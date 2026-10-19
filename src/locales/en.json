@@ -1,0 +1,36 @@
+{
+  "chat": {
+    "back": "뒤로가기",
+    "readMode": "현재 읽기모드: 클릭해서 전환",
+    "chatMode": "현재 대화모드: 클릭해서 전환",
+    "viewAction": "다른 옵션",
+    "rightSidebar": "오른쪽 사이드 바 토글"
+  },
+  "music": {
+    "loopChange": "Change loop mode",
+    "dragHandle": "Mini player drag handle. Use arrow keys to move.",
+    "play": "Play",
+    "pause": "Pause",
+    "onShuffle": "셔플 중",
+    "offShuffle": "셔플 중이 아님",
+    "prevSong": "Prev song",
+    "nextSong": "Next song",
+    "defaultTitle": "재생 중인 곡 없음",
+    "defaultArtist": "알 수 없는 아티스트",
+    "currentTime": "현재 재생 시간",
+    "duration": "전체 음악 길이",
+    "slider": "탐색 슬라이더",
+    "volume": "볼륨",
+    "playlist:add": "플레이리스트에 추가",
+    "playlist:change": "플레이리스트 순서 변경",
+    "playlist:remove": "플레이리스트에서 제거",
+    "playlist:include": "현재 플레이리스트에 있음",
+    "playlist:goChosesMusicPage": "음악 선택 페이지 이동",
+    "playlist:goCurrentPlaylistPage": "현재 플레이리스트 페이지 이동",
+    "context:changeLayout": "레이아웃 변경",
+    "context:miniPlayer": "미니 플레이어",
+    "context:open": "폴더에서 보기",
+    "context:changeAlbumArt": "앨범아트 변경",
+    "context:quit": "종료"
+  }
+}

@@ -1,0 +1,308 @@
+pub mod command;
+pub mod definition;
+pub mod event;
+pub mod repository;
+pub mod state;
+pub mod view;
+mod systems;
+
+pub use command::GameCommand;
+pub use definition::GameDefinition;
+pub use event::GameEvent;
+pub use repository::{GameRepository, SqlxGameRepository};
+pub use state::{GameState, RenderState};
+
+use anyhow::Result;
+use rand::rngs::StdRng;
+use serde::Serialize;
+
+/// 이벤트 전파를 몇 단계까지 허용할지. 데이터 설계 실수로 두 시스템이 서로
+/// 계속 이벤트를 내는 순환이 생겨도, 여기서 끊겨서 앱이 안 멈춘다.
+const MAX_EVENT_DEPTH: usize = 8;
+
+fn period_tuples(definition: &GameDefinition) -> Vec<(String, u32, u32)> {
+    definition.time_periods.iter().map(|p| (p.id.clone(), p.start_minute, p.end_minute)).collect()
+}
+
+#[derive(Serialize)]
+pub struct GameResponse {
+    pub events: Vec<GameEvent>,
+    pub state: RenderState,
+}
+
+/// 정적 데이터(GameDefinition)는 load() 시점에 한 번 다 읽어오고, 그 이후로는
+/// DB를 안 건드린다. dispatch()가 sync인 이유가 이거다 — repository는 load/save에서만 쓴다.
+pub struct GameRuntime {
+    definition: GameDefinition,
+    state: GameState,
+    /// handle_command가 채우고 process_events가 비우는 "이번 턴의 씨앗 이벤트" 큐.
+    /// dispatch() 호출 사이에는 항상 비어 있어야 한다.
+    queue: Vec<GameEvent>,
+    rng: StdRng,
+}
+
+impl GameRuntime {
+    pub fn new(definition: GameDefinition, state: GameState) -> Self {
+        Self { definition, state, queue: Vec::new(), rng: rand::make_rng() }
+    }
+
+    /// 새 게임 시작 — 세이브가 없는 첫 진입.
+    /// 시작 location은 game_projects.start_location_id, 날씨는 settings_json의 startWeatherId를
+    /// 따르고, 없으면 목록의 첫 항목으로 폴백한다 (GameDefinition::start_point 참고).
+    pub fn from_new_game(definition: GameDefinition, session_id: String, player_id: String) -> Result<Self> {
+        let start = definition.start_point();
+
+        let initial_location = match &start.location_id {
+            Some(id) => definition
+                .location(id)
+                .ok_or_else(|| anyhow::anyhow!("설정된 시작 location(start_location_id={id})을 찾을 수 없습니다"))?,
+            None => definition.locations.first().ok_or_else(|| anyhow::anyhow!("게임에 location이 하나도 없습니다"))?,
+        };
+        let zone = definition
+            .zone_of_location(&initial_location.id)
+            .ok_or_else(|| anyhow::anyhow!("시작 location이 어떤 zone에도 속해있지 않습니다"))?;
+        let map = definition.map_by_id(&zone.map_id).ok_or_else(|| anyhow::anyhow!("zone이 가리키는 맵을 찾을 수 없습니다"))?;
+
+        let initial_weather = match &start.weather_id {
+            Some(id) => definition
+                .weather_types
+                .iter()
+                .find(|w| &w.id == id)
+                .ok_or_else(|| anyhow::anyhow!("설정된 시작 날씨(startWeatherId={id})을 찾을 수 없습니다"))?,
+            None => definition.weather_types.first().ok_or_else(|| anyhow::anyhow!("게임에 날씨 타입이 하나도 없습니다"))?,
+        };
+        let time_period_id = crate::game::engine::resolve_time_period(&period_tuples(&definition), 0)
+            .ok_or_else(|| anyhow::anyhow!("게임에 시간대가 하나도 없습니다"))?;
+
+        // game_state_defs의 기본값으로 flags를 채운다 (안 하면 "기본값이 0인 변수"도 키가 없어서
+        // FlagGte 같은 조건과 AI에게 보여줄 현재 값이 비어버린다).
+        let mut initial_flags = serde_json::Map::new();
+        for d in &definition.state_defs {
+            if let Ok(v) = serde_json::from_str::<serde_json::Value>(&d.default_value) {
+                initial_flags.insert(d.key.clone(), v);
+            }
+        }
+        let initial_flags = serde_json::Value::Object(initial_flags);
+
+        let state = GameState {
+            session_id,
+            player_id, // 새 게임 시작 시점에 선택돼 있던 페르소나 (start_new_game이 설정에서 읽어 넘김). 세션 동안 고정.
+            parent_session_id: None,
+            forked_from_seq: None,
+            head_seq: 0,
+            location_id: Some(initial_location.id.clone()),
+            map_id: map.id.clone(),
+            zone_id: Some(zone.id.clone()),
+            game_time: 0,
+            weather_id: initial_weather.id.clone(),
+            time_period_id,
+            // 시작 씬: game_projects.start_scene_key. TODO: 씬 진입을 이벤트(SceneChanged)로 알리지 않는다
+            // — 대기열/진입 경로가 정해지면 GameStarted 뒤에 같은 경로로 열도록 바꿀 것.
+            current_scene_id: definition.project.start_scene_key.as_ref().and_then(|k| definition.scenes.iter().find(|s| &s.scene_key == k)).map(|s| s.id.clone()),
+            pending_scenes_json: serde_json::json!([]),
+            active_npc_id: None,
+            flags: initial_flags,
+            cooldowns: Default::default(),
+            auto_active: Default::default(),
+            turn_fired: false,
+        };
+        Ok(Self::new(definition, state))
+    }
+
+    pub async fn load(repository: &impl GameRepository, game_id: &str, session_id: &str) -> Result<Self> {
+        let definition = repository.load_definition(game_id).await?;
+        let session = repository.load_session(session_id).await?;
+
+        let time_period_id = crate::game::engine::resolve_time_period(&period_tuples(&definition), session.game_time)
+            .ok_or_else(|| anyhow::anyhow!("게임에 시간대가 하나도 없습니다"))?;
+
+        let cooldowns = repository.load_cooldowns(game_id, session_id, session.game_time).await?;
+        let mut state = GameState::from_session(session, cooldowns, time_period_id).map_err(|e| anyhow::anyhow!(e))?;
+        // 지금 이미 참인 auto 이벤트는 "참인 상태"로 표시만 해둔다 (이어하기 직후 재발동 방지).
+        systems::prime_auto_state(&definition, &mut state);
+
+        Ok(Self::new(definition, state))
+    }
+
+    pub fn dispatch(&mut self, command: GameCommand) -> Result<GameResponse> {
+        self.state.turn_fired = false; // random 억제 플래그는 dispatch마다 새로 시작
+        self.handle_command(command)?;
+        let events = self.process_events();
+        Ok(GameResponse { events, state: self.render_state() })
+    }
+
+    fn emit(&mut self, event: GameEvent) {
+        self.queue.push(event);
+    }
+
+    /// 커맨드를 "씨앗 이벤트" 목록으로 바꿔서 큐에 넣는다. 여기서 state를 직접
+    /// 건드리지 않는 걸 원칙으로 한다 (state는 시스템들이 handle_event에서 고친다) —
+    /// 단, from/old처럼 "커맨드 시점의 이전 상태"가 필요한 값은 여기서 읽어서 이벤트에
+    /// 실어 보낸다. 조건/존재 검증(이동 가능한지, 선택지가 실존하는지 등)도 여기서 한다 —
+    /// definition은 읽기만 하는 조회라 DB 없이 바로 할 수 있다.
+    fn handle_command(&mut self, command: GameCommand) -> Result<()> {
+        match command {
+            GameCommand::MoveTo { location_id } => {
+                if self.state.current_scene_id.is_some() {
+                    return Err(anyhow::anyhow!("씬이 진행 중일 때는 이동할 수 없습니다"));
+                }
+                let from = self.state.location_id.clone();
+                let Some(from_id) = from.clone() else {
+                    return Err(anyhow::anyhow!("현재 위치가 없어 이동할 수 없습니다"));
+                };
+                let connection = self
+                    .definition
+                    .connection(&from_id, &location_id)
+                    .ok_or_else(|| anyhow::anyhow!("그 경로로는 이동할 수 없습니다"))?;
+                if let Some(cond) = connection.condition.as_ref().and_then(|s| serde_json::from_str::<crate::game::engine::Condition>(s).ok()) {
+                    let engine_state = self.engine_state_snapshot();
+                    if !cond.eval(&engine_state) {
+                        return Err(anyhow::anyhow!("이동 조건이 충족되지 않았습니다"));
+                    }
+                }
+                let seconds = connection.travel_seconds as i64;
+                self.emit(GameEvent::LocationChanged { from, to: location_id });
+                self.emit(GameEvent::TimeAdvanceRequested { seconds });
+            }
+            GameCommand::Interact { entity_id } => {
+                self.definition
+                    .interactable(&entity_id)
+                    .ok_or_else(|| anyhow::anyhow!("존재하지 않는 상호작용 대상입니다: {entity_id}"))?;
+                self.emit(GameEvent::TriggerActivated { trigger_id: entity_id });
+            }
+            GameCommand::Talk { game_character_id } => {
+                self.definition
+                    .character(&game_character_id)
+                    .ok_or_else(|| anyhow::anyhow!("존재하지 않는 캐릭터입니다: {game_character_id}"))?;
+                self.emit(GameEvent::DialogueStarted { game_character_id });
+            }
+            GameCommand::StopTalk => {
+                let game_character_id = self.state.active_npc_id.clone().ok_or_else(|| anyhow::anyhow!("열린 대화가 없습니다"))?;
+                self.emit(GameEvent::DialogueEnded { game_character_id });
+            }
+            GameCommand::SetVariable { key, value } => {
+                let old = self.state.flags.get(&key).cloned().unwrap_or(serde_json::Value::Null);
+                self.emit(GameEvent::VariableChanged { key, old, new: value });
+            }
+            GameCommand::Choose { choice_id } => {
+                let (_scene, choice) = self
+                    .definition
+                    .find_choice(&choice_id)
+                    .ok_or_else(|| anyhow::anyhow!("존재하지 않는 선택지입니다: {choice_id}"))?;
+                let effect = choice.effect.as_ref().and_then(|s| serde_json::from_str(s).ok());
+                self.emit(GameEvent::ChoiceMade { choice_id, next_scene_id: choice.next_scene_id.clone(), effect });
+            }
+            GameCommand::AdvanceTime { minutes } => {
+                if minutes < 0 {
+                    return Err(anyhow::anyhow!("minutes는 음수일 수 없습니다"));
+                }
+                self.emit(GameEvent::TimeAdvanceRequested { seconds: minutes as i64 * 60 });
+            }
+            GameCommand::UseItem { .. } => {
+                // TODO: 인벤토리 데이터 모델이 아직 없다. 조용히 무시하지 않고 에러로 알린다.
+                return Err(anyhow::anyhow!("인벤토리가 아직 구현되지 않았습니다"));
+            }
+        }
+        Ok(())
+    }
+
+    fn engine_state_snapshot(&self) -> crate::game::engine::EngineState {
+        crate::game::engine::EngineState {
+            map_id: self.state.map_id.clone(),
+            zone_id: self.state.zone_id.clone(),
+            location_id: self.state.location_id.clone(),
+            game_time: self.state.game_time,
+            time_from: self.state.game_time,
+            weather_id: self.state.weather_id.clone(),
+            time_period_id: self.state.time_period_id.clone(),
+            flags: self.state.flags.clone(),
+        }
+    }
+
+    /// 깊이 제한 있는 전파: 씨앗 이벤트를 모든 시스템에 통과시키고, 거기서 나온
+    /// 이벤트를 다음 라운드의 입력으로 다시 돌린다. MAX_EVENT_DEPTH 라운드가 지나면
+    /// 끊는다 (순환 데이터로 인한 무한 루프 방지 — 완전 재귀도, 1단계 고정도 아니다).
+    fn process_events(&mut self) -> Vec<GameEvent> {
+        let mut frontier: Vec<GameEvent> = std::mem::take(&mut self.queue);
+        let mut all_events = Vec::new();
+        let mut depth = 0usize;
+
+        while !frontier.is_empty() {
+            all_events.extend(frontier.iter().cloned());
+            depth += 1;
+            if depth > MAX_EVENT_DEPTH {
+                // TODO: 여기 도달하면 로깅 — 이벤트가 몇 단계 넘게 서로를 계속 트리거하고
+                //   있다는 뜻이라, 데이터(트리거 조건 등) 설계를 점검해야 한다는 신호다.
+                break;
+            }
+            let mut next = Vec::new();
+            for event in &frontier {
+                for system in systems::all() {
+                    next.extend(system.handle_event(&self.definition, &mut self.state, event, &mut self.rng));
+                }
+            }
+            frontier = next;
+        }
+        all_events
+    }
+
+    pub fn state(&self) -> &GameState {
+        &self.state
+    }
+
+    pub fn definition(&self) -> &GameDefinition {
+        &self.definition
+    }
+
+    pub fn render_state(&self) -> RenderState {
+        RenderState::from(&self.state)
+    }
+
+    /// AI가 낸 effect들을 허용 목록/범위로 걸러서 (key, old, new) 변경 목록으로 만든다 (상태는 안 바꿈).
+    /// 여러 effect는 앞의 결과를 누적해서 다음에 적용한다 — 같은 키를 두 번 건드려도 max_step이 지켜진다.
+    pub fn plan_ai_changes(&self, effects: &[serde_json::Value], max_changes: usize) -> Vec<(String, serde_json::Value, serde_json::Value)> {
+        let rules = self.definition.ai_var_rules();
+        let mut working = self.state.flags.clone();
+        let mut all: Vec<(String, serde_json::Value, serde_json::Value)> = Vec::new();
+        for effect in effects {
+            let remaining = max_changes.saturating_sub(all.len());
+            if remaining == 0 {
+                break;
+            }
+            let changes = crate::game::engine::plan_ai_changes(&working, effect, &rules, remaining);
+            if !working.is_object() {
+                working = serde_json::json!({});
+            }
+            if let Some(obj) = working.as_object_mut() {
+                for (k, _, new) in &changes {
+                    obj.insert(k.clone(), new.clone());
+                }
+            }
+            all.extend(changes);
+        }
+        all
+    }
+
+    /// plan_ai_changes로 검증을 통과한 변경만 적용한다. 프론트가 부를 수 있는 GameCommand가 아니라
+    /// 런타임 안쪽 메서드다 (아무 변수나 쓸 수 있게 되면 안 되니까). 변경은 VariableChanged로
+    /// 환원돼서 평소 이벤트 전파(auto 이벤트, 씬 등)를 그대로 탄다.
+    pub fn apply_ai_changes(&mut self, changes: Vec<(String, serde_json::Value, serde_json::Value)>) -> Vec<GameEvent> {
+        self.state.turn_fired = false;
+        self.queue.extend(changes.into_iter().map(|(key, old, new)| GameEvent::VariableChanged { key, old, new }));
+        self.process_events()
+    }
+
+    /// 세션 전체에서 단조 증가하는 번호를 발급한다. 일지/메시지/이벤트 로그가 전부 이 번호를 쓴다.
+    /// 이 앱은 세션 하나를 런타임 하나(락 하나)가 쓰므로 DB 트랜잭션 없이 메모리에서 발급해도 안전하다.
+    /// 발급 후에는 save()로 head_seq를 저장해야 다시 불러왔을 때 번호가 이어진다.
+    pub fn next_seq(&mut self) -> u32 {
+        self.state.head_seq += 1;
+        self.state.head_seq
+    }
+
+    /// 매 턴 자동으로 부르는 가벼운 저장 (세션 위치/시간/날씨만). 세이브 슬롯 스냅샷
+    /// (game_saves.state_snapshot)은 별개 — 그건 명시적 "저장하기" 액션에서만.
+    pub async fn save(&self, repository: &impl GameRepository, game_id: &str) -> Result<()> {
+        repository.persist_session(self.state.to_session_input(game_id.to_string())).await
+    }
+}

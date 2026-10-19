@@ -1,0 +1,20 @@
+{
+  "files": [],
+  "references": [
+    { "path": "./tsconfig.app.json" },
+    { "path": "./tsconfig.node.json" }
+  ],
+  "compilerOptions": {
+    "paths": {
+      "$/*": ["./src/*"],
+      "$shared/*": ["./src/shared/*"],
+      "$app/*": ["./src/app/*"],
+      "$ipc/*": ["./src/ipc/*"],
+      "$lib/*": ["./src/lib/*"],
+      "$type/*": ["./src/lib/type/*"],
+      "$features/*": ["./src/features/*"],
+      "$screens/*": ["./src/screens/*"],
+      "$components/*": ["./src/components/*"],
+    }
+  }
+}

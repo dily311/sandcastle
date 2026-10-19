@@ -1,0 +1,75 @@
+# cargo clean
+# 안드로이드 체크: cargo check --target aarch64-linux-android
+
+[package]
+name = "sandcastle"
+version = "0.1.0"
+description = "A Tauri App"
+authors = ["you"]
+edition = "2021"
+
+# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+
+[lib]
+# The `_lib` suffix may seem redundant but it is necessary
+# to make the lib name unique and wouldn't conflict with the bin name.
+# This seems to be only an issue on Windows, see https://github.com/rust-lang/cargo/issues/8519
+name = "sandcastle_lib"
+crate-type = ["staticlib", "cdylib", "rlib"]
+
+[build-dependencies]
+tauri-build = { version = "2", features = [] }
+
+[dependencies]
+tauri = { version = "2", features = ["protocol-asset",  "tray-icon" ] }
+tauri-plugin-opener = "2"
+tauri-plugin-log = "2"
+tauri-plugin-dialog = "2"
+tauri-plugin-fs = "2.4.5"
+tauri-plugin-store = "2.4.2"
+tauri-plugin-os = "2.3.2"
+tauri-plugin-global-shortcut = "2"
+tauri-plugin-window-state = "2"
+anyhow = "1.0.104"
+thiserror = "2.0.20"
+base64 = "0.22.1"
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+gcp_auth = "0.12"
+sqlx = { version = "0.9", features = ["sqlite", "runtime-tokio", "tls-rustls", "macros"] }
+uuid = { version = "1", features = ["v4", "serde"] }
+chrono = "0.4"
+keyring = "4.2.0"
+futures = "0.3.34"
+mime_guess = "2.0.5"
+rand = "0.10.3"
+reqwest = { version = "0.12", default-features = false, features = ["json", "stream", "rustls-tls"] }
+tokio = { version = "1.0", features = ["full"] }
+tokio-tungstenite = { version = "0.24", features = ["rustls-tls-webpki-roots"] }
+zip = "8.6.0"
+lofty = "0.24.0"
+image = { version = "0.25", features = ["webp"] }
+infer = "0.22.0"
+tiktoken = "4.1.2"
+
+[target.'cfg(target_os = "windows")'.dependencies]
+windows = { version = "0.58", features = [
+    "Win32_UI_WindowsAndMessaging",
+    "Win32_Foundation",
+] }
+
+[target.aarch64-linux-android]
+linker = "aarch64-linux-android21-clang"
+
+[target.'cfg(any(target_os = "macos", target_os = "windows", target_os = "linux"))'.dependencies]
+tauri-plugin-autostart = "2.7.0"
+
+# [dev-dependencies]
+
+# Read the optimization guideline for more details: https://tauri.app/concept/size/#cargo-configuration
+[profile.release]
+codegen-units = 1
+lto = true
+opt-level = 3
+panic = "abort"
+strip = true

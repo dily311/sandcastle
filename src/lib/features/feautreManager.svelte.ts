@@ -1,0 +1,124 @@
+import { getCurrentWindow } from "@tauri-apps/api/window";
+import type { FeatureRuntime } from "./types";
+import { registerWidgetMascot } from "$/lib/features/impl/widget/mascot/mascotFeature.svelte";
+import { registerWidgetMusic } from "$/lib/features/impl/widget/music/musicFeature.svelte";
+import { registerWidgetWindowFeature } from "./impl/main/widgetWindowFeature.svelte";
+import { settingCommands } from "$/ipc/commands";
+
+/** 윈도우 별로 사용할 feature 구성 정의 */
+const featuresByWindow: Record<string, FeatureRuntime[]> = {
+	main: [registerWidgetWindowFeature],
+	widget: [registerWidgetMascot, registerWidgetMusic],
+};
+
+/**기능 초기화 하는 함수 */
+export async function bootstrapFeatures() {
+	// 현재 웹뷰 라벨 가져오기
+	const label = getCurrentWindow().label;
+	// 설정 불러오기
+	await featureConfig.loadConfig();
+	// 초기화
+	await featureManager.initAll(featuresByWindow[label]);
+	console.log("[featureManager]", featureManager.getFeatures.filter((f) => f.enabled));
+}
+
+class FeatureManager {
+	private features = $state.raw<FeatureRuntime[]>([]);
+
+	// 앱 시작시 파일 불러오기
+	async initAll(registeredFeatures: FeatureRuntime[]) {
+		for (const feature of registeredFeatures) {
+			// 초기화 로직 진행
+			const configEnabled = featureConfig.value.get(feature.id);
+			const isEnabled = configEnabled ?? feature.enabled;
+			feature.enabled = isEnabled;
+
+			this.register(feature);
+
+			if (configEnabled && isEnabled) {
+				await feature.init?.();
+			}
+		}
+
+		// 리스너 등록
+		await settingCommands.listen_featureChanged(featureConfig.changeConfig);
+	}
+
+	// 기능 등록
+	async register(f: FeatureRuntime) {
+		if (this.features.some((x) => x.id === f.id)) return; // 중복 방지
+		this.features = [...this.features, f];
+		// 기본 값 등록
+		if (featureConfig.value.has(f.id)) return;
+		await featureConfig.updateConfig(f.id, f.enabled);
+	}
+
+	// 기능 제거
+	unregister(id: string) {
+		this.features.filter((f) => f.id !== id);
+	}
+
+	// 기능 토글
+	async toggleFeature(id: string, enabled: boolean) {
+		const isConfig = featureConfig.value.has(id);
+		// config에 없으면 반영 X
+		if (!isConfig) return;
+		// 같은 값 제외
+		if ((featureConfig.value.get(id) ?? false) === enabled) return;
+
+		// 업데이트
+		await featureConfig.updateConfig(id, enabled);
+
+		// 현재 기능에 포함되어 있는지 확인
+		const feature = this.features.find((f) => f.id === id);
+		// 없으면 리턴
+		if (!feature) return;
+
+		feature.enabled = enabled;
+		if (enabled) {
+			await feature.init?.();
+		} else {
+			feature.destroy?.();
+		}
+	}
+
+	get getFeatures() {
+		return this.features;
+	}
+}
+
+export const featureManager = new FeatureManager();
+
+class FeatureConfig {
+	private config: Map<string, boolean> = new Map();
+	get value() {
+		return this.config;
+	}
+
+	async loadConfig() {
+		const savedConfig = await settingCommands.getFeatureSetting();
+		this.config = new Map(Object.entries(savedConfig.feature));
+		console.log(this.config);
+	}
+
+	async updateConfig(id: string, enabled: boolean) {
+		this.value?.set(id, enabled);
+		await settingCommands.updateFeatureSetting({ id, enabled });
+	}
+
+	changeConfig = async(changed: {id: string, enabled: boolean}) => {
+		this.config.set(changed.id, changed.enabled);
+		const feature = featureManager.getFeatures.find((f)=> f.id === changed.id);
+		// 변화없이 동일한 값이 들어왔을 경우
+		if (!feature || feature?.enabled === changed.enabled) return;
+		feature.enabled = changed.enabled;
+
+		if (changed.enabled) {
+			feature.init?.();
+		} else {
+			feature.destroy();
+		}
+
+	}
+}
+export const featureConfig = new FeatureConfig();

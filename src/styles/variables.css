@@ -1,0 +1,213 @@
+/* --------------------------------- */
+/* 변수 */
+/* --------------------------------- */
+
+body {
+  color-scheme: light;
+
+  --titlebar-height: 30px;
+  --ribbon-width: 44px;
+  --sidebar-width: 270px;
+
+  --header-height: 40px;
+  --header-bg: var(--background-secondary);
+
+  --card-radius: 0.4rem;
+  --card-shadow: 4px 4px 10px rgba(0, 0, 0, 0.1);
+  /* box-shadow: 3px 4px 9px 4px #b8b8b88f; */
+  --card-border-width: 1px;
+
+  --hr-color: var(--color-20);
+  --button-hover-bg: var(--color-20);
+
+  --icon-size: 18px;
+  --icon-stroke: 1px;
+
+  --input-bg: var(--background-secondary);
+  --input-border-color: var(--border-color);
+
+  /* font */
+  --font-size-sm: 0.8rem;
+  --font-size-md: 1.2rem;
+  --font-size-lg: 1.4rem;
+  --font-size-xl: 4rem;
+
+  /* radius */
+  --radius-sm: 4px;
+  --radius-md: 8px;
+  --radius-lg: 10px;
+
+  /* layout */
+  --content-max-width: 1100px;
+  --content-padding: 24px;
+
+  /* scrollbar */
+  --scrollbar-width: 4px;
+
+  /* 00~100 Grayscale (밝은 순 -> 어두운 순) */
+  --color-00: #ffffff;
+  --color-05: #f8f9fa;
+  --color-10: #f1f3f5;
+  --color-20: #e9ecef;
+  --color-30: #dee2e6;
+  --color-40: #adb5bd;
+  --color-50: #6c757d;
+  --color-70: #495057;
+  --color-80: #343a40;
+  --color-100: #121212;
+
+  /* Accent Grayscale (상태 표시용 모노톤) */
+  --color-red-rgb: 220, 53, 69;
+  --color-red: #dc3545;
+  --color-orange-rgb: 253, 126, 20;
+  --color-orange: #fd7e14;
+  --color-yellow-rgb: 255, 193, 7;
+  --color-yellow: #ffc107;
+  --color-green-rgb: 40, 167, 69;
+  --color-green: #28a745;
+  --color-cyan-rgb: 23, 162, 184;
+  --color-cyan: #17a2b8;
+  --color-blue-rgb: 0, 123, 255;
+  --color-blue: #007bff;
+  --color-purple-rgb: 111, 66, 193;
+  --color-purple: #6f42c1;
+  --color-pink-rgb: 214, 51, 132;
+  --color-pink: #d63384;
+
+  /* Backgrounds & Borders */
+  --background-primary: #ffffff;
+  --background-secondary: #f8f9fa;
+  --sidebar-bg: var(--background-secondary);
+  --card-bg: #ffffff;
+  --card-hover-bg: #fafaff;
+  --card-border-color: #dee2e680;
+  --card-box-shadow: 0 4px 16px rgba(160, 165, 210, 0.15);
+  --btn-bg: var(--background-secondary);
+  --border-color: #e2e4f0;
+  --border-strong-color: #d4d7e6;
+  --icon-color: #495057;
+  --indicator-color: #9ca3af;
+  --fill-color: #121212;
+  --icon-hover-color: #121212;
+  --icon-hover-bg: #e9ecef;
+  --track-bg-color: #f1f3f5;
+  --badge-bg: #e2e3e3;
+  --border-strong: #e0dfdb;
+  --badge-color: #535252;
+  /* message bubble */
+  --bubble-bg: var(--background-primary);
+  --bubble-border-color: var(--border-color);
+  --user-bubble-bg: var(--background-primary);
+  --user-bubble-border-color: var(--border-color);
+
+  /* Typography & Accents */
+  --accent-color: #8b85f9;
+  --accent-color-hover: #7871ed;
+  --text-accent: #212529;
+  --text-color: #121212;
+  --text-muted: #6c757d;
+  --text-italic: #868e96;
+  --text-faint: #adb5bd;
+
+  /* Nav */
+  --nav-bg-hover: rgba(59, 59, 59, 0.06);
+  --nav-bg-active: rgba(41, 41, 41, 0.09);
+  --nav-text: var(--text-italic);
+  --nav-text-active: var(--text-accent);
+
+  --input-color: var(--text-color);
+
+  /* Components */
+  --assistant-bubble-bg: #f1f3f5;
+  --user-bubble-bg: #e9ecef;
+
+  --scrollbar-thumb-color: #adb5bd;
+  --text-highlight-bg: #dee2e6;
+
+  --shadow-sm: 0 1px 2px rgba(15, 15, 15, 0.06);
+  --shadow: 0 4px 12px rgba(15, 15, 15, 0.1), 0 0 0 1px rgba(15, 15, 15, 0.04);
+  --shadow-lg: 0 12px 32px rgba(15, 15, 15, 0.12), 0 0 0 1px rgba(15, 15, 15, 0.05);
+
+
+}
+
+body.theme-dark {
+  color-scheme: dark;
+
+  /* 00~100 Grayscale (어두운 순 -> 밝은 순) */
+  --color-00: #0e0e11;
+  --color-05: #16161a;
+  --color-10: #1e1e24;
+  --color-20: #2a2a32;
+  --color-30: #3f3f46;
+  --color-40: #71717a;
+  --color-50: #a1a1aa;
+  --color-70: #d4d4d8;
+  --color-80: #e4e4e7;
+  --color-100: #ffffff;
+
+  /* Accent Grayscale (다크 모드용 무채색 포인트) */
+  --color-red-rgb: 255, 107, 107;
+  --color-red: #ff6b6b;
+  --color-orange-rgb: 255, 159, 67;
+  --color-orange: #ff9f43;
+  --color-yellow-rgb: 255, 212, 59;
+  --color-yellow: #ffd43b;
+  --color-green-rgb: 81, 207, 102;
+  --color-green: #51cf66;
+  --color-cyan-rgb: 34, 211, 238;
+  --color-cyan: #22d3ee;
+  --color-blue-rgb: 77, 171, 247;
+  --color-blue: #4dabf7;
+  --color-purple-rgb: 151, 117, 250;
+  --color-purple: #9775fa;
+  --color-pink-rgb: 240, 101, 149;
+  --color-pink: #f06595;
+
+  /* Backgrounds & Borders */
+  --background-primary: #0e0e11;
+  --background-secondary: #16161a;
+  --card-bg: #0e0e11;
+  --card-hover-bg: #37373d;
+  --card-border-color: #2a2a3280;
+  --border-color: #2a2a32;
+  --border-strong-color: #46464e;
+  --icon-color: #a1a1aa;
+  --indicator-color: #71717a;
+  --fill-color: #ffffff;
+  --icon-hover-color: #ffffff;
+  --icon-hover-bg: #2a2a32;
+  --track-bg-color: #1e1e24;
+  --badge-bg: #282b2b;
+  --badge-color: #cdced6;
+  /* message bubble */
+  --bubble-bg: var(--background-primary);
+  --bubble-border-color: var(--border-color);
+  --user-bubble-bg: var(--background-primary);
+  --user-bubble-border-color: var(--border-color);
+
+  /* Typography & Accents */
+  --accent-color: #8b85f9;
+  --accent-color-hover: #7871ed;
+  --text-accent: #f4f4f5;
+  --text-color: #f4f4f5;
+  --text-muted: #a1a1aa;
+  --text-italic: #71717a;
+  --text-faint: #52525b;
+
+  /* Components */
+  --assistant-bubble-bg: #1e1e24;
+  --user-bubble-bg: #2a2a32;
+
+  --scrollbar-thumb-color: #3f3f46;
+  --text-highlight-bg: #3f3f46;
+
+  --shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.3);
+  --shadow: 0 4px 12px rgba(0, 0, 0, 0.4), 0 0 0 1px rgba(255, 255, 255, 0.05);
+  --shadow-lg: 0 14px 34px rgba(0, 0, 0, 0.5), 0 0 0 1px rgba(255, 255, 255, 0.06);
+
+}
+
+body.mod-mobile {
+  --titlebar-height: 0;
+}

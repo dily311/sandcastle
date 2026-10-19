@@ -1,0 +1,37 @@
+{
+  "compilerOptions": {
+    "tsBuildInfoFile": "./node_modules/.tmp/tsconfig.node.tsbuildinfo",
+    "target": "es2023",
+    "lib": ["ES2023"],
+    "types": ["node"],
+    "skipLibCheck": true,
+
+    /* Bundler mode */
+    "module": "nodenext",
+    "verbatimModuleSyntax": true,
+    "moduleDetection": "force",
+    "composite": true,
+    "noEmit": false,
+
+    /* Linting */
+    "noUnusedLocals": true,
+    "noUnusedParameters": true,
+    "erasableSyntaxOnly": true,
+    "noFallthroughCasesInSwitch": true,
+
+    "paths": {
+      "$/*": ["./src/*"],
+      "$shared/*": ["./src/shared/*"],
+      "$app/*": ["./src/app/*"],
+      "$ipc/*": ["./src/ipc/*"],
+      "$lib/*": ["./src/lib/*"],
+      "$type/*": ["./src/lib/type/*"],
+      "$features/*": ["./src/features/*"],
+      "$screens/*": ["./src/screens/*"],
+      "$components/*": ["./src/components/*"],
+      "@tauri-apps/plugin-os": ["./src/ipc/tauri-mock.ts"],
+      "@tauri-apps/api/window": ["./src/ipc/tauri-mock.ts"]
+    }
+  },
+  "include": ["vite.config.ts"]
+}

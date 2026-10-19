@@ -1,0 +1,550 @@
+body {
+  color: var(--text-color);
+
+  /* font */
+  font-family: var(--font-interface-theme);
+  -webkit-font-smoothing: antialiased;
+}
+
+body.mod-desktop {}
+
+/* --------------------------------- */
+/* 기본 HTML 요소 스타일링 */
+/* --------------------------------- */
+
+h2 {
+  font-size: 19px;
+  font-weight: 600;
+  color: var(--text-color);
+}
+
+h3 {
+  color: var(--text-color);
+  font-size: 13px;
+  font-weight: 600;
+}
+
+textarea {
+  width: 100%;
+  resize: none;
+  font-size: 14px;
+  overflow: hidden;
+}
+
+textarea:focus-visible {
+  outline: 1px solid var(--accent-color);
+}
+
+label {
+  font-size: 0.9rem;
+  color: var(--text-muted);
+}
+
+input {
+  border: 0;
+  outline: none;
+  color: var(--input-color);
+  background: transparent;
+}
+
+input:not([type="range"]),
+select,
+textarea {
+  padding: 0.65rem;
+  border-radius: 8px;
+  color: var(--text-color);
+  border: 1px solid var(--border-color);
+  background: var(--input-bg);
+}
+
+input:focus,
+select:focus {
+  border: 2px solid var(--input-border-color);
+  outline: none;
+}
+
+input[type="range"] {
+  -webkit-appearance: none;
+  width: 100%;
+  height: 6px;
+  border-radius: 3px;
+  background: var(--color-30);
+  outline: none;
+}
+
+input[type="range"]::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  appearance: none;
+  width: 16px;
+  height: 16px;
+  border-radius: 50%;
+  background: var(--accent-color);
+  cursor: pointer;
+  border: 2px solid var(--color-00);
+  box-shadow: var(--card-box-shadow);
+  transition: transform 0.1s ease;
+}
+
+input[type="range"]::-webkit-slider-thumb:hover {
+  transform: scale(1.15);
+}
+
+
+svg,
+path,
+[aria-label] * {
+  pointer-events: none;
+}
+
+svg.svg-icon {
+  width: var(--icon-size);
+  height: var(--icon-size);
+  stroke: currentColor;
+  stroke-width: var(--icon-stroke);
+}
+
+button:has(.svg-icon) {
+  display: flex;
+  align-items: center;
+  padding: 0 0.2rem;
+}
+
+/* -------------------- */
+/* Scrollbar             */
+/* -------------------- */
+*::-webkit-scrollbar {
+  appearance: none;
+  width: var(--scrollbar-width);
+  background: transparent;
+}
+
+*::-webkit-scrollbar-thumb {
+  background: var(--scrollbar-thumb-color);
+  border-radius: 10px;
+}
+
+*::-webkit-scrollbar-track {
+  background: transparent;
+  box-shadow: none;
+}
+
+/* --------------------------------- */
+/* 공통 클래스 스타일링 */
+/* --------------------------------- */
+.content {
+  max-width: 1080px;
+  margin: 0 auto;
+  padding: calc(var(--titlebar-height) + 1rem) 2rem 3.2rem;
+}
+
+.searchbar {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  border: 1px solid var(--border-strong-color);
+  border-radius: var(--radius-lg);
+  padding: 0 12px;
+  background: var(--bg-input);
+  color: var(--text-muted);
+  transition: border-color .12s ease, box-shadow .12s ease;
+  --icon-size: 16px;
+}
+
+.searchbar:focus-within {
+  border-color: var(--accent);
+  box-shadow: 0 0 0 3px var(--accent-soft);
+}
+
+.searchbar input {
+  flex: 1;
+  border: none;
+  outline: none;
+  background: transparent;
+  font-size: 14.5px;
+  color: var(--text-color);
+}
+
+.segmented {
+  flex: 1 0 max-content;
+  width: 100%;
+  display: inline-flex;
+  border: 1px solid var(--border-strong-color);
+  border-radius: var(--radius-sm);
+  overflow: hidden;
+}
+
+.segmented button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: auto;
+  height: 1.6rem;
+  padding: 0 0.6rem;
+  border-radius: 0;
+  cursor: pointer;
+}
+
+.segmented button+button {
+  border-left: 1px solid var(--border-color);
+}
+
+.segmented button.on {
+  background: var(--button-hover-bg);
+  color: var(--text-color);
+}
+
+.btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  height: 30px;
+  padding: 0 10px;
+  border-radius: var(--radius-sm);
+  border: 1px solid var(--border-strong);
+  background: var(--button-bg);
+  color: var(--text);
+  font-size: 13.5px;
+  font-weight: 500;
+  white-space: nowrap;
+  transition: background .12s ease, border-color .12s ease, opacity .12s ease;
+  cursor: pointer;
+}
+
+.clickable-icon {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 1.8rem;
+  height: 1.8rem;
+  padding: 0.4rem;
+  color: var(--icon-color);
+  border-radius: var(--radius-sm);
+  font-size: var(--font-size-sm);
+  cursor: pointer;
+  position: relative;
+}
+
+.clickable-icon:hover,
+.clickable-icon.active {
+  background: var(--button-hover-bg);
+}
+
+.clickable-icon:disabled {
+  opacity: 0.3;
+  cursor: not-allowed;
+}
+
+/* 버튼 */
+.primary-btn {
+  height: 2rem;
+  padding: 0 13px;
+
+  display: flex;
+  align-items: center;
+  gap: 6px;
+
+  border: 0;
+  border-radius: 8px;
+
+  background: var(--accent-color);
+  color: white;
+
+  font-size: 11px;
+  font-weight: 500;
+  cursor: pointer;
+}
+
+.primary-btn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.secondary-btn {
+  background-color: var(--secondary-bg);
+  color: var(--text-color);
+}
+
+.secondary-btn:hover {
+  background-color: var(--secondary-bg-hover);
+}
+
+.success-btn {
+  color: var(--color-green);
+}
+
+.waning-btn {
+  color: var(--color-yellow);
+}
+
+.danger-btn {
+  color: var(--color-red);
+}
+
+.info-btn {
+  color: var(--color-blue);
+}
+
+.star-btn:hover {
+  color: var(--color-yellow);
+}
+
+.btn-group {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 4px;
+}
+
+/* 카드 공통 스타일 */
+.card {
+  background: var(--card-bg);
+  border-radius: var(--radius-md);
+  padding: 16px;
+  border: 1px solid var(--border-color);
+
+}
+
+.card-title {
+  font-size: 13px;
+  font-weight: 700;
+  color: var(--text-muted);
+  margin-bottom: 10px;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.badge {
+  background: var(--badge-bg);
+  color: var(--badge-color);
+  padding: 2px 4px;
+  border-radius: 0.4rem;
+}
+
+/* 사이드바 */
+.sidebar {
+  /* 사이드바 flex-shrink 방지 */
+  flex-shrink: 0;
+}
+
+/* ================= 리사이저 (Resizer/Splitter) ================= */
+.resizer {
+  inset-inline-start: 0;
+  inset-inline-end: unset;
+  width: 4px;
+  height: 100%;
+  background: transparent;
+  cursor: col-resize;
+  position: absolute;
+  top: unset;
+  bottom: 0;
+  border-left: 1px solid var(--border-color);
+  user-select: none;
+  z-index: 10;
+}
+
+.resizer.left {
+  inset-inline-start: unset;
+  inset-inline-end: 0;
+  border-left: none;
+  border-right: 1px solid var(--border-color);
+}
+
+.resizer:hover,
+.resizer.active {
+  border-width: 4px;
+}
+
+/* 드래그 도중 텍스트 드래그 및 깜빡임 방지 */
+.is-resizing {
+  user-select: none;
+  cursor: col-resize;
+}
+
+/**
+ * Visually hide an element, but leave it available for screen readers
+ * @link https://github.com/h5bp/html5-boilerplate/blob/master/dist/css/main.css
+ * @link http://snook.ca/archives/html_and_css/hiding-content-for-accessibility
+ * @link https://github.com/h5bp/main.css/issues/12#issuecomment-321106995
+ */
+.visually-hidden {
+  border: 0;
+  clip: rect(0 0 0 0);
+  height: 1px;
+  overflow: hidden;
+  padding: 0;
+  position: absolute;
+  white-space: nowrap;
+  width: 1px;
+}
+
+.drag {
+  cursor: grabbing;
+  -webkit-user-select: none;
+  /* Safari */
+  -ms-user-select: none;
+  /* IE 10+ and Edge */
+  user-select: none;
+  /* Standard syntax */
+  transition: none;
+}
+
+
+/* 스냅용 */
+.snap-left {
+  border-top-left-radius: 0 !important;
+  border-bottom-left-radius: 0 !important;
+}
+
+.snap-right {
+  border-top-right-radius: 0 !important;
+  border-bottom-right-radius: 0 !important;
+}
+
+.snap-top {
+  border-top-left-radius: 0 !important;
+  border-top-right-radius: 0 !important;
+}
+
+.snap-bottom {
+  border-bottom-left-radius: 0 !important;
+  border-bottom-right-radius: 0 !important;
+}
+
+/* setting page css */
+.setting-card {
+  background: var(--card-bg, #ffffff);
+  border: 1px solid var(--border-color, #e5e7eb);
+  border-radius: 12px;
+  padding: 1.5rem;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.05);
+  margin-bottom: 15px;
+}
+
+.card-header {
+  margin-bottom: 1.25rem;
+}
+
+.card-title {
+  font-size: 1.1rem;
+  font-weight: 600;
+  margin: 0;
+}
+
+.setting-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0.9rem 0;
+  border-bottom: 1px solid var(--border-color, #f3f4f6);
+  gap: 1rem;
+}
+
+.setting-row:last-child {
+  border-bottom: none;
+}
+
+.setting-info {
+  flex: 1;
+}
+
+.setting-info .setting-title {
+  font-size: 0.9rem;
+  font-weight: 500;
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+  margin-bottom: 0.4rem;
+}
+
+.setting-info .description {
+  font-size: 0.8rem;
+  color: var(--text-muted, #6b7280);
+  margin: 0.2rem 0 0 0;
+}
+
+.setting-control {
+  display: flex;
+  align-items: center;
+}
+
+.setting-control.group {
+  gap: 0.5rem;
+}
+
+/* Color Picker Control */
+.color-picker-group {
+  gap: 0.5rem;
+}
+
+.color-picker {
+  -webkit-appearance: none;
+  border: none;
+  width: 3rem;
+  height: 3rem;
+  border-radius: 50%;
+  cursor: pointer;
+  background: none;
+}
+
+.color-picker::-webkit-color-swatch-wrapper {
+  padding: 0;
+}
+
+.color-picker::-webkit-color-swatch {
+  border: 1px solid var(--border-color, #d1d5db);
+  border-radius: 50%;
+}
+
+.color-hex {
+  font-size: 0.85rem;
+  font-family: monospace;
+  color: var(--text-muted, #4b5563);
+}
+
+/* Slider Control */
+.slider-group {
+  gap: 0.5rem;
+}
+
+.range-slider {
+  accent-color: var(--accent-color, #2563eb);
+  cursor: pointer;
+}
+
+.slider-value {
+  font-size: 0.85rem;
+  font-weight: 500;
+  min-width: 36px;
+  text-align: right;
+}
+
+.custom-select,
+.custom-input,
+.custom-textarea {
+  padding: 0.5rem 0.75rem;
+  border-radius: 6px;
+  border: 1px solid var(--border-color, #d1d5db);
+  background-color: var(--input-bg, #fff);
+  font-size: 0.875rem;
+  outline: none;
+}
+
+.custom-select:focus,
+.custom-input:focus,
+.custom-textarea:focus {
+  border-color: var(--accent-color, #2563eb);
+}
+
+.custom-textarea {
+  resize: vertical;
+  min-height: 80px;
+  font-family: monospace;
+}
+
+.toggle-checkbox {
+  width: 1.25rem;
+  height: 1.25rem;
+  cursor: pointer;
+  accent-color: var(--accent-color, #2563eb);
+}
