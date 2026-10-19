@@ -75,6 +75,19 @@ CREATE TABLE IF NOT EXISTS game_character_worldinfo (
   PRIMARY KEY (game_character_id, book_id)
 );
 
+CREATE TABLE IF NOT EXISTS game_character_spawn_locations (
+  id TEXT PRIMARY KEY,
+  game_character_id TEXT NOT NULL REFERENCES game_characters(id) ON DELETE CASCADE,
+  location_id TEXT NOT NULL REFERENCES game_locations(id) ON DELETE CASCADE,
+  -- 다른 장소와 비교하는 출현 가중치
+  spawn_weight INTEGER NOT NULL DEFAULT 1 CHECK (spawn_weight > 0),
+  -- 시간대, 날씨, 플래그 등의 추가 출현 조건
+  condition_json TEXT,
+  created_at INTEGER NOT NULL,
+  updated_at INTEGER NOT NULL,
+  UNIQUE (game_character_id, location_id)
+);
+
 -- ---------------------------------------------------------
 -- 게임 에셋
 -- ---------------------------------------------------------
@@ -407,6 +420,28 @@ CREATE TABLE IF NOT EXISTS game_story_plans (
   PRIMARY KEY (session_id, seq)
 );
 
+CREATE TABLE IF NOT EXISTS game_relationship_snapshots (
+  session_id TEXT NOT NULL REFERENCES game_player_sessions(id) ON DELETE CASCADE,
+  seq INTEGER NOT NULL,
+  relationships_json TEXT NOT NULL,
+  created_at INTEGER NOT NULL,
+  PRIMARY KEY (session_id, seq)
+);
+
+CREATE TABLE IF NOT EXISTS game_character_state_snapshots (
+  session_id TEXT NOT NULL REFERENCES game_player_sessions(id) ON DELETE CASCADE,
+  seq INTEGER NOT NULL,
+  game_character_id TEXT NOT NULL REFERENCES game_characters(id) ON DELETE CASCADE,
+  -- null이면 현재 맵에 등장 X
+  current_location_id TEXT REFERENCES game_locations(id) ON DELETE SET NULL,
+  -- active, absent, traveling, dead 등
+  status TEXT NOT NULL DEFAULT 'active',
+  state_json TEXT,
+  updated_at INTEGER NOT NULL,
+
+  PRIMARY KEY (session_id, seq, game_character_id)
+);
+
 -- event log
 CREATE TABLE IF NOT EXISTS game_event_log (
   seq INTEGER NOT NULL, -- 순서용
@@ -485,6 +520,11 @@ CREATE INDEX IF NOT EXISTS idx_game_scenes_game ON game_scenes(game_id);
 CREATE INDEX IF NOT EXISTS idx_game_choices_node ON game_choices(scene_id);
 CREATE INDEX IF NOT EXISTS idx_game_branches_node ON game_branches(scene_id);
 
+-- character
+CREATE INDEX IF NOT EXISTS idx_game_character ON game_characters(game_id);
+CREATE INDEX IF NOT EXISTS idx_character_spawn_location ON game_character_spawn_locations(location_id);
+CREATE INDEX IF NOT EXISTS idx_character_spawn_character ON game_character_spawn_locations(game_character_id);
+
 -- assets
 CREATE INDEX IF NOT EXISTS idx_game_assets_game ON game_assets(game_id);
 
@@ -525,6 +565,7 @@ CREATE INDEX IF NOT EXISTS idx_player_sessions_player_id ON game_player_sessions
 CREATE INDEX IF NOT EXISTS idx_event_log_session_time ON game_event_log(session_id, triggered_at);
 CREATE INDEX IF NOT EXISTS idx_event_log_event ON game_event_log(event_id);
 CREATE INDEX IF NOT EXISTS idx_event_log_characters_character_id ON game_event_log_characters(game_character_id);
+CREATE INDEX IF NOT EXISTS idx_character_states_location ON game_character_state_snapshots(session_id, seq, current_location_id);
 
 -- conversation
 CREATE INDEX IF NOT EXISTS idx_game_messages_conversation ON game_messages(conversation_id, seq);

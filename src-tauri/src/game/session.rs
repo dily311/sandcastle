@@ -5,7 +5,7 @@
 //! 상태(위치/시간/날씨/변수/씬/대기열)는 세션 테이블의 "지금" 값이 아니라 책갈피의 스냅샷에서 복원한다.
 //! 전부 한 트랜잭션이라 중간에 실패하면 새 세션이 남지 않는다.
 use crate::db::game::{
-    forked_game_conversations, forked_game_conversations_participant, forked_game_event_log, forked_game_journal,
+    forked_game_conversations, forked_game_conversations_participant, forked_game_event_logs, forked_game_journal,
     forked_game_messages, forked_game_save, get_game_save, upsert_game_player_sessions,
 };
 use crate::error::AppError;
@@ -37,7 +37,7 @@ pub async fn fork_session(pool: &SqlitePool, game_id: &str, parent_session_id: &
     // 세션 row를 먼저 만들어야 아래 복사들의 FK(session_id)가 걸린다.
     upsert_game_player_sessions(&mut *tx, state.to_session_input(game_id.to_string())).await?;
     forked_game_journal(&mut *tx, parent_session_id, &new_session_id, None, to_seq).await?;
-    forked_game_event_log(&mut *tx, parent_session_id, &new_session_id, None, to_seq).await?;
+    forked_game_event_logs(&mut *tx, parent_session_id, &new_session_id, None, to_seq).await?;
 
     // 대화는 세션에 묶여 있어서 통째로 복사하고, 메시지는 to_seq까지만 복사한다.
     let conversation_pairs = forked_game_conversations(&mut tx, parent_session_id, &new_session_id).await?;

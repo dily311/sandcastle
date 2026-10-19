@@ -105,6 +105,8 @@ impl GameRuntime {
             cooldowns: Default::default(),
             auto_active: Default::default(),
             turn_fired: false,
+            inventory_json: Default::default(),
+            relationships_json: Default::default(),
         };
         Ok(Self::new(definition, state))
     }

@@ -13,7 +13,7 @@ pub struct GameManifest {
     pub description: Option<String>,
     pub version: String, // 게임버전: semver, 세이브 호환성 체크용
     pub template_id: String,
-    pub api_version: String,     // 게임 엔진 버전
+    pub api_version: String, // 게임 엔진 버전
     pub start_location_id: Option<String>,
     pub cover_image: Option<String>,
     pub custom_css: Option<serde_json::Value>, // 게임에만 적용될 css
@@ -352,6 +352,66 @@ impl From<GameCharacters> for GameCharactersInput {
 pub struct GameCharactersWorldinfo {
     pub game_character_id: String,
     pub book_id: String,
+}
+
+// ---------- game_character_spawn_locations ----------
+#[derive(FromRow)]
+pub struct GameCharacterSpawnLocationsRow {
+    pub id: String,
+    pub game_character_id: String,
+    pub location_id: String,
+    pub spawn_weight: f32,
+    pub condition_json: Option<String>,
+    pub created_at: i64,
+    pub updated_at: i64,
+}
+#[derive(Serialize, Clone)]
+#[serde(rename_all = "camelCase")]
+pub struct GameCharacterSpawnLocations {
+    pub id: String,
+    pub game_character_id: String,
+    pub location_id: String,
+    pub spawn_weight: f32,
+    pub condition_json: serde_json::Value,
+    pub created_at: i64,
+    pub updated_at: i64,
+}
+impl From<GameCharacterSpawnLocationsRow> for GameCharacterSpawnLocations {
+    fn from(r: GameCharacterSpawnLocationsRow) -> Self {
+        Self {
+            id: r.id,
+            game_character_id: r.game_character_id,
+            location_id: r.location_id,
+            spawn_weight: r.spawn_weight,
+            condition_json: r
+                .condition_json
+                .and_then(|s| serde_json::from_str(&s).ok())
+                .unwrap_or_default(),
+            created_at: r.created_at,
+            updated_at: r.updated_at,
+        }
+    }
+}
+#[derive(Debug, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct GameCharacterSpawnLocationsInput {
+    pub id: Option<String>,
+    pub game_character_id: String,
+    pub location_id: String,
+    pub spawn_weight: f32,
+    pub condition_json: serde_json::Value,
+}
+
+impl From<GameCharacterSpawnLocations> for GameCharacterSpawnLocationsInput {
+    fn from(v: GameCharacterSpawnLocations) -> Self {
+        Self {
+            id: Some(v.id),
+            game_character_id: v.game_character_id,
+            location_id: v.location_id,
+            spawn_weight: v.spawn_weight,
+            condition_json: v.condition_json,
+        }
+    }
 }
 
 // ---------------------------------------------------------
@@ -1404,6 +1464,184 @@ impl From<GameEndings> for GameEndingsInput {
         }
     }
 }
+// ---------------------------------------------------------
+// 아이템
+// ---------------------------------------------------------
+#[derive(FromRow)]
+pub struct GameItemsRow {
+    pub id: String,
+    pub game_id: String,
+    pub name: String,
+    pub description: Option<String>,
+    pub icon: Option<String>,
+    pub kind: Option<String>,
+    pub max_stack: u32,
+    pub is_unique: bool,
+    pub is_key: bool,
+    pub consumable: bool,
+    pub use_effect: Option<String>,
+    pub use_condition: Option<String>,
+    pub on_acquire_event_id: String,
+    pub settings_json: Option<String>,
+    pub created_at: i64,
+    pub updated_at: i64,
+}
+#[derive(Serialize, Clone)]
+#[serde(rename_all = "camelCase")]
+pub struct GameItems {
+    pub id: String,
+    pub game_id: String,
+    pub name: String,
+    pub description: Option<String>,
+    pub icon: Option<String>,
+    pub kind: Option<String>,
+    pub max_stack: u32,
+    pub is_unique: bool,
+    pub is_key: bool,
+    pub consumable: bool,
+    pub use_effect: serde_json::Value,
+    pub use_condition: serde_json::Value,
+    pub on_acquire_event_id: String,
+    pub settings_json: serde_json::Value,
+    pub created_at: i64,
+    pub updated_at: i64,
+}
+
+impl From<GameItemsRow> for GameItems {
+    fn from(r: GameItemsRow) -> Self {
+        Self {
+            id: r.id,
+            game_id: r.game_id,
+            name: r.name,
+            description: r.description,
+            icon: r.icon,
+            kind: r.kind,
+            max_stack: r.max_stack,
+            is_unique: r.is_unique,
+            is_key: r.is_key,
+            consumable: r.consumable,
+            use_effect: r
+                .use_effect
+                .and_then(|s| serde_json::from_str(&s).ok())
+                .unwrap_or_default(),
+            use_condition: r
+                .use_condition
+                .and_then(|s| serde_json::from_str(&s).ok())
+                .unwrap_or_default(),
+            on_acquire_event_id: r.on_acquire_event_id,
+            settings_json: r
+                .settings_json
+                .and_then(|s| serde_json::from_str(&s).ok())
+                .unwrap_or_default(),
+            created_at: r.created_at,
+            updated_at: r.updated_at,
+        }
+    }
+}
+#[derive(Debug, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct GameItemsInput {
+    pub id: Option<String>,
+    pub game_id: String,
+    pub name: String,
+    pub description: Option<String>,
+    pub icon: Option<String>,
+    pub kind: Option<String>,
+    pub max_stack: u32,
+    pub is_unique: bool,
+    pub is_key: bool,
+    pub consumable: bool,
+    pub use_effect: serde_json::Value,
+    pub use_condition: serde_json::Value,
+    pub on_acquire_event_id: String,
+    pub settings_json: serde_json::Value,
+}
+
+impl GameItemsInput {
+    pub fn from(r: GameItems) -> Self {
+        Self {
+            id: Some(r.id),
+            game_id: r.game_id,
+            name: r.name,
+            description: r.description,
+            icon: r.icon,
+            kind: r.kind,
+            max_stack: r.max_stack,
+            is_unique: r.is_unique,
+            is_key: r.is_key,
+            consumable: r.consumable,
+            use_effect: r.use_effect,
+            use_condition: r.use_condition,
+            on_acquire_event_id: r.on_acquire_event_id,
+            settings_json: r.settings_json,
+        }
+    }
+}
+
+// ---------------------------------------------------------
+// 관계도
+// ---------------------------------------------------------
+#[derive(FromRow)]
+pub struct GameRelationshipDefsRow {
+    pub id: String,
+    pub game_id: String,
+    pub from_id: String,
+    pub to_id: String,
+    pub values_json: Option<String>,
+    pub tags: Option<String>,
+}
+#[derive(Serialize, Clone)]
+#[serde(rename_all = "camelCase")]
+pub struct GameRelationshipDefs {
+    pub id: String,
+    pub game_id: String,
+    pub from_id: String,
+    pub to_id: String,
+    pub values_json: serde_json::Value,
+    pub tags: serde_json::Value,
+}
+impl From<GameRelationshipDefsRow> for GameRelationshipDefs {
+    fn from(r: GameRelationshipDefsRow) -> Self {
+        Self {
+            id: r.id,
+            game_id: r.game_id,
+            from_id: r.from_id,
+            to_id: r.to_id,
+            values_json: r
+                .values_json
+                .and_then(|s| serde_json::from_str(&s).ok())
+                .unwrap_or_default(),
+            tags: r
+                .tags
+                .and_then(|s| serde_json::from_str(&s).ok())
+                .unwrap_or_default(),
+        }
+    }
+}
+#[derive(Debug, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct GameRelationshipDefsInput {
+    pub id: Option<String>,
+    pub game_id: String,
+    pub from_id: String,
+    pub to_id: String,
+    pub values_json: serde_json::Value,
+    pub tags: serde_json::Value,
+}
+
+impl From<GameRelationshipDefs> for GameRelationshipDefsInput {
+    fn from(v: GameRelationshipDefs) -> Self {
+        Self {
+            id: Some(v.id),
+            game_id: v.game_id,
+            from_id: v.from_id,
+            to_id: v.to_id,
+            values_json: v.values_json,
+            tags: v.tags,
+        }
+    }
+}
+
 // =========================================================
 // 게임 런타임
 // =========================================================
@@ -1668,6 +1906,137 @@ impl From<GameJournal> for GameJournalInput {
             game_time: v.game_time,
         }
     }
+}
+
+// ---------------------------------------------------------
+// 게임 세션 내 스토리 계획
+// ---------------------------------------------------------
+#[derive(FromRow)]
+pub struct GameStoryPlansRow {
+    pub session_id: String,
+    pub seq: u32,
+    pub plan_json: Option<String>,
+    pub reason: Option<String>,
+}
+
+#[derive(Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct GameStoryPlans {
+    pub session_id: String,
+    pub seq: u32,
+    pub plan_json: serde_json::Value,
+    pub reason: serde_json::Value,
+}
+
+impl From<GameStoryPlansRow> for GameStoryPlans {
+    fn from(r: GameStoryPlansRow) -> Self {
+        Self {
+            session_id: r.session_id,
+            seq: r.seq,
+            plan_json: r
+                .plan_json
+                .and_then(|s| serde_json::from_str(&s).ok())
+                .unwrap_or_default(),
+            reason: r
+                .reason
+                .and_then(|s| serde_json::from_str(&s).ok())
+                .unwrap_or_default(),
+        }
+    }
+}
+
+#[derive(Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct GameStoryPlansInput {
+    pub session_id: String,
+    pub seq: u32,
+    pub plan_json: serde_json::Value,
+    pub reason: serde_json::Value,
+}
+
+// ---------------------------------------------------------
+// 게임 세션 내 캐릭터 관계도
+// ---------------------------------------------------------
+// game_relationship_snapshots
+#[derive(FromRow)]
+pub struct GameRelationshipSnapshotsRow {
+    pub session_id: String,
+    pub seq: u32,
+    pub relationships_json: String,
+    pub created_at: i64,
+}
+
+#[derive(Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct GameRelationshipSnapshots {
+    pub session_id: String,
+    pub seq: u32,
+    pub relationships_json: serde_json::Value,
+    pub created_at: i64,
+}
+
+impl From<GameRelationshipSnapshotsRow> for GameRelationshipSnapshots {
+    fn from(r: GameRelationshipSnapshotsRow) -> Self {
+        Self {
+            session_id: r.session_id,
+            seq: r.seq,
+            relationships_json: serde_json::from_str(&r.relationships_json).unwrap_or_default(),
+            created_at: r.created_at,
+        }
+    }
+}
+// ---------------------------------------------------------
+// 게임 세션 내 캐릭터 상태
+// ---------------------------------------------------------
+#[derive(FromRow)]
+pub struct GameCharacterStatesSnapshotsRow {
+    pub session_id: String,
+    pub seq: u32,
+    pub game_character_id: String,
+    pub current_location_id: String,
+    pub status: String,
+    pub state_json: Option<String>,
+    pub updated_at: i64,
+}
+
+#[derive(Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct GameCharacterStatesSnapshots {
+    pub session_id: String,
+    pub seq: u32,
+    pub game_character_id: String,
+    pub current_location_id: String,
+    pub status: String,
+    pub state_json: serde_json::Value,
+    pub updated_at: i64,
+}
+
+impl From<GameCharacterStatesSnapshotsRow> for GameCharacterStatesSnapshots {
+    fn from(r: GameCharacterStatesSnapshotsRow) -> Self {
+        Self {
+            session_id: r.session_id,
+            seq: r.seq,
+            game_character_id: r.game_character_id,
+            current_location_id: r.current_location_id,
+            status: r.status,
+            state_json: r
+                .state_json
+                .and_then(|s| serde_json::from_str(&s).ok())
+                .unwrap_or_default(),
+            updated_at: r.updated_at,
+        }
+    }
+}
+
+#[derive(Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct GameCharacterStatesSnapshotsInput {
+    pub session_id: String,
+    pub seq: u32,
+    pub game_character_id: String,
+    pub current_location_id: String,
+    pub status: String,
+    pub state_json: serde_json::Value,
 }
 
 // ---------------------------------------------------------
