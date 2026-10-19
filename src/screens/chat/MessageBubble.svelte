@@ -4,7 +4,7 @@
 	import { messages } from "$/lib/chat/chatStore.svelte";
 	import type { Message } from "$type/conv";
 	import { ChevronLeft, ChevronRight, Pen, RotateCw } from "@lucide/svelte";
-	import Avatar from "./avatar.svelte";
+	import Avatar from "../../components/avatar.svelte";
 	let { msg, index }: { msg: Message; index: number } = $props();
 
 	let swipeLength = $derived(msg.meta?.swipes?.length ?? 1);

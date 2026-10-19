@@ -11,7 +11,6 @@ import PersonaPage from "$screens/persona/PersonaPage.svelte";
 import WorldInfoPage from "$screens/worldinfo/WorldinfoPage.svelte";
 import CharacterEditPageSvelte from "$screens/character/CharacterEditPage.svelte";
 import GamePage from "$screens/game/GamePage.svelte";
-import ChatPage from "$/screens/chat/ChatPage.svelte";
 
 export type Pages = 
 	"/" |
@@ -45,9 +44,10 @@ interface PageItem {
 export const routes: RouteDefinition = {
 	"/": HomePage,
 	"/character": CharacterListPage,
-	"/character/edit/*": CharacterEditPageSvelte,
+	"/character/details/:characterId": CharacterDetailPage,
+	"/character/edit/:characterId": CharacterEditPageSvelte,
 	"/character/*": CharacterDetailPage,
-	"/chat": ChatPage,
+	"/chat": ChatListPage,
 	"/chat/:conversationId": ChatScreen,
 	"/game": GamePage,
 	"/api": APIPage,

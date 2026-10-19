@@ -3,7 +3,7 @@
 	import { BookOpen, ChevronRight, Compass, Heart, ImageIcon, MoreHorizontal, Plus, Sliders, Sparkles, User, UserCircle } from "@lucide/svelte";
 	import { sidebarSidler } from "$lib/action/useSidebar";
 	import { slide } from "svelte/transition";
-	import Avatar from "./avatar.svelte";
+	import Avatar from "../../components/avatar.svelte";
 	import { personas } from "$/lib/chat/personaStore.svelte";
 	import { conversations } from "$/lib/chat/chatStore.svelte";
 

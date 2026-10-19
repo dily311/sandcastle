@@ -1,5 +1,17 @@
 <script lang="ts">
 	import { createEventDispatcher } from "svelte";
+	import { pop, router } from "svelte-spa-router";
+
+	let params: string | null;
+
+	$effect(() => {
+		if (router.params && 'characterId' in router.params) {
+			params = router.params?.characterId ?? null;
+		}
+		return;
+	});
+	
+	
 	const isEdit = false;
 	const initialData = {
 		name: "",
