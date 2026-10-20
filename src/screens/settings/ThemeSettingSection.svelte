@@ -1,7 +1,9 @@
 <script lang="ts">
 	import { defaultThemeSetting, themeSetting } from "$/lib/stores/themeStore.svelte";
-	import { Monitor, Moon, RotateCcw, Sun } from "@lucide/svelte";
 	import ThemeGallery from "$screens/settings/ThemeGallery.svelte";
+	import Button from "$/components/ui/button/Button.svelte";
+	import ButtonGroup from "$/components/ui/button/ButtonGroup.svelte";
+	import Icon from "$/components/ui/Icon.svelte";
 </script>
 <div>
 	<div class="setting-card">
@@ -16,32 +18,35 @@
 					<p class="description">화면의 기본 색상 모드를 결정합니다.</p>
 				</div>
 				<div class="setting-control">
-					<div class="segmented">
-						<button
-							class="clickable-icon"
-							class:on={themeSetting.mode === "light"}
+					<ButtonGroup segmented={true}>
+						<Button
+							variant="ghost"
+							size="icon"
+							class={themeSetting.mode === "light" ? "on" : ""}
 							onclick={() => themeSetting.update({ mode: "light" })}
 							title="라이트 모드"
 						>
-							<Sun />
-						</button>
-						<button
-							class="clickable-icon"
-							class:on={themeSetting.mode === "dark"}
+							<Icon name="Sun" />
+						</Button>
+						<Button
+							variant="ghost"
+							size="icon"
+							class={themeSetting.mode === "dark" ? "on" : ""}
 							onclick={() => themeSetting.update({ mode: "dark" })}
 							title="다크 모드"
 						>
-							<Moon />
-						</button>
-						<button
-							class="clickable-icon"
-							class:on={themeSetting.mode === "system"}
+							<Icon name="Moon" />
+						</Button>
+						<Button
+							variant="ghost"
+							size="icon"
+							class={themeSetting.mode === "system" ? "on" : ""}
 							onclick={() => themeSetting.update({ mode: "system" })}
 							title="시스템 설정에 맞춤"
 						>
-							<Monitor />
-						</button>
-					</div>
+							<Icon name="Monitor" />
+						</Button>
+					</ButtonGroup>
 				</div>
 			</div>
 
@@ -95,14 +100,15 @@
 						onchange={(e) => themeSetting.update({ accentColor: e.currentTarget?.value })}
 					/>
 					<span class="color-hex">{themeSetting.accentColor}</span>
-					<button
-						class="clickable-icon"
+					<Button
+						variant="ghost"
+						size="icon"
 						title="기본색상으로 되돌리기"
 						disabled={themeSetting.accentColor === defaultThemeSetting.accentColor}
 						onclick={() => themeSetting.update({ accentColor: defaultThemeSetting.accentColor })}
 					>
-						<RotateCcw />
-					</button>
+						<Icon name="RotateCcw" />
+					</Button>
 				</div>
 			</div>
 
@@ -123,14 +129,15 @@
 						onchange={(e) => themeSetting.update({ fontSize: Number(e.currentTarget.value) })}
 					/>
 					<span class="slider-value">{themeSetting.fontSize}px</span>
-					<button
-						class="clickable-icon"
+					<Button
+						variant="ghost"
+						size="icon"
 						title="기본크기로 되돌리기"
 						disabled={themeSetting.fontSize === defaultThemeSetting.fontSize}
 						onclick={() => themeSetting.update({ fontSize: defaultThemeSetting.fontSize })}
 					>
-						<RotateCcw />
-					</button>
+						<Icon name="RotateCcw" />
+					</Button>
 				</div>
 			</div>
 		</div>

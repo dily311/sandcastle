@@ -12,16 +12,19 @@
 	import { WIDGET_MUSIC_FEATURE_ID } from "../musicFeature.svelte";
 	import { LoopMode } from "../types";
 	import { draggablePosition } from "$/lib/action/useImageCrap.svelte";
+	import Button from "$/components/ui/button/Button.svelte";
+	import Icon from "$/components/ui/Icon.svelte";
+	import { cn } from "$/lib/utils/cn";
 	let localPos = $state({
 		x: widgetMusicSetting.pos?.x ?? 10,
 		y: widgetMusicSetting.pos?.y ?? 10,
 	});
 	$effect(() => {
-        if (widgetMusicSetting.pos) {
-            localPos.x = widgetMusicSetting.pos.x;
-            localPos.y = widgetMusicSetting.pos.y;
-        }
-    });
+		if (widgetMusicSetting.pos) {
+			localPos.x = widgetMusicSetting.pos.x;
+			localPos.y = widgetMusicSetting.pos.y;
+		}
+	});
 </script>
 
 <!-- svelte-ignore a11y_no_static_element_interactions -->
@@ -103,24 +106,24 @@
 
 			<div class="controls">
 				<div class="volume-control">
-					<button
-						type="button"
+					<Button
+						variant="ghost"
 						aria-label={$_("music.volume")}
 						class="volume-icon"
 						onclick={() => audioStore.toggleMuted()}
 					>
 						{#if audioStore.value.muted}
-							<VolumeX />
+							<Icon name="VolumeX" size={22} />
 						{:else if audioStore.volumeSliderValue == 0}
-							<VolumeOff />
+							<Icon name="VolumeOff" size={22} />
 						{:else if audioStore.volumeSliderValue > 40}
-							<Volume2 />
+							<Icon name="Volume2" size={22} />
 						{:else if audioStore.volumeSliderValue > 0}
-							<Volume1 />
+							<Icon name="Volume1" size={22} />
 						{:else}
-							<Volume />
+							<Icon name="Volume" size={22} />
 						{/if}
-					</button>
+					</Button>
 					<div class="volume-slider-wrap">
 						<input
 							type="range"
@@ -136,55 +139,51 @@
 						/>
 					</div>
 				</div>
-				<button
-					type="button"
+				<Button
+					variant="ghost"
 					aria-label={audioStore.isShuffle ? $_("music.onShuffle") : $_("music.offShuffle")}
-					class="control-btn shuffle-btn"
-					class:shuffleOff={!audioStore.isShuffle}
+					class={cn("control-btn shuffle-btn", !audioStore.isShuffle && "shuffleOff")}
 					onclick={() => audioStore.toggleShuffle()}
 					disabled={audioStore.isDisabledShuffle}
 				>
-					<Shuffle />
-				</button>
-				<button
-					type="button"
+					<Icon name="Shuffle" size={22} />
+				</Button>
+				<Button
+					variant="ghost"
 					aria-label={$_("plyer.prevSong")}
 					class="control-btn prev-btn"
 					onclick={() => handlePrevSong()}
 					disabled={audioStore.isDisabledPrev}
 				>
-					<SkipBack />
-				</button>
-				<button
-					type="button"
+					<Icon name="SkipBack" size={22} />
+				</Button>
+				<Button
+					variant="ghost"
 					aria-label={audioStore.paused ? $_("music.play") : $_("music.pause")}
 					class="control-btn play-btn"
 					onclick={() => audioStore.togglePlay()}
 					disabled={!playlistStore.currentSong}
 				>
-					{#if audioStore.paused}
-						<Play />
-					{:else}
-						<Pause />
-					{/if}
-				</button>
-				<button
+					<Icon name={audioStore.paused ? "play" : "pause"} size={22} />
+				</Button>
+				<Button
+					variant="ghost"
 					aria-label={$_("music.nextSong")}
 					class="control-btn next-btn"
 					onclick={() => handleNextSong()}
 					disabled={audioStore.isDisabledNext}
 				>
-					<SkipForward />
-				</button>
-				<button
-					type="button"
+					<Icon name="SkipForward" size={22} />
+				</Button>
+				<Button
+					variant="ghost"
 					aria-label={$_("music.loopChange")}
 					aria-pressed={audioStore.loopMode !== 0}
 					class="control-btn loop-btn"
 					onclick={() => audioStore.toggleLoop()}
 				>
 					{#if audioStore.loopMode === LoopMode.LOOP_ALL}
-						<Repeat>
+						<Icon name="Repeat" size={22}>
 							<text
 								x="12"
 								y="12.5"
@@ -197,9 +196,9 @@
 							>
 								A
 							</text>
-						</Repeat>
+						</Icon>
 					{:else if audioStore.loopMode === LoopMode.LOOP_ONE}
-						<Repeat1 />
+						<Icon name="Repeat1" size={22} />
 					{:else if audioStore.loopMode === LoopMode.ONCE_ONE}
 						<svg
 							xmlns="http://w3.org"
@@ -260,15 +259,15 @@
 							<path d="M17 16l4 3-3 3" />
 						</svg>
 					{/if}
-				</button>
-				<button
-					type="button"
+				</Button>
+				<Button
+					variant="ghost"
 					aria-label={$_("music.menu")}
 					class="playlist"
 					onclick={(e) => widgetMusicSetting.update({ isPlayListOpen: !widgetMusicSetting.isPlayListOpen })}
 				>
-					<Menu />
-				</button>
+					<Icon name="Menu" size={22} />
+				</Button>
 			</div>
 			<div class="song-time">
 				<div class="time-info">
@@ -315,10 +314,8 @@
 		max-width: 31rem;
 		width: 100%;
 		/* resize: both; */
-		--icon-size: 20px;
 	}
 	.music-player-container.resize {
-		--icon-size: 22px;
 		display: flex;
 		width: auto;
 		max-width: none;

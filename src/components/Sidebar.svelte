@@ -6,7 +6,10 @@
 	import { tooltipTrigger } from "$lib/stores/tooltip.svelte";
 	import { push, router } from "svelte-spa-router";
 	import { slide } from "svelte/transition";
-	import Icon from "./Icon.svelte";
+	import Icon from "./ui/Icon.svelte";
+	import Button from "./ui/button/Button.svelte";
+	import ButtonGroup from "./ui/button/ButtonGroup.svelte";
+	import { cn } from "$/lib/utils/cn";
 
 	let collapsed = $state(true);
 	const toggleLeft = () => (collapsed = !collapsed);
@@ -25,8 +28,7 @@
 			<div class="sidebar-nav">
 				{#each navigation as page}
 					<button
-						class="clickable-icon"
-						class:active={router.location === page.link}
+						class={cn("nav-item", router.location === page.link && "active")}
 						onclick={() => push(page.link)}
 						use:tooltipTrigger={{ label: page.label, delayDuration: 300 }}
 					>
@@ -40,17 +42,16 @@
 	{:else}
 		<div class="sidebar-header">
 			<div></div>
-			<button class="sidebar-toggle-btn" onclick={() => toggleLeft()}>
+			<Button variant="ghost" size="icon" class="sidebar-toggle-btn" onclick={() => toggleLeft()}>
 				<PanelLeft />
-			</button>
+			</Button>
 		</div>
 
 		<div class="sidebar-contents">
 			<div class="sidebar-nav">
 				{#each navigation as page}
 					<button
-						class="nav-item"
-						class:active={router.location === page.link}
+						class={cn("nav-item", router.location === page.link && "active")}
 						onclick={() => push(page.link)}
 					>
 						{#if page.icon}
@@ -87,15 +88,15 @@
 									<strong>{chat.title}</strong>
 									<span>{chat.id}</span>
 								</button>
-								<div class="btn-group">
-									<button class="clickable-icon">
+								<ButtonGroup>
+									<Button variant="ghost" size="icon-sm">
 										<!-- <span>{chat.pinned}</span> -->
 										<Pin />
-									</button>
-									<button class="clickable-icon" onclick={() => deleteConversation(chat.id)}>
+									</Button>
+									<Button variant="ghost" size="icon-sm" onclick={() => deleteConversation(chat.id)}>
 										<X />
-									</button>
-								</div>
+									</Button>
+								</ButtonGroup>
 							</li>
 						{/each}
 					</ul>

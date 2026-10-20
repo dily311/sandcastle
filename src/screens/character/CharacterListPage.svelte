@@ -2,9 +2,14 @@
 	import { characters } from "$/lib/chat/characterStore.svelte";
 	import { newConversation } from "$/lib/chat/chatStore.svelte";
 	import type { Character } from "$/lib/type/conv";
-	import Icon from "$components/Icon.svelte";
+	import Icon from "$/components/ui/Icon.svelte";
 	import { push } from "svelte-spa-router";
-	import Avatar from "../../components/avatar.svelte";
+	import Avatar from "$components/avatar.svelte";
+	import Button from "$components/ui/button/Button.svelte";
+	import ButtonGroup from "$/components/ui/button/ButtonGroup.svelte";
+	import Card from "$/components/ui/card/Card.svelte";
+	import CardGrid from "$/components/ui/card/CardGrid.svelte";
+	import { cn } from "$/lib/utils/cn";
 
 	type Sort = "recent" | "name" | "favorite";
 
@@ -112,16 +117,16 @@
 			<h1 class="page-title">캐릭터 찾기</h1>
 			<p class="page-sub">대화하고 싶은 상대를 선택하거나 자신만의 페르소나를 만들 수 있습니다.</p>
 		</div>
-		<button class="btn primary" onclick={() => push("/character/edit/")}>
+		<Button variant="primary" onclick={() => push("/character/edit/")}>
 			<Icon name="plus" size={15} /> 새로 만들기
-		</button>
+		</Button>
 	</header>
 
 	<div class="searchbar">
 		<Icon name="search" size={16} />
 		<input class="searchbar-input" placeholder="이름, 설명, 태그로 검색..." bind:value={query} />
 		{#if query}
-			<button class="btn ghost sm" onclick={() => (query = "")}> 필터해제 </button>
+			<Button size="sm" variant="ghost" onclick={() => (query = "")}>필터해제</Button>
 		{/if}
 	</div>
 
@@ -143,14 +148,26 @@
 				<option value="name">이름순</option>
 				<option value="favorite">즐겨찾기 순서</option>
 			</select>
-			<div class="segmented">
-				<button class={view === "grid" ? "on" : ""} onclick={() => (view = "grid")} title="그리드">
+			<ButtonGroup segmented={true}>
+				<Button
+					variant="ghost"
+					size="sm"
+					class={cn(view === "grid" && "on")}
+					onclick={() => (view = "grid")}
+					title="그리드"
+				>
 					<Icon name="grid" size={15} />
-				</button>
-				<button class={view === "list" ? "on" : ""} onclick={() => (view = "list")} title="리스트">
+				</Button>
+				<Button
+					variant="ghost"
+					size="sm"
+					class={cn(view === "list" && "on")}
+					onclick={() => (view = "list")}
+					title="리스트"
+				>
 					<Icon name="list" size={15} />
-				</button>
-			</div>
+				</Button>
+			</ButtonGroup>
 		</div>
 	</div>
 
@@ -168,12 +185,14 @@
 			<button class="btn sm" onclick={() => push("/character/edit/")}> 이 조건으로 새로 만들기 </button>
 		</div>
 	{:else if view === "grid"}
-		<div class="card-grid">
+		<CardGrid class="card-grid" columns={5}>
 			{#each results() as c (c.id)}
-				<article class="char-card" onclick={() => open(c)} role="presentation">
+				<Card class="char-card" onclick={() => open(c)} role="presentation">
 					<div class="char-card-top">
 						<Avatar avatar={c.avatar ?? c.color} />
-						<button
+						<Button
+							variant="ghost"
+							size="icon"
 							class={`star-btn ${c.favorite ? "on" : ""}`}
 							onclick={(e) => {
 								e.stopPropagation();
@@ -182,7 +201,7 @@
 							title="즐겨찾기"
 						>
 							<Icon name={c.favorite ? "star-filled" : "star"} size={15} />
-						</button>
+						</Button>
 					</div>
 					<h3 class="char-name">{c.name}</h3>
 					<p class="char-tagline">{c.description || "설명 없음"}</p>
@@ -193,27 +212,30 @@
 							</span>
 						{/each}
 					</div>
-					<div class="char-card-actions">
-						<button
-							class="btn sm primary"
+					<ButtonGroup>
+						<Button
+							variant="primary"
+							size="sm"
 							onclick={(e) => {
 								e.stopPropagation();
 								newChat(c);
 							}}
 						>
-							<Icon name="MessageCircle" size={13} /> 대화하기
-						</button>
-						<button
-							class="btn sm ghost"
+							<Icon name="message-circle" size={13} /> 대화하기
+						</Button>
+						<Button
+							variant="ghost"
+							size="sm"
 							onclick={(e) => {
 								e.stopPropagation();
 								push("/character/edit/" + c.id);
 							}}
 						>
 							<Icon name="edit" size={13} /> 편집
-						</button>
-						<button
-							class="btn sm ghost"
+						</Button>
+						<Button
+							variant="ghost"
+							size="icon-xs"
 							title="복제"
 							onclick={(e) => {
 								e.stopPropagation();
@@ -222,11 +244,22 @@
 							}}
 						>
 							<Icon name="copy" size={13} />
-						</button>
-					</div>
-				</article>
+						</Button>
+						<Button
+							variant="danger"
+							size="icon-xs"
+							title="삭제"
+							onclick={(e) => {
+								e.stopPropagation();
+								characters.remove(c.id);
+							}}
+						>
+							<Icon name="trash" size={13} />
+						</Button>
+					</ButtonGroup>
+				</Card>
 			{/each}
-		</div>
+		</CardGrid>
 	{:else}
 		<div class="char-list">
 			{#each results() as c (c.id)}
@@ -273,12 +306,6 @@
 </div>
 
 <style>
-	.ellipsis {
-		overflow: hidden;
-		text-overflow: ellipsis;
-		white-space: nowrap;
-	}
-
 	.workspace {
 		display: flex;
 		align-items: center;
@@ -575,35 +602,6 @@
 		color: var(--text-muted);
 	}
 
-	.card-grid {
-		display: grid;
-		grid-template-columns: repeat(auto-fill, minmax(248px, 1fr));
-		gap: 12px;
-	}
-	.char-card {
-		border: 1px solid var(--border-color);
-		border-radius: var(--radius-lg);
-		padding: 16px;
-		background: var(--card-bg);
-		cursor: pointer;
-		display: flex;
-		flex-direction: column;
-		gap: 8px;
-		transition:
-			box-shadow 140ms ease,
-			border-color 140ms ease,
-			transform 140ms ease;
-	}
-	.char-card:hover {
-		box-shadow: var(--shadow);
-		border-color: transparent;
-		transform: translateY(-1px);
-	}
-	.char-card-top {
-		display: flex;
-		align-items: flex-start;
-		justify-content: space-between;
-	}
 	.avatar {
 		width: 30px;
 		height: 30px;
@@ -840,7 +838,7 @@
 		gap: 12px;
 		padding: 14px 16px;
 		border-radius: var(--radius-lg);
-		background: var(--bg-subtle);
+		background: var(--background-secondary);
 		border: 1px solid var(--border-color);
 	}
 	.preview-name {
@@ -926,7 +924,7 @@
 		border-radius: var(--radius-lg);
 	}
 	.msg:hover {
-		background: var(--bg-subtle);
+		background: var(--background-secondary);
 	}
 	.msg-avatar {
 		flex: none;

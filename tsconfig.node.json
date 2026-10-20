@@ -26,6 +26,7 @@
       "$ipc/*": ["./src/ipc/*"],
       "$lib/*": ["./src/lib/*"],
       "$type/*": ["./src/lib/type/*"],
+      "$utils/*": ["./src/lib/utils/*"],
       "$features/*": ["./src/features/*"],
       "$screens/*": ["./src/screens/*"],
       "$components/*": ["./src/components/*"],

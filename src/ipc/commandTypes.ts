@@ -68,11 +68,12 @@ export interface CommandRegistry {
 
     // game_manager
     "create_game": CommandDef<{title: string, templateId: string}, string>,
-    "get_package_data": CommandDef<{gameId: string}, PackageData>,
     "save_package": CommandDef<{gameId: string, data: PackageData}, SaveReport>,
     "delete_game": CommandDef<{gameId: string}, undefined>,
     "import_game": CommandDef<{zipPath: string}, string>,
     "export_game": CommandDef<{gameId: string, outputDir: string}, string>,
+    // 게임 에디터가 불러오는 데이터
+    "get_package_data": CommandDef<{gameId: string}, PackageData>,
     // 게임 플레이
     "open_game": CommandDef<{gameId: string}, GameManifest>,
     // game_engine

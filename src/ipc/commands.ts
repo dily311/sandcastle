@@ -148,32 +148,15 @@ export const dbCommands = {
 		invokeCommand("set_system_default_persona", args),
 };
 
-export const gameCommands = {
-	// importGamePack: (args: CommandRegistry["import_game_pack"]["args"]) => invokeCommand("import_game_pack", args),
-	// exportGamePack: (args: CommandRegistry["export_game_pack"]["args"]) => invokeCommand("export_game_pack", args),
-
-	// listGames: () => invokeCommand("list_games"),
-	// saveGameBundle: (args: CommandRegistry["save_game_bundle"]["args"]) => invokeCommand("save_game_bundle", args),
-	// upsertGameNode: (args: CommandRegistry["upsert_game_node"]["args"]) => invokeCommand("upsert_game_node", args),
-	// loadGameBundle: (args: CommandRegistry["get_game_bundle"]["args"]) => invokeCommand("get_game_bundle", args),
-	// deleteGame: (gameId: string) => invokeCommand("delete_game", { gameId }),
-
-	// // 세이브 데이터
-	// listSaves: (args: CommandRegistry["list_game_saves"]["args"]) => invokeCommand("list_game_saves", args),
-	// saveGame: (args: CommandRegistry["save_game"]["args"]) => invokeCommand("save_game", args),
-	// loadSave: (args: CommandRegistry["load_game_save"]["args"]) => invokeCommand("load_game_save", args),
-	// deleteSave: (args: CommandRegistry["delete_game_save"]["args"]) => invokeCommand("delete_game_save", args),
-
-	// // AI 노드 에디터의 캐릭터 드롭다운용 (새로 추가 필요한 커맨드입니다)
-	// listCharacters: () => invokeCommand("get_list_characters"),
-
-	// // 슬롯별 캐릭터 conversation 매핑 (game_slot_conversations 테이블)
-	// getSlotConversationId: (args: CommandRegistry["get_slot_conversationId"]["args"]) =>
-	// 	invokeCommand("get_slot_conversationId", args),
-	// linkSlotConversation: (args: CommandRegistry["link_slot_conversation"]["args"]) =>
-	// 	invokeCommand("link_slot_conversation", args),
-};
-
+export const gameManagerCommands = {
+	createGame: (args: CommandRegistry["create_game"]["args"]) => invokeCommand("create_game", args),
+	getPackageData: (args: CommandRegistry["get_package_data"]["args"]) => invokeCommand("get_package_data", args),
+	savePackage: (args: CommandRegistry["save_package"]["args"]) => invokeCommand("save_package", args),
+	deleteGame: (args: CommandRegistry["delete_game"]["args"]) => invokeCommand("delete_game", args),
+	importGame: (args: CommandRegistry["import_game"]["args"]) => invokeCommand("import_game", args),
+	exportGame: (args: CommandRegistry["export_game"]["args"]) => invokeCommand("export_game", args),
+	openGame: (args: CommandRegistry["open_game"]["args"]) => invokeCommand("open_game", args),
+}
 export const gameEngineCommands = {
 	startNewGame: (args: CommandRegistry["start_new_game"]["args"]) => invokeCommand("start_new_game", args),
 	continueGame: (args: CommandRegistry["continue_game"]["args"]) => invokeCommand("continue_game", args),
@@ -182,6 +165,4 @@ export const gameEngineCommands = {
 	save_write: (args: CommandRegistry["save_write"]["args"]) => invokeCommand("save_write", args),
 	saveRead: (args: CommandRegistry["save_read"]["args"]) => invokeCommand("save_read", args),
 	saveList: () => invokeCommand("save_list"),
-
-
 };

@@ -17,7 +17,7 @@
 		width: 2.5rem;
 		height: 2.5rem;
 		border-radius: 100%;
-        flex: 0 0 auto;
+		flex: 0 0 auto;
 		display: inline-flex;
 		justify-content: center;
 		align-items: center;

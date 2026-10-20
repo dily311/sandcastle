@@ -6,23 +6,21 @@
 	import { conversations, messages, openConversation } from "$/lib/chat/chatStore.svelte";
 	import MessageBubble from "$screens/chat/MessageBubble.svelte";
 	import { pop, router } from "svelte-spa-router";
-	import { tick } from "svelte";
-	import Icon from "$/components/Icon.svelte";
+	import { onMount, tick } from "svelte";
+	import Icon from "$/components/ui/Icon.svelte";
+	import Button from "$/components/ui/button/Button.svelte";
 
-	let currentMode = $state(true); // true 시 대화 모드 / false 시 읽기 모드
-
-	let params: string | null;
+	// props로 편집할 characterId를 받습니다. (null일 경우 새로 만들기)
+	let { params }: { params?: { conversationId?: string } } = $props();
+	const conversationId = $derived(params?.conversationId ?? null);
 
 	$effect(() => {
-		if (router.params && 'conversationId' in router.params) {
-			params = router.params?.conversationId ?? null;
-			if (params) {
-				openConversation(params);
-			}
+		if (conversationId) {
+			openConversation(conversationId);
 		}
-		return;
 	});
 
+	let currentMode = $state(true); // true 시 대화 모드 / false 시 읽기 모드
 	let isRightSidebarOpen = $state(false); // 오른쪽 사이드바 열림/닫힘 상태
 	let bgImg = false;
 	let chatBoxElement: HTMLElement | null = $state(null);
@@ -90,33 +88,33 @@
 			<!-- 상단 헤더 -->
 			<header class="chat-header">
 				<div class="header-left">
-					<button type="button" aria-label={$_("chat.back")} class="back-btn clickable-icon" onclick={() => pop()}>
+					<Button variant="ghost" size="icon-lg" aria-label={$_("global.back")} onclick={() => pop()}>
 						<Icon name={"ChevronLeft"} />
-					</button>
+					</Button>
 					<h3 class="chat-title-wrap">
 						<span class="chat-title">{conversations.activeConv.title}</span>
 					</h3>
 				</div>
 				<div class="header-right">
-					<button
-						type="button"
+					<Button
+						variant="ghost"
+						size="icon-lg"
 						aria-label={currentMode ? $_("chat.chatMode") : $_("chat.readMode")}
-						class="pill-btn clickable-icon"
 					>
 						<Icon name={"BookOpenIcon"} />
-					</button>
+					</Button>
 					<button type="button" aria-label={$_("chat.viewAction")} class="pill-btn clickable-icon">
 						<Icon name={"EllipsisVertical"} />
 					</button>
 					<!-- 오른쪽 사이드바 토글 버튼 -->
-					<button
-						type="button"
-						aria-label={$_("chat.rightSidebar")} 
-						class="clickable-icon sidebar-toggle-btn"
+					<Button
+						variant="ghost"
+						size="icon-lg"
+						aria-label={$_("chat.rightSidebar")}
 						onclick={() => (isRightSidebarOpen = !isRightSidebarOpen)}
 					>
 						<Icon name={"PanelRight"} />
-					</button>
+					</Button>
 				</div>
 			</header>
 

@@ -1,7 +1,7 @@
 <script lang="ts">
 	import { WIDGET_FEATURES } from "$/lib/features/setFeautres";
 	import { featureConfig, featureManager } from "$/lib/features/feautreManager.svelte";
-	import Icon from "$/components/Icon.svelte";
+	import Icon from "$/components/ui/Icon.svelte";
 	import { widgetCommands } from "$/ipc/commands";
 	import { onMount } from "svelte";
 

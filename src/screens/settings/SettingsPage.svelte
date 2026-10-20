@@ -3,13 +3,14 @@
 	import ThemeSettingPage from "./ThemeSettingSection.svelte";
 	import type { LucideIcon } from "@lucide/svelte";
 	import AppSettingSection from "./AppSettingSection.svelte";
+	import Icon from "$/components/ui/Icon.svelte";
 
 	// 탭 활성화 상태
 	type TabsType = "app" | "theme" | "widget" | "data";
 	interface Tab {
 		type: TabsType;
 		label: string;
-		icon?: LucideIcon;
+		icon?: string;
 	}
 	const tabs: Tab[] = [
 		{
@@ -41,8 +42,7 @@
 				<button class="tab-btn" class:active={activeTab === tab.type} onclick={() => (activeTab = tab.type)}>
 					<span class="tab-icon">
 						{#if tab.icon}
-							{@const Icon = tab.icon}
-							<Icon />
+							<Icon name={tab.icon} />
 						{/if}
 					</span>
 					<span class="tab-label">{tab.label}</span>

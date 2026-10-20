@@ -4,16 +4,21 @@
 	import type { Character, Conversation } from "$type/conv";
 	import { Plus, Send } from "@lucide/svelte";
 	import { personas } from "$/lib/chat/personaStore.svelte";
+	import TextArea from "$/components/ui/TextArea.svelte";
+	import ButtonGroup from "$/components/ui/button/ButtonGroup.svelte";
+	import Button from "$/components/ui/button/Button.svelte";
 
 	let { conversation: conv, character }: { conversation: Conversation; character: Character | null } = $props();
 	let inputMessage = $state("");
 
 	async function handleSend() {
+		if (conversations.isChattingLoading) return;
+
 		const persona = personas.activePersona;
 		if (conversations.isChattingLoading || !character || !persona) return;
 
 		if (inputMessage !== "") {
-			const userText = inputMessage;
+			const userText = inputMessage ?? "";
 			await messages.append({
 				conversationId: conv.id,
 				role: "user",
@@ -27,6 +32,7 @@
 						color: persona.color,
 					},
 				},
+				characterId: null,
 			});
 			inputMessage = "";
 		}
@@ -47,21 +53,15 @@
 </script>
 
 <div class="message-form">
-	<button class="clickable-icon add-btn">
+	<Button variant="ghost" size="icon" class="clickable-icon add-btn">
 		<Plus />
-	</button>
+	</Button>
 	<div class="input-area">
-		<textarea
-			placeholder="메시지를 입력하세요..."
-			bind:value={inputMessage}
-			onkeydown={handleKeyDown}
-			rows="1"
-			disabled={conversations.isChattingLoading}
-		></textarea>
+		<TextArea bind:value={inputMessage} rows={1} placeholder="메시지를 입력하세요..." onkeydown={handleKeyDown} />
 	</div>
-	<button class="send-btn" onclick={() => handleSend()}>
+	<Button variant="primary" size="lg" class="send-btn" onclick={() => handleSend()}>
 		<Send />
-	</button>
+	</Button>
 </div>
 
 <style>
@@ -74,11 +74,6 @@
 
 	.input-area {
 		flex: 1;
-	}
-
-	.input-area textarea {
-		min-height: 1.6rem;
-		background: var(--background-primary);
 	}
 
 	.send-btn {

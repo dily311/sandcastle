@@ -3,7 +3,7 @@
 	import { formatRelativeTime } from "$lib/utils/date";
 	import { conversations } from "$/lib/chat/chatStore.svelte";
 	import { push } from "svelte-spa-router";
-	import Icon from "$/components/Icon.svelte";
+	import Icon from "$/components/ui/Icon.svelte";
 
 	const quickLinks: link[] = [
 		{

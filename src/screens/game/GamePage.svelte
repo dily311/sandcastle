@@ -1,35 +1,16 @@
 <script lang="ts">
-	import { gameCommands } from "$/ipc/commands";
-	import type { GameProject } from "$/lib/types/game";
+	import Button from "$/components/ui/button/Button.svelte";
+	import ButtonGroup from "$/components/ui/button/ButtonGroup.svelte";
+	import { gameManagerCommands } from "$/ipc/commands";
+	import type { GameProject } from "$type/game";
+	import { Notebook } from "@lucide/svelte";
 	import { open } from "@tauri-apps/plugin-dialog";
 	import { onMount } from "svelte";
-
-	// import GamePlayer from "$/lib/game/GamePlayer.svelte";
-	// import type { NpcResponder } from "$/lib/game/npc/npcResponder";
-	// let gameId: string = 'game_yuna_test';
-	// let startSceneKey: string = 'yuna_intro';
-	// let npcResponder: NpcResponder = {
-	// 	send: async (args) => {
-	// 		let random = Date.now();
-	// 		// ai 메시지 응답 모킹
-	// 		return {
-	// 			speakerName: "char212",
-	// 			text: `
-	// 			반가워. 오늘 하루 어땠어? ${random}
-	// 			<state>affection_yuna += 2</state>
-	// 			계속 얘기해볼까 아니면 다른 얘기 할까?
-	// 			<choice>더 얘기하고 싶어</choice>
-	// 			<choice>나중에 다시 올게</choice>
-	// 			`,
-	// 		}
-	// 	}
-	// }
-
 	let games = $state<GameProject[] | undefined>(undefined);
 
-	onMount(async () => {
-		games = await gameCommands.listGames();
-	});
+	// onMount(async () => {
+	// 	games = await gameCommands.listGames();
+	// });
 
 	async function handleImport() {
 		const path = await open({
@@ -43,15 +24,15 @@
 			],
 		});
 		if (!path) return;
-		await gameCommands.importGamePack({ path });
+		await gameManagerCommands.importGame({ zipPath: path });
 	}
 	async function handleExport(gameId: string) {
-		await gameCommands.exportGamePack({ gameId });
+		await gameManagerCommands.exportGame({ gameId, outputDir: "" });
 	}
 </script>
 
 <div class="game-page">
-	<div>
+	<!-- <div>
 		<button type="button" onclick={handleImport}> 파일 임포트 </button>
 	</div>
 	<div>
@@ -88,8 +69,18 @@
 				{/if}
 			</tbody>
 		</table>
-	</div>
-	<!-- <GamePlayer gameId={gameId} gameTitle={"유나와 대화"} startSceneKey={startSceneKey} npcResponder={npcResponder} /> -->
+	</div> -->
+	<ButtonGroup>
+		<Button variant="outline" size="icon">
+			<Notebook />
+		</Button>
+		<Button variant="outline">
+			버튼 테스트
+		</Button>
+		<Button variant="outline">
+			버튼 테스트
+		</Button>
+	</ButtonGroup>
 </div>
 
 <style>

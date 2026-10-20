@@ -3,8 +3,10 @@
 	import { getMD } from "$/lib/markdown";
 	import { messages } from "$/lib/chat/chatStore.svelte";
 	import type { Message } from "$type/conv";
-	import { ChevronLeft, ChevronRight, Pen, RotateCw } from "@lucide/svelte";
-	import Avatar from "../../components/avatar.svelte";
+	import Avatar from "$components/avatar.svelte";
+	import Icon from "$/components/ui/Icon.svelte";
+	import Button from "$/components/ui/button/Button.svelte";
+	import ButtonGroup from "$/components/ui/button/ButtonGroup.svelte";
 	let { msg, index }: { msg: Message; index: number } = $props();
 
 	let swipeLength = $derived(msg.meta?.swipes?.length ?? 1);
@@ -33,28 +35,37 @@
 				<span class="time-stamp">{formatDateTime(msg.createdAt)}</span>
 			</div>
 		</div>
-		<div class="action-btns-wrap">
-			<button aria-label={"메시지 편집"}>
-				<Pen />
-			</button>
-		</div>
+		<ButtonGroup>
+			<Button variant="ghost" size="icon" aria-label={"메시지 편집"}>
+				<Icon name="Pen" />
+			</Button>
+		</ButtonGroup>
 		<div class="bubble">
 			{@html md.render(msg.content)}
 			<div class="swipe-btns-wrap">
 				{#if msg.role === "assistant"}
-					<button
-						class="action-btn clickable-icon"
-						onclick={() => messages.selectSwipe(msg.id, swipeId - 1)}
-						disabled={swipeId === 0}
-					>
-						<ChevronLeft />
-					</button>
-					<div>
-						{displaySwipeId} / {swipeLength}
-					</div>
-					<button class="action-btn clickable-icon" onclick={() => handleNextSwipe()}>
-						<ChevronRight />
-					</button>
+					<ButtonGroup>
+						<Button
+							variant="ghost"
+							size="icon"
+							class="action-btn clickable-icon"
+							onclick={() => messages.selectSwipe(msg.id, swipeId - 1)}
+							disabled={swipeId === 0}
+						>
+							<Icon name="ChevronLeft" />
+						</Button>
+						<div>
+							{displaySwipeId} / {swipeLength}
+						</div>
+						<Button
+							variant="ghost"
+							size="icon"
+							class="action-btn clickable-icon"
+							onclick={() => handleNextSwipe()}
+						>
+							<Icon name="ChevronRight" />
+						</Button>
+					</ButtonGroup>
 				{/if}
 			</div>
 		</div>

@@ -7,7 +7,7 @@
 	import Tooltip from "$components/ui/Tooltip.svelte";
 	import Toast from "$/components/ui/Toast.svelte";
 	import Sidebar from "$components/Sidebar.svelte";
-	import LoadingScreen from "./components/LoadingScreen.svelte";
+	import LoadingScreen from "./screens/LoadingScreen.svelte";
 	import { conversations } from "$/lib/chat/chatStore.svelte";
 	import { personas } from "$/lib/chat/personaStore.svelte";
 	import { characters } from "$/lib/chat/characterStore.svelte";
@@ -63,39 +63,3 @@
 		<Toast />
 	</div>
 {/if}
-
-<style>
-	.app-wrap {
-		display: flex;
-		flex-direction: row;
-		position: relative;
-		width: 100dvw;
-		height: calc(100dvh - env(safe-area-inset-top, 0px));
-		/* 상단 상태 바 공간 확보 */
-		padding-top: env(safe-area-inset-top, 0px);
-		background-color: var(--background-primary);
-		/* background-color: color-mix(in oklab, var(--background-primary) 80%, transparent 10%); */
-	}
-
-	.app-layout {
-		width: calc(100% - var(--ribbon-width));
-		height: calc(100% - var(--titlebar-height));
-		flex: 1;
-		overflow-y: auto;
-	}
-
-	:global(body.is-frameless .app-layout) {
-		height: 100%;
-	}
-
-	:global(body:not(.is-frameless) .app-header) {
-		display: flex;
-		align-items: center;
-		height: var(--titlebar-height);
-		padding: 4px 90px 4px 15px;
-		vertical-align: middle;
-		font-size: 14px;
-		background-color: var(--background-secondary);
-		border-bottom: 1px solid var(--border-color);
-	}
-</style>

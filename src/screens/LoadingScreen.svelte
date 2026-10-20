@@ -4,7 +4,7 @@
 
 <!-- 로딩 스피너 또는 스플래시 화면 -->
 <div class="splash-screen">
-	<!-- <p>Loading settings...</p> -->
+	<p>Loading settings...</p>
 </div>
 
 <style>

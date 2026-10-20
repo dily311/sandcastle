@@ -1,6 +1,8 @@
 {
+  "global": {
+    "back": "뒤로가기"
+  },
   "chat": {
-    "back": "뒤로가기",
     "readMode": "현재 읽기모드: 클릭해서 전환",
     "chatMode": "현재 대화모드: 클릭해서 전환",
     "viewAction": "다른 옵션",

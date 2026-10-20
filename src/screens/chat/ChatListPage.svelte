@@ -2,7 +2,7 @@
 	import { conversations } from "$/lib/chat/chatStore.svelte";
 	import { Search, Plus, MoreVertical, MessageCircle } from "@lucide/svelte";
 	import { push } from "svelte-spa-router";
-	import Avatar from "../../components/avatar.svelte";
+	import Avatar from "$components/avatar.svelte";
 	
 	let search = $state("");
 </script>

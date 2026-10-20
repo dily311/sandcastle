@@ -2,7 +2,7 @@
 	import { handleDeletePersona, personas } from "$/lib/chat/personaStore.svelte";
 	import { confirm } from "@tauri-apps/plugin-dialog";
 	import { appSetting } from "$/lib/stores/settingStore.svelte";
-	import Avatar from "../../components/avatar.svelte";
+	import Avatar from "$components/avatar.svelte";
 
 	let loading = $state(false);
 	let error = $state<string | null>(null);

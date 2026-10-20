@@ -47,7 +47,7 @@ export const routes: RouteDefinition = {
 	"/character/details/:characterId": CharacterDetailPage,
 	"/character/edit/:characterId": CharacterEditPageSvelte,
 	"/character/*": CharacterDetailPage,
-	"/chat": ChatListPage,
+	// "/chat": ChatListPage,
 	"/chat/:conversationId": ChatScreen,
 	"/game": GamePage,
 	"/api": APIPage,
@@ -76,12 +76,6 @@ export const navigation: PageItem[] = [
 		link: "/preset",
 		label: "프리셋",
 		icon: "FileText",
-	},
-	{
-		id: "chat",
-		link: "/chat",
-		label: "채팅",
-		icon: "MessageCircle",
 	},
 	{
 		id: "character",
