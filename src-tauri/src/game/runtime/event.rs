@@ -45,5 +45,7 @@ pub enum GameEvent {
     VariableChanged { key: String, old: serde_json::Value, new: serde_json::Value },
     ItemAdded { item_id: String, quantity: i64 },
     ItemRemoved { item_id: String, quantity: i64 },
+    ItemChangeRequested { item_id: String, delta: i64 },
+    ItemUsed { item_id: String, },
     GameEnded { ending_id: String },
 }

@@ -7,9 +7,7 @@
 //! 거슬러 찾아서 derive한다.
 use crate::game::engine::Condition;
 use crate::models::game::{
-    GameCharacters, GameEncounterEntries, GameEncounterTables, GameEndings, GameEventCharacterPool,
-    GameEvents, GameInteractables, GameLocationConnections, GameLocations, GameMaps, GameMapsZone,
-    GameProject, GameScene, GameStateDef, GameTimePeriods, GameWeatherTransitions, GameWeatherTypes,
+    GameCharacters, GameEncounterEntries, GameEncounterTables, GameEndings, GameEventCharacterPool, GameEvents, GameInteractables, GameItems, GameLocationConnections, GameLocations, GameMaps, GameMapsZone, GameProject, GameScene, GameStateDef, GameTimePeriods, GameWeatherTransitions, GameWeatherTypes,
 };
 use crate::models::conversation::WorldInfoEntry;
 use std::collections::HashMap;
@@ -46,6 +44,7 @@ pub struct GameDefinition {
     /// 키 매칭/예산 배분은 PromptManager가 한다 — 여기선 후보만 들고 있는다.
     /// ⚠ 북/엔트리는 게임 정의가 아니라 전역 테이블(worldinfo_*)이라 export 때 따로 챙겨야 한다.
     pub character_world_info: HashMap<String, Vec<WorldInfoEntry>>,
+    pub items: HashMap<String, GameItems>,
     // TODO: game_assets, game_character_worldinfo — export 완전판 만들 때 필요해지면 추가
 }
 
