@@ -161,7 +161,7 @@ button:has(.svg-icon) {
 	display: flex;
 	align-items: center;
 	padding: 0 0.2rem;
-} */
+}
 
 .ellipsis {
 	overflow: hidden;
