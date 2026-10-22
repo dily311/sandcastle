@@ -1,8 +1,7 @@
 //! iframe SDK가 보낼 수 있는 커맨드.
-use serde::{Deserialize, Serialize};
 use serde_json::Value;
 
-#[derive(Debug, Clone, Deserialize, Serialize)]
+#[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
 #[serde(tag = "type", rename_all = "snake_case")]
 pub enum GameCommand {
     MoveTo { location_id: String },
@@ -18,6 +17,7 @@ pub enum GameCommand {
     /// 그게 곧 AI 대화의 branch_key가 되므로).
     Choose { choice_id: String },
     AdvanceTime { minutes: i32 },
-    /// TODO: 인벤토리 데이터 모델이 아직 없어서 handle_command가 에러를 반환한다.
     UseItem { item_id: String, target_id: Option<String> },
+    /// 버리기. 핵심 아이템(is_key)은 못 버린다. quantity가 없으면 1개.
+    DropItem { item_id: String, quantity: Option<u32> },
 }

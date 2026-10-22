@@ -30,7 +30,7 @@ fn priority(e: &GameEvents) -> i64 {
     e.config_json.get("priority").and_then(|v| v.as_i64()).unwrap_or(0)
 }
 
-fn engine_state(state: &GameState, time_from: i64) -> EngineState {
+pub(super) fn engine_state(state: &GameState, time_from: i64) -> EngineState {
     EngineState {
         map_id: state.map_id.clone(),
         zone_id: state.zone_id.clone(),
@@ -40,6 +40,7 @@ fn engine_state(state: &GameState, time_from: i64) -> EngineState {
         weather_id: state.weather_id.clone(),
         time_period_id: state.time_period_id.clone(),
         flags: state.flags.clone(),
+        inventory: state.inventory_json.clone(),
     }
 }
 
@@ -72,8 +73,16 @@ fn fire(def: &GameDefinition, state: &mut GameState, e: &GameEvents, rng: &mut S
         event_id: e.id.clone(),
         event_type: e.event_type.clone(),
         trigger_type: e.trigger_type.clone(),
-        npc_id,
+        npc_id: npc_id.clone(),
     }];
+    // 이벤트로 등장한 NPC는 플레이어가 있는 위치에 나타난 것으로 기록한다 (Talk의 "같은 위치" 검사와 맞추려는 것).
+    if let Some(npc) = &npc_id {
+        let prev = state.npc_states.get(npc).and_then(|n| n.location_id.clone());
+        if prev != state.location_id {
+            state.npc_states.insert(npc.clone(), super::super::state::NpcState { location_id: state.location_id.clone(), status: "active".into() });
+            out.push(GameEvent::NpcMoved { game_character_id: npc.clone(), from: prev, to: state.location_id.clone() });
+        }
+    }
     out.extend(effect_events(&state.flags, &e.effect_json));
     out
 }
@@ -138,7 +147,7 @@ fn roll_random(def: &GameDefinition, state: &mut GameState, es: &EngineState, rn
         .map(|en| en.event_id.clone())
         .collect();
 
-    let Some(idx) = engine::roll_encounter(&entries, es, table.base_trigger_chance, weather_mod, &cooling_down, rng) else {
+    let Some(idx) = engine::roll_encounter(&entries, es, table.base_trigger_chance * def.danger_multiplier(&state.map_id), weather_mod, &cooling_down, rng) else {
         return vec![];
     };
     let Some(e) = def.events.get(&entries[idx].event_id) else { return vec![] };

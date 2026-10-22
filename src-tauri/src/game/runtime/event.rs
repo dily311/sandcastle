@@ -18,6 +18,10 @@ pub enum GameEvent {
     /// 시간이 from → to 로 흘렀다 (초). 예약 이벤트가 건너뛴 구간을 판정하려면 from이 필요하다.
     TimeAdvanced { from: i64, to: i64 },
     WeatherChanged { weather_id: String },
+    /// 시간대가 바뀌었다 (아침 → 낮 등). NPC 위치를 다시 굴리는 시점이다.
+    TimePeriodChanged { from: Option<String>, to: String },
+    /// NPC가 한 위치에서 다른 위치로 옮겨졌다 (None = 어디에도 없음). 스폰 재굴림/이벤트 등장이 낸다.
+    NpcMoved { game_character_id: String, from: Option<String>, to: Option<String> },
     /// game_events 한 건이 발동됨 (어떤 trigger_type이든 공통). 프론트는 event_type(제작자가 정한
     /// 내용 분류)을 보고 어떤 UI로 보여줄지 고르고, trigger_type은 "어떻게 발동했는가"를 알려준다.
     EventTriggered { event_id: String, event_type: String, trigger_type: String, npc_id: Option<String> },
@@ -43,9 +47,12 @@ pub enum GameEvent {
     /// 변수 변경 "제안 또는 통지". state.flags에 실제로 쓰는 건 trigger.rs의
     /// VariableChanged 핸들러 한 곳뿐 — 다른 시스템은 이 이벤트를 emit만 하고 쓰기는 안 한다.
     VariableChanged { key: String, old: serde_json::Value, new: serde_json::Value },
+    /// 내부 요청: 아이템을 delta만큼 늘리거나(양수) 줄인다(음수). 인벤토리 시스템이 스택/고유 규칙을 적용하고
+    /// 실제로 바뀐 만큼만 ItemAdded/ItemRemoved로 알린다 (효과 give_item/take_item, UseItem, DropItem이 내는 요청).
+    ItemChangeRequested { item_id: String, delta: i64 },
+    ItemUsed { item_id: String, target_id: Option<String> },
+    /// quantity는 요청한 수량이 아니라 실제로 들어온/나간 수량이다 (max_stack/고유 규칙으로 줄 수 있다).
     ItemAdded { item_id: String, quantity: i64 },
     ItemRemoved { item_id: String, quantity: i64 },
-    ItemChangeRequested { item_id: String, delta: i64 },
-    ItemUsed { item_id: String, },
     GameEnded { ending_id: String },
 }

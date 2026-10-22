@@ -4,6 +4,7 @@ mod dialogue;
 mod events;
 mod inventory;
 mod map;
+mod npcs;
 mod movement;
 mod relationship;
 mod scene;

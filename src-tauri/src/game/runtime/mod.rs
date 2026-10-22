@@ -3,14 +3,14 @@ pub mod definition;
 pub mod event;
 pub mod repository;
 pub mod state;
-pub mod view;
 mod systems;
+mod view;
 
 pub use command::GameCommand;
 pub use definition::GameDefinition;
 pub use event::GameEvent;
 pub use repository::{GameRepository, SqlxGameRepository};
-pub use state::{GameState, RenderState};
+pub use state::{GameState, NpcState, RenderState};
 
 use anyhow::Result;
 use rand::rngs::StdRng;
@@ -22,6 +22,51 @@ const MAX_EVENT_DEPTH: usize = 8;
 
 fn period_tuples(definition: &GameDefinition) -> Vec<(String, u32, u32)> {
     definition.time_periods.iter().map(|p| (p.id.clone(), p.start_minute, p.end_minute)).collect()
+}
+
+/// null이거나 빈 객체면 "없음"으로 본다 (DB의 NULL이 Value::Null로 온다).
+fn json_is_empty(v: &serde_json::Value) -> bool {
+    v.is_null() || v.as_object().map_or(false, |o| o.is_empty())
+}
+
+/// 정의에서 사라진 위치/씬/날씨를 가리키는 상태를 되돌린다.
+///  - 위치가 없거나 사라졌으면 시작 위치(없으면 첫 location)로 옮기고, zone/map도 그 위치에서 다시 구한다.
+///  - 위치가 있으면 zone/map 캐시를 위치와 다시 맞춘다 (location이 다른 zone으로 옮겨졌을 수 있다).
+///  - 사라진 씬은 닫고, 대기열에서도 뺀다. 사라진 날씨는 첫 날씨로 바꾼다.
+fn repair_state(def: &GameDefinition, state: &mut GameState) {
+    let valid_location = state.location_id.as_deref().and_then(|id| def.location(id)).map(|l| l.id.clone());
+    let location_id = valid_location.or_else(|| {
+        def.start_point().location_id.filter(|id| def.location(id).is_some()).or_else(|| def.locations.first().map(|l| l.id.clone()))
+    });
+    state.location_id = location_id.clone();
+    if let Some(zone) = location_id.as_deref().and_then(|id| def.zone_of_location(id)) {
+        state.zone_id = Some(zone.id.clone());
+        state.map_id = zone.map_id.clone();
+    }
+    if !def.weather_types.iter().any(|w| w.id == state.weather_id) {
+        if let Some(w) = def.weather_types.first() {
+            state.weather_id = w.id.clone();
+        }
+    }
+    // 사라진 캐릭터/위치를 가리키는 NPC 상태는 정리한다 (위치만 사라졌으면 "어디에도 없음"으로).
+    state.npc_states.retain(|id, _| def.character(id).is_some());
+    for n in state.npc_states.values_mut() {
+        if n.location_id.as_deref().map_or(false, |l| def.location(l).is_none()) {
+            n.location_id = None;
+            n.status = "absent".into();
+        }
+    }
+    // 정의에서 지워진 아이템은 인벤토리에서 뺀다.
+    if let Some(inv) = state.inventory_json.as_object_mut() {
+        inv.retain(|id, v| def.items.contains_key(id) && v.as_i64().map_or(false, |n| n > 0));
+    }
+    if state.current_scene_id.as_deref().map_or(false, |id| def.scene(id).is_none()) {
+        state.current_scene_id = None;
+    }
+    if let Some(arr) = state.pending_scenes_json.as_array() {
+        let kept: Vec<&serde_json::Value> = arr.iter().filter(|v| v.as_str().map_or(false, |id| def.scene(id).is_some())).collect();
+        state.pending_scenes_json = serde_json::json!(kept);
+    }
 }
 
 #[derive(Serialize)]
@@ -84,6 +129,16 @@ impl GameRuntime {
         }
         let initial_flags = serde_json::Value::Object(initial_flags);
 
+        // 제작자가 심어둔 초기 관계(game_relationship_defs)를 세션의 관계로 복사한다.
+        // 키는 "보낸쪽>받는쪽"이고 값은 {축: 수치, ..., "tags": [...]}.
+        let mut initial_relationships = serde_json::Map::new();
+        for d in &definition.relationship_defs {
+            let mut rel = d.values_json.as_object().cloned().unwrap_or_default();
+            rel.insert("tags".into(), if d.tags.is_array() { d.tags.clone() } else { serde_json::json!([]) });
+            initial_relationships.insert(format!("{}>{}", d.from_id, d.to_id), serde_json::Value::Object(rel));
+        }
+        let initial_relationships = serde_json::Value::Object(initial_relationships);
+
         let state = GameState {
             session_id,
             player_id, // 새 게임 시작 시점에 선택돼 있던 페르소나 (start_new_game이 설정에서 읽어 넘김). 세션 동안 고정.
@@ -102,11 +157,12 @@ impl GameRuntime {
             pending_scenes_json: serde_json::json!([]),
             active_npc_id: None,
             flags: initial_flags,
+            inventory_json: serde_json::json!({}),
+            relationships_json: initial_relationships,
+            npc_states: Default::default(), // start()가 GameStarted를 흘려서 처음 위치를 굴린다
             cooldowns: Default::default(),
             auto_active: Default::default(),
             turn_fired: false,
-            inventory_json: Default::default(),
-            relationships_json: Default::default(),
         };
         Ok(Self::new(definition, state))
     }
@@ -120,10 +176,22 @@ impl GameRuntime {
 
         let cooldowns = repository.load_cooldowns(game_id, session_id, session.game_time).await?;
         let mut state = GameState::from_session(session, cooldowns, time_period_id).map_err(|e| anyhow::anyhow!(e))?;
+        state.npc_states = repository.load_npc_states(session_id).await?;
+        // 에디터에서 정의가 바뀌었을 수 있다 (id 보존 저장이라도 행을 지웠으면 FK가 NULL로 만든다).
+        // 사라진 위치/씬/날씨를 가리키는 세션은 여기서 안전한 값으로 되돌린다.
+        repair_state(&definition, &mut state);
         // 지금 이미 참인 auto 이벤트는 "참인 상태"로 표시만 해둔다 (이어하기 직후 재발동 방지).
         systems::prime_auto_state(&definition, &mut state);
 
         Ok(Self::new(definition, state))
+    }
+
+    /// 새 게임의 첫 턴: GameStarted를 흘려서 NPC의 처음 위치를 굴린다. 돌려주는 이벤트(GameStarted 포함)를
+    /// 그대로 journal::record에 넘겨서 기록한다.
+    pub fn start(&mut self) -> Vec<GameEvent> {
+        self.state.turn_fired = false;
+        self.queue.push(GameEvent::GameStarted);
+        self.process_events()
     }
 
     pub fn dispatch(&mut self, command: GameCommand) -> Result<GameResponse> {
@@ -156,7 +224,9 @@ impl GameRuntime {
                     .definition
                     .connection(&from_id, &location_id)
                     .ok_or_else(|| anyhow::anyhow!("그 경로로는 이동할 수 없습니다"))?;
-                if let Some(cond) = connection.condition.as_ref().and_then(|s| serde_json::from_str::<crate::game::engine::Condition>(s).ok()) {
+                // 조건이 적혀 있는데 못 읽으면 통과시키지 않는다 (fail-closed). 빈 문자열은 조건 없음.
+                if let Some(raw) = connection.condition.as_ref().filter(|s| !s.trim().is_empty()) {
+                    let cond = serde_json::from_str::<crate::game::engine::Condition>(raw).unwrap_or(crate::game::engine::Condition::Never);
                     let engine_state = self.engine_state_snapshot();
                     if !cond.eval(&engine_state) {
                         return Err(anyhow::anyhow!("이동 조건이 충족되지 않았습니다"));
@@ -176,6 +246,15 @@ impl GameRuntime {
                 self.definition
                     .character(&game_character_id)
                     .ok_or_else(|| anyhow::anyhow!("존재하지 않는 캐릭터입니다: {game_character_id}"))?;
+                // 위치를 추적하는 NPC(스폰 규칙이 있는 캐릭터)는 같은 위치에 있을 때만 말을 걸 수 있다.
+                // 스폰 규칙이 없는 캐릭터는 항상 가능하다 (스폰을 안 쓰는 기존 게임이 안 깨지게).
+                let tracked = self.definition.spawn_locations.get(&game_character_id).map_or(false, |v| !v.is_empty());
+                if tracked {
+                    let here = self.state.npc_states.get(&game_character_id).and_then(|n| n.location_id.as_deref());
+                    if here.is_none() || here != self.state.location_id.as_deref() {
+                        return Err(anyhow::anyhow!("그 캐릭터는 지금 여기에 없습니다"));
+                    }
+                }
                 self.emit(GameEvent::DialogueStarted { game_character_id });
             }
             GameCommand::StopTalk => {
@@ -187,10 +266,17 @@ impl GameRuntime {
                 self.emit(GameEvent::VariableChanged { key, old, new: value });
             }
             GameCommand::Choose { choice_id } => {
-                let (_scene, choice) = self
+                let (scene, choice) = self
                     .definition
                     .find_choice(&choice_id)
                     .ok_or_else(|| anyhow::anyhow!("존재하지 않는 선택지입니다: {choice_id}"))?;
+                // 지금 열려 있는 씬의 선택지만 고를 수 있다 (아니면 아무 씬의 선택지 id로 씬을 건너뛸 수 있다).
+                if self.state.current_scene_id.as_deref() != Some(scene.id.as_str()) {
+                    return Err(anyhow::anyhow!("지금 열려 있는 씬의 선택지가 아닙니다"));
+                }
+                if !self.choice_available(choice) {
+                    return Err(anyhow::anyhow!("지금은 고를 수 없는 선택지입니다"));
+                }
                 let effect = choice.effect.as_ref().and_then(|s| serde_json::from_str(s).ok());
                 self.emit(GameEvent::ChoiceMade { choice_id, next_scene_id: choice.next_scene_id.clone(), effect });
             }
@@ -200,12 +286,44 @@ impl GameRuntime {
                 }
                 self.emit(GameEvent::TimeAdvanceRequested { seconds: minutes as i64 * 60 });
             }
-            GameCommand::UseItem { .. } => {
-                // TODO: 인벤토리 데이터 모델이 아직 없다. 조용히 무시하지 않고 에러로 알린다.
-                return Err(anyhow::anyhow!("인벤토리가 아직 구현되지 않았습니다"));
+            GameCommand::UseItem { item_id, target_id } => {
+                let item = self.definition.items.get(&item_id).ok_or_else(|| anyhow::anyhow!("존재하지 않는 아이템입니다: {item_id}"))?;
+                if self.inventory_count(&item_id) < 1 {
+                    return Err(anyhow::anyhow!("가지고 있지 않은 아이템입니다"));
+                }
+                if json_is_empty(&item.use_effect) {
+                    return Err(anyhow::anyhow!("사용할 수 없는 아이템입니다"));
+                }
+                if !json_is_empty(&item.use_condition) {
+                    // 조건이 적혀 있는데 못 읽으면 막는다 (fail-closed).
+                    let cond = serde_json::from_value::<crate::game::engine::Condition>(item.use_condition.clone()).unwrap_or(crate::game::engine::Condition::Never);
+                    if !cond.eval(&self.engine_state_snapshot()) {
+                        return Err(anyhow::anyhow!("지금은 사용할 수 없습니다"));
+                    }
+                }
+                if let Some(t) = &target_id {
+                    self.definition.character(t).ok_or_else(|| anyhow::anyhow!("존재하지 않는 대상입니다: {t}"))?;
+                }
+                self.emit(GameEvent::ItemUsed { item_id, target_id });
+            }
+            GameCommand::DropItem { item_id, quantity } => {
+                let item = self.definition.items.get(&item_id).ok_or_else(|| anyhow::anyhow!("존재하지 않는 아이템입니다: {item_id}"))?;
+                if item.is_key {
+                    return Err(anyhow::anyhow!("핵심 아이템은 버릴 수 없습니다"));
+                }
+                let owned = self.inventory_count(&item_id);
+                let qty = quantity.unwrap_or(1) as i64;
+                if qty < 1 || owned < 1 {
+                    return Err(anyhow::anyhow!("버릴 수 있는 아이템이 없습니다"));
+                }
+                self.emit(GameEvent::ItemChangeRequested { item_id, delta: -qty.min(owned) });
             }
         }
         Ok(())
+    }
+
+    fn inventory_count(&self, item_id: &str) -> i64 {
+        self.state.inventory_json.get(item_id).and_then(|v| v.as_i64()).unwrap_or(0)
     }
 
     fn engine_state_snapshot(&self) -> crate::game::engine::EngineState {
@@ -218,6 +336,7 @@ impl GameRuntime {
             weather_id: self.state.weather_id.clone(),
             time_period_id: self.state.time_period_id.clone(),
             flags: self.state.flags.clone(),
+            inventory: self.state.inventory_json.clone(),
         }
     }
 
@@ -256,8 +375,27 @@ impl GameRuntime {
         &self.definition
     }
 
+    /// 선택지 표시 조건(choice.condition) 평가. 조건이 적혀 있는데 못 읽으면 막는다 (fail-closed).
+    fn choice_available(&self, choice: &crate::models::game::GameChoiceRow) -> bool {
+        match choice.condition.as_ref().filter(|s| !s.trim().is_empty()) {
+            None => true,
+            Some(raw) => serde_json::from_str::<crate::game::engine::Condition>(raw)
+                .unwrap_or(crate::game::engine::Condition::Never)
+                .eval(&self.engine_state_snapshot()),
+        }
+    }
+
     pub fn render_state(&self) -> RenderState {
-        RenderState::from(&self.state)
+        let mut render = RenderState::from(&self.state);
+        if let Some(here) = self.state.location_id.as_deref() {
+            let mut present: Vec<String> = self.state.npc_states.iter().filter(|(_, n)| n.location_id.as_deref() == Some(here)).map(|(id, _)| id.clone()).collect();
+            present.sort();
+            render.present_npcs = present;
+        }
+        if let Some(scene) = self.state.current_scene_id.as_deref().and_then(|id| self.definition.scene(id)) {
+            render.available_choices = scene.choices.iter().flatten().filter(|c| self.choice_available(c)).map(|c| c.id.clone()).collect();
+        }
+        render
     }
 
     /// AI가 낸 effect들을 허용 목록/범위로 걸러서 (key, old, new) 변경 목록으로 만든다 (상태는 안 바꿈).

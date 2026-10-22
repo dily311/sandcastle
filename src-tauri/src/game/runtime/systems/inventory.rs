@@ -42,8 +42,10 @@ fn change(def: &GameDefinition, state: &mut GameState, item_id: &str, delta: i64
         }
         set_qty(state, item_id, owned + actual);
         let mut out = vec![GameEvent::ItemAdded { item_id: item_id.to_string(), quantity: actual }];
-        if owned == 0 && !item.on_acquire_event_id.trim().is_empty() {
-            out.push(GameEvent::EventRequested { event_id: item.on_acquire_event_id.clone() });
+        if let Some(event_id) = item.on_acquire_event_id.clone() {
+            if owned == 0 {
+                out.push(GameEvent::EventRequested { event_id });
+            }
         }
         out
     } else if delta < 0 {

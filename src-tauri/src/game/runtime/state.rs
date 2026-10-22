@@ -4,6 +4,15 @@
 use crate::models::game::GamePlayerSessions;
 use std::collections::{HashMap, HashSet};
 
+/// NPC 하나의 지금 상태. 위치는 스폰 규칙(시간대가 바뀔 때)이나 이벤트 등장으로 정해진다.
+#[derive(Debug, Clone, PartialEq, serde::Serialize, serde::Deserialize)]
+pub struct NpcState {
+    /// None이면 지금 어디에도 없다 (스폰 조건을 통과한 위치가 하나도 없음).
+    pub location_id: Option<String>,
+    /// "active" / "absent". (dead, traveling 등은 나중에.)
+    pub status: String,
+}
+
 #[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
 pub struct GameState {
     pub session_id: String,
@@ -27,14 +36,20 @@ pub struct GameState {
     pub current_scene_id: Option<String>,
     /// 대기 중인 씬 id 배열(JSON). 한 번에 하나만 열고 나머지는 여기서 기다린다.
     pub pending_scenes_json: serde_json::Value,
-    pub inventory_json: serde_json::Value,
-    pub relationships_json: serde_json::Value,
     /// 지금 AI 대화창이 열려 있는 NPC(game_character_id). 세션에는 저장하지 않는다 —
     /// 앱을 다시 열면 대화창은 항상 닫힌 상태로 시작한다 (Talk로 다시 열어야 함).
     #[serde(skip)]
     pub active_npc_id: Option<String>,
     /// game_state_defs 에 정의된 값들 (affection_yuna 같은 것들)
     pub flags: serde_json::Value,
+    /// 인벤토리: item_id -> 수량 (0이 되면 키를 지운다). 쓰는 곳은 InventorySystem 하나.
+    pub inventory_json: serde_json::Value,
+    /// 관계: "보낸쪽>받는쪽" -> {affection, trust, tension, tags}. 보낸쪽/받는쪽은 'player' 또는 game_character_id.
+    pub relationships_json: serde_json::Value,
+    /// game_character_id -> 지금 상태/위치. 세션에는 컬럼이 없고 game_character_state_snapshots에 seq별로 쌓인다
+    /// (불러올 때 캐릭터별 가장 최근 행을 읽는다). 스폰 규칙이 정의된 캐릭터만 여기에 생긴다.
+    #[serde(skip)]
+    pub npc_states: HashMap<String, NpcState>,
     /// event_id -> 마지막으로 발생한 game_time. 매 턴 event_log를 다시 안 읽으려고 메모리에 들고 있음.
     #[serde(skip)]
     pub cooldowns: HashMap<String, i64>,
@@ -48,6 +63,11 @@ pub struct GameState {
     #[serde(skip)]
     pub turn_fired: bool,
     // TODO: inventory, relationships — 해당 시스템 설계되면 구체 타입으로 교체.
+}
+
+/// DB에서 NULL이거나 객체가 아닌 값이 오면 빈 객체로 바꾼다.
+fn as_object(v: serde_json::Value) -> serde_json::Value {
+    if v.is_object() { v } else { serde_json::json!({}) }
 }
 
 impl GameState {
@@ -70,10 +90,11 @@ impl GameState {
             time_period_id,
             current_scene_id: session.current_scene_id,
             pending_scenes_json: if session.pending_scenes_json.is_array() { session.pending_scenes_json } else { serde_json::json!([]) },
-            inventory_json: session.inventory_json,
-            relationships_json: session.relationships_json,
             active_npc_id: None, // 항상 닫힌 상태로 시작 (위 주석 참고)
             flags: session.flags_json,
+            inventory_json: as_object(session.inventory_json),
+            relationships_json: as_object(session.relationships_json),
+            npc_states: HashMap::new(), // GameRuntime::load가 DB에서 채운다
             cooldowns,
             auto_active: HashSet::new(),
             turn_fired: false,
@@ -90,6 +111,8 @@ impl GameState {
 #[derive(Debug, Clone, serde::Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct RenderState {
+    /// 지금 플레이 중인 세션(책). 분기로 불러오면 새 세션 id가 여기로 온다.
+    pub session_id: String,
     pub location_id: Option<String>,
     pub map_id: String,
     pub zone_id: Option<String>,
@@ -98,12 +121,20 @@ pub struct RenderState {
     pub time_period_id: String,
     pub current_scene_id: Option<String>,
     pub active_npc_id: Option<String>,
+    /// 지금 열려 있는 씬에서 고를 수 있는 선택지 id (표시 조건을 통과한 것만). GameRuntime::render_state가 채운다.
+    pub available_choices: Vec<String>,
     pub flags: serde_json::Value,
+    /// 지금 가진 아이템 (item_id -> 수량). 아이템 정의(이름/아이콘)는 get_game_view에 있다.
+    pub inventory: serde_json::Value,
+    pub relationships: serde_json::Value,
+    /// 지금 플레이어가 있는 위치에 있는 NPC들 (game_character_id). GameRuntime::render_state가 채운다.
+    pub present_npcs: Vec<String>,
 }
 
 impl From<&GameState> for RenderState {
     fn from(s: &GameState) -> Self {
         Self {
+            session_id: s.session_id.clone(),
             location_id: s.location_id.clone(),
             map_id: s.map_id.clone(),
             zone_id: s.zone_id.clone(),
@@ -112,7 +143,11 @@ impl From<&GameState> for RenderState {
             time_period_id: s.time_period_id.clone(),
             current_scene_id: s.current_scene_id.clone(),
             active_npc_id: s.active_npc_id.clone(),
+            available_choices: Vec::new(),
             flags: s.flags.clone(),
+            inventory: s.inventory_json.clone(),
+            relationships: s.relationships_json.clone(),
+            present_npcs: Vec::new(),
         }
     }
 }

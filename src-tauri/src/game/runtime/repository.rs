@@ -3,23 +3,20 @@
 //! 매 턴 부르는 건 persist_session / append_event_log 뿐.
 use super::definition::GameDefinition;
 use super::state::GameState;
-use crate::db::conversation::{get_all_worldinfo_entries, get_system_default_persona};
 use crate::db::game::{
-    get_all_event_characters, get_all_event_conditions, get_all_game_branches,
-    get_all_game_characters, get_all_game_choices, get_all_game_encounter_table_entries,
-    get_all_game_encounter_tables, get_all_game_endings, get_all_game_event_logs,
-    get_all_game_events, get_all_game_interactables, get_all_game_items,
-    get_all_game_location_connections, get_all_game_locations, get_all_game_map_zones,
-    get_all_game_maps, get_all_game_scenes, get_all_game_state_defs, get_all_game_time_periods,
-    get_all_game_weather_transitions, get_all_game_weather_types, get_game_player_sessions,
-    get_game_project, upsert_game_event_log, upsert_game_event_log_character,
-    upsert_game_player_sessions,
+    get_all_event_characters, get_all_event_conditions, get_all_game_characters, get_all_game_branches, get_all_game_choices,
+    get_all_game_encounter_table_entries, get_all_game_encounter_tables, get_all_game_endings,
+    get_all_game_event_logs, get_all_game_events, get_all_game_interactables, get_all_game_location_connections,
+    get_all_game_character_spawn_locations, get_all_game_items, get_all_game_locations, get_all_game_relationship_defs, get_all_game_map_zones, get_all_game_maps, get_all_game_state_defs,
+    get_all_game_time_periods, get_all_game_weather_transitions, get_all_game_weather_types, get_all_game_scenes,
+    get_game_player_sessions, get_game_project, get_session_game_character_state_snapshots, upsert_game_event_log,
+    upsert_game_event_log_character, upsert_game_player_sessions,
 };
+use crate::db::conversation::{get_all_worldinfo_entries, get_system_default_persona};
 use crate::game::engine::Condition;
 use crate::models::conversation::WorldInfoEntry;
 use crate::models::game::{
-    GameEventLogCharactersInput, GameEventLogInput, GamePlayerSessions, GamePlayerSessionsInput,
-    GameScene,
+    GameEventLogCharactersInput, GameEventLogInput, GamePlayerSessions, GamePlayerSessionsInput, GameScene,
 };
 use anyhow::Result;
 use sqlx::SqlitePool;
@@ -29,17 +26,14 @@ pub trait GameRepository {
     async fn load_definition(&self, game_id: &str) -> Result<GameDefinition>;
     async fn load_session(&self, session_id: &str) -> Result<GamePlayerSessions>;
     /// 세션 쿨다운 계산용. GameDefinition에 안 넣은 이유: 세션마다 다르기 때문.
-    async fn load_cooldowns(
-        &self,
-        game_id: &str,
-        session_id: &str,
-        now: i64,
-    ) -> Result<HashMap<String, i64>>;
+    async fn load_cooldowns(&self, game_id: &str, session_id: &str, now: i64) -> Result<HashMap<String, i64>>;
     async fn persist_session(&self, input: GamePlayerSessionsInput) -> Result<()>;
     async fn append_event_log(&self, entry: GameEventLogInput) -> Result<()>;
     /// game_event_log에서 game_character_id가 빠지고 독립된 junction 테이블이 됐다.
     /// NPC가 있는 로그는 append_event_log로 로그를 쓴 다음 이것도 같이 불러야 한다.
     async fn append_event_log_character(&self, entry: GameEventLogCharactersInput) -> Result<()>;
+    /// 세션의 NPC 상태: 캐릭터별 가장 최근(seq가 가장 큰) 기록.
+    async fn load_npc_states(&self, session_id: &str) -> Result<HashMap<String, super::state::NpcState>>;
 }
 
 pub struct SqlxGameRepository<'a> {
@@ -75,7 +69,6 @@ impl<'a> GameRepository for SqlxGameRepository<'a> {
             entries,
             endings,
             characters,
-            items,
         ) = futures::try_join!(
             get_game_project(pool, game_id),
             get_all_game_state_defs(pool, game_id),
@@ -94,8 +87,17 @@ impl<'a> GameRepository for SqlxGameRepository<'a> {
             get_all_game_encounter_table_entries(pool, game_id),
             get_all_game_endings(pool, game_id),
             get_all_game_characters(pool, game_id),
-            get_all_game_items(pool, game_id),
         )?;
+
+        let (items, relationship_defs, spawn_rows) = futures::try_join!(
+            get_all_game_items(pool, game_id),
+            get_all_game_relationship_defs(pool, game_id),
+            get_all_game_character_spawn_locations(pool, game_id),
+        )?;
+        let mut spawn_locations: HashMap<String, Vec<_>> = HashMap::new();
+        for s in spawn_rows {
+            spawn_locations.entry(s.game_character_id.clone()).or_default().push(s);
+        }
 
         // 씬 + 선택지/분기. 선택지와 분기는 scene_id로 씬에 붙는다 (노드는 없어졌다).
         let (scene_rows, choices, branches) = futures::try_join!(
@@ -105,17 +107,11 @@ impl<'a> GameRepository for SqlxGameRepository<'a> {
         )?;
         let mut choices_by_scene: HashMap<String, Vec<_>> = HashMap::new();
         for c in choices {
-            choices_by_scene
-                .entry(c.scene_id.clone())
-                .or_default()
-                .push(c);
+            choices_by_scene.entry(c.scene_id.clone()).or_default().push(c);
         }
         let mut branches_by_scene: HashMap<String, Vec<_>> = HashMap::new();
         for b in branches {
-            branches_by_scene
-                .entry(b.scene_id.clone())
-                .or_default()
-                .push(b);
+            branches_by_scene.entry(b.scene_id.clone()).or_default().push(b);
         }
         let scenes: Vec<GameScene> = scene_rows
             .into_iter()
@@ -131,11 +127,7 @@ impl<'a> GameRepository for SqlxGameRepository<'a> {
             for c in conditions {
                 // 조건 JSON을 못 읽으면 "조건 없음"으로 버리지 않고 절대 참이 아닌 조건(Never)으로 둔다 —
                 // 버리면 오염된 데이터가 오히려 이벤트를 항상 통과시킨다 (fail-closed).
-                let parsed = c
-                    .condition_value
-                    .as_ref()
-                    .and_then(|s| serde_json::from_str::<Condition>(s).ok())
-                    .unwrap_or(Condition::Never);
+                let parsed = c.condition_value.as_ref().and_then(|s| serde_json::from_str::<Condition>(s).ok()).unwrap_or(Condition::Never);
                 m.entry(c.event_id).or_default().push(parsed);
             }
             m
@@ -156,13 +148,7 @@ impl<'a> GameRepository for SqlxGameRepository<'a> {
                 book_entries.insert(book_id, entries.into_iter().filter(|e| e.enabled).collect());
             }
         }
-        let entries_of = |ids: &[String]| -> Vec<WorldInfoEntry> {
-            ids.iter()
-                .filter_map(|id| book_entries.get(id))
-                .flatten()
-                .cloned()
-                .collect()
-        };
+        let entries_of = |ids: &[String]| -> Vec<WorldInfoEntry> { ids.iter().filter_map(|id| book_entries.get(id)).flatten().cloned().collect() };
         let game_world_info = entries_of(&project.world_info_ids);
         let character_world_info: HashMap<String, Vec<WorldInfoEntry>> = characters
             .iter()
@@ -201,10 +187,12 @@ impl<'a> GameRepository for SqlxGameRepository<'a> {
             encounter_entries: entries,
             scenes,
             endings,
+            items: items.into_iter().map(|i| (i.id.clone(), i)).collect(),
+            relationship_defs,
+            spawn_locations,
             characters: characters.into_iter().map(|c| (c.id.clone(), c)).collect(),
             game_world_info,
             character_world_info,
-            items: items.into_iter().map(|c| (c.id.clone(), c)).collect(),
         })
     }
 
@@ -218,12 +206,7 @@ impl<'a> GameRepository for SqlxGameRepository<'a> {
         Ok(session)
     }
 
-    async fn load_cooldowns(
-        &self,
-        game_id: &str,
-        session_id: &str,
-        now: i64,
-    ) -> Result<HashMap<String, i64>> {
+    async fn load_cooldowns(&self, game_id: &str, session_id: &str, now: i64) -> Result<HashMap<String, i64>> {
         let logs = get_all_game_event_logs(self.pool, game_id).await?;
         Ok(logs
             .into_iter()
@@ -241,6 +224,18 @@ impl<'a> GameRepository for SqlxGameRepository<'a> {
 
     async fn append_event_log(&self, entry: GameEventLogInput) -> Result<()> {
         Ok(upsert_game_event_log(self.pool, entry).await?)
+    }
+
+    async fn load_npc_states(&self, session_id: &str) -> Result<HashMap<String, super::state::NpcState>> {
+        let rows = get_session_game_character_state_snapshots(self.pool, session_id).await?;
+        let mut latest: HashMap<String, (u32, super::state::NpcState)> = HashMap::new();
+        for r in rows {
+            let newer = latest.get(&r.game_character_id).map_or(true, |(seq, _)| r.seq >= *seq);
+            if newer {
+                latest.insert(r.game_character_id, (r.seq, super::state::NpcState { location_id: r.current_location_id, status: r.status }));
+            }
+        }
+        Ok(latest.into_iter().map(|(k, (_, v))| (k, v)).collect())
     }
 
     async fn append_event_log_character(&self, entry: GameEventLogCharactersInput) -> Result<()> {
