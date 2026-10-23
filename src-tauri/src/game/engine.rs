@@ -16,10 +16,44 @@ pub struct EngineState {
     pub flags: serde_json::Value,
     /// item_id -> 수량 (HasItem 조건용)
     pub inventory: serde_json::Value,
+    /// "from>to" -> {axis: 수치, tags} (RelationAtLeast/AtMost 조건용)
+    pub relationships: serde_json::Value,
 }
 
 /// 관계의 고정 축 (처음엔 코드의 문자열 상수로 둔다). 범위는 -100..=100.
 pub const RELATION_AXES: [&str; 3] = ["affection", "trust", "tension"];
+pub const RELATION_MIN: i64 = -100;
+pub const RELATION_MAX: i64 = 100;
+/// AI가 한 번의 응답에서 축 하나를 바꿀 수 있는 최대 폭.
+pub const RELATION_AI_MAX_STEP: i64 = 5;
+
+/// "from>to" 관계에서 축의 현재 값 (없으면 0). 방향은 "from이 to에게 느끼는 것"이다.
+pub fn relation_value(rels: &serde_json::Value, from: &str, to: &str, axis: &str) -> i64 {
+    rels.get(format!("{from}>{to}")).and_then(|r| r.get(axis)).and_then(|v| v.as_i64()).unwrap_or(0)
+}
+
+/// AI가 낸 관계 effect({"affection": 2, ...})를 허용 축/최대 폭/범위로 걸러서 (축, 이전, 이후) 목록으로 만든다.
+/// 상태는 안 바꾼다. 허용 안 된 축, 숫자가 아닌 값, 변화 없는 항목은 버리고 최대 max_changes개까지만.
+pub fn plan_ai_relation(rels: &serde_json::Value, from: &str, to: &str, effect: &serde_json::Value, max_step: i64, max_changes: usize) -> Vec<(String, i64, i64)> {
+    let mut out = Vec::new();
+    let serde_json::Value::Object(m) = effect else { return out };
+    for (axis, d) in m {
+        if out.len() >= max_changes {
+            break;
+        }
+        if !RELATION_AXES.contains(&axis.as_str()) {
+            continue;
+        }
+        let Some(delta) = d.as_f64().filter(|f| f.is_finite()) else { continue };
+        let delta = (delta.round() as i64).clamp(-max_step, max_step);
+        let old = relation_value(rels, from, to, axis);
+        let new = (old + delta).clamp(RELATION_MIN, RELATION_MAX);
+        if new != old {
+            out.push((axis.clone(), old, new));
+        }
+    }
+    out
+}
 
 #[derive(Debug, Clone)]
 pub struct Entry {
@@ -48,6 +82,9 @@ pub enum Condition {
     HasItem { item_id: String, #[serde(default)] min: Option<i64> },
     /// 지금 시간대가 이것인가 (NPC 스폰 조건 등: "밤에만 술집").
     TimePeriod { period_id: String },
+    /// from이 to에게 느끼는 axis가 value 이상/이하인가. from/to는 'player' 또는 game_character_id.
+    RelationAtLeast { from: String, to: String, axis: String, value: i64 },
+    RelationAtMost { from: String, to: String, axis: String, value: i64 },
     Weather { weather_id: String },
     /// 절대 참이 아니다. 저장된 조건 JSON을 못 읽을 때 "조건 없음(=항상 통과)"으로 취급하면
     /// 의도치 않게 열리므로, 읽지 못한 조건은 이 값으로 대신한다 (fail-closed).
@@ -82,6 +119,8 @@ impl Condition {
             Condition::InZone { zone_id } => s.zone_id.as_deref() == Some(zone_id.as_str()),
             Condition::AtMinuteOfDay { minute } => crossed_minute_of_day(s.time_from, s.game_time, *minute),
             Condition::HasItem { item_id, min } => s.inventory.get(item_id).and_then(|v| v.as_i64()).unwrap_or(0) >= min.unwrap_or(1),
+            Condition::RelationAtLeast { from, to, axis, value } => relation_value(&s.relationships, from, to, axis) >= *value,
+            Condition::RelationAtMost { from, to, axis, value } => relation_value(&s.relationships, from, to, axis) <= *value,
             Condition::TimePeriod { period_id } => &s.time_period_id == period_id,
             Condition::Weather { weather_id } => &s.weather_id == weather_id,
             Condition::Never => false,
@@ -325,7 +364,7 @@ mod tests {
         Entry { id: format!("entry-{event_id}"), event_id: event_id.into(), weight: w, time_period_id: None, weather_id: weather.map(String::from), conditions: vec![] }
     }
     fn state(weather: &str) -> EngineState {
-        EngineState { map_id: "map1".into(), zone_id: None, location_id: None, game_time: 0, time_from: 0, weather_id: weather.into(), time_period_id: "day".into(), flags: serde_json::json!({}), inventory: serde_json::json!({}) }
+        EngineState { map_id: "map1".into(), zone_id: None, location_id: None, game_time: 0, time_from: 0, weather_id: weather.into(), time_period_id: "day".into(), flags: serde_json::json!({}), inventory: serde_json::json!({}), relationships: serde_json::json!({}) }
     }
 
     #[test]
@@ -360,6 +399,16 @@ mod tests {
         assert_eq!(resolve_time_period(&periods, 600 * 60), Some("day".into()));
         assert_eq!(resolve_time_period(&periods, 23 * 3600), Some("night".into())); // 23:00
         assert_eq!(resolve_time_period(&periods, 1 * 3600), Some("night".into()));  // 01:00 (자정 넘김)
+    }
+
+    #[test]
+    fn ai_relation_is_clamped_to_step_and_range() {
+        let rels = serde_json::json!({ "yuna>player": { "affection": 98, "trust": 0 } });
+        let effect = serde_json::json!({ "affection": 50, "trust": -20, "secret": 3, "tension": "high" });
+        let ch = plan_ai_relation(&rels, "yuna", "player", &effect, 5, 5);
+        assert!(ch.contains(&("affection".to_string(), 98, 100))); // 폭 5 → 103이지만 범위 100에서 잘림
+        assert!(ch.contains(&("trust".to_string(), 0, -5)));       // 폭 5로 제한
+        assert_eq!(ch.len(), 2);                                    // 모르는 축/숫자 아닌 값은 버림
     }
 
     #[test]

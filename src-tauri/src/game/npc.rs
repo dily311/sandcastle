@@ -13,13 +13,12 @@
 use crate::state::AppState;
 use crate::db::conversation::{get_all_worldinfo_entries, get_persona};
 use crate::db::game::{
-    get_game_conversation_conversation_id, get_game_messages, upsert_game_conversation,
+    upsert_game_player_sessions, get_game_conversation_conversation_id, get_game_messages, upsert_game_conversation,
     upsert_game_conversations_participant, upsert_game_journal, upsert_game_message,
 };
 use crate::error::AppError;
 use crate::game::guard::current_game_id;
 use crate::models::conversation::WorldInfoEntry;
-use crate::game::runtime::SqlxGameRepository;
 use crate::models::game::{GameConversationsInput, GameJournalInput, GameMessagesInput};
 use crate::models::settings::AppSetting;
 use crate::service::ChatManager;
@@ -255,68 +254,65 @@ pub async fn say(
     let (text, var_tags) = extract_tag(&text_without_choices, "updateVar");
     let effects: Vec<serde_json::Value> = var_tags.iter().take(MAX_UPDATE_TAGS).filter_map(|t| serde_json::from_str(t).ok()).collect();
 
-    // seq는 세션 전체 번호 공간에서 하나씩 발급한다(일지/메시지/이벤트 로그 공통). 발급한 head_seq는 바로 저장.
-    // AI 호출 동안 사용자가 다른 세션으로 갈아탔을 수 있어서, 같은 세션인지 다시 확인한다.
-    // 변수 변경은 여기서 "계획"만 세우고(상태는 안 바꿈), 메시지 저장이 끝난 뒤에 적용한다 —
-    // 저장에 실패했는데 변수만 바뀌어 있는 일이 없게 하려는 것.
-    let (user_seq, ai_seq, game_time, changes) = {
-        let mut guard = state.active_runtime.lock().await;
-        let runtime = guard.as_mut().ok_or_else(|| AppError::NotFound("진행 중인 세션이 없습니다".into()))?;
-        if runtime.state().session_id != snap.session_id {
-            return Err(AppError::Validation("응답을 기다리는 동안 세션이 바뀌었습니다".into()));
-        }
-        let changes = runtime.plan_ai_changes(&effects, MAX_AI_CHANGES);
-        let user_seq = runtime.next_seq();
-        let ai_seq = runtime.next_seq();
-        let game_time = runtime.state().game_time;
-        let repo = SqlxGameRepository::new(&state.db);
-        runtime.save(&repo, &game_id).await.map_err(|e| AppError::Database(e.to_string()))?;
-        (user_seq, ai_seq, game_time, changes)
-    };
-
-    let mut meta = serde_json::Map::new();
-    if !choices.is_empty() {
-        meta.insert("choices".into(), serde_json::json!(choices));
-    }
-    if !changes.is_empty() {
-        meta.insert("varChanges".into(), serde_json::json!(changes.iter().map(|(k, o, n)| serde_json::json!({ "key": k, "old": o, "new": n })).collect::<Vec<_>>()));
-    }
-    let ai_meta = if meta.is_empty() { serde_json::Value::Null } else { serde_json::Value::Object(meta) };
-
-    // 메시지의 seq가 곧 그 메시지의 일지 항목 seq다 (같은 번호로 일지에도 한 줄 남긴다).
-    let messages = [
-        (user_seq, "user", None::<String>, None::<String>, trimmed.to_string(), serde_json::Value::Null),
-        (ai_seq, "assistant", Some(snap.character_name), Some(character_id.clone()), text.clone(), ai_meta),
-    ];
-    for (seq, role, name, char_id, content, meta) in messages {
-        upsert_game_message(
-            &state.db,
-            &conversation_id,
-            GameMessagesInput { id: None, seq, conversation_id: conversation_id.clone(), role: role.to_string(), name, character_id: char_id, content, meta },
-        )
-        .await?;
-        upsert_game_journal(
-            &state.db,
-            GameJournalInput {
-                session_id: snap.session_id.clone(),
-                seq,
-                kind: "message".to_string(),
-                payload_json: serde_json::json!({ "conversationId": conversation_id, "role": role }),
-                game_time,
-            },
-        )
-        .await?;
-    }
-
-    // 메시지가 저장된 뒤에 변수 변경을 적용한다. 이 경로는 프론트가 부를 수 있는 커맨드가 아니라
-    // 런타임 안쪽 메서드라, AI(와 그 응답을 조작할 수 있는 입력)가 허용 목록 밖을 건드릴 수 없다.
+    // 여기서부터는 런타임 락을 잡은 채로 끝까지 한다 — AI 호출 동안 사용자가 다른 세션으로 갈아탔을 수
+    // 있어서 같은 세션인지 확인하고, seq 발급/저장/적용이 다른 커맨드와 섞이지 않게 하려는 것.
     let (applied_events, render) = {
         let mut guard = state.active_runtime.lock().await;
         let runtime = guard.as_mut().ok_or_else(|| AppError::NotFound("진행 중인 세션이 없습니다".into()))?;
         if runtime.state().session_id != snap.session_id {
             return Err(AppError::Validation("응답을 기다리는 동안 세션이 바뀌었습니다".into()));
         }
-        let events = if changes.is_empty() { vec![] } else { runtime.apply_ai_changes(changes) };
+
+        // 변수 변경은 "계획"만 세우고 메시지가 저장된 뒤에 적용한다 — 저장에 실패했는데 변수만 바뀌어
+        // 있는 일이 없게 하려는 것. 계획에 쓸 현재 값은 이 락 안에서 읽으니 어긋나지 않는다.
+        let changes = runtime.plan_ai_changes(&effects, MAX_AI_CHANGES);
+        let relations = runtime.plan_ai_relation(&character_id, &effects, MAX_AI_CHANGES);
+        let user_seq = runtime.next_seq();
+        let ai_seq = runtime.next_seq();
+        let game_time = runtime.state().game_time;
+
+        let mut meta = serde_json::Map::new();
+        if !choices.is_empty() {
+            meta.insert("choices".into(), serde_json::json!(choices));
+        }
+        if !changes.is_empty() {
+            meta.insert("varChanges".into(), serde_json::json!(changes.iter().map(|(k, o, n)| serde_json::json!({ "key": k, "old": o, "new": n })).collect::<Vec<_>>()));
+        }
+        let ai_meta = if meta.is_empty() { serde_json::Value::Null } else { serde_json::Value::Object(meta) };
+
+        // 메시지의 seq가 곧 그 메시지의 일지 항목 seq다 (같은 번호로 일지에도 한 줄 남긴다).
+        let messages = [
+            (user_seq, "user", None::<String>, None::<String>, trimmed.to_string(), serde_json::Value::Null),
+            (ai_seq, "assistant", Some(snap.character_name.clone()), Some(character_id.clone()), text.clone(), ai_meta),
+        ];
+
+        // head_seq 저장 + 메시지 + 일지를 한 트랜잭션으로.
+        let mut tx = state.db.begin().await?;
+        upsert_game_player_sessions(&mut *tx, runtime.state().to_session_input(game_id.clone())).await?;
+        for (seq, role, name, char_id, content, meta) in messages {
+            upsert_game_message(
+                &mut *tx,
+                &conversation_id,
+                GameMessagesInput { id: None, seq, conversation_id: conversation_id.clone(), role: role.to_string(), name, character_id: char_id, content, meta },
+            )
+            .await?;
+            upsert_game_journal(
+                &mut *tx,
+                GameJournalInput {
+                    session_id: snap.session_id.clone(),
+                    seq,
+                    kind: "message".to_string(),
+                    payload_json: serde_json::json!({ "conversationId": conversation_id, "role": role }),
+                    game_time,
+                },
+            )
+            .await?;
+        }
+        tx.commit().await?;
+
+        // 메시지가 저장된 뒤에 변수 변경을 적용한다. 이 경로는 프론트가 부를 수 있는 커맨드가 아니라
+        // 런타임 안쪽 메서드라, AI(와 그 응답을 조작할 수 있는 입력)가 허용 목록 밖을 건드릴 수 없다.
+        let events = if changes.is_empty() || relations.is_empty() { vec![] } else { runtime.apply_ai_changes(changes, relations) };
         if !events.is_empty() {
             crate::game::journal::record(&state.db, runtime, &game_id, None, &events).await?;
         }

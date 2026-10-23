@@ -337,6 +337,7 @@ impl GameRuntime {
             time_period_id: self.state.time_period_id.clone(),
             flags: self.state.flags.clone(),
             inventory: self.state.inventory_json.clone(),
+            relationships: self.state.relationships_json.clone(),
         }
     }
 
@@ -423,12 +424,39 @@ impl GameRuntime {
         all
     }
 
+    /// AI가 낸 관계 effect들을 걸러서 (from, to, axis, old, new) 목록으로 만든다 (상태는 안 바꿈).
+    /// 허용 범위: "이 캐릭터가 플레이어에게 느끼는 것"(npc>player)만. 임의의 두 NPC 사이는 AI가 못 바꾼다.
+    /// 여러 effect는 앞의 결과를 누적해서 다음에 적용한다 (같은 축을 두 번 건드려도 폭이 지켜진다).
+    pub fn plan_ai_relation(&self, npc_id: &str, effects: &[serde_json::Value], max_changes: usize) -> Vec<(String, String, String, i64, i64)> {
+        use crate::game::engine::{plan_ai_relation, RELATION_AI_MAX_STEP};
+        let mut working = self.state.relationships_json.clone();
+        let mut all = Vec::new();
+        for effect in effects {
+            let remaining = max_changes.saturating_sub(all.len());
+            if remaining == 0 {
+                break;
+            }
+            let changes = plan_ai_relation(&working, npc_id, "player", effect, RELATION_AI_MAX_STEP, remaining);
+            if !working.is_object() {
+                working = serde_json::json!({});
+            }
+            if let Some(obj) = working.as_object_mut() {
+                for (axis, _, new) in &changes {
+                    obj.entry(format!("{npc_id}>player")).or_insert_with(|| serde_json::json!({ "tags": [] }))[axis.as_str()] = serde_json::Value::from(*new);
+                }
+            }
+            all.extend(changes.into_iter().map(|(axis, old, new)| (npc_id.to_string(), "player".to_string(), axis, old, new)));
+        }
+        all
+    }
+
     /// plan_ai_changes로 검증을 통과한 변경만 적용한다. 프론트가 부를 수 있는 GameCommand가 아니라
     /// 런타임 안쪽 메서드다 (아무 변수나 쓸 수 있게 되면 안 되니까). 변경은 VariableChanged로
     /// 환원돼서 평소 이벤트 전파(auto 이벤트, 씬 등)를 그대로 탄다.
-    pub fn apply_ai_changes(&mut self, changes: Vec<(String, serde_json::Value, serde_json::Value)>) -> Vec<GameEvent> {
+    pub fn apply_ai_changes(&mut self, changes: Vec<(String, serde_json::Value, serde_json::Value)>, relations: Vec<(String, String, String, i64, i64)>) -> Vec<GameEvent> {
         self.state.turn_fired = false;
         self.queue.extend(changes.into_iter().map(|(key, old, new)| GameEvent::VariableChanged { key, old, new }));
+        self.queue.extend(relations.into_iter().map(|(from, to, axis, old, new)| GameEvent::RelationChangeRequested { from, to, axis, delta: new - old }));
         self.process_events()
     }
 

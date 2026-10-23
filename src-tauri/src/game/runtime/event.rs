@@ -51,6 +51,11 @@ pub enum GameEvent {
     /// 실제로 바뀐 만큼만 ItemAdded/ItemRemoved로 알린다 (효과 give_item/take_item, UseItem, DropItem이 내는 요청).
     ItemChangeRequested { item_id: String, delta: i64 },
     ItemUsed { item_id: String, target_id: Option<String> },
+    /// 내부 요청: from이 to에게 느끼는 axis를 delta만큼 바꾼다. 관계 시스템이 축/범위를 검증하고 적용한다
+    /// (효과 relation, AI의 <updateRel>이 내는 요청).
+    RelationChangeRequested { from: String, to: String, axis: String, delta: i64 },
+    /// 실제로 바뀐 결과 (범위로 잘린 뒤의 값). 변화량만 game_relationship_snapshots에 쌓인다.
+    RelationChanged { from: String, to: String, axis: String, old: i64, new: i64 },
     /// quantity는 요청한 수량이 아니라 실제로 들어온/나간 수량이다 (max_stack/고유 규칙으로 줄 수 있다).
     ItemAdded { item_id: String, quantity: i64 },
     ItemRemoved { item_id: String, quantity: i64 },

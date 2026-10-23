@@ -41,6 +41,7 @@ pub(super) fn engine_state(state: &GameState, time_from: i64) -> EngineState {
         time_period_id: state.time_period_id.clone(),
         flags: state.flags.clone(),
         inventory: state.inventory_json.clone(),
+        relationships: state.relationships_json.clone(),
     }
 }
 
