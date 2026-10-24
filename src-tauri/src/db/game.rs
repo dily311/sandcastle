@@ -70,6 +70,9 @@ pub async fn get_all_game_projects<'e, E>(executor: E) -> Result<Vec<GameProject
                 WHERE gw.game_id = p.id
             ) AS world_info_ids,
             p.custom_css, 
+            p.start_scene_key,
+            p.start_map_id,
+            p.start_location_id,
             p.settings_json, 
             p.created_at, 
             p.updated_at
@@ -99,6 +102,9 @@ pub async fn get_game_project<'e, E>(executor: E, id: &str) -> Result<GameProjec
                 WHERE gw.game_id = p.id
             ) AS world_info_ids,
             p.custom_css, 
+            p.start_scene_key,
+            p.start_map_id,
+            p.start_location_id,
             p.settings_json, 
             p.created_at, 
             p.updated_at
@@ -116,11 +122,12 @@ pub async fn get_game_project<'e, E>(executor: E, id: &str) -> Result<GameProjec
 pub async fn upsert_game_project<'e, E>(executor: E, input: &GameProjectInput) -> Result<(), Error> where E: Executor<'e, Database = Sqlite> {
     let id = input.id.clone().unwrap_or_else(|| Uuid::new_v4().to_string());
     let now = chrono::Utc::now().timestamp_millis();
+    let settings_json = serde_json::to_string(&input.settings_json).unwrap_or_default();
     sqlx::query(
         r#"
         INSERT INTO game_projects ( id, title, description, template_id, version, api_version, cover_image, start_scene_key, start_map_id, start_location_id, custom_css, settings_json, created_at, updated_at)
         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?,?)
-        ON CONFLICT(id, created_at) DO UPDATE SET
+        ON CONFLICT(id) DO UPDATE SET
             title = excluded.title,
             description = excluded.description,
             template_id = excluded.template_id,
@@ -131,6 +138,7 @@ pub async fn upsert_game_project<'e, E>(executor: E, input: &GameProjectInput) -
             start_map_id = excluded.start_map_id,
             start_location_id = excluded.start_location_id,
             custom_css = excluded.custom_css,
+            settings_json = excluded.settings_json,
             updated_at = excluded.updated_at
         "#,
     )
@@ -144,7 +152,8 @@ pub async fn upsert_game_project<'e, E>(executor: E, input: &GameProjectInput) -
     .bind(&input.start_scene_key)
     .bind(&input.start_map_id)
     .bind(&input.start_location_id)
-    .bind(&input.settings_json)
+    .bind(&input.custom_css)
+    .bind(settings_json)
     .bind(now)
     .bind(now)
     .execute(executor)
@@ -212,7 +221,7 @@ pub async fn upsert_game_state_defs<'e, E>(executor: E, game_id: &str, state_def
             game_id = excluded.game_id,
             key = excluded.key,
             default_value = excluded.default_value,
-            config_json=excluded.config_json
+            config_json=excluded.config_json,
             updated_at = excluded.updated_at
         "#,
     )
@@ -704,7 +713,7 @@ pub async fn delete_game_locations<'e, E>(executor: E, id: &str) -> Result<bool,
 
 pub async fn get_all_game_location_connections<'e, E>(executor: E, game_id: &str) -> Result<Vec<GameLocationConnections>, Error> where E: Executor<'e, Database = Sqlite> {
     let result = sqlx::query_as::<_, GameLocationConnectionsRow>(
-    "SELECT c.from_id, c.to_id, c.travel_seconds, condition, settings_json
+    "SELECT c.from_id, c.to_id, c.travel_seconds, c.condition, c.settings_json
     FROM game_location_connections c
     JOIN game_locations l ON c.from_id = l.id
     JOIN game_map_zones z ON l.zone_id = z.id
@@ -821,7 +830,7 @@ pub async fn delete_game_time_period<'e, E>(executor: E, id: &str) -> Result<boo
 pub async fn get_all_game_weather_types<'e, E>(executor: E, game_id: &str) -> Result<Vec<GameWeatherTypes>, Error> where E: Executor<'e, Database = Sqlite> {
     let result = sqlx::query_as::<_, GameWeatherTypesRow>(
     "SELECT id, game_id, name, encounter_rate_modifier, visibility_modifier, created_at, updated_at 
-    FROM game_weather_type 
+    FROM game_weather_types 
     WHERE game_id = ?"
     )
     .bind(game_id)
@@ -832,7 +841,7 @@ pub async fn get_all_game_weather_types<'e, E>(executor: E, game_id: &str) -> Re
 pub async fn get_game_weather_type<'e, E>(executor: E, id: &str) -> Result<GameWeatherTypes, Error> where E: Executor<'e, Database = Sqlite> {
     let result = sqlx::query_as::<_, GameWeatherTypesRow>(
     "SELECT id, game_id, name, encounter_rate_modifier, visibility_modifier, created_at, updated_at 
-    FROM game_weather_type 
+    FROM game_weather_types 
     WHERE id = ?"
     )
     .bind(id)
@@ -846,7 +855,7 @@ pub async fn upsert_game_weather_type<'e, E>(executor: E, game_id: &str, input: 
 
     sqlx::query(
         r#"
-        INSERT INTO game_weather_type ( id, game_id, name, encounter_rate_modifier, visibility_modifier, created_at, updated_at )
+        INSERT INTO game_weather_types ( id, game_id, name, encounter_rate_modifier, visibility_modifier, created_at, updated_at )
         VALUES (?, ?, ?, ?, ?, ?, ?)
         ON CONFLICT(game_id, id) DO UPDATE SET
             game_id=excluded.game_id, 
@@ -868,7 +877,7 @@ pub async fn upsert_game_weather_type<'e, E>(executor: E, game_id: &str, input: 
     Ok(())
 }
 pub async fn delete_game_weather_type<'e, E>(executor: E, id: &str) -> Result<bool, Error> where E: Executor<'e, Database = Sqlite> {
-    let result = sqlx::query("DELETE FROM game_weather_type WHERE id = ?")
+    let result = sqlx::query("DELETE FROM game_weather_types WHERE id = ?")
         .bind(&id)
         .execute(executor)
         .await?;
@@ -962,7 +971,7 @@ pub async fn upsert_game_weather_pool_entry<'e, E>(executor: E, input: GameWeath
 // --- GameWeatherTransitions ---
 pub async fn get_all_game_weather_transitions<'e, E>(executor: E, game_id: &str) -> Result<Vec<GameWeatherTransitions>, Error> where E: Executor<'e, Database = Sqlite> {
     let result = sqlx::query_as::<_, GameWeatherTransitionsRow>(
-    "SELECT t.from_weather_id, t,to_weather_id, t,map_id, t,probability
+    "SELECT t.from_weather_id, t.to_weather_id, t.map_id, t.probability
     FROM game_weather_transitions t
     INNER JOIN game_maps m ON t.map_id = m.id 
     WHERE m.game_id = ?"

@@ -15,6 +15,9 @@ CREATE TABLE IF NOT EXISTS game_projects (
   api_version TEXT NOT NULL DEFAULT '1.0',
   cover_image TEXT,
   custom_css TEXT,           -- 커스텀 css
+  start_scene_key TEXT,
+  start_map_id TEXT,
+  start_location_id TEXT,
   settings_json TEXT,        -- 템플릿별 추가 설정
   created_at INTEGER,
   updated_at INTEGER
