@@ -51,6 +51,13 @@ pub async fn export_game(app: AppHandle, state: State<'_, AppState>, game_id: St
     Ok(path.to_string_lossy().into_owned())
 }
 
+#[tauri::command]
+pub async fn game_list(state: State<'_, AppState> ) -> Result<Vec<GameManifest>, AppError> {
+    let project = crate::db::game::get_all_game_projects(&state.db).await?; // 없으면 NotFound
+
+  Ok(project.into_iter().map(Into::into).collect())
+}
+
 /// 게임 열기(마운트): 이 게임을 "현재 게임"으로 지정한다. game:// 가 이 폴더를 서빙하고, 이후 커맨드들이
 /// 이 game_id 범위로 일한다. 데이터는 여기서 안 읽는다 — 정의 전체는 플레이를 시작할 때 한 번에 올라온다.
 /// 다른 게임이 플레이 중이었으면 그 런타임은 내린다 (game_id가 어긋난 채 커맨드가 가는 걸 막으려는 것).
@@ -84,6 +91,16 @@ pub async fn open_game(app: AppHandle, state: State<'_, AppState>, game_id: Stri
     *state.active_archive.lock().map_err(|_| AppError::Archive("archive lock poisoned".into()))? =
         Some(GameArchiveHandle { path, manifest: manifest.clone(), game_id });
     Ok(manifest)
+}
+
+#[tauri::command]
+pub async fn close_game(app: AppHandle, state: State<'_, AppState>) -> Result<(), AppError> {
+    {
+        let mut runtime = state.active_runtime.lock().await;
+        *runtime = None;
+    }
+
+    Ok(())
 }
 
 /// 에디터용: 저장(save_package)이 받는 것과 같은 모양의 전체 데이터. 조건/효과/풀까지 다 들어 있다.

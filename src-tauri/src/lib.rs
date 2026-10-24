@@ -114,6 +114,8 @@ pub fn run() {
             // game_manager
             create_game,
             open_game,
+            close_game,
+            game_list,
             get_package_data,
             save_package,
             delete_game,
@@ -225,6 +227,8 @@ pub fn run() {
             // game_manager
             create_game,
             open_game,
+            close_game,
+            game_list,
             get_package_data,
             save_package,
             delete_game,

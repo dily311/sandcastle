@@ -57,6 +57,7 @@ pub struct PackageWorldInfoBook {
 /// data/definition.json의 모양. 전부 *Input 타입이라 export도 import도 이걸 거친다 —
 /// Output(Row) 타입에는 Deserialize가 없어서 그대로는 못 돌려받는다.
 #[derive(Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
 pub struct PackageData {
     pub project: GameProjectInput,
     pub state_defs: Vec<GameStateDefInput>,

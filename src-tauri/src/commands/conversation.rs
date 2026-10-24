@@ -86,17 +86,6 @@ pub async fn create_character(
     state: State<'_, AppState>,
     input: CharacterInput,
 ) -> Result<Character> {
-    if input.name.trim().is_empty() {
-        return Err(AppError::Validation(
-            "캐릭터 이름은 비어있을 수 없습니다".into(),
-        ));
-    }
-    if input.name.len() > 100 {
-        return Err(AppError::Validation(
-            "캐릭터 이름은 100자를 넘을 수 없습니다".into(),
-        ));
-    }
-
     let character = conversation::create_character(&state.db, input).await?;
     Ok(character)
 }
@@ -107,11 +96,6 @@ pub async fn update_character(
     id: String,
     input: CharacterInput,
 ) -> Result<()> {
-    if input.name.trim().is_empty() {
-        return Err(AppError::Validation(
-            "캐릭터 이름은 비어있을 수 없습니다".into(),
-        ));
-    }
     let pool = &state.db;
     let exists = conversation::char_exists(pool, &id).await?;
     if !exists {
@@ -145,15 +129,6 @@ pub async fn get_all_personas(state: State<'_, AppState>) -> Result<Vec<Persona>
 
 #[tauri::command]
 pub async fn create_persona(state: State<'_, AppState>, input: PersonaInput) -> Result<Persona> {
-    if input.name.trim().is_empty() {
-        return Err(AppError::Validation("이름은 비어있을 수 없습니다".into()));
-    }
-    if input.name.len() > 100 {
-        return Err(AppError::Validation(
-            "이름은 100자를 넘을 수 없습니다".into(),
-        ));
-    }
-
     Ok(conversation::create_persona(&state.db, input).await?)
 }
 
@@ -163,12 +138,6 @@ pub async fn update_persona(
     id: String,
     input: PersonaInput,
 ) -> Result<()> {
-    if input.name.trim().is_empty() {
-        return Err(AppError::Validation(
-            "캐릭터 이름은 비어있을 수 없습니다".into(),
-        ));
-    }
-
     let exists = conversation::persona_exists(&state.db, &id).await?;
     if !exists {
         return Err(AppError::NotFound(format!(
