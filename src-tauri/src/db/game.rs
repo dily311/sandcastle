@@ -4,50 +4,6 @@ use uuid::Uuid;
 use sqlx::{Error, Executor, Sqlite, Transaction};
 use crate::{db::conn::DbPool, models::{conversation::{WorldInfoEntry, WorldInfoEntryRow}, game::*}};
 
-// =========================================================
-// Game Bundle
-// =========================================================
-pub async fn get_game_bundle_internal(pool: &DbPool, game_id: &str) -> Result<GameBundleRow, Error> {
-    let (
-        game, 
-        state_defs, 
-        scene_rows, 
-        choices_rows, 
-        branches_rows
-    ) = futures::try_join!(
-        get_game_project(pool, game_id),
-        get_all_game_state_defs(pool, game_id),
-        get_all_game_scenes(pool, game_id),
-        get_all_game_choices(pool, game_id),
-        get_all_game_branches(pool, game_id),
-    )?;
-
-    // 해쉬 맵으로 조합
-    let mut choice_map: HashMap<String, Vec<GameChoiceRow>> = HashMap::new();
-    for choice in choices_rows {
-        choice_map.entry(choice.scene_id.clone()).or_default().push(choice);
-    };
-    let mut branch_map: HashMap<String, Vec<GameBranchRow>> = HashMap::new();
-    for branch in branches_rows {
-        branch_map.entry(branch.scene_id.clone()).or_default().push(branch);
-    };
-    let scenes: Vec<GameScene> = scene_rows
-        .into_iter()
-        .map(|row| {
-            let choices = choice_map.remove(&row.id);
-            let branches = branch_map.remove(&row.id);
-            GameScene::from_row(row, choices, branches)
-        })
-        .collect();
-
-    Ok(GameBundleRow {
-        game,
-        state_defs,
-        scenes,
-        events: Vec::new(),
-    })
-}
-
 
 // ---------------------------------------------------------
 // 게임 프로젝트
@@ -1779,6 +1735,7 @@ pub async fn get_game_player_sessions<'e, E>(executor: E, id: &str) -> Result<Ga
     let result = sqlx::query_as::<_, GamePlayerSessionsRow>(
     "SELECT 
         id, game_id, player_id, current_scene_id, current_map_id, current_zone_id, current_location_id, current_weather_id, game_time, flags_json, parent_session_id, pending_scenes_json, inventory_json, relationships_json, forked_from_seq, head_seq, updated_at
+    FROM game_player_sessions 
     WHERE id = ?"
     )
     .bind(id)
@@ -2428,7 +2385,7 @@ pub async fn delete_game_character_state_snapshot<'e, E>(executor: E, session_id
 // ---------------------------------------------------------
 pub async fn get_all_game_event_logs<'e, E>(executor: E, game_id: &str) -> Result<Vec<GameEventLog>, Error> where E: Executor<'e, Database = Sqlite> {
     let result = sqlx::query_as::<_, GameEventLogRow>(
-    "SELECT l.seq, l.session_id, l.event_id, l.weather_id, l.triggered_at, l.result_json  
+    "SELECT l.session_id, l.seq, l.event_id, l.weather_id, l.triggered_at, l.result_json  
     FROM game_event_log l
         INNER JOIN game_player_sessions s ON l.session_id = s.id
         WHERE s.game_id = ?
@@ -2442,7 +2399,7 @@ pub async fn get_all_game_event_logs<'e, E>(executor: E, game_id: &str) -> Resul
 pub async fn get_session_game_event_logs<'e, E>(executor: E, session_id: &str) -> Result<Vec<GameEventLog>, Error> where E: Executor<'e, Database = Sqlite> {
     let result = sqlx::query_as::<_, GameEventLogRow>(
     "SELECT 
-        seq, session_id, event_id, weather_id, triggered_at, result_json 
+        session_id, seq, event_id, weather_id, triggered_at, result_json 
     FROM game_event_log 
     WHERE session_id = ?
     "
@@ -2455,7 +2412,7 @@ pub async fn get_session_game_event_logs<'e, E>(executor: E, session_id: &str) -
 pub async fn get_game_event_logs_lookup<'e, E>(executor: E, session_id: &str, from_seq: Option<u32>, to_seq: u32) -> Result<Vec<GameEventLog>, Error> where E: Executor<'e, Database = Sqlite> {
     let result = sqlx::query_as::<_, GameEventLogRow>(
     "SELECT 
-        seq, session_id, event_id, weather_id, triggered_at, result_json  
+        session_id, seq, event_id, weather_id, triggered_at, result_json  
     FROM game_event_log 
     WHERE session_id = ?
         AND seq BETWEEN ? and ?"
@@ -2470,7 +2427,7 @@ pub async fn get_game_event_logs_lookup<'e, E>(executor: E, session_id: &str, fr
 pub async fn get_game_event_log<'e, E>(executor: E, session_id: &str, seq: u32) -> Result<GameEventLog, Error> where E: Executor<'e, Database = Sqlite> {
     let result = sqlx::query_as::<_, GameEventLogRow>(
     "SELECT 
-        seq, session_id, event_id, weather_id, triggered_at, result_json 
+        session_id, seq, event_id, weather_id, triggered_at, result_json 
     FROM game_event_log 
     WHERE session_id = ? AND seq = ?"
     )
@@ -2484,10 +2441,10 @@ pub async fn forked_game_event_logs<'e, E>(executor: E, session_id: &str, new_se
     let _result = sqlx::query(
     "
     INSERT INTO game_event_log (
-        seq, session_id, event_id, weather_id, triggered_at, result_json
+        session_id, seq, event_id, weather_id, triggered_at, result_json
     )
     SELECT 
-        seq, ?, event_id, weather_id, triggered_at, result_json  
+        ?, seq, event_id, weather_id, triggered_at, result_json  
     FROM game_event_log 
     WHERE session_id = ?
         AND seq BETWEEN ? and ?"
@@ -2504,17 +2461,17 @@ pub async fn upsert_game_event_log<'e, E>(executor: E, input: GameEventLogInput)
     let result_json = serde_json::to_string(&input.result_json).unwrap_or_default();
     sqlx::query(
         r#"
-        INSERT INTO game_event_log ( seq, session_id, event_id, weather_id, triggered_at, result_json ) 
+        INSERT INTO game_event_log ( session_id, seq, event_id, weather_id, triggered_at, result_json ) 
         VALUES (?, ?, ?, ?, ?, ?, ?, ?)
-        ON CONFLICT(seq, session_id) DO UPDATE SET
+        ON CONFLICT(session_id, seq) DO UPDATE SET
             event_id=excluded.event_id, 
             weather_id=excluded.weather_id, 
             triggered_at=excluded.triggered_at, 
             result_json=excluded.result_json
         "#,
     )
-    .bind(&input.seq)
     .bind(&input.session_id)
+    .bind(&input.seq)
     .bind(&input.event_id)
     .bind(&input.weather_id)
     .bind(&input.triggered_at)

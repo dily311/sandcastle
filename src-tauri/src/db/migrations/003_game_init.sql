@@ -447,8 +447,8 @@ CREATE TABLE IF NOT EXISTS game_character_state_snapshots (
 
 -- event log
 CREATE TABLE IF NOT EXISTS game_event_log (
-  seq INTEGER NOT NULL, -- 순서용
   session_id TEXT NOT NULL REFERENCES game_player_sessions(id) ON DELETE CASCADE,
+  seq INTEGER NOT NULL, -- 순서용
   event_id TEXT NOT NULL REFERENCES game_events(id) ON DELETE CASCADE,
   weather_id TEXT REFERENCES game_weather_types(id) ON DELETE SET NULL,
   -- game_time 기준
@@ -460,8 +460,8 @@ CREATE TABLE IF NOT EXISTS game_event_log (
 );
 
 CREATE TABLE IF NOT EXISTS game_event_log_characters (
-  seq INTEGER NOT NULL, -- 순서용
   session_id TEXT NOT NULL REFERENCES game_player_sessions(id) ON DELETE CASCADE,
+  seq INTEGER NOT NULL, -- 순서용
   game_character_id TEXT NOT NULL REFERENCES game_characters(id) ON DELETE CASCADE,
   role TEXT,              -- participant, speaker, target 등
   sort_order INTEGER DEFAULT 0,
