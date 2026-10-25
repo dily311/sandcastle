@@ -2004,7 +2004,7 @@ pub async fn get_all_game_journals<'e, E>(executor: E, game_id: &str) -> Result<
         j.game_time,
         j.created_at
     FROM game_journal j
-    INNER JOIN game_player_sessions ps ON ps.id = j.session_id
+    INNER JOIN game_player_sessions s ON s.id = j.session_id
     WHERE ps.game_id = ?
     "
     )
@@ -2081,11 +2081,9 @@ pub async fn upsert_game_journal<'e, E>(executor: E, input: GameJournalInput) ->
     let now = chrono::Utc::now().timestamp_millis();
     sqlx::query(
         r#"
-        INSERT INTO game_player_sessions (session_id, seq, kind, payload_json, game_time, created_at) 
+        INSERT INTO game_journal (session_id, seq, kind, payload_json, game_time, created_at) 
         VALUES (?, ?, ?, ?, ?, ?)
         ON CONFLICT(session_id, seq) DO UPDATE SET
-            session_id=excluded.session_id, 
-            seq=excluded.seq, 
             kind=excluded.kind, 
             payload_json=excluded.payload_json, 
             game_time=excluded.game_time
