@@ -22,26 +22,6 @@ pub struct GameManifest {
     pub updated_at: i64,
 }
 
-impl From<GameProject> for GameManifest {
-    fn from(v: GameProject) -> Self {
-        let parse = |s: &Option<String>| s.as_ref().and_then(|s| serde_json::from_str::<serde_json::Value>(s).ok());
-        Self {
-            id:v.id,
-            title:v.title,
-            description:v.description,
-            version:v.version,
-            template_id:v.template_id,
-            api_version:v.api_version,
-            start_location_id:v.start_location_id,
-            cover_image:v.cover_image,
-            custom_css:v.custom_css.map(|s| serde_json::from_str(&s).ok()).unwrap_or_default(),
-            settings_json:parse(&v.settings_json),
-            created_at:v.created_at,
-            updated_at:v.updated_at,
-        }
-    }
-}
-
 // =========================================================
 // Game Bundle
 // 프론트로 넘겨주는 게임 데이터

@@ -151,14 +151,17 @@ export const dbCommands = {
 export const gameManagerCommands = {
 	createGame: (args: CommandRegistry["create_game"]["args"]) => invokeCommand("create_game", args),
 	getPackageData: (args: CommandRegistry["get_package_data"]["args"]) => invokeCommand("get_package_data", args),
+	getGameList: () => invokeCommand("game_list"),
 	savePackage: (args: CommandRegistry["save_package"]["args"]) => invokeCommand("save_package", args),
 	deleteGame: (args: CommandRegistry["delete_game"]["args"]) => invokeCommand("delete_game", args),
 	importGame: (args: CommandRegistry["import_game"]["args"]) => invokeCommand("import_game", args),
 	exportGame: (args: CommandRegistry["export_game"]["args"]) => invokeCommand("export_game", args),
 	openGame: (args: CommandRegistry["open_game"]["args"]) => invokeCommand("open_game", args),
+	closeGame: () => invokeCommand("close_game"),
 }
 export const gameEngineCommands = {
-	startNewGame: (args: CommandRegistry["start_new_game"]["args"]) => invokeCommand("start_new_game", args),
+	startNewGame: () => invokeCommand("start_new_game"),
+	listSessions: () => invokeCommand("list_sessions"),
 	continueGame: (args: CommandRegistry["continue_game"]["args"]) => invokeCommand("continue_game", args),
 	dispatchGameCommand: (args: CommandRegistry["dispatch_game_command"]["args"]) =>
 		invokeCommand("dispatch_game_command", args),

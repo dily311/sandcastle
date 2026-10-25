@@ -4,7 +4,7 @@ use reqwest::Client;
 use serde::{Deserialize, Serialize};
 use sqlx::SqlitePool;
 
-use crate::{game::runtime::GameRuntime, models::game::GameManifest};
+use crate::{game::runtime::GameRuntime, models::game::{GameProject}};
 pub struct AppState {
     pub db: SqlitePool,
     pub http_client: Client,
@@ -21,7 +21,7 @@ pub struct AppState {
 
 pub struct GameArchiveHandle {
     pub path: PathBuf,
-    pub manifest: GameManifest,
+    pub manifest: GameProject,
     pub game_id: String,
 }
 

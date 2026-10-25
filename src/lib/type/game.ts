@@ -4,20 +4,6 @@
 // ---------------------------------------------------------
 // 게임 번들 데이터
 // ---------------------------------------------------------
-export interface GameManifest {
-    id: string, // 프로젝트 고유 ID
-    title: string,
-    description: string | null,
-    version: string, // 게임버전: semver, 세이브 호환성 체크용
-    templateId: string,
-    apiVersion: string,     // 게임 엔진 버전
-    startLocationId: string | null,
-    coverImage: string | null,
-    customCss: unknown, // 게임에만 적용될 css
-    settingsJson: unknown, // 실행시 기본 값
-    createdAt: number,
-    updatedAt: number,
-}
 
 /** 게임 메타 데이터 */
 export interface GameProject {
@@ -25,6 +11,7 @@ export interface GameProject {
 	title: string;
 	description: string;
 	templateId: string;
+    version: string, // 게임버전: semver, 세이브 호환성 체크용
 	apiVersion: string;
 	coverImage: string | null;
 	startSceneKey: string | null;
@@ -255,6 +242,7 @@ export interface NpcReply {
 // 게임 스테이터스
 // ---------------------------------------------------------
 export interface RenderState {
+	sessionId: string;
 	locationId: string | null;
 	mapId: string;
 	zoneId: string | null;
@@ -262,9 +250,12 @@ export interface RenderState {
 	weatherID: string;
 	timePeriodId: string;
 	currentSceneId: string | null;
-	// currentNodeId: string | null;
 	activeNpcId: string | null;
+	availableChoices: string[];
 	flags: any;
+	inventory: any;
+	relationships: any;
+	presentNpcs: string[];
 }
 
 // ---------------------------------------------------------
@@ -396,6 +387,7 @@ export interface GameStateDefInput {
 	key: string;
 	type: string;
 	defaultValue: string;
+	configJson: string;
 	createdAt: number;
 	updatedAt: number;
 }
@@ -461,14 +453,14 @@ export interface GameEventsInput {
 	id: string;
 	gameId: string;
 	eventType: string;
+	triggerType: "manual" | "auto" | "interaction" | "location" | "scheduled" | "random";
+	repeatPolicy: "once" | "repeatable";
 	name: string;
 	description: string;
 	requiresNpc: boolean;
 	configJson: { [key: string]: unknown };
 	effectJson: { [key: string]: unknown };
 	cooldownSeconds: number;
-	createdAt: number;
-	updatedAt: number;
 }
 export interface GameEventConditionsInput {
 	id: string | null;

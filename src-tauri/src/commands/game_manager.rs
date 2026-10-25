@@ -6,7 +6,7 @@ use crate::error::AppError;
 use crate::game::manager::{GameManager, SaveReport};
 use crate::game::package::PackageData;
 use crate::game::runtime::{GameRepository, SqlxGameRepository};
-use crate::models::game::GameManifest; // ⚠ GameManifest 실제 모듈 경로 확인 (appstate.rs의 import와 같아야 함)
+use crate::models::game::{GameProject}; // ⚠ GameManifest 실제 모듈 경로 확인 (appstate.rs의 import와 같아야 함)
 use std::path::PathBuf;
 use tauri::{AppHandle, Manager, State};
 
@@ -52,7 +52,7 @@ pub async fn export_game(app: AppHandle, state: State<'_, AppState>, game_id: St
 }
 
 #[tauri::command]
-pub async fn game_list(state: State<'_, AppState> ) -> Result<Vec<GameManifest>, AppError> {
+pub async fn game_list(state: State<'_, AppState> ) -> Result<Vec<GameProject>, AppError> {
     let project = crate::db::game::get_all_game_projects(&state.db).await?; // 없으면 NotFound
 
   Ok(project.into_iter().map(Into::into).collect())
@@ -62,26 +62,11 @@ pub async fn game_list(state: State<'_, AppState> ) -> Result<Vec<GameManifest>,
 /// 이 game_id 범위로 일한다. 데이터는 여기서 안 읽는다 — 정의 전체는 플레이를 시작할 때 한 번에 올라온다.
 /// 다른 게임이 플레이 중이었으면 그 런타임은 내린다 (game_id가 어긋난 채 커맨드가 가는 걸 막으려는 것).
 #[tauri::command]
-pub async fn open_game(app: AppHandle, state: State<'_, AppState>, game_id: String) -> Result<GameManifest, AppError> {
+pub async fn open_game(app: AppHandle, state: State<'_, AppState>, game_id: String) -> Result<GameProject, AppError> {
     let path = GameManager::load_package(&state.db, &games_root(&app)?, &game_id).await?;
     let project = crate::db::game::get_game_project(&state.db, &game_id).await?; // 없으면 NotFound
 
     let parse = |s: &Option<String>| s.as_ref().and_then(|s| serde_json::from_str::<serde_json::Value>(s).ok());
-    let manifest = GameManifest {
-        id: project.id.clone(),
-        title: project.title.clone(),
-        description: project.description.clone(),
-        version: project.version.clone(),
-        template_id: project.template_id.clone(),
-        api_version: project.api_version.clone(),
-        start_location_id: project.start_location_id.clone(),
-        cover_image: project.cover_image.clone(),
-        custom_css: project.custom_css.as_ref().map(|s| serde_json::Value::String(s.clone())),
-        settings_json: parse(&project.settings_json),
-        created_at: project.created_at,
-        updated_at: project.updated_at,
-    };
-
     {
         let mut runtime = state.active_runtime.lock().await;
         if runtime.as_ref().map_or(false, |r| r.definition().game_id != game_id) {
@@ -89,8 +74,8 @@ pub async fn open_game(app: AppHandle, state: State<'_, AppState>, game_id: Stri
         }
     }
     *state.active_archive.lock().map_err(|_| AppError::Archive("archive lock poisoned".into()))? =
-        Some(GameArchiveHandle { path, manifest: manifest.clone(), game_id });
-    Ok(manifest)
+        Some(GameArchiveHandle { path, manifest: project.clone(), game_id });
+    Ok(project)
 }
 
 #[tauri::command]
