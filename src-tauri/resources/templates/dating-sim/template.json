@@ -1,0 +1,15 @@
+{
+  "id": "dating-sim",
+  "name": "Dating Sim",
+  "apiVersion": "1",
+  "templateVersion": "1.0.0",
+  "capabilities": {
+    "choices": true,
+    "freeText": true,
+    "inventory": true,
+    "map": true,
+    "aiNarration": true,
+    "location": true,
+    "time": true
+  }
+}

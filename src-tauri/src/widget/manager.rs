@@ -1,4 +1,4 @@
-use crate::{error::Result, widget::mouse_tracker::MouseTrackerState};
+use crate::{error::Result, widget::interaction::MouseTrackerState};
 use tauri::{
     menu::{Menu, MenuItem},
     tray::{self, TrayIconBuilder},

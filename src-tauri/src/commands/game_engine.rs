@@ -34,40 +34,16 @@ pub async fn start_new_game(state: State<'_, AppState>, settings: State<'_, Sett
     let session_id = uuid::Uuid::new_v4().to_string();
     // 지금 선택돼 있는 페르소나를 이 세션에 고정한다. 세션 중에 설정에서 바꿔도 이 세션엔 반영 안 됨.
     let player_id = crate::game::guard::selected_persona_id(&settings)?;
-    let mut runtime = GameRuntime::from_new_game(definition, session_id.clone(), player_id.clone()).map_err(|e| AppError::Validation(e.to_string()))?;
-    let game_state = runtime.state().clone();
+    let mut runtime = GameRuntime::from_new_game(definition, session_id.clone(), player_id).map_err(|e| AppError::Validation(e.to_string()))?;
 
-    upsert_game_player_sessions(
-        &state.db,
-        GamePlayerSessionsInput {
-            id: Some(session_id.clone()),
-            game_id: game_id.clone(),
-            player_id: Some(player_id.clone()),
-            current_scene_id: game_state.current_scene_id,
-            current_map_id: Some(game_state.map_id),
-            current_zone_id: game_state.zone_id,
-            current_location_id: game_state.location_id,
-            current_weather_id: Some(game_state.weather_id),
-            game_time: game_state.game_time,
-            flags_json: game_state.flags,
-            parent_session_id: game_state.parent_session_id,
-            pending_scenes_json: game_state.pending_scenes_json,
-            inventory_json: game_state.inventory_json,
-            relationships_json: game_state.relationships_json,
-            forked_from_seq: game_state.forked_from_seq,
-            head_seq: game_state.head_seq,
-        },
-    )
-    .await
-    .map_err(|e| AppError::Database(e.to_string()))?;
-    let events = vec![GameEvent::GameStarted];
-    for event in &events {
-        let seq = runtime.next_seq();
-        upsert_game_journal(&state.db, crate::game::journal::journal_input(&session_id, seq, "event", event, runtime.state().game_time)).await?;
-    }
-    runtime.save(&repo, &game_id).await.map_err(|e| AppError::Database(e.to_string()))?;
+    // // 플레이어 세션 생성
+    let input = GamePlayerSessionsInput::from_state(runtime.state().clone(), game_id.clone());
+    upsert_game_player_sessions(&state.db, input).await.map_err(|e| AppError::Database(e.to_string()))?;
 
+    let events = runtime.start();   // GameStarted + NPC 처음 위치 굴림
+    crate::game::journal::record(&state.db, &mut runtime, &game_id, None, &events).await?;
     let response = GameResponse { events, state: runtime.render_state() };
+
     *state.active_runtime.lock().await = Some(runtime);
     Ok(response)
 }
@@ -221,7 +197,7 @@ pub async fn save_read(state: State<'_, AppState>, slot: i64) -> Result<Option<s
     };
     let save: GameSave = match get_game_save(&state.db, &session_id, slot).await {
         Ok(s) => s,
-        // Err(sqlx::Error::RowNotFound) => return Ok(None),
+        Err(sqlx::Error::RowNotFound) => return Ok(None),
         Err(e) => return Err(e.into()),
     };
     Ok(save.state_snapshot.get("custom").cloned())

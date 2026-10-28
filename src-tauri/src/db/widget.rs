@@ -105,11 +105,26 @@ pub async fn get_playlist_entry_data<'e, E>(executor: E, playlist_id: &str) -> R
 
     Ok(rows.into_iter().map(Into::into).collect())
 }
-pub async fn create_music_meta<'e, E>(executor: E, input: MusicMetaInput) -> Result<MusicMeta, Error> where E: Executor<'e, Database = Sqlite>,{
+pub async fn upsert_music_meta<'e, E>(executor: E, input: MusicMetaInput) -> Result<MusicMeta, Error> where E: Executor<'e, Database = Sqlite>,{
     let now = chrono::Utc::now().timestamp_millis();
     sqlx::query(
-        "INSERT INTO music_meta (path, title, artist, album, album_title, album_artist, track_number, genre, comment, album_art, lyrics, duration, updated_at)
-        VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?)"
+        "
+        INSERT INTO music_meta (path, title, artist, album, album_title, album_artist, track_number, genre, comment, album_art, lyrics, duration, updated_at)
+        VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?)
+        ON CONFLICT(path) DO UPDATE SET
+            title=excluded.title, 
+            artist=excluded.artist, 
+            album=excluded.album, 
+            album_title=excluded.album_title, 
+            album_artist=excluded.album_artist, 
+            track_number=excluded.track_number, 
+            genre=excluded.genre, 
+            comment=excluded.comment, 
+            album_art=excluded.album_art, 
+            lyrics=excluded.lyrics, 
+            duration=excluded.duration, 
+            updated_at=excluded.updated_at
+        "
     )
     .bind(&input.path)
     .bind(&input.title)
@@ -143,43 +158,6 @@ pub async fn create_music_meta<'e, E>(executor: E, input: MusicMetaInput) -> Res
         updated_at: now,
         img_pos: None,
     })
-}
-
-pub async fn update_music_meta<'e, E>(executor: E, input: MusicMetaInput) -> Result<(), Error> where E: Executor<'e, Database = Sqlite>,{
-    let now = chrono::Utc::now().timestamp_millis();
-
-    sqlx::query(
-        "UPDATE music_meta 
-            SET title = ?, 
-                artist = ?, 
-                album = ?, 
-                album_title = ?, 
-                album_artist = ?, 
-                track_number = ?, 
-                genre = ?, 
-                comment = ?, 
-                album_art = ?, 
-                lyrics = ?, 
-                duration = ?, 
-                updated_at = ?
-            WHERE path = ?;"
-    )
-    .bind(&input.title)
-    .bind(&input.artist)
-    .bind(&input.album)
-    .bind(&input.album_title)
-    .bind(&input.album_artist)
-    .bind(&input.track_number)
-    .bind(&input.genre)
-    .bind(&input.comment)
-    .bind(&input.album_art)
-    .bind(&input.lyrics)
-    .bind(&input.duration)
-    .bind(now)
-    .bind(&input.path)
-    .execute(executor)
-    .await?;
-    Ok(())
 }
 
 pub async fn delete_music_meta<'e, E>(executor: E, path: &str) -> Result<bool, Error> where E: Executor<'e, Database = Sqlite>,{

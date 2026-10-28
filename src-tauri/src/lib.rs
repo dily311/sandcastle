@@ -15,7 +15,7 @@ use crate::{
     state::{AppState, WindowMode},
     sys::{settings::SettingsState, themes::ThemeManager},
 };
-use commands::{ai_service::*, conversation::*, game_manager::*, game_engine::*, settings::*};
+use commands::{ai_service::*, conversation::*, game_engine::*, game_manager::*, settings::*};
 
 #[cfg(desktop)]
 mod widget;
@@ -38,10 +38,7 @@ pub fn run() {
         use commands::widget::*;
         use tauri_plugin_autostart::MacosLauncher;
         use tauri_plugin_autostart::ManagerExt;
-        use widget::{
-            remove_interactive_regions, set_widget_click_through, update_interactive_regions,
-            WidgetInteractionState,
-        };
+        use widget::{WidgetInteractionState, InteractiveRegion, MusicWatcherState};
 
         builder = builder
             .plugin(tauri_plugin_window_state::Builder::default().build())
@@ -52,7 +49,8 @@ pub fn run() {
             ));
         builder = builder
             .manage(WidgetInteractionState::new())
-            .manage(MouseTrackerState::new());
+            .manage(MouseTrackerState::new())
+            .manage(MusicWatcherState::new());
         builder = builder.invoke_handler(tauri::generate_handler![
             // settings
             get_app_setting,
@@ -85,6 +83,7 @@ pub fn run() {
             get_all_characters,
             create_character,
             update_character,
+            toggle_favorite_character,
             delete_character,
             get_list_characters,
             get_all_personas,
@@ -110,7 +109,6 @@ pub fn run() {
             update_message_meta,
             update_message_swipe_id,
             delete_message,
-
             // game_manager
             create_game,
             open_game,
@@ -134,7 +132,6 @@ pub fn run() {
             save_read,
             save_list,
             npc_say,
-
             // widget
             open_widget,
             close_widget,
@@ -198,6 +195,7 @@ pub fn run() {
             get_all_characters,
             create_character,
             update_character,
+            toggle_favorite_character,
             delete_character,
             get_list_characters,
             get_all_personas,
@@ -223,7 +221,6 @@ pub fn run() {
             update_message_meta,
             update_message_swipe_id,
             delete_message,
-            
             // game_manager
             create_game,
             open_game,
@@ -284,9 +281,9 @@ pub fn run() {
         app.manage(SettingsState(Mutex::new(
             sys::settings::load::<ThemeSetting>(&settings_handle),
         )));
-        app.manage(SettingsState(Mutex::new(
-            sys::settings::load::<FeatureSetting>(&settings_handle),
-        )));
+        app.manage(SettingsState(Mutex::new(sys::settings::load::<
+            FeatureSetting,
+        >(&settings_handle))));
 
         // 4. 테마 매니저 초기화
         let app_dir = app.path().app_data_dir().expect("App data dir not found");
@@ -301,7 +298,9 @@ pub fn run() {
         #[cfg(desktop)]
         {
             // 윈도우 초기 상태
-            let main_window = app.get_webview_window("main").expect("main window not found");
+            let main_window = app
+                .get_webview_window("main")
+                .expect("main window not found");
             match launch_mode {
                 LaunchMode::Normal => {
                     main_window.show()?;

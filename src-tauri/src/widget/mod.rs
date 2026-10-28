@@ -1,11 +1,6 @@
 mod interaction;
-mod mouse_tracker;
-mod regions;
+mod watcher;
 pub mod manager;
 
-pub use interaction::{
-    remove_interactive_regions, set_widget_click_through, update_interactive_regions,
-    WidgetInteractionState,
-};
-
-pub use mouse_tracker::MouseTrackerState;
+pub use watcher::MusicWatcherState;
+pub use interaction::{MouseTrackerState, WidgetInteractionState, InteractiveRegion};

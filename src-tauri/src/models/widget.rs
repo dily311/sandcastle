@@ -1,7 +1,10 @@
-use std::collections::HashMap;
+use std::path::PathBuf;
 
+use lofty::tag::{Accessor, ItemKey, Tag};
 use serde::{Deserialize, Serialize};
 use sqlx::prelude::FromRow;
+
+use crate::sys::music::save_album_art;
 
 #[derive(Debug, Serialize, Deserialize, Clone)]
 #[serde(rename_all = "camelCase")]
@@ -115,6 +118,62 @@ pub struct MusicMetaInput {
     pub updated_at: i64,
 }
 
+impl MusicMetaInput {
+    pub fn default(
+        path: &PathBuf,
+        tag: Option<&Tag>,
+        cache_dir: &PathBuf,
+        duration: f64,
+        updated_at: i64,
+    ) -> Self {
+        let audio_src = path.to_string_lossy().to_string();
+
+        let file_name_fallback = path
+            .file_name()
+            .and_then(|n| n.to_str())
+            .unwrap_or("Unknown Title")
+            .to_string();
+
+        let album_art = tag
+            .map(|t| {
+                t.pictures()
+                    .first()
+                    .and_then(|p| save_album_art(p, &file_name_fallback, cache_dir).ok())
+            })
+            .unwrap_or_default();
+
+        Self {
+            path: audio_src,
+            title: tag
+                .map(|t| t.title().map(String::from).unwrap_or(file_name_fallback))
+                .unwrap_or_default(),
+            artist: tag
+                .map(|t| t.artist().map(String::from))
+                .unwrap_or_default(),
+            album: tag.map(|t| t.album().map(String::from)).unwrap_or_default(),
+            album_title: tag
+                .map(|t| t.get_string(ItemKey::AlbumTitle).map(String::from))
+                .unwrap_or_default(),
+            album_artist: tag
+                .map(|t| t.get_string(ItemKey::AlbumArtist).map(String::from))
+                .unwrap_or_default(),
+            track_number: tag
+                .map(|t| t.get_string(ItemKey::TrackNumber).map(String::from))
+                .unwrap_or_default(),
+            genre: tag.map(|t| t.genre().map(String::from)).unwrap_or_default(),
+            comment: tag
+                .map(|t| t.comment().map(String::from))
+                .unwrap_or_default(),
+            album_art,
+            lyrics: tag
+                .map(|t| t.get_string(ItemKey::Lyrics).map(String::from))
+                .unwrap_or_default(),
+            duration,
+            updated_at,
+        }
+    }
+}
+
 #[derive(FromRow, Serialize, Deserialize, Clone)]
 #[serde(rename_all = "camelCase")]
 pub struct Playlist {
@@ -157,19 +216,4 @@ impl From<PlaylistItemRow> for PlaylistItem {
             sort_order: r.sort_order,
         }
     }
-}
-
-#[derive(Serialize, Deserialize, Clone)]
-#[serde(rename_all = "camelCase")]
-pub struct FolderNode {
-    pub name: String,
-    pub folders: HashMap<String, FolderNode>,
-    pub files: Vec<MusicMeta>,
-}
-
-#[derive(Serialize, Deserialize, Clone)]
-#[serde(rename_all = "camelCase")]
-pub struct LibraryRoot {
-    pub folders: HashMap<String, FolderNode>,
-    pub root_files: Vec<MusicMeta>,
 }

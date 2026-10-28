@@ -1,4 +1,4 @@
-use super::interaction::WidgetInteractionState;
+use crate::widget::WidgetInteractionState;
 use std::{
     sync::{
         atomic::{AtomicU64, Ordering},
@@ -10,6 +10,7 @@ use tauri::{AppHandle, Manager, WebviewWindow};
 
 #[cfg(target_os = "windows")]
 use windows::Win32::{Foundation::POINT, UI::WindowsAndMessaging::GetCursorPos};
+
 
 #[cfg(target_os = "windows")]
 fn get_cursor_position() -> Option<(i32, i32)> {

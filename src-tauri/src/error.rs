@@ -61,6 +61,11 @@ impl From<tauri::Error> for AppError {
         AppError::Window(e.to_string())
     }
 }
+impl From<notify::Error> for AppError {
+    fn from(e: notify::Error) -> Self {
+        AppError::Window(e.to_string())
+    }
+}
 
 impl From<serde_json::Error> for AppError {
     fn from(e: serde_json::Error) -> Self {

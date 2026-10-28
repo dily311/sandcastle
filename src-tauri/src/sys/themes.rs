@@ -24,18 +24,18 @@ impl ThemeManager {
         let default_theme = [
             (
                 "pastel.json",
-                include_str!(concat!(env!("CARGO_MANIFEST_DIR"), "/theme/pastel.json")),
+                include_str!(concat!(env!("CARGO_MANIFEST_DIR"), "/resources/theme/pastel.json")),
             ),
             (
                 "catppuccin.json",
                 include_str!(concat!(
                     env!("CARGO_MANIFEST_DIR"),
-                    "/theme/catppuccin.json"
+                    "/resources/theme/catppuccin.json"
                 )),
             ),
             (
                 "mono.json",
-                include_str!(concat!(env!("CARGO_MANIFEST_DIR"), "/theme/mono.json")),
+                include_str!(concat!(env!("CARGO_MANIFEST_DIR"), "/resources/theme/mono.json")),
             ),
         ];
 

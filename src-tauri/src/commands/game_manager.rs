@@ -41,8 +41,10 @@ pub async fn delete_game(app: AppHandle, state: State<'_, AppState>, game_id: St
 }
 
 #[tauri::command]
-pub async fn import_game(app: AppHandle, state: State<'_, AppState>, zip_path: String) -> Result<String, AppError> {
-    GameManager::import_package(&state.db, &games_root(&app)?, &PathBuf::from(zip_path)).await
+pub async fn import_game(app: AppHandle, state: State<'_, AppState>, zip_path: String) -> Result<GameProject, AppError> {
+    let id = GameManager::import_package(&state.db, &games_root(&app)?, &PathBuf::from(zip_path)).await?;
+    let project = crate::db::game::get_game_project(&state.db, &id).await?;
+    Ok(project)
 }
 
 #[tauri::command]
@@ -79,11 +81,12 @@ pub async fn open_game(app: AppHandle, state: State<'_, AppState>, game_id: Stri
 }
 
 #[tauri::command]
-pub async fn close_game(app: AppHandle, state: State<'_, AppState>) -> Result<(), AppError> {
+pub async fn close_game(state: State<'_, AppState>) -> Result<(), AppError> {
     {
         let mut runtime = state.active_runtime.lock().await;
         *runtime = None;
     }
+    *state.active_archive.lock().map_err(|_| AppError::Archive("archive lock poisoned".into()))? = None;
 
     Ok(())
 }

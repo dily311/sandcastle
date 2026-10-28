@@ -1,26 +1,24 @@
 use crate::{
     db::{self, conn::DbPool},
-    error::{AppError, Result},
-    models::widget::{FolderNode, LibraryRoot, MusicMeta, MusicMetaInput},
-    sys::image::{save_image_to_origin, save_image_to_thumbnail},
+    error::AppError,
+    models::widget::MusicMetaInput,
+    sys::{
+        image::{save_image_to_origin, save_image_to_thumbnail},
+        library::{grouped_by_folder, LibraryRoot},
+    },
 };
-use lofty::picture::Picture;
-
 use futures::{
     lock::Mutex,
     stream::{self, StreamExt},
 };
+use lofty::picture::Picture;
 use lofty::{
     config::WriteOptions,
     file::{AudioFile, TaggedFileExt},
     probe::Probe,
-    tag::{Accessor, ItemKey, Tag},
+    tag::Tag,
 };
-use std::{
-    collections::{HashMap, HashSet},
-    io::BufReader,
-    sync::Arc,
-};
+use std::{collections::HashSet, io::BufReader, sync::Arc};
 use std::{fs, path::PathBuf};
 use std::{
     fs::File,
@@ -28,31 +26,57 @@ use std::{
     time::{SystemTime, UNIX_EPOCH},
 };
 
-fn get_timestamp(time: SystemTime) -> Result<i64> {
-    Ok(time
-        .duration_since(UNIX_EPOCH)
-        .map_err(|e| AppError::Io(e.to_string()))
-        .unwrap()
-        .as_secs() as i64)
+// 폴더 인덱싱 동시 작업 제한
+const LIMIT: usize = 16;
+
+/// 지원하는 오디오 확장자 필터링
+pub fn is_audio_file(path: &Path) -> bool {
+    if let Some(ext) = path.extension().and_then(|e| e.to_str()) {
+        matches!(
+            ext.to_lowercase().as_str(),
+            "mp3" | "flac" | "wav" | "m4a" | "ogg"
+        )
+    } else {
+        false
+    }
 }
 
-fn delete_album_art(cache_dir: &PathBuf, file_name: &str) -> Result<()> {
+fn get_timestamp(time: SystemTime) -> i64 {
+    time.duration_since(UNIX_EPOCH)
+        .map_err(|e| e.to_string())
+        .unwrap()
+        .as_secs() as i64
+}
+pub fn get_mtime(path: &Path) -> i64 {
+    let metadata = fs::metadata(&path).ok();
+    let mtime = metadata
+        .and_then(|m| m.modified().ok())
+        .map(|t| get_timestamp(t))
+        .unwrap_or(0);
+    mtime
+}
+
+fn delete_album_art(cache_dir: &PathBuf, file_name: &str) -> Result<(), AppError> {
     fs::remove_file(cache_dir.clone())?;
     fs::remove_file(cache_dir.clone().join("512").join(file_name))?;
     fs::remove_file(cache_dir.clone().join("128").join(file_name))?;
     Ok(())
 }
 
-fn save_album_art(picture: &Picture, file_name: &str, cache_dir: &PathBuf) -> Result<String> {
+pub fn save_album_art(
+    picture: &Picture,
+    file_name: &str,
+    cache_dir: &PathBuf,
+) -> Result<String, AppError> {
     save_album_art_with_options(picture, file_name, cache_dir, false)
 }
-
-fn save_album_art_with_options(
+/// 앨범아트 캐싱 함수
+pub fn save_album_art_with_options(
     picture: &Picture,
     file_name: &str,
     cache_dir: &PathBuf,
     overwrite: bool,
-) -> Result<String> {
+) -> Result<String, AppError> {
     let save_dir = cache_dir.join("album_arts");
     // 이미 파일이 존재할 경우를 판정하기 위함
     let target_path = save_dir.join(format!("{}.webp", file_name));
@@ -66,81 +90,33 @@ fn save_album_art_with_options(
     save_image_to_origin(save_dir.clone(), &file_name, buffer)
 }
 
-fn parse_music_metadata(path: &PathBuf, mtime: i64, cache_dir: &PathBuf) -> Result<MusicMetaInput> {
+pub fn parse_music_metadata(
+    path: &PathBuf,
+    mtime: i64,
+    cache_dir: &PathBuf,
+) -> Result<MusicMetaInput, AppError> {
     let tagged_file = Probe::open(path)
         .map_err(|e| AppError::Io(e.to_string()))?
         .read()
         .map_err(|e| AppError::Io(e.to_string()))?;
     let properties = tagged_file.properties();
     let duration = properties.duration().as_secs_f64();
-    let audio_src = path.to_string_lossy().to_string();
 
-    // 파일명 fallback
-    let file_name_fallback = path
-        .file_name()
-        .and_then(|n| n.to_str())
-        .unwrap_or("Unknown Title")
-        .to_string();
-
-    let meta = match tagged_file
+    let tag = tagged_file
         .primary_tag()
-        .or_else(|| tagged_file.first_tag())
-    {
-        Some(tag) => {
-            let album_art = tag
-                .pictures()
-                .first()
-                .and_then(|p| save_album_art(p, &file_name_fallback, cache_dir).ok());
-            MusicMetaInput {
-                path: audio_src,
-                title: tag.title().map(String::from).unwrap_or(file_name_fallback),
-                artist: tag.artist().map(String::from),
-                album: tag.album().map(String::from),
-                album_title: tag.get_string(ItemKey::AlbumTitle).map(String::from),
-                album_artist: tag.get_string(ItemKey::AlbumArtist).map(String::from),
-                track_number: tag.get_string(ItemKey::TrackNumber).map(String::from),
-                genre: tag.genre().map(String::from),
-                comment: tag.comment().map(String::from),
-                album_art,
-                lyrics: tag.get_string(ItemKey::Lyrics).map(String::from),
-                duration,
-                updated_at: mtime,
-            }
-        }
-        None => MusicMetaInput {
-            path: audio_src,
-            title: file_name_fallback,
-            artist: None,
-            album: None,
-            album_art: None,
-            album_artist: None,
-            track_number: None,
-            album_title: None,
-            comment: None,
-            genre: None,
-            lyrics: None,
-            duration,
-            updated_at: mtime,
-        },
-    };
-
-    // 데이터 조합
+        .or_else(|| tagged_file.first_tag());
+    let meta = MusicMetaInput::default(path, tag, cache_dir, duration, mtime);
     Ok(meta)
 }
 
-fn visit_dirs(dir: &Path, allowed: &[&str], paths: &mut Vec<PathBuf>) -> Result<()> {
+fn visit_dirs(dir: &Path, paths: &mut Vec<PathBuf>) -> Result<(), AppError> {
     if dir.is_dir() {
         for entry in fs::read_dir(dir)? {
             let entry = entry?;
             let path = entry.path();
             if path.is_dir() {
-                visit_dirs(&path, allowed, paths)?;
-            } else if path
-                .extension()
-                .and_then(|s| s.to_str())
-                .map(|s| s.to_lowercase())
-                .is_some_and(|s| allowed.contains(&s.as_str()))
-            {
+                visit_dirs(&path, paths)?;
+            } else if is_audio_file(&path) {
                 paths.push(path);
             }
         }
@@ -148,87 +124,12 @@ fn visit_dirs(dir: &Path, allowed: &[&str], paths: &mut Vec<PathBuf>) -> Result<
     Ok(())
 }
 
-// 🛠️ FolderNode에 재귀적으로 파일을 추가하는 메서드를 작성합니다.
-impl FolderNode {
-    fn insert_file(&mut self, folder_parts: &[&str], file: MusicMeta) {
-        if folder_parts.is_empty() {
-            self.files.push(file);
-            return;
-        }
-
-        let current_folder = folder_parts[0];
-        let remaining_parts = &folder_parts[1..];
-
-        let next_node = self
-            .folders
-            .entry(current_folder.to_string())
-            .or_insert_with(|| FolderNode {
-                name: current_folder.to_string(),
-                folders: HashMap::new(),
-                files: Vec::new(),
-            });
-
-        // 재귀 호출을 통해 다음 레벨로 가변 참조를 안전하게 넘깁니다.
-        next_node.insert_file(remaining_parts, file);
-    }
-}
-
-pub fn grouped_by_folder(music_list: Vec<MusicMeta>, selected_folder: Option<&str>) -> LibraryRoot {
-    let mut root_tree: HashMap<String, FolderNode> = HashMap::new();
-    let mut root_files: Vec<MusicMeta> = Vec::new();
-
-    let root_path = selected_folder
-        .filter(|f| !f.is_empty())
-        .map(|f| format!("{}\\", f))
-        .unwrap_or_default();
-
-    for file in music_list {
-        let path = if !root_path.is_empty() {
-            file.path.strip_prefix(&root_path).unwrap_or(&file.path)
-        } else {
-            &file.path
-        };
-
-        let parts: Vec<&str> = path.split('\\').collect();
-        if parts.is_empty() {
-            continue;
-        }
-
-        let folder_parts = &parts[..parts.len() - 1];
-
-        if folder_parts.is_empty() {
-            root_files.push(file);
-            continue;
-        }
-
-        // 🛠️ 재귀 메서드 호출로 복잡한 루프 대여 문제를 한 줄로 해결
-        let first_folder = folder_parts[0];
-        let remaining_parts = &folder_parts[1..];
-
-        root_tree
-            .entry(first_folder.to_string())
-            .or_insert_with(|| FolderNode {
-                name: first_folder.to_string(),
-                folders: HashMap::new(),
-                files: Vec::new(),
-            })
-            .insert_file(remaining_parts, file.clone());
-    }
-
-    LibraryRoot {
-        folders: root_tree,
-        root_files,
-    }
-}
-
+/// 폴더 인덱싱
 pub async fn folder_indexing(
     pool: &DbPool,
     folder_path: String,
     cache_dir: &PathBuf,
-) -> Result<LibraryRoot> {
-    let limit = 16; // 동시 작업 제한
-    let allowed = ["mp3", "wav", "flac"];
-
+) -> Result<LibraryRoot, AppError> {
     let cache_dir = Arc::new(cache_dir.clone());
     let pool = Arc::new(pool.clone());
     let found_paths = Arc::new(Mutex::new(HashSet::new()));
@@ -238,7 +139,7 @@ pub async fn folder_indexing(
     let folder_path_clone = folder_path.clone();
     let music_paths = tokio::task::spawn_blocking(move || {
         let mut paths = Vec::new();
-        let _ = visit_dirs(Path::new(&folder_path_clone.clone()), &allowed, &mut paths)
+        let _ = visit_dirs(Path::new(&folder_path_clone.clone()), &mut paths)
             .map_err(|e| AppError::Validation(format!("폴더를 읽는 중 오류: {}", e).into()));
         Ok::<Vec<PathBuf>, String>(paths)
     })
@@ -247,7 +148,7 @@ pub async fn folder_indexing(
     .map_err(|e| AppError::Validation(format!("폴더를 읽는 중 오류: {}", e).into()))?;
 
     futures::stream::iter(music_paths)
-        .for_each_concurrent(Some(limit), |path| {
+        .for_each_concurrent(Some(LIMIT), |path| {
             let found_paths = Arc::clone(&found_paths);
             let caching_list = Arc::clone(&caching_list);
             let db_pool = Arc::clone(&pool);
@@ -264,14 +165,11 @@ pub async fn folder_indexing(
 
                 // 캐싱에서 현재 파일 찾기
                 let cache = caching_list.iter().find(|p| p.path == audio_src).cloned();
-                let is_cache = cache.is_some();
 
                 // 파일 메타데이터 및 수정시간 확인
                 let path_for_meta = path.clone();
                 let res = tokio::task::spawn_blocking(move || {
-                    let metadata = fs::metadata(&path_for_meta)?;
-                    let mtime_sys: SystemTime = metadata.modified()?;
-                    let mtime = get_timestamp(mtime_sys)?;
+                    let mtime = get_mtime(&path_for_meta);
 
                     let needs_update = match &cache {
                         Some(c) => !c.updated_at.eq(&mtime),
@@ -306,11 +204,7 @@ pub async fn folder_indexing(
 
                     match parsed_result {
                         Ok(Ok(pared_data)) => {
-                            if is_cache {
-                                let _ = db::widget::update_music_meta(&*db_pool, pared_data).await;
-                            } else {
-                                let _ = db::widget::create_music_meta(&*db_pool, pared_data).await;
-                            };
+                            let _ = db::widget::upsert_music_meta(&*db_pool, pared_data).await;
                         }
                         Ok(Err(e)) => eprintln!("태그 파싱 오류 [{}]: {}", audio_src, e),
                         Err(e) => eprintln!("파싱 태스크 조인 오류: {}", e),
@@ -331,15 +225,25 @@ pub async fn folder_indexing(
         }
     }
     let music_list = db::widget::get_folder_music_data(&*pool, &folder_path).await?;
-    let result = grouped_by_folder(music_list, Some(&folder_path));
+    let file_list: Vec<(String, serde_json::Value)> = music_list
+        .into_iter()
+        .filter_map(|item| {
+            let path = item.path.clone();
+            let value = serde_json::to_value(item.clone()).ok().unwrap_or_default();
+            Some((path, value))
+        })
+        .collect();
+    let result = grouped_by_folder(file_list, Some(&folder_path));
     Ok(result)
 }
 
+/// 앨범아트 설정
+/// 지금은 한장만 교체하는 방식인데, 이후에 여러장을 추가해서 볼 수 있는 기능이 추가되면 좋겠네
 pub async fn set_album_art(
     file_path: String,
     img_path: String,
     cache_dir: &PathBuf,
-) -> Result<String> {
+) -> Result<String, AppError> {
     // 파일 열기 및 태그 로드
     let mut tagged_file = Probe::open(&file_path)
         .map_err(|e| AppError::Validation(format!("파일 여는 중 오류: {}", e.to_string()).into()))?

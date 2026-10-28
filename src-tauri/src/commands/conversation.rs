@@ -96,15 +96,17 @@ pub async fn update_character(
     id: String,
     input: CharacterInput,
 ) -> Result<()> {
-    let pool = &state.db;
-    let exists = conversation::char_exists(pool, &id).await?;
-    if !exists {
-        return Err(AppError::NotFound(format!(
-            "캐릭터를 찾을 수 없습니다: {id}"
-        )));
-    }
+    conversation::update_character(&state.db, &id, &input).await?;
+    Ok(())
+}
 
-    conversation::update_character(pool, &id, &input).await?;
+#[tauri::command]
+pub async fn toggle_favorite_character(
+    state: State<'_, AppState>,
+    id: String,
+    is_favorite: bool,
+) -> Result<()> {
+    conversation::update_character_is_favorite(&state.db, &id, is_favorite).await?;
     Ok(())
 }
 

@@ -38,24 +38,8 @@ impl GameManager {
             return Err(AppError::Validation("제목 길이가 올바르지 않습니다".into()));
         }
         let id = uuid::Uuid::new_v4().to_string();
-        let input = GameProjectInput {
-            id: Some(id.clone()),
-            title,
-            description: None,
-            template_id,
-            version: "1.0".into(),
-            api_version: "1.0".into(),
-            cover_image: None,
-            start_scene_key: None,
-            start_map_id: None,
-            start_location_id: None,
-            world_info_ids: vec![],
-            custom_css: None,
-            settings_json: None,
-            created_at: None,
-            updated_at: None,
-        };
-        upsert_game_project(pool,&input).await?;
+        let input = GameProjectInput::default(Some(id.clone()), title, template_id);
+        upsert_game_project(pool, &input).await?;
 
         // 폴더 스캐폴드. 실패하면 방금 만든 프로젝트 행도 되돌린다 (파일 없는 게임이 남지 않게).
         let dir = games_root.join(&id);

@@ -9,13 +9,13 @@
 use crate::db::conversation::{create_worldinfo_book, get_all_worldinfo_entries, get_worldinfo_book, upsert_worldinfo_entry};
 use crate::db::game::{
     delete_game_branches, delete_game_character, delete_game_choice, delete_game_encounter_table,
-    delete_game_encounter_table_entry, delete_game_ending, delete_game_event, delete_game_event_character,
+    delete_game_character_spawn_location, delete_game_encounter_table_entry, delete_game_item, delete_game_relationship_def, delete_game_ending, delete_game_event, delete_game_event_character,
     delete_game_event_conditions, delete_game_interactables, delete_game_location_connection, delete_game_locations,
     delete_game_map, delete_game_scene, delete_game_state_def, delete_game_time_period, delete_game_weather_transition,
     delete_game_weather_type, delete_game_zone,
     upsert_game_character, upsert_game_encounter_table, upsert_game_encounter_table_entry,
     upsert_game_ending, upsert_game_event, upsert_game_event_character, upsert_game_event_condition,
-    upsert_game_interactables, upsert_game_location_connections, upsert_game_locations,
+    upsert_game_character_spawn_location, upsert_game_interactables, upsert_game_item, upsert_game_relationship_def, upsert_game_location_connections, upsert_game_locations,
     upsert_game_map, upsert_game_project, upsert_game_scene, upsert_game_state_defs,
     upsert_game_time_period, upsert_game_weather_transition, upsert_game_weather_type,
     upsert_game_zone,
@@ -25,7 +25,7 @@ use crate::game::runtime::GameDefinition;
 use crate::models::conversation::{WorldInfoBookInput, WorldInfoEntryInput};
 use crate::models::game::{
     GameCharactersInput, GameEncounterEntriesInput, GameEncounterTablesInput, GameEndingsInput,
-    GameEventCharacterPoolInput, GameEventConditionsInput, GameEventsInput, GameInteractablesInput,
+    GameEventCharacterPoolInput, GameEventConditionsInput, GameCharacterSpawnLocationsInput, GameEventsInput, GameInteractablesInput, GameItemsInput, GameRelationshipDefsInput,
     GameLocationConnectionsInput, GameLocationsInput, GameMapsInput, GameMapsZoneInput,
     GameProjectInput, GameSceneInput, GameStateDefInput, GameTimePeriodsInput,
     GameWeatherTransitionsInput, GameWeatherTypesInput,
@@ -77,6 +77,12 @@ pub struct PackageData {
     pub scenes: Vec<GameSceneInput>,
     pub endings: Vec<GameEndingsInput>,
     pub characters: Vec<GameCharactersInput>,
+    #[serde(default)]
+    pub spawn_locations: Vec<GameCharacterSpawnLocationsInput>,
+    #[serde(default)]
+    pub items: Vec<GameItemsInput>,
+    #[serde(default)]
+    pub relationship_defs: Vec<GameRelationshipDefsInput>,
     /// project/characters의 world_info_ids가 가리키는 북들. 페르소나 쪽 북은 개인 설정이라 안 담는다.
     #[serde(default)]
     pub world_info_books: Vec<PackageWorldInfoBook>,
@@ -115,6 +121,9 @@ fn to_package_data(def: &GameDefinition, world_info_books: Vec<PackageWorldInfoB
         scenes: def.scenes.clone().into_iter().map(Into::into).collect(),
         endings: def.endings.clone().into_iter().map(Into::into).collect(),
         characters: def.characters.values().cloned().map(Into::into).collect(),
+        spawn_locations: def.spawn_locations.values().flatten().cloned().map(Into::into).collect(),
+        items: def.items.values().cloned().map(GameItemsInput::from).collect(),
+        relationship_defs: def.relationship_defs.clone().into_iter().map(Into::into).collect(),
         locations: def.locations.clone().into_iter().map(Into::into).collect(),
         location_connections: def.location_connections.clone().into_iter().map(Into::into).collect(),
         interactables: def
@@ -197,6 +206,12 @@ pub(crate) async fn write_definition(tx: &mut Transaction<'_, Sqlite>, game_id: 
     for c in &mut data.characters {
         c.game_id = game_id.to_string();
     }
+    for i in &mut data.items {
+        i.game_id = game_id.to_string();
+    }
+    for r in &mut data.relationship_defs {
+        r.game_id = game_id.to_string();
+    }
 
     upsert_game_project(&mut **tx, &data.project).await?;
     for s in &data.state_defs {
@@ -229,11 +244,21 @@ pub(crate) async fn write_definition(tx: &mut Transaction<'_, Sqlite>, game_id: 
     for c in data.characters {
         upsert_game_character(&mut **tx, game_id, c).await?;
     }
+    // 스폰 규칙은 캐릭터와 location 둘 다 FK로 가리키므로 둘 뒤에 온다.
+    for s in data.spawn_locations {
+        upsert_game_character_spawn_location(&mut **tx, s).await?;
+    }
     let event_ids: Vec<String> = data.events.iter().filter_map(|e| e.id.clone()).collect();
     for e in data.events {
         upsert_game_event(&mut **tx, game_id, e).await?;
     }
-    // interactables는 event_id FK가 있어서 events 뒤에 와야 한다.
+    // items(획득 이벤트 FK)와 interactables(event_id FK)는 events 뒤에 와야 한다.
+    for i in data.items {
+        upsert_game_item(&mut **tx, i).await?;
+    }
+    for r in data.relationship_defs {
+        upsert_game_relationship_def(&mut **tx, r).await?;
+    }
     for i in data.interactables {
         upsert_game_interactables(&mut **tx, i).await?;
     }
@@ -291,6 +316,9 @@ pub async fn save_definition(pool: &SqlitePool, game_id: &str, existing: &GameDe
     let keep_entries = ids(&data.encounter_entries, |x| x.id.as_deref());
     let keep_endings = ids(&data.endings, |x| x.id.as_deref());
     let keep_characters = ids(&data.characters, |x| x.id.as_deref());
+    let keep_items = ids(&data.items, |x| x.id.as_deref());
+    let keep_spawns = ids(&data.spawn_locations, |x| x.id.as_deref());
+    let keep_rel_defs = ids(&data.relationship_defs, |x| x.id.as_deref());
     let keep_scenes: HashSet<String> = data.scenes.iter().map(|s| s.id.clone()).collect();
     let keep_choices: HashSet<String> = data.scenes.iter().flat_map(|s| s.choices.iter().flatten().map(|c| c.id.clone())).collect();
     let keep_branches: HashSet<String> = data.scenes.iter().flat_map(|s| s.branches.iter().flatten().map(|b| b.id.clone())).collect();
@@ -325,7 +353,10 @@ pub async fn save_definition(pool: &SqlitePool, game_id: &str, existing: &GameDe
             }
         }
     }
+    prune!("spawn_locations", existing.spawn_locations.values().flatten().map(|s| &s.id), keep_spawns, delete_game_character_spawn_location);
     prune!("events", existing.events.keys(), keep_events, delete_game_event);
+    prune!("items", existing.items.keys(), keep_items, delete_game_item);
+    prune!("relationship_defs", existing.relationship_defs.iter().map(|r| &r.id), keep_rel_defs, delete_game_relationship_def);
     for t in &existing.weather_transitions {
         if !keep_transitions.contains(&(t.from_weather_id.clone(), t.to_weather_id.clone(), t.map_id.clone()))
             && delete_game_weather_transition(&mut *tx, &t.from_weather_id, &t.to_weather_id, &t.map_id).await?
@@ -354,6 +385,66 @@ pub async fn save_definition(pool: &SqlitePool, game_id: &str, existing: &GameDe
 
     tx.commit().await?;
     Ok(deleted)
+}
+
+/// 패키지 안의 모든 엔티티 id를 새 uuid로 바꾸고, 그 id를 가리키는 참조도 같이 바꾼다.
+/// 안 바꾸면 같은 패키지를 두 번 가져오거나, 내보낸 내 게임을 다시 가져올 때 id(PK)가 충돌해서
+/// 이미 있는 게임의 행을 덮어쓴다. (id는 전역 PK인데 game_id만 새로 발급하고 있었다.)
+/// 방법: 패키지를 JSON 문자열로 만들어 "옛 id"를 "새 id"로 치환한다. id를 가리키는 곳이 필드(next_scene_id 등)뿐 아니라
+/// 문자열로 저장된 JSON(조건/효과)과 "from>to" 형태의 키 안에도 있어서, 따옴표로 둘러싸인 형태와
+/// '>' 옆에 붙은 형태, 이스케이프된 형태를 모두 치환한다. 월드인포 북 id는 import가 따로 새로 만들어 이어주므로 건드리지 않는다.
+fn remap_ids(data: PackageData) -> Result<PackageData, AppError> {
+    let mut old_ids: HashSet<String> = HashSet::new();
+    macro_rules! collect {
+        ($items:expr) => {
+            for i in &$items {
+                if let Some(id) = &i.id {
+                    old_ids.insert(id.clone());
+                }
+            }
+        };
+    }
+    collect!(data.state_defs);
+    collect!(data.maps);
+    collect!(data.zones);
+    collect!(data.locations);
+    collect!(data.interactables);
+    collect!(data.time_periods);
+    collect!(data.weather_types);
+    collect!(data.events);
+    collect!(data.encounter_tables);
+    collect!(data.encounter_entries);
+    collect!(data.endings);
+    collect!(data.characters);
+    collect!(data.items);
+    collect!(data.relationship_defs);
+    collect!(data.spawn_locations);
+    for s in &data.scenes {
+        old_ids.insert(s.id.clone());
+        for c in s.choices.iter().flatten() {
+            old_ids.insert(c.id.clone());
+        }
+        for b in s.branches.iter().flatten() {
+            old_ids.insert(b.id.clone());
+        }
+    }
+    old_ids.retain(|id| !id.is_empty() && id != "player"); // 'player'는 id가 아니라 예약어
+
+    let mut text = serde_json::to_string(&data)?;
+    for old in old_ids {
+        let new = uuid::Uuid::new_v4().to_string();
+        for (from, to) in [
+            (format!("\"{old}\""), format!("\"{new}\"")),                  // "id"
+            (format!("\\\"{old}\\\""), format!("\\\"{new}\\\"")),  // 문자열 안의 JSON: \"id\"
+            (format!("\"{old}>"), format!("\"{new}>")),                    // "id>other" 관계 키
+            (format!(">{old}\""), format!(">{new}\"")),                    // "other>id"
+            (format!("\\\"{old}>"), format!("\\\"{new}>")),
+            (format!(">{old}\\\""), format!(">{new}\\\"")),
+        ] {
+            text = text.replace(&from, &to);
+        }
+    }
+    Ok(serde_json::from_str(&text)?)
 }
 
 /// 남이 만든 .tgame을 games_root/<새 game_id>/ 에 풀고, data/definition.json을
@@ -395,6 +486,7 @@ pub async fn import(pool: &SqlitePool, games_root: &Path, zip_path: &Path) -> Re
 
     let data_raw = std::fs::read_to_string(dest.join("data/definition.json")).map_err(|_| AppError::Validation("data/definition.json이 없습니다".into()))?;
     let mut data: PackageData = serde_json::from_str(&data_raw)?;
+    data = remap_ids(data)?;
 
     // game_id를 전부 새로 발급받은 걸로 덮어쓴다. 내부 엔티티 id(맵/씬/노드 등)는 원본 그대로 둔다 —
     // 그래야 next_node_id 같은 상호 참조가 깨지지 않는다.
@@ -456,7 +548,7 @@ pub async fn export(pool: &SqlitePool, games_root: &Path, game_id: &str, definit
         return Err(AppError::NotFound("게임 파일을 찾을 수 없습니다".into()));
     }
     std::fs::create_dir_all(output_dir)?;
-    let out_path = output_dir.join(format!("{}.tgame", sanitize_filename(&definition.project.title)));
+    let out_path = unique_path(output_dir, &sanitize_filename(&definition.project.title), "tgame");
 
     let file = std::fs::File::create(&out_path)?;
     let mut zip = zip::ZipWriter::new(file);
@@ -505,6 +597,15 @@ fn add_dir_to_zip<W: std::io::Write + std::io::Seek>(
         }
     }
     Ok(())
+}
+
+/// 같은 이름이 이미 있으면 "이름 (1).tgame"처럼 번호를 붙인다 (다운로드 폴더의 기존 파일을 덮어쓰지 않게).
+fn unique_path(dir: &Path, stem: &str, ext: &str) -> PathBuf {
+    let first = dir.join(format!("{stem}.{ext}"));
+    if !first.exists() {
+        return first;
+    }
+    (1..10_000).map(|n| dir.join(format!("{stem} ({n}).{ext}"))).find(|p| !p.exists()).unwrap_or(first)
 }
 
 fn sanitize_filename(name: &str) -> String {

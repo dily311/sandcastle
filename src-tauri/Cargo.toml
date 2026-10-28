@@ -52,17 +52,18 @@ image = { version = "0.25", features = ["webp"] }
 infer = "0.22.0"
 tiktoken = "4.1.2"
 
+[target.aarch64-linux-android]
+linker = "aarch64-linux-android21-clang"
+
 [target.'cfg(target_os = "windows")'.dependencies]
 windows = { version = "0.58", features = [
     "Win32_UI_WindowsAndMessaging",
     "Win32_Foundation",
 ] }
 
-[target.aarch64-linux-android]
-linker = "aarch64-linux-android21-clang"
-
 [target.'cfg(any(target_os = "macos", target_os = "windows", target_os = "linux"))'.dependencies]
 tauri-plugin-autostart = "2.7.0"
+notify = "6.1" # 파일 시스템 감시
 
 # [dev-dependencies]
 

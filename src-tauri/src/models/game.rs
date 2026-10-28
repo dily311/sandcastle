@@ -3,48 +3,6 @@ use sqlx::FromRow;
 
 use crate::game::runtime::GameState;
 // =========================================================
-// 게임 엔진에서 사용하는 데이터 정의
-// =========================================================
-#[derive(Serialize, Clone)]
-#[serde(rename_all = "camelCase")]
-pub struct GameManifest {
-    pub id: String, // 프로젝트 고유 ID
-    pub title: String,
-    pub description: Option<String>,
-    pub version: String, // 게임버전: semver, 세이브 호환성 체크용
-    pub template_id: String,
-    pub api_version: String, // 게임 엔진 버전
-    pub start_location_id: Option<String>,
-    pub cover_image: Option<String>,
-    pub custom_css: Option<serde_json::Value>, // 게임에만 적용될 css
-    pub settings_json: Option<serde_json::Value>, // 실행시 기본 값
-    pub created_at: i64,
-    pub updated_at: i64,
-}
-
-// =========================================================
-// Game Bundle
-// 프론트로 넘겨주는 게임 데이터
-// =========================================================
-#[derive(Serialize, Clone)]
-#[serde(rename_all = "camelCase")]
-pub struct GameBundleRow {
-    pub game: GameProject,
-    pub state_defs: Vec<GameStateDef>,
-    pub scenes: Vec<GameScene>,
-    pub events: Vec<GameEvents>,
-}
-
-#[derive(Deserialize)]
-#[serde(rename_all = "camelCase")]
-pub struct GameBundleInput {
-    pub game: GameProjectInput,
-    pub state_defs: Vec<GameStateDefInput>,
-    pub scenes: Vec<GameSceneInput>,
-    pub events: Vec<GameEventsInput>,
-}
-
-// =========================================================
 // DB에서 가져오는 데이터 정의
 // =========================================================
 // ---------------------------------------------------------
@@ -154,12 +112,27 @@ impl From<GameProject> for GameProjectInput {
         }
     }
 }
-// ---------- game_worldinfo ----------
-#[derive(FromRow, Serialize, Deserialize)]
-#[serde(rename_all = "camelCase")]
-pub struct GameWorldinfo {
-    pub game_character_id: String,
-    pub book_id: String,
+
+impl GameProjectInput {
+    pub fn default(id: Option<String>, title: String, template_id: String) -> Self {
+        Self {
+            id,
+            title,
+            description: None,
+            template_id,
+            version: "1.0".into(),
+            api_version: "1.0".into(),
+            cover_image: None,
+            start_scene_key: None,
+            start_map_id: None,
+            start_location_id: None,
+            world_info_ids: vec![],
+            custom_css: None,
+            settings_json: None,
+            created_at: None,
+            updated_at: None,
+        }
+    }
 }
 
 // ---------------------------------------------------------
@@ -346,14 +319,6 @@ impl From<GameCharacters> for GameCharactersInput {
         }
     }
 }
-// ---------- game_character_worldinfo ----------
-#[derive(FromRow, Serialize, Deserialize)]
-#[serde(rename_all = "camelCase")]
-pub struct GameCharactersWorldinfo {
-    pub game_character_id: String,
-    pub book_id: String,
-}
-
 // ---------- game_character_spawn_locations ----------
 #[derive(FromRow)]
 pub struct GameCharacterSpawnLocationsRow {

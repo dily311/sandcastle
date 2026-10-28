@@ -440,6 +440,18 @@ pub async fn update_character<'e, E>(executor: E,id: &str,input: &CharacterInput
 
     Ok(())
 }
+pub async fn update_character_is_favorite<'e, E>(executor: E, id: &str, is_favorite: bool) -> Result<(), Error> where E: Executor<'e, Database = Sqlite>,{
+    sqlx::query(
+        "
+        UPDATE characters SET favorite=? WHERE id=?",
+    )
+    .bind(is_favorite)
+    .bind(&id)
+    .execute(executor)
+    .await?;
+
+    Ok(())
+}
 pub async fn delete_character<'e, E>(executor: E, id: &str) -> Result<bool, Error> where E: Executor<'e, Database = Sqlite>,{
     let result = sqlx::query("DELETE FROM characters WHERE id = ?")
         .bind(id)
@@ -642,14 +654,16 @@ pub async fn get_messages<'e, E>(executor: E, conversation_id: &str, limit: i64,
     let rows = match before {
         Some(b) => sqlx::query_as::<_, MessageRow>(
             "SELECT * FROM messages WHERE conversation_id = ? AND created_at < ?
-             ORDER BY created_at, rowid LIMIT ?",
+             ORDER BY created_at, rowid at DESC
+             LIMIT ?",
         )
         .bind(&conversation_id)
         .bind(b)
         .bind(limit),
         None => sqlx::query_as::<_, MessageRow>(
             "SELECT * FROM messages WHERE conversation_id = ?
-             ORDER BY created_at, rowid LIMIT ?",
+             ORDER BY created_at, rowid at DESC
+             LIMIT ?",
         )
         .bind(&conversation_id)
         .bind(limit),
