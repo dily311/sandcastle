@@ -3,7 +3,7 @@
 	import { APICommands } from "$/ipc/commands";
 	import { apiProfiles } from "$/lib/stores/apiProfileStore.svelte";
 	import { appSetting } from "$/lib/stores/settingStore.svelte";
-	import type { APIList, ApiProfile, ApiProfileInput } from "$/lib/types/aiService";
+	import type { APIList, ApiProfile, ApiProfileInput } from "$type/aiService";
 	import { Plus, Check, MoreVertical, Zap } from "@lucide/svelte";
 	import { onMount } from "svelte";
 
@@ -47,11 +47,7 @@
 			profileId: selectedApiProfile.id,
 			conversationId: "",
 			message: "",
-			options: {
-				stream: false,
-				max_tokens: 1024,
-				temperature: 0.7,
-			},
+
 		});
 		console.log(responseText);
 
@@ -89,7 +85,7 @@
 	});
 </script>
 
-<div class="content">
+<div class="page">
 	<div class="page-title">
 		<div>
 			<h2>AI API 연결</h2>

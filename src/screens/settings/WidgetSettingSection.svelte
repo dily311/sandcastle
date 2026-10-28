@@ -4,6 +4,7 @@
 	import Icon from "$/components/ui/Icon.svelte";
 	import { widgetCommands } from "$/ipc/commands";
 	import { onMount } from "svelte";
+	import ToggleButton from "$/components/ui/button/ToggleButton.svelte";
 
 	let isAutoStartWidget = $state(false);
 
@@ -19,11 +20,9 @@
 				<div class="setting-title">위젯</div>
 			</div>
 			<div class="setting-control">
-				<input
-					type="checkbox"
-					class="toggle-checkbox"
-					checked={featureConfig.value.get("widget")}
-					onclick={(e) => featureManager.toggleFeature("widget", e.currentTarget.checked)}
+				<ToggleButton
+					checked={featureConfig.value.get("widget") || false}
+					toggle={(e, change) => featureManager.toggleFeature("widget", change)}
 				/>
 			</div>
 		</div>
@@ -32,11 +31,9 @@
 				<div class="setting-title">위젯 자동 실행</div>
 			</div>
 			<div class="setting-control">
-				<input
-					type="checkbox"
-					class="toggle-checkbox"
-					bind:checked={isAutoStartWidget}
-					onclick={(e) => widgetCommands.set_autostart({enabled: !isAutoStartWidget})}
+				<ToggleButton
+					checked={isAutoStartWidget}
+					toggle={(e, change) => widgetCommands.set_autostart({ enabled: change })}
 				/>
 			</div>
 		</div>
@@ -60,11 +57,9 @@
 						</div>
 					</div>
 					<div class="setting-control">
-						<input
-							type="checkbox"
-							class="toggle-checkbox"
-							checked={featureConfig.value.get(feature.id)}
-							onclick={(e) => featureManager.toggleFeature(feature.id, e.currentTarget.checked)}
+						<ToggleButton
+							checked={featureConfig.value.get(feature.id) || false}
+							toggle={(e, change) => featureManager.toggleFeature(feature.id, change)}
 						/>
 					</div>
 				</div>

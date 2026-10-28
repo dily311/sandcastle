@@ -1,17 +1,13 @@
 // ! rust로 넘어오는 데이터를 정의
 // ! 혼동이 없도록 models/game.rs와 구조체명을 동일하게 할 것
 
-// ---------------------------------------------------------
-// 게임 번들 데이터
-// ---------------------------------------------------------
-
 /** 게임 메타 데이터 */
 export interface GameProject {
 	id: string;
 	title: string;
 	description: string;
 	templateId: string;
-    version: string, // 게임버전: semver, 세이브 호환성 체크용
+	version: string; // 게임버전: semver, 세이브 호환성 체크용
 	apiVersion: string;
 	coverImage: string | null;
 	startSceneKey: string | null;
@@ -23,317 +19,14 @@ export interface GameProject {
 	createdAt: number;
 	updatedAt: number;
 }
+// =========================================================
+// 게임 데이터 로드
+// =========================================================
 
-export interface GameStateDef {
-	id: string;
-	gameId: string;
-	description: string | null;
-	key: string;
-	type: string;
-	defaultValue: string;
-	createdAt: number;
-	updatedAt: number;
-}
-
-export interface GameChoice {
-	id: string;
-	sceneId: string;
-	text: string;
-	nextSceneId: string | null;
-	effect: string | null;
-	sortOrder: number;
-}
-
-export interface GameMaps {
-	id: string;
-	gameId: string;
-	name: string;
-	dangerLevel: number;
-	defaultWeatherPoolId: string | null;
-	settingsJson: unknown;
-	createdAt: number;
-	updatedAt: number;
-}
-
-export interface GameMapsZone {
-	id: string;
-	mapId: string;
-	name: string;
-	tags: string[];
-	settingsJson: unknown;
-	createdAt: number;
-	updatedAt: number;
-}
-
-export interface GameLocations {
-	id: string;
-	zoneId: string;
-	name: string;
-	description: string | null;
-	settingsJson: unknown;
-}
-export interface GameLocationConnections {
-	fromId: string;
-	toId: string;
-	travelSeconds: number;
-	condition: string | null;
-	settingsJson: unknown;
-}
-
-export interface GameInteractables {
-	id: string;
-	locationId: string;
-	name: string;
-	eventId: string | null;
-}
-
-export interface GameTimePeriods {
-	id: string;
-	gameId: string;
-	name: string;
-	sortOrder: number;
-	startMinute: number;
-	endMinute: number;
-}
-
-export interface GameWeatherTypes {
-	id: string;
-	gameId: string;
-	name: string;
-	encounterRateModifier: number;
-	visibilityModifier: number;
-	createdAt: number;
-	updatedAt: number;
-}
-
-export interface GameWeatherTransitions {
-	fromWeatherId: string;
-	toWeatherId: string;
-	mapId: string;
-	probability: number;
-}
-
-export interface GameEvents {
-	id: string;
-	gameId: string;
-	eventType: string;
-	name: string;
-	description: string;
-	requiresNpc: boolean;
-	configJson: { [key: string]: unknown };
-	effectJson: { [key: string]: unknown };
-	cooldownSeconds: number;
-	createdAt: number;
-	updatedAt: number;
-}
-
-export interface GameEventConditions {
-	id: string;
-	eventId: string;
-	conditionType: string;
-	conditionValue: string | null;
-}
-export interface GameEventCharacterPool {
-	eventId: string;
-	gameCharacterId: string;
-	spawnWeight: number;
-}
-
-export interface GameEncounterTables {
-	id: string;
-	mapId: string;
-	zoneId: string | null;
-	locationId: string | null;
-	baseTriggerChance: number;
-}
-
-export interface GameEncounterEntries {
-	id: string;
-	encounterTableId: string;
-	eventId: string;
-	weight: number;
-	timePeriodId: string | null;
-	weatherId: string | null;
-}
-
-export interface GameScene {
-	id: string;
-	gameId: string;
-	sceneName: string;
-	description: string | null;
-	sceneKey: string;
-	settingsJson: string | null;
-	isEnding: boolean;
-	sortOrder: number;
-	createdAt: number;
-	updatedAt: number;
-}
-
-export interface GameEndings {
-	id: string;
-	gameId: string;
-	endingKey: string;
-	title: string;
-	description: string;
-}
-export interface GameCharacters {
-	id: string;
-	gameId: string;
-	characterId: string | null;
-	name: string;
-	avatar: string | null;
-	description: string | null;
-	firstMessage: string | null;
-	exampleDialogue: string | null;
-	systemPromptOverride: string | null;
-	behaviorType: string | null;
-	worldInfoIds: string[];
-	tags: string | null;
-	settingsJson: unknown;
-	createdAt: number;
-	updatedAt: number;
-}
-
-// ---------------------------------------------------------
-// 런타임 시 게임 엔진에서 넘어오는 데이터
-// ---------------------------------------------------------
-export interface GameResponse {
-	events: GameEvent[];
-	state: RenderState;
-}
-
-export interface GameJournal {
-	sessionId: string;
-	seq: number;
-	kind: string;
-	payloadJson: any;
-	gameTime: number;
-	createdAt: number;
-}
-export interface GameConversations {
-	id: string;
-	gameId: string;
-	sessionId: string;
-	branchKey: string;
-	participantsKey: string;
-	title: string | null;
-	createdAt: number;
-	updatedAt: number;
-}
-export interface GameMessages {
-	id: string;
-	seq: number;
-	conversationId: string;
-	role: string;
-	name: string | null;
-	characterId: string | null;
-	content: string;
-	meta: any;
-	createdAt: number;
-	updatedAt: number;
-}
-
-export interface NpcReply {
-	text: string;
-	events: GameEvent[];
-	state: RenderState;
-}
-// ---------------------------------------------------------
-// 게임 스테이터스
-// ---------------------------------------------------------
-export interface RenderState {
-	sessionId: string;
-	locationId: string | null;
-	mapId: string;
-	zoneId: string | null;
-	gameTime: number;
-	weatherID: string;
-	timePeriodId: string;
-	currentSceneId: string | null;
-	activeNpcId: string | null;
-	availableChoices: string[];
-	flags: any;
-	inventory: any;
-	relationships: any;
-	presentNpcs: string[];
-}
-
-// ---------------------------------------------------------
-// 게임 세이브
-// ---------------------------------------------------------
-export interface GamePlayerSessions {
-	id: string;
-	gameId: string;
-	playerId: string;
-	currentSceneId: string | null;
-	currentMapId: string | null;
-	currentZoneId: string | null;
-	currentLocationId: string | null;
-	currentWeatherId: string | null;
-	gameTime: number;
-	flagsJson: any;
-	parentSessionId: string | null;
-	pendingScenesJson: any;
-	forkedFromSeq: number | null;
-	headSeq: number;
-	updatedAt: number;
-}
-
-export interface GameSave {
-	id: string;
-	gameId: string;
-	sessionId: string;
-	slotNumber: number;
-	currentSceneId: string | null;
-	currentMapId: string | null;
-	currentZoneId: string | null;
-	currentLocationId: string | null;
-	gameTime: number;
-	currentWeatherId: string | null;
-	stateSnapshot: string | null;
-	updatedAt: number;
-}
-
-export interface SaveReport {}
-
-// ---------------------------------------------------------
-// 게임 커맨드들
-// ---------------------------------------------------------
-export enum GameCommand {
-	MoveTo,
-	Interact,
-	Talk,
-	StopTalk,
-	SetVariable,
-	Choose,
-	AdvanceTime,
-	UseItem,
-}
-
-export enum GameEvent {
-	GameStarted,
-	LocationChanged,
-	ZoneChanged,
-	TimeAdvanceRequested,
-	TimeAdvanced,
-	WeatherChanged,
-	EncounterTriggered,
-	TriggerActivated,
-	DialogueStarted,
-	DialogueEnded,
-	ChoicePresented,
-	ChoiceMade,
-	SceneChanged,
-	VariableChanged,
-	ItemAdded,
-	ItemRemoved,
-	GameEnded,
-}
-
-// ---------------------------------------------------------
-// 게임 에디터용
-// ---------------------------------------------------------
-
+/**
+ * 게임 데이터 로드시 해당 인터페이스를 불러온다.
+ * 그 이후로는 불러온 데이터에서 변경된 상태만 반환된다.
+ */
 export interface PackageData {
 	project: GameProjectInput;
 	stateDefs: GameStateDefInput[];
@@ -545,4 +238,333 @@ interface WorldInfoEntryInput {
 	enabled: boolean;
 	priority: number;
 	constant: boolean;
+}
+
+// ---------------------------------------------------------
+// // 런타임 시 게임 엔진에서 넘어오는 데이터
+// ---------------------------------------------------------
+export interface GameResponse {
+	events: GameEvent[];
+	state: RenderState;
+}
+
+// ---------------------------------------------------------
+// NPC 대화 시스템
+// ---------------------------------------------------------
+export interface GameConversations {
+	id: string;
+	gameId: string;
+	sessionId: string;
+	branchKey: string;
+	participantsKey: string;
+	title: string | null;
+	createdAt: number;
+	updatedAt: number;
+}
+export interface GameMessages {
+	id: string;
+	seq: number;
+	conversationId: string;
+	role: string;
+	name: string | null;
+	characterId: string | null;
+	content: string;
+	meta: any;
+	createdAt: number;
+	updatedAt: number;
+}
+
+export interface NpcReply {
+	text: string;
+	events: GameEvent[];
+	state: RenderState;
+}
+// ---------------------------------------------------------
+// 게임 스테이터스
+// ---------------------------------------------------------
+export interface RenderState {
+	sessionId: string;
+	locationId: string | null;
+	mapId: string;
+	zoneId: string | null;
+	gameTime: number;
+	weatherID: string;
+	timePeriodId: string;
+	currentSceneId: string | null;
+	activeNpcId: string | null;
+	availableChoices: string[];
+	flags: any;
+	inventory: any;
+	relationships: any;
+	presentNpcs: string[];
+}
+
+// ---------------------------------------------------------
+// 게임 세이브
+// 게임 세이브 저장은 GamePlayerSessions에 종속됨
+// ---------------------------------------------------------
+export interface GamePlayerSessions {
+	id: string;
+	gameId: string;
+	playerId: string;
+	currentSceneId: string | null;
+	currentMapId: string | null;
+	currentZoneId: string | null;
+	currentLocationId: string | null;
+	currentWeatherId: string | null;
+	gameTime: number;
+	flagsJson: any;
+	parentSessionId: string | null;
+	pendingScenesJson: any;
+	forkedFromSeq: number | null;
+	headSeq: number;
+	updatedAt: number;
+}
+export interface GameJournal {
+	sessionId: string;
+	seq: number;
+	kind: string;
+	payloadJson: any;
+	gameTime: number;
+	createdAt: number;
+}
+export interface GameSave {
+	id: string;
+	gameId: string;
+	sessionId: string;
+	slotNumber: number;
+	currentSceneId: string | null;
+	currentMapId: string | null;
+	currentZoneId: string | null;
+	currentLocationId: string | null;
+	gameTime: number;
+	currentWeatherId: string | null;
+	stateSnapshot: string | null;
+	updatedAt: number;
+}
+
+// ---------------------------------------------------------
+// 게임 커맨드들
+// ---------------------------------------------------------
+export enum GameCommand {
+	MoveTo, // 이동
+	Interact, // 상호작용
+	Talk, // NPC 대화
+	StopTalk, // 대화 멈춤
+	SetVariable, // 변수 설정
+	Choose, // 분기 노드
+	AdvanceTime, // 시간 흐름
+	UseItem, // 아이템 사용
+	DropItem, // 아이템 버리기
+}
+
+export enum GameEvent {
+	GameStarted, // 게임 시작
+	LocationChanged, // 이동
+	ZoneChanged, // zone 이동 (맵 순서: map>zone>location)
+	TimeAdvanceRequested, // 시간 흘렀을 경우 뭐가 바뀌었는지 확인하기 위한 이벤트
+	TimeAdvanced, // 시간 변경
+	WeatherChanged, // 날씨 변경
+	TimePeriodChanged, // 시간대 변경
+	NpcMoved, // NPC 이동
+	EventTriggered, // 이벤트 트리거
+	SceneRequested, // 씬 요청
+	EventRequested, // 이벤트 요청
+	TriggerActivated, // 트리거 활성화
+	DialogueStarted, // 다일로그 시작
+	DialogueEnded, // 다일로그 끝
+	ChoicePresented, // 선택지
+	ChoiceMade,
+	SceneChanged,
+	SceneExited,
+	VariableChanged,
+	ItemChangeRequested,
+	ItemUsed,
+	RelationChangeRequested,
+	RelationChanged,
+	ItemAdded,
+	ItemRemoved,
+	GameEnded,
+}
+
+// =========================================================
+// 게임 에디터용 인터페이스
+// =========================================================
+export interface GameStateDef {
+	id: string;
+	gameId: string;
+	description: string | null;
+	key: string;
+	type: string;
+	defaultValue: string;
+	createdAt: number;
+	updatedAt: number;
+}
+
+export interface GameChoice {
+	id: string;
+	sceneId: string;
+	text: string;
+	nextSceneId: string | null;
+	effect: string | null;
+	sortOrder: number;
+}
+
+export interface GameMaps {
+	id: string;
+	gameId: string;
+	name: string;
+	dangerLevel: number;
+	defaultWeatherPoolId: string | null;
+	settingsJson: unknown;
+	createdAt: number;
+	updatedAt: number;
+}
+
+export interface GameMapsZone {
+	id: string;
+	mapId: string;
+	name: string;
+	tags: string[];
+	settingsJson: unknown;
+	createdAt: number;
+	updatedAt: number;
+}
+
+export interface GameLocations {
+	id: string;
+	zoneId: string;
+	name: string;
+	description: string | null;
+	settingsJson: unknown;
+}
+export interface GameLocationConnections {
+	fromId: string;
+	toId: string;
+	travelSeconds: number;
+	condition: string | null;
+	settingsJson: unknown;
+}
+
+export interface GameInteractables {
+	id: string;
+	locationId: string;
+	name: string;
+	eventId: string | null;
+}
+
+export interface GameTimePeriods {
+	id: string;
+	gameId: string;
+	name: string;
+	sortOrder: number;
+	startMinute: number;
+	endMinute: number;
+}
+
+export interface GameWeatherTypes {
+	id: string;
+	gameId: string;
+	name: string;
+	encounterRateModifier: number;
+	visibilityModifier: number;
+	createdAt: number;
+	updatedAt: number;
+}
+
+export interface GameWeatherTransitions {
+	fromWeatherId: string;
+	toWeatherId: string;
+	mapId: string;
+	probability: number;
+}
+
+export interface GameEvents {
+	id: string;
+	gameId: string;
+	eventType: string;
+	name: string;
+	description: string;
+	requiresNpc: boolean;
+	configJson: { [key: string]: unknown };
+	effectJson: { [key: string]: unknown };
+	cooldownSeconds: number;
+	createdAt: number;
+	updatedAt: number;
+}
+
+export interface GameEventConditions {
+	id: string;
+	eventId: string;
+	conditionType: string;
+	conditionValue: string | null;
+}
+export interface GameEventCharacterPool {
+	eventId: string;
+	gameCharacterId: string;
+	spawnWeight: number;
+}
+
+export interface GameEncounterTables {
+	id: string;
+	mapId: string;
+	zoneId: string | null;
+	locationId: string | null;
+	baseTriggerChance: number;
+}
+
+export interface GameEncounterEntries {
+	id: string;
+	encounterTableId: string;
+	eventId: string;
+	weight: number;
+	timePeriodId: string | null;
+	weatherId: string | null;
+}
+
+export interface GameScene {
+	id: string;
+	gameId: string;
+	sceneName: string;
+	description: string | null;
+	sceneKey: string;
+	settingsJson: string | null;
+	isEnding: boolean;
+	sortOrder: number;
+	createdAt: number;
+	updatedAt: number;
+}
+
+export interface GameEndings {
+	id: string;
+	gameId: string;
+	endingKey: string;
+	title: string;
+	description: string;
+}
+export interface GameCharacters {
+	id: string;
+	gameId: string;
+	characterId: string | null;
+	name: string;
+	avatar: string | null;
+	description: string | null;
+	firstMessage: string | null;
+	exampleDialogue: string | null;
+	systemPromptOverride: string | null;
+	behaviorType: string | null;
+	worldInfoIds: string[];
+	tags: string | null;
+	settingsJson: unknown;
+	createdAt: number;
+	updatedAt: number;
+}
+
+// ---------------------------------------------------------
+// 게임 패키지 저장시 반환 데이터
+// ---------------------------------------------------------
+/** 삭제된 데이터와 이슈들을 모아서 반환 */
+export interface SaveReport {
+	deleted: Map<string, number>,
+	issues: any,
 }

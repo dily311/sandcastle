@@ -28,6 +28,12 @@
 </script>
 
 <!-- 일반 컴포넌트처럼 사용하고 props 전달 -->
-<SelectedIcon class={cn("svg-icon", className)} {size} {color}>
+<SelectedIcon class={cn("svg-icon", className)} {size} {color} nonScalingStroke>
 	{@render children?.()}
 </SelectedIcon>
+
+<style>
+	:global(.svg-icon.fill) {
+		fill: currentColor;
+	}
+</style>

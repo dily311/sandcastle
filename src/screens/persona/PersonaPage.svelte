@@ -91,11 +91,8 @@
 		if (!selectedPersona) return;
 
 		const confirmed = await confirm(`"${selectedPersona.name}" 페르소나를 삭제할까요?`);
-
 		if (!confirmed) return;
-
 		loading = true;
-
 		error = null;
 
 		try {
@@ -110,7 +107,7 @@
 	}
 </script>
 
-<div class="persona-screen">
+<div class="content persona-screen">
 	<!-- ========================= -->
 	<!-- SIDEBAR -->
 	<!-- ========================= -->
@@ -223,272 +220,135 @@
 <style>
 	.persona-screen {
 		display: flex;
-
 		width: 100%;
 		height: 100%;
-
 		min-height: 0;
-
 		background: var(--background-primary);
-	}
-
-	/* =========================
+	} /* =========================
        LIST
     ========================= */
-
 	.persona-list {
 		width: 280px;
-
 		flex-shrink: 0;
-
 		border-right: 1px solid var(--border-color);
-
 		display: flex;
-
 		flex-direction: column;
 	}
-
 	.list-header {
 		height: 48px;
-
 		display: flex;
-
 		align-items: center;
-
 		justify-content: space-between;
-
 		padding: 0 12px;
-
 		border-bottom: 1px solid var(--border-color);
 	}
-
 	.list-header h2 {
 		margin: 0;
-
 		font-size: 15px;
-	}
-
-	button {
-		cursor: pointer;
 	}
 
 	.list-header button {
 		border: none;
-
 		background: transparent;
-
 		font-size: 22px;
-
 		color: inherit;
 	}
-
 	.list-content {
 		overflow-y: auto;
 	}
-
 	.persona-item {
 		width: 100%;
-
 		display: flex;
-
 		gap: 10px;
-
 		align-items: center;
-
 		padding: 10px 12px;
-
 		border: none;
-
 		background: transparent;
-
 		color: inherit;
-
 		text-align: left;
 	}
-
 	.persona-item:hover,
 	.persona-item.active {
 		background: var(--button-hover-bg);
 	}
-
-	.avatar {
-		width: 32px;
-		height: 32px;
-
-		border-radius: 50%;
-
-		flex: 0 0 auto;
-		display: flex;
-		align-items: center;
-		justify-content: center;
-
-		color: white;
-
-		font-weight: 600;
-	}
-
 	.persona-info {
 		display: flex;
-
 		flex-direction: column;
-
 		min-width: 0;
 	}
-
 	.persona-info span {
 		font-size: 12px;
-
 		opacity: 0.6;
-
 		white-space: nowrap;
-
 		overflow: hidden;
-
 		text-overflow: ellipsis;
-	}
-
-	/* =========================
+	} /* =========================
        EDITOR
     ========================= */
-
 	.persona-editor {
 		flex: 1;
-
 		min-width: 0;
-
 		overflow-y: auto;
 	}
-
 	.editor-header {
 		height: 56px;
-
 		display: flex;
-
 		align-items: center;
-
 		justify-content: space-between;
-
 		padding: 0 20px;
-
 		border-bottom: 1px solid var(--border-color);
 	}
-
 	.editor-header h1 {
 		margin: 0;
-
 		font-size: 16px;
 	}
-
 	.header-actions {
 		display: flex;
-
 		gap: 8px;
 	}
-
 	.header-actions button {
 		padding: 6px 12px;
-
 		border: 1px solid var(--border-color);
-
 		background: transparent;
-
 		color: inherit;
-
 		border-radius: var(--card-radius);
 	}
-
 	.header-actions .primary {
 		background: var(--accent-color);
-
 		color: white;
-
 		border-color: transparent;
 	}
-
 	.header-actions .danger {
 		color: #e55;
 	}
-
 	.form {
 		max-width: 700px;
-
 		padding: 24px;
-
 		display: flex;
-
 		flex-direction: column;
-
 		gap: 20px;
-	}
-
-	label {
-		display: flex;
-
-		flex-direction: column;
-
-		gap: 7px;
-	}
-
-	label > span {
-		font-size: 13px;
-
-		opacity: 0.7;
-	}
-
-	input,
-	textarea {
-		width: 100%;
-
-		box-sizing: border-box;
-
-		padding: 10px;
-
-		border: 1px solid var(--input-border-color);
-
-		background: var(--input-bg);
-
-		color: inherit;
-
-		border-radius: var(--card-radius);
-	}
-
-	textarea {
-		min-height: 140px;
-
-		resize: vertical;
 	}
 
 	.form-row {
 		display: flex;
-
 		align-items: center;
-
 		gap: 30px;
 	}
-
 	.checkbox {
 		flex-direction: row;
-
 		align-items: center;
 	}
-
 	.checkbox input {
 		width: auto;
 	}
-
 	.error {
 		margin: 16px 24px;
-
 		padding: 10px;
-
 		color: #f55;
-
 		background: rgba(255, 0, 0, 0.08);
 	}
-
 	.empty {
 		padding: 20px;
-
 		opacity: 0.5;
 	}
 </style>

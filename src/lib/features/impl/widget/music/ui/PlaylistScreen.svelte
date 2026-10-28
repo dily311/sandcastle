@@ -227,6 +227,7 @@
 		right: 0;
 		transform: translateY(0.8rem);
 		display: none;
+		transition-behavior: allow-discrete;
 		white-space: nowrap;
 		padding: 0.4rem;
 		border-radius: 0.4rem;

@@ -1,4 +1,5 @@
 <script lang="ts">
+	import ToggleButton from "$/components/ui/button/ToggleButton.svelte";
 	import { appSetting } from "$/lib/stores/settingStore.svelte";
 	import { type Language } from "$/lib/type/settingTypes";
 </script>
@@ -34,11 +35,9 @@
 					<p class="description">새 버전이 출시되면 자동으로 다운로드 및 설치합니다.</p>
 				</div>
 				<div class="setting-control">
-					<input
-						type="checkbox"
-						class="toggle-checkbox"
+					<ToggleButton
 						checked={appSetting.autoUpdate}
-						onchange={(e) => appSetting.update({ autoUpdate: e.currentTarget.checked })}
+						toggle={(e, change) => appSetting.update({ autoUpdate: change })}
 					/>
 				</div>
 			</div>
@@ -56,11 +55,9 @@
 					<p class="description">비활성화 시 Shift + Enter 동작과 전환됩니다.</p>
 				</div>
 				<div class="setting-control">
-					<input
-						type="checkbox"
-						class="toggle-checkbox"
+					<ToggleButton
 						checked={appSetting.sendOnEnter}
-						onchange={(e) => appSetting.update({ sendOnEnter: e.currentTarget.checked })}
+						toggle={(e, change) => appSetting.update({ sendOnEnter: change })}
 					/>
 				</div>
 			</div>
@@ -72,11 +69,9 @@
 					<p class="description">메시지 옆에 작성 시간을 항상 표시합니다.</p>
 				</div>
 				<div class="setting-control">
-					<input
-						type="checkbox"
-						class="toggle-checkbox"
+					<ToggleButton
 						checked={appSetting.showTimestamps}
-						onchange={(e) => appSetting.update({ showTimestamps: e.currentTarget.checked })}
+						toggle={(e, change) => appSetting.update({ showTimestamps: change })}
 					/>
 				</div>
 			</div>

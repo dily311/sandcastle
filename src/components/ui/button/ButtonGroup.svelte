@@ -40,7 +40,7 @@
        --------------------------------------- */
 	.btn-group.segmented {
 		gap: 0;
-		border: 1px solid var(--border-strong, #d1d5db);
+		border: 1px solid var(--border-strong-color);
 		border-radius: var(--radius-sm, 6px);
 		overflow: hidden;
 	}
@@ -64,7 +64,7 @@
 
 	/* 세그먼트 내부 버튼 호버 시 */
 	:global(.btn-group.segmented .btn:hover) {
-		background: var(--button-bg-hover, #e5e7eb);
+		background: var(--button-hover-bg);
 	}
 
 	/* 활성화된 상태 (예: .on 또는 .active) */

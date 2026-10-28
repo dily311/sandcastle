@@ -58,7 +58,7 @@
 
     .card-group.grid {
         display: grid;
-        grid-template-columns: var(--card-columns, repeat(3, minmax(0, 1fr)));
+        grid-template-columns: repeat(auto-fill, minmax(248px, 1fr));
     }
 
     /* Gaps */
@@ -73,9 +73,9 @@
     }
 
     /* 반응형 대응: 화면이 좁아지면 그리드 자동 1열 또는 2열로 조정 */
-    @media (max-width: 768px) {
+    /* @media (max-width: 768px) {
         .card-group.grid {
             grid-template-columns: repeat(1, minmax(0, 1fr)) !important;
         }
-    }
+    } */
 </style>

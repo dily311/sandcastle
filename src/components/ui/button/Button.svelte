@@ -79,7 +79,7 @@
 		outline: none;
 		box-shadow:
 			0 0 0 2px var(--background-color),
-			0 0 0 4px var(--accent-color, #3b82f6);
+			0 0 0 4px var(--accent-color);
 	}
 
 	.btn:disabled,
@@ -87,6 +87,10 @@
 		opacity: 0.6;
 		cursor: not-allowed;
 		pointer-events: none;
+	}
+
+	.btn :global(svg) {
+		block-size: 1cap;
 	}
 
 	/* 아이콘 스타일 */
@@ -127,7 +131,7 @@
        2. Variants (종류별 스타일)
        ================================---------- */
 	.btn.default {
-		background: var(--button-bg, #f3f4f6);
+		background: var(--button-bg);
 		color: var(--text-color);
 		border-color: var(--border-color);
 	}
@@ -141,25 +145,25 @@
 		border-color: transparent;
 	}
 	.btn.primary:hover {
-		background: var(--accent-color-hover, #1d4ed8);
+		background: var(--accent-color-hover);
 	}
 
 	.btn.secondary {
 		background: var(--background-secondary);
-		color: var(--secondary-text, #3730a3);
+		color: var(--secondary-text);
 		border-color: transparent;
 	}
 	.btn.secondary:hover {
-		background: var(--secondary-bg-hover, #c7d2fe);
+		background: var(--secondary-bg-hover);
 	}
 
 	.btn.outline {
 		background: transparent;
-		border-color: var(--border-strong, #d1d5db);
+		border-color: var(--border-strong-color);
 		color: var(--text-color);
 	}
 	.btn.outline:hover {
-		background: var(--button-bg, #f3f4f6);
+		background: var(--button-bg);
 	}
 
 	.btn.ghost {
@@ -168,11 +172,6 @@
 		color: var(--text-color);
 		padding: 0;
 	}
-	.btn.ghost:hover {
-		background: transparent;
-		border-color: transparent;
-	}
-
 	.btn.link {
 		background: transparent;
 		border-color: transparent;
@@ -183,43 +182,43 @@
 		height: auto;
 	}
 	.btn.link:hover {
-		color: var(--accent-color-hover, #1d4ed8);
+		color: var(--accent-color-hover);
 	}
 
 	.btn.success {
-		background: var(--color-green-bg, #ecfdf5);
-		color: var(--color-green, #059669);
-		border-color: var(--color-green-border, #a7f3d0);
+		background: var(--color-green-bg);
+		color: var(--color-green);
+		border-color: var(--color-green-border);
 	}
 	.btn.success:hover {
-		background: var(--color-green-hover, #d1fae5);
+		background: var(--color-green-hover);
 	}
 
 	.btn.warning {
-		background: var(--color-yellow-bg, #fffbeb);
-		color: var(--color-yellow, #d97706);
-		border-color: var(--color-yellow-border, #fde68a);
+		background: var(--color-yellow-bg);
+		color: var(--color-yellow);
+		border-color: var(--color-yellow-border);
 	}
 	.btn.warning:hover {
-		background: var(--color-yellow-hover, #fef3c7);
+		background: var(--color-yellow-hover);
 	}
 
 	.btn.danger {
-		background: var(--color-red-bg, #fef2f2);
-		color: var(--color-red, #dc2626);
-		border-color: var(--color-red-border, #fecaca);
+		background: var(--color-red-bg);
+		color: var(--color-red);
+		border-color: var(--color-red-border);
 	}
 	.btn.danger:hover {
-		background: var(--color-red-hover, #fee2e2);
+		background: var(--color-red-hover);
 	}
 
 	.btn.info {
-		background: var(--color-blue-bg, #eff6ff);
-		color: var(--color-blue, #2563eb);
-		border-color: var(--color-blue-border, #bfdbfe);
+		background: var(--color-blue-bg);
+		color: var(--color-blue);
+		border-color: var(--color-blue-border);
 	}
 	.btn.info:hover {
-		background: var(--color-blue-hover, #dbeafe);
+		background: var(--color-blue-hover);
 	}
 
 	/* ==========================================

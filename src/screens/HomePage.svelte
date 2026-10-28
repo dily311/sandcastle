@@ -37,7 +37,7 @@
 	];
 </script>
 
-<div class="page">
+<div id="home-page" class="page">
 	<div class="content">
 		<section class="welcome">
 			<div class="welcome-text">
@@ -105,10 +105,8 @@
 </div>
 
 <style>
-	.page {
-		height: 100%;
+	:global(.app-layout:has(#home-page)) {
 		background: var(--background-secondary);
-		overflow-y: auto;
 	}
 
 	.welcome {

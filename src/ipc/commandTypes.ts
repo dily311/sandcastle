@@ -2,9 +2,8 @@ import type { Character, WorldInfoBook, WorldInfoEntry, Conversation, Message, P
 import type {ApiProfileInput, ApiProfile} from "$type/aiService";
 import type { AppSettings, CssTheme, FeatureSetting, ThemeSetting } from "$/lib/type/settingTypes";
 import type { Hitbox } from "$/lib/interaction/interactive-registry";
-import type { GameCommand, GameResponse, GameSave, NpcReply, GamePlayerSessions, GameMessages, GameConversations, GameJournal, GameProject } from "$type/game";
-import type { LibraryRoot, LibraryRootRaw, MusicMeta, MusicMetaInput, Playlist, PlaylistInput, PlaylistItem, WidgetMusicSetting } from "$/lib/features/impl/widget/music/types";
-import type { PackageData, SaveReport } from "$type/game";
+import type { PackageData, SaveReport, GameCommand, GameResponse, GameSave, NpcReply, GamePlayerSessions, GameMessages, GameConversations, GameJournal, GameProject } from "$type/game";
+import type { LibraryRootRaw, MusicMetaInput, Playlist, PlaylistInput, PlaylistItem, WidgetMusicSetting } from "$/lib/features/impl/widget/music/types";
 
 export type CommandName = keyof CommandRegistry;
 type CommandDef<A, R> = {args: A; response: R;};
@@ -39,6 +38,7 @@ export interface CommandRegistry {
     "get_all_characters": CommandDef<undefined, Character[]>,
     "create_character": CommandDef<{ input: Omit<Character, "id" | "createdAt" | "updatedAt" | "messageCount"> }, Character>,
     "update_character": CommandDef<{ id: string; input: Omit<Character, "id" | "createdAt" | "updatedAt"> }, void>,
+    "toggle_favorite_character": CommandDef<{ id: string; isFavorite: boolean}, void>,
     "delete_character": CommandDef<{ id: string }, void>,
     "get_all_worldinfo_books": CommandDef<undefined, WorldInfoBook[]>,
     "create_worldinfo_book": CommandDef<{ input: { name: string; description: string | null } }, WorldInfoBook>,
@@ -70,7 +70,7 @@ export interface CommandRegistry {
     "create_game": CommandDef<{title: string, templateId: string}, string>,
     "save_package": CommandDef<{gameId: string, data: PackageData}, SaveReport>,
     "delete_game": CommandDef<{gameId: string}, undefined>,
-    "import_game": CommandDef<{zipPath: string}, string>,
+    "import_game": CommandDef<{zipPath: string}, PackageData>,
     "export_game": CommandDef<{gameId: string, outputDir: string}, string>,
     "game_list": CommandDef<undefined, GameProject[]>,
     // 게임 에디터가 불러오는 데이터

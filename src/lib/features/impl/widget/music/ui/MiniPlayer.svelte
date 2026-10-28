@@ -14,6 +14,8 @@
 	import DefaultAlbumArt from "$/asset/widget/album_art_default.png";
 	import { WIDGET_MUSIC_FEATURE_ID } from "../musicFeature.svelte";
 	import { LoopMode } from "../types";
+	import IconButton from "$/components/ui/button/IconButton.svelte";
+	import Icon from "$/components/ui/Icon.svelte";
 
 	let moveEl = $state<HTMLElement>();
 	let localPos = $state({
@@ -83,26 +85,22 @@
 		</div>
 	</div>
 	<div class="controls">
-		<button
+		<IconButton
 			aria-label={audioStore.paused ? $_("music.play") : $_("music.pause")}
 			class="control-btn play-btn"
 			onclick={() => audioStore.togglePlay()}
 			disabled={!playlistStore.currentSong}
 		>
-			{#if audioStore.paused}
-				<Play size={20} />
-			{:else}
-				<Pause size={20} />
-			{/if}
-		</button>
-		<button
+			<Icon name={audioStore.paused ? "play" : "pause"} size={20} />
+		</IconButton>
+		<IconButton
 			aria-label={$_("music.nextSong")}
 			class="control-btn next-btn"
 			onclick={() => handleNextSong()}
 			disabled={audioStore.isDisabledNext}
 		>
-			<SkipForward size={20} />
-		</button>
+			<Icon name={"SkipForward"} size={20} />
+		</IconButton>
 	</div>
 </div>
 
@@ -175,7 +173,7 @@
 		display: flex;
 		justify-content: center;
 		align-items: center;
-		gap: 0.4rem;
+		gap: 0.5rem;
 		overflow: hidden;
 		flex: 1 1 0;
 	}

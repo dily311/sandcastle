@@ -7,7 +7,7 @@
 	let preset = $derived(presets[selected]);
 </script>
 
-<div class="content">
+<div class="page">
 	<div class="page-title">
 		<div>
 			<h2>프리셋</h2>

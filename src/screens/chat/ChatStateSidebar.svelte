@@ -138,8 +138,6 @@
 								<option value="프리셋2">프리셋2</option>
 								<option value="프리셋3">프리셋3</option>
 								<option value="프리셋4">프리셋4</option>
-								<option value="프리셋5">프리셋5</option>
-								<option value="프리셋6">프리셋6</option>
 								<option value="프리셋7">프리셋7</option>
 							</select>
 						</div>
@@ -431,7 +429,7 @@
 	.grid-item {
 		aspect-ratio: 1;
 		border-radius: 10px;
-		background: var(--btn-bg);
+		background: var(--button-bg);
 		border: 1px dashed var(--border-color);
 		display: flex;
 		align-items: center;

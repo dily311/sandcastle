@@ -1,6 +1,8 @@
 <script lang="ts">
 	import type { CssTheme } from "$/lib/type/settingTypes";
 	import { themeSetting } from "$/lib/stores/themeStore.svelte";
+	import Button from "$/components/ui/button/Button.svelte";
+	import Icon from "$/components/ui/Icon.svelte";
 
 	// 모달 상태 관리
 	let isModalOpen = false;
@@ -82,9 +84,9 @@
 			<h3 class="title">테마 갤러리</h3>
 			<p class="subtitle">적용할 커스텀 테마를 선택하거나 새로 만드세요.</p>
 		</div>
-		<button class="btn btn-primary" onclick={() => openAddModal()}>
-			<span class="icon">+</span> 새 테마 추가
-		</button>
+		<Button variant="primary" onclick={() => openAddModal()}>
+			<Icon name="plus" /> 새 테마 추가
+		</Button>
 	</header>
 
 	<!-- Theme Cards Grid Gallery -->
@@ -195,8 +197,7 @@
 						id="cssContent"
 						class="custom-textarea"
 						placeholder=":root &#123; --accent-color: #10b981; &#125;"
-						bind:value={themeForm.cssContent}
-					></textarea>
+						bind:value={themeForm.cssContent}></textarea>
 				</div>
 			</div>
 

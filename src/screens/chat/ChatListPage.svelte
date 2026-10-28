@@ -3,7 +3,9 @@
 	import { Search, Plus, MoreVertical, MessageCircle } from "@lucide/svelte";
 	import { push } from "svelte-spa-router";
 	import Avatar from "$components/avatar.svelte";
-	
+	let { params }: { params?: { characterId?: string } } = $props();
+
+	let data = $derived(conversations.value.filter((c) => c.characterId === params?.characterId));
 	let search = $state("");
 </script>
 
@@ -28,7 +30,7 @@
 	</div>
 
 	<section class="list">
-		{#each conversations.value as conv (conv.id)}
+		{#each data as conv (conv.id)}
 			<button class="chat" onclick={() => push("/chat/" + conv.id)}>
 				<Avatar avatar={conv.title.charAt(0)} />
 
@@ -146,24 +148,6 @@
 
 	.chat:hover {
 		background: var(--card-hover-bg);
-	}
-
-	.avatar {
-		width: 44px;
-		height: 44px;
-		flex-shrink: 0;
-
-		display: flex;
-		align-items: center;
-		justify-content: center;
-
-		border-radius: 11px;
-
-		background: #6e7584;
-		color: white;
-
-		font-size: 14px;
-		font-weight: 600;
 	}
 
 	.chat-main {

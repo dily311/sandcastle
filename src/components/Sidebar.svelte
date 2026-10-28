@@ -10,6 +10,7 @@
 	import Button from "./ui/button/Button.svelte";
 	import ButtonGroup from "./ui/button/ButtonGroup.svelte";
 	import { cn } from "$/lib/utils/cn";
+	import IconButton from "./ui/button/IconButton.svelte";
 
 	let collapsed = $state(true);
 	const toggleLeft = () => (collapsed = !collapsed);
@@ -19,9 +20,9 @@
 <aside class="sidebar left-sidebar" class:collapsed transition:slide={{ axis: "x" }}>
 	{#if collapsed}
 		<div class="sidebar-header">
-			<button class="sidebar-toggle-btn" onclick={() => toggleLeft()}>
-				<PanelLeft />
-			</button>
+			<IconButton size="lg" class="sidebar-toggle-btn" onclick={() => toggleLeft()}>
+				<Icon name={"PanelLeft"} />
+			</IconButton>
 		</div>
 
 		<div class="sidebar-contents">
@@ -42,9 +43,9 @@
 	{:else}
 		<div class="sidebar-header">
 			<div></div>
-			<Button variant="ghost" size="icon" class="sidebar-toggle-btn" onclick={() => toggleLeft()}>
-				<PanelLeft />
-			</Button>
+			<IconButton size="lg" class="sidebar-toggle-btn" onclick={() => toggleLeft()}>
+				<Icon name={"PanelLeft"} />
+			</IconButton>
 		</div>
 
 		<div class="sidebar-contents">
@@ -146,7 +147,7 @@
 		border-bottom: 1px solid var(--border-color);
 	}
 
-	.sidebar .sidebar-toggle-btn {
+	:global(.sidebar .sidebar-toggle-btn) {
 		padding: 8px;
 		color: var(--icon-color);
 		cursor: pointer;
@@ -228,25 +229,6 @@
 		font-weight: 500;
 		color: var(--nav-text-active);
 		background: var(--nav-bg-active);
-	}
-
-	.conv-item .btn-group button.clickable-icon {
-		--icon-size: 14px;
-		width: 1.4rem;
-		height: 1.4rem;
-		padding: 0;
-	}
-	.conv-item .btn-group button.clickable-icon:hover {
-		font-weight: 500;
-		color: var(--nav-text-active);
-		background: var(--nav-bg-active);
-	}
-
-	.conv-item .btn-group {
-		display: none;
-	}
-	.conv-item:hover .btn-group {
-		display: flex;
 	}
 
 	.sidebar-section {

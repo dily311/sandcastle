@@ -21,6 +21,21 @@ class CharacterStore {
 		return c;
 	}
 
+	async duplicate(id: string) {
+		const target = this.#store.find((c) => c.id === id);
+		if (!target) return;
+		const newChar = await dbCommands.createCharacter({input: target});
+		this.#store.push(newChar);
+		return newChar;
+	}
+
+	async toggleFavorite(id: string) {
+		const target = this.#store.find((c) => c.id === id);
+		if (!target) return;
+		this.#store = this.#store.map(((c) => (c.id === id) ? {...target, favorite: !target.favorite} : c));
+		await dbCommands.toggleFavoriteCharacter({id, isFavorite: !target.favorite});
+	}
+
 	async patch(id: string, changes: Partial<Character>) {
 		const current = this.#store.find((c) => c.id === id);
 		if (!current) return;

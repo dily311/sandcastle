@@ -15,6 +15,7 @@
 	import Button from "$/components/ui/button/Button.svelte";
 	import Icon from "$/components/ui/Icon.svelte";
 	import { cn } from "$/lib/utils/cn";
+	import IconButton from "$/components/ui/button/IconButton.svelte";
 	let localPos = $state({
 		x: widgetMusicSetting.pos?.x ?? 10,
 		y: widgetMusicSetting.pos?.y ?? 10,
@@ -106,8 +107,7 @@
 
 			<div class="controls">
 				<div class="volume-control">
-					<Button
-						variant="ghost"
+					<IconButton
 						aria-label={$_("music.volume")}
 						class="volume-icon"
 						onclick={() => audioStore.toggleMuted()}
@@ -123,7 +123,7 @@
 						{:else}
 							<Icon name="Volume" size={22} />
 						{/if}
-					</Button>
+					</IconButton>
 					<div class="volume-slider-wrap">
 						<input
 							type="range"
@@ -139,44 +139,39 @@
 						/>
 					</div>
 				</div>
-				<Button
-					variant="ghost"
+				<IconButton
 					aria-label={audioStore.isShuffle ? $_("music.onShuffle") : $_("music.offShuffle")}
 					class={cn("control-btn shuffle-btn", !audioStore.isShuffle && "shuffleOff")}
 					onclick={() => audioStore.toggleShuffle()}
 					disabled={audioStore.isDisabledShuffle}
 				>
 					<Icon name="Shuffle" size={22} />
-				</Button>
-				<Button
-					variant="ghost"
+				</IconButton>
+				<IconButton
 					aria-label={$_("plyer.prevSong")}
 					class="control-btn prev-btn"
 					onclick={() => handlePrevSong()}
 					disabled={audioStore.isDisabledPrev}
 				>
 					<Icon name="SkipBack" size={22} />
-				</Button>
-				<Button
-					variant="ghost"
+				</IconButton>
+				<IconButton
 					aria-label={audioStore.paused ? $_("music.play") : $_("music.pause")}
 					class="control-btn play-btn"
 					onclick={() => audioStore.togglePlay()}
 					disabled={!playlistStore.currentSong}
 				>
 					<Icon name={audioStore.paused ? "play" : "pause"} size={22} />
-				</Button>
-				<Button
-					variant="ghost"
+				</IconButton>
+				<IconButton
 					aria-label={$_("music.nextSong")}
 					class="control-btn next-btn"
 					onclick={() => handleNextSong()}
 					disabled={audioStore.isDisabledNext}
 				>
 					<Icon name="SkipForward" size={22} />
-				</Button>
-				<Button
-					variant="ghost"
+				</IconButton>
+				<IconButton
 					aria-label={$_("music.loopChange")}
 					aria-pressed={audioStore.loopMode !== 0}
 					class="control-btn loop-btn"
@@ -259,15 +254,14 @@
 							<path d="M17 16l4 3-3 3" />
 						</svg>
 					{/if}
-				</Button>
-				<Button
-					variant="ghost"
+				</IconButton>
+				<IconButton
 					aria-label={$_("music.menu")}
 					class="playlist"
 					onclick={(e) => widgetMusicSetting.update({ isPlayListOpen: !widgetMusicSetting.isPlayListOpen })}
 				>
 					<Icon name="Menu" size={22} />
-				</Button>
+				</IconButton>
 			</div>
 			<div class="song-time">
 				<div class="time-info">

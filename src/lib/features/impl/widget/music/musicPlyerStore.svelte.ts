@@ -214,7 +214,7 @@ class PlaylistStore {
 		let changeIndex = this.#currentSongIndex;
 		// 현재 인덱스보다 바뀌는 배열이 더 작다면 -1 처리
 		// 만약 삭제하려는 인덱스가 현재 인덱스보다 작은 경우 -1 처리
-		if (this.current.length < changeIndex || (changeIndex > this.currentSong.sortOrder)) {
+		if (this.current.length < changeIndex || (changeIndex > this.currentSong?.sortOrder)) {
 			changeIndex -= 1;
 			// 바뀔 인덱스가 음수인 경우 음악을 세팅하지 않고 그대로 리턴
 			if (changeIndex < 0) {
@@ -628,49 +628,6 @@ function convertLibraryRoot(raw: LibraryRootRaw): LibraryRoot {
   };
 }
 
-// export const groupedByFolder = (musicList: MusicMeta[]): LibraryRoot => {
-// 	const rootTree: FolderTree = new Map();
-// 	const rootFiles: MusicMeta[] = [];
-
-// 	for (const file of musicList) {
-// 		// 선택된 폴더 루트 경로 제거
-// 		const rootPath = widgetMusicSetting.selectedFolder ? widgetMusicSetting.selectedFolder + "\\" : "";
-// 		const path = file.path.replace(rootPath, "");
-// 		const parts = path.split("\\");
-
-// 		const fileName = parts.pop()!;
-// 		const folderParts = parts; // 하위 폴더 경로들
-
-// 		// 만약 하위 폴더 경로가 전혀 없다면 루트 레벨 파일입니다!
-// 		if (folderParts.length === 0) {
-// 			rootFiles.push(file);
-// 			continue;
-// 		}
-
-// 		let currentFolders = rootTree;
-// 		let currentNode: FolderNode | null = null;
-
-// 		// 하위 폴더 생성 및 탐색
-// 		for (const folderName of folderParts) {
-// 			if (!currentFolders.has(folderName)) {
-// 				currentFolders.set(folderName, {
-// 					name: folderName,
-// 					folders: new Map(),
-// 					files: [],
-// 				});
-// 			}
-// 			currentNode = currentFolders.get(folderName)!;
-// 			currentFolders = currentNode.folders;
-// 		}
-
-// 		// 마지막 폴더 노드의 files 배열에 추가
-// 		if (currentNode) {
-// 			currentNode.files.push(file);
-// 		}
-// 	}
-
-// 	return { folders: rootTree, rootFiles };
-// };
 // -----------------------------------
 // 파일 정렬
 // -----------------------------------

@@ -4,7 +4,10 @@
 	import Button from "$/components/ui/button/Button.svelte";
 	import ButtonGroup from "$/components/ui/button/ButtonGroup.svelte";
 	import Icon from "$/components/ui/Icon.svelte";
+	import IconButton from "$/components/ui/button/IconButton.svelte";
+	import ToggleButton from "$/components/ui/button/ToggleButton.svelte";
 </script>
+
 <div>
 	<div class="setting-card">
 		<header class="card-header">
@@ -19,33 +22,27 @@
 				</div>
 				<div class="setting-control">
 					<ButtonGroup segmented={true}>
-						<Button
-							variant="ghost"
-							size="icon"
+						<IconButton
 							class={themeSetting.mode === "light" ? "on" : ""}
 							onclick={() => themeSetting.update({ mode: "light" })}
 							title="라이트 모드"
 						>
 							<Icon name="Sun" />
-						</Button>
-						<Button
-							variant="ghost"
-							size="icon"
+						</IconButton>
+						<IconButton
 							class={themeSetting.mode === "dark" ? "on" : ""}
 							onclick={() => themeSetting.update({ mode: "dark" })}
 							title="다크 모드"
 						>
 							<Icon name="Moon" />
-						</Button>
-						<Button
-							variant="ghost"
-							size="icon"
+						</IconButton>
+						<IconButton
 							class={themeSetting.mode === "system" ? "on" : ""}
 							onclick={() => themeSetting.update({ mode: "system" })}
 							title="시스템 설정에 맞춤"
 						>
 							<Icon name="Monitor" />
-						</Button>
+						</IconButton>
 					</ButtonGroup>
 				</div>
 			</div>
@@ -77,11 +74,9 @@
 					<p class="description">창 타이틀바 테두리를 제거하고 커스텀 프레임을 사용합니다.</p>
 				</div>
 				<div class="setting-control">
-					<input
-						type="checkbox"
-						class="toggle-checkbox"
+					<ToggleButton
 						checked={themeSetting.isFrameless}
-						onchange={(e) => themeSetting.update({ isFrameless: e.currentTarget?.checked })}
+						toggle={(e, change) => themeSetting.update({ isFrameless: change })}
 					/>
 				</div>
 			</div>
@@ -100,15 +95,13 @@
 						onchange={(e) => themeSetting.update({ accentColor: e.currentTarget?.value })}
 					/>
 					<span class="color-hex">{themeSetting.accentColor}</span>
-					<Button
-						variant="ghost"
-						size="icon"
+					<IconButton
 						title="기본색상으로 되돌리기"
 						disabled={themeSetting.accentColor === defaultThemeSetting.accentColor}
 						onclick={() => themeSetting.update({ accentColor: defaultThemeSetting.accentColor })}
 					>
 						<Icon name="RotateCcw" />
-					</Button>
+					</IconButton>
 				</div>
 			</div>
 
@@ -129,15 +122,13 @@
 						onchange={(e) => themeSetting.update({ fontSize: Number(e.currentTarget.value) })}
 					/>
 					<span class="slider-value">{themeSetting.fontSize}px</span>
-					<Button
-						variant="ghost"
-						size="icon"
+					<IconButton
 						title="기본크기로 되돌리기"
 						disabled={themeSetting.fontSize === defaultThemeSetting.fontSize}
 						onclick={() => themeSetting.update({ fontSize: defaultThemeSetting.fontSize })}
 					>
 						<Icon name="RotateCcw" />
-					</Button>
+					</IconButton>
 				</div>
 			</div>
 		</div>

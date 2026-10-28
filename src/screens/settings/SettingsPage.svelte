@@ -1,7 +1,6 @@
 <script lang="ts">
 	import WidgetSetting from "./WidgetSettingSection.svelte";
 	import ThemeSettingPage from "./ThemeSettingSection.svelte";
-	import type { LucideIcon } from "@lucide/svelte";
 	import AppSettingSection from "./AppSettingSection.svelte";
 	import Icon from "$/components/ui/Icon.svelte";
 
@@ -33,7 +32,7 @@
 	let activeTab: TabsType = "app";
 </script>
 
-<div class="content settings-layout">
+<div class="page settings-layout">
 	<!-- Navigation (Desktop: Vertical Sidebar / Mobile: Horizontal Header) -->
 	<nav class="settings-nav">
 		<h2 class="nav-title">설정</h2>

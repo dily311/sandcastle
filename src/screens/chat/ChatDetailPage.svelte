@@ -5,10 +5,12 @@
 	import MessageIndicator from "$screens/chat/MessageIndicator.svelte";
 	import { conversations, messages, openConversation } from "$/lib/chat/chatStore.svelte";
 	import MessageBubble from "$screens/chat/MessageBubble.svelte";
-	import { pop, router } from "svelte-spa-router";
 	import { onMount, tick } from "svelte";
 	import Icon from "$/components/ui/Icon.svelte";
 	import Button from "$/components/ui/button/Button.svelte";
+	import Header from "$/components/Header.svelte";
+	import { cn } from "$/lib/utils/cn";
+	import { handleGoBack } from "$/app/routes";
 
 	// props로 편집할 characterId를 받습니다. (null일 경우 새로 만들기)
 	let { params }: { params?: { conversationId?: string } } = $props();
@@ -86,9 +88,9 @@
 	<div class="main-content-layout" class:isRightSidebarOpen>
 		<main class="chat-container" class:cover-img={bgImg}>
 			<!-- 상단 헤더 -->
-			<header class="chat-header">
+			<Header class={cn(isRightSidebarOpen && "isRightSidebarOpen")}>
 				<div class="header-left">
-					<Button variant="ghost" size="icon-lg" aria-label={$_("global.back")} onclick={() => pop()}>
+					<Button variant="ghost" size="icon-lg" aria-label={$_("global.back")} onclick={handleGoBack}>
 						<Icon name={"ChevronLeft"} />
 					</Button>
 					<h3 class="chat-title-wrap">
@@ -116,7 +118,7 @@
 						<Icon name={"PanelRight"} />
 					</Button>
 				</div>
-			</header>
+			</Header>
 
 			<div class="chat-content">
 				<!-- 메시지 리스트 -->
@@ -167,26 +169,6 @@
 	.chat-container.cover-img {
 		background: url("") no-repeat center;
 		background-size: cover;
-	}
-	/* 헤더 */
-	.chat-header {
-		height: var(--header-height);
-		flex: 0 0 var(--header-height);
-		padding: 0 1rem;
-		border-bottom: 1px solid var(--border-color);
-		display: flex;
-		justify-content: space-between;
-		align-items: center;
-		padding: 0 7rem 0 0.95rem;
-		background: var(--header-bg);
-		white-space: nowrap;
-	}
-	.chat-header .clickable-icon {
-		app-region: no-drag;
-	}
-
-	.isRightSidebarOpen .chat-header {
-		padding: 0 0.95rem;
 	}
 
 	.header-left {

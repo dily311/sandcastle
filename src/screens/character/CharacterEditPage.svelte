@@ -5,6 +5,7 @@
 	import { characters } from "$/lib/chat/characterStore.svelte";
 	import type { Character } from "$/lib/type/conv";
 	import { pop, push, router } from "svelte-spa-router";
+	import { handleGoBack } from "$/app/routes";
 
 	// props로 편집할 characterId를 받습니다. (null일 경우 새로 만들기)
 	let { params }: { params?: { characterId?: string } } = $props();
@@ -96,7 +97,7 @@
 	<!-- 상단 헤더 -->
 	<header class="page-head sticky">
 		<div class="head-left">
-			<Button variant="ghost" size="icon-lg" aria-label={$_("global.back")} onclick={() => pop()}>
+			<Button variant="ghost" size="icon-lg" aria-label={$_("global.back")} onclick={handleGoBack}>
 				<Icon name={"ChevronLeft"} />
 			</Button>
 			<div>
@@ -519,7 +520,7 @@
 		display: flex;
 		align-items: center;
 		gap: 9px;
-		border: 1px solid var(--border-strong);
+		border: 1px solid var(--border-strong-color);
 		border-radius: var(--radius-lg);
 		padding: 8px 12px;
 		background: var(--bg-input);
@@ -576,7 +577,7 @@
 	}
 	.segmented {
 		display: inline-flex;
-		border: 1px solid var(--border-strong);
+		border: 1px solid var(--border-strong-color);
 		border-radius: var(--radius-md);
 		overflow: hidden;
 	}
@@ -595,7 +596,7 @@
 		cursor: pointer;
 	}
 	.segmented button + button {
-		border-left: 1px solid var(--border-strong);
+		border-left: 1px solid var(--border-strong-color);
 	}
 	.segmented button.on {
 		background: var(--bg-active);
@@ -841,7 +842,7 @@
 		appearance: none;
 		height: 4px;
 		border-radius: 3px;
-		background: var(--border-strong);
+		background: var(--border-strong-color);
 		outline: none;
 	}
 	.range::-webkit-slider-thumb {
@@ -850,7 +851,7 @@
 		height: 15px;
 		border-radius: 50%;
 		background: var(--background-primary);
-		border: 1px solid var(--border-strong);
+		border: 1px solid var(--border-strong-color);
 		box-shadow: var(--shadow-sm);
 		cursor: pointer;
 	}
@@ -859,7 +860,7 @@
 		height: 15px;
 		border-radius: 50%;
 		background: var(--background-primary);
-		border: 1px solid var(--border-strong);
+		border: 1px solid var(--border-strong-color);
 		cursor: pointer;
 	}
 	.range-legend {
@@ -1030,7 +1031,7 @@
 	.md blockquote {
 		margin: 4px 0;
 		padding: 2px 0 2px 12px;
-		border-left: 3px solid var(--border-strong);
+		border-left: 3px solid var(--border-strong-color);
 		color: var(--text-soft);
 		font-size: 13px;
 	}
@@ -1084,7 +1085,7 @@
 		padding: 18px 8px 4px;
 	}
 	.suggestion {
-		border: 1px solid var(--border-strong);
+		border: 1px solid var(--border-strong-color);
 		border-radius: 999px;
 		padding: 6px 13px;
 		font-size: 12.5px;
@@ -1111,7 +1112,7 @@
 		display: flex;
 		align-items: flex-end;
 		gap: 8px;
-		border: 1px solid var(--border-strong);
+		border: 1px solid var(--border-strong-color);
 		border-radius: var(--radius-lg);
 		background: var(--bg-input);
 		padding: 8px 8px 8px 12px;
@@ -1310,7 +1311,7 @@
 	.textarea {
 		width: 100%;
 		padding: 10px 12px;
-		border: 1px solid var(--border-strong);
+		border: 1px solid var(--border-strong-color);
 		border-radius: var(--radius-md);
 		background: var(--bg-input);
 		color: var(--text);
@@ -1334,7 +1335,7 @@
 		align-items: center;
 		gap: 6px;
 		padding: 6px 10px;
-		border: 1px solid var(--border-strong);
+		border: 1px solid var(--border-strong-color);
 		border-radius: var(--radius-md);
 		background: var(--bg-input);
 	}

@@ -1,7 +1,6 @@
 <script lang="ts">
 	import { characters } from "$/lib/chat/characterStore.svelte";
 	import { newConversation } from "$/lib/chat/chatStore.svelte";
-	import type { Character } from "$/lib/type/conv";
 	import Icon from "$/components/ui/Icon.svelte";
 	import { push } from "svelte-spa-router";
 	import Avatar from "$components/avatar.svelte";
@@ -10,6 +9,9 @@
 	import Card from "$/components/ui/card/Card.svelte";
 	import CardGrid from "$/components/ui/card/CardGrid.svelte";
 	import { cn } from "$/lib/utils/cn";
+	import { dbCommands } from "$/ipc/commands";
+	import { handleOpenCharacterDetailPage, handleOpenCharacterEditor, handleOpenChatPage } from "$/app/routes";
+	import IconButton from "$/components/ui/button/IconButton.svelte";
 
 	type Sort = "recent" | "name" | "favorite";
 
@@ -46,78 +48,51 @@
 		return list;
 	});
 
-	function open(char: Character) {
-		push("/character/details/" + char.id);
-	}
-	async function newChat(char: Character) {
-		const convID = await newConversation(char.id);
-		push("/chat/" + convID);
+	async function newChat(id: string) {
+		const convID = await newConversation(id);
+		handleOpenChatPage(convID);
 	}
 
 	function toggleTag(t: string) {
 		activeTags = activeTags.includes(t) ? activeTags.filter((x) => x !== t) : [...activeTags, t];
 	}
 
-	function toggleFavorite(id: string): Character {
-		return {
-			id: "2bcfbbca-597b-49d6-a5d3-f7af95da1661",
-			name: "Mika",
-			avatar: "🎮",
-			description:
-				"Mika went from 0 to 2 million followers in a year. Chaotic good energy, loud reactions, and an encyclopedic memory for game lore.",
-			alternateDescriptions: [],
-			firstMessage:
-				"YO!! You're here!! Okay okay okay, chat's gone wild today. Have you SEEN the new update? We have SO much to unpack.",
-			alternateFirstMessage: [],
-			exampleDialogue: null,
-			systemPromptOverride:
-				"You are Mika, an energetic streamer. Use all-caps excitement, gaming slang, and be relentlessly upbeat and playful.",
-			worldInfoIds: [],
-			color: "#0891b2",
-			tags: ["Gaming", "Comedy", "Modern"],
-			category: "Slice of Life",
-			defaultPersonaId: null,
-			favorite: false,
-			messageCount: 0,
-			createdAt: 1791954311016,
-			updatedAt: 1791954311016,
-		};
+	async function handleDuplicateCharacter(id: string) {
+		const copy = await characters.duplicate(id);
+		if (copy) handleOpenCharacterEditor(copy.id);
 	}
-	function duplicateCharacter(id: string): Character {
-		return {
-			id: "2bcfbbca-597b-49d6-a5d3-f7af95da1661",
-			name: "Mika",
-			avatar: "🎮",
-			description:
-				"Mika went from 0 to 2 million followers in a year. Chaotic good energy, loud reactions, and an encyclopedic memory for game lore.",
-			alternateDescriptions: [],
-			firstMessage:
-				"YO!! You're here!! Okay okay okay, chat's gone wild today. Have you SEEN the new update? We have SO much to unpack.",
-			alternateFirstMessage: [],
-			exampleDialogue: null,
-			systemPromptOverride:
-				"You are Mika, an energetic streamer. Use all-caps excitement, gaming slang, and be relentlessly upbeat and playful.",
-			worldInfoIds: [],
-			color: "#0891b2",
-			tags: ["Gaming", "Comedy", "Modern"],
-			category: "Slice of Life",
-			defaultPersonaId: null,
-			favorite: false,
-			messageCount: 0,
-			createdAt: 1791954311016,
-			updatedAt: 1791954311016,
-		};
+
+	async function createCharacter() {
+		const char = await dbCommands.createCharacter({
+			input: {
+				name: "",
+				avatar: "",
+				alternateDescriptions: [],
+				alternateFirstMessage: [],
+				category: null,
+				color: null,
+				defaultPersonaId: null,
+				description: "",
+				exampleDialogue: "",
+				favorite: false,
+				firstMessage: "",
+				systemPromptOverride: "",
+				tags: [],
+				worldInfoIds: [],
+			},
+		});
+		push(`/character/${char.id}/edit`);
 	}
 </script>
 
-<div class="page">
+<div class="page full-width">
 	<header class="page-head">
 		<div>
 			<div class="breadcrumb">작업 공간 / 캐릭터</div>
 			<h1 class="page-title">캐릭터 찾기</h1>
 			<p class="page-sub">대화하고 싶은 상대를 선택하거나 자신만의 페르소나를 만들 수 있습니다.</p>
 		</div>
-		<Button variant="primary" onclick={() => push("/character/edit/")}>
+		<Button variant="primary" onclick={() => createCharacter()}>
 			<Icon name="plus" size={15} /> 새로 만들기
 		</Button>
 	</header>
@@ -133,7 +108,7 @@
 	<div class="filter-row">
 		<div class="tag-row">
 			<button class={`tag ${onlyFav ? "selected" : ""}`} onclick={() => (onlyFav = !onlyFav)}>
-				<Icon name={onlyFav ? "star-filled" : "star"} size={12} /> 즐겨찾기
+				<Icon name={"star"} fill={onlyFav ? "#111" : ""} size={12} /> 즐겨찾기
 			</button>
 			{#each allTags() as [t, n]}
 				<button class={`tag ${activeTags.includes(t) ? "selected" : ""}`} onclick={() => toggleTag(t)}>
@@ -182,25 +157,25 @@
 		<div class="empty">
 			<Icon name="search" />
 			<div>해당 캐릭터가 없습니다.</div>
-			<button class="btn sm" onclick={() => push("/character/edit/")}> 이 조건으로 새로 만들기 </button>
+			<button class="btn sm" onclick={() => createCharacter()}> 이 조건으로 새로 만들기 </button>
 		</div>
 	{:else if view === "grid"}
 		<CardGrid class="card-grid" columns={5}>
 			{#each results() as c (c.id)}
-				<Card class="char-card" onclick={() => open(c)} role="presentation">
+				<Card class="char-card" onclick={() => handleOpenCharacterDetailPage(c.id)} role="presentation">
 					<div class="char-card-top">
 						<Avatar avatar={c.avatar ?? c.color} />
 						<Button
 							variant="ghost"
 							size="icon"
-							class={`star-btn ${c.favorite ? "on" : ""}`}
+							class={cn("star-btn", c.favorite && "on")}
 							onclick={(e) => {
 								e.stopPropagation();
-								toggleFavorite(c.id);
+								characters.toggleFavorite(c.id);
 							}}
 							title="즐겨찾기"
 						>
-							<Icon name={c.favorite ? "star-filled" : "star"} size={15} />
+							<Icon name={"star"} class={cn(c.favorite && "fill")} size={15} />
 						</Button>
 					</div>
 					<h3 class="char-name">{c.name}</h3>
@@ -218,7 +193,7 @@
 							size="sm"
 							onclick={(e) => {
 								e.stopPropagation();
-								newChat(c);
+								newChat(c.id);
 							}}
 						>
 							<Icon name="message-circle" size={13} /> 대화하기
@@ -228,7 +203,7 @@
 							size="sm"
 							onclick={(e) => {
 								e.stopPropagation();
-								push("/character/edit/" + c.id);
+								handleOpenCharacterEditor(c.id);
 							}}
 						>
 							<Icon name="edit" size={13} /> 편집
@@ -239,8 +214,7 @@
 							title="복제"
 							onclick={(e) => {
 								e.stopPropagation();
-								const copy = duplicateCharacter(c.id);
-								push("/character/edit/" + copy.id);
+								handleDuplicateCharacter(c.id);
 							}}
 						>
 							<Icon name="copy" size={13} />
@@ -264,7 +238,7 @@
 		<div class="char-list">
 			{#each results() as c (c.id)}
 				<!-- svelte-ignore a11y_click_events_have_key_events -->
-				<div class="char-row" onclick={() => open(c)} role="presentation">
+				<div class="char-row" onclick={() => handleOpenCharacterDetailPage(c.id)} role="presentation">
 					<Avatar avatar={c.avatar ?? c.color} />
 					<div class="char-row-main">
 						<div class="char-row-name">
@@ -280,24 +254,25 @@
 						{/each}
 					</div>
 					<div class="char-row-actions">
-						<button
-							class={`star-btn ${c.favorite ? "on" : ""}`}
+						<IconButton
+							size="sm"
+							class={cn("star-btn", c.favorite && "on")}
 							onclick={(e) => {
 								e.stopPropagation();
-								toggleFavorite(c.id);
+								characters.toggleFavorite(c.id);
 							}}
 						>
-							<Icon name={c.favorite ? "star-filled" : "star"} size={15} />
-						</button>
-						<button
-							class="clickable-icon"
+							<Icon name={"star"} class={cn(c.favorite && "fill")} size={15} />
+						</IconButton>
+						<IconButton
+							size="sm"
 							onclick={(e) => {
 								e.stopPropagation();
-								push("/character/edit/" + c.id);
+								handleOpenCharacterEditor(c.id);
 							}}
 						>
 							<Icon name="edit" size={15} />
-						</button>
+						</IconButton>
 					</div>
 				</div>
 			{/each}
@@ -476,66 +451,6 @@
    Page (search / edit / settings)
    ============================================================ */
 
-	.page {
-		flex: 1;
-		overflow-y: auto;
-		padding: 40px 56px 90px;
-	}
-	.page.narrow > * {
-		max-width: 720px;
-		margin-left: auto;
-		margin-right: auto;
-	}
-
-	.page-head {
-		display: flex;
-		align-items: flex-start;
-		justify-content: space-between;
-		gap: 20px;
-		margin-bottom: 26px;
-	}
-	.page-head.sticky {
-		position: sticky;
-		top: -40px;
-		z-index: 5;
-		background: var(--card-bg);
-		padding: 12px 0;
-		margin: -12px 0 20px;
-		border-bottom: 1px solid var(--border-color);
-		align-items: center;
-	}
-	.head-left {
-		display: flex;
-		align-items: center;
-		gap: 10px;
-		min-width: 0;
-	}
-	.head-actions {
-		display: flex;
-		align-items: center;
-		gap: 6px;
-		flex: none;
-	}
-	.breadcrumb {
-		font-size: 12px;
-		color: var(--text-muted);
-		margin-bottom: 4px;
-	}
-	.page-title {
-		font-size: 30px;
-		font-weight: 700;
-		letter-spacing: -0.02em;
-		line-height: 1.2;
-	}
-	.page-title.sm {
-		font-size: 18px;
-		font-weight: 600;
-	}
-	.page-sub {
-		color: var(--text-italic);
-		margin-top: 6px;
-		font-size: 13.5px;
-	}
 	.saved-chip {
 		display: inline-flex;
 		align-items: center;
@@ -793,7 +708,7 @@
 		appearance: none;
 		height: 4px;
 		border-radius: 3px;
-		background: var(--border-strong);
+		background: var(--border-strong-color);
 		outline: none;
 	}
 	.range::-webkit-slider-thumb {
@@ -802,7 +717,7 @@
 		height: 15px;
 		border-radius: 50%;
 		background: var(--card-bg);
-		border: 1px solid var(--border-strong);
+		border: 1px solid var(--border-strong-color);
 		box-shadow: var(--shadow-sm);
 		cursor: pointer;
 	}
@@ -811,7 +726,7 @@
 		height: 15px;
 		border-radius: 50%;
 		background: var(--card-bg);
-		border: 1px solid var(--border-strong);
+		border: 1px solid var(--border-strong-color);
 		cursor: pointer;
 	}
 	.range-legend {
@@ -1002,7 +917,7 @@
 		padding: 18px 8px 4px;
 	}
 	.suggestion {
-		border: 1px solid var(--border-strong);
+		border: 1px solid var(--border-strong-color);
 		border-radius: 999px;
 		padding: 6px 13px;
 		font-size: 12.5px;
@@ -1029,7 +944,7 @@
 		display: flex;
 		align-items: flex-end;
 		gap: 8px;
-		border: 1px solid var(--border-strong);
+		border: 1px solid var(--border-strong-color);
 		border-radius: var(--radius-lg);
 		background: var(--bg-input);
 		padding: 8px 8px 8px 12px;
@@ -1165,34 +1080,5 @@
 		padding: 64px 20px;
 		color: var(--text-muted);
 		text-align: center;
-	}
-	/* ============================================================
-   Responsive
-   ============================================================ */
-
-	@media (max-width: 900px) {
-		.page {
-			padding: 28px 22px 80px;
-		}
-		.hide-sm {
-			display: none;
-		}
-		.stat-grid {
-			grid-template-columns: 1fr;
-		}
-	}
-
-	@media (max-width: 700px) {
-		.sidebar {
-			width: 190px;
-		}
-		.page-title {
-			font-size: 24px;
-		}
-		.set-row {
-			flex-direction: column;
-			align-items: flex-start;
-			gap: 10px;
-		}
 	}
 </style>

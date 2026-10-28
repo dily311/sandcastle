@@ -1,4 +1,4 @@
-import type { RouteDefinition } from "svelte-spa-router";
+import { pop, push, type RouteDefinition } from "svelte-spa-router";
 import ChatScreen from "$screens/chat/ChatDetailPage.svelte";
 import SettingsScreen from "$screens/settings/SettingsPage.svelte";
 import HomePage from "$screens/HomePage.svelte";
@@ -11,6 +11,11 @@ import PersonaPage from "$screens/persona/PersonaPage.svelte";
 import WorldInfoPage from "$screens/worldinfo/WorldinfoPage.svelte";
 import CharacterEditPageSvelte from "$screens/character/CharacterEditPage.svelte";
 import GamePage from "$screens/game/GamePage.svelte";
+import GameDetailPage from "$/screens/game/GameDetailPage.svelte";
+import GameSessionList from "$/screens/game/editor/GameSessionList.svelte";
+import GamePlaySession from "$/screens/game/editor/GamePlaySession.svelte";
+import GameEditorPage from "$/screens/game/GameEditorPage.svelte";
+import GamePlayContainer from "$/screens/game/GamePlayContainer.svelte";
 
 export type Pages = 
 	"/" |
@@ -44,12 +49,17 @@ interface PageItem {
 export const routes: RouteDefinition = {
 	"/": HomePage,
 	"/character": CharacterListPage,
-	"/character/details/:characterId": CharacterDetailPage,
-	"/character/edit/:characterId": CharacterEditPageSvelte,
-	"/character/*": CharacterDetailPage,
-	// "/chat": ChatListPage,
+	"/character/:characterId": CharacterDetailPage,
+	"/character/:characterId/details": CharacterDetailPage,
+	"/character/:characterId/chat": ChatListPage,
+	"/character/:characterId/edit": CharacterEditPageSvelte,
 	"/chat/:conversationId": ChatScreen,
 	"/game": GamePage,
+	"/game/:gameId": GameDetailPage,
+	"/game/:gameId/sessions": GameSessionList,
+	"/game/:gameId/play": GamePlaySession,
+	"/game/:gameId/play/:sessionId": GamePlayContainer,
+	"/game/:gameId/editor": GameEditorPage,
 	"/api": APIPage,
 	"/preset": PresetPage,
 	"/persona": PersonaPage,
@@ -108,3 +118,27 @@ export const navigation: PageItem[] = [
 		icon: "Settings",
 	},
 ];
+
+// ---------------------------------------------------------
+// 사용 함수
+// ---------------------------------------------------------
+
+export function handleGoBack() { pop() };
+export function handleOpenCharacterDetailPage(id: string) {
+	push(`/character/${id}`);
+}
+export function handleOpenCharacterEditor(id: string) {
+	push(`/character/${id}/editor`);
+}
+export function handleOpenChatPage(id: string) {
+	push(`/chat/${id}`);
+}
+export function handleOpenGameDetailPage(id: string) {
+	push(`/game/${id}`);
+}
+export function handleStartGamePlay(id: string) {
+	push(`/game/${id}/sessions`);
+}
+export function handleOpenGameEditor(id: string) {
+	push(`/game/${id}/editor`);
+}

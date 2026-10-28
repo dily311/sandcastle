@@ -98,6 +98,7 @@ export const dbCommands = {
 	getCharacters: () => invokeCommand("get_all_characters"),
 	createCharacter: (args: CommandRegistry["create_character"]["args"]) => invokeCommand("create_character", args),
 	updateCharacter: (args: CommandRegistry["update_character"]["args"]) => invokeCommand("update_character", args),
+	toggleFavoriteCharacter: (args: CommandRegistry["toggle_favorite_character"]["args"]) => invokeCommand("toggle_favorite_character", args),
 	deleteCharacter: (args: CommandRegistry["delete_character"]["args"]) => invokeCommand("delete_character", args),
 
 	// WorldInfo
