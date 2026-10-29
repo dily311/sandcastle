@@ -1,8 +1,6 @@
-use std::collections::HashMap;
-
 use uuid::Uuid;
 use sqlx::{Error, Executor, Sqlite, Transaction};
-use crate::{db::conn::DbPool, models::{conversation::{WorldInfoEntry, WorldInfoEntryRow}, game::*}};
+use crate::{models::{conversation::{WorldInfoEntry, WorldInfoEntryRow}, game::*}};
 
 
 // ---------------------------------------------------------
@@ -173,7 +171,7 @@ pub async fn upsert_game_state_defs<'e, E>(executor: E, game_id: &str, state_def
         r#"
         INSERT INTO game_state_defs ( id, game_id, key, type, default_value, config_json, description, created_at, updated_at )
         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
-        ON CONFLICT(id) DO UPDATE SET
+        ON CONFLICT(game_id, key) DO UPDATE SET
             game_id = excluded.game_id,
             key = excluded.key,
             default_value = excluded.default_value,
@@ -417,12 +415,12 @@ pub async fn upsert_game_character_spawn_location<'e, E>(executor: E, input: Gam
         r#"
         INSERT INTO game_character_spawn_locations (  id, game_character_id, location_id, spawn_weight, condition_json, created_at, updated_at )
         VALUES ( ?, ?, ?, ?, ?, ?, ? )
-        ON CONFLICT(id) DO UPDATE SET
+        ON CONFLICT(game_character_id, location_id) DO UPDATE SET
             game_character_id=excluded.game_character_id,
             location_id=excluded.location_id,
             spawn_weight=excluded.spawn_weight,
             condition_json=excluded.condition_json,
-            updated_at=excluded.updated_at,
+            updated_at=excluded.updated_at
         "#,
     )
     .bind(&id)
@@ -1134,7 +1132,6 @@ pub async fn upsert_game_interactables<'e, E>(executor: E, input: GameInteractab
         "#,
     )
     .bind(&id)
-    .bind(&input.event_id)
     .bind(&input.location_id)
     .bind(&input.name)
     .bind(&input.event_id)
@@ -1426,6 +1423,11 @@ pub async fn upsert_game_choice_without_links<'e, E>(executor: E, input: &GameCh
         r#"
         INSERT INTO game_choices ( id, scene_id, text, next_scene_id, effect, sort_order )
         VALUES (?, ?, ?, NULL, ?, ?)
+        ON CONFLICT(id) DO UPDATE SET
+            scene_id=excluded.scene_id, 
+            text=excluded.text, 
+            effect=excluded.effect, 
+            sort_order=excluded.sort_order
         "#,
     )
     .bind(&input.id)
@@ -1581,7 +1583,7 @@ pub async fn upsert_game_ending<'e, E>(executor: E, input: GameEndingsInput) -> 
         ON CONFLICT(id) DO UPDATE SET
             game_id=excluded.game_id, 
             ending_key=excluded.ending_key, 
-            title=excluded.title
+            title=excluded.title,
             description=excluded.description
         "#,
     )
@@ -2636,7 +2638,7 @@ pub async fn upsert_game_conversation<'e, E>(executor: E, input: GameConversatio
         )
         VALUES (?, ?, ?, ?, ?, ?, ?, ?)
         ON CONFLICT(id) DO UPDATE SET
-            title = excluded.title
+            title = excluded.title,
             updated_at = excluded.updated_at
         "#,
     )
