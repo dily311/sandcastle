@@ -11,7 +11,7 @@
 	};
 	let { params }: Props = $props();
 
-	let templateId = $state<string>("default");
+	let templateId = $state<string>("dating-sim");
 	let isLoading = $state(true);
 
 	// 1. 세션 또는 게임 정보에서 templateId 가져오기
@@ -22,7 +22,7 @@
 			// templateId = manifest.templateId;
 
 			// 테스트용 임시 값
-			templateId = "default";
+			templateId = "dating-sim";
 		} catch (err) {
 			console.error("Failed to load template info:", err);
 		} finally {
@@ -35,8 +35,7 @@
 		switch (templateId) {
 			//   case 'fantasy_rpg': return FantasyPlay;
 			//   case 'cyberpunk': return CyberpunkPlay;
-			case "vn": return VisualNovelTemplatePlay;
-			case "gacha": return GachaGameLobby;
+			case "dating-sim": return VisualNovelTemplatePlay;
 			default:
 				return DefaultPlay;
 		}

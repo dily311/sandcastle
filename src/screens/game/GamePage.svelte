@@ -33,7 +33,7 @@
 		const title = prompt("새 게임 프로젝트의 제목을 입력하세요:");
 		if (!title) return;
 
-		const newGameId = await gameManagerCommands.createGame({ title, templateId: "default_template" });
+		const newGameId = await gameManagerCommands.createGame({ title, templateId: "dating-sim" });
 		// 생성 후 바로 에디터로 이동
 		push(`/game/${newGameId}/editor`);
 	}

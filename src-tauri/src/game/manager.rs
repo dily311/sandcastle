@@ -4,12 +4,12 @@
 //! "패키지"라는 단위가 가리키는 것:
 //!   - DB의 game_projects 및 그 아래 테이블들 (정의 데이터 전체)
 //!   - <app_data>/games/<game_id>/ 아래의 scripts/assets 파일들 (protocol.rs가 game://로 서빙)
-use crate::db::game::{delete_game_project, upsert_game_project};
+use crate::db::game::delete_game_project;
 use crate::error::AppError;
 use crate::game::package::{self, PackageData};
+use crate::game::template;
 use crate::game::runtime::repository::{GameRepository, SqlxGameRepository};
 use crate::game::validate::{self, Issue};
-use crate::models::game::GameProjectInput;
 use serde::Serialize;
 use sqlx::SqlitePool;
 use std::collections::BTreeMap;
@@ -24,38 +24,18 @@ pub struct SaveReport {
     pub issues: Vec<Issue>,
 }
 
-/// 새 게임의 진입 화면. 실제 게임 UI는 제작자가 이 파일과 scripts/를 고쳐서 만든다.
-/// TODO: template_id별 스캐폴드와 SDK 로드 코드를 넣을 것 (SDK 위치가 정해지면).
-const INDEX_HTML_TEMPLATE: &str = "<!doctype html>\n<html lang=\"ko\">\n<head><meta charset=\"utf-8\"><title>새 게임</title></head>\n<body>\n  <div id=\"app\"></div>\n  <script src=\"scripts/main.js\"></script>\n</body>\n</html>\n";
-const MAIN_JS_TEMPLATE: &str = "// 게임 스크립트. 엔진과는 SDK(postMessage)로만 통신한다.\n";
-
 impl GameManager {
-    /// 빈 게임 프로젝트를 새로 만든다 (에디터에서 "새 게임" 눌렀을 때). 만들어진 직후에는
-    /// 맵/location/날씨/시간대가 없어서 validate_game이 Error를 내고, 채우기 전엔 시작할 수 없다.
+    /// 템플릿으로 새 게임을 만든다: 번들된 템플릿 패키지(.tgame)를 import하고 제목/template_id를 덮어쓴다.
+    /// import 경로를 그대로 타서 id가 전부 새로 발급되므로 같은 템플릿으로 여러 게임을 만들어도 안 겹친다.
+    /// 템플릿 패키지에 기본 시간대와 location이 들어 있어서 만들자마자 시작할 수 있다.
     pub async fn create_game(pool: &SqlitePool, games_root: &Path, title: String, template_id: String) -> Result<String, AppError> {
         let title = title.trim().to_string();
         if title.is_empty() || title.chars().count() > 100 {
             return Err(AppError::Validation("제목 길이가 올바르지 않습니다".into()));
         }
-        let id = uuid::Uuid::new_v4().to_string();
-        let input = GameProjectInput::default(Some(id.clone()), title, template_id);
-        upsert_game_project(pool, &input).await?;
-
-        // 폴더 스캐폴드. 실패하면 방금 만든 프로젝트 행도 되돌린다 (파일 없는 게임이 남지 않게).
-        let dir = games_root.join(&id);
-        let scaffold = (|| -> std::io::Result<()> {
-            std::fs::create_dir_all(dir.join("scripts"))?;
-            std::fs::create_dir_all(dir.join("assets"))?;
-            std::fs::write(dir.join("index.html"), INDEX_HTML_TEMPLATE)?;
-            std::fs::write(dir.join("scripts/main.js"), MAIN_JS_TEMPLATE)?;
-            Ok(())
-        })();
-        if let Err(e) = scaffold {
-            let _ = std::fs::remove_dir_all(&dir);
-            let _ = delete_game_project(pool, &id).await;
-            return Err(e.into());
-        }
-        Ok(id)
+        let template = template::find(&template_id).ok_or_else(|| AppError::Validation(format!("알 수 없는 템플릿입니다: {template_id}")))?;
+        let bytes = template::package_bytes(&template.id).ok_or_else(|| AppError::NotFound("템플릿 패키지가 없습니다".into()))?;
+        package::import_bytes(pool, games_root, bytes, Some(package::ImportOverrides { title, template_id: template.id })).await
     }
 
     /// 이미 로컬에 있는(= DB에 game_projects row가 있는) 게임의 폴더를 확인해서 경로를 돌려준다.

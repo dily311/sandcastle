@@ -212,7 +212,6 @@ pub(crate) async fn write_definition(tx: &mut Transaction<'_, Sqlite>, game_id: 
     for r in &mut data.relationship_defs {
         r.game_id = game_id.to_string();
     }
-
     upsert_game_project(&mut **tx, &data.project).await?;
     for s in &data.state_defs {
         upsert_game_state_defs(&mut **tx, game_id, s).await?;
@@ -450,16 +449,46 @@ fn remap_ids(data: PackageData) -> Result<PackageData, AppError> {
 /// 남이 만든 .tgame을 games_root/<새 game_id>/ 에 풀고, data/definition.json을
 /// 파싱해서 db::game의 upsert_* 함수들로 밀어넣는다. 전부 한 트랜잭션으로 묶어서
 /// 중간에 실패하면 아무것도 안 남게 한다.
+/// 템플릿으로 새 게임을 만들 때 가져온 프로젝트에 덮어쓸 값.
+pub struct ImportOverrides {
+    pub title: String,
+    pub template_id: String,
+}
+
 pub async fn import(pool: &SqlitePool, games_root: &Path, zip_path: &Path) -> Result<String, AppError> {
     let file = std::fs::File::open(zip_path)?;
     if file.metadata()?.len() > MAX_PACKAGE_BYTES {
         return Err(AppError::Validation("패키지 크기가 너무 큽니다".into()));
     }
-    let mut archive = zip::ZipArchive::new(file).map_err(|e| AppError::Archive(e.to_string()))?;
+    let archive = zip::ZipArchive::new(file).map_err(|e| AppError::Archive(e.to_string()))?;
+    import_archive(pool, games_root, archive, None).await
+}
 
+/// 메모리에 있는 패키지(번들된 템플릿 패키지)를 가져온다. 파일 import와 같은 경로를 탄다.
+pub async fn import_bytes(pool: &SqlitePool, games_root: &Path, bytes: &[u8], overrides: Option<ImportOverrides>) -> Result<String, AppError> {
+    if bytes.len() as u64 > MAX_PACKAGE_BYTES {
+        return Err(AppError::Validation("패키지 크기가 너무 큽니다".into()));
+    }
+    let archive = zip::ZipArchive::new(std::io::Cursor::new(bytes)).map_err(|e| AppError::Archive(e.to_string()))?;
+    import_archive(pool, games_root, archive, overrides).await
+}
+
+/// 새 game_id로 폴더를 만들고 import한다. 중간에 실패하면 만들다 만 폴더를 지운다 (DB는 트랜잭션이라 안 남는다).
+async fn import_archive<R: std::io::Read + std::io::Seek>(pool: &SqlitePool, games_root: &Path, mut archive: zip::ZipArchive<R>, overrides: Option<ImportOverrides>) -> Result<String, AppError> {
     let new_game_id = uuid::Uuid::new_v4().to_string();
     let dest = games_root.join(&new_game_id);
     std::fs::create_dir_all(&dest)?;
+
+    match import_into(pool, &mut archive, &dest, new_game_id, overrides).await {
+        Ok(id) => Ok(id),
+        Err(e) => {
+            let _ = std::fs::remove_dir_all(&dest);
+            Err(e)
+        }
+    }
+}
+
+async fn import_into<R: std::io::Read + std::io::Seek>(pool: &SqlitePool, archive: &mut zip::ZipArchive<R>, dest: &Path, new_game_id: String, overrides: Option<ImportOverrides>) -> Result<String, AppError> {
 
     for i in 0..archive.len() {
         let mut entry = archive.by_index(i).map_err(|e| AppError::Archive(e.to_string()))?;
@@ -487,6 +516,10 @@ pub async fn import(pool: &SqlitePool, games_root: &Path, zip_path: &Path) -> Re
     let data_raw = std::fs::read_to_string(dest.join("data/definition.json")).map_err(|_| AppError::Validation("data/definition.json이 없습니다".into()))?;
     let mut data: PackageData = serde_json::from_str(&data_raw)?;
     data = remap_ids(data)?;
+    if let Some(o) = &overrides {
+        data.project.title = o.title.clone();
+        data.project.template_id = o.template_id.clone();
+    }
 
     // game_id를 전부 새로 발급받은 걸로 덮어쓴다. 내부 엔티티 id(맵/씬/노드 등)는 원본 그대로 둔다 —
     // 그래야 next_node_id 같은 상호 참조가 깨지지 않는다.
