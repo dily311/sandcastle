@@ -2,14 +2,14 @@ use std::{collections::HashMap, sync::Mutex};
 use tauri::Manager;
 pub mod state;
 use state::LaunchMode;
+mod error;
+pub mod models;
 mod adapter;
 mod commands;
-mod db;
-mod error;
-mod game;
-mod models;
-mod service;
-mod sys;
+pub mod db;
+pub mod game;
+pub mod service;
+pub mod sys;
 use crate::{
     models::settings::{AppSetting, FeatureSetting, ThemeSetting},
     state::{AppState, WindowMode},

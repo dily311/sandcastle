@@ -382,33 +382,408 @@ impl From<GameCharacterSpawnLocations> for GameCharacterSpawnLocationsInput {
 // ---------------------------------------------------------
 // 게임 에셋
 // ---------------------------------------------------------
-#[derive(FromRow, Serialize, Clone)]
+#[derive(FromRow)]
+pub struct GameAssetsRow {
+    pub id: String,
+    pub game_id: String,
+    pub key: String,
+    pub name: String,
+    pub category: String,
+    pub kind: String,
+    pub file_path: String,
+    pub settings_json: Option<String>,
+    pub created_at: i64,
+    pub updated_at: i64,
+}
+#[derive(Serialize, Deserialize, Clone)]
 #[serde(rename_all = "camelCase")]
 pub struct GameAssets {
     pub id: String,
+    pub game_id: String,
+    pub key: String,
     pub name: String,
-    pub mime_type: String,
+    pub category: String,
+    pub kind: String,
     pub file_path: String,
+    pub settings_json: Option<serde_json::Value>,
     pub created_at: i64,
     pub updated_at: i64,
+}
+impl From<GameAssetsRow> for GameAssets {
+    fn from(r: GameAssetsRow) -> Self {
+        Self {
+            id: r.id,
+            game_id: r.game_id,
+            key: r.key,
+            name: r.name,
+            category: r.category,
+            kind: r.kind,
+            file_path: r.file_path,
+            settings_json: r
+                .settings_json
+                .and_then(|s| serde_json::from_str(&s).ok())
+                .unwrap_or_default(),
+            created_at: r.created_at,
+            updated_at: r.updated_at,
+        }
+    }
+}
+impl From<AudioAssetsRow> for GameAssets {
+    fn from(r: AudioAssetsRow) -> Self {
+        Self {
+            id: r.id,
+            game_id: r.game_id,
+            key: r.key,
+            name: r.name,
+            category: r.category,
+            kind: r.kind,
+            file_path: r.file_path,
+            settings_json: r
+                .settings_json
+                .and_then(|s| serde_json::from_str(&s).ok())
+                .unwrap_or_default(),
+            created_at: r.created_at,
+            updated_at: r.updated_at,
+        }
+    }
+}
+impl From<CharacterAssetsRow> for GameAssets {
+    fn from(r: CharacterAssetsRow) -> Self {
+        Self {
+            id: r.id,
+            game_id: r.game_id,
+            key: r.key,
+            name: r.name,
+            category: r.category,
+            kind: r.kind,
+            file_path: r.file_path,
+            settings_json: r
+                .settings_json
+                .and_then(|s| serde_json::from_str(&s).ok())
+                .unwrap_or_default(),
+            created_at: r.created_at,
+            updated_at: r.updated_at,
+        }
+    }
+}
+impl From<CgAssetsRow> for GameAssets {
+    fn from(r: CgAssetsRow) -> Self {
+        Self {
+            id: r.id,
+            game_id: r.game_id,
+            key: r.key,
+            name: r.name,
+            category: r.category,
+            kind: r.kind,
+            file_path: r.file_path,
+            settings_json: r
+                .settings_json
+                .and_then(|s| serde_json::from_str(&s).ok())
+                .unwrap_or_default(),
+            created_at: r.created_at,
+            updated_at: r.updated_at,
+        }
+    }
+}
+impl From<BackgroundAssetsRow> for GameAssets {
+    fn from(r: BackgroundAssetsRow) -> Self {
+        Self {
+            id: r.id,
+            game_id: r.game_id,
+            key: r.key,
+            name: r.name,
+            category: r.category,
+            kind: r.kind,
+            file_path: r.file_path,
+            settings_json: r
+                .settings_json
+                .and_then(|s| serde_json::from_str(&s).ok())
+                .unwrap_or_default(),
+            created_at: r.created_at,
+            updated_at: r.updated_at,
+        }
+    }
+}
+#[derive(Deserialize, Clone)]
+#[serde(rename_all = "camelCase")]
+pub struct GameAssetsInput {
+    pub id: Option<String>,
+    pub game_id: String,
+    pub key: String,
+    pub name: String,
+    pub category: String,
+    pub kind: String,
+    pub file_path: String,
+    pub settings_json: Option<serde_json::Value>,
+}
+
+impl From<GameAssets> for GameAssetsInput {
+    fn from(r: GameAssets) -> Self {
+        Self {
+            id: Some(r.id),
+            game_id: r.game_id,
+            key: r.key,
+            name: r.name,
+            category: r.category,
+            kind: r.kind,
+            file_path: r.file_path,
+            settings_json: r.settings_json,
+        }
+    }
+}
+
+#[derive(FromRow, Clone)]
+pub struct AudioAssetsRow {
+    pub id: String,
+    pub game_id: String,
+    pub key: String,
+    pub name: String,
+    pub category: String,
+    pub kind: String,
+    pub file_path: String,
+    pub settings_json: Option<String>,
+    pub created_at: i64,
+    pub updated_at: i64,
+    pub tag: Option<String>,
+    pub game_character_id: Option<String>,
+    pub transcript: Option<String>,
+}
+
+#[derive(Serialize, Clone)]
+#[serde(rename_all = "camelCase")]
+pub struct AudioAssets {
+    #[serde(flatten)]
+    pub base: GameAssets,
+    pub tag: Option<String>,
+    pub game_character_id: Option<String>,
+    pub transcript: Option<String>,
+}
+
+impl From<AudioAssetsRow> for AudioAssets {
+    fn from(r: AudioAssetsRow) -> Self {
+        Self {
+            base: r.clone().into(),
+            tag: r.tag,
+            game_character_id: r.game_character_id,
+            transcript: r.transcript,
+        }
+    }
 }
 
 #[derive(Deserialize)]
 #[serde(rename_all = "camelCase")]
-pub struct GameAssetsInput {
-    pub id: Option<String>,
-    pub name: String,
-    pub mime_type: String,
-    pub file_path: String,
+pub struct AudioAssetsInput {
+    #[serde(flatten)]
+    pub base: GameAssetsInput,
+    pub tag: Option<String>,
+    pub game_character_id: Option<String>,
+    pub transcript: Option<String>,
 }
 
-impl From<GameAssets> for GameAssetsInput {
-    fn from(v: GameAssets) -> Self {
+impl From<AudioAssets> for AudioAssetsInput {
+    fn from(r: AudioAssets) -> Self {
         Self {
-            id: Some(v.id),
-            name: v.name,
-            mime_type: v.mime_type,
-            file_path: v.file_path,
+            base:r.base.into(),
+            tag: r.tag,
+            game_character_id: r.game_character_id,
+            transcript: r.transcript,
+        }
+    }
+}
+
+#[derive(FromRow, Clone)]
+pub struct CharacterAssetsRow {
+    pub id: String,
+    pub game_id: String,
+    pub key: String,
+    pub name: String,
+    pub category: String,
+    pub kind: String,
+    pub file_path: String,
+    pub settings_json: Option<String>,
+    pub created_at: i64,
+    pub updated_at: i64,
+    pub game_character_id: String,
+    pub usage: String,
+    pub emotion: Option<String>,
+}
+
+#[derive(Serialize, Clone)]
+#[serde(rename_all = "camelCase")]
+pub struct CharacterAssets {
+    #[serde(flatten)]
+    pub base: GameAssets,
+
+    pub game_character_id: String,
+    pub usage: String,
+    pub emotion: Option<String>,
+}
+
+impl From<CharacterAssetsRow> for CharacterAssets {
+    fn from(r: CharacterAssetsRow) -> Self {
+        Self {
+            base: r.clone().into(),
+            game_character_id: r.game_character_id,
+            usage: r.usage,
+            emotion: r.emotion,
+        }
+    }
+}
+
+#[derive(Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct CharacterAssetsInput {
+    #[serde(flatten)]
+    pub base: GameAssetsInput,
+
+    pub game_character_id: String,
+    pub usage: String,
+    pub emotion: Option<String>,
+}
+
+impl From<CharacterAssets> for CharacterAssetsInput {
+    fn from(r: CharacterAssets) -> Self {
+        Self {
+            base: r.base.into(),
+            game_character_id: r.game_character_id,
+            usage: r.usage,
+            emotion: r.emotion,
+        }
+    }
+}
+
+#[derive(FromRow, Clone)]
+pub struct CgAssetsRow {
+    pub id: String,
+    pub game_id: String,
+    pub key: String,
+    pub name: String,
+    pub category: String,
+    pub kind: String,
+    pub file_path: String,
+    pub settings_json: Option<String>,
+    pub created_at: i64,
+    pub updated_at: i64,
+    pub game_character_id: String,
+    pub description: Option<String>,
+    pub prompt: Option<String>,
+    pub negative_prompt: Option<String>,
+    pub seed: Option<i64>,
+    pub generation_params: Option<String>,
+}
+
+#[derive(Serialize, Clone)]
+#[serde(rename_all = "camelCase")]
+pub struct CgAssets {
+    #[serde(flatten)]
+    pub base: GameAssets,
+
+    pub game_character_id: String,
+    pub description: Option<String>,
+    pub prompt: Option<String>,
+    pub negative_prompt: Option<String>,
+    pub seed: Option<i64>,
+    pub generation_params: Option<String>,
+}
+
+impl From<CgAssetsRow> for CgAssets {
+    fn from(r: CgAssetsRow) -> Self {
+        Self {
+            base: r.clone().into(),
+            game_character_id: r.game_character_id,
+            description: r.description,
+            prompt: r.prompt,
+            negative_prompt: r.negative_prompt,
+            seed: r.seed,
+            generation_params: r.generation_params,
+        }
+    }
+}
+
+#[derive(Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct CgAssetsInput {
+    #[serde(flatten)]
+    pub base: GameAssetsInput,
+
+    pub game_character_id: String,
+    pub description: Option<String>,
+    pub prompt: Option<String>,
+    pub negative_prompt: Option<String>,
+    pub seed: Option<i64>,
+    pub generation_params: Option<String>,
+}
+
+impl From<CgAssets> for CgAssetsInput {
+    fn from(r: CgAssets) -> Self {
+        Self {
+            base: r.base.into(),
+            game_character_id: r.game_character_id,
+            description: r.description,
+            prompt: r.prompt,
+            negative_prompt: r.negative_prompt,
+            seed: r.seed,
+            generation_params: r.generation_params,
+        }
+    }
+}
+#[derive(FromRow, Clone)]
+pub struct BackgroundAssetsRow {
+    pub id: String,
+    pub game_id: String,
+    pub key: String,
+    pub name: String,
+    pub category: String,
+    pub kind: String,
+    pub file_path: String,
+    pub settings_json: Option<String>,
+    pub created_at: i64,
+    pub updated_at: i64,
+    pub location_id: Option<String>,
+    pub time_id: Option<String>,
+    pub weather_id: Option<String>,
+}
+
+#[derive(Serialize, Clone)]
+#[serde(rename_all = "camelCase")]
+pub struct BackgroundAssets {
+    #[serde(flatten)]
+    pub base: GameAssets,
+
+    pub location_id: Option<String>,
+    pub time_id: Option<String>,
+    pub weather_id: Option<String>,
+}
+
+impl From<BackgroundAssetsRow> for BackgroundAssets {
+    fn from(r: BackgroundAssetsRow) -> Self {
+        Self {
+            base: r.clone().into(),
+            location_id: r.location_id,
+            time_id: r.time_id,
+            weather_id: r.weather_id,
+        }
+    }
+}
+
+#[derive(Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct BackgroundAssetsInput {
+    #[serde(flatten)]
+    pub base: GameAssetsInput,
+
+    pub location_id: Option<String>,
+    pub time_id: Option<String>,
+    pub weather_id: Option<String>,
+}
+
+impl From<BackgroundAssets> for BackgroundAssetsInput {
+    fn from(r: BackgroundAssets) -> Self {
+        Self {
+            base: r.base.into(),
+            location_id: r.location_id,
+            time_id: r.time_id,
+            weather_id: r.weather_id,
         }
     }
 }

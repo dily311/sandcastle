@@ -97,13 +97,50 @@ CREATE TABLE IF NOT EXISTS game_character_spawn_locations (
 CREATE TABLE IF NOT EXISTS game_assets (
   id TEXT PRIMARY KEY,
   game_id TEXT NOT NULL REFERENCES game_projects(id) ON DELETE CASCADE,
+  key TEXT NOT NULL,
   name TEXT NOT NULL,
-  mime_type TEXT NOT NULL CHECK (mime_type IN ('image', 'audio', 'font', 'other')),
+  category TEXT NOT NULL CHECK (category IN ('voice','sfx','bgm','character','cg','background','font','other')),
+  kind TEXT NOT NULL CHECK (kind IN ('image','audio','font','other')),
   file_path TEXT NOT NULL,
-  created_at INTEGER NOT NULL,
-  updated_at INTEGER NOT NULL
+  settings_json TEXT,                       -- 볼륨, 루프, 페이드
+  created_at INTEGER NOT NULL, 
+  updated_at INTEGER NOT NULL,
+  UNIQUE (game_id, key)
 );
 
+-- 오디오 에셋
+CREATE TABLE IF NOT EXISTS audio_assets (                  -- voice / sfx / bgm
+  assets_id TEXT PRIMARY KEY REFERENCES game_assets(id) ON DELETE CASCADE,
+  tag TEXT,                                  -- sfx: 소리 그룹 이름, bgm: 분위기 id
+  game_character_id TEXT REFERENCES game_characters(id) ON DELETE CASCADE,  -- voice의 화자
+  transcript TEXT                            -- voice의 대사 텍스트
+);
+
+-- 이미지 에셋
+CREATE TABLE IF NOT EXISTS character_assets (
+  assets_id TEXT PRIMARY KEY REFERENCES game_assets(id) ON DELETE CASCADE,
+  game_character_id TEXT NOT NULL REFERENCES game_characters(id) ON DELETE CASCADE,
+  usage TEXT NOT NULL CHECK (usage IN ('standing','map')),
+  emotion TEXT,                              -- standing은 필수, map은 NULL 또는 variant
+  UNIQUE (game_character_id, usage, emotion)
+);
+
+CREATE TABLE IF NOT EXISTS cg_assets (
+  assets_id TEXT PRIMARY KEY REFERENCES game_assets(id) ON DELETE CASCADE,
+  game_character_id TEXT REFERENCES game_characters(id) ON DELETE SET NULL,
+  description TEXT,                          -- AI에게 보낼 설명
+  prompt TEXT, 
+  negative_prompt TEXT, 
+  seed INTEGER, 
+  generation_params TEXT
+);
+
+CREATE TABLE IF NOT EXISTS background_assets (
+  assets_id TEXT PRIMARY KEY REFERENCES game_assets(id) ON DELETE CASCADE,
+  location_id TEXT REFERENCES game_locations(id) ON DELETE CASCADE,   -- NULL = 전체 기본
+  time_id TEXT REFERENCES game_time_periods(id) ON DELETE SET NULL,
+  weather_id TEXT REFERENCES game_weather_types(id) ON DELETE SET NULL
+);
 -- ---------------------------------------------------------
 -- 게임 맵
 -- ---------------------------------------------------------
@@ -530,7 +567,7 @@ CREATE INDEX IF NOT EXISTS idx_character_spawn_character ON game_character_spawn
 
 -- assets
 CREATE INDEX IF NOT EXISTS idx_game_assets_game ON game_assets(game_id);
-
+CREATE UNIQUE INDEX IF NOT EXISTS idx_background_pick ON background_assets (COALESCE(location_id,''), COALESCE(time_id,''), COALESCE(weather_id,''));
 -- Map
 CREATE INDEX IF NOT EXISTS idx_game_maps_game ON game_maps(game_id);
 CREATE INDEX IF NOT EXISTS idx_map_zones_map_id ON game_map_zones(map_id);

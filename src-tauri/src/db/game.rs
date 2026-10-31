@@ -446,9 +446,9 @@ pub async fn delete_game_character_spawn_location<'e, E>(executor: E, id: &str) 
 // 게임 에셋
 // ---------------------------------------------------------
 pub async fn get_all_game_assets<'e, E>(executor: E, game_id: &str) -> Result<Vec<GameAssets>, Error> where E: Executor<'e, Database = Sqlite> {
-    let result = sqlx::query_as::<_, GameAssets>(
+    let result = sqlx::query_as::<_, GameAssetsRow>(
             r#"
-            SELECT id, name, mime_type, file_path, created_at, updated_at
+            SELECT id, game_id, key, name, category, kind, file_path, settings_json, created_at, updated_at
             FROM game_assets
             WHERE game_id = ?
             "#,
@@ -456,30 +456,53 @@ pub async fn get_all_game_assets<'e, E>(executor: E, game_id: &str) -> Result<Ve
         .bind(game_id)
         .fetch_all(executor)
         .await?;
-    Ok(result)
+    Ok(result.into_iter().map(Into::into).collect())
 }
-pub async fn upsert_game_asset<'e, E>(executor: E, input: GameAssetsInput, game_id: &str) -> Result<(), Error> where E: Executor<'e, Database = Sqlite> {
+pub async fn get_game_asset<'e, E>(executor: E, id: &str) -> Result<GameAssets, Error> where E: Executor<'e, Database = Sqlite> {
+    let result = sqlx::query_as::<_, GameAssetsRow>(
+            r#"
+            SELECT id, game_id, key, name, category, kind, file_path, settings_json, created_at, updated_at
+            FROM game_assets
+            WHERE id = ?
+            "#,
+        )
+        .bind(id)
+        .fetch_one(executor)
+        .await?;
+    Ok(result.into())
+}
+pub async fn upsert_game_asset<'e, E>(executor: E, input: GameAssetsInput, game_id: &str) -> Result<String, Error> where E: Executor<'e, Database = Sqlite> + Clone {
     let id = input.id.clone().unwrap_or_else(|| Uuid::new_v4().to_string());
     let now = chrono::Utc::now().timestamp_millis();
+    let settings_json = serde_json::to_string(&input.settings_json).unwrap_or_default();
+
     sqlx::query(r#"
-    INSERT INTO game_assets (id, game_id, name, mime_type, file_path, created_at, updated_at)
-    VALUES (?, ?, ?, ?, ?, ?, ?)
-    ON CONFLICT(id, game_id) DO UPDATE SET
+    INSERT INTO game_assets (id, game_id, key, name, category, kind, file_path, settings_json, created_at, updated_at)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    ON CONFLICT(id) DO UPDATE SET
+        game_id=excluded.game_id, 
+        key=excluded.key, 
         name=excluded.name, 
-        mime_type=excluded.mime_type,
+        category=excluded.category,
+        kind=excluded.kind,
         file_path=excluded.file_path, 
+        settings_json=excluded.settings_json, 
         updated_at=excluded.updated_at
     "#)
     .bind(&id)
     .bind(game_id)
+    .bind(&input.key)
     .bind(&input.name)
-    .bind(&input.mime_type)
+    .bind(&input.category)
+    .bind(&input.kind)
     .bind(&input.file_path)
+    .bind(settings_json)
     .bind(now)
     .bind(now)
-    .execute(executor)
+    .execute(executor.clone())
     .await?;
-    Ok(())
+
+    Ok(id)
 }
 
 pub async fn delete_game_asset<'e, E>(executor: E, id: &str) -> Result<bool, Error> where E: Executor<'e, Database = Sqlite> {
@@ -489,6 +512,206 @@ pub async fn delete_game_asset<'e, E>(executor: E, id: &str) -> Result<bool, Err
     .await?;
     Ok(result.rows_affected() != 0)
 }
+
+pub async fn get_all_audio_assets<'e, E>(executor: E, game_id: &str) -> Result<Vec<AudioAssets>, Error> where E: Executor<'e, Database = Sqlite> {
+    let result = sqlx::query_as::<_, AudioAssetsRow>(
+            r#"
+            SELECT ga.id, ga.game_id, ga.key, ga.name, ga.category, ga.kind, ga.file_path, ga.settings_json, ga.created_at, ga.updated_at, a.tag, a.game_character_id, a.transcript
+            FROM audio_assets a
+            INNER JOIN game_assets ga ON ga.id = a.assets_id
+            WHERE ga.game_id = ?
+            "#,
+        )
+        .bind(game_id)
+        .fetch_all(executor)
+        .await?;
+    Ok(result.into_iter().map(Into::into).collect())
+}
+pub async fn get_audio_asset<'e, E>(executor: E, assets_id: &str) -> Result<AudioAssets, Error> where E: Executor<'e, Database = Sqlite> {
+    let result = sqlx::query_as::<_, AudioAssetsRow>(
+            r#"
+            SELECT ga.id, ga.game_id, ga.key, ga.name, ga.category, ga.kind, ga.file_path, ga.settings_json, ga.created_at, ga.updated_at, a.tag, a.game_character_id, a.transcript
+            FROM audio_assets a
+            INNER JOIN game_assets ga ON ga.id = a.assets_id
+            WHERE ga.id = ?
+            "#,
+        )
+        .bind(assets_id)
+        .fetch_one(executor)
+        .await?;
+    Ok(result.into())
+}
+pub async fn upsert_audio_asset<'e, E>(executor: E, input: AudioAssetsInput, game_id: &str) -> Result<(), Error> where E: Executor<'e, Database = Sqlite> + Clone {
+    let assets_id = upsert_game_asset(executor.clone(), input.base.clone(), game_id).await?;
+
+    sqlx::query(r#"
+    INSERT INTO audio_assets (assets_id, tag, game_character_id, transcript)
+    VALUES (?, ?, ?, ?)
+    ON CONFLICT(assets_id) DO UPDATE SET
+        tag=excluded.tag, 
+        game_character_id=excluded.game_character_id, 
+        transcript=excluded.transcript
+    "#)
+    .bind(assets_id)
+    .bind(&input.tag)
+    .bind(&input.game_character_id)
+    .bind(&input.transcript)
+    .execute(executor)
+    .await?;
+
+    Ok(())
+}
+pub async fn get_all_character_assets<'e, E>(executor: E, game_id: &str) -> Result<Vec<CharacterAssets>, Error> where E: Executor<'e, Database = Sqlite> {
+    let result = sqlx::query_as::<_, CharacterAssetsRow>(
+            r#"
+            SELECT ga.id, ga.game_id, ga.key, ga.name, ga.category, ga.kind, ga.file_path, ga.settings_json, ga.created_at, ga.updated_at, a.game_character_id, a.usage, a.emotion
+            FROM character_assets a
+            INNER JOIN game_assets ga ON ga.id = a.assets_id
+            WHERE ga.game_id = ?
+            "#,
+        )
+        .bind(game_id)
+        .fetch_all(executor)
+        .await?;
+    Ok(result.into_iter().map(Into::into).collect())
+}
+pub async fn get_character_asset<'e, E>(executor: E, assets_id: &str) -> Result<CharacterAssets, Error> where E: Executor<'e, Database = Sqlite> {
+    let result = sqlx::query_as::<_, CharacterAssetsRow>(
+            r#"
+            SELECT ga.id, ga.game_id, ga.key, ga.name, ga.category, ga.kind, ga.file_path, ga.settings_json, ga.created_at, ga.updated_at, a.game_character_id, a.usage, a.emotion
+            FROM character_assets a
+            INNER JOIN game_assets ga ON ga.id = a.assets_id
+            WHERE ga.id = ?
+            "#,
+        )
+        .bind(assets_id)
+        .fetch_one(executor)
+        .await?;
+    Ok(result.into())
+}
+pub async fn upsert_character_asset<'e, E>(executor: E, input: CharacterAssetsInput, game_id: &str) -> Result<(), Error> where E: Executor<'e, Database = Sqlite> + Clone {
+    let assets_id = upsert_game_asset(executor.clone(), input.base.clone(), game_id).await?;
+
+    sqlx::query(r#"
+    INSERT INTO character_assets (assets_id, game_character_id, usage, emotion)
+    VALUES (?, ?, ?, ?)
+    ON CONFLICT(assets_id) DO UPDATE SET
+        game_character_id=excluded.game_character_id, 
+        usage=excluded.usage, 
+        emotion=excluded.emotion
+    "#)
+    .bind(assets_id)
+    .bind(&input.game_character_id)
+    .bind(&input.usage)
+    .bind(&input.emotion)
+    .execute(executor)
+    .await?;
+
+    Ok(())
+}
+pub async fn get_all_cg_assets<'e, E>(executor: E, game_id: &str) -> Result<Vec<CgAssets>, Error> where E: Executor<'e, Database = Sqlite> {
+    let result = sqlx::query_as::<_, CgAssetsRow>(
+            r#"
+            SELECT ga.id, ga.game_id, ga.key, ga.name, ga.category, ga.kind, ga.file_path, ga.settings_json, ga.created_at, ga.updated_at, a.game_character_id, a.description, a.prompt, a.negative_prompt, a.seed, a.generation_params
+            FROM cg_assets a
+            INNER JOIN game_assets ga ON ga.id = a.assets_id
+            WHERE ga.game_id = ?
+            "#,
+        )
+        .bind(game_id)
+        .fetch_all(executor)
+        .await?;
+    Ok(result.into_iter().map(Into::into).collect())
+}
+pub async fn get_cg_asset<'e, E>(executor: E, assets_id: &str) -> Result<CgAssets, Error> where E: Executor<'e, Database = Sqlite> {
+    let result = sqlx::query_as::<_, CgAssetsRow>(
+            r#"
+            SELECT ga.id, ga.game_id, ga.key, ga.name, ga.category, ga.kind, ga.file_path, ga.settings_json, ga.created_at, ga.updated_at, a.game_character_id, a.description, a.prompt, a.negative_prompt, a.seed, a.generation_params
+            FROM cg_assets a
+            INNER JOIN game_assets ga ON ga.id = a.assets_id
+            WHERE ga.id = ?
+            "#,
+        )
+        .bind(assets_id)
+        .fetch_one(executor)
+        .await?;
+    Ok(result.into())
+}
+pub async fn upsert_cg_asset<'e, E>(executor: E, input: CgAssetsInput, game_id: &str) -> Result<(), Error> where E: Executor<'e, Database = Sqlite> + Clone {
+    let assets_id = upsert_game_asset(executor.clone(), input.base.clone(), game_id).await?;
+
+    sqlx::query(r#"
+    INSERT INTO cg_assets (assets_id, game_character_id, description, prompt, negative_prompt, seed, generation_params)
+    VALUES (?, ?, ?, ?, ?, ?, ?)
+    ON CONFLICT(assets_id) DO UPDATE SET
+        game_character_id=excluded.game_character_id, 
+        description=excluded.description, 
+        prompt=excluded.prompt, 
+        negative_prompt=excluded.negative_prompt, 
+        seed=excluded.seed, 
+        generation_params=excluded.generation_params
+    "#)
+    .bind(assets_id)
+    .bind(&input.game_character_id)
+    .bind(&input.description)
+    .bind(&input.prompt)
+    .bind(&input.negative_prompt)
+    .bind(&input.seed)
+    .bind(&input.generation_params)
+    .execute(executor)
+    .await?;
+
+    Ok(())
+}
+pub async fn get_all_background_assets<'e, E>(executor: E, game_id: &str) -> Result<Vec<BackgroundAssets>, Error> where E: Executor<'e, Database = Sqlite> {
+    let result = sqlx::query_as::<_, BackgroundAssetsRow>(
+            r#"
+            SELECT ga.id, ga.game_id, ga.key, ga.name, ga.category, ga.kind, ga.file_path, ga.settings_json, ga.created_at, ga.updated_at, a.location_id, a.time_id, a.weather_id
+            FROM background_assets a
+            INNER JOIN game_assets ga ON ga.id = a.assets_id
+            WHERE ga.game_id = ?
+            "#,
+        )
+        .bind(game_id)
+        .fetch_all(executor)
+        .await?;
+    Ok(result.into_iter().map(Into::into).collect())
+}
+pub async fn get_background_asset<'e, E>(executor: E, assets_id: &str) -> Result<BackgroundAssets, Error> where E: Executor<'e, Database = Sqlite> {
+    let result = sqlx::query_as::<_, BackgroundAssetsRow>(
+            r#"
+            SELECT ga.id, ga.game_id, ga.key, ga.name, ga.category, ga.kind, ga.file_path, ga.settings_json, ga.created_at, ga.updated_at, a.location_id, a.time_id, a.weather_id
+            FROM background_assets a
+            INNER JOIN game_assets ga ON ga.id = a.assets_id
+            WHERE ga.id = ?
+            "#,
+        )
+        .bind(assets_id)
+        .fetch_one(executor)
+        .await?;
+    Ok(result.into())
+}
+pub async fn upsert_background_assets<'e, E>(executor: E, input: BackgroundAssetsInput, game_id: &str) -> Result<(), Error> where E: Executor<'e, Database = Sqlite> + Clone {
+    let assets_id = upsert_game_asset(executor.clone(), input.base.clone(), game_id).await?;
+
+    sqlx::query(r#"
+    INSERT INTO background_assets (assets_id, location_id, time_id, weather_id)
+    VALUES (?, ?, ?, ?)
+    ON CONFLICT(assets_id) DO UPDATE SET
+        location_id=excluded.location_id, 
+        time_id=excluded.time_id, 
+        weather_id=excluded.weather_id
+    "#)
+    .bind(assets_id)
+    .bind(&input.location_id)
+    .bind(&input.time_id)
+    .bind(&input.weather_id)
+    .execute(executor)
+    .await?;
+
+    Ok(())
+}
+
 
 // ---------------------------------------------------------
 // 게임 맵

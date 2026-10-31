@@ -653,17 +653,13 @@ pub async fn create_persona_worldinfo_ids<'e, E>(executor: E,persona_id: &str,bo
 pub async fn get_messages<'e, E>(executor: E, conversation_id: &str, limit: i64, before: Option<i64>,) -> Result<Vec<Message>, Error> where E: Executor<'e, Database = Sqlite>,{
     let rows = match before {
         Some(b) => sqlx::query_as::<_, MessageRow>(
-            "SELECT * FROM messages WHERE conversation_id = ? AND created_at < ?
-             ORDER BY created_at, rowid at DESC
-             LIMIT ?",
+            "SELECT * FROM messages WHERE conversation_id = ? AND created_at < ? ORDER BY created_at, rowid LIMIT ?",
         )
         .bind(&conversation_id)
         .bind(b)
         .bind(limit),
         None => sqlx::query_as::<_, MessageRow>(
-            "SELECT * FROM messages WHERE conversation_id = ?
-             ORDER BY created_at, rowid at DESC
-             LIMIT ?",
+            "SELECT * FROM messages WHERE conversation_id = ? ORDER BY created_at, rowid LIMIT ?",
         )
         .bind(&conversation_id)
         .bind(limit),
