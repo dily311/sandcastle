@@ -1,0 +1,287 @@
+# 아키텍처 결정 기록 (ADR) — AI 스토리 엔진 게임 모드
+
+> 기준: 지금까지의 설계 논의와 구현. 상태 표기: **Accepted**(결정·구현됨), **Proposed**(결정됨·구현 전), **Deferred**(보류). 컴파일 검증은 사용자가 단계적으로 진행 중이며, 구현 여부는 각 ADR의 결과 항목에 적었다.
+
+## 0. 배경과 용어
+
+- **제품**: Tauri v2(Windows/Android) 로컬 앱. 프론트 Svelte+TS, 백엔드 Rust, DB SQLite(sqlx). 서버 없음, API 키는 사용자 소유. 기능은 AI 채팅과 게임 모드(사용자들이 만든 게임을 가져와 실행).
+- **게임 코드**는 남이 만든 HTML/JS이며 iframe에서 재생한다.
+- **세션**: 한 번의 플레이 전체(책 한 권). **책갈피(세이브)**: 세션의 한 시점(일지 seq + 상태 스냅샷).
+- **정의(Definition)**: 제작자가 만든 정적 데이터. **상태(State)**: 플레이 중 바뀌는 데이터.
+- **템플릿**: 엔진의 시스템 규칙(capabilities). **템플릿 패키지**: 새 게임의 시작 데이터(.tgame).
+- **시스템**: 이벤트에 반응해 상태를 바꾸는 엔진 모듈(movement, time, events, scene 등).
+
+## ADR 목록
+
+| ID | 제목 | 상태 |
+| --- | --- | --- |
+| 001 | 신뢰 경계와 책임 분리 | Accepted |
+| 002 | 게임 코드 격리 (iframe + game:// 프로토콜) | Accepted(SDK/브릿지 미구현) |
+| 003 | API 키·LLM 호출은 Rust 전담, 게임은 프롬프트를 못 바꾼다 | Accepted |
+| 004 | 게임 패키지(.tgame)와 import/export | Accepted |
+| 005 | 정의/상태 분리와 로드 시 일괄 적재 | Accepted |
+| 006 | 이벤트 구동 시스템과 단일 writer | Accepted |
+| 007 | 선언형 조건·효과, 못 읽으면 막는다 | Accepted |
+| 008 | 공간·시간 모델 | Accepted |
+| 009 | 이벤트 종류·실행 순서 | Accepted |
+| 010 | 세션·책갈피·일지·분기 | Accepted |
+| 011 | 씬 모델 | Accepted |
+| 012 | AI 대화 구조 | Accepted |
+| 013 | AI 출력 태그 프로토콜 | Accepted |
+| 014 | 인벤토리·관계·NPC 위치 | Accepted |
+| 015 | 정의 편집·무결성·화면용 데이터 | Accepted |
+| 016 | 템플릿과 템플릿 패키지 | Accepted |
+| 017 | 코드 구조와 관례 | Accepted |
+| 018 | 에셋 서빙과 연출 | Proposed |
+| 019 | StoryPlan(각본가) | Deferred |
+
+## ADR-001 신뢰 경계와 책임 분리
+
+**상태** Accepted
+
+**배경** 임포트한 게임 코드는 무엇이든 실행할 수 있다고 가정해야 한다. 동시에 로컬 앱이라 서버 쪽 방어선이 없다.
+
+**결정**
+
+- 세 계층으로 나눈다: **Rust(신뢰)** — 엔진, DB, LLM 호출, API 키, 패키지 검증 / **Svelte 호스트(반신뢰)** — UI, 브릿지(메시지 검증·전달) / **iframe(비신뢰)** — 게임 스크립트와 SDK.
+- SDK는 개발 편의용이고 보안은 호스트와 Rust가 책임진다. 모든 검증은 Rust에서 다시 한다.
+- 게임 식별자(game\_id, session\_id)는 iframe이 보내지 않는다. Rust가 현재 열린 게임(active\_archive)과 실행 중 런타임에서 직접 읽는다.
+
+**결과**
+
+- 호스트 창에만 허용할 커맨드(save\_package, delete\_game, import/export 등)와 게임이 부를 수 있는 커맨드(dispatch\_command, npc\_say, get\_game\_view 등)를 Tauri capabilities에서 나눠야 한다(후속).
+
+## ADR-002 게임 코드 격리 (iframe + game:// 프로토콜)
+
+**상태** Accepted — SDK와 호스트 브릿지는 아직 구현 전
+
+**결정**
+
+- iframe은 `sandbox=allow-scripts`만 주고 `allow-same-origin`은 주지 않는다(불투명 origin → 부모 DOM·스토리지·Tauri 전역 접근 차단).
+- 게임 파일은 커스텀 프로토콜 `game://localhost/<game_id>/<path>`로 서빙하고, CSP는 응답 헤더로 강제한다(default-src none, connect-src none, form-action none 등).
+- 경로는 canonicalize 후 게임 폴더 하위인지 확인한다(경로 탈출·심볼릭 링크 방지).
+- 통신은 postMessage 요청/응답만 쓰고, 호스트는 허용 목록 방식으로 메시지 타입과 페이로드를 검증하며 rate limit을 건다.
+
+**결과**
+
+- OS별 WebView(WebView2, WKWebView 등)의 CSP/sandbox 동작이 달라 플랫폼별 테스트가 필요하다.
+- 무한 루프 같은 CPU 남용은 완전히 막기 어렵다(게임 재시작 버튼 상시 제공). 키 입력 UI는 호스트에만 둔다(피싱 방지).
+
+## ADR-003 API 키·LLM 호출은 Rust 전담, 게임은 프롬프트를 못 바꾼다
+
+**상태** Accepted
+
+**결정**
+
+- API 키는 keyring에 저장하고 프론트로 올리지 않는다. NPC 대화는 ChatManager.game\_chat이 프롬프트 조립·어댑터 호출을 맡는다.
+- 게임이 넘기는 것은 입력 텍스트뿐이다. 모델·프로필은 앱 설정의 선택값을 공용으로 쓴다.
+- 앱 고정 규칙(GAME\_SYSTEM\_RULES)을 항상 게임 데이터보다 앞에 둔다(임포트한 설명문이 규칙을 덮어쓰지 못하게). 응답 길이 상한(max\_tokens)은 앱이 고정한다.
+- 게임별 분당 호출 제한(슬라이딩 윈도우)을 Rust에서 건다.
+
+**결과**
+
+- 토큰·비용 기준 예산은 아직 없다(후속). 임포트한 게임이 사용자 키로 호출을 늘리는 위험은 호출 제한으로만 막고 있다.
+
+## ADR-004 게임 패키지(.tgame)와 import/export
+
+**상태** Accepted
+
+**결정**
+
+- 포맷: zip — manifest.json, data/definition.json(PackageData: 각 테이블의 Input 타입 모음, camelCase), index.html, scripts/, assets/. 세이브·세션·일지·대화·API 키는 포함하지 않는다.
+- import: 경로 탈출 방지, 크기 상한, 단일 트랜잭션. **모든 엔티티 id를 새 uuid로 재발급**하고 그 id를 가리키는 참조(문자열로 저장된 조건/효과 JSON, A>B 형태의 관계 키 포함)도 같이 치환한다. 월드인포 북은 새로 만들고 world\_info\_ids를 새 id로 다시 잇는다. 실패하면 만들다 만 폴더를 지운다.
+- export: 폴더를 주지 않으면 다운로드 폴더에 저장하고, 같은 이름이 있으면 번호를 붙인다(실패 환경은 앱 데이터의 exports).
+
+**이유** id가 테이블 전체에서 유일한 PK인데 game\_id만 새로 발급하면, 같은 패키지를 두 번 가져오거나 내가 내보낸 게임을 다시 가져올 때 기존 행을 덮어쓴다.
+
+**결과**
+
+- 예전 snake\_case 최상위 키의 패키지는 가져올 수 없다. 가져온 게임의 월드인포 북은 사용자 북 목록에 추가되고, 게임 삭제 때 고아로 남는다(후속).
+
+## ADR-005 정의/상태 분리와 로드 시 일괄 적재
+
+**상태** Accepted
+
+**결정**
+
+- 플레이를 시작·이어갈 때 GameDefinition을 game\_id 기준 배치 조회로 **한 번에** 메모리에 올리고(futures::try\_join!), 이후 턴에는 DB를 읽지 않는다. 그래서 dispatch는 동기 함수다.
+- 변하는 상태는 GameState(세션에 저장)이고, 순수 계산은 engine.rs(DB·async·Tauri를 모름, RNG 주입)에 둔다.
+- 실행 중 런타임은 AppState.active\_runtime(tokio Mutex)에 하나만 둔다(락을 await 너머로 들고 가기 위해).
+
+**결과**
+
+- 정의를 편집해도 다음 로드부터 반영된다. 이어하기 때 repair\_state가 사라진 위치·씬·날씨·아이템·NPC를 안전한 값으로 되돌린다.
+- 순수 함수 위주라 cargo test로 규칙을 검증하기 쉽다(시드 고정 RNG).
+
+## ADR-006 이벤트 구동 시스템과 단일 writer
+
+**상태** Accepted
+
+**결정**
+
+- 흐름: GameCommand → handle\_command(검증 + 씨앗 이벤트) → process\_events → 시스템들의 handle\_event. 새로 나온 이벤트는 다음 라운드의 입력이 되며 **최대 8라운드**까지만 전파한다(순환 방지).
+- 시스템 순서: movement → time → map → trigger → npcs → events → relationship → dialogue → scene → inventory.
+- **단일 writer**: 상태의 각 부분은 한 시스템만 쓴다(변수=trigger, 인벤토리=inventory, 관계=relationship, 씬=scene, NPC 위치=npcs, 위치=movement, 시간=time). 다른 곳은 **요청 이벤트**(VariableChanged, ItemChangeRequested, RelationChangeRequested, SceneRequested, EventRequested, TimeAdvanceRequested)만 내고, 쓰는 시스템이 규칙을 적용한 뒤 **결과 이벤트**(ItemAdded는 실제 수량 등)를 낸다.
+
+**이유** 1단계 팬아웃은 변수 변경 → 트리거 → 효과 같은 연쇄를 못 받고, 무제한 재귀는 데이터 오류 하나로 앱이 멈춘다.
+
+**결과** 효과가 상태에 반영되기까지 라운드가 늘어난다. 8라운드에서 끊길 때의 로깅은 후속이다.
+
+## ADR-007 선언형 조건·효과, 못 읽으면 막는다
+
+**상태** Accepted
+
+**결정**
+
+- 조건은 serde 태그 enum(Condition)으로 저장하고 DB에는 Condition 전체 JSON을 문자열로 둔다: flag\_gte, flag\_eq, min\_time, in\_location, in\_zone, at\_minute\_of\_day, has\_item, time\_period, weather, relation\_at\_least/at\_most, never.
+- 효과 JSON 동사: set, add(정수는 정수로 유지), enter\_scene, fire\_event, give\_item, take\_item, relation. 새 조건·동사는 variant/verb 추가로 확장한다.
+- **읽지 못한 조건은 Never(항상 거짓)** 로 대체한다. 빈 문자열만 조건 없음이다.
+
+**이유** 조건 파싱 실패를 버리면 오염된 데이터가 오히려 이벤트·이동을 항상 통과시켰다.
+
+**결과** validate가 효과·조건이 가리키는 씬·이벤트·아이템·캐릭터·축의 존재를 미리 검사한다.
+
+## ADR-008 공간·시간 모델
+
+**상태** Accepted
+
+**결정**
+
+- 계층: 맵 > 존(zone) > 위치(location). 이동은 location 단위(game\_location\_connections: 소요 초, 조건). MoveTo는 연결과 조건을 확인해 LocationChanged + TimeAdvanceRequested(소요 시간)를 낸다. ZoneChanged는 존이 바뀔 때만 추가로 나간다. 씬 진행 중에는 이동할 수 없다.
+- game\_time은 **초 단위**로 통일한다. 시간대(time\_periods)는 start/end minute 범위로 판정하며 자정을 넘는 구간을 허용한다.
+- 인카운터는 TimeAdvanced에 반응한다(이동이든 AdvanceTime이든 같은 경로).
+- 맵의 danger\_level은 인카운터 확률 배율 1 + 레벨 x scale로 쓴다(settings\_json의 dangerEncounterScale, 기본 0.25). 시작 시각은 settings\_json의 startMinute.
+
+## ADR-009 이벤트 종류·실행 순서
+
+**상태** Accepted
+
+**결정**
+
+- game\_events.trigger\_type: manual / auto / interaction / location / scheduled / random. repeat\_policy: once / repeatable. event\_type은 제작자가 붙이는 열린 분류이며 엔진은 해석하지 않는다(프론트가 UI 선택에 쓴다). 발동 알림은 EventTriggered(event\_type, trigger\_type, npc\_id).
+- 실행 순서 **interaction > location > scheduled > auto > random**. 라운드 구조(이동 직후 1라운드, TimeAdvanced가 나오는 2라운드)로 자연히 지켜진다. manual은 후보 풀에 없고 fire\_event 효과로만 발동한다.
+- random은 같은 dispatch에서 다른 타입이 하나라도 발동했으면 굴리지 않는다. 같은 타입 안에서는 config\_json의 priority(내림차순) → id 순으로 정렬한다.
+- once는 세션의 이벤트 로그 기준으로 지킨다. auto는 조건이 **거짓에서 참으로 바뀌는 순간에만** 발동하고(불러온 직후에는 참인 것을 발동 없이 표시), scheduled는 이번에 건너뛴 시간 구간에 그 시각이 포함되면 발동해 며칠을 건너뛰어도 한 번이다.
+
+## ADR-010 세션·책갈피·일지·분기
+
+**상태** Accepted
+
+**결정**
+
+- 세션(game\_player\_sessions)이 책 한 권이고, 책갈피(game\_saves)는 (session\_id, seq, slot\_number, 상태 스냅샷)이다. 세션 하나에 책갈피가 여러 개 붙는다.
+- 세션 안의 순서는 **하나의 seq**가 정한다. 일지(game\_journal), 메시지, 이벤트 로그가 같은 번호 공간을 쓰고, 런타임이 메모리에서 발급(next\_seq)하며 head\_seq를 세션에 저장한다(세션 하나는 런타임 하나가 쓰므로 안전하다).
+- 한 턴의 기록(일지 + 이벤트 로그 + NPC/관계 변화량 + 세션 저장)은 journal::record가 **단일 트랜잭션**으로 쓴다. 새 게임의 첫 기록은 세션 행을 가장 먼저 쓴다(FK).
+- 불러오기: 가장 최신 책갈피면 같은 세션을 이어가고, 오래된 책갈피면 **분기(fork)** 한다. 분기는 새 세션에 일지·이벤트 로그·관계/NPC/플랜 기록·대화(+참여자)·메시지를 seq까지 복사하고, 상태는 세션의 지금 값이 아니라 책갈피 스냅샷(engine)에서 복원한다. 원래 기록은 보존한다.
+- 다시 보기는 읽기 전용이다(read\_journal, read\_conversations, read\_messages. AI 재호출 없음, 한 번에 1000개 상한). 변수 적용을 로드 때 재적용하지 않고, 적용 시점에 (키, 이전 값, 이후 값)을 메시지 meta에 남긴다.
+
+**결과** 일지 성장 정책(요약·정리)은 미정이다. 분기 때 책갈피 이후에 만들어진 대화는 빈 대화로 따라온다.
+
+## ADR-011 씬 모델
+
+**상태** Accepted
+
+**결정**
+
+- 노드(game\_nodes)를 없애고 씬 + 선택지(+분기)로 단순화했다. 선택지의 next\_scene\_id가 비어 있으면 씬 종료다.
+- 씬은 한 번에 하나만 열린다. 열려 있는 동안 요청된 씬은 대기열(pending\_scenes\_json)에서 기다리다 현재 씬이 끝나면 차례로 열린다. 대화 중에 씬이 열리면 먼저 DialogueEnded를 내고, 엔딩 씬이면 GameEnded를 낸다.
+- 씬을 여닫는 건 scene 시스템뿐이다. 이벤트·선택지 효과의 enter\_scene은 SceneRequested만 낸다.
+- Choose는 지금 열린 씬의 선택지이면서 표시 조건(condition)을 통과한 것만 받는다(fail-closed). RenderState.available\_choices로 프론트에 알린다. 시작 씬은 start\_scene\_key다.
+
+## ADR-012 AI 대화 구조
+
+**상태** Accepted
+
+**결정**
+
+- Talk/StopTalk로 대화창을 열고 닫는 북마크(active\_npc\_id, 세션에 저장하지 않음)만 엔진이 갖고, npc\_say는 열린 NPC와 일치할 때만 응답한다. 스폰 규칙이 있는 NPC는 같은 위치에 있어야 Talk할 수 있다.
+- 대화 저장소는 게임 전용 테이블이다(game\_conversations: session\_id + branch\_key(=지금 씬) + participants\_key, 참여자 junction, game\_messages). 일반 채팅의 characters 테이블과 분리해서 분기 복사와 삭제 연쇄를 단순하게 했다. 같은 NPC라도 씬이 다르면 다른 대화다.
+- npc\_say(npc.rs)가 ChatContext를 구성한다: 캐릭터, 페르소나, 월드인포(게임 + 캐릭터 + 페르소나), 최근 기록 20개, extra\_data(위치·시간·날씨·AI에게 보이는 변수·같은 자리의 관계). game\_chat은 raw 답변만 돌려주고 후처리와 저장은 npc.rs가 한다. 저장은 호출이 성공한 뒤이고 메시지 seq가 곧 일지 seq다.
+- 페르소나는 새 게임을 시작할 때 세션에 고정한다(NULL이면 기본 페르소나로 복원).
+
+**결과** NpcReply{text, events, state}로 응답해서 프론트가 엔진 커맨드와 같은 방식으로 이벤트를 처리한다.
+
+## ADR-013 AI 출력 태그 프로토콜
+
+**상태** Accepted
+
+**결정**
+
+- 태그: `<choice>`(선택지 버튼, meta.choices), `<updateVar>`(변수), `<updateRel>`(관계). 태그는 본문에서 벗겨 저장한다.
+- 변수는 game\_state\_defs.config\_json의 {ai\_readable, ai\_writable, min, max, max\_step}를 따른다. 허용된 키만, 한 번에 max\_step까지, 응답당 최대 3태그/3변경이다. 관계는 NPC→플레이어(npc>player)만, 축 3개, ±5, 최대 3개다.
+- 순서: 계획 세우기(상태 불변) → 메시지·일지 저장 → 적용. 적용 경로는 프론트가 부를 수 있는 GameCommand가 아니라 런타임 내부 메서드다. AI 출력은 신뢰하지 않는 입력으로 다룬다.
+
+**결과** 스트리밍을 켜면 태그가 토큰 중간에서 잘려 오므로 버퍼링이 필요하다(후속).
+
+## ADR-014 인벤토리·관계·NPC 위치
+
+**상태** Accepted
+
+**결정**
+
+- 인벤토리: 정의 game\_items(max\_stack, is\_unique, is\_key, consumable, use\_effect, use\_condition, on\_acquire\_event\_id\[manual\]). 상태는 세션의 inventory\_json. 규칙은 inventory 시스템만 적용하고(스택 상한, 고유 규칙) ItemAdded는 실제 들어온 수량을 싣는다. DropItem은 핵심 아이템을 막는다. HasItem 조건으로 열쇠와 문을 만든다.
+- 관계: 고정 축 affection/trust/tension, 범위 -100\~100. 키 `A>B`는 A가 B에게 느끼는 것이다. 초기값은 game\_relationship\_defs, 현재 값은 세션의 relationships\_json, 변화량만 game\_relationship\_snapshots에 쌓는다.
+- NPC 위치: game\_character\_spawn\_locations(가중치 + 조건). 게임 시작과 시간대가 바뀔 때만 다시 굴린다(이동마다 굴리지 않는다). 결과는 NpcMoved로 알리고 game\_character\_state\_snapshots에 변화량만 쌓는다. 이벤트로 등장한 NPC는 플레이어 위치에 기록한다. 스폰 규칙이 없는 캐릭터는 위치를 추적하지 않고 항상 말을 걸 수 있다.
+
+## ADR-015 정의 편집·무결성·화면용 데이터
+
+**상태** Accepted
+
+**결정**
+
+- save\_package: **id 보존 upsert + 데이터에 없는 행만 삭제**, 한 트랜잭션. 통째로 지우고 다시 쓰지 않는다(세션·세이브·로그가 정의 행의 id를 FK로 참조한다). 이벤트 조건만 이벤트별로 교체한다.
+- validate(순수 함수): Error가 있으면 start\_new\_game을 막고, Warning은 알려준다(발동하지 않는 이벤트, 조건 없이 매번 발동하는 이벤트, 참조 누락 등).
+- 편집용 전체 데이터(get\_package\_data)와 플레이 화면용으로 추린 데이터(get\_game\_view)를 분리한다. 화면용에는 이벤트 조건·효과, NPC 풀, 인카운터 테이블, 이동 조건, 선택지 효과, 캐릭터 프롬프트 필드, AI 접근 설정을 넣지 않는다. 현재 값은 RenderState(flags, inventory, relationships, present\_npcs, available\_choices)로 준다.
+- delete\_game은 DB를 먼저 지우고 실행 중인 게임은 막는다. 플레이 기록이 같이 지워지므로 UI에서 확인을 받아야 한다.
+
+## ADR-016 템플릿과 템플릿 패키지
+
+**상태** Accepted
+
+**결정**
+
+- **템플릿**은 엔진 규칙이다(id, name, apiVersion, templateVersion, capabilities{choices, freeText, inventory, map, aiNarration, location, time}). capabilities는 지금은 선언일 뿐 엔진이 강제하지 않고 get\_game\_view로 프론트에 알린다(지도·시간 끄기는 후속).
+- **템플릿 패키지**는 시작 데이터(.tgame)다. 앱에 include\_bytes!로 포함하고 사용자 템플릿은 지원하지 않는다. create\_game(title, template\_id)은 번들 패키지를 import(id 재발급)하고 제목과 template\_id를 덮어쓴다.
+- 첫 템플릿은 Dating Sim(기능 전체를 시험할 수 있는 샘플): 5개 시간대, 날씨 3종, 위치 6곳, NPC 3명, 이벤트 6종류, 씬·엔딩, 아이템·변수. 패키지의 index.html과 scripts는 SDK 확정 전 자리표시자이며 생성 스크립트로 다시 만든다.
+
+## ADR-017 코드 구조와 관례
+
+**상태** Accepted
+
+**결정**
+
+- 폴더: commands/(얇은 tauri 커맨드), game/(도메인: runtime, systems, manager, package, template, validate, session, journal, npc), db/, models/, service/(chat, ai). DB 함수는 get/get\_all/upsert/delete + 테이블명, 모델은 X/XRow/XInput. 정의 조회는 game\_id 기준 배치로 한다.
+- 비동기: active\_runtime은 tokio Mutex, 나머지는 std Mutex. 병렬 조회는 futures::try\_join!(tokio::try\_join!은 모바일 빌드 제한 때문에 쓰지 않는다). reqwest와 tungstenite는 rustls. rand 0.10 API(random, random\_range, make\_rng).
+- 검증: 순수 함수 단위 테스트, 번들 템플릿 패키지 역직렬화 테스트, 단계적 cargo check.
+
+## ADR-018 에셋 서빙과 연출
+
+**상태** Proposed — game\_assets 새 컬럼이 확정되면 구현
+
+**결정**
+
+- game\_assets 확장: key(게임 안에서 유일), category(background, cg, standing, map\_sprite, voice, bgm, sfx, font, other), game\_character\_id(standing/map\_sprite/voice의 주인), variant(포즈 이름), description(AI가 언제 쓰는지 판단하는 한 줄), ai\_usable, settings\_json(볼륨, 루프, 스탠딩 위치 등). 세션에 stage\_json(현재 배경·BGM·CG·서 있는 캐릭터와 포즈)을 둬서 이어하기와 분기에서 같은 화면을 복원한다.
+- 서빙: 파일은 games/\<id>/assets/ 아래에 두고 DB의 file\_path는 그 안의 상대경로다. iframe은 상대경로를 그대로 쓴다. protocol.rs에 Range 요청(206)과 확장자 허용 목록(png, jpg, webp, gif, mp3, ogg, wav, m4a, opus, woff2), 파일별 크기 상한을 추가한다. SVG는 제외한다. file\_path는 절대경로와 `..`을 거절하고, 에셋 행을 패키지(PackageData)와 get\_game\_view에 포함한다.
+- 연출은 하나의 이벤트(StageCue)로 통일하고 만드는 곳이 셋이다: 씬·위치의 settings\_json, 이벤트·선택지 효과의 stage 동사, AI 인라인 태그.
+- AI 태그는 `<pose>`(지금 말하는 캐릭터의 스탠딩만), `<sfx>`, `<bgm>`, `<bg>`, `<cg>`다. 에셋 **키**로 지시하고 ai\_usable인 것만 허용하며 모르는 키는 버린다. 응답당 상한을 두고(bgm과 bg는 한 번), 태그를 **본문 위치를 보존한 타임라인(segments)** 으로 파싱해 메시지 meta에 저장한다(다시 볼 때 같은 연출이 재생된다).
+- **음성(voice)은 AI 태그에 포함하지 않는다.** 나중에 음성 생성 API를 연결할 수 있도록 남겨두고, 지금은 사용자가 추가한 음성 파일만 관리하며 엔진·이벤트가 재생한다.
+- 맵 스프라이트는 AI와 무관하게 get\_game\_view의 에셋 목록과 present\_npcs로 프론트가 그린다. 스탠딩이 여러 명이면 위치(left/center/right)를 에셋 설정으로 정한다.
+
+## ADR-019 StoryPlan(각본가)
+
+**상태** Deferred
+
+**결정**
+
+- AI가 각본가, 엔진이 무대다. 각본가는 NPC 대화와 **별개의 호출**이고 체크포인트(세션 시작, 씬 종료, 하루 경계, 이벤트 발동 후, N턴마다)에서만 부른다. 플랜은 구조화 데이터(전제, 단계와 상태, 열린 복선, 확정된 사실, 요약)이고 NPC 대화에는 활성 단계와 지켜야 할 사실만 잘라 넣는다.
+- 플랜은 조언일 뿐 엔진 상태를 직접 바꾸지 않는다. 제작자가 표시한 manual 이벤트와 씬을 「무대에 올리라」고 제안하는 것만 가능하고, fire\_event와 같은 검증을 통과해야 한다. 출력은 신뢰하지 않는 입력으로 다루고(스키마, 크기 상한, 존재하는 id만) 프롬프트에서는 앱 고정 규칙보다 낮은 우선순위로 둔다.
+- 저장은 추가 전용 game\_story\_plans(session\_id, seq)라서 분기 때 seq까지 복사된다. 기본은 꺼짐이고 호출 상한은 npc\_say와 같은 제한 안에 둔다. 인벤토리와 관계 이후에 구현한다.
+
+## 미결·후속 작업
+
+- iframe SDK와 호스트 postMessage 브릿지, 호스트 전용 커맨드와 게임 접근 커맨드의 capabilities 분리.
+- 에셋: game\_assets 새 컬럼과 stage\_json 추가 → protocol의 Range·허용 목록 → 정의·패키지·검증·view 연결 → StageCue → AI 태그 파서와 프롬프트.
+- capabilities 강제(지도·시간 끄기)와 chat 전용 템플릿. 사용자 템플릿은 요청이 있을 때만.
+- 호출 예산(토큰·비용), 이벤트 전파 8라운드 초과 로깅, 일지 성장 정책, 스트리밍 시 태그 버퍼링.
+- AI의 아이템 지급, NPC끼리의 관계 변화(시뮬레이션), 관계 tags 변경 효과, 게임 삭제 시 월드인포 북 정리.
+- 이전 형식(snake\_case) 패키지 호환이 필요하면 format\_version으로 구분한다.
