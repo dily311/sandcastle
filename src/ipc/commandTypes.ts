@@ -2,7 +2,7 @@ import type { Character, WorldInfoBook, WorldInfoEntry, Conversation, Message, P
 import type {ApiProfileInput, ApiProfile} from "$type/aiService";
 import type { AppSettings, CssTheme, FeatureSetting, ThemeSetting } from "$/lib/type/settingTypes";
 import type { Hitbox } from "$/lib/interaction/interactive-registry";
-import type { PackageData, SaveReport, GameCommand, GameResponse, GameSave, NpcReply, GamePlayerSessions, GameMessages, GameConversations, GameJournal, GameProject, Template, StageLine } from "$type/game";
+import type { PackageData, SaveReport, GameCommand, GameResponse, GameSave, NpcReply, GamePlayerSessions, GameMessages, GameConversations, GameJournal, GameProject, Template, StageLine, OpenGameResponse } from "$type/game";
 import type { LibraryRootRaw, MusicMetaInput, Playlist, PlaylistInput, PlaylistItem, WidgetMusicSetting } from "$/lib/features/impl/widget/music/types";
 
 export type CommandName = keyof CommandRegistry;
@@ -77,11 +77,11 @@ export interface CommandRegistry {
     // 게임 에디터가 불러오는 데이터
     "get_package_data": CommandDef<{gameId: string}, PackageData>,
     // 게임 플레이
-    "open_game": CommandDef<{gameId: string}, GameProject>,
+    "open_game": CommandDef<{gameId: string}, OpenGameResponse>,
     "close_game": CommandDef<undefined, undefined>,
     // game_engine
     "start_new_game": CommandDef<undefined, GameResponse>,
-    "get_game_view": CommandDef<undefined, StageLine>,
+    "get_game_view": CommandDef<undefined, any>,
     "validate_game": CommandDef<undefined, any[]>,
     "list_sessions": CommandDef<undefined, GamePlayerSessions[]>,
     "delete_sessions": CommandDef<{sessionId: string}, undefined>,

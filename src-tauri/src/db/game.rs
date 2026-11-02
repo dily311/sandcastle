@@ -76,7 +76,6 @@ pub async fn get_game_project<'e, E>(executor: E, id: &str) -> Result<GameProjec
 pub async fn upsert_game_project<'e, E>(executor: E, input: &GameProjectInput) -> Result<(), Error> where E: Executor<'e, Database = Sqlite> {
     let id = input.id.clone().unwrap_or_else(|| Uuid::new_v4().to_string());
     let now = chrono::Utc::now().timestamp_millis();
-    let settings_json = serde_json::to_string(&input.settings_json).unwrap_or_default();
     sqlx::query(
         r#"
         INSERT INTO game_projects ( id, title, description, template_id, version, api_version, cover_image, start_scene_key, start_map_id, start_location_id, custom_css, settings_json, created_at, updated_at)
@@ -107,7 +106,7 @@ pub async fn upsert_game_project<'e, E>(executor: E, input: &GameProjectInput) -
     .bind(&input.start_map_id)
     .bind(&input.start_location_id)
     .bind(&input.custom_css)
-    .bind(settings_json)
+    .bind(&input.settings_json)
     .bind(now)
     .bind(now)
     .execute(executor)
@@ -413,9 +412,9 @@ pub async fn upsert_game_character_spawn_location<'e, E>(executor: E, input: Gam
 
     sqlx::query(
         r#"
-        INSERT INTO game_character_spawn_locations (  id, game_character_id, location_id, spawn_weight, condition_json, created_at, updated_at )
-        VALUES ( ?, ?, ?, ?, ?, ?, ? )
-        ON CONFLICT(game_character_id, location_id) DO UPDATE SET
+        INSERT INTO game_character_spawn_locations (id, game_character_id, location_id, spawn_weight, condition_json, created_at, updated_at)
+        VALUES (?, ?, ?, ?, ?, ?, ?)
+        ON CONFLICT(id) DO UPDATE SET
             game_character_id=excluded.game_character_id,
             location_id=excluded.location_id,
             spawn_weight=excluded.spawn_weight,
@@ -1600,7 +1599,7 @@ pub async fn delete_game_scene<'e, E>(executor: E, id: &str) -> Result<bool, Err
 /** 특정 씬의 선택지 모두 불러오기 */
 pub async fn get_all_game_choices<'e, E>(executor: E, game_id: &str) -> Result<Vec<GameChoiceRow>, Error> where E: Executor<'e, Database = Sqlite> {
     let rows = sqlx::query_as::<_, GameChoiceRow>("
-        SELECT ch.id, ch.scene_id, ch.text, ch.next_scene_id, ch.effect, ch.sort_order
+        SELECT ch.id, ch.scene_id, ch.text, ch.next_scene_id, ch.condition, ch.effect, ch.sort_order
         FROM game_choices ch
             INNER JOIN game_scenes s ON s.id = ch.scene_id
             WHERE s.game_id = ?
@@ -1615,12 +1614,13 @@ pub async fn get_all_game_choices<'e, E>(executor: E, game_id: &str) -> Result<V
 pub async fn upsert_game_choice<'e, E>(executor: E, input: &GameChoiceInput) -> Result<(), Error> where E: Executor<'e, Database = Sqlite> {
     sqlx::query(
         r#"
-        INSERT INTO game_choices ( id, scene_id, text, next_scene_id, effect, sort_order )
-        VALUES (?, ?, ?, ?, ?, ?)
+        INSERT INTO game_choices ( id, scene_id, text, next_scene_id, condition, effect, sort_order )
+        VALUES (?, ?, ?, ?, ?, ?, ?)
         ON CONFLICT(id) DO UPDATE SET
             scene_id = excluded.scene_id,
             text = excluded.text,
             next_scene_id = excluded.next_scene_id,
+            condition = excluded.condition,
             effect = excluded.effect,
             sort_order = excluded.sort_order
         "#,
@@ -1629,6 +1629,7 @@ pub async fn upsert_game_choice<'e, E>(executor: E, input: &GameChoiceInput) -> 
     .bind(&input.scene_id)
     .bind(&input.text)
     .bind(&input.next_scene_id)
+    .bind(&input.condition)
     .bind(&input.effect)
     .bind(input.sort_order)
     .execute(executor)
@@ -1640,11 +1641,12 @@ pub async fn upsert_game_choice<'e, E>(executor: E, input: &GameChoiceInput) -> 
 pub async fn upsert_game_choice_without_links<'e, E>(executor: E, input: &GameChoiceInput) -> Result<(), Error> where E: Executor<'e, Database = Sqlite> {
     sqlx::query(
         r#"
-        INSERT INTO game_choices ( id, scene_id, text, next_scene_id, effect, sort_order )
+        INSERT INTO game_choices ( id, scene_id, text, next_scene_id, condition, effect, sort_order )
         VALUES (?, ?, ?, NULL, ?, ?)
         ON CONFLICT(id) DO UPDATE SET
             scene_id=excluded.scene_id, 
             text=excluded.text, 
+            condition=excluded.condition, 
             effect=excluded.effect, 
             sort_order=excluded.sort_order
         "#,
@@ -1652,6 +1654,7 @@ pub async fn upsert_game_choice_without_links<'e, E>(executor: E, input: &GameCh
     .bind(&input.id)
     .bind(&input.scene_id)
     .bind(&input.text)
+    .bind(&input.condition)
     .bind(&input.effect)
     .bind(input.sort_order)
     .execute(executor)

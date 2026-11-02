@@ -17,7 +17,6 @@ use serde_json::{json, Value};
 
 impl GameDefinition {
     pub fn view(&self) -> Value {
-        let parse = |s: &Option<String>| -> Value { s.as_ref().and_then(|s| serde_json::from_str::<Value>(s).ok()).unwrap_or(Value::Null) };
 
         json!({
             "game": {
@@ -26,7 +25,7 @@ impl GameDefinition {
                 "description": self.project.description,
                 "coverImage": self.project.cover_image,
                 "customCss": self.project.custom_css,
-                "settings": parse(&self.project.settings_json),
+                "settings": self.project.settings_json,
             },
             // 이 게임의 템플릿과 capabilities. 프론트가 지도/인벤토리 같은 UI를 켜고 끄는 데 쓴다. (엔진이 강제하지는 않는다)
             "template": crate::game::template::find(&self.project.template_id),
@@ -56,7 +55,7 @@ impl GameDefinition {
             "weatherTypes": self.weather_types.iter().map(|w| json!({ "id": w.id, "name": w.name })).collect::<Vec<_>>(),
             "scenes": self.scenes.iter().map(|s| json!({
                 "id": s.id, "sceneKey": s.scene_key, "name": s.scene_name, "description": s.description,
-                "isEnding": s.is_ending, "settings": parse(&s.settings_json),
+                "isEnding": s.is_ending, "settings": s.settings_json,
                 "choices": s.choices.iter().flatten().map(|c| json!({ "id": c.id, "text": c.text, "sortOrder": c.sort_order })).collect::<Vec<_>>(),
             })).collect::<Vec<_>>(),
             // 아이템 정의 (표시용). 사용 효과/조건/획득 이벤트는 안 준다 — usable만 알려준다.

@@ -19,6 +19,12 @@ pub fn current_game_id(state: &AppState) -> Result<String, AppError> {
         .ok_or_else(|| AppError::NotFound("재생 중인 게임이 없습니다".into()))
 }
 
+/// open_game이 올려둔 게임 정의. (플레이를 시작하기 전에도 쓸 수 있다.)
+pub fn current_definition(state: &AppState) -> Result<std::sync::Arc<crate::game::runtime::GameDefinition>, AppError> {
+    let guard = state.active_archive.lock().map_err(|_| AppError::Archive("archive lock poisoned".into()))?;
+    guard.as_ref().map(|a| a.definition.clone()).ok_or_else(|| AppError::NotFound("열려 있는 게임이 없습니다 (open_game을 먼저 부르세요)".into()))
+}
+
 pub fn check_slot(slot: i64) -> Result<(), AppError> {
     if (1..=MAX_SLOT).contains(&slot) {
         Ok(())

@@ -29,8 +29,7 @@ const MAX_SAVE_BYTES: usize = 256 * 1024;
 pub async fn start_new_game(state: State<'_, AppState>, settings: State<'_, SettingsState<AppSetting>>) -> Result<GameResponse, AppError> {
     let game_id = current_game_id(&state)?;
 
-    let repo = SqlxGameRepository::new(&state.db);
-    let definition = repo.load_definition(&game_id).await.map_err(|e| AppError::Database(e.to_string()))?;
+    let definition = crate::game::guard::current_definition(&state)?; // open_game이 올려둔 정의
     // 데이터가 어긋나 있으면(없는 씬을 가리키는 선택지 등) 시작 전에 막는다. 경고는 validate_game으로 본다.
     if let Some(msg) = crate::game::validate::errors_summary(&crate::game::validate::validate(&definition)) {
         return Err(AppError::Validation(format!("게임 데이터에 문제가 있어 시작할 수 없습니다: {msg}")));
@@ -54,10 +53,9 @@ pub async fn start_new_game(state: State<'_, AppState>, settings: State<'_, Sett
 /// 이미 메모리에 있는 정의에서 만들어서 DB를 안 읽는다. 어떤 필드를 주고/안 주는지는 runtime/view.rs 참고.
 /// 현재 값(위치, 시간, 변수 값 등)은 RenderState에 있다.
 #[tauri::command]
-pub async fn get_game_view(state: State<'_, AppState>) -> Result<serde_json::Value, AppError> {
-    let guard = state.active_runtime.lock().await;
-    let runtime = guard.as_ref().ok_or_else(|| AppError::NotFound("진행 중인 세션이 없습니다".into()))?;
-    Ok(runtime.definition().view())
+pub fn get_game_view(state: State<'_, AppState>) -> Result<serde_json::Value, AppError> {
+    // 플레이를 시작하기 전에도 부를 수 있다 (open_game의 응답에도 같은 값이 들어 있다).
+    Ok(crate::game::guard::current_definition(&state)?.view())
 }
 
 /// 게임 정의의 일관성 검사 결과 (Error/Warning). 임포트 직후나 편집기에서 보여주기 위한 것.
@@ -88,7 +86,6 @@ pub async fn delete_sessions(state: State<'_, AppState>, session_id: String) -> 
     Ok(())
 }
 
-
 /// 세션이 이 게임의 것인지 확인하고 돌려준다 (다른 게임의 세션 id를 넣는 위조 방지).
 async fn owned_session(state: &AppState, game_id: &str, session_id: &str) -> Result<GamePlayerSessions, AppError> {
     let session = get_game_player_sessions(&state.db, session_id).await?;
@@ -101,7 +98,8 @@ async fn owned_session(state: &AppState, game_id: &str, session_id: &str) -> Res
 /// 세션을 런타임으로 불러와 active_runtime에 올린다.
 async fn open_session(state: &AppState, game_id: &str, session_id: &str) -> Result<GameResponse, AppError> {
     let repo = SqlxGameRepository::new(&state.db);
-    let runtime = GameRuntime::load(&repo, game_id, session_id).await.map_err(|e| AppError::Database(e.to_string()))?;
+    let definition = crate::game::guard::current_definition(state)?;
+    let runtime = GameRuntime::load(&repo, definition, session_id).await.map_err(|e| AppError::Database(e.to_string()))?;
     // 이어하기는 GameStarted가 아니다 — 새로 생긴 상태가 없으니 events는 빈 배열.
     let response = GameResponse { events: vec![], state: runtime.render_state() };
     *state.active_runtime.lock().await = Some(runtime);

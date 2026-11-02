@@ -87,8 +87,7 @@ CREATE TABLE IF NOT EXISTS game_character_spawn_locations (
   -- 시간대, 날씨, 플래그 등의 추가 출현 조건
   condition_json TEXT,
   created_at INTEGER NOT NULL,
-  updated_at INTEGER NOT NULL,
-  UNIQUE (game_character_id, location_id)
+  updated_at INTEGER NOT NULL
 );
 
 -- ---------------------------------------------------------

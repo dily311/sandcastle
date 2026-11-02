@@ -16,7 +16,7 @@ use crate::db::game::{
     upsert_game_character, upsert_game_encounter_table, upsert_game_encounter_table_entry,
     upsert_game_ending, upsert_game_event, upsert_game_event_character, upsert_game_event_condition,
     upsert_audio_asset, upsert_background_assets, upsert_cg_asset, upsert_character_asset, upsert_game_asset, delete_game_asset, upsert_game_character_spawn_location, upsert_game_interactables, upsert_game_item, upsert_game_relationship_def, upsert_game_location_connections, upsert_game_locations,
-    upsert_game_map, upsert_game_project, upsert_game_scene, upsert_game_state_defs,
+    upsert_game_branches, upsert_game_choice, upsert_game_map, upsert_game_project, upsert_game_scene, upsert_game_state_defs,
     upsert_game_time_period, upsert_game_weather_transition, upsert_game_weather_type,
     upsert_game_zone,
 };
@@ -97,6 +97,7 @@ pub struct PackageData {
     /// project/characters의 world_info_ids가 가리키는 북들. 페르소나 쪽 북은 개인 설정이라 안 담는다.
     #[serde(default)]
     pub world_info_books: Vec<PackageWorldInfoBook>,
+    // TODO: game_assets — GameDefinition에 추가되면 여기도.
 }
 
 const MAX_PACKAGE_BYTES: u64 = 200 * 1024 * 1024; // TODO: 실제 상한 정하기
@@ -350,6 +351,15 @@ pub(crate) async fn write_definition(tx: &mut Transaction<'_, Sqlite>, game_id: 
     }
     for (idx, scene) in data.scenes.iter().enumerate() {
         upsert_game_scene(&mut **tx, game_id, scene, idx as i64).await?;
+    }
+    // 선택지/분기는 씬 행과 따로 쓴다. 다른 씬을 next_scene_id로 가리키므로(FK) 모든 씬을 쓴 뒤에 온다.
+    for scene in &data.scenes {
+        for c in scene.choices.iter().flatten() {
+            upsert_game_choice(&mut **tx, c).await?;
+        }
+        for b in scene.branches.iter().flatten() {
+            upsert_game_branches(&mut **tx, b).await?;
+        }
     }
     for e in data.endings {
         upsert_game_ending(&mut **tx, e).await?;

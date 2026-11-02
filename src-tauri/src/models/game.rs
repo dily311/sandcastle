@@ -41,7 +41,7 @@ pub struct GameProject {
     pub start_location_id: Option<String>,
     pub world_info_ids: Vec<String>,
     pub custom_css: Option<String>,
-    pub settings_json: Option<String>,
+    pub settings_json: Option<serde_json::Value>,
     pub created_at: i64,
     pub updated_at: i64,
 }
@@ -64,7 +64,9 @@ impl From<GameProjectRow> for GameProject {
                 .and_then(|s| serde_json::from_str(&s).ok())
                 .unwrap_or_default(),
             custom_css: r.custom_css,
-            settings_json: r.settings_json,
+            settings_json: r.settings_json
+                .and_then(|s| serde_json::from_str(&s).ok())
+                .unwrap_or_default(),
             created_at: r.created_at,
             updated_at: r.updated_at,
         }
@@ -106,7 +108,7 @@ impl From<GameProject> for GameProjectInput {
             start_location_id: v.start_location_id,
             world_info_ids: v.world_info_ids,
             custom_css: v.custom_css,
-            settings_json: v.settings_json,
+            settings_json: v.settings_json.and_then(|s| serde_json::to_string(&s).ok()),
             created_at: Some(v.created_at),
             updated_at: Some(v.updated_at),
         }
@@ -249,7 +251,7 @@ pub struct GameCharacters {
     pub system_prompt_override: Option<String>,
     pub behavior_type: Option<String>,
     pub world_info_ids: Vec<String>,
-    pub tags: Option<String>,
+    pub tags: Option<Vec<String>>,
     pub settings_json: serde_json::Value,
     pub created_at: i64,
     pub updated_at: i64,
@@ -272,7 +274,7 @@ impl From<GameCharactersRow> for GameCharacters {
                 .world_info_ids
                 .and_then(|s| serde_json::from_str(&s).ok())
                 .unwrap_or_default(),
-            tags: r.tags,
+            tags: r.tags.and_then(|s| serde_json::from_str(&s).ok()),
             settings_json: r
                 .settings_json
                 .and_then(|s| serde_json::from_str(&s).ok())
@@ -314,7 +316,7 @@ impl From<GameCharacters> for GameCharactersInput {
             system_prompt_override: v.system_prompt_override,
             world_info_ids: v.world_info_ids,
             behavior_type: v.behavior_type,
-            tags: v.tags,
+            tags: v.tags.and_then(|s| serde_json::to_string(&s).ok()),
             settings_json: v.settings_json,
         }
     }
@@ -1642,7 +1644,7 @@ pub struct GameScene {
     pub scene_key: String,
     pub is_ending: Option<bool>,
     pub ending_id: Option<String>,
-    pub settings_json: Option<String>,
+    pub settings_json: Option<serde_json::Value>,
     pub script: Option<String>,
     pub choices: Option<Vec<GameChoiceRow>>,
     pub branches: Option<Vec<GameBranchRow>>,
@@ -1664,7 +1666,7 @@ impl GameScene {
             description: r.description,
             scene_key: r.scene_key,
             ending_id: r.ending_id,
-            settings_json: r.settings_json,
+            settings_json: r.settings_json.and_then(|s| serde_json::from_str(&s).ok()),
             script: r.script,
             choices,
             branches,
@@ -1700,7 +1702,7 @@ impl From<GameScene> for GameSceneInput {
             scene_key: v.scene_key,
             is_ending: v.is_ending,
             ending_id: v.ending_id,
-            settings_json: v.settings_json,
+            settings_json: v.settings_json.and_then(|s| serde_json::to_string(&s).ok()),
             script: v.script,
             choices: v.choices.map(|c| c.into_iter().map(Into::into).collect()),
             branches: v.branches.map(|b| b.into_iter().map(Into::into).collect()),

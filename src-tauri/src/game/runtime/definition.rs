@@ -127,7 +127,6 @@ impl GameDefinition {
             .project
             .settings_json
             .as_ref()
-            .and_then(|s| serde_json::from_str::<serde_json::Value>(s).ok())
             .and_then(|v| v.get("dangerEncounterScale").and_then(|x| x.as_f64()))
             .unwrap_or(0.25);
         crate::game::engine::danger_multiplier(self.map_by_id(map_id).map_or(0, |m| m.danger_level), scale)
@@ -153,7 +152,7 @@ impl GameDefinition {
     /// settings_json의 {"startWeatherId": "..."}에서 읽고, 없으면 호출부가 첫 날씨로 폴백한다.
     /// (start_map_id/start_scene_key 컬럼도 있지만 map은 location에서 derive되므로 안 쓴다.)
     pub fn start_point(&self) -> StartPoint {
-        let parsed: Option<serde_json::Value> = self.project.settings_json.as_ref().and_then(|s| serde_json::from_str(s).ok());
+        let parsed: Option<serde_json::Value> = self.project.settings_json.clone();
         StartPoint {
             location_id: self.project.start_location_id.clone(),
             weather_id: parsed.as_ref().and_then(|v| v.get("startWeatherId")).and_then(|v| v.as_str()).map(str::to_string),

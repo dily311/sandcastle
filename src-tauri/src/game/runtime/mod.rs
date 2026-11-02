@@ -72,6 +72,7 @@ fn repair_state(def: &GameDefinition, state: &mut GameState) {
 }
 
 #[derive(Serialize)]
+#[serde(rename_all = "camelCase")]
 pub struct GameResponse {
     pub events: Vec<GameEvent>,
     pub state: RenderState,
@@ -80,7 +81,7 @@ pub struct GameResponse {
 /// 정적 데이터(GameDefinition)는 load() 시점에 한 번 다 읽어오고, 그 이후로는
 /// DB를 안 건드린다. dispatch()가 sync인 이유가 이거다 — repository는 load/save에서만 쓴다.
 pub struct GameRuntime {
-    definition: GameDefinition,
+    definition: std::sync::Arc<GameDefinition>,
     state: GameState,
     /// handle_command가 채우고 process_events가 비우는 "이번 턴의 씨앗 이벤트" 큐.
     /// dispatch() 호출 사이에는 항상 비어 있어야 한다.
@@ -89,14 +90,14 @@ pub struct GameRuntime {
 }
 
 impl GameRuntime {
-    pub fn new(definition: GameDefinition, state: GameState) -> Self {
+    pub fn new(definition: std::sync::Arc<GameDefinition>, state: GameState) -> Self {
         Self { definition, state, queue: Vec::new(), rng: rand::make_rng() }
     }
 
     /// 새 게임 시작 — 세이브가 없는 첫 진입.
     /// 시작 location은 game_projects.start_location_id, 날씨는 settings_json의 startWeatherId를
     /// 따르고, 없으면 목록의 첫 항목으로 폴백한다 (GameDefinition::start_point 참고).
-    pub fn from_new_game(definition: GameDefinition, session_id: String, player_id: String) -> Result<Self> {
+    pub fn from_new_game(definition: std::sync::Arc<GameDefinition>, session_id: String, player_id: String) -> Result<Self> {
         let start = definition.start_point();
 
         let start_seconds = start.start_minute.unwrap_or(0).clamp(0, 1439) * 60;
@@ -171,14 +172,14 @@ impl GameRuntime {
         Ok(Self::new(definition, state))
     }
 
-    pub async fn load(repository: &impl GameRepository, game_id: &str, session_id: &str) -> Result<Self> {
-        let definition = repository.load_definition(game_id).await?;
+    /// 정의는 open_game이 이미 올려둔 것을 받는다 (여기서 다시 읽지 않는다).
+    pub async fn load(repository: &impl GameRepository, definition: std::sync::Arc<GameDefinition>, session_id: &str) -> Result<Self> {
         let session = repository.load_session(session_id).await?;
 
         let time_period_id = crate::game::engine::resolve_time_period(&period_tuples(&definition), session.game_time)
             .ok_or_else(|| anyhow::anyhow!("게임에 시간대가 하나도 없습니다"))?;
 
-        let cooldowns = repository.load_cooldowns(game_id, session_id, session.game_time).await?;
+        let cooldowns = repository.load_cooldowns(&definition.game_id, session_id, session.game_time).await?;
         let mut state = GameState::from_session(session, cooldowns, time_period_id).map_err(|e| anyhow::anyhow!(e))?;
         state.npc_states = repository.load_npc_states(session_id).await?;
         // 에디터에서 정의가 바뀌었을 수 있다 (id 보존 저장이라도 행을 지웠으면 FK가 NULL로 만든다).

@@ -1,10 +1,17 @@
-use std::{collections::{HashMap, VecDeque}, path::PathBuf, sync::Mutex};
+use std::{
+    collections::{HashMap, VecDeque},
+    path::PathBuf,
+    sync::{Arc, Mutex},
+};
 
 use reqwest::Client;
 use serde::{Deserialize, Serialize};
 use sqlx::SqlitePool;
 
-use crate::{game::runtime::GameRuntime, models::game::{GameProject}};
+use crate::{
+    game::runtime::{GameDefinition, GameRuntime},
+    models::game::GameProject,
+};
 pub struct AppState {
     pub db: SqlitePool,
     pub http_client: Client,
@@ -23,6 +30,7 @@ pub struct GameArchiveHandle {
     pub path: PathBuf,
     pub manifest: GameProject,
     pub game_id: String,
+    pub definition: Arc<GameDefinition>,
 }
 
 #[derive(Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]

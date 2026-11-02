@@ -6,7 +6,7 @@ use crate::error::AppError;
 use crate::game::manager::{GameManager, SaveReport};
 use crate::game::package::PackageData;
 use crate::game::runtime::{GameRepository, SqlxGameRepository};
-use crate::models::game::{GameProject};
+use crate::models::game::GameProject;
 use std::path::PathBuf;
 use tauri::{AppHandle, Manager, State};
 
@@ -64,20 +64,30 @@ pub async fn export_game(app: AppHandle, state: State<'_, AppState>, game_id: St
     Ok(path.to_string_lossy().into_owned())
 }
 
-#[tauri::command]
-pub async fn game_list(state: State<'_, AppState> ) -> Result<Vec<GameProject>, AppError> {
-    let project = crate::db::game::get_all_game_projects(&state.db).await?; // 없으면 NotFound
-
-  Ok(project.into_iter().map(Into::into).collect())
+/// open_game의 응답: 프로젝트 정보 + 화면에 그릴 정적 데이터(get_game_view와 같은 값) + 데이터 검증 결과.
+#[derive(serde::Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct OpenGameResponse {
+    pub project: GameProject,
+    pub view: serde_json::Value,
+    /// Error가 하나라도 있으면 start_new_game이 시작을 막는다. 프론트는 이 목록을 보여주면 된다.
+    pub issues: Vec<crate::game::validate::Issue>,
 }
 
-/// 게임 열기(마운트): 이 게임을 "현재 게임"으로 지정한다. game:// 가 이 폴더를 서빙하고, 이후 커맨드들이
-/// 이 game_id 범위로 일한다. 데이터는 여기서 안 읽는다 — 정의 전체는 플레이를 시작할 때 한 번에 올라온다.
-/// 다른 게임이 플레이 중이었으면 그 런타임은 내린다 (game_id가 어긋난 채 커맨드가 가는 걸 막으려는 것).
+/// 게임 열기: 이 게임을 현재 게임으로 지정하고, 정의를 **여기서 한 번** 메모리에 올린다.
+/// 이후 start_new_game / continue_game / load_save는 이 정의를 그대로 쓴다 (다시 읽지 않는다).
+/// 다른 게임을 플레이 중이었으면 그 런타임은 내린다 (game_id가 어긋난 채 커맨드가 가는 걸 막으려는 것).
+/// 에디터에서 정의를 저장했다면 다시 open_game을 불러야 바뀐 내용이 반영된다.
 #[tauri::command]
-pub async fn open_game(app: AppHandle, state: State<'_, AppState>, game_id: String) -> Result<GameProject, AppError> {
+pub async fn open_game(app: AppHandle, state: State<'_, AppState>, game_id: String) -> Result<OpenGameResponse, AppError> {
     let path = GameManager::load_package(&state.db, &games_root(&app)?, &game_id).await?;
     let project = crate::db::game::get_game_project(&state.db, &game_id).await?; // 없으면 NotFound
+
+    let repo = SqlxGameRepository::new(&state.db);
+    let definition = std::sync::Arc::new(repo.load_definition(&game_id).await.map_err(|e| AppError::Database(e.to_string()))?);
+    let mut issues = crate::game::validate::validate(&definition);
+    issues.extend(crate::game::validate::validate_asset_files(&definition, &path));
+    let view = definition.view();
 
     {
         let mut runtime = state.active_runtime.lock().await;
@@ -85,11 +95,13 @@ pub async fn open_game(app: AppHandle, state: State<'_, AppState>, game_id: Stri
             *runtime = None;
         }
     }
+    // ⚠ GameArchiveHandle에 `definition: Arc<GameDefinition>` 필드가 있어야 한다 (manifest 자리에는 GameProject).
     *state.active_archive.lock().map_err(|_| AppError::Archive("archive lock poisoned".into()))? =
-        Some(GameArchiveHandle { path, manifest: project.clone(), game_id });
-    Ok(project)
+        Some(GameArchiveHandle { path, manifest: project.clone(), game_id, definition });
+    Ok(OpenGameResponse { project, view, issues })
 }
 
+/// 게임 종료
 #[tauri::command]
 pub async fn close_game(state: State<'_, AppState>) -> Result<(), AppError> {
     {
@@ -99,6 +111,12 @@ pub async fn close_game(state: State<'_, AppState>) -> Result<(), AppError> {
     *state.active_archive.lock().map_err(|_| AppError::Archive("archive lock poisoned".into()))? = None;
 
     Ok(())
+}
+
+/// 이 앱의 게임 목록 (라이브러리 화면용).
+#[tauri::command]
+pub async fn game_list(state: State<'_, AppState>) -> Result<Vec<GameProject>, AppError> {
+    Ok(crate::db::game::get_all_game_projects(&state.db).await?)
 }
 
 /// 에디터용: 저장(save_package)이 받는 것과 같은 모양의 전체 데이터. 조건/효과/풀까지 다 들어 있다.
