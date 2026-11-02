@@ -19,6 +19,26 @@ export interface GameProject {
 	createdAt: number;
 	updatedAt: number;
 }
+
+/** 템플릿 리스트 */
+export interface Template {
+	id: string;
+	name: string;
+	apiVersion: string;
+	templateVersion: string;
+	capabilities: Capabilities;
+}
+
+export interface Capabilities {
+	choices: boolean;
+	freeText: boolean;
+	inventory: boolean;
+	map: boolean;
+	aiNarration: boolean;
+	location: boolean;
+	time: boolean;
+}
+
 // =========================================================
 // 게임 데이터 로드
 // =========================================================
@@ -47,6 +67,7 @@ export interface PackageData {
 	endings: GameEndingsInput[];
 	characters: GameCharactersInput[];
 	worldInfoBooks: PackageWorldInfoBook[];
+	assets: GameAssetsInput[];
 }
 
 export interface GameBundleRow {
@@ -240,6 +261,16 @@ interface WorldInfoEntryInput {
 	constant: boolean;
 }
 
+export interface GameAssetsInput {
+	id: string | null;
+	gameId: string;
+	key: string;
+	name: string;
+	category: string;
+	kind: string;
+	filePath: string;
+	settingsJson: unknown | null;
+}
 // ---------------------------------------------------------
 // // 런타임 시 게임 엔진에서 넘어오는 데이터
 // ---------------------------------------------------------
@@ -296,7 +327,15 @@ export interface RenderState {
 	flags: any;
 	inventory: any;
 	relationships: any;
+	stage: Stage;
 	presentNpcs: string[];
+}
+
+export interface Stage {
+	background: AssetRef;
+	bgm: { mood: string; asset: string };
+	cg: AssetRef | null;
+	standings: { 캐릭터id: { emotion: string; asset: string } };
 }
 
 // ---------------------------------------------------------
@@ -385,6 +424,41 @@ export enum GameEvent {
 	ItemAdded,
 	ItemRemoved,
 	GameEnded,
+}
+// ---------------------------------------------------------
+// 게임 장면들
+// ---------------------------------------------------------
+export interface AssetRef {
+	id: string;
+	key: string;
+	path: string;
+	settings: any;
+}
+
+export type Cue =
+	| { type: "Bgm"; mood: string; asset: AssetRef | null }
+	| { type: "Sfx"; tag: string; asset: AssetRef }
+	| { type: "Voice"; asset: AssetRef }
+	| { type: "Cg"; asset: AssetRef }
+	| { type: "CgOff" }
+	| { type: "Standing"; characterId: string; emotion: string; asset: AssetRef }
+	| { type: "StandingOff"; characterId: string }
+	| { type: "Motion"; characterId: string; name: string }
+	| { type: "Effect"; name: string; param: string | null }
+	| { type: "Background"; asset: AssetRef };
+
+export enum LineKind {
+	Narration,
+	Dialogue,
+	/// 텍스트 없이 연출만 있는 줄
+	Direction,
+}
+
+export interface StageLine {
+	kind: LineKind;
+	speaker: string | null;
+	text: string;
+	cues: Cue[];
 }
 
 // =========================================================
@@ -565,6 +639,6 @@ export interface GameCharacters {
 // ---------------------------------------------------------
 /** 삭제된 데이터와 이슈들을 모아서 반환 */
 export interface SaveReport {
-	deleted: Map<string, number>,
-	issues: any,
+	deleted: Map<string, number>;
+	issues: any;
 }

@@ -2,11 +2,12 @@
 	import { _ } from "svelte-i18n";
 	import { onMount } from "svelte";
 	import type { GameProject } from "$/lib/type/game";
-	import { gameManagerCommands } from "$/ipc/commands";
+	import { gameEngineCommands, gameManagerCommands } from "$/ipc/commands";
 	import Header from "$/components/Header.svelte";
 	import Button from "$/components/ui/button/Button.svelte";
 	import Icon from "$/components/ui/Icon.svelte";
 	import { handleGoBack, handleOpenGameEditor, handleStartGamePlay } from "$/app/routes";
+	import IconButton from "$/components/ui/button/IconButton.svelte";
 
 	type Props = { params: { gameId: string } };
 	// props로 라우터 파라미터 전달받음 (svelte-spa-router 규격)
@@ -38,9 +39,9 @@
 
 <Header>
 	<div class="header-left">
-		<Button variant="ghost" size="icon-lg" aria-label={$_("global.back")} onclick={handleGoBack}>
+		<IconButton size="lg" aria-label={$_("global.back")} onclick={handleGoBack}>
 			<Icon name={"ChevronLeft"} />
-		</Button>
+		</IconButton>
 	</div>
 </Header>
 <div class="content detail-container">

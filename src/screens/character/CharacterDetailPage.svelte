@@ -6,6 +6,7 @@
 	import { characters } from "$/lib/chat/characterStore.svelte";
 	import type { Character } from "$/lib/type/conv";
 	import { pop, push, router } from "svelte-spa-router";
+	import WarningPage from "../WarningPage.svelte";
 
 	// props로 편집할 characterId를 받습니다. (null일 경우 새로 만들기)
 	let { params }: { params?: { characterId?: string } } = $props();
@@ -18,22 +19,55 @@
 	function handleStartChat() {
 		if (!characterId) return;
 	}
+
+	const tabs = [
+		{
+			id: "info",
+			label: "기본정보",
+		},
+		{},
+	];
 </script>
 
-<div class="page narrow">
-	<div>
-		<div>커버 이미지</div>
-
+{#if !existingChar}
+	<WarningPage />
+{:else}
+	<div class="coverImg">커버 이미지</div>
+	<div class="page narrow">
 		<div>
-			타이틀
-			<div>
-				아바타
-				<img src="" alt="" />
+			<div class="title">
+				<Avatar avatar={existingChar.avatar ?? ""} />
+				<h2>{existingChar.name}</h2>
 			</div>
-			<h2>이름</h2>
+
+			<div class="tabs">
+				{#each tabs as item}
+					<div>
+						{item.label}
+					</div>
+				{/each}
+			</div>
+			<div class="content">
+				<div>
+					{existingChar.alternateDescriptions}
+				</div>
+			</div>
 		</div>
 	</div>
-</div>
+{/if}
 
 <style>
+	.coverImg {
+		width: 100%;
+		height: 200px;
+		background: var(--gray-2);
+	}
+
+	.title {
+		transform: translateY(-2rem);
+	}
+
+	.tabs {
+		display: flex;
+	}
 </style>

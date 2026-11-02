@@ -190,7 +190,7 @@ class PlaylistStore {
 		// 새로 추가되는 거면 순서가 마지막에 오도록
 		music.sortOrder = this.#currentPlaylist.length;
 		// 초기값인 경우 바로 세팅
-		if (this.#currentSongIndex === this.current.length - 1) {
+		if (this.#currentSongIndex === this.current.length) {
 			audioStore.setMusic(music);
 		}
 
@@ -201,29 +201,26 @@ class PlaylistStore {
 		});
 	};
 
-	deleted = async (path: string, index?: number) => {
+	deleted = async (path: string) => {
+		const current = this.currentSong;
 		// 현재 플레이 중인 음악과 같을 경우 멈추기
-		if (this.currentSong?.path === path) {
+		if (current.path === path) {
 			audioStore.pause();
 		}
-
-		// 업데이트
-		await this.removeCurrentPlaylist(path);
 
 		// 인덱스 갱신
 		let changeIndex = this.#currentSongIndex;
 		// 현재 인덱스보다 바뀌는 배열이 더 작다면 -1 처리
 		// 만약 삭제하려는 인덱스가 현재 인덱스보다 작은 경우 -1 처리
-		if (this.current.length < changeIndex || (changeIndex > this.currentSong?.sortOrder)) {
+		if (changeIndex > this.current.length) {
 			changeIndex -= 1;
-			// 바뀔 인덱스가 음수인 경우 음악을 세팅하지 않고 그대로 리턴
-			if (changeIndex < 0) {
-				this.#currentSongIndex = 0;
-				return;
-			}
-
-			this.#currentSongIndex = changeIndex;
 		}
+		// 바뀔 인덱스가 음수인 경우 음악을 세팅하지 않고 그대로 리턴
+		if (changeIndex < 0) changeIndex = 0;
+		this.#currentSongIndex = changeIndex;
+
+		// 업데이트
+		await this.removeCurrentPlaylist(path);
 	};
 
 	shuffle = (isStartIndex: boolean = false) => {
@@ -601,31 +598,31 @@ export const togglePlaylist = (music: MusicMeta) => {
 // 그룹화
 // -----------------------------------
 function convertFolderNode(raw: FolderNodeRaw): FolderNode {
-  const convertedFolders = new Map<string, FolderNode>();
-  
-  // 내부 folders 객체의 키-값을 순회하며 재귀 변환
-  for (const [key, value] of Object.entries(raw.folders)) {
-    convertedFolders.set(key, convertFolderNode(value));
-  }
+	const convertedFolders = new Map<string, FolderNode>();
 
-  return {
-    name: raw.name,
-    files: raw.files,
-    folders: convertedFolders,
-  };
+	// 내부 folders 객체의 키-값을 순회하며 재귀 변환
+	for (const [key, value] of Object.entries(raw.folders)) {
+		convertedFolders.set(key, convertFolderNode(value));
+	}
+
+	return {
+		name: raw.name,
+		files: raw.files,
+		folders: convertedFolders,
+	};
 }
 
 function convertLibraryRoot(raw: LibraryRootRaw): LibraryRoot {
-  const convertedFolders = new Map<string, FolderNode>();
-  
-  for (const [key, value] of Object.entries(raw.folders)) {
-    convertedFolders.set(key, convertFolderNode(value));
-  }
+	const convertedFolders = new Map<string, FolderNode>();
 
-  return {
-    rootFiles: raw.rootFiles,
-    folders: convertedFolders,
-  };
+	for (const [key, value] of Object.entries(raw.folders)) {
+		convertedFolders.set(key, convertFolderNode(value));
+	}
+
+	return {
+		rootFiles: raw.rootFiles,
+		folders: convertedFolders,
+	};
 }
 
 // -----------------------------------

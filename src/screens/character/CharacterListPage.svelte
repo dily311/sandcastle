@@ -124,24 +124,20 @@
 				<option value="favorite">즐겨찾기 순서</option>
 			</select>
 			<ButtonGroup segmented={true}>
-				<Button
-					variant="ghost"
-					size="sm"
+				<IconButton
 					class={cn(view === "grid" && "on")}
 					onclick={() => (view = "grid")}
 					title="그리드"
 				>
 					<Icon name="grid" size={15} />
-				</Button>
-				<Button
-					variant="ghost"
-					size="sm"
+				</IconButton>
+				<IconButton
 					class={cn(view === "list" && "on")}
 					onclick={() => (view = "list")}
 					title="리스트"
 				>
 					<Icon name="list" size={15} />
-				</Button>
+				</IconButton>
 			</ButtonGroup>
 		</div>
 	</div>
@@ -199,8 +195,6 @@
 							<Icon name="message-circle" size={13} /> 대화하기
 						</Button>
 						<Button
-							variant="ghost"
-							size="sm"
 							onclick={(e) => {
 								e.stopPropagation();
 								handleOpenCharacterEditor(c.id);
@@ -208,9 +202,7 @@
 						>
 							<Icon name="edit" size={13} /> 편집
 						</Button>
-						<Button
-							variant="ghost"
-							size="icon-xs"
+						<IconButton
 							title="복제"
 							onclick={(e) => {
 								e.stopPropagation();
@@ -218,10 +210,9 @@
 							}}
 						>
 							<Icon name="copy" size={13} />
-						</Button>
-						<Button
-							variant="danger"
-							size="icon-xs"
+						</IconButton>
+						<IconButton
+							// variant="danger"
 							title="삭제"
 							onclick={(e) => {
 								e.stopPropagation();
@@ -229,7 +220,7 @@
 							}}
 						>
 							<Icon name="trash" size={13} />
-						</Button>
+						</IconButton>
 					</ButtonGroup>
 				</Card>
 			{/each}

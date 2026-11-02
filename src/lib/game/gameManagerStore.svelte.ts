@@ -9,14 +9,12 @@ class createGameManagerStore {
 		this.#store = await gameManagerCommands.getGameList();
 	}
 
-    add() {
-
-    }
+	add() {}
 
 	async create() {
-        const title = "";
+		const title = "";
 		const newGameId = await gameManagerCommands.createGame({ title, templateId: "default_template" });
-        return newGameId;
+		return newGameId;
 	}
 
 	async delete(gameId: string, title: string) {
@@ -41,7 +39,7 @@ export const gameManager = new createGameManagerStore();
 
 // 새로만들기 버튼 클릭 시 (create_game 커맨드 연동 예시)
 export async function handleCreateNewGame() {
-    const newGameId = gameManager.create();
+	const newGameId = gameManager.create();
 	// 생성 후 바로 에디터로 이동
 	push(`/game/${newGameId}/editor`);
 }

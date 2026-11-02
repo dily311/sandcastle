@@ -1,9 +1,16 @@
 <script lang="ts">
-	let { avatar }: { avatar: string | null } = $props();
+	import { cn } from "$/lib/utils/cn";
+	import type { HTMLAttributes } from "svelte/elements";
+
+	type Props = (HTMLAttributes<HTMLDivElement>) & {
+		avatar: string | null;
+		size?: "sm" | "lg";
+	};
+	let { avatar, size, class: className, ...restProps }: Props = $props();
 </script>
 
 {#if avatar}
-	<div class="chat-avatar">
+	<div class={cn("chat-avatar", className, size)} {...restProps}>
 		{#if avatar?.startsWith("http")}
 			<img src={avatar} alt="" />
 		{:else}
@@ -23,6 +30,14 @@
 		align-items: center;
 		background: var(--card-bg);
 		overflow: hidden;
+	}
+	.chat-avatar.sm {
+		width: 14rem;
+		height: 14rem;
+	}
+	.chat-avatar.lg {
+		width: 4rem;
+		height: 4rem;
 	}
 	.chat-avatar img {
 		width: 100%;

@@ -34,7 +34,7 @@
 	}
 
 	.clickable-icon:disabled {
-		opacity: 0.3;
+		opacity: 0.5;
 		cursor: not-allowed;
 	}
 

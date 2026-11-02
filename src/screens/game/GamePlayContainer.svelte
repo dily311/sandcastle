@@ -5,6 +5,7 @@
 	import DefaultPlay from "./play/DefaultTemplatePlay.svelte";
 	import GachaGameLobby from "./play/gacha/GachaGameLobby.svelte";
 	import VisualNovelTemplatePlay from "./play/VisualNovelTemplatePlay.svelte";
+	import { gameEngineCommands, gameManagerCommands } from "$/ipc/commands";
 
 	type Props = {
 		params: { sessionId: string; gameId: string };
@@ -17,12 +18,11 @@
 	// 1. 세션 또는 게임 정보에서 templateId 가져오기
 	async function loadGameTemplateInfo() {
 		try {
-			// 예: 세션 정보나 게임 매니페스트를 불러와서 templateId 획득
-			// const manifest = await invoke('open_game', { gameId: params.gameId });
-			// templateId = manifest.templateId;
-
 			// 테스트용 임시 값
 			templateId = "dating-sim";
+
+			await gameEngineCommands.getGameView();
+
 		} catch (err) {
 			console.error("Failed to load template info:", err);
 		} finally {

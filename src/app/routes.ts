@@ -50,7 +50,6 @@ export const routes: RouteDefinition = {
 	"/": HomePage,
 	"/character": CharacterListPage,
 	"/character/:characterId": CharacterDetailPage,
-	"/character/:characterId/details": CharacterDetailPage,
 	"/character/:characterId/chat": ChatListPage,
 	"/character/:characterId/edit": CharacterEditPageSvelte,
 	"/chat/:conversationId": ChatScreen,

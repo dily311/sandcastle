@@ -49,7 +49,6 @@
 				<div class="list-item" class:active={selectedIndex === index} onclick={() => (selectedIndex = index)}>
 					<div class="item-info">
 						<span class="title">{char.name}</span>
-						<span class="key">ID: {char.characterId || "미설정"}</span>
 					</div>
 				</div>
 			{:else}
@@ -70,10 +69,6 @@
 					<div class="field">
 						<label>캐릭터 이름 (Name)</label>
 						<input type="text" bind:value={activeChar.name} />
-					</div>
-					<div class="field">
-						<label>캐릭터 고유 ID (Character ID)</label>
-						<input type="text" bind:value={activeChar.characterId} />
 					</div>
 				</div>
 				<div class="field">

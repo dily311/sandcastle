@@ -28,7 +28,7 @@
 			isLoading = true;
 			packageData = await gameManagerCommands.getPackageData({ gameId: params.gameId });
 		} catch (err) {
-			console.error("Failed to load package data:", err);
+			console.error("Failed to load package data:", err, params.gameId);
 			alert("패키지 데이터를 불러오지 못했습니다.");
 		} finally {
 			isLoading = false;

@@ -6,6 +6,9 @@ class CharacterStore {
 	get value() {
 		return this.#store;
 	}
+	get favorites() {
+		return this.#store.filter(c => c.favorite);
+	}
 
 	getChar(id: string) {
 		return this.#store.find((c) => c.id === id);

@@ -5,7 +5,6 @@
 	import { Plus, Send } from "@lucide/svelte";
 	import { personas } from "$/lib/chat/personaStore.svelte";
 	import TextArea from "$/components/ui/TextArea.svelte";
-	import ButtonGroup from "$/components/ui/button/ButtonGroup.svelte";
 	import Button from "$/components/ui/button/Button.svelte";
 
 	let { conversation: conv, character }: { conversation: Conversation; character: Character | null } = $props();
@@ -57,7 +56,7 @@
 		<Plus />
 	</Button>
 	<div class="input-area">
-		<TextArea bind:value={inputMessage} rows={1} placeholder="메시지를 입력하세요..." onkeydown={handleKeyDown} />
+		<TextArea bind:value={inputMessage} rows={1} placeholder="메시지 입력" onkeydown={handleKeyDown} />
 	</div>
 	<Button variant="primary" size="lg" class="send-btn" onclick={() => handleSend()}>
 		<Send />

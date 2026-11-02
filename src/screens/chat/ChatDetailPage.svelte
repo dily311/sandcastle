@@ -11,6 +11,8 @@
 	import Header from "$/components/Header.svelte";
 	import { cn } from "$/lib/utils/cn";
 	import { handleGoBack } from "$/app/routes";
+	import IconButton from "$/components/ui/button/IconButton.svelte";
+	import WarningPage from "../WarningPage.svelte";
 
 	// props로 편집할 characterId를 받습니다. (null일 경우 새로 만들기)
 	let { params }: { params?: { conversationId?: string } } = $props();
@@ -90,33 +92,27 @@
 			<!-- 상단 헤더 -->
 			<Header class={cn(isRightSidebarOpen && "isRightSidebarOpen")}>
 				<div class="header-left">
-					<Button variant="ghost" size="icon-lg" aria-label={$_("global.back")} onclick={handleGoBack}>
+					<IconButton aria-label={$_("global.back")} onclick={handleGoBack}>
 						<Icon name={"ChevronLeft"} />
-					</Button>
+					</IconButton>
 					<h3 class="chat-title-wrap">
 						<span class="chat-title">{conversations.activeConv.title}</span>
 					</h3>
 				</div>
 				<div class="header-right">
-					<Button
-						variant="ghost"
-						size="icon-lg"
-						aria-label={currentMode ? $_("chat.chatMode") : $_("chat.readMode")}
-					>
+					<IconButton aria-label={currentMode ? $_("chat.chatMode") : $_("chat.readMode")}>
 						<Icon name={"BookOpenIcon"} />
-					</Button>
+					</IconButton>
 					<button type="button" aria-label={$_("chat.viewAction")} class="pill-btn clickable-icon">
 						<Icon name={"EllipsisVertical"} />
 					</button>
 					<!-- 오른쪽 사이드바 토글 버튼 -->
-					<Button
-						variant="ghost"
-						size="icon-lg"
+					<IconButton
 						aria-label={$_("chat.rightSidebar")}
 						onclick={() => (isRightSidebarOpen = !isRightSidebarOpen)}
 					>
 						<Icon name={"PanelRight"} />
-					</Button>
+					</IconButton>
 				</div>
 			</Header>
 
@@ -142,7 +138,7 @@
 		<ChatStateSidebar bind:isRightSidebarOpen />
 	</div>
 {:else}
-	<div class="empty">선택된 대화방이 없습니다.</div>
+	<WarningPage />
 {/if}
 
 <style>

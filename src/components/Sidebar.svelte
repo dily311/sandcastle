@@ -11,10 +11,10 @@
 	import ButtonGroup from "./ui/button/ButtonGroup.svelte";
 	import { cn } from "$/lib/utils/cn";
 	import IconButton from "./ui/button/IconButton.svelte";
+	import { characters } from "$/lib/chat/characterStore.svelte";
 
 	let collapsed = $state(true);
 	const toggleLeft = () => (collapsed = !collapsed);
-	const favorites = [];
 </script>
 
 <aside class="sidebar left-sidebar" class:collapsed transition:slide={{ axis: "x" }}>
@@ -65,8 +65,24 @@
 
 			<div class="sidebar-section favorites">
 				<div class="section-label">즐겨찾기</div>
-				{#if favorites.length === 0}
+				{#if characters.favorites.length === 0}
 					<div class="section-empty">★ 여기에 표시됩니다.</div>
+				{:else}
+					<div class="section-content">
+						<ul class="conv-list">
+							{#each characters.favorites as char}
+								<li class="conv-item">
+									<button
+										class="conv-title"
+										class:active={router.location === `/character/${char.id}`}
+										onclick={() => push(`/character/${char.id}`)}
+									>
+										{char.name}
+									</button>
+								</li>
+							{/each}
+						</ul>
+					</div>
 				{/if}
 			</div>
 
@@ -90,13 +106,12 @@
 									<span>{chat.id}</span>
 								</button>
 								<ButtonGroup>
-									<Button variant="ghost" size="icon-sm">
-										<!-- <span>{chat.pinned}</span> -->
+									<IconButton size="sm">
 										<Pin />
-									</Button>
-									<Button variant="ghost" size="icon-sm" onclick={() => deleteConversation(chat.id)}>
+									</IconButton>
+									<IconButton size="sm" onclick={() => deleteConversation(chat.id)}>
 										<X />
-									</Button>
+									</IconButton>
 								</ButtonGroup>
 							</li>
 						{/each}
