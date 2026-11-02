@@ -28,6 +28,8 @@ impl GameDefinition {
                 "customCss": self.project.custom_css,
                 "settings": parse(&self.project.settings_json),
             },
+            // 이 게임의 템플릿과 capabilities. 프론트가 지도/인벤토리 같은 UI를 켜고 끄는 데 쓴다. (엔진이 강제하지는 않는다)
+            "template": crate::game::template::find(&self.project.template_id),
             "maps": self.maps.iter().map(|m| json!({
                 "id": m.id, "name": m.name, "dangerLevel": m.danger_level, "settings": m.settings_json,
             })).collect::<Vec<_>>(),
@@ -57,6 +59,40 @@ impl GameDefinition {
                 "isEnding": s.is_ending, "settings": parse(&s.settings_json),
                 "choices": s.choices.iter().flatten().map(|c| json!({ "id": c.id, "text": c.text, "sortOrder": c.sort_order })).collect::<Vec<_>>(),
             })).collect::<Vec<_>>(),
+            // 아이템 정의 (표시용). 사용 효과/조건/획득 이벤트는 안 준다 — usable만 알려준다.
+            // 지금 가진 수량은 RenderState.inventory.
+            "items": self.items.values().map(|i| json!({
+                "id": i.id, "name": i.name, "description": i.description, "icon": i.icon, "kind": i.kind,
+                "maxStack": i.max_stack, "isUnique": i.is_unique, "isKey": i.is_key, "consumable": i.consumable,
+                "usable": !(i.use_effect.is_null() || i.use_effect.as_object().map_or(false, |o| o.is_empty())),
+                "settings": i.settings_json,
+            })).collect::<Vec<_>>(),
+            // 관계의 고정 축 이름. 현재 관계는 RenderState.relationships ("보낸쪽>받는쪽" 키).
+            "relationshipAxes": crate::game::engine::RELATION_AXES,
+            // 에셋 목록 (파일 경로는 게임 폴더 기준 상대경로 — iframe이 그대로 쓴다). 생성 프롬프트/시드 같은 제작 메타는 안 준다.
+            "assets": {
+                "audio": self.assets.audio.iter().map(|a| json!({
+                    "id": a.base.id, "key": a.base.key, "category": a.base.category, "path": a.base.file_path.trim_start_matches('/'),
+                    "settings": a.base.settings_json, "tag": a.tag, "characterId": a.game_character_id, "transcript": a.transcript,
+                })).collect::<Vec<_>>(),
+                "characters": self.assets.characters.iter().map(|a| json!({
+                    "id": a.base.id, "key": a.base.key, "path": a.base.file_path.trim_start_matches('/'),
+                    "settings": a.base.settings_json, "characterId": a.game_character_id, "usage": a.usage, "emotion": a.emotion,
+                })).collect::<Vec<_>>(),
+                "cgs": self.assets.cgs.iter().map(|a| json!({
+                    "id": a.base.id, "key": a.base.key, "path": a.base.file_path.trim_start_matches('/'),
+                    "settings": a.base.settings_json, "characterId": a.game_character_id, "description": a.description,
+                })).collect::<Vec<_>>(),
+                "backgrounds": self.assets.backgrounds.iter().map(|a| json!({
+                    "id": a.base.id, "key": a.base.key, "path": a.base.file_path.trim_start_matches('/'),
+                    "settings": a.base.settings_json, "locationId": a.location_id, "timeId": a.time_id, "weatherId": a.weather_id,
+                })).collect::<Vec<_>>(),
+                "other": self.assets.all.iter().filter(|a| matches!(a.category.as_str(), "font" | "other")).map(|a| json!({
+                    "id": a.id, "key": a.key, "category": a.category, "path": a.file_path.trim_start_matches('/'), "settings": a.settings_json,
+                })).collect::<Vec<_>>(),
+            },
+            // 기본 제공 연출 목록 (프론트가 구현해야 하는 것들)
+            "stageCatalog": { "bgmMoods": crate::game::stage::BGM_MOODS, "screenEffects": crate::game::stage::SCREEN_EFFECTS, "motions": crate::game::stage::MOTIONS },
             "endings": self.endings.iter().map(|e| json!({
                 "id": e.id, "endingKey": e.ending_key, "title": e.title, "description": e.description,
             })).collect::<Vec<_>>(),

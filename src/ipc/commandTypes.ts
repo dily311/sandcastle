@@ -2,7 +2,7 @@ import type { Character, WorldInfoBook, WorldInfoEntry, Conversation, Message, P
 import type {ApiProfileInput, ApiProfile} from "$type/aiService";
 import type { AppSettings, CssTheme, FeatureSetting, ThemeSetting } from "$/lib/type/settingTypes";
 import type { Hitbox } from "$/lib/interaction/interactive-registry";
-import type { PackageData, SaveReport, GameCommand, GameResponse, GameSave, NpcReply, GamePlayerSessions, GameMessages, GameConversations, GameJournal, GameProject } from "$type/game";
+import type { PackageData, SaveReport, GameCommand, GameResponse, GameSave, NpcReply, GamePlayerSessions, GameMessages, GameConversations, GameJournal, GameProject, Template, StageLine } from "$type/game";
 import type { LibraryRootRaw, MusicMetaInput, Playlist, PlaylistInput, PlaylistItem, WidgetMusicSetting } from "$/lib/features/impl/widget/music/types";
 
 export type CommandName = keyof CommandRegistry;
@@ -67,12 +67,13 @@ export interface CommandRegistry {
     "set_system_default_persona": CommandDef<{ id: string }, void>,
 
     // game_manager
-    "create_game": CommandDef<{title: string, templateId: string}, string>,
+    "create_game": CommandDef<{title: string, templateId: string}, GameProject>,
     "save_package": CommandDef<{gameId: string, data: PackageData}, SaveReport>,
     "delete_game": CommandDef<{gameId: string}, undefined>,
     "import_game": CommandDef<{zipPath: string}, PackageData>,
     "export_game": CommandDef<{gameId: string, outputDir: string}, string>,
     "game_list": CommandDef<undefined, GameProject[]>,
+    "list_templates": CommandDef<undefined, Template[]>,
     // 게임 에디터가 불러오는 데이터
     "get_package_data": CommandDef<{gameId: string}, PackageData>,
     // 게임 플레이
@@ -80,7 +81,10 @@ export interface CommandRegistry {
     "close_game": CommandDef<undefined, undefined>,
     // game_engine
     "start_new_game": CommandDef<undefined, GameResponse>,
+    "get_game_view": CommandDef<undefined, StageLine>,
+    "validate_game": CommandDef<undefined, any[]>,
     "list_sessions": CommandDef<undefined, GamePlayerSessions[]>,
+    "delete_sessions": CommandDef<{sessionId: string}, undefined>,
     "continue_game": CommandDef<{sessionId: string}, GameResponse>,
     "load_save": CommandDef<{sessionId: string, slot: number}, GameResponse>,
     "read_journal": CommandDef<{sessionId: string, fromSeq?: number, toSeq: number}, GameJournal[]>,

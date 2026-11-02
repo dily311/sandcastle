@@ -1,11 +1,13 @@
-
-// pub fn can_move_to(&self, definition: &GameDefinition, state: &GameState, location_id: &str) -> bool {todo!()}
-// pub fn move_to(&self, definition: &GameDefinition, state: &GameState, location_id: &str) -> Result<Vec<GameEvent>> {todo!()}
-// pub fn available_locations(&self, definition: &GameDefinition, state: &GameState, location_id: &str) -> Vec<&Location> {todo!()}
-
+//! TODO: 아직 설계 전. 맵의 danger_level은 인카운터 확률 배율로 events.rs의 roll_random에서 이미
+//!   쓰인다 (GameDefinition::danger_multiplier). 그 밖의 맵/존 단위 효과가 필요해지면 여기서.
+use super::super::definition::GameDefinition;
+use super::super::event::GameEvent;
+use super::super::state::GameState;
+use super::GameSystem;
 use rand::rngs::StdRng;
-use crate::game::{engine::{self, Entry}, runtime::{definition::GameDefinition, event::GameEvent, state::GameState, systems::GameSystem}};
+
 pub struct MapSystem;
+
 impl GameSystem for MapSystem {
     fn name(&self) -> &'static str {
         "map"

@@ -471,7 +471,7 @@ pub async fn get_game_asset<'e, E>(executor: E, id: &str) -> Result<GameAssets, 
         .await?;
     Ok(result.into())
 }
-pub async fn upsert_game_asset<'e, E>(executor: E, input: GameAssetsInput, game_id: &str) -> Result<String, Error> where E: Executor<'e, Database = Sqlite> + Clone {
+pub async fn upsert_game_asset<'e, E>(executor: E, input: GameAssetsInput, game_id: &str) -> Result<String, Error> where E: Executor<'e, Database = Sqlite> {
     let id = input.id.clone().unwrap_or_else(|| Uuid::new_v4().to_string());
     let now = chrono::Utc::now().timestamp_millis();
     let settings_json = serde_json::to_string(&input.settings_json).unwrap_or_default();
@@ -499,7 +499,7 @@ pub async fn upsert_game_asset<'e, E>(executor: E, input: GameAssetsInput, game_
     .bind(settings_json)
     .bind(now)
     .bind(now)
-    .execute(executor.clone())
+    .execute(executor)
     .await?;
 
     Ok(id)
@@ -541,9 +541,7 @@ pub async fn get_audio_asset<'e, E>(executor: E, assets_id: &str) -> Result<Audi
         .await?;
     Ok(result.into())
 }
-pub async fn upsert_audio_asset<'e, E>(executor: E, input: AudioAssetsInput, game_id: &str) -> Result<(), Error> where E: Executor<'e, Database = Sqlite> + Clone {
-    let assets_id = upsert_game_asset(executor.clone(), input.base.clone(), game_id).await?;
-
+pub async fn upsert_audio_asset<'e, E>(executor: E, input: AudioAssetsInput, assets_id: &str) -> Result<(), Error> where E: Executor<'e, Database = Sqlite> {
     sqlx::query(r#"
     INSERT INTO audio_assets (assets_id, tag, game_character_id, transcript)
     VALUES (?, ?, ?, ?)
@@ -589,9 +587,7 @@ pub async fn get_character_asset<'e, E>(executor: E, assets_id: &str) -> Result<
         .await?;
     Ok(result.into())
 }
-pub async fn upsert_character_asset<'e, E>(executor: E, input: CharacterAssetsInput, game_id: &str) -> Result<(), Error> where E: Executor<'e, Database = Sqlite> + Clone {
-    let assets_id = upsert_game_asset(executor.clone(), input.base.clone(), game_id).await?;
-
+pub async fn upsert_character_asset<'e, E>(executor: E, input: CharacterAssetsInput, assets_id: &str) -> Result<(), Error> where E: Executor<'e, Database = Sqlite> {
     sqlx::query(r#"
     INSERT INTO character_assets (assets_id, game_character_id, usage, emotion)
     VALUES (?, ?, ?, ?)
@@ -612,7 +608,7 @@ pub async fn upsert_character_asset<'e, E>(executor: E, input: CharacterAssetsIn
 pub async fn get_all_cg_assets<'e, E>(executor: E, game_id: &str) -> Result<Vec<CgAssets>, Error> where E: Executor<'e, Database = Sqlite> {
     let result = sqlx::query_as::<_, CgAssetsRow>(
             r#"
-            SELECT ga.id, ga.game_id, ga.key, ga.name, ga.category, ga.kind, ga.file_path, ga.settings_json, ga.created_at, ga.updated_at, a.game_character_id, a.description, a.prompt, a.negative_prompt, a.seed, a.generation_params
+            SELECT ga.id, ga.game_id, ga.key, ga.name, ga.category, ga.kind, ga.file_path, ga.settings_json, ga.created_at, ga.updated_at, a.game_character_id, a.description, a.prompt, a.negative_prompt, a.seed, a.generation_params, a.ai_usable
             FROM cg_assets a
             INNER JOIN game_assets ga ON ga.id = a.assets_id
             WHERE ga.game_id = ?
@@ -626,7 +622,7 @@ pub async fn get_all_cg_assets<'e, E>(executor: E, game_id: &str) -> Result<Vec<
 pub async fn get_cg_asset<'e, E>(executor: E, assets_id: &str) -> Result<CgAssets, Error> where E: Executor<'e, Database = Sqlite> {
     let result = sqlx::query_as::<_, CgAssetsRow>(
             r#"
-            SELECT ga.id, ga.game_id, ga.key, ga.name, ga.category, ga.kind, ga.file_path, ga.settings_json, ga.created_at, ga.updated_at, a.game_character_id, a.description, a.prompt, a.negative_prompt, a.seed, a.generation_params
+            SELECT ga.id, ga.game_id, ga.key, ga.name, ga.category, ga.kind, ga.file_path, ga.settings_json, ga.created_at, ga.updated_at, a.game_character_id, a.description, a.prompt, a.negative_prompt, a.seed, a.generation_params, a.ai_usable
             FROM cg_assets a
             INNER JOIN game_assets ga ON ga.id = a.assets_id
             WHERE ga.id = ?
@@ -637,19 +633,18 @@ pub async fn get_cg_asset<'e, E>(executor: E, assets_id: &str) -> Result<CgAsset
         .await?;
     Ok(result.into())
 }
-pub async fn upsert_cg_asset<'e, E>(executor: E, input: CgAssetsInput, game_id: &str) -> Result<(), Error> where E: Executor<'e, Database = Sqlite> + Clone {
-    let assets_id = upsert_game_asset(executor.clone(), input.base.clone(), game_id).await?;
-
+pub async fn upsert_cg_asset<'e, E>(executor: E, input: CgAssetsInput, assets_id: &str) -> Result<(), Error> where E: Executor<'e, Database = Sqlite> {
     sqlx::query(r#"
-    INSERT INTO cg_assets (assets_id, game_character_id, description, prompt, negative_prompt, seed, generation_params)
-    VALUES (?, ?, ?, ?, ?, ?, ?)
+    INSERT INTO cg_assets (assets_id, game_character_id, description, prompt, negative_prompt, seed, generation_params, ai_usable)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?)
     ON CONFLICT(assets_id) DO UPDATE SET
         game_character_id=excluded.game_character_id, 
         description=excluded.description, 
         prompt=excluded.prompt, 
         negative_prompt=excluded.negative_prompt, 
         seed=excluded.seed, 
-        generation_params=excluded.generation_params
+        generation_params=excluded.generation_params,
+        ai_usable=excluded.ai_usable
     "#)
     .bind(assets_id)
     .bind(&input.game_character_id)
@@ -658,6 +653,7 @@ pub async fn upsert_cg_asset<'e, E>(executor: E, input: CgAssetsInput, game_id: 
     .bind(&input.negative_prompt)
     .bind(&input.seed)
     .bind(&input.generation_params)
+    .bind(&input.ai_usable)
     .execute(executor)
     .await?;
 
@@ -691,9 +687,7 @@ pub async fn get_background_asset<'e, E>(executor: E, assets_id: &str) -> Result
         .await?;
     Ok(result.into())
 }
-pub async fn upsert_background_assets<'e, E>(executor: E, input: BackgroundAssetsInput, game_id: &str) -> Result<(), Error> where E: Executor<'e, Database = Sqlite> + Clone {
-    let assets_id = upsert_game_asset(executor.clone(), input.base.clone(), game_id).await?;
-
+pub async fn upsert_background_assets<'e, E>(executor: E, input: BackgroundAssetsInput, assets_id: &str) -> Result<(), Error> where E: Executor<'e, Database = Sqlite> {
     sqlx::query(r#"
     INSERT INTO background_assets (assets_id, location_id, time_id, weather_id)
     VALUES (?, ?, ?, ?)
@@ -1528,7 +1522,7 @@ pub async fn delete_game_encounter_table_entry<'e, E>(executor: E, id: &str) -> 
 /** 특정 게임의 씬 모두 불러오기 */
 pub async fn get_all_game_scenes<'e, E>(executor: E, game_id: &str) -> Result<Vec<GameSceneRow>, Error> where E: Executor<'e, Database = Sqlite> {
     let rows = sqlx::query_as::<_, GameSceneRow>(
-    "SELECT id, game_id, scene_name, description, scene_key, is_ending, ending_id, settings_json, sort_order, created_at, updated_at
+    "SELECT id, game_id, scene_name, description, scene_key, is_ending, ending_id, settings_json, script, sort_order, created_at, updated_at
     FROM game_scenes WHERE game_id = ? 
     ORDER BY sort_order, id
     ",
@@ -1544,8 +1538,8 @@ pub async fn upsert_game_scene<'e, E>(executor: E, game_id: &str,scene: &GameSce
     let now = chrono::Utc::now().timestamp_millis();
     sqlx::query(
         r#"
-        INSERT INTO game_scenes ( id, game_id, scene_name, description, scene_key, is_ending, ending_id, settings_json, sort_order, created_at, updated_at)
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        INSERT INTO game_scenes ( id, game_id, scene_name, description, scene_key, is_ending, ending_id, settings_json, script, sort_order, created_at, updated_at)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
         ON CONFLICT(id) DO UPDATE SET
                 game_id = excluded.game_id,
                 scene_name = excluded.scene_name,
@@ -1554,6 +1548,7 @@ pub async fn upsert_game_scene<'e, E>(executor: E, game_id: &str,scene: &GameSce
                 is_ending = excluded.is_ending,
                 ending_id = excluded.ending_id,
                 settings_json = excluded.settings_json,
+                script = excluded.script,
                 sort_order = excluded.sort_order,
                 updated_at = excluded.updated_at
         "#,
@@ -1564,8 +1559,9 @@ pub async fn upsert_game_scene<'e, E>(executor: E, game_id: &str,scene: &GameSce
     .bind(&scene.description)
     .bind(&scene.scene_key)
     .bind(scene.is_ending)
-    .bind::<Option<String>>(None)
+    .bind(&scene.ending_id)
     .bind(&scene.settings_json)
+    .bind(&scene.script)
     .bind(scene_index)
     .bind(now)
     .bind(now)
@@ -1948,7 +1944,7 @@ pub async fn delete_game_relationship_def<'e, E>(executor: E, id: &str) -> Resul
 pub async fn get_all_game_player_sessions<'e, E>(executor: E, game_id: &str) -> Result<Vec<GamePlayerSessions>, Error> where E: Executor<'e, Database = Sqlite> {
     let result = sqlx::query_as::<_, GamePlayerSessionsRow>(
     "SELECT 
-        id, game_id, player_id, current_scene_id, current_map_id, current_zone_id, current_location_id, current_weather_id, game_time, flags_json, parent_session_id, pending_scenes_json, inventory_json, relationships_json, forked_from_seq, head_seq, updated_at
+        id, game_id, player_id, current_scene_id, current_map_id, current_zone_id, current_location_id, current_weather_id, game_time, flags_json, parent_session_id, pending_scenes_json, inventory_json, relationships_json, stage_json, forked_from_seq, head_seq, updated_at
     FROM game_player_sessions WHERE game_id = ?"
     )
     .bind(game_id)
@@ -1959,7 +1955,7 @@ pub async fn get_all_game_player_sessions<'e, E>(executor: E, game_id: &str) -> 
 pub async fn get_game_player_sessions<'e, E>(executor: E, id: &str) -> Result<GamePlayerSessions, Error> where E: Executor<'e, Database = Sqlite> {
     let result = sqlx::query_as::<_, GamePlayerSessionsRow>(
     "SELECT 
-        id, game_id, player_id, current_scene_id, current_map_id, current_zone_id, current_location_id, current_weather_id, game_time, flags_json, parent_session_id, pending_scenes_json, inventory_json, relationships_json, forked_from_seq, head_seq, updated_at
+        id, game_id, player_id, current_scene_id, current_map_id, current_zone_id, current_location_id, current_weather_id, game_time, flags_json, parent_session_id, pending_scenes_json, inventory_json, relationships_json, stage_json, forked_from_seq, head_seq, updated_at
     FROM game_player_sessions 
     WHERE id = ?"
     )
@@ -1975,10 +1971,11 @@ pub async fn upsert_game_player_sessions<'e, E>(executor: E, input: GamePlayerSe
     let pending_scenes_json = serde_json::to_string(&input.pending_scenes_json).unwrap_or_default();
     let inventory_json = serde_json::to_string(&input.inventory_json).unwrap_or_default();
     let relationships_json = serde_json::to_string(&input.relationships_json).unwrap_or_default();
+    let stage_json = serde_json::to_string(&input.stage_json).unwrap_or_default();
     sqlx::query(
         r#"
-        INSERT INTO game_player_sessions ( id, game_id, player_id, current_scene_id, current_map_id, current_zone_id, current_location_id, current_weather_id, game_time, flags_json, parent_session_id,  pending_scenes_json, inventory_json, relationships_json, forked_from_seq, head_seq, updated_at ) 
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        INSERT INTO game_player_sessions ( id, game_id, player_id, current_scene_id, current_map_id, current_zone_id, current_location_id, current_weather_id, game_time, flags_json, parent_session_id,  pending_scenes_json, inventory_json, relationships_json, stage_json, forked_from_seq, head_seq, updated_at ) 
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
         ON CONFLICT(id) DO UPDATE SET
             game_id=excluded.game_id, 
             player_id=excluded.player_id, 
@@ -1993,7 +1990,8 @@ pub async fn upsert_game_player_sessions<'e, E>(executor: E, input: GamePlayerSe
             pending_scenes_json=excluded.pending_scenes_json,
             inventory_json=excluded.inventory_json,
             relationships_json=excluded.relationships_json,
-            forked_from_seq=excluded.forked_from_seq,
+            relationships_json=excluded.relationships_json,
+            stage_json=excluded.stage_json,
             head_seq=excluded.head_seq,
             updated_at=excluded.updated_at
         "#,
@@ -2012,6 +2010,7 @@ pub async fn upsert_game_player_sessions<'e, E>(executor: E, input: GamePlayerSe
     .bind(pending_scenes_json)
     .bind(inventory_json)
     .bind(relationships_json)
+    .bind(stage_json)
     .bind(&input.forked_from_seq)
     .bind(&input.head_seq)
     .bind(now)
@@ -2392,8 +2391,7 @@ pub async fn delete_game_story_plans<'e, E>(executor: E, session_id: &str, seq: 
 // ---------------------------------------------------------
 pub async fn get_all_game_relationship_snapshots<'e, E>(executor: E, game_id: &str) -> Result<Vec<GameRelationshipSnapshots>, Error> where E: Executor<'e, Database = Sqlite> {
     let result = sqlx::query_as::<_, GameRelationshipSnapshotsRow>(
-    "SELECT 
-        rs.session_id, rs.seq, rs.relationships_json, rs.created_at
+    "SELECT rs.session_id, rs.seq, rs.relationships_json, rs.created_at
     FROM game_relationship_snapshots rs
         INNER JOIN game_player_sessions s ON rs.session_id = s.id
         WHERE s.game_id = ?
@@ -2406,8 +2404,7 @@ pub async fn get_all_game_relationship_snapshots<'e, E>(executor: E, game_id: &s
 }
 pub async fn get_session_game_relationship_snapshots<'e, E>(executor: E, session_id: &str) -> Result<Vec<GameRelationshipSnapshots>, Error> where E: Executor<'e, Database = Sqlite> {
     let result = sqlx::query_as::<_, GameRelationshipSnapshotsRow>(
-    "SELECT 
-        session_id, seq, relationships_json, created_at
+    "SELECT session_id, seq, relationships_json, created_at
     FROM game_relationship_snapshots 
     WHERE session_id = ?
     "
@@ -2419,8 +2416,7 @@ pub async fn get_session_game_relationship_snapshots<'e, E>(executor: E, session
 }
 pub async fn get_game_relationship_snapshots_lookup<'e, E>(executor: E, session_id: &str, from_seq: Option<u32>, to_seq: u32) -> Result<Vec<GameRelationshipSnapshots>, Error> where E: Executor<'e, Database = Sqlite> {
     let result = sqlx::query_as::<_, GameRelationshipSnapshotsRow>(
-    "SELECT 
-        session_id, seq, relationships_json, created_at
+    "SELECT session_id, seq, relationships_json, created_at
     FROM game_relationship_snapshots 
     WHERE session_id = ?
         AND seq BETWEEN ? and ?"
@@ -2434,8 +2430,7 @@ pub async fn get_game_relationship_snapshots_lookup<'e, E>(executor: E, session_
 }
 pub async fn get_game_relationship_snapshot<'e, E>(executor: E, session_id: &str, seq: u32) -> Result<GameRelationshipSnapshots, Error> where E: Executor<'e, Database = Sqlite> {
     let result = sqlx::query_as::<_, GameRelationshipSnapshotsRow>(
-    "SELECT 
-        session_id, seq, relationships_json, created_at
+    "SELECT session_id, seq, relationships_json, created_at
     FROM game_relationship_snapshots 
     WHERE session_id = ? AND seq = ?"
     )
@@ -2471,7 +2466,7 @@ pub async fn upsert_game_relationship_snapshot<'e, E>(executor: E, input: GameRe
     sqlx::query(
         r#"
         INSERT INTO game_relationship_snapshots ( session_id, seq, relationships_json, created_at ) 
-        VALUES (?, ?, ?, ?, ?, ?, ?)
+        VALUES (?, ?, ?, ?)
         ON CONFLICT(seq, session_id) DO UPDATE SET
             relationships_json=excluded.relationships_json
         "#,
@@ -2579,9 +2574,11 @@ pub async fn upsert_game_character_state<'e, E>(executor: E, input: GameCharacte
         r#"
         INSERT INTO game_character_state_snapshots ( session_id, seq, game_character_id, current_location_id, status, state_json, updated_at ) 
         VALUES (?, ?, ?, ?, ?, ?, ?)
-        ON CONFLICT(seq, session_id) DO UPDATE SET
-            plan_json=excluded.plan_json, 
-            reason=excluded.reason
+        ON CONFLICT(session_id, seq, game_character_id) DO UPDATE SET
+            current_location_id=excluded.current_location_id, 
+            status=excluded.status, 
+            state_json=excluded.state_json, 
+            updated_at=excluded.updated_at
         "#,
     )
     .bind(&input.session_id)

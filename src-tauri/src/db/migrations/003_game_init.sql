@@ -112,17 +112,16 @@ CREATE TABLE IF NOT EXISTS game_assets (
 CREATE TABLE IF NOT EXISTS audio_assets (                  -- voice / sfx / bgm
   assets_id TEXT PRIMARY KEY REFERENCES game_assets(id) ON DELETE CASCADE,
   tag TEXT,                                  -- sfx: 소리 그룹 이름, bgm: 분위기 id
-  game_character_id TEXT REFERENCES game_characters(id) ON DELETE CASCADE,  -- voice의 화자
+  game_character_id TEXT REFERENCES game_characters(id) ON DELETE SET NULL,  -- voice의 화자
   transcript TEXT                            -- voice의 대사 텍스트
 );
 
 -- 이미지 에셋
 CREATE TABLE IF NOT EXISTS character_assets (
   assets_id TEXT PRIMARY KEY REFERENCES game_assets(id) ON DELETE CASCADE,
-  game_character_id TEXT NOT NULL REFERENCES game_characters(id) ON DELETE CASCADE,
+  game_character_id TEXT REFERENCES game_characters(id) ON DELETE SET NULL,
   usage TEXT NOT NULL CHECK (usage IN ('standing','map')),
-  emotion TEXT,                              -- standing은 필수, map은 NULL 또는 variant
-  UNIQUE (game_character_id, usage, emotion)
+  emotion TEXT                              -- standing은 필수, map은 NULL 또는 variant
 );
 
 CREATE TABLE IF NOT EXISTS cg_assets (
@@ -132,12 +131,13 @@ CREATE TABLE IF NOT EXISTS cg_assets (
   prompt TEXT, 
   negative_prompt TEXT, 
   seed INTEGER, 
-  generation_params TEXT
+  generation_params TEXT,
+  ai_usable INTEGER NOT NULL DEFAULT 1
 );
 
 CREATE TABLE IF NOT EXISTS background_assets (
   assets_id TEXT PRIMARY KEY REFERENCES game_assets(id) ON DELETE CASCADE,
-  location_id TEXT REFERENCES game_locations(id) ON DELETE CASCADE,   -- NULL = 전체 기본
+  location_id TEXT REFERENCES game_locations(id) ON DELETE SET NULL,
   time_id TEXT REFERENCES game_time_periods(id) ON DELETE SET NULL,
   weather_id TEXT REFERENCES game_weather_types(id) ON DELETE SET NULL
 );
@@ -318,6 +318,7 @@ CREATE TABLE IF NOT EXISTS game_scenes (
   ending_id TEXT,
   -- Scene 진입 시 실행되는 설정
   settings_json TEXT,
+  script TEXT,
 
   -- Editor에서의 정렬 순서
   sort_order INTEGER DEFAULT 0,
@@ -415,6 +416,7 @@ CREATE TABLE IF NOT EXISTS game_player_sessions (
   pending_scenes_json TEXT, -- 씬 대기열
   inventory_json TEXT,       -- {"key_card": 1, "potion": 3}  (item_id → 수량)
   relationships_json TEXT,
+  stage_json TEXT,
 
   -- 분기용
   parent_session_id TEXT REFERENCES game_player_sessions(id) ON DELETE SET NULL, -- 이전 세션 id를 가지고 있으면 분기로, 메시지와 대화 세션을 불러오는 역할을 한다.
@@ -567,7 +569,11 @@ CREATE INDEX IF NOT EXISTS idx_character_spawn_character ON game_character_spawn
 
 -- assets
 CREATE INDEX IF NOT EXISTS idx_game_assets_game ON game_assets(game_id);
-CREATE UNIQUE INDEX IF NOT EXISTS idx_background_pick ON background_assets (COALESCE(location_id,''), COALESCE(time_id,''), COALESCE(weather_id,''));
+CREATE INDEX IF NOT EXISTS idx_game_assets_game_category ON game_assets(game_id, category);
+CREATE INDEX IF NOT EXISTS idx_audio_assets_character ON audio_assets(game_character_id);
+CREATE INDEX IF NOT EXISTS idx_character_assets ON character_assets (game_character_id, usage, emotion);
+CREATE INDEX IF NOT EXISTS idx_cg_assets_character ON cg_assets(game_character_id);
+CREATE INDEX IF NOT EXISTS idx_background_assets ON background_assets (location_id, time_id, weather_id);
 -- Map
 CREATE INDEX IF NOT EXISTS idx_game_maps_game ON game_maps(game_id);
 CREATE INDEX IF NOT EXISTS idx_map_zones_map_id ON game_map_zones(map_id);

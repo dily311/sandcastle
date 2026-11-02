@@ -33,6 +33,10 @@ export default defineConfig(({ mode, command }) => {
 				},
 			},
 		},
+		test: {
+			environment: "jsdom",
+			setupFiles: ["./src/test/setup.ts"]
+		},
 		resolve: {
 			alias: (!isTauri && isDev)
 				? {

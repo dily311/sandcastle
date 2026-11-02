@@ -26,7 +26,10 @@ impl GameSystem for TimeSystem {
 
         let periods: Vec<(String, u32, u32)> = def.time_periods.iter().map(|p| (p.id.clone(), p.start_minute, p.end_minute)).collect();
         if let Some(period_id) = engine::resolve_time_period(&periods, state.game_time) {
-            state.time_period_id = period_id;
+            if period_id != state.time_period_id {
+                out.push(GameEvent::TimePeriodChanged { from: Some(state.time_period_id.clone()), to: period_id.clone() });
+                state.time_period_id = period_id;
+            }
         }
 
         let candidates: Vec<(String, f64)> = def

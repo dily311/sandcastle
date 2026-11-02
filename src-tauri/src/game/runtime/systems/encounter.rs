@@ -65,6 +65,10 @@ impl GameSystem for EncounterSystem {
             weather_id: state.weather_id.clone(),
             time_period_id: state.time_period_id.clone(),
             flags: state.flags.clone(),
+            location_id: state.location_id.clone(),
+            time_from: state.game_time.clone(),
+            inventory: state.inventory_json.clone(),
+            relationships: state.relationships_json.clone(),
         };
 
         let Some(idx) = engine::roll_encounter(&entries, &engine_state, table.base_trigger_chance, weather_mod, &cooling_down, rng) else {
@@ -84,7 +88,7 @@ impl GameSystem for EncounterSystem {
 
         state.cooldowns.insert(game_event.id.clone(), state.game_time);
 
-        let mut out = vec![GameEvent::EventTriggered { event_id: game_event.id.clone(), npc_id }];
+        let mut out = vec![GameEvent::EventTriggered {event_id:game_event.id.clone(),npc_id, event_type: game_event.event_type.clone(), trigger_type: game_event.trigger_type.clone() }];
         let (_, changes) = engine::apply_effect(&state.flags, &game_event.effect_json);
         out.extend(changes.into_iter().map(|(key, old, new)| GameEvent::VariableChanged { key, old, new }));
         out

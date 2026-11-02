@@ -134,40 +134,28 @@ impl MusicMetaInput {
             .unwrap_or("Unknown Title")
             .to_string();
 
-        let album_art = tag
-            .map(|t| {
-                t.pictures()
-                    .first()
-                    .and_then(|p| save_album_art(p, &file_name_fallback, cache_dir).ok())
-            })
-            .unwrap_or_default();
+        let album_art = tag.and_then(|t| {
+            t.pictures()
+                .first()
+                .and_then(|p| save_album_art(p, &file_name_fallback, cache_dir).ok())
+        });
 
         Self {
             path: audio_src,
             title: tag
-                .map(|t| t.title().map(String::from).unwrap_or(file_name_fallback))
-                .unwrap_or_default(),
-            artist: tag
-                .map(|t| t.artist().map(String::from))
-                .unwrap_or_default(),
-            album: tag.map(|t| t.album().map(String::from)).unwrap_or_default(),
-            album_title: tag
-                .map(|t| t.get_string(ItemKey::AlbumTitle).map(String::from))
-                .unwrap_or_default(),
-            album_artist: tag
-                .map(|t| t.get_string(ItemKey::AlbumArtist).map(String::from))
-                .unwrap_or_default(),
-            track_number: tag
-                .map(|t| t.get_string(ItemKey::TrackNumber).map(String::from))
-                .unwrap_or_default(),
-            genre: tag.map(|t| t.genre().map(String::from)).unwrap_or_default(),
-            comment: tag
-                .map(|t| t.comment().map(String::from))
-                .unwrap_or_default(),
+                .and_then(|t| t.title().map(String::from))
+                .map(|s| s.trim().to_string())
+                .filter(|s| !s.is_empty())
+                .unwrap_or(file_name_fallback),
+            artist: tag.and_then(|t| t.artist().map(String::from)),
+            album: tag.and_then(|t| t.album().map(String::from)),
+            album_title: tag.and_then(|t| t.get_string(ItemKey::AlbumTitle).map(String::from)),
+            album_artist: tag.and_then(|t| t.get_string(ItemKey::AlbumArtist).map(String::from)),
+            track_number: tag.and_then(|t| t.get_string(ItemKey::TrackNumber).map(String::from)),
+            genre: tag.and_then(|t| t.genre().map(String::from)),
+            comment: tag.and_then(|t| t.comment().map(String::from)),
             album_art,
-            lyrics: tag
-                .map(|t| t.get_string(ItemKey::Lyrics).map(String::from))
-                .unwrap_or_default(),
+            lyrics: tag.and_then(|t| t.get_string(ItemKey::Lyrics).map(String::from)),
             duration,
             updated_at,
         }

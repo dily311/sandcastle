@@ -7,6 +7,7 @@
 //!     protocol.rs         — game:// 커스텀 프로토콜 (에셋 서빙 + CSP)
 //!     journal.rs           — 턴 결과(일지/이벤트 로그/세션 저장) 기록 공용 함수
 //!     validate.rs          — 게임 정의 일관성 검사 (start_new_game이 Error면 시작을 막음)
+//!     template.rs          — 템플릿(규칙/capabilities)과 번들된 템플릿 패키지(.tgame)
 //!     session.rs           — 책갈피에서 분기(fork)한 새 세션 만들기
 //!     guard.rs             — current_game_id 등 커맨드 공용 검증 헬퍼
 //!     npc.rs                — npc_say의 실제 로직 (게임의 AI 대화. 얇은 wrapper는 commands/game_engine.rs)
@@ -31,8 +32,9 @@ pub mod package;
 pub mod protocol;
 pub mod runtime;
 pub mod session;
-pub mod validate;
+pub mod stage;
 pub mod template;
+pub mod validate;
 
 pub use manager::GameManager;
 pub use runtime::GameRuntime;

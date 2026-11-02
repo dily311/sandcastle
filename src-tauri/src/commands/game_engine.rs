@@ -11,12 +11,12 @@
 //! 가드를 .await 너머로 들고 갈 수 있어야 한다.
 use crate::state::AppState;
 use crate::db::game::{
-    get_all_game_conversations, get_all_game_player_sessions, get_all_game_save, get_game_journal_lookup, get_game_messages_lookup, get_game_player_sessions, get_game_save, upsert_game_journal, upsert_game_player_sessions, upsert_game_save,
+    delete_game_player_sessions, get_all_game_conversations, get_all_game_player_sessions, get_all_game_save, get_game_journal_lookup, get_game_messages_lookup, get_game_player_sessions, get_game_save, upsert_game_journal, upsert_game_save,
 };
 use crate::error::AppError;
 use crate::game::guard::{check_slot, current_game_id};
 use crate::game::runtime::{GameCommand, GameEvent, GameRepository, GameResponse, GameRuntime, SqlxGameRepository};
-use crate::models::game::{GameConversations, GameJournal, GameMessages, GamePlayerSessions, GamePlayerSessionsInput, GameSave, GameSaveInput};
+use crate::models::game::{GameConversations, GameJournal, GameMessages, GamePlayerSessions, GameSave, GameSaveInput};
 use crate::models::settings::AppSetting;
 use crate::sys::settings::SettingsState;
 use tauri::{AppHandle, State};
@@ -31,21 +31,47 @@ pub async fn start_new_game(state: State<'_, AppState>, settings: State<'_, Sett
 
     let repo = SqlxGameRepository::new(&state.db);
     let definition = repo.load_definition(&game_id).await.map_err(|e| AppError::Database(e.to_string()))?;
+    // 데이터가 어긋나 있으면(없는 씬을 가리키는 선택지 등) 시작 전에 막는다. 경고는 validate_game으로 본다.
+    if let Some(msg) = crate::game::validate::errors_summary(&crate::game::validate::validate(&definition)) {
+        return Err(AppError::Validation(format!("게임 데이터에 문제가 있어 시작할 수 없습니다: {msg}")));
+    }
     let session_id = uuid::Uuid::new_v4().to_string();
     // 지금 선택돼 있는 페르소나를 이 세션에 고정한다. 세션 중에 설정에서 바꿔도 이 세션엔 반영 안 됨.
     let player_id = crate::game::guard::selected_persona_id(&settings)?;
     let mut runtime = GameRuntime::from_new_game(definition, session_id.clone(), player_id).map_err(|e| AppError::Validation(e.to_string()))?;
 
-    // // 플레이어 세션 생성
-    let input = GamePlayerSessionsInput::from_state(runtime.state().clone(), game_id.clone());
-    upsert_game_player_sessions(&state.db, input).await.map_err(|e| AppError::Database(e.to_string()))?;
-
-    let events = runtime.start();   // GameStarted + NPC 처음 위치 굴림
+    // 첫 턴: GameStarted를 흘려서 NPC의 처음 위치도 굴린다. record가 세션 행을 먼저 만들고
+    // 일지/NPC 상태를 한 트랜잭션으로 쓴다.
+    let events = runtime.start();
     crate::game::journal::record(&state.db, &mut runtime, &game_id, None, &events).await?;
-    let response = GameResponse { events, state: runtime.render_state() };
 
+    let response = GameResponse { events, state: runtime.render_state() };
     *state.active_runtime.lock().await = Some(runtime);
     Ok(response)
+}
+
+/// 화면에 그릴 정적 데이터(맵/위치/캐릭터/씬/변수 정의 등)를 돌려준다. 플레이 중에만 부를 수 있고,
+/// 이미 메모리에 있는 정의에서 만들어서 DB를 안 읽는다. 어떤 필드를 주고/안 주는지는 runtime/view.rs 참고.
+/// 현재 값(위치, 시간, 변수 값 등)은 RenderState에 있다.
+#[tauri::command]
+pub async fn get_game_view(state: State<'_, AppState>) -> Result<serde_json::Value, AppError> {
+    let guard = state.active_runtime.lock().await;
+    let runtime = guard.as_ref().ok_or_else(|| AppError::NotFound("진행 중인 세션이 없습니다".into()))?;
+    Ok(runtime.definition().view())
+}
+
+/// 게임 정의의 일관성 검사 결과 (Error/Warning). 임포트 직후나 편집기에서 보여주기 위한 것.
+#[tauri::command]
+pub async fn validate_game(app: AppHandle, state: State<'_, AppState>) -> Result<Vec<crate::game::validate::Issue>, AppError> {
+    use tauri::Manager;
+    let game_id = current_game_id(&state)?;
+    let repo = SqlxGameRepository::new(&state.db);
+    let definition = repo.load_definition(&game_id).await.map_err(|e| AppError::Database(e.to_string()))?;
+    let mut issues = crate::game::validate::validate(&definition);
+    // 에셋 파일이 실제로 있는지는 파일시스템을 봐야 해서 여기서 더한다.
+    let game_dir = app.path().app_data_dir()?.join("games").join(&game_id);
+    issues.extend(crate::game::validate::validate_asset_files(&definition, &game_dir));
+    Ok(issues)
 }
 
 /// 이 게임의 세션(책) 목록. 세션 목록 화면용.
@@ -54,6 +80,14 @@ pub async fn list_sessions(state: State<'_, AppState>) -> Result<Vec<GamePlayerS
     let game_id = current_game_id(&state)?;
     Ok(get_all_game_player_sessions(&state.db, &game_id).await?)
 }
+
+/// 이 게임의 세션 삭제용
+#[tauri::command]
+pub async fn delete_sessions(state: State<'_, AppState>, session_id: String) -> Result<(), AppError> {
+    delete_game_player_sessions(&state.db, &session_id).await?;
+    Ok(())
+}
+
 
 /// 세션이 이 게임의 것인지 확인하고 돌려준다 (다른 게임의 세션 id를 넣는 위조 방지).
 async fn owned_session(state: &AppState, game_id: &str, session_id: &str) -> Result<GamePlayerSessions, AppError> {
@@ -85,7 +119,7 @@ pub async fn continue_game(state: State<'_, AppState>, session_id: String) -> Re
 /// 책갈피를 불러와서 거기서부터 이어서 플레이한다.
 ///  - 그 책갈피가 세션의 맨 끝(이후 진행 없음)이면 같은 세션을 그대로 이어간다.
 ///  - 이후 기록이 있으면 그 지점까지를 복사한 새 세션으로 분기한다 (원래 기록은 보존).
-/// 돌려주는 응답의 세션 id는 RenderState에 없으니, 프론트는 list_sessions로 새 세션을 확인한다.
+/// 응답의 state.sessionId가 실제로 열린 세션이다 (분기면 새 세션 id).
 #[tauri::command]
 pub async fn load_save(state: State<'_, AppState>, session_id: String, slot: i64) -> Result<GameResponse, AppError> {
     let game_id = current_game_id(&state)?;

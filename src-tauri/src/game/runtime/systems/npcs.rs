@@ -47,12 +47,12 @@ fn reroll_all(def: &GameDefinition, state: &mut GameState, rng: &mut StdRng) -> 
         if known.is_some() && old_loc == new_loc {
             continue; // 그대로면 알리지도 기록하지도 않는다
         }
-        state.npc_states.insert(cid.to_string(), NpcState { location_id: new_loc.clone(), status: if new_loc.is_some() { "active" } else { "absent" }.into() });
-        out.push(GameEvent::NpcMoved { game_character_id: cid.to_string(), from: old_loc, to: new_loc.clone() });
+        state.npc_states.insert(cid.clone(), NpcState { location_id: new_loc.clone(), status: if new_loc.is_some() { "active" } else { "absent" }.into() });
+        out.push(GameEvent::NpcMoved { game_character_id: cid.clone(), from: old_loc, to: new_loc.clone() });
 
         // 대화 중이던 NPC가 이 자리를 떠났으면 대화를 닫는다.
         if state.active_npc_id.as_deref() == Some(cid.as_str()) && new_loc != state.location_id {
-            out.push(GameEvent::DialogueEnded { game_character_id: cid.to_string() });
+            out.push(GameEvent::DialogueEnded { game_character_id: cid.clone() });
         }
     }
     out

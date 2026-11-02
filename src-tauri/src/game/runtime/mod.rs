@@ -4,12 +4,14 @@ pub mod event;
 pub mod repository;
 pub mod state;
 mod systems;
+mod assets;
 mod view;
 
 pub use command::GameCommand;
 pub use definition::GameDefinition;
 pub use event::GameEvent;
 pub use repository::{GameRepository, SqlxGameRepository};
+pub use assets::DefResolver;
 pub use state::{GameState, NpcState, RenderState};
 
 use anyhow::Result;
@@ -97,6 +99,7 @@ impl GameRuntime {
     pub fn from_new_game(definition: GameDefinition, session_id: String, player_id: String) -> Result<Self> {
         let start = definition.start_point();
 
+        let start_seconds = start.start_minute.unwrap_or(0).clamp(0, 1439) * 60;
         let initial_location = match &start.location_id {
             Some(id) => definition
                 .location(id)
@@ -116,7 +119,7 @@ impl GameRuntime {
                 .ok_or_else(|| anyhow::anyhow!("설정된 시작 날씨(startWeatherId={id})을 찾을 수 없습니다"))?,
             None => definition.weather_types.first().ok_or_else(|| anyhow::anyhow!("게임에 날씨 타입이 하나도 없습니다"))?,
         };
-        let time_period_id = crate::game::engine::resolve_time_period(&period_tuples(&definition), 0)
+        let time_period_id = crate::game::engine::resolve_time_period(&period_tuples(&definition), start_seconds)
             .ok_or_else(|| anyhow::anyhow!("게임에 시간대가 하나도 없습니다"))?;
 
         // game_state_defs의 기본값으로 flags를 채운다 (안 하면 "기본값이 0인 변수"도 키가 없어서
@@ -148,7 +151,7 @@ impl GameRuntime {
             location_id: Some(initial_location.id.clone()),
             map_id: map.id.clone(),
             zone_id: Some(zone.id.clone()),
-            game_time: 0,
+            game_time: start_seconds,
             weather_id: initial_weather.id.clone(),
             time_period_id,
             // 시작 씬: game_projects.start_scene_key. TODO: 씬 진입을 이벤트(SceneChanged)로 알리지 않는다
@@ -159,6 +162,7 @@ impl GameRuntime {
             flags: initial_flags,
             inventory_json: serde_json::json!({}),
             relationships_json: initial_relationships,
+            stage_json: serde_json::json!({}),
             npc_states: Default::default(), // start()가 GameStarted를 흘려서 처음 위치를 굴린다
             cooldowns: Default::default(),
             auto_active: Default::default(),
@@ -397,6 +401,41 @@ impl GameRuntime {
             render.available_choices = scene.choices.iter().flatten().filter(|c| self.choice_available(c)).map(|c| c.id.clone()).collect();
         }
         render
+    }
+
+    /// 지금 플레이어와 같은 위치에 있는 NPC들 (정렬). AI 응답에서 말할 수 있는 인물의 범위다.
+    pub fn present_npc_ids(&self) -> Vec<String> {
+        let Some(here) = self.state.location_id.as_deref() else { return vec![] };
+        let mut v: Vec<String> = self.state.npc_states.iter().filter(|(_, n)| n.location_id.as_deref() == Some(here)).map(|(id, _)| id.clone()).collect();
+        v.sort();
+        v
+    }
+
+    /// AI 응답 텍스트를 줄/연출로 파싱한다 (제작자 대본과 같은 문법, 허용 범위만 AI용).
+    /// speakers: 말하거나 연출 대상이 될 수 있는 캐릭터 (대화 상대 + 같은 위치의 NPC).
+    /// `이름:` 접두가 하나도 없으면 옛 방식의 응답으로 보고 전부 대화 상대의 대사로 취급한다.
+    /// 주의: 연출 태그가 풀리지 않거나 화자가 허용되지 않아 줄이 전부 버려지면 빈 목록이 나온다.
+    pub fn parse_ai_stage(&mut self, raw: &str, speakers: std::collections::HashSet<String>, default_speaker: &str) -> Vec<crate::game::stage::StageLine> {
+        use crate::game::stage::{self, Allowed, LineKind};
+        let allow = Allowed::ai(speakers);
+        let mut resolver = DefResolver { def: &self.definition, rng: &mut self.rng, ai: true, player_name: None };
+        let mut lines = stage::parse(raw, &mut resolver, &allow);
+        if !lines.iter().any(|l| l.kind == LineKind::Dialogue) {
+            for l in lines.iter_mut().filter(|l| l.kind == LineKind::Narration) {
+                l.kind = LineKind::Dialogue;
+                l.speaker = Some(default_speaker.to_string());
+            }
+        }
+        lines
+    }
+
+    /// 파싱된 줄의 연출을 무대 상태(stage_json)에 반영한다. 이어하기/분기 때 같은 화면이 복원된다.
+    pub fn commit_stage(&mut self, lines: &[crate::game::stage::StageLine]) {
+        for l in lines {
+            for c in &l.cues {
+                crate::game::stage::apply_cue_to_stage(&mut self.state.stage_json, c);
+            }
+        }
     }
 
     /// AI가 낸 effect들을 허용 목록/범위로 걸러서 (key, old, new) 변경 목록으로 만든다 (상태는 안 바꿈).

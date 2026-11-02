@@ -6,7 +6,7 @@ use crate::error::AppError;
 use crate::game::manager::{GameManager, SaveReport};
 use crate::game::package::PackageData;
 use crate::game::runtime::{GameRepository, SqlxGameRepository};
-use crate::models::game::{GameProject}; // ⚠ GameManifest 실제 모듈 경로 확인 (appstate.rs의 import와 같아야 함)
+use crate::models::game::{GameProject};
 use std::path::PathBuf;
 use tauri::{AppHandle, Manager, State};
 
@@ -15,14 +15,21 @@ fn games_root(app: &AppHandle) -> Result<PathBuf, AppError> {
 }
 
 #[tauri::command]
-pub async fn create_game(app: AppHandle, state: State<'_, AppState>, title: String, template_id: String) -> Result<String, AppError> {
-    GameManager::create_game(&state.db, &games_root(&app)?, title, template_id).await
+pub async fn create_game(app: AppHandle, state: State<'_, AppState>, title: String, template_id: String) -> Result<GameProject, AppError> {
+    let id = GameManager::create_game(&state.db, &games_root(&app)?, title, template_id).await?;
+    Ok(crate::db::game::get_game_project(&state.db, &id).await?)
+}
+
+/// 앱에 포함된 템플릿 목록 (새 게임 만들기 화면용). capabilities로 어떤 기능을 쓰는 템플릿인지 알 수 있다.
+#[tauri::command]
+pub fn list_templates() -> Vec<crate::game::template::Template> {
+    crate::game::template::all()
 }
 
 /// 에디터 저장. 기존 행은 id를 달아 보내야 한다 (없는 id는 새 행). 응답의 deleted/issues를 사용자에게 보여줄 것.
 #[tauri::command]
-pub async fn save_package(state: State<'_, AppState>, game_id: String, data: PackageData) -> Result<SaveReport, AppError> {
-    GameManager::save_package(&state.db, &game_id, data).await
+pub async fn save_package(app: AppHandle, state: State<'_, AppState>, game_id: String, data: PackageData) -> Result<SaveReport, AppError> {
+    GameManager::save_package(&state.db, &games_root(&app)?, &game_id, data).await
 }
 
 /// 게임 삭제. 플레이 기록(세션/세이브/일지/대화)도 같이 지워지므로 UI에서 반드시 확인을 받을 것.
@@ -41,15 +48,19 @@ pub async fn delete_game(app: AppHandle, state: State<'_, AppState>, game_id: St
 }
 
 #[tauri::command]
-pub async fn import_game(app: AppHandle, state: State<'_, AppState>, zip_path: String) -> Result<GameProject, AppError> {
-    let id = GameManager::import_package(&state.db, &games_root(&app)?, &PathBuf::from(zip_path)).await?;
-    let project = crate::db::game::get_game_project(&state.db, &id).await?;
-    Ok(project)
+pub async fn import_game(app: AppHandle, state: State<'_, AppState>, zip_path: String) -> Result<String, AppError> {
+    GameManager::import_package(&state.db, &games_root(&app)?, &PathBuf::from(zip_path)).await
 }
 
 #[tauri::command]
-pub async fn export_game(app: AppHandle, state: State<'_, AppState>, game_id: String, output_dir: String) -> Result<String, AppError> {
-    let path = GameManager::export_package(&state.db, &games_root(&app)?, &game_id, &PathBuf::from(output_dir)).await?;
+pub async fn export_game(app: AppHandle, state: State<'_, AppState>, game_id: String, output_dir: Option<String>) -> Result<String, AppError> {
+    // 폴더를 안 주면 사용자의 다운로드 폴더에 저장한다. 다운로드 폴더를 못 찾는 환경(일부 모바일)이면
+    // 앱 데이터 폴더의 exports로 대신한다.
+    let dir = match output_dir {
+        Some(d) => PathBuf::from(d),
+        None => app.path().download_dir().unwrap_or(app.path().app_data_dir()?.join("exports")),
+    };
+    let path = GameManager::export_package(&state.db, &games_root(&app)?, &game_id, &dir).await?;
     Ok(path.to_string_lossy().into_owned())
 }
 
@@ -68,7 +79,6 @@ pub async fn open_game(app: AppHandle, state: State<'_, AppState>, game_id: Stri
     let path = GameManager::load_package(&state.db, &games_root(&app)?, &game_id).await?;
     let project = crate::db::game::get_game_project(&state.db, &game_id).await?; // 없으면 NotFound
 
-    let parse = |s: &Option<String>| s.as_ref().and_then(|s| serde_json::from_str::<serde_json::Value>(s).ok());
     {
         let mut runtime = state.active_runtime.lock().await;
         if runtime.as_ref().map_or(false, |r| r.definition().game_id != game_id) {

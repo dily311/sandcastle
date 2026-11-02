@@ -4,10 +4,11 @@ mod dialogue;
 mod events;
 mod inventory;
 mod map;
-mod npcs;
 mod movement;
+mod npcs;
 mod relationship;
 mod scene;
+mod stage;
 mod time;
 mod trigger;
 
@@ -23,6 +24,31 @@ pub use events::prime_auto_state;
 pub(super) fn effect_events(flags: &serde_json::Value, effect: &serde_json::Value) -> Vec<GameEvent> {
     let (_, changes) = crate::game::engine::apply_effect(flags, effect);
     let mut out: Vec<GameEvent> = changes.into_iter().map(|(key, old, new)| GameEvent::VariableChanged { key, old, new }).collect();
+    // 아이템: {"give_item": {"key_card": 1}, "take_item": {"potion": 2}}  (item_id -> 수량)
+    for (verb, sign) in [("give_item", 1i64), ("take_item", -1i64)] {
+        if let Some(serde_json::Value::Object(m)) = effect.get(verb) {
+            for (item_id, q) in m {
+                if let Some(q) = q.as_i64().filter(|q| *q > 0) {
+                    out.push(GameEvent::ItemChangeRequested { item_id: item_id.clone(), delta: sign * q });
+                }
+            }
+        }
+    }
+    // 관계: {"relation": {"player>yuna": {"affection": 3, "trust": -2}}}  (키는 "from>to")
+    if let Some(serde_json::Value::Object(pairs)) = effect.get("relation") {
+        for (key, axes) in pairs {
+            let (Some((from, to)), Some(axes)) = (key.split_once('>'), axes.as_object()) else { continue };
+            for (axis, delta) in axes {
+                if let Some(delta) = delta.as_i64().filter(|d| *d != 0) {
+                    out.push(GameEvent::RelationChangeRequested { from: from.to_string(), to: to.to_string(), axis: axis.clone(), delta });
+                }
+            }
+        }
+    }
+    // 연출: {"stage": {"bgm": "romance", "cg": "festival_01", "effects": ["fireworks"], "emotion": {"유나": "happy"}}}
+    if let Some(spec) = effect.get("stage").filter(|s| s.is_object()) {
+        out.push(GameEvent::StageRequested { spec: spec.clone() });
+    }
     if let Some(scene_id) = effect.get("enter_scene").and_then(|v| v.as_str()) {
         out.push(GameEvent::SceneRequested { scene_id: scene_id.to_string() });
     }
@@ -54,10 +80,12 @@ pub fn all() -> Vec<Box<dyn GameSystem>> {
         Box::new(time::TimeSystem),
         Box::new(map::MapSystem),
         Box::new(trigger::TriggerSystem),
+        Box::new(npcs::NpcSystem),
         Box::new(events::EventSystem),
         Box::new(relationship::RelationshipSystem),
         Box::new(dialogue::DialogueSystem),
         Box::new(scene::SceneSystem),
+        Box::new(stage::StageSystem),
         Box::new(inventory::InventorySystem),
     ]
 }

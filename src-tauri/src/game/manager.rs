@@ -56,10 +56,12 @@ impl GameManager {
     /// (세이브/세션/이벤트 로그가 정의 행의 id를 참조하므로 "통째로 지우고 다시 쓰기"는 안 된다).
     /// 기존 행은 반드시 id를 달아 보내야 하고, id 없는 행은 새 행으로 취급된다.
     /// 월드인포 북은 전역 테이블이라 여기서 다루지 않는다 (project/characters의 world_info_ids만 저장).
-    pub async fn save_package(pool: &SqlitePool, game_id: &str, data: PackageData) -> Result<SaveReport, AppError> {
+    pub async fn save_package(pool: &SqlitePool, games_root: &Path, game_id: &str, data: PackageData) -> Result<SaveReport, AppError> {
         let repo = SqlxGameRepository::new(pool);
         let existing = repo.load_definition(game_id).await.map_err(|e| AppError::Database(e.to_string()))?;
-        let deleted = package::save_definition(pool, game_id, &existing, data).await?;
+        let (deleted, removed_files) = package::save_definition(pool, game_id, &existing, data).await?;
+        // DB가 커밋된 뒤에 지워진 에셋의 파일을 지운다 (DB가 실패하면 파일은 그대로 남는다).
+        package::remove_asset_files(games_root, game_id, &removed_files);
 
         // 저장 후 상태를 다시 읽어 검증해서 돌려준다 (저장은 이미 끝났다 — 이건 안내용).
         let after = repo.load_definition(game_id).await.map_err(|e| AppError::Database(e.to_string()))?;

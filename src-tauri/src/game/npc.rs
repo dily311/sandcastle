@@ -41,6 +41,8 @@ const GAME_SYSTEM_RULES: &[&str] = &[
     "플레이어에게 선택지를 줄 때는 각 선택지를 <choice>텍스트</choice> 태그로 감싸라. 선택지가 필요 없으면 태그를 쓰지 마라.",
     "대화 결과로 아래 '변수 목록'의 변수를 바꿔야 할 때만 응답 끝에 <updateVar>{\"add\":{\"변수키\":1}}</updateVar> 또는 <updateVar>{\"set\":{\"변수키\":값}}</updateVar> 형식으로 적어라. 목록에 writable로 표시된 변수만, 한 번에 조금씩만 바꿔라. 바꿀 일이 없으면 태그를 쓰지 마라. 이 태그와 그 내용은 플레이어에게 보이지 않는다.",
     "이 대화 때문에 이 캐릭터가 플레이어에게 느끼는 감정이 실제로 바뀔 때만 응답 끝에 <updateRel>{\"affection\":1,\"trust\":-1}</updateRel> 형식으로 적어라. 축은 affection(호감), trust(신뢰), tension(긴장)뿐이고, 한 번에 ±5 안에서 조금씩만 바꿔라. 바꿀 일이 없으면 태그를 쓰지 마라. 아래 '관계 목록'은 현재 수치다.",
+    "말하는 사람과 줄: 한 줄이 한 장면 조각이다. 대사는 `이름: 내용` 형식으로 쓰고, 지문(나레이션)은 이름 없이 쓴다. 대화 상대 외의 인물은 아래 '같은 장소에 있는 인물'에 있을 때만 등장해서 말할 수 있다. 플레이어(나)가 하는 말이나 행동은 대신 쓰지 마라.",
+    "연출 태그(플레이어에게 보이지 않는다)는 해당 줄에 함께 적는다: <emotion::이름>감정</emotion>(그 인물의 표정, '표정 목록'에 있는 감정만), <motion::이름>동작</motion>, <sfx>소리 이름</sfx>, <bgm>분위기</bgm>(바뀔 때만), <cg>키</cg> 또는 <cg>off</cg>(특별한 순간만), <effects>효과 이름</effects>. 목록에 없는 이름은 절대 쓰지 마라. 눈에 띄게 달라질 때만 쓰고 문장마다 쓰지 마라. 태그를 대사로 읽거나 설명하지 마라.",
 ];
 const MAX_UPDATE_TAGS: usize = 3; // 한 응답에서 읽을 <updateVar> 태그 수
 const MAX_AI_REL_CHANGES: usize = 3; // 한 응답에서 적용할 관계 축 변경 수
@@ -70,6 +72,8 @@ pub struct NpcReply {
     pub text: String,
     /// 보통 [] 또는 [ChoicePresented]. ChoicePresented는 시스템이 아니라 여기서만 만들어진다.
     pub events: Vec<crate::game::runtime::GameEvent>,
+    /// 줄 단위로 나눈 응답 + 줄마다 실행할 연출 (표정, 효과음, BGM, CG, 화면 효과). text는 같은 내용의 평문(`이름: 대사`)이다.
+    pub lines: Vec<crate::game::stage::StageLine>,
     /// AI가 바꾼 변수/그로 인한 이벤트가 반영된 뒤의 상태. 프론트가 그대로 맞춘다.
     pub state: crate::game::runtime::RenderState,
 }
@@ -190,6 +194,45 @@ async fn snapshot(state: &State<'_, AppState>, character_id: &str) -> Result<Npc
         m.insert("relationships".into(), serde_json::Value::Array(relations.into_iter().take(8).map(|(_, v)| v).collect()));
     }
 
+    // 연출 지시에 필요한 목록. AI는 파일이 아니라 "이름"만 본다: 같은 장소에 있는 인물, 인물별 표정(스탠딩 감정명),
+    // 효과음 그룹, 배경음 분위기, AI가 쓸 수 있는 CG(키+설명), 화면 효과, 모션.
+    {
+        let mut present_ids: Vec<&String> = st
+            .npc_states
+            .iter()
+            .filter(|(id, n)| id.as_str() != character_id && st.location_id.is_some() && n.location_id == st.location_id)
+            .map(|(id, _)| id)
+            .collect();
+        present_ids.sort();
+        present_ids.truncate(4);
+        let present: Vec<serde_json::Value> = present_ids
+            .iter()
+            .filter_map(|id| def.character(id))
+            .map(|c| serde_json::json!({ "name": c.name, "description": c.description.clone().unwrap_or_default().chars().take(200).collect::<String>() }))
+            .collect();
+        let mut emotions = serde_json::Map::new();
+        for id in std::iter::once(character_id).chain(present_ids.iter().map(|s| s.as_str())) {
+            let list = def.standing_emotions(id);
+            if !list.is_empty() {
+                emotions.insert(def.character(id).map(|c| c.name.clone()).unwrap_or_else(|| id.to_string()), serde_json::json!(list));
+            }
+        }
+        if let serde_json::Value::Object(m) = &mut extra_data {
+            m.insert("presentCharacters".into(), serde_json::json!(present));
+            m.insert(
+                "stage".into(),
+                serde_json::json!({
+                    "emotions": emotions,
+                    "sfx": def.sfx_tags().into_iter().take(40).collect::<Vec<_>>(),
+                    "bgmMoods": crate::game::stage::BGM_MOODS,
+                    "cgs": def.ai_cgs().into_iter().take(20).map(|(k, d)| serde_json::json!({ "key": k, "description": d })).collect::<Vec<_>>(),
+                    "effects": crate::game::stage::SCREEN_EFFECTS,
+                    "motions": crate::game::stage::MOTIONS,
+                }),
+            );
+        }
+    }
+
     Ok(NpcSnapshot {
         session_id: st.session_id.clone(),
         player_id: st.player_id.clone(),
@@ -290,7 +333,7 @@ pub async fn say(
 
     // 여기서부터는 런타임 락을 잡은 채로 끝까지 한다 — AI 호출 동안 사용자가 다른 세션으로 갈아탔을 수
     // 있어서 같은 세션인지 확인하고, seq 발급/저장/적용이 다른 커맨드와 섞이지 않게 하려는 것.
-    let (applied_events, render) = {
+    let (applied_events, render, plain, lines) = {
         let mut guard = state.active_runtime.lock().await;
         let runtime = guard.as_mut().ok_or_else(|| AppError::NotFound("진행 중인 세션이 없습니다".into()))?;
         if runtime.state().session_id != snap.session_id {
@@ -302,6 +345,19 @@ pub async fn say(
         let changes = runtime.plan_ai_changes(&effects, MAX_AI_CHANGES);
         // 관계는 "이 NPC가 플레이어에게 느끼는 것"(npc>player)만 AI가 바꿀 수 있다.
         let rel_changes = runtime.plan_ai_relation(&character_id, &rel_effects, MAX_AI_REL_CHANGES);
+
+        // 응답을 줄/연출로 파싱한다 (제작자 대본과 같은 문법). 화자와 연출 대상은 대화 상대 + 같은 위치의 NPC만 가능하다.
+        // 저장되는 content는 태그를 벗기고 `이름: ` 접두를 되살린 평문이라, 다음 프롬프트에서도 AI가 같은 형식을 이어간다.
+        let mut speakers: std::collections::HashSet<String> = runtime.present_npc_ids().into_iter().collect();
+        speakers.insert(character_id.to_string());
+        let lines = runtime.parse_ai_stage(&text, speakers, &character_id);
+        let plain = {
+            let def = runtime.definition();
+            crate::game::stage::to_plain(&lines, &|id: &str| {
+                if id == "player" { "플레이어".to_string() } else { def.character(id).map(|c| c.name.clone()).unwrap_or_else(|| id.to_string()) }
+            })
+        };
+        runtime.commit_stage(&lines); // 무대 상태(stage_json)에 반영 — 아래 트랜잭션에서 세션과 함께 저장된다
         let user_seq = runtime.next_seq();
         let ai_seq = runtime.next_seq();
         let game_time = runtime.state().game_time;
@@ -316,12 +372,15 @@ pub async fn say(
         if !rel_changes.is_empty() {
             meta.insert("relChanges".into(), serde_json::json!(rel_changes.iter().map(|(f, t, a, o, n)| serde_json::json!({ "from": f, "to": t, "axis": a, "old": o, "new": n })).collect::<Vec<_>>()));
         }
+        if !lines.is_empty() {
+            meta.insert("lines".into(), serde_json::to_value(&lines).unwrap_or(serde_json::Value::Null));
+        }
         let ai_meta = if meta.is_empty() { serde_json::Value::Null } else { serde_json::Value::Object(meta) };
 
         // 메시지의 seq가 곧 그 메시지의 일지 항목 seq다 (같은 번호로 일지에도 한 줄 남긴다).
         let messages = [
             (user_seq, "user", None::<String>, None::<String>, trimmed.to_string(), serde_json::Value::Null),
-            (ai_seq, "assistant", Some(snap.character_name.clone()), Some(character_id.clone()), text.clone(), ai_meta),
+            (ai_seq, "assistant", Some(snap.character_name.clone()), Some(character_id.clone()), plain.clone(), ai_meta),
         ];
 
         // head_seq 저장 + 메시지 + 일지를 한 트랜잭션으로.
@@ -354,7 +413,7 @@ pub async fn say(
         if !events.is_empty() {
             crate::game::journal::record(&state.db, runtime, &game_id, None, &events).await?;
         }
-        (events, runtime.render_state())
+        (events, runtime.render_state(), plain, lines)
     };
 
     let mut events = Vec::new();
@@ -362,7 +421,7 @@ pub async fn say(
         events.push(crate::game::runtime::GameEvent::ChoicePresented { choices });
     }
     events.extend(applied_events);
-    Ok(NpcReply { text, events, state: render })
+    Ok(NpcReply { text: plain, lines, events, state: render })
 }
 
 #[cfg(test)]

@@ -7,7 +7,7 @@ use crate::db::game::{
     get_all_event_characters, get_all_event_conditions, get_all_game_characters, get_all_game_branches, get_all_game_choices,
     get_all_game_encounter_table_entries, get_all_game_encounter_tables, get_all_game_endings,
     get_all_game_event_logs, get_all_game_events, get_all_game_interactables, get_all_game_location_connections,
-    get_all_game_character_spawn_locations, get_all_game_items, get_all_game_locations, get_all_game_relationship_defs, get_all_game_map_zones, get_all_game_maps, get_all_game_state_defs,
+    get_all_audio_assets, get_all_background_assets, get_all_cg_assets, get_all_character_assets, get_all_game_assets, get_all_game_character_spawn_locations, get_all_game_items, get_all_game_locations, get_all_game_relationship_defs, get_all_game_map_zones, get_all_game_maps, get_all_game_state_defs,
     get_all_game_time_periods, get_all_game_weather_transitions, get_all_game_weather_types, get_all_game_scenes,
     get_game_player_sessions, get_game_project, get_session_game_character_state_snapshots, upsert_game_event_log,
     upsert_game_event_log_character, upsert_game_player_sessions,
@@ -98,6 +98,14 @@ impl<'a> GameRepository for SqlxGameRepository<'a> {
         for s in spawn_rows {
             spawn_locations.entry(s.game_character_id.clone()).or_default().push(s);
         }
+
+        let (all_assets, audio, characters_assets, cgs, backgrounds) = futures::try_join!(
+            get_all_game_assets(pool, game_id),
+            get_all_audio_assets(pool, game_id),
+            get_all_character_assets(pool, game_id),
+            get_all_cg_assets(pool, game_id),
+            get_all_background_assets(pool, game_id),
+        )?;
 
         // 씬 + 선택지/분기. 선택지와 분기는 scene_id로 씬에 붙는다 (노드는 없어졌다).
         let (scene_rows, choices, branches) = futures::try_join!(
@@ -190,6 +198,7 @@ impl<'a> GameRepository for SqlxGameRepository<'a> {
             items: items.into_iter().map(|i| (i.id.clone(), i)).collect(),
             relationship_defs,
             spawn_locations,
+            assets: super::definition::Assets { all: all_assets, audio, characters: characters_assets, cgs, backgrounds },
             characters: characters.into_iter().map(|c| (c.id.clone(), c)).collect(),
             game_world_info,
             character_world_info,

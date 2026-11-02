@@ -504,7 +504,7 @@ impl From<BackgroundAssetsRow> for GameAssets {
         }
     }
 }
-#[derive(Deserialize, Clone)]
+#[derive(Serialize, Deserialize, Clone)]
 #[serde(rename_all = "camelCase")]
 pub struct GameAssetsInput {
     pub id: Option<String>,
@@ -570,7 +570,7 @@ impl From<AudioAssetsRow> for AudioAssets {
     }
 }
 
-#[derive(Deserialize)]
+#[derive(Serialize, Deserialize, Clone)]
 #[serde(rename_all = "camelCase")]
 pub struct AudioAssetsInput {
     #[serde(flatten)]
@@ -603,7 +603,7 @@ pub struct CharacterAssetsRow {
     pub settings_json: Option<String>,
     pub created_at: i64,
     pub updated_at: i64,
-    pub game_character_id: String,
+    pub game_character_id: Option<String>,
     pub usage: String,
     pub emotion: Option<String>,
 }
@@ -614,7 +614,7 @@ pub struct CharacterAssets {
     #[serde(flatten)]
     pub base: GameAssets,
 
-    pub game_character_id: String,
+    pub game_character_id: Option<String>,
     pub usage: String,
     pub emotion: Option<String>,
 }
@@ -630,13 +630,13 @@ impl From<CharacterAssetsRow> for CharacterAssets {
     }
 }
 
-#[derive(Deserialize)]
+#[derive(Serialize, Deserialize, Clone)]
 #[serde(rename_all = "camelCase")]
 pub struct CharacterAssetsInput {
     #[serde(flatten)]
     pub base: GameAssetsInput,
 
-    pub game_character_id: String,
+    pub game_character_id: Option<String>,
     pub usage: String,
     pub emotion: Option<String>,
 }
@@ -664,12 +664,13 @@ pub struct CgAssetsRow {
     pub settings_json: Option<String>,
     pub created_at: i64,
     pub updated_at: i64,
-    pub game_character_id: String,
+    pub game_character_id: Option<String>,
     pub description: Option<String>,
     pub prompt: Option<String>,
     pub negative_prompt: Option<String>,
     pub seed: Option<i64>,
     pub generation_params: Option<String>,
+    pub ai_usable: bool,
 }
 
 #[derive(Serialize, Clone)]
@@ -678,12 +679,13 @@ pub struct CgAssets {
     #[serde(flatten)]
     pub base: GameAssets,
 
-    pub game_character_id: String,
+    pub game_character_id: Option<String>,
     pub description: Option<String>,
     pub prompt: Option<String>,
     pub negative_prompt: Option<String>,
     pub seed: Option<i64>,
     pub generation_params: Option<String>,
+    pub ai_usable: bool,
 }
 
 impl From<CgAssetsRow> for CgAssets {
@@ -696,22 +698,24 @@ impl From<CgAssetsRow> for CgAssets {
             negative_prompt: r.negative_prompt,
             seed: r.seed,
             generation_params: r.generation_params,
+            ai_usable: r.ai_usable,
         }
     }
 }
 
-#[derive(Deserialize)]
+#[derive(Serialize, Deserialize, Clone)]
 #[serde(rename_all = "camelCase")]
 pub struct CgAssetsInput {
     #[serde(flatten)]
     pub base: GameAssetsInput,
 
-    pub game_character_id: String,
+    pub game_character_id: Option<String>,
     pub description: Option<String>,
     pub prompt: Option<String>,
     pub negative_prompt: Option<String>,
     pub seed: Option<i64>,
     pub generation_params: Option<String>,
+    pub ai_usable: bool,
 }
 
 impl From<CgAssets> for CgAssetsInput {
@@ -724,6 +728,7 @@ impl From<CgAssets> for CgAssetsInput {
             negative_prompt: r.negative_prompt,
             seed: r.seed,
             generation_params: r.generation_params,
+            ai_usable: r.ai_usable,
         }
     }
 }
@@ -766,7 +771,7 @@ impl From<BackgroundAssetsRow> for BackgroundAssets {
     }
 }
 
-#[derive(Deserialize)]
+#[derive(Serialize, Deserialize, Clone)]
 #[serde(rename_all = "camelCase")]
 pub struct BackgroundAssetsInput {
     #[serde(flatten)]
@@ -1619,6 +1624,7 @@ pub struct GameSceneRow {
     pub description: Option<String>,
     pub scene_key: String,
     pub settings_json: Option<String>,
+    pub script: Option<String>,
     pub is_ending: Option<bool>,
     pub ending_id: Option<String>,
     pub sort_order: i64,
@@ -1637,6 +1643,7 @@ pub struct GameScene {
     pub is_ending: Option<bool>,
     pub ending_id: Option<String>,
     pub settings_json: Option<String>,
+    pub script: Option<String>,
     pub choices: Option<Vec<GameChoiceRow>>,
     pub branches: Option<Vec<GameBranchRow>>,
     pub sort_order: i64,
@@ -1658,6 +1665,7 @@ impl GameScene {
             scene_key: r.scene_key,
             ending_id: r.ending_id,
             settings_json: r.settings_json,
+            script: r.script,
             choices,
             branches,
             is_ending: r.is_ending,
@@ -1678,6 +1686,7 @@ pub struct GameSceneInput {
     pub is_ending: Option<bool>,
     pub ending_id: Option<String>,
     pub settings_json: Option<String>,
+    pub script: Option<String>,
     pub choices: Option<Vec<GameChoiceInput>>,
     pub branches: Option<Vec<GameBranchInput>>,
 }
@@ -1692,6 +1701,7 @@ impl From<GameScene> for GameSceneInput {
             is_ending: v.is_ending,
             ending_id: v.ending_id,
             settings_json: v.settings_json,
+            script: v.script,
             choices: v.choices.map(|c| c.into_iter().map(Into::into).collect()),
             branches: v.branches.map(|b| b.into_iter().map(Into::into).collect()),
         }
@@ -2004,6 +2014,7 @@ pub struct GamePlayerSessionsRow {
     pub pending_scenes_json: Option<String>,
     pub inventory_json: Option<String>,
     pub relationships_json: Option<String>,
+    pub stage_json: Option<String>,
     pub parent_session_id: Option<String>,
     pub forked_from_seq: Option<u32>,
     pub head_seq: u32,
@@ -2027,6 +2038,7 @@ pub struct GamePlayerSessions {
     pub pending_scenes_json: serde_json::Value,
     pub inventory_json: serde_json::Value,
     pub relationships_json: serde_json::Value,
+    pub stage_json: serde_json::Value,
     pub forked_from_seq: Option<u32>,
     pub head_seq: u32,
     pub updated_at: i64,
@@ -2049,6 +2061,10 @@ impl From<GamePlayerSessionsRow> for GamePlayerSessions {
                 .and_then(|f| serde_json::from_str(&f).ok())
                 .unwrap_or_default(),
             parent_session_id: r.parent_session_id,
+            pending_scenes_json: r
+                .pending_scenes_json
+                .and_then(|f| serde_json::from_str(&f).ok())
+                .unwrap_or_default(),
             inventory_json: r
                 .inventory_json
                 .and_then(|f| serde_json::from_str(&f).ok())
@@ -2057,8 +2073,8 @@ impl From<GamePlayerSessionsRow> for GamePlayerSessions {
                 .relationships_json
                 .and_then(|f| serde_json::from_str(&f).ok())
                 .unwrap_or_default(),
-            pending_scenes_json: r
-                .pending_scenes_json
+            stage_json: r
+                .stage_json
                 .and_then(|f| serde_json::from_str(&f).ok())
                 .unwrap_or_default(),
             forked_from_seq: r.forked_from_seq,
@@ -2085,6 +2101,7 @@ pub struct GamePlayerSessionsInput {
     pub pending_scenes_json: serde_json::Value,
     pub inventory_json: serde_json::Value,
     pub relationships_json: serde_json::Value,
+    pub stage_json: serde_json::Value,
     pub forked_from_seq: Option<u32>,
     pub head_seq: u32,
 }
@@ -2105,6 +2122,7 @@ impl GamePlayerSessionsInput {
             pending_scenes_json: v.pending_scenes_json,
             inventory_json: v.inventory_json,
             relationships_json: v.relationships_json,
+            stage_json: v.stage_json,
             parent_session_id: v.parent_session_id,
             forked_from_seq: v.forked_from_seq,
             head_seq: v.head_seq,

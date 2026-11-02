@@ -46,6 +46,8 @@ pub struct GameState {
     pub inventory_json: serde_json::Value,
     /// 관계: "보낸쪽>받는쪽" -> {affection, trust, tension, tags}. 보낸쪽/받는쪽은 'player' 또는 game_character_id.
     pub relationships_json: serde_json::Value,
+    /// 무대 상태: 지금 배경/BGM 분위기/CG/서 있는 캐릭터와 감정 (이어하기/분기 때 같은 화면을 복원한다).
+    pub stage_json: serde_json::Value,
     /// game_character_id -> 지금 상태/위치. 세션에는 컬럼이 없고 game_character_state_snapshots에 seq별로 쌓인다
     /// (불러올 때 캐릭터별 가장 최근 행을 읽는다). 스폰 규칙이 정의된 캐릭터만 여기에 생긴다.
     #[serde(skip)]
@@ -94,6 +96,7 @@ impl GameState {
             flags: session.flags_json,
             inventory_json: as_object(session.inventory_json),
             relationships_json: as_object(session.relationships_json),
+            stage_json: as_object(session.stage_json),
             npc_states: HashMap::new(), // GameRuntime::load가 DB에서 채운다
             cooldowns,
             auto_active: HashSet::new(),
@@ -127,6 +130,8 @@ pub struct RenderState {
     /// 지금 가진 아이템 (item_id -> 수량). 아이템 정의(이름/아이콘)는 get_game_view에 있다.
     pub inventory: serde_json::Value,
     pub relationships: serde_json::Value,
+    /// 현재 무대(배경/BGM/CG/스탠딩). 지금은 저장된 그대로의 값이다.
+    pub stage: serde_json::Value,
     /// 지금 플레이어가 있는 위치에 있는 NPC들 (game_character_id). GameRuntime::render_state가 채운다.
     pub present_npcs: Vec<String>,
 }
@@ -147,6 +152,7 @@ impl From<&GameState> for RenderState {
             flags: s.flags.clone(),
             inventory: s.inventory_json.clone(),
             relationships: s.relationships_json.clone(),
+            stage: s.stage_json.clone(),
             present_npcs: Vec::new(),
         }
     }

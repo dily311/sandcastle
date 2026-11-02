@@ -285,3 +285,49 @@
 - 호출 예산(토큰·비용), 이벤트 전파 8라운드 초과 로깅, 일지 성장 정책, 스트리밍 시 태그 버퍼링.
 - AI의 아이템 지급, NPC끼리의 관계 변화(시뮬레이션), 관계 tags 변경 효과, 게임 삭제 시 월드인포 북 정리.
 - 이전 형식(snake\_case) 패키지 호환이 필요하면 format\_version으로 구분한다.
+
+## ADR-018 갱신 — 에셋·연출 결정 확정
+
+**상태** Accepted — 서빙, 데이터, 파서, 무대 상태는 구현됨. 프론트 재생기와 에셋 추가/삭제 커맨드는 후속. (위 ADR-018의 Proposed 내용을 이 항목이 대체한다.)
+
+**스키마**
+
+- game\_assets(key, category, kind, file\_path, settings\_json) + 종류별 하위 테이블. 하위 테이블의 PK는 assets\_id다.
+  - audio\_assets: tag(효과음은 소리 그룹 이름, BGM은 분위기 id), game\_character\_id(음성의 화자), transcript
+  - character\_assets: game\_character\_id, usage(standing/map), emotion(스탠딩은 필수)
+  - cg\_assets: description(AI에게 보낼 설명), ai\_usable, 생성 메타(prompt/seed 등)
+  - background\_assets: location/time/weather(NULL이면 그 조건은 전체)
+- 하위 테이블 FK는 SET NULL이고, 에셋 정리는 코드(save\_package)가 한다. FK 때문에 지워진 location의 배경이 「전체 기본 배경」으로 바뀌는 걸 막기 위해, 지워지는 location, 시간대, 날씨, 캐릭터에 묶인 에셋은 에셋째로 먼저 지우고 파일도 같이 지운다.
+- 세션에 stage\_json, 씬에 script 컬럼을 둔다.
+
+**선택 규칙**
+
+- 같은 조건의 중복 에셋은 **랜덤**으로 고른다(배경, 스탠딩, 효과음, BGM 모두). 뽑힌 결과는 기록에 박혀서 다시 볼 때 같은 파일이 나온다.
+- 배경은 위치 > 시간대 > 날씨 순으로 일치하는 조건이 많은 후보가 우선이고 최하위는 전체 기본이다. 지금 보이는 배경이 새 조건의 최적 후보 안에 있으면 바꾸지 않는다.
+
+**문법** (제작자 대본과 AI 응답이 같은 문법을 쓰고, 허용 범위만 다르다)
+
+- 한 줄이 한 노드다. `이름:` 접두가 캐릭터 이름이면 대사, 아니면 나레이션이다. 태그는 줄 어디에 있든 그 줄을 보여주기 직전에 실행되고, 태그만 있는 줄은 다음 줄에 합친다. 프론트는 긴 줄을 글자 수로 나눠 출력한다.
+- 태그: `<bgm>분위기</bgm>`, `<sfx>소리 이름</sfx>`, `<cg>키</cg>`/`<cg>off</cg>`, `<voice>키</voice>`(제작자 전용), `<effects>이름[:값]</effects>`, `<emotion::캐릭터>감정</emotion>`, `<motion::캐릭터>동작</motion>`. 배경은 태그가 아니라 위치, 시간대, 날씨로 엔진이 자동 선택한다.
+- 기본 제공 목록(엔진 상수): BGM 분위기 6개(default, peaceful, upbeat, romance, tense, battle), 화면 효과 10개(shake, flash, blackout, fade\_in, fireworks, petals, snow, rain, fog, clear), 모션 8개(jump, bounce, shake, nod, sway, shrink, slide\_in, slide\_out).
+- 풀 수 없는 키, 허용되지 않은 태그, 상한을 넘는 태그는 조용히 버린다.
+
+**AI 연출 규칙**
+
+- AI는 파일이 아니라 이름만 본다. 목록은 같은 위치의 인물(최대 4명, 설명 200자), 인물별 표정(스탠딩 감정명), 효과음 그룹, BGM 분위기, ai\_usable인 CG(키+설명), 화면 효과, 모션이다.
+- 화자와 연출 대상은 **대화 상대 + 같은 위치의 NPC**만 가능하다. 플레이어 대사와 이 자리에 없는 인물의 대사는 버린다. 응답당 연출 6개, BGM 1개, CG 1개가 상한이다. 음성(voice)은 AI 태그에 포함하지 않는다(나중에 음성 생성 API를 연결할 가능성을 위해 남겨둔다).
+- 저장되는 content는 태그를 벗기고 ` 이름:  ` 접두를 되살린 평문이고, 줄 목록(연출 포함)은 메시지 meta.lines에 남는다. `이름:` 접두가 하나도 없는 응답은 전부 대화 상대의 대사로 취급한다.
+
+**무대 상태와 이벤트**
+
+- stage\_json: {background, bgm:{mood, asset}, cg, standings:{캐릭터id:{emotion, asset}}}. stage 시스템이 유일한 writer이고, 위치가 바뀌면 CG와 스탠딩을 내리고 씬이 끝나면 CG를 내린다(탐험 중에 CG가 남지 않게).
+- 이벤트: SceneScript(씬이 열릴 때 대본의 줄 목록), StageLines(연출만 있는 줄: 배경 전환, 효과 stage). 이벤트 효과 동사 `stage`는 대본 문법으로 바뀌어 같은 파서와 검증을 탄다. NpcReply.lines가 AI 응답의 줄 목록이다.
+
+**서빙**
+
+- 파일은 games/\<id>/assets/ 아래, DB의 file\_path는 상대경로다. protocol.rs는 Range(206, 한 번에 최대 4MB)와 확장자 허용 목록(SVG 제외), 종류별 크기 상한을 둔다. file\_path는 절대경로와 `..`을 거절한다. validate는 키 문자, 카테고리와 종류 일치, 고아 에셋, 대본의 쓸 수 없는 태그, 파일 존재를 검사한다.
+
+**후속**
+
+- 프론트 재생기(타자기, 연출 실행, 효과/모션 구현), 에셋 추가/삭제 커맨드(파일 복사와 행 생성), RenderState의 stage를 에셋 참조로 풀어서 내려주기, 스트리밍 시 태그 버퍼링.
+- 외부 이미지 생성 API로 CG 만들기(Deferred), 음성 생성 API 연결(Deferred).

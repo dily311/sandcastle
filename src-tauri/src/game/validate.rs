@@ -73,6 +73,34 @@ pub fn validate(def: &GameDefinition) -> Vec<Issue> {
     // 효과/선택지에서 fire_event로 불리는 이벤트, 그리고 효과의 참조 검증
     let mut fired: HashSet<String> = HashSet::new();
     let mut check_effect = |out: &mut Vec<Issue>, who: &str, effect: &serde_json::Value| {
+        for verb in ["give_item", "take_item"] {
+            if let Some(serde_json::Value::Object(m)) = effect.get(verb) {
+                for id in m.keys() {
+                    if !def.items.contains_key(id) {
+                        err(out, format!("{who}: {verb}가 존재하지 않는 아이템({id})을 가리킵니다"));
+                    }
+                }
+            }
+        }
+        if let Some(serde_json::Value::Object(pairs)) = effect.get("relation") {
+            for (key, axes) in pairs {
+                match key.split_once('>') {
+                    None => err(out, format!("{who}: relation 키 '{key}'는 \"from>to\" 형식이어야 합니다")),
+                    Some((from, to)) => {
+                        for end in [from, to] {
+                            if end != "player" && !def.characters.contains_key(end) {
+                                err(out, format!("{who}: relation이 존재하지 않는 캐릭터({end})를 가리킵니다 ('player'가 아니면 캐릭터 id)"));
+                            }
+                        }
+                    }
+                }
+                for axis in axes.as_object().into_iter().flat_map(|m| m.keys()) {
+                    if !crate::game::engine::RELATION_AXES.contains(&axis.as_str()) {
+                        err(out, format!("{who}: 알 수 없는 관계 축 '{axis}' (affection/trust/tension만 가능)"));
+                    }
+                }
+            }
+        }
         let (scene, event) = effect_refs(effect);
         if let Some(id) = scene {
             if def.scene(id).is_none() {
@@ -116,6 +144,69 @@ pub fn validate(def: &GameDefinition) -> Vec<Issue> {
         }
         if scene.is_ending == Some(true) && scene.ending_id.is_none() {
             warn(&mut out, format!("엔딩 씬 '{}'에 ending_id가 없어 GameEnded가 나가지 않습니다", scene.scene_name));
+        }
+    }
+
+    // ---- 아이템 / 관계
+    let mut newly_fired_items = Vec::new();
+    for i in def.items.values() {
+        check_effect(&mut out, &format!("아이템 '{}'의 use_effect", i.name), &i.use_effect);
+        if !(i.use_condition.is_null() || i.use_condition.as_object().map_or(false, |o| o.is_empty()))
+            && serde_json::from_value::<Condition>(i.use_condition.clone()).is_err()
+        {
+            warn(&mut out, format!("아이템 '{}'의 use_condition을 읽을 수 없어 아무도 사용할 수 없습니다", i.name));
+        }
+        if let Some (acquire) = i.on_acquire_event_id.as_deref() {
+            if !acquire.trim().is_empty() {
+                match def.events.get(acquire) {
+                    None => err(&mut out, format!("아이템 '{}'의 획득 이벤트({acquire})가 존재하지 않습니다", i.name)),
+                    Some(e) if e.trigger_type != "manual" => err(&mut out, format!("아이템 '{}'의 획득 이벤트는 trigger_type이 manual이어야 합니다 (지금 {})", i.name, e.trigger_type)),
+                    Some(_) => {
+                        newly_fired_items.push(acquire.to_string()); // 이 아이템이 부르는 manual 이벤트는 "호출됨"으로 센다
+                    }
+                }
+            }
+        }
+    }
+    fired.extend(newly_fired_items);
+
+    for conds in def.event_conditions.values() {
+        for c in conds {
+            if let Condition::HasItem { item_id, .. } = c {
+                if !def.items.contains_key(item_id) {
+                    err(&mut out, format!("조건 HasItem이 존재하지 않는 아이템({item_id})을 가리킵니다"));
+                }
+            }
+        }
+    }
+    for conds in def.event_conditions.values() {
+        for c in conds {
+            if let Condition::RelationAtLeast { from, to, axis, .. } | Condition::RelationAtMost { from, to, axis, .. } = c {
+                if !crate::game::engine::RELATION_AXES.contains(&axis.as_str()) {
+                    err(&mut out, format!("관계 조건의 축 '{axis}'을 알 수 없습니다 (affection/trust/tension만 가능)"));
+                }
+                for end in [from, to] {
+                    if end != "player" && !def.characters.contains_key(end.as_str()) {
+                        err(&mut out, format!("관계 조건이 존재하지 않는 캐릭터({end})를 가리킵니다"));
+                    }
+                }
+            }
+        }
+    }
+    for s in def.spawn_locations.values().flatten() {
+        if def.location(&s.location_id).is_none() {
+            err(&mut out, format!("NPC 스폰 규칙이 존재하지 않는 location({})을 가리킵니다", s.location_id));
+        }
+        let c = &s.condition_json;
+        if !(c.is_null() || c.as_object().map_or(false, |o| o.is_empty())) && serde_json::from_value::<Condition>(c.clone()).is_err() {
+            warn(&mut out, format!("NPC 스폰 규칙(location {})의 조건을 읽을 수 없어 그 위치에는 절대 나오지 않습니다", s.location_id));
+        }
+    }
+    for r in &def.relationship_defs {
+        for end in [&r.from_id, &r.to_id] {
+            if end != "player" && !def.characters.contains_key(end.as_str()) {
+                err(&mut out, format!("초기 관계가 존재하지 않는 캐릭터({end})를 가리킵니다 ('player'가 아니면 캐릭터 id여야 합니다)"));
+            }
         }
     }
 
@@ -168,10 +259,116 @@ pub fn validate(def: &GameDefinition) -> Vec<Issue> {
         }
     }
 
+    validate_assets(def, &mut out);
+
     // ---- AI 변수 설정
     for d in &def.state_defs {
         if !d.config_json.trim().is_empty() && serde_json::from_str::<serde_json::Value>(&d.config_json).is_err() {
             warn(&mut out, format!("변수 '{}'의 config_json이 올바른 JSON이 아니라 AI 접근이 모두 막힙니다", d.key));
+        }
+    }
+    out
+}
+
+/// 에셋 데이터의 일관성 (DB만 본다). 파일이 실제로 있는지는 validate_asset_files가 본다.
+fn validate_assets(def: &GameDefinition, out: &mut Vec<Issue>) {
+    use crate::game::stage::{self, Allowed, BGM_MOODS};
+    use rand::SeedableRng;
+    let sub_ids = |ids: Vec<&str>| -> HashSet<String> { ids.into_iter().map(str::to_string).collect() };
+    let audio_ids = sub_ids(def.assets.audio.iter().map(|a| a.base.id.as_str()).collect());
+    let char_ids = sub_ids(def.assets.characters.iter().map(|a| a.base.id.as_str()).collect());
+    let cg_ids = sub_ids(def.assets.cgs.iter().map(|a| a.base.id.as_str()).collect());
+    let bg_ids = sub_ids(def.assets.backgrounds.iter().map(|a| a.base.id.as_str()).collect());
+
+    for a in &def.assets.all {
+        let valid_key = !a.key.is_empty() && a.key.chars().all(|c| c.is_ascii_lowercase() || c.is_ascii_digit() || matches!(c, '.' | '_' | '-'));
+        if !valid_key {
+            err(out, format!("에셋 키 '{}'가 올바르지 않습니다 (영문 소문자, 숫자, . _ - 만 가능)", a.key));
+        }
+        let (expected_kind, has_sub) = match a.category.as_str() {
+            "voice" | "sfx" | "bgm" => ("audio", audio_ids.contains(&a.id)),
+            "character" => ("image", char_ids.contains(&a.id)),
+            "cg" => ("image", cg_ids.contains(&a.id)),
+            "background" => ("image", bg_ids.contains(&a.id)),
+            "font" => ("font", true),
+            _ => (a.kind.as_str(), true),
+        };
+        if a.kind != expected_kind {
+            err(out, format!("에셋 '{}': 카테고리 {}는 종류가 {expected_kind}여야 합니다 (지금 {})", a.key, a.category, a.kind));
+        }
+        if !has_sub {
+            warn(out, format!("에셋 '{}'({})에 종류별 정보가 없어 쓰이지 않습니다 (고아 에셋)", a.key, a.category));
+        }
+    }
+    let bad_chars = |s: &str| s.contains(['<', '>', '"', ',', '\n']);
+    for a in &def.assets.audio {
+        match a.base.category.as_str() {
+            "sfx" => match a.tag.as_deref().map(str::trim) {
+                None | Some("") => err(out, format!("효과음 '{}'에 tag(소리 그룹 이름)가 없습니다", a.base.key)),
+                Some(t) if bad_chars(t) => err(out, format!("효과음 '{}'의 tag에 < > \" , 줄바꿈은 쓸 수 없습니다", a.base.key)),
+                _ => {}
+            },
+            "bgm" => match a.tag.as_deref() {
+                Some(t) if BGM_MOODS.contains(&t) => {}
+                other => err(out, format!("배경음 '{}'의 tag(분위기)가 올바르지 않습니다: {:?} (가능: {})", a.base.key, other, BGM_MOODS.join(", "))),
+            },
+            _ => {}
+        }
+    }
+    for a in &def.assets.characters {
+        if a.usage == "standing" {
+            match a.emotion.as_deref().map(str::trim) {
+                None | Some("") => err(out, format!("스탠딩 '{}'에 감정명(emotion)이 없습니다", a.base.key)),
+                Some(e) if bad_chars(e) || e.contains(':') => err(out, format!("스탠딩 '{}'의 감정명에 < > : \" , 줄바꿈은 쓸 수 없습니다", a.base.key)),
+                _ => {}
+            }
+        }
+        if a.game_character_id.is_none() {
+            warn(out, format!("캐릭터 이미지 '{}'에 캐릭터가 없어 쓰이지 않습니다 (캐릭터가 지워졌을 수 있습니다)", a.base.key));
+        }
+    }
+
+    // 대본의 `이름:`이 모호하지 않게: 이름이 겹치거나 구분자를 포함하면 안 된다.
+    let mut seen: HashSet<String> = HashSet::new();
+    for c in def.characters.values() {
+        if c.name.contains([':', '：', '<', '>']) {
+            err(out, format!("캐릭터 이름 '{}'에 : < > 는 쓸 수 없습니다 (대본의 이름: 접두와 연출 태그에 쓰입니다)", c.name));
+        }
+        if c.name.chars().count() > 20 {
+            warn(out, format!("캐릭터 이름 '{}'이 20자를 넘어 대본에서 화자로 인식되지 않습니다", c.name));
+        }
+        if !seen.insert(c.name.trim().to_lowercase()) {
+            warn(out, format!("캐릭터 이름 '{}'이 겹쳐서 대본의 이름: 접두가 모호합니다", c.name));
+        }
+    }
+
+    // 씬 대본에서 쓸 수 없는 태그(키 없음 등)
+    let mut rng = rand::rngs::StdRng::seed_from_u64(0);
+    for s in &def.scenes {
+        if let Some(script) = s.script.as_deref().filter(|t| !t.trim().is_empty()) {
+            let mut r = crate::game::runtime::DefResolver { def, rng: &mut rng, ai: false, player_name: None };
+            for p in stage::lint(script, &mut r, &Allowed::author()) {
+                warn(out, format!("씬 '{}' 대본: 쓸 수 없는 연출 태그 {p} (키/감정/효과 이름을 확인하세요)", s.scene_name));
+            }
+        }
+    }
+}
+
+/// 에셋 파일이 게임 폴더에 실제로 있는지 (파일시스템이 필요해서 validate와 따로 둔다).
+pub fn validate_asset_files(def: &GameDefinition, game_dir: &std::path::Path) -> Vec<Issue> {
+    let mut out = Vec::new();
+    for a in &def.assets.all {
+        if crate::game::package::check_asset_path(&a.file_path).is_err() {
+            err(&mut out, format!("에셋 '{}'의 경로가 올바르지 않습니다: {}", a.key, a.file_path));
+            continue;
+        }
+        let path = game_dir.join(&a.file_path);
+        if !path.is_file() {
+            err(&mut out, format!("에셋 '{}'의 파일이 없습니다: {}", a.key, a.file_path));
+        }
+        let ext = path.extension().and_then(|e| e.to_str()).unwrap_or("");
+        if !crate::game::protocol::is_servable(ext) {
+            warn(&mut out, format!("에셋 '{}'의 확장자 .{ext}는 지원하지 않아 재생/표시되지 않습니다", a.key));
         }
     }
     out

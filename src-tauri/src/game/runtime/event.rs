@@ -43,6 +43,12 @@ pub enum GameEvent {
     /// VariableChanged로 환원해서 한다.
     ChoiceMade { choice_id: String, next_scene_id: Option<String>, effect: Option<serde_json::Value> },
     SceneChanged { scene_id: String },
+    /// 이벤트 효과 stage가 내는 요청. 해석/검증/무대 반영은 stage 시스템이 한다.
+    StageRequested { spec: serde_json::Value },
+    /// 씬이 열렸을 때 그 씬의 대본 (줄 목록 + 줄마다 실행할 연출). 대본이 없는 씬은 나가지 않는다.
+    SceneScript { scene_id: String, lines: Vec<crate::game::stage::StageLine> },
+    /// 연출만 있는 줄들 (효과 stage, 위치/시간/날씨에 따른 배경 전환 등).
+    StageLines { lines: Vec<crate::game::stage::StageLine> },
     SceneExited { scene_id: String },
     /// 변수 변경 "제안 또는 통지". state.flags에 실제로 쓰는 건 trigger.rs의
     /// VariableChanged 핸들러 한 곳뿐 — 다른 시스템은 이 이벤트를 emit만 하고 쓰기는 안 한다.

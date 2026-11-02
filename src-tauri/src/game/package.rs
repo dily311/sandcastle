@@ -15,7 +15,7 @@ use crate::db::game::{
     delete_game_weather_type, delete_game_zone,
     upsert_game_character, upsert_game_encounter_table, upsert_game_encounter_table_entry,
     upsert_game_ending, upsert_game_event, upsert_game_event_character, upsert_game_event_condition,
-    upsert_game_character_spawn_location, upsert_game_interactables, upsert_game_item, upsert_game_relationship_def, upsert_game_location_connections, upsert_game_locations,
+    upsert_audio_asset, upsert_background_assets, upsert_cg_asset, upsert_character_asset, upsert_game_asset, delete_game_asset, upsert_game_character_spawn_location, upsert_game_interactables, upsert_game_item, upsert_game_relationship_def, upsert_game_location_connections, upsert_game_locations,
     upsert_game_map, upsert_game_project, upsert_game_scene, upsert_game_state_defs,
     upsert_game_time_period, upsert_game_weather_transition, upsert_game_weather_type,
     upsert_game_zone,
@@ -25,7 +25,7 @@ use crate::game::runtime::GameDefinition;
 use crate::models::conversation::{WorldInfoBookInput, WorldInfoEntryInput};
 use crate::models::game::{
     GameCharactersInput, GameEncounterEntriesInput, GameEncounterTablesInput, GameEndingsInput,
-    GameEventCharacterPoolInput, GameEventConditionsInput, GameCharacterSpawnLocationsInput, GameEventsInput, GameInteractablesInput, GameItemsInput, GameRelationshipDefsInput,
+    GameEventCharacterPoolInput, GameEventConditionsInput, AudioAssetsInput, BackgroundAssetsInput, CgAssetsInput, CharacterAssetsInput, GameAssetsInput, GameCharacterSpawnLocationsInput, GameEventsInput, GameInteractablesInput, GameItemsInput, GameRelationshipDefsInput,
     GameLocationConnectionsInput, GameLocationsInput, GameMapsInput, GameMapsZoneInput,
     GameProjectInput, GameSceneInput, GameStateDefInput, GameTimePeriodsInput,
     GameWeatherTransitionsInput, GameWeatherTypesInput,
@@ -83,10 +83,20 @@ pub struct PackageData {
     pub items: Vec<GameItemsInput>,
     #[serde(default)]
     pub relationship_defs: Vec<GameRelationshipDefsInput>,
+    /// 에셋: 기본 행(폰트/기타)과 종류별 하위 정보가 붙은 것들. 파일 자체는 zip의 assets/ 아래에 있다.
+    #[serde(default)]
+    pub assets: Vec<GameAssetsInput>,
+    #[serde(default)]
+    pub audio_assets: Vec<AudioAssetsInput>,
+    #[serde(default)]
+    pub character_assets: Vec<CharacterAssetsInput>,
+    #[serde(default)]
+    pub cg_assets: Vec<CgAssetsInput>,
+    #[serde(default)]
+    pub background_assets: Vec<BackgroundAssetsInput>,
     /// project/characters의 world_info_ids가 가리키는 북들. 페르소나 쪽 북은 개인 설정이라 안 담는다.
     #[serde(default)]
     pub world_info_books: Vec<PackageWorldInfoBook>,
-    // TODO: game_assets — GameDefinition에 추가되면 여기도.
 }
 
 const MAX_PACKAGE_BYTES: u64 = 200 * 1024 * 1024; // TODO: 실제 상한 정하기
@@ -122,6 +132,12 @@ fn to_package_data(def: &GameDefinition, world_info_books: Vec<PackageWorldInfoB
         endings: def.endings.clone().into_iter().map(Into::into).collect(),
         characters: def.characters.values().cloned().map(Into::into).collect(),
         spawn_locations: def.spawn_locations.values().flatten().cloned().map(Into::into).collect(),
+        // 폰트/기타는 기본 행만, 나머지는 종류별 하위 정보를 포함한 입력으로 (기본 행이 두 번 들어가지 않게 나눈다)
+        assets: def.assets.all.iter().filter(|a| matches!(a.category.as_str(), "font" | "other")).cloned().map(Into::into).collect(),
+        audio_assets: def.assets.audio.iter().cloned().map(Into::into).collect(),
+        character_assets: def.assets.characters.iter().cloned().map(Into::into).collect(),
+        cg_assets: def.assets.cgs.iter().cloned().map(Into::into).collect(),
+        background_assets: def.assets.backgrounds.iter().cloned().map(Into::into).collect(),
         items: def.items.values().cloned().map(GameItemsInput::from).collect(),
         relationship_defs: def.relationship_defs.clone().into_iter().map(Into::into).collect(),
         locations: def.locations.clone().into_iter().map(Into::into).collect(),
@@ -212,6 +228,22 @@ pub(crate) async fn write_definition(tx: &mut Transaction<'_, Sqlite>, game_id: 
     for r in &mut data.relationship_defs {
         r.game_id = game_id.to_string();
     }
+    for a in &mut data.assets {
+        a.game_id = game_id.to_string();
+    }
+    for a in &mut data.audio_assets {
+        a.base.game_id = game_id.to_string();
+    }
+    for a in &mut data.character_assets {
+        a.base.game_id = game_id.to_string();
+    }
+    for a in &mut data.cg_assets {
+        a.base.game_id = game_id.to_string();
+    }
+    for a in &mut data.background_assets {
+        a.base.game_id = game_id.to_string();
+    }
+
     upsert_game_project(&mut **tx, &data.project).await?;
     for s in &data.state_defs {
         upsert_game_state_defs(&mut **tx, game_id, s).await?;
@@ -246,6 +278,42 @@ pub(crate) async fn write_definition(tx: &mut Transaction<'_, Sqlite>, game_id: 
     // 스폰 규칙은 캐릭터와 location 둘 다 FK로 가리키므로 둘 뒤에 온다.
     for s in data.spawn_locations {
         upsert_game_character_spawn_location(&mut **tx, s).await?;
+    }
+    // 에셋은 캐릭터/location/시간대/날씨(FK)와 이벤트 뒤에 온다. 파일 경로는 게임 폴더 밖으로 나갈 수 없다.
+    for a in &data.assets {
+        check_asset_path(&a.file_path)?;
+    }
+    for a in &data.audio_assets {
+        check_asset_path(&a.base.file_path)?;
+    }
+    for a in &data.character_assets {
+        check_asset_path(&a.base.file_path)?;
+    }
+    for a in &data.cg_assets {
+        check_asset_path(&a.base.file_path)?;
+    }
+    for a in &data.background_assets {
+        check_asset_path(&a.base.file_path)?;
+    }
+    for a in data.assets {
+        upsert_game_asset(&mut **tx, a, game_id).await?;
+    }
+    // 종류별 정보는 기본 행을 먼저 쓰고, 돌려받은 id(assets_id)로 이어서 쓴다.
+    for a in data.audio_assets {
+        let id = upsert_game_asset(&mut **tx, a.base.clone(), game_id).await?;
+        upsert_audio_asset(&mut **tx, a, &id).await?;
+    }
+    for a in data.character_assets {
+        let id = upsert_game_asset(&mut **tx, a.base.clone(), game_id).await?;
+        upsert_character_asset(&mut **tx, a, &id).await?;
+    }
+    for a in data.cg_assets {
+        let id = upsert_game_asset(&mut **tx, a.base.clone(), game_id).await?;
+        upsert_cg_asset(&mut **tx, a, &id).await?;
+    }
+    for a in data.background_assets {
+        let id = upsert_game_asset(&mut **tx, a.base.clone(), game_id).await?;
+        upsert_background_assets(&mut **tx, a, &id).await?;
     }
     let event_ids: Vec<String> = data.events.iter().filter_map(|e| e.id.clone()).collect();
     for e in data.events {
@@ -289,6 +357,30 @@ pub(crate) async fn write_definition(tx: &mut Transaction<'_, Sqlite>, game_id: 
     Ok(())
 }
 
+/// 에셋의 file_path는 게임 폴더 안의 상대경로여야 한다 (절대경로, `..`, 역슬래시, 빈 값 금지).
+/// import/저장이 받은 데이터를 그대로 믿지 않는다 — 이 값으로 파일을 읽고 지우기 때문이다.
+pub fn check_asset_path(p: &str) -> Result<(), AppError> {
+    let bad = p.trim().is_empty()
+        || p.starts_with('/')
+        || p.contains('\\')
+        || p.contains(':')
+        || p.split('/').any(|seg| seg == ".." || seg.is_empty());
+    if bad {
+        return Err(AppError::Validation(format!("에셋 경로가 올바르지 않습니다: {p}")));
+    }
+    Ok(())
+}
+
+/// 지워진 에셋의 파일을 게임 폴더에서 지운다 (실패해도 무시 — DB 쪽이 이미 정리됐다).
+pub fn remove_asset_files(games_root: &Path, game_id: &str, rel_paths: &[String]) {
+    let base = games_root.join(game_id);
+    for p in rel_paths {
+        if check_asset_path(p).is_ok() {
+            let _ = std::fs::remove_file(base.join(p));
+        }
+    }
+}
+
 fn ids<T>(items: &[T], get: impl for<'a> Fn(&'a T) -> Option<&'a str>) -> HashSet<String> {
     items.iter().filter_map(|i| get(i).map(str::to_string)).collect()
 }
@@ -301,7 +393,7 @@ fn ids<T>(items: &[T], get: impl for<'a> Fn(&'a T) -> Option<&'a str>) -> HashSe
 ///
 /// 규칙: 기존 행은 반드시 id를 달아서 보내야 한다 (id 없는 행은 "새 행"으로 취급된다).
 /// 반환값은 테이블별 삭제 개수다.
-pub async fn save_definition(pool: &SqlitePool, game_id: &str, existing: &GameDefinition, data: PackageData) -> Result<BTreeMap<&'static str, usize>, AppError> {
+pub async fn save_definition(pool: &SqlitePool, game_id: &str, existing: &GameDefinition, data: PackageData) -> Result<(BTreeMap<&'static str, usize>, Vec<String>), AppError> {
     // 삭제 대상 계산에 쓸 "새 데이터에 남아 있는 id/키"를 write_definition이 데이터를 소비하기 전에 모아둔다.
     let keep_state_defs = ids(&data.state_defs, |x| x.id.as_deref());
     let keep_maps = ids(&data.maps, |x| x.id.as_deref());
@@ -316,6 +408,32 @@ pub async fn save_definition(pool: &SqlitePool, game_id: &str, existing: &GameDe
     let keep_endings = ids(&data.endings, |x| x.id.as_deref());
     let keep_characters = ids(&data.characters, |x| x.id.as_deref());
     let keep_items = ids(&data.items, |x| x.id.as_deref());
+    // 에셋: 데이터에 더는 없는 것, 그리고 지워질 location/시간대/날씨/캐릭터에 묶인 것은 에셋째로(파일 포함) 지운다.
+    // FK가 SET NULL이라 그냥 두면 지워진 location의 배경이 "전체 기본 배경"으로 바뀌어버린다.
+    let mut keep_assets: HashSet<String> = HashSet::new();
+    keep_assets.extend(data.assets.iter().filter_map(|a| a.id.clone()));
+    keep_assets.extend(data.audio_assets.iter().filter_map(|a| a.base.id.clone()));
+    keep_assets.extend(data.character_assets.iter().filter_map(|a| a.base.id.clone()));
+    keep_assets.extend(data.cg_assets.iter().filter_map(|a| a.base.id.clone()));
+    keep_assets.extend(data.background_assets.iter().filter_map(|a| a.base.id.clone()));
+    let keep_loc_ids = ids(&data.locations, |x| x.id.as_deref());
+    let keep_time_ids = ids(&data.time_periods, |x| x.id.as_deref());
+    let keep_weather_ids = ids(&data.weather_types, |x| x.id.as_deref());
+    let keep_char_ids = ids(&data.characters, |x| x.id.as_deref());
+    let mut dependent_assets: HashSet<String> = HashSet::new();
+    for b in &data.background_assets {
+        let dangling = b.location_id.as_ref().map_or(false, |l| !keep_loc_ids.contains(l))
+            || b.time_id.as_ref().map_or(false, |t| !keep_time_ids.contains(t))
+            || b.weather_id.as_ref().map_or(false, |w| !keep_weather_ids.contains(w));
+        if dangling {
+            dependent_assets.extend(b.base.id.clone());
+        }
+    }
+    for c in &data.character_assets {
+        if c.game_character_id.as_ref().map_or(false, |id| !keep_char_ids.contains(id)) {
+            dependent_assets.extend(c.base.id.clone());
+        }
+    }
     let keep_spawns = ids(&data.spawn_locations, |x| x.id.as_deref());
     let keep_rel_defs = ids(&data.relationship_defs, |x| x.id.as_deref());
     let keep_scenes: HashSet<String> = data.scenes.iter().map(|s| s.id.clone()).collect();
@@ -330,6 +448,16 @@ pub async fn save_definition(pool: &SqlitePool, game_id: &str, existing: &GameDe
     write_definition(&mut tx, game_id, data, true).await?;
 
     let mut deleted: BTreeMap<&'static str, usize> = BTreeMap::new();
+    let mut removed_files: Vec<String> = Vec::new();
+    // 에셋을 가장 먼저 지운다 (기본 행을 지우면 종류별 하위 행은 CASCADE로 같이 지워진다).
+    for a in &existing.assets.all {
+        if !keep_assets.contains(&a.id) || dependent_assets.contains(&a.id) {
+            if delete_game_asset(&mut *tx, &a.id).await? {
+                *deleted.entry("assets").or_default() += 1;
+                removed_files.push(a.file_path.clone());
+            }
+        }
+    }
     // 자식 쪽부터 지운다. (FK가 CASCADE/SET NULL이라 순서가 틀려도 대부분 되지만, 명시적으로 의존 순서를 지킨다.)
     macro_rules! prune {
         ($label:expr, $existing:expr, $keep:expr, $delete:path) => {
@@ -383,7 +511,7 @@ pub async fn save_definition(pool: &SqlitePool, game_id: &str, existing: &GameDe
     prune!("state_defs", existing.state_defs.iter().map(|d| &d.id), keep_state_defs, delete_game_state_def);
 
     tx.commit().await?;
-    Ok(deleted)
+    Ok((deleted, removed_files))
 }
 
 /// 패키지 안의 모든 엔티티 id를 새 uuid로 바꾸고, 그 id를 가리키는 참조도 같이 바꾼다.
@@ -418,6 +546,21 @@ fn remap_ids(data: PackageData) -> Result<PackageData, AppError> {
     collect!(data.items);
     collect!(data.relationship_defs);
     collect!(data.spawn_locations);
+    for a in &data.assets {
+        old_ids.extend(a.id.clone());
+    }
+    for a in &data.audio_assets {
+        old_ids.extend(a.base.id.clone());
+    }
+    for a in &data.character_assets {
+        old_ids.extend(a.base.id.clone());
+    }
+    for a in &data.cg_assets {
+        old_ids.extend(a.base.id.clone());
+    }
+    for a in &data.background_assets {
+        old_ids.extend(a.base.id.clone());
+    }
     for s in &data.scenes {
         old_ids.insert(s.id.clone());
         for c in s.choices.iter().flatten() {
@@ -478,7 +621,6 @@ async fn import_archive<R: std::io::Read + std::io::Seek>(pool: &SqlitePool, gam
     let new_game_id = uuid::Uuid::new_v4().to_string();
     let dest = games_root.join(&new_game_id);
     std::fs::create_dir_all(&dest)?;
-
     match import_into(pool, &mut archive, &dest, new_game_id, overrides).await {
         Ok(id) => Ok(id),
         Err(e) => {
