@@ -15,7 +15,7 @@ class ToastStore {
 		return this.toasts;
 	}
 
-	showToast(toast: Omit<Toast, "id">, duration = 3000): void {
+	showToast(toast: Omit<Toast, "id">, duration = 6000): void {
 		const id = this.nextId++;
 		this.toasts = [...this.toasts, { ...toast, id }];
 		setTimeout(() => {
