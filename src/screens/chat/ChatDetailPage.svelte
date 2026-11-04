@@ -142,13 +142,7 @@
 {/if}
 
 <style>
-	.empty {
-		width: 100%;
-		height: 100%;
-		display: flex;
-		align-items: center;
-		justify-content: center;
-	}
+
 	/* 전체 컨테이너 (타이틀바/푸터 제외 영역) */
 	.main-content-layout {
 		display: flex;
@@ -173,21 +167,11 @@
 		gap: 8px;
 	}
 
-	.back-btn {
-		color: var(--text-color);
-	}
-
 	.chat-title {
 		font-size: 0.9rem;
 		font-weight: 700;
 	}
 
-	.chat-title-wrap .subtitle {
-		font-size: 0.75rem;
-		font-weight: 400;
-		font-size: var(--font-size-sm);
-		color: var(--text-muted);
-	}
 
 	.header-right {
 		display: flex;

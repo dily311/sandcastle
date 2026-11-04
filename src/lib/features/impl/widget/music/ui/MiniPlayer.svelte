@@ -205,14 +205,6 @@
 		display: flex;
 		margin-right: 0.225rem;
 	}
-	.controls button {
-		display: flex;
-		justify-content: center;
-		align-items: center;
-		padding: 0.4rem;
-		border-radius: 100%;
-		cursor: pointer;
-	}
 
 	.play-btn:hover {
 		background: var(--icon-hover-bg);

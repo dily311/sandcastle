@@ -75,21 +75,5 @@
 		flex: 1;
 	}
 
-	.send-btn {
-		background: var(--accent-color);
-		color: white;
-		border: none;
-		border-radius: 12px;
-		padding: 0 16px;
-		height: 38px;
-		font-weight: 600;
-		display: flex;
-		align-items: center;
-		gap: 6px;
-		cursor: pointer;
-	}
 
-	.send-btn:hover {
-		background: var(--accent-color-hover);
-	}
 </style>

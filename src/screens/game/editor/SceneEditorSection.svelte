@@ -44,6 +44,8 @@
 		</div>
 		<div class="scroll-list">
 			{#each scenes as scene, index (scene.id)}
+				<!-- svelte-ignore a11y_click_events_have_key_events -->
+				<!-- svelte-ignore a11y_no_static_element_interactions -->
 				<div class="list-item" class:active={selectedIndex === index} onclick={() => (selectedIndex = index)}>
 					<div class="item-info">
 						<span class="title">{scene.sceneName}</span>
@@ -68,16 +70,16 @@
 			</div>
 			<div class="form-grid">
 				<div class="field">
-					<label>씬 이름 (Scene Name)</label>
-					<input type="text" bind:value={activeScene.sceneName} />
+					<label for="scene_name">씬 이름 (Scene Name)</label>
+					<input id="scene_name" type="text" bind:value={activeScene.sceneName} />
 				</div>
 				<div class="field">
-					<label>씬 고유 키 (Scene Key)</label>
-					<input type="text" bind:value={activeScene.sceneKey} />
+					<label for="scene_key">씬 고유 키 (Scene Key)</label>
+					<input id="scene_key" type="text" bind:value={activeScene.sceneKey} />
 				</div>
 				<div class="field">
-					<label>설명 (Description)</label>
-					<textarea bind:value={activeScene.description} rows="4"></textarea>
+					<label for="scene_des">설명 (Description)</label>
+					<textarea id="scene_des" bind:value={activeScene.description} rows="4"></textarea>
 				</div>
 				<div class="field-row">
 					<label class="checkbox-label">
@@ -86,8 +88,8 @@
 					</label>
 				</div>
 				<div class="field">
-					<label>정렬 순서 (Sort Order)</label>
-					<input type="number" bind:value={activeScene.sortOrder} />
+					<label for="scene_sort">정렬 순서 (Sort Order)</label>
+					<input id="scene_sort" type="number" bind:value={activeScene.sortOrder} />
 				</div>
 			</div>
 		{:else}

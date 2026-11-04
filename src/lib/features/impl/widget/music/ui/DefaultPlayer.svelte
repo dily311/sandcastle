@@ -386,20 +386,6 @@
 		justify-content: space-between;
 		padding: 0 0.8rem;
 	}
-	.controls button {
-		cursor: pointer;
-		border-radius: 100%;
-		padding: 0.4rem;
-		font-size: 0.8rem;
-		vertical-align: middle;
-	}
-	.controls button:hover {
-		background: var(--icon-hover);
-	}
-
-	.shuffleOff {
-		opacity: 0.6;
-	}
 
 	.song-time .progress-slider {
 		-webkit-appearance: none;

@@ -69,7 +69,7 @@
 								aria-label={$_("music.playlist:remove")}
 								class="playlist-remove-btn"
 								onclick={(e) => {
-									playlistStore.deleted(item.meta.path, index);
+									playlistStore.deleted(item.meta.path);
 								}}
 							>
 								<X />
@@ -186,14 +186,6 @@
 	}
 	.playlist-item-wrap.playing-now {
 		background: var(--color-10);
-	}
-
-	.playlist-item-index {
-		flex: 0 0 1.2rem;
-		/* width: 1.2rem; */
-		text-align: center;
-		color: var(--text-muted);
-		font-size: 0.8rem;
 	}
 
 	.playlist-action-btns button {

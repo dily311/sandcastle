@@ -166,7 +166,6 @@
 		padding: 8px;
 		color: var(--icon-color);
 		cursor: pointer;
-		app-region: no-drag;
 	}
 
 	:global(body.is-frameless .sidebar .sidebar-toggle-btn) {

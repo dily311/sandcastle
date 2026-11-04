@@ -65,24 +65,24 @@
 			</div>
 			<div class="form-grid">
 				<div class="field">
-					<label>변수 키 (Key)</label>
-					<input type="text" bind:value={activeState.key} />
+					<label for="var_key">변수 키 (Key)</label>
+					<input id="var_key" type="text" bind:value={activeState.key} />
 				</div>
 				<div class="field">
-					<label>데이터 타입 (Type)</label>
-					<select bind:value={activeState.type}>
+					<label for="var_type">데이터 타입 (Type)</label>
+					<select id="var_type" bind:value={activeState.type}>
 						<option value="string">string (문자열)</option>
 						<option value="number">number (숫자)</option>
 						<option value="boolean">boolean (참/거짓)</option>
 					</select>
 				</div>
 				<div class="field">
-					<label>초기값 (Default Value)</label>
-					<input type="text" bind:value={activeState.defaultValue} />
+					<label for="var_default">초기값 (Default Value)</label>
+					<input id="var_default" type="text" bind:value={activeState.defaultValue} />
 				</div>
 				<div class="field">
-					<label>설명 (Description)</label>
-					<textarea bind:value={activeState.description} rows="3"></textarea>
+					<label for="var_des">설명 (Description)</label>
+					<textarea id="var_des" bind:value={activeState.description} rows="3"></textarea>
 				</div>
 			</div>
 		{:else}

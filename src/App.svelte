@@ -17,7 +17,6 @@
 	import { apiProfiles } from "./lib/stores/apiProfileStore.svelte";
 	import { setLucideProps } from "@lucide/svelte";
 	import { bootstrapFeatures } from "$lib/features/feautreManager.svelte";
-	import Header from "./components/Header.svelte";
 
 	let isInitialized = $state(false);
 	// icon 기본 설정
@@ -52,7 +51,6 @@
 		<LoadingScreen />
 	{:else}
 		<Sidebar />
-
 		<!-- 메인 콘텐츠 영역 -->
 		<main class="app-layout">
 			<Router {routes} />

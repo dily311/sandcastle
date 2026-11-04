@@ -1,15 +1,15 @@
 <script lang="ts">
 	import { onMount } from "svelte";
-	import { push } from "svelte-spa-router";
 	import type { GameProject } from "$/lib/type/game";
 	import { gameManagerCommands } from "$/ipc/commands";
-	import { open } from "@tauri-apps/plugin-dialog";
 	import Button from "$/components/ui/button/Button.svelte";
 	import ButtonGroup from "$/components/ui/button/ButtonGroup.svelte";
 	import Card from "$/components/ui/card/Card.svelte";
 	import CardGrid from "$/components/ui/card/CardGrid.svelte";
 	import Header from "$/components/Header.svelte";
-	import { handleOpenGameEditor, handleOpenGameDetailPage, handleStartGamePlay } from "$/app/routes";
+	import { handleCreateNewGame, handleExportGamePackage } from "$/lib/game/gameManager.svelte";
+	import { open } from "@tauri-apps/plugin-dialog";
+	import { handleOpenGameDetailPage, handleOpenGameEditor, handleStartGamePlay } from "$/lib/game/gameStore.svelte";
 
 	let games = $state<GameProject[]>([]);
 	let isLoading = $state(true);
@@ -27,15 +27,15 @@
 			isLoading = false;
 		}
 	}
-
-	// 새로만들기 버튼 클릭 시 (create_game 커맨드 연동 예시)
-	async function handleCreateNewGame() {
-		const title = prompt("새 게임 프로젝트의 제목을 입력하세요:");
-		if (!title) return;
-
-		const GameProject = await gameManagerCommands.createGame({ title, templateId: "dating-sim" });
-		// 생성 후 바로 에디터로 이동
-		push(`/game/${GameProject.id}/editor`);
+	async function handleImportGamePackage() {
+		// 유저가 폴더 선택
+		const selected = await open({
+			directory: false,
+			multiple: false,
+		});
+		if (!selected) return;
+		const importGame = await gameManagerCommands.importGame({ zipPath: selected });
+		games.push(importGame);
 	}
 
 	async function handleDeleteGame(gameId: string, title: string) {
@@ -46,24 +46,6 @@
 		await gameManagerCommands.closeGame();
 		await gameManagerCommands.deleteGame({ gameId });
 		games = games.filter((g) => g.id !== gameId);
-	}
-
-	async function closeGame() {
-		await gameManagerCommands.closeGame();
-	}
-
-	async function handleExport(gameId: string) {
-		await gameManagerCommands.exportGame({ gameId, outputDir: "\\download" });
-	}
-	async function handleImportGame() {
-		// 유저가 폴더 선택
-		const selected = await open({
-			directory: false,
-			multiple: false,
-		});
-		if (!selected) return;
-		await gameManagerCommands.importGame({ zipPath: selected });
-		loadGames();
 	}
 
 	onMount(() => {
@@ -82,7 +64,7 @@
 		</div>
 		<ButtonGroup>
 			<Button variant="primary" onclick={handleCreateNewGame}>+ 새로만들기</Button>
-			<Button variant="primary" onclick={handleImportGame}>불러오기</Button>
+			<Button variant="primary" onclick={handleImportGamePackage}>불러오기</Button>
 		</ButtonGroup>
 	</header>
 
@@ -137,7 +119,7 @@
 						<Button
 							onclick={(e) => {
 								e.stopPropagation();
-								handleExport(game.id);
+								handleExportGamePackage(game.id);
 							}}>내보내기</Button
 						>
 						<Button

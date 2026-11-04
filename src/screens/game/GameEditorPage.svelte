@@ -114,20 +114,20 @@
 				<div class="form-section">
 					<h3>기본 설정</h3>
 					<div class="field">
-						<label>프로젝트 제목</label>
-						<input type="text" bind:value={packageData.project.title} />
+						<label for="project_title">프로젝트 제목</label>
+						<input id="project_title" type="text" bind:value={packageData.project.title} />
 					</div>
 					<div class="field">
-						<label>프로젝트 설명</label>
-						<textarea bind:value={packageData.project.description} rows="3"></textarea>
+						<label for="project_des">프로젝트 설명</label>
+						<textarea id="project_des" bind:value={packageData.project.description} rows="3"></textarea>
 					</div>
 					<div class="field">
-						<label>엔진 API 버전</label>
-						<input type="text" bind:value={packageData.project.apiVersion} disabled />
+						<label for="engine_api">엔진 API 버전</label>
+						<input id="engine_api" type="text" bind:value={packageData.project.apiVersion} disabled />
 					</div>
 					<div class="field">
-						<label>커스텀 CSS</label>
-						<textarea class="code-font" bind:value={packageData.project.customCss} rows="5"></textarea>
+						<label for="custom_css">커스텀 CSS</label>
+						<textarea id="custom_css" class="code-font" bind:value={packageData.project.customCss} rows="5"></textarea>
 					</div>
 				</div>
 			{:else if activeTab === "scenes"}

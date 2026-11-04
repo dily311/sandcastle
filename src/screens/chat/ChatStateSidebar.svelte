@@ -303,14 +303,7 @@
 		color: var(--text-color);
 	}
 
-	.affection-label {
-		font-size: var(--font-size-sm);
-		color: var(--pink-accent);
-		font-weight: 600;
-		margin-bottom: 4px;
-		display: flex;
-		justify-content: space-between;
-	}
+
 
 	/* 사이드바 메인 레이아웃 */
 	.tab-header {
@@ -322,10 +315,6 @@
 		background: var(--header-bg);
 		padding: 0 7rem 0 0.95rem;
 		gap: 0.8rem;
-	}
-
-	.tab-header .clickable-icon {
-		app-region: no-drag;
 	}
 
 	.tab-container {
@@ -350,19 +339,7 @@
 		margin-bottom: 8px;
 	}
 
-	.avatar-frame {
-		width: 4rem;
-		height: 4rem;
-		border-radius: 16px;
-		overflow: hidden;
-		background: #f7f7ff;
-	}
 
-	.avatar-frame img {
-		width: 100%;
-		height: 100%;
-		object-fit: cover;
-	}
 
 	.profile-info h4 {
 		margin: 4px 0 2px 0;
@@ -468,9 +445,7 @@
 		transition: width 0.3s ease;
 	}
 
-	.affection-fill {
-		background: linear-gradient(90deg, #ff9ebb, #ff7597);
-	}
+
 	.hp-fill {
 		background: linear-gradient(90deg, #ff8a9e, #ff5271);
 	}

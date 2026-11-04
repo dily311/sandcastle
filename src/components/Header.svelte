@@ -26,11 +26,7 @@
 		position: sticky;
 		top: 0;
 	}
-    :global(.header .svg-icon) {
-        app-region: no-drag;
-    }
-
-    .header.isRightSidebarOpen {
+	.header.isRightSidebarOpen {
 		padding: 0 0.95rem;
     }
 </style>

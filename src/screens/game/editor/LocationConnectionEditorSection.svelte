@@ -54,6 +54,8 @@
 			{#each connections as conn, index (conn.fromId + "->" + conn.toId)}
 				{@const fromName = locationMap.get(conn.fromId) || "알 수 없는 장소"}
 				{@const toName = locationMap.get(conn.toId) || "알 수 없는 장소"}
+				<!-- svelte-ignore a11y_click_events_have_key_events -->
+				<!-- svelte-ignore a11y_no_static_element_interactions -->
 				<div class="list-item" class:active={selectedIndex === index} onclick={() => (selectedIndex = index)}>
 					<div class="item-info">
 						<span class="route-title">{fromName} ➔ {toName}</span>
@@ -76,16 +78,16 @@
 			<div class="form-grid">
 				<div class="field-row-split">
 					<div class="field">
-						<label>출발지 (From Location)</label>
-						<select bind:value={activeConnection.fromId}>
+						<label for="from_location">출발지 (From Location)</label>
+						<select id="from_location" bind:value={activeConnection.fromId}>
 							{#each locations as loc}
 								<option value={loc.id}>{loc.name}</option>
 							{/each}
 						</select>
 					</div>
 					<div class="field">
-						<label>도착지 (To Location)</label>
-						<select bind:value={activeConnection.toId}>
+						<label for="to_location">도착지 (To Location)</label>
+						<select id="to_location" bind:value={activeConnection.toId}>
 							{#each locations as loc}
 								<option value={loc.id}>{loc.name}</option>
 							{/each}
@@ -94,14 +96,15 @@
 				</div>
 
 				<div class="field">
-					<label>이동 소요 시간 (Travel Seconds)</label>
-					<input type="number" bind:value={activeConnection.travelSeconds} min="0" step="10" />
+					<label for="trabel_seconds">이동 소요 시간 (Travel Seconds)</label>
+					<input id="trabel_seconds" type="number" bind:value={activeConnection.travelSeconds} min="0" step="10" />
 					<span class="field-hint">초 단위로 입력하세요 (예: 60초 = 1분)</span>
 				</div>
 
 				<div class="field">
-					<label>이동 조건식 (Condition / Expression)</label>
+					<label for="trabel_condition">이동 조건식 (Condition / Expression)</label>
 					<input
+						id="trabel_condition"
 						type="text"
 						bind:value={activeConnection.condition}
 						placeholder="예: has_key_room_a == true (선택 사항)"

@@ -1,19 +1,19 @@
 <script lang="ts">
 	import { _ } from "svelte-i18n";
 	import { onMount } from "svelte";
-	import type { GameProject } from "$/lib/type/game";
+	import type { GameProject, OpenGameResponse } from "$/lib/type/game";
 	import { gameEngineCommands, gameManagerCommands } from "$/ipc/commands";
 	import Header from "$/components/Header.svelte";
-	import Button from "$/components/ui/button/Button.svelte";
 	import Icon from "$/components/ui/Icon.svelte";
-	import { handleGoBack, handleOpenGameEditor, handleStartGamePlay } from "$/app/routes";
+	import { handleGoBack } from "$/app/routes";
 	import IconButton from "$/components/ui/button/IconButton.svelte";
+	import { handleOpenGameEditor, handleStartGamePlay } from "$/lib/game/gameStore.svelte";
 
 	type Props = { params: { gameId: string } };
 	// props로 라우터 파라미터 전달받음 (svelte-spa-router 규격)
 	let { params }: Props = $props();
 
-	let game = $state<GameProject | null>(null);
+	let game = $state<OpenGameResponse | null>(null);
 	let isLoading = $state(true);
 	let errorMessage = $state<string | null>(null);
 
@@ -52,17 +52,17 @@
 	{:else if game}
 		<!-- 상단 커버 이미지 영역 -->
 		<div class="cover-hero">
-			{#if game.coverImage}
-				<img src={game.coverImage} alt={game.title} class="cover-image" />
+			{#if game.project.coverImage}
+				<img src={game.project.coverImage} alt={game.project.title} class="cover-image" />
 			{:else}
 				<div class="cover-placeholder">
-					<span>{game.title}</span>
+					<span>{game.project.title}</span>
 				</div>
 			{/if}
 			<div class="hero-overlay">
 				<div class="hero-titles">
-					<span class="version-badge">v{game.version}</span>
-					<h1>{game.title}</h1>
+					<span class="version-badge">v{game.project.version}</span>
+					<h1>{game.project.title}</h1>
 				</div>
 				<div class="hero-actions">
 					<button class="action-btn play" onclick={() => handleStartGamePlay(params.gameId)}
@@ -79,18 +79,18 @@
 		<section class="info-section">
 			<div class="info-card description-box">
 				<h3>게임 소개</h3>
-				<p>{game.description || "등록된 게임 설명이 없습니다."}</p>
+				<p>{game.project.description || "등록된 게임 설명이 없습니다."}</p>
 			</div>
 
 			<div class="info-card specs-box">
 				<h3>상세 메타데이터</h3>
 				<ul class="specs-list">
-					<li><span>프로젝트 ID</span> <code>{game.id}</code></li>
-					<li><span>템플릿 ID</span> <code>{game.templateId}</code></li>
-					<li><span>엔진 API 버전</span> <code>{game.apiVersion}</code></li>
-					<li><span>초기 위치 ID</span> <code>{game.startLocationId || "설정되지 않음"}</code></li>
-					<li><span>생성일</span> {new Date(game.createdAt).toLocaleString()}</li>
-					<li><span>최종 수정일</span> {new Date(game.updatedAt).toLocaleString()}</li>
+					<li><span>프로젝트 ID</span> <code>{game.project.id}</code></li>
+					<li><span>템플릿 ID</span> <code>{game.project.templateId}</code></li>
+					<li><span>엔진 API 버전</span> <code>{game.project.apiVersion}</code></li>
+					<li><span>초기 위치 ID</span> <code>{game.project.startLocationId || "설정되지 않음"}</code></li>
+					<li><span>생성일</span> {new Date(game.project.createdAt).toLocaleString()}</li>
+					<li><span>최종 수정일</span> {new Date(game.project.updatedAt).toLocaleString()}</li>
 				</ul>
 			</div>
 		</section>

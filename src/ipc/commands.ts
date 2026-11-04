@@ -164,12 +164,14 @@ export const gameManagerCommands = {
 export const gameEngineCommands = {
 	startNewGame: () => invokeCommand("start_new_game"),
 	listSessions: () => invokeCommand("list_sessions"),
-	deleteSessions: () => invokeCommand("delete_sessions"),
+	deleteSessions: (args: CommandRegistry["delete_sessions"]["args"]) => invokeCommand("delete_sessions", args),
 	continueGame: (args: CommandRegistry["continue_game"]["args"]) => invokeCommand("continue_game", args),
+	readJournal: (args: CommandRegistry["read_journal"]["args"]) => invokeCommand("read_journal", args),
+	npcSay: (args: CommandRegistry["npc_say"]["args"]) => invokeCommand("npc_say", args),
 	getGameView: () => invokeCommand("get_game_view"),
 	validateGame: () => invokeCommand("validate_game"),
-	dispatchGameCommand: (args: CommandRegistry["dispatch_game_command"]["args"]) =>
-		invokeCommand("dispatch_game_command", args),
+	dispatchGameCommand: (args: CommandRegistry["dispatch_command"]["args"]) =>
+		invokeCommand("dispatch_command", args),
 	save_write: (args: CommandRegistry["save_write"]["args"]) => invokeCommand("save_write", args),
 	saveRead: (args: CommandRegistry["save_read"]["args"]) => invokeCommand("save_read", args),
 	saveList: () => invokeCommand("save_list"),

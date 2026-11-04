@@ -176,7 +176,7 @@
 					bookId: selectedBook.id,
 					keys: entryKeys || null,
 					secondaryKeys: entrySecondaryKeys || null,
-					content: entryContent || null,
+					content: entryContent || "",
 					enabled: entryEnabled,
 					priority: entryPriority,
 					constant: entryConstant,
@@ -187,7 +187,7 @@
 
 					keys: entryKeys || null,
 					secondaryKeys: entrySecondaryKeys || null,
-					content: entryContent || null,
+					content: entryContent || "",
 					enabled: entryEnabled,
 					priority: entryPriority,
 					constant: entryConstant,

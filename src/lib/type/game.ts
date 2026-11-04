@@ -50,18 +50,219 @@ export interface Capabilities {
  */
 export interface OpenGameResponse {
 	project: GameProject;
-	view: any;
+	view: GameDefinition;
 	issues: Issue[];
 }
 
 export interface Issue {
-	severity: Severity;
+	severity: "error" | "warning";
 	message: string;
 }
 
-export enum Severity {
-	Error,
-	Warning,
+export interface GameDefinition {
+	game: {
+		id: string;
+		title: string;
+		description: string;
+		coverImage: string;
+		customCss: string;
+		settings: string;
+	};
+	template: string;
+	maps: GameMap[];
+	zones: Zone[];
+	locations: Location[];
+	connections: LocationConnection[];
+	interactables: InteractTable[];
+	characters: Character[];
+	timePeriods: TimePeriod[];
+	weatherTypes: WeatherType[];
+	scenes: Scene[];
+	items: Item[];
+	relationshipAxes: RELATION_AXES;
+	assets: Assets;
+	stageCatalog: {
+		bgmMoods: BGM_MOODS;
+		screenEffects: SCREEN_EFFECTS;
+		motions: MOTIONS;
+	};
+	endings: Ending[];
+}
+
+// js의 map과 혼동으로 GameMap으로 변경
+export interface GameMap {
+	id: string;
+	name: string;
+	dangerLevel: string;
+	settings: any;
+}
+
+export interface Zone {
+	id: string;
+	mapId: string;
+	name: string;
+	tags: string[];
+	settings: any;
+}
+
+export interface Location {
+	id: string;
+	zoneId: string;
+	name: string;
+	description: string;
+	settings: any;
+}
+
+export interface LocationConnection {
+	fromId: string;
+	toId: string;
+	travelSeconds: number;
+	settings: any;
+}
+
+export interface InteractTable {
+	id: string;
+	locationId: string;
+	name: string;
+}
+
+export interface Character {
+	id: string;
+	name: string;
+	avatar: string;
+	description: string;
+	firstMessage: string;
+	tags: string[];
+	settings: any;
+}
+
+export interface TimePeriod {
+	id: string;
+	name: string;
+	startMinute: number;
+	endMinute: number;
+}
+export interface WeatherType {
+	id: string;
+	name: string;
+}
+
+export interface Scene {
+	id: string;
+	sceneKey: string;
+	name: string;
+	description: string;
+	isEnding: boolean;
+	settings: any;
+	choices: Choice[];
+}
+
+export interface Choice {
+	id: string;
+	text: string;
+	sortOrder: number;
+}
+
+export interface Item {
+	id: string;
+	name: string;
+	description: string;
+	// svg 경로
+	icon: string;
+	kind: string;
+	maxStack: number;
+	isUnique: boolean;
+	isKey: boolean;
+	consumable: boolean;
+	usable: boolean;
+	settings: any;
+}
+
+// 처음에는 고정
+export type RELATION_AXES = "affection" | "trust" | "tension";
+
+export interface Assets {
+	audio: AudioAsset[];
+	characters: CharacterAsset[];
+	cgs: CgsAsset[];
+	backgrounds: BackgroundAsset[];
+	other: OtherAsset[];
+}
+
+export interface AudioAsset {
+	id: string;
+	key: string;
+	category: string;
+	path: string;
+	settings: any;
+	tag: string[];
+	characterId: string;
+	// 변환한 대사 문자열 보관
+	transcript: string;
+}
+
+export interface CharacterAsset {
+	id: string;
+	key: string;
+	path: string;
+	settings: any;
+	characterId: string;
+	usage: string;
+	emotion: string;
+}
+export interface CgsAsset {
+	id: string;
+	key: string;
+	path: string;
+	settings: any;
+	characterId: string;
+	description: string;
+}
+export interface BackgroundAsset {
+	id: string;
+	key: string;
+	path: string;
+	settings: any;
+	locationId: string;
+	timeId: string;
+	weatherId: string;
+}
+export interface OtherAsset {
+	id: string;
+	key: string;
+	category: string;
+	path: string;
+	settings: any;
+}
+
+export type BGM_MOODS = "default" | "peaceful" | "upbeat" | "romance" | "tense" | "battle";
+export type SCREEN_EFFECTS =
+	| "shake"
+	| "flash"
+	| "blackout"
+	| "fade_in"
+	| "fireworks"
+	| "petals"
+	| "snow"
+	| "rain"
+	| "fog"
+	| "clear";
+export type MOTIONS = "jump" | "bounce" | "shake" | "nod" | "sway" | "shrink" | "slide_in" | "slide_out";
+
+export interface Ending {
+	id: string;
+	endingKey: string;
+	title: string;
+	description: string;
+}
+
+export interface variable {
+	key: string;
+	description: string;
+	type: string;
+	default: number;
+	min: number;
+	max: number;
 }
 
 // ---------------------------------------------------------
@@ -79,23 +280,80 @@ export interface GameResponse {
 	state: RenderState;
 }
 
+/** 변경된 데이터
+ * stage에는 현재 출력되어야 하는 데이터가 들어가 있음
+ */
 export interface RenderState {
 	sessionId: string;
 	locationId: string | null;
 	mapId: string;
 	zoneId: string | null;
 	gameTime: number;
-	weatherID: string;
+	weatherId: string;
 	timePeriodId: string;
 	currentSceneId: string | null;
 	activeNpcId: string | null;
 	availableChoices: string[];
 	flags: any;
 	inventory: any;
-	relationships: any;
+	relationships: Record<string, RelationshipDetail>;
 	stage: Stage;
 	presentNpcs: string[];
 }
+
+export interface RelationshipDetail {
+	tags: string[];
+	affection?: number;
+	trust?: number;
+	tension?: number;
+}
+// ---------------------------------------------------------
+// 게임 커맨드와 이벤트 정의
+// ---------------------------------------------------------
+export type GameCommand =
+	| { type: "moveTo"; locationId: string }
+	| { type: "interact"; entityId: string }
+	| { type: "talk"; gameCharacterId: string }
+	| { type: "stopTalk" }
+	| { type: "setVariable"; key: string; value: any }
+	| { type: "choose"; choiceId: string }
+	| { type: "advanceTime"; minutes: number }
+	| { type: "useItem"; itemId: string; targetId?: string }
+	| { type: "dropItem"; itemId: string; quantity?: number };
+
+/** 프론트에서는 시스템이 주고 받은 이벤트의 결과만 반환됨
+ * 디버깅용으로 받는 것이므로 신경쓰지마셈
+ */
+export type GameEvent =
+	| { type: "gameStarted" }
+	| { type: "locationChanged"; from?: string; to: string }
+	| { type: "zoneChanged"; from?: string; to: string }
+	| { type: "timeAdvanceRequested"; seconds: number }
+	| { type: "timeAdvanced"; from: number; to: number }
+	| { type: "weatherChanged"; weatherId: string }
+	| { type: "timePeriodChanged"; from?: string; to: string }
+	| { type: "npcMoved"; gameCharacterId: string; from?: string; to?: string }
+	| { type: "eventTriggered"; eventId: string; eventType: string; triggerType: string; npcId?: string }
+	| { type: "sceneRequested"; sceneId: string }
+	| { type: "eventRequested"; sceneId: string }
+	| { type: "triggerActivated"; sceneId: string }
+	| { type: "dialogueStarted"; sceneId: string }
+	| { type: "dialogueEnded"; sceneId: string }
+	| { type: "choicePresented"; sceneId: string }
+	| { type: "choiceMade"; sceneId: string }
+	| { type: "sceneChanged"; sceneId: string }
+	| { type: "stageRequested"; spec: any }
+	| { type: "sceneScript"; sceneId: string; lines: StageLine[] }
+	| { type: "stageLines"; lines: StageLine[] }
+	| { type: "sceneExited"; sceneId: string }
+	| { type: "variableChanged"; key: string; old: any; new: any }
+	| { type: "itemChangeRequested"; itemId: string; delta: number }
+	| { type: "itemUsed"; itemId: string; targetId?: string }
+	| { type: "relationChangeRequested"; from: string; to: string; axis: string; delta: number }
+	| { type: "relationChanged"; from: string; to: string; axis: string; old: number; new: number }
+	| { type: "itemAdded"; itemId: string; quantity: number }
+	| { type: "itemRemoved"; itemId: string; quantity: number }
+	| { type: "gameEnded"; endingId: string };
 
 // ---------------------------------------------------------
 // NPC 대화 시스템
@@ -126,6 +384,7 @@ export interface GameMessages {
 export interface NpcReply {
 	text: string;
 	events: GameEvent[];
+	lines: StageLine[];
 	state: RenderState;
 }
 
@@ -136,7 +395,12 @@ export interface Stage {
 	background: AssetRef;
 	bgm: { mood: string; asset: string };
 	cg: AssetRef | null;
-	standings: { 캐릭터id: { emotion: string; asset: string } };
+	standings: Record<string, CharacterStandingDetail>;
+}
+
+export interface CharacterStandingDetail {
+	emotion: string;
+	asset: CharacterAsset;
 }
 
 export interface AssetRef {
@@ -215,49 +479,13 @@ export interface GameSave {
 	stateSnapshot: string | null;
 	updatedAt: number;
 }
-
 // ---------------------------------------------------------
-// 게임 커맨드들
+// 게임 패키지 저장시 반환 데이터
 // ---------------------------------------------------------
-export enum GameCommand {
-	MoveTo, // 이동
-	Interact, // 상호작용
-	Talk, // NPC 대화
-	StopTalk, // 대화 멈춤
-	SetVariable, // 변수 설정
-	Choose, // 분기 노드
-	AdvanceTime, // 시간 흐름
-	UseItem, // 아이템 사용
-	DropItem, // 아이템 버리기
-}
-
-export enum GameEvent {
-	GameStarted, // 게임 시작
-	LocationChanged, // 이동
-	ZoneChanged, // zone 이동 (맵 순서: map>zone>location)
-	TimeAdvanceRequested, // 시간 흘렀을 경우 뭐가 바뀌었는지 확인하기 위한 이벤트
-	TimeAdvanced, // 시간 변경
-	WeatherChanged, // 날씨 변경
-	TimePeriodChanged, // 시간대 변경
-	NpcMoved, // NPC 이동
-	EventTriggered, // 이벤트 트리거
-	SceneRequested, // 씬 요청
-	EventRequested, // 이벤트 요청
-	TriggerActivated, // 트리거 활성화
-	DialogueStarted, // 다일로그 시작
-	DialogueEnded, // 다일로그 끝
-	ChoicePresented, // 선택지
-	ChoiceMade,
-	SceneChanged,
-	SceneExited,
-	VariableChanged,
-	ItemChangeRequested,
-	ItemUsed,
-	RelationChangeRequested,
-	RelationChanged,
-	ItemAdded,
-	ItemRemoved,
-	GameEnded,
+/** 삭제된 데이터와 이슈들을 모아서 반환 */
+export interface SaveReport {
+	deleted: Map<string, number>;
+	issues: any;
 }
 
 // =========================================================
@@ -285,13 +513,6 @@ export interface PackageData {
 	characters: GameCharactersInput[];
 	worldInfoBooks: PackageWorldInfoBook[];
 	assets: GameAssetsInput[];
-}
-
-export interface GameBundleRow {
-	game: GameProject;
-	stateDefs: GameStateDef[];
-	scenes: GameScene[];
-	events: GameEvents[];
 }
 
 export interface GameProjectInput {
@@ -487,183 +708,4 @@ export interface GameAssetsInput {
 	kind: string;
 	filePath: string;
 	settingsJson: unknown | null;
-}
-
-export interface GameStateDef {
-	id: string;
-	gameId: string;
-	description: string | null;
-	key: string;
-	type: string;
-	defaultValue: string;
-	createdAt: number;
-	updatedAt: number;
-}
-
-export interface GameChoice {
-	id: string;
-	sceneId: string;
-	text: string;
-	nextSceneId: string | null;
-	effect: string | null;
-	sortOrder: number;
-}
-
-export interface GameMaps {
-	id: string;
-	gameId: string;
-	name: string;
-	dangerLevel: number;
-	defaultWeatherPoolId: string | null;
-	settingsJson: unknown;
-	createdAt: number;
-	updatedAt: number;
-}
-
-export interface GameMapsZone {
-	id: string;
-	mapId: string;
-	name: string;
-	tags: string[];
-	settingsJson: unknown;
-	createdAt: number;
-	updatedAt: number;
-}
-
-export interface GameLocations {
-	id: string;
-	zoneId: string;
-	name: string;
-	description: string | null;
-	settingsJson: unknown;
-}
-export interface GameLocationConnections {
-	fromId: string;
-	toId: string;
-	travelSeconds: number;
-	condition: string | null;
-	settingsJson: unknown;
-}
-
-export interface GameInteractables {
-	id: string;
-	locationId: string;
-	name: string;
-	eventId: string | null;
-}
-
-export interface GameTimePeriods {
-	id: string;
-	gameId: string;
-	name: string;
-	sortOrder: number;
-	startMinute: number;
-	endMinute: number;
-}
-
-export interface GameWeatherTypes {
-	id: string;
-	gameId: string;
-	name: string;
-	encounterRateModifier: number;
-	visibilityModifier: number;
-	createdAt: number;
-	updatedAt: number;
-}
-
-export interface GameWeatherTransitions {
-	fromWeatherId: string;
-	toWeatherId: string;
-	mapId: string;
-	probability: number;
-}
-
-export interface GameEvents {
-	id: string;
-	gameId: string;
-	eventType: string;
-	name: string;
-	description: string;
-	requiresNpc: boolean;
-	configJson: { [key: string]: unknown };
-	effectJson: { [key: string]: unknown };
-	cooldownSeconds: number;
-	createdAt: number;
-	updatedAt: number;
-}
-
-export interface GameEventConditions {
-	id: string;
-	eventId: string;
-	conditionType: string;
-	conditionValue: string | null;
-}
-export interface GameEventCharacterPool {
-	eventId: string;
-	gameCharacterId: string;
-	spawnWeight: number;
-}
-
-export interface GameEncounterTables {
-	id: string;
-	mapId: string;
-	zoneId: string | null;
-	locationId: string | null;
-	baseTriggerChance: number;
-}
-
-export interface GameEncounterEntries {
-	id: string;
-	encounterTableId: string;
-	eventId: string;
-	weight: number;
-	timePeriodId: string | null;
-	weatherId: string | null;
-}
-
-export interface GameScene {
-	id: string;
-	gameId: string;
-	sceneName: string;
-	description: string | null;
-	sceneKey: string;
-	settingsJson: string | null;
-	isEnding: boolean;
-	sortOrder: number;
-	createdAt: number;
-	updatedAt: number;
-}
-
-export interface GameEndings {
-	id: string;
-	gameId: string;
-	endingKey: string;
-	title: string;
-	description: string;
-}
-export interface GameCharacters {
-	id: string;
-	gameId: string;
-	characterId: string | null;
-	name: string;
-	avatar: string | null;
-	description: string | null;
-	firstMessage: string | null;
-	exampleDialogue: string | null;
-	systemPromptOverride: string | null;
-	behaviorType: string | null;
-	worldInfoIds: string[];
-	tags: string | null;
-	settingsJson: unknown;
-	createdAt: number;
-	updatedAt: number;
-}
-
-// ---------------------------------------------------------
-// 게임 패키지 저장시 반환 데이터
-// ---------------------------------------------------------
-/** 삭제된 데이터와 이슈들을 모아서 반환 */
-export interface SaveReport {
-	deleted: Map<string, number>;
-	issues: any;
 }

@@ -122,6 +122,8 @@
 		</div>
 		<div class="scroll-list">
 			{#each maps as map, idx (map.id || idx)}
+				<!-- svelte-ignore a11y_click_events_have_key_events -->
+				<!-- svelte-ignore a11y_no_static_element_interactions -->
 				<div
 					class="list-item"
 					class:active={selectedMapIndex === idx}
@@ -149,6 +151,8 @@
 		<div class="scroll-list">
 			{#if activeMap}
 				{#each currentZones as zone, idx (zone.id || idx)}
+					<!-- svelte-ignore a11y_click_events_have_key_events -->
+					<!-- svelte-ignore a11y_no_static_element_interactions -->
 					<div
 						class="list-item"
 						class:active={selectedZoneIndex === idx}
@@ -178,6 +182,8 @@
 		<div class="scroll-list">
 			{#if activeZone}
 				{#each currentLocations as loc, idx (loc.id || idx)}
+					<!-- svelte-ignore a11y_click_events_have_key_events -->
+					<!-- svelte-ignore a11y_no_static_element_interactions -->
 					<div
 						class="list-item"
 						class:active={selectedLocationIndex === idx}
@@ -203,13 +209,16 @@
 			</div>
 			<div class="form-grid">
 				<div class="field">
-					<label>장소 이름</label>
-					<input type="text" bind:value={activeLocation.name} />
+					<label for="location_name">장소 이름</label>
+					<input id="location_name" type="text" bind:value={activeLocation.name} />
 				</div>
 				<div class="field">
-					<label>설명</label>
-					<textarea bind:value={activeLocation.description} rows="4" placeholder="장소 설명 입력..."
-					></textarea>
+					<label for="location_des">설명</label>
+					<textarea
+						id="location_des"
+						bind:value={activeLocation.description}
+						rows="4"
+						placeholder="장소 설명 입력..."></textarea>
 				</div>
 			</div>
 		{:else if activeZone}
@@ -218,8 +227,8 @@
 			</div>
 			<div class="form-grid">
 				<div class="field">
-					<label>존 이름</label>
-					<input type="text" bind:value={activeZone.name} />
+					<label for="zone_name">존 이름</label>
+					<input id="zone_name" type="text" bind:value={activeZone.name} />
 				</div>
 			</div>
 		{:else if activeMap}
@@ -228,16 +237,21 @@
 			</div>
 			<div class="form-grid">
 				<div class="field">
-					<label>맵 이름</label>
-					<input type="text" bind:value={activeMap.name} />
+					<label for="map_name">맵 이름</label>
+					<input id="map_name" type="text" bind:value={activeMap.name} />
 				</div>
 				<div class="field">
-					<label>위험도 (Danger Level)</label>
-					<input type="number" bind:value={activeMap.dangerLevel} min="0" max="10" />
+					<label for="map_danger">위험도 (Danger Level)</label>
+					<input id="map_danger" type="number" bind:value={activeMap.dangerLevel} min="0" max="10" />
 				</div>
 				<div class="field">
-					<label>기본 날씨 풀 ID</label>
-					<input type="text" bind:value={activeMap.defaultWeatherPoolId} placeholder="선택 사항" />
+					<label for="map_default_wather_pool">기본 날씨 풀 ID</label>
+					<input
+						id="map_default_wather_pool"
+						type="text"
+						bind:value={activeMap.defaultWeatherPoolId}
+						placeholder="선택 사항"
+					/>
 				</div>
 			</div>
 		{:else}

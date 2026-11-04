@@ -196,7 +196,7 @@ export const mockHandlers: CommandHandlers = {
 	continue_game: async (args) => {
 		throw new Error("연결되지 않음");
 	},
-	dispatch_game_command: async (args) => {
+	dispatch_command: async (args) => {
 		throw new Error("연결되지 않음");
 	},
 	save_write: async (args) => {

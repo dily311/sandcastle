@@ -61,7 +61,12 @@
 		</div>
 		<div class="scroll-list">
 			{#each events as ev, idx (ev.id)}
-				<div class="list-item" class:active={selectedIndex === idx} onclick={() => (selectedIndex = idx)}>
+				<div
+					role="none"
+					class="list-item"
+					class:active={selectedIndex === idx}
+					onclick={() => (selectedIndex = idx)}
+				>
 					<div class="item-info">
 						<span class="title">{ev.name}</span>
 						<span class="meta">유형: {ev.eventType}</span>
@@ -84,12 +89,13 @@
 			<div class="form-grid">
 				<div class="field-row-split">
 					<div class="field">
-						<label>이벤트 이름 (Name)</label>
-						<input type="text" bind:value={activeEvent.name} />
+						<label for="event_name">이벤트 이름 (Name)</label>
+						<input id="event_name" type="text" bind:value={activeEvent.name} />
 					</div>
 					<div class="field">
-						<label>이벤트 유형 (Event Type)</label>
+						<label for="event_type">이벤트 유형 (Event Type)</label>
 						<input
+							id="event_type"
 							type="text"
 							bind:value={activeEvent.eventType}
 							placeholder="예: combat, dialog, script"
@@ -98,14 +104,15 @@
 				</div>
 
 				<div class="field">
-					<label>설명 (Description)</label>
-					<textarea bind:value={activeEvent.description} rows="2" placeholder="이벤트 설명..."></textarea>
+					<label for="event_des">설명 (Description)</label>
+					<textarea id="event_des" bind:value={activeEvent.description} rows="2" placeholder="이벤트 설명..."
+					></textarea>
 				</div>
 
 				<div class="field-row-split">
 					<div class="field">
-						<label>쿨다운 시간 (Seconds)</label>
-						<input type="number" bind:value={activeEvent.cooldownSeconds} min="0" />
+						<label for="event_seconds">쿨다운 시간 (Seconds)</label>
+						<input id="event_seconds" type="number" bind:value={activeEvent.cooldownSeconds} min="0" />
 					</div>
 					<div class="field checkbox-field">
 						<label class="checkbox-label">
@@ -117,16 +124,18 @@
 
 				<div class="field-row-split">
 					<div class="field">
-						<label>설정 JSON (Config JSON)</label>
+						<label for="event_setting">설정 JSON (Config JSON)</label>
 						<textarea
+							id="event_setting"
 							class="code-font"
 							rows="4"
 							value={toJsonString(activeEvent.configJson)}
 							oninput={(e) => fromJsonString(e.currentTarget.value, "configJson")}></textarea>
 					</div>
 					<div class="field">
-						<label>효과 JSON (Effect JSON)</label>
+						<label for="event_effect">효과 JSON (Effect JSON)</label>
 						<textarea
+							id="event_effect"
 							class="code-font"
 							rows="4"
 							value={toJsonString(activeEvent.effectJson)}

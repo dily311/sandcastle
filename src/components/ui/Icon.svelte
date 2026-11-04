@@ -6,10 +6,11 @@
 	type Props = SVGAttributes<SVGSVGElement> & {
 		name: LucideIconName | (string & {});
 		size?: number;
+		strokeWidth?: number;
 	};
 
 	// 부모로부터 문자열로 아이콘 이름을 받음 (예: "ArrowRight", "Search" 등)
-	let { name = "Activity", size = 16, color = "currentColor", class: className, children, ...restProps }: Props = $props();
+	let { name = "Activity", size = 16, color = "currentColor", strokeWidth=1, class: className, children, ...restProps }: Props = $props();
 
 	const getPascalCase = (str: string) => {
 		if (!str) return "";
@@ -28,7 +29,7 @@
 </script>
 
 <!-- 일반 컴포넌트처럼 사용하고 props 전달 -->
-<SelectedIcon class={cn("svg-icon", className)} {size} {color} nonScalingStroke {...restProps}>
+<SelectedIcon class={cn("svg-icon", className)} {size} {color} {strokeWidth} nonScalingStroke {...restProps}>
 	{@render children?.()}
 </SelectedIcon>
 

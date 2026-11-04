@@ -46,6 +46,8 @@
 		</div>
 		<div class="scroll-list">
 			{#each characters as char, index (char.id || index)}
+				<!-- svelte-ignore a11y_click_events_have_key_events -->
+				<!-- svelte-ignore a11y_no_static_element_interactions -->
 				<div class="list-item" class:active={selectedIndex === index} onclick={() => (selectedIndex = index)}>
 					<div class="item-info">
 						<span class="title">{char.name}</span>
@@ -67,34 +69,48 @@
 			<div class="form-grid">
 				<div class="field-row-split">
 					<div class="field">
-						<label>캐릭터 이름 (Name)</label>
-						<input type="text" bind:value={activeChar.name} />
+						<label for="char_name">캐릭터 이름 (Name)</label>
+						<input id="char_name" type="text" bind:value={activeChar.name} />
 					</div>
 				</div>
 				<div class="field">
-					<label>아바타 이미지 경로/URL (Avatar)</label>
-					<input type="text" bind:value={activeChar.avatar} placeholder="https:// 또는 파일 경로" />
+					<label for="char_avatar">아바타 이미지 경로/URL (Avatar)</label>
+					<input
+						id="char_avatar"
+						type="text"
+						bind:value={activeChar.avatar}
+						placeholder="https:// 또는 파일 경로"
+					/>
 				</div>
 				<div class="field">
-					<label>설명 (Description / Persona)</label>
-					<textarea bind:value={activeChar.description} rows="3" placeholder="캐릭터의 배경 설정 및 성격"
-					></textarea>
-				</div>
-				<div class="field">
-					<label>첫 대사 (First Message)</label>
-					<textarea bind:value={activeChar.firstMessage} rows="2" placeholder="채팅 시작 시 건네는 첫 인사"
-					></textarea>
-				</div>
-				<div class="field">
-					<label>행동 타입 (Behavior Type)</label>
-					<input type="text" bind:value={activeChar.behaviorType} placeholder="예: npc, companion 등" />
-				</div>
-				<div class="field">
-					<label>예시 대화 (Example Dialogue)</label>
+					<label for="char_des">설명 (Description / Persona)</label>
 					<textarea
-						bind:value={activeChar.exampleDialogue}
+						id="char_des"
+						bind:value={activeChar.description}
 						rows="3"
-						placeholder="<START>\n"></textarea>
+						placeholder="캐릭터의 배경 설정 및 성격"></textarea>
+				</div>
+				<div class="field">
+					<label for="char_first">첫 대사 (First Message)</label>
+					<textarea
+						id="char_first"
+						bind:value={activeChar.firstMessage}
+						rows="2"
+						placeholder="채팅 시작 시 건네는 첫 인사"></textarea>
+				</div>
+				<div class="field">
+					<label for="char_behavior">행동 타입 (Behavior Type)</label>
+					<input
+						id="char_behavior"
+						type="text"
+						bind:value={activeChar.behaviorType}
+						placeholder="예: npc, companion 등"
+					/>
+				</div>
+				<div class="field">
+					<label for="char_example">예시 대화 (Example Dialogue)</label>
+					<textarea id="char_example" bind:value={activeChar.exampleDialogue} rows="3" placeholder="<START>\n"
+					></textarea>
 				</div>
 			</div>
 		{:else}
@@ -182,10 +198,7 @@
 		font-size: 0.9rem;
 		color: #f8fafc;
 	}
-	.item-info .key {
-		font-size: 0.75rem;
-		color: #94a3b8;
-	}
+
 	.empty-text {
 		text-align: center;
 		color: #64748b;

@@ -13,7 +13,6 @@ import CharacterEditPageSvelte from "$screens/character/CharacterEditPage.svelte
 import GamePage from "$screens/game/GamePage.svelte";
 import GameDetailPage from "$/screens/game/GameDetailPage.svelte";
 import GameSessionList from "$/screens/game/editor/GameSessionList.svelte";
-import GamePlaySession from "$/screens/game/editor/GamePlaySession.svelte";
 import GameEditorPage from "$/screens/game/GameEditorPage.svelte";
 import GamePlayContainer from "$/screens/game/GamePlayContainer.svelte";
 
@@ -24,6 +23,7 @@ export type Pages =
 	"/character" |
 	"/persona" |
 	"/chat" |
+	"/phone" |
 	"/game" |
 	"/worldInfo" |
 	"/settings"
@@ -53,10 +53,10 @@ export const routes: RouteDefinition = {
 	"/character/:characterId/chat": ChatListPage,
 	"/character/:characterId/edit": CharacterEditPageSvelte,
 	"/chat/:conversationId": ChatScreen,
+	"/phone": ChatListPage,
 	"/game": GamePage,
 	"/game/:gameId": GameDetailPage,
 	"/game/:gameId/sessions": GameSessionList,
-	"/game/:gameId/play": GamePlaySession,
 	"/game/:gameId/play/:sessionId": GamePlayContainer,
 	"/game/:gameId/editor": GameEditorPage,
 	"/api": APIPage,
@@ -131,13 +131,4 @@ export function handleOpenCharacterEditor(id: string) {
 }
 export function handleOpenChatPage(id: string) {
 	push(`/chat/${id}`);
-}
-export function handleOpenGameDetailPage(id: string) {
-	push(`/game/${id}`);
-}
-export function handleStartGamePlay(id: string) {
-	push(`/game/${id}/sessions`);
-}
-export function handleOpenGameEditor(id: string) {
-	push(`/game/${id}/editor`);
 }

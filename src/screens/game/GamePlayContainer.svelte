@@ -3,9 +3,7 @@
 
 	// 템플릿별 UI 컴포넌트 임포트
 	import DefaultPlay from "./play/DefaultTemplatePlay.svelte";
-	import GachaGameLobby from "./play/gacha/GachaGameLobby.svelte";
-	import VisualNovelTemplatePlay from "./play/VisualNovelTemplatePlay.svelte";
-	import { gameEngineCommands, gameManagerCommands } from "$/ipc/commands";
+	import VisualNovelTemplatePlay from "./play/vn/VisualNovelTemplatePlay.svelte";
 
 	type Props = {
 		params: { sessionId: string; gameId: string };
@@ -20,9 +18,6 @@
 		try {
 			// 테스트용 임시 값
 			templateId = "dating-sim";
-
-			await gameEngineCommands.getGameView();
-
 		} catch (err) {
 			console.error("Failed to load template info:", err);
 		} finally {
@@ -35,7 +30,8 @@
 		switch (templateId) {
 			//   case 'fantasy_rpg': return FantasyPlay;
 			//   case 'cyberpunk': return CyberpunkPlay;
-			case "dating-sim": return VisualNovelTemplatePlay;
+			case "dating-sim":
+				return VisualNovelTemplatePlay;
 			default:
 				return DefaultPlay;
 		}
@@ -49,8 +45,7 @@
 {#if isLoading}
 	<div class="loading">플레이 환경을 불러오는 중...</div>
 {:else}
-	<!-- 동적 컴포넌트 렌더링 (Svelte 5) -->
-	<ActivePlayComponent sessionId={params.sessionId} />
+	<ActivePlayComponent gameId={params.gameId} sessionId={params.sessionId} />
 {/if}
 
 <style>
@@ -59,6 +54,6 @@
 		justify-content: center;
 		align-items: center;
 		height: 100vh;
-		color: #94a3b8;
+		color: var(--text-muted);
 	}
 </style>

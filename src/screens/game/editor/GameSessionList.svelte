@@ -1,6 +1,5 @@
 <script lang="ts">
 	import { onMount } from "svelte";
-	import { invoke } from "@tauri-apps/api/core";
 	import { pop, push } from "svelte-spa-router";
 	import { gameEngineCommands } from "$/ipc/commands";
 	import type { GamePlayerSessions } from "$/lib/type/game";
@@ -45,7 +44,7 @@
 	// 기존 세션 이어하기 (continue_game)
 	async function handleContinueSession(sessionId: string) {
 		try {
-			await gameEngineCommands.continueGame({sessionId: sessionId});
+			await gameEngineCommands.continueGame({ sessionId: sessionId });
 			push(`/game/${params.gameId}/play/${sessionId}`);
 		} catch (err) {
 			console.error("Failed to continue session:", err);
@@ -88,9 +87,7 @@
 						<h3>세션 ID: {session.id}</h3>
 						<span class="date">최근 플레이: {new Date(session.updatedAt).toLocaleString()}</span>
 					</div>
-					<button class="continue-btn" onclick={() => handleContinueSession(session.id)}>
-						이어하기 →
-					</button>
+					<button class="continue-btn" onclick={() => handleContinueSession(session.id)}> 이어하기 → </button>
 				</div>
 			{/each}
 		</div>

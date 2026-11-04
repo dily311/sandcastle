@@ -1,3 +1,5 @@
+import { toasts } from "$/lib/stores/toast.svelte";
+
 export type AppErrorKind = "Validation" | "NotFound" | "Database" | "Archive" | "AiProvider" | "Window" | "Io";
 export type AppError = {
 	kind: AppErrorKind;
@@ -50,4 +52,9 @@ export function normalizeError(e: unknown): AppError {
 		return parseErrorMessage(e);
 	}
 	return { kind: "Io", message: "알 수 없는 오류가 발생했습니다." };
+}
+
+export function showError(e: unknown): void {
+	const err = normalizeError(e);
+	toasts.showToast({type: "error", message: `${err.kind}: ${err.message}`});
 }

@@ -41,7 +41,7 @@
 		</div>
 		<div class="scroll-list">
 			{#each timePeriods as tp, idx (tp.id || idx)}
-				<div class="list-item" class:active={selectedIndex === idx} onclick={() => (selectedIndex = idx)}>
+				<div role="none" class="list-item" class:active={selectedIndex === idx} onclick={() => (selectedIndex = idx)}>
 					<div class="item-info">
 						<span class="title">{tp.name}</span>
 						<span class="meta">{tp.startMinute}분 ~ {tp.endMinute}분</span>
@@ -62,24 +62,24 @@
 			</div>
 			<div class="form-grid">
 				<div class="field">
-					<label>시간대 이름 (Name)</label>
-					<input type="text" bind:value={activePeriod.name} placeholder="예: 새벽, 아침, 낮, 밤" />
+					<label for="time_name">시간대 이름 (Name)</label>
+					<input id="time_name" type="text" bind:value={activePeriod.name} placeholder="예: 새벽, 아침, 낮, 밤" />
 				</div>
 				<div class="field-row-split">
 					<div class="field">
-						<label>시작 분 (Start Minute)</label>
-						<input type="number" bind:value={activePeriod.startMinute} min="0" max="1440" />
+						<label for="time_s_minute">시작 분 (Start Minute)</label>
+						<input id="time_s_minute" type="number" bind:value={activePeriod.startMinute} min="0" max="1440" />
 						<span class="field-hint">하루 1440분 기준 (예: 0 = 00:00)</span>
 					</div>
 					<div class="field">
-						<label>종료 분 (End Minute)</label>
-						<input type="number" bind:value={activePeriod.endMinute} min="0" max="1440" />
+						<label for="time_e_minute">종료 분 (End Minute)</label>
+						<input id="time_e_minute" type="number" bind:value={activePeriod.endMinute} min="0" max="1440" />
 						<span class="field-hint">예: 360 = 06:00</span>
 					</div>
 				</div>
 				<div class="field">
-					<label>정렬 순서 (Sort Order)</label>
-					<input type="number" bind:value={activePeriod.sortOrder} />
+					<label for="time_sort">정렬 순서 (Sort Order)</label>
+					<input id="time_sort" type="number" bind:value={activePeriod.sortOrder} />
 				</div>
 			</div>
 		{:else}

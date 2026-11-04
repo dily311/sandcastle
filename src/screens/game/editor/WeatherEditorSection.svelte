@@ -92,6 +92,8 @@
 				</div>
 				<div class="scroll-list">
 					{#each weatherTypes as wt, idx (wt.id || idx)}
+						<!-- svelte-ignore a11y_click_events_have_key_events -->
+						<!-- svelte-ignore a11y_no_static_element_interactions -->
 						<div
 							class="list-item"
 							class:active={selectedTypeIndex === idx}
@@ -101,9 +103,7 @@
 								<span class="title">{wt.name}</span>
 								<span class="meta">조우 보정: {wt.encounterRateModifier}x</span>
 							</div>
-							<button class="icon-del" onclick={() => handleDeleteWeatherType(idx)}
-								>×</button
-							>
+							<button class="icon-del" onclick={() => handleDeleteWeatherType(idx)}>×</button>
 						</div>
 					{:else}
 						<div class="empty-text">등록된 날씨가 없습니다.</div>
@@ -119,18 +119,28 @@
 					</div>
 					<div class="form-grid">
 						<div class="field">
-							<label>날씨 이름 (Name)</label>
-							<input type="text" bind:value={activeWeatherType.name} />
+							<label for="weather_name">날씨 이름 (Name)</label>
+							<input id="weather_name" type="text" bind:value={activeWeatherType.name} />
 						</div>
 						<div class="field-row-split">
 							<div class="field">
-								<label>조우율 보정 (Encounter Rate Modifier)</label>
-								<input type="number" step="0.1" bind:value={activeWeatherType.encounterRateModifier} />
+								<label for="weather_rate">조우율 보정 (Encounter Rate Modifier)</label>
+								<input
+									id="weather_rate"
+									type="number"
+									step="0.1"
+									bind:value={activeWeatherType.encounterRateModifier}
+								/>
 								<span class="field-hint">기본값 1.0 (예: 1.5배 증가)</span>
 							</div>
 							<div class="field">
-								<label>시야각 보정 (Visibility Modifier)</label>
-								<input type="number" step="0.1" bind:value={activeWeatherType.visibilityModifier} />
+								<label for="weather_visibility">시야각 보정 (Visibility Modifier)</label>
+								<input
+									id="weather_visibility"
+									type="number"
+									step="0.1"
+									bind:value={activeWeatherType.visibilityModifier}
+								/>
 								<span class="field-hint">기본값 1.0 (예: 안개 시 0.5)</span>
 							</div>
 						</div>
@@ -150,6 +160,8 @@
 					{#each weatherTransitions as tr, idx (idx)}
 						{@const fromName = weatherMap.get(tr.fromWeatherId) || "지정 안됨"}
 						{@const toName = weatherMap.get(tr.toWeatherId) || "지정 안됨"}
+						<!-- svelte-ignore a11y_click_events_have_key_events -->
+						<!-- svelte-ignore a11y_no_static_element_interactions -->
 						<div
 							class="list-item"
 							class:active={selectedTransitionIndex === idx}
@@ -159,9 +171,7 @@
 								<span class="title">{fromName} ➔ {toName}</span>
 								<span class="meta">확률: {tr.probability * 100}%</span>
 							</div>
-							<button class="icon-del" onclick={() => handleDeleteTransition(idx)}
-								>×</button
-							>
+							<button class="icon-del" onclick={() => handleDeleteTransition(idx)}>×</button>
 						</div>
 					{:else}
 						<div class="empty-text">등록된 전환 규칙이 없습니다.</div>
@@ -178,16 +188,16 @@
 					<div class="form-grid">
 						<div class="field-row-split">
 							<div class="field">
-								<label>시작 날씨 (From Weather)</label>
-								<select bind:value={activeTransition.fromWeatherId}>
+								<label for="weather_from">시작 날씨 (From Weather)</label>
+								<select id="weather_from" bind:value={activeTransition.fromWeatherId}>
 									{#each weatherTypes as wt}
 										<option value={wt.id}>{wt.name}</option>
 									{/each}
 								</select>
 							</div>
 							<div class="field">
-								<label>전환될 날씨 (To Weather)</label>
-								<select bind:value={activeTransition.toWeatherId}>
+								<label for="weather_to">전환될 날씨 (To Weather)</label>
+								<select id="weather_to" bind:value={activeTransition.toWeatherId}>
 									{#each weatherTypes as wt}
 										<option value={wt.id}>{wt.name}</option>
 									{/each}
@@ -197,16 +207,17 @@
 
 						<div class="field-row-split">
 							<div class="field">
-								<label>적용 맵 (Target Map)</label>
-								<select bind:value={activeTransition.mapId}>
+								<label for="weather_target_map">적용 맵 (Target Map)</label>
+								<select id="weather_target_map" bind:value={activeTransition.mapId}>
 									{#each maps as m}
 										<option value={m.id}>{m.name}</option>
 									{/each}
 								</select>
 							</div>
 							<div class="field">
-								<label>전환 확률 (Probability: 0 ~ 1)</label>
+								<label for="weather_probability">전환 확률 (Probability: 0 ~ 1)</label>
 								<input
+									id="weather_probability"
 									type="number"
 									step="0.05"
 									min="0"

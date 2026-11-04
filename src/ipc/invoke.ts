@@ -1,9 +1,8 @@
 import { invoke } from "@tauri-apps/api/core";
-import { normalizeError } from "./errors";
+import { showError } from "./errors";
 import { listen, type EventCallback, type Options, type UnlistenFn } from "@tauri-apps/api/event";
 import { type CommandName, type CommandRegistry, type EventName, type EventRegistry } from "./commandTypes";
 import { mockHandlers } from "./mockup";
-import { toasts } from "$/lib/stores/toast.svelte";
 
 export async function invokeCommand<K extends CommandName>(
 	command: K,
@@ -26,8 +25,7 @@ export async function invokeCommand<K extends CommandName>(
 		console.info("[Tauri ipc result] ", command, result);
 		return result;
 	} catch (e) {
-		toasts.showToast({type: "error", message: JSON.stringify(e)});
-		throw normalizeError(e);
+		throw showError(e);
 	}
 }
 
@@ -48,6 +46,6 @@ export async function listenCommand<K extends EventName>(
 		const result = await listen<EventRegistry[K]["response"]>(event, handler, options);
 		return result;
 	} catch (e) {
-		throw normalizeError(e);
+		throw showError(e);
 	}
 }

@@ -85,6 +85,7 @@
 		<div class="scroll-list">
 			{#each worldInfoBooks as item, idx (item.id)}
 				<div
+					role="none"
 					class="list-item"
 					class:active={selectedBookIndex === idx}
 					onclick={() => {
@@ -114,6 +115,7 @@
 			{#if activeBook}
 				{#each activeBook.entries as entry, idx (entry.id)}
 					<div
+						role="none"
 						class="list-item"
 						class:active={selectedEntryIndex === idx}
 						onclick={() => (selectedEntryIndex = idx)}
@@ -142,8 +144,9 @@
 			</div>
 			<div class="form-grid">
 				<div class="field">
-					<label>트리거 키워드 (쉼표로 구분)</label>
+					<label for="book_triger">트리거 키워드 (쉼표로 구분)</label>
 					<input
+						id="book_triger"
 						type="text"
 						value={keysToString(activeEntry.keys)}
 						oninput={(e) => (activeEntry.keys = stringToKeys(e.currentTarget.value))}
@@ -153,8 +156,8 @@
 
 				<div class="field-row-split">
 					<div class="field">
-						<label>우선순위 (Priority)</label>
-						<input type="number" bind:value={activeEntry.priority} />
+						<label for="book_priority">우선순위 (Priority)</label>
+						<input id="book_priority" type="number" bind:value={activeEntry.priority} />
 					</div>
 					<div class="field checkbox-field">
 						<label class="checkbox-label">
@@ -169,8 +172,9 @@
 				</div>
 
 				<div class="field">
-					<label>컨텐츠 내용 (Content / Lore)</label>
+					<label for="book_content">컨텐츠 내용 (Content / Lore)</label>
 					<textarea
+						id="book_content"
 						bind:value={activeEntry.content}
 						rows="8"
 						placeholder="AI 프롬프트에 주입될 Lore 내용을 작성하세요..."></textarea>
@@ -182,12 +186,13 @@
 			</div>
 			<div class="form-grid">
 				<div class="field">
-					<label>북 이름 (Book Name)</label>
-					<input type="text" bind:value={activeBook.book.name} />
+					<label for="book_name">북 이름 (Book Name)</label>
+					<input id="book_name" type="text" bind:value={activeBook.book.name} />
 				</div>
 				<div class="field">
-					<label>북 설명 (Description)</label>
+					<label for="book_des">북 설명 (Description)</label>
 					<textarea
+						id="book_des"
 						bind:value={activeBook.book.description}
 						rows="4"
 						placeholder="이 인포 북에 대한 설명을 입력하세요..."></textarea>

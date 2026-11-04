@@ -124,18 +124,10 @@
 				<option value="favorite">즐겨찾기 순서</option>
 			</select>
 			<ButtonGroup segmented={true}>
-				<IconButton
-					class={cn(view === "grid" && "on")}
-					onclick={() => (view = "grid")}
-					title="그리드"
-				>
+				<IconButton class={cn(view === "grid" && "on")} onclick={() => (view = "grid")} title="그리드">
 					<Icon name="grid" size={15} />
 				</IconButton>
-				<IconButton
-					class={cn(view === "list" && "on")}
-					onclick={() => (view = "list")}
-					title="리스트"
-				>
+				<IconButton class={cn(view === "list" && "on")} onclick={() => (view = "list")} title="리스트">
 					<Icon name="list" size={15} />
 				</IconButton>
 			</ButtonGroup>
@@ -349,10 +341,7 @@
 		color: var(--text-color);
 		font-weight: 500;
 	}
-	.nav-item svg {
-		flex: none;
-		opacity: 0.8;
-	}
+
 	.nav-emoji {
 		width: 18px;
 		text-align: center;
@@ -364,17 +353,7 @@
 		padding: 0;
 		gap: 0;
 	}
-	.nav-item.row .row-main {
-		display: flex;
-		align-items: center;
-		gap: 8px;
-		flex: 1;
-		min-width: 0;
-		padding: 5px 4px 5px 8px;
-		color: inherit;
-		font-size: 13.5px;
-		text-align: left;
-	}
+
 	.row-action {
 		width: 24px;
 		height: 24px;
@@ -388,9 +367,7 @@
 		border: none;
 		cursor: pointer;
 	}
-	.nav-item.row:hover .row-action {
-		display: inline-flex;
-	}
+
 	.row-action:hover {
 		background: var(--bg-active);
 		color: var(--danger);
