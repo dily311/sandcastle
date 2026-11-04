@@ -147,7 +147,7 @@
 		text-align: center;
 		padding: 4rem 2rem;
 		color: var(--text-muted);
-		background: #1e293b;
+		background: var(--card-bg);
 		border-radius: 12px;
 		border: 1px dashed var(--card-border-color);
 	}

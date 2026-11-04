@@ -12,7 +12,7 @@ import WorldInfoPage from "$screens/worldinfo/WorldinfoPage.svelte";
 import CharacterEditPageSvelte from "$screens/character/CharacterEditPage.svelte";
 import GamePage from "$screens/game/GamePage.svelte";
 import GameDetailPage from "$/screens/game/GameDetailPage.svelte";
-import GameSessionList from "$/screens/game/editor/GameSessionList.svelte";
+import GameSessionList from "$/screens/game/play/GameSessionList.svelte";
 import GameEditorPage from "$/screens/game/GameEditorPage.svelte";
 import GamePlayContainer from "$/screens/game/GamePlayContainer.svelte";
 

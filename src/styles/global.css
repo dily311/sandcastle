@@ -262,8 +262,7 @@ input[type="range"]::-webkit-slider-thumb:hover {
 }
 
 svg,
-path,
-[aria-label] * {
+path {
 	pointer-events: none;
 }
 

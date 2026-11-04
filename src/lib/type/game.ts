@@ -117,6 +117,7 @@ export interface LocationConnection {
 	fromId: string;
 	toId: string;
 	travelSeconds: number;
+	condition?: string | null;
 	settings: any;
 }
 

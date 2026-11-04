@@ -1782,6 +1782,37 @@ body {
   --shadow-sm: 0 1px 2px rgba(15, 15, 15, 0.06);
   --shadow: 0 4px 12px rgba(15, 15, 15, 0.1), 0 0 0 1px rgba(15, 15, 15, 0.04);
   --shadow-lg: 0 12px 32px rgba(15, 15, 15, 0.12), 0 0 0 1px rgba(15, 15, 15, 0.05);
+
+  /* Visual novel player */
+  --game-player-bg: #11100f;
+  --game-stage-bg: #211f22;
+  --game-topbar-bg: rgba(20, 18, 17, 0.94);
+  --game-footer-bg: #181615;
+  --game-panel-bg: rgba(25, 22, 22, 0.96);
+  --game-dialogue-bg: linear-gradient(145deg, rgba(23, 20, 21, 0.92), rgba(14, 14, 17, 0.91));
+  --game-scene-label-bg: rgba(19, 17, 17, 0.55);
+  --game-border: rgba(255, 255, 255, 0.14);
+  --game-border-subtle: rgba(255, 255, 255, 0.08);
+  --game-surface-hover: rgba(255, 255, 255, 0.09);
+  --game-text-primary: #fffaf5;
+  --game-text-main: #f8f5f1;
+  --game-text-secondary: #e4ddd6;
+  --game-text-muted: #b9ada4;
+  --game-text-dim: #aa9d94;
+  --game-accent: #f1b78f;
+  --game-accent-strong: #f4d1b8;
+  --game-accent-soft: rgba(205, 143, 104, 0.14);
+  --game-accent-hover: rgba(205, 143, 104, 0.29);
+  --game-accent-border: rgba(236, 190, 158, 0.43);
+  --game-danger-text: #ffe0d9;
+  --game-danger-bg: #492722ee;
+  --game-danger-border: #e99b8b66;
+  --game-shadow-panel: 0 14px 45px #0008;
+  --game-shadow-dialogue: 0 18px 60px rgba(0, 0, 0, 0.35);
+  --game-stage-placeholder: radial-gradient(ellipse at 50% 35%, #66556a, #302b35 68%, var(--game-stage-bg));
+  --game-stage-shade: linear-gradient(180deg, rgba(8, 7, 9, 0.22), transparent 28%, transparent 52%, rgba(8, 7, 9, 0.3));
+  --game-character-shadow: drop-shadow(0 12px 24px rgba(0, 0, 0, 0.22));
+  --game-character-dim-shadow: brightness(0.35) saturate(0.55) drop-shadow(0 8px 18px rgba(0, 0, 0, 0.35));
   /* scrollbar */
   --scrollbar-width: 4px;
 }

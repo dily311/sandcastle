@@ -6,7 +6,7 @@ import { defineConfig } from "vite";
 const host = process.env.TAURI_DEV_HOST;
 
 // https://vite.dev/config/
-export default defineConfig(({ mode, command }) => {
+export default defineConfig(({ command }) => {
 	const isTauri = process.env.TAURI_ENV_DEBUG === 'true';
 	const isDev = command === 'serve';
 	const baseAlias = {
