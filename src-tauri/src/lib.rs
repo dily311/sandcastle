@@ -2,12 +2,12 @@ use std::{collections::HashMap, sync::Mutex};
 use tauri::Manager;
 pub mod state;
 use state::LaunchMode;
-mod error;
-pub mod models;
 mod adapter;
 mod commands;
 pub mod db;
+mod error;
 pub mod game;
+pub mod models;
 pub mod service;
 pub mod sys;
 use crate::{
@@ -29,7 +29,8 @@ pub fn run() {
         .plugin(tauri_plugin_opener::init())
         .plugin(tauri_plugin_os::init())
         .plugin(tauri_plugin_dialog::init())
-        .plugin(tauri_plugin_store::Builder::new().build());
+        .plugin(tauri_plugin_store::Builder::new().build())
+        .plugin(tauri_plugin_clipboard_manager::init());
 
     // 데스크탑에서만 실행될 기능 등록
     #[cfg(desktop)]
@@ -38,7 +39,7 @@ pub fn run() {
         use commands::widget::*;
         use tauri_plugin_autostart::MacosLauncher;
         use tauri_plugin_autostart::ManagerExt;
-        use widget::{WidgetInteractionState, InteractiveRegion, MusicWatcherState};
+        use widget::{InteractiveRegion, MusicWatcherState, WidgetInteractionState};
 
         builder = builder
             .plugin(tauri_plugin_window_state::Builder::default().build())

@@ -2,7 +2,7 @@
 use serde_json::Value;
 
 #[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
-#[serde(tag = "type", rename_all = "snake_case")]
+#[serde(tag = "type", rename_all = "camelCase", rename_all_fields = "camelCase")]
 pub enum GameCommand {
     MoveTo { location_id: String },
     /// 맵 위 상호작용 대상(game_interactables.id). TriggerSystem이 처리.

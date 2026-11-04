@@ -1,6 +1,8 @@
 //! 세션(=책 한 권)마다 바뀌는 상태. GameDefinition과 달리 플레이 중 계속 바뀌고,
 //! 매 턴 game_player_sessions에 저장된다. 책갈피(game_saves)는 이 상태의 스냅샷 + 일지 위치(seq).
 //! 필드 구성은 models::game::GamePlayerSessionsInput::from_state가 요구하는 모양과 맞춰야 한다.
+use serde_json::json;
+
 use crate::models::game::GamePlayerSessions;
 use std::collections::{HashMap, HashSet};
 
@@ -69,7 +71,11 @@ pub struct GameState {
 
 /// DB에서 NULL이거나 객체가 아닌 값이 오면 빈 객체로 바꾼다.
 fn as_object(v: serde_json::Value) -> serde_json::Value {
-    if v.is_object() { v } else { serde_json::json!({}) }
+    if v.is_object() {
+        v
+    } else {
+        serde_json::json!({})
+    }
 }
 
 impl GameState {
@@ -88,10 +94,16 @@ impl GameState {
             map_id: session.current_map_id.ok_or("세션에 현재 맵이 없습니다")?,
             zone_id: session.current_zone_id,
             game_time: session.game_time,
-            weather_id: session.current_weather_id.ok_or("세션에 현재 날씨가 없습니다")?,
+            weather_id: session
+                .current_weather_id
+                .ok_or("세션에 현재 날씨가 없습니다")?,
             time_period_id,
             current_scene_id: session.current_scene_id,
-            pending_scenes_json: if session.pending_scenes_json.is_array() { session.pending_scenes_json } else { serde_json::json!([]) },
+            pending_scenes_json: if session.pending_scenes_json.is_array() {
+                session.pending_scenes_json
+            } else {
+                serde_json::json!([])
+            },
             active_npc_id: None, // 항상 닫힌 상태로 시작 (위 주석 참고)
             flags: session.flags_json,
             inventory_json: as_object(session.inventory_json),
@@ -105,7 +117,10 @@ impl GameState {
     }
 
     /// models::game::GamePlayerSessionsInput::from_state가 이 변환을 한다.
-    pub fn to_session_input(&self, game_id: String) -> crate::models::game::GamePlayerSessionsInput {
+    pub fn to_session_input(
+        &self,
+        game_id: String,
+    ) -> crate::models::game::GamePlayerSessionsInput {
         crate::models::game::GamePlayerSessionsInput::from_state(self.clone(), game_id)
     }
 }
@@ -136,6 +151,31 @@ pub struct RenderState {
     pub present_npcs: Vec<String>,
 }
 
+impl RenderState {
+    pub fn from(s: &GameState, game_dir: &str) -> Self {
+        let mut stage_val = s.stage_json.clone();
+        convert_stage_paths_to_absolute(&mut stage_val, &game_dir);
+
+        Self {
+            session_id: s.session_id.clone(),
+            location_id: s.location_id.clone(),
+            map_id: s.map_id.clone(),
+            zone_id: s.zone_id.clone(),
+            game_time: s.game_time,
+            weather_id: s.weather_id.clone(),
+            time_period_id: s.time_period_id.clone(),
+            current_scene_id: s.current_scene_id.clone(),
+            active_npc_id: s.active_npc_id.clone(),
+            available_choices: Vec::new(),
+            flags: s.flags.clone(),
+            inventory: s.inventory_json.clone(),
+            relationships: s.relationships_json.clone(),
+            stage: stage_val,
+            present_npcs: Vec::new(),
+        }
+    }
+}
+
 impl From<&GameState> for RenderState {
     fn from(s: &GameState) -> Self {
         Self {
@@ -155,5 +195,38 @@ impl From<&GameState> for RenderState {
             stage: s.stage_json.clone(),
             present_npcs: Vec::new(),
         }
+    }
+}
+
+use std::path::PathBuf;
+
+/// JSON 안을 재귀적으로 돌며 "path" 키의 값을 찾아 base_path와 결합하여 절대 경로로 변경합니다.
+fn convert_stage_paths_to_absolute(value: &mut serde_json::Value, base_path: &str) {
+    match value {
+        serde_json::Value::Object(map) => {
+            for (k, v) in map.iter_mut() {
+                if k == "path" {
+                    if let Some(path_str) = v.as_str() {
+                        // 이미 절대 경로이거나 URL인 경우 중복 결합 방지 (선택 사항)
+                        if !path_str.starts_with("http") && !path_str.starts_with('/') {
+                            let absolute_path = PathBuf::from(base_path)
+                                .join(path_str)
+                                .to_string_lossy()
+                                .into_owned();
+                            *v = serde_json::Value::String(absolute_path);
+                        }
+                    }
+                } else {
+                    // 다른 필드나 중첩된 객체/배열 탐색
+                    convert_stage_paths_to_absolute(v, base_path);
+                }
+            }
+        }
+        serde_json::Value::Array(arr) => {
+            for item in arr {
+                convert_stage_paths_to_absolute(item, base_path);
+            }
+        }
+        _ => {}
     }
 }

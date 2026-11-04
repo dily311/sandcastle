@@ -5,7 +5,7 @@
 //!   만들어진다 (AI 응답의 <choice> 태그 파싱 결과). dispatch_command가 아니라
 //!   npc_say 응답에 실려 나간다 — 헷갈리기 쉬워서 명시.
 #[derive(Debug, Clone, serde::Serialize)]
-#[serde(tag = "type", rename_all = "snake_case")]
+#[serde(tag = "type", rename_all = "camelCase", rename_all_fields = "camelCase")]
 pub enum GameEvent {
     GameStarted,
     /// location 단위 이동. 같은 zone 안이든 다른 zone이든 MoveTo가 성공하면 항상 나간다.

@@ -490,7 +490,7 @@ CREATE TABLE IF NOT EXISTS game_event_log (
   event_id TEXT NOT NULL REFERENCES game_events(id) ON DELETE CASCADE,
   weather_id TEXT REFERENCES game_weather_types(id) ON DELETE SET NULL,
   -- game_time 기준
-  triggered_at INTEGER NOT NULL,
+  triggered_at REAL NOT NULL,
   -- 이벤트 실행 결과
   -- JSON TEXT
   result_json TEXT,

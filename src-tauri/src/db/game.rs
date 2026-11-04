@@ -2687,7 +2687,7 @@ pub async fn upsert_game_event_log<'e, E>(executor: E, input: GameEventLogInput)
     sqlx::query(
         r#"
         INSERT INTO game_event_log ( session_id, seq, event_id, weather_id, triggered_at, result_json ) 
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+        VALUES (?, ?, ?, ?, ?, ?)
         ON CONFLICT(session_id, seq) DO UPDATE SET
             event_id=excluded.event_id, 
             weather_id=excluded.weather_id, 

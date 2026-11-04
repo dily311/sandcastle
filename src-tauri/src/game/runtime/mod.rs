@@ -199,11 +199,11 @@ impl GameRuntime {
         self.process_events()
     }
 
-    pub fn dispatch(&mut self, command: GameCommand) -> Result<GameResponse> {
+    pub fn dispatch(&mut self, command: GameCommand, game_dir: &str) -> Result<GameResponse> {
         self.state.turn_fired = false; // random 억제 플래그는 dispatch마다 새로 시작
         self.handle_command(command)?;
         let events = self.process_events();
-        Ok(GameResponse { events, state: self.render_state() })
+        Ok(GameResponse { events, state: self.render_state(game_dir) })
     }
 
     fn emit(&mut self, event: GameEvent) {
@@ -391,8 +391,8 @@ impl GameRuntime {
         }
     }
 
-    pub fn render_state(&self) -> RenderState {
-        let mut render = RenderState::from(&self.state);
+    pub fn render_state(&self, game_dir: &str) -> RenderState {
+        let mut render = RenderState::from(&self.state, game_dir);
         if let Some(here) = self.state.location_id.as_deref() {
             let mut present: Vec<String> = self.state.npc_states.iter().filter(|(_, n)| n.location_id.as_deref() == Some(here)).map(|(id, _)| id.clone()).collect();
             present.sort();

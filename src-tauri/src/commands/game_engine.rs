@@ -19,15 +19,16 @@ use crate::game::runtime::{GameCommand, GameEvent, GameRepository, GameResponse,
 use crate::models::game::{GameConversations, GameJournal, GameMessages, GamePlayerSessions, GameSave, GameSaveInput};
 use crate::models::settings::AppSetting;
 use crate::sys::settings::SettingsState;
-use tauri::{AppHandle, State};
+use tauri::{AppHandle, Manager, State};
 
 const MAX_SAVE_BYTES: usize = 256 * 1024;
 
 /// 새 게임(새 책) 시작. 세션을 만들어 바로 저장해서 세션 목록에 보이게 하고,
 /// GameRuntime을 active_runtime에 넣어둔다.
 #[tauri::command]
-pub async fn start_new_game(state: State<'_, AppState>, settings: State<'_, SettingsState<AppSetting>>) -> Result<GameResponse, AppError> {
+pub async fn start_new_game(app: AppHandle, state: State<'_, AppState>, settings: State<'_, SettingsState<AppSetting>>) -> Result<GameResponse, AppError> {
     let game_id = current_game_id(&state)?;
+    let game_dir = app.path().app_data_dir()?.join("games").join(&game_id).to_string_lossy().to_string();
 
     let definition = crate::game::guard::current_definition(&state)?; // open_game이 올려둔 정의
     // 데이터가 어긋나 있으면(없는 씬을 가리키는 선택지 등) 시작 전에 막는다. 경고는 validate_game으로 본다.
@@ -44,7 +45,7 @@ pub async fn start_new_game(state: State<'_, AppState>, settings: State<'_, Sett
     let events = runtime.start();
     crate::game::journal::record(&state.db, &mut runtime, &game_id, None, &events).await?;
 
-    let response = GameResponse { events, state: runtime.render_state() };
+    let response = GameResponse { events, state: runtime.render_state(&game_dir) };
     *state.active_runtime.lock().await = Some(runtime);
     Ok(response)
 }
@@ -53,9 +54,11 @@ pub async fn start_new_game(state: State<'_, AppState>, settings: State<'_, Sett
 /// 이미 메모리에 있는 정의에서 만들어서 DB를 안 읽는다. 어떤 필드를 주고/안 주는지는 runtime/view.rs 참고.
 /// 현재 값(위치, 시간, 변수 값 등)은 RenderState에 있다.
 #[tauri::command]
-pub fn get_game_view(state: State<'_, AppState>) -> Result<serde_json::Value, AppError> {
-    // 플레이를 시작하기 전에도 부를 수 있다 (open_game의 응답에도 같은 값이 들어 있다).
-    Ok(crate::game::guard::current_definition(&state)?.view())
+pub fn get_game_view(app: AppHandle, state: State<'_, AppState>) -> Result<serde_json::Value, AppError> {
+    let game_id = current_game_id(&state)?;
+  // 플레이를 시작하기 전에도 부를 수 있다 (open_game의 응답에도 같은 값이 들어 있다).
+    let game_dir = app.path().app_data_dir()?.join("games").join(&game_id).to_string_lossy().to_string();
+    Ok(crate::game::guard::current_definition(&state)?.view(&game_dir))
 }
 
 /// 게임 정의의 일관성 검사 결과 (Error/Warning). 임포트 직후나 편집기에서 보여주기 위한 것.
@@ -96,22 +99,25 @@ async fn owned_session(state: &AppState, game_id: &str, session_id: &str) -> Res
 }
 
 /// 세션을 런타임으로 불러와 active_runtime에 올린다.
-async fn open_session(state: &AppState, game_id: &str, session_id: &str) -> Result<GameResponse, AppError> {
+async fn open_session(state: &AppState, game_id: &str, session_id: &str, game_dir: &str) -> Result<GameResponse, AppError> {
     let repo = SqlxGameRepository::new(&state.db);
     let definition = crate::game::guard::current_definition(state)?;
     let runtime = GameRuntime::load(&repo, definition, session_id).await.map_err(|e| AppError::Database(e.to_string()))?;
+    
     // 이어하기는 GameStarted가 아니다 — 새로 생긴 상태가 없으니 events는 빈 배열.
-    let response = GameResponse { events: vec![], state: runtime.render_state() };
+    let response = GameResponse { events: vec![], state: runtime.render_state(game_dir) };
     *state.active_runtime.lock().await = Some(runtime);
     Ok(response)
 }
 
 /// 세션(책)을 그대로 이어서 플레이한다. 위치/시간/날씨/씬은 세션 테이블에서 복원된다.
 #[tauri::command]
-pub async fn continue_game(state: State<'_, AppState>, session_id: String) -> Result<GameResponse, AppError> {
+pub async fn continue_game(app: AppHandle, state: State<'_, AppState>, session_id: String) -> Result<GameResponse, AppError> {
     let game_id = current_game_id(&state)?;
+    let game_dir = app.path().app_data_dir()?.join("games").join(&game_id).to_string_lossy().to_string();
+
     owned_session(&state, &game_id, &session_id).await?;
-    open_session(&state, &game_id, &session_id).await
+    open_session(&state, &game_id, &session_id, &game_dir).await
 }
 
 /// 책갈피를 불러와서 거기서부터 이어서 플레이한다.
@@ -119,8 +125,10 @@ pub async fn continue_game(state: State<'_, AppState>, session_id: String) -> Re
 ///  - 이후 기록이 있으면 그 지점까지를 복사한 새 세션으로 분기한다 (원래 기록은 보존).
 /// 응답의 state.sessionId가 실제로 열린 세션이다 (분기면 새 세션 id).
 #[tauri::command]
-pub async fn load_save(state: State<'_, AppState>, session_id: String, slot: i64) -> Result<GameResponse, AppError> {
+pub async fn load_save(app: AppHandle, state: State<'_, AppState>, session_id: String, slot: i64) -> Result<GameResponse, AppError> {
     let game_id = current_game_id(&state)?;
+    let game_dir = app.path().app_data_dir()?.join("games").join(&game_id).to_string_lossy().to_string();
+
     check_slot(slot)?;
     let session = owned_session(&state, &game_id, &session_id).await?;
     let save = get_game_save(&state.db, &session_id, slot).await?; // 없으면 NotFound
@@ -130,7 +138,7 @@ pub async fn load_save(state: State<'_, AppState>, session_id: String, slot: i64
     } else {
         crate::game::session::fork_session(&state.db, &game_id, &session_id, slot).await?
     };
-    open_session(&state, &game_id, &target).await
+    open_session(&state, &game_id, &target, &game_dir).await
 }
 
 /// 일지 읽기 전용 재생용: 세션의 [from_seq, to_seq] 구간. AI를 다시 호출하지 않는다.
@@ -171,12 +179,13 @@ pub async fn read_messages(state: State<'_, AppState>, conversation_id: String, 
 
 /// 게임 엔진에 커맨드 하나를 보낸다. iframe SDK의 game.move() 등이 여기로 온다.
 #[tauri::command]
-pub async fn dispatch_command(state: State<'_, AppState>, command: GameCommand) -> Result<GameResponse, AppError> {
+pub async fn dispatch_command(app: AppHandle, state: State<'_, AppState>, command: GameCommand) -> Result<GameResponse, AppError> {
     let game_id = current_game_id(&state)?;
+    let game_dir = app.path().app_data_dir()?.join("games").join(&game_id).to_string_lossy().to_string();
     let mut guard = state.active_runtime.lock().await;
     let runtime = guard.as_mut().ok_or_else(|| AppError::NotFound("진행 중인 세션이 없습니다".into()))?;
 
-    let response = runtime.dispatch(command.clone()).map_err(|e| AppError::Validation(e.to_string()))?;
+    let response = runtime.dispatch(command.clone(), &game_dir).map_err(|e| AppError::Validation(e.to_string()))?;
 
     // 일지/이벤트 로그/세션 저장을 한꺼번에 (npc_say의 AI 변수 변경도 같은 함수를 쓴다).
     crate::game::journal::record(&state.db, runtime, &game_id, Some(&command), &response.events).await?;

@@ -25,7 +25,7 @@ use crate::service::ChatManager;
 use crate::models::ai_service::{ChatContext, HistoryItem};
 use crate::sys::settings::SettingsState;
 use std::collections::VecDeque;
-use tauri::{AppHandle, State};
+use tauri::{AppHandle, Manager, State};
 
 const MAX_INPUT_CHARS: usize = 2000; // TODO: 실제 상한 정하기
 const HISTORY_LIMIT: usize = 20; // TODO: 토큰 예산 기준으로 바꾸기
@@ -255,6 +255,7 @@ pub async fn say(
     input: String,
 ) -> Result<NpcReply, AppError> {
     let game_id = current_game_id(state)?;
+    let game_dir = app.path().app_data_dir()?.join("games").join(&game_id).to_string_lossy().to_string();
 
     let trimmed = input.trim();
     if trimmed.is_empty() || trimmed.chars().count() > MAX_INPUT_CHARS {
@@ -413,7 +414,7 @@ pub async fn say(
         if !events.is_empty() {
             crate::game::journal::record(&state.db, runtime, &game_id, None, &events).await?;
         }
-        (events, runtime.render_state(), plain, lines)
+        (events, runtime.render_state(&game_dir), plain, lines)
     };
 
     let mut events = Vec::new();

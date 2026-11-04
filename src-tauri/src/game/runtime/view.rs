@@ -2,9 +2,10 @@
 //! DB 접근이 없다 — 플레이가 시작될 때 이미 메모리에 올라온 정의에서 만든다.
 //!
 //! 일부러 안 주는 것:
-//!   - 이벤트의 조건/효과/NPC 후보 풀, 인카운터 테이블, 이동 조건, 선택지의 효과/다음 씬/조건
+//!   - 이벤트의 조건/효과/NPC 후보 풀, 인카운터 테이블, 선택지의 효과/다음 씬/조건
 //!     (화면엔 필요 없고, 게임 스크립트가 보고 엔진을 속일 단서가 된다. 선택 가능 여부는
 //!      RenderState.available_choices로 엔진이 계산해서 준다.)
+//! 이동 경로 조건은 플레이 UI가 잠긴 경로와 필요한 요구사항을 표시하도록 전달한다.
 //!   - 캐릭터의 system_prompt_override / example_dialogue (프롬프트 유출 방지)
 //!   - 날씨의 인카운터 배율, 월드인포
 //! 현재 변수 값은 여기가 아니라 RenderState.flags에 있다 — 여기엔 "변수가 뭔지"(이름/설명/범위)만 있다.
@@ -15,9 +16,12 @@
 use super::definition::GameDefinition;
 use serde_json::{json, Value};
 
-impl GameDefinition {
-    pub fn view(&self) -> Value {
+fn parse_asset_path(game_dir: &str, file_path: &str) -> String {
+    format!("{}\\{}", game_dir, file_path.trim_start_matches('/'))
+}
 
+impl GameDefinition {
+    pub fn view(&self, game_dir: &str) -> Value {
         json!({
             "game": {
                 "id": self.project.id,
@@ -38,9 +42,10 @@ impl GameDefinition {
             "locations": self.locations.iter().map(|l| json!({
                 "id": l.id, "zoneId": l.zone_id, "name": l.name, "description": l.description, "settings": l.settings_json,
             })).collect::<Vec<_>>(),
-            // 이동 조건은 안 준다. 막혀 있으면 MoveTo가 에러로 알려준다.
+            // 이동 조건은 플레이 UI에서 필요한 아이템/상태를 안내하기 위한 표시용으로 보낸다.
             "connections": self.location_connections.iter().map(|c| json!({
-                "fromId": c.from_id, "toId": c.to_id, "travelSeconds": c.travel_seconds, "settings": c.settings_json,
+                "fromId": c.from_id, "toId": c.to_id, "travelSeconds": c.travel_seconds,
+                "condition": c.condition, "settings": c.settings_json,
             })).collect::<Vec<_>>(),
             "interactables": self.interactables.values().flatten().map(|i| json!({
                 "id": i.id, "locationId": i.location_id, "name": i.name,
@@ -71,23 +76,23 @@ impl GameDefinition {
             // 에셋 목록 (파일 경로는 게임 폴더 기준 상대경로 — iframe이 그대로 쓴다). 생성 프롬프트/시드 같은 제작 메타는 안 준다.
             "assets": {
                 "audio": self.assets.audio.iter().map(|a| json!({
-                    "id": a.base.id, "key": a.base.key, "category": a.base.category, "path": a.base.file_path.trim_start_matches('/'),
+                    "id": a.base.id, "key": a.base.key, "category": a.base.category, "path": parse_asset_path(&game_dir, &a.base.file_path),
                     "settings": a.base.settings_json, "tag": a.tag, "characterId": a.game_character_id, "transcript": a.transcript,
                 })).collect::<Vec<_>>(),
                 "characters": self.assets.characters.iter().map(|a| json!({
-                    "id": a.base.id, "key": a.base.key, "path": a.base.file_path.trim_start_matches('/'),
+                    "id": a.base.id, "key": a.base.key, "path": parse_asset_path(&game_dir, &a.base.file_path),
                     "settings": a.base.settings_json, "characterId": a.game_character_id, "usage": a.usage, "emotion": a.emotion,
                 })).collect::<Vec<_>>(),
                 "cgs": self.assets.cgs.iter().map(|a| json!({
-                    "id": a.base.id, "key": a.base.key, "path": a.base.file_path.trim_start_matches('/'),
+                    "id": a.base.id, "key": a.base.key, "path": parse_asset_path(&game_dir, &a.base.file_path),
                     "settings": a.base.settings_json, "characterId": a.game_character_id, "description": a.description,
                 })).collect::<Vec<_>>(),
                 "backgrounds": self.assets.backgrounds.iter().map(|a| json!({
-                    "id": a.base.id, "key": a.base.key, "path": a.base.file_path.trim_start_matches('/'),
+                    "id": a.base.id, "key": a.base.key, "path": parse_asset_path(&game_dir, &a.base.file_path),
                     "settings": a.base.settings_json, "locationId": a.location_id, "timeId": a.time_id, "weatherId": a.weather_id,
                 })).collect::<Vec<_>>(),
                 "other": self.assets.all.iter().filter(|a| matches!(a.category.as_str(), "font" | "other")).map(|a| json!({
-                    "id": a.id, "key": a.key, "category": a.category, "path": a.file_path.trim_start_matches('/'), "settings": a.settings_json,
+                    "id": a.id, "key": a.key, "category": a.category, "path": parse_asset_path(&game_dir, &a.file_path), "settings": a.settings_json,
                 })).collect::<Vec<_>>(),
             },
             // 기본 제공 연출 목록 (프론트가 구현해야 하는 것들)

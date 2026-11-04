@@ -772,6 +772,10 @@ fn add_dir_to_zip<W: std::io::Write + std::io::Seek>(
         let entry = entry?;
         let path = entry.path();
         let rel = path.strip_prefix(base).expect("base 하위 경로여야 함").to_string_lossy().replace('\\', "/");
+        // 중복 추가 방지용
+        if rel == "manifest.json" || rel == "data/definition.json" {
+            continue;
+        }
         if path.is_dir() {
             zip.add_directory(format!("{rel}/"), options).map_err(|e| AppError::Archive(e.to_string()))?;
             add_dir_to_zip(zip, base, &path, options)?;

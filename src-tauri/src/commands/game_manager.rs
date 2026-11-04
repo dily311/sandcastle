@@ -48,8 +48,9 @@ pub async fn delete_game(app: AppHandle, state: State<'_, AppState>, game_id: St
 }
 
 #[tauri::command]
-pub async fn import_game(app: AppHandle, state: State<'_, AppState>, zip_path: String) -> Result<String, AppError> {
-    GameManager::import_package(&state.db, &games_root(&app)?, &PathBuf::from(zip_path)).await
+pub async fn import_game(app: AppHandle, state: State<'_, AppState>, zip_path: String) -> Result<GameProject, AppError> {
+    let id = GameManager::import_package(&state.db, &games_root(&app)?, &PathBuf::from(zip_path)).await?;
+    Ok(crate::db::game::get_game_project(&state.db, &id).await?)
 }
 
 #[tauri::command]
@@ -87,7 +88,11 @@ pub async fn open_game(app: AppHandle, state: State<'_, AppState>, game_id: Stri
     let definition = std::sync::Arc::new(repo.load_definition(&game_id).await.map_err(|e| AppError::Database(e.to_string()))?);
     let mut issues = crate::game::validate::validate(&definition);
     issues.extend(crate::game::validate::validate_asset_files(&definition, &path));
-    let view = definition.view();
+
+    // 앱의 데이터 디렉토리 내 특정 파일 경로 파싱
+    let game_dir = app.path().app_data_dir()?.join("games").join(&game_id).to_string_lossy().to_string();
+
+    let view = definition.view(&game_dir);
 
     {
         let mut runtime = state.active_runtime.lock().await;
