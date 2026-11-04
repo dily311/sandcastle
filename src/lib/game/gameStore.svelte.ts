@@ -1,6 +1,7 @@
 import { gameEngineCommands, gameManagerCommands } from "$/ipc/commands";
 import { push } from "svelte-spa-router";
 import type {
+	AssetRef,
 	GameCommand,
 	GameEvent,
 	GameJournal,
@@ -85,9 +86,25 @@ class GameStore {
 		return convertFileSrc(standings[characterId]?.asset.path);
 	}
 
+	getAssetUrl(asset: AssetRef): string {
+		const assets = [
+			...(this.view?.assets.audio ?? []),
+			...(this.view?.assets.characters ?? []),
+			...(this.view?.assets.cgs ?? []),
+			...(this.view?.assets.backgrounds ?? []),
+			...(this.view?.assets.other ?? []),
+		];
+		const path = assets.find((candidate) => candidate.id === asset.id)?.path ?? asset.path;
+		return convertFileSrc(path);
+	}
+
 	updateStore(part: Partial<OpenGameResponse>) {
 		if (!this.#store) return;
 		this.#store = { ...this.#store, ...part };
+	}
+
+	setRenderState(response: GameResponse) {
+		this.renderState = response;
 	}
 
 	/** 게임 선택 시 불러오는 데이터 */

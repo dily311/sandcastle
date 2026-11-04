@@ -48,6 +48,7 @@
 
 <style>
 	*[data-tauri-drag-region] {
+		app-region: drag;
 		width: 100%;
 	}
 	.titlebar {
@@ -64,7 +65,7 @@
 		top: 0;
 		left: 0;
 		right: 0;
-		z-index: 30;
+		z-index: 999;
 		height: var(--header-height);
 		border: none;
 		background: transparent;

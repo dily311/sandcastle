@@ -102,6 +102,7 @@
 		display: flex;
 		flex-direction: column;
 		background: #0b0f19;
+		height: calc(100vh - var(--header-height));
 	}
 
 	.status-box {
