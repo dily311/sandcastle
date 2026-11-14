@@ -8,6 +8,8 @@
 		EyeOff,
 		FileSearch,
 		GitBranch,
+		ImagePlus,
+		Search,
 		PanelLeft,
 		PanelRight,
 		Pencil,
@@ -16,11 +18,11 @@
 		Send,
 		Trash2,
 	} from "@lucide/svelte";
-	import { Avatar, Badge, Button, IconButton, Segmented, Select, Switch, Textarea } from "$shared/ui";
+	import { Avatar, Badge, Button, IconButton, Input, Segmented, Select, Switch, Textarea } from "$shared/ui";
 
 	let showList = $state(true);
 	let showPanel = $state(true);
-	let panelTab: "settings" | "toc" = $state("settings");
+	let panelTab: "settings" | "toc" | "assets" = $state("settings");
 	let draft = $state("");
 	let persona = $state("min");
 	let preset = $state("st-default");
@@ -29,10 +31,40 @@
 	let regexOn = $state([true, false, true]);
 
 	const convs = [
-		{ title: "숲에서 깨어남", char: "Seraphina", n: 12 },
-		{ title: "Branch #1", char: "Seraphina", n: 5 },
-		{ title: "성 앞의 약속", char: "Aria", n: 48 },
+		{ id: "a", title: "숲에서 깨어남", char: "Seraphina", n: 12, ago: 2 },
+		{ id: "b", title: "Branch #1", char: "Seraphina", n: 5, ago: 300 },
+		{ id: "c", title: "성 앞의 약속", char: "Aria", n: 48, ago: 1500 },
+		{ id: "d", title: "SillyTavern 가져옴", char: "Seraphina", n: 12, ago: 9000 },
+		{ id: "e", title: "밤의 이야기", char: "나레이터", n: 30, ago: 40 },
 	];
+	let query = $state("");
+	let sort: "recent" | "name" | "count" = $state("recent");
+	let group: "none" | "character" = $state("character");
+	const groups = $derived.by(() => {
+		const q = query.trim().toLowerCase();
+		const list = convs
+			.filter((c) => !q || c.title.toLowerCase().includes(q) || c.char.toLowerCase().includes(q))
+			.sort((a, b) => (sort === "recent" ? a.ago - b.ago : sort === "name" ? a.title.localeCompare(b.title) : b.n - a.n));
+		if (group === "none") return [{ key: "", items: list }];
+		const map = new Map<string, typeof list>();
+		for (const c of list) map.set(c.char, [...(map.get(c.char) ?? []), c]);
+		return [...map].map(([key, items]) => ({ key, items }));
+	});
+
+	const personas = [
+		{ id: "min", name: "Min" },
+		{ id: "haru", name: "하루" },
+		{ id: "default", name: "기본" },
+		{ id: "knight", name: "기사 레온" },
+	];
+	let assets = $state([
+		{ key: "joy", on: true },
+		{ key: "anger", on: true },
+		{ key: "amusement", on: true },
+		{ key: "sadness", on: true },
+		{ key: "neutral", on: true },
+		{ key: "fear", on: false },
+	]);
 	/** n분 전 → 상대 시간 (실제 구현은 공용 유틸로) */
 	function relative(min: number): string {
 		if (min < 1) return "방금";
@@ -66,11 +98,32 @@
 				<strong>대화</strong>
 				<IconButton label="새 대화" size="sm" variant="soft"><Plus /></IconButton>
 			</div>
-			<ul>
-				{#each convs as c, i (c.title)}
-					<li><button class:on={i === 0}><Avatar name={c.char} size={28} /><span><b>{c.title}</b><small>{c.char} · {c.n}개</small></span></button></li>
+			<div class="convs-tools">
+				<Input bind:value={query} placeholder="대화·캐릭터 검색" aria-label="대화 검색">
+					{#snippet leading()}<Search />{/snippet}
+				</Input>
+				<div class="sortrow">
+					<Select aria-label="정렬" bind:value={sort} options={[{ value: "recent", label: "최근 순" }, { value: "name", label: "이름 순" }, { value: "count", label: "메시지 많은 순" }]} />
+					<Select aria-label="묶기" bind:value={group} options={[{ value: "character", label: "캐릭터별" }, { value: "none", label: "묶지 않음" }]} />
+				</div>
+			</div>
+			<div class="convs-list">
+				{#each groups as g (g.key)}
+					{#if g.key}<p class="ghead"><Avatar name={g.key} size={16} />{g.key}<span>{g.items.length}</span></p>{/if}
+					<ul>
+						{#each g.items as c (c.id)}
+							<li>
+								<button class:on={c.id === "a"}>
+									{#if !g.key}<Avatar name={c.char} size={28} />{/if}
+									<span><b>{c.title}</b><small>{#if !g.key}{c.char} · {/if}{c.n}개 · {relative(c.ago)}</small></span>
+								</button>
+							</li>
+						{/each}
+					</ul>
+				{:else}
+					<p class="none">검색 결과 없음</p>
 				{/each}
-			</ul>
+			</div>
 		</aside>
 	{/if}
 
@@ -144,15 +197,25 @@
 	{#if showPanel}
 		<aside class="panel" aria-label="대화 설정">
 			<div class="panel-head">
-				<Segmented label="패널" bind:value={panelTab} options={[{ value: "settings", label: "설정" }, { value: "toc", label: "목차" }]} />
+				<Segmented label="패널" bind:value={panelTab} options={[{ value: "settings", label: "설정" }, { value: "toc", label: "목차" }, { value: "assets", label: "에셋" }]} />
 			</div>
 			{#if panelTab === "settings"}
 				<div class="panel-body">
 					<section>
 						<h4>이 대화</h4>
-						<label class="row"><span>페르소나</span><Select bind:value={persona} options={[{ value: "min", label: "Min" }, { value: "default", label: "기본" }]} /></label>
-						<label class="row"><span>프리셋</span><Select bind:value={preset} options={[{ value: "st-default", label: "Default (ST)" }, { value: "none", label: "기본 배치" }]} /></label>
 						<label class="row"><span>API</span><Select bind:value={api} options={[{ value: "gemini", label: "Gemini · 3.7 flash" }, { value: "claude", label: "Claude" }]} /></label>
+						<label class="row"><span>프리셋</span><Select bind:value={preset} options={[{ value: "st-default", label: "Default (ST)" }, { value: "none", label: "기본 배치" }]} /></label>
+						<div class="persona">
+							<span>페르소나</span>
+							<div class="pgrid" role="radiogroup" aria-label="페르소나">
+								{#each personas as p (p.id)}
+									<button role="radio" aria-checked={persona === p.id} class:on={persona === p.id} onclick={() => (persona = p.id)}>
+										<Avatar name={p.name} size={44} />
+										<span>{p.name}</span>
+									</button>
+								{/each}
+							</div>
+						</div>
 						<Switch bind:checked={imagesOn} label="캐릭터 이미지" description="키 목록 전송, <cg>로 표시" />
 					</section>
 					<section>
@@ -168,6 +231,23 @@
 							이 대화 내보내기
 						</Button>
 					</section>
+				</div>
+			{:else if panelTab === "assets"}
+				<div class="panel-body">
+					<p class="hint">Seraphina에 포함된 이미지. 켜진 키만 AI에게 보내고 대화에서 &lt;cg&gt;키&lt;/cg&gt;로 표시.</p>
+					<div class="agrid">
+						{#each assets as a (a.key)}
+							<div class="tile" class:off={!a.on}>
+								<div class="thumb"></div>
+								<div class="tile-foot">
+									<span class="key" title={a.key}>{a.key}</span>
+									<Switch bind:checked={a.on} label="{a.key} 사용" hideLabel />
+								</div>
+							</div>
+						{/each}
+						<button class="tile add"><ImagePlus /><span>이미지 추가</span></button>
+					</div>
+					<p class="hint">SillyTavern 표정 폴더를 통째로 넣으면 파일 이름이 키가 됨.</p>
 				</div>
 			{:else}
 				<ol class="toc">
@@ -209,10 +289,148 @@
 		align-items: center;
 		padding: var(--space-3) var(--space-3) var(--space-2) var(--space-4);
 	}
+	.convs-tools {
+		display: flex;
+		flex-direction: column;
+		gap: var(--space-2);
+		padding: 0 var(--space-3) var(--space-2);
+	}
+	.sortrow {
+		display: grid;
+		grid-template-columns: 1fr 1fr;
+		gap: var(--space-2);
+	}
+	.sortrow :global(select) {
+		height: var(--control-sm);
+		font-size: var(--text-xs);
+	}
+	.convs-list {
+		flex: 1;
+		overflow: auto;
+		padding-bottom: var(--space-3);
+	}
+	.ghead {
+		display: flex;
+		align-items: center;
+		gap: 6px;
+		margin: var(--space-3) var(--space-4) var(--space-1);
+		font-size: var(--text-xs);
+		font-weight: 700;
+		color: var(--text-muted);
+	}
+	.ghead span {
+		margin-left: auto;
+		color: var(--text-faint);
+		font-weight: 500;
+	}
+	.none {
+		padding: var(--space-6);
+		text-align: center;
+		color: var(--text-faint);
+		font-size: var(--text-sm);
+	}
 	.convs ul {
 		list-style: none;
 		margin: 0;
 		padding: 0 var(--space-2);
+	}
+	.persona {
+		display: flex;
+		flex-direction: column;
+		gap: var(--space-2);
+		font-size: var(--text-sm);
+	}
+	.pgrid {
+		display: grid;
+		grid-template-columns: repeat(4, 1fr);
+		gap: var(--space-1);
+	}
+	.pgrid button {
+		display: flex;
+		flex-direction: column;
+		align-items: center;
+		gap: 4px;
+		min-width: 0;
+		padding: var(--space-2) 2px;
+		border: 2px solid transparent;
+		border-radius: var(--radius-md);
+		background: transparent;
+		font-size: var(--text-xs);
+		color: var(--text-muted);
+		cursor: pointer;
+	}
+	.pgrid button span {
+		max-width: 100%;
+		white-space: nowrap;
+		overflow: hidden;
+		text-overflow: ellipsis;
+	}
+	.pgrid button:hover {
+		background: var(--surface-hover);
+	}
+	.pgrid button.on {
+		border-color: var(--accent);
+		background: var(--accent-soft);
+		color: var(--text);
+		font-weight: 600;
+	}
+	.hint {
+		font-size: var(--text-xs);
+		color: var(--text-muted);
+	}
+	.agrid {
+		display: grid;
+		grid-template-columns: 1fr 1fr;
+		gap: var(--space-2);
+	}
+	.tile {
+		border: 1px solid var(--border);
+		border-radius: var(--radius-md);
+		background: var(--surface);
+		overflow: hidden;
+	}
+	.tile.off .thumb {
+		opacity: 0.35;
+		filter: grayscale(1);
+	}
+	.thumb {
+		aspect-ratio: 1;
+		background: linear-gradient(135deg, var(--accent-soft-hover), var(--bg-sunken));
+	}
+	.tile-foot {
+		display: flex;
+		align-items: center;
+		justify-content: space-between;
+		gap: 4px;
+		padding: 4px 6px 4px 8px;
+	}
+	.tile-foot :global(.switch) {
+		transform: scale(0.8);
+		transform-origin: right center;
+	}
+	.key {
+		font-size: var(--text-xs);
+		font-family: var(--font-mono);
+		white-space: nowrap;
+		overflow: hidden;
+		text-overflow: ellipsis;
+	}
+	.tile.add {
+		display: flex;
+		flex-direction: column;
+		align-items: center;
+		justify-content: center;
+		gap: 4px;
+		min-height: 120px;
+		border-style: dashed;
+		background: transparent;
+		color: var(--text-muted);
+		font-size: var(--text-xs);
+		cursor: pointer;
+	}
+	.tile.add:hover {
+		border-color: var(--accent);
+		color: var(--accent-text);
 	}
 	.convs li button {
 		display: flex;
