@@ -135,6 +135,8 @@ pub fn run() {
             delete_game,
             import_game,
             export_game,
+            add_game_asset,
+            remove_game_asset,
             // game_engine
             start_new_game,
             get_game_view,
@@ -151,6 +153,9 @@ pub fn run() {
             save_read,
             save_list,
             npc_say,
+            refresh_story_plan,
+            get_story_plan,
+            stage_story_suggestion,
             // widget
             open_widget,
             close_widget,
@@ -258,6 +263,8 @@ pub fn run() {
             delete_game,
             import_game,
             export_game,
+            add_game_asset,
+            remove_game_asset,
             // game_engine
             start_new_game,
             get_game_view,
@@ -274,6 +281,9 @@ pub fn run() {
             save_read,
             save_list,
             npc_say,
+            refresh_story_plan,
+            get_story_plan,
+            stage_story_suggestion,
         ]);
     }
 

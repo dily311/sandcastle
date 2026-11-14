@@ -18,6 +18,7 @@ use super::state::GameState;
 use rand::rngs::StdRng;
 
 pub use events::prime_auto_state;
+pub(in crate::game::runtime) use events::{can_fire, conditions_pass};
 
 /// 효과 JSON({"set":{}, "add":{}, "enter_scene": "<scene_id>", "fire_event": "<event_id>"})을
 /// 이벤트들로 환원한다. state에는 쓰지 않는다 — 쓰기는 trigger.rs(변수)/scene.rs(씬)/events.rs(이벤트)가 한다.

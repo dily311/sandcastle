@@ -4,8 +4,12 @@
 //! 사용자 템플릿은 지원하지 않는다. 템플릿을 추가하려면 resources/templates/<id>/ 에
 //! template.json 과 package.tgame 을 만들고 아래 BUNDLED에 한 줄 추가한다.
 //!
-//! ⚠ capabilities는 지금 "선언"일 뿐이다 — 엔진이 강제하지 않고 get_game_view로 프론트에 알려주기만 한다
-//!   (프론트가 지도/인벤토리 UI를 숨기는 데 쓴다). location/time 기능 끄기는 나중에 구현.
+//! capabilities 중 map/location/time은 엔진이 강제한다 (GameDefinition::capabilities):
+//!   - map 또는 location이 꺼지면 이동(MoveTo)이 막히고 지도 데이터/현재 맵·존이 화면용 데이터에서 빠진다.
+//!     location이 꺼지면 상호작용(Interact)도 막히고 위치 목록/현재 위치까지 빠진다.
+//!   - time이 꺼지면 시간 진행(AdvanceTime)이 막히고 이동해도 시간이 흐르지 않으며, 시간/시간대/날씨가 빠진다.
+//! 게임은 project.settings_json의 {"capabilities": {"map": false}}로 템플릿의 기능을 **끄기만** 할 수 있다(켤 수는 없다).
+//! 나머지(choices/freeText/inventory/aiNarration)는 아직 선언일 뿐이고 프론트가 UI를 숨기는 데 쓴다.
 use serde::{Deserialize, Serialize};
 
 fn yes() -> bool {
@@ -25,12 +29,45 @@ pub struct Capabilities {
     pub map: bool,
     #[serde(default)]
     pub ai_narration: bool,
-    /// 위치(location) 개념을 쓰는가. 빠져 있으면 켜진 것으로 본다. (엔진 강제는 아직 없음)
+    /// 위치(location) 개념을 쓰는가. 빠져 있으면 켜진 것으로 본다.
     #[serde(default = "yes")]
     pub location: bool,
-    /// 시간/날씨 개념을 쓰는가. 빠져 있으면 켜진 것으로 본다. (엔진 강제는 아직 없음)
+    /// 시간/날씨 개념을 쓰는가. 빠져 있으면 켜진 것으로 본다.
     #[serde(default = "yes")]
     pub time: bool,
+}
+
+impl Capabilities {
+    /// 전부 켜진 상태. 템플릿을 찾지 못한 게임(옛 데이터)은 이전처럼 아무것도 막지 않는다.
+    pub fn all() -> Self {
+        Self { choices: true, free_text: true, inventory: true, map: true, ai_narration: true, location: true, time: true }
+    }
+
+    /// 게임 설정의 capabilities로 기능을 끈다. 값이 false인 키만 반영하고 true는 무시한다
+    /// (템플릿이 꺼둔 기능을 게임 데이터가 다시 켤 수는 없다). 객체가 아니면 그대로 둔다.
+    pub fn restricted_by(mut self, overrides: Option<&serde_json::Value>) -> Self {
+        let Some(o) = overrides.and_then(|v| v.as_object()) else { return self };
+        let off = |key: &str| o.get(key).and_then(|v| v.as_bool()) == Some(false);
+        for (key, field) in [
+            ("choices", &mut self.choices),
+            ("freeText", &mut self.free_text),
+            ("inventory", &mut self.inventory),
+            ("map", &mut self.map),
+            ("aiNarration", &mut self.ai_narration),
+            ("location", &mut self.location),
+            ("time", &mut self.time),
+        ] {
+            if off(key) {
+                *field = false;
+            }
+        }
+        self
+    }
+
+    /// 플레이어가 위치를 옮길 수 있는가 (지도와 위치 개념이 둘 다 켜져 있어야 한다).
+    pub fn movement(&self) -> bool {
+        self.map && self.location
+    }
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -96,5 +133,20 @@ mod tests {
             let data: crate::game::package::PackageData = serde_json::from_str(&text).unwrap_or_else(|e| panic!("{}: {e}", t.id));
             assert_eq!(data.project.template_id, t.id, "패키지의 template_id가 템플릿 id와 달라야 하지 않는다");
         }
+    }
+
+    #[test]
+    fn game_settings_can_only_turn_capabilities_off() {
+        let base = Capabilities::all();
+        let c = base.clone().restricted_by(Some(&serde_json::json!({ "map": false, "time": false, "inventory": "no" })));
+        assert!(!c.map && !c.time && !c.movement());
+        assert!(c.inventory && c.location, "false가 아닌 값은 무시한다");
+
+        let mut off = Capabilities::all();
+        off.time = false;
+        let c = off.restricted_by(Some(&serde_json::json!({ "time": true })));
+        assert!(!c.time, "템플릿이 꺼둔 기능은 게임 설정으로 켤 수 없다");
+
+        assert!(base.restricted_by(Some(&serde_json::json!("map"))).map, "객체가 아니면 무시");
     }
 }

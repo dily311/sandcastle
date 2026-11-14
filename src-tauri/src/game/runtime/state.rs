@@ -126,17 +126,20 @@ pub struct AvailableMove {
 pub struct RenderState {
     /// 지금 플레이 중인 세션(책). 분기로 불러오면 새 세션 id가 여기로 온다.
     pub session_id: String,
+    /// 위치 기능(capabilities.location)이 꺼진 게임이면 null.
     pub location_id: Option<String>,
-    pub map_id: String,
+    /// 지도/이동 기능(capabilities.map && location)이 꺼진 게임이면 null (zone_id도 같다).
+    pub map_id: Option<String>,
     pub zone_id: Option<String>,
-    pub game_time: i64,
-    pub weather_id: String,
-    pub time_period_id: String,
+    /// 시간 기능(capabilities.time)이 꺼진 게임이면 game_time/weather_id/time_period_id가 null.
+    pub game_time: Option<i64>,
+    pub weather_id: Option<String>,
+    pub time_period_id: Option<String>,
     pub current_scene_id: Option<String>,
     pub active_npc_id: Option<String>,
     /// 지금 열려 있는 씬에서 고를 수 있는 선택지 id (표시 조건을 통과한 것만). GameRuntime::render_state가 채운다.
     pub available_choices: Vec<String>,
-    /// 지금 위치에서 연결된 곳들과 갈 수 있는지 (MoveTo의 조건을 엔진이 미리 평가한 결과). get_game_view의 connections는 전체 지도다.
+    /// 지금 위치에서 연결된 곳들과 갈 수 있는지 (지도/이동 기능이 꺼진 게임이면 항상 빈 배열) (MoveTo의 조건을 엔진이 미리 평가한 결과). get_game_view의 connections는 전체 지도다.
     pub available_moves: Vec<AvailableMove>,
     /// 지금 씬 입력(sceneSay)과 씬 종료 버튼을 쓸 수 있는가 (씬이 열려 있고 엔딩이 아니며 AI 이어가기가 켜져 있다).
     pub scene_chat: bool,
@@ -148,6 +151,8 @@ pub struct RenderState {
     pub stage: serde_json::Value,
     /// 지금 플레이어가 있는 위치에 있는 NPC들 (game_character_id). GameRuntime::render_state가 채운다.
     pub present_npcs: Vec<String>,
+    /// StoryPlan 체크포인트에 도달했는가 (켜진 게임만). true면 프론트가 refresh_story_plan을 부르면 된다.
+    pub story_plan_due: bool,
 }
 
 impl From<&GameState> for RenderState {
@@ -155,11 +160,11 @@ impl From<&GameState> for RenderState {
         Self {
             session_id: s.session_id.clone(),
             location_id: s.location_id.clone(),
-            map_id: s.map_id.clone(),
+            map_id: Some(s.map_id.clone()),
             zone_id: s.zone_id.clone(),
-            game_time: s.game_time,
-            weather_id: s.weather_id.clone(),
-            time_period_id: s.time_period_id.clone(),
+            game_time: Some(s.game_time),
+            weather_id: Some(s.weather_id.clone()),
+            time_period_id: Some(s.time_period_id.clone()),
             current_scene_id: s.current_scene_id.clone(),
             active_npc_id: s.active_npc_id.clone(),
             available_choices: Vec::new(),
@@ -170,6 +175,7 @@ impl From<&GameState> for RenderState {
             relationships: s.relationships_json.clone(),
             stage: s.stage_json.clone(),
             present_npcs: Vec::new(),
+            story_plan_due: false,
         }
     }
 }

@@ -59,7 +59,8 @@ const MAX_AI_CHANGES: usize = 3; // 한 응답에서 적용할 변수 변경 수
 
 /// 분당 호출 수만 막는 간단한 슬라이딩 윈도우. 토큰/비용 기준 예산은 별도 테이블이 필요해서 TODO.
 /// state.ai_rate_limit: Mutex<HashMap<String, VecDeque<i64>>> (game_id -> 타임스탬프들).
-fn check_rate_limit(state: &AppState, game_id: &str) -> Result<(), AppError> {
+/// StoryPlan(각본가) 호출도 같은 창을 같이 쓴다 (게임별 AI 호출 상한 하나).
+pub(crate) fn check_rate_limit(state: &AppState, game_id: &str) -> Result<(), AppError> {
     let now = chrono::Utc::now().timestamp();
     let mut limiter = state.ai_rate_limit.lock().map_err(|_| AppError::ai_provider(ErrorCode::AiProviderRateLimit, "rate limiter lock poisoned", false))?;
     let window: &mut VecDeque<i64> = limiter.entry(game_id.to_string()).or_default();
@@ -139,6 +140,8 @@ struct NpcSnapshot {
     character_info: Option<String>,
     example_dialogue: Option<String>,
     extra_data: serde_json::Value,
+    /// 이 게임이 StoryPlan을 쓰는가 (쓰면 최근 플랜의 활성 단계/사실을 프롬프트에 붙인다)
+    story_plan_enabled: bool,
 }
 
 async fn snapshot(state: &State<'_, AppState>, character_id: &str) -> Result<NpcSnapshot, AppError> {
@@ -155,12 +158,14 @@ async fn snapshot(state: &State<'_, AppState>, character_id: &str) -> Result<Npc
     // 프롬프트에 노출할 런타임 상태. 이름만 넘긴다 (id/내부 값은 안 넘김).
     // ⚠ flags(관계 수치 등)는 일부러 안 넣었다 — 어떤 키를 AI에 보여줄지 정하는 컬럼이
     //   game_state_defs에 아직 없다. 필요해지면 "노출 여부" 표시를 만들어서 거기서 골라 넣을 것.
+    // 게임이 쓰지 않는 기능(capabilities)의 값은 AI에게도 보여주지 않는다 (화면용 상태와 같은 규칙).
+    let caps = def.capabilities();
     let mut extra_data = serde_json::json!({
-        "location": st.location_id.as_deref().and_then(|id| def.location(id)).map(|l| l.name.clone()),
-        "zone": st.zone_id.as_deref().and_then(|id| def.zone_by_id(id)).map(|z| z.name.clone()),
-        "map": def.map_by_id(&st.map_id).map(|m| m.name.clone()),
-        "time_period": def.time_periods.iter().find(|p| p.id == st.time_period_id).map(|p| p.name.clone()),
-        "weather": def.weather_types.iter().find(|w| w.id == st.weather_id).map(|w| w.name.clone()),
+        "location": st.location_id.as_deref().filter(|_| caps.location).and_then(|id| def.location(id)).map(|l| l.name.clone()),
+        "zone": st.zone_id.as_deref().filter(|_| caps.movement()).and_then(|id| def.zone_by_id(id)).map(|z| z.name.clone()),
+        "map": Some(st.map_id.as_str()).filter(|_| caps.movement()).and_then(|id| def.map_by_id(id)).map(|m| m.name.clone()),
+        "time_period": def.time_periods.iter().find(|p| caps.time && p.id == st.time_period_id).map(|p| p.name.clone()),
+        "weather": def.weather_types.iter().find(|w| caps.time && w.id == st.weather_id).map(|w| w.name.clone()),
         // AI가 볼 수 있는(ai_readable/ai_writable) 변수만. writable이 아니면 AI는 읽기만 한다.
         "variables": def.state_defs.iter().filter_map(|d| {
             let rule = crate::game::engine::VarRule::from_config(&d.config_json);
@@ -255,6 +260,7 @@ async fn snapshot(state: &State<'_, AppState>, character_id: &str) -> Result<Npc
         character_info: character.description.clone(),
         example_dialogue: character.example_dialogue.clone(),
         extra_data,
+        story_plan_enabled: crate::game::story_plan::settings(def).enabled,
     })
 }
 
@@ -355,7 +361,14 @@ async fn converse(app: AppHandle, state: &State<'_, AppState>, settings: &State<
     }
     let persona_info = format!("{}\n{}", persona.name, persona.description);
 
-    let context = ChatContext {
+    // StoryPlan: 최근 플랜에서 활성 단계와 지켜야 할 사실만 잘라 캐릭터 설정 끝에 붙인다 (참고용, 앱 고정 규칙보다 뒤).
+    let story_guide = if snap.story_plan_enabled {
+        crate::game::story_plan::latest(&state.db, &snap.session_id, u32::MAX).await?.and_then(|r| crate::game::story_plan::npc_guide(&r.plan))
+    } else {
+        None
+    };
+
+    let mut context = ChatContext {
         char_name: Some(snap.character_name.clone()),
         user_name: Some(persona.name.clone()),
         system_rules: match &mode {
@@ -370,6 +383,13 @@ async fn converse(app: AppHandle, state: &State<'_, AppState>, settings: &State<
         history,
         extra_data: snap.extra_data,
     };
+    if let Some(guide) = &story_guide {
+        context.system_rules.push(crate::game::story_plan::NPC_GUIDE_RULE.to_string());
+        context.character_info = Some(match context.character_info.take() {
+            Some(c) if !c.trim().is_empty() => format!("{c}\n\n{guide}"),
+            _ => guide.clone(),
+        });
+    }
 
     let raw = ChatManager
         .game_chat(app, state, settings, conversation_id.clone(), trimmed.to_string(), context, None)
@@ -490,6 +510,8 @@ async fn converse(app: AppHandle, state: &State<'_, AppState>, settings: &State<
             let allowed = user_turns >= runtime.scene_min_turns();
             events.extend(runtime.end_scene_by_ai(allowed));
         }
+        // AI 대화 한 번도 StoryPlan의 한 턴이다 (씬 종료 등 체크포인트도 여기서 표시된다).
+        runtime.note_story_plan_turn(&events);
         if !events.is_empty() {
             crate::game::journal::record(&state.db, runtime, &game_id, None, &events).await?;
         }
@@ -603,14 +625,15 @@ async fn snapshot_scene(state: &State<'_, AppState>) -> Result<NpcSnapshot, AppE
             emotions.insert(name_of(id), serde_json::json!(list));
         }
     }
-    let loc = st.location_id.as_deref().and_then(|id| def.location(id));
+    let caps = def.capabilities();
+    let loc = st.location_id.as_deref().filter(|_| caps.location).and_then(|id| def.location(id));
     let extra_data = serde_json::json!({
         "scene": { "name": scene.scene_name, "description": scene.description },
         "location": loc.map(|l| l.name.clone()),
-        "zone": st.location_id.as_deref().and_then(|id| def.zone_of_location(id)).map(|z| z.name.clone()),
-        "map": def.map_by_id(&st.map_id).map(|m| m.name.clone()),
-        "timePeriod": def.time_periods.iter().find(|p| p.id == st.time_period_id).map(|p| p.name.clone()),
-        "weather": def.weather_types.iter().find(|w| w.id == st.weather_id).map(|w| w.name.clone()),
+        "zone": st.location_id.as_deref().filter(|_| caps.movement()).and_then(|id| def.zone_of_location(id)).map(|z| z.name.clone()),
+        "map": Some(st.map_id.as_str()).filter(|_| caps.movement()).and_then(|id| def.map_by_id(id)).map(|m| m.name.clone()),
+        "timePeriod": def.time_periods.iter().find(|p| caps.time && p.id == st.time_period_id).map(|p| p.name.clone()),
+        "weather": def.weather_types.iter().find(|w| caps.time && w.id == st.weather_id).map(|w| w.name.clone()),
         "variables": def.state_defs.iter().filter_map(|d| {
             let rule = crate::game::engine::VarRule::from_config(&d.config_json);
             if !rule.readable {
@@ -648,6 +671,7 @@ async fn snapshot_scene(state: &State<'_, AppState>) -> Result<NpcSnapshot, AppE
         character_info: Some(info),
         example_dialogue: None,
         extra_data,
+        story_plan_enabled: crate::game::story_plan::settings(def).enabled,
     })
 }
 

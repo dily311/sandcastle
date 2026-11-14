@@ -159,6 +159,13 @@ impl GameDefinition {
         None
     }
 
+    /// 이 게임에서 실제로 쓰는 기능: 템플릿의 capabilities에서 게임 설정(settings_json.capabilities)이 끈 것을 뺀 것.
+    /// 템플릿을 못 찾으면(옛 데이터) 전부 켠 것으로 본다. 이동/시간 커맨드 거부, 화면용 데이터, 검증이 모두 이 값을 쓴다.
+    pub fn capabilities(&self) -> crate::game::template::Capabilities {
+        let base = crate::game::template::find(&self.project.template_id).map(|t| t.capabilities).unwrap_or_else(crate::game::template::Capabilities::all);
+        base.restricted_by(self.project.settings_json.as_ref().and_then(|v| v.get("capabilities")))
+    }
+
     /// 시작 지점. location은 game_projects.start_location_id를 쓴다. 날씨는 전용 컬럼이 없어서
     /// settings_json의 {"startWeatherId": "..."}에서 읽고, 없으면 호출부가 첫 날씨로 폴백한다.
     /// (start_map_id/start_scene_key 컬럼도 있지만 map은 location에서 derive되므로 안 쓴다.)

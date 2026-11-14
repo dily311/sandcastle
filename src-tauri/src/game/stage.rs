@@ -404,6 +404,11 @@ pub fn spec_to_script(spec: &serde_json::Value) -> String {
     out
 }
 
+/// 대본 안의 연출 태그를 해석하지 않고 그대로 뽑는다: (태그 이름, `::대상`, 값). 에셋을 지우기 전에 어디서 쓰는지 찾는 데 쓴다.
+pub fn tag_uses(raw: &str) -> Vec<(String, Option<String>, String)> {
+    raw.lines().flat_map(|l| extract_cues(l.trim()).1).map(|rc| (rc.name, rc.target, rc.value)).collect()
+}
+
 /// 제작자 대본을 미리 점검한다: 쓸 수 없어서 버려질 태그를 알려준다 (키가 없음, 알 수 없는 감정/효과/분위기 등).
 pub fn lint(raw: &str, r: &mut dyn StageResolver, allow: &Allowed) -> Vec<String> {
     let mut problems = Vec::new();

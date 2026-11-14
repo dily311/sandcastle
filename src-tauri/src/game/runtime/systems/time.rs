@@ -19,6 +19,10 @@ impl GameSystem for TimeSystem {
         let GameEvent::TimeAdvanceRequested { seconds } = event else {
             return vec![];
         };
+        // 시간 기능이 꺼진 게임은 시간이 흐르지 않는다 (커맨드가 이미 막지만, 다른 경로로 요청이 와도 여기서 한 번 더 막는다).
+        if !def.capabilities().time {
+            return vec![];
+        }
 
         let from = state.game_time;
         state.game_time += seconds;

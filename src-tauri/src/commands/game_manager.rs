@@ -134,3 +134,18 @@ pub async fn get_package_data(state: State<'_, AppState>, game_id: String) -> Re
     let definition = repo.load_definition(&game_id).await.map_err(|e| AppError::database(e.to_string()))?;
     Ok(crate::game::package::to_editor_data(&definition))
 }
+
+/// 에셋 추가: 파일 대화상자로 고른 이미지/오디오(sourcePath)를 게임 폴더(assets/<category>/)로 복사하고 에셋 행을 만든다.
+/// 형식은 파일 내용으로 판정하고(확장자는 믿지 않는다), 크기 상한은 서빙 상한과 같다. 호스트 에디터 전용.
+/// 응답의 diagnostics를 사용자에게 보여줄 것. 플레이 중인 게임이면 다시 open_game을 불러야 반영된다.
+#[tauri::command]
+pub async fn add_game_asset(app: AppHandle, state: State<'_, AppState>, game_id: String, source_path: String, asset: crate::game::asset_store::NewGameAsset) -> Result<crate::game::asset_store::AddAssetReport, AppError> {
+    crate::game::asset_store::add_asset(&state.db, &games_root(&app)?, &game_id, &PathBuf::from(source_path), asset).await
+}
+
+/// 에셋 삭제 (행 + 파일). 씬 대본/효과의 연출, 표지/아바타/아이콘이 쓰는 에셋이면 거절한다
+/// (INVALID_INPUT, details.reason = "assetInUse", details.references = 쓰는 곳). force=true면 지우고 진단을 돌려준다.
+#[tauri::command]
+pub async fn remove_game_asset(app: AppHandle, state: State<'_, AppState>, game_id: String, asset_id: String, force: Option<bool>) -> Result<crate::game::asset_store::RemoveAssetReport, AppError> {
+    crate::game::asset_store::remove_asset(&state.db, &games_root(&app)?, &game_id, &asset_id, force.unwrap_or(false)).await
+}

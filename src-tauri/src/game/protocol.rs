@@ -41,6 +41,21 @@ pub fn is_servable(ext: &str) -> bool {
     ALLOWED.iter().any(|(a, _)| *a == e)
 }
 
+/// 이 확장자의 파일 종류("text"/"image"/"audio"/"font")와 서빙할 수 있는 최대 크기. 서빙하지 않는 확장자면 None.
+/// 에셋 추가(asset_store)가 서빙 규칙과 같은 기준으로 파일을 받으려고 쓴다.
+pub fn media_limits(ext: &str) -> Option<(&'static str, u64)> {
+    let e = ext.to_ascii_lowercase();
+    ALLOWED.iter().find(|(a, _)| *a == e).map(|(_, k)| {
+        let name = match k {
+            Kind::Text => "text",
+            Kind::Image => "image",
+            Kind::Audio => "audio",
+            Kind::Font => "font",
+        };
+        (name, max_bytes(*k))
+    })
+}
+
 fn max_bytes(kind: Kind) -> u64 {
     match kind {
         Kind::Text => 5 * 1024 * 1024,
