@@ -52,6 +52,10 @@
 		</nav>
 		<div class="drag" aria-hidden="true"></div>
 		<!-- 오른쪽 패널이 열려 있으면 패널 폭만큼의 구역: 패널 탭 + 여닫기 + 창 버튼 (옵시디언 방식) -->
+		<!-- 여닫기 버튼은 패널 왼쪽 경계 바로 바깥: 패널이 열리면 경계와 함께 왼쪽으로 이동 -->
+		{#if ui.panelAvailable}
+			<IconButton label={ui.panelOpen ? "오른쪽 패널 닫기" : "오른쪽 패널 열기"} size="sm" active={ui.panelOpen} onclick={() => (ui.panelOpen = !ui.panelOpen)}><PanelRight /></IconButton>
+		{/if}
 		<div class="right-zone" class:panel={ui.panelAvailable && ui.panelOpen}>
 			{#if ui.panelAvailable && ui.panelOpen}
 				<div class="ptabs" role="tablist" aria-label="오른쪽 패널">
@@ -69,9 +73,6 @@
 						</button>
 					{/each}
 				</div>
-			{/if}
-			{#if ui.panelAvailable}
-				<IconButton label={ui.panelOpen ? "오른쪽 패널 닫기" : "오른쪽 패널 열기"} size="sm" active={ui.panelOpen} onclick={() => (ui.panelOpen = !ui.panelOpen)}><PanelRight /></IconButton>
 			{/if}
 			<div class="win" aria-hidden="true">
 				<span><Minus /></span><span><Square /></span><span class="close"><X /></span>
@@ -178,6 +179,7 @@
 	/* 패널 바로 위: 패널과 같은 폭·같은 경계선 */
 	.right-zone.panel {
 		width: var(--panel-width);
+		margin-left: var(--space-1);
 		padding-left: var(--space-2);
 		border-left: 1px solid var(--border);
 		margin-bottom: -1px;
