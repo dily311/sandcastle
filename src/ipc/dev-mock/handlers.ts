@@ -1,5 +1,6 @@
 // 브라우저 개발 모드용 가짜 백엔드. 응답 모양은 생성된 bindings.ts 타입을 따른다.
 // 화면을 만들 때 필요한 커맨드를 여기에 추가한다.
+import { chatHandlers } from "./chat";
 import type { AppSetting_Serialize, FeatureSetting, ThemeSetting } from "../bindings";
 
 type Args = Record<string, unknown>;
@@ -41,4 +42,5 @@ export const handlers: Record<string, Handler> = {
 	},
 	get_recoverable_tasks: () => [],
 	get_pending_restore: () => null,
+	...chatHandlers,
 };

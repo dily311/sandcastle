@@ -1,0 +1,435 @@
+<script lang="ts">
+	import { Download, Eye, EyeOff, FileArchive, ImagePlus, Pencil, Search, Trash2 } from "@lucide/svelte";
+	import { Avatar, Button, ContextMenu, IconButton, Input, Select, Switch, type MenuItem } from "$shared/ui";
+	import { panel } from "$app/panel.svelte";
+	import type { RegexScript_Serialize as RegexScript } from "$ipc/bindings";
+	import { call, commands } from "$shared/ipc/client";
+	import { IMAGE_FILES, pickFiles } from "$shared/ipc/dialog";
+	import { fileSrc } from "$shared/ipc/file";
+	import { confirmAction, promptText } from "$shared/stores/confirm.svelte";
+	import { convActions } from "./actions";
+	import { preview } from "./format";
+	import { library, type CharacterImage, type Conversation } from "./library.svelte";
+	import { metaOf, type ChatSession } from "./session.svelte";
+
+	interface Props {
+		conv: Conversation;
+		session: ChatSession;
+		chapters: Record<string, number>;
+		onjump: (messageId: string) => void;
+	}
+	let { conv, session, chapters, onjump }: Props = $props();
+
+	// ---- 대화 설정: API → 프리셋 → 페르소나 ----
+	const DEFAULT = "";
+	const apiOptions = $derived([{ value: DEFAULT, label: "앱 기본값" }, ...library.apis.map((a) => ({ value: a.id, label: `${a.name} · ${a.model}` }))]);
+	const presetOptions = $derived([{ value: DEFAULT, label: "앱 기본값" }, ...library.presets.map((p) => ({ value: p.id, label: p.name }))]);
+	function setOption(p: { apiProfileId?: string; promptPresetId?: string; personaId?: string }) {
+		void library.setOptions(conv.id, {
+			personaId: p.personaId ?? conv.personaId,
+			promptPresetId: (p.promptPresetId ?? conv.promptPresetId ?? "") || null,
+			apiProfileId: (p.apiProfileId ?? conv.apiProfileId ?? "") || null,
+		});
+	}
+
+	const persona = $derived(library.persona(conv.personaId) ?? library.personas[0]);
+	let personaOpen = $state(false);
+	let personaBtn: HTMLButtonElement | undefined = $state();
+	let popStyle = $state("");
+	function togglePersona() {
+		personaOpen = !personaOpen;
+		if (!personaOpen || !personaBtn) return;
+		// 패널 스크롤에 잘리지 않게 버튼 기준 고정 위치
+		const r = personaBtn.getBoundingClientRect();
+		popStyle = `left:${r.left}px;width:${r.width}px;bottom:${window.innerHeight - r.top + 6}px;max-height:${r.top - 12}px`;
+	}
+
+	// ---- 정규식: 이 대화에 걸리는 것 (전역 + 이 캐릭터 + 이 프리셋) ----
+	let scripts = $state<RegexScript[]>([]);
+	$effect(() => {
+		void conv.id;
+		void call(commands.listRegexScripts(), { source: "regex", silent: true })
+			.then((r) => (scripts = r))
+			.catch(() => (scripts = []));
+	});
+	const applied = $derived(
+		scripts.filter(
+			(s) =>
+				s.scope === "global" ||
+				(s.scope === "character" && s.scopeId === conv.characterId) ||
+				(s.scope === "preset" && !!conv.promptPresetId && s.scopeId === conv.promptPresetId),
+		),
+	);
+	const scopeName = { global: "전역", character: "캐릭터", preset: "프리셋" } as const;
+	async function toggleScript(s: RegexScript, enabled: boolean) {
+		const saved = await call(commands.upsertRegexScript({ ...s, enabled }), { source: "regex" });
+		scripts = scripts.map((x) => (x.id === s.id ? saved : x));
+	}
+
+	// ---- 에셋 ----
+	const assets = $derived(library.images[conv.characterId] ?? []);
+	let menu = $state<{ x: number; y: number } | null>(null);
+	let menuItems: MenuItem[] = $state([]);
+	function assetMenu(e: MouseEvent, a: CharacterImage) {
+		e.preventDefault();
+		menuItems = [
+			{ label: a.enabled ? "AI에게 보내지 않기" : "AI에게 보내기", icon: a.enabled ? EyeOff : Eye, onselect: () => library.updateImage(a, { enabled: !a.enabled }) },
+			{
+				label: "키 이름 바꾸기",
+				icon: Pencil,
+				onselect: async () => {
+					const key = await promptText({ title: "키 이름 바꾸기", message: "AI가 <cg>키</cg>로 부르는 이름", input: { value: a.key }, confirmLabel: "바꾸기" });
+					if (key && key !== a.key) await library.updateImage(a, { key });
+				},
+			},
+			{
+				label: "삭제",
+				icon: Trash2,
+				danger: true,
+				separator: true,
+				onselect: async () => {
+					if (await confirmAction({ title: "에셋 삭제", message: `'${a.key}' 이미지를 지움`, confirmLabel: "삭제", danger: true })) await library.removeImage(a);
+				},
+			},
+		];
+		menu = { x: e.clientX, y: e.clientY };
+	}
+	async function addImages() {
+		await library.addImages(conv.characterId, await pickFiles([IMAGE_FILES]));
+	}
+
+	// ---- 목차 ----
+	let tocQuery = $state("");
+	const toc = $derived.by(() => {
+		const out: { kind: "chapter" | "msg"; id: string; n: number; label: string }[] = [];
+		session.messages.forEach((m, i) => {
+			const meta = metaOf(m);
+			if (meta.chapter) out.push({ kind: "chapter", id: m.id, n: chapters[m.id], label: `${chapters[m.id]}장 · ${meta.chapter}` });
+			out.push({ kind: "msg", id: m.id, n: i + 1, label: meta.hidden ? "(숨긴 메시지)" : preview(m.content) || "(빈 메시지)" });
+		});
+		return out;
+	});
+	const tocShown = $derived.by(() => {
+		const q = tocQuery.trim().toLowerCase();
+		if (!q) return toc;
+		const num = Number(q.replace("#", ""));
+		return toc.filter((t) => t.label.toLowerCase().includes(q) || (t.kind === "msg" && t.n === num));
+	});
+</script>
+
+<svelte:window
+	onmousedown={(e) => {
+		const t = e.target as Element;
+		if (personaOpen && !t.closest(".ppop") && !t.closest(".pcur")) personaOpen = false;
+	}}
+	onkeydown={(e) => e.key === "Escape" && (personaOpen = false)}
+/>
+
+<aside class="panel" aria-label="대화 패널">
+	{#if panel.tab === "assets"}
+		<div class="panel-body">
+			<div class="atools">
+				<span class="faint">{assets.length}개 · 오른쪽 클릭으로 관리</span>
+				<IconButton label="이미지 가져오기 (여러 장 선택)" size="sm" onclick={addImages}><ImagePlus /></IconButton>
+				<IconButton label="ZIP 가져오기 (준비 중)" size="sm" disabled><FileArchive /></IconButton>
+			</div>
+			{#if assets.length}
+				<div class="agrid">
+					{#each assets as a (a.id)}
+						<button class="tile" class:off={!a.enabled} title={a.enabled ? a.key : `${a.key} (AI에게 안 보냄)`} oncontextmenu={(e) => assetMenu(e, a)}>
+							<span class="thumb">
+								<img src={fileSrc(a.thumbnailPath ?? a.path)} alt="" loading="lazy" />
+								{#if !a.enabled}<EyeOff />{/if}
+							</span>
+							<span class="key">{a.key}</span>
+						</button>
+					{/each}
+				</div>
+			{:else}
+				<p class="none">이미지 없음. 표정 이미지를 넣으면 AI가 장면에 맞게 골라 보여줌</p>
+			{/if}
+			<ContextMenu at={menu} items={menuItems} label="에셋 메뉴" onclose={() => (menu = null)} />
+		</div>
+	{:else if panel.tab === "toc"}
+		<div class="toc-search">
+			<Input bind:value={tocQuery} placeholder="챕터·메시지·번호 검색" aria-label="목차 검색">
+				{#snippet leading()}<Search />{/snippet}
+			</Input>
+		</div>
+		<ol class="toc">
+			{#each tocShown as t (t.kind + t.id)}
+				<li class={t.kind}><button onclick={() => onjump(t.id)}><span class="no">{t.kind === "msg" ? `#${t.n}` : ""}</span>{t.label}</button></li>
+			{:else}
+				<li class="none">{tocQuery ? "찾는 항목 없음" : "메시지 없음"}</li>
+			{/each}
+		</ol>
+	{:else}
+		<div class="panel-body">
+			<section>
+				<h4>이 대화</h4>
+				<label class="row"><span>API</span><Select value={conv.apiProfileId ?? DEFAULT} options={apiOptions} onchange={(e) => setOption({ apiProfileId: e.currentTarget.value })} /></label>
+				<label class="row"><span>프리셋</span><Select value={conv.promptPresetId ?? DEFAULT} options={presetOptions} onchange={(e) => setOption({ promptPresetId: e.currentTarget.value })} /></label>
+				<div class="persona">
+					<span>페르소나</span>
+					{#if personaOpen}
+						<div class="ppop" role="listbox" aria-label="페르소나 바꾸기" style={popStyle}>
+							{#each library.personas as p (p.id)}
+								<button
+									role="option"
+									aria-selected={persona?.id === p.id}
+									class:on={persona?.id === p.id}
+									onclick={() => {
+										setOption({ personaId: p.id });
+										personaOpen = false;
+									}}
+								>
+									<Avatar name={p.name} src={fileSrc(p.avatar)} color={p.color || null} size={32} />
+									<span class="pt"><b>{p.name}</b>{#if p.description}<small>{p.description}</small>{/if}</span>
+								</button>
+							{/each}
+						</div>
+					{/if}
+					<button bind:this={personaBtn} class="pcur" aria-haspopup="listbox" aria-expanded={personaOpen} onclick={togglePersona}>
+						<Avatar name={persona?.name ?? "?"} src={fileSrc(persona?.avatar)} color={persona?.color || null} size={40} />
+						<span class="pt"><b>{persona?.name ?? "없음"}</b>{#if persona?.description}<small>{persona.description}</small>{/if}</span>
+						<span class="pchange">바꾸기</span>
+					</button>
+				</div>
+				<Switch checked={conv.imagesEnabled} label="캐릭터 이미지" description="키 목록 전송, <cg>로 표시" onchange={(v) => library.setImagesEnabled(conv.id, v)} />
+			</section>
+			<section>
+				<h4>정규식 <span class="faint">적용 중 {applied.filter((s) => s.enabled).length}개</span></h4>
+				{#each applied as s (s.id)}
+					<Switch checked={s.enabled} label="{s.name} · {scopeName[s.scope]}" onchange={(v) => toggleScript(s, v)} />
+				{:else}
+					<p class="none small">이 대화에 걸리는 정규식 없음</p>
+				{/each}
+			</section>
+			<section>
+				<h4>내보내기</h4>
+				<Button block onclick={() => convActions.export(conv)}>
+					{#snippet icon()}<Download />{/snippet}
+					이 대화 내보내기
+				</Button>
+			</section>
+		</div>
+	{/if}
+</aside>
+
+<style>
+	.panel {
+		display: flex;
+		flex-direction: column;
+		min-width: 0;
+		min-height: 0;
+		border-left: 1px solid var(--border);
+		background: var(--bg);
+	}
+	.panel-body {
+		display: flex;
+		flex-direction: column;
+		gap: var(--space-5);
+		padding: var(--space-3) var(--space-4) var(--space-4);
+		overflow: auto;
+	}
+	section {
+		display: flex;
+		flex-direction: column;
+		gap: var(--space-3);
+	}
+	h4 {
+		margin: 0;
+		font-size: var(--text-xs);
+		color: var(--text-muted);
+		letter-spacing: 0.04em;
+		display: flex;
+		justify-content: space-between;
+	}
+	.row {
+		display: grid;
+		grid-template-columns: 64px minmax(0, 1fr);
+		align-items: center;
+		gap: var(--space-2);
+		font-size: var(--text-sm);
+	}
+	.persona {
+		display: flex;
+		flex-direction: column;
+		gap: var(--space-2);
+		font-size: var(--text-sm);
+	}
+	.pcur,
+	.ppop button {
+		display: flex;
+		align-items: center;
+		gap: var(--space-3);
+		width: 100%;
+		padding: var(--space-2);
+		border: none;
+		border-radius: var(--radius-md);
+		background: transparent;
+		text-align: left;
+		cursor: pointer;
+	}
+	.pcur {
+		border: 1px solid var(--border);
+		background: var(--surface);
+	}
+	.pcur:hover,
+	.ppop button:hover {
+		background: var(--surface-hover);
+	}
+	.pt {
+		display: flex;
+		flex-direction: column;
+		flex: 1;
+		min-width: 0;
+		line-height: 1.3;
+	}
+	.pt small {
+		color: var(--text-muted);
+		font-size: var(--text-xs);
+		white-space: nowrap;
+		overflow: hidden;
+		text-overflow: ellipsis;
+	}
+	.pchange {
+		font-size: var(--text-xs);
+		color: var(--accent-text);
+		font-weight: 600;
+	}
+	.ppop {
+		position: fixed;
+		z-index: 100;
+		overflow: auto;
+		display: flex;
+		flex-direction: column;
+		padding: 4px;
+		border: 1px solid var(--border);
+		border-radius: var(--radius-md);
+		background: var(--surface);
+		box-shadow: var(--shadow-lg);
+		animation: up var(--duration-fast) var(--ease);
+	}
+	@keyframes up {
+		from {
+			opacity: 0;
+			transform: translateY(4px);
+		}
+	}
+	.ppop button.on {
+		background: var(--accent-soft);
+	}
+	.atools {
+		display: flex;
+		align-items: center;
+		gap: 2px;
+		margin-bottom: calc(var(--space-2) * -1);
+	}
+	.atools span {
+		margin-right: auto;
+		font-size: var(--text-xs);
+	}
+	.agrid {
+		display: grid;
+		grid-template-columns: repeat(3, 1fr);
+		gap: var(--space-2);
+	}
+	.tile {
+		display: flex;
+		flex-direction: column;
+		padding: 0;
+		border: 1px solid var(--border);
+		border-radius: var(--radius-md);
+		background: var(--surface);
+		overflow: hidden;
+		cursor: context-menu;
+	}
+	.tile:hover {
+		border-color: var(--border-strong);
+	}
+	.thumb {
+		position: relative;
+		display: grid;
+		place-items: center;
+		aspect-ratio: 1;
+		background: linear-gradient(135deg, var(--accent-soft-hover), var(--bg-sunken));
+		color: var(--text-muted);
+	}
+	.thumb img {
+		position: absolute;
+		inset: 0;
+		width: 100%;
+		height: 100%;
+		object-fit: cover;
+	}
+	.thumb :global(svg) {
+		position: relative;
+	}
+	.tile.off .thumb img {
+		opacity: 0.4;
+		filter: grayscale(1);
+	}
+	.key {
+		padding: 3px 6px;
+		font-size: 11px;
+		font-family: var(--font-mono);
+		white-space: nowrap;
+		overflow: hidden;
+		text-overflow: ellipsis;
+		text-align: left;
+	}
+	.tile.off .key {
+		color: var(--text-faint);
+	}
+	.toc-search {
+		padding: var(--space-3) var(--space-3) var(--space-2);
+	}
+	.toc {
+		list-style: none;
+		margin: 0;
+		padding: 0 var(--space-2) var(--space-4);
+		overflow: auto;
+	}
+	.toc button {
+		display: flex;
+		gap: var(--space-2);
+		width: 100%;
+		padding: 6px var(--space-2);
+		border: none;
+		border-radius: var(--radius-xs);
+		background: transparent;
+		text-align: left;
+		font-size: var(--text-sm);
+		color: var(--text-muted);
+		cursor: pointer;
+		white-space: nowrap;
+		overflow: hidden;
+		text-overflow: ellipsis;
+	}
+	.toc button:hover {
+		background: var(--surface-hover);
+		color: var(--text);
+	}
+	.toc .chapter button {
+		font-weight: 700;
+		color: var(--text);
+		margin-top: var(--space-2);
+	}
+	.toc .no {
+		width: 30px;
+		flex: none;
+		color: var(--text-faint);
+		font-variant-numeric: tabular-nums;
+	}
+	.none {
+		padding: var(--space-4);
+		text-align: center;
+		font-size: var(--text-sm);
+		color: var(--text-faint);
+	}
+	.none.small {
+		padding: 0;
+		text-align: left;
+	}
+</style>

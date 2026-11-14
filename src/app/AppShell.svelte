@@ -1,6 +1,7 @@
 <script lang="ts">
 	import { onMount } from "svelte";
-	import { Toasts } from "$shared/ui";
+	import { ConfirmHost, Toasts } from "$shared/ui";
+	import CharacterPage from "$features/character/CharacterPage.svelte";
 	import { captureGlobalErrors, logs } from "$shared/stores/log.svelte";
 	import { nav } from "./nav.svelte";
 	import { theme } from "./theme.svelte";
@@ -33,13 +34,19 @@
 	<Titlebar />
 	<main class="content">
 		{#if ready}
-			{#key nav.current.page}
-				<Placeholder page={nav.current.page} />
-			{/key}
+			{@const r = nav.current}
+			{#if r.page === "character"}
+				<CharacterPage charId={r.charId} convId={r.convId} />
+			{:else}
+				{#key r.page}
+					<Placeholder page={r.page} />
+				{/key}
+			{/if}
 		{/if}
 	</main>
 </div>
 <Toasts />
+<ConfirmHost />
 
 <style>
 	.app {

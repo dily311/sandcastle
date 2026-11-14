@@ -43,8 +43,6 @@ export default defineConfig(({ command }) => {
 						...baseAlias,
 						"@tauri-apps/plugin-os": path.resolve(__dirname, "./src/ipc/tauri-mock.ts"),
 						"@tauri-apps/api/window": path.resolve(__dirname, "./src/ipc/tauri-mock.ts"),
-						// 생성된 바인딩(bindings.ts)이 쓰는 invoke를 가짜 백엔드로
-						"@tauri-apps/api/core": path.resolve(__dirname, "./src/ipc/dev-mock/core.ts"),
 					}
 				: baseAlias,
 		},
