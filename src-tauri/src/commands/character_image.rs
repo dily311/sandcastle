@@ -18,6 +18,7 @@ pub(crate) fn app_data_dir(app: &AppHandle) -> Result<PathBuf> {
 }
 
 #[tauri::command]
+#[specta::specta]
 pub async fn list_character_images(
     app: AppHandle,
     state: State<'_, AppState>,
@@ -32,6 +33,7 @@ pub async fn list_character_images(
 /// 키는 파일 이름에서 만들고 겹치면 " 2", " 3"…을 붙인다.
 /// (SillyTavern 표정 스프라이트 폴더의 파일들을 그대로 넘기면 감정 이름이 키가 된다)
 #[tauri::command]
+#[specta::specta]
 pub async fn add_character_images(
     app: AppHandle,
     state: State<'_, AppState>,
@@ -44,6 +46,7 @@ pub async fn add_character_images(
 }
 
 #[tauri::command]
+#[specta::specta]
 pub async fn update_character_image(
     app: AppHandle,
     state: State<'_, AppState>,
@@ -61,6 +64,7 @@ pub async fn update_character_image(
 }
 
 #[tauri::command]
+#[specta::specta]
 pub async fn delete_character_image(app: AppHandle, state: State<'_, AppState>, id: String) -> Result<()> {
     let row = db::character_image::get_character_image(&state.db, &id).await?;
     db::character_image::delete_character_image(&state.db, &id).await?;
@@ -73,6 +77,7 @@ pub async fn delete_character_image(app: AppHandle, state: State<'_, AppState>, 
 
 /// 대화별 이미지 기능 켜기/끄기
 #[tauri::command]
+#[specta::specta]
 pub async fn set_conversation_images_enabled(
     state: State<'_, AppState>,
     conversation_id: String,

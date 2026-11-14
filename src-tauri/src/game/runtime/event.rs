@@ -4,7 +4,7 @@
 //! ⚠ ChoicePresented는 이 enum을 공유하지만 시스템이 아니라 game::npc::say 하나에서만
 //!   만들어진다 (AI 응답의 <choice> 태그 파싱 결과). dispatch_command가 아니라
 //!   npc_say 응답에 실려 나간다 — 헷갈리기 쉬워서 명시.
-#[derive(Debug, Clone, serde::Serialize)]
+#[derive(Debug, Clone, serde::Serialize, specta::Type)]
 #[serde(tag = "type", rename_all = "camelCase", rename_all_fields = "camelCase")]
 pub enum GameEvent {
     GameStarted,

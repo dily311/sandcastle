@@ -18,7 +18,7 @@ pub struct CharacterImageRow {
 }
 
 /// 프론트 전달용. 경로는 절대 경로 (프론트에서 convertFileSrc로 표시)
-#[derive(Debug, Clone, Serialize)]
+#[derive(Debug, Clone, Serialize, specta::Type)]
 #[serde(rename_all = "camelCase")]
 pub struct CharacterImage {
     pub id: String,
@@ -50,7 +50,7 @@ impl CharacterImage {
     }
 }
 
-#[derive(Debug, Clone, Deserialize)]
+#[derive(Debug, Clone, Deserialize, specta::Type)]
 #[serde(rename_all = "camelCase")]
 pub struct CharacterImageUpdate {
     pub key: String,
@@ -59,7 +59,7 @@ pub struct CharacterImageUpdate {
 }
 
 /// AI 응답에서 실제로 쓰인 이미지 (응답 본문의 `<cg>키</cg>` 순서대로)
-#[derive(Debug, Clone, PartialEq, Serialize)]
+#[derive(Debug, Clone, PartialEq, Serialize, specta::Type)]
 #[serde(rename_all = "camelCase")]
 pub struct ChatImageRef {
     pub key: String,

@@ -10,18 +10,21 @@ use tauri_plugin_store::StoreExt;
 // 위젯 윈도우 열기
 // =======================================
 #[tauri::command]
+#[specta::specta]
 pub async fn open_widget(app: AppHandle, state: State<'_, MouseTrackerState>) -> Result<(), AppError> {
     WidgetManager::open_widget(&app, &state)?;
     Ok(())
 }
 
 #[tauri::command]
+#[specta::specta]
 pub async fn close_widget(app: AppHandle, state: State<'_, MouseTrackerState>) -> Result<(), AppError> {
     WidgetManager::close_widget(&app, &state)?;
     Ok(())
 }
 
 #[tauri::command]
+#[specta::specta]
 pub async fn toggle_widget(app: AppHandle, state: State<'_, MouseTrackerState>) -> Result<(), AppError> {
     WidgetManager::toggle_widget(&app, &state)?;
     Ok(())
@@ -29,6 +32,7 @@ pub async fn toggle_widget(app: AppHandle, state: State<'_, MouseTrackerState>) 
 
 // ignore 값을 받아서 해당 앱 윈도우를 무시하게 하거나 클릭될 수 있게 하는 함수
 #[tauri::command]
+#[specta::specta]
 pub async fn toggle_ignore_cursor(window: tauri::Window, ignore: bool) -> Result<(), AppError> {
     window.set_ignore_cursor_events(ignore)?;
     Ok(())
@@ -39,6 +43,7 @@ pub async fn toggle_ignore_cursor(window: tauri::Window, ignore: bool) -> Result
 // =======================================
 
 #[tauri::command]
+#[specta::specta]
 pub async fn is_autostart_enabled(state: State<'_, AutoLaunchManager>) -> Result<bool, AppError> {
     state
         .is_enabled()
@@ -46,6 +51,7 @@ pub async fn is_autostart_enabled(state: State<'_, AutoLaunchManager>) -> Result
 }
 
 #[tauri::command]
+#[specta::specta]
 pub async fn set_autostart(state: State<'_, AutoLaunchManager>, enabled: bool) -> Result<(), AppError> {
     if enabled {
         state.enable().map_err(|e| AppError::io(e.to_string()))?;
@@ -60,6 +66,7 @@ pub async fn set_autostart(state: State<'_, AutoLaunchManager>, enabled: bool) -
 // 클릭스루
 // =======================================
 #[tauri::command]
+#[specta::specta]
 pub fn update_interactive_regions(
     upserts: Vec<InteractiveRegion>,
     removed: Vec<String>,
@@ -78,6 +85,7 @@ pub fn update_interactive_regions(
 }
 
 #[tauri::command]
+#[specta::specta]
 pub fn remove_interactive_regions(
     ids: Vec<String>,
     state: State<WidgetInteractionState>,
@@ -91,6 +99,7 @@ pub fn remove_interactive_regions(
 }
 
 #[tauri::command]
+#[specta::specta]
 pub fn set_widget_click_through(window: WebviewWindow, enabled: bool) -> Result<(), AppError> {
     window.set_ignore_cursor_events(enabled)?;
     Ok(())
@@ -100,6 +109,7 @@ pub fn set_widget_click_through(window: WebviewWindow, enabled: bool) -> Result<
 // 음악 플레이어
 // =======================================
 #[tauri::command]
+#[specta::specta]
 pub fn get_widget_music_settings(app: AppHandle) -> Result<WidgetMusicSetting, AppError> {
     let store = app.store("widget.json").map_err(|e| AppError::io(e.to_string()))?;
     let result: WidgetMusicSetting = store.get("music")
@@ -110,6 +120,7 @@ pub fn get_widget_music_settings(app: AppHandle) -> Result<WidgetMusicSetting, A
 }
 
 #[tauri::command]
+#[specta::specta]
 pub fn save_widget_music_settings(app: AppHandle, patch: serde_json::Value) -> Result<(), AppError> {
     let store = app.store("widget.json").map_err(|e| AppError::io(e.to_string()))?;
     let setting: WidgetMusicSetting = store.get("music").and_then(|v| serde_json::from_value(v).ok()).unwrap_or_default();
@@ -123,6 +134,7 @@ pub fn save_widget_music_settings(app: AppHandle, patch: serde_json::Value) -> R
 }
 
 #[tauri::command]
+#[specta::specta]
 pub async fn get_select_folder_music_data(app: AppHandle, state: State<'_, AppState>, folder_path: String) -> Result<LibraryRoot, AppError> {
     let cache_dir = app.path().app_cache_dir()?;
     let result = music::folder_indexing(&state.db, folder_path.clone(), &cache_dir).await?;
@@ -133,39 +145,46 @@ pub async fn get_select_folder_music_data(app: AppHandle, state: State<'_, AppSt
 //  플레이 리스트
 // ---------------------------------------------------------
 #[tauri::command]
+#[specta::specta]
 pub async fn get_all_playlist(state: State<'_, AppState>) -> Result<Vec<Playlist>, AppError> {
     let result = db::widget::get_all_playlist(&state.db).await?;
     Ok(result)
 }
 #[tauri::command]
+#[specta::specta]
 pub async fn create_playlist(state: State<'_, AppState>, input: PlaylistInput) -> Result<Playlist, AppError> {
     let result = db::widget::create_playlist(&state.db, input).await?;
     Ok(result)
 }
 #[tauri::command]
+#[specta::specta]
 pub async fn update_playlist(state: State<'_, AppState>, id: String, input: PlaylistInput) -> Result<(), AppError> {
     db::widget::update_playlist(&state.db, &id, input).await?;
     Ok(())
 }
 #[tauri::command]
+#[specta::specta]
 pub async fn delete_playlist(state: State<'_, AppState>, id: String) -> Result<(), AppError> {
     db::widget::delete_playlist(&state.db, &id).await?;
     Ok(())
 }
 
 #[tauri::command]
+#[specta::specta]
 pub async fn get_playlist_entry(state: State<'_, AppState>, playlist_id: String) -> Result<Vec<PlaylistItem>, AppError> {
     let result = db::widget::get_all_playlist_entry(&state.db, &playlist_id).await?;
     Ok(result)
 }
 
 #[tauri::command]
+#[specta::specta]
 pub async fn append_playlist_entry(state: State<'_, AppState>, playlist_id: String, music_src: String, sort_order: Option<u32>) -> Result<(), AppError> {
     db::widget::append_playlist_entry(&state.db, &playlist_id, &music_src, sort_order).await?;
     Ok(())
 }
 
 #[tauri::command]
+#[specta::specta]
 pub async fn remove_playlist_entry(state: State<'_, AppState>, playlist_id: String, music_src: String) -> Result<(), AppError> {
     db::widget::remove_playlist_entry(&state.db, &playlist_id, &music_src).await?;
     Ok(())
@@ -175,11 +194,13 @@ pub async fn remove_playlist_entry(state: State<'_, AppState>, playlist_id: Stri
 //  음악 데이터 업데이트
 // ---------------------------------------------------------
 #[tauri::command]
+#[specta::specta]
 pub async fn update_music_meta(state: State<'_, AppState>, input: MusicMetaInput) -> Result<(), AppError> {
     db::widget::upsert_music_meta(&state.db, input).await?;
     Ok(())
 }
 #[tauri::command]
+#[specta::specta]
 pub async fn update_playlist_music_order(state: State<'_, AppState>, playlist_id: String, input: Vec<PlaylistItem>) -> Result<(), AppError> {
     for item in input {
         db::widget::update_playlist_music_order(&state.db, &playlist_id, &item.meta.path, item.sort_order).await?;
@@ -188,6 +209,7 @@ pub async fn update_playlist_music_order(state: State<'_, AppState>, playlist_id
 }
 
 #[tauri::command]
+#[specta::specta]
 pub async fn update_music_album_art_pos(state: State<'_, AppState>, path: String, pos: serde_json::Value) -> Result<(), AppError> {
     db::widget::upsert_music_album_art_pos(&state.db, &path, pos).await?;
     Ok(())
@@ -197,12 +219,14 @@ pub async fn update_music_album_art_pos(state: State<'_, AppState>, path: String
 //  파일 접근 또는 변경
 // ---------------------------------------------------------
 #[tauri::command]
+#[specta::specta]
 pub async fn set_album_art(app: AppHandle, file_path: String, img_path: String) -> Result<String, AppError> {
     let cache_dir = app.path().app_cache_dir()?;
     music::set_album_art(file_path, img_path, &cache_dir).await
 }
 
 #[tauri::command]
+#[specta::specta]
 pub async fn filter_existing_paths(paths: Vec<String>) -> Result<Vec<String>, AppError> {
     let existing = paths
         .into_iter()

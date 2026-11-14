@@ -16,7 +16,7 @@ use crate::error::{AppError, ErrorCode};
 // =======================================
 
 /// 작업 상태. 전이 규칙은 task_state.rs에 있다.
-#[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq, Hash, EnumString, Display)]
+#[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq, Hash, EnumString, Display, specta::Type)]
 #[serde(rename_all = "snake_case")]
 #[strum(serialize_all = "snake_case")]
 pub enum TaskStatus {
@@ -45,7 +45,7 @@ impl TaskStatus {
     }
 }
 
-#[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq, EnumString, Display)]
+#[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq, EnumString, Display, specta::Type)]
 #[serde(rename_all = "snake_case")]
 #[strum(serialize_all = "snake_case")]
 pub enum AttemptStatus {
@@ -57,7 +57,7 @@ pub enum AttemptStatus {
 }
 
 /// 작업 종류. 종류마다 TaskExecutor가 하나씩 등록된다.
-#[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq, Hash, EnumString, Display)]
+#[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq, Hash, EnumString, Display, specta::Type)]
 #[serde(rename_all = "snake_case")]
 #[strum(serialize_all = "snake_case")]
 pub enum TaskType {
@@ -73,7 +73,7 @@ pub enum TaskType {
 }
 
 /// 작업을 요청한 쪽. 프론트가 어느 화면에 결과를 붙일지 고를 때 쓴다.
-#[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq, Hash, EnumString, Display)]
+#[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq, Hash, EnumString, Display, specta::Type)]
 #[serde(rename_all = "snake_case")]
 #[strum(serialize_all = "snake_case")]
 pub enum TaskOwner {
@@ -123,7 +123,7 @@ impl CreateTaskRequest {
 }
 
 /// Executor가 성공했을 때 돌려주는 값. DB(result_json)에 그대로 저장된다.
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, specta::Type)]
 #[serde(tag = "kind", rename_all = "camelCase")]
 pub enum TaskOutput {
     /// 생성된 텍스트 원문 (게임 대화 등 호출자가 직접 후처리하는 경우)
@@ -140,7 +140,7 @@ pub enum TaskOutput {
 }
 
 /// 실패 정보. DB와 프론트 이벤트에 같은 형태로 나간다.
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, specta::Type)]
 #[serde(rename_all = "camelCase")]
 pub struct TaskErrorInfo {
     pub code: String,
@@ -262,7 +262,7 @@ impl CancelReason {
 // 프론트 이벤트 (`task-event`)
 // =======================================
 
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, specta::Type)]
 #[serde(tag = "type", content = "data", rename_all = "camelCase")]
 pub enum TaskEvent {
     #[serde(rename_all = "camelCase")]
@@ -331,7 +331,7 @@ impl TaskEvent {
 // =======================================
 
 /// 작업 스냅샷 (읽기 전용 사본). 값을 바꿔도 DB에는 반영되지 않는다.
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, specta::Type)]
 #[serde(rename_all = "camelCase")]
 pub struct TaskInfo {
     pub id: String,
@@ -357,7 +357,7 @@ impl TaskInfo {
     }
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, specta::Type)]
 #[serde(rename_all = "camelCase")]
 pub struct AttemptInfo {
     pub id: String,

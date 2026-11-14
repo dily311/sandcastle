@@ -2,7 +2,7 @@ use serde::{Deserialize, Serialize};
 use sqlx::FromRow;
 
 // ---------- AppSettings ----------
-#[derive(Serialize)]
+#[derive(Serialize, specta::Type)]
 #[serde(rename_all = "camelCase")]
 pub struct ConvSettings {
     pub default_persona_id: Option<String>,
@@ -23,7 +23,7 @@ pub struct PersonaRow {
     pub updated_at: i64,
 }
 
-#[derive(Serialize)]
+#[derive(Serialize, specta::Type)]
 #[serde(rename_all = "camelCase")]
 pub struct Persona {
     pub id: String,
@@ -61,7 +61,7 @@ impl From<PersonaRow> for Persona {
     }
 }
 
-#[derive(Deserialize)]
+#[derive(Deserialize, specta::Type)]
 #[serde(rename_all = "camelCase")]
 pub struct PersonaInput {
     pub name: String,
@@ -73,7 +73,7 @@ pub struct PersonaInput {
     pub is_system_default: bool,
 }
 
-#[derive(Serialize)]
+#[derive(Serialize, specta::Type)]
 #[serde(rename_all = "camelCase")]
 pub struct PersonaUsage {
     pub character_count: i64,
@@ -104,7 +104,7 @@ pub struct CharacterRow {
     pub updated_at: i64,
 }
 
-#[derive(Serialize)]
+#[derive(Serialize, specta::Type)]
 #[serde(rename_all = "camelCase")]
 pub struct Character {
     pub id: String,
@@ -160,7 +160,7 @@ impl From<CharacterRow> for Character {
     }
 }
 
-#[derive(Deserialize)]
+#[derive(Deserialize, specta::Type)]
 #[serde(rename_all = "camelCase")]
 pub struct CharacterInput {
     pub name: String,
@@ -180,7 +180,7 @@ pub struct CharacterInput {
     pub favorite: bool,
 }
 
-#[derive(FromRow, Serialize)]
+#[derive(FromRow, Serialize, specta::Type)]
 #[serde(rename_all = "camelCase")]
 pub struct CharacterOption {
     pub id: String,
@@ -188,7 +188,7 @@ pub struct CharacterOption {
 }
 
 // ---------- WorldInfo ----------
-#[derive(FromRow, Serialize, Clone)]
+#[derive(FromRow, Serialize, Clone, specta::Type)]
 #[serde(rename_all = "camelCase")]
 pub struct WorldInfoBook {
     pub id: String,
@@ -198,7 +198,7 @@ pub struct WorldInfoBook {
     pub updated_at: i64,
 }
 
-#[derive(Serialize, Deserialize)]
+#[derive(Serialize, Deserialize, specta::Type)]
 #[serde(rename_all = "camelCase")]
 pub struct WorldInfoBookInput {
     pub id: Option<String>,
@@ -228,7 +228,7 @@ pub struct WorldInfoEntryRow {
     pub constant: i64,
 }
 
-#[derive(Serialize, Clone)]
+#[derive(Serialize, Clone, specta::Type)]
 #[serde(rename_all = "camelCase")]
 pub struct WorldInfoEntry {
     pub id: String,
@@ -262,7 +262,7 @@ impl From<WorldInfoEntryRow> for WorldInfoEntry {
     }
 }
 
-#[derive(Serialize, Deserialize)]
+#[derive(Serialize, Deserialize, specta::Type)]
 #[serde(rename_all = "camelCase")]
 pub struct WorldInfoEntryInput {
     pub id: Option<String>, // 없으면 새로 생성, 있으면 upsert
@@ -308,7 +308,7 @@ pub struct ConversationRow {
     pub message_count: i64,
 }
 
-#[derive(Serialize)]
+#[derive(Serialize, specta::Type)]
 #[serde(rename_all = "camelCase")]
 pub struct Conversation {
     pub id: String,
@@ -352,7 +352,7 @@ impl From<ConversationRow> for Conversation {
 }
 
 /// 대화 모드. 둘 다 같은 대화 기록·AI 흐름을 쓰고, 기본 시스템 프롬프트만 다르다.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Default, Serialize, Deserialize, strum_macros::EnumString, strum_macros::Display)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default, Serialize, Deserialize, strum_macros::EnumString, strum_macros::Display, specta::Type)]
 #[serde(rename_all = "lowercase")]
 #[strum(serialize_all = "lowercase")]
 pub enum ConversationMode {
@@ -378,7 +378,7 @@ impl ConversationMode {
     }
 }
 
-#[derive(Deserialize)]
+#[derive(Deserialize, specta::Type)]
 #[serde(rename_all = "camelCase")]
 pub struct ConversationInput {
     pub title: String,
@@ -407,7 +407,7 @@ pub struct MessageRow {
     pub updated_at: i64,
 }
 
-#[derive(Clone, Serialize)]
+#[derive(Clone, Serialize, specta::Type)]
 #[serde(rename_all = "camelCase")]
 pub struct Message {
     pub id: String,
@@ -442,7 +442,7 @@ impl From<MessageRow> for Message {
     }
 }
 
-#[derive(Deserialize)]
+#[derive(Deserialize, specta::Type)]
 #[serde(rename_all = "camelCase")]
 pub struct MessageInput {
     pub conversation_id: String,

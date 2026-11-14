@@ -15,6 +15,7 @@ fn games_root(app: &AppHandle) -> Result<PathBuf, AppError> {
 }
 
 #[tauri::command]
+#[specta::specta]
 pub async fn create_game(app: AppHandle, state: State<'_, AppState>, title: String, template_id: String) -> Result<GameProject, AppError> {
     let id = GameManager::create_game(&state.db, &games_root(&app)?, title, template_id).await?;
     Ok(crate::db::game::get_game_project(&state.db, &id).await?)
@@ -22,12 +23,14 @@ pub async fn create_game(app: AppHandle, state: State<'_, AppState>, title: Stri
 
 /// 앱에 포함된 템플릿 목록 (새 게임 만들기 화면용). capabilities로 어떤 기능을 쓰는 템플릿인지 알 수 있다.
 #[tauri::command]
+#[specta::specta]
 pub fn list_templates() -> Vec<crate::game::template::Template> {
     crate::game::template::all()
 }
 
 /// 에디터 저장. 기존 행은 id를 달아 보내야 한다 (없는 id는 새 행). 응답의 deleted/issues를 사용자에게 보여줄 것.
 #[tauri::command]
+#[specta::specta]
 pub async fn save_package(app: AppHandle, state: State<'_, AppState>, game_id: String, data: PackageData) -> Result<SaveReport, AppError> {
     GameManager::save_package(&state.db, &games_root(&app)?, &game_id, data).await
 }
@@ -35,6 +38,7 @@ pub async fn save_package(app: AppHandle, state: State<'_, AppState>, game_id: S
 /// 게임 삭제. 플레이 기록(세션/세이브/일지/대화)도 같이 지워지므로 UI에서 반드시 확인을 받을 것.
 /// 지금 플레이 중이거나 마운트된 게임은 지우지 않는다.
 #[tauri::command]
+#[specta::specta]
 pub async fn delete_game(app: AppHandle, state: State<'_, AppState>, game_id: String) -> Result<(), AppError> {
     let mounted = state.active_archive.lock().map_err(|_| AppError::Archive { code: ErrorCode::ArchiveInvalid, message: "archive lock poisoned".into(), details: None })?.as_ref().map(|a| a.game_id.clone());
     if mounted.as_deref() == Some(game_id.as_str()) {
@@ -48,12 +52,14 @@ pub async fn delete_game(app: AppHandle, state: State<'_, AppState>, game_id: St
 }
 
 #[tauri::command]
+#[specta::specta]
 pub async fn import_game(app: AppHandle, state: State<'_, AppState>, zip_path: String) -> Result<GameProject, AppError> {
     let id = GameManager::import_package(&state.db, &games_root(&app)?, &PathBuf::from(zip_path)).await?;
     Ok(crate::db::game::get_game_project(&state.db, &id).await?)
 }
 
 #[tauri::command]
+#[specta::specta]
 pub async fn export_game(app: AppHandle, state: State<'_, AppState>, game_id: String, output_dir: Option<String>) -> Result<String, AppError> {
     // 폴더를 안 주면 사용자의 다운로드 폴더에 저장한다. 다운로드 폴더를 못 찾는 환경(일부 모바일)이면
     // 앱 데이터 폴더의 exports로 대신한다.
@@ -66,7 +72,7 @@ pub async fn export_game(app: AppHandle, state: State<'_, AppState>, game_id: St
 }
 
 /// open_game의 응답: 프로젝트 정보 + 화면에 그릴 정적 데이터(get_game_view와 같은 값) + 그 내용 해시 + 진단 결과.
-#[derive(serde::Serialize)]
+#[derive(serde::Serialize, specta::Type)]
 #[serde(rename_all = "camelCase")]
 pub struct OpenGameResponse {
     pub project: GameProject,
@@ -86,6 +92,7 @@ pub struct OpenGameResponse {
 /// 다른 게임을 플레이 중이었으면 그 런타임은 내린다 (game_id가 어긋난 채 커맨드가 가는 걸 막으려는 것).
 /// 에디터에서 정의를 저장했다면 다시 open_game을 불러야 바뀐 내용이 반영된다.
 #[tauri::command]
+#[specta::specta]
 pub async fn open_game(app: AppHandle, state: State<'_, AppState>, game_id: String) -> Result<OpenGameResponse, AppError> {
     let path = GameManager::load_package(&state.db, &games_root(&app)?, &game_id).await?;
     let project = crate::db::game::get_game_project(&state.db, &game_id).await?; // 없으면 NotFound
@@ -110,6 +117,7 @@ pub async fn open_game(app: AppHandle, state: State<'_, AppState>, game_id: Stri
 
 /// 게임 종료
 #[tauri::command]
+#[specta::specta]
 pub async fn close_game(state: State<'_, AppState>) -> Result<(), AppError> {
     {
         let mut runtime = state.active_runtime.lock().await;
@@ -122,6 +130,7 @@ pub async fn close_game(state: State<'_, AppState>) -> Result<(), AppError> {
 
 /// 이 앱의 게임 목록 (라이브러리 화면용).
 #[tauri::command]
+#[specta::specta]
 pub async fn game_list(state: State<'_, AppState>) -> Result<Vec<GameProject>, AppError> {
     Ok(crate::db::game::get_all_game_projects(&state.db).await?)
 }
@@ -129,6 +138,7 @@ pub async fn game_list(state: State<'_, AppState>) -> Result<Vec<GameProject>, A
 /// 에디터용: 저장(save_package)이 받는 것과 같은 모양의 전체 데이터. 조건/효과/풀까지 다 들어 있다.
 /// 호스트 에디터 전용이다 (게임 iframe이 부르면 안 된다).
 #[tauri::command]
+#[specta::specta]
 pub async fn get_package_data(state: State<'_, AppState>, game_id: String) -> Result<PackageData, AppError> {
     let repo = SqlxGameRepository::new(&state.db);
     let definition = repo.load_definition(&game_id).await.map_err(|e| AppError::database(e.to_string()))?;

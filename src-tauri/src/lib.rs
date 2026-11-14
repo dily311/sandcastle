@@ -18,7 +18,7 @@ use crate::{
     state::{AppState, WindowMode},
     sys::{settings::SettingsState, themes::ThemeManager},
 };
-use commands::{ai_service::*, conversation::*, game_engine::*, game_manager::*, settings::*, task::*, regex::*, character_image::*, import::*, data::*};
+use commands::{ai_service::*, conversation::*, game_engine::*, game_manager::*, settings::*, task::*, regex::*, character_image::*, import::*, data::*, preset::*};
 
 #[cfg(desktop)]
 mod widget;
@@ -27,6 +27,12 @@ use crate::widget::{manager::WidgetManager, MouseTrackerState};
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
+    // 프론트 바인딩(src/ipc/bindings.ts)은 Rust 커맨드/타입에서 생성된다 (디버그 빌드 실행 시 갱신)
+    let specta = specta_builder();
+    #[cfg(all(debug_assertions, desktop))]
+    export_bindings(&specta, concat!(env!("CARGO_MANIFEST_DIR"), "/../src/ipc/bindings.ts"))
+        .expect("TypeScript 바인딩 생성 실패");
+
     let mut builder = tauri::Builder::default()
         // 플러그인 등록
         .plugin(tauri_plugin_notification::init())
@@ -59,270 +65,12 @@ pub fn run() {
             .manage(WidgetInteractionState::new())
             .manage(MouseTrackerState::new())
             .manage(MusicWatcherState::new());
-        builder = builder.invoke_handler(tauri::generate_handler![
-            // settings
-            get_app_setting,
-            update_app_setting,
-            get_feature_setting,
-            update_feature_setting,
-            get_theme_setting,
-            update_theme_setting,
-            get_conv_settings,
-            set_system_default_persona,
-            // theme
-            get_theme_list,
-            load_theme_content,
-            save_theme,
-            delete_theme,
-            // ai
-            get_models,
-            send_messages,
-            stream_message,
-            // task
-            get_task,
-            list_active_tasks,
-            get_recoverable_tasks,
-            cancel_task,
-            resume_task,
-            dismiss_task,
-            // regex
-            list_regex_scripts,
-            upsert_regex_script,
-            delete_regex_script,
-            preview_regex_script,
-            apply_regex,
-            // character images (chat/phone)
-            list_character_images,
-            add_character_images,
-            update_character_image,
-            delete_character_image,
-            set_conversation_images_enabled,
-            // import
-            import_sillytavern,
-            // data manager
-            get_data_overview,
-            delete_conversations,
-            export_character_pack,
-            import_character_pack,
-            export_backup,
-            prepare_restore,
-            cancel_restore,
-            get_pending_restore,
-            restart_app,
-            // api_profile
-            get_api_profile,
-            get_all_api_profile,
-            create_api_profile,
-            update_api_profile,
-            delete_api_profile,
-            set_api_key,
-            delete_api_key,
-            has_api_key,
-            // data
-            get_all_characters,
-            create_character,
-            update_character,
-            toggle_favorite_character,
-            delete_character,
-            get_list_characters,
-            get_all_personas,
-            create_persona,
-            update_persona,
-            delete_persona,
-            get_persona_usage,
-            get_all_worldinfo_books,
-            create_worldinfo_book,
-            delete_worldinfo_book,
-            get_worldinfo_entries,
-            upsert_worldinfo_entry,
-            delete_worldinfo_entry,
-            get_all_conversations,
-            get_conversation,
-            create_conversation,
-            touch_conversation,
-            delete_conversation,
-            get_messages,
-            append_message,
-            update_message,
-            update_message_content,
-            update_message_meta,
-            update_message_swipe_id,
-            delete_message,
-            // game_manager
-            create_game,
-            open_game,
-            close_game,
-            game_list,
-            list_templates,
-            get_package_data,
-            save_package,
-            delete_game,
-            import_game,
-            export_game,
-            // game_engine
-            start_new_game,
-            get_game_view,
-            validate_game,
-            continue_game,
-            list_sessions,
-            delete_sessions,
-            dispatch_command,
-            load_save,
-            read_journal,
-            read_conversations,
-            read_messages,
-            save_write,
-            save_read,
-            save_list,
-            npc_say,
-            // widget
-            open_widget,
-            close_widget,
-            toggle_widget,
-            toggle_ignore_cursor,
-            is_autostart_enabled,
-            set_autostart,
-            update_interactive_regions,
-            remove_interactive_regions,
-            set_widget_click_through,
-            // widget::music
-            get_select_folder_music_data,
-            get_widget_music_settings,
-            save_widget_music_settings,
-            get_all_playlist,
-            create_playlist,
-            update_playlist,
-            delete_playlist,
-            get_playlist_entry,
-            append_playlist_entry,
-            remove_playlist_entry,
-            update_music_meta,
-            update_playlist_music_order,
-            update_music_album_art_pos,
-            set_album_art,
-            filter_existing_paths,
-        ]);
+        builder = builder.invoke_handler(specta.invoke_handler());
     }
     // 모바일에서 실행될 기능 등록
     #[cfg(mobile)]
     {
-        builder = builder.invoke_handler(tauri::generate_handler![
-            // settings
-            get_app_setting,
-            update_app_setting,
-            get_feature_setting,
-            update_feature_setting,
-            get_theme_setting,
-            update_theme_setting,
-            get_conv_settings,
-            set_system_default_persona,
-            // theme
-            get_theme_list,
-            load_theme_content,
-            save_theme,
-            delete_theme,
-            // ai
-            get_models,
-            send_messages,
-            stream_message,
-            // task
-            get_task,
-            list_active_tasks,
-            get_recoverable_tasks,
-            cancel_task,
-            resume_task,
-            dismiss_task,
-            // regex
-            list_regex_scripts,
-            upsert_regex_script,
-            delete_regex_script,
-            preview_regex_script,
-            apply_regex,
-            // character images (chat/phone)
-            list_character_images,
-            add_character_images,
-            update_character_image,
-            delete_character_image,
-            set_conversation_images_enabled,
-            // import
-            import_sillytavern,
-            // data manager
-            get_data_overview,
-            delete_conversations,
-            export_character_pack,
-            import_character_pack,
-            export_backup,
-            prepare_restore,
-            cancel_restore,
-            get_pending_restore,
-            restart_app,
-            // api_profile
-            get_api_profile,
-            get_all_api_profile,
-            create_api_profile,
-            update_api_profile,
-            delete_api_profile,
-            set_api_key,
-            delete_api_key,
-            has_api_key,
-            // data
-            get_all_characters,
-            create_character,
-            update_character,
-            toggle_favorite_character,
-            delete_character,
-            get_list_characters,
-            get_all_personas,
-            create_persona,
-            update_persona,
-            delete_persona,
-            get_persona_usage,
-            get_all_worldinfo_books,
-            create_worldinfo_book,
-            delete_worldinfo_book,
-            get_worldinfo_entries,
-            upsert_worldinfo_entry,
-            delete_worldinfo_entry,
-            get_all_conversations,
-            get_conversation,
-            create_conversation,
-            touch_conversation,
-            delete_conversation,
-            get_messages,
-            append_message,
-            update_message,
-            update_message_content,
-            update_message_meta,
-            update_message_swipe_id,
-            delete_message,
-            // game_manager
-            create_game,
-            open_game,
-            close_game,
-            game_list,
-            list_templates,
-            get_package_data,
-            save_package,
-            delete_game,
-            import_game,
-            export_game,
-            // game_engine
-            start_new_game,
-            get_game_view,
-            validate_game,
-            continue_game,
-            list_sessions,
-            delete_sessions,
-            dispatch_command,
-            load_save,
-            read_journal,
-            read_conversations,
-            read_messages,
-            save_write,
-            save_read,
-            save_list,
-            npc_say,
-        ]);
+        builder = builder.invoke_handler(specta.invoke_handler());
     }
 
     // setup
@@ -435,4 +183,305 @@ pub fn run() {
     builder
         .run(tauri::generate_context!())
         .expect("error while running tauri application")
+}
+
+/// 커맨드 이벤트 페이로드처럼 커맨드 시그니처에 안 나오지만 프론트가 알아야 하는 타입
+fn with_event_types(b: tauri_specta::Builder<tauri::Wry>) -> tauri_specta::Builder<tauri::Wry> {
+    b.typ::<task::TaskEvent>()
+        .typ::<models::ai_service::DialogueDoneEvent>()
+        .typ::<models::ai_service::StreamPayload>()
+        .typ::<models::settings::FeatureSetting>()
+        // 타임스탬프(밀리초)·개수는 2^53 안이라 number로 충분
+        .dangerously_cast_bigints_to_number()
+}
+
+/// Rust 커맨드 목록 = 프론트 바인딩 목록. 커맨드를 추가하면 여기에도 넣는다.
+#[cfg(desktop)]
+pub fn specta_builder() -> tauri_specta::Builder<tauri::Wry> {
+    use commands::widget::*;
+    with_event_types(tauri_specta::Builder::<tauri::Wry>::new().commands(tauri_specta::collect_commands![
+            // settings
+            get_app_setting,
+            update_app_setting,
+            get_feature_setting,
+            update_feature_setting,
+            get_theme_setting,
+            update_theme_setting,
+            get_conv_settings,
+            set_system_default_persona,
+            // theme
+            get_theme_list,
+            load_theme_content,
+            save_theme,
+            delete_theme,
+            // ai
+            get_models,
+            send_messages,
+            stream_message,
+            // task
+            get_task,
+            list_active_tasks,
+            get_recoverable_tasks,
+            cancel_task,
+            resume_task,
+            dismiss_task,
+            // regex
+            list_regex_scripts,
+            upsert_regex_script,
+            delete_regex_script,
+            preview_regex_script,
+            apply_regex,
+            // character images (chat/phone)
+            list_character_images,
+            add_character_images,
+            update_character_image,
+            delete_character_image,
+            set_conversation_images_enabled,
+            // import
+            import_sillytavern,
+            // data manager
+            get_data_overview,
+            delete_conversations,
+            export_character_pack,
+            import_character_pack,
+            export_backup,
+            prepare_restore,
+            cancel_restore,
+            get_pending_restore,
+            restart_app,
+            // prompt preset
+            list_prompt_presets,
+            get_prompt_preset,
+            save_prompt_preset,
+            delete_prompt_preset,
+            // api_profile
+            get_api_profile,
+            get_all_api_profile,
+            create_api_profile,
+            update_api_profile,
+            delete_api_profile,
+            set_api_key,
+            delete_api_key,
+            has_api_key,
+            // data
+            get_all_characters,
+            create_character,
+            update_character,
+            toggle_favorite_character,
+            delete_character,
+            get_list_characters,
+            get_all_personas,
+            create_persona,
+            update_persona,
+            delete_persona,
+            get_persona_usage,
+            get_all_worldinfo_books,
+            create_worldinfo_book,
+            delete_worldinfo_book,
+            get_worldinfo_entries,
+            upsert_worldinfo_entry,
+            delete_worldinfo_entry,
+            get_all_conversations,
+            get_conversation,
+            create_conversation,
+            touch_conversation,
+            delete_conversation,
+            get_messages,
+            append_message,
+            update_message,
+            update_message_content,
+            update_message_meta,
+            update_message_swipe_id,
+            delete_message,
+            // game_manager
+            create_game,
+            open_game,
+            close_game,
+            game_list,
+            list_templates,
+            get_package_data,
+            save_package,
+            delete_game,
+            import_game,
+            export_game,
+            // game_engine
+            start_new_game,
+            get_game_view,
+            validate_game,
+            continue_game,
+            list_sessions,
+            delete_sessions,
+            dispatch_command,
+            load_save,
+            read_journal,
+            read_conversations,
+            read_messages,
+            save_write,
+            save_read,
+            save_list,
+            npc_say,
+            // widget
+            open_widget,
+            close_widget,
+            toggle_widget,
+            toggle_ignore_cursor,
+            is_autostart_enabled,
+            set_autostart,
+            update_interactive_regions,
+            remove_interactive_regions,
+            set_widget_click_through,
+            // widget::music
+            get_select_folder_music_data,
+            get_widget_music_settings,
+            save_widget_music_settings,
+            get_all_playlist,
+            create_playlist,
+            update_playlist,
+            delete_playlist,
+            get_playlist_entry,
+            append_playlist_entry,
+            remove_playlist_entry,
+            update_music_meta,
+            update_playlist_music_order,
+            update_music_album_art_pos,
+            set_album_art,
+            filter_existing_paths,
+    ]))
+}
+
+#[cfg(mobile)]
+pub fn specta_builder() -> tauri_specta::Builder<tauri::Wry> {
+    with_event_types(tauri_specta::Builder::<tauri::Wry>::new().commands(tauri_specta::collect_commands![
+            // settings
+            get_app_setting,
+            update_app_setting,
+            get_feature_setting,
+            update_feature_setting,
+            get_theme_setting,
+            update_theme_setting,
+            get_conv_settings,
+            set_system_default_persona,
+            // theme
+            get_theme_list,
+            load_theme_content,
+            save_theme,
+            delete_theme,
+            // ai
+            get_models,
+            send_messages,
+            stream_message,
+            // task
+            get_task,
+            list_active_tasks,
+            get_recoverable_tasks,
+            cancel_task,
+            resume_task,
+            dismiss_task,
+            // regex
+            list_regex_scripts,
+            upsert_regex_script,
+            delete_regex_script,
+            preview_regex_script,
+            apply_regex,
+            // character images (chat/phone)
+            list_character_images,
+            add_character_images,
+            update_character_image,
+            delete_character_image,
+            set_conversation_images_enabled,
+            // import
+            import_sillytavern,
+            // data manager
+            get_data_overview,
+            delete_conversations,
+            export_character_pack,
+            import_character_pack,
+            export_backup,
+            prepare_restore,
+            cancel_restore,
+            get_pending_restore,
+            restart_app,
+            // prompt preset
+            list_prompt_presets,
+            get_prompt_preset,
+            save_prompt_preset,
+            delete_prompt_preset,
+            // api_profile
+            get_api_profile,
+            get_all_api_profile,
+            create_api_profile,
+            update_api_profile,
+            delete_api_profile,
+            set_api_key,
+            delete_api_key,
+            has_api_key,
+            // data
+            get_all_characters,
+            create_character,
+            update_character,
+            toggle_favorite_character,
+            delete_character,
+            get_list_characters,
+            get_all_personas,
+            create_persona,
+            update_persona,
+            delete_persona,
+            get_persona_usage,
+            get_all_worldinfo_books,
+            create_worldinfo_book,
+            delete_worldinfo_book,
+            get_worldinfo_entries,
+            upsert_worldinfo_entry,
+            delete_worldinfo_entry,
+            get_all_conversations,
+            get_conversation,
+            create_conversation,
+            touch_conversation,
+            delete_conversation,
+            get_messages,
+            append_message,
+            update_message,
+            update_message_content,
+            update_message_meta,
+            update_message_swipe_id,
+            delete_message,
+            // game_manager
+            create_game,
+            open_game,
+            close_game,
+            game_list,
+            list_templates,
+            get_package_data,
+            save_package,
+            delete_game,
+            import_game,
+            export_game,
+            // game_engine
+            start_new_game,
+            get_game_view,
+            validate_game,
+            continue_game,
+            list_sessions,
+            delete_sessions,
+            dispatch_command,
+            load_save,
+            read_journal,
+            read_conversations,
+            read_messages,
+            save_write,
+            save_read,
+            save_list,
+            npc_say,
+    ]))
+}
+
+/// TypeScript 바인딩 파일 생성 (`cargo run --bin export-bindings`로도 갱신 가능)
+pub fn export_bindings(builder: &tauri_specta::Builder<tauri::Wry>, path: &str) -> Result<(), String> {
+    builder
+        .export(
+            specta_typescript::Typescript::default()
+                .header("// 이 파일은 Rust 커맨드에서 자동 생성됩니다 (src-tauri/src/lib.rs specta_builder). 직접 고치지 마세요.\n/* eslint-disable */"),
+            path,
+        )
+        .map_err(|e| e.to_string())
 }

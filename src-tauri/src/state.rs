@@ -33,7 +33,7 @@ pub struct GameArchiveHandle {
     pub definition: Arc<GameDefinition>,
 }
 
-#[derive(Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Clone, Copy, PartialEq, Eq, Serialize, Deserialize, specta::Type)]
 pub enum WindowMode {
     Explore,
     Mascot,

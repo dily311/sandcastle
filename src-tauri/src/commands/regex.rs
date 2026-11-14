@@ -14,12 +14,14 @@ use crate::{
 };
 
 #[tauri::command]
+#[specta::specta]
 pub async fn list_regex_scripts(state: State<'_, AppState>) -> Result<Vec<RegexScript>> {
     Ok(db::regex::get_all_regex_scripts(&state.db).await?)
 }
 
 /// 생성/수정. 패턴이 컴파일되지 않거나 범위 대상이 없으면 저장하지 않는다.
 #[tauri::command]
+#[specta::specta]
 pub async fn upsert_regex_script(state: State<'_, AppState>, input: RegexScriptInput) -> Result<RegexScript> {
     validate_input(&input)?;
     let id = db::regex::upsert_regex_script(&state.db, &input).await?;
@@ -27,6 +29,7 @@ pub async fn upsert_regex_script(state: State<'_, AppState>, input: RegexScriptI
 }
 
 #[tauri::command]
+#[specta::specta]
 pub async fn delete_regex_script(state: State<'_, AppState>, id: String) -> Result<()> {
     if !db::regex::delete_regex_script(&state.db, &id).await? {
         return Err(AppError::not_found(format!("정규식 스크립트를 찾을 수 없습니다: {id}")));
@@ -36,6 +39,7 @@ pub async fn delete_regex_script(state: State<'_, AppState>, id: String) -> Resu
 
 /// 편집 화면 미리보기: 저장하지 않고 텍스트에 적용한 결과
 #[tauri::command]
+#[specta::specta]
 pub fn preview_regex_script(
     input: RegexScriptInput,
     text: String,
@@ -53,6 +57,7 @@ pub fn preview_regex_script(
 /// 대화 문맥으로 텍스트에 정규식 적용.
 /// 프론트는 주로 화면 표시용(target = display)으로 쓴다. 저장/프롬프트용 치환은 백엔드가 알아서 한다.
 #[tauri::command]
+#[specta::specta]
 pub async fn apply_regex(
     state: State<'_, AppState>,
     settings: State<'_, SettingsState<AppSetting>>,

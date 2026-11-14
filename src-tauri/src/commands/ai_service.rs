@@ -19,17 +19,20 @@ use tauri::{AppHandle, State};
 // =======================================
 
 #[tauri::command]
+#[specta::specta]
 pub fn set_api_key(profile_id: String, api_key: String) -> Result<()> {
     SecretStore::set(&api_key_name(&profile_id), &api_key)
         .map_err(|e| AppError::io(e.to_string()))
 }
 
 #[tauri::command]
+#[specta::specta]
 pub fn delete_api_key(profile_id: String) -> Result<()> {
     SecretStore::delete(&api_key_name(&profile_id)).map_err(|e| AppError::io(e.to_string()))
 }
 
 #[tauri::command]
+#[specta::specta]
 pub fn has_api_key(profile_id: String) -> Result<bool> {
     Ok(SecretStore::exists(&api_key_name(&profile_id)))
 }
@@ -38,6 +41,7 @@ pub fn has_api_key(profile_id: String) -> Result<bool> {
 // API Profile
 // =======================================
 #[tauri::command]
+#[specta::specta]
 pub async fn get_all_api_profile(state: State<'_, AppState>) -> Result<Vec<ApiProfiles>> {
     let get_all_api_profile = ai_service::get_all_api_profile(&state.db).await?;
     let result = get_all_api_profile;
@@ -45,12 +49,14 @@ pub async fn get_all_api_profile(state: State<'_, AppState>) -> Result<Vec<ApiPr
 }
 
 #[tauri::command]
+#[specta::specta]
 pub async fn get_api_profile(state: State<'_, AppState>, id: String) -> Result<ApiProfiles> {
     let result = ai_service::get_api_profile(&state.db, &id).await?;
     Ok(result)
 }
 
 #[tauri::command]
+#[specta::specta]
 pub async fn create_api_profile(
     state: State<'_, AppState>,
     input: ApiProfilesInput,
@@ -67,6 +73,7 @@ pub async fn create_api_profile(
 }
 
 #[tauri::command]
+#[specta::specta]
 pub async fn update_api_profile(
     state: State<'_, AppState>,
     id: String,
@@ -84,6 +91,7 @@ pub async fn update_api_profile(
 }
 
 #[tauri::command]
+#[specta::specta]
 pub async fn delete_api_profile(state: State<'_, AppState>, id: String) -> Result<()> {
     delete_api_key(id.clone())?;
     ai_service::delete_api_profile(&state.db, &id).await?;
@@ -94,11 +102,13 @@ pub async fn delete_api_profile(state: State<'_, AppState>, id: String) -> Resul
 // AI 연결
 // =======================================
 #[tauri::command]
+#[specta::specta]
 pub async fn get_models(ai: State<'_, Arc<AiService>>, profile_id: String) -> Result<Vec<String>> {
     ai.list_models(&profile_id).await
 }
 
 #[tauri::command]
+#[specta::specta]
 pub async fn test_message(
     app: AppHandle,
     state: State<'_, AppState>,
@@ -116,6 +126,7 @@ pub async fn test_message(
  * 5. 완료시 dialogue:done 이벤트 emit + 어시스턴트 메시지 DB 저장
  */
 #[tauri::command]
+#[specta::specta]
 pub async fn send_messages(
     app: AppHandle,
     state: State<'_, AppState>,
@@ -131,6 +142,7 @@ pub async fn send_messages(
 }
 
 #[tauri::command]
+#[specta::specta]
 pub async fn stream_message(
     app: AppHandle,
     state: State<'_, AppState>,

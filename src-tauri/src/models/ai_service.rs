@@ -11,7 +11,7 @@ use sqlx::prelude::FromRow;
 // ---------------------------------------
 // API 프로필
 // ---------------------------------------
-#[derive(FromRow, Deserialize, Serialize, Clone, Debug)]
+#[derive(FromRow, Deserialize, Serialize, Clone, Debug, specta::Type)]
 #[serde(rename_all = "camelCase")]
 pub struct ApiProfiles {
     pub id: String,
@@ -24,7 +24,7 @@ pub struct ApiProfiles {
     pub updated_at: i64,
 }
 
-#[derive(Deserialize)]
+#[derive(Deserialize, specta::Type)]
 #[serde(rename_all = "camelCase")]
 pub struct ApiProfilesInput {
     pub name: String,
@@ -51,7 +51,7 @@ pub struct PromptPresetsRows {
     pub created_at: i64,
     pub updated_at: i64,
 }
-#[derive(Deserialize, Serialize, Clone, Debug)]
+#[derive(Deserialize, Serialize, Clone, Debug, specta::Type)]
 #[serde(rename_all = "camelCase")]
 pub struct PromptPresets {
     pub id: String,
@@ -87,7 +87,7 @@ impl From<PromptPresetsRows> for PromptPresets {
     }
 }
 
-#[derive(Deserialize)]
+#[derive(Deserialize, specta::Type)]
 #[serde(rename_all = "camelCase")]
 pub struct PromptPresetsInput {
     pub id: Option<String>,
@@ -118,7 +118,7 @@ pub struct PromptBlocksRows {
     pub created_at: i64,
     pub updated_at: i64,
 }
-#[derive(Deserialize, Serialize, Clone, Debug)]
+#[derive(Deserialize, Serialize, Clone, Debug, specta::Type)]
 #[serde(rename_all = "camelCase")]
 pub struct PromptBlocks {
     pub id: String,
@@ -162,7 +162,7 @@ impl From<PromptBlocksRows> for PromptBlocks {
     }
 }
 
-#[derive(Deserialize)]
+#[derive(Deserialize, specta::Type)]
 #[serde(rename_all = "camelCase")]
 pub struct PromptBlocksInput {
     pub id: Option<String>,
@@ -181,14 +181,14 @@ pub struct PromptBlocksInput {
     pub extra_json: Option<Value>,
 }
 
-#[derive(Deserialize, Serialize)]
+#[derive(Deserialize, Serialize, specta::Type)]
 #[serde(rename_all = "camelCase")]
 pub struct PromptConfig {}
 // =======================================
 // AI 연결
 // =======================================
 
-#[derive(Serialize)]
+#[derive(Serialize, specta::Type)]
 pub struct ContextRequest {
     pub conversation_id: String,
     pub character_id: String,
@@ -196,7 +196,7 @@ pub struct ContextRequest {
     pub history_limit: i64, // 불러올 메시지 수
 }
 
-#[derive(Serialize, Clone, Default)]
+#[derive(Serialize, Clone, Default, specta::Type)]
 pub struct ChatContext {
     /// 앱이 고정한 규칙. 프리셋보다 항상 앞에 들어가며 프리셋으로 바꿀 수 없다 (ADR-003)
     pub system_rules: Vec<String>,
@@ -212,13 +212,13 @@ pub struct ChatContext {
     pub extra_data: serde_json::Value,
 }
 
-#[derive(Serialize, Clone)]
+#[derive(Serialize, Clone, specta::Type)]
 pub struct HistoryItem {
     pub role: String,
     pub content: String,
 }
 
-#[derive(Serialize)]
+#[derive(Serialize, specta::Type)]
 pub struct PromptRequest {
     pub context: ChatContext,
     pub user_message: String,
@@ -230,7 +230,7 @@ pub struct PromptRequest {
 }
 
 /// 생성 유형. prompt_blocks.triggers_json 값과 같은 표기를 쓴다.
-#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Serialize, Deserialize, specta::Type)]
 #[serde(rename_all = "snake_case")]
 pub enum GenerationType {
     #[default]
@@ -256,7 +256,7 @@ impl GenerationType {
 }
 
 /// PromptManager가 만든 최종 프롬프트. 공급자 형식과 무관하며 어댑터가 각자 형식으로 바꾼다.
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, specta::Type)]
 #[serde(rename_all = "camelCase")]
 pub struct PromptMessage {
     pub chat_options: ChatOptions,
@@ -269,7 +269,7 @@ impl PromptMessage {
     }
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, specta::Type)]
 #[serde(rename_all = "lowercase")]
 pub enum PromptRole {
     System,
@@ -296,7 +296,7 @@ impl PromptRole {
     }
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, specta::Type)]
 pub struct PromptMessageItem {
     pub role: PromptRole,
     pub content: String,
@@ -304,7 +304,7 @@ pub struct PromptMessageItem {
     pub token: i64,
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, specta::Type)]
 #[serde(rename_all = "camelCase")]
 pub struct ChatOptions {
     pub temperature: Option<f32>,
@@ -326,7 +326,7 @@ impl Default for ChatOptions {
     }
 }
 
-#[derive(Clone, Serialize, Deserialize)]
+#[derive(Clone, Serialize, Deserialize, specta::Type)]
 pub struct ChatMessageResponse {
     pub content: String,
     // 완료 이유 (stop, length 등)
@@ -337,14 +337,14 @@ pub struct ChatMessageResponse {
 // Event
 // 프론트로 emit되는 이벤트 페이로드
 // ---------------------------------------------------------
-#[derive(Serialize, Clone)]
+#[derive(Serialize, Clone, specta::Type)]
 #[serde(rename_all = "camelCase")]
 
 pub struct DialogueTokenEvent {
     pub conversation_id: String,
     pub delta: String,
 }
-#[derive(Serialize, Clone)]
+#[derive(Serialize, Clone, specta::Type)]
 #[serde(rename_all = "camelCase")]
 
 pub struct DialogueDoneEvent {
@@ -354,7 +354,7 @@ pub struct DialogueDoneEvent {
     pub images: Vec<crate::models::character_image::ChatImageRef>,
 }
 
-#[derive(Serialize, Clone)]
+#[derive(Serialize, Clone, specta::Type)]
 #[serde(rename_all = "camelCase")]
 
 pub struct DialogueErrorEvent {
@@ -362,7 +362,7 @@ pub struct DialogueErrorEvent {
     pub error: AppErrorResponse,
 }
 
-#[derive(Serialize, Clone)]
+#[derive(Serialize, Clone, specta::Type)]
 #[serde(rename_all = "camelCase")]
 pub struct StreamPayload {
     pub chunk: String,
@@ -372,13 +372,13 @@ pub struct StreamPayload {
 // openai 형식
 // =======================================
 
-#[derive(Clone, Serialize, Deserialize)]
+#[derive(Clone, Serialize, Deserialize, specta::Type)]
 pub struct OpenaiChatMessage {
     pub role: String,
     pub content: String,
 }
 
-#[derive(Serialize)]
+#[derive(Serialize, specta::Type)]
 pub struct OpenaiChatCompletionRequest {
     pub model: String,
     pub messages: Vec<OpenaiChatMessage>,
@@ -406,35 +406,35 @@ impl OpenaiChatCompletionRequest {
     }
 }
 
-#[derive(Deserialize)]
+#[derive(Deserialize, specta::Type)]
 pub struct OpenaiChatCompletionResponse {
     pub choices: Vec<OpenaiChoice>,
 }
 
-#[derive(Deserialize)]
+#[derive(Deserialize, specta::Type)]
 pub struct OpenaiChoice {
     pub delta: Option<OpenaiDelta>,
     pub message: Option<OpenaiMessage>,
     pub finish_reason: Option<String>,
 }
 
-#[derive(Deserialize)]
+#[derive(Deserialize, specta::Type)]
 pub struct OpenaiMessage {
     pub content: Option<String>,
 }
 
-#[derive(Deserialize)]
+#[derive(Deserialize, specta::Type)]
 pub struct OpenaiDelta {
     pub content: Option<String>,
 }
 
 // 모델 리스트
-#[derive(Deserialize)]
+#[derive(Deserialize, specta::Type)]
 pub struct OpenaiModelList {
     pub data: Vec<OpenaiModel>,
 }
 
-#[derive(Deserialize)]
+#[derive(Deserialize, specta::Type)]
 pub struct OpenaiModel {
     pub id: String,
 }
@@ -443,13 +443,13 @@ pub struct OpenaiModel {
 // Anthropic 형식
 // =======================================
 
-#[derive(Clone, Serialize, Deserialize)]
+#[derive(Clone, Serialize, Deserialize, specta::Type)]
 pub struct AnthropicChatMessage {
     pub role: String,
     pub content: String,
 }
 
-#[derive(Serialize)]
+#[derive(Serialize, specta::Type)]
 pub struct AnthropicChatCompletionRequest {
     pub model: String,
     pub stream: bool,
@@ -482,36 +482,36 @@ impl AnthropicChatCompletionRequest {
     }
 }
 
-#[derive(Deserialize)]
+#[derive(Deserialize, specta::Type)]
 pub struct AnthropicChatCompletionResponse {
     pub content: Option<Vec<AnthropicContentBlock>>,
     pub stop_reason: Option<String>,
 }
 
-#[derive(Deserialize)]
+#[derive(Deserialize, specta::Type)]
 pub struct AnthropicContentBlock {
     pub text: Option<String>,
 }
 
 // 스트리밍용
-#[derive(Deserialize)]
+#[derive(Deserialize, specta::Type)]
 pub struct AnthropicStreamEvent {
     pub r#type: String,
     pub delta: Option<AnthropicDelta>,
 }
 
-#[derive(Deserialize)]
+#[derive(Deserialize, specta::Type)]
 pub struct AnthropicDelta {
     pub text: Option<String>,
 }
 
 // 모델 리스트
-#[derive(Deserialize)]
+#[derive(Deserialize, specta::Type)]
 pub struct AnthropicModelList {
     pub data: Vec<AnthropicModel>,
 }
 
-#[derive(Deserialize)]
+#[derive(Deserialize, specta::Type)]
 pub struct AnthropicModel {
     pub id: String,
     pub display_name: Option<String>,
@@ -520,14 +520,14 @@ pub struct AnthropicModel {
 // =======================================
 // 제미니 & 버텍스
 // =======================================
-#[derive(Clone, Deserialize)]
+#[derive(Clone, Deserialize, specta::Type)]
 pub struct VertexChatRequestAPIKey {
     pub service_account: String,
     pub location: String,
     pub project_id: String,
 }
 
-#[derive(Serialize, Deserialize)]
+#[derive(Serialize, Deserialize, specta::Type)]
 pub struct GeminiChatRequest {
     pub contents: Vec<GeminiContent>,
 
@@ -550,7 +550,7 @@ impl GeminiChatRequest {
     }
 }
 
-#[derive(Serialize, Deserialize, Clone)]
+#[derive(Serialize, Deserialize, Clone, specta::Type)]
 pub struct GeminiGenerationConfig {
     #[serde(skip_serializing_if = "Option::is_none")]
     pub temperature: Option<f32>,
@@ -562,18 +562,18 @@ pub struct GeminiGenerationConfig {
     pub top_k: Option<u32>,
 }
 
-#[derive(Serialize, Deserialize, Clone)]
+#[derive(Serialize, Deserialize, Clone, specta::Type)]
 pub struct GeminiContent {
     pub role: String,
     pub parts: Option<Vec<GeminiPart>>,
 }
 
-#[derive(Serialize, Deserialize, Clone)]
+#[derive(Serialize, Deserialize, Clone, specta::Type)]
 pub struct GeminiPart {
     pub text: Option<String>,
 }
 
-#[derive(Deserialize)]
+#[derive(Deserialize, specta::Type)]
 
 pub struct GeminiChatResponse {
     pub candidates: Vec<GeminiCandidates>,
@@ -583,7 +583,7 @@ pub struct GeminiChatResponse {
     pub response_id: Option<String>,
 }
 
-#[derive(Deserialize)]
+#[derive(Deserialize, specta::Type)]
 
 pub struct GeminiCandidates {
     pub content: Option<GeminiContent>, // Vec<Content>가 아닌 단일 Content 객체입니다!
@@ -591,12 +591,12 @@ pub struct GeminiCandidates {
 }
 
 // 모델리스트
-#[derive(Deserialize)]
+#[derive(Deserialize, specta::Type)]
 pub struct GeminiModelList {
     pub models: Vec<GeminiModel>,
 }
 
-#[derive(Deserialize)]
+#[derive(Deserialize, specta::Type)]
 pub struct GeminiModel {
     pub name: String,
     pub display_name: Option<String>,

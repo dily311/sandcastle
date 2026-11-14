@@ -5,7 +5,7 @@ use sqlx::FromRow;
 use strum_macros::{Display, EnumString};
 
 /// 어떤 텍스트에 적용할지
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize, EnumString, Display)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize, EnumString, Display, specta::Type)]
 #[serde(rename_all = "snake_case")]
 #[strum(serialize_all = "snake_case")]
 pub enum RegexPlacement {
@@ -29,7 +29,7 @@ impl RegexPlacement {
 }
 
 /// 어디에 반영할지
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, EnumString, Display)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, EnumString, Display, specta::Type)]
 #[serde(rename_all = "snake_case")]
 #[strum(serialize_all = "snake_case")]
 pub enum RegexTarget {
@@ -41,7 +41,7 @@ pub enum RegexTarget {
     Display,
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, EnumString, Display)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, EnumString, Display, specta::Type)]
 #[serde(rename_all = "snake_case")]
 #[strum(serialize_all = "snake_case")]
 pub enum RegexScope {
@@ -51,7 +51,7 @@ pub enum RegexScope {
 }
 
 /// find_regex 안의 매크로 치환 방식
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Default, Serialize, Deserialize, EnumString, Display)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default, Serialize, Deserialize, EnumString, Display, specta::Type)]
 #[serde(rename_all = "snake_case")]
 #[strum(serialize_all = "snake_case")]
 pub enum MacroMode {
@@ -63,7 +63,7 @@ pub enum MacroMode {
     Escaped,
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, specta::Type)]
 #[serde(rename_all = "camelCase")]
 pub struct RegexScript {
     pub id: String,
@@ -142,7 +142,7 @@ impl From<RegexScriptRow> for RegexScript {
 }
 
 /// 생성/수정 입력. id가 없으면 새로 만든다.
-#[derive(Debug, Clone, Deserialize)]
+#[derive(Debug, Clone, Deserialize, specta::Type)]
 #[serde(rename_all = "camelCase")]
 pub struct RegexScriptInput {
     pub id: Option<String>,

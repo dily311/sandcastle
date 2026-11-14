@@ -2,7 +2,7 @@
 use rand::{Rng, RngExt};
 use serde::{Deserialize, Serialize};
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, specta::Type)]
 pub struct EngineState {
     pub map_id: String,
     pub zone_id: Option<String>,
@@ -67,7 +67,7 @@ pub struct Entry {
 
 /// 선언형 조건. game_event_conditions.condition_type/condition_value,
 /// game_location_connections.condition 를 이 enum으로 매핑해서 쓴다 (JSON으로 통째로 직렬화).
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, specta::Type)]
 #[serde(tag = "type", rename_all = "snake_case")]
 pub enum Condition {
     FlagGte { key: String, value: i64 },

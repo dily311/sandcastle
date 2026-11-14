@@ -13,6 +13,7 @@ use tauri::State;
 // 시스템 기본 페르소나
 // =======================================
 #[tauri::command]
+#[specta::specta]
 pub async fn get_conv_settings(state: State<'_, AppState>) -> Result<ConvSettings> {
     let default = conversation::get_system_default_persona(&state.db).await?;
     Ok(ConvSettings {
@@ -21,6 +22,7 @@ pub async fn get_conv_settings(state: State<'_, AppState>) -> Result<ConvSetting
 }
 
 #[tauri::command]
+#[specta::specta]
 pub async fn set_system_default_persona(state: State<'_, AppState>, id: String) -> Result<()> {
     conversation::set_system_default_persona(&state.db, &id).await?;
     Ok(())
@@ -30,18 +32,21 @@ pub async fn set_system_default_persona(state: State<'_, AppState>, id: String) 
 // Conversations
 // =======================================
 #[tauri::command]
+#[specta::specta]
 pub async fn get_all_conversations(state: State<'_, AppState>) -> Result<Vec<Conversation>> {
     let rows = conversation::get_all_conversations(&state.db).await?;
     Ok(rows)
 }
 
 #[tauri::command]
+#[specta::specta]
 pub async fn get_conversation(state: State<'_, AppState>, id: String) -> Result<Conversation> {
     let row = conversation::get_conversation(&state.db, &id).await?;
     Ok(row)
 }
 
 #[tauri::command]
+#[specta::specta]
 pub async fn create_conversation(
     state: State<'_, AppState>,
     mut input: ConversationInput,
@@ -68,12 +73,14 @@ pub async fn create_conversation(
 }
 
 #[tauri::command]
+#[specta::specta]
 pub async fn touch_conversation(state: State<'_, AppState>, id: String) -> Result<i64> {
     let result = conversation::touch_conversation(&state.db, &id).await?;
     Ok(result)
 }
 
 #[tauri::command]
+#[specta::specta]
 pub async fn delete_conversation(state: State<'_, AppState>, id: String) -> Result<()> {
     let result = conversation::delete_conversation(&state.db, &id).await?;
     if !result {
@@ -86,17 +93,20 @@ pub async fn delete_conversation(state: State<'_, AppState>, id: String) -> Resu
 // Character
 // =======================================
 #[tauri::command]
+#[specta::specta]
 pub async fn get_all_characters(state: State<'_, AppState>) -> Result<Vec<Character>> {
     Ok(conversation::get_all_characters(&state.db).await?)
 }
 
 #[tauri::command]
+#[specta::specta]
 pub async fn get_list_characters(state: State<'_, AppState>) -> Result<Vec<CharacterOption>> {
     let rows = conversation::get_list_characters(&state.db).await?;
     Ok(rows)
 }
 
 #[tauri::command]
+#[specta::specta]
 pub async fn create_character(
     state: State<'_, AppState>,
     input: CharacterInput,
@@ -106,6 +116,7 @@ pub async fn create_character(
 }
 
 #[tauri::command]
+#[specta::specta]
 pub async fn update_character(
     state: State<'_, AppState>,
     id: String,
@@ -116,6 +127,7 @@ pub async fn update_character(
 }
 
 #[tauri::command]
+#[specta::specta]
 pub async fn toggle_favorite_character(
     state: State<'_, AppState>,
     id: String,
@@ -126,6 +138,7 @@ pub async fn toggle_favorite_character(
 }
 
 #[tauri::command]
+#[specta::specta]
 pub async fn delete_character(app: tauri::AppHandle, state: State<'_, AppState>, id: String) -> Result<()> {
     let result = conversation::delete_character(&state.db, &id).await?;
     if !result {
@@ -144,16 +157,19 @@ pub async fn delete_character(app: tauri::AppHandle, state: State<'_, AppState>,
 // Persona
 // =======================================
 #[tauri::command]
+#[specta::specta]
 pub async fn get_all_personas(state: State<'_, AppState>) -> Result<Vec<Persona>> {
     Ok(conversation::get_all_personas(&state.db).await?)
 }
 
 #[tauri::command]
+#[specta::specta]
 pub async fn create_persona(state: State<'_, AppState>, input: PersonaInput) -> Result<Persona> {
     Ok(conversation::create_persona(&state.db, input).await?)
 }
 
 #[tauri::command]
+#[specta::specta]
 pub async fn update_persona(
     state: State<'_, AppState>,
     id: String,
@@ -169,6 +185,7 @@ pub async fn update_persona(
 }
 
 #[tauri::command]
+#[specta::specta]
 pub async fn delete_persona(state: State<'_, AppState>, id: String) -> Result<()> {
     // 삭제 전에 어디서 쓰이고 있는지 확인해서 경고용 정보를 돌려줄 수도 있음
     let result = conversation::delete_persona(&state.db, &id).await?;
@@ -180,6 +197,7 @@ pub async fn delete_persona(state: State<'_, AppState>, id: String) -> Result<()
 
 // 삭제 전 영향 범위를 프론트에 알려주기 위한 커맨드 (선택)
 #[tauri::command]
+#[specta::specta]
 pub async fn get_persona_usage(state: State<'_, AppState>, id: String) -> Result<PersonaUsage> {
     let usage = conversation::get_persona_usage(&state.db, &id).await?;
     Ok(usage)
@@ -190,6 +208,7 @@ pub async fn get_persona_usage(state: State<'_, AppState>, id: String) -> Result
 // =======================================
 
 #[tauri::command]
+#[specta::specta]
 pub async fn get_messages(
     state: State<'_, AppState>,
     conversation_id: String,
@@ -201,6 +220,7 @@ pub async fn get_messages(
 }
 
 #[tauri::command]
+#[specta::specta]
 pub async fn append_message(
     state: State<'_, AppState>,
     settings: State<'_, SettingsState<AppSetting>>,
@@ -223,6 +243,7 @@ pub async fn append_message(
 }
 
 #[tauri::command]
+#[specta::specta]
 pub async fn update_message(
     state: State<'_, AppState>,
     id: String,
@@ -237,6 +258,7 @@ pub async fn update_message(
 }
 
 #[tauri::command]
+#[specta::specta]
 pub async fn update_message_swipe_id(
     state: State<'_, AppState>,
     id: String,
@@ -255,6 +277,7 @@ pub async fn update_message_swipe_id(
 }
 
 #[tauri::command]
+#[specta::specta]
 pub async fn update_message_content(
     state: State<'_, AppState>,
     id: String,
@@ -268,6 +291,7 @@ pub async fn update_message_content(
 }
 
 #[tauri::command]
+#[specta::specta]
 pub async fn update_message_meta(
     state: State<'_, AppState>,
     id: String,
@@ -283,6 +307,7 @@ pub async fn update_message_meta(
 }
 
 #[tauri::command]
+#[specta::specta]
 pub async fn delete_message(state: State<'_, AppState>, id: String) -> Result<()> {
     let result = conversation::delete_message(&state.db, &id).await?;
     if !result {
@@ -297,11 +322,13 @@ pub async fn delete_message(state: State<'_, AppState>, id: String) -> Result<()
 // =======================================
 
 #[tauri::command]
+#[specta::specta]
 pub async fn get_all_worldinfo_books(state: State<'_, AppState>) -> Result<Vec<WorldInfoBook>> {
     Ok(conversation::get_all_worldinfo_books(&state.db).await?)
 }
 
 #[tauri::command]
+#[specta::specta]
 pub async fn create_worldinfo_book(
     state: State<'_, AppState>,
     input: WorldInfoBookInput,
@@ -315,6 +342,7 @@ pub async fn create_worldinfo_book(
 }
 
 #[tauri::command]
+#[specta::specta]
 pub async fn delete_worldinfo_book(state: State<'_, AppState>, id: String) -> Result<()> {
     let result = conversation::delete_worldinfo_book(&state.db, &id).await?;
     if !result {
@@ -324,6 +352,7 @@ pub async fn delete_worldinfo_book(state: State<'_, AppState>, id: String) -> Re
 }
 
 #[tauri::command]
+#[specta::specta]
 pub async fn get_worldinfo_entries(
     state: State<'_, AppState>,
     book_id: String,
@@ -333,6 +362,7 @@ pub async fn get_worldinfo_entries(
 }
 
 #[tauri::command]
+#[specta::specta]
 pub async fn upsert_worldinfo_entry(
     state: State<'_, AppState>,
     input: WorldInfoEntryInput,
@@ -346,6 +376,7 @@ pub async fn upsert_worldinfo_entry(
 }
 
 #[tauri::command]
+#[specta::specta]
 pub async fn delete_worldinfo_entry(state: State<'_, AppState>, id: String) -> Result<()> {
     let result = conversation::delete_worldinfo_entry(&state.db, &id).await?;
     if !result {

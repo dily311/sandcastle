@@ -36,7 +36,7 @@ use sqlx::{Sqlite, Transaction};
 use std::collections::{BTreeMap, HashMap, HashSet};
 use std::path::{Path, PathBuf};
 
-#[derive(Debug, Serialize, Deserialize)]
+#[derive(Debug, Serialize, Deserialize, specta::Type)]
 pub struct Manifest {
     pub format_version: String,
     pub title: String,
@@ -47,7 +47,7 @@ pub struct Manifest {
 /// 게임이 쓰는 월드인포 북 하나(+ 그 entry 전부, 비활성 포함). id는 "원본 DB에서의 id"로,
 /// import 때 새 북을 만들고 {원본 id → 새 id} 맵을 만드는 용도로만 쓴다.
 /// ⚠ WorldInfoBookInput/WorldInfoEntryInput에 Serialize derive가 필요하다 (지금은 Deserialize만).
-#[derive(Serialize, Deserialize)]
+#[derive(Serialize, Deserialize, specta::Type)]
 pub struct PackageWorldInfoBook {
     pub id: String,
     pub book: WorldInfoBookInput,
@@ -56,7 +56,7 @@ pub struct PackageWorldInfoBook {
 
 /// data/definition.json의 모양. 전부 *Input 타입이라 export도 import도 이걸 거친다 —
 /// Output(Row) 타입에는 Deserialize가 없어서 그대로는 못 돌려받는다.
-#[derive(Serialize, Deserialize)]
+#[derive(Serialize, Deserialize, specta::Type)]
 #[serde(rename_all = "camelCase")]
 pub struct PackageData {
     pub project: GameProjectInput,

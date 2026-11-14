@@ -2,7 +2,7 @@ use std::collections::HashMap;
 
 use serde::{de::DeserializeOwned, Deserialize, Serialize};
 
-#[derive(Debug, Serialize, Deserialize, Clone)]
+#[derive(Debug, Serialize, Deserialize, Clone, specta::Type)]
 #[serde(rename_all = "camelCase")]
 pub struct AppSetting {
     pub auto_update: bool,
@@ -47,7 +47,7 @@ impl Default for AppSetting {
         }
     }
 }
-#[derive(Serialize, Deserialize, Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Serialize, Deserialize, Debug, Clone, Copy, PartialEq, Eq, specta::Type)]
 #[serde(rename_all = "lowercase")]
 pub enum ColorSchema {
     Light,
@@ -55,7 +55,7 @@ pub enum ColorSchema {
     System,
 }
 
-#[derive(Debug, Serialize, Deserialize, Clone)]
+#[derive(Debug, Serialize, Deserialize, Clone, specta::Type)]
 #[serde(rename_all = "camelCase")]
 pub struct ThemeSetting {
     pub mode: ColorSchema,
@@ -77,7 +77,7 @@ impl Default for ThemeSetting {
     }
 }
 
-#[derive(Serialize, Deserialize, Debug)]
+#[derive(Serialize, Deserialize, Debug, specta::Type)]
 #[serde(rename_all = "camelCase")]
 pub struct CssThemeMeta {
     #[serde(default, skip_deserializing, skip_serializing_if = "String::is_empty")]
@@ -88,7 +88,7 @@ pub struct CssThemeMeta {
 }
 
 // 2. 기존 저장/Tauri 통신용 전체 구조체
-#[derive(Serialize, Deserialize, Debug)]
+#[derive(Serialize, Deserialize, Debug, specta::Type)]
 #[serde(rename_all = "camelCase")]
 pub struct CssTheme {
     #[serde(default, skip_deserializing, skip_serializing_if = "String::is_empty")]
@@ -99,7 +99,7 @@ pub struct CssTheme {
     pub css_content: String, // 저장할 때는 사용하므로 유지
 }
 
-#[derive(Debug, Serialize, Deserialize, Clone)]
+#[derive(Debug, Serialize, Deserialize, Clone, specta::Type)]
 pub struct FeatureSetting {
     pub feature: HashMap<String, bool>,
 }

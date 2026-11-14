@@ -7,8 +7,15 @@ version = "0.1.0"
 description = "A Tauri App"
 authors = ["you"]
 edition = "2021"
+default-run = "sandcastle"
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+
+[[bin]]
+# 프론트 바인딩(src/ipc/bindings.ts) 생성: cargo run --bin export-bindings
+# (테스트 실행 파일에는 Windows 공용 컨트롤 매니페스트가 없어서 Tauri 런타임을 쓰는 코드를 테스트로 돌릴 수 없다)
+name = "export-bindings"
+path = "src/bin/export_bindings.rs"
 
 [lib]
 # The `_lib` suffix may seem redundant but it is necessary
@@ -60,6 +67,9 @@ tiktoken = "4.1.2"
 strum = "0.26"
 strum_macros = "0.26"
 fancy-regex = "0.20.2"
+tauri-specta = { version = "=2.0.0-rc.29", features = ["derive", "typescript"] }
+specta = { version = "=2.0.0-rc.28", features = ["derive", "serde_json"] }
+specta-typescript = "=0.0.15"
 
 [target.aarch64-linux-android]
 linker = "aarch64-linux-android21-clang"

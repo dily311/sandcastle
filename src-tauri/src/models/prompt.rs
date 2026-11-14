@@ -1,6 +1,6 @@
 use serde::{Deserialize, Serialize};
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, specta::Type)]
 pub struct PromptSetting {
     // unlocked context size option 필요
     context_size: i64,
@@ -17,7 +17,7 @@ pub struct PromptSetting {
     thinking: PromptThinking,
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, specta::Type)]
 pub struct PromptThinking {
     #[serde(rename = "type")]
     thinking_type: String,

@@ -6,7 +6,7 @@ use sqlx::prelude::FromRow;
 
 use crate::sys::music::save_album_art;
 
-#[derive(Debug, Serialize, Deserialize, Clone)]
+#[derive(Debug, Serialize, Deserialize, Clone, specta::Type)]
 #[serde(rename_all = "camelCase")]
 pub struct WidgetMusicSetting {
     pub resize: bool,
@@ -35,7 +35,7 @@ impl Default for WidgetMusicSetting {
 }
 
 // 음악 정보 구조체
-#[derive(FromRow, Serialize, Deserialize, Clone)]
+#[derive(FromRow, Serialize, Deserialize, Clone, specta::Type)]
 pub struct MusicMetaSummary {
     pub path: String,
     pub album_art: String,
@@ -60,7 +60,7 @@ pub struct MusicMetaRow {
     pub updated_at: i64,
 }
 
-#[derive(Serialize, Deserialize, Clone)]
+#[derive(Serialize, Deserialize, Clone, specta::Type)]
 #[serde(rename_all = "camelCase")]
 pub struct MusicMeta {
     pub path: String,
@@ -100,7 +100,7 @@ impl From<MusicMetaRow> for MusicMeta {
     }
 }
 
-#[derive(Serialize, Deserialize)]
+#[derive(Serialize, Deserialize, specta::Type)]
 #[serde(rename_all = "camelCase")]
 pub struct MusicMetaInput {
     pub path: String,
@@ -162,7 +162,7 @@ impl MusicMetaInput {
     }
 }
 
-#[derive(FromRow, Serialize, Deserialize, Clone)]
+#[derive(FromRow, Serialize, Deserialize, Clone, specta::Type)]
 #[serde(rename_all = "camelCase")]
 pub struct Playlist {
     pub id: String,
@@ -174,7 +174,7 @@ pub struct Playlist {
     pub updated_at: i64,
 }
 
-#[derive(Serialize, Deserialize, Clone)]
+#[derive(Serialize, Deserialize, Clone, specta::Type)]
 #[serde(rename_all = "camelCase")]
 pub struct PlaylistInput {
     pub title: String,
@@ -190,7 +190,7 @@ pub struct PlaylistItemRow {
     pub sort_order: u32,
 }
 
-#[derive(Serialize, Deserialize)]
+#[derive(Serialize, Deserialize, specta::Type)]
 #[serde(rename_all = "camelCase")]
 pub struct PlaylistItem {
     pub meta: MusicMeta,

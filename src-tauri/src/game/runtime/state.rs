@@ -5,7 +5,7 @@ use crate::models::game::GamePlayerSessions;
 use std::collections::{HashMap, HashSet};
 
 /// NPC 하나의 지금 상태. 위치는 스폰 규칙(시간대가 바뀔 때)이나 이벤트 등장으로 정해진다.
-#[derive(Debug, Clone, PartialEq, serde::Serialize, serde::Deserialize)]
+#[derive(Debug, Clone, PartialEq, serde::Serialize, serde::Deserialize, specta::Type)]
 pub struct NpcState {
     /// None이면 지금 어디에도 없다 (스폰 조건을 통과한 위치가 하나도 없음).
     pub location_id: Option<String>,
@@ -13,7 +13,7 @@ pub struct NpcState {
     pub status: String,
 }
 
-#[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
+#[derive(Debug, Clone, serde::Serialize, serde::Deserialize, specta::Type)]
 pub struct GameState {
     pub session_id: String,
     /// 세션에 고정된 페르소나. 페르소나는 항상 기본값을 가지므로 Option이 아니다
@@ -112,7 +112,7 @@ impl GameState {
 
 /// 지금 위치에서 갈 수 있는 곳 하나. available=false면 막혀 있다 (조건이 안 맞거나 씬이 진행 중).
 /// 막힌 이유(조건)는 알려주지 않는다 — 문이 잠겨 있다는 것까지만 보인다.
-#[derive(Debug, Clone, serde::Serialize)]
+#[derive(Debug, Clone, serde::Serialize, specta::Type)]
 #[serde(rename_all = "camelCase")]
 pub struct AvailableMove {
     pub to_id: String,
@@ -121,7 +121,7 @@ pub struct AvailableMove {
 }
 
 /// iframe에 노출하는 부분만 추린 뷰. 내부 상태를 그대로 노출하지 않는다.
-#[derive(Debug, Clone, serde::Serialize)]
+#[derive(Debug, Clone, serde::Serialize, specta::Type)]
 #[serde(rename_all = "camelCase")]
 pub struct RenderState {
     /// 지금 플레이 중인 세션(책). 분기로 불러오면 새 세션 id가 여기로 온다.

@@ -222,3 +222,10 @@ impl serde::Serialize for AppError {
         self.to_response().serialize(serializer)
     }
 }
+
+/// 프론트에는 `to_response()` 형태(AppErrorResponse)로 직렬화되므로 타입도 그것으로 내보낸다.
+impl specta::Type for AppError {
+    fn definition(types: &mut specta::Types) -> specta::datatype::DataType {
+        <AppErrorResponse as specta::Type>::definition(types)
+    }
+}

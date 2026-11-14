@@ -56,7 +56,7 @@ pub struct ImportOptions {
     pub character_id: Option<String>,
 }
 
-#[derive(Serialize)]
+#[derive(Serialize, specta::Type)]
 #[serde(tag = "kind", rename_all = "camelCase")]
 pub enum SillyTavernImport {
     #[serde(rename_all = "camelCase")]

@@ -46,7 +46,7 @@ const READY_FILE: &str = "READY.json";
 const FIXUP_FILE: &str = "restore-fixup.json";
 const KEEP_DIR: &str = "restore-backups";
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, specta::Type)]
 #[serde(rename_all = "camelCase")]
 pub struct MigrationInfo {
     pub version: i64,
@@ -54,7 +54,7 @@ pub struct MigrationInfo {
     pub checksum: String,
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, specta::Type)]
 #[serde(rename_all = "camelCase")]
 pub struct BackupManifest {
     pub format: String,
@@ -68,7 +68,7 @@ pub struct BackupManifest {
     pub totals: DataTotals,
 }
 
-#[derive(Debug, Serialize)]
+#[derive(Debug, Serialize, specta::Type)]
 #[serde(rename_all = "camelCase")]
 pub struct BackupSummary {
     pub path: String,
@@ -77,7 +77,7 @@ pub struct BackupSummary {
     pub totals: DataTotals,
 }
 
-#[derive(Debug, Serialize)]
+#[derive(Debug, Serialize, specta::Type)]
 #[serde(rename_all = "camelCase")]
 pub struct RestorePreview {
     pub created_at: i64,

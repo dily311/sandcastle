@@ -18,7 +18,7 @@ use std::path::{Path, PathBuf};
 pub struct GameManager;
 
 /// save_package의 결과: 에디터에서 지워서 DB에서도 지워진 행 수, 그리고 저장 후 검증 결과.
-#[derive(Serialize)]
+#[derive(Serialize, specta::Type)]
 #[serde(rename_all = "camelCase")]
 pub struct SaveReport {
     pub deleted: BTreeMap<&'static str, usize>,

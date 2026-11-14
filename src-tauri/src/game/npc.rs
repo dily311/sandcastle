@@ -75,7 +75,7 @@ fn check_rate_limit(state: &AppState, game_id: &str) -> Result<(), AppError> {
 
 /// dispatch_command의 GameResponse와 같은 취지: 프론트가 "이벤트 배열 받아서 처리"
 /// 하나로 엔진 커맨드/AI 대화 두 경로를 똑같이 다루게 한다.
-#[derive(serde::Serialize)]
+#[derive(serde::Serialize, specta::Type)]
 pub struct NpcReply {
     /// <choice> 태그를 벗겨낸 텍스트
     pub text: String,

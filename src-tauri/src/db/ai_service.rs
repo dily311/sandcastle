@@ -260,3 +260,24 @@ pub async fn delete_prompt_block<'e, E>(executor: E, id: &str) -> Result<bool, E
         .await?;
     Ok(result.rows_affected() != 0)
 }
+/// 프리셋의 블록을 통째로 바꾼다 (목록에 없는 기존 블록은 삭제). 트랜잭션 안에서 부를 것.
+pub async fn replace_prompt_blocks(
+    conn: &mut sqlx::SqliteConnection,
+    preset_id: &str,
+    blocks: Vec<PromptBlocksInput>,
+) -> Result<(), Error> {
+    let keep: Vec<String> = blocks.iter().filter_map(|b| b.id.clone()).collect();
+    let existing: Vec<String> = sqlx::query_scalar("SELECT id FROM prompt_blocks WHERE preset_id = ?")
+        .bind(preset_id)
+        .fetch_all(&mut *conn)
+        .await?;
+    for id in existing.iter().filter(|id| !keep.contains(id)) {
+        sqlx::query("DELETE FROM prompt_blocks WHERE id = ?").bind(id).execute(&mut *conn).await?;
+    }
+    for (i, mut b) in blocks.into_iter().enumerate() {
+        b.preset_id = preset_id.to_string();
+        b.sort_order = i as i64; // 화면에서 보낸 순서가 곧 실행 순서
+        upsert_prompt_block(&mut *conn, preset_id, b).await?;
+    }
+    Ok(())
+}

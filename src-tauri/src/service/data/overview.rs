@@ -8,7 +8,7 @@ use crate::{db::conn::DbPool, error::Result};
 
 use super::archive::dir_size;
 
-#[derive(Debug, Clone, Serialize, FromRow)]
+#[derive(Debug, Clone, Serialize, FromRow, specta::Type)]
 #[serde(rename_all = "camelCase")]
 pub struct ConversationSummary {
     pub id: String,
@@ -23,7 +23,7 @@ pub struct ConversationSummary {
     pub last_message_at: Option<i64>,
 }
 
-#[derive(Debug, Clone, Serialize)]
+#[derive(Debug, Clone, Serialize, specta::Type)]
 #[serde(rename_all = "camelCase")]
 pub struct CharacterData {
     pub id: String,
@@ -39,7 +39,7 @@ pub struct CharacterData {
     pub conversations: Vec<ConversationSummary>,
 }
 
-#[derive(Debug, Clone, Default, Serialize, Deserialize)]
+#[derive(Debug, Clone, Default, Serialize, Deserialize, specta::Type)]
 #[serde(rename_all = "camelCase")]
 pub struct DataTotals {
     pub characters: i64,
@@ -53,7 +53,7 @@ pub struct DataTotals {
     pub games: i64,
 }
 
-#[derive(Debug, Clone, Default, Serialize)]
+#[derive(Debug, Clone, Default, Serialize, specta::Type)]
 #[serde(rename_all = "camelCase")]
 pub struct StorageUsage {
     pub database_bytes: u64,
@@ -63,7 +63,7 @@ pub struct StorageUsage {
     pub total_bytes: u64,
 }
 
-#[derive(Debug, Clone, Serialize)]
+#[derive(Debug, Clone, Serialize, specta::Type)]
 #[serde(rename_all = "camelCase")]
 pub struct DataOverview {
     /// 최근 활동 순

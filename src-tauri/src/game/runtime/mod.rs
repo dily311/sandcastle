@@ -71,7 +71,7 @@ fn repair_state(def: &GameDefinition, state: &mut GameState) {
     }
 }
 
-#[derive(Serialize)]
+#[derive(Serialize, specta::Type)]
 #[serde(rename_all = "camelCase")]
 pub struct GameResponse {
     pub events: Vec<GameEvent>,

@@ -34,7 +34,7 @@ use super::archive::{extract_file, open_archive, read_json, safe_relative, write
 pub const PACK_FORMAT: &str = "sandcastle-pack";
 pub const PACK_VERSION: u32 = 1;
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, specta::Type)]
 #[serde(rename_all = "camelCase")]
 pub struct PackManifest {
     pub format: String,
@@ -46,7 +46,7 @@ pub struct PackManifest {
     pub message_count: usize,
 }
 
-#[derive(Serialize, Deserialize)]
+#[derive(Serialize, Deserialize, specta::Type)]
 #[serde(rename_all = "camelCase")]
 struct PackData {
     characters: Vec<PackCharacter>,
@@ -54,7 +54,7 @@ struct PackData {
     conversations: Vec<PackConversation>,
 }
 
-#[derive(Serialize, Deserialize)]
+#[derive(Serialize, Deserialize, specta::Type)]
 #[serde(rename_all = "camelCase")]
 struct PackCharacter {
     /// Character JSON 그대로 (id 포함)
@@ -64,7 +64,7 @@ struct PackCharacter {
     regex: Vec<RegexScript>,
 }
 
-#[derive(Serialize, Deserialize)]
+#[derive(Serialize, Deserialize, specta::Type)]
 #[serde(rename_all = "camelCase")]
 struct PackImage {
     key: String,
@@ -73,7 +73,7 @@ struct PackImage {
     file: String,
 }
 
-#[derive(Serialize, Deserialize)]
+#[derive(Serialize, Deserialize, specta::Type)]
 #[serde(rename_all = "camelCase")]
 struct PackBook {
     id: String,
@@ -82,7 +82,7 @@ struct PackBook {
     entries: Vec<PackEntry>,
 }
 
-#[derive(Serialize, Deserialize)]
+#[derive(Serialize, Deserialize, specta::Type)]
 #[serde(rename_all = "camelCase")]
 struct PackEntry {
     keys: Vec<String>,
@@ -93,7 +93,7 @@ struct PackEntry {
     constant: bool,
 }
 
-#[derive(Serialize, Deserialize)]
+#[derive(Serialize, Deserialize, specta::Type)]
 #[serde(rename_all = "camelCase")]
 struct PackConversation {
     /// Conversation JSON 그대로
@@ -102,7 +102,7 @@ struct PackConversation {
     messages: Vec<Value>,
 }
 
-#[derive(Debug, Serialize)]
+#[derive(Debug, Serialize, specta::Type)]
 #[serde(rename_all = "camelCase")]
 pub struct PackExportSummary {
     pub path: String,
@@ -112,7 +112,7 @@ pub struct PackExportSummary {
     pub message_count: usize,
 }
 
-#[derive(Debug, Serialize)]
+#[derive(Debug, Serialize, specta::Type)]
 #[serde(rename_all = "camelCase")]
 pub struct ImportedCharacterRef {
     pub old_id: String,
@@ -120,7 +120,7 @@ pub struct ImportedCharacterRef {
     pub name: String,
 }
 
-#[derive(Debug, Serialize)]
+#[derive(Debug, Serialize, specta::Type)]
 #[serde(rename_all = "camelCase")]
 pub struct PackImportSummary {
     pub characters: Vec<ImportedCharacterRef>,

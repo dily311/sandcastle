@@ -4,7 +4,7 @@ use serde_json::Value;
 use crate::error::{ErrorCode, error_code::ErrorCategory};
 
 // 프론트엔드 전달용 에러 구조체
-#[derive(Debug, Clone, Serialize)]
+#[derive(Debug, Clone, Serialize, specta::Type)]
 #[serde(rename_all = "camelCase")]
 pub struct AppErrorResponse {
     pub code: ErrorCode,

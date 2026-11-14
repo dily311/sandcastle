@@ -1,7 +1,7 @@
 //! iframe SDK가 보낼 수 있는 커맨드.
 use serde_json::Value;
 
-#[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
+#[derive(Debug, Clone, serde::Serialize, serde::Deserialize, specta::Type)]
 #[serde(tag = "type", rename_all = "camelCase", rename_all_fields = "camelCase")]
 pub enum GameCommand {
     MoveTo { location_id: String },

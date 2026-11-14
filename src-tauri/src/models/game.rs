@@ -26,7 +26,7 @@ pub struct GameProjectRow {
     pub created_at: i64,
     pub updated_at: i64,
 }
-#[derive(Serialize, Clone)]
+#[derive(Serialize, Clone, specta::Type)]
 #[serde(rename_all = "camelCase")]
 pub struct GameProject {
     pub id: String,
@@ -73,7 +73,7 @@ impl From<GameProjectRow> for GameProject {
     }
 }
 
-#[derive(Debug, Serialize, Deserialize)]
+#[derive(Debug, Serialize, Deserialize, specta::Type)]
 #[serde(rename_all = "camelCase")]
 pub struct GameProjectInput {
     pub id: Option<String>,
@@ -154,7 +154,7 @@ pub struct GameStateDefRow {
     pub updated_at: i64,
 }
 
-#[derive(Serialize, Clone)]
+#[derive(Serialize, Clone, specta::Type)]
 #[serde(rename_all = "camelCase")]
 pub struct GameStateDef {
     pub id: String,
@@ -186,7 +186,7 @@ impl From<GameStateDefRow> for GameStateDef {
     }
 }
 
-#[derive(Debug, Serialize, Deserialize)]
+#[derive(Debug, Serialize, Deserialize, specta::Type)]
 #[serde(rename_all = "camelCase")]
 pub struct GameStateDefInput {
     pub id: Option<String>,
@@ -237,7 +237,7 @@ pub struct GameCharactersRow {
     pub updated_at: i64,
 }
 
-#[derive(Serialize, Clone)]
+#[derive(Serialize, Clone, specta::Type)]
 #[serde(rename_all = "camelCase")]
 pub struct GameCharacters {
     pub id: String,
@@ -285,7 +285,7 @@ impl From<GameCharactersRow> for GameCharacters {
     }
 }
 
-#[derive(Debug, Serialize, Deserialize)]
+#[derive(Debug, Serialize, Deserialize, specta::Type)]
 #[serde(rename_all = "camelCase")]
 pub struct GameCharactersInput {
     pub id: Option<String>,
@@ -332,7 +332,7 @@ pub struct GameCharacterSpawnLocationsRow {
     pub created_at: i64,
     pub updated_at: i64,
 }
-#[derive(Serialize, Clone)]
+#[derive(Serialize, Clone, specta::Type)]
 #[serde(rename_all = "camelCase")]
 pub struct GameCharacterSpawnLocations {
     pub id: String,
@@ -359,7 +359,7 @@ impl From<GameCharacterSpawnLocationsRow> for GameCharacterSpawnLocations {
         }
     }
 }
-#[derive(Debug, Serialize, Deserialize)]
+#[derive(Debug, Serialize, Deserialize, specta::Type)]
 #[serde(rename_all = "camelCase")]
 pub struct GameCharacterSpawnLocationsInput {
     pub id: Option<String>,
@@ -397,7 +397,7 @@ pub struct GameAssetsRow {
     pub created_at: i64,
     pub updated_at: i64,
 }
-#[derive(Serialize, Deserialize, Clone)]
+#[derive(Serialize, Deserialize, Clone, specta::Type)]
 #[serde(rename_all = "camelCase")]
 pub struct GameAssets {
     pub id: String,
@@ -506,7 +506,7 @@ impl From<BackgroundAssetsRow> for GameAssets {
         }
     }
 }
-#[derive(Serialize, Deserialize, Clone)]
+#[derive(Serialize, Deserialize, Clone, specta::Type)]
 #[serde(rename_all = "camelCase")]
 pub struct GameAssetsInput {
     pub id: Option<String>,
@@ -551,7 +551,7 @@ pub struct AudioAssetsRow {
     pub transcript: Option<String>,
 }
 
-#[derive(Serialize, Clone)]
+#[derive(Serialize, Clone, specta::Type)]
 #[serde(rename_all = "camelCase")]
 pub struct AudioAssets {
     #[serde(flatten)]
@@ -572,7 +572,7 @@ impl From<AudioAssetsRow> for AudioAssets {
     }
 }
 
-#[derive(Serialize, Deserialize, Clone)]
+#[derive(Serialize, Deserialize, Clone, specta::Type)]
 #[serde(rename_all = "camelCase")]
 pub struct AudioAssetsInput {
     #[serde(flatten)]
@@ -610,7 +610,7 @@ pub struct CharacterAssetsRow {
     pub emotion: Option<String>,
 }
 
-#[derive(Serialize, Clone)]
+#[derive(Serialize, Clone, specta::Type)]
 #[serde(rename_all = "camelCase")]
 pub struct CharacterAssets {
     #[serde(flatten)]
@@ -632,7 +632,7 @@ impl From<CharacterAssetsRow> for CharacterAssets {
     }
 }
 
-#[derive(Serialize, Deserialize, Clone)]
+#[derive(Serialize, Deserialize, Clone, specta::Type)]
 #[serde(rename_all = "camelCase")]
 pub struct CharacterAssetsInput {
     #[serde(flatten)]
@@ -675,7 +675,7 @@ pub struct CgAssetsRow {
     pub ai_usable: bool,
 }
 
-#[derive(Serialize, Clone)]
+#[derive(Serialize, Clone, specta::Type)]
 #[serde(rename_all = "camelCase")]
 pub struct CgAssets {
     #[serde(flatten)]
@@ -705,7 +705,7 @@ impl From<CgAssetsRow> for CgAssets {
     }
 }
 
-#[derive(Serialize, Deserialize, Clone)]
+#[derive(Serialize, Deserialize, Clone, specta::Type)]
 #[serde(rename_all = "camelCase")]
 pub struct CgAssetsInput {
     #[serde(flatten)]
@@ -751,7 +751,7 @@ pub struct BackgroundAssetsRow {
     pub weather_id: Option<String>,
 }
 
-#[derive(Serialize, Clone)]
+#[derive(Serialize, Clone, specta::Type)]
 #[serde(rename_all = "camelCase")]
 pub struct BackgroundAssets {
     #[serde(flatten)]
@@ -773,7 +773,7 @@ impl From<BackgroundAssetsRow> for BackgroundAssets {
     }
 }
 
-#[derive(Serialize, Deserialize, Clone)]
+#[derive(Serialize, Deserialize, Clone, specta::Type)]
 #[serde(rename_all = "camelCase")]
 pub struct BackgroundAssetsInput {
     #[serde(flatten)]
@@ -809,7 +809,7 @@ pub struct GameMapsRow {
     pub updated_at: i64,
 }
 
-#[derive(Serialize, Clone)]
+#[derive(Serialize, Clone, specta::Type)]
 #[serde(rename_all = "camelCase")]
 pub struct GameMaps {
     pub id: String,
@@ -840,7 +840,7 @@ impl From<GameMapsRow> for GameMaps {
     }
 }
 
-#[derive(Debug, Serialize, Deserialize)]
+#[derive(Debug, Serialize, Deserialize, specta::Type)]
 #[serde(rename_all = "camelCase")]
 pub struct GameMapsInput {
     pub id: Option<String>,
@@ -876,7 +876,7 @@ pub struct GameMapsZoneRow {
     pub updated_at: i64,
 }
 
-#[derive(Serialize, Clone)]
+#[derive(Serialize, Clone, specta::Type)]
 #[serde(rename_all = "camelCase")]
 pub struct GameMapsZone {
     pub id: String,
@@ -908,7 +908,7 @@ impl From<GameMapsZoneRow> for GameMapsZone {
     }
 }
 
-#[derive(Debug, Serialize, Deserialize)]
+#[derive(Debug, Serialize, Deserialize, specta::Type)]
 #[serde(rename_all = "camelCase")]
 pub struct GameMapsZoneInput {
     pub id: Option<String>,
@@ -940,7 +940,7 @@ pub struct GameLocationsRow {
     pub settings_json: Option<String>,
 }
 
-#[derive(Serialize, Clone)]
+#[derive(Serialize, Clone, specta::Type)]
 #[serde(rename_all = "camelCase")]
 pub struct GameLocations {
     pub id: String,
@@ -965,7 +965,7 @@ impl From<GameLocationsRow> for GameLocations {
     }
 }
 
-#[derive(Debug, Serialize, Deserialize)]
+#[derive(Debug, Serialize, Deserialize, specta::Type)]
 #[serde(rename_all = "camelCase")]
 pub struct GameLocationsInput {
     pub id: Option<String>,
@@ -996,7 +996,7 @@ pub struct GameLocationConnectionsRow {
     pub condition: Option<String>,
     pub settings_json: Option<String>,
 }
-#[derive(Serialize, Clone)]
+#[derive(Serialize, Clone, specta::Type)]
 #[serde(rename_all = "camelCase")]
 pub struct GameLocationConnections {
     pub from_id: String,
@@ -1021,7 +1021,7 @@ impl From<GameLocationConnectionsRow> for GameLocationConnections {
     }
 }
 
-#[derive(Debug, Serialize, Deserialize)]
+#[derive(Debug, Serialize, Deserialize, specta::Type)]
 #[serde(rename_all = "camelCase")]
 pub struct GameLocationConnectionsInput {
     pub from_id: String,
@@ -1045,7 +1045,7 @@ impl From<GameLocationConnections> for GameLocationConnectionsInput {
 // ---------------------------------------------------------
 // 게임 시간
 // ---------------------------------------------------------
-#[derive(FromRow, Serialize, Clone)]
+#[derive(FromRow, Serialize, Clone, specta::Type)]
 #[serde(rename_all = "camelCase")]
 pub struct GameTimePeriods {
     pub id: String,
@@ -1056,7 +1056,7 @@ pub struct GameTimePeriods {
     pub end_minute: u32,
 }
 
-#[derive(Debug, Serialize, Deserialize)]
+#[derive(Debug, Serialize, Deserialize, specta::Type)]
 #[serde(rename_all = "camelCase")]
 pub struct GameTimePeriodsInput {
     pub id: Option<String>,
@@ -1094,7 +1094,7 @@ pub struct GameWeatherTypesRow {
     pub updated_at: i64,
 }
 
-#[derive(Serialize, Clone)]
+#[derive(Serialize, Clone, specta::Type)]
 #[serde(rename_all = "camelCase")]
 pub struct GameWeatherTypes {
     pub id: String,
@@ -1120,7 +1120,7 @@ impl From<GameWeatherTypesRow> for GameWeatherTypes {
     }
 }
 
-#[derive(Debug, Serialize, Deserialize)]
+#[derive(Debug, Serialize, Deserialize, specta::Type)]
 #[serde(rename_all = "camelCase")]
 pub struct GameWeatherTypesInput {
     pub id: Option<String>,
@@ -1150,7 +1150,7 @@ pub struct GameWeatherPoolsRow {
     pub updated_at: i64,
 }
 
-#[derive(Serialize, Clone)]
+#[derive(Serialize, Clone, specta::Type)]
 #[serde(rename_all = "camelCase")]
 pub struct GameWeatherPools {
     pub id: String,
@@ -1172,7 +1172,7 @@ impl From<GameWeatherPoolsRow> for GameWeatherPools {
     }
 }
 
-#[derive(Debug, Serialize, Deserialize)]
+#[derive(Debug, Serialize, Deserialize, specta::Type)]
 #[serde(rename_all = "camelCase")]
 pub struct GameWeatherPoolsInput {
     pub id: Option<String>,
@@ -1198,7 +1198,7 @@ pub struct GameWeatherPoolEntriesRow {
     pub weight: i64,
 }
 
-#[derive(Serialize, Clone)]
+#[derive(Serialize, Clone, specta::Type)]
 #[serde(rename_all = "camelCase")]
 pub struct GameWeatherPoolEntries {
     pub pool_id: String,
@@ -1215,7 +1215,7 @@ impl From<GameWeatherPoolEntriesRow> for GameWeatherPoolEntries {
     }
 }
 
-#[derive(Debug, Serialize, Deserialize)]
+#[derive(Debug, Serialize, Deserialize, specta::Type)]
 #[serde(rename_all = "camelCase")]
 pub struct GameWeatherPoolEntriesInput {
     pub pool_id: String,
@@ -1241,7 +1241,7 @@ pub struct GameWeatherTransitionsRow {
     pub probability: f64,
 }
 
-#[derive(Serialize, Clone)]
+#[derive(Serialize, Clone, specta::Type)]
 #[serde(rename_all = "camelCase")]
 pub struct GameWeatherTransitions {
     pub from_weather_id: String,
@@ -1261,7 +1261,7 @@ impl From<GameWeatherTransitionsRow> for GameWeatherTransitions {
     }
 }
 
-#[derive(Debug, Serialize, Deserialize)]
+#[derive(Debug, Serialize, Deserialize, specta::Type)]
 #[serde(rename_all = "camelCase")]
 pub struct GameWeatherTransitionsInput {
     pub from_weather_id: String,
@@ -1300,7 +1300,7 @@ pub struct GameEventsRow {
     pub updated_at: i64,
 }
 
-#[derive(Serialize, Clone)]
+#[derive(Serialize, Clone, specta::Type)]
 #[serde(rename_all = "camelCase")]
 pub struct GameEvents {
     pub id: String,
@@ -1344,7 +1344,7 @@ impl From<GameEventsRow> for GameEvents {
     }
 }
 
-#[derive(Debug, Serialize, Deserialize)]
+#[derive(Debug, Serialize, Deserialize, specta::Type)]
 #[serde(rename_all = "camelCase")]
 pub struct GameEventsInput {
     pub id: Option<String>,
@@ -1387,7 +1387,7 @@ pub struct GameEventConditionsRow {
     pub condition_value: Option<String>,
 }
 
-#[derive(Serialize, Clone)]
+#[derive(Serialize, Clone, specta::Type)]
 #[serde(rename_all = "camelCase")]
 pub struct GameEventConditions {
     pub id: String,
@@ -1406,7 +1406,7 @@ impl From<GameEventConditionsRow> for GameEventConditions {
     }
 }
 
-#[derive(Debug, Serialize, Deserialize)]
+#[derive(Debug, Serialize, Deserialize, specta::Type)]
 #[serde(rename_all = "camelCase")]
 pub struct GameEventConditionsInput {
     pub id: Option<String>,
@@ -1438,7 +1438,7 @@ pub struct GameInteractablesRow {
     pub event_id: Option<String>,
 }
 
-#[derive(Serialize, Clone)]
+#[derive(Serialize, Clone, specta::Type)]
 #[serde(rename_all = "camelCase")]
 pub struct GameInteractables {
     pub id: String,
@@ -1458,7 +1458,7 @@ impl From<GameInteractablesRow> for GameInteractables {
     }
 }
 
-#[derive(Debug, Serialize, Deserialize)]
+#[derive(Debug, Serialize, Deserialize, specta::Type)]
 #[serde(rename_all = "camelCase")]
 pub struct GameInteractablesInput {
     pub id: Option<String>,
@@ -1485,7 +1485,7 @@ pub struct GameEventCharacterPoolRow {
     pub spawn_weight: i64,
 }
 
-#[derive(Serialize, Clone)]
+#[derive(Serialize, Clone, specta::Type)]
 #[serde(rename_all = "camelCase")]
 pub struct GameEventCharacterPool {
     pub event_id: String,
@@ -1502,7 +1502,7 @@ impl From<GameEventCharacterPoolRow> for GameEventCharacterPool {
         }
     }
 }
-#[derive(Debug, Serialize, Deserialize)]
+#[derive(Debug, Serialize, Deserialize, specta::Type)]
 #[serde(rename_all = "camelCase")]
 pub struct GameEventCharacterPoolInput {
     pub id: Option<String>,
@@ -1524,7 +1524,7 @@ impl GameEventCharacterPoolInput {
 // ---------------------------------------------------------
 // 게임 인카운트 테이블
 // ---------------------------------------------------------
-#[derive(FromRow, Serialize, Clone)]
+#[derive(FromRow, Serialize, Clone, specta::Type)]
 #[serde(rename_all = "camelCase")]
 pub struct GameEncounterTables {
     pub id: String,
@@ -1534,7 +1534,7 @@ pub struct GameEncounterTables {
     pub base_trigger_chance: f64,
 }
 
-#[derive(Debug, Serialize, Deserialize)]
+#[derive(Debug, Serialize, Deserialize, specta::Type)]
 #[serde(rename_all = "camelCase")]
 pub struct GameEncounterTablesInput {
     pub id: Option<String>,
@@ -1567,7 +1567,7 @@ pub struct GameEncounterEntriesRow {
     pub weather_id: Option<String>,
 }
 
-#[derive(Serialize, Clone)]
+#[derive(Serialize, Clone, specta::Type)]
 #[serde(rename_all = "camelCase")]
 pub struct GameEncounterEntries {
     pub id: String,
@@ -1591,7 +1591,7 @@ impl From<GameEncounterEntriesRow> for GameEncounterEntries {
     }
 }
 
-#[derive(Debug, Serialize, Deserialize)]
+#[derive(Debug, Serialize, Deserialize, specta::Type)]
 #[serde(rename_all = "camelCase")]
 pub struct GameEncounterEntriesInput {
     pub id: Option<String>,
@@ -1634,7 +1634,7 @@ pub struct GameSceneRow {
     pub updated_at: i64,
 }
 
-#[derive(Serialize, Clone)]
+#[derive(Serialize, Clone, specta::Type)]
 #[serde(rename_all = "camelCase")]
 pub struct GameScene {
     pub id: String,
@@ -1678,7 +1678,7 @@ impl GameScene {
     }
 }
 
-#[derive(Debug, Serialize, Deserialize)]
+#[derive(Debug, Serialize, Deserialize, specta::Type)]
 #[serde(rename_all = "camelCase")]
 pub struct GameSceneInput {
     pub id: String,
@@ -1711,7 +1711,7 @@ impl From<GameScene> for GameSceneInput {
 }
 
 // ---------- Branch ----------
-#[derive(FromRow, Serialize, Clone)]
+#[derive(FromRow, Serialize, Clone, specta::Type)]
 #[serde(rename_all = "camelCase")]
 pub struct GameBranchRow {
     pub id: String,
@@ -1721,7 +1721,7 @@ pub struct GameBranchRow {
     pub sort_order: i64,
 }
 
-#[derive(Debug, Serialize, Deserialize)]
+#[derive(Debug, Serialize, Deserialize, specta::Type)]
 #[serde(rename_all = "camelCase")]
 pub struct GameBranchInput {
     pub id: String,
@@ -1744,7 +1744,7 @@ impl From<GameBranchRow> for GameBranchInput {
 }
 
 // ---------- Choice ----------
-#[derive(FromRow, Serialize, Clone)]
+#[derive(FromRow, Serialize, Clone, specta::Type)]
 #[serde(rename_all = "camelCase")]
 pub struct GameChoiceRow {
     pub id: String,
@@ -1756,7 +1756,7 @@ pub struct GameChoiceRow {
     pub sort_order: i64,
 }
 
-#[derive(Debug, Serialize, Deserialize)]
+#[derive(Debug, Serialize, Deserialize, specta::Type)]
 #[serde(rename_all = "camelCase")]
 pub struct GameChoiceInput {
     pub id: String,
@@ -1785,7 +1785,7 @@ impl From<GameChoiceRow> for GameChoiceInput {
 // ---------------------------------------------------------
 // 게임 엔딩
 // ---------------------------------------------------------
-#[derive(FromRow, Serialize, Clone)]
+#[derive(FromRow, Serialize, Clone, specta::Type)]
 #[serde(rename_all = "camelCase")]
 pub struct GameEndings {
     pub id: String,
@@ -1795,7 +1795,7 @@ pub struct GameEndings {
     pub description: String,
 }
 
-#[derive(Debug, Serialize, Deserialize)]
+#[derive(Debug, Serialize, Deserialize, specta::Type)]
 #[serde(rename_all = "camelCase")]
 pub struct GameEndingsInput {
     pub id: Option<String>,
@@ -1838,7 +1838,7 @@ pub struct GameItemsRow {
     pub created_at: i64,
     pub updated_at: i64,
 }
-#[derive(Serialize, Clone)]
+#[derive(Serialize, Clone, specta::Type)]
 #[serde(rename_all = "camelCase")]
 pub struct GameItems {
     pub id: String,
@@ -1890,7 +1890,7 @@ impl From<GameItemsRow> for GameItems {
         }
     }
 }
-#[derive(Debug, Serialize, Deserialize)]
+#[derive(Debug, Serialize, Deserialize, specta::Type)]
 #[serde(rename_all = "camelCase")]
 pub struct GameItemsInput {
     pub id: Option<String>,
@@ -1942,7 +1942,7 @@ pub struct GameRelationshipDefsRow {
     pub values_json: Option<String>,
     pub tags: Option<String>,
 }
-#[derive(Serialize, Clone)]
+#[derive(Serialize, Clone, specta::Type)]
 #[serde(rename_all = "camelCase")]
 pub struct GameRelationshipDefs {
     pub id: String,
@@ -1970,7 +1970,7 @@ impl From<GameRelationshipDefsRow> for GameRelationshipDefs {
         }
     }
 }
-#[derive(Debug, Serialize, Deserialize)]
+#[derive(Debug, Serialize, Deserialize, specta::Type)]
 #[serde(rename_all = "camelCase")]
 pub struct GameRelationshipDefsInput {
     pub id: Option<String>,
@@ -2023,7 +2023,7 @@ pub struct GamePlayerSessionsRow {
     pub updated_at: i64,
 }
 
-#[derive(Serialize, Deserialize)]
+#[derive(Serialize, Deserialize, specta::Type)]
 #[serde(rename_all = "camelCase")]
 pub struct GamePlayerSessions {
     pub id: String,
@@ -2086,7 +2086,7 @@ impl From<GamePlayerSessionsRow> for GamePlayerSessions {
     }
 }
 
-#[derive(Deserialize)]
+#[derive(Deserialize, specta::Type)]
 #[serde(rename_all = "camelCase")]
 pub struct GamePlayerSessionsInput {
     pub id: Option<String>,
@@ -2134,7 +2134,7 @@ impl GamePlayerSessionsInput {
 // ---------------------------------------------------------
 // 게임 세이브
 // ---------------------------------------------------------
-#[derive(FromRow, Serialize, Deserialize)]
+#[derive(FromRow, Serialize, Deserialize, specta::Type)]
 pub struct GameSaveRow {
     pub name: Option<String>,
     pub seq: u32,
@@ -2150,7 +2150,7 @@ pub struct GameSaveRow {
     pub updated_at: i64,
 }
 
-#[derive(Serialize, Deserialize)]
+#[derive(Serialize, Deserialize, specta::Type)]
 #[serde(rename_all = "camelCase")]
 pub struct GameSave {
     pub name: Option<String>,
@@ -2189,7 +2189,7 @@ impl From<GameSaveRow> for GameSave {
     }
 }
 
-#[derive(Deserialize)]
+#[derive(Deserialize, specta::Type)]
 #[serde(rename_all = "camelCase")]
 pub struct GameSaveInput {
     pub name: Option<String>,
@@ -2208,7 +2208,7 @@ pub struct GameSaveInput {
 // ---------------------------------------------------------
 // 게임 세션 기록
 // ---------------------------------------------------------
-#[derive(FromRow, Serialize, Deserialize)]
+#[derive(FromRow, Serialize, Deserialize, specta::Type)]
 #[serde(rename_all = "camelCase")]
 pub struct GameJournalRow {
     pub session_id: String,
@@ -2219,7 +2219,7 @@ pub struct GameJournalRow {
     pub created_at: i64,
 }
 
-#[derive(Serialize, Deserialize)]
+#[derive(Serialize, Deserialize, specta::Type)]
 #[serde(rename_all = "camelCase")]
 pub struct GameJournal {
     pub session_id: String,
@@ -2246,7 +2246,7 @@ impl From<GameJournalRow> for GameJournal {
     }
 }
 
-#[derive(Serialize, Deserialize)]
+#[derive(Serialize, Deserialize, specta::Type)]
 #[serde(rename_all = "camelCase")]
 pub struct GameJournalInput {
     pub session_id: String,
@@ -2279,7 +2279,7 @@ pub struct GameStoryPlansRow {
     pub reason: Option<String>,
 }
 
-#[derive(Serialize, Deserialize)]
+#[derive(Serialize, Deserialize, specta::Type)]
 #[serde(rename_all = "camelCase")]
 pub struct GameStoryPlans {
     pub session_id: String,
@@ -2305,7 +2305,7 @@ impl From<GameStoryPlansRow> for GameStoryPlans {
     }
 }
 
-#[derive(Deserialize)]
+#[derive(Deserialize, specta::Type)]
 #[serde(rename_all = "camelCase")]
 pub struct GameStoryPlansInput {
     pub session_id: String,
@@ -2326,7 +2326,7 @@ pub struct GameRelationshipSnapshotsRow {
     pub created_at: i64,
 }
 
-#[derive(Serialize, Deserialize)]
+#[derive(Serialize, Deserialize, specta::Type)]
 #[serde(rename_all = "camelCase")]
 pub struct GameRelationshipSnapshots {
     pub session_id: String,
@@ -2359,7 +2359,7 @@ pub struct GameCharacterStatesSnapshotsRow {
     pub updated_at: i64,
 }
 
-#[derive(Serialize, Deserialize)]
+#[derive(Serialize, Deserialize, specta::Type)]
 #[serde(rename_all = "camelCase")]
 pub struct GameCharacterStatesSnapshots {
     pub session_id: String,
@@ -2388,7 +2388,7 @@ impl From<GameCharacterStatesSnapshotsRow> for GameCharacterStatesSnapshots {
     }
 }
 
-#[derive(Deserialize)]
+#[derive(Deserialize, specta::Type)]
 #[serde(rename_all = "camelCase")]
 pub struct GameCharacterStatesSnapshotsInput {
     pub session_id: String,
@@ -2412,7 +2412,7 @@ pub struct GameEventLogRow {
     pub result_json: String,
 }
 
-#[derive(Serialize, Deserialize)]
+#[derive(Serialize, Deserialize, specta::Type)]
 #[serde(rename_all = "camelCase")]
 pub struct GameEventLog {
     pub seq: u32,
@@ -2436,7 +2436,7 @@ impl From<GameEventLogRow> for GameEventLog {
     }
 }
 
-#[derive(Deserialize)]
+#[derive(Deserialize, specta::Type)]
 #[serde(rename_all = "camelCase")]
 pub struct GameEventLogInput {
     pub seq: u32,
@@ -2448,7 +2448,7 @@ pub struct GameEventLogInput {
 }
 
 // ---- GameEventLogCharacters ----
-#[derive(FromRow, Serialize, Clone)]
+#[derive(FromRow, Serialize, Clone, specta::Type)]
 #[serde(rename_all = "camelCase")]
 pub struct GameEventLogCharacters {
     pub session_id: String,
@@ -2458,7 +2458,7 @@ pub struct GameEventLogCharacters {
     pub sort_order: i64,
 }
 
-#[derive(Deserialize)]
+#[derive(Deserialize, specta::Type)]
 #[serde(rename_all = "camelCase")]
 pub struct GameEventLogCharactersInput {
     pub session_id: String,
@@ -2496,7 +2496,7 @@ pub struct GameConversationsRow {
     pub updated_at: i64,
 }
 
-#[derive(Serialize, Deserialize)]
+#[derive(Serialize, Deserialize, specta::Type)]
 #[serde(rename_all = "camelCase")]
 pub struct GameConversations {
     pub id: String,
@@ -2524,7 +2524,7 @@ impl From<GameConversationsRow> for GameConversations {
     }
 }
 
-#[derive(Deserialize)]
+#[derive(Deserialize, specta::Type)]
 #[serde(rename_all = "camelCase")]
 pub struct GameConversationsInput {
     pub id: Option<String>,
@@ -2548,7 +2548,7 @@ impl From<GameConversations> for GameConversationsInput {
     }
 }
 
-#[derive(FromRow, Serialize, Deserialize)]
+#[derive(FromRow, Serialize, Deserialize, specta::Type)]
 pub struct GameConversationsIdsMap {
     pub old_id: String,
     pub new_id: String,
@@ -2571,7 +2571,7 @@ pub struct GameMessagesRow {
     pub updated_at: i64,
 }
 
-#[derive(Serialize, Deserialize)]
+#[derive(Serialize, Deserialize, specta::Type)]
 #[serde(rename_all = "camelCase")]
 pub struct GameMessages {
     pub id: String,
@@ -2606,7 +2606,7 @@ impl From<GameMessagesRow> for GameMessages {
     }
 }
 
-#[derive(Deserialize)]
+#[derive(Deserialize, specta::Type)]
 #[serde(rename_all = "camelCase")]
 pub struct GameMessagesInput {
     pub id: Option<String>,
@@ -2637,7 +2637,7 @@ impl From<GameMessages> for GameMessagesInput {
 // ---------------------------------------------------------
 // GameConversationParticipants
 // ---------------------------------------------------------
-#[derive(FromRow, Serialize, Deserialize)]
+#[derive(FromRow, Serialize, Deserialize, specta::Type)]
 #[serde(rename_all = "camelCase")]
 pub struct GameConversationParticipants {
     pub conversation_id: String,

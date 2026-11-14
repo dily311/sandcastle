@@ -12,11 +12,13 @@ use tauri::{AppHandle, Emitter, State};
 // ---- AppSetting ----
 // =======================================
 #[tauri::command]
+#[specta::specta]
 pub async fn get_app_setting(state: State<'_, SettingsState<AppSetting>>) -> Result<AppSetting> {
     Ok(state.0.lock().map_err(|_| AppError::archive(ErrorCode::InternalError, "archive lock poisoned"))?.clone())
 }
 
 #[tauri::command]
+#[specta::specta]
 pub async fn update_app_setting(
     app: AppHandle,
     state: State<'_, SettingsState<AppSetting>>,
@@ -33,6 +35,7 @@ pub async fn update_app_setting(
 // ---- ThemeSetting ----
 // =======================================
 #[tauri::command]
+#[specta::specta]
 pub async fn get_theme_setting(
     state: State<'_, SettingsState<ThemeSetting>>,
 ) -> Result<ThemeSetting> {
@@ -40,6 +43,7 @@ pub async fn get_theme_setting(
 }
 
 #[tauri::command]
+#[specta::specta]
 pub async fn update_theme_setting(
     app: AppHandle,
     state: State<'_, SettingsState<ThemeSetting>>,
@@ -53,6 +57,7 @@ pub async fn update_theme_setting(
 }
 
 #[tauri::command]
+#[specta::specta]
 pub fn get_theme_list(theme_mgr: State<'_, ThemeManager>) -> Result<Vec<CssThemeMeta>> {
     theme_mgr
         .get_list()
@@ -60,6 +65,7 @@ pub fn get_theme_list(theme_mgr: State<'_, ThemeManager>) -> Result<Vec<CssTheme
 }
 
 #[tauri::command]
+#[specta::specta]
 pub fn load_theme_content(theme_mgr: State<'_, ThemeManager>, filename: String) -> Result<String> {
     theme_mgr
         .load_content(&filename)
@@ -67,6 +73,7 @@ pub fn load_theme_content(theme_mgr: State<'_, ThemeManager>, filename: String) 
 }
 
 #[tauri::command]
+#[specta::specta]
 pub fn save_theme(
     theme_mgr: State<'_, ThemeManager>,
     filename: String,
@@ -78,6 +85,7 @@ pub fn save_theme(
 }
 
 #[tauri::command]
+#[specta::specta]
 pub fn delete_theme(theme_mgr: State<'_, ThemeManager>, filename: String) -> Result<()> {
     theme_mgr
         .delete(&filename)
@@ -88,11 +96,13 @@ pub fn delete_theme(theme_mgr: State<'_, ThemeManager>, filename: String) -> Res
 // ---- FeatureSetting ----
 // =======================================
 #[tauri::command]
+#[specta::specta]
 pub async fn get_feature_setting(state: State<'_, SettingsState<FeatureSetting>>) -> Result<FeatureSetting> {
     Ok(state.0.lock().map_err(|_| AppError::archive(ErrorCode::InternalError, "archive lock poisoned"))?.clone())
 }
 
 #[tauri::command]
+#[specta::specta]
 pub async fn update_feature_setting(
     app: AppHandle,
     state: State<'_, SettingsState<FeatureSetting>>,

@@ -25,7 +25,7 @@ pub const SCREEN_EFFECTS: [&str; 10] = ["shake", "flash", "blackout", "fade_in",
 /// 기본 제공 캐릭터 모션 (스탠딩 스프라이트에 적용하는 프리셋).
 pub const MOTIONS: [&str; 8] = ["jump", "bounce", "shake", "nod", "sway", "shrink", "slide_in", "slide_out"];
 
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, specta::Type)]
 #[serde(rename_all = "camelCase")]
 pub struct AssetRef {
     pub id: String,
@@ -36,7 +36,7 @@ pub struct AssetRef {
     pub settings: serde_json::Value,
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, specta::Type)]
 #[serde(tag = "type", rename_all = "camelCase", rename_all_fields = "camelCase")]
 pub enum Cue {
     /// asset이 None이면 정지
@@ -55,7 +55,7 @@ pub enum Cue {
     BackgroundOff,
 }
 
-#[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq, specta::Type)]
 #[serde(rename_all = "camelCase")]
 pub enum LineKind {
     Narration,
@@ -65,7 +65,7 @@ pub enum LineKind {
 }
 
 /// 프론트로 나가는 한 줄. cues는 이 줄을 보여주기 직전에 순서대로 실행한다.
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, specta::Type)]
 #[serde(rename_all = "camelCase")]
 pub struct StageLine {
     pub kind: LineKind,

@@ -15,6 +15,7 @@ use crate::{
 /// - `character_id`: 채팅을 붙일 캐릭터. 비우면 메시지의 캐릭터 이름으로 찾고,
 ///   못 찾으면 오류의 details.speakers에 화자 이름 목록을 담아 돌려준다 (프론트가 캐릭터를 고르게 하면 됨).
 #[tauri::command]
+#[specta::specta]
 pub async fn import_sillytavern(
     app: AppHandle,
     state: State<'_, AppState>,

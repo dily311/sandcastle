@@ -27,6 +27,7 @@ const MAX_SAVE_BYTES: usize = 256 * 1024;
 /// 새 게임(새 책) 시작. 세션을 만들어 바로 저장해서 세션 목록에 보이게 하고,
 /// GameRuntime을 active_runtime에 넣어둔다.
 #[tauri::command]
+#[specta::specta]
 pub async fn start_new_game(state: State<'_, AppState>, settings: State<'_, SettingsState<AppSetting>>) -> Result<GameResponse, AppError> {
     let game_id = current_game_id(&state)?;
 
@@ -54,6 +55,7 @@ pub async fn start_new_game(state: State<'_, AppState>, settings: State<'_, Sett
 /// 이미 메모리에 있는 정의에서 만들어서 DB를 안 읽는다. 어떤 필드를 주고/안 주는지는 runtime/view.rs 참고.
 /// 현재 값(위치, 시간, 변수 값 등)은 RenderState에 있다.
 #[tauri::command]
+#[specta::specta]
 pub fn get_game_view(state: State<'_, AppState>) -> Result<serde_json::Value, AppError> {
     // 플레이를 시작하기 전에도 부를 수 있다 (open_game의 응답에도 같은 값이 들어 있다).
     Ok(crate::game::guard::current_definition(&state)?.view())
@@ -61,6 +63,7 @@ pub fn get_game_view(state: State<'_, AppState>) -> Result<serde_json::Value, Ap
 
 /// 게임 정의의 일관성 검사 결과 (Error/Warning). 임포트 직후나 편집기에서 보여주기 위한 것.
 #[tauri::command]
+#[specta::specta]
 pub async fn validate_game(app: AppHandle, state: State<'_, AppState>) -> Result<Vec<crate::game::validate::Issue>, AppError> {
     use tauri::Manager;
     let game_id = current_game_id(&state)?;
@@ -72,6 +75,7 @@ pub async fn validate_game(app: AppHandle, state: State<'_, AppState>) -> Result
 
 /// 이 게임의 세션(책) 목록. 세션 목록 화면용.
 #[tauri::command]
+#[specta::specta]
 pub async fn list_sessions(state: State<'_, AppState>) -> Result<Vec<GamePlayerSessions>, AppError> {
     let game_id = current_game_id(&state)?;
     Ok(get_all_game_player_sessions(&state.db, &game_id).await?)
@@ -79,6 +83,7 @@ pub async fn list_sessions(state: State<'_, AppState>) -> Result<Vec<GamePlayerS
 
 /// 이 게임의 세션 삭제용
 #[tauri::command]
+#[specta::specta]
 pub async fn delete_sessions(state: State<'_, AppState>, session_id: String) -> Result<(), AppError> {
     delete_game_player_sessions(&state.db, &session_id).await?;
     Ok(())
@@ -115,6 +120,7 @@ async fn open_session(state: &AppState, game_id: &str, session_id: &str, history
 
 /// 세션(책)을 그대로 이어서 플레이한다. 위치/시간/날씨/씬은 세션 테이블에서 복원된다.
 #[tauri::command]
+#[specta::specta]
 pub async fn continue_game(state: State<'_, AppState>, session_id: String, option_history_limit: Option<u32>) -> Result<ContinueGameResponse, AppError> {
     let game_id = current_game_id(&state)?;
     owned_session(&state, &game_id, &session_id).await?;
@@ -124,6 +130,7 @@ pub async fn continue_game(state: State<'_, AppState>, session_id: String, optio
 /// 이전 대사 기록을 더 읽는다 (이어하기 응답의 history보다 오래된 것). beforeSeq에 history.oldestSeq를 넘기면
 /// 그보다 오래된 limit개를 돌려준다. 연출까지 전부 재생하려면 read_journal을 쓴다.
 #[tauri::command]
+#[specta::specta]
 pub async fn read_transcript(state: State<'_, AppState>, session_id: String, before_seq: Option<u32>, limit: Option<u32>) -> Result<TranscriptPage, AppError> {
     let game_id = current_game_id(&state)?;
     let session = owned_session(&state, &game_id, &session_id).await?;
@@ -135,6 +142,7 @@ pub async fn read_transcript(state: State<'_, AppState>, session_id: String, bef
 ///  - 이후 기록이 있으면 그 지점까지를 복사한 새 세션으로 분기한다 (원래 기록은 보존).
 /// 응답의 state.sessionId가 실제로 열린 세션이다 (분기면 새 세션 id).
 #[tauri::command]
+#[specta::specta]
 pub async fn load_save(state: State<'_, AppState>, session_id: String, slot: i64, option_history_limit: Option<u32>) -> Result<ContinueGameResponse, AppError> {
     let game_id = current_game_id(&state)?;
     check_slot(slot)?;
@@ -151,6 +159,7 @@ pub async fn load_save(state: State<'_, AppState>, session_id: String, slot: i64
 
 /// 일지 읽기 전용 재생용: 세션의 [from_seq, to_seq] 구간. AI를 다시 호출하지 않는다.
 #[tauri::command]
+#[specta::specta]
 pub async fn read_journal(state: State<'_, AppState>, session_id: String, from_seq: Option<u32>, to_seq: u32) -> Result<Vec<GameJournal>, AppError> {
     const MAX_RANGE: u32 = 1000; // 한 번에 읽는 양 상한 (큰 세션을 통째로 끌어오지 않게)
     let game_id = current_game_id(&state)?;
@@ -163,6 +172,7 @@ pub async fn read_journal(state: State<'_, AppState>, session_id: String, from_s
 
 /// 세션의 대화 목록 (다시 보기에서 메시지를 읽을 대화를 고르기 위함).
 #[tauri::command]
+#[specta::specta]
 pub async fn read_conversations(state: State<'_, AppState>, session_id: String) -> Result<Vec<GameConversations>, AppError> {
     let game_id = current_game_id(&state)?;
     owned_session(&state, &game_id, &session_id).await?;
@@ -172,6 +182,7 @@ pub async fn read_conversations(state: State<'_, AppState>, session_id: String) 
 
 /// 대화의 [from_seq, to_seq] 구간 메시지. meta에는 그때 나온 선택지와 적용된 변수 변경이 들어 있다.
 #[tauri::command]
+#[specta::specta]
 pub async fn read_messages(state: State<'_, AppState>, conversation_id: String, from_seq: Option<u32>, to_seq: u32) -> Result<Vec<GameMessages>, AppError> {
     const MAX_RANGE: u32 = 1000;
     let game_id = current_game_id(&state)?;
@@ -187,6 +198,7 @@ pub async fn read_messages(state: State<'_, AppState>, conversation_id: String, 
 
 /// 게임 엔진에 커맨드 하나를 보낸다. iframe SDK의 game.move() 등이 여기로 온다.
 #[tauri::command]
+#[specta::specta]
 pub async fn dispatch_command(state: State<'_, AppState>, command: GameCommand) -> Result<GameResponse, AppError> {
     let game_id = current_game_id(&state)?;
     let mut guard = state.active_runtime.lock().await;
@@ -202,6 +214,7 @@ pub async fn dispatch_command(state: State<'_, AppState>, command: GameCommand) 
 
 /// 책갈피 저장. 지금 일지 위치(head_seq)와 상태 스냅샷을 현재 세션의 slot에 남긴다.
 #[tauri::command]
+#[specta::specta]
 pub async fn save_write(state: State<'_, AppState>, slot: i64, data: serde_json::Value) -> Result<(), AppError> {
     let game_id = current_game_id(&state)?;
     check_slot(slot)?;
@@ -237,6 +250,7 @@ pub async fn save_write(state: State<'_, AppState>, slot: i64, data: serde_json:
 
 /// 현재 세션의 slot 책갈피에서 게임이 저장해둔 custom 데이터만 돌려준다 (engine 상태는 노출 안 함).
 #[tauri::command]
+#[specta::specta]
 pub async fn save_read(state: State<'_, AppState>, slot: i64) -> Result<Option<serde_json::Value>, AppError> {
     check_slot(slot)?;
     let session_id = {
@@ -253,6 +267,7 @@ pub async fn save_read(state: State<'_, AppState>, slot: i64) -> Result<Option<s
 
 /// 이 게임의 모든 책갈피(여러 세션에 걸쳐). 책갈피 화면용.
 #[tauri::command]
+#[specta::specta]
 pub async fn save_list(state: State<'_, AppState>) -> Result<Vec<GameSave>, AppError> {
     let game_id = current_game_id(&state)?;
     Ok(get_all_game_save(&state.db, &game_id).await?)
@@ -261,6 +276,7 @@ pub async fn save_list(state: State<'_, AppState>) -> Result<Vec<GameSave>, AppE
 /// 얇은 wrapper — 실제 로직은 game::npc::say. 여기서는 Tauri가 주입하는
 /// AppHandle/State들을 받아서 그대로 넘기기만 한다.
 #[tauri::command]
+#[specta::specta]
 pub async fn npc_say(
     app: AppHandle,
     state: State<'_, AppState>,
@@ -275,6 +291,7 @@ pub async fn npc_say(
 /// 있으면 그 선택지 문구를 input으로 이어서 부르고, 자유 입력도 같은 경로다.
 /// 씬이 열려 있지 않거나 엔딩 씬이거나 aiContinue가 꺼진 씬이면 에러다 (RenderState.sceneChat으로 미리 알 수 있다).
 #[tauri::command]
+#[specta::specta]
 pub async fn scene_say(
     app: AppHandle,
     state: State<'_, AppState>,

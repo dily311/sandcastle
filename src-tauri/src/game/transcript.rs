@@ -14,14 +14,14 @@ use crate::models::game::GameJournal;
 use serde::Serialize;
 use sqlx::SqlitePool;
 
-#[derive(Debug, Clone, Copy, Serialize, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, Serialize, PartialEq, Eq, specta::Type)]
 #[serde(rename_all = "camelCase")]
 pub enum TranscriptKind {
     SceneScript,
     Message,
 }
 
-#[derive(Debug, Clone, Serialize)]
+#[derive(Debug, Clone, Serialize, specta::Type)]
 #[serde(rename_all = "camelCase")]
 pub struct TranscriptEntry {
     pub seq: u32,
@@ -34,7 +34,7 @@ pub struct TranscriptEntry {
     pub lines: Vec<StageLine>,
 }
 
-#[derive(Debug, Clone, Serialize)]
+#[derive(Debug, Clone, Serialize, specta::Type)]
 #[serde(rename_all = "camelCase")]
 pub struct TranscriptPage {
     /// 오래된 것 → 최신 순
@@ -46,7 +46,7 @@ pub struct TranscriptPage {
 }
 
 /// continue_game / load_save의 응답. events는 항상 비어 있고(새로 생긴 일이 없다), 화면은 state + history로 복원한다.
-#[derive(Serialize)]
+#[derive(Serialize, specta::Type)]
 #[serde(rename_all = "camelCase")]
 pub struct ContinueGameResponse {
     pub events: Vec<GameEvent>,

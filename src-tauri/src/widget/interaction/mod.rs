@@ -14,7 +14,7 @@ impl WidgetInteractionState {
     }
 }
 
-#[derive(Debug, Clone, serde::Deserialize)]
+#[derive(Debug, Clone, serde::Deserialize, specta::Type)]
 #[serde(rename_all = "camelCase")]
 pub struct InteractiveRegion {
     pub id: String,

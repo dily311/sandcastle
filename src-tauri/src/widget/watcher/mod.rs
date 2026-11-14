@@ -24,6 +24,7 @@ impl MusicWatcherState {
 
 // 1. 음악 폴더 감시 시작 커맨드
 #[tauri::command]
+#[specta::specta]
 pub async fn start_music_watcher(
     app: AppHandle,
     state: State<'_, AppState>,
@@ -46,6 +47,7 @@ pub async fn start_music_watcher(
 
 // 2. 음악 폴더 감시 중지 커맨드 (Drop을 통한 자원 해제)
 #[tauri::command]
+#[specta::specta]
 pub fn stop_music_watcher(state: State<'_, MusicWatcherState>) -> Result<(), AppError> {
     let mut watcher_guard = state.watcher.lock().map_err(|_| AppError::io("music watcher lock poisoned"))?;
 
