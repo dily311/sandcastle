@@ -7,6 +7,8 @@
 		disabled?: boolean;
 		/** 앞에 구분선 */
 		separator?: boolean;
+		/** 선택 표시 (정렬 등 하나를 고르는 메뉴) */
+		checked?: boolean;
 		onselect: () => void;
 	}
 </script>
@@ -57,7 +59,8 @@
 		{#each items as it (it.label)}
 			{#if it.separator}<div class="sep" role="separator"></div>{/if}
 			<button
-				role="menuitem"
+				role={it.checked === undefined ? "menuitem" : "menuitemradio"}
+				aria-checked={it.checked}
 				class:danger={it.danger}
 				disabled={it.disabled}
 				onclick={() => {
@@ -66,6 +69,7 @@
 				}}
 			>
 				{#if it.icon}<it.icon />{/if}{it.label}
+				{#if it.checked}<span class="check" aria-hidden="true">✓</span>{/if}
 			</button>
 		{/each}
 	</div>
@@ -121,6 +125,12 @@
 	.danger,
 	.danger :global(svg) {
 		color: var(--danger);
+	}
+	.check {
+		margin-left: auto;
+		padding-left: var(--space-3);
+		color: var(--accent-text);
+		font-weight: 700;
 	}
 	.sep {
 		height: 1px;

@@ -20,7 +20,7 @@
 		Trash2,
 	} from "@lucide/svelte";
 	import { Avatar, Badge, Button, ContextMenu, IconButton, Input, Select, Switch, Textarea, type MenuItem } from "$shared/ui";
-	import { ChevronDown as Chev, Folder, FolderOpen, FolderPlus, Images, ListTree, SlidersHorizontal, Upload } from "@lucide/svelte";
+	import { ArrowDownUp, ChevronDown as Chev, FileArchive, Folder, FolderOpen, FolderPlus, Images, ListTree, SlidersHorizontal, Upload } from "@lucide/svelte";
 
 	const panelTabs = [
 		{ id: "settings", label: "대화 설정", icon: SlidersHorizontal },
@@ -28,7 +28,7 @@
 		{ id: "assets", label: "에셋", icon: Images },
 	] as const;
 	import ConvCard from "./ConvCard.svelte";
-	import { characters, convActions, folderActions, relative, store, ui } from "./mock.svelte";
+	import { characters, convActions, folderActions, relative, store, ui, type MockConv } from "./mock.svelte";
 
 	let { convId, charId, onback, onopen }: { convId: string; charId: string; onback: () => void; onopen: (id: string) => void } = $props();
 	const character = $derived(characters.find((c) => c.id === charId)!);
@@ -65,13 +65,35 @@
 
 	// 같은 캐릭터의 대화만
 	let query = $state("");
-	let sort: "recent" | "name" | "count" = $state("recent");
+	type Sort = "newest" | "oldest" | "name" | "name-desc" | "most" | "least";
+	let sort: Sort = $state("newest");
+	const sorts: { id: Sort; label: string }[] = [
+		{ id: "newest", label: "최신순" },
+		{ id: "oldest", label: "오래된순" },
+		{ id: "name", label: "이름순 (가→하)" },
+		{ id: "name-desc", label: "이름 역순 (하→가)" },
+		{ id: "most", label: "메시지 많은 순" },
+		{ id: "least", label: "메시지 적은 순" },
+	];
+	const compare: Record<Sort, (a: MockConv, b: MockConv) => number> = {
+		newest: (a, b) => a.ago - b.ago,
+		oldest: (a, b) => b.ago - a.ago,
+		name: (a, b) => a.title.localeCompare(b.title, "ko"),
+		"name-desc": (a, b) => b.title.localeCompare(a.title, "ko"),
+		most: (a, b) => b.count - a.count,
+		least: (a, b) => a.count - b.count,
+	};
 	const convs = $derived.by(() => {
 		const q = query.trim().toLowerCase();
 		return store.convs
 			.filter((c) => c.charId === charId && (!q || c.title.toLowerCase().includes(q)))
-			.sort((a, b) => Number(b.pinned) - Number(a.pinned) || (sort === "recent" ? a.ago - b.ago : sort === "name" ? a.title.localeCompare(b.title) : b.count - a.count));
+			.sort((a, b) => Number(b.pinned) - Number(a.pinned) || compare[sort](a, b));
 	});
+	let sortMenu = $state<{ x: number; y: number } | null>(null);
+	function openSortMenu(e: MouseEvent) {
+		const r = (e.currentTarget as HTMLElement).getBoundingClientRect();
+		sortMenu = { x: r.left, y: r.bottom + 4 };
+	}
 	const folders = $derived(store.folders.filter((f) => f.charId === charId));
 	let collapsed: Record<string, boolean> = $state({});
 
@@ -151,6 +173,14 @@
 		{ kind: "chapter", label: "2장 · 그림자 송곳니", n: 4 },
 		{ kind: "msg", label: "(숨긴 메시지)", n: 4 },
 	];
+	let tocQuery = $state("");
+	const tocShown = $derived.by(() => {
+		const q = tocQuery.trim().toLowerCase();
+		if (!q) return toc;
+		// 메시지 번호(#3, 3)나 내용으로 찾기
+		const num = Number(q.replace("#", ""));
+		return toc.filter((t) => t.label.toLowerCase().includes(q) || (t.kind === "msg" && t.n === num));
+	});
 </script>
 
 {#snippet folderInput()}
@@ -199,8 +229,14 @@
 				<Input bind:value={query} placeholder="대화 검색" aria-label="대화 검색">
 					{#snippet leading()}<Search />{/snippet}
 				</Input>
-				<Select aria-label="정렬" bind:value={sort} options={[{ value: "recent", label: "최근 순" }, { value: "name", label: "이름 순" }, { value: "count", label: "메시지 많은 순" }]} />
+				<IconButton label="정렬: {sorts.find((s) => s.id === sort)?.label}" size="md" active={!!sortMenu} aria-haspopup="menu" onclick={openSortMenu}><ArrowDownUp /></IconButton>
 			</div>
+			<ContextMenu
+				at={sortMenu}
+				label="정렬"
+				items={sorts.map((s, i) => ({ label: s.label, checked: sort === s.id, separator: i === 2 || i === 4, onselect: () => (sort = s.id) }))}
+				onclose={() => (sortMenu = null)}
+			/>
 			<div class="convs-list">
 				{#if editingFolder === "new"}{@render folderInput()}{/if}
 				{#each folders as f (f.id)}
@@ -363,6 +399,11 @@
 				</div>
 			{:else if panelTab === "assets"}
 				<div class="panel-body">
+					<div class="atools">
+						<span class="faint">{assets.length}개</span>
+						<IconButton label="이미지 가져오기 (여러 장 선택)" size="sm"><ImagePlus /></IconButton>
+						<IconButton label="ZIP 가져오기 (표정 폴더 묶음)" size="sm"><FileArchive /></IconButton>
+					</div>
 					<div class="agrid">
 						{#each assets as a, i (a.key)}
 							<button class="tile" class:off={!a.on} title={a.on ? a.key : `${a.key} (AI에게 안 보냄)`} oncontextmenu={(e) => openAssetMenu(e, i)}>
@@ -370,14 +411,20 @@
 								<span class="key">{a.key}</span>
 							</button>
 						{/each}
-						<button class="tile add"><ImagePlus /><span>추가</span></button>
 					</div>
 					<ContextMenu at={menu} items={menuItems} label="에셋 메뉴" onclose={() => (menu = null)} />
 				</div>
 			{:else}
+				<div class="toc-search">
+					<Input bind:value={tocQuery} placeholder="챕터·메시지·번호 검색" aria-label="목차 검색">
+						{#snippet leading()}<Search />{/snippet}
+					</Input>
+				</div>
 				<ol class="toc">
-					{#each toc as t (t.kind + t.n + t.label)}
+					{#each tocShown as t (t.kind + t.n + t.label)}
 						<li class={t.kind}><button><span class="no">{t.kind === "msg" ? `#${t.n}` : ""}</span>{t.label}</button></li>
+					{:else}
+						<li class="toc-none">찾는 항목 없음</li>
 					{/each}
 				</ol>
 			{/if}
@@ -418,14 +465,31 @@
 		flex: 1;
 	}
 	.convs-tools {
-		display: flex;
-		flex-direction: column;
-		gap: var(--space-2);
+		display: grid;
+		grid-template-columns: minmax(0, 1fr) auto;
+		align-items: center;
+		gap: var(--space-1);
 		padding: 0 var(--space-3) var(--space-2);
 	}
-	.convs-tools :global(select) {
-		height: var(--control-sm);
+	.atools {
+		display: flex;
+		align-items: center;
+		justify-content: flex-end;
+		gap: 2px;
+		margin-bottom: calc(var(--space-2) * -1);
+	}
+	.atools span {
+		margin-right: auto;
 		font-size: var(--text-xs);
+	}
+	.toc-search {
+		padding: var(--space-3) var(--space-3) var(--space-2);
+	}
+	.toc-none {
+		padding: var(--space-4);
+		text-align: center;
+		font-size: var(--text-sm);
+		color: var(--text-faint);
 	}
 	.convs-list {
 		flex: 1;
@@ -630,21 +694,6 @@
 	}
 	.tile.off .key {
 		color: var(--text-faint);
-	}
-	.tile.add {
-		align-items: center;
-		justify-content: center;
-		gap: 4px;
-		min-height: 80px;
-		border-style: dashed;
-		background: transparent;
-		color: var(--text-muted);
-		font-size: var(--text-xs);
-		cursor: pointer;
-	}
-	.tile.add:hover {
-		border-color: var(--accent);
-		color: var(--accent-text);
 	}
 
 	.reader {
