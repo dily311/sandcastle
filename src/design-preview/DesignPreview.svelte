@@ -1,6 +1,8 @@
 <script lang="ts">
 	import {
 		Gamepad2,
+		ChevronLeft,
+		ChevronRight,
 		Minus,
 		PanelRight,
 		Settings,
@@ -11,14 +13,13 @@
 		X,
 	} from "@lucide/svelte";
 	import { IconButton } from "$shared/ui";
-	import { ui } from "./mock.svelte";
+	import { back, canBack, canForward, current, forward, go, ui } from "./mock.svelte";
 	import { ACCENTS, accentValue } from "$shared/ui/accents";
 	import PhonePage from "./PhonePage.svelte";
 	import CharacterPage from "./CharacterPage.svelte";
 	import SettingsPage from "./SettingsPage.svelte";
 
-	type Page = "phone" | "character" | "game" | "persona" | "settings";
-	let page: Page = $state("character");
+	const page = $derived(current().page);
 	let dark = $state(false);
 	let accent = $state(ACCENTS[0].id);
 
@@ -35,18 +36,35 @@
 	] as const;
 </script>
 
+<svelte:window
+	onkeydown={(e) => {
+		if (!e.altKey) return;
+		if (e.key === "ArrowLeft") back();
+		if (e.key === "ArrowRight") forward();
+	}}
+	onmouseup={(e) => {
+		if (e.button === 3) back();
+		if (e.button === 4) forward();
+	}}
+/>
+
 <div class="app">
 	<!-- 프로그램 헤더 = 타이틀바 + 메뉴 (모바일도 같은 구조) -->
 	<header class="titlebar">
 		<span class="logo" aria-hidden="true">S</span>
+		<!-- 앞으로/뒤로: 앱 안의 화면 이동 기록 (Alt+←/→, 마우스 뒤로/앞으로 버튼도 같음) -->
+		<div class="history">
+			<IconButton label="뒤로 (Alt+←)" size="sm" disabled={!canBack()} onclick={back}><ChevronLeft /></IconButton>
+			<IconButton label="앞으로 (Alt+→)" size="sm" disabled={!canForward()} onclick={forward}><ChevronRight /></IconButton>
+		</div>
 		<nav aria-label="주 메뉴">
 			{#each nav as n (n.id)}
-				<button class="tab" class:active={page === n.id} aria-current={page === n.id ? "page" : undefined} aria-label={n.label} title={n.label} onclick={() => (page = n.id)}>
+				<button class="tab" class:active={page === n.id} aria-current={page === n.id ? "page" : undefined} aria-label={n.label} title={n.label} onclick={() => go({ page: n.id })}>
 					<n.icon />
 					{#if "badge" in n && n.badge}<span class="dot" aria-label="새 메시지 {n.badge}"></span>{/if}
 				</button>
 			{/each}
-			<button class="tab" class:active={page === "settings"} aria-current={page === "settings" ? "page" : undefined} aria-label="설정" title="설정" onclick={() => (page = "settings")}>
+			<button class="tab" class:active={page === "settings"} aria-current={page === "settings" ? "page" : undefined} aria-label="설정" title="설정" onclick={() => go({ page: "settings" })}>
 				<Settings />
 			</button>
 		</nav>
@@ -124,6 +142,13 @@
 	nav {
 		display: flex;
 		gap: 2px;
+	}
+	.history {
+		display: flex;
+		margin-right: var(--space-2);
+	}
+	.history :global(.icon-btn) {
+		width: 24px;
 	}
 	.tab {
 		position: relative;

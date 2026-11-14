@@ -102,3 +102,29 @@ export const ui = $state({
 	panelTabs: [] as PanelTab[],
 	panelTab: "",
 });
+
+// ---- 앱 전체 앞으로/뒤로 (브라우저처럼 화면 이동 기록) ----
+export interface Route {
+	page: "phone" | "character" | "game" | "persona" | "settings";
+	charId?: string | null;
+	convId?: string | null;
+}
+export const nav = $state({ stack: [{ page: "character" }] as Route[], index: 0 });
+export function current(): Route {
+	return nav.stack[nav.index];
+}
+/** 새 화면으로 이동 (앞으로 기록은 버림). 같은 화면이면 무시 */
+export function go(route: Route) {
+	const c = current();
+	if (c.page === route.page && (c.charId ?? null) === (route.charId ?? null) && (c.convId ?? null) === (route.convId ?? null)) return;
+	nav.stack = [...nav.stack.slice(0, nav.index + 1), route];
+	nav.index = nav.stack.length - 1;
+}
+export const canBack = () => nav.index > 0;
+export const canForward = () => nav.index < nav.stack.length - 1;
+export function back() {
+	if (canBack()) nav.index--;
+}
+export function forward() {
+	if (canForward()) nav.index++;
+}

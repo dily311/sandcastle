@@ -8,7 +8,6 @@
 		EyeOff,
 		FileSearch,
 		GitBranch,
-		ArrowLeft,
 		Eye,
 		ImagePlus,
 		Search,
@@ -30,7 +29,7 @@
 	import ConvCard from "./ConvCard.svelte";
 	import { characters, convActions, folderActions, relative, store, ui, type MockConv } from "./mock.svelte";
 
-	let { convId, charId, onback, onopen }: { convId: string; charId: string; onback: () => void; onopen: (id: string) => void } = $props();
+	let { convId, charId, onopen }: { convId: string; charId: string; onopen: (id: string) => void } = $props();
 	const character = $derived(characters.find((c) => c.id === charId)!);
 
 	let showList = $state(true);
@@ -219,7 +218,6 @@
 	{#if showList}
 		<aside class="convs" aria-label="대화 목록">
 			<div class="convs-head">
-				<IconButton label="{character.name} 정보로" size="sm" onclick={onback}><ArrowLeft /></IconButton>
 				<span class="spacer"></span>
 				<IconButton label="새 대화" size="sm" variant="soft"><Plus /></IconButton>
 				<IconButton label="대화 가져오기 (SillyTavern .jsonl 등)" size="sm"><Upload /></IconButton>

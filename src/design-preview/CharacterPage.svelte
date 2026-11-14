@@ -1,12 +1,13 @@
 <script lang="ts">
-	import { ArrowLeft, ChevronRight, Ellipsis, MessageSquarePlus, Plus, Search, Upload } from "@lucide/svelte";
+	import { ChevronRight, Ellipsis, MessageSquarePlus, Plus, Search, Upload } from "@lucide/svelte";
 	import { Avatar, Button, IconButton, Input, Segmented } from "$shared/ui";
 	import ChatDetail from "./ChatDetail.svelte";
-	import { characters, relative, store } from "./mock.svelte";
+	import { characters, current, go, relative, store } from "./mock.svelte";
 
 	// 캐릭터 목록 → 캐릭터 상세 → 대화 상세 (대화 목록·폴더는 대화 상세의 왼쪽 사이드바)
-	let charId: string | null = $state(null);
-	let convId: string | null = $state(null);
+	// 위치는 앱 전체 이동 기록(nav)에 있음 → 타이틀바 앞으로/뒤로 버튼으로 오감
+	const charId = $derived(current().charId ?? null);
+	const convId = $derived(current().convId ?? null);
 	let query = $state("");
 	let tab: "overview" | "recent" | "assets" | "stats" = $state("overview");
 
@@ -34,18 +35,15 @@
 	const recent = $derived(charId ? convsOf(charId) : []);
 
 	function open(cid: string, conv?: string) {
-		charId = cid;
-		convId = conv ?? null;
+		go({ page: "character", charId: cid, convId: conv ?? null });
 	}
 </script>
 
 {#if charId && convId}
-	<ChatDetail {convId} {charId} onback={() => (convId = null)} onopen={(id) => (convId = id)} />
+	<ChatDetail {convId} {charId} onopen={(id) => go({ page: "character", charId, convId: id })} />
 {:else if charId && character}
 	<div class="detail">
-		<div class="banner">
-			<IconButton label="캐릭터 목록" variant="soft" onclick={() => (charId = null)}><ArrowLeft /></IconButton>
-		</div>
+		<div class="banner"></div>
 		<header class="profile">
 			<div class="portrait"><Avatar name={character.name} size={96} /></div>
 			<div class="ident">
@@ -54,7 +52,7 @@
 				<p>{character.intro}</p>
 			</div>
 			<div class="cta">
-				<Button variant="primary" onclick={() => recent[0] && (convId = recent[0].id)}>
+				<Button variant="primary" onclick={() => recent[0] && open(charId!, recent[0].id)}>
 					{#snippet icon()}<MessageSquarePlus />{/snippet}
 					{recent.length ? "이어서 대화" : "대화 시작"}
 				</Button>
@@ -77,7 +75,7 @@
 				<ul class="recent">
 					{#each recent as c (c.id)}
 						<li>
-							<button onclick={() => (convId = c.id)}>
+							<button onclick={() => open(charId!, c.id)}>
 								<span><b>{c.title}</b><small>마지막 활동 · {relative(c.ago)} · {c.count}개</small></span>
 								<ChevronRight />
 							</button>
