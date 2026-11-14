@@ -18,7 +18,7 @@ use crate::{
     state::{AppState, WindowMode},
     sys::{settings::SettingsState, themes::ThemeManager},
 };
-use commands::{ai_service::*, conversation::*, game_engine::*, game_manager::*, settings::*, task::*, regex::*, character_image::*};
+use commands::{ai_service::*, conversation::*, game_engine::*, game_manager::*, settings::*, task::*, regex::*, character_image::*, import::*};
 
 #[cfg(desktop)]
 mod widget;
@@ -97,6 +97,8 @@ pub fn run() {
             update_character_image,
             delete_character_image,
             set_conversation_images_enabled,
+            // import
+            import_sillytavern,
             // api_profile
             get_api_profile,
             get_all_api_profile,
@@ -232,6 +234,8 @@ pub fn run() {
             update_character_image,
             delete_character_image,
             set_conversation_images_enabled,
+            // import
+            import_sillytavern,
             // api_profile
             get_api_profile,
             get_all_api_profile,

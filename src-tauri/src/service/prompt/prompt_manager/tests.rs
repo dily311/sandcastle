@@ -260,3 +260,17 @@ fn macros_leave_unknown_and_unclosed_tags() {
     assert_eq!(m.apply("{{unknown}} {{char"), "{{unknown}} {{char");
     assert_eq!(m.apply("a{{newline}}b{{trim}}"), "a\nb");
 }
+
+#[test]
+fn preset_context_size_overrides_request_limit() {
+    let mut req = request(ctx(), "hi");
+    req.context_limit = 1_000_000;
+    req.context.character_info = Some("long ".repeat(500));
+    // 프리셋 컨텍스트 1100 - 응답 1024 = 76토큰 → 넘침
+    let pr = preset(
+        vec![block("main", "system", "Main.", 0), block("charDescription", "system", "", 1)],
+        json!({ "context_size": 1100 }),
+    );
+    let err = PromptManager.build(req, Some(&pr)).unwrap_err();
+    assert_eq!(err.to_response().code, ErrorCode::AiContextOverflow);
+}

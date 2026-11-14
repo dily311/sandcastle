@@ -92,11 +92,14 @@ impl PromptManager {
         };
         let user_message = request.user_message.trim().to_string();
 
-        // ---- 예산
-        let budget = if request.context_limit == 0 {
+        // ---- 예산 (프리셋에 컨텍스트 크기가 있으면 그 값이 우선)
+        let context_limit = preset
+            .and_then(|p| context_limit_from(&p.preset))
+            .unwrap_or(request.context_limit);
+        let budget = if context_limit == 0 {
             usize::MAX
         } else {
-            (request.context_limit as usize).saturating_sub(options.max_tokens.unwrap_or(0) as usize)
+            (context_limit as usize).saturating_sub(options.max_tokens.unwrap_or(0) as usize)
         };
 
         let mut fixed = token_if(&rules) + token_if(&user_message);
@@ -446,6 +449,16 @@ fn chat_options_from(preset: &PromptPresets) -> ChatOptions {
         }
     }
     o
+}
+
+/// 프리셋의 컨텍스트 크기 (settings_json 우선, 없으면 config_json)
+fn context_limit_from(preset: &PromptPresets) -> Option<u32> {
+    [preset.settings_json.as_ref(), Some(&preset.config_json)]
+        .into_iter()
+        .flatten()
+        .find_map(|src| num(src, &["context_size", "contextSize", "openai_max_context"]))
+        .filter(|v| *v > 0.0)
+        .map(|v| v as u32)
 }
 
 fn num(v: &Value, keys: &[&str]) -> Option<f64> {

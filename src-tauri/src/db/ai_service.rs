@@ -116,12 +116,14 @@ pub async fn get_prompt_preset<'e, E>(executor: E, id: &str) -> Result<PromptPre
     Ok(rows.into())
 }
 
-pub async fn upsert_api_profile<'e, E>(executor: E, input: PromptPresetsInput) -> Result<(), Error> where E: Executor<'e, Database = Sqlite> {
+/// 프롬프트 프리셋 생성/수정. 저장된 id를 돌려준다.
+pub async fn upsert_prompt_preset<'e, E>(executor: E, input: PromptPresetsInput) -> Result<String, Error> where E: Executor<'e, Database = Sqlite> {
     let id = input.id.clone().unwrap_or_else(|| Uuid::new_v4().to_string());
-    let now = chrono::Utc::now().timestamp();
-    let config_json = serde_json::to_string(&input.config_json).ok().unwrap_or_default();
-    let settings_json = input.settings_json.and_then(|s| serde_json::to_string(&s).ok()).unwrap_or_default();
-    let compatibility_json = input.compatibility_json.and_then(|s| serde_json::to_string(&s).ok()).unwrap_or_default();
+    let now = chrono::Utc::now().timestamp_millis();
+    let config_json = input.config_json.to_string();
+    // 값이 없으면 빈 문자열이 아니라 NULL로 저장
+    let settings_json = input.settings_json.as_ref().map(|v| v.to_string());
+    let compatibility_json = input.compatibility_json.as_ref().map(|v| v.to_string());
     sqlx::query(r#"
         INSERT INTO prompt_presets (id, name, description, preset_type, source_format, config_json, settings_json, compatibility_json, created_at, updated_at) 
         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
@@ -136,7 +138,7 @@ pub async fn upsert_api_profile<'e, E>(executor: E, input: PromptPresetsInput) -
             updated_at=excluded.updated_at
 
     "#)
-    .bind(id)
+    .bind(&id)
     .bind(&input.name)
     .bind(&input.description)
     .bind(&input.preset_type)
@@ -149,7 +151,7 @@ pub async fn upsert_api_profile<'e, E>(executor: E, input: PromptPresetsInput) -
     .execute(executor)
     .await?;
 
-    Ok(())
+    Ok(id)
 }
 
 pub async fn delete_prompt_preset<'e, E>(executor: E, id: &str) -> Result<bool, Error> where E: Executor<'e, Database = Sqlite> {
@@ -207,9 +209,10 @@ pub async fn get_prompt_block<'e, E>(executor: E, id: &str) -> Result<PromptBloc
 
 pub async fn upsert_prompt_block<'e, E>(executor: E, preset_id: &str, input: PromptBlocksInput) -> Result<(), Error> where E: Executor<'e, Database = Sqlite> {
     let id = input.id.clone().unwrap_or_else(|| Uuid::new_v4().to_string());
-    let now = chrono::Utc::now().timestamp();
-    let triggers_json = serde_json::to_string(&input.triggers_json).ok().unwrap_or_default();
-    let extra_json = input.extra_json.and_then(|s| serde_json::to_string(&s).ok()).unwrap_or_default();
+    let now = chrono::Utc::now().timestamp_millis();
+    // 이전에는 문자열을 한 번 더 JSON 인코딩해서 triggers가 무시되었다
+    let triggers_json = if input.triggers_json.is_array() { input.triggers_json.to_string() } else { "[]".to_string() };
+    let extra_json = input.extra_json.as_ref().map(|v| v.to_string());
     sqlx::query(r#"
         INSERT INTO prompt_blocks (id, preset_id, identifier, block_type, name, role, content, enabled, position, depth, sort_order, triggers_json, extra_json, created_at, updated_at) 
         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)

@@ -3,6 +3,7 @@ pub mod task;
 pub mod ai_service;
 pub mod regex;
 pub mod character_image;
+pub mod import;
 
 pub mod conversation;
 

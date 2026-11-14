@@ -5,5 +5,6 @@ pub mod secret_store;
 
 pub mod ai;
 pub mod chat;
+pub mod import;
 pub mod prompt;
 pub use chat::chat_manager::ChatManager;

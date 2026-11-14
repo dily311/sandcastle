@@ -10,9 +10,12 @@
 //!   모델은 이후 대화 기록에서 자기가 띄운 이미지를 알 수 있다.
 use std::path::{Path, PathBuf};
 
+use uuid::Uuid;
+
 use crate::{
+    db::{self, conn::DbPool},
     error::{AppError, Result},
-    models::character_image::{CharacterImage, ChatImageRef},
+    models::character_image::{CharacterImage, CharacterImageRow, ChatImageRef},
 };
 
 /// 앱 전체 스위치 키 (FeatureSetting)
@@ -117,6 +120,62 @@ pub fn store_image_file(
         rel(rel_dir.join(format!("{image_id}.webp"))),
         rel(rel_dir.join("thumb").join(format!("{image_id}.webp"))),
     ))
+}
+
+/// 여러 이미지를 캐릭터에 추가. 하나가 실패하면 거기서 멈추고, 앞서 추가된 것은 남긴다.
+/// 이미지 변환은 blocking 스레드에서 한다.
+pub async fn add_images(
+    db: &DbPool,
+    app_data_dir: &Path,
+    character_id: &str,
+    paths: &[PathBuf],
+) -> Result<Vec<CharacterImage>> {
+    if !db::conversation::char_exists(db, character_id).await? {
+        return Err(AppError::not_found("존재하지 않는 캐릭터입니다"));
+    }
+    let mut added = vec![];
+    for source in paths {
+        let id = Uuid::new_v4().to_string();
+        let (file_path, thumb_path) = {
+            let (base, cid, id, source) =
+                (app_data_dir.to_path_buf(), character_id.to_string(), id.clone(), source.clone());
+            tokio::task::spawn_blocking(move || store_image_file(&base, &cid, &id, &source))
+                .await
+                .map_err(|e| AppError::internal(e.to_string()))??
+        };
+
+        let key = unique_key(db, character_id, &key_from_path(source)).await?;
+        let now = chrono::Utc::now().timestamp_millis();
+        let row = CharacterImageRow {
+            id,
+            character_id: character_id.to_string(),
+            key,
+            file_path,
+            thumb_path: Some(thumb_path),
+            enabled: true,
+            sort_order: db::character_image::next_image_sort_order(db, character_id).await?,
+            created_at: now,
+            updated_at: now,
+        };
+        if let Err(e) = db::character_image::insert_character_image(db, &row).await {
+            remove_image_files(app_data_dir, &[&row.file_path, row.thumb_path.as_deref().unwrap_or_default()]);
+            return Err(e.into());
+        }
+        added.push(CharacterImage::from_row(row, app_data_dir));
+    }
+    Ok(added)
+}
+
+/// 파일 이름 기반 키가 겹치면 " 2", " 3"… 을 붙인다
+async fn unique_key(db: &DbPool, character_id: &str, base_key: &str) -> Result<String> {
+    let base_key = normalize_key(base_key).unwrap_or_else(|_| "image".to_string());
+    let mut key = base_key.clone();
+    let mut n = 2;
+    while db::character_image::image_key_exists(db, character_id, &key, None).await? {
+        key = format!("{base_key} {n}");
+        n += 1;
+    }
+    Ok(key)
 }
 
 /// 이미지 파일 삭제 (없으면 무시)

@@ -176,8 +176,9 @@ pub struct PromptBlocksInput {
     pub position: String,
     pub depth: i64,
     pub sort_order: i64,
-    pub triggers_json: String,
-    pub extra_json: Option<String>,
+    /// 생성 유형 배열 (예: ["normal", "continue"]). 비면 항상 사용
+    pub triggers_json: Value,
+    pub extra_json: Option<Value>,
 }
 
 #[derive(Deserialize, Serialize)]

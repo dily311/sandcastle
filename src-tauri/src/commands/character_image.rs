@@ -2,13 +2,12 @@
 use std::path::PathBuf;
 
 use tauri::{AppHandle, Manager, State};
-use uuid::Uuid;
 
 use crate::{
     db,
     error::{AppError, Result},
-    models::character_image::{CharacterImage, CharacterImageRow, CharacterImageUpdate},
-    service::chat::chat_images::{key_from_path, normalize_key, remove_image_files, store_image_file},
+    models::character_image::{CharacterImage, CharacterImageUpdate},
+    service::chat::chat_images::{add_images, normalize_key, remove_image_files},
     state::AppState,
 };
 
@@ -30,8 +29,8 @@ pub async fn list_character_images(
 }
 
 /// 사용자가 파일 대화상자로 고른 이미지들을 캐릭터에 추가.
-/// 키는 파일 이름에서 만들고, 겹치면 " 2", " 3"…을 붙인다. 하나라도 실패하면 그 파일에서 멈추고
-/// 이미 추가된 것은 남긴다(오류 메시지에 실패한 파일 표시).
+/// 키는 파일 이름에서 만들고 겹치면 " 2", " 3"…을 붙인다.
+/// (SillyTavern 표정 스프라이트 폴더의 파일들을 그대로 넘기면 감정 이름이 키가 된다)
 #[tauri::command]
 pub async fn add_character_images(
     app: AppHandle,
@@ -39,43 +38,9 @@ pub async fn add_character_images(
     character_id: String,
     paths: Vec<String>,
 ) -> Result<Vec<CharacterImage>> {
-    if !db::conversation::char_exists(&state.db, &character_id).await? {
-        return Err(AppError::not_found("존재하지 않는 캐릭터입니다"));
-    }
     let base = app_data_dir(&app)?;
-    let mut added = vec![];
-
-    for path in paths {
-        let source = PathBuf::from(&path);
-        let id = Uuid::new_v4().to_string();
-
-        let (file_path, thumb_path) = {
-            let (base, cid, id, source) = (base.clone(), character_id.clone(), id.clone(), source.clone());
-            tauri::async_runtime::spawn_blocking(move || store_image_file(&base, &cid, &id, &source))
-                .await
-                .map_err(|e| AppError::internal(e.to_string()))??
-        };
-
-        let key = unique_key(&state, &character_id, &key_from_path(&source)).await?;
-        let now = chrono::Utc::now().timestamp_millis();
-        let row = CharacterImageRow {
-            id: id.clone(),
-            character_id: character_id.clone(),
-            key,
-            file_path,
-            thumb_path: Some(thumb_path),
-            enabled: true,
-            sort_order: db::character_image::next_image_sort_order(&state.db, &character_id).await?,
-            created_at: now,
-            updated_at: now,
-        };
-        if let Err(e) = db::character_image::insert_character_image(&state.db, &row).await {
-            remove_image_files(&base, &[&row.file_path, row.thumb_path.as_deref().unwrap_or_default()]);
-            return Err(e.into());
-        }
-        added.push(CharacterImage::from_row(row, &base));
-    }
-    Ok(added)
+    let paths: Vec<PathBuf> = paths.into_iter().map(PathBuf::from).collect();
+    add_images(&state.db, &base, &character_id, &paths).await
 }
 
 #[tauri::command]
@@ -117,16 +82,4 @@ pub async fn set_conversation_images_enabled(
         return Err(AppError::not_found(format!("대화를 찾을 수 없습니다: {conversation_id}")));
     }
     Ok(())
-}
-
-/// 파일 이름 기반 키가 겹치면 " 2", " 3"… 을 붙인다
-async fn unique_key(state: &State<'_, AppState>, character_id: &str, base_key: &str) -> Result<String> {
-    let base_key = normalize_key(base_key).unwrap_or_else(|_| "image".to_string());
-    let mut key = base_key.clone();
-    let mut n = 2;
-    while db::character_image::image_key_exists(&state.db, character_id, &key, None).await? {
-        key = format!("{base_key} {n}");
-        n += 1;
-    }
-    Ok(key)
 }
