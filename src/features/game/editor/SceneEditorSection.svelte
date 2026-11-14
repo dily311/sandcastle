@@ -1,4 +1,8 @@
 <script lang="ts">
+	import { confirmAction } from "$shared/stores/confirm.svelte";
+	import { toasts } from "$shared/stores/toast.svelte";
+	/** 지우기 전에 앱 확인 창으로 물어봄 */
+	const ask = (message: string) => confirmAction({ title: "삭제", message, confirmLabel: "삭제", danger: true });
 	import type { GameSceneInput } from "$/lib/type/game";
 
 	type Props = {
@@ -32,8 +36,8 @@
 		selectedIndex = scenes.length - 1;
 	}
 
-	function handleDeleteScene(index: number) {
-		if (!confirm(`"${scenes[index].sceneName}" 씬을 삭제하시겠습니까?`)) return;
+	async function handleDeleteScene(index: number) {
+		if (!await ask(`"${scenes[index].sceneName}" 씬을 삭제하시겠습니까?`)) return;
 		scenes.splice(index, 1);
 		selectedIndex = scenes.length > 0 ? Math.max(0, index - 1) : null;
 	}
@@ -165,17 +169,17 @@
 		justify-content: space-between;
 		align-items: center;
 		padding: 1rem;
-		border-bottom: 1px solid #334155;
-		background: #0f172a;
+		border-bottom: 1px solid var(--border);
+		background: var(--surface);
 	}
 	.pane-header h4 {
 		margin: 0;
 		font-size: 0.95rem;
-		color: #f8fafc;
+		color: var(--text);
 	}
 	.add-btn {
-		background: #3b82f6;
-		color: white;
+		background: var(--accent);
+		color: var(--text-on-accent);
 		border: none;
 		padding: 0.4rem 0.8rem;
 		border-radius: 4px;
@@ -184,7 +188,7 @@
 		cursor: pointer;
 	}
 	.add-btn:hover {
-		background: #2563eb;
+		background: var(--accent-hover);
 	}
 
 	.scroll-list {
@@ -200,18 +204,18 @@
 		justify-content: space-between;
 		align-items: center;
 		padding: 0.75rem 1rem;
-		background: #0f172a;
+		background: var(--surface);
 		border-radius: 6px;
 		cursor: pointer;
 		border: 1px solid transparent;
 		transition: all 0.15s;
 	}
 	.list-item:hover {
-		border-color: #475569;
+		border-color: var(--border-strong);
 	}
 	.list-item.active {
-		border-color: #38bdf8;
-		background: #172554;
+		border-color: var(--accent);
+		background: var(--accent-soft);
 	}
 
 	.item-info {
@@ -223,15 +227,15 @@
 	.item-info .title {
 		font-weight: 600;
 		font-size: 0.9rem;
-		color: #f8fafc;
+		color: var(--text);
 	}
 	.item-info .key {
 		font-size: 0.75rem;
-		color: #94a3b8;
+		color: var(--text-muted);
 	}
 	.badge.ending {
-		background: #84cc16;
-		color: #0f172a;
+		background: var(--success);
+		color: var(--surface);
 		font-size: 0.65rem;
 		font-weight: 700;
 		padding: 0.1rem 0.4rem;
@@ -239,7 +243,7 @@
 	}
 	.empty-text {
 		text-align: center;
-		color: #64748b;
+		color: var(--text-faint);
 		padding: 2rem;
 		font-size: 0.85rem;
 	}
@@ -253,17 +257,17 @@
 		justify-content: space-between;
 		align-items: center;
 		margin-bottom: 1.2rem;
-		border-bottom: 1px solid #334155;
+		border-bottom: 1px solid var(--border);
 		padding-bottom: 0.8rem;
 	}
 	.detail-header h3 {
 		margin: 0;
 		font-size: 1.1rem;
-		color: #f8fafc;
+		color: var(--text);
 	}
 	.delete-btn {
-		background: #ef4444;
-		color: white;
+		background: var(--danger);
+		color: var(--text-on-accent);
 		border: none;
 		padding: 0.4rem 0.8rem;
 		border-radius: 4px;
@@ -272,7 +276,7 @@
 		cursor: pointer;
 	}
 	.delete-btn:hover {
-		background: #dc2626;
+		background: color-mix(in oklab, var(--danger) 85%, black);
 	}
 
 	.form-grid {
@@ -288,21 +292,21 @@
 	.field label {
 		font-size: 0.85rem;
 		font-weight: 600;
-		color: #94a3b8;
+		color: var(--text-muted);
 	}
 	.field input,
 	.field textarea {
-		background: #0f172a;
-		border: 1px solid #334155;
+		background: var(--surface);
+		border: 1px solid var(--border);
 		border-radius: 6px;
 		padding: 0.6rem;
-		color: #e2e8f0;
+		color: var(--text);
 		font-size: 0.95rem;
 	}
 	.field input:focus,
 	.field textarea:focus {
 		outline: none;
-		border-color: #38bdf8;
+		border-color: var(--accent);
 	}
 	.field-row {
 		display: flex;
@@ -315,14 +319,14 @@
 		gap: 0.5rem;
 		cursor: pointer;
 		font-size: 0.9rem;
-		color: #e2e8f0;
+		color: var(--text);
 	}
 	.no-selection {
 		display: flex;
 		align-items: center;
 		justify-content: center;
 		height: 100%;
-		color: #64748b;
+		color: var(--text-faint);
 		font-size: 0.95rem;
 		text-align: center;
 	}
@@ -330,20 +334,20 @@
 	.script-label span,.script-help { color:var(--text-muted); font-size:.75rem; }
 	.scene-script { min-height:230px; font-family:ui-monospace,SFMono-Regular,Consolas,monospace; line-height:1.65; tab-size:2; }
 	.script-help { margin:0; }
-	.script-help code { color:var(--accent-color); }
-	.scene-search { display:flex; align-items:center; gap:.5rem; margin:.7rem .65rem .25rem; padding:.55rem .7rem; border:1px solid var(--border-color); border-radius:var(--radius-md); background:var(--input-bg); color:var(--text-muted); }
-	.scene-search input { flex:1; min-width:0; border:0; outline:0; background:transparent; color:var(--input-color); font:inherit; font-size:.8rem; }
-	.scene-choices { margin-top:.3rem; padding-top:1.1rem; border-top:1px solid var(--border-color); }
+	.script-help code { color:var(--accent); }
+	.scene-search { display:flex; align-items:center; gap:.5rem; margin:.7rem .65rem .25rem; padding:.55rem .7rem; border:1px solid var(--border); border-radius:var(--radius-md); background:var(--surface); color:var(--text-muted); }
+	.scene-search input { flex:1; min-width:0; border:0; outline:0; background:transparent; color:var(--text); font:inherit; font-size:.8rem; }
+	.scene-choices { margin-top:.3rem; padding-top:1.1rem; border-top:1px solid var(--border); }
 	.choices-heading { display:flex; justify-content:space-between; align-items:center; gap:.8rem; margin-bottom:.8rem; }
-	.choices-heading h4 { margin:0; font-size:.95rem; color:var(--text-color); }
+	.choices-heading h4 { margin:0; font-size:.95rem; color:var(--text); }
 	.choices-heading p { margin:.25rem 0 0; color:var(--text-muted); font-size:.76rem; }
 	.choice-list { display:flex; flex-direction:column; gap:.55rem; }
-	.choice-card { display:grid; grid-template-columns:34px minmax(0,1fr) 28px; align-items:center; gap:.7rem; padding:.7rem; border:1px solid var(--border-color); border-radius:var(--radius-md); background:var(--background-secondary); }
-	.choice-number { color:var(--accent-color); font:600 .75rem ui-monospace,monospace; }
+	.choice-card { display:grid; grid-template-columns:34px minmax(0,1fr) 28px; align-items:center; gap:.7rem; padding:.7rem; border:1px solid var(--border); border-radius:var(--radius-md); background:var(--surface-2); }
+	.choice-number { color:var(--accent); font:600 .75rem ui-monospace,monospace; }
 	.choice-fields { display:grid; grid-template-columns:1.3fr 1fr; gap:.7rem; }
 	.choice-fields label { display:flex; flex-direction:column; gap:.3rem; color:var(--text-muted); font-size:.72rem; font-weight:600; }
-	.choice-fields input,.choice-fields select { min-width:0; padding:.5rem .6rem; border:1px solid var(--input-border-color); border-radius:var(--radius-sm); background:var(--input-bg); color:var(--input-color); font:inherit; font-size:.8rem; }
+	.choice-fields input,.choice-fields select { min-width:0; padding:.5rem .6rem; border:1px solid var(--border-strong); border-radius:var(--radius-sm); background:var(--surface); color:var(--text); font:inherit; font-size:.8rem; }
 	.choice-remove { border:0; background:transparent; color:var(--text-muted); font-size:1.2rem; cursor:pointer; }
-	.choice-empty { padding:.9rem; border:1px dashed var(--border-strong-color); border-radius:var(--radius-md); color:var(--text-muted); font-size:.8rem; text-align:center; }
+	.choice-empty { padding:.9rem; border:1px dashed var(--border-strong); border-radius:var(--radius-md); color:var(--text-muted); font-size:.8rem; text-align:center; }
 	@media (max-width:640px) { .choice-fields { grid-template-columns:1fr; } .choices-heading { align-items:flex-start; flex-direction:column; } }
 </style>

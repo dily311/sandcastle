@@ -1,4 +1,8 @@
 <script lang="ts">
+	import { confirmAction } from "$shared/stores/confirm.svelte";
+	import { toasts } from "$shared/stores/toast.svelte";
+	/** 지우기 전에 앱 확인 창으로 물어봄 */
+	const ask = (message: string) => confirmAction({ title: "삭제", message, confirmLabel: "삭제", danger: true });
 	import type {
 		GameAssetsInput,
 		GameAudioAssetsInput,
@@ -11,7 +15,7 @@
 	} from "$/lib/type/game";
 	import { editorAssetPreviewUrl } from "$/lib/game/editorAssetPreview";
 	import { open } from "@tauri-apps/plugin-dialog";
-	import Button from "$/components/ui/button/Button.svelte";
+	import { Button } from "$shared/ui";
 
 	type Props = {
 		assets: GameAssetsInput[];
@@ -101,8 +105,8 @@
 			});
 		else assets.push(common);
 	}
-	function remove(type: string, index: number) {
-		if (!confirm("이 에셋을 삭제할까요?")) return;
+	async function remove(type: string, index: number) {
+		if (!await ask("이 에셋을 삭제할까요?")) return;
 		if (type === "audio") audioAssets.splice(index, 1);
 		else if (type === "character") characterAssets.splice(index, 1);
 		else if (type === "cg") cgAssets.splice(index, 1);
@@ -379,16 +383,16 @@
 	}
 	.asset-card {
 		overflow: hidden;
-		border: 1px solid var(--border-color);
+		border: 1px solid var(--border);
 		border-radius: var(--radius-lg);
-		background: var(--card-bg);
+		background: var(--surface);
 		box-shadow: var(--shadow-sm);
 	}
 	.asset-preview {
 		height: 155px;
 		max-height: 155px;
 		overflow: hidden;
-		background: var(--background-secondary);
+		background: var(--surface-2);
 		position: relative;
 		display: flex;
 		align-items: center;
@@ -441,7 +445,7 @@
 		top: 0.6rem;
 		padding: 0.2rem 0.45rem;
 		border-radius: var(--radius-sm);
-		background: var(--background-primary);
+		background: var(--bg);
 		color: var(--text-muted);
 		font-size: 0.68rem;
 	}
@@ -467,9 +471,9 @@
 	.asset-add select {
 		width: 100%;
 		box-sizing: border-box;
-		background: var(--background-primary);
-		color: var(--text-color);
-		border: 1px solid var(--border-color);
+		background: var(--bg);
+		color: var(--text);
+		border: 1px solid var(--border);
 		border-radius: var(--radius-md);
 		padding: 0.55rem 0.65rem;
 		font: inherit;

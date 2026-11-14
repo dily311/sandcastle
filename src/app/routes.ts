@@ -11,11 +11,6 @@ import CharacterDetailPage from "$screens/character/CharacterDetailPage.svelte";
 import PersonaPage from "$screens/persona/PersonaPage.svelte";
 import WorldInfoPage from "$screens/worldinfo/WorldinfoPage.svelte";
 import CharacterEditPageSvelte from "$screens/character/CharacterEditPage.svelte";
-import GamePage from "$screens/game/GamePage.svelte";
-import GameDetailPage from "$/screens/game/GameDetailPage.svelte";
-import GameSessionList from "$/screens/game/play/GameSessionList.svelte";
-import GameEditorPage from "$/screens/game/GameEditorPage.svelte";
-import GamePlayContainer from "$/screens/game/GamePlayContainer.svelte";
 
 export type Pages = 
 	"/" |
@@ -55,11 +50,6 @@ export const routes: RouteDefinition = {
 	"/character/:characterId/edit": CharacterEditPageSvelte,
 	"/chat/:conversationId": ChatScreen,
 	"/phone": ChatListPage,
-	"/game": GamePage,
-	"/game/:gameId": GameDetailPage,
-	"/game/:gameId/sessions": GameSessionList,
-	"/game/:gameId/play/:sessionId": GamePlayContainer,
-	"/game/:gameId/editor": GameEditorPage,
 	"/api": APIPage,
 	"/preset": PresetPage,
 	"/persona": PersonaPage,

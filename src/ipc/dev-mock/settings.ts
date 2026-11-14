@@ -1,6 +1,7 @@
 // 설정 화면용 가짜 백엔드 (테마·API·프리셋·정규식·데이터·위젯)
 import type { DataOverview_Serialize, GameProject_Serialize, PhoneContact, PromptBlocks_Serialize, PromptPresetDetail_Serialize } from "../bindings";
 import { mockData } from "./chat";
+import { gameView } from "./game";
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 type Args = Record<string, any>;
@@ -22,6 +23,8 @@ const contacts: PhoneContact[] = [
 const gameList: GameProject_Serialize[] = [{ id: "g1", title: "숲의 수수께끼", description: "숲에서 길을 잃은 당신과 견습 마법사의 일주일", templateId: "dating-sim", version: "1.0.0", apiVersion: "1", coverImage: null, startSceneKey: null, startMapId: null, startLocationId: null, worldInfoIds: [], customCss: null, settingsJson: null, createdAt: 0, updatedAt: Date.now() - 3_600_000 }];
 const session = (id: string, scene: string, ago: number, seq: number) => ({ id, gameId: "g1", playerId: "min", currentSceneId: scene, currentMapId: null, currentZoneId: null, currentLocationId: null, currentWeatherId: null, gameTime: 8 * 3600 + seq * 600, flagsJson: {}, parentSessionId: null, pendingScenesJson: [], inventoryJson: {}, relationshipsJson: {}, stageJson: {}, forkedFromSeq: null, headSeq: seq, createdAt: Date.now() - ago, updatedAt: Date.now() - ago });
 const sessions = [session("ss1", "s2", 3_600_000, 12), session("ss2", "s1", 86_400_000 * 2, 3)];
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+const packages: Record<string, any> = {};
 let pendingRestore: null | { createdAt: number } = null;
 
 const block = (presetId: string, i: number, identifier: string, name: string, content = "", extra: Partial<PromptBlocks_Serialize> = {}): PromptBlocks_Serialize => ({
@@ -136,10 +139,7 @@ export const settingsHandlers: Record<string, (a: Args) => unknown> = {
 			contentHash: "h1",
 			assetBaseUrl: `http://game.localhost/${gameId}/`,
 			diagnostics: [{ severity: "warning", message: "배경 없는 장소", targets: ["광장"], text: "배경 없는 장소: [광장]" }],
-			view: {
-				scenes: [{ id: "s1", sceneKey: "intro", name: "숲 입구" }, { id: "s2", sceneKey: "cabin", name: "오두막" }],
-				characters: [{ id: "gc1", name: "엘리안", avatar: null, description: "숲을 지키는 견습 마법사\n말수가 적음" }, { id: "gc2", name: "루카", avatar: null, description: "떠돌이 상인" }],
-			},
+			view: gameView,
 		};
 	},
 	list_sessions: () => sessions,
@@ -151,6 +151,53 @@ export const settingsHandlers: Record<string, (a: Args) => unknown> = {
 		return null;
 	},
 	validate_game: () => [],
+	get_package_data: ({ gameId }) => {
+		const project = gameList.find((g) => g.id === gameId)!;
+		packages[gameId] ??= {
+			project: { ...project },
+			stateDefs: [{ id: "sd1", description: "세라와의 친밀도", key: "affection", type: "number", defaultValue: "0", configJson: "{}", createdAt: 0, updatedAt: 0 }],
+			maps: [],
+			zones: [],
+			locations: [],
+			locationConnections: [],
+			interactables: [],
+			timePeriods: [
+				{ id: "t1", gameId, name: "아침", sortOrder: 0, startMinute: 360, endMinute: 720 },
+				{ id: "t2", gameId, name: "밤", sortOrder: 1, startMinute: 1080, endMinute: 1440 },
+			],
+			weatherTypes: [],
+			weatherTransitions: [],
+			events: [],
+			eventConditions: [],
+			eventCharacterPool: [],
+			encounterTables: [],
+			encounterEntries: [],
+			scenes: [
+				{ id: "s1", sceneName: "숲 입구", description: "길을 잃고 숲에 들어섬", sceneKey: "intro", isEnding: false, endingId: null, settingsJson: null, script: "나레이션: 바람이 분다.\n엘리안: 괜찮아요?", choices: [{ id: "c1", sceneId: "s1", text: "따라간다", nextSceneKey: "cabin", sortOrder: 0 }], branches: [] },
+				{ id: "s2", sceneName: "오두막", description: null, sceneKey: "cabin", isEnding: true, endingId: null, settingsJson: null, script: "", choices: [], branches: [] },
+			],
+			endings: [],
+			characters: [
+				{ id: "gc1", gameId, characterId: null, name: "엘리안", avatar: null, description: "숲을 지키는 견습 마법사", firstMessage: "괜찮아요?", exampleDialogue: null, systemPromptOverride: null, behaviorType: "companion", worldInfoIds: [], tags: null, settingsJson: {} },
+			],
+			spawnLocations: [],
+			items: [],
+			relationshipDefs: [],
+			assets: [],
+			audioAssets: [],
+			characterAssets: [],
+			cgAssets: [],
+			backgroundAssets: [],
+			worldInfoBooks: [],
+		};
+		return JSON.parse(JSON.stringify(packages[gameId]));
+	},
+	save_package: ({ gameId, data }) => {
+		packages[gameId] = JSON.parse(JSON.stringify(data));
+		const g = gameList.find((x) => x.id === gameId);
+		if (g) Object.assign(g, { title: data.project.title, description: data.project.description, updatedAt: now() });
+		return { deleted: {}, diagnostics: data.scenes.length ? [] : [{ severity: "error", message: "씬이 없음", targets: [], text: "씬이 없음" }] };
+	},
 	copy_game_character_to_character: ({ gameCharacterId }) => {
 		const name = gameCharacterId === "gc1" ? "엘리안" : "루카";
 		const c = { ...characters[0], id: uid("ch"), name, avatar: null, description: "게임에서 가져옴", firstMessage: null, alternateFirstMessage: [], creatorNotes: null, tags: [], favorite: false, createdAt: now(), updatedAt: now() };

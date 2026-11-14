@@ -213,6 +213,11 @@ export const commands = {
 	continueGame: (sessionId: string, optionHistoryLimit: number | null, options?: InvokeOptions) => __TAURI_INVOKE<ContinueGameResponse_Serialize>("continue_game", { sessionId, optionHistoryLimit }, options),
 	/**  이 게임의 세션(책) 목록. 세션 목록 화면용. */
 	listSessions: (options?: InvokeOptions) => __TAURI_INVOKE<GamePlayerSessions_Serialize[]>("list_sessions", undefined, options),
+	/**
+	 *  이전 대사 기록을 더 읽는다 (이어하기 응답의 history보다 오래된 것). beforeSeq에 history.oldestSeq를 넘기면
+	 *  그보다 오래된 limit개를 돌려준다. 연출까지 전부 재생하려면 read_journal을 쓴다.
+	 */
+	readTranscript: (sessionId: string, beforeSeq: number | null, limit: number | null, options?: InvokeOptions) => __TAURI_INVOKE<TranscriptPage_Serialize>("read_transcript", { sessionId, beforeSeq, limit }, options),
 	/**  이 게임의 세션 삭제용 */
 	deleteSessions: (sessionId: string, options?: InvokeOptions) => __TAURI_INVOKE<null>("delete_sessions", { sessionId }, options),
 	/**  게임 엔진에 커맨드 하나를 보낸다. iframe SDK의 game.move() 등이 여기로 온다. */

@@ -2,14 +2,14 @@
 	import { onMount, tick } from "svelte";
 	import type { AssetRef, GameCommand, GameJournal, StageLine } from "$/lib/type/game";
 	import { gameEngineCommands } from "$/ipc/commands";
-	import { handleGoBack } from "$/app/routes";
+	import { layout } from "$app/layout.svelte";
+	import "../stage.css";
 	import Backlog from "./Backlog.svelte";
 	import StageView from "./StageView.svelte";
 	import PlayHeader from "./PlayHeader.svelte";
 	import PlayPanels from "./PlayPanels.svelte";
 	import DialoguePanel from "./DialoguePanel.svelte";
 	import ItemGainNotices from "./ItemGainNotices.svelte";
-	import PlayBottomBar from "./PlayBottomBar.svelte";
 	import {
 		createLocationArrivalLine,
 		getItemAddedEvents,
@@ -425,30 +425,70 @@
 	}
 
 	onMount(initSession);
+
+	// ---- 키보드: Space/Enter/→ 다음, ← 이전, 1~9 선택지, Esc 패널 닫기, M 지도, I 소지품, L 지난 대사 ----
+	const openPanel = $derived(showBacklog ? "backlog" : showMap ? "map" : showInventory ? "inventory" : showActions ? "actions" : null);
+	function closePanels() {
+		showBacklog = showMap = showInventory = showActions = showWaitMenu = false;
+	}
+	function onKey(e: KeyboardEvent) {
+		const t = e.target as HTMLElement | null;
+		if (t && (t.tagName === "INPUT" || t.tagName === "TEXTAREA" || t.isContentEditable)) return;
+		if (e.ctrlKey || e.metaKey || e.altKey) return;
+		if (e.key === "Escape") return closePanels();
+		if (openPanel) return;
+		if (e.key === " " || e.key === "Enter" || e.key === "ArrowRight") {
+			if (isReadingScript) {
+				e.preventDefault();
+				handleStageClick();
+			}
+		} else if (e.key === "ArrowLeft") {
+			e.preventDefault();
+			previousLine();
+		} else if (/^[1-9]$/.test(e.key) && scriptFinished) {
+			const i = Number(e.key) - 1;
+			if (i < choices.length) handleChoice(choices[i].id);
+			else if (i - choices.length < npcResponseChoices.length) void submitNpcInput(npcResponseChoices[i - choices.length]);
+		} else if (e.key === "m") toggleMap();
+		else if (e.key === "i") toggleInventory();
+		else if (e.key === "l") showBacklog = true;
+	}
+	const focusMode = $derived(!layout.sidebar);
 </script>
 
-<main class="vn-player">
+<svelte:window onkeydown={onKey} />
+
+<main class="vn-player game-theme">
 	<PlayHeader
-		{title}
 		locationName={runtimeStore.currentLocation?.name ?? "장소 불러오는 중"}
+		weatherName={runtimeStore.currentWeather?.name ?? ""}
 		gameTime={runtimeStore.gameTime}
-		canWait
+		canWait={runtimeStore.canWait}
 		{isLoading}
 		{showWaitMenu}
 		{isBgmMuted}
-		onBack={handleGoBack}
+		{bgmBlocked}
+		{focusMode}
+		open={openPanel}
 		onToggleWaitMenu={toggleWaitMenu}
 		onWait={(hours) => dispatch({ type: "advanceTime", minutes: hours * 60 })}
-		onBacklog={() => (showBacklog = true)}
-		onInventory={toggleInventory}
-		onToggleMute={toggleBgmMute}
+		onActions={toggleActions}
 		onMap={toggleMap}
+		onInventory={toggleInventory}
+		onBacklog={() => {
+			const next = !showBacklog;
+			closePanels();
+			showBacklog = next;
+		}}
+		onToggleMute={toggleBgmMute}
+		onResumeBgm={resumeBgm}
+		onToggleFocus={() => layout.toggleSidebar()}
 	/>
 
 	<section class="stage-area" aria-labelledby="scene-name">
 		<StageView onAdvance={handleStageClick} {standingOverrides} {focusedCharacterId} />
 		<div class="scene-label" id="scene-name">
-			<span class="scene-dot"></span>{runtimeStore.currentScene?.name ?? "현재 장면"}
+			<span class="scene-dot"></span>{runtimeStore.currentScene?.name ?? title}
 		</div>
 		<PlayPanels
 			{showMap}
@@ -461,9 +501,10 @@
 			onCloseInventory={() => (showInventory = false)}
 			onDispatch={dispatch}
 		/>
+		{#if showBacklog}<Backlog {sessionId} onClose={() => (showBacklog = false)} />{/if}
 		<ItemGainNotices notices={itemGainNotices} />
 		<DialoguePanel
-			show={Boolean(currentLine || runtimeStore.currentScene || activeNpcId)}
+			show={Boolean(currentLine || runtimeStore.currentScene || activeNpcId || scriptFinished)}
 			line={currentLine}
 			{speakerName}
 			sceneDescription={runtimeStore.currentScene?.description ?? null}
@@ -486,16 +527,9 @@
 			onSubmitInput={() => submitNpcInput()}
 			onStopTalk={() => dispatch({ type: "stopTalk" })}
 		/>
-		{#if isLoading}<div class="busy-indicator">처리 중…</div>{/if}
+		{#if isLoading}<div class="busy" role="status"><span></span>처리 중</div>{/if}
 	</section>
 
-	<PlayBottomBar
-		locationName={runtimeStore.currentLocation?.name ?? "장소 없음"}
-		weatherName={runtimeStore.currentWeather?.name ?? ""}
-		{bgmBlocked}
-		onActions={toggleActions}
-		onResumeBgm={resumeBgm}
-	/>
 	<audio
 		class="bgm-audio"
 		bind:this={bgmAudio}
@@ -504,8 +538,6 @@
 		preload="auto"
 	></audio>
 </main>
-
-{#if showBacklog}<Backlog {sessionId} onClose={() => (showBacklog = false)} />{/if}
 
 <style>
 	.vn-player {
@@ -516,9 +548,6 @@
 		overflow: hidden;
 		color: var(--game-text-main);
 		background: var(--game-player-bg);
-	}
-	:global(body.is-frameless) .vn-player {
-		height: 100dvh;
 	}
 	.stage-area {
 		position: relative;
@@ -553,13 +582,35 @@
 	.bgm-audio {
 		display: none;
 	}
-	.busy-indicator {
+	.busy {
 		position: absolute;
 		z-index: 150;
-		top: 18px;
-		right: 22px;
+		top: 16px;
+		left: 50%;
+		transform: translateX(-50%);
+		display: flex;
+		align-items: center;
+		gap: 8px;
+		padding: 6px 12px;
+		border: 1px solid var(--game-border);
+		border-radius: 999px;
+		background: var(--game-scene-label-bg);
 		color: var(--game-accent-strong);
 		font-size: 12px;
+		backdrop-filter: blur(10px);
+	}
+	.busy span {
+		width: 10px;
+		height: 10px;
+		border: 2px solid var(--game-accent-border);
+		border-top-color: var(--game-accent);
+		border-radius: 50%;
+		animation: spin 0.8s linear infinite;
+	}
+	@keyframes spin {
+		to {
+			transform: rotate(360deg);
+		}
 	}
 	@media (max-width: 620px) {
 		.scene-label {

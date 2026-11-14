@@ -2,6 +2,7 @@
 // 화면을 만들 때 필요한 커맨드를 여기에 추가한다.
 import { chatHandlers } from "./chat";
 import { settingsHandlers } from "./settings";
+import { gameHandlers } from "./game";
 import type { AppSetting_Serialize, FeatureSetting, ThemeSetting } from "../bindings";
 
 type Args = Record<string, unknown>;
@@ -44,4 +45,5 @@ export const handlers: Record<string, Handler> = {
 	get_recoverable_tasks: () => [],
 	...chatHandlers,
 	...settingsHandlers,
+	...gameHandlers,
 };

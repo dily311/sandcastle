@@ -1,4 +1,8 @@
 <script lang="ts">
+	import { confirmAction } from "$shared/stores/confirm.svelte";
+	import { toasts } from "$shared/stores/toast.svelte";
+	/** 지우기 전에 앱 확인 창으로 물어봄 */
+	const ask = (message: string) => confirmAction({ title: "삭제", message, confirmLabel: "삭제", danger: true });
 	import type {
 		GameBackgroundAssetsInput,
 		GameInteractablesInput,
@@ -128,9 +132,9 @@
 	}
 
 	// 삭제 핸들러들
-	function handleDeleteMap(index: number) {
+	async function handleDeleteMap(index: number) {
 		const targetMap = maps[index];
-		if (!confirm(`"${targetMap.name}" 맵을 삭제하시겠습니까? 하위 존과 로케이션도 함께 관리해야 합니다.`)) return;
+		if (!await ask(`"${targetMap.name}" 맵을 삭제하시겠습니까? 하위 존과 로케이션도 함께 관리해야 합니다.`)) return;
 
 		// 연관된 존과 로케이션도 정리
 		if (targetMap.id) {
@@ -156,8 +160,8 @@
 		selectedLocationIndex = null;
 	}
 
-	function handleDeleteZone(zoneId: string | null) {
-		if (!zoneId || !confirm("이 존(Zone)을 삭제하시겠습니까? 하위 로케이션도 함께 삭제됩니다.")) return;
+	async function handleDeleteZone(zoneId: string | null) {
+		if (!zoneId || !await ask("이 존(Zone)을 삭제하시겠습니까? 하위 로케이션도 함께 삭제됩니다.")) return;
 
 		const locationIdsToRemove = locations
 			.filter((location) => location.zoneId === zoneId)
@@ -176,8 +180,8 @@
 		selectedLocationIndex = null;
 	}
 
-	function handleDeleteLocation(locId: string | null) {
-		if (!locId || !confirm("이 로케이션을 삭제하시겠습니까?")) return;
+	async function handleDeleteLocation(locId: string | null) {
+		if (!locId || !await ask("이 로케이션을 삭제하시겠습니까?")) return;
 
 		locations = locations.filter((l) => l.id !== locId);
 		backgroundAssets = backgroundAssets.filter((asset) => asset.locationId !== locId);
@@ -574,8 +578,8 @@
 		gap: 0.8rem;
 		min-width: 0;
 		padding: 0.8rem;
-		background: var(--card-bg);
-		border: 1px solid var(--border-color);
+		background: var(--surface);
+		border: 1px solid var(--border);
 		border-radius: var(--radius-lg);
 		box-shadow: var(--shadow-sm);
 	}
@@ -584,9 +588,9 @@
 		flex-direction: column;
 		min-height: 130px;
 		overflow: hidden;
-		border: 1px solid var(--border-color);
+		border: 1px solid var(--border);
 		border-radius: var(--radius-md);
-		background: var(--background-primary);
+		background: var(--bg);
 	}
 	.hierarchy-level .pane-header {
 		padding: 0.7rem 0.8rem;
@@ -610,8 +614,8 @@
 	}
 
 	.detail-pane {
-		background: var(--card-bg);
-		border: 1px solid var(--border-color);
+		background: var(--surface);
+		border: 1px solid var(--border);
 		border-radius: var(--radius-lg);
 		box-shadow: var(--shadow-sm);
 		display: flex;
@@ -624,19 +628,19 @@
 		justify-content: space-between;
 		align-items: center;
 		padding: 0.8rem;
-		border-bottom: 1px solid #334155;
-		background: #0f172a;
+		border-bottom: 1px solid var(--border);
+		background: var(--surface);
 	}
 
 	.pane-header h4 {
 		margin: 0;
 		font-size: 0.85rem;
-		color: #f8fafc;
+		color: var(--text);
 	}
 
 	.add-btn {
-		background: #3b82f6;
-		color: white;
+		background: var(--accent);
+		color: var(--text-on-accent);
 		border: none;
 		padding: 0.3rem 0.6rem;
 		border-radius: 4px;
@@ -645,12 +649,12 @@
 		cursor: pointer;
 	}
 	.add-btn:disabled {
-		background: #475569;
+		background: var(--border-strong);
 		opacity: 0.6;
 		cursor: not-allowed;
 	}
 	.add-btn:not(:disabled):hover {
-		background: #2563eb;
+		background: var(--accent-hover);
 	}
 
 	.scroll-list {
@@ -667,40 +671,40 @@
 		justify-content: space-between;
 		align-items: center;
 		padding: 0.6rem 0.8rem;
-		background: #0f172a;
+		background: var(--surface);
 		border-radius: 6px;
 		cursor: pointer;
 		border: 1px solid transparent;
 		font-size: 0.85rem;
-		color: #cbd5e1;
+		color: var(--text-muted);
 		transition: all 0.15s;
 	}
 	.list-item:hover {
-		border-color: #475569;
+		border-color: var(--border-strong);
 	}
 	.list-item.active {
-		border-color: #38bdf8;
-		background: #172554;
-		color: #fff;
+		border-color: var(--accent);
+		background: var(--accent-soft);
+		color: var(--text-on-accent);
 	}
 
 	.icon-del {
 		background: transparent;
 		border: none;
-		color: #94a3b8;
+		color: var(--text-muted);
 		font-size: 1rem;
 		cursor: pointer;
 		padding: 0 0.3rem;
 		border-radius: 4px;
 	}
 	.icon-del:hover {
-		background: #ef4444;
-		color: white;
+		background: var(--danger);
+		color: var(--text-on-accent);
 	}
 
 	.empty-text {
 		text-align: center;
-		color: #64748b;
+		color: var(--text-faint);
 		padding: 2rem 1rem;
 		font-size: 0.8rem;
 	}
@@ -712,16 +716,16 @@
 
 	.detail-header {
 		margin-bottom: 1.2rem;
-		border-bottom: 1px solid #334155;
+		border-bottom: 1px solid var(--border);
 		padding-bottom: 0.8rem;
 	}
 	.detail-header h3 {
 		margin: 0;
 		font-size: 1rem;
-		color: #f8fafc;
+		color: var(--text);
 	}
 	.detail-header strong {
-		color: #38bdf8;
+		color: var(--accent);
 	}
 
 	.form-grid {
@@ -738,21 +742,21 @@
 	.field label {
 		font-size: 0.85rem;
 		font-weight: 600;
-		color: #94a3b8;
+		color: var(--text-muted);
 	}
 	.field input,
 	.field textarea {
-		background: #0f172a;
-		border: 1px solid #334155;
+		background: var(--surface);
+		border: 1px solid var(--border);
 		border-radius: 6px;
 		padding: 0.6rem;
-		color: #e2e8f0;
+		color: var(--text);
 		font-size: 0.95rem;
 	}
 	.field input:focus,
 	.field textarea:focus {
 		outline: none;
-		border-color: #38bdf8;
+		border-color: var(--accent);
 	}
 
 	.no-selection {
@@ -760,7 +764,7 @@
 		align-items: center;
 		justify-content: center;
 		height: 100%;
-		color: #64748b;
+		color: var(--text-faint);
 		font-size: 0.9rem;
 		text-align: center;
 	}
@@ -777,11 +781,11 @@
 	}
 	.section-heading h4 {
 		margin: 0;
-		color: var(--text-color);
+		color: var(--text);
 		font-size: 0.95rem;
 	}
 	.section-heading strong {
-		color: var(--text-color);
+		color: var(--text);
 		font-size: 0.95rem;
 	}
 	.section-heading p {
@@ -800,9 +804,9 @@
 		gap: 0.75rem;
 		align-items: stretch;
 		padding: 0.7rem;
-		border: 1px solid var(--border-color);
+		border: 1px solid var(--border);
 		border-radius: var(--radius-md);
-		background: var(--background-secondary);
+		background: var(--surface-2);
 	}
 	.background-preview {
 		display: grid;
@@ -811,7 +815,7 @@
 		aspect-ratio: 16/10;
 		overflow: hidden;
 		border-radius: var(--radius-md);
-		background: var(--track-bg-color);
+		background: var(--surface-active);
 		color: var(--text-faint);
 		font-size: 1.4rem;
 	}
@@ -840,10 +844,10 @@
 		min-width: 0;
 		box-sizing: border-box;
 		padding: 0.48rem 0.6rem;
-		border: 1px solid var(--input-border-color);
+		border: 1px solid var(--border-strong);
 		border-radius: var(--radius-sm);
-		background: var(--input-bg);
-		color: var(--input-color);
+		background: var(--surface);
+		color: var(--text);
 		font: inherit;
 		font-size: 0.8rem;
 	}
@@ -861,11 +865,11 @@
 		cursor: pointer;
 	}
 	.asset-remove:hover {
-		color: var(--color-red);
+		color: var(--danger);
 	}
 	.asset-empty {
 		padding: 1rem;
-		border: 1px dashed var(--border-strong-color);
+		border: 1px dashed var(--border-strong);
 		border-radius: var(--radius-md);
 		color: var(--text-muted);
 		font-size: 0.8rem;
@@ -881,9 +885,9 @@
 	.location-interactable-card {
 		position: relative;
 		padding: 0.75rem;
-		border: 1px solid var(--border-color);
+		border: 1px solid var(--border);
 		border-radius: var(--radius-md);
-		background: var(--background-secondary);
+		background: var(--surface-2);
 	}
 	.link-route {
 		display: grid;
@@ -921,10 +925,10 @@
 		min-width: 0;
 		box-sizing: border-box;
 		padding: 0.48rem 0.55rem;
-		border: 1px solid var(--input-border-color);
+		border: 1px solid var(--border-strong);
 		border-radius: var(--radius-sm);
-		background: var(--input-bg);
-		color: var(--input-color);
+		background: var(--surface);
+		color: var(--text);
 		font: inherit;
 		font-size: 0.78rem;
 	}

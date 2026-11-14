@@ -1,6 +1,6 @@
 import { gameEngineCommands } from "$/ipc/commands";
 import type { ContinueGameResponse, GameCommand, StageLine } from "$/lib/type/game";
-import { getConnectionRequirement } from "$/screens/game/play/vn/playUtils";
+import { getConnectionRequirement } from "$features/game/play/vn/playUtils";
 import { gameStore } from "./gameStore.svelte";
 
 class createRuntimeStore {

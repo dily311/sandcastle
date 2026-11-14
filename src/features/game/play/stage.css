@@ -1,0 +1,187 @@
+/* 게임 무대 색: 화면 모드와 상관없이 어두운 극장 느낌. 강조색만 앱 강조색을 따라감.
+   플레이 화면 맨 바깥에 class="game-theme"을 붙이면 아래 변수를 씀 */
+.game-theme {
+	--game-player-bg: #0e0e10;
+	--game-stage-bg: #17181b;
+	--game-topbar-bg: rgb(14 14 16 / 0.86);
+	--game-panel-bg: rgb(22 23 26 / 0.94);
+	--game-dialogue-bg: linear-gradient(160deg, rgb(26 27 31 / 0.9), rgb(15 15 18 / 0.92));
+	--game-scene-label-bg: rgb(14 14 16 / 0.55);
+	--game-border: rgb(255 255 255 / 0.13);
+	--game-border-subtle: rgb(255 255 255 / 0.07);
+	--game-surface-hover: rgb(255 255 255 / 0.08);
+	--game-text-primary: #fbfbfc;
+	--game-text-main: #eeeff2;
+	--game-text-secondary: #d4d6db;
+	--game-text-muted: #a9adb5;
+	--game-text-dim: #7d808a;
+	--game-accent: color-mix(in oklab, var(--accent) 72%, white);
+	--game-accent-strong: color-mix(in oklab, var(--accent) 45%, white);
+	--game-accent-soft: color-mix(in oklab, var(--accent) 18%, transparent);
+	--game-accent-hover: color-mix(in oklab, var(--accent) 30%, transparent);
+	--game-accent-border: color-mix(in oklab, var(--accent) 55%, transparent);
+	--game-danger-text: #ffe0d9;
+	--game-danger-bg: #492722ee;
+	--game-danger-border: #e99b8b66;
+	--game-shadow-panel: 0 16px 48px rgb(0 0 0 / 0.5);
+	--game-shadow-dialogue: 0 18px 60px rgb(0 0 0 / 0.4);
+	--game-stage-placeholder: radial-gradient(ellipse at 50% 35%, #4b4f5c, #24262d 68%, var(--game-stage-bg));
+	--game-stage-shade: linear-gradient(180deg, rgb(8 7 9 / 0.3), transparent 26%, transparent 50%, rgb(8 7 9 / 0.45));
+	--game-character-shadow: drop-shadow(0 12px 24px rgb(0 0 0 / 0.25));
+	--game-character-dim-shadow: brightness(0.4) saturate(0.55) drop-shadow(0 8px 18px rgb(0 0 0 / 0.35));
+	--game-footer-bg: var(--game-topbar-bg);
+
+	color-scheme: dark;
+	height: 100%;
+	color: var(--game-text-main);
+}
+
+/* 무대 위 공용 버튼 */
+.game-theme .g-icon {
+	position: relative;
+	display: grid;
+	place-items: center;
+	width: 34px;
+	height: 34px;
+	padding: 0;
+	border: 1px solid transparent;
+	border-radius: 10px;
+	background: transparent;
+	color: var(--game-text-muted);
+	cursor: pointer;
+	transition:
+		background 120ms ease,
+		color 120ms ease;
+}
+.game-theme .g-icon:hover:not(:disabled),
+.game-theme .g-icon[aria-pressed="true"],
+.game-theme .g-icon[aria-expanded="true"] {
+	background: var(--game-surface-hover);
+	color: var(--game-text-primary);
+}
+.game-theme .g-icon:disabled {
+	opacity: 0.4;
+	cursor: default;
+}
+.game-theme .g-icon svg {
+	width: 18px;
+	height: 18px;
+}
+.game-theme .g-chip {
+	display: inline-flex;
+	align-items: center;
+	gap: 6px;
+	height: 30px;
+	padding: 0 12px;
+	border: 1px solid var(--game-border);
+	border-radius: 999px;
+	background: rgb(255 255 255 / 0.04);
+	color: var(--game-text-secondary);
+	font: inherit;
+	font-size: 13px;
+	white-space: nowrap;
+}
+.game-theme button.g-chip {
+	cursor: pointer;
+}
+.game-theme button.g-chip:hover:not(:disabled) {
+	border-color: var(--game-accent-border);
+	color: var(--game-text-primary);
+}
+.game-theme .g-chip svg {
+	width: 14px;
+	height: 14px;
+	color: var(--game-accent);
+}
+.game-theme .g-btn {
+	display: inline-flex;
+	align-items: center;
+	justify-content: center;
+	gap: 6px;
+	height: 36px;
+	padding: 0 14px;
+	border: 1px solid var(--game-border);
+	border-radius: 10px;
+	background: rgb(255 255 255 / 0.05);
+	color: var(--game-text-main);
+	font: inherit;
+	font-size: 14px;
+	cursor: pointer;
+}
+.game-theme .g-btn:hover:not(:disabled) {
+	background: var(--game-surface-hover);
+	border-color: var(--game-accent-border);
+}
+.game-theme .g-btn.primary {
+	border-color: transparent;
+	background: var(--accent);
+	color: var(--text-on-accent);
+	font-weight: 600;
+}
+.game-theme .g-btn.primary:hover:not(:disabled) {
+	background: var(--accent-hover);
+}
+.game-theme .g-btn:disabled {
+	opacity: 0.45;
+	cursor: default;
+}
+.game-theme .g-btn svg {
+	width: 16px;
+	height: 16px;
+}
+
+/* 오른쪽에서 열리는 패널 (지도·소지품·행동·기록) */
+.game-theme .g-sheet {
+	position: absolute;
+	z-index: 60;
+	top: 12px;
+	right: 12px;
+	bottom: 12px;
+	width: min(380px, calc(100% - 24px));
+	display: flex;
+	flex-direction: column;
+	border: 1px solid var(--game-border);
+	border-radius: 16px;
+	background: var(--game-panel-bg);
+	box-shadow: var(--game-shadow-panel);
+	backdrop-filter: blur(14px);
+	overflow: hidden;
+	animation: g-sheet-in 160ms ease;
+}
+.game-theme .g-sheet-head {
+	display: flex;
+	align-items: center;
+	gap: 8px;
+	padding: 14px 14px 12px 18px;
+	border-bottom: 1px solid var(--game-border-subtle);
+}
+.game-theme .g-sheet-head > div {
+	flex: 1;
+	display: flex;
+	flex-direction: column;
+	min-width: 0;
+}
+.game-theme .g-sheet-head strong {
+	color: var(--game-text-primary);
+	font-size: 15px;
+}
+.game-theme .g-sheet-head small {
+	color: var(--game-text-muted);
+	font-size: 12px;
+}
+.game-theme .g-sheet-body {
+	flex: 1;
+	overflow: auto;
+	padding: 12px;
+}
+@keyframes g-sheet-in {
+	from {
+		opacity: 0;
+		transform: translateX(12px);
+	}
+}
+@media (prefers-reduced-motion: reduce) {
+	.game-theme .g-sheet {
+		animation: none;
+	}
+}

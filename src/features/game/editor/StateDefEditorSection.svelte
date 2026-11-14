@@ -1,4 +1,8 @@
 <script lang="ts">
+	import { confirmAction } from "$shared/stores/confirm.svelte";
+	import { toasts } from "$shared/stores/toast.svelte";
+	/** 지우기 전에 앱 확인 창으로 물어봄 */
+	const ask = (message: string) => confirmAction({ title: "삭제", message, confirmLabel: "삭제", danger: true });
 	import type { GameStateDefInput } from "$/lib/type/game";
 
 	type Props = {
@@ -28,8 +32,8 @@
 		selectedIndex = stateDefs.length - 1;
 	}
 
-	function handleDeleteStateDef(index: number) {
-		if (!confirm(`"${stateDefs[index].key}" 상태 정의를 삭제하시겠습니까?`)) return;
+	async function handleDeleteStateDef(index: number) {
+		if (!await ask(`"${stateDefs[index].key}" 상태 정의를 삭제하시겠습니까?`)) return;
 		stateDefs.splice(index, 1);
 		selectedIndex = stateDefs.length > 0 ? Math.max(0, index - 1) : null;
 	}
@@ -115,17 +119,17 @@
 		justify-content: space-between;
 		align-items: center;
 		padding: 1rem;
-		border-bottom: 1px solid #334155;
-		background: #0f172a;
+		border-bottom: 1px solid var(--border);
+		background: var(--surface);
 	}
 	.pane-header h4 {
 		margin: 0;
 		font-size: 0.95rem;
-		color: #f8fafc;
+		color: var(--text);
 	}
 	.add-btn {
-		background: #3b82f6;
-		color: white;
+		background: var(--accent);
+		color: var(--text-on-accent);
 		border: none;
 		padding: 0.4rem 0.8rem;
 		border-radius: 4px;
@@ -134,7 +138,7 @@
 		cursor: pointer;
 	}
 	.add-btn:hover {
-		background: #2563eb;
+		background: var(--accent-hover);
 	}
 	.scroll-list {
 		flex: 1;
@@ -149,18 +153,18 @@
 		justify-content: space-between;
 		align-items: center;
 		padding: 0.75rem 1rem;
-		background: #0f172a;
+		background: var(--surface);
 		border-radius: 6px;
 		cursor: pointer;
 		border: 1px solid transparent;
 		transition: all 0.15s;
 	}
 	.list-item:hover {
-		border-color: #475569;
+		border-color: var(--border-strong);
 	}
 	.list-item.active {
-		border-color: #38bdf8;
-		background: #172554;
+		border-color: var(--accent);
+		background: var(--accent-soft);
 	}
 	.item-info {
 		display: flex;
@@ -168,19 +172,19 @@
 		gap: 0.2rem;
 	}
 	.item-info .title code {
-		color: #38bdf8;
-		background: #1e293b;
+		color: var(--accent);
+		background: var(--bg-sunken);
 		padding: 0.1rem 0.3rem;
 		border-radius: 4px;
 		font-size: 0.85rem;
 	}
 	.item-info .type {
 		font-size: 0.75rem;
-		color: #94a3b8;
+		color: var(--text-muted);
 	}
 	.empty-text {
 		text-align: center;
-		color: #64748b;
+		color: var(--text-faint);
 		padding: 2rem;
 		font-size: 0.85rem;
 	}
@@ -193,17 +197,17 @@
 		justify-content: space-between;
 		align-items: center;
 		margin-bottom: 1.2rem;
-		border-bottom: 1px solid #334155;
+		border-bottom: 1px solid var(--border);
 		padding-bottom: 0.8rem;
 	}
 	.detail-header h3 {
 		margin: 0;
 		font-size: 1.1rem;
-		color: #f8fafc;
+		color: var(--text);
 	}
 	.delete-btn {
-		background: #ef4444;
-		color: white;
+		background: var(--danger);
+		color: var(--text-on-accent);
 		border: none;
 		padding: 0.4rem 0.8rem;
 		border-radius: 4px;
@@ -212,7 +216,7 @@
 		cursor: pointer;
 	}
 	.delete-btn:hover {
-		background: #dc2626;
+		background: color-mix(in oklab, var(--danger) 85%, black);
 	}
 	.form-grid {
 		display: flex;
@@ -227,30 +231,30 @@
 	.field label {
 		font-size: 0.85rem;
 		font-weight: 600;
-		color: #94a3b8;
+		color: var(--text-muted);
 	}
 	.field input,
 	.field select,
 	.field textarea {
-		background: #0f172a;
-		border: 1px solid #334155;
+		background: var(--surface);
+		border: 1px solid var(--border);
 		border-radius: 6px;
 		padding: 0.6rem;
-		color: #e2e8f0;
+		color: var(--text);
 		font-size: 0.95rem;
 	}
 	.field input:focus,
 	.field select:focus,
 	.field textarea:focus {
 		outline: none;
-		border-color: #38bdf8;
+		border-color: var(--accent);
 	}
 	.no-selection {
 		display: flex;
 		align-items: center;
 		justify-content: center;
 		height: 100%;
-		color: #64748b;
+		color: var(--text-faint);
 		font-size: 0.95rem;
 		text-align: center;
 	}

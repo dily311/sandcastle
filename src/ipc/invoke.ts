@@ -10,7 +10,8 @@ export async function invokeCommand<K extends CommandName>(
 ): Promise<CommandRegistry[K]["response"]> {
 	try {
 		// 모킹 모드의 경우
-		if (!__IS_TAURI__) {
+		// 브라우저 개발 모드에서 새 가짜 백엔드(dev-mock)가 깔려 있으면 그쪽으로 보냄
+		if (!__IS_TAURI__ && !("__TAURI_INTERNALS__" in window)) {
 			const handler = mockHandlers[command];
 			if (handler) {
 				console.log(`[Tauri Mock] ${command} called with ${args}`);
