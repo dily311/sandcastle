@@ -109,7 +109,10 @@ class Library {
 
 	/** 폰 대화: 페르소나(폰 주인)와 캐릭터 한 쌍에 하나. 첫 인사 없이 빈 대화로 시작 */
 	async phoneConversation(personaId: string, charId: string): Promise<Conversation> {
-		const found = this.conversations.find((c) => c.mode === "phone" && c.personaId === personaId && c.characterId === charId);
+		// 캐릭터 폰 대화(meta.phone)는 빼고
+		const found = this.conversations.find(
+			(c) => c.mode === "phone" && c.personaId === personaId && c.characterId === charId && !(c.meta as { phone?: unknown } | null)?.phone,
+		);
 		if (found) return found;
 		const ch = this.character(charId);
 		const conv = await call(

@@ -14,8 +14,10 @@ const keys = new Set<string>(["gemini"]);
 let autostart = false;
 let defaultPersona = "default";
 const contacts: PhoneContact[] = [
-	{ personaId: "min", characterId: "sera", status: "숲의 오두막", sortOrder: 0, createdAt: 0 },
-	{ personaId: "min", characterId: "aria", status: "기사단 훈련 중", sortOrder: 1, createdAt: 0 },
+	{ ownerKind: "persona", ownerId: "min", contactKind: "character", contactId: "sera", status: "숲의 오두막", sortOrder: 0, createdAt: 0 },
+	{ ownerKind: "persona", ownerId: "min", contactKind: "character", contactId: "aria", status: "기사단 훈련 중", sortOrder: 1, createdAt: 0 },
+	{ ownerKind: "character", ownerId: "aria", contactKind: "character", contactId: "sera", status: "", sortOrder: 0, createdAt: 0 },
+	{ ownerKind: "character", ownerId: "aria", contactKind: "persona", contactId: "min", status: "숲에서 만난 여행자", sortOrder: 1, createdAt: 0 },
 ];
 let pendingRestore: null | { createdAt: number } = null;
 
@@ -110,22 +112,43 @@ export const settingsHandlers: Record<string, (a: Args) => unknown> = {
 	game_list: () => [{ id: "g1", title: "숲의 수수께끼", description: "비주얼 노벨 템플릿", templateId: "vn", version: "1.0.0", apiVersion: "1", coverImage: null, startSceneKey: null, createdAt: 0, updatedAt: 0 }],
 	copy_character_to_game: ({ characterId, gameId }) => ({ id: uid("gc"), gameId, characterId, name: characters.find((c) => c.id === characterId)?.name ?? "", avatar: null, description: null, firstMessage: null, exampleDialogue: null, systemPromptOverride: null, behaviorType: null, worldInfoIds: [], tags: [], settingsJson: {}, createdAt: now(), updatedAt: now() }),
 
-	// ---- 폰 연락처 ----
-	list_phone_contacts: ({ personaId }) => contacts.filter((c) => c.personaId === personaId),
-	add_phone_contact: ({ personaId, characterId }) => {
-		let c = contacts.find((x) => x.personaId === personaId && x.characterId === characterId);
-		if (!c) contacts.push((c = { personaId, characterId, status: "", sortOrder: contacts.length, createdAt: now() }));
+	// ---- 폰 연락처 (주인·연락처가 각각 페르소나나 캐릭터) ----
+	list_phone_contacts: ({ ownerKind, ownerId }) => contacts.filter((c) => c.ownerKind === ownerKind && c.ownerId === ownerId),
+	add_phone_contact: ({ ownerKind, ownerId, contactKind, contactId }) => {
+		let c = contacts.find((x) => x.ownerKind === ownerKind && x.ownerId === ownerId && x.contactKind === contactKind && x.contactId === contactId);
+		if (!c) contacts.push((c = { ownerKind, ownerId, contactKind, contactId, status: "", sortOrder: contacts.length, createdAt: now() }));
 		return c;
 	},
-	remove_phone_contact: ({ personaId, characterId }) => {
-		const i = contacts.findIndex((x) => x.personaId === personaId && x.characterId === characterId);
+	remove_phone_contact: ({ ownerKind, ownerId, contactKind, contactId }) => {
+		const i = contacts.findIndex((x) => x.ownerKind === ownerKind && x.ownerId === ownerId && x.contactKind === contactKind && x.contactId === contactId);
 		if (i >= 0) contacts.splice(i, 1);
 		return null;
 	},
-	set_phone_contact_status: ({ personaId, characterId, status }) => {
-		const c = contacts.find((x) => x.personaId === personaId && x.characterId === characterId);
+	set_phone_contact_status: ({ ownerKind, ownerId, contactKind, contactId, status }) => {
+		const c = contacts.find((x) => x.ownerKind === ownerKind && x.ownerId === ownerId && x.contactKind === contactKind && x.contactId === contactId);
 		if (c) c.status = status;
 		return null;
+	},
+	phone_peek: async ({ conversationId, onEvent }) => {
+		const conv = convs.find((c) => c.id === conversationId)!;
+		const phoneMeta = (conv.meta as { phone?: { owner: { kind: string; id: string }; contact: { kind: string; id: string } } } | null)?.phone;
+		const nameOf = (w: { kind: string; id: string }) => (w.kind === "persona" ? personas.find((p) => p.id === w.id)?.name : characters.find((c) => c.id === w.id)?.name) ?? "?";
+		const me = phoneMeta ? nameOf(phoneMeta.owner) : "나";
+		const other = phoneMeta ? nameOf(phoneMeta.contact) : "상대";
+		const text = `${me}: 지금 뭐 해?\n${other}: 훈련 끝나고 쉬는 중\n${other}: 너는?\n${me}: 오두막에서 차 마셔`;
+		for (const piece of text.match(/.{1,4}/gsu) ?? []) {
+			onEvent.onmessage({ chunk: piece });
+			await new Promise((r) => setTimeout(r, 30));
+		}
+		const out = [];
+		for (const [mine, body] of [[true, "지금 뭐 해?"], [false, "훈련 끝나고 쉬는 중\n너는?"], [true, "오두막에서 차 마셔"]] as [boolean, string][]) {
+			const t = now();
+			const m = { id: uid("m"), conversationId, seq: messages.filter((x) => x.conversationId === conversationId).length + 1, role: mine ? "user" : "assistant", name: mine ? me : other, content: body, characterId: null, meta: { info: { peek: true } }, createdAt: t, updatedAt: t };
+			messages.push(m as never);
+			out.push(m);
+		}
+		conv.updatedAt = now();
+		return out;
 	},
 
 	// ---- 페르소나 ----

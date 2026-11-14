@@ -6,7 +6,7 @@
 	import { promptText } from "$shared/stores/confirm.svelte";
 	import { nav } from "$app/nav.svelte";
 	import { library, type Conversation } from "$features/character/library.svelte";
-	import { phone, WALLPAPERS } from "./phone.svelte";
+	import { lookup, phone, WALLPAPERS, type Who } from "./phone.svelte";
 	import PhoneRoom from "./PhoneRoom.svelte";
 
 	type Screen = "home" | "messages" | "room" | "contacts" | "settings";
@@ -22,7 +22,7 @@
 		ready = true;
 	});
 
-	// 시계 (1분마다)
+	// 시계 (30초마다)
 	let now = $state(new Date());
 	$effect(() => {
 		const t = setInterval(() => (now = new Date()), 30_000);
@@ -31,25 +31,32 @@
 	const clock = $derived(now.toLocaleTimeString("ko-KR", { hour: "numeric", minute: "2-digit", hour12: false }));
 	const dateLabel = $derived(now.toLocaleDateString("ko-KR", { month: "long", day: "numeric", weekday: "long" }));
 
-	const persona = $derived(phone.persona);
+	const owner = $derived(phone.owner);
+	const q = $derived(search.trim().toLowerCase());
 	const contacts = $derived(
 		phone.contacts
-			.map((c) => ({ ...c, ch: library.character(c.characterId) }))
-			.filter((c) => c.ch)
-			.filter((c) => !search.trim() || c.ch!.name.toLowerCase().includes(search.trim().toLowerCase())),
+			.map((c) => ({ c, who: lookup({ kind: c.contactKind as Who["kind"], id: c.contactId }) }))
+			.filter((x) => x.who && (!q || x.who.name.toLowerCase().includes(q))),
 	);
-	const notContacts = $derived(library.characters.filter((c) => !phone.contacts.some((x) => x.characterId === c.id)));
+	/** 고를 수 있는 상대: 페르소나 폰은 캐릭터만, 캐릭터 폰은 다른 캐릭터와 내 페르소나 */
+	const candidates = $derived.by(() => {
+		const o = phone.prefs.owner;
+		const chars = library.characters.filter((c) => !(o?.kind === "character" && o.id === c.id)).map((c) => lookup({ kind: "character", id: c.id })!);
+		const personas = o?.kind === "character" ? library.personas.map((p) => lookup({ kind: "persona", id: p.id })!) : [];
+		return [...chars, ...personas].filter(Boolean);
+	});
+	const pickList = $derived(picker === "contact" ? candidates.filter((w) => !phone.hasContact(w)) : candidates);
 	// 메시지가 하나도 없는 방은 목록에 안 보임 (연락처에서 열었다가 그냥 나온 경우)
-	const chats = $derived(phone.chats.filter((c) => phone.previews[c.id]).filter((c) => !search.trim() || library.character(c.characterId)?.name.toLowerCase().includes(search.trim().toLowerCase())));
+	const chats = $derived(phone.chats.filter((c) => phone.previews[c.id]).filter((c) => !q || lookup(phone.contactOf(c))?.name.toLowerCase().includes(q)));
 
 	function go(s: Screen) {
 		search = "";
 		picker = null;
 		screen = s;
 	}
-	async function openChat(charId: string) {
+	async function openChat(w: Who) {
 		picker = null;
-		const c = await phone.open(charId);
+		const c = await phone.open(w);
 		if (!c) return;
 		room = c;
 		screen = "room";
@@ -57,6 +64,11 @@
 	function closeRoom() {
 		room = null;
 		screen = "messages";
+	}
+	function openProfile() {
+		const o = phone.prefs.owner;
+		if (!o) return;
+		nav.go(o.kind === "persona" ? { page: "persona", personaId: o.id } : { page: "character", charId: o.id });
 	}
 
 	function when(t: number) {
@@ -70,7 +82,7 @@
 	}
 
 	let menu = $state<{ at: { x: number; y: number }; items: MenuItem[] } | null>(null);
-	function contactMenu(e: MouseEvent, charId: string, status: string) {
+	function contactMenu(e: MouseEvent, w: Who, status: string) {
 		e.preventDefault();
 		menu = {
 			at: { x: e.clientX, y: e.clientY },
@@ -80,13 +92,14 @@
 					icon: Pencil,
 					onselect: async () => {
 						const t = await promptText({ title: "상태 메시지", input: { value: status, placeholder: "예: 기사단 훈련 중" }, confirmLabel: "저장" });
-						if (t !== null && t !== undefined) await phone.setStatus(charId, t);
+						if (t !== null && t !== undefined) await phone.setStatus(w, t);
 					},
 				},
-				{ label: "연락처에서 지우기", icon: Trash2, danger: true, separator: true, onselect: () => phone.removeContact(charId) },
+				{ label: "연락처에서 지우기", icon: Trash2, danger: true, separator: true, onselect: () => phone.removeContact(w) },
 			],
 		};
 	}
+	const kindLabel = (k: string) => (k === "persona" ? "내 페르소나" : "캐릭터");
 </script>
 
 <div class="stage" class:full={phone.prefs.display === "full"}>
@@ -97,14 +110,14 @@
 
 		{#if !ready}
 			<div class="center"><Spinner /></div>
-		{:else if !persona}
+		{:else if !owner}
 			<div class="center empty">
 				<p>폰 주인이 될 페르소나가 없음</p>
 				<button class="link" onclick={() => nav.go({ page: "persona" })}>페르소나 만들러 가기</button>
 			</div>
 		{:else if screen === "home"}
 			<div class="home">
-				<div class="clock"><b>{clock}</b><span>{dateLabel}</span></div>
+				<div class="clock"><b>{clock}</b><span>{dateLabel}</span>{#if phone.isCharacterPhone}<em class="whose">{owner.name}의 폰</em>{/if}</div>
 				<div class="apps">
 					<button class="app" onclick={() => go("messages")}>
 						<span class="ic msg"><MessageCircle />{#if phone.unread}<i>{phone.unread}</i>{/if}</span>메시지
@@ -128,15 +141,15 @@
 				<h2 class="grow">{picker === "contact" ? "연락처 추가" : "새 채팅"}</h2>
 			</div>
 			<ul class="list">
-				{#each picker === "contact" ? notContacts : library.characters as c (c.id)}
+				{#each pickList as w (`${w.kind}:${w.id}`)}
 					<li>
-						<button onclick={() => (picker === "contact" ? phone.addContact(c.id).then(() => (picker = null)) : openChat(c.id))}>
-							<Avatar name={c.name} src={fileSrc(c.avatar)} color={c.color} size={40} />
-							<span class="main"><strong>{c.name}</strong></span>
+						<button onclick={() => (picker === "contact" ? phone.addContact(w).then(() => (picker = null)) : openChat(w))}>
+							<Avatar name={w.name} src={fileSrc(w.avatar)} color={w.color} size={40} />
+							<span class="main"><strong>{w.name}</strong>{#if phone.isCharacterPhone}<span class="last">{kindLabel(w.kind)}</span>{/if}</span>
 						</button>
 					</li>
 				{:else}
-					<li class="none">{picker === "contact" ? "모든 캐릭터가 이미 연락처에 있음" : "캐릭터 없음"}</li>
+					<li class="none">{picker === "contact" ? "더 넣을 사람 없음" : "캐릭터 없음"}</li>
 				{/each}
 			</ul>
 		{:else if screen === "messages"}
@@ -149,13 +162,13 @@
 			{/if}
 			<ul class="list">
 				{#each chats as c (c.id)}
-					{@const ch = library.character(c.characterId)}
+					{@const w = lookup(phone.contactOf(c))}
 					{@const p = phone.previews[c.id]}
 					<li>
-						<button onclick={() => c.characterId && openChat(c.characterId)}>
-							<Avatar name={ch?.name ?? "?"} src={fileSrc(ch?.avatar)} color={ch?.color} size={46} />
+						<button onclick={() => w && openChat(w)}>
+							<Avatar name={w?.name ?? "?"} src={fileSrc(w?.avatar)} color={w?.color} size={46} />
 							<span class="main">
-								<span class="row"><strong>{ch?.name ?? c.title}</strong><span class="time">{when(p?.at ?? c.updatedAt)}</span></span>
+								<span class="row"><strong>{w?.name ?? c.title}</strong><span class="time">{when(p?.at ?? c.updatedAt)}</span></span>
 								<span class="row"><span class="last">{p?.text || "대화를 시작해 봄"}</span>{#if p?.unread}<span class="badge">{p.unread}</span>{/if}</span>
 							</span>
 						</button>
@@ -173,42 +186,53 @@
 				<span class="bar-icons"><button class="plain" aria-label="연락처 추가" onclick={() => (picker = "contact")}><Plus /></button></span>
 			</div>
 			<div class="me-card">
-				<Avatar name={persona.name} src={fileSrc(persona.avatar)} color={persona.color || null} size={52} />
-				<div><strong>{persona.name}</strong><span>내 프로필</span></div>
+				<Avatar name={owner.name} src={fileSrc(owner.avatar)} color={owner.color} size={52} />
+				<div><strong>{owner.name}</strong><span>내 프로필{phone.isCharacterPhone ? " (캐릭터)" : ""}</span></div>
 			</div>
 			{#if phone.contacts.length > 6}
 				<label class="search"><Search /><input bind:value={search} placeholder="이름 검색" aria-label="연락처 검색" /></label>
 			{/if}
 			<p class="section">친구 {phone.contacts.length}</p>
 			<ul class="list">
-				{#each contacts as c (c.characterId)}
+				{#each contacts as { c, who } (`${c.contactKind}:${c.contactId}`)}
 					<li>
-						<button onclick={() => openChat(c.characterId)} oncontextmenu={(e) => contactMenu(e, c.characterId, c.status)}>
-							<Avatar name={c.ch!.name} src={fileSrc(c.ch!.avatar)} color={c.ch!.color} size={40} />
-							<span class="main"><strong>{c.ch!.name}</strong>{#if c.status}<span class="last">{c.status}</span>{/if}</span>
+						<button onclick={() => openChat(who!)} oncontextmenu={(e) => contactMenu(e, who!, c.status)}>
+							<Avatar name={who!.name} src={fileSrc(who!.avatar)} color={who!.color} size={40} />
+							<span class="main"><strong>{who!.name}</strong>{#if c.status}<span class="last">{c.status}</span>{:else if phone.isCharacterPhone && c.contactKind === "persona"}<span class="last">내 페르소나</span>{/if}</span>
 						</button>
 					</li>
 				{:else}
 					<li class="none">
 						연락처 없음<br />
-						<button class="link" onclick={() => (picker = "contact")}>캐릭터 추가</button>
+						<button class="link" onclick={() => (picker = "contact")}>연락처 추가</button>
 					</li>
 				{/each}
 			</ul>
 		{:else if screen === "settings"}
 			<div class="app-bar"><h2>설정</h2></div>
 			<div class="settings">
-				<button class="profile" onclick={() => nav.go({ page: "persona", personaId: persona.id })}>
-					<Avatar name={persona.name} src={fileSrc(persona.avatar)} color={persona.color || null} size={52} />
-					<span><strong>{persona.name}</strong><small>이 폰의 주인 (페르소나)</small></span>
+				<button class="profile" onclick={openProfile}>
+					<Avatar name={owner.name} src={fileSrc(owner.avatar)} color={owner.color} size={52} />
+					<span><strong>{owner.name}</strong><small>이 폰의 주인 ({phone.isCharacterPhone ? "캐릭터" : "페르소나"})</small></span>
 					<ChevronRight />
 				</button>
-				<p class="section">페르소나 바꾸기</p>
+				<p class="section">내 페르소나의 폰</p>
 				<div class="group">
 					{#each library.personas as p (p.id)}
-						<button class="opt" onclick={() => phone.switchPersona(p.id)}>
+						{@const on = phone.prefs.owner?.kind === "persona" && phone.prefs.owner.id === p.id}
+						<button class="opt" onclick={() => phone.switchOwner({ kind: "persona", id: p.id })}>
 							<Avatar name={p.name} src={fileSrc(p.avatar)} color={p.color || null} size={28} />{p.name}
-							{#if p.id === persona.id}<span class="check">✓</span>{/if}
+							{#if on}<span class="check">✓</span>{/if}
+						</button>
+					{/each}
+				</div>
+				<p class="section">캐릭터의 폰 (내가 그 캐릭터가 되거나, 대화를 엿봄)</p>
+				<div class="group">
+					{#each library.characters as c (c.id)}
+						{@const on = phone.prefs.owner?.kind === "character" && phone.prefs.owner.id === c.id}
+						<button class="opt" onclick={() => phone.switchOwner({ kind: "character", id: c.id })}>
+							<Avatar name={c.name} src={fileSrc(c.avatar)} color={c.color} size={28} />{c.name}
+							{#if on}<span class="check">✓</span>{/if}
 						</button>
 					{/each}
 				</div>
@@ -330,6 +354,14 @@
 	}
 	.clock span {
 		font-size: 14px;
+	}
+	.whose {
+		margin-top: 6px;
+		padding: 2px 10px;
+		border-radius: 999px;
+		background: rgb(0 0 0 / 0.25);
+		font-size: 12px;
+		font-style: normal;
 	}
 	.apps {
 		display: grid;

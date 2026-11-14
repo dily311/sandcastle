@@ -33,6 +33,7 @@ use crate::{
         chat::{
             chat_images::{image_rules, sanitize_cg_tags, strip_cg_tags, FEATURE_KEY as IMAGES_FEATURE},
             context_manager::{is_hidden, ContextManager},
+            phone::{self as phone_sides, Side},
             regex_processor::{RegexMacros, RegexProcessor},
         },
         prompt::PromptManager,
@@ -333,6 +334,9 @@ impl ChatManager {
             .or(character.default_prompt_preset_id.clone().filter(|s| !s.is_empty()))
             .unwrap_or(fallback.preset_id);
 
+        // 나/상대: 캐릭터 폰이면 주인 캐릭터와 연락처, 아니면 페르소나와 캐릭터
+        let (me, other, char_phone) = phone_sides::sides(db, conv.meta.as_ref(), &character, &persona).await?;
+
         let (_guard, cancel) = RunningGuard::start(conversation_id)?;
 
         // 다시 생성할 대상
@@ -358,6 +362,9 @@ impl ChatManager {
                 },
             )
             .await?;
+        if char_phone {
+            phone_sides::apply_sides(&mut context, &me, &other);
+        }
 
         // 이번에 보낼 사용자 입력: 새로 쓴 것, 또는 (다시 생성일 때) 기록의 마지막 사용자 메시지
         let (input, already_stored, generation_type) = match (&kind, &target) {
@@ -384,7 +391,10 @@ impl ChatManager {
         }
 
         let images_on = conv.images_enabled && images_feature_on(app);
-        let images = if images_on { load_enabled_images(app, db, &conv.character_id).await? } else { vec![] };
+        let images = match other.character_id() {
+            Some(cid) if images_on => load_enabled_images(app, db, cid).await?,
+            _ => vec![],
+        };
         match image_rules(&images) {
             Some(rules) => context.system_rules.push(rules),
             None => {
@@ -398,7 +408,7 @@ impl ChatManager {
             db,
             Some(&conv.character_id),
             Some(&preset_id),
-            RegexMacros { char_name: character.name.clone(), user_name: persona.name.clone() },
+            RegexMacros { char_name: other.name.clone(), user_name: me.name.clone() },
         )
         .await?;
 
@@ -414,10 +424,10 @@ impl ChatManager {
                     conversation_id: conversation_id.to_string(),
                     seq: 0,
                     role: "user".into(),
-                    name: Some(persona.name.clone()),
+                    name: Some(me.name.clone()),
                     content: stored.clone(),
                     character_id: None,
-                    meta: Some(json!({ "sender": { "type": "user", "name": persona.name, "id": persona_id } })),
+                    meta: Some(json!({ "sender": { "type": "user", "name": me.name, "id": me.id, "kind": me.kind } })),
                 },
             )
             .await
@@ -466,11 +476,11 @@ impl ChatManager {
                     conversation_id: conversation_id.to_string(),
                     seq: 0,
                     role: "assistant".into(),
-                    name: Some(character.name.clone()),
+                    name: Some(other.name.clone()),
                     content: content.clone(),
-                    character_id: Some(character.id.clone()),
+                    character_id: other.character_id().map(str::to_string),
                     meta: Some(json!({
-                        "sender": { "type": "assistant", "name": character.name, "id": character.id },
+                        "sender": { "type": "assistant", "name": other.name, "id": other.id, "kind": other.kind },
                         "info": info,
                         "images": images_json,
                     })),
@@ -497,5 +507,131 @@ impl ChatManager {
             DialogueDoneEvent { conversation_id: conversation_id.to_string(), full_message: content, images: used_images },
         );
         Ok(ChatTurn { user: user_msg, assistant })
+    }
+
+    /// 폰 엿보기: 두 사람 몫을 AI가 모두 이어서 쓰고, 말풍선 메시지로 나눠 저장한다.
+    /// 취소되면 받은 데까지 나눠 저장한다.
+    pub async fn peek(
+        &self,
+        app: &AppHandle,
+        db: &crate::db::conn::DbPool,
+        settings: &SettingsState<AppSetting>,
+        conversation_id: &str,
+        channel: Option<Channel<StreamPayload>>,
+    ) -> Result<Vec<Message>> {
+        let conv = match get_conversation(db, conversation_id).await {
+            Ok(c) => c,
+            Err(sqlx::Error::RowNotFound) => return Err(AppError::not_found("대화를 찾을 수 없음").into()),
+            Err(e) => return Err(AppError::from(e).into()),
+        };
+        if conv.mode != "phone" {
+            return Err(AppError::validation("엿보기는 폰 대화에서만 됨", None).into());
+        }
+        let fallback = current_conv_request(settings)?;
+        let api_profile_id = conv
+            .api_profile_id
+            .clone()
+            .filter(|s| !s.is_empty())
+            .or(Some(fallback.api_profile_id).filter(|s| !s.is_empty()))
+            .ok_or_else(|| AppError::validation("API를 먼저 고르세요 (대화 설정 또는 설정 > API 키)", None))?;
+        let persona_id = match conv.persona_id.as_str() {
+            "" => get_system_default_persona(db).await.unwrap_or_else(|_| "default".into()),
+            id => id.to_string(),
+        };
+        let character = get_character(db, &conv.character_id).await.map_err(AppError::from)?;
+        let persona = get_persona(db, &persona_id).await.map_err(AppError::from)?;
+        let preset_id = conv
+            .prompt_preset_id
+            .clone()
+            .filter(|s| !s.is_empty())
+            .or(character.default_prompt_preset_id.clone().filter(|s| !s.is_empty()))
+            .unwrap_or(fallback.preset_id);
+        let (me, other, _) = phone_sides::sides(db, conv.meta.as_ref(), &character, &persona).await?;
+
+        let (_guard, cancel) = RunningGuard::start(conversation_id)?;
+        let mut context = ContextManager
+            .build_context(
+                db,
+                ContextRequest {
+                    conversation_id: conversation_id.to_string(),
+                    character_id: conv.character_id.clone(),
+                    persona_id: persona_id.clone(),
+                    history_limit: HISTORY_LIMIT,
+                },
+            )
+            .await?;
+        phone_sides::apply_sides(&mut context, &me, &other);
+        phone_sides::peek_history(&mut context.history, &me, &other);
+        for item in context.history.iter_mut() {
+            item.content = strip_cg_tags(&item.content);
+        }
+        context.system_rules.push(phone_sides::peek_rule(&me, &other));
+
+        let gen_started = now_ms();
+        let mut received = String::new();
+        let streaming = channel.is_some();
+        let outcome = {
+            let mut sink = |delta: &str| {
+                received.push_str(delta);
+                if let Some(ch) = &channel {
+                    let _ = ch.send(StreamPayload { chunk: delta.to_string() });
+                }
+            };
+            self.generate_with(
+                app,
+                db,
+                api_profile_id.clone(),
+                Some(preset_id.clone()),
+                context,
+                format!("({}와 {}의 메신저 대화를 이어서 써)", me.name, other.name),
+                GenerationType::Normal,
+                &cancel,
+                streaming,
+                &mut sink,
+            )
+            .await
+        };
+        let (raw, model, cancelled) = match outcome {
+            Ok((AiResponse { content, model, .. }, _)) => (content, model, false),
+            Err(_) if cancel.is_cancelled() && !received.trim().is_empty() => (received, String::new(), true),
+            Err(e) => return Err(e),
+        };
+        let info = json!({
+            "apiProfileId": api_profile_id,
+            "presetId": preset_id,
+            "model": model,
+            "genStarted": gen_started,
+            "genFinished": now_ms(),
+            "cancelled": cancelled,
+            "peek": true,
+        });
+
+        let mut saved = vec![];
+        for (mine, text) in phone_sides::parse_peek(&strip_cg_tags(&raw), &me.name, &other.name) {
+            let side: &Side = if mine { &me } else { &other };
+            let role = if mine { "user" } else { "assistant" };
+            let msg = chat_ui::push_message(
+                db,
+                MessageInput {
+                    conversation_id: conversation_id.to_string(),
+                    seq: 0,
+                    role: role.into(),
+                    name: Some(side.name.clone()),
+                    content: text,
+                    character_id: side.character_id().map(str::to_string),
+                    meta: Some(json!({
+                        "sender": { "type": role, "name": side.name, "id": side.id, "kind": side.kind },
+                        "info": info,
+                    })),
+                },
+            )
+            .await
+            .map_err(AppError::from)?;
+            saved.push(msg);
+        }
+        if saved.is_empty() {
+            return Err(AppError::validation("AI가 메시지를 쓰지 않았음. 다시 시도해 보세요", None).into());
+        }
+        Ok(saved)
     }
 }

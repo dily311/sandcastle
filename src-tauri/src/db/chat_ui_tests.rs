@@ -175,19 +175,29 @@ async fn phone_contacts_are_per_persona() {
         .await
         .unwrap();
 
-    phone::add_contact(&pool, "default", "c1").await.unwrap();
+    use phone::Who;
+    let me = Who { kind: "persona", id: "default" };
+    let c1 = Who { kind: "character", id: "c1" };
+
+    phone::add_contact(&pool, me, c1).await.unwrap();
     // 두 번 넣어도 하나
-    phone::add_contact(&pool, "default", "c1").await.unwrap();
-    assert_eq!(phone::list_contacts(&pool, "default").await.unwrap().len(), 1);
-    assert!(phone::list_contacts(&pool, "p2").await.unwrap().is_empty());
+    phone::add_contact(&pool, me, c1).await.unwrap();
+    assert_eq!(phone::list_contacts(&pool, me).await.unwrap().len(), 1);
+    assert!(phone::list_contacts(&pool, Who { kind: "persona", id: "p2" }).await.unwrap().is_empty());
 
-    assert!(phone::set_status(&pool, "default", "c1", "훈련 중").await.unwrap());
-    assert_eq!(phone::list_contacts(&pool, "default").await.unwrap()[0].status, "훈련 중");
+    assert!(phone::set_status(&pool, me, c1, "훈련 중").await.unwrap());
+    assert_eq!(phone::list_contacts(&pool, me).await.unwrap()[0].status, "훈련 중");
 
-    // 캐릭터가 지워지면 연락처도 사라짐
+    // 캐릭터 폰: 주인 = 캐릭터, 연락처 = 페르소나
+    let char_owner = Who { kind: "character", id: "c1" };
+    phone::add_contact(&pool, char_owner, Who { kind: "persona", id: "p2" }).await.unwrap();
+    assert_eq!(phone::list_contacts(&pool, char_owner).await.unwrap()[0].contact_kind, "persona");
+
+    // 캐릭터가 지워지면 그 캐릭터가 주인인 폰과 연락처 모두 사라짐 (트리거)
     sqlx::query("DELETE FROM characters WHERE id = 'c1'").execute(&pool).await.unwrap();
-    assert!(phone::list_contacts(&pool, "default").await.unwrap().is_empty());
-    assert!(!phone::remove_contact(&pool, "default", "c1").await.unwrap());
+    assert!(phone::list_contacts(&pool, me).await.unwrap().is_empty());
+    assert!(phone::list_contacts(&pool, char_owner).await.unwrap().is_empty());
+    assert!(!phone::remove_contact(&pool, me, c1).await.unwrap());
 }
 
 #[tokio::test]

@@ -519,12 +519,16 @@ pub struct ChatTurn {
     pub assistant: Message,
 }
 
-/// 폰 연락처 (페르소나마다 따로)
+/// 폰 연락처. 주인(폰 주인)과 연락처가 각각 페르소나 또는 캐릭터
 #[derive(Debug, Clone, Serialize, Deserialize, sqlx::FromRow, specta::Type)]
 #[serde(rename_all = "camelCase")]
 pub struct PhoneContact {
-    pub persona_id: String,
-    pub character_id: String,
+    /// "persona" | "character"
+    pub owner_kind: String,
+    pub owner_id: String,
+    /// "persona" | "character"
+    pub contact_kind: String,
+    pub contact_id: String,
     pub status: String,
     pub sort_order: i64,
     pub created_at: i64,

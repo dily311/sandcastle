@@ -15,7 +15,7 @@ use crate::{
 };
 
 /// ChatManager(anyhow) 오류에서 원래 AppError(코드·재시도 여부)를 되살린다.
-fn into_app_error(e: anyhow::Error) -> AppError {
+pub(crate) fn into_app_error(e: anyhow::Error) -> AppError {
     e.downcast::<AppError>()
         .unwrap_or_else(|e| AppError::ai_provider(ErrorCode::AiProviderError, e.to_string(), false))
 }

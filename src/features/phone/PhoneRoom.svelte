@@ -1,6 +1,6 @@
 <script lang="ts">
 	import { onMount, tick } from "svelte";
-	import { BookOpen, ChevronLeft, Copy, Menu, MessageCirclePlus, RefreshCw, Send, Square, Trash2 } from "@lucide/svelte";
+	import { BookOpen, ChevronLeft, Copy, Eye, Menu, MessageCirclePlus, RefreshCw, Send, Square, Trash2 } from "@lucide/svelte";
 	import { Avatar, ContextMenu, type MenuItem } from "$shared/ui";
 	import { fileSrc } from "$shared/ipc/file";
 	import { confirmAction } from "$shared/stores/confirm.svelte";
@@ -9,20 +9,23 @@
 	import { nav } from "$app/nav.svelte";
 	import { library, type Conversation } from "$features/character/library.svelte";
 	import { ChatSession, type Message } from "$features/character/session.svelte";
-	import { bubbles, phone } from "./phone.svelte";
+	import { bubbles, lookup, parsePeek, phone } from "./phone.svelte";
 
 	let { conv, onback }: { conv: Conversation; onback: () => void } = $props();
 
 	// svelte-ignore state_referenced_locally
 	const session = new ChatSession(conv.id);
-	const ch = $derived(library.character(conv.characterId));
-	const images = $derived(Object.fromEntries((library.images[conv.characterId ?? ""] ?? []).map((i) => [i.key, fileSrc(i.path) ?? ""])));
+	// 상대(연락처)와 나(폰 주인)
+	const ch = $derived(lookup(phone.contactOf(conv)));
+	const me = $derived(phone.owner);
+	const imgChar = $derived(ch?.kind === "character" ? ch.id : null);
+	const images = $derived(Object.fromEntries((library.images[imgChar ?? ""] ?? []).map((i) => [i.key, fileSrc(i.path) ?? ""])));
 	let draft = $state("");
 	let scroller: HTMLDivElement | undefined = $state();
 
 	onMount(async () => {
 		void appSetting.load();
-		if (conv.characterId && !library.images[conv.characterId]) void library.loadImages(conv.characterId);
+		if (imgChar && !library.images[imgChar]) void library.loadImages(imgChar);
 		await session.load();
 		phone.markRead(conv.id);
 		await scrollDown();
@@ -54,6 +57,12 @@
 	async function nudge() {
 		if (session.busy) return;
 		await session.send("");
+		await done();
+	}
+	/** 엿보기: 두 사람 몫을 AI가 이어서 씀 */
+	async function peek() {
+		if (session.busy) return;
+		await session.peek();
 		await done();
 	}
 	async function again() {
@@ -104,6 +113,12 @@
 			const lines = bubbles(content);
 			if (!lines.length && !(live?.targetId === m.id)) continue;
 			push({ key: m.id, at: m.createdAt, mine: m.role === "user", msg: m, lines, pending: live?.targetId === m.id });
+		}
+		if (live?.kind === "peek") {
+			const now = Date.now();
+			const parts = parsePeek(live.text, me?.name ?? "", ch?.name ?? "");
+			parts.forEach((p, i) => push({ key: `peek-${i}`, at: now, mine: p.mine, lines: bubbles(p.text), pending: true }));
+			if (!parts.length) push({ key: "peek-wait", at: now, mine: false, lines: [], pending: true });
 		}
 		if (live?.kind === "send") {
 			const now = Date.now();
@@ -159,6 +174,7 @@
 			at: { x: r.right - 200, y: r.bottom + 4 },
 			items: [
 				{ label: "답장 더 받기", icon: MessageCirclePlus, disabled: session.busy, onselect: nudge },
+				{ label: "엿보기: 두 사람 대화를 AI가 이어 씀", icon: Eye, disabled: session.busy, onselect: peek },
 				{ label: "마지막 답장 다시 받기", icon: RefreshCw, disabled: session.busy || !lastAi || session.last?.id !== lastAi.id, onselect: again },
 				{ label: "소설 화면으로 보기", icon: BookOpen, separator: true, onselect: () => nav.go({ page: "character", charId: conv.characterId ?? undefined, convId: conv.id }) },
 			],
@@ -177,7 +193,7 @@
 		{#if session.loading}
 			<p class="hint">불러오는 중…</p>
 		{:else if !rows.length}
-			<p class="hint">{ch?.name ?? "상대"}에게 첫 메시지를 보내 봄</p>
+			<p class="hint">{ch?.name ?? "상대"}에게 첫 메시지를 보내 봄{#if phone.isCharacterPhone}<br />또는 눈 버튼으로 두 사람 대화를 엿봄{/if}</p>
 		{/if}
 		{#each rows as r (r.key)}
 			{#if r.kind === "date"}
@@ -224,7 +240,10 @@
 			void send();
 		}}
 	>
-		<textarea bind:value={draft} rows="1" placeholder="메시지 입력" aria-label="메시지" {onkeydown}></textarea>
+		{#if phone.isCharacterPhone}
+			<button type="button" class="peek" aria-label="엿보기 (AI가 두 사람 대화를 이어서 씀)" title="엿보기: 두 사람 대화를 AI가 이어서 씀" disabled={session.busy} onclick={peek}><Eye /></button>
+		{/if}
+		<textarea bind:value={draft} rows="1" placeholder={phone.isCharacterPhone ? `${me?.name ?? "나"}(으)로 보내기` : "메시지 입력"} aria-label="메시지" {onkeydown}></textarea>
 		{#if session.busy}
 			<button type="button" class="send on" aria-label="멈추기" onclick={() => session.cancel()}><Square /></button>
 		{:else}
@@ -436,6 +455,30 @@
 	.send.on :global(svg) {
 		width: 17px;
 		height: 17px;
+	}
+	.peek {
+		display: grid;
+		place-items: center;
+		flex: none;
+		width: 36px;
+		height: 36px;
+		border: none;
+		border-radius: 50%;
+		background: #f1f1f1;
+		color: #555;
+		cursor: pointer;
+	}
+	.peek:hover:not(:disabled) {
+		background: color-mix(in oklab, var(--accent) 18%, #f1f1f1);
+		color: var(--accent);
+	}
+	.peek :global(svg) {
+		width: 18px;
+		height: 18px;
+	}
+	.hint {
+		text-align: center;
+		line-height: 1.6;
 	}
 	.send:disabled {
 		cursor: default;

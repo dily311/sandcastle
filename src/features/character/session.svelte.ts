@@ -33,8 +33,8 @@ const src = { source: "chat" };
 
 /** 진행 중인 응답 */
 interface Live {
-	/** send: 새 응답 / regenerate: 기존 메시지 다시 만들기 */
-	kind: "send" | "regenerate";
+	/** send: 새 응답 / regenerate: 기존 메시지 다시 만들기 / peek: 폰 엿보기 (AI가 두 사람 몫을 모두 씀) */
+	kind: "send" | "regenerate" | "peek";
 	text: string;
 	/** 다시 만드는 메시지 */
 	targetId?: string;
@@ -106,6 +106,22 @@ export class ChatSession {
 			this.replace(turn.assistant);
 		} catch {
 			/* 토스트로 알림 */
+		} finally {
+			this.live = null;
+			void library.refresh(this.convId);
+		}
+	}
+
+	/** 폰 엿보기: 두 사람 메시지를 AI가 이어서 씀 (여러 메시지가 한 번에 저장됨) */
+	async peek() {
+		if (this.busy) return;
+		this.live = { kind: "peek", text: "" };
+		try {
+			const saved = await call(commands.phonePeek(this.convId, this.channel()), src);
+			this.messages.push(...saved);
+		} catch {
+			// 멈췄을 때 받은 데까지 저장됐을 수 있음
+			await this.load().catch(() => {});
 		} finally {
 			this.live = null;
 			void library.refresh(this.convId);

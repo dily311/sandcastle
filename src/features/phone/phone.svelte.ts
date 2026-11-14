@@ -1,9 +1,17 @@
-// 폰 화면 상태: 폰 주인(페르소나), 연락처, 대화 미리보기·안 읽음, 화면 설정
+// 폰 화면 상태: 폰 주인(페르소나 또는 캐릭터), 연락처, 대화 미리보기·안 읽음, 화면 설정
+// - 페르소나 폰: 내가 페르소나, AI가 연락처 캐릭터 (일반 대화와 같은 구조)
+// - 캐릭터 폰: 내가 주인 캐릭터, AI가 연락처(다른 캐릭터나 페르소나). 엿보기로 AI가 두 사람 몫을 다 쓸 수도 있음
+//   대화 meta.phone = { owner: {kind, id}, contact: {kind, id} }
 import type { Message_Serialize as Message, PhoneContact } from "$ipc/bindings";
 import { call, commands } from "$shared/ipc/client";
 import { library, type Conversation } from "$features/character/library.svelte";
 
 export type { PhoneContact };
+export type Kind = "persona" | "character";
+export interface Who {
+	kind: Kind;
+	id: string;
+}
 
 export const WALLPAPERS: Record<string, string> = {
 	sea: "linear-gradient(160deg, #9ad3cf 0%, #4f8fa8 55%, #2c4f6b 100%)",
@@ -14,23 +22,42 @@ export const WALLPAPERS: Record<string, string> = {
 };
 
 interface Prefs {
-	personaId: string | null;
+	owner: Who | null;
 	display: "mockup" | "full";
-	/** 페르소나별 배경 */
+	/** 주인별 배경 ("persona:id" → 배경) */
 	wallpapers: Record<string, string>;
 	/** 대화별 마지막으로 읽은 시각 */
 	lastRead: Record<string, number>;
 }
 const KEY = "sc.phone";
 const src = { source: "phone" };
+const ownerKey = (w: Who | null) => (w ? `${w.kind}:${w.id}` : "");
 
 function loadPrefs(): Prefs {
-	const base: Prefs = { personaId: null, display: "mockup", wallpapers: {}, lastRead: {} };
+	const base: Prefs = { owner: null, display: "mockup", wallpapers: {}, lastRead: {} };
 	try {
-		return { ...base, ...JSON.parse(localStorage.getItem(KEY) ?? "{}") };
+		const raw = JSON.parse(localStorage.getItem(KEY) ?? "{}");
+		// 예전 저장값: personaId, 페르소나 id로만 된 배경
+		if (raw.personaId && !raw.owner) raw.owner = { kind: "persona", id: raw.personaId };
+		if (raw.wallpapers) for (const k of Object.keys(raw.wallpapers)) if (!k.includes(":")) raw.wallpapers[`persona:${k}`] = raw.wallpapers[k];
+		return { ...base, ...raw };
 	} catch {
 		return base;
 	}
+}
+
+/** 페르소나나 캐릭터 하나의 표시 정보 */
+export function lookup(w: Who | null | undefined) {
+	if (!w) return undefined;
+	const x = w.kind === "persona" ? library.persona(w.id) : library.character(w.id);
+	if (!x) return undefined;
+	return { ...w, name: x.name, avatar: x.avatar, color: x.color || null, description: x.description ?? "" };
+}
+
+/** 대화의 meta.phone */
+export function phoneMeta(c: Conversation): { owner: Who; contact: Who } | null {
+	const p = (c.meta as { phone?: { owner?: Who; contact?: Who } } | null)?.phone;
+	return p?.owner && p.contact ? { owner: p.owner, contact: p.contact } : null;
 }
 
 export interface Preview {
@@ -52,11 +79,30 @@ export function bubbles(content: string): { kind: "text" | "image"; text: string
 		});
 }
 
+/** 엿보기 중 받은 글 → (내 쪽인지, 내용) (백엔드 parse_peek와 같은 규칙) */
+export function parsePeek(text: string, me: string, other: string): { mine: boolean; text: string }[] {
+	const out: { mine: boolean; text: string }[] = [];
+	for (const raw of text.split("\n")) {
+		const line = raw.trim().replace(/^[-*•]\s*/, "");
+		if (!line) continue;
+		const m = /^([^:：]+)[:：]\s*(.*)$/.exec(line);
+		const name = m?.[1].trim().replace(/^[*"「]+|[*"」]+$/g, "");
+		const mine = name === me ? true : name === other ? false : null;
+		const last = out.at(-1);
+		if (mine !== null && m) {
+			if (last && last.mine === mine) last.text += m[2] ? `\n${m[2]}` : "";
+			else if (m[2]) out.push({ mine, text: m[2] });
+		} else if (last) last.text += `\n${line}`;
+		else out.push({ mine: false, text: line });
+	}
+	return out;
+}
+
 class PhoneState {
 	prefs = $state<Prefs>(loadPrefs());
 	contacts = $state<PhoneContact[]>([]);
 	previews = $state<Record<string, Preview>>({});
-	private contactsFor: string | null = null;
+	private contactsFor = "";
 
 	private save() {
 		try {
@@ -66,43 +112,60 @@ class PhoneState {
 		}
 	}
 
-	/** 폰 주인: 저장한 값 → 시스템 기본 → 첫 페르소나 */
+	/** 폰 주인: 저장한 값 → 시스템 기본 페르소나 → 첫 페르소나 */
 	async init() {
 		if (!library.loaded) await library.load();
-		if (!this.prefs.personaId || !library.persona(this.prefs.personaId)) {
+		if (!lookup(this.prefs.owner)) {
 			const conv = await call(commands.getConvSettings(), { ...src, silent: true }).catch(() => null);
-			this.prefs.personaId = library.persona(conv?.defaultPersonaId)?.id ?? library.personas[0]?.id ?? null;
+			const id = library.persona(conv?.defaultPersonaId)?.id ?? library.personas[0]?.id;
+			this.prefs.owner = id ? { kind: "persona", id } : null;
 			this.save();
 		}
-		await this.loadContacts();
-		await this.loadPreviews();
+		await Promise.all([this.loadContacts(), this.loadPreviews()]);
 	}
 
-	get persona() {
-		return library.persona(this.prefs.personaId);
+	get owner() {
+		return lookup(this.prefs.owner);
+	}
+	get isCharacterPhone() {
+		return this.prefs.owner?.kind === "character";
 	}
 	get wallpaper() {
-		return this.prefs.wallpapers[this.prefs.personaId ?? ""] ?? "sea";
+		return this.prefs.wallpapers[ownerKey(this.prefs.owner)] ?? "sea";
 	}
 	setWallpaper(id: string) {
-		if (!this.prefs.personaId) return;
-		this.prefs.wallpapers[this.prefs.personaId] = id;
+		if (!this.prefs.owner) return;
+		this.prefs.wallpapers[ownerKey(this.prefs.owner)] = id;
 		this.save();
 	}
 	setDisplay(d: Prefs["display"]) {
 		this.prefs.display = d;
 		this.save();
 	}
-	async switchPersona(id: string) {
-		this.prefs.personaId = id;
+	async switchOwner(w: Who) {
+		this.prefs.owner = w;
 		this.save();
 		await Promise.all([this.loadContacts(), this.loadPreviews()]);
 	}
 
+	/** 이 대화의 상대 (연락처) */
+	contactOf(c: Conversation): Who | null {
+		const m = phoneMeta(c);
+		if (m) return m.contact;
+		return c.characterId ? { kind: "character", id: c.characterId } : null;
+	}
+
 	/** 이 폰의 대화 (최근 순) */
 	get chats(): Conversation[] {
+		const o = this.prefs.owner;
+		if (!o) return [];
 		return library.conversations
-			.filter((c) => c.mode === "phone" && c.personaId === this.prefs.personaId && library.character(c.characterId))
+			.filter((c) => {
+				if (c.mode !== "phone") return false;
+				const m = phoneMeta(c);
+				const mine = o.kind === "character" ? m?.owner.kind === "character" && m.owner.id === o.id : !m && c.personaId === o.id;
+				return mine && !!lookup(this.contactOf(c));
+			})
 			.sort((a, b) => (this.previews[b.id]?.at ?? b.updatedAt) - (this.previews[a.id]?.at ?? a.updatedAt));
 	}
 	get unread() {
@@ -111,36 +174,65 @@ class PhoneState {
 
 	// ---- 연락처 ----
 	async loadContacts() {
-		const id = this.prefs.personaId;
-		if (!id) return void (this.contacts = []);
-		this.contactsFor = id;
-		const list = await call(commands.listPhoneContacts(id), { ...src, silent: true }).catch(() => []);
-		if (this.contactsFor === id) this.contacts = list;
+		const o = this.prefs.owner;
+		if (!o) return void (this.contacts = []);
+		const key = ownerKey(o);
+		this.contactsFor = key;
+		const list = await call(commands.listPhoneContacts(o.kind, o.id), { ...src, silent: true }).catch(() => []);
+		if (this.contactsFor === key) this.contacts = list;
 	}
-	async addContact(charId: string) {
-		if (!this.prefs.personaId) return;
-		const c = await call(commands.addPhoneContact(this.prefs.personaId, charId), src);
-		if (!this.contacts.some((x) => x.characterId === charId)) this.contacts = [...this.contacts, c];
+	hasContact(w: Who) {
+		return this.contacts.some((c) => c.contactKind === w.kind && c.contactId === w.id);
 	}
-	async removeContact(charId: string) {
-		if (!this.prefs.personaId) return;
-		await call(commands.removePhoneContact(this.prefs.personaId, charId), src);
-		this.contacts = this.contacts.filter((c) => c.characterId !== charId);
+	async addContact(w: Who) {
+		const o = this.prefs.owner;
+		if (!o) return;
+		const c = await call(commands.addPhoneContact(o.kind, o.id, w.kind, w.id), src);
+		if (!this.hasContact(w)) this.contacts = [...this.contacts, c];
 	}
-	async setStatus(charId: string, status: string) {
-		if (!this.prefs.personaId) return;
-		await call(commands.setPhoneContactStatus(this.prefs.personaId, charId, status), src);
-		const c = this.contacts.find((x) => x.characterId === charId);
+	async removeContact(w: Who) {
+		const o = this.prefs.owner;
+		if (!o) return;
+		await call(commands.removePhoneContact(o.kind, o.id, w.kind, w.id), src);
+		this.contacts = this.contacts.filter((c) => !(c.contactKind === w.kind && c.contactId === w.id));
+	}
+	async setStatus(w: Who, status: string) {
+		const o = this.prefs.owner;
+		if (!o) return;
+		await call(commands.setPhoneContactStatus(o.kind, o.id, w.kind, w.id, status), src);
+		const c = this.contacts.find((x) => x.contactKind === w.kind && x.contactId === w.id);
 		if (c) c.status = status.trim();
 	}
 
 	// ---- 대화 ----
 	/** 연락처에서 대화방 열기: 없으면 만들고, 연락처에도 넣음 */
-	async open(charId: string): Promise<Conversation | null> {
-		const pid = this.prefs.personaId;
-		if (!pid) return null;
-		if (!this.contacts.some((c) => c.characterId === charId)) await this.addContact(charId);
-		return library.phoneConversation(pid, charId);
+	async open(w: Who): Promise<Conversation | null> {
+		const o = this.prefs.owner;
+		if (!o) return null;
+		if (!this.hasContact(w)) await this.addContact(w);
+		if (o.kind === "persona") {
+			if (w.kind !== "character") return null;
+			return library.phoneConversation(o.id, w.id);
+		}
+		// 캐릭터 폰: 대화는 주인 캐릭터에 붙고, 상대는 meta에 적음
+		const found = library.conversations.find((c) => {
+			const m = phoneMeta(c);
+			return c.mode === "phone" && m?.owner.kind === "character" && m.owner.id === o.id && m.contact.kind === w.kind && m.contact.id === w.id;
+		});
+		if (found) return found;
+		const conv = await call(
+			commands.createConversation({
+				title: lookup(w)?.name ?? "폰 대화",
+				characterId: o.id,
+				personaId: library.personas[0]?.id ?? "default",
+				worldInfoIds: [],
+				mode: "phone",
+				meta: { phone: { owner: { kind: o.kind, id: o.id }, contact: { kind: w.kind, id: w.id } } },
+			}),
+			src,
+		);
+		library.conversations = [conv, ...library.conversations];
+		return conv;
 	}
 
 	async loadPreviews() {
@@ -157,8 +249,7 @@ class PhoneState {
 			return;
 		}
 		const read = this.prefs.lastRead[convId] ?? 0;
-		const lines = bubbles(last.content);
-		const lastLine = lines.at(-1);
+		const lastLine = bubbles(last.content).at(-1);
 		this.previews[convId] = {
 			text: lastLine ? (lastLine.kind === "image" ? "사진" : lastLine.text) : "",
 			at: last.createdAt,

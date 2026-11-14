@@ -32,10 +32,12 @@ export const commands = {
 	chatRegenerate: (conversationId: string, swipe: boolean, onEvent: Channel<StreamPayload>, options?: InvokeOptions) => __TAURI_INVOKE<ChatTurn_Serialize>("chat_regenerate", { conversationId, swipe, onEvent }, options),
 	/**  진행 중인 응답 멈추기 (받은 데까지는 저장됨). 멈출 게 있었으면 true */
 	chatCancel: (conversationId: string, options?: InvokeOptions) => __TAURI_INVOKE<boolean>("chat_cancel", { conversationId }, options),
-	listPhoneContacts: (personaId: string, options?: InvokeOptions) => __TAURI_INVOKE<PhoneContact[]>("list_phone_contacts", { personaId }, options),
-	addPhoneContact: (personaId: string, characterId: string, options?: InvokeOptions) => __TAURI_INVOKE<PhoneContact>("add_phone_contact", { personaId, characterId }, options),
-	removePhoneContact: (personaId: string, characterId: string, options?: InvokeOptions) => __TAURI_INVOKE<null>("remove_phone_contact", { personaId, characterId }, options),
-	setPhoneContactStatus: (personaId: string, characterId: string, status: string, options?: InvokeOptions) => __TAURI_INVOKE<null>("set_phone_contact_status", { personaId, characterId, status }, options),
+	listPhoneContacts: (ownerKind: string, ownerId: string, options?: InvokeOptions) => __TAURI_INVOKE<PhoneContact[]>("list_phone_contacts", { ownerKind, ownerId }, options),
+	addPhoneContact: (ownerKind: string, ownerId: string, contactKind: string, contactId: string, options?: InvokeOptions) => __TAURI_INVOKE<PhoneContact>("add_phone_contact", { ownerKind, ownerId, contactKind, contactId }, options),
+	removePhoneContact: (ownerKind: string, ownerId: string, contactKind: string, contactId: string, options?: InvokeOptions) => __TAURI_INVOKE<null>("remove_phone_contact", { ownerKind, ownerId, contactKind, contactId }, options),
+	setPhoneContactStatus: (ownerKind: string, ownerId: string, contactKind: string, contactId: string, status: string, options?: InvokeOptions) => __TAURI_INVOKE<null>("set_phone_contact_status", { ownerKind, ownerId, contactKind, contactId, status }, options),
+	/**  엿보기: 캐릭터 폰의 대화를 AI가 두 사람 몫 모두 이어서 씀. 새로 저장된 메시지들을 돌려준다 */
+	phonePeek: (conversationId: string, onEvent: Channel<StreamPayload>, options?: InvokeOptions) => __TAURI_INVOKE<Message_Serialize[]>("phone_peek", { conversationId, onEvent }, options),
 	/**  이 AI 메시지를 만들 때 실제로 보낸 프롬프트 (없으면 null: 가져온 메시지, 취소된 응답 등) */
 	getMessagePrompt: (messageId: string, options?: InvokeOptions) => __TAURI_INVOKE<PromptMessage_Serialize | null>("get_message_prompt", { messageId }, options),
 	listConversationFolders: (characterId: string, options?: InvokeOptions) => __TAURI_INVOKE<ConversationFolder[]>("list_conversation_folders", { characterId }, options),
@@ -2288,10 +2290,14 @@ export type Persona_Serialize = {
 	updatedAt: number,
 };
 
-/**  폰 연락처 (페르소나마다 따로) */
+/**  폰 연락처. 주인(폰 주인)과 연락처가 각각 페르소나 또는 캐릭터 */
 export type PhoneContact = {
-	personaId: string,
-	characterId: string,
+	/**  "persona" | "character" */
+	ownerKind: string,
+	ownerId: string,
+	/**  "persona" | "character" */
+	contactKind: string,
+	contactId: string,
 	status: string,
 	sortOrder: number,
 	createdAt: number,
