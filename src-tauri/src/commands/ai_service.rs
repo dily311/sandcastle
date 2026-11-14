@@ -1,17 +1,12 @@
 use crate::db::ai_service;
-use crate::error::ErrorCode;
-use crate::models::ai_service::{ApiProfiles, ApiProfilesInput, StreamPayload};
+use crate::models::ai_service::{ApiProfiles, ApiProfilesInput};
 use crate::service::ai::AiService;
 use std::sync::Arc;
-use crate::models::settings::AppSetting;
 use crate::service::secret_store::{api_key_name, SecretStore};
-use crate::sys::settings::SettingsState;
 use crate::{
     error::{AppError, Result},
-    service::chat::chat_manager::ChatManager,
     state::AppState,
 };
-use tauri::ipc::Channel;
 use tauri::{AppHandle, State};
 
 // =======================================
@@ -115,51 +110,4 @@ pub async fn test_message(
     profile_id: String,
 ) -> Result<()> {
     Ok(())
-}
-
-/** 사용자 메시지 전송 즉시 반환하고, 실제 응답은 이벤트로 스트리밍됨.
- * 내부적으로
- * 1. 유저 메시지 DB 저장
- * 2. 최근 N턴 컨텍스트 조립
- * 3. systemPrompt + 컨텍스트로 스트리밍 이벤트 호출
- * 4. 토큰마다 dialogue:token 이벤트로 emit
- * 5. 완료시 dialogue:done 이벤트 emit + 어시스턴트 메시지 DB 저장
- */
-#[tauri::command]
-#[specta::specta]
-pub async fn send_messages(
-    app: AppHandle,
-    state: State<'_, AppState>,
-    settings: State<'_, SettingsState<AppSetting>>,
-    conversation_id: String,
-    message: String,
-) -> Result<()> {
-    ChatManager
-        .chat(app, &state, &settings, conversation_id, message, None)
-        .await
-        .map_err(into_app_error)?;
-    Ok(())
-}
-
-#[tauri::command]
-#[specta::specta]
-pub async fn stream_message(
-    app: AppHandle,
-    state: State<'_, AppState>,
-    settings: State<'_, SettingsState<AppSetting>>,
-    conversation_id: String,
-    message: String,
-    on_event: Channel<StreamPayload>,
-) -> Result<()> {
-    ChatManager
-        .chat(app, &state, &settings, conversation_id, message, Some(on_event))
-        .await
-        .map_err(into_app_error)?;
-    Ok(())
-}
-
-/// ChatManager(anyhow) 오류에서 원래 AppError(코드·재시도 여부)를 되살린다.
-fn into_app_error(e: anyhow::Error) -> AppError {
-    e.downcast::<AppError>()
-        .unwrap_or_else(|e| AppError::ai_provider(ErrorCode::AiProviderError, e.to_string(), false))
 }

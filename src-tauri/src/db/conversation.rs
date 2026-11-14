@@ -49,6 +49,9 @@ pub async fn create_conversation<'e, E>(executor: E, input: ConversationInput) -
         created_at: now,
         updated_at: now,
         message_count: 0,
+        folder_id: None,
+        prompt_preset_id: None,
+        api_profile_id: None,
     })
 }
 
@@ -792,7 +795,7 @@ pub async fn update_message<'e, E>(executor: E, id: &str, content: &str, meta: &
 
 pub async fn update_message_content<'e, E>(executor: E, id: &str, content: &str,) -> Result<bool, Error> where E: Executor<'e, Database = Sqlite>,{
     let now = chrono::Utc::now().timestamp_millis();
-    let result = sqlx::query("UPDATE messages SET content = ? updated_at=? WHERE id = ?")
+    let result = sqlx::query("UPDATE messages SET content = ?, updated_at = ? WHERE id = ?")
         .bind(content)
         .bind(now)
         .bind(id)
@@ -804,7 +807,7 @@ pub async fn update_message_content<'e, E>(executor: E, id: &str, content: &str,
 pub async fn update_message_meta<'e, E>(executor: E, id: &str, meta: serde_json::Value) -> Result<bool, Error> where E: Executor<'e, Database = Sqlite>,{
     let now = chrono::Utc::now().timestamp_millis();
     let meta_string = serde_json::to_string(&meta).unwrap_or_default();
-    let result = sqlx::query("UPDATE messages SET meta = ? updated_at=? WHERE id = ?")
+    let result = sqlx::query("UPDATE messages SET meta = ?, updated_at = ? WHERE id = ?")
         .bind(meta_string)
         .bind(now)
         .bind(id)

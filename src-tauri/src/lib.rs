@@ -18,7 +18,7 @@ use crate::{
     state::{AppState, WindowMode},
     sys::{settings::SettingsState, themes::ThemeManager},
 };
-use commands::{ai_service::*, conversation::*, game_engine::*, game_manager::*, settings::*, task::*, regex::*, character_image::*, import::*, data::*, preset::*};
+use commands::{ai_service::*, conversation::*, game_engine::*, game_manager::*, settings::*, task::*, regex::*, character_image::*, import::*, data::*, preset::*, chat::*};
 
 #[cfg(desktop)]
 mod widget;
@@ -216,8 +216,20 @@ pub fn specta_builder() -> tauri_specta::Builder<tauri::Wry> {
             delete_theme,
             // ai
             get_models,
-            send_messages,
-            stream_message,
+            chat_send,
+            chat_regenerate,
+            chat_cancel,
+            get_message_prompt,
+            list_conversation_folders,
+            create_conversation_folder,
+            rename_conversation_folder,
+            delete_conversation_folder,
+            rename_conversation,
+            set_conversation_pinned,
+            move_conversation,
+            set_conversation_options,
+            duplicate_conversation,
+            branch_conversation,
             // task
             get_task,
             list_active_tasks,
@@ -368,8 +380,20 @@ pub fn specta_builder() -> tauri_specta::Builder<tauri::Wry> {
             delete_theme,
             // ai
             get_models,
-            send_messages,
-            stream_message,
+            chat_send,
+            chat_regenerate,
+            chat_cancel,
+            get_message_prompt,
+            list_conversation_folders,
+            create_conversation_folder,
+            rename_conversation_folder,
+            delete_conversation_folder,
+            rename_conversation,
+            set_conversation_pinned,
+            move_conversation,
+            set_conversation_options,
+            duplicate_conversation,
+            branch_conversation,
             // task
             get_task,
             list_active_tasks,

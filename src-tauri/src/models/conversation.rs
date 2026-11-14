@@ -306,6 +306,9 @@ pub struct ConversationRow {
     pub created_at: Option<i64>,
     pub updated_at: Option<i64>,
     pub message_count: i64,
+    pub folder_id: Option<String>,
+    pub prompt_preset_id: Option<String>,
+    pub api_profile_id: Option<String>,
 }
 
 #[derive(Serialize, specta::Type)]
@@ -324,6 +327,11 @@ pub struct Conversation {
     pub created_at: i64,
     pub updated_at: i64,
     pub message_count: i64,
+    /// 대화 목록 폴더 (없으면 폴더 밖)
+    pub folder_id: Option<String>,
+    /// 이 대화의 프리셋/API. 없으면 앱 설정의 선택값
+    pub prompt_preset_id: Option<String>,
+    pub api_profile_id: Option<String>,
 }
 
 impl From<ConversationRow> for Conversation {
@@ -347,6 +355,9 @@ impl From<ConversationRow> for Conversation {
             created_at: r.created_at.unwrap_or_default(),
             updated_at: r.updated_at.unwrap_or_default(),
             message_count: r.message_count,
+            folder_id: r.folder_id,
+            prompt_preset_id: r.prompt_preset_id,
+            api_profile_id: r.api_profile_id,
         }
     }
 }
@@ -469,4 +480,34 @@ mod mode_tests {
         assert_eq!(ConversationMode::Phone.system_prompt("  p  "), Some("p".into()));
         assert_eq!(ConversationMode::Phone.system_prompt("   "), None, "비우면 붙이지 않음");
     }
+}
+
+// ---------- 대화 폴더 ----------
+#[derive(Debug, Clone, Serialize, FromRow, specta::Type)]
+#[serde(rename_all = "camelCase")]
+pub struct ConversationFolder {
+    pub id: String,
+    pub character_id: String,
+    pub name: String,
+    pub sort_order: i64,
+    pub created_at: i64,
+    pub updated_at: i64,
+}
+
+/// 대화별 설정 (오른쪽 패널). None이면 앱 설정의 선택값을 쓴다.
+#[derive(Debug, Clone, Deserialize, specta::Type)]
+#[serde(rename_all = "camelCase")]
+pub struct ConversationOptions {
+    pub persona_id: String,
+    pub prompt_preset_id: Option<String>,
+    pub api_profile_id: Option<String>,
+}
+
+/// 한 번의 대화 차례 결과
+#[derive(Clone, Serialize, specta::Type)]
+#[serde(rename_all = "camelCase")]
+pub struct ChatTurn {
+    /// 이번에 저장된 사용자 메시지 (이어쓰기·다시 생성이면 없음)
+    pub user: Option<Message>,
+    pub assistant: Message,
 }

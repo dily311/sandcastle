@@ -21,17 +21,31 @@ export const commands = {
 	deleteTheme: (filename: string, options?: InvokeOptions) => __TAURI_INVOKE<null>("delete_theme", { filename }, options),
 	getModels: (profileId: string, options?: InvokeOptions) => __TAURI_INVOKE<string[]>("get_models", { profileId }, options),
 	/**
-	 *  사용자 메시지 전송 즉시 반환하고, 실제 응답은 이벤트로 스트리밍됨.
-	 *  * 내부적으로
-	 *  * 1. 유저 메시지 DB 저장
-	 *  * 2. 최근 N턴 컨텍스트 조립
-	 *  * 3. systemPrompt + 컨텍스트로 스트리밍 이벤트 호출
-	 *  * 4. 토큰마다 dialogue:token 이벤트로 emit
-	 *  * 5. 완료시 dialogue:done 이벤트 emit + 어시스턴트 메시지 DB 저장
-	 *  
+	 *  입력을 저장하고 응답을 만든다. `text`가 비었으면 이어서 응답만 (이어쓰기).
+	 *  응답 조각은 `on_event`로 흐르고, 저장된 메시지는 반환값으로 온다.
 	 */
-	sendMessages: (conversationId: string, message: string, options?: InvokeOptions) => __TAURI_INVOKE<null>("send_messages", { conversationId, message }, options),
-	streamMessage: (conversationId: string, message: string, onEvent: Channel<StreamPayload>, options?: InvokeOptions) => __TAURI_INVOKE<null>("stream_message", { conversationId, message, onEvent }, options),
+	chatSend: (conversationId: string, text: string, onEvent: Channel<StreamPayload>, options?: InvokeOptions) => __TAURI_INVOKE<ChatTurn_Serialize>("chat_send", { conversationId, text, onEvent }, options),
+	/**  마지막 AI 메시지 다시 만들기. `swipe`면 스와이프로 쌓고, 아니면 스와이프를 버리고 바꾼다. */
+	chatRegenerate: (conversationId: string, swipe: boolean, onEvent: Channel<StreamPayload>, options?: InvokeOptions) => __TAURI_INVOKE<ChatTurn_Serialize>("chat_regenerate", { conversationId, swipe, onEvent }, options),
+	/**  진행 중인 응답 멈추기 (받은 데까지는 저장됨). 멈출 게 있었으면 true */
+	chatCancel: (conversationId: string, options?: InvokeOptions) => __TAURI_INVOKE<boolean>("chat_cancel", { conversationId }, options),
+	/**  이 AI 메시지를 만들 때 실제로 보낸 프롬프트 (없으면 null: 가져온 메시지, 취소된 응답 등) */
+	getMessagePrompt: (messageId: string, options?: InvokeOptions) => __TAURI_INVOKE<PromptMessage_Serialize | null>("get_message_prompt", { messageId }, options),
+	listConversationFolders: (characterId: string, options?: InvokeOptions) => __TAURI_INVOKE<ConversationFolder[]>("list_conversation_folders", { characterId }, options),
+	createConversationFolder: (characterId: string, name: string, options?: InvokeOptions) => __TAURI_INVOKE<ConversationFolder>("create_conversation_folder", { characterId, name }, options),
+	renameConversationFolder: (id: string, name: string, options?: InvokeOptions) => __TAURI_INVOKE<null>("rename_conversation_folder", { id, name }, options),
+	/**  폴더만 지운다. 안의 대화는 폴더 밖으로 나온다. */
+	deleteConversationFolder: (id: string, options?: InvokeOptions) => __TAURI_INVOKE<null>("delete_conversation_folder", { id }, options),
+	renameConversation: (id: string, title: string, options?: InvokeOptions) => __TAURI_INVOKE<null>("rename_conversation", { id, title }, options),
+	setConversationPinned: (id: string, pinned: boolean, options?: InvokeOptions) => __TAURI_INVOKE<null>("set_conversation_pinned", { id, pinned }, options),
+	/**  폴더로 옮기기. `folder_id`가 null이면 폴더 밖으로 */
+	moveConversation: (id: string, folderId: string | null, options?: InvokeOptions) => __TAURI_INVOKE<null>("move_conversation", { id, folderId }, options),
+	/**  대화별 페르소나·프리셋·API (프리셋/API가 null이면 앱 설정의 선택값을 씀) */
+	setConversationOptions: (id: string, options: ConversationOptions_Deserialize, _options?: InvokeOptions) => __TAURI_INVOKE<Conversation_Serialize>("set_conversation_options", { id, options }, _options),
+	/**  대화 통째로 복제 */
+	duplicateConversation: (id: string, options?: InvokeOptions) => __TAURI_INVOKE<Conversation_Serialize>("duplicate_conversation", { id }, options),
+	/**  분기 나누기: 이 메시지까지 복사한 새 대화 */
+	branchConversation: (id: string, messageId: string, options?: InvokeOptions) => __TAURI_INVOKE<Conversation_Serialize>("branch_conversation", { id, messageId }, options),
 	getTask: (taskId: string, options?: InvokeOptions) => __TAURI_INVOKE<TaskInfo_Serialize>("get_task", { taskId }, options),
 	listActiveTasks: (options?: InvokeOptions) => __TAURI_INVOKE<TaskInfo_Serialize[]>("list_active_tasks", undefined, options),
 	/**  앱 시작 후 프론트가 호출: 재개/포기를 물어볼 중단된 작업 목록 */
@@ -594,6 +608,41 @@ export type ChatImageRef = {
 	path: string,
 };
 
+export type ChatOptions = ChatOptions_Serialize | ChatOptions_Deserialize;
+
+export type ChatOptions_Deserialize = {
+	temperature?: number | null,
+	maxTokens?: number | null,
+	topP?: number | null,
+	topK?: number | null,
+	stream: boolean,
+};
+
+export type ChatOptions_Serialize = {
+	temperature: number | null,
+	maxTokens: number | null,
+	topP: number | null,
+	topK: number | null,
+	stream: boolean,
+};
+
+/**  한 번의 대화 차례 결과 */
+export type ChatTurn = ChatTurn_Serialize | ChatTurn_Deserialize;
+
+/**  한 번의 대화 차례 결과 */
+export type ChatTurn_Deserialize = {
+	/**  이번에 저장된 사용자 메시지 (이어쓰기·다시 생성이면 없음) */
+	user?: Message_Deserialize | null,
+	assistant: Message_Deserialize,
+};
+
+/**  한 번의 대화 차례 결과 */
+export type ChatTurn_Serialize = {
+	/**  이번에 저장된 사용자 메시지 (이어쓰기·다시 생성이면 없음) */
+	user: Message_Serialize | null,
+	assistant: Message_Serialize,
+};
+
 export type ColorSchema = "light" | "dark" | "system";
 
 /**  continue_game / load_save의 응답. events는 항상 비어 있고(새로 생긴 일이 없다), 화면은 state + history로 복원한다. */
@@ -625,6 +674,15 @@ export type ConvSettings_Serialize = {
 
 export type Conversation = Conversation_Serialize | Conversation_Deserialize;
 
+export type ConversationFolder = {
+	id: string,
+	characterId: string,
+	name: string,
+	sortOrder: number,
+	createdAt: number,
+	updatedAt: number,
+};
+
 export type ConversationInput = ConversationInput_Serialize | ConversationInput_Deserialize;
 
 export type ConversationInput_Deserialize = {
@@ -647,6 +705,23 @@ export type ConversationInput_Serialize = {
 	meta: Value | null,
 	/**  생략하면 켜짐 */
 	imagesEnabled: boolean | null,
+};
+
+/**  대화별 설정 (오른쪽 패널). None이면 앱 설정의 선택값을 쓴다. */
+export type ConversationOptions = ConversationOptions_Serialize | ConversationOptions_Deserialize;
+
+/**  대화별 설정 (오른쪽 패널). None이면 앱 설정의 선택값을 쓴다. */
+export type ConversationOptions_Deserialize = {
+	personaId: string,
+	promptPresetId?: string | null,
+	apiProfileId?: string | null,
+};
+
+/**  대화별 설정 (오른쪽 패널). None이면 앱 설정의 선택값을 쓴다. */
+export type ConversationOptions_Serialize = {
+	personaId: string,
+	promptPresetId: string | null,
+	apiProfileId: string | null,
 };
 
 export type ConversationSummary = ConversationSummary_Serialize | ConversationSummary_Deserialize;
@@ -691,6 +766,11 @@ export type Conversation_Deserialize = {
 	createdAt: number,
 	updatedAt: number,
 	messageCount: number,
+	/**  대화 목록 폴더 (없으면 폴더 밖) */
+	folderId?: string | null,
+	/**  이 대화의 프리셋/API. 없으면 앱 설정의 선택값 */
+	promptPresetId?: string | null,
+	apiProfileId?: string | null,
 };
 
 export type Conversation_Serialize = {
@@ -707,6 +787,11 @@ export type Conversation_Serialize = {
 	createdAt: number,
 	updatedAt: number,
 	messageCount: number,
+	/**  대화 목록 폴더 (없으면 폴더 밖) */
+	folderId: string | null,
+	/**  이 대화의 프리셋/API. 없으면 앱 설정의 선택값 */
+	promptPresetId: string | null,
+	apiProfileId: string | null,
 };
 
 export type CssTheme = CssTheme_Serialize | CssTheme_Deserialize;
@@ -2246,6 +2331,28 @@ export type PromptBlocks_Serialize = {
 	updatedAt: number,
 };
 
+/**  PromptManager가 만든 최종 프롬프트. 공급자 형식과 무관하며 어댑터가 각자 형식으로 바꾼다. */
+export type PromptMessage = PromptMessage_Serialize | PromptMessage_Deserialize;
+
+export type PromptMessageItem = {
+	role: PromptRole,
+	content: string,
+	/**  이 메시지의 추정 토큰 수 */
+	token: number,
+};
+
+/**  PromptManager가 만든 최종 프롬프트. 공급자 형식과 무관하며 어댑터가 각자 형식으로 바꾼다. */
+export type PromptMessage_Deserialize = {
+	chatOptions: ChatOptions_Deserialize,
+	messages: PromptMessageItem[],
+};
+
+/**  PromptManager가 만든 최종 프롬프트. 공급자 형식과 무관하며 어댑터가 각자 형식으로 바꾼다. */
+export type PromptMessage_Serialize = {
+	chatOptions: ChatOptions_Serialize,
+	messages: PromptMessageItem[],
+};
+
 /**  프리셋 + 블록 (블록은 실행 순서대로) */
 export type PromptPresetDetail = PromptPresetDetail_Serialize | PromptPresetDetail_Deserialize;
 
@@ -2312,6 +2419,8 @@ export type PromptPresets_Serialize = {
 	createdAt: number,
 	updatedAt: number,
 };
+
+export type PromptRole = "system" | "user" | "assistant";
 
 /**  어떤 텍스트에 적용할지 */
 export type RegexPlacement = 
