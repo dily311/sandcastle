@@ -74,6 +74,14 @@ pub fn load_theme_content(theme_mgr: State<'_, ThemeManager>, filename: String) 
 
 #[tauri::command]
 #[specta::specta]
+pub fn load_theme(theme_mgr: State<'_, ThemeManager>, filename: String) -> Result<CssTheme> {
+    theme_mgr
+        .load(&filename)
+        .map_err(|e| AppError::io(e.to_string()))
+}
+
+#[tauri::command]
+#[specta::specta]
 pub fn save_theme(
     theme_mgr: State<'_, ThemeManager>,
     filename: String,

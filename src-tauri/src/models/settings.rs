@@ -66,6 +66,18 @@ pub struct ThemeSetting {
     /// 회색 톤 (Radix 회색 계열: slate, gray, mauve, sage, olive, sand)
     #[serde(default = "default_gray_tone")]
     pub gray_tone: String,
+    /// CSS 스니펫 (옵시디언처럼 켜고 끄는 작은 CSS 조각)
+    #[serde(default)]
+    pub snippets: Vec<CssSnippet>,
+}
+
+#[derive(Debug, Serialize, Deserialize, Clone, specta::Type)]
+#[serde(rename_all = "camelCase")]
+pub struct CssSnippet {
+    pub id: String,
+    pub name: String,
+    pub css: String,
+    pub enabled: bool,
 }
 
 fn default_gray_tone() -> String {
@@ -81,8 +93,18 @@ impl Default for ThemeSetting {
             accent_color: "#8b85f9".into(),
             font_size: 16,
             gray_tone: default_gray_tone(),
+            snippets: vec![],
         }
     }
+}
+
+/// 테마 색: 화면 모드별로 덮어쓸 CSS 변수 ("--bg" → "#ffffff"). 비어 있으면 앱 기본값
+#[derive(Serialize, Deserialize, Debug, Clone, Default, specta::Type)]
+pub struct ThemeColors {
+    #[serde(default)]
+    pub light: HashMap<String, String>,
+    #[serde(default)]
+    pub dark: HashMap<String, String>,
 }
 
 #[derive(Serialize, Deserialize, Debug, specta::Type)]
@@ -91,8 +113,13 @@ pub struct CssThemeMeta {
     #[serde(default, skip_deserializing, skip_serializing_if = "String::is_empty")]
     pub filename: String,
     pub name: String,
+    #[serde(default)]
     pub author: String,
+    #[serde(default)]
     pub version: String,
+    /// 목록 카드 미리보기용
+    #[serde(default)]
+    pub colors: ThemeColors,
 }
 
 // 2. 기존 저장/Tauri 통신용 전체 구조체
@@ -104,7 +131,11 @@ pub struct CssTheme {
     pub name: String,
     pub author: String,
     pub version: String,
-    pub css_content: String, // 저장할 때는 사용하므로 유지
+    /// 직접 쓰는 CSS (색 편집으로 부족할 때)
+    #[serde(default)]
+    pub css_content: String,
+    #[serde(default)]
+    pub colors: ThemeColors,
 }
 
 #[derive(Debug, Serialize, Deserialize, Clone, specta::Type)]

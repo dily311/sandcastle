@@ -54,7 +54,7 @@
 			{:else if r.page === "persona"}
 				<PersonaPage personaId={r.personaId} />
 			{:else if r.page === "settings"}
-				<SettingsPage tab={r.tab} />
+				<SettingsPage tab={r.tab} edit={r.edit} />
 			{:else}
 				{#key r.page}
 					<Placeholder page={r.page} />

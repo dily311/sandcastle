@@ -13,8 +13,9 @@
 	import RegexSection from "./RegexSection.svelte";
 	import DataSection from "./DataSection.svelte";
 	import LogSection from "./LogSection.svelte";
+	import ThemeEditor from "./ThemeEditor.svelte";
 
-	let { tab = "general" }: { tab?: SettingsTab } = $props();
+	let { tab = "general", edit }: { tab?: SettingsTab; edit?: string } = $props();
 
 	interface Item {
 		id: SettingsTab;
@@ -67,6 +68,7 @@
 	let body: HTMLDivElement | undefined = $state();
 	$effect(() => {
 		void current.id;
+		void edit;
 		body?.scrollTo({ top: 0 });
 	});
 </script>
@@ -97,9 +99,13 @@
 
 	<div class="body" bind:this={body}>
 		<div class="inner">
-			{#key current.id}
-				<current.view />
-			{/key}
+			{#if current.id === "theme" && edit}
+				{#key edit}<ThemeEditor editKey={edit} />{/key}
+			{:else}
+				{#key current.id}
+					<current.view />
+				{/key}
+			{/if}
 		</div>
 	</div>
 </div>

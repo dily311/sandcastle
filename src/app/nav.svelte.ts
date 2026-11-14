@@ -4,7 +4,7 @@ export type Route =
 	| { page: "character"; charId?: string; convId?: string; edit?: boolean }
 	| { page: "game"; gameId?: string; sessionId?: string; edit?: boolean }
 	| { page: "persona"; personaId?: string }
-	| { page: "settings"; tab?: SettingsTab };
+	| { page: "settings"; tab?: SettingsTab; /** 테마 편집: 파일 이름, 또는 "new" / "builtin:id"(복제해서 새로) */ edit?: string };
 
 export type SettingsTab = "general" | "theme" | "shortcut" | "widget" | "api" | "preset" | "regex" | "data" | "log";
 export type Page = Route["page"];

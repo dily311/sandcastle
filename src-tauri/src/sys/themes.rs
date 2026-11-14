@@ -19,36 +19,6 @@ impl ThemeManager {
         Self { themes_dir }
     }
 
-    // 기본 테마 파일저장
-    pub fn init_default_themes(&self) -> Result<()> {
-        let default_theme = [
-            (
-                "pastel.json",
-                include_str!(concat!(env!("CARGO_MANIFEST_DIR"), "/resources/theme/pastel.json")),
-            ),
-            (
-                "catppuccin.json",
-                include_str!(concat!(
-                    env!("CARGO_MANIFEST_DIR"),
-                    "/resources/theme/catppuccin.json"
-                )),
-            ),
-            (
-                "mono.json",
-                include_str!(concat!(env!("CARGO_MANIFEST_DIR"), "/resources/theme/mono.json")),
-            ),
-        ];
-
-        for (filename, contents) in default_theme {
-            let theme_path = self.themes_dir.join(filename);
-            if !theme_path.exists() {
-                fs::write(theme_path, contents).context("테마 파일 복사중 실패")?;
-            }
-        }
-
-        Ok(())
-    }
-
     // 1. 목록 가져오기
     pub fn get_list(&self) -> Result<Vec<CssThemeMeta>> {
         if !self.themes_dir.exists() {
@@ -64,10 +34,10 @@ impl ThemeManager {
             // 1. 조건 검사 (파일이면서 json 확장자인지)
             if path.is_file() && path.extension().and_then(|s| s.to_str()) == Some("json") {
                 if let Some(filename) = path.file_name().and_then(|s| s.to_str()) {
-                    let file = fs::File::open(&path)?;
-                    let mut data: CssThemeMeta = serde_json::from_reader(file)?;
+                    // 깨진 파일 하나 때문에 목록 전체가 실패하지 않게 건너뜀
+                    let std::result::Result::Ok(file) = fs::File::open(&path) else { continue };
+                    let std::result::Result::Ok(mut data) = serde_json::from_reader::<_, CssThemeMeta>(file) else { continue };
                     data.filename = filename.to_string();
-
                     filenames.push(data);
                 }
             }
@@ -93,6 +63,17 @@ impl ThemeManager {
             .context("CSS field not found in theme file")?;
 
         Ok(css_content)
+    }
+
+    /// 편집용: 테마 전체 (색 + CSS)
+    pub fn load(&self, filename: &str) -> Result<CssTheme> {
+        let safe_filename = Path::new(filename)
+            .file_name()
+            .context("유효하지 않은 파일명입니다.")?;
+        let data = fs::read_to_string(self.themes_dir.join(safe_filename)).context("파일을 읽는 중 실패했습니다.")?;
+        let mut theme: CssTheme = serde_json::from_str(&data)?;
+        theme.filename = filename.to_string();
+        Ok(theme)
     }
 
     // 3. 테마 저장

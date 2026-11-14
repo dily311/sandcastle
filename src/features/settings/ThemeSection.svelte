@@ -1,16 +1,20 @@
 <script lang="ts">
 	import { onMount } from "svelte";
-	import { Plus } from "@lucide/svelte";
+	import { Copy, Pencil, Plus, Trash2 } from "@lucide/svelte";
 	import type { CssThemeMeta_Serialize as ThemeMeta } from "$ipc/bindings";
-	import { Badge, Button, Dialog, Field, Input, Segmented, Select, Switch, Textarea } from "$shared/ui";
+	import { Button, ContextMenu, Input, Segmented, Select, Switch, Textarea, type MenuItem } from "$shared/ui";
 	import { ACCENTS } from "$shared/ui/accents";
-	import { theme } from "$app/theme.svelte";
+	import { GRAYS } from "$shared/ui/grays";
+	import { BUILTIN_THEMES, defaultColors, type ColorMap } from "$shared/ui/themes";
+	import { theme, type CssSnippet } from "$app/theme.svelte";
+	import { nav } from "$app/nav.svelte";
 	import { call, commands } from "$shared/ipc/client";
 	import { confirmAction } from "$shared/stores/confirm.svelte";
 	import { toasts } from "$shared/stores/toast.svelte";
 	import Section from "./Section.svelte";
 	import Group from "./Group.svelte";
 	import Row from "./Row.svelte";
+	import ThemeCard from "./ThemeCard.svelte";
 
 	const src = { source: "theme" };
 	let list = $state<ThemeMeta[]>([]);
@@ -19,53 +23,59 @@
 	}
 	onMount(loadList);
 
-	// ---- 테마 편집 ----
-	let editing = $state<{ filename: string | null; name: string; author: string; version: string; css: string } | null>(null);
-	let editOpen = $state(false);
-	const TEMPLATE = `/* 밝은 화면 */
-:root[data-theme="light"] {
-	--bg: #f6f3ee;
-	--surface: #fffdfa;
-	--text: #2b2722;
-}
-/* 어두운 화면 */
-:root[data-theme="dark"] {
-	--bg: #171513;
-	--surface: #1f1c19;
-	--text: #ece6dd;
-}`;
+	const mode = $derived(theme.dark ? "dark" : "light");
+	const base = $derived(defaultColors(mode, theme.setting.grayTone ?? "slate", theme.accentId));
+	const cardColors = (c: { light?: ColorMap; dark?: ColorMap } | undefined): ColorMap => {
+		const over = Object.fromEntries(Object.entries(c?.[mode] ?? {}).filter(([, v]) => v?.trim()));
+		return { ...base, ...over };
+	};
+	const selected = $derived(theme.setting.selectTheme || "default");
+	const selectKey = (key: string) => theme.update({ selectTheme: key });
 
-	function startNew() {
-		editing = { filename: null, name: "", author: "", version: "1.0.0", css: TEMPLATE };
-		editOpen = true;
+	// ---- 사용자 테마 메뉴 ----
+	let menu = $state<{ at: { x: number; y: number }; items: MenuItem[] } | null>(null);
+	function themeMenu(e: MouseEvent, t: ThemeMeta) {
+		e.preventDefault();
+		menu = {
+			at: { x: e.clientX, y: e.clientY },
+			items: [
+				{ label: "편집", icon: Pencil, onselect: () => edit(t.filename ?? "") },
+				{ label: "복제", icon: Copy, onselect: () => duplicate(t) },
+				{ label: "삭제", icon: Trash2, danger: true, separator: true, onselect: () => remove(t) },
+			],
+		};
 	}
-	async function startEdit(t: ThemeMeta) {
-		const raw = await call(commands.loadThemeContent(t.filename ?? ""), src);
-		editing = { filename: t.filename ?? null, name: t.name, author: t.author, version: t.version, css: raw };
-		editOpen = true;
+	function openMenu(e: MouseEvent, t: ThemeMeta) {
+		const r = (e.currentTarget as HTMLElement).getBoundingClientRect();
+		themeMenu(new MouseEvent("contextmenu", { clientX: r.right - 160, clientY: r.bottom + 4 }), t);
 	}
-	function slug(name: string) {
-		const s = name.trim().toLowerCase().replace(/[^\p{L}\p{N}]+/gu, "-").replace(/^-|-$/g, "");
-		return `${s || "theme"}-${Date.now().toString(36)}.json`;
-	}
-	async function saveEdit() {
-		if (!editing || !editing.name.trim()) return;
-		const filename = editing.filename ?? slug(editing.name);
-		await call(
-			commands.saveTheme(filename, { name: editing.name.trim(), author: editing.author.trim(), version: editing.version.trim() || "1.0.0", cssContent: editing.css }),
-			src,
-		);
-		editOpen = false;
+	const edit = (key: string) => nav.go({ page: "settings", tab: "theme", edit: key });
+	async function duplicate(t: ThemeMeta) {
+		const full = await call(commands.loadTheme(t.filename ?? ""), src);
+		await call(commands.saveTheme(`theme-${Date.now().toString(36)}.json`, { name: `${full.name} 사본`, author: full.author, version: full.version, cssContent: full.cssContent, colors: full.colors }), src);
 		await loadList();
-		// 쓰는 중인 테마면 바로 다시 적용
-		if (theme.setting.selectTheme === filename) theme.apply();
-		toasts.success("테마 저장함");
 	}
 	async function remove(t: ThemeMeta) {
 		if (!(await confirmAction({ title: "테마 삭제", message: `'${t.name}' 테마를 지움`, confirmLabel: "삭제", danger: true }))) return;
 		await call(commands.deleteTheme(t.filename ?? ""), src);
-		if (theme.setting.selectTheme === t.filename) await theme.update({ selectTheme: "default" });
+		if (selected === t.filename) await theme.update({ selectTheme: "default" });
 		await loadList();
+	}
+
+	// ---- 스니펫 ----
+	let openSnippet = $state<string | null>(null);
+	async function addSnippet() {
+		const s: CssSnippet = { id: `s-${Date.now().toString(36)}`, name: "새 스니펫", css: "/* 예: 대화 글자를 조금 크게 */\n.block p {\n\tfont-size: 1.05em;\n}", enabled: false };
+		await theme.saveSnippets([...theme.snippets, s]);
+		openSnippet = s.id;
+	}
+	async function patchSnippet(id: string, p: Partial<CssSnippet>) {
+		await theme.saveSnippets(theme.snippets.map((s) => (s.id === id ? { ...s, ...p } : s)));
+	}
+	async function removeSnippet(s: CssSnippet) {
+		if (!(await confirmAction({ title: "스니펫 삭제", message: `'${s.name}' 스니펫을 지움`, confirmLabel: "삭제", danger: true }))) return;
+		await theme.saveSnippets(theme.snippets.filter((x) => x.id !== s.id));
+		toasts.success("지움");
 	}
 
 	const fontSizes = ["13", "14", "15", "16", "17", "18", "20"].map((v) => ({ value: v, label: `${v}px` }));
@@ -85,7 +95,7 @@
 				onchange={(mode) => theme.update({ mode })}
 			/>
 		</Row>
-		<Row label="강조색" desc="버튼·선택 표시·내 메시지 색">
+		<Row label="강조색" desc="버튼·선택 표시·내 메시지 색. 테마가 정하면 테마 색">
 			<div class="accents" role="radiogroup" aria-label="강조색">
 				{#each ACCENTS as a (a.id)}
 					<button
@@ -100,6 +110,22 @@
 				{/each}
 			</div>
 		</Row>
+		<Row label="회색 톤" desc="바탕·테두리·글자의 기본 색감">
+			<div class="grays" role="radiogroup" aria-label="회색 톤">
+				{#each GRAYS as g (g.id)}
+					{@const s = theme.dark ? g.dark : g.light}
+					<button
+						role="radio"
+						aria-checked={theme.setting.grayTone === g.id}
+						aria-label={g.label}
+						title={g.label}
+						class:on={theme.setting.grayTone === g.id}
+						style:background="linear-gradient(135deg, {s[2]} 0 50%, {s[10]} 50% 100%)"
+						onclick={() => theme.update({ grayTone: g.id })}
+					></button>
+				{/each}
+			</div>
+		</Row>
 		<Row label="글자 크기" desc="앱 전체 기본 글자 크기">
 			<Select value={String(theme.setting.fontSize)} options={fontSizes} aria-label="글자 크기" onchange={(e) => theme.update({ fontSize: Number(e.currentTarget.value) })} />
 		</Row>
@@ -108,56 +134,73 @@
 		</Row>
 	</Group>
 
-	<Group title="사용자 테마">
-		{#snippet aside()}<Button size="sm" onclick={startNew}>{#snippet icon()}<Plus />{/snippet}새 테마</Button>{/snippet}
-		<Row label="기본" desc="앱 기본 색">
-			{#if theme.setting.selectTheme === "default" || !theme.setting.selectTheme}
-				<Badge tone="accent">사용 중</Badge>
-			{:else}
-				<Button size="sm" variant="soft" onclick={() => theme.update({ selectTheme: "default" })}>적용</Button>
-			{/if}
-		</Row>
-		{#each list as t (t.filename ?? t.name)}
-			<Row label={t.name} desc="v{t.version}{t.author ? ` · ${t.author}` : ''}">
-				<Button size="sm" variant="ghost" onclick={() => remove(t)}>삭제</Button>
-				<Button size="sm" onclick={() => startEdit(t)}>편집</Button>
-				{#if theme.setting.selectTheme === t.filename}
-					<Badge tone="accent">사용 중</Badge>
-				{:else}
-					<Button size="sm" variant="soft" onclick={() => theme.update({ selectTheme: t.filename ?? "default" })}>적용</Button>
+	<Group title="기본 테마">
+		{#snippet aside()}<span class="faint small">카드를 누르면 바로 적용. 지금은 {mode === "dark" ? "어두운" : "밝은"} 화면 색을 보여줌</span>{/snippet}
+		<div class="gallery" role="radiogroup" aria-label="기본 테마">
+			{#each BUILTIN_THEMES as t (t.id)}
+				{@const key = t.id === "default" ? "default" : `builtin:${t.id}`}
+				<ThemeCard name={t.name} colors={cardColors(t.colors)} selected={selected === key} onselect={() => selectKey(key)}>
+					{#snippet actions()}
+						<Button size="sm" variant="secondary" onclick={() => edit(`builtin:${t.id}`)}>{#snippet icon()}<Copy />{/snippet}복제해서 편집</Button>
+					{/snippet}
+				</ThemeCard>
+			{/each}
+		</div>
+	</Group>
+
+	<Group title="내 테마">
+		{#snippet aside()}<Button size="sm" onclick={() => edit("new")}>{#snippet icon()}<Plus />{/snippet}새 테마</Button>{/snippet}
+		<div class="gallery">
+			{#each list as t (t.filename ?? t.name)}
+				<ThemeCard name={t.name} colors={cardColors(t.colors)} selected={selected === t.filename} onselect={() => selectKey(t.filename ?? "default")} oncontextmenu={(e) => themeMenu(e, t)}>
+					{#snippet actions()}
+						<Button size="sm" variant="secondary" onclick={() => edit(t.filename ?? "")}>{#snippet icon()}<Pencil />{/snippet}편집</Button>
+						<Button size="sm" variant="secondary" aria-label="{t.name} 더 보기" onclick={(e) => openMenu(e, t)}>⋯</Button>
+					{/snippet}
+				</ThemeCard>
+			{/each}
+			<button class="new-card" onclick={() => edit("new")}><Plus />새 테마 만들기</button>
+		</div>
+	</Group>
+
+	<Group title="CSS 스니펫" flush>
+		{#snippet aside()}<Button size="sm" onclick={addSnippet}>{#snippet icon()}<Plus />{/snippet}새 스니펫</Button>{/snippet}
+		<p class="faint small pad">테마 위에 덧붙이는 작은 CSS 조각. 켜고 끌 수 있음</p>
+		{#each theme.snippets as s (s.id)}
+			<div class="snip" class:open={openSnippet === s.id}>
+				<div class="snip-head">
+					<button class="snip-name" aria-expanded={openSnippet === s.id} onclick={() => (openSnippet = openSnippet === s.id ? null : s.id)}>{s.name}</button>
+					<Switch checked={s.enabled} label="{s.name} 사용" hideLabel onchange={(v) => patchSnippet(s.id, { enabled: v })} />
+				</div>
+				{#if openSnippet === s.id}
+					<div class="snip-body">
+						<Input value={s.name} aria-label="스니펫 이름" onchange={(e) => patchSnippet(s.id, { name: e.currentTarget.value.trim() || "이름 없음" })} />
+						<Textarea value={s.css} mono rows={8} spellcheck={false} aria-label="스니펫 CSS" onchange={(e) => patchSnippet(s.id, { css: e.currentTarget.value })} />
+						<div class="snip-foot">
+							<span class="faint small">입력칸에서 나가면 저장·적용됨</span>
+							<Button size="sm" variant="ghost" onclick={() => removeSnippet(s)}>{#snippet icon()}<Trash2 />{/snippet}삭제</Button>
+						</div>
+					</div>
 				{/if}
-			</Row>
+			</div>
+		{:else}
+			<p class="faint small pad">스니펫 없음</p>
 		{/each}
 	</Group>
 </Section>
 
-<Dialog bind:open={editOpen} title={editing?.filename ? "테마 편집" : "새 테마"} description="CSS 변수로 앱 색을 덮어씀. 강조색은 위에서 고른 값을 씀" size="lg">
-	{#if editing}
-		<div class="form">
-			<div class="meta">
-				<Field label="이름" required><Input bind:value={editing.name} placeholder="테마 이름" /></Field>
-				<Field label="만든 사람"><Input bind:value={editing.author} /></Field>
-				<Field label="버전"><Input bind:value={editing.version} /></Field>
-			</div>
-			<Field label="CSS" hint="주요 변수: --bg, --bg-sunken, --surface, --surface-2, --border, --text, --text-muted">
-				<Textarea bind:value={editing.css} mono rows={16} spellcheck={false} />
-			</Field>
-		</div>
-	{/if}
-	{#snippet footer()}
-		<Button variant="ghost" onclick={() => (editOpen = false)}>취소</Button>
-		<Button variant="primary" disabled={!editing?.name.trim()} onclick={saveEdit}>저장</Button>
-	{/snippet}
-</Dialog>
+{#if menu}<ContextMenu at={menu.at} items={menu.items} label="테마 메뉴" onclose={() => (menu = null)} />{/if}
 
 <style>
-	.accents {
+	.accents,
+	.grays {
 		display: flex;
 		gap: 8px;
 		flex-wrap: wrap;
 		justify-content: flex-end;
 	}
-	.accents button {
+	.accents button,
+	.grays button {
 		width: 24px;
 		height: 24px;
 		border-radius: 50%;
@@ -165,17 +208,77 @@
 		box-shadow: 0 0 0 1px var(--border-strong);
 		cursor: pointer;
 	}
-	.accents button.on {
+	.accents button.on,
+	.grays button.on {
 		box-shadow: 0 0 0 2px var(--text);
 	}
-	.form {
+	.gallery {
+		display: grid;
+		grid-template-columns: repeat(auto-fill, minmax(190px, 1fr));
+		gap: var(--space-3);
+		padding: var(--space-4) 0;
+	}
+	.new-card {
 		display: flex;
 		flex-direction: column;
-		gap: var(--space-4);
+		align-items: center;
+		justify-content: center;
+		gap: var(--space-1);
+		min-height: 110px;
+		border: 1px dashed var(--border-strong);
+		border-radius: var(--radius-md);
+		background: transparent;
+		color: var(--text-muted);
+		font: inherit;
+		cursor: pointer;
 	}
-	.meta {
-		display: grid;
-		grid-template-columns: 2fr 1fr 1fr;
-		gap: var(--space-3);
+	.new-card:hover {
+		border-color: var(--accent);
+		color: var(--text);
+	}
+	.new-card :global(svg) {
+		width: 18px;
+		height: 18px;
+	}
+	.small {
+		font-size: var(--text-xs);
+	}
+	.pad {
+		padding: var(--space-2) var(--space-3);
+	}
+	.snip {
+		border-radius: var(--radius-sm);
+	}
+	.snip + .snip {
+		border-top: 1px solid var(--border);
+	}
+	.snip-head {
+		display: flex;
+		align-items: center;
+		gap: var(--space-2);
+		padding: var(--space-1) var(--space-3);
+	}
+	.snip-name {
+		flex: 1;
+		min-height: 36px;
+		padding: 0;
+		border: none;
+		background: none;
+		color: var(--text);
+		font: inherit;
+		font-weight: 600;
+		text-align: left;
+		cursor: pointer;
+	}
+	.snip-body {
+		display: flex;
+		flex-direction: column;
+		gap: var(--space-2);
+		padding: 0 var(--space-3) var(--space-3);
+	}
+	.snip-foot {
+		display: flex;
+		align-items: center;
+		justify-content: space-between;
 	}
 </style>

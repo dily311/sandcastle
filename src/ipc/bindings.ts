@@ -17,6 +17,7 @@ export const commands = {
 	setSystemDefaultPersona: (id: string, options?: InvokeOptions) => __TAURI_INVOKE<null>("set_system_default_persona", { id }, options),
 	getThemeList: (options?: InvokeOptions) => __TAURI_INVOKE<CssThemeMeta_Serialize[]>("get_theme_list", undefined, options),
 	loadThemeContent: (filename: string, options?: InvokeOptions) => __TAURI_INVOKE<string>("load_theme_content", { filename }, options),
+	loadTheme: (filename: string, options?: InvokeOptions) => __TAURI_INVOKE<CssTheme_Serialize>("load_theme", { filename }, options),
 	saveTheme: (filename: string, content: CssTheme_Deserialize, options?: InvokeOptions) => __TAURI_INVOKE<null>("save_theme", { filename, content }, options),
 	deleteTheme: (filename: string, options?: InvokeOptions) => __TAURI_INVOKE<null>("delete_theme", { filename }, options),
 	getModels: (profileId: string, options?: InvokeOptions) => __TAURI_INVOKE<string[]>("get_models", { profileId }, options),
@@ -816,14 +817,23 @@ export type Conversation_Serialize = {
 	apiProfileId: string | null,
 };
 
+export type CssSnippet = {
+	id: string,
+	name: string,
+	css: string,
+	enabled: boolean,
+};
+
 export type CssTheme = CssTheme_Serialize | CssTheme_Deserialize;
 
 export type CssThemeMeta = CssThemeMeta_Serialize | CssThemeMeta_Deserialize;
 
 export type CssThemeMeta_Deserialize = {
 	name: string,
-	author: string,
-	version: string,
+	author?: string,
+	version?: string,
+	/**  목록 카드 미리보기용 */
+	colors?: ThemeColors_Deserialize,
 };
 
 export type CssThemeMeta_Serialize = {
@@ -831,13 +841,17 @@ export type CssThemeMeta_Serialize = {
 	name: string,
 	author: string,
 	version: string,
+	/**  목록 카드 미리보기용 */
+	colors: ThemeColors_Serialize,
 };
 
 export type CssTheme_Deserialize = {
 	name: string,
 	author: string,
 	version: string,
-	cssContent: string,
+	/**  직접 쓰는 CSS (색 편집으로 부족할 때) */
+	cssContent?: string,
+	colors?: ThemeColors_Deserialize,
 };
 
 export type CssTheme_Serialize = {
@@ -845,7 +859,9 @@ export type CssTheme_Serialize = {
 	name: string,
 	author: string,
 	version: string,
+	/**  직접 쓰는 CSS (색 편집으로 부족할 때) */
 	cssContent: string,
+	colors: ThemeColors_Serialize,
 };
 
 export type Cue = Cue_Serialize | Cue_Deserialize;
@@ -2861,6 +2877,21 @@ export type Template_Serialize = {
 	capabilities: Capabilities_Serialize,
 };
 
+/**  테마 색: 화면 모드별로 덮어쓸 CSS 변수 ("--bg" → "#ffffff"). 비어 있으면 앱 기본값 */
+export type ThemeColors = ThemeColors_Serialize | ThemeColors_Deserialize;
+
+/**  테마 색: 화면 모드별로 덮어쓸 CSS 변수 ("--bg" → "#ffffff"). 비어 있으면 앱 기본값 */
+export type ThemeColors_Deserialize = {
+	light?: { [key in string]: string },
+	dark?: { [key in string]: string },
+};
+
+/**  테마 색: 화면 모드별로 덮어쓸 CSS 변수 ("--bg" → "#ffffff"). 비어 있으면 앱 기본값 */
+export type ThemeColors_Serialize = {
+	light: { [key in string]: string },
+	dark: { [key in string]: string },
+};
+
 export type ThemeSetting = ThemeSetting_Serialize | ThemeSetting_Deserialize;
 
 export type ThemeSetting_Deserialize = {
@@ -2871,6 +2902,8 @@ export type ThemeSetting_Deserialize = {
 	fontSize: number,
 	/**  회색 톤 (Radix 회색 계열: slate, gray, mauve, sage, olive, sand) */
 	grayTone?: string,
+	/**  CSS 스니펫 (옵시디언처럼 켜고 끄는 작은 CSS 조각) */
+	snippets?: CssSnippet[],
 };
 
 export type ThemeSetting_Serialize = {
@@ -2881,6 +2914,8 @@ export type ThemeSetting_Serialize = {
 	fontSize: number,
 	/**  회색 톤 (Radix 회색 계열: slate, gray, mauve, sage, olive, sand) */
 	grayTone: string,
+	/**  CSS 스니펫 (옵시디언처럼 켜고 끄는 작은 CSS 조각) */
+	snippets: CssSnippet[],
 };
 
 export type TranscriptEntry = TranscriptEntry_Serialize | TranscriptEntry_Deserialize;

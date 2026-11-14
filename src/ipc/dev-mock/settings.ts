@@ -6,8 +6,9 @@ import { mockData } from "./chat";
 type Args = Record<string, any>;
 const { characters, personas, presets, apis, regex, convs, messages, uid, now } = mockData;
 
-const themes = new Map<string, { name: string; author: string; version: string; cssContent: string }>([
-	["catppuccin.json", { name: "Catppuccin", author: "test", version: "1.0.0", cssContent: ":root[data-theme=\"light\"] { --bg: #eff1f5; }" }],
+type MockTheme = { name: string; author: string; version: string; cssContent: string; colors: { light: Record<string, string>; dark: Record<string, string> } };
+const themes = new Map<string, MockTheme>([
+	["latte.json", { name: "라테", author: "나", version: "1.0.0", cssContent: "", colors: { light: { "--bg": "#f3ede4", "--surface": "#fffaf3", "--text": "#3b2f25" }, dark: { "--bg": "#231c17", "--surface": "#2e251f", "--text": "#f1e6d8" } } }],
 ]);
 const keys = new Set<string>(["gemini"]);
 let autostart = false;
@@ -59,7 +60,12 @@ function detail(id: string): PromptPresetDetail_Serialize {
 
 export const settingsHandlers: Record<string, (a: Args) => unknown> = {
 	// ---- 테마 ----
-	get_theme_list: () => [...themes].map(([filename, t]) => ({ filename, name: t.name, author: t.author, version: t.version })),
+	get_theme_list: () => [...themes].map(([filename, t]) => ({ filename, name: t.name, author: t.author, version: t.version, colors: t.colors })),
+	load_theme: ({ filename }) => {
+		const t = themes.get(filename);
+		if (!t) throw { code: "IO_ERROR", category: "IO", message: "테마 없음", retryable: false };
+		return { filename, ...structuredClone(t) };
+	},
 	load_theme_content: ({ filename }) => themes.get(filename)?.cssContent ?? "",
 	save_theme: ({ filename, content }) => (themes.set(filename, content), null),
 	delete_theme: ({ filename }) => (themes.delete(filename), null),

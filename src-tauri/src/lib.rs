@@ -140,11 +140,8 @@ pub fn run() {
 
         // 4. 테마 매니저 초기화
         let app_dir = app.path().app_data_dir().expect("App data dir not found");
+        // 기본 테마는 앱(프론트)에 들어 있음. 이 폴더에는 사용자 테마만
         let theme_manager = ThemeManager::new(app_dir);
-
-        if let Err(err) = theme_manager.init_default_themes() {
-            eprintln!("Failed to initialize themes: {}", err);
-        }
 
         app.manage(theme_manager);
 
@@ -212,6 +209,7 @@ pub fn specta_builder() -> tauri_specta::Builder<tauri::Wry> {
             // theme
             get_theme_list,
             load_theme_content,
+            load_theme,
             save_theme,
             delete_theme,
             // ai
@@ -383,6 +381,7 @@ pub fn specta_builder() -> tauri_specta::Builder<tauri::Wry> {
             // theme
             get_theme_list,
             load_theme_content,
+            load_theme,
             save_theme,
             delete_theme,
             // ai
