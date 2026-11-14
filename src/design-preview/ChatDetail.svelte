@@ -37,10 +37,15 @@
 	// 오른쪽 패널 버튼은 타이틀바에 있다
 	$effect(() => {
 		ui.panelAvailable = true;
-		return () => (ui.panelAvailable = false);
+		ui.panelTabs = [...panelTabs];
+		ui.panelTab = "settings";
+		return () => {
+			ui.panelAvailable = false;
+			ui.panelTabs = [];
+		};
 	});
+	const panelTab = $derived(ui.panelTab);
 	const showPanel = $derived(ui.panelOpen);
-	let panelTab: "settings" | "toc" | "assets" = $state("settings");
 	let draft = $state("");
 	let persona = $state("min");
 	let personaOpen = $state(false);
@@ -306,22 +311,6 @@
 
 	{#if showPanel}
 		<aside class="panel" aria-label="대화 설정">
-			<!-- 옵시디언처럼 아이콘 탭 줄 -->
-			<div class="panel-head" role="tablist" aria-label="패널">
-				{#each panelTabs as t (t.id)}
-					<button
-						role="tab"
-						class="ptab"
-						aria-selected={panelTab === t.id}
-						aria-label={t.label}
-						title={t.label}
-						class:on={panelTab === t.id}
-						onclick={() => (panelTab = t.id)}
-					>
-						<t.icon />
-					</button>
-				{/each}
-			</div>
 			{#if panelTab === "settings"}
 				<div class="panel-body">
 					<section>
@@ -399,12 +388,12 @@
 <style>
 	.chat {
 		display: grid;
-		grid-template-columns: 280px minmax(0, 1fr) 300px;
+		grid-template-columns: 280px minmax(0, 1fr) var(--panel-width);
 		grid-template-rows: minmax(0, 1fr);
 		height: 100%;
 	}
 	.chat.no-list {
-		grid-template-columns: minmax(0, 1fr) 300px;
+		grid-template-columns: minmax(0, 1fr) var(--panel-width);
 	}
 	.chat.no-panel {
 		grid-template-columns: 280px minmax(0, 1fr);
@@ -809,35 +798,6 @@
 		border-left: 1px solid var(--border);
 		background: var(--bg);
 		min-width: 0;
-	}
-	.panel-head {
-		display: flex;
-		gap: 2px;
-		padding: var(--space-2) var(--space-2) var(--space-2);
-		border-bottom: 1px solid var(--border);
-	}
-	.ptab {
-		display: grid;
-		place-items: center;
-		width: 30px;
-		height: 28px;
-		border: none;
-		border-radius: var(--radius-xs);
-		background: transparent;
-		color: var(--text-muted);
-		cursor: pointer;
-	}
-	.ptab :global(svg) {
-		width: 17px;
-		height: 17px;
-	}
-	.ptab:hover {
-		background: var(--surface-hover);
-		color: var(--text);
-	}
-	.ptab.on {
-		background: var(--surface-active);
-		color: var(--text);
 	}
 	.panel-body {
 		display: flex;

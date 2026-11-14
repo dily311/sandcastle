@@ -90,4 +90,15 @@ export function absolute(min: number): string {
 }
 
 /** 앱 공용 UI 상태: 오른쪽 패널 버튼은 타이틀바에 있고, 패널이 있는 화면(대화·게임)만 켠다 */
-export const ui = $state({ panelAvailable: false, panelOpen: true });
+export interface PanelTab {
+	id: string;
+	label: string;
+	icon: import("svelte").Component;
+}
+/** 오른쪽 패널 탭은 옵시디언처럼 타이틀바(패널 바로 위)에 표시. 화면이 자기 탭을 등록한다. */
+export const ui = $state({
+	panelAvailable: false,
+	panelOpen: true,
+	panelTabs: [] as PanelTab[],
+	panelTab: "",
+});

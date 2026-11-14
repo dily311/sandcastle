@@ -97,6 +97,7 @@
 
 	/* ---- 레이아웃 ---- */
 	--rail-width: 232px;
+	--panel-width: 300px;
 	--titlebar-height: 36px;
 	--control-sm: 28px;
 	--control-md: 34px;

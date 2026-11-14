@@ -51,11 +51,31 @@
 			</button>
 		</nav>
 		<div class="drag" aria-hidden="true"></div>
-		{#if ui.panelAvailable}
-			<IconButton label={ui.panelOpen ? "오른쪽 패널 닫기" : "오른쪽 패널 열기"} size="sm" active={ui.panelOpen} onclick={() => (ui.panelOpen = !ui.panelOpen)}><PanelRight /></IconButton>
-		{/if}
-		<div class="win" aria-hidden="true">
-			<span><Minus /></span><span><Square /></span><span class="close"><X /></span>
+		<!-- 오른쪽 패널이 열려 있으면 패널 폭만큼의 구역: 패널 탭 + 여닫기 + 창 버튼 (옵시디언 방식) -->
+		<div class="right-zone" class:panel={ui.panelAvailable && ui.panelOpen}>
+			{#if ui.panelAvailable && ui.panelOpen}
+				<div class="ptabs" role="tablist" aria-label="오른쪽 패널">
+					{#each ui.panelTabs as t (t.id)}
+						<button
+							role="tab"
+							class="ptab"
+							class:on={ui.panelTab === t.id}
+							aria-selected={ui.panelTab === t.id}
+							aria-label={t.label}
+							title={t.label}
+							onclick={() => (ui.panelTab = t.id)}
+						>
+							<t.icon />
+						</button>
+					{/each}
+				</div>
+			{/if}
+			{#if ui.panelAvailable}
+				<IconButton label={ui.panelOpen ? "오른쪽 패널 닫기" : "오른쪽 패널 열기"} size="sm" active={ui.panelOpen} onclick={() => (ui.panelOpen = !ui.panelOpen)}><PanelRight /></IconButton>
+			{/if}
+			<div class="win" aria-hidden="true">
+				<span><Minus /></span><span><Square /></span><span class="close"><X /></span>
+			</div>
 		</div>
 	</header>
 
@@ -149,9 +169,51 @@
 		flex: 1;
 		align-self: stretch;
 	}
+	.right-zone {
+		display: flex;
+		align-items: center;
+		align-self: stretch;
+		gap: var(--space-1);
+	}
+	/* 패널 바로 위: 패널과 같은 폭·같은 경계선 */
+	.right-zone.panel {
+		width: var(--panel-width);
+		padding-left: var(--space-2);
+		border-left: 1px solid var(--border);
+		margin-bottom: -1px;
+		border-bottom: 1px solid var(--bg);
+	}
+	.ptabs {
+		display: flex;
+		gap: 2px;
+		margin-right: auto;
+	}
+	.ptab {
+		display: grid;
+		place-items: center;
+		width: 30px;
+		height: 26px;
+		border: none;
+		border-radius: var(--radius-xs);
+		background: transparent;
+		color: var(--text-muted);
+		cursor: pointer;
+	}
+	.ptab :global(svg) {
+		width: 16px;
+		height: 16px;
+	}
+	.ptab:hover {
+		background: var(--surface-hover);
+		color: var(--text);
+	}
+	.ptab.on {
+		background: var(--surface-active);
+		color: var(--text);
+	}
 	.win {
 		display: flex;
-		margin-left: var(--space-2);
+		margin-left: var(--space-1);
 		align-self: stretch;
 	}
 	.win span {
