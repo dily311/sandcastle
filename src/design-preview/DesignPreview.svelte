@@ -1,6 +1,5 @@
 <script lang="ts">
 	import {
-		BookOpenText,
 		Gamepad2,
 		Minus,
 		Settings,
@@ -13,11 +12,11 @@
 	import { IconButton } from "$shared/ui";
 	import { ACCENTS, accentValue } from "$shared/ui/accents";
 	import PhonePage from "./PhonePage.svelte";
-	import ChatPage from "./ChatPage.svelte";
+	import CharacterPage from "./CharacterPage.svelte";
 	import SettingsPage from "./SettingsPage.svelte";
 
-	type Page = "phone" | "chat" | "game" | "character" | "persona" | "settings";
-	let page: Page = $state("chat");
+	type Page = "phone" | "character" | "game" | "persona" | "settings";
+	let page: Page = $state("character");
 	let dark = $state(false);
 	let accent = $state(ACCENTS[0].id);
 
@@ -28,9 +27,8 @@
 
 	const nav = [
 		{ id: "phone", icon: Smartphone, label: "폰", badge: 3 },
-		{ id: "chat", icon: BookOpenText, label: "대화" },
-		{ id: "game", icon: Gamepad2, label: "게임" },
 		{ id: "character", icon: Users, label: "캐릭터" },
+		{ id: "game", icon: Gamepad2, label: "게임" },
 		{ id: "persona", icon: UserRound, label: "페르소나" },
 	] as const;
 </script>
@@ -57,12 +55,12 @@
 	<div class="content">
 		{#if page === "phone"}
 			<PhonePage />
-		{:else if page === "chat"}
-			<ChatPage />
+		{:else if page === "character"}
+			<CharacterPage />
 		{:else if page === "settings"}
 			<SettingsPage bind:accent bind:dark />
 		{:else}
-			<div class="todo">이 화면은 다음 단계에서 만듦 (캐릭터·게임은 소개 페이지부터)</div>
+			<div class="todo">이 화면은 다음 단계에서 만듦</div>
 		{/if}
 	</div>
 </div>

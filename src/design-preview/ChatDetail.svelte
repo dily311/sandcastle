@@ -21,8 +21,9 @@
 		Trash2,
 	} from "@lucide/svelte";
 	import { Avatar, Badge, Button, ContextMenu, IconButton, Input, Segmented, Select, Switch, Textarea, type MenuItem } from "$shared/ui";
+	import { ChevronDown as Chev, Folder, FolderOpen, FolderPlus, Upload } from "@lucide/svelte";
 	import ConvCard from "./ConvCard.svelte";
-	import { characters, relative, store } from "./mock.svelte";
+	import { characters, convActions, folderActions, relative, store } from "./mock.svelte";
 
 	let { convId, charId, onback, onopen }: { convId: string; charId: string; onback: () => void; onopen: (id: string) => void } = $props();
 	const character = $derived(characters.find((c) => c.id === charId)!);
@@ -55,6 +56,46 @@
 		return store.convs
 			.filter((c) => c.charId === charId && (!q || c.title.toLowerCase().includes(q)))
 			.sort((a, b) => Number(b.pinned) - Number(a.pinned) || (sort === "recent" ? a.ago - b.ago : sort === "name" ? a.title.localeCompare(b.title) : b.count - a.count));
+	});
+	const folders = $derived(store.folders.filter((f) => f.charId === charId));
+	let collapsed: Record<string, boolean> = $state({});
+
+	// 폴더 만들기 / 이름 바꾸기 (같은 입력칸)
+	let editingFolder: string | null = $state(null); // "new" 또는 폴더 id
+	let folderName = $state("");
+	function startFolderEdit(id: string, name = "") {
+		editingFolder = id;
+		folderName = name;
+	}
+	function commitFolder() {
+		if (editingFolder === "new") folderActions.create(charId, folderName);
+		else if (editingFolder) folderActions.rename(editingFolder, folderName);
+		editingFolder = null;
+	}
+	let folderMenuAt = $state<{ x: number; y: number } | null>(null);
+	let folderMenuItems: MenuItem[] = $state([]);
+	function folderMenu(e: MouseEvent, id: string, name: string) {
+		e.preventDefault();
+		folderMenuItems = [
+			{ label: "이름 바꾸기", icon: Pencil, onselect: () => startFolderEdit(id, name) },
+			{ label: "폴더 삭제 (대화는 남김)", icon: Trash2, danger: true, separator: true, onselect: () => folderActions.remove(id) },
+		];
+		folderMenuAt = { x: e.clientX, y: e.clientY };
+	}
+	// 카드를 폴더(또는 폴더 밖)로 끌어다 놓기
+	let dropTarget: string | null = $state(null);
+	const dnd = (target: string | null, key: string) => ({
+		ondragover: (e: DragEvent) => {
+			e.preventDefault();
+			dropTarget = key;
+		},
+		ondragleave: () => (dropTarget = null),
+		ondrop: (e: DragEvent) => {
+			e.preventDefault();
+			const id = e.dataTransfer?.getData("text/conv-id");
+			if (id) convActions.move(id, target);
+			dropTarget = null;
+		},
 	});
 
 	const personas = [
@@ -97,6 +138,22 @@
 	];
 </script>
 
+{#snippet folderInput()}
+	<!-- svelte-ignore a11y_autofocus -->
+	<input
+		class="folder-input"
+		bind:value={folderName}
+		placeholder="폴더 이름"
+		aria-label="폴더 이름"
+		autofocus
+		onkeydown={(e) => {
+			if (e.key === "Enter") commitFolder();
+			if (e.key === "Escape") editingFolder = null;
+		}}
+		onblur={commitFolder}
+	/>
+{/snippet}
+
 <svelte:window
 	onmousedown={(e) => {
 		const t = e.target as Element;
@@ -117,10 +174,12 @@
 	{#if showList}
 		<aside class="convs" aria-label="대화 목록">
 			<div class="convs-head">
-				<IconButton label="대화 목록으로" size="sm" onclick={onback}><ArrowLeft /></IconButton>
+				<IconButton label="{character.name} 정보로" size="sm" onclick={onback}><ArrowLeft /></IconButton>
 				<Avatar name={character.name} size={24} />
 				<strong>{character.name}</strong>
 				<IconButton label="새 대화" size="sm" variant="soft"><Plus /></IconButton>
+				<IconButton label="대화 가져오기 (SillyTavern .jsonl 등)" size="sm"><Upload /></IconButton>
+				<IconButton label="새 폴더" size="sm" onclick={() => startFolderEdit("new")}><FolderPlus /></IconButton>
 			</div>
 			<div class="convs-tools">
 				<Input bind:value={query} placeholder="대화 검색" aria-label="대화 검색">
@@ -129,12 +188,44 @@
 				<Select aria-label="정렬" bind:value={sort} options={[{ value: "recent", label: "최근 순" }, { value: "name", label: "이름 순" }, { value: "count", label: "메시지 많은 순" }]} />
 			</div>
 			<div class="convs-list">
-				{#each convs as c (c.id)}
-					<ConvCard conv={c} compact selected={c.id === convId} onopen={() => onopen(c.id)} />
-				{:else}
-					<p class="none">검색 결과 없음</p>
+				{#if editingFolder === "new"}{@render folderInput()}{/if}
+				{#each folders as f (f.id)}
+					{@const items = convs.filter((c) => c.folderId === f.id)}
+					{#if editingFolder === f.id}
+						{@render folderInput()}
+					{:else}
+						<button
+							class="folder"
+							class:drop={dropTarget === f.id}
+							aria-expanded={!collapsed[f.id]}
+							onclick={() => (collapsed[f.id] = !collapsed[f.id])}
+							oncontextmenu={(e) => folderMenu(e, f.id, f.name)}
+							{...dnd(f.id, f.id)}
+						>
+							<Chev class={collapsed[f.id] ? "closed" : ""} />
+							{#if collapsed[f.id]}<Folder />{:else}<FolderOpen />{/if}
+							<span class="fname">{f.name}</span>
+							<span class="fcount">{items.length}</span>
+						</button>
+					{/if}
+					{#if !collapsed[f.id]}
+						<div class="in-folder">
+							{#each items as c (c.id)}
+								<ConvCard conv={c} compact selected={c.id === convId} onopen={() => onopen(c.id)} />
+							{:else}
+								<p class="empty-folder">비어 있음</p>
+							{/each}
+						</div>
+					{/if}
 				{/each}
+				<div class="loose" class:drop={dropTarget === "loose"} {...dnd(null, "loose")}>
+					{#each convs.filter((c) => !c.folderId) as c (c.id)}
+						<ConvCard conv={c} compact selected={c.id === convId} onopen={() => onopen(c.id)} />
+					{/each}
+				</div>
+				{#if !convs.length}<p class="none">검색 결과 없음</p>{/if}
 			</div>
+			<ContextMenu at={folderMenuAt} items={folderMenuItems} label="폴더 메뉴" onclose={() => (folderMenuAt = null)} />
 		</aside>
 	{/if}
 
@@ -337,6 +428,83 @@
 		gap: var(--space-2);
 		overflow: auto;
 		padding: 0 var(--space-3) var(--space-3);
+	}
+	.folder {
+		display: flex;
+		align-items: center;
+		gap: 6px;
+		width: 100%;
+		height: 30px;
+		padding: 0 var(--space-2);
+		border: 1px dashed transparent;
+		border-radius: var(--radius-sm);
+		background: transparent;
+		color: var(--text-muted);
+		font-size: var(--text-sm);
+		font-weight: 600;
+		text-align: left;
+		cursor: pointer;
+	}
+	.folder:hover {
+		background: var(--surface-hover);
+		color: var(--text);
+	}
+	.folder :global(svg) {
+		width: 15px;
+		height: 15px;
+		flex: none;
+		transition: transform var(--duration-fast) var(--ease);
+	}
+	.folder :global(.closed) {
+		transform: rotate(-90deg);
+	}
+	.fname {
+		flex: 1;
+		min-width: 0;
+		white-space: nowrap;
+		overflow: hidden;
+		text-overflow: ellipsis;
+	}
+	.fcount {
+		font-size: var(--text-xs);
+		font-weight: 500;
+		color: var(--text-faint);
+	}
+	.folder.drop,
+	.loose.drop {
+		border-color: var(--accent);
+		background: var(--accent-soft);
+	}
+	.in-folder {
+		display: flex;
+		flex-direction: column;
+		gap: var(--space-2);
+		padding-left: var(--space-3);
+		margin-left: 9px;
+		border-left: 1px solid var(--border);
+	}
+	.empty-folder {
+		padding: 2px var(--space-2);
+		font-size: var(--text-xs);
+		color: var(--text-faint);
+	}
+	.loose {
+		display: flex;
+		flex-direction: column;
+		gap: var(--space-2);
+		min-height: 24px;
+		border: 1px dashed transparent;
+		border-radius: var(--radius-md);
+	}
+	.folder-input {
+		width: 100%;
+		height: 30px;
+		padding: 0 var(--space-2);
+		border: 1px solid var(--accent);
+		border-radius: var(--radius-sm);
+		background: var(--surface);
+		outline: none;
+		flex: none;
 	}
 	.none {
 		padding: var(--space-6);
