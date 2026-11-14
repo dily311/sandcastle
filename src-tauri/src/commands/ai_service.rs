@@ -1,6 +1,8 @@
 use crate::db::ai_service;
 use crate::error::ErrorCode;
-use crate::models::ai_service::{ApiProfiles, ApiProfilesInput, ChatOptions, StreamPayload};
+use crate::models::ai_service::{ApiProfiles, ApiProfilesInput, StreamPayload};
+use crate::service::ai::AiService;
+use std::sync::Arc;
 use crate::models::settings::AppSetting;
 use crate::service::secret_store::{api_key_name, SecretStore};
 use crate::sys::settings::SettingsState;
@@ -92,13 +94,8 @@ pub async fn delete_api_profile(state: State<'_, AppState>, id: String) -> Resul
 // AI 연결
 // =======================================
 #[tauri::command]
-pub async fn get_models(state: State<'_, AppState>, profile_id: String) -> Result<Vec<String>> {
-    let api_profile = ai_service::get_api_profile(&state.db, &profile_id).await?;
-    let result = ChatManager
-        .get_models(api_profile, state.http_client.clone())
-        .await
-        .map_err(|e| AppError::ai_provider(ErrorCode::AiProviderError, e.to_string(), false))?;
-    Ok(result)
+pub async fn get_models(ai: State<'_, Arc<AiService>>, profile_id: String) -> Result<Vec<String>> {
+    ai.list_models(&profile_id).await
 }
 
 #[tauri::command]
@@ -129,7 +126,7 @@ pub async fn send_messages(
     ChatManager
         .chat(app, &state, &settings, conversation_id, message, None)
         .await
-        .map_err(|e| AppError::ai_provider(crate::error::ErrorCode::AiProviderAuthFailed, e.to_string(), false))?;
+        .map_err(into_app_error)?;
     Ok(())
 }
 
@@ -145,6 +142,12 @@ pub async fn stream_message(
     ChatManager
         .chat(app, &state, &settings, conversation_id, message, Some(on_event))
         .await
-        .map_err(|e| AppError::ai_provider(crate::error::ErrorCode::AiProviderAuthFailed, e.to_string(), false))?;
+        .map_err(into_app_error)?;
     Ok(())
+}
+
+/// ChatManager(anyhow) 오류에서 원래 AppError(코드·재시도 여부)를 되살린다.
+fn into_app_error(e: anyhow::Error) -> AppError {
+    e.downcast::<AppError>()
+        .unwrap_or_else(|e| AppError::ai_provider(ErrorCode::AiProviderError, e.to_string(), false))
 }

@@ -1,5 +1,5 @@
 use async_trait::async_trait;
-use std::{sync::Arc, time::Duration};
+use std::sync::Arc;
 use tauri::{Manager, Runtime};
 use tauri_plugin_background_service::{BackgroundService, ServiceContext, ServiceError};
 
@@ -15,21 +15,17 @@ impl AppBackgroundService {
 
 #[async_trait]
 impl<R: Runtime> BackgroundService<R> for AppBackgroundService {
-    async fn init(&mut self, ctx: &ServiceContext<R>) -> Result<(), ServiceError> {
-        // One-time setup goes here.
-        // DB 및 서비스 초기화
-        // interrupted 작업 복구 대상 조회
-        let manager = ctx.app.state::<Arc<TaskManager>>().inner().clone();
-        let _ = manager
-            .recover_on_startup()
-            .await
-            .map_err(|e| ServiceError::Init(e.to_string()));
+    async fn init(&mut self, _ctx: &ServiceContext<R>) -> Result<(), ServiceError> {
+        // 작업 복구(recover_on_startup)는 lib.rs setup에서 TaskManager 생성 직후 한 번 수행한다.
         Ok(())
     }
 
     async fn run(&mut self, ctx: &ServiceContext<R>) -> Result<(), ServiceError> {
-        let manager = ctx.app.state::<Arc<TaskManager>>().inner().clone();
-        let _ = manager.run_worker(ctx.shutdown.clone()).await;
+        // 서비스 종료 신호가 오면 실행 중인 작업을 Interrupted로 멈춘다.
+        if let Some(manager) = ctx.app.try_state::<Arc<TaskManager>>() {
+            let manager = manager.inner().clone();
+            let _ = manager.run_worker(ctx.shutdown.clone()).await;
+        }
         Ok(())
     }
 }

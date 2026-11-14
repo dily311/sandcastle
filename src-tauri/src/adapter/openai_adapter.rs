@@ -1,111 +1,110 @@
-use tauri::ipc::Channel;
-use anyhow::{anyhow, Context, Result};
-use futures::stream::{self, StreamExt};
-use crate::{adapter::AIServiceAdapter, models::ai_service::*, service::secret_store::{SecretStore, api_key_name}};
+//! OpenAI 호환 Chat Completions (`/chat/completions`)
+use async_trait::async_trait;
+use serde_json::{json, Map, Value};
+
+use crate::{
+    adapter::{ensure_success, net_err, parse_err, sse::read_sse, AiProvider, Generation, OnDelta, ProviderCall},
+    error::Result,
+    models::ai_service::PromptMessage,
+};
 
 pub struct OpenAIClient;
-impl AIServiceAdapter for OpenAIClient {
-    type ModelList = OpenaiModelList;
-    type Message = OpenaiChatMessage;
-    type Request = OpenaiChatCompletionRequest;
-    type Response = OpenaiChatCompletionResponse;
 
-    fn parse_message(prompt_message: PromptMessage) -> Vec<Self::Message> {
-        let result = Vec::new();
-        result
+impl OpenAIClient {
+    fn body(model: &str, prompt: &PromptMessage) -> Value {
+        let messages: Vec<Value> = prompt
+            .messages
+            .iter()
+            .filter(|m| !m.content.is_empty())
+            .map(|m| json!({ "role": m.role.as_str(), "content": m.content }))
+            .collect();
+        let opts = &prompt.chat_options;
+        let mut body = Map::new();
+        body.insert("model".into(), json!(model));
+        body.insert("messages".into(), Value::Array(messages));
+        body.insert("stream".into(), json!(opts.stream));
+        if let Some(v) = opts.temperature {
+            body.insert("temperature".into(), json!(v));
+        }
+        if let Some(v) = opts.max_tokens {
+            body.insert("max_tokens".into(), json!(v));
+        }
+        if let Some(v) = opts.top_p {
+            body.insert("top_p".into(), json!(v));
+        }
+        Value::Object(body)
     }
-    
-    async fn get_models(&self, client: reqwest::Client, api_profile: ApiProfiles) -> Result<Vec<String>> {
-        // osSecretStore에 저장된 api 키를 불러옴
-        let api_key = SecretStore::get(&api_key_name(&api_profile.provider))?;
+}
 
-        let url = format!("{}/models", api_profile.base_url.trim_end_matches("/"));
-        let resp = client
-        .get(url)
-        .bearer_auth(api_key)
-        .send()
-        .await?;
+#[async_trait]
+impl AiProvider for OpenAIClient {
+    async fn list_models(&self, call: &ProviderCall<'_>) -> Result<Vec<String>> {
+        let resp = call
+            .http
+            .get(call.url("models"))
+            .bearer_auth(call.credential)
+            .send()
+            .await
+            .map_err(net_err)?;
+        let json: Value = ensure_success(resp)
+            .await?
+            .json()
+            .await
+            .map_err(|e| parse_err("모델 목록", e))?;
+        Ok(json["data"]
+            .as_array()
+            .map(|arr| {
+                arr.iter()
+                    .filter_map(|m| m["id"].as_str().map(str::to_string))
+                    .collect()
+            })
+            .unwrap_or_default())
+    }
 
-        if !resp.status().is_success() {
-            let err = resp.text().await?;
-            return Err(anyhow!(err));
+    async fn generate(
+        &self,
+        call: &ProviderCall<'_>,
+        prompt: &PromptMessage,
+        on_delta: &mut OnDelta<'_>,
+    ) -> Result<Generation> {
+        let resp = call
+            .http
+            .post(call.url("chat/completions"))
+            .bearer_auth(call.credential)
+            .json(&Self::body(&call.profile.model, prompt))
+            .send()
+            .await
+            .map_err(net_err)?;
+        let resp = ensure_success(resp).await?;
+
+        if !prompt.chat_options.stream {
+            let json: Value = resp.json().await.map_err(|e| parse_err("OpenAI", e))?;
+            let choice = &json["choices"][0];
+            return Ok(Generation {
+                content: choice["message"]["content"].as_str().unwrap_or_default().to_string(),
+                finish_reason: choice["finish_reason"].as_str().map(str::to_string),
+            });
         }
 
-        let result = resp.json::<Self::ModelList>().await?;
-        let data = result.data.into_iter().map(|r| r.id.clone()).collect();
-        Ok(data)
-    }
-
-    async fn send_message(&self, client: reqwest::Client, api_profile: ApiProfiles, prompt_message: PromptMessage) -> Result<String> {
-        // osSecretStore에 저장된 api 키를 불러옴
-        let api_key = SecretStore::get(&api_key_name(&api_profile.provider))?;
-        let url = format!("{}/chat/completions", api_profile.base_url.trim_end_matches("/"));
-        
-        // 메시지 구조 파싱
-        let messages = Self::parse_message(prompt_message.clone());
-        // request 구조체 생성
-        let request = Self::Request::from_row(api_profile.model.clone(), messages, prompt_message.chat_options.clone());
-
-        let resp = client
-            .post(url)
-            .bearer_auth(api_key)
-            .json(&request)
-            .send()
-            .await?;
-
-        if !resp.status().is_success() {
-            let err = resp.text().await?;
-            return Err(anyhow!(err));
-        }
-
-        let result = resp.json::<OpenaiChatCompletionResponse>().await?;
-
-
-        Ok(
-            result
-            .choices
-            .first()
-            .and_then(|c| c.message.as_ref().unwrap().content.clone())
-            .unwrap_or_default()
-        )
-    }
-
-    async fn stream_message(&self, client: reqwest::Client, api_profile: ApiProfiles, prompt_message: PromptMessage, on_event: Channel<StreamPayload>) -> Result<String> {
-        // osSecretStore에 저장된 api 키를 불러옴
-        let api_key = SecretStore::get(&api_key_name(&api_profile.provider))?;
-        
-        // 보낼 url과 바디 생성
-        let url = format!("{}/chat/completions", api_profile.base_url.trim_end_matches("/"));
-
-        // 메시지 구조 파싱
-        let messages = Self::parse_message(prompt_message.clone());
-        // request 구조체 생성
-        let request = Self::Request::from_row(api_profile.model.clone(), messages, prompt_message.chat_options.clone());
-
-
-        let resp = client
-            .get(url)
-            .bearer_auth(api_key)
-            .json(&request)
-            .send()
-            .await?;
-
-        let mut result = String::from("");
-        let mut stream = resp.bytes_stream();
-        while let Some(chunk_result) = stream.next().await {
-            match chunk_result {
-                Ok(bytes) => {
-                    if let Ok(text) = String::from_utf8(bytes.to_vec()) {
-                        let _ = on_event.send(StreamPayload { chunk: text.clone() });
-                        result.push_str(&text);
-                    }
-                }
-                Err(e) => {
-                    return Err(anyhow!("StreamError: {}", e));
+        let mut out = Generation::default();
+        read_sse(resp, |ev| {
+            if ev.data.trim() == "[DONE]" {
+                return Ok(false);
+            }
+            let json: Value = serde_json::from_str(ev.data).map_err(|e| parse_err("OpenAI 스트림", e))?;
+            let choice = &json["choices"][0];
+            if let Some(delta) = choice["delta"]["content"].as_str() {
+                if !delta.is_empty() {
+                    on_delta(delta);
+                    out.content.push_str(delta);
                 }
             }
-        }
-
-        Ok(result)
+            if let Some(reason) = choice["finish_reason"].as_str() {
+                out.finish_reason = Some(reason.to_string());
+            }
+            Ok(true)
+        })
+        .await?;
+        Ok(out)
     }
 }

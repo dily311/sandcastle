@@ -1,77 +1,115 @@
+//! Google Vertex AI (Gemini 퍼블리셔 모델)
+//!
+//! credential은 API 키가 아니라 JSON 문자열이다:
+//! `{ "service_account": "<서비스 계정 JSON 문자열>", "location": "us-central1", "project_id": "..." }`
+use async_trait::async_trait;
 use gcp_auth::{CustomServiceAccount, TokenProvider};
-use tauri::ipc::Channel;
-use anyhow::{anyhow, Context, Result};
-use futures::stream::{self, StreamExt};
-use crate::{adapter::AIServiceAdapter, models::{ai_service::*}, service::secret_store::{SecretStore, api_key_name}};
+use serde_json::Value;
+
+use crate::{
+    adapter::{
+        ensure_success,
+        gemini_adapter::{gemini_body, model_id, read_gemini_response},
+        net_err, parse_err, AiProvider, Generation, OnDelta, ProviderCall,
+    },
+    error::{AppError, ErrorCode, Result},
+    models::ai_service::{PromptMessage, VertexChatRequestAPIKey},
+};
+
+const SCOPE: &str = "https://www.googleapis.com/auth/cloud-platform";
 
 pub struct VertexAIClient;
-impl AIServiceAdapter for VertexAIClient {
-    type Message = GeminiContent;
-    type ModelList = GeminiModelList;
-    type Request = GeminiChatRequest;
-    type Response = GeminiChatResponse;
 
-    fn parse_message(prompt_message: PromptMessage) -> Vec<Self::Message> {
-        todo!()
-    }
-    async fn get_models(&self, client: reqwest::Client, api_profile: ApiProfiles) -> Result<Vec<String>> {
-        todo!()
-    }
+struct VertexAuth {
+    token: String,
+    location: String,
+    project_id: String,
+}
 
-    async fn send_message(&self, client: reqwest::Client, api_profile: ApiProfiles, prompt_message: PromptMessage) -> Result<String> {
-        // osSecretStore에 저장된 api 키를 불러옴
-        let api_key = SecretStore::get(&api_key_name(&api_profile.provider))?;
-        let service_json = serde_json::from_str::<VertexChatRequestAPIKey>(&api_key)?;
-        // 서비스 계정 키를 통한 GCP 인증 토큰 발급
-        let service_account = CustomServiceAccount::from_json(&service_json.service_account)
-            .context("service-account 계정 발급 실패")?;
-        let token = service_account
-            .token(&["https://www.googleapis.com/auth/cloud-platform"])
+impl VertexAIClient {
+    async fn auth(credential: &str) -> Result<VertexAuth> {
+        let auth_err = |msg: String| AppError::ai_provider(ErrorCode::AiProviderAuthFailed, msg, false);
+        let key: VertexChatRequestAPIKey = serde_json::from_str(credential)
+            .map_err(|e| auth_err(format!("Vertex 인증 정보 형식이 올바르지 않습니다: {e}")))?;
+        let account = CustomServiceAccount::from_json(&key.service_account)
+            .map_err(|e| auth_err(format!("서비스 계정을 읽을 수 없습니다: {e}")))?;
+        let token = account
+            .token(&[SCOPE])
             .await
-            .context("GVP Auth 토큰 발급 실패")?;
+            .map_err(|e| auth_err(format!("GCP 인증 토큰 발급 실패: {e}")))?;
+        Ok(VertexAuth {
+            token: token.as_str().to_string(),
+            location: key.location,
+            project_id: key.project_id,
+        })
+    }
 
-        let url = format!(
-            "https://{}-aiplatform.googleapis.com/v1/projects/{}/locations/{}/publishers/google/models/{}:generateContent", 
-            service_json.location, 
-            service_json.project_id, 
-            service_json.location,
-            api_profile.model.clone()
-        );
-        // 메시지 구조 파싱
-        let messages = Self::parse_message(prompt_message.clone());
-        // request 구조체 생성
-        let request = Self::Request::from_row(messages, prompt_message.chat_options);
-
-        let resp = client
-            .post(url)
-            .bearer_auth(token.as_str())
-            .json(&request)
-            .send()
-            .await?;
-
-        // 오류처리
-        if !resp.status().is_success() {
-            let stats = resp.status();
-            let error_text = resp.text().await.unwrap_or_default();
-            return  Err(anyhow!("VertexAi 오류 {stats} : {error_text}"));
+    fn host(location: &str) -> String {
+        if location == "global" {
+            "https://aiplatform.googleapis.com".to_string()
+        } else {
+            format!("https://{location}-aiplatform.googleapis.com")
         }
-
-        let json = resp.json::<GeminiChatResponse>().await?;
-        let result = json.candidates
-            .first()
-            .and_then(|c| c.content.as_ref().clone().unwrap().parts.as_ref().clone())
-            .unwrap()
-            .first()
-            .map(|m| m.text.clone())
-            .ok_or_else(|| anyhow!("텍스트 응답 추출 실패"))?;
-
-        Ok(result.unwrap_or_default())
     }
-    
-    async fn stream_message(&self, client: reqwest::Client, api_profile: ApiProfiles, prompt_message: PromptMessage, on_event: Channel<StreamPayload>) -> Result<String> {
-        todo!()
+}
+
+#[async_trait]
+impl AiProvider for VertexAIClient {
+    async fn list_models(&self, call: &ProviderCall<'_>) -> Result<Vec<String>> {
+        let auth = Self::auth(call.credential).await?;
+        let url = format!("{}/v1beta1/publishers/google/models", Self::host(&auth.location));
+        let resp = call
+            .http
+            .get(url)
+            .bearer_auth(&auth.token)
+            .header("x-goog-user-project", &auth.project_id)
+            .send()
+            .await
+            .map_err(net_err)?;
+        let json: Value = ensure_success(resp)
+            .await?
+            .json()
+            .await
+            .map_err(|e| parse_err("모델 목록", e))?;
+        Ok(json["publisherModels"]
+            .as_array()
+            .map(|arr| {
+                arr.iter()
+                    .filter_map(|m| m["name"].as_str())
+                    .map(|n| n.rsplit('/').next().unwrap_or(n).to_string())
+                    .collect()
+            })
+            .unwrap_or_default())
     }
 
-
-    
+    async fn generate(
+        &self,
+        call: &ProviderCall<'_>,
+        prompt: &PromptMessage,
+        on_delta: &mut OnDelta<'_>,
+    ) -> Result<Generation> {
+        let auth = Self::auth(call.credential).await?;
+        let stream = prompt.chat_options.stream;
+        let method = if stream {
+            "streamGenerateContent?alt=sse"
+        } else {
+            "generateContent"
+        };
+        let url = format!(
+            "{}/v1/projects/{}/locations/{}/publishers/google/models/{}:{method}",
+            Self::host(&auth.location),
+            auth.project_id,
+            auth.location,
+            model_id(&call.profile.model),
+        );
+        let resp = call
+            .http
+            .post(url)
+            .bearer_auth(&auth.token)
+            .json(&gemini_body(prompt))
+            .send()
+            .await
+            .map_err(net_err)?;
+        read_gemini_response(resp, stream, on_delta).await
+    }
 }

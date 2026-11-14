@@ -356,6 +356,8 @@ async fn converse(app: AppHandle, state: &State<'_, AppState>, settings: &State<
     let persona_info = format!("{}\n{}", persona.name, persona.description);
 
     let context = ChatContext {
+        char_name: Some(snap.character_name.clone()),
+        user_name: Some(persona.name.clone()),
         system_rules: match &mode {
             Mode::Npc(_) => GAME_SYSTEM_RULES.iter().map(|s| s.to_string()).collect(),
             // 씬 입력: 1:1 대화용 <updateRel> 규칙(대화 상대 한 명 기준)은 빼고 서술자용 규칙을 더한다.

@@ -173,6 +173,23 @@ pub async fn get_all_prompt_blocks<'e, E>(executor: E) -> Result<Vec<PromptBlock
     .await?;
     Ok(rows.into_iter().map(Into::into).collect())
 }
+/// 프리셋에 속한 블록 (정렬 순서대로)
+pub async fn get_prompt_blocks_by_preset<'e, E>(executor: E, preset_id: &str) -> Result<Vec<PromptBlocks>, Error> where E: Executor<'e, Database = Sqlite> {
+    let rows = sqlx::query_as::<_, PromptBlocksRows>(
+        r#"
+        SELECT
+            id, preset_id, identifier, block_type, name, role, content, enabled, position, COALESCE(depth, 0) AS depth, sort_order, triggers_json, extra_json, created_at, updated_at
+        FROM prompt_blocks
+        WHERE preset_id = ?
+        ORDER BY sort_order ASC
+    "#,
+    )
+    .bind(preset_id)
+    .fetch_all(executor)
+    .await?;
+    Ok(rows.into_iter().map(Into::into).collect())
+}
+
 pub async fn get_prompt_block<'e, E>(executor: E, id: &str) -> Result<PromptBlocks, Error> where E: Executor<'e, Database = Sqlite> {
     let rows = sqlx::query_as::<_, PromptBlocksRows>(
         r#"

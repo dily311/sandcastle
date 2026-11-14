@@ -9,15 +9,16 @@ mod error;
 pub mod game;
 pub mod models;
 pub mod service;
+use service::ai::AiService;
 pub mod sys;
 pub mod task;
-use task::{TaskEventEmitter, TaskExecutor, TaskManager, TaskRepository, TaskRunner};
+use task::{TaskEventEmitter, TaskManager};
 use crate::{
     models::settings::{AppSetting, FeatureSetting, ThemeSetting},
     state::{AppState, WindowMode},
     sys::{settings::SettingsState, themes::ThemeManager},
 };
-use commands::{ai_service::*, conversation::*, game_engine::*, game_manager::*, settings::*};
+use commands::{ai_service::*, conversation::*, game_engine::*, game_manager::*, settings::*, task::*};
 
 #[cfg(desktop)]
 mod widget;
@@ -77,6 +78,13 @@ pub fn run() {
             get_models,
             send_messages,
             stream_message,
+            // task
+            get_task,
+            list_active_tasks,
+            get_recoverable_tasks,
+            cancel_task,
+            resume_task,
+            dismiss_task,
             // api_profile
             get_api_profile,
             get_all_api_profile,
@@ -193,6 +201,13 @@ pub fn run() {
             get_models,
             send_messages,
             stream_message,
+            // task
+            get_task,
+            list_active_tasks,
+            get_recoverable_tasks,
+            cancel_task,
+            resume_task,
+            dismiss_task,
             // api_profile
             get_api_profile,
             get_all_api_profile,
@@ -289,12 +304,21 @@ pub fn run() {
             launch_mode,
         });
 
-        let emitter = TaskEventEmitter::new(app_handle.clone());
-        let repository = Arc::new(TaskRepository::new(pool.clone()));
-        let runner = Arc::new(TaskRunner::new());
-        let task_manager = Arc::new(TaskManager::new(repository, runner, emitter));
+        // 2-1. 전역 작업 관리자
+        // - 각 Manager(Chat/Game/Image)는 여기서 register_executor로 자기 Executor를 등록한다.
+        // - 지난 실행에서 끝나지 못한 작업은 Interrupted로 표시해 두고, 프론트가
+        //   get_recoverable_tasks로 받아 재개/포기를 묻는다.
+        let task_manager = TaskManager::new(
+            pool.clone(),
+            Arc::new(TaskEventEmitter::new(app_handle.clone())),
+        );
+        if let Err(e) = tauri::async_runtime::block_on(task_manager.recover_on_startup()) {
+            eprintln!("[task] 작업 복구 실패: {e}");
+        }
+        app.manage(task_manager);
 
-        app.manage(task_manager.clone());
+        // 2-2. AI 호출 서비스 (API 키·프로필·공급자 어댑터)
+        app.manage(Arc::new(AiService::new(pool.clone(), reqwest::Client::new())));
 
         // 3. 앱 설정 로드
         let settings_handle = app.handle().clone();

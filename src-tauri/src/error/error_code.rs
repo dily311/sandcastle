@@ -34,6 +34,14 @@ pub enum ErrorCode {
     AiProviderModelNotFound,
     AiProviderTimeout,
     AiProviderConnectionFailed,
+    AiRequestCancelled,
+    AiContextOverflow, // 고정 프롬프트만으로 컨텍스트 한도를 넘음
+
+    // Task
+    TaskInvalidTransition, // 현재 상태에서 허용되지 않는 요청 (이미 끝난 작업 취소 등)
+    TaskExecutorMissing,   // 해당 작업 종류의 실행기가 등록되지 않음
+    TaskCancelled,
+    TaskInterrupted, // 앱/서비스 종료로 중단
 
     // Game
     GameInvalidState,

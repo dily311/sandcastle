@@ -1,131 +1,182 @@
-use crate::adapter::*;
-use crate::db::ai_service;
-use crate::error::{AppError, ErrorCode};
-use crate::models::ai_service::{ApiProfiles, ChatContext, ChatOptions, DialogueDoneEvent, StreamPayload};
-use crate::models::settings::AppSetting;
-use crate::service::chat::context_manager::ContextManager;
-use crate::service::chat::prompt_manager::PromptManager;
-use crate::state::AppState;
-use crate::sys::settings::SettingsState;
-use anyhow::{anyhow, Result};
-use tauri::State;
-use tauri::{ipc::Channel, AppHandle, Emitter};
+//! 채팅 흐름: 컨텍스트 수집(ContextManager) → 프롬프트 조립(PromptManager) → AI 호출(AiService)
+//!
+//! 지금은 커맨드에서 바로 호출되지만, 이후에는 ChatStream 작업의 TaskExecutor 안에서 같은 흐름을
+//! 실행하고 커맨드는 TaskManager::submit만 하게 된다. 그때도 ChatManager는 작업 상태를 직접
+//! 바꾸지 않는다 (TaskContext로 진행 이벤트만 보냄).
+use std::sync::Arc;
 
-const EVENT_DIALOGUE_TOKEN: &str = "chat:dialogue:token";
+use anyhow::Result;
+use tauri::{ipc::Channel, AppHandle, Emitter, Manager, State};
+use tokio_util::sync::CancellationToken;
+
+use crate::{
+    error::AppError,
+    models::{
+        ai_service::{
+            ChatContext, ContextRequest, DialogueDoneEvent, GenerationType, PromptRequest,
+            StreamPayload,
+        },
+        settings::AppSetting,
+    },
+    service::{
+        ai::{AiRequest, AiService},
+        chat::context_manager::ContextManager,
+        prompt::PromptManager,
+    },
+    state::AppState,
+    sys::settings::SettingsState,
+};
+
 const EVENT_DIALOGUE_DONE: &str = "chat:dialogue:done";
-const EVENT_DIALOGUE_ERROR: &str = "chat:dialogue:error";
 
-pub enum ChatMode {
-    Chat,
-    Game,
-}
+// TODO: 설정/프리셋에서 받아오기
+const WORLD_INFO_RATIO: f32 = 0.5;
+const HISTORY_LIMIT: i64 = 50;
+const CONTEXT_LIMIT: u32 = 8192;
+
 pub struct ChatRequest {
     api_profile_id: String,
     character_id: String,
     persona_id: String,
     preset_id: String,
 }
+
 pub fn current_conv_request(state: &SettingsState<AppSetting>) -> Result<ChatRequest> {
-    let guard = state.0.lock().map_err(|_| AppError::archive(ErrorCode::InternalError, "archive lock poisaned"))?;
+    let guard = state
+        .0
+        .lock()
+        .map_err(|_| AppError::internal("settings lock poisoned"))?;
     Ok(ChatRequest {
-        api_profile_id: guard.selected_api_profile.as_ref().map(|a|a.clone()).unwrap_or_default(),
-        character_id: guard.selected_character_id.as_ref().map(|a|a.clone()).unwrap_or_default(),
+        api_profile_id: guard.selected_api_profile.clone().unwrap_or_default(),
+        character_id: guard.selected_character_id.clone().unwrap_or_default(),
         persona_id: guard.selected_persona_id.clone(),
         preset_id: guard.selected_preset.clone(),
-    })    
+    })
 }
 
 pub struct ChatManager;
+
 impl ChatManager {
-    pub async fn get_models(
-        &self,
-        api_profile: ApiProfiles,
-        client: reqwest::Client,
-    ) -> Result<Vec<String>> {
-        let result = match api_profile.format_type.as_str() {
-            "openai" => openai_adapter::OpenAIClient.get_models(client, api_profile,).await?,
-            "claude" => claude_adapter::ClaudeClient.get_models(client, api_profile).await?,
-            "gemini" => gemini_adapter::GeminiClient.get_models(client, api_profile).await?,
-            "vertexai" => vertexai_adapter::VertexAIClient.get_models(client, api_profile).await?,
-            _ => return Err(anyhow!("공급자가 지정되지 않음"))
-        };
-
-        Ok(result)
-    }
-
-    pub async fn test_connection(&self) -> Result<()> {
-        todo!()
-    }
-
     /** 대화 세션
-     * api_profile.provider에 따라 각 함수 호출
-     * - api_profile.provider: openai | claude | gemini
+     * - channel이 있으면 스트리밍으로 받아 조각마다 channel로 보낸다
+     * - 완료 시 chat:dialogue:done 이벤트 emit
      */
-    pub async fn chat(&self, app: AppHandle, state: &State<'_, AppState>, settings: &State<'_, SettingsState<AppSetting>>, conversation_id: String, message: String, channel: Option<Channel<StreamPayload>>,) -> Result<String> {
-        // TODO: context_limit 받아올 수 있게 하기
-        let world_info_ratio: f32 = 0.5;
-        let history_limit = 50;
-        let context_limit = 4080;
+    pub async fn chat(
+        &self,
+        app: AppHandle,
+        state: &State<'_, AppState>,
+        settings: &State<'_, SettingsState<AppSetting>>,
+        conversation_id: String,
+        message: String,
+        channel: Option<Channel<StreamPayload>>,
+    ) -> Result<String> {
         let chat_req = current_conv_request(settings)?;
-
 
         let context = ContextManager
             .build_context(
                 &state.db,
-                crate::models::ai_service::ContextRequest {
+                ContextRequest {
                     conversation_id: conversation_id.clone(),
                     character_id: chat_req.character_id,
                     persona_id: chat_req.persona_id,
-                    history_limit,
+                    history_limit: HISTORY_LIMIT,
                 },
             )
             .await?;
-        
-        let prompt_message = PromptManager.build(crate::models::ai_service::PromptRequest {
-            context,
-            user_message: message,
-            preset_id: Some(chat_req.preset_id),
-            context_limit,
-            world_info_ratio,
-        })?;
 
-        // adapter를 통해서 api 통신
-        // 각 공급자마다 받는 형식이 다르므로 주의
-        let client = state.http_client.clone();
-        let api_profile = ai_service::get_api_profile(&state.db, &chat_req.api_profile_id).await?;
-
-        let result = match channel {
-            Some(on_event) => {
-                match api_profile.format_type.as_str() {
-                    "openai" => openai_adapter::OpenAIClient.stream_message(client, api_profile, prompt_message, on_event).await?,
-                    "claude" => claude_adapter::ClaudeClient.stream_message(client, api_profile, prompt_message, on_event).await?,
-                    "gemini" => gemini_adapter::GeminiClient.stream_message(client, api_profile, prompt_message, on_event).await?,
-                    "vertexai" => vertexai_adapter::VertexAIClient.stream_message(client, api_profile, prompt_message, on_event).await?,
-                    _ => return Err(anyhow!("공급자가 지정되지 않음"))
-                }
-            }
-            None => {
-                match api_profile.format_type.as_str() {
-                    "openai" => openai_adapter::OpenAIClient.send_message(client, api_profile, prompt_message).await?,
-                    "claude" => claude_adapter::ClaudeClient.send_message(client, api_profile, prompt_message).await?,
-                    "gemini" => gemini_adapter::GeminiClient.send_message(client, api_profile, prompt_message).await?,
-                    "vertexai" => vertexai_adapter::VertexAIClient.send_message(client, api_profile, prompt_message).await?,
-                    _ => return Err(anyhow!("공급자가 지정되지 않음"))
-                }
-            }
-        };
+        let result = self
+            .generate(
+                &app,
+                &state.db,
+                chat_req.api_profile_id,
+                Some(chat_req.preset_id),
+                context,
+                message,
+                channel,
+            )
+            .await?;
 
         // 프론트에 생성 완료 알리기 -> DB 저장
-        let payload = DialogueDoneEvent {
-            conversation_id: conversation_id.clone(),
-            full_message: result.clone(),
-        };
-        
-        app.emit(EVENT_DIALOGUE_DONE, payload)?;
+        app.emit(
+            EVENT_DIALOGUE_DONE,
+            DialogueDoneEvent {
+                conversation_id,
+                full_message: result.clone(),
+            },
+        )?;
         Ok(result)
     }
 
-    pub async fn game_chat(&self, _app: AppHandle, _state: &State<'_, AppState>, _settings: &State<'_, SettingsState<AppSetting>>, _game_conversation_id: String, _message: String, _context: ChatContext, _channel: Option<Channel<StreamPayload>>,) -> Result<String> {
-        Err(anyhow!("게임 대화 AI 연결이 아직 구현되지 않았습니다"))
+    /// 게임 대화: 컨텍스트는 GameRuntime(game::npc)이 만들어 넘긴다.
+    pub async fn game_chat(
+        &self,
+        app: AppHandle,
+        state: &State<'_, AppState>,
+        settings: &State<'_, SettingsState<AppSetting>>,
+        _game_conversation_id: String,
+        message: String,
+        context: ChatContext,
+        channel: Option<Channel<StreamPayload>>,
+    ) -> Result<String> {
+        let chat_req = current_conv_request(settings)?;
+        self.generate(
+            &app,
+            &state.db,
+            chat_req.api_profile_id,
+            Some(chat_req.preset_id),
+            context,
+            message,
+            channel,
+        )
+        .await
+    }
+
+    /// 프롬프트 조립 + AI 호출 (채팅/게임 공통)
+    async fn generate(
+        &self,
+        app: &AppHandle,
+        db: &crate::db::conn::DbPool,
+        profile_id: String,
+        preset_id: Option<String>,
+        context: ChatContext,
+        message: String,
+        channel: Option<Channel<StreamPayload>>,
+    ) -> Result<String> {
+        let mut prompt = PromptManager
+            .build_with_db(
+                db,
+                PromptRequest {
+                    context,
+                    user_message: message,
+                    preset_id,
+                    context_limit: CONTEXT_LIMIT,
+                    world_info_ratio: WORLD_INFO_RATIO,
+                    generation_type: GenerationType::Normal,
+                },
+            )
+            .await?;
+        // 받을 곳이 없으면 스트리밍할 이유가 없다
+        prompt.chat_options.stream = channel.is_some();
+
+        let ai = app
+            .try_state::<Arc<AiService>>()
+            .ok_or_else(|| AppError::internal("AiService가 초기화되지 않았습니다"))?
+            .inner()
+            .clone();
+
+        let response = ai
+            .generate(
+                AiRequest { profile_id, prompt },
+                &CancellationToken::new(),
+                |delta| {
+                    if let Some(ch) = &channel {
+                        let _ = ch.send(StreamPayload {
+                            chunk: delta.to_string(),
+                        });
+                    }
+                },
+            )
+            .await?;
+        Ok(response.content)
     }
 }

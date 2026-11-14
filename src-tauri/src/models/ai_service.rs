@@ -11,7 +11,7 @@ use sqlx::prelude::FromRow;
 // ---------------------------------------
 // API 프로필
 // ---------------------------------------
-#[derive(FromRow, Deserialize, Serialize)]
+#[derive(FromRow, Deserialize, Serialize, Clone, Debug)]
 #[serde(rename_all = "camelCase")]
 pub struct ApiProfiles {
     pub id: String,
@@ -51,7 +51,7 @@ pub struct PromptPresetsRows {
     pub created_at: i64,
     pub updated_at: i64,
 }
-#[derive(Deserialize, Serialize)]
+#[derive(Deserialize, Serialize, Clone, Debug)]
 #[serde(rename_all = "camelCase")]
 pub struct PromptPresets {
     pub id: String,
@@ -118,7 +118,7 @@ pub struct PromptBlocksRows {
     pub created_at: i64,
     pub updated_at: i64,
 }
-#[derive(Deserialize, Serialize)]
+#[derive(Deserialize, Serialize, Clone, Debug)]
 #[serde(rename_all = "camelCase")]
 pub struct PromptBlocks {
     pub id: String,
@@ -195,9 +195,14 @@ pub struct ContextRequest {
     pub history_limit: i64, // 불러올 메시지 수
 }
 
-#[derive(Serialize)]
+#[derive(Serialize, Clone, Default)]
 pub struct ChatContext {
+    /// 앱이 고정한 규칙. 프리셋보다 항상 앞에 들어가며 프리셋으로 바꿀 수 없다 (ADR-003)
     pub system_rules: Vec<String>,
+    /// 매크로 {{char}}
+    pub char_name: Option<String>,
+    /// 매크로 {{user}}
+    pub user_name: Option<String>,
     pub character_info: Option<String>,
     pub persona_info: String,
     pub example_dialogue: Option<String>,
@@ -206,7 +211,7 @@ pub struct ChatContext {
     pub extra_data: serde_json::Value,
 }
 
-#[derive(Serialize)]
+#[derive(Serialize, Clone)]
 pub struct HistoryItem {
     pub role: String,
     pub content: String,
@@ -217,29 +222,107 @@ pub struct PromptRequest {
     pub context: ChatContext,
     pub user_message: String,
     pub preset_id: Option<String>,
-    pub context_limit: u32,    // 전체 컨텍스트 토큰 예산
+    pub context_limit: u32,    // 전체 컨텍스트 토큰 예산 (응답 토큰 포함)
     pub world_info_ratio: f32, // 월드인포에 할당할 비율
+    /// 어떤 생성인지 (프롬프트 블록 triggers_json 필터에 사용)
+    pub generation_type: GenerationType,
 }
 
-#[derive(Clone, Serialize, Deserialize)]
+/// 생성 유형. prompt_blocks.triggers_json 값과 같은 표기를 쓴다.
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum GenerationType {
+    #[default]
+    Normal,
+    Continue,
+    Regenerate,
+    Swipe,
+    Impersonate,
+    Quiet,
+}
+
+impl GenerationType {
+    pub fn as_str(&self) -> &'static str {
+        match self {
+            Self::Normal => "normal",
+            Self::Continue => "continue",
+            Self::Regenerate => "regenerate",
+            Self::Swipe => "swipe",
+            Self::Impersonate => "impersonate",
+            Self::Quiet => "quiet",
+        }
+    }
+}
+
+/// PromptManager가 만든 최종 프롬프트. 공급자 형식과 무관하며 어댑터가 각자 형식으로 바꾼다.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
 pub struct PromptMessage {
     pub chat_options: ChatOptions,
     pub messages: Vec<PromptMessageItem>,
 }
 
-#[derive(Clone, Serialize, Deserialize)]
-pub struct PromptMessageItem {
-    pub token: i64,
-    pub content: String,
+impl PromptMessage {
+    pub fn total_tokens(&self) -> i64 {
+        self.messages.iter().map(|m| m.token).sum()
+    }
 }
 
-#[derive(Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "lowercase")]
+pub enum PromptRole {
+    System,
+    User,
+    Assistant,
+}
+
+impl PromptRole {
+    /// DB/히스토리의 문자열 role → PromptRole
+    pub fn from_history(role: &str) -> Self {
+        match role.to_ascii_lowercase().as_str() {
+            "system" => Self::System,
+            "assistant" | "ai" | "char" | "model" | "narrator" => Self::Assistant,
+            _ => Self::User,
+        }
+    }
+
+    pub fn as_str(&self) -> &'static str {
+        match self {
+            Self::System => "system",
+            Self::User => "user",
+            Self::Assistant => "assistant",
+        }
+    }
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct PromptMessageItem {
+    pub role: PromptRole,
+    pub content: String,
+    /// 이 메시지의 추정 토큰 수
+    pub token: i64,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
 pub struct ChatOptions {
     pub temperature: Option<f32>,
     pub max_tokens: Option<u32>,
     pub top_p: Option<f32>,
     pub top_k: Option<u32>, // Gemini, Anthropic 등에서 주로 사용
     pub stream: bool,
+}
+
+impl Default for ChatOptions {
+    fn default() -> Self {
+        Self {
+            temperature: None,
+            max_tokens: Some(1024),
+            top_p: None,
+            top_k: None,
+            stream: true,
+        }
+    }
 }
 
 #[derive(Clone, Serialize, Deserialize)]
