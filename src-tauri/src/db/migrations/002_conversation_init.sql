@@ -1,9 +1,5 @@
 -- =========================================================
 -- 채팅 DB
--- ---------------------------------------------------------
--- 할 일
--- 1. 게임 DB와 채팅 DB를 통합하기
--- 2. 인덱스 추가
 -- =========================================================
 
 -- ---------------------------------------------------------
@@ -39,6 +35,28 @@ CREATE TABLE IF NOT EXISTS characters (
   favorite INTEGER DEFAULT 0,
   created_at INTEGER,
   updated_at INTEGER
+);
+
+-- ---------------------------------------------------------
+-- 채팅용 캐릭터 이미지
+-- ---------------------------------------------------------
+-- - 라이브러리 캐릭터(characters)에 붙는 이미지. 게임 에셋(game_assets)과는 별개.
+-- - chat/phone 대화에서 모델에게 키 목록만 보내고, 모델은 <cg>키</cg>로 고른다.
+-- - 파일은 앱 데이터 폴더 기준 상대 경로로 저장 (내보내기/가져오기 시 그대로 옮길 수 있게)
+-- ---------------------------------------------------------
+CREATE TABLE IF NOT EXISTS character_images (
+  id TEXT PRIMARY KEY,
+  character_id TEXT NOT NULL REFERENCES characters(id) ON DELETE CASCADE,
+  -- 모델이 <cg>키</cg>로 쓰는 이름 (캐릭터 안에서 대소문자 무시 유일)
+  key TEXT NOT NULL,
+  -- 앱 데이터 폴더 기준 상대 경로
+  file_path TEXT NOT NULL,
+  thumb_path TEXT,
+  -- 끄면 모델에게 보내지 않음
+  enabled INTEGER NOT NULL DEFAULT 1 CHECK (enabled IN (0, 1)),
+  sort_order INTEGER NOT NULL DEFAULT 0,
+  created_at INTEGER NOT NULL,
+  updated_at INTEGER NOT NULL
 );
 
 -- ---------------------------------------------------------
@@ -88,6 +106,7 @@ CREATE TABLE IF NOT EXISTS conversations (
   mode TEXT,
   meta TEXT,
   pinned INTEGER DEFAULT 0,
+  images_enabled INTEGER NOT NULL DEFAULT 0,
   created_at INTEGER,
   updated_at INTEGER
 );
@@ -159,6 +178,7 @@ CREATE TABLE IF NOT EXISTS collection_messages (
 -- 인덱스
 -- =========================================================
 CREATE INDEX IF NOT EXISTS idx_messages_conv ON messages(conversation_id, created_at);
+CREATE UNIQUE INDEX IF NOT EXISTS idx_character_images_key ON character_images(character_id, key COLLATE NOCASE);
 
 -- =========================================================
 -- 뷰

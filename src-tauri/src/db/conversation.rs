@@ -15,7 +15,7 @@ pub async fn get_all_conversations<'e, E>(executor: E) -> Result<Vec<Conversatio
     Ok(rows.into_iter().map(Into::into).collect())
 }
 pub async fn get_conversation<'e, E>(executor: E, id: &str) -> Result<Conversation, Error> where E: Executor<'e, Database = Sqlite>,{
-    let row = sqlx::query_as::<_, ConversationRow>("SELECT * FROM conversations WHERE id=?")
+    let row = sqlx::query_as::<_, ConversationRow>("SELECT * FROM v_conversations_with_count WHERE id=?")
         .bind(id)
         .fetch_one(executor)
         .await?;
@@ -28,11 +28,11 @@ pub async fn create_conversation<'e, E>(executor: E, input: ConversationInput) -
     let meta = serde_json::to_string(&input.meta).unwrap_or_default();
 
     sqlx::query(
-        "INSERT INTO conversations (id,title,character_id,persona_id,world_info_ids,mode,meta,created_at,updated_at)
-         VALUES (?,?,?,?,?,?,?,?,?)"
+        "INSERT INTO conversations (id,title,character_id,persona_id,world_info_ids,mode,meta,images_enabled,created_at,updated_at)
+         VALUES (?,?,?,?,?,?,?,?,?,?)"
     )
     .bind(&id).bind(&input.title).bind(&input.character_id).bind(&input.persona_id).bind(&wi_json)
-    .bind(&input.mode).bind(meta).bind(now).bind(now)
+    .bind(&input.mode).bind(meta).bind(input.images_enabled.unwrap_or(true)).bind(now).bind(now)
     .execute(executor)
     .await?;
 
@@ -45,6 +45,7 @@ pub async fn create_conversation<'e, E>(executor: E, input: ConversationInput) -
         mode: input.mode,
         meta: input.meta,
         pinned: false,
+        images_enabled: input.images_enabled.unwrap_or(true),
         created_at: now,
         updated_at: now,
         message_count: 0,
@@ -52,6 +53,16 @@ pub async fn create_conversation<'e, E>(executor: E, input: ConversationInput) -
 }
 
 /** conversation 업데이트일 업데이트 */
+/// 대화별 이미지 기능 스위치
+pub async fn set_conversation_images_enabled<'e, E>(executor: E, id: &str, enabled: bool) -> Result<bool, Error> where E: Executor<'e, Database = Sqlite>,{
+    let result = sqlx::query("UPDATE conversations SET images_enabled = ? WHERE id = ?")
+        .bind(enabled)
+        .bind(id)
+        .execute(executor)
+        .await?;
+    Ok(result.rows_affected() != 0)
+}
+
 pub async fn touch_conversation<'e, E>(executor: E, id: &str) -> Result<i64, Error> where E: Executor<'e, Database = Sqlite>,{
     let now = chrono::Utc::now().timestamp_millis();
     let result = sqlx::query("UPDATE conversations SET updated_at = ? WHERE id = ?")

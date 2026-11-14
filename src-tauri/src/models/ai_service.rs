@@ -349,6 +349,8 @@ pub struct DialogueTokenEvent {
 pub struct DialogueDoneEvent {
     pub conversation_id: String,
     pub full_message: String,
+    /// full_message 안의 <cg>키</cg>가 가리키는 이미지 (등장 순서)
+    pub images: Vec<crate::models::character_image::ChatImageRef>,
 }
 
 #[derive(Serialize, Clone)]

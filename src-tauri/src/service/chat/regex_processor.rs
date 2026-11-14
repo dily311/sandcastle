@@ -443,6 +443,63 @@ mod tests {
         assert_eq!(run(vec![off, broken, script("/b/g", "B")], "ab"), "aB");
     }
 
+    #[tokio::test]
+    async fn loads_scoped_scripts_from_db() {
+        use crate::models::regex::RegexScriptInput;
+        let pool = sqlx::sqlite::SqlitePoolOptions::new()
+            .max_connections(1)
+            .connect("sqlite::memory:")
+            .await
+            .unwrap();
+        sqlx::migrate!("src/db/migrations").run(&pool).await.unwrap();
+
+        let input = |name: &str, find: &str, rep: &str, scope: RegexScope, scope_id: Option<&str>| RegexScriptInput {
+            id: None,
+            name: name.into(),
+            find_regex: find.into(),
+            replace_string: rep.into(),
+            trim_strings: vec!["!".into()],
+            placement: vec![RegexPlacement::AiOutput, RegexPlacement::UserInput],
+            target: RegexTarget::Stored,
+            scope,
+            scope_id: scope_id.map(str::to_string),
+            substitute_macros: MacroMode::None,
+            run_on_edit: true,
+            min_depth: None,
+            max_depth: Some(3),
+            enabled: true,
+            sort_order: 0,
+            source_format: None,
+            extra_json: None,
+        };
+        for i in [
+            input("g", "/a/g", "G", RegexScope::Global, None),
+            input("mine", "/b/g", "{{char}}", RegexScope::Character, Some("c1")),
+            input("other", "/c/g", "X", RegexScope::Character, Some("c2")),
+            input("pre", "/d/g", "P", RegexScope::Preset, Some("p1")),
+        ] {
+            db::regex::upsert_regex_script(&pool, &i).await.unwrap();
+        }
+
+        let all = db::regex::get_all_regex_scripts(&pool).await.unwrap();
+        assert_eq!(all.len(), 4);
+        let g = all.iter().find(|s| s.name == "g").unwrap();
+        assert_eq!(g.placement, vec![RegexPlacement::AiOutput, RegexPlacement::UserInput]);
+        assert_eq!(g.trim_strings, vec!["!".to_string()]);
+        assert_eq!(g.max_depth, Some(3));
+
+        let p = RegexProcessor::load(&pool, Some("c1"), Some("p1"), macros()).await.unwrap();
+        assert_eq!(
+            p.apply("abcd", RegexPlacement::AiOutput, &[RegexTarget::Stored], Some(0)),
+            "GAriacP"
+        );
+        // 범위 밖 캐릭터/프리셋 없음 → 전역만
+        let p = RegexProcessor::load(&pool, None, None, macros()).await.unwrap();
+        assert_eq!(p.apply("abcd", RegexPlacement::UserInput, &[RegexTarget::Stored], None), "Gbcd");
+        // max_depth 3을 넘으면 적용 안 됨
+        assert_eq!(p.apply("a", RegexPlacement::UserInput, &[RegexTarget::Stored], Some(4)), "a");
+    }
+
     #[test]
     fn preview_ignores_placement_and_target() {
         let mut s = script("/hi/g", "hello");

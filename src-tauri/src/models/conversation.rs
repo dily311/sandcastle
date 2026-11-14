@@ -294,15 +294,17 @@ impl From<WorldInfoEntry> for WorldInfoEntryInput {
 #[derive(FromRow)]
 pub struct ConversationRow {
     pub id: String,
-    pub title: String,
-    pub character_id: String,
-    pub persona_id: String,
+    // 아래 nullable 컬럼들은 캐릭터/페르소나 삭제 시 NULL이 될 수 있다 (ON DELETE SET NULL)
+    pub title: Option<String>,
+    pub character_id: Option<String>,
+    pub persona_id: Option<String>,
     pub world_info_ids: Option<String>,
-    pub mode: String,
+    pub mode: Option<String>,
     pub meta: Option<String>,
-    pub pinned: i64,
-    pub created_at: i64,
-    pub updated_at: i64,
+    pub pinned: Option<i64>,
+    pub images_enabled: i64,
+    pub created_at: Option<i64>,
+    pub updated_at: Option<i64>,
     pub message_count: i64,
 }
 
@@ -317,6 +319,8 @@ pub struct Conversation {
     pub mode: String,
     pub meta: Option<serde_json::Value>,
     pub pinned: bool, // 즐겨찾기 여부
+    /// 이 대화에서 캐릭터 이미지(<cg>키</cg>) 사용 여부
+    pub images_enabled: bool,
     pub created_at: i64,
     pub updated_at: i64,
     pub message_count: i64,
@@ -326,22 +330,50 @@ impl From<ConversationRow> for Conversation {
     fn from(r: ConversationRow) -> Self {
         Self {
             id: r.id,
-            title: r.title,
-            character_id: r.character_id,
-            persona_id: r.persona_id,
+            title: r.title.unwrap_or_default(),
+            character_id: r.character_id.unwrap_or_default(),
+            persona_id: r.persona_id.unwrap_or_default(),
             world_info_ids: r
                 .world_info_ids
                 .and_then(|w| serde_json::from_str(&w).ok())
                 .unwrap_or_default(),
-            mode: r.mode,
+            mode: r.mode.unwrap_or_default(),
             meta: r
                 .meta
                 .and_then(|m| serde_json::from_str(&m).ok())
                 .unwrap_or_default(),
-            pinned: r.pinned != 0,
-            created_at: r.created_at,
-            updated_at: r.updated_at,
+            pinned: r.pinned.unwrap_or(0) != 0,
+            images_enabled: r.images_enabled != 0,
+            created_at: r.created_at.unwrap_or_default(),
+            updated_at: r.updated_at.unwrap_or_default(),
             message_count: r.message_count,
+        }
+    }
+}
+
+/// 대화 모드. 둘 다 같은 대화 기록·AI 흐름을 쓰고, 기본 시스템 프롬프트만 다르다.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default, Serialize, Deserialize, strum_macros::EnumString, strum_macros::Display)]
+#[serde(rename_all = "lowercase")]
+#[strum(serialize_all = "lowercase")]
+pub enum ConversationMode {
+    /// 일반 대화
+    #[default]
+    Chat,
+    /// 폰 메신저 대화: AppSetting.phone_mode_prompt가 붙는다
+    Phone,
+}
+
+impl ConversationMode {
+    /// DB 값 해석. 비었거나 모르는 값은 chat으로 본다.
+    pub fn parse_or_default(value: &str) -> Self {
+        value.trim().to_ascii_lowercase().parse().unwrap_or_default()
+    }
+
+    /// 이 모드에서 앱 고정 규칙 뒤에 붙일 시스템 프롬프트
+    pub fn system_prompt(&self, phone_mode_prompt: &str) -> Option<String> {
+        match self {
+            Self::Chat => None,
+            Self::Phone => Some(phone_mode_prompt.trim().to_string()).filter(|s| !s.is_empty()),
         }
     }
 }
@@ -355,6 +387,9 @@ pub struct ConversationInput {
     pub world_info_ids: Vec<String>,
     pub mode: String,
     pub meta: Option<serde_json::Value>,
+    /// 생략하면 켜짐
+    #[serde(default)]
+    pub images_enabled: Option<bool>,
 }
 
 // ---------- Message ----------
@@ -417,4 +452,21 @@ pub struct MessageInput {
     pub content: String,
     pub character_id: Option<String>,
     pub meta: Option<serde_json::Value>,
+}
+
+#[cfg(test)]
+mod mode_tests {
+    use super::ConversationMode;
+
+    #[test]
+    fn parse_and_prompt() {
+        assert_eq!(ConversationMode::parse_or_default("Phone"), ConversationMode::Phone);
+        assert_eq!(ConversationMode::parse_or_default(""), ConversationMode::Chat);
+        assert_eq!(ConversationMode::parse_or_default("game"), ConversationMode::Chat);
+        assert_eq!(ConversationMode::Phone.to_string(), "phone");
+
+        assert_eq!(ConversationMode::Chat.system_prompt("p"), None);
+        assert_eq!(ConversationMode::Phone.system_prompt("  p  "), Some("p".into()));
+        assert_eq!(ConversationMode::Phone.system_prompt("   "), None, "비우면 붙이지 않음");
+    }
 }

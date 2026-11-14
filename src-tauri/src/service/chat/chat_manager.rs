@@ -10,18 +10,22 @@ use tauri::{ipc::Channel, AppHandle, Emitter, Manager, State};
 use tokio_util::sync::CancellationToken;
 
 use crate::{
+    db::conversation::get_conversation,
     error::AppError,
     models::{
         ai_service::{
             ChatContext, ContextRequest, DialogueDoneEvent, GenerationType, PromptRequest,
             StreamPayload,
         },
+        character_image::CharacterImage,
+        conversation::ConversationMode,
         regex::{RegexPlacement, RegexTarget},
-        settings::AppSetting,
+        settings::{AppSetting, FeatureSetting},
     },
     service::{
         ai::{AiRequest, AiService},
         chat::{
+            chat_images::{image_rules, sanitize_cg_tags, strip_cg_tags, FEATURE_KEY as IMAGES_FEATURE},
             context_manager::ContextManager,
             regex_processor::{RegexMacros, RegexProcessor},
         },
@@ -43,6 +47,7 @@ pub struct ChatRequest {
     character_id: String,
     persona_id: String,
     preset_id: String,
+    phone_mode_prompt: String,
 }
 
 pub fn current_conv_request(state: &SettingsState<AppSetting>) -> Result<ChatRequest> {
@@ -55,6 +60,7 @@ pub fn current_conv_request(state: &SettingsState<AppSetting>) -> Result<ChatReq
         character_id: guard.selected_character_id.clone().unwrap_or_default(),
         persona_id: guard.selected_persona_id.clone(),
         preset_id: guard.selected_preset.clone(),
+        phone_mode_prompt: guard.phone_mode_prompt.clone(),
     })
 }
 
@@ -77,6 +83,26 @@ fn apply_prompt_regex(regex: &RegexProcessor, context: &mut ChatContext, message
         entry.content = regex.apply(&entry.content, RegexPlacement::WorldInfo, &both, None);
     }
     regex.apply(message, RegexPlacement::UserInput, &both, Some(0))
+}
+
+/// 앱 전체 이미지 스위치. 설정에 키가 없으면 켜진 것으로 본다.
+fn images_feature_on(app: &AppHandle) -> bool {
+    app.try_state::<SettingsState<FeatureSetting>>()
+        .and_then(|s| s.0.lock().ok().and_then(|f| f.feature.get(IMAGES_FEATURE).copied()))
+        .unwrap_or(true)
+}
+
+async fn load_enabled_images(
+    app: &AppHandle,
+    db: &crate::db::conn::DbPool,
+    character_id: &str,
+) -> Result<Vec<CharacterImage>> {
+    if character_id.is_empty() {
+        return Ok(vec![]);
+    }
+    let base = crate::commands::character_image::app_data_dir(app)?;
+    let rows = crate::db::character_image::get_character_images(db, character_id, true).await?;
+    Ok(rows.into_iter().map(|r| CharacterImage::from_row(r, &base)).collect())
 }
 
 pub struct ChatManager;
@@ -109,6 +135,36 @@ impl ChatManager {
             )
             .await?;
 
+        // 대화 모드별 기본 프롬프트 (앱 고정 규칙 바로 뒤 → 프리셋이 덮어쓰지 못함)
+        let conv = match get_conversation(&state.db, &conversation_id).await {
+            Ok(conv) => Some(conv),
+            Err(sqlx::Error::RowNotFound) => None,
+            Err(e) => return Err(AppError::from(e).into()),
+        };
+        let mode = conv
+            .as_ref()
+            .map(|c| ConversationMode::parse_or_default(&c.mode))
+            .unwrap_or_default();
+        if let Some(prompt) = mode.system_prompt(&chat_req.phone_mode_prompt) {
+            context.system_rules.push(prompt);
+        }
+
+        // 캐릭터 이미지: 켜져 있으면 키 목록을 보내고, 아니면 기록 속 <cg> 태그도 지운다
+        let images_on = conv.as_ref().map(|c| c.images_enabled).unwrap_or(true) && images_feature_on(&app);
+        let images = if images_on {
+            load_enabled_images(&app, &state.db, &chat_req.character_id).await?
+        } else {
+            vec![]
+        };
+        match image_rules(&images) {
+            Some(rules) => context.system_rules.push(rules),
+            None => {
+                for item in context.history.iter_mut() {
+                    item.content = strip_cg_tags(&item.content);
+                }
+            }
+        }
+
         // 정규식: 보내는 쪽(프롬프트)과 받는 쪽(응답)
         let regex = RegexProcessor::load(
             &state.db,
@@ -136,6 +192,8 @@ impl ChatManager {
         // 스트리밍 조각은 원문 그대로 나가고, 완료 이벤트/반환값은 치환된 최종본이다.
         // 프론트는 done 이벤트의 full_message로 메시지를 저장해야 한다.
         let result = regex.apply(&raw, RegexPlacement::AiOutput, &[RegexTarget::Stored], Some(0));
+        // 정규식 뒤에 검증해야 최종 본문에는 목록에 있는 <cg> 태그만 남는다
+        let (result, used_images) = sanitize_cg_tags(&result, &images);
 
         // 프론트에 생성 완료 알리기 -> DB 저장
         app.emit(
@@ -143,6 +201,7 @@ impl ChatManager {
             DialogueDoneEvent {
                 conversation_id,
                 full_message: result.clone(),
+                images: used_images,
             },
         )?;
         Ok(result)

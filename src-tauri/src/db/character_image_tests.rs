@@ -1,0 +1,89 @@
+//! conversations / character_images DB 동작 확인
+use sqlx::sqlite::SqlitePoolOptions;
+
+use crate::{
+    db::{character_image as ci, conversation as conv},
+    models::{character_image::CharacterImageRow, conversation::ConversationInput},
+};
+
+async fn pool() -> sqlx::SqlitePool {
+    let pool = SqlitePoolOptions::new()
+        .max_connections(1)
+        .connect("sqlite::memory:")
+        .await
+        .unwrap();
+    sqlx::query("PRAGMA foreign_keys = ON").execute(&pool).await.unwrap();
+    sqlx::migrate!("src/db/migrations").run(&pool).await.unwrap();
+    sqlx::query("INSERT INTO characters (id, name, created_at, updated_at) VALUES ('c1', 'Aria', 0, 0)")
+        .execute(&pool)
+        .await
+        .unwrap();
+    pool
+}
+
+fn image(id: &str, key: &str) -> CharacterImageRow {
+    CharacterImageRow {
+        id: id.into(),
+        character_id: "c1".into(),
+        key: key.into(),
+        file_path: format!("characters/c1/images/{id}.webp"),
+        thumb_path: None,
+        enabled: true,
+        sort_order: 0,
+        created_at: 0,
+        updated_at: 0,
+    }
+}
+
+#[tokio::test]
+async fn get_conversation_reads_count_flag_and_survives_deleted_character() {
+    let pool = pool().await;
+    let created = conv::create_conversation(
+        &pool,
+        ConversationInput {
+            title: "t".into(),
+            character_id: "c1".into(),
+            persona_id: "default".into(),
+            world_info_ids: vec![],
+            mode: "phone".into(),
+            meta: None,
+            images_enabled: None,
+        },
+    )
+    .await
+    .unwrap();
+    assert!(created.images_enabled);
+
+    // 예전에는 bare 테이블에서 읽어서 message_count 컬럼이 없다는 오류가 났다
+    let c = conv::get_conversation(&pool, &created.id).await.unwrap();
+    assert_eq!(c.mode, "phone");
+    assert_eq!(c.message_count, 0);
+    assert!(c.images_enabled);
+
+    assert!(conv::set_conversation_images_enabled(&pool, &created.id, false).await.unwrap());
+    assert!(!conv::get_conversation(&pool, &created.id).await.unwrap().images_enabled);
+
+    // 캐릭터를 지우면 character_id가 NULL이 되어도 읽혀야 한다
+    ci::insert_character_image(&pool, &image("i1", "Smile")).await.unwrap();
+    assert!(conv::delete_character(&pool, "c1").await.unwrap());
+    let c = conv::get_conversation(&pool, &created.id).await.unwrap();
+    assert_eq!(c.character_id, "");
+    assert_eq!(conv::get_all_conversations(&pool).await.unwrap().len(), 1);
+    // 이미지 행은 CASCADE로 삭제
+    assert!(ci::get_character_images(&pool, "c1", false).await.unwrap().is_empty());
+}
+
+#[tokio::test]
+async fn image_keys_are_unique_per_character_ignoring_case() {
+    let pool = pool().await;
+    ci::insert_character_image(&pool, &image("i1", "Smile")).await.unwrap();
+    assert!(ci::image_key_exists(&pool, "c1", "smile", None).await.unwrap());
+    assert!(!ci::image_key_exists(&pool, "c1", "smile", Some("i1")).await.unwrap());
+    assert!(ci::insert_character_image(&pool, &image("i2", "SMILE")).await.is_err());
+
+    ci::insert_character_image(&pool, &image("i3", "cry")).await.unwrap();
+    ci::update_character_image(&pool, "i3", "cry", false, 5).await.unwrap();
+    let enabled = ci::get_character_images(&pool, "c1", true).await.unwrap();
+    assert_eq!(enabled.iter().map(|r| r.key.as_str()).collect::<Vec<_>>(), vec!["Smile"]);
+    assert_eq!(ci::next_image_sort_order(&pool, "c1").await.unwrap(), 6);
+}

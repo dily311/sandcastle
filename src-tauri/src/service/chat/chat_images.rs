@@ -1,0 +1,303 @@
+//! chat/phone 모드의 캐릭터 이미지.
+//!
+//! 게임 모드의 연출 태그(감정·모션·효과 …)와 달리 가볍게 간다:
+//! 모델에게 사용 가능한 이미지 키 목록만 보내고, 모델은 어울릴 때 `<cg>키</cg>`를 적는다.
+//!
+//! - 켜짐 조건: 앱 전체 스위치(FeatureSetting `chat.images`, 없으면 켜짐)
+//!   && 대화 스위치(conversations.images_enabled) && 캐릭터에 켜진 이미지가 있음
+//! - 응답의 `<cg>` 태그는 목록에 있는 키만 남기고(키 표기는 등록된 그대로), 나머지는 지운다.
+//!   저장되는 본문에 태그를 그대로 두어서, 프론트는 그 자리에 이미지를 그리고
+//!   모델은 이후 대화 기록에서 자기가 띄운 이미지를 알 수 있다.
+use std::path::{Path, PathBuf};
+
+use crate::{
+    error::{AppError, Result},
+    models::character_image::{CharacterImage, ChatImageRef},
+};
+
+/// 앱 전체 스위치 키 (FeatureSetting)
+pub const FEATURE_KEY: &str = "chat.images";
+/// 프롬프트에 넣을 최대 키 수
+pub const MAX_PROMPT_KEYS: usize = 100;
+/// 가져올 원본 파일 최대 크기
+pub const MAX_IMAGE_BYTES: u64 = 20 * 1024 * 1024;
+const MAX_KEY_CHARS: usize = 40;
+const THUMBNAIL_SIZE: u32 = 256;
+
+const OPEN: &str = "<cg>";
+const CLOSE: &str = "</cg>";
+
+// =======================================
+// 키 규칙
+// =======================================
+
+/// 사용자 입력 키 정리. 앞뒤 공백 제거, 연속 공백은 하나로. 태그를 깨는 문자는 거부.
+pub fn normalize_key(raw: &str) -> Result<String> {
+    let key = raw.split_whitespace().collect::<Vec<_>>().join(" ");
+    if key.is_empty() {
+        return Err(AppError::validation("이미지 키가 비어 있습니다", None));
+    }
+    if key.chars().any(|c| matches!(c, '<' | '>' | '/' | '\\' | ',')) {
+        return Err(AppError::validation(
+            "이미지 키에는 < > / \\ , 를 쓸 수 없습니다",
+            None,
+        ));
+    }
+    if key.chars().count() > MAX_KEY_CHARS {
+        return Err(AppError::validation(
+            format!("이미지 키는 {MAX_KEY_CHARS}자 이하로 정해 주세요"),
+            None,
+        ));
+    }
+    Ok(key)
+}
+
+/// 파일 이름에서 기본 키 만들기 ("Smile Big.png" → "Smile Big")
+pub fn key_from_path(path: &Path) -> String {
+    let stem = path
+        .file_stem()
+        .map(|s| s.to_string_lossy().to_string())
+        .unwrap_or_default();
+    let cleaned: String = stem
+        .chars()
+        .map(|c| if matches!(c, '<' | '>' | '/' | '\\' | ',') { '_' } else { c })
+        .collect();
+    let cleaned = cleaned.split_whitespace().collect::<Vec<_>>().join(" ");
+    let truncated: String = cleaned.chars().take(MAX_KEY_CHARS).collect();
+    if truncated.is_empty() {
+        "image".to_string()
+    } else {
+        truncated
+    }
+}
+
+// =======================================
+// 파일 저장
+// =======================================
+
+/// 캐릭터 이미지 폴더 (앱 데이터 기준 상대 경로)
+pub fn relative_dir(character_id: &str) -> PathBuf {
+    PathBuf::from("characters").join(character_id).join("images")
+}
+
+/// 사용자가 고른 파일을 읽어 webp 원본 + 썸네일로 저장. (원본 상대 경로, 썸네일 상대 경로) 반환.
+/// 이미지 디코딩/인코딩이 무거우므로 blocking 스레드에서 부를 것.
+pub fn store_image_file(
+    app_data_dir: &Path,
+    character_id: &str,
+    image_id: &str,
+    source: &Path,
+) -> Result<(String, String)> {
+    let meta = std::fs::metadata(source)
+        .map_err(|e| AppError::io(format!("파일을 열 수 없습니다 ({}): {e}", source.display())))?;
+    if !meta.is_file() {
+        return Err(AppError::validation("파일이 아닙니다", None));
+    }
+    if meta.len() > MAX_IMAGE_BYTES {
+        return Err(AppError::validation(
+            format!("이미지는 {}MB 이하만 넣을 수 있습니다", MAX_IMAGE_BYTES / 1024 / 1024),
+            None,
+        ));
+    }
+    let bytes = std::fs::read(source)?;
+    if !infer::is_image(&bytes) {
+        return Err(AppError::validation(
+            format!("이미지 파일이 아닙니다: {}", source.display()),
+            None,
+        ));
+    }
+
+    let rel_dir = relative_dir(character_id);
+    let abs_dir = app_data_dir.join(&rel_dir);
+    crate::sys::image::save_image_to_origin(abs_dir.clone(), image_id, &bytes)?;
+    crate::sys::image::save_image_to_thumbnail(abs_dir.join("thumb"), image_id, &bytes, THUMBNAIL_SIZE)?;
+
+    let rel = |p: PathBuf| p.to_string_lossy().replace('\\', "/");
+    Ok((
+        rel(rel_dir.join(format!("{image_id}.webp"))),
+        rel(rel_dir.join("thumb").join(format!("{image_id}.webp"))),
+    ))
+}
+
+/// 이미지 파일 삭제 (없으면 무시)
+pub fn remove_image_files(app_data_dir: &Path, rel_paths: &[&str]) {
+    for p in rel_paths {
+        let _ = std::fs::remove_file(app_data_dir.join(p));
+    }
+}
+
+/// 캐릭터 이미지 폴더 통째로 삭제 (캐릭터 삭제 시)
+pub fn remove_character_dir(app_data_dir: &Path, character_id: &str) {
+    if character_id.is_empty() || character_id.contains(['/', '\\', '.']) {
+        return; // 경로 조작 방지
+    }
+    let _ = std::fs::remove_dir_all(app_data_dir.join("characters").join(character_id));
+}
+
+// =======================================
+// 프롬프트
+// =======================================
+
+/// 모델에게 보낼 이미지 규칙 + 키 목록 ({{char}}는 PromptManager가 치환)
+pub fn image_rules(images: &[CharacterImage]) -> Option<String> {
+    let keys: Vec<&str> = images
+        .iter()
+        .filter(|i| i.enabled)
+        .take(MAX_PROMPT_KEYS)
+        .map(|i| i.key.as_str())
+        .collect();
+    if keys.is_empty() {
+        return None;
+    }
+    Some(format!(
+        "[이미지]\n\
+         장면이나 {{{{char}}}}의 감정·상태에 잘 어울리는 이미지가 있으면 응답 안의 알맞은 자리에 <cg>키</cg>를 적어 보여줄 수 있다.\n\
+         - 아래 목록의 키를 그대로만 쓴다. 목록에 없는 키는 절대 쓰지 않는다.\n\
+         - 꼭 어울릴 때만, 한 응답에 한 번 정도 쓴다. 태그를 설명하거나 읽지 않는다.\n\
+         사용 가능한 키: {}",
+        keys.join(", ")
+    ))
+}
+
+// =======================================
+// 응답 처리
+// =======================================
+
+/// 응답의 `<cg>키</cg>`를 검증한다.
+/// - 목록에 있는 키(대소문자·앞뒤 공백·따옴표 무시) → 등록된 키 표기로 바꿔서 남김
+/// - 없는 키 / 빈 태그 → 태그째 지움
+/// - 닫히지 않은 `<cg>` (응답이 잘린 경우 등) → 그 줄 끝까지 지움
+pub fn sanitize_cg_tags(text: &str, images: &[CharacterImage]) -> (String, Vec<ChatImageRef>) {
+    let mut refs = vec![];
+    let out = rewrite_cg_tags(text, |key| {
+        let wanted = key.trim_matches(|c: char| c.is_whitespace() || matches!(c, '"' | '\'' | '`'));
+        let found = images
+            .iter()
+            .filter(|i| i.enabled)
+            .find(|i| i.key.eq_ignore_ascii_case(wanted) || i.key.to_lowercase() == wanted.to_lowercase())?;
+        refs.push(ChatImageRef {
+            key: found.key.clone(),
+            image_id: found.id.clone(),
+            path: found.path.clone(),
+        });
+        Some(format!("{OPEN}{}{CLOSE}", found.key))
+    });
+    (out, refs)
+}
+
+/// `<cg>…</cg>` 태그를 모두 지운다 (이미지 기능이 꺼진 대화의 기록을 프롬프트에 넣을 때)
+pub fn strip_cg_tags(text: &str) -> String {
+    rewrite_cg_tags(text, |_| None)
+}
+
+/// `<cg>`(대소문자 무시) 태그마다 `replace(key)`를 불러, Some이면 그 문자열로, None이면 태그를 지운다
+fn rewrite_cg_tags(text: &str, mut replace: impl FnMut(&str) -> Option<String>) -> String {
+    // ASCII 소문자화는 바이트 위치를 바꾸지 않으므로 같은 인덱스를 원문에 그대로 쓸 수 있다
+    let lower = text.to_ascii_lowercase();
+    let mut out = String::with_capacity(text.len());
+    let mut pos = 0;
+    while let Some(rel) = lower[pos..].find(OPEN) {
+        let start = pos + rel;
+        out.push_str(&text[pos..start]);
+        let key_start = start + OPEN.len();
+        let line_end = lower[key_start..]
+            .find('\n')
+            .map(|i| key_start + i)
+            .unwrap_or(text.len());
+        match lower[key_start..line_end].find(CLOSE) {
+            Some(rel_close) => {
+                let key_end = key_start + rel_close;
+                let key = &text[key_start..key_end];
+                if let Some(rep) = replace(key) {
+                    out.push_str(&rep);
+                }
+                pos = key_end + CLOSE.len();
+            }
+            None => {
+                // 닫는 태그 없음: 줄 끝까지 버림
+                pos = line_end;
+            }
+        }
+    }
+    out.push_str(&text[pos..]);
+    out
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn img(id: &str, key: &str, enabled: bool) -> CharacterImage {
+        CharacterImage {
+            id: id.into(),
+            character_id: "c".into(),
+            key: key.into(),
+            path: format!("/data/{id}.webp"),
+            thumbnail_path: None,
+            enabled,
+            sort_order: 0,
+            created_at: 0,
+            updated_at: 0,
+        }
+    }
+
+    #[test]
+    fn sanitize_keeps_known_keys_and_drops_others() {
+        let images = vec![img("1", "Smile", true), img("2", "울음", true), img("3", "secret", false)];
+        let (text, refs) = sanitize_cg_tags(
+            "안녕! <CG> smile </cg>\n흑 <cg>\"울음\"</cg> <cg>angry</cg><cg>secret</cg><cg></cg> 끝 <cg>잘린",
+            &images,
+        );
+        assert_eq!(text, "안녕! <cg>Smile</cg>\n흑 <cg>울음</cg>  끝 ");
+        let keys: Vec<_> = refs.iter().map(|r| r.key.as_str()).collect();
+        assert_eq!(keys, vec!["Smile", "울음"]);
+        assert_eq!(refs[0].image_id, "1");
+    }
+
+    #[test]
+    fn unclosed_tag_only_removes_its_line() {
+        assert_eq!(strip_cg_tags("a <cg>smi\nnext line"), "a \nnext line");
+        assert_eq!(strip_cg_tags("x<cg>a</cg>y<cg>b</cg>z"), "xyz");
+        assert_eq!(strip_cg_tags("no tags"), "no tags");
+    }
+
+    #[test]
+    fn rules_list_enabled_keys_only() {
+        assert!(image_rules(&[img("1", "a", false)]).is_none());
+        let rules = image_rules(&[img("1", "smile", true), img("2", "off", false), img("3", "cry", true)]).unwrap();
+        assert!(rules.ends_with("사용 가능한 키: smile, cry"));
+        assert!(rules.contains("{{char}}"));
+    }
+
+    #[test]
+    fn stores_webp_and_thumbnail_and_rejects_non_images() {
+        let dir = tempfile::tempdir().unwrap();
+        let src = dir.path().join("Smile.png");
+        image::RgbImage::from_pixel(600, 400, image::Rgb([200, 100, 50])).save(&src).unwrap();
+
+        let base = dir.path().join("appdata");
+        let (file, thumb) = store_image_file(&base, "c1", "img1", &src).unwrap();
+        assert_eq!(file, "characters/c1/images/img1.webp");
+        assert_eq!(thumb, "characters/c1/images/thumb/img1.webp");
+        let t = image::open(base.join(&thumb)).unwrap();
+        assert!(t.width() <= THUMBNAIL_SIZE && t.height() <= THUMBNAIL_SIZE);
+        assert!(base.join(&file).is_file());
+
+        let txt = dir.path().join("note.txt");
+        std::fs::write(&txt, "not an image").unwrap();
+        assert!(store_image_file(&base, "c1", "img2", &txt).is_err());
+
+        remove_character_dir(&base, "c1");
+        assert!(!base.join("characters/c1").exists());
+    }
+
+    #[test]
+    fn key_rules() {
+        assert_eq!(normalize_key("  big   smile ").unwrap(), "big smile");
+        assert!(normalize_key("a<b").is_err());
+        assert!(normalize_key("   ").is_err());
+        assert!(normalize_key(&"가".repeat(41)).is_err());
+        assert_eq!(key_from_path(Path::new("C:/x/Smile, big.PNG")), "Smile_ big");
+        assert_eq!(key_from_path(Path::new("/x/.png")), ".png");
+    }
+}

@@ -44,8 +44,20 @@ pub async fn get_conversation(state: State<'_, AppState>, id: String) -> Result<
 #[tauri::command]
 pub async fn create_conversation(
     state: State<'_, AppState>,
-    input: ConversationInput,
+    mut input: ConversationInput,
 ) -> Result<Conversation> {
+    // 모드: 비우면 chat, 그 외에는 chat / phone만 허용
+    input.mode = if input.mode.trim().is_empty() {
+        ConversationMode::Chat.to_string()
+    } else {
+        input
+            .mode
+            .trim()
+            .to_ascii_lowercase()
+            .parse::<ConversationMode>()
+            .map_err(|_| AppError::validation(format!("알 수 없는 대화 모드입니다: {}", input.mode), None))?
+            .to_string()
+    };
     // character_id가 실제로 존재하는지 확인: 없는 캐릭터로 대화가 생기는 걸 막음
     if !conversation::char_exists(&state.db, &input.character_id).await? {
         return Err(AppError::validation("존재하지 않는 캐릭터입니다", Some(json!({"data": &input.character_id}).into())));
@@ -114,12 +126,16 @@ pub async fn toggle_favorite_character(
 }
 
 #[tauri::command]
-pub async fn delete_character(state: State<'_, AppState>, id: String) -> Result<()> {
+pub async fn delete_character(app: tauri::AppHandle, state: State<'_, AppState>, id: String) -> Result<()> {
     let result = conversation::delete_character(&state.db, &id).await?;
     if !result {
         return Err(AppError::not_found(format!(
             "캐릭터를 찾을 수 없습니다: {id}"
         )));
+    }
+    // 이미지 행은 CASCADE로 지워지고, 파일 폴더는 여기서 정리
+    if let Ok(base) = crate::commands::character_image::app_data_dir(&app) {
+        crate::service::chat::chat_images::remove_character_dir(&base, &id);
     }
     Ok(())
 }
