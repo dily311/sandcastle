@@ -248,6 +248,7 @@ export async function newConversation(characterId: string) {
 		title: `${char?.name}와(과) 대화`,
 		characterId,
 		personaId,
+		promptPresetId: null,
 		worldInfoIds: [],
 		mode: "chat",
 		meta: null,
