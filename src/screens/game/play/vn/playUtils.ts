@@ -1,4 +1,4 @@
-import type { GameDefinition, GameEvent, RenderState, StageLine } from "$/lib/type/game";
+import { LineKind, type GameDefinition, type GameEvent, type Location, type RenderState, type StageLine } from "$/lib/type/game";
 
 export type ItemGainNotice = { id: number; name: string; quantity: number };
 
@@ -26,6 +26,12 @@ export function getStageLines(events: GameEvent[]): StageLine[] {
 
 export function getItemAddedEvents(events: GameEvent[]) {
 	return events.flatMap((event) => (event.type === "itemAdded" ? [event] : []));
+}
+
+export function createLocationArrivalLine(location: Location | undefined): StageLine | null {
+	const description = location?.description.trim();
+	if (!location || !description) return null;
+	return { kind: LineKind.Narration, speaker: null, text: description, cues: [] };
 }
 
 export type ConnectionRequirement = { isMet: boolean; label: string };
@@ -56,17 +62,22 @@ export function getConnectionRequirement(
 		return { isMet: false, label: "조건 확인 필요" };
 	}
 
-	const type = String(condition.type ?? "").replace(/([a-z])([A-Z])/g, "$1_$2").toLowerCase();
+	const type = String(condition.type ?? "")
+		.replace(/([a-z])([A-Z])/g, "$1_$2")
+		.toLowerCase();
 	const key = String(condition.key ?? "");
 	const value = condition.value;
 	const inventory = (state?.inventory ?? {}) as Record<string, number>;
 	const flags = (state?.flags ?? {}) as Record<string, unknown>;
 	const relationships = state?.relationships ?? {};
 	const itemName = (id: unknown) => view?.items.find((item) => item.id === String(id))?.name ?? "아이템";
-	const locationName = (id: unknown) => view?.locations.find((location) => location.id === String(id))?.name ?? "장소";
+	const locationName = (id: unknown) =>
+		view?.locations.find((location) => location.id === String(id))?.name ?? "장소";
 	const zoneName = (id: unknown) => view?.zones.find((zone) => zone.id === String(id))?.name ?? "지역";
-	const timePeriodName = (id: unknown) => view?.timePeriods.find((period) => period.id === String(id))?.name ?? "시간대";
-	const weatherName = (id: unknown) => view?.weatherTypes.find((weather) => weather.id === String(id))?.name ?? "날씨";
+	const timePeriodName = (id: unknown) =>
+		view?.timePeriods.find((period) => period.id === String(id))?.name ?? "시간대";
+	const weatherName = (id: unknown) =>
+		view?.weatherTypes.find((weather) => weather.id === String(id))?.name ?? "날씨";
 	let isMet = false;
 	let label = "조건 충족";
 
@@ -125,13 +136,22 @@ export function getConnectionRequirement(
 			const axis = String(condition.axis ?? "affection");
 			const relation = relationships[`${from}>${to}`];
 			const current = Number(
-				axis === "affection" ? relation?.affection : axis === "trust" ? relation?.trust : axis === "tension" ? relation?.tension : 0,
+				axis === "affection"
+					? relation?.affection
+					: axis === "trust"
+						? relation?.trust
+						: axis === "tension"
+							? relation?.tension
+							: 0,
 			);
 			const required = Number(value);
 			isMet = type === "relation_at_least" ? current >= required : current <= required;
-			const axisName = axis === "affection" ? "호감도" : axis === "trust" ? "신뢰도" : axis === "tension" ? "긴장도" : axis;
-			const fromName = from === "player" ? "나" : (view?.characters.find((character) => character.id === from)?.name ?? from);
-			const toName = to === "player" ? "나" : (view?.characters.find((character) => character.id === to)?.name ?? to);
+			const axisName =
+				axis === "affection" ? "호감도" : axis === "trust" ? "신뢰도" : axis === "tension" ? "긴장도" : axis;
+			const fromName =
+				from === "player" ? "나" : (view?.characters.find((character) => character.id === from)?.name ?? from);
+			const toName =
+				to === "player" ? "나" : (view?.characters.find((character) => character.id === to)?.name ?? to);
 			label = `${fromName}의 ${toName}에 대한 ${axisName} ${type === "relation_at_least" ? "≥" : "≤"} ${required}`;
 			break;
 		}

@@ -41,12 +41,18 @@ pub enum GameEvent {
     /// 씬의 선택지를 고른 결과. next_scene_id가 None이면 "씬 종료"(자유 이동 복귀).
     /// 씬을 실제로 여닫는 건 scene.rs 한 곳이고, effect는 raw JSON이라 변수 반영은 trigger.rs가
     /// VariableChanged로 환원해서 한다.
-    ChoiceMade { choice_id: String, next_scene_id: Option<String>, effect: Option<serde_json::Value> },
+    /// continues_scene=true면 씬이 이어진다 (다음 씬이 없고 끝내는 효과도 없다) — 프론트는 선택지 문구로 sceneSay를 이어서 부른다.
+    ChoiceMade { choice_id: String, next_scene_id: Option<String>, effect: Option<serde_json::Value>, continues_scene: bool },
+    /// 씬을 끝내달라는 요청 (endScene 커맨드, 선택지 효과 end_scene, AI의 <scene>end</scene>). 닫는 건 scene.rs 한 곳이다.
+    SceneEndRequested,
     SceneChanged { scene_id: String },
     /// 이벤트 효과 stage가 내는 요청. 해석/검증/무대 반영은 stage 시스템이 한다.
     StageRequested { spec: serde_json::Value },
     /// 씬이 열렸을 때 그 씬의 대본 (줄 목록 + 줄마다 실행할 연출). 대본이 없는 씬은 나가지 않는다.
     SceneScript { scene_id: String, lines: Vec<crate::game::stage::StageLine> },
+    /// 씬 대본에 나온 인물들이 지금 위치에 나타났다는 요청. NPC 위치의 유일한 writer(npcs.rs)가 반영한다:
+    /// 씬에 나오는 인물은 그 장소에 있어야 하므로, 스폰 규칙이 다른 곳을 가리켜도 씬이 열린 동안/끝난 뒤에 여기 있다.
+    CharactersAppeared { character_ids: Vec<String> },
     /// 연출만 있는 줄들 (효과 stage, 위치/시간/날씨에 따른 배경 전환 등).
     StageLines { lines: Vec<crate::game::stage::StageLine> },
     SceneExited { scene_id: String },

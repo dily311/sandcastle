@@ -97,6 +97,7 @@ pub struct CharacterRow {
     pub tags: Option<String>,
     pub category: Option<String>,
     pub default_persona_id: Option<String>,
+    pub default_prompt_preset_id: Option<String>,
     pub favorite: bool,
     pub message_count: i64,
     pub created_at: i64,
@@ -120,6 +121,7 @@ pub struct Character {
     pub tags: Vec<String>,
     pub category: Option<String>,
     pub default_persona_id: Option<String>,
+    pub default_prompt_preset_id: Option<String>,
     pub favorite: bool,
     pub message_count: i64,
     pub created_at: i64,
@@ -149,6 +151,7 @@ impl From<CharacterRow> for Character {
                 .unwrap_or_default(),
             category: r.category,
             default_persona_id: r.default_persona_id,
+            default_prompt_preset_id: r.default_prompt_preset_id,
             favorite: r.favorite,
             message_count: r.message_count,
             created_at: r.created_at,
@@ -173,6 +176,7 @@ pub struct CharacterInput {
     pub color: Option<String>,
     pub category: Option<String>,
     pub default_persona_id: Option<String>,
+    pub default_prompt_preset_id: Option<String>,
     pub favorite: bool,
 }
 
@@ -358,12 +362,14 @@ pub struct ConversationInput {
 pub struct MessageRow {
     pub id: String,
     pub conversation_id: String,
+    pub seq: i64,
     pub role: String,
     pub name: Option<String>,
     pub content: String,
     pub character_id: Option<String>,
     pub meta: Option<String>,
     pub created_at: i64,
+    pub updated_at: i64,
 }
 
 #[derive(Clone, Serialize)]
@@ -371,12 +377,14 @@ pub struct MessageRow {
 pub struct Message {
     pub id: String,
     pub conversation_id: String,
+    pub seq: i64,
     pub role: String,
     pub name: Option<String>,
     pub content: String,
     pub character_id: Option<String>,
     pub meta: Option<serde_json::Value>,
     pub created_at: i64,
+    pub updated_at: i64,
 }
 
 impl From<MessageRow> for Message {
@@ -384,6 +392,7 @@ impl From<MessageRow> for Message {
         Self {
             id: r.id,
             conversation_id: r.conversation_id,
+            seq: r.seq,
             role: r.role,
             name: r.name,
             content: r.content,
@@ -393,6 +402,7 @@ impl From<MessageRow> for Message {
                 .and_then(|m| serde_json::from_str(&m).ok())
                 .unwrap_or_default(),
             created_at: r.created_at,
+            updated_at: r.updated_at,
         }
     }
 }
@@ -401,6 +411,7 @@ impl From<MessageRow> for Message {
 #[serde(rename_all = "camelCase")]
 pub struct MessageInput {
     pub conversation_id: String,
+    pub seq: i64,
     pub role: String,
     pub name: Option<String>,
     pub content: String,

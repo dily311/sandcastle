@@ -57,6 +57,17 @@ struct Served {
     content_range: Option<String>,
 }
 
+/// 이 게임의 파일을 불러오는 기준 URL (끝에 `/`). 프론트는 에셋의 상대경로 path를 여기에 이어 붙인다.
+/// Windows/Android의 WebView는 사용자 지정 프로토콜을 http://<scheme>.localhost 로, 나머지는 <scheme>://localhost 로 부른다.
+/// (tauri.conf의 useHttpsScheme를 켰다면 Windows는 https가 된다.)
+pub fn base_url(game_id: &str) -> String {
+    if cfg!(any(target_os = "windows", target_os = "android")) {
+        format!("http://game.localhost/{game_id}/")
+    } else {
+        format!("game://localhost/{game_id}/")
+    }
+}
+
 pub fn handle(games_root: &Path, req: Request<Vec<u8>>) -> Response<Vec<u8>> {
     let range = req.headers().get("range").and_then(|v| v.to_str().ok()).map(str::to_string);
     match serve(games_root, req.uri().path(), range.as_deref()) {
@@ -67,7 +78,11 @@ pub fn handle(games_root: &Path, req: Request<Vec<u8>>) -> Response<Vec<u8>> {
                 .header("Accept-Ranges", "bytes")
                 .header("Content-Security-Policy", CSP)
                 .header("X-Content-Type-Options", "nosniff")
-                .header("Cross-Origin-Resource-Policy", "same-origin");
+                // 에셋은 호스트 창(다른 origin)과 샌드박스 iframe(불투명 origin)이 둘 다 불러온다. CORP가 same-origin이면 둘 다
+                // 막히고, pixi.js의 텍스처 로더/WebAudio는 fetch(CORS)를 써서 ACAO도 필요하다. 이 프로토콜은 앱 안에서만 열린다.
+                .header("Cross-Origin-Resource-Policy", "cross-origin")
+                .header("Access-Control-Allow-Origin", "*")
+                .header("Access-Control-Expose-Headers", "Content-Range, Accept-Ranges, Content-Length");
             if let Some(cr) = s.content_range {
                 b = b.header("Content-Range", cr);
             }
@@ -110,6 +125,10 @@ fn serve(root: &Path, uri_path: &str, range: Option<&str>) -> Result<Served, Sta
 
     if game_id.is_empty() || !game_id.chars().all(|c| c.is_ascii_alphanumeric() || c == '-' || c == '_') {
         return Err(StatusCode::BAD_REQUEST);
+    }
+    // 정의/매니페스트 사본(옛 임포트가 풀어둔 것)은 서빙하지 않는다 — 정의의 원본은 DB다.
+    if file == "manifest.json" || file == "data" || file.starts_with("data/") {
+        return Err(StatusCode::FORBIDDEN);
     }
     let base: PathBuf = root.join(game_id).canonicalize().map_err(|_| StatusCode::NOT_FOUND)?;
     let full = base.join(file).canonicalize().map_err(|_| StatusCode::NOT_FOUND)?;

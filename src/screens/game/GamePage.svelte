@@ -9,7 +9,7 @@
 	import Header from "$/components/Header.svelte";
 	import { handleCreateNewGame, handleExportGamePackage } from "$/lib/game/gameManager.svelte";
 	import { open } from "@tauri-apps/plugin-dialog";
-	import { handleOpenGameDetailPage, handleOpenGameEditor, handleStartGamePlay } from "$/lib/game/gameStore.svelte";
+	import { handleOpenGameDetailPage, handleOpenGameEditor, handleStartGamePlay } from "$/lib/game/services/gameServiece";
 
 	let games = $state<GameProject[]>([]);
 	let isLoading = $state(true);
@@ -165,8 +165,6 @@
 	.empty-box {
 		text-align: center;
 		padding: 4rem 2rem;
-		color: #94a3b8;
-		background: #1e293b;
 		border-radius: 12px;
 		border: 1px dashed var(--border-color);
 	}

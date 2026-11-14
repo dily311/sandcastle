@@ -91,3 +91,65 @@ Conversation
 **판단** 폰을 항상 눈에 띄게 두는 방향은 제품의 핵심 사용 방식과 잘 맞는다. 다만 창 조작용 타이틀바 자체보다 앱이 관리하는 헤더에 두는 편이 크기 조정과 모바일 대응이 쉽다. 버튼에는 명확한 “폰” 이름을 붙이고, 선택 상태와 읽지 않은 대화 표시를 지원할 수 있도록 한다.
 
 **UI 시안** `src/components/AppNavigationSample.svelte`에 데스크톱 상단 탐색과 좁은 화면 하단 탐색 예시를 둔다. 폰은 강조된 독립 동작이고, 나머지 다섯 항목은 일반 탐색 버튼이다. `/phone`은 현재 대화 목록 화면을 재사용하는 진입 경로로 등록한다. 이 컴포넌트는 탐색 방향을 검토하기 위한 시안이며, 앱 전체 레이아웃에 적용하기 전 실제 화면에서 높이·스크롤·모바일 안전 영역을 확인한다.
+
+
+### ADR-002: 전역 테스트 관리 방법
+
+
+**ai 채팅 실행 흐름**
+
+```
+User Input
+    |
+    v
+Create generation_task
+    |
+    v
+Create ai_submission
+    |
+    v
+Commit SQLite Transaction
+    |
+    v
+ExecutionManager
+    |
+    v
+Create ai_attempt
+    |
+    v
+ContextManager
+    |
+    v
+AgentRuntime
+    |
+    +----> Provider Adapter
+    |
+    +----> Tool Registry
+    |
+    v
+Persist Events
+    |
+    v
+Update Message Projection
+    |
+    v
+Complete Attempt
+    |
+    v
+Complete Submission + Task
+```
+
+**앱 재시작 시**
+
+1. pending Task 조회
+2. running Task 및 Attempt 조회
+3. 비정상 종료된 Attempt 판별
+4. 복구 가능한 Task 분류
+5. 기존 부분 응답 확인
+6. 새로운 Attempt 생성 또는 사용자 재시도 대기
+7. Worker Queue 재구성
+
+
+**복구 정책**
+
+앱이 종료된 순간이 API 요청 전인지, 스트리밍 중인지, Tool 실행 중인지에 따라 복구 방식이 달라져. 이걸 상태 머신과 Rust ExecutionManager의 책임으로 명확하게 정의하면 실제 구현에 들어갈 수 있는 수준이 될 거야.

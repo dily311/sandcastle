@@ -1,5 +1,6 @@
 use crate::db::ai_service;
-use crate::models::ai_service::{ApiProfile, ApiProfileInput, ChatOptions, StreamPayload};
+use crate::error::ErrorCode;
+use crate::models::ai_service::{ApiProfiles, ApiProfilesInput, ChatOptions, StreamPayload};
 use crate::models::settings::AppSetting;
 use crate::service::secret_store::{api_key_name, SecretStore};
 use crate::sys::settings::SettingsState;
@@ -18,12 +19,12 @@ use tauri::{AppHandle, State};
 #[tauri::command]
 pub fn set_api_key(profile_id: String, api_key: String) -> Result<()> {
     SecretStore::set(&api_key_name(&profile_id), &api_key)
-        .map_err(|e| AppError::AiProvider(e.to_string()))
+        .map_err(|e| AppError::io(e.to_string()))
 }
 
 #[tauri::command]
 pub fn delete_api_key(profile_id: String) -> Result<()> {
-    SecretStore::delete(&api_key_name(&profile_id)).map_err(|e| AppError::AiProvider(e.to_string()))
+    SecretStore::delete(&api_key_name(&profile_id)).map_err(|e| AppError::io(e.to_string()))
 }
 
 #[tauri::command]
@@ -35,14 +36,14 @@ pub fn has_api_key(profile_id: String) -> Result<bool> {
 // API Profile
 // =======================================
 #[tauri::command]
-pub async fn get_all_api_profile(state: State<'_, AppState>) -> Result<Vec<ApiProfile>> {
+pub async fn get_all_api_profile(state: State<'_, AppState>) -> Result<Vec<ApiProfiles>> {
     let get_all_api_profile = ai_service::get_all_api_profile(&state.db).await?;
     let result = get_all_api_profile;
     Ok(result)
 }
 
 #[tauri::command]
-pub async fn get_api_profile(state: State<'_, AppState>, id: String) -> Result<ApiProfile> {
+pub async fn get_api_profile(state: State<'_, AppState>, id: String) -> Result<ApiProfiles> {
     let result = ai_service::get_api_profile(&state.db, &id).await?;
     Ok(result)
 }
@@ -50,9 +51,9 @@ pub async fn get_api_profile(state: State<'_, AppState>, id: String) -> Result<A
 #[tauri::command]
 pub async fn create_api_profile(
     state: State<'_, AppState>,
-    input: ApiProfileInput,
+    input: ApiProfilesInput,
     api_key: String,
-) -> Result<ApiProfile> {
+) -> Result<ApiProfiles> {
     let api_profile = ai_service::create_api_profile(&state.db, input).await?;
 
     // TODO: 연결 테스트해서 응답이 200으로 나왔을때만 has_key: true가 되게 해야 함
@@ -67,7 +68,7 @@ pub async fn create_api_profile(
 pub async fn update_api_profile(
     state: State<'_, AppState>,
     id: String,
-    input: ApiProfileInput,
+    input: ApiProfilesInput,
     api_key: String,
 ) -> Result<()> {
     ai_service::update_api_profile(&state.db, &id, input).await?;
@@ -96,7 +97,7 @@ pub async fn get_models(state: State<'_, AppState>, profile_id: String) -> Resul
     let result = ChatManager
         .get_models(api_profile, state.http_client.clone())
         .await
-        .map_err(|e| AppError::AiProvider(e.to_string()))?;
+        .map_err(|e| AppError::ai_provider(ErrorCode::AiProviderError, e.to_string(), false))?;
     Ok(result)
 }
 
@@ -128,7 +129,7 @@ pub async fn send_messages(
     ChatManager
         .chat(app, &state, &settings, conversation_id, message, None)
         .await
-        .map_err(|e| AppError::AiProvider(e.to_string()))?;
+        .map_err(|e| AppError::ai_provider(crate::error::ErrorCode::AiProviderAuthFailed, e.to_string(), false))?;
     Ok(())
 }
 
@@ -144,6 +145,6 @@ pub async fn stream_message(
     ChatManager
         .chat(app, &state, &settings, conversation_id, message, Some(on_event))
         .await
-        .map_err(|e| AppError::AiProvider(e.to_string()))?;
+        .map_err(|e| AppError::ai_provider(crate::error::ErrorCode::AiProviderAuthFailed, e.to_string(), false))?;
     Ok(())
 }

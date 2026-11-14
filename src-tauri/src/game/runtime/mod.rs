@@ -12,7 +12,7 @@ pub use definition::GameDefinition;
 pub use event::GameEvent;
 pub use repository::{GameRepository, SqlxGameRepository};
 pub use assets::DefResolver;
-pub use state::{GameState, NpcState, RenderState};
+pub use state::{AvailableMove, GameState, NpcState, RenderState};
 
 use anyhow::Result;
 use rand::rngs::StdRng;
@@ -199,11 +199,11 @@ impl GameRuntime {
         self.process_events()
     }
 
-    pub fn dispatch(&mut self, command: GameCommand, game_dir: &str) -> Result<GameResponse> {
+    pub fn dispatch(&mut self, command: GameCommand) -> Result<GameResponse> {
         self.state.turn_fired = false; // random 억제 플래그는 dispatch마다 새로 시작
         self.handle_command(command)?;
         let events = self.process_events();
-        Ok(GameResponse { events, state: self.render_state(game_dir) })
+        Ok(GameResponse { events, state: self.render_state() })
     }
 
     fn emit(&mut self, event: GameEvent) {
@@ -230,12 +230,8 @@ impl GameRuntime {
                     .connection(&from_id, &location_id)
                     .ok_or_else(|| anyhow::anyhow!("그 경로로는 이동할 수 없습니다"))?;
                 // 조건이 적혀 있는데 못 읽으면 통과시키지 않는다 (fail-closed). 빈 문자열은 조건 없음.
-                if let Some(raw) = connection.condition.as_ref().filter(|s| !s.trim().is_empty()) {
-                    let cond = serde_json::from_str::<crate::game::engine::Condition>(raw).unwrap_or(crate::game::engine::Condition::Never);
-                    let engine_state = self.engine_state_snapshot();
-                    if !cond.eval(&engine_state) {
-                        return Err(anyhow::anyhow!("이동 조건이 충족되지 않았습니다"));
-                    }
+                if !self.condition_open(connection.condition.as_deref()) {
+                    return Err(anyhow::anyhow!("이동 조건이 충족되지 않았습니다"));
                 }
                 let seconds = connection.travel_seconds as i64;
                 self.emit(GameEvent::LocationChanged { from, to: location_id });
@@ -248,6 +244,10 @@ impl GameRuntime {
                 self.emit(GameEvent::TriggerActivated { trigger_id: entity_id });
             }
             GameCommand::Talk { game_character_id } => {
+                // 씬이 열려 있는 동안은 1:1 대화 대신 씬 입력(sceneSay)을 쓴다 (AI가 서술자로 장면 전체를 진행한다).
+                if self.state.current_scene_id.is_some() {
+                    return Err(anyhow::anyhow!("씬이 진행 중일 때는 씬 입력(sceneSay)을 사용하세요"));
+                }
                 self.definition
                     .character(&game_character_id)
                     .ok_or_else(|| anyhow::anyhow!("존재하지 않는 캐릭터입니다: {game_character_id}"))?;
@@ -282,8 +282,30 @@ impl GameRuntime {
                 if !self.choice_available(choice) {
                     return Err(anyhow::anyhow!("지금은 고를 수 없는 선택지입니다"));
                 }
-                let effect = choice.effect.as_ref().and_then(|s| serde_json::from_str(s).ok());
-                self.emit(GameEvent::ChoiceMade { choice_id, next_scene_id: choice.next_scene_id.clone(), effect });
+                let effect: Option<serde_json::Value> = choice.effect.as_ref().and_then(|s| serde_json::from_str(s).ok());
+                let effect_ends = effect.as_ref().and_then(|e| e.get("end_scene")).and_then(|v| v.as_bool()) == Some(true);
+                let next_scene_id = choice.next_scene_id.clone();
+                let ai_continue = definition::scene_flag(scene, "aiContinue", true);
+                // 다음 씬이 없고 끝내는 효과도 없으면 씬이 이어진다. (AI 이어가기를 끈 씬은 옛 방식대로 바로 끝난다.)
+                let continues_scene = next_scene_id.is_none() && !effect_ends && ai_continue;
+                let exit_now = next_scene_id.is_none() && !effect_ends && !ai_continue;
+                self.emit(GameEvent::ChoiceMade { choice_id, next_scene_id, effect, continues_scene });
+                if exit_now {
+                    self.emit(GameEvent::SceneEndRequested);
+                }
+            }
+            GameCommand::EndScene => {
+                let ending = self
+                    .state
+                    .current_scene_id
+                    .as_deref()
+                    .and_then(|id| self.definition.scene(id))
+                    .map(|s| s.is_ending == Some(true))
+                    .ok_or_else(|| anyhow::anyhow!("열려 있는 씬이 없습니다"))?;
+                if ending {
+                    return Err(anyhow::anyhow!("엔딩 씬은 끝낼 수 없습니다"));
+                }
+                self.emit(GameEvent::SceneEndRequested);
             }
             GameCommand::AdvanceTime { minutes } => {
                 if minutes < 0 {
@@ -381,6 +403,17 @@ impl GameRuntime {
         &self.definition
     }
 
+    /// 이동 연결의 조건 문자열을 평가한다. 없거나 빈 문자열이면 통과, 적혀 있는데 못 읽으면 막는다 (fail-closed).
+    /// MoveTo의 검사와 RenderState.available_moves가 같은 규칙을 쓰도록 여기 하나로 둔다.
+    fn condition_open(&self, raw: Option<&str>) -> bool {
+        match raw.filter(|s| !s.trim().is_empty()) {
+            None => true,
+            Some(raw) => serde_json::from_str::<crate::game::engine::Condition>(raw)
+                .unwrap_or(crate::game::engine::Condition::Never)
+                .eval(&self.engine_state_snapshot()),
+        }
+    }
+
     /// 선택지 표시 조건(choice.condition) 평가. 조건이 적혀 있는데 못 읽으면 막는다 (fail-closed).
     fn choice_available(&self, choice: &crate::models::game::GameChoiceRow) -> bool {
         match choice.condition.as_ref().filter(|s| !s.trim().is_empty()) {
@@ -391,12 +424,22 @@ impl GameRuntime {
         }
     }
 
-    pub fn render_state(&self, game_dir: &str) -> RenderState {
-        let mut render = RenderState::from(&self.state, game_dir);
+    pub fn render_state(&self) -> RenderState {
+        let mut render = RenderState::from(&self.state);
+        render.scene_chat = self.scene_chat_enabled();
         if let Some(here) = self.state.location_id.as_deref() {
             let mut present: Vec<String> = self.state.npc_states.iter().filter(|(_, n)| n.location_id.as_deref() == Some(here)).map(|(id, _)| id.clone()).collect();
             present.sort();
             render.present_npcs = present;
+            // 갈 수 있는 곳: 지금 위치에서 나가는 연결들. 씬이 열려 있는 동안은 전부 막힌다 (MoveTo가 거절하므로).
+            let scene_open = self.state.current_scene_id.is_some();
+            render.available_moves = self
+                .definition
+                .location_connections
+                .iter()
+                .filter(|c| c.from_id == here)
+                .map(|c| AvailableMove { to_id: c.to_id.clone(), travel_seconds: c.travel_seconds, available: !scene_open && self.condition_open(c.condition.as_deref()) })
+                .collect();
         }
         if let Some(scene) = self.state.current_scene_id.as_deref().and_then(|id| self.definition.scene(id)) {
             render.available_choices = scene.choices.iter().flatten().filter(|c| self.choice_available(c)).map(|c| c.id.clone()).collect();
@@ -412,19 +455,48 @@ impl GameRuntime {
         v
     }
 
+    /// 이름(또는 id)으로 캐릭터를 찾는다 (AI 태그의 `::이름` 대상 해석용).
+    pub fn find_character_id(&self, name: &str) -> Option<String> {
+        let n = name.trim().to_lowercase();
+        self.definition.characters.values().find(|c| c.name.trim().to_lowercase() == n || c.id.to_lowercase() == n).map(|c| c.id.clone())
+    }
+
+    /// 지금 열린 씬이 AI 입력을 받을 수 있는가 (씬이 열려 있고, 엔딩이 아니며, aiContinue가 꺼져 있지 않다).
+    pub fn scene_chat_enabled(&self) -> bool {
+        self.state.current_scene_id.as_deref().and_then(|id| self.definition.scene(id)).map_or(false, |s| s.is_ending != Some(true) && definition::scene_flag(s, "aiContinue", true))
+    }
+
+    /// 지금 씬의 minTurns (AI가 씬을 끝낼 수 있게 되는 플레이어 입력 횟수).
+    pub fn scene_min_turns(&self) -> u32 {
+        self.state.current_scene_id.as_deref().and_then(|id| self.definition.scene(id)).map_or(1, definition::scene_min_turns)
+    }
+
+    /// AI가 <scene>end</scene>로 씬을 끝내려 할 때. allowed=false(아직 이르다)거나 씬이 없으면 아무 일도 없다.
+    pub fn end_scene_by_ai(&mut self, allowed: bool) -> Vec<GameEvent> {
+        if !allowed || !self.scene_chat_enabled() {
+            return vec![];
+        }
+        self.state.turn_fired = false;
+        self.queue.push(GameEvent::SceneEndRequested);
+        self.process_events()
+    }
+
     /// AI 응답 텍스트를 줄/연출로 파싱한다 (제작자 대본과 같은 문법, 허용 범위만 AI용).
     /// speakers: 말하거나 연출 대상이 될 수 있는 캐릭터 (대화 상대 + 같은 위치의 NPC).
     /// `이름:` 접두가 하나도 없으면 옛 방식의 응답으로 보고 전부 대화 상대의 대사로 취급한다.
     /// 주의: 연출 태그가 풀리지 않거나 화자가 허용되지 않아 줄이 전부 버려지면 빈 목록이 나온다.
-    pub fn parse_ai_stage(&mut self, raw: &str, speakers: std::collections::HashSet<String>, default_speaker: &str) -> Vec<crate::game::stage::StageLine> {
+    pub fn parse_ai_stage(&mut self, raw: &str, speakers: std::collections::HashSet<String>, default_speaker: Option<&str>) -> Vec<crate::game::stage::StageLine> {
         use crate::game::stage::{self, Allowed, LineKind};
         let allow = Allowed::ai(speakers);
         let mut resolver = DefResolver { def: &self.definition, rng: &mut self.rng, ai: true, player_name: None };
         let mut lines = stage::parse(raw, &mut resolver, &allow);
-        if !lines.iter().any(|l| l.kind == LineKind::Dialogue) {
-            for l in lines.iter_mut().filter(|l| l.kind == LineKind::Narration) {
-                l.kind = LineKind::Dialogue;
-                l.speaker = Some(default_speaker.to_string());
+        // 씬 입력(서술자)에서는 default_speaker가 없다 — 지문은 지문으로 둔다.
+        if let Some(default_speaker) = default_speaker {
+            if !lines.iter().any(|l| l.kind == LineKind::Dialogue) {
+                for l in lines.iter_mut().filter(|l| l.kind == LineKind::Narration) {
+                    l.kind = LineKind::Dialogue;
+                    l.speaker = Some(default_speaker.to_string());
+                }
             }
         }
         lines

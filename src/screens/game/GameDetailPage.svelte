@@ -7,7 +7,8 @@
 	import Icon from "$/components/ui/Icon.svelte";
 	import { handleGoBack } from "$/app/routes";
 	import IconButton from "$/components/ui/button/IconButton.svelte";
-	import { handleOpenGameEditor, handleStartGamePlay } from "$/lib/game/gameStore.svelte";
+	import { handleOpenGameEditor, handleStartGamePlay } from "$/lib/game/services/gameServiece";
+	import Button from "$/components/ui/button/Button.svelte";
 
 	type Props = { params: { gameId: string } };
 	// props로 라우터 파라미터 전달받음 (svelte-spa-router 규격)
@@ -65,12 +66,15 @@
 					<h1>{game.project.title}</h1>
 				</div>
 				<div class="hero-actions">
-					<button class="action-btn play" onclick={() => handleStartGamePlay(params.gameId)}
-						>게임 플레이</button
+					<Button variant="primary" class="action-btn play" onclick={() => handleStartGamePlay(params.gameId)}
+						>
+						게임 플레이
+						</Button
 					>
-					<button class="action-btn edit" onclick={() => handleOpenGameEditor(params.gameId)}
-						>프로젝트 편집</button
-					>
+					<Button class="action-btn edit" onclick={() => handleOpenGameEditor(params.gameId)}
+						>
+						프로젝트 편집
+						</Button>
 				</div>
 			</div>
 		</div>
@@ -85,10 +89,12 @@
 			<div class="info-card specs-box">
 				<h3>상세 메타데이터</h3>
 				<ul class="specs-list">
-					<li><span>프로젝트 ID</span> <code>{game.project.id}</code></li>
-					<li><span>템플릿 ID</span> <code>{game.project.templateId}</code></li>
 					<li><span>엔진 API 버전</span> <code>{game.project.apiVersion}</code></li>
-					<li><span>초기 위치 ID</span> <code>{game.project.startLocationId || "설정되지 않음"}</code></li>
+					<li>
+						<span>초기 위치</span>
+						{game.view.locations.find((location) => location.id === game?.project.startLocationId)?.name ||
+							"설정되지 않음"}
+					</li>
 					<li><span>생성일</span> {new Date(game.project.createdAt).toLocaleString()}</li>
 					<li><span>최종 수정일</span> {new Date(game.project.updatedAt).toLocaleString()}</li>
 				</ul>
@@ -101,18 +107,17 @@
 	.detail-container {
 		display: flex;
 		flex-direction: column;
-		background: #0b0f19;
 		height: calc(100vh - var(--header-height));
 	}
 
 	.status-box {
 		text-align: center;
 		padding: 6rem 2rem;
-		color: #9ca3af;
+		color: var(--text-muted);
 		font-size: 1.1rem;
 	}
 	.status-box.error {
-		color: #f87171;
+		color: var(--color-red);
 	}
 
 	/* 커버 이미지 영역 */
@@ -120,7 +125,6 @@
 		position: relative;
 		width: 100%;
 		height: 320px;
-		background: #111827;
 		overflow: hidden;
 		display: flex;
 		align-items: flex-end;
@@ -137,10 +141,10 @@
 		display: flex;
 		align-items: center;
 		justify-content: center;
-		background: linear-gradient(135deg, #1f2937, #111827);
+		/* background: linear-gradient(135deg, #1f2937, #111827); */
 		font-size: 2.5rem;
 		font-weight: 700;
-		color: #4b5563;
+		/* color: #4b5563; */
 	}
 
 	.hero-overlay {
@@ -149,7 +153,7 @@
 		left: 0;
 		right: 0;
 		padding: 2rem;
-		background: linear-gradient(to top, rgba(11, 15, 25, 0.95), rgba(11, 15, 25, 0));
+		/* background: linear-gradient(to top, rgba(11, 15, 25, 0.95), rgba(11, 15, 25, 0)); */
 		display: flex;
 		justify-content: space-between;
 		align-items: flex-end;
@@ -163,14 +167,14 @@
 		margin: 0;
 		font-size: 2.2rem;
 		font-weight: 700;
-		color: #f9fafb;
+		color: var(--text-color);
 		text-shadow: 0 2px 4px rgba(0, 0, 0, 0.5);
 	}
 
 	.version-badge {
 		align-self: flex-start;
-		background: #38bdf8;
-		color: #0b0f19;
+		/* background: #38bdf8;
+		color: #0b0f19; */
 		font-size: 0.75rem;
 		font-weight: 700;
 		padding: 0.2rem 0.6rem;
@@ -180,35 +184,6 @@
 	.hero-actions {
 		display: flex;
 		gap: 0.8rem;
-	}
-	.action-btn {
-		padding: 0.7rem 1.4rem;
-		border-radius: 8px;
-		font-weight: 600;
-		font-size: 0.95rem;
-		cursor: pointer;
-		border: none;
-		transition:
-			transform 0.15s,
-			background 0.15s;
-	}
-	.action-btn:hover {
-		transform: translateY(-2px);
-	}
-	.action-btn.play {
-		background: #10b981;
-		color: white;
-	}
-	.action-btn.play:hover {
-		background: #059669;
-	}
-	.action-btn.edit {
-		background: #374151;
-		color: white;
-		border: 1px solid #4b5563;
-	}
-	.action-btn.edit:hover {
-		background: #4b5563;
 	}
 
 	/* 하단 정보 영역 */

@@ -55,7 +55,7 @@
 		display: flex;
 		height: var(--titlebar-height);
 		user-select: none;
-		background: transparent;
+		background: var(--background-primary);
 		border-bottom: 1px solid var(--border-color);
 		position: relative;
 		pointer-events: none;

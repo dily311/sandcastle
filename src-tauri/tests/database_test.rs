@@ -48,6 +48,7 @@ mod character_test {
             color: None,
             category: None,
             default_persona_id: None,
+            default_prompt_preset_id: None,
             favorite: false,
         };
         let char = conversation::create_character(&pool, input).await?;

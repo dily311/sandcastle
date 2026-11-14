@@ -73,7 +73,7 @@ export interface Conversation {
     updatedAt: number,
     messageCount: number,
 }
-
+export type ConversationInput = Omit<Conversation, "id" | "createdAt" | "updatedAt" | "messageCount" | "pinned">;
 export interface ConversationMeta {
 	worldInfoIds?: string[];
 	// 분기 정보
@@ -94,17 +94,20 @@ export interface ConversationMeta {
 export interface Message {
     id: string,
     conversationId: string,
+    seq: number,
     role: string,
     name: string | null,
     content: string,
     characterId: string | null,
     meta: MessageMeta | null,
     createdAt: number,
+    updatedAt: number,
     // 프론트에서만 사용
     status?: string,
 }
 
-export type MessageSwipe = Omit<Message, "id" | "name" | "role" | "status" | "conversationId" | "characterId">;
+export type MessageInput = Omit<Message,  "id" | "createdAt" | "updatedAt" | "loading">;
+export type MessageSwipe = Omit<Message, "id" | "seq" | "name" | "role" | "status" | "conversationId" | "characterId">;
 export interface MessageMeta {
 	// 보낸 정보 기록
 	// 나중에 캐릭터나 페르소나를 수정하게 되더라도 수정 전 이름으로 표시되게 하기 위함

@@ -1,6 +1,6 @@
 //! commands.rs / npc.rs 가 공통으로 쓰는 검증 헬퍼.
 use crate::state::AppState;
-use crate::error::AppError;
+use crate::error::{AppError, ErrorCode};
 use crate::models::settings::AppSetting;
 use crate::sys::settings::SettingsState;
 use tauri::State;
@@ -12,29 +12,29 @@ pub fn current_game_id(state: &AppState) -> Result<String, AppError> {
     let guard = state
         .active_archive
         .lock()
-        .map_err(|_| AppError::Archive("archive lock poisoned".into()))?;
+        .map_err(|_| AppError::archive(ErrorCode::InternalError, "archive lock poisoned"))?;
     guard
         .as_ref()
         .map(|a| a.game_id.clone())
-        .ok_or_else(|| AppError::NotFound("재생 중인 게임이 없습니다".into()))
+        .ok_or_else(|| AppError::not_found("재생 중인 게임이 없습니다"))
 }
 
 /// open_game이 올려둔 게임 정의. (플레이를 시작하기 전에도 쓸 수 있다.)
 pub fn current_definition(state: &AppState) -> Result<std::sync::Arc<crate::game::runtime::GameDefinition>, AppError> {
-    let guard = state.active_archive.lock().map_err(|_| AppError::Archive("archive lock poisoned".into()))?;
-    guard.as_ref().map(|a| a.definition.clone()).ok_or_else(|| AppError::NotFound("열려 있는 게임이 없습니다 (open_game을 먼저 부르세요)".into()))
+    let guard = state.active_archive.lock().map_err(|_| AppError::archive(ErrorCode::InternalError, "archive lock poisoned"))?;
+    guard.as_ref().map(|a| a.definition.clone()).ok_or_else(|| AppError::not_found("열려 있는 게임이 없습니다 (open_game을 먼저 부르세요)"))
 }
 
 pub fn check_slot(slot: i64) -> Result<(), AppError> {
     if (1..=MAX_SLOT).contains(&slot) {
         Ok(())
     } else {
-        Err(AppError::Validation(format!("slot은 1~{MAX_SLOT} 이어야 합니다")))
+        Err(AppError::validation(format!("slot은 1~{MAX_SLOT} 이어야 합니다"), None))
     }
 }
 
 /// 설정에서 선택돼 있는 페르소나 id. 페르소나는 항상 기본값을 갖는다(AppSetting.selected_persona_id: String).
 pub fn selected_persona_id(settings: &State<'_, SettingsState<AppSetting>>) -> Result<String, AppError> {
-    let setting = settings.0.lock().map_err(|_| AppError::Validation("설정을 불러오지 못했습니다".into()))?;
+    let setting = settings.0.lock().map_err(|_| AppError::validation("설정을 불러오지 못했습니다", None))?;
     Ok(setting.selected_persona_id.clone())
 }

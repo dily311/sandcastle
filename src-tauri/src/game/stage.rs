@@ -37,7 +37,7 @@ pub struct AssetRef {
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
-#[serde(tag = "type", rename_all = "snake_case", rename_all_fields = "camelCase")]
+#[serde(tag = "type", rename_all = "camelCase", rename_all_fields = "camelCase")]
 pub enum Cue {
     /// asset이 None이면 정지
     Bgm { mood: String, asset: Option<AssetRef> },
@@ -56,7 +56,7 @@ pub enum Cue {
 }
 
 #[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq)]
-#[serde(rename_all = "snake_case")]
+#[serde(rename_all = "camelCase")]
 pub enum LineKind {
     Narration,
     Dialogue,

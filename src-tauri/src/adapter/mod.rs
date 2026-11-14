@@ -1,7 +1,7 @@
 use anyhow::Result;
 use tauri::ipc::Channel;
 
-use crate::models::ai_service::{ApiProfile, ChatOptions, PromptMessage, StreamPayload};
+use crate::{error::AppError, models::ai_service::{ApiProfiles, ChatOptions, PromptMessage, StreamPayload}};
 
 pub mod openai_adapter;
 pub mod claude_adapter;
@@ -19,7 +19,7 @@ pub trait AIServiceAdapter {
 
     fn parse_message(prompt_message: PromptMessage) -> Vec<Self::Message>;
 
-    async fn get_models(&self, client: reqwest::Client, api_profile: ApiProfile) -> Result<Vec<String>>;
+    async fn get_models(&self, client: reqwest::Client, api_profile: ApiProfiles) -> Result<Vec<String>>;
     /** 
      * ai에게 메시지를 전송하는 함수
      * ### 매개변수
@@ -27,6 +27,6 @@ pub trait AIServiceAdapter {
      * - http_client
      * - message 보낼 메시지. 문자열로 변환해 전송
      */
-    async fn send_message(&self, client: reqwest::Client, api_profile: ApiProfile, prompt_message: PromptMessage) -> Result<String>;
-    async fn stream_message(&self, client: reqwest::Client, api_profile: ApiProfile, prompt_message: PromptMessage, on_event: Channel<StreamPayload>) -> Result<String>;
+    async fn send_message(&self, client: reqwest::Client, api_profile: ApiProfiles, prompt_message: PromptMessage) -> Result<String>;
+    async fn stream_message(&self, client: reqwest::Client, api_profile: ApiProfiles, prompt_message: PromptMessage, on_event: Channel<StreamPayload>) -> Result<String>;
 }

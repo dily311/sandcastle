@@ -2881,7 +2881,7 @@ pub async fn upsert_game_conversation<'e, E>(executor: E, input: GameConversatio
 // ------ messages ---------
 pub async fn get_all_game_messages<'e, E>(executor: E, game_id: &str) -> Result<Vec<GameMessages>, Error> where E: Executor<'e, Database = Sqlite> {
     let result = sqlx::query_as::<_, GameMessagesRow>(
-    "SELECT m.id, m.seq, m.conversation_id, m.role, m.name, m.character_id, m.meta, m.created_at, m.updated_at
+    "SELECT m.id, m.seq, m.conversation_id, m.role, m.name, m.content, m.character_id, m.meta, m.created_at, m.updated_at
     FROM game_messages m
     INNER JOIN game_conversations c ON m.conversation_id = c.id 
     WHERE c.game_id = ?
@@ -2895,7 +2895,7 @@ pub async fn get_all_game_messages<'e, E>(executor: E, game_id: &str) -> Result<
 pub async fn get_game_messages_lookup<'e, E>(executor: E, conversation_id: &str, from_seq: Option<u32>, to_seq: u32) -> Result<Vec<GameMessages>, Error> where E: Executor<'e, Database = Sqlite> {
     let result = sqlx::query_as::<_, GameMessagesRow>(
     "SELECT 
-        id, seq, conversation_id, role, name, character_id, meta, created_at, updated_at  FROM game_messages 
+        id, seq, conversation_id, role, name, content, character_id, meta, created_at, updated_at  FROM game_messages 
     WHERE conversation_id = ? 
         AND seq BETWEEN ? and ?
     ORDER BY created_at, rowid"
@@ -2909,7 +2909,7 @@ pub async fn get_game_messages_lookup<'e, E>(executor: E, conversation_id: &str,
 }
 pub async fn get_game_messages<'e, E>(executor: E, conversation_id: &str) -> Result<Vec<GameMessages>, Error> where E: Executor<'e, Database = Sqlite> {
     let result = sqlx::query_as::<_, GameMessagesRow>(
-    "SELECT id, seq, conversation_id, role, name, character_id, meta, created_at, updated_at  FROM game_messages WHERE conversation_id = ? ORDER BY created_at, rowid"
+    "SELECT id, seq, conversation_id, role, name, content, character_id, meta, created_at, updated_at  FROM game_messages WHERE conversation_id = ? ORDER BY created_at, rowid"
     )
     .bind(conversation_id)
     .fetch_all(executor)
@@ -2957,10 +2957,10 @@ pub async fn forked_game_messages(tx: &mut Transaction<'_, Sqlite>, conversation
         let _result = sqlx::query(
         "
         INSERT INTO game_messages (
-            id, seq, conversation_id, role, name, character_id, meta, created_at, updated_at  FROM game_messages 
+            id, seq, conversation_id, role, name, content, character_id, meta, created_at, updated_at  FROM game_messages 
         )
         SELECT 
-            ?, seq, ?, role, name, character_id, meta, created_at, updated_at  FROM game_messages 
+            ?, seq, ?, role, name, content, character_id, meta, created_at, updated_at  FROM game_messages 
         WHERE id=?
         "
         )
@@ -2979,13 +2979,14 @@ pub async fn upsert_game_message<'e, E>(executor: E, conversation_id: &str, inpu
     let now = chrono::Utc::now().timestamp_millis();
     sqlx::query(
         r#"
-        INSERT INTO game_messages ( id, seq, conversation_id, role, name, character_id, meta, created_at, updated_at ) 
-        VALUES (?, ?, ?, ?, ?, ?, ?)
+        INSERT INTO game_messages ( id, seq, conversation_id, role, name, content, character_id, meta, created_at, updated_at ) 
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
         ON CONFLICT(id) DO UPDATE SET
             seq=excluded.seq, 
             conversation_id=excluded.conversation_id, 
             role=excluded.role, 
             name=excluded.name, 
+            content=excluded.content, 
             character_id=excluded.character_id, 
             meta=excluded.meta, 
             updated_at=excluded.updated_at
@@ -2996,6 +2997,7 @@ pub async fn upsert_game_message<'e, E>(executor: E, conversation_id: &str, inpu
     .bind(conversation_id)
     .bind(&input.role)
     .bind(&input.name)
+    .bind(&input.content)
     .bind(&input.character_id)
     .bind(meta)
     .bind(now)
@@ -3044,7 +3046,7 @@ pub async fn get_game_conversations_participant<'e, E>(executor: E, conversation
     Ok(result.into())
 }
 pub async fn forked_game_conversations_participant<'e, E>(executor: E, conversation_id: &str, new_conversation_id: &str) -> Result<(), Error> where E: Executor<'e, Database = Sqlite> {
-    let result = sqlx::query(
+    sqlx::query(
     "
     INSERT INTO game_conversation_participants (
         conversation_id, game_character_id, sort_order

@@ -17,6 +17,8 @@ pub enum GameCommand {
     /// 그게 곧 AI 대화의 branch_key가 되므로).
     Choose { choice_id: String },
     AdvanceTime { minutes: i32 },
+    /// 지금 열려 있는 씬을 끝낸다 (씬 종료 버튼). 엔딩 씬은 끝낼 수 없다.
+    EndScene,
     UseItem { item_id: String, target_id: Option<String> },
     /// 버리기. 핵심 아이템(is_key)은 못 버린다. quantity가 없으면 1개.
     DropItem { item_id: String, quantity: Option<u32> },

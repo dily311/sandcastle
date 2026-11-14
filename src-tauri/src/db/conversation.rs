@@ -84,9 +84,9 @@ pub async fn delete_conversation<'e, E>(executor: E, id: &str) -> Result<bool, E
 pub async fn persona_exists<'e, E>(executor: E, persona_id: &str) -> Result<bool, Error> where E: Executor<'e, Database = Sqlite>,{
     let char_exists = sqlx::query_scalar::<_, i64>("SELECT COUNT(*) FROM personas WHERE id = ?")
         .bind(persona_id)
-        .fetch_one(executor)
+        .fetch_optional(executor)
         .await?;
-    Ok(char_exists != 0)
+    Ok(!char_exists.is_none())
 }
 
 pub async fn get_all_personas<'e, E>(executor: E) -> Result<Vec<Persona>, Error> where E: Executor<'e, Database = Sqlite>,{
@@ -243,9 +243,9 @@ pub async fn set_system_default_persona<'e, E>(executor: E, persona_id: &str) ->
 pub async fn char_exists<'e, E>(executor: E, character_id: &str) -> Result<bool, Error> where E: Executor<'e, Database = Sqlite>,{
     let char_exists = sqlx::query_scalar::<_, i64>("SELECT COUNT(*) FROM characters WHERE id = ?")
         .bind(character_id)
-        .fetch_one(executor)
+        .fetch_optional(executor)
         .await?;
-    Ok(char_exists != 0)
+    Ok(!char_exists.is_none())
 }
 
 pub async fn get_character_conversation_count<'e, E>(executor: E,character_id: &str) -> Result<i64, Error> where E: Executor<'e, Database = Sqlite>,{
@@ -281,6 +281,7 @@ pub async fn get_all_characters<'e, E>(executor: E) -> Result<Vec<Character>, Er
                 c.tags, 
                 c.category, 
                 c.default_persona_id, 
+                c.default_prompt_preset_id, 
                 c.favorite, 
                 (
                     SELECT COUNT(*) FROM conversations conv WHERE conv.character_id = c.id
@@ -319,6 +320,7 @@ pub async fn get_character<'e, E>(executor: E, id: &str) -> Result<Character, Er
                 c.tags, 
                 c.category, 
                 c.default_persona_id, 
+                c.default_prompt_preset_id, 
                 c.favorite, 
                 (
                     SELECT COUNT(*) FROM conversations conv WHERE conv.character_id = c.id
@@ -388,6 +390,7 @@ pub async fn create_character<'e, E>(executor: E, input: CharacterInput) -> Resu
         tags: input.tags,
         category: input.category,
         default_persona_id: None,
+        default_prompt_preset_id: None,
         favorite: false,
         message_count: 0,
         created_at: now,
@@ -416,6 +419,7 @@ pub async fn update_character<'e, E>(executor: E,id: &str,input: &CharacterInput
             category=?, 
             color=?, 
             default_persona_id=?,
+            default_prompt_preset_id=?,
             favorite=?,
             updated_at=? 
          WHERE id=?",
@@ -432,6 +436,7 @@ pub async fn update_character<'e, E>(executor: E,id: &str,input: &CharacterInput
     .bind(&input.category)
     .bind(&input.color)
     .bind(&input.default_persona_id)
+    .bind(&input.default_prompt_preset_id)
     .bind(&input.favorite)
     .bind(now)
     .bind(&id)
@@ -652,17 +657,17 @@ pub async fn create_persona_worldinfo_ids<'e, E>(executor: E,persona_id: &str,bo
  */
 pub async fn get_messages<'e, E>(executor: E, conversation_id: &str, limit: i64, before: Option<i64>,) -> Result<Vec<Message>, Error> where E: Executor<'e, Database = Sqlite>,{
     let rows = match before {
-        Some(b) => sqlx::query_as::<_, MessageRow>(
-            "SELECT * FROM messages WHERE conversation_id = ? AND created_at < ? ORDER BY created_at, rowid LIMIT ?",
-        )
-        .bind(&conversation_id)
-        .bind(b)
-        .bind(limit),
+            Some(b) => sqlx::query_as::<_, MessageRow>(
+                "SELECT * FROM messages WHERE conversation_id = ? AND created_at < ? ORDER BY created_at DESC, rowid DESC LIMIT ?",
+            )
+            .bind(&conversation_id)
+            .bind(b)
+            .bind(limit),
         None => sqlx::query_as::<_, MessageRow>(
-            "SELECT * FROM messages WHERE conversation_id = ? ORDER BY created_at, rowid LIMIT ?",
-        )
-        .bind(&conversation_id)
-        .bind(limit),
+                "SELECT * FROM messages WHERE conversation_id = ? ORDER BY created_at DESC, rowid DESC LIMIT ?",
+            )
+            .bind(&conversation_id)
+            .bind(limit),
     }
     .fetch_all(executor)
     .await?;
@@ -687,16 +692,18 @@ pub async fn append_message<'e, E>(executor: E, input: MessageInput) -> Result<M
     let meta = serde_json::to_string(&input.meta).unwrap_or_default();
 
     sqlx::query(
-        "INSERT INTO messages (id,conversation_id,role,name,content,character_id,meta,created_at)
-         VALUES (?,?,?,?,?,?,?,?)",
+        "INSERT INTO messages (id,conversation_id,seq,role,name,content,character_id,meta,created_at,updated_at)
+         VALUES (?,?,?,?,?,?,?,?,?,?)",
     )
     .bind(&id)
     .bind(&input.conversation_id)
+    .bind(&input.seq)
     .bind(&input.role)
     .bind(&input.name)
     .bind(&input.content)
     .bind(&input.character_id)
     .bind(meta)
+    .bind(now)
     .bind(now)
     .execute(executor)
     .await?;
@@ -704,20 +711,24 @@ pub async fn append_message<'e, E>(executor: E, input: MessageInput) -> Result<M
     Ok(Message {
         id,
         conversation_id: input.conversation_id,
+        seq: input.seq,
         role: input.role,
         name: input.name,
         content: input.content,
         character_id: input.character_id,
         meta: input.meta,
         created_at: now,
+        updated_at: now,
     })
 }
 
 pub async fn update_message<'e, E>(executor: E, id: &str, content: &str, meta: &Option<serde_json::Value>) -> Result<bool, Error> where E: Executor<'e, Database = Sqlite>,{
+    let now = chrono::Utc::now().timestamp_millis();
     let meta_str = serde_json::to_string(&meta).unwrap_or_default();
-    let result = sqlx::query("UPDATE messages SET content = ?, meta = ? WHERE id = ?")
+    let result = sqlx::query("UPDATE messages SET content = ?, meta = ?, updated_at=? WHERE id = ?")
         .bind(content)
         .bind(meta_str)
+        .bind(now)
         .bind(id)
         .execute(executor)
         .await?;
@@ -725,8 +736,10 @@ pub async fn update_message<'e, E>(executor: E, id: &str, content: &str, meta: &
 }
 
 pub async fn update_message_content<'e, E>(executor: E, id: &str, content: &str,) -> Result<bool, Error> where E: Executor<'e, Database = Sqlite>,{
-    let result = sqlx::query("UPDATE messages SET content = ? WHERE id = ?")
+    let now = chrono::Utc::now().timestamp_millis();
+    let result = sqlx::query("UPDATE messages SET content = ? updated_at=? WHERE id = ?")
         .bind(content)
+        .bind(now)
         .bind(id)
         .execute(executor)
         .await?;
@@ -734,9 +747,11 @@ pub async fn update_message_content<'e, E>(executor: E, id: &str, content: &str,
 }
 
 pub async fn update_message_meta<'e, E>(executor: E, id: &str, meta: serde_json::Value) -> Result<bool, Error> where E: Executor<'e, Database = Sqlite>,{
+    let now = chrono::Utc::now().timestamp_millis();
     let meta_string = serde_json::to_string(&meta).unwrap_or_default();
-    let result = sqlx::query("UPDATE messages SET meta = ? WHERE id = ?")
+    let result = sqlx::query("UPDATE messages SET meta = ? updated_at=? WHERE id = ?")
         .bind(meta_string)
+        .bind(now)
         .bind(id)
         .execute(executor)
         .await?;

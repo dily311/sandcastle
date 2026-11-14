@@ -298,7 +298,7 @@
 		top: 0;
 		left: 0;
 		z-index: 10;
-		box-shadow: 0 0 0 1px var(--card-border-color);
+		/* box-shadow: 0 0 0 1px var(--card-border-color); */
 		background: var(--background-primary);
 		border-radius: var(--card-radius);
 		color: var(--text-color);

@@ -6,7 +6,7 @@ use std::{fs, path::PathBuf};
 fn save_image(image: DynamicImage, save_dir: &PathBuf) -> Result<()> {
     image
         .save_with_format(&save_dir, image::ImageFormat::WebP)
-        .map_err(|e| AppError::Io(e.to_string()))?;
+        .map_err(|e| AppError::io(e.to_string()))?;
     Ok(())
 }
 
@@ -16,7 +16,7 @@ pub fn save_image_to_origin(save_dir: PathBuf, file_name: &str, buffer: &[u8]) -
 
     // 이후 이미지 저장 로직
     let target_path = save_dir.join(format!("{}.webp", file_name));
-    let image = image::load_from_memory(buffer).map_err(|e| AppError::Io(e.to_string()))?;
+    let image = image::load_from_memory(buffer).map_err(|e| AppError::io(e.to_string()))?;
 
     save_image(image, &target_path)?;
 
@@ -34,7 +34,7 @@ pub fn save_image_to_thumbnail(
 
     // 이후 이미지 저장 로직
     let target_path = save_dir.join(format!("{}.webp", file_name));
-    let image = image::load_from_memory(buffer).map_err(|e| AppError::Io(e.to_string()))?;
+    let image = image::load_from_memory(buffer).map_err(|e| AppError::io(e.to_string()))?;
     let thumbnail = image.thumbnail(thumbnail_size, thumbnail_size);
 
     save_image(thumbnail, &target_path)?;

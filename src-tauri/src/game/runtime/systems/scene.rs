@@ -51,7 +51,13 @@ impl GameSystem for SceneSystem {
     fn handle_event(&self, def: &GameDefinition, state: &mut GameState, event: &GameEvent, _rng: &mut StdRng) -> Vec<GameEvent> {
         match event {
             GameEvent::ChoiceMade { next_scene_id: Some(id), .. } => open_scene(def, state, id),
-            GameEvent::ChoiceMade { next_scene_id: None, .. } => {
+            // 다음 씬이 없는 선택지는 씬을 닫지 않는다 — 이야기가 이어진다(AI가 서술자로 진행). 끝내는 건 SceneEndRequested뿐이다.
+            GameEvent::ChoiceMade { next_scene_id: None, .. } => vec![],
+            GameEvent::SceneEndRequested => {
+                // 엔딩 씬은 끝낼 수 없다 (게임이 끝난 것이다).
+                if state.current_scene_id.as_deref().and_then(|id| def.scene(id)).map_or(false, |s| s.is_ending == Some(true)) {
+                    return vec![];
+                }
                 let Some(prev) = state.current_scene_id.take() else { return vec![] };
                 let mut out = vec![GameEvent::SceneExited { scene_id: prev }];
                 // 대기 중인 씬이 있으면 앞에서부터 하나 연다.

@@ -3,7 +3,6 @@
 	import { onMount } from "svelte";
 	import { pop, push } from "svelte-spa-router";
 	import { gameEngineCommands } from "$/ipc/commands";
-	import { gameStore } from "$/lib/game/gameStore.svelte";
 	import type { GamePlayerSessions } from "$/lib/type/game";
 	import { handleGoBack } from "$/app/routes";
 	import IconButton from "$/components/ui/button/IconButton.svelte";
@@ -11,6 +10,7 @@
 	import Button from "$/components/ui/button/Button.svelte";
 	import Header from "$/components/Header.svelte";
 	import ButtonGroup from "$/components/ui/button/ButtonGroup.svelte";
+	import { newGameSession, startGameSession } from "$/lib/game/services/gameSessionService";
 
 	type Props = {
 		params: { gameId: string };
@@ -40,10 +40,9 @@
 	async function handleStartNewSession() {
 		try {
 			// 필요에 따라 gameId를 전달할 수도 있음
-			const res = await gameEngineCommands.startNewGame();
-			gameStore.setRenderState(res);
+			const sessionId = await newGameSession(params.gameId);
 			// 세션 플레이 화면으로 이동 (예: /play/:sessionId)
-			push(`/game/${params.gameId}/play/${res.state.sessionId}`);
+			push(`/game/${params.gameId}/play/${sessionId}`);
 		} catch (err) {
 			console.error("Failed to start new game session:", err);
 			alert("새 세션을 시작하는 중 오류가 발생했습니다.");
@@ -53,7 +52,7 @@
 	// 기존 세션 이어하기 (continue_game)
 	async function handleContinueSession(sessionId: string) {
 		try {
-			await gameEngineCommands.continueGame({ sessionId: sessionId });
+			await startGameSession(params.gameId, sessionId);
 			push(`/game/${params.gameId}/play/${sessionId}`);
 		} catch (err) {
 			console.error("Failed to continue session:", err);
@@ -99,7 +98,7 @@
 				{#each sessions as session (session.id)}
 					<div class="session-card">
 						<div class="session-info">
-							<h3>세션 ID: {session.id}</h3>
+							<h3>저장된 게임</h3>
 							<span class="date">최근 플레이: {new Date(session.updatedAt).toLocaleString()}</span>
 						</div>
 						<ButtonGroup>

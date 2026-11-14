@@ -19,9 +19,11 @@ pub struct GameManager;
 
 /// save_package의 결과: 에디터에서 지워서 DB에서도 지워진 행 수, 그리고 저장 후 검증 결과.
 #[derive(Serialize)]
+#[serde(rename_all = "camelCase")]
 pub struct SaveReport {
     pub deleted: BTreeMap<&'static str, usize>,
-    pub issues: Vec<Issue>,
+    /// 저장 후 상태의 진단 결과 (open_game의 diagnostics와 같은 형식)
+    pub diagnostics: Vec<Issue>,
 }
 
 impl GameManager {
@@ -31,10 +33,10 @@ impl GameManager {
     pub async fn create_game(pool: &SqlitePool, games_root: &Path, title: String, template_id: String) -> Result<String, AppError> {
         let title = title.trim().to_string();
         if title.is_empty() || title.chars().count() > 100 {
-            return Err(AppError::Validation("제목 길이가 올바르지 않습니다".into()));
+            return Err(AppError::validation("제목 길이가 올바르지 않습니다", None));
         }
-        let template = template::find(&template_id).ok_or_else(|| AppError::Validation(format!("알 수 없는 템플릿입니다: {template_id}")))?;
-        let bytes = template::package_bytes(&template.id).ok_or_else(|| AppError::NotFound("템플릿 패키지가 없습니다".into()))?;
+        let template = template::find(&template_id).ok_or_else(|| AppError::validation(format!("알 수 없는 템플릿입니다: {template_id}"), None))?;
+        let bytes = template::package_bytes(&template.id).ok_or_else(|| AppError::not_found("템플릿 패키지가 없습니다"))?;
         package::import_bytes(pool, games_root, bytes, Some(package::ImportOverrides { title, template_id: template.id })).await
     }
 
@@ -45,7 +47,7 @@ impl GameManager {
         let _ = pool;
         let dir = games_root.join(game_id);
         if !dir.join("index.html").exists() {
-            return Err(AppError::NotFound("게임 패키지 파일을 찾을 수 없습니다".into()));
+            return Err(AppError::not_found("게임 패키지 파일을 찾을 수 없습니다"));
         }
         // TODO: db::game::get_game_project로 존재/소유권 확인도 같이 할 것
         Ok(dir)
@@ -58,14 +60,14 @@ impl GameManager {
     /// 월드인포 북은 전역 테이블이라 여기서 다루지 않는다 (project/characters의 world_info_ids만 저장).
     pub async fn save_package(pool: &SqlitePool, games_root: &Path, game_id: &str, data: PackageData) -> Result<SaveReport, AppError> {
         let repo = SqlxGameRepository::new(pool);
-        let existing = repo.load_definition(game_id).await.map_err(|e| AppError::Database(e.to_string()))?;
+        let existing = repo.load_definition(game_id).await.map_err(|e| AppError::database(e.to_string()))?;
         let (deleted, removed_files) = package::save_definition(pool, game_id, &existing, data).await?;
         // DB가 커밋된 뒤에 지워진 에셋의 파일을 지운다 (DB가 실패하면 파일은 그대로 남는다).
         package::remove_asset_files(games_root, game_id, &removed_files);
 
         // 저장 후 상태를 다시 읽어 검증해서 돌려준다 (저장은 이미 끝났다 — 이건 안내용).
-        let after = repo.load_definition(game_id).await.map_err(|e| AppError::Database(e.to_string()))?;
-        Ok(SaveReport { deleted, issues: validate::validate(&after) })
+        let after = repo.load_definition(game_id).await.map_err(|e| AppError::database(e.to_string()))?;
+        Ok(SaveReport { deleted, diagnostics: validate::diagnose(&after, Some(games_root.join(game_id).as_path())) })
     }
 
     /// 게임을 지운다. game_projects가 지워지면 FK CASCADE로 정의 테이블과 세션/세이브/일지/대화가 같이
@@ -90,7 +92,7 @@ impl GameManager {
     /// 내가 만든 게임을 남에게 줄 .tgame으로 내보낸다.
     pub async fn export_package(pool: &SqlitePool, games_root: &Path, game_id: &str, output_dir: &Path) -> Result<PathBuf, AppError> {
         let repo = SqlxGameRepository::new(pool);
-        let definition = repo.load_definition(game_id).await.map_err(|e| AppError::Database(e.to_string()))?;
+        let definition = repo.load_definition(game_id).await.map_err(|e| AppError::database(e.to_string()))?;
         package::export(pool, games_root, game_id, &definition, output_dir).await
     }
 }

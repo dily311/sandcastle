@@ -8,6 +8,8 @@
 	let { stateDefs = $bindable([]), gameId }: Props = $props();
 
 	let selectedIndex = $state<number | null>(stateDefs.length > 0 ? 0 : null);
+	let searchQuery = $state("");
+	let filteredStateDefs = $derived(stateDefs.map((stateDef, index) => ({ stateDef, index })).filter(({ stateDef }) => `${stateDef.key} ${stateDef.type} ${stateDef.description}`.toLowerCase().includes(searchQuery.trim().toLowerCase())));
 	let activeState = $derived(selectedIndex !== null && stateDefs[selectedIndex] ? stateDefs[selectedIndex] : null);
 
 	function handleAddStateDef() {
@@ -36,12 +38,14 @@
 <div class="sub-editor-layout">
 	<!-- 좌측: 상태 목록 -->
 	<div class="item-list-pane">
+		<label class="list-search"><span aria-hidden="true">⌕</span><input aria-label="변수 검색" placeholder="변수 검색" bind:value={searchQuery} /></label>
 		<div class="pane-header">
 			<h4>상태 정의 목록 ({stateDefs.length})</h4>
 			<button class="add-btn" onclick={handleAddStateDef}>+ 상태 추가</button>
 		</div>
 		<div class="scroll-list">
-			{#each stateDefs as stateDef, index (stateDef.id)}
+			{#each filteredStateDefs as row (row.stateDef.id)}
+				{@const stateDef = row.stateDef}{@const index = row.index}
 				<!-- svelte-ignore a11y_click_events_have_key_events -->
 				<!-- svelte-ignore a11y_no_static_element_interactions -->
 				<div class="list-item" class:active={selectedIndex === index} onclick={() => (selectedIndex = index)}>
@@ -63,7 +67,7 @@
 				<h3>상태 정의 상세 편집</h3>
 				<button class="delete-btn" onclick={() => handleDeleteStateDef(selectedIndex!)}>삭제</button>
 			</div>
-			<div class="form-grid">
+			<details class="editor-accordion" open><summary>변수 설정</summary><div class="editor-accordion-content"><div class="form-grid">
 				<div class="field">
 					<label for="var_key">변수 키 (Key)</label>
 					<input id="var_key" type="text" bind:value={activeState.key} />
@@ -84,7 +88,7 @@
 					<label for="var_des">설명 (Description)</label>
 					<textarea id="var_des" bind:value={activeState.description} rows="3"></textarea>
 				</div>
-			</div>
+			</div></div></details>
 		{:else}
 			<div class="no-selection">편집할 상태 정의를 선택하거나 새로 추가해주세요.</div>
 		{/if}
@@ -96,15 +100,12 @@
 	.sub-editor-layout {
 		display: grid;
 		grid-template-columns: 320px 1fr;
-		gap: 1.5rem;
 		height: 100%;
 		min-height: 500px;
 	}
 	.item-list-pane,
 	.item-detail-pane {
-		background: #1e293b;
-		border: 1px solid #334155;
-		border-radius: 8px;
+
 		display: flex;
 		flex-direction: column;
 		overflow: hidden;

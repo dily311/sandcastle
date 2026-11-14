@@ -1,8 +1,7 @@
 <script lang="ts">
 	import { ArrowRight, X } from "@lucide/svelte";
-	import { gameStore } from "$/lib/game/gameStore.svelte";
 	import type { GameCommand } from "$/lib/type/game";
-	import { getConnectionRequirement } from "./playUtils";
+	import { runtimeStore } from "$/lib/game/stores/runtimeStore.svelte";
 
 	type Props = {
 		showMap: boolean;
@@ -17,46 +16,45 @@
 	};
 	let { showMap, showActions, showInventory, isLoading, canMove, onCloseMap, onCloseActions, onCloseInventory, onDispatch }: Props = $props();
 
-	const choices = $derived(gameStore.choices ?? []);
-	const destinations = $derived(
-		(gameStore.locations ?? []).map((destination) => ({
-			...destination,
-			requirement: getConnectionRequirement(destination.condition, gameStore.state, gameStore.view),
-		})),
-	);
-	const inventoryEntries = $derived(
-		Object.entries((gameStore.state?.inventory ?? {}) as Record<string, number>)
-			.filter(([, quantity]) => typeof quantity === "number" && quantity > 0)
-			.map(([itemId, quantity]) => ({ itemId, quantity, item: gameStore.view?.items.find((item) => item.id === itemId) })),
-	);
-	const mapZones = $derived(
-		(gameStore.view?.zones ?? [])
-			.filter((zone) => zone.mapId === gameStore.state?.mapId)
-			.map((zone) => ({ ...zone, locations: (gameStore.view?.locations ?? []).filter((location) => location.zoneId === zone.id) })),
-	);
-	const nearbyCharacters = $derived(
-		(gameStore.view?.characters ?? []).filter((character) => gameStore.state?.presentNpcs.includes(character.id)),
-	);
-	const localInteractables = $derived(
-		(gameStore.view?.interactables ?? []).filter((item) => item.locationId === gameStore.state?.locationId),
-	);
+
 </script>
 
 {#if showMap}
 	<aside class="map-panel" aria-labelledby="map-panel-heading">
 		<div class="panel-heading">
-			<div><strong id="map-panel-heading">{gameStore.currentMap?.name ?? "지도"}</strong><small>{gameStore.currentLocation?.name ?? "현재 위치 없음"}</small></div>
+			<div><strong id="map-panel-heading">{runtimeStore.currentMap?.name ?? "지도"}</strong><small>{runtimeStore.currentLocation?.name ?? "현재 위치 없음"}</small></div>
 			<button class="quiet-button" onclick={onCloseMap} aria-label="지도 닫기"><X size={17} /></button>
 		</div>
 		<div class="map-locations">
-			{#each mapZones as zone (zone.id)}
+			{#each runtimeStore.mapZones as zone (zone.id)}
 				<section class="map-zone">
 					<h3>{zone.name}</h3>
 					{#each zone.locations as location (location.id)}
-						<div class="map-location" class:current={location.id === gameStore.state?.locationId}>
+						{@const isCurrent = location.id === runtimeStore?.currentLocationId}
+						{@const destination = runtimeStore.destinations.find((route) => route.toId === location.id)}
+						{@const isLocked = Boolean(destination?.requirement && !destination.requirement.available)}
+						<button
+							type="button"
+							class="map-location"
+							class:current={isCurrent}
+							class:unavailable={!isCurrent && (!destination || isLocked || !canMove)}
+							disabled={isLoading || !canMove || isCurrent || !destination || isLocked}
+							title={isLocked ? `(${destination?.location?.name})` : undefined}
+							onclick={() => destination && onDispatch({ type: "moveTo", locationId: location.id })}
+						>
 							<span class="map-marker"></span><span>{location.name}</span>
-							{#if location.id === gameStore.state?.locationId}<small>현재 위치</small>{:else if destinations.some((destination) => destination.toId === location.id)}<small>이동 경로 있음</small>{/if}
-						</div>
+							{#if isCurrent}
+								<small>현재 위치</small>
+							{:else if !canMove}
+								<small>씬 진행 중</small>
+							{:else if isLocked}
+								<small>({destination?.location?.name})</small>
+							{:else if destination}
+								<small>이동 · {Math.ceil(destination.travelSeconds / 60)}분</small>
+							{:else}
+								<small>이동 경로 없음</small>
+							{/if}
+						</button>
 					{/each}
 				</section>
 			{:else}<p class="muted">표시할 장소가 없습니다.</p>{/each}
@@ -67,12 +65,12 @@
 {#if showInventory}
 	<aside class="inventory-panel" aria-labelledby="inventory-panel-heading">
 		<div class="panel-heading">
-			<div><strong id="inventory-panel-heading">보유 아이템</strong><small>{inventoryEntries.length}종류</small></div>
+			<div><strong id="inventory-panel-heading">보유 아이템</strong><small>{runtimeStore.inventoryEntries.length}종류</small></div>
 			<button class="quiet-button" onclick={onCloseInventory} aria-label="인벤토리 닫기"><X size={17} /></button>
 		</div>
-		{#if inventoryEntries.length}
+		{#if runtimeStore.inventoryEntries.length}
 			<div class="inventory-list">
-				{#each inventoryEntries as entry (entry.itemId)}
+				{#each runtimeStore.inventoryEntries as entry (entry.itemId)}
 					<article class="inventory-item">
 						<div class="item-icon" aria-hidden="true">{entry.item?.icon ? "✦" : "◇"}</div>
 						<div class="item-copy">
@@ -91,32 +89,32 @@
 {#if showActions}
 	<aside class="actions-panel" aria-labelledby="actions-panel-heading">
 		<div class="panel-heading"><div><strong id="actions-panel-heading">이동 / 행동</strong><small>지금 실행할 수 있는 명령</small></div><button class="quiet-button" onclick={onCloseActions} aria-label="행동 메뉴 닫기"><X size={17} /></button></div>
-		{#if nearbyCharacters.length}
+		{#if runtimeStore.nearbyCharacters.length}
 			<div class="action-group"><span class="action-label">인물과 대화</span>
-				{#each nearbyCharacters as character (character.id)}<button class="destination" disabled={isLoading} onclick={() => onDispatch({ type: "talk", gameCharacterId: character.id })}><span><strong>{character.name}</strong><small>대화 시작</small></span><ArrowRight size={17} /></button>{/each}
+				{#each runtimeStore.nearbyCharacters as character (character.id)}<button class="destination" disabled={isLoading} onclick={() => onDispatch({ type: "talk", gameCharacterId: character.id })}><span><strong>{character.name}</strong><small>대화 시작</small></span><ArrowRight size={17} /></button>{/each}
 			</div>
 		{/if}
-		{#if localInteractables.length}
+		{#if runtimeStore.localInteractables.length}
 			<div class="action-group"><span class="action-label">주변 살펴보기</span>
-				{#each localInteractables as item (item.id)}<button class="destination" disabled={isLoading} onclick={() => onDispatch({ type: "interact", entityId: item.id })}><span><strong>{item.name}</strong><small>조사</small></span><ArrowRight size={17} /></button>{/each}
+				{#each runtimeStore.localInteractables as item (item.id)}<button class="destination" disabled={isLoading} onclick={() => onDispatch({ type: "interact", entityId: item.id })}><span><strong>{item.name}</strong><small>조사</small></span><ArrowRight size={17} /></button>{/each}
 			</div>
 		{/if}
-		{#if canMove && destinations.length}
+		{#if canMove && runtimeStore.destinations.length}
 			<div class="action-group"><span class="action-label">이동 가능</span>
-				{#each destinations as destination (destination.toId)}
-					<button class="destination" class:locked={destination.requirement && !destination.requirement.isMet} disabled={isLoading || Boolean(destination.requirement && !destination.requirement.isMet)} onclick={() => onDispatch({ type: "moveTo", locationId: destination.toId })}>
-						<span><strong>{destination.location?.name}</strong><small>{Math.ceil(destination.travelSeconds / 60)}분 이동</small>{#if destination.requirement && !destination.requirement.isMet}<small class="requirement-label">({destination.requirement.label})</small>{/if}</span>
+				{#each runtimeStore.destinations as destination (destination.toId)}
+					<button class="destination" class:locked={destination.requirement && !destination.requirement.available} disabled={isLoading || Boolean(destination.requirement && !destination.requirement.available)} onclick={() => onDispatch({ type: "moveTo", locationId: destination.toId })}>
+						<span><strong>{destination.location?.name}</strong><small>{Math.ceil(destination.travelSeconds / 60)}분 이동</small>{#if destination.requirement && !destination.requirement.available}<small class="requirement-label">({destination.requirement.toId})</small>{/if}</span>
 						<ArrowRight size={17} />
 					</button>
 				{/each}
 			</div>
 		{/if}
-		{#if choices.length}
+		{#if runtimeStore.currentChoices.length}
 			<div class="action-group"><span class="action-label">현재 선택지</span>
-				{#each choices as choice (choice.id)}<button class="destination" disabled={isLoading} onclick={() => onDispatch({ type: "choose", choiceId: choice.id })}><span><strong>{choice.text}</strong><small>선택</small></span><ArrowRight size={17} /></button>{/each}
+				{#each runtimeStore.currentChoices as choice (choice.id)}<button class="destination" disabled={isLoading} onclick={() => onDispatch({ type: "choose", choiceId: choice.id })}><span><strong>{choice.text}</strong><small>선택</small></span><ArrowRight size={17} /></button>{/each}
 			</div>
 		{/if}
-		{#if !nearbyCharacters.length && !localInteractables.length && (!canMove || !destinations.length) && !choices.length}<p class="muted">지금 실행할 수 있는 명령이 없습니다.</p>{/if}
+		{#if !runtimeStore.nearbyCharacters.length && !runtimeStore.localInteractables.length && (!canMove || !runtimeStore.destinations.length) && !runtimeStore.currentChoices.length}<p class="muted">지금 실행할 수 있는 명령이 없습니다.</p>{/if}
 	</aside>
 {/if}
 
@@ -131,7 +129,10 @@
 	.quiet-button:hover { background: var(--game-surface-hover); }
 	.map-locations { display: grid; gap: 13px; max-height: min(60vh, 520px); overflow-y: auto; padding: 4px; }
 	.map-zone h3 { margin: 0 0 7px; color: var(--game-text-muted); font-size: 11px; text-transform: uppercase; letter-spacing: .08em; }
-	.map-location { display: flex; align-items: center; gap: 9px; min-height: 35px; padding: 7px 9px; border-radius: var(--radius-md); color: var(--game-text-main); font-size: 13px; }
+	.map-location { display: flex; align-items: center; gap: 9px; width: 100%; min-height: 35px; padding: 7px 9px; border: 0; border-radius: var(--radius-md); color: var(--game-text-main); background: transparent; font: inherit; font-size: 13px; text-align: left; cursor: pointer; }
+	.map-location:hover:not(:disabled) { background: var(--game-surface-hover); }
+	.map-location.unavailable { opacity: .58; cursor: not-allowed; }
+	.map-location:disabled { cursor: default; }
 	.map-location.current { background: var(--game-accent-soft); color: var(--game-accent-strong); }
 	.map-location small { margin-left: auto; color: var(--game-text-muted); font-size: 10px; }
 	.map-marker { width: 8px; height: 8px; flex: 0 0 8px; border: 1px solid var(--game-accent); border-radius: 50%; }

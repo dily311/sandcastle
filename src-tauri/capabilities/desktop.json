@@ -26,6 +26,9 @@
     "dialog:default",
     "fs:default",
     "global-shortcut:default",
-    "window-state:default"
+    "window-state:default",
+    "clipboard-manager:default",
+    "clipboard-manager:allow-write-text",
+    "background-service:default"
   ]
 }

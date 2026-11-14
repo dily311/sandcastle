@@ -1,8 +1,8 @@
-import type { Character, WorldInfoBook, WorldInfoEntry, Conversation, Message, Persona, MessageMeta, } from "$type/conv";
+import type { Character, WorldInfoBook, WorldInfoEntry, Conversation, Message, Persona, MessageMeta, MessageInput, ConversationInput, CharacterInput, PersonaInput, } from "$type/conv";
 import type {ApiProfileInput, ApiProfile} from "$type/aiService";
 import type { AppSettings, CssTheme, FeatureSetting, ThemeSetting } from "$/lib/type/settingTypes";
 import type { Hitbox } from "$/lib/interaction/interactive-registry";
-import type { PackageData, SaveReport, GameCommand, GameResponse, GameSave, NpcReply, GamePlayerSessions, GameMessages, GameConversations, GameJournal, GameProject, Template, StageLine, OpenGameResponse } from "$type/game";
+import type { PackageData, SaveReport, GameCommand, ContinueGameResponse, GameSave, NpcReply, GamePlayerSessions, GameMessages, GameConversations, GameJournal, GameProject, Template, StageLine, OpenGameResponse } from "$type/game";
 import type { LibraryRootRaw, MusicMetaInput, Playlist, PlaylistInput, PlaylistItem, WidgetMusicSetting } from "$/lib/features/impl/widget/music/types";
 
 export type CommandName = keyof CommandRegistry;
@@ -36,7 +36,7 @@ export interface CommandRegistry {
     "test_message": CommandDef<{profileId: string}, {status: number; message: string}>,
     // conversation
     "get_all_characters": CommandDef<undefined, Character[]>,
-    "create_character": CommandDef<{ input: Omit<Character, "id" | "createdAt" | "updatedAt" | "messageCount"> }, Character>,
+    "create_character": CommandDef<{ input: CharacterInput }, Character>,
     "update_character": CommandDef<{ id: string; input: Omit<Character, "id" | "createdAt" | "updatedAt"> }, void>,
     "toggle_favorite_character": CommandDef<{ id: string; isFavorite: boolean}, void>,
     "delete_character": CommandDef<{ id: string }, void>,
@@ -48,19 +48,19 @@ export interface CommandRegistry {
     "delete_worldinfo_entry": CommandDef<{ id: string }, void>,
     "get_all_conversations": CommandDef<undefined, Conversation[]>,
     "get_conversation": CommandDef<{ id: string }, Conversation>,
-    "create_conversation": CommandDef<{input: Omit<Conversation, "id" | "createdAt" | "updatedAt" | "messageCount" | "pinned">;}, Conversation>,
+    "create_conversation": CommandDef<{input: ConversationInput;}, Conversation>,
     "touch_conversation": CommandDef<{ id: string }, number>,
     "delete_conversation": CommandDef<{ id: string }, number>,
     "get_messages": CommandDef<{conversationId: string, limit: number, before?: number}, Message[]>,
-    "append_message": CommandDef<{ input: Omit<Message, "id" | "createdAt"> }, Message>,
+    "append_message": CommandDef<{ input: MessageInput }, Message>,
     "update_message": CommandDef<{ id: string; content: string; meta: MessageMeta | null }, void>,
     "update_message_content": CommandDef<{ id: string; content: string }, void>,
     "update_message_meta": CommandDef<{id: string, meta: MessageMeta}, void>,
     "update_message_swipe_id": CommandDef<{ id: string; swipeId: number }, void>,
     "delete_message": CommandDef<{ id: string }, void>,
     "get_all_personas": CommandDef<undefined, Persona[]>,
-    "create_persona": CommandDef<{ input: Omit<Persona, "id" | "createdAt" | "updatedAt"> }, Persona>,
-    "update_persona": CommandDef<{ id: string; input: Omit<Persona, "id" | "createdAt" | "updatedAt"> }, void>,
+    "create_persona": CommandDef<{ input: PersonaInput }, Persona>,
+    "update_persona": CommandDef<{ id: string; input: PersonaInput }, void>,
     "delete_persona": CommandDef<{ id: string }, void>,
     "get_persona_usage": CommandDef<{ id: string }, { characterCount: number; isSystemDefault: boolean }>,
     "get_conv_settings": CommandDef<undefined, {efaultPersonaId: string }>,
@@ -80,21 +80,21 @@ export interface CommandRegistry {
     "open_game": CommandDef<{gameId: string}, OpenGameResponse>,
     "close_game": CommandDef<undefined, undefined>,
     // game_engine
-    "start_new_game": CommandDef<undefined, GameResponse>,
+    "start_new_game": CommandDef<undefined, ContinueGameResponse>,
     "get_game_view": CommandDef<undefined, any>,
     "validate_game": CommandDef<undefined, any[]>,
     "list_sessions": CommandDef<undefined, GamePlayerSessions[]>,
     "delete_sessions": CommandDef<{sessionId: string}, undefined>,
-    "continue_game": CommandDef<{sessionId: string}, GameResponse>,
-    "load_save": CommandDef<{sessionId: string, slot: number}, GameResponse>,
+    "continue_game": CommandDef<{sessionId: string}, ContinueGameResponse>,
+    "load_save": CommandDef<{sessionId: string, slot: number}, ContinueGameResponse>,
     "read_journal": CommandDef<{sessionId: string, fromSeq?: number, toSeq: number}, GameJournal[]>,
     "read_conversations": CommandDef<{sessionId: string, fromSeq?: number, toSeq: number}, GameConversations[]>,
     "read_messages": CommandDef<{conversation_id: string, fromSeq?: number, toSeq: number}, GameMessages[]>,
-    "dispatch_command": CommandDef<{command: GameCommand}, GameResponse>,
+    "dispatch_command": CommandDef<{command: GameCommand}, ContinueGameResponse>,
     "save_write": CommandDef<{slot: number, data: any}, void>,
     "save_read": CommandDef<{slot: number}, any>,
     "save_list": CommandDef<undefined, GameSave[]>,
-    "npc_say": CommandDef<{character_id: string, input: string}, NpcReply>,
+    "npc_say": CommandDef<{characterId: string, input: string}, NpcReply>,
     
     // widget
     "open_widget": CommandDef<undefined, void>,
@@ -118,7 +118,7 @@ export interface CommandRegistry {
     "append_playlist_entry": CommandDef<{playlistId: string, musicSrc: string, sortOrder?: number}, undefined>,
     "remove_playlist_entry": CommandDef<{playlistId: string, musicSrc: string}, undefined>,
     "update_music_meta": CommandDef<{input: MusicMetaInput}, undefined>,
-    "update_playlist_music_order": CommandDef<{playlistId: string, musicSrc: string, sortOrder: number}, undefined>,
+    "update_playlist_music_order": CommandDef<{playlistId: string, input: PlaylistItem[]}, undefined>,
     "update_music_album_art_pos": CommandDef<{path: string, pos: unknown}, undefined>,
     
     // utils

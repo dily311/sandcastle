@@ -24,7 +24,7 @@ pub async fn fork_session(pool: &SqlitePool, game_id: &str, parent_session_id: &
         .get("engine")
         .filter(|v| !v.is_null())
         .cloned()
-        .ok_or_else(|| AppError::Validation("이 책갈피에는 복원할 상태 스냅샷이 없습니다".into()))?;
+        .ok_or_else(|| AppError::validation("이 책갈피에는 복원할 상태 스냅샷이 없습니다", None))?;
     let mut state: GameState = serde_json::from_value(engine)?;
 
     let new_session_id = uuid::Uuid::new_v4().to_string();

@@ -1,11 +1,8 @@
 use crate::{
-    error::{AppError, Result},
-    models::settings::{
+    error::{AppError, ErrorCode, Result}, models::settings::{
         AppSetting, CssTheme, CssThemeMeta, FeatureSetting, SettingsDomain, ThemeSetting,
-    },
-    sys::{
-        settings::{apply_patch, save, SettingsState},
-        themes::ThemeManager,
+    }, sys::{
+        settings::{SettingsState, apply_patch, load, save}, themes::ThemeManager,
     },
 };
 use serde_json::json;
@@ -16,7 +13,7 @@ use tauri::{AppHandle, Emitter, State};
 // =======================================
 #[tauri::command]
 pub async fn get_app_setting(state: State<'_, SettingsState<AppSetting>>) -> Result<AppSetting> {
-    Ok(state.0.lock().unwrap().clone())
+    Ok(state.0.lock().map_err(|_| AppError::archive(ErrorCode::InternalError, "archive lock poisoned"))?.clone())
 }
 
 #[tauri::command]
@@ -28,7 +25,7 @@ pub async fn update_app_setting(
     let settings = apply_patch(&app, &state.0, patch)?;
     // 이벤트 호출
     app.emit(AppSetting::EVENT_NAME, &settings)
-        .map_err(|e| e.to_string())?;
+        .map_err(|e| AppError::io(e.to_string()))?;
     Ok(settings)
 }
 
@@ -39,7 +36,7 @@ pub async fn update_app_setting(
 pub async fn get_theme_setting(
     state: State<'_, SettingsState<ThemeSetting>>,
 ) -> Result<ThemeSetting> {
-    Ok(state.0.lock().unwrap().clone())
+    Ok(state.0.lock().map_err(|_| AppError::archive(ErrorCode::InternalError, "archive lock poisoned"))?.clone())
 }
 
 #[tauri::command]
@@ -51,7 +48,7 @@ pub async fn update_theme_setting(
     let settings = apply_patch(&app, &state.0, patch)?;
     // 이벤트 호출
     app.emit(ThemeSetting::EVENT_NAME, &settings)
-        .map_err(|e| e.to_string())?;
+        .map_err(|e| AppError::io(e.to_string()))?;
     Ok(settings)
 }
 
@@ -59,14 +56,14 @@ pub async fn update_theme_setting(
 pub fn get_theme_list(theme_mgr: State<'_, ThemeManager>) -> Result<Vec<CssThemeMeta>> {
     theme_mgr
         .get_list()
-        .map_err(|e| AppError::Io(e.to_string()))
+        .map_err(|e| AppError::io(e.to_string()))
 }
 
 #[tauri::command]
 pub fn load_theme_content(theme_mgr: State<'_, ThemeManager>, filename: String) -> Result<String> {
     theme_mgr
         .load_content(&filename)
-        .map_err(|e| AppError::Io(e.to_string()))
+        .map_err(|e| AppError::io(e.to_string()))
 }
 
 #[tauri::command]
@@ -77,24 +74,22 @@ pub fn save_theme(
 ) -> Result<()> {
     theme_mgr
         .save(&filename, &content)
-        .map_err(|e| AppError::Io(e.to_string()))
+        .map_err(|e| AppError::io(e.to_string()))
 }
 
 #[tauri::command]
 pub fn delete_theme(theme_mgr: State<'_, ThemeManager>, filename: String) -> Result<()> {
     theme_mgr
         .delete(&filename)
-        .map_err(|e| AppError::Io(e.to_string()))
+        .map_err(|e| AppError::io(e.to_string()))
 }
 
 // =======================================
 // ---- FeatureSetting ----
 // =======================================
 #[tauri::command]
-pub async fn get_feature_setting(
-    state: State<'_, SettingsState<FeatureSetting>>,
-) -> Result<FeatureSetting> {
-    Ok(state.0.lock().unwrap().clone())
+pub async fn get_feature_setting(state: State<'_, SettingsState<FeatureSetting>>) -> Result<FeatureSetting> {
+    Ok(state.0.lock().map_err(|_| AppError::archive(ErrorCode::InternalError, "archive lock poisoned"))?.clone())
 }
 
 #[tauri::command]
@@ -104,7 +99,7 @@ pub async fn update_feature_setting(
     id: String,
     enabled: bool,
 ) -> Result<()> {
-    let mut settings = state.0.lock().map_err(|e| e.to_string())?;
+    let mut settings = state.0.lock().map_err(|e| AppError::io(e.to_string()))?;
     settings.feature.insert(id.clone(), enabled);
 
     save(&app, &*settings)?;
@@ -113,7 +108,7 @@ pub async fn update_feature_setting(
     if id.starts_with("widget.") {
         let json = json!({"id": id, "enabled": enabled});
         app.emit_to("widget", FeatureSetting::EVENT_NAME, json)
-            .map_err(|e| e.to_string())?;
+            .map_err(|e| AppError::io(e.to_string()))?;
     }
 
     Ok(())

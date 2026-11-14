@@ -1,13 +1,10 @@
-
 -- =========================================================
 -- 채팅 DB
+-- ---------------------------------------------------------
+-- 할 일
+-- 1. 게임 DB와 채팅 DB를 통합하기
+-- 2. 인덱스 추가
 -- =========================================================
-
-CREATE TABLE IF NOT EXISTS conv_settings (
-  id INTEGER PRIMARY KEY CHECK (id = 1),
-  default_persona_id TEXT REFERENCES personas(id) ON DELETE SET NULL,
-  updated_at INTEGER
-);
 
 -- ---------------------------------------------------------
 --  캐릭터 & 페르소나
@@ -38,6 +35,7 @@ CREATE TABLE IF NOT EXISTS characters (
   tags TEXT,
   category TEXT,
   default_persona_id TEXT REFERENCES personas(id) ON DELETE SET NULL,
+  default_prompt_preset_id TEXT REFERENCES prompt_presets(id) ON DELETE SET NULL,
   favorite INTEGER DEFAULT 0,
   created_at INTEGER,
   updated_at INTEGER
@@ -85,6 +83,7 @@ CREATE TABLE IF NOT EXISTS conversations (
   title TEXT,
   character_id TEXT REFERENCES characters(id) ON DELETE SET NULL,
   persona_id TEXT REFERENCES personas(id) ON DELETE SET NULL,
+  prompt_preset_id TEXT REFERENCES prompt_presets(id) ON DELETE SET NULL,
   world_info_ids TEXT,
   mode TEXT,
   meta TEXT,
@@ -93,27 +92,80 @@ CREATE TABLE IF NOT EXISTS conversations (
   updated_at INTEGER
 );
 
+CREATE TABLE IF NOT EXISTS conversations_settings (
+  id TEXT PRIMARY KEY REFERENCES conversations(id) ON DELETE CASCADE,
+  default_persona_id TEXT REFERENCES personas(id) ON DELETE SET NULL,
+  default_prompt_preset_id TEXT REFERENCES prompt_presets(id) ON DELETE SET NULL,
+  updated_at INTEGER
+);
+
+-- ---------------------------------------------------------
+--  메시지 테이블
+-- ---------------------------------------------------------
+-- UI표시용 테이블 / raw 답변은 task.sql을 참조 
+-- ---------------------------------------------------------
 CREATE TABLE IF NOT EXISTS messages (
   id TEXT PRIMARY KEY,
   conversation_id TEXT NOT NULL REFERENCES conversations(id) ON DELETE CASCADE,
+  seq INTEGER NOT NULL,
   role TEXT NOT NULL,
   name TEXT,
   content TEXT NOT NULL,
   character_id TEXT REFERENCES characters(id) ON DELETE SET NULL,
   meta TEXT,
   created_at INTEGER,
-  updated_at INTEGER
+  updated_at INTEGER,
+  UNIQUE(conversation_id, seq)
+);
+
+-- 메시지 즐겨찾기
+CREATE TABLE IF NOT EXISTS message_bookmarks (
+  id TEXT PRIMARY KEY,
+  message_id TEXT NOT NULL REFERENCES messages(id) ON DELETE CASCADE,
+  note TEXT,
+  created_at INTEGER NOT NULL
+);
+
+-- 태그
+CREATE TABLE IF NOT EXISTS message_tags (
+  id TEXT PRIMARY KEY,
+  name TEXT NOT NULL
+);
+
+-- 메시지와 태그 연결
+CREATE TABLE IF NOT EXISTS message_tag_relations (
+  message_id TEXT NOT NULL REFERENCES messages(id) ON DELETE CASCADE,
+  tag_id TEXT NOT NULL,
+  PRIMARY KEY (message_id, tag_id)
+);
+
+-- 사용자 컬렉션
+CREATE TABLE IF NOT EXISTS message_collections (
+  id TEXT PRIMARY KEY,
+  title TEXT NOT NULL,
+  description TEXT,
+  created_at INTEGER NOT NULL
+);
+
+-- 컬렉션에 포함된 메시지
+CREATE TABLE IF NOT EXISTS collection_messages (
+  collection_id TEXT NOT NULL REFERENCES message_collections(id) ON DELETE CASCADE,
+  message_id TEXT NOT NULL REFERENCES messages(id) ON DELETE CASCADE,
+  sort_order INTEGER NOT NULL,
+  PRIMARY KEY (collection_id, message_id)
 );
 
 -- =========================================================
 -- 인덱스
 -- =========================================================
 CREATE INDEX IF NOT EXISTS idx_messages_conv ON messages(conversation_id, created_at);
-CREATE VIEW IF NOT EXISTS v_conversations_with_count AS SELECT c.*, COUNT(m.id) AS message_count FROM conversations c LEFT JOIN messages m ON c.id = m.conversation_id GROUP BY c.id;
 
+-- =========================================================
+-- 뷰
+-- =========================================================
+CREATE VIEW IF NOT EXISTS v_conversations_with_count AS SELECT c.*, COUNT(m.id) AS message_count FROM conversations c LEFT JOIN messages m ON c.id = m.conversation_id GROUP BY c.id;
 
 -- =========================================================
 -- 기본 설정
 -- =========================================================
 INSERT OR IGNORE INTO personas (id,name,avatar,description,tags,color,is_system_default,created_at,updated_at) VALUES ("default","user",NULL,NULL,NULL,NULL,0,strftime('%s','now'),strftime('%s','now'));
-INSERT OR IGNORE INTO conv_settings (id, default_persona_id, updated_at) VALUES (1, "default", strftime('%s','now') * 1000);

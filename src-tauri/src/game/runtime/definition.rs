@@ -24,6 +24,17 @@ pub struct Assets {
     pub backgrounds: Vec<BackgroundAssets>,
 }
 
+/// 씬 설정(settings_json)의 불리언. aiContinue(기본 true): 다음 씬이 없는 선택지 뒤에 AI가 이어갈지.
+/// false면 옛 방식 — 그런 선택지는 씬을 바로 끝낸다.
+pub(crate) fn scene_flag(scene: &GameScene, key: &str, default: bool) -> bool {
+    scene.settings_json.as_ref().and_then(|v| v.get(key)).and_then(|v| v.as_bool()).unwrap_or(default)
+}
+
+/// 씬 설정 minTurns(기본 1): AI가 <scene>end</scene>로 씬을 끝낼 수 있게 되는, 플레이어 입력 횟수의 최소값.
+pub(crate) fn scene_min_turns(scene: &GameScene) -> u32 {
+    scene.settings_json.as_ref().and_then(|v| v.get("minTurns")).and_then(|v| v.as_u64()).map_or(1, |n| n as u32)
+}
+
 pub struct GameDefinition {
     pub game_id: String,
     pub project: GameProject,
@@ -152,11 +163,11 @@ impl GameDefinition {
     /// settings_json의 {"startWeatherId": "..."}에서 읽고, 없으면 호출부가 첫 날씨로 폴백한다.
     /// (start_map_id/start_scene_key 컬럼도 있지만 map은 location에서 derive되므로 안 쓴다.)
     pub fn start_point(&self) -> StartPoint {
-        let parsed: Option<serde_json::Value> = self.project.settings_json.clone();
+        let parsed: Option<&serde_json::Value> = self.project.settings_json.as_ref();
         StartPoint {
             location_id: self.project.start_location_id.clone(),
-            weather_id: parsed.as_ref().and_then(|v| v.get("startWeatherId")).and_then(|v| v.as_str()).map(str::to_string),
-            start_minute: parsed.as_ref().and_then(|v| v.get("startMinute")).and_then(|v| v.as_i64()),
+            weather_id: parsed.and_then(|v| v.get("startWeatherId")).and_then(|v| v.as_str()).map(str::to_string),
+            start_minute: parsed.and_then(|v| v.get("startMinute")).and_then(|v| v.as_i64()),
         }
     }
 }

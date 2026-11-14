@@ -1,4 +1,4 @@
-use std::{collections::HashMap, sync::Mutex};
+use std::{collections::HashMap, sync::{Mutex, Arc}};
 use tauri::Manager;
 pub mod state;
 use state::LaunchMode;
@@ -10,6 +10,8 @@ pub mod game;
 pub mod models;
 pub mod service;
 pub mod sys;
+pub mod task;
+use task::{TaskEventEmitter, TaskExecutor, TaskManager, TaskRepository, TaskRunner};
 use crate::{
     models::settings::{AppSetting, FeatureSetting, ThemeSetting},
     state::{AppState, WindowMode},
@@ -26,6 +28,10 @@ use crate::widget::{manager::WidgetManager, MouseTrackerState};
 pub fn run() {
     let mut builder = tauri::Builder::default()
         // 플러그인 등록
+        .plugin(tauri_plugin_notification::init())
+        .plugin(tauri_plugin_background_service::init_with_service(
+            || service::AppBackgroundService::new(),
+        ))
         .plugin(tauri_plugin_opener::init())
         .plugin(tauri_plugin_os::init())
         .plugin(tauri_plugin_dialog::init())
@@ -271,9 +277,10 @@ pub fn run() {
         });
 
         // 2. AppState 초기화
+        let app_handle = app.handle().clone();
         let launch_mode = LaunchMode::from_args();
         app.manage(AppState {
-            db: pool,
+            db: pool.clone(),
             http_client: reqwest::Client::new(),
             active_archive: Mutex::new(None),
             active_runtime: tokio::sync::Mutex::new(None),
@@ -281,6 +288,13 @@ pub fn run() {
             window_mode: Mutex::new(WindowMode::Explore),
             launch_mode,
         });
+
+        let emitter = TaskEventEmitter::new(app_handle.clone());
+        let repository = Arc::new(TaskRepository::new(pool.clone()));
+        let runner = Arc::new(TaskRunner::new());
+        let task_manager = Arc::new(TaskManager::new(repository, runner, emitter));
+
+        app.manage(task_manager.clone());
 
         // 3. 앱 설정 로드
         let settings_handle = app.handle().clone();
@@ -324,6 +338,15 @@ pub fn run() {
             }
         }
         Ok(())
+    });
+
+    // game 에셋 서빙
+    builder = builder.register_uri_scheme_protocol("game", | app, req | {
+        let app_handle = app.app_handle();
+        let app_dir = app_handle.path().app_data_dir().expect("App data dir not found");
+        let games_root = app_dir.join("games");
+
+        game::protocol::handle(&games_root, req)
     });
 
     // 실행

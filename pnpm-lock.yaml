@@ -53,6 +53,9 @@ importers:
       svelte-spa-router:
         specifier: ^5.1.1
         version: 5.1.1(svelte@5.57.2)
+      tauri-plugin-background-service:
+        specifier: ^1.0.1
+        version: 1.0.1
     devDependencies:
       '@sveltejs/vite-plugin-svelte':
         specifier: ^7.2.0
@@ -1113,6 +1116,9 @@ packages:
   svelte@5.57.2:
     resolution: {integrity: sha512-1YiPCAXT0Ct6g1vOMmSLa0Nsc3QRMvtDF32ihgglGVrugIuIK38RyDiFNXVDhtQ81TJjSO57NdMw6DyYLqSGDQ==}
     engines: {node: '>=18'}
+
+  tauri-plugin-background-service@1.0.1:
+    resolution: {integrity: sha512-mXx0TMgQK6eWT7yiWFTGVlQZrhRkmQC50Kt3ZGShvdTiIhV3lOucXNXQdo6XHICmrvx46CkU+UV6UsgbyfHhzw==}
 
   timers-ext@0.1.8:
     resolution: {integrity: sha512-wFH7+SEAcKfJpfLPkrgMPvvwnEtj8W4IurvEyrKsDleXnKLCDw71w8jltvfLa8Rm4qQxxT4jmDBYbJG/z7qoww==}
@@ -2178,6 +2184,10 @@ snapshots:
       zimmerframe: 1.1.5
     transitivePeerDependencies:
       - '@typescript-eslint/types'
+
+  tauri-plugin-background-service@1.0.1:
+    dependencies:
+      '@tauri-apps/api': 2.12.4
 
   timers-ext@0.1.8:
     dependencies:

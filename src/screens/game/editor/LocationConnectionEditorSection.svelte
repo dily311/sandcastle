@@ -121,15 +121,12 @@
 	.sub-editor-layout {
 		display: grid;
 		grid-template-columns: 320px 1fr;
-		gap: 1.5rem;
 		height: 100%;
 		min-height: 500px;
 	}
 	.item-list-pane,
 	.item-detail-pane {
-		background: #1e293b;
-		border: 1px solid #334155;
-		border-radius: 8px;
+
 		display: flex;
 		flex-direction: column;
 		overflow: hidden;

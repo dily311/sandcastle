@@ -49,6 +49,10 @@ pub(super) fn effect_events(flags: &serde_json::Value, effect: &serde_json::Valu
     if let Some(spec) = effect.get("stage").filter(|s| s.is_object()) {
         out.push(GameEvent::StageRequested { spec: spec.clone() });
     }
+    // 씬 끝내기: {"end_scene": true}
+    if effect.get("end_scene").and_then(|v| v.as_bool()) == Some(true) {
+        out.push(GameEvent::SceneEndRequested);
+    }
     if let Some(scene_id) = effect.get("enter_scene").and_then(|v| v.as_str()) {
         out.push(GameEvent::SceneRequested { scene_id: scene_id.to_string() });
     }

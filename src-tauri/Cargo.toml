@@ -31,7 +31,10 @@ tauri-plugin-os = "2.3.2"
 tauri-plugin-global-shortcut = "2"
 tauri-plugin-window-state = "2"
 tauri-plugin-clipboard-manager = "2.0.0"
+tauri-plugin-background-service = "1.0"
+tauri-plugin-notification = "2"
 
+async-trait = "0.1"
 anyhow = "1.0.104"
 thiserror = "2.0.20"
 base64 = "0.22.1"
@@ -47,12 +50,15 @@ mime_guess = "2.0.5"
 rand = "0.10.3"
 reqwest = { version = "0.12", default-features = false, features = ["json", "stream", "rustls-tls"] }
 tokio = { version = "1.0", features = ["full"] }
+tokio-util = "0.7.20"
 tokio-tungstenite = { version = "0.24", features = ["rustls-tls-webpki-roots"] }
 zip = "8.6.0"
 lofty = "0.24.0"
 image = { version = "0.25", features = ["webp"] }
 infer = "0.22.0"
 tiktoken = "4.1.2"
+strum = "0.26"
+strum_macros = "0.26"
 
 [target.aarch64-linux-android]
 linker = "aarch64-linux-android21-clang"

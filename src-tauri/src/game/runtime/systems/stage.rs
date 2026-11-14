@@ -54,7 +54,28 @@ fn scene_script(def: &GameDefinition, state: &mut GameState, scene_id: &str, rng
     let mut resolver = DefResolver { def, rng, ai: false, player_name: None };
     let lines = stage::parse(script, &mut resolver, &Allowed::author());
     commit(state, &lines);
-    vec![GameEvent::SceneScript { scene_id: scene_id.to_string(), lines }]
+
+    // 대본에 나오는 인물(화자, 표정/모션 대상)은 이 장소에 있는 것으로 한다 — 씬이 끝난 뒤 갑자기 사라지면 어색하다.
+    let mut appeared: Vec<String> = Vec::new();
+    for l in &lines {
+        if let Some(sp) = l.speaker.as_deref().filter(|s| *s != "player") {
+            appeared.push(sp.to_string());
+        }
+        for c in &l.cues {
+            match c {
+                Cue::Standing { character_id, .. } | Cue::Motion { character_id, .. } => appeared.push(character_id.clone()),
+                _ => {}
+            }
+        }
+    }
+    appeared.sort();
+    appeared.dedup();
+
+    let mut out = vec![GameEvent::SceneScript { scene_id: scene_id.to_string(), lines }];
+    if !appeared.is_empty() {
+        out.push(GameEvent::CharactersAppeared { character_ids: appeared });
+    }
+    out
 }
 
 /// CG와 스탠딩을 내리는 큐 (있는 것만).

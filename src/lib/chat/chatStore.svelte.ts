@@ -1,4 +1,4 @@
-import type { Character, Conversation, Message, MessageMeta, MessageSwipe } from "$/lib/type/conv";
+import type { Character, Conversation, ConversationInput, Message, MessageInput, MessageMeta, MessageSwipe } from "$/lib/type/conv";
 import { appSetting } from "../stores/settingStore.svelte";
 import { dbCommands } from "$/ipc/commands";
 import { apiProfiles } from "../stores/apiProfileStore.svelte";
@@ -38,7 +38,7 @@ class ConversationStore {
 			.sort((a, b) => b.updatedAt - a.updatedAt);
 	}
 
-	async create(input: Omit<Conversation, "id" | "createdAt" | "updatedAt" | "messageCount" | "pinned">) {
+	async create(input: ConversationInput) {
 		const conv = await dbCommands.createConversation({ input });
 
 		if (conv?.characterId) {
@@ -87,14 +87,14 @@ class MessageStore {
 	async loadForConversation(conversationId: string, opts?: { limit?: number; before?: number }) {
 		const msgs = await dbCommands.getMessages(conversationId, opts?.limit ?? LIMIT_MESSAGE, opts?.before);
 		if (opts?.before) {
-			this.messages.push(...msgs); // 위로 스크롤 시 과거 메시지 앞에 붙이기
+			this.messages.unshift(...msgs); // 위로 스크롤 시 과거 메시지 앞에 붙이기
 		} else {
 			this.currentConvId = conversationId;
 			this.messages = msgs;
 		}
 	}
 
-	async append(msg: Omit<Message, "id" | "createdAt" | "loading">) {
+	async append(msg: MessageInput) {
 		const full = await dbCommands.appendMessage({ input: msg });
 		if (full.conversationId === this.currentConvId) this.messages.push(full);
 		await conversations.touch(full.conversationId);
@@ -105,6 +105,7 @@ class MessageStore {
 	async startAssistantStream(conversationId: string, character: Character) {
 		const message = await this.append({
 			conversationId,
+			seq: this.messages.length + 1,
 			status: "streaming",
 			role: "assistant",
 			content: "",
@@ -169,6 +170,7 @@ class MessageStore {
 				content: current.content,
 				meta: metaWithoutSwipes ?? {},
 				createdAt: current.createdAt,
+				updatedAt: current.updatedAt,
 			};
 			newSwipes.push(prevMessage);
 		}
@@ -176,6 +178,7 @@ class MessageStore {
 			content: content,
 			meta: {},
 			createdAt: Date.now(),
+			updatedAt: Date.now(),
 		};
 		newSwipes.push(swipeMessage);
 
@@ -253,6 +256,7 @@ export async function newConversation(characterId: string) {
 	if (char && char.firstMessage) {
 		await messages.append({
 			conversationId: conv.id,
+			seq: messages.value.length + 1,
 			content: char.firstMessage,
 			name: char.name,
 			role: "system",

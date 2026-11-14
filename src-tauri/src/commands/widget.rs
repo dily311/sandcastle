@@ -42,15 +42,15 @@ pub async fn toggle_ignore_cursor(window: tauri::Window, ignore: bool) -> Result
 pub async fn is_autostart_enabled(state: State<'_, AutoLaunchManager>) -> Result<bool, AppError> {
     state
         .is_enabled()
-        .map_err(|e| AppError::Window(e.to_string()))
+        .map_err(|e| AppError::window(e.to_string()))
 }
 
 #[tauri::command]
 pub async fn set_autostart(state: State<'_, AutoLaunchManager>, enabled: bool) -> Result<(), AppError> {
     if enabled {
-        state.enable().map_err(|e| e.to_string())?;
+        state.enable().map_err(|e| AppError::io(e.to_string()))?;
     } else {
-        state.disable().map_err(|e| e.to_string())?;
+        state.disable().map_err(|e| AppError::io(e.to_string()))?;
     }
 
     Ok(())
@@ -101,7 +101,7 @@ pub fn set_widget_click_through(window: WebviewWindow, enabled: bool) -> Result<
 // =======================================
 #[tauri::command]
 pub fn get_widget_music_settings(app: AppHandle) -> Result<WidgetMusicSetting, AppError> {
-    let store = app.store("widget.json").map_err(|e| e.to_string())?;
+    let store = app.store("widget.json").map_err(|e| AppError::io(e.to_string()))?;
     let result: WidgetMusicSetting = store.get("music")
         .and_then(|v| serde_json::from_value(v).ok())
         .unwrap_or_default();
@@ -111,7 +111,7 @@ pub fn get_widget_music_settings(app: AppHandle) -> Result<WidgetMusicSetting, A
 
 #[tauri::command]
 pub fn save_widget_music_settings(app: AppHandle, patch: serde_json::Value) -> Result<(), AppError> {
-    let store = app.store("widget.json").map_err(|e| e.to_string())?;
+    let store = app.store("widget.json").map_err(|e| AppError::io(e.to_string()))?;
     let setting: WidgetMusicSetting = store.get("music").and_then(|v| serde_json::from_value(v).ok()).unwrap_or_default();
     let mut data: serde_json::Value = serde_json::to_value(&setting)?;
 
@@ -180,8 +180,10 @@ pub async fn update_music_meta(state: State<'_, AppState>, input: MusicMetaInput
     Ok(())
 }
 #[tauri::command]
-pub async fn update_playlist_music_order(state: State<'_, AppState>, playlist_id: String, music_src: String, sort_order: u32) -> Result<(), AppError> {
-    db::widget::update_playlist_music_order(&state.db, &playlist_id, &music_src, sort_order).await?;
+pub async fn update_playlist_music_order(state: State<'_, AppState>, playlist_id: String, input: Vec<PlaylistItem>) -> Result<(), AppError> {
+    for item in input {
+        db::widget::update_playlist_music_order(&state.db, &playlist_id, &item.meta.path, item.sort_order).await?;
+    }
     Ok(())
 }
 

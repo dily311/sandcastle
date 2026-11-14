@@ -1,39 +1,188 @@
-use std::collections::HashMap;
-
+use crate::{
+    error::{AppError, AppErrorResponse}, models::conversation::{Message, WorldInfoEntry},
+};
 use serde::{Deserialize, Serialize};
+use serde_json::Value;
 use sqlx::prelude::FromRow;
 
-use crate::{db::conn::DbPool, error::AppError, models::conversation::{Message, WorldInfoEntry}};
-
 // =======================================
+// DB 내 테이블 정의
+// =======================================
+// ---------------------------------------
 // API 프로필
-// =======================================
-
+// ---------------------------------------
 #[derive(FromRow, Deserialize, Serialize)]
 #[serde(rename_all = "camelCase")]
-pub struct ApiProfile {
+pub struct ApiProfiles {
     pub id: String,
     pub name: String,
     pub provider: String,
     pub format_type: String,
     pub base_url: String,
     pub model: String,
-    pub selected_preset_id: Option<String>,
     pub created_at: i64,
     pub updated_at: i64,
 }
 
 #[derive(Deserialize)]
 #[serde(rename_all = "camelCase")]
-pub struct ApiProfileInput {
+pub struct ApiProfilesInput {
     pub name: String,
     pub provider: String,
     pub format_type: String,
     pub base_url: String,
     pub model: String,
-    pub selected_preset_id: Option<String>,
 }
 
+// ---------------------------------------
+// 프롬프트
+// ---------------------------------------
+
+#[derive(FromRow)]
+pub struct PromptPresetsRows {
+    pub id: String,
+    pub name: String,
+    pub description: Option<String>,
+    pub preset_type: String,   // chat_completion / text_completion
+    pub source_format: String, // native / sillytavern
+    pub config_json: String,
+    pub settings_json: Option<String>,
+    pub compatibility_json: Option<String>,
+    pub created_at: i64,
+    pub updated_at: i64,
+}
+#[derive(Deserialize, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct PromptPresets {
+    pub id: String,
+    pub name: String,
+    pub description: Option<String>,
+    pub preset_type: String,   // chat_completion / text_completion
+    pub source_format: String, // native / sillytavern
+    pub config_json: Value,
+    pub settings_json: Option<Value>,
+    pub compatibility_json: Option<Value>,
+    pub created_at: i64,
+    pub updated_at: i64,
+}
+
+impl From<PromptPresetsRows> for PromptPresets {
+    fn from(r: PromptPresetsRows) -> Self {
+        Self {
+            id: r.id,
+            name: r.name,
+            description: r.description,
+            preset_type: r.preset_type,
+            source_format: r.source_format,
+            config_json: serde_json::from_str(&r.config_json)
+                .ok()
+                .unwrap_or_default(),
+            settings_json: r.settings_json.and_then(|s| serde_json::from_str(&s).ok()),
+            compatibility_json: r
+                .compatibility_json
+                .and_then(|s| serde_json::from_str(&s).ok()),
+            created_at: r.created_at,
+            updated_at: r.updated_at,
+        }
+    }
+}
+
+#[derive(Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct PromptPresetsInput {
+    pub id: Option<String>,
+    pub name: String,
+    pub description: Option<String>,
+    pub preset_type: String,   // chat_completion / text_completion
+    pub source_format: String, // native / sillytavern
+    pub config_json: Value,
+    pub settings_json: Option<Value>,
+    pub compatibility_json: Option<Value>,
+}
+
+#[derive(FromRow)]
+pub struct PromptBlocksRows {
+    pub id: String,
+    pub preset_id: String,
+    pub name: String,
+    pub identifier: String,
+    pub block_type: String,
+    pub role: String,
+    pub content: String,
+    pub enabled: bool,
+    pub position: String,
+    pub depth: i64,
+    pub sort_order: i64,
+    pub triggers_json: String,
+    pub extra_json: Option<String>,
+    pub created_at: i64,
+    pub updated_at: i64,
+}
+#[derive(Deserialize, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct PromptBlocks {
+    pub id: String,
+    pub preset_id: String,
+    pub name: String,
+    pub identifier: String,
+    pub block_type: String,
+    pub role: String,
+    pub content: String,
+    pub enabled: bool,
+    pub position: String,
+    pub depth: i64,
+    pub sort_order: i64,
+    pub triggers_json: Value,
+    pub extra_json: Option<Value>,
+    pub created_at: i64,
+    pub updated_at: i64,
+}
+
+impl From<PromptBlocksRows> for PromptBlocks {
+    fn from(r: PromptBlocksRows) -> Self {
+        Self {
+            id: r.id,
+            preset_id: r.preset_id,
+            name: r.name,
+            identifier: r.identifier,
+            block_type: r.block_type,
+            role: r.role,
+            content: r.content,
+            enabled: r.enabled,
+            position: r.position,
+            depth: r.depth,
+            sort_order: r.sort_order,
+            triggers_json: serde_json::from_str(&r.triggers_json)
+                .ok()
+                .unwrap_or_default(),
+            extra_json: r.extra_json.and_then(|s| serde_json::from_str(&s).ok()),
+            created_at: r.created_at,
+            updated_at: r.updated_at,
+        }
+    }
+}
+
+#[derive(Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct PromptBlocksInput {
+    pub id: Option<String>,
+    pub preset_id: String,
+    pub name: String,
+    pub identifier: String,
+    pub block_type: String,
+    pub role: String,
+    pub content: String,
+    pub enabled: bool,
+    pub position: String,
+    pub depth: i64,
+    pub sort_order: i64,
+    pub triggers_json: String,
+    pub extra_json: Option<String>,
+}
+
+#[derive(Deserialize, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct PromptConfig {}
 // =======================================
 // AI 연결
 // =======================================
@@ -68,7 +217,7 @@ pub struct PromptRequest {
     pub context: ChatContext,
     pub user_message: String,
     pub preset_id: Option<String>,
-    pub context_limit: u32, // 전체 컨텍스트 토큰 예산
+    pub context_limit: u32,    // 전체 컨텍스트 토큰 예산
     pub world_info_ratio: f32, // 월드인포에 할당할 비율
 }
 
@@ -124,7 +273,7 @@ pub struct DialogueDoneEvent {
 
 pub struct DialogueErrorEvent {
     pub conversation_id: String,
-    pub error: AppError,
+    pub error: AppErrorResponse,
 }
 
 #[derive(Serialize, Clone)]

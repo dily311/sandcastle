@@ -12,6 +12,8 @@
     "store:default",
     "dialog:default",
     "fs:default",
-    "clipboard-manager:default"
+    "clipboard-manager:default",
+    "clipboard-manager:allow-write-text",
+    "background-service:default"
   ]
 }

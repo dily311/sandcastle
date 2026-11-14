@@ -4,6 +4,7 @@
 	import { handleSelectMusicFolder, changePlayMusic, playlistStore } from "../musicPlyerStore.svelte";
 	import PlaylistFolderTree from "./PlaylistFolderTree.svelte";
 	import PlaylistItemScreen from "./PlaylistItemScreen.svelte";
+	import { sortableList } from "$/lib/action/useSortable.svelte";
 
 	let currentPageMode = $state(true);
 	let showActionMenu = $state(false);
@@ -42,16 +43,25 @@
 	</div>
 	<div class="playlist-content">
 		{#if currentPageMode}
-			<div class="playlist-item-list">
+			<div 
+				class="playlist-item-list"
+				{@attach sortableList({
+					items: playlistStore.current,
+					onReorder: (items) => {
+						playlistStore.updateMusicOrder(items);
+					}
+				})}
+			>
 				{#each playlistStore.current as item, index}
 					<div
+						data-index={index}
 						class="playlist-item-wrap"
 						class:playing-now={playlistStore?.currentSong?.path === item.meta.path}
 					>
 						<button
 							type="button"
 							aria-label={$_("music.playlist:change")}
-							class="playlist-order-change-btn"
+							class="playlist-order-change-btn order-change-btn"
 							class:grab
 							draggable="true"
 							onclick={() => playlistStore.changeOrder(item, index)}

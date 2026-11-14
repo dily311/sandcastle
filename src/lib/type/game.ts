@@ -51,12 +51,19 @@ export interface Capabilities {
 export interface OpenGameResponse {
 	project: GameProject;
 	view: GameDefinition;
-	issues: Issue[];
+	// view 내용의 해시값. 프론트가 캐시해둔 정적 데이터가 유효한지 비교
+	contentHash: string;
+	// 에셋을 불러오는 기준
+	assetBaseUrl: string;
+	// 데이터 진단 결과. 에러나 경고를 표시하는 데 사용
+	diagnostics: Issue[];
 }
 
 export interface Issue {
 	severity: "error" | "warning";
 	message: string;
+	targets: string[];
+	text: string;
 }
 
 export interface GameDefinition {
@@ -117,7 +124,6 @@ export interface LocationConnection {
 	fromId: string;
 	toId: string;
 	travelSeconds: number;
-	condition?: string | null;
 	settings: any;
 }
 
@@ -273,12 +279,13 @@ export interface variable {
  * 랜더링 데이터
  * 정적 데이터에서 변한 데이터만 반환된다.
  */
-export interface GameResponse {
+export interface ContinueGameResponse {
 	// 게임엔진에서 돌아간 이벤트 목록
 	// 무시해도 됨
 	events: GameEvent[];
 	// 화면 표시 연출용
 	state: RenderState;
+	history: TranscriptPage;
 }
 
 /** 변경된 데이터
@@ -295,6 +302,7 @@ export interface RenderState {
 	currentSceneId: string | null;
 	activeNpcId: string | null;
 	availableChoices: string[];
+	availableMoves: AvailableMove[];
 	flags: any;
 	inventory: any;
 	relationships: Record<string, RelationshipDetail>;
@@ -302,12 +310,34 @@ export interface RenderState {
 	presentNpcs: string[];
 }
 
+export interface AvailableMove {
+	toId: string;
+	travelSeconds: number;
+	available: boolean;
+}
 export interface RelationshipDetail {
 	tags: string[];
 	affection?: number;
 	trust?: number;
 	tension?: number;
 }
+
+
+export interface TranscriptPage {
+	entries: TranscriptEntry[];
+	hasMore: boolean;
+	oldestSeq: number | null;
+}
+
+export interface TranscriptEntry {
+	seq: number;
+	gameTime: number;
+	kind: "sceneScript" | "message";
+	sceneId: string | null;
+	role: string | null;
+	lines: StageLine[];
+}
+
 // ---------------------------------------------------------
 // 게임 커맨드와 이벤트 정의
 // ---------------------------------------------------------
@@ -340,11 +370,12 @@ export type GameEvent =
 	| { type: "triggerActivated"; sceneId: string }
 	| { type: "dialogueStarted"; sceneId: string }
 	| { type: "dialogueEnded"; sceneId: string }
-	| { type: "choicePresented"; sceneId: string }
+	| { type: "choicePresented"; choices: string[] }
 	| { type: "choiceMade"; sceneId: string }
 	| { type: "sceneChanged"; sceneId: string }
 	| { type: "stageRequested"; spec: any }
 	| { type: "sceneScript"; sceneId: string; lines: StageLine[] }
+	| { type: "charactersAppeared", characterIds: string[] }
 	| { type: "stageLines"; lines: StageLine[] }
 	| { type: "sceneExited"; sceneId: string }
 	| { type: "variableChanged"; key: string; old: any; new: any }
@@ -454,6 +485,9 @@ export interface GamePlayerSessions {
 	flagsJson: any;
 	parentSessionId: string | null;
 	pendingScenesJson: any;
+	inventoryJson: any;
+	relationshipsJson: any;
+	stageJson: any;
 	forkedFromSeq: number | null;
 	headSeq: number;
 	updatedAt: number;
@@ -462,21 +496,21 @@ export interface GameJournal {
 	sessionId: string;
 	seq: number;
 	kind: string;
-	payloadJson: any;
+	payloadJson: any | null;
 	gameTime: number;
 	createdAt: number;
 }
 export interface GameSave {
-	id: string;
-	gameId: string;
+	name: string | null;
+	seq: number;
 	sessionId: string;
 	slotNumber: number;
 	currentSceneId: string | null;
 	currentMapId: string | null;
 	currentZoneId: string | null;
 	currentLocationId: string | null;
-	gameTime: number;
 	currentWeatherId: string | null;
+	gameTime: number;
 	stateSnapshot: string | null;
 	updatedAt: number;
 }
@@ -512,8 +546,15 @@ export interface PackageData {
 	scenes: GameSceneInput[];
 	endings: GameEndingsInput[];
 	characters: GameCharactersInput[];
-	worldInfoBooks: PackageWorldInfoBook[];
+	spawnLocations: GameCharacterSpawnLocationsInput[];
+	items: GameItemsInput[];
+	relationshipDefs: GameRelationshipDefsInput[];
 	assets: GameAssetsInput[];
+	audioAssets: GameAudioAssetsInput[];
+	characterAssets: GameCharacterAssetsInput[];
+	cgAssets: GameCgAssetsInput[];
+	backgroundAssets: GameBackgroundAssetsInput[];
+	worldInfoBooks: PackageWorldInfoBook[];
 }
 
 export interface GameProjectInput {
@@ -649,6 +690,8 @@ export interface GameSceneInput {
 	description: string | null;
 	sceneKey: string;
 	settingsJson: string | null;
+	script?: string | null;
+	choices?: GameChoiceInput[] | null;
 	isEnding: boolean;
 	sortOrder: number;
 	createdAt: number;
@@ -660,6 +703,33 @@ export interface GameEndingsInput {
 	endingKey: string;
 	title: string;
 	description: string;
+}
+
+export interface GameChoiceInput {
+	id: string;
+	sceneId: string;
+	text: string;
+	nextSceneId: string | null;
+	condition: string | null;
+	effect: string | null;
+	sortOrder: number;
+}
+
+export interface GameItemsInput {
+	id: string | null;
+	gameId: string;
+	name: string;
+	description: string | null;
+	icon: string | null;
+	kind: string | null;
+	maxStack: number;
+	isUnique: boolean;
+	isKey: boolean;
+	consumable: boolean;
+	useEffect: unknown;
+	useCondition: unknown;
+	onAcquireEventId: string | null;
+	settingsJson: unknown;
 }
 
 export interface GameCharactersInput {
@@ -678,6 +748,13 @@ export interface GameCharactersInput {
 	settingsJson: unknown;
 }
 
+export interface GameCharacterSpawnLocationsInput {
+	id: string | null;
+	gameCharacterId: string;
+	locationId: string;
+	spawnWeight: number;
+	conditionJson: any;
+}
 export interface PackageWorldInfoBook {
 	id: string;
 	book: WorldInfoBookInput;
@@ -700,6 +777,15 @@ interface WorldInfoEntryInput {
 	constant: boolean;
 }
 
+export interface GameRelationshipDefsInput {
+	id: string | null;
+	gameId: string;
+	fromId: string;
+	toId: string;
+	valuesJson: any;
+	tags: any;
+}
+
 export interface GameAssetsInput {
 	id: string | null;
 	gameId: string;
@@ -709,4 +795,32 @@ export interface GameAssetsInput {
 	kind: string;
 	filePath: string;
 	settingsJson: unknown | null;
+}
+
+export interface GameAudioAssetsInput extends GameAssetsInput {
+	tag: string | null;
+	gameCharacterId: string | null;
+	transcript: string | null;
+}
+
+export interface GameCharacterAssetsInput extends GameAssetsInput {
+	gameCharacterId: string | null;
+	usage: "standing" | "map" | string;
+	emotion: string | null;
+}
+
+export interface GameCgAssetsInput extends GameAssetsInput {
+	gameCharacterId: string | null;
+	description: string | null;
+	prompt: string | null;
+	negativePrompt: string | null;
+	seed: number | null;
+	generationParams: unknown | null;
+	aiUsable: boolean;
+}
+
+export interface GameBackgroundAssetsInput extends GameAssetsInput {
+	locationId: string | null;
+	timeId: string | null;
+	weatherId: string | null;
 }

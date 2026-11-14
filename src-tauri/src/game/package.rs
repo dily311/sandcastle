@@ -20,7 +20,7 @@ use crate::db::game::{
     upsert_game_time_period, upsert_game_weather_transition, upsert_game_weather_type,
     upsert_game_zone,
 };
-use crate::error::AppError;
+use crate::error::{AppError, ErrorCode};
 use crate::game::runtime::GameDefinition;
 use crate::models::conversation::{WorldInfoBookInput, WorldInfoEntryInput};
 use crate::models::game::{
@@ -376,7 +376,7 @@ pub fn check_asset_path(p: &str) -> Result<(), AppError> {
         || p.contains(':')
         || p.split('/').any(|seg| seg == ".." || seg.is_empty());
     if bad {
-        return Err(AppError::Validation(format!("에셋 경로가 올바르지 않습니다: {p}")));
+        return Err(AppError::validation(format!("에셋 경로가 올바르지 않습니다: {p}"), None));
     }
     Ok(())
 }
@@ -611,18 +611,18 @@ pub struct ImportOverrides {
 pub async fn import(pool: &SqlitePool, games_root: &Path, zip_path: &Path) -> Result<String, AppError> {
     let file = std::fs::File::open(zip_path)?;
     if file.metadata()?.len() > MAX_PACKAGE_BYTES {
-        return Err(AppError::Validation("패키지 크기가 너무 큽니다".into()));
+        return Err(AppError::validation("패키지 크기가 너무 큽니다", None));
     }
-    let archive = zip::ZipArchive::new(file).map_err(|e| AppError::Archive(e.to_string()))?;
+    let archive = zip::ZipArchive::new(file).map_err(|e| AppError::archive(ErrorCode::ArchiveInvalid, e.to_string()))?;
     import_archive(pool, games_root, archive, None).await
 }
 
 /// 메모리에 있는 패키지(번들된 템플릿 패키지)를 가져온다. 파일 import와 같은 경로를 탄다.
 pub async fn import_bytes(pool: &SqlitePool, games_root: &Path, bytes: &[u8], overrides: Option<ImportOverrides>) -> Result<String, AppError> {
     if bytes.len() as u64 > MAX_PACKAGE_BYTES {
-        return Err(AppError::Validation("패키지 크기가 너무 큽니다".into()));
+        return Err(AppError::validation("패키지 크기가 너무 큽니다", None));
     }
-    let archive = zip::ZipArchive::new(std::io::Cursor::new(bytes)).map_err(|e| AppError::Archive(e.to_string()))?;
+    let archive = zip::ZipArchive::new(std::io::Cursor::new(bytes)).map_err(|e| AppError::archive(ErrorCode::ArchiveInvalid, e.to_string()))?;
     import_archive(pool, games_root, archive, overrides).await
 }
 
@@ -642,14 +642,29 @@ async fn import_archive<R: std::io::Read + std::io::Seek>(pool: &SqlitePool, gam
 
 async fn import_into<R: std::io::Read + std::io::Seek>(pool: &SqlitePool, archive: &mut zip::ZipArchive<R>, dest: &Path, new_game_id: String, overrides: Option<ImportOverrides>) -> Result<String, AppError> {
 
+    let mut manifest_raw: Option<String> = None;
+    let mut data_raw: Option<String> = None;
     for i in 0..archive.len() {
-        let mut entry = archive.by_index(i).map_err(|e| AppError::Archive(e.to_string()))?;
+        let mut entry = archive.by_index(i).map_err(|e| AppError::archive(ErrorCode::ArchiveInvalid, e.to_string()))?;
         let Some(rel_path) = entry.enclosed_name() else {
-            return Err(AppError::Archive("잘못된 경로가 포함된 패키지입니다".into()));
+            return Err(AppError::archive(ErrorCode::ArchiveUnsafePath, "잘못된 경로가 포함된 패키지입니다"));
         };
+        let name = rel_path.to_string_lossy().replace('\\', "/");
+        // manifest.json과 data/는 읽기만 하고 게임 폴더에 풀지 않는다. DB가 정의의 원본이라서, 풀어두면 에디터에서
+        // 저장한 뒤로는 낡은 사본이 되고(export가 같은 이름을 또 넣어서 중복 파일 오류가 났던 원인이기도 하다)
+        // game:// 로 그대로 서빙될 수도 있다.
+        if name == "manifest.json" || name == "data/definition.json" {
+            let mut buf = String::new();
+            std::io::Read::read_to_string(&mut entry, &mut buf)?;
+            if name == "manifest.json" { manifest_raw = Some(buf) } else { data_raw = Some(buf) }
+            continue;
+        }
+        if name == "data" || name == "data/" || name.starts_with("data/") {
+            continue;
+        }
         let out_path = dest.join(rel_path);
         if !out_path.starts_with(&dest) {
-            return Err(AppError::Archive("경로 탈출이 감지됐습니다".into()));
+            return Err(AppError::archive(ErrorCode::ArchiveUnsafePath, "경로 탈출이 감지됐습니다"));
         }
         if entry.is_dir() {
             std::fs::create_dir_all(&out_path)?;
@@ -662,10 +677,10 @@ async fn import_into<R: std::io::Read + std::io::Seek>(pool: &SqlitePool, archiv
         }
     }
 
-    let manifest_raw = std::fs::read_to_string(dest.join("manifest.json")).map_err(|_| AppError::Validation("manifest.json이 없습니다".into()))?;
+    let manifest_raw = manifest_raw.ok_or_else(|| AppError::validation("manifest.json이 없습니다", None))?;
     let _manifest: Manifest = serde_json::from_str(&manifest_raw)?; // TODO: min_engine_version 체크
 
-    let data_raw = std::fs::read_to_string(dest.join("data/definition.json")).map_err(|_| AppError::Validation("data/definition.json이 없습니다".into()))?;
+    let data_raw = data_raw.ok_or_else(|| AppError::validation("data/definition.json이 없습니다", None))?;
     let mut data: PackageData = serde_json::from_str(&data_raw)?;
     data = remap_ids(data)?;
     if let Some(o) = &overrides {
@@ -730,7 +745,7 @@ async fn import_into<R: std::io::Read + std::io::Seek>(pool: &SqlitePool, archiv
 pub async fn export(pool: &SqlitePool, games_root: &Path, game_id: &str, definition: &GameDefinition, output_dir: &Path) -> Result<PathBuf, AppError> {
     let src = games_root.join(game_id);
     if !src.exists() {
-        return Err(AppError::NotFound("게임 파일을 찾을 수 없습니다".into()));
+        return Err(AppError::not_found("게임 파일을 찾을 수 없습니다"));
     }
     std::fs::create_dir_all(output_dir)?;
     let out_path = unique_path(output_dir, &sanitize_filename(&definition.project.title), "tgame");
@@ -745,17 +760,17 @@ pub async fn export(pool: &SqlitePool, games_root: &Path, game_id: &str, definit
         author: None, // TODO: 작성자 정보를 어디서 가져올지 (앱 프로필? 설정?)
         min_engine_version: env!("CARGO_PKG_VERSION").into(),
     };
-    zip.start_file("manifest.json", options).map_err(|e| AppError::Archive(e.to_string()))?;
+    zip.start_file("manifest.json", options).map_err(|e| AppError::archive(ErrorCode::ArchiveInvalid, e.to_string()))?;
     std::io::Write::write_all(&mut zip, serde_json::to_string_pretty(&manifest)?.as_bytes())?;
 
     let world_info_books = collect_world_info_books(pool, definition).await?;
     let package_data = to_package_data(definition, world_info_books);
-    zip.start_file("data/definition.json", options).map_err(|e| AppError::Archive(e.to_string()))?;
+    zip.start_file("data/definition.json", options).map_err(|e| AppError::archive(ErrorCode::ArchiveInvalid, e.to_string()))?;
     std::io::Write::write_all(&mut zip, serde_json::to_string_pretty(&package_data)?.as_bytes())?;
 
     add_dir_to_zip(&mut zip, &src, &src, options)?;
 
-    zip.finish().map_err(|e| AppError::Archive(e.to_string()))?;
+    zip.finish().map_err(|e| AppError::archive(ErrorCode::ArchiveInvalid, e.to_string()))?;
     Ok(out_path)
 }
 
@@ -772,15 +787,15 @@ fn add_dir_to_zip<W: std::io::Write + std::io::Seek>(
         let entry = entry?;
         let path = entry.path();
         let rel = path.strip_prefix(base).expect("base 하위 경로여야 함").to_string_lossy().replace('\\', "/");
-        // 중복 추가 방지용
+        // 중복 추가 방지용 (export가 manifest.json과 data/definition.json을 따로 넣는다)
         if rel == "manifest.json" || rel == "data/definition.json" {
             continue;
         }
         if path.is_dir() {
-            zip.add_directory(format!("{rel}/"), options).map_err(|e| AppError::Archive(e.to_string()))?;
+            zip.add_directory(format!("{rel}/"), options).map_err(|e| AppError::archive(ErrorCode::ArchiveInvalid, e.to_string()))?;
             add_dir_to_zip(zip, base, &path, options)?;
         } else {
-            zip.start_file(rel, options).map_err(|e| AppError::Archive(e.to_string()))?;
+            zip.start_file(rel, options).map_err(|e| AppError::archive(ErrorCode::ArchiveInvalid, e.to_string()))?;
             let bytes = std::fs::read(&path)?;
             std::io::Write::write_all(zip, &bytes)?;
         }

@@ -16,7 +16,7 @@ use crate::db::game::{
     upsert_game_player_sessions, get_game_conversation_conversation_id, get_game_messages, upsert_game_conversation,
     upsert_game_conversations_participant, upsert_game_journal, upsert_game_message,
 };
-use crate::error::AppError;
+use crate::error::{AppError, ErrorCode};
 use crate::game::guard::current_game_id;
 use crate::models::conversation::WorldInfoEntry;
 use crate::models::game::{GameConversationsInput, GameJournalInput, GameMessagesInput};
@@ -25,7 +25,7 @@ use crate::service::ChatManager;
 use crate::models::ai_service::{ChatContext, HistoryItem};
 use crate::sys::settings::SettingsState;
 use std::collections::VecDeque;
-use tauri::{AppHandle, Manager, State};
+use tauri::{AppHandle, State};
 
 const MAX_INPUT_CHARS: usize = 2000; // TODO: 실제 상한 정하기
 const HISTORY_LIMIT: usize = 20; // TODO: 토큰 예산 기준으로 바꾸기
@@ -44,6 +44,15 @@ const GAME_SYSTEM_RULES: &[&str] = &[
     "말하는 사람과 줄: 한 줄이 한 장면 조각이다. 대사는 `이름: 내용` 형식으로 쓰고, 지문(나레이션)은 이름 없이 쓴다. 대화 상대 외의 인물은 아래 '같은 장소에 있는 인물'에 있을 때만 등장해서 말할 수 있다. 플레이어(나)가 하는 말이나 행동은 대신 쓰지 마라.",
     "연출 태그(플레이어에게 보이지 않는다)는 해당 줄에 함께 적는다: <emotion::이름>감정</emotion>(그 인물의 표정, '표정 목록'에 있는 감정만), <motion::이름>동작</motion>, <sfx>소리 이름</sfx>, <bgm>분위기</bgm>(바뀔 때만), <cg>키</cg> 또는 <cg>off</cg>(특별한 순간만), <effects>효과 이름</effects>. 목록에 없는 이름은 절대 쓰지 마라. 눈에 띄게 달라질 때만 쓰고 문장마다 쓰지 마라. 태그를 대사로 읽거나 설명하지 마라.",
 ];
+/// 씬 입력(서술자) 대화의 참여자 키. 씬 하나에 대화가 하나 (branch_key = 씬 id).
+const SCENE_PARTICIPANTS_KEY: &str = "_scene";
+
+/// 씬이 열려 있을 때(sceneSay)의 추가 규칙. 1:1 대화용 <updateRel> 규칙은 이쪽 규칙으로 바꿔 쓴다.
+const SCENE_RULES: [&str; 3] = [
+    "지금은 서술자로서 이야기를 이어간다. 플레이어의 입력(행동, 선택, 말)에 이어서 지문(이름 없이)과 '같은 장소에 있는 인물'들의 대사(`이름: 내용`)로 장면을 한 단계 진행시켜라. 한 번에 너무 길게 쓰지 마라. 아래 '현재 씬'과 이전 지문의 분위기와 설정을 이어간다.",
+    "인물의 호감, 신뢰, 긴장이 이 장면 때문에 실제로 바뀔 때만 <updateRel::인물이름>{\"affection\":1,\"trust\":-1}</updateRel> 형식으로 적어라(인물마다 하나씩, '같은 장소에 있는 인물'만). 축은 affection/trust/tension뿐이고 한 번에 ±5 안에서 조금씩만 바꿔라.",
+    "이야기가 자연스럽게 마무리되어 이 장면을 끝내야 할 때만 응답 맨 끝에 <scene>end</scene>를 적어라. 서둘러 끝내지 마라. 끝내지 않으면 장면이 계속된다.",
+];
 const MAX_UPDATE_TAGS: usize = 3; // 한 응답에서 읽을 <updateVar> 태그 수
 const MAX_AI_REL_CHANGES: usize = 3; // 한 응답에서 적용할 관계 축 변경 수
 const MAX_AI_CHANGES: usize = 3; // 한 응답에서 적용할 변수 변경 수
@@ -52,13 +61,13 @@ const MAX_AI_CHANGES: usize = 3; // 한 응답에서 적용할 변수 변경 수
 /// state.ai_rate_limit: Mutex<HashMap<String, VecDeque<i64>>> (game_id -> 타임스탬프들).
 fn check_rate_limit(state: &AppState, game_id: &str) -> Result<(), AppError> {
     let now = chrono::Utc::now().timestamp();
-    let mut limiter = state.ai_rate_limit.lock().map_err(|_| AppError::AiProvider("rate limiter lock poisoned".into()))?;
+    let mut limiter = state.ai_rate_limit.lock().map_err(|_| AppError::ai_provider(ErrorCode::AiProviderRateLimit, "rate limiter lock poisoned", false))?;
     let window: &mut VecDeque<i64> = limiter.entry(game_id.to_string()).or_default();
     while window.front().is_some_and(|t| now - *t > RATE_LIMIT_WINDOW_SECONDS) {
         window.pop_front();
     }
     if window.len() >= RATE_LIMIT_MAX_CALLS {
-        return Err(AppError::AiProvider("호출이 너무 잦습니다. 잠시 후 다시 시도하세요".into()));
+        return Err(AppError::ai_provider(ErrorCode::AiProviderRateLimit,"호출이 너무 잦습니다. 잠시 후 다시 시도하세요", true));
     }
     window.push_back(now);
     Ok(())
@@ -119,6 +128,8 @@ fn participants_key(ids: &[&str]) -> String {
 
 /// 런타임(메모리)에서 한 번에 뽑아오는 재료. 락은 이 블록 안에서만 잡는다.
 struct NpcSnapshot {
+    /// 씬 입력일 때: 이 씬의 대본(평문). 대본 줄은 대화 기록에 없으니 첫 기록으로 넣어서 AI가 앞선 장면을 알게 한다.
+    scene_script: Option<String>,
     session_id: String,
     player_id: String,
     branch_key: String,
@@ -132,14 +143,14 @@ struct NpcSnapshot {
 
 async fn snapshot(state: &State<'_, AppState>, character_id: &str) -> Result<NpcSnapshot, AppError> {
     let guard = state.active_runtime.lock().await;
-    let runtime = guard.as_ref().ok_or_else(|| AppError::NotFound("진행 중인 세션이 없습니다".into()))?;
+    let runtime = guard.as_ref().ok_or_else(|| AppError::not_found("진행 중인 세션이 없습니다"))?;
     let st = runtime.state();
     if st.active_npc_id.as_deref() != Some(character_id) {
         // GameCommand::Talk으로 먼저 이 캐릭터와의 대화를 열어야 한다.
-        return Err(AppError::Validation("이 캐릭터와의 대화가 열려 있지 않습니다".into()));
+        return Err(AppError::validation("이 캐릭터와의 대화가 열려 있지 않습니다", None));
     }
     let def = runtime.definition();
-    let character = def.character(character_id).ok_or_else(|| AppError::Validation("이 게임에 속한 캐릭터가 아닙니다".into()))?;
+    let character = def.character(character_id).ok_or_else(|| AppError::validation("이 게임에 속한 캐릭터가 아닙니다", None))?;
 
     // 프롬프트에 노출할 런타임 상태. 이름만 넘긴다 (id/내부 값은 안 넘김).
     // ⚠ flags(관계 수치 등)는 일부러 안 넣었다 — 어떤 키를 AI에 보여줄지 정하는 컬럼이
@@ -234,6 +245,7 @@ async fn snapshot(state: &State<'_, AppState>, character_id: &str) -> Result<Npc
     }
 
     Ok(NpcSnapshot {
+        scene_script: None,
         session_id: st.session_id.clone(),
         player_id: st.player_id.clone(),
         game_world_info: def.game_world_info.clone(),
@@ -254,20 +266,46 @@ pub async fn say(
     character_id: String, // game_characters.id
     input: String,
 ) -> Result<NpcReply, AppError> {
+    converse(app, state, settings, Mode::Npc(character_id), input).await
+}
+
+/// 씬 입력: 씬이 열려 있는 동안 AI가 서술자로 이어간다 (선택지 문구나 자유 입력).
+/// commands/game_engine.rs::scene_say가 이 함수를 얇게 감싼다.
+pub async fn scene_say(app: AppHandle, state: &State<'_, AppState>, settings: &State<'_, SettingsState<AppSetting>>, input: String) -> Result<NpcReply, AppError> {
+    converse(app, state, settings, Mode::Scene, input).await
+}
+
+/// 어느 쪽 대화인가: NPC 1:1(Talk로 연 대화창) / 씬 입력(서술자).
+enum Mode {
+    Npc(String),
+    Scene,
+}
+
+async fn converse(app: AppHandle, state: &State<'_, AppState>, settings: &State<'_, SettingsState<AppSetting>>, mode: Mode, input: String) -> Result<NpcReply, AppError> {
     let game_id = current_game_id(state)?;
-    let game_dir = app.path().app_data_dir()?.join("games").join(&game_id).to_string_lossy().to_string();
+    let partner_id: Option<String> = match &mode {
+        Mode::Npc(id) => Some(id.clone()),
+        Mode::Scene => None,
+    };
 
     let trimmed = input.trim();
     if trimmed.is_empty() || trimmed.chars().count() > MAX_INPUT_CHARS {
-        return Err(AppError::Validation("입력 길이가 올바르지 않습니다".into()));
+        return Err(AppError::validation("입력 길이가 올바르지 않습니다", None));
     }
 
-    let snap = snapshot(state, &character_id).await?;
+    let snap = match &mode {
+        Mode::Npc(id) => snapshot(state, id).await?,
+        Mode::Scene => snapshot_scene(state).await?,
+    };
+    let scene_script = snap.scene_script.clone();
     check_rate_limit(state, &game_id)?;
 
     // 대화 get-or-create: (session, 분기=현재 씬, 참여자 조합) 하나당 대화 하나.
     // 세션이 다르면(=다른 세이브 슬롯/새 게임) 새 대화, 씬이 다르면 그 씬의 대화로 전환된다.
-    let p_key = participants_key(&[&character_id]);
+    let p_key = match &partner_id {
+        Some(id) => participants_key(&[id]),
+        None => SCENE_PARTICIPANTS_KEY.to_string(),
+    };
     let conversation_id = match get_game_conversation_conversation_id(&state.db, &game_id, &snap.session_id, &p_key, &snap.branch_key).await? {
         Some(id) => id,
         None => {
@@ -283,19 +321,28 @@ pub async fn say(
                 },
             )
             .await?;
-            upsert_game_conversations_participant(&state.db, &id, &character_id, 0).await?;
+            if let Some(cid) = &partner_id {
+                upsert_game_conversations_participant(&state.db, &id, cid, 0).await?;
+            }
             id
         }
     };
 
     // 기록은 이번 입력을 "빼고" 불러온다 — 이번 입력은 message로 따로 넘긴다 (중복 방지).
     let all_messages = get_game_messages(&state.db, &conversation_id).await?;
+    // 플레이어가 이 대화에서 입력한 횟수(이번 입력 포함) — AI가 씬을 끝낼 수 있는 시점 판단에 쓴다.
+    let user_turns = all_messages.iter().filter(|m| m.role == "user").count() as u32 + 1;
     let skip = all_messages.len().saturating_sub(HISTORY_LIMIT);
-    let history: Vec<HistoryItem> = all_messages
+    let mut history: Vec<HistoryItem> = all_messages
         .into_iter()
         .skip(skip)
         .map(|m| HistoryItem { role: m.role, content: m.content })
         .collect();
+
+    // 씬 입력: 앞서 나온 씬 대본을 첫 기록으로 넣는다 (대본 줄은 메시지로 저장돼 있지 않다).
+    if let Some(script) = scene_script {
+        history.insert(0, HistoryItem { role: "assistant".to_string(), content: script });
+    }
 
     // 페르소나는 항상 있다 — 새 게임 시작 때 세션에 고정된 player_id를 그대로 쓴다.
     // 월드인포는 게임 전체용 + 캐릭터용 + 페르소나용을 합친다. 어떤 entry를 프롬프트에 넣을지
@@ -309,7 +356,11 @@ pub async fn say(
     let persona_info = format!("{}\n{}", persona.name, persona.description);
 
     let context = ChatContext {
-        system_rules: GAME_SYSTEM_RULES.iter().map(|s| s.to_string()).collect(),
+        system_rules: match &mode {
+            Mode::Npc(_) => GAME_SYSTEM_RULES.iter().map(|s| s.to_string()).collect(),
+            // 씬 입력: 1:1 대화용 <updateRel> 규칙(대화 상대 한 명 기준)은 빼고 서술자용 규칙을 더한다.
+            Mode::Scene => GAME_SYSTEM_RULES.iter().filter(|r| !r.contains("<updateRel>")).chain(SCENE_RULES.iter()).map(|s| s.to_string()).collect(),
+        },
         character_info: snap.character_info,
         example_dialogue: snap.example_dialogue,
         persona_info,
@@ -321,37 +372,57 @@ pub async fn say(
     let raw = ChatManager
         .game_chat(app, state, settings, conversation_id.clone(), trimmed.to_string(), context, None)
         .await
-        .map_err(|e| AppError::AiProvider(e.to_string()))?;
+        .map_err(|e| AppError::ai_provider(ErrorCode::AiProviderError, e.to_string(), false))?;
 
     // 응답 후처리: <choice>는 버튼으로, <updateVar>는 검증을 통과한 변수 변경으로. 둘 다 태그는 본문에서 벗긴다.
     // 저장되는 AI content는 태그 없는 텍스트, 선택지/적용된 변경은 meta에 — 기록을 다시 읽을 때
     // 재파싱 없이 meta만 보고 버튼과 "그때 무엇이 바뀌었는지"를 복원한다.
     let (text_without_choices, choices) = extract_choices(&raw);
     let (text, var_tags) = extract_tag(&text_without_choices, "updateVar");
-    let (text, rel_tags) = extract_tag(&text, "updateRel");
+    let (text, rel_tags) = extract_targeted(&text, "updateRel");
+    let (text, scene_tags) = extract_tag(&text, "scene");
+    // 씬 끝내기는 씬 입력에서만 받는다 (1:1 대화에는 끝낼 씬이 없다).
+    let wants_end = matches!(mode, Mode::Scene) && scene_tags.iter().any(|t| t.trim().eq_ignore_ascii_case("end"));
     let effects: Vec<serde_json::Value> = var_tags.iter().take(MAX_UPDATE_TAGS).filter_map(|t| serde_json::from_str(t).ok()).collect();
-    let rel_effects: Vec<serde_json::Value> = rel_tags.iter().take(MAX_UPDATE_TAGS).filter_map(|t| serde_json::from_str(t).ok()).collect();
+    let rel_effects: Vec<(Option<String>, serde_json::Value)> =
+        rel_tags.iter().take(MAX_UPDATE_TAGS).filter_map(|(target, body)| serde_json::from_str(body).ok().map(|v| (target.clone(), v))).collect();
 
     // 여기서부터는 런타임 락을 잡은 채로 끝까지 한다 — AI 호출 동안 사용자가 다른 세션으로 갈아탔을 수
     // 있어서 같은 세션인지 확인하고, seq 발급/저장/적용이 다른 커맨드와 섞이지 않게 하려는 것.
     let (applied_events, render, plain, lines) = {
         let mut guard = state.active_runtime.lock().await;
-        let runtime = guard.as_mut().ok_or_else(|| AppError::NotFound("진행 중인 세션이 없습니다".into()))?;
+        let runtime = guard.as_mut().ok_or_else(|| AppError::not_found("진행 중인 세션이 없습니다"))?;
         if runtime.state().session_id != snap.session_id {
-            return Err(AppError::Validation("응답을 기다리는 동안 세션이 바뀌었습니다".into()));
+            return Err(AppError::validation("응답을 기다리는 동안 세션이 바뀌었습니다", None));
         }
 
         // 변수 변경은 "계획"만 세우고 메시지가 저장된 뒤에 적용한다 — 저장에 실패했는데 변수만 바뀌어
         // 있는 일이 없게 하려는 것. 계획에 쓸 현재 값은 이 락 안에서 읽으니 어긋나지 않는다.
         let changes = runtime.plan_ai_changes(&effects, MAX_AI_CHANGES);
         // 관계는 "이 NPC가 플레이어에게 느끼는 것"(npc>player)만 AI가 바꿀 수 있다.
-        let rel_changes = runtime.plan_ai_relation(&character_id, &rel_effects, MAX_AI_REL_CHANGES);
+        // 화자/연출 대상으로 쓸 수 있는 인물: 같은 위치의 NPC (+ 1:1 대화 상대).
+        let mut speakers: std::collections::HashSet<String> = runtime.present_npc_ids().into_iter().collect();
+        if let Some(p) = &partner_id {
+            speakers.insert(p.clone());
+        }
+        // 관계: 1:1에서는 대화 상대만, 씬에서는 <updateRel::이름>으로 지정한 같은 위치의 인물만. 방향은 항상 "인물>player".
+        let mut rel_changes = Vec::new();
+        for (target, effect) in &rel_effects {
+            let who = match (&partner_id, target) {
+                (Some(p), None) => Some(p.clone()),
+                (Some(p), Some(t)) => runtime.find_character_id(t).filter(|c| c == p),
+                (None, Some(t)) => runtime.find_character_id(t).filter(|c| speakers.contains(c)),
+                (None, None) => None,
+            };
+            if let Some(who) = who {
+                let room = MAX_AI_REL_CHANGES.saturating_sub(rel_changes.len());
+                rel_changes.extend(runtime.plan_ai_relation(&who, std::slice::from_ref(effect), room));
+            }
+        }
 
         // 응답을 줄/연출로 파싱한다 (제작자 대본과 같은 문법). 화자와 연출 대상은 대화 상대 + 같은 위치의 NPC만 가능하다.
         // 저장되는 content는 태그를 벗기고 `이름: ` 접두를 되살린 평문이라, 다음 프롬프트에서도 AI가 같은 형식을 이어간다.
-        let mut speakers: std::collections::HashSet<String> = runtime.present_npc_ids().into_iter().collect();
-        speakers.insert(character_id.to_string());
-        let lines = runtime.parse_ai_stage(&text, speakers, &character_id);
+        let lines = runtime.parse_ai_stage(&text, speakers, partner_id.as_deref());
         let plain = {
             let def = runtime.definition();
             crate::game::stage::to_plain(&lines, &|id: &str| {
@@ -380,14 +451,14 @@ pub async fn say(
 
         // 메시지의 seq가 곧 그 메시지의 일지 항목 seq다 (같은 번호로 일지에도 한 줄 남긴다).
         let messages = [
-            (user_seq, "user", None::<String>, None::<String>, trimmed.to_string(), serde_json::Value::Null),
-            (ai_seq, "assistant", Some(snap.character_name.clone()), Some(character_id.clone()), plain.clone(), ai_meta),
+            (user_seq, "user", None::<String>, None::<String>, trimmed.to_string(), serde_json::Value::Null, serde_json::json!([{ "kind": "dialogue", "speaker": "player", "text": trimmed, "cues": [] }])),
+            (ai_seq, "assistant", Some(snap.character_name.clone()), partner_id.clone(), plain.clone(), ai_meta, serde_json::to_value(&lines).unwrap_or(serde_json::json!([]))),
         ];
 
         // head_seq 저장 + 메시지 + 일지를 한 트랜잭션으로.
         let mut tx = state.db.begin().await?;
         upsert_game_player_sessions(&mut *tx, runtime.state().to_session_input(game_id.clone())).await?;
-        for (seq, role, name, char_id, content, meta) in messages {
+        for (seq, role, name, char_id, content, meta, journal_lines) in messages {
             upsert_game_message(
                 &mut *tx,
                 &conversation_id,
@@ -400,7 +471,8 @@ pub async fn say(
                     session_id: snap.session_id.clone(),
                     seq,
                     kind: "message".to_string(),
-                    payload_json: serde_json::json!({ "conversationId": conversation_id, "role": role }),
+                    // 줄(StageLine)도 일지에 남긴다: 이어하기 때 일지만 읽어서 이전 대사를 화면에 복원한다 (transcript.rs).
+                    payload_json: serde_json::json!({ "conversationId": conversation_id, "role": role, "lines": journal_lines }),
                     game_time,
                 },
             )
@@ -410,11 +482,16 @@ pub async fn say(
 
         // 메시지가 저장된 뒤에 변수 변경을 적용한다. 이 경로는 프론트가 부를 수 있는 커맨드가 아니라
         // 런타임 안쪽 메서드라, AI(와 그 응답을 조작할 수 있는 입력)가 허용 목록 밖을 건드릴 수 없다.
-        let events = if changes.is_empty() && rel_changes.is_empty() { vec![] } else { runtime.apply_ai_changes(changes, rel_changes) };
+        let mut events = if changes.is_empty() && rel_changes.is_empty() { vec![] } else { runtime.apply_ai_changes(changes, rel_changes) };
+        // AI가 씬을 끝내려 하면: 플레이어 입력이 minTurns 이상 오간 뒤에만 받아들인다 (너무 일찍 끝나는 걸 막는다).
+        if wants_end {
+            let allowed = user_turns >= runtime.scene_min_turns();
+            events.extend(runtime.end_scene_by_ai(allowed));
+        }
         if !events.is_empty() {
             crate::game::journal::record(&state.db, runtime, &game_id, None, &events).await?;
         }
-        (events, runtime.render_state(&game_dir), plain, lines)
+        (events, runtime.render_state(), plain, lines)
     };
 
     let mut events = Vec::new();
@@ -423,6 +500,153 @@ pub async fn say(
     }
     events.extend(applied_events);
     Ok(NpcReply { text: plain, lines, events, state: render })
+}
+
+/// "<tag>값</tag>"와 "<tag::대상>값</tag>"를 뽑는다. → (태그를 뺀 본문, [(대상, 값)]).
+/// 닫는 태그는 `</tag>`만 본다. 닫는 태그가 없으면 텍스트로 둔다 (잘린 응답 등).
+fn extract_targeted(raw: &str, tag: &str) -> (String, Vec<(Option<String>, String)>) {
+    let open = format!("<{tag}");
+    let close = format!("</{tag}");
+    let mut text = String::new();
+    let mut found = Vec::new();
+    let mut rest = raw;
+    while let Some(start) = rest.find(&open) {
+        let after = &rest[start + open.len()..];
+        let Some(gt) = after.find('>') else { break };
+        let head = &after[..gt];
+        let target = if head.is_empty() {
+            None
+        } else if let Some(t) = head.strip_prefix("::") {
+            Some(t.trim().to_string())
+        } else {
+            // 다른 태그 이름의 앞부분일 뿐이다 — 텍스트로 두고 계속
+            text.push_str(&rest[..start + open.len()]);
+            rest = after;
+            continue;
+        };
+        text.push_str(&rest[..start]);
+        let body = &after[gt + 1..];
+        match body.find(&close) {
+            Some(cpos) => {
+                let value = body[..cpos].trim();
+                if !value.is_empty() {
+                    found.push((target, value.to_string()));
+                }
+                let after_close = &body[cpos + close.len()..];
+                rest = match after_close.find('>') {
+                    Some(g) => &after_close[g + 1..],
+                    None => after_close,
+                };
+            }
+            None => {
+                text.push_str(&rest[start..start + open.len() + gt + 1]);
+                rest = body;
+            }
+        }
+    }
+    text.push_str(rest);
+    (text.trim().to_string(), found)
+}
+
+/// 씬 입력(서술자)용 스냅샷: 같은 위치의 인물들, 씬 소개와 앞선 대본, 연출 목록. 락은 이 안에서만 잡는다.
+async fn snapshot_scene(state: &State<'_, AppState>) -> Result<NpcSnapshot, AppError> {
+    use rand::SeedableRng;
+    let guard = state.active_runtime.lock().await;
+    let runtime = guard.as_ref().ok_or_else(|| AppError::not_found("진행 중인 세션이 없습니다"))?;
+    if !runtime.scene_chat_enabled() {
+        return Err(AppError::validation("지금은 씬 입력을 쓸 수 없습니다 (열린 씬이 없거나 엔딩 씬이거나 AI 이어가기가 꺼진 씬입니다)", None));
+    }
+    let def = runtime.definition();
+    let st = runtime.state();
+    let scene = st.current_scene_id.as_deref().and_then(|id| def.scene(id)).ok_or_else(|| AppError::not_found("열려 있는 씬이 없습니다"))?;
+    let name_of = |id: &str| -> String {
+        if id == "player" { "플레이어".to_string() } else { def.character(id).map(|c| c.name.clone()).unwrap_or_else(|| id.to_string()) }
+    };
+
+    let mut present = runtime.present_npc_ids();
+    present.truncate(6);
+
+    // 씬 소개 + 같은 장소의 인물 설명 (character_info 자리에 넣는다)
+    let mut info = format!("[현재 씬] {}\n{}", scene.scene_name, scene.description.clone().unwrap_or_default());
+    info.push_str("\n\n[같은 장소에 있는 인물]");
+    for id in &present {
+        if let Some(c) = def.character(id) {
+            info.push_str(&format!("\n- {}: {}", c.name, c.description.clone().unwrap_or_default().chars().take(300).collect::<String>()));
+        }
+    }
+
+    // 앞선 대본(평문): 이름 접두를 되살려서 AI가 같은 형식으로 이어가게 한다.
+    let scene_script = scene.script.as_deref().filter(|t| !t.trim().is_empty()).map(|script| {
+        let mut rng = rand::rngs::StdRng::seed_from_u64(0);
+        let mut resolver = crate::game::runtime::DefResolver { def, rng: &mut rng, ai: false, player_name: None };
+        let lines = crate::game::stage::parse(script, &mut resolver, &crate::game::stage::Allowed::author());
+        crate::game::stage::to_plain(&lines, &|id: &str| name_of(id))
+    });
+
+    // 같은 위치 인물과 플레이어의 관계 (인물>player)
+    let relationships: Vec<serde_json::Value> = present
+        .iter()
+        .filter_map(|id| {
+            let val = st.relationships_json.get(format!("{id}>player"))?;
+            let values: serde_json::Map<String, serde_json::Value> =
+                crate::game::engine::RELATION_AXES.iter().map(|ax| (ax.to_string(), serde_json::Value::from(val.get(ax).and_then(|v| v.as_i64()).unwrap_or(0)))).collect();
+            Some(serde_json::json!({ "from": name_of(id), "to": "플레이어", "values": values, "tags": val.get("tags") }))
+        })
+        .collect();
+
+    let mut emotions = serde_json::Map::new();
+    for id in &present {
+        let list = def.standing_emotions(id);
+        if !list.is_empty() {
+            emotions.insert(name_of(id), serde_json::json!(list));
+        }
+    }
+    let loc = st.location_id.as_deref().and_then(|id| def.location(id));
+    let extra_data = serde_json::json!({
+        "scene": { "name": scene.scene_name, "description": scene.description },
+        "location": loc.map(|l| l.name.clone()),
+        "zone": st.location_id.as_deref().and_then(|id| def.zone_of_location(id)).map(|z| z.name.clone()),
+        "map": def.map_by_id(&st.map_id).map(|m| m.name.clone()),
+        "timePeriod": def.time_periods.iter().find(|p| p.id == st.time_period_id).map(|p| p.name.clone()),
+        "weather": def.weather_types.iter().find(|w| w.id == st.weather_id).map(|w| w.name.clone()),
+        "variables": def.state_defs.iter().filter_map(|d| {
+            let rule = crate::game::engine::VarRule::from_config(&d.config_json);
+            if !rule.readable {
+                return None;
+            }
+            let current = st.flags.get(&d.key).cloned().unwrap_or(serde_json::Value::Null);
+            Some(serde_json::json!({ "key": d.key, "description": d.description, "value": current, "writable": rule.writable, "min": rule.min, "max": rule.max, "maxStep": rule.max_step }))
+        }).collect::<Vec<_>>(),
+        "relationships": relationships,
+        "presentCharacters": present.iter().filter_map(|id| def.character(id)).map(|c| serde_json::json!({ "name": c.name })).collect::<Vec<_>>(),
+        "stage": {
+            "emotions": emotions,
+            "sfx": def.sfx_tags().into_iter().take(40).collect::<Vec<_>>(),
+            "bgmMoods": crate::game::stage::BGM_MOODS,
+            "cgs": def.ai_cgs().into_iter().take(20).map(|(k, d)| serde_json::json!({ "key": k, "description": d })).collect::<Vec<_>>(),
+            "effects": crate::game::stage::SCREEN_EFFECTS,
+            "motions": crate::game::stage::MOTIONS,
+        },
+    });
+
+    let mut character_world_info = Vec::new();
+    for id in &present {
+        if let Some(w) = def.character_world_info.get(id) {
+            character_world_info.extend(w.iter().cloned());
+        }
+    }
+    Ok(NpcSnapshot {
+        scene_script,
+        session_id: st.session_id.clone(),
+        player_id: st.player_id.clone(),
+        game_world_info: def.game_world_info.clone(),
+        character_world_info,
+        branch_key: scene.id.clone(),
+        character_name: "나레이터".to_string(),
+        character_info: Some(info),
+        example_dialogue: None,
+        extra_data,
+    })
 }
 
 #[cfg(test)]
@@ -443,6 +667,13 @@ mod tests {
         assert_eq!(text, "좋아요.");
         assert_eq!(choices, vec!["고마워"]);
         assert_eq!(vars, vec![r#"{"add":{"affection":1}}"#]);
+    }
+
+    #[test]
+    fn targeted_tags_keep_their_target() {
+        let (text, found) = super::extract_targeted("좋아요 <updateRel::유나>{\"affection\":1}</updateRel> <updateRel>{\"trust\":2}</updateRel>끝", "updateRel");
+        assert_eq!(text, "좋아요  끝");
+        assert_eq!(found, vec![(Some("유나".to_string()), "{\"affection\":1}".to_string()), (None, "{\"trust\":2}".to_string())]);
     }
 
     #[test]

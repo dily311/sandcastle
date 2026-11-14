@@ -25,6 +25,7 @@ export async function invokeCommand<K extends CommandName>(
 		console.info("[Tauri ipc result] ", command, result);
 		return result;
 	} catch (e) {
+		console.error(e);
 		throw showError(e);
 	}
 }

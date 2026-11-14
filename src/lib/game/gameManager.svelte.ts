@@ -3,8 +3,6 @@ import { open } from "@tauri-apps/plugin-dialog";
 import { revealItemInDir } from "@tauri-apps/plugin-opener";
 import { toasts } from "../stores/toast.svelte";
 import { push } from "svelte-spa-router";
-import type { GameProject } from "../type/game";
-
 
 // 새로만들기 버튼 클릭 시 (create_game 커맨드 연동 예시)
 export async function handleCreateNewGame() {
@@ -27,4 +25,3 @@ export async function handleExportGamePackage(gameId: string) {
 	// 출력된 위치 표시
 	await revealItemInDir(exportPath);
 }
-

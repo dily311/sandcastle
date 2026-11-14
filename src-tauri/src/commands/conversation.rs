@@ -2,6 +2,7 @@ use crate::db::conversation::{self};
 use crate::error::{AppError, Result};
 use crate::models::conversation::*;
 use crate::state::AppState;
+use serde_json::json;
 use tauri::State;
 
 // =======================================
@@ -43,7 +44,7 @@ pub async fn create_conversation(
 ) -> Result<Conversation> {
     // character_id가 실제로 존재하는지 확인: 없는 캐릭터로 대화가 생기는 걸 막음
     if !conversation::char_exists(&state.db, &input.character_id).await? {
-        return Err(AppError::Validation("존재하지 않는 캐릭터입니다".into()));
+        return Err(AppError::validation("존재하지 않는 캐릭터입니다", Some(json!({"data": &input.character_id}).into())));
     }
 
     let conversation = conversation::create_conversation(&state.db, input).await?;
@@ -60,9 +61,7 @@ pub async fn touch_conversation(state: State<'_, AppState>, id: String) -> Resul
 pub async fn delete_conversation(state: State<'_, AppState>, id: String) -> Result<()> {
     let result = conversation::delete_conversation(&state.db, &id).await?;
     if !result {
-        return Err(AppError::NotFound(format!(
-            "해당 대화 세션을 찾을 수 없습니다: {id}"
-        )));
+        return Err(AppError::not_found(format!("해당 대화 세션을 찾을 수 없습니다: {id}")));
     }
     Ok(())
 }
@@ -114,7 +113,7 @@ pub async fn toggle_favorite_character(
 pub async fn delete_character(state: State<'_, AppState>, id: String) -> Result<()> {
     let result = conversation::delete_character(&state.db, &id).await?;
     if !result {
-        return Err(AppError::NotFound(format!(
+        return Err(AppError::not_found(format!(
             "캐릭터를 찾을 수 없습니다: {id}"
         )));
     }
@@ -142,9 +141,7 @@ pub async fn update_persona(
 ) -> Result<()> {
     let exists = conversation::persona_exists(&state.db, &id).await?;
     if !exists {
-        return Err(AppError::NotFound(format!(
-            "캐릭터를 찾을 수 없습니다: {id}"
-        )));
+        return Err(AppError::not_found(format!("캐릭터를 찾을 수 없습니다: {id}")));
     }
 
     conversation::update_persona(&state.db, &id, input).await?;
@@ -156,9 +153,7 @@ pub async fn delete_persona(state: State<'_, AppState>, id: String) -> Result<()
     // 삭제 전에 어디서 쓰이고 있는지 확인해서 경고용 정보를 돌려줄 수도 있음
     let result = conversation::delete_persona(&state.db, &id).await?;
     if !result {
-        return Err(AppError::NotFound(format!(
-            "해당 페르소나를 찾을 수 없습니다: {id}"
-        )));
+        return Err(AppError::not_found(format!("해당 페르소나를 찾을 수 없습니다: {id}")));
     }
     Ok(())
 }
@@ -188,9 +183,7 @@ pub async fn get_messages(
 #[tauri::command]
 pub async fn append_message(state: State<'_, AppState>, input: MessageInput) -> Result<Message> {
     if input.content.is_empty() && input.role == "user" {
-        return Err(AppError::Validation(
-            "빈 메시지는 전송할 수 없습니다".into(),
-        ));
+        return Err(AppError::validation("빈 메시지는 전송할 수 없습니다", None));
     }
     let conversation_id = input.conversation_id.clone();
     let mes = conversation::append_message(&state.db, input).await?;
@@ -208,9 +201,7 @@ pub async fn update_message(
 ) -> Result<()> {
     let result = conversation::update_message(&state.db, &id, &content, &meta).await?;
     if !result {
-        return Err(AppError::NotFound(format!(
-            "메시지를 찾을 수 없습니다: {id}"
-        )));
+        return Err(AppError::not_found(format!("메시지를 찾을 수 없습니다: {id}")));
     }
     Ok(())
 }
@@ -241,9 +232,7 @@ pub async fn update_message_content(
 ) -> Result<()> {
     let result = conversation::update_message_content(&state.db, &id, &content).await?;
     if !result {
-        return Err(AppError::NotFound(format!(
-            "메시지를 찾을 수 없습니다: {id}"
-        )));
+        return Err(AppError::not_found(format!("메시지를 찾을 수 없습니다: {id}")));
     }
     Ok(())
 }
@@ -256,7 +245,7 @@ pub async fn update_message_meta(
 ) -> Result<()> {
     let result = conversation::update_message_meta(&state.db, &id, meta).await?;
     if !result {
-        return Err(AppError::NotFound(format!(
+        return Err(AppError::not_found(format!(
             "메시지를 찾을 수 없습니다: {id}"
         )));
     }
@@ -267,7 +256,7 @@ pub async fn update_message_meta(
 pub async fn delete_message(state: State<'_, AppState>, id: String) -> Result<()> {
     let result = conversation::delete_message(&state.db, &id).await?;
     if !result {
-        return Err(AppError::NotFound(format!(
+        return Err(AppError::not_found(format!(
             "메시지를 찾을 수 없습니다: {id}"
         )));
     }
@@ -288,9 +277,7 @@ pub async fn create_worldinfo_book(
     input: WorldInfoBookInput,
 ) -> Result<WorldInfoBook> {
     if input.name.trim().is_empty() {
-        return Err(AppError::Validation(
-            "월드인포 이름은 비어있을 수 없습니다".into(),
-        ));
+        return Err(AppError::validation("월드인포 이름은 비어있을 수 없습니다", None));
     }
 
     let result = conversation::create_worldinfo_book(&state.db, input).await?;
@@ -301,9 +288,7 @@ pub async fn create_worldinfo_book(
 pub async fn delete_worldinfo_book(state: State<'_, AppState>, id: String) -> Result<()> {
     let result = conversation::delete_worldinfo_book(&state.db, &id).await?;
     if !result {
-        return Err(AppError::NotFound(format!(
-            "월드인포 북을 찾을 수 없습니다: {id}"
-        )));
+        return Err(AppError::not_found(format!("월드인포 북을 찾을 수 없습니다: {id}")));
     }
     Ok(())
 }
@@ -323,9 +308,7 @@ pub async fn upsert_worldinfo_entry(
     input: WorldInfoEntryInput,
 ) -> Result<WorldInfoEntry> {
     if input.keys.is_empty() && !input.constant {
-        return Err(AppError::Validation(
-            "상시 항목이 아니면 트리거 키워드가 최소 1개 필요합니다".into(),
-        ));
+        return Err(AppError::validation("상시 항목이 아니면 트리거 키워드가 최소 1개 필요합니다", None));
     }
 
     let result = conversation::upsert_worldinfo_entry(&state.db, input).await?;
@@ -336,9 +319,7 @@ pub async fn upsert_worldinfo_entry(
 pub async fn delete_worldinfo_entry(state: State<'_, AppState>, id: String) -> Result<()> {
     let result = conversation::delete_worldinfo_entry(&state.db, &id).await?;
     if !result {
-        return Err(AppError::NotFound(format!(
-            "월드인포 항목을 찾을 수 없습니다: {id}"
-        )));
+        return Err(AppError::not_found(format!("월드인포 항목을 찾을 수 없습니다: {id}")));
     }
     Ok(())
 }

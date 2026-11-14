@@ -170,11 +170,10 @@ class PlaylistStore {
 		await widgetCommands.updateMusicAlbumArtPos({ path: changeData.path, pos });
 	}
 
-	async updateMusicOrder(musicSrc: string, sortOrder: number) {
-		const item = this.#currentPlaylist.find((v) => v.meta.path === musicSrc);
-		const changeData = { ...item, sortOrder };
-		this.#currentPlaylist.map((v) => (v.meta.path == changeData.meta?.path ? changeData : v));
-		await widgetCommands.updateMusicOrder({ playlistId: this.#currentPlaylistId, musicSrc, sortOrder });
+	async updateMusicOrder(input: PlaylistItem[]) {
+		if (this.#currentPlaylist === input) return;
+		this.updateCurrentPlaylist(input);
+		await widgetCommands.updateMusicOrder({ playlistId: this.#currentPlaylistId, input });
 	}
 
 	setSelectedFolderMusics(newValue: LibraryRoot) {

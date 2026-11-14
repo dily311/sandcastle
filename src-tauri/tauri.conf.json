@@ -27,10 +27,15 @@
       }
     ],
     "security": {
-      "csp": "style-src 'unsafe-inline' 'self' https://fonts.googleapis.com; media-src 'self' asset: http://asset.localhost",
+      "csp": "style-src 'unsafe-inline' 'self' https://fonts.googleapis.com; media-src 'self' asset: http://asset.localhost http://game.localhost game://localhost; img-src 'self' data: https://tauri.localhost tauri://* asset: http://asset.localhost http://game.localhost game://localhost",
       "assetProtocol": {
         "enable": true,
-        "scope": ["$APP/assets/**/*", "$HOME/**/*", "$TEMP/**/*", "$APPDATA/**/*"]
+        "scope": [
+          "$APP/assets/**/*",
+          "$HOME/**/*",
+          "$TEMP/**/*",
+          "$APPDATA/**/*"
+        ]
       }
     }
   },
@@ -44,5 +49,14 @@
       "icons/icon.icns",
       "icons/icon.ico"
     ]
+  },
+  "plugins": {
+    "background-service": {
+      "androidForegroundServiceTypes": [
+        "remoteMessaging",
+        "dataSync"
+      ],
+      "androidValidateForegroundServiceType": true
+    }
   }
 }

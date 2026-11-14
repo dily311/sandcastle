@@ -1,7 +1,7 @@
 use crate::adapter::*;
 use crate::db::ai_service;
-use crate::error::AppError;
-use crate::models::ai_service::{ApiProfile, ChatContext, ChatOptions, DialogueDoneEvent, StreamPayload};
+use crate::error::{AppError, ErrorCode};
+use crate::models::ai_service::{ApiProfiles, ChatContext, ChatOptions, DialogueDoneEvent, StreamPayload};
 use crate::models::settings::AppSetting;
 use crate::service::chat::context_manager::ContextManager;
 use crate::service::chat::prompt_manager::PromptManager;
@@ -26,7 +26,7 @@ pub struct ChatRequest {
     preset_id: String,
 }
 pub fn current_conv_request(state: &SettingsState<AppSetting>) -> Result<ChatRequest> {
-    let guard = state.0.lock().map_err(|_| AppError::Archive("archive lock poisaned".into()))?;
+    let guard = state.0.lock().map_err(|_| AppError::archive(ErrorCode::InternalError, "archive lock poisaned"))?;
     Ok(ChatRequest {
         api_profile_id: guard.selected_api_profile.as_ref().map(|a|a.clone()).unwrap_or_default(),
         character_id: guard.selected_character_id.as_ref().map(|a|a.clone()).unwrap_or_default(),
@@ -39,7 +39,7 @@ pub struct ChatManager;
 impl ChatManager {
     pub async fn get_models(
         &self,
-        api_profile: ApiProfile,
+        api_profile: ApiProfiles,
         client: reqwest::Client,
     ) -> Result<Vec<String>> {
         let result = match api_profile.format_type.as_str() {
@@ -125,7 +125,7 @@ impl ChatManager {
         Ok(result)
     }
 
-    pub async fn game_chat(&self, app: AppHandle, state: &State<'_, AppState>, settings: &State<'_, SettingsState<AppSetting>>, game_conversation_id: String, message: String, context: ChatContext, channel: Option<Channel<StreamPayload>>,) -> Result<String> {
-        todo!()
+    pub async fn game_chat(&self, _app: AppHandle, _state: &State<'_, AppState>, _settings: &State<'_, SettingsState<AppSetting>>, _game_conversation_id: String, _message: String, _context: ChatContext, _channel: Option<Channel<StreamPayload>>,) -> Result<String> {
+        Err(anyhow!("게임 대화 AI 연결이 아직 구현되지 않았습니다"))
     }
 }

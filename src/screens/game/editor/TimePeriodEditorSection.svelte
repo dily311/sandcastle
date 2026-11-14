@@ -8,6 +8,8 @@
 	let { timePeriods = $bindable([]), gameId }: Props = $props();
 
 	let selectedIndex = $state<number | null>(timePeriods.length > 0 ? 0 : null);
+	let searchQuery = $state("");
+	let filteredPeriods = $derived(timePeriods.map((tp, index) => ({ tp, index })).filter(({ tp }) => `${tp.name} ${tp.startMinute} ${tp.endMinute}`.toLowerCase().includes(searchQuery.trim().toLowerCase())));
 	let activePeriod = $derived(
 		selectedIndex !== null && timePeriods[selectedIndex] ? timePeriods[selectedIndex] : null,
 	);
@@ -35,12 +37,14 @@
 <div class="sub-editor-layout">
 	<!-- 좌측: 시간대 목록 -->
 	<div class="item-list-pane">
+		<label class="list-search"><span aria-hidden="true">⌕</span><input aria-label="시간대 검색" placeholder="시간대 검색" bind:value={searchQuery} /></label>
 		<div class="pane-header">
 			<h4>시간대 목록 ({timePeriods.length})</h4>
 			<button class="add-btn" onclick={handleAddTimePeriod}>+ 시간대 추가</button>
 		</div>
 		<div class="scroll-list">
-			{#each timePeriods as tp, idx (tp.id || idx)}
+			{#each filteredPeriods as row (row.tp.id || row.index)}
+				{@const tp = row.tp}{@const idx = row.index}
 				<div role="none" class="list-item" class:active={selectedIndex === idx} onclick={() => (selectedIndex = idx)}>
 					<div class="item-info">
 						<span class="title">{tp.name}</span>
@@ -60,7 +64,7 @@
 			<div class="detail-header">
 				<h3>시간대 상세 편집</h3>
 			</div>
-			<div class="form-grid">
+			<details class="editor-accordion" open><summary>시간대 설정</summary><div class="editor-accordion-content"><div class="form-grid">
 				<div class="field">
 					<label for="time_name">시간대 이름 (Name)</label>
 					<input id="time_name" type="text" bind:value={activePeriod.name} placeholder="예: 새벽, 아침, 낮, 밤" />
@@ -81,7 +85,7 @@
 					<label for="time_sort">정렬 순서 (Sort Order)</label>
 					<input id="time_sort" type="number" bind:value={activePeriod.sortOrder} />
 				</div>
-			</div>
+			</div></div></details>
 		{:else}
 			<div class="no-selection">왼쪽에서 시간대를 선택하거나 새로 추가하세요.</div>
 		{/if}
@@ -92,15 +96,12 @@
 	.sub-editor-layout {
 		display: grid;
 		grid-template-columns: 320px 1fr;
-		gap: 1.5rem;
 		height: 100%;
 		min-height: 500px;
 	}
 	.item-list-pane,
 	.item-detail-pane {
-		background: #1e293b;
-		border: 1px solid #334155;
-		border-radius: 8px;
+
 		display: flex;
 		flex-direction: column;
 		overflow: hidden;

@@ -1,9 +1,9 @@
 pub mod settings;
+pub mod task;
 pub mod ai_service;
 
 pub mod conversation;
 
-// pub mod game;
 pub mod game_manager;
 pub mod game_engine;
 

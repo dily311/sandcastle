@@ -14,11 +14,11 @@ impl AIServiceAdapter for VertexAIClient {
     fn parse_message(prompt_message: PromptMessage) -> Vec<Self::Message> {
         todo!()
     }
-    async fn get_models(&self, client: reqwest::Client, api_profile: ApiProfile) -> Result<Vec<String>> {
+    async fn get_models(&self, client: reqwest::Client, api_profile: ApiProfiles) -> Result<Vec<String>> {
         todo!()
     }
 
-    async fn send_message(&self, client: reqwest::Client, api_profile: ApiProfile, prompt_message: PromptMessage) -> Result<String> {
+    async fn send_message(&self, client: reqwest::Client, api_profile: ApiProfiles, prompt_message: PromptMessage) -> Result<String> {
         // osSecretStore에 저장된 api 키를 불러옴
         let api_key = SecretStore::get(&api_key_name(&api_profile.provider))?;
         let service_json = serde_json::from_str::<VertexChatRequestAPIKey>(&api_key)?;
@@ -68,7 +68,7 @@ impl AIServiceAdapter for VertexAIClient {
         Ok(result.unwrap_or_default())
     }
     
-    async fn stream_message(&self, client: reqwest::Client, api_profile: ApiProfile, prompt_message: PromptMessage, on_event: Channel<StreamPayload>) -> Result<String> {
+    async fn stream_message(&self, client: reqwest::Client, api_profile: ApiProfiles, prompt_message: PromptMessage, on_event: Channel<StreamPayload>) -> Result<String> {
         todo!()
     }
 

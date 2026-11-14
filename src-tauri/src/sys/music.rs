@@ -96,9 +96,9 @@ pub fn parse_music_metadata(
     cache_dir: &PathBuf,
 ) -> Result<MusicMetaInput, AppError> {
     let tagged_file = Probe::open(path)
-        .map_err(|e| AppError::Io(e.to_string()))?
+        .map_err(|e| AppError::io(e.to_string()))?
         .read()
-        .map_err(|e| AppError::Io(e.to_string()))?;
+        .map_err(|e| AppError::io(e.to_string()))?;
     let properties = tagged_file.properties();
     let duration = properties.duration().as_secs_f64();
 
@@ -140,12 +140,12 @@ pub async fn folder_indexing(
     let music_paths = tokio::task::spawn_blocking(move || {
         let mut paths = Vec::new();
         let _ = visit_dirs(Path::new(&folder_path_clone.clone()), &mut paths)
-            .map_err(|e| AppError::Validation(format!("폴더를 읽는 중 오류: {}", e).into()));
+            .map_err(|e| AppError::validation(format!("폴더를 읽는 중 오류: {}", e), None));
         Ok::<Vec<PathBuf>, String>(paths)
     })
     .await
-    .map_err(|e| AppError::Validation(format!("태스크 실행 오류: {}", e).into()))?
-    .map_err(|e| AppError::Validation(format!("폴더를 읽는 중 오류: {}", e).into()))?;
+    .map_err(|e| AppError::validation(format!("태스크 실행 오류: {}", e), None))?
+    .map_err(|e| AppError::validation(format!("폴더를 읽는 중 오류: {}", e), None))?;
 
     futures::stream::iter(music_paths)
         .for_each_concurrent(Some(LIMIT), |path| {
@@ -246,10 +246,10 @@ pub async fn set_album_art(
 ) -> Result<String, AppError> {
     // 파일 열기 및 태그 로드
     let mut tagged_file = Probe::open(&file_path)
-        .map_err(|e| AppError::Validation(format!("파일 여는 중 오류: {}", e.to_string()).into()))?
+        .map_err(|e| AppError::validation(format!("파일 여는 중 오류: {}", e.to_string()), None))?
         .read()
         .map_err(|e| {
-            AppError::Validation(format!("파일 여는 중 오류: {}", e.to_string()).into())
+            AppError::validation(format!("파일 여는 중 오류: {}", e.to_string()), None)
         })?;
 
     // 파일명 fallback
@@ -268,21 +268,22 @@ pub async fn set_album_art(
 
     let tag = tagged_file
         .primary_tag_mut()
-        .ok_or_else(|| AppError::Io("태그 생성 실패".into()))?;
+        .ok_or_else(|| AppError::io("태그 생성 실패"))?;
 
     // 이미지 파일 읽기
     let image_file = File::open(&img_path)
-        .map_err(|e| AppError::Io(format!("이미지 파일 로드 실패: {}", e.to_string()).into()))?;
+        .map_err(|e| AppError::io(format!("이미지 파일 로드 실패: {}", e.to_string())))?;
     let mut reader = BufReader::new(image_file);
 
     // Picture 객체 생성
     let picture = Picture::from_reader(&mut reader)
-        .map_err(|e| AppError::Io(format!("객체 생성 중 실패: {}", e.to_string()).into()))?;
+        .map_err(|e| AppError::io(format!("객체 생성 중 실패: {}", e.to_string())))?;
     let picture_size = picture.data().len();
     if picture_size > 1_000_000 {
         // 에러를 생성하고 명시적으로 반환(return)하도록 수정
-        return Err(AppError::Validation(
-            format!("파일 크기가 너무 큼 (1MB 초과): {} bytes", picture_size).into(),
+        return Err(AppError::validation(
+            format!("파일 크기가 너무 큼 (1MB 초과): {} bytes", picture_size),
+            None
         ));
     }
 
@@ -291,7 +292,7 @@ pub async fn set_album_art(
 
     tagged_file
         .save_to_path(&file_path, WriteOptions::default())
-        .map_err(|e| AppError::Io(format!("파일 저장 실패: {}", e)))?;
+        .map_err(|e| AppError::io(format!("파일 저장 실패: {}", e)))?;
 
     save_album_art_with_options(&picture, &file_name_fallback, cache_dir, true)
 }

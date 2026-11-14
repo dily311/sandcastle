@@ -66,6 +66,21 @@ impl GameSystem for NpcSystem {
     fn handle_event(&self, def: &GameDefinition, state: &mut GameState, event: &GameEvent, rng: &mut StdRng) -> Vec<GameEvent> {
         match event {
             GameEvent::GameStarted | GameEvent::TimePeriodChanged { .. } => reroll_all(def, state, rng),
+            GameEvent::CharactersAppeared { character_ids } => {
+                let Some(here) = state.location_id.clone() else { return vec![] };
+                let mut out = Vec::new();
+                for id in character_ids {
+                    if def.character(id).is_none() {
+                        continue;
+                    }
+                    let old = state.npc_states.get(id).and_then(|n| n.location_id.clone());
+                    if old.as_deref() != Some(here.as_str()) {
+                        state.npc_states.insert(id.clone(), NpcState { location_id: Some(here.clone()), status: "active".into() });
+                        out.push(GameEvent::NpcMoved { game_character_id: id.clone(), from: old, to: Some(here.clone()) });
+                    }
+                }
+                out
+            }
             _ => vec![],
         }
     }
