@@ -63,6 +63,13 @@ pub struct ThemeSetting {
     pub is_frameless: bool,
     pub accent_color: String,
     pub font_size: i64,
+    /// 회색 톤 (Radix 회색 계열: slate, gray, mauve, sage, olive, sand)
+    #[serde(default = "default_gray_tone")]
+    pub gray_tone: String,
+}
+
+fn default_gray_tone() -> String {
+    "slate".into()
 }
 
 impl Default for ThemeSetting {
@@ -73,6 +80,7 @@ impl Default for ThemeSetting {
             is_frameless: true,
             accent_color: "#8b85f9".into(),
             font_size: 16,
+            gray_tone: default_gray_tone(),
         }
     }
 }

@@ -11,8 +11,8 @@ export const commands = {
 	updateAppSetting: (patch: Value, options?: InvokeOptions) => __TAURI_INVOKE<AppSetting_Serialize>("update_app_setting", { patch }, options),
 	getFeatureSetting: (options?: InvokeOptions) => __TAURI_INVOKE<FeatureSetting>("get_feature_setting", undefined, options),
 	updateFeatureSetting: (id: string, enabled: boolean, options?: InvokeOptions) => __TAURI_INVOKE<null>("update_feature_setting", { id, enabled }, options),
-	getThemeSetting: (options?: InvokeOptions) => __TAURI_INVOKE<ThemeSetting>("get_theme_setting", undefined, options),
-	updateThemeSetting: (patch: Value, options?: InvokeOptions) => __TAURI_INVOKE<ThemeSetting>("update_theme_setting", { patch }, options),
+	getThemeSetting: (options?: InvokeOptions) => __TAURI_INVOKE<ThemeSetting_Serialize>("get_theme_setting", undefined, options),
+	updateThemeSetting: (patch: Value, options?: InvokeOptions) => __TAURI_INVOKE<ThemeSetting_Serialize>("update_theme_setting", { patch }, options),
 	getConvSettings: (options?: InvokeOptions) => __TAURI_INVOKE<ConvSettings_Serialize>("get_conv_settings", undefined, options),
 	setSystemDefaultPersona: (id: string, options?: InvokeOptions) => __TAURI_INVOKE<null>("set_system_default_persona", { id }, options),
 	getThemeList: (options?: InvokeOptions) => __TAURI_INVOKE<CssThemeMeta_Serialize[]>("get_theme_list", undefined, options),
@@ -2861,12 +2861,26 @@ export type Template_Serialize = {
 	capabilities: Capabilities_Serialize,
 };
 
-export type ThemeSetting = {
+export type ThemeSetting = ThemeSetting_Serialize | ThemeSetting_Deserialize;
+
+export type ThemeSetting_Deserialize = {
 	mode: ColorSchema,
 	selectTheme: string,
 	isFrameless: boolean,
 	accentColor: string,
 	fontSize: number,
+	/**  회색 톤 (Radix 회색 계열: slate, gray, mauve, sage, olive, sand) */
+	grayTone?: string,
+};
+
+export type ThemeSetting_Serialize = {
+	mode: ColorSchema,
+	selectTheme: string,
+	isFrameless: boolean,
+	accentColor: string,
+	fontSize: number,
+	/**  회색 톤 (Radix 회색 계열: slate, gray, mauve, sage, olive, sand) */
+	grayTone: string,
 };
 
 export type TranscriptEntry = TranscriptEntry_Serialize | TranscriptEntry_Deserialize;

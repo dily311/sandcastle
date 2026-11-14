@@ -3,6 +3,7 @@
    ---------------------------------------------------------
    - 화면은 이 토큰만 쓴다 (색상 값을 직접 쓰지 않는다)
    - 다크 모드: <html data-theme="dark">
+   - 회색: --gray-1~12 (Radix 회색 계열). 바탕·테두리·글자는 모두 이 단계에서 나온다
    - 강조색: --accent 하나만 바꾸면 나머지는 color-mix로 따라온다
      (설정의 accentColor → themeStore가 --accent에 넣음)
    - 사용자 테마(CSS)는 :root 또는 [data-theme] 아래 토큰을 덮어쓰면 된다
@@ -11,22 +12,36 @@
 :root {
 	color-scheme: light;
 
-	/* ---- 바탕 (모래색 계열) ---- */
-	--bg: #f7f5f1;
-	--bg-sunken: #efebe5;
-	--surface: #ffffff;
-	--surface-2: #fbfaf7;
-	--surface-hover: #f3f0eb;
-	--surface-active: #ebe6df;
-	--overlay: rgb(31 27 22 / 0.42);
+	/* ---- 회색 12단계 (Radix 회색 계열, 기본 slate). theme.svelte.ts가 고른 톤으로 덮어씀 ---- */
+	--gray-1: #fcfcfd;
+	--gray-2: #f9f9fb;
+	--gray-3: #f0f0f3;
+	--gray-4: #e8e8ec;
+	--gray-5: #e0e1e6;
+	--gray-6: #d9d9e0;
+	--gray-7: #cdced6;
+	--gray-8: #b9bbc6;
+	--gray-9: #8b8d98;
+	--gray-10: #80838d;
+	--gray-11: #60646c;
+	--gray-12: #1c2024;
 
-	--border: #e6e1d9;
-	--border-strong: #d4ccc1;
+	/* ---- 바탕 ---- */
+	--bg: var(--gray-1);
+	--bg-sunken: var(--gray-3);
+	--surface: #ffffff;
+	--surface-2: var(--gray-2);
+	--surface-hover: var(--gray-3);
+	--surface-active: var(--gray-4);
+	--overlay: rgb(0 0 0 / 0.4);
+
+	--border: var(--gray-5);
+	--border-strong: var(--gray-7);
 
 	/* ---- 글자 ---- */
-	--text: #1f1b16;
-	--text-muted: #6d655b;
-	--text-faint: #9a9287;
+	--text: var(--gray-12);
+	--text-muted: var(--gray-11);
+	--text-faint: var(--gray-9);
 	--text-on-accent: #ffffff;
 
 	/* ---- 강조색 (바다 유리) ---- */
@@ -62,9 +77,9 @@
 	--radius-xl: 22px;
 	--radius-full: 999px;
 
-	--shadow-sm: 0 1px 2px rgb(60 45 25 / 0.06), 0 1px 1px rgb(60 45 25 / 0.04);
-	--shadow-md: 0 4px 14px rgb(60 45 25 / 0.08), 0 1px 3px rgb(60 45 25 / 0.06);
-	--shadow-lg: 0 18px 48px rgb(60 45 25 / 0.14), 0 4px 12px rgb(60 45 25 / 0.06);
+	--shadow-sm: 0 1px 2px rgb(0 0 0 / 0.06), 0 1px 1px rgb(0 0 0 / 0.04);
+	--shadow-md: 0 4px 14px rgb(0 0 0 / 0.08), 0 1px 3px rgb(0 0 0 / 0.06);
+	--shadow-lg: 0 18px 48px rgb(0 0 0 / 0.14), 0 4px 12px rgb(0 0 0 / 0.06);
 
 	/* ---- 간격 (4px 단위) ---- */
 	--space-1: 4px;
@@ -107,20 +122,33 @@
 :root[data-theme="dark"] {
 	color-scheme: dark;
 
-	--bg: #13120f;
-	--bg-sunken: #0e0d0b;
-	--surface: #1b1916;
-	--surface-2: #201e1a;
-	--surface-hover: #26231f;
-	--surface-active: #2e2a25;
-	--overlay: rgb(0 0 0 / 0.55);
+	--gray-1: #111113;
+	--gray-2: #18191b;
+	--gray-3: #212225;
+	--gray-4: #272a2d;
+	--gray-5: #2e3135;
+	--gray-6: #363a3f;
+	--gray-7: #43484e;
+	--gray-8: #5a6169;
+	--gray-9: #696e77;
+	--gray-10: #777b84;
+	--gray-11: #b0b4ba;
+	--gray-12: #edeef0;
 
-	--border: #2c2924;
-	--border-strong: #3b3630;
+	--bg: var(--gray-1);
+	--bg-sunken: color-mix(in oklab, var(--gray-1) 70%, black);
+	--surface: var(--gray-2);
+	--surface-2: var(--gray-2);
+	--surface-hover: var(--gray-3);
+	--surface-active: var(--gray-4);
+	--overlay: rgb(0 0 0 / 0.6);
 
-	--text: #f2ede5;
-	--text-muted: #a69d91;
-	--text-faint: #776f65;
+	--border: var(--gray-5);
+	--border-strong: var(--gray-7);
+
+	--text: var(--gray-12);
+	--text-muted: var(--gray-11);
+	--text-faint: var(--gray-9);
 
 	--accent: #4fb3ac;
 	--accent-hover: color-mix(in oklab, var(--accent) 85%, white);

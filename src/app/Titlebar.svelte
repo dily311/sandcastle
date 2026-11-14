@@ -1,58 +1,67 @@
 <script lang="ts">
-	import {
-		ChevronLeft,
-		ChevronRight,
-		Gamepad2,
-		Minus,
-		PanelRight,
-		Settings,
-		Smartphone,
-		Square,
-		UserRound,
-		Users,
-		X,
-	} from "@lucide/svelte";
+	import { ChevronLeft, ChevronRight, Minus, PanelLeft, PanelRight, Square, X } from "@lucide/svelte";
 	import { getCurrentWindow } from "@tauri-apps/api/window";
 	import { IconButton } from "$shared/ui";
-	import { nav, type Page } from "./nav.svelte";
+	import { library } from "$features/character/library.svelte";
+	import { layout } from "./layout.svelte";
+	import { nav } from "./nav.svelte";
 	import { panel } from "./panel.svelte";
 	import { theme } from "./theme.svelte";
 
-	let { showWindowControls = true, unread = 0 }: { showWindowControls?: boolean; unread?: number } = $props();
+	let { showWindowControls = true }: { showWindowControls?: boolean } = $props();
 
 	const appWindow = getCurrentWindow();
-	const items: { page: Page; label: string; icon: typeof Users }[] = [
-		{ page: "phone", label: "폰", icon: Smartphone },
-		{ page: "character", label: "캐릭터", icon: Users },
-		{ page: "game", label: "게임", icon: Gamepad2 },
-		{ page: "persona", label: "페르소나", icon: UserRound },
-		{ page: "settings", label: "설정", icon: Settings },
-	];
 	const panelShown = $derived(panel.available && panel.open);
+
+	const SETTINGS: Record<string, string> = {
+		general: "기본 설정",
+		theme: "테마",
+		shortcut: "단축키",
+		widget: "위젯",
+		api: "API 키",
+		preset: "프리셋",
+		regex: "정규식",
+		data: "데이터",
+		log: "로그",
+	};
+	// 지금 화면 이름 (Claude Code 헤더처럼 가운데 왼쪽에 보임)
+	const title = $derived.by(() => {
+		const r = nav.current;
+		switch (r.page) {
+			case "character": {
+				const ch = library.character(r.charId);
+				if (!ch) return ["캐릭터"];
+				if (r.edit) return [ch.name, "편집"];
+				const conv = library.conversation(r.convId);
+				return conv ? [ch.name, conv.title] : [ch.name];
+			}
+			case "persona":
+				return ["페르소나", library.persona(r.personaId)?.name].filter(Boolean) as string[];
+			case "settings":
+				return ["설정", SETTINGS[r.tab ?? "general"]];
+			case "phone":
+				return ["폰"];
+			case "game":
+				return ["게임"];
+		}
+	});
 </script>
 
-<!-- 프로그램 헤더: 로고 · 앞으로/뒤로 · 메뉴 · (빈 곳은 창 끌기) · 오른쪽 패널 탭 · 창 버튼 -->
+<!-- 프로그램 헤더: 사이드바 · 뒤로/앞으로 · 화면 제목 · (빈 곳은 창 끌기) · 오른쪽 패널 · 창 버튼 -->
 <header class="titlebar" class:frameless={theme.setting.isFrameless} data-tauri-drag-region>
-	<span class="logo" aria-hidden="true">S</span>
+	<IconButton label={layout.sidebar ? "사이드바 닫기 (Ctrl+B)" : "사이드바 열기 (Ctrl+B)"} size="sm" active={layout.sidebar} onclick={() => layout.toggleSidebar()}>
+		<PanelLeft />
+	</IconButton>
 	<div class="history">
 		<IconButton label="뒤로 (Alt+←)" size="sm" disabled={!nav.canBack} onclick={() => nav.back()}><ChevronLeft /></IconButton>
 		<IconButton label="앞으로 (Alt+→)" size="sm" disabled={!nav.canForward} onclick={() => nav.forward()}><ChevronRight /></IconButton>
 	</div>
-	<nav aria-label="주 메뉴">
-		{#each items as it (it.page)}
-			<button
-				class="tab"
-				class:active={nav.current.page === it.page}
-				aria-current={nav.current.page === it.page ? "page" : undefined}
-				aria-label={it.label}
-				title={it.label}
-				onclick={() => nav.go({ page: it.page } as never)}
-			>
-				<it.icon />
-				{#if it.page === "phone" && unread}<span class="dot" aria-label="새 메시지 {unread}"></span>{/if}
-			</button>
+	<h1 class="title" data-tauri-drag-region>
+		{#each title as t, i (i)}
+			{#if i > 0}<span class="sep" aria-hidden="true">/</span>{/if}
+			<span class:last={i === title.length - 1}>{t}</span>
 		{/each}
-	</nav>
+	</h1>
 	<div class="drag" data-tauri-drag-region></div>
 
 	{#if panel.available}
@@ -94,72 +103,40 @@
 		align-items: center;
 		gap: var(--space-1);
 		height: var(--titlebar-height);
-		padding-left: var(--space-3);
+		padding-left: var(--space-2);
 		background: var(--bg);
 		border-bottom: 1px solid var(--border);
 		flex: none;
 		user-select: none;
 	}
-	.logo {
-		display: grid;
-		place-items: center;
-		width: 20px;
-		height: 20px;
-		border-radius: 6px;
-		background: var(--accent);
-		color: var(--text-on-accent);
-		font-size: 11px;
-		font-weight: 800;
-	}
 	.history {
 		display: flex;
-		margin: 0 var(--space-2) 0 var(--space-1);
+		margin: 0 var(--space-1);
+	}
+	.title {
+		display: flex;
+		align-items: center;
+		gap: 6px;
+		min-width: 0;
+		margin: 0 var(--space-2);
+		font-size: var(--text-sm);
+		font-weight: 500;
+		color: var(--text-muted);
+		white-space: nowrap;
+	}
+	.title span {
+		overflow: hidden;
+		text-overflow: ellipsis;
+	}
+	.title .last {
+		color: var(--text);
+		font-weight: 600;
+	}
+	.sep {
+		color: var(--text-faint);
 	}
 	.history :global(.icon-btn) {
 		width: 24px;
-	}
-	nav {
-		display: flex;
-		gap: 2px;
-	}
-	.tab {
-		position: relative;
-		display: grid;
-		place-items: center;
-		width: 30px;
-		height: 26px;
-		padding: 0;
-		border: none;
-		border-radius: var(--radius-xs);
-		background: transparent;
-		color: var(--text-muted);
-		cursor: pointer;
-	}
-	.tab :global(svg) {
-		width: 16px;
-		height: 16px;
-	}
-	.tab:hover {
-		background: var(--surface-hover);
-		color: var(--text);
-	}
-	.tab.active {
-		background: var(--surface);
-		color: var(--text);
-		box-shadow: var(--shadow-sm);
-	}
-	.tab.active :global(svg) {
-		color: var(--accent);
-	}
-	.dot {
-		position: absolute;
-		top: 3px;
-		right: 5px;
-		width: 7px;
-		height: 7px;
-		border-radius: 50%;
-		background: var(--accent);
-		border: 1.5px solid var(--bg);
 	}
 	.drag {
 		flex: 1;

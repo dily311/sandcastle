@@ -26,6 +26,7 @@ const db = {
 		isFrameless: true,
 		accentColor: "seaglass",
 		fontSize: 16,
+		grayTone: "slate",
 	} satisfies ThemeSetting as ThemeSetting,
 	feature: { feature: { "chat.images": true } } as FeatureSetting,
 };

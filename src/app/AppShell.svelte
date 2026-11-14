@@ -6,6 +6,8 @@
 	import { nav } from "./nav.svelte";
 	import { theme } from "./theme.svelte";
 	import Titlebar from "./Titlebar.svelte";
+	import Sidebar from "./Sidebar.svelte";
+	import { layout } from "./layout.svelte";
 	import Placeholder from "./Placeholder.svelte";
 	import SettingsPage from "$features/settings/SettingsPage.svelte";
 	import PersonaPage from "$features/persona/PersonaPage.svelte";
@@ -23,6 +25,11 @@
 
 <svelte:window
 	onkeydown={(e) => {
+		if ((e.ctrlKey || e.metaKey) && !e.shiftKey && !e.altKey && e.key.toLowerCase() === "b") {
+			e.preventDefault();
+			layout.toggleSidebar();
+			return;
+		}
 		if (!e.altKey) return;
 		if (e.key === "ArrowLeft") nav.back();
 		if (e.key === "ArrowRight") nav.forward();
@@ -35,7 +42,9 @@
 
 <div class="app">
 	<Titlebar />
-	<main class="content">
+	<div class="body">
+		{#if layout.sidebar}<Sidebar />{/if}
+		<main class="content">
 		{#if ready}
 			{@const r = nav.current}
 			{#if r.page === "character"}
@@ -52,7 +61,8 @@
 				{/key}
 			{/if}
 		{/if}
-	</main>
+		</main>
+	</div>
 </div>
 <Toasts />
 <ConfirmHost />
@@ -64,8 +74,14 @@
 		height: 100vh;
 		overflow: hidden;
 	}
+	.body {
+		flex: 1;
+		min-height: 0;
+		display: flex;
+	}
 	.content {
 		flex: 1;
+		min-width: 0;
 		min-height: 0;
 	}
 </style>

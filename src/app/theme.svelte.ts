@@ -3,6 +3,7 @@ import type { ThemeSetting } from "$ipc/bindings";
 import { call, commands } from "$shared/ipc/client";
 import { getCurrentWindow } from "@tauri-apps/api/window";
 import { ACCENTS, DEFAULT_ACCENT, accentValue } from "$shared/ui/accents";
+import { DEFAULT_GRAY, grayScale } from "$shared/ui/grays";
 
 const FALLBACK: ThemeSetting = {
 	mode: "system",
@@ -10,6 +11,7 @@ const FALLBACK: ThemeSetting = {
 	isFrameless: true,
 	accentColor: DEFAULT_ACCENT,
 	fontSize: 16,
+	grayTone: DEFAULT_GRAY,
 };
 
 class Theme {
@@ -47,6 +49,7 @@ class Theme {
 		const root = document.documentElement;
 		root.dataset.theme = this.dark ? "dark" : "light";
 		root.style.setProperty("--accent", accentValue(this.accentId, this.dark));
+		grayScale(this.setting.grayTone ?? DEFAULT_GRAY, this.dark).forEach((c, i) => root.style.setProperty(`--gray-${i + 1}`, c));
 		root.style.fontSize = `${this.setting.fontSize}px`;
 		void this.applyCustomCss();
 	}
