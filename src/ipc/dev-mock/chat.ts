@@ -152,6 +152,11 @@ function addMsg(conv: Conv, role: "user" | "assistant", content: string, ago: nu
 	for (let i = 0; i < 6; i++) addMsg(f, i % 2 ? "user" : "assistant", `${i + 1}번째 메시지`, 4000 - i);
 	const c = addConv({ title: "성 앞의 약속", characterId: "aria" }, 1500);
 	addMsg(c, "assistant", '"기사가 되면 꼭 지켜줄게."', 1500);
+	// 폰 대화 (Min의 폰)
+	const p = addConv({ title: "Seraphina", characterId: "sera", mode: "phone" }, 8);
+	addMsg(p, "assistant", "눈 떴어요?\n어제 숲에서 쓰러져 있길래 데려왔어요", 10);
+	addMsg(p, "user", "여기 어디예요??", 9);
+	addMsg(p, "assistant", "제 오두막이에요\n조금 더 쉬어요", 8);
 }
 
 const view = (c: Conv): Conversation_Serialize => ({ ...c, messageCount: messages.filter((m) => m.conversationId === c.id).length });
@@ -170,11 +175,14 @@ const REPLIES = [
 	'*희미한 빛이 그녀의 손끝에 모인다.* "같이 가요. 혼자 두지 않을게요."',
 ];
 
+const PHONE_REPLIES = ["눈 떴어요?\n어제 숲에서 쓰러져 있길래 데려왔어요", "괜찮아요 ㅎㅎ\n천천히 쉬어요", "지금 오두막이에요\n올 때 빵 좀 사다 줄래요?"];
+
 async function generate(convId: string, onEvent: { onmessage: (m: { chunk: string }) => void }) {
 	if (running.has(convId)) throw { code: "INVALID_INPUT", category: "VALIDATION", message: "이미 응답을 만드는 중", retryable: false };
 	const state = { cancelled: false };
 	running.set(convId, state);
-	const text = REPLIES[Math.floor(Math.random() * REPLIES.length)];
+	const pool = convs.find((c) => c.id === convId)?.mode === "phone" ? PHONE_REPLIES : REPLIES;
+	const text = pool[Math.floor(Math.random() * pool.length)];
 	let out = "";
 	try {
 		await sleep(400);

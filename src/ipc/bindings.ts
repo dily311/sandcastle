@@ -31,6 +31,10 @@ export const commands = {
 	chatRegenerate: (conversationId: string, swipe: boolean, onEvent: Channel<StreamPayload>, options?: InvokeOptions) => __TAURI_INVOKE<ChatTurn_Serialize>("chat_regenerate", { conversationId, swipe, onEvent }, options),
 	/**  진행 중인 응답 멈추기 (받은 데까지는 저장됨). 멈출 게 있었으면 true */
 	chatCancel: (conversationId: string, options?: InvokeOptions) => __TAURI_INVOKE<boolean>("chat_cancel", { conversationId }, options),
+	listPhoneContacts: (personaId: string, options?: InvokeOptions) => __TAURI_INVOKE<PhoneContact[]>("list_phone_contacts", { personaId }, options),
+	addPhoneContact: (personaId: string, characterId: string, options?: InvokeOptions) => __TAURI_INVOKE<PhoneContact>("add_phone_contact", { personaId, characterId }, options),
+	removePhoneContact: (personaId: string, characterId: string, options?: InvokeOptions) => __TAURI_INVOKE<null>("remove_phone_contact", { personaId, characterId }, options),
+	setPhoneContactStatus: (personaId: string, characterId: string, status: string, options?: InvokeOptions) => __TAURI_INVOKE<null>("set_phone_contact_status", { personaId, characterId, status }, options),
 	/**  이 AI 메시지를 만들 때 실제로 보낸 프롬프트 (없으면 null: 가져온 메시지, 취소된 응답 등) */
 	getMessagePrompt: (messageId: string, options?: InvokeOptions) => __TAURI_INVOKE<PromptMessage_Serialize | null>("get_message_prompt", { messageId }, options),
 	listConversationFolders: (characterId: string, options?: InvokeOptions) => __TAURI_INVOKE<ConversationFolder[]>("list_conversation_folders", { characterId }, options),
@@ -2212,6 +2216,15 @@ export type Persona_Serialize = {
 	isSystemDefault: boolean,
 	createdAt: number,
 	updatedAt: number,
+};
+
+/**  폰 연락처 (페르소나마다 따로) */
+export type PhoneContact = {
+	personaId: string,
+	characterId: string,
+	status: string,
+	sortOrder: number,
+	createdAt: number,
 };
 
 export type Playlist = Playlist_Serialize | Playlist_Deserialize;

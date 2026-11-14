@@ -48,9 +48,9 @@ class Library {
 	persona(id: string | null | undefined) {
 		return this.personas.find((p) => p.id === id);
 	}
-	/** 최근 활동 순 */
+	/** 최근 활동 순 (폰 대화는 폰 화면에서만 보임) */
 	convsOf(charId: string) {
-		return this.conversations.filter((c) => c.characterId === charId).sort((a, b) => b.updatedAt - a.updatedAt);
+		return this.conversations.filter((c) => c.characterId === charId && c.mode !== "phone").sort((a, b) => b.updatedAt - a.updatedAt);
 	}
 	foldersOf(charId: string) {
 		return this.folders.filter((f) => f.characterId === charId);
@@ -105,6 +105,19 @@ class Library {
 		}
 		await this.refresh(conv.id);
 		return this.conversation(conv.id) ?? conv;
+	}
+
+	/** 폰 대화: 페르소나(폰 주인)와 캐릭터 한 쌍에 하나. 첫 인사 없이 빈 대화로 시작 */
+	async phoneConversation(personaId: string, charId: string): Promise<Conversation> {
+		const found = this.conversations.find((c) => c.mode === "phone" && c.personaId === personaId && c.characterId === charId);
+		if (found) return found;
+		const ch = this.character(charId);
+		const conv = await call(
+			commands.createConversation({ title: ch?.name ?? "폰 대화", characterId: charId, personaId, worldInfoIds: [], mode: "phone" }),
+			src,
+		);
+		this.put(conv);
+		return conv;
 	}
 
 	async rename(id: string, title: string) {

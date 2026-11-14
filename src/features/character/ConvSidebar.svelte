@@ -48,7 +48,7 @@
 	const convs = $derived.by(() => {
 		const q = query.trim().toLowerCase();
 		return library.conversations
-			.filter((c) => c.characterId === charId && (!q || c.title.toLowerCase().includes(q)))
+			.filter((c) => c.characterId === charId && c.mode !== "phone" && (!q || c.title.toLowerCase().includes(q)))
 			.sort((a, b) => Number(b.pinned) - Number(a.pinned) || compare[sort](a, b));
 	});
 	let sortMenu = $state<{ x: number; y: number } | null>(null);

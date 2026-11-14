@@ -1,5 +1,5 @@
 // 설정 화면용 가짜 백엔드 (테마·API·프리셋·정규식·데이터·위젯)
-import type { DataOverview_Serialize, PromptBlocks_Serialize, PromptPresetDetail_Serialize } from "../bindings";
+import type { DataOverview_Serialize, PhoneContact, PromptBlocks_Serialize, PromptPresetDetail_Serialize } from "../bindings";
 import { mockData } from "./chat";
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -12,6 +12,10 @@ const themes = new Map<string, { name: string; author: string; version: string; 
 const keys = new Set<string>(["gemini"]);
 let autostart = false;
 let defaultPersona = "default";
+const contacts: PhoneContact[] = [
+	{ personaId: "min", characterId: "sera", status: "숲의 오두막", sortOrder: 0, createdAt: 0 },
+	{ personaId: "min", characterId: "aria", status: "기사단 훈련 중", sortOrder: 1, createdAt: 0 },
+];
 let pendingRestore: null | { createdAt: number } = null;
 
 const block = (presetId: string, i: number, identifier: string, name: string, content = "", extra: Partial<PromptBlocks_Serialize> = {}): PromptBlocks_Serialize => ({
@@ -67,6 +71,24 @@ export const settingsHandlers: Record<string, (a: Args) => unknown> = {
 	// ---- 페르소나 기본값 ----
 	set_system_default_persona: ({ id }) => ((defaultPersona = id), null),
 	get_conv_settings: () => ({ defaultPersonaId: defaultPersona }),
+
+	// ---- 폰 연락처 ----
+	list_phone_contacts: ({ personaId }) => contacts.filter((c) => c.personaId === personaId),
+	add_phone_contact: ({ personaId, characterId }) => {
+		let c = contacts.find((x) => x.personaId === personaId && x.characterId === characterId);
+		if (!c) contacts.push((c = { personaId, characterId, status: "", sortOrder: contacts.length, createdAt: now() }));
+		return c;
+	},
+	remove_phone_contact: ({ personaId, characterId }) => {
+		const i = contacts.findIndex((x) => x.personaId === personaId && x.characterId === characterId);
+		if (i >= 0) contacts.splice(i, 1);
+		return null;
+	},
+	set_phone_contact_status: ({ personaId, characterId, status }) => {
+		const c = contacts.find((x) => x.personaId === personaId && x.characterId === characterId);
+		if (c) c.status = status;
+		return null;
+	},
 
 	// ---- 페르소나 ----
 	get_all_worldinfo_books: () => [

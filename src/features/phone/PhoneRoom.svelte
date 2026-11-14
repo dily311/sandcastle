@@ -1,0 +1,443 @@
+<script lang="ts">
+	import { onMount, tick } from "svelte";
+	import { BookOpen, ChevronLeft, Copy, Menu, MessageCirclePlus, RefreshCw, Send, Square, Trash2 } from "@lucide/svelte";
+	import { Avatar, ContextMenu, type MenuItem } from "$shared/ui";
+	import { fileSrc } from "$shared/ipc/file";
+	import { confirmAction } from "$shared/stores/confirm.svelte";
+	import { toasts } from "$shared/stores/toast.svelte";
+	import { appSetting } from "$shared/stores/appSetting.svelte";
+	import { nav } from "$app/nav.svelte";
+	import { library, type Conversation } from "$features/character/library.svelte";
+	import { ChatSession, type Message } from "$features/character/session.svelte";
+	import { bubbles, phone } from "./phone.svelte";
+
+	let { conv, onback }: { conv: Conversation; onback: () => void } = $props();
+
+	// svelte-ignore state_referenced_locally
+	const session = new ChatSession(conv.id);
+	const ch = $derived(library.character(conv.characterId));
+	const images = $derived(Object.fromEntries((library.images[conv.characterId ?? ""] ?? []).map((i) => [i.key, fileSrc(i.path) ?? ""])));
+	let draft = $state("");
+	let scroller: HTMLDivElement | undefined = $state();
+
+	onMount(async () => {
+		void appSetting.load();
+		if (conv.characterId && !library.images[conv.characterId]) void library.loadImages(conv.characterId);
+		await session.load();
+		phone.markRead(conv.id);
+		await scrollDown();
+	});
+
+	async function scrollDown() {
+		await tick();
+		scroller?.scrollTo({ top: scroller.scrollHeight });
+	}
+	// 답장이 들어오는 동안 아래로 따라감
+	$effect(() => {
+		void session.live?.text;
+		void session.messages.length;
+		void scrollDown();
+	});
+
+	async function done() {
+		phone.markRead(conv.id);
+		phone.setPreview(conv.id, session.messages);
+	}
+	async function send() {
+		const text = draft.trim();
+		if (!text || session.busy) return;
+		draft = "";
+		await session.send(text);
+		await done();
+	}
+	/** 내 메시지 없이 답장만 더 받기 */
+	async function nudge() {
+		if (session.busy) return;
+		await session.send("");
+		await done();
+	}
+	async function again() {
+		await session.regenerate(false);
+		await done();
+	}
+	function onkeydown(e: KeyboardEvent) {
+		if (e.key !== "Enter" || e.shiftKey || e.isComposing) return;
+		if (appSetting.sendOnEnter || e.ctrlKey || e.metaKey) {
+			e.preventDefault();
+			void send();
+		}
+	}
+
+	// ---- 화면에 그릴 줄 ----
+	interface Row {
+		key: string;
+		kind: "date" | "msg";
+		date?: string;
+		mine?: boolean;
+		msg?: Message;
+		lines?: { kind: "text" | "image"; text: string }[];
+		time?: string;
+		/** 같은 사람이 이어서 보내면 이름·아바타 생략 */
+		cont?: boolean;
+		pending?: boolean;
+	}
+	const day = (t: number) => new Date(t).toLocaleDateString("ko-KR", { year: "numeric", month: "long", day: "numeric", weekday: "long" });
+	const hm = (t: number) => new Date(t).toLocaleTimeString("ko-KR", { hour: "numeric", minute: "2-digit" });
+
+	const rows = $derived.by(() => {
+		const out: Row[] = [];
+		let lastDay = "";
+		let lastSide: boolean | null = null;
+		const live = session.live;
+		const push = (r: Omit<Row, "kind" | "key"> & { key: string; at: number }) => {
+			const d = day(r.at);
+			if (d !== lastDay) {
+				out.push({ key: `d${r.at}`, kind: "date", date: d });
+				lastDay = d;
+				lastSide = null;
+			}
+			out.push({ ...r, kind: "msg", cont: lastSide === r.mine, time: hm(r.at) });
+			lastSide = r.mine ?? null;
+		};
+		for (const m of session.messages) {
+			const content = live?.kind === "regenerate" && live.targetId === m.id ? live.text : m.content;
+			const lines = bubbles(content);
+			if (!lines.length && !(live?.targetId === m.id)) continue;
+			push({ key: m.id, at: m.createdAt, mine: m.role === "user", msg: m, lines, pending: live?.targetId === m.id });
+		}
+		if (live?.kind === "send") {
+			const now = Date.now();
+			if (live.userText) push({ key: "live-user", at: now, mine: true, lines: bubbles(live.userText) });
+			push({ key: "live-ai", at: now, mine: false, lines: bubbles(live.text), pending: true });
+		}
+		return out;
+	});
+	/** 상대가 아직 답하지 않은 내 마지막 메시지 → "1" */
+	const unreadMine = $derived.by(() => {
+		const last = rows.filter((r) => r.kind === "msg" && !r.pending).at(-1);
+		return last?.mine ? last.key : null;
+	});
+	const lastAi = $derived([...session.messages].reverse().find((m) => m.role === "assistant"));
+
+	// ---- 메뉴 ----
+	let menu = $state<{ at: { x: number; y: number }; items: MenuItem[] } | null>(null);
+	function bubbleMenu(e: MouseEvent, r: Row) {
+		if (!r.msg || session.busy) return;
+		e.preventDefault();
+		const m = r.msg;
+		menu = {
+			at: { x: e.clientX, y: e.clientY },
+			items: [
+				{
+					label: "복사",
+					icon: Copy,
+					onselect: () =>
+						navigator.clipboard.writeText(m.content).then(
+							() => toasts.success("복사함"),
+							() => toasts.error("복사 못 함"),
+						),
+				},
+				...(m.id === session.last?.id && m.role === "assistant" ? [{ label: "답장 다시 받기", icon: RefreshCw, onselect: again }] : []),
+				{
+					label: "삭제",
+					icon: Trash2,
+					danger: true,
+					separator: true,
+					onselect: async () => {
+						if (await confirmAction({ title: "메시지 삭제", message: "이 메시지를 지움", confirmLabel: "삭제", danger: true })) {
+							await session.remove(m);
+							phone.setPreview(conv.id, session.messages);
+						}
+					},
+				},
+			],
+		};
+	}
+	function roomMenu(e: MouseEvent) {
+		const r = (e.currentTarget as HTMLElement).getBoundingClientRect();
+		menu = {
+			at: { x: r.right - 200, y: r.bottom + 4 },
+			items: [
+				{ label: "답장 더 받기", icon: MessageCirclePlus, disabled: session.busy, onselect: nudge },
+				{ label: "마지막 답장 다시 받기", icon: RefreshCw, disabled: session.busy || !lastAi || session.last?.id !== lastAi.id, onselect: again },
+				{ label: "소설 화면으로 보기", icon: BookOpen, separator: true, onselect: () => nav.go({ page: "character", charId: conv.characterId ?? undefined, convId: conv.id }) },
+			],
+		};
+	}
+</script>
+
+<div class="room">
+	<div class="room-bar">
+		<button class="plain" aria-label="뒤로" onclick={onback}><ChevronLeft /></button>
+		<strong>{ch?.name ?? conv.title}</strong>
+		<button class="plain" aria-label="대화방 메뉴" onclick={roomMenu}><Menu /></button>
+	</div>
+
+	<div class="msgs" bind:this={scroller}>
+		{#if session.loading}
+			<p class="hint">불러오는 중…</p>
+		{:else if !rows.length}
+			<p class="hint">{ch?.name ?? "상대"}에게 첫 메시지를 보내 봄</p>
+		{/if}
+		{#each rows as r (r.key)}
+			{#if r.kind === "date"}
+				<div class="date">{r.date}</div>
+			{:else if r.mine}
+				<div class="me" class:cont={r.cont} role="group" oncontextmenu={(e) => bubbleMenu(e, r)}>
+					{#each r.lines ?? [] as l, i (i)}
+						<div class="line">
+							{#if i === (r.lines?.length ?? 0) - 1}
+								<span class="t">{#if unreadMine === r.key}<span class="read">1</span>{/if}{r.pending ? "" : r.time}</span>
+							{/if}
+							<div class="b">{l.text}</div>
+						</div>
+					{/each}
+				</div>
+			{:else}
+				<div class="them" class:cont={r.cont} role="group" oncontextmenu={(e) => bubbleMenu(e, r)}>
+					{#if !r.cont}<Avatar name={ch?.name ?? "?"} src={fileSrc(ch?.avatar)} color={ch?.color} size={36} />{:else}<span class="pad"></span>{/if}
+					<div class="stack">
+						{#if !r.cont}<span class="name">{ch?.name}</span>{/if}
+						{#each r.lines ?? [] as l, i (i)}
+							<div class="line">
+								{#if l.kind === "image" && images[l.text]}
+									<img class="photo" src={images[l.text]} alt={l.text} loading="lazy" />
+								{:else}
+									<div class="b">{l.kind === "image" ? `(사진: ${l.text})` : l.text}</div>
+								{/if}
+								{#if i === (r.lines?.length ?? 0) - 1 && !r.pending}<span class="t">{r.time}</span>{/if}
+							</div>
+						{/each}
+						{#if r.pending && !(r.lines?.length)}
+							<div class="line"><div class="b typing" aria-label="입력 중"><span></span><span></span><span></span></div></div>
+						{/if}
+					</div>
+				</div>
+			{/if}
+		{/each}
+	</div>
+
+	<form
+		class="input"
+		onsubmit={(e) => {
+			e.preventDefault();
+			void send();
+		}}
+	>
+		<textarea bind:value={draft} rows="1" placeholder="메시지 입력" aria-label="메시지" {onkeydown}></textarea>
+		{#if session.busy}
+			<button type="button" class="send on" aria-label="멈추기" onclick={() => session.cancel()}><Square /></button>
+		{:else}
+			<button class="send" class:on={!!draft.trim()} aria-label="보내기" disabled={!draft.trim()}><Send /></button>
+		{/if}
+	</form>
+</div>
+
+{#if menu}
+	<ContextMenu at={menu.at} items={menu.items} label="메시지 메뉴" onclose={() => (menu = null)} />
+{/if}
+
+<style>
+	.room {
+		flex: 1;
+		display: flex;
+		flex-direction: column;
+		min-height: 0;
+		background: color-mix(in oklab, var(--accent) 12%, #eef1f4);
+	}
+	.room-bar {
+		display: flex;
+		align-items: center;
+		gap: 10px;
+		padding: 6px 14px 10px;
+	}
+	.room-bar strong {
+		flex: 1;
+		font-size: 16px;
+		overflow: hidden;
+		text-overflow: ellipsis;
+		white-space: nowrap;
+	}
+	.room-bar :global(svg) {
+		width: 22px;
+		height: 22px;
+	}
+	.plain {
+		display: grid;
+		place-items: center;
+		border: none;
+		background: none;
+		color: inherit;
+		padding: 0;
+		cursor: pointer;
+	}
+	.msgs {
+		flex: 1;
+		display: flex;
+		flex-direction: column;
+		gap: 10px;
+		padding: 6px 12px 12px;
+		overflow: auto;
+	}
+	.hint {
+		align-self: center;
+		margin-top: 40%;
+		color: #6b6b6b;
+		font-size: 13px;
+	}
+	.date {
+		align-self: center;
+		padding: 3px 12px;
+		border-radius: 12px;
+		background: rgb(0 0 0 / 0.12);
+		color: white;
+		font-size: 11px;
+	}
+	.them {
+		display: flex;
+		gap: 8px;
+		align-items: flex-start;
+	}
+	.them.cont,
+	.me.cont {
+		margin-top: -6px;
+	}
+	.them :global(.avatar) {
+		border-radius: 38% !important;
+		flex-shrink: 0;
+	}
+	.them :global(.avatar img) {
+		border-radius: inherit;
+	}
+	.pad {
+		width: 36px;
+		flex-shrink: 0;
+	}
+	.stack {
+		display: flex;
+		flex-direction: column;
+		gap: 4px;
+		max-width: 78%;
+		min-width: 0;
+	}
+	.name {
+		font-size: 12px;
+		color: #333;
+	}
+	.line {
+		display: flex;
+		align-items: flex-end;
+		gap: 5px;
+	}
+	.me {
+		align-self: flex-end;
+		max-width: 78%;
+		display: flex;
+		flex-direction: column;
+		align-items: flex-end;
+		gap: 4px;
+	}
+	.b {
+		padding: 7px 10px;
+		border-radius: 14px;
+		background: white;
+		color: #191919;
+		font-size: 14px;
+		line-height: 1.4;
+		white-space: pre-wrap;
+		overflow-wrap: anywhere;
+	}
+	.me .b {
+		background: var(--accent);
+		color: white;
+	}
+	.photo {
+		display: block;
+		max-width: 200px;
+		border-radius: 14px;
+	}
+	.t {
+		flex: none;
+		font-size: 10px;
+		color: #555;
+		display: flex;
+		flex-direction: column;
+		align-items: flex-end;
+	}
+	.read {
+		color: var(--accent);
+		font-weight: 700;
+	}
+	.typing {
+		display: flex;
+		gap: 4px;
+		padding: 11px 12px;
+	}
+	.typing span {
+		width: 6px;
+		height: 6px;
+		border-radius: 50%;
+		background: #9a9a9a;
+		animation: blink 1.2s infinite;
+	}
+	.typing span:nth-child(2) {
+		animation-delay: 0.2s;
+	}
+	.typing span:nth-child(3) {
+		animation-delay: 0.4s;
+	}
+	@keyframes blink {
+		50% {
+			opacity: 0.25;
+		}
+	}
+	.input {
+		display: flex;
+		align-items: flex-end;
+		gap: 8px;
+		padding: 8px 12px 26px;
+		background: white;
+	}
+	.input textarea {
+		flex: 1;
+		min-height: 36px;
+		max-height: 96px;
+		padding: 8px 14px;
+		border: none;
+		border-radius: 18px;
+		background: #f1f1f1;
+		outline: none;
+		color: #191919;
+		font: inherit;
+		font-size: 14px;
+		resize: none;
+		field-sizing: content;
+	}
+	.send {
+		display: grid;
+		place-items: center;
+		flex: none;
+		width: 36px;
+		height: 36px;
+		border: none;
+		border-radius: 50%;
+		background: transparent;
+		color: #666;
+		cursor: pointer;
+	}
+	.send :global(svg) {
+		width: 20px;
+		height: 20px;
+	}
+	.send.on {
+		background: var(--accent);
+		color: white;
+	}
+	.send.on :global(svg) {
+		width: 17px;
+		height: 17px;
+	}
+	.send:disabled {
+		cursor: default;
+	}
+</style>

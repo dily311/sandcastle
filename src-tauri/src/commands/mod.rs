@@ -9,6 +9,7 @@ pub mod preset;
 
 pub mod conversation;
 pub mod chat;
+pub mod phone;
 
 pub mod game_manager;
 pub mod game_engine;

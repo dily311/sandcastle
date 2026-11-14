@@ -8,6 +8,7 @@ pub mod character_image;
 mod character_image_tests;
 pub mod conversation;
 pub mod chat_ui;
+pub mod phone;
 #[cfg(test)]
 mod chat_ui_tests;
 pub mod game;

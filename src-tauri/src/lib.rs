@@ -18,7 +18,7 @@ use crate::{
     state::{AppState, WindowMode},
     sys::{settings::SettingsState, themes::ThemeManager},
 };
-use commands::{ai_service::*, conversation::*, game_engine::*, game_manager::*, settings::*, task::*, regex::*, character_image::*, import::*, data::*, preset::*, chat::*};
+use commands::{ai_service::*, conversation::*, game_engine::*, game_manager::*, settings::*, task::*, regex::*, character_image::*, import::*, data::*, preset::*, chat::*, phone::*};
 
 #[cfg(desktop)]
 mod widget;
@@ -220,6 +220,10 @@ pub fn specta_builder() -> tauri_specta::Builder<tauri::Wry> {
             chat_send,
             chat_regenerate,
             chat_cancel,
+            list_phone_contacts,
+            add_phone_contact,
+            remove_phone_contact,
+            set_phone_contact_status,
             get_message_prompt,
             list_conversation_folders,
             create_conversation_folder,
@@ -386,6 +390,10 @@ pub fn specta_builder() -> tauri_specta::Builder<tauri::Wry> {
             chat_send,
             chat_regenerate,
             chat_cancel,
+            list_phone_contacts,
+            add_phone_contact,
+            remove_phone_contact,
+            set_phone_contact_status,
             get_message_prompt,
             list_conversation_folders,
             create_conversation_folder,

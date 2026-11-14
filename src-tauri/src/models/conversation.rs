@@ -511,3 +511,14 @@ pub struct ChatTurn {
     pub user: Option<Message>,
     pub assistant: Message,
 }
+
+/// 폰 연락처 (페르소나마다 따로)
+#[derive(Debug, Clone, Serialize, Deserialize, sqlx::FromRow, specta::Type)]
+#[serde(rename_all = "camelCase")]
+pub struct PhoneContact {
+    pub persona_id: String,
+    pub character_id: String,
+    pub status: String,
+    pub sort_order: i64,
+    pub created_at: i64,
+}

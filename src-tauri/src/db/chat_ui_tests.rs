@@ -165,3 +165,27 @@ async fn persona_world_info_and_avatar_are_saved() {
     conv::set_persona_avatar(&pool, &p.id, None).await.unwrap();
     assert_eq!(conv::get_persona(&pool, &p.id).await.unwrap().avatar, None);
 }
+
+#[tokio::test]
+async fn phone_contacts_are_per_persona() {
+    use crate::db::phone;
+    let pool = pool().await;
+    sqlx::query("INSERT INTO personas (id, name, created_at, updated_at) VALUES ('p2', '하루', 0, 0)")
+        .execute(&pool)
+        .await
+        .unwrap();
+
+    phone::add_contact(&pool, "default", "c1").await.unwrap();
+    // 두 번 넣어도 하나
+    phone::add_contact(&pool, "default", "c1").await.unwrap();
+    assert_eq!(phone::list_contacts(&pool, "default").await.unwrap().len(), 1);
+    assert!(phone::list_contacts(&pool, "p2").await.unwrap().is_empty());
+
+    assert!(phone::set_status(&pool, "default", "c1", "훈련 중").await.unwrap());
+    assert_eq!(phone::list_contacts(&pool, "default").await.unwrap()[0].status, "훈련 중");
+
+    // 캐릭터가 지워지면 연락처도 사라짐
+    sqlx::query("DELETE FROM characters WHERE id = 'c1'").execute(&pool).await.unwrap();
+    assert!(phone::list_contacts(&pool, "default").await.unwrap().is_empty());
+    assert!(!phone::remove_contact(&pool, "default", "c1").await.unwrap());
+}
