@@ -1,7 +1,11 @@
 use crate::db::conversation::{self};
 use crate::error::{AppError, Result};
 use crate::models::conversation::*;
+use crate::models::regex::{RegexPlacement, RegexTarget};
+use crate::models::settings::AppSetting;
+use crate::service::chat::regex_processor::RegexProcessor;
 use crate::state::AppState;
+use crate::sys::settings::SettingsState;
 use serde_json::json;
 use tauri::State;
 
@@ -181,9 +185,19 @@ pub async fn get_messages(
 }
 
 #[tauri::command]
-pub async fn append_message(state: State<'_, AppState>, input: MessageInput) -> Result<Message> {
+pub async fn append_message(
+    state: State<'_, AppState>,
+    settings: State<'_, SettingsState<AppSetting>>,
+    mut input: MessageInput,
+) -> Result<Message> {
     if input.content.is_empty() && input.role == "user" {
         return Err(AppError::validation("빈 메시지는 전송할 수 없습니다", None));
+    }
+    // 사용자 입력은 저장 전에 정규식(user_input / stored) 적용
+    if input.role == "user" {
+        let preset_id = crate::commands::regex::selected_preset(&settings);
+        let regex = RegexProcessor::for_conversation(&state.db, &input.conversation_id, preset_id.as_deref()).await?;
+        input.content = regex.apply(&input.content, RegexPlacement::UserInput, &[RegexTarget::Stored], Some(0));
     }
     let conversation_id = input.conversation_id.clone();
     let mes = conversation::append_message(&state.db, input).await?;

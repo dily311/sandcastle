@@ -18,7 +18,7 @@ use crate::{
     state::{AppState, WindowMode},
     sys::{settings::SettingsState, themes::ThemeManager},
 };
-use commands::{ai_service::*, conversation::*, game_engine::*, game_manager::*, settings::*, task::*};
+use commands::{ai_service::*, conversation::*, game_engine::*, game_manager::*, settings::*, task::*, regex::*};
 
 #[cfg(desktop)]
 mod widget;
@@ -85,6 +85,12 @@ pub fn run() {
             cancel_task,
             resume_task,
             dismiss_task,
+            // regex
+            list_regex_scripts,
+            upsert_regex_script,
+            delete_regex_script,
+            preview_regex_script,
+            apply_regex,
             // api_profile
             get_api_profile,
             get_all_api_profile,
@@ -208,6 +214,12 @@ pub fn run() {
             cancel_task,
             resume_task,
             dismiss_task,
+            // regex
+            list_regex_scripts,
+            upsert_regex_script,
+            delete_regex_script,
+            preview_regex_script,
+            apply_regex,
             // api_profile
             get_api_profile,
             get_all_api_profile,

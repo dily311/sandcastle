@@ -16,11 +16,15 @@ use crate::{
             ChatContext, ContextRequest, DialogueDoneEvent, GenerationType, PromptRequest,
             StreamPayload,
         },
+        regex::{RegexPlacement, RegexTarget},
         settings::AppSetting,
     },
     service::{
         ai::{AiRequest, AiService},
-        chat::context_manager::ContextManager,
+        chat::{
+            context_manager::ContextManager,
+            regex_processor::{RegexMacros, RegexProcessor},
+        },
         prompt::PromptManager,
     },
     state::AppState,
@@ -54,6 +58,27 @@ pub fn current_conv_request(state: &SettingsState<AppSetting>) -> Result<ChatReq
     })
 }
 
+/// 프롬프트에 들어가기 전 정규식 적용. 치환된 이번 입력을 돌려준다.
+/// - 이번 입력(깊이 0): 저장용 + 프롬프트용 (저장 시 append_message가 적용한 것과 같은 결과)
+/// - 대화 기록: 이미 저장용이 적용된 상태라 프롬프트용만 (깊이 = 최근부터 1, 2, …)
+/// - 월드인포: 저장되지 않으므로 둘 다
+fn apply_prompt_regex(regex: &RegexProcessor, context: &mut ChatContext, message: &str) -> String {
+    if regex.is_empty() {
+        return message.to_string();
+    }
+    let both = [RegexTarget::Stored, RegexTarget::Prompt];
+    let n = context.history.len();
+    for (i, item) in context.history.iter_mut().enumerate() {
+        if let Some(placement) = RegexPlacement::for_role(&item.role) {
+            item.content = regex.apply(&item.content, placement, &[RegexTarget::Prompt], Some(n - i));
+        }
+    }
+    for entry in context.world_info.iter_mut() {
+        entry.content = regex.apply(&entry.content, RegexPlacement::WorldInfo, &both, None);
+    }
+    regex.apply(message, RegexPlacement::UserInput, &both, Some(0))
+}
+
 pub struct ChatManager;
 
 impl ChatManager {
@@ -72,19 +97,32 @@ impl ChatManager {
     ) -> Result<String> {
         let chat_req = current_conv_request(settings)?;
 
-        let context = ContextManager
+        let mut context = ContextManager
             .build_context(
                 &state.db,
                 ContextRequest {
                     conversation_id: conversation_id.clone(),
-                    character_id: chat_req.character_id,
+                    character_id: chat_req.character_id.clone(),
                     persona_id: chat_req.persona_id,
                     history_limit: HISTORY_LIMIT,
                 },
             )
             .await?;
 
-        let result = self
+        // 정규식: 보내는 쪽(프롬프트)과 받는 쪽(응답)
+        let regex = RegexProcessor::load(
+            &state.db,
+            Some(&chat_req.character_id),
+            Some(&chat_req.preset_id),
+            RegexMacros {
+                char_name: context.char_name.clone().unwrap_or_default(),
+                user_name: context.user_name.clone().unwrap_or_default(),
+            },
+        )
+        .await?;
+        let message = apply_prompt_regex(&regex, &mut context, &message);
+
+        let raw = self
             .generate(
                 &app,
                 &state.db,
@@ -95,6 +133,9 @@ impl ChatManager {
                 channel,
             )
             .await?;
+        // 스트리밍 조각은 원문 그대로 나가고, 완료 이벤트/반환값은 치환된 최종본이다.
+        // 프론트는 done 이벤트의 full_message로 메시지를 저장해야 한다.
+        let result = regex.apply(&raw, RegexPlacement::AiOutput, &[RegexTarget::Stored], Some(0));
 
         // 프론트에 생성 완료 알리기 -> DB 저장
         app.emit(

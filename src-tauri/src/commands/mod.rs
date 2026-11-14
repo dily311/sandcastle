@@ -1,6 +1,7 @@
 pub mod settings;
 pub mod task;
 pub mod ai_service;
+pub mod regex;
 
 pub mod conversation;
 
