@@ -1,7 +1,7 @@
 <script lang="ts">
-	import { Copy, Download, Heart, MessageSquare, Pencil, Trash2, Upload } from "@lucide/svelte";
-	import { IconButton } from "$shared/ui";
-	import { absolute, convActions, relative, type MockConv } from "./mock.svelte";
+	import { Copy, Download, FolderInput, FolderOutput, MessageSquare, Pencil, Pin, PinOff, Trash2, Upload } from "@lucide/svelte";
+	import { ContextMenu, IconButton, type MenuItem } from "$shared/ui";
+	import { absolute, convActions, relative, store, type MockConv } from "./mock.svelte";
 
 	interface Props {
 		conv: MockConv;
@@ -22,9 +22,34 @@
 		convActions.rename(conv.id, draft);
 		editing = false;
 	}
+
+	// 오른쪽 클릭: 단축 버튼과 같은 동작 + 폴더로 이동
+	let menu = $state<{ x: number; y: number } | null>(null);
+	const items = $derived.by((): MenuItem[] => {
+		const folders = store.folders.filter((f) => f.charId === conv.charId && f.id !== conv.folderId);
+		return [
+			{ label: "이름 바꾸기", icon: Pencil, onselect: startEdit },
+			{ label: conv.pinned ? "고정 해제" : "맨 위에 고정", icon: conv.pinned ? PinOff : Pin, onselect: () => convActions.togglePin(conv.id) },
+			...folders.map((f, i) => ({ label: `'${f.name}'(으)로 이동`, icon: FolderInput, separator: i === 0, onselect: () => convActions.move(conv.id, f.id) })),
+			...(conv.folderId ? [{ label: "폴더에서 빼기", icon: FolderOutput, separator: folders.length === 0, onselect: () => convActions.move(conv.id, null) }] : []),
+			{ label: "복제", icon: Copy, separator: true, onselect: () => convActions.duplicate(conv.id) },
+			{ label: "내보내기", icon: Download, onselect: () => {} },
+			{ label: "삭제", icon: Trash2, danger: true, onselect: () => convActions.remove(conv.id) },
+		];
+	});
 </script>
 
-<article class="card" class:selected class:compact>
+<article
+	class="card"
+	class:selected
+	class:compact
+	draggable="true"
+	ondragstart={(e) => e.dataTransfer?.setData("text/conv-id", conv.id)}
+	oncontextmenu={(e) => {
+		e.preventDefault();
+		menu = { x: e.clientX, y: e.clientY };
+	}}
+>
 	<div class="top">
 		{#if editing}
 			<!-- svelte-ignore a11y_autofocus -->
@@ -44,8 +69,8 @@
 		{/if}
 		<div class="quick">
 			<IconButton label="이름 바꾸기" size="sm" onclick={startEdit}><Pencil /></IconButton>
-			<IconButton label={conv.favorite ? "즐겨찾기 해제" : "즐겨찾기"} size="sm" active={conv.favorite} onclick={() => convActions.toggleFavorite(conv.id)}>
-				<Heart class={conv.favorite ? "fav" : ""} />
+			<IconButton label={conv.pinned ? "고정 해제" : "맨 위에 고정"} size="sm" active={conv.pinned} onclick={() => convActions.togglePin(conv.id)}>
+				<Pin class={conv.pinned ? "pinned" : ""} />
 			</IconButton>
 		</div>
 	</div>
@@ -62,6 +87,7 @@
 		</div>
 	</div>
 </article>
+<ContextMenu at={menu} {items} label="대화 메뉴" onclose={() => (menu = null)} />
 
 <style>
 	.card {
@@ -122,9 +148,10 @@
 		display: flex;
 		flex: none;
 	}
-	.quick :global(.fav) {
-		fill: var(--danger);
-		color: var(--danger);
+	.quick :global(.pinned) {
+		fill: var(--accent);
+		color: var(--accent);
+		transform: rotate(45deg);
 	}
 	.bottom {
 		display: flex;
@@ -167,7 +194,7 @@
 	.compact .meta {
 		font-size: var(--text-xs);
 	}
-	/* 즐겨찾기된 하트는 항상 보이게 */
+	/* 고정된 핀은 항상 보이게 */
 	.compact .quick :global(.icon-btn:not(.active)),
 	.compact .tools {
 		opacity: 0;

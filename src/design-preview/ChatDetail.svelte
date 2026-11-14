@@ -54,7 +54,7 @@
 		const q = query.trim().toLowerCase();
 		return store.convs
 			.filter((c) => c.charId === charId && (!q || c.title.toLowerCase().includes(q)))
-			.sort((a, b) => Number(b.favorite) - Number(a.favorite) || (sort === "recent" ? a.ago - b.ago : sort === "name" ? a.title.localeCompare(b.title) : b.count - a.count));
+			.sort((a, b) => Number(b.pinned) - Number(a.pinned) || (sort === "recent" ? a.ago - b.ago : sort === "name" ? a.title.localeCompare(b.title) : b.count - a.count));
 	});
 
 	const personas = [
