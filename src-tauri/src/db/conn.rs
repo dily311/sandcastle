@@ -20,3 +20,17 @@ pub async fn init_pool(app_data_dir: PathBuf) -> Result<DbPool, sqlx::Error> {
     sqlx::migrate!("src/db/migrations").run(&pool).await?;
     Ok(pool)
 }
+
+/// 이 빌드에 포함된 마이그레이션 (버전, 체크섬). 백업 복원 전 호환성 검사에 쓴다.
+pub fn schema_migrations() -> Vec<(i64, Vec<u8>)> {
+    sqlx::migrate!("src/db/migrations")
+        .migrations
+        .iter()
+        .map(|m| (m.version, m.checksum.to_vec()))
+        .collect()
+}
+
+/// 이 빌드의 최신 스키마 버전
+pub fn latest_schema_version() -> i64 {
+    schema_migrations().iter().map(|(v, _)| *v).max().unwrap_or(0)
+}

@@ -4,6 +4,7 @@ pub mod ai_service;
 pub mod regex;
 pub mod character_image;
 pub mod import;
+pub mod data;
 
 pub mod conversation;
 

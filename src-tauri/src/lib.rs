@@ -18,7 +18,7 @@ use crate::{
     state::{AppState, WindowMode},
     sys::{settings::SettingsState, themes::ThemeManager},
 };
-use commands::{ai_service::*, conversation::*, game_engine::*, game_manager::*, settings::*, task::*, regex::*, character_image::*, import::*};
+use commands::{ai_service::*, conversation::*, game_engine::*, game_manager::*, settings::*, task::*, regex::*, character_image::*, import::*, data::*};
 
 #[cfg(desktop)]
 mod widget;
@@ -99,6 +99,16 @@ pub fn run() {
             set_conversation_images_enabled,
             // import
             import_sillytavern,
+            // data manager
+            get_data_overview,
+            delete_conversations,
+            export_character_pack,
+            import_character_pack,
+            export_backup,
+            prepare_restore,
+            cancel_restore,
+            get_pending_restore,
+            restart_app,
             // api_profile
             get_api_profile,
             get_all_api_profile,
@@ -236,6 +246,16 @@ pub fn run() {
             set_conversation_images_enabled,
             // import
             import_sillytavern,
+            // data manager
+            get_data_overview,
+            delete_conversations,
+            export_character_pack,
+            import_character_pack,
+            export_backup,
+            prepare_restore,
+            cancel_restore,
+            get_pending_restore,
+            restart_app,
             // api_profile
             get_api_profile,
             get_all_api_profile,
@@ -314,9 +334,19 @@ pub fn run() {
                 .path()
                 .app_data_dir()
                 .expect("app_data_dir 조회 실패");
-            db::conn::init_pool(app_data_dir)
+            // 준비된 백업 복원이 있으면 DB를 열기 전에 파일을 교체한다
+            match service::data::backup::apply_pending_restore(&app_data_dir) {
+                Ok(true) => eprintln!("[data] 백업 복원을 적용했습니다"),
+                Ok(false) => {}
+                Err(e) => eprintln!("[data] 백업 복원 실패: {e}"),
+            }
+            let pool = db::conn::init_pool(app_data_dir.clone())
                 .await
-                .expect("DB 초기화 실패")
+                .expect("DB 초기화 실패");
+            if let Err(e) = service::data::backup::finish_restore_fixups(&pool, &app_data_dir).await {
+                eprintln!("[data] 복원 후 경로 보정 실패: {e}");
+            }
+            pool
         });
 
         // 2. AppState 초기화
