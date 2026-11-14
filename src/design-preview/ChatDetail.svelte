@@ -706,6 +706,15 @@
 		padding: var(--space-2) var(--space-3) 0;
 		background: transparent;
 	}
+	/* 대화 목록 버튼은 마우스를 올리거나 키보드로 갔을 때만 보임 */
+	.bar :global(.icon-btn) {
+		opacity: 0;
+		transition: opacity var(--duration-fast) var(--ease);
+	}
+	.bar:hover :global(.icon-btn),
+	.bar :global(.icon-btn:focus-visible) {
+		opacity: 1;
+	}
 	.stamp {
 		display: inline-flex;
 		gap: 4px;
