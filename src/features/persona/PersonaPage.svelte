@@ -121,6 +121,12 @@
 		discard();
 		nav.replace({ page: "persona", personaId: p.id });
 	}
+	async function toCharacter() {
+		if (!current) return;
+		const c = await call(commands.copyPersonaToCharacter(current.id), src);
+		library.characters = [...library.characters, c];
+		toasts.show({ tone: "success", message: `캐릭터 '${c.name}' 만듦`, action: { label: "열기", run: () => nav.go({ page: "character", charId: c.id }) } });
+	}
 	async function remove() {
 		if (!current) return;
 		const target = current;
@@ -182,6 +188,7 @@
 						onavatar={avatar}
 						ondefault={makeDefault}
 						onduplicate={duplicate}
+						ontocharacter={toCharacter}
 						ondelete={remove}
 					/>
 				{/key}

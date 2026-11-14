@@ -162,7 +162,7 @@ pub async fn set_character_avatar(
 }
 
 /// 이미지 파일을 아바타 폴더로 복사하고 새 경로를 돌려준다
-fn copy_avatar(dir: &std::path::Path, src: &str, prefix: &str) -> Result<String> {
+pub(crate) fn copy_avatar(dir: &std::path::Path, src: &str, prefix: &str) -> Result<String> {
     let src = std::path::PathBuf::from(src);
     let ext = src
         .extension()

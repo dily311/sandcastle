@@ -93,6 +93,23 @@ export const settingsHandlers: Record<string, (a: Args) => unknown> = {
 		return c;
 	},
 
+	// ---- 복사 ----
+	copy_character_to_persona: ({ characterId }) => {
+		const c = characters.find((x) => x.id === characterId)!;
+		const p = { id: uid("pe"), name: c.name, avatar: c.avatar, description: c.description, worldInfoIds: [...c.worldInfoIds], tags: [...c.tags], color: c.color ?? "", isSystemDefault: false, createdAt: now(), updatedAt: now() };
+		personas.push(p);
+		return p;
+	},
+	copy_persona_to_character: ({ personaId }) => {
+		const p = personas.find((x) => x.id === personaId)!;
+		const base = characters[0];
+		const c = { ...base, id: uid("ch"), name: p.name, avatar: p.avatar, description: p.description, firstMessage: null, alternateFirstMessage: [], creatorNotes: null, tags: [...p.tags], color: p.color || null, favorite: false, createdAt: now(), updatedAt: now() };
+		characters.push(c);
+		return c;
+	},
+	game_list: () => [{ id: "g1", title: "숲의 수수께끼", description: "비주얼 노벨 템플릿", templateId: "vn", version: "1.0.0", apiVersion: "1", coverImage: null, startSceneKey: null, createdAt: 0, updatedAt: 0 }],
+	copy_character_to_game: ({ characterId, gameId }) => ({ id: uid("gc"), gameId, characterId, name: characters.find((c) => c.id === characterId)?.name ?? "", avatar: null, description: null, firstMessage: null, exampleDialogue: null, systemPromptOverride: null, behaviorType: null, worldInfoIds: [], tags: [], settingsJson: {}, createdAt: now(), updatedAt: now() }),
+
 	// ---- 폰 연락처 ----
 	list_phone_contacts: ({ personaId }) => contacts.filter((c) => c.personaId === personaId),
 	add_phone_contact: ({ personaId, characterId }) => {

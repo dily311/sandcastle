@@ -130,6 +130,11 @@ export const commands = {
 	updateCharacter: (id: string, input: CharacterInput_Deserialize, options?: InvokeOptions) => __TAURI_INVOKE<Character_Serialize>("update_character", { id, input }, options),
 	/**  캐릭터 아바타: 고른 이미지를 앱 데이터 characters/avatars로 복사. `path`가 없으면 지운다 */
 	setCharacterAvatar: (id: string, path: string | null, options?: InvokeOptions) => __TAURI_INVOKE<Character_Serialize>("set_character_avatar", { id, path }, options),
+	copyCharacterToPersona: (characterId: string, options?: InvokeOptions) => __TAURI_INVOKE<Persona_Serialize>("copy_character_to_persona", { characterId }, options),
+	copyPersonaToCharacter: (personaId: string, options?: InvokeOptions) => __TAURI_INVOKE<Character_Serialize>("copy_persona_to_character", { personaId }, options),
+	/**  캐릭터를 게임에 넣음 (게임 캐릭터는 원본 캐릭터를 기억함). 아바타는 게임 에셋으로 따로 넣어야 함 */
+	copyCharacterToGame: (characterId: string, gameId: string, options?: InvokeOptions) => __TAURI_INVOKE<GameCharacters_Serialize>("copy_character_to_game", { characterId, gameId }, options),
+	copyGameCharacterToCharacter: (gameCharacterId: string, options?: InvokeOptions) => __TAURI_INVOKE<Character_Serialize>("copy_game_character_to_character", { gameCharacterId }, options),
 	toggleFavoriteCharacter: (id: string, isFavorite: boolean, options?: InvokeOptions) => __TAURI_INVOKE<null>("toggle_favorite_character", { id, isFavorite }, options),
 	deleteCharacter: (id: string, options?: InvokeOptions) => __TAURI_INVOKE<null>("delete_character", { id }, options),
 	getListCharacters: (options?: InvokeOptions) => __TAURI_INVOKE<CharacterOption[]>("get_list_characters", undefined, options),
@@ -995,6 +1000,8 @@ export type GameCharacterSpawnLocationsInput_Serialize = {
 	conditionJson: Value,
 };
 
+export type GameCharacters = GameCharacters_Serialize | GameCharacters_Deserialize;
+
 export type GameCharactersInput = GameCharactersInput_Serialize | GameCharactersInput_Deserialize;
 
 export type GameCharactersInput_Deserialize = {
@@ -1027,6 +1034,42 @@ export type GameCharactersInput_Serialize = {
 	worldInfoIds: string[],
 	tags: string | null,
 	settingsJson: Value,
+};
+
+export type GameCharacters_Deserialize = {
+	id: string,
+	gameId: string,
+	characterId?: string | null,
+	name: string,
+	avatar?: string | null,
+	description?: string | null,
+	firstMessage?: string | null,
+	exampleDialogue?: string | null,
+	systemPromptOverride?: string | null,
+	behaviorType?: string | null,
+	worldInfoIds: string[],
+	tags?: string[] | null,
+	settingsJson: Value,
+	createdAt: number,
+	updatedAt: number,
+};
+
+export type GameCharacters_Serialize = {
+	id: string,
+	gameId: string,
+	characterId: string | null,
+	name: string,
+	avatar: string | null,
+	description: string | null,
+	firstMessage: string | null,
+	exampleDialogue: string | null,
+	systemPromptOverride: string | null,
+	behaviorType: string | null,
+	worldInfoIds: string[],
+	tags: string[] | null,
+	settingsJson: Value,
+	createdAt: number,
+	updatedAt: number,
 };
 
 export type GameChoiceInput = GameChoiceInput_Serialize | GameChoiceInput_Deserialize;

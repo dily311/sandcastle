@@ -18,7 +18,7 @@ use crate::{
     state::{AppState, WindowMode},
     sys::{settings::SettingsState, themes::ThemeManager},
 };
-use commands::{ai_service::*, conversation::*, game_engine::*, game_manager::*, settings::*, task::*, regex::*, character_image::*, import::*, data::*, preset::*, chat::*, phone::*};
+use commands::{ai_service::*, conversation::*, game_engine::*, game_manager::*, settings::*, task::*, regex::*, character_image::*, import::*, data::*, preset::*, chat::*, phone::*, convert::*};
 
 #[cfg(desktop)]
 mod widget;
@@ -283,6 +283,10 @@ pub fn specta_builder() -> tauri_specta::Builder<tauri::Wry> {
             create_character,
             update_character,
             set_character_avatar,
+            copy_character_to_persona,
+            copy_persona_to_character,
+            copy_character_to_game,
+            copy_game_character_to_character,
             toggle_favorite_character,
             delete_character,
             get_list_characters,
@@ -455,6 +459,10 @@ pub fn specta_builder() -> tauri_specta::Builder<tauri::Wry> {
             create_character,
             update_character,
             set_character_avatar,
+            copy_character_to_persona,
+            copy_persona_to_character,
+            copy_character_to_game,
+            copy_game_character_to_character,
             toggle_favorite_character,
             delete_character,
             get_list_characters,

@@ -1,6 +1,7 @@
 <script lang="ts">
-	import { ChevronRight, Download, Ellipsis, MessageSquarePlus, Pencil, Plus, Search, Star, StarOff, Trash2, Upload, Users } from "@lucide/svelte";
-	import { Avatar, Button, ContextMenu, EmptyState, IconButton, Input, Segmented, Spinner, type MenuItem } from "$shared/ui";
+	import { ChevronRight, Download, Ellipsis, Gamepad2, MessageSquarePlus, Pencil, Plus, Search, Star, StarOff, Trash2, Upload, UserRound, Users } from "@lucide/svelte";
+	import type { GameProject_Serialize as GameProject } from "$ipc/bindings";
+	import { Avatar, Button, ContextMenu, Dialog, EmptyState, IconButton, Input, Segmented, Spinner, type MenuItem } from "$shared/ui";
 	import { nav } from "$app/nav.svelte";
 	import { call, commands } from "$shared/ipc/client";
 	import { PACK_FILES, ST_FILES, pickFiles, pickSavePath } from "$shared/ipc/dialog";
@@ -82,10 +83,32 @@
 		return [
 			{ label: "편집", icon: Pencil, onselect: () => nav.go({ page: "character", charId: c.id, edit: true }) },
 			{ label: c.favorite ? "즐겨찾기 해제" : "즐겨찾기", icon: c.favorite ? StarOff : Star, onselect: () => toggleFavorite(c) },
-			{ label: "캐릭터와 대화 모두 내보내기", icon: Download, onselect: () => exportCharacter(c) },
+			{ label: "페르소나로 복사", icon: UserRound, separator: true, onselect: () => toPersona(c) },
+			{ label: "게임에 넣기", icon: Gamepad2, onselect: () => openGamePick(c) },
+			{ label: "캐릭터와 대화 모두 내보내기", icon: Download, separator: true, onselect: () => exportCharacter(c) },
 			{ label: "삭제", icon: Trash2, danger: true, separator: true, onselect: () => removeCharacter(c) },
 		];
 	});
+	// ---- 복사: 원본은 그대로, 상대 쪽에 새로 만듦 ----
+	async function toPersona(c: Character) {
+		const p = await call(commands.copyCharacterToPersona(c.id), { source: "character" });
+		library.personas = [...library.personas, p];
+		toasts.show({ tone: "success", message: `페르소나 '${p.name}' 만듦`, action: { label: "열기", run: () => nav.go({ page: "persona", personaId: p.id }) } });
+	}
+	let gamePick = $state<{ c: Character; games: GameProject[] } | null>(null);
+	let gamePickOpen = $state(false);
+	async function openGamePick(c: Character) {
+		const games = await call(commands.gameList(), { source: "character" }).catch(() => []);
+		if (!games.length) return toasts.info("게임이 없음. 게임을 먼저 만들어야 함");
+		gamePick = { c, games };
+		gamePickOpen = true;
+	}
+	async function toGame(g: GameProject) {
+		if (!gamePick) return;
+		await call(commands.copyCharacterToGame(gamePick.c.id, g.id), { source: "character" });
+		gamePickOpen = false;
+		toasts.success(`'${g.title}' 게임에 '${gamePick.c.name}' 넣음 · 아바타는 게임 에셋으로 따로 넣어야 함`);
+	}
 	async function toggleFavorite(c: Character) {
 		await call(commands.toggleFavoriteCharacter(c.id, !c.favorite), { source: "character" });
 		c.favorite = !c.favorite;
@@ -141,6 +164,13 @@
 			</div>
 		</header>
 		<ContextMenu at={more} items={moreItems} label="캐릭터 메뉴" onclose={() => (more = null)} />
+		<Dialog bind:open={gamePickOpen} title="게임에 넣기" description="복사본이 게임 캐릭터로 들어감. 이 캐릭터는 그대로 남음" size="sm">
+			<ul class="games">
+				{#each gamePick?.games ?? [] as g (g.id)}
+					<li><button onclick={() => toGame(g)}><Gamepad2 /><span><b>{g.title}</b>{#if g.description}<small>{g.description}</small>{/if}</span></button></li>
+				{/each}
+			</ul>
+		</Dialog>
 
 		<div class="tabs">
 			<Segmented label="캐릭터 탭" bind:value={tab} options={[{ value: "overview", label: "개요" }, { value: "recent", label: `최근 대화 ${recent.length}` }]} />
@@ -414,6 +444,40 @@
 		padding: var(--space-6);
 		text-align: center;
 		color: var(--text-faint);
+	}
+	.games {
+		list-style: none;
+		margin: 0;
+		padding: 0;
+	}
+	.games button {
+		display: flex;
+		align-items: center;
+		gap: var(--space-3);
+		width: 100%;
+		padding: var(--space-2) var(--space-3);
+		border: none;
+		border-radius: var(--radius-sm);
+		background: none;
+		color: var(--text);
+		font: inherit;
+		text-align: left;
+		cursor: pointer;
+	}
+	.games button:hover {
+		background: var(--surface-hover);
+	}
+	.games :global(svg) {
+		width: 18px;
+		height: 18px;
+		color: var(--text-muted);
+	}
+	.games span {
+		display: flex;
+		flex-direction: column;
+	}
+	.games small {
+		color: var(--text-muted);
 	}
 	.link {
 		padding: 0;
