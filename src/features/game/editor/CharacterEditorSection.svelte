@@ -3,8 +3,8 @@
 	import { toasts } from "$shared/stores/toast.svelte";
 	/** 지우기 전에 앱 확인 창으로 물어봄 */
 	const ask = (message: string) => confirmAction({ title: "삭제", message, confirmLabel: "삭제", danger: true });
-	import type { GameAssetsInput, GameCharactersInput, GameCharacterAssetsInput } from "$/lib/type/game";
-	import { editorAssetPreviewUrl } from "$/lib/game/editorAssetPreview";
+	import type { GameAssetsInput, GameCharactersInput, GameCharacterAssetsInput } from "$features/game/types";
+	import { editorAssetPreviewUrl } from "./assetPreview";
 	import { open } from "@tauri-apps/plugin-dialog";
 
 	type Props = {

@@ -1,7 +1,7 @@
 <script lang="ts">
 	import { onMount, tick } from "svelte";
-	import type { AssetRef, GameCommand, GameJournal, StageLine } from "$/lib/type/game";
-	import { gameEngineCommands } from "$/ipc/commands";
+	import type { AssetRef, GameCommand, GameJournal, NpcReply, StageLine } from "$features/game/types";
+	import { call, commands } from "$shared/ipc/client";
 	import { layout } from "$app/layout.svelte";
 	import "../stage.css";
 	import Backlog from "./Backlog.svelte";
@@ -17,9 +17,9 @@
 		normalizeCueType,
 		type ItemGainNotice,
 	} from "./playUtils";
-	import { gameStore } from "$/lib/game/stores/gameStore.svelte";
-	import { assetUrl } from "$/lib/game/services/gameServiece";
-	import { runtimeStore } from "$/lib/game/stores/runtimeStore.svelte";
+	import { gameStore } from "$features/game/runtime/gameStore.svelte";
+	import { assetUrl } from "$features/game/runtime/gameStore.svelte";
+	import { runtimeStore } from "$features/game/runtime/runtimeStore.svelte";
 
 	type Props = { gameId: string; sessionId: string };
 	let { gameId, sessionId }: Props = $props();
@@ -206,14 +206,10 @@
 
 	async function restoreCurrentSceneLines() {
 		if (scriptLines.length || !runtimeStore?.currentSceneId) return;
-		const sessions = await gameEngineCommands.listSessions();
+		const sessions = await call(commands.listSessions(), { source: "game", silent: true });
 		const session = sessions.find((item) => item.id === sessionId);
 		const toSeq = session?.headSeq ?? 1000;
-		const history: GameJournal[] = await gameEngineCommands.readJournal({
-			sessionId,
-			fromSeq: Math.max(0, toSeq - 1000),
-			toSeq,
-		});
+		const history = (await call(commands.readJournal(sessionId, Math.max(0, toSeq - 1000), toSeq), { source: "game", silent: true })) as unknown as GameJournal[];
 		const savedScript = [...history]
 			.sort((a, b) => a.seq - b.seq)
 			.reverse()
@@ -323,7 +319,7 @@
 			if (runtimeStore?.activeNpcId !== characterId) {
 				await runtimeStore.dispatchCommand({ type: "talk", gameCharacterId: characterId });
 			}
-			const reply = await gameEngineCommands.npcSay({ characterId, input });
+			const reply = (await call(commands.npcSay(characterId, input), { source: "game" })) as unknown as NpcReply;
 			runtimeStore.setState({
 				state: reply.state,
 				events: reply.events,

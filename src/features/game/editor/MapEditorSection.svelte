@@ -11,8 +11,8 @@
 		GameLocationsInput,
 		GameMapsInput,
 		GameMapsZoneInput,
-	} from "$/lib/type/game";
-	import { editorAssetPreviewUrl } from "$/lib/game/editorAssetPreview";
+	} from "$features/game/types";
+	import { editorAssetPreviewUrl } from "./assetPreview";
 
 	type Props = {
 		maps: GameMapsInput[];

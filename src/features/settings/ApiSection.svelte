@@ -1,7 +1,7 @@
 <script lang="ts">
 	import { onMount } from "svelte";
 	import { KeyRound, Plus, Zap } from "@lucide/svelte";
-	import { apiLists } from "$/data/aiModelList";
+	import { apiLists } from "./providers";
 	import { Badge, Button, Dialog, EmptyState, Field, Input, Select } from "$shared/ui";
 	import { call, commands } from "$shared/ipc/client";
 	import { appSetting } from "$shared/stores/appSetting.svelte";

@@ -3,7 +3,7 @@
 	import { X } from "@lucide/svelte";
 	import type { TranscriptEntry_Serialize as Entry } from "$ipc/bindings";
 	import { call, commands } from "$shared/ipc/client";
-	import { gameStore } from "$/lib/game/stores/gameStore.svelte";
+	import { gameStore } from "$features/game/runtime/gameStore.svelte";
 	import { formatGameTime, isNarration } from "./playUtils";
 
 	// 지난 대사: 씬 대본과 대화를 읽을 수 있는 글로 (오래된 것 → 최신)

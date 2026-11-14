@@ -1,11 +1,16 @@
 <script lang="ts" generics="T extends string">
-	interface Props {
+	// 제네릭 컴포넌트는 Props 타입을 따로 이름 붙이면 내보내는 타입에서 오류가 나서 바로 적음
+	let {
+		value = $bindable(),
+		options,
+		label,
+		onchange,
+	}: {
 		value: T;
 		options: { value: T; label: string }[];
 		label: string;
 		onchange?: (v: T) => void;
-	}
-	let { value = $bindable(), options, label, onchange }: Props = $props();
+	} = $props();
 
 	function select(v: T) {
 		value = v;

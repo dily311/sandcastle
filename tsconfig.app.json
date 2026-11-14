@@ -26,11 +26,9 @@
       "$type/*": ["./src/lib/type/*"],
       "$utils/*": ["./src/lib/utils/*"],
       "$features/*": ["./src/features/*"],
-      "$screens/*": ["./src/screens/*"],
-      "$components/*": ["./src/components/*"],
       "@tauri-apps/plugin-os": ["./src/ipc/tauri-mock.ts"],
       "@tauri-apps/api/window": ["./src/ipc/tauri-mock.ts"]
     }
   },
-  "include": ["src/**/*.ts", "src/**/*.js", "src/**/*.svelte", "src/components/in", "index.d.ts"]
+  "include": ["src/**/*.ts", "src/**/*.js", "src/**/*.svelte", "index.d.ts"]
 }

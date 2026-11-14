@@ -1,4 +1,4 @@
-import { LineKind, type GameDefinition, type GameEvent, type Location, type RenderState, type StageLine } from "$/lib/type/game";
+import { LineKind, type GameDefinition, type GameEvent, type Location, type RenderState, type StageLine } from "$features/game/types";
 
 export type ItemGainNotice = { id: number; name: string; quantity: number };
 

@@ -2,7 +2,7 @@ import type { Character, WorldInfoBook, WorldInfoEntry, Conversation, Message, P
 import type {ApiProfileInput, ApiProfile} from "$type/aiService";
 import type { AppSettings, CssTheme, FeatureSetting, ThemeSetting } from "$/lib/type/settingTypes";
 import type { Hitbox } from "$/lib/interaction/interactive-registry";
-import type { PackageData, SaveReport, GameCommand, ContinueGameResponse, GameSave, NpcReply, GamePlayerSessions, GameMessages, GameConversations, GameJournal, GameProject, Template, StageLine, OpenGameResponse } from "$type/game";
+import type { PackageData, SaveReport, GameCommand, ContinueGameResponse, GameSave, NpcReply, GamePlayerSessions, GameMessages, GameConversations, GameJournal, GameProject, Template, StageLine, OpenGameResponse } from "$features/game/types";
 import type { LibraryRootRaw, MusicMetaInput, Playlist, PlaylistInput, PlaylistItem, WidgetMusicSetting } from "$/lib/features/impl/widget/music/types";
 
 export type CommandName = keyof CommandRegistry;

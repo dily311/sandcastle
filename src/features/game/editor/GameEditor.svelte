@@ -14,7 +14,7 @@
 		Variable,
 		X,
 	} from "@lucide/svelte";
-	import type { PackageData } from "$/lib/type/game";
+	import type { PackageData } from "$features/game/types";
 	import type { Issue } from "$ipc/bindings";
 	import { appDataDir, join } from "@tauri-apps/api/path";
 	import { Badge, Button, EmptyState, Field, IconButton, Input, Spinner, Textarea } from "$shared/ui";

@@ -8,7 +8,7 @@
 	import { absolute, relative } from "$shared/time";
 	import { nav } from "$app/nav.svelte";
 	import { library } from "$features/character/library.svelte";
-	import { newGameSession, startGameSession } from "$lib/game/services/gameSessionService";
+	import { newGameSession, startGameSession } from "$features/game/runtime/session";
 	import { gameAssetUrl, games, type Issue, type Session } from "./game.svelte";
 
 	let { gameId }: { gameId: string } = $props();

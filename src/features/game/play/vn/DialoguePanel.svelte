@@ -1,6 +1,6 @@
 <script lang="ts">
 	import { ChevronLeft, ChevronRight, LogOut, Send } from "@lucide/svelte";
-	import type { Choice, StageLine } from "$/lib/type/game";
+	import type { Choice, StageLine } from "$features/game/types";
 	import { isNarration } from "./playUtils";
 
 	// 화면 아래 대사창: 대사 읽기 → 다 읽으면 선택지 / 대화 입력

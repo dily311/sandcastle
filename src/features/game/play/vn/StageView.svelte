@@ -1,8 +1,8 @@
 <script lang="ts">
-	import { assetUrl } from "$/lib/game/services/gameServiece";
-	import { gameStore } from "$/lib/game/stores/gameStore.svelte";
-	import { runtimeStore } from "$/lib/game/stores/runtimeStore.svelte";
-	import type { AssetRef } from "$/lib/type/game";
+	import { assetUrl } from "$features/game/runtime/gameStore.svelte";
+	import { gameStore } from "$features/game/runtime/gameStore.svelte";
+	import { runtimeStore } from "$features/game/runtime/runtimeStore.svelte";
+	import type { AssetRef } from "$features/game/types";
 	type DisplayStanding = { emotion: string; asset: AssetRef };
 	type Props = {
 		onAdvance: () => void;

@@ -1,9 +1,12 @@
-import { gameEngineCommands } from "$/ipc/commands";
-import type { ContinueGameResponse, GameCommand, StageLine } from "$/lib/type/game";
-import { getConnectionRequirement } from "$features/game/play/vn/playUtils";
+// 지금 플레이 중인 세션의 상태 (continue_game / dispatch_command 응답)
+import { call, commands } from "$shared/ipc/client";
+import type { ContinueGameResponse, GameCommand } from "../types";
+import { getConnectionRequirement } from "../play/vn/playUtils";
 import { gameStore } from "./gameStore.svelte";
 
-class createRuntimeStore {
+const src = { source: "game" };
+
+class RuntimeStore {
 	#store = $state<ContinueGameResponse>();
 
 	async initialize(value: ContinueGameResponse) {
@@ -11,7 +14,7 @@ class createRuntimeStore {
 	}
 
 	async loadState(sessionId: string) {
-		this.#store = await gameEngineCommands.continueGame({ sessionId });
+		this.#store = (await call(commands.continueGame(sessionId, null), src)) as unknown as ContinueGameResponse;
 	}
 
 	async setState(value: Partial<ContinueGameResponse>) {
@@ -20,8 +23,8 @@ class createRuntimeStore {
 	}
 
 	async dispatchCommand(command: GameCommand) {
-		const res = await gameEngineCommands.dispatchGameCommand({ command });
-		this.#store = res;
+		const res = await call(commands.dispatchCommand(command as never), src);
+		this.#store = { ...(this.#store ?? { history: { entries: [], hasMore: false, oldestSeq: 0 } }), ...(res as unknown as ContinueGameResponse) };
 	}
 
 	get value() {
@@ -140,23 +143,4 @@ class createRuntimeStore {
 	}
 }
 
-export const runtimeStore = new createRuntimeStore();
-
-class createScriptLineStore {
-	scriptLines = $state<StageLine[]>([]);
-	lineIndex = $state(0);
-
-	setScriptLine(value: StageLine[]) {
-		this.scriptLines = value;
-	}
-
-	get currentLine() {
-		return this.scriptLines[this.lineIndex] ?? null;
-	}
-
-	get currentCharacter() {
-		return this.currentLine.speaker;
-	}
-}
-
-export const scriptLine = new createScriptLineStore();
+export const runtimeStore = new RuntimeStore();

@@ -3,7 +3,7 @@
 	import { toasts } from "$shared/stores/toast.svelte";
 	/** 지우기 전에 앱 확인 창으로 물어봄 */
 	const ask = (message: string) => confirmAction({ title: "삭제", message, confirmLabel: "삭제", danger: true });
-	import type { GameMapsInput, GameWeatherTransitionsInput, GameWeatherTypesInput } from "$/lib/type/game";
+	import type { GameMapsInput, GameWeatherTransitionsInput, GameWeatherTypesInput } from "$features/game/types";
 	type Props = { weatherTypes: GameWeatherTypesInput[]; weatherTransitions: GameWeatherTransitionsInput[]; maps: GameMapsInput[]; gameId: string };
 	let { weatherTypes = $bindable([]), weatherTransitions = $bindable([]), maps = [], gameId }: Props = $props();
 	let selectedIndex = $state<number | null>(weatherTypes.length ? 0 : null);

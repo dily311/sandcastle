@@ -2,17 +2,18 @@
 	import { ChevronDown } from "@lucide/svelte";
 	import type { HTMLSelectAttributes } from "svelte/elements";
 
-	interface Option {
-		value: T;
-		label: string;
-		disabled?: boolean;
-	}
-	interface Props extends Omit<HTMLSelectAttributes, "value"> {
+	// 제네릭 컴포넌트는 Props 타입을 따로 이름 붙이면 내보내는 타입에서 오류가 나서 바로 적음
+	let {
+		value = $bindable(),
+		options,
+		placeholder,
+		class: className = "",
+		...rest
+	}: Omit<HTMLSelectAttributes, "value"> & {
 		value?: T;
-		options: Option[];
+		options: { value: T; label: string; disabled?: boolean }[];
 		placeholder?: string;
-	}
-	let { value = $bindable(), options, placeholder, class: className = "", ...rest }: Props = $props();
+	} = $props();
 </script>
 
 <div class="select {className}">

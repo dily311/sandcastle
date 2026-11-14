@@ -1,7 +1,7 @@
 <script lang="ts">
 	import { ChevronRight, Lock, MapPin, MessageCircle, Search, Sparkles, X } from "@lucide/svelte";
-	import type { GameCommand } from "$/lib/type/game";
-	import { runtimeStore } from "$/lib/game/stores/runtimeStore.svelte";
+	import type { GameCommand } from "$features/game/types";
+	import { runtimeStore } from "$features/game/runtime/runtimeStore.svelte";
 
 	// 오른쪽에서 열리는 패널: 지도 / 소지품 / 이동·행동
 	type Props = {

@@ -1,4 +1,4 @@
-import type { ContinueGameResponse, GameCommand, RenderState } from "$/lib/type/game";
+import type { ContinueGameResponse, GameCommand, RenderState } from "$features/game/types";
 import type { HostMessage } from "../host/protocol";
 
 class createRuntimeBridge {

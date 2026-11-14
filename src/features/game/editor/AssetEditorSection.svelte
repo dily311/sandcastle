@@ -12,8 +12,8 @@
 		GameLocationsInput,
 		GameTimePeriodsInput,
 		GameWeatherTypesInput,
-	} from "$/lib/type/game";
-	import { editorAssetPreviewUrl } from "$/lib/game/editorAssetPreview";
+	} from "$features/game/types";
+	import { editorAssetPreviewUrl } from "./assetPreview";
 	import { open } from "@tauri-apps/plugin-dialog";
 	import { Button } from "$shared/ui";
 

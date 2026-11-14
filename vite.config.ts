@@ -17,8 +17,6 @@ export default defineConfig(({ command }) => {
 		$lib: path.resolve(__dirname, "./src/lib"),
 		$features: path.resolve(__dirname, "./src/features"),
 		$type: path.resolve(__dirname, "./src/lib/type"),
-		$screens: path.resolve(__dirname, "./src/screens"),
-		$components: path.resolve(__dirname, "./src/components"),
 	};
 
 	return {

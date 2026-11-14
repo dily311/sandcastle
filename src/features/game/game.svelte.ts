@@ -7,7 +7,7 @@ import type {
 	Template_Serialize as Template,
 } from "$ipc/bindings";
 import { call, commands } from "$shared/ipc/client";
-import { gameStore } from "$lib/game/stores/gameStore.svelte";
+import { gameStore } from "$features/game/runtime/gameStore.svelte";
 
 export type { GameProject, Session, Template, Issue };
 const src = { source: "game" };

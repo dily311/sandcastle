@@ -1,4 +1,4 @@
-import { get_all_api_profile, get_all_characters, get_all_personas, get_app_setting, get_feature_setting, get_select_folder_music_data, get_theme_list, get_theme_setting, load_theme_content } from "$/data/mockup";
+import { get_all_api_profile, get_all_personas, get_app_setting, get_feature_setting, get_select_folder_music_data, get_theme_list, get_theme_setting, load_theme_content } from "$/data/mockup";
 import type { CommandHandlers } from "./commandTypes";
 
 // 각 커맨드별 모킹 핸들러 구현
@@ -65,7 +65,9 @@ export const mockHandlers: CommandHandlers = {
 	test_message: async (args) => {
 		throw new Error("연결되지 않음");
 	},
-	get_all_characters: async (args) => get_all_characters,
+	get_all_characters: async (args) => {
+		throw new Error("연결되지 않음");
+	},
 	create_character: async (args) => {
 		throw new Error("연결되지 않음");
 	},

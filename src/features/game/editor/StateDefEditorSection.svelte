@@ -3,7 +3,7 @@
 	import { toasts } from "$shared/stores/toast.svelte";
 	/** 지우기 전에 앱 확인 창으로 물어봄 */
 	const ask = (message: string) => confirmAction({ title: "삭제", message, confirmLabel: "삭제", danger: true });
-	import type { GameStateDefInput } from "$/lib/type/game";
+	import type { GameStateDefInput } from "$features/game/types";
 
 	type Props = {
 		stateDefs: GameStateDefInput[];
