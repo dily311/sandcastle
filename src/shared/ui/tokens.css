@@ -1,0 +1,148 @@
+/* =========================================================
+   Sandcastle 디자인 토큰
+   ---------------------------------------------------------
+   - 화면은 이 토큰만 쓴다 (색상 값을 직접 쓰지 않는다)
+   - 다크 모드: <html data-theme="dark">
+   - 강조색: --accent 하나만 바꾸면 나머지는 color-mix로 따라온다
+     (설정의 accentColor → themeStore가 --accent에 넣음)
+   - 사용자 테마(CSS)는 :root 또는 [data-theme] 아래 토큰을 덮어쓰면 된다
+   ========================================================= */
+
+:root {
+	color-scheme: light;
+
+	/* ---- 바탕 (모래색 계열) ---- */
+	--bg: #f7f5f1;
+	--bg-sunken: #efebe5;
+	--surface: #ffffff;
+	--surface-2: #fbfaf7;
+	--surface-hover: #f3f0eb;
+	--surface-active: #ebe6df;
+	--overlay: rgb(31 27 22 / 0.42);
+
+	--border: #e6e1d9;
+	--border-strong: #d4ccc1;
+
+	/* ---- 글자 ---- */
+	--text: #1f1b16;
+	--text-muted: #6d655b;
+	--text-faint: #9a9287;
+	--text-on-accent: #ffffff;
+
+	/* ---- 강조색 (바다 유리) ---- */
+	--accent: #2f8f8a;
+	--accent-hover: color-mix(in oklab, var(--accent) 88%, black);
+	--accent-soft: color-mix(in oklab, var(--accent) 12%, var(--surface));
+	--accent-soft-hover: color-mix(in oklab, var(--accent) 20%, var(--surface));
+	--accent-text: color-mix(in oklab, var(--accent) 78%, var(--text));
+	--focus-ring: color-mix(in oklab, var(--accent) 45%, transparent);
+
+	/* ---- 상태색 ---- */
+	--danger: #c8463c;
+	--danger-soft: color-mix(in oklab, var(--danger) 12%, var(--surface));
+	--warning: #b9801a;
+	--warning-soft: color-mix(in oklab, var(--warning) 14%, var(--surface));
+	--success: #3d8a4e;
+	--success-soft: color-mix(in oklab, var(--success) 12%, var(--surface));
+	--info: #3a6fbf;
+	--info-soft: color-mix(in oklab, var(--info) 12%, var(--surface));
+
+	/* ---- 채팅 ---- */
+	--bubble-user: var(--accent);
+	--bubble-user-text: var(--text-on-accent);
+	--bubble-ai: var(--surface);
+	--bubble-ai-text: var(--text);
+	--bubble-system: var(--bg-sunken);
+
+	/* ---- 모양 ---- */
+	--radius-xs: 6px;
+	--radius-sm: 8px;
+	--radius-md: 12px;
+	--radius-lg: 16px;
+	--radius-xl: 22px;
+	--radius-full: 999px;
+
+	--shadow-sm: 0 1px 2px rgb(60 45 25 / 0.06), 0 1px 1px rgb(60 45 25 / 0.04);
+	--shadow-md: 0 4px 14px rgb(60 45 25 / 0.08), 0 1px 3px rgb(60 45 25 / 0.06);
+	--shadow-lg: 0 18px 48px rgb(60 45 25 / 0.14), 0 4px 12px rgb(60 45 25 / 0.06);
+
+	/* ---- 간격 (4px 단위) ---- */
+	--space-1: 4px;
+	--space-2: 8px;
+	--space-3: 12px;
+	--space-4: 16px;
+	--space-5: 20px;
+	--space-6: 24px;
+	--space-8: 32px;
+	--space-10: 40px;
+
+	/* ---- 글꼴 ---- */
+	--font-sans: "Pretendard", "Pretendard Variable", -apple-system, BlinkMacSystemFont, "Apple SD Gothic Neo",
+		"Malgun Gothic", "Segoe UI", system-ui, sans-serif;
+	--font-mono: "JetBrains Mono", "D2Coding", ui-monospace, "Cascadia Code", Consolas, monospace;
+
+	--text-xs: 0.75rem;
+	--text-sm: 0.8125rem;
+	--text-md: 0.875rem;
+	--text-lg: 1rem;
+	--text-xl: 1.25rem;
+	--text-2xl: 1.625rem;
+	--leading-tight: 1.3;
+	--leading: 1.55;
+
+	/* ---- 움직임 ---- */
+	--ease: cubic-bezier(0.2, 0.8, 0.2, 1);
+	--duration-fast: 120ms;
+	--duration: 200ms;
+
+	/* ---- 레이아웃 ---- */
+	--rail-width: 232px;
+	--titlebar-height: 36px;
+	--control-sm: 28px;
+	--control-md: 34px;
+	--control-lg: 42px;
+}
+
+:root[data-theme="dark"] {
+	color-scheme: dark;
+
+	--bg: #13120f;
+	--bg-sunken: #0e0d0b;
+	--surface: #1b1916;
+	--surface-2: #201e1a;
+	--surface-hover: #26231f;
+	--surface-active: #2e2a25;
+	--overlay: rgb(0 0 0 / 0.55);
+
+	--border: #2c2924;
+	--border-strong: #3b3630;
+
+	--text: #f2ede5;
+	--text-muted: #a69d91;
+	--text-faint: #776f65;
+
+	--accent: #4fb3ac;
+	--accent-hover: color-mix(in oklab, var(--accent) 85%, white);
+	--accent-soft: color-mix(in oklab, var(--accent) 16%, var(--surface));
+	--accent-soft-hover: color-mix(in oklab, var(--accent) 24%, var(--surface));
+	--accent-text: color-mix(in oklab, var(--accent) 80%, white);
+	--text-on-accent: #0d1716;
+
+	--danger: #e0675c;
+	--warning: #d9a33e;
+	--success: #62b475;
+	--info: #6f9fe6;
+
+	--bubble-ai: var(--surface-2);
+
+	--shadow-sm: 0 1px 2px rgb(0 0 0 / 0.4);
+	--shadow-md: 0 6px 18px rgb(0 0 0 / 0.38);
+	--shadow-lg: 0 20px 52px rgb(0 0 0 / 0.5);
+}
+
+@media (prefers-reduced-motion: reduce) {
+	:root {
+		--duration-fast: 0ms;
+		--duration: 0ms;
+	}
+}
