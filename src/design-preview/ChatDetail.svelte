@@ -19,8 +19,14 @@
 		Send,
 		Trash2,
 	} from "@lucide/svelte";
-	import { Avatar, Badge, Button, ContextMenu, IconButton, Input, Segmented, Select, Switch, Textarea, type MenuItem } from "$shared/ui";
-	import { ChevronDown as Chev, Folder, FolderOpen, FolderPlus, Upload } from "@lucide/svelte";
+	import { Avatar, Badge, Button, ContextMenu, IconButton, Input, Select, Switch, Textarea, type MenuItem } from "$shared/ui";
+	import { ChevronDown as Chev, Folder, FolderOpen, FolderPlus, Images, ListTree, SlidersHorizontal, Upload } from "@lucide/svelte";
+
+	const panelTabs = [
+		{ id: "settings", label: "대화 설정", icon: SlidersHorizontal },
+		{ id: "toc", label: "목차", icon: ListTree },
+		{ id: "assets", label: "에셋", icon: Images },
+	] as const;
 	import ConvCard from "./ConvCard.svelte";
 	import { characters, convActions, folderActions, relative, store, ui } from "./mock.svelte";
 
@@ -300,8 +306,21 @@
 
 	{#if showPanel}
 		<aside class="panel" aria-label="대화 설정">
-			<div class="panel-head">
-				<Segmented label="패널" bind:value={panelTab} options={[{ value: "settings", label: "설정" }, { value: "toc", label: "목차" }, { value: "assets", label: "에셋" }]} />
+			<!-- 옵시디언처럼 아이콘 탭 줄 -->
+			<div class="panel-head" role="tablist" aria-label="패널">
+				{#each panelTabs as t (t.id)}
+					<button
+						role="tab"
+						class="ptab"
+						aria-selected={panelTab === t.id}
+						aria-label={t.label}
+						title={t.label}
+						class:on={panelTab === t.id}
+						onclick={() => (panelTab = t.id)}
+					>
+						<t.icon />
+					</button>
+				{/each}
 			</div>
 			{#if panelTab === "settings"}
 				<div class="panel-body">
@@ -792,7 +811,33 @@
 		min-width: 0;
 	}
 	.panel-head {
-		padding: var(--space-3);
+		display: flex;
+		gap: 2px;
+		padding: var(--space-2) var(--space-2) var(--space-2);
+		border-bottom: 1px solid var(--border);
+	}
+	.ptab {
+		display: grid;
+		place-items: center;
+		width: 30px;
+		height: 28px;
+		border: none;
+		border-radius: var(--radius-xs);
+		background: transparent;
+		color: var(--text-muted);
+		cursor: pointer;
+	}
+	.ptab :global(svg) {
+		width: 17px;
+		height: 17px;
+	}
+	.ptab:hover {
+		background: var(--surface-hover);
+		color: var(--text);
+	}
+	.ptab.on {
+		background: var(--surface-active);
+		color: var(--text);
 	}
 	.panel-body {
 		display: flex;
