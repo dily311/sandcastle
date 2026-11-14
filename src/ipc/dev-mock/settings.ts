@@ -11,7 +11,7 @@ const themes = new Map<string, { name: string; author: string; version: string; 
 ]);
 const keys = new Set<string>(["gemini"]);
 let autostart = false;
-let defaultPersona = "min";
+let defaultPersona = "default";
 let pendingRestore: null | { createdAt: number } = null;
 
 const block = (presetId: string, i: number, identifier: string, name: string, content = "", extra: Partial<PromptBlocks_Serialize> = {}): PromptBlocks_Serialize => ({
@@ -67,6 +67,41 @@ export const settingsHandlers: Record<string, (a: Args) => unknown> = {
 	// ---- 페르소나 기본값 ----
 	set_system_default_persona: ({ id }) => ((defaultPersona = id), null),
 	get_conv_settings: () => ({ defaultPersonaId: defaultPersona }),
+
+	// ---- 페르소나 ----
+	get_all_worldinfo_books: () => [
+		{ id: "wb1", name: "엘다리아 대륙", description: "숲과 왕국 설정", createdAt: 0, updatedAt: 0 },
+		{ id: "wb2", name: "현대 서울", description: null, createdAt: 0, updatedAt: 0 },
+	],
+	create_persona: ({ input }) => {
+		const p = { ...input, avatar: input.avatar ?? null, id: uid("pe"), createdAt: now(), updatedAt: now() };
+		personas.push(p);
+		return p;
+	},
+	update_persona: ({ id, input }) => {
+		const p = personas.find((x) => x.id === id);
+		if (p) Object.assign(p, input, { updatedAt: now() });
+		return null;
+	},
+	delete_persona: ({ id }) => {
+		if (id === defaultPersona) throw { code: "VALIDATION_ERROR", category: "VALIDATION", message: "기본 페르소나는 지울 수 없습니다", retryable: false };
+		personas.splice(
+			personas.findIndex((p) => p.id === id),
+			1,
+		);
+		for (const c of convs) if (c.personaId === id) c.personaId = null as never;
+		for (const c of characters) if (c.defaultPersonaId === id) c.defaultPersonaId = null;
+		return null;
+	},
+	get_persona_usage: ({ id }) => ({ characterCount: characters.filter((c) => c.defaultPersonaId === id).length, isSystemDefault: id === defaultPersona }),
+	set_persona_avatar: ({ id, path }) => {
+		const p = personas.find((x) => x.id === id)!;
+		// 브라우저에는 파일이 없으니 고른 경로 대신 그림 하나를 씀
+		p.avatar = path
+			? "data:image/svg+xml," + encodeURIComponent('<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 10 10"><rect width="10" height="10" fill="#7262cf"/><circle cx="5" cy="4" r="2" fill="#fff"/><rect x="2" y="7" width="6" height="3" rx="1.5" fill="#fff"/></svg>')
+			: null;
+		return p;
+	},
 
 	// ---- API ----
 	has_api_key: ({ profileId }) => keys.has(profileId),

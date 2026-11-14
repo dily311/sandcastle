@@ -165,7 +165,12 @@ pub async fn get_all_personas(state: State<'_, AppState>) -> Result<Vec<Persona>
 #[tauri::command]
 #[specta::specta]
 pub async fn create_persona(state: State<'_, AppState>, input: PersonaInput) -> Result<Persona> {
-    Ok(conversation::create_persona(&state.db, input).await?)
+    let books = input.world_info_ids.clone();
+    let mut tx = state.db.begin().await?;
+    let persona = conversation::create_persona(&mut *tx, input).await?;
+    conversation::replace_persona_worldinfo(&mut tx, &persona.id, &books).await?;
+    tx.commit().await?;
+    Ok(persona)
 }
 
 #[tauri::command]
@@ -177,20 +182,74 @@ pub async fn update_persona(
 ) -> Result<()> {
     let exists = conversation::persona_exists(&state.db, &id).await?;
     if !exists {
-        return Err(AppError::not_found(format!("캐릭터를 찾을 수 없습니다: {id}")));
+        return Err(AppError::not_found(format!("페르소나를 찾을 수 없습니다: {id}")));
     }
-
-    conversation::update_persona(&state.db, &id, input).await?;
+    let books = input.world_info_ids.clone();
+    let mut tx = state.db.begin().await?;
+    conversation::update_persona(&mut *tx, &id, input).await?;
+    conversation::replace_persona_worldinfo(&mut tx, &id, &books).await?;
+    tx.commit().await?;
     Ok(())
+}
+
+/// 페르소나 아바타: 고른 이미지를 앱 데이터(백업에 들어가는 characters/avatars)로 복사해 둔다.
+/// `path`가 없으면 아바타를 지운다.
+#[tauri::command]
+#[specta::specta]
+pub async fn set_persona_avatar(
+    app: tauri::AppHandle,
+    state: State<'_, AppState>,
+    id: String,
+    path: Option<String>,
+) -> Result<Persona> {
+    let old = conversation::get_persona(&state.db, &id)
+        .await
+        .map_err(|_| AppError::not_found(format!("페르소나를 찾을 수 없습니다: {id}")))?;
+    let base = crate::commands::character_image::app_data_dir(&app)?;
+    let dir = base.join("characters").join("avatars");
+
+    let avatar = match path {
+        Some(src) => {
+            let src = std::path::PathBuf::from(src);
+            let ext = src
+                .extension()
+                .and_then(|e| e.to_str())
+                .map(|e| e.to_ascii_lowercase())
+                .filter(|e| matches!(e.as_str(), "png" | "jpg" | "jpeg" | "webp" | "gif"))
+                .ok_or_else(|| AppError::validation("png, jpg, webp, gif 이미지만 쓸 수 있습니다", None))?;
+            std::fs::create_dir_all(&dir).map_err(|e| AppError::io(e.to_string()))?;
+            let dest = dir.join(format!("persona-{}.{ext}", uuid::Uuid::new_v4()));
+            std::fs::copy(&src, &dest).map_err(|e| AppError::io(format!("이미지를 복사할 수 없습니다: {e}")))?;
+            Some(dest.to_string_lossy().to_string())
+        }
+        None => None,
+    };
+    conversation::set_persona_avatar(&state.db, &id, avatar.as_deref()).await?;
+    remove_owned_avatar(&dir, old.avatar.as_deref());
+    Ok(conversation::get_persona(&state.db, &id).await?)
+}
+
+/// 앱이 복사해 둔 아바타 파일만 지운다 (사용자가 가진 원본 경로는 건드리지 않음)
+fn remove_owned_avatar(dir: &std::path::Path, avatar: Option<&str>) {
+    let Some(p) = avatar.map(std::path::Path::new) else { return };
+    if p.starts_with(dir) && p.file_name().is_some_and(|n| n.to_string_lossy().starts_with("persona-")) {
+        let _ = std::fs::remove_file(p);
+    }
 }
 
 #[tauri::command]
 #[specta::specta]
-pub async fn delete_persona(state: State<'_, AppState>, id: String) -> Result<()> {
-    // 삭제 전에 어디서 쓰이고 있는지 확인해서 경고용 정보를 돌려줄 수도 있음
+pub async fn delete_persona(app: tauri::AppHandle, state: State<'_, AppState>, id: String) -> Result<()> {
+    if conversation::get_system_default_persona(&state.db).await.ok().as_deref() == Some(id.as_str()) {
+        return Err(AppError::validation("기본 페르소나는 지울 수 없습니다. 다른 페르소나를 기본으로 정한 뒤 지우세요", None));
+    }
+    let old = conversation::get_persona(&state.db, &id).await.ok();
     let result = conversation::delete_persona(&state.db, &id).await?;
     if !result {
         return Err(AppError::not_found(format!("해당 페르소나를 찾을 수 없습니다: {id}")));
+    }
+    if let (Some(old), Ok(base)) = (old, crate::commands::character_image::app_data_dir(&app)) {
+        remove_owned_avatar(&base.join("characters").join("avatars"), old.avatar.as_deref());
     }
     Ok(())
 }

@@ -229,6 +229,33 @@ pub async fn delete_persona<'e, E>(executor: E, persona_id: &str) -> Result<bool
     Ok(result.rows_affected() != 0)
 }
 
+/// 페르소나에 연결된 월드인포 책을 통째로 바꾼다
+pub async fn replace_persona_worldinfo(conn: &mut sqlx::SqliteConnection, persona_id: &str, book_ids: &[String]) -> Result<(), Error> {
+    sqlx::query("DELETE FROM persona_worldinfo WHERE persona_id = ?")
+        .bind(persona_id)
+        .execute(&mut *conn)
+        .await?;
+    for book_id in book_ids {
+        sqlx::query("INSERT OR IGNORE INTO persona_worldinfo (persona_id, book_id) VALUES (?, ?)")
+            .bind(persona_id)
+            .bind(book_id)
+            .execute(&mut *conn)
+            .await?;
+    }
+    Ok(())
+}
+
+pub async fn set_persona_avatar<'e, E>(executor: E, id: &str, avatar: Option<&str>) -> Result<(), Error> where E: Executor<'e, Database = Sqlite>,{
+    let now = chrono::Utc::now().timestamp_millis();
+    sqlx::query("UPDATE personas SET avatar = ?, updated_at = ? WHERE id = ?")
+        .bind(avatar)
+        .bind(now)
+        .bind(id)
+        .execute(executor)
+        .await?;
+    Ok(())
+}
+
 pub async fn get_system_default_persona<'e, E>(executor: E) -> Result<String, Error> where E: Executor<'e, Database = Sqlite>,{
     let row =
         sqlx::query_as::<_, (String,)>("SELECT default_persona_id FROM conv_settings WHERE id = 1")

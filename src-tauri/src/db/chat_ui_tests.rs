@@ -123,3 +123,45 @@ async fn message_content_and_meta_updates_work() {
     assert_eq!(got.content, "b");
     assert_eq!(got.meta.unwrap()["hidden"], true);
 }
+
+#[tokio::test]
+async fn persona_world_info_and_avatar_are_saved() {
+    let pool = pool().await;
+    for b in ["b1", "b2"] {
+        sqlx::query("INSERT INTO worldinfo_books (id, name, created_at, updated_at) VALUES (?, ?, 0, 0)")
+            .bind(b)
+            .bind(b)
+            .execute(&pool)
+            .await
+            .unwrap();
+    }
+    let input = |books: Vec<&str>| crate::models::conversation::PersonaInput {
+        name: "민".into(),
+        avatar: None,
+        description: "대학생".into(),
+        world_info_ids: books.into_iter().map(String::from).collect(),
+        tags: vec!["학생".into()],
+        color: "#2f8f8a".into(),
+        is_system_default: false,
+    };
+
+    let mut tx = pool.begin().await.unwrap();
+    let p = conv::create_persona(&mut *tx, input(vec!["b1", "b2"])).await.unwrap();
+    conv::replace_persona_worldinfo(&mut tx, &p.id, &p.world_info_ids).await.unwrap();
+    tx.commit().await.unwrap();
+    let mut got = conv::get_persona(&pool, &p.id).await.unwrap().world_info_ids;
+    got.sort();
+    assert_eq!(got, vec!["b1", "b2"]);
+
+    // 바꾸면 빠진 책은 연결이 끊김
+    let mut tx = pool.begin().await.unwrap();
+    conv::update_persona(&mut *tx, &p.id, input(vec!["b2"])).await.unwrap();
+    conv::replace_persona_worldinfo(&mut tx, &p.id, &["b2".to_string()]).await.unwrap();
+    tx.commit().await.unwrap();
+    assert_eq!(conv::get_persona(&pool, &p.id).await.unwrap().world_info_ids, vec!["b2"]);
+
+    conv::set_persona_avatar(&pool, &p.id, Some("C:/a/persona-x.png")).await.unwrap();
+    assert_eq!(conv::get_persona(&pool, &p.id).await.unwrap().avatar.as_deref(), Some("C:/a/persona-x.png"));
+    conv::set_persona_avatar(&pool, &p.id, None).await.unwrap();
+    assert_eq!(conv::get_persona(&pool, &p.id).await.unwrap().avatar, None);
+}

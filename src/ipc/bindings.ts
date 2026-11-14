@@ -129,6 +129,11 @@ export const commands = {
 	createPersona: (input: PersonaInput_Deserialize, options?: InvokeOptions) => __TAURI_INVOKE<Persona_Serialize>("create_persona", { input }, options),
 	updatePersona: (id: string, input: PersonaInput_Deserialize, options?: InvokeOptions) => __TAURI_INVOKE<null>("update_persona", { id, input }, options),
 	deletePersona: (id: string, options?: InvokeOptions) => __TAURI_INVOKE<null>("delete_persona", { id }, options),
+	/**
+	 *  페르소나 아바타: 고른 이미지를 앱 데이터(백업에 들어가는 characters/avatars)로 복사해 둔다.
+	 *  `path`가 없으면 아바타를 지운다.
+	 */
+	setPersonaAvatar: (id: string, path: string | null, options?: InvokeOptions) => __TAURI_INVOKE<Persona_Serialize>("set_persona_avatar", { id, path }, options),
 	getPersonaUsage: (id: string, options?: InvokeOptions) => __TAURI_INVOKE<PersonaUsage>("get_persona_usage", { id }, options),
 	getAllWorldinfoBooks: (options?: InvokeOptions) => __TAURI_INVOKE<WorldInfoBook_Serialize[]>("get_all_worldinfo_books", undefined, options),
 	createWorldinfoBook: (input: WorldInfoBookInput_Deserialize, options?: InvokeOptions) => __TAURI_INVOKE<WorldInfoBook_Serialize>("create_worldinfo_book", { input }, options),

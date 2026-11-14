@@ -1,0 +1,416 @@
+<script lang="ts">
+	import { Camera, Copy, MoreHorizontal, Star, Trash2, X } from "@lucide/svelte";
+	import type { PersonaInput_Deserialize as PersonaInput, WorldInfoBook_Serialize as Book } from "$ipc/bindings";
+	import { Avatar, Badge, Button, ContextMenu, Field, IconButton, Input, Textarea, type MenuItem } from "$shared/ui";
+	import { ACCENTS } from "$shared/ui/accents";
+	import { fileSrc } from "$shared/ipc/file";
+	import { relative } from "$shared/time";
+	import { nav } from "$app/nav.svelte";
+	import { library, type Persona } from "$features/character/library.svelte";
+
+	interface Props {
+		persona: Persona;
+		isDefault: boolean;
+		books: Book[];
+		saving: boolean;
+		/** 바뀐 내용이 있는지 (부모가 화면 이동 전에 물어봄) */
+		dirty?: boolean;
+		onsave: (input: PersonaInput) => void;
+		onavatar: (pick: boolean) => void;
+		ondefault: () => void;
+		onduplicate: () => void;
+		ondelete: () => void;
+	}
+	let { persona, isDefault, books, saving, dirty = $bindable(false), onsave, onavatar, ondefault, onduplicate, ondelete }: Props = $props();
+
+	// 편집 사본 (persona가 바뀌면 부모가 {#key}로 새로 만듦)
+	// svelte-ignore state_referenced_locally
+	const p0 = persona;
+	let name = $state(p0.name);
+	let description = $state(p0.description ?? "");
+	let tags = $state<string[]>([...p0.tags]);
+	let tagDraft = $state("");
+	let color = $state(p0.color || "");
+	let worldInfoIds = $state<string[]>([...p0.worldInfoIds]);
+
+	$effect(() => {
+		dirty =
+			name !== p0.name ||
+			description !== (p0.description ?? "") ||
+			color !== (p0.color || "") ||
+			tags.join("\u0000") !== p0.tags.join("\u0000") ||
+			[...worldInfoIds].sort().join() !== [...p0.worldInfoIds].sort().join();
+	});
+
+	function addTag() {
+		const t = tagDraft.trim().replace(/,$/, "");
+		if (t && !tags.includes(t)) tags = [...tags, t];
+		tagDraft = "";
+	}
+	function tagKey(e: KeyboardEvent) {
+		if ((e.key === "Enter" || e.key === ",") && !e.isComposing) {
+			e.preventDefault();
+			addTag();
+		} else if (e.key === "Backspace" && !tagDraft && tags.length) tags = tags.slice(0, -1);
+	}
+	function toggleBook(id: string) {
+		worldInfoIds = worldInfoIds.includes(id) ? worldInfoIds.filter((b) => b !== id) : [...worldInfoIds, id];
+	}
+	function reset() {
+		name = p0.name;
+		description = p0.description ?? "";
+		tags = [...p0.tags];
+		color = p0.color || "";
+		worldInfoIds = [...p0.worldInfoIds];
+	}
+	function save() {
+		if (tagDraft.trim()) addTag();
+		onsave({ name: name.trim(), avatar: persona.avatar, description, tags, color, worldInfoIds, isSystemDefault: persona.isSystemDefault });
+	}
+
+	// 어디서 쓰는지
+	const usedBy = $derived(library.characters.filter((c) => c.defaultPersonaId === persona.id));
+	const convs = $derived(library.conversations.filter((c) => c.personaId === persona.id).sort((a, b) => b.updatedAt - a.updatedAt));
+
+	let menu = $state<{ x: number; y: number } | null>(null);
+	const menuItems: MenuItem[] = $derived([
+		{ label: "복제", icon: Copy, onselect: onduplicate },
+		...(persona.avatar ? [{ label: "아바타 지우기", icon: X, onselect: () => onavatar(false) }] : []),
+		{ label: isDefault ? "삭제 (기본은 못 지움)" : "삭제", icon: Trash2, danger: true, disabled: isDefault, separator: true, onselect: ondelete },
+	]);
+	function openMenu(e: MouseEvent) {
+		const r = (e.currentTarget as HTMLElement).getBoundingClientRect();
+		menu = { x: r.right - 180, y: r.bottom + 4 };
+	}
+</script>
+
+<div class="editor">
+	<header class="head">
+		<button class="avatar-btn" title="아바타 바꾸기" aria-label="아바타 바꾸기" onclick={() => onavatar(true)}>
+			<Avatar name={name || persona.name} src={fileSrc(persona.avatar)} color={color || null} size={88} />
+			<span class="cam"><Camera /></span>
+		</button>
+		<div class="ident">
+			<h1>{name || "이름 없음"}</h1>
+			<p class="faint">
+				페르소나{#if tags.length} · {tags.slice(0, 4).join(" · ")}{/if}
+			</p>
+		</div>
+		<div class="cta">
+			{#if isDefault}
+				<Badge tone="accent"><Star /> 기본 페르소나</Badge>
+			{:else}
+				<Button size="sm" onclick={ondefault}>{#snippet icon()}<Star />{/snippet}기본으로</Button>
+			{/if}
+			<IconButton label="더 보기" onclick={openMenu}><MoreHorizontal /></IconButton>
+		</div>
+	</header>
+
+	<div class="bar" class:show={dirty}>
+		<span>바뀐 내용 있음</span>
+		<Button size="sm" variant="ghost" onclick={reset}>되돌리기</Button>
+		<Button size="sm" variant="primary" loading={saving} disabled={!name.trim()} onclick={save}>저장</Button>
+	</div>
+
+	<div class="form">
+		<Field label="이름" required hint={"대화에서 {{user}} 자리에 들어감"}>
+			<Input bind:value={name} placeholder="이름" />
+		</Field>
+		<Field label="설명" hint="AI에게 보내는 내 캐릭터 소개. 외모·성격·말투·처지 등">
+			{#snippet aside()}<span class="faint count">{description.length.toLocaleString()}자</span>{/snippet}
+			<Textarea bind:value={description} rows={8} autosize maxRows={24} placeholder="예: 스무 살 대학생. 말수가 적지만 호기심이 많음" />
+		</Field>
+		<Field label="태그" hint="Enter나 쉼표로 추가. 목록 검색에 씀">
+			<div class="tags">
+				{#each tags as t (t)}
+					<span class="tag">{t}<button aria-label="{t} 태그 지우기" onclick={() => (tags = tags.filter((x) => x !== t))}><X /></button></span>
+				{/each}
+				<input class="tag-input" bind:value={tagDraft} onkeydown={tagKey} onblur={addTag} placeholder={tags.length ? "" : "태그 입력"} aria-label="태그 추가" />
+			</div>
+		</Field>
+		<Field label="색" hint="아바타가 없을 때 바탕색">
+			<div class="colors" role="radiogroup" aria-label="색">
+				<button role="radio" aria-checked={!color} class="auto" class:on={!color} title="이름에서 자동" aria-label="자동" onclick={() => (color = "")}>자동</button>
+				{#each ACCENTS as a (a.id)}
+					<button role="radio" aria-checked={color === a.light} aria-label={a.label} title={a.label} class:on={color === a.light} style:background={a.light} onclick={() => (color = a.light)}></button>
+				{/each}
+			</div>
+		</Field>
+		<Field label="월드인포" hint="이 페르소나로 대화할 때 함께 쓰는 월드인포 책">
+			{#if books.length}
+				<div class="books">
+					{#each books as b (b.id)}
+						<button class="chip" class:on={worldInfoIds.includes(b.id)} aria-pressed={worldInfoIds.includes(b.id)} title={b.description ?? undefined} onclick={() => toggleBook(b.id)}>{b.name}</button>
+					{/each}
+				</div>
+			{:else}
+				<p class="faint small">월드인포 책 없음</p>
+			{/if}
+		</Field>
+	</div>
+
+	<section class="usage">
+		<h3>쓰는 곳</h3>
+		<p class="faint small">
+			{#if isDefault}캐릭터에 정해진 페르소나가 없으면 새 대화에 이 페르소나를 씀.{/if}
+			{#if usedBy.length}기본 페르소나로 정한 캐릭터: {usedBy.map((c) => c.name).join(", ")}.{/if}
+			{#if !isDefault && !usedBy.length}기본으로 정한 캐릭터 없음.{/if}
+		</p>
+		{#if convs.length}
+			<ul class="convs">
+				{#each convs.slice(0, 8) as c (c.id)}
+					{@const ch = library.character(c.characterId)}
+					<li>
+						<button onclick={() => nav.go({ page: "character", charId: c.characterId, convId: c.id })}>
+							<Avatar name={ch?.name ?? "?"} src={fileSrc(ch?.avatar)} color={ch?.color} size={28} />
+							<span class="t"><b>{c.title}</b><span class="faint">{ch?.name ?? "지워진 캐릭터"} · 메시지 {c.messageCount}</span></span>
+							<span class="faint small">{relative(c.updatedAt)}</span>
+						</button>
+					</li>
+				{/each}
+			</ul>
+			{#if convs.length > 8}<p class="faint small">그 밖에 대화 {convs.length - 8}개</p>{/if}
+		{:else}
+			<p class="faint small">이 페르소나로 한 대화 없음</p>
+		{/if}
+	</section>
+</div>
+
+<ContextMenu at={menu} items={menuItems} label="페르소나 메뉴" onclose={() => (menu = null)} />
+
+<style>
+	.editor {
+		max-width: 760px;
+		margin: 0 auto;
+		padding: var(--space-8) var(--space-6) var(--space-12, 48px);
+	}
+	.head {
+		display: grid;
+		grid-template-columns: auto minmax(0, 1fr) auto;
+		align-items: center;
+		gap: var(--space-4);
+		margin-bottom: var(--space-6);
+	}
+	.avatar-btn {
+		position: relative;
+		padding: 0;
+		border: none;
+		border-radius: 50%;
+		background: none;
+		cursor: pointer;
+	}
+	.cam {
+		position: absolute;
+		inset: 0;
+		display: grid;
+		place-items: center;
+		border-radius: 50%;
+		background: rgb(0 0 0 / 0.45);
+		color: #fff;
+		opacity: 0;
+		transition: opacity var(--duration-fast) var(--ease);
+	}
+	.avatar-btn:hover .cam,
+	.avatar-btn:focus-visible .cam {
+		opacity: 1;
+	}
+	.cam :global(svg) {
+		width: 22px;
+		height: 22px;
+	}
+	h1 {
+		font-size: var(--text-xl);
+		overflow-wrap: anywhere;
+	}
+	.cta {
+		display: flex;
+		align-items: center;
+		gap: var(--space-2);
+	}
+	.cta :global(.badge svg) {
+		width: 12px;
+		height: 12px;
+	}
+	.bar {
+		position: sticky;
+		top: 0;
+		z-index: 3;
+		display: none;
+		align-items: center;
+		gap: var(--space-2);
+		margin-bottom: var(--space-4);
+		padding: var(--space-2) var(--space-3);
+		border: 1px solid var(--accent);
+		border-radius: var(--radius-md);
+		background: var(--surface);
+		box-shadow: var(--shadow-sm);
+	}
+	.bar.show {
+		display: flex;
+	}
+	.bar span {
+		flex: 1;
+		font-size: var(--text-sm);
+		color: var(--text-muted);
+	}
+	.form {
+		display: flex;
+		flex-direction: column;
+		gap: var(--space-5);
+		padding: var(--space-5);
+		border-radius: var(--radius-lg);
+		background: var(--bg-sunken);
+	}
+	.count {
+		font-size: var(--text-xs);
+	}
+	.tags {
+		display: flex;
+		flex-wrap: wrap;
+		align-items: center;
+		gap: 6px;
+		min-height: var(--control-md);
+		padding: 4px var(--space-2);
+		border: 1px solid var(--border-strong);
+		border-radius: var(--radius-sm);
+		background: var(--surface);
+	}
+	.tags:focus-within {
+		border-color: var(--accent);
+	}
+	.tag {
+		display: inline-flex;
+		align-items: center;
+		gap: 2px;
+		height: 24px;
+		padding: 0 4px 0 var(--space-2);
+		border-radius: 999px;
+		background: var(--surface-active);
+		font-size: var(--text-sm);
+	}
+	.tag button {
+		display: grid;
+		place-items: center;
+		width: 18px;
+		height: 18px;
+		padding: 0;
+		border: none;
+		border-radius: 50%;
+		background: none;
+		color: var(--text-faint);
+		cursor: pointer;
+	}
+	.tag button:hover {
+		background: var(--surface-hover);
+		color: var(--text);
+	}
+	.tag button :global(svg) {
+		width: 12px;
+		height: 12px;
+	}
+	.tag-input {
+		flex: 1;
+		min-width: 80px;
+		height: 26px;
+		border: none;
+		outline: none;
+		background: transparent;
+		color: var(--text);
+		font: inherit;
+	}
+	.colors {
+		display: flex;
+		flex-wrap: wrap;
+		align-items: center;
+		gap: 8px;
+	}
+	.colors button {
+		width: 26px;
+		height: 26px;
+		border-radius: 50%;
+		border: 2px solid var(--bg-sunken);
+		box-shadow: 0 0 0 1px var(--border-strong);
+		cursor: pointer;
+	}
+	.colors button.on {
+		box-shadow: 0 0 0 2px var(--text);
+	}
+	.colors .auto {
+		width: auto;
+		padding: 0 var(--space-2);
+		border-radius: 999px;
+		background: var(--surface);
+		color: var(--text-muted);
+		font: inherit;
+		font-size: var(--text-xs);
+	}
+	.books {
+		display: flex;
+		flex-wrap: wrap;
+		gap: var(--space-1);
+	}
+	.chip {
+		height: 28px;
+		padding: 0 var(--space-3);
+		border: 1px solid var(--border-strong);
+		border-radius: 999px;
+		background: var(--surface);
+		color: var(--text-muted);
+		font: inherit;
+		font-size: var(--text-sm);
+		cursor: pointer;
+	}
+	.chip.on {
+		border-color: var(--accent);
+		background: var(--accent-soft);
+		color: var(--text);
+	}
+	.usage {
+		margin-top: var(--space-6);
+	}
+	.usage h3 {
+		margin-bottom: var(--space-2);
+	}
+	.small {
+		font-size: var(--text-sm);
+	}
+	.convs {
+		list-style: none;
+		margin: var(--space-3) 0 0;
+		padding: var(--space-1);
+		border-radius: var(--radius-lg);
+		background: var(--bg-sunken);
+	}
+	.convs button {
+		display: flex;
+		align-items: center;
+		gap: var(--space-3);
+		width: 100%;
+		padding: var(--space-2);
+		border: none;
+		border-radius: var(--radius-sm);
+		background: none;
+		color: var(--text);
+		font: inherit;
+		text-align: left;
+		cursor: pointer;
+	}
+	.convs button:hover {
+		background: var(--surface-hover);
+	}
+	.t {
+		flex: 1;
+		min-width: 0;
+		display: flex;
+		flex-direction: column;
+	}
+	.t b,
+	.t span {
+		overflow: hidden;
+		text-overflow: ellipsis;
+		white-space: nowrap;
+	}
+	.t span {
+		font-size: var(--text-xs);
+	}
+</style>
