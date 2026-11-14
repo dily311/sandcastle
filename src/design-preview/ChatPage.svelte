@@ -8,7 +8,6 @@
 		EyeOff,
 		FileSearch,
 		GitBranch,
-		ListTree,
 		PanelLeft,
 		PanelRight,
 		Pencil,
@@ -34,6 +33,14 @@
 		{ title: "Branch #1", char: "Seraphina", n: 5 },
 		{ title: "성 앞의 약속", char: "Aria", n: 48 },
 	];
+	/** n분 전 → 상대 시간 (실제 구현은 공용 유틸로) */
+	function relative(min: number): string {
+		if (min < 1) return "방금";
+		if (min < 60) return `${min}분 전`;
+		if (min < 60 * 24) return `${Math.floor(min / 60)}시간 전`;
+		return `${Math.floor(min / 60 / 24)}일 전`;
+	}
+
 	const toc = [
 		{ kind: "chapter", label: "1장 · 숲에서 깨어남", n: 1 },
 		{ kind: "msg", label: "눈을 떴군요. 다행이에요…", n: 1 },
@@ -43,6 +50,14 @@
 		{ kind: "msg", label: "(숨긴 메시지)", n: 4 },
 	];
 </script>
+
+{#snippet stamp(minutesAgo: number, model?: string)}
+	{@const at = new Date(Date.now() - minutesAgo * 60_000)}
+	<span class="stamp">
+		<time datetime={at.toISOString()} title={at.toLocaleString("ko-KR", { dateStyle: "full", timeStyle: "medium" })}>{relative(minutesAgo)}</time>
+		{#if model}<span class="model">· {model}</span>{/if}
+	</span>
+{/snippet}
 
 <div class="chat" class:no-list={!showList} class:no-panel={!showPanel}>
 	{#if showList}
@@ -62,21 +77,17 @@
 	<section class="reader">
 		<header class="bar">
 			<IconButton label="대화 목록" size="sm" active={showList} onclick={() => (showList = !showList)}><PanelLeft /></IconButton>
-			<div class="title">
-				<strong>숲에서 깨어남</strong>
-				<span class="faint">Seraphina · 12개 메시지</span>
-			</div>
-			<IconButton label="목차" size="sm" onclick={() => { showPanel = true; panelTab = "toc"; }}><ListTree /></IconButton>
-			<IconButton label="대화 설정" size="sm" active={showPanel} onclick={() => (showPanel = !showPanel)}><PanelRight /></IconButton>
+			<IconButton label="대화 패널" size="sm" active={showPanel} onclick={() => (showPanel = !showPanel)}><PanelRight /></IconButton>
 		</header>
 
 		<div class="scroll">
 			<article class="text">
 				<h2 class="chapter"><span>1장</span>숲에서 깨어남</h2>
 
-				<div class="block ai hover">
+				<div class="block ai">
 					<div class="who">
 						<span class="no">#1</span><b>Seraphina</b>
+						{@render stamp(42, "gemini-3.7-flash")}
 						<div class="actions" role="toolbar" aria-label="메시지 1 동작">
 							<IconButton label="분기 나누기" size="sm"><GitBranch /></IconButton>
 							<IconButton label="복사" size="sm"><Copy /></IconButton>
@@ -93,12 +104,12 @@
 				</div>
 
 				<div class="block user">
-					<div class="who"><span class="no">#2</span><b>Min</b></div>
+					<div class="who"><span class="no">#2</span><b>Min</b>{@render stamp(41)}</div>
 					<p>여기가 어디죠? 숲인가요?</p>
 				</div>
 
 				<div class="block ai">
-					<div class="who"><span class="no">#3</span><b>Seraphina</b></div>
+					<div class="who"><span class="no">#3</span><b>Seraphina</b>{@render stamp(40, "gemini-3.7-flash")}</div>
 					<p>"제 오두막이에요. 이 숲, 엘도리아는 제가 지키는 곳이에요. 여기선 아무도 당신을 해치지 못해요."</p>
 					<p>*그녀가 따뜻한 차를 건넨다.*</p>
 				</div>
@@ -111,14 +122,13 @@
 				</div>
 
 				<div class="block ai last">
-					<div class="who"><span class="no">#5</span><b>Seraphina</b></div>
+					<div class="who"><span class="no">#5</span><b>Seraphina</b>{@render stamp(2, "gemini-3.7-flash")}</div>
 					<p>*멀리서 늑대 울음소리가 들린다. 세라피나의 표정이 굳는다.*</p>
 					<div class="swipe">
 						<IconButton label="이전 응답" size="sm"><ChevronLeft /></IconButton>
 						<span>2 / 3</span>
 						<IconButton label="다음 응답" size="sm"><ChevronRight /></IconButton>
 						<IconButton label="다시 생성" size="sm"><RefreshCw /></IconButton>
-						<span class="faint">gemini-3.7-flash · 18초</span>
 					</div>
 				</div>
 			</article>
@@ -247,20 +257,17 @@
 	}
 	.bar {
 		display: flex;
-		align-items: center;
-		gap: var(--space-2);
-		padding: var(--space-2) var(--space-3);
-		border-bottom: 1px solid var(--border);
+		justify-content: space-between;
+		padding: var(--space-2) var(--space-3) 0;
+		background: transparent;
 	}
-	.title {
-		flex: 1;
-		display: flex;
-		flex-direction: column;
-		align-items: center;
-		line-height: 1.25;
+	.stamp {
+		display: inline-flex;
+		gap: 4px;
+		color: var(--text-faint);
 	}
-	.title span {
-		font-size: var(--text-xs);
+	.stamp time {
+		cursor: help;
 	}
 	.scroll {
 		flex: 1;
@@ -299,8 +306,7 @@
 	.block + .block {
 		margin-top: var(--space-2);
 	}
-	.block:hover,
-	.block.hover {
+	.block:hover {
 		background: var(--surface-2);
 	}
 	.block p + p {
@@ -329,12 +335,13 @@
 		background: var(--surface);
 		box-shadow: var(--shadow-sm);
 		opacity: 0;
+		pointer-events: none;
 		transition: opacity var(--duration-fast) var(--ease);
 	}
 	.block:hover .actions,
-	.block.hover .actions,
 	.block:focus-within .actions {
 		opacity: 1;
+		pointer-events: auto;
 	}
 	.user {
 		border-left: 3px solid var(--accent);

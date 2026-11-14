@@ -1,6 +1,7 @@
 <script lang="ts">
 	import {
 		Database,
+		Keyboard,
 		KeyRound,
 		Music,
 		Palette,
@@ -15,7 +16,7 @@
 
 	let { accent = $bindable(), dark = $bindable() }: { accent: string; dark: boolean } = $props();
 
-	type Tab = "general" | "theme" | "data" | "api" | "preset" | "regex" | "widget" | "log";
+	type Tab = "general" | "theme" | "shortcut" | "data" | "api" | "preset" | "regex" | "widget" | "log";
 	let tab: Tab = $state("theme");
 	let query = $state("");
 
@@ -25,6 +26,7 @@
 			items: [
 				{ id: "general", label: "기본 설정", icon: Settings2 },
 				{ id: "theme", label: "테마", icon: Palette },
+				{ id: "shortcut", label: "단축키", icon: Keyboard },
 				{ id: "widget", label: "위젯", icon: Music },
 			],
 		},
@@ -54,6 +56,12 @@
 	let sendOnEnter = $state(true);
 	let timestamps = $state(false);
 	let lang = $state("ko");
+
+	const shortcuts = [
+		{ group: "전역", items: [["위젯 열기/닫기", ["Ctrl", "Shift", "W"]], ["설정 열기", ["Ctrl", ","]], ["검색", ["Ctrl", "K"]]] },
+		{ group: "대화", items: [["보내기", ["Enter"]], ["줄바꿈", ["Shift", "Enter"]], ["마지막 응답 다시 생성", ["Ctrl", "R"]], ["이전/다음 응답", ["Alt", "←/→"]], ["대화 패널", ["Ctrl", "\\"]]] },
+		{ group: "게임", items: [["로그 보기", ["L"]], ["빠른 저장", ["F5"]]] },
+	] as const;
 
 	const logs = [
 		{ level: "error", time: "22:41:03", src: "chat", msg: "AI_PROVIDER_RATE_LIMIT · API 요청 한도 초과 (429)" },
@@ -145,6 +153,22 @@
 						<Switch bind:checked={timestamps} label="메시지 시각" hideLabel />
 					</div>
 				</div>
+			{:else if tab === "shortcut"}
+				<h1>단축키</h1>
+				<p class="lead">항목을 눌러 새 키 조합 입력. 겹치면 경고.</p>
+				{#each shortcuts as g (g.group)}
+					<h3 class="sub">{g.group}</h3>
+					<div class="group-card">
+						{#each g.items as [label, keys] (label)}
+							<div class="item">
+								<div class="txt"><b>{label}</b></div>
+								<button class="keys" aria-label="{label} 단축키 바꾸기">
+									{#each keys as k, i (k + i)}<kbd>{k}</kbd>{/each}
+								</button>
+							</div>
+						{/each}
+					</div>
+				{/each}
 			{:else if tab === "log"}
 				<h1>로그</h1>
 				<p class="lead">이번 실행 동안 생긴 오류·알림. 앱을 끄면 지워짐.</p>
@@ -290,6 +314,31 @@
 	}
 	.accents button.on {
 		box-shadow: 0 0 0 2px var(--text);
+	}
+	.keys {
+		display: flex;
+		gap: 4px;
+		padding: 4px 6px;
+		border: 1px solid transparent;
+		border-radius: var(--radius-xs);
+		background: transparent;
+		cursor: pointer;
+	}
+	.keys:hover {
+		border-color: var(--border-strong);
+		background: var(--surface);
+	}
+	kbd {
+		min-width: 24px;
+		padding: 2px 6px;
+		border: 1px solid var(--border-strong);
+		border-bottom-width: 2px;
+		border-radius: 5px;
+		background: var(--surface);
+		font-family: var(--font-sans);
+		font-size: var(--text-xs);
+		font-weight: 600;
+		text-align: center;
 	}
 	.log {
 		padding: var(--space-2) var(--space-4);

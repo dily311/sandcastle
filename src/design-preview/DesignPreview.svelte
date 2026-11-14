@@ -3,11 +3,9 @@
 		BookOpenText,
 		Gamepad2,
 		Minus,
-		Moon,
 		Settings,
 		Smartphone,
 		Square,
-		Sun,
 		UserRound,
 		Users,
 		X,
@@ -43,17 +41,13 @@
 		<span class="logo" aria-hidden="true">S</span>
 		<nav aria-label="주 메뉴">
 			{#each nav as n (n.id)}
-				<button class="tab" class:active={page === n.id} aria-current={page === n.id ? "page" : undefined} title={n.label} onclick={() => (page = n.id)}>
+				<button class="tab" class:active={page === n.id} aria-current={page === n.id ? "page" : undefined} aria-label={n.label} title={n.label} onclick={() => (page = n.id)}>
 					<n.icon />
-					<span class="tab-label">{n.label}</span>
 					{#if "badge" in n && n.badge}<span class="dot" aria-label="새 메시지 {n.badge}"></span>{/if}
 				</button>
 			{/each}
 		</nav>
 		<div class="drag" aria-hidden="true"></div>
-		<IconButton label={dark ? "밝은 테마" : "어두운 테마"} size="sm" onclick={() => (dark = !dark)}>
-			{#if dark}<Sun />{:else}<Moon />{/if}
-		</IconButton>
 		<IconButton label="설정" size="sm" active={page === "settings"} onclick={() => (page = "settings")}><Settings /></IconButton>
 		<div class="win" aria-hidden="true">
 			<span><Minus /></span><span><Square /></span><span class="close"><X /></span>
@@ -107,11 +101,11 @@
 	}
 	.tab {
 		position: relative;
-		display: flex;
-		align-items: center;
-		gap: 6px;
+		display: grid;
+		place-items: center;
+		width: 30px;
 		height: 26px;
-		padding: 0 var(--space-2);
+		padding: 0;
 		border: none;
 		border-radius: var(--radius-xs);
 		background: transparent;
@@ -121,8 +115,8 @@
 		cursor: pointer;
 	}
 	.tab :global(svg) {
-		width: 15px;
-		height: 15px;
+		width: 16px;
+		height: 16px;
 	}
 	.tab:hover {
 		background: var(--surface-hover);
@@ -139,7 +133,7 @@
 	.dot {
 		position: absolute;
 		top: 3px;
-		left: 17px;
+		right: 5px;
 		width: 7px;
 		height: 7px;
 		border-radius: 50%;
@@ -184,7 +178,6 @@
 	}
 	/* 좁은 화면: 탭 글자 숨기고 아이콘만 */
 	@media (max-width: 720px) {
-		.tab-label,
 		.win {
 			display: none;
 		}
