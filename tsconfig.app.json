@@ -30,5 +30,7 @@
       "@tauri-apps/api/window": ["./src/ipc/tauri-mock.ts"]
     }
   },
-  "include": ["src/**/*.ts", "src/**/*.js", "src/**/*.svelte", "index.d.ts"]
+  "include": ["src/**/*.ts", "src/**/*.js", "src/**/*.svelte", "index.d.ts"],
+  // src/data는 .gitignore된 로컬 자료 폴더 (위젯 그림 등). 코드 검사에서 뺌
+  "exclude": ["src/data/**"]
 }

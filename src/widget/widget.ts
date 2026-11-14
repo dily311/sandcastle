@@ -10,8 +10,10 @@ window.addEventListener("keydown", (e) => {
 	}
 });
 
-const app = mount(Widget, {
-	target: document.getElementById("app")!,
-});
+async function boot() {
+	// 브라우저 개발 모드: 메인 창과 같은 가짜 백엔드 (빌드에서는 빠짐)
+	if (import.meta.env.DEV && !("__TAURI_INTERNALS__" in window)) await import("$ipc/dev-mock/install");
+	mount(Widget, { target: document.getElementById("app")! });
+}
 
-export default app;
+void boot();

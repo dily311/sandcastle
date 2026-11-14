@@ -1,5 +1,5 @@
 import type { WebviewWindow } from "@tauri-apps/api/webviewWindow";
-import { widgetCommands } from "$/ipc/commands";
+import { commands } from "$ipc/bindings";
 import type { FeatureRuntime } from "../../types";
 
 const WIDGET_FEATURE_ID = "widget";
@@ -11,22 +11,22 @@ class RegisterWidgetWindowFeature implements FeatureRuntime {
 
 	async init() {
 		this.enabled = true;
-		await widgetCommands.openWidgetWindow();
+		await commands.openWidget();
 	}
 
 	shown() {
         this.enabled = true;
-		widgetCommands.toggleWidgetWindow();
+		void commands.toggleWidget();
 	}
 
 	disable() {
         this.enabled = false;
-		widgetCommands.toggleWidgetWindow();
+		void commands.toggleWidget();
 	}
 
 	async destroy() {
         this.enabled = false;
-		await widgetCommands.closeWidgetWindow();
+		await commands.closeWidget();
 	}
 }
 export const registerWidgetWindowFeature = new RegisterWidgetWindowFeature();

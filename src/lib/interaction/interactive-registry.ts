@@ -1,4 +1,4 @@
-import { windowCommands } from "$/ipc/commands";
+import { commands } from "$ipc/bindings";
 
 export interface Hitbox {
 	x: number;
@@ -170,7 +170,7 @@ class InteractiveManager {
 
 		let failed = false;
 		try {
-			await windowCommands.updateInteractiveRegions({ upserts, removed: removedIds });
+			await commands.updateInteractiveRegions(upserts as never, removedIds);
 		} catch (e) {
 			failed = true;
 			console.error("updateInteractiveRegions failed", e);

@@ -31,5 +31,9 @@ async function invoke(cmd: string, args: Record<string, unknown> = {}) {
 	convertFileSrc(path: string) {
 		return path;
 	},
-	metadata: { currentWindow: { label: "main" }, currentWebview: { windowLabel: "main", label: "main" } },
+	// 위젯 페이지(widget.html)는 "widget" 창처럼
+	metadata: (() => {
+		const label = location.pathname.includes("widget") ? "widget" : "main";
+		return { currentWindow: { label }, currentWebview: { windowLabel: label, label } };
+	})(),
 };

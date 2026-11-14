@@ -29,7 +29,7 @@ const db = {
 		fontSize: 16,
 		grayTone: "slate",
 	} satisfies ThemeSetting as ThemeSetting,
-	feature: { feature: { "chat.images": true } } as FeatureSetting,
+	feature: { feature: { "chat.images": true, widget: true, "widget.music": true } } as FeatureSetting,
 };
 
 export const handlers: Record<string, Handler> = {
@@ -46,4 +46,18 @@ export const handlers: Record<string, Handler> = {
 	...chatHandlers,
 	...settingsHandlers,
 	...gameHandlers,
+	// ---- 위젯 (브라우저에서 위젯 화면 확인용) ----
+	get_widget_music_settings: () => ({ resize: false, isMiniPlayer: false, isImgEdit: false, isPlayListOpen: false, pos: null, selectedFolder: null, currentPlaylistId: "default", currentSongIndex: 0 }),
+	save_widget_music_settings: () => null,
+	get_all_playlist: () => [{ id: "default", title: "기본 재생 목록", description: null, coverImage: null, createdAt: 0, updatedAt: 0 }],
+	get_playlist_entry: () => [],
+	get_select_folder_music_data: () => ({ folders: {}, rootFiles: [] }),
+	update_interactive_regions: () => null,
+	remove_interactive_regions: () => null,
+	set_widget_click_through: () => null,
+	open_widget: () => null,
+	close_widget: () => null,
+	toggle_widget: () => null,
+	"plugin:window|close": () => null,
+	"plugin:window|set_ignore_cursor_events": () => null,
 };

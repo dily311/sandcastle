@@ -3,7 +3,7 @@
 	import { themeSetting } from "$/lib/stores/themeStore.svelte";
 	import { bootstrapFeatures, featureManager } from "$/lib/features/feautreManager.svelte";
 	import { setLucideProps } from "@lucide/svelte";
-	import { widgetCommands } from "$/ipc/commands";
+	import { onEvent } from "$shared/ipc/events";
 	import { getCurrentWebviewWindow } from "@tauri-apps/api/webviewWindow";
 	import ContextMenu from "$/lib/contextmenu/ui/ContextMenu.svelte";
 
@@ -21,12 +21,12 @@
 		// 켜진 기능 불러오기
 		await bootstrapFeatures();
 
-		widgetCommands.listen_widgetShown(() => {
+		void onEvent("widget:shown", () => {
 			featureManager.getFeatures.map((v) => {
 				if (v.enabled) v.shown?.();
 			});
 		});
-		widgetCommands.listen_widgetHidden(() => {
+		void onEvent("widget:hidden", () => {
 			featureManager.getFeatures.map((v) => {
 				if (v.enabled) v.disable?.();
 			});

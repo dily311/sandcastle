@@ -3,7 +3,8 @@ import type { FeatureRuntime } from "./types";
 import { registerWidgetMascot } from "$/lib/features/impl/widget/mascot/mascotFeature.svelte";
 import { registerWidgetMusic } from "$/lib/features/impl/widget/music/musicFeature.svelte";
 import { registerWidgetWindowFeature } from "./impl/main/widgetWindowFeature.svelte";
-import { settingCommands } from "$/ipc/commands";
+import { commands } from "$ipc/bindings";
+import { onEvent } from "$shared/ipc/events";
 
 /** 윈도우 별로 사용할 feature 구성 정의 */
 const featuresByWindow: Record<string, FeatureRuntime[]> = {
@@ -41,7 +42,7 @@ class FeatureManager {
 		}
 
 		// 리스너 등록
-		await settingCommands.listen_featureChanged(featureConfig.changeConfig);
+		await onEvent<{ id: string; enabled: boolean }>("feature_setting::changed", featureConfig.changeConfig);
 	}
 
 	// 기능 등록
@@ -96,14 +97,14 @@ class FeatureConfig {
 	}
 
 	async loadConfig() {
-		const savedConfig = await settingCommands.getFeatureSetting();
+		const savedConfig = await commands.getFeatureSetting();
 		this.config = new Map(Object.entries(savedConfig.feature));
 		console.log(this.config);
 	}
 
 	async updateConfig(id: string, enabled: boolean) {
 		this.value?.set(id, enabled);
-		await settingCommands.updateFeatureSetting({ id, enabled });
+		await commands.updateFeatureSetting(id, enabled);
 	}
 
 	changeConfig = async(changed: {id: string, enabled: boolean}) => {

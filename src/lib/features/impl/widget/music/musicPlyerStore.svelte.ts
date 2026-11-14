@@ -1,5 +1,5 @@
 import { convertFileSrc } from "@tauri-apps/api/core";
-import { widgetCommands } from "$/ipc/commands";
+import { commands } from "$ipc/bindings";
 import { open } from "@tauri-apps/plugin-dialog";
 import {
 	type WidgetMusicSetting,
@@ -46,7 +46,7 @@ class WidgetMusicSettingStore {
 
 	async init() {
 		// 설정 값 불러오기
-		this.#setting = await widgetCommands.getWidgetMusicSettings();
+		this.#setting = (await commands.getWidgetMusicSettings()) as unknown as WidgetMusicSetting;
 
 		// 연관 스토어 초기화
 		await playlistStore.init(
@@ -64,7 +64,7 @@ class WidgetMusicSettingStore {
 		if (isIdentical) return;
 
 		this.#setting = { ...this.#setting, ...patch };
-		widgetCommands.saveWidgetMusicSettings({ patch: patch });
+		void commands.saveWidgetMusicSettings(patch as never);
 	}
 
 	toggleResize() {
@@ -118,23 +118,23 @@ class PlaylistStore {
 	#sortType = $state<SortType>("name");
 
 	async init(selectedFolder: string | null, currentPlaylistId: string | null, currentSongIndex: number) {
-		this.#store = await widgetCommands.getAllPlaylist();
+		this.#store = (await commands.getAllPlaylist()) as unknown as Playlist[];
 		if (currentPlaylistId) {
 			this.#currentPlaylistId = currentPlaylistId;
-			this.#currentPlaylist = await widgetCommands.getPlaylistMusic({ playlistId: currentPlaylistId });
+			this.#currentPlaylist = (await commands.getPlaylistEntry(currentPlaylistId)) as unknown as PlaylistItem[];
 		}
 		if (this.#currentPlaylist.length > currentSongIndex) {
 			this.#currentSongIndex = currentSongIndex;
 		}
 		if (selectedFolder) {
-			const raw = await widgetCommands.getSelectedFolderMusics({ folderPath: selectedFolder });
+			const raw = (await commands.getSelectFolderMusicData(selectedFolder)) as unknown as LibraryRootRaw;
 			this.#selectedFolderMusics = convertLibraryRoot(raw);
 		}
 	}
 
 	async updateCurrentIndex(index: number) {
 		this.#currentSongIndex = index;
-		await widgetCommands.saveWidgetMusicSettings({ patch: { currentSongIndex: index } });
+		await commands.saveWidgetMusicSettings({ currentSongIndex: index });
 	}
 
 	/** 저장 X 그냥 순서만 변경하는 경우에 사용 */
@@ -144,21 +144,17 @@ class PlaylistStore {
 
 	async appendCurrentPlaylist(item: PlaylistItem) {
 		this.#currentPlaylist.push(item);
-		await widgetCommands.appendPlaylistMusic({
-			playlistId: this.currentPlaylistKey,
-			musicSrc: item.meta.path,
-			sortOrder: this.#currentPlaylist.length,
-		});
+		await commands.appendPlaylistEntry(this.currentPlaylistKey, item.meta.path, this.#currentPlaylist.length);
 	}
 	async removeCurrentPlaylist(music_src: string) {
 		this.#currentPlaylist = this.#currentPlaylist.filter((v) => v.meta.path !== music_src);
-		await widgetCommands.removePlaylistMusic({ playlistId: this.currentPlaylistKey, musicSrc: music_src });
+		await commands.removePlaylistEntry(this.currentPlaylistKey, music_src);
 	}
 	/** 현재 음악데이터만 업데이트 */
 	async updateCurrentSongData(patch: Partial<MusicMeta>) {
 		const changeData = { ...this.currentSong, ...patch };
 		this.#currentPlaylist.map((v) => (v.meta.path == changeData.path ? changeData : v));
-		await widgetCommands.updateMusicMeta({ input: changeData });
+		await commands.updateMusicMeta(changeData as never);
 	}
 
 	async updateCurrentMusicAlbumArtPos(pos: Pos) {
@@ -167,13 +163,13 @@ class PlaylistStore {
 			v.meta.path == changeData.path ? { meta: changeData, sortOrder: this.currentSongIndex } : v,
 		);
 		this.updateCurrentPlaylist(changedPlaylist);
-		await widgetCommands.updateMusicAlbumArtPos({ path: changeData.path, pos });
+		await commands.updateMusicAlbumArtPos(changeData.path, pos as never);
 	}
 
 	async updateMusicOrder(input: PlaylistItem[]) {
 		if (this.#currentPlaylist === input) return;
 		this.updateCurrentPlaylist(input);
-		await widgetCommands.updateMusicOrder({ playlistId: this.#currentPlaylistId, input });
+		await commands.updatePlaylistMusicOrder(this.#currentPlaylistId, input as never);
 	}
 
 	setSelectedFolderMusics(newValue: LibraryRoot) {
@@ -547,7 +543,7 @@ export async function handleSelectMusicFolder() {
 }
 
 export async function setSelectedMusicFolder(folderPath: string) {
-	const raw = await widgetCommands.getSelectedFolderMusics({ folderPath });
+	const raw = (await commands.getSelectFolderMusicData(folderPath)) as unknown as LibraryRootRaw;
 	// 스토어 등록
 	playlistStore.setSelectedFolderMusics(convertLibraryRoot(raw));
 	return raw;
@@ -569,10 +565,7 @@ export async function handleChangeAlbumCover() {
 	});
 	if (!selected || !playlistStore.currentSong) return;
 
-	const album_art = await widgetCommands.setAlbumCover({
-		filePath: playlistStore.currentSong.path,
-		imgPath: selected,
-	});
+	const album_art = await commands.setAlbumArt(playlistStore.currentSong.path, selected);
 
 	// 앨범아트 변경된 경로 반영
 	// 캐싱된거 사용하는 이유: 다음 음악으로 자동으로 넘어가는 경우 인덱스가 꼬임
