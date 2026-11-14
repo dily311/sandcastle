@@ -1,7 +1,8 @@
 <script lang="ts">
-	import { ArrowDown, ArrowUp, ChevronDown, ChevronRight, Plus, Trash2 } from "@lucide/svelte";
+	import { ChevronDown, ChevronRight, GripVertical, Plus, Trash2 } from "@lucide/svelte";
+	import { flip } from "svelte/animate";
 	import type { PromptBlocksInput_Deserialize as BlockInput, PromptPresetDetail_Serialize as Detail } from "$ipc/bindings";
-	import { Badge, Button, Field, IconButton, Input, Select, Switch, Textarea } from "$shared/ui";
+	import { Badge, Button, Field, Input, Select, Slider, Switch, Textarea } from "$shared/ui";
 	import Group from "./Group.svelte";
 	import Row from "./Row.svelte";
 
@@ -71,12 +72,50 @@
 	);
 	let open = $state<string | null>(null);
 
-	function move(i: number, d: -1 | 1) {
-		const j = i + d;
-		if (j < 0 || j >= blocks.length) return;
+	function moveTo(from: number, to: number) {
+		if (from === to || to < 0 || to >= blocks.length) return;
 		const next = [...blocks];
-		[next[i], next[j]] = [next[j], next[i]];
+		const [item] = next.splice(from, 1);
+		next.splice(to, 0, item);
 		blocks = next;
+	}
+
+	// ---- 손잡이를 잡고 끌어서 순서 바꾸기 (포인터 이벤트: 창의 파일 끌어 놓기와 상관없이 동작) ----
+	let list: HTMLOListElement | undefined = $state();
+	let dragging = $state<string | null>(null);
+	function grab(e: PointerEvent, key: string) {
+		if (e.button !== 0) return;
+		e.preventDefault();
+		try {
+			(e.currentTarget as HTMLElement).setPointerCapture(e.pointerId);
+		} catch {
+			/* 캡처 못 해도 끌기는 됨 */
+		}
+		dragging = key;
+	}
+	function drag(e: PointerEvent) {
+		if (!dragging || !list) return;
+		const from = blocks.findIndex((b) => b.key === dragging);
+		const items = [...list.children] as HTMLElement[];
+		// 포인터가 어느 블록의 가운데를 넘었는지
+		let to = items.findIndex((el) => {
+			const r = el.getBoundingClientRect();
+			return e.clientY < r.top + r.height / 2;
+		});
+		if (to < 0) to = items.length - 1;
+		else if (to > from) to -= 1;
+		moveTo(from, to);
+	}
+	function drop() {
+		dragging = null;
+	}
+	/** 키보드: 손잡이에서 ↑/↓ */
+	function gripKey(e: KeyboardEvent, i: number) {
+		if (e.key === "ArrowUp" || e.key === "ArrowDown") {
+			e.preventDefault();
+			moveTo(i, i + (e.key === "ArrowUp" ? -1 : 1));
+			void Promise.resolve().then(() => (list?.querySelectorAll<HTMLElement>(".grip")[i + (e.key === "ArrowUp" ? -1 : 1)])?.focus());
+		}
 	}
 	function add() {
 		const b: Block = {
@@ -149,12 +188,12 @@
 </Group>
 
 <Group title="생성 옵션">
-	<div class="grid">
-		<Field label="온도" hint="높을수록 다양함 (0~2)"><Input type="number" step="0.05" min="0" max="2" bind:value={temperature} placeholder="공급자 기본" /></Field>
-		<Field label="응답 길이 (토큰)"><Input type="number" min="1" bind:value={maxTokens} placeholder="1024" /></Field>
-		<Field label="컨텍스트 크기 (토큰)" hint="넘치면 오래된 대화부터 뺌"><Input type="number" min="0" bind:value={contextSize} placeholder="제한 없음" /></Field>
-		<Field label="Top P"><Input type="number" step="0.01" min="0" max="1" bind:value={topP} placeholder="공급자 기본" /></Field>
-		<Field label="Top K"><Input type="number" min="0" bind:value={topK} placeholder="공급자 기본" /></Field>
+	<div class="sliders">
+		<Slider label="온도" hint="높을수록 다양하고 낮을수록 일정함" bind:value={temperature} min={0} max={2} step={0.05} fallback={1} unsetLabel="공급자 기본" format={(n) => n.toFixed(2)} />
+		<Slider label="응답 길이 (토큰)" hint="AI가 한 번에 쓰는 최대 길이" bind:value={maxTokens} min={64} max={8192} step={64} fallback={1024} unsetLabel="1,024" format={(n) => n.toLocaleString()} />
+		<Slider label="컨텍스트 크기 (토큰)" hint="넘치면 오래된 대화부터 뺌. 0은 제한 없음" bind:value={contextSize} min={0} max={200000} step={1024} fallback={0} unsetLabel="제한 없음" format={(n) => (n ? n.toLocaleString() : "제한 없음")} />
+		<Slider label="Top P" hint="확률이 높은 낱말 몇 %에서만 고름" bind:value={topP} min={0} max={1} step={0.01} fallback={1} unsetLabel="공급자 기본" format={(n) => n.toFixed(2)} />
+		<Slider label="Top K" hint="후보 낱말을 몇 개까지 볼지. 0은 끔" bind:value={topK} min={0} max={200} step={1} fallback={0} unsetLabel="공급자 기본" format={(n) => (n ? String(n) : "끔")} />
 	</div>
 	<Row label="실시간 응답 (스트리밍)" desc="끄면 응답이 다 만들어진 뒤 한 번에 보임">
 		<Switch bind:checked={stream} label="스트리밍" hideLabel />
@@ -164,11 +203,20 @@
 <Group title="프롬프트 블록">
 	{#snippet aside()}<Button size="sm" onclick={add}>{#snippet icon()}<Plus />{/snippet}블록 추가</Button>{/snippet}
 	<p class="hint">위에서부터 순서대로 보냄. 앱 고정 규칙은 항상 맨 앞</p>
-	<ol class="blocks">
+	<ol class="blocks" bind:this={list} class:sorting={!!dragging}>
 		{#each blocks as b, i (b.key)}
 			{@const marker = markerOf(b)}
-			<li class:off={!b.enabled}>
+			<li class:off={!b.enabled} class:dragging={dragging === b.key} animate:flip={{ duration: 150 }}>
 				<div class="head">
+					<button
+						class="grip"
+						aria-label="{b.name} 끌어서 순서 바꾸기 (↑/↓ 키도 됨)"
+						title="끌어서 순서 바꾸기"
+						onpointerdown={(e) => grab(e, b.key)}
+						onpointermove={drag}
+						onpointerup={drop}
+						onpointercancel={drop}
+						onkeydown={(e) => gripKey(e, i)}><GripVertical /></button>
 					<button class="toggle" aria-expanded={open === b.key} onclick={() => (open = open === b.key ? null : b.key)}>
 						{#if open === b.key}<ChevronDown />{:else}<ChevronRight />{/if}
 						<span class="nm">{b.name}</span>
@@ -177,8 +225,6 @@
 					{#if marker}<Badge tone="info">{marker}</Badge>{/if}
 					{#if b.position === "in_chat"}<Badge tone="accent">대화 안 · 깊이 {b.depth}</Badge>{/if}
 					<span class="sp"></span>
-					<IconButton label="위로" size="sm" disabled={i === 0} onclick={() => move(i, -1)}><ArrowUp /></IconButton>
-					<IconButton label="아래로" size="sm" disabled={i === blocks.length - 1} onclick={() => move(i, 1)}><ArrowDown /></IconButton>
 					<Switch bind:checked={b.enabled} label="{b.name} 사용" hideLabel />
 				</div>
 				{#if open === b.key}
@@ -253,6 +299,45 @@
 		border: 1px solid var(--border);
 		border-radius: var(--radius-md);
 		background: var(--surface);
+	}
+	.sliders {
+		display: grid;
+		grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+		gap: var(--space-4) var(--space-6);
+		padding: var(--space-4) 0 var(--space-2);
+	}
+	.grip {
+		display: grid;
+		place-items: center;
+		width: 22px;
+		height: 28px;
+		padding: 0;
+		border: none;
+		border-radius: var(--radius-xs);
+		background: none;
+		color: var(--text-faint);
+		cursor: grab;
+		touch-action: none;
+	}
+	.grip:hover,
+	.grip:focus-visible {
+		background: var(--surface-hover);
+		color: var(--text);
+	}
+	.grip :global(svg) {
+		width: 16px;
+		height: 16px;
+	}
+	.sorting,
+	.sorting .grip {
+		cursor: grabbing;
+		user-select: none;
+	}
+	.blocks li.dragging {
+		position: relative;
+		z-index: 2;
+		border-color: var(--accent);
+		box-shadow: var(--shadow-md);
 	}
 	.blocks li.off .nm {
 		color: var(--text-faint);
