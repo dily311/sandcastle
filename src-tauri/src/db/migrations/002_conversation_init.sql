@@ -1,7 +1,12 @@
 -- =========================================================
 -- 채팅 DB
 -- =========================================================
-
+CREATE TABLE IF NOT EXISTS conv_settings (
+  id INTEGER PRIMARY KEY CHECK (id = 1),
+  default_persona_id TEXT REFERENCES personas(id) ON DELETE SET NULL,
+  default_prompt_preset_id TEXT REFERENCES prompt_presets(id) ON DELETE SET NULL,
+  updated_at INTEGER
+);
 -- ---------------------------------------------------------
 --  캐릭터 & 페르소나
 -- ---------------------------------------------------------
@@ -111,13 +116,6 @@ CREATE TABLE IF NOT EXISTS conversations (
   updated_at INTEGER
 );
 
-CREATE TABLE IF NOT EXISTS conversations_settings (
-  id TEXT PRIMARY KEY REFERENCES conversations(id) ON DELETE CASCADE,
-  default_persona_id TEXT REFERENCES personas(id) ON DELETE SET NULL,
-  default_prompt_preset_id TEXT REFERENCES prompt_presets(id) ON DELETE SET NULL,
-  updated_at INTEGER
-);
-
 -- ---------------------------------------------------------
 --  메시지 테이블
 -- ---------------------------------------------------------
@@ -189,3 +187,4 @@ CREATE VIEW IF NOT EXISTS v_conversations_with_count AS SELECT c.*, COUNT(m.id) 
 -- 기본 설정
 -- =========================================================
 INSERT OR IGNORE INTO personas (id,name,avatar,description,tags,color,is_system_default,created_at,updated_at) VALUES ("default","user",NULL,NULL,NULL,NULL,0,strftime('%s','now'),strftime('%s','now'));
+INSERT OR IGNORE INTO conv_settings (id, default_persona_id, updated_at) VALUES (1, "default", strftime('%s','now') * 1000);
