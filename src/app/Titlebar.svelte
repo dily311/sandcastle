@@ -3,6 +3,7 @@
 	import { getCurrentWindow } from "@tauri-apps/api/window";
 	import { IconButton } from "$shared/ui";
 	import { library } from "$features/character/library.svelte";
+	import { games } from "$features/game/game.svelte";
 	import { layout } from "./layout.svelte";
 	import { nav } from "./nav.svelte";
 	import { panel } from "./panel.svelte";
@@ -41,8 +42,11 @@
 				return ["설정", SETTINGS[r.tab ?? "general"]];
 			case "phone":
 				return ["폰"];
-			case "game":
-				return ["게임"];
+			case "game": {
+				const g = games.game(r.gameId);
+				if (!g) return ["게임"];
+				return r.sessionId ? [g.title, "플레이"] : r.edit ? [g.title, "편집"] : [g.title];
+			}
 		}
 	});
 </script>

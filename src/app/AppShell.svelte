@@ -8,10 +8,10 @@
 	import Titlebar from "./Titlebar.svelte";
 	import Sidebar from "./Sidebar.svelte";
 	import { layout } from "./layout.svelte";
-	import Placeholder from "./Placeholder.svelte";
 	import SettingsPage from "$features/settings/SettingsPage.svelte";
 	import PersonaPage from "$features/persona/PersonaPage.svelte";
 	import PhonePage from "$features/phone/PhonePage.svelte";
+	import GamePage from "$features/game/GamePage.svelte";
 
 	let ready = $state(false);
 
@@ -49,16 +49,14 @@
 			{@const r = nav.current}
 			{#if r.page === "character"}
 				<CharacterPage charId={r.charId} convId={r.convId} edit={r.edit} />
+			{:else if r.page === "game"}
+				<GamePage gameId={r.gameId} sessionId={r.sessionId} edit={r.edit} />
 			{:else if r.page === "phone"}
 				<PhonePage />
 			{:else if r.page === "persona"}
 				<PersonaPage personaId={r.personaId} />
 			{:else if r.page === "settings"}
 				<SettingsPage tab={r.tab} edit={r.edit} />
-			{:else}
-				{#key r.page}
-					<Placeholder page={r.page} />
-				{/key}
 			{/if}
 		{/if}
 		</main>

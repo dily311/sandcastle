@@ -1,0 +1,63 @@
+/* 예전 게임 플레이·에디터 화면을 새 앱에서 쓰기 위한 변수 다리.
+   예전 변수 이름을 새 토큰(--gray-*, --accent 등)에 연결한다. 새 디자인으로 다시 만들면 지운다. */
+.legacy-game {
+	--text-color: var(--text);
+	--text-muted: var(--text-muted);
+	--text-faint: var(--text-faint);
+	--background-primary: var(--bg);
+	--background-secondary: var(--surface-2);
+	--card-bg: var(--surface);
+	--card-border-color: var(--border);
+	--card-border-hover-color: var(--border-strong);
+	--border-color: var(--border);
+	--border-strong-color: var(--border-strong);
+	--accent-color: var(--accent);
+	--accent-color-hover: var(--accent-hover);
+	--button-hover-bg: var(--surface-hover);
+	--nav-bg-active: var(--surface-active);
+	--input-bg: var(--surface);
+	--input-border-color: var(--border-strong);
+	--input-color: var(--text);
+	--track-bg-color: var(--surface-active);
+	--header-height: 40px;
+	--color-red: var(--danger);
+	--color-blue: var(--info);
+	--color-purple: #6e56cf;
+	--green-3: var(--success-soft);
+	--green-11: var(--success);
+
+	/* 게임 무대: 화면 모드와 상관없이 어두운 극장 느낌 (강조색은 앱 강조색) */
+	--game-player-bg: #111113;
+	--game-stage-bg: #1b1c20;
+	--game-topbar-bg: rgb(17 17 19 / 0.94);
+	--game-footer-bg: #16171a;
+	--game-panel-bg: rgb(24 25 27 / 0.96);
+	--game-dialogue-bg: linear-gradient(145deg, rgb(24 25 28 / 0.92), rgb(14 14 17 / 0.91));
+	--game-scene-label-bg: rgb(17 17 19 / 0.55);
+	--game-border: rgb(255 255 255 / 0.14);
+	--game-border-subtle: rgb(255 255 255 / 0.08);
+	--game-surface-hover: rgb(255 255 255 / 0.09);
+	--game-text-primary: #fbfbfc;
+	--game-text-main: #f2f3f5;
+	--game-text-secondary: #d9dbe0;
+	--game-text-muted: #b0b4ba;
+	--game-text-dim: #8b8d98;
+	--game-accent: color-mix(in oklab, var(--accent) 70%, white);
+	--game-accent-strong: color-mix(in oklab, var(--accent) 45%, white);
+	--game-accent-soft: color-mix(in oklab, var(--accent) 16%, transparent);
+	--game-accent-hover: color-mix(in oklab, var(--accent) 30%, transparent);
+	--game-accent-border: color-mix(in oklab, var(--accent) 50%, transparent);
+	--game-danger-text: #ffe0d9;
+	--game-danger-bg: #492722ee;
+	--game-danger-border: #e99b8b66;
+	--game-shadow-panel: 0 14px 45px #0008;
+	--game-shadow-dialogue: 0 18px 60px rgb(0 0 0 / 0.35);
+	--game-stage-placeholder: radial-gradient(ellipse at 50% 35%, #555a6a, #2b2d35 68%, var(--game-stage-bg));
+	--game-stage-shade: linear-gradient(180deg, rgb(8 7 9 / 0.22), transparent 28%, transparent 52%, rgb(8 7 9 / 0.3));
+	--game-character-shadow: drop-shadow(0 12px 24px rgb(0 0 0 / 0.22));
+	--game-character-dim-shadow: brightness(0.35) saturate(0.55) drop-shadow(0 8px 18px rgb(0 0 0 / 0.35));
+
+	height: 100%;
+	overflow: auto;
+	color: var(--text);
+}

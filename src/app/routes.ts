@@ -1,4 +1,5 @@
-import { pop, push, type RouteDefinition } from "svelte-spa-router";
+import { push, type RouteDefinition } from "svelte-spa-router";
+import { nav } from "./nav.svelte";
 import ChatScreen from "$screens/chat/ChatDetailPage.svelte";
 import SettingsScreen from "$screens/settings/SettingsPage.svelte";
 import HomePage from "$screens/HomePage.svelte";
@@ -122,7 +123,8 @@ export const navigation: PageItem[] = [
 // 사용 함수
 // ---------------------------------------------------------
 
-export function handleGoBack() { pop() };
+// 예전 화면(게임 플레이·에디터)의 뒤로 버튼 → 새 앱의 화면 이동 기록
+export function handleGoBack() { void nav.back() };
 export function handleOpenCharacterDetailPage(id: string) {
 	push(`/character/${id}`);
 }

@@ -509,7 +509,7 @@
 
 <style>
 	.vn-player {
-		height: calc(100dvh - var(--titlebar-height));
+		height: 100%;
 		min-height: 0;
 		display: flex;
 		flex-direction: column;

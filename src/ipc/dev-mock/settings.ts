@@ -1,5 +1,5 @@
 // 설정 화면용 가짜 백엔드 (테마·API·프리셋·정규식·데이터·위젯)
-import type { DataOverview_Serialize, PhoneContact, PromptBlocks_Serialize, PromptPresetDetail_Serialize } from "../bindings";
+import type { DataOverview_Serialize, GameProject_Serialize, PhoneContact, PromptBlocks_Serialize, PromptPresetDetail_Serialize } from "../bindings";
 import { mockData } from "./chat";
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -19,6 +19,9 @@ const contacts: PhoneContact[] = [
 	{ ownerKind: "character", ownerId: "aria", contactKind: "character", contactId: "sera", status: "", sortOrder: 0, createdAt: 0 },
 	{ ownerKind: "character", ownerId: "aria", contactKind: "persona", contactId: "min", status: "숲에서 만난 여행자", sortOrder: 1, createdAt: 0 },
 ];
+const gameList: GameProject_Serialize[] = [{ id: "g1", title: "숲의 수수께끼", description: "숲에서 길을 잃은 당신과 견습 마법사의 일주일", templateId: "dating-sim", version: "1.0.0", apiVersion: "1", coverImage: null, startSceneKey: null, startMapId: null, startLocationId: null, worldInfoIds: [], customCss: null, settingsJson: null, createdAt: 0, updatedAt: Date.now() - 3_600_000 }];
+const session = (id: string, scene: string, ago: number, seq: number) => ({ id, gameId: "g1", playerId: "min", currentSceneId: scene, currentMapId: null, currentZoneId: null, currentLocationId: null, currentWeatherId: null, gameTime: 8 * 3600 + seq * 600, flagsJson: {}, parentSessionId: null, pendingScenesJson: [], inventoryJson: {}, relationshipsJson: {}, stageJson: {}, forkedFromSeq: null, headSeq: seq, createdAt: Date.now() - ago, updatedAt: Date.now() - ago });
+const sessions = [session("ss1", "s2", 3_600_000, 12), session("ss2", "s1", 86_400_000 * 2, 3)];
 let pendingRestore: null | { createdAt: number } = null;
 
 const block = (presetId: string, i: number, identifier: string, name: string, content = "", extra: Partial<PromptBlocks_Serialize> = {}): PromptBlocks_Serialize => ({
@@ -109,7 +112,51 @@ export const settingsHandlers: Record<string, (a: Args) => unknown> = {
 		characters.push(c);
 		return c;
 	},
-	game_list: () => [{ id: "g1", title: "숲의 수수께끼", description: "비주얼 노벨 템플릿", templateId: "vn", version: "1.0.0", apiVersion: "1", coverImage: null, startSceneKey: null, createdAt: 0, updatedAt: 0 }],
+	game_list: () => gameList,
+	list_templates: () => [{ id: "dating-sim", name: "연애 시뮬레이션", apiVersion: "1", templateVersion: "1.0.0", capabilities: { choices: true, freeText: true, inventory: true, map: true, aiNarration: true, location: true, time: true } }],
+	create_game: ({ title, templateId }) => {
+		const g = { ...gameList[0], id: uid("g"), title, templateId, description: null, createdAt: now(), updatedAt: now() };
+		gameList.unshift(g);
+		return g;
+	},
+	delete_game: ({ gameId }) => {
+		gameList.splice(
+			gameList.findIndex((g) => g.id === gameId),
+			1,
+		);
+		return null;
+	},
+	close_game: () => null,
+	export_game: ({ gameId }) => `C:/Users/me/Downloads/${gameId}.zip`,
+	open_game: ({ gameId }) => {
+		const project = gameList.find((g) => g.id === gameId);
+		if (!project) throw { code: "RESOURCE_NOT_FOUND", category: "NOT_FOUND", message: "게임 없음", retryable: false };
+		return {
+			project,
+			contentHash: "h1",
+			assetBaseUrl: `http://game.localhost/${gameId}/`,
+			diagnostics: [{ severity: "warning", message: "배경 없는 장소", targets: ["광장"], text: "배경 없는 장소: [광장]" }],
+			view: {
+				scenes: [{ id: "s1", sceneKey: "intro", name: "숲 입구" }, { id: "s2", sceneKey: "cabin", name: "오두막" }],
+				characters: [{ id: "gc1", name: "엘리안", avatar: null, description: "숲을 지키는 견습 마법사\n말수가 적음" }, { id: "gc2", name: "루카", avatar: null, description: "떠돌이 상인" }],
+			},
+		};
+	},
+	list_sessions: () => sessions,
+	delete_sessions: ({ sessionId }) => {
+		sessions.splice(
+			sessions.findIndex((x) => x.id === sessionId),
+			1,
+		);
+		return null;
+	},
+	validate_game: () => [],
+	copy_game_character_to_character: ({ gameCharacterId }) => {
+		const name = gameCharacterId === "gc1" ? "엘리안" : "루카";
+		const c = { ...characters[0], id: uid("ch"), name, avatar: null, description: "게임에서 가져옴", firstMessage: null, alternateFirstMessage: [], creatorNotes: null, tags: [], favorite: false, createdAt: now(), updatedAt: now() };
+		characters.push(c);
+		return c;
+	},
 	copy_character_to_game: ({ characterId, gameId }) => ({ id: uid("gc"), gameId, characterId, name: characters.find((c) => c.id === characterId)?.name ?? "", avatar: null, description: null, firstMessage: null, exampleDialogue: null, systemPromptOverride: null, behaviorType: null, worldInfoIds: [], tags: [], settingsJson: {}, createdAt: now(), updatedAt: now() }),
 
 	// ---- 폰 연락처 (주인·연락처가 각각 페르소나나 캐릭터) ----

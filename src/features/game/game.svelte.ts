@@ -1,0 +1,90 @@
+// 게임 목록·열린 게임·세션. 플레이·에디터는 예전 화면을 새 틀 안에서 그대로 쓴다 (gameStore 등과 같은 데이터를 공유)
+import type {
+	GamePlayerSessions_Serialize as Session,
+	GameProject_Serialize as GameProject,
+	Issue,
+	OpenGameResponse_Serialize as OpenGame,
+	Template_Serialize as Template,
+} from "$ipc/bindings";
+import { call, commands } from "$shared/ipc/client";
+import { gameStore } from "$lib/game/stores/gameStore.svelte";
+
+export type { GameProject, Session, Template, Issue };
+const src = { source: "game" };
+
+/** 게임 폴더 파일 주소 (open_game의 assetBaseUrl과 같은 규칙) */
+export function gameAssetUrl(gameId: string, path: string | null | undefined) {
+	if (!path) return null;
+	if (/^(https?:|data:|blob:)/.test(path)) return path;
+	const win = /Windows|Android/i.test(navigator.userAgent);
+	const base = win ? `http://game.localhost/${gameId}/` : `game://localhost/${gameId}/`;
+	return base + path.split("/").map(encodeURIComponent).join("/");
+}
+
+class Games {
+	list = $state<GameProject[]>([]);
+	templates = $state<Template[]>([]);
+	loaded = $state(false);
+	/** 지금 열린 게임 (세션 목록·플레이·에디터가 이 게임 기준) */
+	opened = $state<OpenGame | null>(null);
+	sessions = $state<Session[]>([]);
+
+	async load() {
+		const [list, templates] = await Promise.all([
+			call(commands.gameList(), src).catch(() => [] as GameProject[]),
+			call(commands.listTemplates(), { ...src, silent: true }).catch(() => [] as Template[]),
+		]);
+		this.list = list.sort((a, b) => b.updatedAt - a.updatedAt);
+		this.templates = templates;
+		this.loaded = true;
+	}
+	game(id: string | null | undefined) {
+		return this.list.find((g) => g.id === id);
+	}
+	template(id: string) {
+		return this.templates.find((t) => t.id === id);
+	}
+
+	/** 게임 열기 (백엔드의 "지금 게임"을 바꿈). 세션 목록도 다시 읽음 */
+	async open(gameId: string) {
+		if (this.opened?.project.id !== gameId) {
+			const g = await call(commands.openGame(gameId), src);
+			this.opened = g;
+			gameStore.setBundle(g as never);
+		}
+		this.sessions = await call(commands.listSessions(), { ...src, silent: true }).catch(() => []);
+		this.sessions.sort((a, b) => b.updatedAt - a.updatedAt);
+		return this.opened!;
+	}
+
+	async create(title: string, templateId: string) {
+		const g = await call(commands.createGame(title, templateId), src);
+		this.list = [g, ...this.list];
+		return g;
+	}
+	async import(path: string) {
+		const g = await call(commands.importGame(path), src);
+		this.list = [g, ...this.list.filter((x) => x.id !== g.id)];
+		return g;
+	}
+	async export(gameId: string) {
+		return call(commands.exportGame(gameId, null), src);
+	}
+	async remove(gameId: string) {
+		if (this.opened?.project.id === gameId) {
+			await call(commands.closeGame(), { ...src, silent: true }).catch(() => {});
+			this.opened = null;
+		}
+		await call(commands.deleteGame(gameId), src);
+		this.list = this.list.filter((g) => g.id !== gameId);
+	}
+	async removeSession(id: string) {
+		await call(commands.deleteSessions(id), src);
+		this.sessions = this.sessions.filter((s) => s.id !== id);
+	}
+	async validate() {
+		return call(commands.validateGame(), src);
+	}
+}
+
+export const games = new Games();
