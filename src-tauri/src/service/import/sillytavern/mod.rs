@@ -8,14 +8,16 @@
 //! | Chat Completion 프리셋 (.json)          | 프롬프트 프리셋 + 블록 + 프리셋 정규식              |
 //! | 정규식 스크립트 (.json, 하나 또는 배열)      | 전역 정규식                                    |
 //! | 월드인포 (.json)                        | 로어북                                        |
+//! | 채팅 기록 (.jsonl)                       | 대화 + 메시지 (스와이프·숨김·생성 정보 포함)        |
 //!
 //! 지원하지 않는 필드는 버리지 않고 원본(compatibility_json / extra_json)에 남기거나 경고로 알린다.
 pub mod card;
+pub mod chat;
 pub mod preset;
 pub mod regex;
 pub mod worldinfo;
 
-use std::path::Path;
+use std::{collections::HashMap, path::Path};
 
 use serde::Serialize;
 use serde_json::Value;
@@ -25,7 +27,9 @@ use crate::{
     db::{self, conn::DbPool},
     error::{AppError, Result},
     models::{
-        conversation::{Character, WorldInfoBook, WorldInfoBookInput},
+        conversation::{
+            Character, Conversation, ConversationInput, MessageInput, WorldInfoBook, WorldInfoBookInput,
+        },
         regex::{RegexScope, RegexScript, RegexScriptInput},
     },
     service::chat::regex_processor::validate_script,
@@ -40,6 +44,16 @@ pub enum SillyTavernKind {
     Preset,
     Regex,
     WorldInfo,
+    Chat,
+}
+
+/// 가져오기 옵션
+#[derive(Debug, Clone, Default)]
+pub struct ImportOptions {
+    /// 프리셋/로어북/대화 이름 (없으면 파일 이름)
+    pub name: Option<String>,
+    /// 채팅을 붙일 캐릭터. 없으면 메시지의 캐릭터 이름으로 찾는다.
+    pub character_id: Option<String>,
 }
 
 #[derive(Serialize)]
@@ -64,12 +78,23 @@ pub enum SillyTavernImport {
     Regex { scripts: Vec<RegexScript>, warnings: Vec<String> },
     #[serde(rename_all = "camelCase")]
     WorldInfo { book: WorldInfoBook, entry_count: usize, warnings: Vec<String> },
+    #[serde(rename_all = "camelCase")]
+    Chat {
+        conversation: Conversation,
+        message_count: usize,
+        hidden_count: usize,
+        warnings: Vec<String>,
+    },
 }
 
 /// 파일 내용으로 종류 판별
 pub fn detect(bytes: &[u8]) -> Result<(SillyTavernKind, Value)> {
     if card::is_png(bytes) {
         return Ok((SillyTavernKind::Character, card::card_json_from_png(bytes)?));
+    }
+    // .jsonl 채팅은 파일 전체가 JSON 하나가 아니므로 먼저 본다 (내용은 import_chat에서 다시 읽음)
+    if chat::looks_like_chat(bytes) {
+        return Ok((SillyTavernKind::Chat, Value::Null));
     }
     let json: Value = serde_json::from_slice(bytes)
         .map_err(|e| AppError::validation(format!("JSON 파일을 읽을 수 없습니다: {e}"), None))?;
@@ -100,6 +125,16 @@ pub async fn import_file(
     path: &Path,
     name: Option<String>,
 ) -> Result<SillyTavernImport> {
+    import_file_with(db, app_data_dir, path, ImportOptions { name, ..Default::default() }).await
+}
+
+pub async fn import_file_with(
+    db: &DbPool,
+    app_data_dir: &Path,
+    path: &Path,
+    options: ImportOptions,
+) -> Result<SillyTavernImport> {
+    let name = options.name;
     let meta = std::fs::metadata(path).map_err(|e| AppError::io(format!("파일을 열 수 없습니다: {e}")))?;
     if meta.len() > MAX_FILE_BYTES {
         return Err(AppError::validation("파일이 너무 큽니다 (50MB 이하)", None));
@@ -119,7 +154,141 @@ pub async fn import_file(
         SillyTavernKind::Preset => import_preset(db, &json, &file_name).await,
         SillyTavernKind::Regex => import_regex(db, &json).await,
         SillyTavernKind::WorldInfo => import_worldinfo(db, &json, &file_name).await,
+        SillyTavernKind::Chat => import_chat(db, &bytes, &file_name, options.character_id).await,
     }
+}
+
+async fn import_chat(
+    db: &DbPool,
+    bytes: &[u8],
+    title: &str,
+    character_id: Option<String>,
+) -> Result<SillyTavernImport> {
+    let (header, raw) = chat::parse_jsonl(bytes)?;
+    if raw.is_empty() {
+        return Err(AppError::validation("채팅에 메시지가 없습니다", None));
+    }
+    let mut warnings = vec![];
+    let messages = chat::map_messages(&raw, &mut warnings);
+
+    // 말한 캐릭터 이름 (많이 말한 순)
+    let mut counts: Vec<(String, usize)> = vec![];
+    for m in messages.iter().filter(|m| m.role == "assistant" && !m.name.is_empty()) {
+        match counts.iter_mut().find(|(n, _)| *n == m.name) {
+            Some((_, c)) => *c += 1,
+            None => counts.push((m.name.clone(), 1)),
+        }
+    }
+    counts.sort_by(|a, b| b.1.cmp(&a.1));
+    let speakers: Vec<String> = counts.into_iter().map(|(n, _)| n).collect();
+
+    // 이름 → 캐릭터 id (동명이인이 없을 때만)
+    let mut by_name: HashMap<String, Option<String>> = HashMap::new();
+    for s in &speakers {
+        let ids = db::conversation::find_character_ids_by_name(db, s).await?;
+        by_name.insert(s.clone(), (ids.len() == 1).then(|| ids[0].clone()));
+    }
+
+    let main_character = match character_id.filter(|s| !s.is_empty()) {
+        Some(id) => {
+            if !db::conversation::char_exists(db, &id).await? {
+                return Err(AppError::not_found("존재하지 않는 캐릭터입니다"));
+            }
+            id
+        }
+        None => speakers
+            .iter()
+            .find_map(|s| by_name.get(s).cloned().flatten())
+            .ok_or_else(|| AppError::Validation {
+                code: crate::error::ErrorCode::InvalidInput,
+                message: "어떤 캐릭터의 채팅인지 찾지 못했습니다. 캐릭터를 먼저 가져오거나 직접 골라 주세요".into(),
+                details: Some(serde_json::json!({ "speakers": speakers })),
+            })?,
+    };
+    // 1:1 채팅이면 이름이 달라도 그 캐릭터의 말로 본다
+    if speakers.len() == 1 {
+        by_name.insert(speakers[0].clone(), Some(main_character.clone()));
+    }
+    let unmatched: Vec<&str> = speakers
+        .iter()
+        .filter(|s| by_name.get(*s).cloned().flatten().is_none())
+        .map(String::as_str)
+        .collect();
+    if !unmatched.is_empty() {
+        warnings.push(format!("캐릭터를 찾지 못한 화자: {} (이름만 표시됨)", unmatched.join(", ")));
+    }
+
+    // 페르소나: 사용자 이름과 같은 페르소나가 하나 있으면 그것, 아니면 기본 페르소나
+    let user_name = messages.iter().find(|m| m.is_user()).map(|m| m.name.clone()).unwrap_or_default();
+    let persona_ids = db::conversation::find_persona_ids_by_name(db, &user_name).await?;
+    let persona_id = if persona_ids.len() == 1 {
+        persona_ids[0].clone()
+    } else {
+        db::conversation::get_system_default_persona(db)
+            .await
+            .unwrap_or_else(|_| "default".into())
+    };
+
+    if as_str(&header["chat_metadata"], "note_prompt").is_some_and(|s| !s.trim().is_empty()) {
+        warnings.push("작가 노트(Author's Note)는 지원하지 않아 원본에만 보존함".into());
+    }
+
+    let start = chrono::Utc::now().timestamp_millis() - messages.len() as i64;
+    let times = chat::monotonic_times(&messages, start);
+    let hidden_count = messages.iter().filter(|m| m.hidden).count();
+    let message_count = messages.len();
+
+    let mut tx = db.begin().await?;
+    let conversation = db::conversation::create_conversation(
+        &mut *tx,
+        ConversationInput {
+            title: title.to_string(),
+            character_id: main_character.clone(),
+            persona_id: persona_id.clone(),
+            world_info_ids: vec![],
+            mode: "chat".into(),
+            meta: Some(serde_json::json!({
+                "importedFrom": "sillytavern",
+                "sillytavern": {
+                    "chatMetadata": header["chat_metadata"],
+                    "userName": header["user_name"],
+                    "characterName": header["character_name"],
+                }
+            })),
+            images_enabled: None,
+        },
+    )
+    .await?;
+
+    for (i, (m, at)) in messages.into_iter().zip(times).enumerate() {
+        let character_id = match m.role.as_str() {
+            "assistant" => by_name.get(&m.name).cloned().flatten(),
+            _ => None,
+        };
+        let mut meta = m.meta;
+        let sender_id = if m.role == "user" { Some(persona_id.clone()) } else { character_id.clone() };
+        if let (Some(id), Some(sender)) = (sender_id, meta.get_mut("sender").and_then(Value::as_object_mut)) {
+            sender.insert("id".into(), Value::String(id));
+        }
+        db::conversation::insert_message_at(
+            &mut *tx,
+            MessageInput {
+                conversation_id: conversation.id.clone(),
+                seq: i as i64 + 1,
+                role: m.role,
+                name: Some(m.name).filter(|n| !n.is_empty()),
+                content: m.content,
+                character_id,
+                meta: Some(meta),
+            },
+            at,
+        )
+        .await?;
+    }
+    tx.commit().await?;
+
+    let conversation = db::conversation::get_conversation(db, &conversation.id).await?;
+    Ok(SillyTavernImport::Chat { conversation, message_count, hidden_count, warnings })
 }
 
 async fn import_character(

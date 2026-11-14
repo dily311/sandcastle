@@ -87,3 +87,56 @@ async fn image_keys_are_unique_per_character_ignoring_case() {
     assert_eq!(enabled.iter().map(|r| r.key.as_str()).collect::<Vec<_>>(), vec!["Smile"]);
     assert_eq!(ci::next_image_sort_order(&pool, "c1").await.unwrap(), 6);
 }
+
+#[tokio::test]
+async fn conversation_world_info_comes_from_conversation_character_and_persona() {
+    use crate::models::conversation::{WorldInfoBookInput, WorldInfoEntryInput};
+    let pool = pool().await;
+    let mut books = vec![];
+    for name in ["conv", "char", "persona", "unrelated"] {
+        let b = conv::create_worldinfo_book(&pool, WorldInfoBookInput { id: None, name: name.into(), description: None })
+            .await
+            .unwrap();
+        conv::upsert_worldinfo_entry(
+            &pool,
+            WorldInfoEntryInput {
+                id: None,
+                book_id: b.id.clone(),
+                keys: vec![],
+                secondary_keys: vec![],
+                content: name.into(),
+                enabled: true,
+                priority: 0,
+                constant: true,
+            },
+        )
+        .await
+        .unwrap();
+        books.push(b.id);
+    }
+    conv::create_character_worldinfo_ids(&pool, "c1", &books[1]).await.unwrap();
+    conv::create_persona_worldinfo_ids(&pool, "default", &books[2]).await.unwrap();
+    let c = conv::create_conversation(
+        &pool,
+        ConversationInput {
+            title: "t".into(),
+            character_id: "c1".into(),
+            persona_id: "default".into(),
+            world_info_ids: vec![books[0].clone()],
+            mode: "chat".into(),
+            meta: None,
+            images_enabled: None,
+        },
+    )
+    .await
+    .unwrap();
+
+    let mut got: Vec<String> = conv::get_all_conv_worldinfo_book_with_entries(&pool, &c.id, "c1", "default")
+        .await
+        .unwrap()
+        .into_iter()
+        .map(|e| e.content)
+        .collect();
+    got.sort();
+    assert_eq!(got, vec!["char", "conv", "persona"]);
+}

@@ -16,8 +16,10 @@ impl ContextManager {
             get_all_conv_worldinfo_book_with_entries(pool, &request.conversation_id, &request.character_id, &request.persona_id)
         )?;
 
+        // 숨긴 메시지(meta.hidden, SillyTavern의 is_system)는 화면에만 남고 AI에게는 보내지 않는다
         let history = messages
             .into_iter()
+            .filter(|m| !is_hidden(m.meta.as_ref()))
             .map(|m| HistoryItem {
                 role: m.role,
                 content: m.content,
@@ -41,4 +43,9 @@ impl ContextManager {
     pub async fn build_game_mode_context(&self, request: &ContextRequest) -> Result<ChatContext> {
         todo!()
     }
+}
+
+/// 메시지 meta의 hidden 플래그
+pub fn is_hidden(meta: Option<&serde_json::Value>) -> bool {
+    meta.and_then(|m| m.get("hidden")).and_then(serde_json::Value::as_bool).unwrap_or(false)
 }

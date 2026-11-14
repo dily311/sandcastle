@@ -161,6 +161,11 @@ fn detect_kinds() {
     assert_eq!(kind(json!({ "prompts": [] })).unwrap(), SillyTavernKind::Preset);
     assert_eq!(kind(json!({ "findRegex": "/a/" })).unwrap(), SillyTavernKind::Regex);
     assert_eq!(kind(json!({ "entries": {} })).unwrap(), SillyTavernKind::WorldInfo);
+    assert_eq!(
+        detect(b"{\"user_name\":\"u\",\"character_name\":\"c\",\"chat_metadata\":{}}
+{\"mes\":\"x\"}").unwrap().0,
+        SillyTavernKind::Chat
+    );
     assert!(kind(json!({ "hello": 1 })).is_err());
     assert!(detect(b"not json").is_err());
 }
@@ -315,4 +320,89 @@ async fn st_persona_avatar_is_not_a_card() {
         .err()
         .expect("데이터 없는 PNG는 거부");
     assert!(err.to_response().message.contains("캐릭터 카드 데이터"));
+}
+
+fn st_chat_sample() -> std::path::PathBuf {
+    let dir = st_sample("chats/Seraphina");
+    std::fs::read_dir(dir)
+        .unwrap()
+        .map(|e| e.unwrap().path())
+        .find(|p| p.extension().is_some_and(|e| e == "jsonl"))
+        .expect("채팅 샘플")
+}
+
+#[tokio::test]
+async fn st_chat_attaches_to_character_by_name() {
+    let db = pool().await;
+    let dir = tempfile::tempdir().unwrap();
+    let (character, _) = import_seraphina(&db, dir.path()).await;
+
+    let SillyTavernImport::Chat { conversation, message_count, hidden_count, warnings } =
+        import_file(&db, dir.path(), &st_chat_sample(), None).await.unwrap()
+    else {
+        panic!("채팅이어야 함")
+    };
+    assert_eq!(conversation.character_id, character.id);
+    assert_eq!(conversation.mode, "chat");
+    assert!(conversation.title.starts_with("Seraphina - 2026-03-18"));
+    assert_eq!((message_count, hidden_count), (12, 3));
+    assert_eq!(conversation.message_count, 12);
+    assert_eq!(warnings.len(), 1, "첫 메시지의 swipe_id(5)가 스와이프 수와 맞지 않음: {warnings:?}");
+    assert_eq!(conversation.meta.as_ref().unwrap()["importedFrom"], "sillytavern");
+
+    let msgs = db::conversation::get_messages(&db, &conversation.id, 100, None).await.unwrap();
+    assert_eq!(msgs.iter().map(|m| m.seq).collect::<Vec<_>>(), (1..=12).collect::<Vec<_>>(), "시간 순서 = 원래 순서");
+    assert_eq!(msgs[0].content, "mes content <cg>amusement</cg>");
+    assert_eq!(msgs[0].character_id.as_deref(), Some(character.id.as_str()));
+    let meta0 = msgs[0].meta.as_ref().unwrap();
+    assert_eq!(meta0["hidden"], true);
+    assert_eq!(meta0["sender"]["id"], character.id.as_str());
+    assert_eq!(msgs[5].role, "user");
+    assert_eq!(msgs[5].character_id, None);
+    assert_eq!(msgs[2].meta.as_ref().unwrap()["info"]["model"], "gemini-3.7-flash");
+
+    // 프롬프트용 기록에서는 숨긴 메시지(3개)가 빠진다
+    let ctx = crate::service::chat::context_manager::ContextManager
+        .build_context(
+            &db,
+            crate::models::ai_service::ContextRequest {
+                conversation_id: conversation.id.clone(),
+                character_id: character.id.clone(),
+                persona_id: conversation.persona_id.clone(),
+                history_limit: 100,
+            },
+        )
+        .await
+        .unwrap();
+    assert_eq!(ctx.history.len(), 9);
+    assert_eq!(ctx.world_info.len(), 4, "캐릭터에 연결된 Eldoria 로어북");
+    assert!(ctx.history.iter().all(|h| !h.content.contains("<cg>amusement")));
+}
+
+#[tokio::test]
+async fn st_chat_needs_a_character() {
+    let db = pool().await;
+    let dir = tempfile::tempdir().unwrap();
+    // 캐릭터가 없으면 화자 목록과 함께 거부
+    let err = import_file(&db, dir.path(), &st_chat_sample(), None).await.err().unwrap().to_response();
+    assert_eq!(err.details.unwrap()["speakers"], json!(["Seraphina"]));
+
+    // 직접 고르면 이름이 달라도 그 캐릭터에 붙는다
+    sqlx::query("INSERT INTO characters (id, name, created_at, updated_at) VALUES ('other', 'Someone', 0, 0)")
+        .execute(&db)
+        .await
+        .unwrap();
+    let SillyTavernImport::Chat { conversation, .. } = import_file_with(
+        &db,
+        dir.path(),
+        &st_chat_sample(),
+        ImportOptions { name: Some("가져온 대화".into()), character_id: Some("other".into()) },
+    )
+    .await
+    .unwrap() else {
+        panic!()
+    };
+    assert_eq!((conversation.character_id.as_str(), conversation.title.as_str()), ("other", "가져온 대화"));
+    let msgs = db::conversation::get_messages(&db, &conversation.id, 100, None).await.unwrap();
+    assert_eq!(msgs[0].character_id.as_deref(), Some("other"));
 }

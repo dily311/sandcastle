@@ -533,7 +533,12 @@ pub async fn get_all_conv_worldinfo_book_with_entries<'e, E>(executor: E, conver
         FROM worldinfo_entries
         WHERE enabled = 1
         AND book_id IN (
-            SELECT book_id FROM conversation_worldinfo WHERE conversation_id = ?
+            -- 대화에 직접 붙인 로어북은 conversations.world_info_ids(JSON 배열)에 있다
+            -- (예전에는 존재하지 않는 conversation_worldinfo 테이블을 읽어서 매번 실패했음)
+            SELECT j.value
+            FROM conversations c,
+                 json_each(CASE WHEN json_valid(c.world_info_ids) THEN c.world_info_ids ELSE '[]' END) j
+            WHERE c.id = ?
             UNION
             SELECT book_id FROM character_worldinfo WHERE character_id = ?
             UNION
@@ -731,6 +736,45 @@ pub async fn append_message<'e, E>(executor: E, input: MessageInput) -> Result<M
         created_at: now,
         updated_at: now,
     })
+}
+
+/// 가져오기용: 작성 시각을 지정해서 메시지 저장 (대화 기록 정렬이 created_at 기준이라 원래 시각이 필요)
+pub async fn insert_message_at<'e, E>(executor: E, input: MessageInput, created_at: i64) -> Result<(), Error> where E: Executor<'e, Database = Sqlite>,{
+    let id = Uuid::new_v4().to_string();
+    let meta = input.meta.as_ref().map(|m| m.to_string());
+    sqlx::query(
+        "INSERT INTO messages (id,conversation_id,seq,role,name,content,character_id,meta,created_at,updated_at)
+         VALUES (?,?,?,?,?,?,?,?,?,?)",
+    )
+    .bind(&id)
+    .bind(&input.conversation_id)
+    .bind(input.seq)
+    .bind(&input.role)
+    .bind(&input.name)
+    .bind(&input.content)
+    .bind(&input.character_id)
+    .bind(meta)
+    .bind(created_at)
+    .bind(created_at)
+    .execute(executor)
+    .await?;
+    Ok(())
+}
+
+/// 이름으로 캐릭터 찾기 (대소문자 무시). 동명이인이 있을 수 있어 목록으로 돌려준다.
+pub async fn find_character_ids_by_name<'e, E>(executor: E, name: &str) -> Result<Vec<String>, Error> where E: Executor<'e, Database = Sqlite>,{
+    sqlx::query_scalar("SELECT id FROM characters WHERE name = ? COLLATE NOCASE")
+        .bind(name.trim())
+        .fetch_all(executor)
+        .await
+}
+
+/// 이름으로 페르소나 찾기 (대소문자 무시)
+pub async fn find_persona_ids_by_name<'e, E>(executor: E, name: &str) -> Result<Vec<String>, Error> where E: Executor<'e, Database = Sqlite>,{
+    sqlx::query_scalar("SELECT id FROM personas WHERE name = ? COLLATE NOCASE")
+        .bind(name.trim())
+        .fetch_all(executor)
+        .await
 }
 
 pub async fn update_message<'e, E>(executor: E, id: &str, content: &str, meta: &Option<serde_json::Value>) -> Result<bool, Error> where E: Executor<'e, Database = Sqlite>,{
