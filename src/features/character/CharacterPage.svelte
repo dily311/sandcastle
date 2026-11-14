@@ -9,10 +9,11 @@
 	import { toasts } from "$shared/stores/toast.svelte";
 	import { absolute, relative } from "$shared/time";
 	import ChatView from "./ChatView.svelte";
+	import CharacterEditor from "./CharacterEditor.svelte";
 	import { library, type Character } from "./library.svelte";
 
 	// 캐릭터 목록 → 캐릭터 상세 → 대화 상세 (대화 목록·폴더는 대화 상세의 왼쪽 사이드바)
-	let { charId, convId }: { charId?: string; convId?: string } = $props();
+	let { charId, convId, edit = false }: { charId?: string; convId?: string; edit?: boolean } = $props();
 
 	$effect(() => {
 		if (!library.loaded) void library.load();
@@ -30,6 +31,13 @@
 			.filter((c) => !query.trim() || c.name.toLowerCase().includes(query.trim().toLowerCase()) || c.tags.some((t) => t.toLowerCase().includes(query.trim().toLowerCase())))
 			.sort((a, b) => Number(b.favorite) - Number(a.favorite) || lastActive(b.id) - lastActive(a.id) || a.name.localeCompare(b.name, "ko")),
 	);
+	/** 제작자 메모는 HTML이 섞여 올 때가 많음 → 태그를 빼고 글만 (스크립트 실행 없음) */
+	function plain(html: string) {
+		if (!/<[a-z][\s\S]*>/i.test(html)) return html;
+		const withBreaks = html.replace(/<br\s*\/?>/gi, "\n").replace(/<\/(p|div|h\d|li)>/gi, "\n");
+		const doc = new DOMParser().parseFromString(withBreaks, "text/html");
+		return (doc.body.textContent ?? "").replace(/\n{3,}/g, "\n\n").trim();
+	}
 	const firstLine = (s: string) => s.split("\n").find((l) => l.trim())?.trim() ?? "";
 
 	async function importFiles() {
@@ -72,7 +80,7 @@
 		const c = character;
 		if (!c) return [];
 		return [
-			{ label: "편집 (준비 중)", icon: Pencil, disabled: true, onselect: () => {} },
+			{ label: "편집", icon: Pencil, onselect: () => nav.go({ page: "character", charId: c.id, edit: true }) },
 			{ label: c.favorite ? "즐겨찾기 해제" : "즐겨찾기", icon: c.favorite ? StarOff : Star, onselect: () => toggleFavorite(c) },
 			{ label: "캐릭터와 대화 모두 내보내기", icon: Download, onselect: () => exportCharacter(c) },
 			{ label: "삭제", icon: Trash2, danger: true, separator: true, onselect: () => removeCharacter(c) },
@@ -101,6 +109,10 @@
 	<div class="center"><Spinner /></div>
 {:else if charId && convId}
 	<ChatView {charId} {convId} onopen={(id) => open(charId, id)} />
+{:else if charId && character && edit}
+	{#key character.id}
+		<CharacterEditor {character} />
+	{/key}
 {:else if charId && character}
 	<div class="detail">
 		<div class="banner"></div>
@@ -136,10 +148,12 @@
 
 		<div class="body">
 			{#if tab === "overview"}
-				{#if character.description.trim()}
+				{#if character.creatorNotes?.trim()}
+					<div class="intro">{plain(character.creatorNotes)}</div>
+				{:else if character.description.trim()}
 					<div class="intro">{character.description}</div>
 				{:else}
-					<p class="none">소개 없음</p>
+					<p class="none">소개 없음 · <button class="link" onclick={() => nav.go({ page: "character", charId: character.id, edit: true })}>편집에서 쓰기</button></p>
 				{/if}
 			{:else}
 				<ul class="recent">
@@ -400,5 +414,16 @@
 		padding: var(--space-6);
 		text-align: center;
 		color: var(--text-faint);
+	}
+	.link {
+		padding: 0;
+		border: none;
+		background: none;
+		color: var(--accent-text);
+		font: inherit;
+		cursor: pointer;
+	}
+	.link:hover {
+		text-decoration: underline;
 	}
 </style>

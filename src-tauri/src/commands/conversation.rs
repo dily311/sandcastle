@@ -111,19 +111,87 @@ pub async fn create_character(
     state: State<'_, AppState>,
     input: CharacterInput,
 ) -> Result<Character> {
-    let character = conversation::create_character(&state.db, input).await?;
+    let books = input.world_info_ids.clone();
+    let mut tx = state.db.begin().await?;
+    let character = conversation::create_character(&mut *tx, input).await?;
+    conversation::replace_character_worldinfo(&mut tx, &character.id, &books).await?;
+    tx.commit().await?;
     Ok(character)
 }
 
+/// 캐릭터 저장. 월드인포 연결도 `world_info_ids`로 통째로 바꾼다
 #[tauri::command]
 #[specta::specta]
 pub async fn update_character(
     state: State<'_, AppState>,
     id: String,
     input: CharacterInput,
-) -> Result<()> {
-    conversation::update_character(&state.db, &id, &input).await?;
-    Ok(())
+) -> Result<Character> {
+    if input.name.trim().is_empty() {
+        return Err(AppError::validation("이름이 비어 있습니다", None));
+    }
+    let mut tx = state.db.begin().await?;
+    conversation::update_character(&mut *tx, &id, &input).await?;
+    conversation::replace_character_worldinfo(&mut tx, &id, &input.world_info_ids).await?;
+    tx.commit().await?;
+    conversation::get_character(&state.db, &id)
+        .await
+        .map_err(|_| AppError::not_found(format!("캐릭터를 찾을 수 없습니다: {id}")))
+}
+
+/// 캐릭터 아바타: 고른 이미지를 앱 데이터 characters/avatars로 복사. `path`가 없으면 지운다
+#[tauri::command]
+#[specta::specta]
+pub async fn set_character_avatar(
+    app: tauri::AppHandle,
+    state: State<'_, AppState>,
+    id: String,
+    path: Option<String>,
+) -> Result<Character> {
+    let old = conversation::get_character(&state.db, &id)
+        .await
+        .map_err(|_| AppError::not_found(format!("캐릭터를 찾을 수 없습니다: {id}")))?;
+    let dir = crate::commands::character_image::app_data_dir(&app)?.join("characters").join("avatars");
+    let avatar = match path {
+        Some(src) => Some(copy_avatar(&dir, &src, "character")?),
+        None => None,
+    };
+    conversation::set_character_avatar(&state.db, &id, avatar.as_deref()).await?;
+    remove_unused_avatar(&state, &dir, old.avatar.as_deref()).await;
+    Ok(conversation::get_character(&state.db, &id).await?)
+}
+
+/// 이미지 파일을 아바타 폴더로 복사하고 새 경로를 돌려준다
+fn copy_avatar(dir: &std::path::Path, src: &str, prefix: &str) -> Result<String> {
+    let src = std::path::PathBuf::from(src);
+    let ext = src
+        .extension()
+        .and_then(|e| e.to_str())
+        .map(|e| e.to_ascii_lowercase())
+        .filter(|e| matches!(e.as_str(), "png" | "jpg" | "jpeg" | "webp" | "gif"))
+        .ok_or_else(|| AppError::validation("png, jpg, webp, gif 이미지만 쓸 수 있습니다", None))?;
+    std::fs::create_dir_all(dir).map_err(|e| AppError::io(e.to_string()))?;
+    let dest = dir.join(format!("{prefix}-{}.{ext}", uuid::Uuid::new_v4()));
+    std::fs::copy(&src, &dest).map_err(|e| AppError::io(format!("이미지를 복사할 수 없습니다: {e}")))?;
+    Ok(dest.to_string_lossy().to_string())
+}
+
+/// 앱 아바타 폴더 안의 파일이고, 다른 캐릭터·페르소나가 쓰지 않으면 지운다
+async fn remove_unused_avatar(state: &AppState, dir: &std::path::Path, avatar: Option<&str>) {
+    let Some(a) = avatar else { return };
+    if !std::path::Path::new(a).starts_with(dir) {
+        return;
+    }
+    let used: i64 = sqlx::query_scalar(
+        "SELECT (SELECT COUNT(*) FROM characters WHERE avatar = ?1) + (SELECT COUNT(*) FROM personas WHERE avatar = ?1)",
+    )
+    .bind(a)
+    .fetch_one(&state.db)
+    .await
+    .unwrap_or(1);
+    if used == 0 {
+        let _ = std::fs::remove_file(a);
+    }
 }
 
 #[tauri::command]
@@ -209,19 +277,7 @@ pub async fn set_persona_avatar(
     let dir = base.join("characters").join("avatars");
 
     let avatar = match path {
-        Some(src) => {
-            let src = std::path::PathBuf::from(src);
-            let ext = src
-                .extension()
-                .and_then(|e| e.to_str())
-                .map(|e| e.to_ascii_lowercase())
-                .filter(|e| matches!(e.as_str(), "png" | "jpg" | "jpeg" | "webp" | "gif"))
-                .ok_or_else(|| AppError::validation("png, jpg, webp, gif 이미지만 쓸 수 있습니다", None))?;
-            std::fs::create_dir_all(&dir).map_err(|e| AppError::io(e.to_string()))?;
-            let dest = dir.join(format!("persona-{}.{ext}", uuid::Uuid::new_v4()));
-            std::fs::copy(&src, &dest).map_err(|e| AppError::io(format!("이미지를 복사할 수 없습니다: {e}")))?;
-            Some(dest.to_string_lossy().to_string())
-        }
+        Some(src) => Some(copy_avatar(&dir, &src, "persona")?),
         None => None,
     };
     conversation::set_persona_avatar(&state.db, &id, avatar.as_deref()).await?;

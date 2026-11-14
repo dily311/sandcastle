@@ -72,6 +72,21 @@ export const settingsHandlers: Record<string, (a: Args) => unknown> = {
 	set_system_default_persona: ({ id }) => ((defaultPersona = id), null),
 	get_conv_settings: () => ({ defaultPersonaId: defaultPersona }),
 
+	// ---- 캐릭터 편집 ----
+	update_character: ({ id, input }) => {
+		const c = characters.find((x) => x.id === id);
+		if (!c) throw { code: "RESOURCE_NOT_FOUND", category: "NOT_FOUND", message: "캐릭터 없음", retryable: false };
+		Object.assign(c, input, { updatedAt: now() });
+		return c;
+	},
+	set_character_avatar: ({ id, path }) => {
+		const c = characters.find((x) => x.id === id)!;
+		c.avatar = path
+			? "data:image/svg+xml," + encodeURIComponent('<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 10 10"><rect width="10" height="10" fill="#cf6a43"/><circle cx="5" cy="4" r="2" fill="#fff"/></svg>')
+			: null;
+		return c;
+	},
+
 	// ---- 폰 연락처 ----
 	list_phone_contacts: ({ personaId }) => contacts.filter((c) => c.personaId === personaId),
 	add_phone_contact: ({ personaId, characterId }) => {

@@ -207,6 +207,8 @@ pub struct ChatContext {
     pub character_info: Option<String>,
     pub persona_info: String,
     pub example_dialogue: Option<String>,
+    /// 캐릭터의 시스템 프롬프트 덮어쓰기: 프리셋의 main 블록 내용을 대신함 (비면 프리셋 그대로)
+    pub main_prompt: Option<String>,
     pub world_info: Vec<WorldInfoEntry>,
     pub history: Vec<HistoryItem>,
     pub extra_data: serde_json::Value,

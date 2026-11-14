@@ -365,6 +365,7 @@ async fn converse(app: AppHandle, state: &State<'_, AppState>, settings: &State<
         },
         character_info: snap.character_info,
         example_dialogue: snap.example_dialogue,
+        main_prompt: None,
         persona_info,
         world_info,
         history,

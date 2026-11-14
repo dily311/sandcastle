@@ -316,11 +316,6 @@ impl ChatManager {
             .filter(|s| !s.is_empty())
             .or(Some(fallback.api_profile_id).filter(|s| !s.is_empty()))
             .ok_or_else(|| AppError::validation("API를 먼저 고르세요 (대화 설정 또는 설정 > API 키)", None))?;
-        let preset_id = conv
-            .prompt_preset_id
-            .clone()
-            .filter(|s| !s.is_empty())
-            .unwrap_or(fallback.preset_id);
         let persona_id = match conv.persona_id.as_str() {
             "" => get_system_default_persona(db).await.unwrap_or_else(|_| "default".into()),
             id => id.to_string(),
@@ -330,6 +325,13 @@ impl ChatManager {
         }
         let character = get_character(db, &conv.character_id).await.map_err(AppError::from)?;
         let persona = get_persona(db, &persona_id).await.map_err(AppError::from)?;
+        // 프리셋: 대화 → 캐릭터 기본 → 앱 설정
+        let preset_id = conv
+            .prompt_preset_id
+            .clone()
+            .filter(|s| !s.is_empty())
+            .or(character.default_prompt_preset_id.clone().filter(|s| !s.is_empty()))
+            .unwrap_or(fallback.preset_id);
 
         let (_guard, cancel) = RunningGuard::start(conversation_id)?;
 

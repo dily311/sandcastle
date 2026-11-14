@@ -11,6 +11,7 @@ fn ctx() -> ChatContext {
         character_info: Some("{{char}} is a knight who protects {{user}}.".into()),
         persona_info: "A traveler.".into(),
         example_dialogue: None,
+        main_prompt: None,
         world_info: vec![],
         history: vec![],
         extra_data: Value::Null,
@@ -273,4 +274,49 @@ fn preset_context_size_overrides_request_limit() {
     );
     let err = PromptManager.build(req, Some(&pr)).unwrap_err();
     assert_eq!(err.to_response().code, ErrorCode::AiContextOverflow);
+}
+
+/// 캐릭터의 시스템 프롬프트 덮어쓰기는 프리셋의 main 블록 내용만 바꾼다
+#[test]
+fn character_main_prompt_replaces_main_block() {
+    use crate::models::ai_service::{PromptBlocks, PromptPresets};
+    let block = |id: &str, content: &str, order: i64| PromptBlocks {
+        id: id.into(),
+        preset_id: "p".into(),
+        name: id.into(),
+        identifier: id.into(),
+        block_type: "text".into(),
+        role: "system".into(),
+        content: content.into(),
+        enabled: true,
+        position: "relative".into(),
+        depth: 0,
+        sort_order: order,
+        triggers_json: serde_json::json!([]),
+        extra_json: None,
+        created_at: 0,
+        updated_at: 0,
+    };
+    let preset = LoadedPreset {
+        preset: PromptPresets {
+            id: "p".into(),
+            name: "p".into(),
+            description: None,
+            preset_type: "chat_completion".into(),
+            source_format: "native".into(),
+            config_json: serde_json::json!({}),
+            settings_json: None,
+            compatibility_json: None,
+            created_at: 0,
+            updated_at: 0,
+        },
+        blocks: vec![block("main", "기본 지시", 0), block("tail", "마무리", 1)],
+    };
+    let mut c = ctx();
+    c.main_prompt = Some("{{char}} 전용 지시".into());
+    let out = PromptManager.build(request(c, "안녕"), Some(&preset)).unwrap();
+    let all: String = out.messages.iter().map(|m| m.content.clone()).collect::<Vec<_>>().join("\n");
+    assert!(all.contains("전용 지시"), "{all}");
+    assert!(!all.contains("기본 지시"), "{all}");
+    assert!(all.contains("마무리"));
 }

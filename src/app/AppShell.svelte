@@ -39,7 +39,7 @@
 		{#if ready}
 			{@const r = nav.current}
 			{#if r.page === "character"}
-				<CharacterPage charId={r.charId} convId={r.convId} />
+				<CharacterPage charId={r.charId} convId={r.convId} edit={r.edit} />
 			{:else if r.page === "phone"}
 				<PhonePage />
 			{:else if r.page === "persona"}

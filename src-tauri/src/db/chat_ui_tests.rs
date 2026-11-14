@@ -189,3 +189,47 @@ async fn phone_contacts_are_per_persona() {
     assert!(phone::list_contacts(&pool, "default").await.unwrap().is_empty());
     assert!(!phone::remove_contact(&pool, "default", "c1").await.unwrap());
 }
+
+#[tokio::test]
+async fn character_update_saves_notes_links_and_defaults() {
+    let pool = pool().await;
+    sqlx::query("INSERT INTO worldinfo_books (id, name, created_at, updated_at) VALUES ('b1', 'b1', 0, 0)")
+        .execute(&pool)
+        .await
+        .unwrap();
+    let input = crate::models::conversation::CharacterInput {
+        name: "Aria".into(),
+        avatar: None,
+        description: "기사 지망생".into(),
+        alternate_descriptions: vec![],
+        first_message: Some("안녕!".into()),
+        alternate_first_message: vec!["반가워".into()],
+        example_dialogue: None,
+        system_prompt_override: None,
+        creator_notes: Some("<b>v2</b> 업데이트".into()),
+        world_info_ids: vec!["b1".into()],
+        tags: vec!["기사".into()],
+        color: Some("#c94f78".into()),
+        category: None,
+        default_persona_id: Some("default".into()),
+        default_prompt_preset_id: None,
+        favorite: true,
+    };
+    let mut tx = pool.begin().await.unwrap();
+    conv::update_character(&mut *tx, "c1", &input).await.unwrap();
+    conv::replace_character_worldinfo(&mut tx, "c1", &input.world_info_ids).await.unwrap();
+    tx.commit().await.unwrap();
+
+    let c = conv::get_character(&pool, "c1").await.unwrap();
+    assert_eq!(c.creator_notes.as_deref(), Some("<b>v2</b> 업데이트"));
+    assert_eq!(c.world_info_ids, vec!["b1"]);
+    assert_eq!(c.default_persona_id.as_deref(), Some("default"));
+    assert_eq!(c.alternate_first_message, vec!["반가워"]);
+    assert!(c.favorite);
+
+    // 새로 만들 때도 기본 페르소나·제작자 메모가 저장됨
+    let created = conv::create_character(&pool, input).await.unwrap();
+    let got = conv::get_character(&pool, &created.id).await.unwrap();
+    assert_eq!(got.default_persona_id.as_deref(), Some("default"));
+    assert_eq!(got.creator_notes.as_deref(), Some("<b>v2</b> 업데이트"));
+}

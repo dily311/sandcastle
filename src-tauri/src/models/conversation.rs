@@ -92,6 +92,7 @@ pub struct CharacterRow {
     pub alternate_first_message: Option<String>,
     pub example_dialogue: Option<String>,
     pub system_prompt_override: Option<String>,
+    pub creator_notes: Option<String>,
     pub world_info_ids: Option<String>,
     pub color: Option<String>,
     pub tags: Option<String>,
@@ -116,6 +117,8 @@ pub struct Character {
     pub alternate_first_message: Vec<String>,
     pub example_dialogue: Option<String>,
     pub system_prompt_override: Option<String>,
+    /// 제작자 메모 (소개 화면용, 프롬프트에 안 들어감)
+    pub creator_notes: Option<String>,
     pub world_info_ids: Vec<String>,
     pub color: Option<String>,
     pub tags: Vec<String>,
@@ -140,6 +143,7 @@ impl From<CharacterRow> for Character {
             alternate_first_message: r.alternate_first_message.and_then(|s| serde_json::from_str(&s).ok()).unwrap_or_default(),
             example_dialogue: r.example_dialogue,
             system_prompt_override: r.system_prompt_override,
+            creator_notes: r.creator_notes,
             world_info_ids: r
                 .world_info_ids
                 .and_then(|s| serde_json::from_str(&s).ok())
@@ -171,6 +175,9 @@ pub struct CharacterInput {
     pub alternate_first_message: Vec<String>,
     pub example_dialogue: Option<String>,
     pub system_prompt_override: Option<String>,
+    /// 예전 묶음/입력에는 없으므로 기본값 허용
+    #[serde(default)]
+    pub creator_notes: Option<String>,
     pub world_info_ids: Vec<String>,
     pub tags: Vec<String>,
     pub color: Option<String>,

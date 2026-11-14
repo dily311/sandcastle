@@ -256,6 +256,32 @@ pub async fn set_persona_avatar<'e, E>(executor: E, id: &str, avatar: Option<&st
     Ok(())
 }
 
+/// 캐릭터에 연결된 월드인포 책을 통째로 바꾼다
+pub async fn replace_character_worldinfo(conn: &mut sqlx::SqliteConnection, character_id: &str, book_ids: &[String]) -> Result<(), Error> {
+    sqlx::query("DELETE FROM character_worldinfo WHERE character_id = ?")
+        .bind(character_id)
+        .execute(&mut *conn)
+        .await?;
+    for book_id in book_ids {
+        sqlx::query("INSERT OR IGNORE INTO character_worldinfo (character_id, book_id) VALUES (?, ?)")
+            .bind(character_id)
+            .bind(book_id)
+            .execute(&mut *conn)
+            .await?;
+    }
+    Ok(())
+}
+
+pub async fn set_character_avatar<'e, E>(executor: E, id: &str, avatar: Option<&str>) -> Result<(), Error> where E: Executor<'e, Database = Sqlite>,{
+    sqlx::query("UPDATE characters SET avatar = ?, updated_at = ? WHERE id = ?")
+        .bind(avatar)
+        .bind(chrono::Utc::now().timestamp_millis())
+        .bind(id)
+        .execute(executor)
+        .await?;
+    Ok(())
+}
+
 pub async fn get_system_default_persona<'e, E>(executor: E) -> Result<String, Error> where E: Executor<'e, Database = Sqlite>,{
     let row =
         sqlx::query_as::<_, (String,)>("SELECT default_persona_id FROM conv_settings WHERE id = 1")
@@ -313,6 +339,7 @@ pub async fn get_all_characters<'e, E>(executor: E) -> Result<Vec<Character>, Er
                 c.alternate_first_message,
                 c.example_dialogue,
                 c.system_prompt_override,
+                c.creator_notes,
                 (
                     SELECT json_group_array(book_id) 
                     FROM character_worldinfo cw 
@@ -352,6 +379,7 @@ pub async fn get_character<'e, E>(executor: E, id: &str) -> Result<Character, Er
                 c.alternate_first_message,
                 c.example_dialogue,
                 c.system_prompt_override,
+                c.creator_notes,
                 (
                     SELECT json_group_array(book_id) 
                     FROM character_worldinfo cw 
@@ -396,8 +424,8 @@ pub async fn create_character<'e, E>(executor: E, input: CharacterInput) -> Resu
     let alternate_first_message = serde_json::to_string(&input.alternate_first_message).unwrap_or_default();
 
     sqlx::query(
-        "INSERT INTO characters (id,name,avatar,description,alternate_descriptions,first_message,alternate_first_message,example_dialogue,system_prompt_override,tags,category,color,favorite,created_at,updated_at)
-         VALUES (?,?,?,?,?,?,?,?,?,?,?,?,false,?,?)"
+        "INSERT INTO characters (id,name,avatar,description,alternate_descriptions,first_message,alternate_first_message,example_dialogue,system_prompt_override,creator_notes,tags,category,color,default_persona_id,default_prompt_preset_id,favorite,created_at,updated_at)
+         VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)"
     )
     .bind(&id)
     .bind(&input.name)
@@ -408,9 +436,13 @@ pub async fn create_character<'e, E>(executor: E, input: CharacterInput) -> Resu
     .bind(alternate_first_message)
     .bind(&input.example_dialogue)
     .bind(&input.system_prompt_override)
+    .bind(&input.creator_notes)
     .bind(&tags_json)
     .bind(&input.category)
     .bind(&input.color)
+    .bind(&input.default_persona_id)
+    .bind(&input.default_prompt_preset_id)
+    .bind(input.favorite)
     .bind(now)
     .bind(now)
     .execute(executor)
@@ -426,13 +458,14 @@ pub async fn create_character<'e, E>(executor: E, input: CharacterInput) -> Resu
         alternate_first_message: input.alternate_first_message,
         example_dialogue: input.example_dialogue,
         system_prompt_override: input.system_prompt_override,
+        creator_notes: input.creator_notes,
         world_info_ids: input.world_info_ids,
         color: input.color,
         tags: input.tags,
         category: input.category,
-        default_persona_id: None,
-        default_prompt_preset_id: None,
-        favorite: false,
+        default_persona_id: input.default_persona_id,
+        default_prompt_preset_id: input.default_prompt_preset_id,
+        favorite: input.favorite,
         message_count: 0,
         created_at: now,
         updated_at: now,
@@ -456,6 +489,7 @@ pub async fn update_character<'e, E>(executor: E,id: &str,input: &CharacterInput
             alternate_first_message =?, 
             example_dialogue=?, 
             system_prompt_override=?, 
+            creator_notes=?,
             tags=?, 
             category=?, 
             color=?, 
@@ -473,6 +507,7 @@ pub async fn update_character<'e, E>(executor: E,id: &str,input: &CharacterInput
     .bind(alternate_first_message)
     .bind(&input.example_dialogue)
     .bind(&input.system_prompt_override)
+    .bind(&input.creator_notes)
     .bind(&tags_json)
     .bind(&input.category)
     .bind(&input.color)

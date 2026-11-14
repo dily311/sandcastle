@@ -175,6 +175,7 @@ pub fn map_card(card: &Value) -> Result<ImportedCharacter> {
                 .collect(),
             example_dialogue: text("mes_example"),
             system_prompt_override: text("system_prompt"),
+            creator_notes: text("creator_notes"),
             world_info_ids: vec![],
             tags: str_list(&data["tags"]),
             color: None,

@@ -1,8 +1,7 @@
 <script lang="ts">
 	import { Camera, Copy, MoreHorizontal, Star, Trash2, X } from "@lucide/svelte";
 	import type { PersonaInput_Deserialize as PersonaInput, WorldInfoBook_Serialize as Book } from "$ipc/bindings";
-	import { Avatar, Badge, Button, ContextMenu, Field, IconButton, Input, Textarea, type MenuItem } from "$shared/ui";
-	import { ACCENTS } from "$shared/ui/accents";
+	import { Avatar, Badge, Button, ColorPicker, ContextMenu, Field, IconButton, Input, TagInput, Textarea, type MenuItem } from "$shared/ui";
 	import { fileSrc } from "$shared/ipc/file";
 	import { relative } from "$shared/time";
 	import { nav } from "$app/nav.svelte";
@@ -29,7 +28,7 @@
 	let name = $state(p0.name);
 	let description = $state(p0.description ?? "");
 	let tags = $state<string[]>([...p0.tags]);
-	let tagDraft = $state("");
+	let tagInput: ReturnType<typeof TagInput> | undefined = $state();
 	let color = $state(p0.color || "");
 	let worldInfoIds = $state<string[]>([...p0.worldInfoIds]);
 
@@ -42,17 +41,6 @@
 			[...worldInfoIds].sort().join() !== [...p0.worldInfoIds].sort().join();
 	});
 
-	function addTag() {
-		const t = tagDraft.trim().replace(/,$/, "");
-		if (t && !tags.includes(t)) tags = [...tags, t];
-		tagDraft = "";
-	}
-	function tagKey(e: KeyboardEvent) {
-		if ((e.key === "Enter" || e.key === ",") && !e.isComposing) {
-			e.preventDefault();
-			addTag();
-		} else if (e.key === "Backspace" && !tagDraft && tags.length) tags = tags.slice(0, -1);
-	}
 	function toggleBook(id: string) {
 		worldInfoIds = worldInfoIds.includes(id) ? worldInfoIds.filter((b) => b !== id) : [...worldInfoIds, id];
 	}
@@ -64,7 +52,7 @@
 		worldInfoIds = [...p0.worldInfoIds];
 	}
 	function save() {
-		if (tagDraft.trim()) addTag();
+		tagInput?.commit();
 		onsave({ name: name.trim(), avatar: persona.avatar, description, tags, color, worldInfoIds, isSystemDefault: persona.isSystemDefault });
 	}
 
@@ -121,20 +109,10 @@
 			<Textarea bind:value={description} rows={8} autosize maxRows={24} placeholder="예: 스무 살 대학생. 말수가 적지만 호기심이 많음" />
 		</Field>
 		<Field label="태그" hint="Enter나 쉼표로 추가. 목록 검색에 씀">
-			<div class="tags">
-				{#each tags as t (t)}
-					<span class="tag">{t}<button aria-label="{t} 태그 지우기" onclick={() => (tags = tags.filter((x) => x !== t))}><X /></button></span>
-				{/each}
-				<input class="tag-input" bind:value={tagDraft} onkeydown={tagKey} onblur={addTag} placeholder={tags.length ? "" : "태그 입력"} aria-label="태그 추가" />
-			</div>
+			<TagInput bind:this={tagInput} bind:value={tags} />
 		</Field>
 		<Field label="색" hint="아바타가 없을 때 바탕색">
-			<div class="colors" role="radiogroup" aria-label="색">
-				<button role="radio" aria-checked={!color} class="auto" class:on={!color} title="이름에서 자동" aria-label="자동" onclick={() => (color = "")}>자동</button>
-				{#each ACCENTS as a (a.id)}
-					<button role="radio" aria-checked={color === a.light} aria-label={a.label} title={a.label} class:on={color === a.light} style:background={a.light} onclick={() => (color = a.light)}></button>
-				{/each}
-			</div>
+			<ColorPicker bind:value={color} />
 		</Field>
 		<Field label="월드인포" hint="이 페르소나로 대화할 때 함께 쓰는 월드인포 책">
 			{#if books.length}
@@ -262,86 +240,6 @@
 		background: var(--bg-sunken);
 	}
 	.count {
-		font-size: var(--text-xs);
-	}
-	.tags {
-		display: flex;
-		flex-wrap: wrap;
-		align-items: center;
-		gap: 6px;
-		min-height: var(--control-md);
-		padding: 4px var(--space-2);
-		border: 1px solid var(--border-strong);
-		border-radius: var(--radius-sm);
-		background: var(--surface);
-	}
-	.tags:focus-within {
-		border-color: var(--accent);
-	}
-	.tag {
-		display: inline-flex;
-		align-items: center;
-		gap: 2px;
-		height: 24px;
-		padding: 0 4px 0 var(--space-2);
-		border-radius: 999px;
-		background: var(--surface-active);
-		font-size: var(--text-sm);
-	}
-	.tag button {
-		display: grid;
-		place-items: center;
-		width: 18px;
-		height: 18px;
-		padding: 0;
-		border: none;
-		border-radius: 50%;
-		background: none;
-		color: var(--text-faint);
-		cursor: pointer;
-	}
-	.tag button:hover {
-		background: var(--surface-hover);
-		color: var(--text);
-	}
-	.tag button :global(svg) {
-		width: 12px;
-		height: 12px;
-	}
-	.tag-input {
-		flex: 1;
-		min-width: 80px;
-		height: 26px;
-		border: none;
-		outline: none;
-		background: transparent;
-		color: var(--text);
-		font: inherit;
-	}
-	.colors {
-		display: flex;
-		flex-wrap: wrap;
-		align-items: center;
-		gap: 8px;
-	}
-	.colors button {
-		width: 26px;
-		height: 26px;
-		border-radius: 50%;
-		border: 2px solid var(--bg-sunken);
-		box-shadow: 0 0 0 1px var(--border-strong);
-		cursor: pointer;
-	}
-	.colors button.on {
-		box-shadow: 0 0 0 2px var(--text);
-	}
-	.colors .auto {
-		width: auto;
-		padding: 0 var(--space-2);
-		border-radius: 999px;
-		background: var(--surface);
-		color: var(--text-muted);
-		font: inherit;
 		font-size: var(--text-xs);
 	}
 	.books {

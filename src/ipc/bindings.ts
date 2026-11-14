@@ -125,7 +125,10 @@ export const commands = {
 	hasApiKey: (profileId: string, options?: InvokeOptions) => __TAURI_INVOKE<boolean>("has_api_key", { profileId }, options),
 	getAllCharacters: (options?: InvokeOptions) => __TAURI_INVOKE<Character_Serialize[]>("get_all_characters", undefined, options),
 	createCharacter: (input: CharacterInput_Deserialize, options?: InvokeOptions) => __TAURI_INVOKE<Character_Serialize>("create_character", { input }, options),
-	updateCharacter: (id: string, input: CharacterInput_Deserialize, options?: InvokeOptions) => __TAURI_INVOKE<null>("update_character", { id, input }, options),
+	/**  캐릭터 저장. 월드인포 연결도 `world_info_ids`로 통째로 바꾼다 */
+	updateCharacter: (id: string, input: CharacterInput_Deserialize, options?: InvokeOptions) => __TAURI_INVOKE<Character_Serialize>("update_character", { id, input }, options),
+	/**  캐릭터 아바타: 고른 이미지를 앱 데이터 characters/avatars로 복사. `path`가 없으면 지운다 */
+	setCharacterAvatar: (id: string, path: string | null, options?: InvokeOptions) => __TAURI_INVOKE<Character_Serialize>("set_character_avatar", { id, path }, options),
 	toggleFavoriteCharacter: (id: string, isFavorite: boolean, options?: InvokeOptions) => __TAURI_INVOKE<null>("toggle_favorite_character", { id, isFavorite }, options),
 	deleteCharacter: (id: string, options?: InvokeOptions) => __TAURI_INVOKE<null>("delete_character", { id }, options),
 	getListCharacters: (options?: InvokeOptions) => __TAURI_INVOKE<CharacterOption[]>("get_list_characters", undefined, options),
@@ -536,6 +539,8 @@ export type CharacterInput_Deserialize = {
 	alternateFirstMessage: string[],
 	exampleDialogue?: string | null,
 	systemPromptOverride?: string | null,
+	/**  예전 묶음/입력에는 없으므로 기본값 허용 */
+	creatorNotes?: string | null,
 	worldInfoIds: string[],
 	tags: string[],
 	color?: string | null,
@@ -554,6 +559,8 @@ export type CharacterInput_Serialize = {
 	alternateFirstMessage: string[],
 	exampleDialogue: string | null,
 	systemPromptOverride: string | null,
+	/**  예전 묶음/입력에는 없으므로 기본값 허용 */
+	creatorNotes: string | null,
 	worldInfoIds: string[],
 	tags: string[],
 	color: string | null,
@@ -578,6 +585,8 @@ export type Character_Deserialize = {
 	alternateFirstMessage: string[],
 	exampleDialogue?: string | null,
 	systemPromptOverride?: string | null,
+	/**  제작자 메모 (소개 화면용, 프롬프트에 안 들어감) */
+	creatorNotes?: string | null,
 	worldInfoIds: string[],
 	color?: string | null,
 	tags: string[],
@@ -600,6 +609,8 @@ export type Character_Serialize = {
 	alternateFirstMessage: string[],
 	exampleDialogue: string | null,
 	systemPromptOverride: string | null,
+	/**  제작자 메모 (소개 화면용, 프롬프트에 안 들어감) */
+	creatorNotes: string | null,
 	worldInfoIds: string[],
 	color: string | null,
 	tags: string[],

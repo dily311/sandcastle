@@ -33,6 +33,7 @@ impl ContextManager {
             user_name: Some(persona.name.clone()),
             character_info: Some(character.description),
             example_dialogue: character.example_dialogue,
+            main_prompt: character.system_prompt_override.filter(|s| !s.trim().is_empty()),
             persona_info: persona.description,
             world_info,
             history,

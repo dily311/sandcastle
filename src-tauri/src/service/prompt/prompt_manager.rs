@@ -72,7 +72,7 @@ impl PromptManager {
 
         // ---- 배치 결정
         let (mut layout, in_chat) = match preset {
-            Some(p) if !p.blocks.is_empty() => layout_from_preset(p, request.generation_type, &macros),
+            Some(p) if !p.blocks.is_empty() => layout_from_preset(p, request.generation_type, &macros, ctx.main_prompt.as_deref()),
             _ => (default_layout(&macros), vec![]),
         };
         if !layout.iter().any(|s| matches!(s, Slot::Section { section: Section::ChatHistory, .. })) {
@@ -297,6 +297,7 @@ fn layout_from_preset(
     preset: &LoadedPreset,
     generation_type: GenerationType,
     macros: &Macros,
+    main_override: Option<&str>,
 ) -> (Vec<Slot>, Vec<InChat>) {
     let mut blocks: Vec<&PromptBlocks> = preset
         .blocks
@@ -326,10 +327,17 @@ fn layout_from_preset(
                 role,
                 label: None,
             }),
-            None => layout.push(Slot::Text {
-                role,
-                content: macros.apply(&b.content),
-            }),
+            None => {
+                // 캐릭터가 시스템 프롬프트를 덮어쓰면 main 블록 내용 대신 씀 (SillyTavern과 같은 동작)
+                let content = match main_override {
+                    Some(o) if b.identifier.eq_ignore_ascii_case("main") => o,
+                    _ => b.content.as_str(),
+                };
+                layout.push(Slot::Text {
+                    role,
+                    content: macros.apply(content),
+                })
+            }
         }
     }
     (layout, in_chat)

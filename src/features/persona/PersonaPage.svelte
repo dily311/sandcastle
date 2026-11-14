@@ -48,11 +48,25 @@
 		if (ready && !personaId && current) nav.replace({ page: "persona", personaId: current.id });
 	});
 
-	async function select(id: string) {
-		if (id === current?.id) return;
-		if (dirty && !(await confirmAction({ title: "저장하지 않음", message: "바뀐 내용을 버리고 다른 페르소나로 감", confirmLabel: "버리기" }))) return;
+	// 고친 내용이 있으면 다른 페르소나·다른 화면으로 가기 전에 물어봄
+	let releaseGuard: (() => void) | null = null;
+	$effect(() => {
+		if (!dirty) return;
+		const release = nav.setGuard(() => confirmAction({ title: "저장하지 않음", message: "바뀐 내용을 버리고 나감", confirmLabel: "버리기" }));
+		releaseGuard = release;
+		return () => {
+			release();
+			releaseGuard = null;
+		};
+	});
+	/** 이미 물어봤거나 버려도 되는 경우 */
+	function discard() {
+		releaseGuard?.();
 		dirty = false;
-		nav.replace({ page: "persona", personaId: id });
+	}
+
+	function select(id: string) {
+		if (id !== current?.id) void nav.replace({ page: "persona", personaId: id });
 	}
 
 	function put(p: Persona) {
@@ -64,11 +78,12 @@
 
 	async function create() {
 		if (dirty && !(await confirmAction({ title: "저장하지 않음", message: "바뀐 내용을 버리고 새 페르소나를 만듦", confirmLabel: "버리기" }))) return;
+		discard();
 		const name = await promptText({ title: "새 페르소나", message: "대화에서 내가 될 인물", input: { value: "", placeholder: "이름" }, confirmLabel: "만들기" });
 		if (!name?.trim()) return;
 		const p = await call(commands.createPersona(blank(name.trim())), src);
 		put(p);
-		dirty = false;
+		discard();
 		nav.replace({ page: "persona", personaId: p.id });
 	}
 	async function save(input: PersonaInput) {
@@ -103,7 +118,7 @@
 		if (!current) return;
 		const p = await call(commands.createPersona({ ...current, name: `${current.name} 사본`, isSystemDefault: false }), src);
 		put(p);
-		dirty = false;
+		discard();
 		nav.replace({ page: "persona", personaId: p.id });
 	}
 	async function remove() {
@@ -118,7 +133,7 @@
 		if (!(await confirmAction({ title: "페르소나 삭제", message: [`'${target.name}'을(를) 지움`, ...notes].join(". "), confirmLabel: "삭제", danger: true }))) return;
 		await call(commands.deletePersona(target.id), src);
 		library.personas = library.personas.filter((p) => p.id !== target.id);
-		dirty = false;
+		discard();
 		nav.replace({ page: "persona" });
 		// 기본 페르소나·대화의 페르소나가 비워졌을 수 있음
 		void library.load();
