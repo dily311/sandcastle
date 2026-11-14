@@ -88,3 +88,6 @@ export function relative(min: number): string {
 export function absolute(min: number): string {
 	return new Date(Date.now() - min * 60_000).toLocaleString("ko-KR", { dateStyle: "full", timeStyle: "short" });
 }
+
+/** 앱 공용 UI 상태: 오른쪽 패널 버튼은 타이틀바에 있고, 패널이 있는 화면(대화·게임)만 켠다 */
+export const ui = $state({ panelAvailable: false, panelOpen: true });

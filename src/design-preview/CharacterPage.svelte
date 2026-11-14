@@ -1,5 +1,5 @@
 <script lang="ts">
-	import { ArrowLeft, ArrowUp, ChevronDown, ChevronRight, Ellipsis, MessageSquarePlus, Plus, Search, Upload } from "@lucide/svelte";
+	import { ArrowLeft, ChevronRight, Ellipsis, MessageSquarePlus, Plus, Search, Upload } from "@lucide/svelte";
 	import { Avatar, Button, IconButton, Input, Segmented } from "$shared/ui";
 	import ChatDetail from "./ChatDetail.svelte";
 	import { characters, relative, store } from "./mock.svelte";
@@ -8,9 +8,20 @@
 	let charId: string | null = $state(null);
 	let convId: string | null = $state(null);
 	let query = $state("");
-	let tab: "overview" | "assets" | "stats" = $state("overview");
-	let more = $state(false);
-	let ask = $state("");
+	let tab: "overview" | "recent" | "assets" | "stats" = $state("overview");
+
+	// 제작자 소개 (카드 creator_notes 등). 실제 구현에서는 DOMPurify로 정리한 뒤 샌드박스 iframe에 넣음
+	const creatorHtml = `<!doctype html><meta charset="utf-8"><style>
+		body{margin:0;font-family:Georgia,serif;background:#f6efe2;color:#3b2f22}
+		.card{padding:28px 32px;border:1px solid #d9c7a4;border-radius:14px;background:linear-gradient(180deg,#fbf6ec,#f1e6d1)}
+		h1{margin:0 0 4px;font-size:26px;letter-spacing:.02em} .sub{color:#8a6d45;font-style:italic;margin-bottom:16px}
+		.tags span{display:inline-block;margin:0 6px 6px 0;padding:2px 10px;border-radius:999px;background:#e7d6b4;font-size:12px}
+		blockquote{margin:16px 0 0;padding-left:14px;border-left:3px solid #b08a52;color:#5a4630}
+	</style><div class="card"><h1>Seraphina</h1><div class="sub">엘도리아 숲의 수호자</div>
+	<div class="tags"><span>판타지</span><span>힐러</span><span>다정함</span></div>
+	<p>숲 깊은 곳의 오두막에서 지친 여행자를 돌봄. 그림자 송곳니 무리로부터 숲을 지키는 오래된 마법의 주인.</p>
+	<blockquote>"여기선 아무도 당신을 해치지 못해요."</blockquote></div>`;
+	const frameH = 300;
 
 	const character = $derived(characters.find((c) => c.id === charId));
 	const convsOf = (id: string) => store.convs.filter((c) => c.charId === id).sort((a, b) => a.ago - b.ago);
@@ -55,53 +66,26 @@
 		</header>
 
 		<div class="tabs">
-			<Segmented label="캐릭터 탭" bind:value={tab} options={[{ value: "overview", label: "개요" }, { value: "assets", label: "에셋" }, { value: "stats", label: "통계" }]} />
+			<Segmented label="캐릭터 탭" bind:value={tab} options={[{ value: "overview", label: "개요" }, { value: "recent", label: "최근 대화" }, { value: "assets", label: "에셋" }, { value: "stats", label: "통계" }]} />
 		</div>
 
 		<div class="body">
 			{#if tab === "overview"}
-				<section>
-					<h2>소개</h2>
-					<p class="intro" class:clamp={!more}>
-						{character.intro}. 숲 깊은 곳의 오두막에서 지친 여행자를 돌보며 살아감. 엘도리아 숲의 오래된 마법과 그림자 송곳니 무리에 대해 누구보다 잘 앎. 다정하지만 숲을 위협하는 존재에게는 단호함.
-					</p>
-					<button class="more" onclick={() => (more = !more)}>{more ? "접기" : "더 보기"} <ChevronDown class={more ? "up" : ""} /></button>
-					<dl class="stats">
-						<div><dt>함께한 시간</dt><dd>12.5시간</dd></div>
-						<div><dt>대화 수</dt><dd>{recent.length}</dd></div>
-						<div><dt>메시지</dt><dd>{recent.reduce((n, c) => n + c.count, 0).toLocaleString()}</dd></div>
-					</dl>
-				</section>
-
-				<section>
-					<div class="sec-head"><h2>바로 질문하기</h2><span class="faint">기록되지 않음</span></div>
-					<form class="ask" onsubmit={(e) => e.preventDefault()}>
-						<p class="faint">{character.name}의 성격이나 세계관에 대해 질문하기</p>
-						<div class="ask-row">
-							<input bind:value={ask} placeholder="무엇이든 물어보기…" aria-label="질문" />
-							<IconButton label="질문 보내기" size="sm" variant={ask.trim() ? "solid" : "ghost"} disabled={!ask.trim()}><ArrowUp /></IconButton>
-						</div>
-					</form>
-				</section>
-
-				<section>
-					<div class="sec-head">
-						<h2>최근 대화</h2>
-						{#if recent.length}<button class="link" onclick={() => (convId = recent[0].id)}>모두 보기 →</button>{/if}
-					</div>
-					<ul class="recent">
-						{#each recent.slice(0, 3) as c (c.id)}
-							<li>
-								<button onclick={() => (convId = c.id)}>
-									<span><b>{c.title}</b><small>마지막 활동 · {relative(c.ago)} · {c.count}개</small></span>
-									<ChevronRight />
-								</button>
-							</li>
-						{:else}
-							<li class="none">아직 대화 없음</li>
-						{/each}
-					</ul>
-				</section>
+				<!-- 봇 제작자가 쓴 HTML/CSS. 스크립트·외부 요청이 막힌 샌드박스 iframe에 그대로 표시 -->
+				<iframe class="creator" title="{character.name} 소개 (제작자 작성)" sandbox="" srcdoc={creatorHtml} style:height="{frameH}px"></iframe>
+			{:else if tab === "recent"}
+				<ul class="recent">
+					{#each recent as c (c.id)}
+						<li>
+							<button onclick={() => (convId = c.id)}>
+								<span><b>{c.title}</b><small>마지막 활동 · {relative(c.ago)} · {c.count}개</small></span>
+								<ChevronRight />
+							</button>
+						</li>
+					{:else}
+						<li class="none">아직 대화 없음</li>
+					{/each}
+				</ul>
 			{:else}
 				<p class="none">이 탭은 실제 화면에서 만듦 (에셋은 대화 패널 에셋 탭과 같은 관리 화면)</p>
 			{/if}
@@ -214,6 +198,18 @@
 		background: var(--accent-soft);
 	}
 
+	.creator {
+		display: block;
+		width: 100%;
+		margin-top: var(--space-5);
+		border: none;
+		border-radius: var(--radius-lg);
+		background: transparent;
+	}
+	.recent {
+		margin-top: var(--space-3) !important;
+	}
+
 	/* ---- 상세 ---- */
 	.detail {
 		height: 100%;
@@ -275,100 +271,6 @@
 		max-width: 960px;
 		margin: 0 auto;
 		padding: 0 var(--space-6) var(--space-10);
-	}
-	section {
-		padding: var(--space-6) 0;
-		border-bottom: 1px solid var(--border);
-	}
-	section:last-child {
-		border-bottom: none;
-	}
-	h2 {
-		margin-bottom: var(--space-2);
-	}
-	.intro {
-		color: var(--text-muted);
-	}
-	.intro.clamp {
-		display: -webkit-box;
-		-webkit-line-clamp: 2;
-		line-clamp: 2;
-		-webkit-box-orient: vertical;
-		overflow: hidden;
-	}
-	.more {
-		display: inline-flex;
-		align-items: center;
-		gap: 2px;
-		margin-top: var(--space-1);
-		padding: 0;
-		border: none;
-		background: none;
-		color: var(--text-muted);
-		font-size: var(--text-sm);
-		cursor: pointer;
-	}
-	.more :global(svg) {
-		width: 14px;
-		height: 14px;
-		transition: transform var(--duration-fast) var(--ease);
-	}
-	.more :global(.up) {
-		transform: rotate(180deg);
-	}
-	.stats {
-		display: grid;
-		grid-template-columns: repeat(3, 1fr);
-		margin: var(--space-5) 0 0;
-	}
-	.stats dt {
-		font-size: var(--text-sm);
-		color: var(--text-muted);
-	}
-	.stats dd {
-		margin: 0;
-		font-size: var(--text-2xl);
-		font-weight: 700;
-	}
-	.sec-head {
-		display: flex;
-		align-items: baseline;
-		justify-content: space-between;
-	}
-	.sec-head span {
-		font-size: var(--text-sm);
-	}
-	.link {
-		padding: 0;
-		border: none;
-		background: none;
-		color: var(--text-muted);
-		font-size: var(--text-sm);
-		cursor: pointer;
-	}
-	.link:hover {
-		color: var(--text);
-	}
-	.ask {
-		padding: var(--space-3) var(--space-4);
-		border: 1px solid var(--border-strong);
-		border-radius: var(--radius-lg);
-		background: var(--surface);
-	}
-	.ask p {
-		font-size: var(--text-sm);
-	}
-	.ask-row {
-		display: flex;
-		align-items: center;
-		gap: var(--space-2);
-		margin-top: var(--space-2);
-	}
-	.ask input {
-		flex: 1;
-		border: none;
-		background: none;
-		outline: none;
 	}
 	.recent {
 		list-style: none;

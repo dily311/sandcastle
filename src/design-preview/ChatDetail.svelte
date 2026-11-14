@@ -13,7 +13,6 @@
 		ImagePlus,
 		Search,
 		PanelLeft,
-		PanelRight,
 		Pencil,
 		Plus,
 		RefreshCw,
@@ -23,13 +22,18 @@
 	import { Avatar, Badge, Button, ContextMenu, IconButton, Input, Segmented, Select, Switch, Textarea, type MenuItem } from "$shared/ui";
 	import { ChevronDown as Chev, Folder, FolderOpen, FolderPlus, Upload } from "@lucide/svelte";
 	import ConvCard from "./ConvCard.svelte";
-	import { characters, convActions, folderActions, relative, store } from "./mock.svelte";
+	import { characters, convActions, folderActions, relative, store, ui } from "./mock.svelte";
 
 	let { convId, charId, onback, onopen }: { convId: string; charId: string; onback: () => void; onopen: (id: string) => void } = $props();
 	const character = $derived(characters.find((c) => c.id === charId)!);
 
 	let showList = $state(true);
-	let showPanel = $state(true);
+	// 오른쪽 패널 버튼은 타이틀바에 있다
+	$effect(() => {
+		ui.panelAvailable = true;
+		return () => (ui.panelAvailable = false);
+	});
+	const showPanel = $derived(ui.panelOpen);
 	let panelTab: "settings" | "toc" | "assets" = $state("settings");
 	let draft = $state("");
 	let persona = $state("min");
@@ -175,8 +179,7 @@
 		<aside class="convs" aria-label="대화 목록">
 			<div class="convs-head">
 				<IconButton label="{character.name} 정보로" size="sm" onclick={onback}><ArrowLeft /></IconButton>
-				<Avatar name={character.name} size={24} />
-				<strong>{character.name}</strong>
+				<span class="spacer"></span>
 				<IconButton label="새 대화" size="sm" variant="soft"><Plus /></IconButton>
 				<IconButton label="대화 가져오기 (SillyTavern .jsonl 등)" size="sm"><Upload /></IconButton>
 				<IconButton label="새 폴더" size="sm" onclick={() => startFolderEdit("new")}><FolderPlus /></IconButton>
@@ -232,7 +235,6 @@
 	<section class="reader">
 		<header class="bar">
 			<IconButton label="대화 목록" size="sm" active={showList} onclick={() => (showList = !showList)}><PanelLeft /></IconButton>
-			<IconButton label="대화 패널" size="sm" active={showPanel} onclick={() => (showPanel = !showPanel)}><PanelRight /></IconButton>
 		</header>
 
 		<div class="scroll">
@@ -404,12 +406,8 @@
 		gap: var(--space-2);
 		padding: var(--space-3) var(--space-3) var(--space-2);
 	}
-	.convs-head strong {
+	.spacer {
 		flex: 1;
-		min-width: 0;
-		white-space: nowrap;
-		overflow: hidden;
-		text-overflow: ellipsis;
 	}
 	.convs-tools {
 		display: flex;
@@ -771,9 +769,6 @@
 		margin-top: var(--space-2);
 		font-size: var(--text-xs);
 		color: var(--text-muted);
-	}
-	.swipe .faint {
-		margin-left: var(--space-2);
 	}
 	.composer {
 		display: flex;

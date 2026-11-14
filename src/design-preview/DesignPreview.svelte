@@ -2,6 +2,7 @@
 	import {
 		Gamepad2,
 		Minus,
+		PanelRight,
 		Settings,
 		Smartphone,
 		Square,
@@ -10,6 +11,7 @@
 		X,
 	} from "@lucide/svelte";
 	import { IconButton } from "$shared/ui";
+	import { ui } from "./mock.svelte";
 	import { ACCENTS, accentValue } from "$shared/ui/accents";
 	import PhonePage from "./PhonePage.svelte";
 	import CharacterPage from "./CharacterPage.svelte";
@@ -44,9 +46,14 @@
 					{#if "badge" in n && n.badge}<span class="dot" aria-label="새 메시지 {n.badge}"></span>{/if}
 				</button>
 			{/each}
+			<button class="tab" class:active={page === "settings"} aria-current={page === "settings" ? "page" : undefined} aria-label="설정" title="설정" onclick={() => (page = "settings")}>
+				<Settings />
+			</button>
 		</nav>
 		<div class="drag" aria-hidden="true"></div>
-		<IconButton label="설정" size="sm" active={page === "settings"} onclick={() => (page = "settings")}><Settings /></IconButton>
+		{#if ui.panelAvailable}
+			<IconButton label={ui.panelOpen ? "오른쪽 패널 닫기" : "오른쪽 패널 열기"} size="sm" active={ui.panelOpen} onclick={() => (ui.panelOpen = !ui.panelOpen)}><PanelRight /></IconButton>
+		{/if}
 		<div class="win" aria-hidden="true">
 			<span><Minus /></span><span><Square /></span><span class="close"><X /></span>
 		</div>

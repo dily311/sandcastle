@@ -686,7 +686,6 @@
 		opacity: 0.8;
 		cursor: pointer;
 	}
-	.home .home-indicator,
 	.device:has(.home) .home-indicator {
 		background: white;
 	}
