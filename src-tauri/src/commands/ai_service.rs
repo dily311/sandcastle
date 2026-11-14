@@ -1,13 +1,13 @@
 use crate::db::ai_service;
-use crate::models::ai_service::{ApiProfiles, ApiProfilesInput};
-use crate::service::ai::AiService;
+use crate::models::ai_service::{ApiProfiles, ApiProfilesInput, ChatOptions, PromptMessage, PromptMessageItem, PromptRole};
+use crate::service::ai::{AiRequest, AiService};
 use std::sync::Arc;
 use crate::service::secret_store::{api_key_name, SecretStore};
 use crate::{
     error::{AppError, Result},
     state::AppState,
 };
-use tauri::{AppHandle, State};
+use tauri::State;
 
 // =======================================
 // API Key
@@ -102,12 +102,18 @@ pub async fn get_models(ai: State<'_, Arc<AiService>>, profile_id: String) -> Re
     ai.list_models(&profile_id).await
 }
 
+/// 연결 확인: 짧은 메시지 하나를 보내고 받은 답을 돌려준다 (저장하지 않음)
 #[tauri::command]
 #[specta::specta]
-pub async fn test_message(
-    app: AppHandle,
-    state: State<'_, AppState>,
-    profile_id: String,
-) -> Result<()> {
-    Ok(())
+pub async fn test_message(ai: State<'_, Arc<AiService>>, profile_id: String) -> Result<String> {
+    let prompt = PromptMessage {
+        chat_options: ChatOptions { max_tokens: Some(32), stream: false, ..ChatOptions::default() },
+        messages: vec![PromptMessageItem {
+            role: PromptRole::User,
+            content: "Reply with a single word: OK".into(),
+            token: 8,
+        }],
+    };
+    let res = ai.generate_once(AiRequest { profile_id, prompt }).await?;
+    Ok(res.content)
 }

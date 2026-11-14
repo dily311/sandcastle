@@ -9,6 +9,7 @@ export const getCurrentWindow = () => ({
   minimize: () => {return},
   toggleMaximize: () => {return},
   close: () => {return},
+  setDecorations: async (_on: boolean) => {return},
 });
 
 export const Window = () => ({});

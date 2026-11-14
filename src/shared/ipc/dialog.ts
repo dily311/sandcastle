@@ -31,3 +31,5 @@ export const IMAGE_FILES: Filter = { name: "이미지", extensions: ["png", "jpg
 export const ST_FILES: Filter = { name: "SillyTavern", extensions: ["png", "json", "jsonl"] };
 export const CHAT_FILES: Filter = { name: "대화 기록", extensions: ["jsonl"] };
 export const PACK_FILES: Filter = { name: "캐릭터 묶음", extensions: ["zip"] };
+export const JSON_FILES: Filter = { name: "JSON", extensions: ["json"] };
+export const BACKUP_FILES: Filter = { name: "샌드캐슬 백업", extensions: ["scbackup"] };

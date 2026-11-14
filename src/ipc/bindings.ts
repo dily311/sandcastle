@@ -20,6 +20,8 @@ export const commands = {
 	saveTheme: (filename: string, content: CssTheme_Deserialize, options?: InvokeOptions) => __TAURI_INVOKE<null>("save_theme", { filename, content }, options),
 	deleteTheme: (filename: string, options?: InvokeOptions) => __TAURI_INVOKE<null>("delete_theme", { filename }, options),
 	getModels: (profileId: string, options?: InvokeOptions) => __TAURI_INVOKE<string[]>("get_models", { profileId }, options),
+	/**  연결 확인: 짧은 메시지 하나를 보내고 받은 답을 돌려준다 (저장하지 않음) */
+	testMessage: (profileId: string, options?: InvokeOptions) => __TAURI_INVOKE<string>("test_message", { profileId }, options),
 	/**
 	 *  입력을 저장하고 응답을 만든다. `text`가 비었으면 이어서 응답만 (이어쓰기).
 	 *  응답 조각은 `on_event`로 흐르고, 저장된 메시지는 반환값으로 온다.

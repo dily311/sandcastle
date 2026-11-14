@@ -1,6 +1,7 @@
 // 테마: 화면 모드(시스템/밝게/어둡게), 고정 강조색, 글자 크기, 사용자 CSS 테마
 import type { ThemeSetting } from "$ipc/bindings";
 import { call, commands } from "$shared/ipc/client";
+import { getCurrentWindow } from "@tauri-apps/api/window";
 import { ACCENTS, DEFAULT_ACCENT, accentValue } from "$shared/ui/accents";
 
 const FALLBACK: ThemeSetting = {
@@ -32,11 +33,13 @@ class Theme {
 		});
 		this.setting = await call(commands.getThemeSetting(), { source: "theme", silent: true }).catch(() => FALLBACK);
 		this.apply();
+		this.applyFrame();
 	}
 
 	async update(patch: Partial<ThemeSetting>) {
 		this.setting = { ...this.setting, ...patch };
 		this.apply();
+		if ("isFrameless" in patch) this.applyFrame();
 		await call(commands.updateThemeSetting(patch), { source: "theme" });
 	}
 
@@ -46,6 +49,14 @@ class Theme {
 		root.style.setProperty("--accent", accentValue(this.accentId, this.dark));
 		root.style.fontSize = `${this.setting.fontSize}px`;
 		void this.applyCustomCss();
+	}
+
+	/** 프레임 없는 창이면 앱 헤더가 창 버튼을 그림, 아니면 운영체제 제목 표시줄 */
+	private applyFrame() {
+		if (!__IS_TAURI__) return;
+		getCurrentWindow()
+			.setDecorations(!this.setting.isFrameless)
+			.catch(() => {});
 	}
 
 	private styleEl: HTMLStyleElement | null = null;

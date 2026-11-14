@@ -3,6 +3,8 @@
 	import { FastForward, Images, ListTree, PanelLeft, Plus, RefreshCw, Send, SlidersHorizontal, Square } from "@lucide/svelte";
 	import { ContextMenu, Dialog, EmptyState, IconButton, Spinner, Textarea } from "$shared/ui";
 	import { panel } from "$app/panel.svelte";
+	import { appSetting } from "$shared/stores/appSetting.svelte";
+	appSetting.load();
 	import { fileSrc } from "$shared/ipc/file";
 	import type { PromptMessage_Serialize } from "$ipc/bindings";
 	import ChatPanel from "./ChatPanel.svelte";
@@ -96,7 +98,9 @@
 		await session.send(text);
 	}
 	function onkeydown(e: KeyboardEvent) {
-		if (e.key === "Enter" && !e.shiftKey && !e.isComposing) {
+		if (e.key !== "Enter" || e.shiftKey || e.isComposing) return;
+		// 설정: Enter로 보내기. 끄면 Ctrl+Enter
+		if (appSetting.sendOnEnter || e.ctrlKey || e.metaKey) {
 			e.preventDefault();
 			void send();
 		}
@@ -176,7 +180,7 @@
 			}}
 		>
 			<IconButton label="추가 기능" onclick={openPlus} disabled={!session || session.busy}><Plus /></IconButton>
-			<Textarea bind:value={draft} rows={1} autosize maxRows={8} placeholder="다음 행동이나 대사 입력 (Shift+Enter 줄바꿈)" aria-label="메시지" {onkeydown} />
+			<Textarea bind:value={draft} rows={1} autosize maxRows={8} placeholder={appSetting.sendOnEnter ? "다음 행동이나 대사 입력 (Shift+Enter 줄바꿈)" : "다음 행동이나 대사 입력 (Ctrl+Enter 보내기)"} aria-label="메시지" {onkeydown} />
 			{#if session?.busy}
 				<IconButton label="멈추기 (받은 데까지 저장)" variant="solid" onclick={() => session?.cancel()}><Square /></IconButton>
 			{:else}

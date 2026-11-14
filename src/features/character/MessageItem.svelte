@@ -4,6 +4,7 @@
 	import { absolute, relative } from "$shared/time";
 	import { confirmAction, promptText } from "$shared/stores/confirm.svelte";
 	import { toasts } from "$shared/stores/toast.svelte";
+	import { appSetting } from "$shared/stores/appSetting.svelte";
 	import { toBlocks } from "./format";
 	import { metaOf, type ChatSession, type Message } from "./session.svelte";
 
@@ -64,8 +65,8 @@
 			<span class="stamp">만드는 중…</span>
 		{:else}
 			<span class="stamp">
-				<time datetime={new Date(msg.createdAt).toISOString()} title={absolute(msg.createdAt)}>{relative(msg.createdAt)}</time>
-				{#if model}<span class="model">· {model}</span>{/if}
+				{#if appSetting.showTimestamps}<time datetime={new Date(msg.createdAt).toISOString()} title={absolute(msg.createdAt)}>{relative(msg.createdAt)}</time>{/if}
+				{#if model}<span class="model">{appSetting.showTimestamps ? "· " : ""}{model}</span>{/if}
 				{#if meta.info?.cancelled}<span class="model">· 멈춤</span>{/if}
 			</span>
 		{/if}

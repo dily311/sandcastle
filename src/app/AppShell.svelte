@@ -7,6 +7,7 @@
 	import { theme } from "./theme.svelte";
 	import Titlebar from "./Titlebar.svelte";
 	import Placeholder from "./Placeholder.svelte";
+	import SettingsPage from "$features/settings/SettingsPage.svelte";
 
 	let ready = $state(false);
 
@@ -37,6 +38,8 @@
 			{@const r = nav.current}
 			{#if r.page === "character"}
 				<CharacterPage charId={r.charId} convId={r.convId} />
+			{:else if r.page === "settings"}
+				<SettingsPage tab={r.tab} />
 			{:else}
 				{#key r.page}
 					<Placeholder page={r.page} />

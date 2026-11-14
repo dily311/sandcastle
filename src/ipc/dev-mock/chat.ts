@@ -62,7 +62,7 @@ const presets: PromptPresets_Serialize[] = [
 	{ id: "st", name: "Default (ST)", description: null, presetType: "chat_completion", sourceFormat: "sillytavern", configJson: {}, settingsJson: null, compatibilityJson: null, createdAt: 0, updatedAt: 0 },
 ];
 
-const apis: ApiProfiles[] = [{ id: "gemini", name: "Gemini", provider: "gemini", formatType: "gemini", baseUrl: "", model: "gemini-3.7-flash", createdAt: 0, updatedAt: 0 }];
+const apis: ApiProfiles[] = [{ id: "gemini", name: "Gemini", provider: "google", formatType: "google", baseUrl: "", model: "gemini-3.7-flash", createdAt: 0, updatedAt: 0 }];
 
 const folders: ConversationFolder[] = [{ id: "f1", characterId: "sera", name: "본편", sortOrder: 0, createdAt: 0, updatedAt: 0 }];
 
@@ -125,7 +125,7 @@ function addMsg(conv: Conv, role: "user" | "assistant", content: string, ago: nu
 		name: role === "assistant" ? (ch?.name ?? null) : (personas.find((p) => p.id === conv.personaId)?.name ?? "user"),
 		content,
 		characterId: role === "assistant" ? conv.characterId : null,
-		meta: role === "assistant" ? { info: { model: "gemini-3.7-flash" }, ...meta } : meta,
+		meta: (role === "assistant" ? { info: { model: "gemini-3.7-flash" }, ...meta } : meta) as Message_Serialize["meta"],
 		createdAt: t,
 		updatedAt: t,
 	};
@@ -202,7 +202,12 @@ export const chatHandlers: Record<string, (a: Args) => unknown> = {
 	list_regex_scripts: () => regex,
 	upsert_regex_script: ({ input }) => {
 		const i = regex.findIndex((r) => r.id === input.id);
-		regex[i] = { ...regex[i], ...input };
+		if (i < 0) {
+			const r = { ...input, id: uid("r"), sourceFormat: input.sourceFormat ?? "native", createdAt: now(), updatedAt: now() };
+			regex.push(r);
+			return r;
+		}
+		regex[i] = { ...regex[i], ...input, updatedAt: now() };
 		return regex[i];
 	},
 	list_character_images: () => [],
@@ -326,3 +331,6 @@ export const chatHandlers: Record<string, (a: Args) => unknown> = {
 		return !!s;
 	},
 };
+
+/** 설정 화면 가짜 백엔드가 같은 데이터를 쓰도록 */
+export const mockData = { characters, personas, presets, apis, regex, convs, messages, uid, now };
