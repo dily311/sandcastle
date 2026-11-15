@@ -242,6 +242,8 @@ pub fn specta_builder() -> tauri_specta::Builder<tauri::Wry> {
             get_game_session_options,
             set_game_session_options,
             game_context_usage,
+            edit_game_message,
+            regenerate_game_reply,
             export_conversation,
             // task
             get_task,
@@ -434,6 +436,8 @@ pub fn specta_builder() -> tauri_specta::Builder<tauri::Wry> {
             get_game_session_options,
             set_game_session_options,
             game_context_usage,
+            edit_game_message,
+            regenerate_game_reply,
             export_conversation,
             // task
             get_task,

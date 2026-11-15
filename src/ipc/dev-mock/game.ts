@@ -62,6 +62,7 @@ const intro = [
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 const saves: any[] = [{ name: null, seq: 5, sessionId: "ss1", slotNumber: 1, currentSceneId: "s1", currentMapId: null, currentZoneId: null, currentLocationId: "l1", currentWeatherId: null, gameTime: 8 * 3600, stateSnapshot: {}, updatedAt: Date.now() - 3600_000 }];
 const sessionOptions: Record<string, Record<string, unknown>> = {};
+let replySeq = 0;
 
 const respond = (events: unknown[]) => ({ state: structuredClone(state), events });
 
@@ -95,6 +96,25 @@ export const gameHandlers: Record<string, (a: Args) => unknown> = {
 		state: structuredClone(state),
 		events: [{ type: "choicePresented", choices: ["차 고마워요", "여긴 어디예요?"] }],
 		lines: [line("dialogue", "player", input), line("dialogue", state.activeNpcId ?? "gc1", "천천히 마셔요. 몸이 따뜻해질 거예요.")],
+		text: "엘리안: 천천히 마셔요. 몸이 따뜻해질 거예요.",
+		messageId: `gm${++replySeq}`,
+		userMessageId: `gu${replySeq}`,
+	}),
+	edit_game_message: ({ messageId, content }) => ({
+		id: messageId,
+		text: content,
+		lines: (content as string).split("\n").filter((l) => l.trim()).map((l) => {
+			const m = /^([^:]+):\s*(.*)$/.exec(l);
+			return m ? line("dialogue", m[1].trim() === "엘리안" ? "gc1" : null, m[2]) : line("narration", null, l);
+		}),
+	}),
+	regenerate_game_reply: () => ({
+		state: structuredClone(state),
+		events: [],
+		lines: [line("dialogue", state.activeNpcId ?? "gc1", "(다시) 차가 식기 전에 드세요.")],
+		text: "엘리안: (다시) 차가 식기 전에 드세요.",
+		messageId: `gm${++replySeq}`,
+		userMessageId: `gu${replySeq}`,
 	}),
 	read_journal: () => [],
 	read_transcript: () => ({

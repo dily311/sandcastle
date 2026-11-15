@@ -1,5 +1,5 @@
 <script lang="ts">
-	import { ChevronLeft, ChevronRight, ChevronsRight, Copy, EyeOff, LogOut, Maximize2, Minimize2, Play, ScrollText, Send, Square, Volume2, VolumeX } from "@lucide/svelte";
+	import { ChevronLeft, ChevronRight, ChevronsRight, Copy, EyeOff, LogOut, Maximize2, Minimize2, Pencil, Play, RefreshCw, ScrollText, Send, Square, Volume2, VolumeX } from "@lucide/svelte";
 	import type { Choice, StageLine } from "$features/game/types";
 	import { isNarration } from "./playUtils";
 
@@ -38,6 +38,15 @@
 		onLog: () => void;
 		onToggleMute: () => void;
 		onToggleFocus: () => void;
+		// ---- 메시지 고치기 · 다시 만들기 (마지막 AI 응답이 무대에 있을 때) ----
+		canEditMessage: boolean;
+		editing: boolean;
+		editDraft: string;
+		onEdit: () => void;
+		onEditInput: (value: string) => void;
+		onEditSave: () => void;
+		onEditCancel: () => void;
+		onRegenerate: () => void;
 	};
 	let p: Props = $props();
 
@@ -54,7 +63,26 @@
 {#if p.show}
 	<div class="dock">
 	<section class="dialogue" aria-live="polite">
-		{#if showLine}
+		{#if p.editing}
+			<!-- 메시지 전체를 고침: 한 줄에 하나씩, 대사는 `이름: 내용`, 지문은 이름 없이 -->
+			<div class="edit">
+				<textarea
+					value={p.editDraft}
+					oninput={(e) => p.onEditInput(e.currentTarget.value)}
+					onkeydown={(e) => {
+						if (e.key === "Escape") p.onEditCancel();
+						if (e.key === "Enter" && (e.ctrlKey || e.metaKey)) p.onEditSave();
+					}}
+					rows="5"
+					aria-label="메시지 고치기"
+				></textarea>
+				<div class="edit-foot">
+					<span>한 줄에 하나씩 · 대사는 <code>이름: 내용</code> · Ctrl+Enter 저장</span>
+					<button class="g-btn" type="button" onclick={p.onEditCancel}>취소</button>
+					<button class="g-btn primary" type="button" disabled={p.isLoading || !p.editDraft.trim()} onclick={p.onEditSave}>저장</button>
+				</div>
+			</div>
+		{:else if showLine}
 			{#if !narration && p.speakerName}<span class="speaker">{p.speakerName}</span>{/if}
 			<button class="line" type="button" onclick={p.onStageClick} disabled={!p.isReadingScript} title="다음 (Space)">
 				<span class:narration>{text}</span>
@@ -119,6 +147,8 @@
 	<!-- 대사창 아래 동작 줄 (메시지 도구처럼) -->
 	<div class="actions" role="toolbar" aria-label="대사 동작">
 		<button class="act" title="이 대사 복사" aria-label="이 대사 복사" disabled={!showLine} onclick={p.onCopy}><Copy /></button>
+		<button class="act" title="이 응답 메시지 고치기" aria-label="메시지 고치기" disabled={!p.canEditMessage || p.editing} onclick={p.onEdit}><Pencil /></button>
+		<button class="act" title="이 응답 다시 만들기" aria-label="다시 만들기" disabled={!p.canEditMessage} onclick={p.onRegenerate}><RefreshCw /></button>
 		<button class="act" class:on={p.autoAdvance} title={p.autoAdvance ? "자동 넘김 멈추기" : "자동 넘김"} aria-label="자동 넘김" aria-pressed={p.autoAdvance} onclick={p.onToggleAuto}>
 			{#if p.autoAdvance}<Square />{:else}<Play />{/if}
 		</button>
@@ -184,6 +214,42 @@
 	.act:disabled {
 		opacity: 0.4;
 		cursor: default;
+	}
+	.edit {
+		display: flex;
+		flex-direction: column;
+		gap: 8px;
+	}
+	.edit textarea {
+		width: 100%;
+		min-height: 110px;
+		padding: 10px 12px;
+		border: 1px solid var(--game-border);
+		border-radius: 10px;
+		background: var(--game-surface-hover);
+		color: var(--game-text-main);
+		font: inherit;
+		font-size: 15px;
+		line-height: 1.6;
+		resize: vertical;
+	}
+	.edit textarea:focus {
+		outline: none;
+		border-color: var(--game-accent-border);
+	}
+	.edit-foot {
+		display: flex;
+		align-items: center;
+		gap: 6px;
+	}
+	.edit-foot span {
+		flex: 1;
+		font-size: 12px;
+		color: var(--game-text-muted);
+	}
+	.edit-foot code {
+		font-family: var(--font-mono);
+		font-size: 11px;
 	}
 	.dialogue {
 		position: relative;

@@ -415,6 +415,9 @@ export interface GameMessages {
 
 export interface NpcReply {
 	text: string;
+	/** 저장된 AI 메시지 id (고치기·다시 만들기) */
+	messageId?: string | null;
+	userMessageId?: string | null;
 	events: GameEvent[];
 	lines: StageLine[];
 	state: RenderState;

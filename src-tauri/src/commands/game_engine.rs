@@ -388,3 +388,22 @@ pub async fn game_context_usage(
         preset_id,
     })
 }
+
+/// 게임 메시지 고치기 (AI 응답은 줄로 다시 나눠 화면·지난 대사에 반영)
+#[tauri::command]
+#[specta::specta]
+pub async fn edit_game_message(state: State<'_, AppState>, message_id: String, content: String) -> Result<crate::game::npc::EditedGameMessage, AppError> {
+    crate::game::npc::edit_message(&state, message_id, content).await
+}
+
+/// 마지막 AI 응답 다시 만들기 (그 응답이 바꾼 변수·관계는 되돌림)
+#[tauri::command]
+#[specta::specta]
+pub async fn regenerate_game_reply(
+    app: AppHandle,
+    state: State<'_, AppState>,
+    settings: State<'_, SettingsState<AppSetting>>,
+    message_id: String,
+) -> Result<crate::game::npc::NpcReply, AppError> {
+    crate::game::npc::regenerate_reply(app, &state, &settings, message_id).await
+}

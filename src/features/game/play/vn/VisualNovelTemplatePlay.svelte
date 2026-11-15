@@ -254,6 +254,8 @@
 	}
 
 	async function dispatch(command: GameCommand) {
+		stageFrom = null;
+		editing = false;
 		if (isLoading) return;
 		const previousLines = scriptLines;
 		const previousIndex = lineIndex;
@@ -317,24 +319,71 @@
 				await runtimeStore.dispatchCommand({ type: "talk", gameCharacterId: characterId });
 			}
 			const reply = (await call(commands.npcSay(characterId, input), { source: "game" })) as unknown as NpcReply;
-			runtimeStore.setState({
-				state: reply.state,
-				events: reply.events,
-				history: { entries: [], hasMore: false, oldestSeq: 0 },
-			});
-			scriptLines = reply.lines;
-			lineIndex = 0;
-			scriptFinished = scriptLines.length === 0;
-			arrivalOnly = false;
-			npcResponseChoices = reply.events.flatMap((event) =>
-				event.type === "choicePresented" ? event.choices : [],
-			);
-			if (scriptLines.length) prepareLinePresentation(scriptLines);
-			else syncBgmFromStage();
+			applyReply(reply);
 		} catch (error) {
 			console.error("NPC message failed:", error);
 			freeTextInput = input;
 			hideSceneChoicesDuringTalk = false;
+		} finally {
+			isLoading = false;
+		}
+	}
+
+	/** AI 응답(새로 받은 것, 다시 만든 것)을 무대에 올림 */
+	function applyReply(reply: NpcReply) {
+		runtimeStore.setState({
+			state: reply.state,
+			events: reply.events,
+			history: { entries: [], hasMore: false, oldestSeq: 0 },
+		});
+		scriptLines = reply.lines;
+		lineIndex = 0;
+		scriptFinished = scriptLines.length === 0;
+		arrivalOnly = false;
+		npcResponseChoices = reply.events.flatMap((event) => (event.type === "choicePresented" ? event.choices : []));
+		lastReply = reply.messageId ? { messageId: reply.messageId, text: reply.text, lines: reply.lines } : null;
+		stageFrom = reply.messageId ?? null;
+		if (scriptLines.length) prepareLinePresentation(scriptLines);
+		else syncBgmFromStage();
+	}
+
+	// ---- 메시지 고치기 · 다시 만들기 (화면은 대사지만 단위는 AI 메시지 하나) ----
+	let lastReply = $state<{ messageId: string; text: string; lines: StageLine[] } | null>(null);
+	/** 지금 무대의 대사가 어느 AI 메시지의 것인지 (명령·선택지로 다른 대사가 오르면 비움) */
+	let stageFrom = $state<string | null>(null);
+	const onReply = $derived(!!lastReply && stageFrom === lastReply.messageId);
+	let editing = $state(false);
+	let editDraft = $state("");
+	function startEdit() {
+		if (!lastReply) return;
+		editDraft = lastReply.text;
+		editing = true;
+		autoAdvance = false;
+	}
+	async function saveEdit() {
+		if (!lastReply || !editDraft.trim()) return;
+		isLoading = true;
+		try {
+			const r = await call(commands.editGameMessage(lastReply.messageId, editDraft), { source: "game" });
+			const lines = r.lines as unknown as StageLine[];
+			lastReply = { messageId: r.id, text: r.text, lines };
+			scriptLines = lines;
+			lineIndex = 0;
+			scriptFinished = lines.length === 0;
+			if (lines.length) prepareLinePresentation(lines);
+			editing = false;
+			toasts.success("메시지 고침");
+		} finally {
+			isLoading = false;
+		}
+	}
+	async function regenerate() {
+		if (!lastReply || isLoading) return;
+		isLoading = true;
+		editing = false;
+		try {
+			const reply = (await call(commands.regenerateGameReply(lastReply.messageId), { source: "game" })) as unknown as NpcReply;
+			applyReply(reply);
 		} finally {
 			isLoading = false;
 		}
@@ -512,6 +561,14 @@
 			onLog={() => openPanelTab("log")}
 			onToggleMute={toggleBgmMute}
 			onToggleFocus={() => layout.toggleSidebar()}
+			canEditMessage={onReply && !isLoading}
+			{editing}
+			{editDraft}
+			onEdit={startEdit}
+			onEditInput={(v) => (editDraft = v)}
+			onEditSave={saveEdit}
+			onEditCancel={() => (editing = false)}
+			onRegenerate={regenerate}
 		/>
 		{#if uiHidden}<p class="hidden-hint">무대를 누르면 대사창이 다시 보임</p>{/if}
 		{#if isLoading}<div class="busy" role="status"><span></span>처리 중</div>{/if}

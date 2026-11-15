@@ -565,6 +565,32 @@ impl GameRuntime {
     /// plan_ai_changes로 검증을 통과한 변경만 적용한다. 프론트가 부를 수 있는 GameCommand가 아니라
     /// 런타임 안쪽 메서드다 (아무 변수나 쓸 수 있게 되면 안 되니까). 변경은 VariableChanged로
     /// 환원돼서 평소 이벤트 전파(auto 이벤트, 씬 등)를 그대로 탄다.
+    /// 다시 생성할 때: 그 응답이 바꾼 변수·관계를 원래 값으로 되돌린다.
+    /// 이벤트를 다시 일으키지 않도록 상태에 바로 쓴다 (되돌린 결과는 '그 응답이 없던 때'와 같다).
+    pub fn rollback_ai_changes(&mut self, vars: &[(String, serde_json::Value)], relations: &[(String, String, String, i64)]) {
+        if !self.state.flags.is_object() {
+            self.state.flags = serde_json::json!({});
+        }
+        if let Some(obj) = self.state.flags.as_object_mut() {
+            for (key, old) in vars {
+                if old.is_null() {
+                    obj.remove(key);
+                } else {
+                    obj.insert(key.clone(), old.clone());
+                }
+            }
+        }
+        if !self.state.relationships_json.is_object() {
+            self.state.relationships_json = serde_json::json!({});
+        }
+        if let Some(obj) = self.state.relationships_json.as_object_mut() {
+            for (from, to, axis, old) in relations {
+                let entry = obj.entry(format!("{from}>{to}")).or_insert_with(|| serde_json::json!({ "tags": [] }));
+                entry[axis.as_str()] = serde_json::Value::from(*old);
+            }
+        }
+    }
+
     pub fn apply_ai_changes(&mut self, changes: Vec<(String, serde_json::Value, serde_json::Value)>, relations: Vec<(String, String, String, i64, i64)>) -> Vec<GameEvent> {
         self.state.turn_fired = false;
         self.queue.extend(changes.into_iter().map(|(key, old, new)| GameEvent::VariableChanged { key, old, new }));

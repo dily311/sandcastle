@@ -79,6 +79,12 @@ fn check_rate_limit(state: &AppState, game_id: &str) -> Result<(), AppError> {
 pub struct NpcReply {
     /// <choice> 태그를 벗겨낸 텍스트
     pub text: String,
+    /// 저장된 AI 메시지 id (고치기·다시 만들기에 씀)
+    #[serde(rename = "messageId")]
+    pub message_id: Option<String>,
+    /// 저장된 플레이어 입력 메시지 id
+    #[serde(rename = "userMessageId")]
+    pub user_message_id: Option<String>,
     /// 보통 [] 또는 [ChoicePresented]. ChoicePresented는 시스템이 아니라 여기서만 만들어진다.
     pub events: Vec<crate::game::runtime::GameEvent>,
     /// 줄 단위로 나눈 응답 + 줄마다 실행할 연출 (표정, 효과음, BGM, CG, 화면 효과). text는 같은 내용의 평문(`이름: 대사`)이다.
@@ -394,7 +400,7 @@ async fn converse(app: AppHandle, state: &State<'_, AppState>, settings: &State<
 
     // 여기서부터는 런타임 락을 잡은 채로 끝까지 한다 — AI 호출 동안 사용자가 다른 세션으로 갈아탔을 수
     // 있어서 같은 세션인지 확인하고, seq 발급/저장/적용이 다른 커맨드와 섞이지 않게 하려는 것.
-    let (applied_events, render, plain, lines) = {
+    let (applied_events, render, plain, lines, user_msg_id, ai_msg_id) = {
         let mut guard = state.active_runtime.lock().await;
         let runtime = guard.as_mut().ok_or_else(|| AppError::not_found("진행 중인 세션이 없습니다"))?;
         if runtime.state().session_id != snap.session_id {
@@ -455,6 +461,9 @@ async fn converse(app: AppHandle, state: &State<'_, AppState>, settings: &State<
         let ai_meta = if meta.is_empty() { serde_json::Value::Null } else { serde_json::Value::Object(meta) };
 
         // 메시지의 seq가 곧 그 메시지의 일지 항목 seq다 (같은 번호로 일지에도 한 줄 남긴다).
+        // id는 미리 정해서 응답에 실어 보낸다 (화면에서 그 메시지를 고치거나 다시 만들 수 있게).
+        let user_msg_id = uuid::Uuid::new_v4().to_string();
+        let ai_msg_id = uuid::Uuid::new_v4().to_string();
         let messages = [
             (user_seq, "user", None::<String>, None::<String>, trimmed.to_string(), serde_json::Value::Null, serde_json::json!([{ "kind": "dialogue", "speaker": "player", "text": trimmed, "cues": [] }])),
             (ai_seq, "assistant", Some(snap.character_name.clone()), partner_id.clone(), plain.clone(), ai_meta, serde_json::to_value(&lines).unwrap_or(serde_json::json!([]))),
@@ -464,10 +473,11 @@ async fn converse(app: AppHandle, state: &State<'_, AppState>, settings: &State<
         let mut tx = state.db.begin().await?;
         upsert_game_player_sessions(&mut *tx, runtime.state().to_session_input(game_id.clone())).await?;
         for (seq, role, name, char_id, content, meta, journal_lines) in messages {
+            let id = if role == "user" { user_msg_id.clone() } else { ai_msg_id.clone() };
             upsert_game_message(
                 &mut *tx,
                 &conversation_id,
-                GameMessagesInput { id: None, seq, conversation_id: conversation_id.clone(), role: role.to_string(), name, character_id: char_id, content, meta },
+                GameMessagesInput { id: Some(id), seq, conversation_id: conversation_id.clone(), role: role.to_string(), name, character_id: char_id, content, meta },
             )
             .await?;
             upsert_game_journal(
@@ -496,7 +506,7 @@ async fn converse(app: AppHandle, state: &State<'_, AppState>, settings: &State<
         if !events.is_empty() {
             crate::game::journal::record(&state.db, runtime, &game_id, None, &events).await?;
         }
-        (events, runtime.render_state(), plain, lines)
+        (events, runtime.render_state(), plain, lines, user_msg_id, ai_msg_id)
     };
 
     let mut events = Vec::new();
@@ -504,7 +514,7 @@ async fn converse(app: AppHandle, state: &State<'_, AppState>, settings: &State<
         events.push(crate::game::runtime::GameEvent::ChoicePresented { choices });
     }
     events.extend(applied_events);
-    Ok(NpcReply { text: plain, lines, events, state: render })
+    Ok(NpcReply { text: plain, message_id: Some(ai_msg_id), user_message_id: Some(user_msg_id), lines, events, state: render })
 }
 
 /// "<tag>값</tag>"와 "<tag::대상>값</tag>"를 뽑는다. → (태그를 뺀 본문, [(대상, 값)]).
@@ -693,4 +703,162 @@ mod tests {
         assert_eq!(participants_key(&["b", "a"]), participants_key(&["a", "b"]));
         assert_eq!(participants_key(&["a"]), "a");
     }
+}
+
+// =======================================
+// 메시지 고치기 · 다시 만들기 (화면은 대사 형식이지만 단위는 메시지)
+// =======================================
+
+/// 고친 메시지: 화면에 다시 그릴 줄
+#[derive(serde::Serialize, specta::Type)]
+#[serde(rename_all = "camelCase")]
+pub struct EditedGameMessage {
+    pub id: String,
+    pub text: String,
+    pub lines: Vec<crate::game::stage::StageLine>,
+}
+
+async fn load_message(state: &State<'_, AppState>, message_id: &str) -> Result<(crate::models::game::GameMessages, String, String), AppError> {
+    let msg = sqlx::query_as::<_, (String, i64, String, String, Option<String>, Option<String>, String, Option<String>)>(
+        "SELECT id, seq, conversation_id, role, name, character_id, content, meta FROM game_messages WHERE id = ?",
+    )
+    .bind(message_id)
+    .fetch_optional(&state.db)
+    .await?
+    .ok_or_else(|| AppError::not_found("메시지를 찾을 수 없습니다"))?;
+    let (session_id, participants_key) = sqlx::query_as::<_, (String, String)>("SELECT session_id, participants_key FROM game_conversations WHERE id = ?")
+        .bind(&msg.2)
+        .fetch_one(&state.db)
+        .await?;
+    let m = crate::models::game::GameMessages {
+        id: msg.0,
+        seq: msg.1 as u32,
+        conversation_id: msg.2,
+        role: msg.3,
+        name: msg.4,
+        character_id: msg.5,
+        content: msg.6,
+        meta: msg.7.and_then(|s| serde_json::from_str(&s).ok()).unwrap_or(serde_json::Value::Null),
+        created_at: 0,
+        updated_at: 0,
+    };
+    Ok((m, session_id, participants_key))
+}
+
+/// 메시지 내용 고치기. AI 메시지면 `이름: 대사` 형식을 다시 줄로 나눠 화면·지난 대사에 반영한다.
+/// (그 응답이 바꾼 변수·관계는 그대로 둔다 — 다시 정하려면 다시 만들기)
+pub async fn edit_message(state: &State<'_, AppState>, message_id: String, content: String) -> Result<EditedGameMessage, AppError> {
+    use crate::game::stage::{LineKind, StageLine};
+    let content = content.trim().to_string();
+    if content.is_empty() || content.chars().count() > MAX_INPUT_CHARS * 20 {
+        return Err(AppError::validation("내용 길이가 올바르지 않습니다", None));
+    }
+    let (msg, session_id, _) = load_message(state, &message_id).await?;
+    let (lines, plain) = {
+        let mut guard = state.active_runtime.lock().await;
+        let runtime = guard.as_mut().ok_or_else(|| AppError::not_found("진행 중인 세션이 없습니다"))?;
+        if runtime.state().session_id != session_id {
+            return Err(AppError::validation("지금 열린 플레이의 메시지만 고칠 수 있습니다", None));
+        }
+        if msg.role == "user" {
+            (vec![StageLine { kind: LineKind::Dialogue, speaker: Some("player".into()), text: content.clone(), cues: vec![] }], content.clone())
+        } else {
+            let mut speakers: std::collections::HashSet<String> = runtime.present_npc_ids().into_iter().collect();
+            if let Some(c) = &msg.character_id {
+                speakers.insert(c.clone());
+            }
+            let lines = runtime.parse_ai_stage(&content, speakers, msg.character_id.as_deref());
+            let def = runtime.definition();
+            let plain = crate::game::stage::to_plain(&lines, &|id: &str| {
+                if id == "player" { "플레이어".to_string() } else { def.character(id).map(|c| c.name.clone()).unwrap_or_else(|| id.to_string()) }
+            });
+            (lines, plain)
+        }
+    };
+    let mut meta = if msg.meta.is_object() { msg.meta.clone() } else { serde_json::json!({}) };
+    if msg.role != "user" {
+        meta["lines"] = serde_json::to_value(&lines).unwrap_or(serde_json::Value::Null);
+    }
+    meta["edited"] = serde_json::Value::Bool(true);
+
+    let mut tx = state.db.begin().await?;
+    sqlx::query("UPDATE game_messages SET content = ?, meta = ?, updated_at = ? WHERE id = ?")
+        .bind(&plain)
+        .bind(meta.to_string())
+        .bind(chrono::Utc::now().timestamp_millis())
+        .bind(&msg.id)
+        .execute(&mut *tx)
+        .await?;
+    let payload = serde_json::json!({ "conversationId": msg.conversation_id, "role": msg.role, "lines": lines });
+    sqlx::query("UPDATE game_journal SET payload_json = ? WHERE session_id = ? AND seq = ?")
+        .bind(payload.to_string())
+        .bind(&session_id)
+        .bind(msg.seq)
+        .execute(&mut *tx)
+        .await?;
+    tx.commit().await?;
+    Ok(EditedGameMessage { id: msg.id, text: plain, lines })
+}
+
+/// 마지막 AI 응답을 다시 만든다: 그 응답과 플레이어 입력을 지우고, 응답이 바꾼 변수·관계를 되돌린 뒤
+/// 같은 입력으로 다시 보낸다. 그 뒤로 다른 일(명령, 이벤트)이 있었으면 되돌릴 수 없어 막는다.
+pub async fn regenerate_reply(app: AppHandle, state: &State<'_, AppState>, settings: &State<'_, SettingsState<AppSetting>>, message_id: String) -> Result<NpcReply, AppError> {
+    let game_id = current_game_id(state)?;
+    let (msg, session_id, participants_key) = load_message(state, &message_id).await?;
+    if msg.role != "assistant" {
+        return Err(AppError::validation("AI 응답만 다시 만들 수 있습니다", None));
+    }
+    let all = get_game_messages(&state.db, &msg.conversation_id).await?;
+    let pos = all.iter().position(|m| m.id == msg.id).ok_or_else(|| AppError::not_found("메시지를 찾을 수 없습니다"))?;
+    if pos + 1 != all.len() {
+        return Err(AppError::validation("가장 최근 응답만 다시 만들 수 있습니다", None));
+    }
+    let user = pos.checked_sub(1).map(|i| &all[i]).filter(|m| m.role == "user").ok_or_else(|| AppError::validation("이 응답의 입력을 찾을 수 없습니다", None))?;
+    let input = user.content.clone();
+
+    // 이 응답 뒤의 일지: 이 응답이 일으킨 변수·관계 변경만 있어야 한다
+    let later = sqlx::query_as::<_, (String, Option<String>)>("SELECT kind, payload_json FROM game_journal WHERE session_id = ? AND seq > ?")
+        .bind(&session_id)
+        .bind(msg.seq)
+        .fetch_all(&state.db)
+        .await?;
+    const OWN: [&str; 3] = ["variableChanged", "relationChangeRequested", "relationChanged"];
+    let blocked = later.iter().any(|(kind, payload)| {
+        let t = payload.as_deref().and_then(|p| serde_json::from_str::<serde_json::Value>(p).ok()).and_then(|v| v.get("type").and_then(|t| t.as_str()).map(str::to_string));
+        kind != "event" || !t.is_some_and(|t| OWN.contains(&t.as_str()))
+    });
+    if blocked {
+        return Err(AppError::validation("이 응답 뒤로 다른 일이 일어나서 다시 만들 수 없습니다", None));
+    }
+
+    let vars: Vec<(String, serde_json::Value)> = msg.meta["varChanges"]
+        .as_array()
+        .map(|a| a.iter().filter_map(|c| Some((c["key"].as_str()?.to_string(), c["old"].clone()))).collect())
+        .unwrap_or_default();
+    let rels: Vec<(String, String, String, i64)> = msg.meta["relChanges"]
+        .as_array()
+        .map(|a| a.iter().filter_map(|c| Some((c["from"].as_str()?.to_string(), c["to"].as_str()?.to_string(), c["axis"].as_str()?.to_string(), c["old"].as_i64()?))).collect())
+        .unwrap_or_default();
+
+    {
+        let mut guard = state.active_runtime.lock().await;
+        let runtime = guard.as_mut().ok_or_else(|| AppError::not_found("진행 중인 세션이 없습니다"))?;
+        if runtime.state().session_id != session_id {
+            return Err(AppError::validation("지금 열린 플레이의 응답만 다시 만들 수 있습니다", None));
+        }
+        runtime.rollback_ai_changes(&vars, &rels);
+        let mut tx = state.db.begin().await?;
+        upsert_game_player_sessions(&mut *tx, runtime.state().to_session_input(game_id.clone())).await?;
+        sqlx::query("DELETE FROM game_journal WHERE session_id = ? AND seq >= ?").bind(&session_id).bind(user.seq).execute(&mut *tx).await?;
+        sqlx::query("DELETE FROM game_relationship_snapshots WHERE session_id = ? AND seq >= ?").bind(&session_id).bind(user.seq).execute(&mut *tx).await?;
+        sqlx::query("DELETE FROM game_messages WHERE id IN (?, ?)").bind(&user.id).bind(&msg.id).execute(&mut *tx).await?;
+        tx.commit().await?;
+    }
+
+    let mode = if participants_key == SCENE_PARTICIPANTS_KEY {
+        Mode::Scene
+    } else {
+        Mode::Npc(msg.character_id.clone().ok_or_else(|| AppError::validation("대화 상대를 찾을 수 없습니다", None))?)
+    };
+    converse(app, state, settings, mode, input).await
 }

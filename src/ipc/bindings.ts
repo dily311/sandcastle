@@ -77,6 +77,10 @@ export const commands = {
 	setGameSessionOptions: (sessionId: string, apiProfileId: string | null, promptPresetId: string | null, playerId: string | null, options?: InvokeOptions) => __TAURI_INVOKE<null>("set_game_session_options", { sessionId, apiProfileId, promptPresetId, playerId }, options),
 	/**  게임 세션의 컨텍스트 사용량: 이번에 앱을 켠 뒤 마지막으로 보낸 프롬프트 기준 */
 	gameContextUsage: (sessionId: string, options?: InvokeOptions) => __TAURI_INVOKE<ContextUsage_Serialize>("game_context_usage", { sessionId }, options),
+	/**  게임 메시지 고치기 (AI 응답은 줄로 다시 나눠 화면·지난 대사에 반영) */
+	editGameMessage: (messageId: string, content: string, options?: InvokeOptions) => __TAURI_INVOKE<EditedGameMessage_Serialize>("edit_game_message", { messageId, content }, options),
+	/**  마지막 AI 응답 다시 만들기 (그 응답이 바꾼 변수·관계는 되돌림) */
+	regenerateGameReply: (messageId: string, options?: InvokeOptions) => __TAURI_INVOKE<NpcReply_Serialize>("regenerate_game_reply", { messageId }, options),
 	/**  대화 하나를 파일로 내보내기. format: "jsonl"(SillyTavern 채팅) | "txt"(읽기용 글) */
 	exportConversation: (id: string, format: string, path: string, options?: InvokeOptions) => __TAURI_INVOKE<number>("export_conversation", { id, format, path }, options),
 	getTask: (taskId: string, options?: InvokeOptions) => __TAURI_INVOKE<TaskInfo_Serialize>("get_task", { taskId }, options),
@@ -1010,6 +1014,23 @@ export type DialogueDoneEvent = {
 export type DisplayItem = {
 	role: string,
 	content: string,
+};
+
+/**  고친 메시지: 화면에 다시 그릴 줄 */
+export type EditedGameMessage = EditedGameMessage_Serialize | EditedGameMessage_Deserialize;
+
+/**  고친 메시지: 화면에 다시 그릴 줄 */
+export type EditedGameMessage_Deserialize = {
+	id: string,
+	text: string,
+	lines: StageLine_Deserialize[],
+};
+
+/**  고친 메시지: 화면에 다시 그릴 줄 */
+export type EditedGameMessage_Serialize = {
+	id: string,
+	text: string,
+	lines: StageLine_Serialize[],
 };
 
 export type ErrorCategory = "ARCHIVE" | "NOT_FOUND" | "VALIDATION" | "DATABASE" | "AI_PROVIDER" | "IO" | "WINDOW" | "GAME" | "INTERNAL";
@@ -2155,6 +2176,10 @@ export type NpcReply = NpcReply_Serialize | NpcReply_Deserialize;
 export type NpcReply_Deserialize = {
 	/**  <choice> 태그를 벗겨낸 텍스트 */
 	text: string,
+	/**  저장된 AI 메시지 id (고치기·다시 만들기에 씀) */
+	messageId?: string | null,
+	/**  저장된 플레이어 입력 메시지 id */
+	userMessageId?: string | null,
 	/**  보통 [] 또는 [ChoicePresented]. ChoicePresented는 시스템이 아니라 여기서만 만들어진다. */
 	events: GameEvent_Deserialize[],
 	/**  줄 단위로 나눈 응답 + 줄마다 실행할 연출 (표정, 효과음, BGM, CG, 화면 효과). text는 같은 내용의 평문(`이름: 대사`)이다. */
@@ -2170,6 +2195,10 @@ export type NpcReply_Deserialize = {
 export type NpcReply_Serialize = {
 	/**  <choice> 태그를 벗겨낸 텍스트 */
 	text: string,
+	/**  저장된 AI 메시지 id (고치기·다시 만들기에 씀) */
+	messageId: string | null,
+	/**  저장된 플레이어 입력 메시지 id */
+	userMessageId: string | null,
 	/**  보통 [] 또는 [ChoicePresented]. ChoicePresented는 시스템이 아니라 여기서만 만들어진다. */
 	events: GameEvent_Serialize[],
 	/**  줄 단위로 나눈 응답 + 줄마다 실행할 연출 (표정, 효과음, BGM, CG, 화면 효과). text는 같은 내용의 평문(`이름: 대사`)이다. */
