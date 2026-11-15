@@ -338,7 +338,7 @@
 
 		<form class="composer" onsubmit={(e) => e.preventDefault()}>
 			<IconButton label="첨부·추가 기능"><Plus /></IconButton>
-			<Textarea bind:value={draft} rows={1} autosize maxRows={8} placeholder="다음 행동이나 대사 입력" aria-label="메시지" />
+			<Textarea bind:value={draft} rows={1} autosize maxRows={8} placeholder="메시지 입력" aria-label="메시지" />
 			<IconButton label="보내기" variant="solid" disabled={!draft.trim()}><Send /></IconButton>
 		</form>
 	</section>

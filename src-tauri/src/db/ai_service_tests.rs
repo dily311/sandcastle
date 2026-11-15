@@ -61,3 +61,14 @@ async fn replace_blocks_keeps_order_ids_and_triggers() {
     let preset = db::get_prompt_preset(&pool, &id).await.unwrap();
     assert!(preset.settings_json.is_none(), "빈 설정은 NULL");
 }
+
+#[tokio::test]
+async fn default_preset_is_seeded_and_builds() {
+    use crate::service::prompt::prompt_manager::PromptManager;
+    let pool = sqlx::sqlite::SqlitePoolOptions::new().connect("sqlite::memory:").await.unwrap();
+    sqlx::migrate!("src/db/migrations").run(&pool).await.unwrap();
+    let p = PromptManager::load_preset(&pool, Some("default")).await.unwrap().expect("기본 프리셋");
+    assert_eq!(p.preset.name, "Default");
+    assert_eq!(p.blocks.len(), 7);
+    assert!(p.blocks.iter().any(|b| b.identifier == "main" && b.content.contains("{{char}}'s next reply")));
+}

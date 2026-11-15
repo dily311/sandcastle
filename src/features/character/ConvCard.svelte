@@ -37,7 +37,7 @@
 			...folders.map((f, i) => ({ label: `'${f.name}'(으)로 이동`, icon: FolderInput, separator: i === 0, onselect: () => library.move(conv.id, f.id) })),
 			...(conv.folderId ? [{ label: "폴더에서 빼기", icon: FolderOutput, separator: folders.length === 0, onselect: () => library.move(conv.id, null) }] : []),
 			{ label: "복제", icon: Copy, separator: true, onselect: () => library.duplicate(conv.id) },
-			{ label: "내보내기", icon: Download, onselect: () => convActions.export(conv) },
+			{ label: "내보내기…", icon: Download, onselect: () => convActions.exportMenu(conv) },
 			{ label: "삭제", icon: Trash2, danger: true, onselect: () => convActions.remove(conv) },
 		];
 	});
@@ -86,7 +86,7 @@
 		</span>
 		<div class="tools">
 			<IconButton label="복제" size="sm" onclick={() => library.duplicate(conv.id)}><Copy /></IconButton>
-			<IconButton label="내보내기" size="sm" onclick={() => convActions.export(conv)}><Download /></IconButton>
+			<IconButton label="내보내기 (형식 고르기)" size="sm" onclick={() => convActions.exportMenu(conv)}><Download /></IconButton>
 			<IconButton label="삭제" size="sm" onclick={() => convActions.remove(conv)}><Trash2 /></IconButton>
 		</div>
 	</div>

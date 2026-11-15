@@ -546,13 +546,33 @@ pub async fn set_conversation_worldinfo(state: State<'_, AppState>, id: String, 
     Ok(conversation::get_conversation(&state.db, &id).await?)
 }
 
-/// 책 하나를 SillyTavern 월드인포 JSON으로 내보내기. 내보낸 항목 수를 돌려준다
+/// 책 하나를 내보내기. format: "json"(SillyTavern 월드인포) | "txt"(읽기용 글). 내보낸 항목 수를 돌려준다
 #[tauri::command]
 #[specta::specta]
-pub async fn export_worldinfo_book(state: State<'_, AppState>, id: String, path: String) -> Result<u32> {
+pub async fn export_worldinfo_book(state: State<'_, AppState>, id: String, format: String, path: String) -> Result<u32> {
     let entries = conversation::get_all_worldinfo_entries(&state.db, &id).await?;
-    std::fs::write(&path, sillytavern_book_json(&entries).to_string())
-        .map_err(|e| AppError::io(format!("파일을 쓸 수 없습니다: {e}")))?;
+    let out = match format.as_str() {
+        "json" => sillytavern_book_json(&entries).to_string(),
+        "txt" => {
+            let name = conversation::get_all_worldinfo_books(&state.db).await?.into_iter().find(|b| b.id == id).map(|b| b.name).unwrap_or_default();
+            let mut s = format!("{name}
+
+");
+            for e in &entries {
+                let title = if e.comment.trim().is_empty() { e.keys.join(", ") } else { e.comment.clone() };
+                let keys = if e.constant { "항상 넣음".to_string() } else { e.keys.join(", ") };
+                s.push_str(&format!("## {title}{}
+키워드: {keys}
+
+{}
+
+", if e.enabled { "" } else { " (꺼짐)" }, e.content.trim()));
+            }
+            s
+        }
+        _ => return Err(AppError::validation(format!("모르는 형식: {format}"), None)),
+    };
+    std::fs::write(&path, out).map_err(|e| AppError::io(format!("파일을 쓸 수 없습니다: {e}")))?;
     Ok(entries.len() as u32)
 }
 

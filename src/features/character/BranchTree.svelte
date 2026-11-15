@@ -122,7 +122,6 @@
 					{/each}
 				</ol>
 			</div>
-			<p class="hint">왼쪽 번호는 메시지 번호. 큰 점은 대화의 끝, 작은 점은 갈라진 메시지. 사이 구간은 접어 둠</p>
 		{:else}
 			<div class="panel-none">
 				<GitBranch />

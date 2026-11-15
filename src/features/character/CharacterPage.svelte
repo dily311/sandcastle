@@ -12,6 +12,7 @@
 	import ChatView from "./ChatView.svelte";
 	import CharacterEditor from "./CharacterEditor.svelte";
 	import { library, type Character } from "./library.svelte";
+	import { charActions } from "./actions";
 	import { drops, extOf, storeFile } from "$app/drop.svelte";
 
 	// 캐릭터 목록 → 캐릭터 상세 → 대화 상세 (대화 목록·폴더는 대화 상세의 왼쪽 사이드바)
@@ -98,7 +99,7 @@
 			{ label: c.favorite ? "즐겨찾기 해제" : "즐겨찾기", icon: c.favorite ? StarOff : Star, onselect: () => toggleFavorite(c) },
 			{ label: "페르소나로 복사", icon: UserRound, separator: true, onselect: () => toPersona(c) },
 			{ label: "게임에 넣기", icon: Gamepad2, onselect: () => openGamePick(c) },
-			{ label: "캐릭터와 대화 모두 내보내기", icon: Download, separator: true, onselect: () => exportCharacter(c) },
+			{ label: "내보내기…", icon: Download, separator: true, onselect: () => charActions.exportMenu(c) },
 			{ label: "삭제", icon: Trash2, danger: true, separator: true, onselect: () => removeCharacter(c) },
 		];
 	});
@@ -125,12 +126,6 @@
 	async function toggleFavorite(c: Character) {
 		await call(commands.toggleFavoriteCharacter(c.id, !c.favorite), { source: "character" });
 		c.favorite = !c.favorite;
-	}
-	async function exportCharacter(c: Character) {
-		const path = await pickSavePath(`${c.name}.zip`, [PACK_FILES]);
-		if (!path) return;
-		await call(commands.exportCharacterPack([c.id], null, path), { source: "character" });
-		toasts.success("내보냄");
 	}
 	async function removeCharacter(c: Character) {
 		const n = library.convsOf(c.id).length;

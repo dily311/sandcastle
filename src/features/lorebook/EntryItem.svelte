@@ -3,6 +3,7 @@
 	import { ChevronDown, ChevronRight, Copy, Trash2 } from "@lucide/svelte";
 	import { Badge, Field, IconButton, Input, Switch, TagInput, Textarea } from "$shared/ui";
 	import { entryTitle, isDraft, isValid, lorebook, type Entry } from "./lorebook.svelte";
+	import { confirmAction } from "$shared/stores/confirm.svelte";
 
 	interface Props {
 		entry: Entry;
@@ -55,6 +56,14 @@
 			saving = false;
 		}
 	}
+	async function remove() {
+		// 쓴 내용이 있는 항목은 한 번 묻기
+		if (!isDraft(draft) || draft.content.trim()) {
+			const ok = await confirmAction({ title: "항목 삭제", message: `'${entryTitle(draft)}' 항목을 지움`, confirmLabel: "삭제", danger: true });
+			if (!ok) return;
+		}
+		await lorebook.removeEntry(draft);
+	}
 	const status = $derived(saving ? "저장 중…" : failed ? "저장 못 함" : !valid ? "키워드를 넣거나 '항상 넣기'를 켜야 저장됨" : dirty ? "고치는 중" : isDraft(draft) ? "" : "저장됨");
 </script>
 
@@ -72,6 +81,7 @@
 		</button>
 		{#if draft.constant}<Badge tone="accent">상시</Badge>{/if}
 		<span class="prio" title="우선순위">{draft.priority}</span>
+		{#if !open}<IconButton label="{entryTitle(draft)} 삭제" size="sm" onclick={remove}><Trash2 /></IconButton>{/if}
 	</div>
 	{#if open}
 		<div class="body">
@@ -97,7 +107,7 @@
 			<div class="foot">
 				<span class="status" class:warn={!valid || failed}>{status}</span>
 				<IconButton label="복제" size="sm" disabled={isDraft(draft)} onclick={() => lorebook.duplicate(draft)}><Copy /></IconButton>
-				<IconButton label="삭제" size="sm" onclick={() => lorebook.removeEntry(draft)}><Trash2 /></IconButton>
+				<IconButton label="삭제" size="sm" onclick={remove}><Trash2 /></IconButton>
 			</div>
 		</div>
 	{/if}

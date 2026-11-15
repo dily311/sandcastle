@@ -1,6 +1,6 @@
 <script lang="ts">
 	import { tick } from "svelte";
-	import { Bookmark, BookOpen, ChevronRight, Gauge, Copy, CornerUpLeft, FastForward, GitBranch, ImagePlus, Images, ListChecks, ListTree, PanelLeft, Plus, RefreshCw, Send, SlidersHorizontal, Square, Trash2, X } from "@lucide/svelte";
+	import { Bookmark, ChevronRight, Gauge, Copy, CornerUpLeft, FastForward, GitBranch, ImagePlus, Images, ListChecks, ListTree, PanelLeft, Plus, RefreshCw, Send, SlidersHorizontal, Square, Trash2, X } from "@lucide/svelte";
 	import { bookmarks } from "./bookmarks";
 	import { childrenOf, pathOf } from "./branches";
 	import SidePanel from "$app/SidePanel.svelte";
@@ -43,7 +43,6 @@
 			{ id: "settings", label: "대화 설정", icon: SlidersHorizontal },
 			{ id: "context", label: "컨텍스트·프리셋", icon: Gauge },
 			{ id: "toc", label: "목차", icon: ListTree },
-			{ id: "lorebook", label: "로어북", icon: BookOpen },
 			{ id: "bookmarks", label: "북마크", icon: Bookmark },
 			{ id: "branches", label: "분기", icon: GitBranch },
 			{ id: "assets", label: "에셋", icon: Images },
@@ -349,7 +348,7 @@
 			}}
 		>
 			<IconButton label="추가 기능" onclick={openPlus} disabled={!session || session.busy}><Plus /></IconButton>
-			<Textarea bind:value={draft} rows={1} autosize maxRows={8} placeholder={appSetting.sendOnEnter ? "다음 행동이나 대사 입력 (Shift+Enter 줄바꿈)" : "다음 행동이나 대사 입력 (Ctrl+Enter 보내기)"} aria-label="메시지" {onkeydown} {onpaste} />
+			<Textarea bind:value={draft} rows={1} autosize maxRows={8} placeholder={appSetting.sendOnEnter ? "메시지 입력 (Shift+Enter 줄바꿈)" : "메시지 입력 (Ctrl+Enter 보내기)"} aria-label="메시지" {onkeydown} {onpaste} />
 			{#if session?.busy}
 				<IconButton label="멈추기 (받은 데까지 저장)" variant="solid" onclick={() => session?.cancel()}><Square /></IconButton>
 			{:else}

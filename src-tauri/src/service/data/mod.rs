@@ -4,6 +4,7 @@
 //! - pack:     고른 캐릭터와 채팅만 옮기는 캐릭터 팩 (.scpack, 가져오면 병합)
 //! - backup:   앱 데이터 전체 백업 (.scbackup) / 재시작 후 복원
 pub mod archive;
+pub mod card;
 pub mod backup;
 pub mod overview;
 pub mod pack;

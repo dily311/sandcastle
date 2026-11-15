@@ -8,6 +8,7 @@
 	import Titlebar from "./Titlebar.svelte";
 	import Sidebar from "./Sidebar.svelte";
 	import DropLayer from "./DropLayer.svelte";
+	import ExportPicker from "./ExportPicker.svelte";
 	import { layout } from "./layout.svelte";
 	import SettingsPage from "$features/settings/SettingsPage.svelte";
 	import PersonaPage from "$features/persona/PersonaPage.svelte";
@@ -67,6 +68,7 @@
 	</div>
 </div>
 <DropLayer />
+<ExportPicker />
 <Toasts />
 <ConfirmHost />
 

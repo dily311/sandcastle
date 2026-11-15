@@ -38,6 +38,7 @@ CREATE TABLE IF NOT EXISTS characters (
   default_persona_id TEXT REFERENCES personas(id) ON DELETE SET NULL,
   default_prompt_preset_id TEXT REFERENCES prompt_presets(id) ON DELETE SET NULL,
   favorite INTEGER DEFAULT 0,
+  creator_notes TEXT,
   created_at INTEGER,
   updated_at INTEGER
 );
@@ -81,6 +82,7 @@ CREATE TABLE IF NOT EXISTS worldinfo_entries (
   keys TEXT,
   secondary_keys TEXT,
   content TEXT,
+  comment TEXT NOT NULL DEFAULT '',
   enabled INTEGER DEFAULT 1,
   priority INTEGER DEFAULT 0,
   constant INTEGER DEFAULT 0

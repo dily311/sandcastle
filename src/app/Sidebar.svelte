@@ -57,7 +57,7 @@
 						if (d) nav.go({ page: "character", charId: d.characterId ?? undefined, convId: d.id });
 					},
 				},
-				{ label: "내보내기", icon: Download, onselect: () => convActions.export(c) },
+				{ label: "내보내기…", icon: Download, onselect: () => convActions.exportMenu(c) },
 				{ label: "삭제", icon: Trash2, danger: true, separator: true, onselect: () => convActions.remove(c) },
 			],
 		};

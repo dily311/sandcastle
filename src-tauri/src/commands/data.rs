@@ -153,3 +153,11 @@ mod drop_tests {
         assert_eq!(safe_file_name(".."), "file");
     }
 }
+
+
+/// 캐릭터를 SillyTavern 카드로 내보내기. format: "json" | "png" (아바타에 카드를 넣은 그림)
+#[tauri::command]
+#[specta::specta]
+pub async fn export_character_card(state: State<'_, AppState>, id: String, format: String, path: String) -> Result<()> {
+    crate::service::data::card::export_card(&state.db, &id, &format, &PathBuf::from(path)).await
+}

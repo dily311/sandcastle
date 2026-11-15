@@ -1,10 +1,10 @@
 <script lang="ts">
-	import { Bookmark, ChevronLeft, Eye, EyeOff, FileArchive, ImagePlus, Pencil, Search, Trash2, X } from "@lucide/svelte";
+	import { Bookmark, Eye, EyeOff, FileArchive, ImagePlus, Pencil, Search, Trash2, X } from "@lucide/svelte";
 	import { Avatar, Button, ContextMenu, IconButton, Input, Select, Switch, type MenuItem } from "$shared/ui";
 	import { bookmarks, bookmarksOf } from "./bookmarks";
 	import NotesPanel from "./NotesPanel.svelte";
 	import BranchTree from "./BranchTree.svelte";
-	import LorePanel from "$features/lorebook/LorePanel.svelte";
+	import BookPicker from "$features/lorebook/BookPicker.svelte";
 	import ContextMeter from "./ContextMeter.svelte";
 	import ExportButton from "./ExportButton.svelte";
 	import PresetEditor from "$features/settings/PresetEditor.svelte";
@@ -55,30 +55,38 @@
 		if (!session.busy) void loadUsage();
 	});
 
-	// ---- 프리셋 빠른 편집 (패널 안에서) ----
-	let presetEdit = $state<PresetDetail | null>(null);
+	// ---- 프리셋: 컨텍스트 탭 아래에 바로 편집기 (이름·설명은 빼고) ----
+	const activePresetId = $derived(conv.promptPresetId || usage?.presetId || null);
+	let presetDetail = $state<PresetDetail | null>(null);
+	/** 취소·저장 뒤 편집기를 새로 그림 */
+	let presetRev = $state(0);
 	let presetSaving = $state(false);
-	async function editPreset() {
-		const id = conv.promptPresetId || usage?.presetId;
-		if (!id) return toasts.info("쓰는 프리셋이 없음. 설정 > 프리셋에서 만들 수 있음");
-		presetEdit = await call(commands.getPromptPreset(id), { source: "preset" });
+	async function loadPreset(id: string | null) {
+		if (!id) return void (presetDetail = null);
+		const d = await call(commands.getPromptPreset(id), { source: "preset", silent: true }).catch(() => null);
+		if (activePresetId === id) presetDetail = d;
 	}
+	$effect(() => {
+		void loadPreset(activePresetId);
+	});
 	async function savePreset(preset: PresetDetail["preset"], blocks: BlockInput[]) {
 		presetSaving = true;
 		try {
-			const d = await call(commands.savePromptPreset({ ...preset, id: preset.id }, blocks), { source: "preset" });
+			presetDetail = await call(commands.savePromptPreset({ ...preset, id: preset.id }, blocks), { source: "preset" });
 			library.presets = await call(commands.listPromptPresets(), { source: "preset" });
-			presetEdit = null;
-			toasts.success(`'${d.preset.name}' 저장함`);
+			presetRev++;
+			toasts.success("프리셋 저장함");
 			void loadUsage();
 		} finally {
 			presetSaving = false;
 		}
 	}
-	async function closePreset() {
-		if (await confirmAction({ title: "프리셋 편집 그만두기", message: "저장하지 않은 바뀐 내용은 버림", confirmLabel: "그만두기" })) presetEdit = null;
+	async function resetPreset() {
+		await loadPreset(activePresetId);
+		presetRev++;
 	}
 
+	const character = $derived(library.character(conv.characterId));
 	const persona = $derived(library.persona(conv.personaId) ?? library.personas[0]);
 	let personaOpen = $state(false);
 	let personaBtn: HTMLButtonElement | undefined = $state();
@@ -200,8 +208,6 @@
 			{/if}
 			<ContextMenu at={menu} items={menuItems} label="에셋 메뉴" onclose={() => (menu = null)} />
 		</div>
-	{:else if panel.tab === "lorebook"}
-		<LorePanel {conv} />
 	{:else if panel.tab === "branches"}
 		<BranchTree {conv} {onopen} />
 	{:else if panel.tab === "bookmarks"}
@@ -231,34 +237,28 @@
 				<li class="none">{tocQuery ? "찾는 항목 없음" : "메시지 없음"}</li>
 			{/each}
 		</ol>
-	{:else if panel.tab === "context" && presetEdit}
-		<div class="panel-body preset-edit">
-			<div class="back">
-				<IconButton label="대화 설정으로" size="sm" onclick={closePreset}><ChevronLeft /></IconButton>
-				<span>프리셋 편집 · <b>{presetEdit.preset.name}</b></span>
-			</div>
-			{#key presetEdit.preset.id}
-				<PresetEditor detail={presetEdit} saving={presetSaving} onsave={savePreset} oncancel={closePreset} quick />
-			{/key}
-		</div>
 	{:else if panel.tab === "context"}
-		<div class="panel-body">
+		<div class="panel-body preset-edit">
 			<section>
 				<h4>컨텍스트</h4>
 				<ContextMeter {usage} />
 			</section>
 			<section>
 				<h4>프리셋 <span class="faint">{conv.promptPresetId ? "이 대화에서 고름" : "앱·캐릭터 기본값"}</span></h4>
-				<div class="preset-card">
-					<span class="pt"><b>{usage?.presetName ?? "프리셋 없음"}</b><small>보낼 프롬프트 구성과 생성 옵션</small></span>
-					<Button size="sm" variant="soft" disabled={!usage?.presetId && !conv.promptPresetId} onclick={editPreset}>{#snippet icon()}<Pencil />{/snippet}편집</Button>
-				</div>
-				<label class="row"><span>바꾸기</span><Select value={conv.promptPresetId ?? DEFAULT} options={presetOptions} aria-label="이 대화의 프리셋" onchange={(e) => setOption({ promptPresetId: e.currentTarget.value })} /></label>
+				<Select value={conv.promptPresetId ?? DEFAULT} options={presetOptions} aria-label="이 대화의 프리셋" onchange={(e) => setOption({ promptPresetId: e.currentTarget.value })} />
 			</section>
+			{#if presetDetail}
+				{#key `${presetDetail.preset.id}:${presetRev}`}
+					<PresetEditor detail={presetDetail} saving={presetSaving} onsave={savePreset} oncancel={resetPreset} quick />
+				{/key}
+			{:else if activePresetId}
+				<p class="none small">프리셋 불러오는 중…</p>
+			{:else}
+				<p class="none small">쓰는 프리셋 없음. 설정 &gt; 프리셋에서 만들 수 있음</p>
+			{/if}
 		</div>
 	{:else}
 		<div class="panel-body">
-			<NotesPanel {conv} bare />
 			<section>
 				<h4>이 대화</h4>
 				<label class="row"><span>API</span><Select value={conv.apiProfileId ?? DEFAULT} options={apiOptions} onchange={(e) => setOption({ apiProfileId: e.currentTarget.value })} /></label>
@@ -266,10 +266,10 @@
 					<span>프리셋</span>
 					<div class="with-btn">
 						<Select value={conv.promptPresetId ?? DEFAULT} options={presetOptions} aria-label="프리셋" onchange={(e) => setOption({ promptPresetId: e.currentTarget.value })} />
-						<IconButton label="이 프리셋 빠르게 편집{usage?.presetName ? ` (${usage.presetName})` : ''}" size="sm" onclick={() => { panel.tab = "context"; void editPreset(); }}><Pencil /></IconButton>
+						<IconButton label="이 프리셋 빠르게 편집{usage?.presetName ? ` (${usage.presetName})` : ''}" size="sm" onclick={() => (panel.tab = "context")}><Pencil /></IconButton>
 					</div>
 				</div>
-				<div class="persona">
+				<div class="row">
 					<span>페르소나</span>
 					{#if personaOpen}
 						<div class="ppop" role="listbox" aria-label="페르소나 바꾸기" style={popStyle}>
@@ -292,11 +292,28 @@
 					<button bind:this={personaBtn} class="pcur" aria-haspopup="listbox" aria-expanded={personaOpen} onclick={togglePersona}>
 						<Avatar name={persona?.name ?? "?"} src={fileSrc(persona?.avatar)} color={persona?.color || null} size={40} />
 						<span class="pt"><b>{persona?.name ?? "없음"}</b>{#if persona?.description}<small>{persona.description}</small>{/if}</span>
-						<span class="pchange">바꾸기</span>
 					</button>
 				</div>
+			</section>
+			<hr />
+			<section>
 				<Switch checked={conv.imagesEnabled} label="캐릭터 이미지" description="키 목록 전송, <cg>로 표시" onchange={(v) => library.setImagesEnabled(conv.id, v)} />
 			</section>
+			<hr />
+			<section>
+				<h4>월드인포</h4>
+				<div class="wi">
+					<span>{character?.name ?? "캐릭터"} <small>캐릭터에 붙음 · 이 캐릭터의 모든 대화</small></span>
+					<BookPicker label="캐릭터 월드인포" value={character?.worldInfoIds ?? []} onchange={(ids) => library.setCharacterWorldInfo(conv.characterId, ids)} />
+				</div>
+				<div class="wi">
+					<span>이 대화 전용 <small>이 대화에만</small></span>
+					<BookPicker label="이 대화 전용 월드인포" value={conv.worldInfoIds} onchange={(ids) => library.setWorldInfo(conv.id, ids)} />
+				</div>
+			</section>
+			<hr />
+			<NotesPanel {conv} bare />
+			<hr />
 			<section>
 				<h4>정규식 <span class="faint">적용 중 {applied.filter((s) => s.enabled).length}개</span></h4>
 				{#each applied as s (s.id)}
@@ -305,13 +322,13 @@
 					<p class="none small">이 대화에 걸리는 정규식 없음</p>
 				{/each}
 			</section>
+			<hr />
 			<section>
 				<h4>내보내기</h4>
 				<ExportButton {conv} />
 			</section>
 			<hr />
 			<section>
-				<h4>대화 삭제 <span class="faint">되돌릴 수 없음</span></h4>
 				<Button block variant="danger" onclick={() => convActions.remove(conv)}>
 					{#snippet icon()}<Trash2 />{/snippet}
 					이 대화 삭제
@@ -321,14 +338,16 @@
 	{/if}
 
 <style>
-	.preset-card {
+	.wi {
 		display: flex;
-		align-items: center;
-		gap: var(--space-3);
-		padding: var(--space-3);
-		border: 1px solid var(--border);
-		border-radius: var(--radius-md);
-		background: var(--surface);
+		flex-direction: column;
+		gap: 4px;
+		font-size: var(--text-sm);
+	}
+	.wi small {
+		margin-left: 4px;
+		font-size: var(--text-xs);
+		color: var(--text-faint);
 	}
 	.with-btn {
 		display: flex;
@@ -345,17 +364,6 @@
 		margin: 0;
 		border: none;
 		border-top: 1px solid var(--border);
-	}
-	.back {
-		display: flex;
-		align-items: center;
-		gap: var(--space-1);
-		margin-left: calc(var(--space-2) * -1);
-		font-size: var(--text-sm);
-		color: var(--text-muted);
-	}
-	.back b {
-		color: var(--text);
 	}
 	/* 좁은 패널: 설정 화면용 줄을 세로로 */
 	.preset-edit :global(.sliders) {
@@ -432,11 +440,6 @@
 		white-space: nowrap;
 		overflow: hidden;
 		text-overflow: ellipsis;
-	}
-	.pchange {
-		font-size: var(--text-xs);
-		color: var(--accent-text);
-		font-weight: 600;
 	}
 	.ppop {
 		position: fixed;
@@ -531,6 +534,11 @@
 		padding: 0 var(--space-2) var(--space-4);
 		overflow: auto;
 	}
+
+	.toc li {
+		overflow: hidden;
+	}
+	
 	.toc button {
 		display: flex;
 		gap: var(--space-2);

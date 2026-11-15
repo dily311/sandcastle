@@ -48,7 +48,7 @@ pub fn card_json_from_png(bytes: &[u8]) -> Result<Value> {
 }
 
 /// (키워드, 텍스트) 목록. 압축된 zTXt / 압축 iTXt는 건너뛴다(카드는 보통 비압축 tEXt).
-fn png_text_chunks(bytes: &[u8]) -> Result<Vec<(String, String)>> {
+pub(crate) fn png_text_chunks(bytes: &[u8]) -> Result<Vec<(String, String)>> {
     if !is_png(bytes) {
         return Err(AppError::validation("PNG 파일이 아닙니다", None));
     }

@@ -9,7 +9,7 @@
 	import { games } from "$features/game/game.svelte";
 	import { lorebook } from "$features/lorebook/lorebook.svelte";
 	import { layout } from "./layout.svelte";
-	import { nav } from "./nav.svelte";
+	import { nav, type Route } from "./nav.svelte";
 	import { panel } from "./panel.svelte";
 	import { theme } from "./theme.svelte";
 
@@ -91,7 +91,7 @@
 				onselect: () => library.move(c.id, f.id),
 			})),
 			...(c.folderId ? [{ label: "폴더에서 빼기", icon: FolderMinus, onselect: () => library.move(c.id, null) }] : []),
-			{ label: "내보내기", icon: Download, separator: true, onselect: () => convActions.export(c) },
+			{ label: "내보내기…", icon: Download, separator: true, onselect: () => convActions.exportMenu(c) },
 			{ label: "삭제", icon: Trash2, danger: true, onselect: () => convActions.remove(c) },
 		];
 	});
@@ -101,31 +101,48 @@
 	}
 
 	// 지금 화면 이름 (Claude Code 헤더처럼 가운데 왼쪽에 보임)
-	const title = $derived.by(() => {
+	// 누르면 그 자리로 가는 경로 (마지막은 지금 화면)
+	type Crumb = { label: string; to?: Route };
+	const title = $derived.by((): Crumb[] => {
 		const r = nav.current;
 		switch (r.page) {
 			case "character": {
 				const ch = library.character(r.charId);
-				if (!ch) return ["캐릭터"];
-				if (r.edit) return [ch.name, "편집"];
+				if (!ch) return [{ label: "캐릭터" }];
+				const top: Crumb[] = [{ label: "캐릭터", to: { page: "character" } }, { label: ch.name, to: { page: "character", charId: ch.id } }];
+				if (r.edit) return [...top, { label: "편집" }];
 				const conv = library.conversation(r.convId);
-				return conv ? [ch.name, conv.title] : [ch.name];
+				return conv ? [...top, { label: conv.title }] : top;
 			}
-			case "persona":
-				return ["페르소나", library.persona(r.personaId)?.name].filter(Boolean) as string[];
-			case "settings":
-				return ["설정", SETTINGS[r.tab ?? "general"]];
+			case "persona": {
+				const p = library.persona(r.personaId);
+				return p ? [{ label: "페르소나", to: { page: "persona" } }, { label: p.name }] : [{ label: "페르소나" }];
+			}
+			case "settings": {
+				const tab: Crumb = { label: SETTINGS[r.tab ?? "general"], to: { page: "settings", tab: r.tab ?? "general" } };
+				return r.edit ? [{ label: "설정", to: { page: "settings" } }, tab, { label: "편집" }] : [{ label: "설정", to: { page: "settings" } }, tab];
+			}
 			case "phone":
-				return ["폰"];
-			case "lorebook":
-				return ["로어북", lorebook.book(r.bookId)?.name].filter(Boolean) as string[];
+				return [{ label: "폰" }];
+			case "lorebook": {
+				const b = lorebook.book(r.bookId);
+				return b ? [{ label: "로어북", to: { page: "lorebook" } }, { label: b.name }] : [{ label: "로어북" }];
+			}
 			case "game": {
 				const g = games.game(r.gameId);
-				if (!g) return ["게임"];
-				return r.sessionId ? [g.title, "플레이"] : r.edit ? [g.title, "편집"] : [g.title];
+				if (!g) return [{ label: "게임" }];
+				const top: Crumb[] = [{ label: "게임", to: { page: "game" } }, { label: g.title, to: { page: "game", gameId: g.id } }];
+				return r.sessionId ? [...top, { label: "플레이" }] : r.edit ? [...top, { label: "편집" }] : top;
 			}
 		}
 	});
+	// 탭이 많아 넘치면 휠로 옆으로 넘김
+	function wheelTabs(e: WheelEvent) {
+		const el = e.currentTarget as HTMLElement;
+		if (el.scrollWidth <= el.clientWidth || Math.abs(e.deltaX) > Math.abs(e.deltaY)) return;
+		e.preventDefault();
+		el.scrollLeft += e.deltaY;
+	}
 </script>
 
 <!-- 프로그램 헤더: 사이드바 · 뒤로/앞으로 · 화면 제목 · (빈 곳은 창 끌기) · 오른쪽 패널 · 창 버튼 -->
@@ -154,11 +171,13 @@
 						}}
 					/>
 				{:else}
-					<button class="crumb last" title="눌러서 이름 바꾸기" onclick={startRename}>{t}</button>
+					<button class="crumb last" title="눌러서 이름 바꾸기" onclick={startRename}>{t.label}</button>
 				{/if}
 				<IconButton label="대화 동작" size="sm" onclick={openMenu}><ChevronDown /></IconButton>
+			{:else if t.to && i < title.length - 1}
+				<button class="crumb" title="{t.label}(으)로" onclick={() => nav.go(t.to!)}>{t.label}</button>
 			{:else}
-				<span class:last={i === title.length - 1}>{t}</span>
+				<span class:last={i === title.length - 1}>{t.label}</span>
 			{/if}
 		{/each}
 	</h1>
@@ -172,7 +191,7 @@
 	{/if}
 	<div class="right-zone" class:panel={panelShown}>
 		{#if panelShown}
-			<div class="ptabs" role="tablist" aria-label="오른쪽 패널">
+			<div class="ptabs" role="tablist" aria-label="오른쪽 패널" onwheel={wheelTabs}>
 				{#each panel.tabs as t (t.id)}
 					<button
 						role="tab"
@@ -242,6 +261,10 @@
 		white-space: nowrap;
 		cursor: text;
 	}
+	.crumb:not(.last) {
+		color: inherit;
+		cursor: pointer;
+	}
 	.crumb:hover {
 		background: var(--surface-hover);
 	}
@@ -280,6 +303,8 @@
 		align-items: center;
 		align-self: stretch;
 		gap: var(--space-1);
+		min-width: 0;
+		flex: none;
 	}
 	.right-zone.panel {
 		width: var(--panel-width);
@@ -289,12 +314,21 @@
 		margin-bottom: -1px;
 		border-bottom: 1px solid var(--bg);
 	}
+	/* 탭이 많으면 줄어들고 옆으로 넘김 (창 버튼은 밀려나지 않게) */
 	.ptabs {
 		display: flex;
 		gap: 2px;
+		flex: 1;
+		min-width: 0;
 		margin-right: auto;
+		overflow-x: auto;
+		scrollbar-width: none;
+	}
+	.ptabs::-webkit-scrollbar {
+		display: none;
 	}
 	.ptab {
+		flex: none;
 		display: grid;
 		place-items: center;
 		width: 30px;
@@ -319,6 +353,7 @@
 	}
 	.win {
 		display: flex;
+		flex: none;
 		align-self: stretch;
 		margin-left: var(--space-1);
 	}

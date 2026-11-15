@@ -1,10 +1,24 @@
 // 확인·파일 대화상자가 끼는 대화 동작 (카드·메뉴·패널이 같이 씀)
 import { nav } from "$app/nav.svelte";
+import { exportPicker, type ExportFormat } from "$app/exportFormats.svelte";
 import { call, commands } from "$shared/ipc/client";
 import { PACK_FILES, pickSavePath } from "$shared/ipc/dialog";
 import { confirmAction } from "$shared/stores/confirm.svelte";
 import { toasts } from "$shared/stores/toast.svelte";
-import { library, type Conversation } from "./library.svelte";
+import { library, type Character, type Conversation } from "./library.svelte";
+
+export type ChatFormat = "jsonl" | "txt" | "zip";
+export const CHAT_FORMATS: ExportFormat<ChatFormat>[] = [
+	{ id: "jsonl", label: "SillyTavern 채팅 (.jsonl)", desc: "SillyTavern에서 바로 불러올 수 있음" },
+	{ id: "txt", label: "텍스트 (.txt)", desc: "읽기용. 이름과 대사만" },
+	{ id: "zip", label: "캐릭터 묶음 (.zip)", desc: "캐릭터·이미지와 함께, 샌드캐슬끼리 옮길 때" },
+];
+export type CharacterFormat = "zip" | "png" | "json";
+export const CHARACTER_FORMATS: ExportFormat<CharacterFormat>[] = [
+	{ id: "zip", label: "캐릭터 묶음 (.zip)", desc: "대화·이미지·로어북까지 모두, 샌드캐슬끼리 옮길 때" },
+	{ id: "png", label: "SillyTavern 카드 (.png)", desc: "아바타 그림에 카드를 넣음. 로어북 포함" },
+	{ id: "json", label: "SillyTavern 카드 (.json)", desc: "카드 데이터만. 로어북 포함" },
+];
 
 export const convActions = {
 	async remove(conv: Conversation) {
@@ -31,6 +45,15 @@ export const convActions = {
 		toasts.success(`메시지 ${n}개 내보냄`);
 	},
 
+	/** 고른 형식으로 내보내기 */
+	exportFormat(conv: Conversation, format: ChatFormat) {
+		return format === "zip" ? convActions.export(conv) : convActions.exportAs(conv, format);
+	},
+	/** 메뉴의 '내보내기…': 누른 자리에 형식 목록 */
+	exportMenu(conv: Conversation) {
+		exportPicker.open("대화 내보내기", "sc.export.chat", CHAT_FORMATS, (f: ChatFormat) => void convActions.exportFormat(conv, f));
+	},
+
 	/** 대화 하나를 캐릭터 묶음(zip)으로 내보내기 */
 	async export(conv: Conversation) {
 		const ch = library.character(conv.characterId);
@@ -38,5 +61,24 @@ export const convActions = {
 		if (!path) return;
 		await call(commands.exportCharacterPack([conv.characterId], [conv.id], path), { source: "character" });
 		toasts.success("내보냄");
+	},
+};
+
+export const charActions = {
+	async export(c: Character, format: CharacterFormat) {
+		if (format === "zip") {
+			const path = await pickSavePath(`${c.name}.zip`, [PACK_FILES]);
+			if (!path) return;
+			await call(commands.exportCharacterPack([c.id], null, path), { source: "character" });
+		} else {
+			const filter = format === "png" ? { name: "SillyTavern 카드", extensions: ["png"] } : { name: "SillyTavern 카드", extensions: ["json"] };
+			const path = await pickSavePath(`${c.name}.${format}`, [filter]);
+			if (!path) return;
+			await call(commands.exportCharacterCard(c.id, format, path), { source: "character" });
+		}
+		toasts.success("내보냄");
+	},
+	exportMenu(c: Character) {
+		exportPicker.open("캐릭터 내보내기", "sc.export.character", CHARACTER_FORMATS, (f: CharacterFormat) => void charActions.export(c, f));
 	},
 };

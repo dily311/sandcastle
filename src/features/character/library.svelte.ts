@@ -124,6 +124,20 @@ class Library {
 	}
 
 	/** 대화 meta에 키를 합침 (값이 null이면 지움) */
+	/** 캐릭터에 붙은 로어북 바꾸기 (나머지 캐릭터 정보는 그대로) */
+	async setCharacterWorldInfo(charId: string, bookIds: string[]) {
+		const c = this.character(charId);
+		if (!c) return;
+		const { id: _id, messageCount: _m, createdAt: _c, updatedAt: _u, ...rest } = c;
+		void _id;
+		void _m;
+		void _c;
+		void _u;
+		const saved = await call(commands.updateCharacter(charId, { ...rest, worldInfoIds: bookIds }), src);
+		const i = this.characters.findIndex((x) => x.id === charId);
+		if (i >= 0) this.characters[i] = saved;
+	}
+
 	/** 대화에 직접 붙인 로어북 (캐릭터·페르소나의 책과 별개) */
 	async setWorldInfo(id: string, bookIds: string[]) {
 		const conv = await call(commands.setConversationWorldinfo(id, bookIds), src);

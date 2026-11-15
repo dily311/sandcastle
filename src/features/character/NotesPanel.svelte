@@ -31,8 +31,8 @@
 
 {#snippet fields()}
 	<section>
-		<h4>메모 <span class="faint">시스템 규칙 끝에 붙음</span></h4>
-		<Textarea bind:value={memory} autosize rows={4} maxRows={14} placeholder={"긴 대화에서 잊으면 안 되는 사실\n예) {{user}}는 3장에서 열쇠를 잃어버림"} aria-label="메모" onblur={saveMemory} />
+		<h4>메모리</h4>
+		<Textarea bind:value={memory} autosize rows={4} maxRows={14} placeholder={"시스템 규칙 끝에 붙음\n긴 대화에서 잊으면 안 되는 사실\n예) {{user}}는 3장에서 열쇠를 잃어버림"} aria-label="메모" onblur={saveMemory} />
 	</section>
 	<section>
 		<h4>작가 노트 <span class="faint">지금 장면의 방향</span></h4>

@@ -175,8 +175,10 @@ export const commands = {
 	worldinfoEntryCounts: (options?: InvokeOptions) => __TAURI_INVOKE<WorldInfoBookCount[]>("worldinfo_entry_counts", undefined, options),
 	/**  대화에 직접 붙인 로어북 바꾸기 (캐릭터·페르소나의 책은 그대로) */
 	setConversationWorldinfo: (id: string, bookIds: string[], options?: InvokeOptions) => __TAURI_INVOKE<Conversation_Serialize>("set_conversation_worldinfo", { id, bookIds }, options),
-	/**  책 하나를 SillyTavern 월드인포 JSON으로 내보내기. 내보낸 항목 수를 돌려준다 */
-	exportWorldinfoBook: (id: string, path: string, options?: InvokeOptions) => __TAURI_INVOKE<number>("export_worldinfo_book", { id, path }, options),
+	/**  책 하나를 내보내기. format: "json"(SillyTavern 월드인포) | "txt"(읽기용 글). 내보낸 항목 수를 돌려준다 */
+	exportWorldinfoBook: (id: string, format: string, path: string, options?: InvokeOptions) => __TAURI_INVOKE<number>("export_worldinfo_book", { id, format, path }, options),
+	/**  캐릭터를 SillyTavern 카드로 내보내기. format: "json" | "png" (아바타에 카드를 넣은 그림) */
+	exportCharacterCard: (id: string, format: string, path: string, options?: InvokeOptions) => __TAURI_INVOKE<null>("export_character_card", { id, format, path }, options),
 	getAllConversations: (options?: InvokeOptions) => __TAURI_INVOKE<Conversation_Serialize[]>("get_all_conversations", undefined, options),
 	getConversation: (id: string, options?: InvokeOptions) => __TAURI_INVOKE<Conversation_Serialize>("get_conversation", { id }, options),
 	createConversation: (input: ConversationInput_Deserialize, options?: InvokeOptions) => __TAURI_INVOKE<Conversation_Serialize>("create_conversation", { input }, options),

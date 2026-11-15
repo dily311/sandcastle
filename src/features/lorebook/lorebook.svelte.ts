@@ -5,6 +5,13 @@ import { JSON_FILES, pickSavePath } from "$shared/ipc/dialog";
 import { confirmAction } from "$shared/stores/confirm.svelte";
 import { toasts } from "$shared/stores/toast.svelte";
 import { library } from "$features/character/library.svelte";
+import { exportPicker, type ExportFormat } from "$app/exportFormats.svelte";
+
+export type BookFormat = "json" | "txt";
+export const BOOK_FORMATS: ExportFormat<BookFormat>[] = [
+	{ id: "json", label: "SillyTavern 월드인포 (.json)", desc: "SillyTavern이나 다른 앱에서 불러올 수 있음" },
+	{ id: "txt", label: "텍스트 (.txt)", desc: "읽기용. 제목·키워드·내용" },
+];
 
 export type { Book, Entry, EntryInput };
 
@@ -63,11 +70,15 @@ class Lorebook {
 		await library.load();
 		return true;
 	}
-	async export(b: Book) {
-		const path = await pickSavePath(`${b.name}.json`, [JSON_FILES]);
+	async export(b: Book, format: BookFormat = "json") {
+		const filter = format === "json" ? JSON_FILES : { name: "텍스트", extensions: ["txt"] };
+		const path = await pickSavePath(`${b.name}.${format}`, [filter]);
 		if (!path) return;
-		const n = await call(commands.exportWorldinfoBook(b.id, path), src);
-		toasts.success(`항목 ${n}개 내보냄 (SillyTavern 월드인포)`);
+		const n = await call(commands.exportWorldinfoBook(b.id, format, path), src);
+		toasts.success(`항목 ${n}개 내보냄`);
+	}
+	exportMenu(b: Book) {
+		exportPicker.open("로어북 내보내기", "sc.export.lorebook", BOOK_FORMATS, (f: BookFormat) => void this.export(b, f));
 	}
 	/** SillyTavern 월드인포 JSON 가져오기. 가져온 책을 돌려줌 */
 	async importPath(path: string) {

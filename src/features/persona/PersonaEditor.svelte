@@ -128,32 +128,6 @@
 			{/if}
 		</Field>
 	</div>
-
-	<section class="usage">
-		<h3>쓰는 곳</h3>
-		<p class="faint small">
-			{#if isDefault}캐릭터에 정해진 페르소나가 없으면 새 대화에 이 페르소나를 씀.{/if}
-			{#if usedBy.length}기본 페르소나로 정한 캐릭터: {usedBy.map((c) => c.name).join(", ")}.{/if}
-			{#if !isDefault && !usedBy.length}기본으로 정한 캐릭터 없음.{/if}
-		</p>
-		{#if convs.length}
-			<ul class="convs">
-				{#each convs.slice(0, 8) as c (c.id)}
-					{@const ch = library.character(c.characterId)}
-					<li>
-						<button onclick={() => nav.go({ page: "character", charId: c.characterId, convId: c.id })}>
-							<Avatar name={ch?.name ?? "?"} src={fileSrc(ch?.avatar)} color={ch?.color} size={28} />
-							<span class="t"><b>{c.title}</b><span class="faint">{ch?.name ?? "지워진 캐릭터"} · 메시지 {c.messageCount}</span></span>
-							<span class="faint small">{relative(c.updatedAt)}</span>
-						</button>
-					</li>
-				{/each}
-			</ul>
-			{#if convs.length > 8}<p class="faint small">그 밖에 대화 {convs.length - 8}개</p>{/if}
-		{:else}
-			<p class="faint small">이 페르소나로 한 대화 없음</p>
-		{/if}
-	</section>
 </div>
 
 <ContextMenu at={menu} items={menuItems} label="페르소나 메뉴" onclose={() => (menu = null)} />
@@ -265,52 +239,8 @@
 		background: var(--accent-soft);
 		color: var(--text);
 	}
-	.usage {
-		margin-top: var(--space-6);
-	}
-	.usage h3 {
-		margin-bottom: var(--space-2);
-	}
 	.small {
 		font-size: var(--text-sm);
 	}
-	.convs {
-		list-style: none;
-		margin: var(--space-3) 0 0;
-		padding: var(--space-1);
-		border-radius: var(--radius-lg);
-		background: var(--bg-sunken);
-	}
-	.convs button {
-		display: flex;
-		align-items: center;
-		gap: var(--space-3);
-		width: 100%;
-		padding: var(--space-2);
-		border: none;
-		border-radius: var(--radius-sm);
-		background: none;
-		color: var(--text);
-		font: inherit;
-		text-align: left;
-		cursor: pointer;
-	}
-	.convs button:hover {
-		background: var(--surface-hover);
-	}
-	.t {
-		flex: 1;
-		min-width: 0;
-		display: flex;
-		flex-direction: column;
-	}
-	.t b,
-	.t span {
-		overflow: hidden;
-		text-overflow: ellipsis;
-		white-space: nowrap;
-	}
-	.t span {
-		font-size: var(--text-xs);
-	}
+
 </style>
