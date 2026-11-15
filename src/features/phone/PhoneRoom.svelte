@@ -11,10 +11,11 @@
 	import { ChatSession, type Message } from "$features/character/session.svelte";
 	import { bubbles, lookup, parsePeek, phone } from "./phone.svelte";
 
-	let { conv, onback }: { conv: Conversation; onback: () => void } = $props();
+	let { conv, onback, session: given }: { conv: Conversation; onback: () => void; session?: ChatSession } = $props();
 
+	// 폰 화면이 만든 세션을 같이 씀 (오른쪽 패널의 목차·컨텍스트도 같은 메시지를 봄)
 	// svelte-ignore state_referenced_locally
-	const session = new ChatSession(conv.id);
+	const session = given ?? new ChatSession(conv.id);
 	// 상대(연락처)와 나(폰 주인)
 	const ch = $derived(lookup(phone.contactOf(conv)));
 	const me = $derived(phone.owner);

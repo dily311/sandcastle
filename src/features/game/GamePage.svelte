@@ -52,7 +52,10 @@
 		height: 100%;
 		min-height: 0;
 	}
+	/* 플레이 화면 안의 z-index(머리줄·알림 등)가 앱의 패널·서랍 위로 올라오지 않게 가둠 */
 	.stage {
+		position: relative;
+		isolation: isolate;
 		flex: 1;
 		min-width: 0;
 		min-height: 0;

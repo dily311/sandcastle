@@ -1,15 +1,19 @@
 <script lang="ts">
-	// 폰 화면의 오른쪽 패널: (대화방이면) 작가 노트·메모, 상대, 이 대화 / 폰
-	import { ExternalLink, FileJson, FileText } from "@lucide/svelte";
-	import { Avatar, Button, Segmented, Select } from "$shared/ui";
+	// 폰 화면의 오른쪽 패널
+	// - 대화방이면 대화 화면과 같은 공통 탭(대화 설정 · 컨텍스트·프리셋 · 분기)을 ChatPanel로 그대로
+	// - '정보' 탭: 상대 카드와 폰 설정
+	import { ExternalLink } from "@lucide/svelte";
+	import { Avatar, Button, Segmented } from "$shared/ui";
+	import { panel } from "$app/panel.svelte";
+	import ChatPanel from "$features/character/ChatPanel.svelte";
+	import type { ChatSession } from "$features/character/session.svelte";
 	import { fileSrc } from "$shared/ipc/file";
 	import { nav } from "$app/nav.svelte";
 	import { library, type Conversation } from "$features/character/library.svelte";
-	import { convActions } from "$features/character/actions";
-	import NotesPanel from "$features/character/NotesPanel.svelte";
 	import { lookup, phone, WALLPAPERS, type Who } from "./phone.svelte";
 
-	let { room }: { room: Conversation | null } = $props();
+	let { room, session, onopen }: { room: Conversation | null; session: ChatSession | null; onopen: (id: string, messageId?: string) => void } = $props();
+	const shared = new Set(["settings", "context", "branches"]);
 
 	// 방은 열 때의 사본일 수 있으니 목록의 최신 대화를 씀 (meta 저장이 바로 보이게)
 	const conv = $derived(room ? (library.conversation(room.id) ?? room) : null);
@@ -19,26 +23,17 @@
 	);
 	const owner = $derived(phone.owner);
 
-	const DEFAULT = "";
-	const apiOptions = $derived([{ value: DEFAULT, label: "앱 기본값" }, ...library.apis.map((a) => ({ value: a.id, label: `${a.name} · ${a.model}` }))]);
-	const presetOptions = $derived([{ value: DEFAULT, label: "앱 기본값" }, ...library.presets.map((p) => ({ value: p.id, label: p.name }))]);
-	function setOption(p: { apiProfileId?: string; promptPresetId?: string }) {
-		if (!conv) return;
-		void library.setOptions(conv.id, {
-			personaId: conv.personaId,
-			promptPresetId: (p.promptPresetId ?? conv.promptPresetId ?? "") || null,
-			apiProfileId: (p.apiProfileId ?? conv.apiProfileId ?? "") || null,
-		});
-	}
 	function openPage(w: Who) {
 		void nav.go(w.kind === "persona" ? { page: "persona", personaId: w.id } : { page: "character", charId: w.id });
 	}
 	const kindLabel = (k: string) => (k === "persona" ? "페르소나" : "캐릭터");
 </script>
 
+{#if conv && session && shared.has(panel.tab)}
+	<ChatPanel {conv} {session} chapters={{}} onjump={() => {}} {onopen} />
+{:else}
 <div class="panel-body">
 		{#if conv && contact}
-			<NotesPanel {conv} bare />
 			<section>
 				<h4>상대</h4>
 				<div class="card">
@@ -52,15 +47,6 @@
 				{#if contact.description}<p class="desc">{contact.description}</p>{/if}
 			</section>
 
-			<section>
-				<h4>이 대화 <span class="faint">메시지 {conv.messageCount}개</span></h4>
-				<label class="row"><span>API</span><Select value={conv.apiProfileId ?? DEFAULT} options={apiOptions} onchange={(e) => setOption({ apiProfileId: e.currentTarget.value })} /></label>
-				<label class="row"><span>프리셋</span><Select value={conv.promptPresetId ?? DEFAULT} options={presetOptions} onchange={(e) => setOption({ promptPresetId: e.currentTarget.value })} /></label>
-				<div class="two">
-					<Button size="sm" onclick={() => convActions.exportAs(conv, "jsonl")}>{#snippet icon()}<FileJson />{/snippet}.jsonl</Button>
-					<Button size="sm" onclick={() => convActions.exportAs(conv, "txt")}>{#snippet icon()}<FileText />{/snippet}.txt</Button>
-				</div>
-			</section>
 		{/if}
 
 		{#if owner}
@@ -88,6 +74,7 @@
 			</section>
 		{/if}
 </div>
+{/if}
 
 <style>
 	.card {
@@ -132,18 +119,6 @@
 		line-clamp: 6;
 		-webkit-box-orient: vertical;
 		overflow: hidden;
-	}
-	.row {
-		display: grid;
-		grid-template-columns: 64px minmax(0, 1fr);
-		align-items: center;
-		gap: var(--space-2);
-		font-size: var(--text-sm);
-	}
-	.two {
-		display: grid;
-		grid-template-columns: 1fr 1fr;
-		gap: var(--space-2);
 	}
 	.walls {
 		display: grid;

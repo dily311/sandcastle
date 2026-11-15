@@ -257,11 +257,12 @@
 						{#if open === b.key}<ChevronDown />{:else}<ChevronRight />{/if}
 						<span class="nm">{b.name}</span>
 					</button>
-					<Badge>{roleLabel[b.role] ?? b.role}</Badge>
-					{#if marker}<Badge tone="info">{marker}</Badge>{/if}
-					{#if b.position === "in_chat"}<Badge tone="accent">대화 안 · 깊이 {b.depth}</Badge>{/if}
-					<span class="sp"></span>
-					<Switch bind:checked={b.enabled} label="{b.name} 사용" hideLabel />
+					<span class="badges">
+						<Badge>{roleLabel[b.role] ?? b.role}</Badge>
+						{#if marker}<Badge tone="info">{marker}</Badge>{/if}
+						{#if b.position === "in_chat"}<Badge tone="accent">대화 안 · 깊이 {b.depth}</Badge>{/if}
+					</span>
+					<span class="sw"><Switch bind:checked={b.enabled} label="{b.name} 사용" hideLabel /></span>
 				</div>
 				{#if open === b.key}
 					<div class="body">
@@ -393,11 +394,13 @@
 		gap: var(--space-2);
 		padding: var(--space-1) var(--space-2);
 	}
+	/* 좁아도 스위치가 밖으로 밀려나지 않게: 이름은 줄이고 배지는 줄바꿈 */
 	.toggle {
 		display: flex;
 		align-items: center;
 		gap: var(--space-1);
-		min-width: 0;
+		flex: 1 1 0;
+		min-width: 60px;
 		padding: 4px;
 		border: none;
 		background: transparent;
@@ -417,8 +420,17 @@
 		text-overflow: ellipsis;
 		white-space: nowrap;
 	}
-	.sp {
-		flex: 1;
+	.badges {
+		display: flex;
+		flex-wrap: wrap;
+		justify-content: flex-end;
+		gap: 4px;
+		min-width: 0;
+		flex: 0 1 auto;
+	}
+	.sw {
+		flex: none;
+		display: flex;
 	}
 	.body {
 		display: flex;

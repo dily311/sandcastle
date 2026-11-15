@@ -11,7 +11,8 @@
 	import PhonePanel from "./PhonePanel.svelte";
 	import SidePanel from "$app/SidePanel.svelte";
 	import { panel } from "$app/panel.svelte";
-	import { Info } from "@lucide/svelte";
+	import { GitBranch, Gauge, Info, SlidersHorizontal } from "@lucide/svelte";
+	import { ChatSession } from "$features/character/session.svelte";
 
 	type Screen = "home" | "messages" | "room" | "contacts" | "settings";
 	let screen = $state<Screen>("home");
@@ -22,7 +23,28 @@
 	let search = $state("");
 
 	// 오른쪽 패널 (대화방이면 작가 노트·메모도 정보 탭 안에)
-	$effect(() => panel.register([{ id: "info", label: "정보", icon: Info }]));
+	// 대화방이면 대화 화면과 같은 공통 탭 + 정보
+	$effect(() =>
+		panel.register(
+			room
+				? [
+						{ id: "settings", label: "대화 설정", icon: SlidersHorizontal },
+						{ id: "context", label: "컨텍스트·프리셋", icon: Gauge },
+						{ id: "branches", label: "분기", icon: GitBranch },
+						{ id: "info", label: "정보", icon: Info },
+					]
+				: [{ id: "info", label: "정보", icon: Info }],
+		),
+	);
+	// 방의 세션은 여기서 만들어 방과 패널이 같이 씀
+	const roomSession = $derived(room ? new ChatSession(room.id) : null);
+	/** 분기 등에서 다른 폰 대화 열기 */
+	function openRoom(id: string) {
+		const c = library.conversation(id);
+		if (!c) return;
+		room = c;
+		screen = "room";
+	}
 
 	onMount(async () => {
 		await phone.init();
@@ -141,7 +163,7 @@
 			</div>
 		{:else if screen === "room" && room}
 			{#key room.id}
-				<PhoneRoom conv={room} onback={closeRoom} />
+				<PhoneRoom conv={room} onback={closeRoom} session={roomSession ?? undefined} />
 			{/key}
 		{:else if picker}
 			<div class="app-bar">
@@ -262,7 +284,7 @@
 	</div>
 </div>
 {#if panel.open && ready}
-	<SidePanel label="폰 패널"><PhonePanel {room} /></SidePanel>
+	<SidePanel label="폰 패널"><PhonePanel {room} session={roomSession} onopen={openRoom} /></SidePanel>
 {/if}
 </div>
 
