@@ -70,6 +70,7 @@ fancy-regex = "0.20.2"
 tauri-specta = { version = "=2.0.0-rc.29", features = ["derive", "typescript"] }
 specta = { version = "=2.0.0-rc.28", features = ["derive", "serde_json"] }
 specta-typescript = "=0.0.15"
+notify = "6.1" # 파일 시스템 감시
 
 [target.aarch64-linux-android]
 linker = "aarch64-linux-android21-clang"
@@ -82,7 +83,6 @@ windows = { version = "0.58", features = [
 
 [target.'cfg(any(target_os = "macos", target_os = "windows", target_os = "linux"))'.dependencies]
 tauri-plugin-autostart = "2.7.0"
-notify = "6.1" # 파일 시스템 감시
 
 # [dev-dependencies]
 tempfile = "3"

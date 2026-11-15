@@ -28,10 +28,10 @@
 </script>
 
 {#if layout.mobile}
-	<!-- 휴대폰: 아래에서 올라오는 시트. 탭은 시트 위에 -->
+	<!-- 휴대폰: 화면 전체를 덮는 패널. 탭은 위에, 닫기는 오른쪽 위 -->
 	<!-- svelte-ignore a11y_click_events_have_key_events, a11y_no_static_element_interactions (닫기 버튼이 따로 있음) -->
 	<div class="sheet-scrim" transition:fade={{ duration: 150 }} onclick={() => panel.toggle()}></div>
-	<div class="sheet" transition:fly={{ y: 480, duration: 220 }}>
+	<div class="sheet" transition:fly={{ x: 400, duration: 220 }}>
 		<header class="sheet-head">
 			<div class="stabs" role="tablist" aria-label={label}>
 				{#each panel.tabs as t (t.id)}
@@ -81,21 +81,20 @@
 		left: 0;
 		right: 0;
 		bottom: 0;
-		top: max(8vh, env(safe-area-inset-top));
+		top: 0;
 		z-index: 71;
 		display: flex;
 		flex-direction: column;
-		border-radius: 16px 16px 0 0;
 		background: var(--bg);
-		box-shadow: var(--shadow-lg);
 		overflow: hidden;
-		padding-bottom: env(safe-area-inset-bottom);
+		padding: env(safe-area-inset-top) env(safe-area-inset-right) env(safe-area-inset-bottom) env(safe-area-inset-left);
 	}
 	.sheet-head {
 		display: flex;
 		align-items: center;
 		gap: var(--space-1);
-		padding: var(--space-2) var(--space-2) var(--space-1);
+		min-height: 52px;
+		padding: 0 var(--space-1) 0 var(--space-2);
 		border-bottom: 1px solid var(--border);
 	}
 	.stabs {
