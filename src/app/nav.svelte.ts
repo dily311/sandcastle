@@ -4,9 +4,9 @@ export type Route =
 	| { page: "character"; charId?: string; convId?: string; edit?: boolean }
 	| { page: "game"; gameId?: string; sessionId?: string; edit?: boolean }
 	| { page: "persona"; personaId?: string }
-	| { page: "settings"; tab?: SettingsTab; /** 테마 편집: 파일 이름, 또는 "new" / "builtin:id"(복제해서 새로) */ edit?: string };
+	| { page: "settings"; tab?: SettingsTab; /** 테마 편집: 파일 이름, 또는 "new" / "builtin:id"(복제해서 새로). API 편집: 연결 id 또는 "new" */ edit?: string };
 
-export type SettingsTab = "general" | "theme" | "shortcut" | "widget" | "api" | "preset" | "regex" | "data" | "log";
+export type SettingsTab = "general" | "chat" | "phone" | "theme" | "shortcut" | "widget" | "api" | "preset" | "regex" | "data" | "log";
 export type Page = Route["page"];
 
 const MAX = 100;

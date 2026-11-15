@@ -1,6 +1,6 @@
 <script lang="ts">
 	import type { Component } from "svelte";
-	import { Database, Keyboard, KeyRound, Music, Palette, Regex, ScrollText, Search, Settings2, SlidersHorizontal } from "@lucide/svelte";
+	import { Database, Keyboard, KeyRound, MessagesSquare, Music, Palette, Regex, ScrollText, Search, Settings2, SlidersHorizontal, Smartphone } from "@lucide/svelte";
 	import { Badge, Input } from "$shared/ui";
 	import { nav, type SettingsTab } from "$app/nav.svelte";
 	import { logs } from "$shared/stores/log.svelte";
@@ -14,6 +14,9 @@
 	import DataSection from "./DataSection.svelte";
 	import LogSection from "./LogSection.svelte";
 	import ThemeEditor from "./ThemeEditor.svelte";
+	import ApiEditor from "./ApiEditor.svelte";
+	import ChatSection from "./ChatSection.svelte";
+	import PhoneSection from "./PhoneSection.svelte";
 
 	let { tab = "general", edit }: { tab?: SettingsTab; edit?: string } = $props();
 
@@ -29,7 +32,9 @@
 		{
 			title: "앱",
 			items: [
-				{ id: "general", label: "기본 설정", icon: Settings2, keywords: "언어 enter 보내기 시각 업데이트 기본 api 프리셋 페르소나 폰 프롬프트", view: GeneralSection },
+				{ id: "general", label: "기본 설정", icon: Settings2, keywords: "언어 업데이트", view: GeneralSection },
+				{ id: "chat", label: "대화", icon: MessagesSquare, keywords: "enter 보내기 메시지 시각 시간 새 대화 기본값 api 프리셋 페르소나", view: ChatSection },
+				{ id: "phone", label: "폰", icon: Smartphone, keywords: "폰 모드 메신저 프롬프트", view: PhoneSection },
 				{ id: "theme", label: "테마", icon: Palette, keywords: "화면 모드 다크 어둡게 밝게 강조색 글자 크기 프레임 창 css", view: ThemeSection },
 				{ id: "shortcut", label: "단축키", icon: Keyboard, keywords: "키 단축 뒤로 앞으로", view: ShortcutSection },
 				{ id: "widget", label: "위젯", icon: Music, keywords: "음악 플레이어 자동 실행 바탕화면", view: WidgetSection },
@@ -38,7 +43,7 @@
 		{
 			title: "AI",
 			items: [
-				{ id: "api", label: "API 키", icon: KeyRound, keywords: "연결 공급자 모델 openai claude gemini 키 테스트", view: ApiSection },
+				{ id: "api", label: "API 키", icon: KeyRound, keywords: "연결 공급자 모델 openai claude gemini vertex 서비스 계정 json 키 테스트", view: ApiSection },
 				{ id: "preset", label: "프리셋", icon: SlidersHorizontal, keywords: "프롬프트 블록 온도 토큰 컨텍스트 sillytavern", view: PresetSection },
 				{ id: "regex", label: "정규식", icon: Regex, keywords: "찾아 바꾸기 치환 regex", view: RegexSection },
 			],
@@ -101,6 +106,8 @@
 		<div class="inner">
 			{#if current.id === "theme" && edit}
 				{#key edit}<ThemeEditor editKey={edit} />{/key}
+			{:else if current.id === "api" && edit}
+				{#key edit}<ApiEditor editId={edit} />{/key}
 			{:else}
 				{#key current.id}
 					<current.view />

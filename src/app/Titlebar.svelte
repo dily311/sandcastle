@@ -19,6 +19,8 @@
 
 	const SETTINGS: Record<string, string> = {
 		general: "기본 설정",
+		chat: "대화",
+		phone: "폰",
 		theme: "테마",
 		shortcut: "단축키",
 		widget: "위젯",
