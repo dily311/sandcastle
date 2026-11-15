@@ -3,6 +3,7 @@
 	import { Avatar, Button, ContextMenu, IconButton, Input, Select, Switch, type MenuItem } from "$shared/ui";
 	import { bookmarks, bookmarksOf } from "./bookmarks";
 	import NotesPanel from "./NotesPanel.svelte";
+	import BranchTree from "./BranchTree.svelte";
 	import ContextMeter from "./ContextMeter.svelte";
 	import ExportButton from "./ExportButton.svelte";
 	import PresetEditor from "$features/settings/PresetEditor.svelte";
@@ -24,8 +25,10 @@
 		session: ChatSession;
 		chapters: Record<string, number>;
 		onjump: (messageId: string) => void;
+		/** 다른 대화 열기 (주면 그 메시지로) */
+		onopen: (id: string, messageId?: string) => void;
 	}
-	let { conv, session, chapters, onjump }: Props = $props();
+	let { conv, session, chapters, onjump, onopen }: Props = $props();
 
 	// ---- 대화 설정: API → 프리셋 → 페르소나 ----
 	const DEFAULT = "";
@@ -196,6 +199,8 @@
 			{/if}
 			<ContextMenu at={menu} items={menuItems} label="에셋 메뉴" onclose={() => (menu = null)} />
 		</div>
+	{:else if panel.tab === "branches"}
+		<BranchTree {conv} {onopen} />
 	{:else if panel.tab === "notes"}
 		<NotesPanel {conv} />
 	{:else if panel.tab === "bookmarks"}

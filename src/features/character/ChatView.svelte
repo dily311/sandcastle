@@ -1,7 +1,8 @@
 <script lang="ts">
 	import { tick } from "svelte";
-	import { Bookmark, Copy, CornerUpLeft, FastForward, ImagePlus, Images, ListChecks, ListTree, NotebookPen, PanelLeft, Plus, RefreshCw, Send, SlidersHorizontal, Square, Trash2, X } from "@lucide/svelte";
+	import { Bookmark, ChevronRight, Copy, CornerUpLeft, FastForward, GitBranch, ImagePlus, Images, ListChecks, ListTree, NotebookPen, PanelLeft, Plus, RefreshCw, Send, SlidersHorizontal, Square, Trash2, X } from "@lucide/svelte";
 	import { bookmarks } from "./bookmarks";
+	import { childrenOf, pathOf } from "./branches";
 	import SidePanel from "$app/SidePanel.svelte";
 	import { drops, extOf, isImage, storeFile } from "$app/drop.svelte";
 	import { Button } from "$shared/ui";
@@ -43,6 +44,7 @@
 			{ id: "notes", label: "작가 노트·메모", icon: NotebookPen },
 			{ id: "toc", label: "목차", icon: ListTree },
 			{ id: "bookmarks", label: "북마크", icon: Bookmark },
+			{ id: "branches", label: "분기", icon: GitBranch },
 			{ id: "assets", label: "에셋", icon: Images },
 		]),
 	);
@@ -194,10 +196,17 @@
 	const parentConv = $derived(branchInfo ? library.conversation(branchInfo.parentId) : undefined);
 	function goParent() {
 		if (!parentConv || !branchInfo) return;
-		onopen(parentConv.id);
-		// 갈라진 메시지로 스크롤
-		setTimeout(() => jumpTo(branchInfo.messageId), 400);
+		openAt(parentConv.id, branchInfo.messageId);
 	}
+	/** 다른 대화를 열고, 주면 그 메시지로 스크롤 (갈라진 지점) */
+	function openAt(id: string, messageId?: string) {
+		if (id === convId) return messageId && jumpTo(messageId);
+		onopen(id);
+		if (messageId) setTimeout(() => jumpTo(messageId), 400);
+	}
+	// 분기 경로: 맨 위 조상 › … › 지금. 갈래가 있으면 그 수도
+	const path = $derived(conv ? pathOf(conv) : []);
+	const kids = $derived(conv ? childrenOf(conv.id).length : 0);
 
 	// ---- 여러 메시지 고르기 / 삭제 ----
 	let selecting = $state(false);
@@ -249,9 +258,25 @@
 	<section class="reader">
 		<header class="bar" class:listing={showList}>
 			<IconButton label={showList ? "대화 목록 닫기" : "대화 목록 열기"} size="sm" active={showList} onclick={toggleList}><PanelLeft /></IconButton>
-			{#if parentConv && branchInfo}
-				<button class="branch" onclick={goParent} title="갈라져 나온 대화로 돌아가기">
-					<CornerUpLeft />{parentConv.title}<span>#{branchInfo.seq}에서 갈라짐</span>
+			{#if path.length > 1}
+				<nav class="bpath" aria-label="분기 경로">
+					<GitBranch />
+					{#each path.slice(0, -1) as step, i (step.conv?.id ?? `gone-${i}`)}
+						{#if step.conv}
+							<button onclick={() => openAt(step.conv!.id, step.branchAt?.messageId)} title="'{step.conv.title}'로 (#{step.branchAt?.seq}에서 갈라짐)">
+								{step.conv.title}<span>#{step.branchAt?.seq}</span>
+							</button>
+						{:else}
+							<span class="gone" title="원래 대화는 지워졌음">지운 대화<span>#{step.branchAt?.seq}</span></span>
+						{/if}
+						<ChevronRight />
+					{/each}
+					<b>지금</b>
+				</nav>
+			{/if}
+			{#if kids}
+				<button class="branch" onclick={() => { panel.tab = "branches"; if (!panel.open) panel.toggle(); }} title="이 대화에서 갈라진 대화 보기">
+					<GitBranch />갈래 {kids}개
 				</button>
 			{/if}
 		</header>
@@ -364,7 +389,7 @@
 
 	{#if panel.open && conv && session}
 		<SidePanel label="대화 패널">
-			<ChatPanel {conv} {session} {chapters} onjump={jumpTo} />
+			<ChatPanel {conv} {session} {chapters} onjump={jumpTo} onopen={openAt} />
 		</SidePanel>
 	{/if}
 	<ContextMenu
@@ -444,6 +469,64 @@
 		align-items: center;
 		gap: var(--space-2);
 	}
+	.bpath {
+		display: flex;
+		align-items: center;
+		gap: 2px;
+		min-width: 0;
+		overflow: hidden;
+		font-size: var(--text-xs);
+		color: var(--text-muted);
+	}
+	.bpath > :global(svg) {
+		flex: none;
+		width: 13px;
+		height: 13px;
+		margin-right: 4px;
+		color: var(--accent);
+	}
+	.bpath :global(svg:not(:first-child)) {
+		flex: none;
+		width: 12px;
+		height: 12px;
+		color: var(--text-faint);
+	}
+	.bpath button,
+	.bpath .gone {
+		display: inline-flex;
+		align-items: baseline;
+		gap: 4px;
+		min-width: 0;
+		max-width: 180px;
+		padding: 3px 6px;
+		border: none;
+		border-radius: var(--radius-xs);
+		background: transparent;
+		color: inherit;
+		font: inherit;
+		white-space: nowrap;
+		overflow: hidden;
+		text-overflow: ellipsis;
+		cursor: pointer;
+	}
+	.bpath button:hover {
+		background: var(--surface-hover);
+		color: var(--text);
+	}
+	.bpath .gone {
+		cursor: default;
+		font-style: italic;
+	}
+	.bpath span span,
+	.bpath button span {
+		color: var(--text-faint);
+		font-variant-numeric: tabular-nums;
+	}
+	.bpath b {
+		flex: none;
+		padding: 3px 6px;
+		color: var(--text);
+	}
 	.branch {
 		display: inline-flex;
 		align-items: center;
@@ -470,9 +553,6 @@
 		width: 13px;
 		height: 13px;
 		flex-shrink: 0;
-	}
-	.branch span {
-		color: var(--text-faint);
 	}
 	.attach-strip {
 		display: flex;
