@@ -2,6 +2,7 @@
 //   const off = panel.register([{ id: "settings", label: "대화 설정", icon: SlidersHorizontal }, ...]);
 //   onDestroy(off)  — 또는 $effect 안에서 register를 부르고 반환값을 그대로 돌려주기
 import type { Component } from "svelte";
+import { layout } from "./layout.svelte";
 
 export interface PanelTab {
 	id: string;
@@ -34,7 +35,14 @@ function loadOpen(): boolean {
 class Panel {
 	tabs = $state<PanelTab[]>([]);
 	tab = $state("");
-	open = $state(loadOpen());
+	/** 데스크톱에서 패널을 펴 두었는지 (기억함) */
+	private pinned = $state(loadOpen());
+	/** 모바일: 패널은 전체 화면 시트, 기본은 닫힘 (기억하지 않음) */
+	private sheet = $state(false);
+	/** 지금 패널이 보이는지 */
+	get open() {
+		return layout.mobile ? this.sheet : this.pinned;
+	}
 	width = $state(loadWidth());
 
 	constructor() {
@@ -74,12 +82,20 @@ class Panel {
 	}
 
 	toggle() {
-		this.open = !this.open;
+		if (layout.mobile) {
+			this.sheet = !this.sheet;
+			return;
+		}
+		this.pinned = !this.pinned;
 		try {
-			localStorage.setItem(OPEN_KEY, this.open ? "1" : "0");
+			localStorage.setItem(OPEN_KEY, this.pinned ? "1" : "0");
 		} catch {
 			/* 저장 실패는 무시 */
 		}
+	}
+	/** 모바일 시트 닫기 (다른 화면으로 갈 때) */
+	closeSheet() {
+		this.sheet = false;
 	}
 }
 

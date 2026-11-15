@@ -2,6 +2,10 @@
 	// 오른쪽 패널 틀: 왼쪽 가장자리를 끌어서 너비 조절 (대화·폰·게임 화면이 같이 씀)
 	// 내용은 화면마다 다르고, 탭은 panel.register로 타이틀바에 그린다
 	import type { Snippet } from "svelte";
+	import { X } from "@lucide/svelte";
+	import { fade, fly } from "svelte/transition";
+	import IconButton from "$shared/ui/IconButton.svelte";
+	import { layout } from "./layout.svelte";
 	import { panel } from "./panel.svelte";
 
 	let { label, children }: { label: string; children: Snippet } = $props();
@@ -23,6 +27,26 @@
 	}
 </script>
 
+{#if layout.mobile}
+	<!-- 휴대폰: 아래에서 올라오는 시트. 탭은 시트 위에 -->
+	<!-- svelte-ignore a11y_click_events_have_key_events, a11y_no_static_element_interactions (닫기 버튼이 따로 있음) -->
+	<div class="sheet-scrim" transition:fade={{ duration: 150 }} onclick={() => panel.toggle()}></div>
+	<div class="sheet" transition:fly={{ y: 480, duration: 220 }}>
+		<header class="sheet-head">
+			<div class="stabs" role="tablist" aria-label={label}>
+				{#each panel.tabs as t (t.id)}
+					<button role="tab" class:on={panel.tab === t.id} aria-selected={panel.tab === t.id} onclick={() => (panel.tab = t.id)}>
+						<t.icon /><span>{t.label}</span>
+					</button>
+				{/each}
+			</div>
+			<IconButton label="패널 닫기" onclick={() => panel.toggle()}><X /></IconButton>
+		</header>
+		<aside class="panel" aria-label={label}>
+			{@render children()}
+		</aside>
+	</div>
+{:else}
 <div class="side-panel">
 	<!-- svelte-ignore a11y_no_noninteractive_tabindex, a11y_no_noninteractive_element_interactions (포커스 가능한 separator는 조절 가능한 위젯) -->
 	<div
@@ -43,8 +67,76 @@
 		{@render children()}
 	</aside>
 </div>
+{/if}
 
 <style>
+	.sheet-scrim {
+		position: fixed;
+		inset: 0;
+		z-index: 70;
+		background: rgb(0 0 0 / 0.4);
+	}
+	.sheet {
+		position: fixed;
+		left: 0;
+		right: 0;
+		bottom: 0;
+		top: max(8vh, env(safe-area-inset-top));
+		z-index: 71;
+		display: flex;
+		flex-direction: column;
+		border-radius: 16px 16px 0 0;
+		background: var(--bg);
+		box-shadow: var(--shadow-lg);
+		overflow: hidden;
+		padding-bottom: env(safe-area-inset-bottom);
+	}
+	.sheet-head {
+		display: flex;
+		align-items: center;
+		gap: var(--space-1);
+		padding: var(--space-2) var(--space-2) var(--space-1);
+		border-bottom: 1px solid var(--border);
+	}
+	.stabs {
+		display: flex;
+		gap: 4px;
+		flex: 1;
+		min-width: 0;
+		overflow-x: auto;
+		scrollbar-width: none;
+	}
+	.stabs::-webkit-scrollbar {
+		display: none;
+	}
+	.stabs button {
+		display: inline-flex;
+		align-items: center;
+		gap: 6px;
+		flex: none;
+		height: 34px;
+		padding: 0 12px;
+		border: none;
+		border-radius: var(--radius-full);
+		background: transparent;
+		color: var(--text-muted);
+		font: inherit;
+		font-size: var(--text-sm);
+		cursor: pointer;
+	}
+	.stabs button :global(svg) {
+		width: 15px;
+		height: 15px;
+	}
+	.stabs button.on {
+		background: var(--surface-active);
+		color: var(--text);
+		font-weight: 600;
+	}
+	.sheet .panel {
+		border-left: none;
+		overflow: auto;
+	}
 	.side-panel {
 		position: relative;
 		display: flex;

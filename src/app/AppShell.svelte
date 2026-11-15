@@ -15,8 +15,32 @@
 	import PhonePage from "$features/phone/PhonePage.svelte";
 	import GamePage from "$features/game/GamePage.svelte";
 	import LorebookPage from "$features/lorebook/LorebookPage.svelte";
+	import { fade, fly } from "svelte/transition";
+	import { panel } from "./panel.svelte";
 
 	let ready = $state(false);
+
+	// 모바일: 다른 화면으로 가면 서랍과 패널 시트를 닫음
+	$effect(() => {
+		void nav.current;
+		layout.closeDrawer();
+		panel.closeSheet();
+	});
+
+	// 모바일: 화면 왼쪽 끝에서 오른쪽으로 쓸면 서랍 열기
+	let swipe: { x: number; y: number } | null = null;
+	function touchStart(e: TouchEvent) {
+		const t = e.touches[0];
+		swipe = layout.mobile && !layout.drawer && t.clientX < 24 ? { x: t.clientX, y: t.clientY } : null;
+	}
+	function touchMove(e: TouchEvent) {
+		if (!swipe) return;
+		const t = e.touches[0];
+		if (t.clientX - swipe.x > 60 && Math.abs(t.clientY - swipe.y) < 40) {
+			layout.drawer = true;
+			swipe = null;
+		}
+	}
 
 	onMount(async () => {
 		captureGlobalErrors();
@@ -27,7 +51,10 @@
 </script>
 
 <svelte:window
+	ontouchstart={touchStart}
+	ontouchmove={touchMove}
 	onkeydown={(e) => {
+		if (e.key === "Escape" && layout.drawer) return layout.closeDrawer();
 		if ((e.ctrlKey || e.metaKey) && !e.shiftKey && !e.altKey && e.key.toLowerCase() === "b") {
 			e.preventDefault();
 			layout.toggleSidebar();
@@ -43,10 +70,18 @@
 	}}
 />
 
-<div class="app">
+<div class="app" class:mobile={layout.mobile}>
 	<Titlebar />
 	<div class="body">
-		{#if layout.sidebar}<Sidebar />{/if}
+		{#if layout.mobile}
+			{#if layout.drawer}
+				<!-- svelte-ignore a11y_click_events_have_key_events, a11y_no_static_element_interactions (Esc·뒤로로도 닫힘) -->
+				<div class="scrim" transition:fade={{ duration: 150 }} onclick={() => layout.closeDrawer()}></div>
+				<div class="drawer" transition:fly={{ x: -300, duration: 200 }}><Sidebar /></div>
+			{/if}
+		{:else if layout.sidebar}
+			<Sidebar />
+		{/if}
 		<main class="content">
 		{#if ready}
 			{@const r = nav.current}
@@ -77,7 +112,35 @@
 		display: flex;
 		flex-direction: column;
 		height: 100vh;
+		height: 100dvh;
 		overflow: hidden;
+	}
+	/* 휴대폰: 노치·홈 막대 피하기 */
+	.app.mobile {
+		padding: env(safe-area-inset-top) env(safe-area-inset-right) env(safe-area-inset-bottom) env(safe-area-inset-left);
+	}
+	.scrim {
+		position: fixed;
+		inset: 0;
+		z-index: 80;
+		background: rgb(0 0 0 / 0.4);
+	}
+	.drawer {
+		position: fixed;
+		top: 0;
+		bottom: 0;
+		left: 0;
+		z-index: 81;
+		display: flex;
+		width: min(84vw, 300px);
+		padding-top: env(safe-area-inset-top);
+		padding-bottom: env(safe-area-inset-bottom);
+		background: var(--bg);
+		box-shadow: var(--shadow-lg);
+	}
+	.drawer > :global(.sidebar) {
+		width: 100%;
+		border-right: none;
 	}
 	.body {
 		flex: 1;

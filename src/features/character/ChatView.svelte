@@ -4,6 +4,8 @@
 	import { bookmarks } from "./bookmarks";
 	import { childrenOf, pathOf } from "./branches";
 	import SidePanel from "$app/SidePanel.svelte";
+	import { layout } from "$app/layout.svelte";
+	import { fade, fly } from "svelte/transition";
 	import { drops, extOf, isImage, storeFile } from "$app/drop.svelte";
 	import { Button } from "$shared/ui";
 	import { confirmAction } from "$shared/stores/confirm.svelte";
@@ -66,7 +68,11 @@
 			return true;
 		}
 	})());
+	// 휴대폰: 목록은 겹쳐 여는 서랍, 기본 닫힘 (기억하지 않음)
+	let mobileList = $state(false);
+	const listShown = $derived(layout.mobile ? mobileList : showList);
 	function toggleList() {
+		if (layout.mobile) return void (mobileList = !mobileList);
 		showList = !showList;
 		try {
 			localStorage.setItem(LIST_KEY, showList ? "1" : "0");
@@ -259,14 +265,20 @@
 	const roleName = { system: "시스템", user: "사용자", assistant: "AI" } as const;
 </script>
 
-<div class="chat" class:no-list={!showList} class:no-panel={!panel.open}>
-	{#if showList}
+<div class="chat" class:no-list={!listShown || layout.mobile} class:no-panel={!panel.open || layout.mobile}>
+	{#if listShown && layout.mobile}
+		<!-- svelte-ignore a11y_click_events_have_key_events, a11y_no_static_element_interactions (목록 버튼으로도 닫힘) -->
+		<div class="list-scrim" transition:fade={{ duration: 150 }} onclick={() => (mobileList = false)}></div>
+		<div class="list-drawer" transition:fly={{ x: -320, duration: 200 }}>
+			<ConvSidebar {charId} {convId} onopen={(id) => { mobileList = false; onopen(id); }} oncreate={async () => { mobileList = false; onopen((await library.createConversation(charId)).id); }} />
+		</div>
+	{:else if listShown}
 		<ConvSidebar {charId} {convId} {onopen} oncreate={async () => onopen((await library.createConversation(charId)).id)} />
 	{/if}
 
 	<section class="reader">
-		<header class="bar" class:listing={showList}>
-			<IconButton label={showList ? "대화 목록 닫기" : "대화 목록 열기"} size="sm" active={showList} onclick={toggleList}><PanelLeft /></IconButton>
+		<header class="bar" class:listing={listShown}>
+			<IconButton label={listShown ? "대화 목록 닫기" : "대화 목록 열기"} size="sm" active={listShown} onclick={toggleList}><PanelLeft /></IconButton>
 			{#if path.length > 1}
 				<nav class="bpath" aria-label="분기 경로">
 					<GitBranch />
@@ -388,7 +400,7 @@
 					disabled: session?.last?.role !== "assistant",
 					onselect: () => session?.regenerate(true),
 				},
-				{ label: showList ? "대화 목록 닫기" : "대화 목록 열기", icon: PanelLeft, separator: true, onselect: toggleList },
+				{ label: listShown ? "대화 목록 닫기" : "대화 목록 열기", icon: PanelLeft, separator: true, onselect: toggleList },
 				{ label: "메시지 여러 개 지우기", icon: ListChecks, disabled: !session?.messages.length, onselect: startSelect },
 				...(parentConv ? [{ label: "갈라져 나온 대화로", icon: CornerUpLeft, onselect: goParent }] : []),
 			]}
@@ -602,6 +614,28 @@
 		width: 12px;
 		height: 12px;
 	}
+	.list-scrim {
+		position: fixed;
+		inset: 0;
+		z-index: 60;
+		background: rgb(0 0 0 / 0.4);
+	}
+	.list-drawer {
+		position: fixed;
+		top: 0;
+		bottom: 0;
+		left: 0;
+		z-index: 61;
+		display: flex;
+		width: min(88vw, 340px);
+		padding-top: env(safe-area-inset-top);
+		background: var(--bg);
+		box-shadow: var(--shadow-lg);
+	}
+	.list-drawer > :global(.convs) {
+		flex: 1;
+		width: 100%;
+	}
 	.selbar {
 		display: flex;
 		align-items: center;
@@ -773,7 +807,7 @@
 			grid-template-columns: minmax(0, 1fr);
 		}
 		.chat > :global(.convs),
-		.chat > :global(.panel) {
+		.chat > :global(.side-panel) {
 			display: none;
 		}
 	}

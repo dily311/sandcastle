@@ -175,3 +175,12 @@
 		--duration: 0ms;
 	}
 }
+
+/* 휴대폰: 입력칸 글자가 16px보다 작으면 iOS가 화면을 확대함 */
+@media (pointer: coarse) {
+	input,
+	textarea,
+	select {
+		font-size: max(16px, 1em);
+	}
+}

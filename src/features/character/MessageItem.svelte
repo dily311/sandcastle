@@ -8,6 +8,7 @@
 	import { toBlocks } from "./format";
 	import { metaOf, type ChatSession, type Message } from "./session.svelte";
 	import { fileSrc } from "$shared/ipc/file";
+	import { layout } from "$app/layout.svelte";
 
 	interface Props {
 		msg: Message;
@@ -35,6 +36,22 @@
 	const model = $derived(meta.info?.model || undefined);
 
 	let editing = $state(false);
+	// 터치 화면: 메시지를 누르면 도구 줄을 보이고, 다른 곳을 누르면 숨김
+	let tapped = $state(false);
+	let el: HTMLDivElement | undefined = $state();
+	function tap(e: MouseEvent) {
+		if (selecting) return onselect?.(msg, !selected);
+		if (!layout.touch || editing) return;
+		if ((e.target as Element).closest("button, a, input, textarea")) return;
+		if (window.getSelection()?.toString()) return;
+		tapped = !tapped;
+	}
+	$effect(() => {
+		if (!tapped) return;
+		const off = (e: PointerEvent) => !el?.contains(e.target as Node) && (tapped = false);
+		window.addEventListener("pointerdown", off);
+		return () => window.removeEventListener("pointerdown", off);
+	});
 	let draft = $state("");
 	function startEdit() {
 		draft = msg.content;
@@ -63,7 +80,7 @@
 </script>
 
 <!-- svelte-ignore a11y_click_events_have_key_events, a11y_no_static_element_interactions -->
-<div class="block" class:ai={isAi} class:user={!isAi} class:hidden={meta.hidden} class:selecting class:picked={selected} id="msg-{msg.id}" data-no={no} onclick={() => selecting && onselect?.(msg, !selected)}>
+<div bind:this={el} class="block" class:ai={isAi} class:user={!isAi} class:hidden={meta.hidden} class:selecting class:picked={selected} id="msg-{msg.id}" data-no={no} class:tapped onclick={tap}>
 	<div class="who">
 		{#if selecting}<input class="pick" type="checkbox" checked={selected} aria-label="#{no} 메시지 고르기" onclick={(e) => e.stopPropagation()} onchange={(e) => onselect?.(msg, e.currentTarget.checked)} />{/if}
 		<span class="no">#{no}</span><b>{msg.name ?? (isAi ? "AI" : "나")}</b>
@@ -230,7 +247,8 @@
 		transition: opacity var(--duration-fast) var(--ease);
 	}
 	.block:hover .actions,
-	.block:focus-within .actions {
+	.block:focus-within .actions,
+	.block.tapped .actions {
 		opacity: 1;
 		pointer-events: auto;
 	}

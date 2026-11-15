@@ -52,6 +52,13 @@
 		height: var(--control-sm);
 		border-radius: var(--radius-xs);
 	}
+	/* 손가락: 작은 버튼도 누르기 쉽게 */
+	@media (pointer: coarse) {
+		.sm {
+			width: 34px;
+			height: 34px;
+		}
+	}
 	.sm :global(svg) {
 		width: 15px;
 		height: 15px;

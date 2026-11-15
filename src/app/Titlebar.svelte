@@ -1,5 +1,5 @@
 <script lang="ts">
-	import { ChevronDown, ChevronLeft, ChevronRight, Copy, CornerUpLeft, Download, Folder, FolderMinus, GitBranch, Minus, PanelLeft, PanelRight, Pencil, Pin, PinOff, Square, Trash2, X } from "@lucide/svelte";
+	import { ChevronDown, ChevronLeft, ChevronRight, Copy, CornerUpLeft, Download, Folder, FolderMinus, GitBranch, Menu, Minus, PanelLeft, PanelRight, Pencil, Pin, PinOff, Square, Trash2, X } from "@lucide/svelte";
 	import { getCurrentWindow } from "@tauri-apps/api/window";
 	import { ContextMenu, IconButton, type MenuItem } from "$shared/ui";
 	import { call, commands } from "$shared/ipc/client";
@@ -115,10 +115,11 @@
 				return conv ? [...top, { label: conv.title }] : top;
 			}
 			case "persona": {
-				const p = library.persona(r.personaId);
+				const p = r.personaId ? library.persona(r.personaId) : undefined;
 				return p ? [{ label: "페르소나", to: { page: "persona" } }, { label: p.name }] : [{ label: "페르소나" }];
 			}
 			case "settings": {
+				if (layout.mobile && !r.tab) return [{ label: "설정" }];
 				const tab: Crumb = { label: SETTINGS[r.tab ?? "general"], to: { page: "settings", tab: r.tab ?? "general" } };
 				return r.edit ? [{ label: "설정", to: { page: "settings" } }, tab, { label: "편집" }] : [{ label: "설정", to: { page: "settings" } }, tab];
 			}
@@ -146,17 +147,24 @@
 </script>
 
 <!-- 프로그램 헤더: 사이드바 · 뒤로/앞으로 · 화면 제목 · (빈 곳은 창 끌기) · 오른쪽 패널 · 창 버튼 -->
-<header class="titlebar" class:frameless={theme.setting.isFrameless} data-tauri-drag-region>
-	<IconButton label={layout.sidebar ? "사이드바 닫기 (Ctrl+B)" : "사이드바 열기 (Ctrl+B)"} size="sm" active={layout.sidebar} onclick={() => layout.toggleSidebar()}>
-		<PanelLeft />
-	</IconButton>
-	<div class="history">
-		<IconButton label="뒤로 (Alt+←)" size="sm" disabled={!nav.canBack} onclick={() => nav.back()}><ChevronLeft /></IconButton>
-		<IconButton label="앞으로 (Alt+→)" size="sm" disabled={!nav.canForward} onclick={() => nav.forward()}><ChevronRight /></IconButton>
-	</div>
+<header class="titlebar" class:frameless={theme.setting.isFrameless} class:mobile={layout.mobile} data-tauri-drag-region>
+	{#if layout.mobile}
+		<!-- 휴대폰: 메뉴 · 뒤로 · 지금 화면 이름 · 패널 -->
+		<IconButton label="메뉴" onclick={() => layout.toggleSidebar()}><Menu /></IconButton>
+		{#if nav.canBack}<IconButton label="뒤로" onclick={() => nav.back()}><ChevronLeft /></IconButton>{/if}
+	{:else}
+		<IconButton label={layout.sidebar ? "사이드바 닫기 (Ctrl+B)" : "사이드바 열기 (Ctrl+B)"} size="sm" active={layout.sidebar} onclick={() => layout.toggleSidebar()}>
+			<PanelLeft />
+		</IconButton>
+		<div class="history">
+			<IconButton label="뒤로 (Alt+←)" size="sm" disabled={!nav.canBack} onclick={() => nav.back()}><ChevronLeft /></IconButton>
+			<IconButton label="앞으로 (Alt+→)" size="sm" disabled={!nav.canForward} onclick={() => nav.forward()}><ChevronRight /></IconButton>
+		</div>
+	{/if}
 	<h1 class="title" data-tauri-drag-region>
-		{#each title as t, i (i)}
-			{#if i > 0}<span class="sep" aria-hidden="true">/</span>{/if}
+		{#each layout.mobile ? title.slice(-1) : title as t, j (j)}
+			{@const i = layout.mobile ? title.length - 1 : j}
+			{#if j > 0}<span class="sep" aria-hidden="true">/</span>{/if}
 			{#if conv && i === title.length - 1}
 				{#if renaming}
 					<input
@@ -185,10 +193,11 @@
 	<div class="drag" data-tauri-drag-region></div>
 
 	{#if panel.available}
-		<IconButton label={panel.open ? "오른쪽 패널 닫기" : "오른쪽 패널 열기"} size="sm" active={panel.open} onclick={() => panel.toggle()}>
+		<IconButton label={panel.open ? "오른쪽 패널 닫기" : "오른쪽 패널 열기"} size={layout.mobile ? "md" : "sm"} active={panel.open} onclick={() => panel.toggle()}>
 			<PanelRight />
 		</IconButton>
 	{/if}
+	{#if !layout.mobile}
 	<div class="right-zone" class:panel={panelShown}>
 		{#if panelShown}
 			<div class="ptabs" role="tablist" aria-label="오른쪽 패널" onwheel={wheelTabs}>
@@ -215,6 +224,7 @@
 			</div>
 		{/if}
 	</div>
+	{/if}
 </header>
 
 <style>
@@ -228,6 +238,21 @@
 		border-bottom: 1px solid var(--border);
 		flex: none;
 		user-select: none;
+	}
+	.titlebar.mobile {
+		height: 52px;
+		padding: 0 var(--space-1);
+	}
+	.titlebar.mobile .title {
+		flex: 1;
+		font-size: var(--text-md, 15px);
+		margin: 0 var(--space-1);
+	}
+	.titlebar.mobile .crumb {
+		max-width: 100%;
+	}
+	.titlebar.mobile .drag {
+		display: none;
 	}
 	.history {
 		display: flex;

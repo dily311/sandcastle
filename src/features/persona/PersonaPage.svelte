@@ -1,4 +1,5 @@
 <script lang="ts">
+	import { layout } from "$app/layout.svelte";
 	import { onMount } from "svelte";
 	import { Plus, Search, Star, UserCircle } from "@lucide/svelte";
 	import type { PersonaInput_Deserialize as PersonaInput, WorldInfoBook_Serialize as Book } from "$ipc/bindings";
@@ -13,6 +14,8 @@
 	import PersonaEditor from "./PersonaEditor.svelte";
 
 	let { personaId }: { personaId?: string } = $props();
+	// 휴대폰: 페르소나를 고르기 전에는 목록만, 고르면 편집만
+	const mobileList = $derived(layout.mobile && !personaId);
 
 	const src = { source: "persona" };
 	let defaultId = $state<string | null>(null);
@@ -45,7 +48,7 @@
 
 	// 첫 진입이면 첫 페르소나를 주소에 고정 (뒤로 가기 기록은 남기지 않음)
 	$effect(() => {
-		if (ready && !personaId && current) nav.replace({ page: "persona", personaId: current.id });
+		if (ready && !personaId && current && !layout.mobile) nav.replace({ page: "persona", personaId: current.id });
 	});
 
 	// 고친 내용이 있으면 다른 페르소나·다른 화면으로 가기 전에 물어봄
@@ -66,6 +69,7 @@
 	}
 
 	function select(id: string) {
+		if (layout.mobile) return void nav.go({ page: "persona", personaId: id });
 		if (id !== current?.id) void nav.replace({ page: "persona", personaId: id });
 	}
 
@@ -149,7 +153,7 @@
 {#if !library.loaded || !ready}
 	<div class="center"><Spinner /></div>
 {:else}
-	<div class="page">
+	<div class="page" class:mobile={layout.mobile} class:listing={mobileList}>
 		<aside class="side" aria-label="페르소나 목록">
 			<div class="top">
 				<Input bind:value={query} placeholder="이름·태그 검색" aria-label="페르소나 검색" type="search">
@@ -295,12 +299,14 @@
 		overflow: auto;
 		background: var(--surface-2);
 	}
-	@media (max-width: 720px) {
-		.page {
-			grid-template-columns: minmax(0, 1fr);
-		}
-		.side {
-			display: none;
-		}
+	.page.mobile {
+		grid-template-columns: minmax(0, 1fr);
+	}
+	.page.mobile:not(.listing) .side,
+	.page.listing .main {
+		display: none;
+	}
+	.page.listing .side {
+		border-right: none;
 	}
 </style>

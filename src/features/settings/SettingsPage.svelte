@@ -1,4 +1,5 @@
 <script lang="ts">
+	import { layout } from "$app/layout.svelte";
 	import type { Component } from "svelte";
 	import { Database, Keyboard, KeyRound, MessagesSquare, Music, Palette, Regex, ScrollText, Search, Settings2, SlidersHorizontal, Smartphone } from "@lucide/svelte";
 	import { Badge, Input } from "$shared/ui";
@@ -18,7 +19,10 @@
 	import ChatSection from "./ChatSection.svelte";
 	import PhoneSection from "./PhoneSection.svelte";
 
-	let { tab = "general", edit }: { tab?: SettingsTab; edit?: string } = $props();
+	let { tab: routeTab, edit }: { tab?: SettingsTab; edit?: string } = $props();
+	const tab = $derived(routeTab ?? "general");
+	// 휴대폰: 탭을 고르기 전에는 메뉴 목록만, 고르면 그 화면만 (뒤로·경로로 목록에)
+	const mobileList = $derived(layout.mobile && !routeTab);
 
 	interface Item {
 		id: SettingsTab;
@@ -67,6 +71,7 @@
 
 	// 탭 전환은 기록에 남기지 않음 (뒤로 가기는 설정 전 화면으로)
 	function select(id: SettingsTab) {
+		if (layout.mobile) return void nav.go({ page: "settings", tab: id });
 		nav.replace({ page: "settings", tab: id });
 	}
 
@@ -78,7 +83,7 @@
 	});
 </script>
 
-<div class="settings">
+<div class="settings" class:mobile={layout.mobile} class:listing={mobileList}>
 	<nav class="side" aria-label="설정 메뉴">
 		<div class="search">
 			<Input bind:value={query} placeholder="설정 검색" aria-label="설정 검색" type="search">
@@ -188,12 +193,14 @@
 		margin: 0 auto;
 		padding: var(--space-8) var(--space-6);
 	}
-	@media (max-width: 720px) {
-		.settings {
-			grid-template-columns: minmax(0, 1fr);
-		}
-		.side {
-			display: none;
-		}
+	.settings.mobile {
+		grid-template-columns: minmax(0, 1fr);
+	}
+	.settings.mobile:not(.listing) .side,
+	.settings.listing .body {
+		display: none;
+	}
+	.settings.listing .side {
+		border-right: none;
 	}
 </style>
