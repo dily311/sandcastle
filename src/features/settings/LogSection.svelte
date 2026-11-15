@@ -24,6 +24,17 @@
 			return String(e.details);
 		}
 	}
+	/** 한 줄 복사 (자세한 내용이 있으면 같이) */
+	async function copyOne(e: LogEntry) {
+		const d = detail(e);
+		try {
+			await navigator.clipboard.writeText(`[${new Date(e.time).toISOString()}] ${e.level.toUpperCase()} ${e.source}: ${e.message}${d ? `
+${d}` : ""}`);
+			toasts.success("복사함");
+		} catch {
+			toasts.error("복사 못 함");
+		}
+	}
 	async function copyAll() {
 		const text = shown
 			.map((e) => `[${new Date(e.time).toISOString()}] ${e.level.toUpperCase()} ${e.source}: ${e.message}${detail(e) ? `\n${detail(e)}` : ""}`)
@@ -58,12 +69,15 @@
 		{#each shown as l (l.id)}
 			{@const d = detail(l)}
 			<div class="row">
-				<button class="line" disabled={!d} aria-expanded={d ? open === l.id : undefined} onclick={() => (open = open === l.id ? null : l.id)}>
-					<Badge tone={tone(l.level)}>{l.level}</Badge>
-					<span class="t">{clock(l.time)}</span>
-					<span class="src">{l.source}</span>
-					<span class="m">{l.message}</span>
-				</button>
+				<div class="line-wrap">
+					<button class="line" title="눌러서 복사" onclick={() => copyOne(l)}>
+						<Badge tone={tone(l.level)}>{l.level}</Badge>
+						<span class="t">{clock(l.time)}</span>
+						<span class="src">{l.source}</span>
+						<span class="m">{l.message}</span>
+					</button>
+					{#if d}<button class="more" aria-expanded={open === l.id} onclick={() => (open = open === l.id ? null : l.id)}>{open === l.id ? "접기" : "자세히"}</button>{/if}
+				</div>
 				{#if d && open === l.id}<pre>{d}</pre>{/if}
 			</div>
 		{:else}
@@ -94,11 +108,33 @@
 		font-size: var(--text-sm);
 		text-align: left;
 	}
-	.line:not(:disabled) {
+	.line-wrap {
+		display: flex;
+		align-items: center;
+		gap: var(--space-1);
+	}
+	.line {
+		flex: 1;
+		cursor: copy;
+	}
+	.line:hover {
+		background: var(--surface-hover);
+	}
+	.more {
+		flex-shrink: 0;
+		height: 24px;
+		padding: 0 var(--space-2);
+		border: none;
+		border-radius: var(--radius-xs);
+		background: transparent;
+		color: var(--text-muted);
+		font: inherit;
+		font-size: var(--text-xs);
 		cursor: pointer;
 	}
-	.line:not(:disabled):hover {
+	.more:hover {
 		background: var(--surface-hover);
+		color: var(--text);
 	}
 	.t,
 	.src {

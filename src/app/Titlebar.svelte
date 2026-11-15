@@ -1,7 +1,10 @@
 <script lang="ts">
-	import { ChevronLeft, ChevronRight, Minus, PanelLeft, PanelRight, Square, X } from "@lucide/svelte";
+	import { ChevronDown, ChevronLeft, ChevronRight, Copy, CornerUpLeft, Download, Folder, FolderMinus, GitBranch, Minus, PanelLeft, PanelRight, Pencil, Pin, PinOff, Square, Trash2, X } from "@lucide/svelte";
 	import { getCurrentWindow } from "@tauri-apps/api/window";
-	import { IconButton } from "$shared/ui";
+	import { ContextMenu, IconButton, type MenuItem } from "$shared/ui";
+	import { call, commands } from "$shared/ipc/client";
+	import { toasts } from "$shared/stores/toast.svelte";
+	import { convActions } from "$features/character/actions";
 	import { library } from "$features/character/library.svelte";
 	import { games } from "$features/game/game.svelte";
 	import { layout } from "./layout.svelte";
@@ -25,6 +28,75 @@
 		data: "데이터",
 		log: "로그",
 	};
+	// 대화 화면이면 그 대화 (제목 고치기·동작 메뉴)
+	const conv = $derived(nav.current.page === "character" && !nav.current.edit ? library.conversation(nav.current.convId) : undefined);
+	let renaming = $state(false);
+	let draft = $state("");
+	function startRename() {
+		if (!conv) return;
+		draft = conv.title;
+		renaming = true;
+	}
+	async function commitRename() {
+		if (!renaming || !conv) return;
+		renaming = false;
+		if (draft.trim() && draft.trim() !== conv.title) await library.rename(conv.id, draft);
+	}
+	function focusSelect(el: HTMLInputElement) {
+		el.focus();
+		el.select();
+	}
+
+	let menu = $state<{ x: number; y: number } | null>(null);
+	const menuItems = $derived.by((): MenuItem[] => {
+		const c = conv;
+		if (!c) return [];
+		const parent = (c.meta as { branch?: { parentId: string } } | null)?.branch?.parentId;
+		const folders = library.foldersOf(c.characterId ?? "");
+		return [
+			{ label: "이름 바꾸기", icon: Pencil, onselect: startRename },
+			{ label: c.pinned ? "고정 풀기" : "고정", icon: c.pinned ? PinOff : Pin, onselect: () => library.togglePin(c.id) },
+			{
+				label: "복제 (포크)",
+				icon: Copy,
+				separator: true,
+				onselect: async () => {
+					const d = await library.duplicate(c.id);
+					if (d) nav.go({ page: "character", charId: d.characterId ?? undefined, convId: d.id });
+				},
+			},
+			{
+				label: "마지막 메시지에서 분기",
+				icon: GitBranch,
+				disabled: !c.messageCount,
+				onselect: async () => {
+					const [last] = await call(commands.getMessages(c.id, 1, null), { source: "chat" });
+					if (!last) return;
+					const b = await library.branch(c.id, last.id);
+					nav.go({ page: "character", charId: b.characterId ?? undefined, convId: b.id });
+					toasts.success("분기를 만듦");
+				},
+			},
+			...(parent && library.conversation(parent)
+				? [{ label: "갈라져 나온 대화로", icon: CornerUpLeft, onselect: () => nav.go({ page: "character", charId: c.characterId ?? undefined, convId: parent }) }]
+				: []),
+			...folders.map((f, i) => ({
+				label: `폴더로 이동: ${f.name}`,
+				icon: Folder,
+				separator: i === 0,
+				checked: c.folderId === f.id,
+				onselect: () => library.move(c.id, f.id),
+			})),
+			...(c.folderId ? [{ label: "폴더에서 빼기", icon: FolderMinus, onselect: () => library.move(c.id, null) }] : []),
+			{ label: "내보내기", icon: Download, separator: true, onselect: () => convActions.export(c) },
+			{ label: "삭제", icon: Trash2, danger: true, onselect: () => convActions.remove(c) },
+		];
+	});
+	function openMenu(e: MouseEvent) {
+		const r = (e.currentTarget as HTMLElement).getBoundingClientRect();
+		menu = { x: r.left, y: r.bottom + 4 };
+	}
+
 	// 지금 화면 이름 (Claude Code 헤더처럼 가운데 왼쪽에 보임)
 	const title = $derived.by(() => {
 		const r = nav.current;
@@ -63,9 +135,29 @@
 	<h1 class="title" data-tauri-drag-region>
 		{#each title as t, i (i)}
 			{#if i > 0}<span class="sep" aria-hidden="true">/</span>{/if}
-			<span class:last={i === title.length - 1}>{t}</span>
+			{#if conv && i === title.length - 1}
+				{#if renaming}
+					<input
+						class="rename"
+						bind:value={draft}
+						use:focusSelect
+						aria-label="대화 이름"
+						onblur={commitRename}
+						onkeydown={(e) => {
+							if (e.key === "Enter") commitRename();
+							if (e.key === "Escape") renaming = false;
+						}}
+					/>
+				{:else}
+					<button class="crumb last" title="눌러서 이름 바꾸기" onclick={startRename}>{t}</button>
+				{/if}
+				<IconButton label="대화 동작" size="sm" onclick={openMenu}><ChevronDown /></IconButton>
+			{:else}
+				<span class:last={i === title.length - 1}>{t}</span>
+			{/if}
 		{/each}
 	</h1>
+	<ContextMenu at={menu} items={menuItems} label="대화 동작" onclose={() => (menu = null)} />
 	<div class="drag" data-tauri-drag-region></div>
 
 	{#if panel.available}
@@ -131,6 +223,38 @@
 	.title span {
 		overflow: hidden;
 		text-overflow: ellipsis;
+	}
+	.crumb {
+		max-width: 360px;
+		padding: 2px 6px;
+		margin: 0 -6px;
+		border: none;
+		border-radius: var(--radius-xs);
+		background: transparent;
+		font: inherit;
+		overflow: hidden;
+		text-overflow: ellipsis;
+		white-space: nowrap;
+		cursor: text;
+	}
+	.crumb:hover {
+		background: var(--surface-hover);
+	}
+	.rename {
+		width: 260px;
+		height: 24px;
+		padding: 0 6px;
+		border: 1px solid var(--accent);
+		border-radius: var(--radius-xs);
+		background: var(--surface);
+		color: var(--text);
+		font: inherit;
+		font-weight: 600;
+		outline: none;
+	}
+	.title :global(.icon-btn) {
+		width: 22px;
+		height: 22px;
 	}
 	.title .last {
 		color: var(--text);

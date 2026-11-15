@@ -28,11 +28,16 @@ class Panel {
 		return this.tabs.length > 0;
 	}
 
+	/** 지금 탭을 등록한 화면 (해제할 때 다른 화면의 등록을 지우지 않게) */
+	private owner = 0;
+
 	register(tabs: PanelTab[], initial = tabs[0]?.id ?? "") {
+		// $state에 넣으면 배열이 프록시로 바뀌어 원래 배열과 비교할 수 없음 → 번호표로 확인
+		const me = ++this.owner;
 		this.tabs = tabs;
 		if (!tabs.some((t) => t.id === this.tab)) this.tab = initial;
 		return () => {
-			if (this.tabs === tabs) this.tabs = [];
+			if (this.owner === me) this.tabs = [];
 		};
 	}
 

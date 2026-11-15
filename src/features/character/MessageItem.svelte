@@ -17,8 +17,12 @@
 		isLast: boolean;
 		onbranch: (m: Message) => void;
 		onprompt: (m: Message) => void;
+		/** 여러 개 고르기 모드 */
+		selecting?: boolean;
+		selected?: boolean;
+		onselect?: (m: Message, on: boolean) => void;
 	}
-	let { msg, no, session, images, isLast, onbranch, onprompt }: Props = $props();
+	let { msg, no, session, images, isLast, onbranch, onprompt, selecting = false, selected = false, onselect }: Props = $props();
 
 	const meta = $derived(metaOf(msg));
 	const isAi = $derived(msg.role === "assistant");
@@ -57,8 +61,10 @@
 	}
 </script>
 
-<div class="block" class:ai={isAi} class:user={!isAi} class:hidden={meta.hidden} id="msg-{msg.id}" data-no={no}>
+<!-- svelte-ignore a11y_click_events_have_key_events, a11y_no_static_element_interactions -->
+<div class="block" class:ai={isAi} class:user={!isAi} class:hidden={meta.hidden} class:selecting class:picked={selected} id="msg-{msg.id}" data-no={no} onclick={() => selecting && onselect?.(msg, !selected)}>
 	<div class="who">
+		{#if selecting}<input class="pick" type="checkbox" checked={selected} aria-label="#{no} 메시지 고르기" onclick={(e) => e.stopPropagation()} onchange={(e) => onselect?.(msg, e.currentTarget.checked)} />{/if}
 		<span class="no">#{no}</span><b>{msg.name ?? (isAi ? "AI" : "나")}</b>
 		{#if meta.hidden}<Badge><EyeOff /> AI에게 숨김</Badge>{/if}
 		{#if live}
@@ -70,7 +76,7 @@
 				{#if meta.info?.cancelled}<span class="model">· 멈춤</span>{/if}
 			</span>
 		{/if}
-		{#if !editing && !live}
+		{#if !editing && !live && !selecting}
 			<div class="actions" role="toolbar" aria-label="메시지 {no} 동작">
 				<IconButton label="여기서 분기 나누기" size="sm" onclick={() => onbranch(msg)}><GitBranch /></IconButton>
 				<IconButton label="복사" size="sm" onclick={copy}><Copy /></IconButton>
@@ -114,15 +120,12 @@
 		{/each}
 	{/if}
 
-	{#if isAi && (swipes > 1 || (isLast && swipes > 0)) && !editing}
+	<!-- 스와이프는 마지막 AI 메시지에서만: < 번호 > 한 세트 (끝에서 > 를 누르면 새 응답) -->
+	{#if isAi && isLast && !editing && !live}
 		<div class="swipe">
 			<IconButton label="이전 응답" size="sm" disabled={swipeId === 0 || session.busy} onclick={() => session.swipe(msg, -1)}><ChevronLeft /></IconButton>
-			<span>{swipeId + 1} / {swipes}</span>
-			<IconButton label={isLast ? "다음 응답 (마지막이면 새로 생성)" : "다음 응답"} size="sm" disabled={session.busy || (!isLast && swipeId >= swipes - 1)} onclick={() => session.swipe(msg, 1)}><ChevronRight /></IconButton>
-		</div>
-	{:else if isAi && isLast && !editing && !live}
-		<div class="swipe">
-			<IconButton label="다른 응답 만들기 (스와이프)" size="sm" disabled={session.busy} onclick={() => session.swipe(msg, 1)}><ChevronRight /></IconButton>
+			<span>{swipeId + 1} / {Math.max(swipes, 1)}</span>
+			<IconButton label={swipeId >= swipes - 1 ? "새 응답 만들기 (스와이프)" : "다음 응답"} size="sm" disabled={session.busy} onclick={() => session.swipe(msg, 1)}><ChevronRight /></IconButton>
 		</div>
 	{/if}
 </div>
@@ -137,6 +140,18 @@
 	}
 	.block:hover {
 		background: var(--surface-2);
+	}
+	.block.selecting {
+		cursor: pointer;
+	}
+	.block.picked {
+		outline: 2px solid var(--accent);
+		outline-offset: -2px;
+	}
+	.pick {
+		width: 15px;
+		height: 15px;
+		accent-color: var(--accent);
 	}
 	.block p {
 		white-space: pre-wrap;
@@ -230,6 +245,7 @@
 	.swipe {
 		display: flex;
 		align-items: center;
+		justify-content: flex-end;
 		gap: 2px;
 		margin-top: var(--space-2);
 		font-size: var(--text-xs);

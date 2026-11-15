@@ -123,6 +123,13 @@ class Library {
 		return conv;
 	}
 
+	/** 대화 meta에 키를 합침 (값이 null이면 지움) */
+	async patchMeta(id: string, patch: Record<string, unknown>) {
+		const conv = await call(commands.patchConversationMeta(id, patch as never), src);
+		this.put(conv);
+		return conv;
+	}
+
 	async rename(id: string, title: string) {
 		const t = title.trim();
 		const c = this.conversation(id);

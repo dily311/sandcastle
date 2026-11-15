@@ -255,9 +255,32 @@ export const chatHandlers: Record<string, (a: Args) => unknown> = {
 		const upto = list.findIndex((m) => m.id === messageId);
 		const { id: _omit, ...rest } = src;
 		void _omit;
-		const c = addConv({ ...rest, title: `${src.title} · #${list[upto].seq} 분기`, pinned: false } as never, 0);
+		const branchMeta = { ...((src.meta as object) ?? {}), branch: { parentId: id, messageId, seq: list[upto].seq } };
+		const c = addConv({ ...rest, title: `${src.title} · #${list[upto].seq} 분기`, pinned: false, meta: branchMeta } as never, 0);
 		for (const m of list.slice(0, upto + 1)) messages.push({ ...m, id: uid("m"), conversationId: c.id });
 		return view(c);
+	},
+	patch_conversation_meta: ({ id, patch }) => {
+		const c = conv(id);
+		const meta: Record<string, unknown> = { ...((c.meta as object) ?? {}) };
+		for (const [k, v] of Object.entries(patch as object)) {
+			if (v === null) delete meta[k];
+			else meta[k] = v;
+		}
+		c.meta = meta as never;
+		c.updatedAt = now();
+		return view(c);
+	},
+	delete_messages: ({ ids }) => {
+		let n = 0;
+		for (const id of ids as string[]) {
+			const i = messages.findIndex((m) => m.id === id);
+			if (i >= 0) {
+				messages.splice(i, 1);
+				n++;
+			}
+		}
+		return n;
 	},
 	list_conversation_folders: ({ characterId }) => folders.filter((f) => f.characterId === characterId),
 	create_conversation_folder: ({ characterId, name }) => {

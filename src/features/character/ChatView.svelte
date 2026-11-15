@@ -1,6 +1,9 @@
 <script lang="ts">
 	import { tick } from "svelte";
-	import { FastForward, Images, ListTree, PanelLeft, Plus, RefreshCw, Send, SlidersHorizontal, Square } from "@lucide/svelte";
+	import { CornerUpLeft, FastForward, Images, ListChecks, ListTree, PanelLeft, Plus, RefreshCw, Send, SlidersHorizontal, Square, Trash2, X } from "@lucide/svelte";
+	import { Button } from "$shared/ui";
+	import { confirmAction } from "$shared/stores/confirm.svelte";
+	import { toasts } from "$shared/stores/toast.svelte";
 	import { ContextMenu, Dialog, EmptyState, IconButton, Spinner, Textarea } from "$shared/ui";
 	import { panel } from "$app/panel.svelte";
 	import { appSetting } from "$shared/stores/appSetting.svelte";
@@ -108,8 +111,47 @@
 	let plusMenu = $state<{ x: number; y: number } | null>(null);
 	function openPlus(e: MouseEvent) {
 		const r = (e.currentTarget as HTMLElement).getBoundingClientRect();
-		plusMenu = { x: r.left, y: r.top - 8 - 80 };
+		plusMenu = { x: r.left, y: r.top - 8 - 200 };
 	}
+
+	// ---- 분기: 부모 대화 ----
+	const branchInfo = $derived((conv?.meta as { branch?: { parentId: string; messageId: string; seq: number } } | null)?.branch ?? null);
+	const parentConv = $derived(branchInfo ? library.conversation(branchInfo.parentId) : undefined);
+	function goParent() {
+		if (!parentConv || !branchInfo) return;
+		onopen(parentConv.id);
+		// 갈라진 메시지로 스크롤
+		setTimeout(() => jumpTo(branchInfo.messageId), 400);
+	}
+
+	// ---- 여러 메시지 고르기 / 삭제 ----
+	let selecting = $state(false);
+	let picked = $state<Set<string>>(new Set());
+	function startSelect() {
+		picked = new Set();
+		selecting = true;
+	}
+	function pick(m: Message, on: boolean) {
+		const next = new Set(picked);
+		if (on) next.add(m.id);
+		else next.delete(m.id);
+		picked = next;
+	}
+	function pickAll() {
+		picked = picked.size === (session?.messages.length ?? 0) ? new Set() : new Set(session?.messages.map((m) => m.id));
+	}
+	async function removePicked() {
+		if (!session || !picked.size) return;
+		if (!(await confirmAction({ title: "메시지 삭제", message: `고른 메시지 ${picked.size}개를 지움. 되돌릴 수 없음`, confirmLabel: `${picked.size}개 삭제`, danger: true }))) return;
+		const n = await session.removeMany([...picked]);
+		toasts.success(`${n}개 지움`);
+		selecting = false;
+		picked = new Set();
+	}
+	$effect(() => {
+		void convId;
+		selecting = false;
+	});
 
 	// ---- 분기 / 보낸 컨텍스트 ----
 	async function branch(m: Message) {
@@ -130,9 +172,23 @@
 	{/if}
 
 	<section class="reader">
-		<header class="bar">
-			<IconButton label="대화 목록" size="sm" active={showList} onclick={toggleList}><PanelLeft /></IconButton>
+		<header class="bar" class:listing={showList}>
+			<IconButton label={showList ? "대화 목록 닫기" : "대화 목록 열기"} size="sm" active={showList} onclick={toggleList}><PanelLeft /></IconButton>
+			{#if parentConv && branchInfo}
+				<button class="branch" onclick={goParent} title="갈라져 나온 대화로 돌아가기">
+					<CornerUpLeft />{parentConv.title}<span>#{branchInfo.seq}에서 갈라짐</span>
+				</button>
+			{/if}
 		</header>
+		{#if selecting}
+			<div class="selbar" role="toolbar" aria-label="메시지 고르기">
+				<b>{picked.size}개 고름</b>
+				<Button size="sm" variant="ghost" onclick={pickAll}>{picked.size === (session?.messages.length ?? 0) && picked.size ? "모두 풀기" : "모두 고르기"}</Button>
+				<span class="sp"></span>
+				<Button size="sm" variant="danger" disabled={!picked.size} onclick={removePicked}>{#snippet icon()}<Trash2 />{/snippet}삭제</Button>
+				<IconButton label="고르기 끝내기" size="sm" onclick={() => (selecting = false)}><X /></IconButton>
+			</div>
+		{/if}
 
 		<div class="scroll" bind:this={scroller} {onscroll}>
 			{#if !session || session.loading}
@@ -147,7 +203,7 @@
 					{#each session.messages as m, i (m.id)}
 						{@const ch = metaOf(m).chapter}
 						{#if ch}<h2 class="chapter" id="chapter-{m.id}"><span>{chapters[m.id]}장</span>{ch}</h2>{/if}
-						<MessageItem msg={m} no={i + 1} {session} {images} isLast={i === session.messages.length - 1} onbranch={branch} onprompt={showPrompt} />
+						<MessageItem msg={m} no={i + 1} {session} {images} isLast={i === session.messages.length - 1} onbranch={branch} onprompt={showPrompt} {selecting} selected={picked.has(m.id)} onselect={pick} />
 					{/each}
 
 					{#if session.live?.kind === "send"}
@@ -198,6 +254,9 @@
 					disabled: session?.last?.role !== "assistant",
 					onselect: () => session?.regenerate(true),
 				},
+				{ label: showList ? "대화 목록 닫기" : "대화 목록 열기", icon: PanelLeft, separator: true, onselect: toggleList },
+				{ label: "메시지 여러 개 지우기", icon: ListChecks, disabled: !session?.messages.length, onselect: startSelect },
+				...(parentConv ? [{ label: "갈라져 나온 대화로", icon: CornerUpLeft, onselect: goParent }] : []),
 			]}
 			onclose={() => (plusMenu = null)}
 		/>
@@ -258,8 +317,57 @@
 		transition: opacity var(--duration-fast) var(--ease);
 	}
 	.bar:hover :global(.icon-btn),
-	.bar :global(.icon-btn:focus-visible) {
+	.bar :global(.icon-btn:focus-visible),
+	.bar.listing :global(.icon-btn) {
 		opacity: 1;
+	}
+	.bar {
+		align-items: center;
+		gap: var(--space-2);
+	}
+	.branch {
+		display: inline-flex;
+		align-items: center;
+		gap: 6px;
+		min-width: 0;
+		height: 26px;
+		padding: 0 var(--space-2);
+		border: 1px solid var(--border);
+		border-radius: var(--radius-full);
+		background: var(--surface-2);
+		color: var(--text-muted);
+		font: inherit;
+		font-size: var(--text-xs);
+		white-space: nowrap;
+		overflow: hidden;
+		text-overflow: ellipsis;
+		cursor: pointer;
+	}
+	.branch:hover {
+		border-color: var(--accent);
+		color: var(--text);
+	}
+	.branch :global(svg) {
+		width: 13px;
+		height: 13px;
+		flex-shrink: 0;
+	}
+	.branch span {
+		color: var(--text-faint);
+	}
+	.selbar {
+		display: flex;
+		align-items: center;
+		gap: var(--space-2);
+		margin: var(--space-2) var(--space-3) 0;
+		padding: var(--space-1) var(--space-2) var(--space-1) var(--space-3);
+		border: 1px solid var(--accent);
+		border-radius: var(--radius-md);
+		background: var(--accent-soft);
+		font-size: var(--text-sm);
+	}
+	.selbar .sp {
+		flex: 1;
 	}
 	.scroll {
 		flex: 1;

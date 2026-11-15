@@ -243,3 +243,15 @@ async fn character_update_saves_notes_links_and_defaults() {
     assert_eq!(got.default_persona_id.as_deref(), Some("default"));
     assert_eq!(got.creator_notes.as_deref(), Some("<b>v2</b> 업데이트"));
 }
+
+#[tokio::test]
+async fn conversation_meta_patch_merges_and_removes() {
+    let pool = pool().await;
+    let id = new_conv(&pool).await;
+    ui::patch_conversation_meta(&pool, &id, &serde_json::json!({ "branch": { "parentId": "p1", "seq": 3 }, "authorNote": "비 오는 밤" })).await.unwrap();
+    ui::patch_conversation_meta(&pool, &id, &serde_json::json!({ "authorNote": null, "memory": "열쇠를 잃어버림" })).await.unwrap();
+    let meta = conv::get_conversation(&pool, &id).await.unwrap().meta.unwrap();
+    assert_eq!(meta["branch"]["parentId"], "p1");
+    assert_eq!(meta["memory"], "열쇠를 잃어버림");
+    assert!(meta.get("authorNote").is_none());
+}

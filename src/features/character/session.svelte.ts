@@ -178,6 +178,16 @@ export class ChatSession {
 		await this.save(m, m.content, meta);
 	}
 
+	/** 여러 메시지 한 번에 지우기 */
+	async removeMany(ids: string[]) {
+		if (!ids.length) return 0;
+		const n = await call(commands.deleteMessages(ids), src);
+		const gone = new Set(ids);
+		this.messages = this.messages.filter((x) => !gone.has(x.id));
+		void library.refresh(this.convId);
+		return n;
+	}
+
 	async remove(m: Message) {
 		await call(commands.deleteMessage(m.id), src);
 		this.messages = this.messages.filter((x) => x.id !== m.id);

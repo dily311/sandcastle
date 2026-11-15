@@ -55,6 +55,10 @@ export const commands = {
 	duplicateConversation: (id: string, options?: InvokeOptions) => __TAURI_INVOKE<Conversation_Serialize>("duplicate_conversation", { id }, options),
 	/**  분기 나누기: 이 메시지까지 복사한 새 대화 */
 	branchConversation: (id: string, messageId: string, options?: InvokeOptions) => __TAURI_INVOKE<Conversation_Serialize>("branch_conversation", { id, messageId }, options),
+	/**  대화 meta에 키를 합친다 (작가 노트, 메모 등). 값이 null이면 그 키를 지움 */
+	patchConversationMeta: (id: string, patch: Value, options?: InvokeOptions) => __TAURI_INVOKE<Conversation_Serialize>("patch_conversation_meta", { id, patch }, options),
+	/**  메시지 여러 개 한 번에 지우기. 지운 개수를 돌려준다 */
+	deleteMessages: (ids: string[], options?: InvokeOptions) => __TAURI_INVOKE<number>("delete_messages", { ids }, options),
 	getTask: (taskId: string, options?: InvokeOptions) => __TAURI_INVOKE<TaskInfo_Serialize>("get_task", { taskId }, options),
 	listActiveTasks: (options?: InvokeOptions) => __TAURI_INVOKE<TaskInfo_Serialize[]>("list_active_tasks", undefined, options),
 	/**  앱 시작 후 프론트가 호출: 재개/포기를 물어볼 중단된 작업 목록 */

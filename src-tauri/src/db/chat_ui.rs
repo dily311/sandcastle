@@ -239,3 +239,15 @@ where
         .await?;
     Ok(s.and_then(|s| serde_json::from_str(&s).ok()))
 }
+
+// ---------- 대화 meta ----------
+/// 대화 meta에 키를 합친다 (JSON merge patch: 값이 null이면 그 키를 지움)
+pub async fn patch_conversation_meta(pool: &SqlitePool, id: &str, patch: &serde_json::Value) -> Result<(), Error> {
+    sqlx::query("UPDATE conversations SET meta = json_patch(COALESCE(meta, '{}'), ?), updated_at = ? WHERE id = ?")
+        .bind(patch.to_string())
+        .bind(now())
+        .bind(id)
+        .execute(pool)
+        .await?;
+    Ok(())
+}

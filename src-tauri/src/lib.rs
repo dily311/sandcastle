@@ -234,6 +234,8 @@ pub fn specta_builder() -> tauri_specta::Builder<tauri::Wry> {
             set_conversation_options,
             duplicate_conversation,
             branch_conversation,
+            patch_conversation_meta,
+            delete_messages,
             // task
             get_task,
             list_active_tasks,
@@ -412,6 +414,8 @@ pub fn specta_builder() -> tauri_specta::Builder<tauri::Wry> {
             set_conversation_options,
             duplicate_conversation,
             branch_conversation,
+            patch_conversation_meta,
+            delete_messages,
             // task
             get_task,
             list_active_tasks,

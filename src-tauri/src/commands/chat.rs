@@ -164,5 +164,32 @@ pub async fn branch_conversation(state: State<'_, AppState>, id: String, message
     let msg = chat_ui::get_message(&state.db, &message_id).await?;
     let title = format!("{} · #{} 분기", src.title, msg.seq);
     let new_id = chat_ui::copy_conversation(&state.db, &id, &title, Some(&message_id)).await?;
+    // 어디서 갈라졌는지 기억 (부모 대화로 돌아가기·분기 경로 표시용)
+    let branch = serde_json::json!({ "branch": { "parentId": id, "messageId": message_id, "seq": msg.seq } });
+    chat_ui::patch_conversation_meta(&state.db, &new_id, &branch).await?;
     Ok(conversation::get_conversation(&state.db, &new_id).await?)
+}
+
+/// 대화 meta에 키를 합친다 (작가 노트, 메모 등). 값이 null이면 그 키를 지움
+#[tauri::command]
+#[specta::specta]
+pub async fn patch_conversation_meta(state: State<'_, AppState>, id: String, patch: serde_json::Value) -> Result<Conversation> {
+    if !patch.is_object() {
+        return Err(AppError::validation("patch는 객체여야 합니다", None));
+    }
+    chat_ui::patch_conversation_meta(&state.db, &id, &patch).await?;
+    Ok(conversation::get_conversation(&state.db, &id).await?)
+}
+
+/// 메시지 여러 개 한 번에 지우기. 지운 개수를 돌려준다
+#[tauri::command]
+#[specta::specta]
+pub async fn delete_messages(state: State<'_, AppState>, ids: Vec<String>) -> Result<u32> {
+    let mut tx = state.db.begin().await?;
+    let mut n = 0;
+    for id in &ids {
+        n += sqlx::query("DELETE FROM messages WHERE id = ?").bind(id).execute(&mut *tx).await?.rows_affected() as u32;
+    }
+    tx.commit().await?;
+    Ok(n)
 }
