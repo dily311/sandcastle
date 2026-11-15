@@ -275,6 +275,18 @@ export const commands = {
 	readJournal: (sessionId: string, fromSeq: number | null, toSeq: number, options?: InvokeOptions) => __TAURI_INVOKE<GameJournal[]>("read_journal", { sessionId, fromSeq, toSeq }, options),
 	/**  화면이 HTML 코드 블록을 보여주기 전에 부른다. iframe의 src로 쓸 주소를 돌려준다. */
 	registerHtmlView: (html: string, options?: InvokeOptions) => __TAURI_INVOKE<string>("register_html_view", { html }, options),
+	/**  코어 플러그인 목록과 켜짐 상태. 켜고 끄기는 update_feature_setting(id, enabled). */
+	listCorePlugins: (options?: InvokeOptions) => __TAURI_INVOKE<CorePlugin[]>("list_core_plugins", undefined, options),
+	getPluginSetting: (options?: InvokeOptions) => __TAURI_INVOKE<PluginSetting_Serialize>("get_plugin_setting", undefined, options),
+	updatePluginSetting: (setting: PluginSetting_Deserialize, options?: InvokeOptions) => __TAURI_INVOKE<PluginSetting_Serialize>("update_plugin_setting", { setting }, options),
+	/**  글 번역. to를 비우면 설정의 답변 언어. (입력창의 "보내기 전에 번역"은 to에 입력 언어를 넣어 부른다) */
+	translateText: (text: string, to: string | null, options?: InvokeOptions) => __TAURI_INVOKE<string>("translate_text", { text, to }, options),
+	/**  메시지 번역. 결과는 meta.translation = {lang, text, source}에 저장해 다시 열어도 보인다 (원문이 바뀌면 다시 번역) */
+	translateMessage: (messageId: string, options?: InvokeOptions) => __TAURI_INVOKE<Message_Serialize>("translate_message", { messageId }, options),
+	/**  글을 음성 파일(mp3)로 만들고 경로를 돌려준다 (같은 글·설정이면 캐시) */
+	speakText: (text: string, options?: InvokeOptions) => __TAURI_INVOKE<string>("speak_text", { text }, options),
+	/**  메시지 장면을 그림으로. meta.generatedImages에 {path, prompt}를 쌓는다 */
+	generateMessageImage: (messageId: string, options?: InvokeOptions) => __TAURI_INVOKE<Message_Serialize>("generate_message_image", { messageId }, options),
 	/**
 	 *  지금 씬 또는 지금 대화의 기록 ("지난 대사" 창). 씬이 열려 있으면 그 씬이 마지막으로 열린 뒤의 대본과 씬 대화,
 	 *  씬 밖에서 NPC와 대화 중이면 그 대화를 시작한 뒤의 메시지. 둘 다 아니면 최근 기록(limit개).
@@ -957,6 +969,17 @@ export type Conversation_Serialize = {
 	/**  이 대화의 프리셋/API. 없으면 앱 설정의 선택값 */
 	promptPresetId: string | null,
 	apiProfileId: string | null,
+};
+
+export type CorePlugin = {
+	id: string,
+	name: string,
+	description: string,
+	/**  설정에 값이 없을 때 */
+	defaultEnabled: boolean,
+	/**  데스크톱에서만 되는 기능 (모바일에서는 켜도 동작하지 않음) */
+	desktopOnly: boolean,
+	enabled: boolean,
 };
 
 export type CssSnippet = {
@@ -2054,6 +2077,32 @@ export type GameWeatherTypesInput_Serialize = {
 	visibilityModifier: number | null,
 };
 
+export type ImageGenSetting = ImageGenSetting_Serialize | ImageGenSetting_Deserialize;
+
+export type ImageGenSetting_Deserialize = {
+	/**  OpenAI 호환 이미지 API를 쓰는 프로필 (주소 + 키). 비우면 앱에서 고른 API */
+	apiProfileId?: string | null,
+	model?: string,
+	/**  예: "1024x1024" */
+	size?: string,
+	/**  모든 그림에 붙일 화풍 (예: "anime style, soft lighting") */
+	stylePrompt?: string,
+	/**  메시지를 바로 쓰지 않고 채팅 AI가 먼저 영어 이미지 프롬프트를 쓴다 */
+	aiPrompt?: boolean,
+};
+
+export type ImageGenSetting_Serialize = {
+	/**  OpenAI 호환 이미지 API를 쓰는 프로필 (주소 + 키). 비우면 앱에서 고른 API */
+	apiProfileId: string | null,
+	model: string,
+	/**  예: "1024x1024" */
+	size: string,
+	/**  모든 그림에 붙일 화풍 (예: "anime style, soft lighting") */
+	stylePrompt: string,
+	/**  메시지를 바로 쓰지 않고 채팅 AI가 먼저 영어 이미지 프롬프트를 쓴다 */
+	aiPrompt: boolean,
+};
+
 export type ImportedCharacterRef = {
 	oldId: string,
 	newId: string,
@@ -2535,6 +2584,20 @@ export type Playlist_Serialize = {
 	sortOrder: number,
 	createdAt: number,
 	updatedAt: number,
+};
+
+export type PluginSetting = PluginSetting_Serialize | PluginSetting_Deserialize;
+
+export type PluginSetting_Deserialize = {
+	translate?: TranslateSetting_Deserialize,
+	tts?: TtsSetting_Deserialize,
+	imageGen?: ImageGenSetting_Deserialize,
+};
+
+export type PluginSetting_Serialize = {
+	translate: TranslateSetting_Serialize,
+	tts: TtsSetting_Serialize,
+	imageGen: ImageGenSetting_Serialize,
 };
 
 export type PromptBlocks = PromptBlocks_Serialize | PromptBlocks_Deserialize;
@@ -3216,6 +3279,58 @@ export type TranscriptPage_Serialize = {
 	hasMore: boolean,
 	/**  이 페이지에서 가장 오래된 항목의 seq. 다음(더 오래된) 페이지를 읽을 때 beforeSeq로 넘긴다. */
 	oldestSeq: number | null,
+};
+
+export type TranslateSetting = TranslateSetting_Serialize | TranslateSetting_Deserialize;
+
+export type TranslateSetting_Deserialize = {
+	/**  번역에 쓸 API 프로필 (비우면 앱에서 고른 API) */
+	apiProfileId?: string | null,
+	/**  AI 답변을 이 언어로 (예: "한국어") */
+	targetLang?: string,
+	/**  내 입력을 이 언어로 (예: "English") */
+	inputLang?: string,
+	/**  새 AI 답변을 자동으로 번역 */
+	autoTranslate?: boolean,
+};
+
+export type TranslateSetting_Serialize = {
+	/**  번역에 쓸 API 프로필 (비우면 앱에서 고른 API) */
+	apiProfileId: string | null,
+	/**  AI 답변을 이 언어로 (예: "한국어") */
+	targetLang: string,
+	/**  내 입력을 이 언어로 (예: "English") */
+	inputLang: string,
+	/**  새 AI 답변을 자동으로 번역 */
+	autoTranslate: boolean,
+};
+
+export type TtsSetting = TtsSetting_Serialize | TtsSetting_Deserialize;
+
+export type TtsSetting_Deserialize = {
+	/**  OpenAI 호환 음성 API를 쓰는 프로필 (주소 + 키). 비우면 앱에서 고른 API */
+	apiProfileId?: string | null,
+	model?: string,
+	voice?: string,
+	/**  0.25 ~ 4.0 */
+	speed?: number | null,
+	/**  새 AI 답변을 자동으로 읽기 */
+	autoRead?: boolean,
+	/**  *지문*은 빼고 대사만 읽기 */
+	dialogueOnly?: boolean,
+};
+
+export type TtsSetting_Serialize = {
+	/**  OpenAI 호환 음성 API를 쓰는 프로필 (주소 + 키). 비우면 앱에서 고른 API */
+	apiProfileId: string | null,
+	model: string,
+	voice: string,
+	/**  0.25 ~ 4.0 */
+	speed: number | null,
+	/**  새 AI 답변을 자동으로 읽기 */
+	autoRead: boolean,
+	/**  *지문*은 빼고 대사만 읽기 */
+	dialogueOnly: boolean,
 };
 
 /**  분기할 수 있는 시점 하나 (턴 끝 상태 스냅샷이 있는 seq) */

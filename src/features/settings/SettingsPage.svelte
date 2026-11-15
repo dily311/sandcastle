@@ -1,7 +1,7 @@
 <script lang="ts">
 	import { layout } from "$app/layout.svelte";
 	import type { Component } from "svelte";
-	import { Database, Keyboard, KeyRound, MessagesSquare, Music, Palette, Regex, ScrollText, Search, Settings2, SlidersHorizontal, Smartphone } from "@lucide/svelte";
+	import { Blocks, Database, Keyboard, KeyRound, MessagesSquare, Music, Palette, Regex, ScrollText, Search, Settings2, SlidersHorizontal, Smartphone } from "@lucide/svelte";
 	import { Badge, Input } from "$shared/ui";
 	import { nav, type SettingsTab } from "$app/nav.svelte";
 	import { logs } from "$shared/stores/log.svelte";
@@ -18,6 +18,8 @@
 	import ApiEditor from "./ApiEditor.svelte";
 	import ChatSection from "./ChatSection.svelte";
 	import PhoneSection from "./PhoneSection.svelte";
+	import PluginsSection from "./PluginsSection.svelte";
+	import { plugins, type PluginId } from "$shared/stores/plugins.svelte";
 
 	let { tab: routeTab, edit }: { tab?: SettingsTab; edit?: string } = $props();
 	const tab = $derived(routeTab ?? "general");
@@ -31,17 +33,23 @@
 		/** 검색어로 찾을 낱말 */
 		keywords: string;
 		view: Component;
+		/** 이 코어 플러그인이 꺼져 있으면 탭을 숨김 */
+		plugin?: PluginId;
 	}
-	const groups: { title: string; items: Item[] }[] = [
+	$effect(() => {
+		if (!plugins.loaded) void plugins.load();
+	});
+	const allGroups: { title: string; items: Item[] }[] = [
 		{
 			title: "앱",
 			items: [
 				{ id: "general", label: "기본 설정", icon: Settings2, keywords: "언어 업데이트", view: GeneralSection },
+				{ id: "plugins", label: "코어 플러그인", icon: Blocks, keywords: "기능 켜기 끄기 토글 플러그인 폰 게임 위젯 정규식 이미지 html 번역 음성 tts 이미지 생성", view: PluginsSection },
 				{ id: "chat", label: "대화", icon: MessagesSquare, keywords: "enter 보내기 메시지 시각 시간 새 대화 기본값 api 프리셋 페르소나", view: ChatSection },
-				{ id: "phone", label: "폰", icon: Smartphone, keywords: "폰 모드 메신저 프롬프트", view: PhoneSection },
+				{ id: "phone", label: "폰", icon: Smartphone, keywords: "폰 모드 메신저 프롬프트", view: PhoneSection, plugin: "phone" },
 				{ id: "theme", label: "테마", icon: Palette, keywords: "화면 모드 다크 어둡게 밝게 강조색 글자 크기 프레임 창 css", view: ThemeSection },
 				{ id: "shortcut", label: "단축키", icon: Keyboard, keywords: "키 단축 뒤로 앞으로", view: ShortcutSection },
-				{ id: "widget", label: "위젯", icon: Music, keywords: "음악 플레이어 자동 실행 바탕화면", view: WidgetSection },
+				{ id: "widget", label: "위젯", icon: Music, keywords: "음악 플레이어 자동 실행 바탕화면", view: WidgetSection, plugin: "widget" },
 			],
 		},
 		{
@@ -49,7 +57,7 @@
 			items: [
 				{ id: "api", label: "API 키", icon: KeyRound, keywords: "연결 공급자 모델 openai claude gemini vertex 서비스 계정 json 키 테스트", view: ApiSection },
 				{ id: "preset", label: "프리셋", icon: SlidersHorizontal, keywords: "프롬프트 블록 온도 토큰 컨텍스트 sillytavern", view: PresetSection },
-				{ id: "regex", label: "정규식", icon: Regex, keywords: "찾아 바꾸기 치환 regex", view: RegexSection },
+				{ id: "regex", label: "정규식", icon: Regex, keywords: "찾아 바꾸기 치환 regex", view: RegexSection, plugin: "regex" },
 			],
 		},
 		{
@@ -60,7 +68,9 @@
 			],
 		},
 	];
-	const all = groups.flatMap((g) => g.items);
+	/** 꺼진 코어 플러그인의 설정 탭은 숨긴다 */
+	const groups = $derived(allGroups.map((g) => ({ ...g, items: g.items.filter((i) => !i.plugin || plugins.on(i.plugin)) })).filter((g) => g.items.length));
+	const all = $derived(groups.flatMap((g) => g.items));
 
 	let query = $state("");
 	const q = $derived(query.trim().toLowerCase());

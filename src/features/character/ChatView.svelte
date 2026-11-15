@@ -1,6 +1,6 @@
 <script lang="ts">
 	import { tick } from "svelte";
-	import { Bookmark, ChevronRight, Gauge, Copy, CornerUpLeft, FastForward, GitBranch, ImagePlus, Images, ListChecks, ListTree, PanelLeft, Plus, RefreshCw, Send, SlidersHorizontal, Square, Trash2, X } from "@lucide/svelte";
+	import { Bookmark, ChevronRight, Gauge, Copy, CornerUpLeft, FastForward, GitBranch, ImagePlus, Images, Languages, ListChecks, ListTree, PanelLeft, Plus, RefreshCw, Send, SlidersHorizontal, Square, Trash2, X } from "@lucide/svelte";
 	import { bookmarks } from "./bookmarks";
 	import { childrenOf, pathOf } from "./branches";
 	import SidePanel from "$app/SidePanel.svelte";
@@ -19,6 +19,8 @@
 	import ChatPanel from "./ChatPanel.svelte";
 	import ConvSidebar from "./ConvSidebar.svelte";
 	import MessageItem from "./MessageItem.svelte";
+	import { plugins } from "$shared/stores/plugins.svelte";
+	import { translateInput } from "$shared/stores/aiTools.svelte";
 	import { toBlocks } from "./format";
 	import { library } from "./library.svelte";
 	import { ChatSession, metaOf, type Message } from "./session.svelte";
@@ -395,6 +397,9 @@
 			label="추가 기능"
 			items={[
 				{ label: "이미지 첨부", icon: ImagePlus, disabled: pending.length >= MAX_ATTACH, onselect: () => fileInput?.click() },
+				...(plugins.on("translate")
+					? [{ label: "입력을 번역해서 바꾸기", icon: Languages, disabled: !draft.trim(), onselect: async () => (draft = await translateInput(draft).catch(() => draft)) }]
+					: []),
 				{ label: "이어서 응답 받기", icon: FastForward, separator: true, onselect: () => session?.send("") },
 				{
 					label: "마지막 응답 다시 만들기",

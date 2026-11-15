@@ -11,6 +11,7 @@ pub mod conversation;
 pub mod chat;
 pub mod phone;
 pub mod convert;
+pub mod plugins;
 
 pub mod game_manager;
 pub mod game_engine;

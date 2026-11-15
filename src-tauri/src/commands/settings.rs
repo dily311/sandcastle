@@ -122,12 +122,13 @@ pub async fn update_feature_setting(
 
     save(&app, &*settings)?;
 
-    // 추가하는 기능이 widget 윈도우에서 작동하는 기능일 경우 해당 윈도우에 알려야 함
-    if id.starts_with("widget.") {
-        let json = json!({"id": id, "enabled": enabled});
-        app.emit_to("widget", FeatureSetting::EVENT_NAME, json)
-            .map_err(|e| AppError::io(e.to_string()))?;
+    if id == crate::sys::plugins::id::REGEX {
+        crate::service::chat::regex_processor::set_enabled(enabled);
     }
+
+    // 모든 창에 알린다: 메인 창은 코어 플러그인(메뉴·화면), 위젯 창은 위젯 하위 기능
+    let json = json!({"id": id, "enabled": enabled});
+    app.emit(FeatureSetting::EVENT_NAME, json).map_err(|e| AppError::io(e.to_string()))?;
 
     Ok(())
 }

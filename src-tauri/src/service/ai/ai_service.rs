@@ -36,6 +36,16 @@ impl AiService {
         Self { db, http }
     }
 
+    /// 플러그인(음성·이미지)이 공급자 API를 직접 부를 때 쓰는 HTTP 클라이언트
+    pub fn http(&self) -> &Client {
+        &self.http
+    }
+
+    /// 프로필의 API 키 (keyring)
+    pub fn credential(&self, profile: &ApiProfiles) -> Result<String> {
+        load_credential(profile)
+    }
+
     pub async fn load_profile(&self, profile_id: &str) -> Result<ApiProfiles> {
         if profile_id.is_empty() {
             return Err(AppError::validation("선택된 API 프로필이 없습니다", None));

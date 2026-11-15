@@ -1,6 +1,8 @@
 <script lang="ts">
 	import { onMount, tick } from "svelte";
-	import { BookOpen, ChevronLeft, Copy, Eye, Menu, MessageCirclePlus, RefreshCw, Send, Square, Trash2 } from "@lucide/svelte";
+	import { BookOpen, ChevronLeft, Copy, Eye, ImagePlus, Languages, Menu, MessageCirclePlus, RefreshCw, Send, Square, Trash2, Volume2 } from "@lucide/svelte";
+	import { plugins } from "$shared/stores/plugins.svelte";
+	import { drawMessage, generatedImagesOf, speak, speech, translateMessage, translationOf } from "$shared/stores/aiTools.svelte";
 	import { Avatar, ContextMenu, HtmlView, type MenuItem } from "$shared/ui";
 	import { fileSrc } from "$shared/ipc/file";
 	import { confirmAction } from "$shared/stores/confirm.svelte";
@@ -116,8 +118,11 @@
 			lastSide = r.mine ?? null;
 		};
 		for (const m of session.messages) {
-			const content = live?.kind === "regenerate" && live.targetId === m.id ? live.text : (session.display[m.id] ?? m.content);
-			const lines = bubbles(content);
+			const tr = plugins.on("translate") ? translationOf(m) : null;
+			const content = live?.kind === "regenerate" && live.targetId === m.id ? live.text : tr && !originals[m.id] ? tr.text : (session.display[m.id] ?? m.content);
+			// 이미지 생성 플러그인으로 그린 사진은 말풍선 뒤에 사진으로
+			const photos = plugins.on("imagegen") ? generatedImagesOf(m).map((g) => ({ kind: "photo" as const, text: g.path })) : [];
+			const lines = [...bubbles(content), ...photos];
 			if (!lines.length && !(live?.targetId === m.id)) continue;
 			push({ key: m.id, at: m.createdAt, mine: m.role === "user", msg: m, lines, pending: live?.targetId === m.id });
 		}
@@ -143,6 +148,9 @@
 
 	// ---- 메뉴 ----
 	let menu = $state<{ at: { x: number; y: number }; items: MenuItem[] } | null>(null);
+	/** 번역이 있는 메시지 중 원문을 보기로 한 것 */
+	let originals = $state<Record<string, boolean>>({});
+
 	function bubbleMenu(e: MouseEvent, r: Row) {
 		if (!r.msg || session.busy) return;
 		e.preventDefault();
@@ -160,6 +168,17 @@
 						),
 				},
 				...(m.id === session.last?.id && m.role === "assistant" ? [{ label: "답장 다시 받기", icon: RefreshCw, onselect: again }] : []),
+				...(plugins.on("translate")
+					? [
+							translationOf(m)
+								? { label: originals[m.id] ? "번역 보기" : "원문 보기", icon: Languages, onselect: () => (originals[m.id] = !originals[m.id]) }
+								: { label: "번역", icon: Languages, onselect: async () => session.update(await translateMessage(m)) },
+						]
+					: []),
+				...(plugins.on("tts") ? [{ label: speech.messageId === m.id ? "읽기 멈추기" : "소리 내어 읽기", icon: Volume2, onselect: () => speak(m, translationOf(m)?.text ?? m.content) }] : []),
+				...(plugins.on("imagegen") && m.role === "assistant"
+					? [{ label: "사진으로 그리기", icon: ImagePlus, onselect: async () => (toasts.info("그리는 중… (잠시 걸림)"), session.update(await drawMessage(m))) }]
+					: []),
 				{
 					label: "삭제",
 					icon: Trash2,
@@ -225,6 +244,8 @@
 							<div class="line">
 								{#if l.kind === "image" && images[l.text]}
 									<img class="photo" src={images[l.text]} alt={l.text} loading="lazy" />
+								{:else if l.kind === "photo"}
+									<img class="photo" src={fileSrc(l.text)} alt="그린 사진" loading="lazy" />
 								{:else if l.kind === "html"}
 									<div class="html-card"><HtmlView code={l.text} /></div>
 								{:else}

@@ -18,6 +18,8 @@
 	import { fade, fly } from "svelte/transition";
 	import { panel } from "./panel.svelte";
 	import { recoverInterruptedChats } from "$features/character/recovery";
+	import { plugins } from "$shared/stores/plugins.svelte";
+	import PluginOff from "./PluginOff.svelte";
 
 	let ready = $state(false);
 
@@ -49,6 +51,7 @@
 		logs.info("app", "시작");
 		ready = true;
 		void recoverInterruptedChats();
+		void plugins.load();
 	});
 </script>
 
@@ -90,9 +93,9 @@
 			{#if r.page === "character"}
 				<CharacterPage charId={r.charId} convId={r.convId} edit={r.edit} />
 			{:else if r.page === "game"}
-				<GamePage gameId={r.gameId} sessionId={r.sessionId} edit={r.edit} />
+				{#if plugins.on("game")}<GamePage gameId={r.gameId} sessionId={r.sessionId} edit={r.edit} />{:else}<PluginOff id="game" name="게임 모드" />{/if}
 			{:else if r.page === "phone"}
-				<PhonePage />
+				{#if plugins.on("phone")}<PhonePage />{:else}<PluginOff id="phone" name="폰" />{/if}
 			{:else if r.page === "lorebook"}
 				<LorebookPage bookId={r.bookId} />
 			{:else if r.page === "persona"}

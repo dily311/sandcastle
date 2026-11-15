@@ -17,6 +17,7 @@
 	import { fileSrc } from "$shared/ipc/file";
 	import { confirmAction, promptText } from "$shared/stores/confirm.svelte";
 	import { convActions } from "./actions";
+	import { plugins } from "$shared/stores/plugins.svelte";
 	import { preview } from "./format";
 	import { library, type CharacterImage, type Conversation } from "./library.svelte";
 	import { metaOf, type ChatSession } from "./session.svelte";
@@ -231,7 +232,11 @@
 			</section>
 			<hr />
 			<section>
-				<Switch checked={conv.imagesEnabled} label="캐릭터 이미지" description="키 목록 전송, <cg>로 표시" onchange={(v) => library.setImagesEnabled(conv.id, v)} />
+				{#if plugins.on("chat.images")}
+					<Switch checked={conv.imagesEnabled} label="캐릭터 이미지" description="키 목록 전송, <cg>로 표시" onchange={(v) => library.setImagesEnabled(conv.id, v)} />
+				{:else}
+					<p class="faint">캐릭터 이미지 기능이 꺼져 있음 (설정 > 코어 플러그인)</p>
+				{/if}
 			</section>
 			<hr />
 			<section>

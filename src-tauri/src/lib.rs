@@ -133,9 +133,10 @@ pub fn run() {
         app.manage(SettingsState(Mutex::new(
             sys::settings::load::<ThemeSetting>(&settings_handle),
         )));
-        app.manage(SettingsState(Mutex::new(sys::settings::load::<
-            FeatureSetting,
-        >(&settings_handle))));
+        let features = sys::settings::load::<FeatureSetting>(&settings_handle);
+        service::chat::regex_processor::set_enabled(sys::plugins::enabled_in(&features, sys::plugins::id::REGEX));
+        app.manage(SettingsState(Mutex::new(features)));
+        app.manage(SettingsState(Mutex::new(sys::settings::load::<models::settings::PluginSetting>(&settings_handle))));
 
         // 4. 테마 매니저 초기화
         let app_dir = app.path().app_data_dir().expect("App data dir not found");
@@ -359,6 +360,13 @@ pub fn specta_builder() -> tauri_specta::Builder<tauri::Wry> {
             load_save,
             read_journal,
             sys::html_view::register_html_view,
+            sys::plugins::list_core_plugins,
+            commands::plugins::get_plugin_setting,
+            commands::plugins::update_plugin_setting,
+            commands::plugins::translate_text,
+            commands::plugins::translate_message,
+            commands::plugins::speak_text,
+            commands::plugins::generate_message_image,
             read_current_transcript,
             list_turn_points,
             fork_at,
@@ -559,6 +567,13 @@ pub fn specta_builder() -> tauri_specta::Builder<tauri::Wry> {
             load_save,
             read_journal,
             sys::html_view::register_html_view,
+            sys::plugins::list_core_plugins,
+            commands::plugins::get_plugin_setting,
+            commands::plugins::update_plugin_setting,
+            commands::plugins::translate_text,
+            commands::plugins::translate_message,
+            commands::plugins::speak_text,
+            commands::plugins::generate_message_image,
             read_current_transcript,
             list_turn_points,
             fork_at,

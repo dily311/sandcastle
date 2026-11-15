@@ -107,7 +107,8 @@ pub fn handle(req: Request<Vec<u8>>) -> Response<Vec<u8>> {
 /// 화면이 HTML 코드 블록을 보여주기 전에 부른다. iframe의 src로 쓸 주소를 돌려준다.
 #[tauri::command]
 #[specta::specta]
-pub fn register_html_view(html: String) -> Result<String> {
+pub fn register_html_view(app: tauri::AppHandle, html: String) -> Result<String> {
+    crate::sys::plugins::require(&app, crate::sys::plugins::id::HTML)?;
     register(&html)
 }
 

@@ -25,7 +25,7 @@ use crate::{
         character_image::CharacterImage,
         conversation::{ChatTurn, ConversationMode, Message, MessageInput},
         regex::{RegexPlacement, RegexTarget},
-        settings::{AppSetting, FeatureSetting},
+        settings::AppSetting,
     },
     service::{
         ai::{AiRequest, AiResponse, AiService},
@@ -84,11 +84,9 @@ fn apply_prompt_regex(regex: &RegexProcessor, context: &mut ChatContext, message
     regex.apply(message, RegexPlacement::UserInput, message_targets, Some(0))
 }
 
-/// 앱 전체 이미지 스위치. 설정에 키가 없으면 켜진 것으로 본다.
+/// 캐릭터 이미지 코어 플러그인 (sys::plugins)
 fn images_feature_on(app: &AppHandle) -> bool {
-    app.try_state::<SettingsState<FeatureSetting>>()
-        .and_then(|s| s.0.lock().ok().and_then(|f| f.feature.get(IMAGES_FEATURE).copied()))
-        .unwrap_or(true)
+    crate::sys::plugins::is_enabled(app, IMAGES_FEATURE)
 }
 
 async fn load_enabled_images(

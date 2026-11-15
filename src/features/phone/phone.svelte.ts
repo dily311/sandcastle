@@ -69,8 +69,8 @@ export interface Preview {
 }
 
 /** 폰 메시지 한 줄 → 말풍선 여러 개 (줄바꿈마다 하나, <cg>키</cg>는 사진) */
-/** 말풍선 한 줄: 글 / 캐릭터 이미지(<cg>) / HTML 코드 블록 */
-export type BubbleLine = { kind: "text" | "image" | "html"; text: string };
+/** 말풍선 한 줄: 글 / 캐릭터 이미지(<cg>, text는 키) / HTML 코드 블록 / 그린 사진(text는 파일 경로) */
+export type BubbleLine = { kind: "text" | "image" | "html" | "photo"; text: string };
 
 export function bubbles(content: string): BubbleLine[] {
 	// ```html``` 블록은 말풍선으로 쪼개지 않고 통째로 하나 (HtmlView로 그림)

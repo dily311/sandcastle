@@ -15,6 +15,7 @@
 | 002 | 채팅 생성 작업(Task) 실행 흐름 | Accepted |
 | 003 | 보류한 기능: 게임 iframe SDK, 장기 기억·선톡, 다국어 | Deferred |
 | 004 | AI 답변의 HTML 코드 블록 렌더링 | Accepted |
+| 005 | 코어 플러그인 (기능 토글)과 AI 도구 | Accepted |
 
 ### ADR-001 일반 대화와 게임모드 테이블 통합
 
@@ -140,6 +141,24 @@ Conversation
 - 높이는 iframe이 parent에 postMessage({type:"sc-html-height"})로 알리고, 최대 900px에서 iframe 안 스크롤로 넘긴다.
 
 **결과** AI가 만든 스크립트는 사용자 화면에서 돌지만 앱 데이터와 키에는 닿지 못한다. 외부 리소스를 허용했으므로 이미지 요청으로 외부에 신호를 보내는 것은 막지 않는다(필요하면 img-src를 data:/blob:로 좁힌다).
+
+### ADR-005 코어 플러그인 (기능 토글)과 AI 도구
+
+**상태** Accepted (2026-11-16)
+
+**결정**
+
+- 부가 기능은 Obsidian의 코어 플러그인처럼 껐다 켠다. 목록·이름·기본값은 백엔드 `sys/plugins.rs` 한 곳에 두고, 켜짐/꺼짐은 기존 기능 설정 저장소(`feature-setting`, id별 bool)에 둔다. 설정 > 코어 플러그인에서 바꾼다.
+  - 기본 켜짐: 폰(`phone`), 게임 모드(`game`), 캐릭터 이미지(`chat.images`), HTML 렌더링(`html`), 정규식(`regex`)
+  - 기본 꺼짐: 위젯(`widget`, 데스크톱 전용), 번역(`translate`), 음성 읽기(`tts`), 이미지 생성(`imagegen`)
+- 끄면 화면(사이드바·설정 탭·메시지 동작·패널 스위치)에서 숨기고, 그 화면에 들어가면 "꺼져 있음"과 켜기 버튼을 보여준다. AI 결과에 영향을 주는 것은 백엔드에서도 막는다: 정규식은 불러오지 않고(스위치 하나, `regex_processor::set_enabled`), 캐릭터 이미지 키를 보내지 않고, HTML 서빙과 AI 도구 호출은 거절한다. 끈 기능의 데이터는 지우지 않는다.
+- 설정을 바꾸면 백엔드가 모든 창에 `feature_setting::changed`를 보낸다 (메인 창의 플러그인 상태, 위젯 창의 위젯 하위 기능).
+- **AI 도구** 세부 설정은 별도 저장소(`plugin-setting`)에 둔다. 셋 다 연결한 API 프로필(주소 + keyring 키)을 쓰고, 비우면 대화/앱에서 고른 API.
+  - 번역: 채팅 모델에 번역 지시(형식·태그·코드 블록 유지). 메시지 번역은 meta.translation {lang, text, source}에 저장하고 원문이 바뀌면 무효. 자동 번역, 입력 번역(입력창 + 메뉴).
+  - 음성 읽기: OpenAI 호환 `/audio/speech` → mp3를 앱 캐시(tts/)에 저장(같은 글·설정이면 재사용). 태그·코드 블록은 빼고, "대사만 읽기"면 *지문*도 뺀다. 자동 읽기.
+  - 이미지 생성: OpenAI 호환 `/images/generations` → png를 앱 데이터(generated/)에 저장하고 meta.generatedImages에 쌓는다. 기본은 채팅 AI가 장면을 영어 프롬프트로 정리하고(캐릭터 설명 포함), 화풍을 끝에 붙인다.
+
+**결과** 게임 대사창에는 아직 번역·읽기·그리기 버튼이 없다(채팅·폰만). NovelAI·로컬(Stable Diffusion) 이미지, OpenAI 호환이 아닌 음성 API(ElevenLabs 등)는 어댑터를 더 붙여야 한다.
 
 ### (참고) 전역 테스트 관리 방법
 

@@ -45,6 +45,20 @@ export const handlers: Record<string, Handler> = {
 	get_theme_setting: () => db.themeSetting,
 	update_theme_setting: ({ patch }) => (db.themeSetting = { ...db.themeSetting, ...(patch as object) }),
 	get_feature_setting: () => db.feature,
+	list_core_plugins: () =>
+		(
+			[
+				["phone", "폰", "캐릭터와 메신저처럼 대화하는 폰 화면", true, false],
+				["game", "게임 모드", "게임 만들기·가져오기와 플레이", true, false],
+				["chat.images", "캐릭터 이미지", "캐릭터 이미지 에셋과 <cg> 태그", true, false],
+				["html", "HTML 렌더링", "AI 답변의 html 코드 블록 실행", true, false],
+				["regex", "정규식", "메시지 글자 찾아 바꾸기", true, false],
+				["widget", "위젯", "바탕화면 위젯", false, true],
+				["translate", "번역", "AI 답변·내 입력 번역", false, false],
+				["tts", "음성 읽기", "AI 답변을 음성으로", false, false],
+				["imagegen", "이미지 생성", "대화 장면을 이미지로", false, false],
+			] as const
+		).map(([id, name, description, def, desktopOnly]) => ({ id, name, description, defaultEnabled: def, desktopOnly, enabled: db.feature.feature[id] ?? def })),
 	update_feature_setting: ({ id, enabled }) => {
 		db.feature.feature[id as string] = enabled as boolean;
 		return null;

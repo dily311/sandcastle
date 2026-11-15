@@ -5,6 +5,7 @@ import type { Message_Serialize, StreamPayload } from "$ipc/bindings";
 import { call, commands } from "$shared/ipc/client";
 import { onEvent } from "$shared/ipc/events";
 import { library } from "./library.svelte";
+import { afterReply } from "$shared/stores/aiTools.svelte";
 
 export type Message = Message_Serialize;
 
@@ -111,6 +112,11 @@ export class ChatSession {
 		return ch;
 	}
 
+	/** 백엔드가 고친 메시지를 반영 (번역·그림 등 플러그인 결과) */
+	update(m: Message) {
+		this.replace(m);
+	}
+
 	private replace(m: Message) {
 		const i = this.messages.findIndex((x) => x.id === m.id);
 		if (i >= 0) this.messages[i] = m;
@@ -125,6 +131,7 @@ export class ChatSession {
 			const turn = await call(commands.chatSend(this.convId, text, attachments, this.channel()), src);
 			if (turn.user) this.messages.push(turn.user);
 			this.messages.push(turn.assistant);
+			void afterReply(turn.assistant).then((m) => m !== turn.assistant && this.replace(m));
 		} catch {
 			// 입력은 응답 실패와 상관없이 저장돼 있을 수 있다
 			await this.load().catch(() => {});
@@ -142,6 +149,7 @@ export class ChatSession {
 		try {
 			const turn = await call(commands.chatRegenerate(this.convId, swipe, this.channel()), src);
 			this.replace(turn.assistant);
+			void afterReply(turn.assistant).then((m) => m !== turn.assistant && this.replace(m));
 		} catch {
 			/* 토스트로 알림 */
 		} finally {

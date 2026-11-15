@@ -4,3 +4,4 @@ pub mod library;
 pub mod music;
 pub mod image;
 pub mod html_view;
+pub mod plugins;

@@ -10,14 +10,17 @@
 	import { library, type Conversation } from "$features/character/library.svelte";
 	import { convActions } from "$features/character/actions";
 	import { nav, type Page } from "./nav.svelte";
+	import { plugins, type PluginId } from "$shared/stores/plugins.svelte";
 
 	// 화면이 늘어나면 여기에 추가 (페르소나는 아래 사용자 프로필에서)
-	const items: { page: Page; label: string; icon: typeof Users }[] = [
+	// 폰·게임은 코어 플러그인이 꺼져 있으면 숨김
+	const allItems: { page: Page; label: string; icon: typeof Users; plugin?: PluginId }[] = [
 		{ page: "character", label: "캐릭터", icon: Users },
-		{ page: "phone", label: "폰", icon: Smartphone },
-		{ page: "game", label: "게임", icon: Gamepad2 },
+		{ page: "phone", label: "폰", icon: Smartphone, plugin: "phone" },
+		{ page: "game", label: "게임", icon: Gamepad2, plugin: "game" },
 		{ page: "lorebook", label: "로어북", icon: BookOpen },
 	];
+	const items = $derived(allItems.filter((i) => !i.plugin || plugins.on(i.plugin)));
 
 	$effect(() => {
 		if (!library.loaded) void library.load();

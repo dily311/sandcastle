@@ -1,5 +1,7 @@
 <script lang="ts">
-	import { Bookmark, BookmarkX, ChevronLeft, ChevronRight, Copy, Eye, EyeOff, FileSearch, GitBranch, Pencil, RefreshCw, Trash2 } from "@lucide/svelte";
+	import { Bookmark, BookmarkX, ChevronLeft, ChevronRight, Copy, Eye, EyeOff, FileSearch, GitBranch, ImagePlus, Languages, Pencil, RefreshCw, Square, Trash2, Volume2 } from "@lucide/svelte";
+	import { plugins } from "$shared/stores/plugins.svelte";
+	import { drawMessage, generatedImagesOf, speak, speech, translateMessage, translationOf } from "$shared/stores/aiTools.svelte";
 	import { Badge, Button, HtmlView, IconButton, Textarea } from "$shared/ui";
 	import { absolute, relative } from "$shared/time";
 	import { confirmAction, promptText } from "$shared/stores/confirm.svelte";
@@ -29,7 +31,31 @@
 	const meta = $derived(metaOf(msg));
 	const isAi = $derived(msg.role === "assistant");
 	const live = $derived(session.live?.kind === "regenerate" && session.live.targetId === msg.id ? session.live : null);
-	const text = $derived(live ? live.text : (session.display[msg.id] ?? msg.content));
+	// 번역이 있으면 번역문을 보여주고 "원문"으로 바꿔 볼 수 있다
+	const translation = $derived(plugins.on("translate") ? translationOf(msg) : null);
+	let showOriginal = $state(false);
+	const text = $derived(live ? live.text : translation && !showOriginal ? translation.text : (session.display[msg.id] ?? msg.content));
+	const drawn = $derived(plugins.on("imagegen") ? generatedImagesOf(msg) : []);
+	let toolBusy = $state<"" | "translate" | "draw">("");
+	async function translate() {
+		if (translation) return void (showOriginal = !showOriginal);
+		toolBusy = "translate";
+		try {
+			session.update(await translateMessage(msg));
+			showOriginal = false;
+		} finally {
+			toolBusy = "";
+		}
+	}
+	async function draw() {
+		toolBusy = "draw";
+		toasts.info("장면을 그리는 중… (잠시 걸림)");
+		try {
+			session.update(await drawMessage(msg));
+		} finally {
+			toolBusy = "";
+		}
+	}
 	const blocks = $derived(toBlocks(text));
 	const swipes = $derived(meta.swipes?.length ?? 0);
 	const swipeId = $derived(meta.swipeId ?? 0);
@@ -111,6 +137,17 @@
 				{#if isAi}
 					<IconButton label="보낸 컨텍스트 보기" size="sm" onclick={() => onprompt(msg)}><FileSearch /></IconButton>
 				{/if}
+				{#if plugins.on("translate")}
+					<IconButton label={translation ? (showOriginal ? "번역 보기" : "원문 보기") : "번역"} size="sm" disabled={toolBusy === "translate"} onclick={translate}><Languages /></IconButton>
+				{/if}
+				{#if plugins.on("tts")}
+					<IconButton label={speech.messageId === msg.id ? "읽기 멈추기" : "소리 내어 읽기"} size="sm" disabled={speech.loading && speech.messageId === msg.id} onclick={() => speak(msg, translation && !showOriginal ? translation.text : msg.content)}>
+						{#if speech.messageId === msg.id}<Square />{:else}<Volume2 />{/if}
+					</IconButton>
+				{/if}
+				{#if plugins.on("imagegen") && isAi}
+					<IconButton label="이 장면 그리기" size="sm" disabled={toolBusy === "draw"} onclick={draw}><ImagePlus /></IconButton>
+				{/if}
 				<IconButton label="삭제" size="sm" onclick={remove}><Trash2 /></IconButton>
 			</div>
 		{/if}
@@ -130,6 +167,7 @@
 				{#each meta.attachments as a (a)}<a href={fileSrc(a)} target="_blank" rel="noreferrer"><img src={fileSrc(a)} alt="첨부 이미지" loading="lazy" /></a>{/each}
 			</div>
 		{/if}
+		{#if translation && !live}<p class="tr-note">{showOriginal ? "원문" : `${translation.lang} 번역`} · <button class="link" onclick={() => (showOriginal = !showOriginal)}>{showOriginal ? "번역 보기" : "원문 보기"}</button></p>{/if}
 		{#each blocks as b, i (i)}
 			{#if b.kind === "p"}
 				<p>
@@ -145,6 +183,15 @@
 		{/each}
 	{/if}
 
+	{#if drawn.length}
+		<div class="drawn">
+			{#each drawn as d (d.path)}
+				<a href={fileSrc(d.path)} target="_blank" rel="noreferrer" title={d.prompt}><img src={fileSrc(d.path)} alt={d.prompt} loading="lazy" /></a>
+			{/each}
+		</div>
+	{/if}
+	{#if toolBusy === "draw"}<p class="tr-note">장면을 그리는 중…</p>{/if}
+
 	<!-- 스와이프는 마지막 AI 메시지에서만: < 번호 > 한 세트 (끝에서 > 를 누르면 새 응답) -->
 	{#if isAi && isLast && !editing && !live}
 		<div class="swipe">
@@ -156,6 +203,30 @@
 </div>
 
 <style>
+	.tr-note {
+		margin: 0 0 4px;
+		font-size: var(--text-xs);
+		color: var(--text-faint);
+	}
+	.tr-note .link {
+		padding: 0;
+		border: none;
+		background: none;
+		color: var(--accent-text);
+		font: inherit;
+		cursor: pointer;
+	}
+	.drawn {
+		display: flex;
+		flex-wrap: wrap;
+		gap: var(--space-2);
+		margin-top: var(--space-2);
+	}
+	.drawn img {
+		display: block;
+		max-width: min(100%, 360px);
+		border-radius: var(--radius-md);
+	}
 	.attach {
 		display: flex;
 		flex-wrap: wrap;

@@ -5,6 +5,7 @@
 	// - 높이는 iframe이 postMessage로 알려준다 (최대 MAX_HEIGHT, 넘치면 iframe 안에서 스크롤)
 	import { Code, Eye, RotateCw } from "@lucide/svelte";
 	import { call, commands } from "$shared/ipc/client";
+	import { plugins } from "$shared/stores/plugins.svelte";
 
 	let { code }: { code: string } = $props();
 
@@ -16,9 +17,12 @@
 	let reloadKey = $state(0);
 	let frame: HTMLIFrameElement | undefined = $state();
 
+	/** HTML 렌더링 코어 플러그인이 꺼져 있으면 코드만 보여준다 */
+	const enabled = $derived(plugins.on("html"));
 	$effect(() => {
 		const c = code;
 		failed = false;
+		if (!enabled) return;
 		void call(commands.registerHtmlView(c), { source: "html", silent: true })
 			.then((url) => (src = url))
 			.catch(() => (failed = true));
@@ -35,13 +39,13 @@
 
 <figure class="html">
 	<div class="bar">
-		<span>HTML</span>
+		<span>HTML{#if !enabled} · 실행 꺼짐 (코어 플러그인){/if}</span>
 		<button type="button" title="다시 실행" aria-label="다시 실행" onclick={() => reloadKey++}><RotateCw /></button>
 		<button type="button" title={showCode ? "결과 보기" : "코드 보기"} aria-label={showCode ? "결과 보기" : "코드 보기"} aria-pressed={showCode} onclick={() => (showCode = !showCode)}>
 			{#if showCode}<Eye />{:else}<Code />{/if}
 		</button>
 	</div>
-	{#if showCode || failed}
+	{#if showCode || failed || !enabled}
 		<pre><code>{code}</code></pre>
 	{:else if src}
 		{#key reloadKey}

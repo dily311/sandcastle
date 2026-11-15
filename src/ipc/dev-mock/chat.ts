@@ -118,6 +118,11 @@ const regex: RegexScript_Serialize[] = [
 type Conv = Omit<Conversation_Serialize, "messageCount">;
 const convs: Conv[] = [];
 const messages: Message_Serialize[] = [];
+let pluginSetting = {
+	translate: { apiProfileId: null as string | null, targetLang: "한국어", inputLang: "English", autoTranslate: false },
+	tts: { apiProfileId: null as string | null, model: "tts-1", voice: "alloy", speed: 1, autoRead: false, dialogueOnly: false },
+	imageGen: { apiProfileId: null as string | null, model: "gpt-image-1", size: "1024x1024", stylePrompt: "", aiPrompt: true },
+};
 
 function addConv(c: Partial<Conv> & { title: string; characterId: string }, ago: number): Conv {
 	const t = now() - ago * MIN;
@@ -227,6 +232,22 @@ async function generate(convId: string, onEvent: { onmessage: (m: { chunk: strin
 }
 
 export const chatHandlers: Record<string, (a: Args) => unknown> = {
+	// ---- 코어 플러그인 AI 도구 (흉내만) ----
+	get_plugin_setting: () => pluginSetting,
+	update_plugin_setting: ({ setting }) => (pluginSetting = setting as typeof pluginSetting),
+	translate_text: ({ text }) => `[번역] ${text}`,
+	translate_message: ({ messageId }) => {
+		const m = messages.find((x) => x.id === messageId)!;
+		m.meta = { ...((m.meta as object) ?? {}), translation: { lang: pluginSetting.translate.targetLang, text: `[${pluginSetting.translate.targetLang} 번역] ${m.content}`, source: m.content } } as never;
+		return m;
+	},
+	speak_text: () => "C:/mock/tts.mp3",
+	generate_message_image: ({ messageId }) => {
+		const m = messages.find((x) => x.id === messageId)!;
+		const list = ((m.meta as { generatedImages?: unknown[] } | null)?.generatedImages ?? []) as unknown[];
+		m.meta = { ...((m.meta as object) ?? {}), generatedImages: [...list, { path: "https://placehold.co/512x320/png?text=scene", prompt: "a forest cabin at dawn", createdAt: Date.now() }] } as never;
+		return m;
+	},
 	get_all_characters: () => characters,
 	get_all_conversations: () => convs.map(view).sort((a, b) => b.updatedAt - a.updatedAt),
 	get_conversation: ({ id }) => view(conv(id)),

@@ -24,6 +24,18 @@ use crate::{
     models::regex::{MacroMode, RegexPlacement, RegexScope, RegexScript, RegexTarget},
 };
 
+/// 정규식 코어 플러그인 스위치. 꺼져 있으면 어떤 스크립트도 불러오지 않는다 ({{char}}·{{user}} 치환은 그대로).
+/// 대화·화면·저장 경로가 모두 이 모듈로 정규식을 불러오므로 한 곳에서 막는다 (sys::plugins, 설정 바꿀 때 갱신).
+static ENABLED: std::sync::atomic::AtomicBool = std::sync::atomic::AtomicBool::new(true);
+
+pub fn set_enabled(on: bool) {
+    ENABLED.store(on, std::sync::atomic::Ordering::Relaxed);
+}
+
+fn enabled() -> bool {
+    ENABLED.load(std::sync::atomic::Ordering::Relaxed)
+}
+
 /// 치환에 쓰는 이름
 #[derive(Debug, Clone, Default)]
 pub struct RegexMacros {
@@ -67,7 +79,7 @@ impl RegexProcessor {
     ) -> Result<Self> {
         let character_id = character_id.filter(|s| !s.is_empty());
         let preset_id = preset_id.filter(|s| !s.is_empty());
-        let scripts = db::regex::get_regex_scripts_for(db, character_id, preset_id).await?;
+        let scripts = if enabled() { db::regex::get_regex_scripts_for(db, character_id, preset_id).await? } else { vec![] };
         Ok(Self::new(scripts, macros))
     }
 

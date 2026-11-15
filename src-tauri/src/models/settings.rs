@@ -149,6 +149,77 @@ impl Default for FeatureSetting {
     }
 }
 
+// ---------------------------------------------------------
+// 코어 플러그인 설정 (번역 · 음성 · 이미지 생성). 켜짐/꺼짐은 FeatureSetting, 세부 설정은 여기.
+// ---------------------------------------------------------
+#[derive(Debug, Serialize, Deserialize, Clone, Default, specta::Type)]
+#[serde(rename_all = "camelCase", default)]
+pub struct PluginSetting {
+    pub translate: TranslateSetting,
+    pub tts: TtsSetting,
+    pub image_gen: ImageGenSetting,
+}
+
+#[derive(Debug, Serialize, Deserialize, Clone, specta::Type)]
+#[serde(rename_all = "camelCase", default)]
+pub struct TranslateSetting {
+    /// 번역에 쓸 API 프로필 (비우면 앱에서 고른 API)
+    pub api_profile_id: Option<String>,
+    /// AI 답변을 이 언어로 (예: "한국어")
+    pub target_lang: String,
+    /// 내 입력을 이 언어로 (예: "English")
+    pub input_lang: String,
+    /// 새 AI 답변을 자동으로 번역
+    pub auto_translate: bool,
+}
+
+impl Default for TranslateSetting {
+    fn default() -> Self {
+        Self { api_profile_id: None, target_lang: "한국어".into(), input_lang: "English".into(), auto_translate: false }
+    }
+}
+
+#[derive(Debug, Serialize, Deserialize, Clone, specta::Type)]
+#[serde(rename_all = "camelCase", default)]
+pub struct TtsSetting {
+    /// OpenAI 호환 음성 API를 쓰는 프로필 (주소 + 키). 비우면 앱에서 고른 API
+    pub api_profile_id: Option<String>,
+    pub model: String,
+    pub voice: String,
+    /// 0.25 ~ 4.0
+    pub speed: f32,
+    /// 새 AI 답변을 자동으로 읽기
+    pub auto_read: bool,
+    /// *지문*은 빼고 대사만 읽기
+    pub dialogue_only: bool,
+}
+
+impl Default for TtsSetting {
+    fn default() -> Self {
+        Self { api_profile_id: None, model: "tts-1".into(), voice: "alloy".into(), speed: 1.0, auto_read: false, dialogue_only: false }
+    }
+}
+
+#[derive(Debug, Serialize, Deserialize, Clone, specta::Type)]
+#[serde(rename_all = "camelCase", default)]
+pub struct ImageGenSetting {
+    /// OpenAI 호환 이미지 API를 쓰는 프로필 (주소 + 키). 비우면 앱에서 고른 API
+    pub api_profile_id: Option<String>,
+    pub model: String,
+    /// 예: "1024x1024"
+    pub size: String,
+    /// 모든 그림에 붙일 화풍 (예: "anime style, soft lighting")
+    pub style_prompt: String,
+    /// 메시지를 바로 쓰지 않고 채팅 AI가 먼저 영어 이미지 프롬프트를 쓴다
+    pub ai_prompt: bool,
+}
+
+impl Default for ImageGenSetting {
+    fn default() -> Self {
+        Self { api_profile_id: None, model: "gpt-image-1".into(), size: "1024x1024".into(), style_prompt: String::new(), ai_prompt: true }
+    }
+}
+
 // 각 설정 타입이 자기 "키"와 "이벤트 이름"만 정의하면 됨
 pub trait SettingsDomain:
     Serialize + DeserializeOwned + Default + Clone + Send + Sync + 'static
@@ -169,6 +240,10 @@ impl SettingsDomain for ThemeSetting {
 impl SettingsDomain for FeatureSetting {
     const STORE_KEY: &'static str = "feature-setting";
     const EVENT_NAME: &'static str = "feature_setting::changed";
+}
+impl SettingsDomain for PluginSetting {
+    const STORE_KEY: &'static str = "plugin-setting";
+    const EVENT_NAME: &'static str = "plugin_setting::changed";
 }
 
 #[cfg(test)]
