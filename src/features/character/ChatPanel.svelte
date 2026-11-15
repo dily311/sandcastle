@@ -230,7 +230,7 @@
 				<li class="none">{tocQuery ? "찾는 항목 없음" : "메시지 없음"}</li>
 			{/each}
 		</ol>
-	{:else if presetEdit}
+	{:else if panel.tab === "context" && presetEdit}
 		<div class="panel-body preset-edit">
 			<div class="back">
 				<IconButton label="대화 설정으로" size="sm" onclick={closePreset}><ChevronLeft /></IconButton>
@@ -240,12 +240,23 @@
 				<PresetEditor detail={presetEdit} saving={presetSaving} onsave={savePreset} oncancel={closePreset} />
 			{/key}
 		</div>
-	{:else}
+	{:else if panel.tab === "context"}
 		<div class="panel-body">
 			<section>
 				<h4>컨텍스트</h4>
 				<ContextMeter {usage} />
 			</section>
+			<section>
+				<h4>프리셋 <span class="faint">{conv.promptPresetId ? "이 대화에서 고름" : "앱·캐릭터 기본값"}</span></h4>
+				<div class="preset-card">
+					<span class="pt"><b>{usage?.presetName ?? "프리셋 없음"}</b><small>보낼 프롬프트 구성과 생성 옵션</small></span>
+					<Button size="sm" variant="soft" disabled={!usage?.presetId && !conv.promptPresetId} onclick={editPreset}>{#snippet icon()}<Pencil />{/snippet}편집</Button>
+				</div>
+				<label class="row"><span>바꾸기</span><Select value={conv.promptPresetId ?? DEFAULT} options={presetOptions} aria-label="이 대화의 프리셋" onchange={(e) => setOption({ promptPresetId: e.currentTarget.value })} /></label>
+			</section>
+		</div>
+	{:else}
+		<div class="panel-body">
 			<section>
 				<h4>이 대화</h4>
 				<label class="row"><span>API</span><Select value={conv.apiProfileId ?? DEFAULT} options={apiOptions} onchange={(e) => setOption({ apiProfileId: e.currentTarget.value })} /></label>
@@ -253,7 +264,7 @@
 					<span>프리셋</span>
 					<div class="with-btn">
 						<Select value={conv.promptPresetId ?? DEFAULT} options={presetOptions} aria-label="프리셋" onchange={(e) => setOption({ promptPresetId: e.currentTarget.value })} />
-						<IconButton label="이 프리셋 빠르게 편집{usage?.presetName ? ` (${usage.presetName})` : ''}" size="sm" onclick={editPreset}><Pencil /></IconButton>
+						<IconButton label="이 프리셋 빠르게 편집{usage?.presetName ? ` (${usage.presetName})` : ''}" size="sm" onclick={() => { panel.tab = "context"; void editPreset(); }}><Pencil /></IconButton>
 					</div>
 				</div>
 				<div class="persona">
@@ -308,6 +319,15 @@
 	{/if}
 
 <style>
+	.preset-card {
+		display: flex;
+		align-items: center;
+		gap: var(--space-3);
+		padding: var(--space-3);
+		border: 1px solid var(--border);
+		border-radius: var(--radius-md);
+		background: var(--surface);
+	}
 	.with-btn {
 		display: flex;
 		align-items: center;
