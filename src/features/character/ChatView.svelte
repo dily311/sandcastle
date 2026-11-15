@@ -800,15 +800,4 @@
 		max-height: 320px;
 		overflow: auto;
 	}
-	@media (max-width: 900px) {
-		.chat,
-		.chat.no-list,
-		.chat.no-panel {
-			grid-template-columns: minmax(0, 1fr);
-		}
-		.chat > :global(.convs),
-		.chat > :global(.side-panel) {
-			display: none;
-		}
-	}
 </style>
