@@ -7,6 +7,7 @@
 	import { convActions } from "$features/character/actions";
 	import { library } from "$features/character/library.svelte";
 	import { games } from "$features/game/game.svelte";
+	import { lorebook } from "$features/lorebook/lorebook.svelte";
 	import { layout } from "./layout.svelte";
 	import { nav } from "./nav.svelte";
 	import { panel } from "./panel.svelte";
@@ -116,6 +117,8 @@
 				return ["설정", SETTINGS[r.tab ?? "general"]];
 			case "phone":
 				return ["폰"];
+			case "lorebook":
+				return ["로어북", lorebook.book(r.bookId)?.name].filter(Boolean) as string[];
 			case "game": {
 				const g = games.game(r.gameId);
 				if (!g) return ["게임"];

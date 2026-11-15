@@ -55,6 +55,7 @@ pub fn map_entries(book: &Value, warnings: &mut Vec<String>) -> Vec<WorldInfoEnt
             .unwrap_or(100);
 
         out.push(WorldInfoEntryInput {
+            comment: as_str(e, "comment").or(as_str(e, "name")).unwrap_or_default().trim().to_string(),
             id: None,
             book_id: String::new(),
             keys,

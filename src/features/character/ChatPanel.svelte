@@ -4,6 +4,7 @@
 	import { bookmarks, bookmarksOf } from "./bookmarks";
 	import NotesPanel from "./NotesPanel.svelte";
 	import BranchTree from "./BranchTree.svelte";
+	import LorePanel from "$features/lorebook/LorePanel.svelte";
 	import ContextMeter from "./ContextMeter.svelte";
 	import ExportButton from "./ExportButton.svelte";
 	import PresetEditor from "$features/settings/PresetEditor.svelte";
@@ -199,6 +200,8 @@
 			{/if}
 			<ContextMenu at={menu} items={menuItems} label="에셋 메뉴" onclose={() => (menu = null)} />
 		</div>
+	{:else if panel.tab === "lorebook"}
+		<LorePanel {conv} />
 	{:else if panel.tab === "branches"}
 		<BranchTree {conv} {onopen} />
 	{:else if panel.tab === "bookmarks"}

@@ -499,3 +499,110 @@ pub async fn delete_worldinfo_entry(state: State<'_, AppState>, id: String) -> R
     }
     Ok(())
 }
+
+// =======================================
+// 로어북 화면
+// =======================================
+
+/// 책 이름·설명 바꾸기
+#[tauri::command]
+#[specta::specta]
+pub async fn update_worldinfo_book(state: State<'_, AppState>, id: String, input: WorldInfoBookInput) -> Result<()> {
+    if input.name.trim().is_empty() {
+        return Err(AppError::validation("로어북 이름은 비어있을 수 없습니다", None));
+    }
+    if !conversation::update_worldinfo_book(&state.db, &id, &input).await? {
+        return Err(AppError::not_found(format!("로어북을 찾을 수 없습니다: {id}")));
+    }
+    Ok(())
+}
+
+#[derive(serde::Serialize, specta::Type)]
+#[serde(rename_all = "camelCase")]
+pub struct WorldInfoBookCount {
+    pub book_id: String,
+    pub entries: u32,
+    pub enabled: u32,
+}
+
+/// 책마다 항목 수 (목록 화면)
+#[tauri::command]
+#[specta::specta]
+pub async fn worldinfo_entry_counts(state: State<'_, AppState>) -> Result<Vec<WorldInfoBookCount>> {
+    Ok(conversation::worldinfo_entry_counts(&state.db)
+        .await?
+        .into_iter()
+        .map(|(book_id, n, on)| WorldInfoBookCount { book_id, entries: n.max(0) as u32, enabled: on.max(0) as u32 })
+        .collect())
+}
+
+/// 대화에 직접 붙인 로어북 바꾸기 (캐릭터·페르소나의 책은 그대로)
+#[tauri::command]
+#[specta::specta]
+pub async fn set_conversation_worldinfo(state: State<'_, AppState>, id: String, book_ids: Vec<String>) -> Result<Conversation> {
+    if !conversation::set_conversation_world_info(&state.db, &id, &book_ids).await? {
+        return Err(AppError::not_found(format!("대화를 찾을 수 없습니다: {id}")));
+    }
+    Ok(conversation::get_conversation(&state.db, &id).await?)
+}
+
+/// 책 하나를 SillyTavern 월드인포 JSON으로 내보내기. 내보낸 항목 수를 돌려준다
+#[tauri::command]
+#[specta::specta]
+pub async fn export_worldinfo_book(state: State<'_, AppState>, id: String, path: String) -> Result<u32> {
+    let entries = conversation::get_all_worldinfo_entries(&state.db, &id).await?;
+    std::fs::write(&path, sillytavern_book_json(&entries).to_string())
+        .map_err(|e| AppError::io(format!("파일을 쓸 수 없습니다: {e}")))?;
+    Ok(entries.len() as u32)
+}
+
+/// SillyTavern 월드인포 형식 { entries: { "0": {...}, ... } }
+pub(crate) fn sillytavern_book_json(entries: &[WorldInfoEntry]) -> serde_json::Value {
+    let map: serde_json::Map<String, serde_json::Value> = entries
+        .iter()
+        .enumerate()
+        .map(|(i, e)| {
+            (
+                i.to_string(),
+                json!({
+                    "uid": i,
+                    "key": e.keys,
+                    "keysecondary": e.secondary_keys,
+                    "selective": !e.secondary_keys.is_empty(),
+                    "comment": e.comment,
+                    "content": e.content,
+                    "constant": e.constant,
+                    "disable": !e.enabled,
+                    "order": e.priority,
+                    "position": 0,
+                }),
+            )
+        })
+        .collect();
+    json!({ "entries": map })
+}
+
+#[cfg(test)]
+mod lore_tests {
+    use super::*;
+
+    #[test]
+    fn exported_book_reimports_with_titles() {
+        let entry = WorldInfoEntry {
+            id: "e".into(),
+            book_id: "b".into(),
+            keys: vec!["dragon".into()],
+            secondary_keys: vec!["cave".into()],
+            content: "Dragons sleep in caves.".into(),
+            enabled: false,
+            priority: 42,
+            constant: false,
+            comment: "용".into(),
+        };
+        let v = sillytavern_book_json(&[entry]);
+        assert_eq!(v["entries"]["0"]["comment"], "용");
+        assert_eq!(v["entries"]["0"]["disable"], true);
+        assert_eq!(v["entries"]["0"]["selective"], true);
+        assert_eq!(v["entries"]["0"]["order"], 42);
+    }
+}

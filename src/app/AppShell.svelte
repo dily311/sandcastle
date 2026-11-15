@@ -13,6 +13,7 @@
 	import PersonaPage from "$features/persona/PersonaPage.svelte";
 	import PhonePage from "$features/phone/PhonePage.svelte";
 	import GamePage from "$features/game/GamePage.svelte";
+	import LorebookPage from "$features/lorebook/LorebookPage.svelte";
 
 	let ready = $state(false);
 
@@ -54,6 +55,8 @@
 				<GamePage gameId={r.gameId} sessionId={r.sessionId} edit={r.edit} />
 			{:else if r.page === "phone"}
 				<PhonePage />
+			{:else if r.page === "lorebook"}
+				<LorebookPage bookId={r.bookId} />
 			{:else if r.page === "persona"}
 				<PersonaPage personaId={r.personaId} />
 			{:else if r.page === "settings"}

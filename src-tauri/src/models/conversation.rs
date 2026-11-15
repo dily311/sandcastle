@@ -233,6 +233,9 @@ pub struct WorldInfoEntryRow {
     pub enabled: i64,
     pub priority: i64,
     pub constant: i64,
+    /// 제목 (예전 쿼리처럼 열을 고르지 않은 곳에서는 빈 값)
+    #[sqlx(default)]
+    pub comment: Option<String>,
 }
 
 #[derive(Serialize, Clone, specta::Type)]
@@ -246,6 +249,8 @@ pub struct WorldInfoEntry {
     pub enabled: bool,
     pub priority: i64,
     pub constant: bool, // 항상 프롬프트에 삽입
+    /// 제목 (SillyTavern의 comment). 프롬프트에는 들어가지 않음
+    pub comment: String,
 }
 
 impl From<WorldInfoEntryRow> for WorldInfoEntry {
@@ -265,6 +270,7 @@ impl From<WorldInfoEntryRow> for WorldInfoEntry {
             enabled: r.enabled != 0,
             priority: r.priority,
             constant: r.constant != 0,
+            comment: r.comment.unwrap_or_default(),
         }
     }
 }
@@ -280,6 +286,9 @@ pub struct WorldInfoEntryInput {
     pub enabled: bool,
     pub priority: i64,
     pub constant: bool,
+    /// 제목 (없으면 빈 값)
+    #[serde(default)]
+    pub comment: String,
 }
 
 impl From<WorldInfoEntry> for WorldInfoEntryInput {
@@ -293,6 +302,7 @@ impl From<WorldInfoEntry> for WorldInfoEntryInput {
             enabled: v.enabled,
             priority: v.priority,
             constant: v.constant,
+            comment: v.comment,
         }
     }
 }

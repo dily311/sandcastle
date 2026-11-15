@@ -1,6 +1,6 @@
 <script lang="ts">
 	import { onMount } from "svelte";
-	import { Check, ChevronsUpDown, Copy, Download, Ellipsis, Gamepad2, Pencil, Pin, PinOff, Plus, Settings, Smartphone, Trash2, UserCog, Users } from "@lucide/svelte";
+	import { BookOpen, Check, ChevronsUpDown, Copy, Download, Ellipsis, Gamepad2, Pencil, Pin, PinOff, Plus, Settings, Smartphone, Trash2, UserCog, Users } from "@lucide/svelte";
 	import { Avatar, ContextMenu, IconButton, type MenuItem } from "$shared/ui";
 	import { fileSrc } from "$shared/ipc/file";
 	import { call, commands } from "$shared/ipc/client";
@@ -16,6 +16,7 @@
 		{ page: "character", label: "캐릭터", icon: Users },
 		{ page: "phone", label: "폰", icon: Smartphone },
 		{ page: "game", label: "게임", icon: Gamepad2 },
+		{ page: "lorebook", label: "로어북", icon: BookOpen },
 	];
 
 	$effect(() => {

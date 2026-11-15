@@ -43,6 +43,7 @@ const character = (id: string, name: string, description: string, extra: Partial
 
 const characters: Character_Serialize[] = [
 	character("sera", "Seraphina", "엘도리아 숲의 수호자.\n숲 깊은 곳의 오두막에서 지친 여행자를 돌봄. 그림자 송곳니 무리로부터 숲을 지키는 오래된 마법의 주인.", {
+		worldInfoIds: ["wb1"],
 		tags: ["판타지", "힐러"],
 		favorite: true,
 		firstMessage: '*당신이 눈을 뜨자, 부드러운 빛 속에서 한 여인이 고개를 숙인다.*\n"눈을 떴군요. 다행이에요… 숲의 짐승들에게 쫓기다 쓰러졌었어요."',
@@ -240,6 +241,7 @@ export const chatHandlers: Record<string, (a: Args) => unknown> = {
 	set_conversation_pinned: ({ id, pinned }) => ((conv(id).pinned = pinned), null),
 	move_conversation: ({ id, folderId }) => ((conv(id).folderId = folderId), null),
 	set_conversation_options: ({ id, options }) => (Object.assign(conv(id), options), view(conv(id))),
+	set_conversation_worldinfo: ({ id, bookIds }) => ((conv(id).worldInfoIds = bookIds as string[]), view(conv(id))),
 	set_conversation_images_enabled: ({ conversationId, enabled }) => ((conv(conversationId).imagesEnabled = enabled), null),
 	duplicate_conversation: ({ id }) => {
 		const src = conv(id);

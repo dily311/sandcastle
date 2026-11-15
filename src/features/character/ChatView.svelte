@@ -1,6 +1,6 @@
 <script lang="ts">
 	import { tick } from "svelte";
-	import { Bookmark, ChevronRight, Gauge, Copy, CornerUpLeft, FastForward, GitBranch, ImagePlus, Images, ListChecks, ListTree, PanelLeft, Plus, RefreshCw, Send, SlidersHorizontal, Square, Trash2, X } from "@lucide/svelte";
+	import { Bookmark, BookOpen, ChevronRight, Gauge, Copy, CornerUpLeft, FastForward, GitBranch, ImagePlus, Images, ListChecks, ListTree, PanelLeft, Plus, RefreshCw, Send, SlidersHorizontal, Square, Trash2, X } from "@lucide/svelte";
 	import { bookmarks } from "./bookmarks";
 	import { childrenOf, pathOf } from "./branches";
 	import SidePanel from "$app/SidePanel.svelte";
@@ -43,6 +43,7 @@
 			{ id: "settings", label: "대화 설정", icon: SlidersHorizontal },
 			{ id: "context", label: "컨텍스트·프리셋", icon: Gauge },
 			{ id: "toc", label: "목차", icon: ListTree },
+			{ id: "lorebook", label: "로어북", icon: BookOpen },
 			{ id: "bookmarks", label: "북마크", icon: Bookmark },
 			{ id: "branches", label: "분기", icon: GitBranch },
 			{ id: "assets", label: "에셋", icon: Images },

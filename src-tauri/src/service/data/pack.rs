@@ -360,7 +360,7 @@ async fn import_pack_inner(
         for e in b.entries {
             db::conversation::upsert_worldinfo_entry(
                 &mut *tx,
-                WorldInfoEntryInput {
+                WorldInfoEntryInput { comment: String::new(),
                     id: None,
                     book_id: book.id.clone(),
                     keys: e.keys,

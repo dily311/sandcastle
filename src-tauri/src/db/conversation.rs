@@ -638,14 +638,14 @@ pub async fn upsert_worldinfo_entry<'e, E>(executor: E, input: WorldInfoEntryInp
     let skeys_json = serde_json::to_string(&input.secondary_keys).unwrap_or_default();
 
     sqlx::query(
-        "INSERT INTO worldinfo_entries (id, book_id, keys, secondary_keys, content, enabled, priority, constant)
-         VALUES (?,?,?,?,?,?,?,?)
+        "INSERT INTO worldinfo_entries (id, book_id, keys, secondary_keys, content, enabled, priority, constant, comment)
+         VALUES (?,?,?,?,?,?,?,?,?)
          ON CONFLICT(id) DO UPDATE SET
            keys=excluded.keys, 
            secondary_keys=excluded.secondary_keys, 
            content=excluded.content,
            enabled=excluded.enabled, priority=excluded.priority, 
-           constant=excluded.constant"
+           constant=excluded.constant, comment=excluded.comment"
     )
     .bind(&id)
     .bind(&input.book_id)
@@ -655,10 +655,12 @@ pub async fn upsert_worldinfo_entry<'e, E>(executor: E, input: WorldInfoEntryInp
     .bind(input.enabled as i64)
     .bind(input.priority)
     .bind(input.constant as i64)
+    .bind(&input.comment)
     .execute(executor)
     .await?;
 
     Ok(WorldInfoEntry {
+        comment: input.comment,
         id,
         book_id: input.book_id,
         keys: input.keys,
@@ -668,6 +670,36 @@ pub async fn upsert_worldinfo_entry<'e, E>(executor: E, input: WorldInfoEntryInp
         priority: input.priority,
         constant: input.constant,
     })
+}
+
+/// 책 이름·설명 바꾸기
+pub async fn update_worldinfo_book<'e, E>(executor: E, id: &str, input: &WorldInfoBookInput) -> Result<bool, Error> where E: Executor<'e, Database = Sqlite>,{
+    let r = sqlx::query("UPDATE worldinfo_books SET name = ?, description = ?, updated_at = ? WHERE id = ?")
+        .bind(&input.name)
+        .bind(&input.description)
+        .bind(chrono::Utc::now().timestamp_millis())
+        .bind(id)
+        .execute(executor)
+        .await?;
+    Ok(r.rows_affected() != 0)
+}
+
+/// 책마다 (전체 항목 수, 켜진 항목 수)
+pub async fn worldinfo_entry_counts<'e, E>(executor: E) -> Result<Vec<(String, i64, i64)>, Error> where E: Executor<'e, Database = Sqlite>,{
+    sqlx::query_as::<_, (String, i64, i64)>("SELECT book_id, COUNT(*), COALESCE(SUM(enabled), 0) FROM worldinfo_entries GROUP BY book_id")
+        .fetch_all(executor)
+        .await
+}
+
+/// 대화에 직접 붙인 로어북 바꾸기
+pub async fn set_conversation_world_info<'e, E>(executor: E, id: &str, book_ids: &[String]) -> Result<bool, Error> where E: Executor<'e, Database = Sqlite>,{
+    let r = sqlx::query("UPDATE conversations SET world_info_ids = ?, updated_at = ? WHERE id = ?")
+        .bind(serde_json::to_string(book_ids).unwrap_or_else(|_| "[]".into()))
+        .bind(chrono::Utc::now().timestamp_millis())
+        .bind(id)
+        .execute(executor)
+        .await?;
+    Ok(r.rows_affected() != 0)
 }
 
 pub async fn delete_worldinfo_entry<'e, E>(executor: E, id: &str) -> Result<bool, Error> where E: Executor<'e, Database = Sqlite>,{

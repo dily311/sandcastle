@@ -124,6 +124,13 @@ class Library {
 	}
 
 	/** 대화 meta에 키를 합침 (값이 null이면 지움) */
+	/** 대화에 직접 붙인 로어북 (캐릭터·페르소나의 책과 별개) */
+	async setWorldInfo(id: string, bookIds: string[]) {
+		const conv = await call(commands.setConversationWorldinfo(id, bookIds), src);
+		this.put(conv);
+		return conv;
+	}
+
 	async patchMeta(id: string, patch: Record<string, unknown>) {
 		const conv = await call(commands.patchConversationMeta(id, patch as never), src);
 		this.put(conv);

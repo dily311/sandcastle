@@ -169,6 +169,14 @@ export const commands = {
 	getWorldinfoEntries: (bookId: string, options?: InvokeOptions) => __TAURI_INVOKE<WorldInfoEntry[]>("get_worldinfo_entries", { bookId }, options),
 	upsertWorldinfoEntry: (input: WorldInfoEntryInput_Deserialize, options?: InvokeOptions) => __TAURI_INVOKE<WorldInfoEntry>("upsert_worldinfo_entry", { input }, options),
 	deleteWorldinfoEntry: (id: string, options?: InvokeOptions) => __TAURI_INVOKE<null>("delete_worldinfo_entry", { id }, options),
+	/**  책 이름·설명 바꾸기 */
+	updateWorldinfoBook: (id: string, input: WorldInfoBookInput_Deserialize, options?: InvokeOptions) => __TAURI_INVOKE<null>("update_worldinfo_book", { id, input }, options),
+	/**  책마다 항목 수 (목록 화면) */
+	worldinfoEntryCounts: (options?: InvokeOptions) => __TAURI_INVOKE<WorldInfoBookCount[]>("worldinfo_entry_counts", undefined, options),
+	/**  대화에 직접 붙인 로어북 바꾸기 (캐릭터·페르소나의 책은 그대로) */
+	setConversationWorldinfo: (id: string, bookIds: string[], options?: InvokeOptions) => __TAURI_INVOKE<Conversation_Serialize>("set_conversation_worldinfo", { id, bookIds }, options),
+	/**  책 하나를 SillyTavern 월드인포 JSON으로 내보내기. 내보낸 항목 수를 돌려준다 */
+	exportWorldinfoBook: (id: string, path: string, options?: InvokeOptions) => __TAURI_INVOKE<number>("export_worldinfo_book", { id, path }, options),
 	getAllConversations: (options?: InvokeOptions) => __TAURI_INVOKE<Conversation_Serialize[]>("get_all_conversations", undefined, options),
 	getConversation: (id: string, options?: InvokeOptions) => __TAURI_INVOKE<Conversation_Serialize>("get_conversation", { id }, options),
 	createConversation: (input: ConversationInput_Deserialize, options?: InvokeOptions) => __TAURI_INVOKE<Conversation_Serialize>("create_conversation", { input }, options),
@@ -3111,6 +3119,12 @@ export type WidgetMusicSetting_Serialize = {
 
 export type WorldInfoBook = WorldInfoBook_Serialize | WorldInfoBook_Deserialize;
 
+export type WorldInfoBookCount = {
+	bookId: string,
+	entries: number,
+	enabled: number,
+};
+
 export type WorldInfoBookInput = WorldInfoBookInput_Serialize | WorldInfoBookInput_Deserialize;
 
 export type WorldInfoBookInput_Deserialize = {
@@ -3150,6 +3164,8 @@ export type WorldInfoEntry = {
 	enabled: boolean,
 	priority: number,
 	constant: boolean,
+	/**  제목 (SillyTavern의 comment). 프롬프트에는 들어가지 않음 */
+	comment: string,
 };
 
 export type WorldInfoEntryInput = WorldInfoEntryInput_Serialize | WorldInfoEntryInput_Deserialize;
@@ -3163,6 +3179,8 @@ export type WorldInfoEntryInput_Deserialize = {
 	enabled: boolean,
 	priority: number,
 	constant: boolean,
+	/**  제목 (없으면 빈 값) */
+	comment?: string,
 };
 
 export type WorldInfoEntryInput_Serialize = {
@@ -3174,4 +3192,6 @@ export type WorldInfoEntryInput_Serialize = {
 	enabled: boolean,
 	priority: number,
 	constant: boolean,
+	/**  제목 (없으면 빈 값) */
+	comment: string,
 };

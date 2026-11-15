@@ -37,7 +37,7 @@ fn hist(role: &str, content: &str) -> HistoryItem {
 }
 
 fn wi(id: &str, keys: &[&str], content: &str, constant: bool, priority: i64) -> WorldInfoEntry {
-    WorldInfoEntry {
+    WorldInfoEntry { comment: String::new(),
         id: id.into(),
         book_id: "b".into(),
         keys: keys.iter().map(|s| s.to_string()).collect(),

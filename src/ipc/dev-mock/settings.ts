@@ -3,6 +3,17 @@ import type { DataOverview_Serialize, GameProject_Serialize, PhoneContact, Promp
 import { mockData } from "./chat";
 import { gameView } from "./game";
 
+const books = [
+	{ id: "wb1", name: "엘다리아 대륙", description: "숲과 왕국 설정", createdAt: 0, updatedAt: Date.now() - 86400000 },
+	{ id: "wb2", name: "현대 서울", description: null as string | null, createdAt: 0, updatedAt: Date.now() - 3600000 },
+];
+const wiEntries = [
+	{ id: "we1", bookId: "wb1", comment: "엘도리아 숲", keys: ["엘도리아", "숲"], secondaryKeys: [], content: "고대 마법이 깃든 숲. 세라피나가 지킴.", enabled: true, priority: 100, constant: false },
+	{ id: "we2", bookId: "wb1", comment: "그림자 송곳니", keys: ["늑대", "그림자 송곳니"], secondaryKeys: [], content: "숲을 노리는 늑대 무리.", enabled: true, priority: 90, constant: false },
+	{ id: "we3", bookId: "wb1", comment: "세계 규칙", keys: [], secondaryKeys: [], content: "이 세계에는 마법이 존재함.", enabled: true, priority: 200, constant: true },
+	{ id: "we4", bookId: "wb2", comment: "", keys: ["지하철"], secondaryKeys: [], content: "2호선은 늘 붐빔.", enabled: false, priority: 50, constant: false },
+];
+
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 type Args = Record<string, any>;
 const { characters, personas, presets, apis, regex, convs, messages, uid, now } = mockData;
@@ -246,10 +257,37 @@ export const settingsHandlers: Record<string, (a: Args) => unknown> = {
 	},
 
 	// ---- 페르소나 ----
-	get_all_worldinfo_books: () => [
-		{ id: "wb1", name: "엘다리아 대륙", description: "숲과 왕국 설정", createdAt: 0, updatedAt: 0 },
-		{ id: "wb2", name: "현대 서울", description: null, createdAt: 0, updatedAt: 0 },
-	],
+	// ---- 로어북 ----
+	get_all_worldinfo_books: () => books.map((b) => ({ ...b })),
+	worldinfo_entry_counts: () =>
+		books.map((b) => {
+			const list = wiEntries.filter((e) => e.bookId === b.id);
+			return { bookId: b.id, entries: list.length, enabled: list.filter((e) => e.enabled).length };
+		}),
+	create_worldinfo_book: ({ input }) => {
+		const b = { id: `wb${Date.now().toString(36)}`, name: input.name, description: input.description ?? null, createdAt: Date.now(), updatedAt: Date.now() };
+		books.push(b);
+		return b;
+	},
+	update_worldinfo_book: ({ id, input }) => (Object.assign(books.find((b) => b.id === id)!, input, { updatedAt: Date.now() }), null),
+	delete_worldinfo_book: ({ id }) => {
+		books.splice(books.findIndex((b) => b.id === id), 1);
+		return null;
+	},
+	get_worldinfo_entries: ({ bookId }) => wiEntries.filter((e) => e.bookId === bookId).map((e) => ({ ...e })),
+	upsert_worldinfo_entry: ({ input }) => {
+		if (!input.keys.length && !input.constant) throw { code: "INVALID_INPUT", category: "VALIDATION", message: "키워드 필요", retryable: false };
+		const e = { ...input, id: input.id ?? `we${Date.now().toString(36)}`, comment: input.comment ?? "" };
+		const i = wiEntries.findIndex((x) => x.id === e.id);
+		if (i >= 0) wiEntries[i] = e;
+		else wiEntries.push(e);
+		return { ...e };
+	},
+	delete_worldinfo_entry: ({ id }) => {
+		wiEntries.splice(wiEntries.findIndex((e) => e.id === id), 1);
+		return null;
+	},
+	export_worldinfo_book: ({ id }) => wiEntries.filter((e) => e.bookId === id).length,
 	create_persona: ({ input }) => {
 		const p = { ...input, avatar: input.avatar ?? null, id: uid("pe"), createdAt: now(), updatedAt: now() };
 		personas.push(p);
