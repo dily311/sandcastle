@@ -1,6 +1,6 @@
 <script lang="ts">
 	import { onMount } from "svelte";
-	import { ArrowUp, Camera, ChevronLeft, Plus, Trash2, X } from "@lucide/svelte";
+	import { ArrowUp, Camera, Plus, Trash2, X } from "@lucide/svelte";
 	import type { CharacterInput_Deserialize as CharacterInput, WorldInfoBook_Serialize as Book } from "$ipc/bindings";
 	import { Avatar, Button, ColorPicker, Field, IconButton, Input, Select, TagInput, Textarea } from "$shared/ui";
 	import { call, commands } from "$shared/ipc/client";
@@ -147,19 +147,18 @@
 </script>
 
 <div class="editor">
-	<header class="top">
-		<IconButton label="캐릭터로 돌아가기" onclick={close}><ChevronLeft /></IconButton>
-		<h1>{name.trim() || "이름 없음"} <span class="faint">편집</span></h1>
-		{#if dirty}<span class="dirty">바뀐 내용 있음</span>{/if}
-		<Button variant="ghost" onclick={close}>취소</Button>
-		<Button variant="primary" loading={saving} disabled={!dirty || !name.trim()} onclick={save}>저장</Button>
-	</header>
-
 	<div class="layout">
 		<nav class="toc" aria-label="편집 항목">
 			{#each SECTIONS as s (s.id)}
-				<button onclick={() => jump(s.id)}>{s.label}</button>
+				<button class="link" onclick={() => jump(s.id)}>{s.label}</button>
 			{/each}
+			<div class="actions">
+				{#if dirty}<span class="dirty">바뀐 내용 있음</span>{/if}
+				<div class="btns">
+					<Button variant="ghost" onclick={close}>취소</Button>
+					<Button variant="primary" loading={saving} disabled={!dirty || !name.trim()} onclick={save}>저장</Button>
+				</div>
+			</div>
 		</nav>
 
 		<div class="body" bind:this={body}>
@@ -263,24 +262,19 @@
 		flex-direction: column;
 		height: 100%;
 	}
-	.top {
+	.actions {
 		display: flex;
-		align-items: center;
+		flex-direction: column;
 		gap: var(--space-2);
-		padding: var(--space-2) var(--space-4);
-		border-bottom: 1px solid var(--border);
-		background: var(--bg);
+		margin-top: auto;
+		padding-top: var(--space-3);
 	}
-	.top h1 {
+	.btns {
+		display: flex;
+		gap: var(--space-2);
+	}
+	.btns > :global(*) {
 		flex: 1;
-		min-width: 0;
-		font-size: var(--text-lg);
-		overflow: hidden;
-		text-overflow: ellipsis;
-		white-space: nowrap;
-	}
-	.top h1 span {
-		font-weight: 400;
 	}
 	.dirty {
 		font-size: var(--text-sm);
@@ -300,7 +294,7 @@
 		border-right: 1px solid var(--border);
 		background: var(--bg);
 	}
-	.toc button {
+	.toc .link {
 		height: 30px;
 		padding: 0 var(--space-2);
 		border: none;
@@ -311,7 +305,7 @@
 		text-align: left;
 		cursor: pointer;
 	}
-	.toc button:hover {
+	.toc .link:hover {
 		background: var(--surface-hover);
 		color: var(--text);
 	}
@@ -362,8 +356,14 @@
 	.who-fields > :global(:first-child) {
 		align-self: stretch;
 	}
+	/* 세로로 긴 그림이어도 둥근 모양 그대로 (flex에 늘어나지 않게) */
 	.avatar-btn {
 		position: relative;
+		flex: none;
+		align-self: flex-start;
+		width: 88px;
+		height: 88px;
+		overflow: hidden;
 		padding: 0;
 		border: none;
 		border-radius: 50%;
@@ -438,8 +438,24 @@
 		.layout {
 			grid-template-columns: minmax(0, 1fr);
 		}
+		/* 좁으면 목차는 숨기고 저장 줄만 아래에 */
+		.layout {
+			grid-template-rows: minmax(0, 1fr) auto;
+		}
 		.toc {
+			order: 2;
+			padding: var(--space-2) var(--space-3);
+			border-right: none;
+			border-top: 1px solid var(--border);
+		}
+		.toc .link {
 			display: none;
+		}
+		.actions {
+			margin-top: 0;
+			flex-direction: row;
+			align-items: center;
+			justify-content: flex-end;
 		}
 		.two {
 			grid-template-columns: minmax(0, 1fr);

@@ -50,8 +50,22 @@ export class ChatSession {
 	messages = $state<Message[]>([]);
 	loading = $state(true);
 	live = $state<Live | null>(null);
+	/** 화면용 글 (표시용 정규식을 거치고 {{char}}·{{user}}를 이름으로). 없으면 원문을 보임 */
+	display = $state<Record<string, string>>({});
+	private displaySig = "";
 
 	constructor(readonly convId: string) {}
+
+	/** 메시지가 바뀌면 화면용 글을 다시 받음 (화면의 $effect에서 부름) */
+	async refreshDisplay(key = "") {
+		const list = this.messages;
+		const sig = key + "#" + list.map((m) => `${m.id}:${m.updatedAt}:${m.content.length}`).join("|");
+		if (sig === this.displaySig) return;
+		this.displaySig = sig;
+		const out = await call(commands.displayMessages(this.convId, list.map((m) => ({ role: m.role, content: m.content }))), { ...src, silent: true }).catch(() => null);
+		if (!out || sig !== this.displaySig) return;
+		this.display = Object.fromEntries(list.map((m, i) => [m.id, out[i]]));
+	}
 
 	get busy() {
 		return this.live !== null;

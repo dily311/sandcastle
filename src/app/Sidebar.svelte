@@ -83,6 +83,15 @@
 	const scope = $derived(openConvObj ? "이 대화" : "기본");
 
 	let profileOpen = $state(false);
+	// 사이드바가 overflow:hidden이라 팝업은 화면 기준(fixed)으로 띄움
+	let meBtn: HTMLButtonElement | undefined = $state();
+	let popStyle = $state("");
+	function toggleProfile() {
+		profileOpen = !profileOpen;
+		if (!profileOpen || !meBtn) return;
+		const r = meBtn.getBoundingClientRect();
+		popStyle = `left:${r.left}px;bottom:${window.innerHeight - r.top + 6}px;max-height:${r.top - 12}px`;
+	}
 	async function choose(id: string) {
 		profileOpen = false;
 		const c = openConvObj;
@@ -149,13 +158,13 @@
 
 	<div class="bottom">
 		<div class="profile">
-			<button class="me" class:on={cur.page === "persona"} aria-haspopup="listbox" aria-expanded={profileOpen} title="사용자 프로필 바꾸기" onclick={() => (profileOpen = !profileOpen)}>
+			<button bind:this={meBtn} class="me" class:on={cur.page === "persona"} aria-haspopup="listbox" aria-expanded={profileOpen} title="사용자 프로필 바꾸기" onclick={toggleProfile}>
 				{#if me}<Avatar name={me.name} src={fileSrc(me.avatar)} color={me.color || null} size={26} />{/if}
 				<span class="who"><b>{me?.name ?? "페르소나 없음"}</b><small>{scope} 프로필</small></span>
 				<ChevronsUpDown />
 			</button>
 			{#if profileOpen}
-				<div class="pop" role="listbox" aria-label="사용자 프로필">
+				<div class="pop" role="listbox" aria-label="사용자 프로필" style={popStyle}>
 					<p class="pop-head">{scope === "이 대화" ? "이 대화에서 쓸 프로필" : "새 대화에 쓸 기본 프로필"}</p>
 					<ul>
 						{#each library.personas as p (p.id)}
@@ -384,10 +393,11 @@
 		font-size: var(--text-xs);
 	}
 	.pop {
-		position: absolute;
-		left: 0;
-		bottom: calc(100% + 6px);
-		z-index: 50;
+		position: fixed;
+		z-index: 100;
+		display: flex;
+		flex-direction: column;
+		overflow: hidden;
 		width: 240px;
 		padding: var(--space-1);
 		border: 1px solid var(--border);

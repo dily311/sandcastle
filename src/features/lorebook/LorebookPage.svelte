@@ -1,4 +1,5 @@
 <script lang="ts">
+	import { onMount } from "svelte";
 	// 로어북 화면: 책 목록 → 책 하나(이름·설명, 쓰는 곳, 항목 편집)
 	import { BookOpen, Check, Download, Ellipsis, ListFilter, Pencil, Plus, Search, Trash2, Upload } from "@lucide/svelte";
 	import { Avatar, Button, ContextMenu, EmptyState, ExportSplit, IconButton, Input, Spinner, type MenuItem } from "$shared/ui";
@@ -14,8 +15,9 @@
 
 	let { bookId }: { bookId?: string } = $props();
 
-	$effect(() => {
-		if (!lorebook.loaded) void lorebook.load();
+	// 화면을 열 때마다 새로 (캐릭터 카드를 가져오면 로어북이 새로 생기므로)
+	onMount(() => {
+		void lorebook.load();
 		if (!library.loaded) void library.load();
 	});
 

@@ -58,8 +58,6 @@
 	// ---- 프리셋: 컨텍스트 탭 아래에 바로 편집기 (이름·설명은 빼고) ----
 	const activePresetId = $derived(conv.promptPresetId || usage?.presetId || null);
 	let presetDetail = $state<PresetDetail | null>(null);
-	/** 취소·저장 뒤 편집기를 새로 그림 */
-	let presetRev = $state(0);
 	let presetSaving = $state(false);
 	async function loadPreset(id: string | null) {
 		if (!id) return void (presetDetail = null);
@@ -69,21 +67,16 @@
 	$effect(() => {
 		void loadPreset(activePresetId);
 	});
+	/** 자동 저장 (편집기를 다시 그리지 않음: 고치던 자리를 잃지 않게) */
 	async function savePreset(preset: PresetDetail["preset"], blocks: BlockInput[]) {
 		presetSaving = true;
 		try {
-			presetDetail = await call(commands.savePromptPreset({ ...preset, id: preset.id }, blocks), { source: "preset" });
-			library.presets = await call(commands.listPromptPresets(), { source: "preset" });
-			presetRev++;
-			toasts.success("프리셋 저장함");
+			const d = await call(commands.savePromptPreset({ ...preset, id: preset.id }, blocks), { source: "preset" });
 			void loadUsage();
+			return d;
 		} finally {
 			presetSaving = false;
 		}
-	}
-	async function resetPreset() {
-		await loadPreset(activePresetId);
-		presetRev++;
 	}
 
 	const character = $derived(library.character(conv.characterId));
@@ -248,8 +241,8 @@
 				<Select value={conv.promptPresetId ?? DEFAULT} options={presetOptions} aria-label="이 대화의 프리셋" onchange={(e) => setOption({ promptPresetId: e.currentTarget.value })} />
 			</section>
 			{#if presetDetail}
-				{#key `${presetDetail.preset.id}:${presetRev}`}
-					<PresetEditor detail={presetDetail} saving={presetSaving} onsave={savePreset} oncancel={resetPreset} quick />
+				{#key presetDetail.preset.id}
+					<PresetEditor detail={presetDetail} saving={presetSaving} onsave={savePreset} quick autosave />
 				{/key}
 			{:else if activePresetId}
 				<p class="none small">프리셋 불러오는 중…</p>

@@ -265,6 +265,11 @@ export const chatHandlers: Record<string, (a: Args) => unknown> = {
 	export_conversation: ({ id }) => msgsOf(id as string).length,
 	// 첨부는 미리보기가 되도록 data: 주소를 그대로 경로로 씀
 	store_dropped_file: ({ name, dataBase64, keep }) => (keep ? (dataBase64 as string) : `C:/mock/drop/${name as string}`),
+	display_messages: ({ conversationId, items }) => {
+		const c = conv(conversationId as string);
+		const ch = characters.find((x) => x.id === c.characterId)?.name ?? "";
+		return (items as { content: string }[]).map((i) => i.content.replace(/\{\{char\}\}|<bot>/gi, ch).replace(/\{\{user\}\}|<user>/gi, "Min"));
+	},
 	context_usage: ({ conversationId }) => {
 		const c = conv(conversationId as string);
 		const msgs = msgsOf(conversationId as string);

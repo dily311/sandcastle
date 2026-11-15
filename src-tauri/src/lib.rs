@@ -238,6 +238,7 @@ pub fn specta_builder() -> tauri_specta::Builder<tauri::Wry> {
             delete_messages,
             store_dropped_file,
             context_usage,
+            display_messages,
             export_conversation,
             // task
             get_task,
@@ -426,6 +427,7 @@ pub fn specta_builder() -> tauri_specta::Builder<tauri::Wry> {
             delete_messages,
             store_dropped_file,
             context_usage,
+            display_messages,
             export_conversation,
             // task
             get_task,

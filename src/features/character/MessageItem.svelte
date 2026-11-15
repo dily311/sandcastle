@@ -28,7 +28,7 @@
 	const meta = $derived(metaOf(msg));
 	const isAi = $derived(msg.role === "assistant");
 	const live = $derived(session.live?.kind === "regenerate" && session.live.targetId === msg.id ? session.live : null);
-	const text = $derived(live ? live.text : msg.content);
+	const text = $derived(live ? live.text : (session.display[msg.id] ?? msg.content));
 	const blocks = $derived(toBlocks(text));
 	const swipes = $derived(meta.swipes?.length ?? 0);
 	const swipeId = $derived(meta.swipeId ?? 0);

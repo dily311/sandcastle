@@ -119,6 +119,16 @@ impl RegexProcessor {
         }
     }
 
+    /// 화면에 보일 글: 표시용(Display) 정규식을 거친 뒤 {{char}}·{{user}} (옛 <BOT>·<USER>)를 이름으로
+    /// `depth`: 0 = 가장 최근 메시지
+    pub fn for_display(&self, text: &str, role: &str, depth: usize) -> String {
+        let out = match RegexPlacement::for_role(role) {
+            Some(p) => self.apply(text, p, &[RegexTarget::Display], Some(depth)),
+            None => text.to_string(),
+        };
+        display_macros(&out, &self.macros)
+    }
+
     pub fn is_empty(&self) -> bool {
         self.scripts.is_empty()
     }
@@ -505,5 +515,30 @@ mod tests {
         let mut s = script("/hi/g", "hello");
         s.target = RegexTarget::Display;
         assert_eq!(preview_script(&s, "hi hi", &macros()).unwrap(), "hello hello");
+    }
+}
+
+/// 표시용 이름 바꾸기 (대소문자 무시)
+pub fn display_macros(text: &str, m: &RegexMacros) -> String {
+    static RE: std::sync::LazyLock<Regex> =
+        std::sync::LazyLock::new(|| Regex::new(r"(?i)\{\{(char|user)\}\}|<(bot|user)>").unwrap());
+    RE.replace_all(text, |c: &Captures<'_, str>| {
+        let who = c.get(1).or(c.get(2)).map(|x| x.as_str().to_ascii_lowercase()).unwrap_or_default();
+        let name = if who == "user" { &m.user_name } else { &m.char_name };
+        if name.is_empty() { c[0].to_string() } else { name.clone() }
+    })
+    .into_owned()
+}
+
+#[cfg(test)]
+mod display_tests {
+    use super::*;
+
+    #[test]
+    fn names_fill_in_on_display() {
+        let m = RegexMacros { char_name: "Aria".into(), user_name: "Min".into() };
+        assert_eq!(display_macros("{{User}}, <BOT> waves. {{char}}!", &m), "Min, Aria waves. Aria!");
+        let none = RegexMacros::default();
+        assert_eq!(display_macros("{{user}}", &none), "{{user}}", "이름 없으면 그대로");
     }
 }

@@ -35,6 +35,12 @@
 		await tick();
 		scroller?.scrollTo({ top: scroller.scrollHeight });
 	}
+	// 화면용 글 (표시용 정규식·이름)
+	$effect(() => {
+		void session.messages.map((m) => m.content);
+		if (!session.busy) void session.refreshDisplay();
+	});
+
 	// 답장이 들어오는 동안 아래로 따라감
 	$effect(() => {
 		void session.live?.text;
@@ -109,7 +115,7 @@
 			lastSide = r.mine ?? null;
 		};
 		for (const m of session.messages) {
-			const content = live?.kind === "regenerate" && live.targetId === m.id ? live.text : m.content;
+			const content = live?.kind === "regenerate" && live.targetId === m.id ? live.text : (session.display[m.id] ?? m.content);
 			const lines = bubbles(content);
 			if (!lines.length && !(live?.targetId === m.id)) continue;
 			push({ key: m.id, at: m.createdAt, mine: m.role === "user", msg: m, lines, pending: live?.targetId === m.id });

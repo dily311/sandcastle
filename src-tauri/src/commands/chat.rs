@@ -171,6 +171,30 @@ pub async fn branch_conversation(state: State<'_, AppState>, id: String, message
     Ok(conversation::get_conversation(&state.db, &new_id).await?)
 }
 
+/// 화면에 보일 메시지 (role, 원문)
+#[derive(serde::Deserialize, specta::Type)]
+pub struct DisplayItem {
+    pub role: String,
+    pub content: String,
+}
+
+/// 메시지들을 화면용으로: 표시용 정규식 + {{char}}/{{user}} 이름. 순서대로, 마지막이 가장 최근
+#[tauri::command]
+#[specta::specta]
+pub async fn display_messages(state: State<'_, AppState>, conversation_id: String, items: Vec<DisplayItem>) -> Result<Vec<String>> {
+    use crate::service::chat::regex_processor::{RegexMacros, RegexProcessor};
+    let conv = conversation::get_conversation(&state.db, &conversation_id).await?;
+    let char_name = conversation::get_character(&state.db, &conv.character_id).await.map(|c| c.name).unwrap_or_default();
+    let persona_id = match conv.persona_id.as_str() {
+        "" => conversation::get_system_default_persona(&state.db).await.unwrap_or_else(|_| "default".into()),
+        id => id.to_string(),
+    };
+    let user_name = conversation::get_persona(&state.db, &persona_id).await.map(|p| p.name).unwrap_or_default();
+    let regex = RegexProcessor::load(&state.db, Some(&conv.character_id), conv.prompt_preset_id.as_deref(), RegexMacros { char_name, user_name }).await?;
+    let n = items.len();
+    Ok(items.iter().enumerate().map(|(i, m)| regex.for_display(&m.content, &m.role, n - 1 - i)).collect())
+}
+
 /// 컨텍스트 사용량 (오른쪽 패널). 마지막으로 보낸 프롬프트 기준
 #[derive(serde::Serialize, specta::Type)]
 #[serde(rename_all = "camelCase")]

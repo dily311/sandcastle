@@ -9,12 +9,15 @@
 	interface Props {
 		detail: Detail;
 		saving: boolean;
-		onsave: (preset: Detail["preset"], blocks: BlockInput[]) => void;
-		oncancel: () => void;
+		/** 저장한 결과를 돌려주면 새 블록의 id를 받아 둠 (자동 저장에서 같은 블록이 또 생기지 않게) */
+		onsave: (preset: Detail["preset"], blocks: BlockInput[]) => void | Promise<Detail | void>;
+		oncancel?: () => void;
 		/** 빠른 편집 (대화 패널): 이름·설명은 숨김 */
 		quick?: boolean;
+		/** 저장·취소 버튼 없이 고치면 잠시 뒤 저절로 저장 */
+		autosave?: boolean;
 	}
-	let { detail, saving, onsave, oncancel, quick = false }: Props = $props();
+	let { detail, saving, onsave, oncancel, quick = false, autosave = false }: Props = $props();
 
 	// 마커 블록: 내용 대신 앱이 채움
 	const MARKERS: Record<string, string> = {
@@ -143,7 +146,30 @@
 		blocks = blocks.filter((_, k) => k !== i);
 	}
 
-	function save() {
+	// ---- 자동 저장: 값이 바뀌고 잠시 멈추면 ----
+	const snapshot = () => JSON.stringify([name, description, temperature, maxTokens, contextSize, topP, topK, stream, blocks.map(({ key: _k, id: _i, ...b }) => b)]);
+	let lastSaved = snapshot();
+	let autoState = $state<"" | "dirty" | "saving" | "saved" | "failed">("");
+	$effect(() => {
+		if (!autosave) return;
+		const now = snapshot();
+		if (now === lastSaved) return;
+		autoState = "dirty";
+		const t = setTimeout(async () => {
+			lastSaved = now;
+			autoState = "saving";
+			try {
+				await save();
+				autoState = "saved";
+			} catch {
+				autoState = "failed";
+				lastSaved = "";
+			}
+		}, 700);
+		return () => clearTimeout(t);
+	});
+
+	async function save() {
 		const num = (s: string) => (String(s).trim() === "" || Number.isNaN(Number(s)) ? undefined : Number(s));
 		// settings_json이 config_json보다 우선 → 화면 값은 settings_json에 앱 키로 씀
 		const settings: Record<string, unknown> = { ...((p.settingsJson as object) ?? {}) };
@@ -157,10 +183,12 @@
 		put("top_p", num(topP));
 		put("top_k", num(topK));
 		put("stream", stream);
-		onsave(
+		const saved = await onsave(
 			{ ...p, name: name.trim(), description: description.trim() || null, settingsJson: settings as Detail["preset"]["settingsJson"] },
 			blocks.map(({ key: _k, ...b }) => ({ ...b, depth: Number(b.depth) || 0 })),
 		);
+		// 새 블록은 저장된 id를 받아 둠 (identifier로 짝지음)
+		if (saved) for (const b of blocks) if (!b.id) b.id = saved.blocks.find((x) => x.identifier === b.identifier)?.id ?? null;
 	}
 
 	const roleLabel: Record<string, string> = { system: "시스템", user: "사용자", assistant: "AI" };
@@ -179,10 +207,14 @@
 	}
 </script>
 
-<div class="bar">
-	<Button variant="ghost" onclick={oncancel}>취소</Button>
-	<Button variant="primary" loading={saving} disabled={!name.trim()} onclick={save}>저장</Button>
-</div>
+{#if autosave}
+	<p class="auto" class:warn={autoState === "failed"}>{autoState === "saving" ? "저장 중…" : autoState === "saved" ? "저장됨" : autoState === "failed" ? "저장 못 함 · 다시 고치면 또 시도" : autoState === "dirty" ? "고치는 중" : "고치면 저절로 저장됨"}</p>
+{:else}
+	<div class="bar">
+		<Button variant="ghost" onclick={oncancel}>취소</Button>
+		<Button variant="primary" loading={saving} disabled={!name.trim()} onclick={save}>저장</Button>
+	</div>
+{/if}
 
 {#if !quick}
 	<Group>
@@ -269,6 +301,14 @@
 </Group>
 
 <style>
+	.auto {
+		margin: 0;
+		font-size: var(--text-xs);
+		color: var(--text-faint);
+	}
+	.auto.warn {
+		color: var(--warning, #c98a1b);
+	}
 	.bar {
 		position: sticky;
 		top: 0;

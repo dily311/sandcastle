@@ -66,6 +66,8 @@ export const commands = {
 	 */
 	storeDroppedFile: (name: string, dataBase64: string, keep: boolean, options?: InvokeOptions) => __TAURI_INVOKE<string>("store_dropped_file", { name, dataBase64, keep }, options),
 	contextUsage: (conversationId: string, options?: InvokeOptions) => __TAURI_INVOKE<ContextUsage_Serialize>("context_usage", { conversationId }, options),
+	/**  메시지들을 화면용으로: 표시용 정규식 + {{char}}/{{user}} 이름. 순서대로, 마지막이 가장 최근 */
+	displayMessages: (conversationId: string, items: DisplayItem[], options?: InvokeOptions) => __TAURI_INVOKE<string[]>("display_messages", { conversationId, items }, options),
 	/**  대화 하나를 파일로 내보내기. format: "jsonl"(SillyTavern 채팅) | "txt"(읽기용 글) */
 	exportConversation: (id: string, format: string, path: string, options?: InvokeOptions) => __TAURI_INVOKE<number>("export_conversation", { id, format, path }, options),
 	getTask: (taskId: string, options?: InvokeOptions) => __TAURI_INVOKE<TaskInfo_Serialize>("get_task", { taskId }, options),
@@ -993,6 +995,12 @@ export type DialogueDoneEvent = {
 	fullMessage: string,
 	/**  full_message 안의 <cg>키</cg>가 가리키는 이미지 (등장 순서) */
 	images: ChatImageRef[],
+};
+
+/**  화면에 보일 메시지 (role, 원문) */
+export type DisplayItem = {
+	role: string,
+	content: string,
 };
 
 export type ErrorCategory = "ARCHIVE" | "NOT_FOUND" | "VALIDATION" | "DATABASE" | "AI_PROVIDER" | "IO" | "WINDOW" | "GAME" | "INTERNAL";

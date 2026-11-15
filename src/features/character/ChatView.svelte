@@ -37,6 +37,15 @@
 		if (!library.images[charId]) void library.loadImages(charId);
 	});
 
+	// 화면용 글 (표시용 정규식·{{char}}/{{user}} 이름). 메시지가 바뀔 때마다
+	$effect(() => {
+		const s = session;
+		if (!s) return;
+		void s.messages.map((m) => m.content);
+		const key = `${conv?.personaId}:${conv?.promptPresetId}`;
+		if (!s.busy) void s.refreshDisplay(key);
+	});
+
 	// 오른쪽 패널 탭은 타이틀바에 그려진다
 	$effect(() =>
 		panel.register([

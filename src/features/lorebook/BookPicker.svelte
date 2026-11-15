@@ -7,8 +7,14 @@
 
 	let { value, onchange, label, empty = "없음" }: { value: string[]; onchange: (ids: string[]) => void; label: string; empty?: string } = $props();
 
+	// 모르는 책이 붙어 있으면(다른 곳에서 새로 생김, 예: 캐릭터 카드 가져오기) 목록을 다시 받음
+	let reloaded = false;
 	$effect(() => {
-		if (!lorebook.loaded) void lorebook.load();
+		if (!lorebook.loaded) return void lorebook.load();
+		if (!reloaded && value.some((id) => !lorebook.book(id))) {
+			reloaded = true;
+			void lorebook.load();
+		}
 	});
 
 	const picked = $derived(value.map((id) => lorebook.book(id)).filter((b) => !!b));
