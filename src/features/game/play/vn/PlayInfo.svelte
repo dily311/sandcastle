@@ -1,35 +1,30 @@
 <script lang="ts">
-	import { BookOpen, ChevronDown, Clock3, CloudSun, Maximize2, MapPin, Minimize2, Music, Volume2, VolumeX } from "@lucide/svelte";
+	import { ChevronDown, Clock3, CloudSun, Film, MapPin, Music } from "@lucide/svelte";
 	import { formatGameTime } from "./playUtils";
 
-	// 플레이 화면 위쪽 도구줄: 왼쪽은 지금 상태(장소·날씨·시각을 한 상자에), 오른쪽은 보기 도구
-	// 지도·소지품·이동/행동은 오른쪽 패널로 옮겼음
+	// 무대 위에 떠 있는 정보 상자: 씬 · 장소 · 날씨 · 시각(누르면 시간 보내기)
+	// (예전 머리줄을 없애고 무대를 넓게. 지도·소지품·지난 대사는 오른쪽 패널)
 	type Props = {
+		sceneName: string | null;
 		locationName: string;
 		weatherName: string;
 		gameTime?: number;
 		canWait: boolean;
 		isLoading: boolean;
 		showWaitMenu: boolean;
-		isBgmMuted: boolean;
 		bgmBlocked: boolean;
-		focusMode: boolean;
-		/** 지난 대사 창이 열려 있음 */
-		backlogOpen: boolean;
 		onToggleWaitMenu: () => void;
 		onWait: (hours: number) => void;
-		onBacklog: () => void;
-		onToggleMute: () => void;
 		onResumeBgm: () => void;
-		onToggleFocus: () => void;
 	};
 	let p: Props = $props();
 	const waitDurations = [1, 3, 6, 12, 24];
 </script>
 
-<header class="toolbar">
+<div class="info" role="status" aria-label="지금 상태">
 	<div class="status">
 		<div class="state-box">
+			{#if p.sceneName}<span class="item scene" title="지금 씬"><Film /><b>{p.sceneName}</b></span><span class="sep" aria-hidden="true"></span>{/if}
 			<span class="item" title="지금 장소"><MapPin /><b>{p.locationName}</b></span>
 			{#if p.weatherName}<span class="sep" aria-hidden="true"></span><span class="item" title="날씨"><CloudSun />{p.weatherName}</span>{/if}
 			<span class="sep" aria-hidden="true"></span>
@@ -56,33 +51,22 @@
 		{#if p.bgmBlocked}<button class="g-chip unlock" onclick={p.onResumeBgm}><Music />배경음 재생</button>{/if}
 	</div>
 
-	<div class="tools">
-		<button class="g-icon" aria-label="지난 대사 (L)" title="지난 대사 (L)" aria-pressed={p.backlogOpen} onclick={p.onBacklog}><BookOpen /></button>
-		<button class="g-icon" aria-label={p.isBgmMuted ? "배경음 켜기" : "배경음 끄기"} title={p.isBgmMuted ? "배경음 켜기" : "배경음 끄기"} aria-pressed={p.isBgmMuted} onclick={p.onToggleMute}>
-			{#if p.isBgmMuted}<VolumeX />{:else}<Volume2 />{/if}
-		</button>
-		<button class="g-icon" aria-label={p.focusMode ? "집중 모드 끄기" : "집중 모드 (사이드바 숨김)"} title={p.focusMode ? "집중 모드 끄기" : "집중 모드 (사이드바 숨김)"} aria-pressed={p.focusMode} onclick={p.onToggleFocus}>
-			{#if p.focusMode}<Minimize2 />{:else}<Maximize2 />{/if}
-		</button>
-	</div>
-</header>
+</div>
 
 <style>
-	.toolbar {
-		position: relative;
-		z-index: 80;
+	.info {
+		position: absolute;
+		z-index: 30;
+		top: 14px;
+		left: 14px;
+		right: 14px;
 		display: flex;
-		align-items: center;
-		justify-content: space-between;
-		gap: 12px;
-		min-height: 52px;
-		padding: 8px 14px;
-		border-bottom: 1px solid var(--game-border-subtle);
-		background: var(--game-topbar-bg);
-		backdrop-filter: blur(12px);
+		pointer-events: none;
 	}
-	.status,
-	.tools {
+	.info > :global(*) {
+		pointer-events: auto;
+	}
+	.status {
 		display: flex;
 		align-items: center;
 		gap: 6px;
@@ -142,6 +126,8 @@
 		border: 1px solid var(--game-border);
 		border-radius: 999px;
 		background: var(--game-scene-label-bg);
+		box-shadow: var(--shadow-sm);
+		backdrop-filter: blur(12px);
 		color: var(--game-text-main);
 		font-size: 13px;
 	}
@@ -169,6 +155,9 @@
 		width: 14px;
 		height: 14px;
 		color: var(--game-text-muted);
+	}
+	.scene :global(svg) {
+		color: var(--game-accent);
 	}
 	.item :global(.more) {
 		width: 12px;

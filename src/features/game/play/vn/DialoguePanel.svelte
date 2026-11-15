@@ -1,5 +1,5 @@
 <script lang="ts">
-	import { ChevronLeft, ChevronRight, LogOut, Send } from "@lucide/svelte";
+	import { ChevronLeft, ChevronRight, ChevronsRight, Copy, EyeOff, LogOut, Maximize2, Minimize2, Play, ScrollText, Send, Square, Volume2, VolumeX } from "@lucide/svelte";
 	import type { Choice, StageLine } from "$features/game/types";
 	import { isNarration } from "./playUtils";
 
@@ -27,6 +27,17 @@
 		onInputChange: (value: string) => void;
 		onSubmitInput: () => void;
 		onStopTalk: () => void;
+		// ---- 대사창 아래 동작 줄 ----
+		autoAdvance: boolean;
+		bgmMuted: boolean;
+		focusMode: boolean;
+		onCopy: () => void;
+		onToggleAuto: () => void;
+		onSkip: () => void;
+		onHide: () => void;
+		onLog: () => void;
+		onToggleMute: () => void;
+		onToggleFocus: () => void;
 	};
 	let p: Props = $props();
 
@@ -41,6 +52,7 @@
 </script>
 
 {#if p.show}
+	<div class="dock">
 	<section class="dialogue" aria-live="polite">
 		{#if showLine}
 			{#if !narration && p.speakerName}<span class="speaker">{p.speakerName}</span>{/if}
@@ -83,7 +95,7 @@
 					<button class="g-btn primary" type="submit" disabled={p.isLoading || !p.inputValue.trim()}><Send />보내기</button>
 				</form>
 			{:else if !p.choices.length && !p.npcChoices.length}
-				<p class="idle">위쪽 <b>이동 / 행동</b>에서 다음 할 일을 고름</p>
+				<p class="idle">오른쪽 패널의 <b>이동·행동</b>에서 다음 할 일을 고름</p>
 			{/if}
 		{:else if p.isLoading}
 			<p class="idle">장면을 불러오는 중…</p>
@@ -104,16 +116,77 @@
 			</div>
 		{/if}
 	</section>
+	<!-- 대사창 아래 동작 줄 (메시지 도구처럼) -->
+	<div class="actions" role="toolbar" aria-label="대사 동작">
+		<button class="act" title="이 대사 복사" aria-label="이 대사 복사" disabled={!showLine} onclick={p.onCopy}><Copy /></button>
+		<button class="act" class:on={p.autoAdvance} title={p.autoAdvance ? "자동 넘김 멈추기" : "자동 넘김"} aria-label="자동 넘김" aria-pressed={p.autoAdvance} onclick={p.onToggleAuto}>
+			{#if p.autoAdvance}<Square />{:else}<Play />{/if}
+		</button>
+		<button class="act" title="이 장면 대사 끝까지 넘기기" aria-label="끝까지 넘기기" disabled={!p.isReadingScript} onclick={p.onSkip}><ChevronsRight /></button>
+		<span class="gap"></span>
+		<button class="act" title="지난 대사 (L)" aria-label="지난 대사" onclick={p.onLog}><ScrollText /></button>
+		<button class="act" title="대사창 숨기기 (H) · 무대를 누르면 다시 보임" aria-label="대사창 숨기기" onclick={p.onHide}><EyeOff /></button>
+		<button class="act" class:on={p.bgmMuted} title={p.bgmMuted ? "배경음 켜기" : "배경음 끄기"} aria-label="배경음" aria-pressed={p.bgmMuted} onclick={p.onToggleMute}>
+			{#if p.bgmMuted}<VolumeX />{:else}<Volume2 />{/if}
+		</button>
+		<button class="act" class:on={p.focusMode} title={p.focusMode ? "집중 모드 끄기" : "집중 모드 (사이드바 숨김)"} aria-label="집중 모드" aria-pressed={p.focusMode} onclick={p.onToggleFocus}>
+			{#if p.focusMode}<Minimize2 />{:else}<Maximize2 />{/if}
+		</button>
+	</div>
+	</div>
 {/if}
 
 <style>
-	.dialogue {
+	/* 대사창 + 아래 동작 줄 */
+	.dock {
 		position: absolute;
 		z-index: 40;
 		left: 50%;
-		bottom: 18px;
+		bottom: 10px;
 		transform: translateX(-50%);
 		width: min(920px, calc(100% - 28px));
+		display: flex;
+		flex-direction: column;
+		gap: 6px;
+	}
+	.actions {
+		display: flex;
+		align-items: center;
+		gap: 2px;
+		padding: 0 6px;
+	}
+	.gap {
+		flex: 1;
+	}
+	.act {
+		display: grid;
+		place-items: center;
+		width: 30px;
+		height: 28px;
+		border: none;
+		border-radius: 8px;
+		background: transparent;
+		color: var(--game-text-muted);
+		cursor: pointer;
+	}
+	.act :global(svg) {
+		width: 15px;
+		height: 15px;
+	}
+	.act:hover:not(:disabled) {
+		background: var(--game-surface-hover);
+		color: var(--game-text-main);
+	}
+	.act.on {
+		background: var(--game-accent-soft);
+		color: var(--game-accent-strong);
+	}
+	.act:disabled {
+		opacity: 0.4;
+		cursor: default;
+	}
+	.dialogue {
+		position: relative;
 		padding: 18px 20px 12px;
 		border: 1px solid var(--game-border);
 		border-radius: 18px;
@@ -289,7 +362,6 @@
 	}
 	@media (max-width: 620px) {
 		.dialogue {
-			bottom: 10px;
 			padding: 16px 14px 10px;
 		}
 		.line {

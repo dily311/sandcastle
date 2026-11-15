@@ -11,6 +11,7 @@
 	import { formatGameTime } from "./vn/playUtils";
 	import GameSessionTabs from "./GameSessionTabs.svelte";
 	import GameWorldTabs from "./GameWorldTabs.svelte";
+	import GameLogTab from "./GameLogTab.svelte";
 
 	let { gameId, sessionId }: { gameId: string; sessionId: string } = $props();
 	const shared = new Set(["settings", "context", "branches"]);
@@ -46,6 +47,8 @@
 
 {#if shared.has(panel.tab)}
 	<GameSessionTabs {gameId} {sessionId} />
+{:else if panel.tab === "log"}
+	<GameLogTab {sessionId} />
 {:else if panel.tab === "actions" || panel.tab === "map"}
 	<GameWorldTabs />
 {:else if panel.tab === "relations"}

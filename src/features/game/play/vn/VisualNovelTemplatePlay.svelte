@@ -4,11 +4,11 @@
 	import { call, commands } from "$shared/ipc/client";
 	import { layout } from "$app/layout.svelte";
 	import "../stage.css";
-	import Backlog from "./Backlog.svelte";
 	import StageView from "./StageView.svelte";
-	import PlayHeader from "./PlayHeader.svelte";
+	import PlayInfo from "./PlayInfo.svelte";
 	import { playBridge } from "../../runtime/playBridge.svelte";
 	import { panel } from "$app/panel.svelte";
+	import { toasts } from "$shared/stores/toast.svelte";
 	import DialoguePanel from "./DialoguePanel.svelte";
 	import ItemGainNotices from "./ItemGainNotices.svelte";
 	import {
@@ -28,7 +28,9 @@
 	type CurrentBgm = { mood: string; asset: AssetRef };
 
 	let isLoading = $state(false);
-	let showBacklog = $state(false);
+	// ---- 대사창 아래 동작 ----
+	let uiHidden = $state(false);
+	let autoAdvance = $state(false);
 	let showWaitMenu = $state(false);
 	let scriptLines = $state<StageLine[]>([]);
 	let lineIndex = $state(0);
@@ -376,13 +378,35 @@
 	}
 
 	function handleStageClick() {
-		if (!isLoading && !showBacklog) advanceLine();
+		if (uiHidden) return void (uiHidden = false);
+		if (!isLoading) advanceLine();
 	}
 
 	/** 지도·이동/행동·소지품은 오른쪽 패널 탭으로 */
 	function openPanelTab(id: string) {
 		panel.tab = id;
 		if (!panel.open) panel.toggle();
+	}
+
+	/** 자동 넘김: 대사 길이에 맞춰 잠시 뒤 다음 줄 (선택지·입력에서 멈춤) */
+	$effect(() => {
+		if (!autoAdvance || !isReadingScript || isLoading || uiHidden) return;
+		const len = currentLine?.text?.length ?? 0;
+		const t = setTimeout(advanceLine, Math.min(8000, 1600 + len * 45));
+		return () => clearTimeout(t);
+	});
+	/** 이 장면 대사를 끝까지 넘김 (선택지·입력이 나오는 곳까지) */
+	function skipScript() {
+		for (let i = 0; i < 500 && isReadingScript; i++) advanceLine();
+	}
+	function copyLine() {
+		const text = currentLine?.text ?? runtimeStore.currentScene?.description ?? "";
+		if (!text) return;
+		const who = speakerName ? `${speakerName}: ` : "";
+		void navigator.clipboard.writeText(who + text).then(
+			() => toasts.success("대사 복사함"),
+			() => toasts.error("복사 못 함"),
+		);
 	}
 
 	function toggleWaitMenu() {
@@ -403,16 +427,15 @@
 	onMount(initSession);
 
 	// ---- 키보드: Space/Enter/→ 다음, ← 이전, 1~9 선택지, Esc 패널 닫기, M 지도, I 소지품, L 지난 대사 ----
-	const openPanel = $derived(showBacklog ? "backlog" : null);
 	function closePanels() {
-		showBacklog = showWaitMenu = false;
+		showWaitMenu = false;
+		uiHidden = false;
 	}
 	function onKey(e: KeyboardEvent) {
 		const t = e.target as HTMLElement | null;
 		if (t && (t.tagName === "INPUT" || t.tagName === "TEXTAREA" || t.isContentEditable)) return;
 		if (e.ctrlKey || e.metaKey || e.altKey) return;
 		if (e.key === "Escape") return closePanels();
-		if (openPanel) return;
 		if (e.key === " " || e.key === "Enter" || e.key === "ArrowRight") {
 			if (isReadingScript) {
 				e.preventDefault();
@@ -428,7 +451,8 @@
 		} else if (e.key === "m") openPanelTab("map");
 		else if (e.key === "i") openPanelTab("items");
 		else if (e.key === "a") openPanelTab("actions");
-		else if (e.key === "l") showBacklog = true;
+		else if (e.key === "l") openPanelTab("log");
+		else if (e.key === "h") uiHidden = !uiHidden;
 	}
 	const focusMode = $derived(!layout.sidebar);
 </script>
@@ -436,38 +460,27 @@
 <svelte:window onkeydown={onKey} />
 
 <main class="vn-player game-theme">
-	<PlayHeader
-		locationName={runtimeStore.currentLocation?.name ?? "장소 불러오는 중"}
-		weatherName={runtimeStore.currentWeather?.name ?? ""}
-		gameTime={runtimeStore.gameTime}
-		canWait={runtimeStore.canWait}
-		{isLoading}
-		{showWaitMenu}
-		{isBgmMuted}
-		{bgmBlocked}
-		{focusMode}
-		backlogOpen={showBacklog}
-		onToggleWaitMenu={toggleWaitMenu}
-		onWait={(hours) => dispatch({ type: "advanceTime", minutes: hours * 60 })}
-		onBacklog={() => {
-			const next = !showBacklog;
-			closePanels();
-			showBacklog = next;
-		}}
-		onToggleMute={toggleBgmMute}
-		onResumeBgm={resumeBgm}
-		onToggleFocus={() => layout.toggleSidebar()}
-	/>
 
 	<section class="stage-area" aria-labelledby="scene-name">
 		<StageView onAdvance={handleStageClick} {standingOverrides} {focusedCharacterId} />
-		<div class="scene-label" id="scene-name">
-			<span class="scene-dot"></span>{runtimeStore.currentScene?.name ?? title}
-		</div>
-		{#if showBacklog}<Backlog {sessionId} onClose={() => (showBacklog = false)} />{/if}
+		{#if !uiHidden}
+			<PlayInfo
+				sceneName={runtimeStore.currentScene?.name ?? title}
+				locationName={runtimeStore.currentLocation?.name ?? "장소 불러오는 중"}
+				weatherName={runtimeStore.currentWeather?.name ?? ""}
+				gameTime={runtimeStore.gameTime}
+				canWait={runtimeStore.canWait}
+				{isLoading}
+				{showWaitMenu}
+				{bgmBlocked}
+				onToggleWaitMenu={toggleWaitMenu}
+				onWait={(hours) => dispatch({ type: "advanceTime", minutes: hours * 60 })}
+				onResumeBgm={resumeBgm}
+			/>
+		{/if}
 		<ItemGainNotices notices={itemGainNotices} />
 		<DialoguePanel
-			show={Boolean(currentLine || runtimeStore.currentScene || activeNpcId || scriptFinished)}
+			show={!uiHidden && Boolean(currentLine || runtimeStore.currentScene || activeNpcId || scriptFinished)}
 			line={currentLine}
 			{speakerName}
 			sceneDescription={runtimeStore.currentScene?.description ?? null}
@@ -489,7 +502,18 @@
 			onInputChange={(value) => (freeTextInput = value)}
 			onSubmitInput={() => submitNpcInput()}
 			onStopTalk={() => dispatch({ type: "stopTalk" })}
+			{autoAdvance}
+			bgmMuted={isBgmMuted}
+			{focusMode}
+			onCopy={copyLine}
+			onToggleAuto={() => (autoAdvance = !autoAdvance)}
+			onSkip={skipScript}
+			onHide={() => (uiHidden = true)}
+			onLog={() => openPanelTab("log")}
+			onToggleMute={toggleBgmMute}
+			onToggleFocus={() => layout.toggleSidebar()}
 		/>
+		{#if uiHidden}<p class="hidden-hint">무대를 누르면 대사창이 다시 보임</p>{/if}
 		{#if isLoading}<div class="busy" role="status"><span></span>처리 중</div>{/if}
 	</section>
 
@@ -520,27 +544,19 @@
 		background: var(--game-stage-bg);
 		isolation: isolate;
 	}
-	.scene-label {
+	.hidden-hint {
 		position: absolute;
-		z-index: 20;
-		top: 18px;
-		left: 22px;
-		display: flex;
-		align-items: center;
-		gap: 8px;
-		padding: 8px 12px;
-		border: 1px solid var(--game-border);
-		border-radius: 99px;
-		color: var(--game-text-main);
+		z-index: 30;
+		left: 50%;
+		bottom: 16px;
+		transform: translateX(-50%);
+		margin: 0;
+		padding: 6px 12px;
+		border-radius: 999px;
 		background: var(--game-scene-label-bg);
-		backdrop-filter: blur(10px);
+		color: var(--game-text-muted);
 		font-size: 12px;
-	}
-	.scene-dot {
-		width: 6px;
-		height: 6px;
-		border-radius: 50%;
-		background: var(--game-accent);
+		pointer-events: none;
 	}
 	.bgm-audio {
 		display: none;
@@ -573,12 +589,6 @@
 	@keyframes spin {
 		to {
 			transform: rotate(360deg);
-		}
-	}
-	@media (max-width: 620px) {
-		.scene-label {
-			top: 12px;
-			left: 12px;
 		}
 	}
 </style>
