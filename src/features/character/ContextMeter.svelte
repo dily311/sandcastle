@@ -16,10 +16,10 @@
 		<p class="faint">불러오는 중…</p>
 	{:else if usage.used == null}
 		<div class="bar"><i class="reserved" style:width={pct(usage.reserved)}></i></div>
-		<p class="faint">아직 보낸 적 없음 · 한도 {n(usage.limit)} 토큰</p>
+		<p class="faint">아직 보낸 적 없음 · 한도 {usage.limit ? `${n(usage.limit)} 토큰` : "제한 없음"}</p>
 	{:else}
 		<div class="nums">
-			<b class={tone}>{n(total)}</b><span>/ {n(usage.limit)} 토큰</span><em>{Math.round(ratio * 100)}%</em>
+			<b class={tone}>{n(total)}</b><span>/ {usage.limit ? `${n(usage.limit)} 토큰` : "제한 없음"}</span><em>{Math.round(ratio * 100)}%</em>
 		</div>
 		<div class="bar" role="img" aria-label="시스템 {usage.system}, 대화 {usage.history}, 응답 몫 {usage.reserved}, 한도 {usage.limit}">
 			<i class="system" style:width={pct(usage.system)}></i>

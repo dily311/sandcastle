@@ -1,0 +1,58 @@
+name: CI
+
+on:
+  push:
+    branches: [main, dev]
+  pull_request:
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  frontend:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 12.15.0
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - name: 타입 검사
+        run: pnpm check
+      - name: 테스트
+        run: pnpm test:run
+      - name: 빌드
+        run: pnpm build
+
+  rust:
+    # 대상 플랫폼이 Windows라 시스템 WebView 패키지 설치 없이 바로 빌드된다
+    runs-on: windows-latest
+    defaults:
+      run:
+        working-directory: src-tauri
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          components: clippy, rustfmt
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: src-tauri
+      # tauri::generate_context!가 frontendDist(../dist)를 요구한다
+      - name: 빈 dist 만들기
+        shell: bash
+        run: mkdir -p ../dist && touch ../dist/index.html
+      - name: 테스트
+        run: cargo test
+      - name: 프론트 바인딩이 최신인지 확인
+        shell: bash
+        run: |
+          cargo run --bin export-bindings
+          git diff --exit-code -- ../src/ipc/bindings.ts
+      - name: Clippy
+        run: cargo clippy --all-targets

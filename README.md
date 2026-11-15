@@ -10,22 +10,29 @@ Stack: Tauri 2 + Svelte 5 + Vite + TypeScript + Pure CSS + PixiJS 8 + Rust/reqwe
 - Game mode is a separate runtime that can consume the same conversation/state layer.
 - **View more details**: [Tech spec](./docs/Tech%20Spec.md)
 
-## Next production steps
-1. Add SQLite persistence through Tauri SQL plugin or a Rust SQLite layer.
-2. Move API keys to OS secure storage (Keychain/Keystore/Credential Manager).
-3. Add provider adapters instead of hard-coding OpenAI-compatible responses.
-4. Add streaming events from Rust -> Svelte.
-5. Add migrations, repository interfaces, conversation/message persistence.
-6. Add game manifest + scene/state schema and a sandboxed asset loader.
-7. Add import/export of characters, presets and games.
-8. Add Android-specific permissions, lifecycle and secure storage implementation.
-9. Add tests for domain, provider adapters, migrations and game state transitions.
+## 현재 상태
+- 저장소: SQLite(sqlx) + 파일 기반 마이그레이션 (`src-tauri/src/db/migrations`)
+- API 키: OS 보안 저장소(keyring). 프로바이더 HTTP 호출은 Rust 어댑터(OpenAI 호환, Claude, Gemini, Vertex AI, NovelAI)
+- 채팅 생성은 작업(Task)으로 실행되어 대화를 오가도 이어지고, 앱을 다시 켜면 중단된 생성을 복구할 수 있다
+- 게임 모드: 이벤트 구동 엔진, .tgame 패키지 가져오기/내보내기, 책갈피 분기
+- 남은 일과 보류한 결정은 `docs/`의 ADR 참고
 
-## Run
-npm install
-npm run tauri:dev
+## 실행
+```bash
+pnpm install
+pnpm tauri:dev
+```
 
-For Android, initialize the Tauri Android target and use the Tauri CLI Android commands appropriate to your installed SDK/NDK.
+Android는 Tauri Android 타깃을 초기화한 뒤 `pnpm android:dev`로 실행한다. 링커 설정은 `src-tauri/.cargo/config.toml`.
+
+## 검사
+```bash
+pnpm check        # Svelte·TS 타입 검사
+pnpm test:run     # 프론트 단위 테스트 (Vitest)
+cd src-tauri && cargo test && cargo clippy --all-targets
+```
+
+프론트 바인딩(`src/ipc/bindings.ts`)은 Rust 커맨드에서 생성된다. 커맨드를 바꾸면 `cargo run --bin export-bindings`로 다시 만든다. CI(`.github/workflows/ci.yml`)가 위 검사와 바인딩 최신 여부를 확인한다.
 
 ## License
 This project is licensed under the **GNU Affero General Public License v3.0 (AGPL-3.0)** - see the [LICENSE](LICENSE) file for details.

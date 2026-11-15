@@ -1,5 +1,5 @@
 //! 대화 기록 및 월드 인포, system role을 가져오는 매니저
-//! chat과 game 모드를 지원하기 위해 두 메소드가 존재
+//! 게임 NPC 대화의 컨텍스트는 game::npc가 따로 만든다
 //! return: ChatContext
 use crate::{
     db::{conn::DbPool, conversation::*}, error::Result, models::ai_service::{ChatContext, ContextRequest, HistoryItem},
@@ -40,10 +40,6 @@ impl ContextManager {
             history,
             extra_data: ().into(),
         })
-    }
-
-    pub async fn build_game_mode_context(&self, request: &ContextRequest) -> Result<ChatContext> {
-        todo!()
     }
 }
 

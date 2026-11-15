@@ -17,6 +17,7 @@
 	import LorebookPage from "$features/lorebook/LorebookPage.svelte";
 	import { fade, fly } from "svelte/transition";
 	import { panel } from "./panel.svelte";
+	import { recoverInterruptedChats } from "$features/character/recovery";
 
 	let ready = $state(false);
 
@@ -47,6 +48,7 @@
 		await theme.init();
 		logs.info("app", "시작");
 		ready = true;
+		void recoverInterruptedChats();
 	});
 </script>
 

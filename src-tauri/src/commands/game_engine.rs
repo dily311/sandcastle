@@ -3,24 +3,23 @@
 //!
 //! 세션(game_player_sessions)=책 한 권, 세이브(game_saves)=그 책의 책갈피(일지 seq 위치 + 스냅샷).
 //! 화면 흐름: 세션 목록(list_sessions) → continue_game(session_id)로 그 책을 이어서 플레이.
-//! TODO: 오래된 책갈피 불러오기(분기/fork)는 db에 세션+일지+대화+이벤트 로그를 seq까지 복사하는
-//!   함수가 생기면 load_save로 추가한다.
+//! 오래된 책갈피 불러오기는 load_save가 분기(game::session::fork_session)한다.
 //!
 //! ⚠ AppState에 active_runtime: tokio::sync::Mutex<Option<GameRuntime>>가 필요하다.
 //! std Mutex가 아닌 이유: "락 잡고 → dispatch → 저장(async)"을 한 번에 원자적으로 하려면
 //! 가드를 .await 너머로 들고 갈 수 있어야 한다.
 use crate::state::AppState;
 use crate::db::game::{
-    delete_game_player_sessions, get_all_game_conversations, get_all_game_player_sessions, get_all_game_save, get_game_journal_lookup, get_game_messages_lookup, get_game_player_sessions, get_game_save, upsert_game_journal, upsert_game_save,
+    delete_game_player_sessions, get_all_game_conversations, get_all_game_player_sessions, get_all_game_save, get_game_journal_lookup, get_game_messages_lookup, get_game_player_sessions, get_game_save, upsert_game_save,
 };
 use crate::error::AppError;
 use crate::game::guard::{check_slot, current_game_id};
-use crate::game::runtime::{GameCommand, GameEvent, GameRepository, GameResponse, GameRuntime, SqlxGameRepository};
+use crate::game::runtime::{GameCommand, GameRepository, GameResponse, GameRuntime, SqlxGameRepository};
 use crate::models::game::{GameConversations, GameJournal, GameMessages, GamePlayerSessions, GameSave, GameSaveInput};
 use crate::game::transcript::{self, ContinueGameResponse, TranscriptPage};
 use crate::models::settings::AppSetting;
 use crate::sys::settings::SettingsState;
-use tauri::{AppHandle, State};
+use tauri::{ipc::Channel, AppHandle, State};
 
 const MAX_SAVE_BYTES: usize = 256 * 1024;
 
@@ -106,7 +105,7 @@ fn history_limit(requested: Option<u32>) -> usize {
     requested.map_or(DEFAULT_HISTORY, |n| (n as usize).clamp(1, MAX_HISTORY))
 }
 
-async fn open_session(state: &AppState, game_id: &str, session_id: &str, history: usize) -> Result<ContinueGameResponse, AppError> {
+async fn open_session(state: &AppState, _game_id: &str, session_id: &str, history: usize) -> Result<ContinueGameResponse, AppError> {
     let repo = SqlxGameRepository::new(&state.db);
     let definition = crate::game::guard::current_definition(state)?;
     let runtime = GameRuntime::load(&repo, definition, session_id).await.map_err(|e| AppError::database(e.to_string()))?;
@@ -283,8 +282,10 @@ pub async fn npc_say(
     settings: State<'_, SettingsState<AppSetting>>,
     character_id: String,
     input: String,
+    on_event: Channel<crate::models::ai_service::StreamPayload>,
 ) -> Result<crate::game::npc::NpcReply, AppError> {
-    crate::game::npc::say(app, &state, &settings, character_id, input).await
+    // on_event: 기다리는 동안 보여줄 미리보기(태그를 걸러낸 글). 최종 대사·연출은 반환값
+    crate::game::npc::say(app, &state, &settings, character_id, input, Some(on_event)).await
 }
 
 /// 씬 입력: 씬이 열려 있는 동안 AI가 서술자로 장면을 이어간다. 선택지의 ChoiceMade 이벤트에 continuesScene=true가
@@ -297,8 +298,9 @@ pub async fn scene_say(
     state: State<'_, AppState>,
     settings: State<'_, SettingsState<AppSetting>>,
     input: String,
+    on_event: Channel<crate::models::ai_service::StreamPayload>,
 ) -> Result<crate::game::npc::NpcReply, AppError> {
-    crate::game::npc::scene_say(app, &state, &settings, input).await
+    crate::game::npc::scene_say(app, &state, &settings, input, Some(on_event)).await
 }
 
 // =======================================
@@ -357,7 +359,7 @@ pub async fn game_context_usage(
     session_id: String,
 ) -> Result<crate::commands::chat::ContextUsage, AppError> {
     use crate::models::ai_service::PromptRole;
-    use crate::service::{chat::chat_manager::{current_conv_request, CONTEXT_LIMIT, LAST_GAME_PROMPT}, prompt::prompt_manager::{chat_options_from, context_limit_from, PromptManager}};
+    use crate::service::{chat::chat_manager::{current_conv_request, LAST_GAME_PROMPT}, prompt::prompt_manager::{DEFAULT_CONTEXT_LIMIT as CONTEXT_LIMIT, chat_options_from, context_limit_from, PromptManager}};
     let (_, preset) = crate::db::game::get_game_session_options(&state.db, &session_id).await?;
     let fallback = current_conv_request(&settings).map(|r| r.preset_id).unwrap_or_default();
     let preset_id = preset.filter(|s| !s.is_empty()).or(Some(fallback).filter(|s| !s.is_empty()));

@@ -9,7 +9,7 @@ use crate::{
         conversation::{ChatTurn, Conversation, ConversationFolder, ConversationOptions},
         settings::AppSetting,
     },
-    service::chat::chat_manager::{cancel_turn, ChatManager, TurnKind},
+    service::chat::chat_task::{self, ChatJob},
     state::AppState,
     sys::settings::SettingsState,
 };
@@ -39,46 +39,34 @@ fn required(name: &str) -> Result<String> {
 // ---------- 보내기 ----------
 
 /// 입력을 저장하고 응답을 만든다. `text`가 비었으면 이어서 응답만 (이어쓰기).
+/// 생성은 작업(ChatStream)으로 돌아서 다른 대화로 옮겨 가도 계속되고, 앱이 꺼지면 다시 시도할 수 있다.
 /// 응답 조각은 `on_event`로 흐르고, 저장된 메시지는 반환값으로 온다.
 #[tauri::command]
 #[specta::specta]
 pub async fn chat_send(
     app: AppHandle,
-    state: State<'_, AppState>,
-    settings: State<'_, SettingsState<AppSetting>>,
     conversation_id: String,
     text: String,
     attachments: Vec<String>,
     on_event: Channel<StreamPayload>,
 ) -> Result<ChatTurn> {
-    ChatManager
-        .turn(&app, &state.db, &settings, &conversation_id, TurnKind::Send(text, attachments), Some(on_event))
-        .await
-        .map_err(into_app_error)
+    let saved = chat_task::run(&app, &conversation_id, ChatJob::Send { text, attachments }, on_event).await?;
+    chat_task::into_turn(saved)
 }
 
 /// 마지막 AI 메시지 다시 만들기. `swipe`면 스와이프로 쌓고, 아니면 스와이프를 버리고 바꾼다.
 #[tauri::command]
 #[specta::specta]
-pub async fn chat_regenerate(
-    app: AppHandle,
-    state: State<'_, AppState>,
-    settings: State<'_, SettingsState<AppSetting>>,
-    conversation_id: String,
-    swipe: bool,
-    on_event: Channel<StreamPayload>,
-) -> Result<ChatTurn> {
-    ChatManager
-        .turn(&app, &state.db, &settings, &conversation_id, TurnKind::Regenerate { swipe }, Some(on_event))
-        .await
-        .map_err(into_app_error)
+pub async fn chat_regenerate(app: AppHandle, conversation_id: String, swipe: bool, on_event: Channel<StreamPayload>) -> Result<ChatTurn> {
+    let saved = chat_task::run(&app, &conversation_id, ChatJob::Regenerate { swipe }, on_event).await?;
+    chat_task::into_turn(saved)
 }
 
 /// 진행 중인 응답 멈추기 (받은 데까지는 저장됨). 멈출 게 있었으면 true
 #[tauri::command]
 #[specta::specta]
-pub fn chat_cancel(conversation_id: String) -> bool {
-    cancel_turn(&conversation_id)
+pub async fn chat_cancel(app: AppHandle, conversation_id: String) -> Result<bool> {
+    chat_task::cancel(&app, &conversation_id).await
 }
 
 /// 이 AI 메시지를 만들 때 실제로 보낸 프롬프트 (없으면 null: 가져온 메시지, 취소된 응답 등)
@@ -222,7 +210,7 @@ pub async fn context_usage(
     settings: State<'_, SettingsState<AppSetting>>,
     conversation_id: String,
 ) -> Result<ContextUsage> {
-    use crate::service::{chat::chat_manager::{current_conv_request, CONTEXT_LIMIT}, prompt::prompt_manager::{chat_options_from, context_limit_from, PromptManager}};
+    use crate::service::{chat::chat_manager::current_conv_request, prompt::prompt_manager::{DEFAULT_CONTEXT_LIMIT as CONTEXT_LIMIT, chat_options_from, context_limit_from, PromptManager}};
     use crate::models::ai_service::PromptRole;
 
     let conv = conversation::get_conversation(&state.db, &conversation_id).await?;

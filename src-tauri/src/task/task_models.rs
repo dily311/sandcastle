@@ -131,6 +131,9 @@ pub enum TaskOutput {
     /// DB에 저장된 메시지
     #[serde(rename_all = "camelCase")]
     Message { message_id: String, content: String },
+    /// DB에 저장된 메시지 여러 개 (저장 순서대로)
+    #[serde(rename_all = "camelCase")]
+    Messages { message_ids: Vec<String> },
     #[serde(rename_all = "camelCase")]
     Image { asset_id: String },
     #[serde(rename_all = "camelCase")]
@@ -222,6 +225,24 @@ impl From<AppError> for TaskError {
             code: error_code_str(res.code),
             message: res.message,
             retryable: res.retryable,
+        }
+    }
+}
+
+/// 작업 결과를 기다린 커맨드가 프론트에 원래 오류 코드로 돌려줄 때
+impl From<TaskErrorInfo> for AppError {
+    fn from(info: TaskErrorInfo) -> Self {
+        let code: ErrorCode = serde_json::from_value(serde_json::Value::String(info.code)).unwrap_or(ErrorCode::InternalError);
+        let message = info.message;
+        match code {
+            ErrorCode::ResourceNotFound => AppError::NotFound { code, message },
+            ErrorCode::InvalidInput
+            | ErrorCode::TaskInvalidTransition
+            | ErrorCode::TaskExecutorMissing
+            | ErrorCode::TaskCancelled
+            | ErrorCode::TaskInterrupted => AppError::Validation { code, message, details: None },
+            ErrorCode::DatabaseError | ErrorCode::DatabaseLocked => AppError::Database { code, message },
+            _ => AppError::AiProvider { code, message, retryable: info.retryable, details: None },
         }
     }
 }

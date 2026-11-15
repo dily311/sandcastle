@@ -33,6 +33,7 @@ pub mod protocol;
 pub mod runtime;
 pub mod session;
 pub mod stage;
+pub mod stream_filter;
 pub mod template;
 pub mod transcript;
 pub mod validate;

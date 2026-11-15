@@ -2,7 +2,7 @@ use crate::{
     error::{AppError, ErrorCode, Result}, models::settings::{
         AppSetting, CssTheme, CssThemeMeta, FeatureSetting, SettingsDomain, ThemeSetting,
     }, sys::{
-        settings::{SettingsState, apply_patch, load, save}, themes::ThemeManager,
+        settings::{SettingsState, apply_patch, save}, themes::ThemeManager,
     },
 };
 use serde_json::json;

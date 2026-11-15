@@ -36,7 +36,7 @@ use crate::{
 };
 
 /// 동시에 실행할 수 있는 작업 수 (외부 API 호출 폭주 방지)
-const DEFAULT_CONCURRENCY: usize = 2;
+const DEFAULT_CONCURRENCY: usize = 4;
 /// 재시도 대기 기본값 (attempt마다 2배, 최대 30초)
 const DEFAULT_RETRY_BASE_DELAY: Duration = Duration::from_secs(1);
 const MAX_RETRY_DELAY: Duration = Duration::from_secs(30);
@@ -380,13 +380,19 @@ impl TaskManager {
                 TaskReporter::new(task_id.to_string(), self.events.clone()),
             );
 
+            let run = AssertUnwindSafe(executor.execute(&task, &ctx)).catch_unwind();
+            tokio::pin!(run);
             let outcome = tokio::select! {
                 biased;
-                _ = cancel.cancelled() => Err(TaskError::Cancelled),
-                r = AssertUnwindSafe(executor.execute(&task, &ctx)).catch_unwind() => match r {
-                    Ok(r) => r,
-                    Err(_) => Err(TaskError::failed(ErrorCode::InternalError, "작업 실행 중 패닉이 발생했습니다", false)),
+                _ = cancel.cancelled() => match executor.cancel_grace() {
+                    // 협조적 취소: Executor가 마무리(부분 결과 저장 등)할 시간을 준다
+                    Some(grace) => match tokio::time::timeout(grace, &mut run).await {
+                        Ok(r) => unwind_result(r),
+                        Err(_) => Err(TaskError::Cancelled),
+                    },
+                    None => Err(TaskError::Cancelled),
                 },
+                r = &mut run => unwind_result(r),
             };
 
             match outcome {
@@ -534,6 +540,10 @@ impl TaskManager {
 // =======================================
 // 도우미
 // =======================================
+
+fn unwind_result(r: std::thread::Result<Result<TaskOutput, TaskError>>) -> Result<TaskOutput, TaskError> {
+    r.unwrap_or_else(|_| Err(TaskError::failed(ErrorCode::InternalError, "작업 실행 중 패닉이 발생했습니다", false)))
+}
 
 fn lock<T>(m: &Mutex<T>) -> MutexGuard<'_, T> {
     m.lock().unwrap_or_else(|e| e.into_inner())

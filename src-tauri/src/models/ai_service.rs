@@ -1,5 +1,5 @@
 use crate::{
-    error::{AppError, AppErrorResponse}, models::conversation::{Message, WorldInfoEntry},
+    error::AppErrorResponse, models::conversation::WorldInfoEntry,
 };
 use serde::{Deserialize, Serialize};
 use serde_json::Value;

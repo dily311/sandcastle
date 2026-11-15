@@ -2122,7 +2122,7 @@ pub async fn forked_game_save<'e, E>(executor: E, session_id: &str, new_session_
     Ok(())
 }
 
-pub async fn upsert_game_save<'e, E>(executor: E, game_id: &str,input: &GameSaveInput, snapshot: &str) -> Result<(), Error> where E: Executor<'e, Database = Sqlite> {
+pub async fn upsert_game_save<'e, E>(executor: E, _game_id: &str, input: &GameSaveInput, snapshot: &str) -> Result<(), Error> where E: Executor<'e, Database = Sqlite> {
     let now = chrono::Utc::now().timestamp_millis();
     sqlx::query(
         r#"
@@ -2142,18 +2142,29 @@ pub async fn upsert_game_save<'e, E>(executor: E, game_id: &str,input: &GameSave
         )
         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
         ON CONFLICT(session_id, slot_number) DO UPDATE SET
+            name = excluded.name,
+            seq = excluded.seq,
+            current_scene_id = excluded.current_scene_id,
+            current_map_id = excluded.current_map_id,
+            current_zone_id = excluded.current_zone_id,
+            current_location_id = excluded.current_location_id,
+            current_weather_id = excluded.current_weather_id,
+            game_time = excluded.game_time,
             state_snapshot = excluded.state_snapshot,
             updated_at = excluded.updated_at
         "#,
     )
-    .bind(game_id)
+    // 같은 슬롯에 덮어쓰면 위치(seq)와 상태도 새 시점으로 바뀌어야 분기가 올바른 지점에서 갈라진다
+    .bind(&input.name)
+    .bind(input.seq)
+    .bind(&input.session_id)
     .bind(input.slot_number)
     .bind(&input.current_scene_id)
     .bind(&input.current_map_id)
     .bind(&input.current_zone_id)
     .bind(&input.current_location_id)
-    .bind(&input.game_time)
     .bind(&input.current_weather_id)
+    .bind(input.game_time)
     .bind(snapshot)
     .bind(now)
     .execute(executor)

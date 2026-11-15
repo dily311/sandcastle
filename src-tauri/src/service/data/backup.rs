@@ -296,7 +296,7 @@ pub fn apply_pending_restore(app_data_dir: &Path) -> Result<bool> {
 
     // 옮긴 것 기록 (중간에 실패하면 되돌림)
     let mut moved: Vec<(PathBuf, PathBuf)> = vec![];
-    let mut mv = |from: PathBuf, to: PathBuf, moved: &mut Vec<(PathBuf, PathBuf)>| -> Result<()> {
+    let mv = |from: PathBuf, to: PathBuf, moved: &mut Vec<(PathBuf, PathBuf)>| -> Result<()> {
         if from.exists() {
             std::fs::rename(&from, &to)?;
             moved.push((from, to));

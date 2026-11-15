@@ -375,19 +375,32 @@ impl GameRuntime {
         let mut frontier: Vec<GameEvent> = std::mem::take(&mut self.queue);
         let mut all_events = Vec::new();
         let mut depth = 0usize;
+        // 마지막 라운드에서 이벤트를 낸 시스템 (전파가 끊길 때 어디서 맴도는지 알리기 위함)
+        let mut producers: Vec<&'static str> = Vec::new();
 
         while !frontier.is_empty() {
             all_events.extend(frontier.iter().cloned());
             depth += 1;
             if depth > MAX_EVENT_DEPTH {
-                // TODO: 여기 도달하면 로깅 — 이벤트가 몇 단계 넘게 서로를 계속 트리거하고
-                //   있다는 뜻이라, 데이터(트리거 조건 등) 설계를 점검해야 한다는 신호다.
+                // 이벤트가 서로를 계속 트리거하고 있다 → 데이터(트리거 조건·효과) 설계를 점검해야 한다는 신호
+                eprintln!(
+                    "[game] 이벤트 전파가 {MAX_EVENT_DEPTH}라운드를 넘어 끊었습니다 (게임 {}, 세션 {}). 남은 이벤트 {}개, 마지막으로 낸 시스템: {}",
+                    self.definition.project.id,
+                    self.state.session_id,
+                    frontier.len(),
+                    producers.join(", "),
+                );
                 break;
             }
             let mut next = Vec::new();
+            producers.clear();
             for event in &frontier {
                 for system in systems::all() {
-                    next.extend(system.handle_event(&self.definition, &mut self.state, event, &mut self.rng));
+                    let produced = system.handle_event(&self.definition, &mut self.state, event, &mut self.rng);
+                    if !produced.is_empty() && !producers.contains(&system.name()) {
+                        producers.push(system.name());
+                    }
+                    next.extend(produced);
                 }
             }
             frontier = next;

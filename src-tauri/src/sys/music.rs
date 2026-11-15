@@ -9,7 +9,7 @@ use crate::{
 };
 use futures::{
     lock::Mutex,
-    stream::{self, StreamExt},
+    stream::StreamExt,
 };
 use lofty::picture::Picture;
 use lofty::{

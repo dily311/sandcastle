@@ -1,3 +1,5 @@
+// CSP에 unsafe-eval이 없어서 Pixi의 셰이더 코드 생성을 eval 없는 구현으로 바꾼다 (tauri.conf.json의 csp)
+import "pixi.js/unsafe-eval";
 import { Application } from "pixi.js";
 import { CharacterManager } from "./CharaterManager";
 import { behaviors } from "../behaviors";

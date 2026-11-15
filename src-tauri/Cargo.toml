@@ -72,9 +72,6 @@ specta = { version = "=2.0.0-rc.28", features = ["derive", "serde_json"] }
 specta-typescript = "=0.0.15"
 notify = "6.1" # 파일 시스템 감시
 
-[target.aarch64-linux-android]
-linker = "aarch64-linux-android21-clang"
-
 [target.'cfg(target_os = "windows")'.dependencies]
 windows = { version = "0.58", features = [
     "Win32_UI_WindowsAndMessaging",

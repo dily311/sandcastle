@@ -1,7 +1,7 @@
 use crate::{error::Result, widget::interaction::MouseTrackerState};
 use tauri::{
     menu::{Menu, MenuItem},
-    tray::{self, TrayIconBuilder},
+    tray::TrayIconBuilder,
     AppHandle, Emitter, Manager, Runtime, WebviewUrl, WebviewWindow, WebviewWindowBuilder,
 };
 const WIDGET_LABEL: &str = "widget";

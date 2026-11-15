@@ -1,5 +1,7 @@
 <script lang="ts">
 	import { onMount, tick } from "svelte";
+	import { Channel } from "@tauri-apps/api/core";
+	import type { StreamPayload } from "$ipc/bindings";
 	import type { AssetRef, GameCommand, GameJournal, NpcReply, StageLine } from "$features/game/types";
 	import { call, commands } from "$shared/ipc/client";
 	import { layout } from "$app/layout.svelte";
@@ -28,6 +30,8 @@
 	type CurrentBgm = { mood: string; asset: AssetRef };
 
 	let isLoading = $state(false);
+	/** AI 응답을 기다리는 동안 받은 글 (태그는 백엔드가 걸러 보냄). 응답이 오면 비운다 */
+	let streamingText = $state("");
 	// ---- 대사창 아래 동작 ----
 	let uiHidden = $state(false);
 	let autoAdvance = $state(false);
@@ -318,13 +322,16 @@
 			if (runtimeStore?.activeNpcId !== characterId) {
 				await runtimeStore.dispatchCommand({ type: "talk", gameCharacterId: characterId });
 			}
-			const reply = (await call(commands.npcSay(characterId, input), { source: "game" })) as unknown as NpcReply;
+			const channel = new Channel<StreamPayload>();
+			channel.onmessage = (p) => (streamingText += p.chunk);
+			const reply = (await call(commands.npcSay(characterId, input, channel), { source: "game" })) as unknown as NpcReply;
 			applyReply(reply);
 		} catch (error) {
 			console.error("NPC message failed:", error);
 			freeTextInput = input;
 			hideSceneChoicesDuringTalk = false;
 		} finally {
+			streamingText = "";
 			isLoading = false;
 		}
 	}
@@ -543,6 +550,7 @@
 			{scriptFinished}
 			{isReadingScript}
 			{isLoading}
+			{streamingText}
 			onStageClick={handleStageClick}
 			onPrevious={previousLine}
 			onAdvance={advanceLine}

@@ -8,11 +8,8 @@ use crate::{
     models::{
         ai_service::StreamPayload,
         conversation::{Message, PhoneContact},
-        settings::AppSetting,
     },
-    service::chat::chat_manager::ChatManager,
     state::AppState,
-    sys::settings::SettingsState,
 };
 
 fn who<'a>(kind: &'a str, id: &'a str) -> Result<Who<'a>> {
@@ -77,15 +74,6 @@ pub async fn set_phone_contact_status(
 /// 엿보기: 캐릭터 폰의 대화를 AI가 두 사람 몫 모두 이어서 씀. 새로 저장된 메시지들을 돌려준다
 #[tauri::command]
 #[specta::specta]
-pub async fn phone_peek(
-    app: AppHandle,
-    state: State<'_, AppState>,
-    settings: State<'_, SettingsState<AppSetting>>,
-    conversation_id: String,
-    on_event: Channel<StreamPayload>,
-) -> Result<Vec<Message>> {
-    ChatManager
-        .peek(&app, &state.db, &settings, &conversation_id, Some(on_event))
-        .await
-        .map_err(crate::commands::chat::into_app_error)
+pub async fn phone_peek(app: AppHandle, conversation_id: String, on_event: Channel<StreamPayload>) -> Result<Vec<Message>> {
+    crate::service::chat::chat_task::run(&app, &conversation_id, crate::service::chat::chat_task::ChatJob::Peek, on_event).await
 }

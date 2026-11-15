@@ -3,6 +3,7 @@
 import { Channel } from "@tauri-apps/api/core";
 import type { Message_Serialize, StreamPayload } from "$ipc/bindings";
 import { call, commands } from "$shared/ipc/client";
+import { onEvent } from "$shared/ipc/events";
 import { library } from "./library.svelte";
 
 export type Message = Message_Serialize;
@@ -33,6 +34,22 @@ export function metaOf(m: Message): MessageMeta {
 
 const src = { source: "chat" };
 
+// 열려 있는 대화들. 이 화면이 기다리지 않은 응답(앱 재시작 후 다시 만든 응답 등)이 저장되면 새로 불러온다.
+const open = new Set<WeakRef<ChatSession>>();
+let listening = false;
+function watchDone() {
+	if (listening) return;
+	listening = true;
+	void onEvent<{ conversationId: string }>("chat:dialogue:done", ({ conversationId }) => {
+		for (const ref of open) {
+			const s = ref.deref();
+			if (!s) open.delete(ref);
+			else if (s.convId === conversationId && !s.busy) void s.load().catch(() => {});
+		}
+		void library.refresh(conversationId);
+	});
+}
+
 /** 진행 중인 응답 */
 interface Live {
 	/** send: 새 응답 / regenerate: 기존 메시지 다시 만들기 / peek: 폰 엿보기 (AI가 두 사람 몫을 모두 씀) */
@@ -54,7 +71,10 @@ export class ChatSession {
 	display = $state<Record<string, string>>({});
 	private displaySig = "";
 
-	constructor(readonly convId: string) {}
+	constructor(readonly convId: string) {
+		open.add(new WeakRef(this));
+		watchDone();
+	}
 
 	/** 메시지가 바뀌면 화면용 글을 다시 받음 (화면의 $effect에서 부름) */
 	async refreshDisplay(key = "") {

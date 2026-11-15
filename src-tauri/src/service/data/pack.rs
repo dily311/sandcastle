@@ -341,7 +341,7 @@ async fn import_pack_inner(
 ) -> Result<PackImportSummary> {
     let mut warnings = vec![];
     let mut archive = open_archive(pack_path)?;
-    let mut extract = |name: &str, archive: &mut zip::ZipArchive<std::fs::File>| -> Result<PathBuf> {
+    let extract = |name: &str, archive: &mut zip::ZipArchive<std::fs::File>| -> Result<PathBuf> {
         let out = tmp.join(safe_relative(name)?);
         extract_file(archive, name, &out)?;
         Ok(out)

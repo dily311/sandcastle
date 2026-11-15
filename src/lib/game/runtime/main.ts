@@ -28,12 +28,11 @@
 //                             │
 //                        Rust Engine
 
+// 보류(Deferred): 외부 HTML/JS 게임용 iframe SDK. 지금 플레이 화면은 Svelte가 직접 그린다.
+// 빌드 입력(game-runtime.html)에서 빠져 있고, SDK를 다시 시작할 때 이 파일에서 이어간다.
 import { waitForInit } from "./GameApiClient";
 
-async function run() {
-	const inti = await waitForInit();
-
-	while (true) {}
+export async function run() {
+	const init = await waitForInit();
+	return init;
 }
-
-run();

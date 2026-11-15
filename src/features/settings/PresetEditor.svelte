@@ -50,6 +50,9 @@
 	let temperature = $state(numStr(pick("temperature", "temp_openai")));
 	let maxTokens = $state(numStr(pick("max_tokens", "maxTokens", "openai_max_tokens")));
 	let contextSize = $state(numStr(pick("context_size", "contextSize", "openai_max_context")));
+	// 월드인포 비율: 저장은 0~1, 화면은 %
+	const wi0 = pick("world_info_ratio", "worldInfoRatio", "world_info_budget");
+	let worldInfoPercent = $state(typeof wi0 === "number" ? String(Math.round(wi0 > 1 ? Math.min(wi0, 100) : wi0 * 100)) : "");
 	let topP = $state(numStr(pick("top_p", "topP")));
 	let topK = $state(numStr(pick("top_k", "topK")));
 	let stream = $state(pick("stream", "stream_openai", "streaming") !== false);
@@ -147,7 +150,7 @@
 	}
 
 	// ---- 자동 저장: 값이 바뀌고 잠시 멈추면 ----
-	const snapshot = () => JSON.stringify([name, description, temperature, maxTokens, contextSize, topP, topK, stream, blocks.map(({ key: _k, id: _i, ...b }) => b)]);
+	const snapshot = () => JSON.stringify([name, description, temperature, maxTokens, contextSize, worldInfoPercent, topP, topK, stream, blocks.map(({ key: _k, id: _i, ...b }) => b)]);
 	let lastSaved = snapshot();
 	let autoState = $state<"" | "dirty" | "saving" | "saved" | "failed">("");
 	$effect(() => {
@@ -180,6 +183,11 @@
 		put("temperature", num(temperature));
 		put("max_tokens", num(maxTokens));
 		put("context_size", num(contextSize));
+		const wi = num(worldInfoPercent);
+		put("world_info_ratio", wi === undefined ? undefined : Math.min(Math.max(wi, 0), 100) / 100);
+		// 가져온 프리셋의 퍼센트 키는 화면 값으로 대신한다
+		delete settings.worldInfoRatio;
+		delete settings.world_info_budget;
 		put("top_p", num(topP));
 		put("top_k", num(topK));
 		put("stream", stream);
@@ -227,7 +235,8 @@
 	<div class="sliders">
 		<Slider label="온도" hint="높을수록 다양하고 낮을수록 일정함" bind:value={temperature} min={0} max={2} step={0.05} fallback={1} unsetLabel="공급자 기본" format={(n) => n.toFixed(2)} />
 		<Slider label="응답 길이 (토큰)" hint="AI가 한 번에 쓰는 최대 길이" bind:value={maxTokens} min={64} max={8192} step={64} fallback={1024} unsetLabel="1,024" format={(n) => n.toLocaleString()} />
-		<Slider label="컨텍스트 크기 (토큰)" hint="넘치면 오래된 대화부터 뺌. 0은 제한 없음" bind:value={contextSize} min={0} max={200000} step={1024} fallback={0} unsetLabel="제한 없음" format={(n) => (n ? n.toLocaleString() : "제한 없음")} />
+		<Slider label="컨텍스트 크기 (토큰)" hint="넘치면 오래된 대화부터 뺌. 0은 제한 없음" bind:value={contextSize} min={0} max={200000} step={1024} fallback={8192} unsetLabel="기본 (8,192)" format={(n) => (n ? n.toLocaleString() : "제한 없음")} />
+		<Slider label="월드인포 비율 (%)" hint="고정 프롬프트를 뺀 나머지 중 월드인포에 줄 몫. 남는 만큼 대화 기록이 들어감" bind:value={worldInfoPercent} min={0} max={100} step={5} fallback={50} unsetLabel="기본 (50%)" format={(n) => `${n}%`} />
 		<Slider label="Top P" hint="확률이 높은 낱말 몇 %에서만 고름" bind:value={topP} min={0} max={1} step={0.01} fallback={1} unsetLabel="공급자 기본" format={(n) => n.toFixed(2)} />
 		<Slider label="Top K" hint="후보 낱말을 몇 개까지 볼지. 0은 끔" bind:value={topK} min={0} max={200} step={1} fallback={0} unsetLabel="공급자 기본" format={(n) => (n ? String(n) : "끔")} />
 	</div>

@@ -375,3 +375,57 @@ async fn wait_until_status(manager: &TaskManager, id: &str, status: TaskStatus) 
     }
     panic!("{id}가 {status} 상태가 되지 않음");
 }
+
+/// 취소 유예가 있는 Executor: 취소 신호를 받으면 받은 데까지 정리해서 돌려준다
+struct GracefulExecutor;
+
+#[async_trait::async_trait]
+impl TaskExecutor for GracefulExecutor {
+    fn task_type(&self) -> TaskType {
+        TaskType::ChatStream
+    }
+
+    fn cancel_grace(&self) -> Option<Duration> {
+        Some(Duration::from_secs(5))
+    }
+
+    async fn execute(&self, _task: &TaskInfo, ctx: &TaskContext) -> Result<TaskOutput, TaskError> {
+        ctx.cancel_token().cancelled().await;
+        // 부분 결과 저장 같은 마무리 작업
+        tokio::time::sleep(Duration::from_millis(20)).await;
+        Ok(TaskOutput::Text { content: "partial".into() })
+    }
+}
+
+#[tokio::test]
+async fn cancel_grace_keeps_executor_result() {
+    let (manager, sink) = setup().await;
+    manager.register_executor(Arc::new(GracefulExecutor));
+
+    let handle = manager.submit(request(TaskType::ChatStream)).await.unwrap();
+    let id = handle.id().to_string();
+    // 실행이 시작될 때까지 기다렸다가 취소
+    for _ in 0..100 {
+        if manager.get_task(&id).await.unwrap().status == TaskStatus::Running {
+            break;
+        }
+        tokio::time::sleep(Duration::from_millis(5)).await;
+    }
+    manager.cancel(&id).await.unwrap();
+
+    let out = handle.wait().await.unwrap();
+    assert_eq!(out, TaskOutput::Text { content: "partial".into() });
+    assert_eq!(manager.get_task(&id).await.unwrap().status, TaskStatus::Completed);
+    assert_eq!(sink.kinds(&id).last(), Some(&"completed"));
+}
+
+#[test]
+fn task_error_info_keeps_code_for_frontend() {
+    let info = TaskErrorInfo { code: "AI_PROVIDER_RATE_LIMIT".into(), message: "한도".into(), retryable: true };
+    let res = AppError::from(info).to_response();
+    assert_eq!(res.code, ErrorCode::AiProviderRateLimit);
+    assert!(res.retryable);
+
+    let unknown = TaskErrorInfo { code: "NOPE".into(), message: "?".into(), retryable: false };
+    assert_eq!(AppError::from(unknown).to_response().code, ErrorCode::InternalError);
+}

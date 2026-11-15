@@ -369,6 +369,37 @@ pub(crate) async fn write_definition(tx: &mut Transaction<'_, Sqlite>, game_id: 
 
 /// 에셋의 file_path는 게임 폴더 안의 상대경로여야 한다 (절대경로, `..`, 역슬래시, 빈 값 금지).
 /// import/저장이 받은 데이터를 그대로 믿지 않는다 — 이 값으로 파일을 읽고 지우기 때문이다.
+/// "1.2.3" → [1, 2, 3]. 빠진 자리는 0, 숫자가 아닌 꼬리("-beta")는 버린다.
+fn parse_version(v: &str) -> Option<[u64; 3]> {
+    let mut out = [0u64; 3];
+    let core = v.trim().trim_start_matches('v').split(['-', '+']).next()?;
+    if core.is_empty() {
+        return None;
+    }
+    for (i, part) in core.split('.').enumerate() {
+        if i >= 3 {
+            break;
+        }
+        out[i] = part.parse().ok()?;
+    }
+    Some(out)
+}
+
+/// 패키지가 요구하는 엔진 버전보다 이 앱이 오래됐으면 가져오지 않는다 (모르는 데이터를 반쯤 읽는 대신 거절).
+/// 버전을 읽을 수 없는 패키지도 거절한다.
+pub fn check_engine_version(min_engine_version: &str, engine_version: &str) -> Result<(), AppError> {
+    let required = parse_version(min_engine_version)
+        .ok_or_else(|| AppError::validation(format!("패키지의 엔진 버전을 읽을 수 없습니다: {min_engine_version}"), None))?;
+    let current = parse_version(engine_version).unwrap_or([0, 0, 0]);
+    if required > current {
+        return Err(AppError::validation(
+            format!("이 게임은 앱 {min_engine_version} 이상이 필요합니다 (지금 {engine_version}). 앱을 업데이트해 주세요"),
+            None,
+        ));
+    }
+    Ok(())
+}
+
 pub fn check_asset_path(p: &str) -> Result<(), AppError> {
     let bad = p.trim().is_empty()
         || p.starts_with('/')
@@ -678,7 +709,8 @@ async fn import_into<R: std::io::Read + std::io::Seek>(pool: &SqlitePool, archiv
     }
 
     let manifest_raw = manifest_raw.ok_or_else(|| AppError::validation("manifest.json이 없습니다", None))?;
-    let _manifest: Manifest = serde_json::from_str(&manifest_raw)?; // TODO: min_engine_version 체크
+    let manifest: Manifest = serde_json::from_str(&manifest_raw)?;
+    check_engine_version(&manifest.min_engine_version, env!("CARGO_PKG_VERSION"))?;
 
     let data_raw = data_raw.ok_or_else(|| AppError::validation("data/definition.json이 없습니다", None))?;
     let mut data: PackageData = serde_json::from_str(&data_raw)?;
@@ -814,4 +846,18 @@ fn unique_path(dir: &Path, stem: &str, ext: &str) -> PathBuf {
 
 fn sanitize_filename(name: &str) -> String {
     name.chars().map(|c| if c.is_alphanumeric() || c == '-' || c == '_' { c } else { '_' }).collect()
+}
+
+#[cfg(test)]
+mod engine_version_tests {
+    use super::check_engine_version;
+
+    #[test]
+    fn rejects_packages_for_newer_engines() {
+        assert!(check_engine_version("0.1.0", "0.1.0").is_ok());
+        assert!(check_engine_version("0.1", "0.1.3").is_ok());
+        assert!(check_engine_version("0.2.0", "0.1.9").is_err());
+        assert!(check_engine_version("1.0.0-beta", "0.9.0").is_err());
+        assert!(check_engine_version("최신", "0.1.0").is_err());
+    }
 }

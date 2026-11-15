@@ -25,6 +25,7 @@ export const commands = {
 	testMessage: (profileId: string, options?: InvokeOptions) => __TAURI_INVOKE<string>("test_message", { profileId }, options),
 	/**
 	 *  입력을 저장하고 응답을 만든다. `text`가 비었으면 이어서 응답만 (이어쓰기).
+	 *  생성은 작업(ChatStream)으로 돌아서 다른 대화로 옮겨 가도 계속되고, 앱이 꺼지면 다시 시도할 수 있다.
 	 *  응답 조각은 `on_event`로 흐르고, 저장된 메시지는 반환값으로 온다.
 	 */
 	chatSend: (conversationId: string, text: string, attachments: string[], onEvent: Channel<StreamPayload>, options?: InvokeOptions) => __TAURI_INVOKE<ChatTurn_Serialize>("chat_send", { conversationId, text, attachments, onEvent }, options),
@@ -283,7 +284,13 @@ export const commands = {
 	 *  얇은 wrapper — 실제 로직은 game::npc::say. 여기서는 Tauri가 주입하는
 	 *  AppHandle/State들을 받아서 그대로 넘기기만 한다.
 	 */
-	npcSay: (characterId: string, input: string, options?: InvokeOptions) => __TAURI_INVOKE<NpcReply_Serialize>("npc_say", { characterId, input }, options),
+	npcSay: (characterId: string, input: string, onEvent: Channel<StreamPayload>, options?: InvokeOptions) => __TAURI_INVOKE<NpcReply_Serialize>("npc_say", { characterId, input, onEvent }, options),
+	/**
+	 *  씬 입력: 씬이 열려 있는 동안 AI가 서술자로 장면을 이어간다. 선택지의 ChoiceMade 이벤트에 continuesScene=true가
+	 *  있으면 그 선택지 문구를 input으로 이어서 부르고, 자유 입력도 같은 경로다.
+	 *  씬이 열려 있지 않거나 엔딩 씬이거나 aiContinue가 꺼진 씬이면 에러다 (RenderState.sceneChat으로 미리 알 수 있다).
+	 */
+	sceneSay: (input: string, onEvent: Channel<StreamPayload>, options?: InvokeOptions) => __TAURI_INVOKE<NpcReply_Serialize>("scene_say", { input, onEvent }, options),
 	openWidget: (options?: InvokeOptions) => __TAURI_INVOKE<null>("open_widget", undefined, options),
 	closeWidget: (options?: InvokeOptions) => __TAURI_INVOKE<null>("close_widget", undefined, options),
 	toggleWidget: (options?: InvokeOptions) => __TAURI_INVOKE<null>("toggle_widget", undefined, options),
@@ -3019,7 +3026,9 @@ export type TaskOutput =
 /**  생성된 텍스트 원문 (게임 대화 등 호출자가 직접 후처리하는 경우) */
 { kind: "text"; content: string } | 
 /**  DB에 저장된 메시지 */
-{ kind: "message"; messageId: string; content: string } | { kind: "image"; assetId: string } | { kind: "sync"; syncedCount: number } | { kind: "memory"; summary: string } | { kind: "empty" };
+{ kind: "message"; messageId: string; content: string } | 
+/**  DB에 저장된 메시지 여러 개 (저장 순서대로) */
+{ kind: "messages"; messageIds: string[] } | { kind: "image"; assetId: string } | { kind: "sync"; syncedCount: number } | { kind: "memory"; summary: string } | { kind: "empty" };
 
 /**  작업을 요청한 쪽. 프론트가 어느 화면에 결과를 붙일지 고를 때 쓴다. */
 export type TaskOwner = "chat" | "game" | "image" | "system";

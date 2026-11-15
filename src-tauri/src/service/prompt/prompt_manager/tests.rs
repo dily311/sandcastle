@@ -339,3 +339,11 @@ fn attached_images_ride_along_with_their_messages() {
     let p = PromptManager.build(request(c, ""), None).unwrap();
     assert_eq!(p.messages.last().map(|m| m.images.clone()), Some(vec!["only.png".to_string()]));
 }
+
+#[test]
+fn world_info_ratio_reads_fraction_or_percent() {
+    assert_eq!(world_info_ratio_from(&preset(vec![], json!({ "worldInfoRatio": 0.3 })).preset), Some(0.3));
+    assert_eq!(world_info_ratio_from(&preset(vec![], json!({ "world_info_budget": 25 })).preset), Some(0.25));
+    assert_eq!(world_info_ratio_from(&preset(vec![], json!({ "world_info_budget": 250 })).preset), Some(1.0));
+    assert_eq!(world_info_ratio_from(&preset(vec![], json!({})).preset), None);
+}

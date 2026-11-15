@@ -4,10 +4,37 @@ use crate::service::ai::{AiRequest, AiService};
 use std::sync::Arc;
 use crate::service::secret_store::{api_key_name, SecretStore};
 use crate::{
-    error::{AppError, Result},
+    error::{AppError, ErrorCode, Result},
     state::AppState,
 };
+use std::time::Duration;
 use tauri::State;
+
+/// 키 확인(모델 목록 조회)을 기다릴 시간. 넘으면 확인하지 못한 것으로 보고 키는 그대로 둔다.
+const KEY_CHECK_TIMEOUT: Duration = Duration::from_secs(10);
+
+/// 새 키를 저장하고 모델 목록을 불러 확인한다.
+/// 공급자가 인증 실패(401/403)로 답하면 이전 키로 되돌리고 그 오류를 돌려준다.
+/// 네트워크 오류·시간 초과·모델 목록을 지원하지 않는 공급자처럼 확인할 수 없는 경우에는 저장을 유지한다.
+async fn store_verified_key(ai: &AiService, profile_id: &str, api_key: String) -> Result<()> {
+    let name = api_key_name(profile_id);
+    let previous = SecretStore::get(&name).ok();
+    set_api_key(profile_id.to_string(), api_key)?;
+
+    let rejected = match tokio::time::timeout(KEY_CHECK_TIMEOUT, ai.list_models(profile_id)).await {
+        Ok(Err(e)) if e.to_response().code == ErrorCode::AiProviderAuthFailed => Some(e),
+        _ => None,
+    };
+    if let Some(err) = rejected {
+        match previous {
+            Some(old) => SecretStore::set(&name, &old),
+            None => SecretStore::delete(&name),
+        }
+        .map_err(|e| AppError::io(e.to_string()))?;
+        return Err(err);
+    }
+    Ok(())
+}
 
 // =======================================
 // API Key
@@ -54,16 +81,19 @@ pub async fn get_api_profile(state: State<'_, AppState>, id: String) -> Result<A
 #[specta::specta]
 pub async fn create_api_profile(
     state: State<'_, AppState>,
+    ai: State<'_, Arc<AiService>>,
     input: ApiProfilesInput,
     api_key: String,
 ) -> Result<ApiProfiles> {
     let api_profile = ai_service::create_api_profile(&state.db, input).await?;
-
-    // TODO: 연결 테스트해서 응답이 200으로 나왔을때만 has_key: true가 되게 해야 함
     if !api_key.is_empty() {
-        set_api_key(api_profile.id.clone(), api_key)?;
+        // 키가 거절되면 만든 프로필도 지운다 (화면은 실패로 알고 다시 저장하므로 중복이 생기지 않게).
+        // 입력한 주소·모델은 화면에 그대로 남아 있다.
+        if let Err(e) = store_verified_key(&ai, &api_profile.id, api_key).await {
+            let _ = ai_service::delete_api_profile(&state.db, &api_profile.id).await;
+            return Err(e);
+        }
     }
-
     Ok(api_profile)
 }
 
@@ -71,17 +101,15 @@ pub async fn create_api_profile(
 #[specta::specta]
 pub async fn update_api_profile(
     state: State<'_, AppState>,
+    ai: State<'_, Arc<AiService>>,
     id: String,
     input: ApiProfilesInput,
     api_key: String,
 ) -> Result<()> {
     ai_service::update_api_profile(&state.db, &id, input).await?;
-
-    // TODO: 연결 테스트해서 응답이 200으로 나왔을때만 has_key: true가 되게 해야 함
     if !api_key.is_empty() {
-        set_api_key(id.clone(), api_key)?;
+        store_verified_key(&ai, &id, api_key).await?;
     }
-
     Ok(())
 }
 

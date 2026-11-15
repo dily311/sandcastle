@@ -5,7 +5,8 @@
 //!
 //! ⚠ 가정(db/ChatManager 실제와 다를 수 있는 곳):
 //!   - get_game_messages는 (executor, conversation_id) -> Vec<GameMessages>, 오래된 것부터.
-//!     limit 인자가 없어서 전부 읽고 여기서 마지막 HISTORY_LIMIT개만 자른다.
+//!     limit 인자가 없어서 전부 읽고 여기서 마지막 HISTORY_FETCH_LIMIT개만 넘긴다.
+//!     실제로 프롬프트에 들어가는 양은 PromptManager가 프리셋의 컨텍스트 크기(토큰)로 정한다.
 //!     정렬은 ORDER BY created_at, rowid 여야 한다 — 유저/AI 메시지를 호출 직후 같이 저장하니
 //!     같은 초에 들어가서 created_at만으로는 순서가 안 보장된다.
 //!   - ChatManager는 유닛 구조체라 `ChatManager.game_chat(...)`로 부른다.
@@ -22,13 +23,14 @@ use crate::models::conversation::WorldInfoEntry;
 use crate::models::game::{GameConversationsInput, GameJournalInput, GameMessagesInput};
 use crate::models::settings::AppSetting;
 use crate::service::ChatManager;
-use crate::models::ai_service::{ChatContext, HistoryItem};
+use crate::models::ai_service::{ChatContext, HistoryItem, StreamPayload};
 use crate::sys::settings::SettingsState;
 use std::collections::VecDeque;
-use tauri::{AppHandle, State};
+use tauri::{ipc::Channel, AppHandle, State};
 
 const MAX_INPUT_CHARS: usize = 2000; // TODO: 실제 상한 정하기
-const HISTORY_LIMIT: usize = 20; // TODO: 토큰 예산 기준으로 바꾸기
+/// DB에서 넘길 최근 메시지 수 상한 (자르기는 PromptManager가 토큰으로)
+const HISTORY_LIMIT: usize = crate::service::prompt::prompt_manager::HISTORY_FETCH_LIMIT as usize;
 const RATE_LIMIT_WINDOW_SECONDS: i64 = 60;
 const RATE_LIMIT_MAX_CALLS: usize = 6; // 분당 최대 호출 수. TODO: 실제 값 정하기
 const DEFAULT_BRANCH_KEY: &str = "_default"; // 씬 밖(자유 대화)일 때.
@@ -271,14 +273,21 @@ pub async fn say(
     settings: &State<'_, SettingsState<AppSetting>>,
     character_id: String, // game_characters.id
     input: String,
+    channel: Option<Channel<StreamPayload>>,
 ) -> Result<NpcReply, AppError> {
-    converse(app, state, settings, Mode::Npc(character_id), input).await
+    converse(app, state, settings, Mode::Npc(character_id), input, channel).await
 }
 
 /// 씬 입력: 씬이 열려 있는 동안 AI가 서술자로 이어간다 (선택지 문구나 자유 입력).
 /// commands/game_engine.rs::scene_say가 이 함수를 얇게 감싼다.
-pub async fn scene_say(app: AppHandle, state: &State<'_, AppState>, settings: &State<'_, SettingsState<AppSetting>>, input: String) -> Result<NpcReply, AppError> {
-    converse(app, state, settings, Mode::Scene, input).await
+pub async fn scene_say(
+    app: AppHandle,
+    state: &State<'_, AppState>,
+    settings: &State<'_, SettingsState<AppSetting>>,
+    input: String,
+    channel: Option<Channel<StreamPayload>>,
+) -> Result<NpcReply, AppError> {
+    converse(app, state, settings, Mode::Scene, input, channel).await
 }
 
 /// 어느 쪽 대화인가: NPC 1:1(Talk로 연 대화창) / 씬 입력(서술자).
@@ -287,7 +296,15 @@ enum Mode {
     Scene,
 }
 
-async fn converse(app: AppHandle, state: &State<'_, AppState>, settings: &State<'_, SettingsState<AppSetting>>, mode: Mode, input: String) -> Result<NpcReply, AppError> {
+/// channel이 있으면 응답을 스트리밍하되, 연출·상태 태그는 걸러서 보낸다 (미리보기용. 최종 결과는 NpcReply).
+async fn converse(
+    app: AppHandle,
+    state: &State<'_, AppState>,
+    settings: &State<'_, SettingsState<AppSetting>>,
+    mode: Mode,
+    input: String,
+    channel: Option<Channel<StreamPayload>>,
+) -> Result<NpcReply, AppError> {
     let game_id = current_game_id(state)?;
     let partner_id: Option<String> = match &mode {
         Mode::Npc(id) => Some(id.clone()),
@@ -380,10 +397,21 @@ async fn converse(app: AppHandle, state: &State<'_, AppState>, settings: &State<
 
     let (api_profile_id, prompt_preset_id) = crate::db::game::get_game_session_options(&state.db, &snap.session_id).await?;
     let target = crate::service::chat::chat_manager::GameChatTarget { session_id: snap.session_id.clone(), api_profile_id, prompt_preset_id };
+    let mut filter = crate::game::stream_filter::StreamTagFilter::default();
+    let mut forward = |delta: &str| {
+        if let Some(ch) = &channel {
+            let visible = filter.push(delta);
+            if !visible.is_empty() {
+                let _ = ch.send(StreamPayload { chunk: visible });
+            }
+        }
+    };
+    let on_delta: Option<&mut (dyn FnMut(&str) + Send)> = if channel.is_some() { Some(&mut forward) } else { None };
     let raw = ChatManager
-        .game_chat(app, state, settings, conversation_id.clone(), trimmed.to_string(), context, None, target)
+        .game_chat(app, state, settings, conversation_id.clone(), trimmed.to_string(), context, on_delta, target)
         .await
-        .map_err(|e| AppError::ai_provider(ErrorCode::AiProviderError, e.to_string(), false))?;
+        // 공급자 오류 코드(한도 초과, 인증 실패 등)를 그대로 프론트에 전한다
+        .map_err(crate::commands::chat::into_app_error)?;
 
     // 응답 후처리: <choice>는 버튼으로, <updateVar>는 검증을 통과한 변수 변경으로. 둘 다 태그는 본문에서 벗긴다.
     // 저장되는 AI content는 태그 없는 텍스트, 선택지/적용된 변경은 meta에 — 기록을 다시 읽을 때
@@ -860,5 +888,5 @@ pub async fn regenerate_reply(app: AppHandle, state: &State<'_, AppState>, setti
     } else {
         Mode::Npc(msg.character_id.clone().ok_or_else(|| AppError::validation("대화 상대를 찾을 수 없습니다", None))?)
     };
-    converse(app, state, settings, mode, input).await
+    converse(app, state, settings, mode, input, None).await
 }

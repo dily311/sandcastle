@@ -10,13 +10,13 @@ export default defineConfig(({ command }) => {
 	const isTauri = process.env.TAURI_ENV_DEBUG === 'true';
 	const isDev = command === 'serve';
 	const baseAlias = {
-		$: path.resolve(__dirname, "./src"),
-		$shared: path.resolve(__dirname, "./src/shared"),
-		$app: path.resolve(__dirname, "./src/app"),
-		$ipc: path.resolve(__dirname, "./src/ipc"),
-		$lib: path.resolve(__dirname, "./src/lib"),
-		$features: path.resolve(__dirname, "./src/features"),
-		$type: path.resolve(__dirname, "./src/lib/type"),
+		$: path.resolve(import.meta.dirname, "./src"),
+		$shared: path.resolve(import.meta.dirname, "./src/shared"),
+		$app: path.resolve(import.meta.dirname, "./src/app"),
+		$ipc: path.resolve(import.meta.dirname, "./src/ipc"),
+		$lib: path.resolve(import.meta.dirname, "./src/lib"),
+		$features: path.resolve(import.meta.dirname, "./src/features"),
+		$type: path.resolve(import.meta.dirname, "./src/lib/type"),
 	};
 
 	return {
@@ -25,9 +25,8 @@ export default defineConfig(({ command }) => {
 			cssCodeSplit: false,
 			rollupOptions: {
 				input: {
-					main: path.resolve(__dirname, "index.html"),
-					gameRuntime: path.resolve(__dirname, "game-runtime.html"),
-					widget: path.resolve(__dirname, "widget.html"),
+					main: path.resolve(import.meta.dirname, "index.html"),
+					widget: path.resolve(import.meta.dirname, "widget.html"),
 				},
 			},
 		},
@@ -39,8 +38,8 @@ export default defineConfig(({ command }) => {
 			alias: (!isTauri && isDev)
 				? {
 						...baseAlias,
-						"@tauri-apps/plugin-os": path.resolve(__dirname, "./src/ipc/tauri-mock.ts"),
-						"@tauri-apps/api/window": path.resolve(__dirname, "./src/ipc/tauri-mock.ts"),
+						"@tauri-apps/plugin-os": path.resolve(import.meta.dirname, "./src/ipc/tauri-mock.ts"),
+						"@tauri-apps/api/window": path.resolve(import.meta.dirname, "./src/ipc/tauri-mock.ts"),
 					}
 				: baseAlias,
 		},

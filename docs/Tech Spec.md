@@ -122,11 +122,11 @@ cargo clippy
 ## 마일스톤 일정
 
 - [~] Phase1: 기본 아키텍처 구축
-    - [ ] conv 테이블과 game 테이블의 통합작업
+    - [x] ~~conv 테이블과 game 테이블의 통합작업~~ (하지 않기로 함, ADR-001)
     - [ ] UI 구축
     - [ ] 게임 에셋 매니저 구축
     - [ ] 다국어 환경 기반 마련
-- [ ] Phase2: DB 통합테스트 구성
+- [~] Phase2: DB 통합테스트 구성 (CI에서 cargo test 실행)
 - [ ] Phase3: 외부 API 연결 작업
 - [ ] Phase4: 모바일 UI작업
 - [ ] Phase5: 게임 엔진 템플릿 세분화

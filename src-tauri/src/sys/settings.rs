@@ -1,5 +1,5 @@
 use std::sync::Mutex;
-use tauri::{AppHandle, Emitter};
+use tauri::AppHandle;
 use tauri_plugin_store::StoreExt;
 
 use crate::{

@@ -2,7 +2,6 @@
 //! GameRuntime::load() 이후로는 이 trait가 다시 안 불림 (정적 데이터는 메모리에 있음).
 //! 매 턴 부르는 건 persist_session / append_event_log 뿐.
 use super::definition::GameDefinition;
-use super::state::GameState;
 use crate::db::game::{
     get_all_event_characters, get_all_event_conditions, get_all_game_characters, get_all_game_branches, get_all_game_choices,
     get_all_game_encounter_table_entries, get_all_game_encounter_tables, get_all_game_endings,
@@ -22,6 +21,8 @@ use anyhow::Result;
 use sqlx::SqlitePool;
 use std::collections::HashMap;
 
+// 앱 안에서만 쓰는 트레이트라 Send 경계를 따로 적지 않는다
+#[allow(async_fn_in_trait)]
 pub trait GameRepository {
     async fn load_definition(&self, game_id: &str) -> Result<GameDefinition>;
     async fn load_session(&self, session_id: &str) -> Result<GamePlayerSessions>;

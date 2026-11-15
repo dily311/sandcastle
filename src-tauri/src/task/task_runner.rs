@@ -30,6 +30,13 @@ pub trait TaskExecutor: Send + Sync + 'static {
     /// 재시도 가능한 오류(`TaskError::Failed { retryable: true, .. }`)를 반환하면
     /// max_attempts 안에서 TaskManager가 새 attempt로 다시 부른다.
     async fn execute(&self, task: &TaskInfo, ctx: &TaskContext) -> Result<TaskOutput, TaskError>;
+
+    /// 취소 신호를 받은 뒤 Executor가 스스로 마무리하도록 기다려 줄 시간.
+    /// None(기본)이면 바로 멈춘다. Some이면 그 안에 돌아온 결과를 그대로 쓴다
+    /// (채팅: 받은 데까지 저장하고 Ok를 돌려주면 작업은 Completed).
+    fn cancel_grace(&self) -> Option<std::time::Duration> {
+        None
+    }
 }
 
 /// Executor 전용 이벤트 송신기. 진행 상황만 보낼 수 있다.

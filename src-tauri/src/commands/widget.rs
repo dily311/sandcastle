@@ -137,6 +137,10 @@ pub fn save_widget_music_settings(app: AppHandle, patch: serde_json::Value) -> R
 #[specta::specta]
 pub async fn get_select_folder_music_data(app: AppHandle, state: State<'_, AppState>, folder_path: String) -> Result<LibraryRoot, AppError> {
     let cache_dir = app.path().app_cache_dir()?;
+    // 에셋 프로토콜 범위는 앱 폴더로 좁혀 두었으므로(tauri.conf.json), 사용자가 고른 음악 폴더만 실행 중에 연다
+    app.asset_protocol_scope()
+        .allow_directory(&folder_path, true)
+        .map_err(|e| AppError::io(format!("음악 폴더를 열 수 없습니다: {e}")))?;
     let result = music::folder_indexing(&state.db, folder_path.clone(), &cache_dir).await?;
     Ok(result)
 }

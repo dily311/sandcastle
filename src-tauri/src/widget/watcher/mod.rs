@@ -1,3 +1,5 @@
+// 음악 폴더 감시: 커맨드 등록 전(위젯 작업 중)이라 아직 아무도 부르지 않는다
+#![allow(dead_code)]
 use std::path::Path;
 use std::sync::Mutex;
 use std::{path::PathBuf, time::Duration};

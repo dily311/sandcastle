@@ -16,6 +16,9 @@
 //! 1. 고정 부분(규칙, 블록, 설명, 사용자 메시지)을 먼저 잡고 — 이것만으로 넘치면 오류
 //! 2. 남은 예산의 `world_info_ratio`만큼 월드인포 (상시 항목 → 우선순위 순)
 //! 3. 나머지를 최근 대화부터 채운다
+//!
+//! 컨텍스트 크기와 월드인포 비율은 프리셋 값이 우선이고, 없으면 아래 기본값이다.
+//! 대화 기록은 DB에서 넉넉히(HISTORY_FETCH_LIMIT) 읽어 오고, 실제로 들어갈 양은 여기서 토큰으로 정한다.
 use serde_json::Value;
 
 use crate::{
@@ -33,6 +36,13 @@ use crate::{
 
 /// 월드인포 키워드를 찾을 최근 대화 수
 const WORLD_INFO_SCAN_DEPTH: usize = 10;
+
+/// 프리셋에 컨텍스트 크기가 없을 때
+pub const DEFAULT_CONTEXT_LIMIT: u32 = 8192;
+/// 프리셋에 월드인포 비율이 없을 때 (남은 예산 중 월드인포 몫)
+pub const DEFAULT_WORLD_INFO_RATIO: f32 = 0.5;
+/// 프롬프트를 만들 때 DB에서 읽어 올 최근 메시지 수 상한. 실제로 들어가는 양은 토큰 예산이 정한다.
+pub const HISTORY_FETCH_LIMIT: i64 = 500;
 
 /// DB에서 불러온 프리셋 + 블록
 #[derive(Debug, Clone)]
@@ -126,7 +136,10 @@ impl PromptManager {
         let remaining = budget - fixed;
 
         // ---- 월드인포
-        let ratio = request.world_info_ratio.clamp(0.0, 1.0) as f64;
+        let ratio = preset
+            .and_then(|p| world_info_ratio_from(&p.preset))
+            .unwrap_or(request.world_info_ratio)
+            .clamp(0.0, 1.0) as f64;
         let wi_budget = if remaining == usize::MAX { usize::MAX } else { (remaining as f64 * ratio) as usize };
         let world_info = select_world_info(ctx, &user_message, wi_budget, &macros);
         let wi_label = layout.iter().find_map(|s| match s {
@@ -469,8 +482,19 @@ pub(crate) fn context_limit_from(preset: &PromptPresets) -> Option<u32> {
         .into_iter()
         .flatten()
         .find_map(|src| num(src, &["context_size", "contextSize", "openai_max_context"]))
-        .filter(|v| *v > 0.0)
+        // 0은 "제한 없음"(프리셋 편집기의 안내와 같음), 음수는 무시
+        .filter(|v| *v >= 0.0)
         .map(|v| v as u32)
+}
+
+/// 월드인포 비율 (0~1). SillyTavern의 world_info_budget처럼 퍼센트(1 초과)로 적힌 값은 100으로 나눈다.
+pub(crate) fn world_info_ratio_from(preset: &PromptPresets) -> Option<f32> {
+    [preset.settings_json.as_ref(), Some(&preset.config_json)]
+        .into_iter()
+        .flatten()
+        .find_map(|src| num(src, &["world_info_ratio", "worldInfoRatio", "world_info_budget"]))
+        .filter(|v| *v >= 0.0)
+        .map(|v| if v > 1.0 { (v / 100.0).min(1.0) } else { v } as f32)
 }
 
 fn num(v: &Value, keys: &[&str]) -> Option<f64> {

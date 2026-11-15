@@ -19,6 +19,8 @@
 		scriptFinished: boolean;
 		isReadingScript: boolean;
 		isLoading: boolean;
+		/** 응답을 기다리는 동안 받은 미리보기 글 */
+		streamingText?: string;
 		onStageClick: () => void;
 		onPrevious: () => void;
 		onAdvance: () => void;
@@ -82,6 +84,9 @@
 					<button class="g-btn primary" type="button" disabled={p.isLoading || !p.editDraft.trim()} onclick={p.onEditSave}>저장</button>
 				</div>
 			</div>
+		{:else if p.isLoading && p.streamingText?.trim()}
+			<!-- 응답 원문에는 "이름:" 접두가 들어 있어서 화자 표시는 따로 하지 않는다 -->
+			<p class="line streaming" aria-busy="true">{p.streamingText.trim()}</p>
 		{:else if showLine}
 			{#if !narration && p.speakerName}<span class="speaker">{p.speakerName}</span>{/if}
 			<button class="line" type="button" onclick={p.onStageClick} disabled={!p.isReadingScript} title="다음 (Space)">
@@ -291,6 +296,11 @@
 	}
 	.line:disabled {
 		cursor: default;
+	}
+	.line.streaming {
+		margin: 0;
+		cursor: default;
+		opacity: 0.85;
 	}
 	.narration {
 		color: var(--game-text-secondary);

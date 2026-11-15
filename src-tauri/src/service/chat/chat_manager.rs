@@ -1,8 +1,7 @@
 //! 채팅 흐름: 컨텍스트 수집(ContextManager) → 프롬프트 조립(PromptManager) → AI 호출(AiService)
 //!
-//! 지금은 커맨드에서 바로 호출되지만, 이후에는 ChatStream 작업의 TaskExecutor 안에서 같은 흐름을
-//! 실행하고 커맨드는 TaskManager::submit만 하게 된다. 그때도 ChatManager는 작업 상태를 직접
-//! 바꾸지 않는다 (TaskContext로 진행 이벤트만 보냄).
+//! 대화 화면의 한 차례(turn/peek)는 ChatStream 작업(chat_task.rs)의 Executor 안에서 실행된다.
+//! 커맨드는 작업을 제출하고 결과를 기다릴 뿐이고, ChatManager는 작업 상태를 바꾸지 않는다.
 use std::collections::HashMap;
 use std::sync::{Arc, LazyLock, Mutex};
 
@@ -44,15 +43,10 @@ use crate::{
 
 const EVENT_DIALOGUE_DONE: &str = "chat:dialogue:done";
 
-// TODO: 설정/프리셋에서 받아오기
-const WORLD_INFO_RATIO: f32 = 0.5;
-const HISTORY_LIMIT: i64 = 50;
-pub(crate) const CONTEXT_LIMIT: u32 = 8192;
+use crate::service::prompt::prompt_manager::{DEFAULT_CONTEXT_LIMIT, DEFAULT_WORLD_INFO_RATIO, HISTORY_FETCH_LIMIT};
 
 pub struct ChatRequest {
     api_profile_id: String,
-    character_id: String,
-    persona_id: String,
     pub(crate) preset_id: String,
     phone_mode_prompt: String,
 }
@@ -64,8 +58,6 @@ pub fn current_conv_request(state: &SettingsState<AppSetting>) -> Result<ChatReq
         .map_err(|_| AppError::internal("settings lock poisoned"))?;
     Ok(ChatRequest {
         api_profile_id: guard.selected_api_profile.clone().unwrap_or_default(),
-        character_id: guard.selected_character_id.clone().unwrap_or_default(),
-        persona_id: guard.selected_persona_id.clone(),
         preset_id: guard.selected_preset.clone(),
         phone_mode_prompt: guard.phone_mode_prompt.clone(),
     })
@@ -124,45 +116,25 @@ impl ChatManager {
         _game_conversation_id: String,
         message: String,
         context: ChatContext,
-        channel: Option<Channel<StreamPayload>>,
+        on_delta: Option<&mut (dyn FnMut(&str) + Send)>,
         target: GameChatTarget,
     ) -> Result<String> {
         let chat_req = current_conv_request(settings)?;
         let profile = target.api_profile_id.filter(|s| !s.is_empty()).unwrap_or(chat_req.api_profile_id);
         let preset = target.prompt_preset_id.filter(|s| !s.is_empty()).unwrap_or(chat_req.preset_id);
-        let mut sink = |delta: &str| {
-            if let Some(ch) = &channel {
-                let _ = ch.send(StreamPayload { chunk: delta.to_string() });
-            }
+        // 스트리밍: 받은 조각은 호출자(game::npc)가 태그를 걸러 화면으로 보낸다
+        let streaming = on_delta.is_some();
+        let mut noop = |_: &str| {};
+        let sink: &mut (dyn FnMut(&str) + Send) = match on_delta {
+            Some(f) => f,
+            None => &mut noop,
         };
         let (response, prompt) = self
-            .generate_with(&app, &state.db, profile, Some(preset), context, message, GenerationType::Normal, &CancellationToken::new(), channel.is_some(), &mut sink)
+            .generate_with(&app, &state.db, profile, Some(preset), context, message, GenerationType::Normal, &CancellationToken::new(), streaming, sink)
             .await?;
         if let Ok(mut map) = LAST_GAME_PROMPT.lock() {
             map.insert(target.session_id, prompt);
         }
-        Ok(response.content)
-    }
-
-    /// 프롬프트 조립 + AI 호출 (채팅/게임 공통)
-    async fn generate(
-        &self,
-        app: &AppHandle,
-        db: &crate::db::conn::DbPool,
-        profile_id: String,
-        preset_id: Option<String>,
-        context: ChatContext,
-        message: String,
-        channel: Option<Channel<StreamPayload>>,
-    ) -> Result<String> {
-        let mut sink = |delta: &str| {
-            if let Some(ch) = &channel {
-                let _ = ch.send(StreamPayload { chunk: delta.to_string() });
-            }
-        };
-        let (response, _) = self
-            .generate_with(app, db, profile_id, preset_id, context, message, GenerationType::Normal, &CancellationToken::new(), channel.is_some(), &mut sink)
-            .await?;
         Ok(response.content)
     }
 
@@ -188,8 +160,8 @@ impl ChatManager {
                     context,
                     user_message: message,
                     preset_id,
-                    context_limit: CONTEXT_LIMIT,
-                    world_info_ratio: WORLD_INFO_RATIO,
+                    context_limit: DEFAULT_CONTEXT_LIMIT,
+                    world_info_ratio: DEFAULT_WORLD_INFO_RATIO,
                     generation_type,
                 },
             )
@@ -230,39 +202,8 @@ pub enum TurnKind {
     Send(String, Vec<String>),
     /// 마지막 AI 메시지를 다시 만든다. `swipe`면 스와이프로 쌓고, 아니면 스와이프를 버리고 바꾼다
     Regenerate { swipe: bool },
-}
-
-/// 대화별 진행 중인 응답 (취소용). 한 대화에서 동시에 하나만.
-static RUNNING: LazyLock<Mutex<HashMap<String, CancellationToken>>> = LazyLock::new(Default::default);
-
-struct RunningGuard(String);
-impl RunningGuard {
-    fn start(conversation_id: &str) -> std::result::Result<(Self, CancellationToken), AppError> {
-        let mut map = RUNNING.lock().map_err(|_| AppError::internal("running lock poisoned"))?;
-        if map.contains_key(conversation_id) {
-            return Err(AppError::validation("이미 응답을 만드는 중", None));
-        }
-        let token = CancellationToken::new();
-        map.insert(conversation_id.to_string(), token.clone());
-        Ok((Self(conversation_id.to_string()), token))
-    }
-}
-impl Drop for RunningGuard {
-    fn drop(&mut self) {
-        if let Ok(mut map) = RUNNING.lock() {
-            map.remove(&self.0);
-        }
-    }
-}
-
-/// 진행 중인 응답 멈추기. 멈출 게 있었으면 true
-pub fn cancel_turn(conversation_id: &str) -> bool {
-    RUNNING
-        .lock()
-        .ok()
-        .and_then(|map| map.get(conversation_id).cloned())
-        .map(|t| t.cancel())
-        .is_some()
+    /// 이미 저장된 마지막 사용자 메시지에 응답한다 (보내기 작업을 다시 시도할 때: 입력은 첫 시도에 저장됨)
+    Reply,
 }
 
 fn now_ms() -> i64 {
@@ -312,6 +253,8 @@ impl ChatManager {
     /// - 캐릭터·페르소나·프리셋·API는 대화에 저장된 값, 없으면 앱 설정의 선택값
     /// - channel이 있으면 응답 조각을 그대로 흘려보낸다 (저장되는 최종본은 정규식·<cg> 정리 후)
     /// - 취소되면 받은 데까지 저장한다 (info.cancelled = true). 받은 게 없으면 취소 오류
+    /// - task_id: 새로 저장하는 사용자 메시지의 meta.taskId (다시 시도할 때 입력을 두 번 저장하지 않게)
+    #[allow(clippy::too_many_arguments)]
     pub async fn turn(
         &self,
         app: &AppHandle,
@@ -320,6 +263,8 @@ impl ChatManager {
         conversation_id: &str,
         kind: TurnKind,
         channel: Option<Channel<StreamPayload>>,
+        cancel: &CancellationToken,
+        task_id: Option<&str>,
     ) -> Result<ChatTurn> {
         let conv = match get_conversation(db, conversation_id).await {
             Ok(c) => c,
@@ -353,8 +298,6 @@ impl ChatManager {
         // 나/상대: 캐릭터 폰이면 주인 캐릭터와 연락처, 아니면 페르소나와 캐릭터
         let (me, other, char_phone) = phone_sides::sides(db, conv.meta.as_ref(), &character, &persona).await?;
 
-        let (_guard, cancel) = RunningGuard::start(conversation_id)?;
-
         // 다시 생성할 대상
         let target = match kind {
             TurnKind::Regenerate { .. } => {
@@ -364,7 +307,7 @@ impl ChatManager {
                     _ => return Err(AppError::validation("다시 만들 AI 메시지가 없음", None).into()),
                 }
             }
-            TurnKind::Send(..) => None,
+            TurnKind::Send(..) | TurnKind::Reply => None,
         };
 
         let mut context = ContextManager
@@ -374,7 +317,7 @@ impl ChatManager {
                     conversation_id: conversation_id.to_string(),
                     character_id: conv.character_id.clone(),
                     persona_id: persona_id.clone(),
-                    history_limit: HISTORY_LIMIT,
+                    history_limit: HISTORY_FETCH_LIMIT,
                 },
             )
             .await?;
@@ -406,6 +349,14 @@ impl ChatManager {
                 };
                 (input, true, if *swipe { GenerationType::Swipe } else { GenerationType::Regenerate })
             }
+            (TurnKind::Reply, _) => match context.history.last() {
+                Some(h) if h.role == "user" => {
+                    let h = context.history.pop().expect("방금 확인한 마지막 기록");
+                    context.user_images = h.images;
+                    (h.content, true, GenerationType::Normal)
+                }
+                _ => return Err(AppError::validation("응답할 사용자 메시지가 없음 (이미 응답했을 수 있음)", None).into()),
+            },
             _ => unreachable!(),
         };
 
@@ -459,6 +410,9 @@ impl ChatManager {
                     character_id: None,
                     meta: Some({
                         let mut meta = json!({ "sender": { "type": "user", "name": me.name, "id": me.id, "kind": me.kind } });
+                        if let Some(id) = task_id {
+                            meta["taskId"] = json!(id);
+                        }
                         if !attachments.is_empty() {
                             meta["attachments"] = json!(attachments);
                         }
@@ -483,7 +437,7 @@ impl ChatManager {
                     let _ = ch.send(StreamPayload { chunk: delta.to_string() });
                 }
             };
-            self.generate_with(app, db, api_profile_id.clone(), Some(preset_id.clone()), context, prompt_input, generation_type, &cancel, streaming, &mut sink)
+            self.generate_with(app, db, api_profile_id.clone(), Some(preset_id.clone()), context, prompt_input, generation_type, cancel, streaming, &mut sink)
                 .await
         };
         let (raw, model, finish_reason, prompt, cancelled): (String, String, Option<String>, Option<PromptMessage>, bool) = match outcome {
@@ -554,6 +508,7 @@ impl ChatManager {
         settings: &SettingsState<AppSetting>,
         conversation_id: &str,
         channel: Option<Channel<StreamPayload>>,
+        cancel: &CancellationToken,
     ) -> Result<Vec<Message>> {
         let conv = match get_conversation(db, conversation_id).await {
             Ok(c) => c,
@@ -584,7 +539,6 @@ impl ChatManager {
             .unwrap_or(fallback.preset_id);
         let (me, other, _) = phone_sides::sides(db, conv.meta.as_ref(), &character, &persona).await?;
 
-        let (_guard, cancel) = RunningGuard::start(conversation_id)?;
         let mut context = ContextManager
             .build_context(
                 db,
@@ -592,7 +546,7 @@ impl ChatManager {
                     conversation_id: conversation_id.to_string(),
                     character_id: conv.character_id.clone(),
                     persona_id: persona_id.clone(),
-                    history_limit: HISTORY_LIMIT,
+                    history_limit: HISTORY_FETCH_LIMIT,
                 },
             )
             .await?;
@@ -621,7 +575,7 @@ impl ChatManager {
                 context,
                 format!("({}와 {}의 메신저 대화를 이어서 써)", me.name, other.name),
                 GenerationType::Normal,
-                &cancel,
+                cancel,
                 streaming,
                 &mut sink,
             )

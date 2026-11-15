@@ -33,3 +33,6 @@ dist-ssr
 
 /memo
 src/data
+# tsc -p tsconfig.node.json 산출물 (Vite가 .ts보다 .js를 먼저 읽는다)
+/vite.config.js
+/vite.config.d.ts

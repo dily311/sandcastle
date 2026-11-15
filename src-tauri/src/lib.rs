@@ -49,10 +49,8 @@ pub fn run() {
     #[cfg(desktop)]
     {
         use crate::widget::MouseTrackerState;
-        use commands::widget::*;
         use tauri_plugin_autostart::MacosLauncher;
-        use tauri_plugin_autostart::ManagerExt;
-        use widget::{InteractiveRegion, MusicWatcherState, WidgetInteractionState};
+        use widget::{MusicWatcherState, WidgetInteractionState};
 
         builder = builder
             .plugin(tauri_plugin_window_state::Builder::default().build())
@@ -111,13 +109,14 @@ pub fn run() {
         });
 
         // 2-1. 전역 작업 관리자
-        // - 각 Manager(Chat/Game/Image)는 여기서 register_executor로 자기 Executor를 등록한다.
+        // - 각 Manager는 여기서 register_executor로 자기 Executor를 등록한다 (지금은 채팅 생성).
         // - 지난 실행에서 끝나지 못한 작업은 Interrupted로 표시해 두고, 프론트가
         //   get_recoverable_tasks로 받아 재개/포기를 묻는다.
         let task_manager = TaskManager::new(
             pool.clone(),
             Arc::new(TaskEventEmitter::new(app_handle.clone())),
         );
+        task_manager.register_executor(Arc::new(service::chat::chat_task::ChatTaskExecutor::new(app_handle.clone())));
         if let Err(e) = tauri::async_runtime::block_on(task_manager.recover_on_startup()) {
             eprintln!("[task] 작업 복구 실패: {e}");
         }
@@ -359,6 +358,7 @@ pub fn specta_builder() -> tauri_specta::Builder<tauri::Wry> {
             save_read,
             save_list,
             npc_say,
+            scene_say,
             // widget
             open_widget,
             close_widget,
@@ -553,6 +553,7 @@ pub fn specta_builder() -> tauri_specta::Builder<tauri::Wry> {
             save_read,
             save_list,
             npc_say,
+            scene_say,
     ]))
 }
 
