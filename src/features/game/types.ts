@@ -303,6 +303,8 @@ export interface RenderState {
 	activeNpcId: string | null;
 	availableChoices: string[];
 	availableMoves: AvailableMove[];
+	/** 씬 입력(sceneSay)과 씬 끝내기를 쓸 수 있는가 (씬이 열려 있고 엔딩이 아니며 AI 이어가기가 켜져 있음) */
+	sceneChat: boolean;
 	flags: any;
 	inventory: any;
 	relationships: Record<string, RelationshipDetail>;
@@ -348,6 +350,7 @@ export type GameCommand =
 	| { type: "stopTalk" }
 	| { type: "setVariable"; key: string; value: any }
 	| { type: "choose"; choiceId: string }
+	| { type: "endScene" }
 	| { type: "advanceTime"; minutes: number }
 	| { type: "useItem"; itemId: string; targetId?: string }
 	| { type: "dropItem"; itemId: string; quantity?: number };
@@ -371,7 +374,9 @@ export type GameEvent =
 	| { type: "dialogueStarted"; sceneId: string }
 	| { type: "dialogueEnded"; sceneId: string }
 	| { type: "choicePresented"; choices: string[] }
-	| { type: "choiceMade"; sceneId: string }
+	/** continuesScene: 다음 씬이 없고 끝내는 효과도 없음 → 선택지 문구로 sceneSay를 이어 부른다 */
+	| { type: "choiceMade"; choiceId: string; nextSceneId?: string | null; effect?: unknown; continuesScene: boolean }
+	| { type: "sceneEndRequested" }
 	| { type: "sceneChanged"; sceneId: string }
 	| { type: "stageRequested"; spec: any }
 	| { type: "sceneScript"; sceneId: string; lines: StageLine[] }

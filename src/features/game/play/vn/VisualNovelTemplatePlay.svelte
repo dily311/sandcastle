@@ -64,16 +64,17 @@
 	);
 	const speakerName = $derived(currentLine?.speaker === "player" ? "나" : (currentCharacter?.name ?? null));
 	const focusedCharacterId = $derived(currentCharacter?.id ?? null);
-	const freeTextCharacterId = $derived.by(() => {
-		const presentNpcIds = runtimeStore.state?.presentNpcs ?? [];
-		const activeNpcId = runtimeStore.state?.activeNpcId;
-		if (activeNpcId && presentNpcIds.includes(activeNpcId)) return activeNpcId;
-		if (currentLine?.speaker && currentLine.speaker !== "player" && presentNpcIds.includes(currentLine.speaker)) {
-			return currentLine.speaker;
-		}
-		return presentNpcIds[0] ?? null;
-	});
 	const activeNpcId = $derived(runtimeStore.state?.activeNpcId ?? null);
+	/** 열린 씬이 있는가. 씬 동안은 1:1 대화(talk)가 막히고 입력은 씬 입력(sceneSay)으로 간다 */
+	const sceneOpen = $derived(Boolean(runtimeStore.currentSceneId));
+	/** 씬 입력·씬 끝내기를 쓸 수 있는가 (엔딩 씬이나 AI 이어가기가 꺼진 씬이면 false) */
+	const sceneChat = $derived(Boolean(runtimeStore.state?.sceneChat));
+	type SayTarget = { kind: "scene" } | { kind: "npc"; characterId: string };
+	/** 입력·AI 제안 선택지를 보낼 곳. 없으면 입력창을 숨김 */
+	const sayTarget = $derived.by<SayTarget | null>(() => {
+		if (sceneOpen) return sceneChat ? { kind: "scene" } : null;
+		return activeNpcId ? { kind: "npc", characterId: activeNpcId } : null;
+	});
 	const title = $derived(gameStore.view?.game?.title ?? "게임");
 
 	function setBgm(asset: AssetRef | null, mood = "") {
@@ -262,6 +263,9 @@
 		stageFrom = null;
 		editing = false;
 		if (isLoading) return;
+		// 선택지 문구는 고르기 전에 읽어 둔다 (고른 뒤에는 씬이 바뀔 수 있다)
+		const choiceText = command.type === "choose" ? runtimeStore.currentChoices.find((c) => c.id === command.choiceId)?.text : undefined;
+		let continueWith: string | null = null;
 		const previousLines = scriptLines;
 		const previousIndex = lineIndex;
 		const previousScriptFinished = scriptFinished;
@@ -299,6 +303,8 @@
 				syncBgmFromStage();
 			}
 			showWaitMenu = false;
+			const continues = (runtimeStore.events ?? []).some((e) => e.type === "choiceMade" && e.continuesScene);
+			if (continues && choiceText && runtimeStore.state?.sceneChat) continueWith = choiceText;
 		} catch (error) {
 			console.error("Game command failed:", error);
 			scriptLines = previousLines;
@@ -308,31 +314,40 @@
 		} finally {
 			isLoading = false;
 		}
+		// 씬이 이어지는 선택지: 선택지의 결과 대사 뒤에 AI 서술을 붙인다
+		if (continueWith) await say(continueWith, { keepLines: true, fromChoice: true });
 	}
 
-	async function submitNpcInput(text = freeTextInput) {
+	/**
+	 * 플레이어의 말·행동을 보낸다.
+	 * - 씬이 열려 있으면 서술자에게(sceneSay): AI가 장면 전체를 이어 간다. 씬 선택지는 계속 보인다
+	 * - 아니면 대화 중인 NPC에게(npcSay): 대화 동안 씬 선택지는 숨긴다
+	 * keepLines: 지금 무대의 대사(선택지 결과 등) 뒤에 응답을 붙인다
+	 * fromChoice: 선택지에서 온 문구라 실패해도 입력창에 되돌리지 않는다
+	 */
+	async function say(text = freeTextInput, opts: { keepLines?: boolean; fromChoice?: boolean } = {}) {
 		const input = text.trim();
-		const characterId = freeTextCharacterId;
-		if (!input || !characterId || isLoading) return;
-
+		const target = sayTarget;
+		if (!input || !target || isLoading) return;
+		const prefix = opts.keepLines ? scriptLines : [];
+		const startAt = opts.keepLines ? lineIndex : 0;
 		try {
 			isLoading = true;
-			freeTextInput = "";
+			editing = false;
+			if (!opts.fromChoice) freeTextInput = "";
 			npcResponseChoices = [];
-			hideSceneChoicesDuringTalk = true;
-			if (runtimeStore?.activeNpcId !== characterId) {
-				await runtimeStore.dispatchCommand({ type: "talk", gameCharacterId: characterId });
-			}
+			if (target.kind === "npc") hideSceneChoicesDuringTalk = true;
 			const channel = new Channel<StreamPayload>();
 			channel.onmessage = (p) => (streamingText += p.chunk);
-			const reply = (await call(commands.npcSay(characterId, input, channel), { source: "game", silent: true }).catch((e) => {
+			const request = target.kind === "scene" ? commands.sceneSay(input, channel) : commands.npcSay(target.characterId, input, channel);
+			const reply = (await call(request, { source: "game", silent: true }).catch((e) => {
 				reportGameError(e, gameStore.project?.id);
 				throw e;
 			})) as unknown as NpcReply;
-			applyReply(reply);
+			applyReply(reply, prefix, startAt);
 		} catch (error) {
-			console.error("NPC message failed:", error);
-			freeTextInput = input;
+			console.error(target.kind === "scene" ? "Scene input failed:" : "NPC message failed:", error);
+			if (!opts.fromChoice) freeTextInput = input;
 			hideSceneChoicesDuringTalk = false;
 		} finally {
 			streamingText = "";
@@ -340,22 +355,26 @@
 		}
 	}
 
-	/** AI 응답(새로 받은 것, 다시 만든 것)을 무대에 올림 */
-	function applyReply(reply: NpcReply) {
+	/** AI 응답(새로 받은 것, 다시 만든 것)을 무대에 올림. prefix가 있으면 그 뒤에 붙이고 startAt 줄부터 보여준다 */
+	function applyReply(reply: NpcReply, prefix: StageLine[] = [], startAt = 0) {
 		runtimeStore.setState({
 			state: reply.state,
 			events: reply.events,
 			history: { entries: [], hasMore: false, oldestSeq: 0 },
 		});
-		scriptLines = reply.lines;
-		lineIndex = 0;
+		// 씬 입력의 응답으로 씬이 끝났으면 씬 선택지를 다시 숨길 이유가 없다
+		if (!reply.state.currentSceneId && !reply.state.activeNpcId) hideSceneChoicesDuringTalk = false;
+		scriptLines = [...prefix, ...reply.lines];
+		lineIndex = Math.min(startAt, Math.max(0, scriptLines.length - 1));
 		scriptFinished = scriptLines.length === 0;
 		arrivalOnly = false;
 		npcResponseChoices = reply.events.flatMap((event) => (event.type === "choicePresented" ? event.choices : []));
 		lastReply = reply.messageId ? { messageId: reply.messageId, text: reply.text, lines: reply.lines } : null;
 		stageFrom = reply.messageId ?? null;
-		if (scriptLines.length) prepareLinePresentation(scriptLines);
-		else syncBgmFromStage();
+		if (scriptLines.length) {
+			prepareLinePresentation(scriptLines);
+			if (lineIndex > 0) rebuildLinePresentation(lineIndex);
+		} else syncBgmFromStage();
 	}
 
 	// ---- 메시지 고치기 · 다시 만들기 (화면은 대사지만 단위는 AI 메시지 하나) ----
@@ -401,13 +420,7 @@
 	}
 
 	function handleChoice(choiceId: string) {
-		const choice = runtimeStore.currentChoices.find((candidate) => candidate.id === choiceId);
-		if (!choice) return;
-		// 대화 중 씬 종료 화면에서 고른 선택지는 플레이어의 다음 발화로 NPC에게 전달한다.
-		if (scriptFinished && activeNpcId) {
-			void submitNpcInput(choice.text);
-			return;
-		}
+		if (!runtimeStore.currentChoices.some((candidate) => candidate.id === choiceId)) return;
 		void dispatch({ type: "choose", choiceId });
 	}
 
@@ -507,7 +520,7 @@
 		} else if (/^[1-9]$/.test(e.key) && scriptFinished) {
 			const i = Number(e.key) - 1;
 			if (i < choices.length) handleChoice(choices[i].id);
-			else if (i - choices.length < npcResponseChoices.length) void submitNpcInput(npcResponseChoices[i - choices.length]);
+			else if (i - choices.length < npcResponseChoices.length) void say(npcResponseChoices[i - choices.length], { fromChoice: true });
 		} else if (e.key === "m") openPanelTab("map");
 		else if (e.key === "i") openPanelTab("items");
 		else if (e.key === "a") openPanelTab("actions");
@@ -546,8 +559,10 @@
 			sceneDescription={runtimeStore.currentScene?.description ?? null}
 			{choices}
 			npcChoices={npcResponseChoices}
-			canSendInput={Boolean(activeNpcId)}
-			canStopTalk={Boolean(activeNpcId)}
+			canSendInput={Boolean(sayTarget)}
+			inputPlaceholder={sayTarget?.kind === "scene" ? "이 장면에서 할 말이나 행동 입력" : "하고 싶은 말 입력"}
+			canStopTalk={!sceneOpen && Boolean(activeNpcId)}
+			canEndScene={sceneOpen && sceneChat}
 			inputValue={freeTextInput}
 			{lineIndex}
 			lineCount={scriptLines.length}
@@ -559,10 +574,11 @@
 			onPrevious={previousLine}
 			onAdvance={advanceLine}
 			onChoose={handleChoice}
-			onNpcChoice={(text) => submitNpcInput(text)}
+			onNpcChoice={(text) => say(text, { fromChoice: true })}
 			onInputChange={(value) => (freeTextInput = value)}
-			onSubmitInput={() => submitNpcInput()}
+			onSubmitInput={() => say()}
 			onStopTalk={() => dispatch({ type: "stopTalk" })}
+			onEndScene={() => dispatch({ type: "endScene" })}
 			{autoAdvance}
 			bgmMuted={isBgmMuted}
 			{focusMode}

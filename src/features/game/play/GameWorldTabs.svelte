@@ -67,8 +67,9 @@
 				<h4>대화</h4>
 				<div class="list">
 					{#each runtimeStore.nearbyCharacters as character (character.id)}
-						<button class="row" disabled={busy} onclick={() => send({ type: "talk", gameCharacterId: character.id })}>
-							<span class="ic"><MessageCircle /></span><span class="t"><b>{character.name}</b><small>말 걸기</small></span><ChevronRight />
+						<!-- 씬 동안은 1:1 대화가 막힌다 (엔진이 sceneActive로 거절). 대사창의 씬 입력을 쓴다 -->
+						<button class="row" disabled={busy || Boolean(runtimeStore.currentSceneId)} onclick={() => send({ type: "talk", gameCharacterId: character.id })}>
+							<span class="ic"><MessageCircle /></span><span class="t"><b>{character.name}</b><small>{runtimeStore.currentSceneId ? "장면이 끝나면 말 걸 수 있음" : "말 걸기"}</small></span><ChevronRight />
 						</button>
 					{/each}
 				</div>

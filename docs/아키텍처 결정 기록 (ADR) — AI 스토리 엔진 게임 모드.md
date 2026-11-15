@@ -278,6 +278,15 @@
 - 플랜은 조언일 뿐 엔진 상태를 직접 바꾸지 않는다. 제작자가 표시한 manual 이벤트와 씬을 「무대에 올리라」고 제안하는 것만 가능하고, fire\_event와 같은 검증을 통과해야 한다. 출력은 신뢰하지 않는 입력으로 다루고(스키마, 크기 상한, 존재하는 id만) 프롬프트에서는 앱 고정 규칙보다 낮은 우선순위로 둔다.
 - 저장은 추가 전용 game\_story\_plans(session\_id, seq)라서 분기 때 seq까지 복사된다. 기본은 꺼짐이고 호출 상한은 npc\_say와 같은 제한 안에 둔다. 인벤토리와 관계 이후에 구현한다.
 
+## 플레이 화면의 입력 흐름
+
+**상태** Accepted (2026-11-16)
+
+- 씬이 열려 있으면(RenderState.currentSceneId) 대사창 입력과 AI가 제안한 선택지(`<choice>`)는 씬 입력(sceneSay)으로 간다. 씬 동안은 1:1 대화(talk)가 막히므로 오른쪽 패널의 "말 걸기"도 꺼진다.
+- 씬 밖에서 NPC와 대화 중이면(activeNpcId) 같은 입력이 npcSay로 가고, 대화 동안 씬 선택지는 숨긴다.
+- RenderState.sceneChat이 거짓이면(엔딩 씬, AI 이어가기가 꺼진 씬) 씬 입력창과 "장면 끝내기"를 보여주지 않는다. "장면 끝내기"는 endScene 커맨드다.
+- 씬 선택지를 고르면 대사창이든 오른쪽 패널이든 같은 dispatch(choose)를 거친다. 응답의 ChoiceMade.continuesScene이 참이면 선택지 문구로 sceneSay를 이어 불러, 선택지 결과 대사 뒤에 AI 서술을 붙인다.
+
 ## 게임 오류 코드
 
 **상태** Accepted (2026-11-16)
@@ -303,7 +312,6 @@ reason(BlockReason): conditionNotMet, sceneActive, notPresent, noRoute, noActive
 - 에셋: game\_assets 새 컬럼과 stage\_json 추가 → protocol의 Range·허용 목록 → 정의·패키지·검증·view 연결 → StageCue → AI 태그 파서와 프롬프트.
 - capabilities 강제(지도·시간 끄기)와 chat 전용 템플릿. 사용자 템플릿은 요청이 있을 때만.
 - 호출 예산(토큰·비용), 일지 성장 정책. (8라운드 초과 로깅, 스트리밍 태그 버퍼링은 2026-11-15 구현)
-- 씬 입력(scene\_say) 화면 연결: 커맨드와 바인딩은 있고, 플레이 화면에서 RenderState.sceneChat일 때 입력창과 continuesScene 선택지 이어 쓰기를 붙이는 일이 남았다.
 - AI의 아이템 지급, NPC끼리의 관계 변화(시뮬레이션), 관계 tags 변경 효과, 게임 삭제 시 월드인포 북 정리.
 - 이전 형식(snake\_case) 패키지 호환이 필요하면 format\_version으로 구분한다.
 

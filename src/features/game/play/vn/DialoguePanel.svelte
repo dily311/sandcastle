@@ -1,5 +1,5 @@
 <script lang="ts">
-	import { ChevronLeft, ChevronRight, ChevronsRight, Copy, EyeOff, LogOut, Maximize2, Minimize2, Pencil, Play, RefreshCw, ScrollText, Send, Square, Volume2, VolumeX } from "@lucide/svelte";
+	import { ChevronLeft, ChevronRight, ChevronsRight, Copy, DoorOpen, EyeOff, LogOut, Maximize2, Minimize2, Pencil, Play, RefreshCw, ScrollText, Send, Square, Volume2, VolumeX } from "@lucide/svelte";
 	import type { Choice, StageLine } from "$features/game/types";
 	import { isNarration } from "./playUtils";
 
@@ -13,6 +13,9 @@
 		npcChoices: string[];
 		canSendInput: boolean;
 		canStopTalk: boolean;
+		/** 열린 씬을 끝낼 수 있는가 (씬 입력을 쓸 수 있는 씬) */
+		canEndScene?: boolean;
+		inputPlaceholder?: string;
 		inputValue: string;
 		lineIndex: number;
 		lineCount: number;
@@ -29,6 +32,7 @@
 		onInputChange: (value: string) => void;
 		onSubmitInput: () => void;
 		onStopTalk: () => void;
+		onEndScene?: () => void;
 		// ---- 대사창 아래 동작 줄 ----
 		autoAdvance: boolean;
 		bgmMuted: boolean;
@@ -121,8 +125,8 @@
 					<input
 						value={p.inputValue}
 						oninput={(e) => p.onInputChange(e.currentTarget.value)}
-						placeholder="하고 싶은 말 입력"
-						aria-label="대화 입력"
+						placeholder={p.inputPlaceholder ?? "하고 싶은 말 입력"}
+						aria-label={p.inputPlaceholder ?? "대화 입력"}
 						disabled={p.isLoading}
 					/>
 					<button class="g-btn primary" type="submit" disabled={p.isLoading || !p.inputValue.trim()}><Send />보내기</button>
@@ -134,7 +138,7 @@
 			<p class="idle">장면을 불러오는 중…</p>
 		{/if}
 
-		{#if p.lineCount > 0 || p.canStopTalk}
+		{#if p.lineCount > 0 || p.canStopTalk || p.canEndScene}
 			<div class="foot">
 				{#if p.lineCount > 0}
 					<button class="g-icon" aria-label="이전 대사 (←)" title="이전 대사 (←)" onclick={p.onPrevious} disabled={p.isLoading || (p.lineIndex === 0 && !p.scriptFinished)}><ChevronLeft /></button>
@@ -146,6 +150,7 @@
 				{/if}
 				<span class="sp"></span>
 				{#if p.canStopTalk}<button class="g-btn stop" type="button" disabled={p.isLoading} onclick={p.onStopTalk}><LogOut />대화 끝내기</button>{/if}
+				{#if p.canEndScene && p.onEndScene}<button class="g-btn stop" type="button" disabled={p.isLoading} onclick={p.onEndScene} title="AI 서술을 멈추고 이 장면을 마침"><DoorOpen />장면 끝내기</button>{/if}
 			</div>
 		{/if}
 	</section>

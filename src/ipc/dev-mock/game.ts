@@ -71,11 +71,22 @@ export const gameHandlers: Record<string, (a: Args) => unknown> = {
 	continue_game: () => ({ ...respond(intro), history: { entries: [], hasMore: false, oldestSeq: null } }),
 	dispatch_command: ({ command }) => {
 		state.gameTime += 300;
+		// c2(기다린다)는 다음 씬이 없는 선택지 → 씬이 이어지고 프론트가 sceneSay로 서술을 받는다
+		if (command.type === "choose" && command.choiceId === "c2") {
+			return respond([{ type: "choiceMade", choiceId: "c2", nextSceneId: null, effect: null, continuesScene: true }]);
+		}
+		if (command.type === "endScene") {
+			state.currentSceneId = null;
+			state.availableChoices = [];
+			state.sceneChat = false;
+			return respond([{ type: "sceneEndRequested" }, { type: "stageLines", lines: [line("narration", null, "장면이 끝났다. 이제 자유롭게 움직일 수 있다.")] }]);
+		}
 		if (command.type === "choose") {
 			state.currentSceneId = "s2";
 			state.availableChoices = [];
 			state.locationId = "l2";
 			return respond([
+				{ type: "choiceMade", choiceId: "c1", nextSceneId: "s2", effect: null, continuesScene: false },
 				{ type: "itemAdded", itemId: "it1", quantity: 1 },
 				{ type: "sceneScript", sceneId: "s2", lines: [line("narration", null, "작은 오두막 안, 장작이 타닥거린다."), line("dialogue", "gc1", "여기서 쉬어요. 차를 내올게요.")] },
 			]);
@@ -91,6 +102,19 @@ export const gameHandlers: Record<string, (a: Args) => unknown> = {
 		if (command.type === "stopTalk") state.activeNpcId = null;
 		if (command.type === "interact") return respond([{ type: "stageLines", lines: [line("narration", null, "표지판에는 '오두막 →'이라고 희미하게 적혀 있음.")] }]);
 		return respond([]);
+	},
+	scene_say: ({ input }) => {
+		if (!state.currentSceneId || !state.sceneChat) throw { code: "GAME_ACTION_BLOCKED", category: "GAME", message: "열린 씬이 없어 씬 입력을 쓸 수 없습니다", retryable: false, details: { reason: "noOpenScene" } };
+		return {
+			state: structuredClone(state),
+			events: [{ type: "choicePresented", choices: ["오두막으로 가 보자고 한다", "조금 더 쉬었다 간다"] }],
+			lines: [line("dialogue", "player", input), line("narration", null, "잠시 정적이 흐르고, 엘리안이 고개를 끄덕인다."), line("dialogue", "gc1", "그럼 조금만 더 기다려 봐요. 해가 뜨면 길이 보일 거예요.")],
+			text: `나: ${input}
+잠시 정적이 흐르고, 엘리안이 고개를 끄덕인다.
+엘리안: 그럼 조금만 더 기다려 봐요.`,
+			messageId: `gm${++replySeq}`,
+			userMessageId: `gu${replySeq}`,
+		};
 	},
 	npc_say: ({ input }) => ({
 		state: structuredClone(state),
