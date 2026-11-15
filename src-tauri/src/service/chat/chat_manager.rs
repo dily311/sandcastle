@@ -211,7 +211,8 @@ impl ChatManager {
 /// 한 차례의 종류
 pub enum TurnKind {
     /// 사용자 입력을 저장하고 응답을 만든다. 입력이 비었으면 저장 없이 이어서 응답 (이어쓰기)
-    Send(String),
+    /// 두 번째 값은 붙인 이미지 경로 (글 없이 이미지만 보내도 됨)
+    Send(String, Vec<String>),
     /// 마지막 AI 메시지를 다시 만든다. `swipe`면 스와이프로 쌓고, 아니면 스와이프를 버리고 바꾼다
     Regenerate { swipe: bool },
 }
@@ -348,7 +349,7 @@ impl ChatManager {
                     _ => return Err(AppError::validation("다시 만들 AI 메시지가 없음", None).into()),
                 }
             }
-            TurnKind::Send(_) => None,
+            TurnKind::Send(..) => None,
         };
 
         let mut context = ContextManager
@@ -368,9 +369,10 @@ impl ChatManager {
 
         // 이번에 보낼 사용자 입력: 새로 쓴 것, 또는 (다시 생성일 때) 기록의 마지막 사용자 메시지
         let (input, already_stored, generation_type) = match (&kind, &target) {
-            (TurnKind::Send(text), _) => {
+            (TurnKind::Send(text, images), _) => {
                 let t = text.trim().to_string();
-                let gt = if t.is_empty() { GenerationType::Continue } else { GenerationType::Normal };
+                context.user_images = images.clone();
+                let gt = if t.is_empty() && images.is_empty() { GenerationType::Continue } else { GenerationType::Normal };
                 (t, false, gt)
             }
             (TurnKind::Regenerate { swipe }, Some(t)) => {
@@ -378,7 +380,13 @@ impl ChatManager {
                     context.history.pop();
                 }
                 let input = match context.history.last() {
-                    Some(h) if h.role == "user" => context.history.pop().map(|h| h.content).unwrap_or_default(),
+                    Some(h) if h.role == "user" => match context.history.pop() {
+                        Some(h) => {
+                            context.user_images = h.images;
+                            h.content
+                        }
+                        None => String::new(),
+                    },
                     _ => String::new(),
                 };
                 (input, true, if *swipe { GenerationType::Swipe } else { GenerationType::Regenerate })
@@ -417,7 +425,11 @@ impl ChatManager {
 
         // 새 입력은 저장용 정규식을 거쳐 먼저 저장한다 (응답이 실패해도 입력은 남는다)
         let mut user_msg = None;
-        let prompt_input = if already_stored || input.is_empty() {
+        let attachments = match &kind {
+            TurnKind::Send(_, images) => images.clone(),
+            _ => vec![],
+        };
+        let prompt_input = if already_stored || (input.is_empty() && attachments.is_empty()) {
             apply_prompt_regex(&regex, &mut context, &input, &[RegexTarget::Prompt])
         } else {
             let stored = regex.apply(&input, RegexPlacement::UserInput, &[RegexTarget::Stored], Some(0));
@@ -430,7 +442,13 @@ impl ChatManager {
                     name: Some(me.name.clone()),
                     content: stored.clone(),
                     character_id: None,
-                    meta: Some(json!({ "sender": { "type": "user", "name": me.name, "id": me.id, "kind": me.kind } })),
+                    meta: Some({
+                        let mut meta = json!({ "sender": { "type": "user", "name": me.name, "id": me.id, "kind": me.kind } });
+                        if !attachments.is_empty() {
+                            meta["attachments"] = json!(attachments);
+                        }
+                        meta
+                    }),
                 },
             )
             .await

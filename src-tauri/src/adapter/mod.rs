@@ -92,6 +92,28 @@ pub fn provider_for(format_type: &str) -> Result<&'static dyn AiProvider> {
 pub(crate) struct Turn {
     pub role: PromptRole,
     pub content: String,
+    pub images: Vec<String>,
+}
+
+/// 붙인 이미지 한 장: (MIME, base64). 못 읽거나 너무 크면 건너뜀
+pub(crate) fn load_image(path: &str) -> Option<(String, String)> {
+    use base64::Engine;
+    const MAX: u64 = 20 * 1024 * 1024;
+    let meta = std::fs::metadata(path).ok()?;
+    if meta.len() > MAX {
+        eprintln!("[ai] 첨부 이미지가 너무 커서 건너뜀: {path}");
+        return None;
+    }
+    let bytes = std::fs::read(path).ok()?;
+    let ext = std::path::Path::new(path).extension()?.to_str()?.to_ascii_lowercase();
+    let mime = match ext.as_str() {
+        "png" => "image/png",
+        "jpg" | "jpeg" => "image/jpeg",
+        "webp" => "image/webp",
+        "gif" => "image/gif",
+        _ => return None,
+    };
+    Some((mime.to_string(), base64::engine::general_purpose::STANDARD.encode(bytes)))
 }
 
 /// Claude/Gemini처럼 system을 별도 필드로 받고 user/assistant 교대를 기대하는 공급자를 위해
@@ -105,10 +127,10 @@ pub(crate) fn split_system(prompt: &PromptMessage) -> (Option<String>, Vec<Turn>
     let mut leading = true;
 
     for m in &prompt.messages {
-        if m.content.trim().is_empty() {
+        if m.content.trim().is_empty() && m.images.is_empty() {
             continue;
         }
-        if leading && m.role == PromptRole::System {
+        if leading && m.role == PromptRole::System && m.images.is_empty() {
             system_parts.push(&m.content);
             continue;
         }
@@ -119,12 +141,16 @@ pub(crate) fn split_system(prompt: &PromptMessage) -> (Option<String>, Vec<Turn>
         };
         match turns.last_mut() {
             Some(last) if last.role == role => {
-                last.content.push_str("\n\n");
-                last.content.push_str(&m.content);
+                if !m.content.trim().is_empty() {
+                    last.content.push_str("\n\n");
+                    last.content.push_str(&m.content);
+                }
+                last.images.extend(m.images.iter().cloned());
             }
             _ => turns.push(Turn {
                 role,
                 content: m.content.clone(),
+                images: m.images.clone(),
             }),
         }
     }
@@ -135,6 +161,7 @@ pub(crate) fn split_system(prompt: &PromptMessage) -> (Option<String>, Vec<Turn>
             Turn {
                 role: PromptRole::User,
                 content: "[Start]".to_string(),
+                images: vec![],
             },
         );
     }
@@ -255,7 +282,7 @@ mod tests {
     #[test]
     fn split_system_merges_turns() {
         use crate::models::ai_service::{ChatOptions, PromptMessageItem};
-        let item = |role, c: &str| PromptMessageItem { role, content: c.into(), token: 0 };
+        let item = |role, c: &str| PromptMessageItem { images: vec![], role, content: c.into(), token: 0 };
         let prompt = PromptMessage {
             chat_options: ChatOptions::default(),
             messages: vec![
@@ -279,6 +306,31 @@ mod tests {
                 (PromptRole::Assistant, "ok"),
             ]
         );
+    }
+
+    #[test]
+    fn images_reach_every_request_format() {
+        use crate::models::ai_service::{ChatOptions, PromptMessageItem};
+        let dir = tempfile::tempdir().unwrap();
+        let png = dir.path().join("x.png");
+        std::fs::write(&png, [137u8, 80, 78, 71]).unwrap();
+        let png = png.to_string_lossy().into_owned();
+        let prompt = PromptMessage {
+            chat_options: ChatOptions::default(),
+            messages: vec![
+                PromptMessageItem { images: vec![], role: PromptRole::System, content: "rules".into(), token: 0 },
+                PromptMessageItem { images: vec![png.clone(), "missing.png".into()], role: PromptRole::User, content: "look".into(), token: 0 },
+            ],
+        };
+        let (_, turns) = split_system(&prompt);
+        assert_eq!(turns[0].images.len(), 2);
+
+        let openai = openai_adapter::OpenAIClient::body("m", &prompt).to_string();
+        assert!(openai.contains("data:image/png;base64,iVBORw=="), "{openai}");
+        let claude = claude_adapter::ClaudeClient::body("m", &prompt).to_string();
+        assert!(claude.contains(r#""media_type":"image/png""#) && claude.contains(r#""text":"look""#), "{claude}");
+        let gemini = gemini_adapter::gemini_body(&prompt).to_string();
+        assert!(gemini.contains("inlineData") && !gemini.contains("missing"), "{gemini}");
     }
 
     #[test]

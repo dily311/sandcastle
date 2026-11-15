@@ -27,7 +27,7 @@ export const commands = {
 	 *  입력을 저장하고 응답을 만든다. `text`가 비었으면 이어서 응답만 (이어쓰기).
 	 *  응답 조각은 `on_event`로 흐르고, 저장된 메시지는 반환값으로 온다.
 	 */
-	chatSend: (conversationId: string, text: string, onEvent: Channel<StreamPayload>, options?: InvokeOptions) => __TAURI_INVOKE<ChatTurn_Serialize>("chat_send", { conversationId, text, onEvent }, options),
+	chatSend: (conversationId: string, text: string, attachments: string[], onEvent: Channel<StreamPayload>, options?: InvokeOptions) => __TAURI_INVOKE<ChatTurn_Serialize>("chat_send", { conversationId, text, attachments, onEvent }, options),
 	/**  마지막 AI 메시지 다시 만들기. `swipe`면 스와이프로 쌓고, 아니면 스와이프를 버리고 바꾼다. */
 	chatRegenerate: (conversationId: string, swipe: boolean, onEvent: Channel<StreamPayload>, options?: InvokeOptions) => __TAURI_INVOKE<ChatTurn_Serialize>("chat_regenerate", { conversationId, swipe, onEvent }, options),
 	/**  진행 중인 응답 멈추기 (받은 데까지는 저장됨). 멈출 게 있었으면 true */
@@ -59,6 +59,12 @@ export const commands = {
 	patchConversationMeta: (id: string, patch: Value, options?: InvokeOptions) => __TAURI_INVOKE<Conversation_Serialize>("patch_conversation_meta", { id, patch }, options),
 	/**  메시지 여러 개 한 번에 지우기. 지운 개수를 돌려준다 */
 	deleteMessages: (ids: string[], options?: InvokeOptions) => __TAURI_INVOKE<number>("delete_messages", { ids }, options),
+	/**
+	 *  끌어다 놓은 파일을 디스크에 저장하고 경로를 돌려준다 (웹뷰의 드롭은 경로 없이 내용만 줌).
+	 *  - `keep = true`: 메시지 첨부 이미지. 앱 데이터의 attachments 폴더에 계속 둔다
+	 *  - `keep = false`: 가져오기용 임시 파일. 원래 이름을 살려 임시 폴더에 두고, 하루 지난 것은 지운다
+	 */
+	storeDroppedFile: (name: string, dataBase64: string, keep: boolean, options?: InvokeOptions) => __TAURI_INVOKE<string>("store_dropped_file", { name, dataBase64, keep }, options),
 	/**  대화 하나를 파일로 내보내기. format: "jsonl"(SillyTavern 채팅) | "txt"(읽기용 글) */
 	exportConversation: (id: string, format: string, path: string, options?: InvokeOptions) => __TAURI_INVOKE<number>("export_conversation", { id, format, path }, options),
 	getTask: (taskId: string, options?: InvokeOptions) => __TAURI_INVOKE<TaskInfo_Serialize>("get_task", { taskId }, options),
@@ -2441,23 +2447,36 @@ export type PromptBlocks_Serialize = {
 /**  PromptManager가 만든 최종 프롬프트. 공급자 형식과 무관하며 어댑터가 각자 형식으로 바꾼다. */
 export type PromptMessage = PromptMessage_Serialize | PromptMessage_Deserialize;
 
-export type PromptMessageItem = {
+export type PromptMessageItem = PromptMessageItem_Serialize | PromptMessageItem_Deserialize;
+
+export type PromptMessageItem_Deserialize = {
 	role: PromptRole,
 	content: string,
 	/**  이 메시지의 추정 토큰 수 */
 	token: number,
+	/**  함께 보낼 이미지 (파일 경로). 어댑터가 읽어서 공급자 형식으로 넣는다 */
+	images?: string[],
+};
+
+export type PromptMessageItem_Serialize = {
+	role: PromptRole,
+	content: string,
+	/**  이 메시지의 추정 토큰 수 */
+	token: number,
+	/**  함께 보낼 이미지 (파일 경로). 어댑터가 읽어서 공급자 형식으로 넣는다 */
+	images?: string[],
 };
 
 /**  PromptManager가 만든 최종 프롬프트. 공급자 형식과 무관하며 어댑터가 각자 형식으로 바꾼다. */
 export type PromptMessage_Deserialize = {
 	chatOptions: ChatOptions_Deserialize,
-	messages: PromptMessageItem[],
+	messages: PromptMessageItem_Deserialize[],
 };
 
 /**  PromptManager가 만든 최종 프롬프트. 공급자 형식과 무관하며 어댑터가 각자 형식으로 바꾼다. */
 export type PromptMessage_Serialize = {
 	chatOptions: ChatOptions_Serialize,
-	messages: PromptMessageItem[],
+	messages: PromptMessageItem_Serialize[],
 };
 
 /**  프리셋 + 블록 (블록은 실행 순서대로) */

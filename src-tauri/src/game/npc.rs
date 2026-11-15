@@ -336,12 +336,12 @@ async fn converse(app: AppHandle, state: &State<'_, AppState>, settings: &State<
     let mut history: Vec<HistoryItem> = all_messages
         .into_iter()
         .skip(skip)
-        .map(|m| HistoryItem { role: m.role, content: m.content })
+        .map(|m| HistoryItem { images: vec![], role: m.role, content: m.content })
         .collect();
 
     // 씬 입력: 앞서 나온 씬 대본을 첫 기록으로 넣는다 (대본 줄은 메시지로 저장돼 있지 않다).
     if let Some(script) = scene_script {
-        history.insert(0, HistoryItem { role: "assistant".to_string(), content: script });
+        history.insert(0, HistoryItem { images: vec![], role: "assistant".to_string(), content: script });
     }
 
     // 페르소나는 항상 있다 — 새 게임 시작 때 세션에 고정된 player_id를 그대로 쓴다.
@@ -355,7 +355,7 @@ async fn converse(app: AppHandle, state: &State<'_, AppState>, settings: &State<
     }
     let persona_info = format!("{}\n{}", persona.name, persona.description);
 
-    let context = ChatContext {
+    let context = ChatContext { user_images: vec![],
         char_name: Some(snap.character_name.clone()),
         user_name: Some(persona.name.clone()),
         system_rules: match &mode {

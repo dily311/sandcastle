@@ -261,6 +261,8 @@ export const chatHandlers: Record<string, (a: Args) => unknown> = {
 		return view(c);
 	},
 	export_conversation: ({ id }) => msgsOf(id as string).length,
+	// 첨부는 미리보기가 되도록 data: 주소를 그대로 경로로 씀
+	store_dropped_file: ({ name, dataBase64, keep }) => (keep ? (dataBase64 as string) : `C:/mock/drop/${name as string}`),
 	patch_conversation_meta: ({ id, patch }) => {
 		const c = conv(id);
 		const meta: Record<string, unknown> = { ...((c.meta as object) ?? {}) };
@@ -333,10 +335,11 @@ export const chatHandlers: Record<string, (a: Args) => unknown> = {
 			],
 		};
 	},
-	chat_send: async ({ conversationId, text, onEvent }): Promise<ChatTurn_Serialize> => {
+	chat_send: async ({ conversationId, text, attachments, onEvent }): Promise<ChatTurn_Serialize> => {
 		const c = conv(conversationId);
 		let user: Message_Serialize | null = null;
-		if (text.trim()) user = addMsg(c, "user", text.trim(), 0);
+		const files = (attachments as string[] | undefined) ?? [];
+		if (text.trim() || files.length) user = addMsg(c, "user", text.trim(), 0, files.length ? { attachments: files } : {});
 		const r = await generate(conversationId, onEvent);
 		const assistant = addMsg(c, "assistant", r.content, 0, { info: r.info });
 		c.updatedAt = now();

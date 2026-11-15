@@ -213,7 +213,7 @@ mod tests {
     fn peek_history_labels_lines() {
         let me = Side { kind: "character".into(), id: "a".into(), name: "Aria".into(), description: String::new(), example_dialogue: None, main_prompt: None };
         let other = Side { name: "Sera".into(), ..me.clone() };
-        let mut h = vec![HistoryItem { role: "user".into(), content: "안녕\n뭐 해?".into() }];
+        let mut h = vec![HistoryItem { images: vec![], role: "user".into(), content: "안녕\n뭐 해?".into() }];
         peek_history(&mut h, &me, &other);
         assert_eq!(h[0].content, "Aria: 안녕\nAria: 뭐 해?");
     }

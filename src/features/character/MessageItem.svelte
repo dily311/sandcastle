@@ -7,6 +7,7 @@
 	import { appSetting } from "$shared/stores/appSetting.svelte";
 	import { toBlocks } from "./format";
 	import { metaOf, type ChatSession, type Message } from "./session.svelte";
+	import { fileSrc } from "$shared/ipc/file";
 
 	interface Props {
 		msg: Message;
@@ -107,6 +108,11 @@
 			</div>
 		</div>
 	{:else}
+		{#if meta.attachments?.length}
+			<div class="attach">
+				{#each meta.attachments as a (a)}<a href={fileSrc(a)} target="_blank" rel="noreferrer"><img src={fileSrc(a)} alt="첨부 이미지" loading="lazy" /></a>{/each}
+			</div>
+		{/if}
 		{#each blocks as b, i (i)}
 			{#if b.kind === "p"}
 				<p>
@@ -131,6 +137,20 @@
 </div>
 
 <style>
+	.attach {
+		display: flex;
+		flex-wrap: wrap;
+		gap: var(--space-2);
+		margin: var(--space-1) 0 var(--space-2);
+	}
+	.attach img {
+		display: block;
+		max-width: 220px;
+		max-height: 220px;
+		border-radius: var(--radius-md);
+		object-fit: cover;
+		box-shadow: 0 0 0 1px var(--border);
+	}
 	.block {
 		position: relative;
 		margin: 0 calc(var(--space-3) * -1);

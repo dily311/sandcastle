@@ -4,7 +4,7 @@ use super::*;
 use crate::models::ai_service::HistoryItem;
 
 fn ctx() -> ChatContext {
-    ChatContext {
+    ChatContext { user_images: vec![],
         system_rules: vec!["Stay in character as {{char}}.".into()],
         char_name: Some("Aria".into()),
         user_name: Some("Min".into()),
@@ -30,7 +30,7 @@ fn request(context: ChatContext, user_message: &str) -> PromptRequest {
 }
 
 fn hist(role: &str, content: &str) -> HistoryItem {
-    HistoryItem {
+    HistoryItem { images: vec![],
         role: role.into(),
         content: content.into(),
     }
@@ -117,7 +117,7 @@ fn history_is_trimmed_from_oldest() {
     let mut req = request(c.clone(), "latest");
     // 히스토리 없이 들어가는 고정 부분 + 메시지 3개 정도만 들어갈 예산
     let fixed = PromptManager
-        .build(request(ChatContext { history: vec![], ..c }, "latest"), None)
+        .build(request(ChatContext { user_images: vec![], history: vec![], ..c }, "latest"), None)
         .unwrap()
         .total_tokens() as u32;
     let per_msg = count_message_tokens("message number 49") as u32;
@@ -169,7 +169,7 @@ fn world_info_respects_budget_ratio() {
     ];
     let mut req = request(c.clone(), "hi");
     let fixed = PromptManager
-        .build(request(ChatContext { world_info: vec![], ..c }, "hi"), None)
+        .build(request(ChatContext { user_images: vec![], world_info: vec![], ..c }, "hi"), None)
         .unwrap()
         .total_tokens() as u32;
     req.context_limit = fixed + 100 + ChatOptions::default().max_tokens.unwrap();
@@ -319,4 +319,23 @@ fn character_main_prompt_replaces_main_block() {
     assert!(all.contains("전용 지시"), "{all}");
     assert!(!all.contains("기본 지시"), "{all}");
     assert!(all.contains("마무리"));
+}
+
+#[test]
+fn attached_images_ride_along_with_their_messages() {
+    let mut c = ctx();
+    c.history = vec![
+        HistoryItem { images: vec!["a.png".into()], role: "user".into(), content: "".into() },
+        hist("assistant", "nice picture"),
+    ];
+    c.user_images = vec!["b.jpg".into()];
+    let p = PromptManager.build(request(c, "and this one?"), None).unwrap();
+    let with_images: Vec<_> = p.messages.iter().filter(|m| !m.images.is_empty()).map(|m| (m.content.as_str(), m.images.clone())).collect();
+    assert_eq!(with_images, vec![("", vec!["a.png".to_string()]), ("and this one?", vec!["b.jpg".to_string()])]);
+
+    // 글 없이 이미지만 보내도 사용자 차례가 생김
+    let mut c = ctx();
+    c.user_images = vec!["only.png".into()];
+    let p = PromptManager.build(request(c, ""), None).unwrap();
+    assert_eq!(p.messages.last().map(|m| m.images.clone()), Some(vec!["only.png".to_string()]));
 }

@@ -1,4 +1,5 @@
 <script lang="ts">
+	import { drops, extOf, storeFile } from "$app/drop.svelte";
 	import { Gamepad2, Plus, Search, Upload } from "@lucide/svelte";
 	import { Button, Dialog, EmptyState, Field, Input, Select } from "$shared/ui";
 	import { pickFiles, PACK_FILES } from "$shared/ipc/dialog";
@@ -33,10 +34,22 @@
 	}
 	async function importGame() {
 		const [path] = await pickFiles([{ name: "게임 묶음", extensions: ["zip", "tgame"] }, PACK_FILES], false);
-		if (!path) return;
+		if (path) await importPath(path);
+	}
+	async function importPath(path: string) {
 		const g = await games.import(path);
 		toasts.success(`'${g.title}' 가져옴`);
 	}
+	$effect(() =>
+		drops.register({
+			label: "게임 가져오기",
+			hint: "게임 묶음 (.zip, .tgame)",
+			accept: (f) => ["zip", "tgame"].includes(extOf(f)),
+			ondrop: async (files) => {
+				for (const f of files) await importPath(await storeFile(f)).catch(() => {});
+			},
+		}),
+	);
 	const capLabel: Record<string, string> = { choices: "선택지", freeText: "자유 입력", inventory: "인벤토리", map: "지도", aiNarration: "AI 서술" };
 </script>
 

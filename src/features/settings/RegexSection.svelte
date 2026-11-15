@@ -1,4 +1,5 @@
 <script lang="ts">
+	import { drops, extOf, storeFile } from "$app/drop.svelte";
 	import { onMount } from "svelte";
 	import { Download, Plus } from "@lucide/svelte";
 	import type {
@@ -130,7 +131,19 @@
 	}
 	async function importFile() {
 		const [path] = await pickFiles([JSON_FILES], false);
-		if (!path) return;
+		if (path) await importPath(path);
+	}
+	$effect(() =>
+		drops.register({
+			label: "정규식 가져오기",
+			hint: "SillyTavern 정규식 JSON (프리셋에 든 정규식도)",
+			accept: (f) => extOf(f) === "json",
+			ondrop: async (files) => {
+				for (const f of files) await importPath(await storeFile(f)).catch(() => {});
+			},
+		}),
+	);
+	async function importPath(path: string) {
 		const r = await call(commands.importSillytavern(path, null, null), src);
 		if (r.kind === "regex") toasts.success(`정규식 ${r.scripts.length}개 가져옴`);
 		else if (r.kind === "preset") toasts.success(`프리셋 '${r.name}' 가져옴 · 정규식 ${r.regexCount}개`);

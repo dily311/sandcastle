@@ -140,9 +140,9 @@ impl PromptManager {
         // ---- 대화 기록 (최근부터)
         let history_budget = remaining.saturating_sub(wi_used);
         let mut used = 0usize;
-        let mut history: Vec<(PromptRole, String)> = vec![];
+        let mut history: Vec<Line> = vec![];
         for item in ctx.history.iter().rev() {
-            if item.content.trim().is_empty() {
+            if item.content.trim().is_empty() && item.images.is_empty() {
                 continue;
             }
             let t = count_message_tokens(&item.content);
@@ -150,24 +150,24 @@ impl PromptManager {
                 break;
             }
             used += t;
-            history.push((PromptRole::from_history(&item.role), item.content.clone()));
+            history.push((PromptRole::from_history(&item.role), item.content.clone(), item.images.clone()));
         }
         history.reverse();
-        if !user_message.is_empty() {
-            history.push((PromptRole::User, user_message));
+        if !user_message.is_empty() || !ctx.user_images.is_empty() {
+            history.push((PromptRole::User, user_message, ctx.user_images.clone()));
         }
 
         // ---- 조립
-        let mut out: Vec<(PromptRole, String)> = vec![];
+        let mut out: Vec<Line> = vec![];
         if !rules.is_empty() {
-            out.push((PromptRole::System, rules));
+            out.push((PromptRole::System, rules, vec![]));
         }
         let has_wi_slot = layout
             .iter()
             .any(|s| matches!(s, Slot::Section { section: Section::WorldInfo, .. }));
         if !has_wi_slot {
             if let Some(wi) = &world_info_text {
-                out.push((PromptRole::System, wi.clone()));
+                out.push((PromptRole::System, wi.clone(), vec![]));
             }
         }
 
@@ -177,13 +177,13 @@ impl PromptManager {
             match slot {
                 Slot::Text { role, content } => {
                     if !content.trim().is_empty() {
-                        out.push((role, content));
+                        out.push((role, content, vec![]));
                     }
                 }
                 Slot::Section { section: Section::WorldInfo, role, .. } => {
                     if !wi_placed {
                         if let Some(wi) = &world_info_text {
-                            out.push((role, wi.clone()));
+                            out.push((role, wi.clone(), vec![]));
                         }
                         wi_placed = true;
                     }
@@ -196,7 +196,7 @@ impl PromptManager {
                 }
                 Slot::Section { section, role, label } => {
                     if let Some(v) = sections.get(section) {
-                        out.push((role, with_label(label.as_deref(), v)));
+                        out.push((role, with_label(label.as_deref(), v), vec![]));
                     }
                 }
             }
@@ -206,10 +206,11 @@ impl PromptManager {
             chat_options: options,
             messages: out
                 .into_iter()
-                .map(|(role, content)| PromptMessageItem {
+                .map(|(role, content, images)| PromptMessageItem {
                     token: count_message_tokens(&content) as i64,
                     role,
                     content,
+                    images,
                 })
                 .collect(),
         })
@@ -355,13 +356,16 @@ fn trigger_matches(triggers: &Value, generation_type: GenerationType) -> bool {
 
 /// in_chat 블록을 "끝에서 depth번째 메시지 앞"에 끼운다. depth 0 = 맨 끝.
 /// 같은 위치의 블록은 프리셋 순서를 유지한다.
-fn interleave_in_chat(chat: Vec<(PromptRole, String)>, in_chat: &[InChat]) -> Vec<(PromptRole, String)> {
+/// 프롬프트 한 줄: 역할, 내용, 붙인 이미지
+type Line = (PromptRole, String, Vec<String>);
+
+fn interleave_in_chat(chat: Vec<Line>, in_chat: &[InChat]) -> Vec<Line> {
     let n = chat.len();
     let at = |pos: usize| {
         in_chat
             .iter()
             .filter(move |b| n - b.depth.min(n) == pos)
-            .map(|b| (b.role, b.content.clone()))
+            .map(|b| (b.role, b.content.clone(), vec![]))
     };
     let mut out = Vec::with_capacity(n + in_chat.len());
     for (i, msg) in chat.into_iter().enumerate() {

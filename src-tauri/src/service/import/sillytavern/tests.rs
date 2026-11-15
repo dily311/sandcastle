@@ -91,7 +91,7 @@ async fn imported_preset_drives_prompt_assembly() {
 
     let loaded = PromptManager::load_preset(&db, Some(&preset_id)).await.unwrap().unwrap();
     let request = |gen| PromptRequest {
-        context: ChatContext {
+        context: ChatContext { user_images: vec![],
             char_name: Some("Aria".into()),
             ..Default::default()
         },
@@ -246,13 +246,13 @@ async fn st_seraphina_prompt_matches_sillytavern_order() {
     let p = PromptManager
         .build(
             PromptRequest {
-                context: ChatContext {
+                context: ChatContext { user_images: vec![],
                     char_name: Some(character.name.clone()),
                     user_name: Some("Min".into()),
                     character_info: Some(character.description.clone()),
                     persona_info: "A lost traveler.".into(),
                     world_info: db::conversation::get_all_worldinfo_entries(&db, &book_id).await.unwrap(),
-                    history: vec![crate::models::ai_service::HistoryItem {
+                    history: vec![crate::models::ai_service::HistoryItem { images: vec![],
                         role: "assistant".into(),
                         content: character.first_message.clone().unwrap(),
                     }],

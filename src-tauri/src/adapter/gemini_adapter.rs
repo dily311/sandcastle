@@ -7,7 +7,7 @@ use serde_json::{json, Map, Value};
 
 use crate::{
     adapter::{
-        ensure_success, net_err, parse_err, split_system, sse::read_sse, AiProvider, Generation, OnDelta,
+        ensure_success, load_image, net_err, parse_err, split_system, sse::read_sse, AiProvider, Generation, OnDelta,
         ProviderCall,
     },
     error::Result,
@@ -38,7 +38,16 @@ pub(crate) fn gemini_body(prompt: &PromptMessage) -> Value {
                 .iter()
                 .map(|t| {
                     let role = if t.role == PromptRole::Assistant { "model" } else { "user" };
-                    json!({ "role": role, "parts": [{ "text": t.content }] })
+                    let mut parts: Vec<Value> = t
+                        .images
+                        .iter()
+                        .filter_map(|p| load_image(p))
+                        .map(|(mime, data)| json!({ "inlineData": { "mimeType": mime, "data": data } }))
+                        .collect();
+                    if !t.content.trim().is_empty() || parts.is_empty() {
+                        parts.push(json!({ "text": t.content }));
+                    }
+                    json!({ "role": role, "parts": parts })
                 })
                 .collect(),
         ),

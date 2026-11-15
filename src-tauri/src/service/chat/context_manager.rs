@@ -21,13 +21,14 @@ impl ContextManager {
             .into_iter()
             .filter(|m| !is_hidden(m.meta.as_ref()))
             .map(|m| HistoryItem {
+                images: attachments_of(m.meta.as_ref()),
                 role: m.role,
                 content: m.content,
             })
             .collect();
 
         // 현재 대화 중인 캐릭터의 데이터 불러오기
-        Ok(ChatContext {
+        Ok(ChatContext { user_images: vec![],
             system_rules: vec![],
             char_name: Some(character.name.clone()),
             user_name: Some(persona.name.clone()),
@@ -44,6 +45,14 @@ impl ContextManager {
     pub async fn build_game_mode_context(&self, request: &ContextRequest) -> Result<ChatContext> {
         todo!()
     }
+}
+
+/// 메시지 meta.attachments의 이미지 경로
+pub fn attachments_of(meta: Option<&serde_json::Value>) -> Vec<String> {
+    meta.and_then(|m| m.get("attachments"))
+        .and_then(serde_json::Value::as_array)
+        .map(|a| a.iter().filter_map(|v| v.as_str().map(str::to_string)).collect())
+        .unwrap_or_default()
 }
 
 /// 메시지 meta의 hidden 플래그

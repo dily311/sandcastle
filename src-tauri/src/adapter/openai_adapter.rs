@@ -11,12 +11,24 @@ use crate::{
 pub struct OpenAIClient;
 
 impl OpenAIClient {
-    fn body(model: &str, prompt: &PromptMessage) -> Value {
+    pub(crate) fn body(model: &str, prompt: &PromptMessage) -> Value {
         let messages: Vec<Value> = prompt
             .messages
             .iter()
-            .filter(|m| !m.content.is_empty())
-            .map(|m| json!({ "role": m.role.as_str(), "content": m.content }))
+            .filter(|m| !m.content.is_empty() || !m.images.is_empty())
+            .map(|m| {
+                if m.images.is_empty() {
+                    return json!({ "role": m.role.as_str(), "content": m.content });
+                }
+                let mut parts: Vec<Value> = vec![];
+                if !m.content.trim().is_empty() {
+                    parts.push(json!({ "type": "text", "text": m.content }));
+                }
+                for (mime, data) in m.images.iter().filter_map(|p| crate::adapter::load_image(p)) {
+                    parts.push(json!({ "type": "image_url", "image_url": { "url": format!("data:{mime};base64,{data}") } }));
+                }
+                json!({ "role": m.role.as_str(), "content": parts })
+            })
             .collect();
         let opts = &prompt.chat_options;
         let mut body = Map::new();

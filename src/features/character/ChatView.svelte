@@ -3,6 +3,7 @@
 	import { Bookmark, Copy, CornerUpLeft, FastForward, Images, ListChecks, ListTree, NotebookPen, PanelLeft, Plus, RefreshCw, Send, SlidersHorizontal, Square, Trash2, X } from "@lucide/svelte";
 	import { bookmarks } from "./bookmarks";
 	import SidePanel from "$app/SidePanel.svelte";
+	import { drops, extOf, isImage, storeFile } from "$app/drop.svelte";
 	import { Button } from "$shared/ui";
 	import { confirmAction } from "$shared/stores/confirm.svelte";
 	import { toasts } from "$shared/stores/toast.svelte";
@@ -96,14 +97,62 @@
 
 	// ---- 입력 ----
 	let draft = $state("");
-	async function send() {
-		if (!session || session.busy) return;
-		const text = draft;
-		if (!text.trim()) return;
-		draft = "";
-		stick = true;
-		await session.send(text);
+	/** 다음 메시지에 붙일 이미지 (보낼 때 디스크에 저장) */
+	let pending = $state<{ file: File; url: string }[]>([]);
+	const MAX_ATTACH = 6;
+	function attach(files: File[]) {
+		const imgs = files.filter(isImage).slice(0, Math.max(0, MAX_ATTACH - pending.length));
+		if (imgs.length < files.filter(isImage).length) toasts.info(`이미지는 한 번에 ${MAX_ATTACH}장까지`);
+		pending = [...pending, ...imgs.map((file) => ({ file, url: URL.createObjectURL(file) }))];
 	}
+	function unattach(i: number) {
+		URL.revokeObjectURL(pending[i].url);
+		pending = pending.filter((_, j) => j !== i);
+	}
+	function onpaste(e: ClipboardEvent) {
+		const files = Array.from(e.clipboardData?.files ?? []).filter(isImage);
+		if (!files.length) return;
+		e.preventDefault();
+		attach(files);
+	}
+	let sending = $state(false);
+	async function send() {
+		if (!session || session.busy || sending) return;
+		const text = draft;
+		if (!text.trim() && !pending.length) return;
+		const items = pending;
+		sending = true;
+		let paths: string[];
+		try {
+			paths = await Promise.all(items.map((p) => storeFile(p.file, true)));
+		} catch {
+			sending = false;
+			return; // 토스트는 call이 띄움. 입력과 첨부는 그대로 둠
+		}
+		draft = "";
+		pending = [];
+		sending = false;
+		stick = true;
+		await session.send(text, paths, items.map((p) => p.url));
+		for (const p of items) URL.revokeObjectURL(p.url);
+	}
+
+	// 파일을 끌어다 놓으면: 이미지는 첨부, .jsonl은 이 캐릭터의 대화로 가져오기
+	$effect(() =>
+		drops.register({
+			priority: 1,
+			label: "이미지 첨부 · 대화 가져오기",
+			hint: "이미지는 다음 메시지에 붙고, SillyTavern 채팅(.jsonl)은 이 캐릭터의 대화로 들어옴",
+			accept: (f) => isImage(f) || extOf(f) === "jsonl",
+			ondrop: async (files) => {
+				attach(files.filter(isImage));
+				for (const f of files.filter((x) => extOf(x) === "jsonl")) {
+					const r = await library.importSillyTavern(await storeFile(f), charId).catch(() => null);
+					if (r?.kind === "chat") onopen(r.conversation.id);
+				}
+			},
+		}),
+	);
 	function onkeydown(e: KeyboardEvent) {
 		if (e.key !== "Enter" || e.shiftKey || e.isComposing) return;
 		// 설정: Enter로 보내기. 끄면 Ctrl+Enter
@@ -233,10 +282,11 @@
 					{/each}
 
 					{#if session.live?.kind === "send"}
-						{#if session.live.userText}
+						{#if session.live.userText || session.live.userImages}
 							<div class="block user pending">
 								<div class="who"><span class="no">#{session.messages.length + 1}</span><b>{library.persona(conv.personaId)?.name ?? "나"}</b><span class="stamp">보내는 중…</span></div>
-								<p>{session.live.userText}</p>
+								{#if session.live.userImages}<div class="attach-strip">{#each session.live.userImages as u (u)}<img src={u} alt="첨부 이미지" />{/each}</div>{/if}
+								{#if session.live.userText}<p>{session.live.userText}</p>{/if}
 							</div>
 						{/if}
 						<div class="block ai">
@@ -254,6 +304,16 @@
 			{/if}
 		</div>
 
+		{#if pending.length}
+			<div class="attach-strip pending-strip" aria-label="붙일 이미지">
+				{#each pending as p, i (p.url)}
+					<span class="thumb">
+						<img src={p.url} alt={p.file.name} title={p.file.name} />
+						<button type="button" aria-label="{p.file.name} 빼기" onclick={() => unattach(i)}><X /></button>
+					</span>
+				{/each}
+			</div>
+		{/if}
 		<form
 			class="composer"
 			onsubmit={(e) => {
@@ -262,11 +322,11 @@
 			}}
 		>
 			<IconButton label="추가 기능" onclick={openPlus} disabled={!session || session.busy}><Plus /></IconButton>
-			<Textarea bind:value={draft} rows={1} autosize maxRows={8} placeholder={appSetting.sendOnEnter ? "다음 행동이나 대사 입력 (Shift+Enter 줄바꿈)" : "다음 행동이나 대사 입력 (Ctrl+Enter 보내기)"} aria-label="메시지" {onkeydown} />
+			<Textarea bind:value={draft} rows={1} autosize maxRows={8} placeholder={appSetting.sendOnEnter ? "다음 행동이나 대사 입력 (Shift+Enter 줄바꿈)" : "다음 행동이나 대사 입력 (Ctrl+Enter 보내기)"} aria-label="메시지" {onkeydown} {onpaste} />
 			{#if session?.busy}
 				<IconButton label="멈추기 (받은 데까지 저장)" variant="solid" onclick={() => session?.cancel()}><Square /></IconButton>
 			{:else}
-				<IconButton label="보내기" variant="solid" type="submit" disabled={!draft.trim()}><Send /></IconButton>
+				<IconButton label="보내기" variant="solid" type="submit" disabled={(!draft.trim() && !pending.length) || sending}><Send /></IconButton>
 			{/if}
 		</form>
 		<ContextMenu
@@ -399,6 +459,45 @@
 	}
 	.branch span {
 		color: var(--text-faint);
+	}
+	.attach-strip {
+		display: flex;
+		flex-wrap: wrap;
+		gap: var(--space-2);
+		margin-bottom: var(--space-2);
+	}
+	.attach-strip img {
+		width: 72px;
+		height: 72px;
+		border-radius: var(--radius-md);
+		object-fit: cover;
+		box-shadow: 0 0 0 1px var(--border);
+	}
+	.pending-strip {
+		margin: 0;
+		padding: var(--space-2) var(--space-4) 0;
+	}
+	.thumb {
+		position: relative;
+	}
+	.thumb button {
+		position: absolute;
+		top: -6px;
+		right: -6px;
+		display: grid;
+		place-items: center;
+		width: 20px;
+		height: 20px;
+		padding: 0;
+		border: none;
+		border-radius: 50%;
+		background: var(--text);
+		color: var(--bg);
+		cursor: pointer;
+	}
+	.thumb button :global(svg) {
+		width: 12px;
+		height: 12px;
 	}
 	.selbar {
 		display: flex;

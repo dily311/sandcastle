@@ -212,12 +212,16 @@ pub struct ChatContext {
     pub world_info: Vec<WorldInfoEntry>,
     pub history: Vec<HistoryItem>,
     pub extra_data: serde_json::Value,
+    /// 이번 사용자 입력에 붙인 이미지 (파일 경로)
+    pub user_images: Vec<String>,
 }
 
 #[derive(Serialize, Clone, specta::Type)]
 pub struct HistoryItem {
     pub role: String,
     pub content: String,
+    /// 메시지에 붙인 이미지 (파일 경로, meta.attachments)
+    pub images: Vec<String>,
 }
 
 #[derive(Serialize, specta::Type)]
@@ -304,6 +308,9 @@ pub struct PromptMessageItem {
     pub content: String,
     /// 이 메시지의 추정 토큰 수
     pub token: i64,
+    /// 함께 보낼 이미지 (파일 경로). 어댑터가 읽어서 공급자 형식으로 넣는다
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub images: Vec<String>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, specta::Type)]

@@ -5,7 +5,7 @@ use serde_json::{json, Map, Value};
 
 use crate::{
     adapter::{
-        ensure_success, net_err, parse_err, split_system, sse::read_sse, AiProvider, Generation, OnDelta,
+        ensure_success, load_image, net_err, parse_err, split_system, sse::read_sse, AiProvider, Generation, OnDelta,
         ProviderCall,
     },
     error::{AppError, ErrorCode, Result},
@@ -24,7 +24,7 @@ impl ClaudeClient {
             .header("anthropic-version", ANTHROPIC_VERSION)
     }
 
-    fn body(model: &str, prompt: &PromptMessage) -> Value {
+    pub(crate) fn body(model: &str, prompt: &PromptMessage) -> Value {
         let (system, turns) = split_system(prompt);
         let opts = &prompt.chat_options;
         let mut body = Map::new();
@@ -42,7 +42,21 @@ impl ClaudeClient {
             Value::Array(
                 turns
                     .iter()
-                    .map(|t| json!({ "role": t.role.as_str(), "content": t.content }))
+                    .map(|t| {
+                        if t.images.is_empty() {
+                            return json!({ "role": t.role.as_str(), "content": t.content });
+                        }
+                        let mut parts: Vec<Value> = t
+                            .images
+                            .iter()
+                            .filter_map(|p| load_image(p))
+                            .map(|(mime, data)| json!({ "type": "image", "source": { "type": "base64", "media_type": mime, "data": data } }))
+                            .collect();
+                        if !t.content.trim().is_empty() {
+                            parts.push(json!({ "type": "text", "text": t.content }));
+                        }
+                        json!({ "role": t.role.as_str(), "content": parts })
+                    })
                     .collect(),
             ),
         );

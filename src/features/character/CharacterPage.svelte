@@ -12,6 +12,7 @@
 	import ChatView from "./ChatView.svelte";
 	import CharacterEditor from "./CharacterEditor.svelte";
 	import { library, type Character } from "./library.svelte";
+	import { drops, extOf, storeFile } from "$app/drop.svelte";
 
 	// 캐릭터 목록 → 캐릭터 상세 → 대화 상세 (대화 목록·폴더는 대화 상세의 왼쪽 사이드바)
 	let { charId, convId, edit = false }: { charId?: string; convId?: string; edit?: boolean } = $props();
@@ -42,15 +43,27 @@
 	const firstLine = (s: string) => s.split("\n").find((l) => l.trim())?.trim() ?? "";
 
 	async function importFiles() {
-		const paths = await pickFiles([ST_FILES, PACK_FILES]);
+		await importPaths(await pickFiles([ST_FILES, PACK_FILES]));
+	}
+	/** 카드(PNG·JSON)·대화(.jsonl)·묶음(ZIP). 캐릭터 상세에서는 대화를 그 캐릭터에 붙임 */
+	async function importPaths(paths: string[]) {
 		for (const p of paths) {
 			if (p.toLowerCase().endsWith(".zip")) {
 				const r = await call(commands.importCharacterPack(p), { source: "character" }).catch(() => null);
 				if (r) toasts.success(`캐릭터 ${r.characters.length}명 · 대화 ${r.conversationCount}개 가져옴`);
-			} else await library.importSillyTavern(p).catch(() => {});
+			} else await library.importSillyTavern(p, p.toLowerCase().endsWith(".jsonl") ? (charId ?? null) : null).catch(() => {});
 		}
 		if (paths.length) await library.load();
 	}
+	const DROP_EXT = ["png", "json", "jsonl", "zip"];
+	$effect(() =>
+		drops.register({
+			label: charId ? `${library.character(charId)?.name ?? "캐릭터"}에 가져오기` : "캐릭터 가져오기",
+			hint: charId ? "SillyTavern 채팅(.jsonl)은 이 캐릭터의 대화로, 카드(PNG·JSON)·묶음(ZIP)은 새 캐릭터로" : "카드(PNG·JSON), 캐릭터 묶음(ZIP), SillyTavern 채팅(.jsonl)",
+			accept: (f) => DROP_EXT.includes(extOf(f)),
+			ondrop: async (files) => importPaths(await Promise.all(files.map((f) => storeFile(f)))),
+		}),
+	);
 	async function createCharacter() {
 		const name = await promptText({ title: "새 캐릭터", message: "자세한 설정은 나중에 편집에서", input: { value: "", placeholder: "이름" }, confirmLabel: "만들기" });
 		if (!name) return;

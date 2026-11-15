@@ -108,7 +108,7 @@ pub async fn get_models(ai: State<'_, Arc<AiService>>, profile_id: String) -> Re
 pub async fn test_message(ai: State<'_, Arc<AiService>>, profile_id: String) -> Result<String> {
     let prompt = PromptMessage {
         chat_options: ChatOptions { max_tokens: Some(32), stream: false, ..ChatOptions::default() },
-        messages: vec![PromptMessageItem {
+        messages: vec![PromptMessageItem { images: vec![],
             role: PromptRole::User,
             content: "Reply with a single word: OK".into(),
             token: 8,

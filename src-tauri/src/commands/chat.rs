@@ -48,10 +48,11 @@ pub async fn chat_send(
     settings: State<'_, SettingsState<AppSetting>>,
     conversation_id: String,
     text: String,
+    attachments: Vec<String>,
     on_event: Channel<StreamPayload>,
 ) -> Result<ChatTurn> {
     ChatManager
-        .turn(&app, &state.db, &settings, &conversation_id, TurnKind::Send(text), Some(on_event))
+        .turn(&app, &state.db, &settings, &conversation_id, TurnKind::Send(text, attachments), Some(on_event))
         .await
         .map_err(into_app_error)
 }

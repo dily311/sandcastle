@@ -1,4 +1,5 @@
 <script lang="ts">
+	import { drops, extOf, storeFile } from "$app/drop.svelte";
 	import { onMount } from "svelte";
 	import { ChevronLeft, Download, Plus } from "@lucide/svelte";
 	import type { PromptBlocksInput_Deserialize as BlockInput, PromptPresetDetail_Serialize as Detail } from "$ipc/bindings";
@@ -69,7 +70,19 @@
 	}
 	async function importFile() {
 		const [path] = await pickFiles([JSON_FILES], false);
-		if (!path) return;
+		if (path) await importPath(path);
+	}
+	$effect(() =>
+		drops.register({
+			label: "프리셋 가져오기",
+			hint: "SillyTavern 프리셋 JSON",
+			accept: (f) => extOf(f) === "json",
+			ondrop: async (files) => {
+				for (const f of files) await importPath(await storeFile(f)).catch(() => {});
+			},
+		}),
+	);
+	async function importPath(path: string) {
 		const r = await call(commands.importSillytavern(path, null, null), src);
 		if (r.kind !== "preset") {
 			toasts.info("프리셋 파일이 아님. 캐릭터·대화는 캐릭터 화면에서 가져옴");

@@ -36,7 +36,7 @@ pub fn apply(ctx: &mut ChatContext, meta: Option<&Value>) {
         let at = ctx.history.len().saturating_sub(depth);
         ctx.history.insert(
             at,
-            HistoryItem { role: "system".into(), content: format!("[작가 노트]\n{}", macros(&t, &char_name, &user_name)) },
+            HistoryItem { images: vec![], role: "system".into(), content: format!("[작가 노트]\n{}", macros(&t, &char_name, &user_name)) },
         );
     }
 }
@@ -47,10 +47,10 @@ mod tests {
     use serde_json::json;
 
     fn ctx(n: usize) -> ChatContext {
-        ChatContext {
+        ChatContext { user_images: vec![],
             char_name: Some("Aria".into()),
             user_name: Some("Min".into()),
-            history: (0..n).map(|i| HistoryItem { role: "user".into(), content: format!("m{i}") }).collect(),
+            history: (0..n).map(|i| HistoryItem { images: vec![], role: "user".into(), content: format!("m{i}") }).collect(),
             ..Default::default()
         }
     }

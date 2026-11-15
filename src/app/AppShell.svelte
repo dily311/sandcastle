@@ -7,6 +7,7 @@
 	import { theme } from "./theme.svelte";
 	import Titlebar from "./Titlebar.svelte";
 	import Sidebar from "./Sidebar.svelte";
+	import DropLayer from "./DropLayer.svelte";
 	import { layout } from "./layout.svelte";
 	import SettingsPage from "$features/settings/SettingsPage.svelte";
 	import PersonaPage from "$features/persona/PersonaPage.svelte";
@@ -62,6 +63,7 @@
 		</main>
 	</div>
 </div>
+<DropLayer />
 <Toasts />
 <ConfirmHost />
 
