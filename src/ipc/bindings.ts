@@ -65,6 +65,7 @@ export const commands = {
 	 *  - `keep = false`: 가져오기용 임시 파일. 원래 이름을 살려 임시 폴더에 두고, 하루 지난 것은 지운다
 	 */
 	storeDroppedFile: (name: string, dataBase64: string, keep: boolean, options?: InvokeOptions) => __TAURI_INVOKE<string>("store_dropped_file", { name, dataBase64, keep }, options),
+	contextUsage: (conversationId: string, options?: InvokeOptions) => __TAURI_INVOKE<ContextUsage_Serialize>("context_usage", { conversationId }, options),
 	/**  대화 하나를 파일로 내보내기. format: "jsonl"(SillyTavern 채팅) | "txt"(읽기용 글) */
 	exportConversation: (id: string, format: string, path: string, options?: InvokeOptions) => __TAURI_INVOKE<number>("export_conversation", { id, format, path }, options),
 	getTask: (taskId: string, options?: InvokeOptions) => __TAURI_INVOKE<TaskInfo_Serialize>("get_task", { taskId }, options),
@@ -691,6 +692,45 @@ export type ChatTurn_Serialize = {
 };
 
 export type ColorSchema = "light" | "dark" | "system";
+
+/**  컨텍스트 사용량 (오른쪽 패널). 마지막으로 보낸 프롬프트 기준 */
+export type ContextUsage = ContextUsage_Serialize | ContextUsage_Deserialize;
+
+/**  컨텍스트 사용량 (오른쪽 패널). 마지막으로 보낸 프롬프트 기준 */
+export type ContextUsage_Deserialize = {
+	/**  마지막 프롬프트의 토큰 (보낸 적 없으면 None) */
+	used?: number | null,
+	/**  그중 시스템(규칙·캐릭터·월드인포·노트 등) */
+	system: number,
+	/**  그중 대화 기록 */
+	history: number,
+	/**  대화 기록에 들어간 메시지 수 */
+	historyCount: number,
+	/**  전체 컨텍스트 한도 (응답 몫 포함) */
+	limit: number,
+	/**  응답 몫으로 비워 두는 토큰 */
+	reserved: number,
+	presetId?: string | null,
+	presetName?: string | null,
+};
+
+/**  컨텍스트 사용량 (오른쪽 패널). 마지막으로 보낸 프롬프트 기준 */
+export type ContextUsage_Serialize = {
+	/**  마지막 프롬프트의 토큰 (보낸 적 없으면 None) */
+	used: number | null,
+	/**  그중 시스템(규칙·캐릭터·월드인포·노트 등) */
+	system: number,
+	/**  그중 대화 기록 */
+	history: number,
+	/**  대화 기록에 들어간 메시지 수 */
+	historyCount: number,
+	/**  전체 컨텍스트 한도 (응답 몫 포함) */
+	limit: number,
+	/**  응답 몫으로 비워 두는 토큰 */
+	reserved: number,
+	presetId: string | null,
+	presetName: string | null,
+};
 
 /**  continue_game / load_save의 응답. events는 항상 비어 있고(새로 생긴 일이 없다), 화면은 state + history로 복원한다. */
 export type ContinueGameResponse = ContinueGameResponse_Serialize | ContinueGameResponse_Deserialize;

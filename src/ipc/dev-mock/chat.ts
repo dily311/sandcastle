@@ -263,6 +263,13 @@ export const chatHandlers: Record<string, (a: Args) => unknown> = {
 	export_conversation: ({ id }) => msgsOf(id as string).length,
 	// 첨부는 미리보기가 되도록 data: 주소를 그대로 경로로 씀
 	store_dropped_file: ({ name, dataBase64, keep }) => (keep ? (dataBase64 as string) : `C:/mock/drop/${name as string}`),
+	context_usage: ({ conversationId }) => {
+		const c = conv(conversationId as string);
+		const msgs = msgsOf(conversationId as string);
+		const history = msgs.reduce((n, m) => n + Math.ceil(m.content.length / 1.5), 0);
+		const presetId = c.promptPresetId || "default";
+		return { used: msgs.length ? 640 + history : null, system: 640, history, historyCount: msgs.length, limit: 8192, reserved: 1024, presetId, presetName: presetId === "default" ? "기본 배치" : presetId };
+	},
 	patch_conversation_meta: ({ id, patch }) => {
 		const c = conv(id);
 		const meta: Record<string, unknown> = { ...((c.meta as object) ?? {}) };

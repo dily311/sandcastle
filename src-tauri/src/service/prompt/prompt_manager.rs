@@ -436,7 +436,7 @@ fn world_info_matches(entry: &WorldInfoEntry, scan: &str) -> bool {
 
 /// 프리셋 설정 → ChatOptions. settings_json이 config_json보다 우선.
 /// 네이티브 키와 SillyTavern 키를 모두 읽는다.
-fn chat_options_from(preset: &PromptPresets) -> ChatOptions {
+pub(crate) fn chat_options_from(preset: &PromptPresets) -> ChatOptions {
     let mut o = ChatOptions::default();
     for src in [Some(&preset.config_json), preset.settings_json.as_ref()].into_iter().flatten() {
         if let Some(v) = num(src, &["temperature", "temp_openai"]) {
@@ -464,7 +464,7 @@ fn chat_options_from(preset: &PromptPresets) -> ChatOptions {
 }
 
 /// 프리셋의 컨텍스트 크기 (settings_json 우선, 없으면 config_json)
-fn context_limit_from(preset: &PromptPresets) -> Option<u32> {
+pub(crate) fn context_limit_from(preset: &PromptPresets) -> Option<u32> {
     [preset.settings_json.as_ref(), Some(&preset.config_json)]
         .into_iter()
         .flatten()

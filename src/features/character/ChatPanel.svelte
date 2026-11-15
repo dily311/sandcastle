@@ -1,8 +1,13 @@
 <script lang="ts">
-	import { Bookmark, Eye, EyeOff, FileArchive, FileJson, FileText, ImagePlus, Pencil, Search, Trash2, X } from "@lucide/svelte";
+	import { Bookmark, ChevronLeft, Eye, EyeOff, FileArchive, ImagePlus, Pencil, Search, Trash2, X } from "@lucide/svelte";
 	import { Avatar, Button, ContextMenu, IconButton, Input, Select, Switch, type MenuItem } from "$shared/ui";
 	import { bookmarks, bookmarksOf } from "./bookmarks";
 	import NotesPanel from "./NotesPanel.svelte";
+	import ContextMeter from "./ContextMeter.svelte";
+	import ExportButton from "./ExportButton.svelte";
+	import PresetEditor from "$features/settings/PresetEditor.svelte";
+	import { toasts } from "$shared/stores/toast.svelte";
+	import type { ContextUsage, PromptBlocksInput_Deserialize as BlockInput, PromptPresetDetail_Serialize as PresetDetail } from "$ipc/bindings";
 	import { panel } from "$app/panel.svelte";
 	import type { RegexScript_Serialize as RegexScript } from "$ipc/bindings";
 	import { call, commands } from "$shared/ipc/client";
@@ -32,6 +37,42 @@
 			promptPresetId: (p.promptPresetId ?? conv.promptPresetId ?? "") || null,
 			apiProfileId: (p.apiProfileId ?? conv.apiProfileId ?? "") || null,
 		});
+	}
+
+	// ---- 컨텍스트 사용량: 대화가 바뀌거나 응답이 끝날 때마다 ----
+	let usage = $state<ContextUsage | null>(null);
+	async function loadUsage() {
+		usage = await call(commands.contextUsage(conv.id), { source: "chat", silent: true }).catch(() => null);
+	}
+	$effect(() => {
+		void conv.id;
+		void conv.promptPresetId;
+		void session.messages.length;
+		if (!session.busy) void loadUsage();
+	});
+
+	// ---- 프리셋 빠른 편집 (패널 안에서) ----
+	let presetEdit = $state<PresetDetail | null>(null);
+	let presetSaving = $state(false);
+	async function editPreset() {
+		const id = conv.promptPresetId || usage?.presetId;
+		if (!id) return toasts.info("쓰는 프리셋이 없음. 설정 > 프리셋에서 만들 수 있음");
+		presetEdit = await call(commands.getPromptPreset(id), { source: "preset" });
+	}
+	async function savePreset(preset: PresetDetail["preset"], blocks: BlockInput[]) {
+		presetSaving = true;
+		try {
+			const d = await call(commands.savePromptPreset({ ...preset, id: preset.id }, blocks), { source: "preset" });
+			library.presets = await call(commands.listPromptPresets(), { source: "preset" });
+			presetEdit = null;
+			toasts.success(`'${d.preset.name}' 저장함`);
+			void loadUsage();
+		} finally {
+			presetSaving = false;
+		}
+	}
+	async function closePreset() {
+		if (await confirmAction({ title: "프리셋 편집 그만두기", message: "저장하지 않은 바뀐 내용은 버림", confirmLabel: "그만두기" })) presetEdit = null;
 	}
 
 	const persona = $derived(library.persona(conv.personaId) ?? library.personas[0]);
@@ -184,12 +225,32 @@
 				<li class="none">{tocQuery ? "찾는 항목 없음" : "메시지 없음"}</li>
 			{/each}
 		</ol>
+	{:else if presetEdit}
+		<div class="panel-body preset-edit">
+			<div class="back">
+				<IconButton label="대화 설정으로" size="sm" onclick={closePreset}><ChevronLeft /></IconButton>
+				<span>프리셋 편집 · <b>{presetEdit.preset.name}</b></span>
+			</div>
+			{#key presetEdit.preset.id}
+				<PresetEditor detail={presetEdit} saving={presetSaving} onsave={savePreset} oncancel={closePreset} />
+			{/key}
+		</div>
 	{:else}
 		<div class="panel-body">
 			<section>
+				<h4>컨텍스트</h4>
+				<ContextMeter {usage} />
+			</section>
+			<section>
 				<h4>이 대화</h4>
 				<label class="row"><span>API</span><Select value={conv.apiProfileId ?? DEFAULT} options={apiOptions} onchange={(e) => setOption({ apiProfileId: e.currentTarget.value })} /></label>
-				<label class="row"><span>프리셋</span><Select value={conv.promptPresetId ?? DEFAULT} options={presetOptions} onchange={(e) => setOption({ promptPresetId: e.currentTarget.value })} /></label>
+				<div class="row">
+					<span>프리셋</span>
+					<div class="with-btn">
+						<Select value={conv.promptPresetId ?? DEFAULT} options={presetOptions} aria-label="프리셋" onchange={(e) => setOption({ promptPresetId: e.currentTarget.value })} />
+						<IconButton label="이 프리셋 빠르게 편집{usage?.presetName ? ` (${usage.presetName})` : ''}" size="sm" onclick={editPreset}><Pencil /></IconButton>
+					</div>
+				</div>
 				<div class="persona">
 					<span>페르소나</span>
 					{#if personaOpen}
@@ -228,23 +289,55 @@
 			</section>
 			<section>
 				<h4>내보내기</h4>
-				<Button block onclick={() => convActions.exportAs(conv, "jsonl")}>
-					{#snippet icon()}<FileJson />{/snippet}
-					SillyTavern 채팅 (.jsonl)
-				</Button>
-				<Button block onclick={() => convActions.exportAs(conv, "txt")}>
-					{#snippet icon()}<FileText />{/snippet}
-					텍스트 (.txt)
-				</Button>
-				<Button block onclick={() => convActions.export(conv)}>
-					{#snippet icon()}<FileArchive />{/snippet}
-					캐릭터 묶음 (.zip)
+				<ExportButton {conv} />
+			</section>
+			<hr />
+			<section>
+				<h4>대화 삭제 <span class="faint">되돌릴 수 없음</span></h4>
+				<Button block variant="danger" onclick={() => convActions.remove(conv)}>
+					{#snippet icon()}<Trash2 />{/snippet}
+					이 대화 삭제
 				</Button>
 			</section>
 		</div>
 	{/if}
 
 <style>
+	.with-btn {
+		display: flex;
+		align-items: center;
+		gap: 2px;
+		min-width: 0;
+	}
+	.with-btn > :global(:first-child) {
+		flex: 1;
+		min-width: 0;
+	}
+	hr {
+		width: 100%;
+		margin: 0;
+		border: none;
+		border-top: 1px solid var(--border);
+	}
+	.back {
+		display: flex;
+		align-items: center;
+		gap: var(--space-1);
+		margin-left: calc(var(--space-2) * -1);
+		font-size: var(--text-sm);
+		color: var(--text-muted);
+	}
+	.back b {
+		color: var(--text);
+	}
+	/* 좁은 패널: 설정 화면용 줄을 세로로 */
+	.preset-edit :global(.sliders) {
+		grid-template-columns: minmax(0, 1fr);
+	}
+	.preset-edit :global(.row:not(.stacked)) {
+		flex-wrap: wrap;
+		gap: var(--space-2);
+	}
 	.panel-body {
 		display: flex;
 		flex-direction: column;

@@ -171,6 +171,84 @@ pub async fn branch_conversation(state: State<'_, AppState>, id: String, message
     Ok(conversation::get_conversation(&state.db, &new_id).await?)
 }
 
+/// 컨텍스트 사용량 (오른쪽 패널). 마지막으로 보낸 프롬프트 기준
+#[derive(serde::Serialize, specta::Type)]
+#[serde(rename_all = "camelCase")]
+pub struct ContextUsage {
+    /// 마지막 프롬프트의 토큰 (보낸 적 없으면 None)
+    pub used: Option<u32>,
+    /// 그중 시스템(규칙·캐릭터·월드인포·노트 등)
+    pub system: u32,
+    /// 그중 대화 기록
+    pub history: u32,
+    /// 대화 기록에 들어간 메시지 수
+    pub history_count: u32,
+    /// 전체 컨텍스트 한도 (응답 몫 포함)
+    pub limit: u32,
+    /// 응답 몫으로 비워 두는 토큰
+    pub reserved: u32,
+    pub preset_id: Option<String>,
+    pub preset_name: Option<String>,
+}
+
+#[tauri::command]
+#[specta::specta]
+pub async fn context_usage(
+    state: State<'_, AppState>,
+    settings: State<'_, SettingsState<AppSetting>>,
+    conversation_id: String,
+) -> Result<ContextUsage> {
+    use crate::service::{chat::chat_manager::{current_conv_request, CONTEXT_LIMIT}, prompt::prompt_manager::{chat_options_from, context_limit_from, PromptManager}};
+    use crate::models::ai_service::PromptRole;
+
+    let conv = conversation::get_conversation(&state.db, &conversation_id).await?;
+    let char_default = conversation::get_character(&state.db, &conv.character_id).await.ok().and_then(|c| c.default_prompt_preset_id);
+    let fallback = current_conv_request(&settings).map(|r| r.preset_id).unwrap_or_default();
+    let preset_id = conv
+        .prompt_preset_id
+        .clone()
+        .filter(|s| !s.is_empty())
+        .or(char_default.filter(|s| !s.is_empty()))
+        .or(Some(fallback).filter(|s| !s.is_empty()));
+    let preset = PromptManager::load_preset(&state.db, preset_id.as_deref()).await?;
+    let limit = preset.as_ref().and_then(|p| context_limit_from(&p.preset)).unwrap_or(CONTEXT_LIMIT);
+    let reserved = preset.as_ref().and_then(|p| chat_options_from(&p.preset).max_tokens).unwrap_or(0);
+
+    // 마지막 AI 메시지에 저장된 프롬프트
+    let recent = conversation::get_messages(&state.db, &conversation_id, 30, None).await?;
+    let mut prompt: Option<PromptMessage> = None;
+    for m in recent.iter().rev().filter(|m| m.role == "assistant") {
+        if let Some(v) = chat_ui::get_prompt(&state.db, &m.id).await? {
+            if let Ok(p) = serde_json::from_value::<PromptMessage>(v) {
+                prompt = Some(p);
+                break;
+            }
+        }
+    }
+    let (mut system, mut history, mut history_count) = (0u32, 0u32, 0u32);
+    if let Some(p) = &prompt {
+        for m in &p.messages {
+            let t = m.token.max(0) as u32;
+            if m.role == PromptRole::System {
+                system += t;
+            } else {
+                history += t;
+                history_count += 1;
+            }
+        }
+    }
+    Ok(ContextUsage {
+        used: prompt.map(|_| system + history),
+        system,
+        history,
+        history_count,
+        limit,
+        reserved,
+        preset_name: preset.as_ref().map(|p| p.preset.name.clone()),
+        preset_id,
+    })
+}
+
 /// 대화 하나를 파일로 내보내기. format: "jsonl"(SillyTavern 채팅) | "txt"(읽기용 글)
 #[tauri::command]
 #[specta::specta]

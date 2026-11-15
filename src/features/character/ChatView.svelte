@@ -1,6 +1,6 @@
 <script lang="ts">
 	import { tick } from "svelte";
-	import { Bookmark, Copy, CornerUpLeft, FastForward, Images, ListChecks, ListTree, NotebookPen, PanelLeft, Plus, RefreshCw, Send, SlidersHorizontal, Square, Trash2, X } from "@lucide/svelte";
+	import { Bookmark, Copy, CornerUpLeft, FastForward, ImagePlus, Images, ListChecks, ListTree, NotebookPen, PanelLeft, Plus, RefreshCw, Send, SlidersHorizontal, Square, Trash2, X } from "@lucide/svelte";
 	import { bookmarks } from "./bookmarks";
 	import SidePanel from "$app/SidePanel.svelte";
 	import { drops, extOf, isImage, storeFile } from "$app/drop.svelte";
@@ -116,6 +116,7 @@
 		attach(files);
 	}
 	let sending = $state(false);
+	let fileInput: HTMLInputElement | undefined = $state();
 	async function send() {
 		if (!session || session.busy || sending) return;
 		const text = draft;
@@ -329,11 +330,24 @@
 				<IconButton label="보내기" variant="solid" type="submit" disabled={(!draft.trim() && !pending.length) || sending}><Send /></IconButton>
 			{/if}
 		</form>
+		<input
+			bind:this={fileInput}
+			type="file"
+			accept="image/png,image/jpeg,image/webp,image/gif"
+			multiple
+			hidden
+			onchange={(e) => {
+				const input = e.currentTarget;
+				attach(Array.from(input.files ?? []));
+				input.value = "";
+			}}
+		/>
 		<ContextMenu
 			at={plusMenu}
 			label="추가 기능"
 			items={[
-				{ label: "이어서 응답 받기", icon: FastForward, onselect: () => session?.send("") },
+				{ label: "이미지 첨부", icon: ImagePlus, disabled: pending.length >= MAX_ATTACH, onselect: () => fileInput?.click() },
+				{ label: "이어서 응답 받기", icon: FastForward, separator: true, onselect: () => session?.send("") },
 				{
 					label: "마지막 응답 다시 만들기",
 					icon: RefreshCw,

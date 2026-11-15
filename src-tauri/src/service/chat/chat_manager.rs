@@ -47,13 +47,13 @@ const EVENT_DIALOGUE_DONE: &str = "chat:dialogue:done";
 // TODO: 설정/프리셋에서 받아오기
 const WORLD_INFO_RATIO: f32 = 0.5;
 const HISTORY_LIMIT: i64 = 50;
-const CONTEXT_LIMIT: u32 = 8192;
+pub(crate) const CONTEXT_LIMIT: u32 = 8192;
 
 pub struct ChatRequest {
     api_profile_id: String,
     character_id: String,
     persona_id: String,
-    preset_id: String,
+    pub(crate) preset_id: String,
     phone_mode_prompt: String,
 }
 
