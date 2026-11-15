@@ -192,7 +192,7 @@
 		padding: 8px 14px;
 		border: 1px solid var(--game-border);
 		border-radius: 12px;
-		background: rgb(255 255 255 / 0.04);
+		background: var(--surface-hover);
 		color: var(--game-text-main);
 		font: inherit;
 		font-size: 15px;
@@ -216,7 +216,7 @@
 		min-width: 22px;
 		height: 22px;
 		border-radius: 6px;
-		background: rgb(255 255 255 / 0.08);
+		background: var(--surface-hover);
 		color: var(--game-accent);
 		font-family: var(--font-mono);
 		font-size: 12px;
@@ -232,7 +232,7 @@
 		padding: 0 14px;
 		border: 1px solid var(--game-border);
 		border-radius: 10px;
-		background: rgb(0 0 0 / 0.25);
+		background: var(--bg-sunken);
 		color: var(--game-text-primary);
 		font: inherit;
 		font-size: 15px;
@@ -272,7 +272,7 @@
 		width: 90px;
 		height: 3px;
 		border-radius: 3px;
-		background: rgb(255 255 255 / 0.1);
+		background: var(--surface-hover);
 		overflow: hidden;
 	}
 	.bar i {

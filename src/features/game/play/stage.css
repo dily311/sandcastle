@@ -1,39 +1,36 @@
-/* 게임 무대 색: 화면 모드와 상관없이 어두운 극장 느낌. 강조색만 앱 강조색을 따라감.
+/* 게임 무대 색: 앱 색 테마를 따름.
    플레이 화면 맨 바깥에 class="game-theme"을 붙이면 아래 변수를 씀 */
 .game-theme {
-	--game-player-bg: #0e0e10;
-	--game-stage-bg: #17181b;
-	--game-topbar-bg: rgb(14 14 16 / 0.86);
-	--game-panel-bg: rgb(22 23 26 / 0.94);
-	--game-dialogue-bg: linear-gradient(160deg, rgb(26 27 31 / 0.9), rgb(15 15 18 / 0.92));
-	--game-scene-label-bg: rgb(14 14 16 / 0.55);
-	--game-border: rgb(255 255 255 / 0.13);
-	--game-border-subtle: rgb(255 255 255 / 0.07);
-	--game-surface-hover: rgb(255 255 255 / 0.08);
-	--game-text-primary: #fbfbfc;
-	--game-text-main: #eeeff2;
-	--game-text-secondary: #d4d6db;
-	--game-text-muted: #a9adb5;
-	--game-text-dim: #7d808a;
-	--game-accent: color-mix(in oklab, var(--accent) 72%, white);
-	--game-accent-strong: color-mix(in oklab, var(--accent) 45%, white);
-	--game-accent-soft: color-mix(in oklab, var(--accent) 18%, transparent);
-	--game-accent-hover: color-mix(in oklab, var(--accent) 30%, transparent);
+	/* 앱 테마(밝게/어둡게·강조색·사용자 테마)를 그대로 따름 */
+	--game-player-bg: var(--bg);
+	--game-stage-bg: var(--bg-sunken);
+	--game-topbar-bg: color-mix(in oklab, var(--bg) 88%, transparent);
+	--game-panel-bg: color-mix(in oklab, var(--surface) 97%, transparent);
+	--game-dialogue-bg: color-mix(in oklab, var(--surface) 93%, transparent);
+	--game-scene-label-bg: color-mix(in oklab, var(--surface) 75%, transparent);
+	--game-border: var(--border);
+	--game-border-subtle: color-mix(in oklab, var(--border) 60%, transparent);
+	--game-surface-hover: var(--surface-hover);
+	--game-text-primary: var(--text);
+	--game-text-main: var(--text);
+	--game-text-secondary: color-mix(in oklab, var(--text) 80%, var(--text-muted));
+	--game-text-muted: var(--text-muted);
+	--game-text-dim: var(--text-faint);
+	--game-accent: var(--accent);
+	--game-accent-strong: var(--accent-text);
+	--game-accent-soft: var(--accent-soft);
+	--game-accent-hover: var(--accent-soft-hover);
 	--game-accent-border: color-mix(in oklab, var(--accent) 55%, transparent);
-	--game-danger-text: #ffe0d9;
-	--game-danger-bg: #492722ee;
-	--game-danger-border: #e99b8b66;
-	--game-shadow-panel: 0 16px 48px rgb(0 0 0 / 0.5);
-	--game-shadow-dialogue: 0 18px 60px rgb(0 0 0 / 0.4);
-	--game-stage-placeholder: radial-gradient(ellipse at 50% 35%, #4b4f5c, #24262d 68%, var(--game-stage-bg));
-	--game-stage-shade: linear-gradient(180deg, rgb(8 7 9 / 0.3), transparent 26%, transparent 50%, rgb(8 7 9 / 0.45));
-	--game-character-shadow: drop-shadow(0 12px 24px rgb(0 0 0 / 0.25));
-	--game-character-dim-shadow: brightness(0.4) saturate(0.55) drop-shadow(0 8px 18px rgb(0 0 0 / 0.35));
+	--game-danger-text: var(--danger);
+	--game-danger-bg: var(--danger-soft);
+	--game-danger-border: color-mix(in oklab, var(--danger) 40%, transparent);
+	--game-shadow-panel: var(--shadow-lg);
+	--game-shadow-dialogue: var(--shadow-lg);
+	--game-stage-placeholder: radial-gradient(ellipse at 50% 35%, var(--surface-active), var(--bg-sunken) 70%);
+	--game-stage-shade: linear-gradient(180deg, color-mix(in oklab, var(--bg) 25%, transparent), transparent 26%, transparent 55%, color-mix(in oklab, var(--bg) 40%, transparent));
+	--game-character-shadow: drop-shadow(0 12px 24px rgb(0 0 0 / 0.2));
+	--game-character-dim-shadow: brightness(0.55) saturate(0.6) drop-shadow(0 8px 18px rgb(0 0 0 / 0.25));
 	--game-footer-bg: var(--game-topbar-bg);
-
-	color-scheme: dark;
-	height: 100%;
-	color: var(--game-text-main);
 }
 
 /* 무대 위 공용 버튼 */
@@ -75,7 +72,7 @@
 	padding: 0 12px;
 	border: 1px solid var(--game-border);
 	border-radius: 999px;
-	background: rgb(255 255 255 / 0.04);
+	background: var(--surface-hover);
 	color: var(--game-text-secondary);
 	font: inherit;
 	font-size: 13px;
@@ -102,7 +99,7 @@
 	padding: 0 14px;
 	border: 1px solid var(--game-border);
 	border-radius: 10px;
-	background: rgb(255 255 255 / 0.05);
+	background: var(--surface-hover);
 	color: var(--game-text-main);
 	font: inherit;
 	font-size: 14px;

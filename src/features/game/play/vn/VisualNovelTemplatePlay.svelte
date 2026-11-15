@@ -7,7 +7,8 @@
 	import Backlog from "./Backlog.svelte";
 	import StageView from "./StageView.svelte";
 	import PlayHeader from "./PlayHeader.svelte";
-	import PlayPanels from "./PlayPanels.svelte";
+	import { playBridge } from "../../runtime/playBridge.svelte";
+	import { panel } from "$app/panel.svelte";
 	import DialoguePanel from "./DialoguePanel.svelte";
 	import ItemGainNotices from "./ItemGainNotices.svelte";
 	import {
@@ -28,9 +29,6 @@
 
 	let isLoading = $state(false);
 	let showBacklog = $state(false);
-	let showMap = $state(false);
-	let showActions = $state(false);
-	let showInventory = $state(false);
 	let showWaitMenu = $state(false);
 	let scriptLines = $state<StageLine[]>([]);
 	let lineIndex = $state(0);
@@ -69,7 +67,7 @@
 		return presentNpcIds[0] ?? null;
 	});
 	const activeNpcId = $derived(runtimeStore.state?.activeNpcId ?? null);
-	const title = $derived(gameStore.view?.game.title ?? "게임");
+	const title = $derived(gameStore.view?.game?.title ?? "게임");
 
 	function setBgm(asset: AssetRef | null, mood = "") {
 		if (!asset) {
@@ -291,9 +289,6 @@
 				standingOverrides = {};
 				syncBgmFromStage();
 			}
-			showActions = false;
-			showMap = false;
-			showInventory = false;
 			showWaitMenu = false;
 		} catch (error) {
 			console.error("Game command failed:", error);
@@ -381,51 +376,36 @@
 	}
 
 	function handleStageClick() {
-		if (!isLoading && !showActions && !showMap && !showInventory && !showBacklog) advanceLine();
+		if (!isLoading && !showBacklog) advanceLine();
 	}
 
-	function toggleMap() {
-		showMap = !showMap;
-		showWaitMenu = false;
-		if (showMap) {
-			showActions = false;
-			showInventory = false;
-		}
-	}
-
-	function toggleActions() {
-		showActions = !showActions;
-		showWaitMenu = false;
-		if (showActions) {
-			showMap = false;
-			showInventory = false;
-		}
-	}
-
-	function toggleInventory() {
-		showInventory = !showInventory;
-		showWaitMenu = false;
-		if (showInventory) {
-			showMap = false;
-			showActions = false;
-		}
+	/** 지도·이동/행동·소지품은 오른쪽 패널 탭으로 */
+	function openPanelTab(id: string) {
+		panel.tab = id;
+		if (!panel.open) panel.toggle();
 	}
 
 	function toggleWaitMenu() {
 		showWaitMenu = !showWaitMenu;
-		if (showWaitMenu) {
-			showMap = false;
-			showActions = false;
-			showInventory = false;
-		}
 	}
+
+	// 오른쪽 패널(이동·행동, 지도)이 이 화면의 dispatch로 명령을 보냄
+	$effect(() => {
+		playBridge.dispatch = dispatch;
+		return () => {
+			if (playBridge.dispatch === dispatch) playBridge.dispatch = null;
+		};
+	});
+	$effect(() => {
+		playBridge.loading = isLoading;
+	});
 
 	onMount(initSession);
 
 	// ---- 키보드: Space/Enter/→ 다음, ← 이전, 1~9 선택지, Esc 패널 닫기, M 지도, I 소지품, L 지난 대사 ----
-	const openPanel = $derived(showBacklog ? "backlog" : showMap ? "map" : showInventory ? "inventory" : showActions ? "actions" : null);
+	const openPanel = $derived(showBacklog ? "backlog" : null);
 	function closePanels() {
-		showBacklog = showMap = showInventory = showActions = showWaitMenu = false;
+		showBacklog = showWaitMenu = false;
 	}
 	function onKey(e: KeyboardEvent) {
 		const t = e.target as HTMLElement | null;
@@ -445,8 +425,9 @@
 			const i = Number(e.key) - 1;
 			if (i < choices.length) handleChoice(choices[i].id);
 			else if (i - choices.length < npcResponseChoices.length) void submitNpcInput(npcResponseChoices[i - choices.length]);
-		} else if (e.key === "m") toggleMap();
-		else if (e.key === "i") toggleInventory();
+		} else if (e.key === "m") openPanelTab("map");
+		else if (e.key === "i") openPanelTab("items");
+		else if (e.key === "a") openPanelTab("actions");
 		else if (e.key === "l") showBacklog = true;
 	}
 	const focusMode = $derived(!layout.sidebar);
@@ -465,12 +446,9 @@
 		{isBgmMuted}
 		{bgmBlocked}
 		{focusMode}
-		open={openPanel}
+		backlogOpen={showBacklog}
 		onToggleWaitMenu={toggleWaitMenu}
 		onWait={(hours) => dispatch({ type: "advanceTime", minutes: hours * 60 })}
-		onActions={toggleActions}
-		onMap={toggleMap}
-		onInventory={toggleInventory}
 		onBacklog={() => {
 			const next = !showBacklog;
 			closePanels();
@@ -486,17 +464,6 @@
 		<div class="scene-label" id="scene-name">
 			<span class="scene-dot"></span>{runtimeStore.currentScene?.name ?? title}
 		</div>
-		<PlayPanels
-			{showMap}
-			{showActions}
-			{showInventory}
-			{isLoading}
-			canMove={runtimeStore.canWait}
-			onCloseMap={() => (showMap = false)}
-			onCloseActions={() => (showActions = false)}
-			onCloseInventory={() => (showInventory = false)}
-			onDispatch={dispatch}
-		/>
 		{#if showBacklog}<Backlog {sessionId} onClose={() => (showBacklog = false)} />{/if}
 		<ItemGainNotices notices={itemGainNotices} />
 		<DialoguePanel
