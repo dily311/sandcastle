@@ -300,3 +300,91 @@ pub async fn scene_say(
 ) -> Result<crate::game::npc::NpcReply, AppError> {
     crate::game::npc::scene_say(app, &state, &settings, input).await
 }
+
+// =======================================
+// 세션별 설정 · 컨텍스트 (오른쪽 패널)
+// =======================================
+
+#[derive(serde::Serialize, specta::Type)]
+#[serde(rename_all = "camelCase")]
+pub struct GameSessionOptions {
+    pub api_profile_id: Option<String>,
+    pub prompt_preset_id: Option<String>,
+    pub player_id: String,
+}
+
+/// 세션의 AI 설정과 플레이어 페르소나
+#[tauri::command]
+#[specta::specta]
+pub async fn get_game_session_options(state: State<'_, AppState>, session_id: String) -> Result<GameSessionOptions, AppError> {
+    let session = get_game_player_sessions(&state.db, &session_id).await?;
+    let (api_profile_id, prompt_preset_id) = crate::db::game::get_game_session_options(&state.db, &session_id).await?;
+    Ok(GameSessionOptions { api_profile_id, prompt_preset_id, player_id: session.player_id })
+}
+
+/// 세션의 AI 설정·플레이어 페르소나 바꾸기. 비운 값은 앱 기본값.
+/// 플레이어를 바꿨고 지금 열린 세션이면 런타임을 다시 불러와 바로 반영한다.
+#[tauri::command]
+#[specta::specta]
+pub async fn set_game_session_options(
+    state: State<'_, AppState>,
+    session_id: String,
+    api_profile_id: Option<String>,
+    prompt_preset_id: Option<String>,
+    player_id: Option<String>,
+) -> Result<(), AppError> {
+    crate::db::game::set_game_session_options(&state.db, &session_id, api_profile_id.as_deref(), prompt_preset_id.as_deref()).await?;
+    if let Some(player) = player_id.filter(|s| !s.is_empty()) {
+        let changed = {
+            let guard = state.active_runtime.lock().await;
+            guard.as_ref().map(|r| r.state().session_id == session_id && r.state().player_id != player).unwrap_or(false)
+        };
+        crate::db::game::set_game_session_player(&state.db, &session_id, &player).await?;
+        if changed {
+            let game_id = current_game_id(&state)?;
+            open_session(&state, &game_id, &session_id, DEFAULT_HISTORY).await?;
+        }
+    }
+    Ok(())
+}
+
+/// 게임 세션의 컨텍스트 사용량: 이번에 앱을 켠 뒤 마지막으로 보낸 프롬프트 기준
+#[tauri::command]
+#[specta::specta]
+pub async fn game_context_usage(
+    state: State<'_, AppState>,
+    settings: State<'_, SettingsState<AppSetting>>,
+    session_id: String,
+) -> Result<crate::commands::chat::ContextUsage, AppError> {
+    use crate::models::ai_service::PromptRole;
+    use crate::service::{chat::chat_manager::{current_conv_request, CONTEXT_LIMIT, LAST_GAME_PROMPT}, prompt::prompt_manager::{chat_options_from, context_limit_from, PromptManager}};
+    let (_, preset) = crate::db::game::get_game_session_options(&state.db, &session_id).await?;
+    let fallback = current_conv_request(&settings).map(|r| r.preset_id).unwrap_or_default();
+    let preset_id = preset.filter(|s| !s.is_empty()).or(Some(fallback).filter(|s| !s.is_empty()));
+    let loaded = PromptManager::load_preset(&state.db, preset_id.as_deref()).await.map_err(|e| AppError::internal(e.to_string()))?;
+    let limit = loaded.as_ref().and_then(|p| context_limit_from(&p.preset)).unwrap_or(CONTEXT_LIMIT);
+    let reserved = loaded.as_ref().and_then(|p| chat_options_from(&p.preset).max_tokens).unwrap_or(0);
+    let prompt = LAST_GAME_PROMPT.lock().ok().and_then(|m| m.get(&session_id).cloned());
+    let (mut system, mut history, mut history_count) = (0u32, 0u32, 0u32);
+    if let Some(p) = &prompt {
+        for m in &p.messages {
+            let t = m.token.max(0) as u32;
+            if m.role == PromptRole::System {
+                system += t;
+            } else {
+                history += t;
+                history_count += 1;
+            }
+        }
+    }
+    Ok(crate::commands::chat::ContextUsage {
+        used: prompt.map(|_| system + history),
+        system,
+        history,
+        history_count,
+        limit,
+        reserved,
+        preset_name: loaded.as_ref().map(|p| p.preset.name.clone()),
+        preset_id,
+    })
+}

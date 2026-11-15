@@ -372,8 +372,10 @@ async fn converse(app: AppHandle, state: &State<'_, AppState>, settings: &State<
         extra_data: snap.extra_data,
     };
 
+    let (api_profile_id, prompt_preset_id) = crate::db::game::get_game_session_options(&state.db, &snap.session_id).await?;
+    let target = crate::service::chat::chat_manager::GameChatTarget { session_id: snap.session_id.clone(), api_profile_id, prompt_preset_id };
     let raw = ChatManager
-        .game_chat(app, state, settings, conversation_id.clone(), trimmed.to_string(), context, None)
+        .game_chat(app, state, settings, conversation_id.clone(), trimmed.to_string(), context, None, target)
         .await
         .map_err(|e| AppError::ai_provider(ErrorCode::AiProviderError, e.to_string(), false))?;
 

@@ -125,18 +125,23 @@ impl ChatManager {
         message: String,
         context: ChatContext,
         channel: Option<Channel<StreamPayload>>,
+        target: GameChatTarget,
     ) -> Result<String> {
         let chat_req = current_conv_request(settings)?;
-        self.generate(
-            &app,
-            &state.db,
-            chat_req.api_profile_id,
-            Some(chat_req.preset_id),
-            context,
-            message,
-            channel,
-        )
-        .await
+        let profile = target.api_profile_id.filter(|s| !s.is_empty()).unwrap_or(chat_req.api_profile_id);
+        let preset = target.prompt_preset_id.filter(|s| !s.is_empty()).unwrap_or(chat_req.preset_id);
+        let mut sink = |delta: &str| {
+            if let Some(ch) = &channel {
+                let _ = ch.send(StreamPayload { chunk: delta.to_string() });
+            }
+        };
+        let (response, prompt) = self
+            .generate_with(&app, &state.db, profile, Some(preset), context, message, GenerationType::Normal, &CancellationToken::new(), channel.is_some(), &mut sink)
+            .await?;
+        if let Ok(mut map) = LAST_GAME_PROMPT.lock() {
+            map.insert(target.session_id, prompt);
+        }
+        Ok(response.content)
     }
 
     /// 프롬프트 조립 + AI 호출 (채팅/게임 공통)
@@ -207,6 +212,16 @@ impl ChatManager {
 // =======================================
 // 대화 화면의 한 차례 (보내기 / 이어쓰기 / 다시 생성)
 // =======================================
+
+/// 게임 대화를 어느 세션 설정으로 부를지 (비운 값은 앱 기본값)
+pub struct GameChatTarget {
+    pub session_id: String,
+    pub api_profile_id: Option<String>,
+    pub prompt_preset_id: Option<String>,
+}
+
+/// 게임 세션별 마지막으로 보낸 프롬프트 (컨텍스트 사용량 표시용, 앱을 끄면 사라짐)
+pub(crate) static LAST_GAME_PROMPT: LazyLock<Mutex<HashMap<String, PromptMessage>>> = LazyLock::new(Default::default);
 
 /// 한 차례의 종류
 pub enum TurnKind {

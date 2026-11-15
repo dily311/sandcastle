@@ -68,6 +68,15 @@ export const commands = {
 	contextUsage: (conversationId: string, options?: InvokeOptions) => __TAURI_INVOKE<ContextUsage_Serialize>("context_usage", { conversationId }, options),
 	/**  메시지들을 화면용으로: 표시용 정규식 + {{char}}/{{user}} 이름. 순서대로, 마지막이 가장 최근 */
 	displayMessages: (conversationId: string, items: DisplayItem[], options?: InvokeOptions) => __TAURI_INVOKE<string[]>("display_messages", { conversationId, items }, options),
+	/**  세션의 AI 설정과 플레이어 페르소나 */
+	getGameSessionOptions: (sessionId: string, options?: InvokeOptions) => __TAURI_INVOKE<GameSessionOptions_Serialize>("get_game_session_options", { sessionId }, options),
+	/**
+	 *  세션의 AI 설정·플레이어 페르소나 바꾸기. 비운 값은 앱 기본값.
+	 *  플레이어를 바꿨고 지금 열린 세션이면 런타임을 다시 불러와 바로 반영한다.
+	 */
+	setGameSessionOptions: (sessionId: string, apiProfileId: string | null, promptPresetId: string | null, playerId: string | null, options?: InvokeOptions) => __TAURI_INVOKE<null>("set_game_session_options", { sessionId, apiProfileId, promptPresetId, playerId }, options),
+	/**  게임 세션의 컨텍스트 사용량: 이번에 앱을 켠 뒤 마지막으로 보낸 프롬프트 기준 */
+	gameContextUsage: (sessionId: string, options?: InvokeOptions) => __TAURI_INVOKE<ContextUsage_Serialize>("game_context_usage", { sessionId }, options),
 	/**  대화 하나를 파일로 내보내기. format: "jsonl"(SillyTavern 채팅) | "txt"(읽기용 글) */
 	exportConversation: (id: string, format: string, path: string, options?: InvokeOptions) => __TAURI_INVOKE<number>("export_conversation", { id, format, path }, options),
 	getTask: (taskId: string, options?: InvokeOptions) => __TAURI_INVOKE<TaskInfo_Serialize>("get_task", { taskId }, options),
@@ -1882,6 +1891,20 @@ export type GameSceneInput_Serialize = {
 	script: string | null,
 	choices: GameChoiceInput_Serialize[] | null,
 	branches: GameBranchInput_Serialize[] | null,
+};
+
+export type GameSessionOptions = GameSessionOptions_Serialize | GameSessionOptions_Deserialize;
+
+export type GameSessionOptions_Deserialize = {
+	apiProfileId?: string | null,
+	promptPresetId?: string | null,
+	playerId: string,
+};
+
+export type GameSessionOptions_Serialize = {
+	apiProfileId: string | null,
+	promptPresetId: string | null,
+	playerId: string,
 };
 
 export type GameStateDefInput = GameStateDefInput_Serialize | GameStateDefInput_Deserialize;

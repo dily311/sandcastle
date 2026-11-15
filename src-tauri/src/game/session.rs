@@ -50,6 +50,7 @@ pub async fn fork_session(pool: &SqlitePool, game_id: &str, parent_session_id: &
         forked_game_conversations_participant(&mut *tx, old_id, new_id).await?;
     }
     forked_game_save(&mut *tx, parent_session_id, &new_session_id, slot).await?;
+    crate::db::game::forked_game_session_options(&mut *tx, parent_session_id, &new_session_id).await?;
     tx.commit().await?;
 
     Ok(new_session_id)

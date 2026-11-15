@@ -239,6 +239,9 @@ pub fn specta_builder() -> tauri_specta::Builder<tauri::Wry> {
             store_dropped_file,
             context_usage,
             display_messages,
+            get_game_session_options,
+            set_game_session_options,
+            game_context_usage,
             export_conversation,
             // task
             get_task,
@@ -428,6 +431,9 @@ pub fn specta_builder() -> tauri_specta::Builder<tauri::Wry> {
             store_dropped_file,
             context_usage,
             display_messages,
+            get_game_session_options,
+            set_game_session_options,
+            game_context_usage,
             export_conversation,
             // task
             get_task,

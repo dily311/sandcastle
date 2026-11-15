@@ -7,9 +7,9 @@
 	import BookPicker from "$features/lorebook/BookPicker.svelte";
 	import ContextMeter from "./ContextMeter.svelte";
 	import ExportButton from "./ExportButton.svelte";
-	import PresetEditor from "$features/settings/PresetEditor.svelte";
+	import PresetInline from "$features/settings/PresetInline.svelte";
 	import { toasts } from "$shared/stores/toast.svelte";
-	import type { ContextUsage, PromptBlocksInput_Deserialize as BlockInput, PromptPresetDetail_Serialize as PresetDetail } from "$ipc/bindings";
+	import type { ContextUsage } from "$ipc/bindings";
 	import { panel } from "$app/panel.svelte";
 	import type { RegexScript_Serialize as RegexScript } from "$ipc/bindings";
 	import { call, commands } from "$shared/ipc/client";
@@ -55,29 +55,8 @@
 		if (!session.busy) void loadUsage();
 	});
 
-	// ---- 프리셋: 컨텍스트 탭 아래에 바로 편집기 (이름·설명은 빼고) ----
+	// 프리셋: 컨텍스트 탭 아래에 바로 편집기 (PresetInline)
 	const activePresetId = $derived(conv.promptPresetId || usage?.presetId || null);
-	let presetDetail = $state<PresetDetail | null>(null);
-	let presetSaving = $state(false);
-	async function loadPreset(id: string | null) {
-		if (!id) return void (presetDetail = null);
-		const d = await call(commands.getPromptPreset(id), { source: "preset", silent: true }).catch(() => null);
-		if (activePresetId === id) presetDetail = d;
-	}
-	$effect(() => {
-		void loadPreset(activePresetId);
-	});
-	/** 자동 저장 (편집기를 다시 그리지 않음: 고치던 자리를 잃지 않게) */
-	async function savePreset(preset: PresetDetail["preset"], blocks: BlockInput[]) {
-		presetSaving = true;
-		try {
-			const d = await call(commands.savePromptPreset({ ...preset, id: preset.id }, blocks), { source: "preset" });
-			void loadUsage();
-			return d;
-		} finally {
-			presetSaving = false;
-		}
-	}
 
 	const character = $derived(library.character(conv.characterId));
 	const persona = $derived(library.persona(conv.personaId) ?? library.personas[0]);
@@ -240,15 +219,7 @@
 				<h4>프리셋 <span class="faint">{conv.promptPresetId ? "이 대화에서 고름" : "앱·캐릭터 기본값"}</span></h4>
 				<Select value={conv.promptPresetId ?? DEFAULT} options={presetOptions} aria-label="이 대화의 프리셋" onchange={(e) => setOption({ promptPresetId: e.currentTarget.value })} />
 			</section>
-			{#if presetDetail}
-				{#key presetDetail.preset.id}
-					<PresetEditor detail={presetDetail} saving={presetSaving} onsave={savePreset} quick autosave />
-				{/key}
-			{:else if activePresetId}
-				<p class="none small">프리셋 불러오는 중…</p>
-			{:else}
-				<p class="none small">쓰는 프리셋 없음. 설정 &gt; 프리셋에서 만들 수 있음</p>
-			{/if}
+			<PresetInline presetId={activePresetId} onsaved={loadUsage} />
 		</div>
 	{:else}
 		<div class="panel-body">

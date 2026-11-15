@@ -1,5 +1,7 @@
 <script lang="ts">
-	// 게임 플레이 화면의 오른쪽 패널: 상태(지금 장면·주변·변수) / 관계 / 소지품
+	// 게임 플레이 화면의 오른쪽 패널
+	// - 공통 탭(대화 설정 · 컨텍스트·프리셋 · 분기)은 GameSessionTabs
+	// - 게임 탭: 상태(지금 장면·주변·변수) / 관계 / 소지품
 	// 지도·이동·대사 기록은 무대 위 시트가 맡고, 패널은 늘 펼쳐 두고 볼 정보만
 	import { Clock3, CloudSun, Film, MapPin, User } from "@lucide/svelte";
 	import { panel } from "$app/panel.svelte";
@@ -7,6 +9,10 @@
 	import { runtimeStore } from "../runtime/runtimeStore.svelte";
 	import type { RelationshipDetail } from "../types";
 	import { formatGameTime } from "./vn/playUtils";
+	import GameSessionTabs from "./GameSessionTabs.svelte";
+
+	let { gameId, sessionId }: { gameId: string; sessionId: string } = $props();
+	const shared = new Set(["settings", "context", "branches"]);
 
 	const view = $derived(gameStore.view);
 	const charName = (id: string) => (id === "player" ? "나" : (view?.characters.find((c) => c.id === id)?.name ?? id));
@@ -37,7 +43,9 @@
 	const pct = (n: number | undefined) => `${Math.max(0, Math.min(100, Math.abs(n ?? 0)))}%`;
 </script>
 
-{#if panel.tab === "relations"}
+{#if shared.has(panel.tab)}
+	<GameSessionTabs {gameId} {sessionId} />
+{:else if panel.tab === "relations"}
 	<div class="panel-body">
 		{#each relations as rel (rel.key)}
 			<section class="rel">

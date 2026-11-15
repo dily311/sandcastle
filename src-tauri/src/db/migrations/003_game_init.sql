@@ -432,6 +432,14 @@ CREATE TABLE IF NOT EXISTS game_player_sessions (
   updated_at INTEGER
 );
 
+-- 세션별 AI 설정 (비우면 앱 기본값). 분기하면 같이 복사한다
+CREATE TABLE IF NOT EXISTS game_session_options (
+  session_id TEXT PRIMARY KEY REFERENCES game_player_sessions(id) ON DELETE CASCADE,
+  api_profile_id TEXT,
+  prompt_preset_id TEXT,
+  updated_at INTEGER NOT NULL
+);
+
 CREATE TABLE IF NOT EXISTS game_saves (
   name TEXT,
   seq INTEGER NOT NULL,

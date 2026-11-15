@@ -59,6 +59,10 @@ const intro = [
 	{ type: "sceneScript", sceneId: "s1", lines: [line("narration", null, "바람이 나뭇잎을 흔든다. 어디선가 낮은 목소리가 들림."), line("dialogue", "gc1", "괜찮아요? 이 숲에서 혼자 다니면 위험해요."), line("dialogue", "player", "길을 잃은 것 같아요…"), line("dialogue", "gc1", "제 오두막으로 가요. 금방이에요.")] },
 ];
 
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+const saves: any[] = [{ name: null, seq: 5, sessionId: "ss1", slotNumber: 1, currentSceneId: "s1", currentMapId: null, currentZoneId: null, currentLocationId: "l1", currentWeatherId: null, gameTime: 8 * 3600, stateSnapshot: {}, updatedAt: Date.now() - 3600_000 }];
+const sessionOptions: Record<string, Record<string, unknown>> = {};
+
 const respond = (events: unknown[]) => ({ state: structuredClone(state), events });
 
 export const gameHandlers: Record<string, (a: Args) => unknown> = {
@@ -98,7 +102,22 @@ export const gameHandlers: Record<string, (a: Args) => unknown> = {
 		hasMore: false,
 		oldestSeq: 1,
 	}),
-	save_list: () => [],
+	save_list: () => saves,
+	save_write: ({ slot }) => {
+		const i = saves.findIndex((v) => v.sessionId === state.sessionId && v.slotNumber === slot);
+		const v = { name: null, seq: 12, sessionId: state.sessionId, slotNumber: slot as number, currentSceneId: state.currentSceneId, currentMapId: null, currentZoneId: null, currentLocationId: state.locationId, currentWeatherId: null, gameTime: state.gameTime, stateSnapshot: {}, updatedAt: Date.now() };
+		if (i >= 0) saves[i] = v;
+		else saves.push(v);
+		return null;
+	},
+	load_save: ({ sessionId }) => ({ ...respond([]), state: { ...structuredClone(state), sessionId }, history: { entries: [], hasMore: false, oldestSeq: null } }),
+	get_game_session_options: ({ sessionId }) => ({ apiProfileId: null, promptPresetId: null, playerId: "min", ...(sessionOptions[sessionId as string] ?? {}) }),
+	set_game_session_options: ({ sessionId, apiProfileId, promptPresetId, playerId }) => {
+		const cur = sessionOptions[sessionId as string] ?? {};
+		sessionOptions[sessionId as string] = { ...cur, apiProfileId, promptPresetId, ...(playerId ? { playerId } : {}) };
+		return null;
+	},
+	game_context_usage: () => ({ used: 2100, system: 1400, history: 700, historyCount: 9, limit: 16384, reserved: 1024, presetId: "default", presetName: "기본 배치" }),
 	reset: () => {
 		state = { ...state, currentSceneId: "s1", availableChoices: ["c1", "c2"], locationId: "l1" };
 		return null;

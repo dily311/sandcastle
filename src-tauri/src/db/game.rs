@@ -3078,3 +3078,87 @@ pub async fn upsert_game_conversations_participant<'e, E>(executor: E, conversat
     .await?;
     Ok(())
 }
+
+// =======================================
+// 세션별 AI 설정
+// =======================================
+
+/// (api_profile_id, prompt_preset_id). 없으면 둘 다 None
+pub async fn get_game_session_options<'e, E>(executor: E, session_id: &str) -> Result<(Option<String>, Option<String>), Error>
+where
+    E: Executor<'e, Database = Sqlite>,
+{
+    let row = sqlx::query_as::<_, (Option<String>, Option<String>)>("SELECT api_profile_id, prompt_preset_id FROM game_session_options WHERE session_id = ?")
+        .bind(session_id)
+        .fetch_optional(executor)
+        .await?;
+    Ok(row.unwrap_or((None, None)))
+}
+
+pub async fn set_game_session_options<'e, E>(executor: E, session_id: &str, api_profile_id: Option<&str>, prompt_preset_id: Option<&str>) -> Result<(), Error>
+where
+    E: Executor<'e, Database = Sqlite>,
+{
+    sqlx::query(
+        "INSERT INTO game_session_options (session_id, api_profile_id, prompt_preset_id, updated_at) VALUES (?,?,?,?)
+         ON CONFLICT(session_id) DO UPDATE SET api_profile_id=excluded.api_profile_id, prompt_preset_id=excluded.prompt_preset_id, updated_at=excluded.updated_at",
+    )
+    .bind(session_id)
+    .bind(api_profile_id.filter(|s| !s.is_empty()))
+    .bind(prompt_preset_id.filter(|s| !s.is_empty()))
+    .bind(chrono::Utc::now().timestamp_millis())
+    .execute(executor)
+    .await?;
+    Ok(())
+}
+
+/// 분기: 부모 세션의 AI 설정을 새 세션으로
+pub async fn forked_game_session_options<'e, E>(executor: E, parent_session_id: &str, new_session_id: &str) -> Result<(), Error>
+where
+    E: Executor<'e, Database = Sqlite>,
+{
+    sqlx::query(
+        "INSERT OR IGNORE INTO game_session_options (session_id, api_profile_id, prompt_preset_id, updated_at)
+         SELECT ?, api_profile_id, prompt_preset_id, updated_at FROM game_session_options WHERE session_id = ?",
+    )
+    .bind(new_session_id)
+    .bind(parent_session_id)
+    .execute(executor)
+    .await?;
+    Ok(())
+}
+
+/// 세션의 플레이어 페르소나 바꾸기
+pub async fn set_game_session_player<'e, E>(executor: E, session_id: &str, player_id: &str) -> Result<bool, Error>
+where
+    E: Executor<'e, Database = Sqlite>,
+{
+    let r = sqlx::query("UPDATE game_player_sessions SET player_id = ? WHERE id = ?").bind(player_id).bind(session_id).execute(executor).await?;
+    Ok(r.rows_affected() != 0)
+}
+
+#[cfg(test)]
+mod session_options_tests {
+    use super::*;
+
+    #[tokio::test]
+    async fn options_save_and_follow_a_fork() {
+        let pool = sqlx::sqlite::SqlitePoolOptions::new().max_connections(1).connect("sqlite::memory:").await.unwrap();
+        sqlx::migrate!("src/db/migrations").run(&pool).await.unwrap();
+        sqlx::query("PRAGMA foreign_keys = OFF").execute(&pool).await.unwrap();
+        for id in ["s1", "s2"] {
+            sqlx::query("INSERT INTO game_player_sessions (id, game_id, player_id, head_seq) VALUES (?, 'g', 'default', 0)").bind(id).execute(&pool).await.unwrap();
+        }
+
+        assert_eq!(get_game_session_options(&pool, "s1").await.unwrap(), (None, None), "없으면 앱 기본값");
+        set_game_session_options(&pool, "s1", Some("api1"), Some("")).await.unwrap();
+        assert_eq!(get_game_session_options(&pool, "s1").await.unwrap(), (Some("api1".into()), None), "빈 값은 기본값으로");
+
+        forked_game_session_options(&pool, "s1", "s2").await.unwrap();
+        assert_eq!(get_game_session_options(&pool, "s2").await.unwrap(), (Some("api1".into()), None));
+
+        assert!(set_game_session_player(&pool, "s2", "min").await.unwrap());
+        let player: String = sqlx::query_scalar("SELECT player_id FROM game_player_sessions WHERE id = 's2'").fetch_one(&pool).await.unwrap();
+        assert_eq!(player, "min");
+    }
+}
