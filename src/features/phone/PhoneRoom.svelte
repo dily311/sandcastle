@@ -1,7 +1,7 @@
 <script lang="ts">
 	import { onMount, tick } from "svelte";
 	import { BookOpen, ChevronLeft, Copy, Eye, Menu, MessageCirclePlus, RefreshCw, Send, Square, Trash2 } from "@lucide/svelte";
-	import { Avatar, ContextMenu, type MenuItem } from "$shared/ui";
+	import { Avatar, ContextMenu, HtmlView, type MenuItem } from "$shared/ui";
 	import { fileSrc } from "$shared/ipc/file";
 	import { confirmAction } from "$shared/stores/confirm.svelte";
 	import { toasts } from "$shared/stores/toast.svelte";
@@ -9,7 +9,7 @@
 	import { nav } from "$app/nav.svelte";
 	import { library, type Conversation } from "$features/character/library.svelte";
 	import { ChatSession, type Message } from "$features/character/session.svelte";
-	import { bubbles, lookup, parsePeek, phone } from "./phone.svelte";
+	import { bubbles, lookup, parsePeek, phone, type BubbleLine } from "./phone.svelte";
 
 	let { conv, onback, session: given }: { conv: Conversation; onback: () => void; session?: ChatSession } = $props();
 
@@ -91,7 +91,7 @@
 		date?: string;
 		mine?: boolean;
 		msg?: Message;
-		lines?: { kind: "text" | "image"; text: string }[];
+		lines?: BubbleLine[];
 		time?: string;
 		/** 같은 사람이 이어서 보내면 이름·아바타 생략 */
 		cont?: boolean;
@@ -225,6 +225,8 @@
 							<div class="line">
 								{#if l.kind === "image" && images[l.text]}
 									<img class="photo" src={images[l.text]} alt={l.text} loading="lazy" />
+								{:else if l.kind === "html"}
+									<div class="html-card"><HtmlView code={l.text} /></div>
 								{:else}
 									<div class="b">{l.kind === "image" ? `(사진: ${l.text})` : l.text}</div>
 								{/if}
@@ -490,5 +492,8 @@
 	}
 	.send:disabled {
 		cursor: default;
+	}
+	.html-card {
+		width: min(100%, 360px);
 	}
 </style>

@@ -1,7 +1,7 @@
 <script lang="ts">
 	import { drops, extOf, storeFile } from "$app/drop.svelte";
 	import { onMount } from "svelte";
-	import { Download, Plus } from "@lucide/svelte";
+	import { ChevronRight, Download, Plus } from "@lucide/svelte";
 	import type {
 		RegexPlacement,
 		RegexScope,
@@ -44,6 +44,16 @@
 			.map((scope) => ({ scope, title: scope === "global" ? "전체에 적용" : scope === "character" ? "캐릭터 전용" : "프리셋 전용", items: scripts.filter((s) => s.scope === scope) }))
 			.filter((g) => g.items.length),
 	);
+	/** 캐릭터·프리셋 전용 정규식은 주인별로 묶어 이름만 보이고, 누르면 펼친다 (많아져도 한눈에) */
+	function owners(items: RegexScript[]) {
+		const map = new Map<string, RegexScript[]>();
+		for (const s of items) map.set(s.scopeId ?? "", [...(map.get(s.scopeId ?? "") ?? []), s]);
+		return [...map.entries()]
+			.map(([id, list]) => ({ id, name: scopeName(list[0]), items: list, on: list.filter((s) => s.enabled).length }))
+			.sort((a, b) => a.name.localeCompare(b.name, "ko"));
+	}
+	/** 펼친 묶음 (화면에 머무는 동안 기억) */
+	let expanded = $state<Record<string, boolean>>({});
 
 	async function toggle(s: RegexScript, on: boolean) {
 		s.enabled = on;
@@ -144,7 +154,7 @@
 		}),
 	);
 	async function importPath(path: string) {
-		const r = await call(commands.importSillytavern(path, null, null), src);
+		const r = await call(commands.importSillytavern(path, null, null, null), src);
 		if (r.kind === "regex") toasts.success(`정규식 ${r.scripts.length}개 가져옴`);
 		else if (r.kind === "preset") toasts.success(`프리셋 '${r.name}' 가져옴 · 정규식 ${r.regexCount}개`);
 		else toasts.info("정규식 파일이 아님");
@@ -166,6 +176,14 @@
 	}
 </script>
 
+{#snippet scriptRow(s: RegexScript)}
+	<Row label={s.name} desc="{s.placement.map((p) => PLACE[p]).join(' · ')} → {TARGET[s.target]}">
+		<Button size="sm" variant="ghost" onclick={() => remove(s)}>삭제</Button>
+		<Button size="sm" onclick={() => startEdit(s)}>편집</Button>
+		<Switch checked={s.enabled} label="{s.name} 사용" hideLabel onchange={(v) => toggle(s, v)} />
+	</Row>
+{/snippet}
+
 <Section title="정규식" lead="메시지 글자를 찾아 바꿈. 위에 있는 것부터 차례로 적용">
 	{#snippet actions()}
 		<Button size="sm" onclick={importFile}>{#snippet icon()}<Download />{/snippet}가져오기</Button>
@@ -178,13 +196,25 @@
 	{/if}
 	{#each groups as g (g.scope)}
 		<Group title={g.title}>
-			{#each g.items as s (s.id)}
-				<Row label={s.name} desc="{s.placement.map((p) => PLACE[p]).join(' · ')} → {TARGET[s.target]}{s.scope !== 'global' ? ` · ${scopeName(s)}` : ''}">
-					<Button size="sm" variant="ghost" onclick={() => remove(s)}>삭제</Button>
-					<Button size="sm" onclick={() => startEdit(s)}>편집</Button>
-					<Switch checked={s.enabled} label="{s.name} 사용" hideLabel onchange={(v) => toggle(s, v)} />
-				</Row>
-			{/each}
+			{#if g.scope === "global"}
+				{#each g.items as s (s.id)}{@render scriptRow(s)}{/each}
+			{:else}
+				{#each owners(g.items) as o (o.id)}
+					{@const key = `${g.scope}:${o.id}`}
+					<div class="owner">
+						<button class="owner-head" aria-expanded={!!expanded[key]} onclick={() => (expanded[key] = !expanded[key])}>
+							<ChevronRight class="caret" />
+							<b>{o.name}</b>
+							<small>정규식 {o.items.length}개 · 켜짐 {o.on}개</small>
+						</button>
+						{#if expanded[key]}
+							<div class="owner-body">
+								{#each o.items as s (s.id)}{@render scriptRow(s)}{/each}
+							</div>
+						{/if}
+					</div>
+				{/each}
+			{/if}
 		</Group>
 	{/each}
 </Section>
@@ -343,5 +373,41 @@
 		margin-top: var(--space-2);
 		color: var(--danger);
 		font-size: var(--text-sm);
+	}
+	.owner + .owner {
+		border-top: 1px solid var(--border);
+	}
+	.owner-head {
+		display: flex;
+		align-items: center;
+		gap: var(--space-2);
+		width: 100%;
+		padding: var(--space-3) var(--space-2);
+		border: none;
+		background: transparent;
+		color: var(--text);
+		font: inherit;
+		text-align: left;
+		cursor: pointer;
+	}
+	.owner-head:hover {
+		background: var(--surface-hover);
+	}
+	.owner-head small {
+		margin-left: auto;
+		color: var(--text-faint);
+		font-size: var(--text-xs);
+	}
+	.owner-head :global(.caret) {
+		width: 14px;
+		height: 14px;
+		color: var(--text-muted);
+		transition: transform var(--duration-fast) var(--ease);
+	}
+	.owner-head[aria-expanded="true"] :global(.caret) {
+		transform: rotate(90deg);
+	}
+	.owner-body {
+		padding-left: var(--space-4);
 	}
 </style>

@@ -396,7 +396,7 @@ async fn st_chat_needs_a_character() {
         &db,
         dir.path(),
         &st_chat_sample(),
-        ImportOptions { name: Some("가져온 대화".into()), character_id: Some("other".into()) },
+        ImportOptions { name: Some("가져온 대화".into()), character_id: Some("other".into()), ..Default::default() },
     )
     .await
     .unwrap() else {

@@ -14,6 +14,7 @@
 | 001 | 일반 대화와 게임모드 테이블 통합 | Rejected (2026-11-15) |
 | 002 | 채팅 생성 작업(Task) 실행 흐름 | Accepted |
 | 003 | 보류한 기능: 게임 iframe SDK, 장기 기억·선톡, 다국어 | Deferred |
+| 004 | AI 답변의 HTML 코드 블록 렌더링 | Accepted |
 
 ### ADR-001 일반 대화와 게임모드 테이블 통합
 
@@ -126,6 +127,19 @@ Conversation
 - **게임 iframe SDK**: 플레이 화면은 Svelte가 직접 그린다. 외부 HTML/JS 게임을 받을 계획이 가까워지면 재개한다. 빌드 입력(game-runtime.html)에서 뺐고, 초안은 `src/lib/game/`에 남아 있다. 게임 모드 ADR-002의 격리 결정은 그대로 유효하다.
 - **장기 기억(memory\_settings, memory\_embeddings)·선톡(proactive\_settings)**: 테이블만 있고 코드는 없다. 채팅 작업 흐름(ADR-002) 위에서 만들 수 있게 되었으므로, 착수할 때 새 ADR로 정책(임베딩 제공자, 선톡 빈도·비용 상한)을 정한다. 테이블은 그대로 둔다.
 - **다국어**: svelte-i18n만 설정돼 있고 화면 대부분은 한국어로 쓰여 있다. 영어 지원이 목표가 될 때까지 새 화면부터만 locales 키를 쓴다.
+
+### ADR-004 AI 답변의 HTML 코드 블록 렌더링
+
+**상태** Accepted (2026-11-16)
+
+**결정**
+
+- 답변 안의 ```` ```html … ``` ````(또는 언어 표시 없이 태그로 시작하는 코드 블록)은 iframe으로 그린다. 채팅·폰·게임 모두 같은 컴포넌트(HtmlView)를 쓴다. 닫히지 않은 블록(스트리밍 중)은 글로 둔다. 게임은 대본 파서가 코드 블록을 한 줄로 유지한다.
+- **srcdoc을 쓰지 않는다.** srcdoc·blob 문서는 앱 창의 CSP(script-src 'self')를 물려받아 인라인 JS가 막힌다. 대신 백엔드가 `htmlview://localhost/<id>`(Windows/Android는 `http://htmlview.localhost/<id>`)로 서빙하고 그 응답에만 별도 CSP를 붙인다. 내용은 메모리에만 두고(같은 HTML = 같은 id, 최근 300개, 1MB 상한) 화면이 register\_html\_view로 등록한다.
+- **격리**: iframe은 `sandbox="allow-scripts"`만 준다(allow-same-origin 없음 → 불투명 origin). 앱 화면·저장소·Tauri IPC에 닿지 못한다. CSP: connect-src 'none'(fetch·XHR·WebSocket·IPC 요청 차단), form-action·frame-src 'none'. 외부 https 이미지·글꼴·스타일·스크립트(CDN 라이브러리)는 허용한다.
+- 높이는 iframe이 parent에 postMessage({type:"sc-html-height"})로 알리고, 최대 900px에서 iframe 안 스크롤로 넘긴다.
+
+**결과** AI가 만든 스크립트는 사용자 화면에서 돌지만 앱 데이터와 키에는 닿지 못한다. 외부 리소스를 허용했으므로 이미지 요청으로 외부에 신호를 보내는 것은 막지 않는다(필요하면 img-src를 data:/blob:로 좁힌다).
 
 ### (참고) 전역 테스트 관리 방법
 

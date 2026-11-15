@@ -166,6 +166,9 @@ pub fn run() {
         Ok(())
     });
 
+    // AI 답변의 HTML 코드 블록 (iframe, sys/html_view.rs)
+    builder = builder.register_uri_scheme_protocol("htmlview", |_app, req| sys::html_view::handle(req));
+
     // game 에셋 서빙
     builder = builder.register_uri_scheme_protocol("game", | app, req | {
         let app_handle = app.app_handle();
@@ -267,6 +270,7 @@ pub fn specta_builder() -> tauri_specta::Builder<tauri::Wry> {
             set_conversation_images_enabled,
             // import
             import_sillytavern,
+            detect_sillytavern,
             // data manager
             get_data_overview,
             delete_conversations,
@@ -354,6 +358,7 @@ pub fn specta_builder() -> tauri_specta::Builder<tauri::Wry> {
             dispatch_command,
             load_save,
             read_journal,
+            sys::html_view::register_html_view,
             read_current_transcript,
             list_turn_points,
             fork_at,
@@ -465,6 +470,7 @@ pub fn specta_builder() -> tauri_specta::Builder<tauri::Wry> {
             set_conversation_images_enabled,
             // import
             import_sillytavern,
+            detect_sillytavern,
             // data manager
             get_data_overview,
             delete_conversations,
@@ -552,6 +558,7 @@ pub fn specta_builder() -> tauri_specta::Builder<tauri::Wry> {
             dispatch_command,
             load_save,
             read_journal,
+            sys::html_view::register_html_view,
             read_current_transcript,
             list_turn_points,
             fork_at,

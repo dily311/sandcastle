@@ -241,7 +241,7 @@ class Library {
 	// ---- 가져오기 ----
 	/** SillyTavern 파일(카드·채팅 등). 채팅이면 `characterId`에 붙인다 */
 	async importSillyTavern(path: string, characterId: string | null = null) {
-		const r = await call(commands.importSillytavern(path, null, characterId), src);
+		const r = await call(commands.importSillytavern(path, null, characterId, null), src);
 		await this.load();
 		if (r.kind === "character") toasts.success(`'${r.character.name}' 가져옴`);
 		else if (r.kind === "chat") toasts.success(`대화 가져옴 · 메시지 ${r.messageCount}개`);

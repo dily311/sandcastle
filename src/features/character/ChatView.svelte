@@ -7,7 +7,7 @@
 	import { layout } from "$app/layout.svelte";
 	import { fade, fly } from "svelte/transition";
 	import { drops, extOf, isImage, storeFile } from "$app/drop.svelte";
-	import { Button } from "$shared/ui";
+	import { Button, HtmlView } from "$shared/ui";
 	import { confirmAction } from "$shared/stores/confirm.svelte";
 	import { toasts } from "$shared/stores/toast.svelte";
 	import { ContextMenu, Dialog, EmptyState, IconButton, Spinner, Textarea } from "$shared/ui";
@@ -341,6 +341,8 @@
 							{#each toBlocks(session.live.text) as b, j (j)}
 								{#if b.kind === "p"}
 									<p>{#each b.parts as part, k (k)}{#if part.kind === "action"}<em>{part.text}</em>{:else}{part.text}{/if}{/each}</p>
+								{:else if b.kind === "html"}
+									<HtmlView code={b.code} />
 								{/if}
 							{:else}
 								<p class="typing" aria-label="응답 기다리는 중"><span></span><span></span><span></span></p>

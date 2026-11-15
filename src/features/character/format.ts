@@ -2,9 +2,11 @@
 // - 빈 줄/줄바꿈으로 문단 나누기
 // - *지문* → 기울임, "대사" → 대사 강조
 // - <cg>키</cg> → 캐릭터 이미지 (문단 사이 블록)
+// - ```html … ``` → HTML 블록 (iframe으로 그림, shared/html/blocks.ts)
+import { splitHtmlBlocks } from "$shared/html/blocks";
 
 export type Inline = { kind: "text" | "action" | "speech"; text: string };
-export type Block = { kind: "p"; parts: Inline[] } | { kind: "cg"; key: string };
+export type Block = { kind: "p"; parts: Inline[] } | { kind: "cg"; key: string } | { kind: "html"; code: string };
 
 const CG = /<cg>\s*([^<]+?)\s*<\/cg>/gi;
 
@@ -24,6 +26,10 @@ function inline(line: string): Inline[] {
 }
 
 export function toBlocks(content: string): Block[] {
+	return splitHtmlBlocks(content).flatMap((part) => (part.kind === "html" ? [{ kind: "html" as const, code: part.code }] : textBlocks(part.text)));
+}
+
+function textBlocks(content: string): Block[] {
 	const blocks: Block[] = [];
 	// <cg>를 따로 떼어내 문단 사이에 둔다
 	const chunks = content.split(CG);

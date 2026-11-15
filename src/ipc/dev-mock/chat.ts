@@ -91,6 +91,28 @@ const regex: RegexScript_Serialize[] = [
 		createdAt: 0,
 		updatedAt: 0,
 	},
+	// 캐릭터 전용 (설정 > 정규식에서 캐릭터별로 접혀 보이는지 확인용)
+	...["상태창 숨기기", "생각 태그 지우기", "따옴표 정리"].map((name, i) => ({
+		id: `rc${i}`,
+		name,
+		findRegex: "/<status>[\s\S]*?<\/status>/g",
+		replaceString: "",
+		trimStrings: [],
+		placement: ["ai_output"] as never,
+		target: "display" as never,
+		scope: "character" as const,
+		scopeId: "sera",
+		substituteMacros: "none" as never,
+		runOnEdit: false,
+		minDepth: null,
+		maxDepth: null,
+		enabled: i !== 2,
+		sortOrder: i + 1,
+		sourceFormat: "sillytavern",
+		extraJson: null,
+		createdAt: 0,
+		updatedAt: 0,
+	})),
 ];
 
 type Conv = Omit<Conversation_Serialize, "messageCount">;
@@ -141,6 +163,8 @@ function addMsg(conv: Conv, role: "user" | "assistant", content: string, ago: nu
 	addMsg(a, "assistant", '*당신이 눈을 뜨자, 부드러운 빛 속에서 한 여인이 고개를 숙인다.*\n\n"눈을 떴군요. 다행이에요… 숲의 짐승들에게 쫓기다 쓰러졌었어요."', 42, { chapter: "숲에서 깨어남" });
 	addMsg(a, "user", "여기가 어디죠? 숲인가요?", 41);
 	addMsg(a, "assistant", '"제 오두막이에요. 이 숲, 엘도리아는 제가 지키는 곳이에요. 여기선 아무도 당신을 해치지 못해요."\n*그녀가 따뜻한 차를 건넨다.*', 40);
+	// HTML 코드 블록 미리보기 확인용 (iframe으로 그려지고 JS가 돈다)
+	addMsg(a, "assistant", ["그녀가 낡은 지도를 펼친다.", "```html", `<div style="padding:12px;border-radius:12px;background:#1f3b2d;color:#e8f5e9;font-family:system-ui"><b>엘도리아 숲 지도</b><p id="t">불러오는 중…</p><button onclick="document.getElementById('t').textContent='오두막 → 샘터 15분'">길 찾기</button></div>`, `<script>document.getElementById("t").textContent = "JS 실행됨";</script>`, "```", '"여기가 우리가 있는 곳이에요."'].join("\n"), 35);
 	addMsg(a, "assistant", "(작가 메모: 다음 장면에서 늑대 무리 등장)", 30, { hidden: true, chapter: "그림자 송곳니" });
 	addMsg(a, "assistant", "*멀리서 늑대 울음소리가 들린다. 세라피나의 표정이 굳는다.*", 2, {
 		swipeId: 1,

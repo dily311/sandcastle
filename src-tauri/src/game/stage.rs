@@ -284,9 +284,24 @@ pub fn parse(raw: &str, r: &mut dyn StageResolver, allow: &Allowed) -> Vec<Stage
     let mut pending: Vec<Cue> = Vec::new();
     let mut budget = Budget { total: 0, bgm: 0, cg: 0 };
 
-    for line in raw.lines() {
+    let mut source = raw.lines();
+    while let Some(line) = source.next() {
         let line = line.trim();
         if line.is_empty() {
+            continue;
+        }
+        // ``` 코드 블록(HTML 등)은 줄을 나누지 않고 통째로 한 줄(나레이션)로 둔다.
+        // 안의 <태그>를 연출로 읽지 않고, 화면이 코드 블록을 알아보고 그린다 (HTML이면 iframe).
+        if line.starts_with("```") {
+            let mut block = vec![line.to_string()];
+            for inner in source.by_ref() {
+                block.push(inner.to_string());
+                if inner.trim_start().starts_with("```") {
+                    break;
+                }
+            }
+            let all = std::mem::take(&mut pending);
+            lines.push(StageLine { kind: LineKind::Narration, speaker: None, text: block.join("\n"), cues: all });
             continue;
         }
         let (text, raw_cues) = extract_cues(line);
@@ -473,6 +488,27 @@ mod tests {
 
     fn ai() -> Allowed {
         Allowed::ai(["c1".to_string(), "c2".to_string()].into_iter().collect())
+    }
+
+    #[test]
+    fn code_block_stays_one_line() {
+        let mut r = Mock;
+        let raw = "미나: 이거 봐
+```html
+<div class=\"card\">
+  <b>안녕</b>
+</div>
+```
+끝";
+        let lines = parse(raw, &mut r, &Allowed::author());
+        assert_eq!(lines.len(), 3);
+        assert_eq!(lines[1].text, "```html
+<div class=\"card\">
+  <b>안녕</b>
+</div>
+```");
+        assert!(lines[1].cues.is_empty());
+        assert_eq!(lines[2].text, "끝");
     }
 
     #[test]

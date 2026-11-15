@@ -28,7 +28,7 @@
       }
     ],
     "security": {
-      "csp": "default-src 'self' ipc: http://ipc.localhost; script-src 'self' 'wasm-unsafe-eval'; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' data: https://fonts.gstatic.com https://cdn.jsdelivr.net; img-src 'self' data: blob: https://tauri.localhost tauri: asset: http://asset.localhost game: http://game.localhost; media-src 'self' blob: asset: http://asset.localhost game: http://game.localhost; connect-src 'self' ipc: http://ipc.localhost asset: http://asset.localhost game: http://game.localhost blob: data: ws://localhost:1420 ws://localhost:1421; worker-src 'self' blob:; frame-src 'self' game: http://game.localhost; object-src 'none'; base-uri 'self'; form-action 'none'",
+      "csp": "default-src 'self' ipc: http://ipc.localhost; script-src 'self' 'wasm-unsafe-eval'; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' data: https://fonts.gstatic.com https://cdn.jsdelivr.net; img-src 'self' data: blob: https://tauri.localhost tauri: asset: http://asset.localhost game: http://game.localhost; media-src 'self' blob: asset: http://asset.localhost game: http://game.localhost; connect-src 'self' ipc: http://ipc.localhost asset: http://asset.localhost game: http://game.localhost blob: data: ws://localhost:1420 ws://localhost:1421; worker-src 'self' blob:; frame-src 'self' game: http://game.localhost htmlview: http://htmlview.localhost; object-src 'none'; base-uri 'self'; form-action 'none'",
       "assetProtocol": {
         "enable": true,
         "scope": [

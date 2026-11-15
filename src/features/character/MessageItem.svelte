@@ -1,6 +1,6 @@
 <script lang="ts">
 	import { Bookmark, BookmarkX, ChevronLeft, ChevronRight, Copy, Eye, EyeOff, FileSearch, GitBranch, Pencil, RefreshCw, Trash2 } from "@lucide/svelte";
-	import { Badge, Button, IconButton, Textarea } from "$shared/ui";
+	import { Badge, Button, HtmlView, IconButton, Textarea } from "$shared/ui";
 	import { absolute, relative } from "$shared/time";
 	import { confirmAction, promptText } from "$shared/stores/confirm.svelte";
 	import { toasts } from "$shared/stores/toast.svelte";
@@ -135,6 +135,8 @@
 				<p>
 					{#each b.parts as part, j (j)}{#if part.kind === "action"}<em>{part.text}</em>{:else if part.kind === "speech"}<q>{part.text}</q>{:else}{part.text}{/if}{/each}
 				</p>
+			{:else if b.kind === "html"}
+				<HtmlView code={b.code} />
 			{:else if images[b.key]}
 				<figure class="cg"><img src={images[b.key]} alt={b.key} loading="lazy" /><figcaption>{b.key}</figcaption></figure>
 			{/if}

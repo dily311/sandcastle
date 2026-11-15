@@ -25,6 +25,41 @@ pub struct ImportedPreset {
     pub warnings: Vec<String>,
 }
 
+/// 프리셋에 묶인 정규식을 모두 모은다. 위치가 확장마다 달라서 넓게 찾는다:
+/// - extensions.regex_scripts (SillyTavern 기본: 프리셋에 묶인 정규식)
+/// - 최상위 regex_scripts
+/// - extensions 아래 아무 곳(깊이 4까지)의 배열 중 findRegex를 가진 항목이 있는 것 (예: SPreset의 RegexBinding.regexes)
+/// 같은 이름·같은 찾기식은 한 번만.
+pub fn preset_regex(json: &Value) -> Value {
+    fn is_regex_list(v: &Value) -> bool {
+        v.as_array().is_some_and(|a| a.iter().any(|x| x.get("findRegex").is_some()))
+    }
+    fn walk<'a>(v: &'a Value, depth: usize, out: &mut Vec<&'a Value>) {
+        if depth > 4 {
+            return;
+        }
+        match v {
+            Value::Array(a) if is_regex_list(v) => out.extend(a.iter().filter(|x| x.get("findRegex").is_some())),
+            Value::Object(o) => o.values().for_each(|c| walk(c, depth + 1, out)),
+            _ => {}
+        }
+    }
+    let mut found: Vec<&Value> = Vec::new();
+    if is_regex_list(&json["regex_scripts"]) {
+        walk(&json["regex_scripts"], 0, &mut found);
+    }
+    // 기본 위치를 먼저 (확장 객체의 키 순서는 보장되지 않는다)
+    walk(&json["extensions"]["regex_scripts"], 0, &mut found);
+    walk(&json["extensions"], 0, &mut found);
+    let mut seen = std::collections::HashSet::new();
+    let unique: Vec<Value> = found
+        .into_iter()
+        .filter(|s| seen.insert((s.get("scriptName").and_then(Value::as_str).unwrap_or("").to_string(), s.get("findRegex").and_then(Value::as_str).unwrap_or("").to_string())))
+        .cloned()
+        .collect();
+    Value::Array(unique)
+}
+
 pub fn map_preset(json: &Value, preset_id: &str, name: &str) -> ImportedPreset {
     let mut warnings = vec![];
     let prompts: Vec<&Value> = json["prompts"].as_array().map(|a| a.iter().collect()).unwrap_or_default();
@@ -123,7 +158,7 @@ pub fn map_preset(json: &Value, preset_id: &str, name: &str) -> ImportedPreset {
     }
 
     let regex = map_regex_scripts(
-        &json["extensions"]["regex_scripts"],
+        &preset_regex(json),
         RegexScope::Preset,
         Some(preset_id.to_string()),
         &mut warnings,
@@ -245,5 +280,20 @@ mod tests {
         );
         let ids: Vec<_> = p.blocks.iter().map(|b| (b.identifier.as_str(), b.enabled)).collect();
         assert_eq!(ids, vec![("a", true), ("b", false)]);
+    }
+
+    #[test]
+    fn finds_regex_in_extension_settings() {
+        let json = json!({
+            "prompts": [],
+            "regex_scripts": [ { "scriptName": "top", "findRegex": "/t/", "placement": [2] } ],
+            "extensions": {
+                "regex_scripts": [ { "scriptName": "r", "findRegex": "/a/", "placement": [2] } ],
+                "SPreset": { "RegexBinding": { "regexes": [ { "scriptName": "s", "findRegex": "/b/", "placement": [2] }, { "scriptName": "r", "findRegex": "/a/", "placement": [2] } ] } }
+            }
+        });
+        let names: Vec<_> = preset_regex(&json).as_array().unwrap().iter().map(|v| v["scriptName"].as_str().unwrap().to_string()).collect();
+        assert_eq!(names, vec!["top", "r", "s"]);
+        assert_eq!(map_preset(&json, "p1", "x").regex.len(), 3);
     }
 }

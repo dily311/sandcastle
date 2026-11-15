@@ -119,8 +119,11 @@ export const commands = {
 	 *  - `name`: 프리셋/로어북/대화 이름. 비우면 파일 이름을 쓴다.
 	 *  - `character_id`: 채팅을 붙일 캐릭터. 비우면 메시지의 캐릭터 이름으로 찾고,
 	 *    못 찾으면 오류의 details.speakers에 화자 이름 목록을 담아 돌려준다 (프론트가 캐릭터를 고르게 하면 됨).
+	 *  - `preset_id`: 정규식 파일을 이 프리셋에 묶어 가져온다 (프리셋과 함께 고른 정규식). 비우면 전역.
 	 */
-	importSillytavern: (path: string, name: string | null, characterId: string | null, options?: InvokeOptions) => __TAURI_INVOKE<SillyTavernImport_Serialize>("import_sillytavern", { path, name, characterId }, options),
+	importSillytavern: (path: string, name: string | null, characterId: string | null, presetId: string | null, options?: InvokeOptions) => __TAURI_INVOKE<SillyTavernImport_Serialize>("import_sillytavern", { path, name, characterId, presetId }, options),
+	/**  SillyTavern 파일의 종류만 본다 (가져오지 않음) */
+	detectSillytavern: (path: string, options?: InvokeOptions) => __TAURI_INVOKE<SillyTavernKind>("detect_sillytavern", { path }, options),
 	/**  캐릭터 → 채팅 트리, 개수, 저장 공간 */
 	getDataOverview: (options?: InvokeOptions) => __TAURI_INVOKE<DataOverview_Serialize>("get_data_overview", undefined, options),
 	/**  여러 대화를 한 번에 삭제. 지운 개수를 돌려준다. */
@@ -270,6 +273,8 @@ export const commands = {
 	loadSave: (sessionId: string, slot: number, optionHistoryLimit: number | null, options?: InvokeOptions) => __TAURI_INVOKE<ContinueGameResponse_Serialize>("load_save", { sessionId, slot, optionHistoryLimit }, options),
 	/**  일지 읽기 전용 재생용: 세션의 [from_seq, to_seq] 구간. AI를 다시 호출하지 않는다. */
 	readJournal: (sessionId: string, fromSeq: number | null, toSeq: number, options?: InvokeOptions) => __TAURI_INVOKE<GameJournal[]>("read_journal", { sessionId, fromSeq, toSeq }, options),
+	/**  화면이 HTML 코드 블록을 보여주기 전에 부른다. iframe의 src로 쓸 주소를 돌려준다. */
+	registerHtmlView: (html: string, options?: InvokeOptions) => __TAURI_INVOKE<string>("register_html_view", { html }, options),
 	/**
 	 *  지금 씬 또는 지금 대화의 기록 ("지난 대사" 창). 씬이 열려 있으면 그 씬이 마지막으로 열린 뒤의 대본과 씬 대화,
 	 *  씬 밖에서 NPC와 대화 중이면 그 대화를 시작한 뒤의 메시지. 둘 다 아니면 최근 기록(limit개).
@@ -2902,6 +2907,8 @@ export type SillyTavernImport = SillyTavernImport_Serialize | SillyTavernImport_
 export type SillyTavernImport_Deserialize = { kind: "character"; character: Character_Deserialize; worldInfoBookId?: string | null; regexCount: number; warnings: string[] } | { kind: "preset"; presetId: string; name: string; blockCount: number; regexCount: number; warnings: string[] } | { kind: "regex"; scripts: RegexScript_Deserialize[]; warnings: string[] } | { kind: "worldInfo"; book: WorldInfoBook_Deserialize; entryCount: number; warnings: string[] } | { kind: "chat"; conversation: Conversation_Deserialize; messageCount: number; hiddenCount: number; warnings: string[] };
 
 export type SillyTavernImport_Serialize = { kind: "character"; character: Character_Serialize; worldInfoBookId: string | null; regexCount: number; warnings: string[] } | { kind: "preset"; presetId: string; name: string; blockCount: number; regexCount: number; warnings: string[] } | { kind: "regex"; scripts: RegexScript_Serialize[]; warnings: string[] } | { kind: "worldInfo"; book: WorldInfoBook_Serialize; entryCount: number; warnings: string[] } | { kind: "chat"; conversation: Conversation_Serialize; messageCount: number; hiddenCount: number; warnings: string[] };
+
+export type SillyTavernKind = "character" | "preset" | "regex" | "worldInfo" | "chat";
 
 /**  프론트로 나가는 한 줄. cues는 이 줄을 보여주기 직전에 순서대로 실행한다. */
 export type StageLine = StageLine_Serialize | StageLine_Deserialize;

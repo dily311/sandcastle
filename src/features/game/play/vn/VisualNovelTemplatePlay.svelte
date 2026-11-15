@@ -18,7 +18,6 @@
 		directionParticle,
 		foldDirectionLines,
 		getStageLines,
-		isDirectionOnly,
 		itemGainLines,
 		normalizeCueType,
 		type PlayAction,
@@ -45,7 +44,6 @@
 	let scriptLines = $state<StageLine[]>([]);
 	let lineIndex = $state(0);
 	let scriptFinished = $state(false);
-	let arrivalOnly = $state(false);
 	let standingOverrides = $state<Record<string, DisplayStanding | null>>({});
 	let standingBaseline: Record<string, DisplayStanding | null> = {};
 	let currentBgm = $state<CurrentBgm | null>(null);
@@ -254,7 +252,6 @@
 		const events = runtimeStore?.events ?? [];
 		// 얻은 아이템은 대사창에 "~을 얻었다"로 이어서 보여준다
 		const responseLines = [...getStageLines(events), ...itemGainLines(events, gameStore.view?.items)];
-		arrivalOnly = prefixLines.length > 0 && responseLines.every(isDirectionOnly);
 		const lines = foldDirectionLines([...prefixLines, ...responseLines]);
 		if (!lines.length) {
 			scriptFinished = true;
@@ -284,7 +281,6 @@
 					Array.isArray(payload.lines),
 			);
 		if (Array.isArray(savedScript?.lines) && savedScript.lines.length) {
-			arrivalOnly = false;
 			scriptLines = foldDirectionLines(savedScript.lines as StageLine[]);
 			lineIndex = 0;
 			scriptFinished = false;
@@ -317,13 +313,11 @@
 		const previousLines = scriptLines;
 		const previousIndex = lineIndex;
 		const previousScriptFinished = scriptFinished;
-		const previousArrivalOnly = arrivalOnly;
 		try {
 			isLoading = true;
 			scriptLines = [];
 			lineIndex = 0;
 			scriptFinished = false;
-			arrivalOnly = false;
 			await runtimeStore.dispatchCommand(command);
 			npcResponseChoices = [];
 			if (command.type === "talk") {
@@ -357,7 +351,6 @@
 			scriptLines = previousLines;
 			lineIndex = previousIndex;
 			scriptFinished = previousScriptFinished;
-			arrivalOnly = previousArrivalOnly;
 		} finally {
 			isLoading = false;
 		}
@@ -414,7 +407,6 @@
 		scriptLines = [...prefix, ...foldDirectionLines([...reply.lines, ...itemGainLines(reply.events, gameStore.view?.items)])];
 		lineIndex = Math.min(startAt, Math.max(0, scriptLines.length - 1));
 		scriptFinished = scriptLines.length === 0;
-		arrivalOnly = false;
 		npcResponseChoices = reply.events.flatMap((event) => (event.type === "choicePresented" ? event.choices : []));
 		lastReply = reply.messageId ? { messageId: reply.messageId, text: reply.text, lines: reply.lines } : null;
 		stageFrom = reply.messageId ?? null;
@@ -475,11 +467,8 @@
 		if (lineIndex < scriptLines.length - 1) {
 			lineIndex += 1;
 			rebuildLinePresentation(lineIndex);
-		} else if (arrivalOnly) {
-			arrivalOnly = false;
-			scriptLines = [];
-			lineIndex = 0;
 		} else if (scriptLines.length > 0) {
+			// 마지막 줄을 넘기면(이동 도착 문구 포함) 선택지·입력·이동/행동 목록이 나온다
 			scriptFinished = true;
 		}
 	}

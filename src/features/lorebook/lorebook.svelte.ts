@@ -82,7 +82,7 @@ class Lorebook {
 	}
 	/** SillyTavern 월드인포 JSON 가져오기. 가져온 책을 돌려줌 */
 	async importPath(path: string) {
-		const r = await call(commands.importSillytavern(path, null, null), src);
+		const r = await call(commands.importSillytavern(path, null, null, null), src);
 		await this.load();
 		for (const w of r.warnings) toasts.info(w);
 		if (r.kind !== "worldInfo") {

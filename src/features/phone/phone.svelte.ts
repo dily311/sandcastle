@@ -2,6 +2,7 @@
 // - 페르소나 폰: 내가 페르소나, AI가 연락처 캐릭터 (일반 대화와 같은 구조)
 // - 캐릭터 폰: 내가 주인 캐릭터, AI가 연락처(다른 캐릭터나 페르소나). 엿보기로 AI가 두 사람 몫을 다 쓸 수도 있음
 //   대화 meta.phone = { owner: {kind, id}, contact: {kind, id} }
+import { splitHtmlBlocks } from "$shared/html/blocks";
 import type { Message_Serialize as Message, PhoneContact } from "$ipc/bindings";
 import { call, commands } from "$shared/ipc/client";
 import { library, type Conversation } from "$features/character/library.svelte";
@@ -68,7 +69,15 @@ export interface Preview {
 }
 
 /** 폰 메시지 한 줄 → 말풍선 여러 개 (줄바꿈마다 하나, <cg>키</cg>는 사진) */
-export function bubbles(content: string): { kind: "text" | "image"; text: string }[] {
+/** 말풍선 한 줄: 글 / 캐릭터 이미지(<cg>) / HTML 코드 블록 */
+export type BubbleLine = { kind: "text" | "image" | "html"; text: string };
+
+export function bubbles(content: string): BubbleLine[] {
+	// ```html``` 블록은 말풍선으로 쪼개지 않고 통째로 하나 (HtmlView로 그림)
+	return splitHtmlBlocks(content).flatMap<BubbleLine>((part) => (part.kind === "html" ? [{ kind: "html", text: part.code }] : textBubbles(part.text)));
+}
+
+function textBubbles(content: string): BubbleLine[] {
 	return content
 		.split(/\n+/)
 		.map((l) => l.trim())

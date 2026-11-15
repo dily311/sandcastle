@@ -38,7 +38,8 @@ use crate::{
 /// 가져올 파일 최대 크기
 const MAX_FILE_BYTES: u64 = 50 * 1024 * 1024;
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, specta::Type)]
+#[serde(rename_all = "camelCase")]
 pub enum SillyTavernKind {
     Character,
     Preset,
@@ -54,6 +55,8 @@ pub struct ImportOptions {
     pub name: Option<String>,
     /// 채팅을 붙일 캐릭터. 없으면 메시지의 캐릭터 이름으로 찾는다.
     pub character_id: Option<String>,
+    /// 정규식 파일을 이 프리셋에 묶어서 가져온다 (프리셋과 함께 받은 정규식). 없으면 전역.
+    pub preset_id: Option<String>,
 }
 
 #[derive(Serialize, specta::Type)]
@@ -128,6 +131,15 @@ pub async fn import_file(
     import_file_with(db, app_data_dir, path, ImportOptions { name, ..Default::default() }).await
 }
 
+/// 가져오지 않고 종류만 본다 (여러 파일을 함께 가져올 때 순서를 정하려고: 프리셋 먼저, 그다음 정규식을 그 프리셋에)
+pub fn detect_file(path: &Path) -> Result<SillyTavernKind> {
+    let meta = std::fs::metadata(path).map_err(|e| AppError::io(format!("파일을 열 수 없습니다: {e}")))?;
+    if meta.len() > MAX_FILE_BYTES {
+        return Err(AppError::validation("파일이 너무 큽니다 (50MB 이하)", None));
+    }
+    Ok(detect(&std::fs::read(path)?)?.0)
+}
+
 pub async fn import_file_with(
     db: &DbPool,
     app_data_dir: &Path,
@@ -152,7 +164,7 @@ pub async fn import_file_with(
             import_character(db, app_data_dir, &json, avatar_bytes).await
         }
         SillyTavernKind::Preset => import_preset(db, &json, &file_name).await,
-        SillyTavernKind::Regex => import_regex(db, &json).await,
+        SillyTavernKind::Regex => import_regex(db, &json, options.preset_id).await,
         SillyTavernKind::WorldInfo => import_worldinfo(db, &json, &file_name).await,
         SillyTavernKind::Chat => import_chat(db, &bytes, &file_name, options.character_id).await,
     }
@@ -378,9 +390,10 @@ async fn import_preset(db: &DbPool, json: &Value, name: &str) -> Result<SillyTav
     })
 }
 
-async fn import_regex(db: &DbPool, json: &Value) -> Result<SillyTavernImport> {
+async fn import_regex(db: &DbPool, json: &Value, preset_id: Option<String>) -> Result<SillyTavernImport> {
     let mut warnings = vec![];
-    let scripts = regex::map_regex_scripts(json, RegexScope::Global, None, &mut warnings);
+    let scope = if preset_id.is_some() { RegexScope::Preset } else { RegexScope::Global };
+    let scripts = regex::map_regex_scripts(json, scope, preset_id, &mut warnings);
     let mut tx = db.begin().await?;
     let ids = save_regex(&mut tx, scripts, &mut warnings).await?;
     tx.commit().await?;

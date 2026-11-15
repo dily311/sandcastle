@@ -1,6 +1,8 @@
 <script lang="ts">
 	import { ChevronLeft, ChevronRight, ChevronsRight, Clock, Copy, DoorOpen, EyeOff, LogOut, MapPin, Maximize2, MessageCircle, Minimize2, Pencil, Play, RefreshCw, ScrollText, Search, Send, Square, Volume2, VolumeX } from "@lucide/svelte";
 	import type { PlayAction } from "./playUtils";
+	import { HtmlView } from "$shared/ui";
+	import { wholeHtmlBlock } from "$shared/html/blocks";
 	import type { Choice, StageLine } from "$features/game/types";
 	import { isNarration } from "./playUtils";
 
@@ -61,6 +63,8 @@
 	const actionIcon = { talk: MessageCircle, look: Search, move: MapPin, wait: Clock } as const;
 
 	const narration = $derived(isNarration(p.line));
+	/** 이 줄이 통째로 HTML 코드 블록이면 그 코드 (백엔드 대본 파서가 코드 블록을 한 줄로 둔다) */
+	const htmlCode = $derived(p.line ? wholeHtmlBlock(p.line.text) : null);
 	const text = $derived(p.line ? p.line.text || "…" : (p.sceneDescription ?? "장면이 시작됨"));
 	const showLine = $derived(!p.scriptFinished && (p.line || p.sceneDescription));
 
@@ -97,8 +101,9 @@
 			<p class="line streaming" aria-busy="true">{p.streamingText.trim()}</p>
 		{:else if showLine}
 			{#if !narration && p.speakerName}<span class="speaker">{p.speakerName}</span>{/if}
+			{#if htmlCode}<div class="html-line"><HtmlView code={htmlCode} /></div>{/if}
 			<button class="line" type="button" onclick={p.onStageClick} disabled={!p.isReadingScript} title="다음 (Space)">
-				<span class:narration>{text}</span>
+				<span class:narration>{htmlCode ? "" : text}</span>
 				{#if p.isReadingScript}<span class="next-mark" aria-hidden="true">▼</span>{/if}
 			</button>
 		{:else if p.scriptFinished}
@@ -319,6 +324,10 @@
 	.line:disabled {
 		cursor: default;
 	}
+	.html-line {
+		max-height: 50vh;
+		overflow: auto;
+	}
 	.line.streaming {
 		margin: 0;
 		cursor: default;
@@ -422,32 +431,40 @@
 	}
 	.acts {
 		display: flex;
-		flex-wrap: wrap;
-		gap: 8px;
+		flex-direction: column;
+		gap: 6px;
 		margin: 4px 0 6px;
 		padding: 0;
 		list-style: none;
 	}
 	.act-chip {
-		display: inline-flex;
+		display: flex;
 		align-items: center;
-		gap: 6px;
-		min-height: 36px;
-		padding: 6px 12px;
+		gap: 10px;
+		width: 100%;
+		min-height: 40px;
+		padding: 8px 14px;
 		border: 1px solid var(--game-border);
-		border-radius: 999px;
+		border-radius: 12px;
 		background: var(--surface-hover);
 		color: var(--game-text-main);
 		font: inherit;
-		font-size: 14px;
+		font-size: 15px;
+		text-align: left;
 		cursor: pointer;
 	}
 	.act-chip :global(svg) {
-		width: 15px;
-		height: 15px;
+		width: 16px;
+		height: 16px;
 		flex: none;
+		color: var(--game-text-muted);
+	}
+	.act-chip span {
+		flex: 1;
+		min-width: 0;
 	}
 	.act-chip small {
+		flex: none;
 		color: var(--game-text-muted);
 		font-size: 12px;
 	}
