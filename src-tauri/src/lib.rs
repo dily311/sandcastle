@@ -236,6 +236,7 @@ pub fn specta_builder() -> tauri_specta::Builder<tauri::Wry> {
             branch_conversation,
             patch_conversation_meta,
             delete_messages,
+            export_conversation,
             // task
             get_task,
             list_active_tasks,
@@ -416,6 +417,7 @@ pub fn specta_builder() -> tauri_specta::Builder<tauri::Wry> {
             branch_conversation,
             patch_conversation_meta,
             delete_messages,
+            export_conversation,
             // task
             get_task,
             list_active_tasks,

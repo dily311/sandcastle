@@ -21,6 +21,16 @@ export const convActions = {
 		if (cur.page === "character" && cur.convId === conv.id) nav.replace({ page: "character", charId: conv.characterId });
 	},
 
+	/** 대화 하나를 SillyTavern 채팅(jsonl) 또는 읽기용 글(txt)로 */
+	async exportAs(conv: Conversation, format: "jsonl" | "txt") {
+		const ch = library.character(conv.characterId);
+		const filter = format === "jsonl" ? { name: "SillyTavern 채팅", extensions: ["jsonl"] } : { name: "텍스트", extensions: ["txt"] };
+		const path = await pickSavePath(`${ch?.name ?? "chat"} - ${conv.title}.${format}`, [filter]);
+		if (!path) return;
+		const n = await call(commands.exportConversation(conv.id, format, path), { source: "character" });
+		toasts.success(`메시지 ${n}개 내보냄`);
+	},
+
 	/** 대화 하나를 캐릭터 묶음(zip)으로 내보내기 */
 	async export(conv: Conversation) {
 		const ch = library.character(conv.characterId);

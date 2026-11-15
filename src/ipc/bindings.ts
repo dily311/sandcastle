@@ -59,6 +59,8 @@ export const commands = {
 	patchConversationMeta: (id: string, patch: Value, options?: InvokeOptions) => __TAURI_INVOKE<Conversation_Serialize>("patch_conversation_meta", { id, patch }, options),
 	/**  메시지 여러 개 한 번에 지우기. 지운 개수를 돌려준다 */
 	deleteMessages: (ids: string[], options?: InvokeOptions) => __TAURI_INVOKE<number>("delete_messages", { ids }, options),
+	/**  대화 하나를 파일로 내보내기. format: "jsonl"(SillyTavern 채팅) | "txt"(읽기용 글) */
+	exportConversation: (id: string, format: string, path: string, options?: InvokeOptions) => __TAURI_INVOKE<number>("export_conversation", { id, format, path }, options),
 	getTask: (taskId: string, options?: InvokeOptions) => __TAURI_INVOKE<TaskInfo_Serialize>("get_task", { taskId }, options),
 	listActiveTasks: (options?: InvokeOptions) => __TAURI_INVOKE<TaskInfo_Serialize[]>("list_active_tasks", undefined, options),
 	/**  앱 시작 후 프론트가 호출: 재개/포기를 물어볼 중단된 작업 목록 */

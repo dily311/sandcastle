@@ -10,6 +10,18 @@ export interface PanelTab {
 }
 
 const OPEN_KEY = "sc.panel.open";
+const WIDTH_KEY = "sc.panel.width";
+export const PANEL_MIN = 260;
+export const PANEL_MAX = 560;
+
+function loadWidth(): number {
+	try {
+		const n = Number(localStorage.getItem(WIDTH_KEY));
+		return n >= PANEL_MIN && n <= PANEL_MAX ? n : 300;
+	} catch {
+		return 300;
+	}
+}
 
 function loadOpen(): boolean {
 	try {
@@ -23,6 +35,26 @@ class Panel {
 	tabs = $state<PanelTab[]>([]);
 	tab = $state("");
 	open = $state(loadOpen());
+	width = $state(loadWidth());
+
+	constructor() {
+		this.applyWidth();
+	}
+	/** --panel-width를 바꿈 (대화 화면 칸과 타이틀바 탭 줄이 같이 따라감) */
+	setWidth(w: number, save = false) {
+		this.width = Math.round(Math.min(PANEL_MAX, Math.max(PANEL_MIN, w)));
+		this.applyWidth();
+		if (save) {
+			try {
+				localStorage.setItem(WIDTH_KEY, String(this.width));
+			} catch {
+				/* 저장 실패는 무시 */
+			}
+		}
+	}
+	private applyWidth() {
+		if (typeof document !== "undefined") document.documentElement.style.setProperty("--panel-width", `${this.width}px`);
+	}
 
 	get available() {
 		return this.tabs.length > 0;

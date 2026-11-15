@@ -170,6 +170,58 @@ pub async fn branch_conversation(state: State<'_, AppState>, id: String, message
     Ok(conversation::get_conversation(&state.db, &new_id).await?)
 }
 
+/// 대화 하나를 파일로 내보내기. format: "jsonl"(SillyTavern 채팅) | "txt"(읽기용 글)
+#[tauri::command]
+#[specta::specta]
+pub async fn export_conversation(state: State<'_, AppState>, id: String, format: String, path: String) -> Result<u32> {
+    let conv = conversation::get_conversation(&state.db, &id).await?;
+    let messages = conversation::get_messages(&state.db, &id, i64::MAX, None).await?;
+    let char_name = conversation::get_character(&state.db, &conv.character_id).await.map(|c| c.name).unwrap_or_else(|_| "Character".into());
+    let user_name = conversation::get_persona(&state.db, &conv.persona_id).await.map(|p| p.name).unwrap_or_else(|_| "User".into());
+    let iso = |ms: i64| chrono::DateTime::from_timestamp_millis(ms).map(|d| d.to_rfc3339_opts(chrono::SecondsFormat::Millis, true)).unwrap_or_default();
+
+    let out = match format.as_str() {
+        "jsonl" => {
+            let mut lines = vec![serde_json::json!({
+                "user_name": user_name,
+                "character_name": char_name,
+                "create_date": iso(conv.created_at),
+                "chat_metadata": { "note_prompt": conv.meta.as_ref().and_then(|m| m.pointer("/authorNote/text")).cloned().unwrap_or_default() },
+            })
+            .to_string()];
+            for m in &messages {
+                let meta = m.meta.clone().unwrap_or_default();
+                let is_user = m.role == "user";
+                let mut row = serde_json::json!({
+                    "name": m.name.clone().unwrap_or_else(|| if is_user { user_name.clone() } else { char_name.clone() }),
+                    "is_user": is_user,
+                    "is_system": meta.get("hidden").and_then(|v| v.as_bool()).unwrap_or(false),
+                    "send_date": iso(m.created_at),
+                    "mes": m.content,
+                    "extra": {},
+                });
+                if let Some(sw) = meta.get("swipes").and_then(|v| v.as_array()).filter(|a| !a.is_empty()) {
+                    row["swipes"] = serde_json::Value::Array(sw.iter().map(|s| s.get("content").cloned().unwrap_or_default()).collect());
+                    row["swipe_id"] = meta.get("swipeId").cloned().unwrap_or(serde_json::json!(0));
+                }
+                lines.push(row.to_string());
+            }
+            lines.join("\n") + "\n"
+        }
+        "txt" => {
+            let mut s = format!("{}\n{} · {}\n\n", conv.title, char_name, iso(conv.created_at));
+            for m in &messages {
+                let name = m.name.clone().unwrap_or_else(|| if m.role == "user" { user_name.clone() } else { char_name.clone() });
+                s.push_str(&format!("{name}:\n{}\n\n", m.content.trim()));
+            }
+            s
+        }
+        _ => return Err(AppError::validation(format!("모르는 형식: {format}"), None)),
+    };
+    std::fs::write(&path, out).map_err(|e| AppError::io(format!("파일을 쓸 수 없습니다: {e}")))?;
+    Ok(messages.len() as u32)
+}
+
 /// 대화 meta에 키를 합친다 (작가 노트, 메모 등). 값이 null이면 그 키를 지움
 #[tauri::command]
 #[specta::specta]

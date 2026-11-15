@@ -1,6 +1,7 @@
 <script lang="ts">
 	import { tick } from "svelte";
-	import { CornerUpLeft, FastForward, Images, ListChecks, ListTree, PanelLeft, Plus, RefreshCw, Send, SlidersHorizontal, Square, Trash2, X } from "@lucide/svelte";
+	import { Bookmark, Copy, CornerUpLeft, FastForward, Images, ListChecks, ListTree, NotebookPen, PanelLeft, Plus, RefreshCw, Send, SlidersHorizontal, Square, Trash2, X } from "@lucide/svelte";
+	import { bookmarks } from "./bookmarks";
 	import { Button } from "$shared/ui";
 	import { confirmAction } from "$shared/stores/confirm.svelte";
 	import { toasts } from "$shared/stores/toast.svelte";
@@ -37,7 +38,9 @@
 	$effect(() =>
 		panel.register([
 			{ id: "settings", label: "대화 설정", icon: SlidersHorizontal },
+			{ id: "notes", label: "작가 노트·메모", icon: NotebookPen },
 			{ id: "toc", label: "목차", icon: ListTree },
+			{ id: "bookmarks", label: "북마크", icon: Bookmark },
 			{ id: "assets", label: "에셋", icon: Images },
 		]),
 	);
@@ -114,6 +117,26 @@
 		plusMenu = { x: r.left, y: r.top - 8 - 200 };
 	}
 
+	// ---- 글을 끌어서 고르면: 북마크 / 복사 ----
+	let selMenu = $state<{ x: number; y: number; text: string; messageId: string } | null>(null);
+	function onSelectEnd() {
+		setTimeout(() => {
+			const sel = window.getSelection();
+			const text = sel?.toString().trim() ?? "";
+			if (!sel || !text || selecting) return;
+			const node = sel.anchorNode instanceof Element ? sel.anchorNode : sel.anchorNode?.parentElement;
+			const block = node?.closest<HTMLElement>("[id^=msg-]");
+			if (!block) return;
+			const r = sel.getRangeAt(0).getBoundingClientRect();
+			selMenu = { x: r.left, y: r.bottom + 6, text, messageId: block.id.slice(4) };
+		}, 0);
+	}
+	async function bookmarkSelection() {
+		if (!selMenu || !conv) return;
+		await bookmarks.add(conv, selMenu.messageId, selMenu.text);
+		window.getSelection()?.removeAllRanges();
+	}
+
 	// ---- 분기: 부모 대화 ----
 	const branchInfo = $derived((conv?.meta as { branch?: { parentId: string; messageId: string; seq: number } } | null)?.branch ?? null);
 	const parentConv = $derived(branchInfo ? library.conversation(branchInfo.parentId) : undefined);
@@ -122,6 +145,23 @@
 		onopen(parentConv.id);
 		// 갈라진 메시지로 스크롤
 		setTimeout(() => jumpTo(branchInfo.messageId), 400);
+	}
+
+	// ---- 패널 너비 끌기 ----
+	function startResize(e: PointerEvent) {
+		e.preventDefault();
+		const startX = e.clientX;
+		const startW = panel.width;
+		const move = (ev: PointerEvent) => panel.setWidth(startW + (startX - ev.clientX));
+		const up = () => {
+			panel.setWidth(panel.width, true);
+			window.removeEventListener("pointermove", move);
+			window.removeEventListener("pointerup", up);
+			document.body.style.cursor = "";
+		};
+		document.body.style.cursor = "col-resize";
+		window.addEventListener("pointermove", move);
+		window.addEventListener("pointerup", up);
 	}
 
 	// ---- 여러 메시지 고르기 / 삭제 ----
@@ -190,7 +230,8 @@
 			</div>
 		{/if}
 
-		<div class="scroll" bind:this={scroller} {onscroll}>
+		<!-- svelte-ignore a11y_no_static_element_interactions (글 고르기 끝 감지) -->
+		<div class="scroll" bind:this={scroller} {onscroll} onmouseup={onSelectEnd}>
 			{#if !session || session.loading}
 				<div class="center"><Spinner /></div>
 			{:else if !conv}
@@ -263,8 +304,43 @@
 	</section>
 
 	{#if panel.open && conv && session}
-		<ChatPanel {conv} {session} {chapters} onjump={jumpTo} />
+		<div class="panel-wrap">
+			<!-- 왼쪽 가장자리를 끌어서 너비 조절 -->
+			<!-- svelte-ignore a11y_no_noninteractive_tabindex, a11y_no_noninteractive_element_interactions (포커스 가능한 separator는 조절 가능한 위젯) -->
+			<div
+				class="resize"
+				role="separator"
+				aria-orientation="vertical"
+				aria-label="패널 너비 조절 (←/→)"
+				aria-valuenow={panel.width}
+				tabindex="0"
+				onpointerdown={startResize}
+				onkeydown={(e) => {
+					if (e.key === "ArrowLeft") panel.setWidth(panel.width + 20, true);
+					if (e.key === "ArrowRight") panel.setWidth(panel.width - 20, true);
+				}}
+				ondblclick={() => panel.setWidth(300, true)}
+			></div>
+			<ChatPanel {conv} {session} {chapters} onjump={jumpTo} />
+		</div>
 	{/if}
+	<ContextMenu
+		at={selMenu}
+		label="고른 글"
+		items={[
+			{ label: "북마크", icon: Bookmark, onselect: bookmarkSelection },
+			{
+				label: "복사",
+				icon: Copy,
+				onselect: () =>
+					navigator.clipboard.writeText(selMenu?.text ?? "").then(
+						() => toasts.success("복사함"),
+						() => toasts.error("복사 못 함"),
+					),
+			},
+		]}
+		onclose={() => (selMenu = null)}
+	/>
 </div>
 
 <Dialog open={!!prompt} title="보낸 컨텍스트" description={prompt ? `#${(session?.messages.indexOf(prompt.msg) ?? 0) + 1} 응답을 만들 때 보낸 프롬프트` : ""} size="lg" onclose={() => (prompt = null)}>
@@ -354,6 +430,29 @@
 	}
 	.branch span {
 		color: var(--text-faint);
+	}
+	.panel-wrap {
+		position: relative;
+		display: flex;
+		min-width: 0;
+		min-height: 0;
+	}
+	.panel-wrap > :global(.panel) {
+		flex: 1;
+	}
+	.resize {
+		position: absolute;
+		top: 0;
+		bottom: 0;
+		left: -3px;
+		z-index: 5;
+		width: 6px;
+		cursor: col-resize;
+	}
+	.resize:hover,
+	.resize:focus-visible {
+		background: color-mix(in oklab, var(--accent) 40%, transparent);
+		outline: none;
 	}
 	.selbar {
 		display: flex;

@@ -260,6 +260,7 @@ export const chatHandlers: Record<string, (a: Args) => unknown> = {
 		for (const m of list.slice(0, upto + 1)) messages.push({ ...m, id: uid("m"), conversationId: c.id });
 		return view(c);
 	},
+	export_conversation: ({ id }) => msgsOf(id as string).length,
 	patch_conversation_meta: ({ id, patch }) => {
 		const c = conv(id);
 		const meta: Record<string, unknown> = { ...((c.meta as object) ?? {}) };

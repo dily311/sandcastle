@@ -386,6 +386,9 @@ impl ChatManager {
             _ => unreachable!(),
         };
 
+        // 대화별 메모·작가 노트 (오른쪽 패널)
+        crate::service::chat::notes::apply(&mut context, conv.meta.as_ref());
+
         if let Some(prompt) = ConversationMode::parse_or_default(&conv.mode).system_prompt(&fallback.phone_mode_prompt) {
             context.system_rules.push(prompt);
         }
