@@ -35,7 +35,7 @@
 		<header class="sheet-head">
 			<div class="stabs" role="tablist" aria-label={label}>
 				{#each panel.tabs as t (t.id)}
-					<button role="tab" class:on={panel.tab === t.id} aria-selected={panel.tab === t.id} onclick={() => (panel.tab = t.id)}>
+					<button role="tab" class:on={panel.tab === t.id} aria-selected={panel.tab === t.id} onclick={() => (panel.tab = t.id)} {...panel.tabDrag(t.id)}>
 						<t.icon /><span>{t.label}</span>
 					</button>
 				{/each}

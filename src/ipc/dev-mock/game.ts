@@ -95,7 +95,12 @@ export const gameHandlers: Record<string, (a: Args) => unknown> = {
 			state.locationId = command.locationId;
 			state.currentSceneId = null;
 			state.gameTime += 600;
-			return respond([{ type: "locationChanged", from: "l1", to: command.locationId }]);
+			return respond([
+				{ type: "locationChanged", from: "l1", to: command.locationId },
+				{ type: "stageLines", lines: [{ kind: "direction", speaker: null, text: "", cues: [{ type: "StandingOff", characterId: "gc1" }] }] },
+				{ type: "stageLines", lines: [{ kind: "direction", speaker: null, text: "", cues: [{ type: "BackgroundOff" }] }] },
+				...(command.locationId === "l3" ? [{ type: "itemAdded", itemId: "it1", quantity: 1 }] : []),
+			]);
 		}
 		if (command.type === "advanceTime") state.gameTime += command.minutes * 60;
 		if (command.type === "talk") state.activeNpcId = command.gameCharacterId;
@@ -146,6 +151,17 @@ export const gameHandlers: Record<string, (a: Args) => unknown> = {
 		hasMore: false,
 		oldestSeq: 1,
 	}),
+	read_current_transcript: () => ({
+		entries: [{ seq: 1, gameTime: 8 * 3600, kind: "sceneScript", sceneId: "s1", role: null, conversationId: null, lines: intro[0].lines }],
+		hasMore: false,
+		oldestSeq: 1,
+	}),
+	list_turn_points: () => [
+		{ seq: 9, gameTime: state.gameTime, summary: "그럼 조금만 더 기다려 봐요.", sceneId: state.currentSceneId, locationId: state.locationId },
+		{ seq: 5, gameTime: 8 * 3600 + 25 * 60, summary: "이동", sceneId: null, locationId: "l1" },
+		{ seq: 2, gameTime: 8 * 3600 + 20 * 60, summary: "제 오두막으로 가요. 금방이에요.", sceneId: "s1", locationId: "l1" },
+	],
+	fork_at: ({ seq }) => ({ ...respond([]), state: { ...structuredClone(state), sessionId: `ss-fork-${seq}` }, history: { entries: [], hasMore: false, oldestSeq: null } }),
 	save_list: () => saves,
 	save_write: ({ slot }) => {
 		const i = saves.findIndex((v) => v.sessionId === state.sessionId && v.slotNumber === slot);

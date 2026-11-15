@@ -270,6 +270,18 @@ export const commands = {
 	loadSave: (sessionId: string, slot: number, optionHistoryLimit: number | null, options?: InvokeOptions) => __TAURI_INVOKE<ContinueGameResponse_Serialize>("load_save", { sessionId, slot, optionHistoryLimit }, options),
 	/**  일지 읽기 전용 재생용: 세션의 [from_seq, to_seq] 구간. AI를 다시 호출하지 않는다. */
 	readJournal: (sessionId: string, fromSeq: number | null, toSeq: number, options?: InvokeOptions) => __TAURI_INVOKE<GameJournal[]>("read_journal", { sessionId, fromSeq, toSeq }, options),
+	/**
+	 *  지금 씬 또는 지금 대화의 기록 ("지난 대사" 창). 씬이 열려 있으면 그 씬이 마지막으로 열린 뒤의 대본과 씬 대화,
+	 *  씬 밖에서 NPC와 대화 중이면 그 대화를 시작한 뒤의 메시지. 둘 다 아니면 최근 기록(limit개).
+	 */
+	readCurrentTranscript: (limit: number | null, options?: InvokeOptions) => __TAURI_INVOKE<TranscriptPage_Serialize>("read_current_transcript", { limit }, options),
+	/**  분기할 수 있는 시점 목록 (최신 → 오래된 순). 턴이 끝날 때마다 하나씩 생긴다. */
+	listTurnPoints: (sessionId: string, limit: number | null, options?: InvokeOptions) => __TAURI_INVOKE<TurnPoint_Serialize[]>("list_turn_points", { sessionId, limit }, options),
+	/**
+	 *  시점(seq)에서 분기해 새 세션으로 이어서 플레이한다. 원래 세션은 그대로 남는다.
+	 *  응답의 state.sessionId가 새 세션이다.
+	 */
+	forkAt: (sessionId: string, seq: number, optionHistoryLimit: number | null, options?: InvokeOptions) => __TAURI_INVOKE<ContinueGameResponse_Serialize>("fork_at", { sessionId, seq, optionHistoryLimit }, options),
 	/**  세션의 대화 목록 (다시 보기에서 메시지를 읽을 대화를 고르기 위함). */
 	readConversations: (sessionId: string, options?: InvokeOptions) => __TAURI_INVOKE<GameConversations_Serialize[]>("read_conversations", { sessionId }, options),
 	/**  대화의 [from_seq, to_seq] 구간 메시지. meta에는 그때 나온 선택지와 적용된 변수 변경이 들어 있다. */
@@ -1756,6 +1768,8 @@ export type GamePlayerSessions_Deserialize = {
 	inventoryJson: Value,
 	relationshipsJson: Value,
 	stageJson: Value,
+	/**  zone별 날씨 (GameState.zone_weather) */
+	zoneWeatherJson: Value,
 	forkedFromSeq?: number | null,
 	headSeq: number,
 	updatedAt: number,
@@ -1777,6 +1791,8 @@ export type GamePlayerSessions_Serialize = {
 	inventoryJson: Value,
 	relationshipsJson: Value,
 	stageJson: Value,
+	/**  zone별 날씨 (GameState.zone_weather) */
+	zoneWeatherJson: Value,
 	forkedFromSeq: number | null,
 	headSeq: number,
 	updatedAt: number,
@@ -3155,6 +3171,8 @@ export type TranscriptEntry_Deserialize = {
 	sceneId?: string | null,
 	/**  Message일 때 "user" / "assistant" */
 	role?: string | null,
+	/**  Message일 때 어느 게임 대화의 메시지인지 */
+	conversationId?: string | null,
 	lines: StageLine_Deserialize[],
 };
 
@@ -3166,6 +3184,8 @@ export type TranscriptEntry_Serialize = {
 	sceneId: string | null,
 	/**  Message일 때 "user" / "assistant" */
 	role: string | null,
+	/**  Message일 때 어느 게임 대화의 메시지인지 */
+	conversationId: string | null,
 	lines: StageLine_Serialize[],
 };
 
@@ -3189,6 +3209,29 @@ export type TranscriptPage_Serialize = {
 	hasMore: boolean,
 	/**  이 페이지에서 가장 오래된 항목의 seq. 다음(더 오래된) 페이지를 읽을 때 beforeSeq로 넘긴다. */
 	oldestSeq: number | null,
+};
+
+/**  분기할 수 있는 시점 하나 (턴 끝 상태 스냅샷이 있는 seq) */
+export type TurnPoint = TurnPoint_Serialize | TurnPoint_Deserialize;
+
+/**  분기할 수 있는 시점 하나 (턴 끝 상태 스냅샷이 있는 seq) */
+export type TurnPoint_Deserialize = {
+	seq: number,
+	gameTime: number,
+	/**  그 턴에 무슨 일이 있었는지 한 줄 (마지막 대사, 없으면 한 행동) */
+	summary: string,
+	sceneId?: string | null,
+	locationId?: string | null,
+};
+
+/**  분기할 수 있는 시점 하나 (턴 끝 상태 스냅샷이 있는 seq) */
+export type TurnPoint_Serialize = {
+	seq: number,
+	gameTime: number,
+	/**  그 턴에 무슨 일이 있었는지 한 줄 (마지막 대사, 없으면 한 행동) */
+	summary: string,
+	sceneId: string | null,
+	locationId: string | null,
 };
 
 export type Value = null | boolean | number | string | Value[] | { [key in string]: Value };

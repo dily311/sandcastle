@@ -165,11 +165,14 @@ impl GameRuntime {
             inventory_json: serde_json::json!({}),
             relationships_json: initial_relationships,
             stage_json: serde_json::json!({}),
+            zone_weather: serde_json::json!({}),
             npc_states: Default::default(), // start()가 GameStarted를 흘려서 처음 위치를 굴린다
             cooldowns: Default::default(),
             auto_active: Default::default(),
             turn_fired: false,
         };
+        let mut state = state;
+        state.remember_zone_weather();
         Ok(Self::new(definition, state))
     }
 

@@ -33,7 +33,7 @@ const MAX_INPUT_CHARS: usize = 2000; // TODO: 실제 상한 정하기
 const HISTORY_LIMIT: usize = crate::service::prompt::prompt_manager::HISTORY_FETCH_LIMIT as usize;
 const RATE_LIMIT_WINDOW_SECONDS: i64 = 60;
 const RATE_LIMIT_MAX_CALLS: usize = 6; // 분당 최대 호출 수. TODO: 실제 값 정하기
-const DEFAULT_BRANCH_KEY: &str = "_default"; // 씬 밖(자유 대화)일 때.
+pub(crate) const DEFAULT_BRANCH_KEY: &str = "_default"; // 씬 밖(자유 대화)일 때.
 
 /// 앱이 고정으로 거는 규칙. 게임 데이터(캐릭터 설명 등)보다 항상 앞에 온다 — 임포트한 게임의
 /// 텍스트가 이 규칙을 덮어쓰지 못하게 하려는 것. <choice> 규칙이 없으면 AI가 선택지를 안 낸다.
@@ -47,7 +47,7 @@ const GAME_SYSTEM_RULES: &[&str] = &[
     "연출 태그(플레이어에게 보이지 않는다)는 해당 줄에 함께 적는다: <emotion::이름>감정</emotion>(그 인물의 표정, '표정 목록'에 있는 감정만), <motion::이름>동작</motion>, <sfx>소리 이름</sfx>, <bgm>분위기</bgm>(바뀔 때만), <cg>키</cg> 또는 <cg>off</cg>(특별한 순간만), <effects>효과 이름</effects>. 목록에 없는 이름은 절대 쓰지 마라. 눈에 띄게 달라질 때만 쓰고 문장마다 쓰지 마라. 태그를 대사로 읽거나 설명하지 마라.",
 ];
 /// 씬 입력(서술자) 대화의 참여자 키. 씬 하나에 대화가 하나 (branch_key = 씬 id).
-const SCENE_PARTICIPANTS_KEY: &str = "_scene";
+pub(crate) const SCENE_PARTICIPANTS_KEY: &str = "_scene";
 
 /// 씬이 열려 있을 때(sceneSay)의 추가 규칙. 1:1 대화용 <updateRel> 규칙은 이쪽 규칙으로 바꿔 쓴다.
 const SCENE_RULES: [&str; 3] = [
@@ -128,7 +128,7 @@ fn extract_choices(raw: &str) -> (String, Vec<String>) {
 }
 
 /// 참여자 id들을 정렬해서 ','로 이은 값. 지금은 1:1이라 캐릭터 id 하나가 그대로 키가 된다.
-fn participants_key(ids: &[&str]) -> String {
+pub(crate) fn participants_key(ids: &[&str]) -> String {
     let mut v: Vec<&str> = ids.to_vec();
     v.sort_unstable();
     v.join(",")
@@ -531,7 +531,10 @@ async fn converse(
             let allowed = user_turns >= runtime.scene_min_turns();
             events.extend(runtime.end_scene_by_ai(allowed));
         }
-        if !events.is_empty() {
+        if events.is_empty() {
+            // 이 대화 턴 끝의 상태 (분기할 수 있는 시점)
+            crate::game::journal::checkpoint(&state.db, runtime, &game_id).await?;
+        } else {
             crate::game::journal::record(&state.db, runtime, &game_id, None, &events).await?;
         }
         (events, runtime.render_state(), plain, lines, user_msg_id, ai_msg_id)

@@ -48,6 +48,11 @@ pub struct GameState {
     pub relationships_json: serde_json::Value,
     /// 무대 상태: 지금 배경/BGM 분위기/CG/서 있는 캐릭터와 감정 (이어하기/분기 때 같은 화면을 복원한다).
     pub stage_json: serde_json::Value,
+    /// zone별 날씨: {zone_id: {"weather", "day", "period"}}. 같은 zone·같은 날·같은 시간대 안에서는
+    /// 날씨를 다시 굴리지 않는다 (TimeSystem). 지금 zone의 값이 곧 weather_id다.
+    /// 이 필드가 생기기 전의 책갈피 스냅샷에는 없으므로 기본값(빈 객체)을 쓴다.
+    #[serde(default = "empty_object")]
+    pub zone_weather: serde_json::Value,
     /// game_character_id -> 지금 상태/위치. 세션에는 컬럼이 없고 game_character_state_snapshots에 seq별로 쌓인다
     /// (불러올 때 캐릭터별 가장 최근 행을 읽는다). 스폰 규칙이 정의된 캐릭터만 여기에 생긴다.
     #[serde(skip)]
@@ -65,6 +70,30 @@ pub struct GameState {
     #[serde(skip)]
     pub turn_fired: bool,
     // TODO: inventory, relationships — 해당 시스템 설계되면 구체 타입으로 교체.
+}
+
+fn empty_object() -> serde_json::Value {
+    serde_json::json!({})
+}
+
+/// 하루 = 86400초. 날씨를 다시 굴릴지 정하는 기준 중 하나 (같은 시간대라도 날이 바뀌면 다시 굴린다).
+pub fn day_of(game_time: i64) -> i64 {
+    game_time.div_euclid(86_400)
+}
+
+impl GameState {
+    /// 지금 zone의 날씨를 이 시점(날·시간대)으로 기록한다. 새 게임·이전 세션 불러오기·날씨가 정해질 때 쓴다.
+    pub fn remember_zone_weather(&mut self) {
+        let key = self.zone_id.clone().unwrap_or_default();
+        if !self.zone_weather.is_object() {
+            self.zone_weather = empty_object();
+        }
+        self.zone_weather[key] = serde_json::json!({
+            "weather": self.weather_id,
+            "day": day_of(self.game_time),
+            "period": self.time_period_id,
+        });
+    }
 }
 
 /// DB에서 NULL이거나 객체가 아닌 값이 오면 빈 객체로 바꾼다.
@@ -97,10 +126,19 @@ impl GameState {
             inventory_json: as_object(session.inventory_json),
             relationships_json: as_object(session.relationships_json),
             stage_json: as_object(session.stage_json),
+            zone_weather: as_object(session.zone_weather_json),
             npc_states: HashMap::new(), // GameRuntime::load가 DB에서 채운다
             cooldowns,
             auto_active: HashSet::new(),
             turn_fired: false,
+        })
+        .map(|mut state: Self| {
+            // zone별 날씨가 없던 세션: 지금 zone의 날씨를 지금 시점으로 기억해서 바로 다시 굴리지 않게 한다
+            let key = state.zone_id.clone().unwrap_or_default();
+            if state.zone_weather.get(&key).is_none() {
+                state.remember_zone_weather();
+            }
+            state
         })
     }
 

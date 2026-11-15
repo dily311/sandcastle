@@ -1,5 +1,6 @@
 <script lang="ts">
-	import { ChevronLeft, ChevronRight, ChevronsRight, Copy, DoorOpen, EyeOff, LogOut, Maximize2, Minimize2, Pencil, Play, RefreshCw, ScrollText, Send, Square, Volume2, VolumeX } from "@lucide/svelte";
+	import { ChevronLeft, ChevronRight, ChevronsRight, Clock, Copy, DoorOpen, EyeOff, LogOut, MapPin, Maximize2, MessageCircle, Minimize2, Pencil, Play, RefreshCw, ScrollText, Search, Send, Square, Volume2, VolumeX } from "@lucide/svelte";
+	import type { PlayAction } from "./playUtils";
 	import type { Choice, StageLine } from "$features/game/types";
 	import { isNarration } from "./playUtils";
 
@@ -13,6 +14,8 @@
 		npcChoices: string[];
 		canSendInput: boolean;
 		canStopTalk: boolean;
+		/** 할 일이 없을 때(대사·선택지·입력 없음) 보여줄 이동·행동 목록 */
+		actions?: PlayAction[];
 		/** 열린 씬을 끝낼 수 있는가 (씬 입력을 쓸 수 있는 씬) */
 		canEndScene?: boolean;
 		inputPlaceholder?: string;
@@ -55,6 +58,7 @@
 		onRegenerate: () => void;
 	};
 	let p: Props = $props();
+	const actionIcon = { talk: MessageCircle, look: Search, move: MapPin, wait: Clock } as const;
 
 	const narration = $derived(isNarration(p.line));
 	const text = $derived(p.line ? p.line.text || "…" : (p.sceneDescription ?? "장면이 시작됨"));
@@ -132,7 +136,20 @@
 					<button class="g-btn primary" type="submit" disabled={p.isLoading || !p.inputValue.trim()}><Send />보내기</button>
 				</form>
 			{:else if !p.choices.length && !p.npcChoices.length}
-				<p class="idle">오른쪽 패널의 <b>이동·행동</b>에서 다음 할 일을 고름</p>
+				{#if p.actions?.length}
+					<ul class="acts" aria-label="다음에 할 일">
+						{#each p.actions as action (action.id)}
+							{@const Icon = actionIcon[action.kind]}
+							<li>
+								<button class="act-chip" type="button" disabled={p.isLoading || action.disabled} title={action.hint} onclick={action.run}>
+									<Icon /><span>{action.label}</span>{#if action.hint}<small>{action.hint}</small>{/if}
+								</button>
+							</li>
+						{/each}
+					</ul>
+				{:else}
+					<p class="idle">지금 할 수 있는 것이 없음</p>
+				{/if}
 			{/if}
 		{:else if p.isLoading}
 			<p class="idle">장면을 불러오는 중…</p>
@@ -166,7 +183,7 @@
 		<span class="gap"></span>
 		<button class="act" title="지난 대사 (L)" aria-label="지난 대사" onclick={p.onLog}><ScrollText /></button>
 		<button class="act" title="대사창 숨기기 (H) · 무대를 누르면 다시 보임" aria-label="대사창 숨기기" onclick={p.onHide}><EyeOff /></button>
-		<button class="act" class:on={p.bgmMuted} title={p.bgmMuted ? "배경음 켜기" : "배경음 끄기"} aria-label="배경음" aria-pressed={p.bgmMuted} onclick={p.onToggleMute}>
+		<button class="act" class:on={p.bgmMuted} title={p.bgmMuted ? "소리 켜기 (배경음·효과음)" : "소리 끄기 (배경음·효과음)"} aria-label="소리" aria-pressed={p.bgmMuted} onclick={p.onToggleMute}>
 			{#if p.bgmMuted}<VolumeX />{:else}<Volume2 />{/if}
 		</button>
 		<button class="act" class:on={p.focusMode} title={p.focusMode ? "집중 모드 끄기" : "집중 모드 (사이드바 숨김)"} aria-label="집중 모드" aria-pressed={p.focusMode} onclick={p.onToggleFocus}>
@@ -403,8 +420,43 @@
 		color: var(--game-text-muted);
 		font-size: 14px;
 	}
-	.idle b {
-		color: var(--game-text-secondary);
+	.acts {
+		display: flex;
+		flex-wrap: wrap;
+		gap: 8px;
+		margin: 4px 0 6px;
+		padding: 0;
+		list-style: none;
+	}
+	.act-chip {
+		display: inline-flex;
+		align-items: center;
+		gap: 6px;
+		min-height: 36px;
+		padding: 6px 12px;
+		border: 1px solid var(--game-border);
+		border-radius: 999px;
+		background: var(--surface-hover);
+		color: var(--game-text-main);
+		font: inherit;
+		font-size: 14px;
+		cursor: pointer;
+	}
+	.act-chip :global(svg) {
+		width: 15px;
+		height: 15px;
+		flex: none;
+	}
+	.act-chip small {
+		color: var(--game-text-muted);
+		font-size: 12px;
+	}
+	.act-chip:hover:not(:disabled) {
+		border-color: var(--game-text-muted);
+	}
+	.act-chip:disabled {
+		opacity: 0.5;
+		cursor: default;
 	}
 	.foot {
 		display: flex;

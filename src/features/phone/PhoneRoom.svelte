@@ -331,6 +331,7 @@
 	.them :global(.avatar) {
 		border-radius: 38% !important;
 		flex-shrink: 0;
+		overflow: hidden;
 	}
 	.them :global(.avatar img) {
 		border-radius: inherit;

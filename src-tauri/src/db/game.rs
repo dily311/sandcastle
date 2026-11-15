@@ -1947,7 +1947,7 @@ pub async fn delete_game_relationship_def<'e, E>(executor: E, id: &str) -> Resul
 pub async fn get_all_game_player_sessions<'e, E>(executor: E, game_id: &str) -> Result<Vec<GamePlayerSessions>, Error> where E: Executor<'e, Database = Sqlite> {
     let result = sqlx::query_as::<_, GamePlayerSessionsRow>(
     "SELECT 
-        id, game_id, player_id, current_scene_id, current_map_id, current_zone_id, current_location_id, current_weather_id, game_time, flags_json, parent_session_id, pending_scenes_json, inventory_json, relationships_json, stage_json, forked_from_seq, head_seq, updated_at
+        id, game_id, player_id, current_scene_id, current_map_id, current_zone_id, current_location_id, current_weather_id, game_time, flags_json, parent_session_id, pending_scenes_json, inventory_json, relationships_json, stage_json, zone_weather_json, forked_from_seq, head_seq, updated_at
     FROM game_player_sessions WHERE game_id = ?"
     )
     .bind(game_id)
@@ -1958,7 +1958,7 @@ pub async fn get_all_game_player_sessions<'e, E>(executor: E, game_id: &str) -> 
 pub async fn get_game_player_sessions<'e, E>(executor: E, id: &str) -> Result<GamePlayerSessions, Error> where E: Executor<'e, Database = Sqlite> {
     let result = sqlx::query_as::<_, GamePlayerSessionsRow>(
     "SELECT 
-        id, game_id, player_id, current_scene_id, current_map_id, current_zone_id, current_location_id, current_weather_id, game_time, flags_json, parent_session_id, pending_scenes_json, inventory_json, relationships_json, stage_json, forked_from_seq, head_seq, updated_at
+        id, game_id, player_id, current_scene_id, current_map_id, current_zone_id, current_location_id, current_weather_id, game_time, flags_json, parent_session_id, pending_scenes_json, inventory_json, relationships_json, stage_json, zone_weather_json, forked_from_seq, head_seq, updated_at
     FROM game_player_sessions 
     WHERE id = ?"
     )
@@ -1975,10 +1975,11 @@ pub async fn upsert_game_player_sessions<'e, E>(executor: E, input: GamePlayerSe
     let inventory_json = serde_json::to_string(&input.inventory_json).unwrap_or_default();
     let relationships_json = serde_json::to_string(&input.relationships_json).unwrap_or_default();
     let stage_json = serde_json::to_string(&input.stage_json).unwrap_or_default();
+    let zone_weather_json = serde_json::to_string(&input.zone_weather_json).unwrap_or_default();
     sqlx::query(
         r#"
-        INSERT INTO game_player_sessions ( id, game_id, player_id, current_scene_id, current_map_id, current_zone_id, current_location_id, current_weather_id, game_time, flags_json, parent_session_id,  pending_scenes_json, inventory_json, relationships_json, stage_json, forked_from_seq, head_seq, updated_at ) 
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        INSERT INTO game_player_sessions ( id, game_id, player_id, current_scene_id, current_map_id, current_zone_id, current_location_id, current_weather_id, game_time, flags_json, parent_session_id,  pending_scenes_json, inventory_json, relationships_json, stage_json, zone_weather_json, forked_from_seq, head_seq, updated_at )
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
         ON CONFLICT(id) DO UPDATE SET
             game_id=excluded.game_id, 
             player_id=excluded.player_id, 
@@ -1993,8 +1994,8 @@ pub async fn upsert_game_player_sessions<'e, E>(executor: E, input: GamePlayerSe
             pending_scenes_json=excluded.pending_scenes_json,
             inventory_json=excluded.inventory_json,
             relationships_json=excluded.relationships_json,
-            relationships_json=excluded.relationships_json,
             stage_json=excluded.stage_json,
+            zone_weather_json=excluded.zone_weather_json,
             head_seq=excluded.head_seq,
             updated_at=excluded.updated_at
         "#,
@@ -2014,6 +2015,7 @@ pub async fn upsert_game_player_sessions<'e, E>(executor: E, input: GamePlayerSe
     .bind(inventory_json)
     .bind(relationships_json)
     .bind(stage_json)
+    .bind(zone_weather_json)
     .bind(&input.forked_from_seq)
     .bind(&input.head_seq)
     .bind(now)

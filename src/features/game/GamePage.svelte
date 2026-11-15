@@ -9,7 +9,7 @@
 	import GamePanel from "./play/GamePanel.svelte";
 	import SidePanel from "$app/SidePanel.svelte";
 	import { panel } from "$app/panel.svelte";
-	import { Activity, Compass, Gauge, GitBranch, HeartHandshake, Map as MapIcon, Package, ScrollText, SlidersHorizontal } from "@lucide/svelte";
+	import { Activity, Compass, Gauge, GitBranch, HeartHandshake, Map as MapIcon, Package, SlidersHorizontal } from "@lucide/svelte";
 
 	// 게임 목록 → 게임 상세(플레이 기록) → 플레이 / 편집
 	let { gameId, sessionId, edit = false }: { gameId?: string; sessionId?: string; edit?: boolean } = $props();
@@ -28,7 +28,6 @@
 			{ id: "branches", label: "분기", icon: GitBranch },
 			{ id: "actions", label: "이동·행동 (A)", icon: Compass },
 			{ id: "map", label: "지도 (M)", icon: MapIcon },
-			{ id: "log", label: "지난 대사 (L)", icon: ScrollText },
 			{ id: "status", label: "상태", icon: Activity },
 			{ id: "relations", label: "관계", icon: HeartHandshake },
 			{ id: "items", label: "소지품 (I)", icon: Package },

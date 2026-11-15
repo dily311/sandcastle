@@ -3,7 +3,7 @@
 	// - 대화방이면 대화 화면과 같은 공통 탭(대화 설정 · 컨텍스트·프리셋 · 분기)을 ChatPanel로 그대로
 	// - '정보' 탭: 상대 카드와 폰 설정
 	import { ExternalLink } from "@lucide/svelte";
-	import { Avatar, Button, Segmented } from "$shared/ui";
+	import { Avatar, Button, ProfilePicker, Segmented, type ProfileOption } from "$shared/ui";
 	import { panel } from "$app/panel.svelte";
 	import ChatPanel from "$features/character/ChatPanel.svelte";
 	import type { ChatSession } from "$features/character/session.svelte";
@@ -27,10 +27,28 @@
 		void nav.go(w.kind === "persona" ? { page: "persona", personaId: w.id } : { page: "character", charId: w.id });
 	}
 	const kindLabel = (k: string) => (k === "persona" ? "페르소나" : "캐릭터");
+
+	// 폰에서의 "나" = 폰 주인. 페르소나(내 폰)와 캐릭터(그 캐릭터의 폰)를 한 목록에서 고른다
+	const ownerOptions = $derived<ProfileOption[]>([
+		...library.personas.map((p) => ({ id: `persona:${p.id}`, name: p.name, avatar: p.avatar, color: p.color, description: p.description, group: "내 페르소나의 폰" })),
+		...library.characters.map((c) => ({ id: `character:${c.id}`, name: c.name, avatar: c.avatar, color: c.color, description: c.description, group: "캐릭터의 폰 (그 캐릭터가 되거나 엿봄)" })),
+	]);
+	const ownerValue = $derived(phone.prefs.owner ? `${phone.prefs.owner.kind}:${phone.prefs.owner.id}` : null);
+	function pickOwner(id: string) {
+		const [kind, ...rest] = id.split(":");
+		void phone.switchOwner({ kind: kind as Who["kind"], id: rest.join(":") });
+	}
+	const me = $derived({
+		label: "나 (폰 주인)",
+		options: ownerOptions,
+		value: ownerValue,
+		hint: phone.isCharacterPhone ? "캐릭터 폰 · 바꾸면 그 폰으로 넘어감" : "바꾸면 그 사람의 폰으로 넘어감",
+		onchange: pickOwner,
+	});
 </script>
 
 {#if conv && session && shared.has(panel.tab)}
-	<ChatPanel {conv} {session} chapters={{}} onjump={() => {}} {onopen} />
+	<ChatPanel {conv} {session} chapters={{}} onjump={() => {}} {onopen} {me} />
 {:else}
 <div class="panel-body">
 		{#if conv && contact}
@@ -52,10 +70,7 @@
 		{#if owner}
 			<section>
 				<h4>폰</h4>
-				<button class="card owner" onclick={() => openPage(owner)}>
-					<Avatar name={owner.name} src={fileSrc(owner.avatar)} color={owner.color} size={40} />
-					<span class="who"><b>{owner.name}의 폰</b><small>{phone.isCharacterPhone ? "캐릭터 폰 · 그 캐릭터가 되거나 엿봄" : "내 페르소나 폰"}</small></span>
-				</button>
+				<ProfilePicker label="폰 주인 바꾸기" options={ownerOptions} value={ownerValue} hint={me.hint} onchange={pickOwner} />
 				<Segmented
 					label="화면 표시"
 					value={phone.prefs.display}
@@ -70,7 +85,7 @@
 						<button class="wall" role="radio" aria-checked={phone.wallpaper === id} class:on={phone.wallpaper === id} style:background={bg} aria-label="배경 {id}" onclick={() => phone.setWallpaper(id)}></button>
 					{/each}
 				</div>
-				<p class="hint">주인 바꾸기·연락처는 폰 안의 설정·연락처 앱에서</p>
+				<p class="hint">연락처는 폰 안의 연락처 앱에서</p>
 			</section>
 		{/if}
 </div>
@@ -85,14 +100,6 @@
 		border: 1px solid var(--border);
 		border-radius: var(--radius-md);
 		background: var(--surface);
-	}
-	.card.owner {
-		width: 100%;
-		text-align: left;
-		cursor: pointer;
-	}
-	.card.owner:hover {
-		background: var(--surface-hover);
 	}
 	.who {
 		display: flex;

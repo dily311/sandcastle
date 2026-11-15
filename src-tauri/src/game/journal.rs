@@ -21,6 +21,26 @@ pub fn journal_input<T: serde::Serialize>(session_id: &str, seq: u32, kind: &str
     }
 }
 
+/// 턴 끝의 상태 스냅샷이 일지에 쓰이는 kind. 이 항목이 "분기할 수 있는 시점"이다 (session::fork_at_seq).
+pub const STATE_KIND: &str = "state";
+
+/// 일지에 지금 상태를 남긴다 (새 seq를 하나 쓴다). 세션 저장과 같은 트랜잭션에서 부른다.
+pub fn state_input(runtime: &mut GameRuntime) -> GameJournalInput {
+    let seq = runtime.next_seq();
+    let st = runtime.state();
+    journal_input(&st.session_id.clone(), seq, STATE_KIND, st, st.game_time)
+}
+
+/// 턴 끝 스냅샷만 따로 남길 때 (일지에 쓸 이벤트가 없는 NPC 대화 등)
+pub async fn checkpoint(db: &SqlitePool, runtime: &mut GameRuntime, game_id: &str) -> Result<(), AppError> {
+    let snapshot = state_input(runtime);
+    let mut tx = db.begin().await?;
+    upsert_game_player_sessions(&mut *tx, runtime.state().to_session_input(game_id.to_string())).await?;
+    upsert_game_journal(&mut *tx, snapshot).await?;
+    tx.commit().await?;
+    Ok(())
+}
+
 pub async fn record(db: &SqlitePool, runtime: &mut GameRuntime, game_id: &str, command: Option<&GameCommand>, events: &[GameEvent]) -> Result<(), AppError> {
     let session_id = runtime.state().session_id.clone();
     let weather_id = runtime.state().weather_id.clone();
@@ -48,6 +68,9 @@ pub async fn record(db: &SqlitePool, runtime: &mut GameRuntime, game_id: &str, c
             npc_rows.push((seq, game_character_id.clone(), to.clone()));
         }
     }
+
+    // 턴 끝의 상태: 이 시점으로 분기할 수 있게 일지에 남긴다 (seq를 발급하므로 세션 저장보다 먼저)
+    journal.push(state_input(runtime));
 
     let mut tx = db.begin().await?;
     // 세션 행을 가장 먼저 쓴다: 새 게임의 첫 기록은 세션이 아직 없는 상태라, 아래 행들의 session_id FK가 걸리려면 먼저 있어야 한다.

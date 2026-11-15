@@ -125,3 +125,63 @@ async fn blocked_commands_report_reason(pool: SqlitePool) {
     let res = runtime.dispatch(GameCommand::Talk { game_character_id: "없는-캐릭터".into() }).err().expect("없는 캐릭터").to_response();
     assert!(matches!(res.code, ErrorCode::InvalidInput | ErrorCode::GameActionBlocked));
 }
+
+#[sqlx::test(migrations = "src/db/migrations")]
+async fn weather_stays_within_zone_and_period(pool: SqlitePool) {
+    let games_root = tempfile::tempdir().unwrap();
+    let game_id = GameManager::create_game(&pool, games_root.path(), "날씨 테스트".into(), "dating-sim".into()).await.unwrap();
+    let definition = Arc::new(SqlxGameRepository::new(&pool).load_definition(&game_id).await.unwrap());
+    let session_id = uuid::Uuid::new_v4().to_string();
+    let mut runtime = GameRuntime::from_new_game(definition.clone(), session_id.clone(), any_persona(&pool).await).unwrap();
+    let events = runtime.start();
+    journal::record(&pool, &mut runtime, &game_id, None, &events).await.unwrap();
+
+    // 시작 zone의 날씨를 기억한다
+    let zone = runtime.state().zone_id.clone().unwrap_or_default();
+    assert_eq!(runtime.state().zone_weather[&zone]["weather"].as_str(), Some(runtime.state().weather_id.as_str()));
+
+    // 같은 zone·같은 시간대 안에서 시간이 여러 번 흘러도 날씨는 그대로
+    for _ in 0..30 {
+        let (period, weather) = (runtime.state().time_period_id.clone(), runtime.state().weather_id.clone());
+        play(&pool, &mut runtime, &game_id, GameCommand::AdvanceTime { minutes: 1 }).await;
+        if runtime.state().time_period_id == period {
+            assert_eq!(runtime.state().weather_id, weather, "같은 시간대인데 날씨가 바뀜");
+        }
+    }
+
+    // 세션에 저장되고 다시 불러와도 남는다
+    let reloaded = GameRuntime::load(&SqlxGameRepository::new(&pool), definition, &session_id).await.unwrap();
+    assert_eq!(reloaded.state().zone_weather, runtime.state().zone_weather);
+}
+
+#[sqlx::test(migrations = "src/db/migrations")]
+async fn fork_at_any_turn(pool: SqlitePool) {
+    use sandcastle_lib::game::{session::fork_at_seq, transcript::turn_points};
+    let games_root = tempfile::tempdir().unwrap();
+    let game_id = GameManager::create_game(&pool, games_root.path(), "시점 분기".into(), "dating-sim".into()).await.unwrap();
+    let definition = Arc::new(SqlxGameRepository::new(&pool).load_definition(&game_id).await.unwrap());
+    let session_id = uuid::Uuid::new_v4().to_string();
+    let mut runtime = GameRuntime::from_new_game(definition.clone(), session_id.clone(), any_persona(&pool).await).unwrap();
+    let events = runtime.start();
+    journal::record(&pool, &mut runtime, &game_id, None, &events).await.unwrap();
+    let mut times = vec![runtime.state().game_time];
+    for _ in 0..3 {
+        play(&pool, &mut runtime, &game_id, GameCommand::AdvanceTime { minutes: 10 }).await;
+        times.push(runtime.state().game_time);
+    }
+
+    // 턴마다 시점이 하나씩 (시작 + 3턴), 최신이 먼저
+    let head = get_game_player_sessions(&pool, &session_id).await.unwrap().head_seq;
+    let points = turn_points(&pool, &session_id, head, 50).await.unwrap();
+    assert_eq!(points.len(), 4);
+    assert_eq!(points[0].game_time, times[3]);
+
+    // 두 번째 턴 끝에서 분기하면 그때의 시간으로 돌아간다
+    let point = &points[2];
+    let forked = fork_at_seq(&pool, &game_id, &session_id, point.seq).await.unwrap();
+    let reloaded = GameRuntime::load(&SqlxGameRepository::new(&pool), definition, &forked).await.unwrap();
+    assert_eq!(reloaded.state().game_time, times[1]);
+    assert_eq!(reloaded.state().forked_from_seq, Some(point.seq));
+    // 원래 세션은 그대로
+    assert_eq!(get_game_player_sessions(&pool, &session_id).await.unwrap().head_seq, head);
+}

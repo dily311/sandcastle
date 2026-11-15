@@ -208,8 +208,9 @@
 						class:on={panel.tab === t.id}
 						aria-selected={panel.tab === t.id}
 						aria-label={t.label}
-						title={t.label}
+						title="{t.label} · 끌어서 순서 바꾸기"
 						onclick={() => (panel.tab = t.id)}
+						{...panel.tabDrag(t.id)}
 					>
 						<t.icon />
 					</button>

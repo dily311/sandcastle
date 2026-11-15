@@ -1,6 +1,15 @@
 import { LineKind, type GameDefinition, type GameEvent, type Location, type RenderState, type StageLine } from "$features/game/types";
 
-export type ItemGainNotice = { id: number; name: string; quantity: number };
+
+/** 대사창에 보여줄 다음 할 일 하나 (이동·대화·살펴보기) */
+export type PlayAction = {
+	id: string;
+	kind: "talk" | "look" | "move" | "wait";
+	label: string;
+	hint?: string;
+	disabled?: boolean;
+	run: () => void;
+};
 
 export function formatGameTime(seconds = 0): string {
 	const totalMinutes = Math.floor(seconds / 60);
@@ -22,6 +31,63 @@ export function getStageLines(events: GameEvent[]): StageLine[] {
 	return sceneScript?.type === "sceneScript"
 		? sceneScript.lines
 		: events.flatMap((event) => (event.type === "stageLines" ? event.lines : []));
+}
+
+/** 글 없이 연출만 있는 줄 (배경 전환, 캐릭터 내리기 등) */
+export function isDirectionOnly(line: StageLine): boolean {
+	return !line.text?.trim();
+}
+
+/**
+ * 연출만 있는 줄을 대사 줄에 합친다. 화면에 "…"로 한 줄씩 보이지 않게 한다.
+ * 연출은 다음 대사 줄을 보여주기 직전에 실행하고(제작자 대본 규칙과 같음), 뒤에 대사가 없으면 마지막 대사 줄에 붙인다.
+ * 대사 줄이 하나도 없으면 빈 목록 (연출은 이미 무대 상태(stage)에 반영돼 있다).
+ */
+export function foldDirectionLines(lines: StageLine[]): StageLine[] {
+	const out: StageLine[] = [];
+	let pending: StageLine["cues"] = [];
+	for (const line of lines) {
+		if (isDirectionOnly(line)) {
+			pending = [...pending, ...(line.cues ?? [])];
+			continue;
+		}
+		out.push(pending.length ? { ...line, cues: [...pending, ...(line.cues ?? [])] } : line);
+		pending = [];
+	}
+	if (pending.length && out.length) {
+		const last = out[out.length - 1];
+		out[out.length - 1] = { ...last, cues: [...(last.cues ?? []), ...pending] };
+	}
+	return out;
+}
+
+/** 받침이 있으면 "을", 없으면 "를" (한글이 아니면 "을(를)") */
+export function objectParticle(word: string): string {
+	const last = word.trim().slice(-1);
+	const code = last.charCodeAt(0) - 0xac00;
+	if (code < 0 || code > 11171) return "을(를)";
+	return code % 28 === 0 ? "를" : "을";
+}
+
+/** 방향 조사: 받침이 없거나 ㄹ 받침이면 "로", 그 밖의 받침은 "으로" */
+export function directionParticle(word: string): string {
+	const last = word.trim().slice(-1);
+	const code = last.charCodeAt(0) - 0xac00;
+	if (code < 0 || code > 11171) return "(으)로";
+	const jong = code % 28;
+	return jong === 0 || jong === 8 ? "로" : "으로";
+}
+
+/** 아이템을 얻었다는 대사 줄 (대사창에 이어서 보여준다) */
+export function itemGainLines(events: GameEvent[], items: { id: string; name: string }[] = []): StageLine[] {
+	return getItemAddedEvents(events)
+		.filter((e) => e.quantity > 0)
+		.map((e) => {
+			const name = items.find((item) => item.id === e.itemId)?.name ?? "아이템";
+			const count = e.quantity > 1 ? ` ${e.quantity}개` : "";
+			const text = count ? `${name}${count}를 얻었다.` : `${name}${objectParticle(name)} 얻었다.`;
+			return { kind: LineKind.Narration, speaker: null, text, cues: [] };
+		});
 }
 
 export function getItemAddedEvents(events: GameEvent[]) {

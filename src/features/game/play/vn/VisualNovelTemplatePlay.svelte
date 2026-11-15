@@ -12,13 +12,16 @@
 	import { panel } from "$app/panel.svelte";
 	import { toasts } from "$shared/stores/toast.svelte";
 	import DialoguePanel from "./DialoguePanel.svelte";
-	import ItemGainNotices from "./ItemGainNotices.svelte";
+	import Backlog from "./Backlog.svelte";
 	import {
 		createLocationArrivalLine,
-		getItemAddedEvents,
+		directionParticle,
+		foldDirectionLines,
 		getStageLines,
+		isDirectionOnly,
+		itemGainLines,
 		normalizeCueType,
-		type ItemGainNotice,
+		type PlayAction,
 	} from "./playUtils";
 	import { gameStore } from "$features/game/runtime/gameStore.svelte";
 	import { assetUrl } from "$features/game/runtime/gameStore.svelte";
@@ -37,6 +40,8 @@
 	let uiHidden = $state(false);
 	let autoAdvance = $state(false);
 	let showWaitMenu = $state(false);
+	/** 지난 대사 창 (L) */
+	let backlogOpen = $state(false);
 	let scriptLines = $state<StageLine[]>([]);
 	let lineIndex = $state(0);
 	let scriptFinished = $state(false);
@@ -48,8 +53,6 @@
 	let bgmBlocked = $state(false);
 	let isBgmMuted = $state(false);
 	let bgmAudio: HTMLAudioElement;
-	let itemGainNotices = $state<ItemGainNotice[]>([]);
-	let nextItemGainNoticeId = 0;
 	let npcResponseChoices = $state<string[]>([]);
 	let hideSceneChoicesDuringTalk = $state(false);
 	let freeTextInput = $state("");
@@ -70,6 +73,25 @@
 	/** 씬 입력·씬 끝내기를 쓸 수 있는가 (엔딩 씬이나 AI 이어가기가 꺼진 씬이면 false) */
 	const sceneChat = $derived(Boolean(runtimeStore.state?.sceneChat));
 	type SayTarget = { kind: "scene" } | { kind: "npc"; characterId: string };
+	/** 할 일이 없을 때 대사창에 바로 보여줄 이동·행동 (오른쪽 패널의 이동·행동과 같은 목록) */
+	const playActions = $derived.by<PlayAction[]>(() => {
+		if (sceneOpen || activeNpcId) return [];
+		const out: PlayAction[] = [];
+		for (const c of runtimeStore.nearbyCharacters) out.push({ id: `talk:${c.id}`, kind: "talk", label: `${c.name}에게 말 걸기`, run: () => dispatch({ type: "talk", gameCharacterId: c.id }) });
+		for (const i of runtimeStore.localInteractables) out.push({ id: `look:${i.id}`, kind: "look", label: `${i.name} 살펴보기`, run: () => dispatch({ type: "interact", entityId: i.id }) });
+		for (const d of runtimeStore.destinations) {
+			const locked = Boolean(d.requirement && !d.requirement.available);
+			out.push({
+				id: `move:${d.toId}`,
+				kind: "move",
+				label: `${d.location?.name ?? "어딘가"}${directionParticle(d.location?.name ?? "어딘가")} 가기`,
+				hint: locked ? "조건이 필요함" : `${Math.max(1, Math.ceil(d.travelSeconds / 60))}분`,
+				disabled: locked,
+				run: () => dispatch({ type: "moveTo", locationId: d.toId }),
+			});
+		}
+		return out;
+	});
 	/** 입력·AI 제안 선택지를 보낼 곳. 없으면 입력창을 숨김 */
 	const sayTarget = $derived.by<SayTarget | null>(() => {
 		if (sceneOpen) return sceneChat ? { kind: "scene" } : null;
@@ -105,6 +127,38 @@
 		});
 	}
 
+	// ---- 효과음·음성: 줄이 처음 보일 때 한 번만 (이전 대사로 돌아가거나 다시 그릴 때는 다시 안 냄) ----
+	const playedLines = new WeakSet<StageLine>();
+	let voiceAudio: HTMLAudioElement | null = null;
+	function audioVolume(asset: AssetRef, fallback: number) {
+		const v = Number(asset.settings?.volume);
+		return Number.isFinite(v) ? Math.max(0, Math.min(1, v)) : fallback;
+	}
+	function playLineAudio(line: StageLine) {
+		if (isBgmMuted) return;
+		for (const rawCue of line.cues ?? []) {
+			const cue = rawCue as unknown as { type?: string; asset?: AssetRef | null };
+			const kind = normalizeCueType(cue.type);
+			if ((kind !== "sfx" && kind !== "voice") || !cue.asset) continue;
+			const audio = new Audio(assetUrl(cue.asset.path));
+			audio.volume = audioVolume(cue.asset, kind === "voice" ? 1 : 0.8);
+			if (kind === "voice") {
+				// 음성은 한 번에 하나: 다음 대사의 음성이 오면 앞의 것을 끊는다
+				voiceAudio?.pause();
+				voiceAudio = audio;
+			}
+			void audio.play().catch(() => {
+				/* 자동 재생이 막히면 조용히 넘김 (배경음 버튼으로 소리를 켠 뒤부터 들림) */
+			});
+		}
+	}
+	$effect(() => {
+		const line = currentLine;
+		if (!line || scriptFinished || playedLines.has(line)) return;
+		playedLines.add(line);
+		playLineAudio(line);
+	});
+
 	function resumeBgm() {
 		if (!bgmAudio) return;
 		void bgmAudio
@@ -116,6 +170,7 @@
 	function toggleBgmMute() {
 		isBgmMuted = !isBgmMuted;
 		if (bgmAudio) bgmAudio.muted = isBgmMuted;
+		if (isBgmMuted) voiceAudio?.pause();
 	}
 
 	$effect(() => {
@@ -196,9 +251,11 @@
 	}
 
 	function acceptResponseLines(prefixLines: StageLine[] = []) {
-		const responseLines = getStageLines(runtimeStore?.events ?? []);
-		arrivalOnly = prefixLines.length > 0 && responseLines.length === 0;
-		const lines = [...prefixLines, ...responseLines];
+		const events = runtimeStore?.events ?? [];
+		// 얻은 아이템은 대사창에 "~을 얻었다"로 이어서 보여준다
+		const responseLines = [...getStageLines(events), ...itemGainLines(events, gameStore.view?.items)];
+		arrivalOnly = prefixLines.length > 0 && responseLines.every(isDirectionOnly);
+		const lines = foldDirectionLines([...prefixLines, ...responseLines]);
 		if (!lines.length) {
 			scriptFinished = true;
 			return false;
@@ -228,7 +285,7 @@
 			);
 		if (Array.isArray(savedScript?.lines) && savedScript.lines.length) {
 			arrivalOnly = false;
-			scriptLines = savedScript.lines as StageLine[];
+			scriptLines = foldDirectionLines(savedScript.lines as StageLine[]);
 			lineIndex = 0;
 			scriptFinished = false;
 			prepareLinePresentation(scriptLines);
@@ -249,15 +306,6 @@
 		}
 	}
 
-	function showItemGains() {
-		const addedItems = getItemAddedEvents(runtimeStore?.events ?? []);
-		for (const event of addedItems) {
-			const item = gameStore.view?.items.find((candidate) => candidate.id === event.itemId);
-			const id = nextItemGainNoticeId++;
-			itemGainNotices = [...itemGainNotices, { id, name: item?.name ?? "아이템", quantity: event.quantity }];
-			setTimeout(() => (itemGainNotices = itemGainNotices.filter((notice) => notice.id !== id)), 3600);
-		}
-	}
 
 	async function dispatch(command: GameCommand) {
 		stageFrom = null;
@@ -287,7 +335,6 @@
 				freeTextInput = "";
 				scriptFinished = true;
 			}
-			showItemGains();
 			const arrivalEvent =
 				command.type === "moveTo"
 					? runtimeStore?.events?.find((event) => event.type === "locationChanged")
@@ -364,7 +411,7 @@
 		});
 		// 씬 입력의 응답으로 씬이 끝났으면 씬 선택지를 다시 숨길 이유가 없다
 		if (!reply.state.currentSceneId && !reply.state.activeNpcId) hideSceneChoicesDuringTalk = false;
-		scriptLines = [...prefix, ...reply.lines];
+		scriptLines = [...prefix, ...foldDirectionLines([...reply.lines, ...itemGainLines(reply.events, gameStore.view?.items)])];
 		lineIndex = Math.min(startAt, Math.max(0, scriptLines.length - 1));
 		scriptFinished = scriptLines.length === 0;
 		arrivalOnly = false;
@@ -395,7 +442,7 @@
 		isLoading = true;
 		try {
 			const r = await call(commands.editGameMessage(lastReply.messageId, editDraft), { source: "game" });
-			const lines = r.lines as unknown as StageLine[];
+			const lines = foldDirectionLines(r.lines as unknown as StageLine[]);
 			lastReply = { messageId: r.id, text: r.text, lines };
 			scriptLines = lines;
 			lineIndex = 0;
@@ -507,6 +554,7 @@
 	function onKey(e: KeyboardEvent) {
 		const t = e.target as HTMLElement | null;
 		if (t && (t.tagName === "INPUT" || t.tagName === "TEXTAREA" || t.isContentEditable)) return;
+		if (backlogOpen) return; // 창이 Esc·L을 직접 받는다
 		if (e.ctrlKey || e.metaKey || e.altKey) return;
 		if (e.key === "Escape") return closePanels();
 		if (e.key === " " || e.key === "Enter" || e.key === "ArrowRight") {
@@ -524,7 +572,7 @@
 		} else if (e.key === "m") openPanelTab("map");
 		else if (e.key === "i") openPanelTab("items");
 		else if (e.key === "a") openPanelTab("actions");
-		else if (e.key === "l") openPanelTab("log");
+		else if (e.key === "l") backlogOpen = !backlogOpen;
 		else if (e.key === "h") uiHidden = !uiHidden;
 	}
 	const focusMode = $derived(!layout.sidebar);
@@ -551,7 +599,6 @@
 				onResumeBgm={resumeBgm}
 			/>
 		{/if}
-		<ItemGainNotices notices={itemGainNotices} />
 		<DialoguePanel
 			show={!uiHidden && Boolean(currentLine || runtimeStore.currentScene || activeNpcId || scriptFinished)}
 			line={currentLine}
@@ -562,6 +609,7 @@
 			canSendInput={Boolean(sayTarget)}
 			inputPlaceholder={sayTarget?.kind === "scene" ? "이 장면에서 할 말이나 행동 입력" : "하고 싶은 말 입력"}
 			canStopTalk={!sceneOpen && Boolean(activeNpcId)}
+			actions={playActions}
 			canEndScene={sceneOpen && sceneChat}
 			inputValue={freeTextInput}
 			{lineIndex}
@@ -586,7 +634,7 @@
 			onToggleAuto={() => (autoAdvance = !autoAdvance)}
 			onSkip={skipScript}
 			onHide={() => (uiHidden = true)}
-			onLog={() => openPanelTab("log")}
+			onLog={() => (backlogOpen = true)}
 			onToggleMute={toggleBgmMute}
 			onToggleFocus={() => layout.toggleSidebar()}
 			canEditMessage={onReply && !isLoading}
@@ -598,6 +646,7 @@
 			onEditCancel={() => (editing = false)}
 			onRegenerate={regenerate}
 		/>
+		{#if backlogOpen}<Backlog onclose={() => (backlogOpen = false)} />{/if}
 		{#if uiHidden}<p class="hidden-hint">무대를 누르면 대사창이 다시 보임</p>{/if}
 		{#if isLoading}<div class="busy" role="status"><span></span>처리 중</div>{/if}
 	</section>

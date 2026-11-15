@@ -402,6 +402,7 @@
 	.them :global(.avatar),
 	.profile :global(.avatar) {
 		border-radius: 38% !important;
+		overflow: hidden;
 	}
 	.list :global(.avatar img) {
 		border-radius: inherit;

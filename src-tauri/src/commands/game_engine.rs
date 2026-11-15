@@ -138,6 +138,56 @@ pub async fn read_transcript(state: State<'_, AppState>, session_id: String, bef
     transcript::transcript_page(&state.db, &session_id, session.head_seq, before_seq, history_limit(limit)).await
 }
 
+/// 지금 씬 또는 지금 대화의 기록 ("지난 대사" 창). 씬이 열려 있으면 그 씬이 마지막으로 열린 뒤의 대본과 씬 대화,
+/// 씬 밖에서 NPC와 대화 중이면 그 대화를 시작한 뒤의 메시지. 둘 다 아니면 최근 기록(limit개).
+#[tauri::command]
+#[specta::specta]
+pub async fn read_current_transcript(state: State<'_, AppState>, limit: Option<u32>) -> Result<TranscriptPage, AppError> {
+    let game_id = current_game_id(&state)?;
+    let (session_id, head_seq, scene_id, npc_id) = {
+        let guard = state.active_runtime.lock().await;
+        let st = guard.as_ref().ok_or_else(AppError::game_no_session)?.state();
+        (st.session_id.clone(), st.head_seq, st.current_scene_id.clone(), st.active_npc_id.clone())
+    };
+    let limit = history_limit(limit);
+    let conversations = || async { get_all_game_conversations(&state.db, &game_id).await.map(|all| all.into_iter().filter(|c| c.session_id == session_id).collect::<Vec<_>>()) };
+    let scope = if let Some(scene_id) = scene_id {
+        let ids = conversations().await?.into_iter().filter(|c| c.branch_key == scene_id).map(|c| c.id).collect();
+        transcript::CurrentScope::Scene { scene_id, conversation_ids: ids }
+    } else if let Some(character_id) = npc_id {
+        let key = crate::game::npc::participants_key(&[character_id.as_str()]);
+        let conversation_id = conversations()
+            .await?
+            .into_iter()
+            .find(|c| c.branch_key == crate::game::npc::DEFAULT_BRANCH_KEY && c.participants_key == key)
+            .map(|c| c.id);
+        transcript::CurrentScope::Talk { character_id, conversation_id }
+    } else {
+        return transcript::transcript_page(&state.db, &session_id, head_seq, None, limit).await;
+    };
+    transcript::current_page(&state.db, &session_id, head_seq, &scope, limit).await
+}
+
+/// 분기할 수 있는 시점 목록 (최신 → 오래된 순). 턴이 끝날 때마다 하나씩 생긴다.
+#[tauri::command]
+#[specta::specta]
+pub async fn list_turn_points(state: State<'_, AppState>, session_id: String, limit: Option<u32>) -> Result<Vec<transcript::TurnPoint>, AppError> {
+    let game_id = current_game_id(&state)?;
+    let session = owned_session(&state, &game_id, &session_id).await?;
+    transcript::turn_points(&state.db, &session_id, session.head_seq, limit.map_or(100, |n| (n as usize).clamp(1, 500))).await
+}
+
+/// 시점(seq)에서 분기해 새 세션으로 이어서 플레이한다. 원래 세션은 그대로 남는다.
+/// 응답의 state.sessionId가 새 세션이다.
+#[tauri::command]
+#[specta::specta]
+pub async fn fork_at(state: State<'_, AppState>, session_id: String, seq: u32, option_history_limit: Option<u32>) -> Result<ContinueGameResponse, AppError> {
+    let game_id = current_game_id(&state)?;
+    owned_session(&state, &game_id, &session_id).await?;
+    let target = crate::game::session::fork_at_seq(&state.db, &game_id, &session_id, seq).await?;
+    open_session(&state, &game_id, &target, history_limit(option_history_limit)).await
+}
+
 /// 책갈피를 불러와서 거기서부터 이어서 플레이한다.
 ///  - 그 책갈피가 세션의 맨 끝(이후 진행 없음)이면 같은 세션을 그대로 이어간다.
 ///  - 이후 기록이 있으면 그 지점까지를 복사한 새 세션으로 분기한다 (원래 기록은 보존).

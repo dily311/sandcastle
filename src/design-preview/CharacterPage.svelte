@@ -233,6 +233,7 @@
 		border-radius: var(--radius-lg) !important;
 		border: 4px solid var(--bg);
 		box-shadow: var(--shadow-md);
+		overflow: hidden;
 	}
 	.portrait :global(.avatar img) {
 		border-radius: inherit;

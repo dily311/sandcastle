@@ -44,13 +44,13 @@
 		background: var(--avatar-bg);
 		color: white;
 		font-weight: 700;
-		overflow: visible;
+		overflow: hidden;
 	}
 	img {
 		width: 100%;
 		height: 100%;
 		object-fit: cover;
-		border-radius: 50%;
+		object-position: center;
 	}
 	.initial {
 		text-shadow: 0 1px 2px rgb(0 0 0 / 0.15);

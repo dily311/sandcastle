@@ -1,6 +1,6 @@
 <script lang="ts">
 	import { Bookmark, Eye, EyeOff, FileArchive, ImagePlus, Pencil, Search, Trash2, X } from "@lucide/svelte";
-	import { Avatar, Button, ContextMenu, IconButton, Input, Select, Switch, type MenuItem } from "$shared/ui";
+	import { Avatar, Button, ContextMenu, IconButton, Input, ProfilePicker, Select, Switch, type MenuItem, type ProfileOption } from "$shared/ui";
 	import { bookmarks, bookmarksOf } from "./bookmarks";
 	import NotesPanel from "./NotesPanel.svelte";
 	import BranchTree from "./BranchTree.svelte";
@@ -28,8 +28,10 @@
 		onjump: (messageId: string) => void;
 		/** 다른 대화 열기 (주면 그 메시지로) */
 		onopen: (id: string, messageId?: string) => void;
+		/** "나" 고르기를 바꿔 끼움 (폰: 폰 주인). 없으면 이 대화의 페르소나 */
+		me?: { label: string; options: ProfileOption[]; value: string | null; hint?: string; onchange: (id: string) => void };
 	}
-	let { conv, session, chapters, onjump, onopen }: Props = $props();
+	let { conv, session, chapters, onjump, onopen, me }: Props = $props();
 
 	// ---- 대화 설정: API → 프리셋 → 페르소나 ----
 	const DEFAULT = "";
@@ -60,16 +62,7 @@
 
 	const character = $derived(library.character(conv.characterId));
 	const persona = $derived(library.persona(conv.personaId) ?? library.personas[0]);
-	let personaOpen = $state(false);
-	let personaBtn: HTMLButtonElement | undefined = $state();
-	let popStyle = $state("");
-	function togglePersona() {
-		personaOpen = !personaOpen;
-		if (!personaOpen || !personaBtn) return;
-		// 패널 스크롤에 잘리지 않게 버튼 기준 고정 위치
-		const r = personaBtn.getBoundingClientRect();
-		popStyle = `left:${r.left}px;width:${r.width}px;bottom:${window.innerHeight - r.top + 6}px;max-height:${r.top - 12}px`;
-	}
+	const personaOptions = $derived<ProfileOption[]>(library.personas.map((p) => ({ id: p.id, name: p.name, avatar: p.avatar, color: p.color, description: p.description })));
 
 	// ---- 정규식: 이 대화에 걸리는 것 (전역 + 이 캐릭터 + 이 프리셋) ----
 	let scripts = $state<RegexScript[]>([]);
@@ -148,13 +141,6 @@
 	});
 </script>
 
-<svelte:window
-	onmousedown={(e) => {
-		const t = e.target as Element;
-		if (personaOpen && !t.closest(".ppop") && !t.closest(".pcur")) personaOpen = false;
-	}}
-	onkeydown={(e) => e.key === "Escape" && (personaOpen = false)}
-/>
 
 	{#if panel.tab === "assets"}
 		<div class="panel-body">
@@ -234,29 +220,13 @@
 					</div>
 				</div>
 				<div class="row">
-					<span>페르소나</span>
-					{#if personaOpen}
-						<div class="ppop" role="listbox" aria-label="페르소나 바꾸기" style={popStyle}>
-							{#each library.personas as p (p.id)}
-								<button
-									role="option"
-									aria-selected={persona?.id === p.id}
-									class:on={persona?.id === p.id}
-									onclick={() => {
-										setOption({ personaId: p.id });
-										personaOpen = false;
-									}}
-								>
-									<Avatar name={p.name} src={fileSrc(p.avatar)} color={p.color || null} size={32} />
-									<span class="pt"><b>{p.name}</b>{#if p.description}<small>{p.description}</small>{/if}</span>
-								</button>
-							{/each}
-						</div>
+					{#if me}
+						<span>{me.label}</span>
+						<ProfilePicker label="{me.label} 바꾸기" options={me.options} value={me.value} hint={me.hint} onchange={me.onchange} />
+					{:else}
+						<span>페르소나</span>
+						<ProfilePicker label="페르소나 바꾸기" options={personaOptions} value={persona?.id} onchange={(id) => setOption({ personaId: id })} />
 					{/if}
-					<button bind:this={personaBtn} class="pcur" aria-haspopup="listbox" aria-expanded={personaOpen} onclick={togglePersona}>
-						<Avatar name={persona?.name ?? "?"} src={fileSrc(persona?.avatar)} color={persona?.color || null} size={40} />
-						<span class="pt"><b>{persona?.name ?? "없음"}</b>{#if persona?.description}<small>{persona.description}</small>{/if}</span>
-					</button>
 				</div>
 			</section>
 			<hr />
@@ -369,63 +339,6 @@
 		flex-direction: column;
 		gap: var(--space-2);
 		font-size: var(--text-sm);
-	}
-	.pcur,
-	.ppop button {
-		display: flex;
-		align-items: center;
-		gap: var(--space-3);
-		width: 100%;
-		padding: var(--space-2);
-		border: none;
-		border-radius: var(--radius-md);
-		background: transparent;
-		text-align: left;
-		cursor: pointer;
-	}
-	.pcur {
-		border: 1px solid var(--border);
-		background: var(--surface);
-	}
-	.pcur:hover,
-	.ppop button:hover {
-		background: var(--surface-hover);
-	}
-	.pt {
-		display: flex;
-		flex-direction: column;
-		flex: 1;
-		min-width: 0;
-		line-height: 1.3;
-	}
-	.pt small {
-		color: var(--text-muted);
-		font-size: var(--text-xs);
-		white-space: nowrap;
-		overflow: hidden;
-		text-overflow: ellipsis;
-	}
-	.ppop {
-		position: fixed;
-		z-index: 100;
-		overflow: auto;
-		display: flex;
-		flex-direction: column;
-		padding: 4px;
-		border: 1px solid var(--border);
-		border-radius: var(--radius-md);
-		background: var(--surface);
-		box-shadow: var(--shadow-lg);
-		animation: up var(--duration-fast) var(--ease);
-	}
-	@keyframes up {
-		from {
-			opacity: 0;
-			transform: translateY(4px);
-		}
-	}
-	.ppop button.on {
-		background: var(--accent-soft);
 	}
 	.atools {
 		display: flex;

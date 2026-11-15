@@ -11,6 +11,41 @@ export interface PanelTab {
 }
 
 const OPEN_KEY = "sc.panel.open";
+/** 탭 순서: 화면마다(같은 탭 묶음마다) 사용자가 옮긴 순서를 기억한다 */
+const ORDER_KEY = "sc.panel.order:";
+
+/** 탭 묶음을 가리키는 키 (순서와 상관없이 같은 탭들이면 같은 키) */
+export function tabSetKey(tabs: { id: string }[]): string {
+	return tabs.map((t) => t.id).sort().join(",");
+}
+
+/** 저장된 순서대로 탭을 늘어놓는다. 저장에 없는 새 탭은 원래 자리 순서대로 뒤에 붙인다 */
+export function applyOrder<T extends { id: string }>(tabs: T[], order: string[] | null): T[] {
+	if (!order?.length) return tabs;
+	const rank = new Map(order.map((id, i) => [id, i]));
+	return [...tabs].sort((a, b) => (rank.get(a.id) ?? order.length + tabs.indexOf(a)) - (rank.get(b.id) ?? order.length + tabs.indexOf(b)));
+}
+
+/** from 탭을 to 탭 자리로 옮긴 순서 */
+export function moveId(ids: string[], from: string, to: string): string[] {
+	const i = ids.indexOf(from);
+	const j = ids.indexOf(to);
+	if (i < 0 || j < 0 || i === j) return ids;
+	const out = [...ids];
+	out.splice(i, 1);
+	out.splice(j, 0, from);
+	return out;
+}
+
+function loadOrder(key: string): string[] | null {
+	try {
+		const raw = localStorage.getItem(ORDER_KEY + key);
+		const v = raw ? JSON.parse(raw) : null;
+		return Array.isArray(v) ? v.filter((x): x is string => typeof x === "string") : null;
+	} catch {
+		return null;
+	}
+}
 const WIDTH_KEY = "sc.panel.width";
 export const PANEL_MIN = 260;
 export const PANEL_MAX = 560;
@@ -74,11 +109,57 @@ class Panel {
 	register(tabs: PanelTab[], initial = tabs[0]?.id ?? "") {
 		// $state에 넣으면 배열이 프록시로 바뀌어 원래 배열과 비교할 수 없음 → 번호표로 확인
 		const me = ++this.owner;
-		this.tabs = tabs;
+		this.tabs = applyOrder(tabs, loadOrder(tabSetKey(tabs)));
 		if (!tabs.some((t) => t.id === this.tab)) this.tab = initial;
 		return () => {
 			if (this.owner === me) this.tabs = [];
 		};
+	}
+
+	// ---- 탭 순서 바꾸기: 끌어다 놓기, 또는 탭에서 Alt+←/→ ----
+	private dragging: string | null = null;
+
+	/** 탭 버튼에 펼쳐 넣는 속성: {...panel.tabDrag(t.id)} */
+	tabDrag(id: string) {
+		return {
+			draggable: true,
+			ondragstart: (e: DragEvent) => {
+				this.dragging = id;
+				e.dataTransfer?.setData("text/plain", id);
+				if (e.dataTransfer) e.dataTransfer.effectAllowed = "move";
+			},
+			ondragover: (e: DragEvent) => {
+				if (this.dragging && this.dragging !== id) e.preventDefault();
+			},
+			ondrop: (e: DragEvent) => {
+				e.preventDefault();
+				if (this.dragging) this.moveTab(this.dragging, id);
+				this.dragging = null;
+			},
+			ondragend: () => (this.dragging = null),
+			onkeydown: (e: KeyboardEvent) => {
+				if (!e.altKey || (e.key !== "ArrowLeft" && e.key !== "ArrowRight")) return;
+				e.preventDefault();
+				e.stopPropagation(); // 앞으로·뒤로 가기(Alt+←/→)와 겹치지 않게
+				const ids = this.tabs.map((t) => t.id);
+				const target = ids[ids.indexOf(id) + (e.key === "ArrowLeft" ? -1 : 1)];
+				if (target) this.moveTab(id, target);
+			},
+		};
+	}
+
+	moveTab(from: string, to: string) {
+		const ids = moveId(
+			this.tabs.map((t) => t.id),
+			from,
+			to,
+		);
+		this.tabs = applyOrder(this.tabs, ids);
+		try {
+			localStorage.setItem(ORDER_KEY + tabSetKey(this.tabs), JSON.stringify(ids));
+		} catch {
+			/* 저장 실패는 무시 (이번 실행 동안만 유지) */
+		}
 	}
 
 	toggle() {

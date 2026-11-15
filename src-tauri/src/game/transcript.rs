@@ -31,6 +31,8 @@ pub struct TranscriptEntry {
     pub scene_id: Option<String>,
     /// Message일 때 "user" / "assistant"
     pub role: Option<String>,
+    /// Message일 때 어느 게임 대화의 메시지인지
+    pub conversation_id: Option<String>,
     pub lines: Vec<StageLine>,
 }
 
@@ -59,11 +61,10 @@ pub fn entries_from_journal(rows: &[GameJournal]) -> Vec<TranscriptEntry> {
     let mut out = Vec::new();
     for r in rows {
         let payload = &r.payload_json;
-        let (kind, scene_id, role) = match r.kind.as_str() {
-            "event" if payload.get("type").and_then(|t| t.as_str()) == Some("sceneScript") => {
-                (TranscriptKind::SceneScript, payload.get("sceneId").and_then(|v| v.as_str()).map(str::to_string), None)
-            }
-            "message" => (TranscriptKind::Message, None, payload.get("role").and_then(|v| v.as_str()).map(str::to_string)),
+        let text = |k: &str| payload.get(k).and_then(|v| v.as_str()).map(str::to_string);
+        let (kind, scene_id, role, conversation_id) = match r.kind.as_str() {
+            "event" if payload.get("type").and_then(|t| t.as_str()) == Some("sceneScript") => (TranscriptKind::SceneScript, text("sceneId"), None, None),
+            "message" => (TranscriptKind::Message, None, text("role"), text("conversationId")),
             _ => continue,
         };
         let Some(lines) = payload.get("lines").and_then(|l| serde_json::from_value::<Vec<StageLine>>(l.clone()).ok()) else {
@@ -72,7 +73,7 @@ pub fn entries_from_journal(rows: &[GameJournal]) -> Vec<TranscriptEntry> {
         if !lines.iter().any(|l| l.kind != LineKind::Direction) {
             continue;
         }
-        out.push(TranscriptEntry { seq: r.seq, game_time: r.game_time, kind, scene_id, role, lines });
+        out.push(TranscriptEntry { seq: r.seq, game_time: r.game_time, kind, scene_id, role, conversation_id, lines });
     }
     out.sort_by_key(|e| e.seq);
     out
@@ -102,6 +103,155 @@ pub async fn transcript_page(pool: &SqlitePool, session_id: &str, head_seq: u32,
     Ok(TranscriptPage { entries: newest_first, has_more, oldest_seq })
 }
 
+/// "지금" 기록의 범위
+#[derive(Debug, Clone)]
+pub enum CurrentScope {
+    /// 열린 씬: 이 씬이 마지막으로 열린 뒤의 대본 + 이 씬의 대화들(branch_key = 씬 id)
+    Scene { scene_id: String, conversation_ids: Vec<String> },
+    /// 씬 밖 1:1 대화: 이 NPC와 마지막으로 대화를 시작한 뒤의 메시지
+    Talk { character_id: String, conversation_id: Option<String> },
+}
+
+/// 일지 항목이 범위의 시작점인가 (씬 대본이 열린 곳 / 대화를 시작한 곳)
+fn is_anchor(row: &GameJournal, scope: &CurrentScope) -> bool {
+    if row.kind != "event" {
+        return false;
+    }
+    let p = &row.payload_json;
+    let get = |k: &str| p.get(k).and_then(|v| v.as_str());
+    match scope {
+        CurrentScope::Scene { scene_id, .. } => get("type") == Some("sceneScript") && get("sceneId") == Some(scene_id.as_str()),
+        CurrentScope::Talk { character_id, .. } => get("type") == Some("dialogueStarted") && get("gameCharacterId") == Some(character_id.as_str()),
+    }
+}
+
+fn in_scope(e: &TranscriptEntry, scope: &CurrentScope) -> bool {
+    match scope {
+        CurrentScope::Scene { scene_id, conversation_ids } => match e.kind {
+            TranscriptKind::SceneScript => e.scene_id.as_deref() == Some(scene_id.as_str()),
+            TranscriptKind::Message => e.conversation_id.as_ref().is_some_and(|c| conversation_ids.contains(c)),
+        },
+        CurrentScope::Talk { conversation_id, .. } => e.kind == TranscriptKind::Message && e.conversation_id.is_some() && e.conversation_id == *conversation_id,
+    }
+}
+
+/// 범위 안의 기록만 고른다 (순수 함수: 테스트용으로 분리). rows는 seq 오름차순이 아니어도 된다.
+pub fn current_entries(rows: &[GameJournal], scope: &CurrentScope) -> Vec<TranscriptEntry> {
+    let anchor = rows.iter().filter(|r| is_anchor(r, scope)).map(|r| r.seq).max().unwrap_or(0);
+    let after: Vec<GameJournal> = rows.iter().filter(|r| r.seq >= anchor).cloned().collect();
+    entries_from_journal(&after).into_iter().filter(|e| in_scope(e, scope)).collect()
+}
+
+/// 지금 씬·대화의 기록 (오래된 것 → 최신). 시작점을 찾을 때까지 일지를 뒤로 읽되, 너무 길면 최근 limit개만.
+pub async fn current_page(pool: &SqlitePool, session_id: &str, head_seq: u32, scope: &CurrentScope, limit: usize) -> Result<TranscriptPage, AppError> {
+    const WINDOW: u32 = 1000;
+    const MAX_WINDOWS: u32 = 20;
+    let mut rows: Vec<GameJournal> = Vec::new();
+    let mut to = head_seq;
+    for _ in 0..MAX_WINDOWS {
+        if to == 0 {
+            break;
+        }
+        let from = to.saturating_sub(WINDOW - 1).max(1);
+        let chunk = get_game_journal_lookup(pool, session_id, Some(from), to).await?;
+        let found = chunk.iter().any(|r| is_anchor(r, scope));
+        rows.extend(chunk);
+        to = from.saturating_sub(1);
+        if found {
+            break;
+        }
+    }
+    let mut entries = current_entries(&rows, scope);
+    let has_more = entries.len() > limit;
+    if has_more {
+        entries.drain(..entries.len() - limit);
+    }
+    let oldest_seq = entries.first().map(|e| e.seq);
+    Ok(TranscriptPage { entries, has_more, oldest_seq })
+}
+
+/// 분기할 수 있는 시점 하나 (턴 끝 상태 스냅샷이 있는 seq)
+#[derive(Debug, Clone, Serialize, specta::Type)]
+#[serde(rename_all = "camelCase")]
+pub struct TurnPoint {
+    pub seq: u32,
+    pub game_time: i64,
+    /// 그 턴에 무슨 일이 있었는지 한 줄 (마지막 대사, 없으면 한 행동)
+    pub summary: String,
+    pub scene_id: Option<String>,
+    pub location_id: Option<String>,
+}
+
+fn command_label(payload: &serde_json::Value) -> Option<String> {
+    let t = payload.get("type")?.as_str()?;
+    Some(
+        match t {
+            "moveTo" => "이동",
+            "interact" => "살펴보기",
+            "talk" => "말 걸기",
+            "stopTalk" => "대화 끝내기",
+            "choose" => "선택",
+            "endScene" => "장면 끝내기",
+            "advanceTime" => "시간 보내기",
+            "useItem" => "아이템 사용",
+            "dropItem" => "아이템 버리기",
+            other => other,
+        }
+        .to_string(),
+    )
+}
+
+fn last_text(payload: &serde_json::Value) -> Option<String> {
+    let lines = payload.get("lines")?.as_array()?;
+    lines.iter().rev().find_map(|l| l.get("text").and_then(|t| t.as_str()).map(str::trim).filter(|t| !t.is_empty()).map(str::to_string))
+}
+
+/// 일지에서 턴 시점 목록을 만든다 (최신 → 오래된 순). 요약은 직전 시점 이후 항목들에서 고른다.
+pub fn turn_points_from(rows: &[GameJournal]) -> Vec<TurnPoint> {
+    let mut sorted: Vec<&GameJournal> = rows.iter().collect();
+    sorted.sort_by_key(|r| r.seq);
+    let mut out = Vec::new();
+    let (mut text, mut action): (Option<String>, Option<String>) = (None, None);
+    for r in sorted {
+        match r.kind.as_str() {
+            "message" => text = last_text(&r.payload_json).or(text),
+            "event" if r.payload_json.get("type").and_then(|t| t.as_str()) == Some("sceneScript") => text = last_text(&r.payload_json).or(text),
+            "command" => action = command_label(&r.payload_json).or(action),
+            crate::game::journal::STATE_KIND => {
+                let st = &r.payload_json;
+                let get = |k: &str| st.get(k).and_then(|v| v.as_str()).map(str::to_string);
+                let mut summary = text.take().or(action.take()).unwrap_or_else(|| "시작".into());
+                if summary.chars().count() > 60 {
+                    summary = summary.chars().take(60).collect::<String>() + "…";
+                }
+                action = None;
+                out.push(TurnPoint { seq: r.seq, game_time: r.game_time, summary, scene_id: get("current_scene_id"), location_id: get("location_id") });
+            }
+            _ => {}
+        }
+    }
+    out.reverse();
+    out
+}
+
+/// 최근 limit개의 시점 (최신 → 오래된 순)
+pub async fn turn_points(pool: &SqlitePool, session_id: &str, head_seq: u32, limit: usize) -> Result<Vec<TurnPoint>, AppError> {
+    const WINDOW: u32 = 1000;
+    let mut rows: Vec<GameJournal> = Vec::new();
+    let mut to = head_seq;
+    while to > 0 {
+        let from = to.saturating_sub(WINDOW - 1).max(1);
+        rows.extend(get_game_journal_lookup(pool, session_id, Some(from), to).await?);
+        to = from.saturating_sub(1);
+        if rows.iter().filter(|r| r.kind == crate::game::journal::STATE_KIND).count() > limit {
+            break;
+        }
+    }
+    let mut points = turn_points_from(&rows);
+    points.truncate(limit);
+    Ok(points)
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -129,5 +279,54 @@ mod tests {
         assert_eq!(e[0].kind, TranscriptKind::SceneScript);
         assert_eq!(e[0].scene_id.as_deref(), Some("sc1"));
         assert_eq!(e[1].role.as_deref(), Some("assistant"));
+    }
+
+    #[test]
+    fn current_scene_only_since_it_last_opened() {
+        let script = |seq, scene: &str, t: &str| row(seq, "event", json!({ "type": "sceneScript", "sceneId": scene, "lines": [line(t)] }));
+        let msg = |seq, conv: &str, t: &str| row(seq, "message", json!({ "conversationId": conv, "role": "assistant", "lines": [line(t)] }));
+        let rows = vec![
+            script(1, "s1", "처음 열림"),
+            msg(2, "c-s1", "옛 대화"),
+            script(3, "s2", "다른 씬"),
+            msg(4, "c-npc", "엘리안과 대화"),
+            script(5, "s1", "다시 열림"),
+            msg(6, "c-s1", "새 대화"),
+            msg(7, "c-npc", "씬 밖 대화"),
+        ];
+        let scope = CurrentScope::Scene { scene_id: "s1".into(), conversation_ids: vec!["c-s1".into()] };
+        let got: Vec<u32> = current_entries(&rows, &scope).iter().map(|e| e.seq).collect();
+        assert_eq!(got, vec![5, 6]);
+    }
+
+    #[test]
+    fn current_talk_only_since_dialogue_started() {
+        let rows = vec![
+            row(1, "event", json!({ "type": "dialogueStarted", "gameCharacterId": "c1" })),
+            row(2, "message", json!({ "conversationId": "conv", "role": "assistant", "lines": [line("지난번")] })),
+            row(3, "event", json!({ "type": "dialogueEnded", "gameCharacterId": "c1" })),
+            row(4, "event", json!({ "type": "dialogueStarted", "gameCharacterId": "c1" })),
+            row(5, "message", json!({ "conversationId": "conv", "role": "assistant", "lines": [line("이번")] })),
+            row(6, "message", json!({ "conversationId": "other", "role": "assistant", "lines": [line("남의 대화")] })),
+        ];
+        let scope = CurrentScope::Talk { character_id: "c1".into(), conversation_id: Some("conv".into()) };
+        let got: Vec<u32> = current_entries(&rows, &scope).iter().map(|e| e.seq).collect();
+        assert_eq!(got, vec![5]);
+    }
+
+    #[test]
+    fn turn_points_summarize_each_turn() {
+        let rows = vec![
+            row(1, "event", json!({ "type": "sceneScript", "sceneId": "s1", "lines": [line("어서 와")] })),
+            row(2, "state", json!({ "current_scene_id": "s1", "location_id": "l1" })),
+            row(3, "command", json!({ "type": "moveTo", "locationId": "l2" })),
+            row(4, "state", json!({ "current_scene_id": null, "location_id": "l2" })),
+            row(5, "message", json!({ "role": "assistant", "lines": [line("반가워요")] })),
+            row(6, "state", json!({ "location_id": "l2" })),
+        ];
+        let points = turn_points_from(&rows);
+        let got: Vec<(u32, &str)> = points.iter().map(|p| (p.seq, p.summary.as_str())).collect();
+        assert_eq!(got, vec![(6, "반가워요"), (4, "이동"), (2, "어서 와")]);
+        assert_eq!(points[2].scene_id.as_deref(), Some("s1"));
     }
 }

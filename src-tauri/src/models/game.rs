@@ -2017,6 +2017,7 @@ pub struct GamePlayerSessionsRow {
     pub inventory_json: Option<String>,
     pub relationships_json: Option<String>,
     pub stage_json: Option<String>,
+    pub zone_weather_json: Option<String>,
     pub parent_session_id: Option<String>,
     pub forked_from_seq: Option<u32>,
     pub head_seq: u32,
@@ -2041,6 +2042,8 @@ pub struct GamePlayerSessions {
     pub inventory_json: serde_json::Value,
     pub relationships_json: serde_json::Value,
     pub stage_json: serde_json::Value,
+    /// zone별 날씨 (GameState.zone_weather)
+    pub zone_weather_json: serde_json::Value,
     pub forked_from_seq: Option<u32>,
     pub head_seq: u32,
     pub updated_at: i64,
@@ -2079,6 +2082,10 @@ impl From<GamePlayerSessionsRow> for GamePlayerSessions {
                 .stage_json
                 .and_then(|f| serde_json::from_str(&f).ok())
                 .unwrap_or_default(),
+            zone_weather_json: r
+                .zone_weather_json
+                .and_then(|f| serde_json::from_str(&f).ok())
+                .unwrap_or_default(),
             forked_from_seq: r.forked_from_seq,
             head_seq: r.head_seq,
             updated_at: r.updated_at,
@@ -2104,6 +2111,7 @@ pub struct GamePlayerSessionsInput {
     pub inventory_json: serde_json::Value,
     pub relationships_json: serde_json::Value,
     pub stage_json: serde_json::Value,
+    pub zone_weather_json: serde_json::Value,
     pub forked_from_seq: Option<u32>,
     pub head_seq: u32,
 }
@@ -2125,6 +2133,7 @@ impl GamePlayerSessionsInput {
             inventory_json: v.inventory_json,
             relationships_json: v.relationships_json,
             stage_json: v.stage_json,
+            zone_weather_json: v.zone_weather,
             parent_session_id: v.parent_session_id,
             forked_from_seq: v.forked_from_seq,
             head_seq: v.head_seq,
@@ -2219,7 +2228,7 @@ pub struct GameJournalRow {
     pub created_at: i64,
 }
 
-#[derive(Serialize, Deserialize, specta::Type)]
+#[derive(Clone, Serialize, Deserialize, specta::Type)]
 #[serde(rename_all = "camelCase")]
 pub struct GameJournal {
     pub session_id: String,

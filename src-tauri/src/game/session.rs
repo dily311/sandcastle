@@ -1,4 +1,4 @@
-//! 세션(책) 단위 작업. 지금은 "오래된 책갈피에서 분기(fork)"만 있다.
+//! 세션(책) 단위 작업: 책갈피에서 분기(fork), 턴 시점(seq)에서 분기.
 //!
 //! 분기: 책갈피의 일지 위치(seq)까지를 새 세션으로 복사하고, 거기서부터 이어서 플레이한다.
 //! 원래 세션/기록은 그대로 남는다. 복사 대상은 일지, 이벤트 로그, 대화(+참여자)와 메시지, 그 책갈피 자신.
@@ -6,8 +6,10 @@
 //! 전부 한 트랜잭션이라 중간에 실패하면 새 세션이 남지 않는다.
 use crate::db::game::{
     forked_game_character_states, forked_game_conversations, forked_game_conversations_participant, forked_game_event_logs,
-    forked_game_journal, forked_game_messages, forked_game_relationship_snapshots, forked_game_save, forked_game_story_plans, get_game_save, upsert_game_player_sessions,
+    forked_game_journal, forked_game_messages, forked_game_relationship_snapshots, forked_game_save, forked_game_story_plans, get_game_journal_lookup, get_game_save,
+    upsert_game_player_sessions,
 };
+use crate::game::journal::STATE_KIND;
 use crate::error::AppError;
 use crate::game::runtime::GameState;
 use sqlx::SqlitePool;
@@ -15,8 +17,6 @@ use sqlx::SqlitePool;
 /// parent 세션의 slot 책갈피에서 분기한 새 세션 id를 돌려준다.
 pub async fn fork_session(pool: &SqlitePool, game_id: &str, parent_session_id: &str, slot: i64) -> Result<String, AppError> {
     let save = get_game_save(pool, parent_session_id, slot).await?;
-    let to_seq = save.seq;
-
     // GameState는 cooldowns/auto_active/active_npc_id/turn_fired를 직렬화에서 뺐으므로
     // 불러온 쪽이 비워진 채로 시작한다 (쿨다운은 복사된 이벤트 로그에서 다시 채워진다).
     let engine = save
@@ -25,8 +25,22 @@ pub async fn fork_session(pool: &SqlitePool, game_id: &str, parent_session_id: &
         .filter(|v| !v.is_null())
         .cloned()
         .ok_or_else(|| AppError::game_invalid_state("이 책갈피에는 복원할 상태 스냅샷이 없습니다"))?;
-    let mut state: GameState = serde_json::from_value(engine)?;
+    fork_from(pool, game_id, parent_session_id, serde_json::from_value(engine)?, save.seq, Some(slot)).await
+}
 
+/// parent 세션의 seq 시점(턴 끝 상태 스냅샷이 있는 곳)에서 분기한 새 세션 id를 돌려준다.
+pub async fn fork_at_seq(pool: &SqlitePool, game_id: &str, parent_session_id: &str, seq: u32) -> Result<String, AppError> {
+    let row = get_game_journal_lookup(pool, parent_session_id, Some(seq), seq)
+        .await?
+        .into_iter()
+        .find(|r| r.kind == STATE_KIND)
+        .ok_or_else(|| AppError::game_invalid_state("이 시점에는 분기할 상태가 남아 있지 않습니다"))?;
+    fork_from(pool, game_id, parent_session_id, serde_json::from_value(row.payload_json)?, seq, None).await
+}
+
+/// 상태(state)와 seq를 받아 parent의 기록을 seq까지 복사한 새 세션을 만든다.
+/// copy_save_slot이 있으면 그 책갈피도 새 세션으로 복사한다.
+async fn fork_from(pool: &SqlitePool, game_id: &str, parent_session_id: &str, mut state: GameState, to_seq: u32, copy_save_slot: Option<i64>) -> Result<String, AppError> {
     let new_session_id = uuid::Uuid::new_v4().to_string();
     state.session_id = new_session_id.clone();
     state.parent_session_id = Some(parent_session_id.to_string());
@@ -49,7 +63,9 @@ pub async fn fork_session(pool: &SqlitePool, game_id: &str, parent_session_id: &
         forked_game_messages(&mut tx, old_id, new_id, None, to_seq).await?;
         forked_game_conversations_participant(&mut *tx, old_id, new_id).await?;
     }
-    forked_game_save(&mut *tx, parent_session_id, &new_session_id, slot).await?;
+    if let Some(slot) = copy_save_slot {
+        forked_game_save(&mut *tx, parent_session_id, &new_session_id, slot).await?;
+    }
     crate::db::game::forked_game_session_options(&mut *tx, parent_session_id, &new_session_id).await?;
     tx.commit().await?;
 

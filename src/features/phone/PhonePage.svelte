@@ -558,6 +558,7 @@
 	.me-card :global(.avatar),
 	.profile :global(.avatar) {
 		border-radius: 38% !important;
+		overflow: hidden;
 	}
 	.list :global(.avatar img),
 	.me-card :global(.avatar img),
