@@ -17,7 +17,7 @@ use crate::db::game::{
     upsert_game_player_sessions, get_game_conversation_conversation_id, get_game_messages, upsert_game_conversation,
     upsert_game_conversations_participant, upsert_game_journal, upsert_game_message,
 };
-use crate::error::{AppError, ErrorCode};
+use crate::error::{AppError, BlockReason, ErrorCode};
 use crate::game::guard::current_game_id;
 use crate::models::conversation::WorldInfoEntry;
 use crate::models::game::{GameConversationsInput, GameJournalInput, GameMessagesInput};
@@ -151,11 +151,11 @@ struct NpcSnapshot {
 
 async fn snapshot(state: &State<'_, AppState>, character_id: &str) -> Result<NpcSnapshot, AppError> {
     let guard = state.active_runtime.lock().await;
-    let runtime = guard.as_ref().ok_or_else(|| AppError::not_found("진행 중인 세션이 없습니다"))?;
+    let runtime = guard.as_ref().ok_or_else(AppError::game_no_session)?;
     let st = runtime.state();
     if st.active_npc_id.as_deref() != Some(character_id) {
         // GameCommand::Talk으로 먼저 이 캐릭터와의 대화를 열어야 한다.
-        return Err(AppError::validation("이 캐릭터와의 대화가 열려 있지 않습니다", None));
+        return Err(AppError::game_blocked(BlockReason::NoActiveDialogue, "이 캐릭터와의 대화가 열려 있지 않습니다"));
     }
     let def = runtime.definition();
     let character = def.character(character_id).ok_or_else(|| AppError::validation("이 게임에 속한 캐릭터가 아닙니다", None))?;
@@ -430,9 +430,9 @@ async fn converse(
     // 있어서 같은 세션인지 확인하고, seq 발급/저장/적용이 다른 커맨드와 섞이지 않게 하려는 것.
     let (applied_events, render, plain, lines, user_msg_id, ai_msg_id) = {
         let mut guard = state.active_runtime.lock().await;
-        let runtime = guard.as_mut().ok_or_else(|| AppError::not_found("진행 중인 세션이 없습니다"))?;
+        let runtime = guard.as_mut().ok_or_else(AppError::game_no_session)?;
         if runtime.state().session_id != snap.session_id {
-            return Err(AppError::validation("응답을 기다리는 동안 세션이 바뀌었습니다", None));
+            return Err(AppError::game_session_changed());
         }
 
         // 변수 변경은 "계획"만 세우고 메시지가 저장된 뒤에 적용한다 — 저장에 실패했는데 변수만 바뀌어
@@ -595,13 +595,16 @@ fn extract_targeted(raw: &str, tag: &str) -> (String, Vec<(Option<String>, Strin
 async fn snapshot_scene(state: &State<'_, AppState>) -> Result<NpcSnapshot, AppError> {
     use rand::SeedableRng;
     let guard = state.active_runtime.lock().await;
-    let runtime = guard.as_ref().ok_or_else(|| AppError::not_found("진행 중인 세션이 없습니다"))?;
+    let runtime = guard.as_ref().ok_or_else(AppError::game_no_session)?;
     if !runtime.scene_chat_enabled() {
-        return Err(AppError::validation("지금은 씬 입력을 쓸 수 없습니다 (열린 씬이 없거나 엔딩 씬이거나 AI 이어가기가 꺼진 씬입니다)", None));
+        return Err(match runtime.state().current_scene_id {
+            None => AppError::game_blocked(BlockReason::NoOpenScene, "열린 씬이 없어 씬 입력을 쓸 수 없습니다"),
+            Some(_) => AppError::game_blocked(BlockReason::SceneChatDisabled, "이 씬에서는 씬 입력을 쓸 수 없습니다 (엔딩 씬이거나 AI 이어가기가 꺼진 씬)"),
+        });
     }
     let def = runtime.definition();
     let st = runtime.state();
-    let scene = st.current_scene_id.as_deref().and_then(|id| def.scene(id)).ok_or_else(|| AppError::not_found("열려 있는 씬이 없습니다"))?;
+    let scene = st.current_scene_id.as_deref().and_then(|id| def.scene(id)).ok_or_else(|| AppError::game_blocked(BlockReason::NoOpenScene, "열려 있는 씬이 없습니다"))?;
     let name_of = |id: &str| -> String {
         if id == "player" { "플레이어".to_string() } else { def.character(id).map(|c| c.name.clone()).unwrap_or_else(|| id.to_string()) }
     };
@@ -784,9 +787,9 @@ pub async fn edit_message(state: &State<'_, AppState>, message_id: String, conte
     let (msg, session_id, _) = load_message(state, &message_id).await?;
     let (lines, plain) = {
         let mut guard = state.active_runtime.lock().await;
-        let runtime = guard.as_mut().ok_or_else(|| AppError::not_found("진행 중인 세션이 없습니다"))?;
+        let runtime = guard.as_mut().ok_or_else(AppError::game_no_session)?;
         if runtime.state().session_id != session_id {
-            return Err(AppError::validation("지금 열린 플레이의 메시지만 고칠 수 있습니다", None));
+            return Err(AppError::game_invalid_state("지금 열린 플레이의 메시지만 고칠 수 있습니다"));
         }
         if msg.role == "user" {
             (vec![StageLine { kind: LineKind::Dialogue, speaker: Some("player".into()), text: content.clone(), cues: vec![] }], content.clone())
@@ -839,7 +842,7 @@ pub async fn regenerate_reply(app: AppHandle, state: &State<'_, AppState>, setti
     let all = get_game_messages(&state.db, &msg.conversation_id).await?;
     let pos = all.iter().position(|m| m.id == msg.id).ok_or_else(|| AppError::not_found("메시지를 찾을 수 없습니다"))?;
     if pos + 1 != all.len() {
-        return Err(AppError::validation("가장 최근 응답만 다시 만들 수 있습니다", None));
+        return Err(AppError::game_invalid_state("가장 최근 응답만 다시 만들 수 있습니다"));
     }
     let user = pos.checked_sub(1).map(|i| &all[i]).filter(|m| m.role == "user").ok_or_else(|| AppError::validation("이 응답의 입력을 찾을 수 없습니다", None))?;
     let input = user.content.clone();
@@ -856,7 +859,7 @@ pub async fn regenerate_reply(app: AppHandle, state: &State<'_, AppState>, setti
         kind != "event" || !t.is_some_and(|t| OWN.contains(&t.as_str()))
     });
     if blocked {
-        return Err(AppError::validation("이 응답 뒤로 다른 일이 일어나서 다시 만들 수 없습니다", None));
+        return Err(AppError::game_invalid_state("이 응답 뒤로 다른 일이 일어나서 다시 만들 수 없습니다"));
     }
 
     let vars: Vec<(String, serde_json::Value)> = msg.meta["varChanges"]
@@ -870,9 +873,9 @@ pub async fn regenerate_reply(app: AppHandle, state: &State<'_, AppState>, setti
 
     {
         let mut guard = state.active_runtime.lock().await;
-        let runtime = guard.as_mut().ok_or_else(|| AppError::not_found("진행 중인 세션이 없습니다"))?;
+        let runtime = guard.as_mut().ok_or_else(AppError::game_no_session)?;
         if runtime.state().session_id != session_id {
-            return Err(AppError::validation("지금 열린 플레이의 응답만 다시 만들 수 있습니다", None));
+            return Err(AppError::game_invalid_state("지금 열린 플레이의 응답만 다시 만들 수 있습니다"));
         }
         runtime.rollback_ai_changes(&vars, &rels);
         let mut tx = state.db.begin().await?;

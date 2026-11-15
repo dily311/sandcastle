@@ -278,6 +278,25 @@
 - 플랜은 조언일 뿐 엔진 상태를 직접 바꾸지 않는다. 제작자가 표시한 manual 이벤트와 씬을 「무대에 올리라」고 제안하는 것만 가능하고, fire\_event와 같은 검증을 통과해야 한다. 출력은 신뢰하지 않는 입력으로 다루고(스키마, 크기 상한, 존재하는 id만) 프롬프트에서는 앱 고정 규칙보다 낮은 우선순위로 둔다.
 - 저장은 추가 전용 game\_story\_plans(session\_id, seq)라서 분기 때 seq까지 복사된다. 기본은 꺼짐이고 호출 상한은 npc\_say와 같은 제한 안에 둔다. 인벤토리와 관계 이후에 구현한다.
 
+## 게임 오류 코드
+
+**상태** Accepted (2026-11-16)
+
+게임 커맨드의 거절은 코드로 구분한다(`src-tauri/src/error/game_error.rs`). 프론트는 `src/features/game/errors.ts`로 코드별 알림을 고른다.
+
+| 코드 | 언제 | details |
+| --- | --- | --- |
+| GAME\_NOT\_OPENED | open\_game을 부르지 않음 | |
+| GAME\_NO\_SESSION | 진행 중인 세션(런타임)이 없음 | |
+| GAME\_SESSION\_CHANGED | AI를 기다리는 동안 세션이 바뀜 (응답은 버림) | |
+| GAME\_DATA\_INVALID | 게임 데이터 문제로 시작 불가 | diagnostics: 진단 오류 목록 |
+| GAME\_ACTION\_BLOCKED | 규칙상 지금 할 수 없는 행동 | reason |
+| GAME\_INVALID\_STATE | 지금 상태와 맞지 않는 요청 (지난 플레이의 메시지 고치기, 열린 게임 지우기 등) | |
+
+reason(BlockReason): conditionNotMet, sceneActive, notPresent, noRoute, noActiveDialogue, noOpenScene, endingScene, choiceNotInScene, choiceUnavailable, sceneChatDisabled, itemNotOwned, itemNotUsable, keyItem.
+
+없는 id(캐릭터·선택지·아이템 등)나 잘못된 값(음수 시간)은 규칙이 아니라 입력 문제라 INVALID\_INPUT으로 둔다. 화면은 GAME\_ACTION\_BLOCKED를 실패가 아닌 경고로, 세션이 닫힌 경우는 게임 화면으로 돌아가는 버튼과 함께 알린다.
+
 ## 미결·후속 작업
 
 - iframe SDK와 호스트 postMessage 브릿지, 호스트 전용 커맨드와 게임 접근 커맨드의 capabilities 분리.

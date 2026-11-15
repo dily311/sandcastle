@@ -23,6 +23,7 @@
 	import { gameStore } from "$features/game/runtime/gameStore.svelte";
 	import { assetUrl } from "$features/game/runtime/gameStore.svelte";
 	import { runtimeStore } from "$features/game/runtime/runtimeStore.svelte";
+	import { reportGameError } from "$features/game/errors";
 
 	type Props = { gameId: string; sessionId: string };
 	let { gameId, sessionId }: Props = $props();
@@ -324,7 +325,10 @@
 			}
 			const channel = new Channel<StreamPayload>();
 			channel.onmessage = (p) => (streamingText += p.chunk);
-			const reply = (await call(commands.npcSay(characterId, input, channel), { source: "game" })) as unknown as NpcReply;
+			const reply = (await call(commands.npcSay(characterId, input, channel), { source: "game", silent: true }).catch((e) => {
+				reportGameError(e, gameStore.project?.id);
+				throw e;
+			})) as unknown as NpcReply;
 			applyReply(reply);
 		} catch (error) {
 			console.error("NPC message failed:", error);

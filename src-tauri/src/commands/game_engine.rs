@@ -32,13 +32,15 @@ pub async fn start_new_game(state: State<'_, AppState>, settings: State<'_, Sett
 
     let definition = crate::game::guard::current_definition(&state)?; // open_game이 올려둔 정의
     // 데이터가 어긋나 있으면(없는 씬을 가리키는 선택지 등) 시작 전에 막는다. 경고는 validate_game으로 본다.
-    if let Some(msg) = crate::game::validate::errors_summary(&crate::game::validate::validate(&definition)) {
-        return Err(AppError::validation(format!("게임 데이터에 문제가 있어 시작할 수 없습니다: {msg}"), None));
+    let issues = crate::game::validate::validate(&definition);
+    if let Some(msg) = crate::game::validate::errors_summary(&issues) {
+        let errors: Vec<_> = issues.iter().filter(|i| i.severity == crate::game::validate::Severity::Error).collect();
+        return Err(AppError::game_data_invalid(format!("게임 데이터에 문제가 있어 시작할 수 없습니다: {msg}"), serde_json::to_value(errors).ok()));
     }
     let session_id = uuid::Uuid::new_v4().to_string();
     // 지금 선택돼 있는 페르소나를 이 세션에 고정한다. 세션 중에 설정에서 바꿔도 이 세션엔 반영 안 됨.
     let player_id = crate::game::guard::selected_persona_id(&settings)?;
-    let mut runtime = GameRuntime::from_new_game(definition, session_id.clone(), player_id).map_err(|e| AppError::validation(e.to_string(), None))?;
+    let mut runtime = GameRuntime::from_new_game(definition, session_id.clone(), player_id).map_err(|e| AppError::game_data_invalid(e.to_string(), None))?;
 
     // 첫 턴: GameStarted를 흘려서 NPC의 처음 위치도 굴린다. record가 세션 행을 먼저 만들고
     // 일지/NPC 상태를 한 트랜잭션으로 쓴다.
@@ -201,9 +203,9 @@ pub async fn read_messages(state: State<'_, AppState>, conversation_id: String, 
 pub async fn dispatch_command(state: State<'_, AppState>, command: GameCommand) -> Result<GameResponse, AppError> {
     let game_id = current_game_id(&state)?;
     let mut guard = state.active_runtime.lock().await;
-    let runtime = guard.as_mut().ok_or_else(|| AppError::not_found("진행 중인 세션이 없습니다"))?;
+    let runtime = guard.as_mut().ok_or_else(AppError::game_no_session)?;
 
-    let response = runtime.dispatch(command.clone()).map_err(|e| AppError::validation(e.to_string(), None))?;
+    let response = runtime.dispatch(command.clone())?;
 
     // 일지/이벤트 로그/세션 저장을 한꺼번에 (npc_say의 AI 변수 변경도 같은 함수를 쓴다).
     crate::game::journal::record(&state.db, runtime, &game_id, Some(&command), &response.events).await?;
@@ -219,7 +221,7 @@ pub async fn save_write(state: State<'_, AppState>, slot: i64, data: serde_json:
     check_slot(slot)?;
 
     let guard = state.active_runtime.lock().await;
-    let runtime = guard.as_ref().ok_or_else(|| AppError::not_found("진행 중인 세션이 없습니다"))?;
+    let runtime = guard.as_ref().ok_or_else(AppError::game_no_session)?;
     let s = runtime.state();
 
     // engine은 참고용 스냅샷 — 슬롯 목록 UI에 "마지막 저장 시점이 어땠는지" 보여주는 용도.
@@ -254,7 +256,7 @@ pub async fn save_read(state: State<'_, AppState>, slot: i64) -> Result<Option<s
     check_slot(slot)?;
     let session_id = {
         let guard = state.active_runtime.lock().await;
-        guard.as_ref().ok_or_else(|| AppError::not_found("진행 중인 세션이 없습니다"))?.state().session_id.clone()
+        guard.as_ref().ok_or_else(AppError::game_no_session)?.state().session_id.clone()
     };
     let save: GameSave = match get_game_save(&state.db, &session_id, slot).await {
         Ok(s) => s,

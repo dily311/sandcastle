@@ -9,6 +9,7 @@ use sandcastle_lib::{
         runtime::{GameCommand, GameRepository, GameRuntime, SqlxGameRepository},
         session::fork_session,
     },
+    error::ErrorCode,
     models::game::GameSaveInput,
 };
 use sqlx::SqlitePool;
@@ -100,4 +101,27 @@ async fn fork_from_old_bookmark_keeps_original(pool: SqlitePool) {
     // 같은 슬롯에 다시 저장하면 책갈피가 새 시점을 가리킨다
     let new_seq = bookmark(&pool, &runtime, &game_id, 1).await;
     assert_eq!(get_game_save(&pool, &session_id, 1).await.unwrap().seq, new_seq);
+}
+
+#[sqlx::test(migrations = "src/db/migrations")]
+async fn blocked_commands_report_reason(pool: SqlitePool) {
+    let games_root = tempfile::tempdir().unwrap();
+    let game_id = GameManager::create_game(&pool, games_root.path(), "오류 테스트".into(), "dating-sim".into()).await.unwrap();
+    let definition = Arc::new(SqlxGameRepository::new(&pool).load_definition(&game_id).await.unwrap());
+    let mut runtime = GameRuntime::from_new_game(definition, uuid::Uuid::new_v4().to_string(), any_persona(&pool).await).unwrap();
+    runtime.start();
+
+    let reason = |cmd: GameCommand, runtime: &mut GameRuntime| {
+        let res = runtime.dispatch(cmd).err().expect("막혀야 함").to_response();
+        assert_eq!(res.code, ErrorCode::GameActionBlocked);
+        res.details.unwrap()["reason"].as_str().unwrap().to_string()
+    };
+    assert_eq!(reason(GameCommand::StopTalk, &mut runtime), "noActiveDialogue");
+    if runtime.state().current_scene_id.is_none() {
+        assert_eq!(reason(GameCommand::EndScene, &mut runtime), "noOpenScene");
+    }
+
+    // 없는 id는 규칙이 아니라 입력 오류
+    let res = runtime.dispatch(GameCommand::Talk { game_character_id: "없는-캐릭터".into() }).err().expect("없는 캐릭터").to_response();
+    assert!(matches!(res.code, ErrorCode::InvalidInput | ErrorCode::GameActionBlocked));
 }

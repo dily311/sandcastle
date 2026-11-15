@@ -13,7 +13,8 @@ async function open(gameId: string) {
 /** 새 세션을 만들고 그 id를 돌려줌 */
 export async function newGameSession(gameId: string) {
 	await open(gameId);
-	const data = (await call(commands.startNewGame(), src)) as unknown as Omit<ContinueGameResponse, "history">;
+	// 오류(데이터 문제 등)는 부른 화면이 코드에 맞춰 알린다
+	const data = (await call(commands.startNewGame(), { ...src, silent: true })) as unknown as Omit<ContinueGameResponse, "history">;
 	await runtimeStore.initialize({ ...data, history: { entries: [], hasMore: false, oldestSeq: 0 } });
 	return data.state.sessionId;
 }

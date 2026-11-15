@@ -457,6 +457,35 @@ export type BackupSummary = {
 	totals: DataTotals,
 };
 
+/**  GAME_ACTION_BLOCKED의 details.reason */
+export type BlockReason = 
+/**  이동·아이템 사용 조건이 맞지 않음 */
+"conditionNotMet" | 
+/**  씬이 진행 중이라 할 수 없음 (이동, 1:1 대화) */
+"sceneActive" | 
+/**  상대가 이 자리에 없음 */
+"notPresent" | 
+/**  지금 위치에서 그곳으로 가는 길이 없음 (또는 현재 위치가 없음) */
+"noRoute" | 
+/**  열린 대화가 없거나 다른 캐릭터와의 대화가 열려 있음 */
+"noActiveDialogue" | 
+/**  열린 씬이 없음 */
+"noOpenScene" | 
+/**  엔딩 씬은 끝낼 수 없음 */
+"endingScene" | 
+/**  지금 열린 씬의 선택지가 아님 */
+"choiceNotInScene" | 
+/**  선택지의 표시 조건이 맞지 않음 */
+"choiceUnavailable" | 
+/**  씬 입력을 쓸 수 없는 씬 (엔딩이거나 AI 이어가기가 꺼짐) */
+"sceneChatDisabled" | 
+/**  가지고 있지 않은 아이템 */
+"itemNotOwned" | 
+/**  사용 효과가 없는 아이템 */
+"itemNotUsable" | 
+/**  핵심 아이템은 버릴 수 없음 */
+"keyItem";
+
 export type Capabilities = Capabilities_Serialize | Capabilities_Deserialize;
 
 export type Capabilities_Deserialize = {

@@ -5,7 +5,7 @@ use state::LaunchMode;
 mod adapter;
 mod commands;
 pub mod db;
-mod error;
+pub mod error;
 pub mod game;
 pub mod models;
 pub mod service;
@@ -187,6 +187,8 @@ fn with_event_types(b: tauri_specta::Builder<tauri::Wry>) -> tauri_specta::Build
         .typ::<models::ai_service::DialogueDoneEvent>()
         .typ::<models::ai_service::StreamPayload>()
         .typ::<models::settings::FeatureSetting>()
+        // 게임 오류의 details.reason (GAME_ACTION_BLOCKED)
+        .typ::<error::BlockReason>()
         // 타임스탬프(밀리초)·개수는 2^53 안이라 number로 충분
         .dangerously_cast_bigints_to_number()
 }

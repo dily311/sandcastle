@@ -3,6 +3,7 @@ import { call, commands } from "$shared/ipc/client";
 import type { ContinueGameResponse, GameCommand } from "../types";
 import { getConnectionRequirement } from "../play/vn/playUtils";
 import { gameStore } from "./gameStore.svelte";
+import { reportGameError } from "../errors";
 
 const src = { source: "game" };
 
@@ -23,7 +24,11 @@ class RuntimeStore {
 	}
 
 	async dispatchCommand(command: GameCommand) {
-		const res = await call(commands.dispatchCommand(command as never), src);
+		// 규칙상 막힌 행동은 경고로, 플레이가 닫혔으면 돌아가는 버튼과 함께 알린다
+		const res = await call(commands.dispatchCommand(command as never), { ...src, silent: true }).catch((e) => {
+			reportGameError(e, gameStore.project?.id);
+			throw e;
+		});
 		this.#store = { ...(this.#store ?? { history: { entries: [], hasMore: false, oldestSeq: 0 } }), ...(res as unknown as ContinueGameResponse) };
 	}
 

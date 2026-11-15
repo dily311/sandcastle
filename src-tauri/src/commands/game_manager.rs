@@ -42,11 +42,11 @@ pub async fn save_package(app: AppHandle, state: State<'_, AppState>, game_id: S
 pub async fn delete_game(app: AppHandle, state: State<'_, AppState>, game_id: String) -> Result<(), AppError> {
     let mounted = state.active_archive.lock().map_err(|_| AppError::Archive { code: ErrorCode::ArchiveInvalid, message: "archive lock poisoned".into(), details: None })?.as_ref().map(|a| a.game_id.clone());
     if mounted.as_deref() == Some(game_id.as_str()) {
-        return Err(AppError::validation("지금 열려 있는 게임은 지울 수 없습니다", None));
+        return Err(AppError::game_invalid_state("지금 열려 있는 게임은 지울 수 없습니다"));
     }
     let playing = state.active_runtime.lock().await.as_ref().map(|r| r.definition().game_id.clone());
     if playing.as_deref() == Some(game_id.as_str()) {
-        return Err(AppError::validation("지금 플레이 중인 게임은 지울 수 없습니다", None));
+        return Err(AppError::game_invalid_state("지금 플레이 중인 게임은 지울 수 없습니다"));
     }
     GameManager::delete_package(&state.db, &games_root(&app)?, &game_id).await
 }

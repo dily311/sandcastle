@@ -10,6 +10,7 @@
 	import { library } from "$features/character/library.svelte";
 	import { newGameSession, startGameSession } from "$features/game/runtime/session";
 	import { gameAssetUrl, games, type Issue, type Session } from "./game.svelte";
+	import { dataDiagnostics, reportGameError } from "./errors";
 
 	let { gameId }: { gameId: string } = $props();
 	let loading = $state(true);
@@ -48,7 +49,12 @@
 			const sid = await newGameSession(gameId);
 			nav.go({ page: "game", gameId, sessionId: sid });
 		} catch (e) {
-			toasts.error("새 게임을 시작하지 못함", String((e as Error)?.message ?? e));
+			if (dataDiagnostics(e).length) {
+				// 열었을 때 이후로 데이터가 바뀌었을 수 있다: 진단을 다시 받아 진단 탭에서 보여준다
+				tab = "check";
+				await games.open(gameId).catch(() => {});
+			}
+			reportGameError(e, gameId);
 		} finally {
 			starting = false;
 		}

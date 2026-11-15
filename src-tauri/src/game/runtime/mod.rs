@@ -15,6 +15,7 @@ pub use assets::DefResolver;
 pub use state::{AvailableMove, GameState, NpcState, RenderState};
 
 use anyhow::Result;
+use crate::error::{AppError, BlockReason};
 use rand::rngs::StdRng;
 use serde::Serialize;
 
@@ -199,7 +200,7 @@ impl GameRuntime {
         self.process_events()
     }
 
-    pub fn dispatch(&mut self, command: GameCommand) -> Result<GameResponse> {
+    pub fn dispatch(&mut self, command: GameCommand) -> std::result::Result<GameResponse, AppError> {
         self.state.turn_fired = false; // random 억제 플래그는 dispatch마다 새로 시작
         self.handle_command(command)?;
         let events = self.process_events();
@@ -215,23 +216,24 @@ impl GameRuntime {
     /// 단, from/old처럼 "커맨드 시점의 이전 상태"가 필요한 값은 여기서 읽어서 이벤트에
     /// 실어 보낸다. 조건/존재 검증(이동 가능한지, 선택지가 실존하는지 등)도 여기서 한다 —
     /// definition은 읽기만 하는 조회라 DB 없이 바로 할 수 있다.
-    fn handle_command(&mut self, command: GameCommand) -> Result<()> {
+    /// 거절은 AppError: 규칙상 막힌 것은 GAME_ACTION_BLOCKED(+reason), 없는 id·잘못된 값은 INVALID_INPUT.
+    fn handle_command(&mut self, command: GameCommand) -> std::result::Result<(), AppError> {
         match command {
             GameCommand::MoveTo { location_id } => {
                 if self.state.current_scene_id.is_some() {
-                    return Err(anyhow::anyhow!("씬이 진행 중일 때는 이동할 수 없습니다"));
+                    return Err(AppError::game_blocked(BlockReason::SceneActive, "씬이 진행 중일 때는 이동할 수 없습니다"));
                 }
                 let from = self.state.location_id.clone();
                 let Some(from_id) = from.clone() else {
-                    return Err(anyhow::anyhow!("현재 위치가 없어 이동할 수 없습니다"));
+                    return Err(AppError::game_blocked(BlockReason::NoRoute, "현재 위치가 없어 이동할 수 없습니다"));
                 };
                 let connection = self
                     .definition
                     .connection(&from_id, &location_id)
-                    .ok_or_else(|| anyhow::anyhow!("그 경로로는 이동할 수 없습니다"))?;
+                    .ok_or_else(|| AppError::game_blocked(BlockReason::NoRoute, "그 경로로는 이동할 수 없습니다"))?;
                 // 조건이 적혀 있는데 못 읽으면 통과시키지 않는다 (fail-closed). 빈 문자열은 조건 없음.
                 if !self.condition_open(connection.condition.as_deref()) {
-                    return Err(anyhow::anyhow!("이동 조건이 충족되지 않았습니다"));
+                    return Err(AppError::game_blocked(BlockReason::ConditionNotMet, "이동 조건이 충족되지 않았습니다"));
                 }
                 let seconds = connection.travel_seconds as i64;
                 self.emit(GameEvent::LocationChanged { from, to: location_id });
@@ -240,30 +242,30 @@ impl GameRuntime {
             GameCommand::Interact { entity_id } => {
                 self.definition
                     .interactable(&entity_id)
-                    .ok_or_else(|| anyhow::anyhow!("존재하지 않는 상호작용 대상입니다: {entity_id}"))?;
+                    .ok_or_else(|| AppError::validation(format!("존재하지 않는 상호작용 대상입니다: {entity_id}"), None))?;
                 self.emit(GameEvent::TriggerActivated { trigger_id: entity_id });
             }
             GameCommand::Talk { game_character_id } => {
                 // 씬이 열려 있는 동안은 1:1 대화 대신 씬 입력(sceneSay)을 쓴다 (AI가 서술자로 장면 전체를 진행한다).
                 if self.state.current_scene_id.is_some() {
-                    return Err(anyhow::anyhow!("씬이 진행 중일 때는 씬 입력(sceneSay)을 사용하세요"));
+                    return Err(AppError::game_blocked(BlockReason::SceneActive, "씬이 진행 중일 때는 씬 입력(sceneSay)을 사용하세요"));
                 }
                 self.definition
                     .character(&game_character_id)
-                    .ok_or_else(|| anyhow::anyhow!("존재하지 않는 캐릭터입니다: {game_character_id}"))?;
+                    .ok_or_else(|| AppError::validation(format!("존재하지 않는 캐릭터입니다: {game_character_id}"), None))?;
                 // 위치를 추적하는 NPC(스폰 규칙이 있는 캐릭터)는 같은 위치에 있을 때만 말을 걸 수 있다.
                 // 스폰 규칙이 없는 캐릭터는 항상 가능하다 (스폰을 안 쓰는 기존 게임이 안 깨지게).
                 let tracked = self.definition.spawn_locations.get(&game_character_id).map_or(false, |v| !v.is_empty());
                 if tracked {
                     let here = self.state.npc_states.get(&game_character_id).and_then(|n| n.location_id.as_deref());
                     if here.is_none() || here != self.state.location_id.as_deref() {
-                        return Err(anyhow::anyhow!("그 캐릭터는 지금 여기에 없습니다"));
+                        return Err(AppError::game_blocked(BlockReason::NotPresent, "그 캐릭터는 지금 여기에 없습니다"));
                     }
                 }
                 self.emit(GameEvent::DialogueStarted { game_character_id });
             }
             GameCommand::StopTalk => {
-                let game_character_id = self.state.active_npc_id.clone().ok_or_else(|| anyhow::anyhow!("열린 대화가 없습니다"))?;
+                let game_character_id = self.state.active_npc_id.clone().ok_or_else(|| AppError::game_blocked(BlockReason::NoActiveDialogue, "열린 대화가 없습니다"))?;
                 self.emit(GameEvent::DialogueEnded { game_character_id });
             }
             GameCommand::SetVariable { key, value } => {
@@ -274,13 +276,13 @@ impl GameRuntime {
                 let (scene, choice) = self
                     .definition
                     .find_choice(&choice_id)
-                    .ok_or_else(|| anyhow::anyhow!("존재하지 않는 선택지입니다: {choice_id}"))?;
+                    .ok_or_else(|| AppError::validation(format!("존재하지 않는 선택지입니다: {choice_id}"), None))?;
                 // 지금 열려 있는 씬의 선택지만 고를 수 있다 (아니면 아무 씬의 선택지 id로 씬을 건너뛸 수 있다).
                 if self.state.current_scene_id.as_deref() != Some(scene.id.as_str()) {
-                    return Err(anyhow::anyhow!("지금 열려 있는 씬의 선택지가 아닙니다"));
+                    return Err(AppError::game_blocked(BlockReason::ChoiceNotInScene, "지금 열려 있는 씬의 선택지가 아닙니다"));
                 }
                 if !self.choice_available(choice) {
-                    return Err(anyhow::anyhow!("지금은 고를 수 없는 선택지입니다"));
+                    return Err(AppError::game_blocked(BlockReason::ChoiceUnavailable, "지금은 고를 수 없는 선택지입니다"));
                 }
                 let effect: Option<serde_json::Value> = choice.effect.as_ref().and_then(|s| serde_json::from_str(s).ok());
                 let effect_ends = effect.as_ref().and_then(|e| e.get("end_scene")).and_then(|v| v.as_bool()) == Some(true);
@@ -301,47 +303,47 @@ impl GameRuntime {
                     .as_deref()
                     .and_then(|id| self.definition.scene(id))
                     .map(|s| s.is_ending == Some(true))
-                    .ok_or_else(|| anyhow::anyhow!("열려 있는 씬이 없습니다"))?;
+                    .ok_or_else(|| AppError::game_blocked(BlockReason::NoOpenScene, "열려 있는 씬이 없습니다"))?;
                 if ending {
-                    return Err(anyhow::anyhow!("엔딩 씬은 끝낼 수 없습니다"));
+                    return Err(AppError::game_blocked(BlockReason::EndingScene, "엔딩 씬은 끝낼 수 없습니다"));
                 }
                 self.emit(GameEvent::SceneEndRequested);
             }
             GameCommand::AdvanceTime { minutes } => {
                 if minutes < 0 {
-                    return Err(anyhow::anyhow!("minutes는 음수일 수 없습니다"));
+                    return Err(AppError::validation("minutes는 음수일 수 없습니다", None));
                 }
                 self.emit(GameEvent::TimeAdvanceRequested { seconds: minutes as i64 * 60 });
             }
             GameCommand::UseItem { item_id, target_id } => {
-                let item = self.definition.items.get(&item_id).ok_or_else(|| anyhow::anyhow!("존재하지 않는 아이템입니다: {item_id}"))?;
+                let item = self.definition.items.get(&item_id).ok_or_else(|| AppError::validation(format!("존재하지 않는 아이템입니다: {item_id}"), None))?;
                 if self.inventory_count(&item_id) < 1 {
-                    return Err(anyhow::anyhow!("가지고 있지 않은 아이템입니다"));
+                    return Err(AppError::game_blocked(BlockReason::ItemNotOwned, "가지고 있지 않은 아이템입니다"));
                 }
                 if json_is_empty(&item.use_effect) {
-                    return Err(anyhow::anyhow!("사용할 수 없는 아이템입니다"));
+                    return Err(AppError::game_blocked(BlockReason::ItemNotUsable, "사용할 수 없는 아이템입니다"));
                 }
                 if !json_is_empty(&item.use_condition) {
                     // 조건이 적혀 있는데 못 읽으면 막는다 (fail-closed).
                     let cond = serde_json::from_value::<crate::game::engine::Condition>(item.use_condition.clone()).unwrap_or(crate::game::engine::Condition::Never);
                     if !cond.eval(&self.engine_state_snapshot()) {
-                        return Err(anyhow::anyhow!("지금은 사용할 수 없습니다"));
+                        return Err(AppError::game_blocked(BlockReason::ConditionNotMet, "지금은 사용할 수 없습니다"));
                     }
                 }
                 if let Some(t) = &target_id {
-                    self.definition.character(t).ok_or_else(|| anyhow::anyhow!("존재하지 않는 대상입니다: {t}"))?;
+                    self.definition.character(t).ok_or_else(|| AppError::validation(format!("존재하지 않는 대상입니다: {t}"), None))?;
                 }
                 self.emit(GameEvent::ItemUsed { item_id, target_id });
             }
             GameCommand::DropItem { item_id, quantity } => {
-                let item = self.definition.items.get(&item_id).ok_or_else(|| anyhow::anyhow!("존재하지 않는 아이템입니다: {item_id}"))?;
+                let item = self.definition.items.get(&item_id).ok_or_else(|| AppError::validation(format!("존재하지 않는 아이템입니다: {item_id}"), None))?;
                 if item.is_key {
-                    return Err(anyhow::anyhow!("핵심 아이템은 버릴 수 없습니다"));
+                    return Err(AppError::game_blocked(BlockReason::KeyItem, "핵심 아이템은 버릴 수 없습니다"));
                 }
                 let owned = self.inventory_count(&item_id);
                 let qty = quantity.unwrap_or(1) as i64;
                 if qty < 1 || owned < 1 {
-                    return Err(anyhow::anyhow!("버릴 수 있는 아이템이 없습니다"));
+                    return Err(AppError::game_blocked(BlockReason::ItemNotOwned, "버릴 수 있는 아이템이 없습니다"));
                 }
                 self.emit(GameEvent::ItemChangeRequested { item_id, delta: -qty.min(owned) });
             }
