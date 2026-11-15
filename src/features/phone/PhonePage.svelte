@@ -11,7 +11,7 @@
 	import PhonePanel from "./PhonePanel.svelte";
 	import SidePanel from "$app/SidePanel.svelte";
 	import { panel } from "$app/panel.svelte";
-	import { Info, NotebookPen } from "@lucide/svelte";
+	import { Info } from "@lucide/svelte";
 
 	type Screen = "home" | "messages" | "room" | "contacts" | "settings";
 	let screen = $state<Screen>("home");
@@ -21,17 +21,8 @@
 	let picker = $state<null | "contact" | "chat">(null);
 	let search = $state("");
 
-	// 오른쪽 패널: 대화방에 있으면 작가 노트·메모도
-	$effect(() =>
-		panel.register(
-			room
-				? [
-						{ id: "info", label: "정보", icon: Info },
-						{ id: "notes", label: "작가 노트·메모", icon: NotebookPen },
-					]
-				: [{ id: "info", label: "정보", icon: Info }],
-		),
-	);
+	// 오른쪽 패널 (대화방이면 작가 노트·메모도 정보 탭 안에)
+	$effect(() => panel.register([{ id: "info", label: "정보", icon: Info }]));
 
 	onMount(async () => {
 		await phone.init();

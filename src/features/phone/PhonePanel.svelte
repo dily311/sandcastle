@@ -1,10 +1,9 @@
 <script lang="ts">
-	// 폰 화면의 오른쪽 패널: 정보(상대·이 대화·폰) / 작가 노트·메모(대화방에 있을 때)
+	// 폰 화면의 오른쪽 패널: (대화방이면) 작가 노트·메모, 상대, 이 대화 / 폰
 	import { ExternalLink, FileJson, FileText } from "@lucide/svelte";
 	import { Avatar, Button, Segmented, Select } from "$shared/ui";
 	import { fileSrc } from "$shared/ipc/file";
 	import { nav } from "$app/nav.svelte";
-	import { panel } from "$app/panel.svelte";
 	import { library, type Conversation } from "$features/character/library.svelte";
 	import { convActions } from "$features/character/actions";
 	import NotesPanel from "$features/character/NotesPanel.svelte";
@@ -37,11 +36,9 @@
 	const kindLabel = (k: string) => (k === "persona" ? "페르소나" : "캐릭터");
 </script>
 
-{#if panel.tab === "notes" && conv}
-	<NotesPanel conv={conv} />
-{:else}
-	<div class="panel-body">
+<div class="panel-body">
 		{#if conv && contact}
+			<NotesPanel {conv} bare />
 			<section>
 				<h4>상대</h4>
 				<div class="card">
@@ -90,8 +87,7 @@
 				<p class="hint">주인 바꾸기·연락처는 폰 안의 설정·연락처 앱에서</p>
 			</section>
 		{/if}
-	</div>
-{/if}
+</div>
 
 <style>
 	.card {

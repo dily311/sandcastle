@@ -11,8 +11,10 @@
 		saving: boolean;
 		onsave: (preset: Detail["preset"], blocks: BlockInput[]) => void;
 		oncancel: () => void;
+		/** 빠른 편집 (대화 패널): 이름·설명은 숨김 */
+		quick?: boolean;
 	}
-	let { detail, saving, onsave, oncancel }: Props = $props();
+	let { detail, saving, onsave, oncancel, quick = false }: Props = $props();
 
 	// 마커 블록: 내용 대신 앱이 채움
 	const MARKERS: Record<string, string> = {
@@ -182,10 +184,12 @@
 	<Button variant="primary" loading={saving} disabled={!name.trim()} onclick={save}>저장</Button>
 </div>
 
-<Group>
-	<Row label="이름" stacked><Input bind:value={name} aria-label="프리셋 이름" /></Row>
-	<Row label="설명" stacked><Textarea bind:value={description} rows={2} autosize maxRows={6} aria-label="프리셋 설명" /></Row>
-</Group>
+{#if !quick}
+	<Group>
+		<Row label="이름" stacked><Input bind:value={name} aria-label="프리셋 이름" /></Row>
+		<Row label="설명" stacked><Textarea bind:value={description} rows={2} autosize maxRows={6} aria-label="프리셋 설명" /></Row>
+	</Group>
+{/if}
 
 <Group title="생성 옵션">
 	<div class="sliders">

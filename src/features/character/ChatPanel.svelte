@@ -201,8 +201,6 @@
 		</div>
 	{:else if panel.tab === "branches"}
 		<BranchTree {conv} {onopen} />
-	{:else if panel.tab === "notes"}
-		<NotesPanel {conv} />
 	{:else if panel.tab === "bookmarks"}
 			<ol class="marks">
 				{#each [...marks].reverse() as b (b.id)}
@@ -237,7 +235,7 @@
 				<span>프리셋 편집 · <b>{presetEdit.preset.name}</b></span>
 			</div>
 			{#key presetEdit.preset.id}
-				<PresetEditor detail={presetEdit} saving={presetSaving} onsave={savePreset} oncancel={closePreset} />
+				<PresetEditor detail={presetEdit} saving={presetSaving} onsave={savePreset} oncancel={closePreset} quick />
 			{/key}
 		</div>
 	{:else if panel.tab === "context"}
@@ -257,6 +255,7 @@
 		</div>
 	{:else}
 		<div class="panel-body">
+			<NotesPanel {conv} bare />
 			<section>
 				<h4>이 대화</h4>
 				<label class="row"><span>API</span><Select value={conv.apiProfileId ?? DEFAULT} options={apiOptions} onchange={(e) => setOption({ apiProfileId: e.currentTarget.value })} /></label>

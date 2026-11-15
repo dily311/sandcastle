@@ -3,7 +3,8 @@
 	import { Input, Textarea } from "$shared/ui";
 	import { library, type Conversation } from "./library.svelte";
 
-	let { conv }: { conv: Conversation } = $props();
+	/** bare: 감싸는 panel-body 없이 섹션만 (대화 설정 탭 안에 넣을 때) */
+	let { conv, bare = false }: { conv: Conversation; bare?: boolean } = $props();
 
 	type Notes = { memory?: string; authorNote?: { text?: string; depth?: number } };
 	const notes = $derived((conv.meta ?? {}) as Notes);
@@ -28,7 +29,7 @@
 	}
 </script>
 
-<div class="panel-body">
+{#snippet fields()}
 	<section>
 		<h4>메모 <span class="faint">시스템 규칙 끝에 붙음</span></h4>
 		<Textarea bind:value={memory} autosize rows={4} maxRows={14} placeholder={"긴 대화에서 잊으면 안 되는 사실\n예) {{user}}는 3장에서 열쇠를 잃어버림"} aria-label="메모" onblur={saveMemory} />
@@ -42,7 +43,13 @@
 		</label>
 		<p class="hint">최근 메시지 몇 개 앞에 끼울지. 0이면 입력 바로 앞 (가장 세게 반영). <code>{"{{char}}"}</code> <code>{"{{user}}"}</code> 사용 가능</p>
 	</section>
-</div>
+{/snippet}
+
+{#if bare}
+	{@render fields()}
+{:else}
+	<div class="panel-body">{@render fields()}</div>
+{/if}
 
 <style>
 	.depth {

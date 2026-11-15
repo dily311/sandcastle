@@ -1,6 +1,6 @@
 <script lang="ts">
 	import { tick } from "svelte";
-	import { Bookmark, ChevronRight, Gauge, Copy, CornerUpLeft, FastForward, GitBranch, ImagePlus, Images, ListChecks, ListTree, NotebookPen, PanelLeft, Plus, RefreshCw, Send, SlidersHorizontal, Square, Trash2, X } from "@lucide/svelte";
+	import { Bookmark, ChevronRight, Gauge, Copy, CornerUpLeft, FastForward, GitBranch, ImagePlus, Images, ListChecks, ListTree, PanelLeft, Plus, RefreshCw, Send, SlidersHorizontal, Square, Trash2, X } from "@lucide/svelte";
 	import { bookmarks } from "./bookmarks";
 	import { childrenOf, pathOf } from "./branches";
 	import SidePanel from "$app/SidePanel.svelte";
@@ -40,7 +40,6 @@
 	// 오른쪽 패널 탭은 타이틀바에 그려진다
 	$effect(() =>
 		panel.register([
-			{ id: "notes", label: "작가 노트·메모", icon: NotebookPen },
 			{ id: "settings", label: "대화 설정", icon: SlidersHorizontal },
 			{ id: "context", label: "컨텍스트·프리셋", icon: Gauge },
 			{ id: "toc", label: "목차", icon: ListTree },
