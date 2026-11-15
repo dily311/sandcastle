@@ -8,6 +8,10 @@
 	import { library, type Conversation } from "$features/character/library.svelte";
 	import { lookup, phone, WALLPAPERS, type Who } from "./phone.svelte";
 	import PhoneRoom from "./PhoneRoom.svelte";
+	import PhonePanel from "./PhonePanel.svelte";
+	import SidePanel from "$app/SidePanel.svelte";
+	import { panel } from "$app/panel.svelte";
+	import { Info, NotebookPen } from "@lucide/svelte";
 
 	type Screen = "home" | "messages" | "room" | "contacts" | "settings";
 	let screen = $state<Screen>("home");
@@ -16,6 +20,18 @@
 	/** 연락처 추가·새 채팅 고르기 */
 	let picker = $state<null | "contact" | "chat">(null);
 	let search = $state("");
+
+	// 오른쪽 패널: 대화방에 있으면 작가 노트·메모도
+	$effect(() =>
+		panel.register(
+			room
+				? [
+						{ id: "info", label: "정보", icon: Info },
+						{ id: "notes", label: "작가 노트·메모", icon: NotebookPen },
+					]
+				: [{ id: "info", label: "정보", icon: Info }],
+		),
+	);
 
 	onMount(async () => {
 		await phone.init();
@@ -102,6 +118,7 @@
 	const kindLabel = (k: string) => (k === "persona" ? "내 페르소나" : "캐릭터");
 </script>
 
+<div class="phone-page">
 <div class="stage" class:full={phone.prefs.display === "full"}>
 	<div class="device" class:framed={phone.prefs.display === "mockup"} style:--wall={WALLPAPERS[phone.wallpaper] ?? WALLPAPERS.sea}>
 		<div class="status" class:on-wall={screen === "home"}>
@@ -253,12 +270,25 @@
 		<button class="home-indicator" aria-label="홈으로" onclick={() => go("home")}></button>
 	</div>
 </div>
+{#if panel.open && ready}
+	<SidePanel label="폰 패널"><PhonePanel {room} /></SidePanel>
+{/if}
+</div>
 
 {#if menu}
 	<ContextMenu at={menu.at} items={menu.items} label="연락처 메뉴" onclose={() => (menu = null)} />
 {/if}
 
 <style>
+	.phone-page {
+		display: flex;
+		height: 100%;
+		min-height: 0;
+	}
+	.phone-page > .stage {
+		flex: 1;
+		min-width: 0;
+	}
 	.stage {
 		display: flex;
 		align-items: center;

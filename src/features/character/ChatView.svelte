@@ -2,6 +2,7 @@
 	import { tick } from "svelte";
 	import { Bookmark, Copy, CornerUpLeft, FastForward, Images, ListChecks, ListTree, NotebookPen, PanelLeft, Plus, RefreshCw, Send, SlidersHorizontal, Square, Trash2, X } from "@lucide/svelte";
 	import { bookmarks } from "./bookmarks";
+	import SidePanel from "$app/SidePanel.svelte";
 	import { Button } from "$shared/ui";
 	import { confirmAction } from "$shared/stores/confirm.svelte";
 	import { toasts } from "$shared/stores/toast.svelte";
@@ -132,8 +133,9 @@
 		}, 0);
 	}
 	async function bookmarkSelection() {
-		if (!selMenu || !conv) return;
-		await bookmarks.add(conv, selMenu.messageId, selMenu.text);
+		const m = selMenu; // 메뉴가 닫히며 selMenu가 비워지므로 먼저 잡아 둠
+		if (!m || !conv) return;
+		await bookmarks.add(conv, m.messageId, m.text);
 		window.getSelection()?.removeAllRanges();
 	}
 
@@ -145,23 +147,6 @@
 		onopen(parentConv.id);
 		// 갈라진 메시지로 스크롤
 		setTimeout(() => jumpTo(branchInfo.messageId), 400);
-	}
-
-	// ---- 패널 너비 끌기 ----
-	function startResize(e: PointerEvent) {
-		e.preventDefault();
-		const startX = e.clientX;
-		const startW = panel.width;
-		const move = (ev: PointerEvent) => panel.setWidth(startW + (startX - ev.clientX));
-		const up = () => {
-			panel.setWidth(panel.width, true);
-			window.removeEventListener("pointermove", move);
-			window.removeEventListener("pointerup", up);
-			document.body.style.cursor = "";
-		};
-		document.body.style.cursor = "col-resize";
-		window.addEventListener("pointermove", move);
-		window.addEventListener("pointerup", up);
 	}
 
 	// ---- 여러 메시지 고르기 / 삭제 ----
@@ -304,25 +289,9 @@
 	</section>
 
 	{#if panel.open && conv && session}
-		<div class="panel-wrap">
-			<!-- 왼쪽 가장자리를 끌어서 너비 조절 -->
-			<!-- svelte-ignore a11y_no_noninteractive_tabindex, a11y_no_noninteractive_element_interactions (포커스 가능한 separator는 조절 가능한 위젯) -->
-			<div
-				class="resize"
-				role="separator"
-				aria-orientation="vertical"
-				aria-label="패널 너비 조절 (←/→)"
-				aria-valuenow={panel.width}
-				tabindex="0"
-				onpointerdown={startResize}
-				onkeydown={(e) => {
-					if (e.key === "ArrowLeft") panel.setWidth(panel.width + 20, true);
-					if (e.key === "ArrowRight") panel.setWidth(panel.width - 20, true);
-				}}
-				ondblclick={() => panel.setWidth(300, true)}
-			></div>
+		<SidePanel label="대화 패널">
 			<ChatPanel {conv} {session} {chapters} onjump={jumpTo} />
-		</div>
+		</SidePanel>
 	{/if}
 	<ContextMenu
 		at={selMenu}
@@ -430,29 +399,6 @@
 	}
 	.branch span {
 		color: var(--text-faint);
-	}
-	.panel-wrap {
-		position: relative;
-		display: flex;
-		min-width: 0;
-		min-height: 0;
-	}
-	.panel-wrap > :global(.panel) {
-		flex: 1;
-	}
-	.resize {
-		position: absolute;
-		top: 0;
-		bottom: 0;
-		left: -3px;
-		z-index: 5;
-		width: 6px;
-		cursor: col-resize;
-	}
-	.resize:hover,
-	.resize:focus-visible {
-		background: color-mix(in oklab, var(--accent) 40%, transparent);
-		outline: none;
 	}
 	.selbar {
 		display: flex;
