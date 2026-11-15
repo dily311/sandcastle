@@ -2,7 +2,7 @@
 	import { onMount } from "svelte";
 	import { Plus, Search, Star, UserCircle } from "@lucide/svelte";
 	import type { PersonaInput_Deserialize as PersonaInput, WorldInfoBook_Serialize as Book } from "$ipc/bindings";
-	import { Avatar, Button, EmptyState, Input, Spinner } from "$shared/ui";
+	import { Avatar, Button, EmptyState, IconButton, Input, Spinner } from "$shared/ui";
 	import { call, commands } from "$shared/ipc/client";
 	import { fileSrc } from "$shared/ipc/file";
 	import { pickFiles, IMAGE_FILES } from "$shared/ipc/dialog";
@@ -152,12 +152,11 @@
 	<div class="page">
 		<aside class="side" aria-label="페르소나 목록">
 			<div class="top">
-				<h2>페르소나</h2>
-				<Button size="sm" variant="primary" onclick={create}>{#snippet icon()}<Plus />{/snippet}새로</Button>
+				<Input bind:value={query} placeholder="이름·태그 검색" aria-label="페르소나 검색" type="search">
+					{#snippet leading()}<Search />{/snippet}
+				</Input>
+				<IconButton label="페르소나 추가" size="md" onclick={create}><Plus /></IconButton>
 			</div>
-			<Input bind:value={query} placeholder="이름·태그 검색" aria-label="페르소나 검색" type="search">
-				{#snippet leading()}<Search />{/snippet}
-			</Input>
 			<ul>
 				{#each list as p (p.id)}
 					<li>
@@ -228,13 +227,10 @@
 		overflow: auto;
 	}
 	.top {
-		display: flex;
+		display: grid;
+		grid-template-columns: minmax(0, 1fr) auto;
 		align-items: center;
-		justify-content: space-between;
-		padding: var(--space-1) var(--space-1) 0;
-	}
-	.top h2 {
-		font-size: var(--text-lg);
+		gap: var(--space-1);
 	}
 	ul {
 		list-style: none;

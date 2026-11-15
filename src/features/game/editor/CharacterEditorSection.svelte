@@ -6,6 +6,9 @@
 	import type { GameAssetsInput, GameCharactersInput, GameCharacterAssetsInput } from "$features/game/types";
 	import { editorAssetPreviewUrl } from "./assetPreview";
 	import { open } from "@tauri-apps/plugin-dialog";
+	import Input from "$/shared/ui/Input.svelte";
+	import { Plus, Search, X } from "@lucide/svelte";
+	import IconButton from "$/shared/ui/IconButton.svelte";
 
 	type Props = {
 		characters: GameCharactersInput[];
@@ -14,11 +17,23 @@
 		availableImages: GameAssetsInput[];
 		assetRoot: string;
 	};
-	let { characters = $bindable([]), assets = $bindable([]), availableImages = [], gameId, assetRoot }: Props = $props();
+	let {
+		characters = $bindable([]),
+		assets = $bindable([]),
+		availableImages = [],
+		gameId,
+		assetRoot,
+	}: Props = $props();
 
 	let selectedIndex = $state<number | null>(characters.length > 0 ? 0 : null);
 	let characterSearch = $state("");
-	let filteredCharacters = $derived(characters.map((char, index) => ({ char, index })).filter(({ char }) => `${char.name} ${char.behaviorType ?? ""}`.toLowerCase().includes(characterSearch.trim().toLowerCase())));
+	let filteredCharacters = $derived(
+		characters
+			.map((char, index) => ({ char, index }))
+			.filter(({ char }) =>
+				`${char.name} ${char.behaviorType ?? ""}`.toLowerCase().includes(characterSearch.trim().toLowerCase()),
+			),
+	);
 	let activeChar = $derived(selectedIndex !== null && characters[selectedIndex] ? characters[selectedIndex] : null);
 	let avatarPickerOpen = $state(false);
 	let assetPickerIndex = $state<number | null>(null);
@@ -44,7 +59,7 @@
 	}
 
 	async function handleDeleteCharacter(index: number) {
-		if (!await ask(`"${characters[index].name}" 캐릭터를 삭제하시겠습니까?`)) return;
+		if (!(await ask(`"${characters[index].name}" 캐릭터를 삭제하시겠습니까?`))) return;
 		const targetId = characters[index].id;
 		assets = assets.filter((asset) => asset.gameCharacterId !== targetId);
 		characters.splice(index, 1);
@@ -107,31 +122,38 @@
 <div class="sub-editor-layout">
 	<!-- 좌측: 캐릭터 목록 -->
 	<div class="item-list-pane">
-		<label class="list-search"><span aria-hidden="true">⌕</span><input aria-label="캐릭터 검색" placeholder="캐릭터 검색" bind:value={characterSearch} /></label>
 		<div class="pane-header">
-			<h4>캐릭터 목록 ({characters.length})</h4>
-			<button class="add-btn" onclick={handleAddCharacter}>+ 캐릭터 추가</button>
+			<Input bind:value={characterSearch} placeholder="캐릭터 검색" aria-label="캐릭터 검색">
+				{#snippet leading()}<Search />
+				{/snippet}
+			</Input>
+			<IconButton label="캐릭터 추가" size="md" onclick={handleAddCharacter}><Plus /></IconButton>
 		</div>
+
 		<div class="scroll-list">
 			{#each filteredCharacters as row (row.char.id || row.index)}
-				{@const char = row.char}{@const index = row.index}
+				{@const ev = row.char}{@const idx = row.index}
 				<!-- svelte-ignore a11y_click_events_have_key_events -->
 				<!-- svelte-ignore a11y_no_static_element_interactions -->
 				<div
 					class="list-item character-list-item"
-					class:active={selectedIndex === index}
-					onclick={() => (selectedIndex = index)}
+					class:active={selectedIndex === idx}
+					onclick={() => (selectedIndex = idx)}
 				>
-					<span class="character-avatar"
-						>{#if editorAssetPreviewUrl(assetRoot, char.avatar)}<img
-								src={editorAssetPreviewUrl(assetRoot, char.avatar)}
-								alt=""
-							/>{:else}{char.name.slice(0, 1) || "?"}{/if}</span
-					>
-					<div class="item-info">
-						<span class="title">{char.name}</span>
-						<span class="character-role">{char.behaviorType || "npc"}</span>
+					<div class="character-item">
+						<span class="character-avatar">
+							{#if editorAssetPreviewUrl(assetRoot, ev.avatar)}<img
+									src={editorAssetPreviewUrl(assetRoot, ev.avatar)}
+									alt=""
+								/>
+							{:else}{ev.name.slice(0, 1) || "?"}{/if}</span
+						>
+						<div class="item-info">
+							<span class="title"> {ev.name}</span>
+							<span class="character-role"> {ev.behaviorType || "npc"}</span>
+						</div>
 					</div>
+					<IconButton class="icon-del" size="sm" label="캐릭터 삭제" onclick={() => handleDeleteCharacter(idx)}><X /></IconButton>
 				</div>
 			{:else}
 				<div class="empty-text">등록된 캐릭터가 없습니다.</div>
@@ -144,31 +166,81 @@
 		{#if activeChar && selectedIndex !== null}
 			<div class="detail-header">
 				<h3>캐릭터 상세 편집</h3>
-				<button class="delete-btn" onclick={() => handleDeleteCharacter(selectedIndex!)}>삭제</button>
 			</div>
 			<div class="form-grid">
 				<details class="accordion" open>
 					<summary><span>기본 정보</span><small>이름, 대표 이미지, 캐릭터 설명</small></summary>
 					<div class="accordion-content">
 						<div class="character-profile">
-						<div class="field avatar-field">
-							<label>아바타</label>
-							<button class="avatar-image-button" type="button" aria-label="아바타 이미지 선택" onclick={() => (avatarPickerOpen = !avatarPickerOpen)}>
-								{#if editorAssetPreviewUrl(assetRoot, activeChar.avatar)}<img src={editorAssetPreviewUrl(assetRoot, activeChar.avatar)} alt="선택된 아바타" />{:else}<span>＋<small>이미지 선택</small></span>{/if}
-							</button>
-							{#if activeChar.avatar}<button class="clear-avatar" type="button" onclick={() => (activeChar.avatar = null)}>아바타 지우기</button>{/if}
-							{#if avatarPickerOpen}<div class="image-picker"><div class="picker-heading"><strong>이미지 선택</strong><div><button type="button" onclick={chooseAvatarFile}>파일 선택</button><button type="button" onclick={() => (avatarPickerOpen = false)}>닫기</button></div></div><div class="picker-grid">{#each availableImages as imageAsset (`${imageAsset.id}-${imageAsset.key}`)}<button type="button" class="picker-image" onclick={() => selectAvatar(imageAsset.filePath)}><span>{#if editorAssetPreviewUrl(assetRoot, imageAsset.filePath)}<img src={editorAssetPreviewUrl(assetRoot, imageAsset.filePath)} alt="" />{:else}▧{/if}</span><small>{imageAsset.key}</small></button>{:else}<p class="asset-empty">등록된 이미지가 없습니다. 파일 선택으로 추가하세요.</p>{/each}</div></div>{/if}
-						</div>
-						<div class="character-profile-fields">
-							<div class="field">
-								<label for="char_name">캐릭터 이름</label>
-								<input id="char_name" type="text" bind:value={activeChar.name} />
+							<div class="field avatar-field">
+								<label>아바타</label>
+								<button
+									class="avatar-image-button"
+									type="button"
+									aria-label="아바타 이미지 선택"
+									onclick={() => (avatarPickerOpen = !avatarPickerOpen)}
+								>
+									{#if editorAssetPreviewUrl(assetRoot, activeChar.avatar)}<img
+											src={editorAssetPreviewUrl(assetRoot, activeChar.avatar)}
+											alt="선택된 아바타"
+										/>
+									{:else}<span>＋<small>이미지 선택</small></span>
+									{/if}
+								</button>
+								{#if activeChar.avatar}<button
+										class="clear-avatar"
+										type="button"
+										onclick={() => (activeChar.avatar = null)}>아바타 지우기</button
+									>
+								{/if}
+								{#if avatarPickerOpen}<div class="image-picker">
+										<div class="picker-heading">
+											<strong>이미지 선택</strong>
+											<div>
+												<button type="button" onclick={chooseAvatarFile}>파일 선택</button
+												><button type="button" onclick={() => (avatarPickerOpen = false)}
+													>닫기</button
+												>
+											</div>
+										</div>
+										<div class="picker-grid">
+											{#each availableImages as imageAsset (`${imageAsset.id}-${imageAsset.key}`)}<button
+													type="button"
+													class="picker-image"
+													onclick={() => selectAvatar(imageAsset.filePath)}
+													><span>
+														{#if editorAssetPreviewUrl(assetRoot, imageAsset.filePath)}<img
+																src={editorAssetPreviewUrl(
+																	assetRoot,
+																	imageAsset.filePath,
+																)}
+																alt=""
+															/>
+														{:else}▧{/if}</span
+													><small> {imageAsset.key}</small></button
+												>
+											{:else}<p class="asset-empty">
+													등록된 이미지가 없습니다. 파일 선택으로 추가하세요.
+												</p>
+											{/each}
+										</div>
+									</div>
+								{/if}
 							</div>
-							<div class="field">
-								<label for="char_des">캐릭터 정보</label>
-								<textarea id="char_des" bind:value={activeChar.description} rows="5" placeholder="캐릭터의 배경 설정 및 성격"></textarea>
+							<div class="character-profile-fields">
+								<div class="field">
+									<label for="char_name">캐릭터 이름</label>
+									<input id="char_name" type="text" bind:value={activeChar.name} />
+								</div>
+								<div class="field">
+									<label for="char_des">캐릭터 정보</label>
+									<textarea
+										id="char_des"
+										bind:value={activeChar.description}
+										rows="5"
+										placeholder="캐릭터의 배경 설정 및 성격"></textarea>
+								</div>
 							</div>
-						</div>
 						</div>
 					</div>
 				</details>
@@ -206,23 +278,68 @@
 					<summary><span>캐릭터 이미지</span><small>스탠딩과 맵 이미지 관리</small></summary>
 					<div class="accordion-content">
 						<div class="section-heading">
-							<span class="asset-hint">이 캐릭터에 연결된 스탠딩과 맵 이미지</span><button
-								class="add-btn"
-								onclick={handleAddCharacterAsset}
-								disabled={!activeChar.id}>+ 이미지 추가</button
+							<button class="add-btn" onclick={handleAddCharacterAsset} disabled={!activeChar.id}
+								>+ 이미지 추가</button
 							>
 						</div>
 						{#if assets.filter((asset) => asset.gameCharacterId === activeChar.id).length}
 							<div class="character-asset-list">
 								{#each assets.filter((asset) => asset.gameCharacterId === activeChar.id) as asset, assetIndex (asset.id)}
 									<article class="character-asset-card">
-										<button class="asset-preview" type="button" aria-label="이미지 파일 선택" onclick={() => (assetPickerIndex = assetPickerIndex === assetIndex ? null : assetIndex)}>
+										<button
+											class="asset-preview"
+											type="button"
+											aria-label="이미지 파일 선택"
+											onclick={() =>
+												(assetPickerIndex =
+													assetPickerIndex === assetIndex ? null : assetIndex)}
+										>
 											{#if editorAssetPreviewUrl(assetRoot, asset.filePath)}<img
 													src={editorAssetPreviewUrl(assetRoot, asset.filePath)}
 													alt={asset.name}
-												/>{:else}<span>▧</span>{/if}
+												/>
+											{:else}<span>▧</span>
+											{/if}
 										</button>
-										{#if assetPickerIndex === assetIndex}<div class="image-picker asset-image-picker"><div class="picker-heading"><strong>이미지 선택</strong><div><button type="button" onclick={() => chooseCharacterAssetFile(asset)}>파일 선택</button><button type="button" onclick={() => (assetPickerIndex = null)}>닫기</button></div></div><div class="picker-grid">{#each availableImages as imageAsset (`${imageAsset.id}-${imageAsset.key}`)}<button type="button" class="picker-image" onclick={() => selectCharacterImage(asset, imageAsset.filePath)}><span>{#if editorAssetPreviewUrl(assetRoot, imageAsset.filePath)}<img src={editorAssetPreviewUrl(assetRoot, imageAsset.filePath)} alt="" />{:else}▧{/if}</span><small>{imageAsset.key}</small></button>{:else}<p class="asset-empty">등록된 이미지가 없습니다. 파일 선택으로 추가하세요.</p>{/each}</div></div>{/if}
+										{#if assetPickerIndex === assetIndex}<div
+												class="image-picker asset-image-picker"
+											>
+												<div class="picker-heading">
+													<strong>이미지 선택</strong>
+													<div>
+														<button
+															type="button"
+															onclick={() => chooseCharacterAssetFile(asset)}
+															>파일 선택</button
+														><button type="button" onclick={() => (assetPickerIndex = null)}
+															>닫기</button
+														>
+													</div>
+												</div>
+												<div class="picker-grid">
+													{#each availableImages as imageAsset (`${imageAsset.id}-${imageAsset.key}`)}<button
+															type="button"
+															class="picker-image"
+															onclick={() =>
+																selectCharacterImage(asset, imageAsset.filePath)}
+															><span>
+																{#if editorAssetPreviewUrl(assetRoot, imageAsset.filePath)}<img
+																		src={editorAssetPreviewUrl(
+																			assetRoot,
+																			imageAsset.filePath,
+																		)}
+																		alt=""
+																	/>
+																{:else}▧{/if}</span
+															><small> {imageAsset.key}</small></button
+														>
+													{:else}<p class="asset-empty">
+															등록된 이미지가 없습니다. 파일 선택으로 추가하세요.
+														</p>
+													{/each}
+												</div>
+											</div>
+										{/if}
 										<div class="asset-fields">
 											<label>에셋 키<input bind:value={asset.key} /></label>
 											<div class="asset-field-row">
@@ -251,7 +368,8 @@
 							</div>
 						{:else}<div class="asset-empty">
 								아직 등록된 이미지가 없습니다. 이곳에서 캐릭터 이미지를 추가하세요.
-							</div>{/if}
+							</div>
+						{/if}
 					</div>
 				</details>
 			</div>
@@ -270,23 +388,9 @@
 	}
 	.item-list-pane,
 	.item-detail-pane {
-
 		display: flex;
 		flex-direction: column;
 		overflow: hidden;
-	}
-	.pane-header {
-		display: flex;
-		justify-content: space-between;
-		align-items: center;
-		padding: 1rem;
-		border-bottom: 1px solid var(--border);
-		background: var(--surface);
-	}
-	.pane-header h4 {
-		margin: 0;
-		font-size: 0.95rem;
-		color: var(--text);
 	}
 	.add-btn {
 		background: var(--accent);
@@ -327,16 +431,6 @@
 		border-color: var(--accent);
 		background: var(--accent-soft);
 	}
-	.item-info {
-		display: flex;
-		flex-direction: column;
-		gap: 0.2rem;
-	}
-	.item-info .title {
-		font-weight: 600;
-		font-size: 0.9rem;
-		color: var(--text);
-	}
 
 	.empty-text {
 		text-align: center;
@@ -361,27 +455,9 @@
 		font-size: 1.1rem;
 		color: var(--text);
 	}
-	.delete-btn {
-		background: var(--danger);
-		color: var(--text-on-accent);
-		border: none;
-		padding: 0.4rem 0.8rem;
-		border-radius: 4px;
-		font-size: 0.8rem;
-		font-weight: 600;
-		cursor: pointer;
-	}
-	.delete-btn:hover {
-		background: color-mix(in oklab, var(--danger) 85%, black);
-	}
 	.form-grid {
 		display: flex;
 		flex-direction: column;
-		gap: 1rem;
-	}
-	.field-row-split {
-		display: grid;
-		grid-template-columns: 1fr 1fr;
 		gap: 1rem;
 	}
 	.field {
@@ -417,10 +493,12 @@
 		font-size: 0.95rem;
 		text-align: center;
 	}
-	.character-list-item {
+	.character-item {
+		display: flex;
 		justify-content: flex-start;
 		gap: 0.7rem;
 	}
+
 	.character-avatar {
 		display: grid;
 		place-items: center;
@@ -444,25 +522,137 @@
 		font-size: 0.72rem;
 		text-transform: capitalize;
 	}
-	.character-profile { display:grid; grid-template-columns:minmax(150px,190px) minmax(0,1fr); gap:1.25rem; align-items:start; }
-	.character-profile-fields { display:flex; flex-direction:column; gap:.9rem; min-width:0; }
-	.avatar-field { position:relative; align-items:flex-start; }
-	.avatar-image-button { display:grid; place-items:center; width:160px; height:160px; overflow:hidden; padding:0; border:1px dashed var(--border-strong); border-radius:var(--radius-md); background:var(--surface-2); color:var(--text-muted); cursor:pointer; }
-	.avatar-image-button img { width:100%; height:100%; object-fit:contain; }
-	.avatar-image-button span { display:flex; flex-direction:column; align-items:center; gap:.3rem; color:var(--accent); font-size:1.7rem; }
-	.avatar-image-button small { color:var(--text-muted); font-size:.75rem; }
-	.clear-avatar { border:0; padding:.35rem 0; background:none; color:var(--text-muted); font:inherit; font-size:.76rem; cursor:pointer; }
-	.image-picker { margin-top:.65rem; padding:.75rem; border:1px solid var(--border); border-radius:var(--radius-md); background:var(--surface-2); }
-	.avatar-field > .image-picker { position:absolute; z-index:4; top:1.35rem; left:calc(100% + .75rem); width:min(560px,calc(100vw - 520px)); margin:0; box-shadow:var(--shadow-md); }
-	.picker-heading { display:flex; justify-content:space-between; align-items:center; margin-bottom:.65rem; color:var(--text); font-size:.82rem; }
-	.picker-heading button { border:1px solid var(--border); border-radius:var(--radius-sm); padding:.25rem .5rem; background:var(--surface); color:var(--text-muted); cursor:pointer; }
-	.picker-grid { display:grid; grid-template-columns:repeat(auto-fill,minmax(100px,1fr)); gap:.5rem; max-height:260px; overflow:auto; }
-	.picker-image { min-width:0; padding:.35rem; border:1px solid var(--border); border-radius:var(--radius-sm); background:var(--surface); color:var(--text); cursor:pointer; }
-	.picker-image:hover { border-color:var(--accent); }
-	.picker-image span { display:grid; place-items:center; height:75px; overflow:hidden; background:var(--surface-2); color:var(--text-muted); }
-	.picker-image img { width:100%; height:100%; object-fit:contain; }
-	.picker-image small { display:block; overflow:hidden; padding-top:.3rem; color:var(--text-muted); font-size:.68rem; text-overflow:ellipsis; white-space:nowrap; }
-	.asset-image-picker { grid-column:1/-1; }
+	.character-profile {
+		display: grid;
+		grid-template-columns: minmax(150px, 190px) minmax(0, 1fr);
+		gap: 1.25rem;
+		align-items: start;
+	}
+	.character-profile-fields {
+		display: flex;
+		flex-direction: column;
+		gap: 0.9rem;
+		min-width: 0;
+	}
+	.avatar-field {
+		position: relative;
+		align-items: flex-start;
+	}
+	.avatar-image-button {
+		display: grid;
+		place-items: center;
+		width: 160px;
+		height: 160px;
+		overflow: hidden;
+		padding: 0;
+		border: 1px dashed var(--border-strong);
+		border-radius: var(--radius-md);
+		background: var(--surface-2);
+		color: var(--text-muted);
+		cursor: pointer;
+	}
+	.avatar-image-button img {
+		width: 100%;
+		height: 100%;
+		object-fit: contain;
+	}
+	.avatar-image-button span {
+		display: flex;
+		flex-direction: column;
+		align-items: center;
+		gap: 0.3rem;
+		color: var(--accent);
+		font-size: 1.7rem;
+	}
+	.avatar-image-button small {
+		color: var(--text-muted);
+		font-size: 0.75rem;
+	}
+	.clear-avatar {
+		border: 0;
+		padding: 0.35rem 0;
+		background: none;
+		color: var(--text-muted);
+		font: inherit;
+		font-size: 0.76rem;
+		cursor: pointer;
+	}
+	.image-picker {
+		margin-top: 0.65rem;
+		padding: 0.75rem;
+		border: 1px solid var(--border);
+		border-radius: var(--radius-md);
+		background: var(--surface-2);
+	}
+	.avatar-field > .image-picker {
+		position: absolute;
+		z-index: 4;
+		top: 1.35rem;
+		left: calc(100% + 0.75rem);
+		width: min(560px, calc(100vw - 520px));
+		margin: 0;
+		box-shadow: var(--shadow-md);
+	}
+	.picker-heading {
+		display: flex;
+		justify-content: space-between;
+		align-items: center;
+		margin-bottom: 0.65rem;
+		color: var(--text);
+		font-size: 0.82rem;
+	}
+	.picker-heading button {
+		border: 1px solid var(--border);
+		border-radius: var(--radius-sm);
+		padding: 0.25rem 0.5rem;
+		background: var(--surface);
+		color: var(--text-muted);
+		cursor: pointer;
+	}
+	.picker-grid {
+		display: grid;
+		grid-template-columns: repeat(auto-fill, minmax(100px, 1fr));
+		gap: 0.5rem;
+		max-height: 260px;
+		overflow: auto;
+	}
+	.picker-image {
+		min-width: 0;
+		padding: 0.35rem;
+		border: 1px solid var(--border);
+		border-radius: var(--radius-sm);
+		background: var(--surface);
+		color: var(--text);
+		cursor: pointer;
+	}
+	.picker-image:hover {
+		border-color: var(--accent);
+	}
+	.picker-image span {
+		display: grid;
+		place-items: center;
+		height: 75px;
+		overflow: hidden;
+		background: var(--surface-2);
+		color: var(--text-muted);
+	}
+	.picker-image img {
+		width: 100%;
+		height: 100%;
+		object-fit: contain;
+	}
+	.picker-image small {
+		display: block;
+		overflow: hidden;
+		padding-top: 0.3rem;
+		color: var(--text-muted);
+		font-size: 0.68rem;
+		text-overflow: ellipsis;
+		white-space: nowrap;
+	}
+	.asset-image-picker {
+		grid-column: 1/-1;
+	}
 	.accordion {
 		border: 1px solid var(--border);
 		border-radius: var(--radius-lg);
@@ -543,10 +733,10 @@
 		background: var(--surface-2);
 	}
 	.asset-preview {
-		display: grid;
 		place-items: center;
 		width: 100%;
-		aspect-ratio: 16/10;
+		height: 155px;
+		max-height: 155px;
 		overflow: hidden;
 		padding: 0;
 		border: 0;
@@ -620,10 +810,21 @@
 		text-align: center;
 	}
 	@media (max-width: 640px) {
-		.character-profile { grid-template-columns:1fr; }
-		.avatar-field { align-items:stretch; }
-		.avatar-image-button { align-self:flex-start; }
-		.avatar-field > .image-picker { position:static; width:auto; margin-top:.65rem; box-shadow:none; }
+		.character-profile {
+			grid-template-columns: 1fr;
+		}
+		.avatar-field {
+			align-items: stretch;
+		}
+		.avatar-image-button {
+			align-self: flex-start;
+		}
+		.avatar-field > .image-picker {
+			position: static;
+			width: auto;
+			margin-top: 0.65rem;
+			box-shadow: none;
+		}
 		.asset-field-row {
 			grid-template-columns: 1fr;
 		}

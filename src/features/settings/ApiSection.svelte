@@ -143,9 +143,7 @@
 		</Group>
 	{:else}
 		<Group flush>
-			<EmptyState title="연결 없음" description="AI와 대화하려면 연결을 하나 추가해야 함">
-				{#snippet action()}<Button variant="primary" onclick={startNew}>연결 추가</Button>{/snippet}
-			</EmptyState>
+			<EmptyState title="연결 없음" description="AI와 대화하려면 연결을 하나 추가해야 함"></EmptyState>
 		</Group>
 	{/if}
 </Section>

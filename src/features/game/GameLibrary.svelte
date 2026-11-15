@@ -55,7 +55,6 @@
 	{#if !games.list.length}
 		<EmptyState title="게임 없음" description="템플릿으로 새로 만들거나 게임 묶음을 가져옴">
 			{#snippet icon()}<Gamepad2 />{/snippet}
-			{#snippet action()}<Button variant="primary" onclick={startCreate}>새 게임</Button>{/snippet}
 		</EmptyState>
 	{:else}
 		<div class="grid">

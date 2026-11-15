@@ -130,9 +130,7 @@
 			</Group>
 		{:else}
 			<Group flush>
-				<EmptyState title="프리셋 없음" description="새로 만들거나 SillyTavern 프리셋(.json)을 가져옴">
-					{#snippet action()}<Button variant="primary" onclick={create}>새 프리셋</Button>{/snippet}
-				</EmptyState>
+				<EmptyState title="프리셋 없음" description="새로 만들거나 SillyTavern 프리셋(.json)을 가져옴"></EmptyState>
 			</Group>
 		{/if}
 	</Section>

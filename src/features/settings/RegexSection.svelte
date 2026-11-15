@@ -160,9 +160,7 @@
 	{/snippet}
 	{#if loaded && !scripts.length}
 		<Group flush>
-			<EmptyState title="정규식 없음" description="새로 만들거나 SillyTavern 정규식(.json)을 가져옴">
-				{#snippet action()}<Button variant="primary" onclick={startNew}>새 정규식</Button>{/snippet}
-			</EmptyState>
+			<EmptyState title="정규식 없음" description="새로 만들거나 SillyTavern 정규식(.json)을 가져옴"></EmptyState>
 		</Group>
 	{/if}
 	{#each groups as g (g.scope)}

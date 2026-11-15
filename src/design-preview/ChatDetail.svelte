@@ -705,6 +705,7 @@
 		justify-content: space-between;
 		padding: var(--space-2) var(--space-3) 0;
 		background: transparent;
+		position: fixed;
 	}
 	/* 대화 목록 버튼은 마우스를 올리거나 키보드로 갔을 때만 보임 */
 	.bar :global(.icon-btn) {

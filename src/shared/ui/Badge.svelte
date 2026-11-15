@@ -10,12 +10,14 @@
 	.badge {
 		display: inline-flex;
 		align-items: center;
+		justify-content: center;
 		gap: 4px;
 		height: 20px;
 		padding: 0 var(--space-2);
 		border-radius: var(--radius-full);
 		font-size: var(--text-xs);
 		font-weight: 600;
+		text-align: center;
 		white-space: nowrap;
 	}
 	.badge :global(svg) {

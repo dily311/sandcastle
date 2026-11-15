@@ -26,19 +26,14 @@
 	background: var(--surface-2);
 }
 .ge .game-editor .pane-header {
-	display: flex;
+	display: grid;
+	grid-template-columns: minmax(0, 1fr) auto;
 	align-items: center;
 	justify-content: space-between;
 	gap: var(--space-2);
 	padding: var(--space-2) var(--space-3);
 	border-bottom: none;
 	background: transparent;
-}
-.ge .game-editor .pane-header h4 {
-	margin: 0;
-	color: var(--text-muted);
-	font-size: var(--text-xs);
-	font-weight: 600;
 }
 .ge .game-editor .list-search {
 	display: flex;
@@ -123,6 +118,10 @@
 	color: var(--accent-text);
 	font-family: var(--font-mono);
 	font-size: 0.9em;
+}
+.ge .game-editor .item-info .meta {
+    font-size: 0.75rem;
+    color: var(--text-muted);
 }
 .ge .game-editor .empty-text,
 .ge .game-editor .no-selection,
@@ -330,14 +329,6 @@
 }
 .ge .game-editor details > summary::-webkit-details-marker {
 	display: none;
-}
-.ge .game-editor details > summary::before {
-	content: "▸";
-	color: var(--text-faint);
-	transition: transform var(--duration-fast) var(--ease);
-}
-.ge .game-editor details[open] > summary::before {
-	transform: rotate(90deg);
 }
 .ge .game-editor details > summary small {
 	color: var(--text-muted);

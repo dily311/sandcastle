@@ -145,20 +145,6 @@
 	</EmptyState>
 {:else}
 	<div class="ge">
-		<header class="top">
-			<IconButton label="게임 상세로" onclick={back}><ChevronLeft /></IconButton>
-			<div class="title">
-				<b>{data.project.title || "제목 없음"}</b>
-				<span class="faint">{tabs.find((t) => t.id === tab)?.hint}</span>
-			</div>
-			{#if issues.length}
-				<button class="issues-btn" class:err={errors.length} aria-expanded={issuesOpen} onclick={() => (issuesOpen = !issuesOpen)}>
-					<AlertTriangle />{errors.length ? `오류 ${errors.length}` : `경고 ${issues.length}`}
-				</button>
-			{/if}
-			{#if dirty}<span class="dirty">바뀐 내용 있음</span>{/if}
-			<Button variant="primary" loading={saving} disabled={!dirty} onclick={save}>저장 <kbd>Ctrl S</kbd></Button>
-		</header>
 
 		{#if issuesOpen && issues.length}
 			<div class="issues">
@@ -178,6 +164,15 @@
 						<t.icon /><span>{t.label}</span>{#if t.count !== undefined}<small>{t.count}</small>{/if}
 					</button>
 				{/each}
+				<div class="bottom">
+					{#if issues.length}
+						<button class="issues-btn" class:err={errors.length} aria-expanded={issuesOpen} onclick={() => (issuesOpen = !issuesOpen)}>
+							<AlertTriangle />{errors.length ? `오류 ${errors.length}` : `경고 ${issues.length}`}
+						</button>
+					{/if}
+					{#if dirty}<span class="dirty">바뀐 내용 있음</span>{/if}
+					<Button variant="primary" loading={saving} disabled={!dirty} onclick={save}>저장 <kbd>Ctrl S</kbd></Button>
+				</div>
 			</nav>
 
 			<main class="body game-editor" class:wide={tab !== "project"}>
@@ -187,7 +182,6 @@
 						<div class="card">
 							<Field label="제목" required><Input bind:value={data.project.title} /></Field>
 							<Field label="설명" hint="게임 목록과 상세에 보임"><Textarea bind:value={data.project.description} rows={3} autosize maxRows={10} /></Field>
-							<Field label="엔진 API 버전" hint="템플릿이 정함"><Input value={data.project.apiVersion} disabled /></Field>
 						</div>
 						<h2>사용자 CSS</h2>
 						<div class="card">
@@ -267,23 +261,6 @@
 		padding: var(--space-2) var(--space-4) var(--space-2) var(--space-2);
 		border-bottom: 1px solid var(--border);
 		background: var(--bg);
-	}
-	.title {
-		flex: 1;
-		min-width: 0;
-		display: flex;
-		align-items: baseline;
-		gap: var(--space-2);
-	}
-	.title b {
-		font-size: var(--text-lg);
-		white-space: nowrap;
-	}
-	.title span {
-		overflow: hidden;
-		text-overflow: ellipsis;
-		white-space: nowrap;
-		font-size: var(--text-sm);
 	}
 	.dirty {
 		font-size: var(--text-sm);
@@ -427,6 +404,15 @@
 		border-radius: var(--radius-lg);
 		background: var(--bg-sunken);
 	}
+
+	.bottom {
+		display: flex;
+		justify-content: space-between;
+		margin-top: auto;
+		padding-top: var(--space-2);
+		border-top: 1px solid var(--border);
+	}
+
 	@media (max-width: 860px) {
 		.layout {
 			grid-template-columns: minmax(0, 1fr);

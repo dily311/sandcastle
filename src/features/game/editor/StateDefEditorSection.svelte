@@ -4,6 +4,9 @@
 	/** 지우기 전에 앱 확인 창으로 물어봄 */
 	const ask = (message: string) => confirmAction({ title: "삭제", message, confirmLabel: "삭제", danger: true });
 	import type { GameStateDefInput } from "$features/game/types";
+	import IconButton from "$/shared/ui/IconButton.svelte";
+	import { Plus, Search, X } from "@lucide/svelte";
+	import Input from "$/shared/ui/Input.svelte";
 
 	type Props = {
 		stateDefs: GameStateDefInput[];
@@ -42,21 +45,24 @@
 <div class="sub-editor-layout">
 	<!-- 좌측: 상태 목록 -->
 	<div class="item-list-pane">
-		<label class="list-search"><span aria-hidden="true">⌕</span><input aria-label="변수 검색" placeholder="변수 검색" bind:value={searchQuery} /></label>
 		<div class="pane-header">
-			<h4>상태 정의 목록 ({stateDefs.length})</h4>
-			<button class="add-btn" onclick={handleAddStateDef}>+ 상태 추가</button>
+			<Input bind:value={searchQuery} placeholder="변수 검색" aria-label="변수 검색">
+				{#snippet leading()}<Search />{/snippet}
+			</Input>
+			<IconButton label="변수 추가" size="md" onclick={handleAddStateDef}><Plus /></IconButton>
 		</div>
 		<div class="scroll-list">
 			{#each filteredStateDefs as row (row.stateDef.id)}
-				{@const stateDef = row.stateDef}{@const index = row.index}
+				{@const ev = row.stateDef}
+				{@const idx = row.index}
 				<!-- svelte-ignore a11y_click_events_have_key_events -->
 				<!-- svelte-ignore a11y_no_static_element_interactions -->
-				<div class="list-item" class:active={selectedIndex === index} onclick={() => (selectedIndex = index)}>
+				<div class="list-item" class:active={selectedIndex === idx} onclick={() => (selectedIndex = idx)}>
 					<div class="item-info">
-						<span class="title"><code>{stateDef.key}</code></span>
-						<span class="type">타입: {stateDef.type}</span>
+						<span class="title"><code>{ev.key}</code></span>
+						<span class="type">타입: {ev.type}</span>
 					</div>
+					<IconButton class="icon-del" size="sm" label="변수" onclick={() => handleDeleteStateDef(idx)}><X /></IconButton>
 				</div>
 			{:else}
 				<div class="empty-text">등록된 상태 정의가 없습니다.</div>
@@ -69,7 +75,6 @@
 		{#if activeState && selectedIndex !== null}
 			<div class="detail-header">
 				<h3>상태 정의 상세 편집</h3>
-				<button class="delete-btn" onclick={() => handleDeleteStateDef(selectedIndex!)}>삭제</button>
 			</div>
 			<details class="editor-accordion" open><summary>변수 설정</summary><div class="editor-accordion-content"><div class="form-grid">
 				<div class="field">
@@ -114,32 +119,6 @@
 		flex-direction: column;
 		overflow: hidden;
 	}
-	.pane-header {
-		display: flex;
-		justify-content: space-between;
-		align-items: center;
-		padding: 1rem;
-		border-bottom: 1px solid var(--border);
-		background: var(--surface);
-	}
-	.pane-header h4 {
-		margin: 0;
-		font-size: 0.95rem;
-		color: var(--text);
-	}
-	.add-btn {
-		background: var(--accent);
-		color: var(--text-on-accent);
-		border: none;
-		padding: 0.4rem 0.8rem;
-		border-radius: 4px;
-		font-size: 0.8rem;
-		font-weight: 600;
-		cursor: pointer;
-	}
-	.add-btn:hover {
-		background: var(--accent-hover);
-	}
 	.scroll-list {
 		flex: 1;
 		overflow-y: auto;
@@ -166,22 +145,6 @@
 		border-color: var(--accent);
 		background: var(--accent-soft);
 	}
-	.item-info {
-		display: flex;
-		flex-direction: column;
-		gap: 0.2rem;
-	}
-	.item-info .title code {
-		color: var(--accent);
-		background: var(--bg-sunken);
-		padding: 0.1rem 0.3rem;
-		border-radius: 4px;
-		font-size: 0.85rem;
-	}
-	.item-info .type {
-		font-size: 0.75rem;
-		color: var(--text-muted);
-	}
 	.empty-text {
 		text-align: center;
 		color: var(--text-faint);
@@ -204,19 +167,6 @@
 		margin: 0;
 		font-size: 1.1rem;
 		color: var(--text);
-	}
-	.delete-btn {
-		background: var(--danger);
-		color: var(--text-on-accent);
-		border: none;
-		padding: 0.4rem 0.8rem;
-		border-radius: 4px;
-		font-size: 0.8rem;
-		font-weight: 600;
-		cursor: pointer;
-	}
-	.delete-btn:hover {
-		background: color-mix(in oklab, var(--danger) 85%, black);
 	}
 	.form-grid {
 		display: flex;

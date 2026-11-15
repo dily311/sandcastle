@@ -4,6 +4,9 @@
 	/** 지우기 전에 앱 확인 창으로 물어봄 */
 	const ask = (message: string) => confirmAction({ title: "삭제", message, confirmLabel: "삭제", danger: true });
 	import type { GameTimePeriodsInput } from "$features/game/types";
+	import { Plus, Search } from "@lucide/svelte";
+	import { IconButton } from "$/shared/ui";
+	import Input from "$/shared/ui/Input.svelte";
 
 	type Props = {
 		timePeriods: GameTimePeriodsInput[];
@@ -41,11 +44,13 @@
 <div class="sub-editor-layout">
 	<!-- 좌측: 시간대 목록 -->
 	<div class="item-list-pane">
-		<label class="list-search"><span aria-hidden="true">⌕</span><input aria-label="시간대 검색" placeholder="시간대 검색" bind:value={searchQuery} /></label>
 		<div class="pane-header">
-			<h4>시간대 목록 ({timePeriods.length})</h4>
-			<button class="add-btn" onclick={handleAddTimePeriod}>+ 시간대 추가</button>
+			<Input bind:value={searchQuery} placeholder="시간대 검색" aria-label="시간대 검색">
+				{#snippet leading()}<Search />{/snippet}
+			</Input>
+			<IconButton label="시간대 추가" size="md" onclick={handleAddTimePeriod}><Plus /></IconButton>
 		</div>
+		
 		<div class="scroll-list">
 			{#each filteredPeriods as row (row.tp.id || row.index)}
 				{@const tp = row.tp}{@const idx = row.index}
@@ -105,36 +110,9 @@
 	}
 	.item-list-pane,
 	.item-detail-pane {
-
 		display: flex;
 		flex-direction: column;
 		overflow: hidden;
-	}
-	.pane-header {
-		display: flex;
-		justify-content: space-between;
-		align-items: center;
-		padding: 1rem;
-		border-bottom: 1px solid var(--border);
-		background: var(--surface);
-	}
-	.pane-header h4 {
-		margin: 0;
-		font-size: 0.95rem;
-		color: var(--text);
-	}
-	.add-btn {
-		background: var(--accent);
-		color: var(--text-on-accent);
-		border: none;
-		padding: 0.4rem 0.8rem;
-		border-radius: 4px;
-		font-size: 0.8rem;
-		font-weight: 600;
-		cursor: pointer;
-	}
-	.add-btn:hover {
-		background: var(--accent-hover);
 	}
 	.scroll-list {
 		flex: 1;
@@ -161,21 +139,6 @@
 	.list-item.active {
 		border-color: var(--accent);
 		background: var(--accent-soft);
-	}
-	.item-info {
-		display: flex;
-		flex-direction: column;
-		gap: 0.2rem;
-		overflow: hidden;
-	}
-	.item-info .title {
-		font-weight: 600;
-		font-size: 0.9rem;
-		color: var(--text);
-	}
-	.item-info .meta {
-		font-size: 0.75rem;
-		color: var(--text-muted);
 	}
 	.icon-del {
 		background: transparent;

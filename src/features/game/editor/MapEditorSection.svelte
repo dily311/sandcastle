@@ -264,7 +264,7 @@
 </script>
 
 <div class="map-hierarchy-layout">
-	<section class="hierarchy-card">
+	<section class="item-list-pane">
 		<label class="list-search"><span aria-hidden="true">⌕</span><input aria-label="맵, 존, 로케이션 검색" placeholder="맵 · 존 · 로케이션 검색" bind:value={hierarchySearch} /></label>
 		<!-- 1단: 맵(Map) 선택/목록 영역 -->
 		<div class="hierarchy-level">
@@ -365,7 +365,7 @@
 	</section>
 
 	<!-- 선택한 맵/존/장소를 편집하는 넓은 패널 -->
-	<div class="detail-pane">
+	<div class="item-detail-pane">
 		{#if activeLocation}
 			<div class="detail-header">
 				<h3>로케이션 편집: <strong>{activeLocation.name}</strong></h3>
@@ -572,26 +572,7 @@
 		height: 100%;
 		min-height: 550px;
 	}
-	.hierarchy-card {
-		display: flex;
-		flex-direction: column;
-		gap: 0.8rem;
-		min-width: 0;
-		padding: 0.8rem;
-		background: var(--surface);
-		border: 1px solid var(--border);
-		border-radius: var(--radius-lg);
-		box-shadow: var(--shadow-sm);
-	}
-	.hierarchy-level {
-		display: flex;
-		flex-direction: column;
-		min-height: 130px;
-		overflow: hidden;
-		border: 1px solid var(--border);
-		border-radius: var(--radius-md);
-		background: var(--bg);
-	}
+	
 	.hierarchy-level .pane-header {
 		padding: 0.7rem 0.8rem;
 	}
@@ -613,15 +594,6 @@
 		white-space: nowrap;
 	}
 
-	.detail-pane {
-		background: var(--surface);
-		border: 1px solid var(--border);
-		border-radius: var(--radius-lg);
-		box-shadow: var(--shadow-sm);
-		display: flex;
-		flex-direction: column;
-		overflow: hidden;
-	}
 
 	.pane-header {
 		display: flex;
@@ -666,27 +638,6 @@
 		gap: 0.3rem;
 	}
 
-	.list-item {
-		display: flex;
-		justify-content: space-between;
-		align-items: center;
-		padding: 0.6rem 0.8rem;
-		background: var(--surface);
-		border-radius: 6px;
-		cursor: pointer;
-		border: 1px solid transparent;
-		font-size: 0.85rem;
-		color: var(--text-muted);
-		transition: all 0.15s;
-	}
-	.list-item:hover {
-		border-color: var(--border-strong);
-	}
-	.list-item.active {
-		border-color: var(--accent);
-		background: var(--accent-soft);
-		color: var(--text-on-accent);
-	}
 
 	.icon-del {
 		background: transparent;
@@ -709,10 +660,6 @@
 		font-size: 0.8rem;
 	}
 
-	.detail-pane {
-		padding: 1.5rem;
-		overflow-y: auto;
-	}
 
 	.detail-header {
 		margin-bottom: 1.2rem;
@@ -779,15 +726,7 @@
 		gap: 0.8rem;
 		margin-bottom: 0.8rem;
 	}
-	.section-heading h4 {
-		margin: 0;
-		color: var(--text);
-		font-size: 0.95rem;
-	}
-	.section-heading strong {
-		color: var(--text);
-		font-size: 0.95rem;
-	}
+
 	.section-heading p {
 		margin: 0.25rem 0 0;
 		color: var(--text-muted);
@@ -941,13 +880,6 @@
 	@media (max-width: 760px) {
 		.map-hierarchy-layout {
 			grid-template-columns: 1fr;
-		}
-		.hierarchy-card {
-			display: grid;
-			grid-template-columns: 1fr;
-		}
-		.detail-pane {
-			min-height: 360px;
 		}
 	}
 	@media (max-width: 640px) {

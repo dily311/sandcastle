@@ -3,7 +3,16 @@
 	import { toasts } from "$shared/stores/toast.svelte";
 	/** 지우기 전에 앱 확인 창으로 물어봄 */
 	const ask = (message: string) => confirmAction({ title: "삭제", message, confirmLabel: "삭제", danger: true });
-	import type { GameCharactersInput, GameEventsInput, GameItemsInput, GameSceneInput, GameStateDefInput } from "$features/game/types";
+	import type {
+		GameCharactersInput,
+		GameEventsInput,
+		GameItemsInput,
+		GameSceneInput,
+		GameStateDefInput,
+	} from "$features/game/types";
+	import Input from "$/shared/ui/Input.svelte";
+	import { Plus, Search, X } from "@lucide/svelte";
+	import IconButton from "$/shared/ui/IconButton.svelte";
 
 	type Props = {
 		events: GameEventsInput[];
@@ -17,10 +26,21 @@
 
 	let selectedIndex = $state<number | null>(events.length > 0 ? 0 : null);
 	let searchQuery = $state("");
-	let filteredEvents = $derived(events.map((ev, index) => ({ ev, index })).filter(({ ev }) => `${ev.name} ${ev.eventType} ${ev.description}`.toLowerCase().includes(searchQuery.trim().toLowerCase())));
+	let filteredEvents = $derived(
+		events
+			.map((ev, index) => ({ ev, index }))
+			.filter(({ ev }) =>
+				`${ev.name} ${ev.eventType} ${ev.description}`.toLowerCase().includes(searchQuery.trim().toLowerCase()),
+			),
+	);
 	let pendingRelationCharacterId = $state("");
 	let activeEvent = $derived(selectedIndex !== null && events[selectedIndex] ? events[selectedIndex] : null);
-	let availableRelationCharacters = $derived(characters.filter((character) => character.id && !Object.keys(effectSection("relation")).some((key) => key.endsWith(`>${character.id}`))));
+	let availableRelationCharacters = $derived(
+		characters.filter(
+			(character) =>
+				character.id && !Object.keys(effectSection("relation")).some((key) => key.endsWith(`>${character.id}`)),
+		),
+	);
 
 	function handleAddEvent() {
 		const newEvent: GameEventsInput = {
@@ -41,14 +61,14 @@
 	}
 
 	async function handleDeleteEvent(index: number) {
-		if (!await ask(`"${events[index].name}" 이벤트를 삭제하시겠습니까?`)) return;
+		if (!(await ask(`"${events[index].name}" 이벤트를 삭제하시겠습니까?`))) return;
 		events.splice(index, 1);
 		selectedIndex = events.length > 0 ? Math.max(0, index - 1) : null;
 	}
 
 	function effectSection(key: string): Record<string, unknown> {
 		const value = activeEvent?.effectJson[key];
-		return value && typeof value === "object" && !Array.isArray(value) ? value as Record<string, unknown> : {};
+		return value && typeof value === "object" && !Array.isArray(value) ? (value as Record<string, unknown>) : {};
 	}
 
 	function updateEffectSection(key: string, value: Record<string, unknown>) {
@@ -92,7 +112,10 @@
 
 	function updateRelation(characterId: string, axis: string, value: number) {
 		const relations = effectSection("relation");
-		const pair = { ...((relations[`player>${characterId}`] as Record<string, unknown> | undefined) ?? {}), [axis]: value };
+		const pair = {
+			...((relations[`player>${characterId}`] as Record<string, unknown> | undefined) ?? {}),
+			[axis]: value,
+		};
 		updateEffectSection("relation", { ...relations, [`player>${characterId}`]: pair });
 	}
 
@@ -142,18 +165,19 @@
 	}
 </script>
 
-
 <div class="sub-editor-layout">
 	<!-- 좌측: 이벤트 목록 -->
 	<div class="item-list-pane">
-		<label class="list-search"><span aria-hidden="true">⌕</span><input aria-label="이벤트 검색" placeholder="이벤트 검색" bind:value={searchQuery} /></label>
 		<div class="pane-header">
-			<h4>이벤트 목록 ({events.length})</h4>
-			<button class="add-btn" onclick={handleAddEvent}>+ 이벤트 추가</button>
+			<Input bind:value={searchQuery} placeholder="이벤트 검색" aria-label="이벤트 검색">
+				{#snippet leading()}<Search />{/snippet}
+			</Input>
+			<IconButton label="이벤트 추가" size="md" onclick={handleAddEvent}><Plus /></IconButton>
 		</div>
 		<div class="scroll-list">
 			{#each filteredEvents as row (row.ev.id)}
-				{@const ev = row.ev}{@const idx = row.index}
+				{@const ev = row.ev}
+				{@const idx = row.index}
 				<div
 					role="none"
 					class="list-item"
@@ -164,7 +188,9 @@
 						<span class="title">{ev.name}</span>
 						<span class="meta">유형: {ev.eventType}</span>
 					</div>
-					<button class="icon-del" onclick={() => handleDeleteEvent(idx)}>×</button>
+					<IconButton class="icon-del" size="sm" label="날씨 삭제" onclick={() => handleDeleteEvent(idx)}
+						><X />
+					</IconButton>
 				</div>
 			{:else}
 				<div class="empty-text">등록된 이벤트가 없습니다.</div>
@@ -216,47 +242,221 @@
 
 				<div class="field">
 					<label for="event_setting">고급 설정 JSON</label>
-						<textarea
-							id="event_setting"
-							class="code-font"
-							rows="4"
-							value={toJsonString(activeEvent.configJson)}
-							oninput={(e) => fromJsonString(e.currentTarget.value, "configJson")}></textarea>
+					<textarea
+						id="event_setting"
+						class="code-font"
+						rows="4"
+						value={toJsonString(activeEvent.configJson)}
+						oninput={(e) => fromJsonString(e.currentTarget.value, "configJson")}></textarea>
 				</div>
-				<details class="editor-accordion effect-editor" open><summary>이벤트 효과</summary><div class="editor-accordion-content">
-					<div class="effect-heading"><div><p>정해진 항목을 입력하면 저장 시 엔진 효과 형식으로 구성됩니다.</p></div></div>
-					<div class="effect-section">
-						<div class="effect-section-title"><strong>변수 변경</strong><div><button class="small-action" onclick={() => addVariableEffect("set")}>값 지정</button><button class="small-action" onclick={() => addVariableEffect("add")}>숫자 더하기</button></div></div>
-						{#each Object.entries(effectSection("set")) as [key, value] (`set:${key}`)}
-							<div class="effect-row"><span class="effect-kind">지정</span><select value={key} onchange={(e) => { const next = e.currentTarget.value; const current = effectSection("set")[key]; removeEffectValue("set", key); updateEffectValue("set", next, current); }}><option value={key}>{key}</option>{#each stateDefs as variable (variable.id)}<option value={variable.key}>{variable.key}</option>{/each}</select>{#if stateDefs.find((variable) => variable.key === key)?.type === "boolean"}<select value={String(value)} onchange={(e) => updateEffectValue("set", key, e.currentTarget.value === "true")}><option value="true">참</option><option value="false">거짓</option></select>{:else}<input aria-label="지정할 값" type={stateDefs.find((variable) => variable.key === key)?.type === "number" ? "number" : "text"} value={String(value ?? "")} oninput={(e) => updateEffectValue("set", key, stateDefs.find((variable) => variable.key === key)?.type === "number" ? Number(e.currentTarget.value) : e.currentTarget.value)} />{/if}<button class="row-remove" aria-label="변수 효과 삭제" onclick={() => removeEffectValue("set", key)}>×</button></div>
-						{/each}
-						{#each Object.entries(effectSection("add")) as [key, value] (`add:${key}`)}
-							<div class="effect-row"><span class="effect-kind">더하기</span><select value={key} onchange={(e) => { const next = e.currentTarget.value; const current = effectSection("add")[key]; removeEffectValue("add", key); updateEffectValue("add", next, current); }}><option value={key}>{key}</option>{#each stateDefs.filter((variable) => variable.type === "number") as variable (variable.id)}<option value={variable.key}>{variable.key}</option>{/each}</select><input aria-label="더할 값" type="number" value={Number(value)} oninput={(e) => updateEffectValue("add", key, Number(e.currentTarget.value))} /><button class="row-remove" aria-label="변수 효과 삭제" onclick={() => removeEffectValue("add", key)}>×</button></div>
-						{/each}
-						{#if !Object.keys(effectSection("set")).length && !Object.keys(effectSection("add")).length}<p class="effect-empty">아직 변수 효과가 없습니다.</p>{/if}
-					</div>
-					<div class="effect-section">
-						<div class="effect-section-title"><strong>아이템 지급 / 회수</strong><div><button class="small-action" onclick={() => addItemEffect("give_item")}>아이템 지급</button><button class="small-action" onclick={() => addItemEffect("take_item")}>아이템 회수</button></div></div>
-						{#each ["give_item", "take_item"] as section}
-							{#each Object.entries(effectSection(section)) as [itemId, quantity] (`${section}:${itemId}`)}
-								<div class="effect-row"><span class="effect-kind">{section === "give_item" ? "지급" : "회수"}</span><select value={itemId} onchange={(e) => { const next = e.currentTarget.value; const current = effectSection(section)[itemId]; removeEffectValue(section, itemId); updateEffectValue(section, next, current); }}><option value={itemId}>{items.find((item) => item.id === itemId)?.name ?? itemId}</option>{#each items as item (item.id)}<option value={item.id ?? ""}>{item.name}</option>{/each}</select><input aria-label="수량" type="number" min="1" value={Number(quantity)} oninput={(e) => updateEffectValue(section, itemId, Math.max(1, Number(e.currentTarget.value)))} /><button class="row-remove" aria-label="아이템 효과 삭제" onclick={() => removeEffectValue(section, itemId)}>×</button></div>
+				<details class="editor-accordion effect-editor" open>
+					<summary>이벤트 효과</summary>
+					<div class="editor-accordion-content">
+						<div class="effect-heading">
+							<div><p>정해진 항목을 입력하면 저장 시 엔진 효과 형식으로 구성됩니다.</p></div>
+						</div>
+						<div class="effect-section">
+							<div class="effect-section-title">
+								<strong>변수 변경</strong>
+								<div>
+									<button class="small-action" onclick={() => addVariableEffect("set")}
+										>값 지정</button
+									><button class="small-action" onclick={() => addVariableEffect("add")}
+										>숫자 더하기</button
+									>
+								</div>
+							</div>
+							{#each Object.entries(effectSection("set")) as [key, value] (`set:${key}`)}
+								<div class="effect-row">
+									<span class="effect-kind">지정</span><select
+										value={key}
+										onchange={(e) => {
+											const next = e.currentTarget.value;
+											const current = effectSection("set")[key];
+											removeEffectValue("set", key);
+											updateEffectValue("set", next, current);
+										}}
+										><option value={key}>{key}</option
+										>{#each stateDefs as variable (variable.id)}<option value={variable.key}
+												>{variable.key}</option
+											>{/each}</select
+									>{#if stateDefs.find((variable) => variable.key === key)?.type === "boolean"}<select
+											value={String(value)}
+											onchange={(e) =>
+												updateEffectValue("set", key, e.currentTarget.value === "true")}
+											><option value="true">참</option><option value="false">거짓</option></select
+										>{:else}<input
+											aria-label="지정할 값"
+											type={stateDefs.find((variable) => variable.key === key)?.type === "number"
+												? "number"
+												: "text"}
+											value={String(value ?? "")}
+											oninput={(e) =>
+												updateEffectValue(
+													"set",
+													key,
+													stateDefs.find((variable) => variable.key === key)?.type ===
+														"number"
+														? Number(e.currentTarget.value)
+														: e.currentTarget.value,
+												)}
+										/>{/if}<button
+										class="row-remove"
+										aria-label="변수 효과 삭제"
+										onclick={() => removeEffectValue("set", key)}>×</button
+									>
+								</div>
 							{/each}
-						{/each}
+							{#each Object.entries(effectSection("add")) as [key, value] (`add:${key}`)}
+								<div class="effect-row">
+									<span class="effect-kind">더하기</span><select
+										value={key}
+										onchange={(e) => {
+											const next = e.currentTarget.value;
+											const current = effectSection("add")[key];
+											removeEffectValue("add", key);
+											updateEffectValue("add", next, current);
+										}}
+										><option value={key}>{key}</option
+										>{#each stateDefs.filter((variable) => variable.type === "number") as variable (variable.id)}<option
+												value={variable.key}>{variable.key}</option
+											>{/each}</select
+									><input
+										aria-label="더할 값"
+										type="number"
+										value={Number(value)}
+										oninput={(e) => updateEffectValue("add", key, Number(e.currentTarget.value))}
+									/><button
+										class="row-remove"
+										aria-label="변수 효과 삭제"
+										onclick={() => removeEffectValue("add", key)}>×</button
+									>
+								</div>
+							{/each}
+							{#if !Object.keys(effectSection("set")).length && !Object.keys(effectSection("add")).length}<p
+									class="effect-empty"
+								>
+									아직 변수 효과가 없습니다.
+								</p>{/if}
+						</div>
+						<div class="effect-section">
+							<div class="effect-section-title">
+								<strong>아이템 지급 / 회수</strong>
+								<div>
+									<button class="small-action" onclick={() => addItemEffect("give_item")}
+										>아이템 지급</button
+									><button class="small-action" onclick={() => addItemEffect("take_item")}
+										>아이템 회수</button
+									>
+								</div>
+							</div>
+							{#each ["give_item", "take_item"] as section}
+								{#each Object.entries(effectSection(section)) as [itemId, quantity] (`${section}:${itemId}`)}
+									<div class="effect-row">
+										<span class="effect-kind">{section === "give_item" ? "지급" : "회수"}</span
+										><select
+											value={itemId}
+											onchange={(e) => {
+												const next = e.currentTarget.value;
+												const current = effectSection(section)[itemId];
+												removeEffectValue(section, itemId);
+												updateEffectValue(section, next, current);
+											}}
+											><option value={itemId}
+												>{items.find((item) => item.id === itemId)?.name ?? itemId}</option
+											>{#each items as item (item.id)}<option value={item.id ?? ""}
+													>{item.name}</option
+												>{/each}</select
+										><input
+											aria-label="수량"
+											type="number"
+											min="1"
+											value={Number(quantity)}
+											oninput={(e) =>
+												updateEffectValue(
+													section,
+													itemId,
+													Math.max(1, Number(e.currentTarget.value)),
+												)}
+										/><button
+											class="row-remove"
+											aria-label="아이템 효과 삭제"
+											onclick={() => removeEffectValue(section, itemId)}>×</button
+										>
+									</div>
+								{/each}
+							{/each}
+						</div>
+						<div class="effect-section">
+							<div class="effect-section-title">
+								<strong>캐릭터 관계 변화</strong>
+								<div class="relation-add">
+									<select
+										aria-label="관계를 변경할 캐릭터 선택"
+										bind:value={pendingRelationCharacterId}
+										><option value="">캐릭터 선택</option
+										>{#each availableRelationCharacters as character (character.id)}<option
+												value={character.id ?? ""}>{character.name}</option
+											>{/each}</select
+									><button
+										class="small-action"
+										onclick={addRelationEffect}
+										disabled={!pendingRelationCharacterId}>추가</button
+									>
+								</div>
+							</div>
+							{#each Object.entries(effectSection("relation")) as [key, rawValues] (key)}
+								{@const relationValues = rawValues as Record<string, unknown>}
+								{@const characterId = key.split(">").at(-1) ?? ""}
+								<div class="relation-row">
+									<select
+										aria-label="관계 변경 캐릭터"
+										value={characterId}
+										onchange={(e) => changeRelationCharacter(key, e.currentTarget.value)}
+										>{#each relationCharacterOptions(key) as character (character.id)}<option
+												value={character.id ?? ""}>{character.name}</option
+											>{/each}</select
+									>{#each ["affection", "trust", "tension"] as axis}<label
+											>{axis}<input
+												type="number"
+												value={Number(relationValues[axis] ?? 0)}
+												oninput={(e) =>
+													updateRelation(characterId, axis, Number(e.currentTarget.value))}
+											/></label
+										>{/each}<button
+										class="row-remove"
+										aria-label="관계 효과 삭제"
+										onclick={() => removeRelationEffect(key)}>×</button
+									>
+								</div>
+							{/each}
+							{#if !Object.keys(effectSection("relation")).length}<p class="effect-empty">
+									관계 변화가 필요하면 캐릭터를 추가하세요.
+								</p>{/if}
+						</div>
+						<div class="effect-section effect-routing">
+							<label
+								>이동할 씬<select
+									value={String(activeEvent.effectJson.enter_scene ?? "")}
+									onchange={(e) => updateEffectRoot("enter_scene", e.currentTarget.value)}
+									><option value="">이동 없음</option>{#each scenes as scene (scene.id)}<option
+											value={scene.id}>{scene.sceneName}</option
+										>{/each}</select
+								></label
+							>
+							<label
+								>실행할 이벤트<select
+									value={String(activeEvent.effectJson.fire_event ?? "")}
+									onchange={(e) => updateEffectRoot("fire_event", e.currentTarget.value)}
+									><option value="">연결 없음</option
+									>{#each events.filter((event) => event.id !== activeEvent.id) as event (event.id)}<option
+											value={event.id}>{event.name}</option
+										>{/each}</select
+								></label
+							>
+						</div>
 					</div>
-					<div class="effect-section">
-						<div class="effect-section-title"><strong>캐릭터 관계 변화</strong><div class="relation-add"><select aria-label="관계를 변경할 캐릭터 선택" bind:value={pendingRelationCharacterId}><option value="">캐릭터 선택</option>{#each availableRelationCharacters as character (character.id)}<option value={character.id ?? ""}>{character.name}</option>{/each}</select><button class="small-action" onclick={addRelationEffect} disabled={!pendingRelationCharacterId}>추가</button></div></div>
-						{#each Object.entries(effectSection("relation")) as [key, rawValues] (key)}
-							{@const relationValues = rawValues as Record<string, unknown>}
-							{@const characterId = key.split(">").at(-1) ?? ""}
-							<div class="relation-row"><select aria-label="관계 변경 캐릭터" value={characterId} onchange={(e) => changeRelationCharacter(key, e.currentTarget.value)}>{#each relationCharacterOptions(key) as character (character.id)}<option value={character.id ?? ""}>{character.name}</option>{/each}</select>{#each ["affection", "trust", "tension"] as axis}<label>{axis}<input type="number" value={Number(relationValues[axis] ?? 0)} oninput={(e) => updateRelation(characterId, axis, Number(e.currentTarget.value))} /></label>{/each}<button class="row-remove" aria-label="관계 효과 삭제" onclick={() => removeRelationEffect(key)}>×</button></div>
-						{/each}
-						{#if !Object.keys(effectSection("relation")).length}<p class="effect-empty">관계 변화가 필요하면 캐릭터를 추가하세요.</p>{/if}
-					</div>
-					<div class="effect-section effect-routing">
-						<label>이동할 씬<select value={String(activeEvent.effectJson.enter_scene ?? "")} onchange={(e) => updateEffectRoot("enter_scene", e.currentTarget.value)}><option value="">이동 없음</option>{#each scenes as scene (scene.id)}<option value={scene.id}>{scene.sceneName}</option>{/each}</select></label>
-						<label>실행할 이벤트<select value={String(activeEvent.effectJson.fire_event ?? "")} onchange={(e) => updateEffectRoot("fire_event", e.currentTarget.value)}><option value="">연결 없음</option>{#each events.filter((event) => event.id !== activeEvent.id) as event (event.id)}<option value={event.id}>{event.name}</option>{/each}</select></label>
-					</div>
-				</div></details>
+				</details>
 			</div>
 		{:else}
 			<div class="no-selection">왼쪽에서 이벤트를 선택하거나 새로 추가하세요.</div>
@@ -273,7 +473,6 @@
 	}
 	.item-list-pane,
 	.item-detail-pane {
-
 		display: flex;
 		flex-direction: column;
 		overflow: hidden;
@@ -285,24 +484,6 @@
 		padding: 1rem;
 		border-bottom: 1px solid var(--border);
 		background: var(--surface);
-	}
-	.pane-header h4 {
-		margin: 0;
-		font-size: 0.95rem;
-		color: var(--text);
-	}
-	.add-btn {
-		background: var(--accent);
-		color: var(--text-on-accent);
-		border: none;
-		padding: 0.4rem 0.8rem;
-		border-radius: 4px;
-		font-size: 0.8rem;
-		font-weight: 600;
-		cursor: pointer;
-	}
-	.add-btn:hover {
-		background: var(--accent-hover);
 	}
 	.scroll-list {
 		flex: 1;
@@ -329,34 +510,6 @@
 	.list-item.active {
 		border-color: var(--accent);
 		background: var(--accent-soft);
-	}
-	.item-info {
-		display: flex;
-		flex-direction: column;
-		gap: 0.2rem;
-		overflow: hidden;
-	}
-	.item-info .title {
-		font-weight: 600;
-		font-size: 0.9rem;
-		color: var(--text);
-	}
-	.item-info .meta {
-		font-size: 0.75rem;
-		color: var(--text-muted);
-	}
-	.icon-del {
-		background: transparent;
-		border: none;
-		color: var(--text-muted);
-		font-size: 1rem;
-		cursor: pointer;
-		padding: 0.3rem;
-		border-radius: 4px;
-	}
-	.icon-del:hover {
-		background: var(--danger);
-		color: var(--text-on-accent);
 	}
 	.empty-text {
 		text-align: center;
@@ -441,25 +594,152 @@
 		font-size: 0.95rem;
 		text-align: center;
 	}
-	.effect-editor { display:flex; flex-direction:column; gap:.75rem; margin-top:.3rem; }
-	.effect-heading h4 { margin:0; color:var(--text); font-size:1rem; }
-	.effect-heading p { margin:.3rem 0 0; color:var(--text-muted); font-size:.78rem; }
-	.effect-section { display:flex; flex-direction:column; gap:.55rem; padding:.85rem; border:1px solid var(--border); border-radius:var(--radius-md); background:var(--surface-2); }
-	.effect-section-title { display:flex; align-items:center; justify-content:space-between; gap:.6rem; }
-	.effect-section-title strong,.effect-section>strong { color:var(--text); font-size:.82rem; }
-	.effect-section-title>div { display:flex; gap:.35rem; }
-	.small-action { padding:.35rem .55rem; border:1px solid var(--border); border-radius:var(--radius-sm); background:var(--surface); color:var(--text-muted); font:inherit; font-size:.72rem; cursor:pointer; }
-	.small-action:hover { color:var(--accent); border-color:var(--accent); }
-	.effect-row { display:grid; grid-template-columns:68px minmax(120px,1fr) minmax(100px,.7fr) 28px; gap:.45rem; align-items:center; }
-	.effect-row input,.effect-row select,.effect-routing input,.effect-routing select,.relation-row input,.relation-add select { min-width:0; width:100%; box-sizing:border-box; padding:.52rem .6rem; border:1px solid var(--border-strong); border-radius:var(--radius-sm); background:var(--surface); color:var(--text); font:inherit; font-size:.8rem; }
-	.effect-kind { color:var(--text-muted); font-size:.72rem; }
-	.row-remove { border:0; background:transparent; color:var(--text-muted); font-size:1.15rem; cursor:pointer; }
-	.row-remove:hover { color:var(--danger); }
-	.effect-empty { margin:0; padding:.5rem 0; color:var(--text-faint); font-size:.76rem; }
-	.effect-routing { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:.65rem; }
-	.effect-routing label,.relation-row label { display:flex; flex-direction:column; gap:.3rem; color:var(--text-muted); font-size:.72rem; font-weight:600; }
-	.relation-add { display:flex; align-items:center; gap:.35rem; }
-	.relation-row { display:grid; grid-template-columns:minmax(130px,1fr) repeat(3,minmax(75px,.6fr)) 24px; align-items:end; gap:.55rem; padding:.45rem 0; border-top:1px solid var(--border); }
-	.relation-row>select { width:100%; min-width:0; box-sizing:border-box; padding:.52rem .6rem; border:1px solid var(--border-strong); border-radius:var(--radius-sm); background:var(--surface); color:var(--text); font:inherit; font-size:.8rem; }
-	@media (max-width:700px) { .effect-row { grid-template-columns:60px minmax(100px,1fr) minmax(80px,.8fr) 24px; } .effect-routing { grid-template-columns:1fr; } .relation-row { grid-template-columns:minmax(95px,1fr) repeat(3,minmax(55px,.6fr)) 22px; gap:.3rem; } }
+	.effect-editor {
+		display: flex;
+		flex-direction: column;
+		gap: 0.75rem;
+		margin-top: 0.3rem;
+	}
+	.effect-heading h4 {
+		margin: 0;
+		color: var(--text);
+		font-size: 1rem;
+	}
+	.effect-heading p {
+		margin: 0.3rem 0 0;
+		color: var(--text-muted);
+		font-size: 0.78rem;
+	}
+	.effect-section {
+		display: flex;
+		flex-direction: column;
+		gap: 0.55rem;
+		padding: 0.85rem;
+		border: 1px solid var(--border);
+		border-radius: var(--radius-md);
+		background: var(--surface-2);
+	}
+	.effect-section-title {
+		display: flex;
+		align-items: center;
+		justify-content: space-between;
+		gap: 0.6rem;
+	}
+	.effect-section-title strong,
+	.effect-section > strong {
+		color: var(--text);
+		font-size: 0.82rem;
+	}
+	.effect-section-title > div {
+		display: flex;
+		gap: 0.35rem;
+	}
+	.small-action {
+		padding: 0.35rem 0.55rem;
+		border: 1px solid var(--border);
+		border-radius: var(--radius-sm);
+		background: var(--surface);
+		color: var(--text-muted);
+		font: inherit;
+		font-size: 0.72rem;
+		cursor: pointer;
+	}
+	.small-action:hover {
+		color: var(--accent);
+		border-color: var(--accent);
+	}
+	.effect-row {
+		display: grid;
+		grid-template-columns: 68px minmax(120px, 1fr) minmax(100px, 0.7fr) 28px;
+		gap: 0.45rem;
+		align-items: center;
+	}
+	.effect-row input,
+	.effect-row select,
+	.effect-routing input,
+	.effect-routing select,
+	.relation-row input,
+	.relation-add select {
+		min-width: 0;
+		width: 100%;
+		box-sizing: border-box;
+		padding: 0.52rem 0.6rem;
+		border: 1px solid var(--border-strong);
+		border-radius: var(--radius-sm);
+		background: var(--surface);
+		color: var(--text);
+		font: inherit;
+		font-size: 0.8rem;
+	}
+	.effect-kind {
+		color: var(--text-muted);
+		font-size: 0.72rem;
+	}
+	.row-remove {
+		border: 0;
+		background: transparent;
+		color: var(--text-muted);
+		font-size: 1.15rem;
+		cursor: pointer;
+	}
+	.row-remove:hover {
+		color: var(--danger);
+	}
+	.effect-empty {
+		margin: 0;
+		padding: 0.5rem 0;
+		color: var(--text-faint);
+		font-size: 0.76rem;
+	}
+	.effect-routing {
+		display: grid;
+		grid-template-columns: repeat(2, minmax(0, 1fr));
+		gap: 0.65rem;
+	}
+	.effect-routing label,
+	.relation-row label {
+		display: flex;
+		flex-direction: column;
+		gap: 0.3rem;
+		color: var(--text-muted);
+		font-size: 0.72rem;
+		font-weight: 600;
+	}
+	.relation-add {
+		display: flex;
+		align-items: center;
+		gap: 0.35rem;
+	}
+	.relation-row {
+		display: grid;
+		grid-template-columns: minmax(130px, 1fr) repeat(3, minmax(75px, 0.6fr)) 24px;
+		align-items: end;
+		gap: 0.55rem;
+		padding: 0.45rem 0;
+		border-top: 1px solid var(--border);
+	}
+	.relation-row > select {
+		width: 100%;
+		min-width: 0;
+		box-sizing: border-box;
+		padding: 0.52rem 0.6rem;
+		border: 1px solid var(--border-strong);
+		border-radius: var(--radius-sm);
+		background: var(--surface);
+		color: var(--text);
+		font: inherit;
+		font-size: 0.8rem;
+	}
+	@media (max-width: 700px) {
+		.effect-row {
+			grid-template-columns: 60px minmax(100px, 1fr) minmax(80px, 0.8fr) 24px;
+		}
+		.effect-routing {
+			grid-template-columns: 1fr;
+		}
+		.relation-row {
+			grid-template-columns: minmax(95px, 1fr) repeat(3, minmax(55px, 0.6fr)) 22px;
+			gap: 0.3rem;
+		}
+	}
 </style>

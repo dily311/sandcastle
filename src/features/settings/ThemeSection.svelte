@@ -135,7 +135,6 @@
 	</Group>
 
 	<Group title="기본 테마">
-		{#snippet aside()}<span class="faint small">카드를 누르면 바로 적용. 지금은 {mode === "dark" ? "어두운" : "밝은"} 화면 색을 보여줌</span>{/snippet}
 		<div class="gallery" role="radiogroup" aria-label="기본 테마">
 			{#each BUILTIN_THEMES as t (t.id)}
 				{@const key = t.id === "default" ? "default" : `builtin:${t.id}`}
@@ -165,7 +164,6 @@
 
 	<Group title="CSS 스니펫" flush>
 		{#snippet aside()}<Button size="sm" onclick={addSnippet}>{#snippet icon()}<Plus />{/snippet}새 스니펫</Button>{/snippet}
-		<p class="faint small pad">테마 위에 덧붙이는 작은 CSS 조각. 켜고 끌 수 있음</p>
 		{#each theme.snippets as s (s.id)}
 			<div class="snip" class:open={openSnippet === s.id}>
 				<div class="snip-head">

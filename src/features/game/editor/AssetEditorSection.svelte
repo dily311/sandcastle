@@ -147,7 +147,7 @@
 			<h3>전체 에셋</h3>
 			<p>이미지, 오디오, 폰트 등 게임에서 사용하는 파일을 한곳에서 관리합니다.</p>
 		</div>
-		<div class="asset-add">
+		<div class="action-btn">
 			<select aria-label="추가할 에셋 종류" bind:value={filter}>
 				<option value="all">전체 보기</option>
 				<option value="audio">오디오</option>
@@ -357,6 +357,8 @@
 		display: flex;
 		flex-direction: column;
 		gap: 1rem;
+		padding: var(--space-6);
+		overflow: auto;
 	}
 	.asset-toolbar {
 		display: flex;
@@ -372,7 +374,7 @@
 		color: var(--text-muted);
 		font-size: 0.85rem;
 	}
-	.asset-add {
+	.action-btn {
 		display: flex;
 		gap: 0.5rem;
 	}
@@ -468,7 +470,7 @@
 	.field input,
 	.field select,
 	.field textarea,
-	.asset-add select {
+	.action-btn select {
 		width: 100%;
 		box-sizing: border-box;
 		background: var(--bg);
@@ -508,10 +510,10 @@
 			flex-direction: column;
 			width: 100%;
 		}
-		.asset-add {
+		.action-btn {
 			width: 100%;
 		}
-		.asset-add select {
+		.action-btn select {
 			flex: 1;
 		}
 	}
