@@ -47,6 +47,8 @@ jobs:
       - name: 빈 dist 만들기
         shell: bash
         run: mkdir -p ../dist && touch ../dist/index.html
+      - name: 서식 (cargo fmt)
+        run: cargo fmt --check
       - name: 테스트
         run: cargo test
       - name: 프론트 바인딩이 최신인지 확인
@@ -56,3 +58,31 @@ jobs:
           git diff --exit-code -- ../src/ipc/bindings.ts
       - name: Clippy
         run: cargo clippy --all-targets
+
+  android:
+    # Android 대상으로 Rust가 컴파일되는지만 본다 (1-D-2). APK는 릴리스 워크플로가 만든다.
+    # GitHub의 ubuntu 러너에는 Android NDK가 깔려 있다 (ANDROID_NDK_LATEST_HOME)
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: src-tauri
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: aarch64-linux-android
+          components: clippy
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: src-tauri
+          key: android
+      - name: 빈 dist 만들기
+        run: mkdir -p ../dist && touch ../dist/index.html
+      - name: NDK 컴파일러 연결
+        run: |
+          BIN="$ANDROID_NDK_LATEST_HOME/toolchains/llvm/prebuilt/linux-x86_64/bin"
+          echo "CC_aarch64_linux_android=$BIN/aarch64-linux-android24-clang" >> "$GITHUB_ENV"
+          echo "AR_aarch64_linux_android=$BIN/llvm-ar" >> "$GITHUB_ENV"
+          echo "CARGO_TARGET_AARCH64_LINUX_ANDROID_LINKER=$BIN/aarch64-linux-android24-clang" >> "$GITHUB_ENV"
+      - name: Clippy (aarch64-linux-android)
+        run: cargo clippy --lib --target aarch64-linux-android
