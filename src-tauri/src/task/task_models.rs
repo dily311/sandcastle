@@ -70,6 +70,24 @@ pub enum TaskType {
     BackgroundSync,
     MemorySummary,
     Embedding,
+    /// 번역 (코어 플러그인)
+    Translate,
+    /// 음성 읽기 (코어 플러그인)
+    Tts,
+    /// API 연결 확인 등 설정 화면의 짧은 호출
+    ApiCall,
+}
+
+/// 작업을 누가 시작했나. 비용이 드는 작업은 항상 실행 주체가 분명해야 한다 (CLAUDE.md 원칙)
+#[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq, Hash, EnumString, Display, specta::Type, Default)]
+#[serde(rename_all = "snake_case")]
+#[strum(serialize_all = "snake_case")]
+pub enum RunBy {
+    /// 사용자가 누른 버튼·전송
+    #[default]
+    User,
+    /// 사용자가 켜 둔 자동 실행 (자동 번역·자동 읽기 등)
+    Auto,
 }
 
 /// 작업을 요청한 쪽. 프론트가 어느 화면에 결과를 붙일지 고를 때 쓴다.
@@ -98,6 +116,11 @@ pub struct CreateTaskRequest {
     pub payload: Value,
     /// 재시도 가능한 오류가 났을 때 한 번의 실행(run)에서 시도할 최대 횟수. 최소 1.
     pub max_attempts: u32,
+    /// 기능 id (코어 플러그인 id 또는 chat/game/settings)
+    pub feature: Option<String>,
+    pub run_by: RunBy,
+    /// 화면 표시용 한 줄
+    pub label: Option<String>,
 }
 
 impl CreateTaskRequest {
@@ -108,7 +131,33 @@ impl CreateTaskRequest {
             owner_ref: None,
             payload,
             max_attempts: 1,
+            feature: None,
+            run_by: RunBy::User,
+            label: None,
         }
+    }
+
+    /// 즉시 실행(run_inline) 작업: 기능 id·표시 이름·실행 주체만 정한다 (payload 없음)
+    pub fn inline(task_type: TaskType, owner: TaskOwner, feature: &str, label: impl Into<String>, auto: bool) -> Self {
+        Self::new(task_type, owner, Value::Null)
+            .feature(feature)
+            .label(label)
+            .run_by(if auto { RunBy::Auto } else { RunBy::User })
+    }
+
+    pub fn feature(mut self, feature: impl Into<String>) -> Self {
+        self.feature = Some(feature.into());
+        self
+    }
+
+    pub fn run_by(mut self, run_by: RunBy) -> Self {
+        self.run_by = run_by;
+        self
+    }
+
+    pub fn label(mut self, label: impl Into<String>) -> Self {
+        self.label = Some(label.into());
+        self
     }
 
     pub fn owner_ref(mut self, owner_ref: impl Into<String>) -> Self {
@@ -357,6 +406,9 @@ impl TaskEvent {
 pub struct TaskInfo {
     pub id: String,
     pub task_type: TaskType,
+    pub feature: Option<String>,
+    pub run_by: RunBy,
+    pub label: Option<String>,
     pub owner: TaskOwner,
     pub owner_ref: Option<String>,
     pub status: TaskStatus,
@@ -398,6 +450,9 @@ pub struct AttemptInfo {
 pub(crate) struct TaskInfoRow {
     pub id: String,
     pub task_type: String,
+    pub feature: Option<String>,
+    pub run_by: String,
+    pub label: Option<String>,
     pub owner: String,
     pub owner_ref: Option<String>,
     pub status: String,
@@ -433,6 +488,9 @@ impl TryFrom<TaskInfoRow> for TaskInfo {
         Ok(Self {
             id: r.id,
             task_type,
+            feature: r.feature,
+            run_by: RunBy::from_str(&r.run_by).unwrap_or_default(),
+            label: r.label,
             owner,
             owner_ref: r.owner_ref,
             status,

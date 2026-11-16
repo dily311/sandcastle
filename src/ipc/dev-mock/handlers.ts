@@ -65,6 +65,32 @@ export const handlers: Record<string, Handler> = {
 		return null;
 	},
 	get_recoverable_tasks: () => [],
+	// ---- 실행 기록 · 사용량 (브라우저 미리보기용 예시) ----
+	list_active_tasks: () => [
+		{ id: "t-run", taskType: "translate", feature: "translate", runBy: "auto", label: "번역 → ko", owner: "system", ownerRef: null, status: "running", payload: null, result: null, error: null, attemptCount: 1, maxAttempts: 1, createdAt: Date.now() - 2000, startedAt: Date.now() - 2000, updatedAt: Date.now(), finishedAt: null },
+	],
+	list_task_history: () => {
+		const now = Date.now();
+		const row = (id: string, feature: string, label: string, status: string, runBy: string, ago: number, u: Partial<Record<string, unknown>> = {}) => ({
+			id, taskType: "chat_stream", feature, runBy, label, status, errorCode: null, errorMessage: null, attemptCount: 1,
+			createdAt: now - ago, startedAt: now - ago, finishedAt: now - ago + 3200, apiProfileId: "p1", profileName: "Claude", model: "claude-sonnet-5-5",
+			calls: 1, inputTokens: 0, outputTokens: 0, characters: 0, images: 0, estimated: false, ...u,
+		});
+		return [
+			row("t1", "chat", "응답 생성", "completed", "user", 60_000, { inputTokens: 5321, outputTokens: 412 }),
+			row("t2", "translate", "번역 → ko", "completed", "auto", 58_000, { inputTokens: 480, outputTokens: 390, estimated: true }),
+			row("t3", "tts", "음성 읽기", "failed", "auto", 57_000, { profileName: "ElevenLabs", model: "eleven_multilingual_v2", characters: 210, errorCode: "AI_PROVIDER_AUTH_FAILED", errorMessage: "API 키가 맞지 않습니다" }),
+			row("t4", "game", "게임 대사", "cancelled", "user", 3_600_000, { calls: 0, profileName: null, model: null }),
+			row("t5", "imagegen", "메시지 그림", "completed", "user", 90_000_000, { calls: 2, inputTokens: 900, outputTokens: 120, images: 1 }),
+		];
+	},
+	usage_summary: () => [
+		{ apiProfileId: "p1", profileName: "Claude", kind: "chat", calls: 42, failed: 1, inputTokens: 182_340, outputTokens: 20_118, characters: 0, images: 0, estimatedCalls: 6 },
+		{ apiProfileId: "p2", profileName: "ElevenLabs", kind: "tts", calls: 12, failed: 1, inputTokens: 0, outputTokens: 0, characters: 3_410, images: 0, estimatedCalls: 12 },
+		{ apiProfileId: "p3", profileName: "NovelAI", kind: "image", calls: 3, failed: 0, inputTokens: 0, outputTokens: 0, characters: 0, images: 3, estimatedCalls: 3 },
+	],
+	clear_usage: () => 0,
+	cancel_task: () => null,
 	...chatHandlers,
 	...settingsHandlers,
 	...gameHandlers,

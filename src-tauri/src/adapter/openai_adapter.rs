@@ -95,6 +95,7 @@ impl AiProvider for OpenAIClient {
             return Ok(Generation {
                 content: choice["message"]["content"].as_str().unwrap_or_default().to_string(),
                 finish_reason: choice["finish_reason"].as_str().map(str::to_string),
+                usage: super::usage_from(&json["usage"], "prompt_tokens", "completion_tokens"),
             });
         }
 
@@ -113,6 +114,10 @@ impl AiProvider for OpenAIClient {
             }
             if let Some(reason) = choice["finish_reason"].as_str() {
                 out.finish_reason = Some(reason.to_string());
+            }
+            // 스트림 끝에 usage를 보내는 공급자도 있다 (보내지 않으면 앱이 추정)
+            if let Some(u) = super::usage_from(&json["usage"], "prompt_tokens", "completion_tokens") {
+                out.usage = Some(u);
             }
             Ok(true)
         })

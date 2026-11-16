@@ -178,6 +178,66 @@ impl TaskManager {
         Ok(())
     }
 
+    /// 큐와 실행기 없이 "지금 이 자리에서" 실행하는 짧은 작업 (NPC 대화·번역·음성·이미지·API 확인).
+    ///
+    /// submit과 똑같이 작업 행·시도·이벤트(Queued/Started/Completed/Failed/Cancelled)를 남기고 cancel로 멈출 수 있지만,
+    /// 부른 쪽의 future 안에서 바로 돌기 때문에 'static이 아니어도 되고(State<'_> 등을 그대로 씀) 동시 실행 수 제한도 받지 않는다.
+    /// 실패하면 원래 AppError(코드·재시도 여부)를 그대로 돌려준다. 앱이 꺼지며 끊긴 이런 작업은 다음 실행 때 취소로 정리된다.
+    pub async fn run_inline<T, Fut>(&self, request: CreateTaskRequest, f: impl FnOnce(CancellationToken) -> Fut) -> Result<T, AppError>
+    where
+        Fut: std::future::Future<Output = Result<T, AppError>>,
+    {
+        let task = self.repo.insert(&request).await?;
+        self.emit_queued(&task);
+        let cancel = CancellationToken::new();
+        let reason = Arc::new(Mutex::new(None));
+        lock(&self.active).insert(task.id.clone(), ActiveTask { cancel: cancel.clone(), reason: reason.clone(), waiters: vec![] });
+        let result = self.drive_inline(&task, &cancel, &reason, f).await;
+        lock(&self.active).remove(&task.id);
+        result
+    }
+
+    async fn drive_inline<T, Fut>(&self, task: &TaskInfo, cancel: &CancellationToken, reason: &Mutex<Option<CancelReason>>, f: impl FnOnce(CancellationToken) -> Fut) -> Result<T, AppError>
+    where
+        Fut: std::future::Future<Output = Result<T, AppError>>,
+    {
+        let task_id = task.id.as_str();
+        self.repo.transition(task_id, TaskStatus::Pending, TaskStatus::Running, TransitionPatch::default()).await?;
+        let attempt = self.repo.open_attempt(task_id).await?;
+        self.events.emit(&TaskEvent::Started { task_id: task_id.to_string(), attempt_no: attempt.attempt_no });
+
+        let tag = super::task_context::CurrentTask { task_id: task_id.to_string(), feature: task.feature.clone() };
+        let outcome = tokio::select! {
+            biased;
+            _ = cancel.cancelled() => None,
+            r = super::task_context::scope(tag, f(cancel.child_token())) => Some(r),
+        };
+        match outcome {
+            Some(Ok(value)) => {
+                self.complete(task_id, &attempt.id, TaskOutput::Empty).await.map_err(AppError::from)?;
+                Ok(value)
+            }
+            Some(Err(e)) => {
+                let res = e.to_response();
+                if matches!(res.code, ErrorCode::TaskCancelled | ErrorCode::AiRequestCancelled) {
+                    set_reason(reason, CancelReason::UserCancelled);
+                    let _ = self.stop(task_id, Some(&attempt.id), TaskStatus::Running, reason).await;
+                    return Err(e);
+                }
+                let info = TaskErrorInfo { code: error_code_str(res.code), message: res.message, retryable: res.retryable };
+                if let Err(err) = self.repo.close_attempt(&attempt.id, AttemptStatus::Failed, Some(&info)).await {
+                    log_internal(task_id, "attempt 기록", err);
+                }
+                let _ = self.fail(task_id, info).await;
+                Err(e)
+            }
+            None => {
+                let _ = self.stop(task_id, Some(&attempt.id), TaskStatus::Running, reason).await;
+                Err(AppError::Validation { code: ErrorCode::TaskCancelled, message: "작업을 멈췄습니다".into(), details: None })
+            }
+        }
+    }
+
     /// 이미 진행 중인 작업의 결과를 기다린다 (submit하지 않은 쪽에서 결과가 필요할 때).
     /// 메모리에 없는(이미 끝났거나 큐에 없는) 작업이면 None.
     pub fn subscribe(&self, task_id: &str) -> Option<oneshot::Receiver<TaskResult>> {
@@ -237,7 +297,16 @@ impl TaskManager {
                 eprintln!("[task] 이전 실행에서 중단된 작업 {count}개를 interrupted로 표시");
             }
         }
-        self.list_recoverable().await
+        // 즉시 실행 작업(번역·음성 등)은 실행기가 없어 다시 시도할 수 없다 → 취소로 정리해 복구 목록에 남기지 않는다
+        let mut recoverable = Vec::new();
+        for task in self.list_recoverable().await? {
+            if self.executors.get(task.task_type).is_some() {
+                recoverable.push(task);
+            } else {
+                self.repo.transition(&task.id, TaskStatus::Interrupted, TaskStatus::Cancelled, TransitionPatch::default()).await?;
+            }
+        }
+        Ok(recoverable)
     }
 
     /// 실행 중/대기 중인 모든 작업에 종료 신호. 각 작업은 Interrupted로 끝난다.
@@ -380,7 +449,8 @@ impl TaskManager {
                 TaskReporter::new(task_id.to_string(), self.events.clone()),
             );
 
-            let run = AssertUnwindSafe(executor.execute(&task, &ctx)).catch_unwind();
+            let tag = super::task_context::CurrentTask { task_id: task_id.to_string(), feature: task.feature.clone() };
+            let run = super::task_context::scope(tag, AssertUnwindSafe(executor.execute(&task, &ctx)).catch_unwind());
             tokio::pin!(run);
             let outcome = tokio::select! {
                 biased;

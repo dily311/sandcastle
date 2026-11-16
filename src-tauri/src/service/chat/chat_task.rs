@@ -158,9 +158,20 @@ pub async fn run(app: &AppHandle, conversation_id: &str, job: ChatJob, channel: 
         return Err(busy());
     }
 
+    // 실행 기록에 보일 기능·이름: 폰 대화면 phone, 아니면 chat
+    let is_phone = crate::db::conversation::get_conversation(&app.state::<AppState>().db, conversation_id)
+        .await
+        .is_ok_and(|c| c.mode == "phone");
+    let feature = if is_phone { crate::sys::plugins::id::PHONE } else { "chat" };
+    let label = match &job {
+        ChatJob::Send { .. } => "응답 생성",
+        ChatJob::Regenerate { swipe: true } => "다른 응답",
+        ChatJob::Regenerate { swipe: false } => "다시 생성",
+        ChatJob::Peek => "엿보기",
+    };
     let payload = serde_json::to_value(&job).map_err(|e| AppError::internal(e.to_string()))?;
     let handle = manager
-        .submit(CreateTaskRequest::new(TaskType::ChatStream, TaskOwner::Chat, payload).owner_ref(conversation_id))
+        .submit(CreateTaskRequest::new(TaskType::ChatStream, TaskOwner::Chat, payload).owner_ref(conversation_id).feature(feature).label(label))
         .await?;
     let ids = match handle.wait().await.map_err(AppError::from)? {
         TaskOutput::Messages { message_ids } => message_ids,

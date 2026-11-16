@@ -1,7 +1,7 @@
 <script lang="ts">
 	import { layout } from "$app/layout.svelte";
 	import type { Component } from "svelte";
-	import { AudioLines, Blocks, Database, ImagePlus, Keyboard, KeyRound, Languages, MessagesSquare, Music, Palette, Regex, ScrollText, Search, Settings2, SlidersHorizontal, Smartphone } from "@lucide/svelte";
+	import { Activity, AudioLines, Blocks, Database, ImagePlus, Keyboard, KeyRound, Languages, MessagesSquare, Music, Palette, Regex, ScrollText, Search, Settings2, SlidersHorizontal, Smartphone } from "@lucide/svelte";
 	import { Badge, Input } from "$shared/ui";
 	import { nav, type SettingsTab } from "$app/nav.svelte";
 	import { logs } from "$shared/stores/log.svelte";
@@ -14,6 +14,7 @@
 	import RegexSection from "./RegexSection.svelte";
 	import DataSection from "./DataSection.svelte";
 	import LogSection from "./LogSection.svelte";
+	import ActivitySection from "./ActivitySection.svelte";
 	import ThemeEditor from "./ThemeEditor.svelte";
 	import ApiEditor from "./ApiEditor.svelte";
 	import ChatSection from "./ChatSection.svelte";
@@ -74,6 +75,7 @@
 		{
 			title: "관리",
 			items: [
+				{ id: "activity", label: "실행 기록", icon: Activity, keywords: "작업 사용량 토큰 비용 요금 api 실행 중 멈추기 취소 자동 기록", view: ActivitySection },
 				{ id: "data", label: "데이터", icon: Database, keywords: "백업 복원 저장 공간 용량 삭제 정리", view: DataSection },
 				{ id: "log", label: "로그", icon: ScrollText, keywords: "오류 경고 기록", view: LogSection },
 			],

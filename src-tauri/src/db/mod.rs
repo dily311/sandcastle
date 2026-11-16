@@ -4,6 +4,7 @@ pub mod ai_service;
 mod ai_service_tests;
 pub mod regex;
 pub mod translation;
+pub mod usage;
 pub mod character_image;
 #[cfg(test)]
 mod character_image_tests;

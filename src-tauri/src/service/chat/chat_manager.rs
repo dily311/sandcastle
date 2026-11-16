@@ -142,8 +142,26 @@ impl ChatManager {
             Some(f) => f,
             None => &mut noop,
         };
-        let (response, prompt) = self
-            .generate_with(&app, &state.db, profile, Some(preset), context, message, GenerationType::Normal, &CancellationToken::new(), streaming, sink)
+        // 작업으로 실행: 실행 기록·사용량에 남고, 실행 중 목록에서 멈출 수 있다
+        let tasks = app
+            .try_state::<Arc<crate::task::TaskManager>>()
+            .ok_or_else(|| AppError::internal("TaskManager가 초기화되지 않았습니다"))?
+            .inner()
+            .clone();
+        let job = crate::task::CreateTaskRequest::inline(
+            crate::task::TaskType::GameDialogue,
+            crate::task::TaskOwner::Game,
+            crate::sys::plugins::id::GAME,
+            "게임 대사",
+            false,
+        )
+        .owner_ref(target.session_id.clone());
+        let (response, prompt) = tasks
+            .run_inline(job, |cancel| async move {
+                self.generate_with(&app, &state.db, profile, Some(preset), context, message, GenerationType::Normal, &cancel, streaming, sink)
+                    .await
+                    .map_err(crate::commands::chat::into_app_error)
+            })
             .await?;
         if let Ok(mut map) = LAST_GAME_PROMPT.lock() {
             map.insert(target.session_id, prompt);

@@ -123,6 +123,7 @@ impl AiProvider for ClaudeClient {
             return Ok(Generation {
                 content,
                 finish_reason: json["stop_reason"].as_str().map(str::to_string),
+                usage: super::usage_from(&json["usage"], "input_tokens", "output_tokens"),
             });
         }
 
@@ -136,9 +137,19 @@ impl AiProvider for ClaudeClient {
                         out.content.push_str(text);
                     }
                 }
+                "message_start" => {
+                    // 입력 토큰은 시작 때, 출력 토큰은 message_delta에서 온다
+                    if let Some((i, o)) = super::usage_from(&json["message"]["usage"], "input_tokens", "output_tokens") {
+                        out.usage = Some((i, o));
+                    }
+                }
                 "message_delta" => {
                     if let Some(reason) = json["delta"]["stop_reason"].as_str() {
                         out.finish_reason = Some(reason.to_string());
+                    }
+                    if let Some(o) = json["usage"]["output_tokens"].as_u64() {
+                        let input = out.usage.map_or(0, |(i, _)| i);
+                        out.usage = Some((input, o));
                     }
                 }
                 "message_stop" => return Ok(false),

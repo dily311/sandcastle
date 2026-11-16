@@ -308,10 +308,15 @@ async fn recover_on_startup_marks_unfinished_tasks() {
         .await
         .unwrap();
     let attempt = manager.repo.open_attempt(&running.id).await.unwrap();
+    // 실행기가 없는 종류(즉시 실행 작업)는 다시 시도할 수 없어 취소로 정리된다
+    let inline = manager.repo.insert(&request(TaskType::Translate)).await.unwrap();
+    manager.register_executor(Arc::new(FnExecutor(TaskType::ChatStream, |_t: TaskInfo, _a, _c, _r| async { Ok(TaskOutput::Empty) })));
 
     let recoverable = manager.recover_on_startup().await.unwrap();
     let ids: Vec<_> = recoverable.iter().map(|t| t.id.clone()).collect();
     assert!(ids.contains(&pending.id) && ids.contains(&running.id));
+    assert!(!ids.contains(&inline.id));
+    assert_eq!(manager.get_task(&inline.id).await.unwrap().status, TaskStatus::Cancelled);
 
     let attempts = manager.get_attempts(&running.id).await.unwrap();
     assert_eq!(attempts[0].id, attempt.id);
@@ -428,4 +433,56 @@ fn task_error_info_keeps_code_for_frontend() {
 
     let unknown = TaskErrorInfo { code: "NOPE".into(), message: "?".into(), retryable: false };
     assert_eq!(AppError::from(unknown).to_response().code, ErrorCode::InternalError);
+}
+
+#[tokio::test]
+async fn run_inline_records_feature_and_keeps_error_code() {
+    let (manager, sink) = setup().await;
+    let req = || CreateTaskRequest::new(TaskType::Translate, TaskOwner::System, json!({})).feature("translate").run_by(crate::task::RunBy::Auto).label("번역");
+
+    // 성공: 작업이 남고, 안에서 "지금 작업"이 보인다
+    let seen = manager.run_inline(req(), |_c| async { Ok(crate::task::current_task().map(|t| (t.task_id, t.feature))) }).await.unwrap();
+    let (task_id, feature) = seen.unwrap();
+    assert_eq!(feature.as_deref(), Some("translate"));
+    let task = manager.get_task(&task_id).await.unwrap();
+    assert_eq!(task.status, TaskStatus::Completed);
+    assert_eq!(task.run_by, crate::task::RunBy::Auto);
+    assert_eq!(task.label.as_deref(), Some("번역"));
+    assert_eq!(sink.kinds(&task_id), vec!["queued", "started", "completed"]);
+
+    // 실패: 원래 오류 코드를 그대로 돌려주고 작업은 failed
+    let err = manager
+        .run_inline(req(), |_c| async { Err::<(), _>(AppError::ai_provider(ErrorCode::AiProviderRateLimit, "한도", true)) })
+        .await
+        .unwrap_err();
+    assert_eq!(err.to_response().code, ErrorCode::AiProviderRateLimit);
+    let failed = manager.list_by_owner_ref("none").await.unwrap();
+    assert!(failed.is_empty());
+}
+
+#[tokio::test]
+async fn run_inline_can_be_cancelled() {
+    let (manager, _sink) = setup().await;
+    let m = manager.clone();
+    let handle = tokio::spawn(async move {
+        m.run_inline(CreateTaskRequest::new(TaskType::Tts, TaskOwner::System, json!({})).owner_ref("speak"), |_c| async {
+            tokio::time::sleep(Duration::from_secs(30)).await;
+            Ok(())
+        })
+        .await
+    });
+    // 실행 중이 될 때까지 기다렸다가 취소
+    let mut id = None;
+    for _ in 0..100 {
+        if let Some(t) = manager.list_by_owner_ref("speak").await.unwrap().into_iter().find(|t| t.status == TaskStatus::Running) {
+            id = Some(t.id);
+            break;
+        }
+        tokio::time::sleep(Duration::from_millis(5)).await;
+    }
+    let id = id.expect("실행 중이어야 함");
+    manager.cancel(&id).await.unwrap();
+    let err = handle.await.unwrap().unwrap_err();
+    assert_eq!(err.to_response().code, ErrorCode::TaskCancelled);
+    assert_eq!(manager.get_task(&id).await.unwrap().status, TaskStatus::Cancelled);
 }

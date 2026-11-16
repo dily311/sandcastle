@@ -32,6 +32,7 @@
 //! // 3) 취소/재개도 TaskManager에 요청만 한다
 //! task_manager.cancel(&task_id).await?;
 //! ```
+mod task_context;
 mod task_event;
 mod task_manager;
 pub mod task_models;
@@ -39,10 +40,11 @@ mod task_repository;
 mod task_runner;
 mod task_state;
 
+pub use task_context::{current as current_task, CurrentTask};
 pub use task_event::{NoopEventSink, TaskEventEmitter, TaskEventSink, TASK_EVENT};
 pub use task_manager::{TaskHandle, TaskManager, TaskResult};
 pub use task_models::{
-    AttemptInfo, CancelReason, CreateTaskRequest, TaskError, TaskErrorInfo, TaskEvent, TaskInfo,
+    AttemptInfo, CancelReason, CreateTaskRequest, RunBy, TaskError, TaskErrorInfo, TaskEvent, TaskInfo,
     TaskOutput, TaskOwner, TaskStatus, TaskType,
 };
 pub use task_runner::{TaskContext, TaskExecutor, TaskReporter};

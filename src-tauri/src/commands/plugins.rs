@@ -14,6 +14,7 @@ use crate::{
     },
     service::{ai::AiService, plugins as tools},
     state::AppState,
+    task::{CreateTaskRequest, TaskManager, TaskOwner, TaskType},
     sys::{
         plugins::{id, require},
         settings::{save, SettingsState},
@@ -67,30 +68,45 @@ pub fn update_plugin_setting(app: AppHandle, state: State<'_, SettingsState<Plug
 /// 글 번역. to를 비우면 설정의 답변 언어. (입력창의 "보내기 전에 번역"은 to에 입력 언어를 넣어 부른다)
 #[tauri::command]
 #[specta::specta]
+#[allow(clippy::too_many_arguments)]
 pub async fn translate_text(
     app: AppHandle,
     ai: State<'_, Arc<AiService>>,
+    tasks: State<'_, Arc<TaskManager>>,
     plugin: State<'_, SettingsState<PluginSetting>>,
     settings: State<'_, SettingsState<AppSetting>>,
     text: String,
     to: Option<String>,
+    auto: Option<bool>,
 ) -> Result<String> {
     require(&app, id::TRANSLATE)?;
     let p = read(&plugin)?.translate;
     let to = to.filter(|s| !s.trim().is_empty()).unwrap_or_else(|| p.target_lang.clone());
     let db = &app.state::<AppState>().db;
-    cached_translate(db, &ai, &p, &fallback_profile(&read(&settings)?, None), &text, &to).await
+    cached_translate(db, &ai, &tasks, &p, &fallback_profile(&read(&settings)?, None), &text, &to, auto.unwrap_or(false)).await
 }
 
-/// 공용 번역 캐시를 먼저 보고, 없을 때만 AI로 번역해 캐시에 넣는다 (같은 문장에 다시 요금을 내지 않게)
-async fn cached_translate(db: &crate::db::conn::DbPool, ai: &AiService, p: &crate::models::settings::TranslateSetting, fallback: &str, text: &str, to: &str) -> Result<String> {
+/// 공용 번역 캐시를 먼저 보고, 없을 때만 AI로 번역해 캐시에 넣는다 (같은 문장에 다시 요금을 내지 않게).
+/// AI를 부를 때만 작업으로 남긴다 (캐시에서 꺼낸 건 요금이 없으니 기록하지 않음)
+#[allow(clippy::too_many_arguments)]
+async fn cached_translate(
+    db: &crate::db::conn::DbPool,
+    ai: &AiService,
+    tasks: &TaskManager,
+    p: &crate::models::settings::TranslateSetting,
+    fallback: &str,
+    text: &str,
+    to: &str,
+    auto: bool,
+) -> Result<String> {
     if text.trim().is_empty() {
         return Ok(String::new());
     }
     if let Some(hit) = translation::get_translation(db, text, to).await? {
         return Ok(hit);
     }
-    let out = tools::translate(ai, p, fallback, text, to).await?;
+    let job = CreateTaskRequest::inline(TaskType::Translate, TaskOwner::System, id::TRANSLATE, format!("번역 → {to}"), auto);
+    let out = tasks.run_inline(job, |_| tools::translate(ai, p, fallback, text, to)).await?;
     translation::put_translation(db, text, to, &out).await?;
     Ok(out)
 }
@@ -115,19 +131,23 @@ pub async fn get_cached_translations(app: AppHandle, state: State<'_, AppState>,
 /// 메시지 번역. 결과는 meta.translation = {lang, text, source}에 저장해 다시 열어도 보인다 (원문이 바뀌면 다시 번역)
 #[tauri::command]
 #[specta::specta]
+#[allow(clippy::too_many_arguments)]
 pub async fn translate_message(
     app: AppHandle,
     state: State<'_, AppState>,
     ai: State<'_, Arc<AiService>>,
+    tasks: State<'_, Arc<TaskManager>>,
     plugin: State<'_, SettingsState<PluginSetting>>,
     settings: State<'_, SettingsState<AppSetting>>,
     message_id: String,
+    auto: Option<bool>,
 ) -> Result<Message> {
     require(&app, id::TRANSLATE)?;
     let p = read(&plugin)?.translate;
     let msg = chat_ui::get_message(&state.db, &message_id).await?;
     let conv = conversation::get_conversation(&state.db, &msg.conversation_id).await?;
-    let text = cached_translate(&state.db, &ai, &p, &fallback_profile(&read(&settings)?, conv.api_profile_id.as_deref()), &msg.content, &p.target_lang).await?;
+    let fallback = fallback_profile(&read(&settings)?, conv.api_profile_id.as_deref());
+    let text = cached_translate(&state.db, &ai, &tasks, &p, &fallback, &msg.content, &p.target_lang, auto.unwrap_or(false)).await?;
     let mut meta = msg.meta.clone().filter(Value::is_object).unwrap_or_else(|| json!({}));
     meta["translation"] = json!({ "lang": p.target_lang, "text": text, "source": msg.content });
     conversation::update_message_meta(&state.db, &message_id, meta).await?;
@@ -144,14 +164,22 @@ pub async fn translate_message(
 pub async fn speak_text(
     app: AppHandle,
     ai: State<'_, Arc<AiService>>,
+    tasks: State<'_, Arc<TaskManager>>,
     plugin: State<'_, SettingsState<PluginSetting>>,
     settings: State<'_, SettingsState<AppSetting>>,
     text: String,
+    auto: Option<bool>,
 ) -> Result<String> {
     require(&app, id::TTS)?;
     let p = read(&plugin)?.tts;
     let cache = app.path().app_cache_dir().map_err(|e| AppError::io(e.to_string()))?;
-    let path = tools::speak(&ai, &p, &fallback_profile(&read(&settings)?, None), &text, &cache).await?;
+    let fallback = fallback_profile(&read(&settings)?, None);
+    // 이미 만든 음성이면 작업 없이 바로 (요금 없음)
+    if let Some(path) = tools::cached_speech(&p, &fallback, &text, &cache) {
+        return Ok(path.to_string_lossy().into_owned());
+    }
+    let job = CreateTaskRequest::inline(TaskType::Tts, TaskOwner::System, id::TTS, "음성 읽기", auto.unwrap_or(false));
+    let path = tasks.run_inline(job, |_| tools::speak(&ai, &p, &fallback, &text, &cache)).await?;
     Ok(path.to_string_lossy().into_owned())
 }
 
@@ -166,6 +194,7 @@ pub async fn generate_message_image(
     app: AppHandle,
     state: State<'_, AppState>,
     ai: State<'_, Arc<AiService>>,
+    tasks: State<'_, Arc<TaskManager>>,
     plugin: State<'_, SettingsState<PluginSetting>>,
     settings: State<'_, SettingsState<AppSetting>>,
     message_id: String,
@@ -180,8 +209,15 @@ pub async fn generate_message_image(
         Ok(c) => format!("{}: {}", c.name, c.description.chars().take(600).collect::<String>()),
         Err(_) => String::new(),
     };
-    let prompt = tools::image_prompt(&ai, &p, &chat_profile, &msg.content, &context).await?;
-    let image = tools::generate_image(&ai, &p, &chat_profile, &prompt, &generated_dir(&app)?, "message", Some((&message_id, &msg.conversation_id))).await?;
+    let out_dir = generated_dir(&app)?;
+    // 프롬프트 작성(채팅 AI)과 그리기(이미지 API)를 한 작업으로: 사용량은 두 줄로 남는다
+    let job = CreateTaskRequest::inline(TaskType::ImageGen, TaskOwner::Image, id::IMAGE_GEN, "메시지 그림", false);
+    let image = tasks
+        .run_inline(job, |_| async {
+            let prompt = tools::image_prompt(&ai, &p, &chat_profile, &msg.content, &context).await?;
+            tools::generate_image(&ai, &p, &chat_profile, &prompt, &out_dir, "message", Some((&message_id, &msg.conversation_id))).await
+        })
+        .await?;
 
     let mut meta = msg.meta.clone().filter(Value::is_object).unwrap_or_else(|| json!({}));
     let mut list = meta["generatedImages"].as_array().cloned().unwrap_or_default();
@@ -216,9 +252,11 @@ pub fn delete_generated_image(app: AppHandle, path: String) -> Result<()> {
 /// source: "manual"(생성 페이지) / "game"(게임 대사)
 #[tauri::command]
 #[specta::specta]
+#[allow(clippy::too_many_arguments)]
 pub async fn generate_image_from_prompt(
     app: AppHandle,
     ai: State<'_, Arc<AiService>>,
+    tasks: State<'_, Arc<TaskManager>>,
     plugin: State<'_, SettingsState<PluginSetting>>,
     settings: State<'_, SettingsState<AppSetting>>,
     prompt: String,
@@ -231,12 +269,19 @@ pub async fn generate_image_from_prompt(
     }
     let p = read(&plugin)?.image_gen;
     let chat_profile = fallback_profile(&read(&settings)?, None);
-    let final_prompt = if refine {
-        tools::image_prompt(&ai, &crate::models::settings::ImageGenSetting { ai_prompt: true, ..p.clone() }, &chat_profile, &prompt, "").await?
-    } else {
-        let style = p.style_prompt.trim();
-        if style.is_empty() { prompt.trim().to_string() } else { format!("{}, {style}", prompt.trim()) }
-    };
     let source = source.filter(|s| s == "game").unwrap_or_else(|| "manual".into());
-    tools::generate_image(&ai, &p, &chat_profile, &final_prompt, &generated_dir(&app)?, &source, None).await
+    let out_dir = generated_dir(&app)?;
+    let label = if source == "game" { "게임 장면 그림" } else { "그림 만들기" };
+    let job = CreateTaskRequest::inline(TaskType::ImageGen, TaskOwner::Image, id::IMAGE_GEN, label, false);
+    tasks
+        .run_inline(job, |_| async {
+            let final_prompt = if refine {
+                tools::image_prompt(&ai, &crate::models::settings::ImageGenSetting { ai_prompt: true, ..p.clone() }, &chat_profile, &prompt, "").await?
+            } else {
+                let style = p.style_prompt.trim();
+                if style.is_empty() { prompt.trim().to_string() } else { format!("{}, {style}", prompt.trim()) }
+            };
+            tools::generate_image(&ai, &p, &chat_profile, &final_prompt, &out_dir, &source, None).await
+        })
+        .await
 }

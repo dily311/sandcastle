@@ -8,7 +8,7 @@ export type Route =
 	| { page: "images"; tab?: "create" | "gallery" }
 	| { page: "settings"; tab?: SettingsTab; /** 테마 편집: 파일 이름, 또는 "new" / "builtin:id"(복제해서 새로). API 편집: 연결 id 또는 "new" */ edit?: string };
 
-export type SettingsTab = "general" | "plugins" | "chat" | "phone" | "theme" | "shortcut" | "widget" | "api" | "preset" | "regex" | "data" | "log" | "translate" | "tts" | "imagegen";
+export type SettingsTab = "general" | "plugins" | "chat" | "phone" | "theme" | "shortcut" | "widget" | "api" | "preset" | "regex" | "data" | "log" | "activity" | "translate" | "tts" | "imagegen";
 export type Page = Route["page"];
 
 const MAX = 100;

@@ -20,7 +20,7 @@ use crate::{
 };
 
 const TASK_COLUMNS: &str = r#"
-    id, task_type, owner, owner_ref, status, payload_json, result_json,
+    id, task_type, feature, run_by, label, owner, owner_ref, status, payload_json, result_json,
     error_code, error_message, attempt_count, max_attempts,
     created_at, started_at, updated_at, finished_at
 "#;
@@ -120,13 +120,16 @@ impl TaskRepository {
         sqlx::query(
             r#"
             INSERT INTO generation_tasks
-                (id, task_type, owner, owner_ref, status, payload_json,
+                (id, task_type, feature, run_by, label, owner, owner_ref, status, payload_json,
                  attempt_count, max_attempts, created_at, updated_at)
-            VALUES (?, ?, ?, ?, ?, ?, 0, ?, ?, ?)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 0, ?, ?, ?)
             "#,
         )
         .bind(&id)
         .bind(req.task_type.to_string())
+        .bind(&req.feature)
+        .bind(req.run_by.to_string())
+        .bind(&req.label)
         .bind(req.owner.to_string())
         .bind(&req.owner_ref)
         .bind(TaskStatus::Pending.to_string())

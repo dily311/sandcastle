@@ -92,6 +92,12 @@ export const commands = {
 	/**  재개 요청. 결과는 `task-event`로 전달되므로 접수된 작업 정보만 바로 돌려준다. */
 	resumeTask: (taskId: string, options?: InvokeOptions) => __TAURI_INVOKE<TaskInfo_Serialize>("resume_task", { taskId }, options),
 	dismissTask: (taskId: string, options?: InvokeOptions) => __TAURI_INVOKE<null>("dismiss_task", { taskId }, options),
+	/**  최근 실행 내역 (최신 순). 작업마다 그 작업이 쓴 토큰·글자·그림 수 합계 */
+	listTaskHistory: (limit: number | null, options?: InvokeOptions) => __TAURI_INVOKE<TaskHistoryItem_Serialize[]>("list_task_history", { limit }, options),
+	/**  API 프로필·종류별 사용량 합계. since: 이 시각(ms) 이후만 (없으면 전부) */
+	usageSummary: (since: number | null, options?: InvokeOptions) => __TAURI_INVOKE<UsageSummary_Serialize[]>("usage_summary", { since }, options),
+	/**  사용량 기록 비우기 (작업 기록은 남는다) */
+	clearUsage: (options?: InvokeOptions) => __TAURI_INVOKE<number>("clear_usage", undefined, options),
 	listRegexScripts: (options?: InvokeOptions) => __TAURI_INVOKE<RegexScript_Serialize[]>("list_regex_scripts", undefined, options),
 	/**  생성/수정. 패턴이 컴파일되지 않거나 범위 대상이 없으면 저장하지 않는다. */
 	upsertRegexScript: (input: RegexScriptInput_Deserialize, options?: InvokeOptions) => __TAURI_INVOKE<RegexScript_Serialize>("upsert_regex_script", { input }, options),
@@ -283,16 +289,16 @@ export const commands = {
 	getPluginSetting: (options?: InvokeOptions) => __TAURI_INVOKE<PluginSetting_Serialize>("get_plugin_setting", undefined, options),
 	updatePluginSetting: (setting: PluginSetting_Deserialize, options?: InvokeOptions) => __TAURI_INVOKE<PluginSetting_Serialize>("update_plugin_setting", { setting }, options),
 	/**  글 번역. to를 비우면 설정의 답변 언어. (입력창의 "보내기 전에 번역"은 to에 입력 언어를 넣어 부른다) */
-	translateText: (text: string, to: string | null, options?: InvokeOptions) => __TAURI_INVOKE<string>("translate_text", { text, to }, options),
+	translateText: (text: string, to: string | null, auto: boolean | null, options?: InvokeOptions) => __TAURI_INVOKE<string>("translate_text", { text, to, auto }, options),
 	/**  메시지 번역. 결과는 meta.translation = {lang, text, source}에 저장해 다시 열어도 보인다 (원문이 바뀌면 다시 번역) */
-	translateMessage: (messageId: string, options?: InvokeOptions) => __TAURI_INVOKE<Message_Serialize>("translate_message", { messageId }, options),
+	translateMessage: (messageId: string, auto: boolean | null, options?: InvokeOptions) => __TAURI_INVOKE<Message_Serialize>("translate_message", { messageId, auto }, options),
 	/**
 	 *  이미 번역해 둔 것만 꺼낸다 (AI를 부르지 않음). 게임 대사 줄·지난 대사 창이 다시 열릴 때 쓴다.
 	 *  texts와 같은 순서로, 캐시에 없으면 null
 	 */
 	getCachedTranslations: (texts: string[], to: string | null, options?: InvokeOptions) => __TAURI_INVOKE<(string | null)[]>("get_cached_translations", { texts, to }, options),
 	/**  글을 음성 파일(mp3)로 만들고 경로를 돌려준다 (같은 글·설정이면 캐시) */
-	speakText: (text: string, options?: InvokeOptions) => __TAURI_INVOKE<string>("speak_text", { text }, options),
+	speakText: (text: string, auto: boolean | null, options?: InvokeOptions) => __TAURI_INVOKE<string>("speak_text", { text, auto }, options),
 	/**  메시지 장면을 그림으로. meta.generatedImages에 {path, prompt}를 쌓는다 */
 	generateMessageImage: (messageId: string, options?: InvokeOptions) => __TAURI_INVOKE<Message_Serialize>("generate_message_image", { messageId }, options),
 	/**  음성 API 프로필의 목소리 목록 (ElevenLabs는 계정의 목소리) */
@@ -3034,6 +3040,13 @@ export type RestorePreview = {
 	willMigrate: boolean,
 };
 
+/**  작업을 누가 시작했나. 비용이 드는 작업은 항상 실행 주체가 분명해야 한다 (CLAUDE.md 원칙) */
+export type RunBy = 
+/**  사용자가 누른 버튼·전송 */
+"user" | 
+/**  사용자가 켜 둔 자동 실행 (자동 번역·자동 읽기 등) */
+"auto";
+
 /**  save_package의 결과: 에디터에서 지워서 DB에서도 지워진 행 수, 그리고 저장 후 검증 결과. */
 export type SaveReport = {
 	deleted: { [key in string]: number },
@@ -3175,6 +3188,61 @@ export type TaskEvent_Serialize = { type: "queued"; data: {
 	taskId: string,
 } };
 
+/**  최근 실행 내역 한 줄 (작업 + 그 작업의 사용량 합계) */
+export type TaskHistoryItem = TaskHistoryItem_Serialize | TaskHistoryItem_Deserialize;
+
+/**  최근 실행 내역 한 줄 (작업 + 그 작업의 사용량 합계) */
+export type TaskHistoryItem_Deserialize = {
+	id: string,
+	taskType: string,
+	feature?: string | null,
+	/**  user / auto */
+	runBy: string,
+	label?: string | null,
+	status: string,
+	errorCode?: string | null,
+	errorMessage?: string | null,
+	attemptCount: number,
+	createdAt: number,
+	startedAt?: number | null,
+	finishedAt?: number | null,
+	apiProfileId?: string | null,
+	profileName?: string | null,
+	model?: string | null,
+	calls: number,
+	inputTokens: number,
+	outputTokens: number,
+	characters: number,
+	images: number,
+	estimated: boolean,
+};
+
+/**  최근 실행 내역 한 줄 (작업 + 그 작업의 사용량 합계) */
+export type TaskHistoryItem_Serialize = {
+	id: string,
+	taskType: string,
+	feature: string | null,
+	/**  user / auto */
+	runBy: string,
+	label: string | null,
+	status: string,
+	errorCode: string | null,
+	errorMessage: string | null,
+	attemptCount: number,
+	createdAt: number,
+	startedAt: number | null,
+	finishedAt: number | null,
+	apiProfileId: string | null,
+	profileName: string | null,
+	model: string | null,
+	calls: number,
+	inputTokens: number,
+	outputTokens: number,
+	characters: number,
+	images: number,
+	estimated: boolean,
+};
+
 /**  작업 스냅샷 (읽기 전용 사본). 값을 바꿔도 DB에는 반영되지 않는다. */
 export type TaskInfo = TaskInfo_Serialize | TaskInfo_Deserialize;
 
@@ -3182,6 +3250,9 @@ export type TaskInfo = TaskInfo_Serialize | TaskInfo_Deserialize;
 export type TaskInfo_Deserialize = {
 	id: string,
 	taskType: TaskType,
+	feature?: string | null,
+	runBy: RunBy,
+	label?: string | null,
 	owner: TaskOwner,
 	ownerRef?: string | null,
 	status: TaskStatus,
@@ -3200,6 +3271,9 @@ export type TaskInfo_Deserialize = {
 export type TaskInfo_Serialize = {
 	id: string,
 	taskType: TaskType,
+	feature: string | null,
+	runBy: RunBy,
+	label: string | null,
 	owner: TaskOwner,
 	ownerRef: string | null,
 	status: TaskStatus,
@@ -3248,7 +3322,13 @@ export type TaskType =
 /**  게임 NPC/씬 대화 생성 (GameRuntime) */
 "game_dialogue" | 
 /**  이미지 생성 (ImageManager) */
-"image_gen" | "background_sync" | "memory_summary" | "embedding";
+"image_gen" | "background_sync" | "memory_summary" | "embedding" | 
+/**  번역 (코어 플러그인) */
+"translate" | 
+/**  음성 읽기 (코어 플러그인) */
+"tts" | 
+/**  API 연결 확인 등 설정 화면의 짧은 호출 */
+"api_call";
 
 export type Template = Template_Serialize | Template_Deserialize;
 
@@ -3436,6 +3516,41 @@ export type TurnPoint_Serialize = {
 	summary: string,
 	sceneId: string | null,
 	locationId: string | null,
+};
+
+/**  API 프로필·종류별 합계 (설정 > 실행 기록 화면) */
+export type UsageSummary = UsageSummary_Serialize | UsageSummary_Deserialize;
+
+/**  API 프로필·종류별 합계 (설정 > 실행 기록 화면) */
+export type UsageSummary_Deserialize = {
+	apiProfileId?: string | null,
+	/**  지워진 프로필이면 None */
+	profileName?: string | null,
+	kind: string,
+	calls: number,
+	failed: number,
+	inputTokens: number,
+	outputTokens: number,
+	characters: number,
+	images: number,
+	/**  토큰을 앱이 추정한 호출 수 */
+	estimatedCalls: number,
+};
+
+/**  API 프로필·종류별 합계 (설정 > 실행 기록 화면) */
+export type UsageSummary_Serialize = {
+	apiProfileId: string | null,
+	/**  지워진 프로필이면 None */
+	profileName: string | null,
+	kind: string,
+	calls: number,
+	failed: number,
+	inputTokens: number,
+	outputTokens: number,
+	characters: number,
+	images: number,
+	/**  토큰을 앱이 추정한 호출 수 */
+	estimatedCalls: number,
 };
 
 export type Value = null | boolean | number | string | Value[] | { [key in string]: Value };

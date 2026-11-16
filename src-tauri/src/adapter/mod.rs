@@ -48,6 +48,15 @@ pub type OnDelta<'a> = dyn for<'s> FnMut(&'s str) + Send + 'a;
 pub struct Generation {
     pub content: String,
     pub finish_reason: Option<String>,
+    /// 공급자가 알려준 토큰 사용량 (입력, 출력). 없으면 None → 앱이 추정 (ResourceManager)
+    pub usage: Option<(u64, u64)>,
+}
+
+/// JSON 안의 두 숫자로 (입력, 출력) 토큰. 둘 다 없으면 None
+pub(crate) fn usage_from(v: &serde_json::Value, input_key: &str, output_key: &str) -> Option<(u64, u64)> {
+    let i = v.get(input_key).and_then(serde_json::Value::as_u64);
+    let o = v.get(output_key).and_then(serde_json::Value::as_u64);
+    (i.is_some() || o.is_some()).then(|| (i.unwrap_or(0), o.unwrap_or(0)))
 }
 
 #[async_trait]

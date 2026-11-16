@@ -3,7 +3,7 @@ use tokio_util::sync::CancellationToken;
 
 use crate::{
     adapter::{provider_for, ProviderCall},
-    db::{self, conn::DbPool},
+    db::{self, conn::DbPool, usage::{UsageEntry, UsageKind}},
     error::{AppError, ErrorCode, Result},
     models::ai_service::{ApiProfiles, PromptMessage},
     service::secret_store::{api_key_name, SecretStore},
@@ -39,6 +39,11 @@ impl AiService {
     /// 플러그인(음성·이미지)이 공급자 API를 직접 부를 때 쓰는 HTTP 클라이언트
     pub fn http(&self) -> &Client {
         &self.http
+    }
+
+    /// 사용량 한 줄 기록 (음성·이미지 플러그인도 이걸로 남긴다)
+    pub async fn record_usage(&self, entry: UsageEntry) {
+        db::usage::record(&self.db, entry).await;
     }
 
     /// 프로필의 API 키 (keyring)
@@ -87,11 +92,36 @@ impl AiService {
             credential: &credential,
         };
 
-        let generation = tokio::select! {
-            biased;
-            _ = cancel.cancelled() => return Err(cancelled()),
-            r = provider.generate(&call, &request.prompt, &mut on_delta) => r?,
+        let started = std::time::Instant::now();
+        // 스트림 중 받은 글 (취소·실패해도 그만큼은 요금이 나가므로 출력 토큰 추정에 쓴다)
+        let mut streamed = String::new();
+        let mut forward = |d: &str| {
+            streamed.push_str(d);
+            on_delta(d);
         };
+        let result = tokio::select! {
+            biased;
+            _ = cancel.cancelled() => Err(cancelled()),
+            r = provider.generate(&call, &request.prompt, &mut forward) => r,
+        };
+
+        let mut entry = UsageEntry::new(UsageKind::Chat, &profile.id, &profile.model);
+        entry.duration_ms = u64::try_from(started.elapsed().as_millis()).unwrap_or(u64::MAX);
+        let output_text = result.as_ref().map_or(streamed.as_str(), |g| g.content.as_str());
+        match result.as_ref().ok().and_then(|g| g.usage) {
+            Some((i, o)) => (entry.input_tokens, entry.output_tokens) = (i, o),
+            None => {
+                entry.estimated = true;
+                entry.input_tokens = estimate_prompt_tokens(&request.prompt);
+                entry.output_tokens = crate::service::prompt::token::count_tokens(output_text) as u64;
+            }
+        }
+        if let Err(e) = &result {
+            entry.ok = false;
+            entry.error = Some(e.to_response().message);
+        }
+        self.record_usage(entry).await;
+        let generation = result?;
 
         Ok(AiResponse {
             content: generation.content,
@@ -117,6 +147,15 @@ fn load_credential(profile: &ApiProfiles) -> Result<String> {
             false,
         )
     })
+}
+
+/// 프롬프트의 입력 토큰 추정 (PromptManager가 매긴 값이 없으면 다시 센다)
+fn estimate_prompt_tokens(prompt: &PromptMessage) -> u64 {
+    prompt
+        .messages
+        .iter()
+        .map(|m| if m.token > 0 { m.token as u64 } else { crate::service::prompt::token::count_message_tokens(&m.content) as u64 })
+        .sum()
 }
 
 fn cancelled() -> AppError {

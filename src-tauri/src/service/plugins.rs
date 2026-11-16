@@ -12,6 +12,7 @@ use base64::Engine;
 use serde_json::{json, Value};
 
 use crate::{
+    db::usage::{UsageEntry, UsageKind},
     error::{AppError, ErrorCode, Result},
     models::{
         ai_service::{ApiProfiles, ChatOptions, PromptMessage, PromptMessageItem, PromptRole},
@@ -121,6 +122,14 @@ fn cache_name(text: &str, setting: &TtsSetting, profile: &str) -> String {
     format!("{:016x}.mp3", h.finish())
 }
 
+/// 이미 만든 음성 파일 (없으면 None). 호출 전에 확인해 요금 없는 경우는 작업을 만들지 않는다
+pub fn cached_speech(setting: &TtsSetting, fallback_profile: &str, text: &str, cache_dir: &Path) -> Option<PathBuf> {
+    let input: String = speakable(text, setting.dialogue_only).chars().take(MAX_TTS_CHARS).collect();
+    let profile_id = pick_profile(&setting.api_profile_id, fallback_profile).ok()?;
+    let path = cache_dir.join("tts").join(cache_name(&input, setting, &profile_id));
+    (!input.is_empty() && path.exists()).then_some(path)
+}
+
 /// 글을 음성 파일(mp3)로. 이미 만든 것이 있으면 그 경로.
 /// 프로필 종류가 elevenlabs면 ElevenLabs, 아니면 OpenAI 호환 /audio/speech.
 pub async fn speak(ai: &AiService, setting: &TtsSetting, fallback_profile: &str, text: &str, cache_dir: &Path) -> Result<PathBuf> {
@@ -135,13 +144,33 @@ pub async fn speak(ai: &AiService, setting: &TtsSetting, fallback_profile: &str,
     }
     let profile = ai.load_profile(&profile_id).await?;
     let key = ai.credential(&profile)?;
+    let started = std::time::Instant::now();
+    let result = speak_call(ai, setting, &profile, key, &input).await;
+    let mut entry = UsageEntry::new(UsageKind::Tts, &profile.id, if setting.model.is_empty() { &profile.model } else { &setting.model });
+    entry.characters = input.chars().count() as u64;
+    entry.duration_ms = u64::try_from(started.elapsed().as_millis()).unwrap_or(u64::MAX);
+    if let Err(e) = &result {
+        entry.ok = false;
+        entry.error = Some(e.to_response().message);
+    }
+    ai.record_usage(entry).await;
+    let bytes = result?;
+    if let Some(dir) = path.parent() {
+        std::fs::create_dir_all(dir)?;
+    }
+    std::fs::write(&path, &bytes)?;
+    Ok(path)
+}
+
+/// 음성 공급자 호출 → mp3 바이트
+async fn speak_call(ai: &AiService, setting: &TtsSetting, profile: &ApiProfiles, key: String, input: &str) -> Result<Vec<u8>> {
     let speed = setting.speed.clamp(0.25, 4.0);
     let res = if profile.format_type == "elevenlabs" {
         if setting.voice.trim().is_empty() {
             return Err(AppError::validation("ElevenLabs 목소리를 먼저 고르세요 (설정 > 음성 읽기)", None));
         }
         ai.http()
-            .post(format!("{}/text-to-speech/{}?output_format=mp3_44100_128", base_url_or(&profile, ELEVENLABS_BASE), setting.voice.trim()))
+            .post(format!("{}/text-to-speech/{}?output_format=mp3_44100_128", base_url_or(profile, ELEVENLABS_BASE), setting.voice.trim()))
             .header("xi-api-key", key)
             .header("Accept", "audio/mpeg")
             // ElevenLabs의 속도는 0.7~1.2
@@ -150,18 +179,13 @@ pub async fn speak(ai: &AiService, setting: &TtsSetting, fallback_profile: &str,
             .await?
     } else {
         ai.http()
-            .post(format!("{}/audio/speech", base_url(&profile)))
+            .post(format!("{}/audio/speech", base_url(profile)))
             .bearer_auth(key)
             .json(&json!({ "model": setting.model, "voice": setting.voice, "input": input, "speed": speed, "response_format": "mp3" }))
             .send()
             .await?
     };
-    let bytes = ok_bytes(res).await?;
-    if let Some(dir) = path.parent() {
-        std::fs::create_dir_all(dir)?;
-    }
-    std::fs::write(&path, &bytes)?;
-    Ok(path)
+    Ok(ok_bytes(res).await?.to_vec())
 }
 
 // =========================================================
@@ -315,11 +339,27 @@ pub async fn generate_image(
     let profile_id = pick_profile(&setting.api_profile_id, fallback_profile)?;
     let profile = ai.load_profile(&profile_id).await?;
     let key = ai.credential(&profile)?;
+    let started = std::time::Instant::now();
+    let result = image_call(ai, setting, &profile, key, prompt).await;
+    let mut entry = UsageEntry::new(UsageKind::Image, &profile.id, if setting.model.is_empty() { &profile.model } else { &setting.model });
+    entry.images = u64::from(result.is_ok());
+    entry.duration_ms = u64::try_from(started.elapsed().as_millis()).unwrap_or(u64::MAX);
+    if let Err(e) = &result {
+        entry.ok = false;
+        entry.error = Some(e.to_response().message);
+    }
+    ai.record_usage(entry).await;
+    let png = result?;
+    save_image(png, setting, prompt, out_dir, source, message)
+}
+
+/// 이미지 공급자 호출 → png 바이트
+async fn image_call(ai: &AiService, setting: &ImageGenSetting, profile: &ApiProfiles, key: String, prompt: &str) -> Result<Vec<u8>> {
     let png = if profile.format_type == "novelai" {
         let seed = rand::random::<u32>() % 4_294_967_000;
         let res = ai
             .http()
-            .post(format!("{}/ai/generate-image", base_url_or(&profile, NOVELAI_BASE)))
+            .post(format!("{}/ai/generate-image", base_url_or(profile, NOVELAI_BASE)))
             .bearer_auth(key)
             .json(&novelai_body(setting, prompt, seed))
             .send()
@@ -331,7 +371,7 @@ pub async fn generate_image(
         if setting.model.starts_with("dall-e") {
             body["response_format"] = json!("b64_json");
         }
-        let res = ai.http().post(format!("{}/images/generations", base_url(&profile))).bearer_auth(key).json(&body).send().await?;
+        let res = ai.http().post(format!("{}/images/generations", base_url(profile))).bearer_auth(key).json(&body).send().await?;
         let v: Value = serde_json::from_slice(&ok_bytes(res).await?)?;
         let item = v["data"].get(0).ok_or_else(|| AppError::ai_provider(ErrorCode::AiProviderError, "이미지 응답에 그림이 없습니다", false))?;
         if let Some(b64) = item["b64_json"].as_str() {
@@ -342,6 +382,10 @@ pub async fn generate_image(
             return Err(AppError::ai_provider(ErrorCode::AiProviderError, "이미지 응답 형식을 알 수 없습니다", false));
         }
     };
+    Ok(png.to_vec())
+}
+
+fn save_image(png: Vec<u8>, setting: &ImageGenSetting, prompt: &str, out_dir: &Path, source: &str, message: Option<(&str, &str)>) -> Result<GeneratedImage> {
     std::fs::create_dir_all(out_dir)?;
     let id = uuid::Uuid::new_v4();
     let path = out_dir.join(format!("{id}.png"));

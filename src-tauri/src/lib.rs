@@ -257,6 +257,9 @@ pub fn specta_builder() -> tauri_specta::Builder<tauri::Wry> {
             cancel_task,
             resume_task,
             dismiss_task,
+            list_task_history,
+            usage_summary,
+            clear_usage,
             // regex
             list_regex_scripts,
             upsert_regex_script,
@@ -469,6 +472,9 @@ pub fn specta_builder() -> tauri_specta::Builder<tauri::Wry> {
             cancel_task,
             resume_task,
             dismiss_task,
+            list_task_history,
+            usage_summary,
+            clear_usage,
             // regex
             list_regex_scripts,
             upsert_regex_script,

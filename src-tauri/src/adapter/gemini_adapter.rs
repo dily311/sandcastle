@@ -100,6 +100,7 @@ pub(crate) async fn read_gemini_response(
         return Ok(Generation {
             content,
             finish_reason,
+            usage: super::usage_from(&json["usageMetadata"], "promptTokenCount", "candidatesTokenCount"),
         });
     }
 
@@ -113,6 +114,10 @@ pub(crate) async fn read_gemini_response(
         }
         if reason.is_some() {
             out.finish_reason = reason;
+        }
+        // 조각마다 지금까지의 합계가 오므로 마지막 값을 쓴다
+        if let Some(u) = super::usage_from(&json["usageMetadata"], "promptTokenCount", "candidatesTokenCount") {
+            out.usage = Some(u);
         }
         Ok(true)
     })

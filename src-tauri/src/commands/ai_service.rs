@@ -133,7 +133,7 @@ pub async fn get_models(ai: State<'_, Arc<AiService>>, profile_id: String) -> Re
 /// 연결 확인: 짧은 메시지 하나를 보내고 받은 답을 돌려준다 (저장하지 않음)
 #[tauri::command]
 #[specta::specta]
-pub async fn test_message(ai: State<'_, Arc<AiService>>, profile_id: String) -> Result<String> {
+pub async fn test_message(ai: State<'_, Arc<AiService>>, tasks: State<'_, Arc<crate::task::TaskManager>>, profile_id: String) -> Result<String> {
     let prompt = PromptMessage {
         chat_options: ChatOptions { max_tokens: Some(32), stream: false, ..ChatOptions::default() },
         messages: vec![PromptMessageItem { images: vec![],
@@ -142,6 +142,8 @@ pub async fn test_message(ai: State<'_, Arc<AiService>>, profile_id: String) -> 
             token: 8,
         }],
     };
-    let res = ai.generate_once(AiRequest { profile_id, prompt }).await?;
+    use crate::task::{CreateTaskRequest, TaskOwner, TaskType};
+    let job = CreateTaskRequest::inline(TaskType::ApiCall, TaskOwner::System, "settings", "API 연결 확인", false);
+    let res = tasks.run_inline(job, |_| ai.generate_once(AiRequest { profile_id, prompt })).await?;
     Ok(res.content)
 }

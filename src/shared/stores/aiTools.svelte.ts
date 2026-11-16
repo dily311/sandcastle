@@ -42,13 +42,14 @@ export function generatedImagesOf(m: Message): { path: string; prompt: string }[
 	return Array.isArray(list) ? list : [];
 }
 
-export async function translateMessage(m: Message): Promise<Message> {
-	return call(commands.translateMessage(m.id), src);
+/** auto: 자동 번역 설정으로 부른 것 (실행 기록에 "자동"으로 남는다) */
+export async function translateMessage(m: Message, auto = false): Promise<Message> {
+	return call(commands.translateMessage(m.id, auto), src);
 }
 
 /** 입력창: 보내기 전에 입력 언어로 번역 */
 export async function translateInput(text: string): Promise<string> {
-	return call(commands.translateText(text, pluginSetting.value?.translate?.inputLang ?? null), src);
+	return call(commands.translateText(text, pluginSetting.value?.translate?.inputLang ?? null, false), src);
 }
 
 export async function drawMessage(m: Message): Promise<Message> {
@@ -62,7 +63,7 @@ export async function drawText(text: string, source: "game" | "manual" = "game")
 
 /** 글 번역. 공용 번역 캐시에 저장돼 같은 문장은 다시 요금을 내지 않는다 (게임 대사 줄 등) */
 export async function translateText(text: string): Promise<string> {
-	return call(commands.translateText(text, null), src);
+	return call(commands.translateText(text, null, false), src);
 }
 
 /** 이미 번역해 둔 문장만 꺼낸다 (AI 호출 없음). 원문 → 번역문 */
@@ -87,13 +88,14 @@ export function stopSpeaking() {
 	speech.messageId = null;
 }
 
-export async function speak(m: { id: string; content: string }, text = m.content) {
+/** auto: 자동 읽기 설정으로 부른 것 */
+export async function speak(m: { id: string; content: string }, text = m.content, auto = false) {
 	if (speech.messageId === m.id) return stopSpeaking();
 	stopSpeaking();
 	speech.messageId = m.id;
 	speech.loading = true;
 	try {
-		const path = await call(commands.speakText(text), src);
+		const path = await call(commands.speakText(text, auto), src);
 		if (speech.messageId !== m.id) return; // 기다리는 동안 다른 걸 눌렀음
 		const audio = new Audio(fileSrc(path) ?? "");
 		playing = audio;
@@ -115,10 +117,10 @@ export async function afterReply(m: Message): Promise<Message> {
 	const s = pluginSetting.value;
 	let out = m;
 	if (s && plugins.on("translate") && s.translate?.autoTranslate) {
-		out = await translateMessage(m).catch(() => m);
+		out = await translateMessage(m, true).catch(() => m);
 	}
 	if (s && plugins.on("tts") && s.tts?.autoRead) {
-		void speak(out, translationOf(out)?.text ?? out.content);
+		void speak(out, translationOf(out)?.text ?? out.content, true);
 	}
 	return out;
 }
