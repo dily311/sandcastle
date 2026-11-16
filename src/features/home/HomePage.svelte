@@ -200,7 +200,7 @@
 
 <style>
 	.home {
-		max-width: 920px;
+		max-width: var(--page-wide);
 		margin: 0 auto;
 		padding: var(--space-6) var(--space-5) var(--space-8, 48px);
 		display: flex;

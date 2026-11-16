@@ -60,7 +60,7 @@
 	.layer {
 		position: fixed;
 		inset: 0;
-		z-index: 900;
+		z-index: var(--z-drop);
 		display: grid;
 		place-items: center;
 		padding: var(--space-6);

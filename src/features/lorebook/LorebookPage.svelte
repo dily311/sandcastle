@@ -101,13 +101,13 @@
 		}),
 	);
 
-	let menu = $state<{ at: { x: number; y: number }; items: MenuItem[] } | null>(null);
+	let menu = $state<{ at: { x: number; y: number; align?: "start" | "end" }; items: MenuItem[] } | null>(null);
 	function bookMenu(e: MouseEvent, b: Book) {
 		e.preventDefault();
 		e.stopPropagation();
 		const r = (e.currentTarget as HTMLElement).getBoundingClientRect();
 		menu = {
-			at: e.type === "contextmenu" ? { x: e.clientX, y: e.clientY } : { x: r.left, y: r.bottom + 4 },
+			at: e.type === "contextmenu" ? { x: e.clientX, y: e.clientY } : { x: r.right, y: r.bottom + 4, align: "end" },
 			items: [
 				{ label: "이름 바꾸기", icon: Pencil, onselect: () => rename(b) },
 				{ label: "내보내기…", icon: Download, onselect: () => lorebook.exportMenu(b) },
@@ -264,7 +264,7 @@
 						oncontextmenu={(e) => bookMenu(e, b)}
 					>
 						{#snippet fallback()}<BookOpen />{/snippet}
-						{#snippet corner()}{#if !selecting}<IconButton label="{b.name} 메뉴" size="sm" variant="soft" onclick={(e) => bookMenu(e, b)}><Ellipsis /></IconButton>{/if}{/snippet}
+						{#snippet menu()}<IconButton label="{b.name} 메뉴" size="sm" variant="ghost" onclick={(e) => bookMenu(e, b)}><Ellipsis /></IconButton>{/snippet}
 						{#snippet badges()}
 							{#each [...u.characters, ...u.personas].slice(0, 4) as w (w.id)}<Badge><Avatar name={w.name} src={fileSrc(w.avatar)} color={w.color || null} size={14} />{w.name}</Badge>{/each}
 						{/snippet}
@@ -311,7 +311,7 @@
 		display: flex;
 		flex-direction: column;
 		gap: var(--space-4);
-		max-width: 920px;
+		max-width: var(--page-wide);
 		height: 100%;
 		margin: 0 auto;
 		padding: var(--space-6) var(--space-6) var(--space-8);

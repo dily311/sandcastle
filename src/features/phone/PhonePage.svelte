@@ -361,7 +361,7 @@
 	.status.on-wall {
 		position: absolute;
 		inset: 0 0 auto;
-		z-index: 1;
+		z-index: var(--z-above);
 		color: white;
 	}
 	.icons {

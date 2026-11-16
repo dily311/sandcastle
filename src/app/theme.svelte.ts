@@ -6,6 +6,7 @@ import { ACCENTS, DEFAULT_ACCENT, accentValue } from "$shared/ui/accents";
 import { DEFAULT_GRAY, grayScale } from "$shared/ui/grays";
 import { BUILTIN_THEMES, builtinId, colorsToCss, withLegacy, type ThemeColors } from "$shared/ui/themes";
 import { fileSrc } from "$shared/ipc/file";
+import { onEvent } from "$shared/ipc/events";
 import { gradientCss, gradientOf } from "$shared/ui/backgrounds";
 
 export type { CssSnippet };
@@ -60,6 +61,13 @@ class Theme {
 		await this.loadActive();
 		this.apply();
 		this.applyFrame();
+		// 다른 곳(갤러리에서 배경 그림 삭제, 위젯 창 등)에서 바뀐 설정을 따라간다
+		void onEvent<ThemeSetting>("theme_setting::changed", async (next) => {
+			const themeChanged = next.selectTheme !== this.setting.selectTheme;
+			this.setting = next;
+			if (themeChanged) await this.loadActive();
+			this.apply();
+		});
 	}
 
 	async update(patch: Partial<ThemeSetting>) {

@@ -56,7 +56,7 @@
 <style>
 	.info {
 		position: absolute;
-		z-index: 30;
+		z-index: var(--z-stage-ui);
 		top: 14px;
 		left: 14px;
 		right: 14px;

@@ -345,7 +345,7 @@
 		position: absolute;
 		top: 2px;
 		right: var(--space-2);
-		z-index: 2;
+		z-index: var(--z-float);
 		display: flex;
 		padding: 2px;
 		border: 1px solid var(--border);

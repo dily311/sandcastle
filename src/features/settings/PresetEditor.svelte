@@ -322,7 +322,7 @@
 	.bar {
 		position: sticky;
 		top: 0;
-		z-index: 3;
+		z-index: calc(var(--z-float) + 1);
 		display: flex;
 		justify-content: flex-end;
 		gap: var(--space-2);
@@ -389,7 +389,7 @@
 	}
 	.blocks li.dragging {
 		position: relative;
-		z-index: 2;
+		z-index: var(--z-float);
 		border-color: var(--accent);
 		box-shadow: var(--shadow-md);
 	}

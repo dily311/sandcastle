@@ -24,7 +24,12 @@
 </div>
 
 <style>
+	/* 폭은 그 화면의 목록 폭을 따른다 (--selectbar-max, 없으면 꽉 채움) */
 	.selbar {
+		width: 100%;
+		max-width: var(--selectbar-max, none);
+		margin: 0 auto var(--space-3);
+		box-sizing: border-box;
 		display: flex;
 		align-items: center;
 		gap: var(--space-2);

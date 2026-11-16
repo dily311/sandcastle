@@ -129,7 +129,7 @@
 	}
 	.ppop {
 		position: fixed;
-		z-index: 100;
+		z-index: var(--z-popover);
 		overflow: auto;
 		display: flex;
 		flex-direction: column;

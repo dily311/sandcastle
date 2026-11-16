@@ -1,7 +1,7 @@
 <script lang="ts">
 	import { drops, extOf, storeFile } from "$app/drop.svelte";
-	import { Gamepad2, Plus, Search, Upload } from "@lucide/svelte";
-	import { Button, Dialog, EmptyState, Field, Input, ItemCard, ListToolbar, Select, SelectBar, SplitButton } from "$shared/ui";
+	import { Download, Ellipsis, Gamepad2, Pencil, Play, Plus, Search, Trash2, Upload } from "@lucide/svelte";
+	import { Button, ContextMenu, Dialog, EmptyState, Field, IconButton, Input, ItemCard, ListToolbar, Select, SelectBar, SplitButton, type MenuItem } from "$shared/ui";
 	import { confirmAction } from "$shared/stores/confirm.svelte";
 	import { pickFiles, PACK_FILES } from "$shared/ipc/dialog";
 	import { toasts } from "$shared/stores/toast.svelte";
@@ -33,6 +33,31 @@
 		const by = sort === "name" ? (a: GameProject, b: GameProject) => a.title.localeCompare(b.title, "ko") : sort === "new" ? (a: GameProject, b: GameProject) => b.createdAt - a.createdAt : (a: GameProject, b: GameProject) => b.updatedAt - a.updatedAt;
 		return games.list.filter((g) => (filter === "all" || g.templateId === filter.slice(4)) && (!q || g.title.toLowerCase().includes(q) || (g.description ?? "").toLowerCase().includes(q))).sort(by);
 	});
+	// 목록 카드의 … 메뉴 (오른쪽 클릭도 같음)
+	let cardMenu = $state<{ at: { x: number; y: number; align?: "start" | "end" }; items: MenuItem[] } | null>(null);
+	function openCardMenu(e: MouseEvent, g: GameProject) {
+		e.preventDefault();
+		e.stopPropagation();
+		const r = (e.currentTarget as HTMLElement).getBoundingClientRect();
+		cardMenu = {
+			at: e.type === "contextmenu" ? { x: e.clientX, y: e.clientY } : { x: r.right, y: r.bottom + 4, align: "end" },
+			items: [
+				{ label: "열기", icon: Play, onselect: () => nav.go({ page: "game", gameId: g.id }) },
+				{ label: "편집", icon: Pencil, onselect: () => nav.go({ page: "game", gameId: g.id, edit: true }) },
+				{ label: "내보내기 (다운로드 폴더)", icon: Download, onselect: async () => toasts.success(`내보냄 · ${await games.export(g.id)}`) },
+				{
+					label: "삭제",
+					icon: Trash2,
+					danger: true,
+					separator: true,
+					onselect: async () => {
+						if (!(await confirmAction({ title: "게임 삭제", message: `'${g.title}'과 모든 플레이 기록을 지움. 되돌릴 수 없음`, confirmLabel: "삭제", danger: true }))) return;
+						await games.remove(g.id);
+					},
+				},
+			],
+		};
+	}
 	function pickGame(id: string) {
 		const next = new Set(picked);
 		if (next.has(id)) next.delete(id);
@@ -114,7 +139,9 @@
 					{selecting}
 					selected={picked.has(g.id)}
 					onclick={() => (selecting ? pickGame(g.id) : nav.go({ page: "game", gameId: g.id }))}
+					oncontextmenu={(e) => openCardMenu(e, g)}
 				>
+					{#snippet menu()}<IconButton label="{g.title} 메뉴" size="sm" onclick={(e) => openCardMenu(e, g)}><Ellipsis /></IconButton>{/snippet}
 					{#snippet fallback()}<Gamepad2 />{/snippet}
 				</ItemCard>
 			{:else}
@@ -123,6 +150,8 @@
 		</div>
 	{/if}
 </div>
+
+{#if cardMenu}<ContextMenu at={cardMenu.at} items={cardMenu.items} label="게임 메뉴" onclose={() => (cardMenu = null)} />{/if}
 
 <Dialog bind:open={createOpen} title="새 게임" description="템플릿이 게임 규칙과 시작 데이터를 정함" size="sm">
 	<div class="form">
@@ -143,22 +172,25 @@
 
 <style>
 	.page {
+		--selectbar-max: var(--page-wide);
 		height: 100%;
 		overflow: auto;
 		padding: var(--space-6) var(--space-8);
 	}
 	.head {
 		display: flex;
-		flex-direction: column;
+		flex-direction: row;
+		align-items: center;
+		justify-content: space-between;
 		gap: var(--space-4);
-		max-width: 1100px;
+		max-width: var(--page-wide);
 		margin: 0 auto var(--space-5);
 	}
 	.grid {
 		display: grid;
 		grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
-		gap: var(--space-4);
-		max-width: 1100px;
+		gap: var(--space-3);
+		max-width: var(--page-wide);
 		margin: 0 auto;
 	}
 	.none {

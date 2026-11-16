@@ -80,7 +80,7 @@
 <style>
 	.menu {
 		position: fixed;
-		z-index: 1000;
+		z-index: var(--z-menu);
 		min-width: 168px;
 		padding: 4px;
 		border: 1px solid var(--border);

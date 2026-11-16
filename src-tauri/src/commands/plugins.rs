@@ -298,8 +298,26 @@ pub fn import_gallery_images(app: AppHandle, paths: Vec<String>) -> Result<Vec<t
 
 #[tauri::command]
 #[specta::specta]
-pub fn delete_generated_image(app: AppHandle, path: String) -> Result<()> {
-    tools::delete_image(&generated_dir(&app)?, &path)
+pub fn delete_generated_image(app: AppHandle, theme: State<'_, SettingsState<crate::models::settings::ThemeSetting>>, path: String) -> Result<()> {
+    tools::delete_image(&generated_dir(&app)?, &path)?;
+    forget_backgrounds(&app, &theme, std::slice::from_ref(&path))
+}
+
+/// 지운 그림을 테마 배경 목록·앱 배경에서도 뺀다 (배경 태그를 단 갤러리 그림)
+fn forget_backgrounds(app: &AppHandle, theme: &SettingsState<crate::models::settings::ThemeSetting>, paths: &[String]) -> Result<()> {
+    let cur = read(theme)?;
+    let list: Vec<String> = cur.backgrounds.iter().filter(|b| !paths.contains(b)).cloned().collect();
+    let selected_gone = cur.background_image.as_ref().is_some_and(|b| paths.contains(b));
+    if list.len() == cur.backgrounds.len() && !selected_gone {
+        return Ok(());
+    }
+    let mut patch = json!({ "backgrounds": list });
+    if selected_gone {
+        patch["backgroundImage"] = Value::Null;
+    }
+    let settings = crate::sys::settings::apply_patch(app, &theme.0, patch)?;
+    let _ = app.emit(<crate::models::settings::ThemeSetting as SettingsDomain>::EVENT_NAME, &settings);
+    Ok(())
 }
 
 /// 앱의 전체 그림: 갤러리(만든·올린 그림) + 배경 목록 + 캐릭터 아바타·커버·CG 에셋 + 페르소나 아바타.
@@ -398,7 +416,12 @@ pub fn rename_gallery_image(app: AppHandle, path: String, name: String) -> Resul
 /// 여러 그림 한 번에 지우기 (갤러리 그림만, 다른 곳의 그림은 건너뜀). 지운 수를 돌려준다
 #[tauri::command]
 #[specta::specta]
-pub async fn delete_gallery_images(app: AppHandle, state: State<'_, AppState>, paths: Vec<String>) -> Result<u32> {
+pub async fn delete_gallery_images(
+    app: AppHandle,
+    state: State<'_, AppState>,
+    theme: State<'_, SettingsState<crate::models::settings::ThemeSetting>>,
+    paths: Vec<String>,
+) -> Result<u32> {
     let dir = generated_dir(&app)?;
     let data_dir = app_data_dir(&app)?;
     // 캐릭터 CG 에셋은 행과 파일(썸네일 포함)을 함께 지운다
@@ -414,6 +437,7 @@ pub async fn delete_gallery_images(app: AppHandle, state: State<'_, AppState>, p
             n += 1;
         }
     }
+    forget_backgrounds(&app, &theme, &paths)?;
     Ok(n)
 }
 

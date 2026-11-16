@@ -84,6 +84,9 @@ fn open_main_window<R: Runtime>(app: &AppHandle<R>) -> Result<()> {
     Ok(())
 }
 
+/// 창 열기·닫기를 한 번에 하나씩 (설정 이벤트와 명령이 겹쳐 같은 창이 둘 생기지 않게)
+static WINDOW_LOCK: std::sync::Mutex<()> = std::sync::Mutex::new(());
+
 pub struct WidgetManager;
 impl WidgetManager {
     // 위젯 윈도우
@@ -122,6 +125,7 @@ impl WidgetManager {
     }
 
     pub fn open_widget(app: &AppHandle, state: &MouseTrackerState) -> Result<WebviewWindow> {
+        let _guard = WINDOW_LOCK.lock().unwrap_or_else(|e| e.into_inner());
         // 이미 존재하면 새로 만들지 않는다.
         if let Some(window) = app.get_webview_window(WIDGET_LABEL) {
             Self::show(app, state)?;
@@ -153,6 +157,7 @@ impl WidgetManager {
     }
 
     pub fn close_widget(app: &AppHandle, state: &MouseTrackerState) -> Result<()> {
+        let _guard = WINDOW_LOCK.lock().unwrap_or_else(|e| e.into_inner());
         MouseTrackerState::stop_tracker(state);
         if let Some(window) = app.get_webview_window(WIDGET_LABEL) {
             // close는 닫기 요청(창이 막을 수도 있음), destroy는 바로 없앤다. 설정으로 끈 것이므로 바로 없앤다

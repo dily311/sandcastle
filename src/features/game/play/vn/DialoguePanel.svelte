@@ -220,7 +220,7 @@
 	/* 대사창 + 아래 동작 줄 */
 	.dock {
 		position: absolute;
-		z-index: 40;
+		z-index: calc(var(--z-stage-ui) + 10);
 		left: 50%;
 		bottom: 10px;
 		transform: translateX(-50%);

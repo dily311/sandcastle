@@ -73,7 +73,7 @@
 	.sheet-scrim {
 		position: fixed;
 		inset: 0;
-		z-index: 70;
+		z-index: var(--z-sheet);
 		background: rgb(0 0 0 / 0.4);
 	}
 	.sheet {
@@ -82,7 +82,7 @@
 		right: 0;
 		bottom: 0;
 		top: 0;
-		z-index: 71;
+		z-index: calc(var(--z-sheet) + 1);
 		display: flex;
 		flex-direction: column;
 		background: var(--bg);
@@ -159,7 +159,7 @@
 		top: 0;
 		bottom: 0;
 		left: -3px;
-		z-index: 5;
+		z-index: var(--z-float);
 		width: 6px;
 		cursor: col-resize;
 	}

@@ -399,7 +399,7 @@
 	}
 	.pop {
 		position: fixed;
-		z-index: 100;
+		z-index: var(--z-popover);
 		display: flex;
 		flex-direction: column;
 		overflow: hidden;

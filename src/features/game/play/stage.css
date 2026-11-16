@@ -130,7 +130,7 @@
 /* 오른쪽에서 열리는 패널 (지도·소지품·행동·기록) */
 .game-theme .g-sheet {
 	position: absolute;
-	z-index: 60;
+	z-index: calc(var(--z-stage-ui) + 30);
 	top: 12px;
 	right: 12px;
 	bottom: 12px;

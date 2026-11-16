@@ -1,7 +1,7 @@
 <script lang="ts">
 	// 목록 화면(캐릭터·게임·로어북·이미지) 공통 도구 줄: 찾기 · 거르기 · 정렬 · 여러 개 삭제 + 주 동작(children)
 	import type { Snippet } from "svelte";
-	import { ArrowUpDown, Check, Filter, Search, Trash2 } from "@lucide/svelte";
+	import { ArrowUpDown, Check, Filter, ListChecks, Search } from "@lucide/svelte";
 	import IconButton from "./IconButton.svelte";
 	import Input from "./Input.svelte";
 	import ContextMenu, { type MenuItem } from "./ContextMenu.svelte";
@@ -18,7 +18,7 @@
 		filter?: string;
 		sorts?: ListOption[];
 		sort?: string;
-		/** 여러 개 삭제 모드 (없으면 버튼을 숨김) */
+		/** 여러 개 선택 모드 (선택한 것을 지우거나 태그를 닮). canSelect가 없으면 버튼을 숨김 */
 		selecting?: boolean;
 		canSelect?: boolean;
 		children?: Snippet;
@@ -57,7 +57,7 @@
 		<IconButton size="sm" label="정렬 (지금: {sorts.find((s) => s.value === sort)?.label ?? ""})" onclick={(e) => open(e, "정렬", sorts, sort, (v) => (sort = v))}><ArrowUpDown /></IconButton>
 	{/if}
 	{#if canSelect}
-		<IconButton size="sm" label="여러 개 삭제" active={selecting} onclick={() => (selecting = !selecting)}><Trash2 /></IconButton>
+		<IconButton size="sm" label={selecting ? "선택 끝내기" : "여러 개 선택"} active={selecting} onclick={() => (selecting = !selecting)}><ListChecks /></IconButton>
 	{/if}
 	{#if children}{@render children()}{/if}
 </div>

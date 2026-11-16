@@ -263,7 +263,7 @@
 		align-items: flex-end;
 		justify-content: space-between;
 		gap: var(--space-4);
-		max-width: 960px;
+		max-width: var(--page-medium);
 		margin: -40px auto 0;
 		padding: 0 var(--space-6);
 	}
@@ -282,7 +282,7 @@
 		align-items: center;
 	}
 	.body {
-		max-width: 960px;
+		max-width: var(--page-medium);
 		margin: 0 auto;
 		padding: var(--space-5) var(--space-6) var(--space-10);
 	}

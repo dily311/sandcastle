@@ -1,5 +1,5 @@
 <script lang="ts">
-	import { ArrowUpDown, GripVertical, Bookmark, Check, ChevronDown, Eye, EyeOff, FileArchive, ImagePlus, Pencil, Search, Trash2, X } from "@lucide/svelte";
+	import { ArrowUpDown, GripVertical, Bookmark, Check, ChevronDown, Eye, EyeOff, FileArchive, ImagePlus, Pencil, Plus, Search, Trash2, X } from "@lucide/svelte";
 	import { Avatar, Button, ContextMenu, IconButton, Input, ProfilePicker, Select, Switch, type MenuItem, type ProfileOption } from "$shared/ui";
 	import { bookmarks, bookmarksOf } from "./bookmarks";
 	import NotesPanel from "./NotesPanel.svelte";
@@ -8,6 +8,7 @@
 	import ContextMeter from "./ContextMeter.svelte";
 	import ExportButton from "./ExportButton.svelte";
 	import PresetInline from "$features/settings/PresetInline.svelte";
+	import RegexEditDialog from "$features/settings/RegexEditDialog.svelte";
 	import { toasts } from "$shared/stores/toast.svelte";
 	import type { ContextUsage } from "$ipc/bindings";
 	import { panel } from "$app/panel.svelte";
@@ -96,6 +97,11 @@
 		}
 	}
 	const sorters = Object.fromEntries(SCOPES.map((scope) => [scope, new Sortable((from, to) => void reorder(scope, from, to))])) as Record<(typeof SCOPES)[number], Sortable>;
+	// 정규식 바로 편집 (설정 화면과 같은 대화상자)
+	let regexEditor: RegexEditDialog | undefined = $state();
+	function onRegexSaved(saved: RegexScript) {
+		scripts = scripts.some((x) => x.id === saved.id) ? scripts.map((x) => (x.id === saved.id ? saved : x)) : [...scripts, saved];
+	}
 	async function toggleScript(s: RegexScript, enabled: boolean) {
 		const saved = await call(commands.upsertRegexScript({ ...s, enabled }), { source: "regex" });
 		scripts = scripts.map((x) => (x.id === s.id ? saved : x));
@@ -368,12 +374,15 @@
 							<li {...sort.item(i)} class:dragging={sort.from === i} class:over={sort.over === i && sort.from !== i}>
 								<span class="grip" aria-hidden="true"><GripVertical /></span>
 								<Switch checked={s.enabled} label={s.name} onchange={(v) => toggleScript(s, v)} />
+								<IconButton label="{s.name} 편집" size="sm" onclick={() => regexEditor?.startEdit(s)}><Pencil /></IconButton>
 							</li>
 						{/each}
 					</ul>
 				{:else}
 					<p class="none small">이 대화에 걸리는 정규식 없음</p>
 				{/each}
+				<Button size="sm" variant="ghost" onclick={() => regexEditor?.startNew({ scope: "character", scopeId: conv.characterId })}>{#snippet icon()}<Plus />{/snippet}이 캐릭터 정규식 추가</Button>
+				<RegexEditDialog bind:this={regexEditor} sortOrder={applied.length * 10} onsaved={onRegexSaved} />
 			</section>
 			<hr />
 			<section>
@@ -483,10 +492,14 @@
 		display: flex;
 		align-items: center;
 		gap: 4px;
+		margin-bottom: 4px;
 		border-radius: var(--radius-sm);
 		cursor: grab;
 	}
-	.rx li :global(.switch),
+	.rx li:last-child {
+		margin-bottom: 0;
+	}
+	.rx li :global(.switch-row),
 	.rx li > :global(:last-child) {
 		flex: 1;
 		min-width: 0;
@@ -529,7 +542,7 @@
 	.aview {
 		position: fixed;
 		inset: 0;
-		z-index: 200;
+		z-index: var(--z-viewer);
 		display: grid;
 		place-items: center;
 		padding: var(--space-5);

@@ -315,7 +315,7 @@
 		background: var(--surface-2);
 	}
 	section {
-		max-width: 760px;
+		max-width: var(--page-narrow);
 		margin: 0 auto var(--space-8);
 		scroll-margin-top: var(--space-4);
 	}

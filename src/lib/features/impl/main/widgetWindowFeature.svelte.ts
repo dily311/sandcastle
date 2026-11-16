@@ -9,10 +9,10 @@ class RegisterWidgetWindowFeature implements FeatureRuntime {
 	defaultEnabled = false;
 	private win?: WebviewWindow;
 
-	async init() {
+	// 위젯 창은 백엔드만 열고 닫는다 (설정을 바꿀 때 update_feature_setting, 앱을 켤 때 lib.rs).
+	// 여기서도 열면 백엔드와 동시에 열려 창이 두 개가 되던 버그가 있었다
+	init() {
 		this.enabled = true;
-		// 이미 열려 있으면 백엔드가 새로 만들지 않고 보여주기만 한다
-		await commands.openWidget();
 	}
 
 	shown() {
@@ -25,9 +25,8 @@ class RegisterWidgetWindowFeature implements FeatureRuntime {
 		void commands.toggleWidget();
 	}
 
-	async destroy() {
-        this.enabled = false;
-		await commands.closeWidget();
+	destroy() {
+		this.enabled = false;
 	}
 }
 export const registerWidgetWindowFeature = new RegisterWidgetWindowFeature();

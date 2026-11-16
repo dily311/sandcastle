@@ -385,7 +385,7 @@
 		overflow: hidden;
 	}
 	.project {
-		max-width: 760px;
+		max-width: var(--page-narrow);
 		margin: 0 auto;
 		padding: var(--space-6);
 	}

@@ -3,7 +3,7 @@
 	// - 대화방이면 대화 화면과 같은 공통 탭(대화 설정 · 컨텍스트·프리셋 · 분기)을 ChatPanel로 그대로
 	// - '정보' 탭: 상대 카드와 폰 설정
 	import { ExternalLink } from "@lucide/svelte";
-	import { Avatar, Button, ProfilePicker, Segmented, type ProfileOption } from "$shared/ui";
+	import { Avatar, Button, type ProfileOption } from "$shared/ui";
 	import { panel } from "$app/panel.svelte";
 	import ChatPanel from "$features/character/ChatPanel.svelte";
 	import type { ChatSession } from "$features/character/session.svelte";
@@ -11,9 +11,7 @@
 	import { nav } from "$app/nav.svelte";
 	import { library, type Conversation } from "$features/character/library.svelte";
 	import { lookup, phone, type Who } from "./phone.svelte";
-	import BackgroundPicker from "$shared/ui/BackgroundPicker.svelte";
-	import { theme } from "$app/theme.svelte";
-	import { pickFiles } from "$shared/ipc/dialog";
+	import PhoneSettings from "./PhoneSettings.svelte";
 
 	let { room, session, onopen }: { room: Conversation | null; session: ChatSession | null; onopen: (id: string, messageId?: string) => void } = $props();
 	const shared = new Set(["settings", "context", "branches"]);
@@ -24,18 +22,9 @@
 	const status = $derived(
 		contact ? (phone.contacts.find((c) => c.contactKind === contact.kind && c.contactId === contact.id)?.status ?? "") : "",
 	);
-	const owner = $derived(phone.owner);
 
 	function openPage(w: Who) {
 		void nav.go(w.kind === "persona" ? { page: "persona", personaId: w.id } : { page: "character", charId: w.id });
-	}
-	// 배경화면 올리기: 공용 배경 목록에 넣고 바로 이 폰 배경으로
-	async function uploadWallpaper() {
-		const paths = await pickFiles([{ name: "그림", extensions: ["png", "jpg", "jpeg", "webp", "gif", "avif"] }], true);
-		if (!paths.length) return;
-		await theme.addBackgrounds(paths, false);
-		const last = theme.setting.backgrounds?.at(-1);
-		if (last) phone.setWallpaper(last);
 	}
 	const kindLabel = (k: string) => (k === "persona" ? "페르소나" : "캐릭터");
 
@@ -82,23 +71,8 @@
 
 		{/if}
 
-		{#if owner}
-			<section>
-				<h4>폰</h4>
-				<ProfilePicker label="폰 주인 바꾸기" options={ownerOptions} value={ownerValue} hint={me.hint} onchange={pickOwner} />
-				<Segmented
-					label="화면 표시"
-					value={phone.prefs.display}
-					options={[
-						{ value: "mockup", label: "기기 모양" },
-						{ value: "full", label: "화면 가득" },
-					]}
-					onchange={(v) => phone.setDisplay(v)}
-				/>
-				<BackgroundPicker label="폰 배경화면" value={phone.wallpaper} images={theme.setting.backgrounds ?? []} allowNone={false} onpick={(v) => v && phone.setWallpaper(v)} onupload={uploadWallpaper} />
-				<p class="hint">연락처는 폰 안의 연락처 앱에서</p>
-			</section>
-		{/if}
+		<!-- 설정 > 폰과 같은 설정 -->
+		<PhoneSettings />
 </div>
 {/if}
 

@@ -87,12 +87,12 @@
 	.backdrop {
 		position: absolute;
 		inset: 0;
-		z-index: 30;
+		z-index: var(--z-stage-ui);
 		background: rgb(0 0 0 / 0.45);
 	}
 	.backlog {
 		position: absolute;
-		z-index: 40;
+		z-index: calc(var(--z-stage-ui) + 10);
 		inset: 6% 8%;
 		display: flex;
 		flex-direction: column;

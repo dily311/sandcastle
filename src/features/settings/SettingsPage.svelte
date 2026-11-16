@@ -217,7 +217,7 @@
 		background: var(--surface-2);
 	}
 	.inner {
-		max-width: 760px;
+		max-width: var(--page-narrow);
 		margin: 0 auto;
 		padding: var(--space-8) var(--space-6);
 	}

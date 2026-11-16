@@ -239,12 +239,31 @@
 		await call(commands.toggleFavoriteCharacter(c.id, !c.favorite), { source: "character" });
 		c.favorite = !c.favorite;
 	}
-	async function removeCharacter(c: Character) {
+	// 목록 카드의 … 메뉴 (오른쪽 클릭도 같음)
+	let cardMenu = $state<{ at: { x: number; y: number; align?: "start" | "end" }; items: MenuItem[] } | null>(null);
+	function openCardMenu(e: MouseEvent, c: Character) {
+		e.preventDefault();
+		e.stopPropagation();
+		const r = (e.currentTarget as HTMLElement).getBoundingClientRect();
+		const convs = library.convsOf(c.id);
+		cardMenu = {
+			at: e.type === "contextmenu" ? { x: e.clientX, y: e.clientY } : { x: r.right, y: r.bottom + 4, align: "end" },
+			items: [
+				...(convs.length ? [{ label: `이어서: ${convs[0].title}`, icon: MessageSquarePlus, onselect: () => open(c.id, convs[0].id) }] : []),
+				{ label: "새 대화", icon: Plus, onselect: () => newConversation(c.id) },
+				{ label: c.favorite ? "즐겨찾기 빼기" : "즐겨찾기", icon: c.favorite ? StarOff : Star, separator: true, onselect: () => toggleFavorite(c) },
+				{ label: "편집", icon: Pencil, onselect: () => nav.go({ page: "character", charId: c.id, edit: true }) },
+				{ label: "내보내기…", icon: Download, onselect: () => charActions.exportMenu(c) },
+				{ label: "삭제", icon: Trash2, danger: true, separator: true, onselect: () => removeCharacter(c, false) },
+			],
+		};
+	}
+	async function removeCharacter(c: Character, leave = true) {
 		const n = library.convsOf(c.id).length;
 		if (!(await confirmAction({ title: "캐릭터 삭제", message: `'${c.name}'와 대화 ${n}개를 지움. 되돌릴 수 없음`, confirmLabel: "삭제", danger: true }))) return;
 		await call(commands.deleteCharacter(c.id), { source: "character" });
 		await library.load();
-		nav.replace({ page: "character" });
+		if (leave) nav.replace({ page: "character" });
 	}
 </script>
 
@@ -378,7 +397,9 @@
 						{selecting}
 						selected={picked.has(ch.id)}
 						onclick={() => (selecting ? pickChar(ch.id) : open(ch.id))}
+						oncontextmenu={(e) => openCardMenu(e, ch)}
 					>
+						{#snippet menu()}<IconButton label="{ch.name} 메뉴" size="sm" onclick={(e) => openCardMenu(e, ch)}><Ellipsis /></IconButton>{/snippet}
 						{#snippet fallback()}<Avatar name={ch.name} color={ch.color} size={64} />{/snippet}
 						{#snippet badges()}
 							{#if ch.favorite}<Badge tone="warning"><Star /> 즐겨찾기</Badge>{/if}
@@ -395,6 +416,7 @@
 		{/if}
 	</div>
 {/if}
+{#if cardMenu}<ContextMenu at={cardMenu.at} items={cardMenu.items} label="캐릭터 메뉴" onclose={() => (cardMenu = null)} />{/if}
 
 <style>
 	.center {
@@ -403,22 +425,25 @@
 		height: 100%;
 	}
 	.page {
+		--selectbar-max: var(--page-wide);
 		height: 100%;
 		overflow: auto;
 		padding: var(--space-6) var(--space-8);
 	}
 	.head {
 		display: flex;
-		flex-direction: column;
+		flex-direction: row;
+		align-items: center;
+		justify-content: space-between;
 		gap: var(--space-4);
-		max-width: 1100px;
+		max-width: var(--page-wide);
 		margin: 0 auto var(--space-5);
 	}
 	.grid {
 		display: grid;
 		grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
 		gap: var(--space-3);
-		max-width: 1100px;
+		max-width: var(--page-wide);
 		margin: 0 auto;
 	}
 	.resume {
@@ -519,7 +544,7 @@
 		grid-template-columns: auto minmax(0, 1fr) auto;
 		gap: var(--space-4);
 		align-items: end;
-		max-width: 960px;
+		max-width: var(--page-medium);
 		margin: -48px auto 0;
 		padding: 0 var(--space-6);
 	}
@@ -552,13 +577,13 @@
 		align-items: center;
 	}
 	.tabs {
-		max-width: 960px;
+		max-width: var(--page-medium);
 		margin: var(--space-5) auto 0;
 		padding: 0 var(--space-6) var(--space-3);
 		border-bottom: 1px solid var(--border);
 	}
 	.body {
-		max-width: 960px;
+		max-width: var(--page-medium);
 		margin: 0 auto;
 		padding: 0 var(--space-6) var(--space-10);
 	}

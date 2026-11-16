@@ -139,7 +139,7 @@
 	.scrim {
 		position: fixed;
 		inset: 0;
-		z-index: 80;
+		z-index: var(--z-app-drawer);
 		background: rgb(0 0 0 / 0.4);
 	}
 	.drawer {
@@ -147,7 +147,7 @@
 		top: 0;
 		bottom: 0;
 		left: 0;
-		z-index: 81;
+		z-index: calc(var(--z-app-drawer) + 1);
 		display: flex;
 		width: min(84vw, 300px);
 		padding-top: env(safe-area-inset-top);

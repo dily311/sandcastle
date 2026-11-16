@@ -674,7 +674,7 @@
 	.list-scrim {
 		position: fixed;
 		inset: 0;
-		z-index: 60;
+		z-index: var(--z-drawer);
 		background: rgb(0 0 0 / 0.4);
 	}
 	.list-drawer {
@@ -682,7 +682,7 @@
 		top: 0;
 		bottom: 0;
 		left: 0;
-		z-index: 61;
+		z-index: calc(var(--z-drawer) + 1);
 		display: flex;
 		width: min(88vw, 340px);
 		padding-top: env(safe-area-inset-top);
@@ -717,7 +717,7 @@
 		height: 100%;
 	}
 	.text {
-		max-width: 720px;
+		max-width: var(--page-reading);
 		margin: 0 auto;
 		padding: var(--space-6) var(--space-6) var(--space-10);
 		font-size: 15.5px;
@@ -812,7 +812,7 @@
 		display: flex;
 		align-items: flex-end;
 		gap: var(--space-2);
-		max-width: 760px;
+		max-width: var(--page-narrow);
 		width: 100%;
 		margin: 0 auto;
 		padding: var(--space-3) var(--space-4) var(--space-4);

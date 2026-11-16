@@ -27,7 +27,7 @@
 		position: fixed;
 		right: var(--space-4);
 		bottom: var(--space-4);
-		z-index: 2000;
+		z-index: var(--z-toast);
 		display: flex;
 		flex-direction: column;
 		gap: var(--space-2);

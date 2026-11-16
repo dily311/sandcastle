@@ -203,6 +203,10 @@
 
 	// ---- 여러 장 고르기 · 단체 삭제 ----
 	let selecting = $state(false);
+	// 선택 모드를 끄면(아이콘을 다시 누르는 등) 고른 것도 푼다
+	$effect(() => {
+		if (!selecting) picked = new Set();
+	});
 	let picked = $state<Set<string>>(new Set());
 	function pick(img: GeneratedImage) {
 		if (!owned(img)) return toasts.info("캐릭터·페르소나의 그림은 그 화면에서 관리함");
@@ -485,7 +489,7 @@
 	.viewer {
 		position: fixed;
 		inset: 0;
-		z-index: 200;
+		z-index: var(--z-viewer);
 		display: grid;
 		place-items: center;
 		padding: var(--space-5);
@@ -501,7 +505,7 @@
 		display: flex;
 		gap: var(--space-4);
 		width: 90vw;
-		max-width: 1200px;
+		max-width: var(--page-xwide);
 		max-height: 90vh;
 		padding: var(--space-4);
 		border-radius: var(--radius-lg);

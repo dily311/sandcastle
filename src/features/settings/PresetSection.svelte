@@ -1,7 +1,7 @@
 <script lang="ts">
 	import { drops, extOf, storeFile } from "$app/drop.svelte";
 	import { onMount } from "svelte";
-	import { ChevronLeft, Download, Plus } from "@lucide/svelte";
+	import { ChevronLeft, Copy, Download, Pencil, Plus, Trash } from "@lucide/svelte";
 	import type { PromptBlocksInput_Deserialize as BlockInput, PromptPresetDetail_Serialize as Detail } from "$ipc/bindings";
 	import { Badge, Button, EmptyState, IconButton } from "$shared/ui";
 	import { call, commands } from "$shared/ipc/client";
@@ -154,9 +154,9 @@
 						{:else}
 							<Button size="sm" variant="ghost" onclick={() => appSetting.update({ selectedPreset: p.id })}>기본으로</Button>
 						{/if}
-						<Button size="sm" variant="ghost" onclick={() => remove(p)}>삭제</Button>
-						<Button size="sm" variant="ghost" onclick={() => duplicate(p)}>복제</Button>
-						<Button size="sm" variant="soft" onclick={() => edit(p)}>편집</Button>
+						<IconButton label="편집" size="sm" variant="ghost" onclick={() => edit(p)}><Pencil /></IconButton>
+						<IconButton label="복제" size="sm" variant="ghost" onclick={() => duplicate(p)}><Copy /></IconButton>
+						<IconButton label="삭제" size="sm" variant="ghost" onclick={() => remove(p)}><Trash /></IconButton>
 					</Row>
 				{/each}
 			</Group>

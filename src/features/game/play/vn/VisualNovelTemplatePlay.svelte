@@ -744,7 +744,7 @@
 	}
 	.hidden-hint {
 		position: absolute;
-		z-index: 30;
+		z-index: var(--z-stage-ui);
 		left: 50%;
 		bottom: 16px;
 		transform: translateX(-50%);
@@ -761,7 +761,7 @@
 	}
 	.busy {
 		position: absolute;
-		z-index: 150;
+		z-index: calc(var(--z-popover) + 50);
 		top: 16px;
 		left: 50%;
 		transform: translateX(-50%);
@@ -792,7 +792,7 @@
 	.drawn-scene {
 		position: absolute;
 		inset: 0;
-		z-index: 25;
+		z-index: calc(var(--z-stage-ui) - 5);
 		display: grid;
 		place-items: center;
 		padding: 4%;

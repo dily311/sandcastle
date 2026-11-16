@@ -586,7 +586,7 @@
 	}
 	.avatar-field > .image-picker {
 		position: absolute;
-		z-index: 4;
+		z-index: var(--z-float);
 		top: 1.35rem;
 		left: calc(100% + 0.75rem);
 		width: min(560px, calc(100vw - 520px));

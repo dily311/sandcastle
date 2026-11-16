@@ -134,7 +134,7 @@
 
 <style>
 	.editor {
-		max-width: 760px;
+		max-width: var(--page-narrow);
 		margin: 0 auto;
 		padding: var(--space-8) var(--space-6) var(--space-12, 48px);
 	}
@@ -188,7 +188,7 @@
 	.bar {
 		position: sticky;
 		top: 0;
-		z-index: 3;
+		z-index: var(--z-float);
 		display: none;
 		align-items: center;
 		gap: var(--space-2);

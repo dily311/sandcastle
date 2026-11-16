@@ -157,6 +157,15 @@ pub fn run() {
                 LaunchMode::Normal => {
                     main_window.show()?;
                     main_window.set_focus()?;
+                    // 위젯이 켜져 있으면 여기서 연다 (창은 백엔드만 연다)
+                    let wanted = app
+                        .try_state::<SettingsState<models::settings::FeatureSetting>>()
+                        .and_then(|s| s.0.lock().ok().map(|f| f.widget_window_wanted()))
+                        .unwrap_or(false);
+                    if wanted {
+                        let state = app.state::<MouseTrackerState>();
+                        let _ = WidgetManager::open_widget(app.handle(), &state);
+                    }
                 }
 
                 LaunchMode::Widget => {
