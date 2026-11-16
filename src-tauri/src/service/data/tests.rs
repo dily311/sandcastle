@@ -361,7 +361,7 @@ async fn keys_never_leak_into_backup_pack_or_app_data() {
     let needles: Vec<String> = vec![short.to_string(), long[..40].to_string(), long[long.len() - 40..].to_string(), long[1200..1240].to_string()];
     let hit = |bytes: &[u8]| needles.iter().find(|n| bytes.windows(n.len()).any(|w| w == n.as_bytes())).cloned();
     // 찾기가 실제로 걸리는지 (긴 키는 1000자 조각으로 나뉘어도 가운데 조각으로 걸림)
-    assert!(hit(format!("x{short}y").as_bytes()).is_some() && hit(long[1000..2000].as_bytes()).is_some());
+    assert!(hit(format!("x{short}y").as_bytes()).is_some() && hit(&long.as_bytes()[1000..2000]).is_some());
 
     for zip_path in [&backup, &pack_out] {
         let raw = std::fs::read(zip_path).unwrap();
