@@ -49,10 +49,7 @@ pub fn map_entries(book: &Value, warnings: &mut Vec<String>) -> Vec<WorldInfoEnt
             (None, Some(dis)) => !dis,
             _ => true,
         } && (constant || !keys.is_empty());
-        let priority = ["insertion_order", "order", "priority"]
-            .iter()
-            .find_map(|k| e[*k].as_i64())
-            .unwrap_or(100);
+        let priority = ["insertion_order", "order", "priority"].iter().find_map(|k| e[*k].as_i64()).unwrap_or(100);
 
         out.push(WorldInfoEntryInput {
             comment: as_str(e, "comment").or(as_str(e, "name")).unwrap_or_default().trim().to_string(),

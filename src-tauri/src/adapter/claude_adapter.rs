@@ -4,10 +4,7 @@ use reqwest::RequestBuilder;
 use serde_json::{json, Map, Value};
 
 use crate::{
-    adapter::{
-        ensure_success, load_image, net_err, parse_err, split_system, sse::read_sse, AiProvider, Generation, OnDelta,
-        ProviderCall,
-    },
+    adapter::{ensure_success, load_image, net_err, parse_err, split_system, sse::read_sse, AiProvider, Generation, OnDelta, ProviderCall},
     error::{AppError, ErrorCode, Result},
     models::ai_service::PromptMessage,
 };
@@ -20,8 +17,7 @@ pub struct ClaudeClient;
 
 impl ClaudeClient {
     fn auth(req: RequestBuilder, call: &ProviderCall<'_>) -> RequestBuilder {
-        req.header("x-api-key", call.credential)
-            .header("anthropic-version", ANTHROPIC_VERSION)
+        req.header("x-api-key", call.credential).header("anthropic-version", ANTHROPIC_VERSION)
     }
 
     pub(crate) fn body(model: &str, prompt: &PromptMessage) -> Value {
@@ -29,10 +25,7 @@ impl ClaudeClient {
         let opts = &prompt.chat_options;
         let mut body = Map::new();
         body.insert("model".into(), json!(model));
-        body.insert(
-            "max_tokens".into(),
-            json!(opts.max_tokens.unwrap_or(DEFAULT_MAX_TOKENS)),
-        );
+        body.insert("max_tokens".into(), json!(opts.max_tokens.unwrap_or(DEFAULT_MAX_TOKENS)));
         body.insert("stream".into(), json!(opts.stream));
         if let Some(system) = system {
             body.insert("system".into(), json!(system));
@@ -76,31 +69,15 @@ impl ClaudeClient {
 #[async_trait]
 impl AiProvider for ClaudeClient {
     async fn list_models(&self, call: &ProviderCall<'_>) -> Result<Vec<String>> {
-        let resp = Self::auth(call.http.get(call.url("models")), call)
-            .send()
-            .await
-            .map_err(net_err)?;
-        let json: Value = ensure_success(resp)
-            .await?
-            .json()
-            .await
-            .map_err(|e| parse_err("모델 목록", e))?;
+        let resp = Self::auth(call.http.get(call.url("models")), call).send().await.map_err(net_err)?;
+        let json: Value = ensure_success(resp).await?.json().await.map_err(|e| parse_err("모델 목록", e))?;
         Ok(json["data"]
             .as_array()
-            .map(|arr| {
-                arr.iter()
-                    .filter_map(|m| m["id"].as_str().map(str::to_string))
-                    .collect()
-            })
+            .map(|arr| arr.iter().filter_map(|m| m["id"].as_str().map(str::to_string)).collect())
             .unwrap_or_default())
     }
 
-    async fn generate(
-        &self,
-        call: &ProviderCall<'_>,
-        prompt: &PromptMessage,
-        on_delta: &mut OnDelta<'_>,
-    ) -> Result<Generation> {
+    async fn generate(&self, call: &ProviderCall<'_>, prompt: &PromptMessage, on_delta: &mut OnDelta<'_>) -> Result<Generation> {
         let resp = Self::auth(call.http.post(call.url("messages")), call)
             .json(&Self::body(&call.profile.model, prompt))
             .send()
@@ -156,11 +133,7 @@ impl AiProvider for ClaudeClient {
                 "error" => {
                     let message = json["error"]["message"].as_str().unwrap_or("스트림 오류");
                     let overloaded = json["error"]["type"] == "overloaded_error";
-                    return Err(AppError::ai_provider(
-                        ErrorCode::AiProviderError,
-                        message.to_string(),
-                        overloaded,
-                    ));
+                    return Err(AppError::ai_provider(ErrorCode::AiProviderError, message.to_string(), overloaded));
                 }
                 _ => {}
             }

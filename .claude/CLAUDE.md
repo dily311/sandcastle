@@ -50,8 +50,8 @@
     - [x] (추가) 예산 한도·요금 환산·오래된 기록 정리 (1-A, M9, ADR-007)
     - [x] (추가) 데이터 안전: 백업 범위 보완, 마이그레이션 전 자동 백업 (1-B, M9, ADR-008)
     - [x] (추가) Android 실기기 점검과 모바일 레이아웃 최소선 (1-C, M10, ADR-009 — 에뮬레이터로 점검, 실기기는 남음)
-    - [ ] (추가) 품질 기반: E2E 스모크, CI 보강, 문서·이름 정리, 성능 측정 (1-D)
-    - [ ] (추가) 배포: 버전 규칙·업데이트 알림·서명 (1-E)
+    - [x] (추가) 품질 기반: E2E 스모크, CI 보강, 문서·이름 정리, 성능 측정 (1-D, M11)
+    - [x] (추가) 배포: 버전 규칙·업데이트 알림·서명 (1-E, M11, ADR-010)
 2. [ ] 데이터 관리 및 동기화
     - [ ] (추가) 변경 추적(수정 시각·삭제 표시·기기 id)과 휴지통 (2-A)
     - [ ] (추가) 동기화 묶음 형식 + 파일로 주고받는 수동 병합 (2-B)
@@ -324,6 +324,24 @@ M1~M8(2026-11-17 합의, 완료)의 결정과 체크 목록은 `docs/마일스�
     - 1-C-2 백그라운드: 이미 있던 background-service 플러그인은 호스트 네이티브 코어가 필요해 쓰지 못하고, 직접 만든 GenerationService(매니페스트에 선언만 있던 것)를 씀
     - 커밋: 1-C-2와 1-C-4는 같은 파일(main.ts 등)을 고쳐 한 커밋으로
 - 하지 못한 것: 실기기 확인, 알림 권한 묻기(5-C-5), 대화상자가 열려 있을 때 뒤로 가기로 닫기(5-C-4), 쓰이지 않는 background-service 의존성 정리
+
+### M11. 품질 기반과 배포 (1-D + 1-E, 2026-11-17, 완료)
+- 결정 (2026-11-17): Windows 코드 서명은 당분간 없음 / Android 서명 키는 내 PC + GitHub Secrets / 업데이트는 GitHub Releases `dily311/sandcastle` → ADR-010
+- [x] 1-D-1 E2E 스모크: WebdriverIO + tauri-driver, 가짜 공급자, E2E 전용 identifier (`e2e/`, `pnpm e2e:build && pnpm e2e`), CI e2e 작업
+- [x] 1-D-2 CI: `cargo fmt --check`(rustfmt.toml max_width 160, 전체 한 번 정리), Android(aarch64) clippy
+- [x] 1-D-3 문서: Tech Spec 마일스톤 → CLAUDE.md, ADR-005 기본값(HTML 꺼짐)
+- [x] 1-D-4 이름: `feautreManager.svelte.ts` → `widgetFeatures.svelte.ts` (위젯 하위 기능 실행기)
+- [x] 1-D-5 성능: `docs/성능 측정.md` — 긴 대화 2000개 36초 → 0.9초(최근 80개씩), 갤러리 3000장 4.2초 → 0.2초(120장씩)
+- [x] 1-D-6 panic 기록: `logs/panic.log` + 로그 탭 (밖으로 보내지 않음)
+- [x] 1-E-1 버전 한 곳(package.json), `pnpm version:set`, CI 확인, `CHANGELOG.md`
+- [x] 1-E-2 새 버전 확인: 누를 때만 / 켤 때 확인은 기본 꺼짐, 릴리스 페이지를 열 뿐 내려받지 않음
+- [x] 1-E-3 서명: Android release 서명(keystore.properties가 있을 때), R8 keep 규칙
+- [x] 1-E-4 릴리스 워크플로: 태그 → Windows 설치 파일 + APK → 초안 릴리스 (`docs/배포.md`)
+- 계획과 다르게 한 것
+    - 1-D-2: fmt 검사 전에 코드 전체를 한 번 rustfmt로 정리(내용 변경 없는 커밋 하나)
+    - 1-E-2: Tauri updater 대신 GitHub API 확인 + 릴리스 페이지 열기 (계획의 "알림만"에 맞춤, 업데이트 서명 키가 필요 없음)
+    - 커밋: 1-D-3과 1-D-4는 한 커밋
+- 하지 못한 것: E2E·릴리스 워크플로는 아직 GitHub에서 돌려 보지 않음(저장소에 원격이 없어 push 전), 실제 서명 키는 사용자가 만들어 Secrets에 넣어야 함, 배포 빌드 시작 시간 측정
 
 ## 현재 단계의 개선점
 

@@ -2,7 +2,7 @@ import { contextMenuRegistry } from "$/lib/contextmenu/registry";
 import { contextActionRegistry } from "$/lib/contextmenu/actions";
 import Simeji from "./Simeji.svelte";
 import type { FeatureRuntime } from "$/lib/features/types";
-import { featureManager } from "$/lib/features/feautreManager.svelte";
+import { widgetFeatures } from "$/lib/features/widgetFeatures.svelte";
 import type { ContextMenuContext } from "$/lib/contextmenu/types";
 import { Character } from "./character/Character";
 
@@ -35,7 +35,7 @@ class RegisterMascotFeature implements FeatureRuntime {
 		this.unsubscriber = undefined;
 
 		// 제거
-		featureManager.unregister(this.id);
+		widgetFeatures.unregister(this.id);
 	}
 }
 

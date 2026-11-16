@@ -49,6 +49,26 @@ pub async fn deliver_saved_file(app: AppHandle, tmp: String, uri: String) -> Res
         .map_err(|e| crate::error::AppError::internal(e.to_string()))?
 }
 
+/// 새 버전 확인 (GitHub Releases). 내려받지 않고 릴리스 페이지 주소만 돌려준다 (1-E-2)
+#[tauri::command]
+#[specta::specta]
+pub async fn check_for_update(state: State<'_, AppState>) -> Result<crate::service::update::UpdateInfo> {
+    crate::service::update::check(&state.http_client).await
+}
+
+/// 지난 panic 기록 (최근 것부터, 앱 데이터 폴더의 logs/panic.log)
+#[tauri::command]
+#[specta::specta]
+pub async fn get_panic_log(app: AppHandle) -> Result<Vec<crate::sys::panic_log::PanicEntry>> {
+    Ok(crate::sys::panic_log::read(&crate::sys::panic_log::log_path(&app_data_dir(&app)?), 100))
+}
+
+#[tauri::command]
+#[specta::specta]
+pub async fn clear_panic_log(app: AppHandle) -> Result<()> {
+    Ok(crate::sys::panic_log::clear(&crate::sys::panic_log::log_path(&app_data_dir(&app)?))?)
+}
+
 /// DB 점검: 무결성(PRAGMA integrity_check)과 아무 데도 쓰이지 않는 파일 목록. 지우지 않는다
 #[tauri::command]
 #[specta::specta]
@@ -139,7 +159,11 @@ pub async fn store_dropped_file(app: AppHandle, name: String, data_base64: Strin
         .map_err(|e| crate::error::AppError::validation(format!("파일 내용을 읽을 수 없습니다: {e}"), None))?;
     let file_name = safe_file_name(&name);
     let path = if keep {
-        let ext = std::path::Path::new(&file_name).extension().and_then(|e| e.to_str()).unwrap_or("bin").to_ascii_lowercase();
+        let ext = std::path::Path::new(&file_name)
+            .extension()
+            .and_then(|e| e.to_str())
+            .unwrap_or("bin")
+            .to_ascii_lowercase();
         app_data_dir(&app)?.join("attachments").join(format!("{}.{ext}", uuid::Uuid::new_v4()))
     } else {
         let root = std::env::temp_dir().join("sandcastle-drop");
@@ -158,10 +182,20 @@ fn safe_file_name(name: &str) -> String {
     let base = name.rsplit(['/', '\\']).next().unwrap_or(name);
     let cleaned: String = base
         .chars()
-        .map(|c| if matches!(c, '<' | '>' | ':' | '"' | '|' | '?' | '*') || c.is_control() { '_' } else { c })
+        .map(|c| {
+            if matches!(c, '<' | '>' | ':' | '"' | '|' | '?' | '*') || c.is_control() {
+                '_'
+            } else {
+                c
+            }
+        })
         .collect();
     let cleaned = cleaned.trim().trim_matches('.').to_string();
-    if cleaned.is_empty() { "file".into() } else { cleaned }
+    if cleaned.is_empty() {
+        "file".into()
+    } else {
+        cleaned
+    }
 }
 
 /// 임시 드롭 폴더에서 하루 지난 것 지우기
@@ -169,7 +203,12 @@ fn clean_old(root: &std::path::Path) {
     let Ok(entries) = std::fs::read_dir(root) else { return };
     let day = std::time::Duration::from_secs(24 * 60 * 60);
     for e in entries.flatten() {
-        let old = e.metadata().and_then(|m| m.modified()).ok().and_then(|t| t.elapsed().ok()).is_some_and(|d| d > day);
+        let old = e
+            .metadata()
+            .and_then(|m| m.modified())
+            .ok()
+            .and_then(|t| t.elapsed().ok())
+            .is_some_and(|d| d > day);
         if old {
             let _ = std::fs::remove_dir_all(e.path());
         }
@@ -188,7 +227,6 @@ mod drop_tests {
         assert_eq!(safe_file_name(".."), "file");
     }
 }
-
 
 /// 캐릭터를 SillyTavern 카드로 내보내기. format: "json" | "png" (아바타에 카드를 넣은 그림)
 #[tauri::command]

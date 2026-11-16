@@ -5,12 +5,12 @@
 //! 상태(위치/시간/날씨/변수/씬/대기열)는 세션 테이블의 "지금" 값이 아니라 책갈피의 스냅샷에서 복원한다.
 //! 전부 한 트랜잭션이라 중간에 실패하면 새 세션이 남지 않는다.
 use crate::db::game::{
-    forked_game_character_states, forked_game_conversations, forked_game_conversations_participant, forked_game_event_logs,
-    forked_game_journal, forked_game_messages, forked_game_relationship_snapshots, forked_game_save, forked_game_story_plans, get_game_journal_lookup, get_game_save,
+    forked_game_character_states, forked_game_conversations, forked_game_conversations_participant, forked_game_event_logs, forked_game_journal,
+    forked_game_messages, forked_game_relationship_snapshots, forked_game_save, forked_game_story_plans, get_game_journal_lookup, get_game_save,
     upsert_game_player_sessions,
 };
-use crate::game::journal::STATE_KIND;
 use crate::error::AppError;
+use crate::game::journal::STATE_KIND;
 use crate::game::runtime::GameState;
 use sqlx::SqlitePool;
 
@@ -40,7 +40,14 @@ pub async fn fork_at_seq(pool: &SqlitePool, game_id: &str, parent_session_id: &s
 
 /// 상태(state)와 seq를 받아 parent의 기록을 seq까지 복사한 새 세션을 만든다.
 /// copy_save_slot이 있으면 그 책갈피도 새 세션으로 복사한다.
-async fn fork_from(pool: &SqlitePool, game_id: &str, parent_session_id: &str, mut state: GameState, to_seq: u32, copy_save_slot: Option<i64>) -> Result<String, AppError> {
+async fn fork_from(
+    pool: &SqlitePool,
+    game_id: &str,
+    parent_session_id: &str,
+    mut state: GameState,
+    to_seq: u32,
+    copy_save_slot: Option<i64>,
+) -> Result<String, AppError> {
     let new_session_id = uuid::Uuid::new_v4().to_string();
     state.session_id = new_session_id.clone();
     state.parent_session_id = Some(parent_session_id.to_string());

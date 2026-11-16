@@ -1,10 +1,10 @@
 // 음악 폴더 감시: 커맨드 등록 전(위젯 작업 중)이라 아직 아무도 부르지 않는다
 #![allow(dead_code)]
+use notify::RecommendedWatcher;
+use notify::Watcher;
 use std::path::Path;
 use std::sync::Mutex;
 use std::{path::PathBuf, time::Duration};
-use notify::RecommendedWatcher;
-use notify::Watcher;
 use tauri::{AppHandle, Manager, State};
 
 use crate::db;
@@ -18,9 +18,7 @@ pub struct MusicWatcherState {
 
 impl MusicWatcherState {
     pub fn new() -> Self {
-        Self {
-            watcher: Mutex::new(None),
-        }
+        Self { watcher: Mutex::new(None) }
     }
 }
 
@@ -34,7 +32,7 @@ pub async fn start_music_watcher(
     folder_path: String,
 ) -> Result<(), AppError> {
     let mut watcher_guard = music_state.watcher.lock().map_err(|e| AppError::io(e.to_string()))?;
-    
+
     // 이미 감시 중인 워처가 없다면 새로 생성
     if watcher_guard.is_none() {
         let mut pool = state.db.clone();
@@ -58,11 +56,7 @@ pub fn stop_music_watcher(state: State<'_, MusicWatcherState>) -> Result<(), App
 
     Ok(())
 }
-pub async fn folder_watching(
-    pool: &mut DbPool,
-    folder_path: String,
-    cache_dir: &PathBuf,
-) -> Result<notify::RecommendedWatcher, AppError> {
+pub async fn folder_watching(pool: &mut DbPool, folder_path: String, cache_dir: &PathBuf) -> Result<notify::RecommendedWatcher, AppError> {
     let (tx, rx) = std::sync::mpsc::channel::<notify::Result<notify::Event>>();
     let mut watcher: notify::RecommendedWatcher = notify::Watcher::new(
         move |res| {
@@ -107,8 +101,7 @@ async fn handle_fs_event(pool: &mut DbPool, event: notify::Event, cache_dir: &Pa
                     let mtime = get_mtime(&path);
 
                     // DB에 UPSERT (있으면 수정 시간 갱신, 없으면 추가)
-                    let parsed_result =
-                        parse_music_metadata(&path, mtime, &cache_dir).map_err(|e| e.to_string());
+                    let parsed_result = parse_music_metadata(&path, mtime, &cache_dir).map_err(|e| e.to_string());
                     match parsed_result {
                         Ok(data) => {
                             let result = db::widget::upsert_music_meta(&*pool, data).await;

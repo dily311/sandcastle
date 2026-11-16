@@ -7,8 +7,8 @@
 use crate::db::game::delete_game_project;
 use crate::error::AppError;
 use crate::game::package::{self, PackageData};
-use crate::game::template;
 use crate::game::runtime::repository::{GameRepository, SqlxGameRepository};
+use crate::game::template;
 use crate::game::validate::{self, Issue};
 use serde::Serialize;
 use sqlx::SqlitePool;
@@ -37,7 +37,16 @@ impl GameManager {
         }
         let template = template::find(&template_id).ok_or_else(|| AppError::validation(format!("알 수 없는 템플릿입니다: {template_id}"), None))?;
         let bytes = template::package_bytes(&template.id).ok_or_else(|| AppError::not_found("템플릿 패키지가 없습니다"))?;
-        package::import_bytes(pool, games_root, bytes, Some(package::ImportOverrides { title, template_id: template.id })).await
+        package::import_bytes(
+            pool,
+            games_root,
+            bytes,
+            Some(package::ImportOverrides {
+                title,
+                template_id: template.id,
+            }),
+        )
+        .await
     }
 
     /// 이미 로컬에 있는(= DB에 game_projects row가 있는) 게임의 폴더를 확인해서 경로를 돌려준다.
@@ -67,7 +76,10 @@ impl GameManager {
 
         // 저장 후 상태를 다시 읽어 검증해서 돌려준다 (저장은 이미 끝났다 — 이건 안내용).
         let after = repo.load_definition(game_id).await.map_err(|e| AppError::database(e.to_string()))?;
-        Ok(SaveReport { deleted, diagnostics: validate::diagnose(&after, Some(games_root.join(game_id).as_path())) })
+        Ok(SaveReport {
+            deleted,
+            diagnostics: validate::diagnose(&after, Some(games_root.join(game_id).as_path())),
+        })
     }
 
     /// 게임을 지운다. game_projects가 지워지면 FK CASCADE로 정의 테이블과 세션/세이브/일지/대화가 같이

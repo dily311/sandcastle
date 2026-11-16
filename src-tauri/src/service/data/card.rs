@@ -60,7 +60,11 @@ pub async fn export_card(db: &DbPool, character_id: &str, format: &str, path: &P
     for id in &c.world_info_ids {
         entries.extend(conversation::get_all_worldinfo_entries(db, id).await?);
         if book_name.is_none() {
-            book_name = conversation::get_all_worldinfo_books(db).await?.into_iter().find(|b| &b.id == id).map(|b| b.name);
+            book_name = conversation::get_all_worldinfo_books(db)
+                .await?
+                .into_iter()
+                .find(|b| &b.id == id)
+                .map(|b| b.name);
         }
     }
     let card = card_json(&c, book_name.as_deref(), &entries);
@@ -83,7 +87,8 @@ fn avatar_png(avatar: Option<&str>) -> Result<Vec<u8>> {
         .and_then(|p| image::open(p).ok())
         .unwrap_or_else(|| image::DynamicImage::ImageRgb8(image::RgbImage::from_pixel(400, 600, image::Rgb([92, 104, 120]))));
     let mut out = std::io::Cursor::new(Vec::new());
-    img.write_to(&mut out, image::ImageFormat::Png).map_err(|e| AppError::internal(format!("PNG로 바꿀 수 없습니다: {e}")))?;
+    img.write_to(&mut out, image::ImageFormat::Png)
+        .map_err(|e| AppError::internal(format!("PNG로 바꿀 수 없습니다: {e}")))?;
     Ok(out.into_inner())
 }
 

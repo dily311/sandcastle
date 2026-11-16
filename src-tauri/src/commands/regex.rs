@@ -40,12 +40,7 @@ pub async fn delete_regex_script(state: State<'_, AppState>, id: String) -> Resu
 /// 편집 화면 미리보기: 저장하지 않고 텍스트에 적용한 결과
 #[tauri::command]
 #[specta::specta]
-pub fn preview_regex_script(
-    input: RegexScriptInput,
-    text: String,
-    char_name: Option<String>,
-    user_name: Option<String>,
-) -> Result<String> {
+pub fn preview_regex_script(input: RegexScriptInput, text: String, char_name: Option<String>, user_name: Option<String>) -> Result<String> {
     let script = input.to_script(String::new(), 0);
     let macros = RegexMacros {
         char_name: char_name.unwrap_or_default(),
@@ -73,12 +68,7 @@ pub async fn apply_regex(
 }
 
 pub(crate) fn selected_preset(settings: &SettingsState<AppSetting>) -> Option<String> {
-    settings
-        .0
-        .lock()
-        .ok()
-        .map(|s| s.selected_preset.clone())
-        .filter(|s| !s.is_empty())
+    settings.0.lock().ok().map(|s| s.selected_preset.clone()).filter(|s| !s.is_empty())
 }
 
 fn validate_input(input: &RegexScriptInput) -> Result<()> {

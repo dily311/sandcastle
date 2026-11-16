@@ -43,7 +43,10 @@ pub fn sniff_extension(head: &[u8], allowed: &[String]) -> String {
     }
     // zip 계열 (.zip .scpack .scbackup .tgame) — 필터가 고른 것
     if head.starts_with(b"PK\x03\x04") {
-        return ["scbackup", "scpack", "tgame", "zip"].into_iter().find(|e| has(e)).map_or_else(first, str::to_string);
+        return ["scbackup", "scpack", "tgame", "zip"]
+            .into_iter()
+            .find(|e| has(e))
+            .map_or_else(first, str::to_string);
     }
     // 글: JSON 한 덩어리 / 줄마다 JSON(jsonl)
     let text = String::from_utf8_lossy(head);
@@ -68,7 +71,8 @@ fn tmp_dir(app_data_dir: &Path, sub: &str) -> Result<PathBuf> {
 }
 
 fn parse(uri: &str) -> Result<FilePath> {
-    uri.parse::<FilePath>().map_err(|e| AppError::validation(format!("잘못된 파일 주소: {e}"), None))
+    uri.parse::<FilePath>()
+        .map_err(|e| AppError::validation(format!("잘못된 파일 주소: {e}"), None))
 }
 
 /// 고른 content 주소를 앱 임시 폴더로 복사하고 경로를 돌려준다 (경로면 그대로)
@@ -78,7 +82,10 @@ pub fn stage_picked<R: Runtime>(app: &AppHandle<R>, app_data_dir: &Path, uri: &s
     }
     let mut opts = OpenOptions::new();
     opts.read(true);
-    let mut src = app.fs().open(parse(uri)?, opts).map_err(|e| AppError::io(format!("고른 파일을 열 수 없습니다: {e}")))?;
+    let mut src = app
+        .fs()
+        .open(parse(uri)?, opts)
+        .map_err(|e| AppError::io(format!("고른 파일을 열 수 없습니다: {e}")))?;
     let mut bytes = vec![];
     src.read_to_end(&mut bytes)?;
     let ext = sniff_extension(&bytes[..bytes.len().min(4096)], allowed);
@@ -89,7 +96,11 @@ pub fn stage_picked<R: Runtime>(app: &AppHandle<R>, app_data_dir: &Path, uri: &s
 
 /// 저장할 임시 경로 (이름은 기본 파일 이름 그대로 — 내보내기가 확장자로 형식을 정하는 곳이 있어서)
 pub fn save_target(app_data_dir: &Path, file_name: &str) -> Result<String> {
-    let name = Path::new(file_name).file_name().map(|n| n.to_string_lossy().to_string()).filter(|n| !n.is_empty()).unwrap_or_else(|| "export".into());
+    let name = Path::new(file_name)
+        .file_name()
+        .map(|n| n.to_string_lossy().to_string())
+        .filter(|n| !n.is_empty())
+        .unwrap_or_else(|| "export".into());
     let dir = tmp_dir(app_data_dir, &format!("saving/{}", Uuid::new_v4()))?;
     Ok(dir.join(name).to_string_lossy().to_string())
 }
@@ -105,7 +116,10 @@ pub fn deliver_saved<R: Runtime>(app: &AppHandle<R>, app_data_dir: &Path, tmp: &
     let bytes = std::fs::read(&tmp_path)?;
     let mut opts = OpenOptions::new();
     opts.write(true).truncate(true).create(true);
-    let mut dst = app.fs().open(parse(uri)?, opts).map_err(|e| AppError::io(format!("저장할 곳을 열 수 없습니다: {e}")))?;
+    let mut dst = app
+        .fs()
+        .open(parse(uri)?, opts)
+        .map_err(|e| AppError::io(format!("저장할 곳을 열 수 없습니다: {e}")))?;
     dst.write_all(&bytes)?;
     dst.flush()?;
     if let Some(dir) = tmp_path.parent() {

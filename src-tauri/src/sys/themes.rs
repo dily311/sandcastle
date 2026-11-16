@@ -36,7 +36,9 @@ impl ThemeManager {
                 if let Some(filename) = path.file_name().and_then(|s| s.to_str()) {
                     // 깨진 파일 하나 때문에 목록 전체가 실패하지 않게 건너뜀
                     let std::result::Result::Ok(file) = fs::File::open(&path) else { continue };
-                    let std::result::Result::Ok(mut data) = serde_json::from_reader::<_, CssThemeMeta>(file) else { continue };
+                    let std::result::Result::Ok(mut data) = serde_json::from_reader::<_, CssThemeMeta>(file) else {
+                        continue;
+                    };
                     data.filename = filename.to_string();
                     filenames.push(data);
                 }
@@ -48,9 +50,7 @@ impl ThemeManager {
 
     // 2. 단일 테마 내용 읽기
     pub fn load_content(&self, filename: &str) -> Result<String> {
-        let safe_filename = Path::new(filename)
-            .file_name()
-            .context("유효하지 않은 파일명입니다.")?;
+        let safe_filename = Path::new(filename).file_name().context("유효하지 않은 파일명입니다.")?;
         let theme_path = self.themes_dir.join(safe_filename);
         // theme_path.set_extension("json");
 
@@ -67,9 +67,7 @@ impl ThemeManager {
 
     /// 편집용: 테마 전체 (색 + CSS)
     pub fn load(&self, filename: &str) -> Result<CssTheme> {
-        let safe_filename = Path::new(filename)
-            .file_name()
-            .context("유효하지 않은 파일명입니다.")?;
+        let safe_filename = Path::new(filename).file_name().context("유효하지 않은 파일명입니다.")?;
         let data = fs::read_to_string(self.themes_dir.join(safe_filename)).context("파일을 읽는 중 실패했습니다.")?;
         let mut theme: CssTheme = serde_json::from_str(&data)?;
         theme.filename = filename.to_string();
@@ -78,9 +76,7 @@ impl ThemeManager {
 
     // 3. 테마 저장
     pub fn save(&self, filename: &str, content: &CssTheme) -> Result<()> {
-        let safe_filename = Path::new(filename)
-            .file_name()
-            .context("유효하지 않은 파일명입니다.")?;
+        let safe_filename = Path::new(filename).file_name().context("유효하지 않은 파일명입니다.")?;
         let save_path = self.themes_dir.join(safe_filename);
         let data = serde_json::to_string(content)?;
         fs::write(save_path, data).context("파일을 저장하는 중 실패했습니다.")?;
@@ -90,9 +86,7 @@ impl ThemeManager {
 
     // 4. 테마 삭제
     pub fn delete(&self, filename: &str) -> Result<()> {
-        let safe_filename = Path::new(filename)
-            .file_name()
-            .context("유효하지 않은 파일명입니다.")?;
+        let safe_filename = Path::new(filename).file_name().context("유효하지 않은 파일명입니다.")?;
         let path = self.themes_dir.join(safe_filename);
 
         fs::remove_file(path).context("파일을 삭제하는 중 실패했습니다.")?;

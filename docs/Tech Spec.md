@@ -89,7 +89,7 @@ UI에서는 Svelte5를 사용한다.
 | Rust 단위    | cargo test         | 로직이 예상대로 계산되는가?                 |
 | DB           | SQLite             | 데이터가 정확하게 저장되고 조회되는가?      |
 | Tauri 커맨드 | Mock + Integration | 프론트엔드와 Rust 사이의 계약이 맞는가?     |
-| E2E          | WebdriverIO        | 실제 앱에서 전체 기능이 작동하는가?         |
+| E2E          | WebdriverIO + tauri-driver | 실제 앱에서 전체 기능이 작동하는가? (`e2e/`, 가짜 공급자, CI의 e2e 작업) |
 
 ### UI 테스트 - Svelte5 + Vitest
 
@@ -104,7 +104,8 @@ UI에서는 Svelte5를 사용한다.
 
 #### 프론트엔드 테스트
 
-npm run test:run
+pnpm check        (타입 검사)
+pnpm test:run
 
 #### Rust 테스트
 
@@ -117,19 +118,21 @@ cargo fmt --check
 
 ##### Rust 정적 분석
 
-cargo clippy
+cargo clippy --all-targets
+
+##### E2E 스모크 (Windows, 한 번: cargo install tauri-driver --locked + WebView2와 같은 버전의 msedgedriver)
+
+pnpm e2e:build    (identifier를 …sandcastle.e2e로 바꾼 디버그 빌드 — 평소 앱 데이터와 섞이지 않음)
+MSEDGEDRIVER=<msedgedriver.exe 경로> pnpm e2e
+
+##### Android 대상 확인 (CI의 android 작업과 같음, NDK 필요)
+
+cargo clippy --lib --target aarch64-linux-android
 
 ## 마일스톤 일정
 
-- [~] Phase1: 기본 아키텍처 구축
-    - [x] ~~conv 테이블과 game 테이블의 통합작업~~ (하지 않기로 함, ADR-001)
-    - [ ] UI 구축
-    - [ ] 게임 에셋 매니저 구축
-    - [ ] 다국어 환경 기반 마련
-- [~] Phase2: DB 통합테스트 구성 (CI에서 cargo test 실행)
-- [ ] Phase3: 외부 API 연결 작업
-- [ ] Phase4: 모바일 UI작업
-- [ ] Phase5: 게임 엔진 템플릿 세분화
+일정과 진행은 한 곳에서만 관리한다: `.claude/CLAUDE.md`의 "중장기 계획 단계"·"단계별 세부 계획"·"가까운 목표".
+끝난 마일스톤(M1~)의 기록은 `docs/마일스톤 기록.md`. (예전 Phase1~5 목록은 CLAUDE.md의 1~6단계로 옮겨졌다 — conv/game 테이블 통합은 하지 않기로 함, ADR-001)
 
 
 ## 잠재적 문제

@@ -45,14 +45,8 @@ impl From<PersonaRow> for Persona {
             name: r.name,
             avatar: r.avatar,
             description: r.description,
-            world_info_ids: r
-                .world_info_ids
-                .and_then(|s| serde_json::from_str(&s).ok())
-                .unwrap_or_default(),
-            tags: r
-                .tags
-                .and_then(|s| serde_json::from_str(&s).ok())
-                .unwrap_or_default(),
+            world_info_ids: r.world_info_ids.and_then(|s| serde_json::from_str(&s).ok()).unwrap_or_default(),
+            tags: r.tags.and_then(|s| serde_json::from_str(&s).ok()).unwrap_or_default(),
             color: r.color,
             is_system_default: r.is_system_default != 0,
             created_at: r.created_at,
@@ -157,15 +151,9 @@ impl From<CharacterRow> for Character {
             example_dialogue: r.example_dialogue,
             system_prompt_override: r.system_prompt_override,
             creator_notes: r.creator_notes,
-            world_info_ids: r
-                .world_info_ids
-                .and_then(|s| serde_json::from_str(&s).ok())
-                .unwrap_or_default(),
+            world_info_ids: r.world_info_ids.and_then(|s| serde_json::from_str(&s).ok()).unwrap_or_default(),
             color: r.color,
-            tags: r
-                .tags
-                .and_then(|s| serde_json::from_str(&s).ok())
-                .unwrap_or_default(),
+            tags: r.tags.and_then(|s| serde_json::from_str(&s).ok()).unwrap_or_default(),
             category: r.category,
             default_persona_id: r.default_persona_id,
             default_prompt_preset_id: r.default_prompt_preset_id,
@@ -271,14 +259,8 @@ impl From<WorldInfoEntryRow> for WorldInfoEntry {
         Self {
             id: r.id,
             book_id: r.book_id,
-            keys: r
-                .keys
-                .and_then(|k| serde_json::from_str(&k).ok())
-                .unwrap_or_default(),
-            secondary_keys: r
-                .secondary_keys
-                .and_then(|k| serde_json::from_str(&k).ok())
-                .unwrap_or_default(),
+            keys: r.keys.and_then(|k| serde_json::from_str(&k).ok()).unwrap_or_default(),
+            secondary_keys: r.secondary_keys.and_then(|k| serde_json::from_str(&k).ok()).unwrap_or_default(),
             content: r.content,
             enabled: r.enabled != 0,
             priority: r.priority,
@@ -371,15 +353,9 @@ impl From<ConversationRow> for Conversation {
             title: r.title.unwrap_or_default(),
             character_id: r.character_id.unwrap_or_default(),
             persona_id: r.persona_id.unwrap_or_default(),
-            world_info_ids: r
-                .world_info_ids
-                .and_then(|w| serde_json::from_str(&w).ok())
-                .unwrap_or_default(),
+            world_info_ids: r.world_info_ids.and_then(|w| serde_json::from_str(&w).ok()).unwrap_or_default(),
             mode: r.mode.unwrap_or_default(),
-            meta: r
-                .meta
-                .and_then(|m| serde_json::from_str(&m).ok())
-                .unwrap_or_default(),
+            meta: r.meta.and_then(|m| serde_json::from_str(&m).ok()).unwrap_or_default(),
             pinned: r.pinned.unwrap_or(0) != 0,
             images_enabled: r.images_enabled != 0,
             created_at: r.created_at.unwrap_or_default(),
@@ -473,10 +449,7 @@ impl From<MessageRow> for Message {
             name: r.name,
             content: r.content,
             character_id: r.character_id,
-            meta: r
-                .meta
-                .and_then(|m| serde_json::from_str(&m).ok())
-                .unwrap_or_default(),
+            meta: r.meta.and_then(|m| serde_json::from_str(&m).ok()).unwrap_or_default(),
             created_at: r.created_at,
             updated_at: r.updated_at,
         }

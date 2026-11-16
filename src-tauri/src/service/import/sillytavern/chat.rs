@@ -35,9 +35,7 @@ pub fn parse_jsonl(bytes: &[u8]) -> Result<(Value, Vec<Value>)> {
         .ok_or_else(|| AppError::validation("채팅 파일의 첫 줄(헤더)을 읽을 수 없습니다", None))?;
     let mut messages = vec![];
     for (i, line) in lines.enumerate() {
-        let v: Value = serde_json::from_str(line).map_err(|e| {
-            AppError::validation(format!("채팅 {}번째 메시지를 읽을 수 없습니다: {e}", i + 1), None)
-        })?;
+        let v: Value = serde_json::from_str(line).map_err(|e| AppError::validation(format!("채팅 {}번째 메시지를 읽을 수 없습니다: {e}", i + 1), None))?;
         messages.push(v);
     }
     Ok((header, messages))
@@ -137,10 +135,7 @@ pub fn map_messages(raw: &[Value], warnings: &mut Vec<String>) -> Vec<ImportedMe
         }
 
         // 스와이프: 2개 이상이고 swipe_id가 범위 안일 때만 의미가 있다
-        let swipes: Vec<&str> = m["swipes"]
-            .as_array()
-            .map(|a| a.iter().filter_map(Value::as_str).collect())
-            .unwrap_or_default();
+        let swipes: Vec<&str> = m["swipes"].as_array().map(|a| a.iter().filter_map(Value::as_str).collect()).unwrap_or_default();
         let swipe_id = m["swipe_id"].as_u64().map(|n| n as usize);
         if swipes.len() >= 2 {
             let selected = swipe_id.filter(|i| *i < swipes.len()).unwrap_or_else(|| {
@@ -181,9 +176,7 @@ pub fn map_messages(raw: &[Value], warnings: &mut Vec<String>) -> Vec<ImportedMe
         });
     }
     if broken_swipes > 0 {
-        warnings.push(format!(
-            "메시지 {broken_swipes}개의 스와이프 정보가 맞지 않아 현재 표시된 내용만 가져옴"
-        ));
+        warnings.push(format!("메시지 {broken_swipes}개의 스와이프 정보가 맞지 않아 현재 표시된 내용만 가져옴"));
     }
     out
 }

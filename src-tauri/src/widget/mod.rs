@@ -1,6 +1,6 @@
 mod interaction;
-mod watcher;
 pub mod manager;
+mod watcher;
 
+pub use interaction::{InteractiveRegion, MouseTrackerState, WidgetInteractionState};
 pub use watcher::MusicWatcherState;
-pub use interaction::{MouseTrackerState, WidgetInteractionState, InteractiveRegion};

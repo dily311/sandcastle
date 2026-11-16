@@ -43,13 +43,7 @@ fn required(name: &str) -> Result<String> {
 /// 응답 조각은 `on_event`로 흐르고, 저장된 메시지는 반환값으로 온다.
 #[tauri::command]
 #[specta::specta]
-pub async fn chat_send(
-    app: AppHandle,
-    conversation_id: String,
-    text: String,
-    attachments: Vec<String>,
-    on_event: Channel<StreamPayload>,
-) -> Result<ChatTurn> {
+pub async fn chat_send(app: AppHandle, conversation_id: String, text: String, attachments: Vec<String>, on_event: Channel<StreamPayload>) -> Result<ChatTurn> {
     let saved = chat_task::run(&app, &conversation_id, ChatJob::Send { text, attachments }, on_event).await?;
     chat_task::into_turn(saved)
 }
@@ -172,15 +166,28 @@ pub struct DisplayItem {
 pub async fn display_messages(state: State<'_, AppState>, conversation_id: String, items: Vec<DisplayItem>) -> Result<Vec<String>> {
     use crate::service::chat::regex_processor::{RegexMacros, RegexProcessor};
     let conv = conversation::get_conversation(&state.db, &conversation_id).await?;
-    let char_name = conversation::get_character(&state.db, &conv.character_id).await.map(|c| c.name).unwrap_or_default();
+    let char_name = conversation::get_character(&state.db, &conv.character_id)
+        .await
+        .map(|c| c.name)
+        .unwrap_or_default();
     let persona_id = match conv.persona_id.as_str() {
         "" => conversation::get_system_default_persona(&state.db).await.unwrap_or_else(|_| "default".into()),
         id => id.to_string(),
     };
     let user_name = conversation::get_persona(&state.db, &persona_id).await.map(|p| p.name).unwrap_or_default();
-    let regex = RegexProcessor::load(&state.db, Some(&conv.character_id), conv.prompt_preset_id.as_deref(), RegexMacros { char_name, user_name }).await?;
+    let regex = RegexProcessor::load(
+        &state.db,
+        Some(&conv.character_id),
+        conv.prompt_preset_id.as_deref(),
+        RegexMacros { char_name, user_name },
+    )
+    .await?;
     let n = items.len();
-    Ok(items.iter().enumerate().map(|(i, m)| regex.for_display(&m.content, &m.role, n - 1 - i)).collect())
+    Ok(items
+        .iter()
+        .enumerate()
+        .map(|(i, m)| regex.for_display(&m.content, &m.role, n - 1 - i))
+        .collect())
 }
 
 /// 컨텍스트 사용량 (오른쪽 패널). 마지막으로 보낸 프롬프트 기준
@@ -205,16 +212,18 @@ pub struct ContextUsage {
 
 #[tauri::command]
 #[specta::specta]
-pub async fn context_usage(
-    state: State<'_, AppState>,
-    settings: State<'_, SettingsState<AppSetting>>,
-    conversation_id: String,
-) -> Result<ContextUsage> {
-    use crate::service::{chat::chat_manager::current_conv_request, prompt::prompt_manager::{DEFAULT_CONTEXT_LIMIT as CONTEXT_LIMIT, chat_options_from, context_limit_from, PromptManager}};
+pub async fn context_usage(state: State<'_, AppState>, settings: State<'_, SettingsState<AppSetting>>, conversation_id: String) -> Result<ContextUsage> {
     use crate::models::ai_service::PromptRole;
+    use crate::service::{
+        chat::chat_manager::current_conv_request,
+        prompt::prompt_manager::{chat_options_from, context_limit_from, PromptManager, DEFAULT_CONTEXT_LIMIT as CONTEXT_LIMIT},
+    };
 
     let conv = conversation::get_conversation(&state.db, &conversation_id).await?;
-    let char_default = conversation::get_character(&state.db, &conv.character_id).await.ok().and_then(|c| c.default_prompt_preset_id);
+    let char_default = conversation::get_character(&state.db, &conv.character_id)
+        .await
+        .ok()
+        .and_then(|c| c.default_prompt_preset_id);
     let fallback = current_conv_request(&settings).map(|r| r.preset_id).unwrap_or_default();
     let preset_id = conv
         .prompt_preset_id
@@ -267,9 +276,19 @@ pub async fn context_usage(
 pub async fn export_conversation(state: State<'_, AppState>, id: String, format: String, path: String) -> Result<u32> {
     let conv = conversation::get_conversation(&state.db, &id).await?;
     let messages = conversation::get_messages(&state.db, &id, i64::MAX, None).await?;
-    let char_name = conversation::get_character(&state.db, &conv.character_id).await.map(|c| c.name).unwrap_or_else(|_| "Character".into());
-    let user_name = conversation::get_persona(&state.db, &conv.persona_id).await.map(|p| p.name).unwrap_or_else(|_| "User".into());
-    let iso = |ms: i64| chrono::DateTime::from_timestamp_millis(ms).map(|d| d.to_rfc3339_opts(chrono::SecondsFormat::Millis, true)).unwrap_or_default();
+    let char_name = conversation::get_character(&state.db, &conv.character_id)
+        .await
+        .map(|c| c.name)
+        .unwrap_or_else(|_| "Character".into());
+    let user_name = conversation::get_persona(&state.db, &conv.persona_id)
+        .await
+        .map(|p| p.name)
+        .unwrap_or_else(|_| "User".into());
+    let iso = |ms: i64| {
+        chrono::DateTime::from_timestamp_millis(ms)
+            .map(|d| d.to_rfc3339_opts(chrono::SecondsFormat::Millis, true))
+            .unwrap_or_default()
+    };
 
     let out = match format.as_str() {
         "jsonl" => {
@@ -302,7 +321,10 @@ pub async fn export_conversation(state: State<'_, AppState>, id: String, format:
         "txt" => {
             let mut s = format!("{}\n{} · {}\n\n", conv.title, char_name, iso(conv.created_at));
             for m in &messages {
-                let name = m.name.clone().unwrap_or_else(|| if m.role == "user" { user_name.clone() } else { char_name.clone() });
+                let name = m
+                    .name
+                    .clone()
+                    .unwrap_or_else(|| if m.role == "user" { user_name.clone() } else { char_name.clone() });
                 s.push_str(&format!("{name}:\n{}\n\n", m.content.trim()));
             }
             s
@@ -331,7 +353,11 @@ pub async fn delete_messages(state: State<'_, AppState>, ids: Vec<String>) -> Re
     let mut tx = state.db.begin().await?;
     let mut n = 0;
     for id in &ids {
-        n += sqlx::query("DELETE FROM messages WHERE id = ?").bind(id).execute(&mut *tx).await?.rows_affected() as u32;
+        n += sqlx::query("DELETE FROM messages WHERE id = ?")
+            .bind(id)
+            .execute(&mut *tx)
+            .await?
+            .rows_affected() as u32;
     }
     tx.commit().await?;
     Ok(n)

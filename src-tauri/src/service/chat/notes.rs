@@ -36,7 +36,11 @@ pub fn apply(ctx: &mut ChatContext, meta: Option<&Value>) {
         let at = ctx.history.len().saturating_sub(depth);
         ctx.history.insert(
             at,
-            HistoryItem { images: vec![], role: "system".into(), content: format!("[작가 노트]\n{}", macros(&t, &char_name, &user_name)) },
+            HistoryItem {
+                images: vec![],
+                role: "system".into(),
+                content: format!("[작가 노트]\n{}", macros(&t, &char_name, &user_name)),
+            },
         );
     }
 }
@@ -47,10 +51,17 @@ mod tests {
     use serde_json::json;
 
     fn ctx(n: usize) -> ChatContext {
-        ChatContext { user_images: vec![],
+        ChatContext {
+            user_images: vec![],
             char_name: Some("Aria".into()),
             user_name: Some("Min".into()),
-            history: (0..n).map(|i| HistoryItem { images: vec![], role: "user".into(), content: format!("m{i}") }).collect(),
+            history: (0..n)
+                .map(|i| HistoryItem {
+                    images: vec![],
+                    role: "user".into(),
+                    content: format!("m{i}"),
+                })
+                .collect(),
             ..Default::default()
         }
     }
@@ -58,7 +69,10 @@ mod tests {
     #[test]
     fn memory_goes_to_rules_and_note_into_history() {
         let mut c = ctx(6);
-        apply(&mut c, Some(&json!({ "memory": "{{user}}는 열쇠를 잃음", "authorNote": { "text": "{{char}}는 긴장함", "depth": 2 } })));
+        apply(
+            &mut c,
+            Some(&json!({ "memory": "{{user}}는 열쇠를 잃음", "authorNote": { "text": "{{char}}는 긴장함", "depth": 2 } })),
+        );
         assert_eq!(c.system_rules, vec!["[기억할 것]\nMin는 열쇠를 잃음"]);
         assert_eq!(c.history.len(), 7);
         assert_eq!(c.history[4].role, "system");

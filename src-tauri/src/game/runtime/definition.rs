@@ -6,12 +6,12 @@
 //! 단위(game_location_connections)로 일어나고, zone/map은 그 location이 속한 곳을
 //! 거슬러 찾아서 derive한다.
 use crate::game::engine::Condition;
-use crate::models::game::{
-    GameCharacters, GameEncounterEntries, GameEncounterTables, GameEndings, GameEventCharacterPool,
-    AudioAssets, BackgroundAssets, CgAssets, CharacterAssets, GameAssets, GameCharacterSpawnLocations, GameEvents, GameInteractables, GameItems, GameRelationshipDefs, GameLocationConnections, GameLocations, GameMaps, GameMapsZone,
-    GameProject, GameScene, GameStateDef, GameTimePeriods, GameWeatherTransitions, GameWeatherTypes,
-};
 use crate::models::conversation::WorldInfoEntry;
+use crate::models::game::{
+    AudioAssets, BackgroundAssets, CgAssets, CharacterAssets, GameAssets, GameCharacterSpawnLocations, GameCharacters, GameEncounterEntries,
+    GameEncounterTables, GameEndings, GameEventCharacterPool, GameEvents, GameInteractables, GameItems, GameLocationConnections, GameLocations, GameMaps,
+    GameMapsZone, GameProject, GameRelationshipDefs, GameScene, GameStateDef, GameTimePeriods, GameWeatherTransitions, GameWeatherTypes,
+};
 use std::collections::HashMap;
 
 /// 에셋 전체. all은 종류별 하위 정보가 없는 기본 행(폰트/기타 포함)까지 전부, 나머지는 종류별 하위 정보가 붙은 것.
@@ -27,12 +27,22 @@ pub struct Assets {
 /// 씬 설정(settings_json)의 불리언. aiContinue(기본 true): 다음 씬이 없는 선택지 뒤에 AI가 이어갈지.
 /// false면 옛 방식 — 그런 선택지는 씬을 바로 끝낸다.
 pub(crate) fn scene_flag(scene: &GameScene, key: &str, default: bool) -> bool {
-    scene.settings_json.as_ref().and_then(|v| v.get(key)).and_then(|v| v.as_bool()).unwrap_or(default)
+    scene
+        .settings_json
+        .as_ref()
+        .and_then(|v| v.get(key))
+        .and_then(|v| v.as_bool())
+        .unwrap_or(default)
 }
 
 /// 씬 설정 minTurns(기본 1): AI가 <scene>end</scene>로 씬을 끝낼 수 있게 되는, 플레이어 입력 횟수의 최소값.
 pub(crate) fn scene_min_turns(scene: &GameScene) -> u32 {
-    scene.settings_json.as_ref().and_then(|v| v.get("minTurns")).and_then(|v| v.as_u64()).map_or(1, |n| n as u32)
+    scene
+        .settings_json
+        .as_ref()
+        .and_then(|v| v.get("minTurns"))
+        .and_then(|v| v.as_u64())
+        .map_or(1, |n| n as u32)
 }
 
 pub struct GameDefinition {
@@ -119,7 +129,10 @@ impl GameDefinition {
     }
 
     pub fn weather_transitions_for(&self, map_id: &str, from_weather_id: &str) -> Vec<&GameWeatherTransitions> {
-        self.weather_transitions.iter().filter(|t| t.map_id == map_id && t.from_weather_id == from_weather_id).collect()
+        self.weather_transitions
+            .iter()
+            .filter(|t| t.map_id == map_id && t.from_weather_id == from_weather_id)
+            .collect()
     }
 
     pub fn character(&self, character_id: &str) -> Option<&GameCharacters> {
@@ -128,7 +141,10 @@ impl GameDefinition {
 
     /// game_state_defs.config_json에서 읽은 AI 접근 규칙 (key -> 규칙).
     pub fn ai_var_rules(&self) -> HashMap<String, crate::game::engine::VarRule> {
-        self.state_defs.iter().map(|d| (d.key.clone(), crate::game::engine::VarRule::from_config(&d.config_json))).collect()
+        self.state_defs
+            .iter()
+            .map(|d| (d.key.clone(), crate::game::engine::VarRule::from_config(&d.config_json)))
+            .collect()
     }
 
     /// 이 맵의 위험도가 인카운터 확률에 곱해지는 배율. 곡선은 게임마다 다를 수 있어서

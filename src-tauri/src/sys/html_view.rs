@@ -39,7 +39,12 @@ struct Store {
     order: VecDeque<String>,
 }
 
-static STORE: LazyLock<Mutex<Store>> = LazyLock::new(|| Mutex::new(Store { map: HashMap::new(), order: VecDeque::new() }));
+static STORE: LazyLock<Mutex<Store>> = LazyLock::new(|| {
+    Mutex::new(Store {
+        map: HashMap::new(),
+        order: VecDeque::new(),
+    })
+});
 
 /// 편의 함수: 문서 맨 앞(테마 뒤)에 둬서 AI가 쓴 스크립트·onclick이 바로 쓸 수 있게 한다.
 /// - `sandcastle.fill(글)`: 채팅 입력칸에 넣기 (보내지 않음)
@@ -92,7 +97,11 @@ pub fn url_of(id: &str) -> String {
 /// 조각이면 문서로 감싸고, 테마 CSS를 맨 앞에 넣고, 높이를 알려주는 스크립트를 붙인다.
 pub fn document(html: &str, theme: &str) -> String {
     let lower = html.to_ascii_lowercase();
-    let theme_style = if theme.trim().is_empty() { String::new() } else { format!("<style id=\"sc-theme\">{theme}</style>") };
+    let theme_style = if theme.trim().is_empty() {
+        String::new()
+    } else {
+        format!("<style id=\"sc-theme\">{theme}</style>")
+    };
     let theme_style = format!("{theme_style}{HELPER_SCRIPT}");
     let mut doc = if lower.contains("<html") || lower.contains("<!doctype") {
         // 완성된 문서: <head> 바로 뒤(없으면 맨 앞)에 테마를 넣어 문서의 스타일이 이길 수 있게
@@ -120,7 +129,10 @@ pub fn handle(req: Request<Vec<u8>>) -> Response<Vec<u8>> {
     let html = STORE.lock().unwrap_or_else(|e| e.into_inner()).map.get(&id).cloned();
     let (status, body) = match html {
         Some((h, theme)) => (StatusCode::OK, document(&h, &theme)),
-        None => (StatusCode::NOT_FOUND, "<p>이 HTML은 더 이상 없습니다. 메시지를 다시 열어 주세요.</p>".to_string()),
+        None => (
+            StatusCode::NOT_FOUND,
+            "<p>이 HTML은 더 이상 없습니다. 메시지를 다시 열어 주세요.</p>".to_string(),
+        ),
     };
     Response::builder()
         .status(status)
@@ -166,7 +178,10 @@ mod tests {
 
     #[test]
     fn theme_goes_first_and_cannot_escape_style() {
-        let doc = document("<style>body{color:red}</style><b>x</b>", &clean_theme(":root{--bg:#111}</style><script>alert(1)</script>"));
+        let doc = document(
+            "<style>body{color:red}</style><b>x</b>",
+            &clean_theme(":root{--bg:#111}</style><script>alert(1)</script>"),
+        );
         let theme_at = doc.find("sc-theme").unwrap();
         assert!(theme_at < doc.find("color:red").unwrap());
         assert!(!doc.contains("<script>alert"));

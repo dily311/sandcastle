@@ -36,7 +36,11 @@ fn open_scene(def: &GameDefinition, state: &mut GameState, scene_id: &str) -> Ve
 }
 
 fn pending(state: &GameState) -> Vec<String> {
-    state.pending_scenes_json.as_array().map(|a| a.iter().filter_map(|v| v.as_str().map(str::to_string)).collect()).unwrap_or_default()
+    state
+        .pending_scenes_json
+        .as_array()
+        .map(|a| a.iter().filter_map(|v| v.as_str().map(str::to_string)).collect())
+        .unwrap_or_default()
 }
 
 fn set_pending(state: &mut GameState, ids: Vec<String>) {
@@ -55,7 +59,12 @@ impl GameSystem for SceneSystem {
             GameEvent::ChoiceMade { next_scene_id: None, .. } => vec![],
             GameEvent::SceneEndRequested => {
                 // 엔딩 씬은 끝낼 수 없다 (게임이 끝난 것이다).
-                if state.current_scene_id.as_deref().and_then(|id| def.scene(id)).map_or(false, |s| s.is_ending == Some(true)) {
+                if state
+                    .current_scene_id
+                    .as_deref()
+                    .and_then(|id| def.scene(id))
+                    .map_or(false, |s| s.is_ending == Some(true))
+                {
                     return vec![];
                 }
                 let Some(prev) = state.current_scene_id.take() else { return vec![] };

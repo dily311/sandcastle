@@ -25,10 +25,7 @@ use crate::{
     db::{self, conn::DbPool},
     error::{AppError, ErrorCode, Result},
     models::{
-        ai_service::{
-            ChatContext, ChatOptions, GenerationType, PromptBlocks, PromptMessage,
-            PromptMessageItem, PromptPresets, PromptRequest, PromptRole,
-        },
+        ai_service::{ChatContext, ChatOptions, GenerationType, PromptBlocks, PromptMessage, PromptMessageItem, PromptPresets, PromptRequest, PromptRole},
         conversation::WorldInfoEntry,
     },
     service::prompt::token::{count_message_tokens, count_tokens},
@@ -85,7 +82,15 @@ impl PromptManager {
             Some(p) if !p.blocks.is_empty() => layout_from_preset(p, request.generation_type, &macros, ctx.main_prompt.as_deref()),
             _ => (default_layout(&macros), vec![]),
         };
-        if !layout.iter().any(|s| matches!(s, Slot::Section { section: Section::ChatHistory, .. })) {
+        if !layout.iter().any(|s| {
+            matches!(
+                s,
+                Slot::Section {
+                    section: Section::ChatHistory,
+                    ..
+                }
+            )
+        }) {
             layout.push(Slot::Section {
                 section: Section::ChatHistory,
                 role: PromptRole::User,
@@ -103,9 +108,7 @@ impl PromptManager {
         let user_message = request.user_message.trim().to_string();
 
         // ---- 예산 (프리셋에 컨텍스트 크기가 있으면 그 값이 우선)
-        let context_limit = preset
-            .and_then(|p| context_limit_from(&p.preset))
-            .unwrap_or(request.context_limit);
+        let context_limit = preset.and_then(|p| context_limit_from(&p.preset)).unwrap_or(request.context_limit);
         let budget = if context_limit == 0 {
             usize::MAX
         } else {
@@ -116,10 +119,7 @@ impl PromptManager {
         for slot in &layout {
             fixed += match slot {
                 Slot::Text { content, .. } => token_if(content),
-                Slot::Section { section, label, .. } => sections
-                    .get(*section)
-                    .map(|v| token_if(&with_label(label.as_deref(), v)))
-                    .unwrap_or(0),
+                Slot::Section { section, label, .. } => sections.get(*section).map(|v| token_if(&with_label(label.as_deref(), v))).unwrap_or(0),
             };
         }
         fixed += in_chat.iter().map(|b| token_if(&b.content)).sum::<usize>();
@@ -140,14 +140,21 @@ impl PromptManager {
             .and_then(|p| world_info_ratio_from(&p.preset))
             .unwrap_or(request.world_info_ratio)
             .clamp(0.0, 1.0) as f64;
-        let wi_budget = if remaining == usize::MAX { usize::MAX } else { (remaining as f64 * ratio) as usize };
+        let wi_budget = if remaining == usize::MAX {
+            usize::MAX
+        } else {
+            (remaining as f64 * ratio) as usize
+        };
         let world_info = select_world_info(ctx, &user_message, wi_budget, &macros);
         let wi_label = layout.iter().find_map(|s| match s {
-            Slot::Section { section: Section::WorldInfo, label, .. } => Some(label.clone()),
+            Slot::Section {
+                section: Section::WorldInfo,
+                label,
+                ..
+            } => Some(label.clone()),
             _ => None,
         });
-        let world_info_text = (!world_info.is_empty())
-            .then(|| with_label(wi_label.flatten().as_deref(), &world_info.join("\n")));
+        let world_info_text = (!world_info.is_empty()).then(|| with_label(wi_label.flatten().as_deref(), &world_info.join("\n")));
         let wi_used = world_info_text.as_deref().map(token_if).unwrap_or(0);
 
         // ---- 대화 기록 (최근부터)
@@ -175,9 +182,15 @@ impl PromptManager {
         if !rules.is_empty() {
             out.push((PromptRole::System, rules, vec![]));
         }
-        let has_wi_slot = layout
-            .iter()
-            .any(|s| matches!(s, Slot::Section { section: Section::WorldInfo, .. }));
+        let has_wi_slot = layout.iter().any(|s| {
+            matches!(
+                s,
+                Slot::Section {
+                    section: Section::WorldInfo,
+                    ..
+                }
+            )
+        });
         if !has_wi_slot {
             if let Some(wi) = &world_info_text {
                 out.push((PromptRole::System, wi.clone(), vec![]));
@@ -193,7 +206,11 @@ impl PromptManager {
                         out.push((role, content, vec![]));
                     }
                 }
-                Slot::Section { section: Section::WorldInfo, role, .. } => {
+                Slot::Section {
+                    section: Section::WorldInfo,
+                    role,
+                    ..
+                } => {
                     if !wi_placed {
                         if let Some(wi) = &world_info_text {
                             out.push((role, wi.clone(), vec![]));
@@ -201,7 +218,9 @@ impl PromptManager {
                         wi_placed = true;
                     }
                 }
-                Slot::Section { section: Section::ChatHistory, .. } => {
+                Slot::Section {
+                    section: Section::ChatHistory, ..
+                } => {
                     if !history_placed {
                         out.extend(interleave_in_chat(std::mem::take(&mut history), &in_chat));
                         history_placed = true;
@@ -257,8 +276,15 @@ impl Section {
 }
 
 enum Slot {
-    Text { role: PromptRole, content: String },
-    Section { section: Section, role: PromptRole, label: Option<String> },
+    Text {
+        role: PromptRole,
+        content: String,
+    },
+    Section {
+        section: Section,
+        role: PromptRole,
+        label: Option<String>,
+    },
 }
 
 /// 대화 기록 사이에 끼우는 블록
@@ -307,12 +333,7 @@ fn default_layout(macros: &Macros) -> Vec<Slot> {
     ]
 }
 
-fn layout_from_preset(
-    preset: &LoadedPreset,
-    generation_type: GenerationType,
-    macros: &Macros,
-    main_override: Option<&str>,
-) -> (Vec<Slot>, Vec<InChat>) {
+fn layout_from_preset(preset: &LoadedPreset, generation_type: GenerationType, macros: &Macros, main_override: Option<&str>) -> (Vec<Slot>, Vec<InChat>) {
     let mut blocks: Vec<&PromptBlocks> = preset
         .blocks
         .iter()
@@ -336,11 +357,7 @@ fn layout_from_preset(
             continue;
         }
         match Section::from_identifier(&b.identifier) {
-            Some(section) => layout.push(Slot::Section {
-                section,
-                role,
-                label: None,
-            }),
+            Some(section) => layout.push(Slot::Section { section, role, label: None }),
             None => {
                 // 캐릭터가 시스템 프롬프트를 덮어쓰면 main 블록 내용 대신 씀 (SillyTavern과 같은 동작)
                 let content = match main_override {
@@ -360,9 +377,7 @@ fn layout_from_preset(
 /// triggers_json이 비었거나 배열이 아니면 모든 생성에서 사용
 fn trigger_matches(triggers: &Value, generation_type: GenerationType) -> bool {
     match triggers.as_array() {
-        Some(arr) if !arr.is_empty() => arr
-            .iter()
-            .any(|t| t.as_str() == Some(generation_type.as_str())),
+        Some(arr) if !arr.is_empty() => arr.iter().any(|t| t.as_str() == Some(generation_type.as_str())),
         _ => true,
     }
 }
@@ -413,12 +428,7 @@ fn select_world_info(ctx: &ChatContext, user_message: &str, budget: usize, macro
         .filter(|(_, e)| e.constant || world_info_matches(e, &scan))
         .collect();
     // 상시 항목 먼저, 그다음 우선순위 높은 순, 같으면 원래 순서
-    active.sort_by(|(ia, a), (ib, b)| {
-        b.constant
-            .cmp(&a.constant)
-            .then(b.priority.cmp(&a.priority))
-            .then(ia.cmp(ib))
-    });
+    active.sort_by(|(ia, a), (ib, b)| b.constant.cmp(&a.constant).then(b.priority.cmp(&a.priority)).then(ia.cmp(ib)));
 
     let mut used = crate::service::prompt::token::MESSAGE_OVERHEAD;
     let mut out = vec![];
@@ -435,11 +445,7 @@ fn select_world_info(ctx: &ChatContext, user_message: &str, budget: usize, macro
 }
 
 fn world_info_matches(entry: &WorldInfoEntry, scan: &str) -> bool {
-    let hit = |keys: &[String]| {
-        keys.iter()
-            .map(|k| k.trim().to_lowercase())
-            .any(|k| !k.is_empty() && scan.contains(&k))
-    };
+    let hit = |keys: &[String]| keys.iter().map(|k| k.trim().to_lowercase()).any(|k| !k.is_empty() && scan.contains(&k));
     hit(&entry.keys) && (entry.secondary_keys.is_empty() || hit(&entry.secondary_keys))
 }
 

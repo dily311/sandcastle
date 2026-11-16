@@ -1,7 +1,7 @@
 //! commands.rs / npc.rs 가 공통으로 쓰는 검증 헬퍼.
-use crate::state::AppState;
 use crate::error::{AppError, ErrorCode};
 use crate::models::settings::AppSetting;
+use crate::state::AppState;
 use crate::sys::settings::SettingsState;
 use tauri::State;
 
@@ -13,15 +13,15 @@ pub fn current_game_id(state: &AppState) -> Result<String, AppError> {
         .active_archive
         .lock()
         .map_err(|_| AppError::archive(ErrorCode::InternalError, "archive lock poisoned"))?;
-    guard
-        .as_ref()
-        .map(|a| a.game_id.clone())
-        .ok_or_else(AppError::game_not_opened)
+    guard.as_ref().map(|a| a.game_id.clone()).ok_or_else(AppError::game_not_opened)
 }
 
 /// open_game이 올려둔 게임 정의. (플레이를 시작하기 전에도 쓸 수 있다.)
 pub fn current_definition(state: &AppState) -> Result<std::sync::Arc<crate::game::runtime::GameDefinition>, AppError> {
-    let guard = state.active_archive.lock().map_err(|_| AppError::archive(ErrorCode::InternalError, "archive lock poisoned"))?;
+    let guard = state
+        .active_archive
+        .lock()
+        .map_err(|_| AppError::archive(ErrorCode::InternalError, "archive lock poisoned"))?;
     guard.as_ref().map(|a| a.definition.clone()).ok_or_else(AppError::game_not_opened)
 }
 

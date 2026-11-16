@@ -157,8 +157,8 @@ Conversation
 **결정**
 
 - 부가 기능은 Obsidian의 코어 플러그인처럼 껐다 켠다. 목록·이름·기본값은 백엔드 `sys/plugins.rs` 한 곳에 두고, 켜짐/꺼짐은 기존 기능 설정 저장소(`feature-setting`, id별 bool)에 둔다. 설정 > 코어 플러그인에서 바꾼다.
-  - 기본 켜짐: 폰(`phone`), 게임 모드(`game`), 캐릭터 이미지(`chat.images`), HTML 렌더링(`html`), 정규식(`regex`)
-  - 기본 꺼짐: 위젯(`widget`, 데스크톱 전용), 번역(`translate`), 음성 읽기(`tts`), 이미지 생성(`imagegen`)
+  - 기본 켜짐: 폰(`phone`), 게임 모드(`game`), 캐릭터 이미지(`chat.images`), 정규식(`regex`)
+  - 기본 꺼짐: HTML 렌더링(`html`, AI가 쓴 JS를 실행하므로 — 2026-11-17 합의로 바꿈, M1), 위젯(`widget`, 데스크톱 전용), 번역(`translate`), 음성 읽기(`tts`), 이미지 생성(`imagegen`), 이미지 자동 생성(`imageauto`). 앞으로 추가하는 기능은 모두 기본 꺼짐
 - 끄면 화면(사이드바·설정 탭·메시지 동작·패널 스위치)에서 숨기고, 그 화면에 들어가면 "꺼져 있음"과 켜기 버튼을 보여준다. AI 결과에 영향을 주는 것은 백엔드에서도 막는다: 정규식은 불러오지 않고(스위치 하나, `regex_processor::set_enabled`), 캐릭터 이미지 키를 보내지 않고, HTML 서빙과 AI 도구 호출은 거절한다. 끈 기능의 데이터는 지우지 않는다.
 - 설정을 바꾸면 백엔드가 모든 창에 `feature_setting::changed`를 보낸다 (메인 창의 플러그인 상태, 위젯 창의 위젯 하위 기능).
 - **AI 도구** 세부 설정은 별도 저장소(`plugin-setting`)에 둔다. 셋 다 연결한 API 프로필(주소 + keyring 키)을 쓰고, 비우면 대화/앱에서 고른 API.
@@ -260,6 +260,16 @@ Conversation
 - **뒤로 가기**: 앱 안 이동 기록(nav)을 브라우저 기록과 맞춰 시스템 뒤로 가기가 앞 화면으로 가게 한다.
 - **데스크톱 전용 기능**: 코어 플러그인의 `desktop_only`는 모바일에서 목록에서 빠지고 늘 꺼짐으로 본다.
 - **마이그레이션 파일**: `.gitattributes`로 줄 끝 변환을 막는다(sqlx 체크섬이 체크아웃 환경에 따라 바뀌지 않게).
+
+### ADR-010 버전·업데이트·서명·릴리스
+
+**상태** Accepted (2026-11-17) — CLAUDE.md 1-E (M11). 절차는 `docs/배포.md`.
+
+**결정**
+- **버전**: `package.json` 한 곳. `tauri.conf.json`은 `../package.json`을 읽고 `Cargo.toml`은 `scripts/version.mjs`가 맞춘다. CI가 세 곳이 같은지 확인. 변경 내역은 `CHANGELOG.md`.
+- **업데이트**: GitHub Releases(`dily311/sandcastle`)의 최신 공개 릴리스와 비교해 알리기만 한다. 내려받기·설치는 하지 않고 릴리스 페이지를 연다(사용자가 직접). 확인은 사용자가 누를 때만, "앱을 켤 때 확인"은 별도 스위치이며 기본 꺼짐(사용자 동작 없는 외부 요청이므로). 요청에는 일반 User-Agent만. Tauri updater는 쓰지 않는다(업데이트 서명 키·자동 설치가 필요해 "알림만" 범위를 넘음). 예전 "자동 업데이트" 스위치는 연결된 동작이 없었으므로 화면에서 뺐다(저장값은 호환용으로만 남김).
+- **서명** (사용자 결정 2026-11-17): Windows는 당분간 코드 서명 없음(SmartScreen 경고를 릴리스 설명에 적음). Android 키는 사용자 PC(저장소 밖)와 GitHub Secrets에만 두고, `keystore.properties`가 있을 때만 release 빌드에 서명한다. 배포 빌드(R8)에서 JS가 부르는 `@JavascriptInterface`는 keep 규칙으로 지킨다.
+- **릴리스**: 태그 `v<버전>` → `.github/workflows/release.yml`이 Windows 설치 파일과 APK를 만들어 **초안** 릴리스에 올린다. 공개는 사람이 한다(Explicit Execution). 태그와 버전이 다르면 멈춘다.
 
 ### (참고) 전역 테스트 관리 방법
 

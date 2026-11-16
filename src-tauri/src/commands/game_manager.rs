@@ -1,12 +1,12 @@
 //! 게임 패키지 관리 command (만들기/저장/지우기/가져오기/내보내기). 얇은 wrapper — 실제 로직은 game::manager.
 //! 파일 경로(zip, 내보낼 폴더)는 호스트 UI가 파일 대화상자로 고른 값이라 호스트를 신뢰한다
 //! (게임 iframe은 이 command를 못 부른다 — capabilities에서 호스트 창에만 허용할 것).
-use crate::state::{AppState, GameArchiveHandle};
 use crate::error::{AppError, ErrorCode};
 use crate::game::manager::{GameManager, SaveReport};
 use crate::game::package::PackageData;
 use crate::game::runtime::{GameRepository, SqlxGameRepository};
 use crate::models::game::GameProject;
+use crate::state::{AppState, GameArchiveHandle};
 use std::path::PathBuf;
 use tauri::{AppHandle, Manager, State};
 
@@ -40,7 +40,16 @@ pub async fn save_package(app: AppHandle, state: State<'_, AppState>, game_id: S
 #[tauri::command]
 #[specta::specta]
 pub async fn delete_game(app: AppHandle, state: State<'_, AppState>, game_id: String) -> Result<(), AppError> {
-    let mounted = state.active_archive.lock().map_err(|_| AppError::Archive { code: ErrorCode::ArchiveInvalid, message: "archive lock poisoned".into(), details: None })?.as_ref().map(|a| a.game_id.clone());
+    let mounted = state
+        .active_archive
+        .lock()
+        .map_err(|_| AppError::Archive {
+            code: ErrorCode::ArchiveInvalid,
+            message: "archive lock poisoned".into(),
+            details: None,
+        })?
+        .as_ref()
+        .map(|a| a.game_id.clone());
     if mounted.as_deref() == Some(game_id.as_str()) {
         return Err(AppError::game_invalid_state("지금 열려 있는 게임은 지울 수 없습니다"));
     }
@@ -86,7 +95,6 @@ pub struct OpenGameResponse {
     pub diagnostics: Vec<crate::game::validate::Issue>,
 }
 
-
 /// 게임 열기: 이 게임을 현재 게임으로 지정하고, 정의를 **여기서 한 번** 메모리에 올린다.
 /// 이후 start_new_game / continue_game / load_save는 이 정의를 그대로 쓴다 (다시 읽지 않는다).
 /// 다른 게임을 플레이 중이었으면 그 런타임은 내린다 (game_id가 어긋난 채 커맨드가 가는 걸 막으려는 것).
@@ -110,9 +118,19 @@ pub async fn open_game(app: AppHandle, state: State<'_, AppState>, game_id: Stri
         }
     }
     // ⚠ GameArchiveHandle에 `definition: Arc<GameDefinition>` 필드가 있어야 한다 (manifest 자리에는 GameProject).
-    *state.active_archive.lock().map_err(|_| AppError::internal("archive lock poisoned"))? =
-        Some(GameArchiveHandle { path, manifest: project.clone(), game_id, definition });
-    Ok(OpenGameResponse { project, view, content_hash, asset_base_url, diagnostics })
+    *state.active_archive.lock().map_err(|_| AppError::internal("archive lock poisoned"))? = Some(GameArchiveHandle {
+        path,
+        manifest: project.clone(),
+        game_id,
+        definition,
+    });
+    Ok(OpenGameResponse {
+        project,
+        view,
+        content_hash,
+        asset_base_url,
+        diagnostics,
+    })
 }
 
 /// 게임 종료

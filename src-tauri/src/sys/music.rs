@@ -7,10 +7,7 @@ use crate::{
         library::{grouped_by_folder, LibraryRoot},
     },
 };
-use futures::{
-    lock::Mutex,
-    stream::StreamExt,
-};
+use futures::{lock::Mutex, stream::StreamExt};
 use lofty::picture::Picture;
 use lofty::{
     config::WriteOptions,
@@ -32,27 +29,18 @@ const LIMIT: usize = 16;
 /// 지원하는 오디오 확장자 필터링
 pub fn is_audio_file(path: &Path) -> bool {
     if let Some(ext) = path.extension().and_then(|e| e.to_str()) {
-        matches!(
-            ext.to_lowercase().as_str(),
-            "mp3" | "flac" | "wav" | "m4a" | "ogg"
-        )
+        matches!(ext.to_lowercase().as_str(), "mp3" | "flac" | "wav" | "m4a" | "ogg")
     } else {
         false
     }
 }
 
 fn get_timestamp(time: SystemTime) -> i64 {
-    time.duration_since(UNIX_EPOCH)
-        .map_err(|e| e.to_string())
-        .unwrap()
-        .as_secs() as i64
+    time.duration_since(UNIX_EPOCH).map_err(|e| e.to_string()).unwrap().as_secs() as i64
 }
 pub fn get_mtime(path: &Path) -> i64 {
     let metadata = fs::metadata(&path).ok();
-    let mtime = metadata
-        .and_then(|m| m.modified().ok())
-        .map(|t| get_timestamp(t))
-        .unwrap_or(0);
+    let mtime = metadata.and_then(|m| m.modified().ok()).map(|t| get_timestamp(t)).unwrap_or(0);
     mtime
 }
 
@@ -63,20 +51,11 @@ fn delete_album_art(cache_dir: &PathBuf, file_name: &str) -> Result<(), AppError
     Ok(())
 }
 
-pub fn save_album_art(
-    picture: &Picture,
-    file_name: &str,
-    cache_dir: &PathBuf,
-) -> Result<String, AppError> {
+pub fn save_album_art(picture: &Picture, file_name: &str, cache_dir: &PathBuf) -> Result<String, AppError> {
     save_album_art_with_options(picture, file_name, cache_dir, false)
 }
 /// 앨범아트 캐싱 함수
-pub fn save_album_art_with_options(
-    picture: &Picture,
-    file_name: &str,
-    cache_dir: &PathBuf,
-    overwrite: bool,
-) -> Result<String, AppError> {
+pub fn save_album_art_with_options(picture: &Picture, file_name: &str, cache_dir: &PathBuf, overwrite: bool) -> Result<String, AppError> {
     let save_dir = cache_dir.join("album_arts");
     // 이미 파일이 존재할 경우를 판정하기 위함
     let target_path = save_dir.join(format!("{}.webp", file_name));
@@ -90,11 +69,7 @@ pub fn save_album_art_with_options(
     save_image_to_origin(save_dir.clone(), &file_name, buffer)
 }
 
-pub fn parse_music_metadata(
-    path: &PathBuf,
-    mtime: i64,
-    cache_dir: &PathBuf,
-) -> Result<MusicMetaInput, AppError> {
+pub fn parse_music_metadata(path: &PathBuf, mtime: i64, cache_dir: &PathBuf) -> Result<MusicMetaInput, AppError> {
     let tagged_file = Probe::open(path)
         .map_err(|e| AppError::io(e.to_string()))?
         .read()
@@ -102,9 +77,7 @@ pub fn parse_music_metadata(
     let properties = tagged_file.properties();
     let duration = properties.duration().as_secs_f64();
 
-    let tag = tagged_file
-        .primary_tag()
-        .or_else(|| tagged_file.first_tag());
+    let tag = tagged_file.primary_tag().or_else(|| tagged_file.first_tag());
     let meta = MusicMetaInput::default(path, tag, cache_dir, duration, mtime);
     Ok(meta)
 }
@@ -125,11 +98,7 @@ fn visit_dirs(dir: &Path, paths: &mut Vec<PathBuf>) -> Result<(), AppError> {
 }
 
 /// 폴더 인덱싱
-pub async fn folder_indexing(
-    pool: &DbPool,
-    folder_path: String,
-    cache_dir: &PathBuf,
-) -> Result<LibraryRoot, AppError> {
+pub async fn folder_indexing(pool: &DbPool, folder_path: String, cache_dir: &PathBuf) -> Result<LibraryRoot, AppError> {
     let cache_dir = Arc::new(cache_dir.clone());
     let pool = Arc::new(pool.clone());
     let found_paths = Arc::new(Mutex::new(HashSet::new()));
@@ -139,8 +108,7 @@ pub async fn folder_indexing(
     let folder_path_clone = folder_path.clone();
     let music_paths = tokio::task::spawn_blocking(move || {
         let mut paths = Vec::new();
-        let _ = visit_dirs(Path::new(&folder_path_clone.clone()), &mut paths)
-            .map_err(|e| AppError::validation(format!("폴더를 읽는 중 오류: {}", e), None));
+        let _ = visit_dirs(Path::new(&folder_path_clone.clone()), &mut paths).map_err(|e| AppError::validation(format!("폴더를 읽는 중 오류: {}", e), None));
         Ok::<Vec<PathBuf>, String>(paths)
     })
     .await
@@ -175,10 +143,7 @@ pub async fn folder_indexing(
                         Some(c) => !c.updated_at.eq(&mtime),
                         None => true,
                     };
-                    Ok::<(i64, bool), Box<dyn std::error::Error + Send + Sync>>((
-                        mtime,
-                        needs_update,
-                    ))
+                    Ok::<(i64, bool), Box<dyn std::error::Error + Send + Sync>>((mtime, needs_update))
                 })
                 .await;
 
@@ -197,10 +162,7 @@ pub async fn folder_indexing(
                 if needs_update {
                     let cache_dir = Arc::clone(&cache_dir);
                     let p = path.clone();
-                    let parsed_result = tokio::task::spawn_blocking(move || {
-                        parse_music_metadata(&p, mtime, &cache_dir).map_err(|e| e.to_string())
-                    })
-                    .await;
+                    let parsed_result = tokio::task::spawn_blocking(move || parse_music_metadata(&p, mtime, &cache_dir).map_err(|e| e.to_string())).await;
 
                     match parsed_result {
                         Ok(Ok(pared_data)) => {
@@ -239,26 +201,16 @@ pub async fn folder_indexing(
 
 /// 앨범아트 설정
 /// 지금은 한장만 교체하는 방식인데, 이후에 여러장을 추가해서 볼 수 있는 기능이 추가되면 좋겠네
-pub async fn set_album_art(
-    file_path: String,
-    img_path: String,
-    cache_dir: &PathBuf,
-) -> Result<String, AppError> {
+pub async fn set_album_art(file_path: String, img_path: String, cache_dir: &PathBuf) -> Result<String, AppError> {
     // 파일 열기 및 태그 로드
     let mut tagged_file = Probe::open(&file_path)
         .map_err(|e| AppError::validation(format!("파일 여는 중 오류: {}", e.to_string()), None))?
         .read()
-        .map_err(|e| {
-            AppError::validation(format!("파일 여는 중 오류: {}", e.to_string()), None)
-        })?;
+        .map_err(|e| AppError::validation(format!("파일 여는 중 오류: {}", e.to_string()), None))?;
 
     // 파일명 fallback
     let path = PathBuf::from(&file_path);
-    let file_name_fallback = path
-        .file_name()
-        .and_then(|n| n.to_str())
-        .unwrap_or("Unknown Title")
-        .to_string();
+    let file_name_fallback = path.file_name().and_then(|n| n.to_str()).unwrap_or("Unknown Title").to_string();
 
     // 태그 없으면 생성
     if tagged_file.primary_tag().is_none() {
@@ -266,25 +218,18 @@ pub async fn set_album_art(
         tagged_file.insert_tag(Tag::new(tag_type));
     }
 
-    let tag = tagged_file
-        .primary_tag_mut()
-        .ok_or_else(|| AppError::io("태그 생성 실패"))?;
+    let tag = tagged_file.primary_tag_mut().ok_or_else(|| AppError::io("태그 생성 실패"))?;
 
     // 이미지 파일 읽기
-    let image_file = File::open(&img_path)
-        .map_err(|e| AppError::io(format!("이미지 파일 로드 실패: {}", e.to_string())))?;
+    let image_file = File::open(&img_path).map_err(|e| AppError::io(format!("이미지 파일 로드 실패: {}", e.to_string())))?;
     let mut reader = BufReader::new(image_file);
 
     // Picture 객체 생성
-    let picture = Picture::from_reader(&mut reader)
-        .map_err(|e| AppError::io(format!("객체 생성 중 실패: {}", e.to_string())))?;
+    let picture = Picture::from_reader(&mut reader).map_err(|e| AppError::io(format!("객체 생성 중 실패: {}", e.to_string())))?;
     let picture_size = picture.data().len();
     if picture_size > 1_000_000 {
         // 에러를 생성하고 명시적으로 반환(return)하도록 수정
-        return Err(AppError::validation(
-            format!("파일 크기가 너무 큼 (1MB 초과): {} bytes", picture_size),
-            None
-        ));
+        return Err(AppError::validation(format!("파일 크기가 너무 큼 (1MB 초과): {} bytes", picture_size), None));
     }
 
     // 기존 이미지 교체 및 저장

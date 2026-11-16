@@ -89,7 +89,14 @@ pub async fn check_data(db: &DbPool, base: &Path) -> Result<DataCheck> {
     .await
     .map_err(|e| crate::error::AppError::internal(e.to_string()))?;
 
-    let mut orphans: Vec<OrphanFile> = files.iter().filter(|(rel, _)| !used.contains(rel)).map(|(path, bytes)| OrphanFile { path: path.clone(), bytes: *bytes }).collect();
+    let mut orphans: Vec<OrphanFile> = files
+        .iter()
+        .filter(|(rel, _)| !used.contains(rel))
+        .map(|(path, bytes)| OrphanFile {
+            path: path.clone(),
+            bytes: *bytes,
+        })
+        .collect();
     orphans.sort_by(|a, b| b.bytes.cmp(&a.bytes).then_with(|| a.path.cmp(&b.path)));
     let n = |v: usize| u32::try_from(v).unwrap_or(u32::MAX);
     Ok(DataCheck {

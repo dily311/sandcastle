@@ -71,15 +71,14 @@ impl RegexProcessor {
     }
 
     /// DB에서 이 문맥에 해당하는 스크립트를 불러와 컴파일
-    pub async fn load(
-        db: &DbPool,
-        character_id: Option<&str>,
-        preset_id: Option<&str>,
-        macros: RegexMacros,
-    ) -> Result<Self> {
+    pub async fn load(db: &DbPool, character_id: Option<&str>, preset_id: Option<&str>, macros: RegexMacros) -> Result<Self> {
         let character_id = character_id.filter(|s| !s.is_empty());
         let preset_id = preset_id.filter(|s| !s.is_empty());
-        let scripts = if enabled() { db::regex::get_regex_scripts_for(db, character_id, preset_id).await? } else { vec![] };
+        let scripts = if enabled() {
+            db::regex::get_regex_scripts_for(db, character_id, preset_id).await?
+        } else {
+            vec![]
+        };
         Ok(Self::new(scripts, macros))
     }
 
@@ -92,9 +91,7 @@ impl RegexProcessor {
             Err(sqlx::Error::RowNotFound) => None,
             Err(e) => return Err(e.into()),
         };
-        let (character_id, persona_id) = conv
-            .map(|c| (c.character_id, c.persona_id))
-            .unwrap_or_default();
+        let (character_id, persona_id) = conv.map(|c| (c.character_id, c.persona_id)).unwrap_or_default();
 
         let char_name = match character_id.as_str() {
             "" => None,
@@ -125,10 +122,7 @@ impl RegexProcessor {
                 }
             })
             .collect();
-        Self {
-            scripts: compiled,
-            macros,
-        }
+        Self { scripts: compiled, macros }
     }
 
     /// 화면에 보일 글: 표시용(Display) 정규식을 거친 뒤 {{char}}·{{user}} (옛 <BOT>·<USER>)를 이름으로
@@ -147,13 +141,7 @@ impl RegexProcessor {
 
     /// `placement`에 해당하고 `targets` 중 하나에 속하는 스크립트를 차례로 적용.
     /// `depth`: 0 = 가장 최근 메시지. None이면 깊이 제한을 보지 않는다.
-    pub fn apply(
-        &self,
-        text: &str,
-        placement: RegexPlacement,
-        targets: &[RegexTarget],
-        depth: Option<usize>,
-    ) -> String {
+    pub fn apply(&self, text: &str, placement: RegexPlacement, targets: &[RegexTarget], depth: Option<usize>) -> String {
         let mut out = text.to_string();
         for c in &self.scripts {
             if !c.placement.contains(&placement) || !targets.contains(&c.target) {
@@ -277,10 +265,7 @@ fn expand_groups(template: &str, caps: &Captures<'_, str>, trim_strings: &[Strin
     let mut chars = template.char_indices().peekable();
     while let Some((i, ch)) = chars.next() {
         if ch == '$' {
-            let digits: String = template[i + 1..]
-                .chars()
-                .take_while(|c| c.is_ascii_digit())
-                .collect();
+            let digits: String = template[i + 1..].chars().take_while(|c| c.is_ascii_digit()).collect();
             if !digits.is_empty() {
                 for _ in 0..digits.len() {
                     chars.next();
@@ -511,10 +496,7 @@ mod tests {
         assert_eq!(g.max_depth, Some(3));
 
         let p = RegexProcessor::load(&pool, Some("c1"), Some("p1"), macros()).await.unwrap();
-        assert_eq!(
-            p.apply("abcd", RegexPlacement::AiOutput, &[RegexTarget::Stored], Some(0)),
-            "GAriacP"
-        );
+        assert_eq!(p.apply("abcd", RegexPlacement::AiOutput, &[RegexTarget::Stored], Some(0)), "GAriacP");
         // 범위 밖 캐릭터/프리셋 없음 → 전역만
         let p = RegexProcessor::load(&pool, None, None, macros()).await.unwrap();
         assert_eq!(p.apply("abcd", RegexPlacement::UserInput, &[RegexTarget::Stored], None), "Gbcd");
@@ -532,12 +514,15 @@ mod tests {
 
 /// 표시용 이름 바꾸기 (대소문자 무시)
 pub fn display_macros(text: &str, m: &RegexMacros) -> String {
-    static RE: std::sync::LazyLock<Regex> =
-        std::sync::LazyLock::new(|| Regex::new(r"(?i)\{\{(char|user)\}\}|<(bot|user)>").unwrap());
+    static RE: std::sync::LazyLock<Regex> = std::sync::LazyLock::new(|| Regex::new(r"(?i)\{\{(char|user)\}\}|<(bot|user)>").unwrap());
     RE.replace_all(text, |c: &Captures<'_, str>| {
         let who = c.get(1).or(c.get(2)).map(|x| x.as_str().to_ascii_lowercase()).unwrap_or_default();
         let name = if who == "user" { &m.user_name } else { &m.char_name };
-        if name.is_empty() { c[0].to_string() } else { name.clone() }
+        if name.is_empty() {
+            c[0].to_string()
+        } else {
+            name.clone()
+        }
     })
     .into_owned()
 }
@@ -548,7 +533,10 @@ mod display_tests {
 
     #[test]
     fn names_fill_in_on_display() {
-        let m = RegexMacros { char_name: "Aria".into(), user_name: "Min".into() };
+        let m = RegexMacros {
+            char_name: "Aria".into(),
+            user_name: "Min".into(),
+        };
         assert_eq!(display_macros("{{User}}, <BOT> waves. {{char}}!", &m), "Min, Aria waves. Aria!");
         let none = RegexMacros::default();
         assert_eq!(display_macros("{{user}}", &none), "{{user}}", "이름 없으면 그대로");

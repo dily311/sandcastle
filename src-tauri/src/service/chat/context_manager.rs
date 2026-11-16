@@ -2,7 +2,9 @@
 //! 게임 NPC 대화의 컨텍스트는 game::npc가 따로 만든다
 //! return: ChatContext
 use crate::{
-    db::{conn::DbPool, conversation::*}, error::Result, models::ai_service::{ChatContext, ContextRequest, HistoryItem},
+    db::{conn::DbPool, conversation::*},
+    error::Result,
+    models::ai_service::{ChatContext, ContextRequest, HistoryItem},
 };
 
 pub struct ContextManager;
@@ -28,7 +30,8 @@ impl ContextManager {
             .collect();
 
         // 현재 대화 중인 캐릭터의 데이터 불러오기
-        Ok(ChatContext { user_images: vec![],
+        Ok(ChatContext {
+            user_images: vec![],
             system_rules: vec![],
             char_name: Some(character.name.clone()),
             user_name: Some(persona.name.clone()),

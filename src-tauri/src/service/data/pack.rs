@@ -166,16 +166,11 @@ pub async fn export_pack(
                 book_ids.push(b.clone());
             }
         }
-        let avatar_file = character
-            .avatar
-            .as_deref()
-            .map(PathBuf::from)
-            .filter(|p| p.is_file())
-            .map(|p| {
-                let name = format!("files/avatars/{cid}.{}", ext_of(&p));
-                files.push((name.clone(), p));
-                name
-            });
+        let avatar_file = character.avatar.as_deref().map(PathBuf::from).filter(|p| p.is_file()).map(|p| {
+            let name = format!("files/avatars/{cid}.{}", ext_of(&p));
+            files.push((name.clone(), p));
+            name
+        });
         let images = db::character_image::get_character_images(db, cid, false)
             .await?
             .into_iter()
@@ -184,7 +179,12 @@ pub async fn export_pack(
                 src.is_file().then(|| {
                     let name = format!("files/images/{cid}/{}.webp", r.id);
                     files.push((name.clone(), src));
-                    PackImage { key: r.key, enabled: r.enabled, sort_order: r.sort_order, file: name }
+                    PackImage {
+                        key: r.key,
+                        enabled: r.enabled,
+                        sort_order: r.sort_order,
+                        file: name,
+                    }
                 })
             })
             .collect();
@@ -203,7 +203,9 @@ pub async fn export_pack(
 
     let mut books = vec![];
     for id in &book_ids {
-        let Ok(book) = db::conversation::get_worldinfo_book(db, id).await else { continue };
+        let Ok(book) = db::conversation::get_worldinfo_book(db, id).await else {
+            continue;
+        };
         let entries = db::conversation::get_all_worldinfo_entries(db, id)
             .await?
             .into_iter()
@@ -216,7 +218,12 @@ pub async fn export_pack(
                 constant: e.constant,
             })
             .collect();
-        books.push(PackBook { id: book.id, name: book.name, description: book.description, entries });
+        books.push(PackBook {
+            id: book.id,
+            name: book.name,
+            description: book.description,
+            entries,
+        });
     }
 
     let summaries = super::overview::conversation_summaries(db).await?;
@@ -227,10 +234,7 @@ pub async fn export_pack(
         .collect();
     if let Some(only) = conversation_ids {
         if let Some(bad) = only.iter().find(|id| !conv_ids.contains(id)) {
-            return Err(AppError::validation(
-                format!("고른 캐릭터의 대화가 아닙니다: {bad}"),
-                None,
-            ));
+            return Err(AppError::validation(format!("고른 캐릭터의 대화가 아닙니다: {bad}"), None));
         }
         conv_ids.retain(|id| only.contains(id));
     }
@@ -256,7 +260,11 @@ pub async fn export_pack(
         conversation_count: conversations.len(),
         message_count,
     };
-    let data = PackData { characters, world_info_books: books, conversations };
+    let data = PackData {
+        characters,
+        world_info_books: books,
+        conversations,
+    };
 
     let out_path = out.to_path_buf();
     let summary_manifest = manifest.clone();
@@ -354,13 +362,18 @@ async fn import_pack_inner(
     for b in data.world_info_books {
         let book = db::conversation::create_worldinfo_book(
             &mut *tx,
-            WorldInfoBookInput { id: None, name: b.name, description: b.description },
+            WorldInfoBookInput {
+                id: None,
+                name: b.name,
+                description: b.description,
+            },
         )
         .await?;
         for e in b.entries {
             db::conversation::upsert_worldinfo_entry(
                 &mut *tx,
-                WorldInfoEntryInput { comment: String::new(),
+                WorldInfoEntryInput {
+                    comment: String::new(),
                     id: None,
                     book_id: book.id.clone(),
                     keys: e.keys,
@@ -382,8 +395,8 @@ async fn import_pack_inner(
     for pc in data.characters {
         let old_id = pc.character["id"].as_str().unwrap_or_default().to_string();
         let favorite = pc.character["favorite"].as_bool().unwrap_or(false);
-        let mut input: CharacterInput = serde_json::from_value(pc.character)
-            .map_err(|e| AppError::validation(format!("캐릭터 데이터를 읽을 수 없습니다: {e}"), None))?;
+        let mut input: CharacterInput =
+            serde_json::from_value(pc.character).map_err(|e| AppError::validation(format!("캐릭터 데이터를 읽을 수 없습니다: {e}"), None))?;
 
         input.avatar = match &pc.avatar_file {
             Some(name) => {
@@ -465,7 +478,11 @@ async fn import_pack_inner(
         }
 
         char_map.insert(old_id.clone(), new_id.clone());
-        refs.push(ImportedCharacterRef { old_id, new_id, name: character.name });
+        refs.push(ImportedCharacterRef {
+            old_id,
+            new_id,
+            name: character.name,
+        });
     }
 
     // 대화
@@ -475,8 +492,8 @@ async fn import_pack_inner(
     let mut conversation_count = 0;
     let mut message_count = 0;
     for pc in data.conversations {
-        let mut input: ConversationInput = serde_json::from_value(pc.conversation)
-            .map_err(|e| AppError::validation(format!("대화 데이터를 읽을 수 없습니다: {e}"), None))?;
+        let mut input: ConversationInput =
+            serde_json::from_value(pc.conversation).map_err(|e| AppError::validation(format!("대화 데이터를 읽을 수 없습니다: {e}"), None))?;
         let Some(new_char) = char_map.get(&input.character_id).cloned() else {
             warnings.push(format!("캐릭터가 팩에 없는 대화 '{}'를 건너뜀", input.title));
             continue;
@@ -486,11 +503,7 @@ async fn import_pack_inner(
             input.persona_id = default_persona.clone();
         }
         let dropped = input.world_info_ids.len();
-        input.world_info_ids = input
-            .world_info_ids
-            .iter()
-            .filter_map(|b| book_map.get(b).cloned())
-            .collect();
+        input.world_info_ids = input.world_info_ids.iter().filter_map(|b| book_map.get(b).cloned()).collect();
         if input.world_info_ids.len() < dropped {
             warnings.push(format!("대화 '{}'에 붙은 로어북 일부는 팩에 없어 빠짐", input.title));
         }
@@ -498,8 +511,7 @@ async fn import_pack_inner(
 
         for (i, mv) in pc.messages.into_iter().enumerate() {
             let created_at = mv["createdAt"].as_i64().unwrap_or(conv.created_at + i as i64);
-            let mut m: MessageInput = serde_json::from_value(mv)
-                .map_err(|e| AppError::validation(format!("메시지 데이터를 읽을 수 없습니다: {e}"), None))?;
+            let mut m: MessageInput = serde_json::from_value(mv).map_err(|e| AppError::validation(format!("메시지 데이터를 읽을 수 없습니다: {e}"), None))?;
             m.conversation_id = conv.id.clone();
             m.character_id = m.character_id.and_then(|c| char_map.get(&c).cloned());
             if let Some(sender) = m.meta.as_mut().and_then(|v| v.get_mut("sender")).and_then(Value::as_object_mut) {
@@ -514,7 +526,12 @@ async fn import_pack_inner(
     }
 
     tx.commit().await?;
-    Ok(PackImportSummary { characters: refs, conversation_count, message_count, warnings })
+    Ok(PackImportSummary {
+        characters: refs,
+        conversation_count,
+        message_count,
+        warnings,
+    })
 }
 
 async fn persona_exists(tx: &mut sqlx::Transaction<'_, sqlx::Sqlite>, id: &str) -> Result<bool> {

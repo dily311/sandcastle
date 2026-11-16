@@ -5,10 +5,13 @@
 //!   - 세션 저장: 위치/시간/날씨/씬/대기열/head_seq
 //! 전부 한 트랜잭션이다 — 분기 복사가 일지를 믿고 seq로 자르기 때문에, 일부만 남은 턴이 있으면 안 된다.
 //! (실패하면 메모리의 head_seq만 앞서가는데, 번호에 구멍이 생길 뿐이라 무해하다.)
-use crate::db::game::{upsert_game_character_state, upsert_game_event_log, upsert_game_event_log_character, upsert_game_journal, upsert_game_player_sessions, upsert_game_relationship_snapshot};
+use crate::db::game::{
+    upsert_game_character_state, upsert_game_event_log, upsert_game_event_log_character, upsert_game_journal, upsert_game_player_sessions,
+    upsert_game_relationship_snapshot,
+};
 use crate::error::AppError;
 use crate::game::runtime::{GameCommand, GameEvent, GameRuntime};
-use crate::models::game::{GameRelationshipSnapshots, GameCharacterStatesSnapshotsInput, GameEventLogCharactersInput, GameEventLogInput, GameJournalInput};
+use crate::models::game::{GameCharacterStatesSnapshotsInput, GameEventLogCharactersInput, GameEventLogInput, GameJournalInput, GameRelationshipSnapshots};
 use sqlx::SqlitePool;
 
 pub fn journal_input<T: serde::Serialize>(session_id: &str, seq: u32, kind: &str, payload: &T, game_time: i64) -> GameJournalInput {
@@ -81,26 +84,55 @@ pub async fn record(db: &SqlitePool, runtime: &mut GameRuntime, game_id: &str, c
     for (seq, event_id, npc_id) in event_logs {
         upsert_game_event_log(
             &mut *tx,
-            GameEventLogInput { seq, session_id: session_id.clone(), event_id, weather_id: weather_id.clone(), triggered_at: game_time as f32, result_json: serde_json::json!({}) },
+            GameEventLogInput {
+                seq,
+                session_id: session_id.clone(),
+                event_id,
+                weather_id: weather_id.clone(),
+                triggered_at: game_time as f32,
+                result_json: serde_json::json!({}),
+            },
         )
         .await?;
         if let Some(npc) = npc_id {
             // game_event_log에 id가 없어서 로그는 (session_id, seq)로 가리킨다.
-            upsert_game_event_log_character(&mut *tx, GameEventLogCharactersInput { session_id: session_id.clone(), seq, game_character_id: npc, role: None, sort_order: 0 }).await?;
+            upsert_game_event_log_character(
+                &mut *tx,
+                GameEventLogCharactersInput {
+                    session_id: session_id.clone(),
+                    seq,
+                    game_character_id: npc,
+                    role: None,
+                    sort_order: 0,
+                },
+            )
+            .await?;
         }
     }
     for (seq, game_character_id, to) in npc_rows {
         let status = if to.is_some() { "active" } else { "absent" };
         upsert_game_character_state(
             &mut *tx,
-            GameCharacterStatesSnapshotsInput { session_id: session_id.clone(), seq, game_character_id, current_location_id: to, status: status.to_string(), state_json: serde_json::json!({}) },
+            GameCharacterStatesSnapshotsInput {
+                session_id: session_id.clone(),
+                seq,
+                game_character_id,
+                current_location_id: to,
+                status: status.to_string(),
+                state_json: serde_json::json!({}),
+            },
         )
         .await?;
     }
     for (seq, key, axis, delta) in rel_rows {
         upsert_game_relationship_snapshot(
             &mut *tx,
-            GameRelationshipSnapshots { session_id: session_id.clone(), seq, relationships_json: serde_json::json!({ key: { axis: delta } }), created_at: chrono::Utc::now().timestamp() },
+            GameRelationshipSnapshots {
+                session_id: session_id.clone(),
+                seq,
+                relationships_json: serde_json::json!({ key: { axis: delta } }),
+                created_at: chrono::Utc::now().timestamp(),
+            },
         )
         .await?;
     }

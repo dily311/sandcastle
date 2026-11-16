@@ -34,7 +34,14 @@ pub fn relation_value(rels: &serde_json::Value, from: &str, to: &str, axis: &str
 
 /// AI가 낸 관계 effect({"affection": 2, ...})를 허용 축/최대 폭/범위로 걸러서 (축, 이전, 이후) 목록으로 만든다.
 /// 상태는 안 바꾼다. 허용 안 된 축, 숫자가 아닌 값, 변화 없는 항목은 버리고 최대 max_changes개까지만.
-pub fn plan_ai_relation(rels: &serde_json::Value, from: &str, to: &str, effect: &serde_json::Value, max_step: i64, max_changes: usize) -> Vec<(String, i64, i64)> {
+pub fn plan_ai_relation(
+    rels: &serde_json::Value,
+    from: &str,
+    to: &str,
+    effect: &serde_json::Value,
+    max_step: i64,
+    max_changes: usize,
+) -> Vec<(String, i64, i64)> {
     let mut out = Vec::new();
     let serde_json::Value::Object(m) = effect else { return out };
     for (axis, d) in m {
@@ -70,22 +77,54 @@ pub struct Entry {
 #[derive(Debug, Clone, Serialize, Deserialize, specta::Type)]
 #[serde(tag = "type", rename_all = "snake_case")]
 pub enum Condition {
-    FlagGte { key: String, value: i64 },
-    FlagEq { key: String, value: serde_json::Value },
-    MinTime { seconds: i64 },
-    InLocation { location_id: String },
-    InZone { zone_id: String },
+    FlagGte {
+        key: String,
+        value: i64,
+    },
+    FlagEq {
+        key: String,
+        value: serde_json::Value,
+    },
+    MinTime {
+        seconds: i64,
+    },
+    InLocation {
+        location_id: String,
+    },
+    InZone {
+        zone_id: String,
+    },
     /// 하루 중 minute(0~1439)분이 이번 시간 경과 구간 (time_from, game_time]에 포함됐는가.
     /// 정확히 그 시각에 멈춰 있어야 하는 게 아니라, 건너뛰어도(17시→01시) 발동한다.
-    AtMinuteOfDay { minute: u32 },
+    AtMinuteOfDay {
+        minute: u32,
+    },
     /// 아이템을 min개(기본 1) 이상 가지고 있는가. 이동 경로/선택지/이벤트 조건에 써서 열쇠와 문을 만든다.
-    HasItem { item_id: String, #[serde(default)] min: Option<i64> },
+    HasItem {
+        item_id: String,
+        #[serde(default)]
+        min: Option<i64>,
+    },
     /// 지금 시간대가 이것인가 (NPC 스폰 조건 등: "밤에만 술집").
-    TimePeriod { period_id: String },
+    TimePeriod {
+        period_id: String,
+    },
     /// from이 to에게 느끼는 axis가 value 이상/이하인가. from/to는 'player' 또는 game_character_id.
-    RelationAtLeast { from: String, to: String, axis: String, value: i64 },
-    RelationAtMost { from: String, to: String, axis: String, value: i64 },
-    Weather { weather_id: String },
+    RelationAtLeast {
+        from: String,
+        to: String,
+        axis: String,
+        value: i64,
+    },
+    RelationAtMost {
+        from: String,
+        to: String,
+        axis: String,
+        value: i64,
+    },
+    Weather {
+        weather_id: String,
+    },
     /// 절대 참이 아니다. 저장된 조건 JSON을 못 읽을 때 "조건 없음(=항상 통과)"으로 취급하면
     /// 의도치 않게 열리므로, 읽지 못한 조건은 이 값으로 대신한다 (fail-closed).
     Never,
@@ -282,7 +321,11 @@ impl VarRule {
 }
 
 fn num_value(n: f64) -> serde_json::Value {
-    if n.fract() == 0.0 && n.abs() < 9.0e15 { serde_json::Value::from(n as i64) } else { serde_json::Value::from(n) }
+    if n.fract() == 0.0 && n.abs() < 9.0e15 {
+        serde_json::Value::from(n as i64)
+    } else {
+        serde_json::Value::from(n)
+    }
 }
 
 /// AI가 낸 effect를 허용 목록/범위로 걸러서 "(key, old, new) 변경 목록"으로 돌려준다.
@@ -361,10 +404,28 @@ mod tests {
     use rand::{rngs::StdRng, SeedableRng};
 
     fn entry(event_id: &str, w: u32, weather: Option<&str>) -> Entry {
-        Entry { id: format!("entry-{event_id}"), event_id: event_id.into(), weight: w, time_period_id: None, weather_id: weather.map(String::from), conditions: vec![] }
+        Entry {
+            id: format!("entry-{event_id}"),
+            event_id: event_id.into(),
+            weight: w,
+            time_period_id: None,
+            weather_id: weather.map(String::from),
+            conditions: vec![],
+        }
     }
     fn state(weather: &str) -> EngineState {
-        EngineState { map_id: "map1".into(), zone_id: None, location_id: None, game_time: 0, time_from: 0, weather_id: weather.into(), time_period_id: "day".into(), flags: serde_json::json!({}), inventory: serde_json::json!({}), relationships: serde_json::json!({}) }
+        EngineState {
+            map_id: "map1".into(),
+            zone_id: None,
+            location_id: None,
+            game_time: 0,
+            time_from: 0,
+            weather_id: weather.into(),
+            time_period_id: "day".into(),
+            flags: serde_json::json!({}),
+            inventory: serde_json::json!({}),
+            relationships: serde_json::json!({}),
+        }
     }
 
     #[test]
@@ -391,14 +452,15 @@ mod tests {
     #[test]
     fn time_period_range_lookup() {
         let periods = vec![
-            ("dawn".to_string(), 300u32, 420u32),   // 05:00~07:00
-            ("day".to_string(), 420, 1080),         // 07:00~18:00
-            ("night".to_string(), 1080, 300),       // 18:00~05:00 (자정 넘김)
+            ("dawn".to_string(), 300u32, 420u32), // 05:00~07:00
+            ("day".to_string(), 420, 1080),       // 07:00~18:00
+            ("night".to_string(), 1080, 300),     // 18:00~05:00 (자정 넘김)
         ];
         assert_eq!(resolve_time_period(&periods, 300 * 60), Some("dawn".into()));
         assert_eq!(resolve_time_period(&periods, 600 * 60), Some("day".into()));
         assert_eq!(resolve_time_period(&periods, 23 * 3600), Some("night".into())); // 23:00
-        assert_eq!(resolve_time_period(&periods, 1 * 3600), Some("night".into()));  // 01:00 (자정 넘김)
+        assert_eq!(resolve_time_period(&periods, 1 * 3600), Some("night".into()));
+        // 01:00 (자정 넘김)
     }
 
     #[test]
@@ -407,8 +469,8 @@ mod tests {
         let effect = serde_json::json!({ "affection": 50, "trust": -20, "secret": 3, "tension": "high" });
         let ch = plan_ai_relation(&rels, "yuna", "player", &effect, 5, 5);
         assert!(ch.contains(&("affection".to_string(), 98, 100))); // 폭 5 → 103이지만 범위 100에서 잘림
-        assert!(ch.contains(&("trust".to_string(), 0, -5)));       // 폭 5로 제한
-        assert_eq!(ch.len(), 2);                                    // 모르는 축/숫자 아닌 값은 버림
+        assert!(ch.contains(&("trust".to_string(), 0, -5))); // 폭 5로 제한
+        assert_eq!(ch.len(), 2); // 모르는 축/숫자 아닌 값은 버림
     }
 
     #[test]
@@ -431,7 +493,10 @@ mod tests {
     #[test]
     fn ai_changes_are_whitelisted_and_clamped() {
         let mut rules = std::collections::HashMap::new();
-        rules.insert("affection".to_string(), VarRule::from_config(r#"{"ai_writable":true,"min":0,"max":10,"max_step":3}"#));
+        rules.insert(
+            "affection".to_string(),
+            VarRule::from_config(r#"{"ai_writable":true,"min":0,"max":10,"max_step":3}"#),
+        );
         rules.insert("secret".to_string(), VarRule::from_config(r#"{"ai_readable":true}"#)); // 읽기만
         let flags = serde_json::json!({ "affection": 9, "secret": 1, "other": 5 });
         let effect = serde_json::json!({

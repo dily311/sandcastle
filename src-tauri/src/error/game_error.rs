@@ -47,7 +47,11 @@ pub enum BlockReason {
 
 impl AppError {
     fn game_with(code: ErrorCode, message: impl Into<String>, details: Option<serde_json::Value>) -> Self {
-        Self::Game { code, message: message.into(), details }
+        Self::Game {
+            code,
+            message: message.into(),
+            details,
+        }
     }
 
     /// 규칙상 막힌 행동

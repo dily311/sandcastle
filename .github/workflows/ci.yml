@@ -22,6 +22,8 @@ jobs:
           node-version: 24
           cache: pnpm
       - run: pnpm install --frozen-lockfile
+      - name: 버전이 한 곳과 같은지 (package.json · Cargo.toml · tauri.conf.json)
+        run: node scripts/version.mjs
       - name: 타입 검사
         run: pnpm check
       - name: 테스트
@@ -47,6 +49,8 @@ jobs:
       - name: 빈 dist 만들기
         shell: bash
         run: mkdir -p ../dist && touch ../dist/index.html
+      - name: 서식 (cargo fmt)
+        run: cargo fmt --check
       - name: 테스트
         run: cargo test
       - name: 프론트 바인딩이 최신인지 확인
@@ -56,3 +60,68 @@ jobs:
           git diff --exit-code -- ../src/ipc/bindings.ts
       - name: Clippy
         run: cargo clippy --all-targets
+
+  android:
+    # Android 대상으로 Rust가 컴파일되는지만 본다 (1-D-2). APK는 릴리스 워크플로가 만든다.
+    # GitHub의 ubuntu 러너에는 Android NDK가 깔려 있다 (ANDROID_NDK_LATEST_HOME)
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: src-tauri
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: aarch64-linux-android
+          components: clippy
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: src-tauri
+          key: android
+      - name: 빈 dist 만들기
+        run: mkdir -p ../dist && touch ../dist/index.html
+      - name: NDK 컴파일러 연결
+        run: |
+          BIN="$ANDROID_NDK_LATEST_HOME/toolchains/llvm/prebuilt/linux-x86_64/bin"
+          echo "CC_aarch64_linux_android=$BIN/aarch64-linux-android24-clang" >> "$GITHUB_ENV"
+          echo "AR_aarch64_linux_android=$BIN/llvm-ar" >> "$GITHUB_ENV"
+          echo "CARGO_TARGET_AARCH64_LINUX_ANDROID_LINKER=$BIN/aarch64-linux-android24-clang" >> "$GITHUB_ENV"
+      - name: Clippy (aarch64-linux-android)
+        run: cargo clippy --lib --target aarch64-linux-android
+
+  e2e:
+    # 실제 앱(디버그 빌드)을 띄워 스모크 시험 (1-D-1): 시작 → 캐릭터 가져오기 → 가짜 공급자로 메시지 → 백업.
+    # 요금이 드는 API는 부르지 않는다. Windows: 자격 증명 관리자(API 키)와 WebView2 드라이버가 있어 화면 없이 돈다
+    runs-on: windows-latest
+    needs: [frontend, rust]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 12.15.0
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: pnpm
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: src-tauri
+          key: e2e
+      - run: pnpm install --frozen-lockfile
+      - name: tauri-driver 설치
+        run: cargo install tauri-driver --locked
+      - name: WebView2와 같은 버전의 msedgedriver
+        shell: pwsh
+        run: |
+          $key = "HKLM:\SOFTWARE\WOW6432Node\Microsoft\EdgeUpdate\Clients\{F3017226-FE2A-4295-8BDF-00C3A9A7E4C5}"
+          $v = (Get-ItemProperty $key -ErrorAction SilentlyContinue).pv
+          if (-not $v) { $v = (Get-Item "C:\Program Files (x86)\Microsoft\Edge\Application\msedge.exe").VersionInfo.ProductVersion }
+          Write-Host "WebView2 $v"
+          Invoke-WebRequest "https://msedgedriver.microsoft.com/$v/edgedriver_win64.zip" -OutFile "$env:RUNNER_TEMP\edgedriver.zip"
+          Expand-Archive "$env:RUNNER_TEMP\edgedriver.zip" -DestinationPath "$env:RUNNER_TEMP\edgedriver" -Force
+          "MSEDGEDRIVER=$env:RUNNER_TEMP\edgedriver\msedgedriver.exe" >> $env:GITHUB_ENV
+      - name: 앱 빌드 (E2E용 identifier)
+        run: pnpm e2e:build
+      - name: E2E
+        run: pnpm e2e

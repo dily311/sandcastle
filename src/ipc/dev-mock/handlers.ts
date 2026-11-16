@@ -21,6 +21,7 @@ const db = {
 		lastPlayedGameId: null,
 		phoneModePrompt: "[폰 메신저 대화]",
 		usageRetentionDays: null,
+		checkUpdatesOnStart: false,
 		home: { startOnHome: false, greeting: "", blocks: ["continue", "quick", "favorites", "games"], css: "" },
 	} satisfies AppSetting_Serialize as AppSetting_Serialize,
 	themeSetting: {
@@ -104,6 +105,9 @@ export const handlers: Record<string, Handler> = {
 	clear_usage: () => 0,
 	allow_budget_once: () => null,
 	compact_usage: () => ({ usageRows: 0, tasks: 0 }),
+	get_panic_log: () => [{ time: Date.now() - 86_400_000, thread: "tokio-rt-worker", message: "예시: called `Option::unwrap()` on a `None` value", location: "src/service/example.rs:42" }],
+	clear_panic_log: () => null,
+	check_for_update: () => ({ current: "0.1.0", latest: "0.2.0", newer: true, url: "https://github.com/dily311/sandcastle/releases", notes: "예시", publishedAt: null }),
 	check_data: () => ({ ok: true, problems: [], checkedFiles: 42, orphanCount: 2, orphanBytes: 380_000, orphans: [{ path: "characters/avatars/old.png", bytes: 300_000 }, { path: "characters/c9/images/x.webp", bytes: 80_000 }] }),
 	list_budget_status: () => [
 		{

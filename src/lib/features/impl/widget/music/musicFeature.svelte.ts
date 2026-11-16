@@ -4,7 +4,7 @@ import { handleChangeAlbumCover, widgetMusicSetting, playlistStore } from "./mus
 import type { FeatureRuntime } from "$/lib/features/types";
 import MusicPlayer from "./ui/MusicPlayer.svelte";
 import { revealItemInDir } from "@tauri-apps/plugin-opener";
-import { featureManager } from "$/lib/features/feautreManager.svelte";
+import { widgetFeatures } from "$/lib/features/widgetFeatures.svelte";
 import { interactiveManager } from "$/lib/interaction/interactive-registry";
 import { visibleFor } from "$/lib/contextmenu/contextMenu.svelte";
 
@@ -39,7 +39,7 @@ class RegisterMusicFeature implements FeatureRuntime {
 
 		interactiveManager.unregisterInteractiveHitbox(this.id);
 		// 제거
-		featureManager.unregister(this.id);
+		widgetFeatures.unregister(this.id);
 	}
 }
 

@@ -16,7 +16,12 @@ use rand::RngExt;
 pub struct StageSystem;
 
 fn direction(cues: Vec<Cue>) -> StageLine {
-    StageLine { kind: LineKind::Direction, speaker: None, text: String::new(), cues }
+    StageLine {
+        kind: LineKind::Direction,
+        speaker: None,
+        text: String::new(),
+        cues,
+    }
 }
 
 fn commit(state: &mut GameState, lines: &[StageLine]) {
@@ -28,8 +33,17 @@ fn commit(state: &mut GameState, lines: &[StageLine]) {
 }
 
 fn background(def: &GameDefinition, state: &mut GameState, rng: &mut StdRng) -> Vec<GameEvent> {
-    let cands = def.background_candidates(state.location_id.as_deref(), Some(state.time_period_id.as_str()), Some(state.weather_id.as_str()));
-    let current = state.stage_json.get("background").and_then(|b| b.get("id")).and_then(|v| v.as_str()).map(str::to_string);
+    let cands = def.background_candidates(
+        state.location_id.as_deref(),
+        Some(state.time_period_id.as_str()),
+        Some(state.weather_id.as_str()),
+    );
+    let current = state
+        .stage_json
+        .get("background")
+        .and_then(|b| b.get("id"))
+        .and_then(|v| v.as_str())
+        .map(str::to_string);
     let cue = if cands.is_empty() {
         if current.is_none() {
             return vec![];
@@ -51,7 +65,12 @@ fn scene_script(def: &GameDefinition, state: &mut GameState, scene_id: &str, rng
     let Some(script) = def.scene(scene_id).and_then(|s| s.script.as_deref()).filter(|t| !t.trim().is_empty()) else {
         return vec![];
     };
-    let mut resolver = DefResolver { def, rng, ai: false, player_name: None };
+    let mut resolver = DefResolver {
+        def,
+        rng,
+        ai: false,
+        player_name: None,
+    };
     let lines = stage::parse(script, &mut resolver, &Allowed::author());
     commit(state, &lines);
 
@@ -71,7 +90,10 @@ fn scene_script(def: &GameDefinition, state: &mut GameState, scene_id: &str, rng
     appeared.sort();
     appeared.dedup();
 
-    let mut out = vec![GameEvent::SceneScript { scene_id: scene_id.to_string(), lines }];
+    let mut out = vec![GameEvent::SceneScript {
+        scene_id: scene_id.to_string(),
+        lines,
+    }];
     if !appeared.is_empty() {
         out.push(GameEvent::CharactersAppeared { character_ids: appeared });
     }
@@ -132,7 +154,12 @@ impl GameSystem for StageSystem {
             GameEvent::TimePeriodChanged { .. } | GameEvent::WeatherChanged { .. } => background(def, state, rng),
             GameEvent::StageRequested { spec } => {
                 let script = stage::spec_to_script(spec);
-                let mut resolver = DefResolver { def, rng, ai: false, player_name: None };
+                let mut resolver = DefResolver {
+                    def,
+                    rng,
+                    ai: false,
+                    player_name: None,
+                };
                 let lines = stage::parse(&script, &mut resolver, &Allowed::author());
                 if lines.is_empty() {
                     return vec![];

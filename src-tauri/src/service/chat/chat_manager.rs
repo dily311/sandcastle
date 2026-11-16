@@ -18,10 +18,7 @@ use crate::{
     },
     error::AppError,
     models::{
-        ai_service::{
-            ChatContext, ContextRequest, DialogueDoneEvent, GenerationType, PromptMessage, PromptRequest,
-            StreamPayload,
-        },
+        ai_service::{ChatContext, ContextRequest, DialogueDoneEvent, GenerationType, PromptMessage, PromptRequest, StreamPayload},
         character_image::CharacterImage,
         conversation::{ChatTurn, ConversationMode, Message, MessageInput},
         regex::{RegexPlacement, RegexTarget},
@@ -56,7 +53,9 @@ fn phone_defaults(app: &AppHandle, mode: &str, req: &mut ChatRequest) {
     if mode != "phone" {
         return;
     }
-    let Some(state) = app.try_state::<SettingsState<crate::models::settings::PluginSetting>>() else { return };
+    let Some(state) = app.try_state::<SettingsState<crate::models::settings::PluginSetting>>() else {
+        return;
+    };
     let Ok(p) = state.0.lock().map(|s| s.phone.clone()) else { return };
     if let Some(id) = p.api_profile_id.filter(|s| !s.is_empty()) {
         req.api_profile_id = id;
@@ -67,10 +66,7 @@ fn phone_defaults(app: &AppHandle, mode: &str, req: &mut ChatRequest) {
 }
 
 pub fn current_conv_request(state: &SettingsState<AppSetting>) -> Result<ChatRequest> {
-    let guard = state
-        .0
-        .lock()
-        .map_err(|_| AppError::internal("settings lock poisoned"))?;
+    let guard = state.0.lock().map_err(|_| AppError::internal("settings lock poisoned"))?;
     Ok(ChatRequest {
         api_profile_id: guard.selected_api_profile.clone().unwrap_or_default(),
         preset_id: guard.selected_preset.clone(),
@@ -104,11 +100,7 @@ fn images_feature_on(app: &AppHandle) -> bool {
     crate::sys::plugins::is_enabled(app, IMAGES_FEATURE)
 }
 
-async fn load_enabled_images(
-    app: &AppHandle,
-    db: &crate::db::conn::DbPool,
-    character_id: &str,
-) -> Result<Vec<CharacterImage>> {
+async fn load_enabled_images(app: &AppHandle, db: &crate::db::conn::DbPool, character_id: &str) -> Result<Vec<CharacterImage>> {
     if character_id.is_empty() {
         return Ok(vec![]);
     }
@@ -158,9 +150,20 @@ impl ChatManager {
         .owner_ref(target.session_id.clone());
         let (response, prompt) = tasks
             .run_inline(job, |cancel| async move {
-                self.generate_with(&app, &state.db, profile, Some(preset), context, message, GenerationType::Normal, &cancel, streaming, sink)
-                    .await
-                    .map_err(crate::commands::chat::into_app_error)
+                self.generate_with(
+                    &app,
+                    &state.db,
+                    profile,
+                    Some(preset),
+                    context,
+                    message,
+                    GenerationType::Normal,
+                    &cancel,
+                    streaming,
+                    sink,
+                )
+                .await
+                .map_err(crate::commands::chat::into_app_error)
             })
             .await?;
         if let Ok(mut map) = LAST_GAME_PROMPT.lock() {
@@ -206,7 +209,14 @@ impl ChatManager {
             .clone();
 
         let response = ai
-            .generate(AiRequest { profile_id, prompt: prompt.clone() }, cancel, |d| on_delta(d))
+            .generate(
+                AiRequest {
+                    profile_id,
+                    prompt: prompt.clone(),
+                },
+                cancel,
+                |d| on_delta(d),
+            )
             .await?;
         Ok((response, prompt))
     }
@@ -362,7 +372,11 @@ impl ChatManager {
             (TurnKind::Send(text, images), _) => {
                 let t = text.trim().to_string();
                 context.user_images = images.clone();
-                let gt = if t.is_empty() && images.is_empty() { GenerationType::Continue } else { GenerationType::Normal };
+                let gt = if t.is_empty() && images.is_empty() {
+                    GenerationType::Continue
+                } else {
+                    GenerationType::Normal
+                };
                 (t, false, gt)
             }
             (TurnKind::Regenerate { swipe }, Some(t)) => {
@@ -423,7 +437,10 @@ impl ChatManager {
             db,
             Some(&conv.character_id),
             Some(&preset_id),
-            RegexMacros { char_name: other.name.clone(), user_name: me.name.clone() },
+            RegexMacros {
+                char_name: other.name.clone(),
+                user_name: me.name.clone(),
+            },
         )
         .await?;
 
@@ -475,11 +492,27 @@ impl ChatManager {
                     let _ = ch.send(StreamPayload { chunk: delta.to_string() });
                 }
             };
-            self.generate_with(app, db, api_profile_id.clone(), Some(preset_id.clone()), context, prompt_input, generation_type, cancel, streaming, &mut sink)
-                .await
+            self.generate_with(
+                app,
+                db,
+                api_profile_id.clone(),
+                Some(preset_id.clone()),
+                context,
+                prompt_input,
+                generation_type,
+                cancel,
+                streaming,
+                &mut sink,
+            )
+            .await
         };
         let (raw, model, finish_reason, prompt, cancelled): (String, String, Option<String>, Option<PromptMessage>, bool) = match outcome {
-            Ok((AiResponse { content, model, finish_reason, .. }, prompt)) => (content, model, finish_reason, Some(prompt), false),
+            Ok((
+                AiResponse {
+                    content, model, finish_reason, ..
+                },
+                prompt,
+            )) => (content, model, finish_reason, Some(prompt), false),
             Err(_) if cancel.is_cancelled() && !received.trim().is_empty() => (received, String::new(), None, None, true),
             Err(e) => return Err(e),
         };
@@ -521,8 +554,14 @@ impl ChatManager {
             .map_err(AppError::from)?,
             Some(old) => {
                 let swipe = matches!(kind, TurnKind::Regenerate { swipe: true });
-                let meta = if swipe { push_swipe(old, &content, &info, &images_json) } else { replace_meta(old, &info, &images_json) };
-                crate::db::conversation::update_message(db, &old.id, &content, &Some(meta)).await.map_err(AppError::from)?;
+                let meta = if swipe {
+                    push_swipe(old, &content, &info, &images_json)
+                } else {
+                    replace_meta(old, &info, &images_json)
+                };
+                crate::db::conversation::update_message(db, &old.id, &content, &Some(meta))
+                    .await
+                    .map_err(AppError::from)?;
                 crate::db::conversation::touch_conversation(db, conversation_id).await.map_err(AppError::from)?;
                 chat_ui::get_message(db, &old.id).await.map_err(AppError::from)?
             }
@@ -535,13 +574,19 @@ impl ChatManager {
         if let Some(p) = auto_image_prompt {
             let mut meta = assistant.meta.clone().filter(Value::is_object).unwrap_or_else(|| json!({}));
             meta["autoImagePrompt"] = json!(p);
-            crate::db::conversation::update_message_meta(db, &assistant.id, meta).await.map_err(AppError::from)?;
+            crate::db::conversation::update_message_meta(db, &assistant.id, meta)
+                .await
+                .map_err(AppError::from)?;
             assistant = chat_ui::get_message(db, &assistant.id).await.map_err(AppError::from)?;
         }
 
         let _ = app.emit(
             EVENT_DIALOGUE_DONE,
-            DialogueDoneEvent { conversation_id: conversation_id.to_string(), full_message: content, images: used_images },
+            DialogueDoneEvent {
+                conversation_id: conversation_id.to_string(),
+                full_message: content,
+                images: used_images,
+            },
         );
         Ok(ChatTurn { user: user_msg, assistant })
     }

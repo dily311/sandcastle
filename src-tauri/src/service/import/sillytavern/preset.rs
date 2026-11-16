@@ -54,7 +54,12 @@ pub fn preset_regex(json: &Value) -> Value {
     let mut seen = std::collections::HashSet::new();
     let unique: Vec<Value> = found
         .into_iter()
-        .filter(|s| seen.insert((s.get("scriptName").and_then(Value::as_str).unwrap_or("").to_string(), s.get("findRegex").and_then(Value::as_str).unwrap_or("").to_string())))
+        .filter(|s| {
+            seen.insert((
+                s.get("scriptName").and_then(Value::as_str).unwrap_or("").to_string(),
+                s.get("findRegex").and_then(Value::as_str).unwrap_or("").to_string(),
+            ))
+        })
         .cloned()
         .collect();
     Value::Array(unique)
@@ -88,14 +93,14 @@ pub fn map_preset(json: &Value, preset_id: &str, name: &str) -> ImportedPreset {
     let mut blocks = vec![];
     let mut merged_markers = false;
     for (i, (p, enabled)) in placed.into_iter().enumerate() {
-        let Some(identifier) = as_str(p, "identifier").filter(|s| !s.is_empty()) else { continue };
+        let Some(identifier) = as_str(p, "identifier").filter(|s| !s.is_empty()) else {
+            continue;
+        };
         let marker = p["marker"].as_bool().unwrap_or(false);
         if enabled && UNSUPPORTED_MARKERS.contains(&identifier) && !merged_markers {
             // ST 기본 프리셋에 항상 있는 마커라 경고는 한 번만
             merged_markers = true;
-            warnings.push(
-                "성격(charPersonality)/시나리오(scenario) 블록은 비워 둠 — 캐릭터를 가져올 때 두 항목은 캐릭터 설명에 합쳐짐".into(),
-            );
+            warnings.push("성격(charPersonality)/시나리오(scenario) 블록은 비워 둠 — 캐릭터를 가져올 때 두 항목은 캐릭터 설명에 합쳐짐".into());
         }
         let role = match as_str(p, "role").unwrap_or("system") {
             r @ ("system" | "user" | "assistant") => r,
@@ -117,7 +122,11 @@ pub fn map_preset(json: &Value, preset_id: &str, name: &str) -> ImportedPreset {
             identifier: identifier.to_string(),
             block_type: "text".into(),
             role: role.into(),
-            content: if marker { String::new() } else { as_str(p, "content").unwrap_or_default().to_string() },
+            content: if marker {
+                String::new()
+            } else {
+                as_str(p, "content").unwrap_or_default().to_string()
+            },
             enabled,
             position: if in_chat { "in_chat" } else { "relative" }.into(),
             depth: if in_chat {
@@ -157,12 +166,7 @@ pub fn map_preset(json: &Value, preset_id: &str, name: &str) -> ImportedPreset {
         warnings.push("assistant prefill은 아직 지원하지 않아 원본에만 보존함".into());
     }
 
-    let regex = map_regex_scripts(
-        &preset_regex(json),
-        RegexScope::Preset,
-        Some(preset_id.to_string()),
-        &mut warnings,
-    );
+    let regex = map_regex_scripts(&preset_regex(json), RegexScope::Preset, Some(preset_id.to_string()), &mut warnings);
 
     ImportedPreset {
         preset: PromptPresetsInput {
@@ -292,7 +296,12 @@ mod tests {
                 "SPreset": { "RegexBinding": { "regexes": [ { "scriptName": "s", "findRegex": "/b/", "placement": [2] }, { "scriptName": "r", "findRegex": "/a/", "placement": [2] } ] } }
             }
         });
-        let names: Vec<_> = preset_regex(&json).as_array().unwrap().iter().map(|v| v["scriptName"].as_str().unwrap().to_string()).collect();
+        let names: Vec<_> = preset_regex(&json)
+            .as_array()
+            .unwrap()
+            .iter()
+            .map(|v| v["scriptName"].as_str().unwrap().to_string())
+            .collect();
         assert_eq!(names, vec!["top", "r", "s"]);
         assert_eq!(map_preset(&json, "p1", "x").regex.len(), 3);
     }

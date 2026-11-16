@@ -42,13 +42,7 @@ pub async fn add_phone_contact(
 
 #[tauri::command]
 #[specta::specta]
-pub async fn remove_phone_contact(
-    state: State<'_, AppState>,
-    owner_kind: String,
-    owner_id: String,
-    contact_kind: String,
-    contact_id: String,
-) -> Result<()> {
+pub async fn remove_phone_contact(state: State<'_, AppState>, owner_kind: String, owner_id: String, contact_kind: String, contact_id: String) -> Result<()> {
     if !phone::remove_contact(&state.db, who(&owner_kind, &owner_id)?, who(&contact_kind, &contact_id)?).await? {
         return Err(AppError::not_found("연락처를 찾을 수 없습니다"));
     }

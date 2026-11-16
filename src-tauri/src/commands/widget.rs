@@ -1,5 +1,14 @@
 use crate::{
-    db, error::AppError, models::widget::{MusicMetaInput, Playlist, PlaylistInput, PlaylistItem, WidgetMusicSetting}, state::AppState, sys::{library::LibraryRoot, music::{self}, settings::merge_json}, widget::{InteractiveRegion, MouseTrackerState, WidgetInteractionState, manager::WidgetManager},
+    db,
+    error::AppError,
+    models::widget::{MusicMetaInput, Playlist, PlaylistInput, PlaylistItem, WidgetMusicSetting},
+    state::AppState,
+    sys::{
+        library::LibraryRoot,
+        music::{self},
+        settings::merge_json,
+    },
+    widget::{manager::WidgetManager, InteractiveRegion, MouseTrackerState, WidgetInteractionState},
 };
 use std::path::Path;
 use tauri::{AppHandle, Manager, State, WebviewWindow};
@@ -52,9 +61,7 @@ pub async fn toggle_ignore_cursor(window: tauri::Window, ignore: bool) -> Result
 #[tauri::command]
 #[specta::specta]
 pub async fn is_autostart_enabled(state: State<'_, AutoLaunchManager>) -> Result<bool, AppError> {
-    state
-        .is_enabled()
-        .map_err(|e| AppError::window(e.to_string()))
+    state.is_enabled().map_err(|e| AppError::window(e.to_string()))
 }
 
 #[tauri::command]
@@ -74,11 +81,7 @@ pub async fn set_autostart(state: State<'_, AutoLaunchManager>, enabled: bool) -
 // =======================================
 #[tauri::command]
 #[specta::specta]
-pub fn update_interactive_regions(
-    upserts: Vec<InteractiveRegion>,
-    removed: Vec<String>,
-    state: State<'_, WidgetInteractionState>,
-) -> Result<(), AppError> {
+pub fn update_interactive_regions(upserts: Vec<InteractiveRegion>, removed: Vec<String>, state: State<'_, WidgetInteractionState>) -> Result<(), AppError> {
     let mut regions = state.regions.lock().unwrap();
 
     for region in upserts {
@@ -93,10 +96,7 @@ pub fn update_interactive_regions(
 
 #[tauri::command]
 #[specta::specta]
-pub fn remove_interactive_regions(
-    ids: Vec<String>,
-    state: State<WidgetInteractionState>,
-) -> Result<(), AppError> {
+pub fn remove_interactive_regions(ids: Vec<String>, state: State<WidgetInteractionState>) -> Result<(), AppError> {
     let mut regions = state.regions.lock().unwrap();
 
     for id in ids {
@@ -119,9 +119,7 @@ pub fn set_widget_click_through(window: WebviewWindow, enabled: bool) -> Result<
 #[specta::specta]
 pub fn get_widget_music_settings(app: AppHandle) -> Result<WidgetMusicSetting, AppError> {
     let store = app.store("widget.json").map_err(|e| AppError::io(e.to_string()))?;
-    let result: WidgetMusicSetting = store.get("music")
-        .and_then(|v| serde_json::from_value(v).ok())
-        .unwrap_or_default();
+    let result: WidgetMusicSetting = store.get("music").and_then(|v| serde_json::from_value(v).ok()).unwrap_or_default();
 
     Ok(result)
 }
@@ -135,7 +133,7 @@ pub fn save_widget_music_settings(app: AppHandle, patch: serde_json::Value) -> R
 
     // 이전 데이터와 통합
     merge_json(&mut data, &patch);
-    
+
     store.set("music", serde_json::to_value(&data).unwrap());
     Ok(())
 }

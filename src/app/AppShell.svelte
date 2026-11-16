@@ -1,4 +1,5 @@
 <script lang="ts">
+	import { checkOnStart } from "./updateCheck";
 	import { onMount } from "svelte";
 	import { ConfirmHost, Toasts } from "$shared/ui";
 	import CharacterPage from "$features/character/CharacterPage.svelte";
@@ -55,6 +56,8 @@
 		logs.info("app", "시작");
 		// 홈부터 보기를 켰으면 첫 화면을 홈으로 (기본 꺼짐)
 		await appSetting.load();
+		// 새 버전 확인: 설정을 켰을 때만 (기본 꺼짐, 1-E-2)
+		checkOnStart(appSetting.value?.checkUpdatesOnStart ?? false);
 		if (appSetting.value?.home?.startOnHome && nav.current.page === "character" && !nav.canBack) void nav.replace({ page: "home" });
 		ready = true;
 		void recoverInterruptedChats();

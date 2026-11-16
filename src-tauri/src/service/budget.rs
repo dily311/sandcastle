@@ -38,7 +38,10 @@ fn lock() -> std::sync::MutexGuard<'static, Option<Allowance>> {
 
 /// 사용자가 "이번만 계속"을 누름: 2분 안에 사용자가 실행하는 작업 하나를 한도 밖으로
 pub fn allow_once() {
-    *lock() = Some(Allowance { until: Instant::now() + ALLOW_WINDOW, task_id: None });
+    *lock() = Some(Allowance {
+        until: Instant::now() + ALLOW_WINDOW,
+        task_id: None,
+    });
 }
 
 /// 이 작업이 허용을 쓸 수 있는지 (처음 쓰는 작업이 허용을 차지한다)
@@ -121,7 +124,11 @@ pub async fn take_warnings(db: &sqlx::SqlitePool) -> std::result::Result<Vec<Bud
             }
             let start = if m.period == BudgetPeriod::Day { day_start } else { month_start };
             let key = format!("{}:{:?}:{:?}:{start}", o.limit.api_profile_id, m.metric, m.period);
-            let new = WARNED.lock().unwrap_or_else(std::sync::PoisonError::into_inner).get_or_insert_with(Default::default).insert(key);
+            let new = WARNED
+                .lock()
+                .unwrap_or_else(std::sync::PoisonError::into_inner)
+                .get_or_insert_with(Default::default)
+                .insert(key);
             if new {
                 fresh.push((o.limit.api_profile_id.clone(), m));
             }
@@ -129,8 +136,15 @@ pub async fn take_warnings(db: &sqlx::SqlitePool) -> std::result::Result<Vec<Bud
     }
     let mut out = vec![];
     for (id, meter) in fresh {
-        let name: Option<String> = sqlx::query_scalar("SELECT name FROM api_profiles WHERE id = ?").bind(&id).fetch_optional(db).await?;
-        out.push(BudgetWarning { api_profile_id: id, profile_name: name, meter });
+        let name: Option<String> = sqlx::query_scalar("SELECT name FROM api_profiles WHERE id = ?")
+            .bind(&id)
+            .fetch_optional(db)
+            .await?;
+        out.push(BudgetWarning {
+            api_profile_id: id,
+            profile_name: name,
+            meter,
+        });
     }
     Ok(out)
 }
@@ -138,7 +152,9 @@ pub async fn take_warnings(db: &sqlx::SqlitePool) -> std::result::Result<Vec<Bud
 /// 기록 정리 (1-A-4): 보존 기간보다 오래된 상세를 일별 합계로 옮긴다. None이면 하지 않음.
 /// 보존 기간은 30일 미만으로 줄이지 않는다 (실행 기록 화면의 30일 칸이 상세를 쓰므로)
 pub async fn compact(db: &sqlx::SqlitePool, retention_days: Option<u32>) -> std::result::Result<budget_compact::CompactResult, sqlx::Error> {
-    let Some(days) = retention_days else { return Ok(budget_compact::CompactResult::default()) };
+    let Some(days) = retention_days else {
+        return Ok(budget_compact::CompactResult::default());
+    };
     let days = days.max(budget_compact::RETENTION_CHOICES[0]);
     budget_compact::compact_before(db, budget_compact::retention_cutoff(&chrono::Local::now(), days)).await
 }
@@ -153,7 +169,11 @@ fn exceeded(api_profile_id: &str, m: &BudgetMeter, run_by: RunBy) -> AppError {
         BudgetPeriod::Day => "오늘",
         BudgetPeriod::Month => "이번 달",
     };
-    let tail = if run_by == RunBy::Auto { " 자동 실행은 실행하지 않았습니다." } else { "" };
+    let tail = if run_by == RunBy::Auto {
+        " 자동 실행은 실행하지 않았습니다."
+    } else {
+        ""
+    };
     AppError::Validation {
         code: ErrorCode::BudgetExceeded,
         message: format!("{when} {what} 한도를 넘어 실행하지 않았습니다 ({} / {}).{tail}", m.used, m.limit),
@@ -172,18 +192,34 @@ fn exceeded(api_profile_id: &str, m: &BudgetMeter, run_by: RunBy) -> AppError {
 mod tests {
     use super::*;
     use crate::{
-        db::{budget::{upsert_budget_limit, BudgetLimit}, usage::{record, UsageEntry}},
+        db::{
+            budget::{upsert_budget_limit, BudgetLimit},
+            usage::{record, UsageEntry},
+        },
         task::{task_context_scope_for_test as scope, CurrentTask},
     };
 
     async fn pool_over_limit() -> sqlx::SqlitePool {
-        let pool = sqlx::sqlite::SqlitePoolOptions::new().max_connections(1).connect("sqlite::memory:").await.unwrap();
+        let pool = sqlx::sqlite::SqlitePoolOptions::new()
+            .max_connections(1)
+            .connect("sqlite::memory:")
+            .await
+            .unwrap();
         sqlx::migrate!("src/db/migrations").run(&pool).await.unwrap();
         sqlx::query("INSERT INTO api_profiles (id, name, provider, format_type, base_url, model, created_at, updated_at) VALUES ('p1', 'P', 'openai', 'openai', '', 'm', 0, 0)")
             .execute(&pool)
             .await
             .unwrap();
-        upsert_budget_limit(&pool, &BudgetLimit { api_profile_id: "p1".into(), daily_tokens: Some(10), ..Default::default() }).await.unwrap();
+        upsert_budget_limit(
+            &pool,
+            &BudgetLimit {
+                api_profile_id: "p1".into(),
+                daily_tokens: Some(10),
+                ..Default::default()
+            },
+        )
+        .await
+        .unwrap();
         let mut e = UsageEntry::new(UsageKind::Chat, "p1", "m");
         e.input_tokens = 10;
         record(&pool, e).await;
@@ -191,7 +227,11 @@ mod tests {
     }
 
     fn task(id: &str, run_by: RunBy) -> CurrentTask {
-        CurrentTask { task_id: id.into(), feature: Some("chat".into()), run_by }
+        CurrentTask {
+            task_id: id.into(),
+            feature: Some("chat".into()),
+            run_by,
+        }
     }
 
     fn code(r: Result<()>) -> Option<ErrorCode> {
@@ -216,16 +256,25 @@ mod tests {
         // 다른 단위(그림)는 막지 않는다
         assert!(scope(task("t0", RunBy::User), ensure(&db, "p1", UsageKind::Image)).await.is_ok());
         // 사용자 실행도 허용 전에는 막힘
-        assert_eq!(code(scope(task("t1", RunBy::User), ensure(&db, "p1", UsageKind::Chat)).await), Some(ErrorCode::BudgetExceeded));
+        assert_eq!(
+            code(scope(task("t1", RunBy::User), ensure(&db, "p1", UsageKind::Chat)).await),
+            Some(ErrorCode::BudgetExceeded)
+        );
 
         allow_once();
         // 자동 실행은 허용이 있어도 막고, 허용을 써 버리지도 않는다
-        assert_eq!(code(scope(task("a1", RunBy::Auto), ensure(&db, "p1", UsageKind::Chat)).await), Some(ErrorCode::BudgetExceeded));
+        assert_eq!(
+            code(scope(task("a1", RunBy::Auto), ensure(&db, "p1", UsageKind::Chat)).await),
+            Some(ErrorCode::BudgetExceeded)
+        );
         // 처음 실행한 사용자 작업이 허용을 차지 — 같은 작업 안의 다음 호출도 통과
         assert!(scope(task("t2", RunBy::User), ensure(&db, "p1", UsageKind::Chat)).await.is_ok());
         assert!(scope(task("t2", RunBy::User), ensure(&db, "p1", UsageKind::Chat)).await.is_ok());
         // 다른 작업은 다시 막힘
-        assert_eq!(code(scope(task("t3", RunBy::User), ensure(&db, "p1", UsageKind::Chat)).await), Some(ErrorCode::BudgetExceeded));
+        assert_eq!(
+            code(scope(task("t3", RunBy::User), ensure(&db, "p1", UsageKind::Chat)).await),
+            Some(ErrorCode::BudgetExceeded)
+        );
         // 한도가 없는 프로필은 그대로 통과
         assert!(ensure(&db, "none", UsageKind::Chat).await.is_ok());
         *lock() = None;

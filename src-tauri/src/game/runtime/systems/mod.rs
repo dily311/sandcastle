@@ -23,13 +23,19 @@ pub use events::prime_auto_state;
 /// 이벤트들로 환원한다. state에는 쓰지 않는다 — 쓰기는 trigger.rs(변수)/scene.rs(씬)/events.rs(이벤트)가 한다.
 pub(super) fn effect_events(flags: &serde_json::Value, effect: &serde_json::Value) -> Vec<GameEvent> {
     let (_, changes) = crate::game::engine::apply_effect(flags, effect);
-    let mut out: Vec<GameEvent> = changes.into_iter().map(|(key, old, new)| GameEvent::VariableChanged { key, old, new }).collect();
+    let mut out: Vec<GameEvent> = changes
+        .into_iter()
+        .map(|(key, old, new)| GameEvent::VariableChanged { key, old, new })
+        .collect();
     // 아이템: {"give_item": {"key_card": 1}, "take_item": {"potion": 2}}  (item_id -> 수량)
     for (verb, sign) in [("give_item", 1i64), ("take_item", -1i64)] {
         if let Some(serde_json::Value::Object(m)) = effect.get(verb) {
             for (item_id, q) in m {
                 if let Some(q) = q.as_i64().filter(|q| *q > 0) {
-                    out.push(GameEvent::ItemChangeRequested { item_id: item_id.clone(), delta: sign * q });
+                    out.push(GameEvent::ItemChangeRequested {
+                        item_id: item_id.clone(),
+                        delta: sign * q,
+                    });
                 }
             }
         }
@@ -37,10 +43,17 @@ pub(super) fn effect_events(flags: &serde_json::Value, effect: &serde_json::Valu
     // 관계: {"relation": {"player>yuna": {"affection": 3, "trust": -2}}}  (키는 "from>to")
     if let Some(serde_json::Value::Object(pairs)) = effect.get("relation") {
         for (key, axes) in pairs {
-            let (Some((from, to)), Some(axes)) = (key.split_once('>'), axes.as_object()) else { continue };
+            let (Some((from, to)), Some(axes)) = (key.split_once('>'), axes.as_object()) else {
+                continue;
+            };
             for (axis, delta) in axes {
                 if let Some(delta) = delta.as_i64().filter(|d| *d != 0) {
-                    out.push(GameEvent::RelationChangeRequested { from: from.to_string(), to: to.to_string(), axis: axis.clone(), delta });
+                    out.push(GameEvent::RelationChangeRequested {
+                        from: from.to_string(),
+                        to: to.to_string(),
+                        axis: axis.clone(),
+                        delta,
+                    });
                 }
             }
         }
@@ -54,10 +67,14 @@ pub(super) fn effect_events(flags: &serde_json::Value, effect: &serde_json::Valu
         out.push(GameEvent::SceneEndRequested);
     }
     if let Some(scene_id) = effect.get("enter_scene").and_then(|v| v.as_str()) {
-        out.push(GameEvent::SceneRequested { scene_id: scene_id.to_string() });
+        out.push(GameEvent::SceneRequested {
+            scene_id: scene_id.to_string(),
+        });
     }
     if let Some(event_id) = effect.get("fire_event").and_then(|v| v.as_str()) {
-        out.push(GameEvent::EventRequested { event_id: event_id.to_string() });
+        out.push(GameEvent::EventRequested {
+            event_id: event_id.to_string(),
+        });
     }
     out
 }
@@ -67,13 +84,7 @@ pub trait GameSystem {
 
     /// def는 읽기 전용(정적 데이터), state는 이 시스템이 자기 몫만 고쳐야 한다
     /// (다른 시스템의 필드를 건드리지 않기 — 안 그러면 실행 순서에 결과가 좌우됨).
-    fn handle_event(
-        &self,
-        def: &GameDefinition,
-        state: &mut GameState,
-        event: &GameEvent,
-        rng: &mut StdRng,
-    ) -> Vec<GameEvent>;
+    fn handle_event(&self, def: &GameDefinition, state: &mut GameState, event: &GameEvent, rng: &mut StdRng) -> Vec<GameEvent>;
 }
 
 /// 실행 순서. 뒤 시스템이 앞 시스템의 결과(이번 턴에 새로 emit된 이벤트)에 반응하지

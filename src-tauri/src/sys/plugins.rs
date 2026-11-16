@@ -53,18 +53,79 @@ struct Def {
 }
 
 const CATALOG: &[Def] = &[
-    Def { id: id::PHONE, name: "폰", description: "캐릭터와 메신저처럼 대화하는 폰 화면, 캐릭터 폰 엿보기", default_enabled: true, desktop_only: false },
-    Def { id: id::GAME, name: "게임 모드", description: "게임 만들기·가져오기와 플레이 (지도·이벤트·NPC 대화)", default_enabled: true, desktop_only: false },
-    Def { id: id::IMAGES, name: "캐릭터 이미지", description: "캐릭터 이미지 에셋을 AI에게 알려 주고 <cg> 태그로 대화에 표시", default_enabled: true, desktop_only: false },
+    Def {
+        id: id::PHONE,
+        name: "폰",
+        description: "캐릭터와 메신저처럼 대화하는 폰 화면, 캐릭터 폰 엿보기",
+        default_enabled: true,
+        desktop_only: false,
+    },
+    Def {
+        id: id::GAME,
+        name: "게임 모드",
+        description: "게임 만들기·가져오기와 플레이 (지도·이벤트·NPC 대화)",
+        default_enabled: true,
+        desktop_only: false,
+    },
+    Def {
+        id: id::IMAGES,
+        name: "캐릭터 이미지",
+        description: "캐릭터 이미지 에셋을 AI에게 알려 주고 <cg> 태그로 대화에 표시",
+        default_enabled: true,
+        desktop_only: false,
+    },
     // AI가 쓴 JS를 실행하므로 기본 꺼짐 (켜기 전에는 코드로만 보인다)
-    Def { id: id::HTML, name: "HTML 렌더링", description: "AI 답변의 ```html``` 코드 블록을 격리된 창에서 실행해 보여줌 (JS 포함)", default_enabled: false, desktop_only: false },
-    Def { id: id::REGEX, name: "정규식", description: "메시지 글자를 찾아 바꾸는 정규식 (SillyTavern 정규식 가져오기)", default_enabled: true, desktop_only: false },
-    Def { id: id::WIDGET, name: "위젯", description: "바탕화면 위젯 (음악 플레이어 등)", default_enabled: false, desktop_only: true },
-    Def { id: id::TRANSLATE, name: "번역", description: "AI 답변을 내 언어로, 내 입력을 다른 언어로 번역 (연결한 AI로)", default_enabled: false, desktop_only: false },
-    Def { id: id::TTS, name: "음성 읽기", description: "AI 답변을 음성으로 읽어 줌 (OpenAI 호환 음성 API)", default_enabled: false, desktop_only: false },
-    Def { id: id::IMAGE_GEN, name: "이미지 생성", description: "직접 그림 만들기: 이미지 페이지의 새로 만들기, 메시지의 '이 장면 그리기' (NovelAI·OpenAI 호환)", default_enabled: false, desktop_only: false },
+    Def {
+        id: id::HTML,
+        name: "HTML 렌더링",
+        description: "AI 답변의 ```html``` 코드 블록을 격리된 창에서 실행해 보여줌 (JS 포함)",
+        default_enabled: false,
+        desktop_only: false,
+    },
+    Def {
+        id: id::REGEX,
+        name: "정규식",
+        description: "메시지 글자를 찾아 바꾸는 정규식 (SillyTavern 정규식 가져오기)",
+        default_enabled: true,
+        desktop_only: false,
+    },
+    Def {
+        id: id::WIDGET,
+        name: "위젯",
+        description: "바탕화면 위젯 (음악 플레이어 등)",
+        default_enabled: false,
+        desktop_only: true,
+    },
+    Def {
+        id: id::TRANSLATE,
+        name: "번역",
+        description: "AI 답변을 내 언어로, 내 입력을 다른 언어로 번역 (연결한 AI로)",
+        default_enabled: false,
+        desktop_only: false,
+    },
+    Def {
+        id: id::TTS,
+        name: "음성 읽기",
+        description: "AI 답변을 음성으로 읽어 줌 (OpenAI 호환 음성 API)",
+        default_enabled: false,
+        desktop_only: false,
+    },
+    Def {
+        id: id::IMAGE_GEN,
+        name: "이미지 생성",
+        description: "직접 그림 만들기: 이미지 페이지의 새로 만들기, 메시지의 '이 장면 그리기' (NovelAI·OpenAI 호환)",
+        default_enabled: false,
+        desktop_only: false,
+    },
     // 응답마다 이미지 요금이 나가므로 기본 꺼짐
-    Def { id: id::IMAGE_AUTO, name: "이미지 자동 생성", description: "글을 쓰는 AI가 응답 끝에 그림 프롬프트도 쓰고, 응답이 오면 그 프롬프트로 바로 그림 (응답마다 이미지 요금, 설정 > 이미지 생성의 API·프리셋 사용)", default_enabled: false, desktop_only: false },
+    Def {
+        id: id::IMAGE_AUTO,
+        name: "이미지 자동 생성",
+        description:
+            "글을 쓰는 AI가 응답 끝에 그림 프롬프트도 쓰고, 응답이 오면 그 프롬프트로 바로 그림 (응답마다 이미지 요금, 설정 > 이미지 생성의 API·프리셋 사용)",
+        default_enabled: false,
+        desktop_only: false,
+    },
 ];
 
 fn default_of(plugin_id: &str) -> bool {
@@ -99,7 +160,11 @@ pub fn require(app: &AppHandle, plugin_id: &str) -> Result<()> {
         return Ok(());
     }
     let name = CATALOG.iter().find(|d| d.id == plugin_id).map_or(plugin_id, |d| d.name);
-    Err(AppError::Validation { code: ErrorCode::InvalidInput, message: format!("'{name}' 기능이 꺼져 있습니다 (설정 > 코어 플러그인)"), details: Some(serde_json::json!({ "plugin": plugin_id })) })
+    Err(AppError::Validation {
+        code: ErrorCode::InvalidInput,
+        message: format!("'{name}' 기능이 꺼져 있습니다 (설정 > 코어 플러그인)"),
+        details: Some(serde_json::json!({ "plugin": plugin_id })),
+    })
 }
 
 pub fn list(setting: &FeatureSetting) -> Vec<CorePlugin> {
@@ -107,7 +172,14 @@ pub fn list(setting: &FeatureSetting) -> Vec<CorePlugin> {
         .iter()
         // 모바일에서는 데스크톱 전용 기능을 목록에서 뺀다 (설정 화면·메뉴에 나오지 않게)
         .filter(|d| !(cfg!(mobile) && d.desktop_only))
-        .map(|d| CorePlugin { id: d.id, name: d.name, description: d.description, default_enabled: d.default_enabled, desktop_only: d.desktop_only, enabled: enabled_in(setting, d.id) })
+        .map(|d| CorePlugin {
+            id: d.id,
+            name: d.name,
+            description: d.description,
+            default_enabled: d.default_enabled,
+            desktop_only: d.desktop_only,
+            enabled: enabled_in(setting, d.id),
+        })
         .collect()
 }
 

@@ -11,17 +11,12 @@ async fn database_migration_works() -> Result<(), Box<dyn std::error::Error>> {
         .create_if_missing(true)
         .foreign_keys(true);
 
-    let pool = SqlitePoolOptions::new()
-        .max_connections(5)
-        .connect_with(opts)
-        .await?;
+    let pool = SqlitePoolOptions::new().max_connections(5).connect_with(opts).await?;
 
     sqlx::migrate!("src/db/migrations").run(&pool).await?;
-    let exists: (bool,) = sqlx::query_as(
-        "SELECT EXISTS (SELECT 1 FROM sqlite_master WHERE type='table' AND name='conversations')",
-    )
-    .fetch_one(&pool)
-    .await?;
+    let exists: (bool,) = sqlx::query_as("SELECT EXISTS (SELECT 1 FROM sqlite_master WHERE type='table' AND name='conversations')")
+        .fetch_one(&pool)
+        .await?;
 
     assert!(exists.0);
     Ok(())
@@ -132,12 +127,7 @@ mod game_asset_test {
             settings_json: serde_json::Value::default(),
         };
 
-        crate::sandcastle_lib::db::game::upsert_game_character(
-            &pool,
-            "game_1".into(),
-            game_character_input,
-        )
-        .await?;
+        crate::sandcastle_lib::db::game::upsert_game_character(&pool, "game_1".into(), game_character_input).await?;
         Ok(())
     }
 
@@ -181,8 +171,7 @@ mod game_asset_test {
         };
 
         // Upsert 테스트
-        let asset_id =
-            crate::sandcastle_lib::db::game::upsert_game_asset(&pool, input, "game_1").await?;
+        let asset_id = crate::sandcastle_lib::db::game::upsert_game_asset(&pool, input, "game_1").await?;
         assert_eq!(asset_id, "asset_1");
 
         // 단건 조회 테스트
@@ -191,8 +180,7 @@ mod game_asset_test {
         assert_eq!(asset.category, "bgm");
 
         // 전체 조회 테스트
-        let all_assets =
-            crate::sandcastle_lib::db::game::get_all_game_assets(&pool, "game_1").await?;
+        let all_assets = crate::sandcastle_lib::db::game::get_all_game_assets(&pool, "game_1").await?;
         assert_eq!(all_assets.len(), 1);
 
         // 삭제 테스트
@@ -235,8 +223,7 @@ mod game_asset_test {
             file_path: "/assets/voice/hero_01.wav".into(),
             settings_json: None,
         };
-        crate::sandcastle_lib::db::game::upsert_game_asset(&pool, base_input.clone(), "game_1")
-            .await?;
+        crate::sandcastle_lib::db::game::upsert_game_asset(&pool, base_input.clone(), "game_1").await?;
 
         // Audio Input 준비
         let audio_input = AudioAssetsInput {
@@ -246,12 +233,10 @@ mod game_asset_test {
             transcript: Some("적이다!".into()),
         };
 
-        crate::sandcastle_lib::db::game::upsert_audio_asset(&pool, audio_input, "audio_asset_1")
-            .await?;
+        crate::sandcastle_lib::db::game::upsert_audio_asset(&pool, audio_input, "audio_asset_1").await?;
 
         // 조회 테스트
-        let audio =
-            crate::sandcastle_lib::db::game::get_audio_asset(&pool, "audio_asset_1").await?;
+        let audio = crate::sandcastle_lib::db::game::get_audio_asset(&pool, "audio_asset_1").await?;
         assert_eq!(audio.transcript.unwrap(), "적이다!");
 
         let list = crate::sandcastle_lib::db::game::get_all_audio_assets(&pool, "game_1").await?;
@@ -299,12 +284,7 @@ mod game_asset_test {
             settings_json: serde_json::Value::default(),
         };
 
-        crate::sandcastle_lib::db::game::upsert_game_character(
-            &pool,
-            "game_1".into(),
-            game_character_input,
-        )
-        .await?;
+        crate::sandcastle_lib::db::game::upsert_game_character(&pool, "game_1".into(), game_character_input).await?;
         let base_input = GameAssetsInput {
             id: Some("asset_1".into()),
             game_id: "game_1".into(),
@@ -315,9 +295,7 @@ mod game_asset_test {
             file_path: "/assets/chars/hero.png".into(),
             settings_json: None,
         };
-        let asset_id =
-            crate::sandcastle_lib::db::game::upsert_game_asset(&pool, base_input.clone(), "game_1")
-                .await?;
+        let asset_id = crate::sandcastle_lib::db::game::upsert_game_asset(&pool, base_input.clone(), "game_1").await?;
 
         let char_asset_input = CharacterAssetsInput {
             base: base_input,
@@ -326,11 +304,9 @@ mod game_asset_test {
             emotion: Some("smile".into()),
         };
 
-        crate::sandcastle_lib::db::game::upsert_character_asset(&pool, char_asset_input, &asset_id)
-            .await?;
+        crate::sandcastle_lib::db::game::upsert_character_asset(&pool, char_asset_input, &asset_id).await?;
 
-        let asset =
-            crate::sandcastle_lib::db::game::get_character_asset(&pool, &asset_id).await?;
+        let asset = crate::sandcastle_lib::db::game::get_character_asset(&pool, &asset_id).await?;
         assert_eq!(asset.usage, "standing");
         assert_eq!(asset.emotion.unwrap(), "smile");
 
@@ -376,12 +352,7 @@ mod game_asset_test {
             settings_json: serde_json::Value::default(),
         };
 
-        crate::sandcastle_lib::db::game::upsert_game_character(
-            &pool,
-            "game_1".into(),
-            game_character_input,
-        )
-        .await?;
+        crate::sandcastle_lib::db::game::upsert_game_character(&pool, "game_1".into(), game_character_input).await?;
 
         let base_input = GameAssetsInput {
             id: Some("cg_asset_1".into()),
@@ -393,8 +364,7 @@ mod game_asset_test {
             file_path: "/assets/cg/sunset.png".into(),
             settings_json: None,
         };
-        let asset_id = crate::sandcastle_lib::db::game::upsert_game_asset(&pool, base_input.clone(), "game_1")
-            .await?;
+        let asset_id = crate::sandcastle_lib::db::game::upsert_game_asset(&pool, base_input.clone(), "game_1").await?;
 
         let cg_input = CgAssetsInput {
             base: base_input,
@@ -448,8 +418,7 @@ mod game_asset_test {
             file_path: "/assets/bg/forest.png".into(),
             settings_json: None,
         };
-        let asset_id = crate::sandcastle_lib::db::game::upsert_game_asset(&pool, base_input.clone(), "game_1")
-            .await?;
+        let asset_id = crate::sandcastle_lib::db::game::upsert_game_asset(&pool, base_input.clone(), "game_1").await?;
 
         let bg_input = BackgroundAssetsInput {
             base: base_input,
@@ -458,11 +427,9 @@ mod game_asset_test {
             weather_id: None,
         };
 
-        crate::sandcastle_lib::db::game::upsert_background_assets(&pool, bg_input, &asset_id)
-            .await?;
+        crate::sandcastle_lib::db::game::upsert_background_assets(&pool, bg_input, &asset_id).await?;
 
-        let asset =
-            crate::sandcastle_lib::db::game::get_background_asset(&pool, &asset_id).await?;
+        let asset = crate::sandcastle_lib::db::game::get_background_asset(&pool, &asset_id).await?;
         assert_eq!(asset.base.id, "bg_asset_1");
 
         Ok(())

@@ -2,21 +2,19 @@
 //! GameRuntime::load() 이후로는 이 trait가 다시 안 불림 (정적 데이터는 메모리에 있음).
 //! 매 턴 부르는 건 persist_session / append_event_log 뿐.
 use super::definition::GameDefinition;
+use crate::db::conversation::{get_all_worldinfo_entries, get_system_default_persona};
 use crate::db::game::{
-    get_all_event_characters, get_all_event_conditions, get_all_game_characters, get_all_game_branches, get_all_game_choices,
-    get_all_game_encounter_table_entries, get_all_game_encounter_tables, get_all_game_endings,
-    get_all_game_event_logs, get_all_game_events, get_all_game_interactables, get_all_game_location_connections,
-    get_all_audio_assets, get_all_background_assets, get_all_cg_assets, get_all_character_assets, get_all_game_assets, get_all_game_character_spawn_locations, get_all_game_items, get_all_game_locations, get_all_game_relationship_defs, get_all_game_map_zones, get_all_game_maps, get_all_game_state_defs,
-    get_all_game_time_periods, get_all_game_weather_transitions, get_all_game_weather_types, get_all_game_scenes,
-    get_game_player_sessions, get_game_project, get_session_game_character_state_snapshots, upsert_game_event_log,
+    get_all_audio_assets, get_all_background_assets, get_all_cg_assets, get_all_character_assets, get_all_event_characters, get_all_event_conditions,
+    get_all_game_assets, get_all_game_branches, get_all_game_character_spawn_locations, get_all_game_characters, get_all_game_choices,
+    get_all_game_encounter_table_entries, get_all_game_encounter_tables, get_all_game_endings, get_all_game_event_logs, get_all_game_events,
+    get_all_game_interactables, get_all_game_items, get_all_game_location_connections, get_all_game_locations, get_all_game_map_zones, get_all_game_maps,
+    get_all_game_relationship_defs, get_all_game_scenes, get_all_game_state_defs, get_all_game_time_periods, get_all_game_weather_transitions,
+    get_all_game_weather_types, get_game_player_sessions, get_game_project, get_session_game_character_state_snapshots, upsert_game_event_log,
     upsert_game_event_log_character, upsert_game_player_sessions,
 };
-use crate::db::conversation::{get_all_worldinfo_entries, get_system_default_persona};
 use crate::game::engine::Condition;
 use crate::models::conversation::WorldInfoEntry;
-use crate::models::game::{
-    GameEventLogCharactersInput, GameEventLogInput, GamePlayerSessions, GamePlayerSessionsInput, GameScene,
-};
+use crate::models::game::{GameEventLogCharactersInput, GameEventLogInput, GamePlayerSessions, GamePlayerSessionsInput, GameScene};
 use anyhow::Result;
 use sqlx::SqlitePool;
 use std::collections::HashMap;
@@ -136,7 +134,11 @@ impl<'a> GameRepository for SqlxGameRepository<'a> {
             for c in conditions {
                 // 조건 JSON을 못 읽으면 "조건 없음"으로 버리지 않고 절대 참이 아닌 조건(Never)으로 둔다 —
                 // 버리면 오염된 데이터가 오히려 이벤트를 항상 통과시킨다 (fail-closed).
-                let parsed = c.condition_value.as_ref().and_then(|s| serde_json::from_str::<Condition>(s).ok()).unwrap_or(Condition::Never);
+                let parsed = c
+                    .condition_value
+                    .as_ref()
+                    .and_then(|s| serde_json::from_str::<Condition>(s).ok())
+                    .unwrap_or(Condition::Never);
                 m.entry(c.event_id).or_default().push(parsed);
             }
             m
@@ -199,7 +201,13 @@ impl<'a> GameRepository for SqlxGameRepository<'a> {
             items: items.into_iter().map(|i| (i.id.clone(), i)).collect(),
             relationship_defs,
             spawn_locations,
-            assets: super::definition::Assets { all: all_assets, audio, characters: characters_assets, cgs, backgrounds },
+            assets: super::definition::Assets {
+                all: all_assets,
+                audio,
+                characters: characters_assets,
+                cgs,
+                backgrounds,
+            },
             characters: characters.into_iter().map(|c| (c.id.clone(), c)).collect(),
             game_world_info,
             character_world_info,
@@ -242,7 +250,16 @@ impl<'a> GameRepository for SqlxGameRepository<'a> {
         for r in rows {
             let newer = latest.get(&r.game_character_id).map_or(true, |(seq, _)| r.seq >= *seq);
             if newer {
-                latest.insert(r.game_character_id, (r.seq, super::state::NpcState { location_id: r.current_location_id, status: r.status }));
+                latest.insert(
+                    r.game_character_id,
+                    (
+                        r.seq,
+                        super::state::NpcState {
+                            location_id: r.current_location_id,
+                            status: r.status,
+                        },
+                    ),
+                );
             }
         }
         Ok(latest.into_iter().map(|(k, (_, v))| (k, v)).collect())

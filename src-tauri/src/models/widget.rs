@@ -119,26 +119,12 @@ pub struct MusicMetaInput {
 }
 
 impl MusicMetaInput {
-    pub fn default(
-        path: &PathBuf,
-        tag: Option<&Tag>,
-        cache_dir: &PathBuf,
-        duration: f64,
-        updated_at: i64,
-    ) -> Self {
+    pub fn default(path: &PathBuf, tag: Option<&Tag>, cache_dir: &PathBuf, duration: f64, updated_at: i64) -> Self {
         let audio_src = path.to_string_lossy().to_string();
 
-        let file_name_fallback = path
-            .file_name()
-            .and_then(|n| n.to_str())
-            .unwrap_or("Unknown Title")
-            .to_string();
+        let file_name_fallback = path.file_name().and_then(|n| n.to_str()).unwrap_or("Unknown Title").to_string();
 
-        let album_art = tag.and_then(|t| {
-            t.pictures()
-                .first()
-                .and_then(|p| save_album_art(p, &file_name_fallback, cache_dir).ok())
-        });
+        let album_art = tag.and_then(|t| t.pictures().first().and_then(|p| save_album_art(p, &file_name_fallback, cache_dir).ok()));
 
         Self {
             path: audio_src,

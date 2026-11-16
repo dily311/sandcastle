@@ -1,7 +1,7 @@
 use serde::Serialize;
 use serde_json::Value;
 
-use crate::error::{ErrorCode, error_code::ErrorCategory};
+use crate::error::{error_code::ErrorCategory, ErrorCode};
 
 // 프론트엔드 전달용 에러 구조체
 #[derive(Debug, Clone, Serialize, specta::Type)]

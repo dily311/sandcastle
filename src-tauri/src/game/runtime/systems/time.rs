@@ -32,7 +32,10 @@ impl GameSystem for TimeSystem {
         let periods: Vec<(String, u32, u32)> = def.time_periods.iter().map(|p| (p.id.clone(), p.start_minute, p.end_minute)).collect();
         if let Some(period_id) = engine::resolve_time_period(&periods, state.game_time) {
             if period_id != state.time_period_id {
-                out.push(GameEvent::TimePeriodChanged { from: Some(state.time_period_id.clone()), to: period_id.clone() });
+                out.push(GameEvent::TimePeriodChanged {
+                    from: Some(state.time_period_id.clone()),
+                    to: period_id.clone(),
+                });
                 state.time_period_id = period_id;
             }
         }
@@ -49,7 +52,9 @@ impl GameSystem for TimeSystem {
             Some(w) if same_moment && def.weather_types.iter().any(|t| t.id == w) => w,
             // 시점이 바뀌었거나 처음 온 zone: 그 zone의 마지막 날씨(없으면 지금 날씨)에서 굴린다
             from => {
-                let from = from.filter(|w| def.weather_types.iter().any(|t| &t.id == w)).unwrap_or_else(|| state.weather_id.clone());
+                let from = from
+                    .filter(|w| def.weather_types.iter().any(|t| &t.id == w))
+                    .unwrap_or_else(|| state.weather_id.clone());
                 let candidates: Vec<(String, f64)> = def
                     .weather_transitions_for(&state.map_id, &from)
                     .into_iter()

@@ -25,9 +25,7 @@ fn chat_sample() -> PathBuf {
 
 /// 앱 데이터 폴더 하나에 Seraphina(카드 + 이미지 3장 + 정규식) + 채팅을 채운다. (캐릭터 id 반환)
 async fn populate(db: &DbPool, base: &Path) -> String {
-    let SillyTavernImport::Character { character, .. } =
-        import_file(db, base, &sample("character/default_Seraphina.png"), None).await.unwrap()
-    else {
+    let SillyTavernImport::Character { character, .. } = import_file(db, base, &sample("character/default_Seraphina.png"), None).await.unwrap() else {
         panic!()
     };
     let sprites: Vec<PathBuf> = ["joy", "anger", "neutral"]
@@ -117,7 +115,10 @@ async fn character_pack_round_trip_merges_with_new_ids() {
 
     let o = overview::data_overview(&db_b, &base_b).await.unwrap();
     let c = &o.characters[0];
-    assert_eq!((c.name.as_str(), c.message_count, c.image_count, c.world_info_book_count), ("Seraphina", 12, 3, 1));
+    assert_eq!(
+        (c.name.as_str(), c.message_count, c.image_count, c.world_info_book_count),
+        ("Seraphina", 12, 3, 1)
+    );
     assert_eq!(c.conversations[0].hidden_count, 3, "숨김 표시도 그대로");
 
     // 참조가 새 id로 바뀌었는지
@@ -138,7 +139,10 @@ async fn character_pack_round_trip_merges_with_new_ids() {
     // 한 번 더 가져오면 덮어쓰지 않고 하나 더 생긴다
     pack::import_pack(&db_b, &base_b, &out).await.unwrap();
     assert_eq!(overview::totals(&db_b).await.unwrap().characters, 2);
-    assert!(!base_b.join("tmp").read_dir().map(|mut d| d.next().is_some()).unwrap_or(false), "임시 파일 정리");
+    assert!(
+        !base_b.join("tmp").read_dir().map(|mut d| d.next().is_some()).unwrap_or(false),
+        "임시 파일 정리"
+    );
 }
 
 #[tokio::test]
@@ -163,10 +167,16 @@ async fn full_backup_restores_into_another_app_dir() {
         std::fs::write(p, body).unwrap();
     }
     let bg_a = base_a.join("backgrounds/b1.png").to_string_lossy().to_string();
-    let settings = |bg: &str| serde_json::json!({ "app-setting": { "language": "en" }, "theme-setting": { "backgroundImage": bg, "backgrounds": [bg] } }).to_string();
+    let settings =
+        |bg: &str| serde_json::json!({ "app-setting": { "language": "en" }, "theme-setting": { "backgroundImage": bg, "backgrounds": [bg] } }).to_string();
     std::fs::write(base_a.join("settings.json"), settings(&bg_a)).unwrap();
     let cover_a = base_a.join("generated/g1.png").to_string_lossy().to_string();
-    sqlx::query("UPDATE characters SET cover = ? WHERE id = ?").bind(&cover_a).bind(&cid).execute(&db_a).await.unwrap();
+    sqlx::query("UPDATE characters SET cover = ? WHERE id = ?")
+        .bind(&cover_a)
+        .bind(&cid)
+        .execute(&db_a)
+        .await
+        .unwrap();
     let before = overview::totals(&db_a).await.unwrap();
     let out = base_a.join("exports/full.scbackup");
     let summary = backup::export_backup(&db_a, &base_a, &out).await.unwrap();
@@ -195,8 +205,20 @@ async fn full_backup_restores_into_another_app_dir() {
 
     let after = overview::totals(&db_b).await.unwrap();
     assert_eq!(
-        (after.characters, after.conversations, after.messages, after.character_images, after.regex_scripts),
-        (before.characters, before.conversations, before.messages, before.character_images, before.regex_scripts)
+        (
+            after.characters,
+            after.conversations,
+            after.messages,
+            after.character_images,
+            after.regex_scripts
+        ),
+        (
+            before.characters,
+            before.conversations,
+            before.messages,
+            before.character_images,
+            before.regex_scripts
+        )
     );
     // 설정 안의 테마 배경 경로가 이 PC 경로로 (JSON 안의 역슬래시 모양도)
     let bg_b = base_b.join("backgrounds/b1.png").to_string_lossy().to_string();
@@ -289,7 +311,10 @@ fn schema_check_rejects_newer_or_modified_migrations() {
     assert!(msg.contains("DB 구조가 다른 빌드"), "{msg}");
 
     let mut newer = app.clone();
-    newer.push(backup::MigrationInfo { version: 99999, checksum: "aa".into() });
+    newer.push(backup::MigrationInfo {
+        version: 99999,
+        checksum: "aa".into(),
+    });
     assert!(backup::check_schema(&newer).is_err());
 }
 
@@ -343,7 +368,13 @@ async fn keys_never_leak_into_backup_pack_or_app_data() {
     for (name, key) in [("short", short.to_string()), ("long", long.clone())] {
         let p = db::ai_service::create_api_profile(
             &db,
-            ApiProfilesInput { name: name.into(), provider: "openai".into(), format_type: "openai".into(), base_url: "https://example.invalid".into(), model: "m".into() },
+            ApiProfilesInput {
+                name: name.into(),
+                provider: "openai".into(),
+                format_type: "openai".into(),
+                base_url: "https://example.invalid".into(),
+                model: "m".into(),
+            },
         )
         .await
         .unwrap();
@@ -358,7 +389,12 @@ async fn keys_never_leak_into_backup_pack_or_app_data() {
     pack::export_pack(&db, &base, std::slice::from_ref(&cid), None, &pack_out).await.unwrap();
 
     // 찾을 조각: 짧은 키 전체, 긴 키의 앞·뒤·가운데 조각 (keyring 조각 단위로 잘려 들어가도 걸리게)
-    let needles: Vec<String> = vec![short.to_string(), long[..40].to_string(), long[long.len() - 40..].to_string(), long[1200..1240].to_string()];
+    let needles: Vec<String> = vec![
+        short.to_string(),
+        long[..40].to_string(),
+        long[long.len() - 40..].to_string(),
+        long[1200..1240].to_string(),
+    ];
     let hit = |bytes: &[u8]| needles.iter().find(|n| bytes.windows(n.len()).any(|w| w == n.as_bytes())).cloned();
     // 찾기가 실제로 걸리는지 (긴 키는 1000자 조각으로 나뉘어도 가운데 조각으로 걸림)
     assert!(hit(format!("x{short}y").as_bytes()).is_some() && hit(&long.as_bytes()[1000..2000]).is_some());

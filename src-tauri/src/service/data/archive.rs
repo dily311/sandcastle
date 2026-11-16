@@ -99,9 +99,7 @@ pub fn read_json<R: Read + Seek, T: DeserializeOwned>(archive: &mut ZipArchive<R
 pub fn safe_relative(name: &str) -> Result<PathBuf> {
     let p = Path::new(name);
     // ':'는 Windows 드라이브(C:)·대체 데이터 스트림(a.txt:x) 방지 — 다른 OS에서도 같은 판정이 되게 문자로 막는다
-    let ok = !name.is_empty()
-        && !name.contains(':')
-        && p.components().all(|c| matches!(c, std::path::Component::Normal(_)));
+    let ok = !name.is_empty() && !name.contains(':') && p.components().all(|c| matches!(c, std::path::Component::Normal(_)));
     if !ok {
         return Err(AppError::archive(ErrorCode::ArchiveUnsafePath, format!("잘못된 경로: {name}")));
     }

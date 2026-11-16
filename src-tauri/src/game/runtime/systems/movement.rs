@@ -23,7 +23,10 @@ impl GameSystem for MovementSystem {
         let mut out = vec![];
         if let Some(zone) = def.zone_of_location(to) {
             if state.zone_id.as_deref() != Some(zone.id.as_str()) {
-                out.push(GameEvent::ZoneChanged { from: state.zone_id.clone(), to: zone.id.clone() });
+                out.push(GameEvent::ZoneChanged {
+                    from: state.zone_id.clone(),
+                    to: zone.id.clone(),
+                });
                 state.zone_id = Some(zone.id.clone());
             }
             state.map_id = zone.map_id.clone();

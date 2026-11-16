@@ -23,12 +23,7 @@ pub fn save_image_to_origin(save_dir: PathBuf, file_name: &str, buffer: &[u8]) -
     Ok(target_path.to_string_lossy().to_string())
 }
 
-pub fn save_image_to_thumbnail(
-    save_dir: PathBuf,
-    file_name: &str,
-    buffer: &[u8],
-    thumbnail_size: u32,
-) -> Result<String> {
+pub fn save_image_to_thumbnail(save_dir: PathBuf, file_name: &str, buffer: &[u8], thumbnail_size: u32) -> Result<String> {
     // 없는 경우 생성
     fs::create_dir_all(&save_dir)?;
 
@@ -44,9 +39,7 @@ pub fn save_image_to_thumbnail(
 
 pub fn image_to_base64(buffer: &[u8]) -> String {
     let encoded = BASE64_STANDARD.encode(buffer);
-    let mime_type = infer::get(buffer)
-        .map(|kind| kind.mime_type())
-        .unwrap_or("image/jpeg");
+    let mime_type = infer::get(buffer).map(|kind| kind.mime_type()).unwrap_or("image/jpeg");
 
     return format!("data:{};base64,{}", mime_type, encoded);
 }

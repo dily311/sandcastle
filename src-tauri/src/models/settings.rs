@@ -5,6 +5,7 @@ use serde::{de::DeserializeOwned, Deserialize, Serialize};
 #[derive(Debug, Serialize, Deserialize, Clone, specta::Type)]
 #[serde(rename_all = "camelCase")]
 pub struct AppSetting {
+    /// 예전 "자동 업데이트" 스위치. 아무 동작에도 연결된 적이 없어 쓰지 않는다 (check_updates_on_start로 대신, 1-E-2). 저장된 값 호환용으로만 남김
     pub auto_update: bool,
     pub language: String,
     pub selected_preset: String,
@@ -14,7 +15,7 @@ pub struct AppSetting {
     pub selected_character_id: Option<String>,
     pub selected_persona_id: String,
     // "이어하기" UX용. 실제 게임 실행 컨텍스트는 여전히 AppState.active_archive가 기준.
-    pub last_played_game_id: Option<String>, 
+    pub last_played_game_id: Option<String>,
     /// phone 모드 대화에만 붙는 기본 시스템 프롬프트 ({{char}}/{{user}} 사용 가능, 비우면 붙이지 않음)
     /// - 기존 저장값에 이 필드가 없어도 설정 전체가 초기화되지 않도록 serde default 필수
     #[serde(default = "default_phone_mode_prompt")]
@@ -22,6 +23,9 @@ pub struct AppSetting {
     /// 홈 화면 (사용자 꾸미기)
     #[serde(default)]
     pub home: HomeSetting,
+    /// 앱을 켤 때 새 버전 확인 (GitHub Releases, 기본 꺼짐 — 1-E-2). 내려받기는 늘 사용자가 누른다
+    #[serde(default)]
+    pub check_updates_on_start: bool,
     /// 작업·사용량 상세 기록 보존 기간(일). None = 계속 보관(기본). 지난 상세는 일별 합계로 남긴다 (1-A-4)
     #[serde(default)]
     pub usage_retention_days: Option<u32>,
@@ -77,6 +81,7 @@ impl Default for AppSetting {
             phone_mode_prompt: default_phone_mode_prompt(),
             home: HomeSetting::default(),
             usage_retention_days: None,
+            check_updates_on_start: false,
         }
     }
 }
@@ -268,7 +273,11 @@ impl PromptSlot {
         if self.selected.is_empty() {
             return None;
         }
-        self.items.iter().find(|v| v.id == self.selected).map(|v| v.text.as_str()).filter(|t| !t.trim().is_empty())
+        self.items
+            .iter()
+            .find(|v| v.id == self.selected)
+            .map(|v| v.text.as_str())
+            .filter(|t| !t.trim().is_empty())
     }
 }
 
@@ -288,7 +297,14 @@ impl<'de> Deserialize<'de> for PromptSlot {
         }
         Ok(match Raw::deserialize(d)? {
             Raw::Text(t) if t.trim().is_empty() => PromptSlot::default(),
-            Raw::Text(t) => PromptSlot { selected: "mine".into(), items: vec![PromptVariant { id: "mine".into(), name: "내 프롬프트".into(), text: t }] },
+            Raw::Text(t) => PromptSlot {
+                selected: "mine".into(),
+                items: vec![PromptVariant {
+                    id: "mine".into(),
+                    name: "내 프롬프트".into(),
+                    text: t,
+                }],
+            },
             Raw::Slot { selected, items } => PromptSlot { selected, items },
         })
     }
@@ -317,7 +333,12 @@ pub struct TranslateSetting {
 
 impl Default for TranslateSetting {
     fn default() -> Self {
-        Self { api_profile_id: None, target_lang: "한국어".into(), input_lang: "English".into(), auto_translate: false }
+        Self {
+            api_profile_id: None,
+            target_lang: "한국어".into(),
+            input_lang: "English".into(),
+            auto_translate: false,
+        }
     }
 }
 
@@ -340,7 +361,14 @@ pub struct TtsSetting {
 
 impl Default for TtsSetting {
     fn default() -> Self {
-        Self { api_profile_id: None, model: "eleven_multilingual_v2".into(), voice: String::new(), speed: 1.0, auto_read: false, dialogue_only: false }
+        Self {
+            api_profile_id: None,
+            model: "eleven_multilingual_v2".into(),
+            voice: String::new(),
+            speed: 1.0,
+            auto_read: false,
+            dialogue_only: false,
+        }
     }
 }
 
@@ -381,7 +409,8 @@ impl Default for ImageGenSetting {
             style_prompt: String::new(),
             ai_prompt: true,
             prompt_api_profile_id: None,
-            negative_prompt: "lowres, bad anatomy, bad hands, text, error, missing fingers, worst quality, low quality, jpeg artifacts, watermark, blurry".into(),
+            negative_prompt: "lowres, bad anatomy, bad hands, text, error, missing fingers, worst quality, low quality, jpeg artifacts, watermark, blurry"
+                .into(),
             steps: 28,
             scale: 5.0,
             sampler: "k_euler_ancestral".into(),
@@ -391,9 +420,7 @@ impl Default for ImageGenSetting {
 }
 
 // 각 설정 타입이 자기 "키"와 "이벤트 이름"만 정의하면 됨
-pub trait SettingsDomain:
-    Serialize + DeserializeOwned + Default + Clone + Send + Sync + 'static
-{
+pub trait SettingsDomain: Serialize + DeserializeOwned + Default + Clone + Send + Sync + 'static {
     const STORE_KEY: &'static str;
     const EVENT_NAME: &'static str;
 }
@@ -446,7 +473,9 @@ mod feature_tests {
     use super::FeatureSetting;
 
     fn fs(pairs: &[(&str, bool)]) -> FeatureSetting {
-        FeatureSetting { feature: pairs.iter().map(|(k, v)| (k.to_string(), *v)).collect() }
+        FeatureSetting {
+            feature: pairs.iter().map(|(k, v)| (k.to_string(), *v)).collect(),
+        }
     }
 
     #[test]

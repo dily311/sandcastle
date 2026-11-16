@@ -28,14 +28,11 @@ impl FolderNode {
         let current_folder = folder_parts[0];
         let remaining_parts = &folder_parts[1..];
 
-        let next_node = self
-            .folders
-            .entry(current_folder.to_string())
-            .or_insert_with(|| FolderNode {
-                name: current_folder.to_string(),
-                folders: HashMap::new(),
-                files: Vec::new(),
-            });
+        let next_node = self.folders.entry(current_folder.to_string()).or_insert_with(|| FolderNode {
+            name: current_folder.to_string(),
+            folders: HashMap::new(),
+            files: Vec::new(),
+        });
 
         // 재귀 호출을 통해 다음 레벨로 가변 참조를 안전하게 넘김
         next_node.insert_file(remaining_parts, file);
@@ -47,10 +44,7 @@ pub fn grouped_by_folder(file_list: Vec<(String, Value)>, selected_folder: Optio
     let mut root_tree: HashMap<String, FolderNode> = HashMap::new();
     let mut root_files: Vec<Value> = Vec::new();
 
-    let root_path = selected_folder
-        .filter(|f| !f.is_empty())
-        .map(|f| format!("{}\\", f))
-        .unwrap_or_default();
+    let root_path = selected_folder.filter(|f| !f.is_empty()).map(|f| format!("{}\\", f)).unwrap_or_default();
 
     for (path, file) in file_list {
         let path = if !root_path.is_empty() {

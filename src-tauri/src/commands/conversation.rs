@@ -47,10 +47,7 @@ pub async fn get_conversation(state: State<'_, AppState>, id: String) -> Result<
 
 #[tauri::command]
 #[specta::specta]
-pub async fn create_conversation(
-    state: State<'_, AppState>,
-    mut input: ConversationInput,
-) -> Result<Conversation> {
+pub async fn create_conversation(state: State<'_, AppState>, mut input: ConversationInput) -> Result<Conversation> {
     // 모드: 비우면 chat, 그 외에는 chat / phone만 허용
     input.mode = if input.mode.trim().is_empty() {
         ConversationMode::Chat.to_string()
@@ -65,7 +62,10 @@ pub async fn create_conversation(
     };
     // character_id가 실제로 존재하는지 확인: 없는 캐릭터로 대화가 생기는 걸 막음
     if !conversation::char_exists(&state.db, &input.character_id).await? {
-        return Err(AppError::validation("존재하지 않는 캐릭터입니다", Some(json!({"data": &input.character_id}).into())));
+        return Err(AppError::validation(
+            "존재하지 않는 캐릭터입니다",
+            Some(json!({"data": &input.character_id}).into()),
+        ));
     }
 
     let conversation = conversation::create_conversation(&state.db, input).await?;
@@ -107,10 +107,7 @@ pub async fn get_list_characters(state: State<'_, AppState>) -> Result<Vec<Chara
 
 #[tauri::command]
 #[specta::specta]
-pub async fn create_character(
-    state: State<'_, AppState>,
-    input: CharacterInput,
-) -> Result<Character> {
+pub async fn create_character(state: State<'_, AppState>, input: CharacterInput) -> Result<Character> {
     let books = input.world_info_ids.clone();
     let mut tx = state.db.begin().await?;
     let character = conversation::create_character(&mut *tx, input).await?;
@@ -122,11 +119,7 @@ pub async fn create_character(
 /// 캐릭터 저장. 월드인포 연결도 `world_info_ids`로 통째로 바꾼다
 #[tauri::command]
 #[specta::specta]
-pub async fn update_character(
-    state: State<'_, AppState>,
-    id: String,
-    input: CharacterInput,
-) -> Result<Character> {
+pub async fn update_character(state: State<'_, AppState>, id: String, input: CharacterInput) -> Result<Character> {
     if input.name.trim().is_empty() {
         return Err(AppError::validation("이름이 비어 있습니다", None));
     }
@@ -142,12 +135,7 @@ pub async fn update_character(
 /// 캐릭터 아바타: 고른 이미지를 앱 데이터 characters/avatars로 복사. `path`가 없으면 지운다
 #[tauri::command]
 #[specta::specta]
-pub async fn set_character_avatar(
-    app: tauri::AppHandle,
-    state: State<'_, AppState>,
-    id: String,
-    path: Option<String>,
-) -> Result<Character> {
+pub async fn set_character_avatar(app: tauri::AppHandle, state: State<'_, AppState>, id: String, path: Option<String>) -> Result<Character> {
     let old = conversation::get_character(&state.db, &id)
         .await
         .map_err(|_| AppError::not_found(format!("캐릭터를 찾을 수 없습니다: {id}")))?;
@@ -212,13 +200,11 @@ async fn remove_unused_avatar(state: &AppState, dir: &std::path::Path, avatar: O
     if !std::path::Path::new(a).starts_with(dir) {
         return;
     }
-    let used: i64 = sqlx::query_scalar(
-        "SELECT (SELECT COUNT(*) FROM characters WHERE avatar = ?1) + (SELECT COUNT(*) FROM personas WHERE avatar = ?1)",
-    )
-    .bind(a)
-    .fetch_one(&state.db)
-    .await
-    .unwrap_or(1);
+    let used: i64 = sqlx::query_scalar("SELECT (SELECT COUNT(*) FROM characters WHERE avatar = ?1) + (SELECT COUNT(*) FROM personas WHERE avatar = ?1)")
+        .bind(a)
+        .fetch_one(&state.db)
+        .await
+        .unwrap_or(1);
     if used == 0 {
         let _ = std::fs::remove_file(a);
     }
@@ -226,11 +212,7 @@ async fn remove_unused_avatar(state: &AppState, dir: &std::path::Path, avatar: O
 
 #[tauri::command]
 #[specta::specta]
-pub async fn toggle_favorite_character(
-    state: State<'_, AppState>,
-    id: String,
-    is_favorite: bool,
-) -> Result<()> {
+pub async fn toggle_favorite_character(state: State<'_, AppState>, id: String, is_favorite: bool) -> Result<()> {
     conversation::update_character_is_favorite(&state.db, &id, is_favorite).await?;
     Ok(())
 }
@@ -240,9 +222,7 @@ pub async fn toggle_favorite_character(
 pub async fn delete_character(app: tauri::AppHandle, state: State<'_, AppState>, id: String) -> Result<()> {
     let result = conversation::delete_character(&state.db, &id).await?;
     if !result {
-        return Err(AppError::not_found(format!(
-            "캐릭터를 찾을 수 없습니다: {id}"
-        )));
+        return Err(AppError::not_found(format!("캐릭터를 찾을 수 없습니다: {id}")));
     }
     // 이미지 행은 CASCADE로 지워지고, 파일 폴더는 여기서 정리
     if let Ok(base) = crate::commands::character_image::app_data_dir(&app) {
@@ -273,11 +253,7 @@ pub async fn create_persona(state: State<'_, AppState>, input: PersonaInput) -> 
 
 #[tauri::command]
 #[specta::specta]
-pub async fn update_persona(
-    state: State<'_, AppState>,
-    id: String,
-    input: PersonaInput,
-) -> Result<()> {
+pub async fn update_persona(state: State<'_, AppState>, id: String, input: PersonaInput) -> Result<()> {
     let exists = conversation::persona_exists(&state.db, &id).await?;
     if !exists {
         return Err(AppError::not_found(format!("페르소나를 찾을 수 없습니다: {id}")));
@@ -294,12 +270,7 @@ pub async fn update_persona(
 /// `path`가 없으면 아바타를 지운다.
 #[tauri::command]
 #[specta::specta]
-pub async fn set_persona_avatar(
-    app: tauri::AppHandle,
-    state: State<'_, AppState>,
-    id: String,
-    path: Option<String>,
-) -> Result<Persona> {
+pub async fn set_persona_avatar(app: tauri::AppHandle, state: State<'_, AppState>, id: String, path: Option<String>) -> Result<Persona> {
     let old = conversation::get_persona(&state.db, &id)
         .await
         .map_err(|_| AppError::not_found(format!("페르소나를 찾을 수 없습니다: {id}")))?;
@@ -327,7 +298,10 @@ fn remove_owned_avatar(dir: &std::path::Path, avatar: Option<&str>) {
 #[specta::specta]
 pub async fn delete_persona(app: tauri::AppHandle, state: State<'_, AppState>, id: String) -> Result<()> {
     if conversation::get_system_default_persona(&state.db).await.ok().as_deref() == Some(id.as_str()) {
-        return Err(AppError::validation("기본 페르소나는 지울 수 없습니다. 다른 페르소나를 기본으로 정한 뒤 지우세요", None));
+        return Err(AppError::validation(
+            "기본 페르소나는 지울 수 없습니다. 다른 페르소나를 기본으로 정한 뒤 지우세요",
+            None,
+        ));
     }
     let old = conversation::get_persona(&state.db, &id).await.ok();
     let result = conversation::delete_persona(&state.db, &id).await?;
@@ -354,23 +328,14 @@ pub async fn get_persona_usage(state: State<'_, AppState>, id: String) -> Result
 
 #[tauri::command]
 #[specta::specta]
-pub async fn get_messages(
-    state: State<'_, AppState>,
-    conversation_id: String,
-    limit: i64,
-    before: Option<i64>,
-) -> Result<Vec<Message>> {
+pub async fn get_messages(state: State<'_, AppState>, conversation_id: String, limit: i64, before: Option<i64>) -> Result<Vec<Message>> {
     let rows = conversation::get_messages(&state.db, &conversation_id, limit, before).await?;
     Ok(rows)
 }
 
 #[tauri::command]
 #[specta::specta]
-pub async fn append_message(
-    state: State<'_, AppState>,
-    settings: State<'_, SettingsState<AppSetting>>,
-    mut input: MessageInput,
-) -> Result<Message> {
+pub async fn append_message(state: State<'_, AppState>, settings: State<'_, SettingsState<AppSetting>>, mut input: MessageInput) -> Result<Message> {
     if input.content.is_empty() && input.role == "user" {
         return Err(AppError::validation("빈 메시지는 전송할 수 없습니다", None));
     }
@@ -389,12 +354,7 @@ pub async fn append_message(
 
 #[tauri::command]
 #[specta::specta]
-pub async fn update_message(
-    state: State<'_, AppState>,
-    id: String,
-    content: String,
-    meta: Option<serde_json::Value>,
-) -> Result<()> {
+pub async fn update_message(state: State<'_, AppState>, id: String, content: String, meta: Option<serde_json::Value>) -> Result<()> {
     let result = conversation::update_message(&state.db, &id, &content, &meta).await?;
     if !result {
         return Err(AppError::not_found(format!("메시지를 찾을 수 없습니다: {id}")));
@@ -404,14 +364,8 @@ pub async fn update_message(
 
 #[tauri::command]
 #[specta::specta]
-pub async fn update_message_swipe_id(
-    state: State<'_, AppState>,
-    id: String,
-    swipe_id: i64,
-) -> Result<()> {
-    let mut meta = conversation::get_message_meta(&state.db, &id)
-        .await?
-        .unwrap_or_default();
+pub async fn update_message_swipe_id(state: State<'_, AppState>, id: String, swipe_id: i64) -> Result<()> {
+    let mut meta = conversation::get_message_meta(&state.db, &id).await?.unwrap_or_default();
     if let Some(obj) = meta.as_object_mut() {
         obj.insert("swipeId".to_string(), serde_json::json!(swipe_id));
     }
@@ -423,11 +377,7 @@ pub async fn update_message_swipe_id(
 
 #[tauri::command]
 #[specta::specta]
-pub async fn update_message_content(
-    state: State<'_, AppState>,
-    id: String,
-    content: String,
-) -> Result<()> {
+pub async fn update_message_content(state: State<'_, AppState>, id: String, content: String) -> Result<()> {
     let result = conversation::update_message_content(&state.db, &id, &content).await?;
     if !result {
         return Err(AppError::not_found(format!("메시지를 찾을 수 없습니다: {id}")));
@@ -437,16 +387,10 @@ pub async fn update_message_content(
 
 #[tauri::command]
 #[specta::specta]
-pub async fn update_message_meta(
-    state: State<'_, AppState>,
-    id: String,
-    meta: serde_json::Value,
-) -> Result<()> {
+pub async fn update_message_meta(state: State<'_, AppState>, id: String, meta: serde_json::Value) -> Result<()> {
     let result = conversation::update_message_meta(&state.db, &id, meta).await?;
     if !result {
-        return Err(AppError::not_found(format!(
-            "메시지를 찾을 수 없습니다: {id}"
-        )));
+        return Err(AppError::not_found(format!("메시지를 찾을 수 없습니다: {id}")));
     }
     Ok(())
 }
@@ -456,9 +400,7 @@ pub async fn update_message_meta(
 pub async fn delete_message(state: State<'_, AppState>, id: String) -> Result<()> {
     let result = conversation::delete_message(&state.db, &id).await?;
     if !result {
-        return Err(AppError::not_found(format!(
-            "메시지를 찾을 수 없습니다: {id}"
-        )));
+        return Err(AppError::not_found(format!("메시지를 찾을 수 없습니다: {id}")));
     }
     Ok(())
 }
@@ -474,10 +416,7 @@ pub async fn get_all_worldinfo_books(state: State<'_, AppState>) -> Result<Vec<W
 
 #[tauri::command]
 #[specta::specta]
-pub async fn create_worldinfo_book(
-    state: State<'_, AppState>,
-    input: WorldInfoBookInput,
-) -> Result<WorldInfoBook> {
+pub async fn create_worldinfo_book(state: State<'_, AppState>, input: WorldInfoBookInput) -> Result<WorldInfoBook> {
     if input.name.trim().is_empty() {
         return Err(AppError::validation("월드인포 이름은 비어있을 수 없습니다", None));
     }
@@ -498,20 +437,14 @@ pub async fn delete_worldinfo_book(state: State<'_, AppState>, id: String) -> Re
 
 #[tauri::command]
 #[specta::specta]
-pub async fn get_worldinfo_entries(
-    state: State<'_, AppState>,
-    book_id: String,
-) -> Result<Vec<WorldInfoEntry>> {
+pub async fn get_worldinfo_entries(state: State<'_, AppState>, book_id: String) -> Result<Vec<WorldInfoEntry>> {
     let result = conversation::get_all_worldinfo_entries(&state.db, &book_id).await?;
     Ok(result)
 }
 
 #[tauri::command]
 #[specta::specta]
-pub async fn upsert_worldinfo_entry(
-    state: State<'_, AppState>,
-    input: WorldInfoEntryInput,
-) -> Result<WorldInfoEntry> {
+pub async fn upsert_worldinfo_entry(state: State<'_, AppState>, input: WorldInfoEntryInput) -> Result<WorldInfoEntry> {
     if input.keys.is_empty() && !input.constant {
         return Err(AppError::validation("상시 항목이 아니면 트리거 키워드가 최소 1개 필요합니다", None));
     }
@@ -562,7 +495,11 @@ pub async fn worldinfo_entry_counts(state: State<'_, AppState>) -> Result<Vec<Wo
     Ok(conversation::worldinfo_entry_counts(&state.db)
         .await?
         .into_iter()
-        .map(|(book_id, n, on)| WorldInfoBookCount { book_id, entries: n.max(0) as u32, enabled: on.max(0) as u32 })
+        .map(|(book_id, n, on)| WorldInfoBookCount {
+            book_id,
+            entries: n.max(0) as u32,
+            enabled: on.max(0) as u32,
+        })
         .collect())
 }
 
@@ -584,19 +521,30 @@ pub async fn export_worldinfo_book(state: State<'_, AppState>, id: String, forma
     let out = match format.as_str() {
         "json" => sillytavern_book_json(&entries).to_string(),
         "txt" => {
-            let name = conversation::get_all_worldinfo_books(&state.db).await?.into_iter().find(|b| b.id == id).map(|b| b.name).unwrap_or_default();
-            let mut s = format!("{name}
+            let name = conversation::get_all_worldinfo_books(&state.db)
+                .await?
+                .into_iter()
+                .find(|b| b.id == id)
+                .map(|b| b.name)
+                .unwrap_or_default();
+            let mut s = format!(
+                "{name}
 
-");
+"
+            );
             for e in &entries {
                 let title = if e.comment.trim().is_empty() { e.keys.join(", ") } else { e.comment.clone() };
                 let keys = if e.constant { "항상 넣음".to_string() } else { e.keys.join(", ") };
-                s.push_str(&format!("## {title}{}
+                s.push_str(&format!(
+                    "## {title}{}
 키워드: {keys}
 
 {}
 
-", if e.enabled { "" } else { " (꺼짐)" }, e.content.trim()));
+",
+                    if e.enabled { "" } else { " (꺼짐)" },
+                    e.content.trim()
+                ));
             }
             s
         }

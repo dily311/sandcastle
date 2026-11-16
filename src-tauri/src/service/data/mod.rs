@@ -5,8 +5,8 @@
 //! - backup:   앱 데이터 전체 백업 (.scbackup) / 재시작 후 복원
 //! - check:    DB 무결성·고아 파일 점검 (보여주기만)
 pub mod archive;
-pub mod card;
 pub mod backup;
+pub mod card;
 pub mod check;
 pub mod overview;
 pub mod pack;

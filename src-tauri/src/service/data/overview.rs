@@ -103,8 +103,7 @@ async fn grouped_counts(db: &DbPool, sql: &'static str) -> Result<HashMap<String
 }
 
 pub async fn data_overview(db: &DbPool, app_data_dir: &Path) -> Result<DataOverview> {
-    let characters: Vec<(String, String, Option<String>)> =
-        sqlx::query_as("SELECT id, name, avatar FROM characters").fetch_all(db).await?;
+    let characters: Vec<(String, String, Option<String>)> = sqlx::query_as("SELECT id, name, avatar FROM characters").fetch_all(db).await?;
     let images = grouped_counts(db, "SELECT character_id, COUNT(*) FROM character_images GROUP BY character_id").await?;
     let books = grouped_counts(db, "SELECT character_id, COUNT(*) FROM character_worldinfo GROUP BY character_id").await?;
 
@@ -122,10 +121,7 @@ pub async fn data_overview(db: &DbPool, app_data_dir: &Path) -> Result<DataOverv
         .into_iter()
         .map(|(id, name, avatar)| {
             let conversations = by_char.remove(&id).unwrap_or_default();
-            let last_activity = conversations
-                .iter()
-                .filter_map(|c| c.last_message_at.or(c.updated_at))
-                .max();
+            let last_activity = conversations.iter().filter_map(|c| c.last_message_at.or(c.updated_at)).max();
             CharacterData {
                 conversation_count: conversations.len(),
                 message_count: conversations.iter().map(|c| c.message_count).sum(),
@@ -159,7 +155,12 @@ pub async fn data_overview(db: &DbPool, app_data_dir: &Path) -> Result<DataOverv
     .await
     .unwrap_or_default();
 
-    Ok(DataOverview { characters: list, orphan_conversations: orphans, totals, storage })
+    Ok(DataOverview {
+        characters: list,
+        orphan_conversations: orphans,
+        totals,
+        storage,
+    })
 }
 
 pub async fn totals(db: &DbPool) -> Result<DataTotals> {

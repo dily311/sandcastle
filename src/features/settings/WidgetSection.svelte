@@ -3,7 +3,7 @@
 	import { Switch } from "$shared/ui";
 	import { call, commands } from "$shared/ipc/client";
 	import { WIDGET_FEATURES } from "$lib/features/setFeautres";
-	import { featureConfig } from "$lib/features/feautreManager.svelte";
+	import { widgetFeatureConfig } from "$lib/features/widgetFeatures.svelte";
 	import Section from "./Section.svelte";
 	import Group from "./Group.svelte";
 	import Row from "./Row.svelte";
@@ -27,7 +27,7 @@
 		features[id] = on;
 		// 위젯 창 자체는 백엔드가 열고 닫음 (update_feature_setting). 위젯 하위 기능은 위젯 창이 이벤트로 반영
 		await call(commands.updateFeatureSetting(id, on), src);
-		featureConfig.value.set(id, on);
+		widgetFeatureConfig.value.set(id, on);
 	}
 	async function setAutostart(on: boolean) {
 		autostart = on;

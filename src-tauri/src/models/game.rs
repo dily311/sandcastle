@@ -59,14 +59,9 @@ impl From<GameProjectRow> for GameProject {
             start_scene_key: r.start_scene_key,
             start_map_id: r.start_map_id,
             start_location_id: r.start_location_id,
-            world_info_ids: r
-                .world_info_ids
-                .and_then(|s| serde_json::from_str(&s).ok())
-                .unwrap_or_default(),
+            world_info_ids: r.world_info_ids.and_then(|s| serde_json::from_str(&s).ok()).unwrap_or_default(),
             custom_css: r.custom_css,
-            settings_json: r.settings_json
-                .and_then(|s| serde_json::from_str(&s).ok())
-                .unwrap_or_default(),
+            settings_json: r.settings_json.and_then(|s| serde_json::from_str(&s).ok()).unwrap_or_default(),
             created_at: r.created_at,
             updated_at: r.updated_at,
         }
@@ -270,15 +265,9 @@ impl From<GameCharactersRow> for GameCharacters {
             example_dialogue: r.example_dialogue,
             system_prompt_override: r.system_prompt_override,
             behavior_type: r.behavior_type,
-            world_info_ids: r
-                .world_info_ids
-                .and_then(|s| serde_json::from_str(&s).ok())
-                .unwrap_or_default(),
+            world_info_ids: r.world_info_ids.and_then(|s| serde_json::from_str(&s).ok()).unwrap_or_default(),
             tags: r.tags.and_then(|s| serde_json::from_str(&s).ok()),
-            settings_json: r
-                .settings_json
-                .and_then(|s| serde_json::from_str(&s).ok())
-                .unwrap_or_default(),
+            settings_json: r.settings_json.and_then(|s| serde_json::from_str(&s).ok()).unwrap_or_default(),
             created_at: r.created_at,
             updated_at: r.updated_at,
         }
@@ -350,10 +339,7 @@ impl From<GameCharacterSpawnLocationsRow> for GameCharacterSpawnLocations {
             game_character_id: r.game_character_id,
             location_id: r.location_id,
             spawn_weight: r.spawn_weight,
-            condition_json: r
-                .condition_json
-                .and_then(|s| serde_json::from_str(&s).ok())
-                .unwrap_or_default(),
+            condition_json: r.condition_json.and_then(|s| serde_json::from_str(&s).ok()).unwrap_or_default(),
             created_at: r.created_at,
             updated_at: r.updated_at,
         }
@@ -421,10 +407,7 @@ impl From<GameAssetsRow> for GameAssets {
             category: r.category,
             kind: r.kind,
             file_path: r.file_path,
-            settings_json: r
-                .settings_json
-                .and_then(|s| serde_json::from_str(&s).ok())
-                .unwrap_or_default(),
+            settings_json: r.settings_json.and_then(|s| serde_json::from_str(&s).ok()).unwrap_or_default(),
             created_at: r.created_at,
             updated_at: r.updated_at,
         }
@@ -440,10 +423,7 @@ impl From<AudioAssetsRow> for GameAssets {
             category: r.category,
             kind: r.kind,
             file_path: r.file_path,
-            settings_json: r
-                .settings_json
-                .and_then(|s| serde_json::from_str(&s).ok())
-                .unwrap_or_default(),
+            settings_json: r.settings_json.and_then(|s| serde_json::from_str(&s).ok()).unwrap_or_default(),
             created_at: r.created_at,
             updated_at: r.updated_at,
         }
@@ -459,10 +439,7 @@ impl From<CharacterAssetsRow> for GameAssets {
             category: r.category,
             kind: r.kind,
             file_path: r.file_path,
-            settings_json: r
-                .settings_json
-                .and_then(|s| serde_json::from_str(&s).ok())
-                .unwrap_or_default(),
+            settings_json: r.settings_json.and_then(|s| serde_json::from_str(&s).ok()).unwrap_or_default(),
             created_at: r.created_at,
             updated_at: r.updated_at,
         }
@@ -478,10 +455,7 @@ impl From<CgAssetsRow> for GameAssets {
             category: r.category,
             kind: r.kind,
             file_path: r.file_path,
-            settings_json: r
-                .settings_json
-                .and_then(|s| serde_json::from_str(&s).ok())
-                .unwrap_or_default(),
+            settings_json: r.settings_json.and_then(|s| serde_json::from_str(&s).ok()).unwrap_or_default(),
             created_at: r.created_at,
             updated_at: r.updated_at,
         }
@@ -497,10 +471,7 @@ impl From<BackgroundAssetsRow> for GameAssets {
             category: r.category,
             kind: r.kind,
             file_path: r.file_path,
-            settings_json: r
-                .settings_json
-                .and_then(|s| serde_json::from_str(&s).ok())
-                .unwrap_or_default(),
+            settings_json: r.settings_json.and_then(|s| serde_json::from_str(&s).ok()).unwrap_or_default(),
             created_at: r.created_at,
             updated_at: r.updated_at,
         }
@@ -585,7 +556,7 @@ pub struct AudioAssetsInput {
 impl From<AudioAssets> for AudioAssetsInput {
     fn from(r: AudioAssets) -> Self {
         Self {
-            base:r.base.into(),
+            base: r.base.into(),
             tag: r.tag,
             game_character_id: r.game_character_id,
             transcript: r.transcript,
@@ -830,10 +801,7 @@ impl From<GameMapsRow> for GameMaps {
             name: r.name,
             danger_level: r.danger_level,
             default_weather_pool_id: r.default_weather_pool_id,
-            settings_json: r
-                .settings_json
-                .and_then(|s| serde_json::from_str(&s).ok())
-                .unwrap_or_default(),
+            settings_json: r.settings_json.and_then(|s| serde_json::from_str(&s).ok()).unwrap_or_default(),
             created_at: r.created_at,
             updated_at: r.updated_at,
         }
@@ -894,14 +862,8 @@ impl From<GameMapsZoneRow> for GameMapsZone {
             id: r.id,
             map_id: r.map_id,
             name: r.name,
-            tags: r
-                .tags
-                .and_then(|t| serde_json::from_str(&t).ok())
-                .unwrap_or_default(),
-            settings_json: r
-                .settings_json
-                .and_then(|s| serde_json::from_str(&s).ok())
-                .unwrap_or_default(),
+            tags: r.tags.and_then(|t| serde_json::from_str(&t).ok()).unwrap_or_default(),
+            settings_json: r.settings_json.and_then(|s| serde_json::from_str(&s).ok()).unwrap_or_default(),
             created_at: r.created_at,
             updated_at: r.updated_at,
         }
@@ -957,10 +919,7 @@ impl From<GameLocationsRow> for GameLocations {
             zone_id: r.zone_id,
             name: r.name,
             description: r.description,
-            settings_json: r
-                .settings_json
-                .and_then(|s| serde_json::from_str(&s).ok())
-                .unwrap_or_default(),
+            settings_json: r.settings_json.and_then(|s| serde_json::from_str(&s).ok()).unwrap_or_default(),
         }
     }
 }
@@ -1013,10 +972,7 @@ impl From<GameLocationConnectionsRow> for GameLocationConnections {
             to_id: r.to_id,
             travel_seconds: r.travel_seconds,
             condition: r.condition,
-            settings_json: r
-                .settings_json
-                .and_then(|s| serde_json::from_str(&s).ok())
-                .unwrap_or_default(),
+            settings_json: r.settings_json.and_then(|s| serde_json::from_str(&s).ok()).unwrap_or_default(),
         }
     }
 }
@@ -1329,14 +1285,8 @@ impl From<GameEventsRow> for GameEvents {
             name: r.name,
             description: r.description,
             requires_npc: r.requires_npc,
-            config_json: r
-                .config_json
-                .and_then(|c| serde_json::from_str(&c).ok())
-                .unwrap_or_default(),
-            effect_json: r
-                .effect_json
-                .and_then(|c| serde_json::from_str(&c).ok())
-                .unwrap_or_default(),
+            config_json: r.config_json.and_then(|c| serde_json::from_str(&c).ok()).unwrap_or_default(),
+            effect_json: r.effect_json.and_then(|c| serde_json::from_str(&c).ok()).unwrap_or_default(),
             cooldown_seconds: r.cooldown_seconds,
             created_at: r.created_at,
             updated_at: r.updated_at,
@@ -1654,11 +1604,7 @@ pub struct GameScene {
 }
 
 impl GameScene {
-    pub fn from_row(
-        r: GameSceneRow,
-        choices: Option<Vec<GameChoiceRow>>,
-        branches: Option<Vec<GameBranchRow>>,
-    ) -> Self {
+    pub fn from_row(r: GameSceneRow, choices: Option<Vec<GameChoiceRow>>, branches: Option<Vec<GameBranchRow>>) -> Self {
         Self {
             id: r.id,
             game_id: r.game_id,
@@ -1872,19 +1818,10 @@ impl From<GameItemsRow> for GameItems {
             is_unique: r.is_unique,
             is_key: r.is_key,
             consumable: r.consumable,
-            use_effect: r
-                .use_effect
-                .and_then(|s| serde_json::from_str(&s).ok())
-                .unwrap_or_default(),
-            use_condition: r
-                .use_condition
-                .and_then(|s| serde_json::from_str(&s).ok())
-                .unwrap_or_default(),
+            use_effect: r.use_effect.and_then(|s| serde_json::from_str(&s).ok()).unwrap_or_default(),
+            use_condition: r.use_condition.and_then(|s| serde_json::from_str(&s).ok()).unwrap_or_default(),
             on_acquire_event_id: r.on_acquire_event_id,
-            settings_json: r
-                .settings_json
-                .and_then(|s| serde_json::from_str(&s).ok())
-                .unwrap_or_default(),
+            settings_json: r.settings_json.and_then(|s| serde_json::from_str(&s).ok()).unwrap_or_default(),
             created_at: r.created_at,
             updated_at: r.updated_at,
         }
@@ -1959,14 +1896,8 @@ impl From<GameRelationshipDefsRow> for GameRelationshipDefs {
             game_id: r.game_id,
             from_id: r.from_id,
             to_id: r.to_id,
-            values_json: r
-                .values_json
-                .and_then(|s| serde_json::from_str(&s).ok())
-                .unwrap_or_default(),
-            tags: r
-                .tags
-                .and_then(|s| serde_json::from_str(&s).ok())
-                .unwrap_or_default(),
+            values_json: r.values_json.and_then(|s| serde_json::from_str(&s).ok()).unwrap_or_default(),
+            tags: r.tags.and_then(|s| serde_json::from_str(&s).ok()).unwrap_or_default(),
         }
     }
 }
@@ -2061,31 +1992,13 @@ impl From<GamePlayerSessionsRow> for GamePlayerSessions {
             current_location_id: r.current_location_id,
             current_weather_id: r.current_weather_id,
             game_time: r.game_time,
-            flags_json: r
-                .flags_json
-                .and_then(|f| serde_json::from_str(&f).ok())
-                .unwrap_or_default(),
+            flags_json: r.flags_json.and_then(|f| serde_json::from_str(&f).ok()).unwrap_or_default(),
             parent_session_id: r.parent_session_id,
-            pending_scenes_json: r
-                .pending_scenes_json
-                .and_then(|f| serde_json::from_str(&f).ok())
-                .unwrap_or_default(),
-            inventory_json: r
-                .inventory_json
-                .and_then(|f| serde_json::from_str(&f).ok())
-                .unwrap_or_default(),
-            relationships_json: r
-                .relationships_json
-                .and_then(|f| serde_json::from_str(&f).ok())
-                .unwrap_or_default(),
-            stage_json: r
-                .stage_json
-                .and_then(|f| serde_json::from_str(&f).ok())
-                .unwrap_or_default(),
-            zone_weather_json: r
-                .zone_weather_json
-                .and_then(|f| serde_json::from_str(&f).ok())
-                .unwrap_or_default(),
+            pending_scenes_json: r.pending_scenes_json.and_then(|f| serde_json::from_str(&f).ok()).unwrap_or_default(),
+            inventory_json: r.inventory_json.and_then(|f| serde_json::from_str(&f).ok()).unwrap_or_default(),
+            relationships_json: r.relationships_json.and_then(|f| serde_json::from_str(&f).ok()).unwrap_or_default(),
+            stage_json: r.stage_json.and_then(|f| serde_json::from_str(&f).ok()).unwrap_or_default(),
+            zone_weather_json: r.zone_weather_json.and_then(|f| serde_json::from_str(&f).ok()).unwrap_or_default(),
             forked_from_seq: r.forked_from_seq,
             head_seq: r.head_seq,
             updated_at: r.updated_at,
@@ -2189,10 +2102,7 @@ impl From<GameSaveRow> for GameSave {
             current_location_id: r.current_location_id,
             current_weather_id: r.current_weather_id,
             game_time: r.game_time,
-            state_snapshot: r
-                .state_snapshot
-                .and_then(|s| serde_json::from_str(&s).ok())
-                .unwrap_or_default(),
+            state_snapshot: r.state_snapshot.and_then(|s| serde_json::from_str(&s).ok()).unwrap_or_default(),
             updated_at: r.updated_at,
         }
     }
@@ -2245,10 +2155,7 @@ impl From<GameJournalRow> for GameJournal {
             session_id: r.session_id,
             seq: r.seq,
             kind: r.kind,
-            payload_json: r
-                .payload_json
-                .and_then(|s| serde_json::from_str(&s).ok())
-                .unwrap_or_default(),
+            payload_json: r.payload_json.and_then(|s| serde_json::from_str(&s).ok()).unwrap_or_default(),
             game_time: r.game_time,
             created_at: r.created_at,
         }
@@ -2302,14 +2209,8 @@ impl From<GameStoryPlansRow> for GameStoryPlans {
         Self {
             session_id: r.session_id,
             seq: r.seq,
-            plan_json: r
-                .plan_json
-                .and_then(|s| serde_json::from_str(&s).ok())
-                .unwrap_or_default(),
-            reason: r
-                .reason
-                .and_then(|s| serde_json::from_str(&s).ok())
-                .unwrap_or_default(),
+            plan_json: r.plan_json.and_then(|s| serde_json::from_str(&s).ok()).unwrap_or_default(),
+            reason: r.reason.and_then(|s| serde_json::from_str(&s).ok()).unwrap_or_default(),
         }
     }
 }
@@ -2388,10 +2289,7 @@ impl From<GameCharacterStatesSnapshotsRow> for GameCharacterStatesSnapshots {
             game_character_id: r.game_character_id,
             current_location_id: r.current_location_id,
             status: r.status,
-            state_json: r
-                .state_json
-                .and_then(|s| serde_json::from_str(&s).ok())
-                .unwrap_or_default(),
+            state_json: r.state_json.and_then(|s| serde_json::from_str(&s).ok()).unwrap_or_default(),
             updated_at: r.updated_at,
         }
     }
@@ -2605,10 +2503,7 @@ impl From<GameMessagesRow> for GameMessages {
             name: r.name,
             character_id: r.character_id,
             content: r.content,
-            meta: r
-                .meta
-                .and_then(|s| serde_json::from_str(&s).ok())
-                .unwrap_or_default(),
+            meta: r.meta.and_then(|s| serde_json::from_str(&s).ok()).unwrap_or_default(),
             created_at: r.created_at,
             updated_at: r.updated_at,
         }

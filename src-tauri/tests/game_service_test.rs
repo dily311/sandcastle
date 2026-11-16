@@ -3,13 +3,13 @@ use std::sync::Arc;
 
 use sandcastle_lib::{
     db::game::{get_game_player_sessions, get_game_save, upsert_game_save},
+    error::ErrorCode,
     game::{
         journal,
         manager::GameManager,
         runtime::{GameCommand, GameRepository, GameRuntime, SqlxGameRepository},
         session::fork_session,
     },
-    error::ErrorCode,
     models::game::GameSaveInput,
 };
 use sqlx::SqlitePool;
@@ -23,7 +23,11 @@ async fn journal_count(pool: &SqlitePool, session_id: &str) -> i64 {
 }
 
 async fn any_persona(pool: &SqlitePool) -> String {
-    if let Some(id) = sqlx::query_scalar::<_, String>("SELECT id FROM personas LIMIT 1").fetch_optional(pool).await.unwrap() {
+    if let Some(id) = sqlx::query_scalar::<_, String>("SELECT id FROM personas LIMIT 1")
+        .fetch_optional(pool)
+        .await
+        .unwrap()
+    {
         return id;
     }
     sqlx::query("INSERT INTO personas (id, name, description) VALUES ('p1', '플레이어', '')")
@@ -36,7 +40,9 @@ async fn any_persona(pool: &SqlitePool) -> String {
 /// 한 턴: 명령 → 일지 기록
 async fn play(pool: &SqlitePool, runtime: &mut GameRuntime, game_id: &str, command: GameCommand) {
     let response = runtime.dispatch(command.clone()).expect("명령 처리");
-    journal::record(pool, runtime, game_id, Some(&command), &response.events).await.expect("일지 기록");
+    journal::record(pool, runtime, game_id, Some(&command), &response.events)
+        .await
+        .expect("일지 기록");
 }
 
 async fn bookmark(pool: &SqlitePool, runtime: &GameRuntime, game_id: &str, slot: i64) -> u32 {
@@ -90,7 +96,9 @@ async fn fork_from_old_bookmark_keeps_original(pool: SqlitePool) {
     let forked_row = get_game_player_sessions(&pool, &forked).await.unwrap();
     assert_eq!(forked_row.head_seq, saved_seq);
     assert_eq!(journal_count(&pool, &forked).await, journal_at_save);
-    let reloaded = GameRuntime::load(&SqlxGameRepository::new(&pool), definition, &forked).await.expect("분기 세션 불러오기");
+    let reloaded = GameRuntime::load(&SqlxGameRepository::new(&pool), definition, &forked)
+        .await
+        .expect("분기 세션 불러오기");
     assert_eq!(reloaded.state().game_time, saved_time);
     assert_eq!(reloaded.state().parent_session_id.as_deref(), Some(session_id.as_str()));
 
@@ -106,7 +114,9 @@ async fn fork_from_old_bookmark_keeps_original(pool: SqlitePool) {
 #[sqlx::test(migrations = "src/db/migrations")]
 async fn blocked_commands_report_reason(pool: SqlitePool) {
     let games_root = tempfile::tempdir().unwrap();
-    let game_id = GameManager::create_game(&pool, games_root.path(), "오류 테스트".into(), "dating-sim".into()).await.unwrap();
+    let game_id = GameManager::create_game(&pool, games_root.path(), "오류 테스트".into(), "dating-sim".into())
+        .await
+        .unwrap();
     let definition = Arc::new(SqlxGameRepository::new(&pool).load_definition(&game_id).await.unwrap());
     let mut runtime = GameRuntime::from_new_game(definition, uuid::Uuid::new_v4().to_string(), any_persona(&pool).await).unwrap();
     runtime.start();
@@ -122,14 +132,22 @@ async fn blocked_commands_report_reason(pool: SqlitePool) {
     }
 
     // 없는 id는 규칙이 아니라 입력 오류
-    let res = runtime.dispatch(GameCommand::Talk { game_character_id: "없는-캐릭터".into() }).err().expect("없는 캐릭터").to_response();
+    let res = runtime
+        .dispatch(GameCommand::Talk {
+            game_character_id: "없는-캐릭터".into(),
+        })
+        .err()
+        .expect("없는 캐릭터")
+        .to_response();
     assert!(matches!(res.code, ErrorCode::InvalidInput | ErrorCode::GameActionBlocked));
 }
 
 #[sqlx::test(migrations = "src/db/migrations")]
 async fn weather_stays_within_zone_and_period(pool: SqlitePool) {
     let games_root = tempfile::tempdir().unwrap();
-    let game_id = GameManager::create_game(&pool, games_root.path(), "날씨 테스트".into(), "dating-sim".into()).await.unwrap();
+    let game_id = GameManager::create_game(&pool, games_root.path(), "날씨 테스트".into(), "dating-sim".into())
+        .await
+        .unwrap();
     let definition = Arc::new(SqlxGameRepository::new(&pool).load_definition(&game_id).await.unwrap());
     let session_id = uuid::Uuid::new_v4().to_string();
     let mut runtime = GameRuntime::from_new_game(definition.clone(), session_id.clone(), any_persona(&pool).await).unwrap();
@@ -138,7 +156,10 @@ async fn weather_stays_within_zone_and_period(pool: SqlitePool) {
 
     // 시작 zone의 날씨를 기억한다
     let zone = runtime.state().zone_id.clone().unwrap_or_default();
-    assert_eq!(runtime.state().zone_weather[&zone]["weather"].as_str(), Some(runtime.state().weather_id.as_str()));
+    assert_eq!(
+        runtime.state().zone_weather[&zone]["weather"].as_str(),
+        Some(runtime.state().weather_id.as_str())
+    );
 
     // 같은 zone·같은 시간대 안에서 시간이 여러 번 흘러도 날씨는 그대로
     for _ in 0..30 {
@@ -158,7 +179,9 @@ async fn weather_stays_within_zone_and_period(pool: SqlitePool) {
 async fn fork_at_any_turn(pool: SqlitePool) {
     use sandcastle_lib::game::{session::fork_at_seq, transcript::turn_points};
     let games_root = tempfile::tempdir().unwrap();
-    let game_id = GameManager::create_game(&pool, games_root.path(), "시점 분기".into(), "dating-sim".into()).await.unwrap();
+    let game_id = GameManager::create_game(&pool, games_root.path(), "시점 분기".into(), "dating-sim".into())
+        .await
+        .unwrap();
     let definition = Arc::new(SqlxGameRepository::new(&pool).load_definition(&game_id).await.unwrap());
     let session_id = uuid::Uuid::new_v4().to_string();
     let mut runtime = GameRuntime::from_new_game(definition.clone(), session_id.clone(), any_persona(&pool).await).unwrap();
