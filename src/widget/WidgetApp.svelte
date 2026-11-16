@@ -1,7 +1,7 @@
 <script lang="ts">
 	import { onMount } from "svelte";
 	import { themeSetting } from "$/lib/stores/themeStore.svelte";
-	import { bootstrapFeatures, featureManager } from "$/lib/features/feautreManager.svelte";
+	import { bootstrapWidgetFeatures, widgetFeatures } from "$/lib/features/widgetFeatures.svelte";
 	import { setLucideProps } from "@lucide/svelte";
 	import { onEvent } from "$shared/ipc/events";
 	import ContextMenu from "$/lib/contextmenu/ui/ContextMenu.svelte";
@@ -18,15 +18,15 @@
 		await themeSetting.init();
 
 		// 켜진 기능 불러오기
-		await bootstrapFeatures();
+		await bootstrapWidgetFeatures();
 
 		void onEvent("widget:shown", () => {
-			featureManager.getFeatures.map((v) => {
+			widgetFeatures.getFeatures.map((v) => {
 				if (v.enabled) v.shown?.();
 			});
 		});
 		void onEvent("widget:hidden", () => {
-			featureManager.getFeatures.map((v) => {
+			widgetFeatures.getFeatures.map((v) => {
 				if (v.enabled) v.disable?.();
 			});
 		});
@@ -40,7 +40,7 @@
 
 {#if isInitialized}
 	<div class="app-wrap">
-		{#each featureManager.getFeatures as item}
+		{#each widgetFeatures.getFeatures as item}
 			{#if item.enabled}
 				<item.component />
 			{/if}

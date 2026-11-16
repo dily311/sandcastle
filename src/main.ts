@@ -2,7 +2,7 @@ import "$/styles/font.css";
 import "$shared/ui/base.css";
 import { mount } from "svelte";
 import AppShell from "$app/AppShell.svelte";
-import { bootstrapFeatures } from "$lib/features/feautreManager.svelte";
+import { bootstrapWidgetFeatures } from "$lib/features/widgetFeatures.svelte";
 import { logs } from "$shared/stores/log.svelte";
 import { layout } from "$app/layout.svelte";
 import { watchSystemInsets } from "$app/systemInsets";
@@ -26,7 +26,7 @@ async function boot() {
 		watchAndroidBack();
 	}
 	// 위젯 창 같은 부가 기능은 화면과 따로 띄운다 — 실패해도 앱은 계속. 위젯은 데스크톱 전용이라 Android에서는 시작하지 않음
-	if (__IS_TAURI__ && layout.desktop) bootstrapFeatures().catch((e) => logs.error("feature", String(e)));
+	if (__IS_TAURI__ && layout.desktop) bootstrapWidgetFeatures().catch((e) => logs.error("feature", String(e)));
 }
 
 void boot();

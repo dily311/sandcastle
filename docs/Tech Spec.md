@@ -104,7 +104,8 @@ UI에서는 Svelte5를 사용한다.
 
 #### 프론트엔드 테스트
 
-npm run test:run
+pnpm check        (타입 검사)
+pnpm test:run
 
 #### Rust 테스트
 
@@ -117,19 +118,16 @@ cargo fmt --check
 
 ##### Rust 정적 분석
 
-cargo clippy
+cargo clippy --all-targets
+
+##### Android 대상 확인 (CI의 android 작업과 같음, NDK 필요)
+
+cargo clippy --lib --target aarch64-linux-android
 
 ## 마일스톤 일정
 
-- [~] Phase1: 기본 아키텍처 구축
-    - [x] ~~conv 테이블과 game 테이블의 통합작업~~ (하지 않기로 함, ADR-001)
-    - [ ] UI 구축
-    - [ ] 게임 에셋 매니저 구축
-    - [ ] 다국어 환경 기반 마련
-- [~] Phase2: DB 통합테스트 구성 (CI에서 cargo test 실행)
-- [ ] Phase3: 외부 API 연결 작업
-- [ ] Phase4: 모바일 UI작업
-- [ ] Phase5: 게임 엔진 템플릿 세분화
+일정과 진행은 한 곳에서만 관리한다: `.claude/CLAUDE.md`의 "중장기 계획 단계"·"단계별 세부 계획"·"가까운 목표".
+끝난 마일스톤(M1~)의 기록은 `docs/마일스톤 기록.md`. (예전 Phase1~5 목록은 CLAUDE.md의 1~6단계로 옮겨졌다 — conv/game 테이블 통합은 하지 않기로 함, ADR-001)
 
 
 ## 잠재적 문제

@@ -157,8 +157,8 @@ Conversation
 **결정**
 
 - 부가 기능은 Obsidian의 코어 플러그인처럼 껐다 켠다. 목록·이름·기본값은 백엔드 `sys/plugins.rs` 한 곳에 두고, 켜짐/꺼짐은 기존 기능 설정 저장소(`feature-setting`, id별 bool)에 둔다. 설정 > 코어 플러그인에서 바꾼다.
-  - 기본 켜짐: 폰(`phone`), 게임 모드(`game`), 캐릭터 이미지(`chat.images`), HTML 렌더링(`html`), 정규식(`regex`)
-  - 기본 꺼짐: 위젯(`widget`, 데스크톱 전용), 번역(`translate`), 음성 읽기(`tts`), 이미지 생성(`imagegen`)
+  - 기본 켜짐: 폰(`phone`), 게임 모드(`game`), 캐릭터 이미지(`chat.images`), 정규식(`regex`)
+  - 기본 꺼짐: HTML 렌더링(`html`, AI가 쓴 JS를 실행하므로 — 2026-11-17 합의로 바꿈, M1), 위젯(`widget`, 데스크톱 전용), 번역(`translate`), 음성 읽기(`tts`), 이미지 생성(`imagegen`), 이미지 자동 생성(`imageauto`). 앞으로 추가하는 기능은 모두 기본 꺼짐
 - 끄면 화면(사이드바·설정 탭·메시지 동작·패널 스위치)에서 숨기고, 그 화면에 들어가면 "꺼져 있음"과 켜기 버튼을 보여준다. AI 결과에 영향을 주는 것은 백엔드에서도 막는다: 정규식은 불러오지 않고(스위치 하나, `regex_processor::set_enabled`), 캐릭터 이미지 키를 보내지 않고, HTML 서빙과 AI 도구 호출은 거절한다. 끈 기능의 데이터는 지우지 않는다.
 - 설정을 바꾸면 백엔드가 모든 창에 `feature_setting::changed`를 보낸다 (메인 창의 플러그인 상태, 위젯 창의 위젯 하위 기능).
 - **AI 도구** 세부 설정은 별도 저장소(`plugin-setting`)에 둔다. 셋 다 연결한 API 프로필(주소 + keyring 키)을 쓰고, 비우면 대화/앱에서 고른 API.
