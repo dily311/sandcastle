@@ -247,6 +247,20 @@ Conversation
 - 갤러리 정보 `.json` 안의 `path`는 목록을 만들 때 실제 파일 위치로 다시 채우므로 고치지 않는다.
 - **마이그레이션 전 사본** (1-B-2): 앱을 시작할 때 이미 쓰던 DB에 적용할 새 마이그레이션이 있으면, 적용하기 전에 `migration-backups/app-<시각>-v<지금 버전>.db`로 사본을 만든다(VACUUM INTO). 최근 3개만 남긴다. 새로 만든 DB는 건너뛴다. 사본을 만들지 못해도 앱은 연다(로그만 — 시작을 막으면 데이터를 꺼낼 방법도 없어짐). 되돌릴 때는 앱을 끄고 사본을 `app.db`로 바꾼다(화면은 아직 없음).
 
+### ADR-009 Android 플랫폼 처리
+
+**상태** Accepted (2026-11-16) — CLAUDE.md 1-C (M10). 점검 결과는 `docs/Android 점검표.md`.
+
+**결정**
+- **비밀 저장소**: 데스크톱은 OS keyring(keyring v4), Android는 `android-native-keyring-store`(Android Keystore 키로 암호화한 SharedPreferences, keyring-core 직접 사용). 평문 파일에 두지 않는다. 테스트는 메모리 저장소(OS 자격 증명 관리자를 건드리지 않음).
+- **고른 파일**: Android 파일 고르기의 `content://` 주소는 프론트 `pickFiles`/`saveTo`가 받아 백엔드(`service/picked_file.rs`)가 앱 `tmp/`로 복사하거나 `tmp/saving/`에서 고른 곳으로 옮긴다. 가져오기·내보내기 커맨드는 계속 파일 경로만 다룬다. 공용 다운로드 폴더에 직접 쓰지 않는다(Android 10+ 저장소 정책).
+- **화면 가장자리**: edge-to-edge를 유지하되, 아래(키보드·탐색 막대)는 `MainActivity`가 비우고 위(상태 표시줄)는 CSS `--safe-top`(= max(env, 앱이 알려 준 값))으로.
+- **백그라운드 생성**: AI 작업이 도는 동안만 포그라운드 서비스(dataSync)를 켜고 끝나면 끈다. 서비스는 프로세스를 살려 두기만 하며 작업을 멈추지 않는다(끄는 순간 생성이 끊기지 않게). 알림 줄에 "응답을 만드는 중"이 보인다(Observability). 앱이 꺼진 동안의 실행(선톡 등)은 5-A-6에서 따로 정한다.
+- **화면 → 앱(Kotlin) 연결**: 숫자만 돌려주는 상태 표시줄 높이는 `addJavascriptInterface`, 동작이 있는 서비스 켜고 끄기는 `addWebMessageListener`로 **앱 주소(`http://tauri.localhost`)의 최상위 프레임만** 받는다 — AI가 쓴 HTML(htmlview iframe)은 이 객체를 볼 수 없다(Least Privilege).
+- **뒤로 가기**: 앱 안 이동 기록(nav)을 브라우저 기록과 맞춰 시스템 뒤로 가기가 앞 화면으로 가게 한다.
+- **데스크톱 전용 기능**: 코어 플러그인의 `desktop_only`는 모바일에서 목록에서 빠지고 늘 꺼짐으로 본다.
+- **마이그레이션 파일**: `.gitattributes`로 줄 끝 변환을 막는다(sqlx 체크섬이 체크아웃 환경에 따라 바뀌지 않게).
+
 ### (참고) 전역 테스트 관리 방법
 
 
