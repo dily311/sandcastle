@@ -372,7 +372,7 @@
 						{#each g.list as s, i (s.id)}
 							{@const sort = sorters[g.scope]}
 							<li {...sort.item(i)} class:dragging={sort.from === i} class:over={sort.over === i && sort.from !== i}>
-								<span class="grip" aria-hidden="true"><GripVertical /></span>
+								<span class="grip" aria-hidden="true" {...sort.handle(i)}><GripVertical /></span>
 								<Switch checked={s.enabled} label={s.name} onchange={(v) => toggleScript(s, v)} />
 								<IconButton label="{s.name} 편집" size="sm" onclick={() => regexEditor?.startEdit(s)}><Pencil /></IconButton>
 							</li>

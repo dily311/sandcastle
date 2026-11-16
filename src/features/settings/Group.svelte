@@ -29,6 +29,11 @@
 		justify-content: space-between;
 		gap: var(--space-3);
 		margin: var(--space-6) 0 var(--space-3);
+		/* 좁은 화면: 오른쪽 도구가 제목 아래로 (제목이 두 줄로 잘리지 않게) */
+		flex-wrap: wrap;
+	}
+	.title h3 {
+		white-space: nowrap;
 	}
 	.card {
 		border-radius: var(--radius-lg);

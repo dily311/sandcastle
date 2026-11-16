@@ -48,6 +48,7 @@
 
 <style>
 	.btn {
+		position: relative;
 		display: inline-flex;
 		align-items: center;
 		justify-content: center;
@@ -80,6 +81,18 @@
 		width: 100%;
 	}
 
+	/* 손가락: 보이는 크기는 그대로 두고 누르는 범위만 --touch-target(44px)까지 넓힌다 (1-C-3) */
+	@media (pointer: coarse) {
+		.btn::after {
+			content: "";
+			position: absolute;
+			left: 50%;
+			top: 50%;
+			width: max(100%, var(--touch-target));
+			height: max(100%, var(--touch-target));
+			transform: translate(-50%, -50%);
+		}
+	}
 	.sm {
 		height: var(--control-sm);
 		padding: 0 var(--space-3);

@@ -183,8 +183,13 @@
 		align-items: center;
 		justify-content: space-between;
 		gap: var(--space-4);
+		/* 좁은 화면: 도구 줄이 제목 아래로 내려감 (제목이 "캐릭/터"처럼 잘리지 않게) */
+		flex-wrap: wrap;
 		max-width: var(--page-wide);
 		margin: 0 auto var(--space-5);
+	}
+	.head h1 {
+		white-space: nowrap;
 	}
 	.grid {
 		display: grid;

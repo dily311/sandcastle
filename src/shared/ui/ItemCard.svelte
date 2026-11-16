@@ -78,6 +78,10 @@
 		color: var(--text);
 		overflow: hidden;
 		cursor: pointer;
+		/* 꾹 누르기(터치)는 메뉴를 연다 — 글자가 선택되거나 시스템 메뉴가 뜨지 않게 */
+		-webkit-user-select: none;
+		user-select: none;
+		-webkit-touch-callout: none;
 		transition:
 			border-color var(--duration-fast) var(--ease),
 			box-shadow var(--duration-fast) var(--ease);

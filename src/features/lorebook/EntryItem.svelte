@@ -1,6 +1,6 @@
 <script lang="ts">
 	// 로어북 항목 하나: 접힌 줄(켜기·제목·키워드) + 펼치면 편집. 고치면 잠시 뒤 저절로 저장
-	import { ChevronDown, ChevronRight, Copy, Trash2 } from "@lucide/svelte";
+	import { GripVertical, ChevronDown, ChevronRight, Copy, Trash2 } from "@lucide/svelte";
 	import { Badge, Field, IconButton, Input, Switch, TagInput, Textarea } from "$shared/ui";
 	import { entryTitle, isDraft, isValid, lorebook, type Entry } from "./lorebook.svelte";
 	import { confirmAction } from "$shared/stores/confirm.svelte";
@@ -15,10 +15,12 @@
 		bookName?: string;
 		/** 끌어서 순서 바꾸기 (Sortable.item) */
 		drag?: Record<string, unknown>;
+		/** 손잡이 (터치 화면에서 끌기) */
+		grip?: Record<string, unknown>;
 		dragging?: boolean;
 		dragOver?: boolean;
 	}
-	let { entry, open = false, ontoggle, onsaved, bookName, drag, dragging = false, dragOver = false }: Props = $props();
+	let { entry, open = false, ontoggle, onsaved, bookName, drag, grip, dragging = false, dragOver = false }: Props = $props();
 
 	// svelte-ignore state_referenced_locally
 	let draft = $state<Entry>(structuredClone($state.snapshot(entry)));
@@ -73,6 +75,7 @@
 
 <li class="entry" class:open class:off={!draft.enabled} class:draft={isDraft(draft)} class:dragging class:drag-over={dragOver} {...drag}>
 	<div class="head">
+		{#if grip && !open}<span class="grip" aria-hidden="true" {...grip}><GripVertical /></span>{/if}
 		<Switch bind:checked={draft.enabled} label="{entryTitle(draft)} 사용" hideLabel />
 		<button class="toggle" aria-expanded={open} onclick={ontoggle}>
 			{#if open}<ChevronDown />{:else}<ChevronRight />{/if}
@@ -129,6 +132,24 @@
 	}
 	.entry[draggable="true"]:not(.open) {
 		cursor: grab;
+	}
+	/* 손잡이는 터치 화면에서만 (마우스는 줄 전체를 끈다) */
+	.grip {
+		display: none;
+		align-items: center;
+		color: var(--text-faint);
+		cursor: grab;
+	}
+	.grip :global(svg) {
+		width: 16px;
+		height: 16px;
+	}
+	@media (pointer: coarse) {
+		.grip {
+			display: flex;
+			padding: var(--space-2);
+			margin: calc(var(--space-2) * -1) 0;
+		}
 	}
 	.entry.dragging {
 		opacity: 0.4;

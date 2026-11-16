@@ -237,7 +237,8 @@
 	color: var(--text-muted);
 	font-size: var(--text-xs);
 }
-.ge .game-editor .field input,
+/* 공용 Input(.input 안의 input)은 바깥 상자가 테두리를 그리므로 뺀다 (테두리가 두 겹으로 보이던 것) */
+.ge .game-editor .field input:not(.input > input),
 .ge .game-editor .field select,
 .ge .game-editor .field textarea,
 .ge .game-editor .asset-fields input,
@@ -263,7 +264,7 @@
 	line-height: var(--leading);
 	resize: vertical;
 }
-.ge .game-editor .field input:focus,
+.ge .game-editor .field input:not(.input > input):focus,
 .ge .game-editor .field select:focus,
 .ge .game-editor .field textarea:focus,
 .ge .game-editor .asset-fields input:focus,

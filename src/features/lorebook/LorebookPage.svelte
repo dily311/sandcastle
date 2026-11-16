@@ -227,6 +227,7 @@
 				{#each shownEntries as e, i (e.id)}
 					<EntryItem
 						drag={sort.item(i)}
+						grip={sort.handle(i)}
 						dragging={sort.from === i}
 						dragOver={sort.over === i && sort.from !== i}
 						entry={e}
@@ -323,9 +324,12 @@
 		align-items: flex-start;
 		justify-content: space-between;
 		gap: var(--space-4);
+		/* 좁은 화면: 도구 줄이 제목 아래로 내려감 */
+		flex-wrap: wrap;
 	}
 	h1 {
 		font-size: var(--text-xl);
+		white-space: nowrap;
 	}
 	.acts {
 		display: flex;

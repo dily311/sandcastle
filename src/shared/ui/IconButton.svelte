@@ -29,6 +29,7 @@
 
 <style>
 	.icon-btn {
+		position: relative;
 		display: inline-grid;
 		place-items: center;
 		flex: none;
@@ -42,6 +43,18 @@
 		transition:
 			background var(--duration-fast) var(--ease),
 			color var(--duration-fast) var(--ease);
+	}
+	/* 손가락: 보이는 크기는 그대로 두고 누르는 범위만 --touch-target(44px)까지 넓힌다 (1-C-3) */
+	@media (pointer: coarse) {
+		.icon-btn::after {
+			content: "";
+			position: absolute;
+			left: 50%;
+			top: 50%;
+			width: max(100%, var(--touch-target));
+			height: max(100%, var(--touch-target));
+			transform: translate(-50%, -50%);
+		}
 	}
 	.icon-btn :global(svg) {
 		width: 18px;

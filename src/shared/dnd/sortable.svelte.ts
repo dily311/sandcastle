@@ -12,16 +12,56 @@ export function moveItem<T>(list: readonly T[], from: number, to: number): T[] {
 	return next;
 }
 
+let groups = 0;
+
 export class Sortable {
 	from = $state<number | null>(null);
 	over = $state<number | null>(null);
 	enabled = $state(true);
+	/** 한 화면에 목록이 여러 개일 때 손가락으로 끌어도 다른 목록에 놓이지 않게 */
+	private group = `s${++groups}`;
 
 	constructor(private onmove: (from: number, to: number) => void) {}
+
+	/**
+	 * 손잡이(⋮⋮)에 펼쳐 넣을 속성들 — 터치 화면용 (1-C-3).
+	 * Android WebView는 HTML 드래그를 손가락으로 시작하지 못하므로, 손잡이를 누른 채 움직이면 포인터 이벤트로 옮긴다.
+	 * 손잡이는 touch-action: none이라 누른 동안 화면이 스크롤되지 않는다
+	 */
+	handle(i: number) {
+		return {
+			style: "touch-action: none",
+			onpointerdown: (e: PointerEvent) => {
+				if (!this.enabled || e.pointerType === "mouse") return;
+				e.preventDefault();
+				this.from = i;
+				this.over = i;
+				const move = (ev: PointerEvent) => {
+					const el = document.elementFromPoint(ev.clientX, ev.clientY)?.closest<HTMLElement>(`[data-sort-group="${this.group}"]`);
+					const at = el?.dataset.sortIndex;
+					if (at !== undefined) this.over = Number(at);
+				};
+				const end = (ev: PointerEvent) => {
+					window.removeEventListener("pointermove", move);
+					window.removeEventListener("pointerup", end);
+					window.removeEventListener("pointercancel", end);
+					const from = this.from;
+					const to = this.over;
+					this.from = this.over = null;
+					if (ev.type === "pointerup" && from !== null && to !== null && from !== to) this.onmove(from, to);
+				};
+				window.addEventListener("pointermove", move);
+				window.addEventListener("pointerup", end);
+				window.addEventListener("pointercancel", end);
+			},
+		};
+	}
 
 	/** 끌 수 있는 요소에 펼쳐 넣을 속성들 */
 	item(i: number) {
 		return {
+			"data-sort-group": this.group,
+			"data-sort-index": i,
 			draggable: this.enabled,
 			ondragstart: (e: DragEvent) => {
 				if (!this.enabled) return;

@@ -112,7 +112,7 @@
 						{@const b = BLOCKS.find((x) => x.id === id)!}
 						{@const on = draft.blocks.includes(id)}
 						<li {...sort.item(i)} class:dragging={sort.from === i} class:over={sort.over === i && sort.from !== i}>
-							<span class="grip" aria-hidden="true"><GripVertical /></span>
+							<span class="grip" aria-hidden="true" {...sort.handle(i)}><GripVertical /></span>
 							<Switch checked={on} label={b.label} hideLabel onchange={(v) => toggle(id, v)} />
 							<span class="bl"><b>{b.label}</b><small>{b.desc}{b.plugin && !plugins.on(b.plugin) ? " · 플러그인 꺼짐" : ""}</small></span>
 							<Button size="sm" variant="ghost" disabled={i === 0} onclick={() => move(id, -1)} aria-label="{b.label} 위로">{#snippet icon()}<ArrowUp />{/snippet}</Button>

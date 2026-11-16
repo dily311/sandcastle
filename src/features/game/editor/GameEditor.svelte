@@ -423,5 +423,18 @@
 			border-right: none;
 			border-bottom: 1px solid var(--border);
 		}
+		/* 가로 탭: 글자가 세로로 쪼개지지 않게 줄이지 않고 옆으로 넘긴다 (1-C-3) */
+		.side button,
+		.side .bottom {
+			flex-shrink: 0;
+			white-space: nowrap;
+		}
+		.side .bottom {
+			margin: 0 0 0 auto;
+			padding-top: 0;
+			border-top: none;
+			align-items: center;
+			gap: var(--space-2);
+		}
 	}
 </style>
