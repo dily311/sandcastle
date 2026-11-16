@@ -274,6 +274,9 @@ pub fn specta_builder() -> tauri_specta::Builder<tauri::Wry> {
             usage_summary,
             clear_usage,
             allow_budget_once,
+            list_model_prices,
+            upsert_model_price,
+            delete_model_price,
             // regex
             list_regex_scripts,
             upsert_regex_script,
@@ -504,6 +507,9 @@ pub fn specta_builder() -> tauri_specta::Builder<tauri::Wry> {
             usage_summary,
             clear_usage,
             allow_budget_once,
+            list_model_prices,
+            upsert_model_price,
+            delete_model_price,
             // regex
             list_regex_scripts,
             upsert_regex_script,

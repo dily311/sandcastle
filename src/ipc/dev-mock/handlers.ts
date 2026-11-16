@@ -96,12 +96,15 @@ export const handlers: Record<string, Handler> = {
 		];
 	},
 	usage_summary: () => [
-		{ apiProfileId: "p1", profileName: "Claude", kind: "chat", calls: 42, failed: 1, inputTokens: 182_340, outputTokens: 20_118, characters: 0, images: 0, estimatedCalls: 6 },
-		{ apiProfileId: "p2", profileName: "ElevenLabs", kind: "tts", calls: 12, failed: 1, inputTokens: 0, outputTokens: 0, characters: 3_410, images: 0, estimatedCalls: 12 },
-		{ apiProfileId: "p3", profileName: "NovelAI", kind: "image", calls: 3, failed: 0, inputTokens: 0, outputTokens: 0, characters: 0, images: 3, estimatedCalls: 3 },
+		{ apiProfileId: "p1", profileName: "Claude", kind: "chat", calls: 42, failed: 1, inputTokens: 182_340, outputTokens: 20_118, characters: 0, images: 0, estimatedCalls: 6, model: "claude-sonnet-5-5", estimatedCost: 0.85, currency: "$" },
+		{ apiProfileId: "p2", profileName: "ElevenLabs", kind: "tts", calls: 12, failed: 1, inputTokens: 0, outputTokens: 0, characters: 3_410, images: 0, estimatedCalls: 12, model: "eleven_v3", estimatedCost: null, currency: null },
+		{ apiProfileId: "p3", profileName: "NovelAI", kind: "image", calls: 3, failed: 0, inputTokens: 0, outputTokens: 0, characters: 0, images: 3, estimatedCalls: 3, model: "nai-diffusion-4-5-full", estimatedCost: null, currency: null },
 	],
 	clear_usage: () => 0,
 	allow_budget_once: () => null,
+	list_model_prices: () => [{ model: "claude-sonnet-5-5", currency: "$", inputPerMtok: 3, outputPerMtok: 15, per1kChars: null, perImage: null }],
+	upsert_model_price: () => null,
+	delete_model_price: () => null,
 	save_png_file: () => null,
 	default_app_prompts: () => {
 		const d = (text: string) => ({ selected: "", items: [{ id: "", name: "기본값", text }] });

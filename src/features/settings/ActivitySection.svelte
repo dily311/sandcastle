@@ -11,6 +11,7 @@
 	import { toasts } from "$shared/stores/toast.svelte";
 	import Section from "./Section.svelte";
 	import Group from "./Group.svelte";
+	import PriceTable from "./PriceTable.svelte";
 
 	const src = { source: "activity" };
 	const FEATURE: Record<string, string> = {
@@ -39,6 +40,7 @@
 	let who = $state<"all" | "auto">("all");
 	let open = $state<string | null>(null);
 	let loading = $state(false);
+	let showPrices = $state(false);
 
 	const since = (p: typeof period) => {
 		const day = 86_400_000;
@@ -46,6 +48,14 @@
 	};
 	const shown = $derived(who === "auto" ? history.filter((h) => h.runBy === "auto") : history);
 	const autoCount = $derived(history.filter((h) => h.runBy === "auto").length);
+	// 단가표에 적은 모델의 추정 금액 합계 (통화별)
+	const costTotals = $derived.by(() => {
+		const t = new Map<string, number>();
+		for (const u of usage) if (u.estimatedCost != null) t.set(u.currency ?? "$", (t.get(u.currency ?? "$") ?? 0) + u.estimatedCost);
+		return [...t.entries()];
+	});
+	const usedModels = $derived([...new Set(usage.map((u) => u.model).filter((m): m is string => !!m))]);
+	const money = (v: number, cur: string) => `${cur}${v < 0.01 && v > 0 ? v.toFixed(4) : v.toFixed(2)}`;
 
 	async function load() {
 		loading = true;
@@ -164,21 +174,35 @@
 				<Button size="sm" variant="ghost" disabled={!usage.length} onclick={clearUsage}>{#snippet icon()}<Trash2 />{/snippet}비우기</Button>
 			</div>
 		{/snippet}
-		{#each usage as u (`${u.apiProfileId}:${u.kind}`)}
+		{#if costTotals.length}<p class="total">추정 금액 {costTotals.map(([c, v]) => money(v, c)).join(" · ")} <span class="muted">(단가표 기준, 실제 청구와 다를 수 있음)</span></p>{/if}
+		{#each usage as u (`${u.apiProfileId}:${u.kind}:${u.model}`)}
 			<div class="item">
 				<div class="main">
 					<span class="label">{u.profileName ?? (u.apiProfileId ? "지운 프로필" : "알 수 없음")}</span>
 					<Badge>{KIND[u.kind] ?? u.kind}</Badge>
+					{#if u.model}<code class="muted">{u.model}</code>{/if}
 					<span class="muted">{n(u.calls)}회{u.failed ? ` (실패 ${n(u.failed)})` : ""}</span>
 				</div>
 				<div class="amount">
 					{amount(u) || "—"}
 					{#if u.kind === "chat" && u.estimatedCalls}<span class="muted" title="공급자가 사용량을 알려주지 않은 호출은 앱이 글자 수로 추정함">· 추정 {n(u.estimatedCalls)}회</span>{/if}
+					{#if u.estimatedCost != null}<b class="cost" title="단가표로 계산한 추정 금액">≈ {money(u.estimatedCost, u.currency ?? "$")}</b>{/if}
 				</div>
 			</div>
 		{:else}
 			<p class="empty">이 기간에 쓴 API 없음</p>
 		{/each}
+	</Group>
+
+	<Group title="단가표">
+		{#snippet aside()}
+			<Button size="sm" variant="ghost" aria-expanded={showPrices} onclick={() => (showPrices = !showPrices)}>{showPrices ? "접기" : "펼치기"}</Button>
+		{/snippet}
+		{#if showPrices}
+			<div class="prices"><PriceTable models={usedModels} onchanged={load} /></div>
+		{:else}
+			<p class="empty">모델별 단가를 적으면 사용량 옆에 추정 금액이 나옴</p>
+		{/if}
 	</Group>
 
 	<Group title="최근 실행" flush>
@@ -253,6 +277,16 @@
 	.amount {
 		font-size: var(--text-sm);
 		font-variant-numeric: tabular-nums;
+	}
+	.total {
+		margin: var(--space-3) 0 0;
+		font-size: var(--text-sm);
+	}
+	.cost {
+		margin-left: var(--space-2);
+	}
+	.prices {
+		padding: var(--space-4) 0;
 	}
 	.empty {
 		padding: var(--space-4) 0;

@@ -110,6 +110,9 @@ export const commands = {
 	 *  실행을 대신 시작하지 않는다 — 사용자가 다시 누른다
 	 */
 	allowBudgetOnce: (options?: InvokeOptions) => __TAURI_INVOKE<null>("allow_budget_once", undefined, options),
+	listModelPrices: (options?: InvokeOptions) => __TAURI_INVOKE<ModelPrice_Serialize[]>("list_model_prices", undefined, options),
+	upsertModelPrice: (price: ModelPrice_Deserialize, options?: InvokeOptions) => __TAURI_INVOKE<null>("upsert_model_price", { price }, options),
+	deleteModelPrice: (model: string, options?: InvokeOptions) => __TAURI_INVOKE<null>("delete_model_price", { model }, options),
 	listRegexScripts: (options?: InvokeOptions) => __TAURI_INVOKE<RegexScript_Serialize[]>("list_regex_scripts", undefined, options),
 	/**  생성/수정. 패턴이 컴파일되지 않거나 범위 대상이 없으면 저장하지 않는다. */
 	upsertRegexScript: (input: RegexScriptInput_Deserialize, options?: InvokeOptions) => __TAURI_INVOKE<RegexScript_Serialize>("upsert_regex_script", { input }, options),
@@ -2420,6 +2423,32 @@ export type MigrationInfo = {
 	checksum: string,
 };
 
+export type ModelPrice = ModelPrice_Serialize | ModelPrice_Deserialize;
+
+export type ModelPrice_Deserialize = {
+	model: string,
+	currency: string,
+	/**  100만 토큰당 */
+	inputPerMtok?: number | null,
+	outputPerMtok?: number | null,
+	/**  음성 1000자당 */
+	per1kChars?: number | null,
+	/**  그림 1장당 */
+	perImage?: number | null,
+};
+
+export type ModelPrice_Serialize = {
+	model: string,
+	currency: string,
+	/**  100만 토큰당 */
+	inputPerMtok: number | null,
+	outputPerMtok: number | null,
+	/**  음성 1000자당 */
+	per1kChars: number | null,
+	/**  그림 1장당 */
+	perImage: number | null,
+};
+
 export type MusicMeta = MusicMeta_Serialize | MusicMeta_Deserialize;
 
 export type MusicMetaInput = MusicMetaInput_Serialize | MusicMetaInput_Deserialize;
@@ -3718,6 +3747,10 @@ export type UsageSummary_Deserialize = {
 	images: number,
 	/**  토큰을 앱이 추정한 호출 수 */
 	estimatedCalls: number,
+	model?: string | null,
+	/**  단가표로 계산한 추정 금액 (단가표에 이 모델이 없으면 None) */
+	estimatedCost?: number | null,
+	currency?: string | null,
 };
 
 /**  API 프로필·종류별 합계 (설정 > 실행 기록 화면) */
@@ -3734,6 +3767,10 @@ export type UsageSummary_Serialize = {
 	images: number,
 	/**  토큰을 앱이 추정한 호출 수 */
 	estimatedCalls: number,
+	model: string | null,
+	/**  단가표로 계산한 추정 금액 (단가표에 이 모델이 없으면 None) */
+	estimatedCost: number | null,
+	currency: string | null,
 };
 
 export type Value = null | boolean | number | string | Value[] | { [key in string]: Value };

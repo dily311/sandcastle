@@ -81,3 +81,28 @@ pub async fn allow_budget_once() -> Result<()> {
     crate::service::budget::allow_once();
     Ok(())
 }
+
+// ---------------------------------------------------------
+// 단가표 (1-A-3)
+// ---------------------------------------------------------
+
+#[tauri::command]
+#[specta::specta]
+pub async fn list_model_prices(state: State<'_, crate::state::AppState>) -> Result<Vec<crate::db::usage::ModelPrice>> {
+    Ok(crate::db::usage::get_all_model_prices(&state.db).await?)
+}
+
+#[tauri::command]
+#[specta::specta]
+pub async fn upsert_model_price(state: State<'_, crate::state::AppState>, price: crate::db::usage::ModelPrice) -> Result<()> {
+    if price.model.trim().is_empty() {
+        return Err(crate::error::AppError::validation("모델 이름이 비었습니다", None));
+    }
+    Ok(crate::db::usage::upsert_model_price(&state.db, &price).await?)
+}
+
+#[tauri::command]
+#[specta::specta]
+pub async fn delete_model_price(state: State<'_, crate::state::AppState>, model: String) -> Result<()> {
+    Ok(crate::db::usage::delete_model_price(&state.db, &model).await?)
+}

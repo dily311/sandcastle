@@ -2,7 +2,7 @@
 //!
 //! 공급자 호출 한 번마다 한 줄. 토큰은 공급자가 알려주면 그 값(estimated=0), 아니면 앱이 추정한 값(estimated=1).
 //! 지금 실행 중인 작업(task_context)이 있으면 그 작업 id·기능을 함께 남긴다.
-use serde::Serialize;
+use serde::{Deserialize, Serialize};
 use sqlx::{Executor, Sqlite};
 
 use crate::task::current_task;
@@ -116,6 +116,10 @@ pub struct UsageSummary {
     pub images: i64,
     /// 토큰을 앱이 추정한 호출 수
     pub estimated_calls: i64,
+    pub model: Option<String>,
+    /// 단가표로 계산한 추정 금액 (단가표에 이 모델이 없으면 None)
+    pub estimated_cost: Option<f64>,
+    pub currency: Option<String>,
 }
 
 pub async fn summary<'e, E>(executor: E, since: i64) -> Result<Vec<UsageSummary>, sqlx::Error>
@@ -130,10 +134,20 @@ where
                 SUM(u.output_tokens) AS output_tokens,
                 SUM(u.characters) AS characters,
                 SUM(u.images) AS images,
-                SUM(u.estimated) AS estimated_calls
-         FROM usage_log u LEFT JOIN api_profiles p ON p.id = u.api_profile_id
+                SUM(u.estimated) AS estimated_calls,
+                u.model,
+                CASE WHEN mp.model IS NULL THEN NULL ELSE
+                    SUM(u.input_tokens) * COALESCE(mp.input_per_mtok, 0) / 1000000.0
+                  + SUM(u.output_tokens) * COALESCE(mp.output_per_mtok, 0) / 1000000.0
+                  + SUM(u.characters) * COALESCE(mp.per_1k_chars, 0) / 1000.0
+                  + SUM(u.images) * COALESCE(mp.per_image, 0)
+                END AS estimated_cost,
+                mp.currency
+         FROM usage_log u
+         LEFT JOIN api_profiles p ON p.id = u.api_profile_id
+         LEFT JOIN model_prices mp ON mp.model = u.model
          WHERE u.created_at >= ?
-         GROUP BY u.api_profile_id, u.kind
+         GROUP BY u.api_profile_id, u.kind, u.model
          ORDER BY calls DESC",
     )
     .bind(since)
@@ -199,6 +213,66 @@ where
     .await
 }
 
+// ---------------------------------------------------------
+// 단가표 (1-A-3): 사용자가 적는 모델별 단가. 앱은 가격을 넣어 두지 않는다
+// ---------------------------------------------------------
+
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, sqlx::FromRow, specta::Type)]
+#[serde(rename_all = "camelCase")]
+pub struct ModelPrice {
+    pub model: String,
+    pub currency: String,
+    /// 100만 토큰당
+    pub input_per_mtok: Option<f64>,
+    pub output_per_mtok: Option<f64>,
+    /// 음성 1000자당
+    pub per_1k_chars: Option<f64>,
+    /// 그림 1장당
+    pub per_image: Option<f64>,
+}
+
+pub async fn get_all_model_prices<'e, E>(executor: E) -> Result<Vec<ModelPrice>, sqlx::Error>
+where
+    E: Executor<'e, Database = Sqlite>,
+{
+    sqlx::query_as::<_, ModelPrice>("SELECT model, currency, input_per_mtok, output_per_mtok, per_1k_chars, per_image FROM model_prices ORDER BY model")
+        .fetch_all(executor)
+        .await
+}
+
+pub async fn upsert_model_price<'e, E>(executor: E, price: &ModelPrice) -> Result<(), sqlx::Error>
+where
+    E: Executor<'e, Database = Sqlite>,
+{
+    // 음수는 비운 칸으로
+    let ok = |v: Option<f64>| v.filter(|n| n.is_finite() && *n >= 0.0);
+    sqlx::query(
+        "INSERT INTO model_prices (model, currency, input_per_mtok, output_per_mtok, per_1k_chars, per_image, updated_at)
+         VALUES (?, ?, ?, ?, ?, ?, ?)
+         ON CONFLICT(model) DO UPDATE SET currency = excluded.currency, input_per_mtok = excluded.input_per_mtok,
+           output_per_mtok = excluded.output_per_mtok, per_1k_chars = excluded.per_1k_chars, per_image = excluded.per_image,
+           updated_at = excluded.updated_at",
+    )
+    .bind(price.model.trim())
+    .bind(if price.currency.trim().is_empty() { "$" } else { price.currency.trim() })
+    .bind(ok(price.input_per_mtok))
+    .bind(ok(price.output_per_mtok))
+    .bind(ok(price.per_1k_chars))
+    .bind(ok(price.per_image))
+    .bind(chrono::Utc::now().timestamp_millis())
+    .execute(executor)
+    .await?;
+    Ok(())
+}
+
+pub async fn delete_model_price<'e, E>(executor: E, model: &str) -> Result<(), sqlx::Error>
+where
+    E: Executor<'e, Database = Sqlite>,
+{
+    sqlx::query("DELETE FROM model_prices WHERE model = ?").bind(model).execute(executor).await?;
+    Ok(())
+}
+
 /// 사용량 기록 비우기 (작업 기록은 남긴다)
 pub async fn clear<'e, E>(executor: E) -> Result<u64, sqlx::Error>
 where
@@ -238,5 +312,30 @@ mod tests {
         let tts = rows.iter().find(|r| r.kind == "tts").unwrap();
         assert_eq!(tts.characters, 42);
         assert!(task_history(&db, 10).await.unwrap().is_empty());
+        assert!(rows.iter().all(|r| r.estimated_cost.is_none()));
+    }
+
+    #[tokio::test]
+    async fn estimated_cost_uses_user_prices() {
+        let db = pool().await;
+        let mut a = UsageEntry::new(UsageKind::Chat, "p1", "gpt-x");
+        (a.input_tokens, a.output_tokens) = (2_000_000, 500_000);
+        record(&db, a).await;
+        let mut i = UsageEntry::new(UsageKind::Image, "p2", "img");
+        i.images = 3;
+        record(&db, i).await;
+        upsert_model_price(&db, &ModelPrice { model: "gpt-x".into(), currency: "".into(), input_per_mtok: Some(1.5), output_per_mtok: Some(4.0), per_1k_chars: None, per_image: Some(-1.0) })
+            .await
+            .unwrap();
+        let rows = summary(&db, 0).await.unwrap();
+        let chat = rows.iter().find(|r| r.kind == "chat").unwrap();
+        assert!((chat.estimated_cost.unwrap() - 5.0).abs() < 1e-9); // 2 × 1.5 + 0.5 × 4
+        assert_eq!(chat.currency.as_deref(), Some("$"));
+        // 단가표에 없는 모델은 금액 없음
+        assert!(rows.iter().find(|r| r.kind == "image").unwrap().estimated_cost.is_none());
+        let saved = get_all_model_prices(&db).await.unwrap();
+        assert_eq!(saved[0].per_image, None);
+        delete_model_price(&db, "gpt-x").await.unwrap();
+        assert!(get_all_model_prices(&db).await.unwrap().is_empty());
     }
 }
