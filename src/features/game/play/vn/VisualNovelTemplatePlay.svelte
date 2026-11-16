@@ -3,6 +3,7 @@
 	import { Channel } from "@tauri-apps/api/core";
 	import type { StreamPayload } from "$ipc/bindings";
 	import type { AssetRef, GameCommand, GameJournal, NpcReply, StageLine } from "$features/game/types";
+	import { LineKind } from "$features/game/types";
 	import { call, commands } from "$shared/ipc/client";
 	import { layout } from "$app/layout.svelte";
 	import "../stage.css";
@@ -27,7 +28,7 @@
 	import { runtimeStore } from "$features/game/runtime/runtimeStore.svelte";
 	import { reportGameError } from "$features/game/errors";
 	import { plugins } from "$shared/stores/plugins.svelte";
-	import { drawText, speak, speech, stopSpeaking, translateText } from "$shared/stores/aiTools.svelte";
+	import { cachedTranslations, drawText, speak, speech, stopSpeaking, translateText } from "$shared/stores/aiTools.svelte";
 	import { fileSrc } from "$shared/ipc/file";
 
 	type Props = { gameId: string; sessionId: string };
@@ -64,8 +65,15 @@
 	const isReadingScript = $derived(scriptLines.length > 0 && !scriptFinished);
 
 	// ---- 코어 플러그인 AI 도구: 지금 줄 번역 · 읽기 · 장면 그리기 ----
-	/** 줄 글 → 번역문 (이번 플레이 동안만 기억) */
+	/** 줄 글 → 번역문. 공용 번역 캐시에 저장되고, 대본이 바뀔 때 저장된 것을 불러온다 */
 	let translations = $state<Record<string, string>>({});
+	$effect(() => {
+		const texts = scriptLines.map((l) => l.text).filter((t) => t && !translations[t]);
+		if (!texts.length || !plugins.on("translate")) return;
+		void cachedTranslations(texts).then((found) => {
+			if (Object.keys(found).length) translations = { ...translations, ...found };
+		});
+	});
 	let showTranslated = $state(true);
 	let translating = $state(false);
 	let drawing = $state(false);
@@ -122,12 +130,13 @@
 		for (const c of runtimeStore.nearbyCharacters) out.push({ id: `talk:${c.id}`, kind: "talk", label: `${c.name}에게 말 걸기`, run: () => dispatch({ type: "talk", gameCharacterId: c.id }) });
 		for (const i of runtimeStore.localInteractables) out.push({ id: `look:${i.id}`, kind: "look", label: `${i.name} 살펴보기`, run: () => dispatch({ type: "interact", entityId: i.id }) });
 		for (const d of runtimeStore.destinations) {
-			const locked = Boolean(d.requirement && !d.requirement.available);
+			const block = runtimeStore.moveBlock(d.toId);
+			const locked = Boolean(block);
 			out.push({
 				id: `move:${d.toId}`,
 				kind: "move",
 				label: `${d.location?.name ?? "어딘가"}${directionParticle(d.location?.name ?? "어딘가")} 가기`,
-				hint: locked ? "조건이 필요함" : `${Math.max(1, Math.ceil(d.travelSeconds / 60))}분`,
+				hint: block ?? `${Math.max(1, Math.ceil(d.travelSeconds / 60))}분`,
 				disabled: locked,
 				run: () => dispatch({ type: "moveTo", locationId: d.toId }),
 			});
@@ -384,8 +393,13 @@
 						)
 					: null;
 			if (!acceptResponseLines(arrivalLine ? [arrivalLine] : [])) {
-				standingOverrides = {};
-				syncBgmFromStage();
+				if (command.type === "interact") {
+					// 조사했는데 이벤트·대사가 하나도 없음: 눌렀는데 반응이 없어 보이지 않게 명시한다
+					acceptResponseLines([{ kind: LineKind.Narration, speaker: null, text: "아무 일도 없었다.", cues: [] } as StageLine]);
+				} else {
+					standingOverrides = {};
+					syncBgmFromStage();
+				}
 			}
 			showWaitMenu = false;
 			const continues = (runtimeStore.events ?? []).some((e) => e.type === "choiceMade" && e.continuesScene);

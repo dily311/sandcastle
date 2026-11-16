@@ -63,8 +63,14 @@ const intro = [
 const saves: any[] = [{ name: null, seq: 5, sessionId: "ss1", slotNumber: 1, currentSceneId: "s1", currentMapId: null, currentZoneId: null, currentLocationId: "l1", currentWeatherId: null, gameTime: 8 * 3600, stateSnapshot: {}, updatedAt: Date.now() - 3600_000 }];
 const sessionOptions: Record<string, Record<string, unknown>> = {};
 let replySeq = 0;
+let signRead = false;
 
-const respond = (events: unknown[]) => ({ state: structuredClone(state), events });
+// 실제 엔진처럼 지금 위치에서 나가는 길마다 갈 수 있는지 (씬 중에는 막힘, 샘터는 약초가 5개 이상 있어야 갈 수 있다고 가정)
+const moves = () =>
+	gameView.connections
+		.filter((c) => c.fromId === state.locationId)
+		.map((c) => ({ toId: c.toId, travelSeconds: c.travelSeconds, available: !state.currentSceneId && (c.toId !== "l3" || (state.inventory.it1 ?? 0) >= 5) }));
+const respond = (events: unknown[]) => ({ state: { ...structuredClone(state), availableMoves: moves() }, events });
 
 export const gameHandlers: Record<string, (a: Args) => unknown> = {
 	start_new_game: () => respond(intro),
@@ -105,7 +111,12 @@ export const gameHandlers: Record<string, (a: Args) => unknown> = {
 		if (command.type === "advanceTime") state.gameTime += command.minutes * 60;
 		if (command.type === "talk") state.activeNpcId = command.gameCharacterId;
 		if (command.type === "stopTalk") state.activeNpcId = null;
-		if (command.type === "interact") return respond([{ type: "stageLines", lines: [line("narration", null, "표지판에는 '오두막 →'이라고 희미하게 적혀 있음.")] }]);
+		// 표지판은 한 번만 반응하고, 다음부터는 아무 일도 없다 (화면의 "아무 일도 없었다" 확인용)
+		if (command.type === "interact") {
+			if (signRead) return respond([]);
+			signRead = true;
+			return respond([{ type: "stageLines", lines: [line("narration", null, "표지판에는 '오두막 →'이라고 희미하게 적혀 있음.")] }]);
+		}
 		return respond([]);
 	},
 	scene_say: ({ input }) => {

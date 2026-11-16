@@ -223,16 +223,23 @@
 				{/each}
 			</div>
 		{/if}
-		{#if showWindowControls && theme.setting.isFrameless}
-			<div class="win">
-				<button aria-label="최소화" title="최소화" onclick={() => appWindow.minimize()}><Minus /></button>
-				<button aria-label="최대화" title="최대화" onclick={() => appWindow.toggleMaximize()}><Square /></button>
-				<button class="close" aria-label="닫기" title="닫기" onclick={() => appWindow.close()}><X /></button>
-			</div>
-		{/if}
+		{@render winButtons()}
 	</div>
+	{:else}
+		<!-- 좁은 창(모바일 레이아웃)이어도 데스크톱 앱이면 창 버튼은 남긴다 -->
+		{@render winButtons()}
 	{/if}
 </header>
+
+{#snippet winButtons()}
+	{#if showWindowControls && theme.setting.isFrameless && layout.desktop}
+		<div class="win">
+			<button aria-label="최소화" title="최소화" onclick={() => appWindow.minimize()}><Minus /></button>
+			<button aria-label="최대화" title="최대화" onclick={() => appWindow.toggleMaximize()}><Square /></button>
+			<button class="close" aria-label="닫기" title="닫기" onclick={() => appWindow.close()}><X /></button>
+		</div>
+	{/if}
+{/snippet}
 
 <style>
 	.titlebar {

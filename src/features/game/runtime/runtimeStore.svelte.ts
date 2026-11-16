@@ -89,7 +89,7 @@ class RuntimeStore {
 				.map((c) => ({
 					...c,
 					location: gameStore.view?.locations.find((l) => l.id === c.toId),
-					requirement: this.state?.availableMoves.find((l) => l.toId == c.fromId),
+					requirement: this.state?.availableMoves.find((l) => l.toId === c.toId),
 				}))
 				.filter((i) => i.location) ?? []
 		);
@@ -142,6 +142,13 @@ class RuntimeStore {
 
 	get localInteractables() {
 		return (gameStore.view?.interactables ?? []).filter((i) => i.locationId === runtimeStore.currentLocationId);
+	}
+	/** 이 길로 지금 갈 수 없는 이유 (갈 수 있으면 null). 엔진의 available_moves와 같은 규칙 */
+	moveBlock(toId: string): string | null {
+		if (this.currentSceneId) return "장면이 끝나야 이동할 수 있음";
+		const move = this.state?.availableMoves.find((m) => m.toId === toId);
+		if (!move) return "가는 길 없음";
+		return move.available ? null : "조건이 필요함";
 	}
 	get canWait() {
 		return !this.currentSceneId;

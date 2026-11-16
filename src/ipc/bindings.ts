@@ -286,6 +286,11 @@ export const commands = {
 	translateText: (text: string, to: string | null, options?: InvokeOptions) => __TAURI_INVOKE<string>("translate_text", { text, to }, options),
 	/**  메시지 번역. 결과는 meta.translation = {lang, text, source}에 저장해 다시 열어도 보인다 (원문이 바뀌면 다시 번역) */
 	translateMessage: (messageId: string, options?: InvokeOptions) => __TAURI_INVOKE<Message_Serialize>("translate_message", { messageId }, options),
+	/**
+	 *  이미 번역해 둔 것만 꺼낸다 (AI를 부르지 않음). 게임 대사 줄·지난 대사 창이 다시 열릴 때 쓴다.
+	 *  texts와 같은 순서로, 캐시에 없으면 null
+	 */
+	getCachedTranslations: (texts: string[], to: string | null, options?: InvokeOptions) => __TAURI_INVOKE<(string | null)[]>("get_cached_translations", { texts, to }, options),
 	/**  글을 음성 파일(mp3)로 만들고 경로를 돌려준다 (같은 글·설정이면 캐시) */
 	speakText: (text: string, options?: InvokeOptions) => __TAURI_INVOKE<string>("speak_text", { text }, options),
 	/**  메시지 장면을 그림으로. meta.generatedImages에 {path, prompt}를 쌓는다 */

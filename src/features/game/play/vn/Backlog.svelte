@@ -7,6 +7,7 @@
 	import { gameStore } from "../../runtime/gameStore.svelte";
 	import { runtimeStore } from "../../runtime/runtimeStore.svelte";
 	import { formatGameTime, isNarration } from "./playUtils";
+	import { cachedTranslations } from "$shared/stores/aiTools.svelte";
 
 	let { onclose }: { onclose: () => void } = $props();
 
@@ -14,6 +15,10 @@
 	let hasMore = $state(false);
 	let loading = $state(true);
 	let box: HTMLDivElement | undefined = $state();
+	/** 번역해 둔 줄 (원문 → 번역문). 있으면 번역문으로 보여주고 원문 보기로 되돌린다 */
+	let translated = $state<Record<string, string>>({});
+	let showOriginal = $state(false);
+	const hasTranslation = $derived(Object.keys(translated).length > 0);
 
 	const sceneId = $derived(runtimeStore.currentSceneId ?? null);
 	const npcId = $derived(runtimeStore.activeNpcId ?? null);
@@ -28,9 +33,10 @@
 		void runtimeStore.value;
 		loading = true;
 		void call(commands.readCurrentTranscript(200), { source: "game", silent: true })
-			.then((page) => {
+			.then(async (page) => {
 				entries = page.entries;
 				hasMore = page.hasMore;
+				translated = await cachedTranslations(page.entries.flatMap((e) => e.lines.map((l) => l.text)));
 			})
 			.catch(() => (entries = []))
 			.finally(() => {
@@ -52,6 +58,9 @@
 <div class="backlog" role="dialog" aria-modal="true" aria-label={title}>
 	<header>
 		<h3>{title}</h3>
+		{#if hasTranslation}
+			<button class="toggle" type="button" aria-pressed={showOriginal} onclick={() => (showOriginal = !showOriginal)}>{showOriginal ? "번역 보기" : "원문 보기"}</button>
+		{/if}
 		<button class="close" type="button" aria-label="닫기 (Esc)" title="닫기 (Esc)" onclick={onclose}><X /></button>
 	</header>
 	<div class="body" bind:this={box}>
@@ -63,7 +72,7 @@
 					{#if l.text?.trim()}
 						{@const who = isNarration(l as never) ? null : speaker(l.speaker)}
 						<p class="line" class:me={l.speaker === "player"} class:narr={!who}>
-							{#if who}<b>{who}</b>{/if}<span>{l.text}</span>
+							{#if who}<b>{who}</b>{/if}<span>{!showOriginal && translated[l.text] ? translated[l.text] : l.text}</span>
 						</p>
 					{/if}
 				{/each}
@@ -169,5 +178,15 @@
 			inset: 0;
 			border-radius: 0;
 		}
+	}
+	.toggle {
+		padding: 4px 10px;
+		border: 1px solid var(--game-border);
+		border-radius: 999px;
+		background: transparent;
+		color: inherit;
+		font: inherit;
+		font-size: 12px;
+		cursor: pointer;
 	}
 </style>

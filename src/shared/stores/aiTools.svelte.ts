@@ -60,9 +60,21 @@ export async function drawText(text: string, source: "game" | "manual" = "game")
 	return call(commands.generateImageFromPrompt(text, true, source), src);
 }
 
-/** 글 번역 (저장하지 않음: 게임 대사 줄 등) */
+/** 글 번역. 공용 번역 캐시에 저장돼 같은 문장은 다시 요금을 내지 않는다 (게임 대사 줄 등) */
 export async function translateText(text: string): Promise<string> {
 	return call(commands.translateText(text, null), src);
+}
+
+/** 이미 번역해 둔 문장만 꺼낸다 (AI 호출 없음). 원문 → 번역문 */
+export async function cachedTranslations(texts: string[]): Promise<Record<string, string>> {
+	const uniq = [...new Set(texts.filter((t) => t.trim()))];
+	if (!uniq.length || !plugins.on("translate")) return {};
+	const got = await call(commands.getCachedTranslations(uniq, null), { ...src, silent: true }).catch(() => [] as (string | null)[]);
+	const out: Record<string, string> = {};
+	uniq.forEach((t, i) => {
+		if (got[i]) out[t] = got[i] as string;
+	});
+	return out;
 }
 
 // ---- 음성: 한 번에 하나만 재생 ----

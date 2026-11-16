@@ -23,7 +23,7 @@ class Plugins {
 	/** 켜져 있는가. 아직 못 불러왔으면 기본값 (목록에 없으면 켜진 것으로) */
 	on(id: PluginId): boolean {
 		const p = this.list.find((x) => x.id === id);
-		return p ? p.enabled : id !== "translate" && id !== "tts" && id !== "imagegen" && id !== "widget";
+		return p ? p.enabled : id !== "translate" && id !== "tts" && id !== "imagegen" && id !== "widget" && id !== "html";
 	}
 
 	private apply(id: string, enabled: boolean) {
@@ -35,14 +35,8 @@ class Plugins {
 		const before = this.on(id);
 		this.apply(id, enabled);
 		try {
-			if (id === "widget") {
-				// 위젯은 창을 열고 닫는 기능이 따로 있다 (featureManager가 창을 만들거나 닫음)
-				const { featureManager } = await import("$/lib/features/feautreManager.svelte");
-				await featureManager.toggleFeature(id, enabled);
-				await call(commands.updateFeatureSetting(id, enabled), { source: "plugins" });
-			} else {
-				await call(commands.updateFeatureSetting(id, enabled), { source: "plugins" });
-			}
+			// 위젯 창도 백엔드(update_feature_setting)가 열고 닫는다
+			await call(commands.updateFeatureSetting(id, enabled), { source: "plugins" });
 		} catch {
 			this.apply(id, before);
 		}

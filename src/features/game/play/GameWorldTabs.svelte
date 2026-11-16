@@ -28,12 +28,13 @@
 					{#each zone.locations as location (location.id)}
 						{@const here = location.id === runtimeStore.currentLocationId}
 						{@const route = runtimeStore.destinations.find((r) => r.toId === location.id)}
-						{@const locked = Boolean(route?.requirement && !route.requirement.available)}
+						{@const block = route ? runtimeStore.moveBlock(location.id) : null}
+						{@const locked = Boolean(block)}
 						<button class="row" class:here disabled={busy || !canMove || here || !route || locked} onclick={() => route && send({ type: "moveTo", locationId: location.id })}>
 							<span class="ic">{#if here}<MapPin />{:else if locked}<Lock />{:else}<span class="dot"></span>{/if}</span>
 							<span class="t">
 								<b>{location.name}</b>
-								<small>{#if here}지금 여기{:else if locked}조건이 필요함{:else if route}{minutes(route.travelSeconds)} 걸림{:else}가는 길 없음{/if}</small>
+								<small>{#if here}지금 여기{:else if block}{block}{:else if route}{minutes(route.travelSeconds)} 걸림{:else}가는 길 없음{/if}</small>
 							</span>
 							{#if route && !here && !locked && canMove}<ChevronRight />{/if}
 						</button>
@@ -92,10 +93,11 @@
 				<h4>이동</h4>
 				<div class="list">
 					{#each runtimeStore.destinations as d (d.toId)}
-						{@const locked = Boolean(d.requirement && !d.requirement.available)}
+						{@const block = runtimeStore.moveBlock(d.toId)}
+						{@const locked = Boolean(block)}
 						<button class="row" disabled={busy || locked} onclick={() => send({ type: "moveTo", locationId: d.toId })}>
 							<span class="ic">{#if locked}<Lock />{:else}<MapPin />{/if}</span>
-							<span class="t"><b>{d.location?.name}</b><small>{locked ? "조건이 필요함" : `${minutes(d.travelSeconds)} 걸림`}</small></span>
+							<span class="t"><b>{d.location?.name}</b><small>{block ?? `${minutes(d.travelSeconds)} 걸림`}</small></span>
 							{#if !locked}<ChevronRight />{/if}
 						</button>
 					{/each}

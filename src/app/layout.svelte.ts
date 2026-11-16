@@ -22,6 +22,8 @@ class Layout {
 	/** 좁은 화면 (휴대폰, 또는 좁힌 창) */
 	mobile = $state(media(MOBILE_QUERY)?.matches ?? false);
 	/** 마우스 대신 손가락 (hover가 없음) */
+	/** 데스크톱 앱인가 (창 크기와 무관). 좁은 창이라 모바일 레이아웃이어도 창 버튼은 데스크톱이면 보여야 한다 */
+	readonly desktop = typeof navigator === "undefined" || !/Android|iPhone|iPad|iPod/i.test(navigator.userAgent);
 	touch = $state(media("(hover: none)")?.matches ?? false);
 
 	constructor() {

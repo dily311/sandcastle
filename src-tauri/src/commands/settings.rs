@@ -125,6 +125,21 @@ pub async fn update_feature_setting(
     if id == crate::sys::plugins::id::REGEX {
         crate::service::chat::regex_processor::set_enabled(enabled);
     }
+    // 위젯 창은 여기서 직접 열고 닫는다 (어느 화면에서 바꿔도 창 상태가 설정과 같게)
+    #[cfg(desktop)]
+    if id == crate::sys::plugins::id::WIDGET {
+        use tauri::Manager;
+        if let Some(tracker) = app.try_state::<crate::widget::MouseTrackerState>() {
+            let result = if enabled {
+                crate::widget::manager::WidgetManager::open_widget(&app, &tracker).map(|_| ())
+            } else {
+                crate::widget::manager::WidgetManager::close_widget(&app, &tracker)
+            };
+            if let Err(e) = result {
+                eprintln!("[widget] 창 {} 실패: {e}", if enabled { "열기" } else { "닫기" });
+            }
+        }
+    }
 
     // 모든 창에 알린다: 메인 창은 코어 플러그인(메뉴·화면), 위젯 창은 위젯 하위 기능
     let json = json!({"id": id, "enabled": enabled});

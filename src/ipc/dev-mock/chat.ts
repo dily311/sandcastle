@@ -135,6 +135,8 @@ let pluginSetting = {
 	},
 	phone: { apiProfileId: null as string | null, presetId: null as string | null },
 };
+// 공용 번역 캐시 (언어 + 원문 → 번역문)
+const translationCache = new Map<string, string>();
 // 이미지 갤러리 (브라우저 개발 모드: 자리 표시 그림)
 const gallery: { path: string; prompt: string; model: string; source: string; messageId: string | null; conversationId: string | null; createdAt: number }[] = [
 	{ path: "https://placehold.co/832x1216/png?text=forest", prompt: "1girl, silver hair, forest, night, moonlight", model: "nai-diffusion-4-5-full", source: "manual", messageId: null, conversationId: null, createdAt: Date.now() - 3600_000 },
@@ -251,7 +253,13 @@ export const chatHandlers: Record<string, (a: Args) => unknown> = {
 	// ---- 코어 플러그인 AI 도구 (흉내만) ----
 	get_plugin_setting: () => pluginSetting,
 	update_plugin_setting: ({ setting }) => (pluginSetting = setting as typeof pluginSetting),
-	translate_text: ({ text }) => `[번역] ${text}`,
+	translate_text: ({ text, to }) => {
+		const lang = (to as string) || pluginSetting.translate.targetLang;
+		const out = `[${lang}] ${text}`;
+		translationCache.set(`${lang}\u0000${text}`, out);
+		return out;
+	},
+	get_cached_translations: ({ texts, to }) => (texts as string[]).map((t) => translationCache.get(`${(to as string) || pluginSetting.translate.targetLang}\u0000${t}`) ?? null),
 	translate_message: ({ messageId }) => {
 		const m = messages.find((x) => x.id === messageId)!;
 		m.meta = { ...((m.meta as object) ?? {}), translation: { lang: pluginSetting.translate.targetLang, text: `[${pluginSetting.translate.targetLang} 번역] ${m.content}`, source: m.content } } as never;

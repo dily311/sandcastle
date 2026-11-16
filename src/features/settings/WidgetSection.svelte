@@ -3,7 +3,7 @@
 	import { Switch } from "$shared/ui";
 	import { call, commands } from "$shared/ipc/client";
 	import { WIDGET_FEATURES } from "$lib/features/setFeautres";
-	import { featureConfig, featureManager } from "$lib/features/feautreManager.svelte";
+	import { featureConfig } from "$lib/features/feautreManager.svelte";
 	import Section from "./Section.svelte";
 	import Group from "./Group.svelte";
 	import Row from "./Row.svelte";
@@ -25,12 +25,9 @@
 
 	async function toggle(id: string, on: boolean) {
 		features[id] = on;
-		// 위젯 창 자체는 기능 관리자가 열고 닫음. 나머지는 설정만 바꾸면 위젯 창이 알아서 반영
-		if (id === "widget" && featureConfig.value.has(id)) await featureManager.toggleFeature(id, on);
-		else {
-			await call(commands.updateFeatureSetting(id, on), src);
-			featureConfig.value.set(id, on);
-		}
+		// 위젯 창 자체는 백엔드가 열고 닫음 (update_feature_setting). 위젯 하위 기능은 위젯 창이 이벤트로 반영
+		await call(commands.updateFeatureSetting(id, on), src);
+		featureConfig.value.set(id, on);
 	}
 	async function setAutostart(on: boolean) {
 		autostart = on;

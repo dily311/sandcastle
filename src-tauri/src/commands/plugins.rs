@@ -6,7 +6,7 @@ use tauri::{AppHandle, Emitter, Manager, State};
 
 use crate::{
     commands::character_image::app_data_dir,
-    db::{chat_ui, conversation},
+    db::{chat_ui, conversation, translation},
     error::{AppError, Result},
     models::{
         conversation::Message,
@@ -78,7 +78,38 @@ pub async fn translate_text(
     require(&app, id::TRANSLATE)?;
     let p = read(&plugin)?.translate;
     let to = to.filter(|s| !s.trim().is_empty()).unwrap_or_else(|| p.target_lang.clone());
-    tools::translate(&ai, &p, &fallback_profile(&read(&settings)?, None), &text, &to).await
+    let db = &app.state::<AppState>().db;
+    cached_translate(db, &ai, &p, &fallback_profile(&read(&settings)?, None), &text, &to).await
+}
+
+/// 공용 번역 캐시를 먼저 보고, 없을 때만 AI로 번역해 캐시에 넣는다 (같은 문장에 다시 요금을 내지 않게)
+async fn cached_translate(db: &crate::db::conn::DbPool, ai: &AiService, p: &crate::models::settings::TranslateSetting, fallback: &str, text: &str, to: &str) -> Result<String> {
+    if text.trim().is_empty() {
+        return Ok(String::new());
+    }
+    if let Some(hit) = translation::get_translation(db, text, to).await? {
+        return Ok(hit);
+    }
+    let out = tools::translate(ai, p, fallback, text, to).await?;
+    translation::put_translation(db, text, to, &out).await?;
+    Ok(out)
+}
+
+/// 이미 번역해 둔 것만 꺼낸다 (AI를 부르지 않음). 게임 대사 줄·지난 대사 창이 다시 열릴 때 쓴다.
+/// texts와 같은 순서로, 캐시에 없으면 null
+#[tauri::command]
+#[specta::specta]
+pub async fn get_cached_translations(app: AppHandle, state: State<'_, AppState>, plugin: State<'_, SettingsState<PluginSetting>>, texts: Vec<String>, to: Option<String>) -> Result<Vec<Option<String>>> {
+    if !crate::sys::plugins::is_enabled(&app, id::TRANSLATE) {
+        return Ok(vec![None; texts.len()]);
+    }
+    let to = to.filter(|s| !s.trim().is_empty()).unwrap_or_else(|| read(&plugin).map(|p| p.translate.target_lang).unwrap_or_default());
+    let mut out = Vec::with_capacity(texts.len());
+    for t in texts.iter().take(500) {
+        out.push(translation::get_translation(&state.db, t, &to).await?);
+    }
+    out.resize(texts.len(), None);
+    Ok(out)
 }
 
 /// 메시지 번역. 결과는 meta.translation = {lang, text, source}에 저장해 다시 열어도 보인다 (원문이 바뀌면 다시 번역)
@@ -96,7 +127,7 @@ pub async fn translate_message(
     let p = read(&plugin)?.translate;
     let msg = chat_ui::get_message(&state.db, &message_id).await?;
     let conv = conversation::get_conversation(&state.db, &msg.conversation_id).await?;
-    let text = tools::translate(&ai, &p, &fallback_profile(&read(&settings)?, conv.api_profile_id.as_deref()), &msg.content, &p.target_lang).await?;
+    let text = cached_translate(&state.db, &ai, &p, &fallback_profile(&read(&settings)?, conv.api_profile_id.as_deref()), &msg.content, &p.target_lang).await?;
     let mut meta = msg.meta.clone().filter(Value::is_object).unwrap_or_else(|| json!({}));
     meta["translation"] = json!({ "lang": p.target_lang, "text": text, "source": msg.content });
     conversation::update_message_meta(&state.db, &message_id, meta).await?;

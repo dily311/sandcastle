@@ -54,7 +54,8 @@ const CATALOG: &[Def] = &[
     Def { id: id::PHONE, name: "폰", description: "캐릭터와 메신저처럼 대화하는 폰 화면, 캐릭터 폰 엿보기", default_enabled: true, desktop_only: false },
     Def { id: id::GAME, name: "게임 모드", description: "게임 만들기·가져오기와 플레이 (지도·이벤트·NPC 대화)", default_enabled: true, desktop_only: false },
     Def { id: id::IMAGES, name: "캐릭터 이미지", description: "캐릭터 이미지 에셋을 AI에게 알려 주고 <cg> 태그로 대화에 표시", default_enabled: true, desktop_only: false },
-    Def { id: id::HTML, name: "HTML 렌더링", description: "AI 답변의 ```html``` 코드 블록을 격리된 창에서 실행해 보여줌 (JS 포함)", default_enabled: true, desktop_only: false },
+    // AI가 쓴 JS를 실행하므로 기본 꺼짐 (켜기 전에는 코드로만 보인다)
+    Def { id: id::HTML, name: "HTML 렌더링", description: "AI 답변의 ```html``` 코드 블록을 격리된 창에서 실행해 보여줌 (JS 포함)", default_enabled: false, desktop_only: false },
     Def { id: id::REGEX, name: "정규식", description: "메시지 글자를 찾아 바꾸는 정규식 (SillyTavern 정규식 가져오기)", default_enabled: true, desktop_only: false },
     Def { id: id::WIDGET, name: "위젯", description: "바탕화면 위젯 (음악 플레이어 등)", default_enabled: false, desktop_only: true },
     Def { id: id::TRANSLATE, name: "번역", description: "AI 답변을 내 언어로, 내 입력을 다른 언어로 번역 (연결한 AI로)", default_enabled: false, desktop_only: false },

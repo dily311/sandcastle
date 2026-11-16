@@ -11,6 +11,7 @@ class RegisterWidgetWindowFeature implements FeatureRuntime {
 
 	async init() {
 		this.enabled = true;
+		// 이미 열려 있으면 백엔드가 새로 만들지 않고 보여주기만 한다
 		await commands.openWidget();
 	}
 
