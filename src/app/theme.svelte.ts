@@ -162,7 +162,8 @@ class Theme {
 
 	/** 프레임 없는 창이면 앱 헤더가 창 버튼을 그림, 아니면 운영체제 제목 표시줄 */
 	private applyFrame() {
-		if (!__IS_TAURI__) return;
+		// 창 테두리는 데스크톱만 (Android에는 창이 하나뿐)
+		if (!__IS_TAURI__ || /Android|iPhone|iPad|iPod/i.test(navigator.userAgent)) return;
 		getCurrentWindow()
 			.setDecorations(!this.setting.isFrameless)
 			.catch(() => {});

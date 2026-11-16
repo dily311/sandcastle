@@ -2,7 +2,7 @@
 import { nav } from "$app/nav.svelte";
 import { exportPicker, type ExportFormat } from "$app/exportFormats.svelte";
 import { call, commands } from "$shared/ipc/client";
-import { PACK_FILES, pickSavePath } from "$shared/ipc/dialog";
+import { PACK_FILES, saveTo } from "$shared/ipc/dialog";
 import { confirmAction } from "$shared/stores/confirm.svelte";
 import { toasts } from "$shared/stores/toast.svelte";
 import { library, type Character, type Conversation } from "./library.svelte";
@@ -39,9 +39,8 @@ export const convActions = {
 	async exportAs(conv: Conversation, format: "jsonl" | "txt") {
 		const ch = library.character(conv.characterId);
 		const filter = format === "jsonl" ? { name: "SillyTavern 채팅", extensions: ["jsonl"] } : { name: "텍스트", extensions: ["txt"] };
-		const path = await pickSavePath(`${ch?.name ?? "chat"} - ${conv.title}.${format}`, [filter]);
-		if (!path) return;
-		const n = await call(commands.exportConversation(conv.id, format, path), { source: "character" });
+		const n = await saveTo(`${ch?.name ?? "chat"} - ${conv.title}.${format}`, [filter], (path) => call(commands.exportConversation(conv.id, format, path), { source: "character" }));
+		if (n == null) return;
 		toasts.success(`메시지 ${n}개 내보냄`);
 	},
 
@@ -57,9 +56,8 @@ export const convActions = {
 	/** 대화 하나를 캐릭터 묶음(zip)으로 내보내기 */
 	async export(conv: Conversation) {
 		const ch = library.character(conv.characterId);
-		const path = await pickSavePath(`${ch?.name ?? "chat"} - ${conv.title}.zip`, [PACK_FILES]);
-		if (!path) return;
-		await call(commands.exportCharacterPack([conv.characterId], [conv.id], path), { source: "character" });
+		const r = await saveTo(`${ch?.name ?? "chat"} - ${conv.title}.zip`, [PACK_FILES], (path) => call(commands.exportCharacterPack([conv.characterId], [conv.id], path), { source: "character" }));
+		if (r == null) return;
 		toasts.success("내보냄");
 	},
 };
@@ -67,14 +65,15 @@ export const convActions = {
 export const charActions = {
 	async export(c: Character, format: CharacterFormat) {
 		if (format === "zip") {
-			const path = await pickSavePath(`${c.name}.zip`, [PACK_FILES]);
-			if (!path) return;
-			await call(commands.exportCharacterPack([c.id], null, path), { source: "character" });
+			const r = await saveTo(`${c.name}.zip`, [PACK_FILES], (path) => call(commands.exportCharacterPack([c.id], null, path), { source: "character" }));
+			if (r == null) return;
 		} else {
 			const filter = format === "png" ? { name: "SillyTavern 카드", extensions: ["png"] } : { name: "SillyTavern 카드", extensions: ["json"] };
-			const path = await pickSavePath(`${c.name}.${format}`, [filter]);
-			if (!path) return;
-			await call(commands.exportCharacterCard(c.id, format, path), { source: "character" });
+			const r = await saveTo(`${c.name}.${format}`, [filter], async (path) => {
+				await call(commands.exportCharacterCard(c.id, format, path), { source: "character" });
+				return true;
+			});
+			if (!r) return;
 		}
 		toasts.success("내보냄");
 	},

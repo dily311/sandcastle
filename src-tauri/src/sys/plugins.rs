@@ -73,7 +73,17 @@ fn default_of(plugin_id: &str) -> bool {
 
 /// 저장값(없으면 기본값)으로 켜져 있는가
 pub fn enabled_in(setting: &FeatureSetting, plugin_id: &str) -> bool {
+    // 데스크톱 전용 기능(위젯)은 모바일에서 늘 꺼짐 (1-C-4)
+    if cfg!(mobile) && is_desktop_only(plugin_id) {
+        return false;
+    }
     setting.feature.get(plugin_id).copied().unwrap_or_else(|| default_of(plugin_id))
+}
+
+/// 데스크톱 전용인가 (위젯 하위 기능 widget.* 포함)
+fn is_desktop_only(plugin_id: &str) -> bool {
+    let root = plugin_id.split('.').next().unwrap_or(plugin_id);
+    CATALOG.iter().any(|d| d.desktop_only && d.id == root)
 }
 
 /// 앱 상태에서 켜져 있는가. 설정을 읽을 수 없으면 기본값.
@@ -95,6 +105,8 @@ pub fn require(app: &AppHandle, plugin_id: &str) -> Result<()> {
 pub fn list(setting: &FeatureSetting) -> Vec<CorePlugin> {
     CATALOG
         .iter()
+        // 모바일에서는 데스크톱 전용 기능을 목록에서 뺀다 (설정 화면·메뉴에 나오지 않게)
+        .filter(|d| !(cfg!(mobile) && d.desktop_only))
         .map(|d| CorePlugin { id: d.id, name: d.name, description: d.description, default_enabled: d.default_enabled, desktop_only: d.desktop_only, enabled: enabled_in(setting, d.id) })
         .collect()
 }

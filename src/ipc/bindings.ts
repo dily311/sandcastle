@@ -162,6 +162,15 @@ export const commands = {
 	getDataOverview: (options?: InvokeOptions) => __TAURI_INVOKE<DataOverview_Serialize>("get_data_overview", undefined, options),
 	/**  DB 점검: 무결성(PRAGMA integrity_check)과 아무 데도 쓰이지 않는 파일 목록. 지우지 않는다 */
 	checkData: (options?: InvokeOptions) => __TAURI_INVOKE<DataCheck>("check_data", undefined, options),
+	/**
+	 *  고른 파일(Android content:// 주소)을 앱 임시 폴더로 복사해 경로로 (1-C-2). 경로면 그대로.
+	 *  extensions: 고르기 필터의 확장자 (내용으로 확장자를 정할 때 이 안에서)
+	 */
+	stagePickedFile: (uri: string, extensions: string[], options?: InvokeOptions) => __TAURI_INVOKE<string>("stage_picked_file", { uri, extensions }, options),
+	/**  저장 위치가 content:// 주소일 때 먼저 쓸 임시 경로 */
+	prepareSaveTarget: (fileName: string, options?: InvokeOptions) => __TAURI_INVOKE<string>("prepare_save_target", { fileName }, options),
+	/**  임시 경로에 쓴 파일을 고른 content:// 주소로 옮긴다 */
+	deliverSavedFile: (tmp: string, uri: string, options?: InvokeOptions) => __TAURI_INVOKE<null>("deliver_saved_file", { tmp, uri }, options),
 	/**  여러 대화를 한 번에 삭제. 지운 개수를 돌려준다. */
 	deleteConversations: (ids: string[], options?: InvokeOptions) => __TAURI_INVOKE<number>("delete_conversations", { ids }, options),
 	/**

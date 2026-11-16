@@ -11,6 +11,7 @@
 	import { confirmAction, promptText } from "$shared/stores/confirm.svelte";
 	import { drops, isImage, storeFile } from "$app/drop.svelte";
 	import { revealItemInDir } from "@tauri-apps/plugin-opener";
+	import { layout } from "$app/layout.svelte";
 	import { toasts } from "$shared/stores/toast.svelte";
 	import { plugins } from "$shared/stores/plugins.svelte";
 	import { nav } from "$app/nav.svelte";
@@ -113,7 +114,8 @@
 							{ label: "새 태그…", icon: Plus, onselect: () => addCustomTag(img) },
 						]
 					: []),
-				{ label: "파일 위치 열기", icon: FolderOpen, separator: true, onselect: () => reveal(img) },
+				// 파일 위치 열기는 데스크톱만 (Android에는 탐색기가 없음)
+				...(layout.desktop ? [{ label: "파일 위치 열기", icon: FolderOpen, separator: true, onselect: () => reveal(img) }] : []),
 				...(mine ? [{ label: "삭제", icon: Trash2, danger: true, onselect: () => remove(img) }] : []),
 			],
 		};
@@ -347,7 +349,7 @@
 				<div class="acts">
 					{#if v.prompt && plugins.on("imagegen")}<Button size="sm" onclick={() => reuse(v)}>{#snippet icon()}<Sparkles />{/snippet}이 프롬프트로 다시</Button>{/if}
 					{#if v.conversationId}<Button size="sm" onclick={() => openSource(v)}>{#snippet icon()}<MessageSquare />{/snippet}대화로</Button>{/if}
-					<Button size="sm" variant="ghost" onclick={() => reveal(v)}>{#snippet icon()}<ExternalLink />{/snippet}파일 위치</Button>
+					{#if layout.desktop}<Button size="sm" variant="ghost" onclick={() => reveal(v)}>{#snippet icon()}<ExternalLink />{/snippet}파일 위치</Button>{/if}
 					{#if owned(v)}<Button size="sm" variant="ghost" onclick={() => rename(v)}>{#snippet icon()}<Pencil />{/snippet}이름</Button>{/if}
 					<span class="sp"></span>
 					{#if owned(v)}<Button size="sm" variant="ghost" onclick={() => remove(v)}>{#snippet icon()}<Trash2 />{/snippet}삭제</Button>{/if}

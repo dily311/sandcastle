@@ -67,8 +67,9 @@ class Games {
 		this.list = [g, ...this.list.filter((x) => x.id !== g.id)];
 		return g;
 	}
-	async export(gameId: string) {
-		return call(commands.exportGame(gameId, null), src);
+	/** dir를 주지 않으면 다운로드 폴더 (데스크톱) */
+	async export(gameId: string, dir: string | null = null) {
+		return call(commands.exportGame(gameId, dir), src);
 	}
 	async remove(gameId: string) {
 		if (this.opened?.project.id === gameId) {

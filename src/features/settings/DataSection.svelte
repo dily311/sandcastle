@@ -4,7 +4,7 @@
 	import type { BackupManifest, DataCheck, DataOverview_Serialize as Overview, DataTotals } from "$ipc/bindings";
 	import { Badge, Button, Spinner } from "$shared/ui";
 	import { call, commands } from "$shared/ipc/client";
-	import { pickFiles, pickSavePath, BACKUP_FILES } from "$shared/ipc/dialog";
+	import { pickFiles, saveTo, BACKUP_FILES } from "$shared/ipc/dialog";
 	import { confirmAction } from "$shared/stores/confirm.svelte";
 	import { toasts } from "$shared/stores/toast.svelte";
 	import { absolute, relative } from "$shared/time";
@@ -84,12 +84,12 @@
 	async function backup() {
 		const d = new Date();
 		const stamp = `${d.getFullYear()}${String(d.getMonth() + 1).padStart(2, "0")}${String(d.getDate()).padStart(2, "0")}`;
-		const path = await pickSavePath(`sandcastle-${stamp}.scbackup`, [BACKUP_FILES]);
-		if (!path) return;
-		busy = "backup";
 		try {
-			const r = await call(commands.exportBackup(path), src);
-			toasts.success(`백업함 · ${bytes(r.bytes)}, 파일 ${r.fileCount}개`);
+			const r = await saveTo(`sandcastle-${stamp}.scbackup`, [BACKUP_FILES], (path) => {
+				busy = "backup";
+				return call(commands.exportBackup(path), src);
+			});
+			if (r) toasts.success(`백업함 · ${bytes(r.bytes)}, 파일 ${r.fileCount}개`);
 		} finally {
 			busy = null;
 		}

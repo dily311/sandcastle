@@ -2,7 +2,7 @@
 import { moveItem } from "$shared/dnd/sortable.svelte";
 import type { WorldInfoBook_Serialize as Book, WorldInfoEntry as Entry, WorldInfoEntryInput_Deserialize as EntryInput } from "$ipc/bindings";
 import { call, commands } from "$shared/ipc/client";
-import { JSON_FILES, pickSavePath } from "$shared/ipc/dialog";
+import { JSON_FILES, saveTo } from "$shared/ipc/dialog";
 import { confirmAction } from "$shared/stores/confirm.svelte";
 import { toasts } from "$shared/stores/toast.svelte";
 import { library } from "$features/character/library.svelte";
@@ -73,9 +73,8 @@ class Lorebook {
 	}
 	async export(b: Book, format: BookFormat = "json") {
 		const filter = format === "json" ? JSON_FILES : { name: "텍스트", extensions: ["txt"] };
-		const path = await pickSavePath(`${b.name}.${format}`, [filter]);
-		if (!path) return;
-		const n = await call(commands.exportWorldinfoBook(b.id, format, path), src);
+		const n = await saveTo(`${b.name}.${format}`, [filter], (path) => call(commands.exportWorldinfoBook(b.id, format, path), src));
+		if (n == null) return;
 		toasts.success(`항목 ${n}개 내보냄`);
 	}
 	exportMenu(b: Book) {

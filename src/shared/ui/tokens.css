@@ -102,6 +102,9 @@
 	--z-menu: 1000; /* 오른쪽 클릭 메뉴 */
 	--z-toast: 2000; /* 알림 */
 
+	/* 위쪽 안전 영역 (상태 표시줄). Android는 WebView가 화면을 다 덮지 않으면 env()가 0이라 앱이 알려 준 값과 큰 쪽 (systemInsets.ts) */
+	--safe-top: max(env(safe-area-inset-top, 0px), var(--native-inset-top, 0px));
+
 	/* ---- 간격 (4px 단위) ---- */
 	--space-1: 4px;
 	--space-2: 8px;
@@ -138,6 +141,8 @@
 	--control-sm: 28px;
 	--control-md: 34px;
 	--control-lg: 42px;
+	/* 손가락으로 누르는 곳의 최소 크기 (보이는 크기는 그대로, 누르는 범위만 넓힘) */
+	--touch-target: 44px;
 }
 
 :root[data-theme="dark"] {

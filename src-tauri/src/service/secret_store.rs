@@ -1,5 +1,5 @@
 use anyhow::Result;
-#[cfg(not(test))]
+#[cfg(all(not(test), not(target_os = "android")))]
 use keyring::Entry;
 
 #[cfg_attr(test, allow(dead_code))]
@@ -32,8 +32,45 @@ fn chunk_count(stored: &str) -> Option<usize> {
     stored.strip_prefix(CHUNK_MARK).and_then(|n| n.parse().ok())
 }
 
-/// 실제 저장소: 앱은 OS keyring
-#[cfg(not(test))]
+/// Android: Keystore 키로 암호화한 SharedPreferences (android-native-keyring-store).
+/// keyring v4의 Entry는 Android에서 늘 NoDefaultStore라 keyring-core를 직접 쓴다. 평문 파일에는 두지 않는다
+#[cfg(all(not(test), target_os = "android"))]
+mod backend {
+    use super::*;
+    use std::sync::OnceLock;
+
+    static STORE: OnceLock<std::result::Result<(), String>> = OnceLock::new();
+
+    /// 처음 쓸 때 한 번 (Tauri가 ndk-context를 이미 초기화해 둠)
+    fn ensure_store() -> Result<()> {
+        STORE
+            .get_or_init(|| match android_native_keyring_store::Store::new() {
+                Ok(store) => {
+                    keyring_core::set_default_store(store);
+                    Ok(())
+                }
+                Err(e) => Err(e.to_string()),
+            })
+            .clone()
+            .map_err(|e| anyhow::anyhow!("Android 키 저장소를 열 수 없습니다: {e}"))
+    }
+    fn entry(key: &str) -> Result<keyring_core::Entry> {
+        ensure_store()?;
+        Ok(keyring_core::Entry::new(SERVICE_NAME, key)?)
+    }
+    pub fn get(key: &str) -> Result<String> {
+        Ok(entry(key)?.get_password()?)
+    }
+    pub fn set(key: &str, value: &str) -> Result<()> {
+        Ok(entry(key)?.set_password(value)?)
+    }
+    pub fn delete(key: &str) -> Result<()> {
+        Ok(entry(key)?.delete_credential()?)
+    }
+}
+
+/// 실제 저장소: 데스크톱은 OS keyring (Windows 자격 증명 관리자 등)
+#[cfg(all(not(test), not(target_os = "android")))]
 mod backend {
     use super::*;
 

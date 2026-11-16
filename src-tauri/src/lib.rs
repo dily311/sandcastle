@@ -42,6 +42,8 @@ pub fn run() {
         .plugin(tauri_plugin_opener::init())
         .plugin(tauri_plugin_os::init())
         .plugin(tauri_plugin_dialog::init())
+        // Android content:// 파일 열기·저장 (service/picked_file.rs)
+        .plugin(tauri_plugin_fs::init())
         .plugin(tauri_plugin_store::Builder::new().build())
         .plugin(tauri_plugin_clipboard_manager::init());
 
@@ -309,6 +311,9 @@ pub fn specta_builder() -> tauri_specta::Builder<tauri::Wry> {
             // data manager
             get_data_overview,
             check_data,
+            stage_picked_file,
+            prepare_save_target,
+            deliver_saved_file,
             delete_conversations,
             export_character_pack,
             import_character_pack,
@@ -547,6 +552,9 @@ pub fn specta_builder() -> tauri_specta::Builder<tauri::Wry> {
             // data manager
             get_data_overview,
             check_data,
+            stage_picked_file,
+            prepare_save_target,
+            deliver_saved_file,
             delete_conversations,
             export_character_pack,
             import_character_pack,

@@ -6,6 +6,7 @@ pub mod secret_store;
 pub mod ai;
 pub mod app_prompts;
 pub mod budget;
+pub mod picked_file;
 pub mod image_meta;
 pub mod chat;
 pub mod data;

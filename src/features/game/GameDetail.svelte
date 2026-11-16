@@ -3,7 +3,8 @@
 	import { AlertTriangle, ImagePlus, X, ChevronRight, Download, Ellipsis, Gamepad2, Pencil, Play, Plus, Trash2, Users } from "@lucide/svelte";
 	import { Avatar, Badge, Button, ContextMenu, EmptyState, IconButton, Segmented, Spinner, type MenuItem } from "$shared/ui";
 	import { call, commands } from "$shared/ipc/client";
-	import { IMAGE_FILES, pickFiles } from "$shared/ipc/dialog";
+	import { GAME_FILES, IMAGE_FILES, pickFiles, saveIntoPicked } from "$shared/ipc/dialog";
+	import { layout } from "$app/layout.svelte";
 	import { confirmAction } from "$shared/stores/confirm.svelte";
 	import { toasts } from "$shared/stores/toast.svelte";
 	import { absolute, relative } from "$shared/time";
@@ -101,12 +102,13 @@
 
 	let more = $state<{ x: number; y: number; align?: "start" | "end" } | null>(null);
 	const moreItems: MenuItem[] = [
-		{ label: "내보내기 (다운로드 폴더)", icon: Download, onselect: exportGame },
+		{ label: layout.desktop ? "내보내기 (다운로드 폴더)" : "내보내기", icon: Download, onselect: exportGame },
 		{ label: "삭제", icon: Trash2, danger: true, separator: true, onselect: removeGame },
 	];
 	async function exportGame() {
-		const path = await games.export(gameId);
-		toasts.success(`내보냄 · ${path}`);
+		// Android는 공용 다운로드 폴더에 직접 쓸 수 없어 저장 위치를 고른다
+		const path = layout.desktop ? await games.export(gameId) : await saveIntoPicked(`${game?.project.title ?? "game"}.tgame`, [GAME_FILES], (dir) => games.export(gameId, dir));
+		if (path) toasts.success(layout.desktop ? `내보냄 · ${path}` : "내보냄");
 	}
 	async function removeGame() {
 		const title = game?.project.title ?? "게임";

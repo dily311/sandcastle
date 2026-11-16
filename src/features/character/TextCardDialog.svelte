@@ -4,7 +4,7 @@
 	import { Button, Dialog, Select, Switch } from "$shared/ui";
 	import BackgroundPicker from "$shared/ui/BackgroundPicker.svelte";
 	import { call, commands } from "$shared/ipc/client";
-	import { pickFiles, pickSavePath } from "$shared/ipc/dialog";
+	import { pickFiles, saveTo } from "$shared/ipc/dialog";
 	import { toasts } from "$shared/stores/toast.svelte";
 	import { theme } from "$app/theme.svelte";
 	import { CARD_DESIGNS, CARD_FONTS, CARD_SIZES, CARD_STYLES, blobBase64, cardBlob, palette, renderCard, type CardDesign, type CardFont, type CardStyle } from "./textCard";
@@ -71,9 +71,12 @@
 	}
 	async function save() {
 		if (!canvas) return;
-		const path = await pickSavePath("card.png", [{ name: "PNG 이미지", extensions: ["png"] }]);
-		if (!path) return;
-		await call(commands.savePngFile(path, await blobBase64(await cardBlob(canvas))), { source: "card" });
+		const data = await blobBase64(await cardBlob(canvas));
+		const r = await saveTo("card.png", [{ name: "PNG 이미지", extensions: ["png"] }], async (path) => {
+			await call(commands.savePngFile(path, data), { source: "card" });
+			return true;
+		});
+		if (!r) return;
 		toasts.success("저장함");
 	}
 </script>
