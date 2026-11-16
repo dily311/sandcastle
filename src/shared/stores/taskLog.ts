@@ -17,6 +17,7 @@ export function watchTaskErrors() {
 	if (started) return;
 	started = true;
 	void onEvent<Ev>("task-event", async (e) => {
+		if (e.type === "completed" || e.type === "failed") void checkBudget();
 		if (e.type !== "failed" && e.type !== "retrying") return;
 		const err = e.data.error;
 		const task = await call(commands.getTask(e.data.taskId), { source: "task", silent: true }).catch(() => null);
@@ -45,4 +46,20 @@ function budgetToast(message: string, canOverride: boolean) {
 		},
 		10000,
 	);
+}
+
+// 한도의 80%에 새로 닿으면 한 번 알림 (작업이 끝날 때 묻는다, 요금 없음). 몰려도 한 번만
+const METRIC: Record<string, string> = { tokens: "토큰", characters: "음성 글자", images: "그림" };
+let budgetTimer: ReturnType<typeof setTimeout> | undefined;
+function checkBudget() {
+	clearTimeout(budgetTimer);
+	budgetTimer = setTimeout(async () => {
+		const list = await call(commands.takeBudgetWarnings(), { source: "budget", silent: true }).catch(() => []);
+		for (const w of list) {
+			const m = w.meter;
+			const when = m.period === "day" ? "오늘" : "이번 달";
+			const p = Math.round((m.used / m.limit) * 100);
+			toasts.show({ tone: "warning", message: `${w.profileName ?? "API"} ${when} ${METRIC[m.metric] ?? m.metric} 한도의 ${p}%를 씀 (${m.used.toLocaleString()} / ${m.limit.toLocaleString()})`, detail: m.used >= m.limit ? "자동 실행은 이제 막힘" : undefined }, 8000);
+		}
+	}, 500);
 }

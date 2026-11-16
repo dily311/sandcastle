@@ -75,6 +75,66 @@ pub async fn ensure(db: &sqlx::SqlitePool, api_profile_id: &str, kind: UsageKind
     Err(exceeded(api_profile_id, meter, run_by))
 }
 
+// ---------------------------------------------------------
+// 화면 (1-A-5): 한도가 있는 프로필의 상태 · 80% 알림
+// ---------------------------------------------------------
+
+/// 한도가 있는 프로필 하나 (설정 > 실행 기록의 한도 막대)
+#[derive(Debug, Clone, serde::Serialize, specta::Type)]
+#[serde(rename_all = "camelCase")]
+pub struct BudgetOverview {
+    pub limit: budget::BudgetLimit,
+    pub meters: Vec<BudgetMeter>,
+}
+
+pub async fn overview(db: &sqlx::SqlitePool) -> std::result::Result<Vec<BudgetOverview>, sqlx::Error> {
+    let mut out = vec![];
+    for limit in budget::get_all_budget_limits(db).await? {
+        let status = budget::budget_status_now(db, &limit.api_profile_id).await?;
+        out.push(BudgetOverview { limit, meters: status.meters });
+    }
+    Ok(out)
+}
+
+/// 이 비율(%)에 닿으면 한 번 알린다
+pub const WARN_PERCENT: i64 = 80;
+
+#[derive(Debug, Clone, serde::Serialize, specta::Type)]
+#[serde(rename_all = "camelCase")]
+pub struct BudgetWarning {
+    pub api_profile_id: String,
+    pub profile_name: Option<String>,
+    pub meter: BudgetMeter,
+}
+
+/// 이미 알린 칸 (프로필·단위·기간·기간 시작). 앱을 다시 켜면 한 번 더 알린다
+static WARNED: Mutex<Option<std::collections::HashSet<String>>> = Mutex::new(None);
+
+/// 새로 80%에 닿은 칸 (알린 것은 기간이 바뀔 때까지 다시 주지 않음). 작업이 끝날 때 프론트가 묻는다 — 요금 없음
+pub async fn take_warnings(db: &sqlx::SqlitePool) -> std::result::Result<Vec<BudgetWarning>, sqlx::Error> {
+    let (day_start, month_start) = budget::period_starts(&chrono::Local::now());
+    let mut fresh = vec![];
+    for o in overview(db).await? {
+        for m in o.meters {
+            if m.used * 100 < m.limit * WARN_PERCENT {
+                continue;
+            }
+            let start = if m.period == BudgetPeriod::Day { day_start } else { month_start };
+            let key = format!("{}:{:?}:{:?}:{start}", o.limit.api_profile_id, m.metric, m.period);
+            let new = WARNED.lock().unwrap_or_else(std::sync::PoisonError::into_inner).get_or_insert_with(Default::default).insert(key);
+            if new {
+                fresh.push((o.limit.api_profile_id.clone(), m));
+            }
+        }
+    }
+    let mut out = vec![];
+    for (id, meter) in fresh {
+        let name: Option<String> = sqlx::query_scalar("SELECT name FROM api_profiles WHERE id = ?").bind(&id).fetch_optional(db).await?;
+        out.push(BudgetWarning { api_profile_id: id, profile_name: name, meter });
+    }
+    Ok(out)
+}
+
 /// 기록 정리 (1-A-4): 보존 기간보다 오래된 상세를 일별 합계로 옮긴다. None이면 하지 않음.
 /// 보존 기간은 30일 미만으로 줄이지 않는다 (실행 기록 화면의 30일 칸이 상세를 쓰므로)
 pub async fn compact(db: &sqlx::SqlitePool, retention_days: Option<u32>) -> std::result::Result<budget_compact::CompactResult, sqlx::Error> {
@@ -136,6 +196,16 @@ mod tests {
 
     fn code(r: Result<()>) -> Option<ErrorCode> {
         r.err().map(|e| e.to_response().code)
+    }
+
+    #[tokio::test]
+    async fn warns_once_per_period_at_80_percent() {
+        let db = pool_over_limit().await; // 오늘 토큰 10 / 한도 10
+        let w = take_warnings(&db).await.unwrap();
+        assert_eq!(w.len(), 1);
+        assert_eq!((w[0].profile_name.as_deref(), w[0].meter.used, w[0].meter.limit), (Some("P"), 10, 10));
+        assert!(take_warnings(&db).await.unwrap().is_empty());
+        assert_eq!(overview(&db).await.unwrap()[0].meters.len(), 1);
     }
 
     // 전역 허용 슬롯을 같이 쓰므로 한 테스트 안에서 순서대로 확인한다

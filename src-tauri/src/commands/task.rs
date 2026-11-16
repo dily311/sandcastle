@@ -118,3 +118,32 @@ pub async fn upsert_model_price(state: State<'_, crate::state::AppState>, price:
 pub async fn delete_model_price(state: State<'_, crate::state::AppState>, model: String) -> Result<()> {
     Ok(crate::db::usage::delete_model_price(&state.db, &model).await?)
 }
+
+// ---------------------------------------------------------
+// 예산 한도 (1-A-5)
+// ---------------------------------------------------------
+
+/// 한도가 있는 프로필과 지금 사용량 (한도 막대)
+#[tauri::command]
+#[specta::specta]
+pub async fn list_budget_status(state: State<'_, crate::state::AppState>) -> Result<Vec<crate::service::budget::BudgetOverview>> {
+    Ok(crate::service::budget::overview(&state.db).await?)
+}
+
+/// 한도 저장. 칸을 모두 비우면 한도를 지운다
+#[tauri::command]
+#[specta::specta]
+pub async fn upsert_budget_limit(state: State<'_, crate::state::AppState>, limit: crate::db::budget::BudgetLimit) -> Result<()> {
+    use crate::db::budget;
+    if limit.is_empty() || [limit.daily_tokens, limit.monthly_tokens, limit.daily_characters, limit.monthly_characters, limit.daily_images, limit.monthly_images].iter().flatten().all(|n| *n <= 0) {
+        return Ok(budget::delete_budget_limit(&state.db, &limit.api_profile_id).await?);
+    }
+    Ok(budget::upsert_budget_limit(&state.db, &limit).await?)
+}
+
+/// 새로 80%에 닿은 한도 (작업이 끝날 때 프론트가 물어 앱 안 알림으로)
+#[tauri::command]
+#[specta::specta]
+pub async fn take_budget_warnings(state: State<'_, crate::state::AppState>) -> Result<Vec<crate::service::budget::BudgetWarning>> {
+    Ok(crate::service::budget::take_warnings(&state.db).await?)
+}

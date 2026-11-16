@@ -3,7 +3,7 @@
 	// 화면이 열려 있는 동안만 불러오고 작업 이벤트로 새로 고친다 (Lazy Initialization)
 	import { onDestroy, onMount } from "svelte";
 	import { RefreshCw, Square, Trash2 } from "@lucide/svelte";
-	import type { TaskHistoryItem_Serialize as HistoryItem, TaskInfo_Serialize as TaskInfo, UsageSummary_Serialize as Usage } from "$ipc/bindings";
+	import type { ApiProfiles, BudgetOverview_Serialize as BudgetOverview, TaskHistoryItem_Serialize as HistoryItem, TaskInfo_Serialize as TaskInfo, UsageSummary_Serialize as Usage } from "$ipc/bindings";
 	import { Badge, Button, EmptyState, Segmented, Select } from "$shared/ui";
 	import { appSetting } from "$shared/stores/appSetting.svelte";
 	import { call, commands } from "$shared/ipc/client";
@@ -13,6 +13,7 @@
 	import Section from "./Section.svelte";
 	import Group from "./Group.svelte";
 	import PriceTable from "./PriceTable.svelte";
+	import BudgetLimits from "./BudgetLimits.svelte";
 
 	const src = { source: "activity" };
 	const FEATURE: Record<string, string> = {
@@ -37,6 +38,8 @@
 	let active = $state<TaskInfo[]>([]);
 	let history = $state<HistoryItem[]>([]);
 	let usage = $state<Usage[]>([]);
+	let profiles = $state<ApiProfiles[]>([]);
+	let budgets = $state<BudgetOverview[]>([]);
 	let period = $state<"day" | "week" | "month" | "all">("week");
 	let who = $state<"all" | "auto">("all");
 	let open = $state<string | null>(null);
@@ -61,10 +64,12 @@
 	async function load() {
 		loading = true;
 		try {
-			[active, history, usage] = await Promise.all([
+			[active, history, usage, profiles, budgets] = await Promise.all([
 				call(commands.listActiveTasks(), { ...src, silent: true }),
 				call(commands.listTaskHistory(100), { ...src, silent: true }),
 				call(commands.usageSummary(since(period)), { ...src, silent: true }),
+				call(commands.getAllApiProfile(), { ...src, silent: true }),
+				call(commands.listBudgetStatus(), { ...src, silent: true }),
 			]);
 		} catch {
 			toasts.error("실행 기록을 불러오지 못함");
@@ -185,6 +190,10 @@
 		{:else}
 			<p class="empty">실행 중인 작업 없음</p>
 		{/each}
+	</Group>
+
+	<Group title="예산 한도">
+		<BudgetLimits {profiles} items={budgets} onchanged={load} />
 	</Group>
 
 	<Group title="API별 사용량">

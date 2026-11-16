@@ -104,6 +104,17 @@ export const handlers: Record<string, Handler> = {
 	clear_usage: () => 0,
 	allow_budget_once: () => null,
 	compact_usage: () => ({ usageRows: 0, tasks: 0 }),
+	list_budget_status: () => [
+		{
+			limit: { apiProfileId: "gemini", dailyTokens: 100_000, monthlyTokens: 2_000_000, dailyCharacters: null, monthlyCharacters: null, dailyImages: null, monthlyImages: null },
+			meters: [
+				{ metric: "tokens", period: "day", used: 84_200, limit: 100_000, remaining: 15_800 },
+				{ metric: "tokens", period: "month", used: 610_000, limit: 2_000_000, remaining: 1_390_000 },
+			],
+		},
+	],
+	upsert_budget_limit: () => null,
+	take_budget_warnings: () => [],
 	list_model_prices: () => [{ model: "claude-sonnet-5-5", currency: "$", inputPerMtok: 3, outputPerMtok: 15, per1kChars: null, perImage: null }],
 	upsert_model_price: () => null,
 	delete_model_price: () => null,

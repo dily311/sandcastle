@@ -115,6 +115,12 @@ export const commands = {
 	 *  보존 기간이 "계속 보관"이면 아무것도 하지 않는다
 	 */
 	compactUsage: (options?: InvokeOptions) => __TAURI_INVOKE<CompactResult>("compact_usage", undefined, options),
+	/**  한도가 있는 프로필과 지금 사용량 (한도 막대) */
+	listBudgetStatus: (options?: InvokeOptions) => __TAURI_INVOKE<BudgetOverview_Serialize[]>("list_budget_status", undefined, options),
+	/**  한도 저장. 칸을 모두 비우면 한도를 지운다 */
+	upsertBudgetLimit: (limit: BudgetLimit_Deserialize, options?: InvokeOptions) => __TAURI_INVOKE<null>("upsert_budget_limit", { limit }, options),
+	/**  새로 80%에 닿은 한도 (작업이 끝날 때 프론트가 물어 앱 안 알림으로) */
+	takeBudgetWarnings: (options?: InvokeOptions) => __TAURI_INVOKE<BudgetWarning_Serialize[]>("take_budget_warnings", undefined, options),
 	listModelPrices: (options?: InvokeOptions) => __TAURI_INVOKE<ModelPrice_Serialize[]>("list_model_prices", undefined, options),
 	upsertModelPrice: (price: ModelPrice_Deserialize, options?: InvokeOptions) => __TAURI_INVOKE<null>("upsert_model_price", { price }, options),
 	deleteModelPrice: (model: string, options?: InvokeOptions) => __TAURI_INVOKE<null>("delete_model_price", { model }, options),
@@ -641,6 +647,74 @@ export type BlockReason =
 "itemNotUsable" | 
 /**  핵심 아이템은 버릴 수 없음 */
 "keyItem";
+
+/**  한 프로필의 한도. None = 한도 없음 */
+export type BudgetLimit = BudgetLimit_Serialize | BudgetLimit_Deserialize;
+
+/**  한 프로필의 한도. None = 한도 없음 */
+export type BudgetLimit_Deserialize = {
+	apiProfileId: string,
+	dailyTokens?: number | null,
+	monthlyTokens?: number | null,
+	dailyCharacters?: number | null,
+	monthlyCharacters?: number | null,
+	dailyImages?: number | null,
+	monthlyImages?: number | null,
+};
+
+/**  한 프로필의 한도. None = 한도 없음 */
+export type BudgetLimit_Serialize = {
+	apiProfileId: string,
+	dailyTokens: number | null,
+	monthlyTokens: number | null,
+	dailyCharacters: number | null,
+	monthlyCharacters: number | null,
+	dailyImages: number | null,
+	monthlyImages: number | null,
+};
+
+/**  한도가 걸린 칸 하나 (한도 없는 칸은 만들지 않는다) */
+export type BudgetMeter = {
+	metric: BudgetMetric,
+	period: BudgetPeriod,
+	used: number,
+	limit: number,
+	/**  0 이상 (넘었으면 0) */
+	remaining: number,
+};
+
+export type BudgetMetric = "tokens" | "characters" | "images";
+
+/**  한도가 있는 프로필 하나 (설정 > 실행 기록의 한도 막대) */
+export type BudgetOverview = BudgetOverview_Serialize | BudgetOverview_Deserialize;
+
+/**  한도가 있는 프로필 하나 (설정 > 실행 기록의 한도 막대) */
+export type BudgetOverview_Deserialize = {
+	limit: BudgetLimit_Deserialize,
+	meters: BudgetMeter[],
+};
+
+/**  한도가 있는 프로필 하나 (설정 > 실행 기록의 한도 막대) */
+export type BudgetOverview_Serialize = {
+	limit: BudgetLimit_Serialize,
+	meters: BudgetMeter[],
+};
+
+export type BudgetPeriod = "day" | "month";
+
+export type BudgetWarning = BudgetWarning_Serialize | BudgetWarning_Deserialize;
+
+export type BudgetWarning_Deserialize = {
+	apiProfileId: string,
+	profileName?: string | null,
+	meter: BudgetMeter,
+};
+
+export type BudgetWarning_Serialize = {
+	apiProfileId: string,
+	profileName: string | null,
+	meter: BudgetMeter,
+};
 
 export type Capabilities = Capabilities_Serialize | Capabilities_Deserialize;
 
