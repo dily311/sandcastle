@@ -49,6 +49,19 @@ pub async fn deliver_saved_file(app: AppHandle, tmp: String, uri: String) -> Res
         .map_err(|e| crate::error::AppError::internal(e.to_string()))?
 }
 
+/// 지난 panic 기록 (최근 것부터, 앱 데이터 폴더의 logs/panic.log)
+#[tauri::command]
+#[specta::specta]
+pub async fn get_panic_log(app: AppHandle) -> Result<Vec<crate::sys::panic_log::PanicEntry>> {
+    Ok(crate::sys::panic_log::read(&crate::sys::panic_log::log_path(&app_data_dir(&app)?), 100))
+}
+
+#[tauri::command]
+#[specta::specta]
+pub async fn clear_panic_log(app: AppHandle) -> Result<()> {
+    Ok(crate::sys::panic_log::clear(&crate::sys::panic_log::log_path(&app_data_dir(&app)?))?)
+}
+
 /// DB 점검: 무결성(PRAGMA integrity_check)과 아무 데도 쓰이지 않는 파일 목록. 지우지 않는다
 #[tauri::command]
 #[specta::specta]

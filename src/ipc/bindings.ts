@@ -162,6 +162,9 @@ export const commands = {
 	getDataOverview: (options?: InvokeOptions) => __TAURI_INVOKE<DataOverview_Serialize>("get_data_overview", undefined, options),
 	/**  DB 점검: 무결성(PRAGMA integrity_check)과 아무 데도 쓰이지 않는 파일 목록. 지우지 않는다 */
 	checkData: (options?: InvokeOptions) => __TAURI_INVOKE<DataCheck>("check_data", undefined, options),
+	/**  지난 panic 기록 (최근 것부터, 앱 데이터 폴더의 logs/panic.log) */
+	getPanicLog: (options?: InvokeOptions) => __TAURI_INVOKE<PanicEntry_Serialize[]>("get_panic_log", undefined, options),
+	clearPanicLog: (options?: InvokeOptions) => __TAURI_INVOKE<null>("clear_panic_log", undefined, options),
 	/**
 	 *  고른 파일(Android content:// 주소)을 앱 임시 폴더로 복사해 경로로 (1-C-2). 경로면 그대로.
 	 *  extensions: 고르기 필터의 확장자 (내용으로 확장자를 정할 때 이 안에서)
@@ -2854,6 +2857,26 @@ export type PackageWorldInfoBook_Serialize = {
 	id: string,
 	book: WorldInfoBookInput_Serialize,
 	entries: WorldInfoEntryInput_Serialize[],
+};
+
+export type PanicEntry = PanicEntry_Serialize | PanicEntry_Deserialize;
+
+export type PanicEntry_Deserialize = {
+	/**  ms */
+	time: number,
+	thread: string,
+	message: string,
+	/**  파일:줄 */
+	location?: string | null,
+};
+
+export type PanicEntry_Serialize = {
+	/**  ms */
+	time: number,
+	thread: string,
+	message: string,
+	/**  파일:줄 */
+	location: string | null,
 };
 
 export type Persona = Persona_Serialize | Persona_Deserialize;

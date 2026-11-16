@@ -1,5 +1,9 @@
 <script lang="ts">
+	import { onMount } from "svelte";
 	import { Copy, Trash2 } from "@lucide/svelte";
+	import type { PanicEntry } from "$ipc/bindings";
+	import { call, commands } from "$shared/ipc/client";
+	import { confirmAction } from "$shared/stores/confirm.svelte";
 	import { Badge, Button, EmptyState, Segmented } from "$shared/ui";
 	import { logs, type LogEntry, type LogLevel } from "$shared/stores/log.svelte";
 	import { toasts } from "$shared/stores/toast.svelte";
@@ -35,6 +39,21 @@ ${d}` : ""}`);
 			toasts.error("복사 못 함");
 		}
 	}
+	// 지난 실행까지의 백엔드 panic 기록 (앱 데이터 폴더 logs/panic.log). 이 화면을 열 때만 읽는다
+	let panics = $state<PanicEntry[]>([]);
+	onMount(async () => {
+		panics = await call(commands.getPanicLog(), { source: "log", silent: true }).catch(() => []);
+	});
+	const when = (t: number) => {
+		const d = new Date(t);
+		return `${d.getMonth() + 1}/${d.getDate()} ${clock(t)}`;
+	};
+	async function clearPanics() {
+		if (!(await confirmAction({ title: "앱 오류 기록 지우기", message: "logs/panic.log 파일을 지움", confirmLabel: "지우기", danger: true }))) return;
+		await call(commands.clearPanicLog(), { source: "log" });
+		panics = [];
+	}
+
 	async function copyAll() {
 		const text = shown
 			.map((e) => `[${new Date(e.time).toISOString()}] ${e.level.toUpperCase()} ${e.source}: ${e.message}${detail(e) ? `\n${detail(e)}` : ""}`)
@@ -84,9 +103,33 @@ ${d}` : ""}`);
 			<EmptyState title="기록 없음" description="오류나 알림이 생기면 여기 쌓임" />
 		{/each}
 	</Group>
+
+	<Group title="앱 오류 기록 (지난 실행 포함)" flush>
+		{#snippet aside()}
+			<Button size="sm" variant="ghost" disabled={!panics.length} onclick={clearPanics}>{#snippet icon()}<Trash2 />{/snippet}지우기</Button>
+		{/snippet}
+		{#each panics as p, i (i)}
+			<div class="row">
+				<button class="line" title="눌러서 복사" onclick={() => copyOne({ id: -1, level: "error", time: p.time, source: "panic", message: p.message, details: { location: p.location, thread: p.thread } })}>
+					<Badge tone="danger">panic</Badge>
+					<span class="t">{when(p.time)}</span>
+					<span class="src">{p.thread}</span>
+					<span class="m">{p.message}{p.location ? ` (${p.location})` : ""}</span>
+				</button>
+			</div>
+		{:else}
+			<p class="none">앱이 멈춘 기록 없음. 생기면 이 기기 안에만 남고 밖으로 보내지 않음</p>
+		{/each}
+	</Group>
 </Section>
 
 <style>
+	.none {
+		margin: 0;
+		padding: var(--space-4) var(--space-2);
+		color: var(--text-muted);
+		font-size: var(--text-sm);
+	}
 	.filter {
 		margin-bottom: var(--space-3);
 	}

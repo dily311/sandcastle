@@ -80,6 +80,8 @@ pub fn run() {
         let pool = tauri::async_runtime::block_on(async move {
             let app_data_dir = db_handle.path().app_data_dir().expect("app_data_dir 조회 실패");
             // 준비된 백업 복원이 있으면 DB를 열기 전에 파일을 교체한다
+            // panic을 logs/panic.log에 남긴다 (1-D-6, 밖으로 보내지 않음)
+            sys::panic_log::install(&app_data_dir);
             match service::data::backup::apply_pending_restore(&app_data_dir) {
                 Ok(true) => eprintln!("[data] 백업 복원을 적용했습니다"),
                 Ok(false) => {}
@@ -94,6 +96,7 @@ pub fn run() {
 
         // 2. AppState 초기화
         let app_handle = app.handle().clone();
+        sys::panic_log::attach(app_handle.clone());
         let launch_mode = LaunchMode::from_args();
         app.manage(AppState {
             db: pool.clone(),
@@ -295,6 +298,8 @@ pub fn specta_builder() -> tauri_specta::Builder<tauri::Wry> {
         // data manager
         get_data_overview,
         check_data,
+        get_panic_log,
+        clear_panic_log,
         stage_picked_file,
         prepare_save_target,
         deliver_saved_file,
@@ -536,6 +541,8 @@ pub fn specta_builder() -> tauri_specta::Builder<tauri::Wry> {
         // data manager
         get_data_overview,
         check_data,
+        get_panic_log,
+        clear_panic_log,
         stage_picked_file,
         prepare_save_target,
         deliver_saved_file,

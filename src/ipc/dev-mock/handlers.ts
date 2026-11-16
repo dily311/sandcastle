@@ -104,6 +104,8 @@ export const handlers: Record<string, Handler> = {
 	clear_usage: () => 0,
 	allow_budget_once: () => null,
 	compact_usage: () => ({ usageRows: 0, tasks: 0 }),
+	get_panic_log: () => [{ time: Date.now() - 86_400_000, thread: "tokio-rt-worker", message: "예시: called `Option::unwrap()` on a `None` value", location: "src/service/example.rs:42" }],
+	clear_panic_log: () => null,
 	check_data: () => ({ ok: true, problems: [], checkedFiles: 42, orphanCount: 2, orphanBytes: 380_000, orphans: [{ path: "characters/avatars/old.png", bytes: 300_000 }, { path: "characters/c9/images/x.webp", bytes: 80_000 }] }),
 	list_budget_status: () => [
 		{

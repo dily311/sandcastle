@@ -39,8 +39,12 @@ class LogStore {
 
 export const logs = new LogStore();
 
-/** 잡히지 않은 오류도 로그로 */
+/** 잡히지 않은 오류도 로그로 (화면 오류 + 백엔드 panic, 1-D-6). 밖으로 보내지 않는다 */
 export function captureGlobalErrors() {
+	// 백엔드 Rust panic (sys/panic_log.rs가 파일에도 남김)
+	void import("$shared/ipc/events").then(({ onEvent }) =>
+		onEvent<{ message: string; location: string | null; thread: string }>("app-panic", (p) => logs.error("panic", p.message, { location: p.location, thread: p.thread })),
+	);
 	window.addEventListener("error", (e) => {
 		// 브라우저가 크기 감시(ResizeObserver) 알림을 한 프레임 미룰 때 내는 알림. 오류가 아니고 화면에 영향이 없다
 		if (/ResizeObserver loop/i.test(e.message ?? "")) return;
