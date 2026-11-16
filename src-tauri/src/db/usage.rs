@@ -126,15 +126,24 @@ pub async fn summary<'e, E>(executor: E, since: i64) -> Result<Vec<UsageSummary>
 where
     E: Executor<'e, Database = Sqlite>,
 {
+    // 상세(usage_log) + 정리된 일별 합계(usage_daily)
     sqlx::query_as::<_, UsageSummary>(
-        "SELECT u.api_profile_id, p.name AS profile_name, u.kind,
-                COUNT(*) AS calls,
-                SUM(CASE WHEN u.ok = 0 THEN 1 ELSE 0 END) AS failed,
+        "WITH u AS (
+             SELECT api_profile_id, model, kind, 1 AS calls, CASE WHEN ok = 0 THEN 1 ELSE 0 END AS failed,
+                    input_tokens, output_tokens, characters, images, estimated AS estimated_calls
+             FROM usage_log WHERE created_at >= ?1
+             UNION ALL
+             SELECT api_profile_id, model, kind, calls, failed, input_tokens, output_tokens, characters, images, estimated_calls
+             FROM usage_daily WHERE day_start >= ?1
+         )
+         SELECT u.api_profile_id, p.name AS profile_name, u.kind,
+                SUM(u.calls) AS calls,
+                SUM(u.failed) AS failed,
                 SUM(u.input_tokens) AS input_tokens,
                 SUM(u.output_tokens) AS output_tokens,
                 SUM(u.characters) AS characters,
                 SUM(u.images) AS images,
-                SUM(u.estimated) AS estimated_calls,
+                SUM(u.estimated_calls) AS estimated_calls,
                 u.model,
                 CASE WHEN mp.model IS NULL THEN NULL ELSE
                     SUM(u.input_tokens) * COALESCE(mp.input_per_mtok, 0) / 1000000.0
@@ -143,10 +152,9 @@ where
                   + SUM(u.images) * COALESCE(mp.per_image, 0)
                 END AS estimated_cost,
                 mp.currency
-         FROM usage_log u
+         FROM u
          LEFT JOIN api_profiles p ON p.id = u.api_profile_id
          LEFT JOIN model_prices mp ON mp.model = u.model
-         WHERE u.created_at >= ?
          GROUP BY u.api_profile_id, u.kind, u.model
          ORDER BY calls DESC",
     )
@@ -273,12 +281,68 @@ where
     Ok(())
 }
 
-/// 사용량 기록 비우기 (작업 기록은 남긴다)
-pub async fn clear<'e, E>(executor: E) -> Result<u64, sqlx::Error>
-where
-    E: Executor<'e, Database = Sqlite>,
-{
-    Ok(sqlx::query("DELETE FROM usage_log").execute(executor).await?.rows_affected())
+/// 사용량 기록 비우기 (작업 기록은 남긴다). 정리된 일별 합계도 지운다
+pub async fn clear(pool: &sqlx::SqlitePool) -> Result<u64, sqlx::Error> {
+    let mut tx = pool.begin().await?;
+    let n = sqlx::query("DELETE FROM usage_log").execute(&mut *tx).await?.rows_affected();
+    sqlx::query("DELETE FROM usage_daily").execute(&mut *tx).await?;
+    tx.commit().await?;
+    Ok(n)
+}
+
+// ---------------------------------------------------------
+// 기록 정리 (1-A-4): 오래된 상세는 일별 합계로 남기고 지운다
+// ---------------------------------------------------------
+
+/// 보존 기간으로 고를 수 있는 날 수 (30일보다 짧으면 실행 기록 화면의 "30일" 칸이 비므로 30일부터)
+pub const RETENTION_CHOICES: [u32; 4] = [30, 90, 180, 365];
+
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Serialize, specta::Type)]
+#[serde(rename_all = "camelCase")]
+pub struct CompactResult {
+    /// 일별 합계로 옮기고 지운 사용량 상세 줄 수
+    pub usage_rows: u32,
+    /// 지운 작업 수 (시도 기록은 함께 지워짐)
+    pub tasks: u32,
+}
+
+/// 보존 기간의 시작: (오늘 − days)일 0시 (현지, ms). 하루 단위로 자르므로 일별 합계와 기간 계산이 맞는다
+pub fn retention_cutoff<Tz: chrono::TimeZone>(now: &chrono::DateTime<Tz>, days: u32) -> i64 {
+    let back = now.clone() - chrono::Duration::days(i64::from(days));
+    super::budget::period_starts(&back).0
+}
+
+/// cutoff보다 오래된 사용량 상세를 일별 합계로 옮기고, 끝난 작업을 지운다.
+/// - 지우는 작업: 완료·실패·멈춤만. 끊긴 작업(다시 실행 가능)과 다른 기록이 가리키는 작업(대화 제출·에이전트 도구 호출)은 남긴다
+pub async fn compact_before(pool: &sqlx::SqlitePool, cutoff: i64) -> Result<CompactResult, sqlx::Error> {
+    let mut tx = pool.begin().await?;
+    sqlx::query(
+        "INSERT INTO usage_daily (day, day_start, api_profile_id, model, kind, feature, calls, failed, input_tokens, output_tokens, characters, images, estimated_calls)
+         SELECT date(created_at / 1000, 'unixepoch', 'localtime') AS d,
+                CAST(strftime('%s', date(created_at / 1000, 'unixepoch', 'localtime'), 'utc') AS INTEGER) * 1000,
+                api_profile_id, model, kind, feature,
+                COUNT(*), SUM(CASE WHEN ok = 0 THEN 1 ELSE 0 END),
+                SUM(input_tokens), SUM(output_tokens), SUM(characters), SUM(images), SUM(estimated)
+         FROM usage_log WHERE created_at < ?
+         GROUP BY d, api_profile_id, model, kind, feature",
+    )
+    .bind(cutoff)
+    .execute(&mut *tx)
+    .await?;
+    let usage_rows = sqlx::query("DELETE FROM usage_log WHERE created_at < ?").bind(cutoff).execute(&mut *tx).await?.rows_affected();
+    let tasks = sqlx::query(
+        "DELETE FROM generation_tasks
+         WHERE created_at < ? AND status IN ('completed', 'failed', 'cancelled')
+           AND id NOT IN (SELECT task_id FROM ai_submissions)
+           AND id NOT IN (SELECT task_id FROM agent_tool_calls)",
+    )
+    .bind(cutoff)
+    .execute(&mut *tx)
+    .await?
+    .rows_affected();
+    tx.commit().await?;
+    let n = |v: u64| u32::try_from(v).unwrap_or(u32::MAX);
+    Ok(CompactResult { usage_rows: n(usage_rows), tasks: n(tasks) })
 }
 
 #[cfg(test)]
@@ -313,6 +377,52 @@ mod tests {
         assert_eq!(tts.characters, 42);
         assert!(task_history(&db, 10).await.unwrap().is_empty());
         assert!(rows.iter().all(|r| r.estimated_cost.is_none()));
+    }
+
+    #[tokio::test]
+    async fn compact_keeps_totals_and_removes_details() {
+        let db = pool().await;
+        let day = 86_400_000_i64;
+        let now = chrono::Local::now();
+        let at = |d: i64| now.timestamp_millis() - d * day;
+        for (days_ago, tokens, ok) in [(60, 100, true), (45, 50, false), (45, 7, true), (2, 30, true)] {
+            let mut e = UsageEntry::new(UsageKind::Chat, "p1", "m");
+            (e.input_tokens, e.output_tokens, e.ok, e.estimated) = (tokens, 1, ok, true);
+            record(&db, e).await;
+            sqlx::query("UPDATE usage_log SET created_at = ? WHERE id = (SELECT MAX(id) FROM usage_log)").bind(at(days_ago)).execute(&db).await.unwrap();
+        }
+        // 오래된 끝난 작업 / 끊긴 작업 / 최근 작업
+        for (id, status, days_ago) in [("old", "completed", 50), ("cut", "interrupted", 50), ("new", "completed", 1)] {
+            sqlx::query("INSERT INTO generation_tasks (id, task_type, status, created_at, updated_at) VALUES (?, 'chat_stream', ?, ?, ?)")
+                .bind(id)
+                .bind(status)
+                .bind(at(days_ago))
+                .bind(at(days_ago))
+                .execute(&db)
+                .await
+                .unwrap();
+        }
+        let before = summary(&db, 0).await.unwrap();
+        let month_start = crate::db::budget::period_starts(&now).1;
+        let all_before = crate::db::budget::usage_since(&db, "p1", 0).await.unwrap();
+        let month_before = crate::db::budget::usage_since(&db, "p1", month_start).await.unwrap();
+
+        let r = compact_before(&db, retention_cutoff(&now, 30)).await.unwrap();
+        assert_eq!(r, CompactResult { usage_rows: 3, tasks: 1 });
+
+        let pick = |v: &[UsageSummary]| v.iter().map(|r| (r.calls, r.failed, r.input_tokens, r.output_tokens, r.estimated_calls)).collect::<Vec<_>>();
+        let after = summary(&db, 0).await.unwrap();
+        assert_eq!(pick(&before), pick(&after));
+        assert_eq!(pick(&after), vec![(4, 1, 187, 4, 4)]);
+        assert_eq!(crate::db::budget::usage_since(&db, "p1", 0).await.unwrap(), all_before);
+        assert_eq!(crate::db::budget::usage_since(&db, "p1", month_start).await.unwrap(), month_before);
+        let left: i64 = sqlx::query_scalar("SELECT COUNT(*) FROM usage_log").fetch_one(&db).await.unwrap();
+        assert_eq!(left, 1);
+        let tasks: Vec<String> = sqlx::query_scalar("SELECT id FROM generation_tasks ORDER BY id").fetch_all(&db).await.unwrap();
+        assert_eq!(tasks, vec!["cut".to_string(), "new".to_string()]);
+        // 다시 해도 바뀌지 않음
+        assert_eq!(compact_before(&db, retention_cutoff(&now, 30)).await.unwrap(), CompactResult::default());
+        assert_eq!(pick(&summary(&db, 0).await.unwrap()), pick(&before));
     }
 
     #[tokio::test]

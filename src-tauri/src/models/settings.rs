@@ -22,6 +22,9 @@ pub struct AppSetting {
     /// 홈 화면 (사용자 꾸미기)
     #[serde(default)]
     pub home: HomeSetting,
+    /// 작업·사용량 상세 기록 보존 기간(일). None = 계속 보관(기본). 지난 상세는 일별 합계로 남긴다 (1-A-4)
+    #[serde(default)]
+    pub usage_retention_days: Option<u32>,
 }
 
 /// 홈 화면: 보일 블록과 순서, 인사말, 내 글. 리소스를 쓰지 않는 화면이라 블록은 기본으로 보인다
@@ -73,6 +76,7 @@ impl Default for AppSetting {
             last_played_game_id: None,
             phone_mode_prompt: default_phone_mode_prompt(),
             home: HomeSetting::default(),
+            usage_retention_days: None,
         }
     }
 }

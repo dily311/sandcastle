@@ -14,7 +14,7 @@ use serde_json::json;
 use crate::{
     db::{
         budget::{self, BudgetMeter, BudgetMetric, BudgetPeriod},
-        usage::UsageKind,
+        usage::{self as budget_compact, UsageKind},
     },
     error::{AppError, ErrorCode, Result},
     task::{current_task, RunBy},
@@ -73,6 +73,14 @@ pub async fn ensure(db: &sqlx::SqlitePool, api_profile_id: &str, kind: UsageKind
         return Ok(());
     }
     Err(exceeded(api_profile_id, meter, run_by))
+}
+
+/// 기록 정리 (1-A-4): 보존 기간보다 오래된 상세를 일별 합계로 옮긴다. None이면 하지 않음.
+/// 보존 기간은 30일 미만으로 줄이지 않는다 (실행 기록 화면의 30일 칸이 상세를 쓰므로)
+pub async fn compact(db: &sqlx::SqlitePool, retention_days: Option<u32>) -> std::result::Result<budget_compact::CompactResult, sqlx::Error> {
+    let Some(days) = retention_days else { return Ok(budget_compact::CompactResult::default()) };
+    let days = days.max(budget_compact::RETENTION_CHOICES[0]);
+    budget_compact::compact_before(db, budget_compact::retention_cutoff(&chrono::Local::now(), days)).await
 }
 
 fn exceeded(api_profile_id: &str, m: &BudgetMeter, run_by: RunBy) -> AppError {

@@ -136,6 +136,15 @@ pub fn run() {
         let features = sys::settings::load::<FeatureSetting>(&settings_handle);
         service::chat::regex_processor::set_enabled(sys::plugins::enabled_in(&features, sys::plugins::id::REGEX));
         app.manage(SettingsState(Mutex::new(features)));
+        // 사용자가 보존 기간을 골랐을 때만: 지난 작업·사용량 상세를 일별 합계로 정리 (1-A-4, 요금 없음)
+        if let Some(days) = app.state::<SettingsState<AppSetting>>().0.lock().ok().and_then(|s| s.usage_retention_days) {
+            let db = pool.clone();
+            tauri::async_runtime::spawn(async move {
+                if let Err(e) = service::budget::compact(&db, Some(days)).await {
+                    eprintln!("[usage] 기록 정리 실패: {e}");
+                }
+            });
+        }
         let plugin_setting = sys::settings::load::<models::settings::PluginSetting>(&settings_handle);
         service::app_prompts::set(&plugin_setting.prompts);
         app.manage(SettingsState(Mutex::new(plugin_setting)));
@@ -274,6 +283,7 @@ pub fn specta_builder() -> tauri_specta::Builder<tauri::Wry> {
             usage_summary,
             clear_usage,
             allow_budget_once,
+            compact_usage,
             list_model_prices,
             upsert_model_price,
             delete_model_price,
@@ -507,6 +517,7 @@ pub fn specta_builder() -> tauri_specta::Builder<tauri::Wry> {
             usage_summary,
             clear_usage,
             allow_budget_once,
+            compact_usage,
             list_model_prices,
             upsert_model_price,
             delete_model_price,

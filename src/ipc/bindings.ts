@@ -110,6 +110,11 @@ export const commands = {
 	 *  실행을 대신 시작하지 않는다 — 사용자가 다시 누른다
 	 */
 	allowBudgetOnce: (options?: InvokeOptions) => __TAURI_INVOKE<null>("allow_budget_once", undefined, options),
+	/**
+	 *  보존 기간(설정)보다 오래된 작업·사용량 상세를 정리한다. 일별 합계는 남아 사용량 숫자는 그대로.
+	 *  보존 기간이 "계속 보관"이면 아무것도 하지 않는다
+	 */
+	compactUsage: (options?: InvokeOptions) => __TAURI_INVOKE<CompactResult>("compact_usage", undefined, options),
 	listModelPrices: (options?: InvokeOptions) => __TAURI_INVOKE<ModelPrice_Serialize[]>("list_model_prices", undefined, options),
 	upsertModelPrice: (price: ModelPrice_Deserialize, options?: InvokeOptions) => __TAURI_INVOKE<null>("upsert_model_price", { price }, options),
 	deleteModelPrice: (model: string, options?: InvokeOptions) => __TAURI_INVOKE<null>("delete_model_price", { model }, options),
@@ -517,6 +522,8 @@ export type AppSetting_Deserialize = {
 	phoneModePrompt?: string,
 	/**  홈 화면 (사용자 꾸미기) */
 	home?: HomeSetting_Deserialize,
+	/**  작업·사용량 상세 기록 보존 기간(일). None = 계속 보관(기본). 지난 상세는 일별 합계로 남긴다 (1-A-4) */
+	usageRetentionDays?: number | null,
 };
 
 export type AppSetting_Serialize = {
@@ -536,6 +543,8 @@ export type AppSetting_Serialize = {
 	phoneModePrompt: string,
 	/**  홈 화면 (사용자 꾸미기) */
 	home: HomeSetting_Serialize,
+	/**  작업·사용량 상세 기록 보존 기간(일). None = 계속 보관(기본). 지난 상세는 일별 합계로 남긴다 (1-A-4) */
+	usageRetentionDays: number | null,
 };
 
 export type AssetRef = {
@@ -908,6 +917,13 @@ export type ChatTurn_Serialize = {
 };
 
 export type ColorSchema = "light" | "dark" | "system";
+
+export type CompactResult = {
+	/**  일별 합계로 옮기고 지운 사용량 상세 줄 수 */
+	usageRows: number,
+	/**  지운 작업 수 (시도 기록은 함께 지워짐) */
+	tasks: number,
+};
 
 /**  컨텍스트 사용량 (오른쪽 패널). 마지막으로 보낸 프롬프트 기준 */
 export type ContextUsage = ContextUsage_Serialize | ContextUsage_Deserialize;

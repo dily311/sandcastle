@@ -20,6 +20,7 @@ const db = {
 		selectedPersonaId: "default",
 		lastPlayedGameId: null,
 		phoneModePrompt: "[폰 메신저 대화]",
+		usageRetentionDays: null,
 		home: { startOnHome: false, greeting: "", blocks: ["continue", "quick", "favorites", "games"], css: "" },
 	} satisfies AppSetting_Serialize as AppSetting_Serialize,
 	themeSetting: {
@@ -102,6 +103,7 @@ export const handlers: Record<string, Handler> = {
 	],
 	clear_usage: () => 0,
 	allow_budget_once: () => null,
+	compact_usage: () => ({ usageRows: 0, tasks: 0 }),
 	list_model_prices: () => [{ model: "claude-sonnet-5-5", currency: "$", inputPerMtok: 3, outputPerMtok: 15, per1kChars: null, perImage: null }],
 	upsert_model_price: () => null,
 	delete_model_price: () => null,

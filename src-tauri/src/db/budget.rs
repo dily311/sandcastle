@@ -175,14 +175,18 @@ pub fn period_starts<Tz: TimeZone>(now: &DateTime<Tz>) -> (i64, i64) {
     (start(today), start(month_first))
 }
 
-/// since 이후 이 프로필의 사용량. 실패한 호출도 센다(요금이 나갈 수 있음)
+/// since 이후 이 프로필의 사용량. 실패한 호출도 센다(요금이 나갈 수 있음).
+/// 정리된 일별 합계(usage_daily)도 더한다 — 정리는 하루 단위로 자르므로 기간 시작(0시)과 맞는다
 pub async fn usage_since<'e, E>(executor: E, api_profile_id: &str, since: i64) -> Result<PeriodUsage, sqlx::Error>
 where
     E: Executor<'e, Database = Sqlite>,
 {
     let row: (i64, i64, i64) = sqlx::query_as(
-        "SELECT COALESCE(SUM(input_tokens + output_tokens), 0), COALESCE(SUM(characters), 0), COALESCE(SUM(images), 0)
-         FROM usage_log WHERE api_profile_id = ? AND created_at >= ?",
+        "SELECT COALESCE(SUM(t), 0), COALESCE(SUM(c), 0), COALESCE(SUM(i), 0) FROM (
+             SELECT input_tokens + output_tokens AS t, characters AS c, images AS i FROM usage_log WHERE api_profile_id = ?1 AND created_at >= ?2
+             UNION ALL
+             SELECT input_tokens + output_tokens, characters, images FROM usage_daily WHERE api_profile_id = ?1 AND day_start >= ?2
+         )",
     )
     .bind(api_profile_id)
     .bind(since)

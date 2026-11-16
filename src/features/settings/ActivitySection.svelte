@@ -4,7 +4,8 @@
 	import { onDestroy, onMount } from "svelte";
 	import { RefreshCw, Square, Trash2 } from "@lucide/svelte";
 	import type { TaskHistoryItem_Serialize as HistoryItem, TaskInfo_Serialize as TaskInfo, UsageSummary_Serialize as Usage } from "$ipc/bindings";
-	import { Badge, Button, EmptyState, Segmented } from "$shared/ui";
+	import { Badge, Button, EmptyState, Segmented, Select } from "$shared/ui";
+	import { appSetting } from "$shared/stores/appSetting.svelte";
 	import { call, commands } from "$shared/ipc/client";
 	import { onEvent } from "$shared/ipc/events";
 	import { confirmAction } from "$shared/stores/confirm.svelte";
@@ -88,6 +89,7 @@
 	let unlisten: (() => void) | undefined;
 	onMount(() => {
 		void load();
+		void appSetting.load();
 		void onEvent<{ type: string }>("task-event", (e) => {
 			if (e.type === "textDelta" || e.type === "progress") return;
 			clearTimeout(timer);
@@ -101,6 +103,33 @@
 
 	async function cancel(id: string) {
 		await call(commands.cancelTask(id), src).catch(() => {});
+		void load();
+	}
+
+	// 기록 보관 (1-A-4): 지난 상세는 일별 합계로 남기고 지운다. 사용량 숫자는 그대로
+	const RETENTION = [
+		{ value: "", label: "계속 보관" },
+		{ value: "30", label: "30일" },
+		{ value: "90", label: "90일" },
+		{ value: "180", label: "180일" },
+		{ value: "365", label: "1년" },
+	];
+	const retention = $derived(appSetting.value?.usageRetentionDays ?? null);
+	async function setRetention(v: string) {
+		const days = v ? Number(v) : null;
+		if (days != null && (retention == null || days < retention)) {
+			const ok = await confirmAction({
+				title: "기록 보관 기간",
+				message: `${days}일보다 오래된 작업 기록과 사용량 상세를 지움 (앱을 켤 때마다 정리). API별 사용량 합계와 예산 한도 계산은 그대로 남음. 지운 상세는 되돌릴 수 없음`,
+				danger: true,
+				confirmLabel: "정리하기",
+			});
+			if (!ok) return;
+		}
+		await appSetting.update({ usageRetentionDays: days });
+		if (days == null) return toasts.success("기록을 계속 보관함");
+		const r = await call(commands.compactUsage(), src);
+		toasts.success(r.usageRows || r.tasks ? `정리함: 작업 ${n(r.tasks)}개 · 사용량 상세 ${n(r.usageRows)}줄` : "정리할 오래된 기록 없음");
 		void load();
 	}
 
@@ -207,6 +236,11 @@
 
 	<Group title="최근 실행" flush>
 		{#snippet aside()}
+			<div class="aside">
+			<label class="keep"
+				><span class="muted">보관</span>
+				<Select value={retention == null ? "" : String(retention)} options={RETENTION} aria-label="작업·사용량 상세 기록 보관 기간" onchange={(e) => setRetention(e.currentTarget.value)} />
+			</label>
 			<Segmented
 				label="실행 주체"
 				bind:value={who}
@@ -215,6 +249,7 @@
 					{ value: "auto", label: `자동 ${autoCount}` },
 				]}
 			/>
+			</div>
 		{/snippet}
 		{#each shown as h (h.id)}
 			{@const s = status(h)}
@@ -277,6 +312,11 @@
 	.amount {
 		font-size: var(--text-sm);
 		font-variant-numeric: tabular-nums;
+	}
+	.keep {
+		display: flex;
+		align-items: center;
+		gap: var(--space-2);
 	}
 	.total {
 		margin: var(--space-3) 0 0;

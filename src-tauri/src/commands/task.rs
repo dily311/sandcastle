@@ -82,6 +82,18 @@ pub async fn allow_budget_once() -> Result<()> {
     Ok(())
 }
 
+/// 보존 기간(설정)보다 오래된 작업·사용량 상세를 정리한다. 일별 합계는 남아 사용량 숫자는 그대로.
+/// 보존 기간이 "계속 보관"이면 아무것도 하지 않는다
+#[tauri::command]
+#[specta::specta]
+pub async fn compact_usage(
+    state: State<'_, crate::state::AppState>,
+    settings: State<'_, crate::sys::settings::SettingsState<crate::models::settings::AppSetting>>,
+) -> Result<crate::db::usage::CompactResult> {
+    let days = settings.0.lock().map_err(|_| crate::error::AppError::Internal { message: "설정 잠금 실패".into() })?.usage_retention_days;
+    Ok(crate::service::budget::compact(&state.db, days).await?)
+}
+
 // ---------------------------------------------------------
 // 단가표 (1-A-3)
 // ---------------------------------------------------------
