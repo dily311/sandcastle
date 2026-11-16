@@ -176,7 +176,7 @@ export const commands = {
 	/**  준비해 둔 복원 취소 */
 	cancelRestore: (options?: InvokeOptions) => __TAURI_INVOKE<null>("cancel_restore", undefined, options),
 	/**  재시작을 기다리는 복원 정보 (없으면 null) */
-	getPendingRestore: (options?: InvokeOptions) => __TAURI_INVOKE<BackupManifest | null>("get_pending_restore", undefined, options),
+	getPendingRestore: (options?: InvokeOptions) => __TAURI_INVOKE<BackupManifest_Serialize | null>("get_pending_restore", undefined, options),
 	/**  앱 재시작 (복원 적용용) */
 	restartApp: (options?: InvokeOptions) => __TAURI_INVOKE<void>("restart_app", undefined, options),
 	listPromptPresets: (options?: InvokeOptions) => __TAURI_INVOKE<PromptPresets_Serialize[]>("list_prompt_presets", undefined, options),
@@ -600,7 +600,9 @@ export type BackgroundAssetsInput_Serialize = {
 	weatherId: string | null,
 } & GameAssetsInput_Serialize;
 
-export type BackupManifest = {
+export type BackupManifest = BackupManifest_Serialize | BackupManifest_Deserialize;
+
+export type BackupManifest_Deserialize = {
 	format: string,
 	version: number,
 	appVersion: string,
@@ -610,6 +612,22 @@ export type BackupManifest = {
 	/**  만든 PC의 앱 데이터 경로 (복원 시 절대 경로 보정용) */
 	appDataDir: string,
 	totals: DataTotals,
+	/**  백업에 든 폴더. 복원은 이 폴더만 바꾸고 나머지는 그대로 둔다 (v1 백업은 비어 있음 → V1_DIRS) */
+	dirs?: string[],
+};
+
+export type BackupManifest_Serialize = {
+	format: string,
+	version: number,
+	appVersion: string,
+	createdAt: number,
+	schemaVersion: number,
+	migrations: MigrationInfo[],
+	/**  만든 PC의 앱 데이터 경로 (복원 시 절대 경로 보정용) */
+	appDataDir: string,
+	totals: DataTotals,
+	/**  백업에 든 폴더. 복원은 이 폴더만 바꾸고 나머지는 그대로 둔다 (v1 백업은 비어 있음 → V1_DIRS) */
+	dirs: string[],
 };
 
 export type BackupSummary = {

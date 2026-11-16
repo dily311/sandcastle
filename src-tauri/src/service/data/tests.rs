@@ -155,13 +155,23 @@ async fn pack_rejects_conversations_of_other_characters() {
 #[tokio::test]
 async fn full_backup_restores_into_another_app_dir() {
     let (_a, base_a, db_a) = app_dir().await;
-    populate(&db_a, &base_a).await;
-    std::fs::write(base_a.join("settings.json"), r#"{"app-setting":{"language":"en"}}"#).unwrap();
+    let cid = populate(&db_a, &base_a).await;
+    // 갤러리 그림(+정보), 올린 배경, 테마 배경을 가리키는 설정, 커버 경로 (1-B-1)
+    for (rel, body) in [("generated/g1.png", "png"), ("generated/g1.json", "{}"), ("backgrounds/b1.png", "png")] {
+        let p = base_a.join(rel);
+        std::fs::create_dir_all(p.parent().unwrap()).unwrap();
+        std::fs::write(p, body).unwrap();
+    }
+    let bg_a = base_a.join("backgrounds/b1.png").to_string_lossy().to_string();
+    let settings = |bg: &str| serde_json::json!({ "app-setting": { "language": "en" }, "theme-setting": { "backgroundImage": bg, "backgrounds": [bg] } }).to_string();
+    std::fs::write(base_a.join("settings.json"), settings(&bg_a)).unwrap();
+    let cover_a = base_a.join("generated/g1.png").to_string_lossy().to_string();
+    sqlx::query("UPDATE characters SET cover = ? WHERE id = ?").bind(&cover_a).bind(&cid).execute(&db_a).await.unwrap();
     let before = overview::totals(&db_a).await.unwrap();
     let out = base_a.join("exports/full.scbackup");
     let summary = backup::export_backup(&db_a, &base_a, &out).await.unwrap();
-    // db + settings + 이미지 3장(원본·썸네일) + 아바타
-    assert_eq!(summary.file_count, 1 + 1 + 3 * 2 + 1);
+    // db + settings + 이미지 3장(원본·썸네일) + 아바타 + 갤러리 2 + 배경 1
+    assert_eq!(summary.file_count, 1 + 1 + 3 * 2 + 1 + 2 + 1);
 
     // 다른 PC: 기존 데이터가 조금 있는 상태
     let dir_b = tempfile::tempdir().unwrap();
@@ -188,12 +198,20 @@ async fn full_backup_restores_into_another_app_dir() {
         (after.characters, after.conversations, after.messages, after.character_images, after.regex_scripts),
         (before.characters, before.conversations, before.messages, before.character_images, before.regex_scripts)
     );
-    assert_eq!(std::fs::read_to_string(base_b.join("settings.json")).unwrap(), r#"{"app-setting":{"language":"en"}}"#);
+    // 설정 안의 테마 배경 경로가 이 PC 경로로 (JSON 안의 역슬래시 모양도)
+    let bg_b = base_b.join("backgrounds/b1.png").to_string_lossy().to_string();
+    let restored: serde_json::Value = serde_json::from_str(&std::fs::read_to_string(base_b.join("settings.json")).unwrap()).unwrap();
+    let expected: serde_json::Value = serde_json::from_str(&settings(&bg_b)).unwrap();
+    assert_eq!(restored, expected);
+    assert!(Path::new(&bg_b).is_file());
+    // 갤러리 그림 그대로
+    assert!(base_b.join("generated/g1.png").is_file() && base_b.join("generated/g1.json").is_file());
 
-    // 아바타 절대 경로가 이 PC 경로로 바뀜
-    let (avatar,): (String,) = sqlx::query_as("SELECT avatar FROM characters").fetch_one(&db_b).await.unwrap();
+    // 아바타·커버 절대 경로가 이 PC 경로로 바뀜
+    let (avatar, cover): (String, String) = sqlx::query_as("SELECT avatar, cover FROM characters").fetch_one(&db_b).await.unwrap();
     assert!(Path::new(&avatar).starts_with(&base_b), "{avatar}");
     assert!(Path::new(&avatar).is_file());
+    assert!(Path::new(&cover).starts_with(&base_b) && Path::new(&cover).is_file(), "{cover}");
     // 채팅 이미지도 그대로
     let o = overview::data_overview(&db_b, &base_b).await.unwrap();
     let images = db::character_image::get_character_images(&db_b, &o.characters[0].id, false).await.unwrap();
@@ -206,6 +224,35 @@ async fn full_backup_restores_into_another_app_dir() {
     assert!(kept.join("characters/old.txt").is_file());
     assert!(kept.join("app.db").is_file());
     assert!(!base_b.join("characters/old.txt").exists());
+}
+
+/// v1 백업(manifest.dirs 없음)을 복원해도 v1에 없던 갤러리·배경은 지금 것을 그대로 둔다
+#[tokio::test]
+async fn v1_backup_restore_keeps_folders_it_did_not_contain() {
+    let dir = tempfile::tempdir().unwrap();
+    let base = dir.path().join("appdata");
+    let stage = base.join("restore-staging");
+    for rel in ["generated/mine.png", "backgrounds/mine.png", "characters/now.txt"] {
+        let p = base.join(rel);
+        std::fs::create_dir_all(p.parent().unwrap()).unwrap();
+        std::fs::write(p, "x").unwrap();
+    }
+    std::fs::create_dir_all(stage.join("characters")).unwrap();
+    std::fs::write(stage.join("app.db"), "db").unwrap();
+    std::fs::write(stage.join("characters/old.txt"), "old").unwrap();
+    // v1 manifest: dirs 칸이 없음
+    let v1 = serde_json::json!({
+        "format": backup::BACKUP_FORMAT, "version": 1, "appVersion": "0.1.0", "createdAt": 0, "schemaVersion": 1,
+        "migrations": [], "appDataDir": "C:\\old", "totals": serde_json::to_value(overview::DataTotals::default()).unwrap(),
+    });
+    std::fs::write(stage.join("READY.json"), v1.to_string()).unwrap();
+    let m = backup::pending_restore(&base).unwrap();
+    assert_eq!(m.included_dirs(), vec!["characters", "games", "themes"]);
+
+    assert!(backup::apply_pending_restore(&base).unwrap());
+    assert!(base.join("generated/mine.png").is_file());
+    assert!(base.join("backgrounds/mine.png").is_file());
+    assert!(base.join("characters/old.txt").is_file() && !base.join("characters/now.txt").exists());
 }
 
 #[test]

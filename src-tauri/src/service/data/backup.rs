@@ -7,7 +7,12 @@
 //! files/characters/**      아바타, 채팅 이미지
 //! files/games/**           게임 패키지
 //! files/themes/**          테마
+//! files/generated/**       갤러리 그림 (만든·올린 그림과 정보 .json)  — v2부터
+//! files/backgrounds/**     올린 배경 (테마·폰 배경)                   — v2부터
 //! ```
+//!
+//! 무엇이 사용자 데이터인지는 ADR-008의 표. 캐시(음성·앨범 아트 = app_cache_dir), tmp, exports,
+//! restore-* 폴더는 넣지 않는다. API 키는 OS keyring에만 있어 어떤 경우에도 들어가지 않는다.
 //!
 //! ## 복원 순서
 //! 1. `prepare_restore`: 백업을 `restore-staging/`에 풀고 검사한다
@@ -36,9 +41,12 @@ use super::{
 };
 
 pub const BACKUP_FORMAT: &str = "sandcastle-backup";
-pub const BACKUP_VERSION: u32 = 1;
+/// 2: generated·backgrounds 추가, manifest.dirs
+pub const BACKUP_VERSION: u32 = 2;
 /// 백업에 들어가는 폴더 (album_arts 같은 캐시, exports, tmp는 제외)
-pub const BACKUP_DIRS: [&str; 3] = ["characters", "games", "themes"];
+pub const BACKUP_DIRS: [&str; 5] = ["characters", "games", "themes", "generated", "backgrounds"];
+/// v1 백업에 들어 있던 폴더 (manifest.dirs가 없을 때)
+const V1_DIRS: [&str; 3] = ["characters", "games", "themes"];
 const DB_FILE: &str = "app.db";
 const SETTINGS_FILE: &str = "settings.json";
 const STAGING_DIR: &str = "restore-staging";
@@ -66,6 +74,19 @@ pub struct BackupManifest {
     /// 만든 PC의 앱 데이터 경로 (복원 시 절대 경로 보정용)
     pub app_data_dir: String,
     pub totals: DataTotals,
+    /// 백업에 든 폴더. 복원은 이 폴더만 바꾸고 나머지는 그대로 둔다 (v1 백업은 비어 있음 → V1_DIRS)
+    #[serde(default)]
+    pub dirs: Vec<String>,
+}
+
+impl BackupManifest {
+    /// 이 백업이 담은 폴더 (BACKUP_DIRS 안의 것만 — 모르는 이름은 무시)
+    pub fn included_dirs(&self) -> Vec<&'static str> {
+        if self.dirs.is_empty() {
+            return V1_DIRS.to_vec();
+        }
+        BACKUP_DIRS.into_iter().filter(|d| self.dirs.iter().any(|x| x == d)).collect()
+    }
 }
 
 #[derive(Debug, Serialize, specta::Type)]
@@ -123,6 +144,7 @@ pub async fn export_backup(db: &DbPool, app_data_dir: &Path, out: &Path) -> Resu
             migrations: read_migrations(db).await?,
             app_data_dir: app_data_dir.to_string_lossy().to_string(),
             totals: totals(db).await?,
+            dirs: BACKUP_DIRS.iter().map(|d| d.to_string()).collect(),
         };
 
         let (base, out_path, snap, m) =
@@ -214,7 +236,9 @@ async fn prepare_inner(stage: &Path, backup: &Path) -> Result<RestorePreview> {
         if a.by_name(SETTINGS_FILE).is_ok() {
             extract_file(&mut a, SETTINGS_FILE, &st.join(SETTINGS_FILE))?;
         }
-        for dir in BACKUP_DIRS {
+        for dir in manifest.included_dirs() {
+            // 빈 폴더도 만들어 둔다: 백업에 비어 있던 폴더는 복원 뒤에도 비어 있어야 함
+            std::fs::create_dir_all(st.join(dir))?;
             extract_prefix(&mut a, &format!("files/{dir}"), &st.join(dir))?;
         }
         Ok(manifest)
@@ -304,16 +328,18 @@ pub fn apply_pending_restore(app_data_dir: &Path) -> Result<bool> {
         Ok(())
     };
 
+    // 백업에 든 폴더만 바꾼다 (v1 백업이면 갤러리·배경은 지금 것을 그대로 둠)
+    let dirs = manifest.included_dirs();
     let result = (|| -> Result<()> {
         // 현재 데이터 치우기 (WAL/SHM도 같이: 남겨 두면 새 DB에 엉뚱한 로그가 적용된다)
         for name in ["app.db", "app.db-wal", "app.db-shm", SETTINGS_FILE]
             .into_iter()
-            .chain(BACKUP_DIRS)
+            .chain(dirs.iter().copied())
         {
             mv(app_data_dir.join(name), keep.join(name), &mut moved)?;
         }
         // 백업 넣기
-        for name in [DB_FILE, SETTINGS_FILE].into_iter().chain(BACKUP_DIRS) {
+        for name in [DB_FILE, SETTINGS_FILE].into_iter().chain(dirs.iter().copied()) {
             mv(stage.join(name), app_data_dir.join(name), &mut moved)?;
         }
         Ok(())
@@ -334,7 +360,8 @@ pub fn apply_pending_restore(app_data_dir: &Path) -> Result<bool> {
     Ok(true)
 }
 
-/// DB를 연 뒤 호출. 복원된 DB 안의 다른 PC 경로(아바타)를 이 PC 경로로 바꾼다.
+/// DB를 연 뒤 호출. 복원된 DB·설정 안의 다른 PC 앱 데이터 경로를 이 PC 경로로 바꾼다.
+/// (아바타·커버·테마 배경·메시지 meta의 그림 경로 등 — 어느 칸이든 앱 데이터 경로로 시작하는 글자는 모두)
 pub async fn finish_restore_fixups(db: &DbPool, app_data_dir: &Path) -> Result<()> {
     let fixup = app_data_dir.join(FIXUP_FILE);
     let Ok(raw) = std::fs::read(&fixup) else { return Ok(()) };
@@ -343,21 +370,53 @@ pub async fn finish_restore_fixups(db: &DbPool, app_data_dir: &Path) -> Result<(
     let new = app_data_dir.to_string_lossy().to_string();
 
     if !old.is_empty() && old != new {
-        for table in ["characters", "personas"] {
-            let sql = format!("SELECT id, avatar FROM {table} WHERE avatar IS NOT NULL");
-            let rows: Vec<(String, String)> = sqlx::query_as(sqlx::AssertSqlSafe(sql)).fetch_all(db).await?;
-            for (id, avatar) in rows {
-                if let Some(rest) = avatar.strip_prefix(&old) {
-                    let sql = format!("UPDATE {table} SET avatar = ? WHERE id = ?");
-                    sqlx::query(sqlx::AssertSqlSafe(sql))
-                        .bind(format!("{new}{rest}"))
-                        .bind(id)
-                        .execute(db)
-                        .await?;
-                }
+        let pairs = path_variants(&old, &new);
+        replace_paths_in_db(db, &pairs).await?;
+        let settings = app_data_dir.join(SETTINGS_FILE);
+        if let Ok(text) = std::fs::read_to_string(&settings) {
+            let fixed = pairs.iter().fold(text.clone(), |t, (o, n)| t.replace(o.as_str(), n));
+            if fixed != text {
+                std::fs::write(&settings, fixed)?;
             }
         }
     }
     let _ = std::fs::remove_file(fixup);
+    Ok(())
+}
+
+/// 바꿀 경로 모양: 그대로 / JSON 안(역슬래시 두 개) / 슬래시로 쓴 것
+fn path_variants(old: &str, new: &str) -> Vec<(String, String)> {
+    let mut v = vec![(old.to_string(), new.to_string())];
+    if old.contains('\\') {
+        let esc = |s: &str| s.replace('\\', "\\\\");
+        v.push((esc(old), esc(new)));
+        v.push((old.replace('\\', "/"), new.replace('\\', "/")));
+    }
+    v
+}
+
+/// 모든 표의 글자 칸에서 옛 경로를 새 경로로 (마이그레이션 기록 표는 빼고)
+async fn replace_paths_in_db(db: &DbPool, pairs: &[(String, String)]) -> Result<()> {
+    let tables: Vec<String> = sqlx::query_scalar(
+        "SELECT name FROM sqlite_master WHERE type = 'table' AND name NOT LIKE 'sqlite_%' AND name <> '_sqlx_migrations'",
+    )
+    .fetch_all(db)
+    .await?;
+    let mut tx = db.begin().await?;
+    for table in tables {
+        let q = |s: &str| format!("\"{}\"", s.replace('"', "\"\""));
+        let cols: Vec<(String, String)> = sqlx::query_as("SELECT name, type FROM pragma_table_info(?)").bind(&table).fetch_all(&mut *tx).await?;
+        for (col, ty) in cols {
+            let ty = ty.to_ascii_uppercase();
+            if !(ty.is_empty() || ty.contains("TEXT") || ty.contains("CHAR") || ty.contains("JSON")) {
+                continue;
+            }
+            for (o, n) in pairs {
+                let sql = format!("UPDATE {t} SET {c} = REPLACE({c}, ?1, ?2) WHERE instr({c}, ?1) > 0", t = q(&table), c = q(&col));
+                sqlx::query(sqlx::AssertSqlSafe(sql)).bind(o).bind(n).execute(&mut *tx).await?;
+            }
+        }
+    }
+    tx.commit().await?;
     Ok(())
 }

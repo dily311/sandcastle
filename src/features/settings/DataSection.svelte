@@ -158,7 +158,7 @@
 		</Group>
 
 		<Group title="백업">
-			<Row label="백업 파일 만들기" desc="캐릭터·대화·설정·이미지·게임을 파일 하나로. API 키는 빠짐">
+			<Row label="백업 파일 만들기" desc="캐릭터·대화·설정·이미지·갤러리·배경·게임을 파일 하나로. API 키는 빠짐">
 				<Button size="sm" loading={busy === "backup"} disabled={busy !== null} onclick={backup}>{#snippet icon()}<Save />{/snippet}백업</Button>
 			</Row>
 			<Row label="백업에서 복원" desc="지금 데이터는 지우지 않고 따로 옮겨 둔 뒤 바꿈. 앱이 다시 시작됨">
