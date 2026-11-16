@@ -1,3 +1,6 @@
 allowBuilds:
   es5-ext: false
   esbuild: false
+  # WebdriverIO가 끌고 오는 브라우저 드라이버 내려받기 — E2E는 tauri-driver + 맞는 msedgedriver를 따로 씀
+  edgedriver: false
+  geckodriver: false
