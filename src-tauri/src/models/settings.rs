@@ -5,6 +5,7 @@ use serde::{de::DeserializeOwned, Deserialize, Serialize};
 #[derive(Debug, Serialize, Deserialize, Clone, specta::Type)]
 #[serde(rename_all = "camelCase")]
 pub struct AppSetting {
+    /// 예전 "자동 업데이트" 스위치. 아무 동작에도 연결된 적이 없어 쓰지 않는다 (check_updates_on_start로 대신, 1-E-2). 저장된 값 호환용으로만 남김
     pub auto_update: bool,
     pub language: String,
     pub selected_preset: String,
@@ -22,6 +23,9 @@ pub struct AppSetting {
     /// 홈 화면 (사용자 꾸미기)
     #[serde(default)]
     pub home: HomeSetting,
+    /// 앱을 켤 때 새 버전 확인 (GitHub Releases, 기본 꺼짐 — 1-E-2). 내려받기는 늘 사용자가 누른다
+    #[serde(default)]
+    pub check_updates_on_start: bool,
     /// 작업·사용량 상세 기록 보존 기간(일). None = 계속 보관(기본). 지난 상세는 일별 합계로 남긴다 (1-A-4)
     #[serde(default)]
     pub usage_retention_days: Option<u32>,
@@ -77,6 +81,7 @@ impl Default for AppSetting {
             phone_mode_prompt: default_phone_mode_prompt(),
             home: HomeSetting::default(),
             usage_retention_days: None,
+            check_updates_on_start: false,
         }
     }
 }

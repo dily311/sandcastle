@@ -164,6 +164,8 @@ export const commands = {
 	checkData: (options?: InvokeOptions) => __TAURI_INVOKE<DataCheck>("check_data", undefined, options),
 	/**  지난 panic 기록 (최근 것부터, 앱 데이터 폴더의 logs/panic.log) */
 	getPanicLog: (options?: InvokeOptions) => __TAURI_INVOKE<PanicEntry_Serialize[]>("get_panic_log", undefined, options),
+	/**  새 버전 확인 (GitHub Releases). 내려받지 않고 릴리스 페이지 주소만 돌려준다 (1-E-2) */
+	checkForUpdate: (options?: InvokeOptions) => __TAURI_INVOKE<UpdateInfo_Serialize>("check_for_update", undefined, options),
 	clearPanicLog: (options?: InvokeOptions) => __TAURI_INVOKE<null>("clear_panic_log", undefined, options),
 	/**
 	 *  고른 파일(Android content:// 주소)을 앱 임시 폴더로 복사해 경로로 (1-C-2). 경로면 그대로.
@@ -542,6 +544,8 @@ export type AppSetting_Deserialize = {
 	phoneModePrompt?: string,
 	/**  홈 화면 (사용자 꾸미기) */
 	home?: HomeSetting_Deserialize,
+	/**  앱을 켤 때 새 버전 확인 (GitHub Releases, 기본 꺼짐 — 1-E-2). 내려받기는 늘 사용자가 누른다 */
+	checkUpdatesOnStart?: boolean,
 	/**  작업·사용량 상세 기록 보존 기간(일). None = 계속 보관(기본). 지난 상세는 일별 합계로 남긴다 (1-A-4) */
 	usageRetentionDays?: number | null,
 };
@@ -563,6 +567,8 @@ export type AppSetting_Serialize = {
 	phoneModePrompt: string,
 	/**  홈 화면 (사용자 꾸미기) */
 	home: HomeSetting_Serialize,
+	/**  앱을 켤 때 새 버전 확인 (GitHub Releases, 기본 꺼짐 — 1-E-2). 내려받기는 늘 사용자가 누른다 */
+	checkUpdatesOnStart: boolean,
 	/**  작업·사용량 상세 기록 보존 기간(일). None = 계속 보관(기본). 지난 상세는 일별 합계로 남긴다 (1-A-4) */
 	usageRetentionDays: number | null,
 };
@@ -3889,6 +3895,30 @@ export type TurnPoint_Serialize = {
 	summary: string,
 	sceneId: string | null,
 	locationId: string | null,
+};
+
+export type UpdateInfo = UpdateInfo_Serialize | UpdateInfo_Deserialize;
+
+export type UpdateInfo_Deserialize = {
+	current: string,
+	/**  최신 릴리스 버전 (릴리스가 아직 없으면 None) */
+	latest?: string | null,
+	newer: boolean,
+	/**  릴리스 페이지 (여기서 내려받는다) */
+	url?: string | null,
+	notes?: string | null,
+	publishedAt?: string | null,
+};
+
+export type UpdateInfo_Serialize = {
+	current: string,
+	/**  최신 릴리스 버전 (릴리스가 아직 없으면 None) */
+	latest: string | null,
+	newer: boolean,
+	/**  릴리스 페이지 (여기서 내려받는다) */
+	url: string | null,
+	notes: string | null,
+	publishedAt: string | null,
 };
 
 /**  API 프로필·종류별 합계 (설정 > 실행 기록 화면) */

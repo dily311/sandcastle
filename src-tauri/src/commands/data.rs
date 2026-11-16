@@ -49,6 +49,13 @@ pub async fn deliver_saved_file(app: AppHandle, tmp: String, uri: String) -> Res
         .map_err(|e| crate::error::AppError::internal(e.to_string()))?
 }
 
+/// 새 버전 확인 (GitHub Releases). 내려받지 않고 릴리스 페이지 주소만 돌려준다 (1-E-2)
+#[tauri::command]
+#[specta::specta]
+pub async fn check_for_update(state: State<'_, AppState>) -> Result<crate::service::update::UpdateInfo> {
+    crate::service::update::check(&state.http_client).await
+}
+
 /// 지난 panic 기록 (최근 것부터, 앱 데이터 폴더의 logs/panic.log)
 #[tauri::command]
 #[specta::specta]
