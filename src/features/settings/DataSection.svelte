@@ -1,7 +1,7 @@
 <script lang="ts">
 	import { onMount } from "svelte";
-	import { ChevronDown, ChevronRight, RotateCcw, Save, Trash2, Upload } from "@lucide/svelte";
-	import type { BackupManifest, DataOverview_Serialize as Overview, DataTotals } from "$ipc/bindings";
+	import { ChevronDown, ChevronRight, RotateCcw, Save, ShieldCheck, Trash2, Upload } from "@lucide/svelte";
+	import type { BackupManifest, DataCheck, DataOverview_Serialize as Overview, DataTotals } from "$ipc/bindings";
 	import { Badge, Button, Spinner } from "$shared/ui";
 	import { call, commands } from "$shared/ipc/client";
 	import { pickFiles, pickSavePath, BACKUP_FILES } from "$shared/ipc/dialog";
@@ -19,6 +19,22 @@
 	let busy = $state<"backup" | "restore" | null>(null);
 	let openChar = $state<string | null>(null);
 	let picked = $state<Set<string>>(new Set());
+
+	// ---- 점검 (1-B-3): 보여주기만, 지우지 않음 ----
+	let check = $state<DataCheck | null>(null);
+	let checking = $state(false);
+	let showOrphans = $state(false);
+	async function runCheck() {
+		checking = true;
+		try {
+			check = await call(commands.checkData(), src);
+		} catch {
+			/* 토스트는 call이 띄움 */
+		} finally {
+			checking = false;
+		}
+	}
+	const kb = (b: number) => (b < 1024 * 1024 ? `${Math.max(1, Math.round(b / 1024))}KB` : `${(b / 1024 / 1024).toFixed(1)}MB`);
 
 	onMount(load);
 	async function load() {
@@ -166,6 +182,39 @@
 			</Row>
 		</Group>
 
+		<Group title="점검">
+			<Row label="DB 점검" desc="DB가 손상되지 않았는지, 캐릭터 폴더에 아무 데도 쓰이지 않는 파일이 있는지 봄. 아무것도 지우지 않음">
+				<Button size="sm" loading={checking} disabled={checking} onclick={runCheck}>{#snippet icon()}<ShieldCheck />{/snippet}점검</Button>
+			</Row>
+			{#if check}
+				<div class="check" role="status">
+					{#if check.ok}
+						<p><Badge tone="success">DB 이상 없음</Badge></p>
+					{:else}
+						<p><Badge tone="danger">DB 문제 발견</Badge> 먼저 백업 파일을 만들어 두고, 문제가 계속되면 백업에서 복원해 볼 것</p>
+						<ul class="problems">
+							{#each check.problems as p, i (i)}<li><code>{p}</code></li>{/each}
+						</ul>
+					{/if}
+					<p>
+						파일 {check.checkedFiles.toLocaleString()}개를 살펴봄 ·
+						{#if check.orphanCount}
+							쓰이지 않는 파일 {check.orphanCount.toLocaleString()}개 ({kb(check.orphanBytes)})
+							<Button size="sm" variant="ghost" aria-expanded={showOrphans} onclick={() => (showOrphans = !showOrphans)}>{showOrphans ? "목록 접기" : "목록 보기"}</Button>
+						{:else}
+							쓰이지 않는 파일 없음
+						{/if}
+					</p>
+					{#if showOrphans && check.orphans.length}
+						<ul class="orphans">
+							{#each check.orphans as o (o.path)}<li><code>{o.path}</code><span class="meta">{kb(o.bytes)}</span></li>{/each}
+						</ul>
+						{#if check.orphanCount > check.orphans.length}<p class="meta">큰 것부터 {check.orphans.length}개만 보임</p>{/if}
+					{/if}
+				</div>
+			{/if}
+		</Group>
+
 		<Group title="대화 정리">
 			{#snippet aside()}
 				{#if picked.size}<Button size="sm" variant="danger" onclick={removePicked}>{#snippet icon()}<Trash2 />{/snippet}고른 대화 {picked.size}개 삭제</Button>{/if}
@@ -224,6 +273,39 @@
 </Section>
 
 <style>
+	.check {
+		display: flex;
+		flex-direction: column;
+		gap: var(--space-2);
+		padding: var(--space-3) 0;
+		font-size: var(--text-sm);
+	}
+	.check p {
+		margin: 0;
+		display: flex;
+		align-items: center;
+		gap: var(--space-2);
+		flex-wrap: wrap;
+	}
+	.problems,
+	.orphans {
+		margin: 0;
+		padding: 0;
+		list-style: none;
+		max-height: 240px;
+		overflow: auto;
+	}
+	.orphans li {
+		display: flex;
+		justify-content: space-between;
+		gap: var(--space-3);
+		padding: 2px 0;
+	}
+	.orphans code {
+		overflow: hidden;
+		text-overflow: ellipsis;
+		white-space: nowrap;
+	}
 	.loading {
 		display: grid;
 		place-items: center;

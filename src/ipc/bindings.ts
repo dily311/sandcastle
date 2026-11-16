@@ -160,6 +160,8 @@ export const commands = {
 	detectSillytavern: (path: string, options?: InvokeOptions) => __TAURI_INVOKE<SillyTavernKind>("detect_sillytavern", { path }, options),
 	/**  캐릭터 → 채팅 트리, 개수, 저장 공간 */
 	getDataOverview: (options?: InvokeOptions) => __TAURI_INVOKE<DataOverview_Serialize>("get_data_overview", undefined, options),
+	/**  DB 점검: 무결성(PRAGMA integrity_check)과 아무 데도 쓰이지 않는 파일 목록. 지우지 않는다 */
+	checkData: (options?: InvokeOptions) => __TAURI_INVOKE<DataCheck>("check_data", undefined, options),
 	/**  여러 대화를 한 번에 삭제. 지운 개수를 돌려준다. */
 	deleteConversations: (ids: string[], options?: InvokeOptions) => __TAURI_INVOKE<number>("delete_conversations", { ids }, options),
 	/**
@@ -1280,6 +1282,19 @@ export type Cue_Serialize =
 { type: "background"; asset: AssetRef } | 
 /**  지금 위치/시간/날씨에 맞는 배경이 하나도 없을 때 이전 배경을 내린다. */
 { type: "backgroundOff" };
+
+export type DataCheck = {
+	/**  PRAGMA integrity_check 결과가 "ok" */
+	ok: boolean,
+	/**  문제가 있으면 그 내용 (최대 100줄) */
+	problems: string[],
+	/**  살펴본 파일 수 (characters/) */
+	checkedFiles: number,
+	orphanCount: number,
+	orphanBytes: number,
+	/**  최대 500개 */
+	orphans: OrphanFile[],
+};
 
 export type DataOverview = DataOverview_Serialize | DataOverview_Deserialize;
 
@@ -2702,6 +2717,12 @@ export type OpenGameResponse_Serialize = {
 	assetBaseUrl: string,
 	/**  데이터 진단 결과(같은 진단은 한 번만). Error가 하나라도 있으면 start_new_game이 시작을 막는다. */
 	diagnostics: Issue[],
+};
+
+export type OrphanFile = {
+	/**  앱 데이터 폴더 기준 (슬래시) */
+	path: string,
+	bytes: number,
 };
 
 export type PackExportSummary = {

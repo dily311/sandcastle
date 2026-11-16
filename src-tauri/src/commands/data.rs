@@ -21,6 +21,13 @@ pub async fn get_data_overview(app: AppHandle, state: State<'_, AppState>) -> Re
     overview::data_overview(&state.db, &app_data_dir(&app)?).await
 }
 
+/// DB 점검: 무결성(PRAGMA integrity_check)과 아무 데도 쓰이지 않는 파일 목록. 지우지 않는다
+#[tauri::command]
+#[specta::specta]
+pub async fn check_data(app: AppHandle, state: State<'_, AppState>) -> Result<crate::service::data::check::DataCheck> {
+    crate::service::data::check::check_data(&state.db, &app_data_dir(&app)?).await
+}
+
 /// 여러 대화를 한 번에 삭제. 지운 개수를 돌려준다.
 #[tauri::command]
 #[specta::specta]

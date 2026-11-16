@@ -226,6 +226,22 @@ async fn full_backup_restores_into_another_app_dir() {
     assert!(!base_b.join("characters/old.txt").exists());
 }
 
+#[tokio::test]
+async fn check_reports_integrity_and_only_unreferenced_files() {
+    let (_d, base, db) = app_dir().await;
+    populate(&db, &base).await;
+    let clean = super::check::check_data(&db, &base).await.unwrap();
+    assert!(clean.ok && clean.problems.is_empty());
+    assert_eq!(clean.orphan_count, 0, "{:?}", clean.orphans);
+    assert!(clean.checked_files >= 7); // 이미지 3장(원본·썸네일) + 아바타
+
+    std::fs::write(base.join("characters/avatars/stray.png"), "12345").unwrap();
+    let r = super::check::check_data(&db, &base).await.unwrap();
+    assert_eq!(r.orphan_count, 1);
+    assert_eq!((r.orphans[0].path.as_str(), r.orphans[0].bytes), ("characters/avatars/stray.png", 5));
+    assert!(base.join("characters/avatars/stray.png").is_file(), "지우지 않음");
+}
+
 /// v1 백업(manifest.dirs 없음)을 복원해도 v1에 없던 갤러리·배경은 지금 것을 그대로 둔다
 #[tokio::test]
 async fn v1_backup_restore_keeps_folders_it_did_not_contain() {

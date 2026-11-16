@@ -104,6 +104,7 @@ export const handlers: Record<string, Handler> = {
 	clear_usage: () => 0,
 	allow_budget_once: () => null,
 	compact_usage: () => ({ usageRows: 0, tasks: 0 }),
+	check_data: () => ({ ok: true, problems: [], checkedFiles: 42, orphanCount: 2, orphanBytes: 380_000, orphans: [{ path: "characters/avatars/old.png", bytes: 300_000 }, { path: "characters/c9/images/x.webp", bytes: 80_000 }] }),
 	list_budget_status: () => [
 		{
 			limit: { apiProfileId: "gemini", dailyTokens: 100_000, monthlyTokens: 2_000_000, dailyCharacters: null, monthlyCharacters: null, dailyImages: null, monthlyImages: null },

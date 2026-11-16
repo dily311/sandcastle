@@ -308,6 +308,7 @@ pub fn specta_builder() -> tauri_specta::Builder<tauri::Wry> {
             detect_sillytavern,
             // data manager
             get_data_overview,
+            check_data,
             delete_conversations,
             export_character_pack,
             import_character_pack,
@@ -545,6 +546,7 @@ pub fn specta_builder() -> tauri_specta::Builder<tauri::Wry> {
             detect_sillytavern,
             // data manager
             get_data_overview,
+            check_data,
             delete_conversations,
             export_character_pack,
             import_character_pack,
