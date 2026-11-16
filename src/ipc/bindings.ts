@@ -273,8 +273,11 @@ export const commands = {
 	loadSave: (sessionId: string, slot: number, optionHistoryLimit: number | null, options?: InvokeOptions) => __TAURI_INVOKE<ContinueGameResponse_Serialize>("load_save", { sessionId, slot, optionHistoryLimit }, options),
 	/**  일지 읽기 전용 재생용: 세션의 [from_seq, to_seq] 구간. AI를 다시 호출하지 않는다. */
 	readJournal: (sessionId: string, fromSeq: number | null, toSeq: number, options?: InvokeOptions) => __TAURI_INVOKE<GameJournal[]>("read_journal", { sessionId, fromSeq, toSeq }, options),
-	/**  화면이 HTML 코드 블록을 보여주기 전에 부른다. iframe의 src로 쓸 주소를 돌려준다. */
-	registerHtmlView: (html: string, options?: InvokeOptions) => __TAURI_INVOKE<string>("register_html_view", { html }, options),
+	/**
+	 *  화면이 HTML 코드 블록을 보여주기 전에 부른다. iframe의 src로 쓸 주소를 돌려준다.
+	 *  theme: 지금 테마의 CSS 변수 (화면이 만든 `:root{…}` 등). 문서 맨 앞에 들어간다.
+	 */
+	registerHtmlView: (html: string, theme: string | null, options?: InvokeOptions) => __TAURI_INVOKE<string>("register_html_view", { html, theme }, options),
 	/**  코어 플러그인 목록과 켜짐 상태. 켜고 끄기는 update_feature_setting(id, enabled). */
 	listCorePlugins: (options?: InvokeOptions) => __TAURI_INVOKE<CorePlugin[]>("list_core_plugins", undefined, options),
 	getPluginSetting: (options?: InvokeOptions) => __TAURI_INVOKE<PluginSetting_Serialize>("get_plugin_setting", undefined, options),
@@ -287,6 +290,16 @@ export const commands = {
 	speakText: (text: string, options?: InvokeOptions) => __TAURI_INVOKE<string>("speak_text", { text }, options),
 	/**  메시지 장면을 그림으로. meta.generatedImages에 {path, prompt}를 쌓는다 */
 	generateMessageImage: (messageId: string, options?: InvokeOptions) => __TAURI_INVOKE<Message_Serialize>("generate_message_image", { messageId }, options),
+	/**  음성 API 프로필의 목소리 목록 (ElevenLabs는 계정의 목소리) */
+	listTtsVoices: (profileId: string, options?: InvokeOptions) => __TAURI_INVOKE<Voice_Serialize[]>("list_tts_voices", { profileId }, options),
+	/**  이미지 갤러리: 만든 그림 전부 (최신 순) */
+	listGeneratedImages: (options?: InvokeOptions) => __TAURI_INVOKE<GeneratedImage_Serialize[]>("list_generated_images", undefined, options),
+	deleteGeneratedImage: (path: string, options?: InvokeOptions) => __TAURI_INVOKE<null>("delete_generated_image", { path }, options),
+	/**
+	 *  프롬프트로 직접 그리기 (이미지 생성 페이지). refine이면 채팅 AI가 프롬프트를 다듬는다.
+	 *  source: "manual"(생성 페이지) / "game"(게임 대사)
+	 */
+	generateImageFromPrompt: (prompt: string, refine: boolean, source: string | null, options?: InvokeOptions) => __TAURI_INVOKE<GeneratedImage_Serialize>("generate_image_from_prompt", { prompt, refine, source }, options),
 	/**
 	 *  지금 씬 또는 지금 대화의 기록 ("지난 대사" 창). 씬이 열려 있으면 그 씬이 마지막으로 열린 뒤의 대본과 씬 대화,
 	 *  씬 밖에서 NPC와 대화 중이면 그 대화를 시작한 뒤의 메시지. 둘 다 아니면 최근 기록(limit개).
@@ -2077,30 +2090,73 @@ export type GameWeatherTypesInput_Serialize = {
 	visibilityModifier: number | null,
 };
 
+/**  만든 그림 하나 (갤러리). 파일 옆의 같은 이름 .json에 정보를 둔다 */
+export type GeneratedImage = GeneratedImage_Serialize | GeneratedImage_Deserialize;
+
+/**  만든 그림 하나 (갤러리). 파일 옆의 같은 이름 .json에 정보를 둔다 */
+export type GeneratedImage_Deserialize = {
+	path: string,
+	prompt: string,
+	model: string,
+	/**  "message" | "manual" | "game" */
+	source: string,
+	/**  메시지에서 만들었으면 그 메시지·대화 */
+	messageId?: string | null,
+	conversationId?: string | null,
+	createdAt: number,
+};
+
+/**  만든 그림 하나 (갤러리). 파일 옆의 같은 이름 .json에 정보를 둔다 */
+export type GeneratedImage_Serialize = {
+	path: string,
+	prompt: string,
+	model: string,
+	/**  "message" | "manual" | "game" */
+	source: string,
+	/**  메시지에서 만들었으면 그 메시지·대화 */
+	messageId: string | null,
+	conversationId: string | null,
+	createdAt: number,
+};
+
 export type ImageGenSetting = ImageGenSetting_Serialize | ImageGenSetting_Deserialize;
 
 export type ImageGenSetting_Deserialize = {
-	/**  OpenAI 호환 이미지 API를 쓰는 프로필 (주소 + 키). 비우면 앱에서 고른 API */
+	/**  이미지 API 프로필 (주소 + 키). 종류가 NovelAI면 NovelAI, 아니면 OpenAI 호환 /images/generations */
 	apiProfileId?: string | null,
 	model?: string,
-	/**  예: "1024x1024" */
+	/**  예: "1024x1024", NovelAI는 "832x1216" */
 	size?: string,
-	/**  모든 그림에 붙일 화풍 (예: "anime style, soft lighting") */
+	/**  모든 그림에 붙일 화풍·품질 태그 (예: "anime style, soft lighting" / NovelAI: "masterpiece, best quality") */
 	stylePrompt?: string,
-	/**  메시지를 바로 쓰지 않고 채팅 AI가 먼저 영어 이미지 프롬프트를 쓴다 */
+	/**  메시지를 바로 쓰지 않고 채팅 AI가 먼저 이미지 프롬프트를 쓴다 */
 	aiPrompt?: boolean,
+	/**  이미지 프롬프트를 쓸 채팅 API (비우면 대화/앱의 것) */
+	promptApiProfileId?: string | null,
+	/**  NovelAI 생성 프리셋 (OpenAI는 쓰지 않음) */
+	negativePrompt?: string,
+	steps?: number,
+	scale?: number | null,
+	sampler?: string,
 };
 
 export type ImageGenSetting_Serialize = {
-	/**  OpenAI 호환 이미지 API를 쓰는 프로필 (주소 + 키). 비우면 앱에서 고른 API */
+	/**  이미지 API 프로필 (주소 + 키). 종류가 NovelAI면 NovelAI, 아니면 OpenAI 호환 /images/generations */
 	apiProfileId: string | null,
 	model: string,
-	/**  예: "1024x1024" */
+	/**  예: "1024x1024", NovelAI는 "832x1216" */
 	size: string,
-	/**  모든 그림에 붙일 화풍 (예: "anime style, soft lighting") */
+	/**  모든 그림에 붙일 화풍·품질 태그 (예: "anime style, soft lighting" / NovelAI: "masterpiece, best quality") */
 	stylePrompt: string,
-	/**  메시지를 바로 쓰지 않고 채팅 AI가 먼저 영어 이미지 프롬프트를 쓴다 */
+	/**  메시지를 바로 쓰지 않고 채팅 AI가 먼저 이미지 프롬프트를 쓴다 */
 	aiPrompt: boolean,
+	/**  이미지 프롬프트를 쓸 채팅 API (비우면 대화/앱의 것) */
+	promptApiProfileId: string | null,
+	/**  NovelAI 생성 프리셋 (OpenAI는 쓰지 않음) */
+	negativePrompt: string,
+	steps: number,
+	scale: number | null,
+	sampler: string,
 };
 
 export type ImportedCharacterRef = {
@@ -2536,6 +2592,21 @@ export type PhoneContact = {
 	createdAt: number,
 };
 
+/**  폰 대화의 기본 API·프리셋 (대화에 따로 고르지 않았을 때. 비우면 앱 기본값) */
+export type PhoneSetting = PhoneSetting_Serialize | PhoneSetting_Deserialize;
+
+/**  폰 대화의 기본 API·프리셋 (대화에 따로 고르지 않았을 때. 비우면 앱 기본값) */
+export type PhoneSetting_Deserialize = {
+	apiProfileId?: string | null,
+	presetId?: string | null,
+};
+
+/**  폰 대화의 기본 API·프리셋 (대화에 따로 고르지 않았을 때. 비우면 앱 기본값) */
+export type PhoneSetting_Serialize = {
+	apiProfileId: string | null,
+	presetId: string | null,
+};
+
 export type Playlist = Playlist_Serialize | Playlist_Deserialize;
 
 export type PlaylistInput = PlaylistInput_Serialize | PlaylistInput_Deserialize;
@@ -2592,12 +2663,14 @@ export type PluginSetting_Deserialize = {
 	translate?: TranslateSetting_Deserialize,
 	tts?: TtsSetting_Deserialize,
 	imageGen?: ImageGenSetting_Deserialize,
+	phone?: PhoneSetting_Deserialize,
 };
 
 export type PluginSetting_Serialize = {
 	translate: TranslateSetting_Serialize,
 	tts: TtsSetting_Serialize,
 	imageGen: ImageGenSetting_Serialize,
+	phone: PhoneSetting_Serialize,
 };
 
 export type PromptBlocks = PromptBlocks_Serialize | PromptBlocks_Deserialize;
@@ -3308,9 +3381,11 @@ export type TranslateSetting_Serialize = {
 export type TtsSetting = TtsSetting_Serialize | TtsSetting_Deserialize;
 
 export type TtsSetting_Deserialize = {
-	/**  OpenAI 호환 음성 API를 쓰는 프로필 (주소 + 키). 비우면 앱에서 고른 API */
+	/**  음성 API 프로필 (주소 + 키). 종류가 ElevenLabs면 ElevenLabs, 아니면 OpenAI 호환 /audio/speech */
 	apiProfileId?: string | null,
+	/**  OpenAI: tts-1 등 / ElevenLabs: model_id (eleven_multilingual_v2 등) */
 	model?: string,
+	/**  OpenAI: 목소리 이름 (alloy 등) / ElevenLabs: voice_id */
 	voice?: string,
 	/**  0.25 ~ 4.0 */
 	speed?: number | null,
@@ -3321,9 +3396,11 @@ export type TtsSetting_Deserialize = {
 };
 
 export type TtsSetting_Serialize = {
-	/**  OpenAI 호환 음성 API를 쓰는 프로필 (주소 + 키). 비우면 앱에서 고른 API */
+	/**  음성 API 프로필 (주소 + 키). 종류가 ElevenLabs면 ElevenLabs, 아니면 OpenAI 호환 /audio/speech */
 	apiProfileId: string | null,
+	/**  OpenAI: tts-1 등 / ElevenLabs: model_id (eleven_multilingual_v2 등) */
 	model: string,
+	/**  OpenAI: 목소리 이름 (alloy 등) / ElevenLabs: voice_id */
 	voice: string,
 	/**  0.25 ~ 4.0 */
 	speed: number | null,
@@ -3357,6 +3434,23 @@ export type TurnPoint_Serialize = {
 };
 
 export type Value = null | boolean | number | string | Value[] | { [key in string]: Value };
+
+/**  고를 수 있는 목소리 (ElevenLabs는 계정의 목소리 목록, 그 밖은 OpenAI 기본 목소리) */
+export type Voice = Voice_Serialize | Voice_Deserialize;
+
+/**  고를 수 있는 목소리 (ElevenLabs는 계정의 목소리 목록, 그 밖은 OpenAI 기본 목소리) */
+export type Voice_Deserialize = {
+	id: string,
+	name: string,
+	description?: string | null,
+};
+
+/**  고를 수 있는 목소리 (ElevenLabs는 계정의 목소리 목록, 그 밖은 OpenAI 기본 목소리) */
+export type Voice_Serialize = {
+	id: string,
+	name: string,
+	description: string | null,
+};
 
 export type WidgetMusicSetting = WidgetMusicSetting_Serialize | WidgetMusicSetting_Deserialize;
 

@@ -51,6 +51,21 @@ pub struct ChatRequest {
     phone_mode_prompt: String,
 }
 
+/// 폰 대화면 폰 플러그인의 기본 API·프리셋을 앱 기본값보다 앞에 둔다 (대화에 고른 값이 가장 먼저)
+fn phone_defaults(app: &AppHandle, mode: &str, req: &mut ChatRequest) {
+    if mode != "phone" {
+        return;
+    }
+    let Some(state) = app.try_state::<SettingsState<crate::models::settings::PluginSetting>>() else { return };
+    let Ok(p) = state.0.lock().map(|s| s.phone.clone()) else { return };
+    if let Some(id) = p.api_profile_id.filter(|s| !s.is_empty()) {
+        req.api_profile_id = id;
+    }
+    if let Some(id) = p.preset_id.filter(|s| !s.is_empty()) {
+        req.preset_id = id;
+    }
+}
+
 pub fn current_conv_request(state: &SettingsState<AppSetting>) -> Result<ChatRequest> {
     let guard = state
         .0
@@ -269,12 +284,13 @@ impl ChatManager {
             Err(sqlx::Error::RowNotFound) => return Err(AppError::not_found("대화를 찾을 수 없음").into()),
             Err(e) => return Err(AppError::from(e).into()),
         };
-        let fallback = current_conv_request(settings)?;
+        let mut fallback = current_conv_request(settings)?;
+        phone_defaults(app, &conv.mode, &mut fallback);
         let api_profile_id = conv
             .api_profile_id
             .clone()
             .filter(|s| !s.is_empty())
-            .or(Some(fallback.api_profile_id).filter(|s| !s.is_empty()))
+            .or(Some(fallback.api_profile_id.clone()).filter(|s| !s.is_empty()))
             .ok_or_else(|| AppError::validation("API를 먼저 고르세요 (대화 설정 또는 설정 > API 키)", None))?;
         let persona_id = match conv.persona_id.as_str() {
             "" => get_system_default_persona(db).await.unwrap_or_else(|_| "default".into()),
@@ -516,12 +532,13 @@ impl ChatManager {
         if conv.mode != "phone" {
             return Err(AppError::validation("엿보기는 폰 대화에서만 됨", None).into());
         }
-        let fallback = current_conv_request(settings)?;
+        let mut fallback = current_conv_request(settings)?;
+        phone_defaults(app, &conv.mode, &mut fallback);
         let api_profile_id = conv
             .api_profile_id
             .clone()
             .filter(|s| !s.is_empty())
-            .or(Some(fallback.api_profile_id).filter(|s| !s.is_empty()))
+            .or(Some(fallback.api_profile_id.clone()).filter(|s| !s.is_empty()))
             .ok_or_else(|| AppError::validation("API를 먼저 고르세요 (대화 설정 또는 설정 > API 키)", None))?;
         let persona_id = match conv.persona_id.as_str() {
             "" => get_system_default_persona(db).await.unwrap_or_else(|_| "default".into()),

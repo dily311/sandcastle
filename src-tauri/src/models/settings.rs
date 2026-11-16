@@ -158,6 +158,15 @@ pub struct PluginSetting {
     pub translate: TranslateSetting,
     pub tts: TtsSetting,
     pub image_gen: ImageGenSetting,
+    pub phone: PhoneSetting,
+}
+
+/// 폰 대화의 기본 API·프리셋 (대화에 따로 고르지 않았을 때. 비우면 앱 기본값)
+#[derive(Debug, Serialize, Deserialize, Clone, Default, specta::Type)]
+#[serde(rename_all = "camelCase", default)]
+pub struct PhoneSetting {
+    pub api_profile_id: Option<String>,
+    pub preset_id: Option<String>,
 }
 
 #[derive(Debug, Serialize, Deserialize, Clone, specta::Type)]
@@ -182,9 +191,11 @@ impl Default for TranslateSetting {
 #[derive(Debug, Serialize, Deserialize, Clone, specta::Type)]
 #[serde(rename_all = "camelCase", default)]
 pub struct TtsSetting {
-    /// OpenAI 호환 음성 API를 쓰는 프로필 (주소 + 키). 비우면 앱에서 고른 API
+    /// 음성 API 프로필 (주소 + 키). 종류가 ElevenLabs면 ElevenLabs, 아니면 OpenAI 호환 /audio/speech
     pub api_profile_id: Option<String>,
+    /// OpenAI: tts-1 등 / ElevenLabs: model_id (eleven_multilingual_v2 등)
     pub model: String,
+    /// OpenAI: 목소리 이름 (alloy 등) / ElevenLabs: voice_id
     pub voice: String,
     /// 0.25 ~ 4.0
     pub speed: f32,
@@ -196,27 +207,45 @@ pub struct TtsSetting {
 
 impl Default for TtsSetting {
     fn default() -> Self {
-        Self { api_profile_id: None, model: "tts-1".into(), voice: "alloy".into(), speed: 1.0, auto_read: false, dialogue_only: false }
+        Self { api_profile_id: None, model: "eleven_multilingual_v2".into(), voice: String::new(), speed: 1.0, auto_read: false, dialogue_only: false }
     }
 }
 
 #[derive(Debug, Serialize, Deserialize, Clone, specta::Type)]
 #[serde(rename_all = "camelCase", default)]
 pub struct ImageGenSetting {
-    /// OpenAI 호환 이미지 API를 쓰는 프로필 (주소 + 키). 비우면 앱에서 고른 API
+    /// 이미지 API 프로필 (주소 + 키). 종류가 NovelAI면 NovelAI, 아니면 OpenAI 호환 /images/generations
     pub api_profile_id: Option<String>,
     pub model: String,
-    /// 예: "1024x1024"
+    /// 예: "1024x1024", NovelAI는 "832x1216"
     pub size: String,
-    /// 모든 그림에 붙일 화풍 (예: "anime style, soft lighting")
+    /// 모든 그림에 붙일 화풍·품질 태그 (예: "anime style, soft lighting" / NovelAI: "masterpiece, best quality")
     pub style_prompt: String,
-    /// 메시지를 바로 쓰지 않고 채팅 AI가 먼저 영어 이미지 프롬프트를 쓴다
+    /// 메시지를 바로 쓰지 않고 채팅 AI가 먼저 이미지 프롬프트를 쓴다
     pub ai_prompt: bool,
+    /// 이미지 프롬프트를 쓸 채팅 API (비우면 대화/앱의 것)
+    pub prompt_api_profile_id: Option<String>,
+    /// NovelAI 생성 프리셋 (OpenAI는 쓰지 않음)
+    pub negative_prompt: String,
+    pub steps: u32,
+    pub scale: f32,
+    pub sampler: String,
 }
 
 impl Default for ImageGenSetting {
     fn default() -> Self {
-        Self { api_profile_id: None, model: "gpt-image-1".into(), size: "1024x1024".into(), style_prompt: String::new(), ai_prompt: true }
+        Self {
+            api_profile_id: None,
+            model: "nai-diffusion-4-5-full".into(),
+            size: "832x1216".into(),
+            style_prompt: String::new(),
+            ai_prompt: true,
+            prompt_api_profile_id: None,
+            negative_prompt: "lowres, bad anatomy, bad hands, text, error, missing fingers, worst quality, low quality, jpeg artifacts, watermark, blurry".into(),
+            steps: 28,
+            scale: 5.0,
+            sampler: "k_euler_ancestral".into(),
+        }
     }
 }
 

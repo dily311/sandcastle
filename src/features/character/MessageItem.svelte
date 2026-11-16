@@ -339,7 +339,7 @@
 	}
 	.cg {
 		margin: var(--space-4) auto 0;
-		width: min(320px, 100%);
+		width: min(600px, 100%);
 		border-radius: var(--radius-lg);
 		overflow: hidden;
 		border: 1px solid var(--border);

@@ -1,5 +1,5 @@
 <script lang="ts">
-	import { ChevronLeft, ChevronRight, ChevronsRight, Clock, Copy, DoorOpen, EyeOff, LogOut, MapPin, Maximize2, MessageCircle, Minimize2, Pencil, Play, RefreshCw, ScrollText, Search, Send, Square, Volume2, VolumeX } from "@lucide/svelte";
+	import { AudioLines, ChevronLeft, ChevronRight, ChevronsRight, Clock, Copy, DoorOpen, EyeOff, ImagePlus, Languages, LogOut, MapPin, Maximize2, MessageCircle, Minimize2, Pencil, Play, RefreshCw, ScrollText, Search, Send, Square, Volume2, VolumeX } from "@lucide/svelte";
 	import type { PlayAction } from "./playUtils";
 	import { HtmlView } from "$shared/ui";
 	import { wholeHtmlBlock } from "$shared/html/blocks";
@@ -58,6 +58,15 @@
 		onEditSave: () => void;
 		onEditCancel: () => void;
 		onRegenerate: () => void;
+		// ---- 코어 플러그인 AI 도구 (켜진 것만 버튼이 보임) ----
+		onTranslate?: () => void;
+		translating?: boolean;
+		/** 지금 줄이 번역문으로 보이는 중 */
+		translated?: boolean;
+		onSpeak?: () => void;
+		speaking?: boolean;
+		onDraw?: () => void;
+		drawing?: boolean;
 	};
 	let p: Props = $props();
 	const actionIcon = { talk: MessageCircle, look: Search, move: MapPin, wait: Clock } as const;
@@ -181,6 +190,15 @@
 		<button class="act" title="이 대사 복사" aria-label="이 대사 복사" disabled={!showLine} onclick={p.onCopy}><Copy /></button>
 		<button class="act" title="이 응답 메시지 고치기" aria-label="메시지 고치기" disabled={!p.canEditMessage || p.editing} onclick={p.onEdit}><Pencil /></button>
 		<button class="act" title="이 응답 다시 만들기" aria-label="다시 만들기" disabled={!p.canEditMessage} onclick={p.onRegenerate}><RefreshCw /></button>
+		{#if p.onTranslate}
+			<button class="act" class:on={p.translated} title={p.translated ? "원문 보기" : "이 대사 번역"} aria-label="대사 번역" aria-pressed={p.translated} disabled={!showLine || p.translating} onclick={p.onTranslate}><Languages /></button>
+		{/if}
+		{#if p.onSpeak}
+			<button class="act" class:on={p.speaking} title={p.speaking ? "읽기 멈추기" : "이 대사 소리 내어 읽기"} aria-label="대사 읽기" aria-pressed={p.speaking} disabled={!showLine} onclick={p.onSpeak}><AudioLines /></button>
+		{/if}
+		{#if p.onDraw}
+			<button class="act" title="이 장면 그리기" aria-label="장면 그리기" disabled={!showLine || p.drawing} onclick={p.onDraw}><ImagePlus /></button>
+		{/if}
 		<button class="act" class:on={p.autoAdvance} title={p.autoAdvance ? "자동 넘김 멈추기" : "자동 넘김"} aria-label="자동 넘김" aria-pressed={p.autoAdvance} onclick={p.onToggleAuto}>
 			{#if p.autoAdvance}<Square />{:else}<Play />{/if}
 		</button>

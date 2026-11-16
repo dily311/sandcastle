@@ -34,9 +34,10 @@ const db = {
 
 export const handlers: Record<string, Handler> = {
 	// 실제로는 htmlview:// 프로토콜. 브라우저 개발 모드는 blob 주소로 같은 문서를 흉내 낸다
-	register_html_view: ({ html }) => {
+	register_html_view: ({ html, theme }) => {
 		const h = String(html);
-		const doc = /<html|<!doctype/i.test(h) ? h : `<!doctype html><meta charset="utf-8"><body style="margin:0;padding:8px;font-family:system-ui">${h}</body>`;
+		const themeStyle = theme ? `<style id="sc-theme">${String(theme).replace(/</g, "")}</style>` : "";
+		const doc = /<html|<!doctype/i.test(h) ? h : `<!doctype html><meta charset="utf-8">${themeStyle}<body style="margin:0;padding:8px">${h}</body>`;
 		const report = `<script>(()=>{const s=()=>parent.postMessage({type:"sc-html-height",h:Math.ceil(document.body?document.body.getBoundingClientRect().bottom+parseFloat(getComputedStyle(document.body).marginBottom||"0"):document.documentElement.scrollHeight)},"*");new ResizeObserver(s).observe(document.documentElement);addEventListener("load",s);s();setTimeout(s,300);setTimeout(s,1000)})()<\/script>`;
 		return URL.createObjectURL(new Blob([doc + report], { type: "text/html" }));
 	},

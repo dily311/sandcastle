@@ -356,9 +356,7 @@
 		flex-shrink: 0;
 		overflow: hidden;
 	}
-	.them :global(.avatar img) {
-		border-radius: inherit;
-	}
+
 	.pad {
 		width: 36px;
 		flex-shrink: 0;

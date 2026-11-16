@@ -55,6 +55,16 @@ export async function drawMessage(m: Message): Promise<Message> {
 	return call(commands.generateMessageImage(m.id), src);
 }
 
+/** 글(게임 대사 등)로 그림 만들기. 채팅 AI가 장면 프롬프트로 다듬는다 */
+export async function drawText(text: string, source: "game" | "manual" = "game") {
+	return call(commands.generateImageFromPrompt(text, true, source), src);
+}
+
+/** 글 번역 (저장하지 않음: 게임 대사 줄 등) */
+export async function translateText(text: string): Promise<string> {
+	return call(commands.translateText(text, null), src);
+}
+
 // ---- 음성: 한 번에 하나만 재생 ----
 let playing: HTMLAudioElement | null = null;
 export const speech = $state<{ messageId: string | null; loading: boolean }>({ messageId: null, loading: false });
@@ -65,7 +75,7 @@ export function stopSpeaking() {
 	speech.messageId = null;
 }
 
-export async function speak(m: Message, text = m.content) {
+export async function speak(m: { id: string; content: string }, text = m.content) {
 	if (speech.messageId === m.id) return stopSpeaking();
 	stopSpeaking();
 	speech.messageId = m.id;

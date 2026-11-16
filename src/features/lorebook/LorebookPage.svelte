@@ -1,7 +1,7 @@
 <script lang="ts">
 	import { onMount } from "svelte";
 	// 로어북 화면: 책 목록 → 책 하나(이름·설명, 쓰는 곳, 항목 편집)
-	import { BookOpen, Check, Download, Ellipsis, ListFilter, Pencil, Plus, Search, Trash2, Upload } from "@lucide/svelte";
+	import { BookOpen, Check, Download, Ellipsis, Funnel, ListFilter, Pencil, Plus, Search, Trash2, Upload } from "@lucide/svelte";
 	import { Avatar, Button, ContextMenu, EmptyState, ExportSplit, IconButton, Input, Spinner, type MenuItem } from "$shared/ui";
 	import { nav } from "$app/nav.svelte";
 	import { drops, extOf, storeFile } from "$app/drop.svelte";
@@ -156,10 +156,10 @@
 				{#snippet leading()}<Search />{/snippet}
 			</Input>
 			<span class="filter" class:on={filter !== "all"}>
-				<IconButton label="거르기: {FILTERS.find((f) => f.id === filter)?.label}" active={filter !== "all"} aria-haspopup="menu" onclick={openFilter}><ListFilter /></IconButton>
-				{#if filter !== "all"}<button class="filter-chip" title="거르기 풀기" onclick={() => (filter = "all")}>{FILTERS.find((f) => f.id === filter)?.label} ×</button>{/if}
+				<IconButton label="필터: {FILTERS.find((f) => f.id === filter)?.label}" active={filter !== "all"} aria-haspopup="menu" onclick={openFilter}><Funnel /></IconButton>
+				{#if filter !== "all"}<button class="filter-chip" title="필터 풀기" onclick={() => (filter = "all")}>{FILTERS.find((f) => f.id === filter)?.label} ×</button>{/if}
 			</span>
-			<ContextMenu at={filterMenu} label="항목 거르기" items={filterItems} onclose={() => (filterMenu = null)} />
+			<ContextMenu at={filterMenu} label="항목 필터링" items={filterItems} onclose={() => (filterMenu = null)} />
 			<Button variant="primary" onclick={addEntry}>{#snippet icon()}<Plus />{/snippet}항목 추가</Button>
 		</div>
 		<p class="count faint small">
@@ -180,7 +180,7 @@
 				{/each}
 			</ul>
 		{:else}
-			<EmptyState title={entries.length ? "맞는 항목 없음" : "항목 없음"} description={entries.length ? "검색어나 거르기를 바꿔 봄" : "'항목 추가'로 장소·인물·규칙을 하나씩 적음"} />
+			<EmptyState title={entries.length ? "맞는 항목 없음" : "항목 없음"} description={entries.length ? "검색어나 필터를 변경하세요." : "'항목 추가'로 장소·인물·규칙을 하나씩 적음"} />
 		{/if}
 	</div>
 {:else}

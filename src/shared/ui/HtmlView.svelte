@@ -6,6 +6,8 @@
 	import { Code, Eye, RotateCw } from "@lucide/svelte";
 	import { call, commands } from "$shared/ipc/client";
 	import { plugins } from "$shared/stores/plugins.svelte";
+	import { theme } from "$app/theme.svelte";
+	import { currentThemeCss } from "$shared/html/theme";
 
 	let { code }: { code: string } = $props();
 
@@ -23,7 +25,11 @@
 		const c = code;
 		failed = false;
 		if (!enabled) return;
-		void call(commands.registerHtmlView(c), { source: "html", silent: true })
+		// 지금 테마 색을 문서에 넣는다. 테마(모드·강조색 등)가 바뀌면 다시 등록해 새 색으로
+		void theme.dark;
+		void JSON.stringify(theme.setting);
+		const css = currentThemeCss(theme.dark);
+		void call(commands.registerHtmlView(c, css), { source: "html", silent: true })
 			.then((url) => (src = url))
 			.catch(() => (failed = true));
 	});
@@ -96,7 +102,7 @@
 		display: block;
 		width: 100%;
 		border: none;
-		background: white;
+		background: var(--surface);
 	}
 	pre {
 		margin: 0;

@@ -1,7 +1,7 @@
 <script lang="ts">
 	import { layout } from "$app/layout.svelte";
 	import type { Component } from "svelte";
-	import { Blocks, Database, Keyboard, KeyRound, MessagesSquare, Music, Palette, Regex, ScrollText, Search, Settings2, SlidersHorizontal, Smartphone } from "@lucide/svelte";
+	import { AudioLines, Blocks, Database, ImagePlus, Keyboard, KeyRound, Languages, MessagesSquare, Music, Palette, Regex, ScrollText, Search, Settings2, SlidersHorizontal, Smartphone } from "@lucide/svelte";
 	import { Badge, Input } from "$shared/ui";
 	import { nav, type SettingsTab } from "$app/nav.svelte";
 	import { logs } from "$shared/stores/log.svelte";
@@ -19,6 +19,9 @@
 	import ChatSection from "./ChatSection.svelte";
 	import PhoneSection from "./PhoneSection.svelte";
 	import PluginsSection from "./PluginsSection.svelte";
+	import TranslateSection from "./TranslateSection.svelte";
+	import TtsSection from "./TtsSection.svelte";
+	import ImageGenSection from "./ImageGenSection.svelte";
 	import { plugins, type PluginId } from "$shared/stores/plugins.svelte";
 
 	let { tab: routeTab, edit }: { tab?: SettingsTab; edit?: string } = $props();
@@ -44,11 +47,19 @@
 			title: "앱",
 			items: [
 				{ id: "general", label: "기본 설정", icon: Settings2, keywords: "언어 업데이트", view: GeneralSection },
-				{ id: "plugins", label: "코어 플러그인", icon: Blocks, keywords: "기능 켜기 끄기 토글 플러그인 폰 게임 위젯 정규식 이미지 html 번역 음성 tts 이미지 생성", view: PluginsSection },
 				{ id: "chat", label: "대화", icon: MessagesSquare, keywords: "enter 보내기 메시지 시각 시간 새 대화 기본값 api 프리셋 페르소나", view: ChatSection },
-				{ id: "phone", label: "폰", icon: Smartphone, keywords: "폰 모드 메신저 프롬프트", view: PhoneSection, plugin: "phone" },
 				{ id: "theme", label: "테마", icon: Palette, keywords: "화면 모드 다크 어둡게 밝게 강조색 글자 크기 프레임 창 css", view: ThemeSection },
 				{ id: "shortcut", label: "단축키", icon: Keyboard, keywords: "키 단축 뒤로 앞으로", view: ShortcutSection },
+			],
+		},
+		{
+			title: "플러그인",
+			items: [
+				{ id: "plugins", label: "코어 플러그인", icon: Blocks, keywords: "기능 켜기 끄기 토글 플러그인 폰 게임 위젯 정규식 이미지 html 번역 음성 tts 이미지 생성", view: PluginsSection },
+				{ id: "phone", label: "폰", icon: Smartphone, keywords: "폰 모드 메신저 프롬프트", view: PhoneSection, plugin: "phone" },
+				{ id: "translate", label: "번역", icon: Languages, keywords: "번역 언어 자동 번역 입력", view: TranslateSection, plugin: "translate" },
+				{ id: "tts", label: "음성 읽기", icon: AudioLines, keywords: "음성 tts 읽기 목소리 elevenlabs", view: TtsSection, plugin: "tts" },
+				{ id: "imagegen", label: "이미지 생성", icon: ImagePlus, keywords: "이미지 그림 생성 novelai 프롬프트 네거티브 샘플러", view: ImageGenSection, plugin: "imagegen" },
 				{ id: "widget", label: "위젯", icon: Music, keywords: "음악 플레이어 자동 실행 바탕화면", view: WidgetSection, plugin: "widget" },
 			],
 		},

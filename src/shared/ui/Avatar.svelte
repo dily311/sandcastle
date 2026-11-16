@@ -37,7 +37,8 @@
 <style>
 	.avatar {
 		position: relative;
-		display: inline-grid;
+		display: inline-flex;
+		justify-content: center;
 		place-items: center;
 		flex: none;
 		border-radius: 50%;

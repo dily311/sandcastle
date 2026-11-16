@@ -26,6 +26,9 @@
 	import { assetUrl } from "$features/game/runtime/gameStore.svelte";
 	import { runtimeStore } from "$features/game/runtime/runtimeStore.svelte";
 	import { reportGameError } from "$features/game/errors";
+	import { plugins } from "$shared/stores/plugins.svelte";
+	import { drawText, speak, speech, stopSpeaking, translateText } from "$shared/stores/aiTools.svelte";
+	import { fileSrc } from "$shared/ipc/file";
 
 	type Props = { gameId: string; sessionId: string };
 	let { gameId, sessionId }: Props = $props();
@@ -41,6 +44,7 @@
 	let showWaitMenu = $state(false);
 	/** 지난 대사 창 (L) */
 	let backlogOpen = $state(false);
+
 	let scriptLines = $state<StageLine[]>([]);
 	let lineIndex = $state(0);
 	let scriptFinished = $state(false);
@@ -58,6 +62,46 @@
 	const currentLine = $derived(scriptLines[lineIndex] ?? null);
 	const choices = $derived(hideSceneChoicesDuringTalk ? [] : (runtimeStore.currentChoices ?? []));
 	const isReadingScript = $derived(scriptLines.length > 0 && !scriptFinished);
+
+	// ---- 코어 플러그인 AI 도구: 지금 줄 번역 · 읽기 · 장면 그리기 ----
+	/** 줄 글 → 번역문 (이번 플레이 동안만 기억) */
+	let translations = $state<Record<string, string>>({});
+	let showTranslated = $state(true);
+	let translating = $state(false);
+	let drawing = $state(false);
+	/** 그린 장면 (무대 위에 띄움, 누르면 닫힘) */
+	let drawnScene = $state<{ path: string; prompt: string } | null>(null);
+	const lineText = $derived(currentLine?.text ?? "");
+	const lineTranslation = $derived(plugins.on("translate") ? translations[lineText] : undefined);
+	const lineKey = $derived(`game-line:${lineIndex}:${lineText.slice(0, 40)}`);
+	async function translateLine() {
+		if (!lineText) return;
+		if (lineTranslation) return void (showTranslated = !showTranslated);
+		translating = true;
+		try {
+			translations = { ...translations, [lineText]: await translateText(lineText) };
+			showTranslated = true;
+		} finally {
+			translating = false;
+		}
+	}
+	function speakLine() {
+		if (!lineText) return;
+		void speak({ id: lineKey, content: lineText }, lineTranslation && showTranslated ? lineTranslation : lineText);
+	}
+	async function drawScene() {
+		// 이 응답(또는 대본) 전체를 장면 설명으로 쓴다: 한 줄만으로는 그림이 빈약하다
+		const text = lastReply?.text ?? scriptLines.map((l) => l.text).filter(Boolean).join("\n");
+		if (!text.trim()) return;
+		drawing = true;
+		toasts.info("장면을 그리는 중… (잠시 걸림)");
+		try {
+			const img = await drawText(text, "game");
+			drawnScene = { path: img.path, prompt: img.prompt };
+		} finally {
+			drawing = false;
+		}
+	}
 	const currentCharacter = $derived(
 		currentLine?.speaker
 			? gameStore.view?.characters.find((character) => character.id === currentLine.speaker)
@@ -463,6 +507,11 @@
 		void dispatch({ type: "choose", choiceId });
 	}
 
+	$effect(() => {
+		void lineIndex;
+		if (speech.messageId?.startsWith("game-line:") && speech.messageId !== lineKey) stopSpeaking();
+	});
+
 	function advanceLine() {
 		if (lineIndex < scriptLines.length - 1) {
 			lineIndex += 1;
@@ -590,7 +639,7 @@
 		{/if}
 		<DialoguePanel
 			show={!uiHidden && Boolean(currentLine || runtimeStore.currentScene || activeNpcId || scriptFinished)}
-			line={currentLine}
+			line={currentLine && lineTranslation && showTranslated ? { ...currentLine, text: lineTranslation } : currentLine}
 			{speakerName}
 			sceneDescription={runtimeStore.currentScene?.description ?? null}
 			{choices}
@@ -634,8 +683,20 @@
 			onEditSave={saveEdit}
 			onEditCancel={() => (editing = false)}
 			onRegenerate={regenerate}
+			onTranslate={plugins.on("translate") ? translateLine : undefined}
+			{translating}
+			translated={Boolean(lineTranslation && showTranslated)}
+			onSpeak={plugins.on("tts") ? speakLine : undefined}
+			speaking={speech.messageId === lineKey}
+			onDraw={plugins.on("imagegen") ? drawScene : undefined}
+			{drawing}
 		/>
 		{#if backlogOpen}<Backlog onclose={() => (backlogOpen = false)} />{/if}
+		{#if drawnScene}
+			<button class="drawn-scene" type="button" title="닫기 · {drawnScene.prompt}" onclick={() => (drawnScene = null)}>
+				<img src={fileSrc(drawnScene.path)} alt={drawnScene.prompt} />
+			</button>
+		{/if}
 		{#if uiHidden}<p class="hidden-hint">무대를 누르면 대사창이 다시 보임</p>{/if}
 		{#if isLoading}<div class="busy" role="status"><span></span>처리 중</div>{/if}
 	</section>
@@ -713,5 +774,22 @@
 		to {
 			transform: rotate(360deg);
 		}
+	}
+	.drawn-scene {
+		position: absolute;
+		inset: 0;
+		z-index: 25;
+		display: grid;
+		place-items: center;
+		padding: 4%;
+		border: none;
+		background: rgb(0 0 0 / 0.55);
+		cursor: zoom-out;
+	}
+	.drawn-scene img {
+		max-width: 100%;
+		max-height: 100%;
+		border-radius: 12px;
+		box-shadow: 0 18px 48px rgb(0 0 0 / 0.4);
 	}
 </style>

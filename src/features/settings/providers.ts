@@ -110,5 +110,30 @@ export const apiLists: Provider[] = [
                 ]
             }
         ]
+    },
+    // ---- 코어 플러그인 전용 (채팅에는 못 씀): 음성 읽기 · 이미지 생성 ----
+    {
+        label: "ElevenLabs (음성)",
+        provider: "elevenlabs",
+        formatType: "elevenlabs",
+        baseUrl: "https://api.elevenlabs.io/v1",
+        modelList: [
+            {
+                label: "음성 모델",
+                model: ["eleven_multilingual_v2", "eleven_flash_v2_5", "eleven_turbo_v2_5", "eleven_v3"]
+            }
+        ]
+    },
+    {
+        label: "NovelAI (이미지)",
+        provider: "novelai",
+        formatType: "novelai",
+        baseUrl: "https://image.novelai.net",
+        modelList: [
+            {
+                label: "이미지 모델",
+                model: ["nai-diffusion-4-5-full", "nai-diffusion-4-5-curated", "nai-diffusion-4-full", "nai-diffusion-4-curated-preview", "nai-diffusion-3"]
+            }
+        ]
     }
 ]

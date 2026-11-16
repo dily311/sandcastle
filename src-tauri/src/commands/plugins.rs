@@ -20,6 +20,11 @@ use crate::{
     },
 };
 
+/// 만든 그림이 모이는 폴더 (갤러리)
+fn generated_dir(app: &AppHandle) -> Result<std::path::PathBuf> {
+    Ok(app_data_dir(app)?.join("generated"))
+}
+
 fn read<T: Clone>(state: &SettingsState<T>) -> Result<T> {
     Ok(state.0.lock().map_err(|_| AppError::internal("settings lock poisoned"))?.clone())
 }
@@ -145,13 +150,62 @@ pub async fn generate_message_image(
         Err(_) => String::new(),
     };
     let prompt = tools::image_prompt(&ai, &p, &chat_profile, &msg.content, &context).await?;
-    let out_dir = app_data_dir(&app)?.join("generated");
-    let path = tools::generate_image(&ai, &p, &chat_profile, &prompt, &out_dir).await?;
+    let image = tools::generate_image(&ai, &p, &chat_profile, &prompt, &generated_dir(&app)?, "message", Some((&message_id, &msg.conversation_id))).await?;
 
     let mut meta = msg.meta.clone().filter(Value::is_object).unwrap_or_else(|| json!({}));
     let mut list = meta["generatedImages"].as_array().cloned().unwrap_or_default();
-    list.push(json!({ "path": path.to_string_lossy(), "prompt": prompt, "createdAt": chrono::Utc::now().timestamp_millis() }));
+    list.push(json!({ "path": image.path, "prompt": image.prompt, "createdAt": image.created_at }));
     meta["generatedImages"] = Value::Array(list);
     conversation::update_message_meta(&state.db, &message_id, meta).await?;
     Ok(chat_ui::get_message(&state.db, &message_id).await?)
+}
+
+/// 음성 API 프로필의 목소리 목록 (ElevenLabs는 계정의 목소리)
+#[tauri::command]
+#[specta::specta]
+pub async fn list_tts_voices(app: AppHandle, ai: State<'_, Arc<AiService>>, profile_id: String) -> Result<Vec<tools::Voice>> {
+    require(&app, id::TTS)?;
+    tools::voices(&ai, &profile_id).await
+}
+
+/// 이미지 갤러리: 만든 그림 전부 (최신 순)
+#[tauri::command]
+#[specta::specta]
+pub fn list_generated_images(app: AppHandle) -> Result<Vec<tools::GeneratedImage>> {
+    Ok(tools::list_images(&generated_dir(&app)?))
+}
+
+#[tauri::command]
+#[specta::specta]
+pub fn delete_generated_image(app: AppHandle, path: String) -> Result<()> {
+    tools::delete_image(&generated_dir(&app)?, &path)
+}
+
+/// 프롬프트로 직접 그리기 (이미지 생성 페이지). refine이면 채팅 AI가 프롬프트를 다듬는다.
+/// source: "manual"(생성 페이지) / "game"(게임 대사)
+#[tauri::command]
+#[specta::specta]
+pub async fn generate_image_from_prompt(
+    app: AppHandle,
+    ai: State<'_, Arc<AiService>>,
+    plugin: State<'_, SettingsState<PluginSetting>>,
+    settings: State<'_, SettingsState<AppSetting>>,
+    prompt: String,
+    refine: bool,
+    source: Option<String>,
+) -> Result<tools::GeneratedImage> {
+    require(&app, id::IMAGE_GEN)?;
+    if prompt.trim().is_empty() {
+        return Err(AppError::validation("그릴 내용을 입력하세요", None));
+    }
+    let p = read(&plugin)?.image_gen;
+    let chat_profile = fallback_profile(&read(&settings)?, None);
+    let final_prompt = if refine {
+        tools::image_prompt(&ai, &crate::models::settings::ImageGenSetting { ai_prompt: true, ..p.clone() }, &chat_profile, &prompt, "").await?
+    } else {
+        let style = p.style_prompt.trim();
+        if style.is_empty() { prompt.trim().to_string() } else { format!("{}, {style}", prompt.trim()) }
+    };
+    let source = source.filter(|s| s == "game").unwrap_or_else(|| "manual".into());
+    tools::generate_image(&ai, &p, &chat_profile, &final_prompt, &generated_dir(&app)?, &source, None).await
 }

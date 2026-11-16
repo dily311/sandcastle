@@ -235,9 +235,6 @@
 		box-shadow: var(--shadow-md);
 		overflow: hidden;
 	}
-	.portrait :global(.avatar img) {
-		border-radius: inherit;
-	}
 	/* 프로필 사진만 배너에 걸치고 글자·버튼은 배너 아래 */
 	.ident,
 	.cta {

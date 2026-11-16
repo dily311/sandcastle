@@ -30,6 +30,10 @@
 		regex: "정규식",
 		data: "데이터",
 		log: "로그",
+		plugins: "코어 플러그인",
+		translate: "번역",
+		tts: "음성 읽기",
+		imagegen: "이미지 생성",
 	};
 	// 대화 화면이면 그 대화 (제목 고치기·동작 메뉴)
 	const conv = $derived(nav.current.page === "character" && !nav.current.edit ? library.conversation(nav.current.convId) : undefined);
@@ -125,6 +129,8 @@
 			}
 			case "phone":
 				return [{ label: "폰" }];
+			case "images":
+				return [{ label: "이미지", to: { page: "images" } }, { label: r.tab === "gallery" ? "갤러리" : "만들기" }];
 			case "lorebook": {
 				const b = lorebook.book(r.bookId);
 				return b ? [{ label: "로어북", to: { page: "lorebook" } }, { label: b.name }] : [{ label: "로어북" }];

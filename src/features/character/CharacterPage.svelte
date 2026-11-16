@@ -375,9 +375,7 @@
 		box-shadow: var(--shadow-md);
 		overflow: hidden;
 	}
-	.portrait :global(.avatar img) {
-		border-radius: inherit;
-	}
+
 	.ident,
 	.cta {
 		margin-top: 56px;

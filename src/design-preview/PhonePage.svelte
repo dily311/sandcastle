@@ -404,9 +404,6 @@
 		border-radius: 38% !important;
 		overflow: hidden;
 	}
-	.list :global(.avatar img) {
-		border-radius: inherit;
-	}
 	.main {
 		flex: 1;
 		min-width: 0;

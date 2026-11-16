@@ -20,6 +20,7 @@
 	import { recoverInterruptedChats } from "$features/character/recovery";
 	import { plugins } from "$shared/stores/plugins.svelte";
 	import PluginOff from "./PluginOff.svelte";
+	import ImagesPage from "$features/images/ImagesPage.svelte";
 
 	let ready = $state(false);
 
@@ -96,6 +97,8 @@
 				{#if plugins.on("game")}<GamePage gameId={r.gameId} sessionId={r.sessionId} edit={r.edit} />{:else}<PluginOff id="game" name="게임 모드" />{/if}
 			{:else if r.page === "phone"}
 				{#if plugins.on("phone")}<PhonePage />{:else}<PluginOff id="phone" name="폰" />{/if}
+			{:else if r.page === "images"}
+				{#if plugins.on("imagegen")}<ImagesPage tab={r.tab} />{:else}<PluginOff id="imagegen" name="이미지 생성" />{/if}
 			{:else if r.page === "lorebook"}
 				<LorebookPage bookId={r.bookId} />
 			{:else if r.page === "persona"}

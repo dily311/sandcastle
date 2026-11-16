@@ -24,7 +24,7 @@
 </script>
 
 <div class="tags">
-	{#each value as t (t)}
+	{#each value as t}
 		<span class="tag">{t}<button type="button" aria-label="{t} 태그 지우기" onclick={() => (value = value.filter((x) => x !== t))}><X /></button></span>
 	{/each}
 	<input bind:value={draft} {onkeydown} onblur={commit} placeholder={value.length ? "" : placeholder} aria-label={label} />

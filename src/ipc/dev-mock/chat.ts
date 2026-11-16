@@ -121,8 +121,24 @@ const messages: Message_Serialize[] = [];
 let pluginSetting = {
 	translate: { apiProfileId: null as string | null, targetLang: "한국어", inputLang: "English", autoTranslate: false },
 	tts: { apiProfileId: null as string | null, model: "tts-1", voice: "alloy", speed: 1, autoRead: false, dialogueOnly: false },
-	imageGen: { apiProfileId: null as string | null, model: "gpt-image-1", size: "1024x1024", stylePrompt: "", aiPrompt: true },
+	imageGen: {
+		apiProfileId: null as string | null,
+		model: "nai-diffusion-4-5-full",
+		size: "832x1216",
+		stylePrompt: "masterpiece, best quality",
+		aiPrompt: true,
+		promptApiProfileId: null as string | null,
+		negativePrompt: "lowres, bad anatomy",
+		steps: 28,
+		scale: 5,
+		sampler: "k_euler_ancestral",
+	},
+	phone: { apiProfileId: null as string | null, presetId: null as string | null },
 };
+// 이미지 갤러리 (브라우저 개발 모드: 자리 표시 그림)
+const gallery: { path: string; prompt: string; model: string; source: string; messageId: string | null; conversationId: string | null; createdAt: number }[] = [
+	{ path: "https://placehold.co/832x1216/png?text=forest", prompt: "1girl, silver hair, forest, night, moonlight", model: "nai-diffusion-4-5-full", source: "manual", messageId: null, conversationId: null, createdAt: Date.now() - 3600_000 },
+];
 
 function addConv(c: Partial<Conv> & { title: string; characterId: string }, ago: number): Conv {
 	const t = now() - ago * MIN;
@@ -242,6 +258,21 @@ export const chatHandlers: Record<string, (a: Args) => unknown> = {
 		return m;
 	},
 	speak_text: () => "C:/mock/tts.mp3",
+	list_tts_voices: () => [
+		{ id: "21m00Tcm4TlvDq8ikWAM", name: "Rachel", description: "female, calm" },
+		{ id: "AZnzlk1XvdvUeBnXmlld", name: "Domi", description: "female, strong" },
+	],
+	list_generated_images: () => gallery,
+	delete_generated_image: ({ path }) => {
+		const i = gallery.findIndex((g) => g.path === path);
+		if (i >= 0) gallery.splice(i, 1);
+		return null;
+	},
+	generate_image_from_prompt: ({ prompt, source }) => {
+		const img = { path: `https://placehold.co/832x1216/png?text=${encodeURIComponent(String(prompt).slice(0, 16))}`, prompt: `${prompt}, ${pluginSetting.imageGen.stylePrompt}`, model: pluginSetting.imageGen.model, source: (source as string) ?? "manual", messageId: null, conversationId: null, createdAt: Date.now() };
+		gallery.unshift(img);
+		return img;
+	},
 	generate_message_image: ({ messageId }) => {
 		const m = messages.find((x) => x.id === messageId)!;
 		const list = ((m.meta as { generatedImages?: unknown[] } | null)?.generatedImages ?? []) as unknown[];
