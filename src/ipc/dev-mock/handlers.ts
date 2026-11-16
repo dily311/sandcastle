@@ -20,6 +20,7 @@ const db = {
 		selectedPersonaId: "default",
 		lastPlayedGameId: null,
 		phoneModePrompt: "[폰 메신저 대화]",
+		home: { startOnHome: false, greeting: "", blocks: ["continue", "quick", "favorites", "games", "note"], note: "# 오늘 할 것\n- 엘리안 이야기 이어 쓰기\n- **새 게임** 시작해 보기" },
 	} satisfies AppSetting_Serialize as AppSetting_Serialize,
 	themeSetting: {
 		mode: "system",
@@ -39,12 +40,14 @@ export const handlers: Record<string, Handler> = {
 		const themeStyle = theme ? `<style id="sc-theme">${String(theme).replace(/</g, "")}</style>` : "";
 		const doc = /<html|<!doctype/i.test(h) ? h : `<!doctype html><meta charset="utf-8">${themeStyle}<body style="margin:0;padding:8px">${h}</body>`;
 		const report = `<script>(()=>{const s=()=>parent.postMessage({type:"sc-html-height",h:Math.ceil(document.body?document.body.getBoundingClientRect().bottom+parseFloat(getComputedStyle(document.body).marginBottom||"0"):document.documentElement.scrollHeight)},"*");new ResizeObserver(s).observe(document.documentElement);addEventListener("load",s);s();setTimeout(s,300);setTimeout(s,1000)})()<\/script>`;
-		return URL.createObjectURL(new Blob([doc + report], { type: "text/html" }));
+		const helper = `<script>(()=>{const post=(a,t)=>parent.postMessage({type:"sc-action",action:a,text:String(t??"").slice(0,4000)},"*");window.sandcastle=Object.freeze({fill:t=>post("fill",t),send:t=>post("send",t),choose:t=>post("send",t)});addEventListener("click",e=>{const el=e.target&&e.target.closest?e.target.closest("[data-sc-send],[data-sc-choice],[data-sc-fill]"):null;if(!el)return;e.preventDefault();const s=el.getAttribute("data-sc-send")??el.getAttribute("data-sc-choice");if(s!==null)post("send",s||el.textContent.trim());else post("fill",el.getAttribute("data-sc-fill")||el.textContent.trim())},true)})();<\/script>`;
+		return URL.createObjectURL(new Blob([helper + doc + report], { type: "text/html" }));
 	},
 	get_app_setting: () => db.appSetting,
 	update_app_setting: ({ patch }) => (db.appSetting = { ...db.appSetting, ...(patch as object) }),
 	get_theme_setting: () => db.themeSetting,
 	update_theme_setting: ({ patch }) => (db.themeSetting = { ...db.themeSetting, ...(patch as object) }),
+	set_theme_background: ({ path }) => (db.themeSetting = { ...db.themeSetting, backgroundImage: (path as string | null) ?? null }),
 	get_feature_setting: () => db.feature,
 	list_core_plugins: () =>
 		(
@@ -90,6 +93,8 @@ export const handlers: Record<string, Handler> = {
 		{ apiProfileId: "p3", profileName: "NovelAI", kind: "image", calls: 3, failed: 0, inputTokens: 0, outputTokens: 0, characters: 0, images: 3, estimatedCalls: 3 },
 	],
 	clear_usage: () => 0,
+	save_png_file: () => null,
+	default_app_prompts: () => ({ translate: "You are a translator. Translate into {{lang}}.", imagePrompt: "Describe ONE scene as an English prompt.", imagePromptNai: "Danbooru tags.", chatImages: "[이미지]\n사용 가능한 키: {{keys}}", gameRules: "규칙 1\n규칙 2", sceneRules: "씬 규칙" }),
 	cancel_task: () => null,
 	...chatHandlers,
 	...settingsHandlers,

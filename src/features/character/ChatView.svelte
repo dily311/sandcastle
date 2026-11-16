@@ -1,6 +1,6 @@
 <script lang="ts">
 	import { tick } from "svelte";
-	import { Bookmark, ChevronRight, Gauge, Copy, CornerUpLeft, FastForward, GitBranch, ImagePlus, Images, Languages, ListChecks, ListTree, PanelLeft, Plus, RefreshCw, Send, SlidersHorizontal, Square, Trash2, X } from "@lucide/svelte";
+	import { Bookmark, ChevronRight, Gauge, Copy, CornerUpLeft, FastForward, GitBranch, ImagePlus, Images, IdCard, Languages, ListChecks, ListTree, PanelLeft, Plus, RefreshCw, Send, SlidersHorizontal, Square, Trash2, X } from "@lucide/svelte";
 	import { bookmarks } from "./bookmarks";
 	import { childrenOf, pathOf } from "./branches";
 	import SidePanel from "$app/SidePanel.svelte";
@@ -18,6 +18,8 @@
 	import type { PromptMessage_Serialize } from "$ipc/bindings";
 	import ChatPanel from "./ChatPanel.svelte";
 	import ConvSidebar from "./ConvSidebar.svelte";
+	import TextCardDialog from "./TextCardDialog.svelte";
+	import { registerComposer } from "$shared/html/bridge";
 	import MessageItem from "./MessageItem.svelte";
 	import { plugins } from "$shared/stores/plugins.svelte";
 	import { translateInput } from "$shared/stores/aiTools.svelte";
@@ -187,6 +189,18 @@
 		plusMenu = { x: r.left, y: r.top - 8 - 200 };
 	}
 
+	// ---- HTML 블록의 선택지 → 입력칸 / 보내기 ----
+	$effect(() =>
+		registerComposer(({ action, text }) => {
+			if (action === "send" && session && !session.busy) {
+				draft = text;
+				void send();
+			} else {
+				draft = text;
+			}
+		}),
+	);
+
 	// ---- 글을 끌어서 고르면: 북마크 / 복사 ----
 	let selMenu = $state<{ x: number; y: number; text: string; messageId: string } | null>(null);
 	function onSelectEnd() {
@@ -200,6 +214,14 @@
 			const r = sel.getRangeAt(0).getBoundingClientRect();
 			selMenu = { x: r.left, y: r.bottom + 6, text, messageId: block.id.slice(4) };
 		}, 0);
+	}
+	// 고른 글 → 이미지 카드
+	let card = $state<{ text: string; speaker?: string; caption?: string } | null>(null);
+	function cardSelection() {
+		const m = selMenu;
+		if (!m) return;
+		const msg = session?.messages.find((x) => x.id === m.messageId);
+		card = { text: m.text, speaker: msg?.name ?? undefined, caption: [character?.name, conv?.title].filter(Boolean).join(" · ") };
 	}
 	async function bookmarkSelection() {
 		const m = selMenu; // 메뉴가 닫히며 selMenu가 비워지므로 먼저 잡아 둠
@@ -280,7 +302,6 @@
 
 	<section class="reader">
 		<header class="bar" class:listing={listShown}>
-			<IconButton label={listShown ? "대화 목록 닫기" : "대화 목록 열기"} size="sm" active={listShown} onclick={toggleList}><PanelLeft /></IconButton>
 			{#if path.length > 1}
 				<nav class="bpath" aria-label="분기 경로">
 					<GitBranch />
@@ -425,6 +446,7 @@
 		label="고른 글"
 		items={[
 			{ label: "북마크", icon: Bookmark, onselect: bookmarkSelection },
+			{ label: "이미지 카드로 만들기", icon: IdCard, onselect: cardSelection },
 			{
 				label: "복사",
 				icon: Copy,
@@ -438,6 +460,8 @@
 		onclose={() => (selMenu = null)}
 	/>
 </div>
+
+<TextCardDialog {card} onclose={() => (card = null)} />
 
 <Dialog open={!!prompt} title="보낸 컨텍스트" description={prompt ? `#${(session?.messages.indexOf(prompt.msg) ?? 0) + 1} 응답을 만들 때 보낸 프롬프트` : ""} size="lg" onclose={() => (prompt = null)}>
 	{#if prompt?.data}

@@ -13,6 +13,11 @@ export const commands = {
 	updateFeatureSetting: (id: string, enabled: boolean, options?: InvokeOptions) => __TAURI_INVOKE<null>("update_feature_setting", { id, enabled }, options),
 	getThemeSetting: (options?: InvokeOptions) => __TAURI_INVOKE<ThemeSetting_Serialize>("get_theme_setting", undefined, options),
 	updateThemeSetting: (patch: Value, options?: InvokeOptions) => __TAURI_INVOKE<ThemeSetting_Serialize>("update_theme_setting", { patch }, options),
+	/**
+	 *  배경 이미지 정하기: 고른 파일을 앱 데이터 backgrounds/에 복사해 쓴다 (원본은 건드리지 않음).
+	 *  path가 None이면 배경을 없앤다. 전에 복사해 둔 배경 파일은 지운다. 바뀐 설정을 돌려준다
+	 */
+	setThemeBackground: (path: string | null, options?: InvokeOptions) => __TAURI_INVOKE<ThemeSetting_Serialize>("set_theme_background", { path }, options),
 	getConvSettings: (options?: InvokeOptions) => __TAURI_INVOKE<ConvSettings_Serialize>("get_conv_settings", undefined, options),
 	setSystemDefaultPersona: (id: string, options?: InvokeOptions) => __TAURI_INVOKE<null>("set_system_default_persona", { id }, options),
 	getThemeList: (options?: InvokeOptions) => __TAURI_INVOKE<CssThemeMeta_Serialize[]>("get_theme_list", undefined, options),
@@ -307,6 +312,13 @@ export const commands = {
 	listGeneratedImages: (options?: InvokeOptions) => __TAURI_INVOKE<GeneratedImage_Serialize[]>("list_generated_images", undefined, options),
 	deleteGeneratedImage: (path: string, options?: InvokeOptions) => __TAURI_INVOKE<null>("delete_generated_image", { path }, options),
 	/**
+	 *  화면에서 만든 png(이미지 카드 등)를 사용자가 저장 대화상자로 고른 곳에 쓴다.
+	 *  .png 경로와 png 내용만 받는다 (다른 파일을 쓰는 데 쓰이지 않게)
+	 */
+	savePngFile: (path: string, dataBase64: string, options?: InvokeOptions) => __TAURI_INVOKE<null>("save_png_file", { path, dataBase64 }, options),
+	/**  앱 프롬프트 기본값 (설정 화면이 보여주고 "기본값으로" 되돌릴 때) */
+	defaultAppPrompts: (options?: InvokeOptions) => __TAURI_INVOKE<AppPrompts_Serialize>("default_app_prompts", undefined, options),
+	/**
 	 *  프롬프트로 직접 그리기 (이미지 생성 페이지). refine이면 채팅 AI가 프롬프트를 다듬는다.
 	 *  source: "manual"(생성 페이지) / "game"(게임 대사)
 	 */
@@ -408,6 +420,41 @@ export type AppErrorResponse_Serialize = {
 	details?: Value,
 };
 
+/**  앱이 AI에 보내는 고정 지시문을 고친 값. 빈 칸은 기본값을 쓴다 */
+export type AppPrompts = AppPrompts_Serialize | AppPrompts_Deserialize;
+
+/**  앱이 AI에 보내는 고정 지시문을 고친 값. 빈 칸은 기본값을 쓴다 */
+export type AppPrompts_Deserialize = {
+	/**  번역 지시 ({{lang}} = 옮길 언어) */
+	translate?: string,
+	/**  장면 → 그림 프롬프트 쓰기 */
+	imagePrompt?: string,
+	/**  장면 → NovelAI 태그 쓰기 */
+	imagePromptNai?: string,
+	/**  대화의 캐릭터 이미지(<cg>) 규칙 ({{keys}} = 키 목록, {{char}} = 캐릭터) */
+	chatImages?: string,
+	/**  게임 대화 규칙 (한 줄에 하나) */
+	gameRules?: string,
+	/**  씬 입력(서술자) 규칙 (한 줄에 하나) */
+	sceneRules?: string,
+};
+
+/**  앱이 AI에 보내는 고정 지시문을 고친 값. 빈 칸은 기본값을 쓴다 */
+export type AppPrompts_Serialize = {
+	/**  번역 지시 ({{lang}} = 옮길 언어) */
+	translate: string,
+	/**  장면 → 그림 프롬프트 쓰기 */
+	imagePrompt: string,
+	/**  장면 → NovelAI 태그 쓰기 */
+	imagePromptNai: string,
+	/**  대화의 캐릭터 이미지(<cg>) 규칙 ({{keys}} = 키 목록, {{char}} = 캐릭터) */
+	chatImages: string,
+	/**  게임 대화 규칙 (한 줄에 하나) */
+	gameRules: string,
+	/**  씬 입력(서술자) 규칙 (한 줄에 하나) */
+	sceneRules: string,
+};
+
 export type AppSetting = AppSetting_Serialize | AppSetting_Deserialize;
 
 export type AppSetting_Deserialize = {
@@ -425,6 +472,8 @@ export type AppSetting_Deserialize = {
 	 *  - 기존 저장값에 이 필드가 없어도 설정 전체가 초기화되지 않도록 serde default 필수
 	 */
 	phoneModePrompt?: string,
+	/**  홈 화면 (사용자 꾸미기) */
+	home?: HomeSetting_Deserialize,
 };
 
 export type AppSetting_Serialize = {
@@ -442,6 +491,8 @@ export type AppSetting_Serialize = {
 	 *  - 기존 저장값에 이 필드가 없어도 설정 전체가 초기화되지 않도록 serde default 필수
 	 */
 	phoneModePrompt: string,
+	/**  홈 화면 (사용자 꾸미기) */
+	home: HomeSetting_Serialize,
 };
 
 export type AssetRef = {
@@ -2130,6 +2181,33 @@ export type GeneratedImage_Serialize = {
 	createdAt: number,
 };
 
+/**  홈 화면: 보일 블록과 순서, 인사말, 내 글. 리소스를 쓰지 않는 화면이라 블록은 기본으로 보인다 */
+export type HomeSetting = HomeSetting_Serialize | HomeSetting_Deserialize;
+
+/**  홈 화면: 보일 블록과 순서, 인사말, 내 글. 리소스를 쓰지 않는 화면이라 블록은 기본으로 보인다 */
+export type HomeSetting_Deserialize = {
+	/**  앱을 열면 홈부터 (기본 꺼짐: 지금처럼 캐릭터 화면) */
+	startOnHome?: boolean,
+	/**  인사말 (비우면 "안녕하세요, {{user}}"). {{user}} 사용 가능 */
+	greeting?: string,
+	/**  보일 블록 id, 위에서부터 순서대로: continue / quick / favorites / games / note */
+	blocks?: string[],
+	/**  내 글 블록 (마크다운 줄·```html``` 블록, HTML 렌더링이 켜져 있으면 HTML도) */
+	note?: string,
+};
+
+/**  홈 화면: 보일 블록과 순서, 인사말, 내 글. 리소스를 쓰지 않는 화면이라 블록은 기본으로 보인다 */
+export type HomeSetting_Serialize = {
+	/**  앱을 열면 홈부터 (기본 꺼짐: 지금처럼 캐릭터 화면) */
+	startOnHome: boolean,
+	/**  인사말 (비우면 "안녕하세요, {{user}}"). {{user}} 사용 가능 */
+	greeting: string,
+	/**  보일 블록 id, 위에서부터 순서대로: continue / quick / favorites / games / note */
+	blocks: string[],
+	/**  내 글 블록 (마크다운 줄·```html``` 블록, HTML 렌더링이 켜져 있으면 HTML도) */
+	note: string,
+};
+
 export type ImageGenSetting = ImageGenSetting_Serialize | ImageGenSetting_Deserialize;
 
 export type ImageGenSetting_Deserialize = {
@@ -2675,6 +2753,8 @@ export type PluginSetting_Deserialize = {
 	tts?: TtsSetting_Deserialize,
 	imageGen?: ImageGenSetting_Deserialize,
 	phone?: PhoneSetting_Deserialize,
+	/**  앱 프롬프트 (사용자가 고친 것만, 비우면 기본값 — service::app_prompts) */
+	prompts?: AppPrompts_Deserialize,
 };
 
 export type PluginSetting_Serialize = {
@@ -2682,6 +2762,8 @@ export type PluginSetting_Serialize = {
 	tts: TtsSetting_Serialize,
 	imageGen: ImageGenSetting_Serialize,
 	phone: PhoneSetting_Serialize,
+	/**  앱 프롬프트 (사용자가 고친 것만, 비우면 기본값 — service::app_prompts) */
+	prompts: AppPrompts_Serialize,
 };
 
 export type PromptBlocks = PromptBlocks_Serialize | PromptBlocks_Deserialize;
@@ -3375,6 +3457,10 @@ export type ThemeSetting_Deserialize = {
 	grayTone?: string,
 	/**  CSS 스니펫 (옵시디언처럼 켜고 끄는 작은 CSS 조각) */
 	snippets?: CssSnippet[],
+	/**  앱 배경 이미지 (앱 데이터 backgrounds/에 복사한 파일 경로, GIF 가능). 없으면 배경 없음 */
+	backgroundImage?: string | null,
+	/**  배경 위 화면의 불투명도 (0.3~1). 낮을수록 배경이 잘 보임 */
+	backgroundOpacity?: number | null,
 };
 
 export type ThemeSetting_Serialize = {
@@ -3387,6 +3473,10 @@ export type ThemeSetting_Serialize = {
 	grayTone: string,
 	/**  CSS 스니펫 (옵시디언처럼 켜고 끄는 작은 CSS 조각) */
 	snippets: CssSnippet[],
+	/**  앱 배경 이미지 (앱 데이터 backgrounds/에 복사한 파일 경로, GIF 가능). 없으면 배경 없음 */
+	backgroundImage: string | null,
+	/**  배경 위 화면의 불투명도 (0.3~1). 낮을수록 배경이 잘 보임 */
+	backgroundOpacity: number | null,
 };
 
 export type TranscriptEntry = TranscriptEntry_Serialize | TranscriptEntry_Deserialize;

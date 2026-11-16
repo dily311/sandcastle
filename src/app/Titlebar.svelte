@@ -1,5 +1,5 @@
 <script lang="ts">
-	import { ChevronDown, ChevronLeft, ChevronRight, Copy, CornerUpLeft, Download, Folder, FolderMinus, GitBranch, Menu, Minus, PanelLeft, PanelRight, Pencil, Pin, PinOff, Square, Trash2, X } from "@lucide/svelte";
+	import { ChevronDown, ChevronLeft, ChevronRight, Copy, CornerUpLeft, Download, Folder, FolderMinus, GitBranch, Menu, Minus, PanelLeft, PanelRight, Pencil, Pin, PinOff, Square, Trash2, UserRound, X } from "@lucide/svelte";
 	import { getCurrentWindow } from "@tauri-apps/api/window";
 	import { ContextMenu, IconButton, type MenuItem } from "$shared/ui";
 	import { call, commands } from "$shared/ipc/client";
@@ -34,6 +34,8 @@
 		translate: "번역",
 		tts: "음성 읽기",
 		imagegen: "이미지 생성",
+		activity: "실행 기록",
+		prompts: "앱 프롬프트",
 	};
 	// 대화 화면이면 그 대화 (제목 고치기·동작 메뉴)
 	const conv = $derived(nav.current.page === "character" && !nav.current.edit ? library.conversation(nav.current.convId) : undefined);
@@ -61,7 +63,8 @@
 		const parent = (c.meta as { branch?: { parentId: string } } | null)?.branch?.parentId;
 		const folders = library.foldersOf(c.characterId ?? "");
 		return [
-			{ label: "이름 바꾸기", icon: Pencil, onselect: startRename },
+			...(c.characterId ? [{ label: "캐릭터 페이지로", icon: UserRound, onselect: () => nav.go({ page: "character", charId: c.characterId ?? undefined }) }] : []),
+			{ label: "이름 바꾸기", icon: Pencil, separator: !!c.characterId, onselect: startRename },
 			{ label: c.pinned ? "고정 풀기" : "고정", icon: c.pinned ? PinOff : Pin, onselect: () => library.togglePin(c.id) },
 			{
 				label: "복제 (포크)",
@@ -127,6 +130,8 @@
 				const tab: Crumb = { label: SETTINGS[r.tab ?? "general"], to: { page: "settings", tab: r.tab ?? "general" } };
 				return r.edit ? [{ label: "설정", to: { page: "settings" } }, tab, { label: "편집" }] : [{ label: "설정", to: { page: "settings" } }, tab];
 			}
+			case "home":
+				return [{ label: "홈" }];
 			case "phone":
 				return [{ label: "폰" }];
 			case "images":

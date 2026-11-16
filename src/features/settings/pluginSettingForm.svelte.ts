@@ -3,7 +3,7 @@ import type { PluginSetting } from "$ipc/bindings";
 import { library } from "$features/character/library.svelte";
 import { pluginSetting } from "$shared/stores/aiTools.svelte";
 
-export type Part = "translate" | "tts" | "imageGen" | "phone";
+export type Part = "translate" | "tts" | "imageGen" | "phone" | "prompts";
 export type Full = Required<{ [K in keyof PluginSetting]-?: Required<NonNullable<PluginSetting[K]>> }>;
 
 export function ensureLoaded() {

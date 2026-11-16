@@ -15,6 +15,7 @@
 	import DataSection from "./DataSection.svelte";
 	import LogSection from "./LogSection.svelte";
 	import ActivitySection from "./ActivitySection.svelte";
+	import PromptsSection from "./PromptsSection.svelte";
 	import ThemeEditor from "./ThemeEditor.svelte";
 	import ApiEditor from "./ApiEditor.svelte";
 	import ChatSection from "./ChatSection.svelte";
@@ -69,6 +70,7 @@
 			items: [
 				{ id: "api", label: "API 키", icon: KeyRound, keywords: "연결 공급자 모델 openai claude gemini vertex 서비스 계정 json 키 테스트", view: ApiSection },
 				{ id: "preset", label: "프리셋", icon: SlidersHorizontal, keywords: "프롬프트 블록 온도 토큰 컨텍스트 sillytavern", view: PresetSection },
+				{ id: "prompts", label: "앱 프롬프트", icon: ScrollText, keywords: "프롬프트 지시문 번역 이미지 cg 게임 규칙 씬 서술자 novelai 고치기", view: PromptsSection },
 				{ id: "regex", label: "정규식", icon: Regex, keywords: "찾아 바꾸기 치환 regex", view: RegexSection, plugin: "regex" },
 			],
 		},

@@ -1,13 +1,14 @@
 <script lang="ts">
-	import { Bookmark, BookmarkX, ChevronLeft, ChevronRight, Copy, Eye, EyeOff, FileSearch, GitBranch, ImagePlus, Languages, Pencil, RefreshCw, Square, Trash2, Volume2 } from "@lucide/svelte";
+	import { Bookmark, BookmarkX, ChevronDown, ChevronLeft, ChevronRight, Copy, Eye, EyeOff, FileSearch, GitBranch, ImagePlus, Languages, Pencil, RefreshCw, Square, Trash2, Volume2 } from "@lucide/svelte";
 	import { plugins } from "$shared/stores/plugins.svelte";
 	import { drawMessage, generatedImagesOf, speak, speech, translateMessage, translationOf } from "$shared/stores/aiTools.svelte";
-	import { Badge, Button, HtmlView, IconButton, Textarea } from "$shared/ui";
+	import { Badge, Button, IconButton, ProviderIcon, Textarea } from "$shared/ui";
 	import { absolute, relative } from "$shared/time";
 	import { confirmAction, promptText } from "$shared/stores/confirm.svelte";
 	import { toasts } from "$shared/stores/toast.svelte";
 	import { appSetting } from "$shared/stores/appSetting.svelte";
 	import { toBlocks } from "./format";
+	import RichText from "./RichText.svelte";
 	import { metaOf, type ChatSession, type Message } from "./session.svelte";
 	import { fileSrc } from "$shared/ipc/file";
 	import { layout } from "$app/layout.svelte";
@@ -61,6 +62,11 @@
 	const swipeId = $derived(meta.swipeId ?? 0);
 	const model = $derived(meta.info?.model || undefined);
 
+	// AI에게 숨긴 메시지는 한 줄로 접어 둔다 (눌러서 펼침)
+	let unfolded = $state(false);
+	const folded = $derived(!!meta.hidden && !unfolded && !live);
+	const preview = $derived(text.replace(/<[^>]+>/g, " ").replace(/\s+/g, " ").trim().slice(0, 120));
+
 	let editing = $state(false);
 	// 터치 화면: 메시지를 누르면 도구 줄을 보이고, 다른 곳을 누르면 숨김
 	let tapped = $state(false);
@@ -111,12 +117,17 @@
 		{#if selecting}<input class="pick" type="checkbox" checked={selected} aria-label="#{no} 메시지 고르기" onclick={(e) => e.stopPropagation()} onchange={(e) => onselect?.(msg, e.currentTarget.checked)} />{/if}
 		<span class="no">#{no}</span><b>{msg.name ?? (isAi ? "AI" : "나")}</b>
 		{#if meta.hidden}<Badge><EyeOff /> AI에게 숨김</Badge>{/if}
+		{#if meta.hidden && !live}
+			<button class="fold" aria-expanded={!folded} onclick={(e) => { e.stopPropagation(); unfolded = !unfolded; }}>
+				<ChevronDown class={folded ? "rot" : ""} />{folded ? "펼치기" : "접기"}
+			</button>
+		{/if}
 		{#if live}
 			<span class="stamp">만드는 중…</span>
 		{:else}
 			<span class="stamp">
 				{#if appSetting.showTimestamps}<time datetime={new Date(msg.createdAt).toISOString()} title={absolute(msg.createdAt)}>{relative(msg.createdAt)}</time>{/if}
-				{#if model}<span class="model">{appSetting.showTimestamps ? "· " : ""}{model}</span>{/if}
+				{#if isAi}<ProviderIcon {model} size={12} />{/if}
 				{#if meta.info?.cancelled}<span class="model">· 멈춤</span>{/if}
 			</span>
 		{/if}
@@ -153,7 +164,9 @@
 		{/if}
 	</div>
 
-	{#if editing}
+	{#if folded && !editing}
+		<button class="folded-line" onclick={(e) => { e.stopPropagation(); unfolded = true; }} title="눌러서 펼치기">{preview || "(빈 메시지)"}</button>
+	{:else if editing}
 		<div class="edit">
 			<Textarea bind:value={draft} autosize maxRows={20} aria-label="메시지 수정" />
 			<div class="edit-btns">
@@ -168,22 +181,14 @@
 			</div>
 		{/if}
 		{#if translation && !live}<p class="tr-note">{showOriginal ? "원문" : `${translation.lang} 번역`} · <button class="link" onclick={() => (showOriginal = !showOriginal)}>{showOriginal ? "번역 보기" : "원문 보기"}</button></p>{/if}
-		{#each blocks as b, i (i)}
-			{#if b.kind === "p"}
-				<p>
-					{#each b.parts as part, j (j)}{#if part.kind === "action"}<em>{part.text}</em>{:else if part.kind === "speech"}<q>{part.text}</q>{:else}{part.text}{/if}{/each}
-				</p>
-			{:else if b.kind === "html"}
-				<HtmlView code={b.code} />
-			{:else if images[b.key]}
-				<figure class="cg"><img src={images[b.key]} alt={b.key} loading="lazy" /><figcaption>{b.key}</figcaption></figure>
-			{/if}
-		{:else}
-			{#if live}<p class="typing" aria-label="응답 기다리는 중"><span></span><span></span><span></span></p>{/if}
-		{/each}
+		{#if blocks.length}
+			<RichText {blocks} {images} />
+		{:else if live}
+			<p class="typing" aria-label="응답 기다리는 중"><span></span><span></span><span></span></p>
+		{/if}
 	{/if}
 
-	{#if drawn.length}
+	{#if drawn.length && !folded}
 		<div class="drawn">
 			{#each drawn as d (d.path)}
 				<a href={fileSrc(d.path)} target="_blank" rel="noreferrer" title={d.prompt}><img src={fileSrc(d.path)} alt={d.prompt} loading="lazy" /></a>
@@ -203,6 +208,46 @@
 </div>
 
 <style>
+	.fold {
+		display: inline-flex;
+		align-items: center;
+		gap: 4px;
+		padding: 2px 6px;
+		border: none;
+		border-radius: var(--radius-sm);
+		background: transparent;
+		color: var(--text-faint);
+		font: inherit;
+		font-size: var(--text-xs);
+		cursor: pointer;
+	}
+	.fold:hover {
+		background: var(--surface-2);
+		color: var(--text-muted);
+	}
+	.fold :global(svg) {
+		width: 12px;
+		height: 12px;
+		transition: transform var(--duration-fast) var(--ease);
+	}
+	.fold :global(.rot) {
+		transform: rotate(-90deg);
+	}
+	.folded-line {
+		display: block;
+		width: 100%;
+		padding: 0;
+		border: none;
+		background: none;
+		color: var(--text-muted);
+		font: inherit;
+		font-size: var(--text-sm);
+		text-align: left;
+		white-space: nowrap;
+		overflow: hidden;
+		text-overflow: ellipsis;
+		cursor: pointer;
+	}
 	.tr-note {
 		margin: 0 0 4px;
 		font-size: var(--text-xs);
@@ -263,20 +308,9 @@
 		height: 15px;
 		accent-color: var(--accent);
 	}
-	.block p {
+	.block :global(p) {
 		white-space: pre-wrap;
 		overflow-wrap: anywhere;
-	}
-	.block p + p {
-		margin-top: 0.6em;
-	}
-	em {
-		color: var(--text-muted);
-	}
-	q {
-		quotes: none;
-		color: var(--text);
-		font-weight: 500;
 	}
 	.who {
 		display: flex;
@@ -336,22 +370,6 @@
 	.hidden {
 		opacity: 0.6;
 		outline: 1px dashed var(--border-strong);
-	}
-	.cg {
-		margin: var(--space-4) auto 0;
-		width: min(600px, 100%);
-		border-radius: var(--radius-lg);
-		overflow: hidden;
-		border: 1px solid var(--border);
-	}
-	.cg img {
-		display: block;
-		width: 100%;
-	}
-	.cg figcaption {
-		padding: 2px var(--space-3);
-		font-size: var(--text-xs);
-		color: var(--text-faint);
 	}
 	.swipe {
 		display: flex;

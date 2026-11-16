@@ -2,7 +2,7 @@
 	import { onDestroy, onMount } from "svelte";
 	import { ChevronDown, ChevronLeft, ChevronRight, RotateCcw } from "@lucide/svelte";
 	import { Button, Field, IconButton, Input, Segmented, Spinner, Textarea } from "$shared/ui";
-	import { BUILTIN_THEMES, COLOR_VARS, builtinId, defaultColors, type ColorMap, type Mode, type ThemeColors } from "$shared/ui/themes";
+	import { BUILTIN_THEMES, COLOR_VARS, builtinId, defaultColors, type ColorMap, type Mode, type ThemeColors, withLegacy } from "$shared/ui/themes";
 	import { theme } from "$app/theme.svelte";
 	import { nav } from "$app/nav.svelte";
 	import { call, commands } from "$shared/ipc/client";
@@ -47,7 +47,7 @@
 			name = t.name;
 			author = t.author;
 			version = t.version || "1.0.0";
-			colors = { light: { ...(t.colors.light ?? {}) }, dark: { ...(t.colors.dark ?? {}) } };
+			colors = withLegacy({ light: { ...(t.colors.light ?? {}) }, dark: { ...(t.colors.dark ?? {}) } }, t.cssContent ?? "");
 			css = t.cssContent ?? "";
 			cssOpen = !!css.trim();
 		}

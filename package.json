@@ -30,6 +30,7 @@
     "@tauri-apps/plugin-window-state": "^2.5.0",
     "clsx": "^2.1.1",
     "pixi.js": "^8.20.1",
+    "simple-icons": "^15.22.0",
     "svelte-i18n": "^4.0.1",
     "tauri-plugin-background-service": "^1.0.1"
   },

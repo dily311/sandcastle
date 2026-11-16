@@ -1,6 +1,8 @@
 <script lang="ts">
 	import { onMount } from "svelte";
-	import { Copy, Pencil, Plus, Trash2 } from "@lucide/svelte";
+	import { Copy, ImagePlus, Pencil, Plus, Trash2 } from "@lucide/svelte";
+	import { pickFiles } from "$shared/ipc/dialog";
+	import { fileSrc } from "$shared/ipc/file";
 	import type { CssThemeMeta_Serialize as ThemeMeta } from "$ipc/bindings";
 	import { Button, ContextMenu, Input, Segmented, Select, Switch, Textarea, type MenuItem } from "$shared/ui";
 	import { ACCENTS } from "$shared/ui/accents";
@@ -30,6 +32,14 @@
 		return { ...base, ...over };
 	};
 	const selected = $derived(theme.setting.selectTheme || "default");
+
+	// ---- 배경 이미지 (GIF 가능) ----
+	const bgUrl = $derived(theme.setting.backgroundImage ? fileSrc(theme.setting.backgroundImage) : null);
+	async function pickBackground() {
+		const [path] = await pickFiles([{ name: "이미지", extensions: ["png", "jpg", "jpeg", "webp", "gif", "avif"] }], false);
+		if (path) await theme.setBackground(path);
+	}
+	const opacities = [0.5, 0.65, 0.75, 0.82, 0.9, 0.95].map((v) => ({ value: String(v), label: `${Math.round(v * 100)}%` }));
 	const selectKey = (key: string) => theme.update({ selectTheme: key });
 
 	// ---- 사용자 테마 메뉴 ----
@@ -134,6 +144,21 @@
 		</Row>
 	</Group>
 
+	<Group title="배경 이미지">
+		<Row label="배경" desc="앱 뒤에 깔 그림 (움짤 GIF 가능). 고른 파일은 앱 데이터에 복사해 씀">
+			<div class="bg-pick">
+				{#if bgUrl}<img class="bg-thumb" src={bgUrl} alt="지금 배경" />{/if}
+				<Button size="sm" onclick={pickBackground}>{#snippet icon()}<ImagePlus />{/snippet}{bgUrl ? "바꾸기" : "고르기"}</Button>
+				{#if bgUrl}<Button size="sm" variant="ghost" onclick={() => theme.setBackground(null)}>{#snippet icon()}<Trash2 />{/snippet}없애기</Button>{/if}
+			</div>
+		</Row>
+		{#if bgUrl}
+			<Row label="화면 불투명도" desc="낮을수록 배경이 잘 보이고 글은 덜 또렷함">
+				<Select value={String(theme.setting.backgroundOpacity ?? 0.82)} options={opacities} aria-label="화면 불투명도" onchange={(e) => theme.update({ backgroundOpacity: Number(e.currentTarget.value) })} />
+			</Row>
+		{/if}
+	</Group>
+
 	<Group title="기본 테마">
 		<div class="gallery" role="radiogroup" aria-label="기본 테마">
 			{#each BUILTIN_THEMES as t (t.id)}
@@ -190,6 +215,19 @@
 {#if menu}<ContextMenu at={menu.at} items={menu.items} label="테마 메뉴" onclose={() => (menu = null)} />{/if}
 
 <style>
+	.bg-pick {
+		display: flex;
+		align-items: center;
+		gap: var(--space-2);
+		flex-wrap: wrap;
+	}
+	.bg-thumb {
+		width: 72px;
+		height: 44px;
+		object-fit: cover;
+		border-radius: var(--radius-sm);
+		box-shadow: 0 0 0 1px var(--border);
+	}
 	.accents,
 	.grays {
 		display: flex;

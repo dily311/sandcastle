@@ -49,6 +49,13 @@ pub fn get_plugin_setting(state: State<'_, SettingsState<PluginSetting>>) -> Res
     read(&state)
 }
 
+/// 앱 프롬프트 기본값 (설정 화면이 보여주고 "기본값으로" 되돌릴 때)
+#[tauri::command]
+#[specta::specta]
+pub fn default_app_prompts() -> crate::models::settings::AppPrompts {
+    crate::service::app_prompts::defaults()
+}
+
 #[tauri::command]
 #[specta::specta]
 pub fn update_plugin_setting(app: AppHandle, state: State<'_, SettingsState<PluginSetting>>, setting: PluginSetting) -> Result<PluginSetting> {
@@ -57,6 +64,7 @@ pub fn update_plugin_setting(app: AppHandle, state: State<'_, SettingsState<Plug
         *cur = setting.clone();
         save(&app, &*cur)?;
     }
+    crate::service::app_prompts::set(&setting.prompts);
     let _ = app.emit(PluginSetting::EVENT_NAME, &setting);
     Ok(setting)
 }

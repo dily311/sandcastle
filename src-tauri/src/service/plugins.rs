@@ -59,12 +59,7 @@ async fn ask(ai: &AiService, profile_id: String, system: String, user: String, m
 // =========================================================
 
 pub fn translate_rules(to: &str) -> String {
-    format!(
-        "You are a translator. Translate the user's text into {to}.\n\
-- Output only the translation, nothing else.\n\
-- Keep line breaks, *actions in asterisks*, \"quotes\", names, <tags>, {{{{macros}}}} and ``` code blocks ``` exactly as they are (do not translate code).\n\
-- Keep the speaker prefixes like \"Name:\" if present."
-    )
+    crate::service::app_prompts::translate(to)
 }
 
 pub async fn translate(ai: &AiService, setting: &TranslateSetting, fallback_profile: &str, text: &str, to: &str) -> Result<String> {
@@ -241,14 +236,12 @@ pub async fn voices(ai: &AiService, profile_id: &str) -> Result<Vec<Voice>> {
 // 이미지 생성 (OpenAI 호환 / NovelAI)
 // =========================================================
 
-const IMAGE_PROMPT_RULES: &str = "You write prompts for an image generation model. Read the roleplay message and describe ONE vivid scene from it as a single English prompt: subjects and their appearance, action, setting, lighting, mood, camera framing. No dialogue text, no names unless needed, no explanations. Under 80 words. Output only the prompt.";
-const NAI_PROMPT_RULES: &str = "You write prompts for NovelAI image generation (anime models). Read the roleplay message and describe ONE scene as comma-separated Danbooru-style English tags: number of people (1girl, 1boy...), appearance (hair, eyes, clothing), expression, pose/action, setting, lighting, framing. No sentences, no dialogue, no explanations. Under 40 tags. Output only the tags.";
 
 /// 메시지로 이미지 프롬프트를 만든다 (ai_prompt면 채팅 AI가 정리 — NovelAI면 태그로, 아니면 문장으로) + 화풍
 pub async fn image_prompt(ai: &AiService, setting: &ImageGenSetting, chat_profile: &str, message: &str, context: &str) -> Result<String> {
     let body = if setting.ai_prompt {
         let user = if context.trim().is_empty() { message.to_string() } else { format!("[Characters]\n{context}\n\n[Message]\n{message}") };
-        let rules = if image_is_novelai(ai, setting, chat_profile).await { NAI_PROMPT_RULES } else { IMAGE_PROMPT_RULES };
+        let rules = crate::service::app_prompts::image_prompt(image_is_novelai(ai, setting, chat_profile).await);
         ask(ai, pick_profile(&setting.prompt_api_profile_id, chat_profile)?, rules.into(), user, 300).await?
     } else {
         speakable(message, false)

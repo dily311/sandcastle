@@ -41,6 +41,15 @@ struct Store {
 
 static STORE: LazyLock<Mutex<Store>> = LazyLock::new(|| Mutex::new(Store { map: HashMap::new(), order: VecDeque::new() }));
 
+/// 편의 함수: 문서 맨 앞(테마 뒤)에 둬서 AI가 쓴 스크립트·onclick이 바로 쓸 수 있게 한다.
+/// - `sandcastle.fill(글)`: 채팅 입력칸에 넣기 (보내지 않음)
+/// - `sandcastle.send(글)` / `sandcastle.choose(글)`: 채팅으로 보내기. 화면은 사용자가 이 블록을 막 눌렀을 때만 보내고,
+///   아니면 입력칸에 넣기만 한다 (사용자 동의 없는 요금 방지)
+/// - 스크립트 없이: `data-sc-send="글"` / `data-sc-choice` / `data-sc-fill`을 단 요소를 누르면 같은 동작 (값이 비면 그 요소의 글자)
+///
+/// 허용된 요청은 이 둘뿐이고, 화면(HtmlView)이 type·action을 확인한다.
+const HELPER_SCRIPT: &str = r#"<script>(()=>{const post=(a,t)=>parent.postMessage({type:"sc-action",action:a,text:String(t??"").slice(0,4000)},"*");window.sandcastle=Object.freeze({fill:t=>post("fill",t),send:t=>post("send",t),choose:t=>post("send",t)});addEventListener("click",e=>{const el=e.target&&e.target.closest?e.target.closest("[data-sc-send],[data-sc-choice],[data-sc-fill]"):null;if(!el)return;e.preventDefault();const s=el.getAttribute("data-sc-send")??el.getAttribute("data-sc-choice");if(s!==null)post("send",s||el.textContent.trim());else post("fill",el.getAttribute("data-sc-fill")||el.textContent.trim())},true)})();</script>"#;
+
 fn id_of(html: &str, theme: &str) -> String {
     let mut h = std::collections::hash_map::DefaultHasher::new();
     (html, theme).hash(&mut h);
@@ -84,6 +93,7 @@ pub fn url_of(id: &str) -> String {
 pub fn document(html: &str, theme: &str) -> String {
     let lower = html.to_ascii_lowercase();
     let theme_style = if theme.trim().is_empty() { String::new() } else { format!("<style id=\"sc-theme\">{theme}</style>") };
+    let theme_style = format!("{theme_style}{HELPER_SCRIPT}");
     let mut doc = if lower.contains("<html") || lower.contains("<!doctype") {
         // 완성된 문서: <head> 바로 뒤(없으면 맨 앞)에 테마를 넣어 문서의 스타일이 이길 수 있게
         let mut d = html.to_string();
@@ -144,6 +154,8 @@ mod tests {
         let doc = document("<b>hi</b>", "");
         assert!(doc.starts_with("<!doctype html>"));
         assert!(doc.contains("sc-html-height"));
+        // 편의 함수는 본문보다 앞에
+        assert!(doc.find("window.sandcastle").unwrap() < doc.find("<body>").unwrap());
         assert!(doc.find("sc-html-height").unwrap() < doc.find("</body>").unwrap());
     }
 

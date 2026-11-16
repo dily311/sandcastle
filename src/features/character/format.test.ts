@@ -39,3 +39,24 @@ describe("preview", () => {
 		expect(preview("가".repeat(50), 10)).toBe(`${"가".repeat(10)}…`);
 	});
 });
+
+describe("마크다운 줄과 이름 바꾸기", () => {
+	it("제목·목록·인용·가로줄·굵게·코드", async () => {
+		const { toBlocks } = await import("./format");
+		const b = toBlocks("# 제목\n- 하나\n> 인용\n---\n**굵게** `코드`");
+		expect(b.map((x) => x.kind)).toEqual(["h", "li", "quote", "hr", "p"]);
+		expect(b[4]).toEqual({ kind: "p", parts: [{ kind: "strong", text: "굵게" }, { kind: "text", text: " " }, { kind: "code", text: "코드" }] });
+	});
+
+	it("메시지에서는 코드 블록 밖 HTML을 실행하지 않고, 개요(rawHtml)에서는 HTML 블록으로", async () => {
+		const { toBlocks } = await import("./format");
+		expect(toBlocks("<div>안녕</div>").every((x) => x.kind !== "html")).toBe(true);
+		expect(toBlocks("<div>안녕</div>", { rawHtml: true })[0].kind).toBe("html");
+	});
+
+	it("{{char}}/{{user}}를 이름으로", async () => {
+		const { fillNames } = await import("./format");
+		expect(fillNames("{{char}}와 {{ User }}", { char: "엘리안", user: "나" })).toBe("엘리안와 나");
+		expect(fillNames("{{user}}", {})).toBe("{{user}}");
+	});
+});

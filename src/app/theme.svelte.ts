@@ -4,7 +4,8 @@ import { call, commands } from "$shared/ipc/client";
 import { getCurrentWindow } from "@tauri-apps/api/window";
 import { ACCENTS, DEFAULT_ACCENT, accentValue } from "$shared/ui/accents";
 import { DEFAULT_GRAY, grayScale } from "$shared/ui/grays";
-import { BUILTIN_THEMES, builtinId, colorsToCss, type ThemeColors } from "$shared/ui/themes";
+import { BUILTIN_THEMES, builtinId, colorsToCss, withLegacy, type ThemeColors } from "$shared/ui/themes";
+import { fileSrc } from "$shared/ipc/file";
 
 export type { CssSnippet };
 
@@ -16,6 +17,8 @@ const FALLBACK: ThemeSetting = {
 	fontSize: 16,
 	grayTone: DEFAULT_GRAY,
 	snippets: [],
+	backgroundImage: null,
+	backgroundOpacity: 0.82,
 };
 
 /** 지금 적용할 테마 내용 */
@@ -78,7 +81,8 @@ class Theme {
 		else if (bid) this.active = { colors: BUILTIN_THEMES.find((t) => t.id === bid)?.colors ?? NONE.colors, css: "" };
 		else {
 			const t = await call(commands.loadTheme(key), { source: "theme", silent: true }).catch(() => null);
-			this.active = t ? { colors: { light: t.colors.light ?? {}, dark: t.colors.dark ?? {} }, css: t.cssContent ?? "" } : NONE;
+			// 예전 테마 JSON(옵시디언식 변수)도 새 변수로 이어서 보이게
+			this.active = t ? { colors: withLegacy({ light: t.colors.light ?? {}, dark: t.colors.dark ?? {} }, t.cssContent ?? ""), css: t.cssContent ?? "" } : NONE;
 		}
 	}
 
@@ -98,10 +102,39 @@ class Theme {
 		grayScale(this.setting.grayTone ?? DEFAULT_GRAY, this.dark).forEach((c, i) => root.style.setProperty(`--gray-${i + 1}`, c));
 		root.style.fontSize = `${this.setting.fontSize}px`;
 		this.style("user-theme").textContent = [colorsToCss(cur.colors), cur.css].filter((s) => s.trim()).join("\n\n");
+		this.applyBackground();
 		this.style("user-snippets").textContent = this.snippets
 			.filter((s) => s.enabled && s.css.trim())
 			.map((s) => `/* ${s.name.replace(/\*\//g, "")} */\n${s.css}`)
 			.join("\n\n");
+	}
+
+	/** 배경 이미지: body에 깔고, 바탕 색들을 불투명도만큼 비치게 한다 */
+	private applyBackground() {
+		const root = document.documentElement;
+		const el = this.style("user-background");
+		const url = this.setting.backgroundImage ? fileSrc(this.setting.backgroundImage) : null;
+		if (!url) {
+			delete root.dataset.bgImage;
+			el.textContent = "";
+			return;
+		}
+		// 지금 테마의 바탕 색을 읽어 반투명으로 (배경 규칙을 빼고 계산해야 원래 색이 나온다)
+		el.textContent = "";
+		const cs = getComputedStyle(root);
+		const a = Math.round(Math.min(1, Math.max(0.3, this.setting.backgroundOpacity ?? 0.82)) * 100);
+		const see = (name: string) => `${name}: color-mix(in srgb, ${cs.getPropertyValue(name).trim() || "transparent"} ${a}%, transparent);`;
+		root.dataset.bgImage = "";
+		el.textContent = [
+			`:root[data-bg-image] { ${["--bg", "--surface-2", "--bg-sunken"].map(see).join(" ")} }`,
+			`:root[data-bg-image] body { background: var(--bg-solid, #000) url("${url.replace(/"/g, "%22")}") center / cover no-repeat fixed; }`,
+		].join("\n");
+	}
+
+	/** 배경 이미지 고르기 (null이면 없앰) */
+	async setBackground(path: string | null) {
+		this.setting = await call(commands.setThemeBackground(path), { source: "theme" });
+		this.apply();
 	}
 
 	/** 프레임 없는 창이면 앱 헤더가 창 버튼을 그림, 아니면 운영체제 제목 표시줄 */
@@ -120,6 +153,7 @@ class Theme {
 			el.id = id;
 			document.head.appendChild(el);
 			if (id === "user-theme") document.getElementById("user-snippets")?.before(el);
+			if (id === "user-background") document.getElementById("user-snippets")?.before(el);
 		}
 		return el;
 	}

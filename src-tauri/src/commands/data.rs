@@ -161,3 +161,23 @@ mod drop_tests {
 pub async fn export_character_card(state: State<'_, AppState>, id: String, format: String, path: String) -> Result<()> {
     crate::service::data::card::export_card(&state.db, &id, &format, &PathBuf::from(path)).await
 }
+
+/// 화면에서 만든 png(이미지 카드 등)를 사용자가 저장 대화상자로 고른 곳에 쓴다.
+/// .png 경로와 png 내용만 받는다 (다른 파일을 쓰는 데 쓰이지 않게)
+#[tauri::command]
+#[specta::specta]
+pub fn save_png_file(path: String, data_base64: String) -> Result<()> {
+    use base64::Engine;
+    let path = PathBuf::from(path);
+    if !path.extension().is_some_and(|e| e.eq_ignore_ascii_case("png")) {
+        return Err(crate::error::AppError::validation("png 파일로만 저장할 수 있습니다", None));
+    }
+    let bytes = base64::engine::general_purpose::STANDARD
+        .decode(data_base64.as_bytes())
+        .map_err(|e| crate::error::AppError::validation(format!("이미지 내용이 올바르지 않습니다: {e}"), None))?;
+    if !bytes.starts_with(b"\x89PNG\r\n\x1a\n") {
+        return Err(crate::error::AppError::validation("png 이미지가 아닙니다", None));
+    }
+    std::fs::write(&path, bytes)?;
+    Ok(())
+}

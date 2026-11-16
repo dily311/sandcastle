@@ -3,11 +3,13 @@
 	// - 백엔드가 htmlview:// 주소로 서빙하고 그 응답에만 CSP를 붙인다 (sys/html_view.rs)
 	// - sandbox="allow-scripts"만: 불투명 origin이라 앱 화면·저장소·Tauri에 닿지 못한다
 	// - 높이는 iframe이 postMessage로 알려준다 (최대 MAX_HEIGHT, 넘치면 iframe 안에서 스크롤)
-	import { Code, Eye, RotateCw } from "@lucide/svelte";
+	import { ChevronDown, Code, Eye, RotateCw } from "@lucide/svelte";
 	import { call, commands } from "$shared/ipc/client";
 	import { plugins } from "$shared/stores/plugins.svelte";
 	import { theme } from "$app/theme.svelte";
 	import { currentThemeCss } from "$shared/html/theme";
+	import { dispatchAction, parseAction } from "$shared/html/bridge";
+	import { toasts } from "$shared/stores/toast.svelte";
 
 	let { code }: { code: string } = $props();
 
@@ -16,6 +18,8 @@
 	let failed = $state(false);
 	let height = $state(120);
 	let showCode = $state(false);
+	/** 접으면 머리줄만 남긴다 (iframe도 내린다) */
+	let folded = $state(false);
 	let reloadKey = $state(0);
 	let frame: HTMLIFrameElement | undefined = $state();
 
@@ -38,20 +42,32 @@
 		if (!frame || e.source !== frame.contentWindow) return;
 		const d = e.data as { type?: string; h?: number };
 		if (d?.type === "sc-html-height" && typeof d.h === "number" && d.h > 0) height = Math.min(MAX_HEIGHT, Math.ceil(d.h) + 2);
+		const req = parseAction(e.data);
+		if (!req) return;
+		// 보내기는 요금이 나간다: 사용자가 이 블록 안을 막 눌렀을 때만 (iframe에 포커스). 아니면 입력칸에 넣기만
+		const clicked = document.activeElement === frame;
+		const action = req.action === "send" && !clicked ? "fill" : req.action;
+		if (!dispatchAction({ action, text: req.text })) return void toasts.info("대화 화면에서만 쓸 수 있음");
+		if (req.action === "send" && action === "fill") toasts.info("입력칸에 넣음 · 직접 보내기");
 	}
 </script>
 
 <svelte:window onmessage={onMessage} />
 
 <figure class="html">
-	<div class="bar">
-		<span>HTML{#if !enabled} · 실행 꺼짐 (코어 플러그인){/if}</span>
+	<div class="bar" class:folded>
+		<button type="button" class="fold" title={folded ? "펼치기" : "접기"} aria-label={folded ? "HTML 펼치기" : "HTML 접기"} aria-expanded={!folded} onclick={(e) => { e.stopPropagation(); folded = !folded; }}>
+			<ChevronDown class={folded ? "rot" : ""} />
+		</button>
+		<span>HTML{#if !enabled} · 실행 꺼짐 (코어 플러그인){/if}{#if folded} · 접힘{/if}</span>
 		<button type="button" title="다시 실행" aria-label="다시 실행" onclick={() => reloadKey++}><RotateCw /></button>
 		<button type="button" title={showCode ? "결과 보기" : "코드 보기"} aria-label={showCode ? "결과 보기" : "코드 보기"} aria-pressed={showCode} onclick={() => (showCode = !showCode)}>
 			{#if showCode}<Eye />{:else}<Code />{/if}
 		</button>
 	</div>
-	{#if showCode || failed || !enabled}
+	{#if folded}
+		<!-- 접힘 -->
+	{:else if showCode || failed || !enabled}
 		<pre><code>{code}</code></pre>
 	{:else if src}
 		{#key reloadKey}
@@ -72,13 +88,22 @@
 		display: flex;
 		align-items: center;
 		gap: 2px;
-		padding: 2px 4px 2px 10px;
+		padding: 2px 4px;
 		border-bottom: 1px solid var(--border);
 		font-size: var(--text-xs);
 		color: var(--text-muted);
 	}
 	.bar span {
 		flex: 1;
+	}
+	.bar.folded {
+		border-bottom: none;
+	}
+	.bar .fold :global(svg) {
+		transition: transform var(--duration-fast) var(--ease);
+	}
+	.bar .fold :global(.rot) {
+		transform: rotate(-90deg);
 	}
 	.bar button {
 		display: grid;

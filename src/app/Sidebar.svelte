@@ -1,6 +1,6 @@
 <script lang="ts">
 	import { onMount } from "svelte";
-	import { BookOpen, Check, ChevronsUpDown, Copy, Download, Ellipsis, Gamepad2, Pencil, Pin, PinOff, Plus, Settings, Smartphone, Trash2, UserCog, Users, Images } from "@lucide/svelte";
+	import { BookOpen, Check, ChevronsUpDown, Copy, Download, Ellipsis, Gamepad2, House, Pencil, Pin, PinOff, Plus, Settings, Smartphone, Trash2, UserCog, Users, Images } from "@lucide/svelte";
 	import { Avatar, ContextMenu, IconButton, type MenuItem } from "$shared/ui";
 	import { fileSrc } from "$shared/ipc/file";
 	import { call, commands } from "$shared/ipc/client";
@@ -15,6 +15,7 @@
 	// 화면이 늘어나면 여기에 추가 (페르소나는 아래 사용자 프로필에서)
 	// 폰·게임은 코어 플러그인이 꺼져 있으면 숨김
 	const allItems: { page: Page; label: string; icon: typeof Users; plugin?: PluginId }[] = [
+		{ page: "home", label: "홈", icon: House },
 		{ page: "character", label: "캐릭터", icon: Users },
 		{ page: "phone", label: "폰", icon: Smartphone, plugin: "phone" },
 		{ page: "game", label: "게임", icon: Gamepad2, plugin: "game" },

@@ -1,7 +1,7 @@
 <script lang="ts">
 	// API 연결 추가·편집 (모달 대신 설정 안 페이지, 테마 편집과 같은 방식)
 	import { onMount } from "svelte";
-	import { ChevronLeft, FileJson, KeyRound, Zap } from "@lucide/svelte";
+	import { CircleAlert, CircleCheck, ChevronLeft, FileJson, KeyRound, Zap } from "@lucide/svelte";
 	import { apiLists } from "./providers";
 	import { Badge, Button, Field, IconButton, Input, Select, Spinner } from "$shared/ui";
 	import { nav } from "$app/nav.svelte";
@@ -29,6 +29,24 @@
 	let loadingModels = $state(false);
 	let saving = $state(false);
 	let testing = $state(false);
+	// 저장할 때 연결 확인: "Hi" 한 번 보내 보고 결과를 보여준다 (요금이 아주 조금 나가므로 선택할 수 있게)
+	const CHECK_KEY = "sc.api.checkOnSave";
+	let checkOnSave = $state((() => {
+		try {
+			return localStorage.getItem(CHECK_KEY) !== "0";
+		} catch {
+			return true;
+		}
+	})());
+	$effect(() => {
+		try {
+			localStorage.setItem(CHECK_KEY, checkOnSave ? "1" : "0");
+		} catch {
+			/* 저장 못 해도 이번엔 그대로 */
+		}
+	});
+	let check = $state<{ state: "checking" | "ok" | "fail"; message: string } | null>(null);
+	/** 채팅 API만 확인한다 (음성·이미지 API는 대화 요청을 받지 않음, NovelAI는 확인에도 요금이 나감) */
 
 	// Vertex AI: 서비스 계정 JSON + 지역 + 프로젝트 → 백엔드가 받는 키 JSON으로 묶음
 	let saFile = $state<{ name: string; text: string; email: string } | null>(null);
@@ -41,6 +59,7 @@
 	const dirty = $derived(loaded && snapshot() !== initial);
 
 	const provider = $derived(apiLists.find((p) => p.provider === providerId));
+	const chatApi = $derived(!!provider && !["elevenlabs", "novelai"].includes(provider.formatType));
 	const vertex = $derived(provider?.formatType === "vertexai");
 	const knownModels = $derived([...new Set([...(provider?.modelList.flatMap((g) => g.model) ?? []), ...models])]);
 
@@ -123,11 +142,13 @@
 	async function test() {
 		if (!id) return;
 		testing = true;
+		check = { state: "checking", message: "\"Hi\"를 보내는 중…" };
 		try {
-			const reply = await call(commands.testMessage(id), src);
-			toasts.success(`연결됨 · ${reply.trim().slice(0, 40) || "(빈 응답)"}`);
-		} catch {
-			/* 토스트는 call이 띄움 */
+			const reply = await call(commands.testMessage(id), { ...src, silent: true });
+			check = { state: "ok", message: `연결됨 · 답: ${reply.trim().slice(0, 60) || "(빈 응답)"}` };
+		} catch (e) {
+			const msg = (e as { message?: string })?.message ?? String(e);
+			check = { state: "fail", message: `연결 안 됨 · ${msg}` };
 		} finally {
 			testing = false;
 		}
@@ -162,6 +183,7 @@
 		} finally {
 			saving = false;
 		}
+		if (id && hasKey && checkOnSave && chatApi) await test();
 	}
 	async function removeKey() {
 		if (!id) return;
@@ -188,6 +210,15 @@
 		</div>
 	</header>
 	<p class="lead">키는 운영체제 보안 저장소에 따로 보관함</p>
+	{#if chatApi}
+		<label class="check-opt"><input type="checkbox" bind:checked={checkOnSave} />저장할 때 연결 확인 ("Hi" 한 번 보냄 · 요금이 아주 조금 나감)</label>
+	{/if}
+	{#if check}
+		<div class="check {check.state}" role="status">
+			{#if check.state === "checking"}<Spinner size={14} />{:else if check.state === "ok"}<CircleCheck />{:else}<CircleAlert />{/if}
+			<span>{check.message}</span>
+		</div>
+	{/if}
 
 	<div class="card form">
 		<div class="two">
@@ -256,6 +287,36 @@
 {/if}
 
 <style>
+	.check-opt {
+		display: inline-flex;
+		align-items: center;
+		gap: 6px;
+		margin-bottom: var(--space-3);
+		font-size: var(--text-sm);
+		color: var(--text-muted);
+	}
+	.check {
+		display: flex;
+		align-items: center;
+		gap: var(--space-2);
+		margin-bottom: var(--space-4);
+		padding: var(--space-2) var(--space-3);
+		border-radius: var(--radius-md);
+		background: var(--surface-2);
+		font-size: var(--text-sm);
+		overflow-wrap: anywhere;
+	}
+	.check :global(svg) {
+		width: 16px;
+		height: 16px;
+		flex-shrink: 0;
+	}
+	.check.ok {
+		color: var(--success, var(--text));
+	}
+	.check.fail {
+		color: var(--danger, var(--text));
+	}
 	.center {
 		display: grid;
 		place-items: center;

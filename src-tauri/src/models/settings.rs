@@ -19,6 +19,34 @@ pub struct AppSetting {
     /// - 기존 저장값에 이 필드가 없어도 설정 전체가 초기화되지 않도록 serde default 필수
     #[serde(default = "default_phone_mode_prompt")]
     pub phone_mode_prompt: String,
+    /// 홈 화면 (사용자 꾸미기)
+    #[serde(default)]
+    pub home: HomeSetting,
+}
+
+/// 홈 화면: 보일 블록과 순서, 인사말, 내 글. 리소스를 쓰지 않는 화면이라 블록은 기본으로 보인다
+#[derive(Serialize, Deserialize, Debug, Clone, specta::Type)]
+#[serde(rename_all = "camelCase", default)]
+pub struct HomeSetting {
+    /// 앱을 열면 홈부터 (기본 꺼짐: 지금처럼 캐릭터 화면)
+    pub start_on_home: bool,
+    /// 인사말 (비우면 "안녕하세요, {{user}}"). {{user}} 사용 가능
+    pub greeting: String,
+    /// 보일 블록 id, 위에서부터 순서대로: continue / quick / favorites / games / note
+    pub blocks: Vec<String>,
+    /// 내 글 블록 (마크다운 줄·```html``` 블록, HTML 렌더링이 켜져 있으면 HTML도)
+    pub note: String,
+}
+
+impl Default for HomeSetting {
+    fn default() -> Self {
+        Self {
+            start_on_home: false,
+            greeting: String::new(),
+            blocks: ["continue", "quick", "favorites", "games", "note"].map(String::from).to_vec(),
+            note: String::new(),
+        }
+    }
 }
 
 pub const DEFAULT_PHONE_MODE_PROMPT: &str = "[폰 메신저 대화]
@@ -44,6 +72,7 @@ impl Default for AppSetting {
             selected_persona_id: "default".into(),
             last_played_game_id: None,
             phone_mode_prompt: default_phone_mode_prompt(),
+            home: HomeSetting::default(),
         }
     }
 }
@@ -69,6 +98,16 @@ pub struct ThemeSetting {
     /// CSS 스니펫 (옵시디언처럼 켜고 끄는 작은 CSS 조각)
     #[serde(default)]
     pub snippets: Vec<CssSnippet>,
+    /// 앱 배경 이미지 (앱 데이터 backgrounds/에 복사한 파일 경로, GIF 가능). 없으면 배경 없음
+    #[serde(default)]
+    pub background_image: Option<String>,
+    /// 배경 위 화면의 불투명도 (0.3~1). 낮을수록 배경이 잘 보임
+    #[serde(default = "default_background_opacity")]
+    pub background_opacity: f32,
+}
+
+fn default_background_opacity() -> f32 {
+    0.82
 }
 
 #[derive(Debug, Serialize, Deserialize, Clone, specta::Type)]
@@ -94,6 +133,8 @@ impl Default for ThemeSetting {
             font_size: 16,
             gray_tone: default_gray_tone(),
             snippets: vec![],
+            background_image: None,
+            background_opacity: default_background_opacity(),
         }
     }
 }
@@ -159,6 +200,27 @@ pub struct PluginSetting {
     pub tts: TtsSetting,
     pub image_gen: ImageGenSetting,
     pub phone: PhoneSetting,
+    /// 앱 프롬프트 (사용자가 고친 것만, 비우면 기본값 — service::app_prompts)
+    #[serde(default)]
+    pub prompts: AppPrompts,
+}
+
+/// 앱이 AI에 보내는 고정 지시문을 고친 값. 빈 칸은 기본값을 쓴다
+#[derive(Debug, Serialize, Deserialize, Clone, Default, specta::Type)]
+#[serde(rename_all = "camelCase", default)]
+pub struct AppPrompts {
+    /// 번역 지시 ({{lang}} = 옮길 언어)
+    pub translate: String,
+    /// 장면 → 그림 프롬프트 쓰기
+    pub image_prompt: String,
+    /// 장면 → NovelAI 태그 쓰기
+    pub image_prompt_nai: String,
+    /// 대화의 캐릭터 이미지(<cg>) 규칙 ({{keys}} = 키 목록, {{char}} = 캐릭터)
+    pub chat_images: String,
+    /// 게임 대화 규칙 (한 줄에 하나)
+    pub game_rules: String,
+    /// 씬 입력(서술자) 규칙 (한 줄에 하나)
+    pub scene_rules: String,
 }
 
 /// 폰 대화의 기본 API·프리셋 (대화에 따로 고르지 않았을 때. 비우면 앱 기본값)

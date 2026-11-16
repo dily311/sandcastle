@@ -138,8 +138,8 @@ pub async fn test_message(ai: State<'_, Arc<AiService>>, tasks: State<'_, Arc<cr
         chat_options: ChatOptions { max_tokens: Some(32), stream: false, ..ChatOptions::default() },
         messages: vec![PromptMessageItem { images: vec![],
             role: PromptRole::User,
-            content: "Reply with a single word: OK".into(),
-            token: 8,
+            content: "Hi".into(),
+            token: 4,
         }],
     };
     use crate::task::{CreateTaskRequest, TaskOwner, TaskType};

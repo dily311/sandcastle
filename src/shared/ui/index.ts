@@ -22,4 +22,5 @@ export { default as ColorPicker } from "./ColorPicker.svelte";
 export { default as Slider } from "./Slider.svelte";
 export { default as ExportSplit } from "./ExportSplit.svelte";
 export { default as HtmlView } from "./HtmlView.svelte";
+export { default as ProviderIcon, providerOf } from "./ProviderIcon.svelte";
 export { default as ProfilePicker, type ProfileOption } from "./ProfilePicker.svelte";

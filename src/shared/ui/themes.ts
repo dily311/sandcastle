@@ -132,6 +132,75 @@ export function colorsToCss(colors: ThemeColors): string {
 	return [block("light"), block("dark")].filter(Boolean).join("\n");
 }
 
+// ---------------------------------------------------------
+// 예전 테마 JSON (cssContent 안의 body.theme-light / body.theme-dark 블록, 옵시디언식 변수 이름)
+// → 새 테마 변수. 테마의 colors가 정한 값이 있으면 그쪽이 이긴다.
+// ---------------------------------------------------------
+
+/** 새 변수 ← 예전 변수 (앞에 있는 것부터 찾음) */
+const LEGACY_MAP: [string, string[]][] = [
+	["--bg", ["--sidebar-bg", "--background-secondary"]],
+	["--surface-2", ["--background-primary"]],
+	["--bg-sunken", ["--background-secondary", "--track-bg-color"]],
+	["--surface", ["--card-bg", "--assistant-bubble-bg", "--background-primary"]],
+	["--surface-hover", ["--card-hover-bg", "--nav-bg-hover", "--icon-hover-bg"]],
+	["--surface-active", ["--nav-bg-active"]],
+	["--border", ["--border-color", "--card-border-color"]],
+	["--border-strong", ["--border-strong-color"]],
+	["--text", ["--text-color", "--input-color"]],
+	["--text-muted", ["--text-muted", "--nav-text"]],
+	["--text-faint", ["--text-faint"]],
+	["--accent", ["--accent-color", "--text-accent"]],
+	["--bubble-ai", ["--assistant-bubble-bg"]],
+];
+
+/** css 안의 선택자 블록들에서 변수 선언을 모드별로 모은다 */
+function legacyDecls(css: string): Record<Mode, Record<string, string>> {
+	const out: Record<Mode, Record<string, string>> = { light: {}, dark: {} };
+	const clean = css.replace(/\/\*[\s\S]*?\*\//g, "");
+	for (const m of clean.matchAll(/([^{}]+)\{([^{}]*)\}/g)) {
+		const sel = m[1].trim();
+		// body / :root / .theme-light는 밝게(어둡게에도 기본으로), .theme-dark는 어둡게
+		const modes: Mode[] = /theme-dark|\[data-theme="?dark/.test(sel) ? ["dark"] : /theme-light|\[data-theme="?light/.test(sel) ? ["light"] : /^(body|:root|html)$/.test(sel) ? ["light", "dark"] : [];
+		for (const d of m[2].matchAll(/(--[\w-]+)\s*:\s*([^;]+);?/g)) {
+			for (const mode of modes) if (!(mode === "dark" && modes.length === 2 && out.dark[d[1]])) out[mode][d[1]] = d[2].trim();
+		}
+	}
+	return out;
+}
+
+/** var(--x) 를 같은 모드 선언으로 풀어 쓴다 (못 풀면 그대로) */
+function resolveVar(value: string, decls: Record<string, string>, depth = 0): string {
+	if (depth > 8) return value;
+	return value.replace(/var\(\s*(--[\w-]+)\s*(?:,\s*([^)]+))?\)/g, (all, name: string, fb?: string) => {
+		const v = decls[name] ?? fb;
+		return v ? resolveVar(v.trim(), decls, depth + 1) : all;
+	});
+}
+
+/** 예전 테마 CSS에서 새 테마 색을 뽑는다 (없으면 빈 묶음) */
+export function legacyColors(css: string): ThemeColors {
+	const decls = legacyDecls(css ?? "");
+	const pick = (mode: Mode): ColorMap => {
+		const d = mode === "dark" ? decls.dark : decls.light;
+		const out: ColorMap = {};
+		for (const [to, from] of LEGACY_MAP) {
+			const key = from.find((f) => d[f]?.trim());
+			if (!key) continue;
+			const v = resolveVar(d[key], d);
+			if (!/var\(/.test(v)) out[to] = v;
+		}
+		return out;
+	};
+	return { light: pick("light"), dark: pick("dark") };
+}
+
+/** 테마의 colors 위에 예전 변수에서 뽑은 색을 깐다 (colors가 이김) */
+export function withLegacy(colors: ThemeColors, css: string): ThemeColors {
+	const legacy = legacyColors(css);
+	return { light: { ...legacy.light, ...(colors.light ?? {}) }, dark: { ...legacy.dark, ...(colors.dark ?? {}) } };
+}
+
 function mix(a: string, b: string, t: number) {
 	const p = (h: string) => [1, 3, 5].map((i) => parseInt(h.slice(i, i + 2), 16));
 	const [x, y] = [p(a), p(b)];

@@ -147,3 +147,36 @@ pub async fn update_feature_setting(
 
     Ok(())
 }
+
+/// 배경 이미지 정하기: 고른 파일을 앱 데이터 backgrounds/에 복사해 쓴다 (원본은 건드리지 않음).
+/// path가 None이면 배경을 없앤다. 전에 복사해 둔 배경 파일은 지운다. 바뀐 설정을 돌려준다
+#[tauri::command]
+#[specta::specta]
+pub async fn set_theme_background(app: AppHandle, state: State<'_, SettingsState<ThemeSetting>>, path: Option<String>) -> Result<ThemeSetting> {
+    let dir = crate::commands::character_image::app_data_dir(&app)?.join("backgrounds");
+    let old = state.0.lock().map_err(|_| AppError::internal("settings lock poisoned"))?.background_image.clone();
+    let new_path = match path {
+        Some(src) => {
+            let src = std::path::PathBuf::from(src);
+            let ext = src.extension().and_then(|e| e.to_str()).map(str::to_ascii_lowercase).unwrap_or_default();
+            if !["png", "jpg", "jpeg", "webp", "gif", "avif"].contains(&ext.as_str()) {
+                return Err(AppError::validation("이미지 파일(png·jpg·webp·gif)만 배경으로 쓸 수 있습니다", None));
+            }
+            std::fs::create_dir_all(&dir)?;
+            let dest = dir.join(format!("{}.{ext}", uuid::Uuid::new_v4()));
+            std::fs::copy(&src, &dest)?;
+            Some(dest.to_string_lossy().into_owned())
+        }
+        None => None,
+    };
+    let settings = apply_patch(&app, &state.0, json!({ "backgroundImage": new_path }))?;
+    // 앱이 복사해 둔 예전 배경만 지운다 (backgrounds/ 안의 파일)
+    if let Some(old) = old.filter(|o| Some(o) != new_path.as_ref()) {
+        let old = std::path::PathBuf::from(old);
+        if old.parent() == Some(dir.as_path()) {
+            let _ = std::fs::remove_file(old);
+        }
+    }
+    app.emit(ThemeSetting::EVENT_NAME, &settings).map_err(|e| AppError::io(e.to_string()))?;
+    Ok(settings)
+}

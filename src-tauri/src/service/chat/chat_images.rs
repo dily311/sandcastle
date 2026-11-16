@@ -208,14 +208,8 @@ pub fn image_rules(images: &[CharacterImage]) -> Option<String> {
     if keys.is_empty() {
         return None;
     }
-    Some(format!(
-        "[이미지]\n\
-         장면이나 {{{{char}}}}의 감정·상태에 잘 어울리는 이미지가 있으면 응답 안의 알맞은 자리에 <cg>키</cg>를 적어 보여줄 수 있다.\n\
-         - 아래 목록의 키를 그대로만 쓴다. 목록에 없는 키는 절대 쓰지 않는다.\n\
-         - 꼭 어울릴 때만, 한 응답에 한 번 정도 쓴다. 태그를 설명하거나 읽지 않는다.\n\
-         사용 가능한 키: {}",
-        keys.join(", ")
-    ))
+    // 사용자가 설정 > 앱 프롬프트에서 고칠 수 있다
+    Some(crate::service::app_prompts::chat_images(&keys.join(", ")))
 }
 
 // =======================================

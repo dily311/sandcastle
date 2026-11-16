@@ -136,7 +136,9 @@ pub fn run() {
         let features = sys::settings::load::<FeatureSetting>(&settings_handle);
         service::chat::regex_processor::set_enabled(sys::plugins::enabled_in(&features, sys::plugins::id::REGEX));
         app.manage(SettingsState(Mutex::new(features)));
-        app.manage(SettingsState(Mutex::new(sys::settings::load::<models::settings::PluginSetting>(&settings_handle))));
+        let plugin_setting = sys::settings::load::<models::settings::PluginSetting>(&settings_handle);
+        service::app_prompts::set(&plugin_setting.prompts);
+        app.manage(SettingsState(Mutex::new(plugin_setting)));
 
         // 4. 테마 매니저 초기화
         let app_dir = app.path().app_data_dir().expect("App data dir not found");
@@ -209,6 +211,7 @@ pub fn specta_builder() -> tauri_specta::Builder<tauri::Wry> {
             update_feature_setting,
             get_theme_setting,
             update_theme_setting,
+            set_theme_background,
             get_conv_settings,
             set_system_default_persona,
             // theme
@@ -374,6 +377,8 @@ pub fn specta_builder() -> tauri_specta::Builder<tauri::Wry> {
             commands::plugins::list_tts_voices,
             commands::plugins::list_generated_images,
             commands::plugins::delete_generated_image,
+            save_png_file,
+            commands::plugins::default_app_prompts,
             commands::plugins::generate_image_from_prompt,
             read_current_transcript,
             list_turn_points,
@@ -424,6 +429,7 @@ pub fn specta_builder() -> tauri_specta::Builder<tauri::Wry> {
             update_feature_setting,
             get_theme_setting,
             update_theme_setting,
+            set_theme_background,
             get_conv_settings,
             set_system_default_persona,
             // theme
@@ -589,6 +595,8 @@ pub fn specta_builder() -> tauri_specta::Builder<tauri::Wry> {
             commands::plugins::list_tts_voices,
             commands::plugins::list_generated_images,
             commands::plugins::delete_generated_image,
+            save_png_file,
+            commands::plugins::default_app_prompts,
             commands::plugins::generate_image_from_prompt,
             read_current_transcript,
             list_turn_points,

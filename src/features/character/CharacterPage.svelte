@@ -13,6 +13,9 @@
 	import CharacterEditor from "./CharacterEditor.svelte";
 	import { library, type Character } from "./library.svelte";
 	import { charActions } from "./actions";
+	import { fillNames, toBlocks } from "./format";
+	import RichText from "./RichText.svelte";
+	import { plugins } from "$shared/stores/plugins.svelte";
 	import { drops, extOf, storeFile } from "$app/drop.svelte";
 
 	// 캐릭터 목록 → 캐릭터 상세 → 대화 상세 (대화 목록·폴더는 대화 상세의 왼쪽 사이드바)
@@ -42,6 +45,15 @@
 		return (doc.body.textContent ?? "").replace(/\n{3,}/g, "\n\n").trim();
 	}
 	const firstLine = (s: string) => s.split("\n").find((l) => l.trim())?.trim() ?? "";
+
+	// ---- 개요: 메시지와 같은 렌더링 (마크다운 줄·HTML·<cg>·{{char}}/{{user}}) ----
+	// HTML 렌더링 플러그인이 꺼져 있으면 HTML 소개는 글만 뽑아 보인다 (스크립트 실행 없음)
+	function overviewBlocks(ch: Character) {
+		const raw = ch.creatorNotes?.trim() ? ch.creatorNotes : ch.description;
+		const persona = library.persona(ch.defaultPersonaId) ?? library.persona("default") ?? library.personas[0];
+		const text = fillNames(raw, { char: ch.name, user: persona?.name });
+		return plugins.on("html") ? toBlocks(text, { rawHtml: true }) : toBlocks(plain(text));
+	}
 
 	async function importFiles() {
 		await importPaths(await pickFiles([ST_FILES, PACK_FILES]));
@@ -78,6 +90,10 @@
 
 	// ---- 상세 ----
 	const character = $derived(library.character(charId));
+	const overviewImages = $derived(charId ? Object.fromEntries((library.images[charId] ?? []).map((i) => [i.key, fileSrc(i.path) ?? ""])) : {});
+	$effect(() => {
+		if (charId && !edit && !convId && !library.images[charId]) void library.loadImages(charId);
+	});
 	const recent = $derived(charId ? library.convsOf(charId) : []);
 	let tab: "overview" | "recent" = $state("overview");
 	let starting = $state(false);
@@ -186,10 +202,8 @@
 
 		<div class="body">
 			{#if tab === "overview"}
-				{#if character.creatorNotes?.trim()}
-					<div class="intro">{plain(character.creatorNotes)}</div>
-				{:else if character.description.trim()}
-					<div class="intro">{character.description}</div>
+				{#if character.creatorNotes?.trim() || character.description.trim()}
+					<div class="intro"><RichText blocks={overviewBlocks(character)} images={overviewImages} /></div>
 				{:else}
 					<p class="none">소개 없음 · <button class="link" onclick={() => nav.go({ page: "character", charId: character.id, edit: true })}>편집에서 쓰기</button></p>
 				{/if}
@@ -410,7 +424,6 @@
 	}
 	.intro {
 		margin-top: var(--space-5);
-		white-space: pre-wrap;
 		line-height: 1.8;
 	}
 	.recent {

@@ -14,6 +14,8 @@ export const defaultThemeSetting: ThemeSetting = {
 	fontSize: 16,
 	grayTone: "slate",
 	snippets: [],
+	backgroundImage: null,
+	backgroundOpacity: 0.82,
 };
 
 class ThemeStore {

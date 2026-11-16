@@ -21,6 +21,8 @@
 	import { plugins } from "$shared/stores/plugins.svelte";
 	import PluginOff from "./PluginOff.svelte";
 	import ImagesPage from "$features/images/ImagesPage.svelte";
+	import HomePage from "$features/home/HomePage.svelte";
+	import { appSetting } from "$shared/stores/appSetting.svelte";
 
 	let ready = $state(false);
 
@@ -50,6 +52,9 @@
 		captureGlobalErrors();
 		await theme.init();
 		logs.info("app", "시작");
+		// 홈부터 보기를 켰으면 첫 화면을 홈으로 (기본 꺼짐)
+		await appSetting.load();
+		if (appSetting.value?.home?.startOnHome && nav.current.page === "character" && !nav.canBack) void nav.replace({ page: "home" });
 		ready = true;
 		void recoverInterruptedChats();
 		void plugins.load();
@@ -91,7 +96,9 @@
 		<main class="content">
 		{#if ready}
 			{@const r = nav.current}
-			{#if r.page === "character"}
+			{#if r.page === "home"}
+				<HomePage />
+			{:else if r.page === "character"}
 				<CharacterPage charId={r.charId} convId={r.convId} edit={r.edit} />
 			{:else if r.page === "game"}
 				{#if plugins.on("game")}<GamePage gameId={r.gameId} sessionId={r.sessionId} edit={r.edit} />{:else}<PluginOff id="game" name="게임 모드" />{/if}
