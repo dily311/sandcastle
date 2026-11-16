@@ -6,6 +6,19 @@ plugins {
     id("rust")
 }
 
+// 배포 서명 (CLAUDE.md 1-E-3, ADR-010): keystore.properties가 있을 때만 (저장소에 넣지 않음 — .gitignore).
+// 내 PC: 키 파일은 저장소 밖에 두고 이 파일에 경로를 적는다. CI: GitHub Secrets에서 만든다 (.github/workflows/release.yml)
+//   storeFile=C:/keys/sandcastle-release.jks
+//   password=...
+//   keyAlias=sandcastle
+val keystoreProperties = Properties().apply {
+    val propFile = rootProject.file("keystore.properties")
+    if (propFile.exists()) {
+        propFile.inputStream().use { load(it) }
+    }
+}
+val hasReleaseKey = keystoreProperties.getProperty("storeFile") != null
+
 val tauriProperties = Properties().apply {
     val propFile = file("tauri.properties")
     if (propFile.exists()) {
@@ -24,6 +37,16 @@ android {
         versionCode = tauriProperties.getProperty("tauri.android.versionCode", "1").toInt()
         versionName = tauriProperties.getProperty("tauri.android.versionName", "1.0")
     }
+    signingConfigs {
+        if (hasReleaseKey) {
+            create("release") {
+                storeFile = file(keystoreProperties.getProperty("storeFile"))
+                storePassword = keystoreProperties.getProperty("password")
+                keyAlias = keystoreProperties.getProperty("keyAlias")
+                keyPassword = keystoreProperties.getProperty("password")
+            }
+        }
+    }
     buildTypes {
         getByName("debug") {
             manifestPlaceholders["usesCleartextTraffic"] = "true"
@@ -37,6 +60,7 @@ android {
             }
         }
         getByName("release") {
+            if (hasReleaseKey) signingConfig = signingConfigs.getByName("release")
             isMinifyEnabled = true
             proguardFiles(
                 *fileTree(".") { include("**/*.pro") }

@@ -1,0 +1,107 @@
+name: Release
+
+# 태그 v<버전>을 달면 설치 파일을 만들어 GitHub 릴리스 "초안"에 올린다 (CLAUDE.md 1-E-4, ADR-010).
+# 초안은 사람이 확인하고 공개한다. 앱의 "새 버전 확인"은 공개된 릴리스만 본다.
+#   1) pnpm version:set 0.2.0 → CHANGELOG.md 적기 → 커밋
+#   2) git tag v0.2.0 && git push origin v0.2.0
+# 서명: Windows는 아직 코드 서명 없음(결정 2026-11-17). Android는 GitHub Secrets의 키로 서명
+#   ANDROID_KEYSTORE_BASE64  키 파일(.jks)을 base64로
+#   ANDROID_KEYSTORE_PASSWORD
+#   ANDROID_KEY_ALIAS
+on:
+  push:
+    tags: ["v*"]
+
+permissions:
+  contents: write
+
+jobs:
+  windows:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 12.15.0
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: pnpm
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: src-tauri
+          key: release
+      - run: pnpm install --frozen-lockfile
+      - name: 태그와 버전이 같은지
+        shell: bash
+        run: |
+          node scripts/version.mjs
+          V=$(node -p "require('./package.json').version")
+          [ "v$V" = "$GITHUB_REF_NAME" ] || { echo "태그 $GITHUB_REF_NAME 와 package.json 버전 v$V 이 다름"; exit 1; }
+      - uses: tauri-apps/tauri-action@v0
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          tagName: ${{ github.ref_name }}
+          releaseName: Sandcastle ${{ github.ref_name }}
+          releaseBody: |
+            변경 내역: CHANGELOG.md
+            Windows 설치 파일은 아직 코드 서명이 없어 처음 실행할 때 SmartScreen 경고가 뜰 수 있음 ("추가 정보" → "실행").
+          releaseDraft: true
+          prerelease: false
+
+  android:
+    needs: windows
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 12.15.0
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: pnpm
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: 17
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: aarch64-linux-android,armv7-linux-androideabi,i686-linux-android,x86_64-linux-android
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: src-tauri
+          key: release-android
+      - run: pnpm install --frozen-lockfile
+      - name: 서명 키 (GitHub Secrets → keystore.properties, 저장소에는 넣지 않음)
+        env:
+          KEYSTORE: ${{ secrets.ANDROID_KEYSTORE_BASE64 }}
+          PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
+          ALIAS: ${{ secrets.ANDROID_KEY_ALIAS }}
+        run: |
+          if [ -z "$KEYSTORE" ]; then
+            echo "::warning::ANDROID_KEYSTORE_BASE64 비밀값이 없어 APK를 만들지 않음"
+            echo "SKIP_APK=1" >> "$GITHUB_ENV"
+            exit 0
+          fi
+          echo "$KEYSTORE" | base64 -d > "$RUNNER_TEMP/release.jks"
+          printf 'storeFile=%s\npassword=%s\nkeyAlias=%s\n' "$RUNNER_TEMP/release.jks" "$PASSWORD" "$ALIAS" > src-tauri/gen/android/keystore.properties
+      - name: APK
+        if: env.SKIP_APK != '1'
+        env:
+          NDK_HOME: ${{ env.ANDROID_NDK_LATEST_HOME }}
+        run: pnpm tauri android build --apk
+      - name: 릴리스 초안에 올리기
+        if: env.SKIP_APK != '1'
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          for f in src-tauri/gen/android/app/build/outputs/apk/*/release/*.apk; do
+            cp "$f" "sandcastle-${GITHUB_REF_NAME}-$(basename "$f")"
+            gh release upload "$GITHUB_REF_NAME" "sandcastle-${GITHUB_REF_NAME}-$(basename "$f")" --clobber
+          done
+      - name: 키 파일 지우기
+        if: always()
+        run: rm -f "$RUNNER_TEMP/release.jks" src-tauri/gen/android/keystore.properties

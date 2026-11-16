@@ -261,6 +261,16 @@ Conversation
 - **데스크톱 전용 기능**: 코어 플러그인의 `desktop_only`는 모바일에서 목록에서 빠지고 늘 꺼짐으로 본다.
 - **마이그레이션 파일**: `.gitattributes`로 줄 끝 변환을 막는다(sqlx 체크섬이 체크아웃 환경에 따라 바뀌지 않게).
 
+### ADR-010 버전·업데이트·서명·릴리스
+
+**상태** Accepted (2026-11-17) — CLAUDE.md 1-E (M11). 절차는 `docs/배포.md`.
+
+**결정**
+- **버전**: `package.json` 한 곳. `tauri.conf.json`은 `../package.json`을 읽고 `Cargo.toml`은 `scripts/version.mjs`가 맞춘다. CI가 세 곳이 같은지 확인. 변경 내역은 `CHANGELOG.md`.
+- **업데이트**: GitHub Releases(`dily311/sandcastle`)의 최신 공개 릴리스와 비교해 알리기만 한다. 내려받기·설치는 하지 않고 릴리스 페이지를 연다(사용자가 직접). 확인은 사용자가 누를 때만, "앱을 켤 때 확인"은 별도 스위치이며 기본 꺼짐(사용자 동작 없는 외부 요청이므로). 요청에는 일반 User-Agent만. Tauri updater는 쓰지 않는다(업데이트 서명 키·자동 설치가 필요해 "알림만" 범위를 넘음). 예전 "자동 업데이트" 스위치는 연결된 동작이 없었으므로 화면에서 뺐다(저장값은 호환용으로만 남김).
+- **서명** (사용자 결정 2026-11-17): Windows는 당분간 코드 서명 없음(SmartScreen 경고를 릴리스 설명에 적음). Android 키는 사용자 PC(저장소 밖)와 GitHub Secrets에만 두고, `keystore.properties`가 있을 때만 release 빌드에 서명한다. 배포 빌드(R8)에서 JS가 부르는 `@JavascriptInterface`는 keep 규칙으로 지킨다.
+- **릴리스**: 태그 `v<버전>` → `.github/workflows/release.yml`이 Windows 설치 파일과 APK를 만들어 **초안** 릴리스에 올린다. 공개는 사람이 한다(Explicit Execution). 태그와 버전이 다르면 멈춘다.
+
 ### (참고) 전역 테스트 관리 방법
 
 
