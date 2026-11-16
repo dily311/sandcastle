@@ -246,8 +246,26 @@ pub async fn image_prompt(ai: &AiService, setting: &ImageGenSetting, chat_profil
     } else {
         speakable(message, false)
     };
-    let style = setting.style_prompt.trim();
-    Ok(if style.is_empty() { body } else { format!("{body}, {style}") })
+    // 화풍·품질 태그 칸은 없앴다: 품질은 NovelAI 품질 태그(quality)로 붙는다 (novelai_body)
+    Ok(body)
+}
+
+/// NovelAI 품질 태그 (프롬프트 끝). 4.5·5 모델 기준
+pub fn quality_tags(quality: &str) -> &'static str {
+    match quality {
+        "none" => "",
+        "light" => "very aesthetic, masterpiece",
+        _ => "very aesthetic, masterpiece, no text",
+    }
+}
+
+/// V4 이후 모델(4, 4.5, 5 …)은 v4_prompt 구조로 보내야 한다 (5도 없으면 500 오류)
+fn is_v4_plus(model: &str) -> bool {
+    model
+        .strip_prefix("nai-diffusion-")
+        .and_then(|rest| rest.split('-').next())
+        .and_then(|n| n.parse::<u32>().ok())
+        .is_some_and(|n| n >= 4)
 }
 
 async fn image_is_novelai(ai: &AiService, setting: &ImageGenSetting, fallback: &str) -> bool {
@@ -268,7 +286,10 @@ fn parse_size(size: &str) -> (u32, u32) {
 /// NovelAI 요청 본문 (v4 이상은 v4_prompt 구조가 필요하다)
 pub fn novelai_body(setting: &ImageGenSetting, prompt: &str, seed: u32) -> Value {
     let (width, height) = parse_size(&setting.size);
-    let v4 = setting.model.starts_with("nai-diffusion-4");
+    let v4 = is_v4_plus(&setting.model);
+    let tags = quality_tags(&setting.quality);
+    let prompt_owned = if tags.is_empty() || prompt.contains(tags) { prompt.to_string() } else { format!("{}, {tags}", prompt.trim_end().trim_end_matches(',')) };
+    let prompt = prompt_owned.as_str();
     let mut params = json!({
         "params_version": 3,
         "width": width,
@@ -279,7 +300,7 @@ pub fn novelai_body(setting: &ImageGenSetting, prompt: &str, seed: u32) -> Value
         "n_samples": 1,
         "seed": seed,
         "ucPreset": 0,
-        "qualityToggle": true,
+        "qualityToggle": !tags.is_empty(),
         "negative_prompt": setting.negative_prompt,
         "noise_schedule": if v4 { "karras" } else { "native" },
     });
@@ -344,6 +365,23 @@ impl GeneratedImage {
             .map_or(0, |d| d.as_millis() as i64);
         Self { path, prompt: String::new(), model: String::new(), source: source.into(), message_id: None, conversation_id: None, created_at, meta: vec![], album: None, name: Some(name), tags, readonly: true }
     }
+}
+
+/// 갤러리 그림의 보일 이름 바꾸기 (파일 자체 이름은 그대로, 정보 .json의 name). out_dir 안의 그림만
+pub fn rename_image(out_dir: &Path, path: &str, name: &str) -> Result<GeneratedImage> {
+    let name = name.trim();
+    if name.is_empty() {
+        return Err(AppError::validation("이름을 입력하세요", None));
+    }
+    let target = std::fs::canonicalize(path).map_err(|_| AppError::not_found("그림을 찾을 수 없습니다"))?;
+    let root = std::fs::canonicalize(out_dir).map_err(|_| AppError::not_found("그림 폴더가 없습니다"))?;
+    if !target.starts_with(&root) {
+        return Err(AppError::validation("갤러리의 그림만 이름을 바꿀 수 있습니다", None));
+    }
+    let mut info = list_images(out_dir).into_iter().find(|i| Path::new(&i.path) == Path::new(path)).ok_or_else(|| AppError::not_found("그림을 찾을 수 없습니다"))?;
+    info.name = Some(name.chars().take(200).collect());
+    std::fs::write(Path::new(&info.path).with_extension("json"), serde_json::to_vec(&info)?)?;
+    Ok(info)
 }
 
 /// 갤러리 그림의 태그 바꾸기 (정보 .json에 저장). out_dir 안의 그림만
@@ -614,12 +652,27 @@ mod tests {
     }
 
     #[test]
+    fn v4_plus_models_and_quality_tags() {
+        assert!(is_v4_plus("nai-diffusion-4-5-full"));
+        assert!(is_v4_plus("nai-diffusion-5-full"));
+        assert!(!is_v4_plus("nai-diffusion-3"));
+        let s = ImageGenSetting { model: "nai-diffusion-5-full".into(), quality: "light".into(), ..ImageGenSetting::default() };
+        let b = novelai_body(&s, "1girl", 1);
+        assert_eq!(b["input"], "1girl, very aesthetic, masterpiece");
+        assert!(b["parameters"]["v4_prompt"].is_object());
+        assert_eq!(b["parameters"]["qualityToggle"], true);
+        let none = ImageGenSetting { quality: "none".into(), ..s };
+        assert_eq!(novelai_body(&none, "1girl", 1)["input"], "1girl");
+    }
+
+    #[test]
     fn novelai_body_uses_v4_structure_and_snaps_size() {
         let s = ImageGenSetting { size: "800x1200".into(), ..ImageGenSetting::default() };
         let b = novelai_body(&s, "1girl, forest", 7);
         assert_eq!(b["parameters"]["width"], 768);
         assert_eq!(b["parameters"]["height"], 1152);
-        assert_eq!(b["parameters"]["v4_prompt"]["caption"]["base_caption"], "1girl, forest");
+        // 기본 품질(standard) 태그가 끝에 붙는다
+        assert_eq!(b["parameters"]["v4_prompt"]["caption"]["base_caption"], "1girl, forest, very aesthetic, masterpiece, no text");
         let v3 = novelai_body(&ImageGenSetting { model: "nai-diffusion-3".into(), ..ImageGenSetting::default() }, "x", 1);
         assert!(v3["parameters"].get("v4_prompt").is_none());
     }

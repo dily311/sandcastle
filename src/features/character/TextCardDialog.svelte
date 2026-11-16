@@ -135,9 +135,11 @@
 	}
 	.preview img {
 		display: block;
-		width: 100%;
+		width: auto;
+		max-width: 100%;
 		height: auto;
-		max-height: 52vh;
+		max-height: 60vh;
+		aspect-ratio: 3 / 4;
 		object-fit: contain;
 	}
 	.opts {

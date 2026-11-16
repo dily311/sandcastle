@@ -310,6 +310,11 @@ export const chatHandlers: Record<string, (a: Args) => unknown> = {
 		g.tags = tags as string[];
 		return g;
 	},
+	rename_gallery_image: ({ path, name }) => {
+		const g = gallery.find((x) => x.path === path)!;
+		g.name = name as string;
+		return g;
+	},
 	delete_gallery_images: ({ paths }) => {
 		let n = 0;
 		for (const p of paths as string[]) {

@@ -2,7 +2,7 @@
 	import { Camera, ImagePlus, Move, X as XIcon } from "@lucide/svelte";
 	import { ChevronRight, Download, Ellipsis, Gamepad2, MessageSquarePlus, Pencil, Plus, Search, Star, StarOff, Trash2, Upload, UserRound, Users } from "@lucide/svelte";
 	import type { GameProject_Serialize as GameProject } from "$ipc/bindings";
-	import { Avatar, Button, ContextMenu, Dialog, EmptyState, IconButton, Input, Segmented, Spinner, type MenuItem } from "$shared/ui";
+	import { Avatar, Button, ContextMenu, SplitButton, Dialog, EmptyState, IconButton, Input, Segmented, Spinner, type MenuItem } from "$shared/ui";
 	import { nav } from "$app/nav.svelte";
 	import { call, commands } from "$shared/ipc/client";
 	import { IMAGE_FILES, PACK_FILES, ST_FILES, pickFiles, pickSavePath } from "$shared/ipc/dialog";
@@ -311,14 +311,7 @@
 				<Input bind:value={query} placeholder="이름·태그 검색" aria-label="캐릭터 검색">
 					{#snippet leading()}<Search />{/snippet}
 				</Input>
-				<Button onclick={importFiles}>
-					{#snippet icon()}<Upload />{/snippet}
-					가져오기
-				</Button>
-				<Button variant="primary" onclick={createCharacter}>
-					{#snippet icon()}<Plus />{/snippet}
-					새 캐릭터
-				</Button>
+				<SplitButton label="새로 만들기" onclick={createCharacter} menuLabel="캐릭터 가져오기" items={[{ label: "파일에서 가져오기 (PNG·JSON·ZIP)", icon: Upload, onselect: importFiles }]} />
 			</div>
 		</header>
 		{#if !library.characters.length}

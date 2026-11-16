@@ -13,6 +13,8 @@
 	import { fileSrc } from "$shared/ipc/file";
 	import { toasts } from "$shared/stores/toast.svelte";
 	import { presetFromMeta, presetSummary } from "$features/images/presetFromImage";
+	import { pickFiles } from "$shared/ipc/dialog";
+	import { Upload } from "@lucide/svelte";
 	import { apiOptions, chatApiOptions, current, ensureLoaded, orNull, save } from "./pluginSettingForm.svelte";
 
 	// 프리셋 태그를 단 그림 (화면이 열릴 때 한 번 읽음)
@@ -23,6 +25,18 @@
 			.then((list) => (presetImages = list.filter((i) => i.tags.includes("preset"))))
 			.catch(() => {});
 	});
+	/** AI 그림을 올려 #프리셋 태그로 갤러리에 넣고, 생성 정보가 있으면 바로 설정에 */
+	async function uploadPreset() {
+		const paths = await pickFiles([{ name: "그림", extensions: ["png", "jpg", "jpeg", "webp"] }], true);
+		if (!paths.length) return;
+		const added = await call(commands.importGalleryImages(paths), { source: "imagegen" });
+		const tagged: GeneratedImage[] = [];
+		for (const a of added) tagged.push(await call(commands.setImageTags(a.path, [...a.tags, "preset"]), { source: "imagegen" }));
+		presetImages = [...tagged, ...presetImages];
+		const withInfo = tagged.find((t) => Object.keys(presetFromMeta(t.meta)).length);
+		if (withInfo) applyPreset(withInfo);
+		else toasts.info("생성 정보가 없는 그림이라 프리셋 목록에만 넣음");
+	}
 	function applyPreset(img: GeneratedImage) {
 		const p = presetFromMeta(img.meta);
 		if (!Object.keys(p).length) return;
@@ -68,12 +82,17 @@
 		</Group>
 
 		<Group title="생성 프리셋">
-			<Row label="화풍·품질 태그" desc="모든 그림 프롬프트 끝에 붙음" stacked>
-				<Textarea value={cur.imageGen.stylePrompt} rows={2} autosize maxRows={6} placeholder={nai ? "masterpiece, best quality, very aesthetic" : "anime style, soft lighting"} onchange={(e) => save("imageGen", { stylePrompt: e.currentTarget.value })} />
+			<Row label="네거티브·단계·샘플러 등" desc="AI 그림을 올리면 그 생성 정보로 프리셋을 만듦 (#프리셋 태그로 갤러리에 들어감). 그림을 보며 고치려면 이미지 페이지의 새로 만들기">
+				<div class="pair">
+					<Button size="sm" onclick={uploadPreset}>{#snippet icon()}<Upload />{/snippet}그림 올리기</Button>
+					<Button size="sm" variant="ghost" onclick={() => nav.go({ page: "images" })}>{#snippet icon()}<Images />{/snippet}새로 만들기</Button>
+				</div>
 			</Row>
-			<Row label="네거티브·단계·샘플러 등" desc="이미지 페이지의 생성하기에서 그림을 보며 고치고 '설정에 저장'으로 저장함">
-				<Button size="sm" onclick={() => nav.go({ page: "images" })}>{#snippet icon()}<Images />{/snippet}생성하기에서 고치기</Button>
-			</Row>
+			{#if nai}
+				<Row label="품질 태그" desc="프롬프트 끝에 붙는 NovelAI 품질 태그">
+					<Select value={cur.imageGen.quality ?? "standard"} options={[{ value: "standard", label: "기본" }, { value: "light", label: "가볍게" }, { value: "none", label: "없음" }]} onchange={(e) => save("imageGen", { quality: e.currentTarget.value })} />
+				</Row>
+			{/if}
 			<div class="presets">
 				<p class="pdesc">갤러리에서 <b>#프리셋</b> 태그를 단 그림. 누르면 그 그림의 생성 정보(네거티브·단계·반영·샘플러·크기)를 설정에 넣음</p>
 				{#if presetImages.length}

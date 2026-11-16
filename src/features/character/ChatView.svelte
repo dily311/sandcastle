@@ -331,12 +331,12 @@
 			{/if}
 		</header>
 		{#if selecting}
-			<div class="selbar" role="toolbar" aria-label="메시지 고르기">
-				<b>{picked.size}개 고름</b>
-				<Button size="sm" variant="ghost" onclick={pickAll}>{picked.size === (session?.messages.length ?? 0) && picked.size ? "모두 풀기" : "모두 고르기"}</Button>
+			<div class="selbar" role="toolbar" aria-label="메시지 선택">
+				<b>{picked.size}개 선택</b>
+				<Button size="sm" variant="ghost" onclick={pickAll}>{picked.size === (session?.messages.length ?? 0) && picked.size ? "모두 해제" : "모두 선택"}</Button>
 				<span class="sp"></span>
 				<Button size="sm" variant="danger" disabled={!picked.size} onclick={removePicked}>{#snippet icon()}<Trash2 />{/snippet}삭제</Button>
-				<IconButton label="고르기 끝내기" size="sm" onclick={() => (selecting = false)}><X /></IconButton>
+				<IconButton label="선택 끝내기" size="sm" onclick={() => (selecting = false)}><X /></IconButton>
 			</div>
 		{/if}
 

@@ -4,7 +4,8 @@
 	import { onMount } from "svelte";
 	import { RotateCcw, Save, Wand2 } from "@lucide/svelte";
 	import type { GeneratedImage_Serialize as GeneratedImage, ImageGenSetting_Serialize as ImageGenSetting } from "$ipc/bindings";
-	import { Button, Input, Select, Slider, Spinner, Switch, Textarea } from "$shared/ui";
+	import { Button, Input, ProfilePicker, Select, Slider, Spinner, Switch, Textarea, type ProfileOption } from "$shared/ui";
+	import { presetFromMeta, presetSummary } from "./presetFromImage";
 	import { call, commands } from "$shared/ipc/client";
 	import { fileSrc } from "$shared/ipc/file";
 	import { toasts } from "$shared/stores/toast.svelte";
@@ -29,10 +30,27 @@
 	let { source = "manual", initialPrompt = "", album, compact = false, onmade, onview }: Props = $props();
 	const src = { source: "imagegen" };
 
+	// #프리셋 태그를 단 그림 (고르면 그 생성 정보를 이번 프리셋에)
+	let presetImages = $state<GeneratedImage[]>([]);
+	let presetPick = $state<string | null>(null);
 	onMount(() => {
 		if (!pluginSetting.value) void pluginSetting.load();
 		if (!library.loaded) void library.load();
+		void call(commands.listAllImages(), { source: "imagegen", silent: true })
+			.then((list) => (presetImages = list.filter((i) => i.tags.includes("preset"))))
+			.catch(() => {});
 	});
+	const presetOptions = $derived<ProfileOption[]>([
+		{ id: "", name: "설정의 프리셋", description: "설정 > 이미지 생성 값 그대로" },
+		...presetImages.map((i) => ({ id: i.path, name: i.name || i.prompt.slice(0, 30) || "그림", avatar: i.path, description: presetSummary(presetFromMeta(i.meta)) || "생성 정보 없음" })),
+	]);
+	function pickPresetImage(id: string) {
+		presetPick = id || null;
+		if (!saved) return;
+		if (!id) return void (draft = null);
+		const img = presetImages.find((i) => i.path === id);
+		if (img) draft = { ...saved, ...presetFromMeta(img.meta) };
+	}
 
 	// 처음 값만 쓴다 (다른 프롬프트로 다시 열 때는 부모가 {#key}로 새로 만든다)
 	// svelte-ignore state_referenced_locally
@@ -60,7 +78,13 @@
 
 	const profile = $derived(library.apis.find((a) => a.id === preset?.apiProfileId));
 	const nai = $derived(profile?.formatType === "novelai");
-	const MODELS = $derived(nai ? ["nai-diffusion-4-5-full", "nai-diffusion-4-5-curated", "nai-diffusion-4-full", "nai-diffusion-4-curated-preview", "nai-diffusion-3"] : ["gpt-image-1", "dall-e-3", "dall-e-2"]);
+	// 주로 4.5·5를 쓴다 (5도 4 이후 형식으로 보냄, service/plugins.rs)
+	const MODELS = $derived(nai ? ["nai-diffusion-4-5-full", "nai-diffusion-4-5-curated", "nai-diffusion-5-full", "nai-diffusion-5-curated", "nai-diffusion-4-full", "nai-diffusion-3"] : ["gpt-image-1", "dall-e-3", "dall-e-2"]);
+	const QUALITY = [
+		{ value: "standard", label: "기본 (very aesthetic, masterpiece, no text)" },
+		{ value: "light", label: "가볍게 (very aesthetic, masterpiece)" },
+		{ value: "none", label: "없음" },
+	];
 	const SIZES = $derived(nai ? ["832x1216", "1216x832", "1024x1024", "640x640", "512x768", "768x512"] : ["1024x1024", "1024x1536", "1536x1024", "512x512", "auto"]);
 	const SAMPLERS = ["k_euler_ancestral", "k_euler", "k_dpmpp_2s_ancestral", "k_dpmpp_2m_sde", "k_dpmpp_2m", "k_dpmpp_sde"];
 	const opts = (list: string[], cur?: string) => (cur && !list.includes(cur) ? [cur, ...list] : list).map((v) => ({ value: v, label: v }));
@@ -84,19 +108,34 @@
 		<p class="api">
 			{#if profile}{profile.name}{:else}이미지 API가 없음 — <button class="link" onclick={() => nav.go({ page: "settings", tab: "imagegen" })}>설정에서 고르기</button>{/if}
 		</p>
-		<Textarea bind:value={prompt} rows={5} autosize maxRows={14} placeholder="그릴 장면. NovelAI는 태그(1girl, silver hair, forest, night…)가 잘 먹힘" aria-label="그릴 프롬프트" />
-		<Switch bind:checked={refine} label="AI가 프롬프트 다듬기" description="짧게 써도 장면 프롬프트로 정리함 (채팅 API 요금)" />
-
+		{#if !preset}
+			<label class="field"><span>프롬프트</span><Textarea bind:value={prompt} rows={5} autosize maxRows={14} placeholder="그릴 장면" aria-label="그릴 프롬프트" /></label>
+		{/if}
 		{#if preset}
 			<div class="preset">
 				<div class="ph">
 					<b>생성 프리셋</b>
 					{#if edited}
 						<span class="dirty">이번만 바꿈</span>
-						<Button size="sm" variant="ghost" onclick={() => (draft = null)}>{#snippet icon()}<RotateCcw />{/snippet}되돌리기</Button>
+						<Button size="sm" variant="ghost" onclick={() => ((draft = null), (presetPick = null))}>{#snippet icon()}<RotateCcw />{/snippet}되돌리기</Button>
 						<Button size="sm" onclick={savePreset}>{#snippet icon()}<Save />{/snippet}설정에 저장</Button>
 					{/if}
 				</div>
+				{#if presetImages.length}
+					<div class="field">
+						<span>프리셋 그림 <small>#프리셋 태그를 단 그림의 생성 정보</small></span>
+						<ProfilePicker options={presetOptions} value={presetPick ?? ""} label="프리셋 그림 고르기" onchange={pickPresetImage} />
+					</div>
+				{/if}
+				<label class="field"><span>프롬프트</span>
+					<Textarea bind:value={prompt} rows={4} autosize maxRows={14} placeholder="그릴 장면. NovelAI는 태그(1girl, silver hair, forest, night…)가 잘 먹힘" aria-label="그릴 프롬프트" />
+				</label>
+				<Switch bind:checked={refine} label="AI가 프롬프트 다듬기" description="짧게 써도 장면 프롬프트로 정리함 (채팅 API 요금)" />
+				{#if nai || !profile}
+					<label class="field"><span>네거티브 프롬프트</span>
+						<Textarea value={preset.negativePrompt} rows={2} autosize maxRows={6} oninput={(e) => edit("negativePrompt", e.currentTarget.value)} />
+					</label>
+				{/if}
 				<div class="two">
 					<label class="field"><span>모델</span>
 						{#if MODELS.includes(preset.model)}
@@ -107,13 +146,8 @@
 					</label>
 					<label class="field"><span>크기</span><Select value={preset.size} options={opts(SIZES, preset.size)} onchange={(e) => edit("size", e.currentTarget.value)} /></label>
 				</div>
-				<label class="field"><span>화풍·품질 태그 <small>프롬프트 끝에 붙음</small></span>
-					<Textarea value={preset.stylePrompt} rows={2} autosize maxRows={6} placeholder={nai ? "masterpiece, best quality, very aesthetic" : "anime style, soft lighting"} oninput={(e) => edit("stylePrompt", e.currentTarget.value)} />
-				</label>
 				{#if nai || !profile}
-					<label class="field"><span>네거티브 프롬프트</span>
-						<Textarea value={preset.negativePrompt} rows={2} autosize maxRows={6} oninput={(e) => edit("negativePrompt", e.currentTarget.value)} />
-					</label>
+					<label class="field"><span>품질 태그 <small>프롬프트 끝에 붙음</small></span><Select value={preset.quality ?? "standard"} options={QUALITY} onchange={(e) => edit("quality", e.currentTarget.value)} /></label>
 					<Slider label="단계 (steps)" hint="많을수록 정교하지만 느리고 비쌈 (Opus 무료는 28까지)" bind:value={() => String(preset.steps), (v) => edit("steps", Math.round(Number(v)) || 28)} min={1} max={50} step={1} fallback={28} format={(n) => String(n)} />
 					<Slider label="프롬프트 반영 (scale)" bind:value={() => String(preset.scale), (v) => edit("scale", Number(v) || 5)} min={1} max={10} step={0.1} fallback={5} format={(n) => n.toFixed(1)} />
 					<label class="field"><span>샘플러</span><Select value={preset.sampler} options={opts(SAMPLERS, preset.sampler)} onchange={(e) => edit("sampler", e.currentTarget.value)} /></label>

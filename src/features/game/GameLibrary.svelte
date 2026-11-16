@@ -1,7 +1,7 @@
 <script lang="ts">
 	import { drops, extOf, storeFile } from "$app/drop.svelte";
 	import { Gamepad2, Plus, Search, Upload } from "@lucide/svelte";
-	import { Button, Dialog, EmptyState, Field, Input, Select } from "$shared/ui";
+	import { Button, Dialog, EmptyState, Field, Input, Select, SplitButton } from "$shared/ui";
 	import { pickFiles, PACK_FILES } from "$shared/ipc/dialog";
 	import { toasts } from "$shared/stores/toast.svelte";
 	import { relative } from "$shared/time";
@@ -60,8 +60,7 @@
 			<Input bind:value={query} placeholder="제목 검색" aria-label="게임 검색">
 				{#snippet leading()}<Search />{/snippet}
 			</Input>
-			<Button onclick={importGame}>{#snippet icon()}<Upload />{/snippet}가져오기</Button>
-			<Button variant="primary" onclick={startCreate} disabled={!games.templates.length}>{#snippet icon()}<Plus />{/snippet}새 게임</Button>
+			<SplitButton label="새로 만들기" onclick={startCreate} disabled={!games.templates.length} menuLabel="게임 가져오기" items={[{ label: "파일에서 가져오기", icon: Upload, onselect: importGame }]} />
 		</div>
 	</header>
 

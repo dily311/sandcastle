@@ -2,7 +2,7 @@
 	import { onMount } from "svelte";
 	// 로어북 화면: 책 목록 → 책 하나(이름·설명, 쓰는 곳, 항목 편집)
 	import { BookOpen, Check, Download, Ellipsis, Funnel, ListFilter, Pencil, Plus, Search, Trash2, Upload } from "@lucide/svelte";
-	import { Avatar, Button, ContextMenu, EmptyState, ExportSplit, IconButton, Input, Spinner, type MenuItem } from "$shared/ui";
+	import { Avatar, Button, ContextMenu, EmptyState, ExportSplit, IconButton, Input, SplitButton, Spinner, type MenuItem } from "$shared/ui";
 	import { nav } from "$app/nav.svelte";
 	import { drops, extOf, storeFile } from "$app/drop.svelte";
 	import { JSON_FILES, pickFiles } from "$shared/ipc/dialog";
@@ -198,8 +198,7 @@
 		<header class="head">
 			<h1>로어북</h1>
 			<div class="acts">
-				<Button onclick={importFiles}>{#snippet icon()}<Upload />{/snippet}가져오기</Button>
-				<Button variant="primary" onclick={create}>{#snippet icon()}<Plus />{/snippet}새 로어북</Button>
+				<SplitButton label="새로 만들기" onclick={create} menuLabel="로어북 가져오기" items={[{ label: "파일에서 가져오기 (JSON)", icon: Upload, onselect: importFiles }]} />
 			</div>
 		</header>
 		<p class="lead">대화에 키워드가 나오면 그 설정을 AI에게 함께 보냄. 캐릭터·페르소나·대화에 붙여서 씀</p>

@@ -328,6 +328,8 @@ export const commands = {
 	setImageTags: (path: string, tags: string[], options?: InvokeOptions) => __TAURI_INVOKE<GeneratedImage_Serialize>("set_image_tags", { path, tags }, options),
 	/**  여러 그림 한 번에 지우기 (갤러리 그림만, 다른 곳의 그림은 건너뜀). 지운 수를 돌려준다 */
 	deleteGalleryImages: (paths: string[], options?: InvokeOptions) => __TAURI_INVOKE<number>("delete_gallery_images", { paths }, options),
+	/**  갤러리 그림의 보일 이름 바꾸기 */
+	renameGalleryImage: (path: string, name: string, options?: InvokeOptions) => __TAURI_INVOKE<GeneratedImage_Serialize>("rename_gallery_image", { path, name }, options),
 	/**
 	 *  화면에서 만든 png(이미지 카드 등)를 사용자가 저장 대화상자로 고른 곳에 쓴다.
 	 *  .png 경로와 png 내용만 받는다 (다른 파일을 쓰는 데 쓰이지 않게)
@@ -2270,6 +2272,8 @@ export type ImageGenSetting_Deserialize = {
 	steps?: number,
 	scale?: number | null,
 	sampler?: string,
+	/**  NovelAI 품질 태그: "standard" / "light" / "none" (프롬프트 끝에 붙임) */
+	quality?: string,
 };
 
 export type ImageGenSetting_Serialize = {
@@ -2289,6 +2293,8 @@ export type ImageGenSetting_Serialize = {
 	steps: number,
 	scale: number | null,
 	sampler: string,
+	/**  NovelAI 품질 태그: "standard" / "light" / "none" (프롬프트 끝에 붙임) */
+	quality: string,
 };
 
 export type ImportedCharacterRef = {

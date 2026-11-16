@@ -357,6 +357,13 @@ pub struct ImageGenSetting {
     pub steps: u32,
     pub scale: f32,
     pub sampler: String,
+    /// NovelAI 품질 태그: "standard" / "light" / "none" (프롬프트 끝에 붙임)
+    #[serde(default = "default_quality")]
+    pub quality: String,
+}
+
+fn default_quality() -> String {
+    "standard".into()
 }
 
 impl Default for ImageGenSetting {
@@ -372,6 +379,7 @@ impl Default for ImageGenSetting {
             steps: 28,
             scale: 5.0,
             sampler: "k_euler_ancestral".into(),
+            quality: default_quality(),
         }
     }
 }

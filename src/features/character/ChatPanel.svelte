@@ -14,6 +14,7 @@
 	import type { RegexScript_Serialize as RegexScript } from "$ipc/bindings";
 	import { call, commands } from "$shared/ipc/client";
 	import { IMAGE_FILES, pickFiles } from "$shared/ipc/dialog";
+	import { drops, isImage, storeFile } from "$app/drop.svelte";
 	import { fileSrc } from "$shared/ipc/file";
 	import { confirmAction, promptText } from "$shared/stores/confirm.svelte";
 	import { convActions } from "./actions";
@@ -118,6 +119,21 @@
 	async function addImages() {
 		await library.addImages(conv.characterId, await pickFiles([IMAGE_FILES]));
 	}
+	// 에셋 탭이 열려 있으면 끌어다 놓은 그림은 캐릭터 에셋으로 (메시지 첨부보다 우선)
+	$effect(() => {
+		if (panel.tab !== "assets" || !plugins.on("chat.images")) return;
+		const charId = conv.characterId;
+		return drops.register({
+			priority: 2,
+			label: "캐릭터 에셋에 넣기",
+			hint: "파일 이름이 이미지 키가 됨 (<cg>키</cg>)",
+			accept: isImage,
+			ondrop: async (files) => {
+				const paths = await Promise.all(files.filter(isImage).map((f) => storeFile(f)));
+				if (paths.length) await library.addImages(charId, paths);
+			},
+		});
+	});
 
 	// ---- 북마크 ----
 	const marks = $derived(bookmarksOf(conv));

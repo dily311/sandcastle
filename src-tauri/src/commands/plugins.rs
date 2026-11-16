@@ -347,6 +347,13 @@ pub fn set_image_tags(
     Ok(info)
 }
 
+/// 갤러리 그림의 보일 이름 바꾸기
+#[tauri::command]
+#[specta::specta]
+pub fn rename_gallery_image(app: AppHandle, path: String, name: String) -> Result<tools::GeneratedImage> {
+    tools::rename_image(&generated_dir(&app)?, &path, &name)
+}
+
 /// 여러 그림 한 번에 지우기 (갤러리 그림만, 다른 곳의 그림은 건너뜀). 지운 수를 돌려준다
 #[tauri::command]
 #[specta::specta]
@@ -397,8 +404,7 @@ pub async fn generate_image_from_prompt(
             let final_prompt = if refine {
                 tools::image_prompt(&ai, &crate::models::settings::ImageGenSetting { ai_prompt: true, ..p.clone() }, &chat_profile, &prompt, "").await?
             } else {
-                let style = p.style_prompt.trim();
-                if style.is_empty() { prompt.trim().to_string() } else { format!("{}, {style}", prompt.trim()) }
+                prompt.trim().to_string()
             };
             let mut img = tools::generate_image(&ai, &p, &chat_profile, &final_prompt, &out_dir, &source, None).await?;
             // 폰 카메라: 그 폰 앨범으로 (정보 파일에도 남김)

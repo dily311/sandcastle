@@ -96,7 +96,7 @@
 	}
 	.expanded .tiles {
 		display: grid;
-		grid-template-columns: repeat(auto-fill, minmax(56px, 1fr));
+		grid-template-columns: repeat(auto-fill, minmax(48px, 1fr));
 		overflow: visible;
 		max-height: 260px;
 		overflow-y: auto;
@@ -109,8 +109,8 @@
 		flex: 0 0 auto;
 		display: grid;
 		place-items: center;
-		width: 56px;
-		height: 40px;
+		width: 48px;
+		height: 48px;
 		padding: 0;
 		border: none;
 		border-radius: var(--radius-md);
@@ -120,8 +120,11 @@
 		overflow: hidden;
 		box-shadow: 0 0 0 1px var(--border);
 	}
+	/* 칸은 항상 정사각형 */
 	.expanded .tile {
 		width: 100%;
+		height: auto;
+		aspect-ratio: 1;
 	}
 	.tile:hover {
 		filter: brightness(1.05);

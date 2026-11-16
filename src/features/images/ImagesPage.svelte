@@ -2,13 +2,15 @@
 	// 이미지 페이지 = 갤러리: 만든 그림과 올린 그림 전부. 위의 "만들기"를 누르면 만들기 칸이 열린다.
 	// 그림은 앱 데이터 generated/ 폴더에 있고, 같은 이름 .json에 프롬프트·출처·생성 정보가 있다 (service/plugins.rs)
 	import { onMount } from "svelte";
-	import { CheckSquare, Copy, ExternalLink, MessageSquare, RefreshCw, Sparkles, Trash2, Upload, Wand2, X } from "@lucide/svelte";
+	import { ArrowUpDown, Check, Copy, ExternalLink, Eye, Filter, FolderOpen, MessageSquare, Pencil, Search, Sparkles, Tag, Trash2, Upload, Wand2, X } from "@lucide/svelte";
 	import type { GeneratedImage_Serialize as GeneratedImage } from "$ipc/bindings";
-	import { Badge, Button, EmptyState, IconButton, Select, Spinner } from "$shared/ui";
+	import { Badge, Button, ContextMenu, EmptyState, IconButton, Input, SplitButton, Spinner, type MenuItem } from "$shared/ui";
 	import { call, commands } from "$shared/ipc/client";
 	import { fileSrc } from "$shared/ipc/file";
 	import { pickFiles } from "$shared/ipc/dialog";
-	import { confirmAction } from "$shared/stores/confirm.svelte";
+	import { confirmAction, promptText } from "$shared/stores/confirm.svelte";
+	import { drops, isImage, storeFile } from "$app/drop.svelte";
+	import { revealItemInDir } from "@tauri-apps/plugin-opener";
 	import { toasts } from "$shared/stores/toast.svelte";
 	import { plugins } from "$shared/stores/plugins.svelte";
 	import { nav } from "$app/nav.svelte";
@@ -56,9 +58,75 @@
 			.map(([value, label]) => ({ value, label: `${label} ${images.filter((i) => i.source === value).length}` }))
 			.filter((o) => !o.label.endsWith(" 0")),
 	]);
-	const shown = $derived(
+	// ---- 거르기 · 찾기 · 정렬 ----
+	let query = $state("");
+	let searchOpen = $state(false);
+	let sort = $state<"new" | "old" | "name">("new");
+	const filtered = $derived(
 		filter === "all" ? images : filter.startsWith("tag:") ? images.filter((i) => i.tags.includes(filter.slice(4))) : images.filter((i) => i.source === filter),
 	);
+	const shown = $derived.by(() => {
+		const q = query.trim().toLowerCase();
+		const list = q ? filtered.filter((i) => title(i).toLowerCase().includes(q) || i.prompt.toLowerCase().includes(q) || i.tags.some((t) => t.includes(q))) : filtered;
+		const by = sort === "name" ? (a: GeneratedImage, b: GeneratedImage) => title(a).localeCompare(title(b), "ko") : sort === "old" ? (a: GeneratedImage, b: GeneratedImage) => a.createdAt - b.createdAt : (a: GeneratedImage, b: GeneratedImage) => b.createdAt - a.createdAt;
+		return [...list].sort(by);
+	});
+	let menu = $state<{ at: { x: number; y: number }; items: MenuItem[]; label: string } | null>(null);
+	const below = (e: MouseEvent) => {
+		const r = (e.currentTarget as HTMLElement).getBoundingClientRect();
+		return { x: r.right - 220, y: r.bottom + 4 };
+	};
+	function filterMenu(e: MouseEvent) {
+		menu = { at: below(e), label: "거르기", items: FILTERS.map((f) => ({ label: f.label, icon: filter === f.value ? Check : undefined, onselect: () => (filter = f.value) })) };
+	}
+	function sortMenu(e: MouseEvent) {
+		const opts = [
+			{ v: "new", l: "최신 순" },
+			{ v: "old", l: "오래된 순" },
+			{ v: "name", l: "이름 순" },
+		] as const;
+		menu = { at: below(e), label: "정렬", items: opts.map((o) => ({ label: o.l, icon: sort === o.v ? Check : undefined, onselect: () => (sort = o.v) })) };
+	}
+
+	// ---- 오른쪽 클릭 메뉴 ----
+	function imageMenu(e: MouseEvent, img: GeneratedImage) {
+		e.preventDefault();
+		const mine = owned(img);
+		const taggable = mine && img.source !== "background";
+		menu = {
+			at: { x: e.clientX, y: e.clientY },
+			label: "그림 메뉴",
+			items: [
+				{ label: "크게 보기", icon: Eye, onselect: () => (viewing = img) },
+				...(mine ? [{ label: "이름 바꾸기", icon: Pencil, onselect: () => rename(img) }] : []),
+				...(taggable ? TAGS.map((t, i) => ({ label: `#${t.label}`, icon: img.tags.includes(t.id) ? Check : Tag, separator: i === 0, onselect: () => toggleTag(img, t.id) })) : []),
+				{ label: "파일 위치 열기", icon: FolderOpen, separator: true, onselect: () => reveal(img) },
+				...(mine ? [{ label: "삭제", icon: Trash2, danger: true, onselect: () => remove(img) }] : []),
+			],
+		};
+	}
+	async function rename(img: GeneratedImage) {
+		const name = await promptText({ title: "이름 바꾸기", message: "갤러리에 보일 이름 (파일은 그대로)", input: { value: title(img), placeholder: "이름" }, confirmLabel: "바꾸기" });
+		if (!name?.trim()) return;
+		const saved = await call(commands.renameGalleryImage(img.path, name), src);
+		images = images.map((i) => (i.path === img.path ? { ...i, name: saved.name } : i));
+		if (viewing?.path === img.path) viewing = { ...viewing, name: saved.name };
+	}
+	/** 원본: 앱 안 창으로는 파일을 열 수 없어 파일 탐색기에서 보여준다 */
+	async function reveal(img: GeneratedImage) {
+		if (/^https?:/.test(img.path)) return void window.open(img.path, "_blank");
+		await revealItemInDir(img.path).catch((e) => toasts.error("파일 위치를 열 수 없음", String(e)));
+	}
+
+	// ---- 끌어다 놓아 올리기 ----
+	async function importFiles(files: File[]) {
+		const paths = await Promise.all(files.filter(isImage).map((f) => storeFile(f)));
+		if (!paths.length) return;
+		const added = await call(commands.importGalleryImages(paths), src);
+		images = [...added, ...images];
+		toasts.success(`${added.length}장 업로드 됨`);
+	}
+	$effect(() => drops.register({ label: "갤러리에 올리기", hint: "PNG·JPG·WEBP·GIF (AI 그림이면 생성 정보도 읽음)", accept: isImage, ondrop: importFiles }));
 	let viewing = $state<GeneratedImage | null>(null);
 
 	/** 그림 아래 이름: 원래 파일 이름 → 프롬프트 → 파일 이름 */
@@ -154,12 +222,19 @@
 		<h1>이미지</h1>
 		<span class="count">{images.length}장</span>
 		<span class="sp"></span>
-		<Select bind:value={filter} options={FILTERS} aria-label="출처로 거르기" />
-		<IconButton label="새로 고침" size="sm" onclick={load}><RefreshCw /></IconButton>
-		<Button size="sm" variant={selecting ? "secondary" : "ghost"} onclick={() => (selecting ? stopSelecting() : (selecting = true))}>{#snippet icon()}<CheckSquare />{/snippet}{selecting ? "고르기 끝" : "여러 장 고르기"}</Button>
-		<Button size="sm" onclick={upload}>{#snippet icon()}<Upload />{/snippet}업로드</Button>
+		{#if searchOpen}
+			<div class="search">
+				<Input bind:value={query} placeholder="이름·프롬프트·태그" aria-label="그림 찾기" autofocus>{#snippet leading()}<Search />{/snippet}</Input>
+			</div>
+		{/if}
+		<IconButton size="sm" label="찾기" active={searchOpen} onclick={() => ((searchOpen = !searchOpen), !searchOpen && (query = ""))}><Search /></IconButton>
+		<IconButton size="sm" label="거르기" active={filter !== "all"} onclick={filterMenu}><Filter /></IconButton>
+		<IconButton size="sm" label="정렬" onclick={sortMenu}><ArrowUpDown /></IconButton>
+		<IconButton size="sm" label="파일 여러 개 삭제" active={selecting} onclick={() => (selecting ? stopSelecting() : (selecting = true))}><Trash2 /></IconButton>
 		{#if plugins.on("imagegen")}
-			<Button size="sm" variant={creating ? "secondary" : "primary"} onclick={() => (creating = !creating)}>{#snippet icon()}{#if creating}<X />{:else}<Wand2 />{/if}{/snippet}{creating ? "생성 탭 닫기" : "생성하기"}</Button>
+			<SplitButton size="sm" label={creating ? "생성 닫기" : "새로 만들기"} icon={creating ? X : Wand2} onclick={() => (creating = !creating)} menuLabel="그림 올리기" items={[{ label: "파일 업로드", icon: Upload, onselect: upload }]} />
+		{:else}
+			<Button size="sm" variant="primary" onclick={upload}>{#snippet icon()}<Upload />{/snippet}업로드</Button>
 		{/if}
 	</header>
 
@@ -180,15 +255,14 @@
 	{:else}
 		{#if selecting}
 			<div class="selbar" role="toolbar" aria-label="그림 고르기">
-				<b>{picked.size}장 고름</b>
-				<Button size="sm" variant="ghost" onclick={() => (picked = new Set(shown.filter(owned).map((i) => i.path)))}>보이는 것 모두</Button>
+				<Button size="sm" variant="ghost" onclick={() => (picked = new Set(shown.filter(owned).map((i) => i.path)))}>모두 선택</Button>
 				<span class="sp"></span>
-				<Button size="sm" variant="danger" disabled={!picked.size} onclick={removePicked}>{#snippet icon()}<Trash2 />{/snippet}삭제</Button>
+				<Button size="sm" variant="danger" disabled={!picked.size} onclick={removePicked}>{#snippet icon()}<Trash2 />{/snippet}{picked.size}장 삭제</Button>
 			</div>
 		{/if}
 		<div class="grid">
 			{#each shown as img (img.path)}
-				<figure class:picked={picked.has(img.path)} class:locked={selecting && !owned(img)}>
+				<figure class:picked={picked.has(img.path)} class:locked={selecting && !owned(img)} oncontextmenu={(e) => imageMenu(e, img)}>
 					<button class="thumb" onclick={() => (selecting ? pick(img) : (viewing = img))}>
 						<img src={fileSrc(img.path)} alt={title(img)} loading="lazy" />
 						{#if selecting && owned(img)}<span class="check" aria-hidden="true">{picked.has(img.path) ? "✓" : ""}</span>{/if}
@@ -249,7 +323,8 @@
 				<div class="acts">
 					{#if v.prompt && plugins.on("imagegen")}<Button size="sm" onclick={() => reuse(v)}>{#snippet icon()}<Sparkles />{/snippet}이 프롬프트로 다시</Button>{/if}
 					{#if v.conversationId}<Button size="sm" onclick={() => openSource(v)}>{#snippet icon()}<MessageSquare />{/snippet}대화로</Button>{/if}
-					<Button size="sm" variant="ghost" onclick={() => window.open(fileSrc(v.path) ?? "", "_blank")}>{#snippet icon()}<ExternalLink />{/snippet}원본</Button>
+					<Button size="sm" variant="ghost" onclick={() => reveal(v)}>{#snippet icon()}<ExternalLink />{/snippet}파일 위치</Button>
+					{#if owned(v)}<Button size="sm" variant="ghost" onclick={() => rename(v)}>{#snippet icon()}<Pencil />{/snippet}이름</Button>{/if}
 					<span class="sp"></span>
 					{#if owned(v)}<Button size="sm" variant="ghost" onclick={() => remove(v)}>{#snippet icon()}<Trash2 />{/snippet}삭제</Button>{/if}
 				</div>
@@ -257,6 +332,7 @@
 		</div>
 	</div>
 {/if}
+{#if menu}<ContextMenu at={menu.at} label={menu.label} items={menu.items} onclose={() => (menu = null)} />{/if}
 
 <style>
 	.page {
@@ -369,6 +445,9 @@
 	}
 	figure.locked {
 		opacity: 0.45;
+	}
+	.search {
+		width: min(260px, 40vw);
 	}
 	.selbar {
 		display: flex;
