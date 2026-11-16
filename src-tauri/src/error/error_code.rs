@@ -43,6 +43,9 @@ pub enum ErrorCode {
     TaskCancelled,
     TaskInterrupted, // 앱/서비스 종료로 중단
 
+    // Budget
+    BudgetExceeded, // 예산 한도를 넘어 공급자를 부르지 않음 (details: apiProfileId, metric, period, used, limit, canOverride)
+
     // Game
     GameInvalidState,
     GameSceneNotFound,

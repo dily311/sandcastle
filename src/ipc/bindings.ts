@@ -105,6 +105,11 @@ export const commands = {
 	usageSummary: (since: number | null, options?: InvokeOptions) => __TAURI_INVOKE<UsageSummary_Serialize[]>("usage_summary", { since }, options),
 	/**  사용량 기록 비우기 (작업 기록은 남는다) */
 	clearUsage: (options?: InvokeOptions) => __TAURI_INVOKE<number>("clear_usage", undefined, options),
+	/**
+	 *  예산 한도로 막힌 사용자 실행을 "이번만 계속": 2분 안에 다시 실행하는 작업 하나만 한도 밖으로 (ADR-007).
+	 *  실행을 대신 시작하지 않는다 — 사용자가 다시 누른다
+	 */
+	allowBudgetOnce: (options?: InvokeOptions) => __TAURI_INVOKE<null>("allow_budget_once", undefined, options),
 	listRegexScripts: (options?: InvokeOptions) => __TAURI_INVOKE<RegexScript_Serialize[]>("list_regex_scripts", undefined, options),
 	/**  생성/수정. 패턴이 컴파일되지 않거나 범위 대상이 없으면 저장하지 않는다. */
 	upsertRegexScript: (input: RegexScriptInput_Deserialize, options?: InvokeOptions) => __TAURI_INVOKE<RegexScript_Serialize>("upsert_regex_script", { input }, options),
@@ -1229,7 +1234,7 @@ export type EditedGameMessage_Serialize = {
 
 export type ErrorCategory = "ARCHIVE" | "NOT_FOUND" | "VALIDATION" | "DATABASE" | "AI_PROVIDER" | "IO" | "WINDOW" | "GAME" | "INTERNAL";
 
-export type ErrorCode = "INTERNAL_ERROR" | "RESOURCE_NOT_FOUND" | "INVALID_INPUT" | "DATABASE_ERROR" | "DATABASE_LOCKED" | "AI_PROVIDER_ERROR" | "AI_PROVIDER_RATE_LIMIT" | "AI_PROVIDER_AUTH_FAILED" | "AI_PROVIDER_MODEL_NOT_FOUND" | "AI_PROVIDER_TIMEOUT" | "AI_PROVIDER_CONNECTION_FAILED" | "AI_REQUEST_CANCELLED" | "AI_CONTEXT_OVERFLOW" | "TASK_INVALID_TRANSITION" | "TASK_EXECUTOR_MISSING" | "TASK_CANCELLED" | "TASK_INTERRUPTED" | "GAME_INVALID_STATE" | "GAME_SCENE_NOT_FOUND" | "GAME_EVENT_FAILED" | "GAME_DATA_INVALID" | "GAME_NOT_OPENED" | "GAME_NO_SESSION" | "GAME_SESSION_CHANGED" | "GAME_ACTION_BLOCKED" | "ARCHIVE_INVALID" | "ARCHIVE_CORRUPTED" | "ARCHIVE_UNSAFE_PATH" | "IO_ERROR" | "WINDOW_ERROR";
+export type ErrorCode = "INTERNAL_ERROR" | "RESOURCE_NOT_FOUND" | "INVALID_INPUT" | "DATABASE_ERROR" | "DATABASE_LOCKED" | "AI_PROVIDER_ERROR" | "AI_PROVIDER_RATE_LIMIT" | "AI_PROVIDER_AUTH_FAILED" | "AI_PROVIDER_MODEL_NOT_FOUND" | "AI_PROVIDER_TIMEOUT" | "AI_PROVIDER_CONNECTION_FAILED" | "AI_REQUEST_CANCELLED" | "AI_CONTEXT_OVERFLOW" | "TASK_INVALID_TRANSITION" | "TASK_EXECUTOR_MISSING" | "TASK_CANCELLED" | "TASK_INTERRUPTED" | "BUDGET_EXCEEDED" | "GAME_INVALID_STATE" | "GAME_SCENE_NOT_FOUND" | "GAME_EVENT_FAILED" | "GAME_DATA_INVALID" | "GAME_NOT_OPENED" | "GAME_NO_SESSION" | "GAME_SESSION_CHANGED" | "GAME_ACTION_BLOCKED" | "ARCHIVE_INVALID" | "ARCHIVE_CORRUPTED" | "ARCHIVE_UNSAFE_PATH" | "IO_ERROR" | "WINDOW_ERROR";
 
 export type FeatureSetting = {
 	feature: { [key in string]: boolean },

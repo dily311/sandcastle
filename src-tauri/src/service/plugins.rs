@@ -139,6 +139,7 @@ pub async fn speak(ai: &AiService, setting: &TtsSetting, fallback_profile: &str,
     }
     let profile = ai.load_profile(&profile_id).await?;
     let key = ai.credential(&profile)?;
+    ai.ensure_budget(&profile.id, UsageKind::Tts).await?;
     let started = std::time::Instant::now();
     let result = speak_call(ai, setting, &profile, key, &input).await;
     let mut entry = UsageEntry::new(UsageKind::Tts, &profile.id, if setting.model.is_empty() { &profile.model } else { &setting.model });
@@ -468,6 +469,7 @@ pub async fn generate_image(
     let profile_id = pick_profile(&setting.api_profile_id, fallback_profile)?;
     let profile = ai.load_profile(&profile_id).await?;
     let key = ai.credential(&profile)?;
+    ai.ensure_budget(&profile.id, UsageKind::Image).await?;
     let started = std::time::Instant::now();
     let result = image_call(ai, setting, &profile, key, prompt).await;
     let mut entry = UsageEntry::new(UsageKind::Image, &profile.id, if setting.model.is_empty() { &profile.model } else { &setting.model });

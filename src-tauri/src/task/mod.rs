@@ -41,6 +41,8 @@ mod task_runner;
 mod task_state;
 
 pub use task_context::{current as current_task, CurrentTask};
+#[cfg(test)]
+pub(crate) use task_context::scope as task_context_scope_for_test;
 pub use task_event::{NoopEventSink, TaskEventEmitter, TaskEventSink, TASK_EVENT};
 pub use task_manager::{TaskHandle, TaskManager, TaskResult};
 pub use task_models::{

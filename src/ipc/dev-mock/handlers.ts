@@ -101,6 +101,7 @@ export const handlers: Record<string, Handler> = {
 		{ apiProfileId: "p3", profileName: "NovelAI", kind: "image", calls: 3, failed: 0, inputTokens: 0, outputTokens: 0, characters: 0, images: 3, estimatedCalls: 3 },
 	],
 	clear_usage: () => 0,
+	allow_budget_once: () => null,
 	save_png_file: () => null,
 	default_app_prompts: () => {
 		const d = (text: string) => ({ selected: "", items: [{ id: "", name: "기본값", text }] });

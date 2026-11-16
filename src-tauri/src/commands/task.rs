@@ -72,3 +72,12 @@ pub async fn usage_summary(state: State<'_, crate::state::AppState>, since: Opti
 pub async fn clear_usage(state: State<'_, crate::state::AppState>) -> Result<u32> {
     Ok(u32::try_from(crate::db::usage::clear(&state.db).await?).unwrap_or(u32::MAX))
 }
+
+/// 예산 한도로 막힌 사용자 실행을 "이번만 계속": 2분 안에 다시 실행하는 작업 하나만 한도 밖으로 (ADR-007).
+/// 실행을 대신 시작하지 않는다 — 사용자가 다시 누른다
+#[tauri::command]
+#[specta::specta]
+pub async fn allow_budget_once() -> Result<()> {
+    crate::service::budget::allow_once();
+    Ok(())
+}

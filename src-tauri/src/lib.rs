@@ -273,6 +273,7 @@ pub fn specta_builder() -> tauri_specta::Builder<tauri::Wry> {
             list_task_history,
             usage_summary,
             clear_usage,
+            allow_budget_once,
             // regex
             list_regex_scripts,
             upsert_regex_script,
@@ -502,6 +503,7 @@ pub fn specta_builder() -> tauri_specta::Builder<tauri::Wry> {
             list_task_history,
             usage_summary,
             clear_usage,
+            allow_budget_once,
             // regex
             list_regex_scripts,
             upsert_regex_script,

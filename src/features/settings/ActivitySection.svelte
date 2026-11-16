@@ -124,7 +124,7 @@
 		return parts.join(" · ");
 	}
 	const featureName = (f: string | null) => (f ? (FEATURE[f] ?? f) : "기타");
-	const status = (s: string) => STATUS[s] ?? { label: s, tone: "neutral" as const };
+	const status = (h: HistoryItem) => (h.status === "failed" && h.errorCode === "BUDGET_EXCEEDED" ? { label: "한도로 막힘", tone: "warning" as const } : (STATUS[h.status] ?? { label: h.status, tone: "neutral" as const }));
 </script>
 
 <Section title="실행 기록" lead="AI·음성·이미지 API를 부른 작업과 사용량. 토큰은 공급자가 알려주면 그 값, 아니면 앱이 추정함">
@@ -193,7 +193,7 @@
 			/>
 		{/snippet}
 		{#each shown as h (h.id)}
-			{@const s = status(h.status)}
+			{@const s = status(h)}
 			<div class="row">
 				<button class="line" aria-expanded={open === h.id} onclick={() => (open = open === h.id ? null : h.id)}>
 					<span class="t">{when(h.createdAt)}</span>

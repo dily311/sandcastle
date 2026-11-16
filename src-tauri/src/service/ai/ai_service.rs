@@ -46,6 +46,11 @@ impl AiService {
         db::usage::record(&self.db, entry).await;
     }
 
+    /// 예산 한도 확인 (공급자를 부르기 직전에. 넘었으면 BUDGET_EXCEEDED)
+    pub async fn ensure_budget(&self, profile_id: &str, kind: UsageKind) -> Result<()> {
+        crate::service::budget::ensure(&self.db, profile_id, kind).await
+    }
+
     /// 프로필의 API 키 (keyring)
     pub fn credential(&self, profile: &ApiProfiles) -> Result<String> {
         load_credential(profile)
@@ -86,6 +91,7 @@ impl AiService {
         let profile = self.load_profile(&request.profile_id).await?;
         let provider = provider_for(&profile.format_type)?;
         let credential = load_credential(&profile)?;
+        self.ensure_budget(&profile.id, UsageKind::Chat).await?;
         let call = ProviderCall {
             http: &self.http,
             profile: &profile,

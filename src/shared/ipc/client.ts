@@ -58,7 +58,8 @@ export async function call<T>(p: Promise<T>, opts: CallOptions = {}): Promise<T>
 	} catch (e) {
 		const err = toAppError(e);
 		logs.error(opts.source ?? "ipc", `${err.code} · ${err.message}`, err.details);
-		if (!opts.silent) toasts.error(err.message, err.code);
+		// 예산 한도로 막힌 작업은 작업 실패 알림(taskLog)이 "이번만 계속"과 함께 띄운다
+		if (!opts.silent && err.code !== "BUDGET_EXCEEDED") toasts.error(err.message, err.code);
 		throw err;
 	}
 }

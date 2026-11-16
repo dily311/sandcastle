@@ -206,7 +206,7 @@ impl TaskManager {
         let attempt = self.repo.open_attempt(task_id).await?;
         self.events.emit(&TaskEvent::Started { task_id: task_id.to_string(), attempt_no: attempt.attempt_no });
 
-        let tag = super::task_context::CurrentTask { task_id: task_id.to_string(), feature: task.feature.clone() };
+        let tag = super::task_context::CurrentTask { task_id: task_id.to_string(), feature: task.feature.clone(), run_by: task.run_by };
         let outcome = tokio::select! {
             biased;
             _ = cancel.cancelled() => None,
@@ -449,7 +449,7 @@ impl TaskManager {
                 TaskReporter::new(task_id.to_string(), self.events.clone()),
             );
 
-            let tag = super::task_context::CurrentTask { task_id: task_id.to_string(), feature: task.feature.clone() };
+            let tag = super::task_context::CurrentTask { task_id: task_id.to_string(), feature: task.feature.clone(), run_by: task.run_by };
             let run = super::task_context::scope(tag, AssertUnwindSafe(executor.execute(&task, &ctx)).catch_unwind());
             tokio::pin!(run);
             let outcome = tokio::select! {
