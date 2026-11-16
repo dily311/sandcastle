@@ -1,8 +1,9 @@
 use crate::{
-    error::{AppError, ErrorCode, Result}, models::settings::{
-        AppSetting, CssTheme, CssThemeMeta, FeatureSetting, SettingsDomain, ThemeSetting,
-    }, sys::{
-        settings::{SettingsState, apply_patch, save}, themes::ThemeManager,
+    error::{AppError, ErrorCode, Result},
+    models::settings::{AppSetting, CssTheme, CssThemeMeta, FeatureSetting, SettingsDomain, ThemeSetting},
+    sys::{
+        settings::{apply_patch, save, SettingsState},
+        themes::ThemeManager,
     },
 };
 use serde_json::json;
@@ -14,20 +15,19 @@ use tauri::{AppHandle, Emitter, State};
 #[tauri::command]
 #[specta::specta]
 pub async fn get_app_setting(state: State<'_, SettingsState<AppSetting>>) -> Result<AppSetting> {
-    Ok(state.0.lock().map_err(|_| AppError::archive(ErrorCode::InternalError, "archive lock poisoned"))?.clone())
+    Ok(state
+        .0
+        .lock()
+        .map_err(|_| AppError::archive(ErrorCode::InternalError, "archive lock poisoned"))?
+        .clone())
 }
 
 #[tauri::command]
 #[specta::specta]
-pub async fn update_app_setting(
-    app: AppHandle,
-    state: State<'_, SettingsState<AppSetting>>,
-    patch: serde_json::Value,
-) -> Result<AppSetting> {
+pub async fn update_app_setting(app: AppHandle, state: State<'_, SettingsState<AppSetting>>, patch: serde_json::Value) -> Result<AppSetting> {
     let settings = apply_patch(&app, &state.0, patch)?;
     // 이벤트 호출
-    app.emit(AppSetting::EVENT_NAME, &settings)
-        .map_err(|e| AppError::io(e.to_string()))?;
+    app.emit(AppSetting::EVENT_NAME, &settings).map_err(|e| AppError::io(e.to_string()))?;
     Ok(settings)
 }
 
@@ -36,68 +36,51 @@ pub async fn update_app_setting(
 // =======================================
 #[tauri::command]
 #[specta::specta]
-pub async fn get_theme_setting(
-    state: State<'_, SettingsState<ThemeSetting>>,
-) -> Result<ThemeSetting> {
-    Ok(state.0.lock().map_err(|_| AppError::archive(ErrorCode::InternalError, "archive lock poisoned"))?.clone())
+pub async fn get_theme_setting(state: State<'_, SettingsState<ThemeSetting>>) -> Result<ThemeSetting> {
+    Ok(state
+        .0
+        .lock()
+        .map_err(|_| AppError::archive(ErrorCode::InternalError, "archive lock poisoned"))?
+        .clone())
 }
 
 #[tauri::command]
 #[specta::specta]
-pub async fn update_theme_setting(
-    app: AppHandle,
-    state: State<'_, SettingsState<ThemeSetting>>,
-    patch: serde_json::Value,
-) -> Result<ThemeSetting> {
+pub async fn update_theme_setting(app: AppHandle, state: State<'_, SettingsState<ThemeSetting>>, patch: serde_json::Value) -> Result<ThemeSetting> {
     let settings = apply_patch(&app, &state.0, patch)?;
     // 이벤트 호출
-    app.emit(ThemeSetting::EVENT_NAME, &settings)
-        .map_err(|e| AppError::io(e.to_string()))?;
+    app.emit(ThemeSetting::EVENT_NAME, &settings).map_err(|e| AppError::io(e.to_string()))?;
     Ok(settings)
 }
 
 #[tauri::command]
 #[specta::specta]
 pub fn get_theme_list(theme_mgr: State<'_, ThemeManager>) -> Result<Vec<CssThemeMeta>> {
-    theme_mgr
-        .get_list()
-        .map_err(|e| AppError::io(e.to_string()))
+    theme_mgr.get_list().map_err(|e| AppError::io(e.to_string()))
 }
 
 #[tauri::command]
 #[specta::specta]
 pub fn load_theme_content(theme_mgr: State<'_, ThemeManager>, filename: String) -> Result<String> {
-    theme_mgr
-        .load_content(&filename)
-        .map_err(|e| AppError::io(e.to_string()))
+    theme_mgr.load_content(&filename).map_err(|e| AppError::io(e.to_string()))
 }
 
 #[tauri::command]
 #[specta::specta]
 pub fn load_theme(theme_mgr: State<'_, ThemeManager>, filename: String) -> Result<CssTheme> {
-    theme_mgr
-        .load(&filename)
-        .map_err(|e| AppError::io(e.to_string()))
+    theme_mgr.load(&filename).map_err(|e| AppError::io(e.to_string()))
 }
 
 #[tauri::command]
 #[specta::specta]
-pub fn save_theme(
-    theme_mgr: State<'_, ThemeManager>,
-    filename: String,
-    content: CssTheme,
-) -> Result<()> {
-    theme_mgr
-        .save(&filename, &content)
-        .map_err(|e| AppError::io(e.to_string()))
+pub fn save_theme(theme_mgr: State<'_, ThemeManager>, filename: String, content: CssTheme) -> Result<()> {
+    theme_mgr.save(&filename, &content).map_err(|e| AppError::io(e.to_string()))
 }
 
 #[tauri::command]
 #[specta::specta]
 pub fn delete_theme(theme_mgr: State<'_, ThemeManager>, filename: String) -> Result<()> {
-    theme_mgr
-        .delete(&filename)
-        .map_err(|e| AppError::io(e.to_string()))
+    theme_mgr.delete(&filename).map_err(|e| AppError::io(e.to_string()))
 }
 
 // =======================================
@@ -106,17 +89,16 @@ pub fn delete_theme(theme_mgr: State<'_, ThemeManager>, filename: String) -> Res
 #[tauri::command]
 #[specta::specta]
 pub async fn get_feature_setting(state: State<'_, SettingsState<FeatureSetting>>) -> Result<FeatureSetting> {
-    Ok(state.0.lock().map_err(|_| AppError::archive(ErrorCode::InternalError, "archive lock poisoned"))?.clone())
+    Ok(state
+        .0
+        .lock()
+        .map_err(|_| AppError::archive(ErrorCode::InternalError, "archive lock poisoned"))?
+        .clone())
 }
 
 #[tauri::command]
 #[specta::specta]
-pub async fn update_feature_setting(
-    app: AppHandle,
-    state: State<'_, SettingsState<FeatureSetting>>,
-    id: String,
-    enabled: bool,
-) -> Result<()> {
+pub async fn update_feature_setting(app: AppHandle, state: State<'_, SettingsState<FeatureSetting>>, id: String, enabled: bool) -> Result<()> {
     let wanted = {
         let mut settings = state.0.lock().map_err(|e| AppError::io(e.to_string()))?;
         settings.feature.insert(id.clone(), enabled);
@@ -191,7 +173,10 @@ pub async fn remove_background(app: AppHandle, state: State<'_, SettingsState<Th
     let dir = crate::commands::character_image::app_data_dir(&app)?.join("backgrounds");
     let (list, selected) = {
         let cur = state.0.lock().map_err(|_| AppError::internal("settings lock poisoned"))?;
-        (cur.backgrounds.iter().filter(|p| **p != path).cloned().collect::<Vec<_>>(), cur.background_image.clone())
+        (
+            cur.backgrounds.iter().filter(|p| **p != path).cloned().collect::<Vec<_>>(),
+            cur.background_image.clone(),
+        )
     };
     let mut patch = json!({ "backgrounds": list });
     if selected.as_deref() == Some(path.as_str()) {

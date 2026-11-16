@@ -2,20 +2,29 @@ use crate::models::widget::*;
 use sqlx::{Error, Executor, Sqlite};
 use uuid::Uuid;
 
-pub async fn get_music_list<'e, E>(executor: E, folder_path: &str) -> Result<Vec<MusicMetaSummary>, Error> where E: Executor<'e, Database = Sqlite> {
-    let rows = sqlx::query_as::<_, MusicMetaSummary>("
+pub async fn get_music_list<'e, E>(executor: E, folder_path: &str) -> Result<Vec<MusicMetaSummary>, Error>
+where
+    E: Executor<'e, Database = Sqlite>,
+{
+    let rows = sqlx::query_as::<_, MusicMetaSummary>(
+        "
         SELECT path, album_art, updated_at
         FROM music_meta
         WHERE path LIKE ?
-    ")
+    ",
+    )
     .bind(&format!("{}%", folder_path))
     .fetch_all(executor)
     .await?;
     Ok(rows)
 }
 
-pub async fn get_all_music_data<'e, E>(executor: E) -> Result<Vec<MusicMeta>, Error> where E: Executor<'e, Database = Sqlite> {
-    let rows = sqlx::query_as::<_, MusicMetaRow>("
+pub async fn get_all_music_data<'e, E>(executor: E) -> Result<Vec<MusicMeta>, Error>
+where
+    E: Executor<'e, Database = Sqlite>,
+{
+    let rows = sqlx::query_as::<_, MusicMetaRow>(
+        "
         SELECT 
             mm.path,
             mm.title,
@@ -36,14 +45,19 @@ pub async fn get_all_music_data<'e, E>(executor: E) -> Result<Vec<MusicMeta>, Er
             mm.duration,
             mm.updated_at
         FROM music_meta mm 
-    ")
+    ",
+    )
     .fetch_all(executor)
     .await?;
 
     Ok(rows.into_iter().map(Into::into).collect())
 }
-pub async fn get_folder_music_data<'e, E>(executor: E, folder_path: &str) -> Result<Vec<MusicMeta>, Error> where E: Executor<'e, Database = Sqlite> {
-    let rows = sqlx::query_as::<_, MusicMetaRow>("
+pub async fn get_folder_music_data<'e, E>(executor: E, folder_path: &str) -> Result<Vec<MusicMeta>, Error>
+where
+    E: Executor<'e, Database = Sqlite>,
+{
+    let rows = sqlx::query_as::<_, MusicMetaRow>(
+        "
         SELECT 
             mm.path,
             mm.title,
@@ -65,7 +79,8 @@ pub async fn get_folder_music_data<'e, E>(executor: E, folder_path: &str) -> Res
             mm.updated_at
         FROM music_meta mm 
         WHERE mm.path LIKE ?
-    ")
+    ",
+    )
     .bind(&format!("{}%", folder_path))
     .fetch_all(executor)
     .await?;
@@ -73,8 +88,12 @@ pub async fn get_folder_music_data<'e, E>(executor: E, folder_path: &str) -> Res
     Ok(rows.into_iter().map(Into::into).collect())
 }
 
-pub async fn get_playlist_entry_data<'e, E>(executor: E, playlist_id: &str) -> Result<Vec<MusicMeta>, Error> where E: Executor<'e, Database = Sqlite> {
-    let rows = sqlx::query_as::<_, MusicMetaRow>("
+pub async fn get_playlist_entry_data<'e, E>(executor: E, playlist_id: &str) -> Result<Vec<MusicMeta>, Error>
+where
+    E: Executor<'e, Database = Sqlite>,
+{
+    let rows = sqlx::query_as::<_, MusicMetaRow>(
+        "
         SELECT 
             mm.path,
             mm.title,
@@ -98,14 +117,18 @@ pub async fn get_playlist_entry_data<'e, E>(executor: E, playlist_id: &str) -> R
         INNER JOIN playlist_entries pm ON mm.path = pm.music_src
         WHERE pm.playlist_id = ?
         ORDER BY pm.sort_order DESC
-    ")
+    ",
+    )
     .bind(playlist_id)
     .fetch_all(executor)
     .await?;
 
     Ok(rows.into_iter().map(Into::into).collect())
 }
-pub async fn upsert_music_meta<'e, E>(executor: E, input: MusicMetaInput) -> Result<MusicMeta, Error> where E: Executor<'e, Database = Sqlite>,{
+pub async fn upsert_music_meta<'e, E>(executor: E, input: MusicMetaInput) -> Result<MusicMeta, Error>
+where
+    E: Executor<'e, Database = Sqlite>,
+{
     let now = chrono::Utc::now().timestamp_millis();
     sqlx::query(
         "
@@ -124,7 +147,7 @@ pub async fn upsert_music_meta<'e, E>(executor: E, input: MusicMetaInput) -> Res
             lyrics=excluded.lyrics, 
             duration=excluded.duration, 
             updated_at=excluded.updated_at
-        "
+        ",
     )
     .bind(&input.path)
     .bind(&input.title)
@@ -160,15 +183,18 @@ pub async fn upsert_music_meta<'e, E>(executor: E, input: MusicMetaInput) -> Res
     })
 }
 
-pub async fn delete_music_meta<'e, E>(executor: E, path: &str) -> Result<bool, Error> where E: Executor<'e, Database = Sqlite>,{
-    let result = sqlx::query("DELETE FROM music_meta WHERE path = ?")
-        .bind(path)
-        .execute(executor)
-        .await?;
+pub async fn delete_music_meta<'e, E>(executor: E, path: &str) -> Result<bool, Error>
+where
+    E: Executor<'e, Database = Sqlite>,
+{
+    let result = sqlx::query("DELETE FROM music_meta WHERE path = ?").bind(path).execute(executor).await?;
     Ok(result.rows_affected() != 0)
 }
 
-pub async fn upsert_music_album_art_pos<'e, E>(executor: E, path: &str, pos: serde_json::Value) -> Result<(), Error> where E: Executor<'e, Database = Sqlite>,{
+pub async fn upsert_music_album_art_pos<'e, E>(executor: E, path: &str, pos: serde_json::Value) -> Result<(), Error>
+where
+    E: Executor<'e, Database = Sqlite>,
+{
     let pos_json = serde_json::to_string(&pos).unwrap_or_default();
     sqlx::query(
         r#"
@@ -185,23 +211,33 @@ pub async fn upsert_music_album_art_pos<'e, E>(executor: E, path: &str, pos: ser
     Ok(())
 }
 
-pub async fn get_all_playlist<'e, E>(executor: E) -> Result<Vec<Playlist>, Error> where E: Executor<'e, Database = Sqlite> {
-    let rows = sqlx::query_as::<_, Playlist>("
+pub async fn get_all_playlist<'e, E>(executor: E) -> Result<Vec<Playlist>, Error>
+where
+    E: Executor<'e, Database = Sqlite>,
+{
+    let rows = sqlx::query_as::<_, Playlist>(
+        "
         SELECT * FROM playlist ORDER BY sort_order DESC
-    ")
+    ",
+    )
     .fetch_all(executor)
     .await?;
     Ok(rows)
 }
 
-pub async fn create_playlist<'e, E>(executor: E, input: PlaylistInput) -> Result<Playlist, Error> where E: Executor<'e, Database = Sqlite> {
+pub async fn create_playlist<'e, E>(executor: E, input: PlaylistInput) -> Result<Playlist, Error>
+where
+    E: Executor<'e, Database = Sqlite>,
+{
     let id = Uuid::new_v4().to_string();
     let now = chrono::Utc::now().timestamp_millis();
 
-    sqlx::query("
+    sqlx::query(
+        "
         INSERT INTO playlist (id, title, description, cover_image, sort_order, created_at, updated_at)
         VALUES (?,?,?,?,?,?,?)
-    ")
+    ",
+    )
     .bind(&id)
     .bind(&input.title)
     .bind(&input.description)
@@ -212,7 +248,7 @@ pub async fn create_playlist<'e, E>(executor: E, input: PlaylistInput) -> Result
     .execute(executor)
     .await?;
 
-    Ok(Playlist { 
+    Ok(Playlist {
         id,
         title: input.title,
         description: input.description,
@@ -223,9 +259,13 @@ pub async fn create_playlist<'e, E>(executor: E, input: PlaylistInput) -> Result
     })
 }
 
-pub async fn update_playlist<'e, E>(executor: E, id: &str, input: PlaylistInput) -> Result<(), Error> where E: Executor<'e, Database = Sqlite> {
+pub async fn update_playlist<'e, E>(executor: E, id: &str, input: PlaylistInput) -> Result<(), Error>
+where
+    E: Executor<'e, Database = Sqlite>,
+{
     let now = chrono::Utc::now().timestamp_millis();
-    sqlx::query("
+    sqlx::query(
+        "
         UPDATE playlist 
         SET
             title=?,
@@ -234,7 +274,8 @@ pub async fn update_playlist<'e, E>(executor: E, id: &str, input: PlaylistInput)
             sort_order=?,
             updated_at=?
         WHERE id =?
-    ")
+    ",
+    )
     .bind(&input.title)
     .bind(&input.description)
     .bind(&input.cover_image)
@@ -247,25 +288,31 @@ pub async fn update_playlist<'e, E>(executor: E, id: &str, input: PlaylistInput)
     Ok(())
 }
 
-pub async fn delete_playlist<'e, E>(executor: E, id: &str) -> Result<bool, Error> where E: Executor<'e, Database = Sqlite>,{
-    let result = sqlx::query("DELETE FROM playlist WHERE id = ?")
-        .bind(&id)
-        .execute(executor)
-        .await?;
+pub async fn delete_playlist<'e, E>(executor: E, id: &str) -> Result<bool, Error>
+where
+    E: Executor<'e, Database = Sqlite>,
+{
+    let result = sqlx::query("DELETE FROM playlist WHERE id = ?").bind(&id).execute(executor).await?;
     Ok(result.rows_affected() != 0)
 }
 
-pub async fn append_playlist_entry<'e, E>(executor: E, playlist_id: &str, music_src: &str, sort_order: Option<u32>,) -> Result<(), Error> where E: Executor<'e, Database = Sqlite>,{
+pub async fn append_playlist_entry<'e, E>(executor: E, playlist_id: &str, music_src: &str, sort_order: Option<u32>) -> Result<(), Error>
+where
+    E: Executor<'e, Database = Sqlite>,
+{
     sqlx::query("INSERT INTO playlist_entries (playlist_id, music_src, sort_order) VALUES (?, ?, ?)")
-    .bind(playlist_id)
-    .bind(music_src)
-    .bind(sort_order.unwrap_or(0))
-    .execute(executor)
-    .await?;
+        .bind(playlist_id)
+        .bind(music_src)
+        .bind(sort_order.unwrap_or(0))
+        .execute(executor)
+        .await?;
     Ok(())
 }
 
-pub async fn get_all_playlist_entry<'e, E>(executor: E, playlist_id: &str) -> Result<Vec<PlaylistItem>, Error> where E: Executor<'e, Database = Sqlite>,{
+pub async fn get_all_playlist_entry<'e, E>(executor: E, playlist_id: &str) -> Result<Vec<PlaylistItem>, Error>
+where
+    E: Executor<'e, Database = Sqlite>,
+{
     let rows = sqlx::query_as::<_, PlaylistItemRow>(
         r#"
         SELECT 
@@ -300,7 +347,10 @@ pub async fn get_all_playlist_entry<'e, E>(executor: E, playlist_id: &str) -> Re
     Ok(rows.into_iter().map(Into::into).collect())
 }
 
-pub async fn update_playlist_music_order<'e, E>(executor: E, playlist_id: &str, music_src: &str, sort_order: u32) -> Result<(), Error> where E: Executor<'e, Database = Sqlite>,{
+pub async fn update_playlist_music_order<'e, E>(executor: E, playlist_id: &str, music_src: &str, sort_order: u32) -> Result<(), Error>
+where
+    E: Executor<'e, Database = Sqlite>,
+{
     sqlx::query(
         r#"
         UPDATE playlist_entries SET sort_order =? WHERE playlist_id=? AND music_src =?
@@ -314,7 +364,10 @@ pub async fn update_playlist_music_order<'e, E>(executor: E, playlist_id: &str, 
     Ok(())
 }
 
-pub async fn remove_playlist_entry<'e, E>(executor: E, playlist_id: &str, music_src: &str) -> Result<bool, Error> where E: Executor<'e, Database = Sqlite>,{
+pub async fn remove_playlist_entry<'e, E>(executor: E, playlist_id: &str, music_src: &str) -> Result<bool, Error>
+where
+    E: Executor<'e, Database = Sqlite>,
+{
     let result = sqlx::query("DELETE FROM playlist_entries WHERE playlist_id = ? AND music_src=?")
         .bind(playlist_id)
         .bind(music_src)

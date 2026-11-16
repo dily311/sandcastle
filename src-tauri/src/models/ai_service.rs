@@ -1,6 +1,4 @@
-use crate::{
-    error::AppErrorResponse, models::conversation::WorldInfoEntry,
-};
+use crate::{error::AppErrorResponse, models::conversation::WorldInfoEntry};
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 use sqlx::prelude::FromRow;
@@ -74,13 +72,9 @@ impl From<PromptPresetsRows> for PromptPresets {
             description: r.description,
             preset_type: r.preset_type,
             source_format: r.source_format,
-            config_json: serde_json::from_str(&r.config_json)
-                .ok()
-                .unwrap_or_default(),
+            config_json: serde_json::from_str(&r.config_json).ok().unwrap_or_default(),
             settings_json: r.settings_json.and_then(|s| serde_json::from_str(&s).ok()),
-            compatibility_json: r
-                .compatibility_json
-                .and_then(|s| serde_json::from_str(&s).ok()),
+            compatibility_json: r.compatibility_json.and_then(|s| serde_json::from_str(&s).ok()),
             created_at: r.created_at,
             updated_at: r.updated_at,
         }
@@ -152,9 +146,7 @@ impl From<PromptBlocksRows> for PromptBlocks {
             position: r.position,
             depth: r.depth,
             sort_order: r.sort_order,
-            triggers_json: serde_json::from_str(&r.triggers_json)
-                .ok()
-                .unwrap_or_default(),
+            triggers_json: serde_json::from_str(&r.triggers_json).ok().unwrap_or_default(),
             extra_json: r.extra_json.and_then(|s| serde_json::from_str(&s).ok()),
             created_at: r.created_at,
             updated_at: r.updated_at,
@@ -474,11 +466,7 @@ pub struct AnthropicChatCompletionRequest {
 }
 
 impl AnthropicChatCompletionRequest {
-    pub fn from_row(
-        model: String,
-        messages: Vec<AnthropicChatMessage>,
-        options: ChatOptions,
-    ) -> Self {
+    pub fn from_row(model: String, messages: Vec<AnthropicChatMessage>, options: ChatOptions) -> Self {
         Self {
             model: model,
             stream: options.stream,

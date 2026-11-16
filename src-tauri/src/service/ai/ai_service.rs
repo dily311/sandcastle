@@ -3,7 +3,11 @@ use tokio_util::sync::CancellationToken;
 
 use crate::{
     adapter::{provider_for, ProviderCall},
-    db::{self, conn::DbPool, usage::{UsageEntry, UsageKind}},
+    db::{
+        self,
+        conn::DbPool,
+        usage::{UsageEntry, UsageKind},
+    },
     error::{AppError, ErrorCode, Result},
     models::ai_service::{ApiProfiles, PromptMessage},
     service::secret_store::{api_key_name, SecretStore},
@@ -79,12 +83,7 @@ impl AiService {
     /// 텍스트 생성.
     /// - `on_delta`: 스트리밍 조각마다 호출 (stream=false면 호출되지 않음)
     /// - `cancel`: 취소되면 진행 중인 HTTP 요청을 버리고 `AiRequestCancelled`로 끝남
-    pub async fn generate<F>(
-        &self,
-        request: AiRequest,
-        cancel: &CancellationToken,
-        mut on_delta: F,
-    ) -> Result<AiResponse>
+    pub async fn generate<F>(&self, request: AiRequest, cancel: &CancellationToken, mut on_delta: F) -> Result<AiResponse>
     where
         F: FnMut(&str) + Send,
     {
@@ -160,7 +159,13 @@ fn estimate_prompt_tokens(prompt: &PromptMessage) -> u64 {
     prompt
         .messages
         .iter()
-        .map(|m| if m.token > 0 { m.token as u64 } else { crate::service::prompt::token::count_message_tokens(&m.content) as u64 })
+        .map(|m| {
+            if m.token > 0 {
+                m.token as u64
+            } else {
+                crate::service::prompt::token::count_message_tokens(&m.content) as u64
+            }
+        })
         .sum()
 }
 

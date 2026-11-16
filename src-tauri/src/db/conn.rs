@@ -1,4 +1,4 @@
-use sqlx::sqlite::{SqlitePool, SqlitePoolOptions, SqliteConnectOptions};
+use sqlx::sqlite::{SqliteConnectOptions, SqlitePool, SqlitePoolOptions};
 use std::path::{Path, PathBuf};
 use std::str::FromStr;
 
@@ -17,10 +17,7 @@ pub async fn init_pool(app_data_dir: PathBuf) -> Result<DbPool, sqlx::Error> {
         .create_if_missing(true)
         .foreign_keys(true);
 
-    let pool = SqlitePoolOptions::new()
-        .max_connections(5)
-        .connect_with(opts)
-        .await?;
+    let pool = SqlitePoolOptions::new().max_connections(5).connect_with(opts).await?;
 
     // 적용할 마이그레이션이 있으면 먼저 사본을 만든다 (1-B-2). 실패해도 앱은 연다(로그만)
     match backup_before_migrations(&pool, &app_data_dir).await {
@@ -42,7 +39,9 @@ pub async fn backup_before_migrations(pool: &DbPool, app_data_dir: &Path) -> Res
     if !has_table {
         return Ok(None);
     }
-    let applied: Vec<i64> = sqlx::query_scalar("SELECT version FROM _sqlx_migrations WHERE success = 1").fetch_all(pool).await?;
+    let applied: Vec<i64> = sqlx::query_scalar("SELECT version FROM _sqlx_migrations WHERE success = 1")
+        .fetch_all(pool)
+        .await?;
     let Some(current) = applied.iter().max().copied() else { return Ok(None) };
     let pending = schema_migrations().iter().any(|(v, _)| !applied.contains(v));
     if !pending {
@@ -106,17 +105,33 @@ mod tests {
         // 새 DB: 사본 없음
         let pool = init_pool(base.clone()).await.unwrap();
         assert!(backups(&base).is_empty());
-        sqlx::query("INSERT INTO characters (id, name, created_at, updated_at) VALUES ('c1', 'Keep', 0, 0)").execute(&pool).await.unwrap();
+        sqlx::query("INSERT INTO characters (id, name, created_at, updated_at) VALUES ('c1', 'Keep', 0, 0)")
+            .execute(&pool)
+            .await
+            .unwrap();
         // 최신이면 사본 없음
         assert!(backup_before_migrations(&pool, &base).await.unwrap().is_none());
 
         // 마지막 마이그레이션이 안 된 상태로 되돌려 "업데이트한 앱"을 흉내
         let latest = latest_schema_version();
-        sqlx::query("DELETE FROM _sqlx_migrations WHERE version = ?").bind(latest).execute(&pool).await.unwrap();
+        sqlx::query("DELETE FROM _sqlx_migrations WHERE version = ?")
+            .bind(latest)
+            .execute(&pool)
+            .await
+            .unwrap();
         let copy = backup_before_migrations(&pool, &base).await.unwrap().expect("사본");
-        assert!(copy.file_name().unwrap().to_string_lossy().ends_with(&format!("-v{}.db", schema_migrations().iter().map(|(v, _)| *v).filter(|v| *v < latest).max().unwrap())));
-        let snap = SqlitePoolOptions::new().connect_with(SqliteConnectOptions::new().filename(&copy).read_only(true)).await.unwrap();
-        let name: String = sqlx::query_scalar("SELECT name FROM characters WHERE id = 'c1'").fetch_one(&snap).await.unwrap();
+        assert!(copy.file_name().unwrap().to_string_lossy().ends_with(&format!(
+            "-v{}.db",
+            schema_migrations().iter().map(|(v, _)| *v).filter(|v| *v < latest).max().unwrap()
+        )));
+        let snap = SqlitePoolOptions::new()
+            .connect_with(SqliteConnectOptions::new().filename(&copy).read_only(true))
+            .await
+            .unwrap();
+        let name: String = sqlx::query_scalar("SELECT name FROM characters WHERE id = 'c1'")
+            .fetch_one(&snap)
+            .await
+            .unwrap();
         assert_eq!(name, "Keep");
         snap.close().await;
 

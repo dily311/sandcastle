@@ -42,11 +42,7 @@ pub async fn get_prompt_preset(state: State<'_, AppState>, id: String) -> Result
 /// 프리셋과 블록을 한 번에 저장. `blocks` 순서가 실행 순서가 되고, 목록에 없는 기존 블록은 지워진다.
 #[tauri::command]
 #[specta::specta]
-pub async fn save_prompt_preset(
-    state: State<'_, AppState>,
-    preset: PromptPresetsInput,
-    blocks: Vec<PromptBlocksInput>,
-) -> Result<PromptPresetDetail> {
+pub async fn save_prompt_preset(state: State<'_, AppState>, preset: PromptPresetsInput, blocks: Vec<PromptBlocksInput>) -> Result<PromptPresetDetail> {
     if preset.name.trim().is_empty() {
         return Err(AppError::validation("프리셋 이름이 비어 있습니다", None));
     }

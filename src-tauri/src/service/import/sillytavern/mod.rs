@@ -27,9 +27,7 @@ use crate::{
     db::{self, conn::DbPool},
     error::{AppError, Result},
     models::{
-        conversation::{
-            Character, Conversation, ConversationInput, MessageInput, WorldInfoBook, WorldInfoBookInput,
-        },
+        conversation::{Character, Conversation, ConversationInput, MessageInput, WorldInfoBook, WorldInfoBookInput},
         regex::{RegexScope, RegexScript, RegexScriptInput},
     },
     service::chat::regex_processor::validate_script,
@@ -80,7 +78,11 @@ pub enum SillyTavernImport {
     #[serde(rename_all = "camelCase")]
     Regex { scripts: Vec<RegexScript>, warnings: Vec<String> },
     #[serde(rename_all = "camelCase")]
-    WorldInfo { book: WorldInfoBook, entry_count: usize, warnings: Vec<String> },
+    WorldInfo {
+        book: WorldInfoBook,
+        entry_count: usize,
+        warnings: Vec<String>,
+    },
     #[serde(rename_all = "camelCase")]
     Chat {
         conversation: Conversation,
@@ -99,8 +101,7 @@ pub fn detect(bytes: &[u8]) -> Result<(SillyTavernKind, Value)> {
     if chat::looks_like_chat(bytes) {
         return Ok((SillyTavernKind::Chat, Value::Null));
     }
-    let json: Value = serde_json::from_slice(bytes)
-        .map_err(|e| AppError::validation(format!("JSON 파일을 읽을 수 없습니다: {e}"), None))?;
+    let json: Value = serde_json::from_slice(bytes).map_err(|e| AppError::validation(format!("JSON 파일을 읽을 수 없습니다: {e}"), None))?;
     let has = |k: &str| json.get(k).is_some();
     let kind = if as_str(&json, "spec").is_some_and(|s| s.starts_with("chara_card"))
         || (has("name") && (has("first_mes") || has("mes_example") || has("personality")))
@@ -122,12 +123,7 @@ pub fn detect(bytes: &[u8]) -> Result<(SillyTavernKind, Value)> {
 }
 
 /// 파일을 읽어 가져온다. `name`은 프리셋/로어북 이름 (없으면 파일 이름)
-pub async fn import_file(
-    db: &DbPool,
-    app_data_dir: &Path,
-    path: &Path,
-    name: Option<String>,
-) -> Result<SillyTavernImport> {
+pub async fn import_file(db: &DbPool, app_data_dir: &Path, path: &Path, name: Option<String>) -> Result<SillyTavernImport> {
     import_file_with(db, app_data_dir, path, ImportOptions { name, ..Default::default() }).await
 }
 
@@ -140,12 +136,7 @@ pub fn detect_file(path: &Path) -> Result<SillyTavernKind> {
     Ok(detect(&std::fs::read(path)?)?.0)
 }
 
-pub async fn import_file_with(
-    db: &DbPool,
-    app_data_dir: &Path,
-    path: &Path,
-    options: ImportOptions,
-) -> Result<SillyTavernImport> {
+pub async fn import_file_with(db: &DbPool, app_data_dir: &Path, path: &Path, options: ImportOptions) -> Result<SillyTavernImport> {
     let name = options.name;
     let meta = std::fs::metadata(path).map_err(|e| AppError::io(format!("파일을 열 수 없습니다: {e}")))?;
     if meta.len() > MAX_FILE_BYTES {
@@ -170,12 +161,7 @@ pub async fn import_file_with(
     }
 }
 
-async fn import_chat(
-    db: &DbPool,
-    bytes: &[u8],
-    title: &str,
-    character_id: Option<String>,
-) -> Result<SillyTavernImport> {
+async fn import_chat(db: &DbPool, bytes: &[u8], title: &str, character_id: Option<String>) -> Result<SillyTavernImport> {
     let (header, raw) = chat::parse_jsonl(bytes)?;
     if raw.is_empty() {
         return Err(AppError::validation("채팅에 메시지가 없습니다", None));
@@ -236,9 +222,7 @@ async fn import_chat(
     let persona_id = if persona_ids.len() == 1 {
         persona_ids[0].clone()
     } else {
-        db::conversation::get_system_default_persona(db)
-            .await
-            .unwrap_or_else(|_| "default".into())
+        db::conversation::get_system_default_persona(db).await.unwrap_or_else(|_| "default".into())
     };
 
     if as_str(&header["chat_metadata"], "note_prompt").is_some_and(|s| !s.trim().is_empty()) {
@@ -300,15 +284,15 @@ async fn import_chat(
     tx.commit().await?;
 
     let conversation = db::conversation::get_conversation(db, &conversation.id).await?;
-    Ok(SillyTavernImport::Chat { conversation, message_count, hidden_count, warnings })
+    Ok(SillyTavernImport::Chat {
+        conversation,
+        message_count,
+        hidden_count,
+        warnings,
+    })
 }
 
-async fn import_character(
-    db: &DbPool,
-    app_data_dir: &Path,
-    card_json: &Value,
-    avatar_png: Option<&[u8]>,
-) -> Result<SillyTavernImport> {
+async fn import_character(db: &DbPool, app_data_dir: &Path, card_json: &Value, avatar_png: Option<&[u8]>) -> Result<SillyTavernImport> {
     let mut imported = card::map_card(card_json)?;
 
     // 아바타는 DB 저장 전에 파일로 (실패하면 경고만)
@@ -437,11 +421,7 @@ async fn import_worldinfo(db: &DbPool, json: &Value, name: &str) -> Result<Silly
 }
 
 /// 정규식 저장. 패턴이 우리 엔진에서 컴파일되지 않으면 그 스크립트만 건너뛰고 경고.
-async fn save_regex(
-    tx: &mut sqlx::Transaction<'_, sqlx::Sqlite>,
-    scripts: Vec<RegexScriptInput>,
-    warnings: &mut Vec<String>,
-) -> Result<Vec<String>> {
+async fn save_regex(tx: &mut sqlx::Transaction<'_, sqlx::Sqlite>, scripts: Vec<RegexScriptInput>, warnings: &mut Vec<String>) -> Result<Vec<String>> {
     let mut ids = vec![];
     for s in scripts {
         if let Err(e) = validate_script(&s.to_script(String::new(), 0)) {

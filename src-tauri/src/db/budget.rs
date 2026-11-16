@@ -24,9 +24,16 @@ pub struct BudgetLimit {
 impl BudgetLimit {
     /// 모든 칸이 비었는지 (= 한도 없음, 행을 지워도 됨)
     pub fn is_empty(&self) -> bool {
-        [self.daily_tokens, self.monthly_tokens, self.daily_characters, self.monthly_characters, self.daily_images, self.monthly_images]
-            .iter()
-            .all(Option::is_none)
+        [
+            self.daily_tokens,
+            self.monthly_tokens,
+            self.daily_characters,
+            self.monthly_characters,
+            self.daily_images,
+            self.monthly_images,
+        ]
+        .iter()
+        .all(Option::is_none)
     }
 }
 
@@ -87,7 +94,10 @@ pub async fn delete_budget_limit<'e, E>(executor: E, api_profile_id: &str) -> Re
 where
     E: Executor<'e, Database = Sqlite>,
 {
-    sqlx::query("DELETE FROM budget_limits WHERE api_profile_id = ?").bind(api_profile_id).execute(executor).await?;
+    sqlx::query("DELETE FROM budget_limits WHERE api_profile_id = ?")
+        .bind(api_profile_id)
+        .execute(executor)
+        .await?;
     Ok(())
 }
 
@@ -168,7 +178,9 @@ pub fn period_starts<Tz: TimeZone>(now: &DateTime<Tz>) -> (i64, i64) {
     let start = |d: chrono::NaiveDate| {
         let naive = d.and_time(NaiveTime::MIN);
         // 서머타임으로 0시가 없는 날은 가장 이른 시각
-        tz.from_local_datetime(&naive).earliest().map_or_else(|| naive.and_utc().timestamp_millis(), |t| t.timestamp_millis())
+        tz.from_local_datetime(&naive)
+            .earliest()
+            .map_or_else(|| naive.and_utc().timestamp_millis(), |t| t.timestamp_millis())
     };
     let today = now.date_naive();
     let month_first = today.with_day(1).unwrap_or(today);
@@ -192,7 +204,11 @@ where
     .bind(since)
     .fetch_one(executor)
     .await?;
-    Ok(PeriodUsage { tokens: row.0, characters: row.1, images: row.2 })
+    Ok(PeriodUsage {
+        tokens: row.0,
+        characters: row.1,
+        images: row.2,
+    })
 }
 
 /// 한도와 두 기간의 사용량으로 칸 목록을 만든다 (순수 함수)
@@ -209,7 +225,13 @@ pub fn meters(limit: &BudgetLimit, day: PeriodUsage, month: PeriodUsage) -> Vec<
         .into_iter()
         .filter_map(|(metric, period, limit, used)| {
             let limit = limit.filter(|n| *n > 0)?;
-            Some(BudgetMeter { metric, period, used, limit, remaining: (limit - used).max(0) })
+            Some(BudgetMeter {
+                metric,
+                period,
+                used,
+                limit,
+                remaining: (limit - used).max(0),
+            })
         })
         .collect()
 }
@@ -217,11 +239,17 @@ pub fn meters(limit: &BudgetLimit, day: PeriodUsage, month: PeriodUsage) -> Vec<
 /// 이 프로필의 지금 상태 (한도가 없으면 meters가 빈 목록)
 pub async fn budget_status<Tz: TimeZone>(pool: &sqlx::SqlitePool, api_profile_id: &str, now: &DateTime<Tz>) -> Result<BudgetStatus, sqlx::Error> {
     let Some(limit) = get_budget_limit(pool, api_profile_id).await?.filter(|l| !l.is_empty()) else {
-        return Ok(BudgetStatus { api_profile_id: api_profile_id.to_string(), meters: vec![] });
+        return Ok(BudgetStatus {
+            api_profile_id: api_profile_id.to_string(),
+            meters: vec![],
+        });
     };
     let (day_start, month_start) = period_starts(now);
     let (day, month) = futures::try_join!(usage_since(pool, api_profile_id, day_start), usage_since(pool, api_profile_id, month_start))?;
-    Ok(BudgetStatus { api_profile_id: api_profile_id.to_string(), meters: meters(&limit, day, month) })
+    Ok(BudgetStatus {
+        api_profile_id: api_profile_id.to_string(),
+        meters: meters(&limit, day, month),
+    })
 }
 
 /// 지금 시각(현지) 기준 상태
@@ -236,7 +264,11 @@ mod tests {
     use chrono::FixedOffset;
 
     async fn pool() -> sqlx::SqlitePool {
-        let pool = sqlx::sqlite::SqlitePoolOptions::new().max_connections(1).connect("sqlite::memory:").await.unwrap();
+        let pool = sqlx::sqlite::SqlitePoolOptions::new()
+            .max_connections(1)
+            .connect("sqlite::memory:")
+            .await
+            .unwrap();
         sqlx::migrate!("src/db/migrations").run(&pool).await.unwrap();
         sqlx::query("INSERT INTO api_profiles (id, name, provider, format_type, base_url, model, created_at, updated_at) VALUES ('p1', 'P', 'openai', 'openai', '', 'm', 0, 0)")
             .execute(&pool)
@@ -249,7 +281,11 @@ mod tests {
         let mut e = UsageEntry::new(kind, "p1", "m");
         (e.input_tokens, e.output_tokens, e.characters, e.images) = (tokens, 0, chars, images);
         record(db, e).await;
-        sqlx::query("UPDATE usage_log SET created_at = ? WHERE id = (SELECT MAX(id) FROM usage_log)").bind(at).execute(db).await.unwrap();
+        sqlx::query("UPDATE usage_log SET created_at = ? WHERE id = (SELECT MAX(id) FROM usage_log)")
+            .bind(at)
+            .execute(db)
+            .await
+            .unwrap();
     }
 
     fn kst(y: i32, m: u32, d: u32, h: u32) -> DateTime<FixedOffset> {
@@ -266,8 +302,20 @@ mod tests {
 
     #[test]
     fn meters_skip_empty_and_non_positive_limits() {
-        let limit = BudgetLimit { api_profile_id: "p1".into(), daily_tokens: Some(100), monthly_images: Some(0), ..Default::default() };
-        let m = meters(&limit, PeriodUsage { tokens: 130, ..Default::default() }, PeriodUsage::default());
+        let limit = BudgetLimit {
+            api_profile_id: "p1".into(),
+            daily_tokens: Some(100),
+            monthly_images: Some(0),
+            ..Default::default()
+        };
+        let m = meters(
+            &limit,
+            PeriodUsage {
+                tokens: 130,
+                ..Default::default()
+            },
+            PeriodUsage::default(),
+        );
         assert_eq!(m.len(), 1);
         assert_eq!((m[0].used, m[0].limit, m[0].remaining, m[0].exceeded()), (130, 100, 0, true));
     }
@@ -284,9 +332,18 @@ mod tests {
         // 한도 없음 → 칸 없음
         assert!(budget_status(&db, "p1", &now).await.unwrap().meters.is_empty());
 
-        upsert_budget_limit(&db, &BudgetLimit { api_profile_id: "p1".into(), daily_tokens: Some(100), monthly_tokens: Some(300), daily_images: Some(5), ..Default::default() })
-            .await
-            .unwrap();
+        upsert_budget_limit(
+            &db,
+            &BudgetLimit {
+                api_profile_id: "p1".into(),
+                daily_tokens: Some(100),
+                monthly_tokens: Some(300),
+                daily_images: Some(5),
+                ..Default::default()
+            },
+        )
+        .await
+        .unwrap();
         let s = budget_status(&db, "p1", &now).await.unwrap();
         let get = |metric, period| s.meters.iter().find(|m| m.metric == metric && m.period == period).unwrap().clone();
         assert_eq!(get(BudgetMetric::Tokens, BudgetPeriod::Day).used, 50);
@@ -302,7 +359,11 @@ mod tests {
     #[tokio::test]
     async fn crud_and_cascade_on_profile_delete() {
         let db = pool().await;
-        let l = BudgetLimit { api_profile_id: "p1".into(), monthly_characters: Some(5000), ..Default::default() };
+        let l = BudgetLimit {
+            api_profile_id: "p1".into(),
+            monthly_characters: Some(5000),
+            ..Default::default()
+        };
         upsert_budget_limit(&db, &l).await.unwrap();
         assert_eq!(get_budget_limit(&db, "p1").await.unwrap(), Some(l));
         assert_eq!(get_all_budget_limits(&db).await.unwrap().len(), 1);

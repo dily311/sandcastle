@@ -40,17 +40,41 @@ pub struct AssetRef {
 #[serde(tag = "type", rename_all = "camelCase", rename_all_fields = "camelCase")]
 pub enum Cue {
     /// asset이 None이면 정지
-    Bgm { mood: String, asset: Option<AssetRef> },
-    Sfx { tag: String, asset: AssetRef },
-    Voice { asset: AssetRef },
-    Cg { asset: AssetRef },
+    Bgm {
+        mood: String,
+        asset: Option<AssetRef>,
+    },
+    Sfx {
+        tag: String,
+        asset: AssetRef,
+    },
+    Voice {
+        asset: AssetRef,
+    },
+    Cg {
+        asset: AssetRef,
+    },
     CgOff,
-    Standing { character_id: String, emotion: String, asset: AssetRef },
-    StandingOff { character_id: String },
-    Motion { character_id: String, name: String },
-    Effect { name: String, param: Option<String> },
+    Standing {
+        character_id: String,
+        emotion: String,
+        asset: AssetRef,
+    },
+    StandingOff {
+        character_id: String,
+    },
+    Motion {
+        character_id: String,
+        name: String,
+    },
+    Effect {
+        name: String,
+        param: Option<String>,
+    },
     /// 텍스트 태그가 아니라 엔진이 위치/시간/날씨가 바뀔 때 자동으로 낸다.
-    Background { asset: AssetRef },
+    Background {
+        asset: AssetRef,
+    },
     /// 지금 위치/시간/날씨에 맞는 배경이 하나도 없을 때 이전 배경을 내린다.
     BackgroundOff,
 }
@@ -108,12 +132,38 @@ pub struct Allowed {
 
 impl Allowed {
     pub fn author() -> Self {
-        Self { bgm: true, sfx: true, cg: true, voice: true, effects: true, emotion: true, motion: true, player_lines: true, speakers: None, max_cues: usize::MAX, max_bgm: usize::MAX, max_cg: usize::MAX }
+        Self {
+            bgm: true,
+            sfx: true,
+            cg: true,
+            voice: true,
+            effects: true,
+            emotion: true,
+            motion: true,
+            player_lines: true,
+            speakers: None,
+            max_cues: usize::MAX,
+            max_bgm: usize::MAX,
+            max_cg: usize::MAX,
+        }
     }
 
     /// AI 응답: 음성은 못 쓰고(미래의 음성 생성 연결을 위해 비워둔다), 플레이어 대사도 못 쓰며, 화자는 정해진 캐릭터만.
     pub fn ai(speakers: HashSet<String>) -> Self {
-        Self { bgm: true, sfx: true, cg: true, voice: false, effects: true, emotion: true, motion: true, player_lines: false, speakers: Some(speakers), max_cues: 6, max_bgm: 1, max_cg: 1 }
+        Self {
+            bgm: true,
+            sfx: true,
+            cg: true,
+            voice: false,
+            effects: true,
+            emotion: true,
+            motion: true,
+            player_lines: false,
+            speakers: Some(speakers),
+            max_cues: 6,
+            max_bgm: 1,
+            max_cg: 1,
+        }
     }
 
     fn speaker_ok(&self, id: &str) -> bool {
@@ -163,7 +213,11 @@ fn extract_cues(line: &str) -> (String, Vec<RawCue>) {
                 let after_close = &body[cpos + close.len()..];
                 match after_close.find('>') {
                     Some(cgt) => {
-                        cues.push(RawCue { name: name.to_string(), target, value: body[..cpos].trim().to_string() });
+                        cues.push(RawCue {
+                            name: name.to_string(),
+                            target,
+                            value: body[..cpos].trim().to_string(),
+                        });
                         rest = &after_close[cgt + 1..];
                     }
                     None => {
@@ -217,7 +271,10 @@ fn resolve_cue(rc: &RawCue, r: &mut dyn StageResolver, allow: &Allowed, b: &mut 
     let cue = match rc.name.as_str() {
         "bgm" if allow.bgm && b.bgm < allow.max_bgm => {
             if v.eq_ignore_ascii_case("stop") {
-                Cue::Bgm { mood: "stop".into(), asset: None }
+                Cue::Bgm {
+                    mood: "stop".into(),
+                    asset: None,
+                }
             } else {
                 let mood = v.to_ascii_lowercase();
                 if !BGM_MOODS.contains(&mood.as_str()) {
@@ -227,7 +284,10 @@ fn resolve_cue(rc: &RawCue, r: &mut dyn StageResolver, allow: &Allowed, b: &mut 
                 Cue::Bgm { mood, asset: Some(asset) }
             }
         }
-        "sfx" if allow.sfx => Cue::Sfx { tag: v.to_string(), asset: r.sfx(v)? },
+        "sfx" if allow.sfx => Cue::Sfx {
+            tag: v.to_string(),
+            asset: r.sfx(v)?,
+        },
         "cg" if allow.cg && b.cg < allow.max_cg => {
             if v.eq_ignore_ascii_case("off") {
                 Cue::CgOff
@@ -256,7 +316,11 @@ fn resolve_cue(rc: &RawCue, r: &mut dyn StageResolver, allow: &Allowed, b: &mut 
                 Cue::StandingOff { character_id: id }
             } else {
                 let asset = r.standing(&id, v)?;
-                Cue::Standing { character_id: id, emotion: v.to_string(), asset }
+                Cue::Standing {
+                    character_id: id,
+                    emotion: v.to_string(),
+                    asset,
+                }
             }
         }
         "motion" if allow.motion => {
@@ -301,7 +365,12 @@ pub fn parse(raw: &str, r: &mut dyn StageResolver, allow: &Allowed) -> Vec<Stage
                 }
             }
             let all = std::mem::take(&mut pending);
-            lines.push(StageLine { kind: LineKind::Narration, speaker: None, text: block.join("\n"), cues: all });
+            lines.push(StageLine {
+                kind: LineKind::Narration,
+                speaker: None,
+                text: block.join("\n"),
+                cues: all,
+            });
             continue;
         }
         let (text, raw_cues) = extract_cues(line);
@@ -336,10 +405,20 @@ pub fn parse(raw: &str, r: &mut dyn StageResolver, allow: &Allowed) -> Vec<Stage
         }
         let mut all = std::mem::take(&mut pending);
         all.extend(cues);
-        lines.push(StageLine { kind, speaker, text: body, cues: all });
+        lines.push(StageLine {
+            kind,
+            speaker,
+            text: body,
+            cues: all,
+        });
     }
     if !pending.is_empty() {
-        lines.push(StageLine { kind: LineKind::Direction, speaker: None, text: String::new(), cues: pending });
+        lines.push(StageLine {
+            kind: LineKind::Direction,
+            speaker: None,
+            text: String::new(),
+            cues: pending,
+        });
     }
     lines
 }
@@ -455,7 +534,12 @@ mod tests {
 
     struct Mock;
     fn a(key: &str) -> AssetRef {
-        AssetRef { id: format!("id-{key}"), key: key.to_string(), path: format!("assets/{key}.x"), settings: serde_json::Value::Null }
+        AssetRef {
+            id: format!("id-{key}"),
+            key: key.to_string(),
+            path: format!("assets/{key}.x"),
+            settings: serde_json::Value::Null,
+        }
     }
     impl StageResolver for Mock {
         fn character_by_name(&self, name: &str) -> Option<String> {
@@ -502,11 +586,14 @@ mod tests {
 끝";
         let lines = parse(raw, &mut r, &Allowed::author());
         assert_eq!(lines.len(), 3);
-        assert_eq!(lines[1].text, "```html
+        assert_eq!(
+            lines[1].text,
+            "```html
 <div class=\"card\">
   <b>안녕</b>
 </div>
-```");
+```"
+        );
         assert!(lines[1].cues.is_empty());
         assert_eq!(lines[2].text, "끝");
     }
@@ -575,7 +662,11 @@ mod tests {
 
     #[test]
     fn stage_state_follows_cues_and_spec_becomes_a_direction_line() {
-        let lines = parse(&spec_to_script(&serde_json::json!({ "bgm": "romance", "cg": "festival", "emotion": { "유나": "happy" }, "effects": ["shake"] })), &mut Mock, &Allowed::author());
+        let lines = parse(
+            &spec_to_script(&serde_json::json!({ "bgm": "romance", "cg": "festival", "emotion": { "유나": "happy" }, "effects": ["shake"] })),
+            &mut Mock,
+            &Allowed::author(),
+        );
         assert_eq!(lines.len(), 1);
         assert_eq!(lines[0].kind, LineKind::Direction);
         let mut stage = serde_json::json!({});

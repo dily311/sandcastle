@@ -7,11 +7,7 @@ use crate::{
 };
 
 async fn pool() -> sqlx::SqlitePool {
-    let pool = SqlitePoolOptions::new()
-        .max_connections(1)
-        .connect("sqlite::memory:")
-        .await
-        .unwrap();
+    let pool = SqlitePoolOptions::new().max_connections(1).connect("sqlite::memory:").await.unwrap();
     sqlx::query("PRAGMA foreign_keys = ON").execute(&pool).await.unwrap();
     sqlx::migrate!("src/db/migrations").run(&pool).await.unwrap();
     sqlx::query("INSERT INTO characters (id, name, created_at, updated_at) VALUES ('c1', 'Aria', 0, 0)")
@@ -94,12 +90,20 @@ async fn conversation_world_info_comes_from_conversation_character_and_persona()
     let pool = pool().await;
     let mut books = vec![];
     for name in ["conv", "char", "persona", "unrelated"] {
-        let b = conv::create_worldinfo_book(&pool, WorldInfoBookInput { id: None, name: name.into(), description: None })
-            .await
-            .unwrap();
+        let b = conv::create_worldinfo_book(
+            &pool,
+            WorldInfoBookInput {
+                id: None,
+                name: name.into(),
+                description: None,
+            },
+        )
+        .await
+        .unwrap();
         conv::upsert_worldinfo_entry(
             &pool,
-            WorldInfoEntryInput { comment: String::new(),
+            WorldInfoEntryInput {
+                comment: String::new(),
                 id: None,
                 book_id: b.id.clone(),
                 keys: vec![],

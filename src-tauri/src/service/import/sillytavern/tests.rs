@@ -10,11 +10,7 @@ use crate::{
 };
 
 async fn pool() -> DbPool {
-    let pool = SqlitePoolOptions::new()
-        .max_connections(1)
-        .connect("sqlite::memory:")
-        .await
-        .unwrap();
+    let pool = SqlitePoolOptions::new().max_connections(1).connect("sqlite::memory:").await.unwrap();
     sqlx::query("PRAGMA foreign_keys = ON").execute(&pool).await.unwrap();
     sqlx::migrate!("src/db/migrations").run(&pool).await.unwrap();
     pool
@@ -33,8 +29,12 @@ async fn imports_png_card_with_book_regex_and_avatar() {
     let encoded = BASE64_STANDARD.encode(card::tests::v2_card().to_string());
     let path = write(dir.path(), "aria.png", &card::tests::png_with_text("chara", &encoded));
 
-    let SillyTavernImport::Character { character, world_info_book_id, regex_count, warnings } =
-        import_file(&db, dir.path(), &path, None).await.unwrap()
+    let SillyTavernImport::Character {
+        character,
+        world_info_book_id,
+        regex_count,
+        warnings,
+    } = import_file(&db, dir.path(), &path, None).await.unwrap()
     else {
         panic!("캐릭터여야 함")
     };
@@ -79,8 +79,13 @@ async fn imported_preset_drives_prompt_assembly() {
     });
     let path = write(dir.path(), "My Preset.json", preset_json.to_string().as_bytes());
 
-    let SillyTavernImport::Preset { preset_id, name, block_count, regex_count, warnings } =
-        import_file(&db, dir.path(), &path, None).await.unwrap()
+    let SillyTavernImport::Preset {
+        preset_id,
+        name,
+        block_count,
+        regex_count,
+        warnings,
+    } = import_file(&db, dir.path(), &path, None).await.unwrap()
     else {
         panic!("프리셋이어야 함")
     };
@@ -91,7 +96,8 @@ async fn imported_preset_drives_prompt_assembly() {
 
     let loaded = PromptManager::load_preset(&db, Some(&preset_id)).await.unwrap().unwrap();
     let request = |gen| PromptRequest {
-        context: ChatContext { user_images: vec![],
+        context: ChatContext {
+            user_images: vec![],
             char_name: Some("Aria".into()),
             ..Default::default()
         },
@@ -144,9 +150,7 @@ async fn imports_standalone_regex_and_world_info() {
             .to_string()
             .as_bytes(),
     );
-    let SillyTavernImport::WorldInfo { book, entry_count, .. } =
-        import_file(&db, dir.path(), &path, Some("달".into())).await.unwrap()
-    else {
+    let SillyTavernImport::WorldInfo { book, entry_count, .. } = import_file(&db, dir.path(), &path, Some("달".into())).await.unwrap() else {
         panic!("월드인포여야 함")
     };
     assert_eq!(book.name, "달");
@@ -162,8 +166,12 @@ fn detect_kinds() {
     assert_eq!(kind(json!({ "findRegex": "/a/" })).unwrap(), SillyTavernKind::Regex);
     assert_eq!(kind(json!({ "entries": {} })).unwrap(), SillyTavernKind::WorldInfo);
     assert_eq!(
-        detect(b"{\"user_name\":\"u\",\"character_name\":\"c\",\"chat_metadata\":{}}
-{\"mes\":\"x\"}").unwrap().0,
+        detect(
+            b"{\"user_name\":\"u\",\"character_name\":\"c\",\"chat_metadata\":{}}
+{\"mes\":\"x\"}"
+        )
+        .unwrap()
+        .0,
         SillyTavernKind::Chat
     );
     assert!(kind(json!({ "hello": 1 })).is_err());
@@ -179,8 +187,12 @@ fn st_sample(rel: &str) -> std::path::PathBuf {
 }
 
 async fn import_seraphina(db: &DbPool, dir: &Path) -> (Character, String) {
-    let SillyTavernImport::Character { character, world_info_book_id, regex_count, warnings } =
-        import_file(db, dir, &st_sample("character/default_Seraphina.png"), None).await.unwrap()
+    let SillyTavernImport::Character {
+        character,
+        world_info_book_id,
+        regex_count,
+        warnings,
+    } = import_file(db, dir, &st_sample("character/default_Seraphina.png"), None).await.unwrap()
     else {
         panic!("캐릭터여야 함")
     };
@@ -203,18 +215,20 @@ async fn st_seraphina_card() {
     let entries = db::conversation::get_all_worldinfo_entries(&db, &book_id).await.unwrap();
     assert_eq!(entries.len(), 4);
     assert!(entries.iter().all(|e| e.enabled && !e.keys.is_empty()));
-    assert_eq!(
-        db::conversation::get_character_world_info_ids(&db, &character.id).await.unwrap(),
-        vec![book_id]
-    );
+    assert_eq!(db::conversation::get_character_world_info_ids(&db, &character.id).await.unwrap(), vec![book_id]);
 }
 
 #[tokio::test]
 async fn st_default_preset() {
     let db = pool().await;
     let dir = tempfile::tempdir().unwrap();
-    let SillyTavernImport::Preset { preset_id, name, block_count, warnings, .. } =
-        import_file(&db, dir.path(), &st_sample("presets/Default.json"), None).await.unwrap()
+    let SillyTavernImport::Preset {
+        preset_id,
+        name,
+        block_count,
+        warnings,
+        ..
+    } = import_file(&db, dir.path(), &st_sample("presets/Default.json"), None).await.unwrap()
     else {
         panic!("프리셋이어야 함")
     };
@@ -237,22 +251,22 @@ async fn st_seraphina_prompt_matches_sillytavern_order() {
     let db = pool().await;
     let dir = tempfile::tempdir().unwrap();
     let (character, book_id) = import_seraphina(&db, dir.path()).await;
-    let SillyTavernImport::Preset { preset_id, .. } =
-        import_file(&db, dir.path(), &st_sample("presets/Default.json"), None).await.unwrap()
-    else {
+    let SillyTavernImport::Preset { preset_id, .. } = import_file(&db, dir.path(), &st_sample("presets/Default.json"), None).await.unwrap() else {
         panic!()
     };
     let preset = PromptManager::load_preset(&db, Some(&preset_id)).await.unwrap().unwrap();
     let p = PromptManager
         .build(
             PromptRequest {
-                context: ChatContext { user_images: vec![],
+                context: ChatContext {
+                    user_images: vec![],
                     char_name: Some(character.name.clone()),
                     user_name: Some("Min".into()),
                     character_info: Some(character.description.clone()),
                     persona_info: "A lost traveler.".into(),
                     world_info: db::conversation::get_all_worldinfo_entries(&db, &book_id).await.unwrap(),
-                    history: vec![crate::models::ai_service::HistoryItem { images: vec![],
+                    history: vec![crate::models::ai_service::HistoryItem {
+                        images: vec![],
                         role: "assistant".into(),
                         content: character.first_message.clone().unwrap(),
                     }],
@@ -337,8 +351,12 @@ async fn st_chat_attaches_to_character_by_name() {
     let dir = tempfile::tempdir().unwrap();
     let (character, _) = import_seraphina(&db, dir.path()).await;
 
-    let SillyTavernImport::Chat { conversation, message_count, hidden_count, warnings } =
-        import_file(&db, dir.path(), &st_chat_sample(), None).await.unwrap()
+    let SillyTavernImport::Chat {
+        conversation,
+        message_count,
+        hidden_count,
+        warnings,
+    } = import_file(&db, dir.path(), &st_chat_sample(), None).await.unwrap()
     else {
         panic!("채팅이어야 함")
     };
@@ -351,7 +369,11 @@ async fn st_chat_attaches_to_character_by_name() {
     assert_eq!(conversation.meta.as_ref().unwrap()["importedFrom"], "sillytavern");
 
     let msgs = db::conversation::get_messages(&db, &conversation.id, 100, None).await.unwrap();
-    assert_eq!(msgs.iter().map(|m| m.seq).collect::<Vec<_>>(), (1..=12).collect::<Vec<_>>(), "시간 순서 = 원래 순서");
+    assert_eq!(
+        msgs.iter().map(|m| m.seq).collect::<Vec<_>>(),
+        (1..=12).collect::<Vec<_>>(),
+        "시간 순서 = 원래 순서"
+    );
     assert_eq!(msgs[0].content, "mes content <cg>amusement</cg>");
     assert_eq!(msgs[0].character_id.as_deref(), Some(character.id.as_str()));
     let meta0 = msgs[0].meta.as_ref().unwrap();
@@ -396,7 +418,11 @@ async fn st_chat_needs_a_character() {
         &db,
         dir.path(),
         &st_chat_sample(),
-        ImportOptions { name: Some("가져온 대화".into()), character_id: Some("other".into()), ..Default::default() },
+        ImportOptions {
+            name: Some("가져온 대화".into()),
+            character_id: Some("other".into()),
+            ..Default::default()
+        },
     )
     .await
     .unwrap() else {

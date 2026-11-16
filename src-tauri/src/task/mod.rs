@@ -40,13 +40,12 @@ mod task_repository;
 mod task_runner;
 mod task_state;
 
-pub use task_context::{current as current_task, CurrentTask};
 #[cfg(test)]
 pub(crate) use task_context::scope as task_context_scope_for_test;
+pub use task_context::{current as current_task, CurrentTask};
 pub use task_event::{NoopEventSink, TaskEventEmitter, TaskEventSink, TASK_EVENT};
 pub use task_manager::{TaskHandle, TaskManager, TaskResult};
 pub use task_models::{
-    AttemptInfo, CancelReason, CreateTaskRequest, RunBy, TaskError, TaskErrorInfo, TaskEvent, TaskInfo,
-    TaskOutput, TaskOwner, TaskStatus, TaskType,
+    AttemptInfo, CancelReason, CreateTaskRequest, RunBy, TaskError, TaskErrorInfo, TaskEvent, TaskInfo, TaskOutput, TaskOwner, TaskStatus, TaskType,
 };
 pub use task_runner::{TaskContext, TaskExecutor, TaskReporter};

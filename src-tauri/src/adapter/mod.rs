@@ -31,11 +31,7 @@ pub struct ProviderCall<'a> {
 
 impl ProviderCall<'_> {
     pub fn url(&self, path: &str) -> String {
-        format!(
-            "{}/{}",
-            self.profile.base_url.trim_end_matches('/'),
-            path.trim_start_matches('/')
-        )
+        format!("{}/{}", self.profile.base_url.trim_end_matches('/'), path.trim_start_matches('/'))
     }
 }
 
@@ -66,12 +62,7 @@ pub trait AiProvider: Send + Sync {
     /// 텍스트 생성.
     /// `prompt.chat_options.stream`이 true면 스트리밍으로 받으며 조각마다 `on_delta`를 부른다.
     /// false면 `on_delta`를 부르지 않고 전체 응답만 돌려준다.
-    async fn generate(
-        &self,
-        call: &ProviderCall<'_>,
-        prompt: &PromptMessage,
-        on_delta: &mut OnDelta<'_>,
-    ) -> Result<Generation>;
+    async fn generate(&self, call: &ProviderCall<'_>, prompt: &PromptMessage, on_delta: &mut OnDelta<'_>) -> Result<Generation>;
 }
 
 /// api_profiles.format_type → 어댑터
@@ -86,10 +77,7 @@ pub fn provider_for(format_type: &str) -> Result<&'static dyn AiProvider> {
         "claude" | "anthropic" => Ok(&CLAUDE),
         "gemini" => Ok(&GEMINI),
         "vertexai" | "vertex" => Ok(&VERTEX),
-        other => Err(AppError::validation(
-            format!("지원하지 않는 API 형식입니다: {other}"),
-            None,
-        )),
+        other => Err(AppError::validation(format!("지원하지 않는 API 형식입니다: {other}"), None)),
     }
 }
 
@@ -175,11 +163,7 @@ pub(crate) fn split_system(prompt: &PromptMessage) -> (Option<String>, Vec<Turn>
         );
     }
 
-    let system = if system_parts.is_empty() {
-        None
-    } else {
-        Some(system_parts.join("\n\n"))
-    };
+    let system = if system_parts.is_empty() { None } else { Some(system_parts.join("\n\n")) };
     (system, turns)
 }
 
@@ -192,11 +176,7 @@ pub(crate) fn net_err(e: reqwest::Error) -> AppError {
     if e.is_timeout() {
         AppError::ai_provider(ErrorCode::AiProviderTimeout, "AI 서버 응답 시간이 초과되었습니다", true)
     } else if e.is_connect() {
-        AppError::ai_provider(
-            ErrorCode::AiProviderConnectionFailed,
-            format!("AI 서버에 연결할 수 없습니다: {e}"),
-            true,
-        )
+        AppError::ai_provider(ErrorCode::AiProviderConnectionFailed, format!("AI 서버에 연결할 수 없습니다: {e}"), true)
     } else {
         AppError::ai_provider(ErrorCode::AiProviderError, e.to_string(), false)
     }
@@ -251,11 +231,7 @@ fn provider_message(body: &str) -> String {
 }
 
 pub(crate) fn parse_err(what: &str, e: impl std::fmt::Display) -> AppError {
-    AppError::ai_provider(
-        ErrorCode::AiProviderError,
-        format!("{what} 응답을 해석할 수 없습니다: {e}"),
-        false,
-    )
+    AppError::ai_provider(ErrorCode::AiProviderError, format!("{what} 응답을 해석할 수 없습니다: {e}"), false)
 }
 
 fn truncate(s: &str, max_chars: usize) -> String {
@@ -274,10 +250,7 @@ mod tests {
 
     #[test]
     fn http_error_maps_status_and_message() {
-        let e = http_error(
-            StatusCode::TOO_MANY_REQUESTS,
-            r#"{"error":{"message":"slow down"}}"#,
-        );
+        let e = http_error(StatusCode::TOO_MANY_REQUESTS, r#"{"error":{"message":"slow down"}}"#);
         let r = e.to_response();
         assert_eq!(r.code, ErrorCode::AiProviderRateLimit);
         assert!(r.retryable);
@@ -291,7 +264,12 @@ mod tests {
     #[test]
     fn split_system_merges_turns() {
         use crate::models::ai_service::{ChatOptions, PromptMessageItem};
-        let item = |role, c: &str| PromptMessageItem { images: vec![], role, content: c.into(), token: 0 };
+        let item = |role, c: &str| PromptMessageItem {
+            images: vec![],
+            role,
+            content: c.into(),
+            token: 0,
+        };
         let prompt = PromptMessage {
             chat_options: ChatOptions::default(),
             messages: vec![
@@ -327,8 +305,18 @@ mod tests {
         let prompt = PromptMessage {
             chat_options: ChatOptions::default(),
             messages: vec![
-                PromptMessageItem { images: vec![], role: PromptRole::System, content: "rules".into(), token: 0 },
-                PromptMessageItem { images: vec![png.clone(), "missing.png".into()], role: PromptRole::User, content: "look".into(), token: 0 },
+                PromptMessageItem {
+                    images: vec![],
+                    role: PromptRole::System,
+                    content: "rules".into(),
+                    token: 0,
+                },
+                PromptMessageItem {
+                    images: vec![png.clone(), "missing.png".into()],
+                    role: PromptRole::User,
+                    content: "look".into(),
+                    token: 0,
+                },
             ],
         };
         let (_, turns) = split_system(&prompt);
@@ -337,7 +325,10 @@ mod tests {
         let openai = openai_adapter::OpenAIClient::body("m", &prompt).to_string();
         assert!(openai.contains("data:image/png;base64,iVBORw=="), "{openai}");
         let claude = claude_adapter::ClaudeClient::body("m", &prompt).to_string();
-        assert!(claude.contains(r#""media_type":"image/png""#) && claude.contains(r#""text":"look""#), "{claude}");
+        assert!(
+            claude.contains(r#""media_type":"image/png""#) && claude.contains(r#""text":"look""#),
+            "{claude}"
+        );
         let gemini = gemini_adapter::gemini_body(&prompt).to_string();
         assert!(gemini.contains("inlineData") && !gemini.contains("missing"), "{gemini}");
     }

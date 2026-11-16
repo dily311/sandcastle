@@ -1,7 +1,7 @@
 use serde_json::Value;
 use thiserror::Error;
 
-use crate::error::{ErrorCode, error_code::ErrorCategory, error_response::AppErrorResponse};
+use crate::error::{error_code::ErrorCategory, error_response::AppErrorResponse, ErrorCode};
 
 pub type Result<T> = std::result::Result<T, AppError>;
 
@@ -9,11 +9,7 @@ pub type Result<T> = std::result::Result<T, AppError>;
 pub enum AppError {
     #[error("archive error: {message}")]
     // zip 관련 (경로 순회, 손상된 파일 등)
-    Archive {
-        code: ErrorCode,
-        message: String,
-        details: Option<Value>,
-    },
+    Archive { code: ErrorCode, message: String, details: Option<Value> },
 
     #[error("not found: {message}")]
     // 존재하지 않는 리소스
@@ -36,11 +32,7 @@ pub enum AppError {
     },
 
     #[error("game error: {message}")]
-    Game {
-        code: ErrorCode,
-        message: String,
-        details: Option<Value>,
-    },
+    Game { code: ErrorCode, message: String, details: Option<Value> },
 
     #[error("io error: {message}")]
     Io { message: String },
@@ -55,86 +47,28 @@ pub enum AppError {
 impl AppError {
     pub fn to_response(&self) -> AppErrorResponse {
         let (code, category, message, retryable, details) = match self {
-            Self::Archive {
-                code,
-                message,
-                details,
-            } => (
-                *code,
-                ErrorCategory::Archive,
-                message.clone(),
-                false,
-                details.clone(),
-            ),
+            Self::Archive { code, message, details } => (*code, ErrorCategory::Archive, message.clone(), false, details.clone()),
 
-            Self::NotFound { code, message } => {
-                (*code, ErrorCategory::NotFound, message.clone(), false, None)
-            }
+            Self::NotFound { code, message } => (*code, ErrorCategory::NotFound, message.clone(), false, None),
 
-            Self::Validation { code, message , details} => (
-                *code,
-                ErrorCategory::Validation,
-                message.clone(),
-                false,
-                details.clone(),
-            ),
+            Self::Validation { code, message, details } => (*code, ErrorCategory::Validation, message.clone(), false, details.clone()),
 
-            Self::Database { code, message } => (
-                *code,
-                ErrorCategory::Database,
-                message.clone(),
-                *code == ErrorCode::DatabaseLocked,
-                None,
-            ),
+            Self::Database { code, message } => (*code, ErrorCategory::Database, message.clone(), *code == ErrorCode::DatabaseLocked, None),
 
             Self::AiProvider {
                 code,
                 message,
                 retryable,
                 details,
-            } => (
-                *code,
-                ErrorCategory::AiProvider,
-                message.clone(),
-                *retryable,
-                details.clone(),
-            ),
+            } => (*code, ErrorCategory::AiProvider, message.clone(), *retryable, details.clone()),
 
-            Self::Game {
-                code,
-                message,
-                details,
-            } => (
-                *code,
-                ErrorCategory::Game,
-                message.clone(),
-                false,
-                details.clone(),
-            ),
+            Self::Game { code, message, details } => (*code, ErrorCategory::Game, message.clone(), false, details.clone()),
 
-            Self::Io { message } => (
-                ErrorCode::IoError,
-                ErrorCategory::Io,
-                message.clone(),
-                false,
-                None,
-            ),
+            Self::Io { message } => (ErrorCode::IoError, ErrorCategory::Io, message.clone(), false, None),
 
-            Self::Window { message } => (
-                ErrorCode::WindowError,
-                ErrorCategory::Window,
-                message.clone(),
-                false,
-                None,
-            ),
+            Self::Window { message } => (ErrorCode::WindowError, ErrorCategory::Window, message.clone(), false, None),
 
-            Self::Internal { message } => (
-                ErrorCode::InternalError,
-                ErrorCategory::Internal,
-                message.clone(),
-                false,
-                None,
-            ),
+            Self::Internal { message } => (ErrorCode::InternalError, ErrorCategory::Internal, message.clone(), false, None),
         };
 
         AppErrorResponse {
@@ -176,11 +110,7 @@ impl AppError {
         }
     }
 
-    pub fn ai_provider(
-        code: ErrorCode,
-        message: impl Into<String>,
-        retryable: bool,
-    ) -> Self {
+    pub fn ai_provider(code: ErrorCode, message: impl Into<String>, retryable: bool) -> Self {
         Self::AiProvider {
             code,
             message: message.into(),
@@ -198,15 +128,11 @@ impl AppError {
     }
 
     pub fn io(message: impl Into<String>) -> Self {
-        Self::Io {
-            message: message.into(),
-        }
+        Self::Io { message: message.into() }
     }
 
     pub fn internal(message: impl Into<String>) -> Self {
-        Self::Internal {
-            message: message.into(),
-        }
+        Self::Internal { message: message.into() }
     }
 
     pub fn window(message: impl Into<String>) -> Self {

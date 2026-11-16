@@ -19,11 +19,7 @@ pub(crate) fn app_data_dir(app: &AppHandle) -> Result<PathBuf> {
 
 #[tauri::command]
 #[specta::specta]
-pub async fn list_character_images(
-    app: AppHandle,
-    state: State<'_, AppState>,
-    character_id: String,
-) -> Result<Vec<CharacterImage>> {
+pub async fn list_character_images(app: AppHandle, state: State<'_, AppState>, character_id: String) -> Result<Vec<CharacterImage>> {
     let base = app_data_dir(&app)?;
     let rows = db::character_image::get_character_images(&state.db, &character_id, false).await?;
     Ok(rows.into_iter().map(|r| CharacterImage::from_row(r, &base)).collect())
@@ -34,12 +30,7 @@ pub async fn list_character_images(
 /// (SillyTavern 표정 스프라이트 폴더의 파일들을 그대로 넘기면 감정 이름이 키가 된다)
 #[tauri::command]
 #[specta::specta]
-pub async fn add_character_images(
-    app: AppHandle,
-    state: State<'_, AppState>,
-    character_id: String,
-    paths: Vec<String>,
-) -> Result<Vec<CharacterImage>> {
+pub async fn add_character_images(app: AppHandle, state: State<'_, AppState>, character_id: String, paths: Vec<String>) -> Result<Vec<CharacterImage>> {
     let base = app_data_dir(&app)?;
     let paths: Vec<PathBuf> = paths.into_iter().map(PathBuf::from).collect();
     add_images(&state.db, &base, &character_id, &paths).await
@@ -63,12 +54,7 @@ pub async fn add_character_images_zip(app: AppHandle, state: State<'_, AppState>
 
 #[tauri::command]
 #[specta::specta]
-pub async fn update_character_image(
-    app: AppHandle,
-    state: State<'_, AppState>,
-    id: String,
-    input: CharacterImageUpdate,
-) -> Result<CharacterImage> {
+pub async fn update_character_image(app: AppHandle, state: State<'_, AppState>, id: String, input: CharacterImageUpdate) -> Result<CharacterImage> {
     let current = db::character_image::get_character_image(&state.db, &id).await?;
     let key = normalize_key(&input.key)?;
     if db::character_image::image_key_exists(&state.db, &current.character_id, &key, Some(&id)).await? {
@@ -84,21 +70,14 @@ pub async fn update_character_image(
 pub async fn delete_character_image(app: AppHandle, state: State<'_, AppState>, id: String) -> Result<()> {
     let row = db::character_image::get_character_image(&state.db, &id).await?;
     db::character_image::delete_character_image(&state.db, &id).await?;
-    remove_image_files(
-        &app_data_dir(&app)?,
-        &[&row.file_path, row.thumb_path.as_deref().unwrap_or_default()],
-    );
+    remove_image_files(&app_data_dir(&app)?, &[&row.file_path, row.thumb_path.as_deref().unwrap_or_default()]);
     Ok(())
 }
 
 /// 대화별 이미지 기능 켜기/끄기
 #[tauri::command]
 #[specta::specta]
-pub async fn set_conversation_images_enabled(
-    state: State<'_, AppState>,
-    conversation_id: String,
-    enabled: bool,
-) -> Result<()> {
+pub async fn set_conversation_images_enabled(state: State<'_, AppState>, conversation_id: String, enabled: bool) -> Result<()> {
     if !db::conversation::set_conversation_images_enabled(&state.db, &conversation_id, enabled).await? {
         return Err(AppError::not_found(format!("대화를 찾을 수 없습니다: {conversation_id}")));
     }

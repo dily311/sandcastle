@@ -1,7 +1,10 @@
 use serde_json::json;
 use sqlx::sqlite::SqlitePoolOptions;
 
-use crate::{db::ai_service as db, models::ai_service::{PromptBlocksInput, PromptPresetsInput}};
+use crate::{
+    db::ai_service as db,
+    models::ai_service::{PromptBlocksInput, PromptPresetsInput},
+};
 
 fn block(id: Option<&str>, identifier: &str) -> PromptBlocksInput {
     PromptBlocksInput {
@@ -42,13 +45,21 @@ async fn replace_blocks_keeps_order_ids_and_triggers() {
     .unwrap();
 
     let mut conn = pool.acquire().await.unwrap();
-    db::replace_prompt_blocks(&mut conn, &id, vec![block(Some("a"), "main"), block(Some("b"), "chatHistory"), block(Some("c"), "jailbreak")])
-        .await
-        .unwrap();
+    db::replace_prompt_blocks(
+        &mut conn,
+        &id,
+        vec![block(Some("a"), "main"), block(Some("b"), "chatHistory"), block(Some("c"), "jailbreak")],
+    )
+    .await
+    .unwrap();
     // c 삭제, 순서 바꿈, 새 블록 추가
-    db::replace_prompt_blocks(&mut conn, &id, vec![block(Some("b"), "chatHistory"), block(None, "note"), block(Some("a"), "main")])
-        .await
-        .unwrap();
+    db::replace_prompt_blocks(
+        &mut conn,
+        &id,
+        vec![block(Some("b"), "chatHistory"), block(None, "note"), block(Some("a"), "main")],
+    )
+    .await
+    .unwrap();
     drop(conn);
 
     let blocks = db::get_prompt_blocks_by_preset(&pool, &id).await.unwrap();

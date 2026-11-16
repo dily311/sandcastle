@@ -29,14 +29,9 @@ struct VertexAuth {
 impl VertexAIClient {
     async fn auth(credential: &str) -> Result<VertexAuth> {
         let auth_err = |msg: String| AppError::ai_provider(ErrorCode::AiProviderAuthFailed, msg, false);
-        let key: VertexChatRequestAPIKey = serde_json::from_str(credential)
-            .map_err(|e| auth_err(format!("Vertex 인증 정보 형식이 올바르지 않습니다: {e}")))?;
-        let account = CustomServiceAccount::from_json(&key.service_account)
-            .map_err(|e| auth_err(format!("서비스 계정을 읽을 수 없습니다: {e}")))?;
-        let token = account
-            .token(&[SCOPE])
-            .await
-            .map_err(|e| auth_err(format!("GCP 인증 토큰 발급 실패: {e}")))?;
+        let key: VertexChatRequestAPIKey = serde_json::from_str(credential).map_err(|e| auth_err(format!("Vertex 인증 정보 형식이 올바르지 않습니다: {e}")))?;
+        let account = CustomServiceAccount::from_json(&key.service_account).map_err(|e| auth_err(format!("서비스 계정을 읽을 수 없습니다: {e}")))?;
+        let token = account.token(&[SCOPE]).await.map_err(|e| auth_err(format!("GCP 인증 토큰 발급 실패: {e}")))?;
         Ok(VertexAuth {
             token: token.as_str().to_string(),
             location: key.location,
@@ -66,11 +61,7 @@ impl AiProvider for VertexAIClient {
             .send()
             .await
             .map_err(net_err)?;
-        let json: Value = ensure_success(resp)
-            .await?
-            .json()
-            .await
-            .map_err(|e| parse_err("모델 목록", e))?;
+        let json: Value = ensure_success(resp).await?.json().await.map_err(|e| parse_err("모델 목록", e))?;
         Ok(json["publisherModels"]
             .as_array()
             .map(|arr| {
@@ -82,19 +73,10 @@ impl AiProvider for VertexAIClient {
             .unwrap_or_default())
     }
 
-    async fn generate(
-        &self,
-        call: &ProviderCall<'_>,
-        prompt: &PromptMessage,
-        on_delta: &mut OnDelta<'_>,
-    ) -> Result<Generation> {
+    async fn generate(&self, call: &ProviderCall<'_>, prompt: &PromptMessage, on_delta: &mut OnDelta<'_>) -> Result<Generation> {
         let auth = Self::auth(call.credential).await?;
         let stream = prompt.chat_options.stream;
-        let method = if stream {
-            "streamGenerateContent?alt=sse"
-        } else {
-            "generateContent"
-        };
+        let method = if stream { "streamGenerateContent?alt=sse" } else { "generateContent" };
         let url = format!(
             "{}/v1/projects/{}/locations/{}/publishers/google/models/{}:{method}",
             Self::host(&auth.location),

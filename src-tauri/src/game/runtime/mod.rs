@@ -1,21 +1,21 @@
+mod assets;
 pub mod command;
 pub mod definition;
 pub mod event;
 pub mod repository;
 pub mod state;
 mod systems;
-mod assets;
 mod view;
 
+pub use assets::DefResolver;
 pub use command::GameCommand;
 pub use definition::GameDefinition;
 pub use event::GameEvent;
 pub use repository::{GameRepository, SqlxGameRepository};
-pub use assets::DefResolver;
 pub use state::{AvailableMove, GameState, NpcState, RenderState};
 
-use anyhow::Result;
 use crate::error::{AppError, BlockReason};
+use anyhow::Result;
 use rand::rngs::StdRng;
 use serde::Serialize;
 
@@ -39,7 +39,10 @@ fn json_is_empty(v: &serde_json::Value) -> bool {
 fn repair_state(def: &GameDefinition, state: &mut GameState) {
     let valid_location = state.location_id.as_deref().and_then(|id| def.location(id)).map(|l| l.id.clone());
     let location_id = valid_location.or_else(|| {
-        def.start_point().location_id.filter(|id| def.location(id).is_some()).or_else(|| def.locations.first().map(|l| l.id.clone()))
+        def.start_point()
+            .location_id
+            .filter(|id| def.location(id).is_some())
+            .or_else(|| def.locations.first().map(|l| l.id.clone()))
     });
     state.location_id = location_id.clone();
     if let Some(zone) = location_id.as_deref().and_then(|id| def.zone_of_location(id)) {
@@ -92,7 +95,12 @@ pub struct GameRuntime {
 
 impl GameRuntime {
     pub fn new(definition: std::sync::Arc<GameDefinition>, state: GameState) -> Self {
-        Self { definition, state, queue: Vec::new(), rng: rand::make_rng() }
+        Self {
+            definition,
+            state,
+            queue: Vec::new(),
+            rng: rand::make_rng(),
+        }
     }
 
     /// 새 게임 시작 — 세이브가 없는 첫 진입.
@@ -106,12 +114,17 @@ impl GameRuntime {
             Some(id) => definition
                 .location(id)
                 .ok_or_else(|| anyhow::anyhow!("설정된 시작 location(start_location_id={id})을 찾을 수 없습니다"))?,
-            None => definition.locations.first().ok_or_else(|| anyhow::anyhow!("게임에 location이 하나도 없습니다"))?,
+            None => definition
+                .locations
+                .first()
+                .ok_or_else(|| anyhow::anyhow!("게임에 location이 하나도 없습니다"))?,
         };
         let zone = definition
             .zone_of_location(&initial_location.id)
             .ok_or_else(|| anyhow::anyhow!("시작 location이 어떤 zone에도 속해있지 않습니다"))?;
-        let map = definition.map_by_id(&zone.map_id).ok_or_else(|| anyhow::anyhow!("zone이 가리키는 맵을 찾을 수 없습니다"))?;
+        let map = definition
+            .map_by_id(&zone.map_id)
+            .ok_or_else(|| anyhow::anyhow!("zone이 가리키는 맵을 찾을 수 없습니다"))?;
 
         let initial_weather = match &start.weather_id {
             Some(id) => definition
@@ -119,7 +132,10 @@ impl GameRuntime {
                 .iter()
                 .find(|w| &w.id == id)
                 .ok_or_else(|| anyhow::anyhow!("설정된 시작 날씨(startWeatherId={id})을 찾을 수 없습니다"))?,
-            None => definition.weather_types.first().ok_or_else(|| anyhow::anyhow!("게임에 날씨 타입이 하나도 없습니다"))?,
+            None => definition
+                .weather_types
+                .first()
+                .ok_or_else(|| anyhow::anyhow!("게임에 날씨 타입이 하나도 없습니다"))?,
         };
         let time_period_id = crate::game::engine::resolve_time_period(&period_tuples(&definition), start_seconds)
             .ok_or_else(|| anyhow::anyhow!("게임에 시간대가 하나도 없습니다"))?;
@@ -158,7 +174,12 @@ impl GameRuntime {
             time_period_id,
             // 시작 씬: game_projects.start_scene_key. TODO: 씬 진입을 이벤트(SceneChanged)로 알리지 않는다
             // — 대기열/진입 경로가 정해지면 GameStarted 뒤에 같은 경로로 열도록 바꿀 것.
-            current_scene_id: definition.project.start_scene_key.as_ref().and_then(|k| definition.scenes.iter().find(|s| &s.scene_key == k)).map(|s| s.id.clone()),
+            current_scene_id: definition
+                .project
+                .start_scene_key
+                .as_ref()
+                .and_then(|k| definition.scenes.iter().find(|s| &s.scene_key == k))
+                .map(|s| s.id.clone()),
             pending_scenes_json: serde_json::json!([]),
             active_npc_id: None,
             flags: initial_flags,
@@ -207,7 +228,10 @@ impl GameRuntime {
         self.state.turn_fired = false; // random 억제 플래그는 dispatch마다 새로 시작
         self.handle_command(command)?;
         let events = self.process_events();
-        Ok(GameResponse { events, state: self.render_state() })
+        Ok(GameResponse {
+            events,
+            state: self.render_state(),
+        })
     }
 
     fn emit(&mut self, event: GameEvent) {
@@ -251,7 +275,10 @@ impl GameRuntime {
             GameCommand::Talk { game_character_id } => {
                 // 씬이 열려 있는 동안은 1:1 대화 대신 씬 입력(sceneSay)을 쓴다 (AI가 서술자로 장면 전체를 진행한다).
                 if self.state.current_scene_id.is_some() {
-                    return Err(AppError::game_blocked(BlockReason::SceneActive, "씬이 진행 중일 때는 씬 입력(sceneSay)을 사용하세요"));
+                    return Err(AppError::game_blocked(
+                        BlockReason::SceneActive,
+                        "씬이 진행 중일 때는 씬 입력(sceneSay)을 사용하세요",
+                    ));
                 }
                 self.definition
                     .character(&game_character_id)
@@ -268,7 +295,11 @@ impl GameRuntime {
                 self.emit(GameEvent::DialogueStarted { game_character_id });
             }
             GameCommand::StopTalk => {
-                let game_character_id = self.state.active_npc_id.clone().ok_or_else(|| AppError::game_blocked(BlockReason::NoActiveDialogue, "열린 대화가 없습니다"))?;
+                let game_character_id = self
+                    .state
+                    .active_npc_id
+                    .clone()
+                    .ok_or_else(|| AppError::game_blocked(BlockReason::NoActiveDialogue, "열린 대화가 없습니다"))?;
                 self.emit(GameEvent::DialogueEnded { game_character_id });
             }
             GameCommand::SetVariable { key, value } => {
@@ -294,7 +325,12 @@ impl GameRuntime {
                 // 다음 씬이 없고 끝내는 효과도 없으면 씬이 이어진다. (AI 이어가기를 끈 씬은 옛 방식대로 바로 끝난다.)
                 let continues_scene = next_scene_id.is_none() && !effect_ends && ai_continue;
                 let exit_now = next_scene_id.is_none() && !effect_ends && !ai_continue;
-                self.emit(GameEvent::ChoiceMade { choice_id, next_scene_id, effect, continues_scene });
+                self.emit(GameEvent::ChoiceMade {
+                    choice_id,
+                    next_scene_id,
+                    effect,
+                    continues_scene,
+                });
                 if exit_now {
                     self.emit(GameEvent::SceneEndRequested);
                 }
@@ -319,7 +355,11 @@ impl GameRuntime {
                 self.emit(GameEvent::TimeAdvanceRequested { seconds: minutes as i64 * 60 });
             }
             GameCommand::UseItem { item_id, target_id } => {
-                let item = self.definition.items.get(&item_id).ok_or_else(|| AppError::validation(format!("존재하지 않는 아이템입니다: {item_id}"), None))?;
+                let item = self
+                    .definition
+                    .items
+                    .get(&item_id)
+                    .ok_or_else(|| AppError::validation(format!("존재하지 않는 아이템입니다: {item_id}"), None))?;
                 if self.inventory_count(&item_id) < 1 {
                     return Err(AppError::game_blocked(BlockReason::ItemNotOwned, "가지고 있지 않은 아이템입니다"));
                 }
@@ -328,18 +368,25 @@ impl GameRuntime {
                 }
                 if !json_is_empty(&item.use_condition) {
                     // 조건이 적혀 있는데 못 읽으면 막는다 (fail-closed).
-                    let cond = serde_json::from_value::<crate::game::engine::Condition>(item.use_condition.clone()).unwrap_or(crate::game::engine::Condition::Never);
+                    let cond =
+                        serde_json::from_value::<crate::game::engine::Condition>(item.use_condition.clone()).unwrap_or(crate::game::engine::Condition::Never);
                     if !cond.eval(&self.engine_state_snapshot()) {
                         return Err(AppError::game_blocked(BlockReason::ConditionNotMet, "지금은 사용할 수 없습니다"));
                     }
                 }
                 if let Some(t) = &target_id {
-                    self.definition.character(t).ok_or_else(|| AppError::validation(format!("존재하지 않는 대상입니다: {t}"), None))?;
+                    self.definition
+                        .character(t)
+                        .ok_or_else(|| AppError::validation(format!("존재하지 않는 대상입니다: {t}"), None))?;
                 }
                 self.emit(GameEvent::ItemUsed { item_id, target_id });
             }
             GameCommand::DropItem { item_id, quantity } => {
-                let item = self.definition.items.get(&item_id).ok_or_else(|| AppError::validation(format!("존재하지 않는 아이템입니다: {item_id}"), None))?;
+                let item = self
+                    .definition
+                    .items
+                    .get(&item_id)
+                    .ok_or_else(|| AppError::validation(format!("존재하지 않는 아이템입니다: {item_id}"), None))?;
                 if item.is_key {
                     return Err(AppError::game_blocked(BlockReason::KeyItem, "핵심 아이템은 버릴 수 없습니다"));
                 }
@@ -348,7 +395,10 @@ impl GameRuntime {
                 if qty < 1 || owned < 1 {
                     return Err(AppError::game_blocked(BlockReason::ItemNotOwned, "버릴 수 있는 아이템이 없습니다"));
                 }
-                self.emit(GameEvent::ItemChangeRequested { item_id, delta: -qty.min(owned) });
+                self.emit(GameEvent::ItemChangeRequested {
+                    item_id,
+                    delta: -qty.min(owned),
+                });
             }
         }
         Ok(())
@@ -446,7 +496,13 @@ impl GameRuntime {
         let mut render = RenderState::from(&self.state);
         render.scene_chat = self.scene_chat_enabled();
         if let Some(here) = self.state.location_id.as_deref() {
-            let mut present: Vec<String> = self.state.npc_states.iter().filter(|(_, n)| n.location_id.as_deref() == Some(here)).map(|(id, _)| id.clone()).collect();
+            let mut present: Vec<String> = self
+                .state
+                .npc_states
+                .iter()
+                .filter(|(_, n)| n.location_id.as_deref() == Some(here))
+                .map(|(id, _)| id.clone())
+                .collect();
             present.sort();
             render.present_npcs = present;
             // 갈 수 있는 곳: 지금 위치에서 나가는 연결들. 씬이 열려 있는 동안은 전부 막힌다 (MoveTo가 거절하므로).
@@ -456,11 +512,21 @@ impl GameRuntime {
                 .location_connections
                 .iter()
                 .filter(|c| c.from_id == here)
-                .map(|c| AvailableMove { to_id: c.to_id.clone(), travel_seconds: c.travel_seconds, available: !scene_open && self.condition_open(c.condition.as_deref()) })
+                .map(|c| AvailableMove {
+                    to_id: c.to_id.clone(),
+                    travel_seconds: c.travel_seconds,
+                    available: !scene_open && self.condition_open(c.condition.as_deref()),
+                })
                 .collect();
         }
         if let Some(scene) = self.state.current_scene_id.as_deref().and_then(|id| self.definition.scene(id)) {
-            render.available_choices = scene.choices.iter().flatten().filter(|c| self.choice_available(c)).map(|c| c.id.clone()).collect();
+            render.available_choices = scene
+                .choices
+                .iter()
+                .flatten()
+                .filter(|c| self.choice_available(c))
+                .map(|c| c.id.clone())
+                .collect();
         }
         render
     }
@@ -468,7 +534,13 @@ impl GameRuntime {
     /// 지금 플레이어와 같은 위치에 있는 NPC들 (정렬). AI 응답에서 말할 수 있는 인물의 범위다.
     pub fn present_npc_ids(&self) -> Vec<String> {
         let Some(here) = self.state.location_id.as_deref() else { return vec![] };
-        let mut v: Vec<String> = self.state.npc_states.iter().filter(|(_, n)| n.location_id.as_deref() == Some(here)).map(|(id, _)| id.clone()).collect();
+        let mut v: Vec<String> = self
+            .state
+            .npc_states
+            .iter()
+            .filter(|(_, n)| n.location_id.as_deref() == Some(here))
+            .map(|(id, _)| id.clone())
+            .collect();
         v.sort();
         v
     }
@@ -476,17 +548,29 @@ impl GameRuntime {
     /// 이름(또는 id)으로 캐릭터를 찾는다 (AI 태그의 `::이름` 대상 해석용).
     pub fn find_character_id(&self, name: &str) -> Option<String> {
         let n = name.trim().to_lowercase();
-        self.definition.characters.values().find(|c| c.name.trim().to_lowercase() == n || c.id.to_lowercase() == n).map(|c| c.id.clone())
+        self.definition
+            .characters
+            .values()
+            .find(|c| c.name.trim().to_lowercase() == n || c.id.to_lowercase() == n)
+            .map(|c| c.id.clone())
     }
 
     /// 지금 열린 씬이 AI 입력을 받을 수 있는가 (씬이 열려 있고, 엔딩이 아니며, aiContinue가 꺼져 있지 않다).
     pub fn scene_chat_enabled(&self) -> bool {
-        self.state.current_scene_id.as_deref().and_then(|id| self.definition.scene(id)).map_or(false, |s| s.is_ending != Some(true) && definition::scene_flag(s, "aiContinue", true))
+        self.state
+            .current_scene_id
+            .as_deref()
+            .and_then(|id| self.definition.scene(id))
+            .map_or(false, |s| s.is_ending != Some(true) && definition::scene_flag(s, "aiContinue", true))
     }
 
     /// 지금 씬의 minTurns (AI가 씬을 끝낼 수 있게 되는 플레이어 입력 횟수).
     pub fn scene_min_turns(&self) -> u32 {
-        self.state.current_scene_id.as_deref().and_then(|id| self.definition.scene(id)).map_or(1, definition::scene_min_turns)
+        self.state
+            .current_scene_id
+            .as_deref()
+            .and_then(|id| self.definition.scene(id))
+            .map_or(1, definition::scene_min_turns)
     }
 
     /// AI가 <scene>end</scene>로 씬을 끝내려 할 때. allowed=false(아직 이르다)거나 씬이 없으면 아무 일도 없다.
@@ -503,10 +587,20 @@ impl GameRuntime {
     /// speakers: 말하거나 연출 대상이 될 수 있는 캐릭터 (대화 상대 + 같은 위치의 NPC).
     /// `이름:` 접두가 하나도 없으면 옛 방식의 응답으로 보고 전부 대화 상대의 대사로 취급한다.
     /// 주의: 연출 태그가 풀리지 않거나 화자가 허용되지 않아 줄이 전부 버려지면 빈 목록이 나온다.
-    pub fn parse_ai_stage(&mut self, raw: &str, speakers: std::collections::HashSet<String>, default_speaker: Option<&str>) -> Vec<crate::game::stage::StageLine> {
+    pub fn parse_ai_stage(
+        &mut self,
+        raw: &str,
+        speakers: std::collections::HashSet<String>,
+        default_speaker: Option<&str>,
+    ) -> Vec<crate::game::stage::StageLine> {
         use crate::game::stage::{self, Allowed, LineKind};
         let allow = Allowed::ai(speakers);
-        let mut resolver = DefResolver { def: &self.definition, rng: &mut self.rng, ai: true, player_name: None };
+        let mut resolver = DefResolver {
+            def: &self.definition,
+            rng: &mut self.rng,
+            ai: true,
+            player_name: None,
+        };
         let mut lines = stage::parse(raw, &mut resolver, &allow);
         // 씬 입력(서술자)에서는 default_speaker가 없다 — 지문은 지문으로 둔다.
         if let Some(default_speaker) = default_speaker {
@@ -575,7 +669,11 @@ impl GameRuntime {
                     obj.entry(format!("{npc_id}>player")).or_insert_with(|| serde_json::json!({ "tags": [] }))[axis.as_str()] = serde_json::Value::from(*new);
                 }
             }
-            all.extend(changes.into_iter().map(|(axis, old, new)| (npc_id.to_string(), "player".to_string(), axis, old, new)));
+            all.extend(
+                changes
+                    .into_iter()
+                    .map(|(axis, old, new)| (npc_id.to_string(), "player".to_string(), axis, old, new)),
+            );
         }
         all
     }
@@ -609,10 +707,21 @@ impl GameRuntime {
         }
     }
 
-    pub fn apply_ai_changes(&mut self, changes: Vec<(String, serde_json::Value, serde_json::Value)>, relations: Vec<(String, String, String, i64, i64)>) -> Vec<GameEvent> {
+    pub fn apply_ai_changes(
+        &mut self,
+        changes: Vec<(String, serde_json::Value, serde_json::Value)>,
+        relations: Vec<(String, String, String, i64, i64)>,
+    ) -> Vec<GameEvent> {
         self.state.turn_fired = false;
-        self.queue.extend(changes.into_iter().map(|(key, old, new)| GameEvent::VariableChanged { key, old, new }));
-        self.queue.extend(relations.into_iter().map(|(from, to, axis, old, new)| GameEvent::RelationChangeRequested { from, to, axis, delta: new - old }));
+        self.queue
+            .extend(changes.into_iter().map(|(key, old, new)| GameEvent::VariableChanged { key, old, new }));
+        self.queue
+            .extend(relations.into_iter().map(|(from, to, axis, old, new)| GameEvent::RelationChangeRequested {
+                from,
+                to,
+                axis,
+                delta: new - old,
+            }));
         self.process_events()
     }
 

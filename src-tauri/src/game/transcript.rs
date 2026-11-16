@@ -73,7 +73,15 @@ pub fn entries_from_journal(rows: &[GameJournal]) -> Vec<TranscriptEntry> {
         if !lines.iter().any(|l| l.kind != LineKind::Direction) {
             continue;
         }
-        out.push(TranscriptEntry { seq: r.seq, game_time: r.game_time, kind, scene_id, role, conversation_id, lines });
+        out.push(TranscriptEntry {
+            seq: r.seq,
+            game_time: r.game_time,
+            kind,
+            scene_id,
+            role,
+            conversation_id,
+            lines,
+        });
     }
     out.sort_by_key(|e| e.seq);
     out
@@ -100,7 +108,11 @@ pub async fn transcript_page(pool: &SqlitePool, session_id: &str, head_seq: u32,
     newest_first.truncate(limit);
     newest_first.reverse();
     let oldest_seq = newest_first.first().map(|e| e.seq);
-    Ok(TranscriptPage { entries: newest_first, has_more, oldest_seq })
+    Ok(TranscriptPage {
+        entries: newest_first,
+        has_more,
+        oldest_seq,
+    })
 }
 
 /// "지금" 기록의 범위
@@ -203,7 +215,13 @@ fn command_label(payload: &serde_json::Value) -> Option<String> {
 
 fn last_text(payload: &serde_json::Value) -> Option<String> {
     let lines = payload.get("lines")?.as_array()?;
-    lines.iter().rev().find_map(|l| l.get("text").and_then(|t| t.as_str()).map(str::trim).filter(|t| !t.is_empty()).map(str::to_string))
+    lines.iter().rev().find_map(|l| {
+        l.get("text")
+            .and_then(|t| t.as_str())
+            .map(str::trim)
+            .filter(|t| !t.is_empty())
+            .map(str::to_string)
+    })
 }
 
 /// 일지에서 턴 시점 목록을 만든다 (최신 → 오래된 순). 요약은 직전 시점 이후 항목들에서 고른다.
@@ -225,7 +243,13 @@ pub fn turn_points_from(rows: &[GameJournal]) -> Vec<TurnPoint> {
                     summary = summary.chars().take(60).collect::<String>() + "…";
                 }
                 action = None;
-                out.push(TurnPoint { seq: r.seq, game_time: r.game_time, summary, scene_id: get("current_scene_id"), location_id: get("location_id") });
+                out.push(TurnPoint {
+                    seq: r.seq,
+                    game_time: r.game_time,
+                    summary,
+                    scene_id: get("current_scene_id"),
+                    location_id: get("location_id"),
+                });
             }
             _ => {}
         }
@@ -258,7 +282,14 @@ mod tests {
     use serde_json::json;
 
     fn row(seq: u32, kind: &str, payload: serde_json::Value) -> GameJournal {
-        GameJournal { session_id: "s".into(), seq, kind: kind.into(), payload_json: payload, game_time: 0, created_at: 0 }
+        GameJournal {
+            session_id: "s".into(),
+            seq,
+            kind: kind.into(),
+            payload_json: payload,
+            game_time: 0,
+            created_at: 0,
+        }
     }
     fn line(text: &str) -> serde_json::Value {
         json!({ "kind": "dialogue", "speaker": "c1", "text": text, "cues": [] })
@@ -269,10 +300,18 @@ mod tests {
         let rows = vec![
             row(3, "message", json!({ "role": "assistant", "lines": [line("안녕")] })),
             row(1, "event", json!({ "type": "sceneScript", "sceneId": "sc1", "lines": [line("대본")] })),
-            row(2, "event", json!({ "type": "stageLines", "lines": [{ "kind": "direction", "speaker": null, "text": "", "cues": [] }] })),
+            row(
+                2,
+                "event",
+                json!({ "type": "stageLines", "lines": [{ "kind": "direction", "speaker": null, "text": "", "cues": [] }] }),
+            ),
             row(4, "command", json!({ "type": "moveTo" })),
-            row(5, "message", json!({ "role": "user", "lines": [{ "kind": "direction", "speaker": null, "text": "", "cues": [] }] })), // 텍스트 없는 항목
-            row(6, "message", json!({ "role": "user" })),                                                                       // 줄이 없는 옛 항목
+            row(
+                5,
+                "message",
+                json!({ "role": "user", "lines": [{ "kind": "direction", "speaker": null, "text": "", "cues": [] }] }),
+            ), // 텍스트 없는 항목
+            row(6, "message", json!({ "role": "user" })), // 줄이 없는 옛 항목
         ];
         let e = entries_from_journal(&rows);
         assert_eq!(e.iter().map(|x| x.seq).collect::<Vec<_>>(), vec![1, 3]); // 오름차순, 텍스트가 있는 것만
@@ -294,7 +333,10 @@ mod tests {
             msg(6, "c-s1", "새 대화"),
             msg(7, "c-npc", "씬 밖 대화"),
         ];
-        let scope = CurrentScope::Scene { scene_id: "s1".into(), conversation_ids: vec!["c-s1".into()] };
+        let scope = CurrentScope::Scene {
+            scene_id: "s1".into(),
+            conversation_ids: vec!["c-s1".into()],
+        };
         let got: Vec<u32> = current_entries(&rows, &scope).iter().map(|e| e.seq).collect();
         assert_eq!(got, vec![5, 6]);
     }
@@ -303,13 +345,24 @@ mod tests {
     fn current_talk_only_since_dialogue_started() {
         let rows = vec![
             row(1, "event", json!({ "type": "dialogueStarted", "gameCharacterId": "c1" })),
-            row(2, "message", json!({ "conversationId": "conv", "role": "assistant", "lines": [line("지난번")] })),
+            row(
+                2,
+                "message",
+                json!({ "conversationId": "conv", "role": "assistant", "lines": [line("지난번")] }),
+            ),
             row(3, "event", json!({ "type": "dialogueEnded", "gameCharacterId": "c1" })),
             row(4, "event", json!({ "type": "dialogueStarted", "gameCharacterId": "c1" })),
             row(5, "message", json!({ "conversationId": "conv", "role": "assistant", "lines": [line("이번")] })),
-            row(6, "message", json!({ "conversationId": "other", "role": "assistant", "lines": [line("남의 대화")] })),
+            row(
+                6,
+                "message",
+                json!({ "conversationId": "other", "role": "assistant", "lines": [line("남의 대화")] }),
+            ),
         ];
-        let scope = CurrentScope::Talk { character_id: "c1".into(), conversation_id: Some("conv".into()) };
+        let scope = CurrentScope::Talk {
+            character_id: "c1".into(),
+            conversation_id: Some("conv".into()),
+        };
         let got: Vec<u32> = current_entries(&rows, &scope).iter().map(|e| e.seq).collect();
         assert_eq!(got, vec![5]);
     }

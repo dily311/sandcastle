@@ -55,22 +55,12 @@ where
     }
 
     async fn execute(&self, task: &TaskInfo, ctx: &TaskContext) -> Result<TaskOutput, TaskError> {
-        (self.1)(
-            task.clone(),
-            ctx.attempt_id().to_string(),
-            ctx.cancel_token().clone(),
-            ctx.reporter().clone(),
-        )
-        .await
+        (self.1)(task.clone(), ctx.attempt_id().to_string(), ctx.cancel_token().clone(), ctx.reporter().clone()).await
     }
 }
 
 async fn setup() -> (Arc<TaskManager>, Arc<CollectSink>) {
-    let pool = SqlitePoolOptions::new()
-        .max_connections(1)
-        .connect("sqlite::memory:")
-        .await
-        .unwrap();
+    let pool = SqlitePoolOptions::new().max_connections(1).connect("sqlite::memory:").await.unwrap();
     sqlx::migrate!("src/db/migrations").run(&pool).await.unwrap();
     let sink = Arc::new(CollectSink::default());
     let manager = TaskManager::with_options(pool, sink.clone(), 2, Duration::from_millis(1));
@@ -111,10 +101,7 @@ async fn submit_runs_to_completion() {
     assert_eq!(task.result, Some(out));
     assert!(task.started_at.is_some() && task.finished_at.is_some());
     assert!(!manager.is_active(&id));
-    assert_eq!(
-        sink.kinds(&id),
-        vec!["queued", "started", "delta", "delta", "completed"]
-    );
+    assert_eq!(sink.kinds(&id), vec!["queued", "started", "delta", "delta", "completed"]);
 
     let attempts = manager.get_attempts(&id).await.unwrap();
     assert_eq!(attempts.len(), 1);
@@ -126,24 +113,18 @@ async fn retryable_error_opens_new_attempts() {
     let (manager, sink) = setup().await;
     let calls = Arc::new(AtomicU32::new(0));
     let c = calls.clone();
-    manager.register_executor(Arc::new(FnExecutor(
-        TaskType::ChatStream,
-        move |_t, _a, _c, _r| {
-            let c = c.clone();
-            async move {
-                if c.fetch_add(1, Ordering::SeqCst) < 2 {
-                    Err(TaskError::failed(ErrorCode::AiProviderRateLimit, "429", true))
-                } else {
-                    Ok(TaskOutput::Empty)
-                }
+    manager.register_executor(Arc::new(FnExecutor(TaskType::ChatStream, move |_t, _a, _c, _r| {
+        let c = c.clone();
+        async move {
+            if c.fetch_add(1, Ordering::SeqCst) < 2 {
+                Err(TaskError::failed(ErrorCode::AiProviderRateLimit, "429", true))
+            } else {
+                Ok(TaskOutput::Empty)
             }
-        },
-    )));
+        }
+    })));
 
-    let handle = manager
-        .submit(request(TaskType::ChatStream).max_attempts(3))
-        .await
-        .unwrap();
+    let handle = manager.submit(request(TaskType::ChatStream).max_attempts(3)).await.unwrap();
     let id = handle.id().to_string();
     assert_eq!(handle.wait().await, Ok(TaskOutput::Empty));
 
@@ -152,10 +133,7 @@ async fn retryable_error_opens_new_attempts() {
     assert_eq!(task.attempt_count, 3);
     let attempts = manager.get_attempts(&id).await.unwrap();
     let statuses: Vec<_> = attempts.iter().map(|a| a.status).collect();
-    assert_eq!(
-        statuses,
-        vec![AttemptStatus::Failed, AttemptStatus::Failed, AttemptStatus::Completed]
-    );
+    assert_eq!(statuses, vec![AttemptStatus::Failed, AttemptStatus::Failed, AttemptStatus::Completed]);
     assert_eq!(sink.kinds(&id).iter().filter(|k| **k == "retrying").count(), 2);
 }
 
@@ -164,24 +142,18 @@ async fn non_retryable_error_fails_and_can_be_resumed() {
     let (manager, _sink) = setup().await;
     let calls = Arc::new(AtomicU32::new(0));
     let c = calls.clone();
-    manager.register_executor(Arc::new(FnExecutor(
-        TaskType::ChatStream,
-        move |_t, _a, _c, _r| {
-            let c = c.clone();
-            async move {
-                if c.fetch_add(1, Ordering::SeqCst) == 0 {
-                    Err(TaskError::failed(ErrorCode::AiProviderAuthFailed, "401", false))
-                } else {
-                    Ok(TaskOutput::Empty)
-                }
+    manager.register_executor(Arc::new(FnExecutor(TaskType::ChatStream, move |_t, _a, _c, _r| {
+        let c = c.clone();
+        async move {
+            if c.fetch_add(1, Ordering::SeqCst) == 0 {
+                Err(TaskError::failed(ErrorCode::AiProviderAuthFailed, "401", false))
+            } else {
+                Ok(TaskOutput::Empty)
             }
-        },
-    )));
+        }
+    })));
 
-    let handle = manager
-        .submit(request(TaskType::ChatStream).max_attempts(5))
-        .await
-        .unwrap();
+    let handle = manager.submit(request(TaskType::ChatStream).max_attempts(5)).await.unwrap();
     let id = handle.id().to_string();
     let err = handle.wait().await.unwrap_err();
     assert_eq!(err.code, "AI_PROVIDER_AUTH_FAILED");
@@ -203,13 +175,10 @@ async fn non_retryable_error_fails_and_can_be_resumed() {
 #[tokio::test]
 async fn cancel_running_task() {
     let (manager, sink) = setup().await;
-    manager.register_executor(Arc::new(FnExecutor(
-        TaskType::ChatStream,
-        |_t, _a, cancel: CancellationToken, _r| async move {
-            cancel.cancelled().await;
-            Err(TaskError::Cancelled)
-        },
-    )));
+    manager.register_executor(Arc::new(FnExecutor(TaskType::ChatStream, |_t, _a, cancel: CancellationToken, _r| async move {
+        cancel.cancelled().await;
+        Err(TaskError::Cancelled)
+    })));
 
     let handle = manager.submit(request(TaskType::ChatStream)).await.unwrap();
     let id = handle.id().to_string();
@@ -221,10 +190,7 @@ async fn cancel_running_task() {
 
     let task = manager.get_task(&id).await.unwrap();
     assert_eq!(task.status, TaskStatus::Cancelled);
-    assert_eq!(
-        manager.get_attempts(&id).await.unwrap()[0].status,
-        AttemptStatus::Cancelled
-    );
+    assert_eq!(manager.get_attempts(&id).await.unwrap()[0].status, AttemptStatus::Cancelled);
     // 끝난 작업은 다시 취소할 수 없음
     assert!(manager.cancel(&id).await.is_err());
 }
@@ -232,13 +198,10 @@ async fn cancel_running_task() {
 #[tokio::test]
 async fn cancel_while_waiting_for_slot() {
     let (manager, _sink) = setup().await;
-    manager.register_executor(Arc::new(FnExecutor(
-        TaskType::ChatStream,
-        |_t, _a, cancel: CancellationToken, _r| async move {
-            cancel.cancelled().await;
-            Err(TaskError::Cancelled)
-        },
-    )));
+    manager.register_executor(Arc::new(FnExecutor(TaskType::ChatStream, |_t, _a, cancel: CancellationToken, _r| async move {
+        cancel.cancelled().await;
+        Err(TaskError::Cancelled)
+    })));
 
     // 동시 실행 2개를 채운 뒤 세 번째는 Pending으로 대기
     let a = manager.submit(request(TaskType::ChatStream)).await.unwrap();
@@ -265,21 +228,18 @@ async fn shutdown_interrupts_then_resume_completes() {
     let (manager, sink) = setup().await;
     let calls = Arc::new(AtomicU32::new(0));
     let c = calls.clone();
-    manager.register_executor(Arc::new(FnExecutor(
-        TaskType::ImageGen,
-        move |_t, _a, cancel: CancellationToken, _r| {
-            let c = c.clone();
-            async move {
-                if c.fetch_add(1, Ordering::SeqCst) == 0 {
-                    // 첫 실행은 끝나지 않음 → 종료 신호로 강제 중단
-                    cancel.cancelled().await;
-                    Err(TaskError::Cancelled)
-                } else {
-                    Ok(TaskOutput::Image { asset_id: "a1".into() })
-                }
+    manager.register_executor(Arc::new(FnExecutor(TaskType::ImageGen, move |_t, _a, cancel: CancellationToken, _r| {
+        let c = c.clone();
+        async move {
+            if c.fetch_add(1, Ordering::SeqCst) == 0 {
+                // 첫 실행은 끝나지 않음 → 종료 신호로 강제 중단
+                cancel.cancelled().await;
+                Err(TaskError::Cancelled)
+            } else {
+                Ok(TaskOutput::Image { asset_id: "a1".into() })
             }
-        },
-    )));
+        }
+    })));
 
     let handle = manager.submit(request(TaskType::ImageGen)).await.unwrap();
     let id = handle.id().to_string();
@@ -310,7 +270,9 @@ async fn recover_on_startup_marks_unfinished_tasks() {
     let attempt = manager.repo.open_attempt(&running.id).await.unwrap();
     // 실행기가 없는 종류(즉시 실행 작업)는 다시 시도할 수 없어 취소로 정리된다
     let inline = manager.repo.insert(&request(TaskType::Translate)).await.unwrap();
-    manager.register_executor(Arc::new(FnExecutor(TaskType::ChatStream, |_t: TaskInfo, _a, _c, _r| async { Ok(TaskOutput::Empty) })));
+    manager.register_executor(Arc::new(FnExecutor(TaskType::ChatStream, |_t: TaskInfo, _a, _c, _r| async {
+        Ok(TaskOutput::Empty)
+    })));
 
     let recoverable = manager.recover_on_startup().await.unwrap();
     let ids: Vec<_> = recoverable.iter().map(|t| t.id.clone()).collect();
@@ -341,16 +303,13 @@ async fn subscribe_gets_result_of_running_task() {
     let (manager, sink) = setup().await;
     let gate = Arc::new(tokio::sync::Notify::new());
     let g = gate.clone();
-    manager.register_executor(Arc::new(FnExecutor(
-        TaskType::GameDialogue,
-        move |_t, _a, _c, _r| {
-            let g = g.clone();
-            async move {
-                g.notified().await;
-                Ok(TaskOutput::Text { content: "npc".into() })
-            }
-        },
-    )));
+    manager.register_executor(Arc::new(FnExecutor(TaskType::GameDialogue, move |_t, _a, _c, _r| {
+        let g = g.clone();
+        async move {
+            g.notified().await;
+            Ok(TaskOutput::Text { content: "npc".into() })
+        }
+    })));
     let handle = manager.submit(request(TaskType::GameDialogue)).await.unwrap();
     let id = handle.id().to_string();
     wait_until(|| sink.kinds(&id).contains(&"started")).await;
@@ -426,22 +385,38 @@ async fn cancel_grace_keeps_executor_result() {
 
 #[test]
 fn task_error_info_keeps_code_for_frontend() {
-    let info = TaskErrorInfo { code: "AI_PROVIDER_RATE_LIMIT".into(), message: "한도".into(), retryable: true };
+    let info = TaskErrorInfo {
+        code: "AI_PROVIDER_RATE_LIMIT".into(),
+        message: "한도".into(),
+        retryable: true,
+    };
     let res = AppError::from(info).to_response();
     assert_eq!(res.code, ErrorCode::AiProviderRateLimit);
     assert!(res.retryable);
 
-    let unknown = TaskErrorInfo { code: "NOPE".into(), message: "?".into(), retryable: false };
+    let unknown = TaskErrorInfo {
+        code: "NOPE".into(),
+        message: "?".into(),
+        retryable: false,
+    };
     assert_eq!(AppError::from(unknown).to_response().code, ErrorCode::InternalError);
 }
 
 #[tokio::test]
 async fn run_inline_records_feature_and_keeps_error_code() {
     let (manager, sink) = setup().await;
-    let req = || CreateTaskRequest::new(TaskType::Translate, TaskOwner::System, json!({})).feature("translate").run_by(crate::task::RunBy::Auto).label("번역");
+    let req = || {
+        CreateTaskRequest::new(TaskType::Translate, TaskOwner::System, json!({}))
+            .feature("translate")
+            .run_by(crate::task::RunBy::Auto)
+            .label("번역")
+    };
 
     // 성공: 작업이 남고, 안에서 "지금 작업"이 보인다
-    let seen = manager.run_inline(req(), |_c| async { Ok(crate::task::current_task().map(|t| (t.task_id, t.feature))) }).await.unwrap();
+    let seen = manager
+        .run_inline(req(), |_c| async { Ok(crate::task::current_task().map(|t| (t.task_id, t.feature))) })
+        .await
+        .unwrap();
     let (task_id, feature) = seen.unwrap();
     assert_eq!(feature.as_deref(), Some("translate"));
     let task = manager.get_task(&task_id).await.unwrap();
@@ -452,7 +427,9 @@ async fn run_inline_records_feature_and_keeps_error_code() {
 
     // 실패: 원래 오류 코드를 그대로 돌려주고 작업은 failed
     let err = manager
-        .run_inline(req(), |_c| async { Err::<(), _>(AppError::ai_provider(ErrorCode::AiProviderRateLimit, "한도", true)) })
+        .run_inline(req(), |_c| async {
+            Err::<(), _>(AppError::ai_provider(ErrorCode::AiProviderRateLimit, "한도", true))
+        })
         .await
         .unwrap_err();
     assert_eq!(err.to_response().code, ErrorCode::AiProviderRateLimit);
@@ -465,16 +442,25 @@ async fn run_inline_can_be_cancelled() {
     let (manager, _sink) = setup().await;
     let m = manager.clone();
     let handle = tokio::spawn(async move {
-        m.run_inline(CreateTaskRequest::new(TaskType::Tts, TaskOwner::System, json!({})).owner_ref("speak"), |_c| async {
-            tokio::time::sleep(Duration::from_secs(30)).await;
-            Ok(())
-        })
+        m.run_inline(
+            CreateTaskRequest::new(TaskType::Tts, TaskOwner::System, json!({})).owner_ref("speak"),
+            |_c| async {
+                tokio::time::sleep(Duration::from_secs(30)).await;
+                Ok(())
+            },
+        )
         .await
     });
     // 실행 중이 될 때까지 기다렸다가 취소
     let mut id = None;
     for _ in 0..100 {
-        if let Some(t) = manager.list_by_owner_ref("speak").await.unwrap().into_iter().find(|t| t.status == TaskStatus::Running) {
+        if let Some(t) = manager
+            .list_by_owner_ref("speak")
+            .await
+            .unwrap()
+            .into_iter()
+            .find(|t| t.status == TaskStatus::Running)
+        {
             id = Some(t.id);
             break;
         }

@@ -113,10 +113,9 @@ fn hex(bytes: &[u8]) -> String {
 }
 
 async fn read_migrations(db: &DbPool) -> Result<Vec<MigrationInfo>> {
-    let rows: Vec<(i64, Vec<u8>)> =
-        sqlx::query_as("SELECT version, checksum FROM _sqlx_migrations WHERE success = 1 ORDER BY version")
-            .fetch_all(db)
-            .await?;
+    let rows: Vec<(i64, Vec<u8>)> = sqlx::query_as("SELECT version, checksum FROM _sqlx_migrations WHERE success = 1 ORDER BY version")
+        .fetch_all(db)
+        .await?;
     Ok(rows.into_iter().map(|(version, c)| MigrationInfo { version, checksum: hex(&c) }).collect())
 }
 
@@ -130,10 +129,7 @@ pub async fn export_backup(db: &DbPool, app_data_dir: &Path, out: &Path) -> Resu
     let snapshot = tmp_dir.join(format!("{}.db", Uuid::new_v4()));
 
     let result = async {
-        sqlx::query("VACUUM INTO ?")
-            .bind(snapshot.to_string_lossy().to_string())
-            .execute(db)
-            .await?;
+        sqlx::query("VACUUM INTO ?").bind(snapshot.to_string_lossy().to_string()).execute(db).await?;
 
         let manifest = BackupManifest {
             format: BACKUP_FORMAT.into(),
@@ -147,8 +143,7 @@ pub async fn export_backup(db: &DbPool, app_data_dir: &Path, out: &Path) -> Resu
             dirs: BACKUP_DIRS.iter().map(|d| d.to_string()).collect(),
         };
 
-        let (base, out_path, snap, m) =
-            (app_data_dir.to_path_buf(), out.to_path_buf(), snapshot.clone(), manifest.clone());
+        let (base, out_path, snap, m) = (app_data_dir.to_path_buf(), out.to_path_buf(), snapshot.clone(), manifest.clone());
         let file_count = tokio::task::spawn_blocking(move || -> Result<u64> {
             if let Some(parent) = out_path.parent() {
                 std::fs::create_dir_all(parent)?;
@@ -248,9 +243,11 @@ async fn prepare_inner(stage: &Path, backup: &Path) -> Result<RestorePreview> {
 
     // 2. DB 검사: 무결성 + 스키마 호환
     let opts = SqliteConnectOptions::new().filename(stage.join(DB_FILE)).read_only(true);
-    let pool = SqlitePoolOptions::new().max_connections(1).connect_with(opts).await.map_err(|e| {
-        AppError::archive(ErrorCode::ArchiveCorrupted, format!("백업 DB를 열 수 없습니다: {e}"))
-    })?;
+    let pool = SqlitePoolOptions::new()
+        .max_connections(1)
+        .connect_with(opts)
+        .await
+        .map_err(|e| AppError::archive(ErrorCode::ArchiveCorrupted, format!("백업 DB를 열 수 없습니다: {e}")))?;
     let check = async {
         let ok: String = sqlx::query_scalar("PRAGMA quick_check").fetch_one(&pool).await?;
         if ok != "ok" {
@@ -313,9 +310,7 @@ pub fn apply_pending_restore(app_data_dir: &Path) -> Result<bool> {
         return Ok(false);
     };
 
-    let keep = app_data_dir
-        .join(KEEP_DIR)
-        .join(chrono::Local::now().format("%Y%m%d-%H%M%S").to_string());
+    let keep = app_data_dir.join(KEEP_DIR).join(chrono::Local::now().format("%Y%m%d-%H%M%S").to_string());
     std::fs::create_dir_all(&keep)?;
 
     // 옮긴 것 기록 (중간에 실패하면 되돌림)
@@ -332,10 +327,7 @@ pub fn apply_pending_restore(app_data_dir: &Path) -> Result<bool> {
     let dirs = manifest.included_dirs();
     let result = (|| -> Result<()> {
         // 현재 데이터 치우기 (WAL/SHM도 같이: 남겨 두면 새 DB에 엉뚱한 로그가 적용된다)
-        for name in ["app.db", "app.db-wal", "app.db-shm", SETTINGS_FILE]
-            .into_iter()
-            .chain(dirs.iter().copied())
-        {
+        for name in ["app.db", "app.db-wal", "app.db-shm", SETTINGS_FILE].into_iter().chain(dirs.iter().copied()) {
             mv(app_data_dir.join(name), keep.join(name), &mut moved)?;
         }
         // 백업 넣기
@@ -397,15 +389,17 @@ fn path_variants(old: &str, new: &str) -> Vec<(String, String)> {
 
 /// 모든 표의 글자 칸에서 옛 경로를 새 경로로 (마이그레이션 기록 표는 빼고)
 async fn replace_paths_in_db(db: &DbPool, pairs: &[(String, String)]) -> Result<()> {
-    let tables: Vec<String> = sqlx::query_scalar(
-        "SELECT name FROM sqlite_master WHERE type = 'table' AND name NOT LIKE 'sqlite_%' AND name <> '_sqlx_migrations'",
-    )
-    .fetch_all(db)
-    .await?;
+    let tables: Vec<String> =
+        sqlx::query_scalar("SELECT name FROM sqlite_master WHERE type = 'table' AND name NOT LIKE 'sqlite_%' AND name <> '_sqlx_migrations'")
+            .fetch_all(db)
+            .await?;
     let mut tx = db.begin().await?;
     for table in tables {
         let q = |s: &str| format!("\"{}\"", s.replace('"', "\"\""));
-        let cols: Vec<(String, String)> = sqlx::query_as("SELECT name, type FROM pragma_table_info(?)").bind(&table).fetch_all(&mut *tx).await?;
+        let cols: Vec<(String, String)> = sqlx::query_as("SELECT name, type FROM pragma_table_info(?)")
+            .bind(&table)
+            .fetch_all(&mut *tx)
+            .await?;
         for (col, ty) in cols {
             let ty = ty.to_ascii_uppercase();
             if !(ty.is_empty() || ty.contains("TEXT") || ty.contains("CHAR") || ty.contains("JSON")) {

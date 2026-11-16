@@ -11,19 +11,19 @@
 //!     같은 초에 들어가서 created_at만으로는 순서가 안 보장된다.
 //!   - ChatManager는 유닛 구조체라 `ChatManager.game_chat(...)`로 부른다.
 //!   - Persona 포맷("이름\n설명")은 PromptManager가 기대하는 모양이 있으면 거기에 맞출 것.
-use crate::state::AppState;
 use crate::db::conversation::{get_all_worldinfo_entries, get_persona};
 use crate::db::game::{
-    upsert_game_player_sessions, get_game_conversation_conversation_id, get_game_messages, upsert_game_conversation,
-    upsert_game_conversations_participant, upsert_game_journal, upsert_game_message,
+    get_game_conversation_conversation_id, get_game_messages, upsert_game_conversation, upsert_game_conversations_participant, upsert_game_journal,
+    upsert_game_message, upsert_game_player_sessions,
 };
 use crate::error::{AppError, BlockReason, ErrorCode};
 use crate::game::guard::current_game_id;
+use crate::models::ai_service::{ChatContext, HistoryItem, StreamPayload};
 use crate::models::conversation::WorldInfoEntry;
 use crate::models::game::{GameConversationsInput, GameJournalInput, GameMessagesInput};
 use crate::models::settings::AppSetting;
 use crate::service::ChatManager;
-use crate::models::ai_service::{ChatContext, HistoryItem, StreamPayload};
+use crate::state::AppState;
 use crate::sys::settings::SettingsState;
 use std::collections::VecDeque;
 use tauri::{ipc::Channel, AppHandle, State};
@@ -48,13 +48,20 @@ const MAX_AI_CHANGES: usize = 3; // 한 응답에서 적용할 변수 변경 수
 /// state.ai_rate_limit: Mutex<HashMap<String, VecDeque<i64>>> (game_id -> 타임스탬프들).
 fn check_rate_limit(state: &AppState, game_id: &str) -> Result<(), AppError> {
     let now = chrono::Utc::now().timestamp();
-    let mut limiter = state.ai_rate_limit.lock().map_err(|_| AppError::ai_provider(ErrorCode::AiProviderRateLimit, "rate limiter lock poisoned", false))?;
+    let mut limiter = state
+        .ai_rate_limit
+        .lock()
+        .map_err(|_| AppError::ai_provider(ErrorCode::AiProviderRateLimit, "rate limiter lock poisoned", false))?;
     let window: &mut VecDeque<i64> = limiter.entry(game_id.to_string()).or_default();
     while window.front().is_some_and(|t| now - *t > RATE_LIMIT_WINDOW_SECONDS) {
         window.pop_front();
     }
     if window.len() >= RATE_LIMIT_MAX_CALLS {
-        return Err(AppError::ai_provider(ErrorCode::AiProviderRateLimit,"호출이 너무 잦습니다. 잠시 후 다시 시도하세요", true));
+        return Err(AppError::ai_provider(
+            ErrorCode::AiProviderRateLimit,
+            "호출이 너무 잦습니다. 잠시 후 다시 시도하세요",
+            true,
+        ));
     }
     window.push_back(now);
     Ok(())
@@ -143,7 +150,9 @@ async fn snapshot(state: &State<'_, AppState>, character_id: &str) -> Result<Npc
         return Err(AppError::game_blocked(BlockReason::NoActiveDialogue, "이 캐릭터와의 대화가 열려 있지 않습니다"));
     }
     let def = runtime.definition();
-    let character = def.character(character_id).ok_or_else(|| AppError::validation("이 게임에 속한 캐릭터가 아닙니다", None))?;
+    let character = def
+        .character(character_id)
+        .ok_or_else(|| AppError::validation("이 게임에 속한 캐릭터가 아닙니다", None))?;
 
     // 프롬프트에 노출할 런타임 상태. 이름만 넘긴다 (id/내부 값은 안 넘김).
     // ⚠ flags(관계 수치 등)는 일부러 안 넣었다 — 어떤 키를 AI에 보여줄지 정하는 컬럼이
@@ -171,11 +180,20 @@ async fn snapshot(state: &State<'_, AppState>, character_id: &str) -> Result<Npc
     // 관계: 이 대화 상대와 (플레이어 또는 지금 같은 위치에 있는 NPC) 사이의 것만, 변화가 큰 순서로 몇 개만.
     // NPC가 늘어도 프롬프트가 폭발하지 않게 하려는 것. 방향은 "from이 to에게 느끼는 것".
     let here: std::collections::HashSet<&str> = match st.location_id.as_deref() {
-        Some(loc) => st.npc_states.iter().filter(|(_, n)| n.location_id.as_deref() == Some(loc)).map(|(id, _)| id.as_str()).collect(),
+        Some(loc) => st
+            .npc_states
+            .iter()
+            .filter(|(_, n)| n.location_id.as_deref() == Some(loc))
+            .map(|(id, _)| id.as_str())
+            .collect(),
         None => Default::default(),
     };
     let name_of = |id: &str| -> String {
-        if id == "player" { "플레이어".to_string() } else { def.character(id).map(|c| c.name.clone()).unwrap_or_else(|| id.to_string()) }
+        if id == "player" {
+            "플레이어".to_string()
+        } else {
+            def.character(id).map(|c| c.name.clone()).unwrap_or_else(|| id.to_string())
+        }
     };
     let mut relations: Vec<(i64, serde_json::Value)> = Vec::new();
     if let Some(obj) = st.relationships_json.as_object() {
@@ -188,14 +206,23 @@ async fn snapshot(state: &State<'_, AppState>, character_id: &str) -> Result<Npc
             if other != "player" && !here.contains(other) {
                 continue;
             }
-            let values: serde_json::Map<String, serde_json::Value> = crate::game::engine::RELATION_AXES.iter().map(|ax| (ax.to_string(), serde_json::Value::from(val.get(ax).and_then(|v| v.as_i64()).unwrap_or(0)))).collect();
+            let values: serde_json::Map<String, serde_json::Value> = crate::game::engine::RELATION_AXES
+                .iter()
+                .map(|ax| (ax.to_string(), serde_json::Value::from(val.get(ax).and_then(|v| v.as_i64()).unwrap_or(0))))
+                .collect();
             let magnitude: i64 = values.values().filter_map(|v| v.as_i64()).map(|n| n.abs()).sum();
-            relations.push((magnitude, serde_json::json!({ "from": name_of(a), "to": name_of(b), "values": values, "tags": val.get("tags") })));
+            relations.push((
+                magnitude,
+                serde_json::json!({ "from": name_of(a), "to": name_of(b), "values": values, "tags": val.get("tags") }),
+            ));
         }
     }
     relations.sort_by(|x, y| y.0.cmp(&x.0));
     if let serde_json::Value::Object(m) = &mut extra_data {
-        m.insert("relationships".into(), serde_json::Value::Array(relations.into_iter().take(8).map(|(_, v)| v).collect()));
+        m.insert(
+            "relationships".into(),
+            serde_json::Value::Array(relations.into_iter().take(8).map(|(_, v)| v).collect()),
+        );
     }
 
     // 연출 지시에 필요한 목록. AI는 파일이 아니라 "이름"만 본다: 같은 장소에 있는 인물, 인물별 표정(스탠딩 감정명),
@@ -218,7 +245,10 @@ async fn snapshot(state: &State<'_, AppState>, character_id: &str) -> Result<Npc
         for id in std::iter::once(character_id).chain(present_ids.iter().map(|s| s.as_str())) {
             let list = def.standing_emotions(id);
             if !list.is_empty() {
-                emotions.insert(def.character(id).map(|c| c.name.clone()).unwrap_or_else(|| id.to_string()), serde_json::json!(list));
+                emotions.insert(
+                    def.character(id).map(|c| c.name.clone()).unwrap_or_else(|| id.to_string()),
+                    serde_json::json!(list),
+                );
             }
         }
         if let serde_json::Value::Object(m) = &mut extra_data {
@@ -344,12 +374,23 @@ async fn converse(
     let mut history: Vec<HistoryItem> = all_messages
         .into_iter()
         .skip(skip)
-        .map(|m| HistoryItem { images: vec![], role: m.role, content: m.content })
+        .map(|m| HistoryItem {
+            images: vec![],
+            role: m.role,
+            content: m.content,
+        })
         .collect();
 
     // 씬 입력: 앞서 나온 씬 대본을 첫 기록으로 넣는다 (대본 줄은 메시지로 저장돼 있지 않다).
     if let Some(script) = scene_script {
-        history.insert(0, HistoryItem { images: vec![], role: "assistant".to_string(), content: script });
+        history.insert(
+            0,
+            HistoryItem {
+                images: vec![],
+                role: "assistant".to_string(),
+                content: script,
+            },
+        );
     }
 
     // 페르소나는 항상 있다 — 새 게임 시작 때 세션에 고정된 player_id를 그대로 쓴다.
@@ -363,7 +404,8 @@ async fn converse(
     }
     let persona_info = format!("{}\n{}", persona.name, persona.description);
 
-    let context = ChatContext { user_images: vec![],
+    let context = ChatContext {
+        user_images: vec![],
         char_name: Some(snap.character_name.clone()),
         user_name: Some(persona.name.clone()),
         system_rules: match &mode {
@@ -385,7 +427,11 @@ async fn converse(
     };
 
     let (api_profile_id, prompt_preset_id) = crate::db::game::get_game_session_options(&state.db, &snap.session_id).await?;
-    let target = crate::service::chat::chat_manager::GameChatTarget { session_id: snap.session_id.clone(), api_profile_id, prompt_preset_id };
+    let target = crate::service::chat::chat_manager::GameChatTarget {
+        session_id: snap.session_id.clone(),
+        api_profile_id,
+        prompt_preset_id,
+    };
     let mut filter = crate::game::stream_filter::StreamTagFilter::default();
     let mut forward = |delta: &str| {
         if let Some(ch) = &channel {
@@ -412,8 +458,11 @@ async fn converse(
     // 씬 끝내기는 씬 입력에서만 받는다 (1:1 대화에는 끝낼 씬이 없다).
     let wants_end = matches!(mode, Mode::Scene) && scene_tags.iter().any(|t| t.trim().eq_ignore_ascii_case("end"));
     let effects: Vec<serde_json::Value> = var_tags.iter().take(MAX_UPDATE_TAGS).filter_map(|t| serde_json::from_str(t).ok()).collect();
-    let rel_effects: Vec<(Option<String>, serde_json::Value)> =
-        rel_tags.iter().take(MAX_UPDATE_TAGS).filter_map(|(target, body)| serde_json::from_str(body).ok().map(|v| (target.clone(), v))).collect();
+    let rel_effects: Vec<(Option<String>, serde_json::Value)> = rel_tags
+        .iter()
+        .take(MAX_UPDATE_TAGS)
+        .filter_map(|(target, body)| serde_json::from_str(body).ok().map(|v| (target.clone(), v)))
+        .collect();
 
     // 여기서부터는 런타임 락을 잡은 채로 끝까지 한다 — AI 호출 동안 사용자가 다른 세션으로 갈아탔을 수
     // 있어서 같은 세션인지 확인하고, seq 발급/저장/적용이 다른 커맨드와 섞이지 않게 하려는 것.
@@ -454,7 +503,11 @@ async fn converse(
         let plain = {
             let def = runtime.definition();
             crate::game::stage::to_plain(&lines, &|id: &str| {
-                if id == "player" { "플레이어".to_string() } else { def.character(id).map(|c| c.name.clone()).unwrap_or_else(|| id.to_string()) }
+                if id == "player" {
+                    "플레이어".to_string()
+                } else {
+                    def.character(id).map(|c| c.name.clone()).unwrap_or_else(|| id.to_string())
+                }
             })
         };
         runtime.commit_stage(&lines); // 무대 상태(stage_json)에 반영 — 아래 트랜잭션에서 세션과 함께 저장된다
@@ -467,23 +520,55 @@ async fn converse(
             meta.insert("choices".into(), serde_json::json!(choices));
         }
         if !changes.is_empty() {
-            meta.insert("varChanges".into(), serde_json::json!(changes.iter().map(|(k, o, n)| serde_json::json!({ "key": k, "old": o, "new": n })).collect::<Vec<_>>()));
+            meta.insert(
+                "varChanges".into(),
+                serde_json::json!(changes
+                    .iter()
+                    .map(|(k, o, n)| serde_json::json!({ "key": k, "old": o, "new": n }))
+                    .collect::<Vec<_>>()),
+            );
         }
         if !rel_changes.is_empty() {
-            meta.insert("relChanges".into(), serde_json::json!(rel_changes.iter().map(|(f, t, a, o, n)| serde_json::json!({ "from": f, "to": t, "axis": a, "old": o, "new": n })).collect::<Vec<_>>()));
+            meta.insert(
+                "relChanges".into(),
+                serde_json::json!(rel_changes
+                    .iter()
+                    .map(|(f, t, a, o, n)| serde_json::json!({ "from": f, "to": t, "axis": a, "old": o, "new": n }))
+                    .collect::<Vec<_>>()),
+            );
         }
         if !lines.is_empty() {
             meta.insert("lines".into(), serde_json::to_value(&lines).unwrap_or(serde_json::Value::Null));
         }
-        let ai_meta = if meta.is_empty() { serde_json::Value::Null } else { serde_json::Value::Object(meta) };
+        let ai_meta = if meta.is_empty() {
+            serde_json::Value::Null
+        } else {
+            serde_json::Value::Object(meta)
+        };
 
         // 메시지의 seq가 곧 그 메시지의 일지 항목 seq다 (같은 번호로 일지에도 한 줄 남긴다).
         // id는 미리 정해서 응답에 실어 보낸다 (화면에서 그 메시지를 고치거나 다시 만들 수 있게).
         let user_msg_id = uuid::Uuid::new_v4().to_string();
         let ai_msg_id = uuid::Uuid::new_v4().to_string();
         let messages = [
-            (user_seq, "user", None::<String>, None::<String>, trimmed.to_string(), serde_json::Value::Null, serde_json::json!([{ "kind": "dialogue", "speaker": "player", "text": trimmed, "cues": [] }])),
-            (ai_seq, "assistant", Some(snap.character_name.clone()), partner_id.clone(), plain.clone(), ai_meta, serde_json::to_value(&lines).unwrap_or(serde_json::json!([]))),
+            (
+                user_seq,
+                "user",
+                None::<String>,
+                None::<String>,
+                trimmed.to_string(),
+                serde_json::Value::Null,
+                serde_json::json!([{ "kind": "dialogue", "speaker": "player", "text": trimmed, "cues": [] }]),
+            ),
+            (
+                ai_seq,
+                "assistant",
+                Some(snap.character_name.clone()),
+                partner_id.clone(),
+                plain.clone(),
+                ai_meta,
+                serde_json::to_value(&lines).unwrap_or(serde_json::json!([])),
+            ),
         ];
 
         // head_seq 저장 + 메시지 + 일지를 한 트랜잭션으로.
@@ -494,7 +579,16 @@ async fn converse(
             upsert_game_message(
                 &mut *tx,
                 &conversation_id,
-                GameMessagesInput { id: Some(id), seq, conversation_id: conversation_id.clone(), role: role.to_string(), name, character_id: char_id, content, meta },
+                GameMessagesInput {
+                    id: Some(id),
+                    seq,
+                    conversation_id: conversation_id.clone(),
+                    role: role.to_string(),
+                    name,
+                    character_id: char_id,
+                    content,
+                    meta,
+                },
             )
             .await?;
             upsert_game_journal(
@@ -514,7 +608,11 @@ async fn converse(
 
         // 메시지가 저장된 뒤에 변수 변경을 적용한다. 이 경로는 프론트가 부를 수 있는 커맨드가 아니라
         // 런타임 안쪽 메서드라, AI(와 그 응답을 조작할 수 있는 입력)가 허용 목록 밖을 건드릴 수 없다.
-        let mut events = if changes.is_empty() && rel_changes.is_empty() { vec![] } else { runtime.apply_ai_changes(changes, rel_changes) };
+        let mut events = if changes.is_empty() && rel_changes.is_empty() {
+            vec![]
+        } else {
+            runtime.apply_ai_changes(changes, rel_changes)
+        };
         // AI가 씬을 끝내려 하면: 플레이어 입력이 minTurns 이상 오간 뒤에만 받아들인다 (너무 일찍 끝나는 걸 막는다).
         if wants_end {
             let allowed = user_turns >= runtime.scene_min_turns();
@@ -534,7 +632,14 @@ async fn converse(
         events.push(crate::game::runtime::GameEvent::ChoicePresented { choices });
     }
     events.extend(applied_events);
-    Ok(NpcReply { text: plain, message_id: Some(ai_msg_id), user_message_id: Some(user_msg_id), lines, events, state: render })
+    Ok(NpcReply {
+        text: plain,
+        message_id: Some(ai_msg_id),
+        user_message_id: Some(user_msg_id),
+        lines,
+        events,
+        state: render,
+    })
 }
 
 /// "<tag>값</tag>"와 "<tag::대상>값</tag>"를 뽑는다. → (태그를 뺀 본문, [(대상, 값)]).
@@ -591,14 +696,25 @@ async fn snapshot_scene(state: &State<'_, AppState>) -> Result<NpcSnapshot, AppE
     if !runtime.scene_chat_enabled() {
         return Err(match runtime.state().current_scene_id {
             None => AppError::game_blocked(BlockReason::NoOpenScene, "열린 씬이 없어 씬 입력을 쓸 수 없습니다"),
-            Some(_) => AppError::game_blocked(BlockReason::SceneChatDisabled, "이 씬에서는 씬 입력을 쓸 수 없습니다 (엔딩 씬이거나 AI 이어가기가 꺼진 씬)"),
+            Some(_) => AppError::game_blocked(
+                BlockReason::SceneChatDisabled,
+                "이 씬에서는 씬 입력을 쓸 수 없습니다 (엔딩 씬이거나 AI 이어가기가 꺼진 씬)",
+            ),
         });
     }
     let def = runtime.definition();
     let st = runtime.state();
-    let scene = st.current_scene_id.as_deref().and_then(|id| def.scene(id)).ok_or_else(|| AppError::game_blocked(BlockReason::NoOpenScene, "열려 있는 씬이 없습니다"))?;
+    let scene = st
+        .current_scene_id
+        .as_deref()
+        .and_then(|id| def.scene(id))
+        .ok_or_else(|| AppError::game_blocked(BlockReason::NoOpenScene, "열려 있는 씬이 없습니다"))?;
     let name_of = |id: &str| -> String {
-        if id == "player" { "플레이어".to_string() } else { def.character(id).map(|c| c.name.clone()).unwrap_or_else(|| id.to_string()) }
+        if id == "player" {
+            "플레이어".to_string()
+        } else {
+            def.character(id).map(|c| c.name.clone()).unwrap_or_else(|| id.to_string())
+        }
     };
 
     let mut present = runtime.present_npc_ids();
@@ -609,14 +725,23 @@ async fn snapshot_scene(state: &State<'_, AppState>) -> Result<NpcSnapshot, AppE
     info.push_str("\n\n[같은 장소에 있는 인물]");
     for id in &present {
         if let Some(c) = def.character(id) {
-            info.push_str(&format!("\n- {}: {}", c.name, c.description.clone().unwrap_or_default().chars().take(300).collect::<String>()));
+            info.push_str(&format!(
+                "\n- {}: {}",
+                c.name,
+                c.description.clone().unwrap_or_default().chars().take(300).collect::<String>()
+            ));
         }
     }
 
     // 앞선 대본(평문): 이름 접두를 되살려서 AI가 같은 형식으로 이어가게 한다.
     let scene_script = scene.script.as_deref().filter(|t| !t.trim().is_empty()).map(|script| {
         let mut rng = rand::rngs::StdRng::seed_from_u64(0);
-        let mut resolver = crate::game::runtime::DefResolver { def, rng: &mut rng, ai: false, player_name: None };
+        let mut resolver = crate::game::runtime::DefResolver {
+            def,
+            rng: &mut rng,
+            ai: false,
+            player_name: None,
+        };
         let lines = crate::game::stage::parse(script, &mut resolver, &crate::game::stage::Allowed::author());
         crate::game::stage::to_plain(&lines, &|id: &str| name_of(id))
     });
@@ -626,8 +751,10 @@ async fn snapshot_scene(state: &State<'_, AppState>) -> Result<NpcSnapshot, AppE
         .iter()
         .filter_map(|id| {
             let val = st.relationships_json.get(format!("{id}>player"))?;
-            let values: serde_json::Map<String, serde_json::Value> =
-                crate::game::engine::RELATION_AXES.iter().map(|ax| (ax.to_string(), serde_json::Value::from(val.get(ax).and_then(|v| v.as_i64()).unwrap_or(0)))).collect();
+            let values: serde_json::Map<String, serde_json::Value> = crate::game::engine::RELATION_AXES
+                .iter()
+                .map(|ax| (ax.to_string(), serde_json::Value::from(val.get(ax).and_then(|v| v.as_i64()).unwrap_or(0))))
+                .collect();
             Some(serde_json::json!({ "from": name_of(id), "to": "플레이어", "values": values, "tags": val.get("tags") }))
         })
         .collect();
@@ -709,9 +836,15 @@ mod tests {
 
     #[test]
     fn targeted_tags_keep_their_target() {
-        let (text, found) = super::extract_targeted("좋아요 <updateRel::유나>{\"affection\":1}</updateRel> <updateRel>{\"trust\":2}</updateRel>끝", "updateRel");
+        let (text, found) = super::extract_targeted(
+            "좋아요 <updateRel::유나>{\"affection\":1}</updateRel> <updateRel>{\"trust\":2}</updateRel>끝",
+            "updateRel",
+        );
         assert_eq!(text, "좋아요  끝");
-        assert_eq!(found, vec![(Some("유나".to_string()), "{\"affection\":1}".to_string()), (None, "{\"trust\":2}".to_string())]);
+        assert_eq!(
+            found,
+            vec![(Some("유나".to_string()), "{\"affection\":1}".to_string()), (None, "{\"trust\":2}".to_string())]
+        );
     }
 
     #[test]
@@ -784,7 +917,15 @@ pub async fn edit_message(state: &State<'_, AppState>, message_id: String, conte
             return Err(AppError::game_invalid_state("지금 열린 플레이의 메시지만 고칠 수 있습니다"));
         }
         if msg.role == "user" {
-            (vec![StageLine { kind: LineKind::Dialogue, speaker: Some("player".into()), text: content.clone(), cues: vec![] }], content.clone())
+            (
+                vec![StageLine {
+                    kind: LineKind::Dialogue,
+                    speaker: Some("player".into()),
+                    text: content.clone(),
+                    cues: vec![],
+                }],
+                content.clone(),
+            )
         } else {
             let mut speakers: std::collections::HashSet<String> = runtime.present_npc_ids().into_iter().collect();
             if let Some(c) = &msg.character_id {
@@ -793,7 +934,11 @@ pub async fn edit_message(state: &State<'_, AppState>, message_id: String, conte
             let lines = runtime.parse_ai_stage(&content, speakers, msg.character_id.as_deref());
             let def = runtime.definition();
             let plain = crate::game::stage::to_plain(&lines, &|id: &str| {
-                if id == "player" { "플레이어".to_string() } else { def.character(id).map(|c| c.name.clone()).unwrap_or_else(|| id.to_string()) }
+                if id == "player" {
+                    "플레이어".to_string()
+                } else {
+                    def.character(id).map(|c| c.name.clone()).unwrap_or_else(|| id.to_string())
+                }
             });
             (lines, plain)
         }
@@ -820,23 +965,39 @@ pub async fn edit_message(state: &State<'_, AppState>, message_id: String, conte
         .execute(&mut *tx)
         .await?;
     tx.commit().await?;
-    Ok(EditedGameMessage { id: msg.id, text: plain, lines })
+    Ok(EditedGameMessage {
+        id: msg.id,
+        text: plain,
+        lines,
+    })
 }
 
 /// 마지막 AI 응답을 다시 만든다: 그 응답과 플레이어 입력을 지우고, 응답이 바꾼 변수·관계를 되돌린 뒤
 /// 같은 입력으로 다시 보낸다. 그 뒤로 다른 일(명령, 이벤트)이 있었으면 되돌릴 수 없어 막는다.
-pub async fn regenerate_reply(app: AppHandle, state: &State<'_, AppState>, settings: &State<'_, SettingsState<AppSetting>>, message_id: String) -> Result<NpcReply, AppError> {
+pub async fn regenerate_reply(
+    app: AppHandle,
+    state: &State<'_, AppState>,
+    settings: &State<'_, SettingsState<AppSetting>>,
+    message_id: String,
+) -> Result<NpcReply, AppError> {
     let game_id = current_game_id(state)?;
     let (msg, session_id, participants_key) = load_message(state, &message_id).await?;
     if msg.role != "assistant" {
         return Err(AppError::validation("AI 응답만 다시 만들 수 있습니다", None));
     }
     let all = get_game_messages(&state.db, &msg.conversation_id).await?;
-    let pos = all.iter().position(|m| m.id == msg.id).ok_or_else(|| AppError::not_found("메시지를 찾을 수 없습니다"))?;
+    let pos = all
+        .iter()
+        .position(|m| m.id == msg.id)
+        .ok_or_else(|| AppError::not_found("메시지를 찾을 수 없습니다"))?;
     if pos + 1 != all.len() {
         return Err(AppError::game_invalid_state("가장 최근 응답만 다시 만들 수 있습니다"));
     }
-    let user = pos.checked_sub(1).map(|i| &all[i]).filter(|m| m.role == "user").ok_or_else(|| AppError::validation("이 응답의 입력을 찾을 수 없습니다", None))?;
+    let user = pos
+        .checked_sub(1)
+        .map(|i| &all[i])
+        .filter(|m| m.role == "user")
+        .ok_or_else(|| AppError::validation("이 응답의 입력을 찾을 수 없습니다", None))?;
     let input = user.content.clone();
 
     // 이 응답 뒤의 일지: 이 응답이 일으킨 변수·관계 변경만 있어야 한다
@@ -847,7 +1008,10 @@ pub async fn regenerate_reply(app: AppHandle, state: &State<'_, AppState>, setti
         .await?;
     const OWN: [&str; 3] = ["variableChanged", "relationChangeRequested", "relationChanged"];
     let blocked = later.iter().any(|(kind, payload)| {
-        let t = payload.as_deref().and_then(|p| serde_json::from_str::<serde_json::Value>(p).ok()).and_then(|v| v.get("type").and_then(|t| t.as_str()).map(str::to_string));
+        let t = payload
+            .as_deref()
+            .and_then(|p| serde_json::from_str::<serde_json::Value>(p).ok())
+            .and_then(|v| v.get("type").and_then(|t| t.as_str()).map(str::to_string));
         kind != "event" || !t.is_some_and(|t| OWN.contains(&t.as_str()))
     });
     if blocked {
@@ -860,7 +1024,18 @@ pub async fn regenerate_reply(app: AppHandle, state: &State<'_, AppState>, setti
         .unwrap_or_default();
     let rels: Vec<(String, String, String, i64)> = msg.meta["relChanges"]
         .as_array()
-        .map(|a| a.iter().filter_map(|c| Some((c["from"].as_str()?.to_string(), c["to"].as_str()?.to_string(), c["axis"].as_str()?.to_string(), c["old"].as_i64()?))).collect())
+        .map(|a| {
+            a.iter()
+                .filter_map(|c| {
+                    Some((
+                        c["from"].as_str()?.to_string(),
+                        c["to"].as_str()?.to_string(),
+                        c["axis"].as_str()?.to_string(),
+                        c["old"].as_i64()?,
+                    ))
+                })
+                .collect()
+        })
         .unwrap_or_default();
 
     {
@@ -872,16 +1047,32 @@ pub async fn regenerate_reply(app: AppHandle, state: &State<'_, AppState>, setti
         runtime.rollback_ai_changes(&vars, &rels);
         let mut tx = state.db.begin().await?;
         upsert_game_player_sessions(&mut *tx, runtime.state().to_session_input(game_id.clone())).await?;
-        sqlx::query("DELETE FROM game_journal WHERE session_id = ? AND seq >= ?").bind(&session_id).bind(user.seq).execute(&mut *tx).await?;
-        sqlx::query("DELETE FROM game_relationship_snapshots WHERE session_id = ? AND seq >= ?").bind(&session_id).bind(user.seq).execute(&mut *tx).await?;
-        sqlx::query("DELETE FROM game_messages WHERE id IN (?, ?)").bind(&user.id).bind(&msg.id).execute(&mut *tx).await?;
+        sqlx::query("DELETE FROM game_journal WHERE session_id = ? AND seq >= ?")
+            .bind(&session_id)
+            .bind(user.seq)
+            .execute(&mut *tx)
+            .await?;
+        sqlx::query("DELETE FROM game_relationship_snapshots WHERE session_id = ? AND seq >= ?")
+            .bind(&session_id)
+            .bind(user.seq)
+            .execute(&mut *tx)
+            .await?;
+        sqlx::query("DELETE FROM game_messages WHERE id IN (?, ?)")
+            .bind(&user.id)
+            .bind(&msg.id)
+            .execute(&mut *tx)
+            .await?;
         tx.commit().await?;
     }
 
     let mode = if participants_key == SCENE_PARTICIPANTS_KEY {
         Mode::Scene
     } else {
-        Mode::Npc(msg.character_id.clone().ok_or_else(|| AppError::validation("대화 상대를 찾을 수 없습니다", None))?)
+        Mode::Npc(
+            msg.character_id
+                .clone()
+                .ok_or_else(|| AppError::validation("대화 상대를 찾을 수 없습니다", None))?,
+        )
     };
     converse(app, state, settings, mode, input, None).await
 }

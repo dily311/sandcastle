@@ -41,30 +41,18 @@ pub fn normalize_key(raw: &str) -> Result<String> {
         return Err(AppError::validation("이미지 키가 비어 있습니다", None));
     }
     if key.chars().any(|c| matches!(c, '<' | '>' | '/' | '\\' | ',')) {
-        return Err(AppError::validation(
-            "이미지 키에는 < > / \\ , 를 쓸 수 없습니다",
-            None,
-        ));
+        return Err(AppError::validation("이미지 키에는 < > / \\ , 를 쓸 수 없습니다", None));
     }
     if key.chars().count() > MAX_KEY_CHARS {
-        return Err(AppError::validation(
-            format!("이미지 키는 {MAX_KEY_CHARS}자 이하로 정해 주세요"),
-            None,
-        ));
+        return Err(AppError::validation(format!("이미지 키는 {MAX_KEY_CHARS}자 이하로 정해 주세요"), None));
     }
     Ok(key)
 }
 
 /// 파일 이름에서 기본 키 만들기 ("Smile Big.png" → "Smile Big")
 pub fn key_from_path(path: &Path) -> String {
-    let stem = path
-        .file_stem()
-        .map(|s| s.to_string_lossy().to_string())
-        .unwrap_or_default();
-    let cleaned: String = stem
-        .chars()
-        .map(|c| if matches!(c, '<' | '>' | '/' | '\\' | ',') { '_' } else { c })
-        .collect();
+    let stem = path.file_stem().map(|s| s.to_string_lossy().to_string()).unwrap_or_default();
+    let cleaned: String = stem.chars().map(|c| if matches!(c, '<' | '>' | '/' | '\\' | ',') { '_' } else { c }).collect();
     let cleaned = cleaned.split_whitespace().collect::<Vec<_>>().join(" ");
     let truncated: String = cleaned.chars().take(MAX_KEY_CHARS).collect();
     if truncated.is_empty() {
@@ -85,14 +73,8 @@ pub fn relative_dir(character_id: &str) -> PathBuf {
 
 /// 사용자가 고른 파일을 읽어 webp 원본 + 썸네일로 저장. (원본 상대 경로, 썸네일 상대 경로) 반환.
 /// 이미지 디코딩/인코딩이 무거우므로 blocking 스레드에서 부를 것.
-pub fn store_image_file(
-    app_data_dir: &Path,
-    character_id: &str,
-    image_id: &str,
-    source: &Path,
-) -> Result<(String, String)> {
-    let meta = std::fs::metadata(source)
-        .map_err(|e| AppError::io(format!("파일을 열 수 없습니다 ({}): {e}", source.display())))?;
+pub fn store_image_file(app_data_dir: &Path, character_id: &str, image_id: &str, source: &Path) -> Result<(String, String)> {
+    let meta = std::fs::metadata(source).map_err(|e| AppError::io(format!("파일을 열 수 없습니다 ({}): {e}", source.display())))?;
     if !meta.is_file() {
         return Err(AppError::validation("파일이 아닙니다", None));
     }
@@ -104,10 +86,7 @@ pub fn store_image_file(
     }
     let bytes = std::fs::read(source)?;
     if !infer::is_image(&bytes) {
-        return Err(AppError::validation(
-            format!("이미지 파일이 아닙니다: {}", source.display()),
-            None,
-        ));
+        return Err(AppError::validation(format!("이미지 파일이 아닙니다: {}", source.display()), None));
     }
 
     let rel_dir = relative_dir(character_id);
@@ -124,12 +103,7 @@ pub fn store_image_file(
 
 /// 여러 이미지를 캐릭터에 추가. 하나가 실패하면 거기서 멈추고, 앞서 추가된 것은 남긴다.
 /// 이미지 변환은 blocking 스레드에서 한다.
-pub async fn add_images(
-    db: &DbPool,
-    app_data_dir: &Path,
-    character_id: &str,
-    paths: &[PathBuf],
-) -> Result<Vec<CharacterImage>> {
+pub async fn add_images(db: &DbPool, app_data_dir: &Path, character_id: &str, paths: &[PathBuf]) -> Result<Vec<CharacterImage>> {
     if !db::conversation::char_exists(db, character_id).await? {
         return Err(AppError::not_found("존재하지 않는 캐릭터입니다"));
     }
@@ -145,8 +119,7 @@ pub async fn add_images(
                 .await?;
         let id = existing.as_ref().map(|e| e.0.clone()).unwrap_or_else(|| Uuid::new_v4().to_string());
         let (file_path, thumb_path) = {
-            let (base, cid, id, source) =
-                (app_data_dir.to_path_buf(), character_id.to_string(), id.clone(), source.clone());
+            let (base, cid, id, source) = (app_data_dir.to_path_buf(), character_id.to_string(), id.clone(), source.clone());
             tokio::task::spawn_blocking(move || store_image_file(&base, &cid, &id, &source))
                 .await
                 .map_err(|e| AppError::internal(e.to_string()))??
@@ -161,7 +134,17 @@ pub async fn add_images(
                 .bind(&id)
                 .execute(db)
                 .await?;
-            let row = CharacterImageRow { id, character_id: character_id.to_string(), key, file_path, thumb_path: Some(thumb_path), enabled, sort_order, created_at, updated_at: now };
+            let row = CharacterImageRow {
+                id,
+                character_id: character_id.to_string(),
+                key,
+                file_path,
+                thumb_path: Some(thumb_path),
+                enabled,
+                sort_order,
+                created_at,
+                updated_at: now,
+            };
             added.push(CharacterImage::from_row(row, app_data_dir));
             continue;
         }
@@ -185,7 +168,6 @@ pub async fn add_images(
     Ok(added)
 }
 
-
 /// ZIP 안의 그림들을 임시 폴더에 풀어 경로를 돌려준다 (폴더 구조는 버리고 파일 이름만, 최대 500장)
 pub fn extract_zip_images(zip_path: &Path, out_dir: &Path) -> Result<Vec<PathBuf>> {
     let file = std::fs::File::open(zip_path).map_err(|e| AppError::io(format!("ZIP을 열 수 없습니다: {e}")))?;
@@ -197,7 +179,9 @@ pub fn extract_zip_images(zip_path: &Path, out_dir: &Path) -> Result<Vec<PathBuf
         if f.is_dir() || f.size() > MAX_IMAGE_BYTES {
             continue;
         }
-        let Some(name) = std::path::Path::new(f.name()).file_name().map(|n| n.to_string_lossy().into_owned()) else { continue };
+        let Some(name) = std::path::Path::new(f.name()).file_name().map(|n| n.to_string_lossy().into_owned()) else {
+            continue;
+        };
         let ext = name.rsplit('.').next().unwrap_or_default().to_ascii_lowercase();
         if name.starts_with('.') || !["png", "jpg", "jpeg", "webp", "gif"].contains(&ext.as_str()) {
             continue;
@@ -234,12 +218,7 @@ pub fn remove_character_dir(app_data_dir: &Path, character_id: &str) {
 
 /// 모델에게 보낼 이미지 규칙 + 키 목록 ({{char}}는 PromptManager가 치환)
 pub fn image_rules(images: &[CharacterImage]) -> Option<String> {
-    let keys: Vec<&str> = images
-        .iter()
-        .filter(|i| i.enabled)
-        .take(MAX_PROMPT_KEYS)
-        .map(|i| i.key.as_str())
-        .collect();
+    let keys: Vec<&str> = images.iter().filter(|i| i.enabled).take(MAX_PROMPT_KEYS).map(|i| i.key.as_str()).collect();
     if keys.is_empty() {
         return None;
     }
@@ -288,10 +267,7 @@ fn rewrite_cg_tags(text: &str, mut replace: impl FnMut(&str) -> Option<String>) 
         let start = pos + rel;
         out.push_str(&text[pos..start]);
         let key_start = start + OPEN.len();
-        let line_end = lower[key_start..]
-            .find('\n')
-            .map(|i| key_start + i)
-            .unwrap_or(text.len());
+        let line_end = lower[key_start..].find('\n').map(|i| key_start + i).unwrap_or(text.len());
         match lower[key_start..line_end].find(CLOSE) {
             Some(rel_close) => {
                 let key_end = key_start + rel_close;

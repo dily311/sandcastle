@@ -11,10 +11,7 @@ use crate::{
     db::conn::DbPool,
     error::AppError,
     task::{
-        task_models::{
-            AttemptInfo, AttemptRow, AttemptStatus, CreateTaskRequest, TaskErrorInfo, TaskInfo,
-            TaskInfoRow, TaskOutput, TaskStatus,
-        },
+        task_models::{AttemptInfo, AttemptRow, AttemptStatus, CreateTaskRequest, TaskErrorInfo, TaskInfo, TaskInfoRow, TaskOutput, TaskStatus},
         task_state::validate_transition,
     },
 };
@@ -64,17 +61,12 @@ impl TaskRepository {
             .ok_or_else(|| AppError::not_found(format!("작업을 찾을 수 없습니다: {task_id}")))
     }
 
-    pub(super) async fn find_by_statuses(
-        &self,
-        statuses: &[TaskStatus],
-    ) -> Result<Vec<TaskInfo>, AppError> {
+    pub(super) async fn find_by_statuses(&self, statuses: &[TaskStatus]) -> Result<Vec<TaskInfo>, AppError> {
         if statuses.is_empty() {
             return Ok(vec![]);
         }
         let placeholders = vec!["?"; statuses.len()].join(", ");
-        let sql = format!(
-            "SELECT {TASK_COLUMNS} FROM generation_tasks WHERE status IN ({placeholders}) ORDER BY created_at ASC"
-        );
+        let sql = format!("SELECT {TASK_COLUMNS} FROM generation_tasks WHERE status IN ({placeholders}) ORDER BY created_at ASC");
         let mut query = sqlx::query_as::<_, TaskInfoRow>(AssertSqlSafe(sql));
         for s in statuses {
             query = query.bind(s.to_string());
@@ -83,17 +75,9 @@ impl TaskRepository {
         rows.into_iter().map(TaskInfo::try_from).collect()
     }
 
-    pub(super) async fn find_by_owner_ref(
-        &self,
-        owner_ref: &str,
-    ) -> Result<Vec<TaskInfo>, AppError> {
-        let sql = format!(
-            "SELECT {TASK_COLUMNS} FROM generation_tasks WHERE owner_ref = ? ORDER BY created_at ASC"
-        );
-        let rows = sqlx::query_as::<_, TaskInfoRow>(AssertSqlSafe(sql))
-            .bind(owner_ref)
-            .fetch_all(&self.db)
-            .await?;
+    pub(super) async fn find_by_owner_ref(&self, owner_ref: &str) -> Result<Vec<TaskInfo>, AppError> {
+        let sql = format!("SELECT {TASK_COLUMNS} FROM generation_tasks WHERE owner_ref = ? ORDER BY created_at ASC");
+        let rows = sqlx::query_as::<_, TaskInfoRow>(AssertSqlSafe(sql)).bind(owner_ref).fetch_all(&self.db).await?;
         rows.into_iter().map(TaskInfo::try_from).collect()
     }
 
@@ -148,24 +132,14 @@ impl TaskRepository {
     /// - Running 진입: started_at이 비어 있으면 채움
     /// - Pending 복귀: 이전 오류/결과/종료 시각 초기화
     /// - 그 외 종료 상태: finished_at 기록
-    pub(super) async fn transition(
-        &self,
-        task_id: &str,
-        from: TaskStatus,
-        to: TaskStatus,
-        patch: TransitionPatch,
-    ) -> Result<TaskInfo, AppError> {
+    pub(super) async fn transition(&self, task_id: &str, from: TaskStatus, to: TaskStatus, patch: TransitionPatch) -> Result<TaskInfo, AppError> {
         validate_transition(from, to)?;
         let ts = now();
         let finished_at: Option<i64> = match to {
             TaskStatus::Pending | TaskStatus::Running => None,
             _ => Some(ts),
         };
-        let result_json = patch
-            .result
-            .as_ref()
-            .map(serde_json::to_string)
-            .transpose()?;
+        let result_json = patch.result.as_ref().map(serde_json::to_string).transpose()?;
 
         let res = sqlx::query(
             r#"
@@ -197,10 +171,7 @@ impl TaskRepository {
             let current = self.get(task_id).await?;
             return Err(AppError::Validation {
                 code: crate::error::ErrorCode::TaskInvalidTransition,
-                message: format!(
-                    "작업 상태가 이미 바뀌었습니다 (기대: {from}, 현재: {})",
-                    current.status
-                ),
+                message: format!("작업 상태가 이미 바뀌었습니다 (기대: {from}, 현재: {})", current.status),
                 details: None,
             });
         }
@@ -244,12 +215,10 @@ impl TaskRepository {
         let id = Uuid::new_v4().to_string();
         let ts = now();
         let mut tx = self.db.begin().await?;
-        let next_no: i64 = sqlx::query_scalar(
-            "SELECT COALESCE(MAX(attempt_no), 0) + 1 FROM task_attempts WHERE task_id = ?",
-        )
-        .bind(task_id)
-        .fetch_one(&mut *tx)
-        .await?;
+        let next_no: i64 = sqlx::query_scalar("SELECT COALESCE(MAX(attempt_no), 0) + 1 FROM task_attempts WHERE task_id = ?")
+            .bind(task_id)
+            .fetch_one(&mut *tx)
+            .await?;
         sqlx::query(
             r#"
             INSERT INTO task_attempts (id, task_id, attempt_no, status, started_at)
@@ -262,13 +231,11 @@ impl TaskRepository {
         .bind(ts)
         .execute(&mut *tx)
         .await?;
-        sqlx::query(
-            "UPDATE generation_tasks SET attempt_count = attempt_count + 1, updated_at = ? WHERE id = ?",
-        )
-        .bind(ts)
-        .bind(task_id)
-        .execute(&mut *tx)
-        .await?;
+        sqlx::query("UPDATE generation_tasks SET attempt_count = attempt_count + 1, updated_at = ? WHERE id = ?")
+            .bind(ts)
+            .bind(task_id)
+            .execute(&mut *tx)
+            .await?;
         tx.commit().await?;
 
         Ok(AttemptInfo {
@@ -282,12 +249,7 @@ impl TaskRepository {
         })
     }
 
-    pub(super) async fn close_attempt(
-        &self,
-        attempt_id: &str,
-        status: AttemptStatus,
-        error: Option<&TaskErrorInfo>,
-    ) -> Result<(), AppError> {
+    pub(super) async fn close_attempt(&self, attempt_id: &str, status: AttemptStatus, error: Option<&TaskErrorInfo>) -> Result<(), AppError> {
         sqlx::query(
             r#"
             UPDATE task_attempts SET status = ?, error_code = ?, error_message = ?, finished_at = ?

@@ -14,18 +14,12 @@ where
     E: Executor<'e, Database = Sqlite>,
 {
     let sql = format!("SELECT {COLUMNS} FROM regex_scripts ORDER BY scope, sort_order, created_at");
-    let rows = sqlx::query_as::<_, RegexScriptRow>(sqlx::AssertSqlSafe(sql))
-        .fetch_all(executor)
-        .await?;
+    let rows = sqlx::query_as::<_, RegexScriptRow>(sqlx::AssertSqlSafe(sql)).fetch_all(executor).await?;
     Ok(rows.into_iter().map(Into::into).collect())
 }
 
 /// 이 문맥에서 적용될 수 있는 스크립트 (전역 + 해당 캐릭터 + 해당 프리셋). 꺼진 것 포함.
-pub async fn get_regex_scripts_for<'e, E>(
-    executor: E,
-    character_id: Option<&str>,
-    preset_id: Option<&str>,
-) -> Result<Vec<RegexScript>, Error>
+pub async fn get_regex_scripts_for<'e, E>(executor: E, character_id: Option<&str>, preset_id: Option<&str>) -> Result<Vec<RegexScript>, Error>
 where
     E: Executor<'e, Database = Sqlite>,
 {
@@ -122,9 +116,6 @@ pub async fn delete_regex_script<'e, E>(executor: E, id: &str) -> Result<bool, E
 where
     E: Executor<'e, Database = Sqlite>,
 {
-    let res = sqlx::query("DELETE FROM regex_scripts WHERE id = ?")
-        .bind(id)
-        .execute(executor)
-        .await?;
+    let res = sqlx::query("DELETE FROM regex_scripts WHERE id = ?").bind(id).execute(executor).await?;
     Ok(res.rows_affected() != 0)
 }

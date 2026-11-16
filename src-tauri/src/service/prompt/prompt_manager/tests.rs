@@ -4,7 +4,8 @@ use super::*;
 use crate::models::ai_service::HistoryItem;
 
 fn ctx() -> ChatContext {
-    ChatContext { user_images: vec![],
+    ChatContext {
+        user_images: vec![],
         system_rules: vec!["Stay in character as {{char}}.".into()],
         char_name: Some("Aria".into()),
         user_name: Some("Min".into()),
@@ -30,14 +31,16 @@ fn request(context: ChatContext, user_message: &str) -> PromptRequest {
 }
 
 fn hist(role: &str, content: &str) -> HistoryItem {
-    HistoryItem { images: vec![],
+    HistoryItem {
+        images: vec![],
         role: role.into(),
         content: content.into(),
     }
 }
 
 fn wi(id: &str, keys: &[&str], content: &str, constant: bool, priority: i64) -> WorldInfoEntry {
-    WorldInfoEntry { comment: String::new(),
+    WorldInfoEntry {
+        comment: String::new(),
         id: id.into(),
         book_id: "b".into(),
         keys: keys.iter().map(|s| s.to_string()).collect(),
@@ -99,10 +102,7 @@ fn default_layout_puts_rules_first_and_user_last() {
     let s = shape(&p);
 
     assert_eq!(s[0], (PromptRole::System, "Stay in character as Aria.".into()));
-    assert_eq!(
-        s[1],
-        (PromptRole::System, "[Character: Aria]\nAria is a knight who protects Min.".into())
-    );
+    assert_eq!(s[1], (PromptRole::System, "[Character: Aria]\nAria is a knight who protects Min.".into()));
     assert_eq!(s[2], (PromptRole::System, "[User: Min]\nA traveler.".into()));
     assert_eq!(s[3], (PromptRole::User, "hello".into()));
     assert_eq!(s[4], (PromptRole::Assistant, "greetings".into()));
@@ -117,7 +117,17 @@ fn history_is_trimmed_from_oldest() {
     let mut req = request(c.clone(), "latest");
     // 히스토리 없이 들어가는 고정 부분 + 메시지 3개 정도만 들어갈 예산
     let fixed = PromptManager
-        .build(request(ChatContext { user_images: vec![], history: vec![], ..c }, "latest"), None)
+        .build(
+            request(
+                ChatContext {
+                    user_images: vec![],
+                    history: vec![],
+                    ..c
+                },
+                "latest",
+            ),
+            None,
+        )
         .unwrap()
         .total_tokens() as u32;
     let per_msg = count_message_tokens("message number 49") as u32;
@@ -149,27 +159,27 @@ fn world_info_uses_keywords_constants_and_priority() {
         wi("w1", &["dragon"], "Dragons breathe fire.", false, 1), // 중복 id
     ];
     let p = PromptManager.build(request(c, "we reach the castle"), None).unwrap();
-    let wi_msg = p
-        .messages
-        .iter()
-        .find(|m| m.content.starts_with("[World Info]"))
-        .expect("월드인포 메시지");
-    assert_eq!(
-        wi_msg.content,
-        "[World Info]\nThe kingdom is at war.\nDragons breathe fire."
-    );
+    let wi_msg = p.messages.iter().find(|m| m.content.starts_with("[World Info]")).expect("월드인포 메시지");
+    assert_eq!(wi_msg.content, "[World Info]\nThe kingdom is at war.\nDragons breathe fire.");
 }
 
 #[test]
 fn world_info_respects_budget_ratio() {
     let mut c = ctx();
-    c.world_info = vec![
-        wi("big", &[], &"lore ".repeat(400), true, 10),
-        wi("small", &[], "Short fact.", true, 0),
-    ];
+    c.world_info = vec![wi("big", &[], &"lore ".repeat(400), true, 10), wi("small", &[], "Short fact.", true, 0)];
     let mut req = request(c.clone(), "hi");
     let fixed = PromptManager
-        .build(request(ChatContext { user_images: vec![], world_info: vec![], ..c }, "hi"), None)
+        .build(
+            request(
+                ChatContext {
+                    user_images: vec![],
+                    world_info: vec![],
+                    ..c
+                },
+                "hi",
+            ),
+            None,
+        )
         .unwrap()
         .total_tokens() as u32;
     req.context_limit = fixed + 100 + ChatOptions::default().max_tokens.unwrap();
@@ -184,11 +194,7 @@ fn world_info_respects_budget_ratio() {
 #[test]
 fn preset_blocks_markers_in_chat_and_triggers() {
     let mut c = ctx();
-    c.history = vec![
-        hist("user", "h1"),
-        hist("assistant", "h2"),
-        hist("user", "h3"),
-    ];
+    c.history = vec![hist("user", "h1"), hist("assistant", "h2"), hist("user", "h3")];
     let mut in_chat_d1 = block("authorNote", "system", "Note for {{char}}", 10);
     in_chat_d1.position = "in_chat".into();
     in_chat_d1.depth = 1;
@@ -325,12 +331,21 @@ fn character_main_prompt_replaces_main_block() {
 fn attached_images_ride_along_with_their_messages() {
     let mut c = ctx();
     c.history = vec![
-        HistoryItem { images: vec!["a.png".into()], role: "user".into(), content: "".into() },
+        HistoryItem {
+            images: vec!["a.png".into()],
+            role: "user".into(),
+            content: "".into(),
+        },
         hist("assistant", "nice picture"),
     ];
     c.user_images = vec!["b.jpg".into()];
     let p = PromptManager.build(request(c, "and this one?"), None).unwrap();
-    let with_images: Vec<_> = p.messages.iter().filter(|m| !m.images.is_empty()).map(|m| (m.content.as_str(), m.images.clone())).collect();
+    let with_images: Vec<_> = p
+        .messages
+        .iter()
+        .filter(|m| !m.images.is_empty())
+        .map(|m| (m.content.as_str(), m.images.clone()))
+        .collect();
     assert_eq!(with_images, vec![("", vec!["a.png".to_string()]), ("and this one?", vec!["b.jpg".to_string()])]);
 
     // 글 없이 이미지만 보내도 사용자 차례가 생김

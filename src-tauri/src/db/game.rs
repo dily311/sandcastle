@@ -1,13 +1,18 @@
-use uuid::Uuid;
+use crate::models::{
+    conversation::{WorldInfoEntry, WorldInfoEntryRow},
+    game::*,
+};
 use sqlx::{Error, Executor, Sqlite, Transaction};
-use crate::{models::{conversation::{WorldInfoEntry, WorldInfoEntryRow}, game::*}};
-
+use uuid::Uuid;
 
 // ---------------------------------------------------------
 // 게임 프로젝트
 // ---------------------------------------------------------
 /** 게임 프로젝트들 모두 불러오기 */
-pub async fn get_all_game_projects<'e, E>(executor: E) -> Result<Vec<GameProject>, Error> where E: Executor<'e, Database = Sqlite> {
+pub async fn get_all_game_projects<'e, E>(executor: E) -> Result<Vec<GameProject>, Error>
+where
+    E: Executor<'e, Database = Sqlite>,
+{
     let rows = sqlx::query_as::<_, GameProjectRow>(
         r#"
         SELECT 
@@ -39,7 +44,10 @@ pub async fn get_all_game_projects<'e, E>(executor: E) -> Result<Vec<GameProject
     Ok(rows.into_iter().map(Into::into).collect())
 }
 /** 게임 프로젝트 불러오기 */
-pub async fn get_game_project<'e, E>(executor: E, id: &str) -> Result<GameProject, Error> where E: Executor<'e, Database = Sqlite> {
+pub async fn get_game_project<'e, E>(executor: E, id: &str) -> Result<GameProject, Error>
+where
+    E: Executor<'e, Database = Sqlite>,
+{
     let row = sqlx::query_as::<_, GameProjectRow>(
         r#"
         SELECT
@@ -73,7 +81,10 @@ pub async fn get_game_project<'e, E>(executor: E, id: &str) -> Result<GameProjec
 }
 
 /** 게임 프로젝트 생성/업데이트 */
-pub async fn upsert_game_project<'e, E>(executor: E, input: &GameProjectInput) -> Result<(), Error> where E: Executor<'e, Database = Sqlite> {
+pub async fn upsert_game_project<'e, E>(executor: E, input: &GameProjectInput) -> Result<(), Error>
+where
+    E: Executor<'e, Database = Sqlite>,
+{
     let id = input.id.clone().unwrap_or_else(|| Uuid::new_v4().to_string());
     let now = chrono::Utc::now().timestamp_millis();
     sqlx::query(
@@ -118,17 +129,20 @@ pub async fn upsert_game_project<'e, E>(executor: E, input: &GameProjectInput) -
  * return true: 삭제됨
  *        false: 해당 칼럼을 찾을 수 없음
 */
-pub async fn delete_game_project<'e, E>(executor: E, id: &str) -> Result<bool, Error> where E: Executor<'e, Database = Sqlite> {
-    let result = sqlx::query("DELETE FROM game_projects WHERE id = ?")
-        .bind(&id)
-        .execute(executor)
-        .await?;
+pub async fn delete_game_project<'e, E>(executor: E, id: &str) -> Result<bool, Error>
+where
+    E: Executor<'e, Database = Sqlite>,
+{
+    let result = sqlx::query("DELETE FROM game_projects WHERE id = ?").bind(&id).execute(executor).await?;
     Ok(result.rows_affected() != 0)
 }
 
-pub async fn get_game_worldinfo<'e, E>(executor: E, game_id: &str) -> Result<Vec<WorldInfoEntry>, Error> where E: Executor<'e, Database = Sqlite> {
+pub async fn get_game_worldinfo<'e, E>(executor: E, game_id: &str) -> Result<Vec<WorldInfoEntry>, Error>
+where
+    E: Executor<'e, Database = Sqlite>,
+{
     let rows = sqlx::query_as::<_, WorldInfoEntryRow>(
-    r#"
+        r#"
         SELECT id, book_id, keys, secondary_keys, content, enabled, priority, constant
         FROM worldinfo_entries
         WHERE enabled = 1
@@ -147,7 +161,10 @@ pub async fn get_game_worldinfo<'e, E>(executor: E, game_id: &str) -> Result<Vec
 // 게임 변수
 // ---------------------------------------------------------
 /** 특정 게임 state 모두 가져오기 */
-pub async fn get_all_game_state_defs<'e, E>(executor: E, game_id: &str) -> Result<Vec<GameStateDef>, Error> where E: Executor<'e, Database = Sqlite> {
+pub async fn get_all_game_state_defs<'e, E>(executor: E, game_id: &str) -> Result<Vec<GameStateDef>, Error>
+where
+    E: Executor<'e, Database = Sqlite>,
+{
     let state_defs = sqlx::query_as::<_, GameStateDefRow>(
         r#"
         SELECT id, game_id, description, key, type, default_value, config_json, created_at, updated_at 
@@ -163,7 +180,10 @@ pub async fn get_all_game_state_defs<'e, E>(executor: E, game_id: &str) -> Resul
 }
 
 /** 특정 게임 state 모두 업데이트 */
-pub async fn upsert_game_state_defs<'e, E>(executor: E, game_id: &str, state_def: &GameStateDefInput) -> Result<(), Error> where E: Executor<'e, Database = Sqlite> {
+pub async fn upsert_game_state_defs<'e, E>(executor: E, game_id: &str, state_def: &GameStateDefInput) -> Result<(), Error>
+where
+    E: Executor<'e, Database = Sqlite>,
+{
     let id = state_def.id.clone().unwrap_or_else(|| Uuid::new_v4().to_string());
     let now = chrono::Utc::now().timestamp_millis();
     sqlx::query(
@@ -192,23 +212,26 @@ pub async fn upsert_game_state_defs<'e, E>(executor: E, game_id: &str, state_def
     Ok(())
 }
 
-/** 특정 state 제거 
+/** 특정 state 제거
  * return true: 삭제됨
  *        false: 해당 칼럼을 찾을 수 없음
 */
-pub async fn delete_game_state_def<'e, E>(executor: E, id: &str) -> Result<bool, Error> where E: Executor<'e, Database = Sqlite> {
-    let result = sqlx::query("DELETE FROM game_state_defs WHERE id = ?")
-        .bind(&id)
-        .execute(executor)
-        .await?;
+pub async fn delete_game_state_def<'e, E>(executor: E, id: &str) -> Result<bool, Error>
+where
+    E: Executor<'e, Database = Sqlite>,
+{
+    let result = sqlx::query("DELETE FROM game_state_defs WHERE id = ?").bind(&id).execute(executor).await?;
     Ok(result.rows_affected() != 0)
 }
 
-/** 한 게임에 관련된 state들을 모두 제거 
+/** 한 게임에 관련된 state들을 모두 제거
  * return true: 삭제됨
  *        false: 해당 칼럼을 찾을 수 없음
 */
-pub async fn delete_game_all_state_defs<'e, E>(executor: E, game_id: &str) -> Result<bool, Error> where E: Executor<'e, Database = Sqlite> {
+pub async fn delete_game_all_state_defs<'e, E>(executor: E, game_id: &str) -> Result<bool, Error>
+where
+    E: Executor<'e, Database = Sqlite>,
+{
     let result = sqlx::query("DELETE FROM game_state_defs WHERE game_id = ?")
         .bind(&game_id)
         .execute(executor)
@@ -219,9 +242,12 @@ pub async fn delete_game_all_state_defs<'e, E>(executor: E, game_id: &str) -> Re
 // ---------------------------------------------------------
 // 게임 캐릭터
 // ---------------------------------------------------------
-pub async fn get_all_game_characters<'e, E>(executor: E, game_id: &str) -> Result<Vec<GameCharacters>, Error> where E: Executor<'e, Database = Sqlite> {
+pub async fn get_all_game_characters<'e, E>(executor: E, game_id: &str) -> Result<Vec<GameCharacters>, Error>
+where
+    E: Executor<'e, Database = Sqlite>,
+{
     let result = sqlx::query_as::<_, GameCharactersRow>(
-    "SELECT 
+        "SELECT 
         c.id, 
         c.game_id, 
         c.character_id, 
@@ -242,16 +268,19 @@ pub async fn get_all_game_characters<'e, E>(executor: E, game_id: &str) -> Resul
         c.created_at, 
         c.updated_at
     FROM game_characters c
-    WHERE c.game_id = ?"
+    WHERE c.game_id = ?",
     )
     .bind(game_id)
     .fetch_all(executor)
     .await?;
     Ok(result.into_iter().map(Into::into).collect())
 }
-pub async fn get_game_character<'e, E>(executor: E, id: &str) -> Result<GameCharacters, Error> where E: Executor<'e, Database = Sqlite> {
+pub async fn get_game_character<'e, E>(executor: E, id: &str) -> Result<GameCharacters, Error>
+where
+    E: Executor<'e, Database = Sqlite>,
+{
     let result = sqlx::query_as::<_, GameCharactersRow>(
-    "SELECT 
+        "SELECT 
         c.id, 
         c.game_id, 
         c.character_id, 
@@ -272,14 +301,17 @@ pub async fn get_game_character<'e, E>(executor: E, id: &str) -> Result<GameChar
         c.created_at, 
         c.updated_at
     FROM game_characters c
-    WHERE c.id = ?"
+    WHERE c.id = ?",
     )
     .bind(id)
     .fetch_one(executor)
     .await?;
     Ok(result.into())
 }
-pub async fn upsert_game_character<'e, E>(executor: E, game_id: &str, input: GameCharactersInput) -> Result<(), Error> where E: Executor<'e, Database = Sqlite> {
+pub async fn upsert_game_character<'e, E>(executor: E, game_id: &str, input: GameCharactersInput) -> Result<(), Error>
+where
+    E: Executor<'e, Database = Sqlite>,
+{
     let id = input.id.clone().unwrap_or_else(|| Uuid::new_v4().to_string());
     let now = chrono::Utc::now().timestamp_millis();
 
@@ -320,17 +352,20 @@ pub async fn upsert_game_character<'e, E>(executor: E, game_id: &str, input: Gam
     .await?;
     Ok(())
 }
-pub async fn delete_game_character<'e, E>(executor: E, id: &str) -> Result<bool, Error> where E: Executor<'e, Database = Sqlite> {
-    let result = sqlx::query("DELETE FROM game_characters WHERE id = ?")
-    .bind(&id)
-    .execute(executor)
-    .await?;
+pub async fn delete_game_character<'e, E>(executor: E, id: &str) -> Result<bool, Error>
+where
+    E: Executor<'e, Database = Sqlite>,
+{
+    let result = sqlx::query("DELETE FROM game_characters WHERE id = ?").bind(&id).execute(executor).await?;
     Ok(result.rows_affected() != 0)
 }
 
-pub async fn get_all_game_character_worldinfo<'e, E>(executor: E, game_id: &str) -> Result<Vec<WorldInfoEntry>, Error> where E: Executor<'e, Database = Sqlite> {
+pub async fn get_all_game_character_worldinfo<'e, E>(executor: E, game_id: &str) -> Result<Vec<WorldInfoEntry>, Error>
+where
+    E: Executor<'e, Database = Sqlite>,
+{
     let rows = sqlx::query_as::<_, WorldInfoEntryRow>(
-    r#"
+        r#"
         SELECT we.id, we.book_id, we.keys, we.secondary_keys, we.content, we.enabled, we.priority, we.constant
         FROM worldinfo_entries we
         WHERE we.enabled = 1
@@ -349,9 +384,12 @@ pub async fn get_all_game_character_worldinfo<'e, E>(executor: E, game_id: &str)
 
     Ok(rows.into_iter().map(Into::into).collect())
 }
-pub async fn get_game_character_worldinfo<'e, E>(executor: E, game_character_id: &str) -> Result<Vec<WorldInfoEntry>, Error> where E: Executor<'e, Database = Sqlite> {
+pub async fn get_game_character_worldinfo<'e, E>(executor: E, game_character_id: &str) -> Result<Vec<WorldInfoEntry>, Error>
+where
+    E: Executor<'e, Database = Sqlite>,
+{
     let rows = sqlx::query_as::<_, WorldInfoEntryRow>(
-    r#"
+        r#"
         SELECT id, book_id, keys, secondary_keys, content, enabled, priority, constant
         FROM worldinfo_entries
         WHERE enabled = 1
@@ -368,9 +406,12 @@ pub async fn get_game_character_worldinfo<'e, E>(executor: E, game_character_id:
 }
 
 // game_character_spawn_locations
-pub async fn get_all_game_character_spawn_locations<'e, E>(executor: E, game_id: &str) -> Result<Vec<GameCharacterSpawnLocations>, Error> where E: Executor<'e, Database = Sqlite> {
+pub async fn get_all_game_character_spawn_locations<'e, E>(executor: E, game_id: &str) -> Result<Vec<GameCharacterSpawnLocations>, Error>
+where
+    E: Executor<'e, Database = Sqlite>,
+{
     let result = sqlx::query_as::<_, GameCharacterSpawnLocationsRow>(
-    "SELECT 
+        "SELECT 
         cs.id,
         cs.game_character_id,
         cs.location_id,
@@ -380,16 +421,19 @@ pub async fn get_all_game_character_spawn_locations<'e, E>(executor: E, game_id:
         cs.updated_at
     FROM game_character_spawn_locations cs
     INNER JOIN game_characters c ON c.id = cs.game_character_id 
-    WHERE c.game_id = ?"
+    WHERE c.game_id = ?",
     )
     .bind(game_id)
     .fetch_all(executor)
     .await?;
     Ok(result.into_iter().map(Into::into).collect())
 }
-pub async fn get_game_character_spawn_location<'e, E>(executor: E, id: &str) -> Result<GameCharacterSpawnLocations, Error> where E: Executor<'e, Database = Sqlite> {
+pub async fn get_game_character_spawn_location<'e, E>(executor: E, id: &str) -> Result<GameCharacterSpawnLocations, Error>
+where
+    E: Executor<'e, Database = Sqlite>,
+{
     let result = sqlx::query_as::<_, GameCharacterSpawnLocationsRow>(
-    "SELECT 
+        "SELECT 
         cs.id,
         cs.game_character_id,
         cs.location_id,
@@ -398,14 +442,17 @@ pub async fn get_game_character_spawn_location<'e, E>(executor: E, id: &str) -> 
         cs.created_at,
         cs.updated_at
     FROM game_character_spawn_locations cs
-    WHERE cs.id = ?"
+    WHERE cs.id = ?",
     )
     .bind(id)
     .fetch_one(executor)
     .await?;
     Ok(result.into())
 }
-pub async fn upsert_game_character_spawn_location<'e, E>(executor: E, input: GameCharacterSpawnLocationsInput) -> Result<(), Error> where E: Executor<'e, Database = Sqlite> {
+pub async fn upsert_game_character_spawn_location<'e, E>(executor: E, input: GameCharacterSpawnLocationsInput) -> Result<(), Error>
+where
+    E: Executor<'e, Database = Sqlite>,
+{
     let id = input.id.clone().unwrap_or_else(|| Uuid::new_v4().to_string());
     let now = chrono::Utc::now().timestamp_millis();
     let condition_json = serde_json::to_string(&input.condition_json).unwrap_or_default();
@@ -433,49 +480,62 @@ pub async fn upsert_game_character_spawn_location<'e, E>(executor: E, input: Gam
     .await?;
     Ok(())
 }
-pub async fn delete_game_character_spawn_location<'e, E>(executor: E, id: &str) -> Result<bool, Error> where E: Executor<'e, Database = Sqlite> {
+pub async fn delete_game_character_spawn_location<'e, E>(executor: E, id: &str) -> Result<bool, Error>
+where
+    E: Executor<'e, Database = Sqlite>,
+{
     let result = sqlx::query("DELETE FROM game_character_spawn_locations WHERE id = ?")
-    .bind(&id)
-    .execute(executor)
-    .await?;
+        .bind(&id)
+        .execute(executor)
+        .await?;
     Ok(result.rows_affected() != 0)
 }
 
 // ---------------------------------------------------------
 // 게임 에셋
 // ---------------------------------------------------------
-pub async fn get_all_game_assets<'e, E>(executor: E, game_id: &str) -> Result<Vec<GameAssets>, Error> where E: Executor<'e, Database = Sqlite> {
+pub async fn get_all_game_assets<'e, E>(executor: E, game_id: &str) -> Result<Vec<GameAssets>, Error>
+where
+    E: Executor<'e, Database = Sqlite>,
+{
     let result = sqlx::query_as::<_, GameAssetsRow>(
-            r#"
+        r#"
             SELECT id, game_id, key, name, category, kind, file_path, settings_json, created_at, updated_at
             FROM game_assets
             WHERE game_id = ?
             "#,
-        )
-        .bind(game_id)
-        .fetch_all(executor)
-        .await?;
+    )
+    .bind(game_id)
+    .fetch_all(executor)
+    .await?;
     Ok(result.into_iter().map(Into::into).collect())
 }
-pub async fn get_game_asset<'e, E>(executor: E, id: &str) -> Result<GameAssets, Error> where E: Executor<'e, Database = Sqlite> {
+pub async fn get_game_asset<'e, E>(executor: E, id: &str) -> Result<GameAssets, Error>
+where
+    E: Executor<'e, Database = Sqlite>,
+{
     let result = sqlx::query_as::<_, GameAssetsRow>(
-            r#"
+        r#"
             SELECT id, game_id, key, name, category, kind, file_path, settings_json, created_at, updated_at
             FROM game_assets
             WHERE id = ?
             "#,
-        )
-        .bind(id)
-        .fetch_one(executor)
-        .await?;
+    )
+    .bind(id)
+    .fetch_one(executor)
+    .await?;
     Ok(result.into())
 }
-pub async fn upsert_game_asset<'e, E>(executor: E, input: GameAssetsInput, game_id: &str) -> Result<String, Error> where E: Executor<'e, Database = Sqlite> {
+pub async fn upsert_game_asset<'e, E>(executor: E, input: GameAssetsInput, game_id: &str) -> Result<String, Error>
+where
+    E: Executor<'e, Database = Sqlite>,
+{
     let id = input.id.clone().unwrap_or_else(|| Uuid::new_v4().to_string());
     let now = chrono::Utc::now().timestamp_millis();
     let settings_json = serde_json::to_string(&input.settings_json).unwrap_or_default();
 
-    sqlx::query(r#"
+    sqlx::query(
+        r#"
     INSERT INTO game_assets (id, game_id, key, name, category, kind, file_path, settings_json, created_at, updated_at)
     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     ON CONFLICT(id) DO UPDATE SET
@@ -487,7 +547,8 @@ pub async fn upsert_game_asset<'e, E>(executor: E, input: GameAssetsInput, game_
         file_path=excluded.file_path, 
         settings_json=excluded.settings_json, 
         updated_at=excluded.updated_at
-    "#)
+    "#,
+    )
     .bind(&id)
     .bind(game_id)
     .bind(&input.key)
@@ -504,15 +565,18 @@ pub async fn upsert_game_asset<'e, E>(executor: E, input: GameAssetsInput, game_
     Ok(id)
 }
 
-pub async fn delete_game_asset<'e, E>(executor: E, id: &str) -> Result<bool, Error> where E: Executor<'e, Database = Sqlite> {
-    let result = sqlx::query("DELETE FROM game_assets WHERE id = ?")
-    .bind(&id)
-    .execute(executor)
-    .await?;
+pub async fn delete_game_asset<'e, E>(executor: E, id: &str) -> Result<bool, Error>
+where
+    E: Executor<'e, Database = Sqlite>,
+{
+    let result = sqlx::query("DELETE FROM game_assets WHERE id = ?").bind(&id).execute(executor).await?;
     Ok(result.rows_affected() != 0)
 }
 
-pub async fn get_all_audio_assets<'e, E>(executor: E, game_id: &str) -> Result<Vec<AudioAssets>, Error> where E: Executor<'e, Database = Sqlite> {
+pub async fn get_all_audio_assets<'e, E>(executor: E, game_id: &str) -> Result<Vec<AudioAssets>, Error>
+where
+    E: Executor<'e, Database = Sqlite>,
+{
     let result = sqlx::query_as::<_, AudioAssetsRow>(
             r#"
             SELECT ga.id, ga.game_id, ga.key, ga.name, ga.category, ga.kind, ga.file_path, ga.settings_json, ga.created_at, ga.updated_at, a.tag, a.game_character_id, a.transcript
@@ -526,7 +590,10 @@ pub async fn get_all_audio_assets<'e, E>(executor: E, game_id: &str) -> Result<V
         .await?;
     Ok(result.into_iter().map(Into::into).collect())
 }
-pub async fn get_audio_asset<'e, E>(executor: E, assets_id: &str) -> Result<AudioAssets, Error> where E: Executor<'e, Database = Sqlite> {
+pub async fn get_audio_asset<'e, E>(executor: E, assets_id: &str) -> Result<AudioAssets, Error>
+where
+    E: Executor<'e, Database = Sqlite>,
+{
     let result = sqlx::query_as::<_, AudioAssetsRow>(
             r#"
             SELECT ga.id, ga.game_id, ga.key, ga.name, ga.category, ga.kind, ga.file_path, ga.settings_json, ga.created_at, ga.updated_at, a.tag, a.game_character_id, a.transcript
@@ -540,15 +607,20 @@ pub async fn get_audio_asset<'e, E>(executor: E, assets_id: &str) -> Result<Audi
         .await?;
     Ok(result.into())
 }
-pub async fn upsert_audio_asset<'e, E>(executor: E, input: AudioAssetsInput, assets_id: &str) -> Result<(), Error> where E: Executor<'e, Database = Sqlite> {
-    sqlx::query(r#"
+pub async fn upsert_audio_asset<'e, E>(executor: E, input: AudioAssetsInput, assets_id: &str) -> Result<(), Error>
+where
+    E: Executor<'e, Database = Sqlite>,
+{
+    sqlx::query(
+        r#"
     INSERT INTO audio_assets (assets_id, tag, game_character_id, transcript)
     VALUES (?, ?, ?, ?)
     ON CONFLICT(assets_id) DO UPDATE SET
         tag=excluded.tag, 
         game_character_id=excluded.game_character_id, 
         transcript=excluded.transcript
-    "#)
+    "#,
+    )
     .bind(assets_id)
     .bind(&input.tag)
     .bind(&input.game_character_id)
@@ -558,7 +630,10 @@ pub async fn upsert_audio_asset<'e, E>(executor: E, input: AudioAssetsInput, ass
 
     Ok(())
 }
-pub async fn get_all_character_assets<'e, E>(executor: E, game_id: &str) -> Result<Vec<CharacterAssets>, Error> where E: Executor<'e, Database = Sqlite> {
+pub async fn get_all_character_assets<'e, E>(executor: E, game_id: &str) -> Result<Vec<CharacterAssets>, Error>
+where
+    E: Executor<'e, Database = Sqlite>,
+{
     let result = sqlx::query_as::<_, CharacterAssetsRow>(
             r#"
             SELECT ga.id, ga.game_id, ga.key, ga.name, ga.category, ga.kind, ga.file_path, ga.settings_json, ga.created_at, ga.updated_at, a.game_character_id, a.usage, a.emotion
@@ -572,7 +647,10 @@ pub async fn get_all_character_assets<'e, E>(executor: E, game_id: &str) -> Resu
         .await?;
     Ok(result.into_iter().map(Into::into).collect())
 }
-pub async fn get_character_asset<'e, E>(executor: E, assets_id: &str) -> Result<CharacterAssets, Error> where E: Executor<'e, Database = Sqlite> {
+pub async fn get_character_asset<'e, E>(executor: E, assets_id: &str) -> Result<CharacterAssets, Error>
+where
+    E: Executor<'e, Database = Sqlite>,
+{
     let result = sqlx::query_as::<_, CharacterAssetsRow>(
             r#"
             SELECT ga.id, ga.game_id, ga.key, ga.name, ga.category, ga.kind, ga.file_path, ga.settings_json, ga.created_at, ga.updated_at, a.game_character_id, a.usage, a.emotion
@@ -586,15 +664,20 @@ pub async fn get_character_asset<'e, E>(executor: E, assets_id: &str) -> Result<
         .await?;
     Ok(result.into())
 }
-pub async fn upsert_character_asset<'e, E>(executor: E, input: CharacterAssetsInput, assets_id: &str) -> Result<(), Error> where E: Executor<'e, Database = Sqlite> {
-    sqlx::query(r#"
+pub async fn upsert_character_asset<'e, E>(executor: E, input: CharacterAssetsInput, assets_id: &str) -> Result<(), Error>
+where
+    E: Executor<'e, Database = Sqlite>,
+{
+    sqlx::query(
+        r#"
     INSERT INTO character_assets (assets_id, game_character_id, usage, emotion)
     VALUES (?, ?, ?, ?)
     ON CONFLICT(assets_id) DO UPDATE SET
         game_character_id=excluded.game_character_id, 
         usage=excluded.usage, 
         emotion=excluded.emotion
-    "#)
+    "#,
+    )
     .bind(assets_id)
     .bind(&input.game_character_id)
     .bind(&input.usage)
@@ -604,7 +687,10 @@ pub async fn upsert_character_asset<'e, E>(executor: E, input: CharacterAssetsIn
 
     Ok(())
 }
-pub async fn get_all_cg_assets<'e, E>(executor: E, game_id: &str) -> Result<Vec<CgAssets>, Error> where E: Executor<'e, Database = Sqlite> {
+pub async fn get_all_cg_assets<'e, E>(executor: E, game_id: &str) -> Result<Vec<CgAssets>, Error>
+where
+    E: Executor<'e, Database = Sqlite>,
+{
     let result = sqlx::query_as::<_, CgAssetsRow>(
             r#"
             SELECT ga.id, ga.game_id, ga.key, ga.name, ga.category, ga.kind, ga.file_path, ga.settings_json, ga.created_at, ga.updated_at, a.game_character_id, a.description, a.prompt, a.negative_prompt, a.seed, a.generation_params, a.ai_usable
@@ -618,7 +704,10 @@ pub async fn get_all_cg_assets<'e, E>(executor: E, game_id: &str) -> Result<Vec<
         .await?;
     Ok(result.into_iter().map(Into::into).collect())
 }
-pub async fn get_cg_asset<'e, E>(executor: E, assets_id: &str) -> Result<CgAssets, Error> where E: Executor<'e, Database = Sqlite> {
+pub async fn get_cg_asset<'e, E>(executor: E, assets_id: &str) -> Result<CgAssets, Error>
+where
+    E: Executor<'e, Database = Sqlite>,
+{
     let result = sqlx::query_as::<_, CgAssetsRow>(
             r#"
             SELECT ga.id, ga.game_id, ga.key, ga.name, ga.category, ga.kind, ga.file_path, ga.settings_json, ga.created_at, ga.updated_at, a.game_character_id, a.description, a.prompt, a.negative_prompt, a.seed, a.generation_params, a.ai_usable
@@ -632,8 +721,12 @@ pub async fn get_cg_asset<'e, E>(executor: E, assets_id: &str) -> Result<CgAsset
         .await?;
     Ok(result.into())
 }
-pub async fn upsert_cg_asset<'e, E>(executor: E, input: CgAssetsInput, assets_id: &str) -> Result<(), Error> where E: Executor<'e, Database = Sqlite> {
-    sqlx::query(r#"
+pub async fn upsert_cg_asset<'e, E>(executor: E, input: CgAssetsInput, assets_id: &str) -> Result<(), Error>
+where
+    E: Executor<'e, Database = Sqlite>,
+{
+    sqlx::query(
+        r#"
     INSERT INTO cg_assets (assets_id, game_character_id, description, prompt, negative_prompt, seed, generation_params, ai_usable)
     VALUES (?, ?, ?, ?, ?, ?, ?, ?)
     ON CONFLICT(assets_id) DO UPDATE SET
@@ -644,7 +737,8 @@ pub async fn upsert_cg_asset<'e, E>(executor: E, input: CgAssetsInput, assets_id
         seed=excluded.seed, 
         generation_params=excluded.generation_params,
         ai_usable=excluded.ai_usable
-    "#)
+    "#,
+    )
     .bind(assets_id)
     .bind(&input.game_character_id)
     .bind(&input.description)
@@ -658,7 +752,10 @@ pub async fn upsert_cg_asset<'e, E>(executor: E, input: CgAssetsInput, assets_id
 
     Ok(())
 }
-pub async fn get_all_background_assets<'e, E>(executor: E, game_id: &str) -> Result<Vec<BackgroundAssets>, Error> where E: Executor<'e, Database = Sqlite> {
+pub async fn get_all_background_assets<'e, E>(executor: E, game_id: &str) -> Result<Vec<BackgroundAssets>, Error>
+where
+    E: Executor<'e, Database = Sqlite>,
+{
     let result = sqlx::query_as::<_, BackgroundAssetsRow>(
             r#"
             SELECT ga.id, ga.game_id, ga.key, ga.name, ga.category, ga.kind, ga.file_path, ga.settings_json, ga.created_at, ga.updated_at, a.location_id, a.time_id, a.weather_id
@@ -672,7 +769,10 @@ pub async fn get_all_background_assets<'e, E>(executor: E, game_id: &str) -> Res
         .await?;
     Ok(result.into_iter().map(Into::into).collect())
 }
-pub async fn get_background_asset<'e, E>(executor: E, assets_id: &str) -> Result<BackgroundAssets, Error> where E: Executor<'e, Database = Sqlite> {
+pub async fn get_background_asset<'e, E>(executor: E, assets_id: &str) -> Result<BackgroundAssets, Error>
+where
+    E: Executor<'e, Database = Sqlite>,
+{
     let result = sqlx::query_as::<_, BackgroundAssetsRow>(
             r#"
             SELECT ga.id, ga.game_id, ga.key, ga.name, ga.category, ga.kind, ga.file_path, ga.settings_json, ga.created_at, ga.updated_at, a.location_id, a.time_id, a.weather_id
@@ -686,15 +786,20 @@ pub async fn get_background_asset<'e, E>(executor: E, assets_id: &str) -> Result
         .await?;
     Ok(result.into())
 }
-pub async fn upsert_background_assets<'e, E>(executor: E, input: BackgroundAssetsInput, assets_id: &str) -> Result<(), Error> where E: Executor<'e, Database = Sqlite> {
-    sqlx::query(r#"
+pub async fn upsert_background_assets<'e, E>(executor: E, input: BackgroundAssetsInput, assets_id: &str) -> Result<(), Error>
+where
+    E: Executor<'e, Database = Sqlite>,
+{
+    sqlx::query(
+        r#"
     INSERT INTO background_assets (assets_id, location_id, time_id, weather_id)
     VALUES (?, ?, ?, ?)
     ON CONFLICT(assets_id) DO UPDATE SET
         location_id=excluded.location_id, 
         time_id=excluded.time_id, 
         weather_id=excluded.weather_id
-    "#)
+    "#,
+    )
     .bind(assets_id)
     .bind(&input.location_id)
     .bind(&input.time_id)
@@ -705,31 +810,39 @@ pub async fn upsert_background_assets<'e, E>(executor: E, input: BackgroundAsset
     Ok(())
 }
 
-
 // ---------------------------------------------------------
 // 게임 맵
 // ---------------------------------------------------------
-pub async fn get_all_game_maps<'e, E>(executor: E, game_id: &str) -> Result<Vec<GameMaps>, Error> where E: Executor<'e, Database = Sqlite> {
+pub async fn get_all_game_maps<'e, E>(executor: E, game_id: &str) -> Result<Vec<GameMaps>, Error>
+where
+    E: Executor<'e, Database = Sqlite>,
+{
     let result = sqlx::query_as::<_, GameMapsRow>(
-    "SELECT id, game_id, name, danger_level, default_weather_pool_id, settings_json, created_at, updated_at 
-    FROM game_maps WHERE game_id = ?"
+        "SELECT id, game_id, name, danger_level, default_weather_pool_id, settings_json, created_at, updated_at 
+    FROM game_maps WHERE game_id = ?",
     )
     .bind(game_id)
     .fetch_all(executor)
     .await?;
     Ok(result.into_iter().map(Into::into).collect())
 }
-pub async fn get_game_map<'e, E>(executor: E, id: &str) -> Result<GameMaps, Error> where E: Executor<'e, Database = Sqlite> {
+pub async fn get_game_map<'e, E>(executor: E, id: &str) -> Result<GameMaps, Error>
+where
+    E: Executor<'e, Database = Sqlite>,
+{
     let result = sqlx::query_as::<_, GameMapsRow>(
-    "SELECT id, game_id, name, danger_level, default_weather_pool_id, settings_json, created_at, updated_at 
-    FROM game_maps WHERE id = ?"
+        "SELECT id, game_id, name, danger_level, default_weather_pool_id, settings_json, created_at, updated_at 
+    FROM game_maps WHERE id = ?",
     )
     .bind(id)
     .fetch_one(executor)
     .await?;
     Ok(result.into())
 }
-pub async fn upsert_game_map<'e, E>(executor: E, game_id: &str, input: GameMapsInput) -> Result<(), Error> where E: Executor<'e, Database = Sqlite> {
+pub async fn upsert_game_map<'e, E>(executor: E, game_id: &str, input: GameMapsInput) -> Result<(), Error>
+where
+    E: Executor<'e, Database = Sqlite>,
+{
     let id = input.id.clone().unwrap_or_else(|| Uuid::new_v4().to_string());
     let now = chrono::Utc::now().timestamp_millis();
     let settings_json = serde_json::to_string(&input.settings_json).unwrap_or_default();
@@ -758,38 +871,47 @@ pub async fn upsert_game_map<'e, E>(executor: E, game_id: &str, input: GameMapsI
     .await?;
     Ok(())
 }
-pub async fn delete_game_map<'e, E>(executor: E, id: &str) -> Result<bool, Error> where E: Executor<'e, Database = Sqlite> {
-    let result = sqlx::query("DELETE FROM game_maps WHERE id = ?")
-        .bind(&id)
-        .execute(executor)
-        .await?;
+pub async fn delete_game_map<'e, E>(executor: E, id: &str) -> Result<bool, Error>
+where
+    E: Executor<'e, Database = Sqlite>,
+{
+    let result = sqlx::query("DELETE FROM game_maps WHERE id = ?").bind(&id).execute(executor).await?;
     Ok(result.rows_affected() != 0)
 }
 
-pub async fn get_all_game_map_zones<'e, E>(executor: E, game_id: &str) -> Result<Vec<GameMapsZone>, Error> where E: Executor<'e, Database = Sqlite> {
+pub async fn get_all_game_map_zones<'e, E>(executor: E, game_id: &str) -> Result<Vec<GameMapsZone>, Error>
+where
+    E: Executor<'e, Database = Sqlite>,
+{
     let result = sqlx::query_as::<_, GameMapsZoneRow>(
-    "SELECT z.id, z.map_id, z.name, z.tags, z.settings_json, z.created_at, z.updated_at
+        "SELECT z.id, z.map_id, z.name, z.tags, z.settings_json, z.created_at, z.updated_at
     FROM game_map_zones z
     INNER JOIN game_maps m ON z.map_id = m.id 
-    WHERE m.game_id = ?"
+    WHERE m.game_id = ?",
     )
     .bind(game_id)
     .fetch_all(executor)
     .await?;
     Ok(result.into_iter().map(Into::into).collect())
 }
-pub async fn get_game_zone<'e, E>(executor: E, id: &str) -> Result<GameMapsZone, Error> where E: Executor<'e, Database = Sqlite> {
+pub async fn get_game_zone<'e, E>(executor: E, id: &str) -> Result<GameMapsZone, Error>
+where
+    E: Executor<'e, Database = Sqlite>,
+{
     let result = sqlx::query_as::<_, GameMapsZoneRow>(
-    "SELECT z.id, z.map_id, z.name, z.tags, z.settings_json, z.created_at, z.updated_at 
+        "SELECT z.id, z.map_id, z.name, z.tags, z.settings_json, z.created_at, z.updated_at 
     FROM game_map_zones z
-    WHERE id = ?"
+    WHERE id = ?",
     )
     .bind(id)
     .fetch_one(executor)
     .await?;
     Ok(result.into())
 }
-pub async fn upsert_game_zone<'e, E>(executor: E, map_id: &str, input: GameMapsZoneInput) -> Result<(), Error> where E: Executor<'e, Database = Sqlite> {
+pub async fn upsert_game_zone<'e, E>(executor: E, map_id: &str, input: GameMapsZoneInput) -> Result<(), Error>
+where
+    E: Executor<'e, Database = Sqlite>,
+{
     let id = input.id.clone().unwrap_or_else(|| Uuid::new_v4().to_string());
     let now = chrono::Utc::now().timestamp_millis();
     let tags = serde_json::to_string(&input.tags).unwrap_or_default();
@@ -818,39 +940,48 @@ pub async fn upsert_game_zone<'e, E>(executor: E, map_id: &str, input: GameMapsZ
     .await?;
     Ok(())
 }
-pub async fn delete_game_zone<'e, E>(executor: E, id: &str) -> Result<bool, Error> where E: Executor<'e, Database = Sqlite> {
-    let result = sqlx::query("DELETE FROM game_map_zones WHERE id = ?")
-        .bind(&id)
-        .execute(executor)
-        .await?;
+pub async fn delete_game_zone<'e, E>(executor: E, id: &str) -> Result<bool, Error>
+where
+    E: Executor<'e, Database = Sqlite>,
+{
+    let result = sqlx::query("DELETE FROM game_map_zones WHERE id = ?").bind(&id).execute(executor).await?;
     Ok(result.rows_affected() != 0)
 }
 
-pub async fn get_all_game_locations<'e, E>(executor: E, game_id: &str) -> Result<Vec<GameLocations>, Error> where E: Executor<'e, Database = Sqlite> {
+pub async fn get_all_game_locations<'e, E>(executor: E, game_id: &str) -> Result<Vec<GameLocations>, Error>
+where
+    E: Executor<'e, Database = Sqlite>,
+{
     let result = sqlx::query_as::<_, GameLocationsRow>(
-    "SELECT l.id, l.zone_id, l.name, l.description, l.settings_json
+        "SELECT l.id, l.zone_id, l.name, l.description, l.settings_json
     FROM game_locations l
     INNER JOIN game_map_zones z ON l.zone_id = z.id 
     INNER JOIN game_maps m ON z.map_id = m.id 
-    WHERE m.game_id = ?"
+    WHERE m.game_id = ?",
     )
     .bind(game_id)
     .fetch_all(executor)
     .await?;
     Ok(result.into_iter().map(Into::into).collect())
 }
-pub async fn get_game_locations<'e, E>(executor: E, id: &str) -> Result<GameLocations, Error> where E: Executor<'e, Database = Sqlite> {
+pub async fn get_game_locations<'e, E>(executor: E, id: &str) -> Result<GameLocations, Error>
+where
+    E: Executor<'e, Database = Sqlite>,
+{
     let result = sqlx::query_as::<_, GameLocationsRow>(
-    "SELECT l.id, l.zone_id, l.name, l.description, l.settings_json
+        "SELECT l.id, l.zone_id, l.name, l.description, l.settings_json
     FROM game_locations l
-    WHERE id = ?"
+    WHERE id = ?",
     )
     .bind(id)
     .fetch_one(executor)
     .await?;
     Ok(result.into())
 }
-pub async fn upsert_game_locations<'e, E>(executor: E, zone_id: &str, input: GameLocationsInput) -> Result<(), Error> where E: Executor<'e, Database = Sqlite> {
+pub async fn upsert_game_locations<'e, E>(executor: E, zone_id: &str, input: GameLocationsInput) -> Result<(), Error>
+where
+    E: Executor<'e, Database = Sqlite>,
+{
     let id = input.id.clone().unwrap_or_else(|| Uuid::new_v4().to_string());
     let settings_json = serde_json::to_string(&input.settings_json).unwrap_or_default();
     sqlx::query(
@@ -873,33 +1004,39 @@ pub async fn upsert_game_locations<'e, E>(executor: E, zone_id: &str, input: Gam
     .await?;
     Ok(())
 }
-pub async fn delete_game_locations<'e, E>(executor: E, id: &str) -> Result<bool, Error> where E: Executor<'e, Database = Sqlite> {
-    let result = sqlx::query("DELETE FROM game_locations WHERE id = ?")
-        .bind(&id)
-        .execute(executor)
-        .await?;
+pub async fn delete_game_locations<'e, E>(executor: E, id: &str) -> Result<bool, Error>
+where
+    E: Executor<'e, Database = Sqlite>,
+{
+    let result = sqlx::query("DELETE FROM game_locations WHERE id = ?").bind(&id).execute(executor).await?;
     Ok(result.rows_affected() != 0)
 }
 
-pub async fn get_all_game_location_connections<'e, E>(executor: E, game_id: &str) -> Result<Vec<GameLocationConnections>, Error> where E: Executor<'e, Database = Sqlite> {
+pub async fn get_all_game_location_connections<'e, E>(executor: E, game_id: &str) -> Result<Vec<GameLocationConnections>, Error>
+where
+    E: Executor<'e, Database = Sqlite>,
+{
     let result = sqlx::query_as::<_, GameLocationConnectionsRow>(
-    "SELECT c.from_id, c.to_id, c.travel_seconds, c.condition, c.settings_json
+        "SELECT c.from_id, c.to_id, c.travel_seconds, c.condition, c.settings_json
     FROM game_location_connections c
     JOIN game_locations l ON c.from_id = l.id
     JOIN game_map_zones z ON l.zone_id = z.id
     JOIN game_maps m ON z.map_id = m.id
-    WHERE m.game_id = ?"
+    WHERE m.game_id = ?",
     )
     .bind(game_id)
     .fetch_all(executor)
     .await?;
     Ok(result.into_iter().map(Into::into).collect())
 }
-pub async fn get_game_location_connection<'e, E>(executor: E, from_id: &str, to_id: &str) -> Result<GameLocationConnections, Error> where E: Executor<'e, Database = Sqlite> {
+pub async fn get_game_location_connection<'e, E>(executor: E, from_id: &str, to_id: &str) -> Result<GameLocationConnections, Error>
+where
+    E: Executor<'e, Database = Sqlite>,
+{
     let result = sqlx::query_as::<_, GameLocationConnectionsRow>(
-    "SELECT from_id, to_id, travel_seconds, condition, settings_json
+        "SELECT from_id, to_id, travel_seconds, condition, settings_json
     FROM game_location_connections
-    WHERE from_id = ? AND to_id = ?"
+    WHERE from_id = ? AND to_id = ?",
     )
     .bind(from_id)
     .bind(to_id)
@@ -908,7 +1045,10 @@ pub async fn get_game_location_connection<'e, E>(executor: E, from_id: &str, to_
     Ok(result.into())
 }
 
-pub async fn upsert_game_location_connections<'e, E>(executor: E, input:GameLocationConnectionsInput) -> Result<(), Error> where E: Executor<'e, Database = Sqlite> {
+pub async fn upsert_game_location_connections<'e, E>(executor: E, input: GameLocationConnectionsInput) -> Result<(), Error>
+where
+    E: Executor<'e, Database = Sqlite>,
+{
     let settings_json = serde_json::to_string(&input.settings_json).unwrap_or_default();
     sqlx::query(
         r#"
@@ -930,7 +1070,10 @@ pub async fn upsert_game_location_connections<'e, E>(executor: E, input:GameLoca
     Ok(())
 }
 
-pub async fn delete_game_location_connection<'e, E>(executor: E, from_id: &str, to_id: &str) -> Result<bool, Error> where E: Executor<'e, Database = Sqlite> {
+pub async fn delete_game_location_connection<'e, E>(executor: E, from_id: &str, to_id: &str) -> Result<bool, Error>
+where
+    E: Executor<'e, Database = Sqlite>,
+{
     let result = sqlx::query("DELETE FROM game_location_connections WHERE from_id = ? AND to_id = ?")
         .bind(from_id)
         .bind(to_id)
@@ -942,26 +1085,32 @@ pub async fn delete_game_location_connection<'e, E>(executor: E, from_id: &str, 
 // ---------------------------------------------------------
 // 게임 시간
 // ---------------------------------------------------------
-pub async fn get_all_game_time_periods<'e, E>(executor: E, game_id: &str) -> Result<Vec<GameTimePeriods>, Error> where E: Executor<'e, Database = Sqlite> {
-    let result = sqlx::query_as::<_, GameTimePeriods>(
-    "SELECT id, game_id, name, sort_order, start_minute, end_minute FROM game_time_periods WHERE game_id = ?"
-    )
-    .bind(game_id)
-    .fetch_all(executor)
-    .await?;
+pub async fn get_all_game_time_periods<'e, E>(executor: E, game_id: &str) -> Result<Vec<GameTimePeriods>, Error>
+where
+    E: Executor<'e, Database = Sqlite>,
+{
+    let result =
+        sqlx::query_as::<_, GameTimePeriods>("SELECT id, game_id, name, sort_order, start_minute, end_minute FROM game_time_periods WHERE game_id = ?")
+            .bind(game_id)
+            .fetch_all(executor)
+            .await?;
     Ok(result.into_iter().map(Into::into).collect())
 }
-pub async fn get_game_time_period<'e, E>(executor: E, id: &str) -> Result<GameTimePeriods, Error> where E: Executor<'e, Database = Sqlite> {
-    let result = sqlx::query_as::<_, GameTimePeriods>(
-    "SELECT id, game_id, name, sort_order, start_minute, end_minute FROM game_time_periods WHERE id = ?"
-    )
-    .bind(id)
-    .fetch_one(executor)
-    .await?;
+pub async fn get_game_time_period<'e, E>(executor: E, id: &str) -> Result<GameTimePeriods, Error>
+where
+    E: Executor<'e, Database = Sqlite>,
+{
+    let result = sqlx::query_as::<_, GameTimePeriods>("SELECT id, game_id, name, sort_order, start_minute, end_minute FROM game_time_periods WHERE id = ?")
+        .bind(id)
+        .fetch_one(executor)
+        .await?;
     Ok(result.into())
 }
 
-pub async fn upsert_game_time_period<'e, E>(executor: E, game_id: &str, input: GameTimePeriodsInput) -> Result<(), Error> where E: Executor<'e, Database = Sqlite> {
+pub async fn upsert_game_time_period<'e, E>(executor: E, game_id: &str, input: GameTimePeriodsInput) -> Result<(), Error>
+where
+    E: Executor<'e, Database = Sqlite>,
+{
     let id = input.id.clone().unwrap_or_else(|| Uuid::new_v4().to_string());
 
     sqlx::query(
@@ -986,40 +1135,49 @@ pub async fn upsert_game_time_period<'e, E>(executor: E, game_id: &str, input: G
     .await?;
     Ok(())
 }
-pub async fn delete_game_time_period<'e, E>(executor: E, id: &str) -> Result<bool, Error> where E: Executor<'e, Database = Sqlite> {
-    let result = sqlx::query("DELETE FROM game_time_periods WHERE id = ?")
-        .bind(&id)
-        .execute(executor)
-        .await?;
+pub async fn delete_game_time_period<'e, E>(executor: E, id: &str) -> Result<bool, Error>
+where
+    E: Executor<'e, Database = Sqlite>,
+{
+    let result = sqlx::query("DELETE FROM game_time_periods WHERE id = ?").bind(&id).execute(executor).await?;
     Ok(result.rows_affected() != 0)
 }
 
 // ---------------------------------------------------------
 // 게임 날씨
 // ---------------------------------------------------------
-pub async fn get_all_game_weather_types<'e, E>(executor: E, game_id: &str) -> Result<Vec<GameWeatherTypes>, Error> where E: Executor<'e, Database = Sqlite> {
+pub async fn get_all_game_weather_types<'e, E>(executor: E, game_id: &str) -> Result<Vec<GameWeatherTypes>, Error>
+where
+    E: Executor<'e, Database = Sqlite>,
+{
     let result = sqlx::query_as::<_, GameWeatherTypesRow>(
-    "SELECT id, game_id, name, encounter_rate_modifier, visibility_modifier, created_at, updated_at 
+        "SELECT id, game_id, name, encounter_rate_modifier, visibility_modifier, created_at, updated_at 
     FROM game_weather_types 
-    WHERE game_id = ?"
+    WHERE game_id = ?",
     )
     .bind(game_id)
     .fetch_all(executor)
     .await?;
     Ok(result.into_iter().map(Into::into).collect())
 }
-pub async fn get_game_weather_type<'e, E>(executor: E, id: &str) -> Result<GameWeatherTypes, Error> where E: Executor<'e, Database = Sqlite> {
+pub async fn get_game_weather_type<'e, E>(executor: E, id: &str) -> Result<GameWeatherTypes, Error>
+where
+    E: Executor<'e, Database = Sqlite>,
+{
     let result = sqlx::query_as::<_, GameWeatherTypesRow>(
-    "SELECT id, game_id, name, encounter_rate_modifier, visibility_modifier, created_at, updated_at 
+        "SELECT id, game_id, name, encounter_rate_modifier, visibility_modifier, created_at, updated_at 
     FROM game_weather_types 
-    WHERE id = ?"
+    WHERE id = ?",
     )
     .bind(id)
     .fetch_one(executor)
     .await?;
     Ok(result.into())
 }
-pub async fn upsert_game_weather_type<'e, E>(executor: E, game_id: &str, input: GameWeatherTypesInput) -> Result<(), Error> where E: Executor<'e, Database = Sqlite> {
+pub async fn upsert_game_weather_type<'e, E>(executor: E, game_id: &str, input: GameWeatherTypesInput) -> Result<(), Error>
+where
+    E: Executor<'e, Database = Sqlite>,
+{
     let id = input.id.clone().unwrap_or_else(|| Uuid::new_v4().to_string());
     let now = chrono::Utc::now().timestamp_millis();
 
@@ -1046,38 +1204,47 @@ pub async fn upsert_game_weather_type<'e, E>(executor: E, game_id: &str, input: 
     .await?;
     Ok(())
 }
-pub async fn delete_game_weather_type<'e, E>(executor: E, id: &str) -> Result<bool, Error> where E: Executor<'e, Database = Sqlite> {
-    let result = sqlx::query("DELETE FROM game_weather_types WHERE id = ?")
-        .bind(&id)
-        .execute(executor)
-        .await?;
+pub async fn delete_game_weather_type<'e, E>(executor: E, id: &str) -> Result<bool, Error>
+where
+    E: Executor<'e, Database = Sqlite>,
+{
+    let result = sqlx::query("DELETE FROM game_weather_types WHERE id = ?").bind(&id).execute(executor).await?;
     Ok(result.rows_affected() != 0)
 }
 
 // --- GameWeatherPools ---
-pub async fn get_all_game_weather_pools<'e, E>(executor: E, game_id: &str) -> Result<Vec<GameWeatherPools>, Error> where E: Executor<'e, Database = Sqlite> {
+pub async fn get_all_game_weather_pools<'e, E>(executor: E, game_id: &str) -> Result<Vec<GameWeatherPools>, Error>
+where
+    E: Executor<'e, Database = Sqlite>,
+{
     let result = sqlx::query_as::<_, GameWeatherPoolsRow>(
-    "SELECT id, game_id, name, created_at, updated_at
+        "SELECT id, game_id, name, created_at, updated_at
     FROM game_weather_pools 
-    WHERE game_id = ?"
+    WHERE game_id = ?",
     )
     .bind(game_id)
     .fetch_all(executor)
     .await?;
     Ok(result.into_iter().map(Into::into).collect())
 }
-pub async fn get_game_weather_pool<'e, E>(executor: E, id: &str) -> Result<GameWeatherPools, Error> where E: Executor<'e, Database = Sqlite> {
+pub async fn get_game_weather_pool<'e, E>(executor: E, id: &str) -> Result<GameWeatherPools, Error>
+where
+    E: Executor<'e, Database = Sqlite>,
+{
     let result = sqlx::query_as::<_, GameWeatherPoolsRow>(
-    "SELECT id, game_id, name, created_at, updated_at 
+        "SELECT id, game_id, name, created_at, updated_at 
     FROM game_weather_pools 
-    WHERE id = ?"
+    WHERE id = ?",
     )
     .bind(id)
     .fetch_one(executor)
     .await?;
     Ok(result.into())
 }
-pub async fn upsert_game_weather_pool<'e, E>(executor: E, game_id: &str, input: GameWeatherPoolsInput) -> Result<(), Error> where E: Executor<'e, Database = Sqlite> {
+pub async fn upsert_game_weather_pool<'e, E>(executor: E, game_id: &str, input: GameWeatherPoolsInput) -> Result<(), Error>
+where
+    E: Executor<'e, Database = Sqlite>,
+{
     let id = input.id.clone().unwrap_or_else(|| Uuid::new_v4().to_string());
     let now = chrono::Utc::now().timestamp_millis();
 
@@ -1100,28 +1267,34 @@ pub async fn upsert_game_weather_pool<'e, E>(executor: E, game_id: &str, input: 
     .await?;
     Ok(())
 }
-pub async fn delete_game_weather_pool<'e, E>(executor: E, id: &str) -> Result<bool, Error> where E: Executor<'e, Database = Sqlite> {
-    let result = sqlx::query("DELETE FROM game_weather_pools WHERE id = ?")
-        .bind(&id)
-        .execute(executor)
-        .await?;
+pub async fn delete_game_weather_pool<'e, E>(executor: E, id: &str) -> Result<bool, Error>
+where
+    E: Executor<'e, Database = Sqlite>,
+{
+    let result = sqlx::query("DELETE FROM game_weather_pools WHERE id = ?").bind(&id).execute(executor).await?;
     Ok(result.rows_affected() != 0)
 }
 
 // --- GameWeatherPoolEntries ---
-pub async fn get_all_game_weather_pool_entries<'e, E>(executor: E, game_id: &str) -> Result<Vec<GameWeatherPoolEntries>, Error> where E: Executor<'e, Database = Sqlite> {
+pub async fn get_all_game_weather_pool_entries<'e, E>(executor: E, game_id: &str) -> Result<Vec<GameWeatherPoolEntries>, Error>
+where
+    E: Executor<'e, Database = Sqlite>,
+{
     let result = sqlx::query_as::<_, GameWeatherPoolEntriesRow>(
-    "SELECT e.pool_id, e.weather_id, e.weight
+        "SELECT e.pool_id, e.weather_id, e.weight
     FROM game_weather_pool_entries e 
     INNER JOIN game_weather_pools p ON e.pool_id = p.id 
-    WHERE p.game_id = ?"
+    WHERE p.game_id = ?",
     )
     .bind(game_id)
     .fetch_all(executor)
     .await?;
     Ok(result.into_iter().map(Into::into).collect())
 }
-pub async fn upsert_game_weather_pool_entry<'e, E>(executor: E, input: GameWeatherPoolEntriesInput) -> Result<(), Error> where E: Executor<'e, Database = Sqlite> {
+pub async fn upsert_game_weather_pool_entry<'e, E>(executor: E, input: GameWeatherPoolEntriesInput) -> Result<(), Error>
+where
+    E: Executor<'e, Database = Sqlite>,
+{
     sqlx::query(
         r#"
         INSERT INTO game_weather_pool_entries ( pool_id, weather_id, weight )
@@ -1139,19 +1312,25 @@ pub async fn upsert_game_weather_pool_entry<'e, E>(executor: E, input: GameWeath
 }
 
 // --- GameWeatherTransitions ---
-pub async fn get_all_game_weather_transitions<'e, E>(executor: E, game_id: &str) -> Result<Vec<GameWeatherTransitions>, Error> where E: Executor<'e, Database = Sqlite> {
+pub async fn get_all_game_weather_transitions<'e, E>(executor: E, game_id: &str) -> Result<Vec<GameWeatherTransitions>, Error>
+where
+    E: Executor<'e, Database = Sqlite>,
+{
     let result = sqlx::query_as::<_, GameWeatherTransitionsRow>(
-    "SELECT t.from_weather_id, t.to_weather_id, t.map_id, t.probability
+        "SELECT t.from_weather_id, t.to_weather_id, t.map_id, t.probability
     FROM game_weather_transitions t
     INNER JOIN game_maps m ON t.map_id = m.id 
-    WHERE m.game_id = ?"
+    WHERE m.game_id = ?",
     )
     .bind(game_id)
     .fetch_all(executor)
     .await?;
     Ok(result.into_iter().map(Into::into).collect())
 }
-pub async fn upsert_game_weather_transition<'e, E>(executor: E, input: GameWeatherTransitionsInput) -> Result<(), Error> where E: Executor<'e, Database = Sqlite> {
+pub async fn upsert_game_weather_transition<'e, E>(executor: E, input: GameWeatherTransitionsInput) -> Result<(), Error>
+where
+    E: Executor<'e, Database = Sqlite>,
+{
     sqlx::query(
         r#"
         INSERT INTO game_weather_transitions ( from_weather_id, to_weather_id, map_id, probability )
@@ -1168,7 +1347,10 @@ pub async fn upsert_game_weather_transition<'e, E>(executor: E, input: GameWeath
     .await?;
     Ok(())
 }
-pub async fn delete_game_weather_transition<'e, E>(executor: E, from_weather_id: &str, to_weather_id: &str, map_id: &str) -> Result<bool, Error> where E: Executor<'e, Database = Sqlite> {
+pub async fn delete_game_weather_transition<'e, E>(executor: E, from_weather_id: &str, to_weather_id: &str, map_id: &str) -> Result<bool, Error>
+where
+    E: Executor<'e, Database = Sqlite>,
+{
     let result = sqlx::query("DELETE FROM game_weather_transitions WHERE from_weather_id = ? AND to_weather_id = ? AND map_id = ?")
         .bind(from_weather_id)
         .bind(to_weather_id)
@@ -1181,7 +1363,10 @@ pub async fn delete_game_weather_transition<'e, E>(executor: E, from_weather_id:
 // ---------------------------------------------------------
 // 게임 이벤트
 // ---------------------------------------------------------
-pub async fn get_all_game_events<'e, E>(executor: E, game_id: &str) -> Result<Vec<GameEvents>, Error> where E: Executor<'e, Database = Sqlite> {
+pub async fn get_all_game_events<'e, E>(executor: E, game_id: &str) -> Result<Vec<GameEvents>, Error>
+where
+    E: Executor<'e, Database = Sqlite>,
+{
     let result = sqlx::query_as::<_, GameEventsRow>(
     "SELECT id, game_id, event_type, trigger_type, repeat_policy, name, description, requires_npc, config_json, effect_json, cooldown_seconds, created_at, updated_at 
     FROM game_events 
@@ -1192,7 +1377,10 @@ pub async fn get_all_game_events<'e, E>(executor: E, game_id: &str) -> Result<Ve
     .await?;
     Ok(result.into_iter().map(Into::into).collect())
 }
-pub async fn get_game_event<'e, E>(executor: E, id: &str) -> Result<GameEvents, Error> where E: Executor<'e, Database = Sqlite> {
+pub async fn get_game_event<'e, E>(executor: E, id: &str) -> Result<GameEvents, Error>
+where
+    E: Executor<'e, Database = Sqlite>,
+{
     let result = sqlx::query_as::<_, GameEventsRow>(
     "SELECT id, game_id, event_type, trigger_type, repeat_policy, name, description, requires_npc, config_json, effect_json, cooldown_seconds, created_at, updated_at  FROM game_events WHERE id = ?"
     )
@@ -1201,7 +1389,10 @@ pub async fn get_game_event<'e, E>(executor: E, id: &str) -> Result<GameEvents, 
     .await?;
     Ok(result.into())
 }
-pub async fn upsert_game_event<'e, E>(executor: E, game_id: &str, input: GameEventsInput) -> Result<(), Error> where E: Executor<'e, Database = Sqlite> {
+pub async fn upsert_game_event<'e, E>(executor: E, game_id: &str, input: GameEventsInput) -> Result<(), Error>
+where
+    E: Executor<'e, Database = Sqlite>,
+{
     let id = input.id.clone().unwrap_or_else(|| Uuid::new_v4().to_string());
     let now = chrono::Utc::now().timestamp_millis();
     let config_json = serde_json::to_string(&input.config_json).unwrap_or_default();
@@ -1242,37 +1433,44 @@ pub async fn upsert_game_event<'e, E>(executor: E, game_id: &str, input: GameEve
     .await?;
     Ok(())
 }
-pub async fn delete_game_event<'e, E>(executor: E, id: &str) -> Result<bool, Error> where E: Executor<'e, Database = Sqlite> {
-    let result = sqlx::query("DELETE FROM game_events WHERE id = ?")
-        .bind(&id)
-        .execute(executor)
-        .await?;
+pub async fn delete_game_event<'e, E>(executor: E, id: &str) -> Result<bool, Error>
+where
+    E: Executor<'e, Database = Sqlite>,
+{
+    let result = sqlx::query("DELETE FROM game_events WHERE id = ?").bind(&id).execute(executor).await?;
     Ok(result.rows_affected() != 0)
 }
 
 // --- GameEventConditions ---
-pub async fn get_all_event_conditions<'e, E>(executor: E, game_id: &str) -> Result<Vec<GameEventConditions>, Error> where E: Executor<'e, Database = Sqlite> {
+pub async fn get_all_event_conditions<'e, E>(executor: E, game_id: &str) -> Result<Vec<GameEventConditions>, Error>
+where
+    E: Executor<'e, Database = Sqlite>,
+{
     let result = sqlx::query_as::<_, GameEventConditionsRow>(
-    "SELECT c.id, c.event_id, c.condition_type, c.condition_value 
+        "SELECT c.id, c.event_id, c.condition_type, c.condition_value 
     FROM game_event_conditions c
     INNER JOIN game_events e ON c.event_id = e.id 
-    WHERE e.game_id = ?"
+    WHERE e.game_id = ?",
     )
     .bind(game_id)
     .fetch_all(executor)
     .await?;
     Ok(result.into_iter().map(Into::into).collect())
 }
-pub async fn get_game_event_condition<'e, E>(executor: E, id: &str) -> Result<GameEventConditions, Error> where E: Executor<'e, Database = Sqlite> {
-    let result = sqlx::query_as::<_, GameEventConditionsRow>(
-    "SELECT id, event_id, condition_type, condition_value  FROM game_event_conditions WHERE id = ?"
-    )
-    .bind(id)
-    .fetch_one(executor)
-    .await?;
+pub async fn get_game_event_condition<'e, E>(executor: E, id: &str) -> Result<GameEventConditions, Error>
+where
+    E: Executor<'e, Database = Sqlite>,
+{
+    let result = sqlx::query_as::<_, GameEventConditionsRow>("SELECT id, event_id, condition_type, condition_value  FROM game_event_conditions WHERE id = ?")
+        .bind(id)
+        .fetch_one(executor)
+        .await?;
     Ok(result.into())
 }
-pub async fn upsert_game_event_condition<'e, E>(executor: E, event_id: &str, input: GameEventConditionsInput) -> Result<(), Error> where E: Executor<'e, Database = Sqlite> {
+pub async fn upsert_game_event_condition<'e, E>(executor: E, event_id: &str, input: GameEventConditionsInput) -> Result<(), Error>
+where
+    E: Executor<'e, Database = Sqlite>,
+{
     let id = input.id.clone().unwrap_or_else(|| Uuid::new_v4().to_string());
 
     sqlx::query(
@@ -1293,7 +1491,10 @@ pub async fn upsert_game_event_condition<'e, E>(executor: E, event_id: &str, inp
     .await?;
     Ok(())
 }
-pub async fn delete_game_event_conditions<'e, E>(executor: E, id: &str) -> Result<bool, Error> where E: Executor<'e, Database = Sqlite> {
+pub async fn delete_game_event_conditions<'e, E>(executor: E, id: &str) -> Result<bool, Error>
+where
+    E: Executor<'e, Database = Sqlite>,
+{
     let result = sqlx::query("DELETE FROM game_event_conditions WHERE id = ?")
         .bind(&id)
         .execute(executor)
@@ -1302,39 +1503,47 @@ pub async fn delete_game_event_conditions<'e, E>(executor: E, id: &str) -> Resul
 }
 
 // --- game_interactables ---
-pub async fn get_all_game_interactables<'e, E>(executor: E, game_id: &str) -> Result<Vec<GameInteractables>, Error> where E: Executor<'e, Database = Sqlite> {
+pub async fn get_all_game_interactables<'e, E>(executor: E, game_id: &str) -> Result<Vec<GameInteractables>, Error>
+where
+    E: Executor<'e, Database = Sqlite>,
+{
     let result = sqlx::query_as::<_, GameInteractablesRow>(
-    "SELECT i.id, i.location_id, i.name, i.event_id 
+        "SELECT i.id, i.location_id, i.name, i.event_id 
     FROM game_interactables i
     INNER JOIN game_locations l ON i.location_id = l.id 
     INNER JOIN game_map_zones z ON l.zone_id = z.id 
     INNER JOIN game_maps m ON z.map_id = m.id 
-    WHERE m.game_id = ?"
+    WHERE m.game_id = ?",
     )
     .bind(game_id)
     .fetch_all(executor)
     .await?;
     Ok(result.into_iter().map(Into::into).collect())
 }
-pub async fn get_location_game_interactables<'e, E>(executor: E, location_id: &str) -> Result<Vec<GameInteractables>, Error> where E: Executor<'e, Database = Sqlite> {
-    let result = sqlx::query_as::<_, GameInteractablesRow>(
-    "SELECT id, location_id, name, event_id FROM game_interactables WHERE location_id = ?"
-    )
-    .bind(location_id)
-    .fetch_all(executor)
-    .await?;
+pub async fn get_location_game_interactables<'e, E>(executor: E, location_id: &str) -> Result<Vec<GameInteractables>, Error>
+where
+    E: Executor<'e, Database = Sqlite>,
+{
+    let result = sqlx::query_as::<_, GameInteractablesRow>("SELECT id, location_id, name, event_id FROM game_interactables WHERE location_id = ?")
+        .bind(location_id)
+        .fetch_all(executor)
+        .await?;
     Ok(result.into_iter().map(Into::into).collect())
 }
-pub async fn get_game_interactables<'e, E>(executor: E, id: &str) -> Result<GameInteractables, Error> where E: Executor<'e, Database = Sqlite> {
-    let result = sqlx::query_as::<_, GameInteractablesRow>(
-    "SELECT id, location_id, name, event_id FROM game_interactables WHERE id = ?"
-    )
-    .bind(id)
-    .fetch_one(executor)
-    .await?;
+pub async fn get_game_interactables<'e, E>(executor: E, id: &str) -> Result<GameInteractables, Error>
+where
+    E: Executor<'e, Database = Sqlite>,
+{
+    let result = sqlx::query_as::<_, GameInteractablesRow>("SELECT id, location_id, name, event_id FROM game_interactables WHERE id = ?")
+        .bind(id)
+        .fetch_one(executor)
+        .await?;
     Ok(result.into())
 }
-pub async fn upsert_game_interactables<'e, E>(executor: E, input: GameInteractablesInput) -> Result<(), Error> where E: Executor<'e, Database = Sqlite> {
+pub async fn upsert_game_interactables<'e, E>(executor: E, input: GameInteractablesInput) -> Result<(), Error>
+where
+    E: Executor<'e, Database = Sqlite>,
+{
     let id = input.id.clone().unwrap_or_else(|| Uuid::new_v4().to_string());
 
     sqlx::query(
@@ -1355,28 +1564,34 @@ pub async fn upsert_game_interactables<'e, E>(executor: E, input: GameInteractab
     .await?;
     Ok(())
 }
-pub async fn delete_game_interactables<'e, E>(executor: E, id: &str) -> Result<bool, Error> where E: Executor<'e, Database = Sqlite> {
-    let result = sqlx::query("DELETE FROM game_interactables WHERE id = ?")
-        .bind(&id)
-        .execute(executor)
-        .await?;
+pub async fn delete_game_interactables<'e, E>(executor: E, id: &str) -> Result<bool, Error>
+where
+    E: Executor<'e, Database = Sqlite>,
+{
+    let result = sqlx::query("DELETE FROM game_interactables WHERE id = ?").bind(&id).execute(executor).await?;
     Ok(result.rows_affected() != 0)
 }
 
 // --- GameEventCharacterPool ---
-pub async fn get_all_event_characters<'e, E>(executor: E, game_id: &str) -> Result<Vec<GameEventCharacterPool>, Error> where E: Executor<'e, Database = Sqlite> {
+pub async fn get_all_event_characters<'e, E>(executor: E, game_id: &str) -> Result<Vec<GameEventCharacterPool>, Error>
+where
+    E: Executor<'e, Database = Sqlite>,
+{
     let result = sqlx::query_as::<_, GameEventCharacterPoolRow>(
-    "SELECT c.event_id, c.game_character_id, c.spawn_weight 
+        "SELECT c.event_id, c.game_character_id, c.spawn_weight 
     FROM game_event_character_pool c
     INNER JOIN game_events e ON c.event_id = e.id
-    WHERE e.game_id = ?"
+    WHERE e.game_id = ?",
     )
     .bind(game_id)
     .fetch_all(executor)
     .await?;
     Ok(result.into_iter().map(Into::into).collect())
 }
-pub async fn upsert_game_event_character<'e, E>(executor: E, event_id: &str, input: GameEventCharacterPoolInput) -> Result<(), Error> where E: Executor<'e, Database = Sqlite> {
+pub async fn upsert_game_event_character<'e, E>(executor: E, event_id: &str, input: GameEventCharacterPoolInput) -> Result<(), Error>
+where
+    E: Executor<'e, Database = Sqlite>,
+{
     sqlx::query(
         r#"
         INSERT INTO game_event_character_pool ( event_id, game_character_id, spawn_weight ) 
@@ -1393,10 +1608,15 @@ pub async fn upsert_game_event_character<'e, E>(executor: E, event_id: &str, inp
     Ok(())
 }
 
-pub async fn delete_game_event_character<'e, E>(executor: E, event_id: &str, game_character_id: &str) -> Result<bool, Error> where E: Executor<'e, Database = Sqlite> {
-    let result = sqlx::query("
+pub async fn delete_game_event_character<'e, E>(executor: E, event_id: &str, game_character_id: &str) -> Result<bool, Error>
+where
+    E: Executor<'e, Database = Sqlite>,
+{
+    let result = sqlx::query(
+        "
         DELETE FROM game_event_character_pool WHERE event_id = ? AND game_character_id = ?
-    ")
+    ",
+    )
     .bind(event_id)
     .bind(game_character_id)
     .execute(executor)
@@ -1407,28 +1627,36 @@ pub async fn delete_game_event_character<'e, E>(executor: E, event_id: &str, gam
 // ---------------------------------------------------------
 // 게임 인카운트 테이블
 // ---------------------------------------------------------
-pub async fn get_all_game_encounter_tables<'e, E>(executor: E, game_id: &str) -> Result<Vec<GameEncounterTables>, Error> where E: Executor<'e, Database = Sqlite> {
+pub async fn get_all_game_encounter_tables<'e, E>(executor: E, game_id: &str) -> Result<Vec<GameEncounterTables>, Error>
+where
+    E: Executor<'e, Database = Sqlite>,
+{
     let result = sqlx::query_as::<_, GameEncounterTables>(
-    "SELECT t.id, t.map_id, t.zone_id, location_id, t.base_trigger_chance 
+        "SELECT t.id, t.map_id, t.zone_id, location_id, t.base_trigger_chance 
     FROM game_encounter_tables t
     INNER JOIN game_maps m ON t.map_id = m.id
-    WHERE m.game_id = ?"
+    WHERE m.game_id = ?",
     )
     .bind(game_id)
     .fetch_all(executor)
     .await?;
     Ok(result)
 }
-pub async fn get_game_encounter_tables<'e, E>(executor: E, id: &str) -> Result<GameEncounterTables, Error> where E: Executor<'e, Database = Sqlite> {
-    let result = sqlx::query_as::<_, GameEncounterTables>(
-    "SELECT id, map_id, zone_id, location_id, base_trigger_chance  FROM game_encounter_tables WHERE id = ?"
-    )
-    .bind(id)
-    .fetch_one(executor)
-    .await?;
+pub async fn get_game_encounter_tables<'e, E>(executor: E, id: &str) -> Result<GameEncounterTables, Error>
+where
+    E: Executor<'e, Database = Sqlite>,
+{
+    let result =
+        sqlx::query_as::<_, GameEncounterTables>("SELECT id, map_id, zone_id, location_id, base_trigger_chance  FROM game_encounter_tables WHERE id = ?")
+            .bind(id)
+            .fetch_one(executor)
+            .await?;
     Ok(result)
 }
-pub async fn upsert_game_encounter_table<'e, E>(executor: E, input: GameEncounterTablesInput) -> Result<(), Error> where E: Executor<'e, Database = Sqlite> {
+pub async fn upsert_game_encounter_table<'e, E>(executor: E, input: GameEncounterTablesInput) -> Result<(), Error>
+where
+    E: Executor<'e, Database = Sqlite>,
+{
     let id = input.id.clone().unwrap_or_else(|| Uuid::new_v4().to_string());
 
     sqlx::query(
@@ -1451,39 +1679,52 @@ pub async fn upsert_game_encounter_table<'e, E>(executor: E, input: GameEncounte
     .await?;
     Ok(())
 }
-pub async fn delete_game_encounter_table<'e, E>(executor: E, id: &str) -> Result<bool, Error> where E: Executor<'e, Database = Sqlite> {
+pub async fn delete_game_encounter_table<'e, E>(executor: E, id: &str) -> Result<bool, Error>
+where
+    E: Executor<'e, Database = Sqlite>,
+{
     let result = sqlx::query("DELETE FROM game_encounter_tables WHERE id = ?")
-    .bind(&id)
-    .execute(executor)
-    .await?;
+        .bind(&id)
+        .execute(executor)
+        .await?;
     Ok(result.rows_affected() != 0)
 }
 
-pub async fn get_all_game_encounter_table_entries<'e, E>(executor: E, game_id: &str) -> Result<Vec<GameEncounterEntries>, Error> where E: Executor<'e, Database = Sqlite> {
+pub async fn get_all_game_encounter_table_entries<'e, E>(executor: E, game_id: &str) -> Result<Vec<GameEncounterEntries>, Error>
+where
+    E: Executor<'e, Database = Sqlite>,
+{
     let result = sqlx::query_as::<_, GameEncounterEntriesRow>(
-    "SELECT c.id, c.encounter_table_id, c.event_id, c.weight, c.time_period_id, c.weather_id  
+        "SELECT c.id, c.encounter_table_id, c.event_id, c.weight, c.time_period_id, c.weather_id  
     FROM game_encounter_entries c
     INNER JOIN game_events e ON c.event_id = e.id
-    WHERE e.game_id = ?"
+    WHERE e.game_id = ?",
     )
     .bind(game_id)
     .fetch_all(executor)
     .await?;
     Ok(result.into_iter().map(Into::into).collect())
 }
-pub async fn get_game_encounter_table_entry<'e, E>(executor: E, id: &str) -> Result<GameEncounterEntries, Error> where E: Executor<'e, Database = Sqlite> {
+pub async fn get_game_encounter_table_entry<'e, E>(executor: E, id: &str) -> Result<GameEncounterEntries, Error>
+where
+    E: Executor<'e, Database = Sqlite>,
+{
     let result = sqlx::query_as::<_, GameEncounterEntriesRow>(
-    "
+        "
     SELECT id, encounter_table_id, event_id, weight, time_period_id, weather_id  
     FROM game_encounter_entries 
     WHERE id = ?
-    ")
+    ",
+    )
     .bind(id)
     .fetch_one(executor)
     .await?;
     Ok(result.into())
 }
-pub async fn upsert_game_encounter_table_entry<'e, E>(executor: E, input: GameEncounterEntriesInput) -> Result<(), Error> where E: Executor<'e, Database = Sqlite> {
+pub async fn upsert_game_encounter_table_entry<'e, E>(executor: E, input: GameEncounterEntriesInput) -> Result<(), Error>
+where
+    E: Executor<'e, Database = Sqlite>,
+{
     let id = input.id.clone().unwrap_or_else(|| Uuid::new_v4().to_string());
     sqlx::query(
         r#"
@@ -1507,11 +1748,14 @@ pub async fn upsert_game_encounter_table_entry<'e, E>(executor: E, input: GameEn
     .await?;
     Ok(())
 }
-pub async fn delete_game_encounter_table_entry<'e, E>(executor: E, id: &str) -> Result<bool, Error> where E: Executor<'e, Database = Sqlite> {
+pub async fn delete_game_encounter_table_entry<'e, E>(executor: E, id: &str) -> Result<bool, Error>
+where
+    E: Executor<'e, Database = Sqlite>,
+{
     let result = sqlx::query("DELETE FROM game_encounter_entries WHERE id = ?")
-    .bind(&id)
-    .execute(executor)
-    .await?;
+        .bind(&id)
+        .execute(executor)
+        .await?;
     Ok(result.rows_affected() != 0)
 }
 
@@ -1519,21 +1763,27 @@ pub async fn delete_game_encounter_table_entry<'e, E>(executor: E, id: &str) -> 
 // 게임 씬
 // ---------------------------------------------------------
 /** 특정 게임의 씬 모두 불러오기 */
-pub async fn get_all_game_scenes<'e, E>(executor: E, game_id: &str) -> Result<Vec<GameSceneRow>, Error> where E: Executor<'e, Database = Sqlite> {
+pub async fn get_all_game_scenes<'e, E>(executor: E, game_id: &str) -> Result<Vec<GameSceneRow>, Error>
+where
+    E: Executor<'e, Database = Sqlite>,
+{
     let rows = sqlx::query_as::<_, GameSceneRow>(
-    "SELECT id, game_id, scene_name, description, scene_key, is_ending, ending_id, settings_json, script, sort_order, created_at, updated_at
+        "SELECT id, game_id, scene_name, description, scene_key, is_ending, ending_id, settings_json, script, sort_order, created_at, updated_at
     FROM game_scenes WHERE game_id = ? 
     ORDER BY sort_order, id
     ",
     )
-        .bind(&game_id)
-        .fetch_all(executor)
-        .await?;
+    .bind(&game_id)
+    .fetch_all(executor)
+    .await?;
     Ok(rows)
 }
 
 /** 게임 씬 생성/업데이트 */
-pub async fn upsert_game_scene<'e, E>(executor: E, game_id: &str,scene: &GameSceneInput, scene_index: i64) -> Result<(), Error> where E: Executor<'e, Database = Sqlite> {
+pub async fn upsert_game_scene<'e, E>(executor: E, game_id: &str, scene: &GameSceneInput, scene_index: i64) -> Result<(), Error>
+where
+    E: Executor<'e, Database = Sqlite>,
+{
     let now = chrono::Utc::now().timestamp_millis();
     sqlx::query(
         r#"
@@ -1573,23 +1823,23 @@ pub async fn upsert_game_scene<'e, E>(executor: E, game_id: &str,scene: &GameSce
  * return true: 삭제됨
  *        false: 해당 칼럼을 찾을 수 없음
 */
-pub async fn delete_game_all_scene<'e, E>(executor: E, game_id: &str) -> Result<bool, Error> where E: Executor<'e, Database = Sqlite> {
-    let result = sqlx::query("DELETE FROM game_scenes WHERE game_id = ?")
-        .bind(game_id)
-        .execute(executor)
-        .await?;
+pub async fn delete_game_all_scene<'e, E>(executor: E, game_id: &str) -> Result<bool, Error>
+where
+    E: Executor<'e, Database = Sqlite>,
+{
+    let result = sqlx::query("DELETE FROM game_scenes WHERE game_id = ?").bind(game_id).execute(executor).await?;
     Ok(result.rows_affected() != 0)
 }
 
-/** 특정 씬 삭제 
+/** 특정 씬 삭제
  * return true: 삭제됨
  *        false: 해당 칼럼을 찾을 수 없음
 */
-pub async fn delete_game_scene<'e, E>(executor: E, id: &str) -> Result<bool, Error> where E: Executor<'e, Database = Sqlite> {
-    let result = sqlx::query("DELETE FROM game_scenes WHERE id = ?")
-        .bind(id)
-        .execute(executor)
-        .await?;
+pub async fn delete_game_scene<'e, E>(executor: E, id: &str) -> Result<bool, Error>
+where
+    E: Executor<'e, Database = Sqlite>,
+{
+    let result = sqlx::query("DELETE FROM game_scenes WHERE id = ?").bind(id).execute(executor).await?;
     Ok(result.rows_affected() != 0)
 }
 
@@ -1597,13 +1847,18 @@ pub async fn delete_game_scene<'e, E>(executor: E, id: &str) -> Result<bool, Err
 // Game choices
 // ---------------------------------------------------------
 /** 특정 씬의 선택지 모두 불러오기 */
-pub async fn get_all_game_choices<'e, E>(executor: E, game_id: &str) -> Result<Vec<GameChoiceRow>, Error> where E: Executor<'e, Database = Sqlite> {
-    let rows = sqlx::query_as::<_, GameChoiceRow>("
+pub async fn get_all_game_choices<'e, E>(executor: E, game_id: &str) -> Result<Vec<GameChoiceRow>, Error>
+where
+    E: Executor<'e, Database = Sqlite>,
+{
+    let rows = sqlx::query_as::<_, GameChoiceRow>(
+        "
         SELECT ch.id, ch.scene_id, ch.text, ch.next_scene_id, ch.condition, ch.effect, ch.sort_order
         FROM game_choices ch
             INNER JOIN game_scenes s ON s.id = ch.scene_id
             WHERE s.game_id = ?
-    ")
+    ",
+    )
     .bind(game_id)
     .fetch_all(executor)
     .await?;
@@ -1611,7 +1866,10 @@ pub async fn get_all_game_choices<'e, E>(executor: E, game_id: &str) -> Result<V
 }
 
 /** 게임 선택지 생성/업데이트 */
-pub async fn upsert_game_choice<'e, E>(executor: E, input: &GameChoiceInput) -> Result<(), Error> where E: Executor<'e, Database = Sqlite> {
+pub async fn upsert_game_choice<'e, E>(executor: E, input: &GameChoiceInput) -> Result<(), Error>
+where
+    E: Executor<'e, Database = Sqlite>,
+{
     sqlx::query(
         r#"
         INSERT INTO game_choices ( id, scene_id, text, next_scene_id, condition, effect, sort_order )
@@ -1638,7 +1896,10 @@ pub async fn upsert_game_choice<'e, E>(executor: E, input: &GameChoiceInput) -> 
 }
 
 /** 게임 선택지 생성/업데이트 (다음 노드 제외) */
-pub async fn upsert_game_choice_without_links<'e, E>(executor: E, input: &GameChoiceInput) -> Result<(), Error> where E: Executor<'e, Database = Sqlite> {
+pub async fn upsert_game_choice_without_links<'e, E>(executor: E, input: &GameChoiceInput) -> Result<(), Error>
+where
+    E: Executor<'e, Database = Sqlite>,
+{
     sqlx::query(
         r#"
         INSERT INTO game_choices ( id, scene_id, text, next_scene_id, condition, effect, sort_order )
@@ -1663,7 +1924,10 @@ pub async fn upsert_game_choice_without_links<'e, E>(executor: E, input: &GameCh
 }
 
 /** 게임 선택지에서 다음노드만 업데이트 */
-pub async fn upsert_game_choice_next<'e, E>(executor: E, next_scene_id: &str, choice_id: &str) -> Result<(), Error> where E: Executor<'e, Database = Sqlite> {
+pub async fn upsert_game_choice_next<'e, E>(executor: E, next_scene_id: &str, choice_id: &str) -> Result<(), Error>
+where
+    E: Executor<'e, Database = Sqlite>,
+{
     sqlx::query(r#"UPDATE game_choices SET next_scene_id =? WHERE id = ?"#)
         .bind(next_scene_id)
         .bind(choice_id)
@@ -1672,15 +1936,15 @@ pub async fn upsert_game_choice_next<'e, E>(executor: E, next_scene_id: &str, ch
     Ok(())
 }
 
-/** 특정 선택지 삭제 
+/** 특정 선택지 삭제
  * return true: 삭제됨
  *        false: 해당 칼럼을 찾을 수 없음
 */
-pub async fn delete_game_choice<'e, E>(executor: E, id: &str) -> Result<bool, Error> where E: Executor<'e, Database = Sqlite> {
-    let result = sqlx::query("DELETE FROM game_choices WHERE id = ?")
-    .bind(&id)
-    .execute(executor)
-    .await?;
+pub async fn delete_game_choice<'e, E>(executor: E, id: &str) -> Result<bool, Error>
+where
+    E: Executor<'e, Database = Sqlite>,
+{
+    let result = sqlx::query("DELETE FROM game_choices WHERE id = ?").bind(&id).execute(executor).await?;
     Ok(result.rows_affected() != 0)
 }
 
@@ -1688,13 +1952,18 @@ pub async fn delete_game_choice<'e, E>(executor: E, id: &str) -> Result<bool, Er
 // Game branches
 // ---------------------------------------------------------
 /** 특정 씬의 브런치 모두 불러오기 */
-pub async fn get_all_game_branches<'e, E>(executor: E, game_id: &str) -> Result<Vec<GameBranchRow>, Error> where E: Executor<'e, Database = Sqlite> {
-    let rows = sqlx::query_as::<_, GameBranchRow>("
+pub async fn get_all_game_branches<'e, E>(executor: E, game_id: &str) -> Result<Vec<GameBranchRow>, Error>
+where
+    E: Executor<'e, Database = Sqlite>,
+{
+    let rows = sqlx::query_as::<_, GameBranchRow>(
+        "
         SELECT cb.id, cb.scene_id, cb.condition, cb.next_scene_id, cb.sort_order
         FROM game_branches cb
             INNER JOIN game_scenes s ON s.id = cb.scene_id
             WHERE s.game_id = ?
-    ")
+    ",
+    )
     .bind(game_id)
     .fetch_all(executor)
     .await?;
@@ -1702,7 +1971,10 @@ pub async fn get_all_game_branches<'e, E>(executor: E, game_id: &str) -> Result<
 }
 
 /** 게임 브런치 생성/업데이트 */
-pub async fn upsert_game_branches<'e, E>(executor: E, input: &GameBranchInput) -> Result<(), Error> where E: Executor<'e, Database = Sqlite> {
+pub async fn upsert_game_branches<'e, E>(executor: E, input: &GameBranchInput) -> Result<(), Error>
+where
+    E: Executor<'e, Database = Sqlite>,
+{
     sqlx::query(
         r#"
         INSERT INTO game_branches (
@@ -1730,7 +2002,10 @@ pub async fn upsert_game_branches<'e, E>(executor: E, input: &GameBranchInput) -
     Ok(())
 }
 /** 게임 브런치 생성/업데이트 (다음 노드 제외) */
-pub async fn upsert_game_branch_without_links<'e, E>(executor: E, input: &GameBranchInput) -> Result<(), Error> where E: Executor<'e, Database = Sqlite> {
+pub async fn upsert_game_branch_without_links<'e, E>(executor: E, input: &GameBranchInput) -> Result<(), Error>
+where
+    E: Executor<'e, Database = Sqlite>,
+{
     sqlx::query(
         r#"
         INSERT INTO game_branches (
@@ -1753,7 +2028,10 @@ pub async fn upsert_game_branch_without_links<'e, E>(executor: E, input: &GameBr
 }
 
 /** 게임 브런치에서 다음노드만 업데이트 */
-pub async fn upsert_game_branch_next<'e, E>(executor: E, next_scene_id: &str, id: &str) -> Result<(), Error> where E: Executor<'e, Database = Sqlite> {
+pub async fn upsert_game_branch_next<'e, E>(executor: E, next_scene_id: &str, id: &str) -> Result<(), Error>
+where
+    E: Executor<'e, Database = Sqlite>,
+{
     sqlx::query(r#"UPDATE game_branches SET next_scene_id =? WHERE id = ?"#)
         .bind(next_scene_id)
         .bind(id)
@@ -1762,40 +2040,45 @@ pub async fn upsert_game_branch_next<'e, E>(executor: E, next_scene_id: &str, id
     Ok(())
 }
 
-/** 특정 브런치 삭제 
+/** 특정 브런치 삭제
  * return true: 삭제됨
  *        false: 해당 칼럼을 찾을 수 없음
 */
-pub async fn delete_game_branches<'e, E>(executor: E, id: &str) -> Result<bool, Error> where E: Executor<'e, Database = Sqlite> {
-    let result = sqlx::query("DELETE FROM game_branches WHERE id = ?")
-    .bind(&id)
-    .execute(executor)
-    .await?;
+pub async fn delete_game_branches<'e, E>(executor: E, id: &str) -> Result<bool, Error>
+where
+    E: Executor<'e, Database = Sqlite>,
+{
+    let result = sqlx::query("DELETE FROM game_branches WHERE id = ?").bind(&id).execute(executor).await?;
     Ok(result.rows_affected() != 0)
 }
 
 // ---------------------------------------------------------
 // 게임 엔딩
 // ---------------------------------------------------------
-pub async fn get_all_game_endings<'e, E>(executor: E, game_id: &str) -> Result<Vec<GameEndings>, Error> where E: Executor<'e, Database = Sqlite> {
-    let result = sqlx::query_as::<_, GameEndings>(
-    "SELECT id, game_id, ending_key, title, description  FROM game_endings WHERE game_id = ?"
-    )
-    .bind(game_id)
-    .fetch_all(executor)
-    .await?;
+pub async fn get_all_game_endings<'e, E>(executor: E, game_id: &str) -> Result<Vec<GameEndings>, Error>
+where
+    E: Executor<'e, Database = Sqlite>,
+{
+    let result = sqlx::query_as::<_, GameEndings>("SELECT id, game_id, ending_key, title, description  FROM game_endings WHERE game_id = ?")
+        .bind(game_id)
+        .fetch_all(executor)
+        .await?;
     Ok(result)
 }
-pub async fn get_game_ending<'e, E>(executor: E, id: &str) -> Result<GameEndings, Error> where E: Executor<'e, Database = Sqlite> {
-    let result = sqlx::query_as::<_, GameEndings>(
-    "SELECT id, game_id, ending_key, title, description  FROM game_endings WHERE id = ?"
-    )
-    .bind(id)
-    .fetch_one(executor)
-    .await?;
+pub async fn get_game_ending<'e, E>(executor: E, id: &str) -> Result<GameEndings, Error>
+where
+    E: Executor<'e, Database = Sqlite>,
+{
+    let result = sqlx::query_as::<_, GameEndings>("SELECT id, game_id, ending_key, title, description  FROM game_endings WHERE id = ?")
+        .bind(id)
+        .fetch_one(executor)
+        .await?;
     Ok(result)
 }
-pub async fn upsert_game_ending<'e, E>(executor: E, input: GameEndingsInput) -> Result<(), Error> where E: Executor<'e, Database = Sqlite> {
+pub async fn upsert_game_ending<'e, E>(executor: E, input: GameEndingsInput) -> Result<(), Error>
+where
+    E: Executor<'e, Database = Sqlite>,
+{
     let id = input.id.clone().unwrap_or_else(|| Uuid::new_v4().to_string());
 
     sqlx::query(
@@ -1818,17 +2101,20 @@ pub async fn upsert_game_ending<'e, E>(executor: E, input: GameEndingsInput) -> 
     .await?;
     Ok(())
 }
-pub async fn delete_game_ending<'e, E>(executor: E, id: &str) -> Result<bool, Error> where E: Executor<'e, Database = Sqlite> {
-    let result = sqlx::query("DELETE FROM game_endings WHERE id = ?")
-    .bind(&id)
-    .execute(executor)
-    .await?;
+pub async fn delete_game_ending<'e, E>(executor: E, id: &str) -> Result<bool, Error>
+where
+    E: Executor<'e, Database = Sqlite>,
+{
+    let result = sqlx::query("DELETE FROM game_endings WHERE id = ?").bind(&id).execute(executor).await?;
     Ok(result.rows_affected() != 0)
 }
 // ---------------------------------------------------------
 // 아이템
 // ---------------------------------------------------------
-pub async fn get_all_game_items<'e, E>(executor: E, game_id: &str) -> Result<Vec<GameItems>, Error> where E: Executor<'e, Database = Sqlite> {
+pub async fn get_all_game_items<'e, E>(executor: E, game_id: &str) -> Result<Vec<GameItems>, Error>
+where
+    E: Executor<'e, Database = Sqlite>,
+{
     let result = sqlx::query_as::<_, GameItemsRow>("
         SELECT 
             id, game_id, name, description, icon, kind, max_stack, is_unique, is_key, consumable, use_effect, use_condition, on_acquire_event_id, settings_json, created_at, updated_at
@@ -1840,7 +2126,10 @@ pub async fn get_all_game_items<'e, E>(executor: E, game_id: &str) -> Result<Vec
     .await?;
     Ok(result.into_iter().map(Into::into).collect())
 }
-pub async fn upsert_game_item<'e, E>(executor: E, input: GameItemsInput) -> Result<(), Error> where E: Executor<'e, Database = Sqlite> {
+pub async fn upsert_game_item<'e, E>(executor: E, input: GameItemsInput) -> Result<(), Error>
+where
+    E: Executor<'e, Database = Sqlite>,
+{
     let id = input.id.clone().unwrap_or_else(|| Uuid::new_v4().to_string());
     let now = chrono::Utc::now().timestamp_millis();
     let _result = sqlx::query("
@@ -1882,34 +2171,43 @@ pub async fn upsert_game_item<'e, E>(executor: E, input: GameItemsInput) -> Resu
     .await?;
     Ok(())
 }
-pub async fn delete_game_item<'e, E>(executor: E, id: &str) -> Result<bool, Error> where E: Executor<'e, Database = Sqlite> {
-    let result = sqlx::query("DELETE FROM game_items WHERE id = ?")
-    .bind(&id)
-    .execute(executor)
-    .await?;
+pub async fn delete_game_item<'e, E>(executor: E, id: &str) -> Result<bool, Error>
+where
+    E: Executor<'e, Database = Sqlite>,
+{
+    let result = sqlx::query("DELETE FROM game_items WHERE id = ?").bind(&id).execute(executor).await?;
     Ok(result.rows_affected() != 0)
 }
 // ---------------------------------------------------------
 // 관계도
 // ---------------------------------------------------------
-pub async fn get_all_game_relationship_defs<'e, E>(executor: E, game_id: &str) -> Result<Vec<GameRelationshipDefs>, Error> where E: Executor<'e, Database = Sqlite> {
-    let result = sqlx::query_as::<_, GameRelationshipDefsRow>("
+pub async fn get_all_game_relationship_defs<'e, E>(executor: E, game_id: &str) -> Result<Vec<GameRelationshipDefs>, Error>
+where
+    E: Executor<'e, Database = Sqlite>,
+{
+    let result = sqlx::query_as::<_, GameRelationshipDefsRow>(
+        "
         SELECT 
             id, game_id, from_id, to_id, values_json, tags
         FROM game_relationship_defs
         WHERE game_id = ?
-    ")
+    ",
+    )
     .bind(game_id)
     .fetch_all(executor)
     .await?;
     Ok(result.into_iter().map(Into::into).collect())
 }
-pub async fn upsert_game_relationship_def<'e, E>(executor: E, input: GameRelationshipDefsInput) -> Result<(), Error> where E: Executor<'e, Database = Sqlite> {
+pub async fn upsert_game_relationship_def<'e, E>(executor: E, input: GameRelationshipDefsInput) -> Result<(), Error>
+where
+    E: Executor<'e, Database = Sqlite>,
+{
     let id = input.id.clone().unwrap_or_else(|| Uuid::new_v4().to_string());
     let values_json = serde_json::to_string(&input.values_json).unwrap_or_default();
     let tags = serde_json::to_string(&input.tags).unwrap_or_default();
 
-    let _result = sqlx::query("
+    let _result = sqlx::query(
+        "
         INSERT INTO game_relationship_defs (
             id, game_id, from_id, to_id, values_json, tags
         )
@@ -1920,7 +2218,8 @@ pub async fn upsert_game_relationship_def<'e, E>(executor: E, input: GameRelatio
             to_id=excluded.to_id,
             values_json=excluded.values_json,
             tags=excluded.tags
-    ")
+    ",
+    )
     .bind(id)
     .bind(&input.game_id)
     .bind(&input.from_id)
@@ -1931,11 +2230,14 @@ pub async fn upsert_game_relationship_def<'e, E>(executor: E, input: GameRelatio
     .await?;
     Ok(())
 }
-pub async fn delete_game_relationship_def<'e, E>(executor: E, id: &str) -> Result<bool, Error> where E: Executor<'e, Database = Sqlite> {
+pub async fn delete_game_relationship_def<'e, E>(executor: E, id: &str) -> Result<bool, Error>
+where
+    E: Executor<'e, Database = Sqlite>,
+{
     let result = sqlx::query("DELETE FROM game_relationship_defs WHERE id = ?")
-    .bind(&id)
-    .execute(executor)
-    .await?;
+        .bind(&id)
+        .execute(executor)
+        .await?;
     Ok(result.rows_affected() != 0)
 }
 // =========================================================
@@ -1944,7 +2246,10 @@ pub async fn delete_game_relationship_def<'e, E>(executor: E, id: &str) -> Resul
 // ---------------------------------------------------------
 // 게임 플레이 세션
 // ---------------------------------------------------------
-pub async fn get_all_game_player_sessions<'e, E>(executor: E, game_id: &str) -> Result<Vec<GamePlayerSessions>, Error> where E: Executor<'e, Database = Sqlite> {
+pub async fn get_all_game_player_sessions<'e, E>(executor: E, game_id: &str) -> Result<Vec<GamePlayerSessions>, Error>
+where
+    E: Executor<'e, Database = Sqlite>,
+{
     let result = sqlx::query_as::<_, GamePlayerSessionsRow>(
     "SELECT 
         id, game_id, player_id, current_scene_id, current_map_id, current_zone_id, current_location_id, current_weather_id, game_time, flags_json, parent_session_id, pending_scenes_json, inventory_json, relationships_json, stage_json, zone_weather_json, forked_from_seq, head_seq, updated_at
@@ -1955,7 +2260,10 @@ pub async fn get_all_game_player_sessions<'e, E>(executor: E, game_id: &str) -> 
     .await?;
     Ok(result.into_iter().map(Into::into).collect())
 }
-pub async fn get_game_player_sessions<'e, E>(executor: E, id: &str) -> Result<GamePlayerSessions, Error> where E: Executor<'e, Database = Sqlite> {
+pub async fn get_game_player_sessions<'e, E>(executor: E, id: &str) -> Result<GamePlayerSessions, Error>
+where
+    E: Executor<'e, Database = Sqlite>,
+{
     let result = sqlx::query_as::<_, GamePlayerSessionsRow>(
     "SELECT 
         id, game_id, player_id, current_scene_id, current_map_id, current_zone_id, current_location_id, current_weather_id, game_time, flags_json, parent_session_id, pending_scenes_json, inventory_json, relationships_json, stage_json, zone_weather_json, forked_from_seq, head_seq, updated_at
@@ -1967,7 +2275,10 @@ pub async fn get_game_player_sessions<'e, E>(executor: E, id: &str) -> Result<Ga
     .await?;
     Ok(result.into())
 }
-pub async fn upsert_game_player_sessions<'e, E>(executor: E, input: GamePlayerSessionsInput) -> Result<(), Error> where E: Executor<'e, Database = Sqlite> {
+pub async fn upsert_game_player_sessions<'e, E>(executor: E, input: GamePlayerSessionsInput) -> Result<(), Error>
+where
+    E: Executor<'e, Database = Sqlite>,
+{
     let id = input.id.clone().unwrap_or_else(|| Uuid::new_v4().to_string());
     let now = chrono::Utc::now().timestamp_millis();
     let flags_json = serde_json::to_string(&input.flags_json).unwrap_or_default();
@@ -2023,19 +2334,22 @@ pub async fn upsert_game_player_sessions<'e, E>(executor: E, input: GamePlayerSe
     .await?;
     Ok(())
 }
-pub async fn delete_game_player_sessions<'e, E>(executor: E, id: &str) -> Result<bool, Error> where E: Executor<'e, Database = Sqlite> {
-    let result = sqlx::query("DELETE FROM game_player_sessions WHERE id = ?")
-    .bind(&id)
-    .execute(executor)
-    .await?;
+pub async fn delete_game_player_sessions<'e, E>(executor: E, id: &str) -> Result<bool, Error>
+where
+    E: Executor<'e, Database = Sqlite>,
+{
+    let result = sqlx::query("DELETE FROM game_player_sessions WHERE id = ?").bind(&id).execute(executor).await?;
     Ok(result.rows_affected() != 0)
 }
 
 // ---------------------------------------------------------
 // 게임 세이브
 // ---------------------------------------------------------
-pub async fn get_all_game_save<'e, E>(executor: E, game_id: &str) -> Result<Vec<GameSave>, Error> where E: Executor<'e, Database = Sqlite> {
-    let rows= sqlx::query_as::<_, GameSaveRow>(
+pub async fn get_all_game_save<'e, E>(executor: E, game_id: &str) -> Result<Vec<GameSave>, Error>
+where
+    E: Executor<'e, Database = Sqlite>,
+{
+    let rows = sqlx::query_as::<_, GameSaveRow>(
         r#"
         SELECT
             s.name,
@@ -2061,7 +2375,10 @@ pub async fn get_all_game_save<'e, E>(executor: E, game_id: &str) -> Result<Vec<
     Ok(rows.into_iter().map(Into::into).collect())
 }
 
-pub async fn get_session_game_saves<'e, E>(executor: E, session_id: &str) -> Result<Vec<GameSave>, Error> where E: Executor<'e, Database = Sqlite> {
+pub async fn get_session_game_saves<'e, E>(executor: E, session_id: &str) -> Result<Vec<GameSave>, Error>
+where
+    E: Executor<'e, Database = Sqlite>,
+{
     let row = sqlx::query_as::<_, GameSaveRow>(
         r#"
         SELECT 
@@ -2075,7 +2392,10 @@ pub async fn get_session_game_saves<'e, E>(executor: E, session_id: &str) -> Res
     .await?;
     Ok(row.into_iter().map(Into::into).collect())
 }
-pub async fn get_game_save<'e, E>(executor: E, session_id: &str, slot_number: i64) -> Result<GameSave, Error> where E: Executor<'e, Database = Sqlite> {
+pub async fn get_game_save<'e, E>(executor: E, session_id: &str, slot_number: i64) -> Result<GameSave, Error>
+where
+    E: Executor<'e, Database = Sqlite>,
+{
     let row = sqlx::query_as::<_, GameSaveRow>(
         r#"
         SELECT
@@ -2103,7 +2423,10 @@ pub async fn get_game_save<'e, E>(executor: E, session_id: &str, slot_number: i6
     .ok_or_else(|| Error::RowNotFound)?;
     Ok(row.into())
 }
-pub async fn forked_game_save<'e, E>(executor: E, session_id: &str, new_session_id: &str, slot_number: i64) -> Result<(), Error> where E: Executor<'e, Database = Sqlite> {
+pub async fn forked_game_save<'e, E>(executor: E, session_id: &str, new_session_id: &str, slot_number: i64) -> Result<(), Error>
+where
+    E: Executor<'e, Database = Sqlite>,
+{
     let _result = sqlx::query(
         r#"
         INSERT INTO game_saves (
@@ -2124,7 +2447,10 @@ pub async fn forked_game_save<'e, E>(executor: E, session_id: &str, new_session_
     Ok(())
 }
 
-pub async fn upsert_game_save<'e, E>(executor: E, _game_id: &str, input: &GameSaveInput, snapshot: &str) -> Result<(), Error> where E: Executor<'e, Database = Sqlite> {
+pub async fn upsert_game_save<'e, E>(executor: E, _game_id: &str, input: &GameSaveInput, snapshot: &str) -> Result<(), Error>
+where
+    E: Executor<'e, Database = Sqlite>,
+{
     let now = chrono::Utc::now().timestamp_millis();
     sqlx::query(
         r#"
@@ -2174,26 +2500,31 @@ pub async fn upsert_game_save<'e, E>(executor: E, _game_id: &str, input: &GameSa
     Ok(())
 }
 
-/** 특정 세이브 삭제 
+/** 특정 세이브 삭제
  * return true: 삭제됨
  *        false: 해당 칼럼을 찾을 수 없음
 */
-pub async fn delete_game_save<'e, E>(executor: E, session_id: &str, slot_number: i64) -> Result<bool, Error> where E: Executor<'e, Database = Sqlite> {
+pub async fn delete_game_save<'e, E>(executor: E, session_id: &str, slot_number: i64) -> Result<bool, Error>
+where
+    E: Executor<'e, Database = Sqlite>,
+{
     let result = sqlx::query("DELETE FROM game_saves WHERE session_id = ? AND slot_number = ?")
-    .bind(session_id)
-    .bind(slot_number)
-    .execute(executor)
-    .await?;
+        .bind(session_id)
+        .bind(slot_number)
+        .execute(executor)
+        .await?;
     Ok(result.rows_affected() != 0)
 }
-
 
 // ---------------------------------------------------------
 // 게임 세션 기록
 // ---------------------------------------------------------
-pub async fn get_all_game_journals<'e, E>(executor: E, game_id: &str) -> Result<Vec<GameJournal>, Error> where E: Executor<'e, Database = Sqlite> {
+pub async fn get_all_game_journals<'e, E>(executor: E, game_id: &str) -> Result<Vec<GameJournal>, Error>
+where
+    E: Executor<'e, Database = Sqlite>,
+{
     let rows = sqlx::query_as::<_, GameJournalRow>(
-    "SELECT 
+        "SELECT 
         j.session_id,
         j.seq,
         j.kind,
@@ -2203,34 +2534,40 @@ pub async fn get_all_game_journals<'e, E>(executor: E, game_id: &str) -> Result<
     FROM game_journal j
     INNER JOIN game_player_sessions s ON s.id = j.session_id
     WHERE ps.game_id = ?
-    "
+    ",
     )
     .bind(game_id)
     .fetch_all(executor)
     .await?;
     Ok(rows.into_iter().map(Into::into).collect())
 }
-pub async fn get_session_game_journals<'e, E>(executor: E, session_id: &str) -> Result<Vec<GameJournal>, Error> where E: Executor<'e, Database = Sqlite> {
+pub async fn get_session_game_journals<'e, E>(executor: E, session_id: &str) -> Result<Vec<GameJournal>, Error>
+where
+    E: Executor<'e, Database = Sqlite>,
+{
     let rows = sqlx::query_as::<_, GameJournalRow>(
-    "SELECT 
+        "SELECT 
         session_id, seq, kind, payload_json, game_time, created_at
     FROM game_journal 
     WHERE session_id = ? 
-    "
+    ",
     )
     .bind(session_id)
     .fetch_all(executor)
     .await?;
     Ok(rows.into_iter().map(Into::into).collect())
 }
-pub async fn get_game_journal_lookup<'e, E>(executor: E, session_id: &str, from_seq: Option<u32>, to_seq: u32) -> Result<Vec<GameJournal>, Error> where E: Executor<'e, Database = Sqlite> {
+pub async fn get_game_journal_lookup<'e, E>(executor: E, session_id: &str, from_seq: Option<u32>, to_seq: u32) -> Result<Vec<GameJournal>, Error>
+where
+    E: Executor<'e, Database = Sqlite>,
+{
     let rows = sqlx::query_as::<_, GameJournalRow>(
-    "SELECT 
+        "SELECT 
         session_id, seq, kind, payload_json, game_time, created_at
     FROM game_journal 
     WHERE session_id = ? 
         AND (seq BETWEEN ? and ?)
-    "
+    ",
     )
     .bind(session_id)
     .bind(from_seq.unwrap_or(0))
@@ -2239,22 +2576,28 @@ pub async fn get_game_journal_lookup<'e, E>(executor: E, session_id: &str, from_
     .await?;
     Ok(rows.into_iter().map(Into::into).collect())
 }
-pub async fn get_game_journal<'e, E>(executor: E, session_id: &str) -> Result<Vec<GameJournal>, Error> where E: Executor<'e, Database = Sqlite> {
+pub async fn get_game_journal<'e, E>(executor: E, session_id: &str) -> Result<Vec<GameJournal>, Error>
+where
+    E: Executor<'e, Database = Sqlite>,
+{
     let rows = sqlx::query_as::<_, GameJournalRow>(
-    "SELECT 
+        "SELECT 
         session_id, seq, kind, payload_json, game_time, created_at
     FROM game_journal 
     WHERE session_id = ?
-    "
+    ",
     )
     .bind(session_id)
     .fetch_all(executor)
     .await?;
     Ok(rows.into_iter().map(Into::into).collect())
 }
-pub async fn forked_game_journal<'e, E>(executor: E, session_id: &str, new_session_id: &str, from_seq: Option<u32>, to_seq: u32) -> Result<(), Error> where E: Executor<'e, Database = Sqlite> {
+pub async fn forked_game_journal<'e, E>(executor: E, session_id: &str, new_session_id: &str, from_seq: Option<u32>, to_seq: u32) -> Result<(), Error>
+where
+    E: Executor<'e, Database = Sqlite>,
+{
     let _result = sqlx::query(
-    "
+        "
     INSERT INTO game_journal (
         session_id, seq, kind, payload_json, game_time, created_at
     )
@@ -2263,7 +2606,7 @@ pub async fn forked_game_journal<'e, E>(executor: E, session_id: &str, new_sessi
     FROM game_journal 
     WHERE session_id = ? 
         AND (seq BETWEEN ? and ?)
-    "
+    ",
     )
     .bind(new_session_id)
     .bind(session_id)
@@ -2273,7 +2616,10 @@ pub async fn forked_game_journal<'e, E>(executor: E, session_id: &str, new_sessi
     .await?;
     Ok(())
 }
-pub async fn upsert_game_journal<'e, E>(executor: E, input: GameJournalInput) -> Result<(), Error> where E: Executor<'e, Database = Sqlite> {
+pub async fn upsert_game_journal<'e, E>(executor: E, input: GameJournalInput) -> Result<(), Error>
+where
+    E: Executor<'e, Database = Sqlite>,
+{
     let payload_json = serde_json::to_string(&input.payload_json).unwrap_or_default();
     let now = chrono::Utc::now().timestamp_millis();
     sqlx::query(
@@ -2299,40 +2645,49 @@ pub async fn upsert_game_journal<'e, E>(executor: E, input: GameJournalInput) ->
 // ---------------------------------------------------------
 // 게임 세션 내 스토리 계획
 // ---------------------------------------------------------
-pub async fn get_all_game_story_plans<'e, E>(executor: E, game_id: &str) -> Result<Vec<GameStoryPlans>, Error> where E: Executor<'e, Database = Sqlite> {
+pub async fn get_all_game_story_plans<'e, E>(executor: E, game_id: &str) -> Result<Vec<GameStoryPlans>, Error>
+where
+    E: Executor<'e, Database = Sqlite>,
+{
     let result = sqlx::query_as::<_, GameStoryPlansRow>(
-    "SELECT 
+        "SELECT 
         p.session_id, p.seq, p.plan_json, p.reason
     FROM game_story_plans p
         INNER JOIN game_player_sessions s ON p.session_id = s.id
         WHERE s.game_id = ?
-    "
+    ",
     )
     .bind(game_id)
     .fetch_all(executor)
     .await?;
     Ok(result.into_iter().map(Into::into).collect())
 }
-pub async fn get_game_story_plans<'e, E>(executor: E, session_id: &str) -> Result<Vec<GameStoryPlans>, Error> where E: Executor<'e, Database = Sqlite> {
+pub async fn get_game_story_plans<'e, E>(executor: E, session_id: &str) -> Result<Vec<GameStoryPlans>, Error>
+where
+    E: Executor<'e, Database = Sqlite>,
+{
     let result = sqlx::query_as::<_, GameStoryPlansRow>(
-    "SELECT 
+        "SELECT 
         session_id, seq, plan_json, reason
     FROM game_story_plans 
     WHERE session_id = ?
-    "
+    ",
     )
     .bind(session_id)
     .fetch_all(executor)
     .await?;
     Ok(result.into_iter().map(Into::into).collect())
 }
-pub async fn get_game_story_plans_lookup<'e, E>(executor: E, session_id: &str, from_seq: Option<u32>, to_seq: u32) -> Result<Vec<GameStoryPlans>, Error> where E: Executor<'e, Database = Sqlite> {
+pub async fn get_game_story_plans_lookup<'e, E>(executor: E, session_id: &str, from_seq: Option<u32>, to_seq: u32) -> Result<Vec<GameStoryPlans>, Error>
+where
+    E: Executor<'e, Database = Sqlite>,
+{
     let result = sqlx::query_as::<_, GameStoryPlansRow>(
-    "SELECT 
+        "SELECT 
         session_id, seq, plan_json, reason
     FROM game_story_plans 
     WHERE session_id = ?
-        AND seq BETWEEN ? and ?"
+        AND seq BETWEEN ? and ?",
     )
     .bind(session_id)
     .bind(from_seq.unwrap_or(0))
@@ -2341,12 +2696,15 @@ pub async fn get_game_story_plans_lookup<'e, E>(executor: E, session_id: &str, f
     .await?;
     Ok(result.into_iter().map(Into::into).collect())
 }
-pub async fn get_game_story_plan<'e, E>(executor: E, session_id: &str, seq: u32) -> Result<GameStoryPlans, Error> where E: Executor<'e, Database = Sqlite> {
+pub async fn get_game_story_plan<'e, E>(executor: E, session_id: &str, seq: u32) -> Result<GameStoryPlans, Error>
+where
+    E: Executor<'e, Database = Sqlite>,
+{
     let result = sqlx::query_as::<_, GameStoryPlansRow>(
-    "SELECT 
+        "SELECT 
         session_id, seq, plan_json, reason
     FROM game_story_plans 
-    WHERE session_id = ? AND seq = ?"
+    WHERE session_id = ? AND seq = ?",
     )
     .bind(session_id)
     .bind(seq)
@@ -2354,9 +2712,12 @@ pub async fn get_game_story_plan<'e, E>(executor: E, session_id: &str, seq: u32)
     .await?;
     Ok(result.into())
 }
-pub async fn forked_game_story_plans<'e, E>(executor: E, session_id: &str, new_session_id: &str, from_seq: Option<u32>, to_seq: u32) -> Result<(), Error> where E: Executor<'e, Database = Sqlite> {
+pub async fn forked_game_story_plans<'e, E>(executor: E, session_id: &str, new_session_id: &str, from_seq: Option<u32>, to_seq: u32) -> Result<(), Error>
+where
+    E: Executor<'e, Database = Sqlite>,
+{
     let _result = sqlx::query(
-    "
+        "
     INSERT INTO game_story_plans (
         session_id, seq, plan_json, reason
     )
@@ -2364,7 +2725,7 @@ pub async fn forked_game_story_plans<'e, E>(executor: E, session_id: &str, new_s
         ?, seq, plan_json, reason
     FROM game_story_plans 
     WHERE session_id = ?
-        AND seq BETWEEN ? and ?"
+        AND seq BETWEEN ? and ?",
     )
     .bind(new_session_id)
     .bind(session_id)
@@ -2374,7 +2735,10 @@ pub async fn forked_game_story_plans<'e, E>(executor: E, session_id: &str, new_s
     .await?;
     Ok(())
 }
-pub async fn upsert_game_story_plan<'e, E>(executor: E, input: GameStoryPlansInput) -> Result<(), Error> where E: Executor<'e, Database = Sqlite> {
+pub async fn upsert_game_story_plan<'e, E>(executor: E, input: GameStoryPlansInput) -> Result<(), Error>
+where
+    E: Executor<'e, Database = Sqlite>,
+{
     let plan_json = serde_json::to_string(&input.plan_json).unwrap_or_default();
     let reason = serde_json::to_string(&input.reason).unwrap_or_default();
     sqlx::query(
@@ -2394,48 +2758,65 @@ pub async fn upsert_game_story_plan<'e, E>(executor: E, input: GameStoryPlansInp
     .await?;
     Ok(())
 }
-pub async fn delete_game_story_plans<'e, E>(executor: E, session_id: &str, seq: u32) -> Result<bool, Error> where E: Executor<'e, Database = Sqlite> {
+pub async fn delete_game_story_plans<'e, E>(executor: E, session_id: &str, seq: u32) -> Result<bool, Error>
+where
+    E: Executor<'e, Database = Sqlite>,
+{
     let result = sqlx::query("DELETE FROM game_story_plans WHERE session_id = ? AND seq = ?")
-    .bind(session_id)
-    .bind(seq)
-    .execute(executor)
-    .await?;
+        .bind(session_id)
+        .bind(seq)
+        .execute(executor)
+        .await?;
     Ok(result.rows_affected() != 0)
 }
 // ---------------------------------------------------------
 // 게임 세션 내 캐릭터 관계도
 // ---------------------------------------------------------
-pub async fn get_all_game_relationship_snapshots<'e, E>(executor: E, game_id: &str) -> Result<Vec<GameRelationshipSnapshots>, Error> where E: Executor<'e, Database = Sqlite> {
+pub async fn get_all_game_relationship_snapshots<'e, E>(executor: E, game_id: &str) -> Result<Vec<GameRelationshipSnapshots>, Error>
+where
+    E: Executor<'e, Database = Sqlite>,
+{
     let result = sqlx::query_as::<_, GameRelationshipSnapshotsRow>(
-    "SELECT rs.session_id, rs.seq, rs.relationships_json, rs.created_at
+        "SELECT rs.session_id, rs.seq, rs.relationships_json, rs.created_at
     FROM game_relationship_snapshots rs
         INNER JOIN game_player_sessions s ON rs.session_id = s.id
         WHERE s.game_id = ?
-    "
+    ",
     )
     .bind(game_id)
     .fetch_all(executor)
     .await?;
     Ok(result.into_iter().map(Into::into).collect())
 }
-pub async fn get_session_game_relationship_snapshots<'e, E>(executor: E, session_id: &str) -> Result<Vec<GameRelationshipSnapshots>, Error> where E: Executor<'e, Database = Sqlite> {
+pub async fn get_session_game_relationship_snapshots<'e, E>(executor: E, session_id: &str) -> Result<Vec<GameRelationshipSnapshots>, Error>
+where
+    E: Executor<'e, Database = Sqlite>,
+{
     let result = sqlx::query_as::<_, GameRelationshipSnapshotsRow>(
-    "SELECT session_id, seq, relationships_json, created_at
+        "SELECT session_id, seq, relationships_json, created_at
     FROM game_relationship_snapshots 
     WHERE session_id = ?
-    "
+    ",
     )
     .bind(session_id)
     .fetch_all(executor)
     .await?;
     Ok(result.into_iter().map(Into::into).collect())
 }
-pub async fn get_game_relationship_snapshots_lookup<'e, E>(executor: E, session_id: &str, from_seq: Option<u32>, to_seq: u32) -> Result<Vec<GameRelationshipSnapshots>, Error> where E: Executor<'e, Database = Sqlite> {
+pub async fn get_game_relationship_snapshots_lookup<'e, E>(
+    executor: E,
+    session_id: &str,
+    from_seq: Option<u32>,
+    to_seq: u32,
+) -> Result<Vec<GameRelationshipSnapshots>, Error>
+where
+    E: Executor<'e, Database = Sqlite>,
+{
     let result = sqlx::query_as::<_, GameRelationshipSnapshotsRow>(
-    "SELECT session_id, seq, relationships_json, created_at
+        "SELECT session_id, seq, relationships_json, created_at
     FROM game_relationship_snapshots 
     WHERE session_id = ?
-        AND seq BETWEEN ? and ?"
+        AND seq BETWEEN ? and ?",
     )
     .bind(session_id)
     .bind(from_seq.unwrap_or(0))
@@ -2444,11 +2825,14 @@ pub async fn get_game_relationship_snapshots_lookup<'e, E>(executor: E, session_
     .await?;
     Ok(result.into_iter().map(Into::into).collect())
 }
-pub async fn get_game_relationship_snapshot<'e, E>(executor: E, session_id: &str, seq: u32) -> Result<GameRelationshipSnapshots, Error> where E: Executor<'e, Database = Sqlite> {
+pub async fn get_game_relationship_snapshot<'e, E>(executor: E, session_id: &str, seq: u32) -> Result<GameRelationshipSnapshots, Error>
+where
+    E: Executor<'e, Database = Sqlite>,
+{
     let result = sqlx::query_as::<_, GameRelationshipSnapshotsRow>(
-    "SELECT session_id, seq, relationships_json, created_at
+        "SELECT session_id, seq, relationships_json, created_at
     FROM game_relationship_snapshots 
-    WHERE session_id = ? AND seq = ?"
+    WHERE session_id = ? AND seq = ?",
     )
     .bind(session_id)
     .bind(seq)
@@ -2456,9 +2840,18 @@ pub async fn get_game_relationship_snapshot<'e, E>(executor: E, session_id: &str
     .await?;
     Ok(result.into())
 }
-pub async fn forked_game_relationship_snapshots<'e, E>(executor: E, session_id: &str, new_session_id: &str, from_seq: Option<u32>, to_seq: u32) -> Result<(), Error> where E: Executor<'e, Database = Sqlite> {
+pub async fn forked_game_relationship_snapshots<'e, E>(
+    executor: E,
+    session_id: &str,
+    new_session_id: &str,
+    from_seq: Option<u32>,
+    to_seq: u32,
+) -> Result<(), Error>
+where
+    E: Executor<'e, Database = Sqlite>,
+{
     let _result = sqlx::query(
-    "
+        "
     INSERT INTO game_relationship_snapshots (
         session_id, seq, relationships_json, created_at
     )
@@ -2466,7 +2859,7 @@ pub async fn forked_game_relationship_snapshots<'e, E>(executor: E, session_id: 
         ?, seq, relationships_json, created_at
     FROM game_relationship_snapshots 
     WHERE session_id = ?
-        AND seq BETWEEN ? and ?"
+        AND seq BETWEEN ? and ?",
     )
     .bind(new_session_id)
     .bind(session_id)
@@ -2476,7 +2869,10 @@ pub async fn forked_game_relationship_snapshots<'e, E>(executor: E, session_id: 
     .await?;
     Ok(())
 }
-pub async fn upsert_game_relationship_snapshot<'e, E>(executor: E, input: GameRelationshipSnapshots) -> Result<(), Error> where E: Executor<'e, Database = Sqlite> {
+pub async fn upsert_game_relationship_snapshot<'e, E>(executor: E, input: GameRelationshipSnapshots) -> Result<(), Error>
+where
+    E: Executor<'e, Database = Sqlite>,
+{
     let now = chrono::Utc::now().timestamp_millis();
     let relationships_json = serde_json::to_string(&input.relationships_json).unwrap_or_default();
     sqlx::query(
@@ -2495,52 +2891,69 @@ pub async fn upsert_game_relationship_snapshot<'e, E>(executor: E, input: GameRe
     .await?;
     Ok(())
 }
-pub async fn delete_game_relationship_snapshot<'e, E>(executor: E, session_id: &str, seq: u32) -> Result<bool, Error> where E: Executor<'e, Database = Sqlite> {
+pub async fn delete_game_relationship_snapshot<'e, E>(executor: E, session_id: &str, seq: u32) -> Result<bool, Error>
+where
+    E: Executor<'e, Database = Sqlite>,
+{
     let result = sqlx::query("DELETE FROM game_relationship_snapshots WHERE session_id = ? AND seq = ?")
-    .bind(session_id)
-    .bind(seq)
-    .execute(executor)
-    .await?;
+        .bind(session_id)
+        .bind(seq)
+        .execute(executor)
+        .await?;
     Ok(result.rows_affected() != 0)
 }
 
 // ---------------------------------------------------------
 // 게임 세션 내 캐릭터 상태
 // ---------------------------------------------------------
-pub async fn get_all_game_character_state_snapshots<'e, E>(executor: E, game_id: &str) -> Result<Vec<GameCharacterStatesSnapshots>, Error> where E: Executor<'e, Database = Sqlite> {
+pub async fn get_all_game_character_state_snapshots<'e, E>(executor: E, game_id: &str) -> Result<Vec<GameCharacterStatesSnapshots>, Error>
+where
+    E: Executor<'e, Database = Sqlite>,
+{
     let result = sqlx::query_as::<_, GameCharacterStatesSnapshotsRow>(
-    "SELECT 
+        "SELECT 
         cs.session_id, cs.seq, cs.game_character_id, cs.current_location_id, cs.status, cs.state_json, cs.updated_at
     FROM game_character_state_snapshots cs
         INNER JOIN game_player_sessions s ON cs.session_id = s.id
         WHERE s.game_id = ?
-    "
+    ",
     )
     .bind(game_id)
     .fetch_all(executor)
     .await?;
     Ok(result.into_iter().map(Into::into).collect())
 }
-pub async fn get_session_game_character_state_snapshots<'e, E>(executor: E, session_id: &str) -> Result<Vec<GameCharacterStatesSnapshots>, Error> where E: Executor<'e, Database = Sqlite> {
+pub async fn get_session_game_character_state_snapshots<'e, E>(executor: E, session_id: &str) -> Result<Vec<GameCharacterStatesSnapshots>, Error>
+where
+    E: Executor<'e, Database = Sqlite>,
+{
     let result = sqlx::query_as::<_, GameCharacterStatesSnapshotsRow>(
-    "SELECT 
+        "SELECT 
         session_id, seq, game_character_id, current_location_id, status, state_json, updated_at
     FROM game_character_state_snapshots 
     WHERE session_id = ?
-    "
+    ",
     )
     .bind(session_id)
     .fetch_all(executor)
     .await?;
     Ok(result.into_iter().map(Into::into).collect())
 }
-pub async fn get_game_character_state_snapshots_lookup<'e, E>(executor: E, session_id: &str, from_seq: Option<u32>, to_seq: u32) -> Result<Vec<GameCharacterStatesSnapshots>, Error> where E: Executor<'e, Database = Sqlite> {
+pub async fn get_game_character_state_snapshots_lookup<'e, E>(
+    executor: E,
+    session_id: &str,
+    from_seq: Option<u32>,
+    to_seq: u32,
+) -> Result<Vec<GameCharacterStatesSnapshots>, Error>
+where
+    E: Executor<'e, Database = Sqlite>,
+{
     let result = sqlx::query_as::<_, GameCharacterStatesSnapshotsRow>(
-    "SELECT 
+        "SELECT 
         session_id, seq, game_character_id, current_location_id, status, state_json, updated_at
     FROM game_character_state_snapshots 
     WHERE session_id = ?
-        AND seq BETWEEN ? and ?"
+        AND seq BETWEEN ? and ?",
     )
     .bind(session_id)
     .bind(from_seq.unwrap_or(0))
@@ -2549,12 +2962,15 @@ pub async fn get_game_character_state_snapshots_lookup<'e, E>(executor: E, sessi
     .await?;
     Ok(result.into_iter().map(Into::into).collect())
 }
-pub async fn get_game_character_state<'e, E>(executor: E, session_id: &str, seq: u32, game_character_id: &str) -> Result<GameCharacterStatesSnapshots, Error> where E: Executor<'e, Database = Sqlite> {
+pub async fn get_game_character_state<'e, E>(executor: E, session_id: &str, seq: u32, game_character_id: &str) -> Result<GameCharacterStatesSnapshots, Error>
+where
+    E: Executor<'e, Database = Sqlite>,
+{
     let result = sqlx::query_as::<_, GameCharacterStatesSnapshotsRow>(
-    "SELECT 
+        "SELECT 
         session_id, seq, game_character_id, current_location_id, status, state_json, updated_at
     FROM game_character_state_snapshots 
-    WHERE session_id = ? AND seq = ? AND game_character_id=?"
+    WHERE session_id = ? AND seq = ? AND game_character_id=?",
     )
     .bind(session_id)
     .bind(seq)
@@ -2563,9 +2979,12 @@ pub async fn get_game_character_state<'e, E>(executor: E, session_id: &str, seq:
     .await?;
     Ok(result.into())
 }
-pub async fn forked_game_character_states<'e, E>(executor: E, session_id: &str, new_session_id: &str, from_seq: Option<u32>, to_seq: u32) -> Result<(), Error> where E: Executor<'e, Database = Sqlite> {
+pub async fn forked_game_character_states<'e, E>(executor: E, session_id: &str, new_session_id: &str, from_seq: Option<u32>, to_seq: u32) -> Result<(), Error>
+where
+    E: Executor<'e, Database = Sqlite>,
+{
     let _result = sqlx::query(
-    "
+        "
     INSERT INTO game_character_state_snapshots (
         session_id, seq, game_character_id, current_location_id, status, state_json, updated_at
     )
@@ -2573,7 +2992,7 @@ pub async fn forked_game_character_states<'e, E>(executor: E, session_id: &str, 
         ?, seq, game_character_id, current_location_id, status, state_json, updated_at
     FROM game_character_state_snapshots 
     WHERE session_id = ?
-        AND seq BETWEEN ? and ?"
+        AND seq BETWEEN ? and ?",
     )
     .bind(new_session_id)
     .bind(session_id)
@@ -2583,7 +3002,10 @@ pub async fn forked_game_character_states<'e, E>(executor: E, session_id: &str, 
     .await?;
     Ok(())
 }
-pub async fn upsert_game_character_state<'e, E>(executor: E, input: GameCharacterStatesSnapshotsInput) -> Result<(), Error> where E: Executor<'e, Database = Sqlite> {
+pub async fn upsert_game_character_state<'e, E>(executor: E, input: GameCharacterStatesSnapshotsInput) -> Result<(), Error>
+where
+    E: Executor<'e, Database = Sqlite>,
+{
     let now = chrono::Utc::now().timestamp_millis();
     let state_json = serde_json::to_string(&input.state_json).unwrap_or_default();
     sqlx::query(
@@ -2608,52 +3030,63 @@ pub async fn upsert_game_character_state<'e, E>(executor: E, input: GameCharacte
     .await?;
     Ok(())
 }
-pub async fn delete_game_character_state_snapshot<'e, E>(executor: E, session_id: &str, seq: u32) -> Result<bool, Error> where E: Executor<'e, Database = Sqlite> {
+pub async fn delete_game_character_state_snapshot<'e, E>(executor: E, session_id: &str, seq: u32) -> Result<bool, Error>
+where
+    E: Executor<'e, Database = Sqlite>,
+{
     let result = sqlx::query("DELETE FROM game_character_state_snapshots WHERE session_id = ? AND seq = ?")
-    .bind(session_id)
-    .bind(seq)
-    .execute(executor)
-    .await?;
+        .bind(session_id)
+        .bind(seq)
+        .execute(executor)
+        .await?;
     Ok(result.rows_affected() != 0)
 }
-
 
 // ---------------------------------------------------------
 // 게임 이벤트 로그
 // ---------------------------------------------------------
-pub async fn get_all_game_event_logs<'e, E>(executor: E, game_id: &str) -> Result<Vec<GameEventLog>, Error> where E: Executor<'e, Database = Sqlite> {
+pub async fn get_all_game_event_logs<'e, E>(executor: E, game_id: &str) -> Result<Vec<GameEventLog>, Error>
+where
+    E: Executor<'e, Database = Sqlite>,
+{
     let result = sqlx::query_as::<_, GameEventLogRow>(
-    "SELECT l.session_id, l.seq, l.event_id, l.weather_id, l.triggered_at, l.result_json  
+        "SELECT l.session_id, l.seq, l.event_id, l.weather_id, l.triggered_at, l.result_json  
     FROM game_event_log l
         INNER JOIN game_player_sessions s ON l.session_id = s.id
         WHERE s.game_id = ?
-    "
+    ",
     )
     .bind(game_id)
     .fetch_all(executor)
     .await?;
     Ok(result.into_iter().map(Into::into).collect())
 }
-pub async fn get_session_game_event_logs<'e, E>(executor: E, session_id: &str) -> Result<Vec<GameEventLog>, Error> where E: Executor<'e, Database = Sqlite> {
+pub async fn get_session_game_event_logs<'e, E>(executor: E, session_id: &str) -> Result<Vec<GameEventLog>, Error>
+where
+    E: Executor<'e, Database = Sqlite>,
+{
     let result = sqlx::query_as::<_, GameEventLogRow>(
-    "SELECT 
+        "SELECT 
         session_id, seq, event_id, weather_id, triggered_at, result_json 
     FROM game_event_log 
     WHERE session_id = ?
-    "
+    ",
     )
     .bind(session_id)
     .fetch_all(executor)
     .await?;
     Ok(result.into_iter().map(Into::into).collect())
 }
-pub async fn get_game_event_logs_lookup<'e, E>(executor: E, session_id: &str, from_seq: Option<u32>, to_seq: u32) -> Result<Vec<GameEventLog>, Error> where E: Executor<'e, Database = Sqlite> {
+pub async fn get_game_event_logs_lookup<'e, E>(executor: E, session_id: &str, from_seq: Option<u32>, to_seq: u32) -> Result<Vec<GameEventLog>, Error>
+where
+    E: Executor<'e, Database = Sqlite>,
+{
     let result = sqlx::query_as::<_, GameEventLogRow>(
-    "SELECT 
+        "SELECT 
         session_id, seq, event_id, weather_id, triggered_at, result_json  
     FROM game_event_log 
     WHERE session_id = ?
-        AND seq BETWEEN ? and ?"
+        AND seq BETWEEN ? and ?",
     )
     .bind(session_id)
     .bind(from_seq.unwrap_or(0))
@@ -2662,12 +3095,15 @@ pub async fn get_game_event_logs_lookup<'e, E>(executor: E, session_id: &str, fr
     .await?;
     Ok(result.into_iter().map(Into::into).collect())
 }
-pub async fn get_game_event_log<'e, E>(executor: E, session_id: &str, seq: u32) -> Result<GameEventLog, Error> where E: Executor<'e, Database = Sqlite> {
+pub async fn get_game_event_log<'e, E>(executor: E, session_id: &str, seq: u32) -> Result<GameEventLog, Error>
+where
+    E: Executor<'e, Database = Sqlite>,
+{
     let result = sqlx::query_as::<_, GameEventLogRow>(
-    "SELECT 
+        "SELECT 
         session_id, seq, event_id, weather_id, triggered_at, result_json 
     FROM game_event_log 
-    WHERE session_id = ? AND seq = ?"
+    WHERE session_id = ? AND seq = ?",
     )
     .bind(session_id)
     .bind(seq)
@@ -2675,9 +3111,12 @@ pub async fn get_game_event_log<'e, E>(executor: E, session_id: &str, seq: u32) 
     .await?;
     Ok(result.into())
 }
-pub async fn forked_game_event_logs<'e, E>(executor: E, session_id: &str, new_session_id: &str, from_seq: Option<u32>, to_seq: u32) -> Result<(), Error> where E: Executor<'e, Database = Sqlite> {
+pub async fn forked_game_event_logs<'e, E>(executor: E, session_id: &str, new_session_id: &str, from_seq: Option<u32>, to_seq: u32) -> Result<(), Error>
+where
+    E: Executor<'e, Database = Sqlite>,
+{
     let _result = sqlx::query(
-    "
+        "
     INSERT INTO game_event_log (
         session_id, seq, event_id, weather_id, triggered_at, result_json
     )
@@ -2685,7 +3124,7 @@ pub async fn forked_game_event_logs<'e, E>(executor: E, session_id: &str, new_se
         ?, seq, event_id, weather_id, triggered_at, result_json  
     FROM game_event_log 
     WHERE session_id = ?
-        AND seq BETWEEN ? and ?"
+        AND seq BETWEEN ? and ?",
     )
     .bind(new_session_id)
     .bind(session_id)
@@ -2695,7 +3134,10 @@ pub async fn forked_game_event_logs<'e, E>(executor: E, session_id: &str, new_se
     .await?;
     Ok(())
 }
-pub async fn upsert_game_event_log<'e, E>(executor: E, input: GameEventLogInput) -> Result<(), Error> where E: Executor<'e, Database = Sqlite> {
+pub async fn upsert_game_event_log<'e, E>(executor: E, input: GameEventLogInput) -> Result<(), Error>
+where
+    E: Executor<'e, Database = Sqlite>,
+{
     let result_json = serde_json::to_string(&input.result_json).unwrap_or_default();
     sqlx::query(
         r#"
@@ -2718,33 +3160,42 @@ pub async fn upsert_game_event_log<'e, E>(executor: E, input: GameEventLogInput)
     .await?;
     Ok(())
 }
-pub async fn delete_game_event_log<'e, E>(executor: E, session_id: &str, seq: u32) -> Result<bool, Error> where E: Executor<'e, Database = Sqlite> {
+pub async fn delete_game_event_log<'e, E>(executor: E, session_id: &str, seq: u32) -> Result<bool, Error>
+where
+    E: Executor<'e, Database = Sqlite>,
+{
     let result = sqlx::query("DELETE FROM game_event_log WHERE session_id = ? AND seq = ?")
-    .bind(session_id)
-    .bind(seq)
-    .execute(executor)
-    .await?;
+        .bind(session_id)
+        .bind(seq)
+        .execute(executor)
+        .await?;
     Ok(result.rows_affected() != 0)
 }
 
-pub async fn get_all_game_event_log_characters<'e, E>(executor: E, game_id: &str) -> Result<Vec<GameEventLogCharacters>, Error> where E: Executor<'e, Database = Sqlite> {
+pub async fn get_all_game_event_log_characters<'e, E>(executor: E, game_id: &str) -> Result<Vec<GameEventLogCharacters>, Error>
+where
+    E: Executor<'e, Database = Sqlite>,
+{
     let result = sqlx::query_as::<_, GameEventLogCharacters>(
-    "SELECT c.session_id, c.seq, c.game_character_id, c.role, c.sort_order
+        "SELECT c.session_id, c.seq, c.game_character_id, c.role, c.sort_order
     FROM game_event_log_characters c
         INNER JOIN game_player_sessions s ON c.session_id = s.id
         WHERE s.game_id = ?
-    "
+    ",
     )
     .bind(game_id)
     .fetch_all(executor)
     .await?;
     Ok(result)
 }
-pub async fn get_game_event_log_characters<'e, E>(executor: E, session_id: &str, seq: u32) -> Result<Vec<GameEventLogCharacters>, Error> where E: Executor<'e, Database = Sqlite> {
+pub async fn get_game_event_log_characters<'e, E>(executor: E, session_id: &str, seq: u32) -> Result<Vec<GameEventLogCharacters>, Error>
+where
+    E: Executor<'e, Database = Sqlite>,
+{
     let result = sqlx::query_as::<_, GameEventLogCharacters>(
-    "SELECT session_id, seq, game_character_id, role, sort_order 
+        "SELECT session_id, seq, game_character_id, role, sort_order 
     FROM game_event_log_characters 
-    WHERE session_id = ? AND seq = ?"
+    WHERE session_id = ? AND seq = ?",
     )
     .bind(session_id)
     .bind(seq)
@@ -2752,7 +3203,10 @@ pub async fn get_game_event_log_characters<'e, E>(executor: E, session_id: &str,
     .await?;
     Ok(result)
 }
-pub async fn upsert_game_event_log_character<'e, E>(executor: E, input: GameEventLogCharactersInput) -> Result<(), Error> where E: Executor<'e, Database = Sqlite> {
+pub async fn upsert_game_event_log_character<'e, E>(executor: E, input: GameEventLogCharactersInput) -> Result<(), Error>
+where
+    E: Executor<'e, Database = Sqlite>,
+{
     sqlx::query(
         r#"
         INSERT INTO game_event_log_characters ( session_id, seq, game_character_id, role, sort_order ) 
@@ -2775,7 +3229,10 @@ pub async fn upsert_game_event_log_character<'e, E>(executor: E, input: GameEven
 // ---------------------------------------------------------
 // 게임 대화 세션
 // ---------------------------------------------------------
-pub async fn get_all_game_conversations<'e, E>(executor: E, game_id: &str) -> Result<Vec<GameConversations>, Error> where E: Executor<'e, Database = Sqlite> {
+pub async fn get_all_game_conversations<'e, E>(executor: E, game_id: &str) -> Result<Vec<GameConversations>, Error>
+where
+    E: Executor<'e, Database = Sqlite>,
+{
     let rows = sqlx::query_as::<_, GameConversationsRow>(
         r#"
         SELECT
@@ -2797,7 +3254,16 @@ pub async fn get_all_game_conversations<'e, E>(executor: E, game_id: &str) -> Re
     Ok(rows.into_iter().map(Into::into).collect())
 }
 
-pub async fn get_game_conversation_conversation_id<'e, E>(executor: E, game_id: &str, session_id: &str, participants_key: &str, branch_key: &str) -> Result<Option<String>, Error> where E: Executor<'e, Database = Sqlite> {
+pub async fn get_game_conversation_conversation_id<'e, E>(
+    executor: E,
+    game_id: &str,
+    session_id: &str,
+    participants_key: &str,
+    branch_key: &str,
+) -> Result<Option<String>, Error>
+where
+    E: Executor<'e, Database = Sqlite>,
+{
     let rows = sqlx::query_scalar::<_, String>(
         r#"
         SELECT id FROM game_conversations WHERE game_id = ? AND session_id = ? AND participants_key = ? AND branch_key = ?
@@ -2813,12 +3279,10 @@ pub async fn get_game_conversation_conversation_id<'e, E>(executor: E, game_id: 
 }
 pub async fn forked_game_conversations(tx: &mut Transaction<'_, Sqlite>, session_id: &str, new_session_id: &str) -> Result<Vec<(String, String)>, Error> {
     // 기존 데이터의 id와 기타 필요한 정보 조회
-    let old_records: Vec<String> = sqlx::query_scalar(
-        "SELECT id FROM game_conversations WHERE session_id = ?"
-    )
-    .bind(session_id)
-    .fetch_all(&mut **tx)
-    .await?;
+    let old_records: Vec<String> = sqlx::query_scalar("SELECT id FROM game_conversations WHERE session_id = ?")
+        .bind(session_id)
+        .fetch_all(&mut **tx)
+        .await?;
 
     // 각 행마다 대응될 새로운 id(문자열)들을 미리 생성
     let mut paired_ids = Vec::with_capacity(old_records.len());
@@ -2828,7 +3292,7 @@ pub async fn forked_game_conversations(tx: &mut Transaction<'_, Sqlite>, session
     for record in old_records {
         let old_id = record;
         let new_id = Uuid::new_v4().to_string(); // 새로운 문자열 ID 생성 (예: UUID)
-        
+
         old_ids.push(old_id.clone());
         new_ids.push(new_id.clone());
         paired_ids.push((old_id, new_id));
@@ -2846,18 +3310,22 @@ pub async fn forked_game_conversations(tx: &mut Transaction<'_, Sqlite>, session
                 ?,game_id, ?, branch_key, participants_key, title, created_at, updated_at 
             FROM game_conversations 
             WHERE id = ?
-            ")
-            .bind(&new_id)
-            .bind(new_session_id)
-            .bind(&old_id)
-            .execute(&mut **tx)
-            .await?;
+            ",
+        )
+        .bind(&new_id)
+        .bind(new_session_id)
+        .bind(&old_id)
+        .execute(&mut **tx)
+        .await?;
     }
 
     Ok(paired_ids)
 }
 
-pub async fn upsert_game_conversation<'e, E>(executor: E, input: GameConversationsInput) -> Result<String, Error> where E: Executor<'e, Database = Sqlite> {
+pub async fn upsert_game_conversation<'e, E>(executor: E, input: GameConversationsInput) -> Result<String, Error>
+where
+    E: Executor<'e, Database = Sqlite>,
+{
     let id = input.id.clone().unwrap_or_else(|| Uuid::new_v4().to_string());
     let now = chrono::Utc::now().timestamp_millis();
     sqlx::query(
@@ -2892,26 +3360,32 @@ pub async fn upsert_game_conversation<'e, E>(executor: E, input: GameConversatio
 }
 
 // ------ messages ---------
-pub async fn get_all_game_messages<'e, E>(executor: E, game_id: &str) -> Result<Vec<GameMessages>, Error> where E: Executor<'e, Database = Sqlite> {
+pub async fn get_all_game_messages<'e, E>(executor: E, game_id: &str) -> Result<Vec<GameMessages>, Error>
+where
+    E: Executor<'e, Database = Sqlite>,
+{
     let result = sqlx::query_as::<_, GameMessagesRow>(
-    "SELECT m.id, m.seq, m.conversation_id, m.role, m.name, m.content, m.character_id, m.meta, m.created_at, m.updated_at
+        "SELECT m.id, m.seq, m.conversation_id, m.role, m.name, m.content, m.character_id, m.meta, m.created_at, m.updated_at
     FROM game_messages m
     INNER JOIN game_conversations c ON m.conversation_id = c.id 
     WHERE c.game_id = ?
-    ORDER BY created_at, rowid"
+    ORDER BY created_at, rowid",
     )
     .bind(game_id)
     .fetch_all(executor)
     .await?;
     Ok(result.into_iter().map(Into::into).collect())
 }
-pub async fn get_game_messages_lookup<'e, E>(executor: E, conversation_id: &str, from_seq: Option<u32>, to_seq: u32) -> Result<Vec<GameMessages>, Error> where E: Executor<'e, Database = Sqlite> {
+pub async fn get_game_messages_lookup<'e, E>(executor: E, conversation_id: &str, from_seq: Option<u32>, to_seq: u32) -> Result<Vec<GameMessages>, Error>
+where
+    E: Executor<'e, Database = Sqlite>,
+{
     let result = sqlx::query_as::<_, GameMessagesRow>(
-    "SELECT 
+        "SELECT 
         id, seq, conversation_id, role, name, content, character_id, meta, created_at, updated_at  FROM game_messages 
     WHERE conversation_id = ? 
         AND seq BETWEEN ? and ?
-    ORDER BY created_at, rowid"
+    ORDER BY created_at, rowid",
     )
     .bind(conversation_id)
     .bind(from_seq.unwrap_or(0))
@@ -2920,7 +3394,10 @@ pub async fn get_game_messages_lookup<'e, E>(executor: E, conversation_id: &str,
     .await?;
     Ok(result.into_iter().map(Into::into).collect())
 }
-pub async fn get_game_messages<'e, E>(executor: E, conversation_id: &str) -> Result<Vec<GameMessages>, Error> where E: Executor<'e, Database = Sqlite> {
+pub async fn get_game_messages<'e, E>(executor: E, conversation_id: &str) -> Result<Vec<GameMessages>, Error>
+where
+    E: Executor<'e, Database = Sqlite>,
+{
     let result = sqlx::query_as::<_, GameMessagesRow>(
     "SELECT id, seq, conversation_id, role, name, content, character_id, meta, created_at, updated_at  FROM game_messages WHERE conversation_id = ? ORDER BY created_at, rowid"
     )
@@ -2929,21 +3406,30 @@ pub async fn get_game_messages<'e, E>(executor: E, conversation_id: &str) -> Res
     .await?;
     Ok(result.into_iter().map(Into::into).collect())
 }
-pub async fn get_message_meta<'e, E>(executor: E, id: &str) -> Result<Option<serde_json::Value>, Error> where E: Executor<'e, Database = Sqlite>,{
+pub async fn get_message_meta<'e, E>(executor: E, id: &str) -> Result<Option<serde_json::Value>, Error>
+where
+    E: Executor<'e, Database = Sqlite>,
+{
     let row = sqlx::query_scalar::<_, String>("SELECT meta FROM game_messages WHERE id = ?")
         .bind(id)
         .fetch_optional(executor)
         .await?;
     Ok(row.and_then(|s| serde_json::from_str(&s).ok()).unwrap_or_default())
 }
-pub async fn forked_game_messages(tx: &mut Transaction<'_, Sqlite>, conversation_id: &str, new_conversation_id: &str, from_seq: Option<u32>, to_seq: u32) -> Result<Vec<(String, String)>, Error> {
+pub async fn forked_game_messages(
+    tx: &mut Transaction<'_, Sqlite>,
+    conversation_id: &str,
+    new_conversation_id: &str,
+    from_seq: Option<u32>,
+    to_seq: u32,
+) -> Result<Vec<(String, String)>, Error> {
     // 기존 데이터의 id와 기타 필요한 정보 조회
     let old_records: Vec<String> = sqlx::query_scalar(
         "SELECT id FROM game_messages 
         WHERE conversation_id = ? 
             AND seq BETWEEN ? and ?
         ORDER BY created_at, rowid
-        "
+        ",
     )
     .bind(conversation_id)
     .bind(from_seq.unwrap_or(0))
@@ -2959,7 +3445,7 @@ pub async fn forked_game_messages(tx: &mut Transaction<'_, Sqlite>, conversation
     for record in old_records {
         let old_id = record;
         let new_id = Uuid::new_v4().to_string(); // 새로운 문자열 ID 생성 (예: UUID)
-        
+
         old_ids.push(old_id.clone());
         new_ids.push(new_id.clone());
         paired_ids.push((old_id, new_id));
@@ -2968,14 +3454,14 @@ pub async fn forked_game_messages(tx: &mut Transaction<'_, Sqlite>, conversation
     // INSERT 쿼리 실행
     for (old_id, new_id) in paired_ids.clone() {
         let _result = sqlx::query(
-        "
+            "
         INSERT INTO game_messages (
             id, seq, conversation_id, role, name, content, character_id, meta, created_at, updated_at  FROM game_messages 
         )
         SELECT 
             ?, seq, ?, role, name, content, character_id, meta, created_at, updated_at  FROM game_messages 
         WHERE id=?
-        "
+        ",
         )
         .bind(&new_id)
         .bind(new_conversation_id)
@@ -2986,7 +3472,10 @@ pub async fn forked_game_messages(tx: &mut Transaction<'_, Sqlite>, conversation
 
     Ok(paired_ids)
 }
-pub async fn upsert_game_message<'e, E>(executor: E, conversation_id: &str, input: GameMessagesInput) -> Result<(), Error> where E: Executor<'e, Database = Sqlite> {
+pub async fn upsert_game_message<'e, E>(executor: E, conversation_id: &str, input: GameMessagesInput) -> Result<(), Error>
+where
+    E: Executor<'e, Database = Sqlite>,
+{
     let id = input.id.clone().unwrap_or_else(|| Uuid::new_v4().to_string());
     let meta = serde_json::to_string(&input.meta).unwrap_or_default();
     let now = chrono::Utc::now().timestamp_millis();
@@ -3019,7 +3508,10 @@ pub async fn upsert_game_message<'e, E>(executor: E, conversation_id: &str, inpu
     .await?;
     Ok(())
 }
-pub async fn update_game_message_meta<'e, E>(executor: E, id: &str, meta: serde_json::Value) -> Result<bool, Error> where E: Executor<'e, Database = Sqlite>,{
+pub async fn update_game_message_meta<'e, E>(executor: E, id: &str, meta: serde_json::Value) -> Result<bool, Error>
+where
+    E: Executor<'e, Database = Sqlite>,
+{
     let meta_string = serde_json::to_string(&meta).unwrap_or_default();
     let result = sqlx::query("UPDATE game_messages SET meta = ? WHERE id = ?")
         .bind(meta_string)
@@ -3028,46 +3520,55 @@ pub async fn update_game_message_meta<'e, E>(executor: E, id: &str, meta: serde_
         .await?;
     Ok(result.rows_affected() != 0)
 }
-pub async fn delete_game_message<'e, E>(executor: E, id: &str) -> Result<bool, Error> where E: Executor<'e, Database = Sqlite> {
-    let result = sqlx::query("DELETE FROM game_messages WHERE id = ?")
-        .bind(&id)
-        .execute(executor)
-        .await?;
+pub async fn delete_game_message<'e, E>(executor: E, id: &str) -> Result<bool, Error>
+where
+    E: Executor<'e, Database = Sqlite>,
+{
+    let result = sqlx::query("DELETE FROM game_messages WHERE id = ?").bind(&id).execute(executor).await?;
     Ok(result.rows_affected() != 0)
 }
 
 // ---------참여자---------
-pub async fn get_all_game_conversations_participants<'e, E>(executor: E, game_id: &str) -> Result<Vec<GameConversationParticipants>, Error> where E: Executor<'e, Database = Sqlite> {
+pub async fn get_all_game_conversations_participants<'e, E>(executor: E, game_id: &str) -> Result<Vec<GameConversationParticipants>, Error>
+where
+    E: Executor<'e, Database = Sqlite>,
+{
     let result = sqlx::query_as::<_, GameConversationParticipants>(
-    "SELECT p.conversation_id, p.game_character_id, p.sort_order
+        "SELECT p.conversation_id, p.game_character_id, p.sort_order
     FROM game_conversation_participants p
     INNER JOIN game_conversation c ON p.conversation_id = c.id 
-    WHERE c.game_id = ?"
+    WHERE c.game_id = ?",
     )
     .bind(game_id)
     .fetch_all(executor)
     .await?;
     Ok(result.into_iter().map(Into::into).collect())
 }
-pub async fn get_game_conversations_participant<'e, E>(executor: E, conversation_id: &str) -> Result<GameConversationParticipants, Error> where E: Executor<'e, Database = Sqlite> {
+pub async fn get_game_conversations_participant<'e, E>(executor: E, conversation_id: &str) -> Result<GameConversationParticipants, Error>
+where
+    E: Executor<'e, Database = Sqlite>,
+{
     let result = sqlx::query_as::<_, GameConversationParticipants>(
-    "SELECT conversation_id, game_character_id, sort_order FROM game_conversation_participants WHERE conversation_id = ?"
+        "SELECT conversation_id, game_character_id, sort_order FROM game_conversation_participants WHERE conversation_id = ?",
     )
     .bind(conversation_id)
     .fetch_one(executor)
     .await?;
     Ok(result.into())
 }
-pub async fn forked_game_conversations_participant<'e, E>(executor: E, conversation_id: &str, new_conversation_id: &str) -> Result<(), Error> where E: Executor<'e, Database = Sqlite> {
+pub async fn forked_game_conversations_participant<'e, E>(executor: E, conversation_id: &str, new_conversation_id: &str) -> Result<(), Error>
+where
+    E: Executor<'e, Database = Sqlite>,
+{
     sqlx::query(
-    "
+        "
     INSERT INTO game_conversation_participants (
         conversation_id, game_character_id, sort_order
     )
     SELECT 
         ?, game_character_id, sort_order 
     FROM game_conversation_participants 
-    WHERE conversation_id = ?"
+    WHERE conversation_id = ?",
     )
     .bind(new_conversation_id)
     .bind(conversation_id)
@@ -3075,7 +3576,10 @@ pub async fn forked_game_conversations_participant<'e, E>(executor: E, conversat
     .await?;
     Ok(())
 }
-pub async fn upsert_game_conversations_participant<'e, E>(executor: E, conversation_id: &str, game_character_id: &str, sort_order: i64) -> Result<(), Error> where E: Executor<'e, Database = Sqlite> {
+pub async fn upsert_game_conversations_participant<'e, E>(executor: E, conversation_id: &str, game_character_id: &str, sort_order: i64) -> Result<(), Error>
+where
+    E: Executor<'e, Database = Sqlite>,
+{
     sqlx::query(
         r#"
         INSERT INTO game_conversation_participants ( conversation_id, game_character_id, sort_order ) 
@@ -3146,7 +3650,11 @@ pub async fn set_game_session_player<'e, E>(executor: E, session_id: &str, playe
 where
     E: Executor<'e, Database = Sqlite>,
 {
-    let r = sqlx::query("UPDATE game_player_sessions SET player_id = ? WHERE id = ?").bind(player_id).bind(session_id).execute(executor).await?;
+    let r = sqlx::query("UPDATE game_player_sessions SET player_id = ? WHERE id = ?")
+        .bind(player_id)
+        .bind(session_id)
+        .execute(executor)
+        .await?;
     Ok(r.rows_affected() != 0)
 }
 
@@ -3156,22 +3664,37 @@ mod session_options_tests {
 
     #[tokio::test]
     async fn options_save_and_follow_a_fork() {
-        let pool = sqlx::sqlite::SqlitePoolOptions::new().max_connections(1).connect("sqlite::memory:").await.unwrap();
+        let pool = sqlx::sqlite::SqlitePoolOptions::new()
+            .max_connections(1)
+            .connect("sqlite::memory:")
+            .await
+            .unwrap();
         sqlx::migrate!("src/db/migrations").run(&pool).await.unwrap();
         sqlx::query("PRAGMA foreign_keys = OFF").execute(&pool).await.unwrap();
         for id in ["s1", "s2"] {
-            sqlx::query("INSERT INTO game_player_sessions (id, game_id, player_id, head_seq) VALUES (?, 'g', 'default', 0)").bind(id).execute(&pool).await.unwrap();
+            sqlx::query("INSERT INTO game_player_sessions (id, game_id, player_id, head_seq) VALUES (?, 'g', 'default', 0)")
+                .bind(id)
+                .execute(&pool)
+                .await
+                .unwrap();
         }
 
         assert_eq!(get_game_session_options(&pool, "s1").await.unwrap(), (None, None), "없으면 앱 기본값");
         set_game_session_options(&pool, "s1", Some("api1"), Some("")).await.unwrap();
-        assert_eq!(get_game_session_options(&pool, "s1").await.unwrap(), (Some("api1".into()), None), "빈 값은 기본값으로");
+        assert_eq!(
+            get_game_session_options(&pool, "s1").await.unwrap(),
+            (Some("api1".into()), None),
+            "빈 값은 기본값으로"
+        );
 
         forked_game_session_options(&pool, "s1", "s2").await.unwrap();
         assert_eq!(get_game_session_options(&pool, "s2").await.unwrap(), (Some("api1".into()), None));
 
         assert!(set_game_session_player(&pool, "s2", "min").await.unwrap());
-        let player: String = sqlx::query_scalar("SELECT player_id FROM game_player_sessions WHERE id = 's2'").fetch_one(&pool).await.unwrap();
+        let player: String = sqlx::query_scalar("SELECT player_id FROM game_player_sessions WHERE id = 's2'")
+            .fetch_one(&pool)
+            .await
+            .unwrap();
         assert_eq!(player, "min");
     }
 }

@@ -80,8 +80,18 @@ fn fire(def: &GameDefinition, state: &mut GameState, e: &GameEvents, rng: &mut S
     if let Some(npc) = &npc_id {
         let prev = state.npc_states.get(npc).and_then(|n| n.location_id.clone());
         if prev != state.location_id {
-            state.npc_states.insert(npc.clone(), super::super::state::NpcState { location_id: state.location_id.clone(), status: "active".into() });
-            out.push(GameEvent::NpcMoved { game_character_id: npc.clone(), from: prev, to: state.location_id.clone() });
+            state.npc_states.insert(
+                npc.clone(),
+                super::super::state::NpcState {
+                    location_id: state.location_id.clone(),
+                    status: "active".into(),
+                },
+            );
+            out.push(GameEvent::NpcMoved {
+                game_character_id: npc.clone(),
+                from: prev,
+                to: state.location_id.clone(),
+            });
         }
     }
     out.extend(effect_events(&state.flags, &e.effect_json));
@@ -148,7 +158,14 @@ fn roll_random(def: &GameDefinition, state: &mut GameState, es: &EngineState, rn
         .map(|en| en.event_id.clone())
         .collect();
 
-    let Some(idx) = engine::roll_encounter(&entries, es, table.base_trigger_chance * def.danger_multiplier(&state.map_id), weather_mod, &cooling_down, rng) else {
+    let Some(idx) = engine::roll_encounter(
+        &entries,
+        es,
+        table.base_trigger_chance * def.danger_multiplier(&state.map_id),
+        weather_mod,
+        &cooling_down,
+        rng,
+    ) else {
         return vec![];
     };
     let Some(e) = def.events.get(&entries[idx].event_id) else { return vec![] };

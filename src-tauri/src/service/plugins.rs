@@ -42,13 +42,23 @@ fn base_url(profile: &ApiProfiles) -> String {
 }
 
 fn message(role: PromptRole, content: String) -> PromptMessageItem {
-    PromptMessageItem { images: vec![], role, token: 0, content }
+    PromptMessageItem {
+        images: vec![],
+        role,
+        token: 0,
+        content,
+    }
 }
 
 /// 채팅 AI에 지시 하나를 보내 답을 받는다 (번역, 이미지 프롬프트 쓰기)
 async fn ask(ai: &AiService, profile_id: String, system: String, user: String, max_tokens: u32) -> Result<String> {
     let prompt = PromptMessage {
-        chat_options: ChatOptions { max_tokens: Some(max_tokens), stream: false, temperature: Some(0.2), ..ChatOptions::default() },
+        chat_options: ChatOptions {
+            max_tokens: Some(max_tokens),
+            stream: false,
+            temperature: Some(0.2),
+            ..ChatOptions::default()
+        },
         messages: vec![message(PromptRole::System, system), message(PromptRole::User, user)],
     };
     Ok(ai.generate_once(AiRequest { profile_id, prompt }).await?.content.trim().to_string())
@@ -142,7 +152,11 @@ pub async fn speak(ai: &AiService, setting: &TtsSetting, fallback_profile: &str,
     ai.ensure_budget(&profile.id, UsageKind::Tts).await?;
     let started = std::time::Instant::now();
     let result = speak_call(ai, setting, &profile, key, &input).await;
-    let mut entry = UsageEntry::new(UsageKind::Tts, &profile.id, if setting.model.is_empty() { &profile.model } else { &setting.model });
+    let mut entry = UsageEntry::new(
+        UsageKind::Tts,
+        &profile.id,
+        if setting.model.is_empty() { &profile.model } else { &setting.model },
+    );
     entry.characters = input.chars().count() as u64;
     entry.duration_ms = u64::try_from(started.elapsed().as_millis()).unwrap_or(u64::MAX);
     if let Err(e) = &result {
@@ -166,7 +180,11 @@ async fn speak_call(ai: &AiService, setting: &TtsSetting, profile: &ApiProfiles,
             return Err(AppError::validation("ElevenLabs 목소리를 먼저 고르세요 (설정 > 음성 읽기)", None));
         }
         ai.http()
-            .post(format!("{}/text-to-speech/{}?output_format=mp3_44100_128", base_url_or(profile, ELEVENLABS_BASE), setting.voice.trim()))
+            .post(format!(
+                "{}/text-to-speech/{}?output_format=mp3_44100_128",
+                base_url_or(profile, ELEVENLABS_BASE),
+                setting.voice.trim()
+            ))
             .header("xi-api-key", key)
             .header("Accept", "audio/mpeg")
             // ElevenLabs의 속도는 0.7~1.2
@@ -214,19 +232,34 @@ pub async fn voices(ai: &AiService, profile_id: &str) -> Result<Vec<Voice>> {
     if profile.format_type != "elevenlabs" {
         return Ok(["alloy", "ash", "ballad", "coral", "echo", "fable", "nova", "onyx", "sage", "shimmer"]
             .into_iter()
-            .map(|v| Voice { id: v.into(), name: v.into(), description: None })
+            .map(|v| Voice {
+                id: v.into(),
+                name: v.into(),
+                description: None,
+            })
             .collect());
     }
     let key = ai.credential(&profile)?;
-    let res = ai.http().get(format!("{}/voices", base_url_or(&profile, ELEVENLABS_BASE))).header("xi-api-key", key).send().await?;
+    let res = ai
+        .http()
+        .get(format!("{}/voices", base_url_or(&profile, ELEVENLABS_BASE)))
+        .header("xi-api-key", key)
+        .send()
+        .await?;
     let v: Value = serde_json::from_slice(&ok_bytes(res).await?)?;
     Ok(v["voices"]
         .as_array()
         .map(|a| {
             a.iter()
                 .filter_map(|x| {
-                    let labels = x["labels"].as_object().map(|o| o.values().filter_map(Value::as_str).collect::<Vec<_>>().join(", "));
-                    Some(Voice { id: x["voice_id"].as_str()?.to_string(), name: x["name"].as_str().unwrap_or("?").to_string(), description: labels.filter(|s| !s.is_empty()) })
+                    let labels = x["labels"]
+                        .as_object()
+                        .map(|o| o.values().filter_map(Value::as_str).collect::<Vec<_>>().join(", "));
+                    Some(Voice {
+                        id: x["voice_id"].as_str()?.to_string(),
+                        name: x["name"].as_str().unwrap_or("?").to_string(),
+                        description: labels.filter(|s| !s.is_empty()),
+                    })
                 })
                 .collect()
         })
@@ -237,11 +270,14 @@ pub async fn voices(ai: &AiService, profile_id: &str) -> Result<Vec<Voice>> {
 // 이미지 생성 (OpenAI 호환 / NovelAI)
 // =========================================================
 
-
 /// 메시지로 이미지 프롬프트를 만든다 (ai_prompt면 채팅 AI가 정리 — NovelAI면 태그로, 아니면 문장으로) + 화풍
 pub async fn image_prompt(ai: &AiService, setting: &ImageGenSetting, chat_profile: &str, message: &str, context: &str) -> Result<String> {
     let body = if setting.ai_prompt {
-        let user = if context.trim().is_empty() { message.to_string() } else { format!("[Characters]\n{context}\n\n[Message]\n{message}") };
+        let user = if context.trim().is_empty() {
+            message.to_string()
+        } else {
+            format!("[Characters]\n{context}\n\n[Message]\n{message}")
+        };
         let rules = crate::service::app_prompts::image_prompt(image_is_novelai(ai, setting, chat_profile).await);
         ask(ai, pick_profile(&setting.prompt_api_profile_id, chat_profile)?, rules.into(), user, 300).await?
     } else {
@@ -289,7 +325,11 @@ pub fn novelai_body(setting: &ImageGenSetting, prompt: &str, seed: u32) -> Value
     let (width, height) = parse_size(&setting.size);
     let v4 = is_v4_plus(&setting.model);
     let tags = quality_tags(&setting.quality);
-    let prompt_owned = if tags.is_empty() || prompt.contains(tags) { prompt.to_string() } else { format!("{}, {tags}", prompt.trim_end().trim_end_matches(',')) };
+    let prompt_owned = if tags.is_empty() || prompt.contains(tags) {
+        prompt.to_string()
+    } else {
+        format!("{}, {tags}", prompt.trim_end().trim_end_matches(','))
+    };
     let prompt = prompt_owned.as_str();
     let mut params = json!({
         "params_version": 3,
@@ -314,9 +354,12 @@ pub fn novelai_body(setting: &ImageGenSetting, prompt: &str, seed: u32) -> Value
 
 /// NovelAI 응답(zip)에서 첫 그림
 fn first_png_in_zip(bytes: &[u8]) -> Result<Vec<u8>> {
-    let mut zip = zip::ZipArchive::new(std::io::Cursor::new(bytes)).map_err(|e| AppError::ai_provider(ErrorCode::AiProviderError, format!("NovelAI 응답을 열 수 없습니다: {e}"), false))?;
+    let mut zip = zip::ZipArchive::new(std::io::Cursor::new(bytes))
+        .map_err(|e| AppError::ai_provider(ErrorCode::AiProviderError, format!("NovelAI 응답을 열 수 없습니다: {e}"), false))?;
     for i in 0..zip.len() {
-        let mut f = zip.by_index(i).map_err(|e| AppError::ai_provider(ErrorCode::AiProviderError, e.to_string(), false))?;
+        let mut f = zip
+            .by_index(i)
+            .map_err(|e| AppError::ai_provider(ErrorCode::AiProviderError, e.to_string(), false))?;
         if f.name().to_ascii_lowercase().ends_with(".png") {
             let mut out = Vec::new();
             std::io::Read::read_to_end(&mut f, &mut out)?;
@@ -364,7 +407,20 @@ impl GeneratedImage {
             .ok()
             .and_then(|t| t.duration_since(std::time::UNIX_EPOCH).ok())
             .map_or(0, |d| d.as_millis() as i64);
-        Self { path, prompt: String::new(), model: String::new(), source: source.into(), message_id: None, conversation_id: None, created_at, meta: vec![], album: None, name: Some(name), tags, readonly: true }
+        Self {
+            path,
+            prompt: String::new(),
+            model: String::new(),
+            source: source.into(),
+            message_id: None,
+            conversation_id: None,
+            created_at,
+            meta: vec![],
+            album: None,
+            name: Some(name),
+            tags,
+            readonly: true,
+        }
     }
 }
 
@@ -379,7 +435,10 @@ pub fn rename_image(out_dir: &Path, path: &str, name: &str) -> Result<GeneratedI
     if !target.starts_with(&root) {
         return Err(AppError::validation("갤러리의 그림만 이름을 바꿀 수 있습니다", None));
     }
-    let mut info = list_images(out_dir).into_iter().find(|i| Path::new(&i.path) == Path::new(path)).ok_or_else(|| AppError::not_found("그림을 찾을 수 없습니다"))?;
+    let mut info = list_images(out_dir)
+        .into_iter()
+        .find(|i| Path::new(&i.path) == Path::new(path))
+        .ok_or_else(|| AppError::not_found("그림을 찾을 수 없습니다"))?;
     info.name = Some(name.chars().take(200).collect());
     std::fs::write(Path::new(&info.path).with_extension("json"), serde_json::to_vec(&info)?)?;
     Ok(info)
@@ -392,7 +451,10 @@ pub fn set_image_tags(out_dir: &Path, path: &str, tags: Vec<String>) -> Result<G
     if !target.starts_with(&root) {
         return Err(AppError::validation("갤러리의 그림에만 태그를 달 수 있습니다", None));
     }
-    let mut info = list_images(out_dir).into_iter().find(|i| Path::new(&i.path) == Path::new(path)).ok_or_else(|| AppError::not_found("그림을 찾을 수 없습니다"))?;
+    let mut info = list_images(out_dir)
+        .into_iter()
+        .find(|i| Path::new(&i.path) == Path::new(path))
+        .ok_or_else(|| AppError::not_found("그림을 찾을 수 없습니다"))?;
     let mut tags: Vec<String> = tags.into_iter().map(|t| t.trim().to_string()).filter(|t| !t.is_empty()).take(20).collect();
     tags.dedup();
     info.tags = tags;
@@ -403,14 +465,21 @@ pub fn set_image_tags(out_dir: &Path, path: &str, tags: Vec<String>) -> Result<G
 /// 갤러리가 다루는 그림 확장자
 const GALLERY_EXTS: [&str; 5] = ["png", "jpg", "jpeg", "webp", "gif"];
 fn is_gallery_image(p: &Path) -> bool {
-    p.extension().and_then(|e| e.to_str()).is_some_and(|e| GALLERY_EXTS.contains(&e.to_ascii_lowercase().as_str()))
+    p.extension()
+        .and_then(|e| e.to_str())
+        .is_some_and(|e| GALLERY_EXTS.contains(&e.to_ascii_lowercase().as_str()))
 }
 
 /// 생성할 때 쓴 설정 → 정보 줄
 fn setting_meta(setting: &ImageGenSetting, novelai: bool) -> Vec<crate::service::image_meta::MetaItem> {
     let mut v = vec![("크기", setting.size.clone())];
     if novelai {
-        v.extend([("네거티브", setting.negative_prompt.clone()), ("단계", setting.steps.to_string()), ("프롬프트 반영", format!("{}", setting.scale)), ("샘플러", setting.sampler.clone())]);
+        v.extend([
+            ("네거티브", setting.negative_prompt.clone()),
+            ("단계", setting.steps.to_string()),
+            ("프롬프트 반영", format!("{}", setting.scale)),
+            ("샘플러", setting.sampler.clone()),
+        ]);
     }
     v.into_iter()
         .filter(|(_, val)| !val.trim().is_empty())
@@ -434,7 +503,10 @@ pub fn import_images(out_dir: &Path, paths: &[String]) -> Result<Vec<GeneratedIm
         std::fs::write(&path, &bytes)?;
         let meta = crate::service::image_meta::parse(&crate::service::image_meta::png_text_chunks(&bytes));
         let model = meta.items.iter().find(|i| i.key == "모델").map(|i| i.value.clone()).unwrap_or_default();
-        let mut items = vec![crate::service::image_meta::MetaItem { key: "원래 파일".into(), value: src.file_name().map(|n| n.to_string_lossy().into_owned()).unwrap_or_default() }];
+        let mut items = vec![crate::service::image_meta::MetaItem {
+            key: "원래 파일".into(),
+            value: src.file_name().map(|n| n.to_string_lossy().into_owned()).unwrap_or_default(),
+        }];
         items.extend(meta.items);
         let info = GeneratedImage {
             path: path.to_string_lossy().into_owned(),
@@ -472,7 +544,11 @@ pub async fn generate_image(
     ai.ensure_budget(&profile.id, UsageKind::Image).await?;
     let started = std::time::Instant::now();
     let result = image_call(ai, setting, &profile, key, prompt).await;
-    let mut entry = UsageEntry::new(UsageKind::Image, &profile.id, if setting.model.is_empty() { &profile.model } else { &setting.model });
+    let mut entry = UsageEntry::new(
+        UsageKind::Image,
+        &profile.id,
+        if setting.model.is_empty() { &profile.model } else { &setting.model },
+    );
     entry.images = u64::from(result.is_ok());
     entry.duration_ms = u64::try_from(started.elapsed().as_millis()).unwrap_or(u64::MAX);
     if let Err(e) = &result {
@@ -505,11 +581,21 @@ async fn image_call(ai: &AiService, setting: &ImageGenSetting, profile: &ApiProf
         if setting.model.starts_with("dall-e") {
             body["response_format"] = json!("b64_json");
         }
-        let res = ai.http().post(format!("{}/images/generations", base_url(profile))).bearer_auth(key).json(&body).send().await?;
+        let res = ai
+            .http()
+            .post(format!("{}/images/generations", base_url(profile)))
+            .bearer_auth(key)
+            .json(&body)
+            .send()
+            .await?;
         let v: Value = serde_json::from_slice(&ok_bytes(res).await?)?;
-        let item = v["data"].get(0).ok_or_else(|| AppError::ai_provider(ErrorCode::AiProviderError, "이미지 응답에 그림이 없습니다", false))?;
+        let item = v["data"]
+            .get(0)
+            .ok_or_else(|| AppError::ai_provider(ErrorCode::AiProviderError, "이미지 응답에 그림이 없습니다", false))?;
         if let Some(b64) = item["b64_json"].as_str() {
-            base64::engine::general_purpose::STANDARD.decode(b64).map_err(|e| AppError::ai_provider(ErrorCode::AiProviderError, format!("이미지를 읽을 수 없습니다: {e}"), false))?
+            base64::engine::general_purpose::STANDARD
+                .decode(b64)
+                .map_err(|e| AppError::ai_provider(ErrorCode::AiProviderError, format!("이미지를 읽을 수 없습니다: {e}"), false))?
         } else if let Some(url) = item["url"].as_str() {
             ok_bytes(ai.http().get(url).send().await?).await?
         } else {
@@ -567,7 +653,10 @@ pub fn list_images(out_dir: &Path) -> Vec<GeneratedImage> {
         .filter(|p| is_gallery_image(p))
         .map(|p| {
             let path = p.to_string_lossy().into_owned();
-            match std::fs::read(p.with_extension("json")).ok().and_then(|b| serde_json::from_slice::<GeneratedImage>(&b).ok()) {
+            match std::fs::read(p.with_extension("json"))
+                .ok()
+                .and_then(|b| serde_json::from_slice::<GeneratedImage>(&b).ok())
+            {
                 Some(m) => GeneratedImage { path, ..m },
                 None => GeneratedImage {
                     path,
@@ -623,7 +712,11 @@ async fn ok_bytes(res: reqwest::Response) -> Result<Vec<u8>> {
         429 => ErrorCode::AiProviderRateLimit,
         _ => ErrorCode::AiProviderError,
     };
-    Err(AppError::ai_provider(code, format!("{status}: {detail}"), status.as_u16() == 429 || status.is_server_error()))
+    Err(AppError::ai_provider(
+        code,
+        format!("{status}: {detail}"),
+        status.as_u16() == 429 || status.is_server_error(),
+    ))
 }
 
 #[cfg(test)]
@@ -648,7 +741,10 @@ mod tests {
     #[test]
     fn tts_cache_name_changes_with_voice() {
         let a = TtsSetting::default();
-        let b = TtsSetting { voice: "nova".into(), ..TtsSetting::default() };
+        let b = TtsSetting {
+            voice: "nova".into(),
+            ..TtsSetting::default()
+        };
         assert_ne!(cache_name("hi", &a, "p"), cache_name("hi", &b, "p"));
         assert_eq!(cache_name("hi", &a, "p"), cache_name("hi", &a, "p"));
     }
@@ -658,7 +754,11 @@ mod tests {
         assert!(is_v4_plus("nai-diffusion-4-5-full"));
         assert!(is_v4_plus("nai-diffusion-5-full"));
         assert!(!is_v4_plus("nai-diffusion-3"));
-        let s = ImageGenSetting { model: "nai-diffusion-5-full".into(), quality: "light".into(), ..ImageGenSetting::default() };
+        let s = ImageGenSetting {
+            model: "nai-diffusion-5-full".into(),
+            quality: "light".into(),
+            ..ImageGenSetting::default()
+        };
         let b = novelai_body(&s, "1girl", 1);
         assert_eq!(b["input"], "1girl, very aesthetic, masterpiece");
         assert!(b["parameters"]["v4_prompt"].is_object());
@@ -669,13 +769,26 @@ mod tests {
 
     #[test]
     fn novelai_body_uses_v4_structure_and_snaps_size() {
-        let s = ImageGenSetting { size: "800x1200".into(), ..ImageGenSetting::default() };
+        let s = ImageGenSetting {
+            size: "800x1200".into(),
+            ..ImageGenSetting::default()
+        };
         let b = novelai_body(&s, "1girl, forest", 7);
         assert_eq!(b["parameters"]["width"], 768);
         assert_eq!(b["parameters"]["height"], 1152);
         // 기본 품질(standard) 태그가 끝에 붙는다
-        assert_eq!(b["parameters"]["v4_prompt"]["caption"]["base_caption"], "1girl, forest, very aesthetic, masterpiece, no text");
-        let v3 = novelai_body(&ImageGenSetting { model: "nai-diffusion-3".into(), ..ImageGenSetting::default() }, "x", 1);
+        assert_eq!(
+            b["parameters"]["v4_prompt"]["caption"]["base_caption"],
+            "1girl, forest, very aesthetic, masterpiece, no text"
+        );
+        let v3 = novelai_body(
+            &ImageGenSetting {
+                model: "nai-diffusion-3".into(),
+                ..ImageGenSetting::default()
+            },
+            "x",
+            1,
+        );
         assert!(v3["parameters"].get("v4_prompt").is_none());
     }
 

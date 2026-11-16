@@ -27,8 +27,7 @@ use crate::{
     task::{
         task_event::TaskEventSink,
         task_models::{
-            error_code_str, AttemptInfo, AttemptStatus, CancelReason, CreateTaskRequest,
-            TaskError, TaskErrorInfo, TaskEvent, TaskInfo, TaskOutput, TaskStatus,
+            error_code_str, AttemptInfo, AttemptStatus, CancelReason, CreateTaskRequest, TaskError, TaskErrorInfo, TaskEvent, TaskInfo, TaskOutput, TaskStatus,
         },
         task_repository::{TaskRepository, TransitionPatch},
         task_runner::{ExecutorRegistry, TaskContext, TaskExecutor, TaskReporter},
@@ -87,12 +86,7 @@ impl TaskManager {
         Self::with_options(db, events, DEFAULT_CONCURRENCY, DEFAULT_RETRY_BASE_DELAY)
     }
 
-    pub fn with_options(
-        db: DbPool,
-        events: Arc<dyn TaskEventSink>,
-        concurrency: usize,
-        retry_base_delay: Duration,
-    ) -> Arc<Self> {
+    pub fn with_options(db: DbPool, events: Arc<dyn TaskEventSink>, concurrency: usize, retry_base_delay: Duration) -> Arc<Self> {
         Arc::new(Self {
             repo: TaskRepository::new(db),
             executors: ExecutorRegistry::new(),
@@ -135,9 +129,7 @@ impl TaskManager {
                 self.repo
                     .transition(task_id, task.status, TaskStatus::Cancelled, TransitionPatch::default())
                     .await?;
-                self.events.emit(&TaskEvent::Cancelled {
-                    task_id: task_id.to_string(),
-                });
+                self.events.emit(&TaskEvent::Cancelled { task_id: task_id.to_string() });
                 Ok(())
             }
             other => Err(invalid_state(task_id, other, "취소")),
@@ -172,9 +164,7 @@ impl TaskManager {
         self.repo
             .transition(task_id, TaskStatus::Interrupted, TaskStatus::Cancelled, TransitionPatch::default())
             .await?;
-        self.events.emit(&TaskEvent::Cancelled {
-            task_id: task_id.to_string(),
-        });
+        self.events.emit(&TaskEvent::Cancelled { task_id: task_id.to_string() });
         Ok(())
     }
 
@@ -191,22 +181,44 @@ impl TaskManager {
         self.emit_queued(&task);
         let cancel = CancellationToken::new();
         let reason = Arc::new(Mutex::new(None));
-        lock(&self.active).insert(task.id.clone(), ActiveTask { cancel: cancel.clone(), reason: reason.clone(), waiters: vec![] });
+        lock(&self.active).insert(
+            task.id.clone(),
+            ActiveTask {
+                cancel: cancel.clone(),
+                reason: reason.clone(),
+                waiters: vec![],
+            },
+        );
         let result = self.drive_inline(&task, &cancel, &reason, f).await;
         lock(&self.active).remove(&task.id);
         result
     }
 
-    async fn drive_inline<T, Fut>(&self, task: &TaskInfo, cancel: &CancellationToken, reason: &Mutex<Option<CancelReason>>, f: impl FnOnce(CancellationToken) -> Fut) -> Result<T, AppError>
+    async fn drive_inline<T, Fut>(
+        &self,
+        task: &TaskInfo,
+        cancel: &CancellationToken,
+        reason: &Mutex<Option<CancelReason>>,
+        f: impl FnOnce(CancellationToken) -> Fut,
+    ) -> Result<T, AppError>
     where
         Fut: std::future::Future<Output = Result<T, AppError>>,
     {
         let task_id = task.id.as_str();
-        self.repo.transition(task_id, TaskStatus::Pending, TaskStatus::Running, TransitionPatch::default()).await?;
+        self.repo
+            .transition(task_id, TaskStatus::Pending, TaskStatus::Running, TransitionPatch::default())
+            .await?;
         let attempt = self.repo.open_attempt(task_id).await?;
-        self.events.emit(&TaskEvent::Started { task_id: task_id.to_string(), attempt_no: attempt.attempt_no });
+        self.events.emit(&TaskEvent::Started {
+            task_id: task_id.to_string(),
+            attempt_no: attempt.attempt_no,
+        });
 
-        let tag = super::task_context::CurrentTask { task_id: task_id.to_string(), feature: task.feature.clone(), run_by: task.run_by };
+        let tag = super::task_context::CurrentTask {
+            task_id: task_id.to_string(),
+            feature: task.feature.clone(),
+            run_by: task.run_by,
+        };
         let outcome = tokio::select! {
             biased;
             _ = cancel.cancelled() => None,
@@ -224,7 +236,11 @@ impl TaskManager {
                     let _ = self.stop(task_id, Some(&attempt.id), TaskStatus::Running, reason).await;
                     return Err(e);
                 }
-                let info = TaskErrorInfo { code: error_code_str(res.code), message: res.message, retryable: res.retryable };
+                let info = TaskErrorInfo {
+                    code: error_code_str(res.code),
+                    message: res.message,
+                    retryable: res.retryable,
+                };
                 if let Err(err) = self.repo.close_attempt(&attempt.id, AttemptStatus::Failed, Some(&info)).await {
                     log_internal(task_id, "attempt 기록", err);
                 }
@@ -233,7 +249,11 @@ impl TaskManager {
             }
             None => {
                 let _ = self.stop(task_id, Some(&attempt.id), TaskStatus::Running, reason).await;
-                Err(AppError::Validation { code: ErrorCode::TaskCancelled, message: "작업을 멈췄습니다".into(), details: None })
+                Err(AppError::Validation {
+                    code: ErrorCode::TaskCancelled,
+                    message: "작업을 멈췄습니다".into(),
+                    details: None,
+                })
             }
         }
     }
@@ -262,9 +282,7 @@ impl TaskManager {
 
     /// Pending / Running 작업
     pub async fn list_active(&self) -> Result<Vec<TaskInfo>, AppError> {
-        self.repo
-            .find_by_statuses(&[TaskStatus::Pending, TaskStatus::Running])
-            .await
+        self.repo.find_by_statuses(&[TaskStatus::Pending, TaskStatus::Running]).await
     }
 
     /// 사용자에게 재개/포기를 물어봐야 하는 작업
@@ -303,7 +321,9 @@ impl TaskManager {
             if self.executors.get(task.task_type).is_some() {
                 recoverable.push(task);
             } else {
-                self.repo.transition(&task.id, TaskStatus::Interrupted, TaskStatus::Cancelled, TransitionPatch::default()).await?;
+                self.repo
+                    .transition(&task.id, TaskStatus::Interrupted, TaskStatus::Cancelled, TransitionPatch::default())
+                    .await?;
             }
         }
         Ok(recoverable)
@@ -366,10 +386,7 @@ impl TaskManager {
         let this = Arc::clone(self);
         spawn(async move {
             let result = this.drive(&task_id, &cancel, &reason).await;
-            let waiters = lock(&this.active)
-                .remove(&task_id)
-                .map(|a| a.waiters)
-                .unwrap_or_default();
+            let waiters = lock(&this.active).remove(&task_id).map(|a| a.waiters).unwrap_or_default();
             for w in waiters {
                 let _ = w.send(result.clone());
             }
@@ -389,12 +406,7 @@ impl TaskManager {
         }
     }
 
-    async fn drive(
-        &self,
-        task_id: &str,
-        cancel: &CancellationToken,
-        reason: &Mutex<Option<CancelReason>>,
-    ) -> TaskResult {
+    async fn drive(&self, task_id: &str, cancel: &CancellationToken, reason: &Mutex<Option<CancelReason>>) -> TaskResult {
         // 1. 실행 슬롯 대기 (상태는 Pending 유지)
         let _permit = tokio::select! {
             biased;
@@ -449,7 +461,11 @@ impl TaskManager {
                 TaskReporter::new(task_id.to_string(), self.events.clone()),
             );
 
-            let tag = super::task_context::CurrentTask { task_id: task_id.to_string(), feature: task.feature.clone(), run_by: task.run_by };
+            let tag = super::task_context::CurrentTask {
+                task_id: task_id.to_string(),
+                feature: task.feature.clone(),
+                run_by: task.run_by,
+            };
             let run = super::task_context::scope(tag, AssertUnwindSafe(executor.execute(&task, &ctx)).catch_unwind());
             tokio::pin!(run);
             let outcome = tokio::select! {
@@ -471,18 +487,12 @@ impl TaskManager {
                 Err(TaskError::Cancelled) => {
                     // Executor가 스스로 멈춘 경우에도 사유가 없으면 사용자 취소로 본다
                     set_reason(reason, CancelReason::UserCancelled);
-                    return self
-                        .stop(task_id, Some(&attempt.id), TaskStatus::Running, reason)
-                        .await;
+                    return self.stop(task_id, Some(&attempt.id), TaskStatus::Running, reason).await;
                 }
 
                 Err(err) => {
                     let info = err.to_info();
-                    if let Err(e) = self
-                        .repo
-                        .close_attempt(&attempt.id, AttemptStatus::Failed, Some(&info))
-                        .await
-                    {
+                    if let Err(e) = self.repo.close_attempt(&attempt.id, AttemptStatus::Failed, Some(&info)).await {
                         log_internal(task_id, "attempt 기록", e);
                     }
 
@@ -508,22 +518,14 @@ impl TaskManager {
     }
 
     async fn complete(&self, task_id: &str, attempt_id: &str, output: TaskOutput) -> TaskResult {
-        if let Err(e) = self
-            .repo
-            .close_attempt(attempt_id, AttemptStatus::Completed, None)
-            .await
-        {
+        if let Err(e) = self.repo.close_attempt(attempt_id, AttemptStatus::Completed, None).await {
             log_internal(task_id, "attempt 완료 기록", e);
         }
         let patch = TransitionPatch {
             result: Some(output.clone()),
             ..Default::default()
         };
-        if let Err(e) = self
-            .repo
-            .transition(task_id, TaskStatus::Running, TaskStatus::Completed, patch)
-            .await
-        {
+        if let Err(e) = self.repo.transition(task_id, TaskStatus::Running, TaskStatus::Completed, patch).await {
             return Err(log_internal(task_id, "완료 처리", e));
         }
         self.events.emit(&TaskEvent::Completed {
@@ -539,11 +541,7 @@ impl TaskManager {
             error: Some(info.clone()),
             ..Default::default()
         };
-        if let Err(e) = self
-            .repo
-            .transition(task_id, TaskStatus::Running, TaskStatus::Failed, patch)
-            .await
-        {
+        if let Err(e) = self.repo.transition(task_id, TaskStatus::Running, TaskStatus::Failed, patch).await {
             log_internal(task_id, "실패 처리", e);
         }
         self.events.emit(&TaskEvent::Failed {
@@ -554,13 +552,7 @@ impl TaskManager {
     }
 
     /// 취소 신호로 멈춤: 사유에 따라 Cancelled 또는 Interrupted
-    async fn stop(
-        &self,
-        task_id: &str,
-        attempt_id: Option<&str>,
-        from: TaskStatus,
-        reason: &Mutex<Option<CancelReason>>,
-    ) -> TaskResult {
+    async fn stop(&self, task_id: &str, attempt_id: Option<&str>, from: TaskStatus, reason: &Mutex<Option<CancelReason>>) -> TaskResult {
         let reason = lock(reason).unwrap_or(CancelReason::UserCancelled);
         let to = reason.final_status();
         let (attempt_status, info) = match to {
@@ -580,20 +572,12 @@ impl TaskManager {
                 log_internal(task_id, "attempt 중단 기록", e);
             }
         }
-        if let Err(e) = self
-            .repo
-            .transition(task_id, from, to, TransitionPatch::default())
-            .await
-        {
+        if let Err(e) = self.repo.transition(task_id, from, to, TransitionPatch::default()).await {
             log_internal(task_id, "중단 처리", e);
         }
         let event = match to {
-            TaskStatus::Interrupted => TaskEvent::Interrupted {
-                task_id: task_id.to_string(),
-            },
-            _ => TaskEvent::Cancelled {
-                task_id: task_id.to_string(),
-            },
+            TaskStatus::Interrupted => TaskEvent::Interrupted { task_id: task_id.to_string() },
+            _ => TaskEvent::Cancelled { task_id: task_id.to_string() },
         };
         self.events.emit(&event);
         Err(info)
@@ -601,9 +585,7 @@ impl TaskManager {
 
     fn retry_delay(&self, attempt: u32) -> Duration {
         let factor = 2u32.saturating_pow(attempt.saturating_sub(1));
-        self.retry_base_delay
-            .saturating_mul(factor)
-            .min(MAX_RETRY_DELAY)
+        self.retry_base_delay.saturating_mul(factor).min(MAX_RETRY_DELAY)
     }
 }
 

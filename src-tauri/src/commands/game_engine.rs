@@ -8,16 +8,17 @@
 //! ⚠ AppState에 active_runtime: tokio::sync::Mutex<Option<GameRuntime>>가 필요하다.
 //! std Mutex가 아닌 이유: "락 잡고 → dispatch → 저장(async)"을 한 번에 원자적으로 하려면
 //! 가드를 .await 너머로 들고 갈 수 있어야 한다.
-use crate::state::AppState;
 use crate::db::game::{
-    delete_game_player_sessions, get_all_game_conversations, get_all_game_player_sessions, get_all_game_save, get_game_journal_lookup, get_game_messages_lookup, get_game_player_sessions, get_game_save, upsert_game_save,
+    delete_game_player_sessions, get_all_game_conversations, get_all_game_player_sessions, get_all_game_save, get_game_journal_lookup,
+    get_game_messages_lookup, get_game_player_sessions, get_game_save, upsert_game_save,
 };
 use crate::error::AppError;
 use crate::game::guard::{check_slot, current_game_id};
 use crate::game::runtime::{GameCommand, GameRepository, GameResponse, GameRuntime, SqlxGameRepository};
-use crate::models::game::{GameConversations, GameJournal, GameMessages, GamePlayerSessions, GameSave, GameSaveInput};
 use crate::game::transcript::{self, ContinueGameResponse, TranscriptPage};
+use crate::models::game::{GameConversations, GameJournal, GameMessages, GamePlayerSessions, GameSave, GameSaveInput};
 use crate::models::settings::AppSetting;
+use crate::state::AppState;
 use crate::sys::settings::SettingsState;
 use tauri::{ipc::Channel, AppHandle, State};
 
@@ -31,11 +32,14 @@ pub async fn start_new_game(state: State<'_, AppState>, settings: State<'_, Sett
     let game_id = current_game_id(&state)?;
 
     let definition = crate::game::guard::current_definition(&state)?; // open_game이 올려둔 정의
-    // 데이터가 어긋나 있으면(없는 씬을 가리키는 선택지 등) 시작 전에 막는다. 경고는 validate_game으로 본다.
+                                                                      // 데이터가 어긋나 있으면(없는 씬을 가리키는 선택지 등) 시작 전에 막는다. 경고는 validate_game으로 본다.
     let issues = crate::game::validate::validate(&definition);
     if let Some(msg) = crate::game::validate::errors_summary(&issues) {
         let errors: Vec<_> = issues.iter().filter(|i| i.severity == crate::game::validate::Severity::Error).collect();
-        return Err(AppError::game_data_invalid(format!("게임 데이터에 문제가 있어 시작할 수 없습니다: {msg}"), serde_json::to_value(errors).ok()));
+        return Err(AppError::game_data_invalid(
+            format!("게임 데이터에 문제가 있어 시작할 수 없습니다: {msg}"),
+            serde_json::to_value(errors).ok(),
+        ));
     }
     let session_id = uuid::Uuid::new_v4().to_string();
     // 지금 선택돼 있는 페르소나를 이 세션에 고정한다. 세션 중에 설정에서 바꿔도 이 세션엔 반영 안 됨.
@@ -47,7 +51,10 @@ pub async fn start_new_game(state: State<'_, AppState>, settings: State<'_, Sett
     let events = runtime.start();
     crate::game::journal::record(&state.db, &mut runtime, &game_id, None, &events).await?;
 
-    let response = GameResponse { events, state: runtime.render_state() };
+    let response = GameResponse {
+        events,
+        state: runtime.render_state(),
+    };
     *state.active_runtime.lock().await = Some(runtime);
     Ok(response)
 }
@@ -110,11 +117,17 @@ fn history_limit(requested: Option<u32>) -> usize {
 async fn open_session(state: &AppState, _game_id: &str, session_id: &str, history: usize) -> Result<ContinueGameResponse, AppError> {
     let repo = SqlxGameRepository::new(&state.db);
     let definition = crate::game::guard::current_definition(state)?;
-    let runtime = GameRuntime::load(&repo, definition, session_id).await.map_err(|e| AppError::database(e.to_string()))?;
+    let runtime = GameRuntime::load(&repo, definition, session_id)
+        .await
+        .map_err(|e| AppError::database(e.to_string()))?;
     // 이어하기는 GameStarted가 아니다 — 새로 생긴 일이 없으니 events는 빈 배열이다.
     // 대신 이전에 나온 대사를 history로 같이 준다 (일지에서 읽는다). 지금 화면의 모습은 state.stage가 복원한다.
     let history = transcript::transcript_page(&state.db, session_id, runtime.state().head_seq, None, history).await?;
-    let response = ContinueGameResponse { events: vec![], state: runtime.render_state(), history };
+    let response = ContinueGameResponse {
+        events: vec![],
+        state: runtime.render_state(),
+        history,
+    };
     *state.active_runtime.lock().await = Some(runtime);
     Ok(response)
 }
@@ -150,10 +163,17 @@ pub async fn read_current_transcript(state: State<'_, AppState>, limit: Option<u
         (st.session_id.clone(), st.head_seq, st.current_scene_id.clone(), st.active_npc_id.clone())
     };
     let limit = history_limit(limit);
-    let conversations = || async { get_all_game_conversations(&state.db, &game_id).await.map(|all| all.into_iter().filter(|c| c.session_id == session_id).collect::<Vec<_>>()) };
+    let conversations = || async {
+        get_all_game_conversations(&state.db, &game_id)
+            .await
+            .map(|all| all.into_iter().filter(|c| c.session_id == session_id).collect::<Vec<_>>())
+    };
     let scope = if let Some(scene_id) = scene_id {
         let ids = conversations().await?.into_iter().filter(|c| c.branch_key == scene_id).map(|c| c.id).collect();
-        transcript::CurrentScope::Scene { scene_id, conversation_ids: ids }
+        transcript::CurrentScope::Scene {
+            scene_id,
+            conversation_ids: ids,
+        }
     } else if let Some(character_id) = npc_id {
         let key = crate::game::npc::participants_key(&[character_id.as_str()]);
         let conversation_id = conversations()
@@ -373,7 +393,11 @@ pub struct GameSessionOptions {
 pub async fn get_game_session_options(state: State<'_, AppState>, session_id: String) -> Result<GameSessionOptions, AppError> {
     let session = get_game_player_sessions(&state.db, &session_id).await?;
     let (api_profile_id, prompt_preset_id) = crate::db::game::get_game_session_options(&state.db, &session_id).await?;
-    Ok(GameSessionOptions { api_profile_id, prompt_preset_id, player_id: session.player_id })
+    Ok(GameSessionOptions {
+        api_profile_id,
+        prompt_preset_id,
+        player_id: session.player_id,
+    })
 }
 
 /// 세션의 AI 설정·플레이어 페르소나 바꾸기. 비운 값은 앱 기본값.
@@ -391,7 +415,10 @@ pub async fn set_game_session_options(
     if let Some(player) = player_id.filter(|s| !s.is_empty()) {
         let changed = {
             let guard = state.active_runtime.lock().await;
-            guard.as_ref().map(|r| r.state().session_id == session_id && r.state().player_id != player).unwrap_or(false)
+            guard
+                .as_ref()
+                .map(|r| r.state().session_id == session_id && r.state().player_id != player)
+                .unwrap_or(false)
         };
         crate::db::game::set_game_session_player(&state.db, &session_id, &player).await?;
         if changed {
@@ -411,11 +438,16 @@ pub async fn game_context_usage(
     session_id: String,
 ) -> Result<crate::commands::chat::ContextUsage, AppError> {
     use crate::models::ai_service::PromptRole;
-    use crate::service::{chat::chat_manager::{current_conv_request, LAST_GAME_PROMPT}, prompt::prompt_manager::{DEFAULT_CONTEXT_LIMIT as CONTEXT_LIMIT, chat_options_from, context_limit_from, PromptManager}};
+    use crate::service::{
+        chat::chat_manager::{current_conv_request, LAST_GAME_PROMPT},
+        prompt::prompt_manager::{chat_options_from, context_limit_from, PromptManager, DEFAULT_CONTEXT_LIMIT as CONTEXT_LIMIT},
+    };
     let (_, preset) = crate::db::game::get_game_session_options(&state.db, &session_id).await?;
     let fallback = current_conv_request(&settings).map(|r| r.preset_id).unwrap_or_default();
     let preset_id = preset.filter(|s| !s.is_empty()).or(Some(fallback).filter(|s| !s.is_empty()));
-    let loaded = PromptManager::load_preset(&state.db, preset_id.as_deref()).await.map_err(|e| AppError::internal(e.to_string()))?;
+    let loaded = PromptManager::load_preset(&state.db, preset_id.as_deref())
+        .await
+        .map_err(|e| AppError::internal(e.to_string()))?;
     let limit = loaded.as_ref().and_then(|p| context_limit_from(&p.preset)).unwrap_or(CONTEXT_LIMIT);
     let reserved = loaded.as_ref().and_then(|p| chat_options_from(&p.preset).max_tokens).unwrap_or(0);
     let prompt = LAST_GAME_PROMPT.lock().ok().and_then(|m| m.get(&session_id).cloned());

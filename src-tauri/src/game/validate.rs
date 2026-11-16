@@ -37,13 +37,25 @@ struct Raw {
 }
 
 fn err(out: &mut Vec<Raw>, message: &str, target: impl Into<String>) {
-    out.push(Raw { severity: Severity::Error, message: message.to_string(), target: Some(target.into()) });
+    out.push(Raw {
+        severity: Severity::Error,
+        message: message.to_string(),
+        target: Some(target.into()),
+    });
 }
 fn warn(out: &mut Vec<Raw>, message: &str, target: impl Into<String>) {
-    out.push(Raw { severity: Severity::Warning, message: message.to_string(), target: Some(target.into()) });
+    out.push(Raw {
+        severity: Severity::Warning,
+        message: message.to_string(),
+        target: Some(target.into()),
+    });
 }
 fn err_all(out: &mut Vec<Raw>, message: &str) {
-    out.push(Raw { severity: Severity::Error, message: message.to_string(), target: None });
+    out.push(Raw {
+        severity: Severity::Error,
+        message: message.to_string(),
+        target: None,
+    });
 }
 
 /// 같은 (심각도, 문구)를 하나로 묶고 곳들은 중복 없이 처음 나온 순서로 모은다. 에러가 경고보다 앞에 온다.
@@ -66,8 +78,17 @@ fn group(raw: Vec<Raw>) -> Vec<Issue> {
         .into_iter()
         .map(|(severity, message)| {
             let t = targets.remove(&(severity == Severity::Error, message.clone())).unwrap_or_default();
-            let text = if t.is_empty() { message.clone() } else { format!("{message}: [{}]", t.join(", ")) };
-            Issue { severity, message, targets: t, text }
+            let text = if t.is_empty() {
+                message.clone()
+            } else {
+                format!("{message}: [{}]", t.join(", "))
+            };
+            Issue {
+                severity,
+                message,
+                targets: t,
+                text,
+            }
         })
         .collect();
     issues.sort_by_key(|i| i.severity != Severity::Error); // 안정 정렬: 에러가 먼저
@@ -76,14 +97,20 @@ fn group(raw: Vec<Raw>) -> Vec<Issue> {
 
 /// 효과 JSON이 가리키는 (enter_scene, fire_event) id.
 fn effect_refs(effect: &serde_json::Value) -> (Option<&str>, Option<&str>) {
-    (effect.get("enter_scene").and_then(|v| v.as_str()), effect.get("fire_event").and_then(|v| v.as_str()))
+    (
+        effect.get("enter_scene").and_then(|v| v.as_str()),
+        effect.get("fire_event").and_then(|v| v.as_str()),
+    )
 }
 
 fn char_name(def: &GameDefinition, id: &str) -> String {
     if id == "player" {
         "플레이어".to_string()
     } else {
-        def.characters.get(id).map(|c| c.name.clone()).unwrap_or_else(|| format!("알 수 없는 캐릭터(id: {id})"))
+        def.characters
+            .get(id)
+            .map(|c| c.name.clone())
+            .unwrap_or_else(|| format!("알 수 없는 캐릭터(id: {id})"))
     }
 }
 
@@ -92,7 +119,11 @@ fn location_name(def: &GameDefinition, id: &str) -> String {
 }
 
 fn asset_label(key: &str, name: &str) -> String {
-    if name.trim().is_empty() || name == key { format!("에셋 '{key}'") } else { format!("에셋 '{name}' ({key})") }
+    if name.trim().is_empty() || name == key {
+        format!("에셋 '{key}'")
+    } else {
+        format!("에셋 '{name}' ({key})")
+    }
 }
 
 /// 데이터 일관성 진단 (DB/파일 접근 없음).
@@ -126,20 +157,40 @@ fn raw_validate(def: &GameDefinition) -> Vec<Raw> {
         err_all(&mut out, "시간대가 하나도 없습니다");
     } else {
         let uncovered = (0u32..1440)
-            .filter(|m| !def.time_periods.iter().any(|p| if p.start_minute <= p.end_minute { *m >= p.start_minute && *m < p.end_minute } else { *m >= p.start_minute || *m < p.end_minute }))
+            .filter(|m| {
+                !def.time_periods.iter().any(|p| {
+                    if p.start_minute <= p.end_minute {
+                        *m >= p.start_minute && *m < p.end_minute
+                    } else {
+                        *m >= p.start_minute || *m < p.end_minute
+                    }
+                })
+            })
             .count();
         if uncovered > 0 {
-            warn(&mut out, "시간대가 덮지 못하는 시각이 있습니다 (그 시각엔 이전 시간대가 유지됩니다)", format!("하루 중 {uncovered}분"));
+            warn(
+                &mut out,
+                "시간대가 덮지 못하는 시각이 있습니다 (그 시각엔 이전 시간대가 유지됩니다)",
+                format!("하루 중 {uncovered}분"),
+            );
         }
     }
     if let Some(id) = &def.project.start_location_id {
         if def.location(id).is_none() {
-            err(&mut out, "시작 위치 설정이 존재하지 않는 위치를 가리킵니다", format!("프로젝트 설정 (id: {id})"));
+            err(
+                &mut out,
+                "시작 위치 설정이 존재하지 않는 위치를 가리킵니다",
+                format!("프로젝트 설정 (id: {id})"),
+            );
         }
     }
     if let Some(key) = &def.project.start_scene_key {
         if !def.scenes.iter().any(|s| &s.scene_key == key) {
-            err(&mut out, "시작 씬 설정이 존재하지 않는 씬을 가리킵니다", format!("프로젝트 설정 (씬 키: {key})"));
+            err(
+                &mut out,
+                "시작 씬 설정이 존재하지 않는 씬을 가리킵니다",
+                format!("프로젝트 설정 (씬 키: {key})"),
+            );
         }
     }
 
@@ -166,7 +217,11 @@ fn raw_validate(def: &GameDefinition) -> Vec<Raw> {
                     Some((from, to)) => {
                         for end in [from, to] {
                             if end != "player" && !def.characters.contains_key(end) {
-                                err(out, "relation이 존재하지 않는 캐릭터를 가리킵니다 ('player'가 아니면 캐릭터여야 합니다)", format!("{who} (id: {end})"));
+                                err(
+                                    out,
+                                    "relation이 존재하지 않는 캐릭터를 가리킵니다 ('player'가 아니면 캐릭터여야 합니다)",
+                                    format!("{who} (id: {end})"),
+                                );
                             }
                         }
                     }
@@ -187,9 +242,11 @@ fn raw_validate(def: &GameDefinition) -> Vec<Raw> {
         if let Some(id) = event {
             match def.events.get(id) {
                 None => err(out, "효과 fire_event가 존재하지 않는 이벤트를 가리킵니다", format!("{who} (id: {id})")),
-                Some(e) if e.trigger_type != "manual" => {
-                    err(out, "효과 fire_event의 대상 이벤트는 trigger_type이 manual이어야 합니다", format!("{who} → 이벤트 '{}' (지금 {})", e.name, e.trigger_type))
-                }
+                Some(e) if e.trigger_type != "manual" => err(
+                    out,
+                    "효과 fire_event의 대상 이벤트는 trigger_type이 manual이어야 합니다",
+                    format!("{who} → 이벤트 '{}' (지금 {})", e.name, e.trigger_type),
+                ),
                 Some(_) => {
                     fired.insert(id.to_string());
                 }
@@ -218,12 +275,20 @@ fn raw_validate(def: &GameDefinition) -> Vec<Raw> {
         for b in scene.branches.iter().flatten() {
             if let Some(next) = &b.next_scene_id {
                 if def.scene(next).is_none() {
-                    err(&mut out, "분기가 존재하지 않는 씬으로 이어집니다", format!("씬 '{}' (id: {next})", scene.scene_name));
+                    err(
+                        &mut out,
+                        "분기가 존재하지 않는 씬으로 이어집니다",
+                        format!("씬 '{}' (id: {next})", scene.scene_name),
+                    );
                 }
             }
         }
         if scene.is_ending == Some(true) && scene.ending_id.is_none() {
-            warn(&mut out, "엔딩 씬에 ending_id가 없어 엔딩 알림이 나가지 않습니다", format!("씬 '{}'", scene.scene_name));
+            warn(
+                &mut out,
+                "엔딩 씬에 ending_id가 없어 엔딩 알림이 나가지 않습니다",
+                format!("씬 '{}'", scene.scene_name),
+            );
         }
     }
 
@@ -234,15 +299,25 @@ fn raw_validate(def: &GameDefinition) -> Vec<Raw> {
         if !(i.use_condition.is_null() || i.use_condition.as_object().map_or(false, |o| o.is_empty()))
             && serde_json::from_value::<Condition>(i.use_condition.clone()).is_err()
         {
-            warn(&mut out, "아이템의 사용 조건을 읽을 수 없어 아무도 사용할 수 없습니다", format!("아이템 '{}'", i.name));
+            warn(
+                &mut out,
+                "아이템의 사용 조건을 읽을 수 없어 아무도 사용할 수 없습니다",
+                format!("아이템 '{}'", i.name),
+            );
         }
         if let Some(acquire) = i.on_acquire_event_id.as_deref() {
             if !acquire.trim().is_empty() {
                 match def.events.get(acquire) {
-                    None => err(&mut out, "아이템의 획득 이벤트가 존재하지 않습니다", format!("아이템 '{}' (id: {acquire})", i.name)),
-                    Some(e) if e.trigger_type != "manual" => {
-                        err(&mut out, "아이템의 획득 이벤트는 trigger_type이 manual이어야 합니다", format!("아이템 '{}' → 이벤트 '{}' (지금 {})", i.name, e.name, e.trigger_type))
-                    }
+                    None => err(
+                        &mut out,
+                        "아이템의 획득 이벤트가 존재하지 않습니다",
+                        format!("아이템 '{}' (id: {acquire})", i.name),
+                    ),
+                    Some(e) if e.trigger_type != "manual" => err(
+                        &mut out,
+                        "아이템의 획득 이벤트는 trigger_type이 manual이어야 합니다",
+                        format!("아이템 '{}' → 이벤트 '{}' (지금 {})", i.name, e.name, e.trigger_type),
+                    ),
                     Some(_) => {
                         newly_fired_items.push(acquire.to_string()); // 이 아이템이 부르는 manual 이벤트는 "호출됨"으로 센다
                     }
@@ -260,7 +335,11 @@ fn raw_validate(def: &GameDefinition) -> Vec<Raw> {
         na.cmp(nb)
     });
     for (event_id, conds) in cond_owners {
-        let owner = def.events.get(event_id).map(|e| format!("이벤트 '{}'", e.name)).unwrap_or_else(|| format!("이벤트(id: {event_id})"));
+        let owner = def
+            .events
+            .get(event_id)
+            .map(|e| format!("이벤트 '{}'", e.name))
+            .unwrap_or_else(|| format!("이벤트(id: {event_id})"));
         for c in conds {
             match c {
                 Condition::HasItem { item_id, .. } if !def.items.contains_key(item_id) => {
@@ -268,7 +347,11 @@ fn raw_validate(def: &GameDefinition) -> Vec<Raw> {
                 }
                 Condition::RelationAtLeast { from, to, axis, .. } | Condition::RelationAtMost { from, to, axis, .. } => {
                     if !crate::game::engine::RELATION_AXES.contains(&axis.as_str()) {
-                        err(&mut out, "관계 조건의 축을 알 수 없습니다 (affection/trust/tension만 가능)", format!("{owner} ('{axis}')"));
+                        err(
+                            &mut out,
+                            "관계 조건의 축을 알 수 없습니다 (affection/trust/tension만 가능)",
+                            format!("{owner} ('{axis}')"),
+                        );
                     }
                     for end in [from, to] {
                         if end != "player" && !def.characters.contains_key(end.as_str()) {
@@ -282,8 +365,12 @@ fn raw_validate(def: &GameDefinition) -> Vec<Raw> {
     }
 
     // NPC 스폰 규칙: "캐릭터 → 위치"
-    let mut spawn_rows: Vec<(String, &crate::models::game::GameCharacterSpawnLocations)> =
-        def.spawn_locations.iter().flat_map(|(cid, rows)| rows.iter().map(move |r| (cid.clone(), r))).map(|(cid, r)| (char_name(def, &cid), r)).collect();
+    let mut spawn_rows: Vec<(String, &crate::models::game::GameCharacterSpawnLocations)> = def
+        .spawn_locations
+        .iter()
+        .flat_map(|(cid, rows)| rows.iter().map(move |r| (cid.clone(), r)))
+        .map(|(cid, r)| (char_name(def, &cid), r))
+        .collect();
     spawn_rows.sort_by(|a, b| a.0.cmp(&b.0));
     for (cname, s) in spawn_rows {
         let target = format!("{cname} → {}", location_name(def, &s.location_id));
@@ -298,7 +385,11 @@ fn raw_validate(def: &GameDefinition) -> Vec<Raw> {
     for r in &def.relationship_defs {
         for end in [&r.from_id, &r.to_id] {
             if end != "player" && !def.characters.contains_key(end.as_str()) {
-                err(&mut out, "초기 관계가 존재하지 않는 캐릭터를 가리킵니다 ('player'가 아니면 캐릭터여야 합니다)", format!("{} → {} (id: {end})", char_name(def, &r.from_id), char_name(def, &r.to_id)));
+                err(
+                    &mut out,
+                    "초기 관계가 존재하지 않는 캐릭터를 가리킵니다 ('player'가 아니면 캐릭터여야 합니다)",
+                    format!("{} → {} (id: {end})", char_name(def, &r.from_id), char_name(def, &r.to_id)),
+                );
             }
         }
     }
@@ -315,10 +406,18 @@ fn raw_validate(def: &GameDefinition) -> Vec<Raw> {
                 warn(&mut out, "random 이벤트가 어느 인카운터 테이블에도 없어 발동하지 않습니다", target.clone());
             }
             "scheduled" if !conds.iter().any(|c| matches!(c, Condition::AtMinuteOfDay { .. })) => {
-                warn(&mut out, "scheduled 이벤트에 AtMinuteOfDay(시각) 조건이 없어 시간이 흐를 때마다 발동합니다", target.clone());
+                warn(
+                    &mut out,
+                    "scheduled 이벤트에 AtMinuteOfDay(시각) 조건이 없어 시간이 흐를 때마다 발동합니다",
+                    target.clone(),
+                );
             }
             "location" if !conds.iter().any(|c| matches!(c, Condition::InLocation { .. } | Condition::InZone { .. })) => {
-                warn(&mut out, "location 이벤트에 InLocation/InZone 조건이 없어 모든 이동마다 발동합니다", target.clone());
+                warn(
+                    &mut out,
+                    "location 이벤트에 InLocation/InZone 조건이 없어 모든 이동마다 발동합니다",
+                    target.clone(),
+                );
             }
             "manual" if !fired.contains(&e.id) => {
                 warn(&mut out, "manual 이벤트를 fire_event로 부르는 곳이 없어 발동하지 않습니다", target.clone());
@@ -334,10 +433,16 @@ fn raw_validate(def: &GameDefinition) -> Vec<Raw> {
     for i in &interactables {
         if let Some(event_id) = &i.event_id {
             match def.events.get(event_id) {
-                None => err(&mut out, "오브젝트가 존재하지 않는 이벤트를 가리킵니다", format!("오브젝트 '{}' (id: {event_id})", i.name)),
-                Some(e) if e.trigger_type != "interaction" => {
-                    warn(&mut out, "오브젝트에 연결된 이벤트의 trigger_type이 interaction이 아니라 발동하지 않습니다", format!("오브젝트 '{}' → 이벤트 '{}' (지금 {})", i.name, e.name, e.trigger_type))
-                }
+                None => err(
+                    &mut out,
+                    "오브젝트가 존재하지 않는 이벤트를 가리킵니다",
+                    format!("오브젝트 '{}' (id: {event_id})", i.name),
+                ),
+                Some(e) if e.trigger_type != "interaction" => warn(
+                    &mut out,
+                    "오브젝트에 연결된 이벤트의 trigger_type이 interaction이 아니라 발동하지 않습니다",
+                    format!("오브젝트 '{}' → 이벤트 '{}' (지금 {})", i.name, e.name, e.trigger_type),
+                ),
                 Some(_) => {}
             }
         }
@@ -353,10 +458,16 @@ fn raw_validate(def: &GameDefinition) -> Vec<Raw> {
         });
         let table = table.unwrap_or_else(|| "알 수 없는 테이블".to_string());
         match def.events.get(&en.event_id) {
-            None => err(&mut out, "인카운터 항목이 존재하지 않는 이벤트를 가리킵니다", format!("인카운터 테이블 '{table}' (id: {})", en.event_id)),
-            Some(e) if e.trigger_type != "random" => {
-                warn(&mut out, "인카운터 테이블에 있는 이벤트의 trigger_type이 random이 아니라 무시됩니다", format!("인카운터 테이블 '{table}' → 이벤트 '{}' (지금 {})", e.name, e.trigger_type))
-            }
+            None => err(
+                &mut out,
+                "인카운터 항목이 존재하지 않는 이벤트를 가리킵니다",
+                format!("인카운터 테이블 '{table}' (id: {})", en.event_id),
+            ),
+            Some(e) if e.trigger_type != "random" => warn(
+                &mut out,
+                "인카운터 테이블에 있는 이벤트의 trigger_type이 random이 아니라 무시됩니다",
+                format!("인카운터 테이블 '{table}' → 이벤트 '{}' (지금 {})", e.name, e.trigger_type),
+            ),
             Some(_) => {}
         }
     }
@@ -399,7 +510,10 @@ fn validate_assets(def: &GameDefinition, out: &mut Vec<Raw>) {
 
     for a in &def.assets.all {
         let label = asset_label(&a.key, &a.name);
-        let valid_key = !a.key.is_empty() && a.key.chars().all(|c| c.is_ascii_lowercase() || c.is_ascii_digit() || matches!(c, '.' | '_' | '-'));
+        let valid_key = !a.key.is_empty()
+            && a.key
+                .chars()
+                .all(|c| c.is_ascii_lowercase() || c.is_ascii_digit() || matches!(c, '.' | '_' | '-'));
         if !valid_key {
             err(out, "에셋 키가 올바르지 않습니다 (영문 소문자, 숫자, . _ - 만 가능)", label.clone());
         }
@@ -412,10 +526,18 @@ fn validate_assets(def: &GameDefinition, out: &mut Vec<Raw>) {
             _ => (a.kind.as_str(), true),
         };
         if a.kind != expected_kind {
-            err(out, "에셋의 종류(kind)가 카테고리와 맞지 않습니다", format!("{label} (카테고리 {}는 {expected_kind}여야 하는데 지금 {})", a.category, a.kind));
+            err(
+                out,
+                "에셋의 종류(kind)가 카테고리와 맞지 않습니다",
+                format!("{label} (카테고리 {}는 {expected_kind}여야 하는데 지금 {})", a.category, a.kind),
+            );
         }
         if !has_sub {
-            warn(out, "종류별 정보가 없어 쓰이지 않는 에셋입니다 (고아 에셋)", format!("{label} ({})", a.category));
+            warn(
+                out,
+                "종류별 정보가 없어 쓰이지 않는 에셋입니다 (고아 에셋)",
+                format!("{label} ({})", a.category),
+            );
         }
     }
     let bad_chars = |s: &str| s.contains(['<', '>', '"', ',', '\n']);
@@ -429,7 +551,11 @@ fn validate_assets(def: &GameDefinition, out: &mut Vec<Raw>) {
             },
             "bgm" => match a.tag.as_deref() {
                 Some(t) if BGM_MOODS.contains(&t) => {}
-                other => err(out, &format!("배경음 tag(분위기)가 올바르지 않습니다 (가능: {})", BGM_MOODS.join(", ")), format!("{label} (지금 {})", other.unwrap_or("없음"))),
+                other => err(
+                    out,
+                    &format!("배경음 tag(분위기)가 올바르지 않습니다 (가능: {})", BGM_MOODS.join(", ")),
+                    format!("{label} (지금 {})", other.unwrap_or("없음")),
+                ),
             },
             _ => {}
         }
@@ -455,7 +581,11 @@ fn validate_assets(def: &GameDefinition, out: &mut Vec<Raw>) {
     for c in names {
         let label = format!("캐릭터 '{}'", c.name);
         if c.name.contains([':', '：', '<', '>']) {
-            err(out, "캐릭터 이름에 : < > 는 쓸 수 없습니다 (대본의 이름: 접두와 연출 태그에 쓰입니다)", label.clone());
+            err(
+                out,
+                "캐릭터 이름에 : < > 는 쓸 수 없습니다 (대본의 이름: 접두와 연출 태그에 쓰입니다)",
+                label.clone(),
+            );
         }
         if c.name.chars().count() > 20 {
             warn(out, "캐릭터 이름이 20자를 넘어 대본에서 화자로 인식되지 않습니다", label.clone());
@@ -469,9 +599,18 @@ fn validate_assets(def: &GameDefinition, out: &mut Vec<Raw>) {
     let mut rng = rand::rngs::StdRng::seed_from_u64(0);
     for s in &def.scenes {
         if let Some(script) = s.script.as_deref().filter(|t| !t.trim().is_empty()) {
-            let mut r = crate::game::runtime::DefResolver { def, rng: &mut rng, ai: false, player_name: None };
+            let mut r = crate::game::runtime::DefResolver {
+                def,
+                rng: &mut rng,
+                ai: false,
+                player_name: None,
+            };
             for p in stage::lint(script, &mut r, &Allowed::author()) {
-                warn(out, "씬 대본에 쓸 수 없는 연출 태그가 있습니다 (키/감정/효과 이름을 확인하세요)", format!("씬 '{}': {p}", s.scene_name));
+                warn(
+                    out,
+                    "씬 대본에 쓸 수 없는 연출 태그가 있습니다 (키/감정/효과 이름을 확인하세요)",
+                    format!("씬 '{}': {p}", s.scene_name),
+                );
             }
         }
     }
@@ -505,5 +644,9 @@ fn raw_asset_files(def: &GameDefinition, game_dir: &std::path::Path) -> Vec<Raw>
 /// Error만 모아 한 문장으로. start_new_game이 시작을 막을 때 쓴다.
 pub fn errors_summary(issues: &[Issue]) -> Option<String> {
     let errors: Vec<&str> = issues.iter().filter(|i| i.severity == Severity::Error).map(|i| i.text.as_str()).collect();
-    if errors.is_empty() { None } else { Some(errors.join("; ")) }
+    if errors.is_empty() {
+        None
+    } else {
+        Some(errors.join("; "))
+    }
 }

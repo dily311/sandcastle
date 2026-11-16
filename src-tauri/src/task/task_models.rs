@@ -176,18 +176,31 @@ impl CreateTaskRequest {
 #[serde(tag = "kind", rename_all = "camelCase")]
 pub enum TaskOutput {
     /// 생성된 텍스트 원문 (게임 대화 등 호출자가 직접 후처리하는 경우)
-    Text { content: String },
+    Text {
+        content: String,
+    },
     /// DB에 저장된 메시지
     #[serde(rename_all = "camelCase")]
-    Message { message_id: String, content: String },
+    Message {
+        message_id: String,
+        content: String,
+    },
     /// DB에 저장된 메시지 여러 개 (저장 순서대로)
     #[serde(rename_all = "camelCase")]
-    Messages { message_ids: Vec<String> },
+    Messages {
+        message_ids: Vec<String>,
+    },
     #[serde(rename_all = "camelCase")]
-    Image { asset_id: String },
+    Image {
+        asset_id: String,
+    },
     #[serde(rename_all = "camelCase")]
-    Sync { synced_count: u64 },
-    Memory { summary: String },
+    Sync {
+        synced_count: u64,
+    },
+    Memory {
+        summary: String,
+    },
     Empty,
 }
 
@@ -214,11 +227,7 @@ pub enum TaskError {
     Cancelled,
 
     #[error("{message}")]
-    Failed {
-        code: String,
-        message: String,
-        retryable: bool,
-    },
+    Failed { code: String, message: String, retryable: bool },
 }
 
 impl TaskError {
@@ -251,11 +260,7 @@ impl TaskError {
                 message: self.to_string(),
                 retryable: false,
             },
-            Self::Failed {
-                code,
-                message,
-                retryable,
-            } => TaskErrorInfo {
+            Self::Failed { code, message, retryable } => TaskErrorInfo {
                 code: code.clone(),
                 message: message.clone(),
                 retryable: *retryable,
@@ -291,7 +296,12 @@ impl From<TaskErrorInfo> for AppError {
             | ErrorCode::TaskCancelled
             | ErrorCode::TaskInterrupted => AppError::Validation { code, message, details: None },
             ErrorCode::DatabaseError | ErrorCode::DatabaseLocked => AppError::Database { code, message },
-            _ => AppError::AiProvider { code, message, retryable: info.retryable, details: None },
+            _ => AppError::AiProvider {
+                code,
+                message,
+                retryable: info.retryable,
+                details: None,
+            },
         }
     }
 }
@@ -354,20 +364,12 @@ pub enum TaskEvent {
     #[serde(rename_all = "camelCase")]
     TextDelta { task_id: String, delta: String },
     #[serde(rename_all = "camelCase")]
-    ToolCallStarted {
-        task_id: String,
-        tool_call_id: String,
-        tool_name: String,
-    },
+    ToolCallStarted { task_id: String, tool_call_id: String, tool_name: String },
     #[serde(rename_all = "camelCase")]
     ToolCallCompleted { task_id: String, tool_call_id: String },
     /// 재시도 가능한 오류로 다음 attempt를 준비 중
     #[serde(rename_all = "camelCase")]
-    Retrying {
-        task_id: String,
-        attempt_no: u32,
-        error: TaskErrorInfo,
-    },
+    Retrying { task_id: String, attempt_no: u32, error: TaskErrorInfo },
     #[serde(rename_all = "camelCase")]
     Completed { task_id: String, output: TaskOutput },
     #[serde(rename_all = "camelCase")]
@@ -472,15 +474,11 @@ impl TryFrom<TaskInfoRow> for TaskInfo {
     type Error = AppError;
 
     fn try_from(r: TaskInfoRow) -> Result<Self, Self::Error> {
-        let task_type = TaskType::from_str(&r.task_type)
-            .map_err(|_| AppError::database(format!("알 수 없는 task_type: {}", r.task_type)))?;
-        let status = TaskStatus::from_str(&r.status)
-            .map_err(|_| AppError::database(format!("알 수 없는 task status: {}", r.status)))?;
+        let task_type = TaskType::from_str(&r.task_type).map_err(|_| AppError::database(format!("알 수 없는 task_type: {}", r.task_type)))?;
+        let status = TaskStatus::from_str(&r.status).map_err(|_| AppError::database(format!("알 수 없는 task status: {}", r.status)))?;
         let owner = TaskOwner::from_str(&r.owner).unwrap_or(TaskOwner::System);
         let error = r.error_message.map(|message| TaskErrorInfo {
-            code: r
-                .error_code
-                .unwrap_or_else(|| error_code_str(ErrorCode::InternalError)),
+            code: r.error_code.unwrap_or_else(|| error_code_str(ErrorCode::InternalError)),
             message,
             retryable: false,
         });
@@ -494,10 +492,7 @@ impl TryFrom<TaskInfoRow> for TaskInfo {
             owner,
             owner_ref: r.owner_ref,
             status,
-            payload: r
-                .payload_json
-                .and_then(|s| serde_json::from_str(&s).ok())
-                .unwrap_or(Value::Null),
+            payload: r.payload_json.and_then(|s| serde_json::from_str(&s).ok()).unwrap_or(Value::Null),
             result: r.result_json.and_then(|s| serde_json::from_str(&s).ok()),
             error,
             attempt_count: r.attempt_count.max(0) as u32,
@@ -526,17 +521,14 @@ impl TryFrom<AttemptRow> for AttemptInfo {
     type Error = AppError;
 
     fn try_from(r: AttemptRow) -> Result<Self, Self::Error> {
-        let status = AttemptStatus::from_str(&r.status)
-            .map_err(|_| AppError::database(format!("알 수 없는 attempt status: {}", r.status)))?;
+        let status = AttemptStatus::from_str(&r.status).map_err(|_| AppError::database(format!("알 수 없는 attempt status: {}", r.status)))?;
         Ok(Self {
             id: r.id,
             task_id: r.task_id,
             attempt_no: r.attempt_no.max(0) as u32,
             status,
             error: r.error_message.map(|message| TaskErrorInfo {
-                code: r
-                    .error_code
-                    .unwrap_or_else(|| error_code_str(ErrorCode::InternalError)),
+                code: r.error_code.unwrap_or_else(|| error_code_str(ErrorCode::InternalError)),
                 message,
                 retryable: false,
             }),

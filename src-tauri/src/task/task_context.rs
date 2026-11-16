@@ -36,7 +36,15 @@ mod tests {
     #[tokio::test]
     async fn current_is_visible_only_inside_scope() {
         assert!(current().is_none());
-        let id = scope(CurrentTask { task_id: "t1".into(), feature: Some("translate".into()), run_by: RunBy::User }, async { current().map(|c| c.task_id) }).await;
+        let id = scope(
+            CurrentTask {
+                task_id: "t1".into(),
+                feature: Some("translate".into()),
+                run_by: RunBy::User,
+            },
+            async { current().map(|c| c.task_id) },
+        )
+        .await;
         assert_eq!(id.as_deref(), Some("t1"));
         assert!(current().is_none());
     }

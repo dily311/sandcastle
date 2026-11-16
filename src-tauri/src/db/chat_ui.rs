@@ -13,12 +13,10 @@ pub async fn list_folders<'e, E>(executor: E, character_id: &str) -> Result<Vec<
 where
     E: Executor<'e, Database = Sqlite>,
 {
-    sqlx::query_as::<_, ConversationFolder>(
-        "SELECT * FROM conversation_folders WHERE character_id = ? ORDER BY sort_order, created_at",
-    )
-    .bind(character_id)
-    .fetch_all(executor)
-    .await
+    sqlx::query_as::<_, ConversationFolder>("SELECT * FROM conversation_folders WHERE character_id = ? ORDER BY sort_order, created_at")
+        .bind(character_id)
+        .fetch_all(executor)
+        .await
 }
 
 pub async fn create_folder(pool: &SqlitePool, character_id: &str, name: &str) -> Result<ConversationFolder, Error> {
@@ -188,12 +186,10 @@ pub async fn last_message<'e, E>(executor: E, conversation_id: &str) -> Result<O
 where
     E: Executor<'e, Database = Sqlite>,
 {
-    let row = sqlx::query_as::<_, MessageRow>(
-        "SELECT * FROM messages WHERE conversation_id = ? ORDER BY created_at DESC, rowid DESC LIMIT 1",
-    )
-    .bind(conversation_id)
-    .fetch_optional(executor)
-    .await?;
+    let row = sqlx::query_as::<_, MessageRow>("SELECT * FROM messages WHERE conversation_id = ? ORDER BY created_at DESC, rowid DESC LIMIT 1")
+        .bind(conversation_id)
+        .fetch_optional(executor)
+        .await?;
     Ok(row.map(Into::into))
 }
 

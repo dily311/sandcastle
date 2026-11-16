@@ -36,15 +36,14 @@ pub fn card_json_from_png(bytes: &[u8]) -> Result<Value> {
             _ => {}
         }
     }
-    let encoded = ccv3.or(chara).ok_or_else(|| {
-        AppError::validation("PNG에 캐릭터 카드 데이터(chara/ccv3)가 없습니다", None)
-    })?;
+    let encoded = ccv3
+        .or(chara)
+        .ok_or_else(|| AppError::validation("PNG에 캐릭터 카드 데이터(chara/ccv3)가 없습니다", None))?;
     let cleaned: String = encoded.chars().filter(|c| !c.is_whitespace()).collect();
     let decoded = BASE64_STANDARD
         .decode(cleaned.as_bytes())
         .map_err(|e| AppError::validation(format!("카드 데이터 base64 해석 실패: {e}"), None))?;
-    serde_json::from_slice(&decoded)
-        .map_err(|e| AppError::validation(format!("카드 JSON 해석 실패: {e}"), None))
+    serde_json::from_slice(&decoded).map_err(|e| AppError::validation(format!("카드 JSON 해석 실패: {e}"), None))
 }
 
 /// (키워드, 텍스트) 목록. 압축된 zTXt / 압축 iTXt는 건너뛴다(카드는 보통 비압축 tEXt).
@@ -58,9 +57,10 @@ pub(crate) fn png_text_chunks(bytes: &[u8]) -> Result<Vec<(String, String)>> {
         let len = u32::from_be_bytes(bytes[pos..pos + 4].try_into().unwrap()) as usize;
         let kind = &bytes[pos + 4..pos + 8];
         let data_start = pos + 8;
-        let data_end = data_start.checked_add(len).filter(|e| *e + 4 <= bytes.len()).ok_or_else(|| {
-            AppError::validation("PNG 청크가 손상되었습니다", None)
-        })?;
+        let data_end = data_start
+            .checked_add(len)
+            .filter(|e| *e + 4 <= bytes.len())
+            .ok_or_else(|| AppError::validation("PNG 청크가 손상되었습니다", None))?;
         let data = &bytes[data_start..data_end];
         match kind {
             b"tEXt" => {
@@ -110,7 +110,11 @@ pub struct ImportedCharacter {
 
 pub fn map_card(card: &Value) -> Result<ImportedCharacter> {
     // V2/V3는 data 아래, V1은 최상위
-    let data = if card["data"].is_object() && card["spec"].is_string() { &card["data"] } else { card };
+    let data = if card["data"].is_object() && card["spec"].is_string() {
+        &card["data"]
+    } else {
+        card
+    };
     let name = as_str(data, "name")
         .map(str::trim)
         .filter(|s| !s.is_empty())
@@ -155,12 +159,7 @@ pub fn map_card(card: &Value) -> Result<ImportedCharacter> {
         None
     };
 
-    let regex = map_regex_scripts(
-        &data["extensions"]["regex_scripts"],
-        RegexScope::Character,
-        None,
-        &mut warnings,
-    );
+    let regex = map_regex_scripts(&data["extensions"]["regex_scripts"], RegexScope::Character, None, &mut warnings);
 
     Ok(ImportedCharacter {
         character: CharacterInput {
@@ -169,10 +168,7 @@ pub fn map_card(card: &Value) -> Result<ImportedCharacter> {
             description,
             alternate_descriptions: vec![],
             first_message: text("first_mes"),
-            alternate_first_message: str_list(&data["alternate_greetings"])
-                .into_iter()
-                .filter(|s| !s.trim().is_empty())
-                .collect(),
+            alternate_first_message: str_list(&data["alternate_greetings"]).into_iter().filter(|s| !s.trim().is_empty()).collect(),
             example_dialogue: text("mes_example"),
             system_prompt_override: text("system_prompt"),
             creator_notes: text("creator_notes"),

@@ -20,13 +20,7 @@ fn placement(n: i64) -> Option<RegexPlacement> {
 }
 
 /// 스크립트 하나 변환. 쓸 수 없는 스크립트면 None과 함께 경고를 남긴다.
-pub fn map_regex_script(
-    v: &Value,
-    scope: RegexScope,
-    scope_id: Option<String>,
-    sort_order: i64,
-    warnings: &mut Vec<String>,
-) -> Option<RegexScriptInput> {
+pub fn map_regex_script(v: &Value, scope: RegexScope, scope_id: Option<String>, sort_order: i64, warnings: &mut Vec<String>) -> Option<RegexScriptInput> {
     let name = as_str(v, "scriptName").unwrap_or("이름 없는 정규식").to_string();
     let find = as_str(v, "findRegex").unwrap_or_default().to_string();
     if find.is_empty() {
@@ -40,9 +34,7 @@ pub fn map_regex_script(
         .unwrap_or_default();
     let places: Vec<RegexPlacement> = raw_places.iter().filter_map(|n| placement(*n)).collect();
     if places.len() < raw_places.len() {
-        warnings.push(format!(
-            "정규식 '{name}': 슬래시 커맨드/추론 등 지원하지 않는 적용 위치는 제외함"
-        ));
+        warnings.push(format!("정규식 '{name}': 슬래시 커맨드/추론 등 지원하지 않는 적용 위치는 제외함"));
     }
     if places.is_empty() {
         warnings.push(format!("정규식 '{name}': 지원하는 적용 위치가 없어 건너뜀"));
@@ -90,12 +82,7 @@ pub fn map_regex_script(
 }
 
 /// 배열 또는 단일 객체 모두 받는다
-pub fn map_regex_scripts(
-    v: &Value,
-    scope: RegexScope,
-    scope_id: Option<String>,
-    warnings: &mut Vec<String>,
-) -> Vec<RegexScriptInput> {
+pub fn map_regex_scripts(v: &Value, scope: RegexScope, scope_id: Option<String>, warnings: &mut Vec<String>) -> Vec<RegexScriptInput> {
     let items: Vec<&Value> = match v {
         Value::Array(a) => a.iter().collect(),
         Value::Object(_) => vec![v],

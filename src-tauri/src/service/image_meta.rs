@@ -36,7 +36,9 @@ pub fn png_text_chunks(bytes: &[u8]) -> Vec<(String, String)> {
         let len = u32::from_be_bytes([bytes[i], bytes[i + 1], bytes[i + 2], bytes[i + 3]]) as usize;
         let kind = &bytes[i + 4..i + 8];
         let start = i + 8;
-        let Some(end) = start.checked_add(len).filter(|e| *e + 4 <= bytes.len()) else { break };
+        let Some(end) = start.checked_add(len).filter(|e| *e + 4 <= bytes.len()) else {
+            break;
+        };
         let data = &bytes[start..end];
         match kind {
             b"tEXt" => {
@@ -80,7 +82,10 @@ fn latin1(b: &[u8]) -> String {
 fn push(items: &mut Vec<MetaItem>, key: &str, value: impl Into<String>) {
     let value = value.into();
     if !value.trim().is_empty() {
-        items.push(MetaItem { key: key.to_string(), value: value.trim().to_string() });
+        items.push(MetaItem {
+            key: key.to_string(),
+            value: value.trim().to_string(),
+        });
     }
 }
 
@@ -96,7 +101,14 @@ fn json_str(v: &Value) -> String {
 fn novelai(json: &Value, items: &mut Vec<MetaItem>) -> String {
     let prompt = json_str(&json["prompt"]);
     push(items, "네거티브", json_str(&json["uc"]));
-    for (k, label) in [("steps", "단계"), ("scale", "프롬프트 반영"), ("sampler", "샘플러"), ("seed", "시드"), ("noise_schedule", "노이즈 일정"), ("cfg_rescale", "CFG 리스케일")] {
+    for (k, label) in [
+        ("steps", "단계"),
+        ("scale", "프롬프트 반영"),
+        ("sampler", "샘플러"),
+        ("seed", "시드"),
+        ("noise_schedule", "노이즈 일정"),
+        ("cfg_rescale", "CFG 리스케일"),
+    ] {
         push(items, label, json_str(&json[k]));
     }
     if let (Some(w), Some(h)) = (json["width"].as_u64(), json["height"].as_u64()) {
@@ -164,7 +176,10 @@ pub fn parse(chunks: &[(String, String)]) -> ImageMeta {
             other => push(&mut items, other, v.chars().take(500).collect::<String>()),
         }
     }
-    ImageMeta { prompt: prompt.trim().to_string(), items }
+    ImageMeta {
+        prompt: prompt.trim().to_string(),
+        items,
+    }
 }
 
 #[cfg(test)]
@@ -189,7 +204,8 @@ mod tests {
 
     #[test]
     fn reads_novelai_comment_and_software() {
-        let comment = r#"{"prompt":"1girl, silver hair","uc":"lowres","steps":28,"scale":5.0,"sampler":"k_euler_ancestral","seed":42,"width":832,"height":1216}"#;
+        let comment =
+            r#"{"prompt":"1girl, silver hair","uc":"lowres","steps":28,"scale":5.0,"sampler":"k_euler_ancestral","seed":42,"width":832,"height":1216}"#;
         let bytes = png(&[chunk(b"tEXt", b"Software\0NovelAI"), chunk(b"tEXt", format!("Comment\0{comment}").as_bytes())]);
         let meta = parse(&png_text_chunks(&bytes));
         assert_eq!(meta.prompt, "1girl, silver hair");

@@ -16,7 +16,7 @@ pub struct AppState {
     pub db: SqlitePool,
     pub http_client: Client,
     // 현재 로드된 게임 아카이브
-    pub active_archive: Mutex<Option<GameArchiveHandle>>, // 기존 그대로
+    pub active_archive: Mutex<Option<GameArchiveHandle>>,        // 기존 그대로
     pub active_runtime: tokio::sync::Mutex<Option<GameRuntime>>, // 새로 추가
 
     pub ai_rate_limit: Mutex<HashMap<String, VecDeque<i64>>>,

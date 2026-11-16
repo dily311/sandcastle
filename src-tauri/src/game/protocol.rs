@@ -29,10 +29,28 @@ enum Kind {
 
 /// (확장자, 종류). 목록에 없으면 403.
 const ALLOWED: &[(&str, Kind)] = &[
-    ("html", Kind::Text), ("htm", Kind::Text), ("js", Kind::Text), ("mjs", Kind::Text), ("css", Kind::Text), ("json", Kind::Text), ("txt", Kind::Text),
-    ("png", Kind::Image), ("jpg", Kind::Image), ("jpeg", Kind::Image), ("webp", Kind::Image), ("gif", Kind::Image), ("avif", Kind::Image),
-    ("mp3", Kind::Audio), ("ogg", Kind::Audio), ("wav", Kind::Audio), ("m4a", Kind::Audio), ("aac", Kind::Audio), ("opus", Kind::Audio), ("flac", Kind::Audio),
-    ("woff2", Kind::Font), ("woff", Kind::Font),
+    ("html", Kind::Text),
+    ("htm", Kind::Text),
+    ("js", Kind::Text),
+    ("mjs", Kind::Text),
+    ("css", Kind::Text),
+    ("json", Kind::Text),
+    ("txt", Kind::Text),
+    ("png", Kind::Image),
+    ("jpg", Kind::Image),
+    ("jpeg", Kind::Image),
+    ("webp", Kind::Image),
+    ("gif", Kind::Image),
+    ("avif", Kind::Image),
+    ("mp3", Kind::Audio),
+    ("ogg", Kind::Audio),
+    ("wav", Kind::Audio),
+    ("m4a", Kind::Audio),
+    ("aac", Kind::Audio),
+    ("opus", Kind::Audio),
+    ("flac", Kind::Audio),
+    ("woff2", Kind::Font),
+    ("woff", Kind::Font),
 ];
 
 /// 이 확장자의 파일을 game:// 로 서빙하는가 (validate가 쓴다).
@@ -88,7 +106,11 @@ pub fn handle(games_root: &Path, req: Request<Vec<u8>>) -> Response<Vec<u8>> {
             }
             b.body(s.body).unwrap()
         }
-        Err(StatusCode::RANGE_NOT_SATISFIABLE) => Response::builder().status(StatusCode::RANGE_NOT_SATISFIABLE).header("Content-Range", "bytes */0").body(Vec::new()).unwrap(),
+        Err(StatusCode::RANGE_NOT_SATISFIABLE) => Response::builder()
+            .status(StatusCode::RANGE_NOT_SATISFIABLE)
+            .header("Content-Range", "bytes */0")
+            .body(Vec::new())
+            .unwrap(),
         Err(code) => Response::builder().status(code).body(Vec::new()).unwrap(),
     }
 }
@@ -158,12 +180,22 @@ fn serve(root: &Path, uri_path: &str, range: Option<&str>) -> Result<Served, Sta
             f.seek(SeekFrom::Start(start)).map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
             let mut body = Vec::with_capacity(len as usize);
             f.take(len).read_to_end(&mut body).map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
-            Ok(Served { status: StatusCode::PARTIAL_CONTENT, body, mime, content_range: Some(format!("bytes {start}-{end}/{total}")) })
+            Ok(Served {
+                status: StatusCode::PARTIAL_CONTENT,
+                body,
+                mime,
+                content_range: Some(format!("bytes {start}-{end}/{total}")),
+            })
         }
         None => {
             let mut body = Vec::with_capacity(total as usize);
             f.read_to_end(&mut body).map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
-            Ok(Served { status: StatusCode::OK, body, mime, content_range: None })
+            Ok(Served {
+                status: StatusCode::OK,
+                body,
+                mime,
+                content_range: None,
+            })
         }
     }
 }
@@ -178,8 +210,8 @@ mod tests {
         assert_eq!(parse_range("bytes=500-", 1000), Ok((500, 999)));
         assert_eq!(parse_range("bytes=-100", 1000), Ok((900, 999)));
         assert_eq!(parse_range("bytes=900-5000", 1000), Ok((900, 999))); // 끝이 넘치면 파일 끝으로
-        assert!(parse_range("bytes=1000-1001", 1000).is_err());          // 시작이 파일 밖
-        assert!(parse_range("bytes=0-1,5-9", 1000).is_err());            // 여러 구간 미지원
+        assert!(parse_range("bytes=1000-1001", 1000).is_err()); // 시작이 파일 밖
+        assert!(parse_range("bytes=0-1,5-9", 1000).is_err()); // 여러 구간 미지원
         assert!(parse_range("items=0-1", 1000).is_err());
     }
 }

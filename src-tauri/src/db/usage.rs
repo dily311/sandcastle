@@ -329,7 +329,11 @@ pub async fn compact_before(pool: &sqlx::SqlitePool, cutoff: i64) -> Result<Comp
     .bind(cutoff)
     .execute(&mut *tx)
     .await?;
-    let usage_rows = sqlx::query("DELETE FROM usage_log WHERE created_at < ?").bind(cutoff).execute(&mut *tx).await?.rows_affected();
+    let usage_rows = sqlx::query("DELETE FROM usage_log WHERE created_at < ?")
+        .bind(cutoff)
+        .execute(&mut *tx)
+        .await?
+        .rows_affected();
     let tasks = sqlx::query(
         "DELETE FROM generation_tasks
          WHERE created_at < ? AND status IN ('completed', 'failed', 'cancelled')
@@ -342,7 +346,10 @@ pub async fn compact_before(pool: &sqlx::SqlitePool, cutoff: i64) -> Result<Comp
     .rows_affected();
     tx.commit().await?;
     let n = |v: u64| u32::try_from(v).unwrap_or(u32::MAX);
-    Ok(CompactResult { usage_rows: n(usage_rows), tasks: n(tasks) })
+    Ok(CompactResult {
+        usage_rows: n(usage_rows),
+        tasks: n(tasks),
+    })
 }
 
 #[cfg(test)]
@@ -350,7 +357,11 @@ mod tests {
     use super::*;
 
     async fn pool() -> sqlx::SqlitePool {
-        let pool = sqlx::sqlite::SqlitePoolOptions::new().max_connections(1).connect("sqlite::memory:").await.unwrap();
+        let pool = sqlx::sqlite::SqlitePoolOptions::new()
+            .max_connections(1)
+            .connect("sqlite::memory:")
+            .await
+            .unwrap();
         sqlx::migrate!("src/db/migrations").run(&pool).await.unwrap();
         pool
     }
@@ -372,7 +383,10 @@ mod tests {
 
         let rows = summary(&db, 0).await.unwrap();
         let chat = rows.iter().find(|r| r.kind == "chat").unwrap();
-        assert_eq!((chat.calls, chat.failed, chat.input_tokens, chat.output_tokens, chat.estimated_calls), (2, 1, 200, 40, 1));
+        assert_eq!(
+            (chat.calls, chat.failed, chat.input_tokens, chat.output_tokens, chat.estimated_calls),
+            (2, 1, 200, 40, 1)
+        );
         let tts = rows.iter().find(|r| r.kind == "tts").unwrap();
         assert_eq!(tts.characters, 42);
         assert!(task_history(&db, 10).await.unwrap().is_empty());
@@ -389,7 +403,11 @@ mod tests {
             let mut e = UsageEntry::new(UsageKind::Chat, "p1", "m");
             (e.input_tokens, e.output_tokens, e.ok, e.estimated) = (tokens, 1, ok, true);
             record(&db, e).await;
-            sqlx::query("UPDATE usage_log SET created_at = ? WHERE id = (SELECT MAX(id) FROM usage_log)").bind(at(days_ago)).execute(&db).await.unwrap();
+            sqlx::query("UPDATE usage_log SET created_at = ? WHERE id = (SELECT MAX(id) FROM usage_log)")
+                .bind(at(days_ago))
+                .execute(&db)
+                .await
+                .unwrap();
         }
         // 오래된 끝난 작업 / 끊긴 작업 / 최근 작업
         for (id, status, days_ago) in [("old", "completed", 50), ("cut", "interrupted", 50), ("new", "completed", 1)] {
@@ -410,7 +428,11 @@ mod tests {
         let r = compact_before(&db, retention_cutoff(&now, 30)).await.unwrap();
         assert_eq!(r, CompactResult { usage_rows: 3, tasks: 1 });
 
-        let pick = |v: &[UsageSummary]| v.iter().map(|r| (r.calls, r.failed, r.input_tokens, r.output_tokens, r.estimated_calls)).collect::<Vec<_>>();
+        let pick = |v: &[UsageSummary]| {
+            v.iter()
+                .map(|r| (r.calls, r.failed, r.input_tokens, r.output_tokens, r.estimated_calls))
+                .collect::<Vec<_>>()
+        };
         let after = summary(&db, 0).await.unwrap();
         assert_eq!(pick(&before), pick(&after));
         assert_eq!(pick(&after), vec![(4, 1, 187, 4, 4)]);
@@ -434,9 +456,19 @@ mod tests {
         let mut i = UsageEntry::new(UsageKind::Image, "p2", "img");
         i.images = 3;
         record(&db, i).await;
-        upsert_model_price(&db, &ModelPrice { model: "gpt-x".into(), currency: "".into(), input_per_mtok: Some(1.5), output_per_mtok: Some(4.0), per_1k_chars: None, per_image: Some(-1.0) })
-            .await
-            .unwrap();
+        upsert_model_price(
+            &db,
+            &ModelPrice {
+                model: "gpt-x".into(),
+                currency: "".into(),
+                input_per_mtok: Some(1.5),
+                output_per_mtok: Some(4.0),
+                per_1k_chars: None,
+                per_image: Some(-1.0),
+            },
+        )
+        .await
+        .unwrap();
         let rows = summary(&db, 0).await.unwrap();
         let chat = rows.iter().find(|r| r.kind == "chat").unwrap();
         assert!((chat.estimated_cost.unwrap() - 5.0).abs() < 1e-9); // 2 × 1.5 + 0.5 × 4

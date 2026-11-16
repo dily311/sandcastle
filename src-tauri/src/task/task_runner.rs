@@ -93,13 +93,7 @@ pub struct TaskContext {
 }
 
 impl TaskContext {
-    pub(super) fn new(
-        task_id: String,
-        attempt_id: String,
-        attempt_no: u32,
-        cancel: CancellationToken,
-        reporter: TaskReporter,
-    ) -> Self {
+    pub(super) fn new(task_id: String, attempt_id: String, attempt_no: u32, cancel: CancellationToken, reporter: TaskReporter) -> Self {
         Self {
             task_id,
             attempt_id,

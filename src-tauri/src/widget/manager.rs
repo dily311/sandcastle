@@ -15,13 +15,7 @@ fn show_tray_for_window<R: Runtime>(window: &WebviewWindow<R>) -> Result<()> {
     // 1. 트레이가 이미 존재하지 않는 경우에만 새로 생성 (중복 생성 방지)
     if app_handle.tray_by_id(WIDGET_TRAY_LABEL).is_none() {
         // 2. 트레이 메뉴 구성
-        let open_main_i = MenuItem::with_id(
-            app_handle,
-            "open_main",
-            "메인 윈도우 열기",
-            true,
-            None::<&str>,
-        )?;
+        let open_main_i = MenuItem::with_id(app_handle, "open_main", "메인 윈도우 열기", true, None::<&str>)?;
         let focus_i = MenuItem::with_id(app_handle, "focus", "위젯 포커스", true, None::<&str>)?;
         let quit_i = MenuItem::with_id(app_handle, "quit", "위젯 종료", true, None::<&str>)?;
         let menu = Menu::with_items(app_handle, &[&open_main_i, &focus_i, &quit_i])?;
@@ -132,18 +126,17 @@ impl WidgetManager {
             return Ok(window);
         }
 
-        let window =
-            WebviewWindowBuilder::new(app, WIDGET_LABEL, WebviewUrl::App("widget.html".into()))
-                .title("widget")
-                .resizable(false)
-                .decorations(false)
-                .transparent(true)
-                .always_on_top(true)
-                .maximized(true)
-                .shadow(false)
-                .skip_taskbar(true)
-                .devtools(true)
-                .build()?;
+        let window = WebviewWindowBuilder::new(app, WIDGET_LABEL, WebviewUrl::App("widget.html".into()))
+            .title("widget")
+            .resizable(false)
+            .decorations(false)
+            .transparent(true)
+            .always_on_top(true)
+            .maximized(true)
+            .shadow(false)
+            .skip_taskbar(true)
+            .devtools(true)
+            .build()?;
 
         window.set_ignore_cursor_events(true)?;
         // 시스템 트레이 생성

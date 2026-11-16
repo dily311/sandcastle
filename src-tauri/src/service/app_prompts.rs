@@ -60,7 +60,14 @@ fn pick(f: impl Fn(&AppPrompts) -> &PromptSlot, default: &str) -> String {
 }
 
 fn default_slot(text: &str) -> PromptSlot {
-    PromptSlot { selected: String::new(), items: vec![PromptVariant { id: String::new(), name: "기본값".into(), text: text.into() }] }
+    PromptSlot {
+        selected: String::new(),
+        items: vec![PromptVariant {
+            id: String::new(),
+            name: "기본값".into(),
+            text: text.into(),
+        }],
+    }
 }
 
 /// 기본값 묶음 (설정 화면이 보여주고 "기본값을 복제해 새로"에 씀). 자리마다 기본 글 하나
@@ -80,7 +87,11 @@ pub fn translate(lang: &str) -> String {
     pick(|p| &p.translate, DEFAULT_TRANSLATE).replace("{{lang}}", lang)
 }
 pub fn image_prompt(novelai: bool) -> String {
-    if novelai { pick(|p| &p.image_prompt_nai, DEFAULT_IMAGE_PROMPT_NAI) } else { pick(|p| &p.image_prompt, DEFAULT_IMAGE_PROMPT) }
+    if novelai {
+        pick(|p| &p.image_prompt_nai, DEFAULT_IMAGE_PROMPT_NAI)
+    } else {
+        pick(|p| &p.image_prompt, DEFAULT_IMAGE_PROMPT)
+    }
 }
 /// {{char}}는 그대로 둔다 (PromptManager가 치환)
 pub fn chat_images(keys: &str) -> String {

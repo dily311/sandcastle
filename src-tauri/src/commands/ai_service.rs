@@ -1,12 +1,12 @@
 use crate::db::ai_service;
 use crate::models::ai_service::{ApiProfiles, ApiProfilesInput, ChatOptions, PromptMessage, PromptMessageItem, PromptRole};
 use crate::service::ai::{AiRequest, AiService};
-use std::sync::Arc;
 use crate::service::secret_store::{api_key_name, SecretStore};
 use crate::{
     error::{AppError, ErrorCode, Result},
     state::AppState,
 };
+use std::sync::Arc;
 use std::time::Duration;
 use tauri::State;
 
@@ -43,8 +43,7 @@ async fn store_verified_key(ai: &AiService, profile_id: &str, api_key: String) -
 #[tauri::command]
 #[specta::specta]
 pub fn set_api_key(profile_id: String, api_key: String) -> Result<()> {
-    SecretStore::set(&api_key_name(&profile_id), &api_key)
-        .map_err(|e| AppError::io(e.to_string()))
+    SecretStore::set(&api_key_name(&profile_id), &api_key).map_err(|e| AppError::io(e.to_string()))
 }
 
 #[tauri::command]
@@ -79,12 +78,7 @@ pub async fn get_api_profile(state: State<'_, AppState>, id: String) -> Result<A
 
 #[tauri::command]
 #[specta::specta]
-pub async fn create_api_profile(
-    state: State<'_, AppState>,
-    ai: State<'_, Arc<AiService>>,
-    input: ApiProfilesInput,
-    api_key: String,
-) -> Result<ApiProfiles> {
+pub async fn create_api_profile(state: State<'_, AppState>, ai: State<'_, Arc<AiService>>, input: ApiProfilesInput, api_key: String) -> Result<ApiProfiles> {
     let api_profile = ai_service::create_api_profile(&state.db, input).await?;
     if !api_key.is_empty() {
         // 키가 거절되면 만든 프로필도 지운다 (화면은 실패로 알고 다시 저장하므로 중복이 생기지 않게).
@@ -99,13 +93,7 @@ pub async fn create_api_profile(
 
 #[tauri::command]
 #[specta::specta]
-pub async fn update_api_profile(
-    state: State<'_, AppState>,
-    ai: State<'_, Arc<AiService>>,
-    id: String,
-    input: ApiProfilesInput,
-    api_key: String,
-) -> Result<()> {
+pub async fn update_api_profile(state: State<'_, AppState>, ai: State<'_, Arc<AiService>>, id: String, input: ApiProfilesInput, api_key: String) -> Result<()> {
     ai_service::update_api_profile(&state.db, &id, input).await?;
     if !api_key.is_empty() {
         store_verified_key(&ai, &id, api_key).await?;
@@ -135,8 +123,13 @@ pub async fn get_models(ai: State<'_, Arc<AiService>>, profile_id: String) -> Re
 #[specta::specta]
 pub async fn test_message(ai: State<'_, Arc<AiService>>, tasks: State<'_, Arc<crate::task::TaskManager>>, profile_id: String) -> Result<String> {
     let prompt = PromptMessage {
-        chat_options: ChatOptions { max_tokens: Some(32), stream: false, ..ChatOptions::default() },
-        messages: vec![PromptMessageItem { images: vec![],
+        chat_options: ChatOptions {
+            max_tokens: Some(32),
+            stream: false,
+            ..ChatOptions::default()
+        },
+        messages: vec![PromptMessageItem {
+            images: vec![],
             role: PromptRole::User,
             content: "Hi".into(),
             token: 4,

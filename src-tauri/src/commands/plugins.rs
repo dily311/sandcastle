@@ -14,11 +14,11 @@ use crate::{
     },
     service::{ai::AiService, plugins as tools},
     state::AppState,
-    task::{CreateTaskRequest, TaskManager, TaskOwner, TaskType},
     sys::{
         plugins::{id, require},
         settings::{save, SettingsState},
     },
+    task::{CreateTaskRequest, TaskManager, TaskOwner, TaskType},
 };
 
 /// 만든 그림이 모이는 폴더 (갤러리)
@@ -91,7 +91,17 @@ pub async fn translate_text(
     let p = read(&plugin)?.translate;
     let to = to.filter(|s| !s.trim().is_empty()).unwrap_or_else(|| p.target_lang.clone());
     let db = &app.state::<AppState>().db;
-    cached_translate(db, &ai, &tasks, &p, &fallback_profile(&read(&settings)?, None), &text, &to, auto.unwrap_or(false)).await
+    cached_translate(
+        db,
+        &ai,
+        &tasks,
+        &p,
+        &fallback_profile(&read(&settings)?, None),
+        &text,
+        &to,
+        auto.unwrap_or(false),
+    )
+    .await
 }
 
 /// 공용 번역 캐시를 먼저 보고, 없을 때만 AI로 번역해 캐시에 넣는다 (같은 문장에 다시 요금을 내지 않게).
@@ -123,11 +133,19 @@ async fn cached_translate(
 /// texts와 같은 순서로, 캐시에 없으면 null
 #[tauri::command]
 #[specta::specta]
-pub async fn get_cached_translations(app: AppHandle, state: State<'_, AppState>, plugin: State<'_, SettingsState<PluginSetting>>, texts: Vec<String>, to: Option<String>) -> Result<Vec<Option<String>>> {
+pub async fn get_cached_translations(
+    app: AppHandle,
+    state: State<'_, AppState>,
+    plugin: State<'_, SettingsState<PluginSetting>>,
+    texts: Vec<String>,
+    to: Option<String>,
+) -> Result<Vec<Option<String>>> {
     if !crate::sys::plugins::is_enabled(&app, id::TRANSLATE) {
         return Ok(vec![None; texts.len()]);
     }
-    let to = to.filter(|s| !s.trim().is_empty()).unwrap_or_else(|| read(&plugin).map(|p| p.translate.target_lang).unwrap_or_default());
+    let to = to
+        .filter(|s| !s.trim().is_empty())
+        .unwrap_or_else(|| read(&plugin).map(|p| p.translate.target_lang).unwrap_or_default());
     let mut out = Vec::with_capacity(texts.len());
     for t in texts.iter().take(500) {
         out.push(translation::get_translation(&state.db, t, &to).await?);
@@ -264,7 +282,9 @@ pub async fn generate_auto_image(
     let out_dir = generated_dir(&app)?;
     let job = CreateTaskRequest::inline(TaskType::ImageGen, TaskOwner::Image, id::IMAGE_AUTO, "자동 그림", true);
     let image = tasks
-        .run_inline(job, |_| tools::generate_image(&ai, &p, &chat_profile, &prompt, &out_dir, "message", Some((&message_id, &msg.conversation_id))))
+        .run_inline(job, |_| {
+            tools::generate_image(&ai, &p, &chat_profile, &prompt, &out_dir, "message", Some((&message_id, &msg.conversation_id)))
+        })
         .await?;
     let mut meta = msg.meta.clone().filter(Value::is_object).unwrap_or_else(|| json!({}));
     let mut list = meta["generatedImages"].as_array().cloned().unwrap_or_default();
@@ -340,7 +360,12 @@ pub async fn list_all_images(
             img.tags.push("background".into());
         }
     }
-    let file_name = |p: &str| std::path::Path::new(p).file_name().map(|n| n.to_string_lossy().into_owned()).unwrap_or_default();
+    let file_name = |p: &str| {
+        std::path::Path::new(p)
+            .file_name()
+            .map(|n| n.to_string_lossy().into_owned())
+            .unwrap_or_default()
+    };
     // 배경 목록 중 갤러리 밖(backgrounds/에 올린 것)
     for b in backgrounds.iter().filter(|b| !std::path::Path::new(b).starts_with(&gen_dir)) {
         if std::path::Path::new(b).exists() {
@@ -350,8 +375,10 @@ pub async fn list_all_images(
         }
     }
     let exists = |p: &str| std::path::Path::new(p).exists();
-    let chars: Vec<(String, String, Option<String>, Option<String>)> =
-        sqlx::query_as("SELECT id, name, avatar, cover FROM characters").fetch_all(&state.db).await.map_err(AppError::from)?;
+    let chars: Vec<(String, String, Option<String>, Option<String>)> = sqlx::query_as("SELECT id, name, avatar, cover FROM characters")
+        .fetch_all(&state.db)
+        .await
+        .map_err(AppError::from)?;
     for (_, name, avatar, cover) in &chars {
         if let Some(a) = avatar.as_deref().filter(|a| exists(a)) {
             out.push(G::external(a.into(), "avatar", format!("{name} 아바타"), vec![]));
@@ -361,8 +388,10 @@ pub async fn list_all_images(
         }
     }
     let names: std::collections::HashMap<&str, &str> = chars.iter().map(|(id, n, _, _)| (id.as_str(), n.as_str())).collect();
-    let assets: Vec<(String, String, String)> =
-        sqlx::query_as("SELECT character_id, key, file_path FROM character_images").fetch_all(&state.db).await.map_err(AppError::from)?;
+    let assets: Vec<(String, String, String)> = sqlx::query_as("SELECT character_id, key, file_path FROM character_images")
+        .fetch_all(&state.db)
+        .await
+        .map_err(AppError::from)?;
     for (cid, key, rel) in assets {
         let abs = data_dir.join(&rel).to_string_lossy().into_owned();
         if exists(&abs) {
@@ -371,7 +400,10 @@ pub async fn list_all_images(
             out.push(g);
         }
     }
-    let personas: Vec<(String, Option<String>)> = sqlx::query_as("SELECT name, avatar FROM personas").fetch_all(&state.db).await.map_err(AppError::from)?;
+    let personas: Vec<(String, Option<String>)> = sqlx::query_as("SELECT name, avatar FROM personas")
+        .fetch_all(&state.db)
+        .await
+        .map_err(AppError::from)?;
     for (name, avatar) in personas {
         if let Some(a) = avatar.filter(|a| exists(a)) {
             out.push(G::external(a, "persona", format!("{name} 아바타"), vec![]));
@@ -425,8 +457,10 @@ pub async fn delete_gallery_images(
     let dir = generated_dir(&app)?;
     let data_dir = app_data_dir(&app)?;
     // 캐릭터 CG 에셋은 행과 파일(썸네일 포함)을 함께 지운다
-    let assets: Vec<(String, String, Option<String>)> =
-        sqlx::query_as("SELECT id, file_path, thumb_path FROM character_images").fetch_all(&state.db).await.map_err(AppError::from)?;
+    let assets: Vec<(String, String, Option<String>)> = sqlx::query_as("SELECT id, file_path, thumb_path FROM character_images")
+        .fetch_all(&state.db)
+        .await
+        .map_err(AppError::from)?;
     let mut n = 0;
     for p in paths.iter().take(500) {
         if let Some((id, rel, thumb)) = assets.iter().find(|(_, rel, _)| data_dir.join(rel) == std::path::Path::new(p)) {
@@ -470,12 +504,23 @@ pub async fn generate_image_from_prompt(
     let chat_profile = fallback_profile(&read(&settings)?, None);
     let source = source.filter(|s| s == "game" || s == "phone").unwrap_or_else(|| "manual".into());
     let out_dir = generated_dir(&app)?;
-    let label = match source.as_str() { "game" => "게임 장면 그림", "phone" => "폰 카메라", _ => "그림 만들기" };
+    let label = match source.as_str() {
+        "game" => "게임 장면 그림",
+        "phone" => "폰 카메라",
+        _ => "그림 만들기",
+    };
     let job = CreateTaskRequest::inline(TaskType::ImageGen, TaskOwner::Image, id::IMAGE_GEN, label, false);
     tasks
         .run_inline(job, |_| async {
             let final_prompt = if refine {
-                tools::image_prompt(&ai, &crate::models::settings::ImageGenSetting { ai_prompt: true, ..p.clone() }, &chat_profile, &prompt, "").await?
+                tools::image_prompt(
+                    &ai,
+                    &crate::models::settings::ImageGenSetting { ai_prompt: true, ..p.clone() },
+                    &chat_profile,
+                    &prompt,
+                    "",
+                )
+                .await?
             } else {
                 prompt.trim().to_string()
             };

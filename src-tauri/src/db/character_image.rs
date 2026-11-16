@@ -4,11 +4,7 @@ use crate::models::character_image::CharacterImageRow;
 
 const COLUMNS: &str = "id, character_id, key, file_path, thumb_path, enabled, sort_order, created_at, updated_at";
 
-pub async fn get_character_images<'e, E>(
-    executor: E,
-    character_id: &str,
-    enabled_only: bool,
-) -> Result<Vec<CharacterImageRow>, Error>
+pub async fn get_character_images<'e, E>(executor: E, character_id: &str, enabled_only: bool) -> Result<Vec<CharacterImageRow>, Error>
 where
     E: Executor<'e, Database = Sqlite>,
 {
@@ -34,23 +30,16 @@ where
 }
 
 /// 같은 캐릭터에 같은 키(대소문자 무시)가 있는지. `except_id`는 수정 중인 자기 자신 제외용
-pub async fn image_key_exists<'e, E>(
-    executor: E,
-    character_id: &str,
-    key: &str,
-    except_id: Option<&str>,
-) -> Result<bool, Error>
+pub async fn image_key_exists<'e, E>(executor: E, character_id: &str, key: &str, except_id: Option<&str>) -> Result<bool, Error>
 where
     E: Executor<'e, Database = Sqlite>,
 {
-    let count: i64 = sqlx::query_scalar(
-        "SELECT COUNT(*) FROM character_images WHERE character_id = ? AND key = ? COLLATE NOCASE AND id != ?",
-    )
-    .bind(character_id)
-    .bind(key)
-    .bind(except_id.unwrap_or_default())
-    .fetch_one(executor)
-    .await?;
+    let count: i64 = sqlx::query_scalar("SELECT COUNT(*) FROM character_images WHERE character_id = ? AND key = ? COLLATE NOCASE AND id != ?")
+        .bind(character_id)
+        .bind(key)
+        .bind(except_id.unwrap_or_default())
+        .fetch_one(executor)
+        .await?;
     Ok(count > 0)
 }
 
@@ -79,26 +68,18 @@ where
     Ok(())
 }
 
-pub async fn update_character_image<'e, E>(
-    executor: E,
-    id: &str,
-    key: &str,
-    enabled: bool,
-    sort_order: i64,
-) -> Result<bool, Error>
+pub async fn update_character_image<'e, E>(executor: E, id: &str, key: &str, enabled: bool, sort_order: i64) -> Result<bool, Error>
 where
     E: Executor<'e, Database = Sqlite>,
 {
-    let res = sqlx::query(
-        "UPDATE character_images SET key = ?, enabled = ?, sort_order = ?, updated_at = ? WHERE id = ?",
-    )
-    .bind(key)
-    .bind(enabled)
-    .bind(sort_order)
-    .bind(chrono::Utc::now().timestamp_millis())
-    .bind(id)
-    .execute(executor)
-    .await?;
+    let res = sqlx::query("UPDATE character_images SET key = ?, enabled = ?, sort_order = ?, updated_at = ? WHERE id = ?")
+        .bind(key)
+        .bind(enabled)
+        .bind(sort_order)
+        .bind(chrono::Utc::now().timestamp_millis())
+        .bind(id)
+        .execute(executor)
+        .await?;
     Ok(res.rows_affected() != 0)
 }
 
@@ -106,10 +87,7 @@ pub async fn delete_character_image<'e, E>(executor: E, id: &str) -> Result<bool
 where
     E: Executor<'e, Database = Sqlite>,
 {
-    let res = sqlx::query("DELETE FROM character_images WHERE id = ?")
-        .bind(id)
-        .execute(executor)
-        .await?;
+    let res = sqlx::query("DELETE FROM character_images WHERE id = ?").bind(id).execute(executor).await?;
     Ok(res.rows_affected() != 0)
 }
 

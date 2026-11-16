@@ -14,7 +14,7 @@ pub struct AppSetting {
     pub selected_character_id: Option<String>,
     pub selected_persona_id: String,
     // "이어하기" UX용. 실제 게임 실행 컨텍스트는 여전히 AppState.active_archive가 기준.
-    pub last_played_game_id: Option<String>, 
+    pub last_played_game_id: Option<String>,
     /// phone 모드 대화에만 붙는 기본 시스템 프롬프트 ({{char}}/{{user}} 사용 가능, 비우면 붙이지 않음)
     /// - 기존 저장값에 이 필드가 없어도 설정 전체가 초기화되지 않도록 serde default 필수
     #[serde(default = "default_phone_mode_prompt")]
@@ -268,7 +268,11 @@ impl PromptSlot {
         if self.selected.is_empty() {
             return None;
         }
-        self.items.iter().find(|v| v.id == self.selected).map(|v| v.text.as_str()).filter(|t| !t.trim().is_empty())
+        self.items
+            .iter()
+            .find(|v| v.id == self.selected)
+            .map(|v| v.text.as_str())
+            .filter(|t| !t.trim().is_empty())
     }
 }
 
@@ -288,7 +292,14 @@ impl<'de> Deserialize<'de> for PromptSlot {
         }
         Ok(match Raw::deserialize(d)? {
             Raw::Text(t) if t.trim().is_empty() => PromptSlot::default(),
-            Raw::Text(t) => PromptSlot { selected: "mine".into(), items: vec![PromptVariant { id: "mine".into(), name: "내 프롬프트".into(), text: t }] },
+            Raw::Text(t) => PromptSlot {
+                selected: "mine".into(),
+                items: vec![PromptVariant {
+                    id: "mine".into(),
+                    name: "내 프롬프트".into(),
+                    text: t,
+                }],
+            },
             Raw::Slot { selected, items } => PromptSlot { selected, items },
         })
     }
@@ -317,7 +328,12 @@ pub struct TranslateSetting {
 
 impl Default for TranslateSetting {
     fn default() -> Self {
-        Self { api_profile_id: None, target_lang: "한국어".into(), input_lang: "English".into(), auto_translate: false }
+        Self {
+            api_profile_id: None,
+            target_lang: "한국어".into(),
+            input_lang: "English".into(),
+            auto_translate: false,
+        }
     }
 }
 
@@ -340,7 +356,14 @@ pub struct TtsSetting {
 
 impl Default for TtsSetting {
     fn default() -> Self {
-        Self { api_profile_id: None, model: "eleven_multilingual_v2".into(), voice: String::new(), speed: 1.0, auto_read: false, dialogue_only: false }
+        Self {
+            api_profile_id: None,
+            model: "eleven_multilingual_v2".into(),
+            voice: String::new(),
+            speed: 1.0,
+            auto_read: false,
+            dialogue_only: false,
+        }
     }
 }
 
@@ -381,7 +404,8 @@ impl Default for ImageGenSetting {
             style_prompt: String::new(),
             ai_prompt: true,
             prompt_api_profile_id: None,
-            negative_prompt: "lowres, bad anatomy, bad hands, text, error, missing fingers, worst quality, low quality, jpeg artifacts, watermark, blurry".into(),
+            negative_prompt: "lowres, bad anatomy, bad hands, text, error, missing fingers, worst quality, low quality, jpeg artifacts, watermark, blurry"
+                .into(),
             steps: 28,
             scale: 5.0,
             sampler: "k_euler_ancestral".into(),
@@ -391,9 +415,7 @@ impl Default for ImageGenSetting {
 }
 
 // 각 설정 타입이 자기 "키"와 "이벤트 이름"만 정의하면 됨
-pub trait SettingsDomain:
-    Serialize + DeserializeOwned + Default + Clone + Send + Sync + 'static
-{
+pub trait SettingsDomain: Serialize + DeserializeOwned + Default + Clone + Send + Sync + 'static {
     const STORE_KEY: &'static str;
     const EVENT_NAME: &'static str;
 }
@@ -446,7 +468,9 @@ mod feature_tests {
     use super::FeatureSetting;
 
     fn fs(pairs: &[(&str, bool)]) -> FeatureSetting {
-        FeatureSetting { feature: pairs.iter().map(|(k, v)| (k.to_string(), *v)).collect() }
+        FeatureSetting {
+            feature: pairs.iter().map(|(k, v)| (k.to_string(), *v)).collect(),
+        }
     }
 
     #[test]

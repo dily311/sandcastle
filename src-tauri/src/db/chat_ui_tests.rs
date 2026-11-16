@@ -78,9 +78,17 @@ async fn branch_copies_messages_up_to_the_chosen_one() {
     let pool = pool().await;
     let c = new_conv(&pool).await;
     ui::set_pinned(&pool, &c, true).await.unwrap();
-    ui::set_options(&pool, &c, &ConversationOptions { persona_id: "default".into(), prompt_preset_id: None, api_profile_id: None })
-        .await
-        .unwrap();
+    ui::set_options(
+        &pool,
+        &c,
+        &ConversationOptions {
+            persona_id: "default".into(),
+            prompt_preset_id: None,
+            api_profile_id: None,
+        },
+    )
+    .await
+    .unwrap();
     let _m1 = ui::push_message(&pool, msg(&c, "user", "1")).await.unwrap();
     let m2 = ui::push_message(&pool, msg(&c, "assistant", "2")).await.unwrap();
     let _m3 = ui::push_message(&pool, msg(&c, "user", "3")).await.unwrap();
@@ -176,7 +184,10 @@ async fn phone_contacts_are_per_persona() {
         .unwrap();
 
     use phone::Who;
-    let me = Who { kind: "persona", id: "default" };
+    let me = Who {
+        kind: "persona",
+        id: "default",
+    };
     let c1 = Who { kind: "character", id: "c1" };
 
     phone::add_contact(&pool, me, c1).await.unwrap();
@@ -248,8 +259,16 @@ async fn character_update_saves_notes_links_and_defaults() {
 async fn conversation_meta_patch_merges_and_removes() {
     let pool = pool().await;
     let id = new_conv(&pool).await;
-    ui::patch_conversation_meta(&pool, &id, &serde_json::json!({ "branch": { "parentId": "p1", "seq": 3 }, "authorNote": "비 오는 밤" })).await.unwrap();
-    ui::patch_conversation_meta(&pool, &id, &serde_json::json!({ "authorNote": null, "memory": "열쇠를 잃어버림" })).await.unwrap();
+    ui::patch_conversation_meta(
+        &pool,
+        &id,
+        &serde_json::json!({ "branch": { "parentId": "p1", "seq": 3 }, "authorNote": "비 오는 밤" }),
+    )
+    .await
+    .unwrap();
+    ui::patch_conversation_meta(&pool, &id, &serde_json::json!({ "authorNote": null, "memory": "열쇠를 잃어버림" }))
+        .await
+        .unwrap();
     let meta = conv::get_conversation(&pool, &id).await.unwrap().meta.unwrap();
     assert_eq!(meta["branch"]["parentId"], "p1");
     assert_eq!(meta["memory"], "열쇠를 잃어버림");

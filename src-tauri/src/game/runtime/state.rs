@@ -98,15 +98,15 @@ impl GameState {
 
 /// DB에서 NULL이거나 객체가 아닌 값이 오면 빈 객체로 바꾼다.
 fn as_object(v: serde_json::Value) -> serde_json::Value {
-    if v.is_object() { v } else { serde_json::json!({}) }
+    if v.is_object() {
+        v
+    } else {
+        serde_json::json!({})
+    }
 }
 
 impl GameState {
-    pub fn from_session(
-        session: GamePlayerSessions,
-        cooldowns: HashMap<String, i64>,
-        time_period_id: String,
-    ) -> Result<Self, &'static str> {
+    pub fn from_session(session: GamePlayerSessions, cooldowns: HashMap<String, i64>, time_period_id: String) -> Result<Self, &'static str> {
         Ok(Self {
             session_id: session.id,
             player_id: session.player_id,
@@ -120,7 +120,11 @@ impl GameState {
             weather_id: session.current_weather_id.ok_or("세션에 현재 날씨가 없습니다")?,
             time_period_id,
             current_scene_id: session.current_scene_id,
-            pending_scenes_json: if session.pending_scenes_json.is_array() { session.pending_scenes_json } else { serde_json::json!([]) },
+            pending_scenes_json: if session.pending_scenes_json.is_array() {
+                session.pending_scenes_json
+            } else {
+                serde_json::json!([])
+            },
             active_npc_id: None, // 항상 닫힌 상태로 시작 (위 주석 참고)
             flags: session.flags_json,
             inventory_json: as_object(session.inventory_json),

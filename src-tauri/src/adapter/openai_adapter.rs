@@ -51,34 +51,15 @@ impl OpenAIClient {
 #[async_trait]
 impl AiProvider for OpenAIClient {
     async fn list_models(&self, call: &ProviderCall<'_>) -> Result<Vec<String>> {
-        let resp = call
-            .http
-            .get(call.url("models"))
-            .bearer_auth(call.credential)
-            .send()
-            .await
-            .map_err(net_err)?;
-        let json: Value = ensure_success(resp)
-            .await?
-            .json()
-            .await
-            .map_err(|e| parse_err("모델 목록", e))?;
+        let resp = call.http.get(call.url("models")).bearer_auth(call.credential).send().await.map_err(net_err)?;
+        let json: Value = ensure_success(resp).await?.json().await.map_err(|e| parse_err("모델 목록", e))?;
         Ok(json["data"]
             .as_array()
-            .map(|arr| {
-                arr.iter()
-                    .filter_map(|m| m["id"].as_str().map(str::to_string))
-                    .collect()
-            })
+            .map(|arr| arr.iter().filter_map(|m| m["id"].as_str().map(str::to_string)).collect())
             .unwrap_or_default())
     }
 
-    async fn generate(
-        &self,
-        call: &ProviderCall<'_>,
-        prompt: &PromptMessage,
-        on_delta: &mut OnDelta<'_>,
-    ) -> Result<Generation> {
+    async fn generate(&self, call: &ProviderCall<'_>, prompt: &PromptMessage, on_delta: &mut OnDelta<'_>) -> Result<Generation> {
         let resp = call
             .http
             .post(call.url("chat/completions"))

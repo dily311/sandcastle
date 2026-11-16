@@ -6,10 +6,7 @@ use reqwest::Response;
 use serde_json::{json, Map, Value};
 
 use crate::{
-    adapter::{
-        ensure_success, load_image, net_err, parse_err, split_system, sse::read_sse, AiProvider, Generation, OnDelta,
-        ProviderCall,
-    },
+    adapter::{ensure_success, load_image, net_err, parse_err, split_system, sse::read_sse, AiProvider, Generation, OnDelta, ProviderCall},
     error::Result,
     models::ai_service::{PromptMessage, PromptRole},
 };
@@ -26,10 +23,7 @@ pub(crate) fn gemini_body(prompt: &PromptMessage) -> Value {
     let opts = &prompt.chat_options;
     let mut body = Map::new();
     if let Some(system) = system {
-        body.insert(
-            "systemInstruction".into(),
-            json!({ "parts": [{ "text": system }] }),
-        );
+        body.insert("systemInstruction".into(), json!({ "parts": [{ "text": system }] }));
     }
     body.insert(
         "contents".into(),
@@ -88,11 +82,7 @@ fn candidate_text(json: &Value) -> (String, Option<String>) {
 }
 
 /// generateContent / streamGenerateContent?alt=sse 응답 공통 처리
-pub(crate) async fn read_gemini_response(
-    resp: Response,
-    stream: bool,
-    on_delta: &mut OnDelta<'_>,
-) -> Result<Generation> {
+pub(crate) async fn read_gemini_response(resp: Response, stream: bool, on_delta: &mut OnDelta<'_>) -> Result<Generation> {
     let resp = ensure_success(resp).await?;
     if !stream {
         let json: Value = resp.json().await.map_err(|e| parse_err("Gemini", e))?;
@@ -136,11 +126,7 @@ impl AiProvider for GeminiClient {
             .send()
             .await
             .map_err(net_err)?;
-        let json: Value = ensure_success(resp)
-            .await?
-            .json()
-            .await
-            .map_err(|e| parse_err("모델 목록", e))?;
+        let json: Value = ensure_success(resp).await?.json().await.map_err(|e| parse_err("모델 목록", e))?;
         Ok(json["models"]
             .as_array()
             .map(|arr| {
@@ -157,12 +143,7 @@ impl AiProvider for GeminiClient {
             .unwrap_or_default())
     }
 
-    async fn generate(
-        &self,
-        call: &ProviderCall<'_>,
-        prompt: &PromptMessage,
-        on_delta: &mut OnDelta<'_>,
-    ) -> Result<Generation> {
+    async fn generate(&self, call: &ProviderCall<'_>, prompt: &PromptMessage, on_delta: &mut OnDelta<'_>) -> Result<Generation> {
         let stream = prompt.chat_options.stream;
         let model = model_id(&call.profile.model);
         let url = if stream {

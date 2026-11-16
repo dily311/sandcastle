@@ -59,10 +59,7 @@ where
     }
     if let Some(data) = line.strip_prefix("data:") {
         let data = data.strip_prefix(' ').unwrap_or(data);
-        return on_event(SseEvent {
-            event: event.as_deref(),
-            data,
-        });
+        return on_event(SseEvent { event: event.as_deref(), data });
     }
     Ok(true)
 }
@@ -75,13 +72,7 @@ mod tests {
     fn parses_event_and_data_lines() {
         let mut event = None;
         let mut seen = vec![];
-        let lines = [
-            ": ping",
-            "event: content_block_delta",
-            "data: {\"a\":1}",
-            "",
-            "data:[DONE]",
-        ];
+        let lines = [": ping", "event: content_block_delta", "data: {\"a\":1}", "", "data:[DONE]"];
         for l in lines {
             handle_line(l, &mut event, &mut |e: SseEvent<'_>| {
                 seen.push((e.event.map(str::to_string), e.data.to_string()));
@@ -89,12 +80,6 @@ mod tests {
             })
             .unwrap();
         }
-        assert_eq!(
-            seen,
-            vec![
-                (Some("content_block_delta".into()), "{\"a\":1}".into()),
-                (None, "[DONE]".into()),
-            ]
-        );
+        assert_eq!(seen, vec![(Some("content_block_delta".into()), "{\"a\":1}".into()), (None, "[DONE]".into()),]);
     }
 }

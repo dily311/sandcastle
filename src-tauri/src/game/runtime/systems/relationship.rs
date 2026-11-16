@@ -40,6 +40,12 @@ impl GameSystem for RelationshipSystem {
             let entry = obj.entry(format!("{from}>{to}")).or_insert_with(|| serde_json::json!({ "tags": [] }));
             entry[axis.as_str()] = serde_json::Value::from(new);
         }
-        vec![GameEvent::RelationChanged { from: from.clone(), to: to.clone(), axis: axis.clone(), old, new }]
+        vec![GameEvent::RelationChanged {
+            from: from.clone(),
+            to: to.clone(),
+            axis: axis.clone(),
+            old,
+            new,
+        }]
     }
 }

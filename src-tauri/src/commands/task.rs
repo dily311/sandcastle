@@ -90,7 +90,13 @@ pub async fn compact_usage(
     state: State<'_, crate::state::AppState>,
     settings: State<'_, crate::sys::settings::SettingsState<crate::models::settings::AppSetting>>,
 ) -> Result<crate::db::usage::CompactResult> {
-    let days = settings.0.lock().map_err(|_| crate::error::AppError::Internal { message: "설정 잠금 실패".into() })?.usage_retention_days;
+    let days = settings
+        .0
+        .lock()
+        .map_err(|_| crate::error::AppError::Internal {
+            message: "설정 잠금 실패".into(),
+        })?
+        .usage_retention_days;
     Ok(crate::service::budget::compact(&state.db, days).await?)
 }
 
@@ -135,7 +141,19 @@ pub async fn list_budget_status(state: State<'_, crate::state::AppState>) -> Res
 #[specta::specta]
 pub async fn upsert_budget_limit(state: State<'_, crate::state::AppState>, limit: crate::db::budget::BudgetLimit) -> Result<()> {
     use crate::db::budget;
-    if limit.is_empty() || [limit.daily_tokens, limit.monthly_tokens, limit.daily_characters, limit.monthly_characters, limit.daily_images, limit.monthly_images].iter().flatten().all(|n| *n <= 0) {
+    if limit.is_empty()
+        || [
+            limit.daily_tokens,
+            limit.monthly_tokens,
+            limit.daily_characters,
+            limit.monthly_characters,
+            limit.daily_images,
+            limit.monthly_images,
+        ]
+        .iter()
+        .flatten()
+        .all(|n| *n <= 0)
+    {
         return Ok(budget::delete_budget_limit(&state.db, &limit.api_profile_id).await?);
     }
     Ok(budget::upsert_budget_limit(&state.db, &limit).await?)

@@ -72,10 +72,10 @@ fn task_err(e: anyhow::Error) -> TaskError {
 
 /// 이 작업이 저장한 사용자 메시지가 대화의 마지막인가 (= 입력은 저장됐고 응답만 못 받음)
 async fn input_already_saved(db: &DbPool, conversation_id: &str, task_id: &str) -> Result<bool, TaskError> {
-    let last = chat_ui::last_message(db, conversation_id).await.map_err(|e| TaskError::from(AppError::from(e)))?;
-    Ok(last.is_some_and(|m| {
-        m.role == "user" && m.meta.as_ref().and_then(|v| v.get("taskId")).and_then(|v| v.as_str()) == Some(task_id)
-    }))
+    let last = chat_ui::last_message(db, conversation_id)
+        .await
+        .map_err(|e| TaskError::from(AppError::from(e)))?;
+    Ok(last.is_some_and(|m| m.role == "user" && m.meta.as_ref().and_then(|v| v.get("taskId")).and_then(|v| v.as_str()) == Some(task_id)))
 }
 
 #[async_trait::async_trait]
@@ -105,7 +105,9 @@ impl TaskExecutor for ChatTaskExecutor {
                     .peek(&self.app, db, &settings, &conversation_id, channel, ctx.cancel_token())
                     .await
                     .map_err(task_err)?;
-                return Ok(TaskOutput::Messages { message_ids: saved.into_iter().map(|m| m.id).collect() });
+                return Ok(TaskOutput::Messages {
+                    message_ids: saved.into_iter().map(|m| m.id).collect(),
+                });
             }
             ChatJob::Regenerate { swipe } => TurnKind::Regenerate { swipe },
             ChatJob::Send { text, attachments } => {
@@ -171,7 +173,12 @@ pub async fn run(app: &AppHandle, conversation_id: &str, job: ChatJob, channel: 
     };
     let payload = serde_json::to_value(&job).map_err(|e| AppError::internal(e.to_string()))?;
     let handle = manager
-        .submit(CreateTaskRequest::new(TaskType::ChatStream, TaskOwner::Chat, payload).owner_ref(conversation_id).feature(feature).label(label))
+        .submit(
+            CreateTaskRequest::new(TaskType::ChatStream, TaskOwner::Chat, payload)
+                .owner_ref(conversation_id)
+                .feature(feature)
+                .label(label),
+        )
         .await?;
     let ids = match handle.wait().await.map_err(AppError::from)? {
         TaskOutput::Messages { message_ids } => message_ids,
@@ -189,7 +196,10 @@ pub async fn run(app: &AppHandle, conversation_id: &str, job: ChatJob, channel: 
 /// 보내기·다시 생성 결과를 화면용 한 차례로
 pub fn into_turn(mut messages: Vec<Message>) -> Result<ChatTurn, AppError> {
     let assistant = messages.pop().ok_or_else(|| AppError::internal("응답 메시지가 없음"))?;
-    Ok(ChatTurn { user: messages.pop(), assistant })
+    Ok(ChatTurn {
+        user: messages.pop(),
+        assistant,
+    })
 }
 
 /// 진행 중인 생성 멈추기 (받은 데까지는 저장됨). 멈출 게 있었으면 true
@@ -208,7 +218,10 @@ mod tests {
     #[test]
     fn job_payload_round_trip() {
         let jobs = [
-            ChatJob::Send { text: "안녕".into(), attachments: vec!["a.png".into()] },
+            ChatJob::Send {
+                text: "안녕".into(),
+                attachments: vec!["a.png".into()],
+            },
             ChatJob::Regenerate { swipe: true },
             ChatJob::Peek,
         ];

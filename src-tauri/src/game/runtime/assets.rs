@@ -8,7 +8,12 @@ use rand::rngs::StdRng;
 use rand::RngExt;
 
 pub fn asset_ref(a: &GameAssets) -> AssetRef {
-    AssetRef { id: a.id.clone(), key: a.key.clone(), path: a.file_path.trim_start_matches('/').to_string(), settings: a.settings_json.clone().unwrap_or(serde_json::Value::Null) }
+    AssetRef {
+        id: a.id.clone(),
+        key: a.key.clone(),
+        path: a.file_path.trim_start_matches('/').to_string(),
+        settings: a.settings_json.clone().unwrap_or(serde_json::Value::Null),
+    }
 }
 
 fn pick<'a, T>(items: Vec<&'a T>, rng: &mut StdRng) -> Option<&'a T> {
@@ -63,7 +68,11 @@ impl GameDefinition {
             .assets
             .characters
             .iter()
-            .filter(|a| a.usage == "standing" && a.game_character_id.as_deref() == Some(character_id) && a.emotion.as_deref().map(|e| e.trim().to_lowercase()).as_deref() == Some(want.as_str()))
+            .filter(|a| {
+                a.usage == "standing"
+                    && a.game_character_id.as_deref() == Some(character_id)
+                    && a.emotion.as_deref().map(|e| e.trim().to_lowercase()).as_deref() == Some(want.as_str())
+            })
             .collect();
         pick(c, rng)
     }
@@ -84,21 +93,39 @@ impl GameDefinition {
 
     /// 효과음 그룹 이름 목록 (AI에게 보여줄 목록: 파일명은 보내지 않는다).
     pub fn sfx_tags(&self) -> Vec<String> {
-        let mut v: Vec<String> = self.assets.audio.iter().filter(|a| a.base.category == "sfx").filter_map(|a| a.tag.clone()).collect();
+        let mut v: Vec<String> = self
+            .assets
+            .audio
+            .iter()
+            .filter(|a| a.base.category == "sfx")
+            .filter_map(|a| a.tag.clone())
+            .collect();
         v.sort();
         v.dedup();
         v
     }
 
     pub fn pick_sfx(&self, tag: &str, rng: &mut StdRng) -> Option<&GameAssets> {
-        let c: Vec<&GameAssets> = self.assets.audio.iter().filter(|a| a.base.category == "sfx" && a.tag.as_deref() == Some(tag)).map(|a| &a.base).collect();
+        let c: Vec<&GameAssets> = self
+            .assets
+            .audio
+            .iter()
+            .filter(|a| a.base.category == "sfx" && a.tag.as_deref() == Some(tag))
+            .map(|a| &a.base)
+            .collect();
         pick(c, rng)
     }
 
     /// 분위기에 맞는 곡. 없으면 default 분위기로 대체한다.
     pub fn pick_bgm(&self, mood: &str, rng: &mut StdRng) -> Option<&GameAssets> {
         for m in [mood, "default"] {
-            let c: Vec<&GameAssets> = self.assets.audio.iter().filter(|a| a.base.category == "bgm" && a.tag.as_deref() == Some(m)).map(|a| &a.base).collect();
+            let c: Vec<&GameAssets> = self
+                .assets
+                .audio
+                .iter()
+                .filter(|a| a.base.category == "bgm" && a.tag.as_deref() == Some(m))
+                .map(|a| &a.base)
+                .collect();
             if let Some(found) = pick(c, rng) {
                 return Some(found);
             }
@@ -107,12 +134,21 @@ impl GameDefinition {
     }
 
     pub fn voice(&self, key: &str) -> Option<&GameAssets> {
-        self.assets.audio.iter().find(|a| a.base.category == "voice" && a.base.key == key).map(|a| &a.base)
+        self.assets
+            .audio
+            .iter()
+            .find(|a| a.base.category == "voice" && a.base.key == key)
+            .map(|a| &a.base)
     }
 
     /// AI가 쓸 수 있는 CG (ai_usable). (key, description)
     pub fn ai_cgs(&self) -> Vec<(String, String)> {
-        self.assets.cgs.iter().filter(|c| c.ai_usable).map(|c| (c.base.key.clone(), c.description.clone().unwrap_or_default())).collect()
+        self.assets
+            .cgs
+            .iter()
+            .filter(|c| c.ai_usable)
+            .map(|c| (c.base.key.clone(), c.description.clone().unwrap_or_default()))
+            .collect()
     }
 }
 
@@ -128,7 +164,11 @@ pub struct DefResolver<'a> {
 impl StageResolver for DefResolver<'_> {
     fn character_by_name(&self, name: &str) -> Option<String> {
         let n = name.trim().to_lowercase();
-        self.def.characters.values().find(|c| c.name.trim().to_lowercase() == n || c.id.to_lowercase() == n).map(|c| c.id.clone())
+        self.def
+            .characters
+            .values()
+            .find(|c| c.name.trim().to_lowercase() == n || c.id.to_lowercase() == n)
+            .map(|c| c.id.clone())
     }
 
     fn is_player_name(&self, name: &str) -> bool {
@@ -145,7 +185,12 @@ impl StageResolver for DefResolver<'_> {
     }
 
     fn cg(&mut self, key: &str) -> Option<AssetRef> {
-        self.def.assets.cgs.iter().find(|c| c.base.key == key && (!self.ai || c.ai_usable)).map(|c| asset_ref(&c.base))
+        self.def
+            .assets
+            .cgs
+            .iter()
+            .find(|c| c.base.key == key && (!self.ai || c.ai_usable))
+            .map(|c| asset_ref(&c.base))
     }
 
     fn voice(&mut self, key: &str) -> Option<AssetRef> {

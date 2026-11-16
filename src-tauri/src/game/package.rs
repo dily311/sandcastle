@@ -8,27 +8,24 @@
 //! (북은 전역 테이블이라 새로 만들고, project/characters의 world_info_ids를 새 id로 다시 이어준다).
 use crate::db::conversation::{create_worldinfo_book, get_all_worldinfo_entries, get_worldinfo_book, upsert_worldinfo_entry};
 use crate::db::game::{
-    delete_game_branches, delete_game_character, delete_game_choice, delete_game_encounter_table,
-    delete_game_character_spawn_location, delete_game_encounter_table_entry, delete_game_item, delete_game_relationship_def, delete_game_ending, delete_game_event, delete_game_event_character,
-    delete_game_event_conditions, delete_game_interactables, delete_game_location_connection, delete_game_locations,
-    delete_game_map, delete_game_scene, delete_game_state_def, delete_game_time_period, delete_game_weather_transition,
-    delete_game_weather_type, delete_game_zone,
-    upsert_game_character, upsert_game_encounter_table, upsert_game_encounter_table_entry,
-    upsert_game_ending, upsert_game_event, upsert_game_event_character, upsert_game_event_condition,
-    upsert_audio_asset, upsert_background_assets, upsert_cg_asset, upsert_character_asset, upsert_game_asset, delete_game_asset, upsert_game_character_spawn_location, upsert_game_interactables, upsert_game_item, upsert_game_relationship_def, upsert_game_location_connections, upsert_game_locations,
-    upsert_game_branches, upsert_game_choice, upsert_game_map, upsert_game_project, upsert_game_scene, upsert_game_state_defs,
-    upsert_game_time_period, upsert_game_weather_transition, upsert_game_weather_type,
-    upsert_game_zone,
+    delete_game_asset, delete_game_branches, delete_game_character, delete_game_character_spawn_location, delete_game_choice, delete_game_encounter_table,
+    delete_game_encounter_table_entry, delete_game_ending, delete_game_event, delete_game_event_character, delete_game_event_conditions,
+    delete_game_interactables, delete_game_item, delete_game_location_connection, delete_game_locations, delete_game_map, delete_game_relationship_def,
+    delete_game_scene, delete_game_state_def, delete_game_time_period, delete_game_weather_transition, delete_game_weather_type, delete_game_zone,
+    upsert_audio_asset, upsert_background_assets, upsert_cg_asset, upsert_character_asset, upsert_game_asset, upsert_game_branches, upsert_game_character,
+    upsert_game_character_spawn_location, upsert_game_choice, upsert_game_encounter_table, upsert_game_encounter_table_entry, upsert_game_ending,
+    upsert_game_event, upsert_game_event_character, upsert_game_event_condition, upsert_game_interactables, upsert_game_item, upsert_game_location_connections,
+    upsert_game_locations, upsert_game_map, upsert_game_project, upsert_game_relationship_def, upsert_game_scene, upsert_game_state_defs,
+    upsert_game_time_period, upsert_game_weather_transition, upsert_game_weather_type, upsert_game_zone,
 };
 use crate::error::{AppError, ErrorCode};
 use crate::game::runtime::GameDefinition;
 use crate::models::conversation::{WorldInfoBookInput, WorldInfoEntryInput};
 use crate::models::game::{
-    GameCharactersInput, GameEncounterEntriesInput, GameEncounterTablesInput, GameEndingsInput,
-    GameEventCharacterPoolInput, GameEventConditionsInput, AudioAssetsInput, BackgroundAssetsInput, CgAssetsInput, CharacterAssetsInput, GameAssetsInput, GameCharacterSpawnLocationsInput, GameEventsInput, GameInteractablesInput, GameItemsInput, GameRelationshipDefsInput,
-    GameLocationConnectionsInput, GameLocationsInput, GameMapsInput, GameMapsZoneInput,
-    GameProjectInput, GameSceneInput, GameStateDefInput, GameTimePeriodsInput,
-    GameWeatherTransitionsInput, GameWeatherTypesInput,
+    AudioAssetsInput, BackgroundAssetsInput, CgAssetsInput, CharacterAssetsInput, GameAssetsInput, GameCharacterSpawnLocationsInput, GameCharactersInput,
+    GameEncounterEntriesInput, GameEncounterTablesInput, GameEndingsInput, GameEventCharacterPoolInput, GameEventConditionsInput, GameEventsInput,
+    GameInteractablesInput, GameItemsInput, GameLocationConnectionsInput, GameLocationsInput, GameMapsInput, GameMapsZoneInput, GameProjectInput,
+    GameRelationshipDefsInput, GameSceneInput, GameStateDefInput, GameTimePeriodsInput, GameWeatherTransitionsInput, GameWeatherTypesInput,
 };
 use serde::{Deserialize, Serialize};
 use sqlx::SqlitePool;
@@ -134,7 +131,14 @@ fn to_package_data(def: &GameDefinition, world_info_books: Vec<PackageWorldInfoB
         characters: def.characters.values().cloned().map(Into::into).collect(),
         spawn_locations: def.spawn_locations.values().flatten().cloned().map(Into::into).collect(),
         // 폰트/기타는 기본 행만, 나머지는 종류별 하위 정보를 포함한 입력으로 (기본 행이 두 번 들어가지 않게 나눈다)
-        assets: def.assets.all.iter().filter(|a| matches!(a.category.as_str(), "font" | "other")).cloned().map(Into::into).collect(),
+        assets: def
+            .assets
+            .all
+            .iter()
+            .filter(|a| matches!(a.category.as_str(), "font" | "other"))
+            .cloned()
+            .map(Into::into)
+            .collect(),
         audio_assets: def.assets.audio.iter().cloned().map(Into::into).collect(),
         character_assets: def.assets.characters.iter().cloned().map(Into::into).collect(),
         cg_assets: def.assets.cgs.iter().cloned().map(Into::into).collect(),
@@ -179,10 +183,15 @@ async fn collect_world_info_books(pool: &SqlitePool, def: &GameDefinition) -> Re
         let entries = get_all_worldinfo_entries(pool, &id).await?;
         out.push(PackageWorldInfoBook {
             id: id.clone(),
-            book: WorldInfoBookInput { id: None, name: book.name, description: book.description },
+            book: WorldInfoBookInput {
+                id: None,
+                name: book.name,
+                description: book.description,
+            },
             entries: entries
                 .into_iter()
-                .map(|e| WorldInfoEntryInput { comment: String::new(),
+                .map(|e| WorldInfoEntryInput {
+                    comment: String::new(),
                     id: None, // import 때 새로 발급
                     book_id: id.clone(),
                     keys: e.keys,
@@ -388,8 +397,8 @@ fn parse_version(v: &str) -> Option<[u64; 3]> {
 /// 패키지가 요구하는 엔진 버전보다 이 앱이 오래됐으면 가져오지 않는다 (모르는 데이터를 반쯤 읽는 대신 거절).
 /// 버전을 읽을 수 없는 패키지도 거절한다.
 pub fn check_engine_version(min_engine_version: &str, engine_version: &str) -> Result<(), AppError> {
-    let required = parse_version(min_engine_version)
-        .ok_or_else(|| AppError::validation(format!("패키지의 엔진 버전을 읽을 수 없습니다: {min_engine_version}"), None))?;
+    let required =
+        parse_version(min_engine_version).ok_or_else(|| AppError::validation(format!("패키지의 엔진 버전을 읽을 수 없습니다: {min_engine_version}"), None))?;
     let current = parse_version(engine_version).unwrap_or([0, 0, 0]);
     if required > current {
         return Err(AppError::validation(
@@ -401,11 +410,7 @@ pub fn check_engine_version(min_engine_version: &str, engine_version: &str) -> R
 }
 
 pub fn check_asset_path(p: &str) -> Result<(), AppError> {
-    let bad = p.trim().is_empty()
-        || p.starts_with('/')
-        || p.contains('\\')
-        || p.contains(':')
-        || p.split('/').any(|seg| seg == ".." || seg.is_empty());
+    let bad = p.trim().is_empty() || p.starts_with('/') || p.contains('\\') || p.contains(':') || p.split('/').any(|seg| seg == ".." || seg.is_empty());
     if bad {
         return Err(AppError::validation(format!("에셋 경로가 올바르지 않습니다: {p}"), None));
     }
@@ -434,7 +439,12 @@ fn ids<T>(items: &[T], get: impl for<'a> Fn(&'a T) -> Option<&'a str>) -> HashSe
 ///
 /// 규칙: 기존 행은 반드시 id를 달아서 보내야 한다 (id 없는 행은 "새 행"으로 취급된다).
 /// 반환값은 테이블별 삭제 개수다.
-pub async fn save_definition(pool: &SqlitePool, game_id: &str, existing: &GameDefinition, data: PackageData) -> Result<(BTreeMap<&'static str, usize>, Vec<String>), AppError> {
+pub async fn save_definition(
+    pool: &SqlitePool,
+    game_id: &str,
+    existing: &GameDefinition,
+    data: PackageData,
+) -> Result<(BTreeMap<&'static str, usize>, Vec<String>), AppError> {
     // 삭제 대상 계산에 쓸 "새 데이터에 남아 있는 id/키"를 write_definition이 데이터를 소비하기 전에 모아둔다.
     let keep_state_defs = ids(&data.state_defs, |x| x.id.as_deref());
     let keep_maps = ids(&data.maps, |x| x.id.as_deref());
@@ -480,10 +490,17 @@ pub async fn save_definition(pool: &SqlitePool, game_id: &str, existing: &GameDe
     let keep_scenes: HashSet<String> = data.scenes.iter().map(|s| s.id.clone()).collect();
     let keep_choices: HashSet<String> = data.scenes.iter().flat_map(|s| s.choices.iter().flatten().map(|c| c.id.clone())).collect();
     let keep_branches: HashSet<String> = data.scenes.iter().flat_map(|s| s.branches.iter().flatten().map(|b| b.id.clone())).collect();
-    let keep_transitions: HashSet<(String, String, String)> =
-        data.weather_transitions.iter().map(|t| (t.from_weather_id.clone(), t.to_weather_id.clone(), t.map_id.clone())).collect();
+    let keep_transitions: HashSet<(String, String, String)> = data
+        .weather_transitions
+        .iter()
+        .map(|t| (t.from_weather_id.clone(), t.to_weather_id.clone(), t.map_id.clone()))
+        .collect();
     let keep_connections: HashSet<(String, String)> = data.location_connections.iter().map(|c| (c.from_id.clone(), c.to_id.clone())).collect();
-    let keep_pool: HashSet<(String, String)> = data.event_character_pool.iter().map(|p| (p.event_id.clone(), p.game_character_id.clone())).collect();
+    let keep_pool: HashSet<(String, String)> = data
+        .event_character_pool
+        .iter()
+        .map(|p| (p.event_id.clone(), p.game_character_id.clone()))
+        .collect();
 
     let mut tx = pool.begin().await?;
     write_definition(&mut tx, game_id, data, true).await?;
@@ -511,20 +528,47 @@ pub async fn save_definition(pool: &SqlitePool, game_id: &str, existing: &GameDe
             }
         };
     }
-    prune!("interactables", existing.interactables.values().flatten().map(|i| &i.id), keep_interactables, delete_game_interactables);
-    prune!("encounter_entries", existing.encounter_entries.iter().map(|e| &e.id), keep_entries, delete_game_encounter_table_entry);
-    prune!("encounter_tables", existing.encounter_tables.iter().map(|t| &t.id), keep_tables, delete_game_encounter_table);
+    prune!(
+        "interactables",
+        existing.interactables.values().flatten().map(|i| &i.id),
+        keep_interactables,
+        delete_game_interactables
+    );
+    prune!(
+        "encounter_entries",
+        existing.encounter_entries.iter().map(|e| &e.id),
+        keep_entries,
+        delete_game_encounter_table_entry
+    );
+    prune!(
+        "encounter_tables",
+        existing.encounter_tables.iter().map(|t| &t.id),
+        keep_tables,
+        delete_game_encounter_table
+    );
     for (event_id, pool_rows) in &existing.event_npc_pool {
         for p in pool_rows {
-            if !keep_pool.contains(&(event_id.clone(), p.game_character_id.clone())) && delete_game_event_character(&mut *tx, event_id, &p.game_character_id).await? {
+            if !keep_pool.contains(&(event_id.clone(), p.game_character_id.clone()))
+                && delete_game_event_character(&mut *tx, event_id, &p.game_character_id).await?
+            {
                 *deleted.entry("event_character_pool").or_default() += 1;
             }
         }
     }
-    prune!("spawn_locations", existing.spawn_locations.values().flatten().map(|s| &s.id), keep_spawns, delete_game_character_spawn_location);
+    prune!(
+        "spawn_locations",
+        existing.spawn_locations.values().flatten().map(|s| &s.id),
+        keep_spawns,
+        delete_game_character_spawn_location
+    );
     prune!("events", existing.events.keys(), keep_events, delete_game_event);
     prune!("items", existing.items.keys(), keep_items, delete_game_item);
-    prune!("relationship_defs", existing.relationship_defs.iter().map(|r| &r.id), keep_rel_defs, delete_game_relationship_def);
+    prune!(
+        "relationship_defs",
+        existing.relationship_defs.iter().map(|r| &r.id),
+        keep_rel_defs,
+        delete_game_relationship_def
+    );
     for t in &existing.weather_transitions {
         if !keep_transitions.contains(&(t.from_weather_id.clone(), t.to_weather_id.clone(), t.map_id.clone()))
             && delete_game_weather_transition(&mut *tx, &t.from_weather_id, &t.to_weather_id, &t.map_id).await?
@@ -532,8 +576,18 @@ pub async fn save_definition(pool: &SqlitePool, game_id: &str, existing: &GameDe
             *deleted.entry("weather_transitions").or_default() += 1;
         }
     }
-    prune!("weather_types", existing.weather_types.iter().map(|w| &w.id), keep_weather_types, delete_game_weather_type);
-    prune!("time_periods", existing.time_periods.iter().map(|p| &p.id), keep_time_periods, delete_game_time_period);
+    prune!(
+        "weather_types",
+        existing.weather_types.iter().map(|w| &w.id),
+        keep_weather_types,
+        delete_game_weather_type
+    );
+    prune!(
+        "time_periods",
+        existing.time_periods.iter().map(|p| &p.id),
+        keep_time_periods,
+        delete_game_time_period
+    );
     for c in &existing.location_connections {
         if !keep_connections.contains(&(c.from_id.clone(), c.to_id.clone())) && delete_game_location_connection(&mut *tx, &c.from_id, &c.to_id).await? {
             *deleted.entry("location_connections").or_default() += 1;
@@ -617,10 +671,10 @@ fn remap_ids(data: PackageData) -> Result<PackageData, AppError> {
     for old in old_ids {
         let new = uuid::Uuid::new_v4().to_string();
         for (from, to) in [
-            (format!("\"{old}\""), format!("\"{new}\"")),                  // "id"
-            (format!("\\\"{old}\\\""), format!("\\\"{new}\\\"")),  // 문자열 안의 JSON: \"id\"
-            (format!("\"{old}>"), format!("\"{new}>")),                    // "id>other" 관계 키
-            (format!(">{old}\""), format!(">{new}\"")),                    // "other>id"
+            (format!("\"{old}\""), format!("\"{new}\"")),         // "id"
+            (format!("\\\"{old}\\\""), format!("\\\"{new}\\\"")), // 문자열 안의 JSON: \"id\"
+            (format!("\"{old}>"), format!("\"{new}>")),           // "id>other" 관계 키
+            (format!(">{old}\""), format!(">{new}\"")),           // "other>id"
             (format!("\\\"{old}>"), format!("\\\"{new}>")),
             (format!(">{old}\\\""), format!(">{new}\\\"")),
         ] {
@@ -658,7 +712,12 @@ pub async fn import_bytes(pool: &SqlitePool, games_root: &Path, bytes: &[u8], ov
 }
 
 /// 새 game_id로 폴더를 만들고 import한다. 중간에 실패하면 만들다 만 폴더를 지운다 (DB는 트랜잭션이라 안 남는다).
-async fn import_archive<R: std::io::Read + std::io::Seek>(pool: &SqlitePool, games_root: &Path, mut archive: zip::ZipArchive<R>, overrides: Option<ImportOverrides>) -> Result<String, AppError> {
+async fn import_archive<R: std::io::Read + std::io::Seek>(
+    pool: &SqlitePool,
+    games_root: &Path,
+    mut archive: zip::ZipArchive<R>,
+    overrides: Option<ImportOverrides>,
+) -> Result<String, AppError> {
     let new_game_id = uuid::Uuid::new_v4().to_string();
     let dest = games_root.join(&new_game_id);
     std::fs::create_dir_all(&dest)?;
@@ -671,8 +730,13 @@ async fn import_archive<R: std::io::Read + std::io::Seek>(pool: &SqlitePool, gam
     }
 }
 
-async fn import_into<R: std::io::Read + std::io::Seek>(pool: &SqlitePool, archive: &mut zip::ZipArchive<R>, dest: &Path, new_game_id: String, overrides: Option<ImportOverrides>) -> Result<String, AppError> {
-
+async fn import_into<R: std::io::Read + std::io::Seek>(
+    pool: &SqlitePool,
+    archive: &mut zip::ZipArchive<R>,
+    dest: &Path,
+    new_game_id: String,
+    overrides: Option<ImportOverrides>,
+) -> Result<String, AppError> {
     let mut manifest_raw: Option<String> = None;
     let mut data_raw: Option<String> = None;
     for i in 0..archive.len() {
@@ -687,7 +751,11 @@ async fn import_into<R: std::io::Read + std::io::Seek>(pool: &SqlitePool, archiv
         if name == "manifest.json" || name == "data/definition.json" {
             let mut buf = String::new();
             std::io::Read::read_to_string(&mut entry, &mut buf)?;
-            if name == "manifest.json" { manifest_raw = Some(buf) } else { data_raw = Some(buf) }
+            if name == "manifest.json" {
+                manifest_raw = Some(buf)
+            } else {
+                data_raw = Some(buf)
+            }
             continue;
         }
         if name == "data" || name == "data/" || name.starts_with("data/") {
@@ -792,12 +860,14 @@ pub async fn export(pool: &SqlitePool, games_root: &Path, game_id: &str, definit
         author: None, // TODO: 작성자 정보를 어디서 가져올지 (앱 프로필? 설정?)
         min_engine_version: env!("CARGO_PKG_VERSION").into(),
     };
-    zip.start_file("manifest.json", options).map_err(|e| AppError::archive(ErrorCode::ArchiveInvalid, e.to_string()))?;
+    zip.start_file("manifest.json", options)
+        .map_err(|e| AppError::archive(ErrorCode::ArchiveInvalid, e.to_string()))?;
     std::io::Write::write_all(&mut zip, serde_json::to_string_pretty(&manifest)?.as_bytes())?;
 
     let world_info_books = collect_world_info_books(pool, definition).await?;
     let package_data = to_package_data(definition, world_info_books);
-    zip.start_file("data/definition.json", options).map_err(|e| AppError::archive(ErrorCode::ArchiveInvalid, e.to_string()))?;
+    zip.start_file("data/definition.json", options)
+        .map_err(|e| AppError::archive(ErrorCode::ArchiveInvalid, e.to_string()))?;
     std::io::Write::write_all(&mut zip, serde_json::to_string_pretty(&package_data)?.as_bytes())?;
 
     add_dir_to_zip(&mut zip, &src, &src, options)?;
@@ -824,10 +894,12 @@ fn add_dir_to_zip<W: std::io::Write + std::io::Seek>(
             continue;
         }
         if path.is_dir() {
-            zip.add_directory(format!("{rel}/"), options).map_err(|e| AppError::archive(ErrorCode::ArchiveInvalid, e.to_string()))?;
+            zip.add_directory(format!("{rel}/"), options)
+                .map_err(|e| AppError::archive(ErrorCode::ArchiveInvalid, e.to_string()))?;
             add_dir_to_zip(zip, base, &path, options)?;
         } else {
-            zip.start_file(rel, options).map_err(|e| AppError::archive(ErrorCode::ArchiveInvalid, e.to_string()))?;
+            zip.start_file(rel, options)
+                .map_err(|e| AppError::archive(ErrorCode::ArchiveInvalid, e.to_string()))?;
             let bytes = std::fs::read(&path)?;
             std::io::Write::write_all(zip, &bytes)?;
         }
@@ -841,11 +913,16 @@ fn unique_path(dir: &Path, stem: &str, ext: &str) -> PathBuf {
     if !first.exists() {
         return first;
     }
-    (1..10_000).map(|n| dir.join(format!("{stem} ({n}).{ext}"))).find(|p| !p.exists()).unwrap_or(first)
+    (1..10_000)
+        .map(|n| dir.join(format!("{stem} ({n}).{ext}")))
+        .find(|p| !p.exists())
+        .unwrap_or(first)
 }
 
 fn sanitize_filename(name: &str) -> String {
-    name.chars().map(|c| if c.is_alphanumeric() || c == '-' || c == '_' { c } else { '_' }).collect()
+    name.chars()
+        .map(|c| if c.is_alphanumeric() || c == '-' || c == '_' { c } else { '_' })
+        .collect()
 }
 
 #[cfg(test)]
