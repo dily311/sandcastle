@@ -1,0 +1,4 @@
+# DB 마이그레이션은 바이트 그대로 둔다 (줄 끝 변환 금지).
+# sqlx가 파일 내용의 체크섬으로 이미 적용한 마이그레이션을 확인하므로, 체크아웃 환경(Windows/Linux CI)에 따라
+# CRLF/LF가 바뀌면 기존 DB가 열리지 않고 백업의 스키마 검사도 실패한다 (1-C, ADR-008).
+src-tauri/src/db/migrations/*.sql -text
