@@ -18,10 +18,10 @@
 	let { label, onclick, items, icon: Icon = Plus, disabled = false, menuLabel = "다른 방법", size = "md" }: Props = $props();
 
 	let box: HTMLDivElement | undefined = $state();
-	let menu = $state<{ x: number; y: number } | null>(null);
+	let menu = $state<{ x: number; y: number; align?: "start" | "end" } | null>(null);
 	function open() {
 		const r = box?.getBoundingClientRect();
-		if (r) menu = { x: r.right - 200, y: r.bottom + 4 };
+		if (r) menu = { x: r.right, y: r.bottom + 4, align: "end" };
 	}
 </script>
 
@@ -35,7 +35,7 @@
 	.split {
 		display: inline-flex;
 		align-items: stretch;
-		border-radius: var(--radius-md);
+		border-radius: var(--radius-sm);
 		background: var(--accent);
 		color: var(--text-on-accent);
 		box-shadow: var(--shadow-sm);
@@ -66,21 +66,18 @@
 	}
 	.main {
 		padding: 0 var(--space-3) 0 var(--space-3);
-		border-radius: var(--radius-md) 0 0 var(--radius-md);
+		border-radius: var(--radius-sm) 0 0 var(--radius-sm);
 	}
 	.more {
 		padding: 0 8px;
 		border-left: 1px solid color-mix(in oklab, var(--text-on-accent) 35%, transparent);
-		border-radius: 0 var(--radius-md) var(--radius-md) 0;
+		border-radius: 0 var(--radius-sm) var(--radius-sm) 0;
 	}
 	.split :global(svg) {
 		width: 16px;
 		height: 16px;
 	}
 	.more :global(svg) {
-		border: 1.5px solid currentColor;
-		border-radius: 5px;
-		padding: 1px;
 		width: 18px;
 		height: 18px;
 	}

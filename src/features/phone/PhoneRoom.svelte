@@ -147,7 +147,7 @@
 	const lastAi = $derived([...session.messages].reverse().find((m) => m.role === "assistant"));
 
 	// ---- 메뉴 ----
-	let menu = $state<{ at: { x: number; y: number }; items: MenuItem[] } | null>(null);
+	let menu = $state<{ at: { x: number; y: number; align?: "start" | "end" }; items: MenuItem[] } | null>(null);
 	/** 번역이 있는 메시지 중 원문을 보기로 한 것 */
 	let originals = $state<Record<string, boolean>>({});
 
@@ -197,7 +197,7 @@
 	function roomMenu(e: MouseEvent) {
 		const r = (e.currentTarget as HTMLElement).getBoundingClientRect();
 		menu = {
-			at: { x: r.right - 200, y: r.bottom + 4 },
+			at: { x: r.right, y: r.bottom + 4, align: "end" },
 			items: [
 				{ label: "답장 더 받기", icon: MessageCirclePlus, disabled: session.busy, onselect: nudge },
 				{ label: "엿보기: 두 사람 대화를 AI가 이어 씀", icon: Eye, disabled: session.busy, onselect: peek },

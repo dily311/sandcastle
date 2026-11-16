@@ -67,7 +67,8 @@ export const handlers: Record<string, Handler> = {
 				["widget", "위젯", "바탕화면 위젯", false, true],
 				["translate", "번역", "AI 답변·내 입력 번역", false, false],
 				["tts", "음성 읽기", "AI 답변을 음성으로", false, false],
-				["imagegen", "이미지 생성", "대화 장면을 이미지로", false, false],
+				["imagegen", "이미지 생성", "직접 그림 만들기", false, false],
+				["imageauto", "이미지 자동 생성", "글쓰기 AI가 그림 프롬프트도 쓰고 응답 뒤 자동으로 그림", false, false],
 			] as const
 		).map(([id, name, description, def, desktopOnly]) => ({ id, name, description, defaultEnabled: def, desktopOnly, enabled: db.feature.feature[id] ?? def })),
 	update_feature_setting: ({ id, enabled }) => {
@@ -103,7 +104,7 @@ export const handlers: Record<string, Handler> = {
 	save_png_file: () => null,
 	default_app_prompts: () => {
 		const d = (text: string) => ({ selected: "", items: [{ id: "", name: "기본값", text }] });
-		return { translate: d("You are a translator. Translate into {{lang}}."), imagePrompt: d("Describe ONE scene as an English prompt."), imagePromptNai: d("Danbooru tags."), chatImages: d("[이미지]\n사용 가능한 키: {{keys}}"), gameRules: d("규칙 1\n규칙 2"), sceneRules: d("씬 규칙") };
+		return { translate: d("You are a translator. Translate into {{lang}}."), imagePrompt: d("Describe ONE scene as an English prompt."), imagePromptNai: d("Danbooru tags."), chatImages: d("[이미지]\n사용 가능한 키: {{keys}}"), autoImage: d("[그림]\n응답 끝에 <image>태그</image>"), gameRules: d("규칙 1\n규칙 2"), sceneRules: d("씬 규칙") };
 	},
 	cancel_task: () => null,
 	...chatHandlers,

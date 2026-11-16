@@ -8,6 +8,7 @@
 	import Group from "./Group.svelte";
 	import Row from "./Row.svelte";
 	import PromptSlotEditor from "./PromptSlotEditor.svelte";
+	import { plugins } from "$shared/stores/plugins.svelte";
 	import type { GeneratedImage_Serialize as GeneratedImage } from "$ipc/bindings";
 	import { call, commands } from "$shared/ipc/client";
 	import { fileSrc } from "$shared/ipc/file";
@@ -94,7 +95,6 @@
 				</Row>
 			{/if}
 			<div class="presets">
-				<p class="pdesc">갤러리에서 <b>#프리셋</b> 태그를 단 그림. 누르면 그 그림의 생성 정보(네거티브·단계·반영·샘플러·크기)를 설정에 넣음</p>
 				{#if presetImages.length}
 					<div class="pgrid">
 						{#each presetImages as img (img.path)}
@@ -112,6 +112,11 @@
 			</div>
 		</Group>
 
+		{#if plugins.on("imageauto")}
+			<Group title="이미지 자동 생성 프롬프트">
+				<PromptSlotEditor key="autoImage" desc="글을 쓰는 AI에게 응답 끝에 <image>그림 프롬프트</image>를 쓰게 하는 지시. 응답이 오면 이 프롬프트로 바로 그림 (응답마다 이미지 요금)" />
+			</Group>
+		{/if}
 		<Group title="그림 프롬프트 쓰기">
 			<PromptSlotEditor key={nai ? "imagePromptNai" : "imagePrompt"} desc={nai ? "NovelAI: 장면을 Danbooru 태그로 정리하는 지시" : "장면을 영어 그림 프롬프트로 정리하는 지시"} />
 		</Group>
@@ -158,7 +163,7 @@
 	}
 	.pcard img {
 		width: 100%;
-		aspect-ratio: 3 / 4;
+		aspect-ratio: 1 / 1;
 		object-fit: cover;
 	}
 	.pname,

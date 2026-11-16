@@ -128,6 +128,53 @@ pub async fn close_game(state: State<'_, AppState>) -> Result<(), AppError> {
     Ok(())
 }
 
+/// 게임 커버(배너) 그림 바꾸기: 고른 파일을 게임 폴더 cover/에 복사하고 cover_image로. None이면 지운다.
+/// 앱이 cover/에 넣어 둔 예전 커버 파일은 지운다. 바뀐 게임을 돌려준다
+#[tauri::command]
+#[specta::specta]
+pub async fn set_game_cover(app: AppHandle, state: State<'_, AppState>, game_id: String, path: Option<String>) -> Result<GameProject, AppError> {
+    if game_id.is_empty() || game_id.contains(['/', '\\', '.']) {
+        return Err(AppError::validation("게임 id가 올바르지 않습니다", None));
+    }
+    let dir = games_root(&app)?.join(&game_id);
+    if !dir.is_dir() {
+        return Err(AppError::not_found("게임 폴더를 찾을 수 없습니다"));
+    }
+    let old: Option<String> = sqlx::query_scalar("SELECT cover_image FROM game_projects WHERE id = ?")
+        .bind(&game_id)
+        .fetch_optional(&state.db)
+        .await?
+        .flatten();
+    let rel = match path {
+        Some(src) => {
+            let src = PathBuf::from(src);
+            let ext = src.extension().and_then(|e| e.to_str()).map(str::to_ascii_lowercase).unwrap_or_default();
+            if !["png", "jpg", "jpeg", "webp", "gif"].contains(&ext.as_str()) {
+                return Err(AppError::validation("png·jpg·webp·gif 그림만 커버로 쓸 수 있습니다", None));
+            }
+            std::fs::create_dir_all(dir.join("cover"))?;
+            let name = format!("cover/{}.{ext}", uuid::Uuid::new_v4());
+            std::fs::copy(&src, dir.join(&name))?;
+            Some(name)
+        }
+        None => None,
+    };
+    sqlx::query("UPDATE game_projects SET cover_image = ?, updated_at = ? WHERE id = ?")
+        .bind(&rel)
+        .bind(chrono::Utc::now().timestamp_millis())
+        .bind(&game_id)
+        .execute(&state.db)
+        .await?;
+    if let Some(old) = old.filter(|o| o.starts_with("cover/") && Some(o) != rel.as_ref()) {
+        let _ = std::fs::remove_file(dir.join(old));
+    }
+    crate::db::game::get_all_game_projects(&state.db)
+        .await?
+        .into_iter()
+        .find(|g| g.id == game_id)
+        .ok_or_else(|| AppError::not_found("게임을 찾을 수 없습니다"))
+}
+
 /// 이 앱의 게임 목록 (라이브러리 화면용).
 #[tauri::command]
 #[specta::specta]

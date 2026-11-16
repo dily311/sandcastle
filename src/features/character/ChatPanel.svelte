@@ -1,5 +1,5 @@
 <script lang="ts">
-	import { Bookmark, Eye, EyeOff, FileArchive, ImagePlus, Pencil, Search, Trash2, X } from "@lucide/svelte";
+	import { ArrowUpDown, GripVertical, Bookmark, Check, ChevronDown, Eye, EyeOff, FileArchive, ImagePlus, Pencil, Search, Trash2, X } from "@lucide/svelte";
 	import { Avatar, Button, ContextMenu, IconButton, Input, ProfilePicker, Select, Switch, type MenuItem, type ProfileOption } from "$shared/ui";
 	import { bookmarks, bookmarksOf } from "./bookmarks";
 	import NotesPanel from "./NotesPanel.svelte";
@@ -15,6 +15,7 @@
 	import { call, commands } from "$shared/ipc/client";
 	import { IMAGE_FILES, pickFiles } from "$shared/ipc/dialog";
 	import { drops, isImage, storeFile } from "$app/drop.svelte";
+	import { Sortable, moveItem } from "$shared/dnd/sortable.svelte";
 	import { fileSrc } from "$shared/ipc/file";
 	import { confirmAction, promptText } from "$shared/stores/confirm.svelte";
 	import { convActions } from "./actions";
@@ -83,6 +84,18 @@
 		),
 	);
 	const scopeName = { global: "전역", character: "캐릭터", preset: "프리셋" } as const;
+	// 적용 순서: 전역 → 프리셋 → 캐릭터, 같은 범위 안에서는 sortOrder (regex_processor.rs와 같음)
+	const SCOPES = ["global", "preset", "character"] as const;
+	const groups = $derived(SCOPES.map((scope) => ({ scope, list: applied.filter((s) => s.scope === scope).sort((a, b) => a.sortOrder - b.sortOrder) })).filter((g) => g.list.length));
+	async function reorder(scope: string, from: number, to: number) {
+		const list = moveItem(groups.find((g) => g.scope === scope)?.list ?? [], from, to);
+		for (const [i, s] of list.entries()) {
+			if (s.sortOrder === i * 10) continue;
+			const saved = await call(commands.upsertRegexScript({ ...s, sortOrder: i * 10 }), { source: "regex" });
+			scripts = scripts.map((x) => (x.id === s.id ? saved : x));
+		}
+	}
+	const sorters = Object.fromEntries(SCOPES.map((scope) => [scope, new Sortable((from, to) => void reorder(scope, from, to))])) as Record<(typeof SCOPES)[number], Sortable>;
 	async function toggleScript(s: RegexScript, enabled: boolean) {
 		const saved = await call(commands.upsertRegexScript({ ...s, enabled }), { source: "regex" });
 		scripts = scripts.map((x) => (x.id === s.id ? saved : x));
@@ -90,7 +103,7 @@
 
 	// ---- 에셋 ----
 	const assets = $derived(library.images[conv.characterId] ?? []);
-	let menu = $state<{ x: number; y: number } | null>(null);
+	let menu = $state<{ x: number; y: number; align?: "start" | "end" } | null>(null);
 	let menuItems: MenuItem[] = $state([]);
 	function assetMenu(e: MouseEvent, a: CharacterImage) {
 		e.preventDefault();
@@ -119,6 +132,44 @@
 	async function addImages() {
 		await library.addImages(conv.characterId, await pickFiles([IMAGE_FILES]));
 	}
+	async function addZip() {
+		const [zip] = await pickFiles([{ name: "ZIP", extensions: ["zip"] }], false);
+		if (!zip) return;
+		const n = await library.addImagesZip(conv.characterId, zip);
+		toasts.success(n ? `에셋 ${n}개 넣음 (같은 이름은 덮어씀)` : "ZIP에 그림이 없음");
+	}
+	// 정렬 · 여러 개 고르기 · 크게 보기
+	let assetSort = $state<"order" | "name" | "new">("order");
+	const sortedAssets = $derived(
+		assetSort === "name" ? [...assets].sort((a, b) => a.key.localeCompare(b.key, "ko")) : assetSort === "new" ? [...assets].sort((a, b) => b.createdAt - a.createdAt) : assets,
+	);
+	let assetPicking = $state(false);
+	let assetPicked = $state<Set<string>>(new Set());
+	function pickAsset(a: CharacterImage) {
+		const next = new Set(assetPicked);
+		if (next.has(a.id)) next.delete(a.id);
+		else next.add(a.id);
+		assetPicked = next;
+	}
+	async function removePickedAssets() {
+		const list = assets.filter((a) => assetPicked.has(a.id));
+		if (!list.length) return;
+		if (!(await confirmAction({ title: "에셋 삭제", message: `고른 이미지 ${list.length}개를 지움. 되돌릴 수 없음`, confirmLabel: `${list.length}개 삭제`, danger: true }))) return;
+		for (const a of list) await library.removeImage(a);
+		assetPicked = new Set();
+		assetPicking = false;
+	}
+	let assetView = $state<CharacterImage | null>(null);
+	function assetSortMenu(e: MouseEvent) {
+		const r = (e.currentTarget as HTMLElement).getBoundingClientRect();
+		const opts = [
+			{ v: "order", l: "넣은 순서" },
+			{ v: "new", l: "최근 추가" },
+			{ v: "name", l: "키 이름 순" },
+		] as const;
+		menuItems = opts.map((o) => ({ label: o.l, icon: assetSort === o.v ? Check : undefined, onselect: () => (assetSort = o.v) }));
+		menu = { x: r.right, y: r.bottom + 4, align: "end" };
+	}
 	// 에셋 탭이 열려 있으면 끌어다 놓은 그림은 캐릭터 에셋으로 (메시지 첨부보다 우선)
 	$effect(() => {
 		if (panel.tab !== "assets" || !plugins.on("chat.images")) return;
@@ -142,17 +193,31 @@
 	// ---- 목차 ----
 	let tocQuery = $state("");
 	const toc = $derived.by(() => {
-		const out: { kind: "chapter" | "msg"; id: string; n: number; label: string }[] = [];
+		// under: 이 메시지가 속한 챕터(그 챕터를 시작한 메시지 id)
+		const out: { kind: "chapter" | "msg"; id: string; n: number; label: string; under?: string }[] = [];
+		let cur: string | undefined;
 		session.messages.forEach((m, i) => {
 			const meta = metaOf(m);
-			if (meta.chapter) out.push({ kind: "chapter", id: m.id, n: chapters[m.id], label: `${chapters[m.id]}장 · ${meta.chapter}` });
-			out.push({ kind: "msg", id: m.id, n: i + 1, label: meta.hidden ? "(숨긴 메시지)" : preview(m.content) || "(빈 메시지)" });
+			if (meta.chapter) {
+				cur = m.id;
+				out.push({ kind: "chapter", id: m.id, n: chapters[m.id], label: `${chapters[m.id]}장 · ${meta.chapter}` });
+			}
+			out.push({ kind: "msg", id: m.id, n: i + 1, label: meta.hidden ? "(숨긴 메시지)" : preview(m.content) || "(빈 메시지)", under: cur });
 		});
 		return out;
 	});
+	// 접은 챕터 (검색 중에는 모두 펼쳐 보임)
+	let folded = $state<Set<string>>(new Set());
+	function toggleChapter(id: string) {
+		const next = new Set(folded);
+		if (next.has(id)) next.delete(id);
+		else next.add(id);
+		folded = next;
+	}
+	const hasChapters = $derived(toc.some((t) => t.kind === "chapter"));
 	const tocShown = $derived.by(() => {
 		const q = tocQuery.trim().toLowerCase();
-		if (!q) return toc;
+		if (!q) return toc.filter((t) => !(t.kind === "msg" && t.under && folded.has(t.under)));
 		const num = Number(q.replace("#", ""));
 		return toc.filter((t) => t.label.toLowerCase().includes(q) || (t.kind === "msg" && t.n === num));
 	});
@@ -161,15 +226,29 @@
 
 	{#if panel.tab === "assets"}
 		<div class="panel-body">
+			{#if plugins.on("chat.images")}
+				<Switch checked={conv.imagesEnabled} label="이 대화에서 캐릭터 이미지 쓰기" description="키 목록을 AI에게 보내고 <cg>로 보여줌" onchange={(v) => library.setImagesEnabled(conv.id, v)} />
+			{:else}
+				<p class="faint">캐릭터 이미지 기능이 꺼져 있음 (설정 > 코어 플러그인)</p>
+			{/if}
 			<div class="atools">
 				<span class="faint">{assets.length}개 · 오른쪽 클릭으로 관리</span>
+				<IconButton label="정렬" size="sm" onclick={assetSortMenu}><ArrowUpDown /></IconButton>
+				<IconButton label="여러 개 삭제" size="sm" active={assetPicking} disabled={!assets.length} onclick={() => ((assetPicking = !assetPicking), (assetPicked = new Set()))}><Trash2 /></IconButton>
 				<IconButton label="이미지 가져오기 (여러 장 선택)" size="sm" onclick={addImages}><ImagePlus /></IconButton>
-				<IconButton label="ZIP 가져오기 (준비 중)" size="sm" disabled><FileArchive /></IconButton>
+				<IconButton label="ZIP으로 가져오기 (같은 이름은 덮어씀)" size="sm" onclick={addZip}><FileArchive /></IconButton>
 			</div>
+			{#if assetPicking}
+				<div class="apick">
+					<button class="link" onclick={() => (assetPicked = new Set(assets.map((a) => a.id)))}>모두 선택</button>
+					<span class="sp"></span>
+					<Button size="sm" variant="danger" disabled={!assetPicked.size} onclick={removePickedAssets}>{#snippet icon()}<Trash2 />{/snippet}{assetPicked.size}개 삭제</Button>
+				</div>
+			{/if}
 			{#if assets.length}
 				<div class="agrid">
-					{#each assets as a (a.id)}
-						<button class="tile" class:off={!a.enabled} title={a.enabled ? a.key : `${a.key} (AI에게 안 보냄)`} oncontextmenu={(e) => assetMenu(e, a)}>
+					{#each sortedAssets as a (a.id)}
+						<button class="tile" class:off={!a.enabled} class:picked={assetPicked.has(a.id)} title={a.enabled ? a.key : `${a.key} (AI에게 안 보냄)`} onclick={() => (assetPicking ? pickAsset(a) : (assetView = a))} oncontextmenu={(e) => assetMenu(e, a)}>
 							<span class="thumb">
 								<img src={fileSrc(a.thumbnailPath ?? a.path)} alt="" loading="lazy" />
 								{#if !a.enabled}<EyeOff />{/if}
@@ -183,6 +262,16 @@
 			{/if}
 			<ContextMenu at={menu} items={menuItems} label="에셋 메뉴" onclose={() => (menu = null)} />
 		</div>
+		{#if assetView}
+			{@const v = assetView}
+			<div class="aview" role="dialog" aria-modal="true" aria-label="에셋 크게 보기">
+				<button class="ascrim" aria-label="닫기" onclick={() => (assetView = null)}></button>
+				<figure>
+					<img src={fileSrc(v.path)} alt={v.key} />
+					<figcaption><code>&lt;cg&gt;{v.key}&lt;/cg&gt;</code>{v.enabled ? "" : " · AI에게 안 보냄"}</figcaption>
+				</figure>
+			</div>
+		{/if}
 	{:else if panel.tab === "branches"}
 		<BranchTree {conv} {onopen} />
 	{:else if panel.tab === "bookmarks"}
@@ -204,10 +293,18 @@
 			<Input bind:value={tocQuery} placeholder="챕터·메시지·번호 검색" aria-label="목차 검색">
 				{#snippet leading()}<Search />{/snippet}
 			</Input>
+			{#if hasChapters}
+				<button class="fold-all" onclick={() => (folded = folded.size ? new Set() : new Set(toc.filter((t) => t.kind === "chapter").map((t) => t.id)))}>{folded.size ? "모두 펼치기" : "모두 접기"}</button>
+			{/if}
 		</div>
 		<ol class="toc">
 			{#each tocShown as t (t.kind + t.id)}
-				<li class={t.kind}><button onclick={() => onjump(t.id)}><span class="no">{t.kind === "msg" ? `#${t.n}` : ""}</span>{t.label}</button></li>
+				<li class={t.kind}>
+					{#if t.kind === "chapter"}
+						<button class="fold" aria-label={folded.has(t.id) ? "챕터 펼치기" : "챕터 접기"} aria-expanded={!folded.has(t.id)} onclick={() => toggleChapter(t.id)}><ChevronDown class={folded.has(t.id) ? "rot" : ""} /></button>
+					{/if}
+					<button onclick={() => onjump(t.id)}><span class="no">{t.kind === "msg" ? `#${t.n}` : ""}</span>{t.label}</button>
+				</li>
 			{:else}
 				<li class="none">{tocQuery ? "찾는 항목 없음" : "메시지 없음"}</li>
 			{/each}
@@ -248,14 +345,6 @@
 			</section>
 			<hr />
 			<section>
-				{#if plugins.on("chat.images")}
-					<Switch checked={conv.imagesEnabled} label="캐릭터 이미지" description="키 목록 전송, <cg>로 표시" onchange={(v) => library.setImagesEnabled(conv.id, v)} />
-				{:else}
-					<p class="faint">캐릭터 이미지 기능이 꺼져 있음 (설정 > 코어 플러그인)</p>
-				{/if}
-			</section>
-			<hr />
-			<section>
 				<h4>월드인포</h4>
 				<div class="wi">
 					<span>{character?.name ?? "캐릭터"} <small>캐릭터에 붙음 · 이 캐릭터의 모든 대화</small></span>
@@ -270,9 +359,18 @@
 			<NotesPanel {conv} bare />
 			<hr />
 			<section>
-				<h4>정규식 <span class="faint">적용 중 {applied.filter((s) => s.enabled).length}개</span></h4>
-				{#each applied as s (s.id)}
-					<Switch checked={s.enabled} label="{s.name} · {scopeName[s.scope]}" onchange={(v) => toggleScript(s, v)} />
+				<h4>정규식 <span class="faint">적용 중 {applied.filter((s) => s.enabled).length}개 · 위에서부터 적용, 끌어서 순서 바꾸기</span></h4>
+				{#each groups as g (g.scope)}
+					<p class="rx-scope">{scopeName[g.scope]}</p>
+					<ul class="rx">
+						{#each g.list as s, i (s.id)}
+							{@const sort = sorters[g.scope]}
+							<li {...sort.item(i)} class:dragging={sort.from === i} class:over={sort.over === i && sort.from !== i}>
+								<span class="grip" aria-hidden="true"><GripVertical /></span>
+								<Switch checked={s.enabled} label={s.name} onchange={(v) => toggleScript(s, v)} />
+							</li>
+						{/each}
+					</ul>
 				{:else}
 					<p class="none small">이 대화에 걸리는 정규식 없음</p>
 				{/each}
@@ -371,6 +469,97 @@
 		margin-right: auto;
 		font-size: var(--text-xs);
 	}
+	.rx-scope {
+		margin: var(--space-2) 0 2px;
+		font-size: var(--text-xs);
+		color: var(--text-faint);
+	}
+	.rx {
+		list-style: none;
+		margin: 0;
+		padding: 0;
+	}
+	.rx li {
+		display: flex;
+		align-items: center;
+		gap: 4px;
+		border-radius: var(--radius-sm);
+		cursor: grab;
+	}
+	.rx li :global(.switch),
+	.rx li > :global(:last-child) {
+		flex: 1;
+		min-width: 0;
+	}
+	.rx li.dragging {
+		opacity: 0.4;
+	}
+	.rx li.over {
+		box-shadow: inset 0 2px 0 var(--accent);
+	}
+	.rx .grip {
+		display: grid;
+		color: var(--text-faint);
+	}
+	.rx .grip :global(svg) {
+		width: 14px;
+		height: 14px;
+	}
+	.apick {
+		display: flex;
+		align-items: center;
+		gap: var(--space-2);
+	}
+	.apick .sp {
+		flex: 1;
+	}
+	.apick .link {
+		padding: 0;
+		border: none;
+		background: none;
+		color: var(--accent-text);
+		font: inherit;
+		font-size: var(--text-xs);
+		cursor: pointer;
+	}
+	.tile.picked {
+		outline: 2px solid var(--accent);
+		outline-offset: -2px;
+	}
+	.aview {
+		position: fixed;
+		inset: 0;
+		z-index: 200;
+		display: grid;
+		place-items: center;
+		padding: var(--space-5);
+	}
+	.ascrim {
+		position: absolute;
+		inset: 0;
+		border: none;
+		background: rgb(0 0 0 / 0.6);
+	}
+	.aview figure {
+		position: relative;
+		margin: 0;
+		padding: var(--space-3);
+		border-radius: var(--radius-lg);
+		background: var(--surface);
+		box-shadow: var(--shadow-lg);
+	}
+	.aview img {
+		display: block;
+		max-width: 80vw;
+		max-height: 80vh;
+		object-fit: contain;
+		border-radius: var(--radius-md);
+	}
+	.aview figcaption {
+		padding-top: var(--space-2);
+		font-size: var(--text-sm);
+		color: var(--text-muted);
+	}
 	.agrid {
 		display: grid;
 		grid-template-columns: repeat(3, 1fr);
@@ -384,7 +573,7 @@
 		border-radius: var(--radius-md);
 		background: var(--surface);
 		overflow: hidden;
-		cursor: context-menu;
+		cursor: zoom-in;
 	}
 	.tile:hover {
 		border-color: var(--border-strong);
@@ -456,6 +645,35 @@
 	.toc button:hover {
 		background: var(--surface-hover);
 		color: var(--text);
+	}
+	.toc .chapter {
+		display: flex;
+		align-items: center;
+	}
+	.toc .chapter .fold {
+		flex: 0 0 auto;
+		width: 24px;
+		padding: 0;
+		display: grid;
+		place-items: center;
+	}
+	.toc .fold :global(svg) {
+		width: 14px;
+		height: 14px;
+		transition: transform var(--duration-fast) var(--ease);
+	}
+	.toc .fold :global(.rot) {
+		transform: rotate(-90deg);
+	}
+	.fold-all {
+		margin-top: 6px;
+		padding: 2px 6px;
+		border: none;
+		background: none;
+		color: var(--text-muted);
+		font: inherit;
+		font-size: var(--text-xs);
+		cursor: pointer;
 	}
 	.toc .chapter button {
 		font-weight: 700;

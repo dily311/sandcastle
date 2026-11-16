@@ -112,12 +112,22 @@ export async function speak(m: { id: string; content: string }, text = m.content
  * 새 AI 답변이 저장된 뒤 (대화·폰 공통). 자동 번역이 켜져 있으면 번역해 고쳐진 메시지를 돌려주고,
  * 자동 읽기가 켜져 있으면 읽기 시작한다 (번역이 있으면 번역문을 읽는다).
  */
-export async function afterReply(m: Message): Promise<Message> {
+/** 이미지 자동 생성: 응답에 붙은 그림 프롬프트로 그린다 (실행 기록에 "자동") */
+export async function autoImage(m: Message): Promise<Message> {
+	return call(commands.generateAutoImage(m.id), src);
+}
+
+export async function afterReply(m: Message, onupdate?: (m: Message) => void): Promise<Message> {
 	if (!pluginSetting.value) await pluginSetting.load();
 	const s = pluginSetting.value;
 	let out = m;
 	if (s && plugins.on("translate") && s.translate?.autoTranslate) {
 		out = await translateMessage(m, true).catch(() => m);
+	}
+	// 그림은 오래 걸리므로 기다리지 않고, 다 되면 onupdate로 알린다
+	const autoPrompt = (out.meta as { autoImagePrompt?: string } | null)?.autoImagePrompt;
+	if (plugins.on("imageauto") && autoPrompt && onupdate) {
+		void autoImage(out).then(onupdate, () => {});
 	}
 	if (s && plugins.on("tts") && s.tts?.autoRead) {
 		void speak(out, translationOf(out)?.text ?? out.content, true);

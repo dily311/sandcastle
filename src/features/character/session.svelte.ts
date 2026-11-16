@@ -131,7 +131,7 @@ export class ChatSession {
 			const turn = await call(commands.chatSend(this.convId, text, attachments, this.channel()), src);
 			if (turn.user) this.messages.push(turn.user);
 			this.messages.push(turn.assistant);
-			void afterReply(turn.assistant).then((m) => m !== turn.assistant && this.replace(m));
+			void afterReply(turn.assistant, (m) => this.replace(m)).then((m) => m !== turn.assistant && this.replace(m));
 		} catch {
 			// 입력은 응답 실패와 상관없이 저장돼 있을 수 있다
 			await this.load().catch(() => {});
@@ -149,7 +149,7 @@ export class ChatSession {
 		try {
 			const turn = await call(commands.chatRegenerate(this.convId, swipe, this.channel()), src);
 			this.replace(turn.assistant);
-			void afterReply(turn.assistant).then((m) => m !== turn.assistant && this.replace(m));
+			void afterReply(turn.assistant, (m) => this.replace(m)).then((m) => m !== turn.assistant && this.replace(m));
 		} catch {
 			/* 토스트로 알림 */
 		} finally {

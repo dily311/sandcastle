@@ -4,7 +4,7 @@ import type { CorePlugin } from "$ipc/bindings";
 import { call, commands } from "$shared/ipc/client";
 import { onEvent } from "$shared/ipc/events";
 
-export type PluginId = "phone" | "game" | "chat.images" | "html" | "regex" | "widget" | "translate" | "tts" | "imagegen";
+export type PluginId = "phone" | "game" | "chat.images" | "html" | "regex" | "widget" | "translate" | "tts" | "imagegen" | "imageauto";
 
 class Plugins {
 	list = $state<CorePlugin[]>([]);

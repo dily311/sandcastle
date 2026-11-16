@@ -233,6 +233,12 @@ class Library {
 		const i = list.findIndex((x) => x.id === img.id);
 		if (i >= 0) list[i] = saved;
 	}
+	/** ZIP 안의 그림을 한꺼번에 (파일 이름이 키, 같은 키는 덮어씀) */
+	async addImagesZip(charId: string, zipPath: string) {
+		const added = await call(commands.addCharacterImagesZip(charId, zipPath), src);
+		await this.loadImages(charId);
+		return added.length;
+	}
 	async removeImage(img: CharacterImage) {
 		await call(commands.deleteCharacterImage(img.id), src);
 		this.images[img.characterId] = (this.images[img.characterId] ?? []).filter((x) => x.id !== img.id);

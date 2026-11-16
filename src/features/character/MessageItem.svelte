@@ -35,7 +35,8 @@
 	// 번역이 있으면 번역문을 보여주고 "원문"으로 바꿔 볼 수 있다
 	const translation = $derived(plugins.on("translate") ? translationOf(msg) : null);
 	let showOriginal = $state(false);
-	const text = $derived(live ? live.text : translation && !showOriginal ? translation.text : (session.display[msg.id] ?? msg.content));
+	// 받는 중에는 응답 끝의 <image> 그림 프롬프트(이미지 자동 생성)를 숨긴다 (저장할 때 백엔드가 뺀다)
+	const text = $derived(live ? live.text.replace(/<image>[\s\S]*?(<\/image>|$)/i, "") : translation && !showOriginal ? translation.text : (session.display[msg.id] ?? msg.content));
 	const drawn = $derived(plugins.on("imagegen") ? generatedImagesOf(msg) : []);
 	let toolBusy = $state<"" | "translate" | "draw">("");
 	async function translate() {

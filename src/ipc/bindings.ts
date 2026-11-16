@@ -123,6 +123,8 @@ export const commands = {
 	 *  (SillyTavern 표정 스프라이트 폴더의 파일들을 그대로 넘기면 감정 이름이 키가 된다)
 	 */
 	addCharacterImages: (characterId: string, paths: string[], options?: InvokeOptions) => __TAURI_INVOKE<CharacterImage_Serialize[]>("add_character_images", { characterId, paths }, options),
+	/**  ZIP으로 에셋 한꺼번에 넣기 (파일 이름이 키, 같은 키는 덮어씀) */
+	addCharacterImagesZip: (characterId: string, zipPath: string, options?: InvokeOptions) => __TAURI_INVOKE<CharacterImage_Serialize[]>("add_character_images_zip", { characterId, zipPath }, options),
 	updateCharacterImage: (id: string, input: CharacterImageUpdate, options?: InvokeOptions) => __TAURI_INVOKE<CharacterImage_Serialize>("update_character_image", { id, input }, options),
 	deleteCharacterImage: (id: string, options?: InvokeOptions) => __TAURI_INVOKE<null>("delete_character_image", { id }, options),
 	/**  대화별 이미지 기능 켜기/끄기 */
@@ -239,6 +241,11 @@ export const commands = {
 	closeGame: (options?: InvokeOptions) => __TAURI_INVOKE<null>("close_game", undefined, options),
 	/**  이 앱의 게임 목록 (라이브러리 화면용). */
 	gameList: (options?: InvokeOptions) => __TAURI_INVOKE<GameProject_Serialize[]>("game_list", undefined, options),
+	/**
+	 *  게임 커버(배너) 그림 바꾸기: 고른 파일을 게임 폴더 cover/에 복사하고 cover_image로. None이면 지운다.
+	 *  앱이 cover/에 넣어 둔 예전 커버 파일은 지운다. 바뀐 게임을 돌려준다
+	 */
+	setGameCover: (gameId: string, path: string | null, options?: InvokeOptions) => __TAURI_INVOKE<GameProject_Serialize>("set_game_cover", { gameId, path }, options),
 	/**  앱에 포함된 템플릿 목록 (새 게임 만들기 화면용). capabilities로 어떤 기능을 쓰는 템플릿인지 알 수 있다. */
 	listTemplates: (options?: InvokeOptions) => __TAURI_INVOKE<Template_Serialize[]>("list_templates", undefined, options),
 	/**
@@ -312,6 +319,11 @@ export const commands = {
 	speakText: (text: string, auto: boolean | null, options?: InvokeOptions) => __TAURI_INVOKE<string>("speak_text", { text, auto }, options),
 	/**  메시지 장면을 그림으로. meta.generatedImages에 {path, prompt}를 쌓는다 */
 	generateMessageImage: (messageId: string, options?: InvokeOptions) => __TAURI_INVOKE<Message_Serialize>("generate_message_image", { messageId }, options),
+	/**
+	 *  이미지 자동 생성: 응답에 붙은 그림 프롬프트(meta.autoImagePrompt)로 바로 그린다 (채팅 AI 호출 없음).
+	 *  응답이 온 뒤 화면이 자동으로 부르므로 실행 기록에는 "자동"으로 남는다
+	 */
+	generateAutoImage: (messageId: string, options?: InvokeOptions) => __TAURI_INVOKE<Message_Serialize>("generate_auto_image", { messageId }, options),
 	/**  음성 API 프로필의 목소리 목록 (ElevenLabs는 계정의 목소리) */
 	listTtsVoices: (profileId: string, options?: InvokeOptions) => __TAURI_INVOKE<Voice_Serialize[]>("list_tts_voices", { profileId }, options),
 	/**  이미지 갤러리: 만든 그림 전부 (최신 순) */
@@ -452,6 +464,8 @@ export type AppPrompts_Deserialize = {
 	imagePromptNai?: PromptSlot,
 	/**  대화의 캐릭터 이미지(<cg>) 규칙 ({{keys}} = 키 목록, {{char}} = 캐릭터) */
 	chatImages?: PromptSlot,
+	/**  이미지 자동 생성: 글쓰기 AI에게 응답 끝 <image> 그림 프롬프트를 쓰게 하는 지시 */
+	autoImage?: PromptSlot,
 	/**  게임 대화 규칙 (한 줄에 하나) */
 	gameRules?: PromptSlot,
 	/**  씬 입력(서술자) 규칙 (한 줄에 하나) */
@@ -468,6 +482,8 @@ export type AppPrompts_Serialize = {
 	imagePromptNai: PromptSlot,
 	/**  대화의 캐릭터 이미지(<cg>) 규칙 ({{keys}} = 키 목록, {{char}} = 캐릭터) */
 	chatImages: PromptSlot,
+	/**  이미지 자동 생성: 글쓰기 AI에게 응답 끝 <image> 그림 프롬프트를 쓰게 하는 지시 */
+	autoImage: PromptSlot,
 	/**  게임 대화 규칙 (한 줄에 하나) */
 	gameRules: PromptSlot,
 	/**  씬 입력(서술자) 규칙 (한 줄에 하나) */

@@ -235,6 +235,45 @@ pub async fn generate_message_image(
     Ok(chat_ui::get_message(&state.db, &message_id).await?)
 }
 
+/// 이미지 자동 생성: 응답에 붙은 그림 프롬프트(meta.autoImagePrompt)로 바로 그린다 (채팅 AI 호출 없음).
+/// 응답이 온 뒤 화면이 자동으로 부르므로 실행 기록에는 "자동"으로 남는다
+#[tauri::command]
+#[specta::specta]
+#[allow(clippy::too_many_arguments)]
+pub async fn generate_auto_image(
+    app: AppHandle,
+    state: State<'_, AppState>,
+    ai: State<'_, Arc<AiService>>,
+    tasks: State<'_, Arc<TaskManager>>,
+    plugin: State<'_, SettingsState<PluginSetting>>,
+    settings: State<'_, SettingsState<AppSetting>>,
+    message_id: String,
+) -> Result<Message> {
+    require(&app, id::IMAGE_AUTO)?;
+    let p = read(&plugin)?.image_gen;
+    let msg = chat_ui::get_message(&state.db, &message_id).await?;
+    let prompt = msg
+        .meta
+        .as_ref()
+        .and_then(|m| m["autoImagePrompt"].as_str())
+        .map(str::to_string)
+        .filter(|s| !s.trim().is_empty())
+        .ok_or_else(|| AppError::validation("이 메시지에는 그림 프롬프트가 없습니다", None))?;
+    let conv = conversation::get_conversation(&state.db, &msg.conversation_id).await?;
+    let chat_profile = fallback_profile(&read(&settings)?, conv.api_profile_id.as_deref());
+    let out_dir = generated_dir(&app)?;
+    let job = CreateTaskRequest::inline(TaskType::ImageGen, TaskOwner::Image, id::IMAGE_AUTO, "자동 그림", true);
+    let image = tasks
+        .run_inline(job, |_| tools::generate_image(&ai, &p, &chat_profile, &prompt, &out_dir, "message", Some((&message_id, &msg.conversation_id))))
+        .await?;
+    let mut meta = msg.meta.clone().filter(Value::is_object).unwrap_or_else(|| json!({}));
+    let mut list = meta["generatedImages"].as_array().cloned().unwrap_or_default();
+    list.push(json!({ "path": image.path, "prompt": image.prompt, "createdAt": image.created_at, "auto": true }));
+    meta["generatedImages"] = Value::Array(list);
+    conversation::update_message_meta(&state.db, &message_id, meta).await?;
+    Ok(chat_ui::get_message(&state.db, &message_id).await?)
+}
+
 /// 음성 API 프로필의 목소리 목록 (ElevenLabs는 계정의 목소리)
 #[tauri::command]
 #[specta::specta]
@@ -309,7 +348,9 @@ pub async fn list_all_images(
     for (cid, key, rel) in assets {
         let abs = data_dir.join(&rel).to_string_lossy().into_owned();
         if exists(&abs) {
-            out.push(G::external(abs, "asset", format!("{} · {key}", names.get(cid.as_str()).unwrap_or(&"?")), vec![]));
+            let mut g = G::external(abs, "asset", format!("{} · {key}", names.get(cid.as_str()).unwrap_or(&"?")), vec![]);
+            g.readonly = false; // CG 에셋은 갤러리에서도 지울 수 있다 (태그는 달지 않음)
+            out.push(g);
         }
     }
     let personas: Vec<(String, Option<String>)> = sqlx::query_as("SELECT name, avatar FROM personas").fetch_all(&state.db).await.map_err(AppError::from)?;
@@ -357,11 +398,19 @@ pub fn rename_gallery_image(app: AppHandle, path: String, name: String) -> Resul
 /// 여러 그림 한 번에 지우기 (갤러리 그림만, 다른 곳의 그림은 건너뜀). 지운 수를 돌려준다
 #[tauri::command]
 #[specta::specta]
-pub fn delete_gallery_images(app: AppHandle, paths: Vec<String>) -> Result<u32> {
+pub async fn delete_gallery_images(app: AppHandle, state: State<'_, AppState>, paths: Vec<String>) -> Result<u32> {
     let dir = generated_dir(&app)?;
+    let data_dir = app_data_dir(&app)?;
+    // 캐릭터 CG 에셋은 행과 파일(썸네일 포함)을 함께 지운다
+    let assets: Vec<(String, String, Option<String>)> =
+        sqlx::query_as("SELECT id, file_path, thumb_path FROM character_images").fetch_all(&state.db).await.map_err(AppError::from)?;
     let mut n = 0;
     for p in paths.iter().take(500) {
-        if tools::delete_image(&dir, p).is_ok() {
+        if let Some((id, rel, thumb)) = assets.iter().find(|(_, rel, _)| data_dir.join(rel) == std::path::Path::new(p)) {
+            crate::db::character_image::delete_character_image(&state.db, id).await?;
+            crate::service::chat::chat_images::remove_image_files(&data_dir, &[rel, thumb.as_deref().unwrap_or_default()]);
+            n += 1;
+        } else if tools::delete_image(&dir, p).is_ok() {
             n += 1;
         }
     }

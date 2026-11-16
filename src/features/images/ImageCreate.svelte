@@ -121,21 +121,6 @@
 						<Button size="sm" onclick={savePreset}>{#snippet icon()}<Save />{/snippet}설정에 저장</Button>
 					{/if}
 				</div>
-				{#if presetImages.length}
-					<div class="field">
-						<span>프리셋 그림 <small>#프리셋 태그를 단 그림의 생성 정보</small></span>
-						<ProfilePicker options={presetOptions} value={presetPick ?? ""} label="프리셋 그림 고르기" onchange={pickPresetImage} />
-					</div>
-				{/if}
-				<label class="field"><span>프롬프트</span>
-					<Textarea bind:value={prompt} rows={4} autosize maxRows={14} placeholder="그릴 장면. NovelAI는 태그(1girl, silver hair, forest, night…)가 잘 먹힘" aria-label="그릴 프롬프트" />
-				</label>
-				<Switch bind:checked={refine} label="AI가 프롬프트 다듬기" description="짧게 써도 장면 프롬프트로 정리함 (채팅 API 요금)" />
-				{#if nai || !profile}
-					<label class="field"><span>네거티브 프롬프트</span>
-						<Textarea value={preset.negativePrompt} rows={2} autosize maxRows={6} oninput={(e) => edit("negativePrompt", e.currentTarget.value)} />
-					</label>
-				{/if}
 				<div class="two">
 					<label class="field"><span>모델</span>
 						{#if MODELS.includes(preset.model)}
@@ -146,6 +131,20 @@
 					</label>
 					<label class="field"><span>크기</span><Select value={preset.size} options={opts(SIZES, preset.size)} onchange={(e) => edit("size", e.currentTarget.value)} /></label>
 				</div>
+				{#if presetImages.length}
+					<div class="field">
+						<span>프리셋 그림 <small>#프리셋 태그를 단 그림의 생성 정보</small></span>
+						<ProfilePicker options={presetOptions} value={presetPick ?? ""} label="프리셋 그림 고르기" onchange={pickPresetImage} />
+					</div>
+				{/if}
+				<label class="field"><span>프롬프트</span>
+					<Textarea bind:value={prompt} rows={4} autosize maxRows={14} placeholder="그릴 장면. NovelAI는 태그(1girl, silver hair, forest, night…)가 잘 먹힘" aria-label="그릴 프롬프트" />
+				</label>
+				{#if nai || !profile}
+					<label class="field"><span>네거티브 프롬프트</span>
+						<Textarea value={preset.negativePrompt} rows={2} autosize maxRows={6} oninput={(e) => edit("negativePrompt", e.currentTarget.value)} />
+					</label>
+				{/if}
 				{#if nai || !profile}
 					<label class="field"><span>품질 태그 <small>프롬프트 끝에 붙음</small></span><Select value={preset.quality ?? "standard"} options={QUALITY} onchange={(e) => edit("quality", e.currentTarget.value)} /></label>
 					<Slider label="단계 (steps)" hint="많을수록 정교하지만 느리고 비쌈 (Opus 무료는 28까지)" bind:value={() => String(preset.steps), (v) => edit("steps", Math.round(Number(v)) || 28)} min={1} max={50} step={1} fallback={28} format={(n) => String(n)} />

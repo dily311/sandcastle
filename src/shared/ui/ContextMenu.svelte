@@ -21,7 +21,8 @@
 	 *   <ContextMenu at={menu} items={...} onclose={() => (menu = null)} />
 	 */
 	interface Props {
-		at: { x: number; y: number } | null;
+		/** align "end": x가 메뉴의 오른쪽 끝 (버튼 오른쪽 끝에 맞춰 버튼 아래에 띄울 때). 메뉴 실제 폭으로 맞춘다 */
+		at: { x: number; y: number; align?: "start" | "end" } | null;
 		items: MenuItem[];
 		label?: string;
 		onclose: () => void;
@@ -35,8 +36,9 @@
 	$effect(() => {
 		if (!at || !el) return;
 		const r = el.getBoundingClientRect();
+		const left = at.align === "end" ? at.x - r.width : at.x;
 		pos = {
-			x: Math.min(at.x, window.innerWidth - r.width - 8),
+			x: Math.max(8, Math.min(left, window.innerWidth - r.width - 8)),
 			y: Math.min(at.y, window.innerHeight - r.height - 8),
 		};
 		el.querySelector<HTMLButtonElement>("button:not(:disabled)")?.focus();

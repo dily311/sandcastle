@@ -10,7 +10,10 @@
 	import { fileSrc } from "$shared/ipc/file";
 	import { nav } from "$app/nav.svelte";
 	import { library, type Conversation } from "$features/character/library.svelte";
-	import { lookup, phone, WALLPAPERS, type Who } from "./phone.svelte";
+	import { lookup, phone, type Who } from "./phone.svelte";
+	import BackgroundPicker from "$shared/ui/BackgroundPicker.svelte";
+	import { theme } from "$app/theme.svelte";
+	import { pickFiles } from "$shared/ipc/dialog";
 
 	let { room, session, onopen }: { room: Conversation | null; session: ChatSession | null; onopen: (id: string, messageId?: string) => void } = $props();
 	const shared = new Set(["settings", "context", "branches"]);
@@ -25,6 +28,14 @@
 
 	function openPage(w: Who) {
 		void nav.go(w.kind === "persona" ? { page: "persona", personaId: w.id } : { page: "character", charId: w.id });
+	}
+	// 배경화면 올리기: 공용 배경 목록에 넣고 바로 이 폰 배경으로
+	async function uploadWallpaper() {
+		const paths = await pickFiles([{ name: "그림", extensions: ["png", "jpg", "jpeg", "webp", "gif", "avif"] }], true);
+		if (!paths.length) return;
+		await theme.addBackgrounds(paths, false);
+		const last = theme.setting.backgrounds?.at(-1);
+		if (last) phone.setWallpaper(last);
 	}
 	const kindLabel = (k: string) => (k === "persona" ? "페르소나" : "캐릭터");
 
@@ -49,6 +60,11 @@
 
 {#if conv && session && shared.has(panel.tab)}
 	<ChatPanel {conv} {session} chapters={{}} onjump={() => {}} {onopen} {me} />
+{:else if shared.has(panel.tab)}
+	<div class="panel-body">
+		<p class="hint">채팅방을 열면 그 대화의 {panel.tab === "context" ? "컨텍스트·프리셋" : "설정"}이 여기 보임</p>
+		<p class="hint">새 채팅방의 기본 API·프리셋은 설정 &gt; 폰에서 정함</p>
+	</div>
 {:else}
 <div class="panel-body">
 		{#if conv && contact}
@@ -62,7 +78,6 @@
 					</div>
 					<Button size="sm" variant="ghost" onclick={() => openPage(contact)}>{#snippet icon()}<ExternalLink />{/snippet}열기</Button>
 				</div>
-				{#if contact.description}<p class="desc">{contact.description}</p>{/if}
 			</section>
 
 		{/if}
@@ -80,11 +95,7 @@
 					]}
 					onchange={(v) => phone.setDisplay(v)}
 				/>
-				<div class="walls" role="radiogroup" aria-label="배경화면">
-					{#each Object.entries(WALLPAPERS) as [id, bg] (id)}
-						<button class="wall" role="radio" aria-checked={phone.wallpaper === id} class:on={phone.wallpaper === id} style:background={bg} aria-label="배경 {id}" onclick={() => phone.setWallpaper(id)}></button>
-					{/each}
-				</div>
+				<BackgroundPicker label="폰 배경화면" value={phone.wallpaper} images={theme.setting.backgrounds ?? []} allowNone={false} onpick={(v) => v && phone.setWallpaper(v)} onupload={uploadWallpaper} />
 				<p class="hint">연락처는 폰 안의 연락처 앱에서</p>
 			</section>
 		{/if}
@@ -115,32 +126,6 @@
 		overflow: hidden;
 		text-overflow: ellipsis;
 		white-space: nowrap;
-	}
-	.desc {
-		margin: 0;
-		font-size: var(--text-sm);
-		color: var(--text-muted);
-		line-height: 1.55;
-		display: -webkit-box;
-		-webkit-line-clamp: 6;
-		line-clamp: 6;
-		-webkit-box-orient: vertical;
-		overflow: hidden;
-	}
-	.walls {
-		display: grid;
-		grid-template-columns: repeat(auto-fill, minmax(36px, 1fr));
-		gap: var(--space-2);
-	}
-	.wall {
-		aspect-ratio: 9 / 16;
-		border: 2px solid transparent;
-		border-radius: var(--radius-sm);
-		cursor: pointer;
-		box-shadow: 0 0 0 1px var(--border);
-	}
-	.wall.on {
-		border-color: var(--accent);
 	}
 	.hint {
 		margin: 0;

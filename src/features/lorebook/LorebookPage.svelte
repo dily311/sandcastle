@@ -2,12 +2,14 @@
 	import { onMount } from "svelte";
 	// 로어북 화면: 책 목록 → 책 하나(이름·설명, 쓰는 곳, 항목 편집)
 	import { BookOpen, Check, Download, Ellipsis, Funnel, ListFilter, Pencil, Plus, Search, Trash2, Upload } from "@lucide/svelte";
-	import { Avatar, Button, ContextMenu, EmptyState, ExportSplit, IconButton, Input, SplitButton, Spinner, type MenuItem } from "$shared/ui";
+	import { Avatar, Badge, Button, ContextMenu, EmptyState, ExportSplit, IconButton, Input, ItemCard, ListToolbar, SelectBar, SplitButton, Spinner, type MenuItem } from "$shared/ui";
 	import { nav } from "$app/nav.svelte";
 	import { drops, extOf, storeFile } from "$app/drop.svelte";
 	import { JSON_FILES, pickFiles } from "$shared/ipc/dialog";
 	import { fileSrc } from "$shared/ipc/file";
-	import { promptText } from "$shared/stores/confirm.svelte";
+	import { confirmAction, promptText } from "$shared/stores/confirm.svelte";
+	import { toasts } from "$shared/stores/toast.svelte";
+	import { call, commands } from "$shared/ipc/client";
 	import { relative } from "$shared/time";
 	import { library } from "$features/character/library.svelte";
 	import EntryItem from "./EntryItem.svelte";
@@ -25,13 +27,58 @@
 	const open = (id?: string) => nav.go(id ? { page: "lorebook", bookId: id } : { page: "lorebook" });
 
 	// ---- 목록 ----
+	// ---- 찾기 · 거르기 · 정렬 · 여러 개 삭제 (다른 목록 화면과 같은 도구) ----
 	let query = $state("");
-	const shown = $derived(
-		lorebook.books.filter((b) => {
-			const q = query.trim().toLowerCase();
-			return !q || b.name.toLowerCase().includes(q) || (b.description ?? "").toLowerCase().includes(q);
-		}),
-	);
+	let bookFilter = $state("all");
+	let bookSort = $state("name");
+	let selecting = $state(false);
+	let picked = $state<Set<string>>(new Set());
+	$effect(() => {
+		if (!selecting) picked = new Set();
+	});
+	const used = (id: string) => {
+		const u = lorebook.usage(id);
+		return u.characters.length + u.personas.length + u.conversations.length > 0;
+	};
+	const BOOK_FILTERS = $derived([
+		{ value: "all", label: `전부 ${lorebook.books.length}` },
+		{ value: "used", label: "쓰이는 것" },
+		{ value: "unused", label: "안 쓰이는 것" },
+	]);
+	const BOOK_SORTS = [
+		{ value: "name", label: "이름 순" },
+		{ value: "recent", label: "최근 바뀐 순" },
+		{ value: "size", label: "항목 많은 순" },
+	];
+	const shown = $derived.by(() => {
+		const q = query.trim().toLowerCase();
+		const by =
+			bookSort === "recent"
+				? (a: (typeof lorebook.books)[number], b: (typeof lorebook.books)[number]) => b.updatedAt - a.updatedAt
+				: bookSort === "size"
+					? (a: (typeof lorebook.books)[number], b: (typeof lorebook.books)[number]) => (lorebook.counts[b.id]?.entries ?? 0) - (lorebook.counts[a.id]?.entries ?? 0)
+					: (a: (typeof lorebook.books)[number], b: (typeof lorebook.books)[number]) => a.name.localeCompare(b.name, "ko");
+		return lorebook.books
+			.filter((b) => (bookFilter === "all" || (bookFilter === "used") === used(b.id)) && (!q || b.name.toLowerCase().includes(q) || (b.description ?? "").toLowerCase().includes(q)))
+			.sort(by);
+	});
+	function pickBook(id: string) {
+		const next = new Set(picked);
+		if (next.has(id)) next.delete(id);
+		else next.add(id);
+		picked = next;
+	}
+	async function removePicked() {
+		const ids = [...picked];
+		if (!ids.length) return;
+		const n = ids.reduce((s, id) => s + (lorebook.counts[id]?.entries ?? 0), 0);
+		if (!(await confirmAction({ title: "로어북 삭제", message: `로어북 ${ids.length}개와 항목 ${n}개를 지움. 쓰던 캐릭터·페르소나·대화에서도 빠짐`, confirmLabel: `${ids.length}개 삭제`, danger: true }))) return;
+		for (const id of ids) await call(commands.deleteWorldinfoBook(id), { source: "lorebook" });
+		await lorebook.load();
+		await library.load();
+		selecting = false;
+		toasts.success(`로어북 ${ids.length}개 지움`);
+	}
 	async function create() {
 		const name = await promptText({ title: "새 로어북", message: "세계관·장소·인물 설정을 모아 두는 책", input: { value: "", placeholder: "예: 엘다리아 대륙" }, confirmLabel: "만들기" });
 		if (!name?.trim()) return;
@@ -197,39 +244,31 @@
 	<div class="page">
 		<header class="head">
 			<h1>로어북</h1>
-			<div class="acts">
+			<ListToolbar bind:query bind:filter={bookFilter} bind:sort={bookSort} bind:selecting placeholder="이름·설명" filters={BOOK_FILTERS} sorts={BOOK_SORTS} canSelect={!!lorebook.books.length}>
 				<SplitButton label="새로 만들기" onclick={create} menuLabel="로어북 가져오기" items={[{ label: "파일에서 가져오기 (JSON)", icon: Upload, onselect: importFiles }]} />
-			</div>
+			</ListToolbar>
 		</header>
-		<p class="lead">대화에 키워드가 나오면 그 설정을 AI에게 함께 보냄. 캐릭터·페르소나·대화에 붙여서 씀</p>
+		{#if selecting}<SelectBar count={picked.size} onall={() => (picked = new Set(shown.map((b) => b.id)))} ondelete={removePicked} />{/if}
 		{#if lorebook.books.length}
-			<Input bind:value={query} placeholder="로어북 검색" aria-label="로어북 검색" type="search">
-				{#snippet leading()}<Search />{/snippet}
-			</Input>
 			<div class="grid">
 				{#each shown as b (b.id)}
 					{@const u = lorebook.usage(b.id)}
 					{@const n = lorebook.counts[b.id]}
-					<div class="card" role="button" tabindex="0" onclick={() => open(b.id)} onkeydown={(e) => e.key === "Enter" && open(b.id)} oncontextmenu={(e) => bookMenu(e, b)}>
-						<div class="card-top">
-							<span class="ic"><BookOpen /></span>
-							<b>{b.name}</b>
-							<IconButton label="{b.name} 메뉴" size="sm" onclick={(e) => bookMenu(e, b)}><Ellipsis /></IconButton>
-						</div>
-						<p class="desc">{b.description || "설명 없음"}</p>
-						<div class="meta">
-							<span>항목 {n?.entries ?? 0}개{n && n.enabled !== n.entries ? ` (켜짐 ${n.enabled})` : ""}</span>
-							<span>{relative(b.updatedAt)}</span>
-						</div>
-						{#if u.characters.length || u.personas.length}
-							<div class="who">
-								{#each [...u.characters, ...u.personas].slice(0, 6) as w (w.id)}
-									<Avatar name={w.name} src={fileSrc(w.avatar)} color={w.color || null} size={22} />
-								{/each}
-								<small>{[...u.characters, ...u.personas].map((w) => w.name).join(", ")}</small>
-							</div>
-						{/if}
-					</div>
+					<ItemCard
+						title={b.name}
+						desc={b.description || "설명 없음"}
+						meta="항목 {n?.entries ?? 0}개{n && n.enabled !== n.entries ? ` (켜짐 ${n.enabled})` : ''} · {relative(b.updatedAt)}"
+						{selecting}
+						selected={picked.has(b.id)}
+						onclick={() => (selecting ? pickBook(b.id) : open(b.id))}
+						oncontextmenu={(e) => bookMenu(e, b)}
+					>
+						{#snippet fallback()}<BookOpen />{/snippet}
+						{#snippet corner()}{#if !selecting}<IconButton label="{b.name} 메뉴" size="sm" variant="soft" onclick={(e) => bookMenu(e, b)}><Ellipsis /></IconButton>{/if}{/snippet}
+						{#snippet badges()}
+							{#each [...u.characters, ...u.personas].slice(0, 4) as w (w.id)}<Badge><Avatar name={w.name} src={fileSrc(w.avatar)} color={w.color || null} size={14} />{w.name}</Badge>{/each}
+						{/snippet}
+					</ItemCard>
 				{:else}
 					<p class="faint">맞는 로어북 없음</p>
 				{/each}
@@ -288,11 +327,6 @@
 	h1 {
 		font-size: var(--text-xl);
 	}
-	.lead {
-		margin: calc(var(--space-3) * -1) 0 0;
-		color: var(--text-muted);
-		font-size: var(--text-sm);
-	}
 	.acts {
 		display: flex;
 		align-items: center;
@@ -301,80 +335,8 @@
 	}
 	.grid {
 		display: grid;
-		grid-template-columns: repeat(auto-fill, minmax(260px, 1fr));
+		grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
 		gap: var(--space-3);
-	}
-	.card {
-		display: flex;
-		flex-direction: column;
-		gap: var(--space-2);
-		padding: var(--space-4);
-		border: 1px solid var(--border);
-		border-radius: var(--radius-lg);
-		background: var(--surface);
-		cursor: pointer;
-	}
-	.card:hover {
-		border-color: var(--border-strong);
-	}
-	.card:focus-visible {
-		outline: 2px solid var(--accent);
-	}
-	.card-top {
-		display: flex;
-		align-items: center;
-		gap: var(--space-2);
-	}
-	.card-top b {
-		flex: 1;
-		min-width: 0;
-		overflow: hidden;
-		text-overflow: ellipsis;
-		white-space: nowrap;
-	}
-	.ic {
-		display: grid;
-		place-items: center;
-		width: 30px;
-		height: 30px;
-		flex: none;
-		border-radius: var(--radius-md);
-		background: var(--accent-soft);
-		color: var(--accent-text);
-	}
-	.ic :global(svg) {
-		width: 16px;
-		height: 16px;
-	}
-	.desc {
-		margin: 0;
-		font-size: var(--text-sm);
-		color: var(--text-muted);
-		display: -webkit-box;
-		-webkit-line-clamp: 2;
-		line-clamp: 2;
-		-webkit-box-orient: vertical;
-		overflow: hidden;
-	}
-	.meta {
-		display: flex;
-		justify-content: space-between;
-		font-size: var(--text-xs);
-		color: var(--text-faint);
-	}
-	.who {
-		display: flex;
-		align-items: center;
-		gap: 4px;
-		min-width: 0;
-	}
-	.who small {
-		margin-left: 4px;
-		font-size: var(--text-xs);
-		color: var(--text-muted);
-		white-space: nowrap;
-		overflow: hidden;
-		text-overflow: ellipsis;
 	}
 	.info {
 		display: flex;

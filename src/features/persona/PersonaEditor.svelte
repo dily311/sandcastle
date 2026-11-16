@@ -61,7 +61,7 @@
 	const usedBy = $derived(library.characters.filter((c) => c.defaultPersonaId === persona.id));
 	const convs = $derived(library.conversations.filter((c) => c.personaId === persona.id).sort((a, b) => b.updatedAt - a.updatedAt));
 
-	let menu = $state<{ x: number; y: number } | null>(null);
+	let menu = $state<{ x: number; y: number; align?: "start" | "end" } | null>(null);
 	const menuItems: MenuItem[] = $derived([
 		{ label: "복제", icon: Copy, onselect: onduplicate },
 		{ label: "캐릭터로 복사", icon: Users, onselect: ontocharacter },
@@ -70,7 +70,7 @@
 	]);
 	function openMenu(e: MouseEvent) {
 		const r = (e.currentTarget as HTMLElement).getBoundingClientRect();
-		menu = { x: r.right - 180, y: r.bottom + 4 };
+		menu = { x: r.right, y: r.bottom + 4, align: "end" };
 	}
 </script>
 

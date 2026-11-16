@@ -2,7 +2,7 @@
 	import { Camera, ImagePlus, Move, X as XIcon } from "@lucide/svelte";
 	import { ChevronRight, Download, Ellipsis, Gamepad2, MessageSquarePlus, Pencil, Plus, Search, Star, StarOff, Trash2, Upload, UserRound, Users } from "@lucide/svelte";
 	import type { GameProject_Serialize as GameProject } from "$ipc/bindings";
-	import { Avatar, Button, ContextMenu, SplitButton, Dialog, EmptyState, IconButton, Input, Segmented, Spinner, type MenuItem } from "$shared/ui";
+	import { Avatar, Badge, Button, ContextMenu, ItemCard, ListToolbar, SelectBar, SplitButton, Dialog, EmptyState, IconButton, Input, Segmented, Spinner, type MenuItem } from "$shared/ui";
 	import { nav } from "$app/nav.svelte";
 	import { call, commands } from "$shared/ipc/client";
 	import { IMAGE_FILES, PACK_FILES, ST_FILES, pickFiles, pickSavePath } from "$shared/ipc/dialog";
@@ -30,14 +30,61 @@
 		nav.go(conv ? { page: "character", charId: cid, convId: conv } : { page: "character", charId: cid });
 	}
 
-	// ---- 목록 ----
+	// ---- 목록: 찾기 · 거르기 · 정렬 · 여러 개 삭제 (이미지·게임·로어북 목록과 같은 도구) ----
 	let query = $state("");
+	let filter = $state("all");
+	let sort = $state("recent");
+	let selecting = $state(false);
+	let picked = $state<Set<string>>(new Set());
+	$effect(() => {
+		if (!selecting) picked = new Set();
+	});
 	const lastActive = (id: string) => library.convsOf(id)[0]?.updatedAt ?? 0;
-	const list = $derived(
-		library.characters
-			.filter((c) => !query.trim() || c.name.toLowerCase().includes(query.trim().toLowerCase()) || c.tags.some((t) => t.toLowerCase().includes(query.trim().toLowerCase())))
-			.sort((a, b) => Number(b.favorite) - Number(a.favorite) || lastActive(b.id) - lastActive(a.id) || a.name.localeCompare(b.name, "ko")),
-	);
+	const allTags = $derived([...new Set(library.characters.flatMap((c) => c.tags))].sort((a, b) => a.localeCompare(b, "ko")));
+	const FILTERS = $derived([
+		{ value: "all", label: `전부 ${library.characters.length}` },
+		{ value: "fav", label: "즐겨찾기" },
+		{ value: "chat", label: "대화 있음" },
+		{ value: "nochat", label: "대화 없음" },
+		...allTags.map((t) => ({ value: `tag:${t}`, label: `#${t}` })),
+	]);
+	const SORTS = [
+		{ value: "recent", label: "최근 대화 순" },
+		{ value: "name", label: "이름 순" },
+		{ value: "new", label: "최근 만든 순" },
+	];
+	const list = $derived.by(() => {
+		const q = query.trim().toLowerCase();
+		const pass = (c: Character) =>
+			filter === "all" ||
+			(filter === "fav" && c.favorite) ||
+			(filter === "chat" && library.convsOf(c.id).length > 0) ||
+			(filter === "nochat" && !library.convsOf(c.id).length) ||
+			(filter.startsWith("tag:") && c.tags.includes(filter.slice(4)));
+		const by =
+			sort === "name"
+				? (a: Character, b: Character) => a.name.localeCompare(b.name, "ko")
+				: sort === "new"
+					? (a: Character, b: Character) => b.createdAt - a.createdAt
+					: (a: Character, b: Character) => Number(b.favorite) - Number(a.favorite) || lastActive(b.id) - lastActive(a.id) || a.name.localeCompare(b.name, "ko");
+		return library.characters.filter((c) => pass(c) && (!q || c.name.toLowerCase().includes(q) || c.tags.some((t) => t.toLowerCase().includes(q)))).sort(by);
+	});
+	function pickChar(id: string) {
+		const next = new Set(picked);
+		if (next.has(id)) next.delete(id);
+		else next.add(id);
+		picked = next;
+	}
+	async function removePicked() {
+		const ids = [...picked];
+		if (!ids.length) return;
+		const convs = ids.reduce((n, id) => n + library.convsOf(id).length, 0);
+		if (!(await confirmAction({ title: "캐릭터 삭제", message: `캐릭터 ${ids.length}개와 대화 ${convs}개를 지움. 되돌릴 수 없음`, confirmLabel: `${ids.length}개 삭제`, danger: true }))) return;
+		for (const id of ids) await call(commands.deleteCharacter(id), { source: "character" });
+		await library.load();
+		selecting = false;
+		toasts.success(`캐릭터 ${ids.length}개 지움`);
+	}
 	/** 제작자 메모는 HTML이 섞여 올 때가 많음 → 태그를 빼고 글만 (스크립트 실행 없음) */
 	function plain(html: string) {
 		if (!/<[a-z][\s\S]*>/i.test(html)) return html;
@@ -66,6 +113,8 @@
 	}
 	function onCoverDown(e: PointerEvent) {
 		if (!positioning) return;
+		// 완료·취소 버튼을 누른 것은 끌기가 아님 (포인터를 잡으면 버튼이 클릭을 못 받아 저장이 안 됐음)
+		if ((e.target as Element).closest("button")) return;
 		dragFrom = { y: e.clientY, start: coverY };
 		(e.currentTarget as HTMLElement).setPointerCapture(e.pointerId);
 	}
@@ -153,7 +202,7 @@
 		}
 	}
 
-	let more = $state<{ x: number; y: number } | null>(null);
+	let more = $state<{ x: number; y: number; align?: "start" | "end" } | null>(null);
 	const moreItems = $derived.by((): MenuItem[] => {
 		const c = character;
 		if (!c) return [];
@@ -257,7 +306,7 @@
 						size="sm"
 						onclick={(e) => {
 							const r = (e.currentTarget as HTMLElement).getBoundingClientRect();
-							more = { x: r.right - 220, y: r.bottom + 4 };
+							more = { x: r.right, y: r.bottom + 4, align: "end" };
 						}}><Ellipsis /></IconButton
 					>
 				</div>
@@ -307,13 +356,11 @@
 	<div class="page">
 		<header class="head">
 			<h1>캐릭터</h1>
-			<div class="tools">
-				<Input bind:value={query} placeholder="이름·태그 검색" aria-label="캐릭터 검색">
-					{#snippet leading()}<Search />{/snippet}
-				</Input>
+			<ListToolbar bind:query bind:filter bind:sort bind:selecting placeholder="이름·태그" filters={FILTERS} sorts={SORTS} canSelect={!!library.characters.length}>
 				<SplitButton label="새로 만들기" onclick={createCharacter} menuLabel="캐릭터 가져오기" items={[{ label: "파일에서 가져오기 (PNG·JSON·ZIP)", icon: Upload, onselect: importFiles }]} />
-			</div>
+			</ListToolbar>
 		</header>
+		{#if selecting}<SelectBar count={picked.size} onall={() => (picked = new Set(list.map((c) => c.id)))} ondelete={removePicked} />{/if}
 		{#if !library.characters.length}
 			<EmptyState title="캐릭터 없음" description="SillyTavern 카드(PNG·JSON)나 캐릭터 묶음(zip)을 가져오거나 새로 만들기">
 				{#snippet icon()}<Users />{/snippet}
@@ -322,17 +369,25 @@
 			<div class="grid">
 				{#each list as ch (ch.id)}
 					{@const convs = library.convsOf(ch.id)}
-					<article class="char">
-						<button class="body-btn" onclick={() => open(ch.id)}>
-							<Avatar name={ch.name} src={fileSrc(ch.avatar)} color={ch.color} size={64} />
-							<b>{#if ch.favorite}<Star class="fav" />{/if}{ch.name}</b>
-							<span class="muted desc">{firstLine(ch.description) || "소개 없음"}</span>
-							<span class="faint">대화 {convs.length}개{#if convs.length} · {relative(convs[0].updatedAt)}{/if}</span>
-						</button>
-						{#if convs.length}
-							<button class="resume" onclick={() => open(ch.id, convs[0].id)}>이어서: {convs[0].title}</button>
-						{/if}
-					</article>
+					<ItemCard
+						title={ch.name}
+						desc={firstLine(ch.description) || "소개 없음"}
+						meta="대화 {convs.length}개{convs.length ? ` · ${relative(convs[0].updatedAt)}` : ''}"
+						image={fileSrc(ch.cover) ?? fileSrc(ch.avatar)}
+						imagePosition={ch.cover ? `center ${ch.coverY ?? 50}%` : undefined}
+						{selecting}
+						selected={picked.has(ch.id)}
+						onclick={() => (selecting ? pickChar(ch.id) : open(ch.id))}
+					>
+						{#snippet fallback()}<Avatar name={ch.name} color={ch.color} size={64} />{/snippet}
+						{#snippet badges()}
+							{#if ch.favorite}<Badge tone="warning"><Star /> 즐겨찾기</Badge>{/if}
+							{#each ch.tags.slice(0, 3) as t (t)}<Badge>#{t}</Badge>{/each}
+						{/snippet}
+						{#snippet footer()}
+							{#if convs.length && !selecting}<button class="resume" onclick={() => open(ch.id, convs[0].id)}>이어서: {convs[0].title}</button>{/if}
+						{/snippet}
+					</ItemCard>
 				{:else}
 					<p class="none">검색 결과 없음</p>
 				{/each}
@@ -359,63 +414,12 @@
 		max-width: 1100px;
 		margin: 0 auto var(--space-5);
 	}
-	.tools {
-		display: grid;
-		grid-template-columns: minmax(0, 1fr) auto auto;
-		gap: var(--space-2);
-	}
 	.grid {
 		display: grid;
 		grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
 		gap: var(--space-3);
 		max-width: 1100px;
 		margin: 0 auto;
-	}
-	.char {
-		display: flex;
-		flex-direction: column;
-		border: 1px solid var(--border);
-		border-radius: var(--radius-lg);
-		background: var(--surface);
-		overflow: hidden;
-		transition: border-color var(--duration-fast) var(--ease);
-	}
-	.char:hover {
-		border-color: var(--accent);
-	}
-	.body-btn {
-		display: flex;
-		flex-direction: column;
-		align-items: center;
-		gap: var(--space-1);
-		flex: 1;
-		padding: var(--space-5) var(--space-4) var(--space-4);
-		border: none;
-		background: none;
-		text-align: center;
-		cursor: pointer;
-	}
-	.body-btn b {
-		display: inline-flex;
-		align-items: center;
-		gap: 4px;
-		margin-top: var(--space-2);
-	}
-	.body-btn b :global(.fav) {
-		width: 14px;
-		height: 14px;
-		color: var(--accent);
-		fill: var(--accent);
-	}
-	.body-btn span {
-		font-size: var(--text-sm);
-	}
-	.desc {
-		display: -webkit-box;
-		-webkit-line-clamp: 2;
-		line-clamp: 2;
-		-webkit-box-orient: vertical;
-		overflow: hidden;
 	}
 	.resume {
 		padding: var(--space-2) var(--space-3);

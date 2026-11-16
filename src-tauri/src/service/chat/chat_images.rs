@@ -135,7 +135,15 @@ pub async fn add_images(
     }
     let mut added = vec![];
     for source in paths {
-        let id = Uuid::new_v4().to_string();
+        // 같은 키(파일 이름)가 이미 있으면 그 이미지를 새 파일로 덮어쓴다 (id·키·순서 유지)
+        let key = normalize_key(&key_from_path(source)).unwrap_or_else(|_| "image".to_string());
+        let existing: Option<(String, i64, bool, i64)> =
+            sqlx::query_as("SELECT id, sort_order, enabled, created_at FROM character_images WHERE character_id = ? AND key = ?")
+                .bind(character_id)
+                .bind(&key)
+                .fetch_optional(db)
+                .await?;
+        let id = existing.as_ref().map(|e| e.0.clone()).unwrap_or_else(|| Uuid::new_v4().to_string());
         let (file_path, thumb_path) = {
             let (base, cid, id, source) =
                 (app_data_dir.to_path_buf(), character_id.to_string(), id.clone(), source.clone());
@@ -144,8 +152,19 @@ pub async fn add_images(
                 .map_err(|e| AppError::internal(e.to_string()))??
         };
 
-        let key = unique_key(db, character_id, &key_from_path(source)).await?;
         let now = chrono::Utc::now().timestamp_millis();
+        if let Some((_, sort_order, enabled, created_at)) = existing {
+            sqlx::query("UPDATE character_images SET file_path = ?, thumb_path = ?, updated_at = ? WHERE id = ?")
+                .bind(&file_path)
+                .bind(&thumb_path)
+                .bind(now)
+                .bind(&id)
+                .execute(db)
+                .await?;
+            let row = CharacterImageRow { id, character_id: character_id.to_string(), key, file_path, thumb_path: Some(thumb_path), enabled, sort_order, created_at, updated_at: now };
+            added.push(CharacterImage::from_row(row, app_data_dir));
+            continue;
+        }
         let row = CharacterImageRow {
             id,
             character_id: character_id.to_string(),
@@ -166,16 +185,32 @@ pub async fn add_images(
     Ok(added)
 }
 
-/// 파일 이름 기반 키가 겹치면 " 2", " 3"… 을 붙인다
-async fn unique_key(db: &DbPool, character_id: &str, base_key: &str) -> Result<String> {
-    let base_key = normalize_key(base_key).unwrap_or_else(|_| "image".to_string());
-    let mut key = base_key.clone();
-    let mut n = 2;
-    while db::character_image::image_key_exists(db, character_id, &key, None).await? {
-        key = format!("{base_key} {n}");
-        n += 1;
+
+/// ZIP 안의 그림들을 임시 폴더에 풀어 경로를 돌려준다 (폴더 구조는 버리고 파일 이름만, 최대 500장)
+pub fn extract_zip_images(zip_path: &Path, out_dir: &Path) -> Result<Vec<PathBuf>> {
+    let file = std::fs::File::open(zip_path).map_err(|e| AppError::io(format!("ZIP을 열 수 없습니다: {e}")))?;
+    let mut zip = zip::ZipArchive::new(file).map_err(|e| AppError::validation(format!("ZIP 파일이 아닙니다: {e}"), None))?;
+    std::fs::create_dir_all(out_dir)?;
+    let mut out = Vec::new();
+    for i in 0..zip.len().min(2000) {
+        let mut f = zip.by_index(i).map_err(|e| AppError::io(e.to_string()))?;
+        if f.is_dir() || f.size() > MAX_IMAGE_BYTES {
+            continue;
+        }
+        let Some(name) = std::path::Path::new(f.name()).file_name().map(|n| n.to_string_lossy().into_owned()) else { continue };
+        let ext = name.rsplit('.').next().unwrap_or_default().to_ascii_lowercase();
+        if name.starts_with('.') || !["png", "jpg", "jpeg", "webp", "gif"].contains(&ext.as_str()) {
+            continue;
+        }
+        let dest = out_dir.join(&name);
+        let mut w = std::fs::File::create(&dest)?;
+        std::io::copy(&mut f, &mut w)?;
+        out.push(dest);
+        if out.len() >= 500 {
+            break;
+        }
     }
-    Ok(key)
+    Ok(out)
 }
 
 /// 이미지 파일 삭제 (없으면 무시)

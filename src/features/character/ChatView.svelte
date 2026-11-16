@@ -8,7 +8,7 @@
 	import { fade, fly } from "svelte/transition";
 	import { drops, extOf, isImage, storeFile } from "$app/drop.svelte";
 	import { Button, HtmlView } from "$shared/ui";
-	import { confirmAction } from "$shared/stores/confirm.svelte";
+	import { confirmAction, promptText } from "$shared/stores/confirm.svelte";
 	import { toasts } from "$shared/stores/toast.svelte";
 	import { ContextMenu, Dialog, EmptyState, IconButton, Spinner, Textarea } from "$shared/ui";
 	import { panel } from "$app/panel.svelte";
@@ -236,6 +236,23 @@
 		window.getSelection()?.removeAllRanges();
 	}
 
+	// ---- 챕터 이름 바꾸기 (오른쪽 클릭 / 꾹 누르기) ----
+	async function renameChapter(m: Message) {
+		const cur = metaOf(m).chapter ?? "";
+		const t = await promptText({ title: "챕터 이름 바꾸기", message: "비우면 챕터 표시를 지움", input: { value: cur, placeholder: "챕터 제목" }, confirmLabel: "바꾸기" });
+		if (t === null || t === undefined) return;
+		await session?.setChapter(m, t.trim() || null);
+	}
+	let pressTimer: ReturnType<typeof setTimeout> | undefined;
+	function pressStart(e: PointerEvent, m: Message) {
+		if (e.pointerType === "mouse") return;
+		clearTimeout(pressTimer);
+		pressTimer = setTimeout(() => void renameChapter(m), 550);
+	}
+	function pressEnd() {
+		clearTimeout(pressTimer);
+	}
+
 	// ---- 분기: 부모 대화 ----
 	const branchInfo = $derived((conv?.meta as { branch?: { parentId: string; messageId: string; seq: number } } | null)?.branch ?? null);
 	const parentConv = $derived(branchInfo ? library.conversation(branchInfo.parentId) : undefined);
@@ -353,7 +370,10 @@
 					{/if}
 					{#each session.messages as m, i (m.id)}
 						{@const ch = metaOf(m).chapter}
-						{#if ch}<h2 class="chapter" id="chapter-{m.id}"><span>{chapters[m.id]}장</span>{ch}</h2>{/if}
+						{#if ch}
+							<!-- svelte-ignore a11y_no_noninteractive_element_interactions (오른쪽 클릭·꾹 누르기로 이름 바꾸기, 키보드는 메시지 동작의 챕터 버튼) -->
+							<h2 class="chapter" id="chapter-{m.id}" title="오른쪽 클릭하거나 꾹 눌러 이름 바꾸기" oncontextmenu={(e) => { e.preventDefault(); void renameChapter(m); }} onpointerdown={(e) => pressStart(e, m)} onpointerup={pressEnd} onpointerleave={pressEnd}><span>{chapters[m.id]}장</span>{ch}</h2>
+						{/if}
 						<MessageItem msg={m} no={i + 1} {session} {images} isLast={i === session.messages.length - 1} onbranch={branch} onprompt={showPrompt} {selecting} selected={picked.has(m.id)} onselect={pick} />
 					{/each}
 

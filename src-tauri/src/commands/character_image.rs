@@ -45,6 +45,22 @@ pub async fn add_character_images(
     add_images(&state.db, &base, &character_id, &paths).await
 }
 
+/// ZIP으로 에셋 한꺼번에 넣기 (파일 이름이 키, 같은 키는 덮어씀)
+#[tauri::command]
+#[specta::specta]
+pub async fn add_character_images_zip(app: AppHandle, state: State<'_, AppState>, character_id: String, zip_path: String) -> Result<Vec<CharacterImage>> {
+    let base = app_data_dir(&app)?;
+    let tmp = std::env::temp_dir().join(format!("sandcastle-zip-{}", uuid::Uuid::new_v4()));
+    let zip = PathBuf::from(zip_path);
+    let tmp2 = tmp.clone();
+    let paths = tokio::task::spawn_blocking(move || crate::service::chat::chat_images::extract_zip_images(&zip, &tmp2))
+        .await
+        .map_err(|e| AppError::internal(e.to_string()))??;
+    let result = add_images(&state.db, &base, &character_id, &paths).await;
+    let _ = std::fs::remove_dir_all(&tmp);
+    result
+}
+
 #[tauri::command]
 #[specta::specta]
 pub async fn update_character_image(

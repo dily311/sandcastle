@@ -40,8 +40,8 @@
 	const openConv = $derived(cur.page === "character" ? cur.convId : undefined);
 
 	// ---- 대화 동작 메뉴 (… 버튼 / 오른쪽 클릭) ----
-	let menu = $state<{ at: { x: number; y: number }; items: MenuItem[] } | null>(null);
-	function convMenu(c: Conversation, at: { x: number; y: number }) {
+	let menu = $state<{ at: { x: number; y: number; align?: "start" | "end" }; items: MenuItem[] } | null>(null);
+	function convMenu(c: Conversation, at: { x: number; y: number; align?: "start" | "end" }) {
 		menu = {
 			at,
 			items: [
@@ -70,7 +70,7 @@
 	function openMenu(e: MouseEvent, c: Conversation) {
 		e.stopPropagation();
 		const r = (e.currentTarget as HTMLElement).getBoundingClientRect();
-		convMenu(c, { x: r.right - 180, y: r.bottom + 4 });
+		convMenu(c, { x: r.right, y: r.bottom + 4, align: "end" });
 	}
 	function rightClick(e: MouseEvent, c: Conversation) {
 		e.preventDefault();

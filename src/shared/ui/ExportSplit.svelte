@@ -29,7 +29,7 @@
 	let format = $state<T>(rememberedFormat(storageKey, formats));
 	const current = $derived(formats.find((f) => f.id === format) ?? formats[0]);
 
-	let menu = $state<{ x: number; y: number } | null>(null);
+	let menu = $state<{ x: number; y: number; align?: "start" | "end" } | null>(null);
 	let box: HTMLDivElement | undefined = $state();
 	const items = $derived<MenuItem[]>(
 		formats.map((f) => ({
@@ -43,7 +43,7 @@
 	);
 	function openMenu() {
 		const r = box?.getBoundingClientRect();
-		if (r) menu = { x: r.left, y: r.bottom + 4 };
+		if (r) menu = { x: r.right, y: r.bottom + 4, align: "end" };
 	}
 </script>
 

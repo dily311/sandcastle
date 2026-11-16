@@ -7,7 +7,7 @@
 	import { promptText } from "$shared/stores/confirm.svelte";
 	import { nav } from "$app/nav.svelte";
 	import { library, type Conversation } from "$features/character/library.svelte";
-	import { lookup, phone, WALLPAPERS, type Who } from "./phone.svelte";
+	import { lookup, phone, WALLPAPERS, wallpaperCss, type Who } from "./phone.svelte";
 	import PhoneRoom from "./PhoneRoom.svelte";
 	import PhonePanel from "./PhonePanel.svelte";
 	import PhoneAlbum from "./PhoneAlbum.svelte";
@@ -32,14 +32,13 @@
 	// 대화방이면 대화 화면과 같은 공통 탭 + 정보
 	$effect(() =>
 		panel.register(
-			room
-				? [
-						{ id: "settings", label: "대화 설정", icon: SlidersHorizontal },
-						{ id: "context", label: "컨텍스트·프리셋", icon: Gauge },
-						{ id: "branches", label: "분기", icon: GitBranch },
-						{ id: "info", label: "정보", icon: Info },
-					]
-				: [{ id: "info", label: "정보", icon: Info }],
+			// 대화·게임처럼 늘 같은 탭 (채팅방을 열기 전에는 안내만)
+			[
+				{ id: "settings", label: "대화 설정", icon: SlidersHorizontal },
+				{ id: "context", label: "컨텍스트·프리셋", icon: Gauge },
+				...(room ? [{ id: "branches", label: "분기", icon: GitBranch }] : []),
+				{ id: "info", label: "정보", icon: Info },
+			],
 		),
 	);
 	// 방의 세션은 여기서 만들어 방과 패널이 같이 씀
@@ -139,7 +138,7 @@
 
 <div class="phone-page">
 <div class="stage" class:full={phone.prefs.display === "full"}>
-	<div class="device" class:framed={phone.prefs.display === "mockup"} style:--wall={WALLPAPERS[phone.wallpaper] ?? WALLPAPERS.sea}>
+	<div class="device" class:framed={phone.prefs.display === "mockup"} style:--wall={wallpaperCss(phone.wallpaper)}>
 		<div class="status" class:on-wall={screen === "home"}>
 			<span>{clock}</span><span class="icons"><Signal /><Wifi /><BatteryFull /></span>
 		</div>

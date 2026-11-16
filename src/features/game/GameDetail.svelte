@@ -1,8 +1,9 @@
 <script lang="ts">
 	import { onMount } from "svelte";
-	import { AlertTriangle, ChevronRight, Download, Ellipsis, Gamepad2, Pencil, Play, Plus, Trash2, Users } from "@lucide/svelte";
+	import { AlertTriangle, ImagePlus, X, ChevronRight, Download, Ellipsis, Gamepad2, Pencil, Play, Plus, Trash2, Users } from "@lucide/svelte";
 	import { Avatar, Badge, Button, ContextMenu, EmptyState, IconButton, Segmented, Spinner, type MenuItem } from "$shared/ui";
 	import { call, commands } from "$shared/ipc/client";
+	import { IMAGE_FILES, pickFiles } from "$shared/ipc/dialog";
 	import { confirmAction } from "$shared/stores/confirm.svelte";
 	import { toasts } from "$shared/stores/toast.svelte";
 	import { absolute, relative } from "$shared/time";
@@ -35,6 +36,19 @@
 	const warnings = $derived((game?.diagnostics ?? []).filter((d: Issue) => d.severity !== "error"));
 	const template = $derived(game ? games.template(game.project.templateId) : undefined);
 	const cover = $derived(game ? gameAssetUrl(gameId, game.project.coverImage) : null);
+
+	// 커버 바로 바꾸기 (게임 폴더 cover/에 복사)
+	async function changeCover(remove = false) {
+		let path: string | null = null;
+		if (!remove) {
+			[path] = await pickFiles([IMAGE_FILES], false);
+			if (!path) return;
+		}
+		const saved = await call(commands.setGameCover(gameId, path), { source: "game" });
+		if (games.opened?.project.id === gameId) games.opened.project.coverImage = saved.coverImage;
+		const g = games.game(gameId);
+		if (g) g.coverImage = saved.coverImage;
+	}
 
 	let tab = $state<"sessions" | "characters" | "check">("sessions");
 	let starting = $state(false);
@@ -85,7 +99,7 @@
 		toasts.show({ tone: "success", message: `캐릭터 '${name}' 만듦`, action: { label: "열기", run: () => nav.go({ page: "character", charId: c.id }) } });
 	}
 
-	let more = $state<{ x: number; y: number } | null>(null);
+	let more = $state<{ x: number; y: number; align?: "start" | "end" } | null>(null);
 	const moreItems: MenuItem[] = [
 		{ label: "내보내기 (다운로드 폴더)", icon: Download, onselect: exportGame },
 		{ label: "삭제", icon: Trash2, danger: true, separator: true, onselect: removeGame },
@@ -115,7 +129,12 @@
 	</EmptyState>
 {:else}
 	<div class="detail">
-		<div class="banner" style:background-image={cover ? `url("${cover}")` : undefined}></div>
+		<div class="banner" style:background-image={cover ? `url("${cover}")` : undefined}>
+			<div class="cover-tools">
+				<Button size="sm" variant="secondary" onclick={() => changeCover()}>{#snippet icon()}<ImagePlus />{/snippet}{cover ? "커버 바꾸기" : "커버 넣기"}</Button>
+				{#if game.project.coverImage}<Button size="sm" variant="secondary" onclick={() => changeCover(true)}>{#snippet icon()}<X />{/snippet}커버 지우기</Button>{/if}
+			</div>
+		</div>
 		<header class="profile">
 			<div class="ident">
 				<h1>{game.project.title}</h1>
@@ -131,7 +150,7 @@
 					label="더 보기"
 					onclick={(e) => {
 						const r = (e.currentTarget as HTMLElement).getBoundingClientRect();
-						more = { x: r.right - 200, y: r.bottom + 4 };
+						more = { x: r.right, y: r.bottom + 4, align: "end" };
 					}}><Ellipsis /></IconButton
 				>
 			</div>
@@ -203,6 +222,24 @@
 {/if}
 
 <style>
+	.cover-tools {
+		position: absolute;
+		top: var(--space-3);
+		right: var(--space-4);
+		display: flex;
+		gap: var(--space-2);
+		opacity: 0;
+		transition: opacity var(--duration-fast) var(--ease);
+	}
+	.banner:hover .cover-tools,
+	.cover-tools:focus-within {
+		opacity: 1;
+	}
+	@media (hover: none) {
+		.cover-tools {
+			opacity: 1;
+		}
+	}
 	.center {
 		display: grid;
 		place-items: center;
@@ -213,6 +250,7 @@
 		overflow: auto;
 	}
 	.banner {
+		position: relative;
 		height: 200px;
 		background:
 			radial-gradient(ellipse at 70% 0%, color-mix(in oklab, var(--accent) 45%, transparent), transparent 55%),

@@ -2,6 +2,8 @@
 // - 페르소나 폰: 내가 페르소나, AI가 연락처 캐릭터 (일반 대화와 같은 구조)
 // - 캐릭터 폰: 내가 주인 캐릭터, AI가 연락처(다른 캐릭터나 페르소나). 엿보기로 AI가 두 사람 몫을 다 쓸 수도 있음
 //   대화 meta.phone = { owner: {kind, id}, contact: {kind, id} }
+import { gradientCss, gradientOf } from "$shared/ui/backgrounds";
+import { fileSrc } from "$shared/ipc/file";
 import { splitHtmlBlocks } from "$shared/html/blocks";
 import type { Message_Serialize as Message, PhoneContact } from "$ipc/bindings";
 import { call, commands } from "$shared/ipc/client";
@@ -21,6 +23,16 @@ export const WALLPAPERS: Record<string, string> = {
 	night: "linear-gradient(160deg, #3b4a6b 0%, #1e2a44 55%, #0f1424 100%)",
 	forest: "linear-gradient(160deg, #b9d9a8 0%, #5f8f5a 55%, #2d4a35 100%)",
 };
+
+/** 폰 배경 값 → CSS 배경. 예전 이름(sea 등) / "preset:<id>"(공용 그라데이션) / 올린 그림 경로 */
+export function wallpaperCss(value: string | null | undefined): string {
+	if (!value) return WALLPAPERS.sea;
+	if (WALLPAPERS[value]) return WALLPAPERS[value];
+	const g = gradientOf(value);
+	if (g) return gradientCss(g);
+	const url = fileSrc(value);
+	return url ? `center / cover no-repeat url("${url.replace(/"/g, "%22")}")` : WALLPAPERS.sea;
+}
 
 interface Prefs {
 	owner: Who | null;

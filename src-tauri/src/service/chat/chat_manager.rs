@@ -413,6 +413,12 @@ impl ChatManager {
             }
         }
 
+        // 이미지 자동 생성: 글쓰기 AI에게 응답 끝 <image> 그림 프롬프트를 쓰게 한다 (기본 꺼짐)
+        let auto_image = crate::sys::plugins::is_enabled(app, crate::sys::plugins::id::IMAGE_AUTO);
+        if auto_image {
+            context.system_rules.push(crate::service::app_prompts::auto_image());
+        }
+
         let regex = RegexProcessor::load(
             db,
             Some(&conv.character_id),
@@ -479,6 +485,9 @@ impl ChatManager {
         };
 
         let result = regex.apply(&raw, RegexPlacement::AiOutput, &[RegexTarget::Stored], Some(0));
+        // <image> 그림 프롬프트는 본문에서 빼서 meta에 (자동 생성이 꺼져 있어도 태그는 지운다)
+        let (result, auto_image_prompt) = take_image_tag(&result);
+        let auto_image_prompt = auto_image_prompt.filter(|_| auto_image);
         let (content, used_images) = sanitize_cg_tags(&result, &images);
         let info = json!({
             "apiProfileId": api_profile_id,
@@ -491,7 +500,7 @@ impl ChatManager {
         });
         let images_json = serde_json::to_value(&used_images).unwrap_or(Value::Array(vec![]));
 
-        let assistant = match &target {
+        let mut assistant = match &target {
             None => chat_ui::push_message(
                 db,
                 MessageInput {
@@ -522,6 +531,12 @@ impl ChatManager {
             if let Ok(v) = serde_json::to_value(&prompt) {
                 chat_ui::save_prompt(db, &assistant.id, &v).await.map_err(AppError::from)?;
             }
+        }
+        if let Some(p) = auto_image_prompt {
+            let mut meta = assistant.meta.clone().filter(Value::is_object).unwrap_or_else(|| json!({}));
+            meta["autoImagePrompt"] = json!(p);
+            crate::db::conversation::update_message_meta(db, &assistant.id, meta).await.map_err(AppError::from)?;
+            assistant = chat_ui::get_message(db, &assistant.id).await.map_err(AppError::from)?;
         }
 
         let _ = app.emit(
@@ -656,5 +671,53 @@ impl ChatManager {
             return Err(AppError::validation("AI가 메시지를 쓰지 않았음. 다시 시도해 보세요", None).into());
         }
         Ok(saved)
+    }
+}
+
+/// 응답 끝의 <image>그림 프롬프트</image>를 떼어 낸다 (본문, 프롬프트). 여러 개면 마지막 것을 쓴다
+pub(crate) fn take_image_tag(text: &str) -> (String, Option<String>) {
+    let lower = text.to_ascii_lowercase();
+    let mut out = String::with_capacity(text.len());
+    let mut prompt = None;
+    let mut i = 0;
+    while let Some(start) = lower[i..].find("<image>").map(|p| p + i) {
+        out.push_str(&text[i..start]);
+        let body_start = start + "<image>".len();
+        match lower[body_start..].find("</image>").map(|p| p + body_start) {
+            Some(end) => {
+                let p = text[body_start..end].trim();
+                if !p.is_empty() {
+                    prompt = Some(p.to_string());
+                }
+                i = end + "</image>".len();
+            }
+            None => {
+                // 닫히지 않은 태그(응답이 끊김): 남은 글을 프롬프트로 본다
+                let p = text[body_start..].trim();
+                if !p.is_empty() {
+                    prompt = Some(p.to_string());
+                }
+                i = text.len();
+            }
+        }
+    }
+    out.push_str(&text[i.min(text.len())..]);
+    (out.trim_end().to_string(), prompt)
+}
+
+#[cfg(test)]
+mod image_tag_tests {
+    use super::take_image_tag;
+
+    #[test]
+    fn strips_image_tag_and_keeps_prompt() {
+        let (body, p) = take_image_tag("그녀가 웃었다.\n<image>1girl, smile, forest</image>");
+        assert_eq!(body, "그녀가 웃었다.");
+        assert_eq!(p.as_deref(), Some("1girl, smile, forest"));
+        let (body, p) = take_image_tag("태그 없음");
+        assert_eq!((body.as_str(), p), ("태그 없음", None));
+        let (body, p) = take_image_tag("끊김 <IMAGE>1girl, night");
+        assert_eq!(body, "끊김");
+        assert_eq!(p.as_deref(), Some("1girl, night"));
     }
 }

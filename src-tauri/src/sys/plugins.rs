@@ -27,6 +27,8 @@ pub mod id {
     pub const TRANSLATE: &str = "translate";
     pub const TTS: &str = "tts";
     pub const IMAGE_GEN: &str = "imagegen";
+    /// 글을 쓰는 AI가 응답과 함께 그림 프롬프트를 쓰고, 응답 뒤 자동으로 그린다
+    pub const IMAGE_AUTO: &str = "imageauto";
 }
 
 #[derive(Debug, Clone, Serialize, specta::Type)]
@@ -60,7 +62,9 @@ const CATALOG: &[Def] = &[
     Def { id: id::WIDGET, name: "위젯", description: "바탕화면 위젯 (음악 플레이어 등)", default_enabled: false, desktop_only: true },
     Def { id: id::TRANSLATE, name: "번역", description: "AI 답변을 내 언어로, 내 입력을 다른 언어로 번역 (연결한 AI로)", default_enabled: false, desktop_only: false },
     Def { id: id::TTS, name: "음성 읽기", description: "AI 답변을 음성으로 읽어 줌 (OpenAI 호환 음성 API)", default_enabled: false, desktop_only: false },
-    Def { id: id::IMAGE_GEN, name: "이미지 생성", description: "대화 장면을 이미지로 만들기 (OpenAI 호환 이미지 API)", default_enabled: false, desktop_only: false },
+    Def { id: id::IMAGE_GEN, name: "이미지 생성", description: "직접 그림 만들기: 이미지 페이지의 새로 만들기, 메시지의 '이 장면 그리기' (NovelAI·OpenAI 호환)", default_enabled: false, desktop_only: false },
+    // 응답마다 이미지 요금이 나가므로 기본 꺼짐
+    Def { id: id::IMAGE_AUTO, name: "이미지 자동 생성", description: "글을 쓰는 AI가 응답 끝에 그림 프롬프트도 쓰고, 응답이 오면 그 프롬프트로 바로 그림 (응답마다 이미지 요금, 설정 > 이미지 생성의 API·프리셋 사용)", default_enabled: false, desktop_only: false },
 ];
 
 fn default_of(plugin_id: &str) -> bool {

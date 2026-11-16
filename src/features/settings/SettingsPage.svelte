@@ -40,7 +40,8 @@
 		keywords: string;
 		view: Component;
 		/** 이 코어 플러그인이 꺼져 있으면 탭을 숨김 */
-		plugin?: PluginId;
+		/** 이 코어 플러그인(여럿이면 하나라도)이 꺼져 있으면 탭을 숨김 */
+		plugin?: PluginId | PluginId[];
 	}
 	$effect(() => {
 		if (!plugins.loaded) void plugins.load();
@@ -64,7 +65,7 @@
 				{ id: "phone", label: "폰", icon: Smartphone, keywords: "폰 모드 메신저 프롬프트", view: PhoneSection, plugin: "phone" },
 				{ id: "translate", label: "번역", icon: Languages, keywords: "번역 언어 자동 번역 입력", view: TranslateSection, plugin: "translate" },
 				{ id: "tts", label: "음성 읽기", icon: AudioLines, keywords: "음성 tts 읽기 목소리 elevenlabs", view: TtsSection, plugin: "tts" },
-				{ id: "imagegen", label: "이미지 생성", icon: ImagePlus, keywords: "이미지 그림 생성 novelai 프롬프트 네거티브 샘플러", view: ImageGenSection, plugin: "imagegen" },
+				{ id: "imagegen", label: "이미지 생성", icon: ImagePlus, keywords: "이미지 그림 생성 novelai 프롬프트 네거티브 샘플러", view: ImageGenSection, plugin: ["imagegen", "imageauto"] },
 				{ id: "widget", label: "위젯", icon: Music, keywords: "음악 플레이어 자동 실행 바탕화면", view: WidgetSection, plugin: "widget" },
 			],
 		},
@@ -86,7 +87,7 @@
 		},
 	];
 	/** 꺼진 코어 플러그인의 설정 탭은 숨긴다 */
-	const groups = $derived(allGroups.map((g) => ({ ...g, items: g.items.filter((i) => !i.plugin || plugins.on(i.plugin)) })).filter((g) => g.items.length));
+	const groups = $derived(allGroups.map((g) => ({ ...g, items: g.items.filter((i) => !i.plugin || (Array.isArray(i.plugin) ? i.plugin.some((p) => plugins.on(p)) : plugins.on(i.plugin))) })).filter((g) => g.items.length));
 	const all = $derived(groups.flatMap((g) => g.items));
 
 	let query = $state("");
