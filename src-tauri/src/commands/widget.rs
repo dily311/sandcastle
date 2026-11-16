@@ -12,7 +12,14 @@ use tauri_plugin_store::StoreExt;
 #[tauri::command]
 #[specta::specta]
 pub async fn open_widget(app: AppHandle, state: State<'_, MouseTrackerState>) -> Result<(), AppError> {
-    WidgetManager::open_widget(&app, &state)?;
+    // 하위 기능이 모두 꺼져 있으면 빈 창을 띄우지 않는다
+    let wanted = app
+        .try_state::<crate::sys::settings::SettingsState<crate::models::settings::FeatureSetting>>()
+        .and_then(|s| s.0.lock().ok().map(|f| f.widget_window_wanted()))
+        .unwrap_or(true);
+    if wanted {
+        WidgetManager::open_widget(&app, &state)?;
+    }
     Ok(())
 }
 

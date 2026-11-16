@@ -250,6 +250,13 @@ pub fn list_generated_images(app: AppHandle) -> Result<Vec<tools::GeneratedImage
     Ok(tools::list_images(&generated_dir(&app)?))
 }
 
+/// 갤러리에 그림 올리기 (복사, AI 생성 정보는 파일에서 읽어 정리). 이미지 생성 플러그인이 꺼져 있어도 된다 (AI 호출 없음)
+#[tauri::command]
+#[specta::specta]
+pub fn import_gallery_images(app: AppHandle, paths: Vec<String>) -> Result<Vec<tools::GeneratedImage>> {
+    tools::import_images(&generated_dir(&app)?, &paths)
+}
+
 #[tauri::command]
 #[specta::specta]
 pub fn delete_generated_image(app: AppHandle, path: String) -> Result<()> {
@@ -270,16 +277,22 @@ pub async fn generate_image_from_prompt(
     prompt: String,
     refine: bool,
     source: Option<String>,
+    preset: Option<crate::models::settings::ImageGenSetting>,
+    album: Option<String>,
 ) -> Result<tools::GeneratedImage> {
     require(&app, id::IMAGE_GEN)?;
     if prompt.trim().is_empty() {
         return Err(AppError::validation("그릴 내용을 입력하세요", None));
     }
-    let p = read(&plugin)?.image_gen;
+    // 만들기 화면에서 고친 프리셋이 있으면 그것으로 (이번 한 번만, 설정은 그대로)
+    let p = match preset {
+        Some(pr) => pr,
+        None => read(&plugin)?.image_gen,
+    };
     let chat_profile = fallback_profile(&read(&settings)?, None);
-    let source = source.filter(|s| s == "game").unwrap_or_else(|| "manual".into());
+    let source = source.filter(|s| s == "game" || s == "phone").unwrap_or_else(|| "manual".into());
     let out_dir = generated_dir(&app)?;
-    let label = if source == "game" { "게임 장면 그림" } else { "그림 만들기" };
+    let label = match source.as_str() { "game" => "게임 장면 그림", "phone" => "폰 카메라", _ => "그림 만들기" };
     let job = CreateTaskRequest::inline(TaskType::ImageGen, TaskOwner::Image, id::IMAGE_GEN, label, false);
     tasks
         .run_inline(job, |_| async {
@@ -289,7 +302,13 @@ pub async fn generate_image_from_prompt(
                 let style = p.style_prompt.trim();
                 if style.is_empty() { prompt.trim().to_string() } else { format!("{}, {style}", prompt.trim()) }
             };
-            tools::generate_image(&ai, &p, &chat_profile, &final_prompt, &out_dir, &source, None).await
+            let mut img = tools::generate_image(&ai, &p, &chat_profile, &final_prompt, &out_dir, &source, None).await?;
+            // 폰 카메라: 그 폰 앨범으로 (정보 파일에도 남김)
+            if let Some(album) = album.filter(|a| !a.trim().is_empty()) {
+                img.album = Some(album);
+                std::fs::write(std::path::Path::new(&img.path).with_extension("json"), serde_json::to_vec(&img)?)?;
+            }
+            Ok(img)
         })
         .await
 }

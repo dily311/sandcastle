@@ -142,6 +142,16 @@ pub async fn test_message(ai: State<'_, Arc<AiService>>, tasks: State<'_, Arc<cr
             token: 4,
         }],
     };
+    // 음성·이미지 API는 대화 요청을 받지 않으므로 요금이 없는 확인 요청을 쓴다
+    let profile = ai.load_profile(&profile_id).await?;
+    match profile.format_type.as_str() {
+        "elevenlabs" => {
+            let n = crate::service::plugins::voices(&ai, &profile_id).await?.len();
+            return Ok(format!("목소리 {n}개"));
+        }
+        "novelai" => return crate::service::plugins::novelai_check(&ai, &profile).await,
+        _ => {}
+    }
     use crate::task::{CreateTaskRequest, TaskOwner, TaskType};
     let job = CreateTaskRequest::inline(TaskType::ApiCall, TaskOwner::System, "settings", "API 연결 확인", false);
     let res = tasks.run_inline(job, |_| ai.generate_once(AiRequest { profile_id, prompt })).await?;

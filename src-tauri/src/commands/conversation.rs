@@ -161,6 +161,28 @@ pub async fn set_character_avatar(
     Ok(conversation::get_character(&state.db, &id).await?)
 }
 
+/// 캐릭터 커버(배너) 이미지 바꾸기. path가 None이면 지운다. 앱이 복사해 둔 이전 커버 파일은 지운다
+#[tauri::command]
+#[specta::specta]
+pub async fn set_character_cover(app: tauri::AppHandle, state: State<'_, AppState>, id: String, path: Option<String>) -> Result<Character> {
+    let old = conversation::get_character(&state.db, &id)
+        .await
+        .map_err(|_| AppError::not_found(format!("캐릭터를 찾을 수 없습니다: {id}")))?;
+    let dir = crate::commands::character_image::app_data_dir(&app)?.join("characters").join("covers");
+    let cover = match path {
+        Some(src) => Some(copy_avatar(&dir, &src, "cover")?),
+        None => None,
+    };
+    conversation::set_character_cover(&state.db, &id, cover.as_deref()).await?;
+    if let Some(old) = old.cover.filter(|o| Some(o) != cover.as_ref()) {
+        let p = std::path::PathBuf::from(old);
+        if p.parent() == Some(dir.as_path()) {
+            let _ = std::fs::remove_file(p);
+        }
+    }
+    Ok(conversation::get_character(&state.db, &id).await?)
+}
+
 /// 이미지 파일을 아바타 폴더로 복사하고 새 경로를 돌려준다
 pub(crate) fn copy_avatar(dir: &std::path::Path, src: &str, prefix: &str) -> Result<String> {
     let src = std::path::PathBuf::from(src);

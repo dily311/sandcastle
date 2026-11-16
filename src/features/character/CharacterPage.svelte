@@ -1,10 +1,11 @@
 <script lang="ts">
+	import { Camera, ImagePlus, X as XIcon } from "@lucide/svelte";
 	import { ChevronRight, Download, Ellipsis, Gamepad2, MessageSquarePlus, Pencil, Plus, Search, Star, StarOff, Trash2, Upload, UserRound, Users } from "@lucide/svelte";
 	import type { GameProject_Serialize as GameProject } from "$ipc/bindings";
 	import { Avatar, Button, ContextMenu, Dialog, EmptyState, IconButton, Input, Segmented, Spinner, type MenuItem } from "$shared/ui";
 	import { nav } from "$app/nav.svelte";
 	import { call, commands } from "$shared/ipc/client";
-	import { PACK_FILES, ST_FILES, pickFiles, pickSavePath } from "$shared/ipc/dialog";
+	import { IMAGE_FILES, PACK_FILES, ST_FILES, pickFiles, pickSavePath } from "$shared/ipc/dialog";
 	import { fileSrc } from "$shared/ipc/file";
 	import { confirmAction, promptText } from "$shared/stores/confirm.svelte";
 	import { toasts } from "$shared/stores/toast.svelte";
@@ -44,6 +45,25 @@
 		const doc = new DOMParser().parseFromString(withBreaks, "text/html");
 		return (doc.body.textContent ?? "").replace(/\n{3,}/g, "\n\n").trim();
 	}
+	// ---- 커버·아바타 바로 바꾸기 (편집 화면에 가지 않고) ----
+	async function changeCover(id: string, remove = false) {
+		let path: string | null = null;
+		if (!remove) {
+			[path] = await pickFiles([IMAGE_FILES], false);
+			if (!path) return;
+		}
+		const saved = await call(commands.setCharacterCover(id, path), { source: "character" });
+		const c = library.character(id);
+		if (c) c.cover = saved.cover;
+	}
+	async function changeAvatar(id: string) {
+		const [path] = await pickFiles([IMAGE_FILES], false);
+		if (!path) return;
+		const saved = await call(commands.setCharacterAvatar(id, path), { source: "character" });
+		const c = library.character(id);
+		if (c) c.avatar = saved.avatar;
+	}
+
 	const firstLine = (s: string) => s.split("\n").find((l) => l.trim())?.trim() ?? "";
 
 	// ---- 개요: 메시지와 같은 렌더링 (마크다운 줄·HTML·<cg>·{{char}}/{{user}}) ----
@@ -162,9 +182,17 @@
 	{/key}
 {:else if charId && character}
 	<div class="detail">
-		<div class="banner"></div>
+		<div class="banner" class:has-cover={!!character.cover} style:background-image={character.cover ? `url("${fileSrc(character.cover)}")` : undefined}>
+			<div class="cover-tools">
+				<Button size="sm" variant="secondary" onclick={() => changeCover(character.id)}>{#snippet icon()}<ImagePlus />{/snippet}{character.cover ? "커버 바꾸기" : "커버 넣기"}</Button>
+				{#if character.cover}<Button size="sm" variant="secondary" onclick={() => changeCover(character.id, true)}>{#snippet icon()}<XIcon />{/snippet}커버 지우기</Button>{/if}
+			</div>
+		</div>
 		<header class="profile">
-			<div class="portrait"><Avatar name={character.name} src={fileSrc(character.avatar)} color={character.color} size={96} /></div>
+			<button class="portrait" title="아바타 바꾸기" aria-label="아바타 바꾸기" onclick={() => changeAvatar(character.id)}>
+				<Avatar name={character.name} src={fileSrc(character.avatar)} color={character.color} size={96} />
+				<span class="cam" aria-hidden="true"><Camera /></span>
+			</button>
 			<div class="ident">
 				<h1>{character.name}</h1>
 				<p class="faint">{["캐릭터", character.category, ...character.tags.slice(0, 4)].filter(Boolean).join(" · ")}</p>
@@ -369,10 +397,58 @@
 		overflow: auto;
 	}
 	.banner {
+		position: relative;
 		height: 200px;
 		background:
 			radial-gradient(ellipse at 70% 0%, color-mix(in oklab, var(--accent) 45%, transparent), transparent 55%),
 			linear-gradient(180deg, #2f3d47 0%, #24343c 55%, #1a2328 100%);
+	}
+	.banner.has-cover {
+		background-size: cover;
+		background-position: center;
+		background-repeat: no-repeat;
+	}
+	/* 커버 버튼은 마우스를 올리거나 키보드로 갔을 때 (터치 화면은 늘 보임) */
+	.cover-tools {
+		position: absolute;
+		top: var(--space-3);
+		right: var(--space-4);
+		display: flex;
+		gap: var(--space-2);
+		opacity: 0;
+		transition: opacity var(--duration-fast) var(--ease);
+	}
+	.banner:hover .cover-tools,
+	.cover-tools:focus-within {
+		opacity: 1;
+	}
+	@media (hover: none) {
+		.cover-tools {
+			opacity: 1;
+		}
+	}
+	.portrait {
+		position: relative;
+		padding: 0;
+		border: none;
+		background: none;
+		cursor: pointer;
+		border-radius: var(--radius-lg);
+	}
+	.portrait .cam {
+		position: absolute;
+		inset: 4px;
+		display: grid;
+		place-items: center;
+		border-radius: var(--radius-lg);
+		background: rgb(0 0 0 / 0.4);
+		color: #fff;
+		opacity: 0;
+		transition: opacity var(--duration-fast) var(--ease);
+	}
+	.portrait:hover .cam,
+	.portrait:focus-visible .cam {
+		opacity: 1;
 	}
 	.profile {
 		display: grid;

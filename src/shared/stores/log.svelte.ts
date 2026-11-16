@@ -41,7 +41,11 @@ export const logs = new LogStore();
 
 /** 잡히지 않은 오류도 로그로 */
 export function captureGlobalErrors() {
-	window.addEventListener("error", (e) => logs.error("app", e.message, { file: e.filename, line: e.lineno }));
+	window.addEventListener("error", (e) => {
+		// 브라우저가 크기 감시(ResizeObserver) 알림을 한 프레임 미룰 때 내는 알림. 오류가 아니고 화면에 영향이 없다
+		if (/ResizeObserver loop/i.test(e.message ?? "")) return;
+		logs.error("app", e.message, { file: e.filename, line: e.lineno });
+	});
 	window.addEventListener("unhandledrejection", (e) => {
 		const r = e.reason as { message?: string } | undefined;
 		logs.error("app", r?.message ?? String(e.reason), e.reason);

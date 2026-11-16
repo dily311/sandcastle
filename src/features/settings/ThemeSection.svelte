@@ -1,13 +1,13 @@
 <script lang="ts">
 	import { onMount } from "svelte";
-	import { Copy, ImagePlus, Pencil, Plus, Trash2 } from "@lucide/svelte";
+	import { Copy, Pencil, Plus, Trash2 } from "@lucide/svelte";
 	import { pickFiles } from "$shared/ipc/dialog";
-	import { fileSrc } from "$shared/ipc/file";
+	import BackgroundPicker from "$shared/ui/BackgroundPicker.svelte";
 	import type { CssThemeMeta_Serialize as ThemeMeta } from "$ipc/bindings";
 	import { Button, ContextMenu, Input, Segmented, Select, Switch, Textarea, type MenuItem } from "$shared/ui";
 	import { ACCENTS } from "$shared/ui/accents";
 	import { GRAYS } from "$shared/ui/grays";
-	import { BUILTIN_THEMES, defaultColors, type ColorMap } from "$shared/ui/themes";
+	import { BUILTIN_THEMES, defaultColors, withLegacy, type ColorMap } from "$shared/ui/themes";
 	import { theme, type CssSnippet } from "$app/theme.svelte";
 	import { nav } from "$app/nav.svelte";
 	import { call, commands } from "$shared/ipc/client";
@@ -22,6 +22,14 @@
 	let list = $state<ThemeMeta[]>([]);
 	async function loadList() {
 		list = await call(commands.getThemeList(), { ...src, silent: true }).catch(() => []);
+		// 색을 메타데이터에 갖고 있지 않은 예전 테마는 CSS에서 색을 뽑아 카드 미리보기에 쓴다 (파일은 고치지 않음)
+		for (const t of list) {
+			const empty = !Object.keys(t.colors?.light ?? {}).length && !Object.keys(t.colors?.dark ?? {}).length;
+			if (!empty || !t.filename) continue;
+			const full = await call(commands.loadTheme(t.filename), { ...src, silent: true }).catch(() => null);
+			if (full?.cssContent) t.colors = withLegacy({ light: {}, dark: {} }, full.cssContent);
+		}
+		list = [...list];
 	}
 	onMount(loadList);
 
@@ -34,10 +42,10 @@
 	const selected = $derived(theme.setting.selectTheme || "default");
 
 	// ---- 배경 이미지 (GIF 가능) ----
-	const bgUrl = $derived(theme.setting.backgroundImage ? fileSrc(theme.setting.backgroundImage) : null);
-	async function pickBackground() {
-		const [path] = await pickFiles([{ name: "이미지", extensions: ["png", "jpg", "jpeg", "webp", "gif", "avif"] }], false);
-		if (path) await theme.setBackground(path);
+	const hasBg = $derived(!!theme.setting.backgroundImage);
+	async function uploadBackgrounds() {
+		const paths = await pickFiles([{ name: "이미지", extensions: ["png", "jpg", "jpeg", "webp", "gif", "avif"] }], true);
+		await theme.addBackgrounds(paths, true);
 	}
 	const opacities = [0.5, 0.65, 0.75, 0.82, 0.9, 0.95].map((v) => ({ value: String(v), label: `${Math.round(v * 100)}%` }));
 	const selectKey = (key: string) => theme.update({ selectTheme: key });
@@ -145,14 +153,18 @@
 	</Group>
 
 	<Group title="배경 이미지">
-		<Row label="배경" desc="앱 뒤에 깔 그림 (움짤 GIF 가능). 고른 파일은 앱 데이터에 복사해 씀">
-			<div class="bg-pick">
-				{#if bgUrl}<img class="bg-thumb" src={bgUrl} alt="지금 배경" />{/if}
-				<Button size="sm" onclick={pickBackground}>{#snippet icon()}<ImagePlus />{/snippet}{bgUrl ? "바꾸기" : "고르기"}</Button>
-				{#if bgUrl}<Button size="sm" variant="ghost" onclick={() => theme.setBackground(null)}>{#snippet icon()}<Trash2 />{/snippet}없애기</Button>{/if}
-			</div>
-		</Row>
-		{#if bgUrl}
+		<div class="bg-row">
+			<p class="bg-desc">앱 뒤에 깔 그림. 카메라로 여러 장 올려 두고 골라 씀 (움짤 GIF 가능, 앱 데이터에 복사). 더보기에서 지울 수 있음</p>
+			<BackgroundPicker
+				label="앱 배경"
+				value={theme.setting.backgroundImage ?? null}
+				images={theme.setting.backgrounds ?? []}
+				onpick={(v) => theme.setBackground(v)}
+				onupload={uploadBackgrounds}
+				onremove={(p) => theme.removeBackground(p)}
+			/>
+		</div>
+		{#if hasBg}
 			<Row label="화면 불투명도" desc="낮을수록 배경이 잘 보이고 글은 덜 또렷함">
 				<Select value={String(theme.setting.backgroundOpacity ?? 0.82)} options={opacities} aria-label="화면 불투명도" onchange={(e) => theme.update({ backgroundOpacity: Number(e.currentTarget.value) })} />
 			</Row>
@@ -215,18 +227,13 @@
 {#if menu}<ContextMenu at={menu.at} items={menu.items} label="테마 메뉴" onclose={() => (menu = null)} />{/if}
 
 <style>
-	.bg-pick {
-		display: flex;
-		align-items: center;
-		gap: var(--space-2);
-		flex-wrap: wrap;
+	.bg-row {
+		padding: var(--space-4) 0;
 	}
-	.bg-thumb {
-		width: 72px;
-		height: 44px;
-		object-fit: cover;
-		border-radius: var(--radius-sm);
-		box-shadow: 0 0 0 1px var(--border);
+	.bg-desc {
+		margin-bottom: var(--space-3);
+		color: var(--text-muted);
+		font-size: var(--text-sm);
 	}
 	.accents,
 	.grays {

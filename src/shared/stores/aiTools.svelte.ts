@@ -58,7 +58,7 @@ export async function drawMessage(m: Message): Promise<Message> {
 
 /** 글(게임 대사 등)로 그림 만들기. 채팅 AI가 장면 프롬프트로 다듬는다 */
 export async function drawText(text: string, source: "game" | "manual" = "game") {
-	return call(commands.generateImageFromPrompt(text, true, source), src);
+	return call(commands.generateImageFromPrompt(text, true, source, null, null), src);
 }
 
 /** 글 번역. 공용 번역 캐시에 저장돼 같은 문장은 다시 요금을 내지 않는다 (게임 대사 줄 등) */

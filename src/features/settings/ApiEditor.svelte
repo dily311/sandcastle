@@ -29,24 +29,8 @@
 	let loadingModels = $state(false);
 	let saving = $state(false);
 	let testing = $state(false);
-	// 저장할 때 연결 확인: "Hi" 한 번 보내 보고 결과를 보여준다 (요금이 아주 조금 나가므로 선택할 수 있게)
-	const CHECK_KEY = "sc.api.checkOnSave";
-	let checkOnSave = $state((() => {
-		try {
-			return localStorage.getItem(CHECK_KEY) !== "0";
-		} catch {
-			return true;
-		}
-	})());
-	$effect(() => {
-		try {
-			localStorage.setItem(CHECK_KEY, checkOnSave ? "1" : "0");
-		} catch {
-			/* 저장 못 해도 이번엔 그대로 */
-		}
-	});
+	// 연결 테스트 결과 (맨 아래 버튼)
 	let check = $state<{ state: "checking" | "ok" | "fail"; message: string } | null>(null);
-	/** 채팅 API만 확인한다 (음성·이미지 API는 대화 요청을 받지 않음, NovelAI는 확인에도 요금이 나감) */
 
 	// Vertex AI: 서비스 계정 JSON + 지역 + 프로젝트 → 백엔드가 받는 키 JSON으로 묶음
 	let saFile = $state<{ name: string; text: string; email: string } | null>(null);
@@ -59,7 +43,6 @@
 	const dirty = $derived(loaded && snapshot() !== initial);
 
 	const provider = $derived(apiLists.find((p) => p.provider === providerId));
-	const chatApi = $derived(!!provider && !["elevenlabs", "novelai"].includes(provider.formatType));
 	const vertex = $derived(provider?.formatType === "vertexai");
 	const knownModels = $derived([...new Set([...(provider?.modelList.flatMap((g) => g.model) ?? []), ...models])]);
 
@@ -142,10 +125,10 @@
 	async function test() {
 		if (!id) return;
 		testing = true;
-		check = { state: "checking", message: "\"Hi\"를 보내는 중…" };
+		check = { state: "checking", message: "확인하는 중…" };
 		try {
 			const reply = await call(commands.testMessage(id), { ...src, silent: true });
-			check = { state: "ok", message: `연결됨 · 답: ${reply.trim().slice(0, 60) || "(빈 응답)"}` };
+			check = { state: "ok", message: `연결됨 · ${reply.trim().slice(0, 60) || "(빈 응답)"}` };
 		} catch (e) {
 			const msg = (e as { message?: string })?.message ?? String(e);
 			check = { state: "fail", message: `연결 안 됨 · ${msg}` };
@@ -183,7 +166,6 @@
 		} finally {
 			saving = false;
 		}
-		if (id && hasKey && checkOnSave && chatApi) await test();
 	}
 	async function removeKey() {
 		if (!id) return;
@@ -204,21 +186,11 @@
 		<h1>{isNew ? "연결 추가" : name || "연결 편집"}</h1>
 		<div class="btns">
 			{#if dirty}<span class="dirty">바뀐 내용 있음</span>{/if}
-			{#if id}<Button variant="soft" loading={testing} disabled={dirty} onclick={test}>{#snippet icon()}<Zap />{/snippet}테스트</Button>{/if}
 			<Button variant="ghost" onclick={() => back()}>{dirty ? "취소" : "닫기"}</Button>
 			<Button variant="primary" loading={saving} disabled={!canSave || (!!id && !dirty)} onclick={save}>저장</Button>
 		</div>
 	</header>
 	<p class="lead">키는 운영체제 보안 저장소에 따로 보관함</p>
-	{#if chatApi}
-		<label class="check-opt"><input type="checkbox" bind:checked={checkOnSave} />저장할 때 연결 확인 ("Hi" 한 번 보냄 · 요금이 아주 조금 나감)</label>
-	{/if}
-	{#if check}
-		<div class="check {check.state}" role="status">
-			{#if check.state === "checking"}<Spinner size={14} />{:else if check.state === "ok"}<CircleCheck />{:else}<CircleAlert />{/if}
-			<span>{check.message}</span>
-		</div>
-	{/if}
 
 	<div class="card form">
 		<div class="two">
@@ -284,22 +256,34 @@
 		</div>
 	{/if}
 	{#if id && !hasKey}<p class="warn"><Badge tone="warning"><KeyRound /> 키 없음</Badge> 키를 넣어야 대화할 수 있음</p>{/if}
+
+	{#if id}
+		<div class="test-row">
+			<Button loading={testing} disabled={dirty || !hasKey} title={dirty ? "저장한 뒤 테스트할 수 있음" : undefined} onclick={test}>{#snippet icon()}<Zap />{/snippet}연결 테스트</Button>
+			{#if check}
+				<div class="check {check.state}" role="status">
+					{#if check.state === "checking"}<Spinner size={14} />{:else if check.state === "ok"}<CircleCheck />{:else}<CircleAlert />{/if}
+					<span>{check.message}</span>
+				</div>
+			{/if}
+		</div>
+	{/if}
 {/if}
 
 <style>
-	.check-opt {
-		display: inline-flex;
+	.test-row {
+		display: flex;
 		align-items: center;
-		gap: 6px;
-		margin-bottom: var(--space-3);
-		font-size: var(--text-sm);
-		color: var(--text-muted);
+		gap: var(--space-3);
+		flex-wrap: wrap;
+		margin-top: var(--space-5);
 	}
 	.check {
 		display: flex;
 		align-items: center;
 		gap: var(--space-2);
-		margin-bottom: var(--space-4);
+		flex: 1;
+		min-width: 0;
 		padding: var(--space-2) var(--space-3);
 		border-radius: var(--radius-md);
 		background: var(--surface-2);

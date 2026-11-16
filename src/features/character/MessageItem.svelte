@@ -117,11 +117,6 @@
 		{#if selecting}<input class="pick" type="checkbox" checked={selected} aria-label="#{no} 메시지 고르기" onclick={(e) => e.stopPropagation()} onchange={(e) => onselect?.(msg, e.currentTarget.checked)} />{/if}
 		<span class="no">#{no}</span><b>{msg.name ?? (isAi ? "AI" : "나")}</b>
 		{#if meta.hidden}<Badge><EyeOff /> AI에게 숨김</Badge>{/if}
-		{#if meta.hidden && !live}
-			<button class="fold" aria-expanded={!folded} onclick={(e) => { e.stopPropagation(); unfolded = !unfolded; }}>
-				<ChevronDown class={folded ? "rot" : ""} />{folded ? "펼치기" : "접기"}
-			</button>
-		{/if}
 		{#if live}
 			<span class="stamp">만드는 중…</span>
 		{:else}
@@ -187,6 +182,12 @@
 			<p class="typing" aria-label="응답 기다리는 중"><span></span><span></span><span></span></p>
 		{/if}
 	{/if}
+	<!-- AI에게 숨긴 메시지: 접기·펼치기는 본문(한 줄 미리보기) 아래 -->
+	{#if meta.hidden && !live && !editing}
+		<button class="fold" aria-expanded={!folded} onclick={(e) => { e.stopPropagation(); unfolded = !unfolded; }}>
+			<ChevronDown class={folded ? "rot" : ""} />{folded ? "펼치기" : "접기"}
+		</button>
+	{/if}
 
 	{#if drawn.length && !folded}
 		<div class="drawn">
@@ -212,6 +213,7 @@
 		display: inline-flex;
 		align-items: center;
 		gap: 4px;
+		margin: 2px 0 0 -6px;
 		padding: 2px 6px;
 		border: none;
 		border-radius: var(--radius-sm);

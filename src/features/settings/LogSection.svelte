@@ -48,7 +48,7 @@ ${d}` : ""}`);
 	}
 </script>
 
-<Section title="로그" lead="이번 실행 동안 생긴 오류·알림. 앱을 끄면 지워짐">
+<Section title="로그" lead="이번 실행 동안 생긴 오류·알림 (실패한 AI·음성·이미지 작업 포함). 앱을 끄면 지워짐">
 	{#snippet actions()}
 		<Button size="sm" disabled={!shown.length} onclick={copyAll}>{#snippet icon()}<Copy />{/snippet}복사</Button>
 		<Button size="sm" variant="ghost" disabled={!logs.entries.length} onclick={() => logs.clear()}>{#snippet icon()}<Trash2 />{/snippet}비우기</Button>

@@ -135,7 +135,7 @@
 			case "phone":
 				return [{ label: "폰" }];
 			case "images":
-				return [{ label: "이미지", to: { page: "images" } }, { label: r.tab === "gallery" ? "갤러리" : "만들기" }];
+				return [{ label: "이미지" }];
 			case "lorebook": {
 				const b = lorebook.book(r.bookId);
 				return b ? [{ label: "로어북", to: { page: "lorebook" } }, { label: b.name }] : [{ label: "로어북" }];

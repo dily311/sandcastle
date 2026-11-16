@@ -55,6 +55,8 @@
 		width: min(calc(100vw - 32px), 480px);
 		max-height: min(calc(100vh - 48px), 760px);
 		padding: 0;
+		/* 스크롤은 본문(.body) 하나만: 창 자체가 테두리 몇 px 때문에 또 스크롤되지 않게 */
+		overflow: hidden;
 		border: 1px solid var(--border);
 		border-radius: var(--radius-xl);
 		background: var(--surface);
@@ -83,7 +85,7 @@
 	.panel {
 		display: flex;
 		flex-direction: column;
-		max-height: inherit;
+		max-height: min(calc(100vh - 50px), 758px);
 	}
 	header {
 		display: flex;
@@ -102,6 +104,7 @@
 	}
 	.body {
 		padding: 0 var(--space-5) var(--space-5);
+		min-height: 0;
 		overflow: auto;
 	}
 	footer {

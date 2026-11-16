@@ -13,8 +13,12 @@
 		onsaved?: (oldId: string, newId: string) => void;
 		/** 여러 책을 섞어 보일 때 책 이름 */
 		bookName?: string;
+		/** 끌어서 순서 바꾸기 (Sortable.item) */
+		drag?: Record<string, unknown>;
+		dragging?: boolean;
+		dragOver?: boolean;
 	}
-	let { entry, open = false, ontoggle, onsaved, bookName }: Props = $props();
+	let { entry, open = false, ontoggle, onsaved, bookName, drag, dragging = false, dragOver = false }: Props = $props();
 
 	// svelte-ignore state_referenced_locally
 	let draft = $state<Entry>(structuredClone($state.snapshot(entry)));
@@ -67,7 +71,7 @@
 	const status = $derived(saving ? "저장 중…" : failed ? "저장 못 함" : !valid ? "키워드를 넣거나 '항상 넣기'를 켜야 저장됨" : dirty ? "고치는 중" : isDraft(draft) ? "" : "저장됨");
 </script>
 
-<li class="entry" class:open class:off={!draft.enabled} class:draft={isDraft(draft)}>
+<li class="entry" class:open class:off={!draft.enabled} class:draft={isDraft(draft)} class:dragging class:drag-over={dragOver} {...drag}>
 	<div class="head">
 		<Switch bind:checked={draft.enabled} label="{entryTitle(draft)} 사용" hideLabel />
 		<button class="toggle" aria-expanded={open} onclick={ontoggle}>
@@ -122,6 +126,15 @@
 	}
 	.entry:not(:first-child) {
 		margin-top: var(--space-2);
+	}
+	.entry[draggable="true"]:not(.open) {
+		cursor: grab;
+	}
+	.entry.dragging {
+		opacity: 0.4;
+	}
+	.entry.drag-over {
+		box-shadow: 0 -3px 0 var(--accent);
 	}
 	.entry.open {
 		border-color: var(--border-strong);

@@ -155,9 +155,10 @@ impl WidgetManager {
     pub fn close_widget(app: &AppHandle, state: &MouseTrackerState) -> Result<()> {
         MouseTrackerState::stop_tracker(state);
         if let Some(window) = app.get_webview_window(WIDGET_LABEL) {
-            window.close()?;
+            // close는 닫기 요청(창이 막을 수도 있음), destroy는 바로 없앤다. 설정으로 끈 것이므로 바로 없앤다
+            window.destroy()?;
         }
-
+        let _ = app.remove_tray_by_id(WIDGET_TRAY_LABEL);
         Ok(())
     }
 }

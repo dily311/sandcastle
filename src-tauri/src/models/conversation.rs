@@ -86,6 +86,9 @@ pub struct CharacterRow {
     pub id: String,
     pub name: String,
     pub avatar: Option<String>,
+    /// 커버 이미지 (cover 열을 읽지 않는 쿼리도 있어 없으면 None)
+    #[sqlx(default)]
+    pub cover: Option<String>,
     pub description: String,
     pub alternate_descriptions: Option<String>,
     pub first_message: Option<String>,
@@ -111,6 +114,9 @@ pub struct Character {
     pub id: String,
     pub name: String,
     pub avatar: Option<String>,
+    /// 캐릭터 페이지 위쪽 커버 이미지
+    #[serde(default)]
+    pub cover: Option<String>,
     pub description: String,
     pub alternate_descriptions: Vec<String>,
     pub first_message: Option<String>,
@@ -137,6 +143,7 @@ impl From<CharacterRow> for Character {
             id: r.id,
             name: r.name,
             avatar: r.avatar,
+            cover: r.cover,
             description: r.description,
             alternate_descriptions: r.alternate_descriptions.and_then(|s| serde_json::from_str(&s).ok()).unwrap_or_default(),
             first_message: r.first_message,

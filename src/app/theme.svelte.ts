@@ -6,6 +6,7 @@ import { ACCENTS, DEFAULT_ACCENT, accentValue } from "$shared/ui/accents";
 import { DEFAULT_GRAY, grayScale } from "$shared/ui/grays";
 import { BUILTIN_THEMES, builtinId, colorsToCss, withLegacy, type ThemeColors } from "$shared/ui/themes";
 import { fileSrc } from "$shared/ipc/file";
+import { gradientCss, gradientOf } from "$shared/ui/backgrounds";
 
 export type { CssSnippet };
 
@@ -18,6 +19,7 @@ const FALLBACK: ThemeSetting = {
 	grayTone: DEFAULT_GRAY,
 	snippets: [],
 	backgroundImage: null,
+	backgrounds: [],
 	backgroundOpacity: 0.82,
 };
 
@@ -113,8 +115,10 @@ class Theme {
 	private applyBackground() {
 		const root = document.documentElement;
 		const el = this.style("user-background");
-		const url = this.setting.backgroundImage ? fileSrc(this.setting.backgroundImage) : null;
-		if (!url) {
+		const value = this.setting.backgroundImage;
+		const gradient = gradientOf(value);
+		const url = gradient ? null : value ? fileSrc(value) : null;
+		if (!url && !gradient) {
 			delete root.dataset.bgImage;
 			el.textContent = "";
 			return;
@@ -127,13 +131,24 @@ class Theme {
 		root.dataset.bgImage = "";
 		el.textContent = [
 			`:root[data-bg-image] { ${["--bg", "--surface-2", "--bg-sunken"].map(see).join(" ")} }`,
-			`:root[data-bg-image] body { background: var(--bg-solid, #000) url("${url.replace(/"/g, "%22")}") center / cover no-repeat fixed; }`,
+			gradient
+				? `:root[data-bg-image] body { background: ${gradientCss(gradient)} fixed; }`
+				: `:root[data-bg-image] body { background: #000 url("${(url ?? "").replace(/"/g, "%22")}") center / cover no-repeat fixed; }`,
 		].join("\n");
 	}
 
-	/** 배경 이미지 고르기 (null이면 없앰) */
-	async setBackground(path: string | null) {
-		this.setting = await call(commands.setThemeBackground(path), { source: "theme" });
+	/** 앱 배경 고르기: 배경 목록의 경로 / "preset:<id>" / null(없음) */
+	async setBackground(value: string | null) {
+		await this.update({ backgroundImage: value });
+	}
+	/** 배경 목록에 이미지 올리기 (select면 마지막 것을 앱 배경으로) */
+	async addBackgrounds(paths: string[], select = false) {
+		if (!paths.length) return;
+		this.setting = await call(commands.addBackgrounds(paths, select), { source: "theme" });
+		this.apply();
+	}
+	async removeBackground(path: string) {
+		this.setting = await call(commands.removeBackground(path), { source: "theme" });
 		this.apply();
 	}
 

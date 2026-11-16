@@ -311,12 +311,71 @@ pub struct GeneratedImage {
     pub path: String,
     pub prompt: String,
     pub model: String,
-    /// "message" | "manual" | "game"
+    /// "message" | "manual" | "game" | "upload"
     pub source: String,
     /// 메시지에서 만들었으면 그 메시지·대화
     pub message_id: Option<String>,
     pub conversation_id: Option<String>,
     pub created_at: i64,
+    /// 생성 정보 (만들 때 쓴 설정, 올린 그림이면 파일에 들어 있던 정보)
+    #[serde(default)]
+    pub meta: Vec<crate::service::image_meta::MetaItem>,
+    /// 앨범: 폰 카메라로 만든 그림이면 그 폰 주인 ("persona:<id>" / "character:<id>")
+    #[serde(default)]
+    pub album: Option<String>,
+}
+
+/// 갤러리가 다루는 그림 확장자
+const GALLERY_EXTS: [&str; 5] = ["png", "jpg", "jpeg", "webp", "gif"];
+fn is_gallery_image(p: &Path) -> bool {
+    p.extension().and_then(|e| e.to_str()).is_some_and(|e| GALLERY_EXTS.contains(&e.to_ascii_lowercase().as_str()))
+}
+
+/// 생성할 때 쓴 설정 → 정보 줄
+fn setting_meta(setting: &ImageGenSetting, novelai: bool) -> Vec<crate::service::image_meta::MetaItem> {
+    let mut v = vec![("크기", setting.size.clone())];
+    if novelai {
+        v.extend([("네거티브", setting.negative_prompt.clone()), ("단계", setting.steps.to_string()), ("프롬프트 반영", format!("{}", setting.scale)), ("샘플러", setting.sampler.clone())]);
+    }
+    v.into_iter()
+        .filter(|(_, val)| !val.trim().is_empty())
+        .map(|(k, val)| crate::service::image_meta::MetaItem { key: k.into(), value: val })
+        .collect()
+}
+
+/// 갤러리에 그림 올리기: out_dir에 복사하고, PNG에 든 AI 생성 정보를 읽어 .json에 정리해 둔다
+pub fn import_images(out_dir: &Path, paths: &[String]) -> Result<Vec<GeneratedImage>> {
+    std::fs::create_dir_all(out_dir)?;
+    let mut out = Vec::new();
+    for src in paths.iter().take(100) {
+        let src = Path::new(src);
+        if !is_gallery_image(src) {
+            return Err(AppError::validation("png·jpg·webp·gif 그림만 올릴 수 있습니다", None));
+        }
+        let bytes = std::fs::read(src)?;
+        let ext = src.extension().and_then(|e| e.to_str()).unwrap_or("png").to_ascii_lowercase();
+        let id = uuid::Uuid::new_v4();
+        let path = out_dir.join(format!("{id}.{ext}"));
+        std::fs::write(&path, &bytes)?;
+        let meta = crate::service::image_meta::parse(&crate::service::image_meta::png_text_chunks(&bytes));
+        let model = meta.items.iter().find(|i| i.key == "모델").map(|i| i.value.clone()).unwrap_or_default();
+        let mut items = vec![crate::service::image_meta::MetaItem { key: "원래 파일".into(), value: src.file_name().map(|n| n.to_string_lossy().into_owned()).unwrap_or_default() }];
+        items.extend(meta.items);
+        let info = GeneratedImage {
+            path: path.to_string_lossy().into_owned(),
+            prompt: meta.prompt,
+            model,
+            source: "upload".into(),
+            message_id: None,
+            conversation_id: None,
+            created_at: chrono::Utc::now().timestamp_millis(),
+            meta: items,
+            album: None,
+        };
+        std::fs::write(out_dir.join(format!("{id}.json")), serde_json::to_vec(&info)?)?;
+        out.push(info);
+    }
+    Ok(out)
 }
 
 /// 프롬프트로 그림을 만들어 out_dir에 png(+ 정보 .json)로 저장한다. message = (메시지 id, 대화 id)
@@ -343,7 +402,10 @@ pub async fn generate_image(
     }
     ai.record_usage(entry).await;
     let png = result?;
-    save_image(png, setting, prompt, out_dir, source, message)
+    let mut info = save_image(png, setting, prompt, out_dir, source, message)?;
+    info.meta = setting_meta(setting, profile.format_type == "novelai");
+    std::fs::write(Path::new(&info.path).with_extension("json"), serde_json::to_vec(&info)?)?;
+    Ok(info)
 }
 
 /// 이미지 공급자 호출 → png 바이트
@@ -391,9 +453,27 @@ fn save_image(png: Vec<u8>, setting: &ImageGenSetting, prompt: &str, out_dir: &P
         message_id: message.map(|(m, _)| m.to_string()),
         conversation_id: message.map(|(_, c)| c.to_string()),
         created_at: chrono::Utc::now().timestamp_millis(),
+        meta: vec![],
+        album: None,
     };
     std::fs::write(out_dir.join(format!("{id}.json")), serde_json::to_vec(&info)?)?;
     Ok(info)
+}
+
+/// NovelAI 연결 확인 (요금 없음): 계정 구독 정보를 읽는다. 이미지 주소와 다른 api.novelai.net을 쓴다
+pub async fn novelai_check(ai: &AiService, profile: &ApiProfiles) -> Result<String> {
+    let key = ai.credential(profile)?;
+    let res = ai.http().get("https://api.novelai.net/user/subscription").bearer_auth(key).send().await?;
+    let v: Value = serde_json::from_slice(&ok_bytes(res).await?).unwrap_or(Value::Null);
+    let tier = match v["tier"].as_i64() {
+        Some(0) => "무료",
+        Some(1) => "Tablet",
+        Some(2) => "Scroll",
+        Some(3) => "Opus",
+        _ => "구독 정보 없음",
+    };
+    let anlas = v["trainingStepsLeft"]["fixedTrainingStepsLeft"].as_i64().unwrap_or(0) + v["trainingStepsLeft"]["purchasedTrainingSteps"].as_i64().unwrap_or(0);
+    Ok(format!("{tier} · Anlas {anlas}"))
 }
 
 /// 갤러리: out_dir의 그림들 (최신 순). 정보 파일이 없는 그림도 보인다
@@ -402,7 +482,7 @@ pub fn list_images(out_dir: &Path) -> Vec<GeneratedImage> {
     let mut out: Vec<GeneratedImage> = entries
         .flatten()
         .map(|e| e.path())
-        .filter(|p| p.extension().is_some_and(|e| e.eq_ignore_ascii_case("png")))
+        .filter(|p| is_gallery_image(p))
         .map(|p| {
             let path = p.to_string_lossy().into_owned();
             match std::fs::read(p.with_extension("json")).ok().and_then(|b| serde_json::from_slice::<GeneratedImage>(&b).ok()) {
@@ -414,6 +494,8 @@ pub fn list_images(out_dir: &Path) -> Vec<GeneratedImage> {
                     source: "unknown".into(),
                     message_id: None,
                     conversation_id: None,
+                    meta: vec![],
+                    album: None,
                     created_at: std::fs::metadata(&p)
                         .and_then(|m| m.modified())
                         .ok()
@@ -431,8 +513,8 @@ pub fn list_images(out_dir: &Path) -> Vec<GeneratedImage> {
 pub fn delete_image(out_dir: &Path, path: &str) -> Result<()> {
     let target = std::fs::canonicalize(path).map_err(|_| AppError::not_found("그림을 찾을 수 없습니다"))?;
     let root = std::fs::canonicalize(out_dir).map_err(|_| AppError::not_found("그림 폴더가 없습니다"))?;
-    if !target.starts_with(&root) || !target.extension().is_some_and(|e| e.eq_ignore_ascii_case("png")) {
-        return Err(AppError::validation("생성한 그림만 지울 수 있습니다", None));
+    if !target.starts_with(&root) || !is_gallery_image(&target) {
+        return Err(AppError::validation("갤러리의 그림만 지울 수 있습니다", None));
     }
     std::fs::remove_file(&target)?;
     let _ = std::fs::remove_file(target.with_extension("json"));

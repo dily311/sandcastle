@@ -22,6 +22,7 @@
 	import PluginOff from "./PluginOff.svelte";
 	import ImagesPage from "$features/images/ImagesPage.svelte";
 	import HomePage from "$features/home/HomePage.svelte";
+	import { watchTaskErrors } from "$shared/stores/taskLog";
 	import { appSetting } from "$shared/stores/appSetting.svelte";
 
 	let ready = $state(false);
@@ -58,6 +59,7 @@
 		ready = true;
 		void recoverInterruptedChats();
 		void plugins.load();
+		watchTaskErrors();
 	});
 </script>
 
@@ -105,7 +107,7 @@
 			{:else if r.page === "phone"}
 				{#if plugins.on("phone")}<PhonePage />{:else}<PluginOff id="phone" name="폰" />{/if}
 			{:else if r.page === "images"}
-				{#if plugins.on("imagegen")}<ImagesPage tab={r.tab} />{:else}<PluginOff id="imagegen" name="이미지 생성" />{/if}
+				<ImagesPage />
 			{:else if r.page === "lorebook"}
 				<LorebookPage bookId={r.bookId} />
 			{:else if r.page === "persona"}

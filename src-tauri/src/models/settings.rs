@@ -32,10 +32,10 @@ pub struct HomeSetting {
     pub start_on_home: bool,
     /// 인사말 (비우면 "안녕하세요, {{user}}"). {{user}} 사용 가능
     pub greeting: String,
-    /// 보일 블록 id, 위에서부터 순서대로: continue / quick / favorites / games / note
+    /// 보일 블록 id, 위에서부터 순서대로: continue / quick / favorites / games
     pub blocks: Vec<String>,
-    /// 내 글 블록 (마크다운 줄·```html``` 블록, HTML 렌더링이 켜져 있으면 HTML도)
-    pub note: String,
+    /// 홈 화면에만 붙는 CSS (홈이 열려 있을 때만 적용)
+    pub css: String,
 }
 
 impl Default for HomeSetting {
@@ -43,8 +43,8 @@ impl Default for HomeSetting {
         Self {
             start_on_home: false,
             greeting: String::new(),
-            blocks: ["continue", "quick", "favorites", "games", "note"].map(String::from).to_vec(),
-            note: String::new(),
+            blocks: ["continue", "quick", "favorites", "games"].map(String::from).to_vec(),
+            css: String::new(),
         }
     }
 }
@@ -98,9 +98,12 @@ pub struct ThemeSetting {
     /// CSS 스니펫 (옵시디언처럼 켜고 끄는 작은 CSS 조각)
     #[serde(default)]
     pub snippets: Vec<CssSnippet>,
-    /// 앱 배경 이미지 (앱 데이터 backgrounds/에 복사한 파일 경로, GIF 가능). 없으면 배경 없음
+    /// 앱 배경: 배경 목록의 파일 경로, 또는 "preset:<id>"(기본 그라데이션). 없으면 배경 없음
     #[serde(default)]
     pub background_image: Option<String>,
+    /// 올려 둔 배경 이미지들 (앱 데이터 backgrounds/에 복사한 파일, GIF 가능). 테마 배경·이미지 카드가 같이 쓴다
+    #[serde(default)]
+    pub backgrounds: Vec<String>,
     /// 배경 위 화면의 불투명도 (0.3~1). 낮을수록 배경이 잘 보임
     #[serde(default = "default_background_opacity")]
     pub background_opacity: f32,
@@ -134,6 +137,7 @@ impl Default for ThemeSetting {
             gray_tone: default_gray_tone(),
             snippets: vec![],
             background_image: None,
+            backgrounds: vec![],
             background_opacity: default_background_opacity(),
         }
     }
@@ -182,6 +186,18 @@ pub struct CssTheme {
 #[derive(Debug, Serialize, Deserialize, Clone, specta::Type)]
 pub struct FeatureSetting {
     pub feature: HashMap<String, bool>,
+}
+
+impl FeatureSetting {
+    /// 위젯 창을 열어 둘지: 위젯이 켜져 있고 하위 기능(widget.*)이 하나라도 켜져 있을 때.
+    /// 하위 기능 값이 하나도 없으면(처음 켬) 위젯 창이 기본값을 등록하도록 연다
+    pub fn widget_window_wanted(&self) -> bool {
+        if !self.feature.get("widget").copied().unwrap_or(false) {
+            return false;
+        }
+        let mut subs = self.feature.iter().filter(|(k, _)| k.starts_with("widget.")).peekable();
+        subs.peek().is_none() || subs.any(|(_, on)| *on)
+    }
 }
 
 impl Default for FeatureSetting {
@@ -359,5 +375,23 @@ mod tests {
         assert_eq!(s.language, "en");
         assert_eq!(s.selected_api_profile.as_deref(), Some("api-1"));
         assert_eq!(s.phone_mode_prompt, DEFAULT_PHONE_MODE_PROMPT);
+    }
+}
+
+#[cfg(test)]
+mod feature_tests {
+    use super::FeatureSetting;
+
+    fn fs(pairs: &[(&str, bool)]) -> FeatureSetting {
+        FeatureSetting { feature: pairs.iter().map(|(k, v)| (k.to_string(), *v)).collect() }
+    }
+
+    #[test]
+    fn widget_window_follows_widget_and_sub_features() {
+        assert!(!fs(&[]).widget_window_wanted());
+        assert!(fs(&[("widget", true)]).widget_window_wanted(), "처음 켜면 기본값 등록을 위해 연다");
+        assert!(!fs(&[("widget", true), ("widget.music", false), ("widget.mascot", false)]).widget_window_wanted());
+        assert!(fs(&[("widget", true), ("widget.music", true), ("widget.mascot", false)]).widget_window_wanted());
+        assert!(!fs(&[("widget", false), ("widget.music", true)]).widget_window_wanted());
     }
 }

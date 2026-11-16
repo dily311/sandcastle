@@ -1,7 +1,8 @@
 <script lang="ts">
 	// 홈: 사용자가 꾸미는 첫 화면. 블록(이어하기·빠른 실행·즐겨찾기·게임·내 글)을 켜고 끄고 순서를 바꾼다.
 	// AI를 부르지 않는다 (보여주기만). 설정은 앱 설정의 home에 저장
-	import { ArrowDown, ArrowUp, Check, Gamepad2, Images, MessageSquarePlus, Pencil, Smartphone, Star, Users } from "@lucide/svelte";
+	import { ArrowDown, ArrowUp, Check, Gamepad2, GripVertical, Images, MessageSquarePlus, Pencil, Smartphone, Star, Users } from "@lucide/svelte";
+	import { Sortable, moveItem } from "$shared/dnd/sortable.svelte";
 	import type { HomeSetting_Serialize as HomeSetting } from "$ipc/bindings";
 	import { Avatar, Button, EmptyState, Input, Switch, Textarea } from "$shared/ui";
 	import { nav } from "$app/nav.svelte";
@@ -11,17 +12,15 @@
 	import { relative } from "$shared/time";
 	import { library } from "$features/character/library.svelte";
 	import { games } from "$features/game/game.svelte";
-	import { fillNames, toBlocks } from "$features/character/format";
-	import RichText from "$features/character/RichText.svelte";
+	import { fillNames } from "$features/character/format";
 
 	const BLOCKS: { id: string; label: string; desc: string; plugin?: "game" }[] = [
 		{ id: "continue", label: "이어하기", desc: "최근 대화" },
 		{ id: "quick", label: "빠른 실행", desc: "새 대화·폰·게임·이미지" },
 		{ id: "favorites", label: "즐겨찾기", desc: "별표한 캐릭터" },
 		{ id: "games", label: "게임", desc: "최근 게임", plugin: "game" },
-		{ id: "note", label: "내 글", desc: "직접 쓰는 메모·링크·HTML" },
 	];
-	const FALLBACK: HomeSetting = { startOnHome: false, greeting: "", blocks: BLOCKS.map((b) => b.id), note: "" };
+	const FALLBACK: HomeSetting = { startOnHome: false, greeting: "", blocks: BLOCKS.map((b) => b.id), css: "" };
 
 	$effect(() => {
 		if (!library.loaded) void library.load();
@@ -44,7 +43,6 @@
 	);
 	const favorites = $derived(library.characters.filter((c) => c.favorite).slice(0, 12));
 	const recentGames = $derived(games.list.slice(0, 4));
-	const noteBlocks = $derived(home.note.trim() ? toBlocks(fillNames(home.note, { user: me?.name }), { rawHtml: plugins.on("html") }) : []);
 	const shown = $derived(home.blocks.filter((id) => BLOCKS.some((b) => b.id === id && (!b.plugin || plugins.on(b.plugin)))));
 
 	async function newChat() {
@@ -62,23 +60,35 @@
 		// 빠진 블록도 끄는 목록에 보이게 (켜진 것 먼저, 그 순서대로)
 		editing = true;
 	}
-	const order = $derived([...draft.blocks.filter((id) => BLOCKS.some((b) => b.id === id)), ...BLOCKS.map((b) => b.id).filter((id) => !draft.blocks.includes(id))]);
+	// 전체 순서 (꺼진 블록은 켜진 것 뒤에). 끌어서 바꾸고, 켜진 것만 저장된다
+	let order = $state<string[]>([]);
+	$effect(() => {
+		if (!editing) return;
+		order = [...draft.blocks.filter((id) => BLOCKS.some((b) => b.id === id)), ...BLOCKS.map((b) => b.id).filter((id) => !draft.blocks.includes(id))];
+	});
+	function setOrder(next: string[]) {
+		order = next;
+		draft.blocks = next.filter((id) => draft.blocks.includes(id));
+	}
+	const sort = new Sortable((from, to) => setOrder(moveItem(order, from, to)));
 	function toggle(id: string, on: boolean) {
-		draft.blocks = on ? [...draft.blocks, id] : draft.blocks.filter((x) => x !== id);
+		draft.blocks = on ? order.filter((x) => x === id || draft.blocks.includes(x)) : draft.blocks.filter((x) => x !== id);
 	}
 	function move(id: string, d: -1 | 1) {
-		const list = [...draft.blocks];
-		const i = list.indexOf(id);
-		const j = i + d;
-		if (i < 0 || j < 0 || j >= list.length) return;
-		[list[i], list[j]] = [list[j], list[i]];
-		draft.blocks = list;
+		const i = order.indexOf(id);
+		setOrder(moveItem(order, i, i + d));
 	}
+	// 홈에만 붙는 사용자 CSS (</style>로 빠져나가지 못하게)
+	const customCss = $derived((editing ? draft.css : home.css).replace(/<\/style/gi, ""));
 	async function saveEdit() {
 		await appSetting.update({ home: $state.snapshot(draft) });
 		editing = false;
 	}
 </script>
+
+<svelte:head>
+	{#if customCss.trim()}{@html `<style id="home-css">${customCss}</style>`}{/if}
+</svelte:head>
 
 <div class="home">
 	<header class="hero">
@@ -96,23 +106,24 @@
 			<h2>홈 꾸미기</h2>
 			<label class="field"><span>인사말 <small>{"{{user}}"} = 내 이름</small></span><Input bind:value={draft.greeting} placeholder={"안녕하세요, {{user}}"} /></label>
 			<div class="field">
-				<span>블록 (켜고 끄기 · 순서)</span>
+				<span>블록 <small>켜고 끄기 · 끌어서 순서 바꾸기</small></span>
 				<ul class="blocks">
-					{#each order as id (id)}
+					{#each order as id, i (id)}
 						{@const b = BLOCKS.find((x) => x.id === id)!}
 						{@const on = draft.blocks.includes(id)}
-						<li>
+						<li {...sort.item(i)} class:dragging={sort.from === i} class:over={sort.over === i && sort.from !== i}>
+							<span class="grip" aria-hidden="true"><GripVertical /></span>
 							<Switch checked={on} label={b.label} hideLabel onchange={(v) => toggle(id, v)} />
 							<span class="bl"><b>{b.label}</b><small>{b.desc}{b.plugin && !plugins.on(b.plugin) ? " · 플러그인 꺼짐" : ""}</small></span>
-							<Button size="sm" variant="ghost" disabled={!on || draft.blocks.indexOf(id) === 0} onclick={() => move(id, -1)} aria-label="{b.label} 위로">{#snippet icon()}<ArrowUp />{/snippet}</Button>
-							<Button size="sm" variant="ghost" disabled={!on || draft.blocks.indexOf(id) === draft.blocks.length - 1} onclick={() => move(id, 1)} aria-label="{b.label} 아래로">{#snippet icon()}<ArrowDown />{/snippet}</Button>
+							<Button size="sm" variant="ghost" disabled={i === 0} onclick={() => move(id, -1)} aria-label="{b.label} 위로">{#snippet icon()}<ArrowUp />{/snippet}</Button>
+							<Button size="sm" variant="ghost" disabled={i === order.length - 1} onclick={() => move(id, 1)} aria-label="{b.label} 아래로">{#snippet icon()}<ArrowDown />{/snippet}</Button>
 						</li>
 					{/each}
 				</ul>
 			</div>
 			<label class="field">
-				<span>내 글 <small>마크다운 줄(# 제목, - 목록, **굵게**), ```html``` 블록. HTML 렌더링이 켜져 있으면 HTML 그대로</small></span>
-				<Textarea bind:value={draft.note} autosize rows={4} maxRows={16} mono placeholder={"# 오늘 할 것\n- 엘리안 이야기 이어 쓰기"} />
+				<span>홈 CSS <small>이 화면에만 적용 · 예) .home h1 {"{"} font-size: 2.4rem; {"}"}</small></span>
+				<Textarea bind:value={draft.css} autosize rows={4} maxRows={16} mono placeholder={".home { background: linear-gradient(#0000, var(--accent-soft)); }\n.home .card { border-radius: 24px; }"} />
 			</label>
 			<label class="row"><Switch checked={draft.startOnHome} label="앱을 열면 홈부터" hideLabel onchange={(v) => (draft.startOnHome = v)} /><span>앱을 열면 홈부터 보기</span></label>
 			<div class="btns">
@@ -183,14 +194,6 @@
 					<p class="muted">아직 게임 없음</p>
 				{/if}
 			</section>
-		{:else if id === "note"}
-			{#if noteBlocks.length}
-				<section class="card note"><RichText blocks={noteBlocks} /></section>
-			{:else if !editing}
-				<section>
-					<EmptyState title="내 글" description="꾸미기에서 메모·링크·HTML을 넣어 홈을 채울 수 있음" />
-				</section>
-			{/if}
 		{/if}
 	{/each}
 </div>
@@ -315,10 +318,6 @@
 		text-overflow: ellipsis;
 		white-space: nowrap;
 	}
-	.note {
-		padding: var(--space-4) var(--space-5);
-		line-height: 1.7;
-	}
 	.muted {
 		display: inline-flex;
 		align-items: center;
@@ -359,7 +358,23 @@
 		display: flex;
 		align-items: center;
 		gap: var(--space-2);
-		padding: var(--space-1) 0;
+		padding: var(--space-1) var(--space-2);
+		border-radius: var(--radius-md);
+		cursor: grab;
+	}
+	.blocks li.dragging {
+		opacity: 0.4;
+	}
+	.blocks li.over {
+		box-shadow: inset 0 2px 0 var(--accent);
+	}
+	.grip {
+		display: grid;
+		color: var(--text-faint);
+	}
+	.grip :global(svg) {
+		width: 16px;
+		height: 16px;
 	}
 	.bl {
 		flex: 1;

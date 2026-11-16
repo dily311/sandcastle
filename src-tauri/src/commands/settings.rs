@@ -117,65 +117,91 @@ pub async fn update_feature_setting(
     id: String,
     enabled: bool,
 ) -> Result<()> {
-    let mut settings = state.0.lock().map_err(|e| AppError::io(e.to_string()))?;
-    settings.feature.insert(id.clone(), enabled);
-
-    save(&app, &*settings)?;
+    let wanted = {
+        let mut settings = state.0.lock().map_err(|e| AppError::io(e.to_string()))?;
+        settings.feature.insert(id.clone(), enabled);
+        save(&app, &*settings)?;
+        settings.widget_window_wanted()
+    };
 
     if id == crate::sys::plugins::id::REGEX {
         crate::service::chat::regex_processor::set_enabled(enabled);
     }
-    // 위젯 창은 여기서 직접 열고 닫는다 (어느 화면에서 바꿔도 창 상태가 설정과 같게)
+    // 모든 창에 먼저 알린다 (메인 창은 코어 플러그인, 위젯 창은 하위 기능). 닫을 창에 닫은 뒤 보내면
+    // "잘못된 창 핸들" 오류가 나므로 알림 → 창 열고 닫기 순서
+    let json = json!({"id": id, "enabled": enabled});
+    app.emit(FeatureSetting::EVENT_NAME, json).map_err(|e| AppError::io(e.to_string()))?;
+
+    // 위젯 창은 백엔드만 열고 닫는다: 위젯이 켜져 있고 하위 기능이 하나라도 켜져 있으면 열고, 아니면 닫는다
     #[cfg(desktop)]
-    if id == crate::sys::plugins::id::WIDGET {
+    if id == crate::sys::plugins::id::WIDGET || id.starts_with("widget.") {
         use tauri::Manager;
         if let Some(tracker) = app.try_state::<crate::widget::MouseTrackerState>() {
-            let result = if enabled {
+            let result = if wanted {
                 crate::widget::manager::WidgetManager::open_widget(&app, &tracker).map(|_| ())
             } else {
                 crate::widget::manager::WidgetManager::close_widget(&app, &tracker)
             };
             if let Err(e) = result {
-                eprintln!("[widget] 창 {} 실패: {e}", if enabled { "열기" } else { "닫기" });
+                eprintln!("[widget] 창 {} 실패: {e}", if wanted { "열기" } else { "닫기" });
             }
         }
     }
-
-    // 모든 창에 알린다: 메인 창은 코어 플러그인(메뉴·화면), 위젯 창은 위젯 하위 기능
-    let json = json!({"id": id, "enabled": enabled});
-    app.emit(FeatureSetting::EVENT_NAME, json).map_err(|e| AppError::io(e.to_string()))?;
+    #[cfg(not(desktop))]
+    let _ = wanted;
 
     Ok(())
 }
 
-/// 배경 이미지 정하기: 고른 파일을 앱 데이터 backgrounds/에 복사해 쓴다 (원본은 건드리지 않음).
-/// path가 None이면 배경을 없앤다. 전에 복사해 둔 배경 파일은 지운다. 바뀐 설정을 돌려준다
+/// 배경 목록에 이미지 추가: 고른 파일들을 앱 데이터 backgrounds/에 복사한다 (원본은 건드리지 않음).
+/// select면 마지막 것을 앱 배경으로 고른다. 바뀐 설정을 돌려준다
 #[tauri::command]
 #[specta::specta]
-pub async fn set_theme_background(app: AppHandle, state: State<'_, SettingsState<ThemeSetting>>, path: Option<String>) -> Result<ThemeSetting> {
+pub async fn add_backgrounds(app: AppHandle, state: State<'_, SettingsState<ThemeSetting>>, paths: Vec<String>, select: bool) -> Result<ThemeSetting> {
     let dir = crate::commands::character_image::app_data_dir(&app)?.join("backgrounds");
-    let old = state.0.lock().map_err(|_| AppError::internal("settings lock poisoned"))?.background_image.clone();
-    let new_path = match path {
-        Some(src) => {
-            let src = std::path::PathBuf::from(src);
-            let ext = src.extension().and_then(|e| e.to_str()).map(str::to_ascii_lowercase).unwrap_or_default();
-            if !["png", "jpg", "jpeg", "webp", "gif", "avif"].contains(&ext.as_str()) {
-                return Err(AppError::validation("이미지 파일(png·jpg·webp·gif)만 배경으로 쓸 수 있습니다", None));
-            }
-            std::fs::create_dir_all(&dir)?;
-            let dest = dir.join(format!("{}.{ext}", uuid::Uuid::new_v4()));
-            std::fs::copy(&src, &dest)?;
-            Some(dest.to_string_lossy().into_owned())
+    std::fs::create_dir_all(&dir)?;
+    let mut added = Vec::new();
+    for src in paths.iter().take(50) {
+        let src = std::path::PathBuf::from(src);
+        let ext = src.extension().and_then(|e| e.to_str()).map(str::to_ascii_lowercase).unwrap_or_default();
+        if !["png", "jpg", "jpeg", "webp", "gif", "avif"].contains(&ext.as_str()) {
+            return Err(AppError::validation("이미지 파일(png·jpg·webp·gif)만 배경으로 쓸 수 있습니다", None));
         }
-        None => None,
+        let dest = dir.join(format!("{}.{ext}", uuid::Uuid::new_v4()));
+        std::fs::copy(&src, &dest)?;
+        added.push(dest.to_string_lossy().into_owned());
+    }
+    let mut list = state.0.lock().map_err(|_| AppError::internal("settings lock poisoned"))?.backgrounds.clone();
+    list.extend(added.iter().cloned());
+    let mut patch = json!({ "backgrounds": list });
+    if select {
+        if let Some(last) = added.last() {
+            patch["backgroundImage"] = json!(last);
+        }
+    }
+    let settings = apply_patch(&app, &state.0, patch)?;
+    app.emit(ThemeSetting::EVENT_NAME, &settings).map_err(|e| AppError::io(e.to_string()))?;
+    Ok(settings)
+}
+
+/// 배경 목록에서 빼고 복사해 둔 파일을 지운다 (앱 배경이었으면 배경 없음으로)
+#[tauri::command]
+#[specta::specta]
+pub async fn remove_background(app: AppHandle, state: State<'_, SettingsState<ThemeSetting>>, path: String) -> Result<ThemeSetting> {
+    let dir = crate::commands::character_image::app_data_dir(&app)?.join("backgrounds");
+    let (list, selected) = {
+        let cur = state.0.lock().map_err(|_| AppError::internal("settings lock poisoned"))?;
+        (cur.backgrounds.iter().filter(|p| **p != path).cloned().collect::<Vec<_>>(), cur.background_image.clone())
     };
-    let settings = apply_patch(&app, &state.0, json!({ "backgroundImage": new_path }))?;
-    // 앱이 복사해 둔 예전 배경만 지운다 (backgrounds/ 안의 파일)
-    if let Some(old) = old.filter(|o| Some(o) != new_path.as_ref()) {
-        let old = std::path::PathBuf::from(old);
-        if old.parent() == Some(dir.as_path()) {
-            let _ = std::fs::remove_file(old);
-        }
+    let mut patch = json!({ "backgrounds": list });
+    if selected.as_deref() == Some(path.as_str()) {
+        patch["backgroundImage"] = serde_json::Value::Null;
+    }
+    let settings = apply_patch(&app, &state.0, patch)?;
+    let p = std::path::PathBuf::from(&path);
+    // 앱이 복사해 둔 파일(backgrounds/ 안)만 지운다
+    if p.parent() == Some(dir.as_path()) {
+        let _ = std::fs::remove_file(p);
     }
     app.emit(ThemeSetting::EVENT_NAME, &settings).map_err(|e| AppError::io(e.to_string()))?;
     Ok(settings)

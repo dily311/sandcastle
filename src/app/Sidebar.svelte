@@ -20,7 +20,7 @@
 		{ page: "phone", label: "폰", icon: Smartphone, plugin: "phone" },
 		{ page: "game", label: "게임", icon: Gamepad2, plugin: "game" },
 		{ page: "lorebook", label: "로어북", icon: BookOpen },
-		{ page: "images", label: "이미지", icon: Images, plugin: "imagegen" },
+		{ page: "images", label: "이미지", icon: Images },
 	];
 	const items = $derived(allItems.filter((i) => !i.plugin || plugins.on(i.plugin)));
 

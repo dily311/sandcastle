@@ -14,10 +14,12 @@ export const commands = {
 	getThemeSetting: (options?: InvokeOptions) => __TAURI_INVOKE<ThemeSetting_Serialize>("get_theme_setting", undefined, options),
 	updateThemeSetting: (patch: Value, options?: InvokeOptions) => __TAURI_INVOKE<ThemeSetting_Serialize>("update_theme_setting", { patch }, options),
 	/**
-	 *  배경 이미지 정하기: 고른 파일을 앱 데이터 backgrounds/에 복사해 쓴다 (원본은 건드리지 않음).
-	 *  path가 None이면 배경을 없앤다. 전에 복사해 둔 배경 파일은 지운다. 바뀐 설정을 돌려준다
+	 *  배경 목록에 이미지 추가: 고른 파일들을 앱 데이터 backgrounds/에 복사한다 (원본은 건드리지 않음).
+	 *  select면 마지막 것을 앱 배경으로 고른다. 바뀐 설정을 돌려준다
 	 */
-	setThemeBackground: (path: string | null, options?: InvokeOptions) => __TAURI_INVOKE<ThemeSetting_Serialize>("set_theme_background", { path }, options),
+	addBackgrounds: (paths: string[], select: boolean, options?: InvokeOptions) => __TAURI_INVOKE<ThemeSetting_Serialize>("add_backgrounds", { paths, select }, options),
+	/**  배경 목록에서 빼고 복사해 둔 파일을 지운다 (앱 배경이었으면 배경 없음으로) */
+	removeBackground: (path: string, options?: InvokeOptions) => __TAURI_INVOKE<ThemeSetting_Serialize>("remove_background", { path }, options),
 	getConvSettings: (options?: InvokeOptions) => __TAURI_INVOKE<ConvSettings_Serialize>("get_conv_settings", undefined, options),
 	setSystemDefaultPersona: (id: string, options?: InvokeOptions) => __TAURI_INVOKE<null>("set_system_default_persona", { id }, options),
 	getThemeList: (options?: InvokeOptions) => __TAURI_INVOKE<CssThemeMeta_Serialize[]>("get_theme_list", undefined, options),
@@ -175,6 +177,8 @@ export const commands = {
 	updateCharacter: (id: string, input: CharacterInput_Deserialize, options?: InvokeOptions) => __TAURI_INVOKE<Character_Serialize>("update_character", { id, input }, options),
 	/**  캐릭터 아바타: 고른 이미지를 앱 데이터 characters/avatars로 복사. `path`가 없으면 지운다 */
 	setCharacterAvatar: (id: string, path: string | null, options?: InvokeOptions) => __TAURI_INVOKE<Character_Serialize>("set_character_avatar", { id, path }, options),
+	/**  캐릭터 커버(배너) 이미지 바꾸기. path가 None이면 지운다. 앱이 복사해 둔 이전 커버 파일은 지운다 */
+	setCharacterCover: (id: string, path: string | null, options?: InvokeOptions) => __TAURI_INVOKE<Character_Serialize>("set_character_cover", { id, path }, options),
 	copyCharacterToPersona: (characterId: string, options?: InvokeOptions) => __TAURI_INVOKE<Persona_Serialize>("copy_character_to_persona", { characterId }, options),
 	copyPersonaToCharacter: (personaId: string, options?: InvokeOptions) => __TAURI_INVOKE<Character_Serialize>("copy_persona_to_character", { personaId }, options),
 	/**  캐릭터를 게임에 넣음 (게임 캐릭터는 원본 캐릭터를 기억함). 아바타는 게임 에셋으로 따로 넣어야 함 */
@@ -311,6 +315,8 @@ export const commands = {
 	/**  이미지 갤러리: 만든 그림 전부 (최신 순) */
 	listGeneratedImages: (options?: InvokeOptions) => __TAURI_INVOKE<GeneratedImage_Serialize[]>("list_generated_images", undefined, options),
 	deleteGeneratedImage: (path: string, options?: InvokeOptions) => __TAURI_INVOKE<null>("delete_generated_image", { path }, options),
+	/**  갤러리에 그림 올리기 (복사, AI 생성 정보는 파일에서 읽어 정리). 이미지 생성 플러그인이 꺼져 있어도 된다 (AI 호출 없음) */
+	importGalleryImages: (paths: string[], options?: InvokeOptions) => __TAURI_INVOKE<GeneratedImage_Serialize[]>("import_gallery_images", { paths }, options),
 	/**
 	 *  화면에서 만든 png(이미지 카드 등)를 사용자가 저장 대화상자로 고른 곳에 쓴다.
 	 *  .png 경로와 png 내용만 받는다 (다른 파일을 쓰는 데 쓰이지 않게)
@@ -322,7 +328,7 @@ export const commands = {
 	 *  프롬프트로 직접 그리기 (이미지 생성 페이지). refine이면 채팅 AI가 프롬프트를 다듬는다.
 	 *  source: "manual"(생성 페이지) / "game"(게임 대사)
 	 */
-	generateImageFromPrompt: (prompt: string, refine: boolean, source: string | null, options?: InvokeOptions) => __TAURI_INVOKE<GeneratedImage_Serialize>("generate_image_from_prompt", { prompt, refine, source }, options),
+	generateImageFromPrompt: (prompt: string, refine: boolean, source: string | null, preset: ImageGenSetting_Deserialize | null, album: string | null, options?: InvokeOptions) => __TAURI_INVOKE<GeneratedImage_Serialize>("generate_image_from_prompt", { prompt, refine, source, preset, album }, options),
 	/**
 	 *  지금 씬 또는 지금 대화의 기록 ("지난 대사" 창). 씬이 열려 있으면 그 씬이 마지막으로 열린 뒤의 대본과 씬 대화,
 	 *  씬 밖에서 NPC와 대화 중이면 그 대화를 시작한 뒤의 메시지. 둘 다 아니면 최근 기록(limit개).
@@ -770,6 +776,8 @@ export type Character_Deserialize = {
 	id: string,
 	name: string,
 	avatar?: string | null,
+	/**  캐릭터 페이지 위쪽 커버 이미지 */
+	cover?: string | null,
 	description: string,
 	alternateDescriptions: string[],
 	firstMessage?: string | null,
@@ -794,6 +802,8 @@ export type Character_Serialize = {
 	id: string,
 	name: string,
 	avatar: string | null,
+	/**  캐릭터 페이지 위쪽 커버 이미지 */
+	cover: string | null,
 	description: string,
 	alternateDescriptions: string[],
 	firstMessage: string | null,
@@ -2160,12 +2170,16 @@ export type GeneratedImage_Deserialize = {
 	path: string,
 	prompt: string,
 	model: string,
-	/**  "message" | "manual" | "game" */
+	/**  "message" | "manual" | "game" | "upload" */
 	source: string,
 	/**  메시지에서 만들었으면 그 메시지·대화 */
 	messageId?: string | null,
 	conversationId?: string | null,
 	createdAt: number,
+	/**  생성 정보 (만들 때 쓴 설정, 올린 그림이면 파일에 들어 있던 정보) */
+	meta?: MetaItem[],
+	/**  앨범: 폰 카메라로 만든 그림이면 그 폰 주인 ("persona:<id>" / "character:<id>") */
+	album?: string | null,
 };
 
 /**  만든 그림 하나 (갤러리). 파일 옆의 같은 이름 .json에 정보를 둔다 */
@@ -2173,12 +2187,16 @@ export type GeneratedImage_Serialize = {
 	path: string,
 	prompt: string,
 	model: string,
-	/**  "message" | "manual" | "game" */
+	/**  "message" | "manual" | "game" | "upload" */
 	source: string,
 	/**  메시지에서 만들었으면 그 메시지·대화 */
 	messageId: string | null,
 	conversationId: string | null,
 	createdAt: number,
+	/**  생성 정보 (만들 때 쓴 설정, 올린 그림이면 파일에 들어 있던 정보) */
+	meta: MetaItem[],
+	/**  앨범: 폰 카메라로 만든 그림이면 그 폰 주인 ("persona:<id>" / "character:<id>") */
+	album: string | null,
 };
 
 /**  홈 화면: 보일 블록과 순서, 인사말, 내 글. 리소스를 쓰지 않는 화면이라 블록은 기본으로 보인다 */
@@ -2190,10 +2208,10 @@ export type HomeSetting_Deserialize = {
 	startOnHome?: boolean,
 	/**  인사말 (비우면 "안녕하세요, {{user}}"). {{user}} 사용 가능 */
 	greeting?: string,
-	/**  보일 블록 id, 위에서부터 순서대로: continue / quick / favorites / games / note */
+	/**  보일 블록 id, 위에서부터 순서대로: continue / quick / favorites / games */
 	blocks?: string[],
-	/**  내 글 블록 (마크다운 줄·```html``` 블록, HTML 렌더링이 켜져 있으면 HTML도) */
-	note?: string,
+	/**  홈 화면에만 붙는 CSS (홈이 열려 있을 때만 적용) */
+	css?: string,
 };
 
 /**  홈 화면: 보일 블록과 순서, 인사말, 내 글. 리소스를 쓰지 않는 화면이라 블록은 기본으로 보인다 */
@@ -2202,10 +2220,10 @@ export type HomeSetting_Serialize = {
 	startOnHome: boolean,
 	/**  인사말 (비우면 "안녕하세요, {{user}}"). {{user}} 사용 가능 */
 	greeting: string,
-	/**  보일 블록 id, 위에서부터 순서대로: continue / quick / favorites / games / note */
+	/**  보일 블록 id, 위에서부터 순서대로: continue / quick / favorites / games */
 	blocks: string[],
-	/**  내 글 블록 (마크다운 줄·```html``` 블록, HTML 렌더링이 켜져 있으면 HTML도) */
-	note: string,
+	/**  홈 화면에만 붙는 CSS (홈이 열려 있을 때만 적용) */
+	css: string,
 };
 
 export type ImageGenSetting = ImageGenSetting_Serialize | ImageGenSetting_Deserialize;
@@ -2336,6 +2354,12 @@ export type Message_Serialize = {
 	meta: Value | null,
 	createdAt: number,
 	updatedAt: number,
+};
+
+/**  화면에 보일 정보 한 줄 */
+export type MetaItem = {
+	key: string,
+	value: string,
 };
 
 export type MigrationInfo = {
@@ -3457,8 +3481,10 @@ export type ThemeSetting_Deserialize = {
 	grayTone?: string,
 	/**  CSS 스니펫 (옵시디언처럼 켜고 끄는 작은 CSS 조각) */
 	snippets?: CssSnippet[],
-	/**  앱 배경 이미지 (앱 데이터 backgrounds/에 복사한 파일 경로, GIF 가능). 없으면 배경 없음 */
+	/**  앱 배경: 배경 목록의 파일 경로, 또는 "preset:<id>"(기본 그라데이션). 없으면 배경 없음 */
 	backgroundImage?: string | null,
+	/**  올려 둔 배경 이미지들 (앱 데이터 backgrounds/에 복사한 파일, GIF 가능). 테마 배경·이미지 카드가 같이 쓴다 */
+	backgrounds?: string[],
 	/**  배경 위 화면의 불투명도 (0.3~1). 낮을수록 배경이 잘 보임 */
 	backgroundOpacity?: number | null,
 };
@@ -3473,8 +3499,10 @@ export type ThemeSetting_Serialize = {
 	grayTone: string,
 	/**  CSS 스니펫 (옵시디언처럼 켜고 끄는 작은 CSS 조각) */
 	snippets: CssSnippet[],
-	/**  앱 배경 이미지 (앱 데이터 backgrounds/에 복사한 파일 경로, GIF 가능). 없으면 배경 없음 */
+	/**  앱 배경: 배경 목록의 파일 경로, 또는 "preset:<id>"(기본 그라데이션). 없으면 배경 없음 */
 	backgroundImage: string | null,
+	/**  올려 둔 배경 이미지들 (앱 데이터 backgrounds/에 복사한 파일, GIF 가능). 테마 배경·이미지 카드가 같이 쓴다 */
+	backgrounds: string[],
 	/**  배경 위 화면의 불투명도 (0.3~1). 낮을수록 배경이 잘 보임 */
 	backgroundOpacity: number | null,
 };

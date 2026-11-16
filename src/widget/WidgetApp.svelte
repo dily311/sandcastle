@@ -4,7 +4,6 @@
 	import { bootstrapFeatures, featureManager } from "$/lib/features/feautreManager.svelte";
 	import { setLucideProps } from "@lucide/svelte";
 	import { onEvent } from "$shared/ipc/events";
-	import { getCurrentWebviewWindow } from "@tauri-apps/api/webviewWindow";
 	import ContextMenu from "$/lib/contextmenu/ui/ContextMenu.svelte";
 
 	let isInitialized = $state(false);
@@ -35,12 +34,8 @@
 		isInitialized = true;
 	});
 
-	$effect(() => {
-		// 위젯이 모두 꺼졌다면 자동으로 윈도우 종료
-		if (isInitialized && featureManager.getFeatures.filter(f => f.enabled).length === 0) {
-			getCurrentWebviewWindow().close();
-		}
-	});
+	// 하위 기능이 모두 꺼지면 백엔드(update_feature_setting)가 이 창을 닫는다.
+	// 창이 스스로 닫으면 백엔드는 열려 있는 줄 알고 닫힌 창에 메시지를 보내게 된다
 </script>
 
 {#if isInitialized}

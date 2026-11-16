@@ -20,7 +20,7 @@ const db = {
 		selectedPersonaId: "default",
 		lastPlayedGameId: null,
 		phoneModePrompt: "[폰 메신저 대화]",
-		home: { startOnHome: false, greeting: "", blocks: ["continue", "quick", "favorites", "games", "note"], note: "# 오늘 할 것\n- 엘리안 이야기 이어 쓰기\n- **새 게임** 시작해 보기" },
+		home: { startOnHome: false, greeting: "", blocks: ["continue", "quick", "favorites", "games"], css: "" },
 	} satisfies AppSetting_Serialize as AppSetting_Serialize,
 	themeSetting: {
 		mode: "system",
@@ -47,7 +47,14 @@ export const handlers: Record<string, Handler> = {
 	update_app_setting: ({ patch }) => (db.appSetting = { ...db.appSetting, ...(patch as object) }),
 	get_theme_setting: () => db.themeSetting,
 	update_theme_setting: ({ patch }) => (db.themeSetting = { ...db.themeSetting, ...(patch as object) }),
-	set_theme_background: ({ path }) => (db.themeSetting = { ...db.themeSetting, backgroundImage: (path as string | null) ?? null }),
+	add_backgrounds: ({ paths, select }) => {
+		const list = [...((db.themeSetting as { backgrounds?: string[] }).backgrounds ?? []), ...(paths as string[])];
+		return (db.themeSetting = { ...db.themeSetting, backgrounds: list, ...(select ? { backgroundImage: list.at(-1) ?? null } : {}) });
+	},
+	remove_background: ({ path }) => {
+		const cur = db.themeSetting as { backgrounds?: string[]; backgroundImage?: string | null };
+		return (db.themeSetting = { ...db.themeSetting, backgrounds: (cur.backgrounds ?? []).filter((p) => p !== path), backgroundImage: cur.backgroundImage === path ? null : (cur.backgroundImage ?? null) });
+	},
 	get_feature_setting: () => db.feature,
 	list_core_plugins: () =>
 		(

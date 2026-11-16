@@ -248,7 +248,6 @@
 	}
 	.cta {
 		display: flex;
-		flex-direction: row;
 		align-items: flex-end;
 		gap: var(--space-1);
 		padding-bottom: var(--space-1);

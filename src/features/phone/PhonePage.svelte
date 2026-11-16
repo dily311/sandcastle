@@ -1,5 +1,6 @@
 <script lang="ts">
 	import { onMount } from "svelte";
+	import { Camera, Image as ImageIcon } from "@lucide/svelte";
 	import { BatteryFull, ChevronLeft, ChevronRight, Contact, MessageCircle, Pencil, Plus, Search, Settings, Signal, Trash2, Wifi } from "@lucide/svelte";
 	import { Avatar, ContextMenu, Spinner, type MenuItem } from "$shared/ui";
 	import { fileSrc } from "$shared/ipc/file";
@@ -9,12 +10,17 @@
 	import { lookup, phone, WALLPAPERS, type Who } from "./phone.svelte";
 	import PhoneRoom from "./PhoneRoom.svelte";
 	import PhonePanel from "./PhonePanel.svelte";
+	import PhoneAlbum from "./PhoneAlbum.svelte";
+	import ImageCreate from "$features/images/ImageCreate.svelte";
+	import { plugins } from "$shared/stores/plugins.svelte";
 	import SidePanel from "$app/SidePanel.svelte";
 	import { panel } from "$app/panel.svelte";
 	import { GitBranch, Gauge, Info, SlidersHorizontal } from "@lucide/svelte";
 	import { ChatSession } from "$features/character/session.svelte";
 
-	type Screen = "home" | "messages" | "room" | "contacts" | "settings";
+	type Screen = "home" | "messages" | "room" | "contacts" | "settings" | "photos" | "camera";
+	/** 이 폰 주인 앨범 키 (카메라 그림) */
+	const albumKey = $derived(phone.prefs.owner ? `${phone.prefs.owner.kind}:${phone.prefs.owner.id}` : "");
 	let screen = $state<Screen>("home");
 	let room = $state<Conversation | null>(null);
 	let ready = $state(false);
@@ -153,6 +159,8 @@
 						<span class="ic msg"><MessageCircle />{#if phone.unread}<i>{phone.unread}</i>{/if}</span>메시지
 					</button>
 					<button class="app" onclick={() => go("contacts")}><span class="ic contact"><Contact /></span>연락처</button>
+					<button class="app" onclick={() => go("photos")}><span class="ic photos"><ImageIcon /></span>사진</button>
+					{#if plugins.on("imagegen")}<button class="app" onclick={() => go("camera")}><span class="ic camera"><Camera /></span>카메라</button>{/if}
 					<button class="app" onclick={() => go("settings")}><span class="ic set"><Settings /></span>설정</button>
 				</div>
 				<div class="dock">
@@ -161,6 +169,15 @@
 					<button class="app" aria-label="설정" onclick={() => go("settings")}><span class="ic set"><Settings /></span></button>
 				</div>
 			</div>
+		{:else if screen === "photos"}
+			<PhoneAlbum album={albumKey} chatIds={phone.chats.map((c) => c.id)} onback={() => go("home")} oncamera={plugins.on("imagegen") ? () => go("camera") : undefined} />
+		{:else if screen === "camera"}
+			<div class="app-bar">
+				<button class="plain" aria-label="뒤로" onclick={() => go("home")}><ChevronLeft /></button>
+				<h2 class="grow">카메라</h2>
+				<button class="plain small" onclick={() => go("photos")}>사진</button>
+			</div>
+			<div class="cam-wrap"><ImageCreate source="phone" album={albumKey} compact /></div>
 		{:else if screen === "room" && room}
 			{#key room.id}
 				<PhoneRoom conv={room} onback={closeRoom} session={roomSession ?? undefined} />
@@ -459,6 +476,23 @@
 	}
 	.set {
 		background: #636366;
+	}
+	.photos {
+		background: linear-gradient(135deg, #ffb35c, #ff6b8b 55%, #8f6fe0);
+	}
+	.camera {
+		background: #2c2c2e;
+	}
+	.cam-wrap {
+		background: none;
+		flex: 1;
+		min-height: 0;
+		overflow: auto;
+		padding: 0 14px 16px;
+	}
+	.small {
+		font-size: 14px;
+		color: var(--accent);
 	}
 	.dock {
 		margin-top: auto;

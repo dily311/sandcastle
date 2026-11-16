@@ -1,4 +1,5 @@
 // 로어북(월드인포): 책 목록, 책별 항목, 쓰는 곳. 로어북 화면과 대화 패널이 같이 씀
+import { moveItem } from "$shared/dnd/sortable.svelte";
 import type { WorldInfoBook_Serialize as Book, WorldInfoEntry as Entry, WorldInfoEntryInput_Deserialize as EntryInput } from "$ipc/bindings";
 import { call, commands } from "$shared/ipc/client";
 import { JSON_FILES, pickSavePath } from "$shared/ipc/dialog";
@@ -120,6 +121,19 @@ class Lorebook {
 		this.entries[e.bookId] = (this.entries[e.bookId] ?? []).filter((x) => x.id !== e.id);
 		this.recount(e.bookId);
 	}
+	/**
+	 * 끌어서 순서 바꾸기: 순서 = 우선순위(높은 것이 위). 옮긴 항목만 새 이웃 사이 값으로 바꾸고,
+	 * 사이에 빈 값이 없으면 전부 10 간격으로 다시 매긴다. 바뀐 항목만 저장한다
+	 */
+	async reorder(bookId: string, from: number, to: number) {
+		const list = this.entries[bookId];
+		if (!list) return;
+		const next = moveItem(list, from, to);
+		const changed = reprioritize(next, to);
+		this.entries[bookId] = next;
+		for (const e of changed) if (!isDraft(e)) await this.saveEntry(e);
+	}
+
 	private recount(bookId: string) {
 		const list = (this.entries[bookId] ?? []).filter((e) => !isDraft(e));
 		this.counts[bookId] = { entries: list.length, enabled: list.filter((e) => e.enabled).length };
@@ -133,6 +147,36 @@ class Lorebook {
 			conversations: library.conversations.filter((c) => c.worldInfoIds.includes(bookId)),
 		};
 	}
+}
+
+/**
+ * to 자리로 옮겨진 목록의 우선순위를 순서에 맞춘다 (제자리에서 고친다). 값이 바뀐 항목을 돌려준다.
+ * 옮긴 항목만 이웃 사이 값으로, 자리가 없으면 전부 (개수-순번)*10
+ */
+export function reprioritize(list: Entry[], to: number): Entry[] {
+	const prev = list[to - 1];
+	const nextE = list[to + 1];
+	const cur = list[to];
+	let p: number | null = null;
+	if (!prev && nextE) p = nextE.priority + 10;
+	else if (prev && !nextE) p = prev.priority - 10;
+	else if (prev && nextE && prev.priority - nextE.priority >= 2) p = Math.floor((prev.priority + nextE.priority) / 2);
+	if (p !== null || !prev) {
+		if (p !== null && cur.priority !== p) {
+			cur.priority = p;
+			return [cur];
+		}
+		return [];
+	}
+	const changed: Entry[] = [];
+	list.forEach((e, i) => {
+		const want = (list.length - i) * 10;
+		if (e.priority !== want) {
+			e.priority = want;
+			changed.push(e);
+		}
+	});
+	return changed;
 }
 
 /** 우선순위 높은 것부터, 같으면 제목 순 */

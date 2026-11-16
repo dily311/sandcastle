@@ -38,9 +38,6 @@
 <Section title="위젯" lead="바탕화면에 떠 있는 작은 창">
 	{#if ready}
 		<Group>
-			<Row label="위젯 켜기" desc="켜면 위젯 창이 열림">
-				<Switch checked={features["widget"] ?? false} label="위젯 켜기" hideLabel onchange={(v) => toggle("widget", v)} />
-			</Row>
 			<Row label="컴퓨터 켤 때 위젯 실행" desc="로그인하면 위젯만 먼저 띄움">
 				<Switch checked={autostart} label="컴퓨터 켤 때 위젯 실행" hideLabel onchange={setAutostart} />
 			</Row>

@@ -11,6 +11,7 @@
 	import { relative } from "$shared/time";
 	import { library } from "$features/character/library.svelte";
 	import EntryItem from "./EntryItem.svelte";
+	import { Sortable } from "$shared/dnd/sortable.svelte";
 	import { BOOK_FORMATS, entryTitle, lorebook, type Book, type BookFormat } from "./lorebook.svelte";
 
 	let { bookId }: { bookId?: string } = $props();
@@ -122,6 +123,12 @@
 		filterMenu = { x: r.left, y: r.bottom + 4 };
 	}
 
+	// 끌어서 순서 바꾸기 (검색·필터가 없을 때만: 보이는 순서 = 전체 순서)
+	const sort = new Sortable((from, to) => bookId && lorebook.reorder(bookId, from, to));
+	$effect(() => {
+		sort.enabled = filter === "all" && !entryQuery.trim() && openId === null;
+	});
+
 	let openId = $state<string | null>(null);
 	function addEntry() {
 		if (!bookId) return;
@@ -163,15 +170,18 @@
 			<Button variant="primary" onclick={addEntry}>{#snippet icon()}<Plus />{/snippet}항목 추가</Button>
 		</div>
 		<p class="count faint small">
-			항목 {lorebook.counts[book.id]?.entries ?? 0}개 · 켜짐 {lorebook.counts[book.id]?.enabled ?? 0}개 · 우선순위 높은 것부터 (넣을 자리가 모자라면 높은 것부터 들어감)
+			항목 {lorebook.counts[book.id]?.entries ?? 0}개 · 켜짐 {lorebook.counts[book.id]?.enabled ?? 0}개 · 우선순위 높은 것부터 (넣을 자리가 모자라면 높은 것부터 들어감){sort.enabled ? " · 끌어서 순서(우선순위) 바꾸기" : ""}
 		</p>
 
 		{#if !entries}
 			<div class="center"><Spinner /></div>
 		{:else if shownEntries.length}
 			<ul class="entries">
-				{#each shownEntries as e (e.id)}
+				{#each shownEntries as e, i (e.id)}
 					<EntryItem
+						drag={sort.item(i)}
+						dragging={sort.from === i}
+						dragOver={sort.over === i && sort.from !== i}
 						entry={e}
 						open={openId === e.id}
 						ontoggle={() => (openId = openId === e.id ? null : e.id)}

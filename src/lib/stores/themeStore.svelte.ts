@@ -15,6 +15,7 @@ export const defaultThemeSetting: ThemeSetting = {
 	grayTone: "slate",
 	snippets: [],
 	backgroundImage: null,
+	backgrounds: [],
 	backgroundOpacity: 0.82,
 };
 

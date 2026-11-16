@@ -21,6 +21,7 @@ const character = (id: string, name: string, description: string, extra: Partial
 	id,
 	name,
 	avatar: null,
+	cover: null,
 	description,
 	alternateDescriptions: [],
 	firstMessage: null,

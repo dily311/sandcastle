@@ -208,20 +208,26 @@
 			const sel = window.getSelection();
 			const text = sel?.toString().trim() ?? "";
 			if (!sel || !text || selecting) return;
-			const node = sel.anchorNode instanceof Element ? sel.anchorNode : sel.anchorNode?.parentElement;
+			const el = (n: Node | null) => (n instanceof Element ? n : (n?.parentElement ?? null));
+			const node = el(sel.anchorNode);
 			const block = node?.closest<HTMLElement>("[id^=msg-]");
 			if (!block) return;
+			// 본문 글만: 머리줄(번호·이름·시각)·도구 줄에서 고른 것은 메뉴를 띄우지 않는다
+			const inMeta = (n: Element | null) => !!n?.closest(".who, .actions, .swipe, .tr-note");
+			if (inMeta(node) || inMeta(el(sel.focusNode))) return;
+			// 고른 범위가 다른 메시지로 넘어가면 메뉴를 띄우지 않는다
+			if (el(sel.focusNode)?.closest("[id^=msg-]") !== block) return;
 			const r = sel.getRangeAt(0).getBoundingClientRect();
 			selMenu = { x: r.left, y: r.bottom + 6, text, messageId: block.id.slice(4) };
 		}, 0);
 	}
 	// 고른 글 → 이미지 카드
-	let card = $state<{ text: string; speaker?: string; caption?: string } | null>(null);
+	let card = $state<{ text: string; speaker?: string; time?: number } | null>(null);
 	function cardSelection() {
 		const m = selMenu;
 		if (!m) return;
 		const msg = session?.messages.find((x) => x.id === m.messageId);
-		card = { text: m.text, speaker: msg?.name ?? undefined, caption: [character?.name, conv?.title].filter(Boolean).join(" · ") };
+		card = { text: m.text, speaker: msg?.name ?? (msg?.role === "assistant" ? character?.name : undefined), time: msg?.createdAt };
 	}
 	async function bookmarkSelection() {
 		const m = selMenu; // 메뉴가 닫히며 selMenu가 비워지므로 먼저 잡아 둠

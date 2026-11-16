@@ -112,6 +112,14 @@ export const settingsHandlers: Record<string, (a: Args) => unknown> = {
 		return c;
 	},
 
+	set_character_cover: ({ id, path }) => {
+		const c = characters.find((x) => x.id === id)!;
+		c.cover = path
+			? "data:image/svg+xml," + encodeURIComponent('<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 40 10"><defs><linearGradient id="g"><stop offset="0" stop-color="#5b4bdb"/><stop offset="1" stop-color="#f38fb1"/></linearGradient></defs><rect width="40" height="10" fill="url(#g)"/></svg>')
+			: null;
+		return c;
+	},
+
 	// ---- 복사 ----
 	copy_character_to_persona: ({ characterId }) => {
 		const c = characters.find((x) => x.id === characterId)!;
