@@ -125,10 +125,10 @@ where
     Ok(())
 }
 
-/** 게임 프로젝트 삭제
- * return true: 삭제됨
- *        false: 해당 칼럼을 찾을 수 없음
-*/
+/// 게임 프로젝트 삭제
+/// return true: 삭제됨
+///        false: 해당 칼럼을 찾을 수 없음
+///
 pub async fn delete_game_project<'e, E>(executor: E, id: &str) -> Result<bool, Error>
 where
     E: Executor<'e, Database = Sqlite>,
@@ -212,10 +212,9 @@ where
     Ok(())
 }
 
-/** 특정 state 제거
- * return true: 삭제됨
- *        false: 해당 칼럼을 찾을 수 없음
-*/
+/// 특정 state 제거
+/// return true: 삭제됨
+///        false: 해당 칼럼을 찾을 수 없음
 pub async fn delete_game_state_def<'e, E>(executor: E, id: &str) -> Result<bool, Error>
 where
     E: Executor<'e, Database = Sqlite>,
@@ -224,10 +223,9 @@ where
     Ok(result.rows_affected() != 0)
 }
 
-/** 한 게임에 관련된 state들을 모두 제거
- * return true: 삭제됨
- *        false: 해당 칼럼을 찾을 수 없음
-*/
+/// 한 게임에 관련된 state들을 모두 제거
+///  return true: 삭제됨
+///         false: 해당 칼럼을 찾을 수 없음
 pub async fn delete_game_all_state_defs<'e, E>(executor: E, game_id: &str) -> Result<bool, Error>
 where
     E: Executor<'e, Database = Sqlite>,
@@ -1819,10 +1817,9 @@ where
     Ok(())
 }
 
-/** 특정 게임의 씬 모두 삭제
- * return true: 삭제됨
- *        false: 해당 칼럼을 찾을 수 없음
-*/
+/// 특정 게임의 씬 모두 삭제
+/// return true: 삭제됨
+///        false: 해당 칼럼을 찾을 수 없음
 pub async fn delete_game_all_scene<'e, E>(executor: E, game_id: &str) -> Result<bool, Error>
 where
     E: Executor<'e, Database = Sqlite>,
@@ -1831,10 +1828,9 @@ where
     Ok(result.rows_affected() != 0)
 }
 
-/** 특정 씬 삭제
- * return true: 삭제됨
- *        false: 해당 칼럼을 찾을 수 없음
-*/
+/// 특정 씬 삭제
+///  return true: 삭제됨
+///         false: 해당 칼럼을 찾을 수 없음
 pub async fn delete_game_scene<'e, E>(executor: E, id: &str) -> Result<bool, Error>
 where
     E: Executor<'e, Database = Sqlite>,
@@ -1936,10 +1932,9 @@ where
     Ok(())
 }
 
-/** 특정 선택지 삭제
- * return true: 삭제됨
- *        false: 해당 칼럼을 찾을 수 없음
-*/
+/// 특정 선택지 삭제
+/// return true: 삭제됨
+///        false: 해당 칼럼을 찾을 수 없음
 pub async fn delete_game_choice<'e, E>(executor: E, id: &str) -> Result<bool, Error>
 where
     E: Executor<'e, Database = Sqlite>,
@@ -2040,10 +2035,9 @@ where
     Ok(())
 }
 
-/** 특정 브런치 삭제
- * return true: 삭제됨
- *        false: 해당 칼럼을 찾을 수 없음
-*/
+///  특정 브런치 삭제
+/// return true: 삭제됨
+///        false: 해당 칼럼을 찾을 수 없음
 pub async fn delete_game_branches<'e, E>(executor: E, id: &str) -> Result<bool, Error>
 where
     E: Executor<'e, Database = Sqlite>,
@@ -2500,10 +2494,9 @@ where
     Ok(())
 }
 
-/** 특정 세이브 삭제
- * return true: 삭제됨
- *        false: 해당 칼럼을 찾을 수 없음
-*/
+/// 특정 세이브 삭제
+/// return true: 삭제됨
+///        false: 해당 칼럼을 찾을 수 없음
 pub async fn delete_game_save<'e, E>(executor: E, session_id: &str, slot_number: i64) -> Result<bool, Error>
 where
     E: Executor<'e, Database = Sqlite>,
