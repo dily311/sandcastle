@@ -35,7 +35,8 @@
 		tts: "음성 읽기",
 		imagegen: "이미지 생성",
 		activity: "실행 기록",
-		prompts: "앱 프롬프트",
+		game: "게임 모드",
+		cg: "캐릭터 이미지",
 	};
 	// 대화 화면이면 그 대화 (제목 고치기·동작 메뉴)
 	const conv = $derived(nav.current.page === "character" && !nav.current.edit ? library.conversation(nav.current.convId) : undefined);

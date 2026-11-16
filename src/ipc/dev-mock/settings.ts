@@ -120,6 +120,12 @@ export const settingsHandlers: Record<string, (a: Args) => unknown> = {
 		return c;
 	},
 
+	set_character_cover_position: ({ id, y }) => {
+		const c = characters.find((x) => x.id === id)!;
+		c.coverY = y as number;
+		return null;
+	},
+
 	// ---- 복사 ----
 	copy_character_to_persona: ({ characterId }) => {
 		const c = characters.find((x) => x.id === characterId)!;

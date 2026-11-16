@@ -1,5 +1,5 @@
 <script lang="ts">
-	import { Camera, ImagePlus, X as XIcon } from "@lucide/svelte";
+	import { Camera, ImagePlus, Move, X as XIcon } from "@lucide/svelte";
 	import { ChevronRight, Download, Ellipsis, Gamepad2, MessageSquarePlus, Pencil, Plus, Search, Star, StarOff, Trash2, Upload, UserRound, Users } from "@lucide/svelte";
 	import type { GameProject_Serialize as GameProject } from "$ipc/bindings";
 	import { Avatar, Button, ContextMenu, Dialog, EmptyState, IconButton, Input, Segmented, Spinner, type MenuItem } from "$shared/ui";
@@ -56,6 +56,33 @@
 		const c = library.character(id);
 		if (c) c.cover = saved.cover;
 	}
+	// 커버 위치 조절: 위아래로 끌어서 보일 부분을 고르고 "완료"로 저장
+	let positioning = $state(false);
+	let coverY = $state(50);
+	let dragFrom: { y: number; start: number } | null = null;
+	function startPosition(y: number) {
+		coverY = y;
+		positioning = true;
+	}
+	function onCoverDown(e: PointerEvent) {
+		if (!positioning) return;
+		dragFrom = { y: e.clientY, start: coverY };
+		(e.currentTarget as HTMLElement).setPointerCapture(e.pointerId);
+	}
+	function onCoverMove(e: PointerEvent) {
+		if (!positioning || !dragFrom) return;
+		const h = (e.currentTarget as HTMLElement).clientHeight || 200;
+		// 그림을 아래로 끌면 위쪽이 보인다 (값이 줄어듦)
+		coverY = Math.min(100, Math.max(0, dragFrom.start - ((e.clientY - dragFrom.y) / h) * 100));
+	}
+	async function finishPosition(id: string) {
+		positioning = false;
+		dragFrom = null;
+		await call(commands.setCharacterCoverPosition(id, Math.round(coverY)), { source: "character" });
+		const c = library.character(id);
+		if (c) c.coverY = Math.round(coverY);
+	}
+
 	async function changeAvatar(id: string) {
 		const [path] = await pickFiles([IMAGE_FILES], false);
 		if (!path) return;
@@ -182,11 +209,32 @@
 	{/key}
 {:else if charId && character}
 	<div class="detail">
-		<div class="banner" class:has-cover={!!character.cover} style:background-image={character.cover ? `url("${fileSrc(character.cover)}")` : undefined}>
-			<div class="cover-tools">
-				<Button size="sm" variant="secondary" onclick={() => changeCover(character.id)}>{#snippet icon()}<ImagePlus />{/snippet}{character.cover ? "커버 바꾸기" : "커버 넣기"}</Button>
-				{#if character.cover}<Button size="sm" variant="secondary" onclick={() => changeCover(character.id, true)}>{#snippet icon()}<XIcon />{/snippet}커버 지우기</Button>{/if}
-			</div>
+		<!-- svelte-ignore a11y_no_static_element_interactions (위치 조절은 끌기, 버튼으로 시작·끝) -->
+		<div
+			class="banner"
+			class:has-cover={!!character.cover}
+			class:positioning
+			style:background-image={character.cover ? `url("${fileSrc(character.cover)}")` : undefined}
+			style:background-position-y={character.cover ? `${positioning ? coverY : (character.coverY ?? 50)}%` : undefined}
+			onpointerdown={onCoverDown}
+			onpointermove={onCoverMove}
+			onpointerup={() => (dragFrom = null)}
+		>
+			{#if positioning}
+				<div class="cover-hint">위아래로 끌어서 보일 부분 고르기</div>
+				<div class="cover-tools on">
+					<Button size="sm" variant="secondary" onclick={() => (positioning = false)}>취소</Button>
+					<Button size="sm" variant="primary" onclick={() => finishPosition(character.id)}>완료</Button>
+				</div>
+			{:else}
+				<div class="cover-tools">
+					<Button size="sm" variant="secondary" onclick={() => changeCover(character.id)}>{#snippet icon()}<ImagePlus />{/snippet}{character.cover ? "커버 바꾸기" : "커버 넣기"}</Button>
+					{#if character.cover}
+						<Button size="sm" variant="secondary" onclick={() => startPosition(character.coverY ?? 50)}>{#snippet icon()}<Move />{/snippet}위치 조절</Button>
+						<Button size="sm" variant="secondary" onclick={() => changeCover(character.id, true)}>{#snippet icon()}<XIcon />{/snippet}커버 지우기</Button>
+					{/if}
+				</div>
+			{/if}
 		</div>
 		<header class="profile">
 			<button class="portrait" title="아바타 바꾸기" aria-label="아바타 바꾸기" onclick={() => changeAvatar(character.id)}>
@@ -419,8 +467,27 @@
 		transition: opacity var(--duration-fast) var(--ease);
 	}
 	.banner:hover .cover-tools,
-	.cover-tools:focus-within {
+	.cover-tools:focus-within,
+	.cover-tools.on {
 		opacity: 1;
+	}
+	.banner.positioning {
+		cursor: ns-resize;
+		touch-action: none;
+		outline: 2px dashed var(--accent);
+		outline-offset: -2px;
+	}
+	.cover-hint {
+		position: absolute;
+		left: 50%;
+		bottom: var(--space-3);
+		transform: translateX(-50%);
+		padding: 4px 12px;
+		border-radius: var(--radius-full);
+		background: rgb(0 0 0 / 0.55);
+		color: #fff;
+		font-size: var(--text-xs);
+		pointer-events: none;
 	}
 	@media (hover: none) {
 		.cover-tools {

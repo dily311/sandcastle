@@ -4,6 +4,7 @@
 	import Section from "./Section.svelte";
 	import Group from "./Group.svelte";
 	import Row from "./Row.svelte";
+	import PromptSlotEditor from "./PromptSlotEditor.svelte";
 	import { chatApiOptions, current, ensureLoaded, orNull, save } from "./pluginSettingForm.svelte";
 
 	onMount(ensureLoaded);
@@ -25,6 +26,9 @@
 			<Row label="새 답변 자동 번역" desc="답변이 오면 바로 번역해서 보여줌 (원문 보기로 되돌림)">
 				<Switch checked={cur.translate.autoTranslate} label="자동 번역" hideLabel onchange={(v) => save("translate", { autoTranslate: v })} />
 			</Row>
+		</Group>
+		<Group title="번역 프롬프트">
+			<PromptSlotEditor key="translate" desc="AI 답변·입력·게임 대사를 옮길 때 보내는 지시" vars={"{{lang}} 옮길 언어"} />
 		</Group>
 	{/if}
 </Section>

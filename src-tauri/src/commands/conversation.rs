@@ -183,6 +183,14 @@ pub async fn set_character_cover(app: tauri::AppHandle, state: State<'_, AppStat
     Ok(conversation::get_character(&state.db, &id).await?)
 }
 
+/// 커버에서 보일 세로 위치 (0 위 ~ 100 아래)
+#[tauri::command]
+#[specta::specta]
+pub async fn set_character_cover_position(state: State<'_, AppState>, id: String, y: f64) -> Result<()> {
+    conversation::set_character_cover_y(&state.db, &id, y).await?;
+    Ok(())
+}
+
 /// 이미지 파일을 아바타 폴더로 복사하고 새 경로를 돌려준다
 pub(crate) fn copy_avatar(dir: &std::path::Path, src: &str, prefix: &str) -> Result<String> {
     let src = std::path::PathBuf::from(src);

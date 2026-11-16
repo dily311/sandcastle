@@ -7,7 +7,7 @@
 	import { pickFiles, pickSavePath } from "$shared/ipc/dialog";
 	import { toasts } from "$shared/stores/toast.svelte";
 	import { theme } from "$app/theme.svelte";
-	import { CARD_FONTS, CARD_SIZES, CARD_STYLES, blobBase64, cardBlob, renderCard, type CardFont, type CardStyle } from "./textCard";
+	import { CARD_DESIGNS, CARD_FONTS, CARD_SIZES, CARD_STYLES, blobBase64, cardBlob, palette, renderCard, type CardDesign, type CardFont, type CardStyle } from "./textCard";
 
 	interface Props {
 		card: { text: string; speaker?: string; time?: number } | null;
@@ -16,7 +16,17 @@
 	let { card, onclose }: Props = $props();
 
 	// 고른 옵션은 이번 실행 동안 기억 (다음 카드도 같은 모양으로)
-	const opts = $state({ style: "theme" as CardStyle, font: "app" as CardFont, size: "0", background: null as string | null, speaker: true, time: false });
+	const opts = $state({ design: "footnote" as CardDesign, style: "theme" as CardStyle, font: "app" as CardFont, size: "0", background: null as string | null, speaker: true, time: false });
+	// 사용자가 고친 색 (빈 값 = 색 묶음 그대로)
+	const colors = $state({ bg: "", text: "", accent: "" });
+	const base = $derived(palette(opts.style));
+	const COLOR_FIELDS = [
+		{ key: "bg", label: "카드" },
+		{ key: "text", label: "글자" },
+		{ key: "accent", label: "강조" },
+	] as const;
+	/** input[type=color]는 #rrggbb만 받는다 */
+	const hex = (v: string) => (/^#[0-9a-f]{6}$/i.test(v.trim()) ? v.trim() : "#888888");
 	let url = $state("");
 	let canvas: HTMLCanvasElement | null = null;
 	let seq = 0;
@@ -29,7 +39,9 @@
 			text: card.text,
 			speaker: opts.speaker ? card.speaker : undefined,
 			caption: opts.time && card.time ? stamp(card.time) : undefined,
+			design: opts.design,
 			style: opts.style,
+			colors: { bg: colors.bg, text: colors.text, accent: colors.accent },
 			font: opts.font,
 			size: Number(opts.size),
 			background: opts.background,
@@ -70,7 +82,20 @@
 	<div class="layout">
 		<div class="preview">{#if url}<img src={url} alt="카드 미리보기" />{/if}</div>
 		<div class="opts">
-			<label class="field"><span>색</span><Select bind:value={opts.style} options={CARD_STYLES} aria-label="카드 색" /></label>
+			<label class="field"><span>디자인</span><Select bind:value={opts.design} options={CARD_DESIGNS} aria-label="카드 디자인" /></label>
+			<label class="field"><span>색 묶음</span><Select bind:value={opts.style} options={CARD_STYLES} aria-label="카드 색 묶음" /></label>
+			<div class="field">
+				<span>색 고치기</span>
+				<div class="colors">
+					{#each COLOR_FIELDS as f (f.key)}
+						<label class="swatch" title="{f.label} 색">
+							<input type="color" value={hex(colors[f.key] || base[f.key])} oninput={(e) => (colors[f.key] = e.currentTarget.value)} aria-label="{f.label} 색" />
+							<span>{f.label}</span>
+							{#if colors[f.key]}<button type="button" class="reset" aria-label="{f.label} 색 되돌리기" onclick={() => (colors[f.key] = "")}>×</button>{/if}
+						</label>
+					{/each}
+				</div>
+			</div>
 			<label class="field"><span>글꼴</span><Select bind:value={opts.font} options={CARD_FONTS} aria-label="글꼴" /></label>
 			<label class="field"><span>글자 크기</span><Select bind:value={opts.size} options={CARD_SIZES} aria-label="글자 크기" /></label>
 			<div class="field">
@@ -128,6 +153,34 @@
 		font-size: var(--text-sm);
 		color: var(--text-muted);
 		min-width: 0;
+	}
+	.colors {
+		display: flex;
+		gap: var(--space-3);
+		flex-wrap: wrap;
+	}
+	.swatch {
+		display: inline-flex;
+		align-items: center;
+		gap: 4px;
+		color: var(--text);
+		font-size: var(--text-xs);
+	}
+	.swatch input {
+		width: 28px;
+		height: 28px;
+		padding: 0;
+		border: 1px solid var(--border);
+		border-radius: var(--radius-sm);
+		background: none;
+		cursor: pointer;
+	}
+	.reset {
+		padding: 0 4px;
+		border: none;
+		background: none;
+		color: var(--text-muted);
+		cursor: pointer;
 	}
 	.toggle {
 		display: flex;

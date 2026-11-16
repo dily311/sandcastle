@@ -179,6 +179,8 @@ export const commands = {
 	setCharacterAvatar: (id: string, path: string | null, options?: InvokeOptions) => __TAURI_INVOKE<Character_Serialize>("set_character_avatar", { id, path }, options),
 	/**  캐릭터 커버(배너) 이미지 바꾸기. path가 None이면 지운다. 앱이 복사해 둔 이전 커버 파일은 지운다 */
 	setCharacterCover: (id: string, path: string | null, options?: InvokeOptions) => __TAURI_INVOKE<Character_Serialize>("set_character_cover", { id, path }, options),
+	/**  커버에서 보일 세로 위치 (0 위 ~ 100 아래) */
+	setCharacterCoverPosition: (id: string, y: number | null, options?: InvokeOptions) => __TAURI_INVOKE<null>("set_character_cover_position", { id, y }, options),
 	copyCharacterToPersona: (characterId: string, options?: InvokeOptions) => __TAURI_INVOKE<Persona_Serialize>("copy_character_to_persona", { characterId }, options),
 	copyPersonaToCharacter: (personaId: string, options?: InvokeOptions) => __TAURI_INVOKE<Character_Serialize>("copy_persona_to_character", { personaId }, options),
 	/**  캐릭터를 게임에 넣음 (게임 캐릭터는 원본 캐릭터를 기억함). 아바타는 게임 에셋으로 따로 넣어야 함 */
@@ -318,6 +320,15 @@ export const commands = {
 	/**  갤러리에 그림 올리기 (복사, AI 생성 정보는 파일에서 읽어 정리). 이미지 생성 플러그인이 꺼져 있어도 된다 (AI 호출 없음) */
 	importGalleryImages: (paths: string[], options?: InvokeOptions) => __TAURI_INVOKE<GeneratedImage_Serialize[]>("import_gallery_images", { paths }, options),
 	/**
+	 *  앱의 전체 그림: 갤러리(만든·올린 그림) + 배경 목록 + 캐릭터 아바타·커버·CG 에셋 + 페르소나 아바타.
+	 *  다른 곳의 그림은 readonly (갤러리에서 지우거나 태그를 달지 않고, 원래 화면에서 관리)
+	 */
+	listAllImages: (options?: InvokeOptions) => __TAURI_INVOKE<GeneratedImage_Serialize[]>("list_all_images", undefined, options),
+	/**  갤러리 그림의 태그 바꾸기 ("preset" / "upload" / "background" 등). 배경 태그는 테마 배경 목록에도 넣고 뺀다 */
+	setImageTags: (path: string, tags: string[], options?: InvokeOptions) => __TAURI_INVOKE<GeneratedImage_Serialize>("set_image_tags", { path, tags }, options),
+	/**  여러 그림 한 번에 지우기 (갤러리 그림만, 다른 곳의 그림은 건너뜀). 지운 수를 돌려준다 */
+	deleteGalleryImages: (paths: string[], options?: InvokeOptions) => __TAURI_INVOKE<number>("delete_gallery_images", { paths }, options),
+	/**
 	 *  화면에서 만든 png(이미지 카드 등)를 사용자가 저장 대화상자로 고른 곳에 쓴다.
 	 *  .png 경로와 png 내용만 받는다 (다른 파일을 쓰는 데 쓰이지 않게)
 	 */
@@ -426,39 +437,39 @@ export type AppErrorResponse_Serialize = {
 	details?: Value,
 };
 
-/**  앱이 AI에 보내는 고정 지시문을 고친 값. 빈 칸은 기본값을 쓴다 */
+/**  앱이 AI에 보내는 고정 지시문. 자리마다 사용자가 여러 개 만들어 두고 하나를 고른다 (고르지 않으면 기본값) */
 export type AppPrompts = AppPrompts_Serialize | AppPrompts_Deserialize;
 
-/**  앱이 AI에 보내는 고정 지시문을 고친 값. 빈 칸은 기본값을 쓴다 */
+/**  앱이 AI에 보내는 고정 지시문. 자리마다 사용자가 여러 개 만들어 두고 하나를 고른다 (고르지 않으면 기본값) */
 export type AppPrompts_Deserialize = {
 	/**  번역 지시 ({{lang}} = 옮길 언어) */
-	translate?: string,
+	translate?: PromptSlot,
 	/**  장면 → 그림 프롬프트 쓰기 */
-	imagePrompt?: string,
+	imagePrompt?: PromptSlot,
 	/**  장면 → NovelAI 태그 쓰기 */
-	imagePromptNai?: string,
+	imagePromptNai?: PromptSlot,
 	/**  대화의 캐릭터 이미지(<cg>) 규칙 ({{keys}} = 키 목록, {{char}} = 캐릭터) */
-	chatImages?: string,
+	chatImages?: PromptSlot,
 	/**  게임 대화 규칙 (한 줄에 하나) */
-	gameRules?: string,
+	gameRules?: PromptSlot,
 	/**  씬 입력(서술자) 규칙 (한 줄에 하나) */
-	sceneRules?: string,
+	sceneRules?: PromptSlot,
 };
 
-/**  앱이 AI에 보내는 고정 지시문을 고친 값. 빈 칸은 기본값을 쓴다 */
+/**  앱이 AI에 보내는 고정 지시문. 자리마다 사용자가 여러 개 만들어 두고 하나를 고른다 (고르지 않으면 기본값) */
 export type AppPrompts_Serialize = {
 	/**  번역 지시 ({{lang}} = 옮길 언어) */
-	translate: string,
+	translate: PromptSlot,
 	/**  장면 → 그림 프롬프트 쓰기 */
-	imagePrompt: string,
+	imagePrompt: PromptSlot,
 	/**  장면 → NovelAI 태그 쓰기 */
-	imagePromptNai: string,
+	imagePromptNai: PromptSlot,
 	/**  대화의 캐릭터 이미지(<cg>) 규칙 ({{keys}} = 키 목록, {{char}} = 캐릭터) */
-	chatImages: string,
+	chatImages: PromptSlot,
 	/**  게임 대화 규칙 (한 줄에 하나) */
-	gameRules: string,
+	gameRules: PromptSlot,
 	/**  씬 입력(서술자) 규칙 (한 줄에 하나) */
-	sceneRules: string,
+	sceneRules: PromptSlot,
 };
 
 export type AppSetting = AppSetting_Serialize | AppSetting_Deserialize;
@@ -778,6 +789,8 @@ export type Character_Deserialize = {
 	avatar?: string | null,
 	/**  캐릭터 페이지 위쪽 커버 이미지 */
 	cover?: string | null,
+	/**  커버에서 보일 세로 위치 % (0 위 ~ 100 아래) */
+	coverY?: number | null,
 	description: string,
 	alternateDescriptions: string[],
 	firstMessage?: string | null,
@@ -804,6 +817,8 @@ export type Character_Serialize = {
 	avatar: string | null,
 	/**  캐릭터 페이지 위쪽 커버 이미지 */
 	cover: string | null,
+	/**  커버에서 보일 세로 위치 % (0 위 ~ 100 아래) */
+	coverY: number | null,
 	description: string,
 	alternateDescriptions: string[],
 	firstMessage: string | null,
@@ -2180,6 +2195,10 @@ export type GeneratedImage_Deserialize = {
 	meta?: MetaItem[],
 	/**  앨범: 폰 카메라로 만든 그림이면 그 폰 주인 ("persona:<id>" / "character:<id>") */
 	album?: string | null,
+	/**  원래 파일 이름 (올린 그림) */
+	name?: string | null,
+	/**  태그: "preset"(생성 프리셋으로 씀) / "upload"(그냥 올린 그림) / "background"(배경) 등 */
+	tags?: string[],
 };
 
 /**  만든 그림 하나 (갤러리). 파일 옆의 같은 이름 .json에 정보를 둔다 */
@@ -2197,6 +2216,12 @@ export type GeneratedImage_Serialize = {
 	meta: MetaItem[],
 	/**  앨범: 폰 카메라로 만든 그림이면 그 폰 주인 ("persona:<id>" / "character:<id>") */
 	album: string | null,
+	/**  원래 파일 이름 (올린 그림) */
+	name: string | null,
+	/**  태그: "preset"(생성 프리셋으로 씀) / "upload"(그냥 올린 그림) / "background"(배경) 등 */
+	tags: string[],
+	/**  다른 곳(캐릭터·페르소나·에셋)의 그림: 갤러리에서 지우거나 태그를 달 수 없다 (저장하지 않음) */
+	readonly: boolean,
 };
 
 /**  홈 화면: 보일 블록과 순서, 인사말, 내 글. 리소스를 쓰지 않는 화면이라 블록은 기본으로 보인다 */
@@ -2967,6 +2992,19 @@ export type PromptPresets_Serialize = {
 };
 
 export type PromptRole = "system" | "user" | "assistant";
+
+/**  프롬프트 자리: 만든 것들과 고른 것 (selected가 비었거나 없는 id면 기본값) */
+export type PromptSlot = {
+	selected: string,
+	items: PromptVariant[],
+};
+
+/**  사용자가 만든 프롬프트 하나 */
+export type PromptVariant = {
+	id: string,
+	name: string,
+	text: string,
+};
 
 /**  어떤 텍스트에 적용할지 */
 export type RegexPlacement = 

@@ -22,6 +22,7 @@ const character = (id: string, name: string, description: string, extra: Partial
 	name,
 	avatar: null,
 	cover: null,
+	coverY: 50,
 	description,
 	alternateDescriptions: [],
 	firstMessage: null,
@@ -139,9 +140,40 @@ let pluginSetting = {
 // 공용 번역 캐시 (언어 + 원문 → 번역문)
 const translationCache = new Map<string, string>();
 // 이미지 갤러리 (브라우저 개발 모드: 자리 표시 그림)
-const gallery: { path: string; prompt: string; model: string; source: string; messageId: string | null; conversationId: string | null; createdAt: number }[] = [
-	{ path: "https://placehold.co/832x1216/png?text=forest", prompt: "1girl, silver hair, forest, night, moonlight", model: "nai-diffusion-4-5-full", source: "manual", messageId: null, conversationId: null, createdAt: Date.now() - 3600_000 },
+type MockImage = {
+	path: string;
+	prompt: string;
+	model: string;
+	source: string;
+	messageId: string | null;
+	conversationId: string | null;
+	createdAt: number;
+	meta: { key: string; value: string }[];
+	album: string | null;
+	name: string | null;
+	tags: string[];
+	readonly: boolean;
+};
+const img = (p: Partial<MockImage> & { path: string }): MockImage => ({ prompt: "", model: "", source: "manual", messageId: null, conversationId: null, createdAt: Date.now(), meta: [], album: null, name: null, tags: [], readonly: false, ...p });
+const gallery: MockImage[] = [
+	img({
+		path: "https://placehold.co/832x1216/png?text=forest",
+		prompt: "1girl, silver hair, forest, night, moonlight",
+		model: "nai-diffusion-4-5-full",
+		createdAt: Date.now() - 3600_000,
+		meta: [
+			{ key: "크기", value: "832x1216" },
+			{ key: "네거티브", value: "lowres, bad anatomy" },
+			{ key: "단계", value: "28" },
+			{ key: "프롬프트 반영", value: "5" },
+			{ key: "샘플러", value: "k_euler_ancestral" },
+		],
+		tags: ["preset"],
+	}),
+	img({ path: "https://placehold.co/600x400/png?text=upload", source: "upload", name: "my_scene.png", tags: ["upload"], createdAt: Date.now() - 7200_000 }),
 ];
+/** 갤러리 밖 그림 (캐릭터 에셋 등) */
+const externalImages: MockImage[] = [img({ path: "https://placehold.co/400x400/png?text=cg", source: "asset", name: "Seraphina · smile", readonly: true, createdAt: Date.now() - 86_400_000 })];
 
 function addConv(c: Partial<Conv> & { title: string; characterId: string }, ago: number): Conv {
 	const t = now() - ago * MIN;
@@ -272,15 +304,32 @@ export const chatHandlers: Record<string, (a: Args) => unknown> = {
 		{ id: "AZnzlk1XvdvUeBnXmlld", name: "Domi", description: "female, strong" },
 	],
 	list_generated_images: () => gallery,
+	list_all_images: () => [...gallery, ...externalImages],
+	set_image_tags: ({ path, tags }) => {
+		const g = gallery.find((x) => x.path === path)!;
+		g.tags = tags as string[];
+		return g;
+	},
+	delete_gallery_images: ({ paths }) => {
+		let n = 0;
+		for (const p of paths as string[]) {
+			const i = gallery.findIndex((g) => g.path === p);
+			if (i >= 0) {
+				gallery.splice(i, 1);
+				n++;
+			}
+		}
+		return n;
+	},
 	delete_generated_image: ({ path }) => {
 		const i = gallery.findIndex((g) => g.path === path);
 		if (i >= 0) gallery.splice(i, 1);
 		return null;
 	},
 	generate_image_from_prompt: ({ prompt, source }) => {
-		const img = { path: `https://placehold.co/832x1216/png?text=${encodeURIComponent(String(prompt).slice(0, 16))}`, prompt: `${prompt}, ${pluginSetting.imageGen.stylePrompt}`, model: pluginSetting.imageGen.model, source: (source as string) ?? "manual", messageId: null, conversationId: null, createdAt: Date.now() };
-		gallery.unshift(img);
-		return img;
+		const made = img({ path: `https://placehold.co/832x1216/png?text=${encodeURIComponent(String(prompt).slice(0, 16))}`, prompt: `${prompt}, ${pluginSetting.imageGen.stylePrompt}`, model: pluginSetting.imageGen.model, source: (source as string) ?? "manual" });
+		gallery.unshift(made);
+		return made;
 	},
 	generate_message_image: ({ messageId }) => {
 		const m = messages.find((x) => x.id === messageId)!;

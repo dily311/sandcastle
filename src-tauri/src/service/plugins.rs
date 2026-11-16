@@ -323,6 +323,42 @@ pub struct GeneratedImage {
     /// 앨범: 폰 카메라로 만든 그림이면 그 폰 주인 ("persona:<id>" / "character:<id>")
     #[serde(default)]
     pub album: Option<String>,
+    /// 원래 파일 이름 (올린 그림)
+    #[serde(default)]
+    pub name: Option<String>,
+    /// 태그: "preset"(생성 프리셋으로 씀) / "upload"(그냥 올린 그림) / "background"(배경) 등
+    #[serde(default)]
+    pub tags: Vec<String>,
+    /// 다른 곳(캐릭터·페르소나·에셋)의 그림: 갤러리에서 지우거나 태그를 달 수 없다 (저장하지 않음)
+    #[serde(default, skip_deserializing)]
+    pub readonly: bool,
+}
+
+impl GeneratedImage {
+    /// 앱의 다른 곳에 있는 그림을 갤러리에 보일 때
+    pub fn external(path: String, source: &str, name: String, tags: Vec<String>) -> Self {
+        let created_at = std::fs::metadata(&path)
+            .and_then(|m| m.modified())
+            .ok()
+            .and_then(|t| t.duration_since(std::time::UNIX_EPOCH).ok())
+            .map_or(0, |d| d.as_millis() as i64);
+        Self { path, prompt: String::new(), model: String::new(), source: source.into(), message_id: None, conversation_id: None, created_at, meta: vec![], album: None, name: Some(name), tags, readonly: true }
+    }
+}
+
+/// 갤러리 그림의 태그 바꾸기 (정보 .json에 저장). out_dir 안의 그림만
+pub fn set_image_tags(out_dir: &Path, path: &str, tags: Vec<String>) -> Result<GeneratedImage> {
+    let target = std::fs::canonicalize(path).map_err(|_| AppError::not_found("그림을 찾을 수 없습니다"))?;
+    let root = std::fs::canonicalize(out_dir).map_err(|_| AppError::not_found("그림 폴더가 없습니다"))?;
+    if !target.starts_with(&root) {
+        return Err(AppError::validation("갤러리의 그림에만 태그를 달 수 있습니다", None));
+    }
+    let mut info = list_images(out_dir).into_iter().find(|i| Path::new(&i.path) == Path::new(path)).ok_or_else(|| AppError::not_found("그림을 찾을 수 없습니다"))?;
+    let mut tags: Vec<String> = tags.into_iter().map(|t| t.trim().to_string()).filter(|t| !t.is_empty()).take(20).collect();
+    tags.dedup();
+    info.tags = tags;
+    std::fs::write(Path::new(&info.path).with_extension("json"), serde_json::to_vec(&info)?)?;
+    Ok(info)
 }
 
 /// 갤러리가 다루는 그림 확장자
@@ -371,6 +407,9 @@ pub fn import_images(out_dir: &Path, paths: &[String]) -> Result<Vec<GeneratedIm
             created_at: chrono::Utc::now().timestamp_millis(),
             meta: items,
             album: None,
+            name: src.file_name().map(|n| n.to_string_lossy().into_owned()),
+            tags: vec!["upload".into()],
+            readonly: false,
         };
         std::fs::write(out_dir.join(format!("{id}.json")), serde_json::to_vec(&info)?)?;
         out.push(info);
@@ -455,6 +494,9 @@ fn save_image(png: Vec<u8>, setting: &ImageGenSetting, prompt: &str, out_dir: &P
         created_at: chrono::Utc::now().timestamp_millis(),
         meta: vec![],
         album: None,
+        name: None,
+        tags: vec![],
+        readonly: false,
     };
     std::fs::write(out_dir.join(format!("{id}.json")), serde_json::to_vec(&info)?)?;
     Ok(info)
@@ -496,6 +538,9 @@ pub fn list_images(out_dir: &Path) -> Vec<GeneratedImage> {
                     conversation_id: None,
                     meta: vec![],
                     album: None,
+                    name: p.file_name().map(|n| n.to_string_lossy().into_owned()),
+                    tags: vec![],
+                    readonly: false,
                     created_at: std::fs::metadata(&p)
                         .and_then(|m| m.modified())
                         .ok()

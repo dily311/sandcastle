@@ -221,22 +221,71 @@ pub struct PluginSetting {
     pub prompts: AppPrompts,
 }
 
-/// 앱이 AI에 보내는 고정 지시문을 고친 값. 빈 칸은 기본값을 쓴다
+/// 앱이 AI에 보내는 고정 지시문. 자리마다 사용자가 여러 개 만들어 두고 하나를 고른다 (고르지 않으면 기본값)
 #[derive(Debug, Serialize, Deserialize, Clone, Default, specta::Type)]
 #[serde(rename_all = "camelCase", default)]
 pub struct AppPrompts {
     /// 번역 지시 ({{lang}} = 옮길 언어)
-    pub translate: String,
+    pub translate: PromptSlot,
     /// 장면 → 그림 프롬프트 쓰기
-    pub image_prompt: String,
+    pub image_prompt: PromptSlot,
     /// 장면 → NovelAI 태그 쓰기
-    pub image_prompt_nai: String,
+    pub image_prompt_nai: PromptSlot,
     /// 대화의 캐릭터 이미지(<cg>) 규칙 ({{keys}} = 키 목록, {{char}} = 캐릭터)
-    pub chat_images: String,
+    pub chat_images: PromptSlot,
     /// 게임 대화 규칙 (한 줄에 하나)
-    pub game_rules: String,
+    pub game_rules: PromptSlot,
     /// 씬 입력(서술자) 규칙 (한 줄에 하나)
-    pub scene_rules: String,
+    pub scene_rules: PromptSlot,
+}
+
+/// 사용자가 만든 프롬프트 하나
+#[derive(Debug, Serialize, Deserialize, Clone, Default, specta::Type)]
+#[serde(rename_all = "camelCase")]
+pub struct PromptVariant {
+    pub id: String,
+    pub name: String,
+    pub text: String,
+}
+
+/// 프롬프트 자리: 만든 것들과 고른 것 (selected가 비었거나 없는 id면 기본값)
+#[derive(Debug, Serialize, Clone, Default, specta::Type)]
+#[serde(rename_all = "camelCase")]
+pub struct PromptSlot {
+    pub selected: String,
+    pub items: Vec<PromptVariant>,
+}
+
+impl PromptSlot {
+    /// 고른 프롬프트의 글 (기본값을 쓰면 None)
+    pub fn chosen(&self) -> Option<&str> {
+        if self.selected.is_empty() {
+            return None;
+        }
+        self.items.iter().find(|v| v.id == self.selected).map(|v| v.text.as_str()).filter(|t| !t.trim().is_empty())
+    }
+}
+
+/// 예전(한 줄 글) 저장값도 읽는다: 글이 있으면 "내 프롬프트" 하나를 만들어 고른 상태로
+impl<'de> Deserialize<'de> for PromptSlot {
+    fn deserialize<D: serde::Deserializer<'de>>(d: D) -> Result<Self, D::Error> {
+        #[derive(Deserialize)]
+        #[serde(untagged)]
+        enum Raw {
+            Text(String),
+            Slot {
+                #[serde(default)]
+                selected: String,
+                #[serde(default)]
+                items: Vec<PromptVariant>,
+            },
+        }
+        Ok(match Raw::deserialize(d)? {
+            Raw::Text(t) if t.trim().is_empty() => PromptSlot::default(),
+            Raw::Text(t) => PromptSlot { selected: "mine".into(), items: vec![PromptVariant { id: "mine".into(), name: "내 프롬프트".into(), text: t }] },
+            Raw::Slot { selected, items } => PromptSlot { selected, items },
+        })
+    }
 }
 
 /// 폰 대화의 기본 API·프리셋 (대화에 따로 고르지 않았을 때. 비우면 앱 기본값)

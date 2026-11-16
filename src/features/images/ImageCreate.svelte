@@ -3,7 +3,7 @@
 	// 프리셋은 설정 값에서 시작하고, 여기서 고치면 이번 그리기에만 쓴다 ("설정에 저장"을 눌러야 저장)
 	import { onMount } from "svelte";
 	import { RotateCcw, Save, Wand2 } from "@lucide/svelte";
-	import type { GeneratedImage, ImageGenSetting_Serialize as ImageGenSetting } from "$ipc/bindings";
+	import type { GeneratedImage_Serialize as GeneratedImage, ImageGenSetting_Serialize as ImageGenSetting } from "$ipc/bindings";
 	import { Button, Input, Select, Slider, Spinner, Switch, Textarea } from "$shared/ui";
 	import { call, commands } from "$shared/ipc/client";
 	import { fileSrc } from "$shared/ipc/file";

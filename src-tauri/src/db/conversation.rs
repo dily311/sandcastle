@@ -292,6 +292,11 @@ pub async fn set_character_cover<'e, E>(executor: E, id: &str, cover: Option<&st
     Ok(())
 }
 
+pub async fn set_character_cover_y<'e, E>(executor: E, id: &str, y: f64) -> Result<(), Error> where E: Executor<'e, Database = Sqlite>,{
+    sqlx::query("UPDATE characters SET cover_y = ? WHERE id = ?").bind(y.clamp(0.0, 100.0)).bind(id).execute(executor).await?;
+    Ok(())
+}
+
 pub async fn get_system_default_persona<'e, E>(executor: E) -> Result<String, Error> where E: Executor<'e, Database = Sqlite>,{
     let row =
         sqlx::query_as::<_, (String,)>("SELECT default_persona_id FROM conv_settings WHERE id = 1")
@@ -344,6 +349,7 @@ pub async fn get_all_characters<'e, E>(executor: E) -> Result<Vec<Character>, Er
                 c.name,
                 c.avatar,
                 c.cover,
+                c.cover_y,
                 c.description,
                 c.alternate_descriptions,
                 c.first_message,
@@ -385,6 +391,7 @@ pub async fn get_character<'e, E>(executor: E, id: &str) -> Result<Character, Er
                 c.name,
                 c.avatar,
                 c.cover,
+                c.cover_y,
                 c.description,
                 c.alternate_descriptions,
                 c.first_message,
@@ -465,6 +472,7 @@ pub async fn create_character<'e, E>(executor: E, input: CharacterInput) -> Resu
         name: input.name,
         avatar: input.avatar,
         cover: None,
+        cover_y: 50.0,
         description: input.description,
         alternate_descriptions: input.alternate_descriptions,
         first_message: input.first_message,

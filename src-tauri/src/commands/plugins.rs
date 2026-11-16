@@ -263,6 +263,104 @@ pub fn delete_generated_image(app: AppHandle, path: String) -> Result<()> {
     tools::delete_image(&generated_dir(&app)?, &path)
 }
 
+/// 앱의 전체 그림: 갤러리(만든·올린 그림) + 배경 목록 + 캐릭터 아바타·커버·CG 에셋 + 페르소나 아바타.
+/// 다른 곳의 그림은 readonly (갤러리에서 지우거나 태그를 달지 않고, 원래 화면에서 관리)
+#[tauri::command]
+#[specta::specta]
+pub async fn list_all_images(
+    app: AppHandle,
+    state: State<'_, AppState>,
+    theme: State<'_, SettingsState<crate::models::settings::ThemeSetting>>,
+) -> Result<Vec<tools::GeneratedImage>> {
+    use tools::GeneratedImage as G;
+    let gen_dir = generated_dir(&app)?;
+    let data_dir = app_data_dir(&app)?;
+    let backgrounds = read(&theme)?.backgrounds;
+    let mut out = tools::list_images(&gen_dir);
+    // 갤러리 그림 중 배경 목록에 든 것은 배경 태그를 보인다
+    for img in &mut out {
+        if backgrounds.iter().any(|b| b == &img.path) && !img.tags.iter().any(|t| t == "background") {
+            img.tags.push("background".into());
+        }
+    }
+    let file_name = |p: &str| std::path::Path::new(p).file_name().map(|n| n.to_string_lossy().into_owned()).unwrap_or_default();
+    // 배경 목록 중 갤러리 밖(backgrounds/에 올린 것)
+    for b in backgrounds.iter().filter(|b| !std::path::Path::new(b).starts_with(&gen_dir)) {
+        if std::path::Path::new(b).exists() {
+            let mut g = G::external(b.clone(), "background", file_name(b), vec!["background".into()]);
+            g.readonly = false; // 배경 목록에서 빼기·지우기는 됨
+            out.push(g);
+        }
+    }
+    let exists = |p: &str| std::path::Path::new(p).exists();
+    let chars: Vec<(String, String, Option<String>, Option<String>)> =
+        sqlx::query_as("SELECT id, name, avatar, cover FROM characters").fetch_all(&state.db).await.map_err(AppError::from)?;
+    for (_, name, avatar, cover) in &chars {
+        if let Some(a) = avatar.as_deref().filter(|a| exists(a)) {
+            out.push(G::external(a.into(), "avatar", format!("{name} 아바타"), vec![]));
+        }
+        if let Some(c) = cover.as_deref().filter(|c| exists(c)) {
+            out.push(G::external(c.into(), "cover", format!("{name} 커버"), vec![]));
+        }
+    }
+    let names: std::collections::HashMap<&str, &str> = chars.iter().map(|(id, n, _, _)| (id.as_str(), n.as_str())).collect();
+    let assets: Vec<(String, String, String)> =
+        sqlx::query_as("SELECT character_id, key, file_path FROM character_images").fetch_all(&state.db).await.map_err(AppError::from)?;
+    for (cid, key, rel) in assets {
+        let abs = data_dir.join(&rel).to_string_lossy().into_owned();
+        if exists(&abs) {
+            out.push(G::external(abs, "asset", format!("{} · {key}", names.get(cid.as_str()).unwrap_or(&"?")), vec![]));
+        }
+    }
+    let personas: Vec<(String, Option<String>)> = sqlx::query_as("SELECT name, avatar FROM personas").fetch_all(&state.db).await.map_err(AppError::from)?;
+    for (name, avatar) in personas {
+        if let Some(a) = avatar.filter(|a| exists(a)) {
+            out.push(G::external(a, "persona", format!("{name} 아바타"), vec![]));
+        }
+    }
+    out.sort_by(|a, b| b.created_at.cmp(&a.created_at));
+    Ok(out)
+}
+
+/// 갤러리 그림의 태그 바꾸기 ("preset" / "upload" / "background" 등). 배경 태그는 테마 배경 목록에도 넣고 뺀다
+#[tauri::command]
+#[specta::specta]
+pub fn set_image_tags(
+    app: AppHandle,
+    theme: State<'_, SettingsState<crate::models::settings::ThemeSetting>>,
+    path: String,
+    tags: Vec<String>,
+) -> Result<tools::GeneratedImage> {
+    let info = tools::set_image_tags(&generated_dir(&app)?, &path, tags)?;
+    let wants_bg = info.tags.iter().any(|t| t == "background");
+    let mut list = read(&theme)?.backgrounds;
+    let has = list.iter().any(|b| b == &path);
+    if wants_bg != has {
+        if wants_bg {
+            list.push(path.clone());
+        } else {
+            list.retain(|b| b != &path);
+        }
+        let settings = crate::sys::settings::apply_patch(&app, &theme.0, json!({ "backgrounds": list }))?;
+        let _ = app.emit(<crate::models::settings::ThemeSetting as SettingsDomain>::EVENT_NAME, &settings);
+    }
+    Ok(info)
+}
+
+/// 여러 그림 한 번에 지우기 (갤러리 그림만, 다른 곳의 그림은 건너뜀). 지운 수를 돌려준다
+#[tauri::command]
+#[specta::specta]
+pub fn delete_gallery_images(app: AppHandle, paths: Vec<String>) -> Result<u32> {
+    let dir = generated_dir(&app)?;
+    let mut n = 0;
+    for p in paths.iter().take(500) {
+        if tools::delete_image(&dir, p).is_ok() {
+            n += 1;
+        }
+    }
+    Ok(n)
+}
+
 /// 프롬프트로 직접 그리기 (이미지 생성 페이지). refine이면 채팅 AI가 프롬프트를 다듬는다.
 /// source: "manual"(생성 페이지) / "game"(게임 대사)
 #[tauri::command]

@@ -5,7 +5,7 @@
 //! 설정을 불러오거나 저장할 때 `set`으로 넣어 두고, 쓰는 쪽은 인자 없이 꺼내 쓴다.
 use std::sync::{LazyLock, RwLock};
 
-use crate::models::settings::AppPrompts;
+use crate::models::settings::{AppPrompts, PromptSlot, PromptVariant};
 
 pub const DEFAULT_TRANSLATE: &str = "You are a translator. Translate the user's text into {{lang}}.
 - Output only the translation, nothing else.
@@ -45,20 +45,27 @@ pub fn set(p: &AppPrompts) {
     }
 }
 
-fn pick(f: impl Fn(&AppPrompts) -> &String, default: &str) -> String {
-    let cur = OVERRIDES.read().ok().map(|p| f(&p).trim().to_string()).unwrap_or_default();
-    if cur.is_empty() { default.to_string() } else { cur }
+fn pick(f: impl Fn(&AppPrompts) -> &PromptSlot, default: &str) -> String {
+    OVERRIDES
+        .read()
+        .ok()
+        .and_then(|p| f(&p).chosen().map(|t| t.trim().to_string()))
+        .unwrap_or_else(|| default.to_string())
 }
 
-/// 기본값 묶음 (설정 화면이 보여주고 되돌릴 때 씀)
+fn default_slot(text: &str) -> PromptSlot {
+    PromptSlot { selected: String::new(), items: vec![PromptVariant { id: String::new(), name: "기본값".into(), text: text.into() }] }
+}
+
+/// 기본값 묶음 (설정 화면이 보여주고 "기본값을 복제해 새로"에 씀). 자리마다 기본 글 하나
 pub fn defaults() -> AppPrompts {
     AppPrompts {
-        translate: DEFAULT_TRANSLATE.into(),
-        image_prompt: DEFAULT_IMAGE_PROMPT.into(),
-        image_prompt_nai: DEFAULT_IMAGE_PROMPT_NAI.into(),
-        chat_images: DEFAULT_CHAT_IMAGES.into(),
-        game_rules: DEFAULT_GAME_RULES.into(),
-        scene_rules: DEFAULT_SCENE_RULES.into(),
+        translate: default_slot(DEFAULT_TRANSLATE),
+        image_prompt: default_slot(DEFAULT_IMAGE_PROMPT),
+        image_prompt_nai: default_slot(DEFAULT_IMAGE_PROMPT_NAI),
+        chat_images: default_slot(DEFAULT_CHAT_IMAGES),
+        game_rules: default_slot(DEFAULT_GAME_RULES),
+        scene_rules: default_slot(DEFAULT_SCENE_RULES),
     }
 }
 
@@ -93,6 +100,17 @@ mod tests {
         assert_eq!(game_rules().len(), 7);
         assert_eq!(scene_rules().len(), 3);
         assert!(chat_images("smile, cry").ends_with("smile, cry"));
-        assert_eq!(pick(|p| &p.translate, "기본"), if OVERRIDES.read().unwrap().translate.trim().is_empty() { "기본".to_string() } else { OVERRIDES.read().unwrap().translate.trim().to_string() });
+    }
+
+    #[test]
+    fn slot_reads_old_string_and_picks_selected() {
+        let old: PromptSlot = serde_json::from_str("\"Translate to {{lang}}\"").unwrap();
+        assert_eq!(old.chosen(), Some("Translate to {{lang}}"));
+        let empty: PromptSlot = serde_json::from_str("\"\"").unwrap();
+        assert_eq!(empty.chosen(), None);
+        let slot: PromptSlot = serde_json::from_str(r#"{"selected":"b","items":[{"id":"a","name":"A","text":"x"},{"id":"b","name":"B","text":"y"}]}"#).unwrap();
+        assert_eq!(slot.chosen(), Some("y"));
+        let missing = PromptSlot { selected: "z".into(), ..slot };
+        assert_eq!(missing.chosen(), None, "없는 id면 기본값");
     }
 }
