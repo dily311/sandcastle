@@ -3,6 +3,8 @@ use std::{
     sync::{Arc, Mutex},
 };
 use tauri::Manager;
+#[cfg(test)]
+mod perf_tests;
 pub mod state;
 use state::LaunchMode;
 mod adapter;

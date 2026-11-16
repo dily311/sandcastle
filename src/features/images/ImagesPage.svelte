@@ -80,6 +80,26 @@
 		const by = sort === "name" ? (a: GeneratedImage, b: GeneratedImage) => title(a).localeCompare(title(b), "ko") : sort === "old" ? (a: GeneratedImage, b: GeneratedImage) => a.createdAt - b.createdAt : (a: GeneratedImage, b: GeneratedImage) => b.createdAt - a.createdAt;
 		return [...list].sort(by);
 	});
+	// ---- 많이 있을 때: 처음엔 BATCH장만 그리고 끝에 닿으면 더 (1-D-5) ----
+	// 3000장을 한 번에 그리면 화면이 몇 초 멈췄다. 고르기·모두 선택·찾기는 전체(shown)를 그대로 쓴다
+	const BATCH = 120;
+	let limit = $state(BATCH);
+	const rendered = $derived(shown.slice(0, limit));
+	// 거르기·정렬·찾기를 바꾸면 처음부터
+	$effect(() => {
+		void filter;
+		void sort;
+		void query;
+		limit = BATCH;
+	});
+	/** 목록 끝 표시가 보이면 더 그린다 */
+	function more(node: HTMLElement) {
+		const io = new IntersectionObserver((es) => {
+			if (es.some((e) => e.isIntersecting)) limit += BATCH;
+		}, { rootMargin: "600px" });
+		io.observe(node);
+		return { destroy: () => io.disconnect() };
+	}
 	let menu = $state<{ at: { x: number; y: number; align?: "start" | "end" }; items: MenuItem[]; label: string } | null>(null);
 	const below = (e: MouseEvent) => {
 		const r = (e.currentTarget as HTMLElement).getBoundingClientRect();
@@ -315,7 +335,7 @@
 			</SelectBar>
 		{/if}
 		<div class="grid">
-			{#each shown as img (img.path)}
+			{#each rendered as img (img.path)}
 				<ItemCard
 					title={title(img)}
 					image={fileSrc(img.path)}
@@ -333,6 +353,10 @@
 				</ItemCard>
 			{/each}
 		</div>
+		{#if rendered.length < shown.length}
+			<!-- 끝에 닿으면 저절로, 안 되면 눌러서 -->
+			<button class="more" use:more onclick={() => (limit += BATCH)}>더 보기 <small>({shown.length - rendered.length}장 남음)</small></button>
+		{/if}
 	{/if}
 </div>
 
@@ -395,6 +419,21 @@
 {#if menu}<ContextMenu at={menu.at} label={menu.label} items={menu.items} onclose={() => (menu = null)} />{/if}
 
 <style>
+	.more {
+		display: block;
+		margin: var(--space-5) auto;
+		padding: var(--space-2) var(--space-5);
+		border: 1px solid var(--border);
+		border-radius: var(--radius-full, 999px);
+		background: var(--surface);
+		color: var(--text-muted);
+		font: inherit;
+		font-size: var(--text-sm);
+		cursor: pointer;
+	}
+	.more small {
+		color: var(--text-faint);
+	}
 	.page {
 		display: flex;
 		flex-direction: column;

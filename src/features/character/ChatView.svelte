@@ -37,8 +37,32 @@
 	$effect(() => {
 		const s = new ChatSession(convId);
 		session = s;
-		void s.load().then(() => scrollToEnd(true));
+		shownFrom = -1;
+		void s.load().then(() => {
+			// 불러온 뒤에는 시작을 고정 (새 메시지가 와도 위쪽이 사라지지 않게)
+			shownFrom = Math.max(0, s.messages.length - PAGE);
+			void scrollToEnd(true);
+		});
 	});
+
+	// ---- 긴 대화: 최근 PAGE개만 그리고, 위로 올리면 더 그린다 (1-D-5) ----
+	// 메시지 2000개를 한 번에 그리면 화면이 수십 초 멈췄다. 데이터(session.messages)는 전부 두고 그리는 것만 나눈다
+	const PAGE = 80;
+	/** 그리기 시작하는 메시지 번호. -1 = 아직 정하지 않음(최근 PAGE개) — 불러오자마자 전부 그리는 일이 없게 */
+	let shownFrom = $state(-1);
+	const start = $derived.by(() => {
+		const len = session?.messages.length ?? 0;
+		return shownFrom < 0 ? Math.max(0, len - PAGE) : Math.min(shownFrom, len);
+	});
+	const visible = $derived(session ? session.messages.slice(start) : []);
+	/** 위쪽에 PAGE개 더 (읽던 자리는 그대로) */
+	async function showEarlier(target = Math.max(0, start - PAGE)) {
+		if (!scroller || start === 0) return;
+		const before = scroller.scrollHeight - scroller.scrollTop;
+		shownFrom = Math.max(0, target);
+		await tick();
+		if (scroller) scroller.scrollTop = scroller.scrollHeight - before;
+	}
 	$effect(() => {
 		if (!library.images[charId]) void library.loadImages(charId);
 	});
@@ -102,6 +126,7 @@
 	function onscroll() {
 		if (!scroller) return;
 		stick = scroller.scrollHeight - scroller.scrollTop - scroller.clientHeight < 80;
+		if (scroller.scrollTop < 300 && start > 0) void showEarlier();
 	}
 	async function scrollToEnd(force = false) {
 		await tick();
@@ -112,7 +137,13 @@
 		void session?.live?.text;
 		void scrollToEnd();
 	});
-	export function jumpTo(id: string) {
+	export async function jumpTo(id: string) {
+		// 아직 그리지 않은 앞쪽 메시지면 거기까지 먼저 그린다
+		const at = session?.messages.findIndex((m) => m.id === id) ?? -1;
+		if (at >= 0 && at < start) {
+			shownFrom = Math.max(0, at - 5);
+			await tick();
+		}
 		document.getElementById(`msg-${id}`)?.scrollIntoView({ behavior: "smooth", block: "start" });
 	}
 
@@ -368,7 +399,11 @@
 					{#if !session.messages.length && !session.live}
 						<p class="empty">첫 메시지를 보내 보세요</p>
 					{/if}
-					{#each session.messages as m, i (m.id)}
+					{#if start > 0}
+						<button class="earlier" onclick={() => showEarlier()}>이전 메시지 {Math.min(PAGE, start)}개 더 보기 <small>(앞에 {start}개)</small></button>
+					{/if}
+					{#each visible as m, j (m.id)}
+						{@const i = start + j}
 						{@const ch = metaOf(m).chapter}
 						{#if ch}
 							<!-- svelte-ignore a11y_no_noninteractive_element_interactions (오른쪽 클릭·꾹 누르기로 이름 바꾸기, 키보드는 메시지 동작의 챕터 버튼) -->
@@ -507,6 +542,21 @@
 </Dialog>
 
 <style>
+	.earlier {
+		display: block;
+		margin: 0 auto var(--space-4);
+		padding: var(--space-2) var(--space-4);
+		border: 1px solid var(--border);
+		border-radius: var(--radius-full, 999px);
+		background: var(--surface);
+		color: var(--text-muted);
+		font: inherit;
+		font-size: var(--text-sm);
+		cursor: pointer;
+	}
+	.earlier small {
+		color: var(--text-faint);
+	}
 	.chat {
 		display: grid;
 		grid-template-columns: 280px minmax(0, 1fr) var(--panel-width);
