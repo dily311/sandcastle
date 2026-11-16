@@ -1,6 +1,8 @@
 use anyhow::Result;
+#[cfg(not(test))]
 use keyring::Entry;
 
+#[cfg_attr(test, allow(dead_code))]
 const SERVICE_NAME: &str = "sandcastle-secret";
 
 /// Windows 자격 증명 관리자는 비밀 하나를 UTF-16 2560자까지만 받는다 (Vertex 서비스 계정 JSON은 이보다 길다).
@@ -30,19 +32,57 @@ fn chunk_count(stored: &str) -> Option<usize> {
     stored.strip_prefix(CHUNK_MARK).and_then(|n| n.parse().ok())
 }
 
+/// 실제 저장소: 앱은 OS keyring
+#[cfg(not(test))]
+mod backend {
+    use super::*;
+
+    fn entry(key: &str) -> Result<Entry> {
+        Ok(Entry::new(SERVICE_NAME, key)?)
+    }
+    pub fn get(key: &str) -> Result<String> {
+        Ok(entry(key)?.get_password()?)
+    }
+    pub fn set(key: &str, value: &str) -> Result<()> {
+        Ok(entry(key)?.set_password(value)?)
+    }
+    pub fn delete(key: &str) -> Result<()> {
+        Ok(entry(key)?.delete_credential()?)
+    }
+}
+
+/// 테스트: 메모리 (OS 자격 증명 관리자를 건드리지 않게, CI에서도 돌게)
+#[cfg(test)]
+mod backend {
+    use std::{collections::HashMap, sync::Mutex};
+
+    use super::Result;
+
+    static MAP: Mutex<Option<HashMap<String, String>>> = Mutex::new(None);
+    fn with<T>(f: impl FnOnce(&mut HashMap<String, String>) -> T) -> T {
+        let mut g = MAP.lock().unwrap_or_else(std::sync::PoisonError::into_inner);
+        f(g.get_or_insert_with(HashMap::new))
+    }
+    pub fn get(key: &str) -> Result<String> {
+        with(|m| m.get(key).cloned()).ok_or_else(|| anyhow::anyhow!("no entry"))
+    }
+    pub fn set(key: &str, value: &str) -> Result<()> {
+        with(|m| m.insert(key.to_string(), value.to_string()));
+        Ok(())
+    }
+    pub fn delete(key: &str) -> Result<()> {
+        with(|m| m.remove(key)).map(|_| ()).ok_or_else(|| anyhow::anyhow!("no entry"))
+    }
+}
+
 pub struct SecretStore;
 impl SecretStore {
-    fn entry(key: &str) -> Result<Entry> {
-        let entry = Entry::new(SERVICE_NAME, key)?;
-        Ok(entry)
-    }
-
     pub fn get(key: &str) -> Result<String> {
-        let stored = Self::entry(key)?.get_password()?;
+        let stored = backend::get(key)?;
         let Some(n) = chunk_count(&stored) else { return Ok(stored) };
         let mut out = String::new();
         for i in 0..n {
-            out.push_str(&Self::entry(&chunk_key(key, i))?.get_password()?);
+            out.push_str(&backend::get(&chunk_key(key, i))?);
         }
         Ok(out)
     }
@@ -51,31 +91,29 @@ impl SecretStore {
         // 예전 조각이 남지 않게 먼저 지운다
         Self::delete_chunks(key);
         if value.chars().count() <= CHUNK_CHARS {
-            Self::entry(key)?.set_password(value)?;
+            backend::set(key, value)?;
             return Ok(());
         }
         let parts = split_chunks(value);
         for (i, p) in parts.iter().enumerate() {
-            Self::entry(&chunk_key(key, i))?.set_password(p)?;
+            backend::set(&chunk_key(key, i), p)?;
         }
-        Self::entry(key)?.set_password(&format!("{CHUNK_MARK}{}", parts.len()))?;
+        backend::set(key, &format!("{CHUNK_MARK}{}", parts.len()))?;
         Ok(())
     }
 
     pub fn delete(key: &str) -> Result<()> {
         Self::delete_chunks(key);
-        Self::entry(key)?.delete_credential()?;
+        backend::delete(key)?;
         Ok(())
     }
 
     /// 조각으로 나눠 저장했던 것만 지운다 (원래 키는 그대로)
     fn delete_chunks(key: &str) {
-        let Ok(stored) = Self::entry(key).and_then(|e| Ok(e.get_password()?)) else { return };
+        let Ok(stored) = backend::get(key) else { return };
         if let Some(n) = chunk_count(&stored) {
             for i in 0..n {
-                if let Ok(e) = Self::entry(&chunk_key(key, i)) {
-                    let _ = e.delete_credential();
-                }
+                let _ = backend::delete(&chunk_key(key, i));
             }
         }
     }
@@ -98,5 +136,17 @@ mod tests {
         assert_eq!(parts.concat(), value);
         assert_eq!(chunk_count(&format!("{CHUNK_MARK}3")), Some(3));
         assert_eq!(chunk_count("sk-plain-key"), None);
+    }
+
+    #[test]
+    fn set_get_delete_round_trip_with_chunks() {
+        let long: String = "k".repeat(2500);
+        SecretStore::set("t:long", &long).unwrap();
+        assert_eq!(SecretStore::get("t:long").unwrap(), long);
+        SecretStore::set("t:long", "short").unwrap(); // 예전 조각이 지워짐
+        assert_eq!(SecretStore::get("t:long").unwrap(), "short");
+        assert!(SecretStore::get(&chunk_key("t:long", 0)).is_err());
+        SecretStore::delete("t:long").unwrap();
+        assert!(!SecretStore::exists("t:long"));
     }
 }

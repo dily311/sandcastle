@@ -324,3 +324,70 @@ async fn restore_rejects_path_traversal_and_cleans_staging() {
     assert!(!base.join("restore-staging").exists(), "실패한 스테이징은 지움");
     assert!(!backup::apply_pending_restore(&base).unwrap());
 }
+
+/// 1-B-4: API 키는 keyring에만. 백업·캐릭터 팩·앱 데이터 폴더 어디에도 키 값이 없어야 한다
+/// (가짜 키를 넣고 산출물 전체 — zip은 각 항목을 풀어서 — 에서 찾는다)
+#[tokio::test]
+async fn keys_never_leak_into_backup_pack_or_app_data() {
+    use crate::{
+        models::ai_service::ApiProfilesInput,
+        service::secret_store::{api_key_name, SecretStore},
+    };
+    use std::io::Read;
+
+    let (_d, base, db) = app_dir().await;
+    let cid = populate(&db, &base).await;
+    let short = "sk-LEAKCHECK-short-7f3a9c1e5b";
+    // 조각으로 나눠 저장되는 긴 키 (Vertex 서비스 계정 JSON 같은 것)
+    let long = format!("{{\"private_key\":\"LEAKCHECK-LONG-{}\"}}", "Zq9".repeat(900));
+    for (name, key) in [("short", short.to_string()), ("long", long.clone())] {
+        let p = db::ai_service::create_api_profile(
+            &db,
+            ApiProfilesInput { name: name.into(), provider: "openai".into(), format_type: "openai".into(), base_url: "https://example.invalid".into(), model: "m".into() },
+        )
+        .await
+        .unwrap();
+        SecretStore::set(&api_key_name(&p.id), &key).unwrap();
+        assert_eq!(SecretStore::get(&api_key_name(&p.id)).unwrap(), key, "가짜 키가 저장소에 들어감");
+    }
+    std::fs::write(base.join("settings.json"), r#"{"app-setting":{"language":"ko"}}"#).unwrap();
+
+    let backup = base.join("exports/full.scbackup");
+    backup::export_backup(&db, &base, &backup).await.unwrap();
+    let pack_out = base.join("exports/c.scpack");
+    pack::export_pack(&db, &base, std::slice::from_ref(&cid), None, &pack_out).await.unwrap();
+
+    // 찾을 조각: 짧은 키 전체, 긴 키의 앞·뒤·가운데 조각 (keyring 조각 단위로 잘려 들어가도 걸리게)
+    let needles: Vec<String> = vec![short.to_string(), long[..40].to_string(), long[long.len() - 40..].to_string(), long[1200..1240].to_string()];
+    let hit = |bytes: &[u8]| needles.iter().find(|n| bytes.windows(n.len()).any(|w| w == n.as_bytes())).cloned();
+    // 찾기가 실제로 걸리는지 (긴 키는 1000자 조각으로 나뉘어도 가운데 조각으로 걸림)
+    assert!(hit(format!("x{short}y").as_bytes()).is_some() && hit(long[1000..2000].as_bytes()).is_some());
+
+    for zip_path in [&backup, &pack_out] {
+        let raw = std::fs::read(zip_path).unwrap();
+        assert_eq!(hit(&raw), None, "{} (압축된 그대로)", zip_path.display());
+        let mut zip = zip::ZipArchive::new(std::io::Cursor::new(raw)).unwrap();
+        for i in 0..zip.len() {
+            let mut entry = zip.by_index(i).unwrap();
+            let mut body = vec![];
+            entry.read_to_end(&mut body).unwrap();
+            assert_eq!(hit(&body), None, "{} 안의 {}", zip_path.display(), entry.name());
+        }
+    }
+    // 앱 데이터 폴더의 모든 파일 (DB 파일·WAL 포함)
+    fn walk(dir: &Path, out: &mut Vec<PathBuf>) {
+        for e in std::fs::read_dir(dir).unwrap().flatten() {
+            let p = e.path();
+            if p.is_dir() {
+                walk(&p, out)
+            } else {
+                out.push(p)
+            }
+        }
+    }
+    let mut files = vec![];
+    walk(&base, &mut files);
+    for f in files.iter().filter(|f| !f.starts_with(base.join("exports"))) {
+        assert_eq!(hit(&std::fs::read(f).unwrap()), None, "{}", f.display());
+    }
+}
