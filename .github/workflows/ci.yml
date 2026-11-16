@@ -22,6 +22,8 @@ jobs:
           node-version: 24
           cache: pnpm
       - run: pnpm install --frozen-lockfile
+      - name: 버전이 한 곳과 같은지 (package.json · Cargo.toml · tauri.conf.json)
+        run: node scripts/version.mjs
       - name: 타입 검사
         run: pnpm check
       - name: 테스트

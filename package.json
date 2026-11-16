@@ -1,7 +1,7 @@
 {
   "name": "sandcastle",
   "private": true,
-  "version": "0.0.0",
+  "version": "0.1.0",
   "type": "module",
   "scripts": {
     "dev": "vite",
@@ -17,7 +17,9 @@
     "check": "svelte-check --tsconfig ./tsconfig.app.json && tsc -p tsconfig.node.json",
     "tauri": "tauri",
     "e2e:build": "tauri build --debug --no-bundle --config src-tauri/tauri.e2e.conf.json",
-    "e2e": "wdio run e2e/wdio.conf.mjs"
+    "e2e": "wdio run e2e/wdio.conf.mjs",
+    "version:check": "node scripts/version.mjs",
+    "version:set": "node scripts/version.mjs"
   },
   "license": "AGPL-3.0",
   "dependencies": {
