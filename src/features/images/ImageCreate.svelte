@@ -134,7 +134,7 @@
 				{#if presetImages.length}
 					<div class="field">
 						<span>프리셋 그림 <small>#프리셋 태그를 단 그림의 생성 정보</small></span>
-						<ProfilePicker options={presetOptions} value={presetPick ?? ""} label="프리셋 그림 고르기" onchange={pickPresetImage} />
+						<ProfilePicker options={presetOptions} value={presetPick ?? ""} label="프리셋 그림 선택" onchange={pickPresetImage} />
 					</div>
 				{/if}
 				<label class="field"><span>프롬프트</span>

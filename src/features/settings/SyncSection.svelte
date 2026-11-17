@@ -276,7 +276,7 @@
 				{#if targetKind === "folder"}
 					<Row label="동기화 폴더" desc={sync?.folder ?? "OneDrive·Dropbox·구글 드라이브 앱처럼 이미 쓰는 동기화 앱의 폴더를 고르면, 그 안에 sandcastle-sync 폴더를 만들어 기기마다 자기 파일만 씀"}>
 						{#if sync?.folder}<Button size="sm" variant="ghost" onclick={() => savePart("sync", { folder: null, auto: false })}>빼기</Button>{/if}
-						<Button size="sm" onclick={chooseFolder}>{#snippet icon()}<FolderOpen />{/snippet}{sync?.folder ? "바꾸기" : "고르기"}</Button>
+						<Button size="sm" onclick={chooseFolder}>{#snippet icon()}<FolderOpen />{/snippet}{sync?.folder ? "바꾸기" : "미선택"}</Button>
 					</Row>
 				{:else if drive && !drive.available}
 					<p class="meta empty">이 빌드에는 구글 드라이브 연결이 들어 있지 않음 (배포 빌드에서 쓸 수 있음). 폴더 동기화나 파일로 주고받기를 쓰세요</p>
@@ -301,7 +301,7 @@
 						<Switch checked={sync.auto} label="자동 동기화" hideLabel onchange={(v) => savePart("sync", { auto: v })} />
 					</Row>
 					{#if phone}
-						<Row label="Wi-Fi에서만" desc="켜면 자동 동기화는 Wi-Fi(요금이 들지 않는 연결)일 때만 하고, 직접 누를 때는 먼저 물어봄">
+						<Row label="Wi-Fi에서만" desc="켜면 자동 동기화는 Wi-Fi(요금이 들지 않는 연결)일 때만 하고, 직접 누를 때는 먼저 물어봄" nowrap={true}>
 							<Switch checked={sync.wifiOnly} label="Wi-Fi에서만" hideLabel onchange={(v) => savePart("sync", { wifiOnly: v })} />
 						</Row>
 					{/if}
@@ -321,7 +321,7 @@
 		{/if}
 
 		<Group title="파일로 보내기">
-			<Row label="그림·파일 포함" desc="끄면 항목과 설정만 (파일 목록은 들어가서, 받는 쪽이 빠진 파일 수를 알 수 있음)">
+			<Row label="그림·파일 포함" desc="끄면 항목과 설정만 (파일 목록은 들어가서, 받는 쪽이 빠진 파일 수를 알 수 있음)" nowrap={true}>
 				<Switch checked={includeFiles} label="그림·파일 포함" hideLabel onchange={(v) => (includeFiles = v)} />
 			</Row>
 			<Row label="동기화 파일 만들기" desc="캐릭터·대화·로어북·프리셋·게임·같이 쓰는 설정. 실행 기록·휴지통·이 기기 전용 설정은 빠짐">

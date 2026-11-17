@@ -36,7 +36,7 @@
 		imagegen: "이미지 생성",
 		activity: "실행 기록",
 		game: "게임 모드",
-		cg: "캐릭터 이미지",
+		cg: "캐릭터 에셋",
 	};
 	// 대화 화면이면 그 대화 (제목 고치기·동작 메뉴)
 	const conv = $derived(nav.current.page === "character" && !nav.current.edit ? library.conversation(nav.current.convId) : undefined);
@@ -127,7 +127,7 @@
 				return p ? [{ label: "페르소나", to: { page: "persona" } }, { label: p.name }] : [{ label: "페르소나" }];
 			}
 			case "settings": {
-				if (layout.mobile && !r.tab) return [{ label: "설정" }];
+				if (layout.narrow && !r.tab) return [{ label: "설정" }];
 				const tab: Crumb = { label: SETTINGS[r.tab ?? "general"], to: { page: "settings", tab: r.tab ?? "general" } };
 				return r.edit ? [{ label: "설정", to: { page: "settings" } }, tab, { label: "편집" }] : [{ label: "설정", to: { page: "settings" } }, tab];
 			}
@@ -159,8 +159,8 @@
 </script>
 
 <!-- 프로그램 헤더: 사이드바 · 뒤로/앞으로 · 화면 제목 · (빈 곳은 창 끌기) · 오른쪽 패널 · 창 버튼 -->
-<header class="titlebar" class:frameless={theme.setting.isFrameless} class:mobile={layout.mobile} data-tauri-drag-region>
-	{#if layout.mobile}
+<header class="titlebar" class:frameless={theme.setting.isFrameless} class:desktop={!layout.mobile} class:mobile={layout.mobile} class:narrow={layout.narrow} data-tauri-drag-region>
+	{#if layout.narrow}
 		<!-- 휴대폰: 메뉴 · 뒤로 · 지금 화면 이름 · 패널 -->
 		<IconButton label="메뉴" onclick={() => layout.toggleSidebar()}><Menu /></IconButton>
 		{#if nav.canBack}<IconButton label="뒤로" onclick={() => nav.back()}><ChevronLeft /></IconButton>{/if}
@@ -174,8 +174,8 @@
 		</div>
 	{/if}
 	<h1 class="title" data-tauri-drag-region>
-		{#each layout.mobile ? title.slice(-1) : title as t, j (j)}
-			{@const i = layout.mobile ? title.length - 1 : j}
+		{#each layout.narrow ? title.slice(-1) : title as t, j (j)}
+			{@const i = layout.narrow ? title.length - 1 : j}
 			{#if j > 0}<span class="sep" aria-hidden="true">/</span>{/if}
 			{#if conv && i === title.length - 1}
 				{#if renaming}
@@ -205,11 +205,11 @@
 	<div class="drag" data-tauri-drag-region></div>
 
 	{#if panel.available}
-		<IconButton label={panel.open ? "오른쪽 패널 닫기" : "오른쪽 패널 열기"} size={layout.mobile ? "md" : "sm"} active={panel.open} onclick={() => panel.toggle()}>
+		<IconButton label={panel.open ? "오른쪽 패널 닫기" : "오른쪽 패널 열기"} size={layout.narrow ? "md" : "sm"} active={panel.open} onclick={() => panel.toggle()}>
 			<PanelRight />
 		</IconButton>
 	{/if}
-	{#if !layout.mobile}
+	{#if !layout.narrow}
 	<div class="right-zone" class:panel={panelShown}>
 		{#if panelShown}
 			<div class="ptabs" role="tablist" aria-label="오른쪽 패널" onwheel={wheelTabs}>
@@ -260,7 +260,6 @@
 		user-select: none;
 	}
 	.titlebar.mobile {
-		height: 52px;
 		padding: 0 var(--space-1);
 	}
 	.titlebar.mobile .title {

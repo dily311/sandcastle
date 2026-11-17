@@ -76,7 +76,7 @@ class Panel {
 	private sheet = $state(false);
 	/** 지금 패널이 보이는지 */
 	get open() {
-		return layout.mobile ? this.sheet : this.pinned;
+		return layout.narrow ? this.sheet : this.pinned;
 	}
 	width = $state(loadWidth());
 
@@ -163,7 +163,7 @@ class Panel {
 	}
 
 	toggle() {
-		if (layout.mobile) {
+		if (layout.narrow) {
 			this.sheet = !this.sheet;
 			return;
 		}

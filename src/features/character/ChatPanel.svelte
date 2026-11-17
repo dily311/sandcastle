@@ -233,9 +233,9 @@
 	{#if panel.tab === "assets"}
 		<div class="panel-body">
 			{#if plugins.on("chat.images")}
-				<Switch checked={conv.imagesEnabled} label="이 대화에서 캐릭터 이미지 쓰기" description="키 목록을 AI에게 보내고 <cg>로 보여줌" onchange={(v) => library.setImagesEnabled(conv.id, v)} />
+				<Switch checked={conv.imagesEnabled} label="이 대화에서 캐릭터 에셋 사용" onchange={(v) => library.setImagesEnabled(conv.id, v)} />
 			{:else}
-				<p class="faint">캐릭터 이미지 기능이 꺼져 있음 (설정 > 코어 플러그인)</p>
+				<p class="faint">캐릭터 에셋 기능이 꺼져 있음 (설정 > 코어 플러그인)</p>
 			{/if}
 			<div class="atools">
 				<span class="faint">{assets.length}개 · 오른쪽 클릭으로 관리</span>

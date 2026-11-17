@@ -275,7 +275,7 @@
 					</div>
 				</details>
 				<details class="accordion character-assets" open>
-					<summary><span>캐릭터 이미지</span><small>스탠딩과 맵 이미지 관리</small></summary>
+					<summary><span>캐릭터 에셋</span><small>스탠딩과 맵 이미지 관리</small></summary>
 					<div class="accordion-content">
 						<div class="section-heading">
 							<button class="add-btn" onclick={handleAddCharacterAsset} disabled={!activeChar.id}
@@ -367,7 +367,7 @@
 								{/each}
 							</div>
 						{:else}<div class="asset-empty">
-								아직 등록된 이미지가 없습니다. 이곳에서 캐릭터 이미지를 추가하세요.
+								아직 등록된 이미지가 없습니다. 이곳에서 캐릭터 에셋을 추가하세요.
 							</div>
 						{/if}
 					</div>

@@ -357,6 +357,7 @@
 		display: flex;
 		flex-direction: column;
 		gap: 1rem;
+		height: 100%;
 		padding: var(--space-6);
 		overflow: auto;
 	}
@@ -403,19 +404,20 @@
 		font-size: 2rem;
 	}
 	.preview-select {
-		display: grid;
 		place-items: center;
 		width: 100%;
-		height: 100%;
+		height: 155px;
+		max-height: 155px;
 		overflow: hidden;
 		padding: 0;
 		border: 0;
-		background: transparent;
-		color: var(--text-muted);
+		border-radius: var(--radius-md);
+		background: var(--surface-active);
+		color: var(--text-faint);
+		font-size: 1.4rem;
 		cursor: pointer;
 	}
 	.asset-preview img {
-		display: block;
 		width: 100%;
 		height: 100%;
 		max-width: 100%;

@@ -552,6 +552,8 @@
 		border-radius: var(--radius-lg);
 		background: var(--surface);
 		box-shadow: var(--shadow-lg);
+		flex-direction: column;
+		overflow: auto;
 	}
 	.box > img {
 		max-width: 58vw;

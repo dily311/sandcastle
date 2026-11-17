@@ -106,7 +106,7 @@
 			<h2>홈 꾸미기</h2>
 			<label class="field"><span>인사말 <small>{"{{user}}"} = 내 이름</small></span><Input bind:value={draft.greeting} placeholder={"안녕하세요, {{user}}"} /></label>
 			<div class="field">
-				<span>블록 <small>켜고 끄기 · 끌어서 순서 바꾸기</small></span>
+				<span>블록</span>
 				<ul class="blocks">
 					{#each order as id, i (id)}
 						{@const b = BLOCKS.find((x) => x.id === id)!}
@@ -115,8 +115,6 @@
 							<span class="grip" aria-hidden="true" {...sort.handle(i)}><GripVertical /></span>
 							<Switch checked={on} label={b.label} hideLabel onchange={(v) => toggle(id, v)} />
 							<span class="bl"><b>{b.label}</b><small>{b.desc}{b.plugin && !plugins.on(b.plugin) ? " · 플러그인 꺼짐" : ""}</small></span>
-							<Button size="sm" variant="ghost" disabled={i === 0} onclick={() => move(id, -1)} aria-label="{b.label} 위로">{#snippet icon()}<ArrowUp />{/snippet}</Button>
-							<Button size="sm" variant="ghost" disabled={i === order.length - 1} onclick={() => move(id, 1)} aria-label="{b.label} 아래로">{#snippet icon()}<ArrowDown />{/snippet}</Button>
 						</li>
 					{/each}
 				</ul>

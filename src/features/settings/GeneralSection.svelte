@@ -39,7 +39,7 @@
 				{#if update?.newer}<Button size="sm" variant="primary" onclick={() => update && openRelease(update)}>릴리스 페이지 열기</Button>{/if}
 				<Button size="sm" loading={checking} disabled={checking} onclick={check}>{#snippet icon()}<RefreshCw />{/snippet}업데이트 확인</Button>
 			</Row>
-			<Row label="앱을 켤 때 새 버전 확인" desc="켜면 시작할 때마다 GitHub에 한 번 물어보고, 새 버전이 있으면 알림. 자동으로 내려받지 않음">
+			<Row label="앱을 켤 때 새 버전 확인" desc="켜면 시작할 때마다 GitHub에 한 번 물어보고, 새 버전이 있으면 알림. 자동으로 내려받지 않음" nowrap={true}>
 				<Switch checked={s.checkUpdatesOnStart} label="앱을 켤 때 새 버전 확인" hideLabel onchange={(v) => appSetting.update({ checkUpdatesOnStart: v })} />
 			</Row>
 		</Group>

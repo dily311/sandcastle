@@ -59,7 +59,7 @@
 	{#if cur}
 		<Group title="기본 API">
 			<Row label="이미지 API" desc="API 키 화면에서 'NovelAI (이미지)' 연결을 만들어 고름">
-				<Select value={cur.imageGen.apiProfileId ?? ""} options={apiOptions("고르기", ["novelai", "openai"])} onchange={(e) => save("imageGen", { apiProfileId: orNull(e.currentTarget.value) })} />
+				<Select value={cur.imageGen.apiProfileId ?? ""} options={apiOptions("미선택", ["novelai", "openai"])} onchange={(e) => save("imageGen", { apiProfileId: orNull(e.currentTarget.value) })} />
 			</Row>
 			<Row label="모델">
 				{#if MODELS.includes(cur.imageGen.model)}
@@ -77,7 +77,7 @@
 			<Row label="그림 프롬프트를 쓸 API" desc="메시지로 그릴 때 장면을 프롬프트로 정리하는 채팅 AI (NovelAI면 태그로 씀)">
 				<Select value={cur.imageGen.promptApiProfileId ?? ""} options={chatApiOptions("대화에 고른 API")} onchange={(e) => save("imageGen", { promptApiProfileId: orNull(e.currentTarget.value) })} />
 			</Row>
-			<Row label="AI가 그림 프롬프트 쓰기" desc="끄면 메시지 글을 그대로 프롬프트로 보냄">
+			<Row label="AI가 그림 프롬프트 쓰기" desc="끄면 메시지 글을 그대로 프롬프트로 보냄" nowrap={true}>
 				<Switch checked={cur.imageGen.aiPrompt} label="AI 프롬프트" hideLabel onchange={(v) => save("imageGen", { aiPrompt: v })} />
 			</Row>
 		</Group>

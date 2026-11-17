@@ -16,7 +16,7 @@
 	let { count, unit = "개", onall, ondelete, children }: Props = $props();
 </script>
 
-<div class="selbar" role="toolbar" aria-label="고르기">
+<div class="selbar" role="toolbar" aria-label="선택">
 	<Button size="sm" variant="ghost" onclick={onall}>모두 선택</Button>
 	<span class="sp"></span>
 	{#if children}{@render children()}{/if}

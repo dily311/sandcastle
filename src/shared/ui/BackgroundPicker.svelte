@@ -92,7 +92,7 @@
 		min-width: 0;
 		flex: 1;
 		overflow: hidden;
-		padding: 3px;
+		padding: 4px;
 	}
 	.expanded .tiles {
 		display: grid;

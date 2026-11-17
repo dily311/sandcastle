@@ -1,17 +1,20 @@
 <script lang="ts">
-	import type { Snippet } from "svelte";
+import { cn } from "$/lib/utils/cn";
+import type { Snippet } from "svelte";
 
 	interface Props {
 		label: string;
 		desc?: string;
+		class?: string;
+		nowrap?: boolean;
 		/** 조작 요소를 아래로 내림 (긴 입력칸) */
 		stacked?: boolean;
 		children?: Snippet;
 	}
-	let { label, desc, stacked = false, children }: Props = $props();
+	let { label, desc, stacked = false, nowrap=false, class: className, children }: Props = $props();
 </script>
 
-<div class="row" class:stacked>
+<div class={cn("row", className)} class:nowrap class:stacked>
 	<div class="txt"><b>{label}</b>{#if desc}<span>{desc}</span>{/if}</div>
 	{#if children}<div class="ctl">{@render children()}</div>{/if}
 </div>
@@ -23,6 +26,11 @@
 		justify-content: space-between;
 		gap: var(--space-6);
 		padding: var(--space-4) 0;
+	    flex-wrap: wrap;
+		overflow: hidden;
+	}
+	.row.nowrap {
+		flex-wrap: nowrap;
 	}
 	.row + :global(.row) {
 		border-top: 1px solid var(--border);
@@ -59,4 +67,5 @@
 	.ctl :global(.select) {
 		min-width: 160px;
 	}
+
 </style>

@@ -16,7 +16,7 @@
 
 	let { personaId }: { personaId?: string } = $props();
 	// 휴대폰: 페르소나를 고르기 전에는 목록만, 고르면 편집만
-	const mobileList = $derived(layout.mobile && !personaId);
+	const mobileList = $derived(layout.narrow && !personaId);
 
 	const src = { source: "persona" };
 	let defaultId = $state<string | null>(null);
@@ -49,7 +49,7 @@
 
 	// 첫 진입이면 첫 페르소나를 주소에 고정 (뒤로 가기 기록은 남기지 않음)
 	$effect(() => {
-		if (ready && !personaId && current && !layout.mobile) nav.replace({ page: "persona", personaId: current.id });
+		if (ready && !personaId && current && !layout.narrow) nav.replace({ page: "persona", personaId: current.id });
 	});
 
 	// 고친 내용이 있으면 다른 페르소나·다른 화면으로 가기 전에 물어봄
@@ -70,7 +70,7 @@
 	}
 
 	function select(id: string) {
-		if (layout.mobile) return void nav.go({ page: "persona", personaId: id });
+		if (layout.narrow) return void nav.go({ page: "persona", personaId: id });
 		if (id !== current?.id) void nav.replace({ page: "persona", personaId: id });
 	}
 
@@ -155,7 +155,7 @@
 {#if !library.loaded || !ready}
 	<div class="center"><Spinner /></div>
 {:else}
-	<div class="page" class:mobile={layout.mobile} class:listing={mobileList}>
+	<div class="page" class:desktop={!layout.mobile} class:mobile={layout.mobile} class:listing={mobileList}>
 		<aside class="side" aria-label="페르소나 목록">
 			<div class="top">
 				<Input bind:value={query} placeholder="이름·태그 검색" aria-label="페르소나 검색" type="search">

@@ -40,7 +40,7 @@
 	let swipe: { x: number; y: number } | null = null;
 	function touchStart(e: TouchEvent) {
 		const t = e.touches[0];
-		swipe = layout.mobile && !layout.drawer && t.clientX < 24 ? { x: t.clientX, y: t.clientY } : null;
+		swipe = layout.narrow && !layout.drawer && t.clientX < 24 ? { x: t.clientX, y: t.clientY } : null;
 	}
 	function touchMove(e: TouchEvent) {
 		if (!swipe) return;
@@ -89,10 +89,10 @@
 	}}
 />
 
-<div class="app" class:mobile={layout.mobile}>
+<div class="app" class:desktop={!layout.mobile} class:mobile={layout.mobile}>
 	<Titlebar />
 	<div class="body">
-		{#if layout.mobile}
+		{#if layout.narrow}
 			{#if layout.drawer}
 				<!-- svelte-ignore a11y_click_events_have_key_events, a11y_no_static_element_interactions (Esc·뒤로로도 닫힘) -->
 				<div class="scrim" transition:fade={{ duration: 150 }} onclick={() => layout.closeDrawer()}></div>

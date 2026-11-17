@@ -149,7 +149,7 @@
 				</Field>
 				{#if draft.scope !== "global"}
 					<Field label={draft.scope === "character" ? "캐릭터" : "프리셋"}>
-						<Select value={draft.scopeId ?? ""} options={scopeOptions} placeholder="고르기" onchange={(e) => draft && (draft.scopeId = e.currentTarget.value)} />
+						<Select value={draft.scopeId ?? ""} options={scopeOptions} placeholder="미선택" onchange={(e) => draft && (draft.scopeId = e.currentTarget.value)} />
 					</Field>
 				{/if}
 			</div>

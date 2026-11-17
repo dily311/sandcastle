@@ -115,7 +115,7 @@
 <!-- svelte-ignore a11y_click_events_have_key_events, a11y_no_static_element_interactions -->
 <div bind:this={el} class="block" class:ai={isAi} class:user={!isAi} class:hidden={meta.hidden} class:selecting class:picked={selected} id="msg-{msg.id}" data-no={no} class:tapped onclick={tap}>
 	<div class="who">
-		{#if selecting}<input class="pick" type="checkbox" checked={selected} aria-label="#{no} 메시지 고르기" onclick={(e) => e.stopPropagation()} onchange={(e) => onselect?.(msg, e.currentTarget.checked)} />{/if}
+		{#if selecting}<input class="pick" type="checkbox" checked={selected} aria-label="#{no} 메시지 선택" onclick={(e) => e.stopPropagation()} onchange={(e) => onselect?.(msg, e.currentTarget.checked)} />{/if}
 		<span class="no">#{no}</span><b>{msg.name ?? (isAi ? "AI" : "나")}</b>
 		{#if meta.hidden}<Badge><EyeOff /> AI에게 숨김</Badge>{/if}
 		{#if live}
