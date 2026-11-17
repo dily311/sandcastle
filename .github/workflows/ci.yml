@@ -129,18 +129,9 @@ jobs:
           "MSEDGEDRIVER=$wrap" >> $env:GITHUB_ENV
       - name: 앱 빌드 (E2E용 identifier)
         run: pnpm e2e:build
-      # 새 러너에서 WebView2가 처음 뜰 때는 오래 걸려 드라이버의 60초 대기를 넘기고, 드라이버가 앱만 죽이면
-      # 남은 msedgewebview2가 다음 시도까지 붙잡아(디버깅 포트 없이) 세션이 끝내 안 만들어졌다.
-      # 그래서 앱을 한 번 먼저 띄워 WebView2를 데우고, 앱과 남은 WebView2 프로세스를 모두 끈다 (러너에는 다른 WebView2가 없음)
-      - name: WebView2 데우기
-        shell: pwsh
-        run: |
-          $p = Start-Process "src-tauri\target\debug\sandcastle.exe" -PassThru
-          Start-Sleep -Seconds 40
-          if (-not $p.HasExited) { Stop-Process $p -Force }
-          Get-Process msedgewebview2 -ErrorAction SilentlyContinue | Stop-Process -Force
-          Start-Sleep -Seconds 3
-          Write-Host "남은 WebView2 프로세스: $((Get-Process msedgewebview2 -ErrorAction SilentlyContinue).Count)"
+      # 앱 창의 WebView2 브라우저 인자는 E2E 설정(tauri.e2e.conf.json)에서 비워 둔다: 앱이 API로 인자를 주면
+      # 러너의 WebView2(156)는 드라이버가 넣는 WEBVIEW2_ADDITIONAL_BROWSER_ARGUMENTS(--remote-debugging-port)를
+      # 무시해서 세션이 만들어지지 않았다 (DevToolsActivePort). 실패하면 아래 단계가 프로세스 명령줄을 남긴다
       - name: E2E
         run: pnpm e2e
         env:
