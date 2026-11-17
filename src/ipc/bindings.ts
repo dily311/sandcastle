@@ -171,7 +171,7 @@ export const commands = {
 	/**  휴지통 비우기 (되돌릴 수 없음 — 화면에서 확인을 받는다). 지운 개수 */
 	emptyTrash: (options?: InvokeOptions) => __TAURI_INVOKE<number>("empty_trash", undefined, options),
 	/**  이 기기 id, 합친 적 있는 기기, 남은 충돌 수. 동기화 화면을 열 때 (기기 id는 이때 처음 만든다) */
-	getSyncStatus: (options?: InvokeOptions) => __TAURI_INVOKE<SyncStatus>("get_sync_status", undefined, options),
+	getSyncStatus: (options?: InvokeOptions) => __TAURI_INVOKE<SyncStatus_Serialize>("get_sync_status", undefined, options),
 	/**  동기화 파일 만들기. `path`는 저장 대화상자에서 고른 경로 (.scsync) */
 	exportSyncBundle: (path: string, includeFiles: boolean, options?: InvokeOptions) => __TAURI_INVOKE<SyncBundleInfo>("export_sync_bundle", { path, includeFiles }, options),
 	/**  합치기 전에 숫자만 (DB·파일·설정을 바꾸지 않음) */
@@ -182,6 +182,15 @@ export const commands = {
 	syncNow: (auto: boolean, options?: InvokeOptions) => __TAURI_INVOKE<SyncRunReport_Serialize>("sync_now", { auto }, options),
 	/**  동기화 기록 (최근부터) */
 	listSyncRuns: (limit: number, options?: InvokeOptions) => __TAURI_INVOKE<SyncRun_Serialize[]>("list_sync_runs", { limit }, options),
+	/**  아직 고르지 않은 충돌 (최근부터) */
+	listSyncConflicts: (options?: InvokeOptions) => __TAURI_INVOKE<SyncConflict_Serialize[]>("list_sync_conflicts", undefined, options),
+	/**  고르기: 이 기기 것 두기 / 받은 것으로 바꾸기 / 버리기(확인함) */
+	resolveSyncConflict: (id: string, choice: ConflictChoice, options?: InvokeOptions) => __TAURI_INVOKE<null>("resolve_sync_conflict", { id, choice }, options),
+	/**  합치기 전 사본 (sync-backups, 최근부터) */
+	listSyncBackups: (options?: InvokeOptions) => __TAURI_INVOKE<SyncBackup[]>("list_sync_backups", undefined, options),
+	/**  되돌리기 준비 — 앱을 다시 시작하면 적용된다 (지금 DB·설정은 restore-backups/로 치움, 자동 동기화는 꺼짐) */
+	requestSyncRollback: (name: string, options?: InvokeOptions) => __TAURI_INVOKE<null>("request_sync_rollback", { name }, options),
+	cancelSyncRollback: (options?: InvokeOptions) => __TAURI_INVOKE<null>("cancel_sync_rollback", undefined, options),
 	/**  지난 panic 기록 (최근 것부터, 앱 데이터 폴더의 logs/panic.log) */
 	getPanicLog: (options?: InvokeOptions) => __TAURI_INVOKE<PanicEntry_Serialize[]>("get_panic_log", undefined, options),
 	/**  새 버전 확인 (GitHub Releases). 내려받지 않고 릴리스 페이지 주소만 돌려준다 (1-E-2) */
@@ -1063,6 +1072,8 @@ export type CompactResult = {
 	tasks: number,
 };
 
+export type ConflictChoice = "keep_local" | "use_remote" | "dismiss";
+
 /**  컨텍스트 사용량 (오른쪽 패널). 마지막으로 보낸 프롬프트 기준 */
 export type ContextUsage = ContextUsage_Serialize | ContextUsage_Deserialize;
 
@@ -1408,6 +1419,12 @@ export type ErrorCode = "INTERNAL_ERROR" | "RESOURCE_NOT_FOUND" | "INVALID_INPUT
 
 export type FeatureSetting = {
 	feature: { [key in string]: boolean },
+};
+
+export type FieldDiff = {
+	column: string,
+	local: Value,
+	remote: Value,
 };
 
 export type FileCounts = {
@@ -3536,6 +3553,13 @@ export type SyncApplied = {
 	backup: string,
 };
 
+export type SyncBackup = {
+	/**  `app-….db` 파일 이름 */
+	name: string,
+	createdAt: number,
+	bytes: number,
+};
+
 /**  묶음 하나의 요약 (화면용) */
 export type SyncBundleInfo = {
 	deviceId: string,
@@ -3548,11 +3572,58 @@ export type SyncBundleInfo = {
 	bytes: number,
 };
 
-export type SyncPeer = {
+export type SyncConflict = SyncConflict_Serialize | SyncConflict_Deserialize;
+
+export type SyncConflict_Deserialize = {
+	id: string,
+	/**  edit / unique / orphan / branch */
+	kind: string,
+	tbl: string,
+	key: string,
+	/**  이름·제목·내용 앞부분 (화면용) */
+	label: string,
+	deviceId: string,
+	createdAt: number,
+	/**  edit: 다른 칸만 (시각 칸 빼고) */
+	diff: FieldDiff[],
+	/**  받은 행 (unique·orphan은 넣지 못한 행 전체, branch는 {branchId, fromSeq}) */
+	remote?: Value | null,
+};
+
+export type SyncConflict_Serialize = {
+	id: string,
+	/**  edit / unique / orphan / branch */
+	kind: string,
+	tbl: string,
+	key: string,
+	/**  이름·제목·내용 앞부분 (화면용) */
+	label: string,
+	deviceId: string,
+	createdAt: number,
+	/**  edit: 다른 칸만 (시각 칸 빼고) */
+	diff: FieldDiff[],
+	/**  받은 행 (unique·orphan은 넣지 못한 행 전체, branch는 {branchId, fromSeq}) */
+	remote: Value | null,
+};
+
+export type SyncPeer = SyncPeer_Serialize | SyncPeer_Deserialize;
+
+export type SyncPeer_Deserialize = {
 	deviceId: string,
 	/**  이 기기 시각 */
 	lastMergeAt: number,
 	merges: number,
+	/**  그 기기가 이 기기 내용을 어디까지 받았나 (이 기기 시각, 그 기기 묶음의 acks). 아직이면 없음 */
+	theirAck?: number | null,
+};
+
+export type SyncPeer_Serialize = {
+	deviceId: string,
+	/**  이 기기 시각 */
+	lastMergeAt: number,
+	merges: number,
+	/**  그 기기가 이 기기 내용을 어디까지 받았나 (이 기기 시각, 그 기기 묶음의 acks). 아직이면 없음 */
+	theirAck: number | null,
 };
 
 export type SyncPreview = {
@@ -3639,11 +3710,24 @@ export type SyncSetting_Serialize = {
 	intervalMinutes: number,
 };
 
-export type SyncStatus = {
+export type SyncStatus = SyncStatus_Serialize | SyncStatus_Deserialize;
+
+export type SyncStatus_Deserialize = {
 	deviceId: string,
-	peers: SyncPeer[],
+	peers: SyncPeer_Deserialize[],
 	/**  아직 고르지 않은 충돌 (2-E에서 고른다) */
 	openConflicts: number,
+	/**  다음 시작 때 되돌릴 합치기 전 사본 (2-E) */
+	pendingRollback?: string | null,
+};
+
+export type SyncStatus_Serialize = {
+	deviceId: string,
+	peers: SyncPeer_Serialize[],
+	/**  아직 고르지 않은 충돌 (2-E에서 고른다) */
+	openConflicts: number,
+	/**  다음 시작 때 되돌릴 합치기 전 사본 (2-E) */
+	pendingRollback: string | null,
 };
 
 /**  실패 정보. DB와 프론트 이벤트에 같은 형태로 나간다. */

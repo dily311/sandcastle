@@ -314,3 +314,28 @@ async fn first_reply_applies_edits_and_deletes_thanks_to_acks() {
     exec(&b, "UPDATE characters SET name = 'B만 고침' WHERE id = 'c1'").await;
     assert_eq!(send(&b, &a).await.conflicts, 1);
 }
+
+/// 2-E: 한쪽에서 고르면(이 기기 것 두기) 다음 동기화 때 다른 기기도 그것을 받고, 그 기기의 열린 충돌도 닫힌다
+#[tokio::test]
+async fn choosing_on_one_device_settles_the_other() {
+    use super::sync_conflicts::{self, ConflictChoice};
+    let (a, b) = paired().await;
+    exec(&a, "UPDATE characters SET name = 'A가 고침' WHERE id = 'c1'").await;
+    exec(&b, "UPDATE characters SET name = 'B가 고침' WHERE id = 'c1'").await;
+    assert_eq!(send(&a, &b).await.conflicts, 1);
+    assert_eq!(send(&b, &a).await.conflicts, 1);
+    assert_eq!(sync_conflicts::open_count(&a.db).await.unwrap(), 1);
+
+    // B에서 "이 기기 것 두기"
+    let id = sync_conflicts::list(&b.db).await.unwrap()[0].id.clone();
+    sync_conflicts::resolve(&b.db, &id, ConflictChoice::KeepLocal).await.unwrap();
+    tick().await;
+    let r = send(&b, &a).await;
+    assert_eq!((r.updated, r.conflicts), (1, 0), "{r:?}");
+    assert_eq!(state(&a).await["char:c1"], "B가 고침");
+    assert_eq!(sync_conflicts::open_count(&a.db).await.unwrap(), 0, "A의 충돌도 닫힘");
+    // 다시 보내도 그대로
+    let r = send(&a, &b).await;
+    assert_eq!((r.updated, r.conflicts), (0, 0), "{r:?}");
+    assert_eq!(state(&a).await, state(&b).await);
+}

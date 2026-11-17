@@ -89,6 +89,12 @@ pub fn run() {
                 Ok(false) => {}
                 Err(e) => eprintln!("[data] 백업 복원 실패: {e}"),
             }
+            // 동기화 합치기 되돌리기 (2-E): 합치기 전 사본으로 DB·설정을 바꾼다 (설정을 읽기 전이라야 함)
+            match service::data::sync_conflicts::apply_pending_rollback(&app_data_dir) {
+                Ok(true) => eprintln!("[sync] 합치기 전 사본으로 되돌렸습니다"),
+                Ok(false) => {}
+                Err(e) => eprintln!("[sync] 되돌리기 실패: {e}"),
+            }
             let pool = db::conn::init_pool(app_data_dir.clone()).await.expect("DB 초기화 실패");
             if let Err(e) = service::data::backup::finish_restore_fixups(&pool, &app_data_dir).await {
                 eprintln!("[data] 복원 후 경로 보정 실패: {e}");
@@ -312,6 +318,11 @@ pub fn specta_builder() -> tauri_specta::Builder<tauri::Wry> {
         apply_sync_bundle,
         sync_now,
         list_sync_runs,
+        list_sync_conflicts,
+        resolve_sync_conflict,
+        list_sync_backups,
+        request_sync_rollback,
+        cancel_sync_rollback,
         get_panic_log,
         check_for_update,
         clear_panic_log,
@@ -566,6 +577,11 @@ pub fn specta_builder() -> tauri_specta::Builder<tauri::Wry> {
         apply_sync_bundle,
         sync_now,
         list_sync_runs,
+        list_sync_conflicts,
+        resolve_sync_conflict,
+        list_sync_backups,
+        request_sync_rollback,
+        cancel_sync_rollback,
         get_panic_log,
         check_for_update,
         clear_panic_log,

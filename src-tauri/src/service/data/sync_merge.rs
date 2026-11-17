@@ -197,6 +197,17 @@ async fn seen_by_sender(conn: &mut SqliteConnection, ctx: &Ctx<'_>, table: &str,
     Ok(origin.is_some_and(|(dev, remote_at, merged_at)| merged_at == local_at && ctx.acks.get(&dev).is_some_and(|a| *a >= remote_at)))
 }
 
+/// 양쪽 내용이 같아졌으면 그 행의 열린 edit 충돌을 닫는다 (다른 기기에서 고른 결과가 왔을 때)
+async fn close_conflicts(conn: &mut SqliteConnection, ctx: &Ctx<'_>, table: &str, key: &[Value]) -> Result<()> {
+    sqlx::query("UPDATE sync_conflicts SET resolved_at = ? WHERE tbl = ? AND key = ? AND kind = 'edit' AND resolved_at IS NULL")
+        .bind(ctx.now)
+        .bind(table)
+        .bind(key_text(key))
+        .execute(&mut *conn)
+        .await?;
+    Ok(())
+}
+
 async fn has_tombstone(conn: &mut SqliteConnection, table: &str, key: &[Value]) -> Result<bool> {
     Ok(sqlx::query_scalar::<_, i64>("SELECT COUNT(*) FROM sync_tombstones WHERE tbl = ? AND key = ?")
         .bind(table)
@@ -274,6 +285,7 @@ async fn upsert(conn: &mut SqliteConnection, ctx: &Ctx<'_>, table: &str, key_col
                 .bind(ctx.now)
                 .execute(&mut *conn)
                 .await?;
+            close_conflicts(conn, ctx, table, &key).await?;
             Ok(true)
         }
         Err(sqlx::Error::Database(e)) if e.is_unique_violation() => Ok(false),
@@ -498,7 +510,10 @@ async fn apply_rows(conn: &mut SqliteConnection, ctx: &mut Ctx<'_>, table: &str,
                     ctx.report.conflicts += 1;
                 }
             }
-            Some(l) if same_content(&l, &row) => ctx.report.unchanged += 1,
+            Some(l) if same_content(&l, &row) => {
+                ctx.report.unchanged += 1;
+                close_conflicts(conn, ctx, table, &key).await?;
+            }
             Some(l) => {
                 let local_at = l.get("updated_at").and_then(Value::as_i64).unwrap_or(i64::MAX);
                 let held = ctx.held.contains(&(table.to_string(), key_text(&key)));

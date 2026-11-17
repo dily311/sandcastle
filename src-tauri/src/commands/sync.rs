@@ -32,6 +32,8 @@ pub struct SyncPeer {
     /// 이 기기 시각
     pub last_merge_at: i64,
     pub merges: i64,
+    /// 그 기기가 이 기기 내용을 어디까지 받았나 (이 기기 시각, 그 기기 묶음의 acks). 아직이면 없음
+    pub their_ack: Option<i64>,
 }
 
 #[derive(Debug, Clone, Serialize, specta::Type)]
@@ -41,6 +43,8 @@ pub struct SyncStatus {
     pub peers: Vec<SyncPeer>,
     /// 아직 고르지 않은 충돌 (2-E에서 고른다)
     pub open_conflicts: i64,
+    /// 다음 시작 때 되돌릴 합치기 전 사본 (2-E)
+    pub pending_rollback: Option<String>,
 }
 
 fn lock_err() -> AppError {
@@ -89,23 +93,24 @@ fn job(label: &str) -> CreateTaskRequest {
 pub async fn get_sync_status(app: AppHandle, state: State<'_, AppState>) -> Result<SyncStatus> {
     require(&app, id::SYNC)?;
     let me = device::get_or_create(&app_data_dir(&app)?)?;
-    let peers = sqlx::query_as::<_, (String, i64, i64)>("SELECT device_id, last_merge_at, merges FROM sync_peers ORDER BY last_merge_at DESC")
-        .fetch_all(&state.db)
-        .await?
-        .into_iter()
-        .map(|(device_id, last_merge_at, merges)| SyncPeer {
-            device_id,
-            last_merge_at,
-            merges,
-        })
-        .collect();
-    let open_conflicts: i64 = sqlx::query_scalar("SELECT COUNT(*) FROM sync_conflicts WHERE resolved_at IS NULL")
-        .fetch_one(&state.db)
-        .await?;
+    let peers =
+        sqlx::query_as::<_, (String, i64, i64, Option<i64>)>("SELECT device_id, last_merge_at, merges, their_ack FROM sync_peers ORDER BY last_merge_at DESC")
+            .fetch_all(&state.db)
+            .await?
+            .into_iter()
+            .map(|(device_id, last_merge_at, merges, their_ack)| SyncPeer {
+                device_id,
+                last_merge_at,
+                merges,
+                their_ack,
+            })
+            .collect();
+    let open_conflicts = crate::service::data::sync_conflicts::open_count(&state.db).await?;
     Ok(SyncStatus {
         device_id: me.id,
         peers,
         open_conflicts,
+        pending_rollback: crate::service::data::sync_conflicts::pending_rollback(&app_data_dir(&app)?),
     })
 }
 
@@ -302,4 +307,52 @@ pub async fn list_sync_runs(app: AppHandle, state: State<'_, AppState>, limit: u
             summary: summary.and_then(|s| serde_json::from_str(&s).ok()),
         })
         .collect())
+}
+
+// ---------------------------------------------------------------------------
+// 둘 다 남긴 것 고르기 · 되돌리기 (2-E)
+// ---------------------------------------------------------------------------
+
+/// 아직 고르지 않은 충돌 (최근부터)
+#[tauri::command]
+#[specta::specta]
+pub async fn list_sync_conflicts(app: AppHandle, state: State<'_, AppState>) -> Result<Vec<crate::service::data::sync_conflicts::SyncConflict>> {
+    require(&app, id::SYNC)?;
+    crate::service::data::sync_conflicts::list(&state.db).await
+}
+
+/// 고르기: 이 기기 것 두기 / 받은 것으로 바꾸기 / 버리기(확인함)
+#[tauri::command]
+#[specta::specta]
+pub async fn resolve_sync_conflict(
+    app: AppHandle,
+    state: State<'_, AppState>,
+    id: String,
+    choice: crate::service::data::sync_conflicts::ConflictChoice,
+) -> Result<()> {
+    require(&app, id::SYNC)?;
+    crate::service::data::sync_conflicts::resolve(&state.db, &id, choice).await
+}
+
+/// 합치기 전 사본 (sync-backups, 최근부터)
+#[tauri::command]
+#[specta::specta]
+pub fn list_sync_backups(app: AppHandle) -> Result<Vec<crate::service::data::sync_conflicts::SyncBackup>> {
+    require(&app, id::SYNC)?;
+    Ok(crate::service::data::sync_conflicts::list_backups(&app_data_dir(&app)?))
+}
+
+/// 되돌리기 준비 — 앱을 다시 시작하면 적용된다 (지금 DB·설정은 restore-backups/로 치움, 자동 동기화는 꺼짐)
+#[tauri::command]
+#[specta::specta]
+pub fn request_sync_rollback(app: AppHandle, name: String) -> Result<()> {
+    require(&app, id::SYNC)?;
+    crate::service::data::sync_conflicts::request_rollback(&app_data_dir(&app)?, &name)
+}
+
+#[tauri::command]
+#[specta::specta]
+pub fn cancel_sync_rollback(app: AppHandle) -> Result<()> {
+    crate::service::data::sync_conflicts::cancel_rollback(&app_data_dir(&app)?);
+    Ok(())
 }

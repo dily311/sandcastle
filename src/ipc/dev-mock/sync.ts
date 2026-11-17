@@ -1,5 +1,5 @@
 // 동기화 가짜 응답 (2-B-3). 브라우저 미리보기에서는 실제로 합치지 않고 숫자만 보여준다
-import type { MergeReport, SyncApplied, SyncBundleInfo, SyncPreview, SyncRun, SyncRunReport, SyncStatus } from "../bindings";
+import type { MergeReport, SyncApplied, SyncBackup, SyncBundleInfo, SyncConflict, SyncPreview, SyncRun, SyncRunReport, SyncStatus } from "../bindings";
 
 type Args = Record<string, unknown>;
 type Handler = (args: Args) => unknown;
@@ -7,8 +7,9 @@ type Handler = (args: Args) => unknown;
 const HOUR = 3600_000;
 const status: SyncStatus = {
 	deviceId: "3f9a1c2e-7b44-4d1a-9c0e-5a6b7c8d9e0f",
-	peers: [{ deviceId: "a81d00c4-1e2f-4a3b-8c9d-0e1f2a3b4c5d", lastMergeAt: Date.now() - 26 * HOUR, merges: 3 }],
-	openConflicts: 1,
+	peers: [{ deviceId: "a81d00c4-1e2f-4a3b-8c9d-0e1f2a3b4c5d", lastMergeAt: Date.now() - 26 * HOUR, merges: 3, theirAck: Date.now() - 30 * HOUR }],
+	openConflicts: 3,
+	pendingRollback: null,
 };
 const report: MergeReport = {
 	added: 12,
@@ -45,7 +46,40 @@ const runs: SyncRun[] = [
 	{ id: "r1", target: "folder", runBy: "user", startedAt: Date.now() - 26 * HOUR, finishedAt: Date.now() - 26 * HOUR + 6000, ok: true, error: null, summary: runReport(1) },
 ];
 
+const peer = "a81d00c4-1e2f-4a3b-8c9d-0e1f2a3b4c5d";
+let conflicts: SyncConflict[] = [
+	{
+		id: "k1",
+		kind: "edit",
+		tbl: "characters",
+		key: '["sera"]',
+		label: "세라피나",
+		deviceId: peer,
+		createdAt: Date.now() - 2 * HOUR,
+		diff: [
+			{ column: "name", local: "세라피나", remote: "세라" },
+			{ column: "description", local: "숲의 수호자. 상처를 치유한다.", remote: "숲의 수호자. 상처를 치유하고 길 잃은 이를 돕는다." },
+		],
+		remote: null,
+	},
+	{ id: "k2", kind: "branch", tbl: "conversations", key: '["c1"]', label: "숲에서 깨어남", deviceId: peer, createdAt: Date.now() - 2 * HOUR, diff: [], remote: { branchId: "c1", fromSeq: 9 } },
+	{ id: "k3", kind: "unique", tbl: "worldinfo_entries", key: '["e9"]', label: "엘도리아 숲", deviceId: peer, createdAt: Date.now() - 5 * HOUR, diff: [], remote: { id: "e9", comment: "엘도리아 숲", content: "고대의 숲." } },
+];
+const backups: SyncBackup[] = [
+	{ name: "app-20261117-120000-000.db", createdAt: Date.now() - 2 * HOUR, bytes: 3_400_000 },
+	{ name: "app-20261116-090000-000.db", createdAt: Date.now() - 27 * HOUR, bytes: 3_300_000 },
+];
+
 export const syncHandlers: Record<string, Handler> = {
+	list_sync_conflicts: () => conflicts,
+	resolve_sync_conflict: ({ id }) => {
+		conflicts = conflicts.filter((c) => c.id !== id);
+		status.openConflicts = conflicts.length;
+		return null;
+	},
+	list_sync_backups: () => backups,
+	request_sync_rollback: ({ name }) => ((status.pendingRollback = String(name)), null),
+	cancel_sync_rollback: () => ((status.pendingRollback = null), null),
 	sync_now: async ({ auto }) => {
 		const r = runReport(runs.length % 2);
 		await new Promise((res) => setTimeout(res, 900));

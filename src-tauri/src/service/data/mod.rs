@@ -11,6 +11,7 @@
 //! - sync_exchange: 파일로 주고받기 — 만들기·미리보기·적용 (2-B-3)
 //! - sync_target: 동기화 저장소(폴더·드라이브)의 모양 (2-C-1)
 //! - sync_run: 저장소 동기화 한 번 — 받기·올리기·파일·지운 기록 정리 (2-C-2)
+//! - sync_conflicts: 둘 다 남긴 것 고르기, 합치기 되돌리기 (2-E)
 pub mod archive;
 pub mod backup;
 pub mod card;
@@ -19,6 +20,7 @@ pub mod overview;
 pub mod pack;
 pub mod settings_scope;
 pub mod sync_bundle;
+pub mod sync_conflicts;
 pub mod sync_exchange;
 pub mod sync_merge;
 #[cfg(test)]

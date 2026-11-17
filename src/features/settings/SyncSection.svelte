@@ -1,8 +1,10 @@
 <script lang="ts">
 	// 동기화 (CLAUDE.md 2-B-3, ADR-011): 파일로 주고받기. 누를 때만 만들고, 합치기 전에 미리보기 → 자동 사본 → 적용
 	import { onMount } from "svelte";
-	import { Download, FolderOpen, Info, RefreshCw } from "@lucide/svelte";
-	import type { SyncPreview, SyncRun, SyncStatus } from "$ipc/bindings";
+	import { Download, FolderOpen, Info, RefreshCw, RotateCcw } from "@lucide/svelte";
+	import type { SyncBackup, SyncPreview, SyncRun, SyncStatus } from "$ipc/bindings";
+	import { confirmAction } from "$shared/stores/confirm.svelte";
+	import SyncConflicts from "./SyncConflicts.svelte";
 	import { Badge, Button, Select, Spinner, Switch } from "$shared/ui";
 	import { call, commands } from "$shared/ipc/client";
 	import { pickFiles, pickFolder, saveTo, SYNC_FILES } from "$shared/ipc/dialog";
@@ -43,8 +45,29 @@
 		void onEvent<{ step: string }>("sync::progress", (p) => (step = p.step)).then((u) => (unlisten = u));
 		return () => unlisten?.();
 	});
+	// ---- 되돌리기 (2-E) ----
+	let backups = $state<SyncBackup[]>([]);
+	let conflictsKey = $state(0);
+	async function rollback(b: SyncBackup) {
+		const ok = await confirmAction({
+			title: "합치기 전으로 되돌리기",
+			message: `${absolute(b.createdAt)}에 만든 사본으로 DB와 설정을 바꿈. 그 뒤에 이 기기에서 한 일도 사라짐 (지금 데이터는 지우지 않고 restore-backups 폴더로 치워 둠). 자동 동기화는 꺼짐 — 켜 둔 채면 다음 동기화가 같은 내용을 다시 합침. 앱이 다시 시작됨`,
+			confirmLabel: "다시 시작해서 되돌리기",
+			danger: true,
+		});
+		if (!ok) return;
+		await call(commands.requestSyncRollback(b.name), src);
+		await call(commands.restartApp(), src);
+	}
+	async function cancelRollback() {
+		await call(commands.cancelSyncRollback(), src);
+		toasts.success("되돌리기 취소함");
+		await load();
+	}
+
 	async function load() {
 		status = await call(commands.getSyncStatus(), src).catch(() => null);
+		backups = await call(commands.listSyncBackups(), { ...src, silent: true }).catch(() => []);
 		if (layout.desktop) runs = await call(commands.listSyncRuns(10), { ...src, silent: true }).catch(() => []);
 	}
 	async function chooseFolder() {
@@ -63,6 +86,7 @@
 					: "동기화함: 다른 기기에서 새로 바뀐 것 없음",
 			);
 			await library.load();
+			conflictsKey++;
 		} catch {
 			/* 이유는 call이 토스트로, 기록에도 남음 */
 		} finally {
@@ -130,6 +154,7 @@
 			].filter(Boolean);
 			toasts.success(parts.length ? `합침: ${parts.join(" · ")}` : "합침: 바뀐 것 없음");
 			pending = null;
+			conflictsKey++;
 			await Promise.all([load(), library.load()]);
 		} finally {
 			busy = null;
@@ -159,6 +184,16 @@
 	{#if !status}
 		<div class="loading"><Spinner /></div>
 	{:else}
+		{#if status.pendingRollback}
+			<div class="banner" role="status">
+				<RotateCcw />
+				<div><b>되돌리기 준비됨</b><span>앱을 다시 시작하면 합치기 전 사본으로 바꿈</span></div>
+				<Button size="sm" variant="ghost" onclick={cancelRollback}>취소</Button>
+				<Button size="sm" variant="primary" onclick={() => call(commands.restartApp(), src)}>다시 시작</Button>
+			</div>
+		{/if}
+		{#key conflictsKey}<SyncConflicts onchange={load} />{/key}
+
 		{#if layout.desktop}
 			<Group title="폴더 동기화">
 				<Row label="동기화 폴더" desc={sync?.folder ?? "OneDrive·Dropbox·구글 드라이브 앱처럼 이미 쓰는 동기화 앱의 폴더를 고르면, 그 안에 sandcastle-sync 폴더를 만들어 기기마다 자기 파일만 씀"}>
@@ -224,7 +259,7 @@
 						<p class="note"><Info /> 같이 쓰는 설정(테마·언어·프롬프트 등)은 받은 것으로 바뀜. 이 기기 전용(API 선택·기능 켜기·글자 크기 등)은 그대로</p>
 					{/if}
 					{#if pending.preview.report.conflicts + pending.preview.report.branches > 0}
-						<p class="note"><Info /> 둘 다 남긴 항목은 지금은 이 기기 것이 보이고, 받은 것은 따로 보관됨 (고르는 화면은 준비 중)</p>
+						<p class="note"><Info /> 둘 다 남긴 항목은 지금은 이 기기 것이 보이고, 받은 것은 따로 보관됨 — 합친 뒤 이 화면 위쪽 "둘 다 남긴 항목"에서 고름</p>
 					{/if}
 					<div class="acts">
 						<Button size="sm" variant="ghost" disabled={busy !== null} onclick={() => (pending = null)}>취소</Button>
@@ -238,18 +273,13 @@
 			<Row label="이 기기" desc="동기화 파일에 적히는 이 설치의 표시. 백업을 다른 기기에 복원해도 바뀌지 않음">
 				<code>{short(status.deviceId)}</code>
 			</Row>
-			{#if status.openConflicts > 0}
-				<Row label="둘 다 남긴 항목" desc="양쪽에서 고쳐 받은 쪽을 따로 보관한 것 (고르는 화면은 준비 중)">
-					<Badge tone="warning">{n(status.openConflicts)}</Badge>
-				</Row>
-			{/if}
 			{#if status.peers.length}
 				<ul class="peers">
 					{#each status.peers as p (p.deviceId)}
 						<li>
 							<code>{short(p.deviceId)}</code>
-							<span title={absolute(p.lastMergeAt)}>마지막으로 합침 {relative(p.lastMergeAt)}</span>
-							<span class="meta">{n(p.merges)}번</span>
+							<span title={absolute(p.lastMergeAt)}>그 기기 것을 받음 {relative(p.lastMergeAt)}</span>
+							<span class="meta" title={p.theirAck ? absolute(p.theirAck) : undefined}>{p.theirAck ? `이 기기 것을 받아 감 ${relative(p.theirAck)}` : "이 기기 것은 아직 안 받아 감"} · {n(p.merges)}번</span>
 						</li>
 					{/each}
 				</ul>
@@ -257,6 +287,22 @@
 				<p class="meta empty">아직 합친 기기 없음</p>
 			{/if}
 		</Group>
+
+		{#if backups.length}
+			<Group title="합치기 되돌리기">
+				<p class="meta empty">합치기 전에 자동으로 만든 사본 (최근 3개). 고르면 다음 시작 때 그 상태로 돌아감</p>
+				<ul class="peers">
+					{#each backups as b (b.name)}
+						<li>
+							<span title={b.name}>{absolute(b.createdAt)}</span>
+							<span class="meta">{relative(b.createdAt)} · {size(b.bytes)}</span>
+							<span class="grow"></span>
+							<Button size="sm" variant="ghost" onclick={() => rollback(b)}>{#snippet icon()}<RotateCcw />{/snippet}이 사본으로</Button>
+						</li>
+					{/each}
+				</ul>
+			</Group>
+		{/if}
 	{/if}
 </Section>
 
@@ -353,6 +399,30 @@
 	}
 	.runs .fail .what {
 		color: var(--danger, var(--text-muted));
+	}
+	.banner {
+		display: flex;
+		align-items: center;
+		gap: var(--space-3);
+		padding: var(--space-3) var(--space-4);
+		margin-bottom: var(--space-4);
+		border: 1px solid var(--border);
+		border-radius: var(--radius-md);
+		background: var(--surface-2, var(--surface));
+		flex-wrap: wrap;
+	}
+	.banner div {
+		display: flex;
+		flex-direction: column;
+		flex: 1;
+		min-width: 10rem;
+	}
+	.banner span {
+		color: var(--text-muted);
+		font-size: var(--text-sm);
+	}
+	.grow {
+		flex: 1;
 	}
 	.peers {
 		list-style: none;
