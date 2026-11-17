@@ -64,6 +64,14 @@ pub struct SyncManifest {
     /// 암호화 방식 (아직 없음 — 2-C 뒤, ADR-011 ⑤)
     #[serde(default)]
     pub encryption: Option<String>,
+    /// 보낸 기기가 지금까지 합친 다른 기기의 묶음: {기기 id: 그 기기 묶음의 createdAt (그 기기 시계)}.
+    /// 받는 쪽은 자기 id의 값보다 오래된 자기 행을 "보낸 쪽이 이미 본 것"으로 여긴다 (sync_merge)
+    #[serde(default)]
+    pub acks: BTreeMap<String, i64>,
+    /// 보낸 기기가 받은 행 대신 자기 것을 둔 행 (아직 고르지 않은 충돌): {받을 기기 id: [(테이블, 키)]}.
+    /// acks만 보면 받는 쪽은 "보낸 쪽이 내 것을 봤다"고 여겨 덮어쓰므로, 이 행들은 받는 쪽도 둘 다 남긴다
+    #[serde(default)]
+    pub held: BTreeMap<String, Vec<(String, String)>>,
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
@@ -288,6 +296,19 @@ pub async fn write_bundle(
             .into_iter()
             .map(|(tbl, key, deleted_at)| Tombstone { tbl, key, deleted_at })
             .collect();
+    let acks: BTreeMap<String, i64> = sqlx::query_as::<_, (String, i64)>("SELECT device_id, last_bundle_created_at FROM sync_peers")
+        .fetch_all(&mut *conn)
+        .await?
+        .into_iter()
+        .collect();
+    let mut held: BTreeMap<String, Vec<(String, String)>> = BTreeMap::new();
+    for (dev, tbl, key) in
+        sqlx::query_as::<_, (String, String, String)>("SELECT device_id, tbl, key FROM sync_conflicts WHERE resolved_at IS NULL AND kind = 'edit'")
+            .fetch_all(&mut *conn)
+            .await?
+    {
+        held.entry(dev).or_default().push((tbl, key));
+    }
     let schema_version = sqlx::query_scalar::<_, Option<i64>>("SELECT MAX(version) FROM _sqlx_migrations WHERE success = 1")
         .fetch_one(&mut *conn)
         .await?
@@ -310,6 +331,8 @@ pub async fn write_bundle(
         files: 0,
         blobs: 0,
         encryption: None,
+        acks,
+        held,
     };
 
     // ---- 파일과 zip (막는 작업이라 따로) ----

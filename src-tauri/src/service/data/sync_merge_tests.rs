@@ -289,3 +289,28 @@ async fn shared_settings_merge_and_device_fields_stay() {
     assert_eq!(sb["app-setting"]["selectedPersonaId"], Value::from("me"));
     assert_eq!(sb["app-setting"]["selectedApiProfile"], Value::from("p-b"), "기기 전용은 그대로");
 }
+
+/// 에뮬레이터 점검에서 찾음: A → B로 보낸 뒤 B가 고치고 지워서 처음으로 B → A. A는 B에게서 받은 적이 없지만,
+/// B의 묶음이 "A의 묶음을 이 시각까지 합쳤다"(acks)를 알려 주므로 A는 고침을 받아들이고 지우기도 적용한다
+#[tokio::test]
+async fn first_reply_applies_edits_and_deletes_thanks_to_acks() {
+    let (a, b) = (dev("dev-a").await, dev("dev-b").await);
+    seed(&a).await;
+    exec(&a, "INSERT INTO characters (id, name, created_at, updated_at) VALUES ('c9', 'Gone', 1, 0)").await;
+    send(&a, &b).await;
+    exec(&b, "UPDATE conversations SET title = 'B가 고침' WHERE id = 'v1'").await;
+    exec(&b, "DELETE FROM characters WHERE id = 'c9'").await;
+
+    let r = send(&b, &a).await;
+    assert_eq!((r.conflicts, r.kept_local_edits), (0, 0), "{r:?}");
+    assert!(r.updated >= 1 && r.deleted >= 1, "{r:?}");
+    let s = state(&a).await;
+    assert_eq!(s["conv:v1"], "B가 고침");
+    assert!(!s.contains_key("char:c9"));
+    assert_eq!(s, state(&b).await);
+
+    // A가 그 사이 고친 것은 여전히 둘 다 남김
+    exec(&a, "UPDATE characters SET name = 'A만 고침' WHERE id = 'c1'").await;
+    exec(&b, "UPDATE characters SET name = 'B만 고침' WHERE id = 'c1'").await;
+    assert_eq!(send(&b, &a).await.conflicts, 1);
+}

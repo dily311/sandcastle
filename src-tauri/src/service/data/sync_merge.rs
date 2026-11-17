@@ -175,6 +175,8 @@ struct Ctx<'a> {
     id_map: HashMap<(String, String), String>,
     /// 이번에 되살린 행 (자식도 같이 살린다)
     restored: HashSet<(String, String)>,
+    /// 보낸 기기가 이 기기 것 대신 자기 것을 둔 행 (manifest.held) — 받는 쪽도 둘 다 남긴다
+    held: HashSet<(String, String)>,
     report: MergeReport,
 }
 
@@ -473,7 +475,8 @@ async fn apply_rows(conn: &mut SqliteConnection, ctx: &mut Ctx<'_>, table: &str,
             Some(l) if same_content(&l, &row) => ctx.report.unchanged += 1,
             Some(l) => {
                 let local_at = l.get("updated_at").and_then(Value::as_i64).unwrap_or(i64::MAX);
-                if local_at <= ctx.local_base {
+                let held = ctx.held.contains(&(table.to_string(), key_text(&key)));
+                if local_at <= ctx.local_base && !held {
                     if upsert(conn, ctx, table, &key_cols, &row).await? {
                         ctx.report.updated += 1;
                     } else {
@@ -606,10 +609,13 @@ pub async fn merge(db: &SqlitePool, data: &BundleData, local_device: &str, setti
         device: m.device_id.clone(),
         now: now_ms(),
         remote_seen: peer.map_or(i64::MIN, |p| p.0),
-        // 처음 만나는 기기면 이 기기의 모든 행을 "고친 것"으로 본다 (내용이 다르면 둘 다 남김)
-        local_base: peer.map_or(i64::MIN, |p| p.1),
+        // 이 기기 행이 "그 뒤로 고친 것"인지의 기준 (둘 다 이 기기 시계):
+        //   그 기기에서 마지막으로 합친 시각, 그리고 그 기기가 이미 합친 이 기기 묶음의 시각(묶음의 acks).
+        // 둘 다 없으면(처음 만남) 이 기기의 모든 행을 "고친 것"으로 본다 (내용이 다르면 둘 다 남김)
+        local_base: peer.map_or(i64::MIN, |p| p.1).max(m.acks.get(local_device).copied().unwrap_or(i64::MIN)),
         id_map: HashMap::new(),
         restored: HashSet::new(),
+        held: m.held.get(local_device).map(|v| v.iter().cloned().collect()).unwrap_or_default(),
         report: MergeReport { dry_run, ..Default::default() },
     };
 
