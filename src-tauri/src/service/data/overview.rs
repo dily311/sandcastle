@@ -176,18 +176,3 @@ pub async fn totals(db: &DbPool) -> Result<DataTotals> {
         games: count(db, "game_projects").await?,
     })
 }
-
-/// 여러 대화 한 번에 삭제 (메시지는 CASCADE). 지운 개수를 돌려준다.
-pub async fn delete_conversations(db: &DbPool, ids: &[String]) -> Result<u64> {
-    let mut tx = db.begin().await?;
-    let mut n = 0;
-    for id in ids {
-        n += sqlx::query("DELETE FROM conversations WHERE id = ?")
-            .bind(id)
-            .execute(&mut *tx)
-            .await?
-            .rows_affected();
-    }
-    tx.commit().await?;
-    Ok(n)
-}

@@ -3,6 +3,7 @@
 import { chatHandlers } from "./chat";
 import { settingsHandlers } from "./settings";
 import { gameHandlers } from "./game";
+import { withTrash } from "./trash";
 import type { AppSetting_Serialize, FeatureSetting, ThemeSetting } from "../bindings";
 
 type Args = Record<string, unknown>;
@@ -21,6 +22,7 @@ const db = {
 		lastPlayedGameId: null,
 		phoneModePrompt: "[폰 메신저 대화]",
 		usageRetentionDays: null,
+		trashRetentionDays: 30,
 		checkUpdatesOnStart: false,
 		home: { startOnHome: false, greeting: "", blocks: ["continue", "quick", "favorites", "games"], css: "" },
 	} satisfies AppSetting_Serialize as AppSetting_Serialize,
@@ -35,7 +37,7 @@ const db = {
 	feature: { feature: { "chat.images": true, widget: true, "widget.music": true } } as FeatureSetting,
 };
 
-export const handlers: Record<string, Handler> = {
+const base: Record<string, Handler> = {
 	// 실제로는 htmlview:// 프로토콜. 브라우저 개발 모드는 blob 주소로 같은 문서를 흉내 낸다
 	register_html_view: ({ html, theme }) => {
 		const h = String(html);
@@ -147,3 +149,6 @@ export const handlers: Record<string, Handler> = {
 	"plugin:window|close": () => null,
 	"plugin:window|set_ignore_cursor_events": () => null,
 };
+
+// 지우기는 휴지통 항목을 돌려준다 (2-A-3)
+export const handlers = withTrash(base);

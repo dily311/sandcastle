@@ -39,7 +39,7 @@ pub async fn save_package(app: AppHandle, state: State<'_, AppState>, game_id: S
 /// 지금 플레이 중이거나 마운트된 게임은 지우지 않는다.
 #[tauri::command]
 #[specta::specta]
-pub async fn delete_game(app: AppHandle, state: State<'_, AppState>, game_id: String) -> Result<(), AppError> {
+pub async fn delete_game(app: AppHandle, state: State<'_, AppState>, game_id: String) -> Result<crate::service::data::trash::TrashItem, AppError> {
     let mounted = state
         .active_archive
         .lock()
@@ -57,7 +57,8 @@ pub async fn delete_game(app: AppHandle, state: State<'_, AppState>, game_id: St
     if playing.as_deref() == Some(game_id.as_str()) {
         return Err(AppError::game_invalid_state("지금 플레이 중인 게임은 지울 수 없습니다"));
     }
-    GameManager::delete_package(&state.db, &games_root(&app)?, &game_id).await
+    // 휴지통으로: 게임 폴더(games/<id>)도 같이 옮겨 두고, 되살리면 돌아온다 (2-A-3)
+    crate::commands::data::move_to_trash(&app, &state, crate::service::data::trash::TrashKind::Game, &game_id).await
 }
 
 #[tauri::command]

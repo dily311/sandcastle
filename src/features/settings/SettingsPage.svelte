@@ -81,7 +81,7 @@
 			title: "관리",
 			items: [
 				{ id: "activity", label: "실행 기록", icon: Activity, keywords: "작업 사용량 토큰 비용 요금 api 실행 중 멈추기 취소 자동 기록", view: ActivitySection },
-				{ id: "data", label: "데이터", icon: Database, keywords: "백업 복원 저장 공간 용량 삭제 정리", view: DataSection },
+				{ id: "data", label: "데이터", icon: Database, keywords: "백업 복원 저장 공간 용량 삭제 정리 휴지통 되살리기 점검", view: DataSection },
 				{ id: "log", label: "로그", icon: ScrollText, keywords: "오류 경고 기록", view: LogSection },
 			],
 		},

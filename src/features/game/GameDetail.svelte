@@ -86,7 +86,7 @@
 		}
 	}
 	async function removeSession(s: Session) {
-		if (await confirmAction({ title: "세션 삭제", message: `${relative(s.updatedAt)}에 플레이한 기록을 지움`, confirmLabel: "삭제", danger: true })) await games.removeSession(s.id);
+		if (await confirmAction({ title: "세션 삭제", message: `${relative(s.updatedAt)}에 플레이한 기록을 휴지통으로 옮김`, confirmLabel: "삭제", danger: true })) await games.removeSession(s.id);
 	}
 	const sceneName = (id: string | null) => view.scenes?.find((x) => x.id === id)?.name ?? view.scenes?.find((x) => x.id === id)?.sceneKey ?? "처음";
 	const clock = (sec = 0) => {
@@ -112,7 +112,7 @@
 	}
 	async function removeGame() {
 		const title = game?.project.title ?? "게임";
-		if (!(await confirmAction({ title: "게임 삭제", message: `'${title}'과 모든 플레이 기록을 지움. 되돌릴 수 없음`, confirmLabel: "삭제", danger: true }))) return;
+		if (!(await confirmAction({ title: "게임 삭제", message: `'${title}'과 모든 플레이 기록을 휴지통으로 옮김. 설정 > 데이터 > 휴지통에서 되살릴 수 있음`, confirmLabel: "삭제", danger: true }))) return;
 		await games.remove(gameId);
 		void nav.replace({ page: "game" });
 	}

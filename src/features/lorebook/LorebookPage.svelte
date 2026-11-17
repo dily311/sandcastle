@@ -72,12 +72,12 @@
 		const ids = [...picked];
 		if (!ids.length) return;
 		const n = ids.reduce((s, id) => s + (lorebook.counts[id]?.entries ?? 0), 0);
-		if (!(await confirmAction({ title: "로어북 삭제", message: `로어북 ${ids.length}개와 항목 ${n}개를 지움. 쓰던 캐릭터·페르소나·대화에서도 빠짐`, confirmLabel: `${ids.length}개 삭제`, danger: true }))) return;
+		if (!(await confirmAction({ title: "로어북 삭제", message: `로어북 ${ids.length}개와 항목 ${n}개를 휴지통으로 옮김. 쓰던 캐릭터·페르소나·대화에서도 빠짐. 설정 > 데이터 > 휴지통에서 되살릴 수 있음`, confirmLabel: `${ids.length}개 삭제`, danger: true }))) return;
 		for (const id of ids) await call(commands.deleteWorldinfoBook(id), { source: "lorebook" });
 		await lorebook.load();
 		await library.load();
 		selecting = false;
-		toasts.success(`로어북 ${ids.length}개 지움`);
+		toasts.success(`로어북 ${ids.length}개를 휴지통으로 옮김`);
 	}
 	async function create() {
 		const name = await promptText({ title: "새 로어북", message: "세계관·장소·인물 설정을 모아 두는 책", input: { value: "", placeholder: "예: 엘다리아 대륙" }, confirmLabel: "만들기" });

@@ -12,6 +12,7 @@
 	import Section from "./Section.svelte";
 	import Group from "./Group.svelte";
 	import Row from "./Row.svelte";
+	import TrashGroup from "./TrashGroup.svelte";
 
 	const src = { source: "data" };
 	let data = $state<Overview | null>(null);
@@ -19,6 +20,7 @@
 	let busy = $state<"backup" | "restore" | null>(null);
 	let openChar = $state<string | null>(null);
 	let picked = $state<Set<string>>(new Set());
+	let trashKey = $state(0);
 
 	// ---- 점검 (1-B-3): 보여주기만, 지우지 않음 ----
 	let check = $state<DataCheck | null>(null);
@@ -128,15 +130,16 @@
 	}
 	async function removePicked() {
 		const n = picked.size;
-		if (!(await confirmAction({ title: "대화 삭제", message: `고른 대화 ${n}개와 메시지를 지움. 되돌릴 수 없음`, confirmLabel: `${n}개 삭제`, danger: true }))) return;
+		if (!(await confirmAction({ title: "대화 삭제", message: `고른 대화 ${n}개와 메시지를 휴지통으로 옮김. 아래 휴지통에서 되살릴 수 있음`, confirmLabel: `${n}개 삭제`, danger: true }))) return;
 		const removed = await call(commands.deleteConversations([...picked]), src);
-		toasts.success(`대화 ${removed}개 지움`);
+		toasts.success(`대화 ${removed}개를 휴지통으로 옮김`);
+		trashKey++; // 휴지통 목록 다시 읽기
 		await Promise.all([load(), library.load()]);
 	}
 	const convTitle = (c: { title: string | null; mode: string | null }) => c.title || (c.mode === "phone" ? "폰 대화" : "제목 없음");
 </script>
 
-<Section title="데이터" lead="저장 공간, 백업과 복원, 대화 정리">
+<Section title="데이터" lead="저장 공간, 백업과 복원, 휴지통, 대화 정리">
 	{#if !data}
 		<div class="loading"><Spinner /></div>
 	{:else}
@@ -214,6 +217,8 @@
 				</div>
 			{/if}
 		</Group>
+
+		{#key trashKey}<TrashGroup onrestored={() => Promise.all([load(), library.load()])} />{/key}
 
 		<Group title="대화 정리">
 			{#snippet aside()}

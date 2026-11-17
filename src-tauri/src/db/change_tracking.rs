@@ -1,9 +1,11 @@
 //! 변경 추적 (CLAUDE.md 2-A-2, ADR-011).
 //!
-//! 동기화 대상 테이블은 모두 `updated_at`(밀리초)과 `deleted_at`(휴지통 표시)을 갖고, 마이그레이션 156의 트리거가
-//! 모든 쓰기에서 `updated_at`을 갱신한다:
+//! 동기화 대상 테이블은 모두 `updated_at`(밀리초)을 갖고, 마이그레이션 156의 트리거가 모든 쓰기에서 갱신한다:
 //! - INSERT에서 `updated_at`이 비었거나 0이면 지금 시각
 //! - UPDATE에서 `updated_at`을 바꾸지 않았으면 지금 시각, 직접 바꿨으면 그 값을 둔다(동기화 병합이 원래 시각을 쓸 수 있게)
+//!
+//! 지우기는 마이그레이션 157의 트리거가 `sync_tombstones`에 (테이블, 키)로 남기고, 같은 키로 다시 들어오면 지운다.
+//! 휴지통(되살리기)은 `service/data/trash.rs`.
 //!
 //! 동기화하지 않는 테이블은 아래 목록에만 적는다. 새 테이블은 둘 중 하나에 들어가야 테스트가 통과한다.
 
@@ -30,6 +32,9 @@ pub const UNSYNCED_TABLES: &[&str] = &[
     "music_album_art_pos",
     "playlist",
     "playlist_entries",
+    // 기기마다의 휴지통과 지운 기록 자체
+    "trash_items",
+    "sync_tombstones",
 ];
 
 #[cfg_attr(not(test), allow(dead_code))] // 2-B 묶음 만들기에서 쓴다
@@ -75,11 +80,11 @@ mod tests {
                 .await
                 .unwrap();
             assert!(
-                cols.iter().any(|c| c == "updated_at") && cols.iter().any(|c| c == "deleted_at"),
-                "{t}: updated_at·deleted_at이 없음 — 동기화 대상이면 컬럼과 트리거를 붙이고, 아니면 UNSYNCED_TABLES에 적기 (ADR-011)"
+                cols.iter().any(|c| c == "updated_at"),
+                "{t}: updated_at이 없음 — 동기화 대상이면 컬럼과 트리거를 붙이고, 아니면 UNSYNCED_TABLES에 적기 (ADR-011)"
             );
-            for kind in ["insert", "update"] {
-                let name = format!("{t}_touch_{kind}");
+            for kind in ["touch_insert", "touch_update", "tombstone", "untombstone"] {
+                let name = format!("{t}_{kind}");
                 let n: i64 = sqlx::query_scalar("SELECT COUNT(*) FROM sqlite_master WHERE type = 'trigger' AND name = ? AND tbl_name = ?")
                     .bind(&name)
                     .bind(t)
@@ -132,17 +137,6 @@ mod tests {
             .await
             .unwrap();
         assert_eq!(at, 1234);
-
-        // 휴지통 표시도 쓰기이므로 갱신
-        sqlx::query("UPDATE message_tags SET deleted_at = 1 WHERE id = 't1'")
-            .execute(&pool)
-            .await
-            .unwrap();
-        let at: i64 = sqlx::query_scalar("SELECT updated_at FROM message_tags WHERE id = 't1'")
-            .fetch_one(&pool)
-            .await
-            .unwrap();
-        assert!(at >= before);
 
         // 복합 키 연결 테이블·키 없는 테이블도 같음
         sqlx::query("INSERT INTO characters (id, name, created_at, updated_at) VALUES ('c1', 'A', 0, 0)")

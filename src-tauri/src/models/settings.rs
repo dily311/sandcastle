@@ -29,6 +29,13 @@ pub struct AppSetting {
     /// 작업·사용량 상세 기록 보존 기간(일). None = 계속 보관(기본). 지난 상세는 일별 합계로 남긴다 (1-A-4)
     #[serde(default)]
     pub usage_retention_days: Option<u32>,
+    /// 휴지통 보존 기간(일). None = 계속 보관. 지난 것은 휴지통을 열거나 새로 지울 때 정리 (2-A-3)
+    #[serde(default = "default_trash_retention_days")]
+    pub trash_retention_days: Option<u32>,
+}
+
+fn default_trash_retention_days() -> Option<u32> {
+    Some(crate::service::data::trash::DEFAULT_RETENTION_DAYS)
 }
 
 /// 홈 화면: 보일 블록과 순서, 인사말, 내 글. 리소스를 쓰지 않는 화면이라 블록은 기본으로 보인다
@@ -81,6 +88,7 @@ impl Default for AppSetting {
             phone_mode_prompt: default_phone_mode_prompt(),
             home: HomeSetting::default(),
             usage_retention_days: None,
+            trash_retention_days: default_trash_retention_days(),
             check_updates_on_start: false,
         }
     }

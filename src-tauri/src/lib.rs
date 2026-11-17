@@ -300,6 +300,10 @@ pub fn specta_builder() -> tauri_specta::Builder<tauri::Wry> {
         // data manager
         get_data_overview,
         check_data,
+        list_trash,
+        restore_trash_item,
+        purge_trash_item,
+        empty_trash,
         get_panic_log,
         check_for_update,
         clear_panic_log,
@@ -544,6 +548,10 @@ pub fn specta_builder() -> tauri_specta::Builder<tauri::Wry> {
         // data manager
         get_data_overview,
         check_data,
+        list_trash,
+        restore_trash_item,
+        purge_trash_item,
+        empty_trash,
         get_panic_log,
         check_for_update,
         clear_panic_log,

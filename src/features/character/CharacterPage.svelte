@@ -1,4 +1,5 @@
 <script lang="ts">
+	import { TRASH_HINT, trashedToast } from "$shared/trash";
 	import { Camera, ImagePlus, Move, X as XIcon } from "@lucide/svelte";
 	import { ChevronRight, Download, Ellipsis, Gamepad2, MessageSquarePlus, Pencil, Plus, Search, Star, StarOff, Trash2, Upload, UserRound, Users } from "@lucide/svelte";
 	import type { GameProject_Serialize as GameProject } from "$ipc/bindings";
@@ -79,11 +80,11 @@
 		const ids = [...picked];
 		if (!ids.length) return;
 		const convs = ids.reduce((n, id) => n + library.convsOf(id).length, 0);
-		if (!(await confirmAction({ title: "캐릭터 삭제", message: `캐릭터 ${ids.length}개와 대화 ${convs}개를 지움. 되돌릴 수 없음`, confirmLabel: `${ids.length}개 삭제`, danger: true }))) return;
+		if (!(await confirmAction({ title: "캐릭터 삭제", message: `캐릭터 ${ids.length}개를 휴지통으로 옮김 (대화 ${convs}개는 캐릭터 없이 남음). 설정 > 데이터 > 휴지통에서 되살릴 수 있음`, confirmLabel: `${ids.length}개 삭제`, danger: true }))) return;
 		for (const id of ids) await call(commands.deleteCharacter(id), { source: "character" });
 		await library.load();
 		selecting = false;
-		toasts.success(`캐릭터 ${ids.length}개 지움`);
+		toasts.success(`캐릭터 ${ids.length}개를 휴지통으로 옮김`);
 	}
 	/** 제작자 메모는 HTML이 섞여 올 때가 많음 → 태그를 빼고 글만 (스크립트 실행 없음) */
 	function plain(html: string) {
@@ -260,9 +261,10 @@
 	}
 	async function removeCharacter(c: Character, leave = true) {
 		const n = library.convsOf(c.id).length;
-		if (!(await confirmAction({ title: "캐릭터 삭제", message: `'${c.name}'와 대화 ${n}개를 지움. 되돌릴 수 없음`, confirmLabel: "삭제", danger: true }))) return;
-		await call(commands.deleteCharacter(c.id), { source: "character" });
+		if (!(await confirmAction({ title: "캐릭터 삭제", message: `'${c.name}'을(를) 휴지통으로 옮김${n ? ` (대화 ${n}개는 캐릭터 없이 남고, 되살리면 다시 이어짐)` : ""}. ${TRASH_HINT}`, confirmLabel: "삭제", danger: true }))) return;
+		const item = await call(commands.deleteCharacter(c.id), { source: "character" });
 		await library.load();
+		trashedToast(item, () => library.load());
 		if (leave) nav.replace({ page: "character" });
 	}
 </script>

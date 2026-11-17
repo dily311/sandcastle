@@ -10,6 +10,7 @@ use crate::{
         backup::{self, BackupManifest, BackupSummary, RestorePreview},
         overview::{self, DataOverview},
         pack::{self, PackExportSummary, PackImportSummary},
+        trash::{self, TrashItem, TrashKind},
     },
     state::AppState,
 };
@@ -76,11 +77,72 @@ pub async fn check_data(app: AppHandle, state: State<'_, AppState>) -> Result<cr
     crate::service::data::check::check_data(&state.db, &app_data_dir(&app)?).await
 }
 
-/// 여러 대화를 한 번에 삭제. 지운 개수를 돌려준다.
+/// 여러 대화를 한 번에 휴지통으로 (대화마다 휴지통 항목 하나). 옮긴 개수를 돌려준다.
 #[tauri::command]
 #[specta::specta]
-pub async fn delete_conversations(state: State<'_, AppState>, ids: Vec<String>) -> Result<u64> {
-    overview::delete_conversations(&state.db, &ids).await
+pub async fn delete_conversations(app: AppHandle, state: State<'_, AppState>, ids: Vec<String>) -> Result<u64> {
+    let mut n = 0;
+    for id in &ids {
+        match move_to_trash(&app, &state, TrashKind::Conversation, id).await {
+            Ok(_) => n += 1,
+            Err(crate::error::AppError::NotFound { .. }) => {}
+            Err(e) => return Err(e),
+        }
+    }
+    Ok(n)
+}
+
+// ---------------------------------------------------------------------------
+// 휴지통 (2-A-3)
+// ---------------------------------------------------------------------------
+
+fn trash_retention(app: &AppHandle) -> Option<u32> {
+    use tauri::Manager;
+    app.state::<crate::sys::settings::SettingsState<crate::models::settings::AppSetting>>()
+        .0
+        .lock()
+        .ok()
+        .and_then(|s| s.trash_retention_days)
+}
+
+/// 지우기 커맨드들이 부른다: 휴지통으로 옮기고, 보존 기간이 지난 것을 정리한다
+pub async fn move_to_trash(app: &AppHandle, state: &AppState, kind: TrashKind, id: &str) -> Result<TrashItem> {
+    let base = app_data_dir(app)?;
+    let item = trash::move_to_trash(&state.db, &base, kind, id).await?;
+    if let Err(e) = trash::purge_expired(&state.db, &base, trash_retention(app)).await {
+        eprintln!("[trash] 기간 지난 항목 정리 실패: {e}");
+    }
+    Ok(item)
+}
+
+/// 휴지통 목록 (열 때 보존 기간이 지난 것을 먼저 정리)
+#[tauri::command]
+#[specta::specta]
+pub async fn list_trash(app: AppHandle, state: State<'_, AppState>) -> Result<Vec<TrashItem>> {
+    let base = app_data_dir(&app)?;
+    trash::purge_expired(&state.db, &base, trash_retention(&app)).await?;
+    trash::list(&state.db).await
+}
+
+/// 되살리기
+#[tauri::command]
+#[specta::specta]
+pub async fn restore_trash_item(app: AppHandle, state: State<'_, AppState>, id: String) -> Result<TrashItem> {
+    trash::restore(&state.db, &app_data_dir(&app)?, &id).await
+}
+
+/// 완전히 지우기 (되돌릴 수 없음 — 화면에서 확인을 받는다)
+#[tauri::command]
+#[specta::specta]
+pub async fn purge_trash_item(app: AppHandle, state: State<'_, AppState>, id: String) -> Result<bool> {
+    trash::purge(&state.db, &app_data_dir(&app)?, &id).await
+}
+
+/// 휴지통 비우기 (되돌릴 수 없음 — 화면에서 확인을 받는다). 지운 개수
+#[tauri::command]
+#[specta::specta]
+pub async fn empty_trash(app: AppHandle, state: State<'_, AppState>) -> Result<u32> {
+    trash::purge_all(&state.db, &app_data_dir(&app)?).await
 }
 
 /// 캐릭터 팩 내보내기. `path`는 프론트의 저장 대화상자에서 고른 경로 (.scpack).

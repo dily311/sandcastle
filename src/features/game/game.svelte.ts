@@ -1,4 +1,5 @@
 // 게임 목록·열린 게임·세션. 플레이·에디터는 예전 화면을 새 틀 안에서 그대로 쓴다 (gameStore 등과 같은 데이터를 공유)
+import { trashedToast } from "$shared/trash";
 import type {
 	GamePlayerSessions_Serialize as Session,
 	GameProject_Serialize as GameProject,
@@ -71,17 +72,26 @@ class Games {
 	async export(gameId: string, dir: string | null = null) {
 		return call(commands.exportGame(gameId, dir), src);
 	}
-	async remove(gameId: string) {
+	/** 휴지통으로 (2-A-3). 여러 개를 한 번에 지울 때는 toast=false */
+	async remove(gameId: string, toast = true) {
 		if (this.opened?.project.id === gameId) {
 			await call(commands.closeGame(), { ...src, silent: true }).catch(() => {});
 			this.opened = null;
 		}
-		await call(commands.deleteGame(gameId), src);
+		const item = await call(commands.deleteGame(gameId), src);
 		this.list = this.list.filter((g) => g.id !== gameId);
+		if (toast) trashedToast(item, () => this.load());
 	}
 	async removeSession(id: string) {
-		await call(commands.deleteSessions(id), src);
+		const item = await call(commands.deleteSessions(id), src);
+		const gameId = this.opened?.project.id;
 		this.sessions = this.sessions.filter((s) => s.id !== id);
+		trashedToast(item, async () => {
+			if (gameId && this.opened?.project.id === gameId) {
+				this.sessions = await call(commands.listSessions(), { ...src, silent: true }).catch(() => []);
+				this.sessions.sort((a, b) => b.updatedAt - a.updatedAt);
+			}
+		});
 	}
 	async validate() {
 		return call(commands.validateGame(), src);

@@ -1,4 +1,5 @@
 // 캐릭터·대화·폴더와 대화 설정에 쓰는 목록(페르소나·프리셋·API). 화면들이 같이 쓴다.
+import { trashedToast } from "$shared/trash";
 import type {
 	ApiProfiles,
 	CharacterImage_Serialize as CharacterImage,
@@ -179,9 +180,11 @@ class Library {
 		this.put(conv);
 		return conv;
 	}
+	/** 휴지통으로 (2-A-3). "되돌리기" 알림을 띄운다 */
 	async remove(id: string) {
-		await call(commands.deleteConversation(id), src);
+		const item = await call(commands.deleteConversation(id), src);
 		this.conversations = this.conversations.filter((c) => c.id !== id);
+		trashedToast(item, () => this.load());
 	}
 	async setOptions(id: string, o: { personaId: string; promptPresetId: string | null; apiProfileId: string | null }) {
 		this.put(await call(commands.setConversationOptions(id, o), src));

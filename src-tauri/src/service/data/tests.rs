@@ -95,7 +95,11 @@ async fn overview_groups_chats_by_character() {
     assert_eq!(o.totals.messages, 12);
     assert!(o.storage.characters_bytes > 0 && o.storage.database_bytes > 0);
 
-    assert_eq!(overview::delete_conversations(&db, &["orphan".into(), "missing".into()]).await.unwrap(), 1);
+    // 지우기는 휴지통으로 (2-A-3): 목록에서 빠진다
+    super::trash::move_to_trash(&db, &base, super::trash::TrashKind::Conversation, "orphan")
+        .await
+        .unwrap();
+    assert!(overview::data_overview(&db, &base).await.unwrap().orphan_conversations.is_empty());
 }
 
 #[tokio::test]
@@ -426,4 +430,130 @@ async fn keys_never_leak_into_backup_pack_or_app_data() {
     for f in files.iter().filter(|f| !f.starts_with(base.join("exports"))) {
         assert_eq!(hit(&std::fs::read(f).unwrap()), None, "{}", f.display());
     }
+}
+
+// ---------------------------------------------------------------------------
+// 휴지통 (2-A-3)
+// ---------------------------------------------------------------------------
+
+async fn count(db: &DbPool, sql: &str) -> i64 {
+    sqlx::query_scalar(sqlx::AssertSqlSafe(sql.to_string())).fetch_one(db).await.unwrap()
+}
+
+#[tokio::test]
+async fn trash_character_round_trip() {
+    use super::trash::{self, TrashKind};
+    let (_d, base, db) = app_dir().await;
+    let cid = populate(&db, &base).await;
+    sqlx::query("INSERT INTO phone_links (owner_kind, owner_id, contact_kind, contact_id, created_at) VALUES ('persona', 'default', 'character', ?, 1)")
+        .bind(&cid)
+        .execute(&db)
+        .await
+        .unwrap();
+    let images_dir = base.join("characters").join(&cid);
+    assert!(images_dir.exists());
+    let images = count(&db, &format!("SELECT COUNT(*) FROM character_images WHERE character_id = '{cid}'")).await;
+    let convs = count(&db, &format!("SELECT COUNT(*) FROM conversations WHERE character_id = '{cid}'")).await;
+    assert!(images == 3 && convs >= 1);
+
+    let item = trash::move_to_trash(&db, &base, TrashKind::Character, &cid).await.unwrap();
+    assert_eq!(item.label, "Seraphina");
+    assert!(item.rows >= 5 && item.files == 1, "{item:?}");
+    // 지운 것처럼 보인다: 행·연결·폴더가 사라지고, 대화는 남되 캐릭터 연결만 끊긴다 (FK SET NULL)
+    assert_eq!(count(&db, &format!("SELECT COUNT(*) FROM characters WHERE id = '{cid}'")).await, 0);
+    assert_eq!(count(&db, "SELECT COUNT(*) FROM character_images").await, 0);
+    assert_eq!(count(&db, "SELECT COUNT(*) FROM phone_links").await, 0);
+    assert_eq!(count(&db, &format!("SELECT COUNT(*) FROM conversations WHERE character_id = '{cid}'")).await, 0);
+    assert!(!images_dir.exists());
+    // 다른 기기에 전할 지운 기록
+    assert_eq!(
+        count(
+            &db,
+            &format!("SELECT COUNT(*) FROM sync_tombstones WHERE tbl = 'characters' AND key = '[\"{cid}\"]'")
+        )
+        .await,
+        1
+    );
+    assert_eq!(trash::list(&db).await.unwrap().len(), 1);
+
+    let before = chrono::Utc::now().timestamp_millis() - 1;
+    trash::restore(&db, &base, &item.id).await.unwrap();
+    assert_eq!(
+        count(&db, &format!("SELECT COUNT(*) FROM character_images WHERE character_id = '{cid}'")).await,
+        images
+    );
+    assert_eq!(
+        count(&db, &format!("SELECT COUNT(*) FROM conversations WHERE character_id = '{cid}'")).await,
+        convs,
+        "대화 연결이 다시 이어져야 함"
+    );
+    assert_eq!(count(&db, "SELECT COUNT(*) FROM phone_links").await, 1);
+    assert!(images_dir.exists() && std::fs::read_dir(&images_dir).unwrap().count() > 0);
+    assert_eq!(
+        count(&db, "SELECT COUNT(*) FROM sync_tombstones WHERE tbl = 'characters'").await,
+        0,
+        "되살리면 지운 기록도 지움"
+    );
+    let at = count(&db, &format!("SELECT updated_at FROM characters WHERE id = '{cid}'")).await;
+    assert!(at >= before, "되살린 행은 지금 고친 것으로");
+    assert!(trash::list(&db).await.unwrap().is_empty());
+    assert!(!base.join("trash").join(&item.id).exists());
+}
+
+#[tokio::test]
+async fn trash_conversation_keeps_messages_and_purge_is_final() {
+    use super::trash::{self, TrashKind};
+    let (_d, base, db) = app_dir().await;
+    populate(&db, &base).await;
+    let conv: String = sqlx::query_scalar("SELECT id FROM conversations LIMIT 1").fetch_one(&db).await.unwrap();
+    let msgs = count(&db, &format!("SELECT COUNT(*) FROM messages WHERE conversation_id = '{conv}'")).await;
+    assert!(msgs > 0);
+
+    let item = trash::move_to_trash(&db, &base, TrashKind::Conversation, &conv).await.unwrap();
+    assert_eq!(count(&db, "SELECT COUNT(*) FROM messages").await, 0);
+    trash::restore(&db, &base, &item.id).await.unwrap();
+    assert_eq!(
+        count(&db, &format!("SELECT COUNT(*) FROM messages WHERE conversation_id = '{conv}'")).await,
+        msgs
+    );
+
+    // 완전히 지우기: 휴지통에서도 사라지고 되살릴 수 없다
+    let item = trash::move_to_trash(&db, &base, TrashKind::Conversation, &conv).await.unwrap();
+    assert!(trash::purge(&db, &base, &item.id).await.unwrap());
+    assert!(trash::restore(&db, &base, &item.id).await.is_err());
+    assert_eq!(count(&db, "SELECT COUNT(*) FROM conversations").await, 0);
+    // 없는 항목은 NotFound
+    assert!(matches!(
+        trash::move_to_trash(&db, &base, TrashKind::Conversation, "nope").await,
+        Err(crate::error::AppError::NotFound { .. })
+    ));
+}
+
+#[tokio::test]
+async fn trash_restore_refuses_when_parent_is_gone_and_expires() {
+    use super::trash::{self, TrashKind};
+    let (_d, base, db) = app_dir().await;
+    sqlx::query("INSERT INTO game_projects (id, title, template_id, created_at, updated_at) VALUES ('g1', '숲', 'dating-sim', 1, 1)")
+        .execute(&db)
+        .await
+        .unwrap();
+    sqlx::query("INSERT INTO game_player_sessions (id, game_id, head_seq, updated_at) VALUES ('s1', 'g1', 0, 1)")
+        .execute(&db)
+        .await
+        .unwrap();
+    let session = trash::move_to_trash(&db, &base, TrashKind::GameSession, "s1").await.unwrap();
+    assert_eq!(session.label, "숲 플레이 기록");
+    // 그 사이 게임을 휴지통에 넣고 완전히 지우면, 세션은 되살릴 수 없다 (이유를 알린다)
+    let game = trash::move_to_trash(&db, &base, TrashKind::Game, "g1").await.unwrap();
+    trash::purge(&db, &base, &game.id).await.unwrap();
+    let err = trash::restore(&db, &base, &session.id).await.unwrap_err();
+    assert!(err.to_string().contains("game_projects"), "{err}");
+    assert_eq!(count(&db, "SELECT COUNT(*) FROM game_player_sessions").await, 0, "실패하면 아무것도 넣지 않음");
+    assert_eq!(trash::list(&db).await.unwrap().len(), 1, "실패한 항목은 휴지통에 남음");
+
+    // 보존 기간: None이면 그대로, 지난 것은 정리
+    assert_eq!(trash::purge_expired(&db, &base, None).await.unwrap(), 0);
+    sqlx::query("UPDATE trash_items SET deleted_at = 0").execute(&db).await.unwrap();
+    assert_eq!(trash::purge_expired(&db, &base, Some(30)).await.unwrap(), 1);
+    assert!(trash::list(&db).await.unwrap().is_empty());
 }

@@ -9,8 +9,8 @@
 //! std Mutex가 아닌 이유: "락 잡고 → dispatch → 저장(async)"을 한 번에 원자적으로 하려면
 //! 가드를 .await 너머로 들고 갈 수 있어야 한다.
 use crate::db::game::{
-    delete_game_player_sessions, get_all_game_conversations, get_all_game_player_sessions, get_all_game_save, get_game_journal_lookup,
-    get_game_messages_lookup, get_game_player_sessions, get_game_save, upsert_game_save,
+    get_all_game_conversations, get_all_game_player_sessions, get_all_game_save, get_game_journal_lookup, get_game_messages_lookup, get_game_player_sessions,
+    get_game_save, upsert_game_save,
 };
 use crate::error::AppError;
 use crate::game::guard::{check_slot, current_game_id};
@@ -92,9 +92,8 @@ pub async fn list_sessions(state: State<'_, AppState>) -> Result<Vec<GamePlayerS
 /// 이 게임의 세션 삭제용
 #[tauri::command]
 #[specta::specta]
-pub async fn delete_sessions(state: State<'_, AppState>, session_id: String) -> Result<(), AppError> {
-    delete_game_player_sessions(&state.db, &session_id).await?;
-    Ok(())
+pub async fn delete_sessions(app: AppHandle, state: State<'_, AppState>, session_id: String) -> Result<crate::service::data::trash::TrashItem, AppError> {
+    crate::commands::data::move_to_trash(&app, &state, crate::service::data::trash::TrashKind::GameSession, &session_id).await
 }
 
 /// 세션이 이 게임의 것인지 확인하고 돌려준다 (다른 게임의 세션 id를 넣는 위조 방지).

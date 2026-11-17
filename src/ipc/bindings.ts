@@ -162,6 +162,14 @@ export const commands = {
 	getDataOverview: (options?: InvokeOptions) => __TAURI_INVOKE<DataOverview_Serialize>("get_data_overview", undefined, options),
 	/**  DB 점검: 무결성(PRAGMA integrity_check)과 아무 데도 쓰이지 않는 파일 목록. 지우지 않는다 */
 	checkData: (options?: InvokeOptions) => __TAURI_INVOKE<DataCheck>("check_data", undefined, options),
+	/**  휴지통 목록 (열 때 보존 기간이 지난 것을 먼저 정리) */
+	listTrash: (options?: InvokeOptions) => __TAURI_INVOKE<TrashItem[]>("list_trash", undefined, options),
+	/**  되살리기 */
+	restoreTrashItem: (id: string, options?: InvokeOptions) => __TAURI_INVOKE<TrashItem>("restore_trash_item", { id }, options),
+	/**  완전히 지우기 (되돌릴 수 없음 — 화면에서 확인을 받는다) */
+	purgeTrashItem: (id: string, options?: InvokeOptions) => __TAURI_INVOKE<boolean>("purge_trash_item", { id }, options),
+	/**  휴지통 비우기 (되돌릴 수 없음 — 화면에서 확인을 받는다). 지운 개수 */
+	emptyTrash: (options?: InvokeOptions) => __TAURI_INVOKE<number>("empty_trash", undefined, options),
 	/**  지난 panic 기록 (최근 것부터, 앱 데이터 폴더의 logs/panic.log) */
 	getPanicLog: (options?: InvokeOptions) => __TAURI_INVOKE<PanicEntry_Serialize[]>("get_panic_log", undefined, options),
 	/**  새 버전 확인 (GitHub Releases). 내려받지 않고 릴리스 페이지 주소만 돌려준다 (1-E-2) */
@@ -176,7 +184,7 @@ export const commands = {
 	prepareSaveTarget: (fileName: string, options?: InvokeOptions) => __TAURI_INVOKE<string>("prepare_save_target", { fileName }, options),
 	/**  임시 경로에 쓴 파일을 고른 content:// 주소로 옮긴다 */
 	deliverSavedFile: (tmp: string, uri: string, options?: InvokeOptions) => __TAURI_INVOKE<null>("deliver_saved_file", { tmp, uri }, options),
-	/**  여러 대화를 한 번에 삭제. 지운 개수를 돌려준다. */
+	/**  여러 대화를 한 번에 휴지통으로 (대화마다 휴지통 항목 하나). 옮긴 개수를 돌려준다. */
 	deleteConversations: (ids: string[], options?: InvokeOptions) => __TAURI_INVOKE<number>("delete_conversations", { ids }, options),
 	/**
 	 *  캐릭터 팩 내보내기. `path`는 프론트의 저장 대화상자에서 고른 경로 (.scpack).
@@ -199,7 +207,7 @@ export const commands = {
 	getPromptPreset: (id: string, options?: InvokeOptions) => __TAURI_INVOKE<PromptPresetDetail_Serialize>("get_prompt_preset", { id }, options),
 	/**  프리셋과 블록을 한 번에 저장. `blocks` 순서가 실행 순서가 되고, 목록에 없는 기존 블록은 지워진다. */
 	savePromptPreset: (preset: PromptPresetsInput_Deserialize, blocks: PromptBlocksInput_Deserialize[], options?: InvokeOptions) => __TAURI_INVOKE<PromptPresetDetail_Serialize>("save_prompt_preset", { preset, blocks }, options),
-	deletePromptPreset: (id: string, options?: InvokeOptions) => __TAURI_INVOKE<null>("delete_prompt_preset", { id }, options),
+	deletePromptPreset: (id: string, options?: InvokeOptions) => __TAURI_INVOKE<TrashItem>("delete_prompt_preset", { id }, options),
 	getApiProfile: (id: string, options?: InvokeOptions) => __TAURI_INVOKE<ApiProfiles>("get_api_profile", { id }, options),
 	getAllApiProfile: (options?: InvokeOptions) => __TAURI_INVOKE<ApiProfiles[]>("get_all_api_profile", undefined, options),
 	createApiProfile: (input: ApiProfilesInput, apiKey: string, options?: InvokeOptions) => __TAURI_INVOKE<ApiProfiles>("create_api_profile", { input, apiKey }, options),
@@ -224,12 +232,12 @@ export const commands = {
 	copyCharacterToGame: (characterId: string, gameId: string, options?: InvokeOptions) => __TAURI_INVOKE<GameCharacters_Serialize>("copy_character_to_game", { characterId, gameId }, options),
 	copyGameCharacterToCharacter: (gameCharacterId: string, options?: InvokeOptions) => __TAURI_INVOKE<Character_Serialize>("copy_game_character_to_character", { gameCharacterId }, options),
 	toggleFavoriteCharacter: (id: string, isFavorite: boolean, options?: InvokeOptions) => __TAURI_INVOKE<null>("toggle_favorite_character", { id, isFavorite }, options),
-	deleteCharacter: (id: string, options?: InvokeOptions) => __TAURI_INVOKE<null>("delete_character", { id }, options),
+	deleteCharacter: (id: string, options?: InvokeOptions) => __TAURI_INVOKE<TrashItem>("delete_character", { id }, options),
 	getListCharacters: (options?: InvokeOptions) => __TAURI_INVOKE<CharacterOption[]>("get_list_characters", undefined, options),
 	getAllPersonas: (options?: InvokeOptions) => __TAURI_INVOKE<Persona_Serialize[]>("get_all_personas", undefined, options),
 	createPersona: (input: PersonaInput_Deserialize, options?: InvokeOptions) => __TAURI_INVOKE<Persona_Serialize>("create_persona", { input }, options),
 	updatePersona: (id: string, input: PersonaInput_Deserialize, options?: InvokeOptions) => __TAURI_INVOKE<null>("update_persona", { id, input }, options),
-	deletePersona: (id: string, options?: InvokeOptions) => __TAURI_INVOKE<null>("delete_persona", { id }, options),
+	deletePersona: (id: string, options?: InvokeOptions) => __TAURI_INVOKE<TrashItem>("delete_persona", { id }, options),
 	/**
 	 *  페르소나 아바타: 고른 이미지를 앱 데이터(백업에 들어가는 characters/avatars)로 복사해 둔다.
 	 *  `path`가 없으면 아바타를 지운다.
@@ -238,7 +246,7 @@ export const commands = {
 	getPersonaUsage: (id: string, options?: InvokeOptions) => __TAURI_INVOKE<PersonaUsage>("get_persona_usage", { id }, options),
 	getAllWorldinfoBooks: (options?: InvokeOptions) => __TAURI_INVOKE<WorldInfoBook_Serialize[]>("get_all_worldinfo_books", undefined, options),
 	createWorldinfoBook: (input: WorldInfoBookInput_Deserialize, options?: InvokeOptions) => __TAURI_INVOKE<WorldInfoBook_Serialize>("create_worldinfo_book", { input }, options),
-	deleteWorldinfoBook: (id: string, options?: InvokeOptions) => __TAURI_INVOKE<null>("delete_worldinfo_book", { id }, options),
+	deleteWorldinfoBook: (id: string, options?: InvokeOptions) => __TAURI_INVOKE<TrashItem>("delete_worldinfo_book", { id }, options),
 	getWorldinfoEntries: (bookId: string, options?: InvokeOptions) => __TAURI_INVOKE<WorldInfoEntry[]>("get_worldinfo_entries", { bookId }, options),
 	upsertWorldinfoEntry: (input: WorldInfoEntryInput_Deserialize, options?: InvokeOptions) => __TAURI_INVOKE<WorldInfoEntry>("upsert_worldinfo_entry", { input }, options),
 	deleteWorldinfoEntry: (id: string, options?: InvokeOptions) => __TAURI_INVOKE<null>("delete_worldinfo_entry", { id }, options),
@@ -256,7 +264,7 @@ export const commands = {
 	getConversation: (id: string, options?: InvokeOptions) => __TAURI_INVOKE<Conversation_Serialize>("get_conversation", { id }, options),
 	createConversation: (input: ConversationInput_Deserialize, options?: InvokeOptions) => __TAURI_INVOKE<Conversation_Serialize>("create_conversation", { input }, options),
 	touchConversation: (id: string, options?: InvokeOptions) => __TAURI_INVOKE<number>("touch_conversation", { id }, options),
-	deleteConversation: (id: string, options?: InvokeOptions) => __TAURI_INVOKE<null>("delete_conversation", { id }, options),
+	deleteConversation: (id: string, options?: InvokeOptions) => __TAURI_INVOKE<TrashItem>("delete_conversation", { id }, options),
 	getMessages: (conversationId: string, limit: number, before: number | null, options?: InvokeOptions) => __TAURI_INVOKE<Message_Serialize[]>("get_messages", { conversationId, limit, before }, options),
 	appendMessage: (input: MessageInput_Deserialize, options?: InvokeOptions) => __TAURI_INVOKE<Message_Serialize>("append_message", { input }, options),
 	updateMessage: (id: string, content: string, meta: Value | null, options?: InvokeOptions) => __TAURI_INVOKE<null>("update_message", { id, content, meta }, options),
@@ -294,7 +302,7 @@ export const commands = {
 	 *  게임 삭제. 플레이 기록(세션/세이브/일지/대화)도 같이 지워지므로 UI에서 반드시 확인을 받을 것.
 	 *  지금 플레이 중이거나 마운트된 게임은 지우지 않는다.
 	 */
-	deleteGame: (gameId: string, options?: InvokeOptions) => __TAURI_INVOKE<null>("delete_game", { gameId }, options),
+	deleteGame: (gameId: string, options?: InvokeOptions) => __TAURI_INVOKE<TrashItem>("delete_game", { gameId }, options),
 	importGame: (zipPath: string, options?: InvokeOptions) => __TAURI_INVOKE<GameProject_Serialize>("import_game", { zipPath }, options),
 	exportGame: (gameId: string, outputDir: string | null, options?: InvokeOptions) => __TAURI_INVOKE<string>("export_game", { gameId, outputDir }, options),
 	/**
@@ -320,7 +328,7 @@ export const commands = {
 	 */
 	readTranscript: (sessionId: string, beforeSeq: number | null, limit: number | null, options?: InvokeOptions) => __TAURI_INVOKE<TranscriptPage_Serialize>("read_transcript", { sessionId, beforeSeq, limit }, options),
 	/**  이 게임의 세션 삭제용 */
-	deleteSessions: (sessionId: string, options?: InvokeOptions) => __TAURI_INVOKE<null>("delete_sessions", { sessionId }, options),
+	deleteSessions: (sessionId: string, options?: InvokeOptions) => __TAURI_INVOKE<TrashItem>("delete_sessions", { sessionId }, options),
 	/**  게임 엔진에 커맨드 하나를 보낸다. iframe SDK의 game.move() 등이 여기로 온다. */
 	dispatchCommand: (command: GameCommand_Deserialize, options?: InvokeOptions) => __TAURI_INVOKE<GameResponse_Serialize>("dispatch_command", { command }, options),
 	/**
@@ -528,6 +536,7 @@ export type AppPrompts_Serialize = {
 export type AppSetting = AppSetting_Serialize | AppSetting_Deserialize;
 
 export type AppSetting_Deserialize = {
+	/**  예전 "자동 업데이트" 스위치. 아무 동작에도 연결된 적이 없어 쓰지 않는다 (check_updates_on_start로 대신, 1-E-2). 저장된 값 호환용으로만 남김 */
 	autoUpdate: boolean,
 	language: string,
 	selectedPreset: string,
@@ -548,9 +557,12 @@ export type AppSetting_Deserialize = {
 	checkUpdatesOnStart?: boolean,
 	/**  작업·사용량 상세 기록 보존 기간(일). None = 계속 보관(기본). 지난 상세는 일별 합계로 남긴다 (1-A-4) */
 	usageRetentionDays?: number | null,
+	/**  휴지통 보존 기간(일). None = 계속 보관. 지난 것은 휴지통을 열거나 새로 지울 때 정리 (2-A-3) */
+	trashRetentionDays?: number | null,
 };
 
 export type AppSetting_Serialize = {
+	/**  예전 "자동 업데이트" 스위치. 아무 동작에도 연결된 적이 없어 쓰지 않는다 (check_updates_on_start로 대신, 1-E-2). 저장된 값 호환용으로만 남김 */
 	autoUpdate: boolean,
 	language: string,
 	selectedPreset: string,
@@ -571,6 +583,8 @@ export type AppSetting_Serialize = {
 	checkUpdatesOnStart: boolean,
 	/**  작업·사용량 상세 기록 보존 기간(일). None = 계속 보관(기본). 지난 상세는 일별 합계로 남긴다 (1-A-4) */
 	usageRetentionDays: number | null,
+	/**  휴지통 보존 기간(일). None = 계속 보관. 지난 것은 휴지통을 열거나 새로 지울 때 정리 (2-A-3) */
+	trashRetentionDays: number | null,
 };
 
 export type AssetRef = {
@@ -3841,6 +3855,21 @@ export type TranslateSetting_Serialize = {
 	/**  새 AI 답변을 자동으로 번역 */
 	autoTranslate: boolean,
 };
+
+/**  휴지통 목록의 한 줄 */
+export type TrashItem = {
+	id: string,
+	kind: TrashKind,
+	itemId: string,
+	label: string,
+	deletedAt: number,
+	/**  같이 지운 행 수 (항목 자신 포함) */
+	rows: number,
+	files: number,
+	size: number,
+};
+
+export type TrashKind = "character" | "persona" | "conversation" | "worldinfo_book" | "prompt_preset" | "game" | "game_session";
 
 export type TtsSetting = TtsSetting_Serialize | TtsSetting_Deserialize;
 
