@@ -10,6 +10,8 @@
 //!
 //! 순서가 "받기 → 올리기"인 이유: 올리는 묶음의 acks에 방금 합친 것이 들어가야 상대가 이 기기 행을 덮어쓰지 않는다.
 use std::collections::HashSet;
+
+use futures::stream::{self, StreamExt};
 use std::path::Path;
 
 use serde::{Deserialize, Serialize};
@@ -20,6 +22,9 @@ use super::sync_bundle::{self, BundleOptions};
 use super::sync_merge::{self, BundleData, MergeReport};
 use super::sync_target::SyncTarget;
 use crate::error::{AppError, Result};
+
+/// 파일 내용을 동시에 몇 개씩 주고받나
+const PARALLEL: usize = 4;
 
 /// 지운 기록을 남겨 두는 최소 기간 (모든 기기가 봤어도)
 const TOMBSTONE_KEEP_MS: i64 = 30 * 86_400_000;
@@ -109,22 +114,32 @@ async fn run_in<T: SyncTarget>(
             rep.backup = Some(p.strip_prefix(base).unwrap_or(&p).to_string_lossy().replace('\\', "/"));
         }
         // 이 기기에 없는 파일을 저장소에서 (DB보다 먼저 — 합친 행이 가리키는 그림이 없는 순간이 없게)
-        for f in b.files()? {
-            let dest = base.join(&f.path);
-            if dest.exists() {
-                continue;
-            }
-            let part = dest.with_extension("sync-partial");
-            match target.get(&format!("blobs/{}", f.hash), &part).await {
-                Ok(()) if sync_bundle::sha256_file(&part)? == f.hash => {
-                    std::fs::rename(&part, &dest)?;
-                    rep.files_down += 1;
+        let wanted: Vec<_> = b.files()?.into_iter().filter(|f| !base.join(&f.path).exists()).collect();
+        // 동시에 몇 개씩 (드라이브는 파일마다 왕복이 있어 하나씩이면 느리다)
+        let results: Vec<Result<bool>> = stream::iter(wanted)
+            .map(|f| async move {
+                let dest = base.join(&f.path);
+                let part = dest.with_extension("sync-partial");
+                match target.get(&format!("blobs/{}", f.hash), &part).await {
+                    Ok(()) if sync_bundle::sha256_file(&part)? == f.hash => {
+                        std::fs::rename(&part, &dest)?;
+                        Ok(true)
+                    }
+                    Ok(()) => {
+                        let _ = std::fs::remove_file(&part);
+                        Err(AppError::validation(format!("동기화 저장소의 파일 내용이 해시와 다름: {}", f.path), None))
+                    }
+                    Err(_) => Ok(false),
                 }
-                Ok(()) => {
-                    let _ = std::fs::remove_file(&part);
-                    return Err(AppError::validation(format!("동기화 폴더의 파일 내용이 해시와 다름: {}", f.path), None));
-                }
-                Err(_) => rep.files_missing += 1,
+            })
+            .buffer_unordered(PARALLEL)
+            .collect()
+            .await;
+        for r in results {
+            if r? {
+                rep.files_down += 1;
+            } else {
+                rep.files_missing += 1;
             }
         }
         let data = BundleData::read(&mut b, db).await?;
@@ -170,11 +185,14 @@ async fn run_in<T: SyncTarget>(
         .collect();
     let files = sync_bundle::open(&mine, i64::MAX, base)?.files()?;
     let mut sent: HashSet<String> = HashSet::new();
-    for f in files {
-        if have.contains(&f.hash) || !sent.insert(f.hash.clone()) {
-            continue;
-        }
-        target.put(&format!("blobs/{}", f.hash), &base.join(&f.path)).await?;
+    let todo: Vec<_> = files.into_iter().filter(|f| !have.contains(&f.hash) && sent.insert(f.hash.clone())).collect();
+    let results: Vec<Result<()>> = stream::iter(todo)
+        .map(|f| async move { target.put(&format!("blobs/{}", f.hash), &base.join(&f.path)).await })
+        .buffer_unordered(PARALLEL)
+        .collect()
+        .await;
+    for r in results {
+        r?;
         rep.files_up += 1;
     }
 
@@ -213,13 +231,13 @@ mod tests {
     }
 
     async fn dev(root: &Path, name: &str) -> Dev {
+        dev_with(root, name, &uuid::Uuid::new_v4().to_string()).await
+    }
+
+    async fn dev_with(root: &Path, name: &str, id: &str) -> Dev {
         let base = root.join(name);
         let db = crate::db::conn::init_pool(base.clone()).await.unwrap();
-        Dev {
-            base,
-            db,
-            id: uuid::Uuid::new_v4().to_string(),
-        }
+        Dev { base, db, id: id.to_string() }
     }
 
     async fn sync(d: &Dev, t: &FolderTarget) -> SyncRunReport {
@@ -235,11 +253,23 @@ mod tests {
 
     #[tokio::test]
     async fn three_devices_meet_in_one_folder() {
+        // 기기 id 순서 = 저장소 목록 순서 = 합치는 순서. 두 순서 모두 (새 판을 먼저 받고 옛 판이 나중에 와도 충돌이 아니어야)
+        let low = "00000000-0000-4000-8000-000000000000";
+        let high = "ffffffff-ffff-4fff-bfff-ffffffffffff";
+        three_devices(low, high).await;
+        three_devices(high, low).await;
+    }
+
+    async fn three_devices(a_id: &str, b_id: &str) {
         let root = tempfile::tempdir().unwrap();
         let shared = root.path().join("OneDrive");
         std::fs::create_dir_all(&shared).unwrap();
         let folder = FolderTarget::new(&shared).unwrap();
-        let (a, b, c) = (dev(root.path(), "a").await, dev(root.path(), "b").await, dev(root.path(), "c").await);
+        let (a, b, c) = (
+            dev_with(root.path(), "a", a_id).await,
+            dev_with(root.path(), "b", b_id).await,
+            dev(root.path(), "c").await,
+        );
 
         // A: 캐릭터 + 아바타 파일
         let avatar = a.base.join("characters/avatars/x.png");

@@ -179,6 +179,8 @@ struct Ctx<'a> {
     held: HashSet<(String, String)>,
     /// 보낸 기기가 합친 다른 기기 묶음의 시각 (manifest.acks, 그 기기들 시계)
     acks: BTreeMap<String, i64>,
+    /// 전에 합친 기기들의 acks (sync_peers.acks): 기기 → {다른 기기: 그 기기 묶음 시각}
+    peer_acks: HashMap<String, BTreeMap<String, i64>>,
     report: MergeReport,
 }
 
@@ -195,6 +197,20 @@ async fn seen_by_sender(conn: &mut SqliteConnection, ctx: &Ctx<'_>, table: &str,
         .fetch_optional(&mut *conn)
         .await?;
     Ok(origin.is_some_and(|(dev, remote_at, merged_at)| merged_at == local_at && ctx.acks.get(&dev).is_some_and(|a| *a >= remote_at)))
+}
+
+/// 받은 행이 이 기기 행의 출처 기기(O)가 이미 본 옛 판인가: 이 기기 행이 O에게서 받은 그대로이고,
+/// O의 묶음이 "보낸 기기의 묶음을 이 시각까지 합쳤다"고 했으며 받은 행이 그보다 오래됐으면 — O의 판이 더 새것이다.
+/// (기기가 셋 이상일 때, 합치는 순서에 따라 새 판을 받은 뒤 옛 판이 와서 충돌로 보이던 것)
+async fn stale_for_origin(conn: &mut SqliteConnection, ctx: &Ctx<'_>, table: &str, key: &[Value], local_at: i64, remote_at: i64) -> Result<bool> {
+    let origin: Option<(String, i64)> = sqlx::query_as("SELECT device_id, merged_at FROM sync_row_origin WHERE tbl = ? AND key = ?")
+        .bind(table)
+        .bind(key_text(key))
+        .fetch_optional(&mut *conn)
+        .await?;
+    Ok(origin.is_some_and(|(dev, merged_at)| {
+        merged_at == local_at && dev != ctx.device && ctx.peer_acks.get(&dev).and_then(|a| a.get(&ctx.device)).is_some_and(|seen| *seen >= remote_at)
+    }))
 }
 
 /// 양쪽 내용이 같아졌으면 그 행의 열린 edit 충돌을 닫는다 (다른 기기에서 고른 결과가 왔을 때)
@@ -524,6 +540,8 @@ async fn apply_rows(conn: &mut SqliteConnection, ctx: &mut Ctx<'_>, table: &str,
                         record_conflict(conn, ctx, "unique", table, &key_text(&key), Some(&l), Some(Value::Object(original.clone()))).await?;
                         ctx.report.conflicts += 1;
                     }
+                } else if !held && stale_for_origin(conn, ctx, table, &key, local_at, remote_at).await? {
+                    ctx.report.unchanged += 1; // 이미 더 새 판이 있음
                 } else {
                     // 양쪽 다 고침 → 둘 다 남김 (이 기기 것을 두고 받은 것은 충돌 목록에)
                     record_conflict(conn, ctx, "edit", table, &key_text(&key), Some(&l), Some(Value::Object(original.clone()))).await?;
@@ -644,6 +662,12 @@ pub async fn merge(db: &SqlitePool, data: &BundleData, local_device: &str, setti
             return Err(AppError::validation("이미 합친 묶음이거나 그보다 오래된 묶음", None));
         }
     }
+    let peer_acks: HashMap<String, BTreeMap<String, i64>> = sqlx::query_as::<_, (String, Option<String>)>("SELECT device_id, acks FROM sync_peers")
+        .fetch_all(&mut *tx)
+        .await?
+        .into_iter()
+        .filter_map(|(d, a)| Some((d, serde_json::from_str(&a?).ok()?)))
+        .collect();
     let mut ctx = Ctx {
         schema: &schema,
         out: outgoing(&schema),
@@ -658,6 +682,7 @@ pub async fn merge(db: &SqlitePool, data: &BundleData, local_device: &str, setti
         restored: HashSet::new(),
         held: m.held.get(local_device).map(|v| v.iter().cloned().collect()).unwrap_or_default(),
         acks: m.acks.clone(),
+        peer_acks,
         report: MergeReport { dry_run, ..Default::default() },
     };
 
@@ -686,12 +711,13 @@ pub async fn merge(db: &SqlitePool, data: &BundleData, local_device: &str, setti
         }
     }
     sqlx::query(
-        "INSERT INTO sync_peers (device_id, last_bundle_created_at, last_merge_at, merges) VALUES (?, ?, ?, 1)
-         ON CONFLICT(device_id) DO UPDATE SET last_bundle_created_at = excluded.last_bundle_created_at, last_merge_at = excluded.last_merge_at, merges = merges + 1",
+        "INSERT INTO sync_peers (device_id, last_bundle_created_at, last_merge_at, merges, acks) VALUES (?, ?, ?, 1, ?)
+         ON CONFLICT(device_id) DO UPDATE SET last_bundle_created_at = excluded.last_bundle_created_at, last_merge_at = excluded.last_merge_at, merges = merges + 1, acks = excluded.acks",
     )
     .bind(&m.device_id)
     .bind(m.created_at)
     .bind(ctx.now)
+    .bind(serde_json::to_string(&m.acks).unwrap_or_default())
     .execute(&mut *tx)
     .await?;
 
