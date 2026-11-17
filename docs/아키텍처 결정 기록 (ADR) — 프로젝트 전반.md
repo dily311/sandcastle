@@ -17,6 +17,11 @@
 | 004 | AI 답변의 HTML 코드 블록 렌더링 | Accepted |
 | 005 | 코어 플러그인 (기능 토글)과 AI 도구 | Accepted |
 | 006 | 기능·작업·사용량 책임 분리 (FeatureManager / TaskManager / ResourceManager) | Accepted |
+| 007 | 예산 한도 | Accepted |
+| 008 | 사용자 데이터의 범위와 백업 | Accepted |
+| 009 | Android 플랫폼 처리 | Accepted |
+| 010 | 버전·업데이트·서명·릴리스 | Accepted |
+| 011 | 동기화 방식 (폴더 → 드라이브, 항목별 병합, 충돌은 둘 다 남김) | Accepted |
 
 ### ADR-001 일반 대화와 게임모드 테이블 통합
 
@@ -270,6 +275,44 @@ Conversation
 - **업데이트**: GitHub Releases(`dily311/sandcastle`)의 최신 공개 릴리스와 비교해 알리기만 한다. 내려받기·설치는 하지 않고 릴리스 페이지를 연다(사용자가 직접). 확인은 사용자가 누를 때만, "앱을 켤 때 확인"은 별도 스위치이며 기본 꺼짐(사용자 동작 없는 외부 요청이므로). 요청에는 일반 User-Agent만. Tauri updater는 쓰지 않는다(업데이트 서명 키·자동 설치가 필요해 "알림만" 범위를 넘음). 예전 "자동 업데이트" 스위치는 연결된 동작이 없었으므로 화면에서 뺐다(저장값은 호환용으로만 남김).
 - **서명** (사용자 결정 2026-11-17): Windows는 당분간 코드 서명 없음(SmartScreen 경고를 릴리스 설명에 적음). Android 키는 사용자 PC(저장소 밖)와 GitHub Secrets에만 두고, `keystore.properties`가 있을 때만 release 빌드에 서명한다. 배포 빌드(R8)에서 JS가 부르는 `@JavascriptInterface`는 keep 규칙으로 지킨다.
 - **릴리스**: 태그 `v<버전>` → `.github/workflows/release.yml`이 Windows 설치 파일과 APK를 만들어 **초안** 릴리스에 올린다. 공개는 사람이 한다(Explicit Execution). 태그와 버전이 다르면 멈춘다.
+
+### ADR-011 동기화 방식
+
+**상태** Accepted (2026-11-17, 사용자 결정) — CLAUDE.md 2단계. 대상 표(2-A-1)는 아래. 동기화는 코어 플러그인 `sync`(기본 꺼짐).
+
+**결정**
+| 항목 | 결정 | 이유 |
+| --- | --- | --- |
+| ① 저장소 | **사용자가 고른 폴더를 먼저**(2-C), 같은 `SyncTarget` 위에 **구글 드라이브 앱 전용 폴더**(2-D). WebDAV는 하지 않음 | 폴더 대상은 OAuth 없이 병합 로직을 검증할 수 있고, OneDrive·Dropbox 같은 동기화 앱에 맡길 수 있다. 드라이브는 `drive.appdata` 권한만(Least Privilege) |
+| ② 단위 | **항목(행) 단위 병합**. 전체 스냅샷 교체는 하지 않음 | 두 기기에서 따로 쓴 것이 사라지지 않게 |
+| ③ 충돌 | **둘 다 남김**. 같은 행을 양쪽에서 고쳤으면 한쪽을 "충돌 사본"으로 남겨 2-E 화면에서 고른다. 대화는 갈라진 지점부터 분기로 남긴다. 지우기 ↔ 고치기 충돌은 고친 쪽을 살린다 | 조용히 덮어쓰지 않는다(Reversibility). 적용 전 자동 백업도 남긴다 |
+| ④ 큰 파일 | **사용자 데이터 파일만**(ADR-008 표의 사용자 데이터 폴더: characters·games·themes·generated·backgrounds), **해시로 바뀐 것만** 보낸다. 캐시(음성 캐시·앨범 아트)·임시·안전망 폴더는 제외. Android에 "Wi-Fi에서만" 옵션 | 용량과 데이터 요금을 줄이고, 다시 만들 수 있는 것은 보내지 않는다 |
+| ⑤ 암호화 | **선택 사항, 기본 꺼짐**. 켜면 사용자가 정한 암호 문구로 묶음을 암호화하고, 문구는 기기마다 keyring에 넣으며 동기화하지 않는다. 문구를 잊으면 저장소의 사본은 못 읽는다(각 기기의 원본은 남음). 2-C 뒤에 붙인다 | 키·토큰은 원래 묶음에 없고, 대화 내용 보호가 필요한 사람만 켜게 |
+
+**변하지 않는 규칙**
+- API 키·토큰·암호 문구는 어떤 경우에도 묶음·저장소·로그에 넣지 않는다(2-B-4 테스트로 고정). API 프로필 행은 동기화하되 키는 기기마다 다시 넣고 "키 없음"을 보여준다.
+- 실행은 "지금 동기화" 버튼이 먼저. 자동 동기화(시작·종료·주기)는 별도 스위치, 기본 꺼짐. 실행은 TaskManager 작업(feature `sync`)으로 기록한다.
+- 스키마 버전이 낮은 기기는 묶음을 적용하지 않고 업데이트를 안내한다.
+
+**동기화 대상 (2-A-1)** — id는 이미 대부분 `Uuid::new_v4` 글자 id라 기기 사이에서 겹치지 않는다. 정수 id 테이블(`conv_settings`·`usage_log`·`usage_daily`)은 아래처럼 다룬다. 연결 테이블(복합 키)은 그 키로 합친다.
+
+| 분류 | 테이블 | 동기화 |
+| --- | --- | --- |
+| 캐릭터·페르소나 | characters, character_assets, character_images, character_worldinfo, personas, persona_worldinfo, cg_assets, background_assets | O |
+| 로어북 | worldinfo_books, worldinfo_entries | O |
+| 대화 | conversation_folders, conversations, messages, message_bookmarks, message_collections, collection_messages, message_tags, message_tag_relations | O |
+| 프롬프트·규칙 | prompt_presets, prompt_blocks, regex_scripts | O |
+| 폰 | phone_contacts, phone_links | O |
+| 게임 정의 | game_projects와 그 아래 정의 테이블(game_characters·game_locations·game_maps·game_scenes·game_events·game_items·game_endings·game_assets·audio_assets 등) | O |
+| 게임 진행 | game_player_sessions, game_session_options, game_conversations, game_conversation_participants, game_messages, game_scene_conversations, game_saves, game_journal, game_event_log, game_event_log_characters, game_character_state_snapshots, game_relationship_snapshots, game_story_plans | O |
+| 기능 설정 | api_profiles(키 제외), model_prices, budget_limits, conv_settings(한 행짜리 — 행 전체를 최신 것으로), memory_settings, proactive_settings, agent_definitions | O |
+| 실행 기록 | generation_tasks, task_attempts, ai_submissions, ai_attempts, conversation_events, message_prompts, usage_log, usage_daily, agent_states, agent_tool_calls | X (기기마다의 기록. 예산은 기기마다 따로 센다) |
+| 캐시 | translation_cache, memory_embeddings(모델이 같으면 다시 만들 수 있음) | X |
+| 기기 전용 | widget_characters, widget_character_settings, music_meta, music_album_art_pos, playlist, playlist_entries, 창 상태, localStorage | X |
+| 설정 파일 | `settings.json` — 2-A-4에서 "같이 쓰는 것 / 기기 전용"으로 나눈 뒤 같이 쓰는 것만 | 일부 |
+
+- 예산 한도(budget_limits)는 같이 쓰지만 사용량은 기기마다 세므로 한도도 기기마다 걸린다. 기기를 합친 한도는 하지 않는다(필요하면 나중에).
+- 새 테이블을 만들 때는 이 표에 분류를 적는다.
 
 ### (참고) 전역 테스트 관리 방법
 
