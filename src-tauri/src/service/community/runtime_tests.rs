@@ -46,8 +46,12 @@ async fn run_start(db: &DbPool, base: &Path) -> runtime::RuntimeStart {
     runtime::start(&list(db, base).await.unwrap(), base)
 }
 
+/// 도는 목록이 전역이라 런타임 테스트는 하나씩
+static LOCK: tokio::sync::Mutex<()> = tokio::sync::Mutex::const_new(());
+
 #[tokio::test]
 async fn runtime_serves_and_checks_calls() {
+    let _g = LOCK.lock().await;
     let (d, base, db) = app_dir().await;
     add(&db, &base, d.path(), "rt-store", &["storage"], true).await;
     add(&db, &base, d.path(), "rt-plain", &[], true).await;
@@ -59,8 +63,8 @@ async fn runtime_serves_and_checks_calls() {
 
     let started = run_start(&db, &base).await;
     let ids: Vec<&str> = started.plugins.iter().map(|p| p.id.as_str()).collect();
-    assert_eq!(ids, ["rt-plain", "rt-store"], "꺼진 플러그인은 시작하지 않음");
-    assert_eq!(started.plugins[1].host_url, runtime::host_url("rt-store"));
+    assert_eq!(ids, ["rt-store", "rt-plain"], "꺼진 플러그인은 시작하지 않음, 설치 순서");
+    assert_eq!(started.plugins[0].host_url, runtime::host_url("rt-store"));
     assert_eq!(started.api.get("storage.set"), Some(&Some("storage".to_string())));
 
     // 서빙
@@ -188,6 +192,112 @@ async fn runtime_serves_and_checks_calls() {
         .unwrap();
     assert_eq!(back, 1);
 
+    runtime::stop_all();
+}
+
+#[tokio::test]
+async fn postprocess_keeps_original_and_respects_mode() {
+    use super::postprocess::{self, PluginNote, PostProcessResult};
+    let _g = LOCK.lock().await;
+    let (d, base, db) = app_dir().await;
+    add(&db, &base, d.path(), "pp-fix", &["messages.process"], true).await;
+    add(&db, &base, d.path(), "pp-none", &[], true).await;
+    run_start(&db, &base).await;
+    for sql in [
+        "INSERT INTO conversations (id, title) VALUES ('v1', 'c')",
+        r#"INSERT INTO messages (id, conversation_id, seq, role, content, meta) VALUES ('m1', 'v1', 1, 'assistant', 'Hello "x', '{"swipes":[{"content":"Hello \"x"}],"swipeId":0}')"#,
+        "INSERT INTO messages (id, conversation_id, seq, role, content) VALUES ('u1', 'v1', 0, 'user', 'hi')",
+    ] {
+        sqlx::query(sql).execute(&db).await.unwrap();
+    }
+    let content = |id: &'static str| {
+        let db = db.clone();
+        async move {
+            sqlx::query_scalar::<_, String>("SELECT content FROM messages WHERE id = ?")
+                .bind(id)
+                .fetch_one(&db)
+                .await
+                .unwrap()
+        }
+    };
+    let fix = |changed: bool| PostProcessResult {
+        plugin_id: "pp-fix".into(),
+        changed,
+        notes: vec![PluginNote {
+            level: "warn".into(),
+            text: "따옴표가 닫히지 않음".into(),
+        }],
+    };
+
+    // 표시만(기본)인 플러그인은 글을 바꾸지 못함 — 메모만
+    assert!(postprocess::apply(&db, "m1", "Hello \"x", "Hello \"x\"", &[fix(true)]).await.is_err());
+    postprocess::apply(&db, "m1", "Hello \"x", "Hello \"x", &[fix(false)]).await.unwrap();
+    assert_eq!(content("m1").await, "Hello \"x");
+    let meta: String = sqlx::query_scalar("SELECT meta FROM messages WHERE id = 'm1'").fetch_one(&db).await.unwrap();
+    assert!(meta.contains("따옴표가 닫히지 않음"), "{meta}");
+
+    // 자동 고침으로 바꾸면 글이 바뀌고 원문·스와이프가 남음
+    postprocess::set_mode(&db, "pp-fix", "fix").await.unwrap();
+    postprocess::apply(&db, "m1", "Hello \"x", "Hello \"x\"", &[fix(true)]).await.unwrap();
+    assert_eq!(content("m1").await, "Hello \"x\"");
+    let meta: Value = serde_json::from_str(
+        &sqlx::query_scalar::<_, String>("SELECT meta FROM messages WHERE id = 'm1'")
+            .fetch_one(&db)
+            .await
+            .unwrap(),
+    )
+    .unwrap();
+    assert_eq!(meta["pluginProcess"]["original"], "Hello \"x");
+    assert_eq!(meta["pluginProcess"]["changedBy"], json!(["pp-fix"]));
+    assert_eq!(meta["swipes"][0]["content"], "Hello \"x\"", "{meta}");
+
+    // 다시 처리해도 처음 원문을 지킴
+    postprocess::apply(&db, "m1", "Hello \"x\"", "Hello \"x\"!", &[fix(true)]).await.unwrap();
+    let meta: Value = serde_json::from_str(
+        &sqlx::query_scalar::<_, String>("SELECT meta FROM messages WHERE id = 'm1'")
+            .fetch_one(&db)
+            .await
+            .unwrap(),
+    )
+    .unwrap();
+    assert_eq!(meta["pluginProcess"]["original"], "Hello \"x");
+
+    // 그 사이 바뀐 글, 권한 없는 플러그인, 사용자 메시지, 글을 바꾼 플러그인이 없는데 다른 글은 거절
+    assert!(postprocess::apply(&db, "m1", "stale", "x", &[fix(true)]).await.is_err());
+    let none = PostProcessResult {
+        plugin_id: "pp-none".into(),
+        changed: false,
+        notes: vec![],
+    };
+    assert!(postprocess::apply(&db, "m1", "Hello \"x\"!", "Hello \"x\"!", &[none]).await.is_err());
+    assert!(postprocess::apply(&db, "u1", "hi", "hi!", &[fix(true)]).await.is_err());
+    assert!(postprocess::apply(&db, "m1", "Hello \"x\"!", "other", &[fix(false)]).await.is_err());
+
+    // 되돌리기 → 처음 원문, 스와이프도
+    postprocess::revert(&db, "m1").await.unwrap();
+    assert_eq!(content("m1").await, "Hello \"x");
+    let meta: Value = serde_json::from_str(
+        &sqlx::query_scalar::<_, String>("SELECT meta FROM messages WHERE id = 'm1'")
+            .fetch_one(&db)
+            .await
+            .unwrap(),
+    )
+    .unwrap();
+    assert!(meta.get("pluginProcess").is_none());
+    assert_eq!(meta["swipes"][0]["content"], "Hello \"x");
+    assert!(postprocess::revert(&db, "m1").await.is_err(), "고친 적 없는 메시지");
+
+    // 고친 뒤 사용자가 또 고치면 되돌리지 않음
+    postprocess::apply(&db, "m1", "Hello \"x", "fixed", &[fix(true)]).await.unwrap();
+    sqlx::query("UPDATE messages SET content = 'user edit' WHERE id = 'm1'")
+        .execute(&db)
+        .await
+        .unwrap();
+    assert!(postprocess::revert(&db, "m1").await.is_err());
+
+    // 꺼진(도는 중이 아닌) 플러그인의 결과는 받지 않음
+    set_enabled(&db, &base, "pp-fix", false, vec![]).await.unwrap();
+    assert!(postprocess::apply(&db, "m1", "user edit", "x", &[fix(true)]).await.is_err());
     runtime::stop_all();
 }
 

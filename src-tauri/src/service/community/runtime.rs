@@ -100,6 +100,8 @@ pub struct RuntimePlugin {
     pub version: String,
     pub host_url: String,
     pub granted: Vec<String>,
+    /// 메시지 후처리: notes(표시만) / fix(자동 고침) — 6-D-4
+    pub process_mode: String,
 }
 
 #[derive(Debug, Clone, Serialize, specta::Type)]
@@ -128,6 +130,9 @@ pub fn start(plugins: &[UserPlugin], base: &Path) -> RuntimeStart {
     map.clear();
     let suspended: BTreeSet<String> = health().iter().filter(|(_, h)| h.suspended).map(|(k, _)| k.clone()).collect();
     let mut out = vec![];
+    // 설치 순서 (후처리·프롬프트 훅을 이 순서로 부른다)
+    let mut plugins: Vec<&UserPlugin> = plugins.iter().collect();
+    plugins.sort_by(|a, b| (a.installed_at, &a.id).cmp(&(b.installed_at, &b.id)));
     for p in plugins {
         let Some(m) = p.manifest.as_ref().filter(|_| p.enabled && !suspended.contains(&p.id)) else {
             continue;
@@ -153,6 +158,7 @@ pub fn start(plugins: &[UserPlugin], base: &Path) -> RuntimeStart {
             version: m.version.clone(),
             host_url: host_url(&p.id),
             granted: m.permissions.clone(),
+            process_mode: p.process_mode.clone(),
         });
     }
     RuntimeStart {
@@ -173,6 +179,10 @@ pub fn stop(id: &str) {
 
 pub fn is_running(id: &str) -> bool {
     active().contains_key(id)
+}
+
+pub fn has_permission(id: &str, permission: &str) -> bool {
+    active().get(id).is_some_and(|a| a.granted.contains(permission))
 }
 
 pub fn log(id: &str, level: &str, message: &str) {
@@ -280,10 +290,13 @@ pub const SDK_JS: &str = r#"(()=>{"use strict";
 let seq=0;const pending=new Map();
 addEventListener("message",e=>{if(e.source!==parent)return;const d=e.data;if(!d||d.type!=="sc-plugin-reply")return;const p=pending.get(d.id);if(!p)return;pending.delete(d.id);clearTimeout(p.t);if(d.error){const err=new Error(String(d.error.message||"error"));err.code=d.error.code;p.reject(err)}else p.resolve(d.ok)});
 const call=(method,args)=>new Promise((resolve,reject)=>{const id=++seq;const t=setTimeout(()=>{pending.delete(id);reject(new Error("응답 없음: "+method))},15000);pending.set(id,{resolve,reject,t});parent.postMessage({type:"sc-plugin-call",id,method:String(method),args:args===undefined?null:args},"*")});
+const handlers=new Map();
+addEventListener("message",async e=>{if(e.source!==parent)return;const d=e.data;if(!d||d.type!=="sc-plugin-event")return;const h=handlers.get(d.event);let r;try{r={type:"sc-plugin-event-reply",id:d.id,ok:h?((await h(d.data))??null):null};parent.postMessage(r,"*")}catch(err){parent.postMessage({type:"sc-plugin-event-reply",id:d.id,error:{message:String(err&&err.message||err)}},"*")}});
 const fmt=a=>a.map(x=>{if(typeof x==="string")return x;try{return JSON.stringify(x)}catch(_){return String(x)}}).join(" ").slice(0,2000);
 addEventListener("error",e=>{call("report",{message:String(e.message||e.error||"error")}).catch(()=>{})});
 addEventListener("unhandledrejection",e=>{const r=e.reason;call("report",{message:"처리 안 된 오류: "+String(r&&r.message||r)}).catch(()=>{})});
 window.sandcastle=Object.freeze({apiVersion:1,call,
+on:(event,fn)=>{if(typeof fn!=="function")throw new Error("handler가 함수가 아님");handlers.set(String(event),fn)},
 log:(...a)=>call("log",{level:"info",message:fmt(a)}),
 warn:(...a)=>call("log",{level:"warn",message:fmt(a)}),
 app:Object.freeze({info:()=>call("app.info")}),

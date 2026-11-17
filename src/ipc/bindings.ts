@@ -182,6 +182,12 @@ export const commands = {
 	callUserPlugin: (pluginId: string, method: string, args: Value, options?: InvokeOptions) => __TAURI_INVOKE<Value>("call_user_plugin", { pluginId, method, args }, options),
 	/**  플러그인 기록 (최근 것, 메모리 — 앱을 다시 켜면 비어 있음) */
 	getUserPluginLog: (pluginId: string, options?: InvokeOptions) => __TAURI_INVOKE<PluginLogEntry[]>("get_user_plugin_log", { pluginId }, options),
+	/**  후처리 방식: notes(표시만) / fix(자동 고침) */
+	setUserPluginProcessMode: (pluginId: string, mode: string, options?: InvokeOptions) => __TAURI_INVOKE<UserPlugin_Serialize>("set_user_plugin_process_mode", { pluginId, mode }, options),
+	/**  화면의 호스트가 플러그인들을 부른 결과를 저장 (원문은 meta에). 그 사이 메시지가 바뀌었으면 거절 */
+	applyPluginPostprocess: (messageId: string, expected: string, content: string, results: PostProcessResult[], options?: InvokeOptions) => __TAURI_INVOKE<Message_Serialize>("apply_plugin_postprocess", { messageId, expected, content, results }, options),
+	/**  플러그인이 고친 글을 원문으로 (그 뒤 또 고쳤으면 거절). 코어 플러그인이 꺼져 있어도 된다 — 되돌리기는 언제나 */
+	revertPluginPostprocess: (messageId: string, options?: InvokeOptions) => __TAURI_INVOKE<Message_Serialize>("revert_plugin_postprocess", { messageId }, options),
 	/**  제안 목록 (새것부터). status: pending / applied / rejected / reverted, 비우면 전부 */
 	listChangeProposals: (status: string | null, options?: InvokeOptions) => __TAURI_INVOKE<ChangeProposal_Serialize[]>("list_change_proposals", { status }, options),
 	/**  기다리는 제안 수 */
@@ -3232,6 +3238,12 @@ export type PluginManifest_Serialize = {
 	minAppVersion?: string,
 };
 
+export type PluginNote = {
+	/**  info / warn */
+	level: string,
+	text: string,
+};
+
 /**  설치 전 미리보기 */
 export type PluginPreview = PluginPreview_Serialize | PluginPreview_Deserialize;
 
@@ -3314,6 +3326,13 @@ export type PluginSetting_Serialize = {
 	prompts: AppPrompts_Serialize,
 	/**  폴더 동기화 (2-C) — 경로가 기기마다 달라 기기 전용 (settings_scope) */
 	sync: SyncSetting_Serialize,
+};
+
+export type PostProcessResult = {
+	pluginId: string,
+	/**  이 플러그인이 글을 바꿨나 */
+	changed: boolean,
+	notes: PluginNote[],
 };
 
 export type PromptBlocks = PromptBlocks_Serialize | PromptBlocks_Deserialize;
@@ -3712,6 +3731,8 @@ export type RuntimePlugin = {
 	version: string,
 	hostUrl: string,
 	granted: string[],
+	/**  메시지 후처리: notes(표시만) / fix(자동 고침) — 6-D-4 */
+	processMode: string,
 };
 
 export type RuntimeStart = {
@@ -4496,6 +4517,8 @@ export type UserPlugin_Deserialize = {
 	granted: string[],
 	installedAt: number,
 	size: number,
+	/**  메시지 후처리: notes(표시만, 기본) / fix(자동 고침) — 6-D-4 */
+	processMode: string,
 };
 
 /**  목록의 한 줄. manifest를 읽지 못한 폴더도 보여준다(지울 수 있게) */
@@ -4508,6 +4531,8 @@ export type UserPlugin_Serialize = {
 	granted: string[],
 	installedAt: number,
 	size: number,
+	/**  메시지 후처리: notes(표시만, 기본) / fix(자동 고침) — 6-D-4 */
+	processMode: string,
 };
 
 export type Value = null | boolean | number | string | Value[] | { [key in string]: Value };

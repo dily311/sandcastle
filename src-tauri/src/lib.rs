@@ -327,6 +327,9 @@ pub fn specta_builder() -> tauri_specta::Builder<tauri::Wry> {
         stop_user_plugins,
         call_user_plugin,
         get_user_plugin_log,
+        set_user_plugin_process_mode,
+        apply_plugin_postprocess,
+        revert_plugin_postprocess,
         // 고치기 제안 (6-D-3)
         list_change_proposals,
         count_pending_proposals,
@@ -606,6 +609,9 @@ pub fn specta_builder() -> tauri_specta::Builder<tauri::Wry> {
         stop_user_plugins,
         call_user_plugin,
         get_user_plugin_log,
+        set_user_plugin_process_mode,
+        apply_plugin_postprocess,
+        revert_plugin_postprocess,
         // 고치기 제안 (6-D-3)
         list_change_proposals,
         count_pending_proposals,

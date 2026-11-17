@@ -7,10 +7,13 @@ use tauri::{AppHandle, Emitter, State};
 
 use crate::{
     commands::{character_image::app_data_dir, data::move_to_trash},
+    db::chat_ui,
     error::{AppError, Result},
+    models::conversation::Message,
     service::{
         community::{
             self,
+            postprocess::{self, PostProcessResult},
             runtime::{self, PluginLogEntry, RuntimeStart},
             PluginPreview, UserPlugin,
         },
@@ -120,4 +123,42 @@ pub async fn call_user_plugin(app: AppHandle, state: State<'_, AppState>, plugin
 #[specta::specta]
 pub fn get_user_plugin_log(plugin_id: String) -> Vec<PluginLogEntry> {
     runtime::log_of(&plugin_id)
+}
+
+// ---------------------------------------------------------------------------
+// 메시지 후처리 (6-D-4)
+// ---------------------------------------------------------------------------
+
+/// 후처리 방식: notes(표시만) / fix(자동 고침)
+#[tauri::command]
+#[specta::specta]
+pub async fn set_user_plugin_process_mode(app: AppHandle, state: State<'_, AppState>, plugin_id: String, mode: String) -> Result<UserPlugin> {
+    require(&app, id::COMMUNITY)?;
+    postprocess::set_mode(&state.db, &plugin_id, &mode).await?;
+    changed(&app);
+    community::get(&state.db, &app_data_dir(&app)?, &plugin_id).await
+}
+
+/// 화면의 호스트가 플러그인들을 부른 결과를 저장 (원문은 meta에). 그 사이 메시지가 바뀌었으면 거절
+#[tauri::command]
+#[specta::specta]
+pub async fn apply_plugin_postprocess(
+    app: AppHandle,
+    state: State<'_, AppState>,
+    message_id: String,
+    expected: String,
+    content: String,
+    results: Vec<PostProcessResult>,
+) -> Result<Message> {
+    require(&app, id::COMMUNITY)?;
+    postprocess::apply(&state.db, &message_id, &expected, &content, &results).await?;
+    Ok(chat_ui::get_message(&state.db, &message_id).await?)
+}
+
+/// 플러그인이 고친 글을 원문으로 (그 뒤 또 고쳤으면 거절). 코어 플러그인이 꺼져 있어도 된다 — 되돌리기는 언제나
+#[tauri::command]
+#[specta::specta]
+pub async fn revert_plugin_postprocess(state: State<'_, AppState>, message_id: String) -> Result<Message> {
+    postprocess::revert(&state.db, &message_id).await?;
+    Ok(chat_ui::get_message(&state.db, &message_id).await?)
 }

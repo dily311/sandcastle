@@ -117,10 +117,23 @@ export async function autoImage(m: Message): Promise<Message> {
 	return call(commands.generateAutoImage(m.id), src);
 }
 
+/** 응답 저장 뒤 먼저 도는 훅 (커뮤니티 플러그인의 후처리 — 켜져 있을 때만 등록됨). 번역·읽기는 고친 글로 */
+type ReplyHook = (m: Message) => Promise<Message>;
+const replyHooks = new Set<ReplyHook>();
+export function addReplyHook(h: ReplyHook): () => void {
+	replyHooks.add(h);
+	return () => void replyHooks.delete(h);
+}
+
 export async function afterReply(m: Message, onupdate?: (m: Message) => void): Promise<Message> {
 	if (!pluginSetting.value) await pluginSetting.load();
 	const s = pluginSetting.value;
 	let out = m;
+	for (const h of replyHooks) {
+		const before = out;
+		out = await h(out).catch(() => before);
+		if (out !== before) onupdate?.(out);
+	}
 	if (s && plugins.on("translate") && s.translate?.autoTranslate) {
 		out = await translateMessage(m, true).catch(() => m);
 	}

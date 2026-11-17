@@ -7,6 +7,8 @@ import { call, commands, toAppError } from "$shared/ipc/client";
 import { onEvent } from "$shared/ipc/events";
 import { logs } from "$shared/stores/log.svelte";
 import { toasts } from "$shared/stores/toast.svelte";
+import { addReplyHook } from "$shared/stores/aiTools.svelte";
+import { postProcess } from "./postprocess";
 import { route } from "./router";
 
 type Unlisten = () => void;
@@ -20,12 +22,16 @@ class PluginHost {
 	private unlisten: Unlisten[] = [];
 	private running = false;
 	private reloadTimer: ReturnType<typeof setTimeout> | undefined;
+	private eventSeq = 0;
+	private waiting = new Map<string, { resolve: (v: unknown) => void; reject: (e: Error) => void; timer: ReturnType<typeof setTimeout> }>();
 	private onMessage = (e: MessageEvent) => void this.handle(e);
 
 	async start() {
 		if (this.running) return;
 		this.running = true;
 		window.addEventListener("message", this.onMessage);
+		// 새 AI 응답의 후처리 (6-D-4)
+		const unhook = addReplyHook((m) => postProcess(m, this.plugins, (id, ev, data) => this.emit(id, ev, data)));
 		this.unlisten = await Promise.all([
 			// 설치 → 켜기처럼 잇달아 오면 한 번만 다시 시작 (도중의 호출이 "실행 중이 아님"으로 실패하지 않게)
 			onEvent("user-plugins-changed", () => {
@@ -34,6 +40,7 @@ class PluginHost {
 			}),
 			onEvent<string>("user-plugin-suspended", (id) => this.suspended(id)),
 		]);
+		this.unlisten.push(unhook);
 		if (!this.running) return this.cleanup(); // 그 사이 꺼짐
 		await this.reload();
 	}
@@ -82,6 +89,27 @@ class PluginHost {
 		toasts.error(`플러그인 '${id}'이(가) 오류가 많아 멈췄습니다. 설정에서 다시 켤 수 있습니다.`, "PLUGIN_SUSPENDED");
 	}
 
+	/** 도는 플러그인 (설치 순서) */
+	get active(): readonly RuntimePlugin[] {
+		return this.plugins;
+	}
+
+	/** 플러그인 하나에 이벤트를 보내고 답을 기다린다 (시간 초과·멈춤이면 거절). 핸들러가 없으면 null */
+	emit(pluginId: string, event: string, data: unknown, timeoutMs = 5000): Promise<unknown> {
+		const frame = this.frames.get(pluginId);
+		if (!frame?.contentWindow) return Promise.reject(new Error(`플러그인이 실행 중이 아님: ${pluginId}`));
+		const id = ++this.eventSeq;
+		const key = `${pluginId}:${id}`;
+		return new Promise((resolve, reject) => {
+			const timer = setTimeout(() => {
+				this.waiting.delete(key);
+				reject(new Error(`응답 없음 (${timeoutMs / 1000}초): ${event}`));
+			}, timeoutMs);
+			this.waiting.set(key, { resolve, reject, timer });
+			frame.contentWindow!.postMessage({ type: "sc-plugin-event", id, event, data }, "*");
+		});
+	}
+
 	private async handle(e: MessageEvent) {
 		// 보낸 창으로 플러그인을 정한다 (메시지 안의 값은 믿지 않음)
 		let id: string | null = null;
@@ -96,6 +124,19 @@ class PluginHost {
 		if (!id || !frame) return;
 		const plugin = this.plugins.find((p) => p.id === id);
 		if (!plugin) return;
+		// 호스트가 보낸 이벤트(후처리 등)의 답
+		const d = e.data as { type?: unknown; id?: unknown; ok?: unknown; error?: { message?: unknown } } | null;
+		if (d && d.type === "sc-plugin-event-reply" && typeof d.id === "number") {
+			const key = `${id}:${d.id}`;
+			const w = this.waiting.get(key);
+			if (w) {
+				this.waiting.delete(key);
+				clearTimeout(w.timer);
+				if (d.error) w.reject(new Error(String(d.error.message ?? "오류")));
+				else w.resolve(d.ok ?? null);
+			}
+			return;
+		}
 		const r = route(e.data, this.api, plugin.granted);
 		if (!r) return;
 		const reply = (msg: Record<string, unknown>) => {

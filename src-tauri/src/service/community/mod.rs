@@ -10,6 +10,7 @@
 pub mod data;
 pub mod manifest;
 pub mod package;
+pub mod postprocess;
 pub mod runtime;
 pub mod storage;
 
@@ -66,10 +67,12 @@ pub struct UserPlugin {
     pub granted: Vec<String>,
     pub installed_at: i64,
     pub size: i64,
+    /// 메시지 후처리: notes(표시만, 기본) / fix(자동 고침) — 6-D-4
+    pub process_mode: String,
 }
 
-/// (name, version, enabled, granted, code_hash, installed_at)
-type StateRow = (String, String, i64, String, String, i64);
+/// (name, version, enabled, granted, code_hash, installed_at, process_mode)
+type StateRow = (String, String, i64, String, String, i64, String);
 
 fn now_ms() -> i64 {
     chrono::Utc::now().timestamp_millis()
@@ -92,7 +95,7 @@ fn plugin_dir(base: &Path, id: &str) -> Result<PathBuf> {
 
 async fn state_of(db: &SqlitePool, id: &str) -> Result<Option<StateRow>> {
     Ok(
-        sqlx::query_as("SELECT name, version, enabled, granted, code_hash, installed_at FROM user_plugins WHERE id = ?")
+        sqlx::query_as("SELECT name, version, enabled, granted, code_hash, installed_at, process_mode FROM user_plugins WHERE id = ?")
             .bind(id)
             .fetch_optional(db)
             .await?,
@@ -156,7 +159,10 @@ pub async fn list(db: &SqlitePool, base: &Path) -> Result<Vec<UserPlugin>> {
             Ok(m) => (Some(m), None),
             Err(e) => (None, Some(e)),
         };
-        let (enabled, granted, installed_at) = state.map(|s| (s.2 != 0, granted_of(&s.3), s.5)).unwrap_or((false, vec![], 0));
+        let (enabled, granted, installed_at, process_mode) =
+            state
+                .map(|s| (s.2 != 0, granted_of(&s.3), s.5, s.6))
+                .unwrap_or((false, vec![], 0, postprocess::MODE_NOTES.to_string()));
         out.push(UserPlugin {
             id,
             enabled: enabled && manifest.is_some(),
@@ -165,6 +171,7 @@ pub async fn list(db: &SqlitePool, base: &Path) -> Result<Vec<UserPlugin>> {
             granted,
             installed_at,
             size: dir_size(&dir),
+            process_mode,
         });
     }
     Ok(out)
