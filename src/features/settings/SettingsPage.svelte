@@ -113,7 +113,7 @@
 	});
 </script>
 
-<div class="settings" class:desktop={!layout.mobile} class:mobile={layout.mobile} class:listing={mobileList}>
+<div class="settings" class:desktop={!layout.mobile} class:mobile={layout.mobile} class:narrow={layout.narrow} class:listing={mobileList}>
 	<nav class="side" aria-label="설정 메뉴">
 		<div class="search">
 			<Input bind:value={query} placeholder="설정 검색" aria-label="설정 검색" type="search">
@@ -223,14 +223,19 @@
 		margin: 0 auto;
 		padding: var(--space-8) var(--space-6);
 	}
-	.settings.mobile {
+	/* 좁은 화면(휴대폰·좁힌 창): 목록과 화면을 한 번에 하나만. 고르는 흐름(mobileList)이 layout.narrow를 따르므로 클래스도 narrow로 */
+	.settings.narrow {
 		grid-template-columns: minmax(0, 1fr);
 	}
-	.settings.mobile:not(.listing) .side,
+	.settings.narrow:not(.listing) .side,
 	.settings.listing .body {
 		display: none;
 	}
 	.settings.listing .side {
 		border-right: none;
+	}
+	/* 휴대폰 메뉴 목록: 손가락으로 누르기 쉽게 줄 높이를 --touch-target까지 */
+	.settings.listing .side button {
+		height: var(--touch-target);
 	}
 </style>

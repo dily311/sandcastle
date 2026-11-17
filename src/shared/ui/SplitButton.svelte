@@ -52,6 +52,8 @@
 		font: inherit;
 		font-size: var(--text-sm);
 		font-weight: 600;
+		/* 좁은 화면에서도 아이콘·글자를 한 줄로 (body의 overflow-wrap: anywhere 때문에 "새로/만들기"로 꺾이던 것). Button과 같게 */
+		white-space: nowrap;
 		cursor: pointer;
 	}
 	.sm button {
@@ -74,6 +76,7 @@
 		border-radius: 0 var(--radius-sm) var(--radius-sm) 0;
 	}
 	.split :global(svg) {
+		flex-shrink: 0;
 		width: 16px;
 		height: 16px;
 	}

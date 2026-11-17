@@ -155,7 +155,7 @@
 {#if !library.loaded || !ready}
 	<div class="center"><Spinner /></div>
 {:else}
-	<div class="page" class:desktop={!layout.mobile} class:mobile={layout.mobile} class:listing={mobileList}>
+	<div class="page" class:desktop={!layout.mobile} class:mobile={layout.mobile} class:narrow={layout.narrow} class:listing={mobileList}>
 		<aside class="side" aria-label="페르소나 목록">
 			<div class="top">
 				<Input bind:value={query} placeholder="이름·태그 검색" aria-label="페르소나 검색" type="search">
@@ -301,10 +301,11 @@
 		overflow: auto;
 		background: var(--surface-2);
 	}
-	.page.mobile {
+	/* 좁은 화면: 목록과 편집을 한 번에 하나만 (mobileList와 같은 기준 layout.narrow) */
+	.page.narrow {
 		grid-template-columns: minmax(0, 1fr);
 	}
-	.page.mobile:not(.listing) .side,
+	.page.narrow:not(.listing) .side,
 	.page.listing .main {
 		display: none;
 	}

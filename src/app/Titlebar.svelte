@@ -259,18 +259,19 @@
 		flex: none;
 		user-select: none;
 	}
-	.titlebar.mobile {
+	/* 좁은 화면 배치 (위 마크업의 layout.narrow 분기와 같은 기준). 높이만 휴대폰(.mobile)에서 크게 — tokens.css */
+	.titlebar.narrow {
 		padding: 0 var(--space-1);
 	}
-	.titlebar.mobile .title {
+	.titlebar.narrow .title {
 		flex: 1;
 		font-size: var(--text-md, 15px);
 		margin: 0 var(--space-1);
 	}
-	.titlebar.mobile .crumb {
+	.titlebar.narrow .crumb {
 		max-width: 100%;
 	}
-	.titlebar.mobile .drag {
+	.titlebar.narrow .drag {
 		display: none;
 	}
 	.history {
