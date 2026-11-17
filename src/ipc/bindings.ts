@@ -170,6 +170,14 @@ export const commands = {
 	purgeTrashItem: (id: string, options?: InvokeOptions) => __TAURI_INVOKE<boolean>("purge_trash_item", { id }, options),
 	/**  휴지통 비우기 (되돌릴 수 없음 — 화면에서 확인을 받는다). 지운 개수 */
 	emptyTrash: (options?: InvokeOptions) => __TAURI_INVOKE<number>("empty_trash", undefined, options),
+	/**  이 기기 id, 합친 적 있는 기기, 남은 충돌 수. 동기화 화면을 열 때 (기기 id는 이때 처음 만든다) */
+	getSyncStatus: (options?: InvokeOptions) => __TAURI_INVOKE<SyncStatus>("get_sync_status", undefined, options),
+	/**  동기화 파일 만들기. `path`는 저장 대화상자에서 고른 경로 (.scsync) */
+	exportSyncBundle: (path: string, includeFiles: boolean, options?: InvokeOptions) => __TAURI_INVOKE<SyncBundleInfo>("export_sync_bundle", { path, includeFiles }, options),
+	/**  합치기 전에 숫자만 (DB·파일·설정을 바꾸지 않음) */
+	previewSyncBundle: (path: string, options?: InvokeOptions) => __TAURI_INVOKE<SyncPreview>("preview_sync_bundle", { path }, options),
+	/**  합치기: 이 기기 DB·설정 사본을 먼저 만들고, 없는 파일을 넣고, DB를 합치고, 같이 쓰는 설정을 바꾼다 */
+	applySyncBundle: (path: string, options?: InvokeOptions) => __TAURI_INVOKE<SyncApplied>("apply_sync_bundle", { path }, options),
 	/**  지난 panic 기록 (최근 것부터, 앱 데이터 폴더의 logs/panic.log) */
 	getPanicLog: (options?: InvokeOptions) => __TAURI_INVOKE<PanicEntry_Serialize[]>("get_panic_log", undefined, options),
 	/**  새 버전 확인 (GitHub Releases). 내려받지 않고 릴리스 페이지 주소만 돌려준다 (1-E-2) */
@@ -1398,6 +1406,15 @@ export type FeatureSetting = {
 	feature: { [key in string]: boolean },
 };
 
+export type FileCounts = {
+	/**  묶음에 내용이 있고 이 기기에 없어 넣을 (넣은) 파일 */
+	added: number,
+	/**  이 기기에 없는데 묶음에 내용이 없는 파일 ("파일 포함"으로 다시 만들면 들어옴) */
+	missing: number,
+	/**  같은 경로에 내용이 다른 파일이 있어 이 기기 것을 둔 파일 */
+	keptLocal: number,
+};
+
 export type FolderNode = {
 	name: string,
 	folders: { [key in string]: FolderNode },
@@ -2516,6 +2533,25 @@ export type MacroMode = "none" |
 /**  정규식 특수문자를 이스케이프해서 넣음 */
 "escaped";
 
+export type MergeReport = {
+	added: number,
+	updated: number,
+	unchanged: number,
+	deleted: number,
+	/**  받은 지우기를 이 기기에서 고친 것이 이겨서 지우지 않음 */
+	keptLocalEdits: number,
+	/**  이 기기에서 지운 것을 받은 고침이 되살림 */
+	restored: number,
+	/**  둘 다 남긴 것 (sync_conflicts, 분기 제외) */
+	conflicts: number,
+	/**  양쪽이 이어 써서 만든 분기 대화 */
+	branches: number,
+	/**  이 기기가 모르는 테이블·열 등으로 넘긴 것 */
+	skipped: number,
+	settingsApplied: boolean,
+	dryRun: boolean,
+};
+
 export type Message = Message_Serialize | Message_Deserialize;
 
 export type MessageInput = MessageInput_Serialize | MessageInput_Deserialize;
@@ -3476,6 +3512,45 @@ export type StorageUsage = {
 
 export type StreamPayload = {
 	chunk: string,
+};
+
+export type SyncApplied = {
+	report: MergeReport,
+	files: FileCounts,
+	/**  적용 전 사본 (앱 데이터 폴더 기준) */
+	backup: string,
+};
+
+/**  묶음 하나의 요약 (화면용) */
+export type SyncBundleInfo = {
+	deviceId: string,
+	createdAt: number,
+	appVersion: string,
+	rows: number,
+	tombstones: number,
+	files: number,
+	blobs: number,
+	bytes: number,
+};
+
+export type SyncPeer = {
+	deviceId: string,
+	/**  이 기기 시각 */
+	lastMergeAt: number,
+	merges: number,
+};
+
+export type SyncPreview = {
+	bundle: SyncBundleInfo,
+	report: MergeReport,
+	files: FileCounts,
+};
+
+export type SyncStatus = {
+	deviceId: string,
+	peers: SyncPeer[],
+	/**  아직 고르지 않은 충돌 (2-E에서 고른다) */
+	openConflicts: number,
 };
 
 /**  실패 정보. DB와 프론트 이벤트에 같은 형태로 나간다. */

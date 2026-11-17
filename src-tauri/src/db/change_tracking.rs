@@ -40,7 +40,6 @@ pub const UNSYNCED_TABLES: &[&str] = &[
     "sync_conflicts",
 ];
 
-#[cfg_attr(not(test), allow(dead_code))] // 2-B 묶음 만들기에서 쓴다
 /// 동기화 대상 테이블 이름 (DB에서 읽음 — 마이그레이션이 늘어도 따로 고칠 목록이 없다)
 pub async fn synced_tables<'e, E>(executor: E) -> Result<Vec<String>, sqlx::Error>
 where

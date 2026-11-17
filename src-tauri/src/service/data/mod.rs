@@ -8,6 +8,7 @@
 //! - settings_scope: 설정 칸마다 같이 쓸지 / 기기 전용인지 (2-A-4)
 //! - sync_bundle: 기기 사이에 주고받는 동기화 묶음 (.scsync, 2-B-1)
 //! - sync_merge: 받은 묶음을 행 단위로 합치기 (2-B-2)
+//! - sync_exchange: 파일로 주고받기 — 만들기·미리보기·적용 (2-B-3)
 pub mod archive;
 pub mod backup;
 pub mod card;
@@ -16,6 +17,7 @@ pub mod overview;
 pub mod pack;
 pub mod settings_scope;
 pub mod sync_bundle;
+pub mod sync_exchange;
 pub mod sync_merge;
 #[cfg(test)]
 mod sync_merge_tests;

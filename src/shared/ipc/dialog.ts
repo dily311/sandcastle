@@ -69,3 +69,4 @@ export const CHAT_FILES: Filter = { name: "대화 기록", extensions: ["jsonl"]
 export const PACK_FILES: Filter = { name: "캐릭터 묶음", extensions: ["zip"] };
 export const JSON_FILES: Filter = { name: "JSON", extensions: ["json"] };
 export const BACKUP_FILES: Filter = { name: "샌드캐슬 백업", extensions: ["scbackup"] };
+export const SYNC_FILES: Filter = { name: "샌드캐슬 동기화", extensions: ["scsync"] };

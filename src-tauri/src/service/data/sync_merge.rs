@@ -18,7 +18,6 @@
 //! - 같이 쓰는 설정 칸은 받은 것으로 (기기 전용 칸은 그대로 — settings_scope)
 //!
 //! 넣지 못한 받은 행(다른 UNIQUE 규칙, 이 기기에 없는 항목을 가리킴)은 버리지 않고 `sync_conflicts`에 남긴다.
-#![cfg_attr(not(test), allow(dead_code))] // 2-B-3 화면에서 쓴다
 
 use std::collections::{BTreeMap, HashMap, HashSet};
 

@@ -5,6 +5,7 @@ pub mod import;
 pub mod preset;
 pub mod regex;
 pub mod settings;
+pub mod sync;
 pub mod task;
 
 pub mod chat;

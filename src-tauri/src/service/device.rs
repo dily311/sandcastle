@@ -5,7 +5,6 @@
 //! 백업을 다른 기기에 복원해도 그 기기의 id는 그대로다.
 //!
 //! 처음 필요할 때 만든다(동기화를 쓰지 않으면 파일도 생기지 않는다 — Lazy Initialization).
-#![cfg_attr(not(test), allow(dead_code))] // 2-B 동기화 묶음에서 쓴다
 
 use std::path::Path;
 

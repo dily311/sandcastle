@@ -4,6 +4,7 @@ import { chatHandlers } from "./chat";
 import { settingsHandlers } from "./settings";
 import { gameHandlers } from "./game";
 import { withTrash } from "./trash";
+import { syncHandlers } from "./sync";
 import type { AppSetting_Serialize, FeatureSetting, ThemeSetting } from "../bindings";
 
 type Args = Record<string, unknown>;
@@ -73,6 +74,7 @@ const base: Record<string, Handler> = {
 				["tts", "음성 읽기", "AI 답변을 음성으로", false, false],
 				["imagegen", "이미지 생성", "직접 그림 만들기", false, false],
 				["imageauto", "이미지 자동 생성", "글쓰기 AI가 그림 프롬프트도 쓰고 응답 뒤 자동으로 그림", false, false],
+				["sync", "동기화", "다른 기기와 파일로 주고받아 합치기. API 키는 넘어가지 않음", false, false],
 			] as const
 		).map(([id, name, description, def, desktopOnly]) => ({ id, name, description, defaultEnabled: def, desktopOnly, enabled: db.feature.feature[id] ?? def })),
 	update_feature_setting: ({ id, enabled }) => {
@@ -134,6 +136,7 @@ const base: Record<string, Handler> = {
 	...chatHandlers,
 	...settingsHandlers,
 	...gameHandlers,
+	...syncHandlers,
 	// ---- 위젯 (브라우저에서 위젯 화면 확인용) ----
 	get_widget_music_settings: () => ({ resize: false, isMiniPlayer: false, isImgEdit: false, isPlayListOpen: false, pos: null, selectedFolder: null, currentPlaylistId: "default", currentSongIndex: 0 }),
 	save_widget_music_settings: () => null,

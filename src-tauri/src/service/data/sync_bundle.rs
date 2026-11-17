@@ -17,7 +17,6 @@
 //! - **비밀**: API 키·토큰은 DB·설정에 없으므로 들어가지 않는다(2-B-4 테스트로 고정). 기기 id 파일·휴지통·실행 기록도 넣지 않는다.
 //! - **버전**: 받는 앱보다 스키마가 새 묶음은 열지 않고 업데이트를 안내한다. 암호화(ADR-011 ⑤)는 아직 없어 `encryption`이
 //!   있는 묶음도 열지 않는다.
-#![cfg_attr(not(test), allow(dead_code))] // 2-B-2·2-B-3에서 쓴다
 
 use std::{
     collections::{BTreeMap, HashSet},
@@ -191,7 +190,7 @@ pub async fn schema_version(db: &SqlitePool) -> Result<i64> {
     )
 }
 
-fn sha256_file(path: &Path) -> Result<String> {
+pub fn sha256_file(path: &Path) -> Result<String> {
     let mut f = File::open(path)?;
     let mut h = Sha256::new();
     let mut buf = vec![0u8; 64 * 1024];
