@@ -443,7 +443,13 @@ async fn apply_rows(conn: &mut SqliteConnection, ctx: &mut Ctx<'_>, table: &str,
     // 같은 대화에 양쪽이 이어 씀 → 받은 메시지는 분기 대화로
     let mut branch_of: HashMap<String, (String, i64)> = HashMap::new();
     if table == "messages" {
-        for (conv, from_seq) in diverged_conversations(conn, rows, ctx.remote_seen).await? {
+        // 전에 분기로 옮긴 메시지는 빼고 본다 (이미 이 기기에 있음)
+        let fresh: Vec<Map<String, Value>> = rows
+            .iter()
+            .filter(|r| !matches!(r.get("id"), Some(Value::String(id)) if ctx.id_map.contains_key(&(table.to_string(), id.clone()))))
+            .cloned()
+            .collect();
+        for (conv, from_seq) in diverged_conversations(conn, &fresh, ctx.remote_seen).await? {
             let b = make_branch(conn, ctx, &conv, from_seq).await?;
             let key = key_text(&[Value::from(conv.clone())]);
             record_conflict(
@@ -462,6 +468,13 @@ async fn apply_rows(conn: &mut SqliteConnection, ctx: &mut Ctx<'_>, table: &str,
     }
 
     for original in rows {
+        // 전에 분기 대화로 옮긴 메시지가 다른 기기를 거쳐 다시 옴 → 이미 있음 (분기를 또 만들지 않는다)
+        if let Some(Value::String(id)) = original.get("id") {
+            if ctx.id_map.contains_key(&(table.to_string(), id.clone())) {
+                ctx.report.unchanged += 1;
+                continue;
+            }
+        }
         let mut row = original.clone();
         // 분기로 옮긴 행을 가리키면 새 id로
         for f in &fks {
@@ -496,6 +509,12 @@ async fn apply_rows(conn: &mut SqliteConnection, ctx: &mut Ctx<'_>, table: &str,
                     let new_id = uuid::Uuid::new_v4().to_string();
                     if let Some(Value::String(old)) = row.get("id") {
                         ctx.id_map.insert((table.to_string(), old.clone()), new_id.clone());
+                        sqlx::query("INSERT OR REPLACE INTO sync_id_map (tbl, remote_id, local_id) VALUES (?, ?, ?)")
+                            .bind(table)
+                            .bind(old)
+                            .bind(&new_id)
+                            .execute(&mut *conn)
+                            .await?;
                     }
                     row.insert("id".into(), Value::String(new_id));
                     row.insert("conversation_id".into(), Value::String(b.clone()));
@@ -662,6 +681,13 @@ pub async fn merge(db: &SqlitePool, data: &BundleData, local_device: &str, setti
             return Err(AppError::validation("이미 합친 묶음이거나 그보다 오래된 묶음", None));
         }
     }
+    // 전에 분기로 옮기며 바꾼 id (받은 id → 이 기기 id)
+    let id_map: HashMap<(String, String), String> = sqlx::query_as::<_, (String, String, String)>("SELECT tbl, remote_id, local_id FROM sync_id_map")
+        .fetch_all(&mut *tx)
+        .await?
+        .into_iter()
+        .map(|(t, r, l)| ((t, r), l))
+        .collect();
     let peer_acks: HashMap<String, BTreeMap<String, i64>> = sqlx::query_as::<_, (String, Option<String>)>("SELECT device_id, acks FROM sync_peers")
         .fetch_all(&mut *tx)
         .await?
@@ -678,7 +704,7 @@ pub async fn merge(db: &SqlitePool, data: &BundleData, local_device: &str, setti
         //   그 기기에서 마지막으로 합친 시각, 그리고 그 기기가 이미 합친 이 기기 묶음의 시각(묶음의 acks).
         // 둘 다 없으면(처음 만남) 이 기기의 모든 행을 "고친 것"으로 본다 (내용이 다르면 둘 다 남김)
         local_base: peer.map_or(i64::MIN, |p| p.1).max(m.acks.get(local_device).copied().unwrap_or(i64::MIN)),
-        id_map: HashMap::new(),
+        id_map,
         restored: HashSet::new(),
         held: m.held.get(local_device).map(|v| v.iter().cloned().collect()).unwrap_or_default(),
         acks: m.acks.clone(),

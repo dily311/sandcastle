@@ -408,6 +408,12 @@ Conversation
   - 테스트는 가짜 드라이브 서버(손으로 읽는 HTTP/1.1)로 — 실제 구글에 요청하지 않는다.
   - 실제 구글로 확인(2026-11-17, 테스트 빌드 둘 + 사용자 계정): 로그인(권한 화면에 앱 전용 폴더만), 기기 B가 올리고 A가 받음, A의 고침이 B로 — 충돌 0.
   - 파일 내용은 **4개씩 동시에** 주고받는다(드라이브는 파일마다 왕복이 두 번이라 하나씩이면 40개에 97초 → 4개씩이면 파일당 약 1초).
+- **Android 드라이브** (2026-11-17): 구글은 Android에서 데스크톱식(브라우저 + loopback) 로그인을 받지 않으므로, **Play 서비스의 권한 요청**(`AuthorizationClient`, play-services-auth)으로 `drive.appdata` 권한만 받는다(`gen/android/…/DriveAuth.kt`). 구글 클라우드의 **Android 클라이언트(패키지 이름 + 서명 키 SHA-1)**로 앱을 알아보므로 코드에 클라이언트 ID가 없다. refresh token은 받지 않는다 — 동기화할 때마다 화면이 폰에 묻고(이미 허락했으면 화면 없이) 받은 access token을 백엔드에 넘긴다(`drive_use_token`, 메모리에만). keyring에는 "허락받음" 표시만. 토큰이 없거나 만료되면 백엔드가 `details.driveAuthRequired`로 알려 화면이 새로 받는다. 연결 끊기는 지금 가진 access token으로 권한을 거둔다.
+  - 화면 ↔ 앱: 기존 `SandcastleNative`(앱 주소의 최상위 프레임만) 메시지 `drive:authorize:<id>:<동의 화면 허용>` → 답 {token | error}. AI가 쓴 HTML iframe은 이 객체를 보지 못한다.
+  - **Wi-Fi에서만** (기본 켜짐, 기기 전용 `sync.wifiOnly`): 자동 동기화는 요금이 드는 연결이면 건너뛰고, 직접 누르면 먼저 묻는다. 연결 확인은 `SandcastleNet.unmetered()`(참거짓 하나, `ACCESS_NETWORK_STATE`).
+  - Android는 폴더 동기화가 없으므로 저장소 고르기 없이 드라이브만. 자동 동기화도 Android에서 돈다(앱이 켜져 있는 동안).
+  - 서명 키마다 Android 클라이언트가 따로 필요하다: 지금은 디버그 키(SHA-1 40:A1:…:62:8F)로 확인했고, 배포용 키를 만들면 그 SHA-1로 클라이언트를 하나 더 등록해야 배포 APK에서 로그인된다.
+- **분기로 옮긴 메시지 기억** (Android 점검에서 찾음, 마이그레이션 161 `sync_id_map`): 받은 메시지를 분기 대화로 옮기며 새 id를 줄 때 "받은 id → 이 기기 id"를 남긴다. 같은 메시지가 다른 기기를 거쳐 다시 와도 분기를 또 만들지 않고, 그 메시지를 가리키는 책갈피 등도 같은 새 id로.
 - **옛 판 거르기** (2-D 점검 중 찾음, 마이그레이션 160): 합치는 순서가 기기 id 순서라, C가 B의 새 판을 먼저 받고 A의 옛 판(B가 이미 본 것)을 나중에 받으면 충돌로 보였다. 그래서 합친 기기의 acks를 `sync_peers.acks`에 기억하고, 받은 행이 이 기기 행의 출처 기기가 이미 본 판보다 오래됐으면 건너뛴다. 테스트는 두 순서를 모두 고정해서 돈다.
 - **기록** (2-C-3): 실행 기록(TaskManager, feature `sync`)과 별도로 `sync_runs`에 시작·끝·성공·오류·요약(기기별 합친 수, 파일 받음·올림·아직 없는 파일, 정리한 지운 기록)을 최근 100개. 화면에 최근 10개와 진행 단계(`sync::progress` 이벤트).
 - **설정**: `plugin-setting.sync` {folder, auto, intervalMinutes} — 경로가 기기마다 달라 기기 전용(settings_scope).

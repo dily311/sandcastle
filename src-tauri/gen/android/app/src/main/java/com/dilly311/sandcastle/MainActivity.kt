@@ -22,19 +22,29 @@ class SystemInsets {
 class MainActivity : TauriActivity() {
   private val systemInsets = SystemInsets()
   private var webView: WebView? = null
+  // 구글 드라이브 권한 (2-D). 동의 화면 결과를 받으려면 생성될 때 등록해야 해서 필드로
+  private val driveAuth = DriveAuth(this)
 
   override fun onWebViewCreate(webView: WebView) {
     this.webView = webView
     webView.addJavascriptInterface(systemInsets, "SandcastleInsets")
+    // 참거짓 하나만 돌려준다 (데이터 요금이 드는 연결인가)
+    webView.addJavascriptInterface(NetworkState(applicationContext), "SandcastleNet")
 
     // 백그라운드 서비스 켜고 끄기 (src/app/keepAlive.ts). 앱 자기 주소에서만 받는다 —
     // AI가 쓴 HTML(htmlview iframe)은 다른 출처라 이 객체가 아예 없다 (Least Privilege)
     if (WebViewFeature.isFeatureSupported(WebViewFeature.WEB_MESSAGE_LISTENER)) {
-      WebViewCompat.addWebMessageListener(webView, "SandcastleNative", setOf("http://tauri.localhost")) { _, message, _, isMainFrame, _ ->
+      WebViewCompat.addWebMessageListener(webView, "SandcastleNative", setOf("http://tauri.localhost")) { _, message, _, isMainFrame, reply ->
         if (!isMainFrame) return@addWebMessageListener
-        when (message.data) {
-          "keepalive:start" -> GenerationService.start(applicationContext, "응답을 만드는 중")
-          "keepalive:stop" -> GenerationService.stop(applicationContext)
+        val data = message.data ?: return@addWebMessageListener
+        when {
+          data == "keepalive:start" -> GenerationService.start(applicationContext, "응답을 만드는 중")
+          data == "keepalive:stop" -> GenerationService.stop(applicationContext)
+          // 구글 드라이브 권한: drive:authorize:<id>:<1이면 동의 화면을 띄워도 됨> (src/app/androidDrive.ts)
+          data.startsWith("drive:authorize:") -> {
+            val parts = data.split(":")
+            if (parts.size == 4) driveAuth.authorize(reply, parts[2], parts[3] == "1")
+          }
         }
       }
     }

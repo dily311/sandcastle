@@ -58,8 +58,34 @@ pub fn built_in_client() -> Option<Client> {
     })
 }
 
+/// Android: Play 서비스로 권한을 받은 적이 있음 (refresh token 대신 표시만 — 토큰은 필요할 때마다 폰이 준다)
+const ANDROID_KEY: &str = "google-drive:android-granted";
+
+/// 이 빌드에서 드라이브를 쓸 수 있나: 데스크톱은 OAuth 클라이언트가 들어 있을 때, Android는 Play 서비스로 늘
+pub fn available() -> bool {
+    cfg!(mobile) || built_in_client().is_some()
+}
+
 pub fn is_connected() -> bool {
-    SecretStore::exists(REFRESH_KEY)
+    SecretStore::exists(REFRESH_KEY) || SecretStore::exists(ANDROID_KEY)
+}
+
+/// Android: 폰이 Play 서비스에서 받은 access token을 넣는다 (메모리에만). 처음이면 연결됨으로 표시
+pub fn use_android_token(token: &str) -> Result<()> {
+    if token.trim().is_empty() {
+        return Err(AppError::validation("빈 토큰", None));
+    }
+    if let Ok(mut a) = ACCESS.lock() {
+        // Play 서비스 토큰은 보통 1시간. 남은 시간을 모르므로 50분으로 본다
+        *a = Some((token.to_string(), now() + 50 * 60));
+    }
+    SecretStore::set(ANDROID_KEY, "1").map_err(|e| AppError::io(format!("드라이브 연결을 저장하지 못함 (키 저장소): {e}")))?;
+    Ok(())
+}
+
+/// 화면이 이 오류를 받으면 폰에서 토큰을 새로 받아 다시 부른다 (Android)
+fn auth_required() -> AppError {
+    AppError::validation("구글 드라이브 권한을 다시 받아야 함", Some(serde_json::json!({ "driveAuthRequired": true })))
 }
 
 fn drive_err(msg: impl Into<String>) -> AppError {
@@ -203,7 +229,12 @@ pub async fn access_token(http: &reqwest::Client, client: &Client, ep: &Endpoint
             return Ok(t);
         }
     }
-    let refresh = SecretStore::get(REFRESH_KEY).map_err(|_| AppError::validation("구글 드라이브가 연결되어 있지 않음 (설정 > 동기화에서 로그인)", None))?;
+    let refresh = match SecretStore::get(REFRESH_KEY) {
+        Ok(r) => r,
+        // Android는 refresh token이 없다 — 화면이 폰에서 새 토큰을 받아 넣는다
+        Err(_) if SecretStore::exists(ANDROID_KEY) => return Err(auth_required()),
+        Err(_) => return Err(AppError::validation("구글 드라이브가 연결되어 있지 않음 (설정 > 동기화에서 로그인)", None)),
+    };
     let res = http
         .post(&ep.token)
         .form(&[
@@ -231,16 +262,21 @@ pub async fn access_token(http: &reqwest::Client, client: &Client, ep: &Endpoint
 
 /// 연결 끊기: 구글에서 권한을 거두고(가능하면) keyring에서 지운다
 pub async fn disconnect(http: &reqwest::Client, ep: &Endpoints) -> Result<()> {
-    if let Ok(refresh) = SecretStore::get(REFRESH_KEY) {
+    // 데스크톱은 refresh token, Android는 지금 가진 access token으로 권한을 거둔다 (둘 다 그 허락 전체가 취소됨)
+    let token = SecretStore::get(REFRESH_KEY)
+        .ok()
+        .or_else(|| ACCESS.lock().ok().and_then(|a| a.as_ref().map(|t| t.0.clone())));
+    if let Some(t) = token {
         let _ = http
             .post(&ep.revoke)
-            .form(&[("token", refresh.as_str())])
+            .form(&[("token", t.as_str())])
             .timeout(Duration::from_secs(10))
             .send()
             .await;
     }
     forget_access_token();
     let _ = SecretStore::delete(REFRESH_KEY);
+    let _ = SecretStore::delete(ANDROID_KEY);
     Ok(())
 }
 
@@ -261,6 +297,29 @@ mod tests {
         assert!(v.chars().all(|ch| ch.is_ascii_alphanumeric()));
         assert_eq!(c, base64::engine::general_purpose::URL_SAFE_NO_PAD.encode(Sha256::digest(v.as_bytes())));
         assert!(!c.contains('=') && !c.contains('+') && !c.contains('/'));
+    }
+
+    #[test]
+    fn android_token_is_used_until_it_expires_then_asks_again() {
+        set_refresh_for_test("x");
+        let _ = SecretStore::delete(REFRESH_KEY);
+        assert!(use_android_token("").is_err());
+        use_android_token("phone-token").unwrap();
+        assert!(is_connected());
+        let rt = tokio::runtime::Runtime::new().unwrap();
+        let client = Client {
+            id: String::new(),
+            secret: String::new(),
+        };
+        let ep = Endpoints::default(); // 요청이 나가면 안 됨: 캐시에서 바로
+        assert_eq!(rt.block_on(access_token(&reqwest::Client::new(), &client, &ep)).unwrap(), "phone-token");
+        forget_access_token();
+        let e = rt.block_on(access_token(&reqwest::Client::new(), &client, &ep)).unwrap_err();
+        assert!(
+            matches!(e, AppError::Validation { details: Some(ref d), .. } if d["driveAuthRequired"] == true),
+            "{e:?}"
+        );
+        let _ = SecretStore::delete(ANDROID_KEY);
     }
 
     #[tokio::test]

@@ -339,3 +339,31 @@ async fn choosing_on_one_device_settles_the_other() {
     assert_eq!((r.updated, r.conflicts), (0, 0), "{r:?}");
     assert_eq!(state(&a).await, state(&b).await);
 }
+
+/// 2-D 점검에서 찾음: 분기로 옮긴 메시지가 다른 기기(C)를 거쳐 다시 와도 분기를 또 만들지 않는다
+#[tokio::test]
+async fn branched_message_arriving_again_via_third_device_is_not_branched_twice() {
+    let (a, b) = paired().await;
+    let c = dev("dev-c").await;
+    send(&a, &c).await;
+    exec(
+        &a,
+        "INSERT INTO messages (id, conversation_id, seq, role, content, created_at, updated_at) VALUES ('ma', 'v1', 3, 'user', 'A의 다음 말', 1, 0)",
+    )
+    .await;
+    exec(
+        &b,
+        "INSERT INTO messages (id, conversation_id, seq, role, content, created_at, updated_at) VALUES ('mb', 'v1', 3, 'user', 'B의 다음 말', 1, 0)",
+    )
+    .await;
+    exec(&b, "INSERT INTO message_bookmarks (id, message_id, created_at) VALUES ('bk', 'mb', 1)").await;
+    assert_eq!(send(&b, &a).await.branches, 1);
+    // C가 B의 메시지를 받고(C에는 3번이 비어 있어 분기 없음), A에게 보낸다 — 같은 메시지 mb가 다시 옴
+    assert_eq!(send(&b, &c).await.branches, 0);
+    let r = send(&c, &a).await;
+    assert_eq!(r.branches, 0, "같은 메시지로 분기를 또 만들지 않음: {r:?}");
+    let convs: i64 = sqlx::query_scalar("SELECT COUNT(*) FROM conversations").fetch_one(&a.db).await.unwrap();
+    assert_eq!(convs, 2, "원래 대화 + 분기 하나");
+    let bks: i64 = sqlx::query_scalar("SELECT COUNT(*) FROM message_bookmarks").fetch_one(&a.db).await.unwrap();
+    assert_eq!(bks, 1, "책갈피도 한 번만");
+}

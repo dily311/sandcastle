@@ -6,8 +6,10 @@ import { plugins } from "$shared/stores/plugins.svelte";
 import { pluginSetting } from "$shared/stores/aiTools.svelte";
 import { logs } from "$shared/stores/log.svelte";
 import { layout } from "./layout.svelte";
+import { hasNativeDrive, prepareDrive, unmetered } from "./androidDrive";
 
 const FIRST_DELAY_MS = 20_000;
+const phone = () => !layout.desktop && hasNativeDrive();
 let timer: ReturnType<typeof setTimeout> | null = null;
 let key = "";
 
@@ -19,6 +21,14 @@ function stop() {
 
 async function runOnce() {
 	try {
+		// Android: Wi-Fi에서만이면 모바일 데이터일 때 건너뛰고, 폰에서 새 토큰을 받는다 (권한이 없으면 화면 없이 실패 → 기록)
+		if (phone()) {
+			if (pluginSetting.value?.sync?.wifiOnly && !unmetered()) {
+				logs.info("sync", "자동 동기화: Wi-Fi가 아니라 건너뜀");
+				return;
+			}
+			await prepareDrive(false);
+		}
 		const r = await call(commands.syncNow(true), { source: "sync", silent: true });
 		const merged = r.merged.length;
 		if (merged) logs.info("sync", `자동 동기화: 기기 ${merged}개 합침, 파일 받음 ${r.filesDown} · 올림 ${r.filesUp}`);
@@ -38,14 +48,14 @@ function schedule(delay: number, intervalMs: number) {
 export function watchAutoSync() {
 	$effect.root(() => {
 		$effect(() => {
-			if (!layout.desktop || !plugins.loaded || !plugins.on("sync")) return stop();
+			if (!(layout.desktop || phone()) || !plugins.loaded || !plugins.on("sync")) return stop();
 			if (!pluginSetting.value) {
 				void pluginSetting.load();
 				return;
 			}
 			const s = pluginSetting.value.sync;
 			// 폴더면 폴더가, 드라이브면 로그인이 있어야 (로그인이 끊기면 백엔드가 거절하고 기록에 남음 — 연결 끊기는 자동 동기화도 끔)
-			if (!s?.auto || (s.target !== "drive" && !s.folder)) return stop();
+			if (!s?.auto || (s.target !== "drive" && (phone() || !s.folder))) return stop();
 			const minutes = Math.max(5, s.intervalMinutes || 30);
 			const next = `${s.target}|${s.folder}|${minutes}`;
 			if (next === key) return;

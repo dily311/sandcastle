@@ -136,7 +136,7 @@ let pluginSetting = {
 		sampler: "k_euler_ancestral",
 	},
 	phone: { apiProfileId: null as string | null, presetId: null as string | null },
-	sync: { folder: null as string | null, auto: false, intervalMinutes: 30, target: "folder", driveEmail: null as string | null },
+	sync: { folder: null as string | null, auto: false, intervalMinutes: 30, target: "folder", driveEmail: null as string | null, wifiOnly: true },
 };
 // 공용 번역 캐시 (언어 + 원문 → 번역문)
 const translationCache = new Map<string, string>();

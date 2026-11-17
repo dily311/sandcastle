@@ -10,6 +10,7 @@
 	import { pickFiles, pickFolder, saveTo, SYNC_FILES } from "$shared/ipc/dialog";
 	import { onEvent } from "$shared/ipc/events";
 	import { layout } from "$app/layout.svelte";
+	import { hasNativeDrive, prepareDrive, unmetered } from "$app/androidDrive";
 	import { current, ensureLoaded, save as savePart } from "./pluginSettingForm.svelte";
 	import { toasts } from "$shared/stores/toast.svelte";
 	import { absolute, relative } from "$shared/time";
@@ -39,7 +40,7 @@
 
 	onMount(() => {
 		void load();
-		if (!layout.desktop) return;
+		if (!showAuto) return;
 		ensureLoaded();
 		let unlisten: (() => void) | undefined;
 		void onEvent<{ step: string }>("sync::progress", (p) => (step = p.step)).then((u) => (unlisten = u));
@@ -68,23 +69,38 @@
 	async function load() {
 		status = await call(commands.getSyncStatus(), src).catch(() => null);
 		backups = await call(commands.listSyncBackups(), { ...src, silent: true }).catch(() => []);
-		if (layout.desktop) {
+		if (showAuto) {
 			runs = await call(commands.listSyncRuns(10), { ...src, silent: true }).catch(() => []);
 			drive = await call(commands.driveStatus(), { ...src, silent: true }).catch(() => null);
 		}
 	}
 	// ---- 구글 드라이브 (2-D) ----
+	// Android는 폰의 Play 서비스가 권한을 준다 (폴더 동기화는 데스크톱만)
+	const phone = hasNativeDrive();
+	const showAuto = layout.desktop || phone;
 	let drive = $state<DriveStatus | null>(null);
 	let loggingIn = $state(false);
-	const targetKind = $derived((sync?.target === "drive" ? "drive" : "folder") as "folder" | "drive");
+	const targetKind = $derived((phone || sync?.target === "drive" ? "drive" : "folder") as "folder" | "drive");
+	/** Android: 폰에서 새 토큰을 받아 넣는다 (이미 허락했으면 화면 없이). 실패하면 토스트 */
+	async function phoneToken(): Promise<boolean> {
+		if (!phone) return true;
+		try {
+			await prepareDrive(false);
+			return true;
+		} catch (e) {
+			toasts.error("구글 드라이브 권한을 받지 못함", String((e as Error)?.message ?? e));
+			return false;
+		}
+	}
 	const ready = $derived(targetKind === "drive" ? !!drive?.connected : !!sync?.folder);
 	async function loginDrive() {
 		loggingIn = true;
 		try {
-			drive = await call(commands.driveLogin(), src);
+			drive = phone ? await prepareDrive(true) : await call(commands.driveLogin(), src);
 			toasts.success(drive.email ? `구글 드라이브 연결함 · ${drive.email}` : "구글 드라이브 연결함");
-		} catch {
-			/* 이유는 call이 토스트로 */
+		} catch (e) {
+			// 백엔드 오류는 call이 이미 토스트로, 폰(Play 서비스)의 오류는 여기서
+			if (e instanceof Error) toasts.error("구글 드라이브에 연결하지 못함", e.message);
 		} finally {
 			loggingIn = false;
 		}
@@ -96,6 +112,7 @@
 			confirmLabel: "연결 끊기",
 		});
 		if (!keep) return;
+		if (phone) await prepareDrive(false).catch(() => null); // 권한을 거두려면 지금 토큰이 필요
 		await call(commands.driveLogout(false), src);
 		drive = await call(commands.driveStatus(), { ...src, silent: true }).catch(() => null);
 		toasts.success("구글 드라이브 연결을 끊음");
@@ -108,6 +125,7 @@
 			danger: true,
 		});
 		if (!ok) return;
+		if (!(await phoneToken())) return;
 		const n = await call(commands.driveLogout(true), src);
 		drive = await call(commands.driveStatus(), { ...src, silent: true }).catch(() => null);
 		toasts.success(`드라이브의 동기화 파일 ${n}개를 지우고 연결을 끊음`);
@@ -118,9 +136,14 @@
 		if (f) savePart("sync", { folder: f });
 	}
 	async function syncNow() {
+		if (phone && sync?.wifiOnly && !unmetered()) {
+			const ok = await confirmAction({ title: "모바일 데이터로 동기화", message: "지금은 Wi-Fi가 아님. 모바일 데이터로 동기화할까요? (그림이 많으면 데이터가 많이 듦)", confirmLabel: "동기화" });
+			if (!ok) return;
+		}
 		syncing = true;
 		step = "";
 		try {
+			if (!(await phoneToken())) return;
 			const r = await call(commands.syncNow(false), src);
 			const m = r.merged.reduce((a, d) => ({ added: a.added + d.report.added, updated: a.updated + d.report.updated, deleted: a.deleted + d.report.deleted, both: a.both + d.report.conflicts + d.report.branches }), { added: 0, updated: 0, deleted: 0, both: 0 });
 			toasts.success(
@@ -237,9 +260,9 @@
 		{/if}
 		{#key conflictsKey}<SyncConflicts onchange={load} />{/key}
 
-		{#if layout.desktop}
+		{#if showAuto}
 			<Group title="자동으로 주고받기">
-				<Row label="저장소" desc="여러 기기가 같은 곳에 자기 파일을 두고 서로 것을 받아 합침">
+				{#if layout.desktop}<Row label="저장소" desc="여러 기기가 같은 곳에 자기 파일을 두고 서로 것을 받아 합침">
 					<Segmented
 						label="동기화 저장소"
 						value={targetKind}
@@ -249,7 +272,7 @@
 						]}
 						onchange={(v) => savePart("sync", { target: v, auto: false })}
 					/>
-				</Row>
+				</Row>{/if}
 				{#if targetKind === "folder"}
 					<Row label="동기화 폴더" desc={sync?.folder ?? "OneDrive·Dropbox·구글 드라이브 앱처럼 이미 쓰는 동기화 앱의 폴더를 고르면, 그 안에 sandcastle-sync 폴더를 만들어 기기마다 자기 파일만 씀"}>
 						{#if sync?.folder}<Button size="sm" variant="ghost" onclick={() => savePart("sync", { folder: null, auto: false })}>빼기</Button>{/if}
@@ -263,7 +286,7 @@
 						<Button size="sm" onclick={logoutDrive}>{#snippet icon()}<LogOut />{/snippet}연결 끊기</Button>
 					</Row>
 				{:else}
-					<Row label="구글 드라이브" desc="브라우저에서 구글에 로그인하면 연결됨. 권한은 드라이브의 앱 전용 폴더뿐이고, 로그인 정보는 이 기기의 키 저장소에만">
+					<Row label="구글 드라이브" desc={phone ? "이 폰의 구글 계정으로 권한을 허락하면 연결됨. 권한은 드라이브의 앱 전용 폴더뿐" : "브라우저에서 구글에 로그인하면 연결됨. 권한은 드라이브의 앱 전용 폴더뿐이고, 로그인 정보는 이 기기의 키 저장소에만"}>
 						<Button size="sm" variant="primary" loading={loggingIn} disabled={loggingIn} onclick={loginDrive}>{#snippet icon()}<Cloud />{/snippet}로그인</Button>
 					</Row>
 				{/if}
@@ -277,6 +300,11 @@
 						{/if}
 						<Switch checked={sync.auto} label="자동 동기화" hideLabel onchange={(v) => savePart("sync", { auto: v })} />
 					</Row>
+					{#if phone}
+						<Row label="Wi-Fi에서만" desc="켜면 자동 동기화는 Wi-Fi(요금이 들지 않는 연결)일 때만 하고, 직접 누를 때는 먼저 물어봄">
+							<Switch checked={sync.wifiOnly} label="Wi-Fi에서만" hideLabel onchange={(v) => savePart("sync", { wifiOnly: v })} />
+						</Row>
+					{/if}
 				{/if}
 				{#if runs.length}
 					<ul class="runs" aria-label="동기화 기록">

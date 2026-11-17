@@ -40,6 +40,7 @@ pub const UNSYNCED_TABLES: &[&str] = &[
     "sync_conflicts",
     "sync_runs",
     "sync_row_origin",
+    "sync_id_map",
 ];
 
 /// 동기화 대상 테이블 이름 (DB에서 읽음 — 마이그레이션이 늘어도 따로 고칠 목록이 없다)

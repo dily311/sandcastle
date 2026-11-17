@@ -254,6 +254,8 @@ pub struct SyncSetting {
     pub target: String,
     /// 연결한 구글 계정 (화면 표시용. 토큰은 keyring에만)
     pub drive_email: Option<String>,
+    /// Android: Wi-Fi(요금이 들지 않는 연결)에서만 자동 동기화, 직접 누를 때는 먼저 묻기 (기본 켜짐)
+    pub wifi_only: bool,
 }
 
 impl Default for SyncSetting {
@@ -264,6 +266,7 @@ impl Default for SyncSetting {
             interval_minutes: 30,
             target: "folder".into(),
             drive_email: None,
+            wifi_only: true,
         }
     }
 }

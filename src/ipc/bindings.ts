@@ -196,6 +196,8 @@ export const commands = {
 	driveLogin: (options?: InvokeOptions) => __TAURI_INVOKE<DriveStatus_Serialize>("drive_login", undefined, options),
 	/**  연결 끊기. `delete_remote`면 먼저 드라이브의 앱 전용 폴더를 비운다(되돌릴 수 없음 — 화면에서 확인) */
 	driveLogout: (deleteRemote: boolean, options?: InvokeOptions) => __TAURI_INVOKE<number>("drive_logout", { deleteRemote }, options),
+	/**  Android: 폰이 Play 서비스에서 받은 access token을 넣는다 (메모리에만). `connect`면 처음 연결 — 계정을 읽고 저장소를 드라이브로 */
+	driveUseToken: (token: string, connect: boolean, options?: InvokeOptions) => __TAURI_INVOKE<DriveStatus_Serialize>("drive_use_token", { token, connect }, options),
 	/**  지난 panic 기록 (최근 것부터, 앱 데이터 폴더의 logs/panic.log) */
 	getPanicLog: (options?: InvokeOptions) => __TAURI_INVOKE<PanicEntry_Serialize[]>("get_panic_log", undefined, options),
 	/**  새 버전 확인 (GitHub Releases). 내려받지 않고 릴리스 페이지 주소만 돌려준다 (1-E-2) */
@@ -3724,6 +3726,8 @@ export type SyncSetting_Deserialize = {
 	target?: string,
 	/**  연결한 구글 계정 (화면 표시용. 토큰은 keyring에만) */
 	driveEmail?: string | null,
+	/**  Android: Wi-Fi(요금이 들지 않는 연결)에서만 자동 동기화, 직접 누를 때는 먼저 묻기 (기본 켜짐) */
+	wifiOnly?: boolean,
 };
 
 /**  폴더 동기화 설정 (CLAUDE.md 2-C, ADR-011) */
@@ -3737,6 +3741,8 @@ export type SyncSetting_Serialize = {
 	target: string,
 	/**  연결한 구글 계정 (화면 표시용. 토큰은 keyring에만) */
 	driveEmail: string | null,
+	/**  Android: Wi-Fi(요금이 들지 않는 연결)에서만 자동 동기화, 직접 누를 때는 먼저 묻기 (기본 켜짐) */
+	wifiOnly: boolean,
 };
 
 export type SyncStatus = SyncStatus_Serialize | SyncStatus_Deserialize;

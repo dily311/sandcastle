@@ -23,3 +23,7 @@
 -keepclassmembers class com.dilly311.sandcastle.SystemInsets {
    @android.webkit.JavascriptInterface <methods>;
 }
+# 동기화의 "Wi-Fi에서만"이 부르는 함수 (DriveAuth.kt, 2-D)
+-keepclassmembers class com.dilly311.sandcastle.NetworkState {
+   @android.webkit.JavascriptInterface <methods>;
+}

@@ -223,7 +223,7 @@ pub async fn sync_now(
     let drive = setting.target == "drive";
     let folder = setting.folder.clone().unwrap_or_default();
     if drive {
-        if crate::service::drive::auth::built_in_client().is_none() {
+        if !crate::service::drive::auth::available() {
             return Err(AppError::validation("이 빌드에는 구글 드라이브 연결이 들어 있지 않음", None));
         }
         if !crate::service::drive::auth::is_connected() {
@@ -261,7 +261,7 @@ pub async fn sync_now(
     let result = tasks
         .run_inline(job, |_| async {
             if drive {
-                let client = crate::service::drive::auth::built_in_client().ok_or_else(|| AppError::internal("드라이브 클라이언트 없음"))?;
+                let client = drive_client()?;
                 let target = crate::service::drive::target::DriveTarget::new(http, client, Default::default());
                 sync_run::run(&state.db, &base, &mut settings, &me.id, &target, &progress).await
             } else {
@@ -407,7 +407,7 @@ pub fn drive_status(app: AppHandle) -> Result<DriveStatus> {
     require(&app, id::SYNC)?;
     let connected = crate::service::drive::auth::is_connected();
     Ok(DriveStatus {
-        available: crate::service::drive::auth::built_in_client().is_some(),
+        available: crate::service::drive::auth::available(),
         connected,
         email: if connected { sync_setting(&app)?.drive_email } else { None },
     })
@@ -446,8 +446,7 @@ pub async fn drive_logout(app: AppHandle, state: State<'_, AppState>, delete_rem
     let ep = auth::Endpoints::default();
     let mut removed = 0;
     if delete_remote {
-        let client = auth::built_in_client().ok_or_else(|| AppError::validation("이 빌드에는 구글 드라이브 연결이 들어 있지 않음", None))?;
-        removed = DriveTarget::new(state.http_client.clone(), client, ep.clone()).delete_all().await?;
+        removed = DriveTarget::new(state.http_client.clone(), drive_client()?, ep.clone()).delete_all().await?;
     }
     auth::disconnect(&state.http_client, &ep).await?;
     save_sync_setting(&app, |s| {
@@ -458,4 +457,38 @@ pub async fn drive_logout(app: AppHandle, state: State<'_, AppState>, delete_rem
         }
     })?;
     Ok(removed)
+}
+
+/// 드라이브 요청에 쓸 클라이언트: 데스크톱은 빌드에 넣은 것, Android는 필요 없음(Play 서비스가 토큰을 줌)
+fn drive_client() -> Result<crate::service::drive::auth::Client> {
+    use crate::service::drive::auth;
+    match auth::built_in_client() {
+        Some(c) => Ok(c),
+        None if auth::available() => Ok(auth::Client {
+            id: String::new(),
+            secret: String::new(),
+        }),
+        None => Err(AppError::validation("이 빌드에는 구글 드라이브 연결이 들어 있지 않음", None)),
+    }
+}
+
+/// Android: 폰이 Play 서비스에서 받은 access token을 넣는다 (메모리에만). `connect`면 처음 연결 — 계정을 읽고 저장소를 드라이브로
+#[tauri::command]
+#[specta::specta]
+pub async fn drive_use_token(app: AppHandle, state: State<'_, AppState>, token: String, connect: bool) -> Result<DriveStatus> {
+    use crate::service::drive::{auth, target::DriveTarget};
+    require(&app, id::SYNC)?;
+    auth::use_android_token(&token)?;
+    if connect {
+        let email = DriveTarget::new(state.http_client.clone(), drive_client()?, auth::Endpoints::default())
+            .account_email()
+            .await
+            .ok()
+            .flatten();
+        save_sync_setting(&app, |s| {
+            s.drive_email = email.clone();
+            s.target = "drive".into();
+        })?;
+    }
+    drive_status(app)
 }
