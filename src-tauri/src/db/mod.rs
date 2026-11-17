@@ -2,6 +2,7 @@ pub mod ai_service;
 #[cfg(test)]
 mod ai_service_tests;
 pub mod budget;
+pub mod change_tracking;
 pub mod character_image;
 #[cfg(test)]
 mod character_image_tests;
