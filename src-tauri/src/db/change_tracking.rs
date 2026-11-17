@@ -107,7 +107,7 @@ mod tests {
     #[tokio::test]
     async fn writes_touch_updated_at() {
         let pool = pool().await;
-        let before = now_ms() - 1;
+        let before = now_ms() - 1_000; // SQLite의 "지금"은 Windows에서 약 15ms 단위라 넉넉히
 
         // 시각 없이 넣으면 지금 시각
         sqlx::query("INSERT INTO message_tags (id, name) VALUES ('t1', 'a')")
@@ -173,7 +173,7 @@ mod tests {
             .execute(&pool)
             .await
             .unwrap();
-        let before = now_ms() - 1;
+        let before = now_ms() - 1_000; // SQLite의 "지금"은 Windows에서 약 15ms 단위라 넉넉히
         crate::db::conversation::update_character_is_favorite(&pool, "c1", true).await.unwrap();
         let at: i64 = sqlx::query_scalar("SELECT updated_at FROM characters WHERE id = 'c1'")
             .fetch_one(&pool)

@@ -111,17 +111,31 @@ jobs:
       - run: pnpm install --frozen-lockfile
       - name: tauri-driver 설치
         run: cargo install tauri-driver --locked
+      # 앱이 실제로 쓰는 WebView2와 같은 버전의 msedgedriver — Tauri 공식 안내(tauri.app/develop/tests/webdriver/ci)의 방법.
+      # 예전에는 레지스트리의 버전으로 받았는데, 러너에서 앱이 쓰는 런타임과 달라 세션을 못 만들었다(DevToolsActivePort)
       - name: WebView2와 같은 버전의 msedgedriver
         shell: pwsh
         run: |
-          $key = "HKLM:\SOFTWARE\WOW6432Node\Microsoft\EdgeUpdate\Clients\{F3017226-FE2A-4295-8BDF-00C3A9A7E4C5}"
-          $v = (Get-ItemProperty $key -ErrorAction SilentlyContinue).pv
-          if (-not $v) { $v = (Get-Item "C:\Program Files (x86)\Microsoft\Edge\Application\msedge.exe").VersionInfo.ProductVersion }
-          Write-Host "WebView2 $v"
-          Invoke-WebRequest "https://msedgedriver.microsoft.com/$v/edgedriver_win64.zip" -OutFile "$env:RUNNER_TEMP\edgedriver.zip"
-          Expand-Archive "$env:RUNNER_TEMP\edgedriver.zip" -DestinationPath "$env:RUNNER_TEMP\edgedriver" -Force
+          cargo install --git https://github.com/chippers/msedgedriver-tool
+          New-Item -ItemType Directory -Force "$env:RUNNER_TEMP\edgedriver" | Out-Null
+          Push-Location "$env:RUNNER_TEMP\edgedriver"
+          & "$HOME/.cargo/bin/msedgedriver-tool.exe"
+          Pop-Location
+          "$env:RUNNER_TEMP\edgedriver" >> $env:GITHUB_PATH
           "MSEDGEDRIVER=$env:RUNNER_TEMP\edgedriver\msedgedriver.exe" >> $env:GITHUB_ENV
+          & "$env:RUNNER_TEMP\edgedriver\msedgedriver.exe" --version
       - name: 앱 빌드 (E2E용 identifier)
         run: pnpm e2e:build
       - name: E2E
         run: pnpm e2e
+      # 실패하면 원인을 남긴다: 앱의 panic 기록, WebView2·드라이버 버전
+      - name: 실패 원인 (panic 기록·버전)
+        if: failure()
+        shell: pwsh
+        run: |
+          $log = "$env:APPDATA\com.dilly311.sandcastle.e2e\logs\panic.log"
+          if (Test-Path $log) { Get-Content $log -Tail 80 } else { Write-Host "panic.log 없음" }
+          $key = "HKLM:\SOFTWARE\WOW6432Node\Microsoft\EdgeUpdate\Clients\{F3017226-FE2A-4295-8BDF-00C3A9A7E4C5}"
+          Write-Host "WebView2 런타임(레지스트리): $((Get-ItemProperty $key -ErrorAction SilentlyContinue).pv)"
+          Write-Host "Edge: $((Get-Item 'C:\Program Files (x86)\Microsoft\Edge\Application\msedge.exe' -ErrorAction SilentlyContinue).VersionInfo.ProductVersion)"
+          if (Test-Path "$env:MSEDGEDRIVER") { & "$env:MSEDGEDRIVER" --version }
