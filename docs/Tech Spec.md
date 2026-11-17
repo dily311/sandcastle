@@ -89,7 +89,7 @@ UI에서는 Svelte5를 사용한다.
 | Rust 단위    | cargo test         | 로직이 예상대로 계산되는가?                 |
 | DB           | SQLite             | 데이터가 정확하게 저장되고 조회되는가?      |
 | Tauri 커맨드 | Mock + Integration | 프론트엔드와 Rust 사이의 계약이 맞는가?     |
-| E2E          | WebdriverIO + tauri-driver | 실제 앱에서 전체 기능이 작동하는가? (`e2e/`, 가짜 공급자, CI의 e2e 작업) |
+| E2E          | WebdriverIO + msedgedriver (앱의 디버깅 포트에 붙음) | 실제 앱에서 전체 기능이 작동하는가? (`e2e/`, 가짜 공급자, CI의 e2e 작업) |
 
 ### UI 테스트 - Svelte5 + Vitest
 
@@ -120,7 +120,7 @@ cargo fmt --check
 
 cargo clippy --all-targets
 
-##### E2E 스모크 (Windows, 한 번: cargo install tauri-driver --locked + WebView2와 같은 버전의 msedgedriver)
+##### E2E 스모크 (Windows, 한 번: WebView2와 같은 버전의 msedgedriver)
 
 pnpm e2e:build    (identifier를 …sandcastle.e2e로 바꾼 디버그 빌드 — 평소 앱 데이터와 섞이지 않음)
 MSEDGEDRIVER=<msedgedriver.exe 경로> pnpm e2e

@@ -15,7 +15,7 @@
         "resizable": true,
         "fullscreen": false,
         "visible": false,
-        "additionalBrowserArgs": ""
+        "additionalBrowserArgs": "--remote-debugging-port=9333"
       }
     ]
   }

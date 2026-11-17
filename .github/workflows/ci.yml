@@ -109,8 +109,6 @@ jobs:
           workspaces: src-tauri
           key: e2e
       - run: pnpm install --frozen-lockfile
-      - name: tauri-driver 설치
-        run: cargo install tauri-driver --locked
       # 앱이 실제로 쓰는 WebView2와 같은 버전의 msedgedriver — Tauri 공식 안내(tauri.app/develop/tests/webdriver/ci)의 방법.
       # 예전에는 레지스트리의 버전으로 받았는데, 러너에서 앱이 쓰는 런타임과 달라 세션을 못 만들었다(DevToolsActivePort)
       - name: WebView2와 같은 버전의 msedgedriver
@@ -129,9 +127,9 @@ jobs:
           "MSEDGEDRIVER=$wrap" >> $env:GITHUB_ENV
       - name: 앱 빌드 (E2E용 identifier)
         run: pnpm e2e:build
-      # 앱 창의 WebView2 브라우저 인자는 E2E 설정(tauri.e2e.conf.json)에서 비워 둔다: 앱이 API로 인자를 주면
       # 러너의 WebView2(156)는 드라이버가 넣는 WEBVIEW2_ADDITIONAL_BROWSER_ARGUMENTS(--remote-debugging-port)를
-      # 무시해서 세션이 만들어지지 않았다 (DevToolsActivePort). 실패하면 아래 단계가 프로세스 명령줄을 남긴다
+      # 무시해서 tauri-driver로는 세션이 만들어지지 않았다 (DevToolsActivePort). 그래서 Windows에서는
+      # E2E 빌드가 설정(tauri.e2e.conf.json)으로 포트 9333을 열고, wdio가 앱을 띄워 msedgedriver를 그 포트에 붙인다
       - name: E2E
         run: pnpm e2e
         env:
@@ -155,18 +153,17 @@ jobs:
           Get-Process msedgewebview2 -ErrorAction SilentlyContinue | Stop-Process -Force
           Write-Host "--- Edge·WebView2 정책"
           foreach ($k in "HKLM:\SOFTWARE\Policies\Microsoft\Edge", "HKLM:\SOFTWARE\Policies\Microsoft\Edge\WebView2", "HKCU:\SOFTWARE\Policies\Microsoft\Edge") { if (Test-Path $k) { Write-Host $k; Get-ItemProperty $k | Out-String | Write-Host } }
-          # 드라이버 없이 앱만 띄워 본다 (원격 디버깅 포트를 열어 달라고 해서): 20초 뒤 살아 있는지, 포트가 열렸는지
+          # 드라이버 없이 앱만 띄워 본다 (E2E 빌드는 원격 디버깅 포트 9333을 연다): 20초 뒤 살아 있는지, 포트가 열렸는지
           Get-Process sandcastle -ErrorAction SilentlyContinue | Stop-Process -Force
           $exe = "src-tauri\target\debug\sandcastle.exe"
           $env:RUST_BACKTRACE = "1"
-          $env:WEBVIEW2_ADDITIONAL_BROWSER_ARGUMENTS = "--remote-debugging-port=9229"
           $p = Start-Process $exe -PassThru -RedirectStandardOutput "$env:RUNNER_TEMP\app.out" -RedirectStandardError "$env:RUNNER_TEMP\app.err"
           Start-Sleep -Seconds 20
           Write-Host "--- 앱이 도는 동안의 WebView2 프로세스 (명령줄)"
           Get-CimInstance Win32_Process -Filter "Name='msedgewebview2.exe'" | Select-Object -First 3 | ForEach-Object { Write-Host ($_.CommandLine.Substring(0, [Math]::Min(700, $_.CommandLine.Length))) }
           Write-Host "WebView2 프로세스 수: $((Get-Process msedgewebview2 -ErrorAction SilentlyContinue).Count)"
           Write-Host "세션: $((Get-Process -Id $PID).SessionId), 사용자: $env:USERNAME, 대화형: $([Environment]::UserInteractive)"
-          try { $j = Invoke-RestMethod "http://127.0.0.1:9229/json/version" -TimeoutSec 5; Write-Host "원격 디버깅 열림: $($j.Browser)" } catch { Write-Host "원격 디버깅 안 열림: $($_.Exception.Message)" }
+          try { $j = Invoke-RestMethod "http://127.0.0.1:9333/json/version" -TimeoutSec 5; Write-Host "원격 디버깅 열림: $($j.Browser)" } catch { Write-Host "원격 디버깅 안 열림: $($_.Exception.Message)" }
           if ($p.HasExited) { Write-Host "앱이 스스로 끝남: 종료 코드 $($p.ExitCode) (0x$('{0:X}' -f $p.ExitCode))" } else { Write-Host "앱이 20초 동안 살아 있음 (창 $($p.MainWindowTitle))"; Stop-Process $p -Force }
           Write-Host "--- stdout"; Get-Content "$env:RUNNER_TEMP\app.out" -Tail 40
           Write-Host "--- stderr"; Get-Content "$env:RUNNER_TEMP\app.err" -Tail 60
