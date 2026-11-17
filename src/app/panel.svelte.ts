@@ -1,7 +1,7 @@
 // 오른쪽 패널: 탭 아이콘은 타이틀바(패널 바로 위)에 그려지고, 화면이 자기 탭을 등록한다.
 //   const off = panel.register([{ id: "settings", label: "대화 설정", icon: SlidersHorizontal }, ...]);
 //   onDestroy(off)  — 또는 $effect 안에서 register를 부르고 반환값을 그대로 돌려주기
-import type { Component } from "svelte";
+import { untrack, type Component } from "svelte";
 import { layout } from "./layout.svelte";
 
 export interface PanelTab {
@@ -69,7 +69,13 @@ function loadOpen(): boolean {
 
 class Panel {
 	tabs = $state<PanelTab[]>([]);
+	/** 커뮤니티 플러그인의 패널 탭 (6-D-6). 화면이 패널을 쓸 때만 화면 탭 뒤에 붙는다 */
+	plugins = $state<PanelTab[]>([]);
 	tab = $state("");
+	/** 타이틀바·시트가 그리는 탭 */
+	get allTabs(): PanelTab[] {
+		return this.tabs.length ? [...this.tabs, ...this.plugins] : [];
+	}
 	/** 데스크톱에서 패널을 펴 두었는지 (기억함) */
 	private pinned = $state(loadOpen());
 	/** 모바일: 패널은 전체 화면 시트, 기본은 닫힘 (기억하지 않음) */
@@ -110,7 +116,10 @@ class Panel {
 		// $state에 넣으면 배열이 프록시로 바뀌어 원래 배열과 비교할 수 없음 → 번호표로 확인
 		const me = ++this.owner;
 		this.tabs = applyOrder(tabs, loadOrder(tabSetKey(tabs)));
-		if (!tabs.some((t) => t.id === this.tab)) this.tab = initial;
+		// 고른 탭을 읽어도 이 등록이 탭에 매이지 않게 (화면이 $effect 안에서 부르므로, 탭을 누를 때마다 다시 등록되지 않게)
+		untrack(() => {
+			if (!tabs.some((t) => t.id === this.tab) && !this.plugins.some((t) => t.id === this.tab)) this.tab = initial;
+		});
 		return () => {
 			if (this.owner === me) this.tabs = [];
 		};

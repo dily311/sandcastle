@@ -1151,6 +1151,12 @@ export type ChatTurn_Serialize = {
 
 export type ColorSchema = "light" | "dark" | "system";
 
+/**  명령 (`ui.command`, 6-D-6). 사용자가 누를 때만 main.js의 `sandcastle.on("command", …)`이 불린다 */
+export type CommandDecl = {
+	id: string,
+	title: string,
+};
+
 export type CompactResult = {
 	/**  일별 합계로 옮기고 지운 사용량 상세 줄 수 */
 	usageRows: number,
@@ -3054,6 +3060,13 @@ export type PackageWorldInfoBook_Serialize = {
 	entries: WorldInfoEntryInput_Serialize[],
 };
 
+/**  오른쪽 패널 탭 (`ui.panel`, 6-D-6). page는 플러그인 폴더 안의 html */
+export type PanelDecl = {
+	id: string,
+	title: string,
+	page: string,
+};
+
 export type PanicEntry = PanicEntry_Serialize | PanicEntry_Deserialize;
 
 export type PanicEntry_Deserialize = {
@@ -3228,6 +3241,8 @@ export type PluginManifest_Deserialize = {
 	permissions?: string[],
 	settings?: PluginSettingField_Deserialize[],
 	minAppVersion?: string | null,
+	panels?: PanelDecl[],
+	commands?: CommandDecl[],
 };
 
 export type PluginManifest_Serialize = {
@@ -3242,6 +3257,8 @@ export type PluginManifest_Serialize = {
 	permissions: string[],
 	settings: PluginSettingField_Serialize[],
 	minAppVersion?: string,
+	panels: PanelDecl[],
+	commands: CommandDecl[],
 };
 
 export type PluginNote = {
@@ -3788,6 +3805,12 @@ export type RunBy =
 /**  사용자가 켜 둔 자동 실행 (자동 번역·자동 읽기 등) */
 "auto";
 
+export type RuntimePanel = {
+	id: string,
+	title: string,
+	url: string,
+};
+
 /**  화면에 주는 도는 플러그인 정보 */
 export type RuntimePlugin = {
 	id: string,
@@ -3797,6 +3820,9 @@ export type RuntimePlugin = {
 	granted: string[],
 	/**  메시지 후처리: notes(표시만) / fix(자동 고침) — 6-D-4 */
 	processMode: string,
+	/**  오른쪽 패널 탭 (6-D-6): id·제목·주소 */
+	panels: RuntimePanel[],
+	commands: CommandDecl[],
 };
 
 export type RuntimeStart = {

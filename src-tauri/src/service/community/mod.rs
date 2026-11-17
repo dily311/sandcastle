@@ -378,6 +378,8 @@ pub async fn call(db: &SqlitePool, id: &str, method: &str, args: &serde_json::Va
             Ok(Value::Null)
         }
         "app.info" => Ok(runtime::app_info(id)),
+        // 화면의 호스트가 직접 답한다 (백엔드는 화면 상태를 모름)
+        "app.context" => Ok(Value::Null),
         "storage.get" => storage::get(db, id, &key()).await,
         "storage.set" => storage::set(db, id, &key(), &arg("value")).await.map(|_| Value::Null),
         "storage.delete" => storage::delete(db, id, &key()).await.map(|_| Value::Null),

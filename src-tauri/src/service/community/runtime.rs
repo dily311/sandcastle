@@ -25,6 +25,8 @@ pub const API: &[(&str, Option<&str>)] = &[
     ("log", None),
     ("report", None),
     ("app.info", None),
+    // 지금 화면의 대화·캐릭터 id (화면의 호스트가 답함, 6-D-6)
+    ("app.context", None),
     ("storage.get", Some("storage")),
     ("storage.set", Some("storage")),
     ("storage.delete", Some("storage")),
@@ -65,6 +67,8 @@ struct Active {
     main: String,
     granted: BTreeSet<String>,
     dir: PathBuf,
+    /// 패널 id → 페이지 (6-D-6)
+    panels: HashMap<String, String>,
 }
 
 #[derive(Debug, Clone, Serialize, specta::Type)]
@@ -105,6 +109,17 @@ pub struct RuntimePlugin {
     pub granted: Vec<String>,
     /// 메시지 후처리: notes(표시만) / fix(자동 고침) — 6-D-4
     pub process_mode: String,
+    /// 오른쪽 패널 탭 (6-D-6): id·제목·주소
+    pub panels: Vec<RuntimePanel>,
+    pub commands: Vec<super::manifest::CommandDecl>,
+}
+
+#[derive(Debug, Clone, Serialize, specta::Type)]
+#[serde(rename_all = "camelCase")]
+pub struct RuntimePanel {
+    pub id: String,
+    pub title: String,
+    pub url: String,
 }
 
 #[derive(Debug, Clone, Serialize, specta::Type)]
@@ -155,6 +170,7 @@ pub fn start(plugins: &[UserPlugin], base: &Path) -> RuntimeStart {
                 main: m.main.clone(),
                 granted,
                 dir: base.join(super::PLUGINS_DIR).join(&p.id),
+                panels: m.panels.iter().map(|x| (x.id.clone(), x.page.clone())).collect(),
             },
         );
         out.push(RuntimePlugin {
@@ -164,6 +180,16 @@ pub fn start(plugins: &[UserPlugin], base: &Path) -> RuntimeStart {
             host_url: host_url(&p.id),
             granted: m.permissions.clone(),
             process_mode: p.process_mode.clone(),
+            panels: m
+                .panels
+                .iter()
+                .map(|x| RuntimePanel {
+                    id: x.id.clone(),
+                    title: x.title.clone(),
+                    url: format!("{}/{}/__panel/{}", origin(), p.id, x.id),
+                })
+                .collect(),
+            commands: m.commands.clone(),
         });
     }
     RuntimeStart {
@@ -309,6 +335,7 @@ addEventListener("message",e=>{if(e.source!==parent)return;const d=e.data;if(!d|
 const call=(method,args)=>new Promise((resolve,reject)=>{const id=++seq;const t=setTimeout(()=>{pending.delete(id);reject(new Error("응답 없음: "+method))},15000);pending.set(id,{resolve,reject,t});parent.postMessage({type:"sc-plugin-call",id,method:String(method),args:args===undefined?null:args},"*")});
 const handlers=new Map();
 addEventListener("message",async e=>{if(e.source!==parent)return;const d=e.data;if(!d||d.type!=="sc-plugin-event")return;const h=handlers.get(d.event);let r;try{r={type:"sc-plugin-event-reply",id:d.id,ok:h?((await h(d.data))??null):null};parent.postMessage(r,"*")}catch(err){parent.postMessage({type:"sc-plugin-event-reply",id:d.id,error:{message:String(err&&err.message||err)}},"*")}});
+addEventListener("message",e=>{if(e.source!==parent)return;const d=e.data;if(!d||d.type!=="sc-plugin-theme")return;let st=document.getElementById("sc-theme");if(!st){st=document.createElement("style");st.id="sc-theme";(document.head||document.documentElement).prepend(st)}st.textContent=String(d.css||"").replace(/</g,"")});
 const fmt=a=>a.map(x=>{if(typeof x==="string")return x;try{return JSON.stringify(x)}catch(_){return String(x)}}).join(" ").slice(0,2000);
 addEventListener("error",e=>{call("report",{message:String(e.message||e.error||"error")}).catch(()=>{})});
 addEventListener("unhandledrejection",e=>{const r=e.reason;call("report",{message:"처리 안 된 오류: "+String(r&&r.message||r)}).catch(()=>{})});
@@ -316,7 +343,7 @@ window.sandcastle=Object.freeze({apiVersion:1,call,
 on:(event,fn)=>{if(typeof fn!=="function")throw new Error("handler가 함수가 아님");handlers.set(String(event),fn)},
 log:(...a)=>call("log",{level:"info",message:fmt(a)}),
 warn:(...a)=>call("log",{level:"warn",message:fmt(a)}),
-app:Object.freeze({info:()=>call("app.info")}),
+app:Object.freeze({info:()=>call("app.info"),context:()=>call("app.context")}),
 storage:Object.freeze({get:k=>call("storage.get",{key:k}),set:(k,v)=>call("storage.set",{key:k,value:v===undefined?null:v}),delete:k=>call("storage.delete",{key:k}),keys:()=>call("storage.keys")}),
 data:Object.freeze({
 characters:Object.freeze({list:()=>call("data.character.list"),get:id=>call("data.character.get",{id}),propose:(id,changes,reason)=>call("data.character.propose",{id,changes,reason})}),
@@ -330,7 +357,7 @@ fn csp(id: &str) -> String {
     let own = format!("{o}/{id}/");
     format!(
         "default-src 'none'; script-src {o}/__sdk.js {own}; style-src {own} 'unsafe-inline'; img-src {own} data: blob:; \
-font-src {own} data:; media-src {own} data: blob:; connect-src 'none'; frame-src 'none'; form-action 'none'; base-uri 'none'; object-src 'none'"
+font-src {own} data:; media-src {own} data: blob:; connect-src 'none'; frame-src 'none'; form-action 'none'; base-uri {own}; object-src 'none'"
     )
 }
 
@@ -401,6 +428,29 @@ pub fn handle(req: &Request<Vec<u8>>) -> Response<Vec<u8>> {
     let csp = csp(id);
     if rel == "__host" {
         return respond(StatusCode::OK, "text/html; charset=utf-8", Some(&csp), host_document(id, &a.main).into_bytes());
+    }
+    if let Some(pid) = rel.strip_prefix("__panel/") {
+        let Some(page) = a.panels.get(pid) else {
+            return not_found();
+        };
+        let file = a.dir.join(page);
+        let (Ok(real), Ok(root)) = (file.canonicalize(), a.dir.canonicalize()) else {
+            return not_found();
+        };
+        if !real.starts_with(&root) {
+            return not_found();
+        }
+        let Ok(html) = std::fs::read_to_string(&real) else {
+            return not_found();
+        };
+        // 페이지의 상대 경로(css·js·그림)가 플러그인 폴더를 가리키게 <base>를, 맨 앞에 SDK를 넣는다
+        let dir = page.rsplit_once('/').map(|(d, _)| format!("{d}/")).unwrap_or_default();
+        let head = format!("<base href=\"{}/{id}/{dir}\"><script src=\"{}/__sdk.js\"></script>", origin(), origin());
+        let doc = match html.to_ascii_lowercase().find("<head>") {
+            Some(i) => format!("{}{head}{}", &html[..i + 6], &html[i + 6..]),
+            None => format!("{head}{html}"),
+        };
+        return respond(StatusCode::OK, "text/html; charset=utf-8", Some(&csp), doc.into_bytes());
     }
     if !super::manifest::safe_rel_path(rel) || !package::allowed(rel) || rel.split('/').any(|s| s.starts_with('.')) {
         return not_found();

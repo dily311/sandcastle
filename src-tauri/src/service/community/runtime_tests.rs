@@ -143,6 +143,49 @@ async fn runtime_serves_and_checks_calls() {
     )
     .unwrap();
 
+    // 패널 페이지 (6-D-6): SDK와 <base>를 넣어 준다, 선언하지 않은 패널은 없음
+    let src = d.path().join("src-rt-ui");
+    std::fs::create_dir_all(src.join("ui")).unwrap();
+    std::fs::write(
+        src.join("manifest.json"),
+        json!({ "id": "rt-ui", "name": "UI", "version": "1", "apiVersion": 1, "permissions": ["ui.panel", "ui.command"],
+                "panels": [{ "id": "main", "title": "글자 수", "page": "ui/panel.html" }], "commands": [{ "id": "count", "title": "세기" }] })
+        .to_string(),
+    )
+    .unwrap();
+    std::fs::write(src.join("main.js"), "1").unwrap();
+    std::fs::write(
+        src.join("ui/panel.html"),
+        "<!doctype html><html><head><title>p</title></head><body>hi<script src=\"panel.js\"></script></body></html>",
+    )
+    .unwrap();
+    std::fs::write(src.join("ui/panel.js"), "1").unwrap();
+    let pv = preview(&db, &base, &src).await.unwrap();
+    install(&db, &base, &src, &pv.hash).await.unwrap();
+    set_enabled(&db, &base, "rt-ui", true, vec!["ui.command".into(), "ui.panel".into()])
+        .await
+        .unwrap();
+    let started = run_start(&db, &base).await;
+    let ui = started.plugins.iter().find(|p| p.id == "rt-ui").unwrap();
+    assert_eq!(ui.panels[0].url, format!("{}/rt-ui/__panel/main", runtime::origin()));
+    assert_eq!(ui.commands[0].title, "세기");
+    let (status, body, csp) = get_url("/rt-ui/__panel/main");
+    assert_eq!(status, 200);
+    let head_at = body.find("<head>").unwrap();
+    assert!(
+        body[head_at..].starts_with(&format!(
+            "<head><base href=\"{}/rt-ui/ui/\"><script src=\"{}/__sdk.js\">",
+            runtime::origin(),
+            runtime::origin()
+        )),
+        "{body}"
+    );
+    assert!(csp.contains("connect-src 'none'"));
+    assert_eq!(get_url("/rt-ui/ui/panel.js").0, 200);
+    assert_eq!(get_url("/rt-ui/__panel/other").0, 404);
+    assert_eq!(get_url("/rt-plain/__panel/main").0, 404);
+    assert_eq!(call(&db, "rt-ui", "app.context", &Value::Null).await.unwrap(), Value::Null);
+
     // 데이터 읽기·제안 (6-D-3): 권한 종류별, 파일 경로는 주지 않음, 제안은 원본을 바꾸지 않음
     sqlx::query("INSERT INTO characters (id, name, description, avatar) VALUES ('c1', 'Mira', 'desc', 'C:/secret/avatar.png')")
         .execute(&db)

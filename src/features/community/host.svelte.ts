@@ -12,6 +12,10 @@ import { postProcess } from "./postprocess";
 import { gather } from "./promptHook";
 import type { PromptHookRequest } from "$ipc/bindings";
 import { route } from "./router";
+import { Puzzle } from "@lucide/svelte";
+import { panel } from "$app/panel.svelte";
+import { nav } from "$app/nav.svelte";
+import { isPluginTab, panelTabId } from "./panels";
 
 type Unlisten = () => void;
 
@@ -27,11 +31,21 @@ class PluginHost {
 	private eventSeq = 0;
 	private waiting = new Map<string, { resolve: (v: unknown) => void; reject: (e: Error) => void; timer: ReturnType<typeof setTimeout> }>();
 	private onMessage = (e: MessageEvent) => void this.handle(e);
+	/** 패널 iframe → 플러그인 (6-D-6). 패널도 같은 권한으로 API를 부른다 */
+	private panelFrames = new Map<HTMLIFrameElement, string>();
+	/** 사용자가 그 플러그인을 마지막으로 직접 쓴 때 (명령을 누름·패널을 누름) — 6-D-7의 실행 주체 판단에 쓴다 */
+	readonly userActedAt = new Map<string, number>();
+	private onBlur = () =>
+		setTimeout(() => {
+			const el = document.activeElement;
+			if (el instanceof HTMLIFrameElement && this.panelFrames.has(el)) this.userActedAt.set(this.panelFrames.get(el)!, Date.now());
+		}, 0);
 
 	async start() {
 		if (this.running) return;
 		this.running = true;
 		window.addEventListener("message", this.onMessage);
+		window.addEventListener("blur", this.onBlur);
 		// 새 AI 응답의 후처리 (6-D-4)
 		const unhook = addReplyHook((m) => postProcess(m, this.plugins, (id, ev, data) => this.emit(id, ev, data)));
 		this.unlisten = await Promise.all([
@@ -55,12 +69,15 @@ class PluginHost {
 		this.cleanup();
 		this.plugins = [];
 		this.frames.clear();
+		this.panelFrames.clear();
+		this.syncPanels();
 		await call(commands.stopUserPlugins(), { source: "plugins", silent: true }).catch(() => {});
 	}
 
 	private cleanup() {
 		clearTimeout(this.reloadTimer);
 		window.removeEventListener("message", this.onMessage);
+		window.removeEventListener("blur", this.onBlur);
 		for (const u of this.unlisten) u();
 		this.unlisten = [];
 	}
@@ -78,6 +95,37 @@ class PluginHost {
 		} catch {
 			this.plugins = [];
 		}
+		this.syncPanels();
+	}
+
+	/** 오른쪽 패널에 플러그인 탭을 올린다 (도는 플러그인의 것만) */
+	private syncPanels() {
+		panel.plugins = this.plugins.flatMap((p) => p.panels.map((x) => ({ id: panelTabId(p.id, x.id), label: `${x.title} · ${p.name}`, icon: Puzzle })));
+		// 보고 있던 플러그인 탭이 사라지면 화면의 첫 탭으로
+		if (isPluginTab(panel.tab) && !panel.plugins.some((t) => t.id === panel.tab)) panel.tab = panel.tabs[0]?.id ?? "";
+	}
+
+	attachPanel(pluginId: string, el: HTMLIFrameElement) {
+		this.panelFrames.set(el, pluginId);
+	}
+	detachPanel(el: HTMLIFrameElement) {
+		this.panelFrames.delete(el);
+	}
+
+	/** 지금 화면 (플러그인의 app.context). id만 준다 */
+	private context() {
+		const r = nav.current as { page: string; convId?: string; charId?: string; gameId?: string };
+		return { page: r.page, conversationId: r.convId ?? null, characterId: r.charId ?? null };
+	}
+
+	/** 명령 실행 — 사용자가 메뉴에서 누를 때만 부른다 */
+	async runCommand(pluginId: string, commandId: string) {
+		this.userActedAt.set(pluginId, Date.now());
+		try {
+			await this.emit(pluginId, "command", { id: commandId, context: this.context() }, 10_000);
+		} catch (e) {
+			toasts.error(`플러그인 명령 실패: ${e instanceof Error ? e.message : String(e)}`, "PLUGIN_COMMAND");
+		}
 	}
 
 	/** PluginHost.svelte가 iframe을 만들고 지울 때 */
@@ -90,6 +138,7 @@ class PluginHost {
 		if (!this.plugins.some((p) => p.id === id)) return;
 		this.plugins = this.plugins.filter((p) => p.id !== id);
 		this.frames.delete(id);
+		this.syncPanels();
 		toasts.error(`플러그인 '${id}'이(가) 오류가 많아 멈췄습니다. 설정에서 다시 켤 수 있습니다.`, "PLUGIN_SUSPENDED");
 	}
 
@@ -128,6 +177,7 @@ class PluginHost {
 		// 보낸 창으로 플러그인을 정한다 (메시지 안의 값은 믿지 않음)
 		let id: string | null = null;
 		let frame: HTMLIFrameElement | null = null;
+		let isPanel = false;
 		for (const [pid, el] of this.frames) {
 			if (el.contentWindow && el.contentWindow === e.source) {
 				id = pid;
@@ -135,12 +185,22 @@ class PluginHost {
 				break;
 			}
 		}
+		if (!id) {
+			for (const [el, pid] of this.panelFrames) {
+				if (el.contentWindow && el.contentWindow === e.source) {
+					id = pid;
+					frame = el;
+					isPanel = true;
+					break;
+				}
+			}
+		}
 		if (!id || !frame) return;
 		const plugin = this.plugins.find((p) => p.id === id);
 		if (!plugin) return;
 		// 호스트가 보낸 이벤트(후처리 등)의 답
 		const d = e.data as { type?: unknown; id?: unknown; ok?: unknown; error?: { message?: unknown } } | null;
-		if (d && d.type === "sc-plugin-event-reply" && typeof d.id === "number") {
+		if (d && d.type === "sc-plugin-event-reply" && typeof d.id === "number" && !isPanel) {
 			const key = `${id}:${d.id}`;
 			const w = this.waiting.get(key);
 			if (w) {
@@ -155,13 +215,16 @@ class PluginHost {
 		if (!r) return;
 		const reply = (msg: Record<string, unknown>) => {
 			// 불투명 origin(sandbox)이라 대상 origin은 "*" — 대신 그 iframe의 창에만 보낸다
-			if (this.frames.get(id) === frame) frame.contentWindow?.postMessage({ type: "sc-plugin-reply", ...msg }, "*");
+			const alive = isPanel ? this.panelFrames.has(frame) : this.frames.get(id) === frame;
+			if (alive) frame.contentWindow?.postMessage({ type: "sc-plugin-reply", ...msg }, "*");
 		};
 		if (!r.ok) {
 			if (r.id !== null) reply({ id: r.id, error: { code: r.code, message: r.message } });
 			logs.warn(`plugin:${id}`, r.message);
 			return;
 		}
+		// 화면 상태는 백엔드가 모르므로 호스트가 답한다 (권한 확인은 위의 route에서 끝남)
+		if (r.call.method === "app.context") return reply({ id: r.call.id, ok: this.context() });
 		try {
 			const ok = await commands.callUserPlugin(id, r.call.method, r.call.args as never);
 			reply({ id: r.call.id, ok });

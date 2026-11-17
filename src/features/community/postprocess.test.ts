@@ -2,7 +2,7 @@ import { describe, expect, it } from "vitest";
 import type { RuntimePlugin } from "$ipc/bindings";
 import { chain } from "./postprocess";
 
-const plugin = (id: string, mode: string, granted = ["messages.process"]): RuntimePlugin => ({ id, name: id, version: "1", hostUrl: "", granted, processMode: mode });
+const plugin = (id: string, mode: string, granted = ["messages.process"]): RuntimePlugin => ({ id, name: id, version: "1", hostUrl: "", granted, processMode: mode, panels: [], commands: [] });
 const msg = { id: "m1", role: "assistant", content: "Hello \"x", conversationId: "v1", name: null };
 
 describe("후처리 차례", () => {

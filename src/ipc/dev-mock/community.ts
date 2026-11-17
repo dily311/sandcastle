@@ -15,6 +15,8 @@ const sample: PluginManifest = {
 	main: "main.js",
 	permissions: ["data.read:chat", "ui.panel"],
 	settings: [],
+	panels: [{ id: "main", title: "글자 수", page: "panel.html" }],
+	commands: [],
 };
 
 const plugins: UserPlugin[] = [
@@ -30,6 +32,8 @@ const plugins: UserPlugin[] = [
 			main: "main.js",
 			permissions: ["messages.process"],
 			settings: [{ key: "fix", type: "toggle", label: "자동으로 고치기", default: false }],
+			panels: [],
+			commands: [],
 		},
 		error: null,
 		enabled: false,

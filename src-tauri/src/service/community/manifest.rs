@@ -23,6 +23,13 @@ const MAX_NAME: usize = 80;
 const MAX_VERSION: usize = 32;
 const MAX_DESCRIPTION: usize = 500;
 const MAX_SETTINGS: usize = 50;
+const MAX_PANELS: usize = 5;
+const MAX_COMMANDS: usize = 20;
+const MAX_TITLE: usize = 40;
+
+fn valid_local_id(id: &str) -> bool {
+    !id.is_empty() && id.len() <= 32 && id.chars().all(|c| c.is_ascii_alphanumeric() || c == '-' || c == '_')
+}
 
 /// 플러그인 설정 칸 (6-D-8의 설정 화면이 이것으로 그린다)
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize, specta::Type)]
@@ -40,6 +47,23 @@ pub struct PluginSettingField {
     /// select의 고를 것
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub options: Vec<String>,
+}
+
+/// 오른쪽 패널 탭 (`ui.panel`, 6-D-6). page는 플러그인 폴더 안의 html
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, specta::Type)]
+#[serde(rename_all = "camelCase")]
+pub struct PanelDecl {
+    pub id: String,
+    pub title: String,
+    pub page: String,
+}
+
+/// 명령 (`ui.command`, 6-D-6). 사용자가 누를 때만 main.js의 `sandcastle.on("command", …)`이 불린다
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, specta::Type)]
+#[serde(rename_all = "camelCase")]
+pub struct CommandDecl {
+    pub id: String,
+    pub title: String,
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize, specta::Type)]
@@ -62,6 +86,10 @@ pub struct PluginManifest {
     pub settings: Vec<PluginSettingField>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub min_app_version: Option<String>,
+    #[serde(default)]
+    pub panels: Vec<PanelDecl>,
+    #[serde(default)]
+    pub commands: Vec<CommandDecl>,
 }
 
 fn default_main() -> String {
@@ -189,6 +217,38 @@ pub fn parse(bytes: &[u8], app_version: &str) -> Result<PluginManifest> {
         }
         if f.label.trim().is_empty() || f.label.chars().count() > MAX_NAME {
             return Err(bad(format!("settings.{}의 label은 1~{MAX_NAME}자", f.key)));
+        }
+    }
+    // 화면 (6-D-6): 선언한 것은 권한이 있어야 한다
+    if !m.panels.is_empty() && !m.permissions.iter().any(|p| p == "ui.panel") {
+        return Err(bad("panels를 쓰려면 'ui.panel' 권한이 필요함"));
+    }
+    if !m.commands.is_empty() && !m.permissions.iter().any(|p| p == "ui.command") {
+        return Err(bad("commands를 쓰려면 'ui.command' 권한이 필요함"));
+    }
+    if m.panels.len() > MAX_PANELS || m.commands.len() > MAX_COMMANDS {
+        return Err(bad(format!("panels는 {MAX_PANELS}개, commands는 {MAX_COMMANDS}개까지")));
+    }
+    let mut ids = BTreeSet::new();
+    for p in &mut m.panels {
+        p.title = p.title.trim().to_string();
+        if !valid_local_id(&p.id) || !ids.insert(format!("panel:{}", p.id)) {
+            return Err(bad(format!("panels의 id가 올바르지 않거나 겹침: {:?}", p.id)));
+        }
+        if p.title.is_empty() || p.title.chars().count() > MAX_TITLE {
+            return Err(bad(format!("panels.{}의 title은 1~{MAX_TITLE}자", p.id)));
+        }
+        if !safe_rel_path(&p.page) || !p.page.ends_with(".html") {
+            return Err(bad(format!("panels.{}의 page는 플러그인 폴더 안의 .html이어야 함", p.id)));
+        }
+    }
+    for c in &mut m.commands {
+        c.title = c.title.trim().to_string();
+        if !valid_local_id(&c.id) || !ids.insert(format!("command:{}", c.id)) {
+            return Err(bad(format!("commands의 id가 올바르지 않거나 겹침: {:?}", c.id)));
+        }
+        if c.title.is_empty() || c.title.chars().count() > MAX_TITLE {
+            return Err(bad(format!("commands.{}의 title은 1~{MAX_TITLE}자", c.id)));
         }
     }
     Ok(m)

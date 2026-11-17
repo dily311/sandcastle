@@ -189,6 +189,11 @@ pub fn read(path: &Path, app_version: &str) -> Result<Package> {
     if !files.contains_key(&manifest.main) {
         return Err(bad(format!("main 파일이 없음: {}", manifest.main)));
     }
+    for p in &manifest.panels {
+        if !files.contains_key(&p.page) {
+            return Err(bad(format!("패널 페이지가 없음: {}", p.page)));
+        }
+    }
     let size = files.values().map(|b| b.len() as u64).sum();
     let hash = hash_files(&files);
     Ok(Package { manifest, files, size, hash })

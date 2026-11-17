@@ -2,6 +2,7 @@
 	import { ChevronDown, ChevronLeft, ChevronRight, Copy, CornerUpLeft, Download, Folder, FolderMinus, GitBranch, Menu, Minus, PanelLeft, PanelRight, Pencil, Pin, PinOff, Square, Trash2, UserRound, X } from "@lucide/svelte";
 	import { getCurrentWindow } from "@tauri-apps/api/window";
 	import { ContextMenu, IconButton, type MenuItem } from "$shared/ui";
+	import PluginCommands from "$features/community/PluginCommands.svelte";
 	import { call, commands } from "$shared/ipc/client";
 	import { toasts } from "$shared/stores/toast.svelte";
 	import { convActions } from "$features/character/actions";
@@ -204,6 +205,7 @@
 	<ContextMenu at={menu} items={menuItems} label="대화 동작" onclose={() => (menu = null)} />
 	<div class="drag" data-tauri-drag-region></div>
 
+	<PluginCommands />
 	{#if panel.available}
 		<IconButton label={panel.open ? "오른쪽 패널 닫기" : "오른쪽 패널 열기"} size={layout.mobile ? "md" : "sm"} active={panel.open} onclick={() => panel.toggle()}>
 			<PanelRight />
@@ -213,7 +215,7 @@
 	<div class="right-zone" class:panel={panelShown}>
 		{#if panelShown}
 			<div class="ptabs" role="tablist" aria-label="오른쪽 패널" onwheel={wheelTabs}>
-				{#each panel.tabs as t (t.id)}
+				{#each panel.allTabs as t (t.id)}
 					<button
 						role="tab"
 						class="ptab"

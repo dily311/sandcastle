@@ -112,12 +112,26 @@ async fn rejects_bad_manifests() {
             json!({ "id": "p7", "name": "x", "version": "1", "apiVersion": 1, "settings": [{ "key": "a", "type": "select", "label": "A" }] }).to_string(),
         ),
         ("읽을 수 없음", "{".to_string()),
+        // 화면 선언 (6-D-6): 권한·id·페이지
+        ("ui.panel", json!({ "id": "p9", "name": "x", "version": "1", "apiVersion": 1, "panels": [{ "id": "a", "title": "A", "page": "p.html" }] }).to_string()),
+        ("ui.command", json!({ "id": "p10", "name": "x", "version": "1", "apiVersion": 1, "commands": [{ "id": "a", "title": "A" }] }).to_string()),
+        ("page", json!({ "id": "p11", "name": "x", "version": "1", "apiVersion": 1, "permissions": ["ui.panel"], "panels": [{ "id": "a", "title": "A", "page": "../x.html" }] }).to_string()),
+        ("겹침", json!({ "id": "p12", "name": "x", "version": "1", "apiVersion": 1, "permissions": ["ui.command"], "commands": [{ "id": "a", "title": "A" }, { "id": "a", "title": "B" }] }).to_string()),
     ];
     for (want, m) in cases {
         let src = folder(d.path(), &[("manifest.json", &m), ("main.js", "1")]);
         let err = preview(&db, &base, &src).await.expect_err(&m).to_string();
         assert!(err.contains(want), "{m}: {err}");
     }
+    // 패널 페이지가 묶음에 없음
+    let src = folder(
+        d.path(),
+        &[(
+            "manifest.json",
+            &json!({ "id": "p13", "name": "x", "version": "1", "apiVersion": 1, "permissions": ["ui.panel"], "panels": [{ "id": "a", "title": "A", "page": "panel.html" }] }).to_string(),
+        ), ("main.js", "1")],
+    );
+    assert!(preview(&db, &base, &src).await.unwrap_err().to_string().contains("패널"));
     // main 파일이 없음
     let src = folder(d.path(), &[("manifest.json", &manifest("p8", "1", &[]))]);
     assert!(preview(&db, &base, &src).await.unwrap_err().to_string().contains("main"));
