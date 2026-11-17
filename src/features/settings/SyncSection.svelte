@@ -1,11 +1,11 @@
 <script lang="ts">
 	// 동기화 (CLAUDE.md 2-B-3, ADR-011): 파일로 주고받기. 누를 때만 만들고, 합치기 전에 미리보기 → 자동 사본 → 적용
 	import { onMount } from "svelte";
-	import { Download, FolderOpen, Info, RefreshCw, RotateCcw } from "@lucide/svelte";
-	import type { SyncBackup, SyncPreview, SyncRun, SyncStatus } from "$ipc/bindings";
+	import { Cloud, Download, FolderOpen, Info, LogOut, RefreshCw, RotateCcw } from "@lucide/svelte";
+	import type { DriveStatus, SyncBackup, SyncPreview, SyncRun, SyncStatus } from "$ipc/bindings";
 	import { confirmAction } from "$shared/stores/confirm.svelte";
 	import SyncConflicts from "./SyncConflicts.svelte";
-	import { Badge, Button, Select, Spinner, Switch } from "$shared/ui";
+	import { Badge, Button, Segmented, Select, Spinner, Switch } from "$shared/ui";
 	import { call, commands } from "$shared/ipc/client";
 	import { pickFiles, pickFolder, saveTo, SYNC_FILES } from "$shared/ipc/dialog";
 	import { onEvent } from "$shared/ipc/events";
@@ -68,8 +68,51 @@
 	async function load() {
 		status = await call(commands.getSyncStatus(), src).catch(() => null);
 		backups = await call(commands.listSyncBackups(), { ...src, silent: true }).catch(() => []);
-		if (layout.desktop) runs = await call(commands.listSyncRuns(10), { ...src, silent: true }).catch(() => []);
+		if (layout.desktop) {
+			runs = await call(commands.listSyncRuns(10), { ...src, silent: true }).catch(() => []);
+			drive = await call(commands.driveStatus(), { ...src, silent: true }).catch(() => null);
+		}
 	}
+	// ---- 구글 드라이브 (2-D) ----
+	let drive = $state<DriveStatus | null>(null);
+	let loggingIn = $state(false);
+	const targetKind = $derived((sync?.target === "drive" ? "drive" : "folder") as "folder" | "drive");
+	const ready = $derived(targetKind === "drive" ? !!drive?.connected : !!sync?.folder);
+	async function loginDrive() {
+		loggingIn = true;
+		try {
+			drive = await call(commands.driveLogin(), src);
+			toasts.success(drive.email ? `구글 드라이브 연결함 · ${drive.email}` : "구글 드라이브 연결함");
+		} catch {
+			/* 이유는 call이 토스트로 */
+		} finally {
+			loggingIn = false;
+		}
+	}
+	async function logoutDrive() {
+		const keep = await confirmAction({
+			title: "구글 드라이브 연결 끊기",
+			message: "이 기기에서 구글 로그인을 지움 (구글에서도 권한을 거둠). 드라이브의 동기화 데이터는 그대로 둠 — 다른 기기는 계속 쓸 수 있음",
+			confirmLabel: "연결 끊기",
+		});
+		if (!keep) return;
+		await call(commands.driveLogout(false), src);
+		drive = await call(commands.driveStatus(), { ...src, silent: true }).catch(() => null);
+		toasts.success("구글 드라이브 연결을 끊음");
+	}
+	async function wipeDrive() {
+		const ok = await confirmAction({
+			title: "드라이브의 동기화 데이터 지우기",
+			message: "구글 드라이브의 샌드캐슬 앱 전용 폴더(모든 기기의 동기화 파일과 그림)를 지우고 이 기기의 연결도 끊음. 각 기기의 데이터는 그대로지만, 드라이브의 것은 되돌릴 수 없음",
+			confirmLabel: "드라이브 데이터 지우기",
+			danger: true,
+		});
+		if (!ok) return;
+		const n = await call(commands.driveLogout(true), src);
+		drive = await call(commands.driveStatus(), { ...src, silent: true }).catch(() => null);
+		toasts.success(`드라이브의 동기화 파일 ${n}개를 지우고 연결을 끊음`);
+	}
+
 	async function chooseFolder() {
 		const f = await pickFolder();
 		if (f) savePart("sync", { folder: f });
@@ -195,12 +238,36 @@
 		{#key conflictsKey}<SyncConflicts onchange={load} />{/key}
 
 		{#if layout.desktop}
-			<Group title="폴더 동기화">
-				<Row label="동기화 폴더" desc={sync?.folder ?? "OneDrive·Dropbox·구글 드라이브 앱처럼 이미 쓰는 동기화 앱의 폴더를 고르면, 그 안에 sandcastle-sync 폴더를 만들어 기기마다 자기 파일만 씀"}>
-					{#if sync?.folder}<Button size="sm" variant="ghost" onclick={() => savePart("sync", { folder: null, auto: false })}>빼기</Button>{/if}
-					<Button size="sm" onclick={chooseFolder}>{#snippet icon()}<FolderOpen />{/snippet}{sync?.folder ? "바꾸기" : "고르기"}</Button>
+			<Group title="자동으로 주고받기">
+				<Row label="저장소" desc="여러 기기가 같은 곳에 자기 파일을 두고 서로 것을 받아 합침">
+					<Segmented
+						label="동기화 저장소"
+						value={targetKind}
+						options={[
+							{ value: "folder", label: "폴더" },
+							{ value: "drive", label: "구글 드라이브" },
+						]}
+						onchange={(v) => savePart("sync", { target: v, auto: false })}
+					/>
 				</Row>
-				{#if sync?.folder}
+				{#if targetKind === "folder"}
+					<Row label="동기화 폴더" desc={sync?.folder ?? "OneDrive·Dropbox·구글 드라이브 앱처럼 이미 쓰는 동기화 앱의 폴더를 고르면, 그 안에 sandcastle-sync 폴더를 만들어 기기마다 자기 파일만 씀"}>
+						{#if sync?.folder}<Button size="sm" variant="ghost" onclick={() => savePart("sync", { folder: null, auto: false })}>빼기</Button>{/if}
+						<Button size="sm" onclick={chooseFolder}>{#snippet icon()}<FolderOpen />{/snippet}{sync?.folder ? "바꾸기" : "고르기"}</Button>
+					</Row>
+				{:else if drive && !drive.available}
+					<p class="meta empty">이 빌드에는 구글 드라이브 연결이 들어 있지 않음 (배포 빌드에서 쓸 수 있음). 폴더 동기화나 파일로 주고받기를 쓰세요</p>
+				{:else if drive?.connected}
+					<Row label="구글 드라이브" desc={`${drive.email ?? "연결됨"} · 드라이브의 앱 전용 폴더만 씀 (다른 드라이브 파일은 보지 못함)`}>
+						<Button size="sm" variant="ghost" onclick={wipeDrive}>드라이브 데이터 지우기</Button>
+						<Button size="sm" onclick={logoutDrive}>{#snippet icon()}<LogOut />{/snippet}연결 끊기</Button>
+					</Row>
+				{:else}
+					<Row label="구글 드라이브" desc="브라우저에서 구글에 로그인하면 연결됨. 권한은 드라이브의 앱 전용 폴더뿐이고, 로그인 정보는 이 기기의 키 저장소에만">
+						<Button size="sm" variant="primary" loading={loggingIn} disabled={loggingIn} onclick={loginDrive}>{#snippet icon()}<Cloud />{/snippet}로그인</Button>
+					</Row>
+				{/if}
+				{#if sync && ready}
 					<Row label="지금 동기화" desc={syncing ? step || "준비 중" : "다른 기기가 올린 것을 받아 합치고, 이 기기 것을 올림. 합치기 전에 이 기기 DB·설정 사본을 만듦"}>
 						<Button size="sm" variant="primary" loading={syncing} disabled={syncing} onclick={syncNow}>{#snippet icon()}<RefreshCw />{/snippet}지금 동기화</Button>
 					</Row>

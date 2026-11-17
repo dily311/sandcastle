@@ -1,5 +1,5 @@
 // 자동 동기화 (CLAUDE.md 2-C-2, ADR-011). 기본 꺼짐.
-// 동기화 플러그인 + 설정 > 동기화의 "자동 동기화" + 폴더가 모두 있을 때만 타이머를 만든다 (데스크톱만).
+// 동기화 플러그인 + 설정 > 동기화의 "자동 동기화" + 저장소(폴더 또는 구글 드라이브)가 모두 있을 때만 타이머를 만든다 (데스크톱만).
 // 앱을 켜고 조금 뒤 한 번, 그 뒤 정한 간격마다. 실패는 실행 기록·동기화 기록과 로그에 남고 알림은 띄우지 않는다.
 import { call, commands } from "$shared/ipc/client";
 import { plugins } from "$shared/stores/plugins.svelte";
@@ -44,9 +44,10 @@ export function watchAutoSync() {
 				return;
 			}
 			const s = pluginSetting.value.sync;
-			if (!s?.auto || !s.folder) return stop();
+			// 폴더면 폴더가, 드라이브면 로그인이 있어야 (로그인이 끊기면 백엔드가 거절하고 기록에 남음 — 연결 끊기는 자동 동기화도 끔)
+			if (!s?.auto || (s.target !== "drive" && !s.folder)) return stop();
 			const minutes = Math.max(5, s.intervalMinutes || 30);
-			const next = `${s.folder}|${minutes}`;
+			const next = `${s.target}|${s.folder}|${minutes}`;
 			if (next === key) return;
 			stop();
 			key = next;

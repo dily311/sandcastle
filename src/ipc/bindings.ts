@@ -191,6 +191,11 @@ export const commands = {
 	/**  되돌리기 준비 — 앱을 다시 시작하면 적용된다 (지금 DB·설정은 restore-backups/로 치움, 자동 동기화는 꺼짐) */
 	requestSyncRollback: (name: string, options?: InvokeOptions) => __TAURI_INVOKE<null>("request_sync_rollback", { name }, options),
 	cancelSyncRollback: (options?: InvokeOptions) => __TAURI_INVOKE<null>("cancel_sync_rollback", undefined, options),
+	driveStatus: (options?: InvokeOptions) => __TAURI_INVOKE<DriveStatus_Serialize>("drive_status", undefined, options),
+	/**  구글 로그인: 기본 브라우저를 열고 돌아올 때까지 기다린다(5분). 권한은 앱 전용 폴더만 */
+	driveLogin: (options?: InvokeOptions) => __TAURI_INVOKE<DriveStatus_Serialize>("drive_login", undefined, options),
+	/**  연결 끊기. `delete_remote`면 먼저 드라이브의 앱 전용 폴더를 비운다(되돌릴 수 없음 — 화면에서 확인) */
+	driveLogout: (deleteRemote: boolean, options?: InvokeOptions) => __TAURI_INVOKE<number>("drive_logout", { deleteRemote }, options),
 	/**  지난 panic 기록 (최근 것부터, 앱 데이터 폴더의 logs/panic.log) */
 	getPanicLog: (options?: InvokeOptions) => __TAURI_INVOKE<PanicEntry_Serialize[]>("get_panic_log", undefined, options),
 	/**  새 버전 확인 (GitHub Releases). 내려받지 않고 릴리스 페이지 주소만 돌려준다 (1-E-2) */
@@ -1394,6 +1399,22 @@ export type DialogueDoneEvent = {
 export type DisplayItem = {
 	role: string,
 	content: string,
+};
+
+export type DriveStatus = DriveStatus_Serialize | DriveStatus_Deserialize;
+
+export type DriveStatus_Deserialize = {
+	/**  이 빌드에 OAuth 클라이언트가 들어 있나 (없으면 드라이브를 쓸 수 없음) */
+	available: boolean,
+	connected: boolean,
+	email?: string | null,
+};
+
+export type DriveStatus_Serialize = {
+	/**  이 빌드에 OAuth 클라이언트가 들어 있나 (없으면 드라이브를 쓸 수 없음) */
+	available: boolean,
+	connected: boolean,
+	email: string | null,
 };
 
 /**  고친 메시지: 화면에 다시 그릴 줄 */
@@ -3699,6 +3720,10 @@ export type SyncSetting_Deserialize = {
 	/**  자동 동기화 (기본 꺼짐): 앱을 켤 때 한 번, 그 뒤 interval_minutes마다 */
 	auto?: boolean,
 	intervalMinutes?: number,
+	/**  지금 동기화·자동 동기화가 쓸 저장소: "folder" / "drive" (2-D) */
+	target?: string,
+	/**  연결한 구글 계정 (화면 표시용. 토큰은 keyring에만) */
+	driveEmail?: string | null,
 };
 
 /**  폴더 동기화 설정 (CLAUDE.md 2-C, ADR-011) */
@@ -3708,6 +3733,10 @@ export type SyncSetting_Serialize = {
 	/**  자동 동기화 (기본 꺼짐): 앱을 켤 때 한 번, 그 뒤 interval_minutes마다 */
 	auto: boolean,
 	intervalMinutes: number,
+	/**  지금 동기화·자동 동기화가 쓸 저장소: "folder" / "drive" (2-D) */
+	target: string,
+	/**  연결한 구글 계정 (화면 표시용. 토큰은 keyring에만) */
+	driveEmail: string | null,
 };
 
 export type SyncStatus = SyncStatus_Serialize | SyncStatus_Deserialize;

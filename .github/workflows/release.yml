@@ -42,6 +42,9 @@ jobs:
       - uses: tauri-apps/tauri-action@v0
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          # 구글 드라이브 동기화 (2-D). 없으면 드라이브 연결이 없는 빌드 (docs/배포.md)
+          SANDCASTLE_GOOGLE_CLIENT_ID: ${{ secrets.GOOGLE_CLIENT_ID }}
+          SANDCASTLE_GOOGLE_CLIENT_SECRET: ${{ secrets.GOOGLE_CLIENT_SECRET }}
         with:
           tagName: ${{ github.ref_name }}
           releaseName: Sandcastle ${{ github.ref_name }}

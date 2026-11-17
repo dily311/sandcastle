@@ -70,7 +70,19 @@ const backups: SyncBackup[] = [
 	{ name: "app-20261116-090000-000.db", createdAt: Date.now() - 27 * HOUR, bytes: 3_300_000 },
 ];
 
+const drive = { available: true, connected: false, email: null as string | null };
+
 export const syncHandlers: Record<string, Handler> = {
+	drive_status: () => ({ ...drive }),
+	drive_login: async () => {
+		await new Promise((r) => setTimeout(r, 1200)); // 브라우저 로그인 흉내
+		Object.assign(drive, { connected: true, email: "me@example.com" });
+		return { ...drive };
+	},
+	drive_logout: ({ deleteRemote }) => {
+		Object.assign(drive, { connected: false, email: null });
+		return deleteRemote ? 42 : 0;
+	},
 	list_sync_conflicts: () => conflicts,
 	resolve_sync_conflict: ({ id }) => {
 		conflicts = conflicts.filter((c) => c.id !== id);

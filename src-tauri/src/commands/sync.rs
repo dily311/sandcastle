@@ -220,9 +220,19 @@ pub async fn sync_now(
     if auto && !setting.auto {
         return Err(AppError::validation("자동 동기화가 꺼져 있습니다", None));
     }
-    let folder = setting
-        .folder
-        .ok_or_else(|| AppError::validation("동기화 폴더를 먼저 고르세요 (설정 > 동기화)", None))?;
+    let drive = setting.target == "drive";
+    let folder = setting.folder.clone().unwrap_or_default();
+    if drive {
+        if crate::service::drive::auth::built_in_client().is_none() {
+            return Err(AppError::validation("이 빌드에는 구글 드라이브 연결이 들어 있지 않음", None));
+        }
+        if !crate::service::drive::auth::is_connected() {
+            return Err(AppError::validation("구글 드라이브에 먼저 로그인하세요 (설정 > 동기화)", None));
+        }
+    } else if folder.is_empty() {
+        return Err(AppError::validation("동기화 폴더를 먼저 고르세요 (설정 > 동기화)", None));
+    }
+    let target_kind = if drive { "drive" } else { "folder" };
     if RUNNING.swap(true, std::sync::atomic::Ordering::SeqCst) {
         return Err(AppError::validation("동기화가 이미 진행 중입니다", None));
     }
@@ -234,21 +244,30 @@ pub async fn sync_now(
     let mut settings = before.clone();
     let run_id = uuid::Uuid::new_v4().to_string();
     let started = chrono::Utc::now().timestamp_millis();
-    sqlx::query("INSERT INTO sync_runs (id, target, run_by, started_at) VALUES (?, 'folder', ?, ?)")
+    sqlx::query("INSERT INTO sync_runs (id, target, run_by, started_at) VALUES (?, ?, ?, ?)")
         .bind(&run_id)
+        .bind(target_kind)
         .bind(if auto { "auto" } else { "user" })
         .bind(started)
         .execute(&state.db)
         .await?;
 
-    let job = CreateTaskRequest::inline(TaskType::BackgroundSync, TaskOwner::System, id::SYNC, "폴더 동기화", auto);
+    let label = if drive { "구글 드라이브 동기화" } else { "폴더 동기화" };
+    let job = CreateTaskRequest::inline(TaskType::BackgroundSync, TaskOwner::System, id::SYNC, label, auto);
     let progress = |step: &str| {
         let _ = app.emit("sync::progress", SyncProgress { step: step.to_string() });
     };
+    let http = state.http_client.clone();
     let result = tasks
         .run_inline(job, |_| async {
-            let target = FolderTarget::new(std::path::Path::new(&folder))?;
-            sync_run::run(&state.db, &base, &mut settings, &me.id, &target, &progress).await
+            if drive {
+                let client = crate::service::drive::auth::built_in_client().ok_or_else(|| AppError::internal("드라이브 클라이언트 없음"))?;
+                let target = crate::service::drive::target::DriveTarget::new(http, client, Default::default());
+                sync_run::run(&state.db, &base, &mut settings, &me.id, &target, &progress).await
+            } else {
+                let target = FolderTarget::new(std::path::Path::new(&folder))?;
+                sync_run::run(&state.db, &base, &mut settings, &me.id, &target, &progress).await
+            }
         })
         .await;
 
@@ -355,4 +374,88 @@ pub fn request_sync_rollback(app: AppHandle, name: String) -> Result<()> {
 pub fn cancel_sync_rollback(app: AppHandle) -> Result<()> {
     crate::service::data::sync_conflicts::cancel_rollback(&app_data_dir(&app)?);
     Ok(())
+}
+
+// ---------------------------------------------------------------------------
+// 구글 드라이브 (2-D, 데스크톱)
+// ---------------------------------------------------------------------------
+
+#[derive(Debug, Clone, Serialize, specta::Type)]
+#[serde(rename_all = "camelCase")]
+pub struct DriveStatus {
+    /// 이 빌드에 OAuth 클라이언트가 들어 있나 (없으면 드라이브를 쓸 수 없음)
+    pub available: bool,
+    pub connected: bool,
+    pub email: Option<String>,
+}
+
+fn save_sync_setting(app: &AppHandle, f: impl FnOnce(&mut crate::models::settings::SyncSetting)) -> Result<()> {
+    let state = app.state::<SettingsState<PluginSetting>>();
+    let value = {
+        let mut cur = state.0.lock().map_err(|_| lock_err())?;
+        f(&mut cur.sync);
+        cur.clone()
+    };
+    save(app, &value)?;
+    app.emit(PluginSetting::EVENT_NAME, &value).map_err(|e| AppError::io(e.to_string()))?;
+    Ok(())
+}
+
+#[tauri::command]
+#[specta::specta]
+pub fn drive_status(app: AppHandle) -> Result<DriveStatus> {
+    require(&app, id::SYNC)?;
+    let connected = crate::service::drive::auth::is_connected();
+    Ok(DriveStatus {
+        available: crate::service::drive::auth::built_in_client().is_some(),
+        connected,
+        email: if connected { sync_setting(&app)?.drive_email } else { None },
+    })
+}
+
+/// 구글 로그인: 기본 브라우저를 열고 돌아올 때까지 기다린다(5분). 권한은 앱 전용 폴더만
+#[tauri::command]
+#[specta::specta]
+pub async fn drive_login(app: AppHandle, state: State<'_, AppState>) -> Result<DriveStatus> {
+    use crate::service::drive::{auth, target::DriveTarget};
+    use tauri_plugin_opener::OpenerExt;
+    require(&app, id::SYNC)?;
+    let client = auth::built_in_client().ok_or_else(|| AppError::validation("이 빌드에는 구글 드라이브 연결이 들어 있지 않음", None))?;
+    let ep = auth::Endpoints::default();
+    auth::login(&state.http_client, &client, &ep, |url| {
+        app.opener()
+            .open_url(url, None::<&str>)
+            .map_err(|e| AppError::io(format!("브라우저를 열지 못함: {e}")))
+    })
+    .await?;
+    // 연결 확인 겸 계정 이름 (드라이브 about — 앱 전용 폴더 권한으로 읽을 수 있음)
+    let email = DriveTarget::new(state.http_client.clone(), client, ep).account_email().await.ok().flatten();
+    save_sync_setting(&app, |s| {
+        s.drive_email = email.clone();
+        s.target = "drive".into();
+    })?;
+    drive_status(app)
+}
+
+/// 연결 끊기. `delete_remote`면 먼저 드라이브의 앱 전용 폴더를 비운다(되돌릴 수 없음 — 화면에서 확인)
+#[tauri::command]
+#[specta::specta]
+pub async fn drive_logout(app: AppHandle, state: State<'_, AppState>, delete_remote: bool) -> Result<u32> {
+    use crate::service::drive::{auth, target::DriveTarget};
+    require(&app, id::SYNC)?;
+    let ep = auth::Endpoints::default();
+    let mut removed = 0;
+    if delete_remote {
+        let client = auth::built_in_client().ok_or_else(|| AppError::validation("이 빌드에는 구글 드라이브 연결이 들어 있지 않음", None))?;
+        removed = DriveTarget::new(state.http_client.clone(), client, ep.clone()).delete_all().await?;
+    }
+    auth::disconnect(&state.http_client, &ep).await?;
+    save_sync_setting(&app, |s| {
+        s.drive_email = None;
+        if s.target == "drive" {
+            s.target = "folder".into();
+            s.auto = false;
+        }
+    })?;
+    Ok(removed)
 }

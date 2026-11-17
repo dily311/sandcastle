@@ -250,6 +250,10 @@ pub struct SyncSetting {
     /// 자동 동기화 (기본 꺼짐): 앱을 켤 때 한 번, 그 뒤 interval_minutes마다
     pub auto: bool,
     pub interval_minutes: u32,
+    /// 지금 동기화·자동 동기화가 쓸 저장소: "folder" / "drive" (2-D)
+    pub target: String,
+    /// 연결한 구글 계정 (화면 표시용. 토큰은 keyring에만)
+    pub drive_email: Option<String>,
 }
 
 impl Default for SyncSetting {
@@ -258,6 +262,8 @@ impl Default for SyncSetting {
             folder: None,
             auto: false,
             interval_minutes: 30,
+            target: "folder".into(),
+            drive_email: None,
         }
     }
 }

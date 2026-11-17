@@ -9,6 +9,7 @@ pub mod budget;
 pub mod chat;
 pub mod data;
 pub mod device;
+pub mod drive;
 pub mod image_meta;
 pub mod import;
 pub mod picked_file;
