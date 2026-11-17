@@ -26,8 +26,8 @@
 </script>
 
 <div class="split" class:sm={size === "sm"} bind:this={box}>
-	<button type="button" class="main" {disabled} {onclick}><Icon />{label}</button>
-	<button type="button" class="more" aria-label={menuLabel} title={menuLabel} aria-haspopup="menu" aria-expanded={!!menu} onclick={open}><ChevronDown /></button>
+	<button type="button" class="split-main" {disabled} {onclick}><Icon />{label}</button>
+	<button type="button" class="split-more" aria-label={menuLabel} title={menuLabel} aria-haspopup="menu" aria-expanded={!!menu} onclick={open}><ChevronDown /></button>
 </div>
 <ContextMenu at={menu} label={menuLabel} {items} onclose={() => (menu = null)} />
 
@@ -66,11 +66,12 @@
 		opacity: 0.55;
 		cursor: default;
 	}
-	.main {
+	/* 이름이 .main이면 옛 전역 스타일(src/styles/global.css의 .main: 세로 flex)에 걸려 아이콘·글자가 위아래로 놓였다 */
+	.split-main {
 		padding: 0 var(--space-3) 0 var(--space-3);
 		border-radius: var(--radius-sm) 0 0 var(--radius-sm);
 	}
-	.more {
+	.split-more {
 		padding: 0 8px;
 		border-left: 1px solid color-mix(in oklab, var(--text-on-accent) 35%, transparent);
 		border-radius: 0 var(--radius-sm) var(--radius-sm) 0;
@@ -80,7 +81,7 @@
 		width: 16px;
 		height: 16px;
 	}
-	.more :global(svg) {
+	.split-more :global(svg) {
 		width: 18px;
 		height: 18px;
 	}
