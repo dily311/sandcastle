@@ -249,6 +249,8 @@ pub async fn write_bundle(
     let base_str = base.to_string_lossy().to_string();
     let portable = |v: &mut Value| map_strings(v, &|s| to_portable(s, &base_str));
     let since = opts.since.unwrap_or(i64::MIN);
+    // 행을 읽기 전 시각: 읽는 동안 바뀐 행은 다음 묶음에 들어가게 (받는 쪽은 이 시각 이전 것을 "이미 본 것"으로 여긴다)
+    let created_at = chrono::Utc::now().timestamp_millis();
 
     // ---- DB에서 읽기 ----
     let mut conn = db.acquire().await?;
@@ -302,7 +304,7 @@ pub async fn write_bundle(
         schema_version,
         app_version: env!("CARGO_PKG_VERSION").into(),
         device_id: device_id.into(),
-        created_at: chrono::Utc::now().timestamp_millis(),
+        created_at,
         since: opts.since,
         tables: tables.iter().map(|(t, l)| (t.clone(), l.len() as u64)).collect(),
         tombstones: tombstones.len() as u64,

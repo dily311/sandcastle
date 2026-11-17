@@ -35,6 +35,9 @@ pub const UNSYNCED_TABLES: &[&str] = &[
     // 기기마다의 휴지통과 지운 기록 자체
     "trash_items",
     "sync_tombstones",
+    // 동기화 상태 자체 (기기마다)
+    "sync_peers",
+    "sync_conflicts",
 ];
 
 #[cfg_attr(not(test), allow(dead_code))] // 2-B 묶음 만들기에서 쓴다
