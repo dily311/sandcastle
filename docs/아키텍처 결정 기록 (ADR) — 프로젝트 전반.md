@@ -262,7 +262,7 @@ Conversation
 **결정**
 - **비밀 저장소**: 데스크톱은 OS keyring(keyring v4), Android는 `android-native-keyring-store`(Android Keystore 키로 암호화한 SharedPreferences, keyring-core 직접 사용). 평문 파일에 두지 않는다. 테스트는 메모리 저장소(OS 자격 증명 관리자를 건드리지 않음).
 - **고른 파일**: Android 파일 고르기의 `content://` 주소는 프론트 `pickFiles`/`saveTo`가 받아 백엔드(`service/picked_file.rs`)가 앱 `tmp/`로 복사하거나 `tmp/saving/`에서 고른 곳으로 옮긴다. 가져오기·내보내기 커맨드는 계속 파일 경로만 다룬다. 공용 다운로드 폴더에 직접 쓰지 않는다(Android 10+ 저장소 정책).
-- **화면 가장자리**: edge-to-edge를 유지하되, 아래(키보드·탐색 막대)는 `MainActivity`가 비우고 위(상태 표시줄)는 CSS `--safe-top`(= max(env, 앱이 알려 준 값))으로.
+- **화면 가장자리**: edge-to-edge를 유지하되, 키보드는 `MainActivity`가 비우고 위(상태 표시줄)는 CSS `--safe-top`(= max(env, 앱이 알려 준 값))으로. 아래 탐색 막대는 앱이 높이만 알려 주고(`--native-inset-bottom`, 키보드가 열리면 0) CSS `--safe-bottom`이 비운다 — 처음에는 앱이 탐색 막대까지 비웠는데, 실기기(v0.2.0)에서 WebView가 `env(safe-area-inset-bottom)`도 주어 두 번 비워져 아래에 빈 띠가 생겼다 (2026-11-18).
 - **백그라운드 생성**: AI 작업이 도는 동안만 포그라운드 서비스(dataSync)를 켜고 끝나면 끈다. 서비스는 프로세스를 살려 두기만 하며 작업을 멈추지 않는다(끄는 순간 생성이 끊기지 않게). 알림 줄에 "응답을 만드는 중"이 보인다(Observability). 앱이 꺼진 동안의 실행(선톡 등)은 5-A-6에서 따로 정한다.
 - **화면 → 앱(Kotlin) 연결**: 숫자만 돌려주는 상태 표시줄 높이는 `addJavascriptInterface`, 동작이 있는 서비스 켜고 끄기는 `addWebMessageListener`로 **앱 주소(`http://tauri.localhost`)의 최상위 프레임만** 받는다 — AI가 쓴 HTML(htmlview iframe)은 이 객체를 볼 수 없다(Least Privilege).
 - **뒤로 가기**: 앱 안 이동 기록(nav)을 브라우저 기록과 맞춰 시스템 뒤로 가기가 앞 화면으로 가게 한다.

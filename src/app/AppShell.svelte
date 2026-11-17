@@ -140,7 +140,7 @@
 	}
 	/* 휴대폰: 노치·홈 막대 피하기 */
 	.app.mobile {
-		padding: var(--safe-top) env(safe-area-inset-right) env(safe-area-inset-bottom) env(safe-area-inset-left);
+		padding: var(--safe-top) env(safe-area-inset-right) var(--safe-bottom) env(safe-area-inset-left);
 	}
 	.scrim {
 		position: fixed;
@@ -157,7 +157,7 @@
 		display: flex;
 		width: min(84vw, 300px);
 		padding-top: var(--safe-top);
-		padding-bottom: env(safe-area-inset-bottom);
+		padding-bottom: var(--safe-bottom);
 		background: var(--bg);
 		box-shadow: var(--shadow-lg);
 	}

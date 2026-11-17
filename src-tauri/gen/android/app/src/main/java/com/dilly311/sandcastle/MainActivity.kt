@@ -11,12 +11,17 @@ import androidx.webkit.WebViewCompat
 import androidx.webkit.WebViewFeature
 import com.dilly311.sandcastle.background.GenerationService
 
-/** 화면이 읽는 상태 표시줄 높이 (CSS px). 숫자만 돌려준다 */
+/** 화면이 읽는 상태 표시줄·하단 탐색 막대 높이 (CSS px). 숫자만 돌려준다 */
 class SystemInsets {
   @Volatile var topCss: Float = 0f
+  @Volatile var bottomCss: Float = 0f
 
   @JavascriptInterface
   fun top(): Float = topCss
+
+  /** 화면이 직접 비워야 할 아래 높이 (하단 탐색 막대). 키보드가 열려 있으면 앱이 이미 비웠으므로 0 */
+  @JavascriptInterface
+  fun bottom(): Float = bottomCss
 }
 
 class MainActivity : TauriActivity() {
@@ -55,14 +60,18 @@ class MainActivity : TauriActivity() {
     super.onCreate(savedInstanceState)
 
     // Android 15+ edge-to-edge에서는 창이 키보드에 맞춰 줄지 않아 입력칸이 키보드에 가려진다 (CLAUDE.md 1-C-2).
-    // - 아래: 키보드(열려 있으면) 또는 하단 탐색 막대만큼 비운다
+    // - 아래: 키보드가 열려 있을 때만 그만큼 비운다. 하단 탐색 막대는 비우지 않고 높이만 알려 주어 화면(--safe-bottom)이 비운다 —
+    //   여기서도 비우면 WebView가 env(safe-area-inset-bottom)을 주는 기기에서 두 번 비워져 아래에 빈 띠가 생겼고,
+    //   막대 뒤가 앱 배경이 아닌 창 배경으로 보였다
     // - 위: WebView가 화면 전체를 덮지 않으면 env(safe-area-inset-top)이 0이 되므로, 상태 표시줄 높이를 화면에 알려 준다
     //   (화면은 max(env(safe-area-inset-top), var(--native-inset-top))을 쓴다 — src/app/systemInsets.ts)
     val content = findViewById<View>(android.R.id.content)
     ViewCompat.setOnApplyWindowInsetsListener(content) { v, insets ->
       val ime = insets.getInsets(WindowInsetsCompat.Type.ime()).bottom
       val nav = insets.getInsets(WindowInsetsCompat.Type.navigationBars()).bottom
-      v.setPadding(0, 0, 0, maxOf(ime, nav))
+      val keyboard = ime > nav
+      v.setPadding(0, 0, 0, if (keyboard) ime else 0)
+      systemInsets.bottomCss = if (keyboard) 0f else nav / resources.displayMetrics.density
       val top = insets.getInsets(WindowInsetsCompat.Type.statusBars() or WindowInsetsCompat.Type.displayCutout()).top
       systemInsets.topCss = top / resources.displayMetrics.density
       webView?.evaluateJavascript("window.dispatchEvent(new Event('sc-insets'))", null)

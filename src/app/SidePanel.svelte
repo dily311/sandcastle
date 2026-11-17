@@ -87,7 +87,7 @@
 		flex-direction: column;
 		background: var(--bg);
 		overflow: hidden;
-		padding: var(--safe-top) env(safe-area-inset-right) env(safe-area-inset-bottom) env(safe-area-inset-left);
+		padding: var(--safe-top) env(safe-area-inset-right) var(--safe-bottom) env(safe-area-inset-left);
 	}
 	.sheet-head {
 		display: flex;

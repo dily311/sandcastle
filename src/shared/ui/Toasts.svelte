@@ -26,7 +26,8 @@
 	.stack {
 		position: fixed;
 		right: var(--space-4);
-		bottom: var(--space-4);
+		/* 휴대폰: 하단 탐색 막대 위로 */
+		bottom: calc(var(--space-4) + var(--safe-bottom));
 		z-index: var(--z-toast);
 		display: flex;
 		flex-direction: column;

@@ -736,6 +736,7 @@
 		display: flex;
 		width: min(88vw, 340px);
 		padding-top: var(--safe-top);
+		padding-bottom: var(--safe-bottom);
 		background: var(--bg);
 		box-shadow: var(--shadow-lg);
 	}
