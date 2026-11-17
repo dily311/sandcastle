@@ -182,6 +182,15 @@ export const commands = {
 	callUserPlugin: (pluginId: string, method: string, args: Value, options?: InvokeOptions) => __TAURI_INVOKE<Value>("call_user_plugin", { pluginId, method, args }, options),
 	/**  플러그인 기록 (최근 것, 메모리 — 앱을 다시 켜면 비어 있음) */
 	getUserPluginLog: (pluginId: string, options?: InvokeOptions) => __TAURI_INVOKE<PluginLogEntry[]>("get_user_plugin_log", { pluginId }, options),
+	/**  제안 목록 (새것부터). status: pending / applied / rejected / reverted, 비우면 전부 */
+	listChangeProposals: (status: string | null, options?: InvokeOptions) => __TAURI_INVOKE<ChangeProposal_Serialize[]>("list_change_proposals", { status }, options),
+	/**  기다리는 제안 수 */
+	countPendingProposals: (options?: InvokeOptions) => __TAURI_INVOKE<number>("count_pending_proposals", undefined, options),
+	/**  적용 (그 사이 원본이 바뀌었으면 거절) */
+	applyChangeProposal: (id: string, options?: InvokeOptions) => __TAURI_INVOKE<ChangeProposal_Serialize>("apply_change_proposal", { id }, options),
+	rejectChangeProposal: (id: string, options?: InvokeOptions) => __TAURI_INVOKE<ChangeProposal_Serialize>("reject_change_proposal", { id }, options),
+	/**  적용한 것을 되돌림 (그 뒤 원본이 또 바뀌었으면 거절) */
+	revertChangeProposal: (id: string, options?: InvokeOptions) => __TAURI_INVOKE<ChangeProposal_Serialize>("revert_change_proposal", { id }, options),
 	/**  되살리기 */
 	restoreTrashItem: (id: string, options?: InvokeOptions) => __TAURI_INVOKE<TrashItem>("restore_trash_item", { id }, options),
 	/**  완전히 지우기 (되돌릴 수 없음 — 화면에서 확인을 받는다) */
@@ -861,6 +870,50 @@ export type CgAssetsInput_Serialize = {
 	generationParams: string | null,
 	aiUsable: boolean,
 } & GameAssetsInput_Serialize;
+
+export type ChangeProposal = ChangeProposal_Serialize | ChangeProposal_Deserialize;
+
+export type ChangeProposal_Deserialize = {
+	id: string,
+	source: string,
+	kind: ProposalKind,
+	/**  update / create */
+	op: string,
+	targetId?: string | null,
+	parentId?: string | null,
+	targetLabel: string,
+	fields: ProposalField[],
+	reason: string,
+	/**  pending / applied / rejected / reverted */
+	status: string,
+	createdAt: number,
+	decidedAt?: number | null,
+	/**  기다리는 제안: 제안한 뒤 원본이 바뀌어 적용할 수 없음 */
+	outdated: boolean,
+	/**  적용한 제안: 그 뒤 원본이 그대로라 되돌릴 수 있음 */
+	canRevert: boolean,
+};
+
+export type ChangeProposal_Serialize = {
+	id: string,
+	source: string,
+	kind: ProposalKind,
+	/**  update / create */
+	op: string,
+	targetId: string | null,
+	parentId: string | null,
+	targetLabel: string,
+	fields: ProposalField[],
+	reason: string,
+	/**  pending / applied / rejected / reverted */
+	status: string,
+	createdAt: number,
+	decidedAt: number | null,
+	/**  기다리는 제안: 제안한 뒤 원본이 바뀌어 적용할 수 없음 */
+	outdated: boolean,
+	/**  적용한 제안: 그 뒤 원본이 그대로라 되돌릴 수 있음 */
+	canRevert: boolean,
+};
 
 export type Character = Character_Serialize | Character_Deserialize;
 
@@ -3453,6 +3506,19 @@ export type PromptVariant = {
 	name: string,
 	text: string,
 };
+
+export type ProposalField = {
+	field: string,
+	label: string,
+	before: Value,
+	after: Value,
+};
+
+export type ProposalKind = "character" | "persona" | 
+/**  로어북 자체 (이름·설명) */
+"lorebook" | "lorebook_entry" | 
+/**  대화의 메시지 글 */
+"message";
 
 /**  어떤 텍스트에 적용할지 */
 export type RegexPlacement = 

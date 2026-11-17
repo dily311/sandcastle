@@ -24,7 +24,7 @@ use crate::{
 };
 use commands::{
     ai_service::*, character_image::*, chat::*, community::*, conversation::*, convert::*, data::*, game_engine::*, game_manager::*, import::*, phone::*,
-    preset::*, regex::*, settings::*, sync::*, task::*,
+    preset::*, proposals::*, regex::*, settings::*, sync::*, task::*,
 };
 use task::{TaskEventEmitter, TaskManager};
 
@@ -327,6 +327,12 @@ pub fn specta_builder() -> tauri_specta::Builder<tauri::Wry> {
         stop_user_plugins,
         call_user_plugin,
         get_user_plugin_log,
+        // 고치기 제안 (6-D-3)
+        list_change_proposals,
+        count_pending_proposals,
+        apply_change_proposal,
+        reject_change_proposal,
+        revert_change_proposal,
         restore_trash_item,
         purge_trash_item,
         empty_trash,
@@ -600,6 +606,12 @@ pub fn specta_builder() -> tauri_specta::Builder<tauri::Wry> {
         stop_user_plugins,
         call_user_plugin,
         get_user_plugin_log,
+        // 고치기 제안 (6-D-3)
+        list_change_proposals,
+        count_pending_proposals,
+        apply_change_proposal,
+        reject_change_proposal,
+        revert_change_proposal,
         restore_trash_item,
         purge_trash_item,
         empty_trash,

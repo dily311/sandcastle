@@ -106,6 +106,9 @@ pub fn stop_user_plugins() {
 pub async fn call_user_plugin(app: AppHandle, state: State<'_, AppState>, plugin_id: String, method: String, args: Value) -> Result<Value> {
     require(&app, id::COMMUNITY)?;
     let r = community::call(&state.db, &plugin_id, &method, &args).await;
+    if r.is_ok() && method.ends_with(".propose") {
+        crate::commands::proposals::changed(&app);
+    }
     if runtime::is_suspended(&plugin_id) {
         let _ = app.emit(SUSPENDED_EVENT, &plugin_id);
     }

@@ -44,6 +44,8 @@ pub const UNSYNCED_TABLES: &[&str] = &[
     // 커뮤니티 플러그인의 켜짐·허락 — 기기마다 (다른 기기에서 받은 코드가 저절로 돌지 않게, ADR-012)
     "user_plugins",
     "user_plugin_storage",
+    // 고치기 제안 (6-D-3) — 적용한 결과는 원래 테이블에서 동기화된다
+    "change_proposals",
 ];
 
 /// 동기화 대상 테이블 이름 (DB에서 읽음 — 마이그레이션이 늘어도 따로 고칠 목록이 없다)

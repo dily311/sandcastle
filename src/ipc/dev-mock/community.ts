@@ -1,6 +1,6 @@
 // 커뮤니티 플러그인 가짜 응답 (6-D-1). 브라우저 미리보기에는 파일이 없으므로 고른 경로와 상관없이
 // 예제 플러그인 하나를 미리보기로 보여 주고, 설치·켜기·지우기는 메모리 목록만 바꾼다
-import type { PluginManifest_Serialize as PluginManifest, PluginPreview_Serialize as PluginPreview, TrashItem, UserPlugin_Serialize as UserPlugin } from "../bindings";
+import type { ChangeProposal, PluginManifest_Serialize as PluginManifest, PluginPreview_Serialize as PluginPreview, TrashItem, UserPlugin_Serialize as UserPlugin } from "../bindings";
 
 type Args = Record<string, unknown>;
 type Handler = (args: Args) => unknown;
@@ -45,7 +45,65 @@ const find = (id: unknown) => {
 	return p;
 };
 
+// 고치기 제안 (6-D-3) — 미리보기에서 승인 화면을 볼 수 있게 몇 개 넣어 둔다
+const proposalList: ChangeProposal[] = [
+	{
+		id: "pr-1",
+		source: "plugin:tidy-quotes",
+		kind: "lorebook_entry",
+		op: "update",
+		targetId: "e1",
+		parentId: null,
+		targetLabel: "엘도리아 숲",
+		fields: [
+			{ field: "keys", label: "키워드", before: ["eldoria", "wood"], after: ["eldoria", "wood", "forest", "숲"] },
+			{
+				field: "content",
+				label: "내용",
+				before: ["엘도리아 숲은 오래된 숲이다.", "마법 생물이 산다.", "밤에는 위험하다."].join("\n"),
+				after: ["엘도리아 숲은 오래된 마법의 숲이다.", "마법 생물이 산다.", "밤에는 길을 잃기 쉽다."].join("\n"),
+			},
+		],
+		reason: "키워드가 적어 '숲'이라는 말로는 이 항목이 걸리지 않습니다.",
+		status: "pending",
+		createdAt: Date.now() - 5 * 60_000,
+		decidedAt: null,
+		outdated: false,
+		canRevert: false,
+	},
+	{
+		id: "pr-2",
+		source: "plugin:tidy-quotes",
+		kind: "character",
+		op: "update",
+		targetId: "c1",
+		parentId: null,
+		targetLabel: "세라피나",
+		fields: [{ field: "description", label: "설명", before: "숲의 수호자.", after: "엘도리아 숲을 지키는 수호자." }],
+		reason: "",
+		status: "pending",
+		createdAt: Date.now() - 60_000,
+		decidedAt: null,
+		outdated: true,
+		canRevert: false,
+	},
+];
+
+function decide(id: unknown, status: string): ChangeProposal {
+	const p = proposalList.find((x) => x.id === id);
+	if (!p) throw { code: "RESOURCE_NOT_FOUND", message: "제안이 없음" };
+	p.status = status;
+	p.decidedAt = Date.now();
+	p.canRevert = status === "applied";
+	return { ...p };
+}
+
 export const communityHandlers: Record<string, Handler> = {
+	list_change_proposals: ({ status }) => proposalList.filter((p) => !status || p.status === status).map((p) => ({ ...p })),
+	count_pending_proposals: () => proposalList.filter((p) => p.status === "pending").length,
+	apply_change_proposal: ({ id }) => decide(id, "applied"),
+	reject_change_proposal: ({ id }) => decide(id, "rejected"),
+	revert_change_proposal: ({ id }) => decide(id, "reverted"),
 	list_user_plugins: () => plugins.map((p) => ({ ...p })),
 	preview_user_plugin: (): PluginPreview => {
 		const existing = plugins.find((p) => p.id === sample.id);

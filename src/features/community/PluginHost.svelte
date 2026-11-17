@@ -3,14 +3,24 @@
 	// sandbox="allow-scripts"만 준다(allow-same-origin 없음 → 불투명 origin: 앱 화면·저장소·IPC에 닿지 못함)
 	import { plugins } from "$shared/stores/plugins.svelte";
 	import { pluginHost } from "./host.svelte";
+	import { proposals } from "./proposals.svelte";
+	import ProposalsDialog from "./ProposalsDialog.svelte";
 
 	let { enabled = plugins.on("community") }: { enabled?: boolean } = $props();
 
 	$effect(() => {
-		if (enabled) void pluginHost.start();
-		else void pluginHost.stop();
+		if (enabled) {
+			void pluginHost.start();
+			void proposals.watch();
+		} else {
+			void pluginHost.stop();
+			proposals.unwatch();
+		}
 	});
-	$effect(() => () => void pluginHost.stop());
+	$effect(() => () => {
+		void pluginHost.stop();
+		proposals.unwatch();
+	});
 
 	function frame(el: HTMLIFrameElement, id: string) {
 		pluginHost.attach(id, el);
@@ -26,6 +36,7 @@
 			{/each}
 		{/key}
 	</div>
+	<ProposalsDialog />
 {/if}
 
 <style>

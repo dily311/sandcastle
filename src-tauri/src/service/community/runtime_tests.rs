@@ -139,6 +139,40 @@ async fn runtime_serves_and_checks_calls() {
     )
     .unwrap();
 
+    // 데이터 읽기·제안 (6-D-3): 권한 종류별, 파일 경로는 주지 않음, 제안은 원본을 바꾸지 않음
+    sqlx::query("INSERT INTO characters (id, name, description, avatar) VALUES ('c1', 'Mira', 'desc', 'C:/secret/avatar.png')")
+        .execute(&db)
+        .await
+        .unwrap();
+    add(&db, &base, d.path(), "rt-data", &["data.read:character", "data.write:character"], true).await;
+    run_start(&db, &base).await;
+    let list = call(&db, "rt-data", "data.character.list", &Value::Null).await.unwrap();
+    assert_eq!(list[0]["name"], "Mira");
+    let one = call(&db, "rt-data", "data.character.get", &json!({ "id": "c1" })).await.unwrap();
+    assert_eq!(one["description"], "desc");
+    assert!(!one.to_string().contains("secret"), "아바타 경로를 주지 않음: {one}");
+    assert!(call(&db, "rt-data", "data.persona.list", &Value::Null).await.is_err(), "다른 종류는 권한 없음");
+    assert!(call(&db, "rt-data", "data.chat.messages", &json!({ "conversationId": "x" })).await.is_err());
+    let r = call(
+        &db,
+        "rt-data",
+        "data.character.propose",
+        &json!({ "id": "c1", "changes": { "description": "better" }, "reason": "r" }),
+    )
+    .await
+    .unwrap();
+    assert_eq!(r["status"], "pending");
+    let d2: String = sqlx::query_scalar("SELECT description FROM characters WHERE id = 'c1'")
+        .fetch_one(&db)
+        .await
+        .unwrap();
+    assert_eq!(d2, "desc");
+    let p = crate::service::proposals::get(&db, r["id"].as_str().unwrap()).await.unwrap();
+    assert_eq!(p.source, "plugin:rt-data");
+    assert!(call(&db, "rt-data", "data.lorebook.propose", &json!({ "id": "b", "changes": { "name": "x" } }))
+        .await
+        .is_err());
+
     // 지우면 저장소도 휴지통으로, 되살리면 같이
     let item = uninstall(&db, &base, "rt-store").await.unwrap();
     assert_eq!(get_url("/rt-store/main.js").0, 404);

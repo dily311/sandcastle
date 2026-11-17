@@ -29,6 +29,20 @@ pub const API: &[(&str, Option<&str>)] = &[
     ("storage.set", Some("storage")),
     ("storage.delete", Some("storage")),
     ("storage.keys", Some("storage")),
+    // 데이터 읽기 (6-D-3)
+    ("data.character.list", Some("data.read:character")),
+    ("data.character.get", Some("data.read:character")),
+    ("data.persona.list", Some("data.read:persona")),
+    ("data.persona.get", Some("data.read:persona")),
+    ("data.lorebook.list", Some("data.read:lorebook")),
+    ("data.lorebook.get", Some("data.read:lorebook")),
+    ("data.chat.list", Some("data.read:chat")),
+    ("data.chat.messages", Some("data.read:chat")),
+    // 고치기 제안 (6-D-3) — 원본은 사용자가 승인해야 바뀐다
+    ("data.character.propose", Some("data.write:character")),
+    ("data.persona.propose", Some("data.write:persona")),
+    ("data.lorebook.propose", Some("data.write:lorebook")),
+    ("data.chat.propose", Some("data.write:chat")),
 ];
 
 pub fn required_permission(method: &str) -> Option<Option<&'static str>> {
@@ -273,7 +287,12 @@ window.sandcastle=Object.freeze({apiVersion:1,call,
 log:(...a)=>call("log",{level:"info",message:fmt(a)}),
 warn:(...a)=>call("log",{level:"warn",message:fmt(a)}),
 app:Object.freeze({info:()=>call("app.info")}),
-storage:Object.freeze({get:k=>call("storage.get",{key:k}),set:(k,v)=>call("storage.set",{key:k,value:v===undefined?null:v}),delete:k=>call("storage.delete",{key:k}),keys:()=>call("storage.keys")})});
+storage:Object.freeze({get:k=>call("storage.get",{key:k}),set:(k,v)=>call("storage.set",{key:k,value:v===undefined?null:v}),delete:k=>call("storage.delete",{key:k}),keys:()=>call("storage.keys")}),
+data:Object.freeze({
+characters:Object.freeze({list:()=>call("data.character.list"),get:id=>call("data.character.get",{id}),propose:(id,changes,reason)=>call("data.character.propose",{id,changes,reason})}),
+personas:Object.freeze({list:()=>call("data.persona.list"),get:id=>call("data.persona.get",{id}),propose:(id,changes,reason)=>call("data.persona.propose",{id,changes,reason})}),
+lorebooks:Object.freeze({list:()=>call("data.lorebook.list"),get:id=>call("data.lorebook.get",{id}),propose:(id,changes,reason)=>call("data.lorebook.propose",{entity:"book",id,changes,reason}),proposeEntry:(id,changes,reason)=>call("data.lorebook.propose",{entity:"entry",id,changes,reason}),proposeNewEntry:(bookId,changes,reason)=>call("data.lorebook.propose",{entity:"entry",op:"create",parentId:bookId,changes,reason})}),
+chats:Object.freeze({list:o=>call("data.chat.list",o||{}),messages:(conversationId,o)=>call("data.chat.messages",Object.assign({},o||{},{conversationId})),proposeMessage:(id,content,reason)=>call("data.chat.propose",{id,changes:{content},reason})})})});
 })();"#;
 
 fn csp(id: &str) -> String {

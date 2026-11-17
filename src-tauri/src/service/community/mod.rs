@@ -7,6 +7,7 @@
 //! - 삭제는 휴지통으로 (`TrashKind::UserPlugin`, 폴더도 같이).
 //!
 //! 플러그인 코드를 실행하는 것은 6-D-2(런타임)이다. 여기는 파일과 상태만 다룬다.
+pub mod data;
 pub mod manifest;
 pub mod package;
 pub mod runtime;
@@ -373,6 +374,15 @@ pub async fn call(db: &SqlitePool, id: &str, method: &str, args: &serde_json::Va
         "storage.set" => storage::set(db, id, &key(), &arg("value")).await.map(|_| Value::Null),
         "storage.delete" => storage::delete(db, id, &key()).await.map(|_| Value::Null),
         "storage.keys" => storage::keys(db, id).await.map(Value::from),
+        "data.character.list" => data::character_list(db).await,
+        "data.character.get" => data::character_get(db, args).await,
+        "data.persona.list" => data::persona_list(db).await,
+        "data.persona.get" => data::persona_get(db, args).await,
+        "data.lorebook.list" => data::lorebook_list(db).await,
+        "data.lorebook.get" => data::lorebook_get(db, args).await,
+        "data.chat.list" => data::chat_list(db, args).await,
+        "data.chat.messages" => data::chat_messages(db, args).await,
+        "data.character.propose" | "data.persona.propose" | "data.lorebook.propose" | "data.chat.propose" => propose(db, id, method, args).await,
         _ => Err(AppError::validation(format!("없는 메서드: {method}"), None)),
     };
     if let Err(e) = &result {
@@ -383,5 +393,38 @@ pub async fn call(db: &SqlitePool, id: &str, method: &str, args: &serde_json::Va
 
 #[cfg(test)]
 mod runtime_tests;
+/// 플러그인의 고치기 제안 → 사용자가 고를 때까지 원본은 그대로. 돌려주는 것은 제안 id와 상태
+async fn propose(db: &SqlitePool, plugin: &str, method: &str, args: &serde_json::Value) -> Result<serde_json::Value> {
+    use crate::service::proposals::{self, NewProposal, ProposalKind};
+    use serde_json::Value;
+    let s = |k: &str| args.get(k).and_then(Value::as_str);
+    let entry = s("entity") == Some("entry");
+    let kind = match method {
+        "data.character.propose" => ProposalKind::Character,
+        "data.persona.propose" => ProposalKind::Persona,
+        "data.lorebook.propose" if entry => ProposalKind::LorebookEntry,
+        "data.lorebook.propose" => ProposalKind::Lorebook,
+        _ => ProposalKind::Message,
+    };
+    // 권한 표와 제안 종류가 어긋나지 않게 한 번 더 (lorebook_entry는 data.write:lorebook)
+    debug_assert_eq!(runtime::required_permission(method), Some(Some(kind.write_permission())));
+    let changes = args.get("changes").and_then(Value::as_object).cloned().unwrap_or_default();
+    let source = format!("plugin:{plugin}");
+    let p = proposals::propose(
+        db,
+        NewProposal {
+            source: &source,
+            kind,
+            op: s("op").unwrap_or("update"),
+            target_id: s("id"),
+            parent_id: s("parentId"),
+            changes: &changes,
+            reason: s("reason").unwrap_or(""),
+        },
+    )
+    .await?;
+    Ok(serde_json::json!({ "id": p.id, "status": p.status }))
+}
+
 #[cfg(test)]
 mod tests;

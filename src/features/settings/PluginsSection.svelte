@@ -3,7 +3,8 @@
 	// 기능별 세부 설정은 각자의 설정 탭 (켜져 있을 때만 보임)
 	import { onMount } from "svelte";
 	import { Settings2 } from "@lucide/svelte";
-	import { Badge, IconButton, Switch } from "$shared/ui";
+	import { Badge, Button, IconButton, Switch } from "$shared/ui";
+	import { proposals, proposalsUi } from "$features/community/proposals.svelte";
 	import { layout } from "$app/layout.svelte";
 	import { nav, type SettingsTab } from "$app/nav.svelte";
 	import { plugins, type PluginId } from "$shared/stores/plugins.svelte";
@@ -18,6 +19,7 @@
 		{ title: "대화 표시", ids: ["chat.images", "html", "regex"] },
 		{ title: "AI 도구", ids: ["translate", "tts", "imagegen"] },
 		{ title: "데이터", ids: ["sync"] },
+		{ title: "확장", ids: ["community"] },
 	];
 	/** 세부 설정 탭이 있는 플러그인 */
 	const TAB: Partial<Record<PluginId, SettingsTab>> = { phone: "phone", widget: "widget", regex: "regex", translate: "translate", tts: "tts", imagegen: "imagegen", sync: "sync" };
@@ -33,6 +35,9 @@
 				{#if p}
 					<Row label={p.name} desc={p.description}>
 						{#if p.desktopOnly && layout.mobile}<Badge>데스크톱 전용</Badge>{/if}
+						{#if id === "community" && p.enabled}
+							<Button size="sm" variant="ghost" onclick={() => (proposalsUi.open = true)}>고치기 제안{#if proposals.pending.length > 0}&nbsp;<Badge tone="accent">{proposals.pending.length}</Badge>{/if}</Button>
+						{/if}
 						{#if tab && p.enabled}<IconButton label="{p.name} 설정" size="sm" onclick={() => nav.replace({ page: "settings", tab })}><Settings2 /></IconButton>{/if}
 						<Switch checked={p.enabled} label="{p.name} 사용" hideLabel disabled={p.desktopOnly && layout.mobile} onchange={(v) => plugins.set(id, v)} />
 					</Row>
