@@ -6,6 +6,7 @@
 //! - check:    DB 무결성·고아 파일 점검 (보여주기만)
 //! - trash:    휴지통 (지운 항목 되살리기·완전히 지우기, 2-A-3)
 //! - settings_scope: 설정 칸마다 같이 쓸지 / 기기 전용인지 (2-A-4)
+//! - sync_bundle: 기기 사이에 주고받는 동기화 묶음 (.scsync, 2-B-1)
 pub mod archive;
 pub mod backup;
 pub mod card;
@@ -13,6 +14,7 @@ pub mod check;
 pub mod overview;
 pub mod pack;
 pub mod settings_scope;
+pub mod sync_bundle;
 pub mod trash;
 
 #[cfg(test)]

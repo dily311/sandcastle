@@ -14,6 +14,7 @@ pub mod conversation;
 pub mod game;
 pub mod phone;
 pub mod regex;
+pub mod schema;
 pub mod translation;
 pub mod usage;
 pub mod widget;

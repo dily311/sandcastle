@@ -349,6 +349,23 @@ Conversation
 - API 선택이 기기 전용인 이유: 키가 기기마다 따로이고, 로컬 모델 주소는 그 PC에서만 닿는다. API 프로필 행 자체는 동기화하고, 키가 없는 기기는 설정 > API 키에 "키 없음"이 보이며(이미 있던 표시), 그 프로필로 보내면 "이 기기에 키가 없음 — 설정 > API 키에서 넣기"로 알린다.
 - 그 밖의 기기 전용: 창 위치·크기(window-state), 위젯 음악(`widget.json`), localStorage(폰 주인·배경 선택·마지막 읽음 등).
 
+**동기화 묶음 형식 (2-B-1)** — `service/data/sync_bundle.rs`, 확장자 `.scsync`(zip).
+
+| 안의 파일 | 내용 |
+| --- | --- |
+| `manifest.json` | `format`("sandcastle-sync")·`formatVersion`(1)·`schemaVersion`(보낸 DB의 마이그레이션 번호)·`appVersion`·`deviceId`·`createdAt`·`since`(이 시각 뒤 바뀐 것만, 없으면 전부)·테이블별 행 수·지운 기록 수·파일 수·`encryption`(지금은 늘 없음) |
+| `tables/<테이블>.jsonl` | 동기화 대상 테이블에서 `updated_at > since`인 행, 한 줄에 {열: 값} 하나. 열 이름으로 담으므로 받는 쪽 스키마가 조금 달라도 아는 열만 쓰면 된다 |
+| `tombstones.json` | `sync_tombstones`에서 `deleted_at > since`인 것 |
+| `settings.json` | 같이 쓰는 설정 칸만 (`settings_scope::shared_part`) |
+| `files.json` | 사용자 데이터 폴더(characters·games·themes·generated·backgrounds — 휴지통 제외)의 **모든** 파일: 경로·크기·sha256·수정 시각·`included` |
+| `blobs/<sha256>` | `included` 파일 내용(같은 내용은 한 번). `since` 뒤에 바뀐 파일만, 또는 "파일 빼고" 선택이면 없음 |
+
+- 파일 목록은 늘 전부 담는다: 받는 쪽이 "나한테 없는 해시"를 알아 다음 묶음에서 요청하거나(2-C), 없다고 보여줄 수 있게. 내용만 골라 담는다.
+- **경로 자리표시**: 행·설정 글자 속의 보낸 기기 앱 데이터 경로(그대로 / JSON 안 역슬래시 두 개 / 슬래시 모양)를 `$SANDCASTLE_DATA$`로 바꾸고, 그 뒤 경로의 구분자를 `/`로 맞춘다. 받는 쪽은 자기 경로로 되돌린다(`/` 구분자 — Windows도 읽음). Windows ↔ Android가 맞고, 묶음에 보낸 사람의 사용자 이름이 든 경로가 남지 않는다(Least Privilege).
+- **여는 쪽 검사**: 형식 이름, 형식 버전, **스키마 버전이 이 기기보다 높으면 열지 않고 "이 기기의 앱을 업데이트"** 안내, 암호화된 묶음 거부, 파일 경로가 동기화 폴더 안인지·`..`·드라이브 문자, 해시 모양, 꺼낸 파일의 해시가 맞는지(다르면 지움).
+- 넣지 않는 것: 동기화 안 하는 테이블(실행 기록·캐시·기기 전용·휴지통·지운 기록 표 자체), `device.json`, `trash/`, 기기 전용 설정, API 키(원래 DB·설정에 없음 — 2-B-4가 묶음 전체에서 가짜 키를 찾는 테스트로 고정).
+- 테이블 구조 읽기(pragma)는 휴지통과 같이 `db/schema.rs`로 옮겨 같이 쓴다.
+
 ### (참고) 전역 테스트 관리 방법
 
 
