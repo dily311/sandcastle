@@ -129,6 +129,18 @@ jobs:
           "MSEDGEDRIVER=$wrap" >> $env:GITHUB_ENV
       - name: 앱 빌드 (E2E용 identifier)
         run: pnpm e2e:build
+      # 새 러너에서 WebView2가 처음 뜰 때는 오래 걸려 드라이버의 60초 대기를 넘기고, 드라이버가 앱만 죽이면
+      # 남은 msedgewebview2가 다음 시도까지 붙잡아(디버깅 포트 없이) 세션이 끝내 안 만들어졌다.
+      # 그래서 앱을 한 번 먼저 띄워 WebView2를 데우고, 앱과 남은 WebView2 프로세스를 모두 끈다 (러너에는 다른 WebView2가 없음)
+      - name: WebView2 데우기
+        shell: pwsh
+        run: |
+          $p = Start-Process "src-tauri\target\debug\sandcastle.exe" -PassThru
+          Start-Sleep -Seconds 40
+          if (-not $p.HasExited) { Stop-Process $p -Force }
+          Get-Process msedgewebview2 -ErrorAction SilentlyContinue | Stop-Process -Force
+          Start-Sleep -Seconds 3
+          Write-Host "남은 WebView2 프로세스: $((Get-Process msedgewebview2 -ErrorAction SilentlyContinue).Count)"
       - name: E2E
         run: pnpm e2e
         env:
@@ -143,8 +155,13 @@ jobs:
           $key = "HKLM:\SOFTWARE\WOW6432Node\Microsoft\EdgeUpdate\Clients\{F3017226-FE2A-4295-8BDF-00C3A9A7E4C5}"
           Write-Host "WebView2 런타임(레지스트리): $((Get-ItemProperty $key -ErrorAction SilentlyContinue).pv)"
           Write-Host "Edge: $((Get-Item 'C:\Program Files (x86)\Microsoft\Edge\Application\msedge.exe' -ErrorAction SilentlyContinue).VersionInfo.ProductVersion)"
-          Write-Host "--- msedgedriver 기록 (끝부분)"
-          if (Test-Path "$env:RUNNER_TEMP\msedgedriver.log") { Get-Content "$env:RUNNER_TEMP\msedgedriver.log" -Tail 120 } else { Write-Host "기록 없음" }
+          Write-Host "--- msedgedriver 기록 (처음 시도 부분과 끝부분)"
+          if (Test-Path "$env:RUNNER_TEMP\msedgedriver.log") {
+            Get-Content "$env:RUNNER_TEMP\msedgedriver.log" | Select-String -Pattern "Launching|Failed to connect|RESPONSE InitSession|DevToolsActivePort|USER_DATA|user-data" | Select-Object -First 20 | ForEach-Object { $_.Line.Substring(0, [Math]::Min(300, $_.Line.Length)) }
+            Get-Content "$env:RUNNER_TEMP\msedgedriver.log" -Tail 60
+          } else { Write-Host "기록 없음" }
+          Write-Host "--- 남은 WebView2 프로세스: $((Get-Process msedgewebview2 -ErrorAction SilentlyContinue).Count)"
+          Get-Process msedgewebview2 -ErrorAction SilentlyContinue | Stop-Process -Force
           Write-Host "--- Edge·WebView2 정책"
           foreach ($k in "HKLM:\SOFTWARE\Policies\Microsoft\Edge", "HKLM:\SOFTWARE\Policies\Microsoft\Edge\WebView2", "HKCU:\SOFTWARE\Policies\Microsoft\Edge") { if (Test-Path $k) { Write-Host $k; Get-ItemProperty $k | Out-String | Write-Host } }
           # 드라이버 없이 앱만 띄워 본다 (원격 디버깅 포트를 열어 달라고 해서): 20초 뒤 살아 있는지, 포트가 열렸는지
