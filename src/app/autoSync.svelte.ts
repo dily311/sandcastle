@@ -1,0 +1,56 @@
+// 자동 동기화 (CLAUDE.md 2-C-2, ADR-011). 기본 꺼짐.
+// 동기화 플러그인 + 설정 > 동기화의 "자동 동기화" + 폴더가 모두 있을 때만 타이머를 만든다 (데스크톱만).
+// 앱을 켜고 조금 뒤 한 번, 그 뒤 정한 간격마다. 실패는 실행 기록·동기화 기록과 로그에 남고 알림은 띄우지 않는다.
+import { call, commands } from "$shared/ipc/client";
+import { plugins } from "$shared/stores/plugins.svelte";
+import { pluginSetting } from "$shared/stores/aiTools.svelte";
+import { logs } from "$shared/stores/log.svelte";
+import { layout } from "./layout.svelte";
+
+const FIRST_DELAY_MS = 20_000;
+let timer: ReturnType<typeof setTimeout> | null = null;
+let key = "";
+
+function stop() {
+	if (timer) clearTimeout(timer);
+	timer = null;
+	key = "";
+}
+
+async function runOnce() {
+	try {
+		const r = await call(commands.syncNow(true), { source: "sync", silent: true });
+		const merged = r.merged.length;
+		if (merged) logs.info("sync", `자동 동기화: 기기 ${merged}개 합침, 파일 받음 ${r.filesDown} · 올림 ${r.filesUp}`);
+	} catch (e) {
+		logs.warn("sync", `자동 동기화 실패: ${String((e as { message?: string })?.message ?? e)}`);
+	}
+}
+
+function schedule(delay: number, intervalMs: number) {
+	timer = setTimeout(async () => {
+		await runOnce();
+		if (timer) schedule(intervalMs, intervalMs);
+	}, delay);
+}
+
+/** AppShell이 한 번 부른다. 꺼져 있으면 설정도 읽지 않는다 */
+export function watchAutoSync() {
+	$effect.root(() => {
+		$effect(() => {
+			if (!layout.desktop || !plugins.loaded || !plugins.on("sync")) return stop();
+			if (!pluginSetting.value) {
+				void pluginSetting.load();
+				return;
+			}
+			const s = pluginSetting.value.sync;
+			if (!s?.auto || !s.folder) return stop();
+			const minutes = Math.max(5, s.intervalMinutes || 30);
+			const next = `${s.folder}|${minutes}`;
+			if (next === key) return;
+			stop();
+			key = next;
+			schedule(FIRST_DELAY_MS, minutes * 60_000);
+		});
+	});
+}

@@ -21,7 +21,7 @@
 
 use std::collections::{BTreeMap, HashMap, HashSet};
 
-use serde::Serialize;
+use serde::{Deserialize, Serialize};
 use serde_json::{Map, Value};
 use sqlx::{SqliteConnection, SqlitePool};
 
@@ -61,7 +61,7 @@ impl BundleData {
     }
 }
 
-#[derive(Debug, Clone, Default, PartialEq, Serialize, specta::Type)]
+#[derive(Debug, Clone, Default, PartialEq, Serialize, Deserialize, specta::Type)]
 #[serde(rename_all = "camelCase")]
 pub struct MergeReport {
     pub added: u32,
@@ -177,11 +177,24 @@ struct Ctx<'a> {
     restored: HashSet<(String, String)>,
     /// 보낸 기기가 이 기기 것 대신 자기 것을 둔 행 (manifest.held) — 받는 쪽도 둘 다 남긴다
     held: HashSet<(String, String)>,
+    /// 보낸 기기가 합친 다른 기기 묶음의 시각 (manifest.acks, 그 기기들 시계)
+    acks: BTreeMap<String, i64>,
     report: MergeReport,
 }
 
 async fn local_row(conn: &mut SqliteConnection, schema: &Schema, table: &str, key_cols: &[String], key: &[Value]) -> Result<Option<Map<String, Value>>> {
     Ok(schema.select(conn, table, key_cols, key).await?.into_iter().next())
+}
+
+/// 이 기기 행이 다른 기기(C)에게서 받은 그대로이고(그 뒤 안 고침), 보낸 기기가 C의 그 판을 이미 봤는가.
+/// 그렇다면 이 행은 "이 기기에서 고친 것"이 아니다 — 기기가 셋 이상일 때 같은 고침을 충돌로 보지 않게
+async fn seen_by_sender(conn: &mut SqliteConnection, ctx: &Ctx<'_>, table: &str, key: &[Value], local_at: i64) -> Result<bool> {
+    let origin: Option<(String, i64, i64)> = sqlx::query_as("SELECT device_id, remote_at, merged_at FROM sync_row_origin WHERE tbl = ? AND key = ?")
+        .bind(table)
+        .bind(key_text(key))
+        .fetch_optional(&mut *conn)
+        .await?;
+    Ok(origin.is_some_and(|(dev, remote_at, merged_at)| merged_at == local_at && ctx.acks.get(&dev).is_some_and(|a| *a >= remote_at)))
 }
 
 async fn has_tombstone(conn: &mut SqliteConnection, table: &str, key: &[Value]) -> Result<bool> {
@@ -249,7 +262,20 @@ async fn upsert(conn: &mut SqliteConnection, ctx: &Ctx<'_>, table: &str, key_col
         q = bind_query(q, &v);
     }
     match q.execute(&mut *conn).await {
-        Ok(_) => Ok(true),
+        Ok(_) => {
+            // 어느 기기의 어느 판을 받았나 (seen_by_sender)
+            let key: Vec<Value> = key_cols.iter().map(|c| row.get(c).cloned().unwrap_or(Value::Null)).collect();
+            let remote_at = row.get("updated_at").and_then(Value::as_i64).unwrap_or(0);
+            sqlx::query("INSERT OR REPLACE INTO sync_row_origin (tbl, key, device_id, remote_at, merged_at) VALUES (?, ?, ?, ?, ?)")
+                .bind(table)
+                .bind(key_text(&key))
+                .bind(&ctx.device)
+                .bind(remote_at)
+                .bind(ctx.now)
+                .execute(&mut *conn)
+                .await?;
+            Ok(true)
+        }
         Err(sqlx::Error::Database(e)) if e.is_unique_violation() => Ok(false),
         Err(e) => Err(e.into()),
     }
@@ -280,7 +306,7 @@ async fn apply_tombstones(conn: &mut SqliteConnection, ctx: &mut Ctx<'_>, tombst
             continue;
         };
         let local_at = local.get("updated_at").and_then(Value::as_i64).unwrap_or(i64::MAX);
-        if local_at > ctx.local_base {
+        if local_at > ctx.local_base && !seen_by_sender(conn, ctx, &t.tbl, &key, local_at).await? {
             ctx.report.kept_local_edits += 1;
             kept.insert((t.tbl.clone(), key_text(&key)));
         } else {
@@ -476,7 +502,7 @@ async fn apply_rows(conn: &mut SqliteConnection, ctx: &mut Ctx<'_>, table: &str,
             Some(l) => {
                 let local_at = l.get("updated_at").and_then(Value::as_i64).unwrap_or(i64::MAX);
                 let held = ctx.held.contains(&(table.to_string(), key_text(&key)));
-                if local_at <= ctx.local_base && !held {
+                if (local_at <= ctx.local_base || seen_by_sender(conn, ctx, table, &key, local_at).await?) && !held {
                     if upsert(conn, ctx, table, &key_cols, &row).await? {
                         ctx.report.updated += 1;
                     } else {
@@ -616,6 +642,7 @@ pub async fn merge(db: &SqlitePool, data: &BundleData, local_device: &str, setti
         id_map: HashMap::new(),
         restored: HashSet::new(),
         held: m.held.get(local_device).map(|v| v.iter().cloned().collect()).unwrap_or_default(),
+        acks: m.acks.clone(),
         report: MergeReport { dry_run, ..Default::default() },
     };
 

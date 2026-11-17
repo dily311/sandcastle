@@ -178,6 +178,10 @@ export const commands = {
 	previewSyncBundle: (path: string, options?: InvokeOptions) => __TAURI_INVOKE<SyncPreview>("preview_sync_bundle", { path }, options),
 	/**  합치기: 이 기기 DB·설정 사본을 먼저 만들고, 없는 파일을 넣고, DB를 합치고, 같이 쓰는 설정을 바꾼다 */
 	applySyncBundle: (path: string, options?: InvokeOptions) => __TAURI_INVOKE<SyncApplied>("apply_sync_bundle", { path }, options),
+	/**  지금 동기화 (폴더). `auto`는 자동 동기화가 부를 때 (설정 > 동기화의 자동 동기화가 켜져 있어야 함) */
+	syncNow: (auto: boolean, options?: InvokeOptions) => __TAURI_INVOKE<SyncRunReport_Serialize>("sync_now", { auto }, options),
+	/**  동기화 기록 (최근부터) */
+	listSyncRuns: (limit: number, options?: InvokeOptions) => __TAURI_INVOKE<SyncRun_Serialize[]>("list_sync_runs", { limit }, options),
 	/**  지난 panic 기록 (최근 것부터, 앱 데이터 폴더의 logs/panic.log) */
 	getPanicLog: (options?: InvokeOptions) => __TAURI_INVOKE<PanicEntry_Serialize[]>("get_panic_log", undefined, options),
 	/**  새 버전 확인 (GitHub Releases). 내려받지 않고 릴리스 페이지 주소만 돌려준다 (1-E-2) */
@@ -2552,6 +2556,13 @@ export type MergeReport = {
 	dryRun: boolean,
 };
 
+export type MergedDevice = {
+	deviceId: string,
+	/**  그 묶음을 만든 시각 (그 기기 시계) */
+	createdAt: number,
+	report: MergeReport,
+};
+
 export type Message = Message_Serialize | Message_Deserialize;
 
 export type MessageInput = MessageInput_Serialize | MessageInput_Deserialize;
@@ -3077,6 +3088,8 @@ export type PluginSetting_Deserialize = {
 	phone?: PhoneSetting_Deserialize,
 	/**  앱 프롬프트 (사용자가 고친 것만, 비우면 기본값 — service::app_prompts) */
 	prompts?: AppPrompts_Deserialize,
+	/**  폴더 동기화 (2-C) — 경로가 기기마다 달라 기기 전용 (settings_scope) */
+	sync?: SyncSetting_Deserialize,
 };
 
 export type PluginSetting_Serialize = {
@@ -3086,6 +3099,8 @@ export type PluginSetting_Serialize = {
 	phone: PhoneSetting_Serialize,
 	/**  앱 프롬프트 (사용자가 고친 것만, 비우면 기본값 — service::app_prompts) */
 	prompts: AppPrompts_Serialize,
+	/**  폴더 동기화 (2-C) — 경로가 기기마다 달라 기기 전용 (settings_scope) */
+	sync: SyncSetting_Serialize,
 };
 
 export type PromptBlocks = PromptBlocks_Serialize | PromptBlocks_Deserialize;
@@ -3544,6 +3559,84 @@ export type SyncPreview = {
 	bundle: SyncBundleInfo,
 	report: MergeReport,
 	files: FileCounts,
+};
+
+/**  진행 단계 (화면에 "다른 기기 확인 / 기기 … 합치는 중 / 올리는 중") */
+export type SyncProgress = {
+	step: string,
+};
+
+export type SyncRun = SyncRun_Serialize | SyncRun_Deserialize;
+
+export type SyncRunReport = SyncRunReport_Serialize | SyncRunReport_Deserialize;
+
+export type SyncRunReport_Deserialize = {
+	merged: MergedDevice[],
+	/**  새로 쓰인 것이 없어 건너뛴 기기 */
+	unchangedDevices: number,
+	filesDown: number,
+	/**  저장소에 내용이 아직 없는 파일 (그 기기가 다음 동기화 때 올림) */
+	filesMissing: number,
+	filesUp: number,
+	tombstonesCleaned: number,
+	/**  합치기 전 사본 (앱 데이터 폴더 기준). 합친 것이 없으면 없음 */
+	backup?: string | null,
+};
+
+export type SyncRunReport_Serialize = {
+	merged: MergedDevice[],
+	/**  새로 쓰인 것이 없어 건너뛴 기기 */
+	unchangedDevices: number,
+	filesDown: number,
+	/**  저장소에 내용이 아직 없는 파일 (그 기기가 다음 동기화 때 올림) */
+	filesMissing: number,
+	filesUp: number,
+	tombstonesCleaned: number,
+	/**  합치기 전 사본 (앱 데이터 폴더 기준). 합친 것이 없으면 없음 */
+	backup: string | null,
+};
+
+export type SyncRun_Deserialize = {
+	id: string,
+	target: string,
+	runBy: string,
+	startedAt: number,
+	finishedAt?: number | null,
+	ok: boolean,
+	error?: string | null,
+	summary?: SyncRunReport_Deserialize | null,
+};
+
+export type SyncRun_Serialize = {
+	id: string,
+	target: string,
+	runBy: string,
+	startedAt: number,
+	finishedAt: number | null,
+	ok: boolean,
+	error: string | null,
+	summary: SyncRunReport_Serialize | null,
+};
+
+/**  폴더 동기화 설정 (CLAUDE.md 2-C, ADR-011) */
+export type SyncSetting = SyncSetting_Serialize | SyncSetting_Deserialize;
+
+/**  폴더 동기화 설정 (CLAUDE.md 2-C, ADR-011) */
+export type SyncSetting_Deserialize = {
+	/**  동기화 폴더 (OneDrive·Dropbox처럼 이미 쓰는 동기화 앱의 폴더 안). 없으면 폴더 동기화를 하지 않음 */
+	folder?: string | null,
+	/**  자동 동기화 (기본 꺼짐): 앱을 켤 때 한 번, 그 뒤 interval_minutes마다 */
+	auto?: boolean,
+	intervalMinutes?: number,
+};
+
+/**  폴더 동기화 설정 (CLAUDE.md 2-C, ADR-011) */
+export type SyncSetting_Serialize = {
+	/**  동기화 폴더 (OneDrive·Dropbox처럼 이미 쓰는 동기화 앱의 폴더 안). 없으면 폴더 동기화를 하지 않음 */
+	folder: string | null,
+	/**  자동 동기화 (기본 꺼짐): 앱을 켤 때 한 번, 그 뒤 interval_minutes마다 */
+	auto: boolean,
+	intervalMinutes: number,
 };
 
 export type SyncStatus = {

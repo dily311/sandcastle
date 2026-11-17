@@ -204,6 +204,8 @@ fn with_event_types(b: tauri_specta::Builder<tauri::Wry>) -> tauri_specta::Build
         .typ::<models::settings::FeatureSetting>()
         // 게임 오류의 details.reason (GAME_ACTION_BLOCKED)
         .typ::<error::BlockReason>()
+        // 동기화 진행 (sync::progress)
+        .typ::<commands::sync::SyncProgress>()
         // 타임스탬프(밀리초)·개수는 2^53 안이라 number로 충분
         .dangerously_cast_bigints_to_number()
 }
@@ -308,6 +310,8 @@ pub fn specta_builder() -> tauri_specta::Builder<tauri::Wry> {
         export_sync_bundle,
         preview_sync_bundle,
         apply_sync_bundle,
+        sync_now,
+        list_sync_runs,
         get_panic_log,
         check_for_update,
         clear_panic_log,
@@ -560,6 +564,8 @@ pub fn specta_builder() -> tauri_specta::Builder<tauri::Wry> {
         export_sync_bundle,
         preview_sync_bundle,
         apply_sync_bundle,
+        sync_now,
+        list_sync_runs,
         get_panic_log,
         check_for_update,
         clear_panic_log,

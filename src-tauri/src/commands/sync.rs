@@ -161,3 +161,145 @@ pub async fn apply_sync_bundle(app: AppHandle, state: State<'_, AppState>, tasks
     put::<PluginSetting>(&app, &before, &settings)?;
     Ok(applied)
 }
+
+// ---------------------------------------------------------------------------
+// 폴더 동기화 (2-C)
+// ---------------------------------------------------------------------------
+
+/// 동기화가 도는 중인가 (지금 동기화와 자동 동기화가 겹치지 않게)
+static RUNNING: std::sync::atomic::AtomicBool = std::sync::atomic::AtomicBool::new(false);
+
+struct RunGuard;
+impl Drop for RunGuard {
+    fn drop(&mut self) {
+        RUNNING.store(false, std::sync::atomic::Ordering::SeqCst);
+    }
+}
+
+/// 진행 단계 (화면에 "다른 기기 확인 / 기기 … 합치는 중 / 올리는 중")
+#[derive(Debug, Clone, Serialize, specta::Type)]
+#[serde(rename_all = "camelCase")]
+pub struct SyncProgress {
+    pub step: String,
+}
+
+#[derive(Debug, Clone, Serialize, specta::Type)]
+#[serde(rename_all = "camelCase")]
+pub struct SyncRun {
+    pub id: String,
+    pub target: String,
+    pub run_by: String,
+    pub started_at: i64,
+    pub finished_at: Option<i64>,
+    pub ok: bool,
+    pub error: Option<String>,
+    pub summary: Option<crate::service::data::sync_run::SyncRunReport>,
+}
+
+fn sync_setting(app: &AppHandle) -> Result<crate::models::settings::SyncSetting> {
+    Ok(app.state::<SettingsState<PluginSetting>>().0.lock().map_err(|_| lock_err())?.sync.clone())
+}
+
+/// 지금 동기화 (폴더). `auto`는 자동 동기화가 부를 때 (설정 > 동기화의 자동 동기화가 켜져 있어야 함)
+#[tauri::command]
+#[specta::specta]
+pub async fn sync_now(
+    app: AppHandle,
+    state: State<'_, AppState>,
+    tasks: State<'_, Arc<TaskManager>>,
+    auto: bool,
+) -> Result<crate::service::data::sync_run::SyncRunReport> {
+    use crate::service::data::{sync_run, sync_target::FolderTarget};
+    require(&app, id::SYNC)?;
+    let setting = sync_setting(&app)?;
+    if auto && !setting.auto {
+        return Err(AppError::validation("자동 동기화가 꺼져 있습니다", None));
+    }
+    let folder = setting
+        .folder
+        .ok_or_else(|| AppError::validation("동기화 폴더를 먼저 고르세요 (설정 > 동기화)", None))?;
+    if RUNNING.swap(true, std::sync::atomic::Ordering::SeqCst) {
+        return Err(AppError::validation("동기화가 이미 진행 중입니다", None));
+    }
+    let _guard = RunGuard;
+
+    let base = app_data_dir(&app)?;
+    let me = device::get_or_create(&base)?;
+    let before = settings_map(&app)?;
+    let mut settings = before.clone();
+    let run_id = uuid::Uuid::new_v4().to_string();
+    let started = chrono::Utc::now().timestamp_millis();
+    sqlx::query("INSERT INTO sync_runs (id, target, run_by, started_at) VALUES (?, 'folder', ?, ?)")
+        .bind(&run_id)
+        .bind(if auto { "auto" } else { "user" })
+        .bind(started)
+        .execute(&state.db)
+        .await?;
+
+    let job = CreateTaskRequest::inline(TaskType::BackgroundSync, TaskOwner::System, id::SYNC, "폴더 동기화", auto);
+    let progress = |step: &str| {
+        let _ = app.emit("sync::progress", SyncProgress { step: step.to_string() });
+    };
+    let result = tasks
+        .run_inline(job, |_| async {
+            let target = FolderTarget::new(std::path::Path::new(&folder))?;
+            sync_run::run(&state.db, &base, &mut settings, &me.id, &target, &progress).await
+        })
+        .await;
+
+    let finished = chrono::Utc::now().timestamp_millis();
+    match &result {
+        Ok(r) => {
+            sqlx::query("UPDATE sync_runs SET finished_at = ?, ok = 1, summary = ? WHERE id = ?")
+                .bind(finished)
+                .bind(serde_json::to_string(r).unwrap_or_default())
+                .bind(&run_id)
+                .execute(&state.db)
+                .await?;
+            put::<AppSetting>(&app, &before, &settings)?;
+            put::<ThemeSetting>(&app, &before, &settings)?;
+            put::<PluginSetting>(&app, &before, &settings)?;
+        }
+        Err(e) => {
+            sqlx::query("UPDATE sync_runs SET finished_at = ?, ok = 0, error = ? WHERE id = ?")
+                .bind(finished)
+                .bind(e.to_string())
+                .bind(&run_id)
+                .execute(&state.db)
+                .await?;
+        }
+    }
+    // 오래된 기록은 100개만 남긴다
+    sqlx::query("DELETE FROM sync_runs WHERE id NOT IN (SELECT id FROM sync_runs ORDER BY started_at DESC LIMIT 100)")
+        .execute(&state.db)
+        .await?;
+    result
+}
+
+/// id, target, run_by, started_at, finished_at, ok, error, summary
+type SyncRunRow = (String, String, String, i64, Option<i64>, bool, Option<String>, Option<String>);
+
+/// 동기화 기록 (최근부터)
+#[tauri::command]
+#[specta::specta]
+pub async fn list_sync_runs(app: AppHandle, state: State<'_, AppState>, limit: u32) -> Result<Vec<SyncRun>> {
+    require(&app, id::SYNC)?;
+    let rows: Vec<SyncRunRow> =
+        sqlx::query_as("SELECT id, target, run_by, started_at, finished_at, ok, error, summary FROM sync_runs ORDER BY started_at DESC LIMIT ?")
+            .bind(limit.min(100))
+            .fetch_all(&state.db)
+            .await?;
+    Ok(rows
+        .into_iter()
+        .map(|(id, target, run_by, started_at, finished_at, ok, error, summary)| SyncRun {
+            id,
+            target,
+            run_by,
+            started_at,
+            finished_at,
+            ok,
+            error,
+            summary: summary.and_then(|s| serde_json::from_str(&s).ok()),
+        })
+        .collect())
+}

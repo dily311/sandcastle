@@ -1,11 +1,14 @@
 <script lang="ts">
 	// 동기화 (CLAUDE.md 2-B-3, ADR-011): 파일로 주고받기. 누를 때만 만들고, 합치기 전에 미리보기 → 자동 사본 → 적용
 	import { onMount } from "svelte";
-	import { Download, FolderOpen, Info } from "@lucide/svelte";
-	import type { SyncPreview, SyncStatus } from "$ipc/bindings";
-	import { Badge, Button, Spinner, Switch } from "$shared/ui";
+	import { Download, FolderOpen, Info, RefreshCw } from "@lucide/svelte";
+	import type { SyncPreview, SyncRun, SyncStatus } from "$ipc/bindings";
+	import { Badge, Button, Select, Spinner, Switch } from "$shared/ui";
 	import { call, commands } from "$shared/ipc/client";
-	import { pickFiles, saveTo, SYNC_FILES } from "$shared/ipc/dialog";
+	import { pickFiles, pickFolder, saveTo, SYNC_FILES } from "$shared/ipc/dialog";
+	import { onEvent } from "$shared/ipc/events";
+	import { layout } from "$app/layout.svelte";
+	import { current, ensureLoaded, save as savePart } from "./pluginSettingForm.svelte";
 	import { toasts } from "$shared/stores/toast.svelte";
 	import { absolute, relative } from "$shared/time";
 	import { library } from "$features/character/library.svelte";
@@ -20,9 +23,63 @@
 	/** 열어 본 묶음 (적용 전) */
 	let pending = $state<{ path: string; preview: SyncPreview } | null>(null);
 
-	onMount(load);
+	// ---- 폴더 동기화 (2-C, 데스크톱) ----
+	let runs = $state<SyncRun[]>([]);
+	let syncing = $state(false);
+	let step = $state("");
+	const sync = $derived(current()?.sync ?? null);
+	const INTERVALS = [
+		{ value: "15", label: "15분마다" },
+		{ value: "30", label: "30분마다" },
+		{ value: "60", label: "1시간마다" },
+		{ value: "180", label: "3시간마다" },
+	];
+
+	onMount(() => {
+		void load();
+		if (!layout.desktop) return;
+		ensureLoaded();
+		let unlisten: (() => void) | undefined;
+		void onEvent<{ step: string }>("sync::progress", (p) => (step = p.step)).then((u) => (unlisten = u));
+		return () => unlisten?.();
+	});
 	async function load() {
 		status = await call(commands.getSyncStatus(), src).catch(() => null);
+		if (layout.desktop) runs = await call(commands.listSyncRuns(10), { ...src, silent: true }).catch(() => []);
+	}
+	async function chooseFolder() {
+		const f = await pickFolder();
+		if (f) savePart("sync", { folder: f });
+	}
+	async function syncNow() {
+		syncing = true;
+		step = "";
+		try {
+			const r = await call(commands.syncNow(false), src);
+			const m = r.merged.reduce((a, d) => ({ added: a.added + d.report.added, updated: a.updated + d.report.updated, deleted: a.deleted + d.report.deleted, both: a.both + d.report.conflicts + d.report.branches }), { added: 0, updated: 0, deleted: 0, both: 0 });
+			toasts.success(
+				r.merged.length
+					? `동기화함: 기기 ${r.merged.length}개 · 추가 ${n(m.added)} · 변경 ${n(m.updated)} · 지움 ${n(m.deleted)}${m.both ? ` · 둘 다 남김 ${n(m.both)}` : ""}`
+					: "동기화함: 다른 기기에서 새로 바뀐 것 없음",
+			);
+			await library.load();
+		} catch {
+			/* 이유는 call이 토스트로, 기록에도 남음 */
+		} finally {
+			syncing = false;
+			step = "";
+			await load();
+		}
+	}
+	function runText(r: SyncRun) {
+		if (!r.ok) return r.error ?? "실패";
+		const s = r.summary;
+		if (!s) return "";
+		const merged = s.merged.reduce((a, d) => a + d.report.added + d.report.updated + d.report.deleted + d.report.restored, 0);
+		const both = s.merged.reduce((a, d) => a + d.report.conflicts + d.report.branches, 0);
+		return [s.merged.length ? `기기 ${s.merged.length}개에서 ${n(merged)}개 반영` : "받을 것 없음", both && `둘 다 남김 ${n(both)}`, s.filesDown && `파일 받음 ${n(s.filesDown)}`, s.filesUp && `올림 ${n(s.filesUp)}`, s.filesMissing && `아직 없는 파일 ${n(s.filesMissing)}`]
+			.filter(Boolean)
+			.join(" · ");
 	}
 	const short = (id: string) => id.slice(0, 8);
 	const n = (v: number) => v.toLocaleString();
@@ -98,11 +155,42 @@
 	});
 </script>
 
-<Section title="동기화" lead="다른 기기(PC·폰)와 파일로 주고받아 합침. API 키는 넘어가지 않음 — 받는 기기에서 다시 넣기">
+<Section title="동기화" lead="다른 기기(PC·폰)와 캐릭터·대화·설정을 합침. API 키는 넘어가지 않음 — 받는 기기에서 다시 넣기">
 	{#if !status}
 		<div class="loading"><Spinner /></div>
 	{:else}
-		<Group title="보내기">
+		{#if layout.desktop}
+			<Group title="폴더 동기화">
+				<Row label="동기화 폴더" desc={sync?.folder ?? "OneDrive·Dropbox·구글 드라이브 앱처럼 이미 쓰는 동기화 앱의 폴더를 고르면, 그 안에 sandcastle-sync 폴더를 만들어 기기마다 자기 파일만 씀"}>
+					{#if sync?.folder}<Button size="sm" variant="ghost" onclick={() => savePart("sync", { folder: null, auto: false })}>빼기</Button>{/if}
+					<Button size="sm" onclick={chooseFolder}>{#snippet icon()}<FolderOpen />{/snippet}{sync?.folder ? "바꾸기" : "고르기"}</Button>
+				</Row>
+				{#if sync?.folder}
+					<Row label="지금 동기화" desc={syncing ? step || "준비 중" : "다른 기기가 올린 것을 받아 합치고, 이 기기 것을 올림. 합치기 전에 이 기기 DB·설정 사본을 만듦"}>
+						<Button size="sm" variant="primary" loading={syncing} disabled={syncing} onclick={syncNow}>{#snippet icon()}<RefreshCw />{/snippet}지금 동기화</Button>
+					</Row>
+					<Row label="자동 동기화" desc="켜면 앱을 켤 때 한 번, 그 뒤 정한 간격마다 (앱이 켜져 있는 동안만). 요금은 들지 않음">
+						{#if sync.auto}
+							<Select value={String(sync.intervalMinutes)} options={INTERVALS} aria-label="자동 동기화 간격" onchange={(e) => savePart("sync", { intervalMinutes: Number(e.currentTarget.value) })} />
+						{/if}
+						<Switch checked={sync.auto} label="자동 동기화" hideLabel onchange={(v) => savePart("sync", { auto: v })} />
+					</Row>
+				{/if}
+				{#if runs.length}
+					<ul class="runs" aria-label="동기화 기록">
+						{#each runs as r (r.id)}
+							<li class:fail={!r.ok}>
+								<span title={absolute(r.startedAt)}>{relative(r.startedAt)}</span>
+								<Badge tone={r.ok ? undefined : "danger"}>{r.runBy === "auto" ? "자동" : "직접"}</Badge>
+								<span class="what">{runText(r)}</span>
+							</li>
+						{/each}
+					</ul>
+				{/if}
+			</Group>
+		{/if}
+
+		<Group title="파일로 보내기">
 			<Row label="그림·파일 포함" desc="끄면 항목과 설정만 (파일 목록은 들어가서, 받는 쪽이 빠진 파일 수를 알 수 있음)">
 				<Switch checked={includeFiles} label="그림·파일 포함" hideLabel onchange={(v) => (includeFiles = v)} />
 			</Row>
@@ -111,7 +199,7 @@
 			</Row>
 		</Group>
 
-		<Group title="받기">
+		<Group title="파일로 받기">
 			<Row label="동기화 파일 열기" desc="합치기 전에 무엇이 바뀌는지 먼저 보여줌. 적용하면 이 기기 DB·설정 사본을 먼저 만듦">
 				<Button size="sm" loading={busy === "open"} disabled={busy !== null} onclick={openBundle}>{#snippet icon()}<FolderOpen />{/snippet}열기</Button>
 			</Row>
@@ -243,6 +331,28 @@
 	.empty {
 		margin: 0;
 		padding: var(--space-3) 0;
+	}
+	.runs {
+		list-style: none;
+		margin: 0;
+		padding: 0;
+	}
+	.runs li {
+		display: flex;
+		align-items: center;
+		gap: var(--space-3);
+		padding: var(--space-2) 0;
+		border-top: 1px solid var(--border);
+		font-size: var(--text-sm);
+		flex-wrap: wrap;
+	}
+	.runs .what {
+		color: var(--text-muted);
+		flex: 1;
+		min-width: 12rem;
+	}
+	.runs .fail .what {
+		color: var(--danger, var(--text-muted));
 	}
 	.peers {
 		list-style: none;

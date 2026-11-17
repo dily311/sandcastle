@@ -75,6 +75,7 @@ pub const SETTINGS_SCOPE: &[(&str, Scope)] = &[
     ("plugin-setting/phone/apiProfileId", Scope::Device),
     ("plugin-setting/phone/presetId", Scope::Shared),
     ("plugin-setting/prompts", Scope::Shared),
+    ("plugin-setting/sync", Scope::Device), // 폴더 경로·자동 동기화는 기기마다
 ];
 
 /// settings.json에 있는 설정 묶음 키 (sys::settings의 STORE_KEY)

@@ -140,7 +140,7 @@ pub async fn apply(db: &SqlitePool, base: &Path, settings: &mut Map<String, Valu
 }
 
 /// 적용 전 사본: DB(VACUUM INTO)와 settings.json. 최근 BACKUP_KEEP개만
-async fn backup_before(db: &SqlitePool, base: &Path, settings: &Map<String, Value>) -> Result<PathBuf> {
+pub(crate) async fn backup_before(db: &SqlitePool, base: &Path, settings: &Map<String, Value>) -> Result<PathBuf> {
     let dir = base.join(BACKUP_DIR);
     std::fs::create_dir_all(&dir)?;
     let stamp = chrono::Local::now().format("%Y%m%d-%H%M%S-%3f");

@@ -236,6 +236,30 @@ pub struct PluginSetting {
     /// 앱 프롬프트 (사용자가 고친 것만, 비우면 기본값 — service::app_prompts)
     #[serde(default)]
     pub prompts: AppPrompts,
+    /// 폴더 동기화 (2-C) — 경로가 기기마다 달라 기기 전용 (settings_scope)
+    #[serde(default)]
+    pub sync: SyncSetting,
+}
+
+/// 폴더 동기화 설정 (CLAUDE.md 2-C, ADR-011)
+#[derive(Debug, Serialize, Deserialize, Clone, specta::Type)]
+#[serde(rename_all = "camelCase", default)]
+pub struct SyncSetting {
+    /// 동기화 폴더 (OneDrive·Dropbox처럼 이미 쓰는 동기화 앱의 폴더 안). 없으면 폴더 동기화를 하지 않음
+    pub folder: Option<String>,
+    /// 자동 동기화 (기본 꺼짐): 앱을 켤 때 한 번, 그 뒤 interval_minutes마다
+    pub auto: bool,
+    pub interval_minutes: u32,
+}
+
+impl Default for SyncSetting {
+    fn default() -> Self {
+        Self {
+            folder: None,
+            auto: false,
+            interval_minutes: 30,
+        }
+    }
 }
 
 /// 앱이 AI에 보내는 고정 지시문. 자리마다 사용자가 여러 개 만들어 두고 하나를 고른다 (고르지 않으면 기본값)

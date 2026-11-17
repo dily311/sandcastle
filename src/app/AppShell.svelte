@@ -1,5 +1,6 @@
 <script lang="ts">
 	import { checkOnStart } from "./updateCheck";
+	import { watchAutoSync } from "./autoSync.svelte";
 	import { onMount } from "svelte";
 	import { ConfirmHost, Toasts } from "$shared/ui";
 	import CharacterPage from "$features/character/CharacterPage.svelte";
@@ -63,6 +64,8 @@
 		void recoverInterruptedChats();
 		void plugins.load();
 		watchTaskErrors();
+		// 자동 동기화: 동기화 플러그인·자동 동기화·폴더가 모두 있을 때만 타이머 (기본 꺼짐)
+		watchAutoSync();
 	});
 </script>
 
