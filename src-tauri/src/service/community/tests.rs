@@ -131,7 +131,8 @@ async fn rejects_bad_manifests() {
 async fn rejects_unsafe_packages() {
     let (d, base, db) = app_dir().await;
     let m = manifest("evil", "1", &[]);
-    let bad: Vec<(&str, Vec<(&str, &[u8])>)> = vec![
+    type Case<'a> = (&'a str, Vec<(&'a str, &'a [u8])>);
+    let bad: Vec<Case> = vec![
         ("경로", vec![("manifest.json", m.as_bytes()), ("main.js", b"1"), ("../escape.js", b"x")]),
         ("경로", vec![("manifest.json", m.as_bytes()), ("main.js", b"1"), ("/abs.js", b"x")]),
         ("경로", vec![("manifest.json", m.as_bytes()), ("main.js", b"1"), ("a\\b.js", b"x")]),

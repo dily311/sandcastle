@@ -76,6 +76,11 @@ export const communityHandlers: Record<string, Handler> = {
 		if (enabled) p.granted = [...(p.manifest?.permissions ?? [])];
 		return { ...p };
 	},
+	// 런타임: 브라우저 미리보기에는 plugin 프로토콜이 없어 iframe을 띄우지 않는다
+	start_user_plugins: () => ({ plugins: [], api: { log: null, report: null, "app.info": null } }),
+	stop_user_plugins: () => null,
+	call_user_plugin: () => null,
+	get_user_plugin_log: () => [],
 	uninstall_user_plugin: ({ pluginId }): TrashItem => {
 		const p = find(pluginId);
 		plugins.splice(plugins.indexOf(p), 1);

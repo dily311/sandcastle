@@ -9,6 +9,8 @@
 //! 플러그인 코드를 실행하는 것은 6-D-2(런타임)이다. 여기는 파일과 상태만 다룬다.
 pub mod manifest;
 pub mod package;
+pub mod runtime;
+pub mod storage;
 
 use std::{
     collections::BTreeSet,
@@ -284,6 +286,8 @@ pub async fn install(db: &SqlitePool, base: &Path, path: &Path, expected_hash: &
     if had_old {
         let _ = std::fs::remove_dir_all(&old);
     }
+    // 도는 중이면 내린다 — 화면이 목록이 바뀐 것을 알고 새 코드로 다시 시작한다
+    runtime::stop(&id);
     get(db, base, &id).await
 }
 
@@ -312,6 +316,12 @@ pub async fn set_enabled(db: &SqlitePool, base: &Path, id: &str, enabled: bool, 
     .bind(serde_json::to_string(&granted).unwrap_or_else(|_| "[]".into()))
     .execute(db)
     .await?;
+    if enabled {
+        // 사용자가 다시 켜면 멈춤(오류가 많았던 것)을 푼다
+        runtime::clear_suspension(id);
+    } else {
+        runtime::stop(id);
+    }
     get(db, base, id).await
 }
 
@@ -323,6 +333,7 @@ pub async fn uninstall(db: &SqlitePool, base: &Path, id: &str) -> Result<TrashIt
 
 /// 휴지통에 넣기 전: 끄고, 행이 없으면(폴더만 있는 플러그인) 만든다 — 휴지통은 행을 떠서 옮긴다
 pub async fn prepare_uninstall(db: &SqlitePool, base: &Path, id: &str) -> Result<()> {
+    runtime::stop(id);
     let p = get(db, base, id).await?;
     let name = p.manifest.as_ref().map(|m| m.name.clone()).unwrap_or_else(|| id.to_string());
     let version = p.manifest.as_ref().map(|m| m.version.clone()).unwrap_or_default();
@@ -338,5 +349,39 @@ pub async fn prepare_uninstall(db: &SqlitePool, base: &Path, id: &str) -> Result
     Ok(())
 }
 
+/// 플러그인 iframe의 호출 하나 (`sandcastle.*`). 권한·횟수 확인은 runtime, 실패는 플러그인 기록에 남고 오류 수에 들어간다
+pub async fn call(db: &SqlitePool, id: &str, method: &str, args: &serde_json::Value) -> Result<serde_json::Value> {
+    use serde_json::Value;
+    if let Err(e) = runtime::check_call(id, method) {
+        runtime::record_error(id, &e.to_string());
+        return Err(e);
+    }
+    let arg = |k: &str| args.get(k).cloned().unwrap_or(Value::Null);
+    let key = || arg("key").as_str().map(str::to_string).unwrap_or_default();
+    let result = match method {
+        "log" => {
+            let level = if arg("level").as_str() == Some("warn") { "warn" } else { "info" };
+            runtime::log(id, level, arg("message").as_str().unwrap_or(""));
+            Ok(Value::Null)
+        }
+        "report" => {
+            runtime::record_error(id, arg("message").as_str().unwrap_or("오류"));
+            Ok(Value::Null)
+        }
+        "app.info" => Ok(runtime::app_info(id)),
+        "storage.get" => storage::get(db, id, &key()).await,
+        "storage.set" => storage::set(db, id, &key(), &arg("value")).await.map(|_| Value::Null),
+        "storage.delete" => storage::delete(db, id, &key()).await.map(|_| Value::Null),
+        "storage.keys" => storage::keys(db, id).await.map(Value::from),
+        _ => Err(AppError::validation(format!("없는 메서드: {method}"), None)),
+    };
+    if let Err(e) = &result {
+        runtime::record_error(id, &format!("{method}: {e}"));
+    }
+    result
+}
+
+#[cfg(test)]
+mod runtime_tests;
 #[cfg(test)]
 mod tests;

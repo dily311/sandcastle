@@ -174,6 +174,14 @@ export const commands = {
 	setUserPluginEnabled: (pluginId: string, enabled: boolean, grant: string[], options?: InvokeOptions) => __TAURI_INVOKE<UserPlugin_Serialize>("set_user_plugin_enabled", { pluginId, enabled, grant }, options),
 	/**  삭제 = 휴지통으로 (되살리면 꺼진 채) */
 	uninstallUserPlugin: (pluginId: string, options?: InvokeOptions) => __TAURI_INVOKE<TrashItem>("uninstall_user_plugin", { pluginId }, options),
+	/**  화면의 플러그인 호스트가 시작할 때: 켜진 플러그인을 도는 목록에 올리고 iframe 주소를 돌려준다 */
+	startUserPlugins: (options?: InvokeOptions) => __TAURI_INVOKE<RuntimeStart>("start_user_plugins", undefined, options),
+	/**  호스트를 내릴 때 (코어 플러그인을 끔 등) */
+	stopUserPlugins: (options?: InvokeOptions) => __TAURI_INVOKE<void>("stop_user_plugins", undefined, options),
+	/**  플러그인 iframe의 호출. 화면이 보낸 창을 확인해 플러그인 id를 붙여 넘긴다. 권한은 여기서 다시 본다 */
+	callUserPlugin: (pluginId: string, method: string, args: Value, options?: InvokeOptions) => __TAURI_INVOKE<Value>("call_user_plugin", { pluginId, method, args }, options),
+	/**  플러그인 기록 (최근 것, 메모리 — 앱을 다시 켜면 비어 있음) */
+	getUserPluginLog: (pluginId: string, options?: InvokeOptions) => __TAURI_INVOKE<PluginLogEntry[]>("get_user_plugin_log", { pluginId }, options),
 	/**  되살리기 */
 	restoreTrashItem: (id: string, options?: InvokeOptions) => __TAURI_INVOKE<TrashItem>("restore_trash_item", { id }, options),
 	/**  완전히 지우기 (되돌릴 수 없음 — 화면에서 확인을 받는다) */
@@ -3134,6 +3142,13 @@ export type Playlist_Serialize = {
 	updatedAt: number,
 };
 
+export type PluginLogEntry = {
+	at: number,
+	/**  info / warn / error */
+	level: string,
+	message: string,
+};
+
 export type PluginManifest = PluginManifest_Serialize | PluginManifest_Deserialize;
 
 export type PluginManifest_Deserialize = {
@@ -3623,6 +3638,21 @@ export type RunBy =
 "user" | 
 /**  사용자가 켜 둔 자동 실행 (자동 번역·자동 읽기 등) */
 "auto";
+
+/**  화면에 주는 도는 플러그인 정보 */
+export type RuntimePlugin = {
+	id: string,
+	name: string,
+	version: string,
+	hostUrl: string,
+	granted: string[],
+};
+
+export type RuntimeStart = {
+	plugins: RuntimePlugin[],
+	/**  메서드 → 필요한 권한 (화면이 IPC 전에 거른다) */
+	api: { [key in string]: string | null },
+};
 
 /**  save_package의 결과: 에디터에서 지워서 DB에서도 지워진 행 수, 그리고 저장 후 검증 결과. */
 export type SaveReport = {

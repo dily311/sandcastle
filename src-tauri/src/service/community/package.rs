@@ -45,7 +45,7 @@ fn skipped(rel: &str) -> bool {
         .any(|s| s.starts_with('.') || s == "__MACOSX" || s.eq_ignore_ascii_case("Thumbs.db"))
 }
 
-fn allowed(rel: &str) -> bool {
+pub fn allowed(rel: &str) -> bool {
     Path::new(rel)
         .extension()
         .and_then(|e| e.to_str())
