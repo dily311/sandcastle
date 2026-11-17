@@ -47,7 +47,9 @@ thiserror = "2.0.20"
 base64 = "0.22.1"
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
-gcp_auth = "0.12"
+# webpki-roots: 루트 인증서를 바이너리에 넣는다. 기본(native roots)은 Android에서 OS 인증서를 읽지 못해
+# 서비스 계정 토큰을 받지 못했다(Vertex 연결 실패, 0.2.0 실기기). reqwest(rustls-tls)와 같은 방식
+gcp_auth = { version = "0.12", features = ["webpki-roots"] }
 sqlx = { version = "0.9", features = ["sqlite", "runtime-tokio", "tls-rustls", "macros"] }
 uuid = { version = "1", features = ["v4", "serde"] }
 chrono = "0.4"
