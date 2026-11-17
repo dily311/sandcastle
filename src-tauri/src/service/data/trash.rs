@@ -35,6 +35,8 @@ pub enum TrashKind {
     PromptPreset,
     Game,
     GameSession,
+    /// 커뮤니티 플러그인 (6-D-1) — 폴더 plugins/<id>와 기기 상태
+    UserPlugin,
 }
 
 impl TrashKind {
@@ -47,6 +49,7 @@ impl TrashKind {
             Self::PromptPreset => "prompt_presets",
             Self::Game => "game_projects",
             Self::GameSession => "game_player_sessions",
+            Self::UserPlugin => "user_plugins",
         }
     }
     /// phone_links는 FK가 아니라 트리거로 지워진다(캐릭터·페르소나)
@@ -199,6 +202,7 @@ fn owned_files(base: &Path, kind: TrashKind, id: &str, row: &Map<String, Value>)
     match kind {
         TrashKind::Character => vec![PathBuf::from("characters").join(id)],
         TrashKind::Game => vec![PathBuf::from("games").join(id)],
+        TrashKind::UserPlugin => vec![PathBuf::from(crate::service::community::PLUGINS_DIR).join(id)],
         TrashKind::Persona => {
             // 앱이 복사해 둔 아바타만 (사용자가 가진 원본 경로는 건드리지 않음)
             let dir = base.join("characters").join("avatars");

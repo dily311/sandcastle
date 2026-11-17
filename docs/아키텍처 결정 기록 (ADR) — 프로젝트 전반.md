@@ -244,6 +244,7 @@ Conversation
 | `generated/` | 갤러리 그림(만든·올린) + 정보 `.json` | 사용자 데이터 | O (v2부터) |
 | `backgrounds/` | 올린 배경(테마·폰) | 사용자 데이터 | O (v2부터) |
 | `trash/` | 휴지통에 든 항목의 파일 (ADR-011) | 사용자 데이터 (DB의 휴지통 항목과 짝) | O (2-A-3부터) |
+| `plugins/` | 사용자가 설치한 커뮤니티 플러그인 (ADR-012) | 사용자 데이터 (동기화는 안 함, 켜짐·허락은 DB의 `user_plugins`) | O (v3, 6-D-1부터) |
 | `exports/` | 내보낸 파일 | 사용자가 꺼낸 사본 | X |
 | `tmp/`, `restore-staging/` | 작업 중 임시 | 임시 | X |
 | `restore-backups/`, `migration-backups/`, `sync-backups/` | 복원·마이그레이션·동기화 적용 전 보관본 | 안전망 | X |

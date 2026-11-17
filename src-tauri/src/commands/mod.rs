@@ -1,5 +1,6 @@
 pub mod ai_service;
 pub mod character_image;
+pub mod community;
 pub mod data;
 pub mod import;
 pub mod preset;

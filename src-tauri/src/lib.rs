@@ -23,8 +23,8 @@ use crate::{
     sys::{settings::SettingsState, themes::ThemeManager},
 };
 use commands::{
-    ai_service::*, character_image::*, chat::*, conversation::*, convert::*, data::*, game_engine::*, game_manager::*, import::*, phone::*, preset::*,
-    regex::*, settings::*, sync::*, task::*,
+    ai_service::*, character_image::*, chat::*, community::*, conversation::*, convert::*, data::*, game_engine::*, game_manager::*, import::*, phone::*,
+    preset::*, regex::*, settings::*, sync::*, task::*,
 };
 use task::{TaskEventEmitter, TaskManager};
 
@@ -309,6 +309,12 @@ pub fn specta_builder() -> tauri_specta::Builder<tauri::Wry> {
         get_data_overview,
         check_data,
         list_trash,
+        // 커뮤니티 플러그인 (6-D)
+        list_user_plugins,
+        preview_user_plugin,
+        install_user_plugin,
+        set_user_plugin_enabled,
+        uninstall_user_plugin,
         restore_trash_item,
         purge_trash_item,
         empty_trash,
@@ -572,6 +578,12 @@ pub fn specta_builder() -> tauri_specta::Builder<tauri::Wry> {
         get_data_overview,
         check_data,
         list_trash,
+        // 커뮤니티 플러그인 (6-D)
+        list_user_plugins,
+        preview_user_plugin,
+        install_user_plugin,
+        set_user_plugin_enabled,
+        uninstall_user_plugin,
         restore_trash_item,
         purge_trash_item,
         empty_trash,

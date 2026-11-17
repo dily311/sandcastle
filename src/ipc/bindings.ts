@@ -164,6 +164,16 @@ export const commands = {
 	checkData: (options?: InvokeOptions) => __TAURI_INVOKE<DataCheck>("check_data", undefined, options),
 	/**  휴지통 목록 (열 때 보존 기간이 지난 것을 먼저 정리) */
 	listTrash: (options?: InvokeOptions) => __TAURI_INVOKE<TrashItem[]>("list_trash", undefined, options),
+	/**  설치된 플러그인 목록 */
+	listUserPlugins: (options?: InvokeOptions) => __TAURI_INVOKE<UserPlugin_Serialize[]>("list_user_plugins", undefined, options),
+	/**  zip 파일이나 폴더를 읽어 미리보기 (아무것도 쓰지 않음) */
+	previewUserPlugin: (path: string, options?: InvokeOptions) => __TAURI_INVOKE<PluginPreview_Serialize>("preview_user_plugin", { path }, options),
+	/**  미리보기에서 확인한 것을 설치 (hash가 다르면 거절). 새로 설치한 플러그인은 꺼져 있다 */
+	installUserPlugin: (path: string, hash: string, options?: InvokeOptions) => __TAURI_INVOKE<UserPlugin_Serialize>("install_user_plugin", { path, hash }, options),
+	/**  켜기(권한 전부에 동의한 목록과 함께) · 끄기 */
+	setUserPluginEnabled: (pluginId: string, enabled: boolean, grant: string[], options?: InvokeOptions) => __TAURI_INVOKE<UserPlugin_Serialize>("set_user_plugin_enabled", { pluginId, enabled, grant }, options),
+	/**  삭제 = 휴지통으로 (되살리면 꺼진 채) */
+	uninstallUserPlugin: (pluginId: string, options?: InvokeOptions) => __TAURI_INVOKE<TrashItem>("uninstall_user_plugin", { pluginId }, options),
 	/**  되살리기 */
 	restoreTrashItem: (id: string, options?: InvokeOptions) => __TAURI_INVOKE<TrashItem>("restore_trash_item", { id }, options),
 	/**  완전히 지우기 (되돌릴 수 없음 — 화면에서 확인을 받는다) */
@@ -2543,6 +2553,11 @@ export type ImportedCharacterRef = {
 	name: string,
 };
 
+export type InstalledPluginInfo = {
+	version: string,
+	enabled: boolean,
+};
+
 export type InteractiveRegion = {
 	id: string,
 	x: number | null,
@@ -3119,7 +3134,97 @@ export type Playlist_Serialize = {
 	updatedAt: number,
 };
 
+export type PluginManifest = PluginManifest_Serialize | PluginManifest_Deserialize;
+
+export type PluginManifest_Deserialize = {
+	id: string,
+	name: string,
+	version: string,
+	apiVersion: number,
+	author?: string,
+	description?: string,
+	/**  플러그인 폴더 안의 JS (기본 main.js) */
+	main?: string,
+	permissions?: string[],
+	settings?: PluginSettingField_Deserialize[],
+	minAppVersion?: string | null,
+};
+
+export type PluginManifest_Serialize = {
+	id: string,
+	name: string,
+	version: string,
+	apiVersion: number,
+	author: string,
+	description: string,
+	/**  플러그인 폴더 안의 JS (기본 main.js) */
+	main: string,
+	permissions: string[],
+	settings: PluginSettingField_Serialize[],
+	minAppVersion?: string,
+};
+
+/**  설치 전 미리보기 */
+export type PluginPreview = PluginPreview_Serialize | PluginPreview_Deserialize;
+
+/**  설치 전 미리보기 */
+export type PluginPreview_Deserialize = {
+	manifest: PluginManifest_Deserialize,
+	files: number,
+	size: number,
+	/**  설치할 때 그대로 넘긴다 (그 사이 파일이 바뀌면 설치하지 않음) */
+	hash: string,
+	/**  같은 id가 이미 있으면 업데이트 */
+	existing?: InstalledPluginInfo | null,
+	/**  지금 허락한 것보다 늘어난 권한 (새로 설치면 전부) */
+	addedPermissions: string[],
+	/**  있는 것보다 낮은 판 */
+	downgrade: boolean,
+};
+
+/**  설치 전 미리보기 */
+export type PluginPreview_Serialize = {
+	manifest: PluginManifest_Serialize,
+	files: number,
+	size: number,
+	/**  설치할 때 그대로 넘긴다 (그 사이 파일이 바뀌면 설치하지 않음) */
+	hash: string,
+	/**  같은 id가 이미 있으면 업데이트 */
+	existing: InstalledPluginInfo | null,
+	/**  지금 허락한 것보다 늘어난 권한 (새로 설치면 전부) */
+	addedPermissions: string[],
+	/**  있는 것보다 낮은 판 */
+	downgrade: boolean,
+};
+
 export type PluginSetting = PluginSetting_Serialize | PluginSetting_Deserialize;
+
+/**  플러그인 설정 칸 (6-D-8의 설정 화면이 이것으로 그린다) */
+export type PluginSettingField = PluginSettingField_Serialize | PluginSettingField_Deserialize;
+
+/**  플러그인 설정 칸 (6-D-8의 설정 화면이 이것으로 그린다) */
+export type PluginSettingField_Deserialize = {
+	key: string,
+	/**  text / number / toggle / select */
+	type: string,
+	label: string,
+	description?: string | null,
+	default?: Value | null,
+	/**  select의 고를 것 */
+	options?: string[],
+};
+
+/**  플러그인 설정 칸 (6-D-8의 설정 화면이 이것으로 그린다) */
+export type PluginSettingField_Serialize = {
+	key: string,
+	/**  text / number / toggle / select */
+	type: string,
+	label: string,
+	description?: string,
+	default?: Value,
+	/**  select의 고를 것 */
+	options?: string[],
+};
 
 export type PluginSetting_Deserialize = {
 	translate?: TranslateSetting_Deserialize,
@@ -4156,7 +4261,9 @@ export type TrashItem = {
 	size: number,
 };
 
-export type TrashKind = "character" | "persona" | "conversation" | "worldinfo_book" | "prompt_preset" | "game" | "game_session";
+export type TrashKind = "character" | "persona" | "conversation" | "worldinfo_book" | "prompt_preset" | "game" | "game_session" | 
+/**  커뮤니티 플러그인 (6-D-1) — 폴더 plugins/<id>와 기기 상태 */
+"user_plugin";
 
 export type TtsSetting = TtsSetting_Serialize | TtsSetting_Deserialize;
 
@@ -4278,6 +4385,33 @@ export type UsageSummary_Serialize = {
 	/**  단가표로 계산한 추정 금액 (단가표에 이 모델이 없으면 None) */
 	estimatedCost: number | null,
 	currency: string | null,
+};
+
+/**  목록의 한 줄. manifest를 읽지 못한 폴더도 보여준다(지울 수 있게) */
+export type UserPlugin = UserPlugin_Serialize | UserPlugin_Deserialize;
+
+/**  목록의 한 줄. manifest를 읽지 못한 폴더도 보여준다(지울 수 있게) */
+export type UserPlugin_Deserialize = {
+	id: string,
+	manifest?: PluginManifest_Deserialize | null,
+	/**  manifest를 읽지 못한 이유 (그런 플러그인은 켤 수 없음) */
+	error?: string | null,
+	enabled: boolean,
+	granted: string[],
+	installedAt: number,
+	size: number,
+};
+
+/**  목록의 한 줄. manifest를 읽지 못한 폴더도 보여준다(지울 수 있게) */
+export type UserPlugin_Serialize = {
+	id: string,
+	manifest: PluginManifest_Serialize | null,
+	/**  manifest를 읽지 못한 이유 (그런 플러그인은 켤 수 없음) */
+	error: string | null,
+	enabled: boolean,
+	granted: string[],
+	installedAt: number,
+	size: number,
 };
 
 export type Value = null | boolean | number | string | Value[] | { [key in string]: Value };

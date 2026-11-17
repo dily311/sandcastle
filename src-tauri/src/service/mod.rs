@@ -7,6 +7,7 @@ pub mod ai;
 pub mod app_prompts;
 pub mod budget;
 pub mod chat;
+pub mod community;
 pub mod data;
 pub mod device;
 pub mod drive;
