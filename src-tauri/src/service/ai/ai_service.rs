@@ -148,7 +148,10 @@ fn load_credential(profile: &ApiProfiles) -> Result<String> {
     SecretStore::get(&api_key_name(&profile.id)).map_err(|_| {
         AppError::ai_provider(
             ErrorCode::AiProviderAuthFailed,
-            format!("'{}' 프로필에 API 키가 설정되지 않았습니다", profile.name),
+            format!(
+                "이 기기에 '{}' 프로필의 API 키가 없습니다. 설정 > API 키에서 넣어 주세요 (키는 기기마다 따로 저장되고 백업·동기화되지 않음)",
+                profile.name
+            ),
             false,
         )
     })
