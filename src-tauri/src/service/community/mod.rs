@@ -11,6 +11,7 @@ pub mod data;
 pub mod manifest;
 pub mod package;
 pub mod postprocess;
+pub mod prompt_hook;
 pub mod runtime;
 pub mod storage;
 

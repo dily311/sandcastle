@@ -14,6 +14,7 @@ use crate::{
         community::{
             self,
             postprocess::{self, PostProcessResult},
+            prompt_hook::{self, PluginPromptAnswer},
             runtime::{self, PluginLogEntry, RuntimeStart},
             PluginPreview, UserPlugin,
         },
@@ -161,4 +162,15 @@ pub async fn apply_plugin_postprocess(
 pub async fn revert_plugin_postprocess(state: State<'_, AppState>, message_id: String) -> Result<Message> {
     postprocess::revert(&state.db, &message_id).await?;
     Ok(chat_ui::get_message(&state.db, &message_id).await?)
+}
+
+// ---------------------------------------------------------------------------
+// 프롬프트 훅 (6-D-5)
+// ---------------------------------------------------------------------------
+
+/// 화면의 호스트가 프롬프트 요청(user-plugin-prompt)에 답한다. 늦게 와서 기다리는 요청이 없으면 false
+#[tauri::command]
+#[specta::specta]
+pub fn answer_plugin_prompt(request_id: String, answers: Vec<PluginPromptAnswer>) -> bool {
+    prompt_hook::answer(&request_id, answers)
 }

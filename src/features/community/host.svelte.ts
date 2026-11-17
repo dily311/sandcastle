@@ -9,6 +9,8 @@ import { logs } from "$shared/stores/log.svelte";
 import { toasts } from "$shared/stores/toast.svelte";
 import { addReplyHook } from "$shared/stores/aiTools.svelte";
 import { postProcess } from "./postprocess";
+import { gather } from "./promptHook";
+import type { PromptHookRequest } from "$ipc/bindings";
 import { route } from "./router";
 
 type Unlisten = () => void;
@@ -39,6 +41,8 @@ class PluginHost {
 				this.reloadTimer = setTimeout(() => void this.reload(), 300);
 			}),
 			onEvent<string>("user-plugin-suspended", (id) => this.suspended(id)),
+			// 보내기 직전 프롬프트 훅 (6-D-5): 늦거나 실패해도 답은 꼭 보낸다(백엔드가 덜 기다리게)
+			onEvent<PromptHookRequest>("user-plugin-prompt", (req) => void this.answerPrompt(req)),
 		]);
 		this.unlisten.push(unhook);
 		if (!this.running) return this.cleanup(); // 그 사이 꺼짐
@@ -87,6 +91,16 @@ class PluginHost {
 		this.plugins = this.plugins.filter((p) => p.id !== id);
 		this.frames.delete(id);
 		toasts.error(`플러그인 '${id}'이(가) 오류가 많아 멈췄습니다. 설정에서 다시 켤 수 있습니다.`, "PLUGIN_SUSPENDED");
+	}
+
+	private async answerPrompt(req: PromptHookRequest) {
+		const { answers, errors } = await gather(
+			req,
+			this.plugins.map((p) => p.id),
+			(id, ev, data, ms) => this.emit(id, ev, data, ms),
+		);
+		for (const e of errors) logs.warn(`plugin:${e.pluginId}`, `프롬프트 훅 실패: ${e.message}`);
+		await commands.answerPluginPrompt(req.requestId, answers).catch(() => {});
 	}
 
 	/** 도는 플러그인 (설치 순서) */

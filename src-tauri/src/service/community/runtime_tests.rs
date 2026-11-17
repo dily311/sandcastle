@@ -301,6 +301,129 @@ async fn postprocess_keeps_original_and_respects_mode() {
     runtime::stop_all();
 }
 
+#[tokio::test]
+async fn prompt_hook_adds_blocks_within_limits() {
+    use super::prompt_hook::{self, PluginPromptAnswer, PromptBlockInput};
+    use crate::models::ai_service::{ChatContext, HistoryItem};
+    let _g = LOCK.lock().await;
+    let (d, base, db) = app_dir().await;
+
+    // 훅을 쓸 플러그인이 없으면 묻지도 않는다
+    runtime::stop_all();
+    let asked = std::cell::Cell::new(false);
+    assert!(prompt_hook::ask("v", None, "hi", |_| {
+        asked.set(true);
+        true
+    })
+    .await
+    .is_empty());
+    assert!(!asked.get());
+
+    add(&db, &base, d.path(), "ph-a", &["prompt.modify"], true).await;
+    add(&db, &base, d.path(), "ph-b", &["prompt.modify"], true).await;
+    add(&db, &base, d.path(), "ph-none", &[], true).await;
+    run_start(&db, &base).await;
+    assert_eq!(prompt_hook::hooked_plugins(), ["ph-a", "ph-b"]);
+
+    // 화면이 답하면 그 답을 받는다
+    let got = prompt_hook::ask("v1", Some("c1"), "hello", |r| {
+        assert_eq!(r.plugins, ["ph-a", "ph-b"]);
+        assert_eq!(r.user_input, "hello");
+        let id = r.request_id.clone();
+        tokio::spawn(async move {
+            assert!(prompt_hook::answer(
+                &id,
+                vec![PluginPromptAnswer {
+                    plugin_id: "ph-a".into(),
+                    blocks: vec![]
+                }]
+            ));
+        });
+        true
+    })
+    .await;
+    assert_eq!(got.len(), 1);
+
+    // 답이 없으면 기다리다 없이 보냄 (기록에 남김)
+    let started = std::time::Instant::now();
+    assert!(prompt_hook::ask("v1", None, "x", |_| true).await.is_empty());
+    assert!(started.elapsed() >= std::time::Duration::from_millis(prompt_hook::PER_PLUGIN_MS));
+    assert!(runtime::log_of("ph-a").iter().any(|l| l.message.contains("답이 오지 않아")));
+
+    let mut ctx = ChatContext {
+        history: (0..4)
+            .map(|i| HistoryItem {
+                images: vec![],
+                role: "user".into(),
+                content: format!("m{i}"),
+            })
+            .collect(),
+        ..Default::default()
+    };
+    let block = |text: &str, position: &str, depth: Option<u32>| PromptBlockInput {
+        text: text.into(),
+        position: position.into(),
+        depth,
+    };
+    let used = prompt_hook::apply(
+        &mut ctx,
+        vec![
+            // 순서를 섞어 보내도 설치 순서로
+            PluginPromptAnswer {
+                plugin_id: "ph-b".into(),
+                blocks: vec![block("in history", "history", Some(1)), block(&"긴 ".repeat(3000), "rules", None)],
+            },
+            PluginPromptAnswer {
+                plugin_id: "ph-a".into(),
+                blocks: vec![block("rule A", "rules", None), block("", "rules", None)],
+            },
+            // 권한 없는 플러그인, 부르지 않은 플러그인, 두 번 온 답은 무시
+            PluginPromptAnswer {
+                plugin_id: "ph-none".into(),
+                blocks: vec![block("sneaky", "rules", None)],
+            },
+            PluginPromptAnswer {
+                plugin_id: "ph-a".into(),
+                blocks: vec![block("again", "rules", None)],
+            },
+        ],
+    );
+    assert_eq!(
+        ctx.system_rules,
+        vec![
+            "[플러그인: ph-a]
+rule A"
+        ]
+    );
+    assert_eq!(ctx.history.len(), 5);
+    assert_eq!(ctx.history[3].role, "system");
+    assert_eq!(
+        ctx.history[3].content,
+        "[플러그인: ph-b]
+in history"
+    );
+    assert_eq!(
+        used.iter().map(|u| (u.plugin_id.as_str(), u.blocks)).collect::<Vec<_>>(),
+        [("ph-a", 1), ("ph-b", 1)]
+    );
+    assert!(!ctx.system_rules.iter().any(|r| r.contains("sneaky") || r.contains("again")));
+    assert!(runtime::log_of("ph-b")
+        .iter()
+        .any(|l| l.message.contains("토큰 상한") || l.message.contains("자를 넘어")));
+
+    // 블록 수 상한
+    let mut ctx2 = ChatContext::default();
+    let used = prompt_hook::apply(
+        &mut ctx2,
+        vec![PluginPromptAnswer {
+            plugin_id: "ph-a".into(),
+            blocks: (0..9).map(|i| block(&format!("b{i}"), "rules", None)).collect(),
+        }],
+    );
+    assert_eq!(used[0].blocks, 5);
+    runtime::stop_all();
+}
+
 #[test]
 fn every_api_permission_is_a_known_permission() {
     for (m, p) in runtime::API {

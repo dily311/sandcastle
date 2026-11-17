@@ -58,6 +58,9 @@ const MAX_LOG_CHARS: usize = 2000;
 
 #[derive(Debug, Clone)]
 struct Active {
+    /// 설치 순서 (훅을 부르는 차례)
+    seq: usize,
+    name: String,
     version: String,
     main: String,
     granted: BTreeSet<String>,
@@ -146,6 +149,8 @@ pub fn start(plugins: &[UserPlugin], base: &Path) -> RuntimeStart {
         map.insert(
             p.id.clone(),
             Active {
+                seq: out.len(),
+                name: m.name.clone(),
                 version: m.version.clone(),
                 main: m.main.clone(),
                 granted,
@@ -179,6 +184,18 @@ pub fn stop(id: &str) {
 
 pub fn is_running(id: &str) -> bool {
     active().contains_key(id)
+}
+
+/// 도는 플러그인 id (설치 순서)
+pub fn running_ids() -> Vec<String> {
+    let map = active();
+    let mut v: Vec<(&String, usize)> = map.iter().map(|(k, a)| (k, a.seq)).collect();
+    v.sort_by_key(|(_, s)| *s);
+    v.into_iter().map(|(k, _)| k.clone()).collect()
+}
+
+pub fn name_of(id: &str) -> Option<String> {
+    active().get(id).map(|a| a.name.clone())
 }
 
 pub fn has_permission(id: &str, permission: &str) -> bool {

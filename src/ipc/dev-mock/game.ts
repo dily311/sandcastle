@@ -188,7 +188,7 @@ export const gameHandlers: Record<string, (a: Args) => unknown> = {
 		sessionOptions[sessionId as string] = { ...cur, apiProfileId, promptPresetId, ...(playerId ? { playerId } : {}) };
 		return null;
 	},
-	game_context_usage: () => ({ used: 2100, system: 1400, history: 700, historyCount: 9, limit: 16384, reserved: 1024, presetId: "default", presetName: "기본 배치" }),
+	game_context_usage: () => ({ used: 2100, system: 1400, history: 700, historyCount: 9, limit: 16384, reserved: 1024, presetId: "default", presetName: "기본 배치", plugins: [] }),
 	reset: () => {
 		state = { ...state, currentSceneId: "s1", availableChoices: ["c1", "c2"], locationId: "l1" };
 		return null;

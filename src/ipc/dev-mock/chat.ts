@@ -415,7 +415,7 @@ export const chatHandlers: Record<string, (a: Args) => unknown> = {
 		const msgs = msgsOf(conversationId as string);
 		const history = msgs.reduce((n, m) => n + Math.ceil(m.content.length / 1.5), 0);
 		const presetId = c.promptPresetId || "default";
-		return { used: msgs.length ? 640 + history : null, system: 640, history, historyCount: msgs.length, limit: 8192, reserved: 1024, presetId, presetName: presetId === "default" ? "기본 배치" : presetId };
+		return { used: msgs.length ? 640 + history : null, system: 640, history, historyCount: msgs.length, limit: 8192, reserved: 1024, presetId, presetName: presetId === "default" ? "기본 배치" : presetId, plugins: [] };
 	},
 	patch_conversation_meta: ({ id, patch }) => {
 		const c = conv(id);

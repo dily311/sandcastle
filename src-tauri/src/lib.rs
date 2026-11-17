@@ -220,6 +220,8 @@ fn with_event_types(b: tauri_specta::Builder<tauri::Wry>) -> tauri_specta::Build
         .typ::<error::BlockReason>()
         // 동기화 진행 (sync::progress)
         .typ::<commands::sync::SyncProgress>()
+        // 커뮤니티 플러그인 프롬프트 요청 (user-plugin-prompt, 6-D-5)
+        .typ::<service::community::prompt_hook::PromptHookRequest>()
         // 타임스탬프(밀리초)·개수는 2^53 안이라 number로 충분
         .dangerously_cast_bigints_to_number()
 }
@@ -330,6 +332,7 @@ pub fn specta_builder() -> tauri_specta::Builder<tauri::Wry> {
         set_user_plugin_process_mode,
         apply_plugin_postprocess,
         revert_plugin_postprocess,
+        answer_plugin_prompt,
         // 고치기 제안 (6-D-3)
         list_change_proposals,
         count_pending_proposals,
@@ -612,6 +615,7 @@ pub fn specta_builder() -> tauri_specta::Builder<tauri::Wry> {
         set_user_plugin_process_mode,
         apply_plugin_postprocess,
         revert_plugin_postprocess,
+        answer_plugin_prompt,
         // 고치기 제안 (6-D-3)
         list_change_proposals,
         count_pending_proposals,

@@ -188,6 +188,8 @@ export const commands = {
 	applyPluginPostprocess: (messageId: string, expected: string, content: string, results: PostProcessResult[], options?: InvokeOptions) => __TAURI_INVOKE<Message_Serialize>("apply_plugin_postprocess", { messageId, expected, content, results }, options),
 	/**  플러그인이 고친 글을 원문으로 (그 뒤 또 고쳤으면 거절). 코어 플러그인이 꺼져 있어도 된다 — 되돌리기는 언제나 */
 	revertPluginPostprocess: (messageId: string, options?: InvokeOptions) => __TAURI_INVOKE<Message_Serialize>("revert_plugin_postprocess", { messageId }, options),
+	/**  화면의 호스트가 프롬프트 요청(user-plugin-prompt)에 답한다. 늦게 와서 기다리는 요청이 없으면 false */
+	answerPluginPrompt: (requestId: string, answers: PluginPromptAnswer_Deserialize[], options?: InvokeOptions) => __TAURI_INVOKE<boolean>("answer_plugin_prompt", { requestId, answers }, options),
 	/**  제안 목록 (새것부터). status: pending / applied / rejected / reverted, 비우면 전부 */
 	listChangeProposals: (status: string | null, options?: InvokeOptions) => __TAURI_INVOKE<ChangeProposal_Serialize[]>("list_change_proposals", { status }, options),
 	/**  기다리는 제안 수 */
@@ -1177,6 +1179,8 @@ export type ContextUsage_Deserialize = {
 	reserved: number,
 	presetId?: string | null,
 	presetName?: string | null,
+	/**  커뮤니티 플러그인이 더한 프롬프트 블록 (6-D-5, 시스템 토큰에 들어 있음) */
+	plugins: PluginPromptUse[],
 };
 
 /**  컨텍스트 사용량 (오른쪽 패널). 마지막으로 보낸 프롬프트 기준 */
@@ -1195,6 +1199,8 @@ export type ContextUsage_Serialize = {
 	reserved: number,
 	presetId: string | null,
 	presetName: string | null,
+	/**  커뮤니티 플러그인이 더한 프롬프트 블록 (6-D-5, 시스템 토큰에 들어 있음) */
+	plugins: PluginPromptUse[],
 };
 
 /**  continue_game / load_save의 응답. events는 항상 비어 있고(새로 생긴 일이 없다), 화면은 state + history로 복원한다. */
@@ -3277,6 +3283,26 @@ export type PluginPreview_Serialize = {
 	downgrade: boolean,
 };
 
+export type PluginPromptAnswer = PluginPromptAnswer_Serialize | PluginPromptAnswer_Deserialize;
+
+export type PluginPromptAnswer_Deserialize = {
+	pluginId: string,
+	blocks: PromptBlockInput_Deserialize[],
+};
+
+export type PluginPromptAnswer_Serialize = {
+	pluginId: string,
+	blocks: PromptBlockInput_Serialize[],
+};
+
+/**  응답 meta.info.pluginPrompt에 남는 것 */
+export type PluginPromptUse = {
+	pluginId: string,
+	name: string,
+	blocks: number,
+	tokens: number,
+};
+
 export type PluginSetting = PluginSetting_Serialize | PluginSetting_Deserialize;
 
 /**  플러그인 설정 칸 (6-D-8의 설정 화면이 이것으로 그린다) */
@@ -3333,6 +3359,22 @@ export type PostProcessResult = {
 	/**  이 플러그인이 글을 바꿨나 */
 	changed: boolean,
 	notes: PluginNote[],
+};
+
+export type PromptBlockInput = PromptBlockInput_Serialize | PromptBlockInput_Deserialize;
+
+export type PromptBlockInput_Deserialize = {
+	text: string,
+	/**  rules(시스템 규칙 끝) / history(대화 기록 안, depth) */
+	position: string,
+	depth?: number | null,
+};
+
+export type PromptBlockInput_Serialize = {
+	text: string,
+	/**  rules(시스템 규칙 끝) / history(대화 기록 안, depth) */
+	position: string,
+	depth: number | null,
 };
 
 export type PromptBlocks = PromptBlocks_Serialize | PromptBlocks_Deserialize;
@@ -3407,6 +3449,28 @@ export type PromptBlocks_Serialize = {
 	extraJson: Value | null,
 	createdAt: number,
 	updatedAt: number,
+};
+
+export type PromptHookRequest = PromptHookRequest_Serialize | PromptHookRequest_Deserialize;
+
+export type PromptHookRequest_Deserialize = {
+	requestId: string,
+	conversationId: string,
+	characterId?: string | null,
+	/**  이번 입력 (비었으면 이어 쓰기·다시 만들기) */
+	userInput: string,
+	/**  부를 플러그인 (설치 순서) */
+	plugins: string[],
+};
+
+export type PromptHookRequest_Serialize = {
+	requestId: string,
+	conversationId: string,
+	characterId: string | null,
+	/**  이번 입력 (비었으면 이어 쓰기·다시 만들기) */
+	userInput: string,
+	/**  부를 플러그인 (설치 순서) */
+	plugins: string[],
 };
 
 /**  PromptManager가 만든 최종 프롬프트. 공급자 형식과 무관하며 어댑터가 각자 형식으로 바꾼다. */

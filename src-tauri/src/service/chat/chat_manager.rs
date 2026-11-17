@@ -433,6 +433,18 @@ impl ChatManager {
             context.system_rules.push(crate::service::app_prompts::auto_image());
         }
 
+        // 커뮤니티 플러그인의 프롬프트 블록 (6-D-5). prompt.modify 플러그인이 돌고 있을 때만 화면에 묻고, 늦으면 없이 보낸다
+        let plugin_prompt = if crate::sys::plugins::is_enabled(app, crate::sys::plugins::id::COMMUNITY) {
+            use crate::service::community::prompt_hook;
+            let answers = prompt_hook::ask(conversation_id, Some(&conv.character_id), &input, |r| {
+                app.emit(prompt_hook::REQUEST_EVENT, r).is_ok()
+            })
+            .await;
+            prompt_hook::apply(&mut context, answers)
+        } else {
+            vec![]
+        };
+
         let regex = RegexProcessor::load(
             db,
             Some(&conv.character_id),
@@ -530,6 +542,7 @@ impl ChatManager {
             "genFinished": now_ms(),
             "finishReason": finish_reason,
             "cancelled": cancelled,
+            "pluginPrompt": plugin_prompt,
         });
         let images_json = serde_json::to_value(&used_images).unwrap_or(Value::Array(vec![]));
 
