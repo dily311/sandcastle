@@ -38,7 +38,7 @@ where
     E: Executor<'e, Database = Sqlite>,
 {
     let id = Uuid::new_v4().to_string();
-    let now = chrono::Utc::now().timestamp();
+    let now = chrono::Utc::now().timestamp_millis();
 
     sqlx::query(
         r#"
@@ -73,7 +73,7 @@ pub async fn update_api_profile<'e, E>(executor: E, id: &str, input: ApiProfiles
 where
     E: Executor<'e, Database = Sqlite>,
 {
-    let now = chrono::Utc::now().timestamp();
+    let now = chrono::Utc::now().timestamp_millis();
     sqlx::query(
         r#"
         UPDATE api_profiles SET (name, provider,format_type, base_url, model,  updated_at) 

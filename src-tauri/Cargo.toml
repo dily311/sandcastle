@@ -60,6 +60,7 @@ tokio = { version = "1.0", features = ["full"] }
 tokio-util = "0.7.20"
 tokio-tungstenite = { version = "0.24", features = ["rustls-tls-webpki-roots"] }
 zip = "8.6.0"
+sha2 = "0.11"
 lofty = "0.24.0"
 image = { version = "0.25", features = ["webp"] }
 infer = "0.22.0"

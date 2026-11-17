@@ -4,7 +4,10 @@ import type { CorePlugin } from "$ipc/bindings";
 import { call, commands } from "$shared/ipc/client";
 import { onEvent } from "$shared/ipc/events";
 
-export type PluginId = "phone" | "game" | "chat.images" | "html" | "regex" | "widget" | "translate" | "tts" | "imagegen" | "imageauto";
+export type PluginId = "phone" | "game" | "chat.images" | "html" | "regex" | "widget" | "translate" | "tts" | "imagegen" | "imageauto" | "sync";
+
+/** 백엔드 목록을 읽기 전에 꺼진 것으로 볼 기능 (sys/plugins.rs의 default_enabled: false) */
+const DEFAULT_OFF: PluginId[] = ["translate", "tts", "imagegen", "imageauto", "widget", "html", "sync"];
 
 class Plugins {
 	list = $state<CorePlugin[]>([]);
@@ -23,7 +26,7 @@ class Plugins {
 	/** 켜져 있는가. 아직 못 불러왔으면 기본값 (목록에 없으면 켜진 것으로) */
 	on(id: PluginId): boolean {
 		const p = this.list.find((x) => x.id === id);
-		return p ? p.enabled : id !== "translate" && id !== "tts" && id !== "imagegen" && id !== "widget" && id !== "html";
+		return p ? p.enabled : !DEFAULT_OFF.includes(id);
 	}
 
 	private apply(id: string, enabled: boolean) {

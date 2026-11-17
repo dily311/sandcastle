@@ -162,6 +162,42 @@ export const commands = {
 	getDataOverview: (options?: InvokeOptions) => __TAURI_INVOKE<DataOverview_Serialize>("get_data_overview", undefined, options),
 	/**  DB 점검: 무결성(PRAGMA integrity_check)과 아무 데도 쓰이지 않는 파일 목록. 지우지 않는다 */
 	checkData: (options?: InvokeOptions) => __TAURI_INVOKE<DataCheck>("check_data", undefined, options),
+	/**  휴지통 목록 (열 때 보존 기간이 지난 것을 먼저 정리) */
+	listTrash: (options?: InvokeOptions) => __TAURI_INVOKE<TrashItem[]>("list_trash", undefined, options),
+	/**  되살리기 */
+	restoreTrashItem: (id: string, options?: InvokeOptions) => __TAURI_INVOKE<TrashItem>("restore_trash_item", { id }, options),
+	/**  완전히 지우기 (되돌릴 수 없음 — 화면에서 확인을 받는다) */
+	purgeTrashItem: (id: string, options?: InvokeOptions) => __TAURI_INVOKE<boolean>("purge_trash_item", { id }, options),
+	/**  휴지통 비우기 (되돌릴 수 없음 — 화면에서 확인을 받는다). 지운 개수 */
+	emptyTrash: (options?: InvokeOptions) => __TAURI_INVOKE<number>("empty_trash", undefined, options),
+	/**  이 기기 id, 합친 적 있는 기기, 남은 충돌 수. 동기화 화면을 열 때 (기기 id는 이때 처음 만든다) */
+	getSyncStatus: (options?: InvokeOptions) => __TAURI_INVOKE<SyncStatus_Serialize>("get_sync_status", undefined, options),
+	/**  동기화 파일 만들기. `path`는 저장 대화상자에서 고른 경로 (.scsync) */
+	exportSyncBundle: (path: string, includeFiles: boolean, options?: InvokeOptions) => __TAURI_INVOKE<SyncBundleInfo>("export_sync_bundle", { path, includeFiles }, options),
+	/**  합치기 전에 숫자만 (DB·파일·설정을 바꾸지 않음) */
+	previewSyncBundle: (path: string, options?: InvokeOptions) => __TAURI_INVOKE<SyncPreview>("preview_sync_bundle", { path }, options),
+	/**  합치기: 이 기기 DB·설정 사본을 먼저 만들고, 없는 파일을 넣고, DB를 합치고, 같이 쓰는 설정을 바꾼다 */
+	applySyncBundle: (path: string, options?: InvokeOptions) => __TAURI_INVOKE<SyncApplied>("apply_sync_bundle", { path }, options),
+	/**  지금 동기화 (폴더). `auto`는 자동 동기화가 부를 때 (설정 > 동기화의 자동 동기화가 켜져 있어야 함) */
+	syncNow: (auto: boolean, options?: InvokeOptions) => __TAURI_INVOKE<SyncRunReport_Serialize>("sync_now", { auto }, options),
+	/**  동기화 기록 (최근부터) */
+	listSyncRuns: (limit: number, options?: InvokeOptions) => __TAURI_INVOKE<SyncRun_Serialize[]>("list_sync_runs", { limit }, options),
+	/**  아직 고르지 않은 충돌 (최근부터) */
+	listSyncConflicts: (options?: InvokeOptions) => __TAURI_INVOKE<SyncConflict_Serialize[]>("list_sync_conflicts", undefined, options),
+	/**  고르기: 이 기기 것 두기 / 받은 것으로 바꾸기 / 버리기(확인함) */
+	resolveSyncConflict: (id: string, choice: ConflictChoice, options?: InvokeOptions) => __TAURI_INVOKE<null>("resolve_sync_conflict", { id, choice }, options),
+	/**  합치기 전 사본 (sync-backups, 최근부터) */
+	listSyncBackups: (options?: InvokeOptions) => __TAURI_INVOKE<SyncBackup[]>("list_sync_backups", undefined, options),
+	/**  되돌리기 준비 — 앱을 다시 시작하면 적용된다 (지금 DB·설정은 restore-backups/로 치움, 자동 동기화는 꺼짐) */
+	requestSyncRollback: (name: string, options?: InvokeOptions) => __TAURI_INVOKE<null>("request_sync_rollback", { name }, options),
+	cancelSyncRollback: (options?: InvokeOptions) => __TAURI_INVOKE<null>("cancel_sync_rollback", undefined, options),
+	driveStatus: (options?: InvokeOptions) => __TAURI_INVOKE<DriveStatus_Serialize>("drive_status", undefined, options),
+	/**  구글 로그인: 기본 브라우저를 열고 돌아올 때까지 기다린다(5분). 권한은 앱 전용 폴더만 */
+	driveLogin: (options?: InvokeOptions) => __TAURI_INVOKE<DriveStatus_Serialize>("drive_login", undefined, options),
+	/**  연결 끊기. `delete_remote`면 먼저 드라이브의 앱 전용 폴더를 비운다(되돌릴 수 없음 — 화면에서 확인) */
+	driveLogout: (deleteRemote: boolean, options?: InvokeOptions) => __TAURI_INVOKE<number>("drive_logout", { deleteRemote }, options),
+	/**  Android: 폰이 Play 서비스에서 받은 access token을 넣는다 (메모리에만). `connect`면 처음 연결 — 계정을 읽고 저장소를 드라이브로 */
+	driveUseToken: (token: string, connect: boolean, options?: InvokeOptions) => __TAURI_INVOKE<DriveStatus_Serialize>("drive_use_token", { token, connect }, options),
 	/**  지난 panic 기록 (최근 것부터, 앱 데이터 폴더의 logs/panic.log) */
 	getPanicLog: (options?: InvokeOptions) => __TAURI_INVOKE<PanicEntry_Serialize[]>("get_panic_log", undefined, options),
 	/**  새 버전 확인 (GitHub Releases). 내려받지 않고 릴리스 페이지 주소만 돌려준다 (1-E-2) */
@@ -176,7 +212,7 @@ export const commands = {
 	prepareSaveTarget: (fileName: string, options?: InvokeOptions) => __TAURI_INVOKE<string>("prepare_save_target", { fileName }, options),
 	/**  임시 경로에 쓴 파일을 고른 content:// 주소로 옮긴다 */
 	deliverSavedFile: (tmp: string, uri: string, options?: InvokeOptions) => __TAURI_INVOKE<null>("deliver_saved_file", { tmp, uri }, options),
-	/**  여러 대화를 한 번에 삭제. 지운 개수를 돌려준다. */
+	/**  여러 대화를 한 번에 휴지통으로 (대화마다 휴지통 항목 하나). 옮긴 개수를 돌려준다. */
 	deleteConversations: (ids: string[], options?: InvokeOptions) => __TAURI_INVOKE<number>("delete_conversations", { ids }, options),
 	/**
 	 *  캐릭터 팩 내보내기. `path`는 프론트의 저장 대화상자에서 고른 경로 (.scpack).
@@ -199,7 +235,7 @@ export const commands = {
 	getPromptPreset: (id: string, options?: InvokeOptions) => __TAURI_INVOKE<PromptPresetDetail_Serialize>("get_prompt_preset", { id }, options),
 	/**  프리셋과 블록을 한 번에 저장. `blocks` 순서가 실행 순서가 되고, 목록에 없는 기존 블록은 지워진다. */
 	savePromptPreset: (preset: PromptPresetsInput_Deserialize, blocks: PromptBlocksInput_Deserialize[], options?: InvokeOptions) => __TAURI_INVOKE<PromptPresetDetail_Serialize>("save_prompt_preset", { preset, blocks }, options),
-	deletePromptPreset: (id: string, options?: InvokeOptions) => __TAURI_INVOKE<null>("delete_prompt_preset", { id }, options),
+	deletePromptPreset: (id: string, options?: InvokeOptions) => __TAURI_INVOKE<TrashItem>("delete_prompt_preset", { id }, options),
 	getApiProfile: (id: string, options?: InvokeOptions) => __TAURI_INVOKE<ApiProfiles>("get_api_profile", { id }, options),
 	getAllApiProfile: (options?: InvokeOptions) => __TAURI_INVOKE<ApiProfiles[]>("get_all_api_profile", undefined, options),
 	createApiProfile: (input: ApiProfilesInput, apiKey: string, options?: InvokeOptions) => __TAURI_INVOKE<ApiProfiles>("create_api_profile", { input, apiKey }, options),
@@ -224,12 +260,12 @@ export const commands = {
 	copyCharacterToGame: (characterId: string, gameId: string, options?: InvokeOptions) => __TAURI_INVOKE<GameCharacters_Serialize>("copy_character_to_game", { characterId, gameId }, options),
 	copyGameCharacterToCharacter: (gameCharacterId: string, options?: InvokeOptions) => __TAURI_INVOKE<Character_Serialize>("copy_game_character_to_character", { gameCharacterId }, options),
 	toggleFavoriteCharacter: (id: string, isFavorite: boolean, options?: InvokeOptions) => __TAURI_INVOKE<null>("toggle_favorite_character", { id, isFavorite }, options),
-	deleteCharacter: (id: string, options?: InvokeOptions) => __TAURI_INVOKE<null>("delete_character", { id }, options),
+	deleteCharacter: (id: string, options?: InvokeOptions) => __TAURI_INVOKE<TrashItem>("delete_character", { id }, options),
 	getListCharacters: (options?: InvokeOptions) => __TAURI_INVOKE<CharacterOption[]>("get_list_characters", undefined, options),
 	getAllPersonas: (options?: InvokeOptions) => __TAURI_INVOKE<Persona_Serialize[]>("get_all_personas", undefined, options),
 	createPersona: (input: PersonaInput_Deserialize, options?: InvokeOptions) => __TAURI_INVOKE<Persona_Serialize>("create_persona", { input }, options),
 	updatePersona: (id: string, input: PersonaInput_Deserialize, options?: InvokeOptions) => __TAURI_INVOKE<null>("update_persona", { id, input }, options),
-	deletePersona: (id: string, options?: InvokeOptions) => __TAURI_INVOKE<null>("delete_persona", { id }, options),
+	deletePersona: (id: string, options?: InvokeOptions) => __TAURI_INVOKE<TrashItem>("delete_persona", { id }, options),
 	/**
 	 *  페르소나 아바타: 고른 이미지를 앱 데이터(백업에 들어가는 characters/avatars)로 복사해 둔다.
 	 *  `path`가 없으면 아바타를 지운다.
@@ -238,7 +274,7 @@ export const commands = {
 	getPersonaUsage: (id: string, options?: InvokeOptions) => __TAURI_INVOKE<PersonaUsage>("get_persona_usage", { id }, options),
 	getAllWorldinfoBooks: (options?: InvokeOptions) => __TAURI_INVOKE<WorldInfoBook_Serialize[]>("get_all_worldinfo_books", undefined, options),
 	createWorldinfoBook: (input: WorldInfoBookInput_Deserialize, options?: InvokeOptions) => __TAURI_INVOKE<WorldInfoBook_Serialize>("create_worldinfo_book", { input }, options),
-	deleteWorldinfoBook: (id: string, options?: InvokeOptions) => __TAURI_INVOKE<null>("delete_worldinfo_book", { id }, options),
+	deleteWorldinfoBook: (id: string, options?: InvokeOptions) => __TAURI_INVOKE<TrashItem>("delete_worldinfo_book", { id }, options),
 	getWorldinfoEntries: (bookId: string, options?: InvokeOptions) => __TAURI_INVOKE<WorldInfoEntry[]>("get_worldinfo_entries", { bookId }, options),
 	upsertWorldinfoEntry: (input: WorldInfoEntryInput_Deserialize, options?: InvokeOptions) => __TAURI_INVOKE<WorldInfoEntry>("upsert_worldinfo_entry", { input }, options),
 	deleteWorldinfoEntry: (id: string, options?: InvokeOptions) => __TAURI_INVOKE<null>("delete_worldinfo_entry", { id }, options),
@@ -256,7 +292,7 @@ export const commands = {
 	getConversation: (id: string, options?: InvokeOptions) => __TAURI_INVOKE<Conversation_Serialize>("get_conversation", { id }, options),
 	createConversation: (input: ConversationInput_Deserialize, options?: InvokeOptions) => __TAURI_INVOKE<Conversation_Serialize>("create_conversation", { input }, options),
 	touchConversation: (id: string, options?: InvokeOptions) => __TAURI_INVOKE<number>("touch_conversation", { id }, options),
-	deleteConversation: (id: string, options?: InvokeOptions) => __TAURI_INVOKE<null>("delete_conversation", { id }, options),
+	deleteConversation: (id: string, options?: InvokeOptions) => __TAURI_INVOKE<TrashItem>("delete_conversation", { id }, options),
 	getMessages: (conversationId: string, limit: number, before: number | null, options?: InvokeOptions) => __TAURI_INVOKE<Message_Serialize[]>("get_messages", { conversationId, limit, before }, options),
 	appendMessage: (input: MessageInput_Deserialize, options?: InvokeOptions) => __TAURI_INVOKE<Message_Serialize>("append_message", { input }, options),
 	updateMessage: (id: string, content: string, meta: Value | null, options?: InvokeOptions) => __TAURI_INVOKE<null>("update_message", { id, content, meta }, options),
@@ -294,7 +330,7 @@ export const commands = {
 	 *  게임 삭제. 플레이 기록(세션/세이브/일지/대화)도 같이 지워지므로 UI에서 반드시 확인을 받을 것.
 	 *  지금 플레이 중이거나 마운트된 게임은 지우지 않는다.
 	 */
-	deleteGame: (gameId: string, options?: InvokeOptions) => __TAURI_INVOKE<null>("delete_game", { gameId }, options),
+	deleteGame: (gameId: string, options?: InvokeOptions) => __TAURI_INVOKE<TrashItem>("delete_game", { gameId }, options),
 	importGame: (zipPath: string, options?: InvokeOptions) => __TAURI_INVOKE<GameProject_Serialize>("import_game", { zipPath }, options),
 	exportGame: (gameId: string, outputDir: string | null, options?: InvokeOptions) => __TAURI_INVOKE<string>("export_game", { gameId, outputDir }, options),
 	/**
@@ -320,7 +356,7 @@ export const commands = {
 	 */
 	readTranscript: (sessionId: string, beforeSeq: number | null, limit: number | null, options?: InvokeOptions) => __TAURI_INVOKE<TranscriptPage_Serialize>("read_transcript", { sessionId, beforeSeq, limit }, options),
 	/**  이 게임의 세션 삭제용 */
-	deleteSessions: (sessionId: string, options?: InvokeOptions) => __TAURI_INVOKE<null>("delete_sessions", { sessionId }, options),
+	deleteSessions: (sessionId: string, options?: InvokeOptions) => __TAURI_INVOKE<TrashItem>("delete_sessions", { sessionId }, options),
 	/**  게임 엔진에 커맨드 하나를 보낸다. iframe SDK의 game.move() 등이 여기로 온다. */
 	dispatchCommand: (command: GameCommand_Deserialize, options?: InvokeOptions) => __TAURI_INVOKE<GameResponse_Serialize>("dispatch_command", { command }, options),
 	/**
@@ -528,6 +564,7 @@ export type AppPrompts_Serialize = {
 export type AppSetting = AppSetting_Serialize | AppSetting_Deserialize;
 
 export type AppSetting_Deserialize = {
+	/**  예전 "자동 업데이트" 스위치. 아무 동작에도 연결된 적이 없어 쓰지 않는다 (check_updates_on_start로 대신, 1-E-2). 저장된 값 호환용으로만 남김 */
 	autoUpdate: boolean,
 	language: string,
 	selectedPreset: string,
@@ -548,9 +585,12 @@ export type AppSetting_Deserialize = {
 	checkUpdatesOnStart?: boolean,
 	/**  작업·사용량 상세 기록 보존 기간(일). None = 계속 보관(기본). 지난 상세는 일별 합계로 남긴다 (1-A-4) */
 	usageRetentionDays?: number | null,
+	/**  휴지통 보존 기간(일). None = 계속 보관. 지난 것은 휴지통을 열거나 새로 지울 때 정리 (2-A-3) */
+	trashRetentionDays?: number | null,
 };
 
 export type AppSetting_Serialize = {
+	/**  예전 "자동 업데이트" 스위치. 아무 동작에도 연결된 적이 없어 쓰지 않는다 (check_updates_on_start로 대신, 1-E-2). 저장된 값 호환용으로만 남김 */
 	autoUpdate: boolean,
 	language: string,
 	selectedPreset: string,
@@ -571,6 +611,8 @@ export type AppSetting_Serialize = {
 	checkUpdatesOnStart: boolean,
 	/**  작업·사용량 상세 기록 보존 기간(일). None = 계속 보관(기본). 지난 상세는 일별 합계로 남긴다 (1-A-4) */
 	usageRetentionDays: number | null,
+	/**  휴지통 보존 기간(일). None = 계속 보관. 지난 것은 휴지통을 열거나 새로 지울 때 정리 (2-A-3) */
+	trashRetentionDays: number | null,
 };
 
 export type AssetRef = {
@@ -1037,6 +1079,8 @@ export type CompactResult = {
 	tasks: number,
 };
 
+export type ConflictChoice = "keep_local" | "use_remote" | "dismiss";
+
 /**  컨텍스트 사용량 (오른쪽 패널). 마지막으로 보낸 프롬프트 기준 */
 export type ContextUsage = ContextUsage_Serialize | ContextUsage_Deserialize;
 
@@ -1359,6 +1403,22 @@ export type DisplayItem = {
 	content: string,
 };
 
+export type DriveStatus = DriveStatus_Serialize | DriveStatus_Deserialize;
+
+export type DriveStatus_Deserialize = {
+	/**  이 빌드에 OAuth 클라이언트가 들어 있나 (없으면 드라이브를 쓸 수 없음) */
+	available: boolean,
+	connected: boolean,
+	email?: string | null,
+};
+
+export type DriveStatus_Serialize = {
+	/**  이 빌드에 OAuth 클라이언트가 들어 있나 (없으면 드라이브를 쓸 수 없음) */
+	available: boolean,
+	connected: boolean,
+	email: string | null,
+};
+
 /**  고친 메시지: 화면에 다시 그릴 줄 */
 export type EditedGameMessage = EditedGameMessage_Serialize | EditedGameMessage_Deserialize;
 
@@ -1382,6 +1442,21 @@ export type ErrorCode = "INTERNAL_ERROR" | "RESOURCE_NOT_FOUND" | "INVALID_INPUT
 
 export type FeatureSetting = {
 	feature: { [key in string]: boolean },
+};
+
+export type FieldDiff = {
+	column: string,
+	local: Value,
+	remote: Value,
+};
+
+export type FileCounts = {
+	/**  묶음에 내용이 있고 이 기기에 없어 넣을 (넣은) 파일 */
+	added: number,
+	/**  이 기기에 없는데 묶음에 내용이 없는 파일 ("파일 포함"으로 다시 만들면 들어옴) */
+	missing: number,
+	/**  같은 경로에 내용이 다른 파일이 있어 이 기기 것을 둔 파일 */
+	keptLocal: number,
 };
 
 export type FolderNode = {
@@ -2502,6 +2577,32 @@ export type MacroMode = "none" |
 /**  정규식 특수문자를 이스케이프해서 넣음 */
 "escaped";
 
+export type MergeReport = {
+	added: number,
+	updated: number,
+	unchanged: number,
+	deleted: number,
+	/**  받은 지우기를 이 기기에서 고친 것이 이겨서 지우지 않음 */
+	keptLocalEdits: number,
+	/**  이 기기에서 지운 것을 받은 고침이 되살림 */
+	restored: number,
+	/**  둘 다 남긴 것 (sync_conflicts, 분기 제외) */
+	conflicts: number,
+	/**  양쪽이 이어 써서 만든 분기 대화 */
+	branches: number,
+	/**  이 기기가 모르는 테이블·열 등으로 넘긴 것 */
+	skipped: number,
+	settingsApplied: boolean,
+	dryRun: boolean,
+};
+
+export type MergedDevice = {
+	deviceId: string,
+	/**  그 묶음을 만든 시각 (그 기기 시계) */
+	createdAt: number,
+	report: MergeReport,
+};
+
 export type Message = Message_Serialize | Message_Deserialize;
 
 export type MessageInput = MessageInput_Serialize | MessageInput_Deserialize;
@@ -3027,6 +3128,8 @@ export type PluginSetting_Deserialize = {
 	phone?: PhoneSetting_Deserialize,
 	/**  앱 프롬프트 (사용자가 고친 것만, 비우면 기본값 — service::app_prompts) */
 	prompts?: AppPrompts_Deserialize,
+	/**  폴더 동기화 (2-C) — 경로가 기기마다 달라 기기 전용 (settings_scope) */
+	sync?: SyncSetting_Deserialize,
 };
 
 export type PluginSetting_Serialize = {
@@ -3036,6 +3139,8 @@ export type PluginSetting_Serialize = {
 	phone: PhoneSetting_Serialize,
 	/**  앱 프롬프트 (사용자가 고친 것만, 비우면 기본값 — service::app_prompts) */
 	prompts: AppPrompts_Serialize,
+	/**  폴더 동기화 (2-C) — 경로가 기기마다 달라 기기 전용 (settings_scope) */
+	sync: SyncSetting_Serialize,
 };
 
 export type PromptBlocks = PromptBlocks_Serialize | PromptBlocks_Deserialize;
@@ -3464,6 +3569,202 @@ export type StreamPayload = {
 	chunk: string,
 };
 
+export type SyncApplied = {
+	report: MergeReport,
+	files: FileCounts,
+	/**  적용 전 사본 (앱 데이터 폴더 기준) */
+	backup: string,
+};
+
+export type SyncBackup = {
+	/**  `app-….db` 파일 이름 */
+	name: string,
+	createdAt: number,
+	bytes: number,
+};
+
+/**  묶음 하나의 요약 (화면용) */
+export type SyncBundleInfo = {
+	deviceId: string,
+	createdAt: number,
+	appVersion: string,
+	rows: number,
+	tombstones: number,
+	files: number,
+	blobs: number,
+	bytes: number,
+};
+
+export type SyncConflict = SyncConflict_Serialize | SyncConflict_Deserialize;
+
+export type SyncConflict_Deserialize = {
+	id: string,
+	/**  edit / unique / orphan / branch */
+	kind: string,
+	tbl: string,
+	key: string,
+	/**  이름·제목·내용 앞부분 (화면용) */
+	label: string,
+	deviceId: string,
+	createdAt: number,
+	/**  edit: 다른 칸만 (시각 칸 빼고) */
+	diff: FieldDiff[],
+	/**  받은 행 (unique·orphan은 넣지 못한 행 전체, branch는 {branchId, fromSeq}) */
+	remote?: Value | null,
+};
+
+export type SyncConflict_Serialize = {
+	id: string,
+	/**  edit / unique / orphan / branch */
+	kind: string,
+	tbl: string,
+	key: string,
+	/**  이름·제목·내용 앞부분 (화면용) */
+	label: string,
+	deviceId: string,
+	createdAt: number,
+	/**  edit: 다른 칸만 (시각 칸 빼고) */
+	diff: FieldDiff[],
+	/**  받은 행 (unique·orphan은 넣지 못한 행 전체, branch는 {branchId, fromSeq}) */
+	remote: Value | null,
+};
+
+export type SyncPeer = SyncPeer_Serialize | SyncPeer_Deserialize;
+
+export type SyncPeer_Deserialize = {
+	deviceId: string,
+	/**  이 기기 시각 */
+	lastMergeAt: number,
+	merges: number,
+	/**  그 기기가 이 기기 내용을 어디까지 받았나 (이 기기 시각, 그 기기 묶음의 acks). 아직이면 없음 */
+	theirAck?: number | null,
+};
+
+export type SyncPeer_Serialize = {
+	deviceId: string,
+	/**  이 기기 시각 */
+	lastMergeAt: number,
+	merges: number,
+	/**  그 기기가 이 기기 내용을 어디까지 받았나 (이 기기 시각, 그 기기 묶음의 acks). 아직이면 없음 */
+	theirAck: number | null,
+};
+
+export type SyncPreview = {
+	bundle: SyncBundleInfo,
+	report: MergeReport,
+	files: FileCounts,
+};
+
+/**  진행 단계 (화면에 "다른 기기 확인 / 기기 … 합치는 중 / 올리는 중") */
+export type SyncProgress = {
+	step: string,
+};
+
+export type SyncRun = SyncRun_Serialize | SyncRun_Deserialize;
+
+export type SyncRunReport = SyncRunReport_Serialize | SyncRunReport_Deserialize;
+
+export type SyncRunReport_Deserialize = {
+	merged: MergedDevice[],
+	/**  새로 쓰인 것이 없어 건너뛴 기기 */
+	unchangedDevices: number,
+	filesDown: number,
+	/**  저장소에 내용이 아직 없는 파일 (그 기기가 다음 동기화 때 올림) */
+	filesMissing: number,
+	filesUp: number,
+	tombstonesCleaned: number,
+	/**  합치기 전 사본 (앱 데이터 폴더 기준). 합친 것이 없으면 없음 */
+	backup?: string | null,
+};
+
+export type SyncRunReport_Serialize = {
+	merged: MergedDevice[],
+	/**  새로 쓰인 것이 없어 건너뛴 기기 */
+	unchangedDevices: number,
+	filesDown: number,
+	/**  저장소에 내용이 아직 없는 파일 (그 기기가 다음 동기화 때 올림) */
+	filesMissing: number,
+	filesUp: number,
+	tombstonesCleaned: number,
+	/**  합치기 전 사본 (앱 데이터 폴더 기준). 합친 것이 없으면 없음 */
+	backup: string | null,
+};
+
+export type SyncRun_Deserialize = {
+	id: string,
+	target: string,
+	runBy: string,
+	startedAt: number,
+	finishedAt?: number | null,
+	ok: boolean,
+	error?: string | null,
+	summary?: SyncRunReport_Deserialize | null,
+};
+
+export type SyncRun_Serialize = {
+	id: string,
+	target: string,
+	runBy: string,
+	startedAt: number,
+	finishedAt: number | null,
+	ok: boolean,
+	error: string | null,
+	summary: SyncRunReport_Serialize | null,
+};
+
+/**  폴더 동기화 설정 (CLAUDE.md 2-C, ADR-011) */
+export type SyncSetting = SyncSetting_Serialize | SyncSetting_Deserialize;
+
+/**  폴더 동기화 설정 (CLAUDE.md 2-C, ADR-011) */
+export type SyncSetting_Deserialize = {
+	/**  동기화 폴더 (OneDrive·Dropbox처럼 이미 쓰는 동기화 앱의 폴더 안). 없으면 폴더 동기화를 하지 않음 */
+	folder?: string | null,
+	/**  자동 동기화 (기본 꺼짐): 앱을 켤 때 한 번, 그 뒤 interval_minutes마다 */
+	auto?: boolean,
+	intervalMinutes?: number,
+	/**  지금 동기화·자동 동기화가 쓸 저장소: "folder" / "drive" (2-D) */
+	target?: string,
+	/**  연결한 구글 계정 (화면 표시용. 토큰은 keyring에만) */
+	driveEmail?: string | null,
+	/**  Android: Wi-Fi(요금이 들지 않는 연결)에서만 자동 동기화, 직접 누를 때는 먼저 묻기 (기본 켜짐) */
+	wifiOnly?: boolean,
+};
+
+/**  폴더 동기화 설정 (CLAUDE.md 2-C, ADR-011) */
+export type SyncSetting_Serialize = {
+	/**  동기화 폴더 (OneDrive·Dropbox처럼 이미 쓰는 동기화 앱의 폴더 안). 없으면 폴더 동기화를 하지 않음 */
+	folder: string | null,
+	/**  자동 동기화 (기본 꺼짐): 앱을 켤 때 한 번, 그 뒤 interval_minutes마다 */
+	auto: boolean,
+	intervalMinutes: number,
+	/**  지금 동기화·자동 동기화가 쓸 저장소: "folder" / "drive" (2-D) */
+	target: string,
+	/**  연결한 구글 계정 (화면 표시용. 토큰은 keyring에만) */
+	driveEmail: string | null,
+	/**  Android: Wi-Fi(요금이 들지 않는 연결)에서만 자동 동기화, 직접 누를 때는 먼저 묻기 (기본 켜짐) */
+	wifiOnly: boolean,
+};
+
+export type SyncStatus = SyncStatus_Serialize | SyncStatus_Deserialize;
+
+export type SyncStatus_Deserialize = {
+	deviceId: string,
+	peers: SyncPeer_Deserialize[],
+	/**  아직 고르지 않은 충돌 (2-E에서 고른다) */
+	openConflicts: number,
+	/**  다음 시작 때 되돌릴 합치기 전 사본 (2-E) */
+	pendingRollback?: string | null,
+};
+
+export type SyncStatus_Serialize = {
+	deviceId: string,
+	peers: SyncPeer_Serialize[],
+	/**  아직 고르지 않은 충돌 (2-E에서 고른다) */
+	openConflicts: number,
+	/**  다음 시작 때 되돌릴 합치기 전 사본 (2-E) */
+	pendingRollback: string | null,
+};
+
 /**  실패 정보. DB와 프론트 이벤트에 같은 형태로 나간다. */
 export type TaskErrorInfo = {
 	code: string,
@@ -3841,6 +4142,21 @@ export type TranslateSetting_Serialize = {
 	/**  새 AI 답변을 자동으로 번역 */
 	autoTranslate: boolean,
 };
+
+/**  휴지통 목록의 한 줄 */
+export type TrashItem = {
+	id: string,
+	kind: TrashKind,
+	itemId: string,
+	label: string,
+	deletedAt: number,
+	/**  같이 지운 행 수 (항목 자신 포함) */
+	rows: number,
+	files: number,
+	size: number,
+};
+
+export type TrashKind = "character" | "persona" | "conversation" | "worldinfo_book" | "prompt_preset" | "game" | "game_session";
 
 export type TtsSetting = TtsSetting_Serialize | TtsSetting_Deserialize;
 

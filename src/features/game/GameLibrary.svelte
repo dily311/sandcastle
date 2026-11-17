@@ -51,7 +51,7 @@
 					danger: true,
 					separator: true,
 					onselect: async () => {
-						if (!(await confirmAction({ title: "게임 삭제", message: `'${g.title}'과 모든 플레이 기록을 지움. 되돌릴 수 없음`, confirmLabel: "삭제", danger: true }))) return;
+						if (!(await confirmAction({ title: "게임 삭제", message: `'${g.title}'과 모든 플레이 기록을 휴지통으로 옮김. 설정 > 데이터 > 휴지통에서 되살릴 수 있음`, confirmLabel: "삭제", danger: true }))) return;
 						await games.remove(g.id);
 					},
 				},
@@ -67,10 +67,10 @@
 	async function removePicked() {
 		const ids = [...picked];
 		if (!ids.length) return;
-		if (!(await confirmAction({ title: "게임 삭제", message: `게임 ${ids.length}개와 그 저장·세션을 지움. 되돌릴 수 없음`, confirmLabel: `${ids.length}개 삭제`, danger: true }))) return;
-		for (const id of ids) await games.remove(id);
+		if (!(await confirmAction({ title: "게임 삭제", message: `게임 ${ids.length}개와 그 저장·세션을 휴지통으로 옮김. 설정 > 데이터 > 휴지통에서 되살릴 수 있음`, confirmLabel: `${ids.length}개 삭제`, danger: true }))) return;
+		for (const id of ids) await games.remove(id, false);
 		selecting = false;
-		toasts.success(`게임 ${ids.length}개 지움`);
+		toasts.success(`게임 ${ids.length}개를 휴지통으로 옮김`);
 	}
 
 	// ---- 새 게임 ----

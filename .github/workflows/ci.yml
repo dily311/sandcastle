@@ -109,19 +109,64 @@ jobs:
           workspaces: src-tauri
           key: e2e
       - run: pnpm install --frozen-lockfile
-      - name: tauri-driver 설치
-        run: cargo install tauri-driver --locked
+      # 앱이 실제로 쓰는 WebView2와 같은 버전의 msedgedriver — Tauri 공식 안내(tauri.app/develop/tests/webdriver/ci)의 방법.
+      # 예전에는 레지스트리의 버전으로 받았는데, 러너에서 앱이 쓰는 런타임과 달라 세션을 못 만들었다(DevToolsActivePort)
       - name: WebView2와 같은 버전의 msedgedriver
         shell: pwsh
         run: |
-          $key = "HKLM:\SOFTWARE\WOW6432Node\Microsoft\EdgeUpdate\Clients\{F3017226-FE2A-4295-8BDF-00C3A9A7E4C5}"
-          $v = (Get-ItemProperty $key -ErrorAction SilentlyContinue).pv
-          if (-not $v) { $v = (Get-Item "C:\Program Files (x86)\Microsoft\Edge\Application\msedge.exe").VersionInfo.ProductVersion }
-          Write-Host "WebView2 $v"
-          Invoke-WebRequest "https://msedgedriver.microsoft.com/$v/edgedriver_win64.zip" -OutFile "$env:RUNNER_TEMP\edgedriver.zip"
-          Expand-Archive "$env:RUNNER_TEMP\edgedriver.zip" -DestinationPath "$env:RUNNER_TEMP\edgedriver" -Force
-          "MSEDGEDRIVER=$env:RUNNER_TEMP\edgedriver\msedgedriver.exe" >> $env:GITHUB_ENV
+          cargo install --git https://github.com/chippers/msedgedriver-tool
+          New-Item -ItemType Directory -Force "$env:RUNNER_TEMP\edgedriver" | Out-Null
+          Push-Location "$env:RUNNER_TEMP\edgedriver"
+          & "$HOME/.cargo/bin/msedgedriver-tool.exe"
+          Pop-Location
+          "$env:RUNNER_TEMP\edgedriver" >> $env:GITHUB_PATH
+          & "$env:RUNNER_TEMP\edgedriver\msedgedriver.exe" --version
+          # 드라이버를 자세한 기록과 함께 띄우는 감싸기 (러너에서만 세션이 안 만들어지는 원인 찾기)
+          $wrap = "$env:RUNNER_TEMP\edgedriver\msedgedriver-logged.cmd"
+          "@`"$env:RUNNER_TEMP\edgedriver\msedgedriver.exe`" --verbose --log-path=`"$env:RUNNER_TEMP\msedgedriver.log`" %*" | Set-Content -Encoding ascii $wrap
+          "MSEDGEDRIVER=$wrap" >> $env:GITHUB_ENV
       - name: 앱 빌드 (E2E용 identifier)
         run: pnpm e2e:build
+      # 러너의 WebView2(156)는 드라이버가 넣는 WEBVIEW2_ADDITIONAL_BROWSER_ARGUMENTS(--remote-debugging-port)를
+      # 무시해서 tauri-driver로는 세션이 만들어지지 않았다 (DevToolsActivePort). 그래서 Windows에서는
+      # E2E 빌드가 설정(tauri.e2e.conf.json)으로 포트 9333을 열고, wdio가 앱을 띄워 msedgedriver를 그 포트에 붙인다
       - name: E2E
         run: pnpm e2e
+        env:
+          RUST_BACKTRACE: "1"
+      # 실패하면 원인을 남긴다: 앱의 panic 기록, WebView2·드라이버 버전
+      - name: 실패 원인 (panic 기록·버전)
+        if: failure()
+        shell: pwsh
+        run: |
+          $log = "$env:APPDATA\com.dilly311.sandcastle.e2e\logs\panic.log"
+          if (Test-Path $log) { Get-Content $log -Tail 80 } else { Write-Host "panic.log 없음" }
+          $key = "HKLM:\SOFTWARE\WOW6432Node\Microsoft\EdgeUpdate\Clients\{F3017226-FE2A-4295-8BDF-00C3A9A7E4C5}"
+          Write-Host "WebView2 런타임(레지스트리): $((Get-ItemProperty $key -ErrorAction SilentlyContinue).pv)"
+          Write-Host "Edge: $((Get-Item 'C:\Program Files (x86)\Microsoft\Edge\Application\msedge.exe' -ErrorAction SilentlyContinue).VersionInfo.ProductVersion)"
+          Write-Host "--- msedgedriver 기록 (처음 시도 부분과 끝부분)"
+          if (Test-Path "$env:RUNNER_TEMP\msedgedriver.log") {
+            Get-Content "$env:RUNNER_TEMP\msedgedriver.log" | Select-String -Pattern "Launching|Failed to connect|RESPONSE InitSession|DevToolsActivePort|USER_DATA|user-data" | Select-Object -First 20 | ForEach-Object { $_.Line.Substring(0, [Math]::Min(300, $_.Line.Length)) }
+            Get-Content "$env:RUNNER_TEMP\msedgedriver.log" -Tail 60
+          } else { Write-Host "기록 없음" }
+          Write-Host "--- 남은 WebView2 프로세스: $((Get-Process msedgewebview2 -ErrorAction SilentlyContinue).Count)"
+          Get-Process msedgewebview2 -ErrorAction SilentlyContinue | Stop-Process -Force
+          Write-Host "--- Edge·WebView2 정책"
+          foreach ($k in "HKLM:\SOFTWARE\Policies\Microsoft\Edge", "HKLM:\SOFTWARE\Policies\Microsoft\Edge\WebView2", "HKCU:\SOFTWARE\Policies\Microsoft\Edge") { if (Test-Path $k) { Write-Host $k; Get-ItemProperty $k | Out-String | Write-Host } }
+          # 드라이버 없이 앱만 띄워 본다 (E2E 빌드는 원격 디버깅 포트 9333을 연다): 20초 뒤 살아 있는지, 포트가 열렸는지
+          Get-Process sandcastle -ErrorAction SilentlyContinue | Stop-Process -Force
+          $exe = "src-tauri\target\debug\sandcastle.exe"
+          $env:RUST_BACKTRACE = "1"
+          $p = Start-Process $exe -PassThru -RedirectStandardOutput "$env:RUNNER_TEMP\app.out" -RedirectStandardError "$env:RUNNER_TEMP\app.err"
+          Start-Sleep -Seconds 20
+          Write-Host "--- 앱이 도는 동안의 WebView2 프로세스 (명령줄)"
+          Get-CimInstance Win32_Process -Filter "Name='msedgewebview2.exe'" | Select-Object -First 3 | ForEach-Object { Write-Host ($_.CommandLine.Substring(0, [Math]::Min(700, $_.CommandLine.Length))) }
+          Write-Host "WebView2 프로세스 수: $((Get-Process msedgewebview2 -ErrorAction SilentlyContinue).Count)"
+          Write-Host "세션: $((Get-Process -Id $PID).SessionId), 사용자: $env:USERNAME, 대화형: $([Environment]::UserInteractive)"
+          try { $j = Invoke-RestMethod "http://127.0.0.1:9333/json/version" -TimeoutSec 5; Write-Host "원격 디버깅 열림: $($j.Browser)" } catch { Write-Host "원격 디버깅 안 열림: $($_.Exception.Message)" }
+          if ($p.HasExited) { Write-Host "앱이 스스로 끝남: 종료 코드 $($p.ExitCode) (0x$('{0:X}' -f $p.ExitCode))" } else { Write-Host "앱이 20초 동안 살아 있음 (창 $($p.MainWindowTitle))"; Stop-Process $p -Force }
+          Write-Host "--- stdout"; Get-Content "$env:RUNNER_TEMP\app.out" -Tail 40
+          Write-Host "--- stderr"; Get-Content "$env:RUNNER_TEMP\app.err" -Tail 60
+          Write-Host "--- 앱 데이터"; Get-ChildItem "$env:APPDATA\com.dilly311.sandcastle.e2e" -ErrorAction SilentlyContinue | Select-Object -ExpandProperty Name
+          Write-Host "--- WebView2 데이터"; Get-ChildItem "$env:LOCALAPPDATA\com.dilly311.sandcastle.e2e" -ErrorAction SilentlyContinue | Select-Object -ExpandProperty Name
+          if (Test-Path $log) { Write-Host "--- panic.log (앱만 띄운 뒤)"; Get-Content $log -Tail 80 }

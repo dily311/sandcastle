@@ -1,4 +1,5 @@
 // 로어북(월드인포): 책 목록, 책별 항목, 쓰는 곳. 로어북 화면과 대화 패널이 같이 씀
+import { trashedToast } from "$shared/trash";
 import { moveItem } from "$shared/dnd/sortable.svelte";
 import type { WorldInfoBook_Serialize as Book, WorldInfoEntry as Entry, WorldInfoEntryInput_Deserialize as EntryInput } from "$ipc/bindings";
 import { call, commands } from "$shared/ipc/client";
@@ -61,11 +62,16 @@ class Lorebook {
 		const b = this.book(id);
 		if (b) Object.assign(b, patch, { updatedAt: Date.now() });
 	}
-	async remove(b: Book) {
+	async remove(b: Book, toast = true) {
 		const n = this.counts[b.id]?.entries ?? 0;
-		const ok = await confirmAction({ title: "로어북 삭제", message: `'${b.name}'와 항목 ${n}개를 지움. 이 책을 쓰던 캐릭터·페르소나·대화에서도 빠짐`, confirmLabel: "삭제", danger: true });
+		const ok = await confirmAction({ title: "로어북 삭제", message: `'${b.name}'와 항목 ${n}개를 휴지통으로 옮김. 이 책을 쓰던 캐릭터·페르소나·대화에서도 빠지고, 되살리면 다시 이어짐`, confirmLabel: "삭제", danger: true });
 		if (!ok) return false;
-		await call(commands.deleteWorldinfoBook(b.id), src);
+		const item = await call(commands.deleteWorldinfoBook(b.id), src);
+		if (toast)
+			trashedToast(item, async () => {
+				await this.load();
+				await library.load();
+			});
 		this.books = this.books.filter((x) => x.id !== b.id);
 		delete this.entries[b.id];
 		await library.load();

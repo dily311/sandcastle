@@ -1,4 +1,5 @@
 // 확인·파일 대화상자가 끼는 대화 동작 (카드·메뉴·패널이 같이 씀)
+import { TRASH_HINT } from "$shared/trash";
 import { nav } from "$app/nav.svelte";
 import { exportPicker, type ExportFormat } from "$app/exportFormats.svelte";
 import { call, commands } from "$shared/ipc/client";
@@ -24,7 +25,7 @@ export const convActions = {
 	async remove(conv: Conversation) {
 		const ok = await confirmAction({
 			title: "대화 삭제",
-			message: `'${conv.title}'와 메시지 ${conv.messageCount}개를 지움. 되돌릴 수 없음`,
+			message: `'${conv.title}'와 메시지 ${conv.messageCount}개를 휴지통으로 옮김. ${TRASH_HINT}`,
 			confirmLabel: "삭제",
 			danger: true,
 		});

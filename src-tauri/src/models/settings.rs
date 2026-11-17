@@ -29,6 +29,13 @@ pub struct AppSetting {
     /// 작업·사용량 상세 기록 보존 기간(일). None = 계속 보관(기본). 지난 상세는 일별 합계로 남긴다 (1-A-4)
     #[serde(default)]
     pub usage_retention_days: Option<u32>,
+    /// 휴지통 보존 기간(일). None = 계속 보관. 지난 것은 휴지통을 열거나 새로 지울 때 정리 (2-A-3)
+    #[serde(default = "default_trash_retention_days")]
+    pub trash_retention_days: Option<u32>,
+}
+
+fn default_trash_retention_days() -> Option<u32> {
+    Some(crate::service::data::trash::DEFAULT_RETENTION_DAYS)
 }
 
 /// 홈 화면: 보일 블록과 순서, 인사말, 내 글. 리소스를 쓰지 않는 화면이라 블록은 기본으로 보인다
@@ -81,6 +88,7 @@ impl Default for AppSetting {
             phone_mode_prompt: default_phone_mode_prompt(),
             home: HomeSetting::default(),
             usage_retention_days: None,
+            trash_retention_days: default_trash_retention_days(),
             check_updates_on_start: false,
         }
     }
@@ -228,6 +236,39 @@ pub struct PluginSetting {
     /// 앱 프롬프트 (사용자가 고친 것만, 비우면 기본값 — service::app_prompts)
     #[serde(default)]
     pub prompts: AppPrompts,
+    /// 폴더 동기화 (2-C) — 경로가 기기마다 달라 기기 전용 (settings_scope)
+    #[serde(default)]
+    pub sync: SyncSetting,
+}
+
+/// 폴더 동기화 설정 (CLAUDE.md 2-C, ADR-011)
+#[derive(Debug, Serialize, Deserialize, Clone, specta::Type)]
+#[serde(rename_all = "camelCase", default)]
+pub struct SyncSetting {
+    /// 동기화 폴더 (OneDrive·Dropbox처럼 이미 쓰는 동기화 앱의 폴더 안). 없으면 폴더 동기화를 하지 않음
+    pub folder: Option<String>,
+    /// 자동 동기화 (기본 꺼짐): 앱을 켤 때 한 번, 그 뒤 interval_minutes마다
+    pub auto: bool,
+    pub interval_minutes: u32,
+    /// 지금 동기화·자동 동기화가 쓸 저장소: "folder" / "drive" (2-D)
+    pub target: String,
+    /// 연결한 구글 계정 (화면 표시용. 토큰은 keyring에만)
+    pub drive_email: Option<String>,
+    /// Android: Wi-Fi(요금이 들지 않는 연결)에서만 자동 동기화, 직접 누를 때는 먼저 묻기 (기본 켜짐)
+    pub wifi_only: bool,
+}
+
+impl Default for SyncSetting {
+    fn default() -> Self {
+        Self {
+            folder: None,
+            auto: false,
+            interval_minutes: 30,
+            target: "folder".into(),
+            drive_email: None,
+            wifi_only: true,
+        }
+    }
 }
 
 /// 앱이 AI에 보내는 고정 지시문. 자리마다 사용자가 여러 개 만들어 두고 하나를 고른다 (고르지 않으면 기본값)

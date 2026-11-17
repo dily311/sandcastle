@@ -43,8 +43,8 @@ use super::{
 pub const BACKUP_FORMAT: &str = "sandcastle-backup";
 /// 2: generated·backgrounds 추가, manifest.dirs
 pub const BACKUP_VERSION: u32 = 2;
-/// 백업에 들어가는 폴더 (album_arts 같은 캐시, exports, tmp는 제외)
-pub const BACKUP_DIRS: [&str; 5] = ["characters", "games", "themes", "generated", "backgrounds"];
+/// 백업에 들어가는 폴더 (album_arts 같은 캐시, exports, tmp는 제외). trash는 DB의 휴지통 항목과 짝이라 같이 담는다 (2-A-3)
+pub const BACKUP_DIRS: [&str; 6] = ["characters", "games", "themes", "generated", "backgrounds", "trash"];
 /// v1 백업에 들어 있던 폴더 (manifest.dirs가 없을 때)
 const V1_DIRS: [&str; 3] = ["characters", "games", "themes"];
 const DB_FILE: &str = "app.db";

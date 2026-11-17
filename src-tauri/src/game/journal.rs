@@ -131,7 +131,7 @@ pub async fn record(db: &SqlitePool, runtime: &mut GameRuntime, game_id: &str, c
                 session_id: session_id.clone(),
                 seq,
                 relationships_json: serde_json::json!({ key: { axis: delta } }),
-                created_at: chrono::Utc::now().timestamp(),
+                created_at: chrono::Utc::now().timestamp_millis(),
             },
         )
         .await?;

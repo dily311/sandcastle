@@ -24,7 +24,7 @@ use crate::{
 };
 use commands::{
     ai_service::*, character_image::*, chat::*, conversation::*, convert::*, data::*, game_engine::*, game_manager::*, import::*, phone::*, preset::*,
-    regex::*, settings::*, task::*,
+    regex::*, settings::*, sync::*, task::*,
 };
 use task::{TaskEventEmitter, TaskManager};
 
@@ -88,6 +88,12 @@ pub fn run() {
                 Ok(true) => eprintln!("[data] 백업 복원을 적용했습니다"),
                 Ok(false) => {}
                 Err(e) => eprintln!("[data] 백업 복원 실패: {e}"),
+            }
+            // 동기화 합치기 되돌리기 (2-E): 합치기 전 사본으로 DB·설정을 바꾼다 (설정을 읽기 전이라야 함)
+            match service::data::sync_conflicts::apply_pending_rollback(&app_data_dir) {
+                Ok(true) => eprintln!("[sync] 합치기 전 사본으로 되돌렸습니다"),
+                Ok(false) => {}
+                Err(e) => eprintln!("[sync] 되돌리기 실패: {e}"),
             }
             let pool = db::conn::init_pool(app_data_dir.clone()).await.expect("DB 초기화 실패");
             if let Err(e) = service::data::backup::finish_restore_fixups(&pool, &app_data_dir).await {
@@ -204,6 +210,8 @@ fn with_event_types(b: tauri_specta::Builder<tauri::Wry>) -> tauri_specta::Build
         .typ::<models::settings::FeatureSetting>()
         // 게임 오류의 details.reason (GAME_ACTION_BLOCKED)
         .typ::<error::BlockReason>()
+        // 동기화 진행 (sync::progress)
+        .typ::<commands::sync::SyncProgress>()
         // 타임스탬프(밀리초)·개수는 2^53 안이라 number로 충분
         .dangerously_cast_bigints_to_number()
 }
@@ -300,6 +308,25 @@ pub fn specta_builder() -> tauri_specta::Builder<tauri::Wry> {
         // data manager
         get_data_overview,
         check_data,
+        list_trash,
+        restore_trash_item,
+        purge_trash_item,
+        empty_trash,
+        get_sync_status,
+        export_sync_bundle,
+        preview_sync_bundle,
+        apply_sync_bundle,
+        sync_now,
+        list_sync_runs,
+        list_sync_conflicts,
+        resolve_sync_conflict,
+        list_sync_backups,
+        request_sync_rollback,
+        cancel_sync_rollback,
+        drive_status,
+        drive_login,
+        drive_logout,
+        drive_use_token,
         get_panic_log,
         check_for_update,
         clear_panic_log,
@@ -544,6 +571,25 @@ pub fn specta_builder() -> tauri_specta::Builder<tauri::Wry> {
         // data manager
         get_data_overview,
         check_data,
+        list_trash,
+        restore_trash_item,
+        purge_trash_item,
+        empty_trash,
+        get_sync_status,
+        export_sync_bundle,
+        preview_sync_bundle,
+        apply_sync_bundle,
+        sync_now,
+        list_sync_runs,
+        list_sync_conflicts,
+        resolve_sync_conflict,
+        list_sync_backups,
+        request_sync_rollback,
+        cancel_sync_rollback,
+        drive_status,
+        drive_login,
+        drive_logout,
+        drive_use_token,
         get_panic_log,
         check_for_update,
         clear_panic_log,

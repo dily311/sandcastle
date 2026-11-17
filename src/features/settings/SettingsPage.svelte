@@ -1,7 +1,7 @@
 <script lang="ts">
 	import { layout } from "$app/layout.svelte";
 	import type { Component } from "svelte";
-	import { Activity, Gamepad2, Images, AudioLines, Blocks, Database, ImagePlus, Keyboard, KeyRound, Languages, MessagesSquare, Music, Palette, Regex, ScrollText, Search, Settings2, SlidersHorizontal, Smartphone } from "@lucide/svelte";
+	import { Activity, ArrowLeftRight, Gamepad2, Images, AudioLines, Blocks, Database, ImagePlus, Keyboard, KeyRound, Languages, MessagesSquare, Music, Palette, Regex, ScrollText, Search, Settings2, SlidersHorizontal, Smartphone } from "@lucide/svelte";
 	import { Badge, Input } from "$shared/ui";
 	import { nav, type SettingsTab } from "$app/nav.svelte";
 	import { logs } from "$shared/stores/log.svelte";
@@ -13,6 +13,7 @@
 	import PresetSection from "./PresetSection.svelte";
 	import RegexSection from "./RegexSection.svelte";
 	import DataSection from "./DataSection.svelte";
+	import SyncSection from "./SyncSection.svelte";
 	import LogSection from "./LogSection.svelte";
 	import ActivitySection from "./ActivitySection.svelte";
 	import GameSection from "./GameSection.svelte";
@@ -59,7 +60,7 @@
 		{
 			title: "플러그인",
 			items: [
-				{ id: "plugins", label: "코어 플러그인", icon: Blocks, keywords: "기능 켜기 끄기 토글 플러그인 폰 게임 위젯 정규식 이미지 html 번역 음성 tts 이미지 생성", view: PluginsSection },
+				{ id: "plugins", label: "코어 플러그인", icon: Blocks, keywords: "기능 켜기 끄기 토글 플러그인 폰 게임 위젯 정규식 이미지 html 번역 음성 tts 이미지 생성 동기화", view: PluginsSection },
 				{ id: "game", label: "게임 모드", icon: Gamepad2, keywords: "게임 규칙 씬 서술자 npc 프롬프트", view: GameSection, plugin: "game" },
 				{ id: "cg", label: "캐릭터 이미지", icon: Images, keywords: "cg 이미지 키 프롬프트 에셋", view: CgSection, plugin: "chat.images" },
 				{ id: "phone", label: "폰", icon: Smartphone, keywords: "폰 모드 메신저 프롬프트", view: PhoneSection, plugin: "phone" },
@@ -81,7 +82,8 @@
 			title: "관리",
 			items: [
 				{ id: "activity", label: "실행 기록", icon: Activity, keywords: "작업 사용량 토큰 비용 요금 api 실행 중 멈추기 취소 자동 기록", view: ActivitySection },
-				{ id: "data", label: "데이터", icon: Database, keywords: "백업 복원 저장 공간 용량 삭제 정리", view: DataSection },
+				{ id: "data", label: "데이터", icon: Database, keywords: "백업 복원 저장 공간 용량 삭제 정리 휴지통 되살리기 점검", view: DataSection },
+				{ id: "sync", label: "동기화", icon: ArrowLeftRight, keywords: "기기 폰 pc 옮기기 합치기 동기화 내보내기 가져오기 충돌", view: SyncSection, plugin: "sync" },
 				{ id: "log", label: "로그", icon: ScrollText, keywords: "오류 경고 기록", view: LogSection },
 			],
 		},

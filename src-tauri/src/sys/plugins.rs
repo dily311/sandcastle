@@ -29,6 +29,8 @@ pub mod id {
     pub const IMAGE_GEN: &str = "imagegen";
     /// 글을 쓰는 AI가 응답과 함께 그림 프롬프트를 쓰고, 응답 뒤 자동으로 그린다
     pub const IMAGE_AUTO: &str = "imageauto";
+    /// 기기 사이 동기화 (2단계, ADR-011)
+    pub const SYNC: &str = "sync";
 }
 
 #[derive(Debug, Clone, Serialize, specta::Type)]
@@ -123,6 +125,14 @@ const CATALOG: &[Def] = &[
         name: "이미지 자동 생성",
         description:
             "글을 쓰는 AI가 응답 끝에 그림 프롬프트도 쓰고, 응답이 오면 그 프롬프트로 바로 그림 (응답마다 이미지 요금, 설정 > 이미지 생성의 API·프리셋 사용)",
+        default_enabled: false,
+        desktop_only: false,
+    },
+    // 새 기능이라 기본 꺼짐. 켜도 사용자가 누를 때만 파일을 만들고 합친다 (API 키는 넘어가지 않음)
+    Def {
+        id: id::SYNC,
+        name: "동기화",
+        description: "다른 기기(PC·폰)와 캐릭터·대화·설정을 파일로 주고받아 합치기. API 키는 넘어가지 않음",
         default_enabled: false,
         desktop_only: false,
     },

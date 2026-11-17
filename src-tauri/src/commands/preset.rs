@@ -64,9 +64,6 @@ pub async fn save_prompt_preset(state: State<'_, AppState>, preset: PromptPreset
 
 #[tauri::command]
 #[specta::specta]
-pub async fn delete_prompt_preset(state: State<'_, AppState>, id: String) -> Result<()> {
-    if !db::delete_prompt_preset(&state.db, &id).await? {
-        return Err(AppError::not_found(format!("프리셋을 찾을 수 없습니다: {id}")));
-    }
-    Ok(())
+pub async fn delete_prompt_preset(app: tauri::AppHandle, state: State<'_, AppState>, id: String) -> Result<crate::service::data::trash::TrashItem> {
+    crate::commands::data::move_to_trash(&app, &state, crate::service::data::trash::TrashKind::PromptPreset, &id).await
 }

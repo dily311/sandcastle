@@ -112,10 +112,9 @@ where
 // =======================================
 // Persona
 // =======================================
-/** 페르소나가 db에 존재하는지 확인
- * return true: 있음
- *        false: 없음
- */
+/// 페르소나가 db에 존재하는지 확인
+/// return true: 있음
+///        false: 없음
 pub async fn persona_exists<'e, E>(executor: E, persona_id: &str) -> Result<bool, Error>
 where
     E: Executor<'e, Database = Sqlite>,
@@ -385,10 +384,9 @@ where
 // =======================================
 // Character
 // =======================================
-/** 캐릭터가 db에 존재하는지 확인
- * return true: 있음
- *        false: 없음
- */
+/// 캐릭터가 db에 존재하는지 확인
+/// return true: 있음
+///        false: 없음
 pub async fn char_exists<'e, E>(executor: E, character_id: &str) -> Result<bool, Error>
 where
     E: Executor<'e, Database = Sqlite>,

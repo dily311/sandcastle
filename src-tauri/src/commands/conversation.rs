@@ -1,9 +1,11 @@
+use crate::commands::data::move_to_trash;
 use crate::db::conversation::{self};
 use crate::error::{AppError, Result};
 use crate::models::conversation::*;
 use crate::models::regex::{RegexPlacement, RegexTarget};
 use crate::models::settings::AppSetting;
 use crate::service::chat::regex_processor::RegexProcessor;
+use crate::service::data::trash::{TrashItem, TrashKind};
 use crate::state::AppState;
 use crate::sys::settings::SettingsState;
 use serde_json::json;
@@ -81,12 +83,8 @@ pub async fn touch_conversation(state: State<'_, AppState>, id: String) -> Resul
 
 #[tauri::command]
 #[specta::specta]
-pub async fn delete_conversation(state: State<'_, AppState>, id: String) -> Result<()> {
-    let result = conversation::delete_conversation(&state.db, &id).await?;
-    if !result {
-        return Err(AppError::not_found(format!("해당 대화 세션을 찾을 수 없습니다: {id}")));
-    }
-    Ok(())
+pub async fn delete_conversation(app: tauri::AppHandle, state: State<'_, AppState>, id: String) -> Result<TrashItem> {
+    move_to_trash(&app, &state, TrashKind::Conversation, &id).await
 }
 
 // =======================================
@@ -219,16 +217,9 @@ pub async fn toggle_favorite_character(state: State<'_, AppState>, id: String, i
 
 #[tauri::command]
 #[specta::specta]
-pub async fn delete_character(app: tauri::AppHandle, state: State<'_, AppState>, id: String) -> Result<()> {
-    let result = conversation::delete_character(&state.db, &id).await?;
-    if !result {
-        return Err(AppError::not_found(format!("캐릭터를 찾을 수 없습니다: {id}")));
-    }
-    // 이미지 행은 CASCADE로 지워지고, 파일 폴더는 여기서 정리
-    if let Ok(base) = crate::commands::character_image::app_data_dir(&app) {
-        crate::service::chat::chat_images::remove_character_dir(&base, &id);
-    }
-    Ok(())
+pub async fn delete_character(app: tauri::AppHandle, state: State<'_, AppState>, id: String) -> Result<TrashItem> {
+    // 휴지통으로: 이미지 행(CASCADE)과 채팅 이미지 폴더도 같이 옮겨 두고, 되살리면 돌아온다 (2-A-3)
+    move_to_trash(&app, &state, TrashKind::Character, &id).await
 }
 
 // =======================================
@@ -296,22 +287,15 @@ fn remove_owned_avatar(dir: &std::path::Path, avatar: Option<&str>) {
 
 #[tauri::command]
 #[specta::specta]
-pub async fn delete_persona(app: tauri::AppHandle, state: State<'_, AppState>, id: String) -> Result<()> {
+pub async fn delete_persona(app: tauri::AppHandle, state: State<'_, AppState>, id: String) -> Result<TrashItem> {
     if conversation::get_system_default_persona(&state.db).await.ok().as_deref() == Some(id.as_str()) {
         return Err(AppError::validation(
             "기본 페르소나는 지울 수 없습니다. 다른 페르소나를 기본으로 정한 뒤 지우세요",
             None,
         ));
     }
-    let old = conversation::get_persona(&state.db, &id).await.ok();
-    let result = conversation::delete_persona(&state.db, &id).await?;
-    if !result {
-        return Err(AppError::not_found(format!("해당 페르소나를 찾을 수 없습니다: {id}")));
-    }
-    if let (Some(old), Ok(base)) = (old, crate::commands::character_image::app_data_dir(&app)) {
-        remove_owned_avatar(&base.join("characters").join("avatars"), old.avatar.as_deref());
-    }
-    Ok(())
+    // 휴지통으로: 앱이 복사해 둔 아바타 파일도 같이 옮긴다 (2-A-3)
+    move_to_trash(&app, &state, TrashKind::Persona, &id).await
 }
 
 // 삭제 전 영향 범위를 프론트에 알려주기 위한 커맨드 (선택)
@@ -427,12 +411,8 @@ pub async fn create_worldinfo_book(state: State<'_, AppState>, input: WorldInfoB
 
 #[tauri::command]
 #[specta::specta]
-pub async fn delete_worldinfo_book(state: State<'_, AppState>, id: String) -> Result<()> {
-    let result = conversation::delete_worldinfo_book(&state.db, &id).await?;
-    if !result {
-        return Err(AppError::not_found(format!("월드인포 북을 찾을 수 없습니다: {id}")));
-    }
-    Ok(())
+pub async fn delete_worldinfo_book(app: tauri::AppHandle, state: State<'_, AppState>, id: String) -> Result<TrashItem> {
+    move_to_trash(&app, &state, TrashKind::WorldinfoBook, &id).await
 }
 
 #[tauri::command]

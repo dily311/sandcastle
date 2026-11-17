@@ -4,7 +4,6 @@
 //! "패키지"라는 단위가 가리키는 것:
 //!   - DB의 game_projects 및 그 아래 테이블들 (정의 데이터 전체)
 //!   - <app_data>/games/<game_id>/ 아래의 scripts/assets 파일들 (protocol.rs가 game://로 서빙)
-use crate::db::game::delete_game_project;
 use crate::error::AppError;
 use crate::game::package::{self, PackageData};
 use crate::game::runtime::repository::{GameRepository, SqlxGameRepository};
@@ -80,20 +79,6 @@ impl GameManager {
             deleted,
             diagnostics: validate::diagnose(&after, Some(games_root.join(game_id).as_path())),
         })
-    }
-
-    /// 게임을 지운다. game_projects가 지워지면 FK CASCADE로 정의 테이블과 세션/세이브/일지/대화가 같이
-    /// 지워진다 (003_game_mode.sql 참고) — 플레이 기록까지 사라지니 호출 전에 사용자 확인이 필요하다.
-    /// DB를 먼저 지우고 폴더를 지운다 (DB가 실패하면 폴더는 그대로 둔다).
-    /// ⚠ 지금 실행 중인 게임이면 호출하는 쪽에서 막아야 한다 (active_archive/active_runtime 확인).
-    /// ⚠ 임포트하면서 만들어진 월드인포 북은 전역 테이블이라 같이 지워지지 않는다 (고아로 남음).
-    pub async fn delete_package(pool: &SqlitePool, games_root: &Path, game_id: &str) -> Result<(), AppError> {
-        delete_game_project(pool, game_id).await?;
-        let dir = games_root.join(game_id);
-        if dir.exists() {
-            std::fs::remove_dir_all(&dir)?;
-        }
-        Ok(())
     }
 
     /// 남이 만든 .tgame을 내 라이브러리로 가져온다 (package.rs가 zip 검증/해제 담당).

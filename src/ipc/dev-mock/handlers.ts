@@ -3,6 +3,8 @@
 import { chatHandlers } from "./chat";
 import { settingsHandlers } from "./settings";
 import { gameHandlers } from "./game";
+import { withTrash } from "./trash";
+import { syncHandlers } from "./sync";
 import type { AppSetting_Serialize, FeatureSetting, ThemeSetting } from "../bindings";
 
 type Args = Record<string, unknown>;
@@ -21,6 +23,7 @@ const db = {
 		lastPlayedGameId: null,
 		phoneModePrompt: "[폰 메신저 대화]",
 		usageRetentionDays: null,
+		trashRetentionDays: 30,
 		checkUpdatesOnStart: false,
 		home: { startOnHome: false, greeting: "", blocks: ["continue", "quick", "favorites", "games"], css: "" },
 	} satisfies AppSetting_Serialize as AppSetting_Serialize,
@@ -35,7 +38,7 @@ const db = {
 	feature: { feature: { "chat.images": true, widget: true, "widget.music": true } } as FeatureSetting,
 };
 
-export const handlers: Record<string, Handler> = {
+const base: Record<string, Handler> = {
 	// 실제로는 htmlview:// 프로토콜. 브라우저 개발 모드는 blob 주소로 같은 문서를 흉내 낸다
 	register_html_view: ({ html, theme }) => {
 		const h = String(html);
@@ -71,6 +74,7 @@ export const handlers: Record<string, Handler> = {
 				["tts", "음성 읽기", "AI 답변을 음성으로", false, false],
 				["imagegen", "이미지 생성", "직접 그림 만들기", false, false],
 				["imageauto", "이미지 자동 생성", "글쓰기 AI가 그림 프롬프트도 쓰고 응답 뒤 자동으로 그림", false, false],
+				["sync", "동기화", "다른 기기와 파일로 주고받아 합치기. API 키는 넘어가지 않음", false, false],
 			] as const
 		).map(([id, name, description, def, desktopOnly]) => ({ id, name, description, defaultEnabled: def, desktopOnly, enabled: db.feature.feature[id] ?? def })),
 	update_feature_setting: ({ id, enabled }) => {
@@ -132,6 +136,7 @@ export const handlers: Record<string, Handler> = {
 	...chatHandlers,
 	...settingsHandlers,
 	...gameHandlers,
+	...syncHandlers,
 	// ---- 위젯 (브라우저에서 위젯 화면 확인용) ----
 	get_widget_music_settings: () => ({ resize: false, isMiniPlayer: false, isImgEdit: false, isPlayListOpen: false, pos: null, selectedFolder: null, currentPlaylistId: "default", currentSongIndex: 0 }),
 	save_widget_music_settings: () => null,
@@ -147,3 +152,6 @@ export const handlers: Record<string, Handler> = {
 	"plugin:window|close": () => null,
 	"plugin:window|set_ignore_cursor_events": () => null,
 };
+
+// 지우기는 휴지통 항목을 돌려준다 (2-A-3)
+export const handlers = withTrash(base);
