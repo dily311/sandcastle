@@ -2,7 +2,7 @@
 	import { checkOnStart } from "./updateCheck";
 	import { watchAutoSync } from "./autoSync.svelte";
 	import { onMount } from "svelte";
-	import { ConfirmHost, Toasts } from "$shared/ui";
+	import { ConfirmHost, ImageViewerHost, installImageZoom, Toasts } from "$shared/ui";
 	import CharacterPage from "$features/character/CharacterPage.svelte";
 	import { captureGlobalErrors, logs } from "$shared/stores/log.svelte";
 	import { nav } from "./nav.svelte";
@@ -50,6 +50,9 @@
 			swipe = null;
 		}
 	}
+
+	// 모든 그림은 눌러서 크게 보기 (링크·버튼 안의 그림은 제외, 이유는 imageZoom.ts)
+	onMount(() => installImageZoom());
 
 	onMount(async () => {
 		captureGlobalErrors();
@@ -129,6 +132,7 @@
 <ExportPicker />
 <Toasts />
 <ConfirmHost />
+<ImageViewerHost />
 
 <style>
 	.app {

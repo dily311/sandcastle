@@ -273,7 +273,7 @@
 			<div class="aview" role="dialog" aria-modal="true" aria-label="에셋 크게 보기">
 				<button class="ascrim" aria-label="닫기" onclick={() => (assetView = null)}></button>
 				<figure>
-					<img src={fileSrc(v.path)} alt={v.key} />
+					<img src={fileSrc(v.path)} alt={v.key} data-no-zoom />
 					<figcaption><code>&lt;cg&gt;{v.key}&lt;/cg&gt;</code>{v.enabled ? "" : " · AI에게 안 보냄"}</figcaption>
 				</figure>
 			</div>
