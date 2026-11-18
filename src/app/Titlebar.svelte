@@ -38,6 +38,8 @@
 		activity: "실행 기록",
 		game: "게임 모드",
 		cg: "캐릭터 이미지",
+		sync: "동기화",
+		community: "커뮤니티 플러그인",
 	};
 	// 대화 화면이면 그 대화 (제목 고치기·동작 메뉴)
 	const conv = $derived(nav.current.page === "character" && !nav.current.edit ? library.conversation(nav.current.convId) : undefined);

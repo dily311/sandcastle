@@ -112,7 +112,7 @@ fn read_zip(path: &Path) -> Result<BTreeMap<String, Vec<u8>>> {
     Ok(files)
 }
 
-fn read_dir_tree(root: &Path) -> Result<BTreeMap<String, Vec<u8>>> {
+pub(super) fn read_dir_tree(root: &Path) -> Result<BTreeMap<String, Vec<u8>>> {
     let mut files = BTreeMap::new();
     let mut total = 0u64;
     let mut seen = 0usize;
@@ -177,6 +177,11 @@ pub fn hash_files(files: &BTreeMap<String, Vec<u8>>) -> String {
         h.update(bytes);
     }
     h.finalize().iter().map(|b| format!("{b:02x}")).collect()
+}
+
+/// 설치된 폴더의 코드 지문 (설치할 때 미리보기의 `hash`와 같은 방식). 읽을 수 없으면 None
+pub fn folder_hash(dir: &Path) -> Option<String> {
+    read_dir_tree(dir).ok().map(|f| hash_files(&f))
 }
 
 /// zip 파일이나 폴더를 읽어 검사한다. 아무것도 쓰지 않는다.

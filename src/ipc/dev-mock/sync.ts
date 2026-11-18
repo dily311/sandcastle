@@ -99,7 +99,8 @@ export const syncHandlers: Record<string, Handler> = {
 		return r;
 	},
 	list_sync_runs: ({ limit }) => runs.slice(0, Number(limit)),
-	"plugin:dialog|open": (args) => dialog(args, JSON.stringify(args).includes('"directory":true') ? "C:/Users/me/OneDrive/Sandcastle" : "C:/Users/me/Downloads/sandcastle-sync-20261117-1200.scsync"),
+	// 커뮤니티 플러그인 설치(zip 고르기)는 예제 묶음 경로를 돌려준다 (미리보기 가짜 응답이 그 경로와 상관없이 예제를 보여 줌)
+	"plugin:dialog|open": (args) => (JSON.stringify(args).includes("플러그인 묶음") ? "C:/Users/me/Downloads/word-count-1.0.0.zip" : dialog(args, JSON.stringify(args).includes('"directory":true') ? "C:/Users/me/OneDrive/Sandcastle" : "C:/Users/me/Downloads/sandcastle-sync-20261117-1200.scsync")),
 	"plugin:dialog|save": (args) => dialog(args, "C:/Users/me/Downloads/sandcastle-sync.scsync"),
 	get_sync_status: () => status,
 	export_sync_bundle: ({ includeFiles }): SyncBundleInfo => ({

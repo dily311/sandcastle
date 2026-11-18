@@ -4,6 +4,9 @@
 //! - 글은 "자동 고침"으로 고른 플러그인만 바꿀 수 있다. "표시만"인 플러그인은 메모(notes)만 남긴다.
 //! - 원문은 meta.pluginProcess.original에 남긴다(여러 번 고쳐도 처음 원문). "원문 보기 / 되돌리기"가 이것을 쓴다.
 //! - 플러그인이 일하는 사이 사용자가 메시지를 고쳤으면(지금 글 ≠ 시작할 때 글) 저장하지 않는다.
+use std::sync::LazyLock;
+
+use fancy_regex::Regex;
 use serde::{Deserialize, Serialize};
 use serde_json::{json, Value};
 use sqlx::SqlitePool;
@@ -68,6 +71,36 @@ fn clean_notes(notes: &[PluginNote]) -> Vec<PluginNote> {
         .collect()
 }
 
+/// 앱이 살아 있는 HTML 화면으로 그리는 코드 블록들 (프런트 `shared/html/blocks.ts`의 규칙과 같게:
+/// ```html … ``` 이거나, 언어 표시 없이 태그로 시작하는 블록). 닫히지 않은 블록은 그리지 않으므로 세지 않는다
+fn html_blocks(text: &str) -> Vec<String> {
+    static FENCE: LazyLock<Regex> = LazyLock::new(|| Regex::new("(?s)```[ \\t]*([\\w-]*)[ \\t]*\\r?\\n(.*?)\\r?\\n?```").expect("고정 정규식"));
+    static TAG: LazyLock<Regex> = LazyLock::new(|| Regex::new(r"(?i)^<(!doctype|[a-z])").expect("고정 정규식"));
+    FENCE
+        .captures_iter(text)
+        .filter_map(|c| c.ok())
+        .filter_map(|c| {
+            let lang = c.get(1).map_or("", |m| m.as_str()).to_ascii_lowercase();
+            let code = c.get(2).map_or("", |m| m.as_str()).trim();
+            (lang == "html" || lang == "htm" || (lang.is_empty() && TAG.is_match(code).unwrap_or(false))).then(|| code.to_string())
+        })
+        .collect()
+}
+
+/// 플러그인이 만든 글에 원문에 없던 HTML 블록이 들어 있는지. 있으면 앱이 그대로 그려 외부 주소로 데이터를 보낼 수 있으므로(ADR-012) 거절
+fn adds_html_block(before: &str, after: &str) -> bool {
+    let mut allowed = html_blocks(before);
+    for b in html_blocks(after) {
+        match allowed.iter().position(|x| *x == b) {
+            Some(i) => {
+                allowed.swap_remove(i);
+            }
+            None => return true,
+        }
+    }
+    false
+}
+
 /// 메시지 meta. 비었으면 {}, 읽을 수 없으면 거절 (덮어써서 스와이프 등을 잃지 않게)
 fn parse_meta(raw: Option<String>) -> Result<Value> {
     match raw.as_deref().map(str::trim) {
@@ -108,6 +141,12 @@ pub async fn apply(db: &SqlitePool, message_id: &str, expected: &str, content: &
     }
     if content != expected && changed_by.is_empty() {
         return Err(AppError::validation("글을 바꾼 플러그인이 없는데 글이 다름", None));
+    }
+    if content != expected && adds_html_block(expected, content) {
+        return Err(AppError::validation(
+            "플러그인이 응답에 HTML 코드 블록을 새로 넣거나 바꿀 수 없음 (앱이 그대로 그려 화면에서 실행될 수 있어서)",
+            None,
+        ));
     }
 
     let mut tx = db.begin().await?;

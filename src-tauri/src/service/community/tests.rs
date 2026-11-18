@@ -4,7 +4,7 @@ use std::{
     path::{Path, PathBuf},
 };
 
-use serde_json::json;
+use serde_json::{json, Value};
 use zip::{write::SimpleFileOptions, ZipWriter};
 
 use super::*;
@@ -289,4 +289,147 @@ fn version_compare() {
     assert!(!manifest::version_newer("1.0", "1.0.0"));
     assert!(manifest::version_newer("v2", "1.99"));
     assert!(!manifest::version_newer("0.2.0", "0.2.0"));
+}
+
+// ---------------------------------------------------------------------------
+// 보안 점검(Opus 자문)에서 나온 것들 — ADR-012
+// ---------------------------------------------------------------------------
+
+fn manifest_with(id: &str, version: &str, perms: &[&str]) -> String {
+    manifest(id, version, perms)
+}
+
+#[test]
+fn manifest_text_drops_control_and_direction_characters() {
+    let raw = json!({ "id": "spoof", "name": "Safe\u{202E}etatS\u{200B}\u{0007} App", "version": "1\u{FEFF}.0", "apiVersion": 1,
+        "author": "a\u{2066}b", "description": "d\u{0000}e" });
+    let m = manifest::parse(raw.to_string().as_bytes(), "0.2.0").unwrap();
+    assert_eq!(m.name, "SafeetatS App");
+    assert_eq!(m.version, "1.0");
+    assert_eq!(m.author, "ab");
+    assert_eq!(m.description, "de");
+    // 한글·이모지는 그대로
+    assert_eq!(manifest::clean("글자 수 📝"), "글자 수 📝");
+}
+
+#[tokio::test]
+async fn update_keeps_only_permissions_still_requested() {
+    let (d, base, db) = app_dir().await;
+    let v1 = folder(
+        d.path(),
+        &[
+            ("manifest.json", &manifest_with("shrink", "1.0.0", &["ai", "storage", "messages.process"])),
+            ("main.js", "1"),
+        ],
+    );
+    install_from(&db, &base, &v1).await.unwrap();
+    set_enabled(&db, &base, "shrink", true, vec!["ai".into(), "messages.process".into(), "storage".into()])
+        .await
+        .unwrap();
+    runtime::ai_state_for_test_set(&db, "shrink", true, "fix").await;
+
+    // v2: ai·messages.process를 뺀다 → 허락도 교집합, 자동 AI 호출·후처리 방식은 초기화, 켜진 채
+    let v2 = folder(
+        d.path(),
+        &[("manifest.json", &manifest_with("shrink", "2.0.0", &["storage"])), ("main.js", "2")],
+    );
+    let p = install_from(&db, &base, &v2).await.unwrap();
+    assert!(p.enabled);
+    assert_eq!(p.granted, ["storage"]);
+    assert!(!p.ai_auto);
+    assert_eq!(p.process_mode, "notes");
+
+    // v3: ai를 다시 요구 → 예전에 허락했던 것을 되살리지 않는다: 꺼지고, 늘어난 권한으로 보인다
+    let v3 = folder(
+        d.path(),
+        &[("manifest.json", &manifest_with("shrink", "3.0.0", &["ai", "storage"])), ("main.js", "3")],
+    );
+    let pv = preview(&db, &base, &v3).await.unwrap();
+    assert_eq!(pv.added_permissions, ["ai"]);
+    let p = install(&db, &base, &v3, &pv.hash).await.unwrap();
+    assert!(!p.enabled);
+    assert!(!p.granted.contains(&"ai".to_string()));
+}
+
+#[tokio::test]
+async fn reinstall_without_folder_starts_fresh() {
+    // 폴더만 사라지고 행·저장소가 남은 id에 다른 사람의 같은 id 플러그인을 설치하면 이전 상태를 물려받지 않는다
+    let (d, base, db) = app_dir().await;
+    let a = folder(
+        d.path(),
+        &[("manifest.json", &manifest_with("same-id", "1.0.0", &["ai", "storage"])), ("main.js", "1")],
+    );
+    install_from(&db, &base, &a).await.unwrap();
+    set_enabled(&db, &base, "same-id", true, vec!["ai".into(), "storage".into()]).await.unwrap();
+    runtime::ai_state_for_test_set(&db, "same-id", true, "fix").await;
+    storage::set(&db, "same-id", "secret", &json!("old data")).await.unwrap();
+    std::fs::remove_dir_all(base.join("plugins/same-id")).unwrap();
+
+    let b = folder(
+        d.path(),
+        &[("manifest.json", &manifest_with("same-id", "9.0.0", &["ai", "storage"])), ("main.js", "evil")],
+    );
+    let p = install_from(&db, &base, &b).await.unwrap();
+    assert!(!p.enabled && !p.ai_auto && p.granted.is_empty());
+    assert_eq!(
+        storage::get(&db, "same-id", "secret").await.unwrap(),
+        Value::Null,
+        "이전 저장소를 물려받지 않음"
+    );
+}
+
+#[tokio::test]
+async fn changed_code_is_not_enabled_until_consent_again() {
+    let (d, base, db) = app_dir().await;
+    let v1 = folder(d.path(), &[("manifest.json", &manifest_with("hashy", "1", &["storage"])), ("main.js", "good")]);
+    install_from(&db, &base, &v1).await.unwrap();
+    assert!(set_enabled(&db, &base, "hashy", true, vec!["storage".into()]).await.unwrap().enabled);
+    assert!(!get(&db, &base, "hashy").await.unwrap().code_changed);
+
+    // 폴더의 코드를 손으로 바꾸면 켜진 것으로 치지 않는다 (같은 manifest여도)
+    std::fs::write(base.join("plugins/hashy/main.js"), "evil").unwrap();
+    let p = get(&db, &base, "hashy").await.unwrap();
+    assert!(!p.enabled && p.code_changed);
+    // 파일을 더하는 것도 마찬가지
+    std::fs::write(base.join("plugins/hashy/main.js"), "good").unwrap();
+    assert!(get(&db, &base, "hashy").await.unwrap().enabled, "원래대로 돌리면 다시 켜진 것");
+    std::fs::write(base.join("plugins/hashy/extra.js"), "x").unwrap();
+    assert!(get(&db, &base, "hashy").await.unwrap().code_changed);
+
+    // 다시 켜면(동의) 지금 코드가 기준이 된다
+    let p = set_enabled(&db, &base, "hashy", true, vec!["storage".into()]).await.unwrap();
+    assert!(p.enabled && !p.code_changed);
+}
+
+#[tokio::test]
+async fn restored_backup_and_trash_do_not_start_plugins_on_their_own() {
+    use crate::service::data::backup;
+    let (d, base, db) = app_dir().await;
+    let v = folder(d.path(), &[("manifest.json", &manifest_with("rb", "1", &["ai", "storage"])), ("main.js", "1")]);
+    install_from(&db, &base, &v).await.unwrap();
+    set_enabled(&db, &base, "rb", true, vec!["ai".into(), "storage".into()]).await.unwrap();
+    runtime::ai_state_for_test_set(&db, "rb", true, "notes").await;
+
+    // 백업을 복원한 뒤 앱이 처음 켜질 때: 켜짐·자동 AI 호출이 꺼진다 (폴더는 그대로)
+    std::fs::write(base.join("restore-fixup.json"), br#"{"oldAppDataDir":""}"#).unwrap();
+    backup::finish_restore_fixups(&db, &base).await.unwrap();
+    let p = get(&db, &base, "rb").await.unwrap();
+    assert!(!p.enabled && !p.ai_auto);
+    assert!(base.join("plugins/rb/main.js").is_file());
+
+    // 휴지통에서 되살린 플러그인도 꺼진 채 (스냅샷 안의 enabled=1을 믿지 않음)
+    set_enabled(&db, &base, "rb", true, vec!["ai".into(), "storage".into()]).await.unwrap();
+    runtime::ai_state_for_test_set(&db, "rb", true, "notes").await;
+    let item = uninstall(&db, &base, "rb").await.unwrap();
+    // 되살리기 전에 같은 id를 새로 설치했다면 거절 (저장소가 섞이지 않게)
+    let other = folder(d.path(), &[("manifest.json", &manifest_with("rb", "2", &[])), ("main.js", "2")]);
+    install_from(&db, &base, &other).await.unwrap();
+    let err = trash::restore(&db, &base, &item.id).await.unwrap_err().to_string();
+    assert!(err.contains("이미 설치"), "{err}");
+    uninstall(&db, &base, "rb").await.unwrap();
+    // 비워 놓고 되살리면 꺼진 채로 돌아온다
+    let item2 = trash::list(&db).await.unwrap().into_iter().find(|t| t.id == item.id).unwrap();
+    trash::restore(&db, &base, &item2.id).await.unwrap();
+    let back = get(&db, &base, "rb").await.unwrap();
+    assert!(!back.enabled && !back.ai_auto);
 }

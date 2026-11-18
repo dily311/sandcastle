@@ -238,3 +238,29 @@ pub async fn revert_plugin_postprocess(state: State<'_, AppState>, message_id: S
 pub fn answer_plugin_prompt(request_id: String, answers: Vec<PluginPromptAnswer>) -> bool {
     prompt_hook::answer(&request_id, answers)
 }
+
+// ---------------------------------------------------------------------------
+// 플러그인 설정 (6-D-8)
+// ---------------------------------------------------------------------------
+
+/// manifest의 설정 칸에 사용자가 정한 값 (선언한 칸 전부, 기본값 채움)
+#[tauri::command]
+#[specta::specta]
+pub async fn get_user_plugin_settings(app: AppHandle, state: State<'_, AppState>, plugin_id: String) -> Result<Value> {
+    require(&app, id::COMMUNITY)?;
+    let p = community::get(&state.db, &app_data_dir(&app)?, &plugin_id).await?;
+    let decl = p.manifest.map(|m| m.settings).unwrap_or_default();
+    community::settings::get(&state.db, &plugin_id, &decl).await
+}
+
+/// 한 칸 저장 (null이면 기본값으로). 플러그인이 새 값을 읽도록 호스트가 다시 시작한다
+#[tauri::command]
+#[specta::specta]
+pub async fn set_user_plugin_setting(app: AppHandle, state: State<'_, AppState>, plugin_id: String, key: String, value: Value) -> Result<Value> {
+    require(&app, id::COMMUNITY)?;
+    let p = community::get(&state.db, &app_data_dir(&app)?, &plugin_id).await?;
+    let decl = p.manifest.map(|m| m.settings).unwrap_or_default();
+    community::settings::set(&state.db, &plugin_id, &decl, &key, &value).await?;
+    changed(&app);
+    community::settings::get(&state.db, &plugin_id, &decl).await
+}

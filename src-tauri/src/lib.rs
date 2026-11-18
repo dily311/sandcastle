@@ -334,6 +334,8 @@ pub fn specta_builder() -> tauri_specta::Builder<tauri::Wry> {
         revert_plugin_postprocess,
         answer_plugin_prompt,
         set_user_plugin_ai_auto,
+        get_user_plugin_settings,
+        set_user_plugin_setting,
         // 고치기 제안 (6-D-3)
         list_change_proposals,
         count_pending_proposals,
@@ -618,6 +620,8 @@ pub fn specta_builder() -> tauri_specta::Builder<tauri::Wry> {
         revert_plugin_postprocess,
         answer_plugin_prompt,
         set_user_plugin_ai_auto,
+        get_user_plugin_settings,
+        set_user_plugin_setting,
         // 고치기 제안 (6-D-3)
         list_change_proposals,
         count_pending_proposals,

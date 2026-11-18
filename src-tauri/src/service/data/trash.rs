@@ -353,6 +353,22 @@ pub async fn restore(db: &SqlitePool, base: &Path, trash_id: &str) -> Result<Tra
         .await?;
     let snap: Snapshot = serde_json::from_str(&payload).map_err(|e| AppError::internal(e.to_string()))?;
     let files: Vec<MovedFile> = serde_json::from_str(&row.4).unwrap_or_default();
+    // 커뮤니티 플러그인: 같은 id가 이미 설치되어 있으면 되살리지 않는다 (저장한 값이 다른 플러그인에 섞이거나 폴더를 잃지 않게)
+    if item.kind == TrashKind::UserPlugin {
+        let taken: Option<String> = sqlx::query_scalar("SELECT id FROM user_plugins WHERE id = ?")
+            .bind(&item.item_id)
+            .fetch_optional(db)
+            .await?;
+        if taken.is_some() || base.join(crate::service::community::PLUGINS_DIR).join(&item.item_id).exists() {
+            return Err(AppError::validation(
+                format!(
+                    "같은 id('{}')의 플러그인이 이미 설치되어 있어 되살릴 수 없음 — 그것을 먼저 지우세요",
+                    item.item_id
+                ),
+                None,
+            ));
+        }
+    }
 
     let mut tx = db.begin().await?;
     sqlx::query("PRAGMA defer_foreign_keys = ON").execute(&mut *tx).await?;
@@ -376,6 +392,9 @@ pub async fn restore(db: &SqlitePool, base: &Path, trash_id: &str) -> Result<Tra
             // 되살린 행은 지금 고친 것으로 (다른 기기의 지운 기록보다 새것)
             let v = if c.as_str() == "updated_at" {
                 Value::from(now)
+            } else if r.table == "user_plugins" && matches!(c.as_str(), "enabled" | "ai_auto") {
+                // 되살린 플러그인은 꺼진 채로 (휴지통 안의 값을 믿지 않는다)
+                Value::from(0)
             } else {
                 r.values[c.as_str()].clone()
             };

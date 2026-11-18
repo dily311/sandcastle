@@ -14,6 +14,7 @@ pub mod package;
 pub mod postprocess;
 pub mod prompt_hook;
 pub mod runtime;
+pub mod settings;
 pub mod storage;
 
 use std::{
@@ -73,6 +74,8 @@ pub struct UserPlugin {
     pub process_mode: String,
     /// 사용자가 누른 명령 밖에서 플러그인이 스스로 AI를 불러도 되나 (기본 꺼짐) — 6-D-7
     pub ai_auto: bool,
+    /// 켤 때 본 코드와 폴더의 코드가 달라졌나 (파일을 손으로 고침·다른 곳에서 바뀜). 그러면 꺼진 것으로 보고 다시 켜서 동의해야 한다 (6-D-8)
+    pub code_changed: bool,
 }
 
 /// (name, version, enabled, granted, code_hash, installed_at, process_mode, ai_auto)
@@ -163,10 +166,13 @@ pub async fn list(db: &SqlitePool, base: &Path) -> Result<Vec<UserPlugin>> {
             Ok(m) => (Some(m), None),
             Err(e) => (None, Some(e)),
         };
-        let (enabled, granted, installed_at, process_mode, ai_auto) =
-            state
-                .map(|s| (s.2 != 0, granted_of(&s.3), s.5, s.6, s.7 != 0))
-                .unwrap_or((false, vec![], 0, postprocess::MODE_NOTES.to_string(), false));
+        // 켤 때 저장한 코드 지문과 지금 폴더가 다르면 켜지 않은 것으로 본다 (읽을 수 없어도 같음)
+        let code_changed = state
+            .as_ref()
+            .is_some_and(|s| s.2 != 0 && package::folder_hash(&dir).as_deref() != Some(s.4.as_str()));
+        let (enabled, granted, installed_at, process_mode, ai_auto) = state
+            .map(|s| (s.2 != 0 && !code_changed, granted_of(&s.3), s.5, s.6, s.7 != 0))
+            .unwrap_or((false, vec![], 0, postprocess::MODE_NOTES.to_string(), false));
         out.push(UserPlugin {
             id,
             enabled: enabled && manifest.is_some(),
@@ -177,6 +183,7 @@ pub async fn list(db: &SqlitePool, base: &Path) -> Result<Vec<UserPlugin>> {
             size: dir_size(&dir),
             process_mode,
             ai_auto,
+            code_changed,
         });
     }
     Ok(out)
@@ -272,12 +279,32 @@ pub async fn install(db: &SqlitePool, base: &Path, path: &Path, expected_hash: &
     }
 
     let prev = state_of(db, &id).await?;
-    let granted = prev.as_ref().filter(|_| had_old).map(|s| granted_of(&s.3)).unwrap_or_default();
-    let keep_enabled = prev.as_ref().is_some_and(|s| s.2 != 0) && had_old && not_subset(&pkg.manifest.permissions, &granted).is_empty();
+    let perms = &pkg.manifest.permissions;
+    let has = |p: &str| perms.iter().any(|x| x == p);
+    // 업데이트(폴더가 있었음)일 때만 이전 상태를 이어받는다. 폴더 없이 행만 남은 id는 새로 시작한다 — 다른 사람의 같은 id 플러그인이
+    // 이전 허락·자동 AI 호출·저장한 값을 물려받지 않게
+    let carry = prev.as_ref().filter(|_| had_old);
+    // 허락은 새 manifest가 요구하는 것과의 교집합으로만 (빠졌다가 다시 생긴 권한을 몰래 되살리지 않음)
+    let granted: Vec<String> = carry
+        .map(|s| granted_of(&s.3))
+        .unwrap_or_default()
+        .into_iter()
+        .filter(|p| perms.contains(p))
+        .collect();
+    let keep_enabled = carry.is_some_and(|s| s.2 != 0) && not_subset(perms, &granted).is_empty();
+    let ai_auto = carry.is_some_and(|s| s.7 != 0) && has("ai");
+    let mode = carry
+        .map(|s| s.6.clone())
+        .filter(|_| has("messages.process"))
+        .unwrap_or_else(|| postprocess::MODE_NOTES.to_string());
+    if carry.is_none() {
+        sqlx::query("DELETE FROM user_plugin_storage WHERE plugin_id = ?").bind(&id).execute(db).await?;
+    }
     let saved = sqlx::query(
-        "INSERT INTO user_plugins (id, name, version, enabled, granted, code_hash, installed_at) VALUES (?, ?, ?, ?, ?, ?, ?)
+        "INSERT INTO user_plugins (id, name, version, enabled, granted, code_hash, installed_at, process_mode, ai_auto) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
          ON CONFLICT(id) DO UPDATE SET name = excluded.name, version = excluded.version, enabled = excluded.enabled,
-           granted = excluded.granted, code_hash = excluded.code_hash, installed_at = excluded.installed_at",
+           granted = excluded.granted, code_hash = excluded.code_hash, installed_at = excluded.installed_at,
+           process_mode = excluded.process_mode, ai_auto = excluded.ai_auto",
     )
     .bind(&id)
     .bind(&pkg.manifest.name)
@@ -286,6 +313,8 @@ pub async fn install(db: &SqlitePool, base: &Path, path: &Path, expected_hash: &
     .bind(serde_json::to_string(&granted).unwrap_or_else(|_| "[]".into()))
     .bind(&pkg.hash)
     .bind(now_ms())
+    .bind(&mode)
+    .bind(ai_auto as i64)
     .execute(db)
     .await;
     if let Err(e) = saved {
@@ -318,15 +347,23 @@ pub async fn set_enabled(db: &SqlitePool, base: &Path, id: &str, enabled: bool, 
         }
     }
     let granted = if enabled { m.permissions.clone() } else { p.granted.clone() };
+    // 켤 때 폴더의 지금 코드를 기억한다 — 나중에 폴더가 바뀌면(code_changed) 다시 켜서 동의해야 한다
+    let hash = if enabled {
+        package::folder_hash(&plugin_dir(base, id)?).ok_or_else(|| AppError::validation("플러그인 폴더를 읽을 수 없음", None))?
+    } else {
+        String::new()
+    };
     sqlx::query(
-        "INSERT INTO user_plugins (id, name, version, enabled, granted) VALUES (?, ?, ?, ?, ?)
-         ON CONFLICT(id) DO UPDATE SET name = excluded.name, version = excluded.version, enabled = excluded.enabled, granted = excluded.granted",
+        "INSERT INTO user_plugins (id, name, version, enabled, granted, code_hash) VALUES (?, ?, ?, ?, ?, ?)
+         ON CONFLICT(id) DO UPDATE SET name = excluded.name, version = excluded.version, enabled = excluded.enabled, granted = excluded.granted,
+           code_hash = CASE WHEN excluded.code_hash <> '' THEN excluded.code_hash ELSE user_plugins.code_hash END",
     )
     .bind(id)
     .bind(&m.name)
     .bind(&m.version)
     .bind(enabled as i64)
     .bind(serde_json::to_string(&granted).unwrap_or_else(|_| "[]".into()))
+    .bind(&hash)
     .execute(db)
     .await?;
     if enabled {
@@ -384,6 +421,7 @@ pub async fn call(db: &SqlitePool, id: &str, method: &str, args: &serde_json::Va
         "app.info" => Ok(runtime::app_info(id)),
         // 화면의 호스트가 직접 답한다 (백엔드는 화면 상태를 모름)
         "app.context" => Ok(Value::Null),
+        "settings.get" => settings::get(db, id, &runtime::settings_decl(id)).await,
         // AI 호출은 작업·프로필이 필요해 커맨드(call_user_plugin)가 직접 처리한다 (6-D-7)
         "ai.generate" => Err(AppError::validation("ai.generate는 call_user_plugin 커맨드로만 부를 수 있음", None)),
         "storage.get" => storage::get(db, id, &key()).await,

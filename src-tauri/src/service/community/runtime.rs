@@ -27,6 +27,8 @@ pub const API: &[(&str, Option<&str>)] = &[
     ("app.info", None),
     // 지금 화면의 대화·캐릭터 id (화면의 호스트가 답함, 6-D-6)
     ("app.context", None),
+    // 사용자가 설정 화면에서 정한 이 플러그인의 설정값 (읽기만, 6-D-8)
+    ("settings.get", None),
     // AI 글 생성 (6-D-7) — 작업·예산 한도 안에서, 실행 주체는 호스트가 정한다
     ("ai.generate", Some("ai")),
     ("storage.get", Some("storage")),
@@ -71,6 +73,8 @@ struct Active {
     dir: PathBuf,
     /// 패널 id → 페이지 (6-D-6)
     panels: HashMap<String, String>,
+    /// manifest의 설정 칸 (6-D-8)
+    settings: Vec<super::manifest::PluginSettingField>,
 }
 
 #[derive(Debug, Clone, Serialize, specta::Type)]
@@ -175,6 +179,7 @@ pub fn start(plugins: &[UserPlugin], base: &Path) -> RuntimeStart {
                 granted,
                 dir: base.join(super::PLUGINS_DIR).join(&p.id),
                 panels: m.panels.iter().map(|x| (x.id.clone(), x.page.clone())).collect(),
+                settings: m.settings.clone(),
             },
         );
         out.push(RuntimePlugin {
@@ -223,6 +228,10 @@ pub fn running_ids() -> Vec<String> {
     let mut v: Vec<(&String, usize)> = map.iter().map(|(k, a)| (k, a.seq)).collect();
     v.sort_by_key(|(_, s)| *s);
     v.into_iter().map(|(k, _)| k.clone()).collect()
+}
+
+pub fn settings_decl(id: &str) -> Vec<super::manifest::PluginSettingField> {
+    active().get(id).map(|a| a.settings.clone()).unwrap_or_default()
 }
 
 pub fn name_of(id: &str) -> Option<String> {
@@ -349,6 +358,7 @@ on:(event,fn)=>{if(typeof fn!=="function")throw new Error("handler가 함수가 
 log:(...a)=>call("log",{level:"info",message:fmt(a)}),
 warn:(...a)=>call("log",{level:"warn",message:fmt(a)}),
 app:Object.freeze({info:()=>call("app.info"),context:()=>call("app.context")}),
+settings:Object.freeze({get:()=>call("settings.get")}),
 ai:Object.freeze({generate:(prompt,o)=>call("ai.generate",Object.assign({},o||{},{prompt}))}),
 storage:Object.freeze({get:k=>call("storage.get",{key:k}),set:(k,v)=>call("storage.set",{key:k,value:v===undefined?null:v}),delete:k=>call("storage.delete",{key:k}),keys:()=>call("storage.keys")}),
 data:Object.freeze({
@@ -498,4 +508,16 @@ fn percent_decode(s: &str) -> String {
 pub fn reset_for_test() {
     active().clear();
     health().clear();
+}
+
+/// 시험용: 자동 AI 호출과 후처리 방식을 바로 정한다
+#[cfg(test)]
+pub async fn ai_state_for_test_set(db: &sqlx::SqlitePool, id: &str, ai_auto: bool, mode: &str) {
+    sqlx::query("UPDATE user_plugins SET ai_auto = ?, process_mode = ? WHERE id = ?")
+        .bind(ai_auto as i64)
+        .bind(mode)
+        .bind(id)
+        .execute(db)
+        .await
+        .unwrap();
 }

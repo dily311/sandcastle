@@ -149,8 +149,30 @@ pub fn version_newer(a: &str, b: &str) -> bool {
 }
 
 /// manifest.json을 읽고 검사한다. 권한은 정리(중복 제거·정렬)해서 돌려준다.
+/// 사용자에게 보이는 글에서 제어 문자와 글자 방향을 바꾸는 문자·보이지 않는 문자를 뺀다 (이름이 다른 글자처럼 보이게 속이지 못하게)
+pub fn clean(s: &str) -> String {
+    s.chars()
+        .filter(|c| !c.is_control() && !matches!(*c as u32, 0x061C | 0x200B..=0x200F | 0x202A..=0x202E | 0x2060..=0x2064 | 0x2066..=0x2069 | 0xFEFF))
+        .collect()
+}
+
 pub fn parse(bytes: &[u8], app_version: &str) -> Result<PluginManifest> {
     let mut m: PluginManifest = serde_json::from_slice(bytes).map_err(|e| bad(format!("읽을 수 없음 ({e})")))?;
+    m.name = clean(&m.name);
+    m.version = clean(&m.version);
+    m.author = clean(&m.author);
+    m.description = clean(&m.description);
+    for p in &mut m.panels {
+        p.title = clean(&p.title);
+    }
+    for c in &mut m.commands {
+        c.title = clean(&c.title);
+    }
+    for f in &mut m.settings {
+        f.label = clean(&f.label);
+        f.description = f.description.as_deref().map(clean);
+        f.options = f.options.iter().map(|o| clean(o)).collect();
+    }
     m.id = m.id.trim().to_string();
     m.name = m.name.trim().to_string();
     m.version = m.version.trim().to_string();

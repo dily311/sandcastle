@@ -195,6 +195,10 @@ export const commands = {
 	answerPluginPrompt: (requestId: string, answers: PluginPromptAnswer_Deserialize[], options?: InvokeOptions) => __TAURI_INVOKE<boolean>("answer_plugin_prompt", { requestId, answers }, options),
 	/**  누른 명령 밖에서도 플러그인이 AI를 부르게 할지 (기본 꺼짐, 요금이 들 수 있음) */
 	setUserPluginAiAuto: (pluginId: string, enabled: boolean, options?: InvokeOptions) => __TAURI_INVOKE<UserPlugin_Serialize>("set_user_plugin_ai_auto", { pluginId, enabled }, options),
+	/**  manifest의 설정 칸에 사용자가 정한 값 (선언한 칸 전부, 기본값 채움) */
+	getUserPluginSettings: (pluginId: string, options?: InvokeOptions) => __TAURI_INVOKE<Value>("get_user_plugin_settings", { pluginId }, options),
+	/**  한 칸 저장 (null이면 기본값으로). 플러그인이 새 값을 읽도록 호스트가 다시 시작한다 */
+	setUserPluginSetting: (pluginId: string, key: string, value: Value, options?: InvokeOptions) => __TAURI_INVOKE<Value>("set_user_plugin_setting", { pluginId, key, value }, options),
 	/**  제안 목록 (새것부터). status: pending / applied / rejected / reverted, 비우면 전부 */
 	listChangeProposals: (status: string | null, options?: InvokeOptions) => __TAURI_INVOKE<ChangeProposal_Serialize[]>("list_change_proposals", { status }, options),
 	/**  기다리는 제안 수 */
@@ -4620,6 +4624,8 @@ export type UserPlugin_Deserialize = {
 	processMode: string,
 	/**  사용자가 누른 명령 밖에서 플러그인이 스스로 AI를 불러도 되나 (기본 꺼짐) — 6-D-7 */
 	aiAuto: boolean,
+	/**  켤 때 본 코드와 폴더의 코드가 달라졌나 (파일을 손으로 고침·다른 곳에서 바뀜). 그러면 꺼진 것으로 보고 다시 켜서 동의해야 한다 (6-D-8) */
+	codeChanged: boolean,
 };
 
 /**  목록의 한 줄. manifest를 읽지 못한 폴더도 보여준다(지울 수 있게) */
@@ -4636,6 +4642,8 @@ export type UserPlugin_Serialize = {
 	processMode: string,
 	/**  사용자가 누른 명령 밖에서 플러그인이 스스로 AI를 불러도 되나 (기본 꺼짐) — 6-D-7 */
 	aiAuto: boolean,
+	/**  켤 때 본 코드와 폴더의 코드가 달라졌나 (파일을 손으로 고침·다른 곳에서 바뀜). 그러면 꺼진 것으로 보고 다시 켜서 동의해야 한다 (6-D-8) */
+	codeChanged: boolean,
 };
 
 export type Value = null | boolean | number | string | Value[] | { [key in string]: Value };

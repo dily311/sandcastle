@@ -40,10 +40,11 @@ const plugins: UserPlugin[] = [
 		granted: [],
 		installedAt: Date.now() - 3 * 86_400_000,
 		size: 8_200,
-		processMode: "notes", aiAuto: false,
+		processMode: "notes", aiAuto: false, codeChanged: false,
 	},
 ];
 
+const settingValues: Record<string, unknown> = {};
 const find = (id: unknown) => {
 	const p = plugins.find((x) => x.id === id);
 	if (!p) throw { code: "RESOURCE_NOT_FOUND", message: `설치된 플러그인이 아님: ${String(id)}` };
@@ -124,7 +125,7 @@ export const communityHandlers: Record<string, Handler> = {
 	},
 	install_user_plugin: () => {
 		const old = plugins.findIndex((p) => p.id === sample.id);
-		const p: UserPlugin = { id: sample.id, manifest: sample, error: null, enabled: false, granted: [], installedAt: Date.now(), size: 5_400, processMode: "notes", aiAuto: false };
+		const p: UserPlugin = { id: sample.id, manifest: sample, error: null, enabled: false, granted: [], installedAt: Date.now(), size: 5_400, processMode: "notes", aiAuto: false, codeChanged: false };
 		if (old >= 0) plugins.splice(old, 1, p);
 		else plugins.push(p);
 		return { ...p };
@@ -142,6 +143,14 @@ export const communityHandlers: Record<string, Handler> = {
 	// 런타임: 브라우저 미리보기에는 plugin 프로토콜이 없어 iframe을 띄우지 않는다
 	start_user_plugins: () => ({ plugins: [], api: { log: null, report: null, "app.info": null } }),
 	stop_user_plugins: () => null,
+	get_user_plugin_settings: ({ pluginId }) => {
+		const p = find(pluginId);
+		return Object.fromEntries((p.manifest?.settings ?? []).map((f) => [f.key, (settingValues[`${pluginId}:${f.key}`] ?? f.default ?? (f.type === "toggle" ? false : f.type === "number" ? 0 : "")) as never]));
+	},
+	set_user_plugin_setting: ({ pluginId, key, value }) => {
+		settingValues[`${pluginId}:${key}`] = value;
+		return communityHandlers.get_user_plugin_settings({ pluginId });
+	},
 	set_user_plugin_ai_auto: ({ pluginId, enabled }) => Object.assign(find(pluginId), { aiAuto: Boolean(enabled) }),
 	set_user_plugin_process_mode: ({ pluginId, mode }) => Object.assign(find(pluginId), { processMode: String(mode) }),
 	apply_plugin_postprocess: () => null,

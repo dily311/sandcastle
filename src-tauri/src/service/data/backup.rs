@@ -358,6 +358,9 @@ pub fn apply_pending_restore(app_data_dir: &Path) -> Result<bool> {
 pub async fn finish_restore_fixups(db: &DbPool, app_data_dir: &Path) -> Result<()> {
     let fixup = app_data_dir.join(FIXUP_FILE);
     let Ok(raw) = std::fs::read(&fixup) else { return Ok(()) };
+    // 복원한 백업 안의 커뮤니티 플러그인은 켜진 채 시작하지 않는다 (남이 만든 백업이 동의 없이 코드를 돌리지 않게, ADR-012).
+    // 플러그인 폴더는 그대로 두고 켜짐·자동 AI 호출만 끈다 — 설정 > 커뮤니티 플러그인에서 다시 켜서 동의한다
+    sqlx::query("UPDATE user_plugins SET enabled = 0, ai_auto = 0").execute(db).await?;
     let v: serde_json::Value = serde_json::from_slice(&raw).unwrap_or_default();
     let old = v["oldAppDataDir"].as_str().unwrap_or_default().to_string();
     let new = app_data_dir.to_string_lossy().to_string();

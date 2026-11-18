@@ -16,7 +16,7 @@ import { Puzzle } from "@lucide/svelte";
 import { panel } from "$app/panel.svelte";
 import { nav } from "$app/nav.svelte";
 import { isPluginTab, panelTabId } from "./panels";
-import { decide, describeCall } from "./aiPolicy";
+import { COMMAND_AI_CALLS, COMMAND_AI_WINDOW_MS, DENY_COOLDOWN_MS, decide, describeCall } from "./aiPolicy";
 import { confirmAction } from "$shared/stores/confirm.svelte";
 
 type Unlisten = () => void;
@@ -39,6 +39,10 @@ class PluginHost {
 	private busy = new Map<string, { command: number; hook: number }>();
 	/** 확인 창을 띄운 플러그인 (한 번에 하나) */
 	private asking = new Set<string>();
+	/** 사용자가 방금 누른 명령이 "사용자가 한 것"으로 부를 수 있는 AI 호출의 남은 몫 (누를 때마다 새로, 명령이 끝나면 사라짐) */
+	private allowance = new Map<string, { left: number; until: number }>();
+	/** 확인 창을 거절당한 때 — 곧바로 다시 묻지 못하게 */
+	private deniedAt = new Map<string, number>();
 
 	async start() {
 		if (this.running) return;
@@ -117,11 +121,16 @@ class PluginHost {
 
 	/** 명령 실행 — 사용자가 메뉴에서 누를 때만 부른다 */
 	async runCommand(pluginId: string, commandId: string) {
+		// 누른 명령 하나가 쓸 수 있는 AI 호출은 몇 번·잠깐뿐 (명령이 끝나지 않아도 시간이 지나면 끝) — aiPolicy.ts
+		const mine = { left: COMMAND_AI_CALLS, until: Date.now() + COMMAND_AI_WINDOW_MS };
+		this.allowance.set(pluginId, mine);
 		try {
 			// 명령이 AI를 부르면 오래 걸릴 수 있다
 			await this.emit(pluginId, "command", { id: commandId, context: this.context() }, 90_000);
 		} catch (e) {
 			toasts.error(`플러그인 명령 실패: ${e instanceof Error ? e.message : String(e)}`, "PLUGIN_COMMAND");
+		} finally {
+			if (this.allowance.get(pluginId) === mine) this.allowance.delete(pluginId);
 		}
 	}
 
@@ -237,14 +246,24 @@ class PluginHost {
 		if (r.call.method === "ai.generate") {
 			// AI 호출: 실행 주체는 호스트가 본 것으로만 정한다 (플러그인 인자에는 없음) — aiPolicy.ts
 			const b = this.busy.get(id) ?? { command: 0, hook: 0 };
-			const d = decide({ fromPanel: isPanel, inCommand: b.command > 0, inHook: b.hook > 0, aiAuto: plugin.aiAuto });
+			const a = this.allowance.get(id);
+			const commandAllowance = !!a && a.left > 0 && Date.now() < a.until && b.command > 0;
+			const d = decide({ fromPanel: isPanel, commandAllowance, inHook: b.hook > 0, aiAuto: plugin.aiAuto });
 			by = d.by;
+			if (d.by === "user" && !d.ask && a) a.left--;
 			if (d.ask) {
+				const denied = this.deniedAt.get(id);
+				if (denied && Date.now() - denied < DENY_COOLDOWN_MS) {
+					return reply({ id: r.call.id, error: { code: "INVALID_INPUT", message: "사용자가 방금 AI 호출을 허락하지 않았음 — 잠시 뒤에 다시 부르세요" } });
+				}
 				if (this.asking.has(id)) return reply({ id: r.call.id, error: { code: "INVALID_INPUT", message: "확인 중인 AI 호출이 있음 — 끝난 뒤에 부르세요" } });
 				this.asking.add(id);
-				const text = describeCall(plugin.name, r.call.args);
+				const text = describeCall(plugin.name, id, r.call.args);
 				const ok = await confirmAction({ ...text, confirmLabel: "허락 (이번 한 번)" }).finally(() => this.asking.delete(id));
-				if (!ok) return reply({ id: r.call.id, error: { code: "INVALID_INPUT", message: "사용자가 AI 호출을 허락하지 않음" } });
+				if (!ok) {
+					this.deniedAt.set(id, Date.now());
+					return reply({ id: r.call.id, error: { code: "INVALID_INPUT", message: "사용자가 AI 호출을 허락하지 않음" } });
+				}
 			}
 		}
 		try {

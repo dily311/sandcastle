@@ -1,7 +1,7 @@
 <script lang="ts">
 	import { layout } from "$app/layout.svelte";
 	import type { Component } from "svelte";
-	import { Activity, ArrowLeftRight, Gamepad2, Images, AudioLines, Blocks, Database, ImagePlus, Keyboard, KeyRound, Languages, MessagesSquare, Music, Palette, Regex, ScrollText, Search, Settings2, SlidersHorizontal, Smartphone } from "@lucide/svelte";
+	import { Activity, ArrowLeftRight, Gamepad2, Images, AudioLines, Blocks, Database, ImagePlus, Keyboard, KeyRound, Languages, MessagesSquare, Music, Palette, Puzzle, Regex, ScrollText, Search, Settings2, SlidersHorizontal, Smartphone } from "@lucide/svelte";
 	import { Badge, Input } from "$shared/ui";
 	import { nav, type SettingsTab } from "$app/nav.svelte";
 	import { logs } from "$shared/stores/log.svelte";
@@ -14,6 +14,7 @@
 	import RegexSection from "./RegexSection.svelte";
 	import DataSection from "./DataSection.svelte";
 	import SyncSection from "./SyncSection.svelte";
+	import CommunitySection from "./CommunitySection.svelte";
 	import LogSection from "./LogSection.svelte";
 	import ActivitySection from "./ActivitySection.svelte";
 	import GameSection from "./GameSection.svelte";
@@ -67,6 +68,7 @@
 				{ id: "translate", label: "번역", icon: Languages, keywords: "번역 언어 자동 번역 입력", view: TranslateSection, plugin: "translate" },
 				{ id: "tts", label: "음성 읽기", icon: AudioLines, keywords: "음성 tts 읽기 목소리 elevenlabs", view: TtsSection, plugin: "tts" },
 				{ id: "imagegen", label: "이미지 생성", icon: ImagePlus, keywords: "이미지 그림 생성 novelai 프롬프트 네거티브 샘플러", view: ImageGenSection, plugin: ["imagegen", "imageauto"] },
+				{ id: "community", label: "커뮤니티 플러그인", icon: Puzzle, keywords: "플러그인 확장 설치 권한 zip 폴더 후처리 프롬프트 패널 명령 ai 제안", view: CommunitySection, plugin: "community" },
 				{ id: "widget", label: "위젯", icon: Music, keywords: "음악 플레이어 자동 실행 바탕화면", view: WidgetSection, plugin: "widget" },
 			],
 		},
