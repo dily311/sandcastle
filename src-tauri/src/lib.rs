@@ -250,6 +250,7 @@ pub fn specta_builder() -> tauri_specta::Builder<tauri::Wry> {
         delete_theme,
         // ai
         get_models,
+        get_ai_capabilities,
         test_message,
         chat_send,
         chat_regenerate,
@@ -536,6 +537,7 @@ pub fn specta_builder() -> tauri_specta::Builder<tauri::Wry> {
         delete_theme,
         // ai
         get_models,
+        get_ai_capabilities,
         test_message,
         chat_send,
         chat_regenerate,

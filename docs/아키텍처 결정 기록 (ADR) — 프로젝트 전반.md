@@ -23,6 +23,7 @@
 | 010 | 버전·업데이트·서명·릴리스 | Accepted |
 | 011 | 동기화 방식 (폴더 → 드라이브, 항목별 병합, 충돌은 둘 다 남김) | Accepted |
 | 012 | 커뮤니티 플러그인 (격리된 JS + 권한 선언) | Accepted |
+| 013 | 어댑터 확장: 임베딩·도구 호출·구조화 출력 | Accepted |
 
 ### ADR-001 일반 대화와 게임모드 테이블 통합
 
@@ -604,3 +605,23 @@ Complete Submission + Task
 **복구 정책**
 
 앱이 종료된 순간이 API 요청 전인지, 스트리밍 중인지, Tool 실행 중인지에 따라 복구 방식이 달라져. 이걸 상태 머신과 Rust ExecutionManager의 책임으로 명확하게 정의하면 실제 구현에 들어갈 수 있는 수준이 될 거야.
+
+### ADR-013 어댑터 확장: 임베딩·도구 호출·구조화 출력
+
+**상태** Accepted (2026-11-18) — CLAUDE.md 3-A. 3-B~3-D·4-D·5-B의 바닥. 화면과 기능은 없고(스위치 없음) 부르는 길만 만든다 — 이 길을 쓰는 기능이 각자 플러그인 스위치(기본 꺼짐)와 작업(`run_by`)을 가진다.
+
+**결정**
+1. **기존 길은 그대로, 덧붙이기만**: `generate`가 쓰던 요청 모양은 바이트 단위로 같다(기존 테스트 유지). 새 길은 `AiProvider::generate_with(prompt, ChatExtras)`·`embed`, 그리고 `AiService::generate_ext / generate_structured / embed`. `PromptMessage`·`PromptRole`은 바꾸지 않는다 — 도구 루프는 프롬프트 뒤에 붙는 `tail`(`ToolTurn`)로 표현한다.
+2. **도구 호출**: 요청에 도구 목록, 응답에서 호출을 읽는다(스트리밍은 조각을 인덱스별로 모아 끝에 확정 — `CallAssembler`). 호출 id가 없는 공급자는 `call_<표>_<번호>`를 붙이고, 인자가 JSON이 아니면 호출을 버리지 않고 `parse_error`를 단다. Gemini는 `thoughtSignature` 등을 되돌려 줘야 하므로 공급자 응답 원본 parts를 `ProviderState`로 불투명하게 들고 다닌다. 종료 사유는 `StopKind`(End/ToolUse/MaxTokens/Filtered)로 맞춘다. **도구와 구조화 출력은 한 요청에 같이 쓰지 못한다**(공급자마다 조합 지원이 달라서). 도구 이름은 공급자 공통 부분집합(영문·`_`로 시작, 영문·숫자·`_`·`-`, 64자). 실행은 호출하는 쪽의 몫 — 어댑터는 도구를 실행하지 않는다.
+3. **구조화 출력**: JSON Schema **부분집합**(`adapter/schema.rs`: type·properties·required·items·enum·const·min/max·minLength/maxLength·minItems/maxItems·additionalProperties(bool)·anyOf, 깊이 8·32KB 이하. `$ref`·oneOf·allOf·not·pattern·튜플 items는 거절). 네이티브는 연결이 `지원`일 때만(OpenAI 공식 주소 `response_format`, Claude는 도구 하나를 강제로 부르고 그 입력을 내용으로, Gemini/Vertex `responseSchema`). 그 밖에는 "JSON만 답하라" system 지시 + 앱의 검증. **공급자가 스키마를 지켰다고 믿지 않는다** — 네이티브든 대체든 결과는 앱이 다시 검증한다. OpenAI strict는 스키마가 모든 객체를 닫고 모든 칸이 필수일 때만 켠다. 실패해도 **자동으로 다시 부르지 않는다**(`AI_STRUCTURED_OUTPUT_INVALID`, details에 문제 목록·원문 2000자). 출력 한도에 잘려 끊긴 도구 호출·JSON은 실행하지 않고 `AI_OUTPUT_TRUNCATED`(이미 쓴 토큰은 기록). 도구·구조화 요청은 출력 한도 하한 2048(올리기만 함).
+4. **임베딩**: `AiService::embed({프로필, 모델, 글 목록, 용도(문서/질의), 차원})`. 글 2048개 이하(그 이상은 부르는 쪽이 나눔 — 한 번에 큰 요금이 나가지 않게), 빈 글·빈 모델 거절. 사용량은 새 종류 `embedding`, **모델 이름은 프로필의 채팅 모델이 아니라 임베딩 모델**로 기록하고 토큰 한도(`BudgetMetric::Tokens`)에 같이 센다. 공급자가 토큰 수를 안 주면 앱이 세어 `estimated`로 기록. OpenAI 호환 `/embeddings`(100개씩), Gemini `batchEmbedContents`(작업 용도 매핑, 차원을 줄이면 L2 정규화), Vertex `:predict`. Claude는 임베딩 API가 없어 거절하고 Voyage AI나 Gemini 연결을 쓰라고 안내한다.
+5. **지원 표**(`adapter/capabilities.rs`, 3-A-4): 연결(형식·주소·모델)별로 임베딩·도구·구조화 각각 `지원 / 확인 안 됨 / 지원 안 함` + 이유. OpenAI 공식 주소 밖(호환 서버)은 전부 `확인 안 됨`. **`지원 안 함`이면 요금이 나가기 전에 `AI_FEATURE_UNSUPPORTED`로 거절하고, `확인 안 됨`은 통과**시킨다(막으면 로컬 모델을 못 씀). 구조화 출력은 글 생성 자체가 안 되는 모델(임베딩·음성 모델)만 `지원 안 함`. 표는 앱이 아는 규칙이지 요청으로 확인한 것이 아니다 — 새 모델이 나오면 틀릴 수 있어 `확인 안 됨`을 기본으로 둔다. 설정 > API 키의 연결 편집 화면이 "이 연결로 되는 것"으로 보여 준다(`get_ai_capabilities`, 요청을 보내지 않는 계산).
+6. **가짜 공급자 테스트**: `adapter/testutil.rs`의 로컬 서버로 요청 본문을 기록해 공급자별 요청 모양과 응답 해석을 검증한다. 테스트에서 실제 공급자를 부르지 않는다.
+
+**자문(Opus) 결과 반영** — 설계를 검토받아 바꾼 것: 호출 id가 없거나 겹칠 때 생성·유일성 검사(루프 전체), Gemini 원본 parts 보존(thoughtSignature), `MALFORMED_FUNCTION_CALL` 오류 처리, 도구 이름 첫 글자 규칙, `tool_choice`가 도구 목록과 어긋나는 요청 거절, Claude는 확장 생각을 켜지 않음, 도구 결과를 note 글보다 앞에 둠. 기존 버그도 찾아 고침: **Gemini 사용량이 생각 토큰(`thoughtsTokenCount`)을 빼고 세어 예산을 과소 집계**했다.
+
+**하지 않은 것·알려진 한계**
+- 실제 OpenAI·Claude·Gemini·Vertex로 확인하지 않았다(요금·키 없이 가짜 서버로만). 특히 Vertex `:predict` 임베딩의 네트워크 구간은 서비스 계정 없이 확인 불가.
+- OpenAI GPT-5·o 계열은 `max_tokens` 대신 `max_completion_tokens`를 요구할 수 있다(기존 `generate`도 같은 한계 — 이번에 건드리지 않음).
+- DeepSeek류의 `reasoning_content` 되돌려 보내기, Claude 확장 생각과 도구 호출의 결합은 지원하지 않는다.
+- 도구를 자동으로 실행하는 루프·승인은 5-B의 몫이다.

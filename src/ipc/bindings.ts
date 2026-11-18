@@ -28,6 +28,8 @@ export const commands = {
 	saveTheme: (filename: string, content: CssTheme_Deserialize, options?: InvokeOptions) => __TAURI_INVOKE<null>("save_theme", { filename, content }, options),
 	deleteTheme: (filename: string, options?: InvokeOptions) => __TAURI_INVOKE<null>("delete_theme", { filename }, options),
 	getModels: (profileId: string, options?: InvokeOptions) => __TAURI_INVOKE<string[]>("get_models", { profileId }, options),
+	/**  연결(형식·주소·모델)로 되는 것: 임베딩·도구 호출·구조화 출력. 요청을 보내지 않는 순수 계산이라 저장 전에도 부를 수 있다 (3-A-4) */
+	getAiCapabilities: (formatType: string, baseUrl: string, model: string, options?: InvokeOptions) => __TAURI_INVOKE<AiCapabilities>("get_ai_capabilities", { formatType, baseUrl, model }, options),
 	/**  연결 확인: 짧은 메시지 하나를 보내고 받은 답을 돌려준다 (저장하지 않음) */
 	testMessage: (profileId: string, options?: InvokeOptions) => __TAURI_INVOKE<string>("test_message", { profileId }, options),
 	/**
@@ -529,6 +531,12 @@ export const commands = {
 };
 
 /* Types */
+export type AiCapabilities = {
+	embeddings: Support,
+	tools: Support,
+	structured: Support,
+};
+
 export type ApiProfiles = {
 	id: string,
 	name: string,
@@ -1536,7 +1544,7 @@ export type EditedGameMessage_Serialize = {
 
 export type ErrorCategory = "ARCHIVE" | "NOT_FOUND" | "VALIDATION" | "DATABASE" | "AI_PROVIDER" | "IO" | "WINDOW" | "GAME" | "INTERNAL";
 
-export type ErrorCode = "INTERNAL_ERROR" | "RESOURCE_NOT_FOUND" | "INVALID_INPUT" | "DATABASE_ERROR" | "DATABASE_LOCKED" | "AI_PROVIDER_ERROR" | "AI_PROVIDER_RATE_LIMIT" | "AI_PROVIDER_AUTH_FAILED" | "AI_PROVIDER_MODEL_NOT_FOUND" | "AI_PROVIDER_TIMEOUT" | "AI_PROVIDER_CONNECTION_FAILED" | "AI_REQUEST_CANCELLED" | "AI_CONTEXT_OVERFLOW" | "TASK_INVALID_TRANSITION" | "TASK_EXECUTOR_MISSING" | "TASK_CANCELLED" | "TASK_INTERRUPTED" | "BUDGET_EXCEEDED" | "GAME_INVALID_STATE" | "GAME_SCENE_NOT_FOUND" | "GAME_EVENT_FAILED" | "GAME_DATA_INVALID" | "GAME_NOT_OPENED" | "GAME_NO_SESSION" | "GAME_SESSION_CHANGED" | "GAME_ACTION_BLOCKED" | "ARCHIVE_INVALID" | "ARCHIVE_CORRUPTED" | "ARCHIVE_UNSAFE_PATH" | "IO_ERROR" | "WINDOW_ERROR";
+export type ErrorCode = "INTERNAL_ERROR" | "RESOURCE_NOT_FOUND" | "INVALID_INPUT" | "DATABASE_ERROR" | "DATABASE_LOCKED" | "AI_PROVIDER_ERROR" | "AI_PROVIDER_RATE_LIMIT" | "AI_PROVIDER_AUTH_FAILED" | "AI_PROVIDER_MODEL_NOT_FOUND" | "AI_PROVIDER_TIMEOUT" | "AI_PROVIDER_CONNECTION_FAILED" | "AI_REQUEST_CANCELLED" | "AI_CONTEXT_OVERFLOW" | "AI_FEATURE_UNSUPPORTED" | "AI_STRUCTURED_OUTPUT_INVALID" | "AI_OUTPUT_TRUNCATED" | "TASK_INVALID_TRANSITION" | "TASK_EXECUTOR_MISSING" | "TASK_CANCELLED" | "TASK_INTERRUPTED" | "BUDGET_EXCEEDED" | "GAME_INVALID_STATE" | "GAME_SCENE_NOT_FOUND" | "GAME_EVENT_FAILED" | "GAME_DATA_INVALID" | "GAME_NOT_OPENED" | "GAME_NO_SESSION" | "GAME_SESSION_CHANGED" | "GAME_ACTION_BLOCKED" | "ARCHIVE_INVALID" | "ARCHIVE_CORRUPTED" | "ARCHIVE_UNSAFE_PATH" | "IO_ERROR" | "WINDOW_ERROR";
 
 export type FeatureSetting = {
 	feature: { [key in string]: boolean },
@@ -3891,6 +3899,14 @@ export type StorageUsage = {
 export type StreamPayload = {
 	chunk: string,
 };
+
+export type Support = {
+	status: SupportStatus,
+	/**  화면에 보일 이유·안내 */
+	reason: string,
+};
+
+export type SupportStatus = "supported" | "unknown" | "unsupported";
 
 export type SyncApplied = {
 	report: MergeReport,

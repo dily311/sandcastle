@@ -33,7 +33,7 @@
 		cancelled: { label: "멈춤", tone: "neutral" },
 		interrupted: { label: "끊김", tone: "warning" },
 	};
-	const KIND: Record<string, string> = { chat: "텍스트", tts: "음성", image: "이미지" };
+	const KIND: Record<string, string> = { chat: "텍스트", tts: "음성", image: "이미지", embedding: "임베딩" };
 
 	let active = $state<TaskInfo[]>([]);
 	let history = $state<HistoryItem[]>([]);

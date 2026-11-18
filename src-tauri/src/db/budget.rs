@@ -120,6 +120,8 @@ impl BudgetMetric {
             UsageKind::Chat => Self::Tokens,
             UsageKind::Tts => Self::Characters,
             UsageKind::Image => Self::Images,
+            // 임베딩은 토큰 한도에 같이 센다
+            UsageKind::Embedding => Self::Tokens,
         }
     }
 }

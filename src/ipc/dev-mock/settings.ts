@@ -355,6 +355,12 @@ export const settingsHandlers: Record<string, (a: Args) => unknown> = {
 		keys.delete(id);
 		return null;
 	},
+	get_ai_capabilities: ({ formatType, model }) => {
+		const yes = (reason: string) => ({ status: "supported", reason });
+		if (formatType === "claude") return { embeddings: { status: "unsupported", reason: "Claude에는 임베딩 API가 없음 — Voyage AI나 Gemini 연결을 쓰세요" }, tools: yes("도구 호출 지원"), structured: yes("도구 하나를 강제로 불러 JSON을 받음") };
+		if (formatType === "openai" && model !== "gpt-4o") return { embeddings: { status: "unknown", reason: "호환 서버라 확인할 수 없음" }, tools: { status: "unknown", reason: "호환 서버라 확인할 수 없음" }, structured: { status: "unknown", reason: "지원하지 않으면 'JSON만 답하라' 지시와 검사로 대신함" } };
+		return { embeddings: yes("임베딩 지원"), tools: yes("도구 호출 지원"), structured: yes("스키마 응답 지원") };
+	},
 	get_models: ({ profileId }) => {
 		if (!keys.has(profileId)) throw { code: "AI_PROVIDER_AUTH_FAILED", category: "AI_PROVIDER", message: "API 키가 설정되지 않았습니다", retryable: false };
 		return ["gemini-3.7-flash", "gemini-3.1-pro-preview", "gemini-2.5-pro"];
