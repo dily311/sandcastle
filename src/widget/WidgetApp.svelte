@@ -51,6 +51,8 @@
 
 <style>
 	.app-wrap {
+		display: flex;
+		flex-direction: row;
 		background: transparent;
 		position: relative;
 		width: 100dvw;

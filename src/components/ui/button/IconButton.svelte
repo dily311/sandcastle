@@ -21,16 +21,16 @@
 		width: 2rem;
 		height: 2rem;
 		padding: 0.4rem;
-		color: var(--icon-color);
+		color: var(--text-muted);
 		border-radius: var(--radius-sm);
-		font-size: var(--font-size-sm);
+		font-size: var(--text-sm);
 		cursor: pointer;
 		position: relative;
 	}
 
 	.clickable-icon:hover,
 	.clickable-icon.active {
-		background: var(--button-hover-bg);
+		background: var(--surface-hover);
 	}
 
 	.clickable-icon:disabled {

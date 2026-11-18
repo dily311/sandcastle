@@ -12,7 +12,6 @@
 	import { WIDGET_MUSIC_FEATURE_ID } from "../musicFeature.svelte";
 	import { LoopMode } from "../types";
 	import { draggablePosition } from "$/lib/action/useImageCrap.svelte";
-	import Button from "$/components/ui/button/Button.svelte";
 	import Icon from "$/components/ui/Icon.svelte";
 	import { cn } from "$/lib/utils/cn";
 	import IconButton from "$/components/ui/button/IconButton.svelte";
@@ -298,10 +297,10 @@
 		top: 0;
 		left: 0;
 		z-index: 10;
-		/* box-shadow: 0 0 0 1px var(--card-border-color); */
-		background: var(--background-primary);
-		border-radius: var(--card-radius);
-		color: var(--text-color);
+		/* box-shadow: 0 0 0 1px var(--border); */
+		background: var(--surface);
+		border-radius: var(--radius-xs);
+		color: var(--text);
 		cursor: default;
 		overflow: hidden;
 		contain: paint;
@@ -318,7 +317,7 @@
 			width: 18rem;
 		}
 		.album-art {
-			border-bottom: 1px solid var(--card-border-color);
+			border-bottom: 1px solid var(--border);
 		}
 		.album-art,
 		.song-info-wrap {
@@ -404,7 +403,7 @@
 		width: 8px;
 		height: 3px;
 		border: none;
-		background: var(--fill-color);
+		background: var(--text);
 		border-radius: 0;
 		transform: none;
 	}
@@ -414,8 +413,8 @@
 		width: 100%;
 		height: 3px;
 		background:
-			linear-gradient(to right, var(--fill-color), var(--fill-color)) 0% 0% / var(--current-fill) 100% no-repeat,
-			var(--track-bg-color) 100% 0% / calc(100% - var(--current-fill)) 100% no-repeat;
+			linear-gradient(to right, var(--text), var(--text)) 0% 0% / var(--current-fill) 100% no-repeat,
+			var(--bg-sunken) 100% 0% / calc(100% - var(--current-fill)) 100% no-repeat;
 		transition: background-size 0.1s linear;
 		border: none;
 		border-radius: 0;
@@ -438,7 +437,7 @@
 		left: 100%;
 		z-index: 1;
 		transform: translate(0, -50%);
-		background: var(--color-05);
+		background: var(--bg-sunken);
 		border-radius: 1.6rem;
 		width: 0;
 		min-width: 0;

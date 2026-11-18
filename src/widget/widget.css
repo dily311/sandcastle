@@ -1,0 +1,139 @@
+/* =========================================================
+   위젯 창 전용 바탕 스타일. 공용 토큰(shared/ui/tokens.css)·base.css 다음에 불러온다.
+   - 위젯 창은 투명 창 위에 그려지므로 바탕을 비운다
+   - 예전 전역 reset(styles/reset.css)이 하던 일 중 위젯 화면이 기대는 것만 옮겼다
+   ========================================================= */
+
+html,
+body {
+	background: transparent;
+}
+
+body {
+	line-height: 1;
+	overflow: hidden;
+}
+
+/* 요소 기본 여백·모양 초기화 (위젯 화면은 이 전제로 만들어짐) */
+html,
+body,
+div,
+span,
+iframe,
+h1,
+h2,
+h3,
+h4,
+h5,
+h6,
+p,
+blockquote,
+pre,
+cite,
+code,
+del,
+em,
+img,
+ins,
+q,
+small,
+strong,
+sub,
+sup,
+dl,
+dt,
+dd,
+ol,
+ul,
+li,
+fieldset,
+form,
+legend,
+table,
+caption,
+thead,
+tfoot,
+tr,
+th,
+td,
+article,
+aside,
+canvas,
+details,
+figcaption,
+figure,
+footer,
+header,
+nav,
+section,
+summary,
+time,
+mark,
+audio,
+video,
+button {
+	margin: 0;
+	padding: 0;
+	border: 0;
+	outline: 0;
+	font-size: 100%;
+	font-weight: normal;
+	vertical-align: baseline;
+}
+
+ul,
+li,
+ol {
+	list-style: none;
+}
+
+a {
+	color: inherit;
+	font-size: 1em;
+	vertical-align: baseline;
+	background: none;
+	text-decoration: none;
+}
+
+img {
+	vertical-align: top;
+}
+
+button {
+	text-align: unset;
+	background: none;
+}
+
+/* 아이콘은 글자색을 따라가고 클릭을 가로채지 않음 */
+svg,
+path {
+	pointer-events: none;
+}
+
+svg.svg-icon {
+	stroke: currentColor;
+	stroke-width: 1px;
+}
+
+button:has(.svg-icon) {
+	display: flex;
+	align-items: center;
+	padding: 0 0.2rem;
+}
+
+/* 위젯 안 스크롤바: 얇게, 바탕에 묻히게 */
+*::-webkit-scrollbar {
+	appearance: none;
+	width: 4px;
+	background: transparent;
+}
+
+*::-webkit-scrollbar-thumb {
+	background: var(--border-strong);
+	border-radius: 10px;
+}
+
+*::-webkit-scrollbar-track {
+	background: transparent;
+	box-shadow: none;
+}

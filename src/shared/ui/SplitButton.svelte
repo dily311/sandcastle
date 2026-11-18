@@ -66,7 +66,7 @@
 		opacity: 0.55;
 		cursor: default;
 	}
-	/* 이름이 .main이면 옛 전역 스타일(src/styles/global.css의 .main: 세로 flex)에 걸려 아이콘·글자가 위아래로 놓였다 */
+	/* 이름이 .main이면 옛 전역 스타일(지금은 없앤 global.css의 .main: 세로 flex)에 걸려 아이콘·글자가 위아래로 놓였다 */
 	.split-main {
 		padding: 0 var(--space-3) 0 var(--space-3);
 		border-radius: var(--radius-sm) 0 0 var(--radius-sm);
