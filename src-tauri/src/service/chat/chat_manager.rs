@@ -321,7 +321,7 @@ async fn recall_setup(
         .ok()?
         .memory
         .clone();
-    if !cfg.auto_recall || conv.meta.as_ref().and_then(|m| m.get("memory")).and_then(Value::as_str) == Some("off") {
+    if !cfg.auto_recall || !memory::is_eligible(conv.meta.as_ref().map(|m| m.to_string()).as_deref()) {
         return None;
     }
     let profile_id = memory::check_config(&cfg).ok()?;
@@ -481,6 +481,20 @@ impl ChatManager {
 
         // 대화별 메모·작가 노트 (오른쪽 패널)
         crate::service::chat::notes::apply(&mut context, conv.meta.as_ref());
+
+        // 대화 요약 (3-D, ADR-016): 켜져 있고 이 대화에서 끄지 않았으면 시스템 규칙 끝에 (history에 넣으면 토큰 한도에서 가장 먼저 잘림)
+        let summary_use =
+            if crate::sys::plugins::is_enabled(app, crate::sys::plugins::id::SUMMARY) && !crate::service::summary::disabled_for(conv.meta.as_ref()) {
+                match crate::service::summary::block_for(db, conversation_id).await {
+                    Some((block, used)) => {
+                        context.system_rules.push(block);
+                        serde_json::to_value(&used).ok()
+                    }
+                    None => None,
+                }
+            } else {
+                None
+            };
 
         if let Some(prompt) = ConversationMode::parse_or_default(&conv.mode).system_prompt(&fallback.phone_mode_prompt) {
             context.system_rules.push(prompt);
@@ -656,6 +670,7 @@ impl ChatManager {
             "cancelled": cancelled,
             "pluginPrompt": plugin_prompt,
             "memoryRecall": recall_meta,
+            "summary": summary_use,
         });
         let images_json = serde_json::to_value(&used_images).unwrap_or(Value::Array(vec![]));
 
@@ -719,6 +734,8 @@ impl ChatManager {
                 images: used_images,
             },
         );
+        // 쌓인 만큼이 되었으면 백그라운드로 요약 (켜져 있을 때만, 보내기를 늦추지 않음)
+        crate::service::summary::hooks::after_response(app, &conv, &api_profile_id, &preset_id);
         Ok(ChatTurn { user: user_msg, assistant })
     }
 

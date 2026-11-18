@@ -48,6 +48,9 @@
 			<!-- 커뮤니티 플러그인이 더한 블록 (6-D-5). 설정·캐릭터 몫 안에 들어 있다 -->
 			<p class="faint small plugins">플러그인이 더함: {usage.plugins.map((p) => `${p.name} ${n(p.tokens)}`).join(" · ")} <small>(설정·캐릭터에 포함)</small></p>
 		{/if}
+		{#if usage.summary}
+			<p class="faint small plugins">요약 {n(usage.summary.tokens)} <small>(설정에 포함 · {usage.summary.coveredCount}개 반영)</small></p>
+		{/if}
 		{#if usage.memoryRecall}
 			<!-- 자동 회상 (3-C-5): 지난 대화에서 가져온 글. 대화 몫 안에 들어 있다 -->
 			{#if usage.memoryRecall.status === "used"}

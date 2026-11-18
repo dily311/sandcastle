@@ -215,6 +215,14 @@ export const commands = {
 	 *  플러그인이 꺼져 있어도 된다 — 데이터를 지우는 길은 늘 열려 있어야 함. 지운 chunk 수(all은 0)
 	 */
 	purgeMemory: (kind: string, options?: InvokeOptions) => __TAURI_INVOKE<number>("purge_memory", { kind }, options),
+	getConversationSummary: (conversationId: string, options?: InvokeOptions) => __TAURI_INVOKE<SummaryInfo_Serialize | null>("get_conversation_summary", { conversationId }, options),
+	/**  사용자가 요약 글을 고침 (고친 글은 그대로 AI에게 가고, 다음 자동 요약이 그 위에 이어 씀) */
+	setConversationSummary: (conversationId: string, text: string, options?: InvokeOptions) => __TAURI_INVOKE<SummaryInfo_Serialize>("set_conversation_summary", { conversationId, text }, options),
+	clearConversationSummary: (conversationId: string, options?: InvokeOptions) => __TAURI_INVOKE<null>("clear_conversation_summary", { conversationId }, options),
+	/**  한 단계 전 글로 되돌리기 (없으면 None) */
+	undoConversationSummary: (conversationId: string, options?: InvokeOptions) => __TAURI_INVOKE<SummaryInfo_Serialize | null>("undo_conversation_summary", { conversationId }, options),
+	/**  지금 요약: 사용자가 누른 것(`run_by = user`). 창과 상관없이 최근 몇 개만 원문으로 남기고 요약한다. 요약할 것이 없으면 오류 */
+	summarizeConversationNow: (conversationId: string, options?: InvokeOptions) => __TAURI_INVOKE<SummaryInfo_Serialize>("summarize_conversation_now", { conversationId }, options),
 	/**  화면의 호스트가 프롬프트 요청(user-plugin-prompt)에 답한다. 늦게 와서 기다리는 요청이 없으면 false */
 	answerPluginPrompt: (requestId: string, answers: PluginPromptAnswer_Deserialize[], options?: InvokeOptions) => __TAURI_INVOKE<boolean>("answer_plugin_prompt", { requestId, answers }, options),
 	/**  누른 명령 밖에서도 플러그인이 AI를 부르게 할지 (기본 꺼짐, 요금이 들 수 있음) */
@@ -1228,6 +1236,8 @@ export type ContextUsage_Deserialize = {
 	plugins: PluginPromptUse[],
 	/**  마지막 응답에서 지난 대화를 떠올린 기록 (3-C-5, 대화 기록 토큰에 들어 있음). 자동 회상이 꺼져 있었으면 None */
 	memoryRecall?: RecallMeta_Deserialize | null,
+	/**  마지막 응답을 만들 때 쓴 대화 요약 (3-D, 시스템 토큰에 들어 있음) */
+	summary?: SummaryUse | null,
 };
 
 /**  컨텍스트 사용량 (오른쪽 패널). 마지막으로 보낸 프롬프트 기준 */
@@ -1250,6 +1260,8 @@ export type ContextUsage_Serialize = {
 	plugins: PluginPromptUse[],
 	/**  마지막 응답에서 지난 대화를 떠올린 기록 (3-C-5, 대화 기록 토큰에 들어 있음). 자동 회상이 꺼져 있었으면 None */
 	memoryRecall: RecallMeta_Serialize | null,
+	/**  마지막 응답을 만들 때 쓴 대화 요약 (3-D, 시스템 토큰에 들어 있음) */
+	summary: SummaryUse | null,
 };
 
 /**  continue_game / load_save의 응답. events는 항상 비어 있고(새로 생긴 일이 없다), 화면은 state + history로 복원한다. */
@@ -3554,6 +3566,8 @@ export type PluginSetting_Deserialize = {
 	lint?: LintSetting_Deserialize,
 	/**  메모리 임베딩 검색 (3-C, ADR-015) — 기기 전용 */
 	memory?: MemorySetting_Deserialize,
+	/**  메모리 확장: 대화 요약 (3-D, ADR-016) — 기기 전용 */
+	summary?: SummarySetting_Deserialize,
 };
 
 export type PluginSetting_Serialize = {
@@ -3569,6 +3583,8 @@ export type PluginSetting_Serialize = {
 	lint: LintSetting_Serialize,
 	/**  메모리 임베딩 검색 (3-C, ADR-015) — 기기 전용 */
 	memory: MemorySetting_Serialize,
+	/**  메모리 확장: 대화 요약 (3-D, ADR-016) — 기기 전용 */
+	summary: SummarySetting_Serialize,
 };
 
 export type PostProcessResult = {
@@ -4142,6 +4158,60 @@ export type StorageUsage = {
 
 export type StreamPayload = {
 	chunk: string,
+};
+
+export type SummaryFailure = {
+	at: number,
+	/**  budget / timeout / cancelled / error / empty */
+	reason: string,
+	/**  실패했을 때의 보이는 메시지 수 */
+	visibleCount: number,
+};
+
+export type SummaryInfo = SummaryInfo_Serialize | SummaryInfo_Deserialize;
+
+export type SummaryInfo_Deserialize = {
+	text: string,
+	coveredCount: number,
+	rev: number,
+	editedByUser: boolean,
+	hasPrev: boolean,
+	tokens: number,
+	updatedAt: number,
+	failure?: SummaryFailure | null,
+};
+
+export type SummaryInfo_Serialize = {
+	text: string,
+	coveredCount: number,
+	rev: number,
+	editedByUser: boolean,
+	hasPrev: boolean,
+	tokens: number,
+	updatedAt: number,
+	failure: SummaryFailure | null,
+};
+
+/**  대화 요약 설정. 켜짐/꺼짐은 코어 플러그인 `summary`(기본 꺼짐, 켜는 것이 동의) */
+export type SummarySetting = SummarySetting_Serialize | SummarySetting_Deserialize;
+
+/**  대화 요약 설정. 켜짐/꺼짐은 코어 플러그인 `summary`(기본 꺼짐, 켜는 것이 동의) */
+export type SummarySetting_Deserialize = {
+	/**  요약에 쓸 API 프로필 (비우면 그 대화가 쓰는 API) */
+	apiProfileId?: string | null,
+};
+
+/**  대화 요약 설정. 켜짐/꺼짐은 코어 플러그인 `summary`(기본 꺼짐, 켜는 것이 동의) */
+export type SummarySetting_Serialize = {
+	/**  요약에 쓸 API 프로필 (비우면 그 대화가 쓰는 API) */
+	apiProfileId: string | null,
+};
+
+/**  응답 meta.info.summary와 컨텍스트 탭: 이 응답을 만들 때 쓴 요약 */
+export type SummaryUse = {
+	rev: number,
+	tokens: number,
+	coveredCount: number,
 };
 
 export type Support = {

@@ -792,3 +792,11 @@ async fn recall_does_not_inject_a_chunk_edited_after_indexing() {
     // 맞춘 뒤 다시 색인하면 새 글로 돌아온다
     assert_eq!(maintain::reconcile(&r.e.db, &r.e.store, "big").await.unwrap(), 1);
 }
+
+#[test]
+fn memory_switch_has_its_own_key_and_the_legacy_value_still_reads_as_off() {
+    assert!(is_eligible(None) && is_eligible(Some(r#"{"memory":"내 메모"}"#)), "메모 글은 스위치가 아님");
+    assert!(!is_eligible(Some(r#"{"memoryOff":true}"#)));
+    assert!(!is_eligible(Some(r#"{"memory":"off"}"#)), "예전 버전이 메모 칸에 쓴 값");
+    assert!(is_eligible(Some(r#"{"memoryOff":null,"memory":"열쇠를 잃음"}"#)));
+}

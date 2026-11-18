@@ -37,6 +37,8 @@ pub mod id {
     pub const LINT: &str = "lint";
     /// 대화 메모리 임베딩 검색 (3-C, ADR-015)
     pub const MEMORY: &str = "memory";
+    /// 메모리 확장: 대화 요약 (3-D, ADR-016) — 임베딩 메모리와 무관
+    pub const SUMMARY: &str = "summary";
 }
 
 #[derive(Debug, Clone, Serialize, specta::Type)]
@@ -153,6 +155,13 @@ const CATALOG: &[Def] = &[
         id: id::MEMORY,
         name: "메모리 검색",
         description: "지난 대화를 뜻으로 찾기. 색인하면 대화 글이 임베딩 공급자에게 전송되고 요금이 듦 (버튼을 눌렀을 때만)",
+        default_enabled: false,
+        desktop_only: false,
+    },
+    Def {
+        id: id::SUMMARY,
+        name: "메모리 확장 · 대화 요약",
+        description: "프롬프트 창 밖으로 밀려난 오래된 대화를 줄거리로 요약해 AI에게 전달. 켜면 쌓인 만큼 자동으로 요약하고 요금이 듦",
         default_enabled: false,
         desktop_only: false,
     },

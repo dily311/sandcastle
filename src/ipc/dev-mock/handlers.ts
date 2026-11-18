@@ -87,6 +87,7 @@ const base: Record<string, Handler> = {
 				["imageauto", "이미지 자동 생성", "글쓰기 AI가 그림 프롬프트도 쓰고 응답 뒤 자동으로 그림", false, false],
 				["sync", "동기화", "다른 기기와 파일로 주고받아 합치기. API 키는 넘어가지 않음", false, false],
 				["lint", "메시지 linter", "AI 응답이 저장될 때 닫히지 않은 태그·따옴표 등을 검사", false, false],
+				["summary", "메모리 확장 · 대화 요약", "프롬프트 창 밖으로 밀려난 오래된 대화를 줄거리로 요약해 AI에게 전달", false, false],
 				["memory", "메모리 검색", "지난 대화를 뜻으로 찾기. 색인하면 대화 글이 임베딩 공급자에게 전송됨", false, false],
 				["community", "커뮤니티 플러그인", "직접 만들거나 받은 플러그인을 파일로 설치. 격리된 곳에서 허락한 권한만으로 동작", false, false],
 			] as const

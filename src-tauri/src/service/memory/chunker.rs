@@ -99,7 +99,7 @@ fn strip_blocks(text: &str, names: &[&str]) -> String {
     out
 }
 
-fn line_of(m: &MemMsg) -> String {
+pub fn line_of(m: &MemMsg) -> String {
     let who = m
         .name
         .as_deref()

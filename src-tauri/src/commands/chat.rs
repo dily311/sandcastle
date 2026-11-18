@@ -150,6 +150,8 @@ pub async fn branch_conversation(state: State<'_, AppState>, id: String, message
     // 어디서 갈라졌는지 기억 (부모 대화로 돌아가기·분기 경로 표시용)
     let branch = serde_json::json!({ "branch": { "parentId": id, "messageId": message_id, "seq": msg.seq } });
     chat_ui::patch_conversation_meta(&state.db, &new_id, &branch).await?;
+    // 요약은 메시지 id가 아니라 개수(위치)로 옮긴다 — 분기 대화는 id가 새로 붙으므로
+    crate::service::summary::copy_for_branch(&state.db, &id, &new_id).await?;
     Ok(conversation::get_conversation(&state.db, &new_id).await?)
 }
 
@@ -212,6 +214,8 @@ pub struct ContextUsage {
     pub plugins: Vec<crate::service::community::prompt_hook::PluginPromptUse>,
     /// 마지막 응답에서 지난 대화를 떠올린 기록 (3-C-5, 대화 기록 토큰에 들어 있음). 자동 회상이 꺼져 있었으면 None
     pub memory_recall: Option<crate::service::memory::recall::RecallMeta>,
+    /// 마지막 응답을 만들 때 쓴 대화 요약 (3-D, 시스템 토큰에 들어 있음)
+    pub summary: Option<crate::service::summary::SummaryUse>,
 }
 
 #[tauri::command]
@@ -244,6 +248,7 @@ pub async fn context_usage(state: State<'_, AppState>, settings: State<'_, Setti
     let mut prompt: Option<PromptMessage> = None;
     let mut plugins = vec![];
     let mut memory_recall = None;
+    let mut summary_use = None;
     for m in recent.iter().rev().filter(|m| m.role == "assistant") {
         if let Some(v) = chat_ui::get_prompt(&state.db, &m.id).await? {
             if let Ok(p) = serde_json::from_value::<PromptMessage>(v) {
@@ -258,6 +263,11 @@ pub async fn context_usage(state: State<'_, AppState>, settings: State<'_, Setti
                     .meta
                     .as_ref()
                     .and_then(|meta| meta.pointer("/info/memoryRecall"))
+                    .and_then(|v| serde_json::from_value(v.clone()).ok());
+                summary_use = m
+                    .meta
+                    .as_ref()
+                    .and_then(|meta| meta.pointer("/info/summary"))
                     .and_then(|v| serde_json::from_value(v.clone()).ok());
                 break;
             }
@@ -286,6 +296,7 @@ pub async fn context_usage(state: State<'_, AppState>, settings: State<'_, Setti
         preset_id,
         plugins,
         memory_recall,
+        summary: summary_use,
     })
 }
 

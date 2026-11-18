@@ -26,6 +26,7 @@
 	import { metaOf, type ChatSession } from "./session.svelte";
 	import { lintOf } from "./lint";
 	import MemoryIndex from "$features/memory/MemoryIndex.svelte";
+	import SummaryPanel from "$features/memory/SummaryPanel.svelte";
 	import MemorySearch from "$features/memory/MemorySearch.svelte";
 
 	interface Props {
@@ -41,7 +42,13 @@
 	let { conv, session, chapters, onjump, onopen, me }: Props = $props();
 
 	// ---- 메시지 linter: 이 대화의 덮어쓰기와 마지막 응답에서 걸린 규칙 (3-B-5) ----
-	const memoryOff = $derived((conv.meta as { memory?: string } | null)?.memory === "off");
+	// 스위치는 `memoryOff`. 예전 버전은 메모(`memory`) 칸에 "off"를 썼다 — 그 값도 꺼짐으로 읽고 새로 바꿀 때 지운다
+	const legacyMemoryOff = $derived((conv.meta as { memory?: string } | null)?.memory === "off");
+	const memoryOff = $derived((conv.meta as { memoryOff?: boolean } | null)?.memoryOff === true || legacyMemoryOff);
+	const memoText = $derived.by(() => {
+		const m = (conv.meta as { memory?: string } | null)?.memory ?? "";
+		return m === "off" ? "" : m;
+	});
 	const lintOff = $derived((conv.meta as { lint?: string } | null)?.lint === "off");
 	const lastLint = $derived.by(() => {
 		const last = [...session.messages].reverse().find((m) => m.role === "assistant");
@@ -384,11 +391,15 @@
 					{/if}
 				</section>
 			{/if}
+			{#if plugins.on("summary")}
+				<hr />
+				<SummaryPanel {conv} memo={memoText} />
+			{/if}
 			{#if plugins.on("memory")}
 				<hr />
 				<section>
 					<h4>메모리 검색 <span class="faint">지난 대화를 뜻으로 찾기</span></h4>
-					<Switch checked={!memoryOff} label="이 대화를 메모리에 포함" description="끄면 색인과 전체 검색에서 이 대화를 뺌" onchange={(v) => library.patchMeta(conv.id, { memory: v ? null : "off" })} />
+					<Switch checked={!memoryOff} label="이 대화를 메모리에 포함" description="끄면 색인과 전체 검색에서 이 대화를 뺌" onchange={(v) => library.patchMeta(conv.id, { memoryOff: v ? null : true, ...(legacyMemoryOff ? { memory: null } : {}) })} />
 					{#if !memoryOff}
 						<div class="mem-actions"><MemoryIndex conversationId={conv.id} /></div>
 						<MemorySearch conversationId={conv.id} onopen={(h) => onopen(conv.id, h.firstMessageId)} />

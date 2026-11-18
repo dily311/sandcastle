@@ -24,7 +24,7 @@ use crate::{
 };
 use commands::{
     ai_service::*, character_image::*, chat::*, community::*, conversation::*, convert::*, data::*, game_engine::*, game_manager::*, import::*, memory::*,
-    phone::*, preset::*, proposals::*, regex::*, settings::*, sync::*, task::*,
+    phone::*, preset::*, proposals::*, regex::*, settings::*, summary::*, sync::*, task::*,
 };
 use task::{TaskEventEmitter, TaskManager};
 
@@ -345,6 +345,11 @@ pub fn specta_builder() -> tauri_specta::Builder<tauri::Wry> {
         run_memory_index,
         search_memory,
         purge_memory,
+        get_conversation_summary,
+        set_conversation_summary,
+        clear_conversation_summary,
+        undo_conversation_summary,
+        summarize_conversation_now,
         answer_plugin_prompt,
         set_user_plugin_ai_auto,
         get_user_plugin_settings,
@@ -640,6 +645,11 @@ pub fn specta_builder() -> tauri_specta::Builder<tauri::Wry> {
         run_memory_index,
         search_memory,
         purge_memory,
+        get_conversation_summary,
+        set_conversation_summary,
+        clear_conversation_summary,
+        undo_conversation_summary,
+        summarize_conversation_now,
         answer_plugin_prompt,
         set_user_plugin_ai_auto,
         get_user_plugin_settings,

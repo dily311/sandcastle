@@ -44,6 +44,8 @@ pub const UNSYNCED_TABLES: &[&str] = &[
     // 커뮤니티 플러그인의 켜짐·허락 — 기기마다 (다른 기기에서 받은 코드가 저절로 돌지 않게, ADR-012)
     "user_plugins",
     "user_plugin_storage",
+    // 대화 요약 (3-D, ADR-016) — 자동 요약이 쓰는 행이 동기화 충돌을 만들지 않게 기기마다 따로 (사용자가 고친 글은 백업에는 들어감)
+    "conversation_summaries",
     // 고치기 제안 (6-D-3) — 적용한 결과는 원래 테이블에서 동기화된다
     "change_proposals",
 ];

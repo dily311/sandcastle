@@ -18,5 +18,6 @@ pub mod picked_file;
 pub mod plugins;
 pub mod prompt;
 pub mod proposals;
+pub mod summary;
 pub mod update;
 pub use chat::chat_manager::ChatManager;

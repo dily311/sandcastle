@@ -475,6 +475,7 @@ pub async fn game_context_usage(
         plugins: vec![],
         // 자동 회상은 채팅에서만 (게임 대사에는 쓰지 않음)
         memory_recall: None,
+        summary: None,
     })
 }
 

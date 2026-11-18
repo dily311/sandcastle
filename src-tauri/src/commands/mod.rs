@@ -8,6 +8,7 @@ pub mod preset;
 pub mod proposals;
 pub mod regex;
 pub mod settings;
+pub mod summary;
 pub mod sync;
 pub mod task;
 

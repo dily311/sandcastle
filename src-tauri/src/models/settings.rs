@@ -263,6 +263,17 @@ pub struct PluginSetting {
     /// 메모리 임베딩 검색 (3-C, ADR-015) — 기기 전용
     #[serde(default)]
     pub memory: MemorySetting,
+    /// 메모리 확장: 대화 요약 (3-D, ADR-016) — 기기 전용
+    #[serde(default)]
+    pub summary: SummarySetting,
+}
+
+/// 대화 요약 설정. 켜짐/꺼짐은 코어 플러그인 `summary`(기본 꺼짐, 켜는 것이 동의)
+#[derive(Debug, Serialize, Deserialize, Clone, Default, specta::Type)]
+#[serde(rename_all = "camelCase", default)]
+pub struct SummarySetting {
+    /// 요약에 쓸 API 프로필 (비우면 그 대화가 쓰는 API)
+    pub api_profile_id: Option<String>,
 }
 
 /// 메모리 임베딩 검색 설정. API 프로필·모델은 기기마다 다르므로 통째로 기기 전용
