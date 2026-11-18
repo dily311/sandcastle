@@ -467,6 +467,65 @@ in history"
     runtime::stop_all();
 }
 
+#[tokio::test]
+async fn ai_policy_caps_switch_and_limits() {
+    use super::ai as plugin_ai;
+    let _g = LOCK.lock().await;
+    let (d, base, db) = app_dir().await;
+    add(&db, &base, d.path(), "ai-a", &["ai"], true).await;
+    add(&db, &base, d.path(), "ai-b", &[], true).await;
+    run_start(&db, &base).await;
+
+    // 인자 검사: 필요한 글, 상한, 범위 맞추기
+    assert!(plugin_ai::parse(&json!({})).is_err());
+    assert!(plugin_ai::parse(&json!({ "prompt": "   " })).is_err());
+    assert!(plugin_ai::parse(&json!({ "prompt": "x", "system": 3 })).is_err());
+    assert!(plugin_ai::parse(&json!({ "prompt": "x".repeat(plugin_ai::MAX_INPUT_CHARS + 1) })).is_err());
+    assert!(
+        plugin_ai::parse(&json!({ "prompt": "x".repeat(plugin_ai::MAX_INPUT_CHARS), "system": "y" })).is_err(),
+        "system도 합쳐서 센다"
+    );
+    let c = plugin_ai::parse(&json!({ "prompt": " 안녕 ", "system": "규칙", "maxTokens": 999_999, "temperature": 9 })).unwrap();
+    assert_eq!(
+        (c.prompt.as_str(), c.system.as_deref(), c.max_tokens, c.temperature),
+        ("안녕", Some("규칙"), plugin_ai::MAX_OUTPUT_TOKENS, 2.0)
+    );
+    let c = plugin_ai::parse(&json!({ "prompt": "x" })).unwrap();
+    assert_eq!(c.max_tokens, plugin_ai::DEFAULT_MAX_TOKENS);
+    assert!(plugin_ai::parse(&json!({ "prompt": "x", "maxTokens": "많이" })).is_err());
+
+    // 자동 실행은 스위치가 켜져 있어야 (기본 꺼짐), 사용자가 누른 실행은 스위치와 상관없이
+    let err = plugin_ai::admit(&db, "ai-a", true).await.err().unwrap().to_string();
+    assert!(err.contains("자동 AI 호출"), "{err}");
+    drop(plugin_ai::admit(&db, "ai-a", false).await.unwrap());
+    plugin_ai::set_auto(&db, "ai-a", true).await.unwrap();
+    assert!(list(&db, &base).await.unwrap().iter().any(|p| p.id == "ai-a" && p.ai_auto));
+    drop(plugin_ai::admit(&db, "ai-a", true).await.unwrap());
+    assert!(plugin_ai::set_auto(&db, "nope", true).await.is_err());
+    plugin_ai::set_auto(&db, "ai-a", false).await.unwrap();
+    assert!(plugin_ai::admit(&db, "ai-a", true).await.is_err());
+
+    // 한 번에 하나: 쥐고 있는 동안은 거절, 놓으면 다시
+    let g = plugin_ai::admit(&db, "ai-b", false).await.unwrap();
+    let err = plugin_ai::admit(&db, "ai-b", false).await.err().unwrap().to_string();
+    assert!(err.contains("끝나지 않았음"), "{err}");
+    drop(g);
+
+    // 1분에 MAX_PER_MINUTE번 (위에서 ai-b는 1번 썼다)
+    for _ in 1..plugin_ai::MAX_PER_MINUTE {
+        drop(plugin_ai::admit(&db, "ai-b", false).await.unwrap());
+    }
+    let err = plugin_ai::admit(&db, "ai-b", false).await.err().unwrap().to_string();
+    assert!(err.contains("너무 잦음"), "{err}");
+
+    // 권한이 없으면 호출 자체를 거절 (ai-b는 ai 권한이 없다), 백엔드 디스패처는 ai.generate를 직접 처리하지 않음
+    let err = runtime::check_call("ai-b", "ai.generate").unwrap_err().to_string();
+    assert!(err.contains("권한"), "{err}");
+    runtime::check_call("ai-a", "ai.generate").unwrap();
+    assert!(call(&db, "ai-a", "ai.generate", &json!({ "prompt": "x" })).await.is_err());
+    runtime::stop_all();
+}
+
 #[test]
 fn every_api_permission_is_a_known_permission() {
     for (m, p) in runtime::API {

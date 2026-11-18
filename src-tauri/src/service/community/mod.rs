@@ -7,6 +7,7 @@
 //! - 삭제는 휴지통으로 (`TrashKind::UserPlugin`, 폴더도 같이).
 //!
 //! 플러그인 코드를 실행하는 것은 6-D-2(런타임)이다. 여기는 파일과 상태만 다룬다.
+pub mod ai;
 pub mod data;
 pub mod manifest;
 pub mod package;
@@ -70,10 +71,12 @@ pub struct UserPlugin {
     pub size: i64,
     /// 메시지 후처리: notes(표시만, 기본) / fix(자동 고침) — 6-D-4
     pub process_mode: String,
+    /// 사용자가 누른 명령 밖에서 플러그인이 스스로 AI를 불러도 되나 (기본 꺼짐) — 6-D-7
+    pub ai_auto: bool,
 }
 
-/// (name, version, enabled, granted, code_hash, installed_at, process_mode)
-type StateRow = (String, String, i64, String, String, i64, String);
+/// (name, version, enabled, granted, code_hash, installed_at, process_mode, ai_auto)
+type StateRow = (String, String, i64, String, String, i64, String, i64);
 
 fn now_ms() -> i64 {
     chrono::Utc::now().timestamp_millis()
@@ -96,7 +99,7 @@ fn plugin_dir(base: &Path, id: &str) -> Result<PathBuf> {
 
 async fn state_of(db: &SqlitePool, id: &str) -> Result<Option<StateRow>> {
     Ok(
-        sqlx::query_as("SELECT name, version, enabled, granted, code_hash, installed_at, process_mode FROM user_plugins WHERE id = ?")
+        sqlx::query_as("SELECT name, version, enabled, granted, code_hash, installed_at, process_mode, ai_auto FROM user_plugins WHERE id = ?")
             .bind(id)
             .fetch_optional(db)
             .await?,
@@ -160,10 +163,10 @@ pub async fn list(db: &SqlitePool, base: &Path) -> Result<Vec<UserPlugin>> {
             Ok(m) => (Some(m), None),
             Err(e) => (None, Some(e)),
         };
-        let (enabled, granted, installed_at, process_mode) =
+        let (enabled, granted, installed_at, process_mode, ai_auto) =
             state
-                .map(|s| (s.2 != 0, granted_of(&s.3), s.5, s.6))
-                .unwrap_or((false, vec![], 0, postprocess::MODE_NOTES.to_string()));
+                .map(|s| (s.2 != 0, granted_of(&s.3), s.5, s.6, s.7 != 0))
+                .unwrap_or((false, vec![], 0, postprocess::MODE_NOTES.to_string(), false));
         out.push(UserPlugin {
             id,
             enabled: enabled && manifest.is_some(),
@@ -173,6 +176,7 @@ pub async fn list(db: &SqlitePool, base: &Path) -> Result<Vec<UserPlugin>> {
             installed_at,
             size: dir_size(&dir),
             process_mode,
+            ai_auto,
         });
     }
     Ok(out)
@@ -380,6 +384,8 @@ pub async fn call(db: &SqlitePool, id: &str, method: &str, args: &serde_json::Va
         "app.info" => Ok(runtime::app_info(id)),
         // 화면의 호스트가 직접 답한다 (백엔드는 화면 상태를 모름)
         "app.context" => Ok(Value::Null),
+        // AI 호출은 작업·프로필이 필요해 커맨드(call_user_plugin)가 직접 처리한다 (6-D-7)
+        "ai.generate" => Err(AppError::validation("ai.generate는 call_user_plugin 커맨드로만 부를 수 있음", None)),
         "storage.get" => storage::get(db, id, &key()).await,
         "storage.set" => storage::set(db, id, &key(), &arg("value")).await.map(|_| Value::Null),
         "storage.delete" => storage::delete(db, id, &key()).await.map(|_| Value::Null),

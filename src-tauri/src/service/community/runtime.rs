@@ -27,6 +27,8 @@ pub const API: &[(&str, Option<&str>)] = &[
     ("app.info", None),
     // 지금 화면의 대화·캐릭터 id (화면의 호스트가 답함, 6-D-6)
     ("app.context", None),
+    // AI 글 생성 (6-D-7) — 작업·예산 한도 안에서, 실행 주체는 호스트가 정한다
+    ("ai.generate", Some("ai")),
     ("storage.get", Some("storage")),
     ("storage.set", Some("storage")),
     ("storage.delete", Some("storage")),
@@ -109,6 +111,8 @@ pub struct RuntimePlugin {
     pub granted: Vec<String>,
     /// 메시지 후처리: notes(표시만) / fix(자동 고침) — 6-D-4
     pub process_mode: String,
+    /// 누른 명령 밖에서도 AI를 부르게 허락했나 (6-D-7)
+    pub ai_auto: bool,
     /// 오른쪽 패널 탭 (6-D-6): id·제목·주소
     pub panels: Vec<RuntimePanel>,
     pub commands: Vec<super::manifest::CommandDecl>,
@@ -180,6 +184,7 @@ pub fn start(plugins: &[UserPlugin], base: &Path) -> RuntimeStart {
             host_url: host_url(&p.id),
             granted: m.permissions.clone(),
             process_mode: p.process_mode.clone(),
+            ai_auto: p.ai_auto,
             panels: m
                 .panels
                 .iter()
@@ -344,6 +349,7 @@ on:(event,fn)=>{if(typeof fn!=="function")throw new Error("handler가 함수가 
 log:(...a)=>call("log",{level:"info",message:fmt(a)}),
 warn:(...a)=>call("log",{level:"warn",message:fmt(a)}),
 app:Object.freeze({info:()=>call("app.info"),context:()=>call("app.context")}),
+ai:Object.freeze({generate:(prompt,o)=>call("ai.generate",Object.assign({},o||{},{prompt}))}),
 storage:Object.freeze({get:k=>call("storage.get",{key:k}),set:(k,v)=>call("storage.set",{key:k,value:v===undefined?null:v}),delete:k=>call("storage.delete",{key:k}),keys:()=>call("storage.keys")}),
 data:Object.freeze({
 characters:Object.freeze({list:()=>call("data.character.list"),get:id=>call("data.character.get",{id}),propose:(id,changes,reason)=>call("data.character.propose",{id,changes,reason})}),

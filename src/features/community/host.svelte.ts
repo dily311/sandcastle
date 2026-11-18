@@ -16,6 +16,8 @@ import { Puzzle } from "@lucide/svelte";
 import { panel } from "$app/panel.svelte";
 import { nav } from "$app/nav.svelte";
 import { isPluginTab, panelTabId } from "./panels";
+import { decide, describeCall } from "./aiPolicy";
+import { confirmAction } from "$shared/stores/confirm.svelte";
 
 type Unlisten = () => void;
 
@@ -33,19 +35,15 @@ class PluginHost {
 	private onMessage = (e: MessageEvent) => void this.handle(e);
 	/** 패널 iframe → 플러그인 (6-D-6). 패널도 같은 권한으로 API를 부른다 */
 	private panelFrames = new Map<HTMLIFrameElement, string>();
-	/** 사용자가 그 플러그인을 마지막으로 직접 쓴 때 (명령을 누름·패널을 누름) — 6-D-7의 실행 주체 판단에 쓴다 */
-	readonly userActedAt = new Map<string, number>();
-	private onBlur = () =>
-		setTimeout(() => {
-			const el = document.activeElement;
-			if (el instanceof HTMLIFrameElement && this.panelFrames.has(el)) this.userActedAt.set(this.panelFrames.get(el)!, Date.now());
-		}, 0);
+	/** 지금 처리 중인 이벤트 수 (플러그인마다): 명령은 사용자가 눌렀고, 훅은 아니다 — AI 호출의 실행 주체를 정할 때 본다 (6-D-7) */
+	private busy = new Map<string, { command: number; hook: number }>();
+	/** 확인 창을 띄운 플러그인 (한 번에 하나) */
+	private asking = new Set<string>();
 
 	async start() {
 		if (this.running) return;
 		this.running = true;
 		window.addEventListener("message", this.onMessage);
-		window.addEventListener("blur", this.onBlur);
 		// 새 AI 응답의 후처리 (6-D-4)
 		const unhook = addReplyHook((m) => postProcess(m, this.plugins, (id, ev, data) => this.emit(id, ev, data)));
 		this.unlisten = await Promise.all([
@@ -77,7 +75,6 @@ class PluginHost {
 	private cleanup() {
 		clearTimeout(this.reloadTimer);
 		window.removeEventListener("message", this.onMessage);
-		window.removeEventListener("blur", this.onBlur);
 		for (const u of this.unlisten) u();
 		this.unlisten = [];
 	}
@@ -120,9 +117,9 @@ class PluginHost {
 
 	/** 명령 실행 — 사용자가 메뉴에서 누를 때만 부른다 */
 	async runCommand(pluginId: string, commandId: string) {
-		this.userActedAt.set(pluginId, Date.now());
 		try {
-			await this.emit(pluginId, "command", { id: commandId, context: this.context() }, 10_000);
+			// 명령이 AI를 부르면 오래 걸릴 수 있다
+			await this.emit(pluginId, "command", { id: commandId, context: this.context() }, 90_000);
 		} catch (e) {
 			toasts.error(`플러그인 명령 실패: ${e instanceof Error ? e.message : String(e)}`, "PLUGIN_COMMAND");
 		}
@@ -159,6 +156,17 @@ class PluginHost {
 
 	/** 플러그인 하나에 이벤트를 보내고 답을 기다린다 (시간 초과·멈춤이면 거절). 핸들러가 없으면 null */
 	emit(pluginId: string, event: string, data: unknown, timeoutMs = 5000): Promise<unknown> {
+		const kind = event === "command" ? "command" : event === "message.process" || event === "prompt.build" ? "hook" : null;
+		if (!kind) return this.send(pluginId, event, data, timeoutMs);
+		const b = this.busy.get(pluginId) ?? { command: 0, hook: 0 };
+		b[kind]++;
+		this.busy.set(pluginId, b);
+		return this.send(pluginId, event, data, timeoutMs).finally(() => {
+			b[kind]--;
+		});
+	}
+
+	private send(pluginId: string, event: string, data: unknown, timeoutMs: number): Promise<unknown> {
 		const frame = this.frames.get(pluginId);
 		if (!frame?.contentWindow) return Promise.reject(new Error(`플러그인이 실행 중이 아님: ${pluginId}`));
 		const id = ++this.eventSeq;
@@ -225,8 +233,22 @@ class PluginHost {
 		}
 		// 화면 상태는 백엔드가 모르므로 호스트가 답한다 (권한 확인은 위의 route에서 끝남)
 		if (r.call.method === "app.context") return reply({ id: r.call.id, ok: this.context() });
+		let by: "user" | "auto" = "auto";
+		if (r.call.method === "ai.generate") {
+			// AI 호출: 실행 주체는 호스트가 본 것으로만 정한다 (플러그인 인자에는 없음) — aiPolicy.ts
+			const b = this.busy.get(id) ?? { command: 0, hook: 0 };
+			const d = decide({ fromPanel: isPanel, inCommand: b.command > 0, inHook: b.hook > 0, aiAuto: plugin.aiAuto });
+			by = d.by;
+			if (d.ask) {
+				if (this.asking.has(id)) return reply({ id: r.call.id, error: { code: "INVALID_INPUT", message: "확인 중인 AI 호출이 있음 — 끝난 뒤에 부르세요" } });
+				this.asking.add(id);
+				const text = describeCall(plugin.name, r.call.args);
+				const ok = await confirmAction({ ...text, confirmLabel: "허락 (이번 한 번)" }).finally(() => this.asking.delete(id));
+				if (!ok) return reply({ id: r.call.id, error: { code: "INVALID_INPUT", message: "사용자가 AI 호출을 허락하지 않음" } });
+			}
+		}
 		try {
-			const ok = await commands.callUserPlugin(id, r.call.method, r.call.args as never);
+			const ok = await commands.callUserPlugin(id, r.call.method, r.call.args as never, by);
 			reply({ id: r.call.id, ok });
 		} catch (err) {
 			const ae = toAppError(err);

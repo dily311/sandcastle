@@ -178,8 +178,11 @@ export const commands = {
 	startUserPlugins: (options?: InvokeOptions) => __TAURI_INVOKE<RuntimeStart>("start_user_plugins", undefined, options),
 	/**  호스트를 내릴 때 (코어 플러그인을 끔 등) */
 	stopUserPlugins: (options?: InvokeOptions) => __TAURI_INVOKE<void>("stop_user_plugins", undefined, options),
-	/**  플러그인 iframe의 호출. 화면이 보낸 창을 확인해 플러그인 id를 붙여 넘긴다. 권한은 여기서 다시 본다 */
-	callUserPlugin: (pluginId: string, method: string, args: Value, options?: InvokeOptions) => __TAURI_INVOKE<Value>("call_user_plugin", { pluginId, method, args }, options),
+	/**
+	 *  플러그인 iframe의 호출. 화면이 보낸 창을 확인해 플러그인 id를 붙여 넘긴다. 권한은 여기서 다시 본다.
+	 *  `by`: 화면의 호스트가 정한 실행 주체 — "user"(사용자가 누른 명령·확인 창에서 허락) / 그 밖은 auto. 플러그인은 정할 수 없다 (6-D-7)
+	 */
+	callUserPlugin: (pluginId: string, method: string, args: Value, by: string | null, options?: InvokeOptions) => __TAURI_INVOKE<Value>("call_user_plugin", { pluginId, method, args, by }, options),
 	/**  플러그인 기록 (최근 것, 메모리 — 앱을 다시 켜면 비어 있음) */
 	getUserPluginLog: (pluginId: string, options?: InvokeOptions) => __TAURI_INVOKE<PluginLogEntry[]>("get_user_plugin_log", { pluginId }, options),
 	/**  후처리 방식: notes(표시만) / fix(자동 고침) */
@@ -190,6 +193,8 @@ export const commands = {
 	revertPluginPostprocess: (messageId: string, options?: InvokeOptions) => __TAURI_INVOKE<Message_Serialize>("revert_plugin_postprocess", { messageId }, options),
 	/**  화면의 호스트가 프롬프트 요청(user-plugin-prompt)에 답한다. 늦게 와서 기다리는 요청이 없으면 false */
 	answerPluginPrompt: (requestId: string, answers: PluginPromptAnswer_Deserialize[], options?: InvokeOptions) => __TAURI_INVOKE<boolean>("answer_plugin_prompt", { requestId, answers }, options),
+	/**  누른 명령 밖에서도 플러그인이 AI를 부르게 할지 (기본 꺼짐, 요금이 들 수 있음) */
+	setUserPluginAiAuto: (pluginId: string, enabled: boolean, options?: InvokeOptions) => __TAURI_INVOKE<UserPlugin_Serialize>("set_user_plugin_ai_auto", { pluginId, enabled }, options),
 	/**  제안 목록 (새것부터). status: pending / applied / rejected / reverted, 비우면 전부 */
 	listChangeProposals: (status: string | null, options?: InvokeOptions) => __TAURI_INVOKE<ChangeProposal_Serialize[]>("list_change_proposals", { status }, options),
 	/**  기다리는 제안 수 */
@@ -3820,6 +3825,8 @@ export type RuntimePlugin = {
 	granted: string[],
 	/**  메시지 후처리: notes(표시만) / fix(자동 고침) — 6-D-4 */
 	processMode: string,
+	/**  누른 명령 밖에서도 AI를 부르게 허락했나 (6-D-7) */
+	aiAuto: boolean,
 	/**  오른쪽 패널 탭 (6-D-6): id·제목·주소 */
 	panels: RuntimePanel[],
 	commands: CommandDecl[],
@@ -4308,7 +4315,9 @@ export type TaskType =
 /**  음성 읽기 (코어 플러그인) */
 "tts" | 
 /**  API 연결 확인 등 설정 화면의 짧은 호출 */
-"api_call";
+"api_call" | 
+/**  커뮤니티 플러그인이 부른 AI 글 생성 (feature `plugin:<id>`, 6-D-7) */
+"plugin_ai";
 
 export type Template = Template_Serialize | Template_Deserialize;
 
@@ -4609,6 +4618,8 @@ export type UserPlugin_Deserialize = {
 	size: number,
 	/**  메시지 후처리: notes(표시만, 기본) / fix(자동 고침) — 6-D-4 */
 	processMode: string,
+	/**  사용자가 누른 명령 밖에서 플러그인이 스스로 AI를 불러도 되나 (기본 꺼짐) — 6-D-7 */
+	aiAuto: boolean,
 };
 
 /**  목록의 한 줄. manifest를 읽지 못한 폴더도 보여준다(지울 수 있게) */
@@ -4623,6 +4634,8 @@ export type UserPlugin_Serialize = {
 	size: number,
 	/**  메시지 후처리: notes(표시만, 기본) / fix(자동 고침) — 6-D-4 */
 	processMode: string,
+	/**  사용자가 누른 명령 밖에서 플러그인이 스스로 AI를 불러도 되나 (기본 꺼짐) — 6-D-7 */
+	aiAuto: boolean,
 };
 
 export type Value = null | boolean | number | string | Value[] | { [key in string]: Value };

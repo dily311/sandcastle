@@ -76,6 +76,8 @@ pub enum TaskType {
     Tts,
     /// API 연결 확인 등 설정 화면의 짧은 호출
     ApiCall,
+    /// 커뮤니티 플러그인이 부른 AI 글 생성 (feature `plugin:<id>`, 6-D-7)
+    PluginAi,
 }
 
 /// 작업을 누가 시작했나. 비용이 드는 작업은 항상 실행 주체가 분명해야 한다 (CLAUDE.md 원칙)

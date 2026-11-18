@@ -513,9 +513,14 @@ Conversation
 
 **화면: 패널·명령 (6-D-6)** — manifest의 `panels`(id·제목·page html)·`commands`(id·제목), 각각 `ui.panel`·`ui.command` 권한이 있어야 선언할 수 있다(설치 화면에 미리 보임). 패널 5개·명령 20개까지.
 - 패널: 오른쪽 패널을 쓰는 화면(대화·폰·게임)에서 화면 탭 뒤에 붙는다. `/<id>/__panel/<패널 id>`가 페이지에 SDK와 `<base>`(그 플러그인 폴더)를 넣어 준다. CSP는 플러그인과 같다 — 인라인 `<script>`는 안 되고 폴더의 js 파일만. 앱이 테마 CSS 변수를 보내 주고(SDK가 `<style id="sc-theme">`에 넣음) 테마를 바꾸면 다시 보낸다. 패널 iframe도 그 플러그인의 권한으로 같은 API를 부른다. 플러그인이 꺼지면 탭이 사라지고 화면의 첫 탭으로 돌아간다.
-- 명령: 타이틀바의 "플러그인 명령" 메뉴. **사용자가 누를 때만** main.js의 `sandcastle.on("command", ({ id, context }))`가 불린다(10초). 플러그인이 명령을 스스로 실행하지 못한다.
+- 명령: 타이틀바의 "플러그인 명령" 메뉴. **사용자가 누를 때만** main.js의 `sandcastle.on("command", ({ id, context }))`가 불린다(AI를 부르는 명령이 있어 90초). 플러그인이 명령을 스스로 실행하지 못한다.
 - `sandcastle.app.context()`: 지금 화면의 page·대화 id·캐릭터 id만 (화면의 호스트가 답함, 백엔드는 모름).
-- 사용자가 명령을 누르거나 패널 iframe에 포커스를 준 때를 플러그인마다 기억한다(`userActedAt`) — 6-D-7의 실행 주체(user/auto) 판단에 쓴다.
+
+**AI 호출 (6-D-7)** — `ai` 권한, `sandcastle.ai.generate(prompt, { system?, maxTokens?, temperature? }) → { text, model }`. `service/community/ai.rs`(정책), `commands/community.rs`(`call_user_plugin`이 직접 실행).
+- 실행은 TaskManager 작업(`TaskType::PluginAi`, feature `plugin:<id>`, 표시 이름 "플러그인 · 이름") 안에서 `AiService::generate_once`로 — 사용량이 자동으로 쌓이고 **예산 한도(ADR-007)가 그대로 적용**된다(자동은 항상 막힘, 직접은 "이번만 계속"). 어느 API를 쓰는지는 앱에서 고른 프로필. 실패해도 자동으로 다시 시도하지 않는다.
+- **실행 주체는 화면의 호스트가 정하고 플러그인은 정하지 못한다**(`call_user_plugin`의 `by`는 호스트만 채움, 메시지 안의 값은 무시): ① 훅(후처리·프롬프트) 안 → auto ② 사용자가 누른 명령이 도는 동안 메인 프레임에서 → user ③ 그 밖(패널 등) → 스위치가 켜져 있으면 auto, 아니면 **호출마다 확인 창**(프롬프트 앞부분·최대 출력 토큰·요금 안내)을 띄우고 허락하면 user. 패널은 명령 중이어도 사용자 것으로 치지 않는다(프레임 안의 클릭은 호스트가 믿을 수 있게 알 방법이 없음).
+- auto는 플러그인별 스위치 `ai_auto`(기본 꺼짐, 마이그레이션 166)가 켜져 있어야 하고, 백엔드가 `by = auto`일 때 한 번 더 확인한다.
+- 상한: 입력 2만 자(system 포함), 출력 최대 2000토큰(기본 500), 한 번에 하나, 1분에 10번.
 
 **설치·삭제·백업·동기화**
 - 설치 전 미리보기: manifest, 권한, 파일 수·크기, 코드 해시. 같은 id가 있으면 업데이트로 보여준다(판 비교, 늘어난 권한).

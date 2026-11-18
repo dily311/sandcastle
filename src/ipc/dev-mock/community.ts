@@ -40,7 +40,7 @@ const plugins: UserPlugin[] = [
 		granted: [],
 		installedAt: Date.now() - 3 * 86_400_000,
 		size: 8_200,
-		processMode: "notes",
+		processMode: "notes", aiAuto: false,
 	},
 ];
 
@@ -124,7 +124,7 @@ export const communityHandlers: Record<string, Handler> = {
 	},
 	install_user_plugin: () => {
 		const old = plugins.findIndex((p) => p.id === sample.id);
-		const p: UserPlugin = { id: sample.id, manifest: sample, error: null, enabled: false, granted: [], installedAt: Date.now(), size: 5_400, processMode: "notes" };
+		const p: UserPlugin = { id: sample.id, manifest: sample, error: null, enabled: false, granted: [], installedAt: Date.now(), size: 5_400, processMode: "notes", aiAuto: false };
 		if (old >= 0) plugins.splice(old, 1, p);
 		else plugins.push(p);
 		return { ...p };
@@ -142,6 +142,7 @@ export const communityHandlers: Record<string, Handler> = {
 	// 런타임: 브라우저 미리보기에는 plugin 프로토콜이 없어 iframe을 띄우지 않는다
 	start_user_plugins: () => ({ plugins: [], api: { log: null, report: null, "app.info": null } }),
 	stop_user_plugins: () => null,
+	set_user_plugin_ai_auto: ({ pluginId, enabled }) => Object.assign(find(pluginId), { aiAuto: Boolean(enabled) }),
 	set_user_plugin_process_mode: ({ pluginId, mode }) => Object.assign(find(pluginId), { processMode: String(mode) }),
 	apply_plugin_postprocess: () => null,
 	revert_plugin_postprocess: () => null,
