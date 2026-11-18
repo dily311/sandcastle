@@ -266,6 +266,31 @@ pub struct PluginSetting {
     /// 메모리 확장: 대화 요약 (3-D, ADR-016) — 기기 전용
     #[serde(default)]
     pub summary: SummarySetting,
+    /// 자동 재생성 (3-B-4, ADR-017) — 기기 전용
+    #[serde(default)]
+    pub rewrite: RewriteSetting,
+}
+
+/// 자동 재생성 설정. 켜짐/꺼짐은 코어 플러그인 `rewrite`(기본 꺼짐, 켜는 것이 동의). 꺼져 있으면 linter가 쓸 수 없다
+#[derive(Debug, Serialize, Deserialize, Clone, specta::Type)]
+#[serde(rename_all = "camelCase", default)]
+pub struct RewriteSetting {
+    /// 한 응답에 자동으로 더 만드는 최대 횟수 (기본 1, 안전상 3까지) — 한 번마다 응답 하나의 요금
+    pub max_attempts: u32,
+    /// 금지어가 걸리면 다시 쓰기 (linter의 금지어 규칙이 표시만이어야 함)
+    pub banned: bool,
+    /// 단어 반복 오류가 걸리면 다시 쓰기
+    pub stuck: bool,
+}
+
+impl Default for RewriteSetting {
+    fn default() -> Self {
+        Self {
+            max_attempts: 1,
+            banned: true,
+            stuck: true,
+        }
+    }
 }
 
 /// 대화 요약 설정. 켜짐/꺼짐은 코어 플러그인 `summary`(기본 꺼짐, 켜는 것이 동의)

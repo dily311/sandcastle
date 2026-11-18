@@ -60,7 +60,7 @@ pub async fn chat_regenerate(
 ) -> Result<ChatTurn> {
     // 지시는 이번 생성에만 붙는다 (비면 평범한 다시 생성)
     let extra = extra.as_deref().and_then(crate::service::chat::chat_manager::clean_extra);
-    let saved = chat_task::run(&app, &conversation_id, ChatJob::Regenerate { swipe, extra }, on_event).await?;
+    let saved = chat_task::run(&app, &conversation_id, ChatJob::Regenerate { swipe, extra, auto: None }, on_event).await?;
     chat_task::into_turn(saved)
 }
 

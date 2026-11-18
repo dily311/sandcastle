@@ -15,13 +15,13 @@
 
 	const GROUPS: { title: string; ids: PluginId[] }[] = [
 		{ title: "화면", ids: ["phone", "game", "widget"] },
-		{ title: "대화 표시", ids: ["chat.images", "html", "regex", "lint"] },
+		{ title: "대화 표시", ids: ["chat.images", "html", "regex", "lint", "rewrite"] },
 		{ title: "AI 도구", ids: ["translate", "tts", "imagegen", "memory", "summary"] },
 		{ title: "데이터", ids: ["sync"] },
 		{ title: "확장", ids: ["community"] },
 	];
 	/** 세부 설정 탭이 있는 플러그인 */
-	const TAB: Partial<Record<PluginId, SettingsTab>> = { phone: "phone", widget: "widget", regex: "regex", translate: "translate", tts: "tts", imagegen: "imagegen", sync: "sync", community: "community", lint: "lint", memory: "memory", summary: "summary" };
+	const TAB: Partial<Record<PluginId, SettingsTab>> = { phone: "phone", widget: "widget", regex: "regex", translate: "translate", tts: "tts", imagegen: "imagegen", sync: "sync", community: "community", lint: "lint", memory: "memory", summary: "summary", rewrite: "rewrite" };
 	const byId = (id: string) => plugins.list.find((p) => p.id === id);
 </script>
 

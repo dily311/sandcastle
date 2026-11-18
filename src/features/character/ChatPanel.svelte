@@ -49,6 +49,7 @@
 		const m = (conv.meta as { memory?: string } | null)?.memory ?? "";
 		return m === "off" ? "" : m;
 	});
+	const rewriteOff = $derived((conv.meta as { rewriteOff?: boolean } | null)?.rewriteOff === true);
 	const lintOff = $derived((conv.meta as { lint?: string } | null)?.lint === "off");
 	const lastLint = $derived.by(() => {
 		const last = [...session.messages].reverse().find((m) => m.role === "assistant");
@@ -377,6 +378,9 @@
 				<section>
 					<h4>메시지 linter <span class="faint">응답이 저장될 때 검사</span></h4>
 					<Switch checked={!lintOff} label="이 대화에서 linter 쓰기" description="끄면 이 대화의 새 응답은 검사하지 않음 (규칙은 설정 > 메시지 linter)" onchange={(v) => library.patchMeta(conv.id, { lint: v ? null : "off" })} />
+					{#if plugins.on("rewrite")}
+						<Switch checked={!rewriteOff} label="이 대화에서 자동 재생성" onchange={(v) => library.patchMeta(conv.id, { rewriteOff: v ? null : true })} />
+					{/if}
 					{#if !lintOff}
 						{#if lastLint}
 							<p class="faint">마지막 응답에서 걸린 것</p>

@@ -243,7 +243,12 @@ pub enum TurnKind {
     Send(String, Vec<String>),
     /// 마지막 AI 메시지를 다시 만든다. `swipe`면 스와이프로 쌓고, 아니면 스와이프를 버리고 바꾼다.
     /// `extra`: 이번 생성에만 붙이는 지시 ("지시와 함께 다시 생성")
-    Regenerate { swipe: bool, extra: Option<String> },
+    /// `auto`: 자동 재생성(3-B-4)이 낸 것이면 묶은 메시지·시도 횟수 — 그 메시지가 바뀌었으면 만들지 않고, 멈추면 받은 글을 버린다
+    Regenerate {
+        swipe: bool,
+        extra: Option<String>,
+        auto: Option<super::rewrite::AutoCtx>,
+    },
     /// 이미 저장된 마지막 사용자 메시지에 응답한다 (보내기 작업을 다시 시도할 때: 입력은 첫 시도에 저장됨)
     Reply,
 }
@@ -259,7 +264,8 @@ fn meta_obj(meta: &Option<Value>) -> Map<String, Value> {
 /// 다시 생성(스와이프): 기존 내용을 첫 스와이프로 보존하고 새 응답을 뒤에 쌓는다
 fn push_swipe(old: &Message, content: &str, info: &Value, images: &Value) -> Value {
     let mut m = meta_obj(&old.meta);
-    m.remove("lint"); // 새 응답의 linter 결과는 저장한 뒤 따로 넣는다
+    let old_lint = m.remove("lint"); // 새 응답의 linter 결과는 저장한 뒤 따로 넣는다 (원본의 것은 스와이프에 보관)
+    m.remove("rewriteNote");
     let mut swipes = m.get("swipes").and_then(Value::as_array).cloned().unwrap_or_default();
     if swipes.is_empty() {
         let mut first = Map::new();
@@ -268,6 +274,9 @@ fn push_swipe(old: &Message, content: &str, info: &Value, images: &Value) -> Val
         }
         if let Some(i) = m.get("images") {
             first.insert("images".into(), i.clone());
+        }
+        if let Some(l) = old_lint {
+            first.insert("lint".into(), l);
         }
         swipes.push(json!({ "content": old.content, "meta": first, "createdAt": old.created_at, "updatedAt": old.updated_at }));
     }
@@ -287,6 +296,7 @@ fn replace_meta(old: &Message, info: &Value, images: &Value) -> Value {
     m.remove("swipeId");
     m.remove("reasoning");
     m.remove("lint");
+    m.remove("rewriteNote");
     m.insert("info".into(), info.clone());
     m.insert("images".into(), images.clone());
     Value::Object(m)
@@ -424,7 +434,14 @@ impl ChatManager {
             TurnKind::Regenerate { .. } => {
                 let last = chat_ui::last_message(db, conversation_id).await.map_err(AppError::from)?;
                 match last {
-                    Some(m) if m.role == "assistant" => Some(m),
+                    Some(m) if m.role == "assistant" => {
+                        if let TurnKind::Regenerate { auto: Some(a), .. } = &kind {
+                            if !a.matches(&m) {
+                                return Err(AppError::validation("다시 쓸 메시지가 바뀌어 자동 재생성을 멈춤", None).into());
+                            }
+                        }
+                        Some(m)
+                    }
                     _ => return Err(AppError::validation("다시 만들 AI 메시지가 없음", None).into()),
                 }
             }
@@ -671,7 +688,10 @@ impl ChatManager {
                 },
                 prompt,
             )) => (content, model, finish_reason, Some(prompt), false),
-            Err(_) if cancel.is_cancelled() && !received.trim().is_empty() => (received, String::new(), None, None, true),
+            // 사용자가 멈추면 받은 데까지 저장하지만, 자동 재생성이 멈춘 것은 버린다 (반쯤 쓴 글이 스와이프로 쌓이면 안 됨)
+            Err(_) if cancel.is_cancelled() && !received.trim().is_empty() && !matches!(kind, TurnKind::Regenerate { auto: Some(_), .. }) => {
+                (received, String::new(), None, None, true)
+            }
             Err(e) => return Err(e),
         };
 
@@ -688,6 +708,16 @@ impl ChatManager {
             conv.meta.as_ref(),
             matches!(finish_reason.as_deref(), Some("length" | "max_tokens" | "MAX_TOKENS")),
         );
+        // 자동 재생성 (3-B-4): linter가 걸었고 켜져 있으면 다음 시도가 필요하다 — 응답이 취소된 것에는 이어가지 않는다
+        let (attempts_done, auto_info) = match &kind {
+            TurnKind::Regenerate { auto: Some(a), .. } => (a.attempt, Some(json!({ "attempt": a.attempt, "max": a.max, "rules": a.rules }))),
+            _ => (0, None),
+        };
+        let rewrite_pending = if cancelled {
+            None
+        } else {
+            super::rewrite::enabled_for(app, &conv).and_then(|cfg| super::rewrite::decide(&cfg, lint_meta.as_ref(), attempts_done))
+        };
         let info = json!({
             "apiProfileId": api_profile_id,
             "presetId": preset_id,
@@ -700,6 +730,8 @@ impl ChatManager {
             "memoryRecall": recall_meta,
             "summary": summary_use,
             "regenExtra": regen_extra,
+            "rewrite": auto_info,
+            "rewritePending": rewrite_pending,
         });
         let images_json = serde_json::to_value(&used_images).unwrap_or(Value::Array(vec![]));
 
@@ -747,6 +779,11 @@ impl ChatManager {
                 meta["autoImagePrompt"] = json!(p);
             }
             if let Some(l) = lint_meta {
+                // 스와이프마다 자기 linter 결과를 가진다 (자동 재생성이 가장 나은 스와이프를 고를 때 읽음)
+                let sid = meta.get("swipeId").and_then(Value::as_u64);
+                if let Some(e) = sid.and_then(|i| meta.get_mut("swipes").and_then(Value::as_array_mut).and_then(|a| a.get_mut(i as usize))) {
+                    e["meta"]["lint"] = l.clone();
+                }
                 meta["lint"] = l;
             }
             crate::db::conversation::update_message_meta(db, &assistant.id, meta)

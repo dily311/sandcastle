@@ -143,6 +143,8 @@
 		{#if meta.hidden}<Badge><EyeOff /> AI에게 숨김</Badge>{/if}
 		{#if live}
 			<span class="stamp">만드는 중…</span>
+		{:else if isAi && isLast && session.rewriting}
+			<span class="stamp">다시 쓰는 중…</span>
 		{:else}
 			<span class="stamp">
 				{#if appSetting.showTimestamps}<time datetime={new Date(msg.createdAt).toISOString()} title={absolute(msg.createdAt)}>{relative(msg.createdAt)}</time>{/if}

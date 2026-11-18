@@ -23,7 +23,10 @@ use crate::{
         conversation::{ChatTurn, Message},
         settings::AppSetting,
     },
-    service::chat::chat_manager::{ChatManager, TurnKind},
+    service::chat::{
+        chat_manager::{ChatManager, TurnKind},
+        rewrite::{self, AutoCtx},
+    },
     state::AppState,
     sys::settings::SettingsState,
     task::{CreateTaskRequest, TaskContext, TaskError, TaskExecutor, TaskInfo, TaskManager, TaskOutput, TaskOwner, TaskStatus, TaskType},
@@ -45,6 +48,9 @@ pub enum ChatJob {
         /// 이번 생성에만 붙이는 지시 (없으면 평범한 다시 생성). 예전에 저장된 작업에는 없으므로 기본값 필요
         #[serde(default, skip_serializing_if = "Option::is_none")]
         extra: Option<String>,
+        /// 자동 재생성(3-B-4)이 낸 작업이면 묶인 메시지·시도 횟수. 사용자가 시작한 작업에는 없음
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        auto: Option<AutoCtx>,
     },
     Peek,
 }
@@ -105,7 +111,12 @@ impl TaskExecutor for ChatTaskExecutor {
         let state = self.app.state::<AppState>();
         let settings = self.app.state::<SettingsState<AppSetting>>();
         let db = &state.db;
-        let channel = streams().get(&conversation_id).cloned();
+        // 자동 재생성은 사용자의 화면에 스트리밍하지 않는다 (사용자 명령의 Channel을 가로채지 않음)
+        let auto = match &job {
+            ChatJob::Regenerate { auto, .. } => auto.clone(),
+            _ => None,
+        };
+        let channel = if auto.is_some() { None } else { streams().get(&conversation_id).cloned() };
 
         let kind = match job {
             ChatJob::Peek => {
@@ -117,7 +128,7 @@ impl TaskExecutor for ChatTaskExecutor {
                     message_ids: saved.into_iter().map(|m| m.id).collect(),
                 });
             }
-            ChatJob::Regenerate { swipe, extra } => TurnKind::Regenerate { swipe, extra },
+            ChatJob::Regenerate { swipe, extra, auto } => TurnKind::Regenerate { swipe, extra, auto },
             ChatJob::Send { text, attachments } => {
                 if input_already_saved(db, &conversation_id, &task.id).await? {
                     TurnKind::Reply
@@ -126,10 +137,28 @@ impl TaskExecutor for ChatTaskExecutor {
                 }
             }
         };
-        let turn = ChatManager
+        let turn = match ChatManager
             .turn(&self.app, db, &settings, &conversation_id, kind, channel, ctx.cancel_token(), Some(&task.id))
             .await
-            .map_err(task_err)?;
+        {
+            Ok(t) => t,
+            Err(e) => {
+                let e = into_app_error(e);
+                if let Some(a) = &auto {
+                    // 자동 재생성이 실패·취소됨: 원본은 그대로, 사슬은 여기서 끝 (같은 요청을 다시 보내지 않는다)
+                    let code = e.to_response().code;
+                    let cancelled = matches!(code, crate::error::ErrorCode::AiRequestCancelled | crate::error::ErrorCode::TaskCancelled);
+                    rewrite::on_failed(&self.app, db, &conversation_id, a, &format!("{code:?}"), cancelled).await;
+                }
+                return Err(TaskError::from(e));
+            }
+        };
+        // linter가 걸었고 자동 재생성이 켜져 있으면 다음 시도를 예약, 아니면 사슬이 끝난 것이니 마무리
+        if let Some(p) = rewrite::pending_of(&turn.assistant) {
+            rewrite::schedule(&self.app, &conversation_id, &turn.assistant, p);
+        } else if let Some(a) = &auto {
+            rewrite::finish_chain(&self.app, db, &conversation_id, &turn.assistant, a.attempt).await;
+        }
         let mut ids: Vec<String> = turn.user.into_iter().map(|m| m.id).collect();
         ids.push(turn.assistant.id);
         Ok(TaskOutput::Messages { message_ids: ids })
@@ -143,6 +172,26 @@ fn manager(app: &AppHandle) -> Result<Arc<TaskManager>, AppError> {
 }
 
 /// 이 대화에서 대기 중이거나 실행 중인 생성 작업
+pub(crate) async fn active_task_of(app: &AppHandle, conversation_id: &str) -> Result<Option<TaskInfo>, AppError> {
+    active_task(&*manager(app)?, conversation_id).await
+}
+
+/// 자동 재생성 작업을 낸다 (기다리지 않음). `run_by = auto`, 기능 `rewrite` — 예산 한도가 막고, 사용자가 보내면 먼저 멈춘다
+pub(crate) async fn submit_auto(app: &AppHandle, conversation_id: &str, job: ChatJob, label: &str) -> Result<(), AppError> {
+    let manager = manager(app)?;
+    let payload = serde_json::to_value(&job).map_err(|e| AppError::internal(e.to_string()))?;
+    manager
+        .submit(
+            CreateTaskRequest::new(TaskType::ChatStream, TaskOwner::Chat, payload)
+                .owner_ref(conversation_id)
+                .feature(rewrite::FEATURE)
+                .label(label)
+                .run_by(crate::task::RunBy::Auto),
+        )
+        .await?;
+    Ok(())
+}
+
 async fn active_task(manager: &TaskManager, conversation_id: &str) -> Result<Option<TaskInfo>, AppError> {
     Ok(manager
         .list_by_owner_ref(conversation_id)
@@ -163,9 +212,21 @@ pub async fn run(app: &AppHandle, conversation_id: &str, job: ChatJob, channel: 
         map.insert(conversation_id.to_string(), channel);
         StreamSlot(conversation_id.to_string())
     };
-    // 지난 실행에서 다시 시도한 작업이 아직 돌고 있을 수 있다
-    if active_task(&manager, conversation_id).await?.is_some() {
-        return Err(busy());
+    // 지난 실행에서 다시 시도한 작업이 아직 돌고 있을 수 있다. 자동 재생성이 돌고 있으면 사용자가 우선 — 먼저 멈추고 이어 간다
+    if let Some(t) = active_task(&manager, conversation_id).await? {
+        if t.feature.as_deref() != Some(rewrite::FEATURE) {
+            return Err(busy());
+        }
+        manager.cancel(&t.id).await?;
+        for _ in 0..30 {
+            if active_task(&manager, conversation_id).await?.is_none() {
+                break;
+            }
+            tokio::time::sleep(Duration::from_millis(100)).await;
+        }
+        if active_task(&manager, conversation_id).await?.is_some() {
+            return Err(busy());
+        }
     }
 
     // 실행 기록에 보일 기능·이름: 폰 대화면 phone, 아니면 chat
@@ -231,10 +292,26 @@ mod tests {
                 text: "안녕".into(),
                 attachments: vec!["a.png".into()],
             },
-            ChatJob::Regenerate { swipe: true, extra: None },
+            ChatJob::Regenerate {
+                swipe: true,
+                extra: None,
+                auto: None,
+            },
             ChatJob::Regenerate {
                 swipe: false,
                 extra: Some("묘사는 짧게".into()),
+                auto: None,
+            },
+            ChatJob::Regenerate {
+                swipe: true,
+                extra: Some("다음 표현은 쓰지 말 것".into()),
+                auto: Some(AutoCtx {
+                    message_id: "m".into(),
+                    swipe_id: 1,
+                    attempt: 2,
+                    max: 3,
+                    rules: vec!["banned".into()],
+                }),
             },
             ChatJob::Peek,
         ];
@@ -247,7 +324,11 @@ mod tests {
         let old = serde_json::json!({ "kind": "regenerate", "swipe": true });
         assert_eq!(
             serde_json::from_value::<ChatJob>(old).unwrap(),
-            ChatJob::Regenerate { swipe: true, extra: None }
+            ChatJob::Regenerate {
+                swipe: true,
+                extra: None,
+                auto: None
+            }
         );
     }
 }

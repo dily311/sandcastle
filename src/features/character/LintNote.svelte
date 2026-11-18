@@ -8,6 +8,11 @@
 	let { msg, showOriginal = $bindable(false), onupdate }: { msg: Message; showOriginal?: boolean; onupdate?: (m: Message) => void } = $props();
 
 	const lint = $derived(lintOf(msg));
+	type Note = { status: string; detail?: { reason?: string; attempts?: number; attempt?: number } };
+	const meta = $derived((msg.meta ?? {}) as { rewriteNote?: Note; info?: { rewrite?: { attempt: number; max: number } } });
+	const rw = $derived(meta.info?.rewrite);
+	const note = $derived(meta.rewriteNote);
+	const REASON: Record<string, string> = { BudgetExceeded: "예산 한도", AiProviderTimeout: "시간 초과" };
 	const fixed = $derived(!!lint?.original);
 	let busy = $state(false);
 
@@ -25,6 +30,13 @@
 	}
 </script>
 
+{#if rw || note}
+	<div class="lint">
+		{#if rw}<p class="line">자동 재생성 {rw.attempt}/{rw.max}번째 응답</p>{/if}
+		{#if note?.status === "exhausted"}<p class="line">자동 재생성 {note.detail?.attempts}번 후에도 걸림 · 가장 나은 스와이프를 고름</p>{/if}
+		{#if note?.status === "failed"}<p class="line warn">자동 재생성 실패 ({REASON[note.detail?.reason ?? ""] ?? note.detail?.reason}) · 원본 그대로</p>{/if}
+	</div>
+{/if}
 {#if lint}
 	<div class="lint">
 		{#if fixed}
@@ -50,6 +62,9 @@
 	}
 	.line {
 		margin: 0;
+	}
+	.line.warn {
+		color: var(--warning);
 	}
 	.link {
 		padding: 0;

@@ -138,6 +138,7 @@ let pluginSetting = {
 	phone: { apiProfileId: null as string | null, presetId: null as string | null },
 	memory: { apiProfileId: null as string | null, model: "", dimensions: null as number | null, tokenCap: 200000, docPrefix: "", queryPrefix: "", autoRecall: false, recallTokens: 1500, recallTopK: 4, recallScope: "character" },
 	summary: { apiProfileId: null as string | null },
+	rewrite: { maxAttempts: 1, banned: true, stuck: true },
 	lint: { unclosed: "report", repeat: "report", stuck: "report", impersonate: "report", banned: "off", bannedWords: [] as string[], length: "off", minChars: 0, maxChars: 0 },
 	sync: { folder: null as string | null, auto: false, intervalMinutes: 30, target: "folder", driveEmail: null as string | null, wifiOnly: true },
 };

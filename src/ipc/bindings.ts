@@ -3572,6 +3572,8 @@ export type PluginSetting_Deserialize = {
 	memory?: MemorySetting_Deserialize,
 	/**  메모리 확장: 대화 요약 (3-D, ADR-016) — 기기 전용 */
 	summary?: SummarySetting_Deserialize,
+	/**  자동 재생성 (3-B-4, ADR-017) — 기기 전용 */
+	rewrite?: RewriteSetting_Deserialize,
 };
 
 export type PluginSetting_Serialize = {
@@ -3589,6 +3591,8 @@ export type PluginSetting_Serialize = {
 	memory: MemorySetting_Serialize,
 	/**  메모리 확장: 대화 요약 (3-D, ADR-016) — 기기 전용 */
 	summary: SummarySetting_Serialize,
+	/**  자동 재생성 (3-B-4, ADR-017) — 기기 전용 */
+	rewrite: RewriteSetting_Serialize,
 };
 
 export type PostProcessResult = {
@@ -4039,6 +4043,29 @@ export type RestorePreview = {
 	totals: DataTotals,
 	/**  백업이 이 앱보다 예전 스키마라 시작할 때 마이그레이션이 이어서 실행되는지 */
 	willMigrate: boolean,
+};
+
+/**  자동 재생성 설정. 켜짐/꺼짐은 코어 플러그인 `rewrite`(기본 꺼짐, 켜는 것이 동의). 꺼져 있으면 linter가 쓸 수 없다 */
+export type RewriteSetting = RewriteSetting_Serialize | RewriteSetting_Deserialize;
+
+/**  자동 재생성 설정. 켜짐/꺼짐은 코어 플러그인 `rewrite`(기본 꺼짐, 켜는 것이 동의). 꺼져 있으면 linter가 쓸 수 없다 */
+export type RewriteSetting_Deserialize = {
+	/**  한 응답에 자동으로 더 만드는 최대 횟수 (기본 1, 안전상 3까지) — 한 번마다 응답 하나의 요금 */
+	maxAttempts?: number,
+	/**  금지어가 걸리면 다시 쓰기 (linter의 금지어 규칙이 표시만이어야 함) */
+	banned?: boolean,
+	/**  단어 반복 오류가 걸리면 다시 쓰기 */
+	stuck?: boolean,
+};
+
+/**  자동 재생성 설정. 켜짐/꺼짐은 코어 플러그인 `rewrite`(기본 꺼짐, 켜는 것이 동의). 꺼져 있으면 linter가 쓸 수 없다 */
+export type RewriteSetting_Serialize = {
+	/**  한 응답에 자동으로 더 만드는 최대 횟수 (기본 1, 안전상 3까지) — 한 번마다 응답 하나의 요금 */
+	maxAttempts: number,
+	/**  금지어가 걸리면 다시 쓰기 (linter의 금지어 규칙이 표시만이어야 함) */
+	banned: boolean,
+	/**  단어 반복 오류가 걸리면 다시 쓰기 */
+	stuck: boolean,
 };
 
 /**  작업을 누가 시작했나. 비용이 드는 작업은 항상 실행 주체가 분명해야 한다 (CLAUDE.md 원칙) */

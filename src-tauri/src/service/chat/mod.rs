@@ -6,3 +6,4 @@ pub mod lint;
 pub mod notes;
 pub mod phone;
 pub mod regex_processor;
+pub mod rewrite;

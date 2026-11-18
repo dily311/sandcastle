@@ -39,6 +39,8 @@ pub mod id {
     pub const MEMORY: &str = "memory";
     /// 메모리 확장: 대화 요약 (3-D, ADR-016) — 임베딩 메모리와 무관
     pub const SUMMARY: &str = "summary";
+    /// 자동 재생성 (3-B-4, ADR-017): linter가 찾은 문제로 응답을 새 스와이프로 다시 만듦
+    pub const REWRITE: &str = "rewrite";
 }
 
 #[derive(Debug, Clone, Serialize, specta::Type)]
@@ -162,6 +164,13 @@ const CATALOG: &[Def] = &[
         id: id::SUMMARY,
         name: "메모리 확장 · 대화 요약",
         description: "프롬프트 창 밖으로 밀려난 오래된 대화를 줄거리로 요약해 AI에게 전달. 켜면 쌓인 만큼 자동으로 요약하고 요금이 듦",
+        default_enabled: false,
+        desktop_only: false,
+    },
+    Def {
+        id: id::REWRITE,
+        name: "자동 재생성",
+        description: "linter가 금지어·단어 반복 오류를 찾으면 응답을 새 스와이프로 다시 만듦 (원본은 남음). 켜면 걸릴 때마다 응답 하나의 요금이 더 듦",
         default_enabled: false,
         desktop_only: false,
     },
