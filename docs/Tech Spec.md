@@ -131,8 +131,8 @@ cargo clippy --lib --target aarch64-linux-android
 
 ## 마일스톤 일정
 
-일정과 진행은 한 곳에서만 관리한다: `.claude/CLAUDE.md`의 "중장기 계획 단계"·"단계별 세부 계획"·"가까운 목표".
-끝난 마일스톤(M1~)의 기록은 `docs/마일스톤 기록.md`. (예전 Phase1~5 목록은 CLAUDE.md의 1~6단계로 옮겨졌다 — conv/game 테이블 통합은 하지 않기로 함, ADR-001)
+일정과 진행은 한 곳에서만 관리한다: `plans/roadmap.md`(중장기 계획·단계별 세부 계획)와 `plans/current-milestone.md`(지금 하는 일).
+끝난 마일스톤(M1~)의 기록은 `docs/마일스톤 기록.md`. (예전 Phase1~5 목록은 plans/roadmap.md의 1~6단계로 옮겨졌다 — conv/game 테이블 통합은 하지 않기로 함, ADR-001)
 
 
 ## 잠재적 문제

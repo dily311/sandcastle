@@ -192,7 +192,7 @@ Conversation
 
 ### ADR-006 기능·작업·사용량 책임 분리
 
-**상태** Accepted (2026-11-16) — CLAUDE.md 가까운 목표 M2
+**상태** Accepted (2026-11-16) — docs/마일스톤 기록.md M2
 
 **배경** 유료 AI 호출이 채팅(TaskManager 작업)과 그 밖(게임 대사·번역·음성·이미지·API 확인, 커맨드에서 바로 호출)으로 갈려 있어, 무엇이 언제 누구 때문에 돈을 썼는지 볼 수 없었다. 원칙: Explicit Execution(실행 주체가 분명), Observability(상태·결과 확인), 사용자 동의 없는 리소스 소비 금지.
 
@@ -217,7 +217,7 @@ Conversation
 
 ### ADR-007 예산 한도
 
-**상태** Accepted (2026-11-16) — CLAUDE.md 1-A (M9)
+**상태** Accepted (2026-11-16) — plans/roadmap.md 1-A (M9)
 
 **배경** ADR-006으로 사용량은 보이지만 막지는 못했다. 선톡·에이전트·자동 색인처럼 "사용자가 안 볼 때 요금이 나가는" 기능(5-A, 5-B, 3-C)보다 먼저 상한이 필요하다. 원칙: 사용자 동의 없는 리소스 소비 금지, Observability.
 
@@ -229,7 +229,7 @@ Conversation
 
 ### ADR-008 사용자 데이터의 범위와 백업
 
-**상태** Accepted (2026-11-16) — CLAUDE.md 1-B (M9). 동기화(2단계)는 이 표를 출발점으로 한다.
+**상태** Accepted (2026-11-16) — plans/roadmap.md 1-B (M9). 동기화(2단계)는 이 표를 출발점으로 한다.
 
 **배경** 전체 백업(`.scbackup`)의 `BACKUP_DIRS`가 characters·games·themes뿐이라 갤러리 그림(`generated/`)과 올린 배경(`backgrounds/`)이 빠져 있었다. 복원 뒤 경로 보정도 아바타만 했다.
 
@@ -264,7 +264,7 @@ Conversation
 
 ### ADR-009 Android 플랫폼 처리
 
-**상태** Accepted (2026-11-16) — CLAUDE.md 1-C (M10). 점검 결과는 `docs/Android 점검표.md`.
+**상태** Accepted (2026-11-16) — plans/roadmap.md 1-C (M10). 점검 결과는 `docs/Android 점검표.md`.
 
 **결정**
 - **비밀 저장소**: 데스크톱은 OS keyring(keyring v4), Android는 `android-native-keyring-store`(Android Keystore 키로 암호화한 SharedPreferences, keyring-core 직접 사용). 평문 파일에 두지 않는다. 테스트는 메모리 저장소(OS 자격 증명 관리자를 건드리지 않음).
@@ -278,7 +278,7 @@ Conversation
 
 ### ADR-010 버전·업데이트·서명·릴리스
 
-**상태** Accepted (2026-11-17) — CLAUDE.md 1-E (M11). 절차는 `docs/배포.md`.
+**상태** Accepted (2026-11-17) — plans/roadmap.md 1-E (M11). 절차는 `docs/배포.md`.
 
 **결정**
 - **버전**: `package.json` 한 곳. `tauri.conf.json`은 `../package.json`을 읽고 `Cargo.toml`은 `scripts/version.mjs`가 맞춘다. CI가 세 곳이 같은지 확인. 변경 내역은 `CHANGELOG.md`.
@@ -288,7 +288,7 @@ Conversation
 
 ### ADR-011 동기화 방식
 
-**상태** Accepted (2026-11-17, 사용자 결정) — CLAUDE.md 2단계. 대상 표(2-A-1)는 아래. 동기화는 코어 플러그인 `sync`(기본 꺼짐).
+**상태** Accepted (2026-11-17, 사용자 결정) — plans/roadmap.md 2단계. 대상 표(2-A-1)는 아래. 동기화는 코어 플러그인 `sync`(기본 꺼짐).
 
 **결정**
 | 항목 | 결정 | 이유 |
@@ -448,7 +448,7 @@ Conversation
 
 ### ADR-012 커뮤니티 플러그인 (사용자 코드 플러그인)
 
-**상태** Accepted (2026-11-17) — CLAUDE.md 6-D (M16). 3단계보다 먼저 하기로 함(사용자 요청)
+**상태** Accepted (2026-11-17) — plans/roadmap.md 6-D (M16). 3단계보다 먼저 하기로 함(사용자 요청)
 
 **배경** Obsidian의 커뮤니티 플러그인처럼 사용자가 만든 기능을 앱에 넣고 싶다. 그러나 이 앱에는 API 키와 요금이 드는 호출이 있어, Obsidian처럼 플러그인이 앱 전체에 닿으면 악성·실수 플러그인이 키를 빼거나 요금을 쓸 수 있다. 원칙: Least Privilege, Explicit Execution, 사용자 동의 없는 리소스 소비 금지, Reversibility, Observability.
 
@@ -612,7 +612,7 @@ Complete Submission + Task
 
 ### ADR-013 어댑터 확장: 임베딩·도구 호출·구조화 출력
 
-**상태** Accepted (2026-11-18) — CLAUDE.md 3-A. 3-B~3-D·4-D·5-B의 바닥. 화면과 기능은 없고(스위치 없음) 부르는 길만 만든다 — 이 길을 쓰는 기능이 각자 플러그인 스위치(기본 꺼짐)와 작업(`run_by`)을 가진다.
+**상태** Accepted (2026-11-18) — plans/roadmap.md 3-A. 3-B~3-D·4-D·5-B의 바닥. 화면과 기능은 없고(스위치 없음) 부르는 길만 만든다 — 이 길을 쓰는 기능이 각자 플러그인 스위치(기본 꺼짐)와 작업(`run_by`)을 가진다.
 
 **결정**
 1. **기존 길은 그대로, 덧붙이기만**: `generate`가 쓰던 요청 모양은 바이트 단위로 같다(기존 테스트 유지). 새 길은 `AiProvider::generate_with(prompt, ChatExtras)`·`embed`, 그리고 `AiService::generate_ext / generate_structured / embed`. `PromptMessage`·`PromptRole`은 바꾸지 않는다 — 도구 루프는 프롬프트 뒤에 붙는 `tail`(`ToolTurn`)로 표현한다.
@@ -632,7 +632,7 @@ Complete Submission + Task
 
 ### ADR-014 메시지 linter
 
-**상태** Accepted (2026-11-18) — CLAUDE.md 3-B. 사용자 지시: 후처리(linter)가 6-D의 커뮤니티 플러그인 후처리보다 먼저 일어나야 한다.
+**상태** Accepted (2026-11-18) — plans/roadmap.md 3-B. 사용자 지시: 후처리(linter)가 6-D의 커뮤니티 플러그인 후처리보다 먼저 일어나야 한다.
 
 **결정**
 1. **실행 자리**: AI 응답 → 정규식(`AiOutput`) → `<image>`·`<cg>` 정리 → **linter** → 메시지 저장 → (화면의 `afterReply`) 커뮤니티 플러그인 후처리(ADR-012). linter는 백엔드가 저장하기 직전에 한 번 돌고, 플러그인은 그 뒤 저장된 글을 받으므로 순서가 구조로 보장된다(별도 순서 장치 없음). 스트리밍 중에는 돌지 않는다(받는 도중 화면은 원문 조각 그대로).
@@ -648,7 +648,7 @@ Complete Submission + Task
 
 ### ADR-015 메모리 임베딩 검색
 
-**상태** Accepted (2026-11-18) — CLAUDE.md 3-C. 설계는 Opus 자문을 받아 아래 "자문 반영"과 같이 바꿨다. 이번 범위는 3-C-1~3-C-4(저장·색인·뜻으로 찾기). 프롬프트에 넣기(3-C-5)와 무효화 정리(3-C-6)는 뒤에.
+**상태** Accepted (2026-11-18) — plans/roadmap.md 3-C. 설계는 Opus 자문을 받아 아래 "자문 반영"과 같이 바꿨다. 이번 범위는 3-C-1~3-C-4(저장·색인·뜻으로 찾기). 프롬프트에 넣기(3-C-5)와 무효화 정리(3-C-6)는 뒤에.
 
 **결정**
 1. **코어 플러그인 `memory`**(기본 꺼짐). 꺼져 있으면 `memory.db`를 열지도 않는다(처음 쓸 때 연다). 설정 `plugin-setting/memory`(기기 전용): 임베딩 API 프로필·모델 이름(사용자가 입력, 앱이 모델·가격을 내장하지 않음)·차원(선택)·실행당 토큰 상한(기본 20만)·문서/질의 접두어(e5·nomic류 로컬 모델용).

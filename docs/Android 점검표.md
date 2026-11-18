@@ -1,4 +1,4 @@
-# Android 점검표 (CLAUDE.md 1-C)
+# Android 점검표 (plans/roadmap.md 1-C)
 
 > 2026-11-16 점검. 에뮬레이터 Pixel_6 (Android 16, API 36, x86_64), `pnpm android:dev`.
 > 요금이 나가지 않게 PC에서 띄운 가짜 OpenAI 호환 공급자(`http://10.0.2.2:8787/v1`)로 확인했다.
