@@ -10,6 +10,7 @@
 	import { confirmAction } from "$shared/stores/confirm.svelte";
 	import { toasts } from "$shared/stores/toast.svelte";
 	import { library } from "$features/character/library.svelte";
+	import { drops, extOf } from "$app/drop.svelte";
 
 	/** 연결 id, 또는 "new" */
 	let { editId }: { editId: string } = $props();
@@ -84,11 +85,23 @@
 	}
 
 	let fileInput: HTMLInputElement | undefined = $state();
-	async function importServiceAccount(e: Event) {
+	function pickServiceAccount(e: Event) {
 		const input = e.currentTarget as HTMLInputElement;
 		const file = input.files?.[0];
 		input.value = "";
-		if (!file) return;
+		if (file) void importServiceAccount(file);
+	}
+	// Vertex 연결일 때 키 파일을 끌어다 놓기. 비밀 파일이라 디스크에 쓰지 않고 메모리에서만 읽음
+	$effect(() => {
+		if (!vertex) return;
+		return drops.register({
+			label: "서비스 계정 키 불러오기",
+			hint: "Google Cloud 서비스 계정 JSON 한 개",
+			accept: (f) => extOf(f) === "json",
+			ondrop: ([file]) => importServiceAccount(file),
+		});
+	});
+	async function importServiceAccount(file: File) {
 		try {
 			const text = await file.text();
 			const j = JSON.parse(text);
@@ -226,7 +239,7 @@
 				</div>
 				{#if hasKey && !saFile}<Button variant="ghost" onclick={removeKey}>지우기</Button>{/if}
 				<Button variant={saFile || hasKey ? "secondary" : "primary"} onclick={() => fileInput?.click()}>JSON 불러오기</Button>
-				<input bind:this={fileInput} type="file" accept=".json,application/json" hidden onchange={importServiceAccount} />
+				<input bind:this={fileInput} type="file" accept=".json,application/json" hidden onchange={pickServiceAccount} />
 			</div>
 			{#if saFile || !hasKey}
 				<div class="two">

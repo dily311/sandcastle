@@ -2,6 +2,7 @@
 	import { onMount } from "svelte";
 	import { Copy, Pencil, Plus, Trash2 } from "@lucide/svelte";
 	import { pickFiles } from "$shared/ipc/dialog";
+	import { dropPaths, isImageAvif } from "$app/drop.svelte";
 	import BackgroundPicker from "$shared/ui/BackgroundPicker.svelte";
 	import type { CssThemeMeta_Serialize as ThemeMeta } from "$ipc/bindings";
 	import { Button, ContextMenu, Input, Segmented, Select, Switch, Textarea, type MenuItem } from "$shared/ui";
@@ -47,6 +48,7 @@
 		const paths = await pickFiles([{ name: "이미지", extensions: ["png", "jpg", "jpeg", "webp", "gif", "avif"] }], true);
 		await theme.addBackgrounds(paths, true);
 	}
+	$effect(() => dropPaths({ label: "배경 이미지로 올리기", hint: "PNG·JPG·WEBP·GIF·AVIF (GIF는 움직임)", accept: isImageAvif, onpaths: (paths) => theme.addBackgrounds(paths, true) }));
 	const opacities = [0.5, 0.65, 0.75, 0.82, 0.9, 0.95].map((v) => ({ value: String(v), label: `${Math.round(v * 100)}%` }));
 	const selectKey = (key: string) => theme.update({ selectTheme: key });
 

@@ -9,6 +9,7 @@
 	import { confirmAction } from "$shared/stores/confirm.svelte";
 	import { toasts } from "$shared/stores/toast.svelte";
 	import { nav } from "$app/nav.svelte";
+	import { dropPaths } from "$app/drop.svelte";
 	import { library, type Character } from "./library.svelte";
 
 	let { character }: { character: Character } = $props();
@@ -113,10 +114,15 @@
 			[path] = await pickFiles([IMAGE_FILES], false);
 			if (!path) return;
 		}
+		await setAvatar(path);
+	}
+	async function setAvatar(path: string | null) {
 		const saved = await call(commands.setCharacterAvatar(character.id, path), src);
 		const c = library.character(character.id);
 		if (c) c.avatar = saved.avatar;
 	}
+	// 편집 중에 끌어다 놓은 그림은 아바타로 (캐릭터 화면의 "카드 가져오기"보다 우선)
+	$effect(() => dropPaths({ priority: 5, label: "아바타로 쓰기", hint: "PNG·JPG·WEBP·GIF 한 장", multiple: false, onpaths: ([path]) => setAvatar(path) }));
 
 	// ---- 첫 메시지 ----
 	function addFirst() {

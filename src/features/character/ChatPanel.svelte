@@ -15,7 +15,7 @@
 	import type { RegexScript_Serialize as RegexScript } from "$ipc/bindings";
 	import { call, commands } from "$shared/ipc/client";
 	import { IMAGE_FILES, pickFiles } from "$shared/ipc/dialog";
-	import { drops, isImage, storeFile } from "$app/drop.svelte";
+	import { drops, extOf, isImage, storeFile } from "$app/drop.svelte";
 	import { Sortable, moveItem } from "$shared/dnd/sortable.svelte";
 	import { fileSrc } from "$shared/ipc/file";
 	import { confirmAction, promptText } from "$shared/stores/confirm.svelte";
@@ -183,11 +183,16 @@
 		return drops.register({
 			priority: 2,
 			label: "캐릭터 에셋에 넣기",
-			hint: "파일 이름이 이미지 키가 됨 (<cg>키</cg>)",
-			accept: isImage,
+			hint: "파일 이름이 이미지 키가 됨 (<cg>키</cg>). 그림이 든 ZIP도 가능",
+			accept: (f) => isImage(f) || extOf(f) === "zip",
 			ondrop: async (files) => {
 				const paths = await Promise.all(files.filter(isImage).map((f) => storeFile(f)));
 				if (paths.length) await library.addImages(charId, paths);
+					// ZIP은 에셋 추가 메뉴의 "ZIP"과 같은 처리
+					for (const z of files.filter((f) => extOf(f) === "zip")) {
+						const n = await library.addImagesZip(charId, await storeFile(z));
+						toasts.success(n ? `에셋 ${n}개 넣음 (같은 이름은 덮어씀)` : "ZIP에 그림이 없음");
+					}
 			},
 		});
 	});

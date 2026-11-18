@@ -15,6 +15,7 @@
 	import { toasts } from "$shared/stores/toast.svelte";
 	import { presetFromMeta, presetSummary } from "$features/images/presetFromImage";
 	import { pickFiles } from "$shared/ipc/dialog";
+	import { dropPaths, extOf, isImage } from "$app/drop.svelte";
 	import { Upload } from "@lucide/svelte";
 	import { apiOptions, chatApiOptions, current, ensureLoaded, orNull, save } from "./pluginSettingForm.svelte";
 
@@ -28,7 +29,12 @@
 	});
 	/** AI 그림을 올려 #프리셋 태그로 갤러리에 넣고, 생성 정보가 있으면 바로 설정에 */
 	async function uploadPreset() {
-		const paths = await pickFiles([{ name: "그림", extensions: ["png", "jpg", "jpeg", "webp"] }], true);
+		await addPresetImages(await pickFiles([{ name: "그림", extensions: ["png", "jpg", "jpeg", "webp"] }], true));
+	}
+	$effect(() =>
+		dropPaths({ label: "프리셋 그림으로 올리기", hint: "PNG·JPG·WEBP (AI 그림이면 생성 정보를 설정에 넣음)", accept: (f) => isImage(f) && extOf(f) !== "gif", onpaths: addPresetImages }),
+	);
+	async function addPresetImages(paths: string[]) {
 		if (!paths.length) return;
 		const added = await call(commands.importGalleryImages(paths), { source: "imagegen" });
 		const tagged: GeneratedImage[] = [];

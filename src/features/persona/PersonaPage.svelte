@@ -11,6 +11,7 @@
 	import { confirmAction, promptText } from "$shared/stores/confirm.svelte";
 	import { toasts } from "$shared/stores/toast.svelte";
 	import { nav } from "$app/nav.svelte";
+	import { dropPaths } from "$app/drop.svelte";
 	import { library, type Persona } from "$features/character/library.svelte";
 	import PersonaEditor from "./PersonaEditor.svelte";
 
@@ -113,6 +114,17 @@
 		}
 		put(await call(commands.setPersonaAvatar(current.id, path), src));
 	}
+	// 끌어다 놓은 그림은 지금 보고 있는 페르소나의 아바타로 (아바타 버튼과 같은 처리)
+	$effect(() => {
+		const p = current;
+		if (!p) return;
+		return dropPaths({
+			label: `${p.name}의 아바타로 쓰기`,
+			hint: "PNG·JPG·WEBP·GIF 한 장",
+			multiple: false,
+			onpaths: async ([path]) => put(await call(commands.setPersonaAvatar(p.id, path), src)),
+		});
+	});
 	async function makeDefault() {
 		if (!current) return;
 		await call(commands.setSystemDefaultPersona(current.id), src);

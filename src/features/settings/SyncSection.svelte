@@ -8,6 +8,7 @@
 	import { Badge, Button, Segmented, Select, Spinner, Switch } from "$shared/ui";
 	import { call, commands } from "$shared/ipc/client";
 	import { pickFiles, pickFolder, saveTo, SYNC_FILES } from "$shared/ipc/dialog";
+	import { dropPaths, extOf } from "$app/drop.svelte";
 	import { onEvent } from "$shared/ipc/events";
 	import { layout } from "$app/layout.svelte";
 	import { hasNativeDrive, prepareDrive, unmetered } from "$app/androidDrive";
@@ -193,7 +194,20 @@
 
 	async function openBundle() {
 		const [path] = await pickFiles([SYNC_FILES], false);
-		if (!path) return;
+		if (path) await openBundleAt(path);
+	}
+	// 끌어다 놓아도 미리보기부터 (합치기는 그 뒤 버튼). 큰 묶음은 버튼으로
+	$effect(() =>
+		dropPaths({
+			label: "동기화 파일 열기",
+			hint: "샌드캐슬 동기화(.scsync), 300MB까지. 더 큰 파일은 열기 버튼으로",
+			accept: (f) => extOf(f) === "scsync",
+			multiple: false,
+			maxBytes: 300 * 1024 * 1024,
+			onpaths: ([path]) => openBundleAt(path),
+		}),
+	);
+	async function openBundleAt(path: string) {
 		busy = "open";
 		try {
 			pending = { path, preview: await call(commands.previewSyncBundle(path), src) };
