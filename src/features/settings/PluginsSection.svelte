@@ -18,9 +18,10 @@
 		{ title: "대화 표시", ids: ["chat.images", "html", "regex"] },
 		{ title: "AI 도구", ids: ["translate", "tts", "imagegen"] },
 		{ title: "데이터", ids: ["sync"] },
+		{ title: "확장", ids: ["community"] },
 	];
 	/** 세부 설정 탭이 있는 플러그인 */
-	const TAB: Partial<Record<PluginId, SettingsTab>> = { phone: "phone", widget: "widget", regex: "regex", translate: "translate", tts: "tts", imagegen: "imagegen", sync: "sync" };
+	const TAB: Partial<Record<PluginId, SettingsTab>> = { phone: "phone", widget: "widget", regex: "regex", translate: "translate", tts: "tts", imagegen: "imagegen", sync: "sync", community: "community" };
 	const byId = (id: string) => plugins.list.find((p) => p.id === id);
 </script>
 

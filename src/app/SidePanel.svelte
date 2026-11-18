@@ -7,6 +7,8 @@
 	import IconButton from "$shared/ui/IconButton.svelte";
 	import { layout } from "./layout.svelte";
 	import { panel } from "./panel.svelte";
+	import PluginPanelView from "$features/community/PluginPanelView.svelte";
+	import { isPluginTab } from "$features/community/panels";
 
 	let { label, children }: { label: string; children: Snippet } = $props();
 
@@ -34,7 +36,7 @@
 	<div class="sheet" transition:fly={{ x: 400, duration: 220 }}>
 		<header class="sheet-head">
 			<div class="stabs" role="tablist" aria-label={label}>
-				{#each panel.tabs as t (t.id)}
+				{#each panel.allTabs as t (t.id)}
 					<button role="tab" class:on={panel.tab === t.id} aria-selected={panel.tab === t.id} onclick={() => (panel.tab = t.id)} {...panel.tabDrag(t.id)}>
 						<t.icon /><span>{t.label}</span>
 					</button>
@@ -43,7 +45,8 @@
 			<IconButton label="패널 닫기" onclick={() => panel.toggle()}><X /></IconButton>
 		</header>
 		<aside class="panel" aria-label={label}>
-			{@render children()}
+			{#if isPluginTab(panel.tab)}<PluginPanelView tab={panel.tab} />{/if}
+			<div class="screen-panel" class:hidden={isPluginTab(panel.tab)}>{@render children()}</div>
 		</aside>
 	</div>
 {:else}
@@ -64,12 +67,19 @@
 		ondblclick={() => panel.setWidth(300, true)}
 	></div>
 	<aside class="panel" aria-label={label}>
-		{@render children()}
+		{#if isPluginTab(panel.tab)}<PluginPanelView tab={panel.tab} />{/if}
+			<div class="screen-panel" class:hidden={isPluginTab(panel.tab)}>{@render children()}</div>
 	</aside>
 </div>
 {/if}
 
 <style>
+	.screen-panel {
+		display: contents;
+	}
+	.screen-panel.hidden {
+		display: none;
+	}
 	.sheet-scrim {
 		position: fixed;
 		inset: 0;

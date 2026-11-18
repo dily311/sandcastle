@@ -1,0 +1,9 @@
+{
+  "id": "quote-check",
+  "name": "따옴표 점검",
+  "version": "1.0.0",
+  "apiVersion": 1,
+  "author": "Sandcastle 예제",
+  "description": "AI 응답의 짝이 안 맞는 따옴표와 별표를 찾아 메모로 알려 줍니다. '자동 고침'으로 두면 닫는 따옴표를 붙여 줍니다",
+  "permissions": ["messages.process"]
+}

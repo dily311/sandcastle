@@ -1,0 +1,15 @@
+{
+  "id": "word-count",
+  "name": "글자 수",
+  "version": "1.0.0",
+  "apiVersion": 1,
+  "author": "Sandcastle 예제",
+  "description": "오른쪽 패널에 지금 대화의 글자 수와 메시지 수를 보여줍니다. 명령으로 센 결과를 저장소에 남기는 예제",
+  "permissions": ["ui.panel", "ui.command", "data.read:chat", "storage"],
+  "panels": [{ "id": "main", "title": "글자 수", "page": "ui/panel.html" }],
+  "commands": [{ "id": "count", "title": "이 대화 글자 세기" }],
+  "settings": [
+    { "key": "countSpaces", "type": "toggle", "label": "공백도 세기", "default": true },
+    { "key": "recent", "type": "number", "label": "최근 메시지 몇 개까지 셀지", "description": "최대 200", "default": 100 }
+  ]
+}

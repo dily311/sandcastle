@@ -1,0 +1,4 @@
+body { margin: 12px; }
+h3 { margin: 0 0 8px; color: var(--accent-text); }
+.text { white-space: pre-wrap; line-height: 1.5; margin: 0 0 8px; }
+.muted { color: var(--text-muted); font-size: 13px; margin: 2px 0; }

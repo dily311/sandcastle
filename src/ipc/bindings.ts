@@ -164,6 +164,50 @@ export const commands = {
 	checkData: (options?: InvokeOptions) => __TAURI_INVOKE<DataCheck>("check_data", undefined, options),
 	/**  휴지통 목록 (열 때 보존 기간이 지난 것을 먼저 정리) */
 	listTrash: (options?: InvokeOptions) => __TAURI_INVOKE<TrashItem[]>("list_trash", undefined, options),
+	/**  설치된 플러그인 목록 */
+	listUserPlugins: (options?: InvokeOptions) => __TAURI_INVOKE<UserPlugin_Serialize[]>("list_user_plugins", undefined, options),
+	/**  zip 파일이나 폴더를 읽어 미리보기 (아무것도 쓰지 않음) */
+	previewUserPlugin: (path: string, options?: InvokeOptions) => __TAURI_INVOKE<PluginPreview_Serialize>("preview_user_plugin", { path }, options),
+	/**  미리보기에서 확인한 것을 설치 (hash가 다르면 거절). 새로 설치한 플러그인은 꺼져 있다 */
+	installUserPlugin: (path: string, hash: string, options?: InvokeOptions) => __TAURI_INVOKE<UserPlugin_Serialize>("install_user_plugin", { path, hash }, options),
+	/**  켜기(권한 전부에 동의한 목록과 함께) · 끄기 */
+	setUserPluginEnabled: (pluginId: string, enabled: boolean, grant: string[], options?: InvokeOptions) => __TAURI_INVOKE<UserPlugin_Serialize>("set_user_plugin_enabled", { pluginId, enabled, grant }, options),
+	/**  삭제 = 휴지통으로 (되살리면 꺼진 채) */
+	uninstallUserPlugin: (pluginId: string, options?: InvokeOptions) => __TAURI_INVOKE<TrashItem>("uninstall_user_plugin", { pluginId }, options),
+	/**  화면의 플러그인 호스트가 시작할 때: 켜진 플러그인을 도는 목록에 올리고 iframe 주소를 돌려준다 */
+	startUserPlugins: (options?: InvokeOptions) => __TAURI_INVOKE<RuntimeStart>("start_user_plugins", undefined, options),
+	/**  호스트를 내릴 때 (코어 플러그인을 끔 등) */
+	stopUserPlugins: (options?: InvokeOptions) => __TAURI_INVOKE<void>("stop_user_plugins", undefined, options),
+	/**
+	 *  플러그인 iframe의 호출. 화면이 보낸 창을 확인해 플러그인 id를 붙여 넘긴다. 권한은 여기서 다시 본다.
+	 *  `by`: 화면의 호스트가 정한 실행 주체 — "user"(사용자가 누른 명령·확인 창에서 허락) / 그 밖은 auto. 플러그인은 정할 수 없다 (6-D-7)
+	 */
+	callUserPlugin: (pluginId: string, method: string, args: Value, by: string | null, options?: InvokeOptions) => __TAURI_INVOKE<Value>("call_user_plugin", { pluginId, method, args, by }, options),
+	/**  플러그인 기록 (최근 것, 메모리 — 앱을 다시 켜면 비어 있음) */
+	getUserPluginLog: (pluginId: string, options?: InvokeOptions) => __TAURI_INVOKE<PluginLogEntry[]>("get_user_plugin_log", { pluginId }, options),
+	/**  후처리 방식: notes(표시만) / fix(자동 고침) */
+	setUserPluginProcessMode: (pluginId: string, mode: string, options?: InvokeOptions) => __TAURI_INVOKE<UserPlugin_Serialize>("set_user_plugin_process_mode", { pluginId, mode }, options),
+	/**  화면의 호스트가 플러그인들을 부른 결과를 저장 (원문은 meta에). 그 사이 메시지가 바뀌었으면 거절 */
+	applyPluginPostprocess: (messageId: string, expected: string, content: string, results: PostProcessResult[], options?: InvokeOptions) => __TAURI_INVOKE<Message_Serialize>("apply_plugin_postprocess", { messageId, expected, content, results }, options),
+	/**  플러그인이 고친 글을 원문으로 (그 뒤 또 고쳤으면 거절). 코어 플러그인이 꺼져 있어도 된다 — 되돌리기는 언제나 */
+	revertPluginPostprocess: (messageId: string, options?: InvokeOptions) => __TAURI_INVOKE<Message_Serialize>("revert_plugin_postprocess", { messageId }, options),
+	/**  화면의 호스트가 프롬프트 요청(user-plugin-prompt)에 답한다. 늦게 와서 기다리는 요청이 없으면 false */
+	answerPluginPrompt: (requestId: string, answers: PluginPromptAnswer_Deserialize[], options?: InvokeOptions) => __TAURI_INVOKE<boolean>("answer_plugin_prompt", { requestId, answers }, options),
+	/**  누른 명령 밖에서도 플러그인이 AI를 부르게 할지 (기본 꺼짐, 요금이 들 수 있음) */
+	setUserPluginAiAuto: (pluginId: string, enabled: boolean, options?: InvokeOptions) => __TAURI_INVOKE<UserPlugin_Serialize>("set_user_plugin_ai_auto", { pluginId, enabled }, options),
+	/**  manifest의 설정 칸에 사용자가 정한 값 (선언한 칸 전부, 기본값 채움) */
+	getUserPluginSettings: (pluginId: string, options?: InvokeOptions) => __TAURI_INVOKE<Value>("get_user_plugin_settings", { pluginId }, options),
+	/**  한 칸 저장 (null이면 기본값으로). 플러그인이 새 값을 읽도록 호스트가 다시 시작한다 */
+	setUserPluginSetting: (pluginId: string, key: string, value: Value, options?: InvokeOptions) => __TAURI_INVOKE<Value>("set_user_plugin_setting", { pluginId, key, value }, options),
+	/**  제안 목록 (새것부터). status: pending / applied / rejected / reverted, 비우면 전부 */
+	listChangeProposals: (status: string | null, options?: InvokeOptions) => __TAURI_INVOKE<ChangeProposal_Serialize[]>("list_change_proposals", { status }, options),
+	/**  기다리는 제안 수 */
+	countPendingProposals: (options?: InvokeOptions) => __TAURI_INVOKE<number>("count_pending_proposals", undefined, options),
+	/**  적용 (그 사이 원본이 바뀌었으면 거절) */
+	applyChangeProposal: (id: string, options?: InvokeOptions) => __TAURI_INVOKE<ChangeProposal_Serialize>("apply_change_proposal", { id }, options),
+	rejectChangeProposal: (id: string, options?: InvokeOptions) => __TAURI_INVOKE<ChangeProposal_Serialize>("reject_change_proposal", { id }, options),
+	/**  적용한 것을 되돌림 (그 뒤 원본이 또 바뀌었으면 거절) */
+	revertChangeProposal: (id: string, options?: InvokeOptions) => __TAURI_INVOKE<ChangeProposal_Serialize>("revert_change_proposal", { id }, options),
 	/**  되살리기 */
 	restoreTrashItem: (id: string, options?: InvokeOptions) => __TAURI_INVOKE<TrashItem>("restore_trash_item", { id }, options),
 	/**  완전히 지우기 (되돌릴 수 없음 — 화면에서 확인을 받는다) */
@@ -844,6 +888,50 @@ export type CgAssetsInput_Serialize = {
 	aiUsable: boolean,
 } & GameAssetsInput_Serialize;
 
+export type ChangeProposal = ChangeProposal_Serialize | ChangeProposal_Deserialize;
+
+export type ChangeProposal_Deserialize = {
+	id: string,
+	source: string,
+	kind: ProposalKind,
+	/**  update / create */
+	op: string,
+	targetId?: string | null,
+	parentId?: string | null,
+	targetLabel: string,
+	fields: ProposalField[],
+	reason: string,
+	/**  pending / applied / rejected / reverted */
+	status: string,
+	createdAt: number,
+	decidedAt?: number | null,
+	/**  기다리는 제안: 제안한 뒤 원본이 바뀌어 적용할 수 없음 */
+	outdated: boolean,
+	/**  적용한 제안: 그 뒤 원본이 그대로라 되돌릴 수 있음 */
+	canRevert: boolean,
+};
+
+export type ChangeProposal_Serialize = {
+	id: string,
+	source: string,
+	kind: ProposalKind,
+	/**  update / create */
+	op: string,
+	targetId: string | null,
+	parentId: string | null,
+	targetLabel: string,
+	fields: ProposalField[],
+	reason: string,
+	/**  pending / applied / rejected / reverted */
+	status: string,
+	createdAt: number,
+	decidedAt: number | null,
+	/**  기다리는 제안: 제안한 뒤 원본이 바뀌어 적용할 수 없음 */
+	outdated: boolean,
+	/**  적용한 제안: 그 뒤 원본이 그대로라 되돌릴 수 있음 */
+	canRevert: boolean,
+};
+
 export type Character = Character_Serialize | Character_Deserialize;
 
 export type CharacterAssetsInput = CharacterAssetsInput_Serialize | CharacterAssetsInput_Deserialize;
@@ -1072,6 +1160,12 @@ export type ChatTurn_Serialize = {
 
 export type ColorSchema = "light" | "dark" | "system";
 
+/**  명령 (`ui.command`, 6-D-6). 사용자가 누를 때만 main.js의 `sandcastle.on("command", …)`이 불린다 */
+export type CommandDecl = {
+	id: string,
+	title: string,
+};
+
 export type CompactResult = {
 	/**  일별 합계로 옮기고 지운 사용량 상세 줄 수 */
 	usageRows: number,
@@ -1100,6 +1194,8 @@ export type ContextUsage_Deserialize = {
 	reserved: number,
 	presetId?: string | null,
 	presetName?: string | null,
+	/**  커뮤니티 플러그인이 더한 프롬프트 블록 (6-D-5, 시스템 토큰에 들어 있음) */
+	plugins: PluginPromptUse[],
 };
 
 /**  컨텍스트 사용량 (오른쪽 패널). 마지막으로 보낸 프롬프트 기준 */
@@ -1118,6 +1214,8 @@ export type ContextUsage_Serialize = {
 	reserved: number,
 	presetId: string | null,
 	presetName: string | null,
+	/**  커뮤니티 플러그인이 더한 프롬프트 블록 (6-D-5, 시스템 토큰에 들어 있음) */
+	plugins: PluginPromptUse[],
 };
 
 /**  continue_game / load_save의 응답. events는 항상 비어 있고(새로 생긴 일이 없다), 화면은 state + history로 복원한다. */
@@ -2543,6 +2641,11 @@ export type ImportedCharacterRef = {
 	name: string,
 };
 
+export type InstalledPluginInfo = {
+	version: string,
+	enabled: boolean,
+};
+
 export type InteractiveRegion = {
 	id: string,
 	x: number | null,
@@ -2966,6 +3069,13 @@ export type PackageWorldInfoBook_Serialize = {
 	entries: WorldInfoEntryInput_Serialize[],
 };
 
+/**  오른쪽 패널 탭 (`ui.panel`, 6-D-6). page는 플러그인 폴더 안의 html */
+export type PanelDecl = {
+	id: string,
+	title: string,
+	page: string,
+};
+
 export type PanicEntry = PanicEntry_Serialize | PanicEntry_Deserialize;
 
 export type PanicEntry_Deserialize = {
@@ -3119,7 +3229,134 @@ export type Playlist_Serialize = {
 	updatedAt: number,
 };
 
+export type PluginLogEntry = {
+	at: number,
+	/**  info / warn / error */
+	level: string,
+	message: string,
+};
+
+export type PluginManifest = PluginManifest_Serialize | PluginManifest_Deserialize;
+
+export type PluginManifest_Deserialize = {
+	id: string,
+	name: string,
+	version: string,
+	apiVersion: number,
+	author?: string,
+	description?: string,
+	/**  플러그인 폴더 안의 JS (기본 main.js) */
+	main?: string,
+	permissions?: string[],
+	settings?: PluginSettingField_Deserialize[],
+	minAppVersion?: string | null,
+	panels?: PanelDecl[],
+	commands?: CommandDecl[],
+};
+
+export type PluginManifest_Serialize = {
+	id: string,
+	name: string,
+	version: string,
+	apiVersion: number,
+	author: string,
+	description: string,
+	/**  플러그인 폴더 안의 JS (기본 main.js) */
+	main: string,
+	permissions: string[],
+	settings: PluginSettingField_Serialize[],
+	minAppVersion?: string,
+	panels: PanelDecl[],
+	commands: CommandDecl[],
+};
+
+export type PluginNote = {
+	/**  info / warn */
+	level: string,
+	text: string,
+};
+
+/**  설치 전 미리보기 */
+export type PluginPreview = PluginPreview_Serialize | PluginPreview_Deserialize;
+
+/**  설치 전 미리보기 */
+export type PluginPreview_Deserialize = {
+	manifest: PluginManifest_Deserialize,
+	files: number,
+	size: number,
+	/**  설치할 때 그대로 넘긴다 (그 사이 파일이 바뀌면 설치하지 않음) */
+	hash: string,
+	/**  같은 id가 이미 있으면 업데이트 */
+	existing?: InstalledPluginInfo | null,
+	/**  지금 허락한 것보다 늘어난 권한 (새로 설치면 전부) */
+	addedPermissions: string[],
+	/**  있는 것보다 낮은 판 */
+	downgrade: boolean,
+};
+
+/**  설치 전 미리보기 */
+export type PluginPreview_Serialize = {
+	manifest: PluginManifest_Serialize,
+	files: number,
+	size: number,
+	/**  설치할 때 그대로 넘긴다 (그 사이 파일이 바뀌면 설치하지 않음) */
+	hash: string,
+	/**  같은 id가 이미 있으면 업데이트 */
+	existing: InstalledPluginInfo | null,
+	/**  지금 허락한 것보다 늘어난 권한 (새로 설치면 전부) */
+	addedPermissions: string[],
+	/**  있는 것보다 낮은 판 */
+	downgrade: boolean,
+};
+
+export type PluginPromptAnswer = PluginPromptAnswer_Serialize | PluginPromptAnswer_Deserialize;
+
+export type PluginPromptAnswer_Deserialize = {
+	pluginId: string,
+	blocks: PromptBlockInput_Deserialize[],
+};
+
+export type PluginPromptAnswer_Serialize = {
+	pluginId: string,
+	blocks: PromptBlockInput_Serialize[],
+};
+
+/**  응답 meta.info.pluginPrompt에 남는 것 */
+export type PluginPromptUse = {
+	pluginId: string,
+	name: string,
+	blocks: number,
+	tokens: number,
+};
+
 export type PluginSetting = PluginSetting_Serialize | PluginSetting_Deserialize;
+
+/**  플러그인 설정 칸 (6-D-8의 설정 화면이 이것으로 그린다) */
+export type PluginSettingField = PluginSettingField_Serialize | PluginSettingField_Deserialize;
+
+/**  플러그인 설정 칸 (6-D-8의 설정 화면이 이것으로 그린다) */
+export type PluginSettingField_Deserialize = {
+	key: string,
+	/**  text / number / toggle / select */
+	type: string,
+	label: string,
+	description?: string | null,
+	default?: Value | null,
+	/**  select의 고를 것 */
+	options?: string[],
+};
+
+/**  플러그인 설정 칸 (6-D-8의 설정 화면이 이것으로 그린다) */
+export type PluginSettingField_Serialize = {
+	key: string,
+	/**  text / number / toggle / select */
+	type: string,
+	label: string,
+	description?: string,
+	default?: Value,
+	/**  select의 고를 것 */
+	options?: string[],
+};
 
 export type PluginSetting_Deserialize = {
 	translate?: TranslateSetting_Deserialize,
@@ -3141,6 +3378,29 @@ export type PluginSetting_Serialize = {
 	prompts: AppPrompts_Serialize,
 	/**  폴더 동기화 (2-C) — 경로가 기기마다 달라 기기 전용 (settings_scope) */
 	sync: SyncSetting_Serialize,
+};
+
+export type PostProcessResult = {
+	pluginId: string,
+	/**  이 플러그인이 글을 바꿨나 */
+	changed: boolean,
+	notes: PluginNote[],
+};
+
+export type PromptBlockInput = PromptBlockInput_Serialize | PromptBlockInput_Deserialize;
+
+export type PromptBlockInput_Deserialize = {
+	text: string,
+	/**  rules(시스템 규칙 끝) / history(대화 기록 안, depth) */
+	position: string,
+	depth?: number | null,
+};
+
+export type PromptBlockInput_Serialize = {
+	text: string,
+	/**  rules(시스템 규칙 끝) / history(대화 기록 안, depth) */
+	position: string,
+	depth: number | null,
 };
 
 export type PromptBlocks = PromptBlocks_Serialize | PromptBlocks_Deserialize;
@@ -3215,6 +3475,28 @@ export type PromptBlocks_Serialize = {
 	extraJson: Value | null,
 	createdAt: number,
 	updatedAt: number,
+};
+
+export type PromptHookRequest = PromptHookRequest_Serialize | PromptHookRequest_Deserialize;
+
+export type PromptHookRequest_Deserialize = {
+	requestId: string,
+	conversationId: string,
+	characterId?: string | null,
+	/**  이번 입력 (비었으면 이어 쓰기·다시 만들기) */
+	userInput: string,
+	/**  부를 플러그인 (설치 순서) */
+	plugins: string[],
+};
+
+export type PromptHookRequest_Serialize = {
+	requestId: string,
+	conversationId: string,
+	characterId: string | null,
+	/**  이번 입력 (비었으면 이어 쓰기·다시 만들기) */
+	userInput: string,
+	/**  부를 플러그인 (설치 순서) */
+	plugins: string[],
 };
 
 /**  PromptManager가 만든 최종 프롬프트. 공급자 형식과 무관하며 어댑터가 각자 형식으로 바꾼다. */
@@ -3333,6 +3615,19 @@ export type PromptVariant = {
 	name: string,
 	text: string,
 };
+
+export type ProposalField = {
+	field: string,
+	label: string,
+	before: Value,
+	after: Value,
+};
+
+export type ProposalKind = "character" | "persona" | 
+/**  로어북 자체 (이름·설명) */
+"lorebook" | "lorebook_entry" | 
+/**  대화의 메시지 글 */
+"message";
 
 /**  어떤 텍스트에 적용할지 */
 export type RegexPlacement = 
@@ -3518,6 +3813,34 @@ export type RunBy =
 "user" | 
 /**  사용자가 켜 둔 자동 실행 (자동 번역·자동 읽기 등) */
 "auto";
+
+export type RuntimePanel = {
+	id: string,
+	title: string,
+	url: string,
+};
+
+/**  화면에 주는 도는 플러그인 정보 */
+export type RuntimePlugin = {
+	id: string,
+	name: string,
+	version: string,
+	hostUrl: string,
+	granted: string[],
+	/**  메시지 후처리: notes(표시만) / fix(자동 고침) — 6-D-4 */
+	processMode: string,
+	/**  누른 명령 밖에서도 AI를 부르게 허락했나 (6-D-7) */
+	aiAuto: boolean,
+	/**  오른쪽 패널 탭 (6-D-6): id·제목·주소 */
+	panels: RuntimePanel[],
+	commands: CommandDecl[],
+};
+
+export type RuntimeStart = {
+	plugins: RuntimePlugin[],
+	/**  메서드 → 필요한 권한 (화면이 IPC 전에 거른다) */
+	api: { [key in string]: string | null },
+};
 
 /**  save_package의 결과: 에디터에서 지워서 DB에서도 지워진 행 수, 그리고 저장 후 검증 결과. */
 export type SaveReport = {
@@ -3996,7 +4319,9 @@ export type TaskType =
 /**  음성 읽기 (코어 플러그인) */
 "tts" | 
 /**  API 연결 확인 등 설정 화면의 짧은 호출 */
-"api_call";
+"api_call" | 
+/**  커뮤니티 플러그인이 부른 AI 글 생성 (feature `plugin:<id>`, 6-D-7) */
+"plugin_ai";
 
 export type Template = Template_Serialize | Template_Deserialize;
 
@@ -4156,7 +4481,9 @@ export type TrashItem = {
 	size: number,
 };
 
-export type TrashKind = "character" | "persona" | "conversation" | "worldinfo_book" | "prompt_preset" | "game" | "game_session";
+export type TrashKind = "character" | "persona" | "conversation" | "worldinfo_book" | "prompt_preset" | "game" | "game_session" | 
+/**  커뮤니티 플러그인 (6-D-1) — 폴더 plugins/<id>와 기기 상태 */
+"user_plugin";
 
 export type TtsSetting = TtsSetting_Serialize | TtsSetting_Deserialize;
 
@@ -4278,6 +4605,45 @@ export type UsageSummary_Serialize = {
 	/**  단가표로 계산한 추정 금액 (단가표에 이 모델이 없으면 None) */
 	estimatedCost: number | null,
 	currency: string | null,
+};
+
+/**  목록의 한 줄. manifest를 읽지 못한 폴더도 보여준다(지울 수 있게) */
+export type UserPlugin = UserPlugin_Serialize | UserPlugin_Deserialize;
+
+/**  목록의 한 줄. manifest를 읽지 못한 폴더도 보여준다(지울 수 있게) */
+export type UserPlugin_Deserialize = {
+	id: string,
+	manifest?: PluginManifest_Deserialize | null,
+	/**  manifest를 읽지 못한 이유 (그런 플러그인은 켤 수 없음) */
+	error?: string | null,
+	enabled: boolean,
+	granted: string[],
+	installedAt: number,
+	size: number,
+	/**  메시지 후처리: notes(표시만, 기본) / fix(자동 고침) — 6-D-4 */
+	processMode: string,
+	/**  사용자가 누른 명령 밖에서 플러그인이 스스로 AI를 불러도 되나 (기본 꺼짐) — 6-D-7 */
+	aiAuto: boolean,
+	/**  켤 때 본 코드와 폴더의 코드가 달라졌나 (파일을 손으로 고침·다른 곳에서 바뀜). 그러면 꺼진 것으로 보고 다시 켜서 동의해야 한다 (6-D-8) */
+	codeChanged: boolean,
+};
+
+/**  목록의 한 줄. manifest를 읽지 못한 폴더도 보여준다(지울 수 있게) */
+export type UserPlugin_Serialize = {
+	id: string,
+	manifest: PluginManifest_Serialize | null,
+	/**  manifest를 읽지 못한 이유 (그런 플러그인은 켤 수 없음) */
+	error: string | null,
+	enabled: boolean,
+	granted: string[],
+	installedAt: number,
+	size: number,
+	/**  메시지 후처리: notes(표시만, 기본) / fix(자동 고침) — 6-D-4 */
+	processMode: string,
+	/**  사용자가 누른 명령 밖에서 플러그인이 스스로 AI를 불러도 되나 (기본 꺼짐) — 6-D-7 */
+	aiAuto: boolean,
+	/**  켤 때 본 코드와 폴더의 코드가 달라졌나 (파일을 손으로 고침·다른 곳에서 바뀜). 그러면 꺼진 것으로 보고 다시 켜서 동의해야 한다 (6-D-8) */
+	codeChanged: boolean,
 };
 
 export type Value = null | boolean | number | string | Value[] | { [key in string]: Value };

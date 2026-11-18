@@ -167,7 +167,7 @@
 		if (u.images) parts.push(`그림 ${n(u.images)}장`);
 		return parts.join(" · ");
 	}
-	const featureName = (f: string | null) => (f ? (FEATURE[f] ?? f) : "기타");
+	const featureName = (f: string | null) => (f ? (FEATURE[f] ?? (f.startsWith("plugin:") ? `플러그인 ${f.slice(7)}` : f)) : "기타");
 	const status = (h: HistoryItem) => (h.status === "failed" && h.errorCode === "BUDGET_EXCEEDED" ? { label: "한도로 막힘", tone: "warning" as const } : (STATUS[h.status] ?? { label: h.status, tone: "neutral" as const }));
 </script>
 
