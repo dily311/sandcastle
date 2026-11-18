@@ -10,6 +10,7 @@
 	import { confirmAction } from "$shared/stores/confirm.svelte";
 	import { toasts } from "$shared/stores/toast.svelte";
 	import { library } from "$features/character/library.svelte";
+	import type { AiCapabilities, SupportStatus } from "$ipc/bindings";
 
 	/** 연결 id, 또는 "new" */
 	let { editId }: { editId: string } = $props();
@@ -45,6 +46,33 @@
 	const provider = $derived(apiLists.find((p) => p.provider === providerId));
 	const vertex = $derived(provider?.formatType === "vertexai");
 	const knownModels = $derived([...new Set([...(provider?.modelList.flatMap((g) => g.model) ?? []), ...models])]);
+
+	// 이 연결로 되는 것 (3-A-4). 요청을 보내지 않는 계산이라 입력이 바뀔 때마다 다시 구함
+	let caps = $state<AiCapabilities | null>(null);
+	$effect(() => {
+		const fmt = provider?.formatType;
+		if (!fmt || !model.trim()) {
+			caps = null;
+			return;
+		}
+		let stale = false;
+		void commands.getAiCapabilities(fmt, baseUrl.trim(), model.trim()).then(
+			(c) => {
+				if (!stale) caps = c;
+			},
+			() => {
+				if (!stale) caps = null;
+			},
+		);
+		return () => (stale = true);
+	});
+	const CAP_ROWS = [
+		{ key: "embeddings", label: "임베딩 (뜻으로 찾기)" },
+		{ key: "tools", label: "도구 호출 (에이전트)" },
+		{ key: "structured", label: "구조화 출력 (JSON)" },
+	] as const;
+	const CAP_LABEL: Record<SupportStatus, string> = { supported: "지원", unknown: "확인 안 됨", unsupported: "지원 안 함" };
+	const CAP_TONE: Record<SupportStatus, "success" | "neutral" | "warning"> = { supported: "success", unknown: "neutral", unsupported: "warning" };
 
 	onMount(async () => {
 		await Promise.all([appSetting.load(), library.loaded ? null : library.load()]);
@@ -255,6 +283,19 @@
 			</Field>
 		</div>
 	{/if}
+	{#if caps}
+		<h2>이 연결로 되는 것</h2>
+		<div class="card caps">
+			{#each CAP_ROWS as row (row.key)}
+				{@const c = caps[row.key]}
+				<div class="cap">
+					<div class="cap-head"><span>{row.label}</span><Badge tone={CAP_TONE[c.status]}>{CAP_LABEL[c.status]}</Badge></div>
+					<small>{c.reason}</small>
+				</div>
+			{/each}
+			<small class="cap-note">앱이 알고 있는 규칙으로 알려 주는 것이며 요청을 보내 확인한 것은 아님. 이 기능을 쓰는 화면은 꺼져 있고, 켜서 쓸 때만 요금이 나감</small>
+		</div>
+	{/if}
 	{#if id && !hasKey}<p class="warn"><Badge tone="warning"><KeyRound /> 키 없음</Badge> 키를 넣어야 대화할 수 있음</p>{/if}
 
 	{#if id}
@@ -392,6 +433,28 @@
 		overflow: hidden;
 		text-overflow: ellipsis;
 		white-space: nowrap;
+	}
+	.caps {
+		display: flex;
+		flex-direction: column;
+		gap: var(--space-3);
+	}
+	.cap {
+		display: flex;
+		flex-direction: column;
+		gap: var(--space-1);
+		font-size: var(--text-sm);
+	}
+	.cap-head {
+		display: flex;
+		align-items: center;
+		justify-content: space-between;
+		gap: var(--space-2);
+	}
+	.cap small,
+	.cap-note {
+		color: var(--text-muted);
+		font-size: var(--text-xs);
 	}
 	.warn {
 		display: flex;

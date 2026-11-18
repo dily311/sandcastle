@@ -112,6 +112,13 @@ pub async fn delete_api_profile(state: State<'_, AppState>, id: String) -> Resul
 // =======================================
 // AI 연결
 // =======================================
+/// 연결(형식·주소·모델)로 되는 것: 임베딩·도구 호출·구조화 출력. 요청을 보내지 않는 순수 계산이라 저장 전에도 부를 수 있다 (3-A-4)
+#[tauri::command]
+#[specta::specta]
+pub fn get_ai_capabilities(format_type: String, base_url: String, model: String) -> crate::adapter::capabilities::AiCapabilities {
+    crate::adapter::capabilities::capabilities(&format_type, &base_url, &model)
+}
+
 #[tauri::command]
 #[specta::specta]
 pub async fn get_models(ai: State<'_, Arc<AiService>>, profile_id: String) -> Result<Vec<String>> {

@@ -9,12 +9,60 @@ use serde_json::Value;
 use crate::{
     adapter::{
         ensure_success,
-        gemini_adapter::{gemini_body, model_id, read_gemini_response},
-        net_err, parse_err, AiProvider, Generation, OnDelta, ProviderCall,
+        gemini_adapter::{gemini_body_with, model_id, read_gemini_response, task_type},
+        l2_normalize, net_err,
+        openai_adapter::floats,
+        parse_err, AiProvider, ChatExtras, EmbedRequest, EmbedTask, Embeddings, Generation, OnDelta, ProviderCall,
     },
     error::{AppError, ErrorCode, Result},
     models::ai_service::{PromptMessage, VertexChatRequestAPIKey},
 };
+
+/// predict 한 번에 보내는 글 수 (text-embedding-005 등은 250개·토큰 2만 개 한도라 여유를 둠). `gemini-embedding-*`은 요청당 1개
+const EMBED_BATCH: usize = 32;
+
+fn embed_batch(model: &str) -> usize {
+    if model.contains("gemini-embedding") {
+        1
+    } else {
+        EMBED_BATCH
+    }
+}
+
+/// `:predict` 본문. `autoTruncate`는 기본이 true라 긴 글이 소리 없이 잘리므로 끄고(너무 길면 오류), 차원 줄이기는 `outputDimensionality`
+pub(crate) fn embed_body(chunk: &[String], task: EmbedTask, dimensions: Option<u32>) -> Value {
+    let instances: Vec<Value> = chunk
+        .iter()
+        .map(|t| serde_json::json!({ "content": t, "task_type": task_type(task) }))
+        .collect();
+    let mut params = serde_json::json!({ "autoTruncate": false });
+    if let Some(d) = dimensions {
+        params["outputDimensionality"] = serde_json::json!(d);
+    }
+    serde_json::json!({ "instances": instances, "parameters": params })
+}
+
+/// predict 응답 → (벡터들, 입력 토큰 합계). 토큰은 `embeddings.statistics.token_count`가 있을 때만
+pub(crate) fn parse_embeddings(json: &Value, expect: usize, normalize: bool) -> Result<(Vec<Vec<f32>>, Option<u64>)> {
+    let rows = json["predictions"].as_array().ok_or_else(|| parse_err("임베딩", "predictions가 없음"))?;
+    if rows.len() != expect {
+        return Err(parse_err("임베딩", format!("{expect}개를 보냈는데 {}개가 옴", rows.len())));
+    }
+    let mut tokens: Option<u64> = None;
+    let mut vectors = vec![];
+    for r in rows {
+        let e = &r["embeddings"];
+        let mut v = floats(&e["values"]).ok_or_else(|| parse_err("임베딩", "values가 숫자 목록이 아님"))?;
+        if normalize {
+            l2_normalize(&mut v);
+        }
+        if let Some(t) = e["statistics"]["token_count"].as_f64() {
+            *tokens.get_or_insert(0) += t as u64;
+        }
+        vectors.push(v);
+    }
+    Ok((vectors, tokens))
+}
 
 const SCOPE: &str = "https://www.googleapis.com/auth/cloud-platform";
 
@@ -73,7 +121,7 @@ impl AiProvider for VertexAIClient {
             .unwrap_or_default())
     }
 
-    async fn generate(&self, call: &ProviderCall<'_>, prompt: &PromptMessage, on_delta: &mut OnDelta<'_>) -> Result<Generation> {
+    async fn generate_with(&self, call: &ProviderCall<'_>, prompt: &PromptMessage, extras: &ChatExtras, on_delta: &mut OnDelta<'_>) -> Result<Generation> {
         let auth = Self::auth(call.credential).await?;
         let stream = prompt.chat_options.stream;
         let method = if stream { "streamGenerateContent?alt=sse" } else { "generateContent" };
@@ -88,11 +136,43 @@ impl AiProvider for VertexAIClient {
             .http
             .post(url)
             .bearer_auth(&auth.token)
-            .json(&gemini_body(prompt))
+            .json(&gemini_body_with(prompt, extras))
             .send()
             .await
             .map_err(net_err)?;
         read_gemini_response(resp, stream, on_delta).await
+    }
+
+    async fn embed(&self, call: &ProviderCall<'_>, req: &EmbedRequest<'_>) -> Result<Embeddings> {
+        let auth = Self::auth(call.credential).await?;
+        let model = model_id(req.model);
+        let url = format!(
+            "{}/v1/projects/{}/locations/{}/publishers/google/models/{model}:predict",
+            Self::host(&auth.location),
+            auth.project_id,
+            auth.location,
+        );
+        let mut out = Embeddings::default();
+        let mut tokens: Option<u64> = None;
+        for chunk in req.inputs.chunks(embed_batch(model)) {
+            let resp = call
+                .http
+                .post(&url)
+                .bearer_auth(&auth.token)
+                .header("x-goog-user-project", &auth.project_id)
+                .json(&embed_body(chunk, req.task, req.dimensions))
+                .send()
+                .await
+                .map_err(net_err)?;
+            let json: Value = ensure_success(resp).await?.json().await.map_err(|e| parse_err("임베딩", e))?;
+            let (vectors, t) = parse_embeddings(&json, chunk.len(), req.dimensions.is_some())?;
+            out.vectors.extend(vectors);
+            if let Some(t) = t {
+                *tokens.get_or_insert(0) += t;
+            }
+        }
+        out.tokens = tokens;
+        Ok(out)
     }
 }
 
@@ -176,6 +256,36 @@ mod tests {
     /// 0.2.0 실기기: Android에는 OS 루트 인증서를 읽는 길이 없어 서비스 계정을 읽는 순간(HTTPS 클라이언트를 만들 때) 실패했다.
     /// 루트 인증서를 바이너리에 넣었으므로(gcp_auth webpki-roots) OS 인증서가 없어도 읽혀야 한다.
     /// PC에서 Android처럼 확인하려면: SSL_CERT_DIR을 빈 폴더로 두고 이 테스트를 돌린다 (rustls-native-certs는 그 폴더만 본다)
+    #[test]
+    fn predict_body_and_response_shapes() {
+        let b = embed_body(&["가".to_string(), "나".to_string()], EmbedTask::Query, Some(256));
+        assert_eq!(b["instances"][1], serde_json::json!({ "content": "나", "task_type": "RETRIEVAL_QUERY" }));
+        assert_eq!(
+            b["parameters"],
+            serde_json::json!({ "autoTruncate": false, "outputDimensionality": 256 }),
+            "조용히 잘리지 않게 autoTruncate를 끈다"
+        );
+        assert!(embed_body(&["a".to_string()], EmbedTask::Document, None)["parameters"]
+            .get("outputDimensionality")
+            .is_none());
+        assert_eq!((embed_batch("gemini-embedding-001"), embed_batch("text-embedding-005")), (1, 32));
+
+        let resp = serde_json::json!({ "predictions": [
+            { "embeddings": { "values": [3.0, 4.0], "statistics": { "token_count": 5, "truncated": false } } },
+            { "embeddings": { "values": [0.0, 2.0], "statistics": { "token_count": 7.0 } } }
+        ] });
+        let (v, t) = parse_embeddings(&resp, 2, true).unwrap();
+        assert_eq!((v[0].clone(), v[1].clone(), t), (vec![0.6, 0.8], vec![0.0, 1.0], Some(12)));
+        assert_eq!(parse_embeddings(&resp, 2, false).unwrap().0[0], vec![3.0, 4.0]);
+        assert!(parse_embeddings(&resp, 3, false).is_err());
+        assert_eq!(
+            parse_embeddings(&serde_json::json!({ "predictions": [{ "embeddings": { "values": [1.0] } }] }), 1, false)
+                .unwrap()
+                .1,
+            None
+        );
+    }
+
     #[test]
     fn service_account_loads_without_os_root_certificates() {
         CustomServiceAccount::from_json(&fake_account()).expect("OS 루트 인증서 없이도 서비스 계정을 읽어야 함");
