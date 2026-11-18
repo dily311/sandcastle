@@ -34,6 +34,10 @@ pub struct SyncPeer {
     pub merges: i64,
     /// 그 기기가 이 기기 내용을 어디까지 받았나 (이 기기 시각, 그 기기 묶음의 acks). 아직이면 없음
     pub their_ack: Option<i64>,
+    /// 오래(STALE_PEER_MS) 못 본 기기. 지운 기록 정리가 이 기기를 기다리는 중이라 사용자가 제외할 수 있다
+    pub stale: bool,
+    /// 사용자가 제외함: 지운 기록 정리가 기다리지 않는다. 돌아와 합치면 저절로 풀린다
+    pub excluded: bool,
 }
 
 #[derive(Debug, Clone, Serialize, specta::Type)]
@@ -93,18 +97,22 @@ fn job(label: &str) -> CreateTaskRequest {
 pub async fn get_sync_status(app: AppHandle, state: State<'_, AppState>) -> Result<SyncStatus> {
     require(&app, id::SYNC)?;
     let me = device::get_or_create(&app_data_dir(&app)?)?;
-    let peers =
-        sqlx::query_as::<_, (String, i64, i64, Option<i64>)>("SELECT device_id, last_merge_at, merges, their_ack FROM sync_peers ORDER BY last_merge_at DESC")
-            .fetch_all(&state.db)
-            .await?
-            .into_iter()
-            .map(|(device_id, last_merge_at, merges, their_ack)| SyncPeer {
-                device_id,
-                last_merge_at,
-                merges,
-                their_ack,
-            })
-            .collect();
+    let now = chrono::Utc::now().timestamp_millis();
+    let peers = sqlx::query_as::<_, (String, i64, i64, Option<i64>, bool)>(
+        "SELECT device_id, last_merge_at, merges, their_ack, excluded FROM sync_peers ORDER BY last_merge_at DESC",
+    )
+    .fetch_all(&state.db)
+    .await?
+    .into_iter()
+    .map(|(device_id, last_merge_at, merges, their_ack, excluded)| SyncPeer {
+        device_id,
+        last_merge_at,
+        merges,
+        their_ack,
+        stale: last_merge_at < now - crate::service::data::sync_run::STALE_PEER_MS,
+        excluded,
+    })
+    .collect();
     let open_conflicts = crate::service::data::sync_conflicts::open_count(&state.db).await?;
     Ok(SyncStatus {
         device_id: me.id,
@@ -112,6 +120,23 @@ pub async fn get_sync_status(app: AppHandle, state: State<'_, AppState>) -> Resu
         open_conflicts,
         pending_rollback: crate::service::data::sync_conflicts::pending_rollback(&app_data_dir(&app)?),
     })
+}
+
+/// 오래 못 본 기기를 제외하거나(지운 기록 정리가 기다리지 않음) 다시 포함한다. 제외한 기기가 돌아와 합치면 저절로 풀리고, 그때는 전체를 다시 합친다
+#[tauri::command]
+#[specta::specta]
+pub async fn set_sync_peer_excluded(app: AppHandle, state: State<'_, AppState>, device_id: String, excluded: bool) -> Result<()> {
+    require(&app, id::SYNC)?;
+    let n = sqlx::query("UPDATE sync_peers SET excluded = ? WHERE device_id = ?")
+        .bind(excluded)
+        .bind(&device_id)
+        .execute(&state.db)
+        .await?
+        .rows_affected();
+    if n == 0 {
+        return Err(AppError::not_found("모르는 기기"));
+    }
+    Ok(())
 }
 
 /// 동기화 파일 만들기. `path`는 저장 대화상자에서 고른 경로 (.scsync)

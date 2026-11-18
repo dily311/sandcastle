@@ -67,6 +67,19 @@
 		await load();
 	}
 
+	async function setExcluded(deviceId: string, excluded: boolean) {
+		await call(commands.setSyncPeerExcluded(deviceId, excluded), src);
+		await load();
+	}
+	async function excludePeer(deviceId: string) {
+		const ok = await confirmAction({
+			title: "오래 못 본 기기 제외",
+			message: `${short(deviceId)} 기기를 기다리지 않고 지운 기록을 정리합니다. 그 기기가 나중에 돌아오면 전체를 다시 합치고, 그동안 지운 항목이 되살아날 수 있습니다.`,
+			confirmLabel: "제외",
+			danger: true,
+		});
+		if (ok) await setExcluded(deviceId, true);
+	}
 	async function load() {
 		status = await call(commands.getSyncStatus(), src).catch(() => null);
 		backups = await call(commands.listSyncBackups(), { ...src, silent: true }).catch(() => []);
@@ -152,6 +165,8 @@
 					? `동기화함: 기기 ${r.merged.length}개 · 추가 ${n(m.added)} · 변경 ${n(m.updated)} · 지움 ${n(m.deleted)}${m.both ? ` · 둘 다 남김 ${n(m.both)}` : ""}`
 					: "동기화함: 다른 기기에서 새로 바뀐 것 없음",
 			);
+			for (const d of r.skippedDevices ?? []) toasts.error(`기기 ${short(d.deviceId)}의 묶음을 열지 못해 건너뜀: ${d.reason}`);
+			if (r.merged.some((d) => d.returnedAfterExclusion)) toasts.info("제외했던 기기가 돌아와 전체를 다시 합쳤습니다. 그동안 지운 항목이 되살아났을 수 있으니 확인하세요");
 			await library.load();
 			conflictsKey++;
 		} catch {
@@ -387,8 +402,14 @@
 					{#each status.peers as p (p.deviceId)}
 						<li>
 							<code>{short(p.deviceId)}</code>
+							{#if p.excluded}<Badge>제외됨</Badge>{:else if p.stale}<Badge tone="warning">오래 못 봄</Badge>{/if}
 							<span title={absolute(p.lastMergeAt)}>그 기기 것을 받음 {relative(p.lastMergeAt)}</span>
 							<span class="meta" title={p.theirAck ? absolute(p.theirAck) : undefined}>{p.theirAck ? `이 기기 것을 받아 감 ${relative(p.theirAck)}` : "이 기기 것은 아직 안 받아 감"} · {n(p.merges)}번</span>
+							{#if p.excluded}
+								<Button size="sm" variant="ghost" onclick={() => setExcluded(p.deviceId, false)}>다시 포함</Button>
+							{:else if p.stale}
+								<Button size="sm" variant="ghost" onclick={() => excludePeer(p.deviceId)}>제외</Button>
+							{/if}
 						</li>
 					{/each}
 				</ul>

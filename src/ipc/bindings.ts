@@ -258,6 +258,8 @@ export const commands = {
 	emptyTrash: (options?: InvokeOptions) => __TAURI_INVOKE<number>("empty_trash", undefined, options),
 	/**  이 기기 id, 합친 적 있는 기기, 남은 충돌 수. 동기화 화면을 열 때 (기기 id는 이때 처음 만든다) */
 	getSyncStatus: (options?: InvokeOptions) => __TAURI_INVOKE<SyncStatus_Serialize>("get_sync_status", undefined, options),
+	/**  오래 못 본 기기를 제외하거나(지운 기록 정리가 기다리지 않음) 다시 포함한다. 제외한 기기가 돌아와 합치면 저절로 풀리고, 그때는 전체를 다시 합친다 */
+	setSyncPeerExcluded: (deviceId: string, excluded: boolean, options?: InvokeOptions) => __TAURI_INVOKE<null>("set_sync_peer_excluded", { deviceId, excluded }, options),
 	/**  동기화 파일 만들기. `path`는 저장 대화상자에서 고른 경로 (.scsync) */
 	exportSyncBundle: (path: string, includeFiles: boolean, options?: InvokeOptions) => __TAURI_INVOKE<SyncBundleInfo>("export_sync_bundle", { path, includeFiles }, options),
 	/**  합치기 전에 숫자만 (DB·파일·설정을 바꾸지 않음) */
@@ -3012,11 +3014,24 @@ export type MergeReport = {
 	dryRun: boolean,
 };
 
-export type MergedDevice = {
+export type MergedDevice = MergedDevice_Serialize | MergedDevice_Deserialize;
+
+export type MergedDevice_Deserialize = {
 	deviceId: string,
 	/**  그 묶음을 만든 시각 (그 기기 시계) */
 	createdAt: number,
 	report: MergeReport,
+	/**  사용자가 제외했던 기기가 돌아와 전체를 다시 합쳤다. 그동안 지운 기록이 정리됐을 수 있어, 그 기기에 남아 있던 항목이 되살아났을 수 있다 */
+	returnedAfterExclusion?: boolean,
+};
+
+export type MergedDevice_Serialize = {
+	deviceId: string,
+	/**  그 묶음을 만든 시각 (그 기기 시계) */
+	createdAt: number,
+	report: MergeReport,
+	/**  사용자가 제외했던 기기가 돌아와 전체를 다시 합쳤다. 그동안 지운 기록이 정리됐을 수 있어, 그 기기에 남아 있던 항목이 되살아났을 수 있다 */
+	returnedAfterExclusion: boolean,
 };
 
 export type Message = Message_Serialize | Message_Deserialize;
@@ -4386,6 +4401,12 @@ export type SillyTavernImport_Serialize = { kind: "character"; character: Charac
 
 export type SillyTavernKind = "character" | "preset" | "regex" | "worldInfo" | "chat";
 
+/**  열지 못해 건너뛴 기기의 묶음 (더 새 앱에서 만든 것, 깨진 것 등). 다른 기기와의 동기화는 막지 않는다 — 이유를 보여 주고 다음 동기화 때 다시 본다 */
+export type SkippedDevice = {
+	deviceId: string,
+	reason: string,
+};
+
 /**  프론트로 나가는 한 줄. cues는 이 줄을 보여주기 직전에 순서대로 실행한다. */
 export type StageLine = StageLine_Serialize | StageLine_Deserialize;
 
@@ -4576,6 +4597,10 @@ export type SyncPeer_Deserialize = {
 	merges: number,
 	/**  그 기기가 이 기기 내용을 어디까지 받았나 (이 기기 시각, 그 기기 묶음의 acks). 아직이면 없음 */
 	theirAck?: number | null,
+	/**  오래(STALE_PEER_MS) 못 본 기기. 지운 기록 정리가 이 기기를 기다리는 중이라 사용자가 제외할 수 있다 */
+	stale: boolean,
+	/**  사용자가 제외함: 지운 기록 정리가 기다리지 않는다. 돌아와 합치면 저절로 풀린다 */
+	excluded: boolean,
 };
 
 export type SyncPeer_Serialize = {
@@ -4585,6 +4610,10 @@ export type SyncPeer_Serialize = {
 	merges: number,
 	/**  그 기기가 이 기기 내용을 어디까지 받았나 (이 기기 시각, 그 기기 묶음의 acks). 아직이면 없음 */
 	theirAck: number | null,
+	/**  오래(STALE_PEER_MS) 못 본 기기. 지운 기록 정리가 이 기기를 기다리는 중이라 사용자가 제외할 수 있다 */
+	stale: boolean,
+	/**  사용자가 제외함: 지운 기록 정리가 기다리지 않는다. 돌아와 합치면 저절로 풀린다 */
+	excluded: boolean,
 };
 
 export type SyncPreview = {
@@ -4603,7 +4632,9 @@ export type SyncRun = SyncRun_Serialize | SyncRun_Deserialize;
 export type SyncRunReport = SyncRunReport_Serialize | SyncRunReport_Deserialize;
 
 export type SyncRunReport_Deserialize = {
-	merged: MergedDevice[],
+	/**  열지 못해 건너뛴 기기 */
+	skippedDevices?: SkippedDevice[],
+	merged: MergedDevice_Deserialize[],
 	/**  새로 쓰인 것이 없어 건너뛴 기기 */
 	unchangedDevices: number,
 	filesDown: number,
@@ -4616,7 +4647,9 @@ export type SyncRunReport_Deserialize = {
 };
 
 export type SyncRunReport_Serialize = {
-	merged: MergedDevice[],
+	/**  열지 못해 건너뛴 기기 */
+	skippedDevices: SkippedDevice[],
+	merged: MergedDevice_Serialize[],
 	/**  새로 쓰인 것이 없어 건너뛴 기기 */
 	unchangedDevices: number,
 	filesDown: number,

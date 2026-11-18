@@ -99,3 +99,6 @@ lto = true
 opt-level = 3
 panic = "abort"
 strip = true
+
+[dev-dependencies]
+memory-stats = "1.2.0"

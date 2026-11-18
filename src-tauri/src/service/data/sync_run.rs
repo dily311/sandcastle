@@ -29,6 +29,9 @@ const PARALLEL: usize = 4;
 /// 지운 기록을 남겨 두는 최소 기간 (모든 기기가 봤어도)
 const TOMBSTONE_KEEP_MS: i64 = 30 * 86_400_000;
 
+/// 이 기간 넘게 새 묶음이 안 온 기기는 "오래 못 봄"으로 보여 준다 (1-F-3-3). 자동으로 빼지는 않고 사용자가 제외해야 정리가 풀린다
+pub const STALE_PEER_MS: i64 = 90 * 86_400_000;
+
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize, specta::Type)]
 #[serde(rename_all = "camelCase")]
 pub struct MergedDevice {
@@ -36,11 +39,25 @@ pub struct MergedDevice {
     /// 그 묶음을 만든 시각 (그 기기 시계)
     pub created_at: i64,
     pub report: MergeReport,
+    /// 사용자가 제외했던 기기가 돌아와 전체를 다시 합쳤다. 그동안 지운 기록이 정리됐을 수 있어, 그 기기에 남아 있던 항목이 되살아났을 수 있다
+    #[serde(default)]
+    pub returned_after_exclusion: bool,
+}
+
+/// 열지 못해 건너뛴 기기의 묶음 (더 새 앱에서 만든 것, 깨진 것 등). 다른 기기와의 동기화는 막지 않는다 — 이유를 보여 주고 다음 동기화 때 다시 본다
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, specta::Type)]
+#[serde(rename_all = "camelCase")]
+pub struct SkippedDevice {
+    pub device_id: String,
+    pub reason: String,
 }
 
 #[derive(Debug, Clone, Default, PartialEq, Serialize, Deserialize, specta::Type)]
 #[serde(rename_all = "camelCase")]
 pub struct SyncRunReport {
+    /// 열지 못해 건너뛴 기기
+    #[serde(default)]
+    pub skipped_devices: Vec<SkippedDevice>,
     pub merged: Vec<MergedDevice>,
     /// 새로 쓰인 것이 없어 건너뛴 기기
     pub unchanged_devices: u32,
@@ -96,7 +113,16 @@ async fn run_in<T: SyncTarget>(
         }
         let local = tmp.join(format!("{id}.scsync"));
         target.get(&e.name, &local).await?;
-        let mut b = sync_bundle::open(&local, local_schema, base)?;
+        let mut b = match sync_bundle::open(&local, local_schema, base) {
+            Ok(b) => b,
+            Err(e) => {
+                rep.skipped_devices.push(SkippedDevice {
+                    device_id: id,
+                    reason: e.to_string(),
+                });
+                continue;
+            }
+        };
         if b.manifest.device_id != id {
             continue; // 이름과 안의 기기가 다른 파일은 믿지 않는다
         }
@@ -142,6 +168,10 @@ async fn run_in<T: SyncTarget>(
                 rep.files_missing += 1;
             }
         }
+        let was_excluded: bool = sqlx::query_scalar("SELECT COALESCE((SELECT excluded FROM sync_peers WHERE device_id = ?), 0)")
+            .bind(&id)
+            .fetch_one(db)
+            .await?;
         let data = BundleData::read(&mut b, db).await?;
         let report = sync_merge::merge(db, &data, me, settings, false).await?;
         if let Some(ack) = data.manifest.acks.get(me) {
@@ -151,10 +181,18 @@ async fn run_in<T: SyncTarget>(
                 .execute(db)
                 .await?;
         }
+        if was_excluded {
+            // 돌아온 기기: 제외를 풀고 (이미 전체 묶음을 합쳤으므로 전체 재동기화가 된 것) 보고에 표시한다
+            sqlx::query("UPDATE sync_peers SET excluded = 0 WHERE device_id = ?")
+                .bind(&id)
+                .execute(db)
+                .await?;
+        }
         rep.merged.push(MergedDevice {
             device_id: id,
             created_at: data.manifest.created_at,
             report,
+            returned_after_exclusion: was_excluded,
         });
     }
 
@@ -204,13 +242,19 @@ async fn run_in<T: SyncTarget>(
 /// 아는 모든 기기가 본(그 기기 묶음의 acks가 이 기록보다 뒤) 30일 넘은 지운 기록만 지운다.
 /// 아직 이 기기 묶음을 합친 적이 없는 기기가 하나라도 있으면 지우지 않는다
 pub async fn cleanup_tombstones(db: &SqlitePool) -> Result<u32> {
-    let (peers, acked, min_ack): (i64, i64, Option<i64>) = sqlx::query_as("SELECT COUNT(*), COUNT(their_ack), MIN(their_ack) FROM sync_peers")
-        .fetch_one(db)
-        .await?;
+    cleanup_tombstones_at(db, chrono::Utc::now().timestamp_millis()).await
+}
+
+/// 시계를 받는 판 (시험에서 몇십 일 뒤를 흉내 낸다). 사용자가 제외한 기기는 기다리지 않는다
+pub async fn cleanup_tombstones_at(db: &SqlitePool, now: i64) -> Result<u32> {
+    let (peers, acked, min_ack): (i64, i64, Option<i64>) =
+        sqlx::query_as("SELECT COUNT(*), COUNT(their_ack), MIN(their_ack) FROM sync_peers WHERE excluded = 0")
+            .fetch_one(db)
+            .await?;
     let Some(min_ack) = min_ack.filter(|_| peers > 0 && peers == acked) else {
         return Ok(0);
     };
-    let before = min_ack.min(chrono::Utc::now().timestamp_millis() - TOMBSTONE_KEEP_MS);
+    let before = min_ack.min(now - TOMBSTONE_KEEP_MS);
     Ok(sqlx::query("DELETE FROM sync_tombstones WHERE deleted_at < ?")
         .bind(before)
         .execute(db)
@@ -349,5 +393,180 @@ mod tests {
             .await
             .unwrap();
         assert_eq!(cleanup_tombstones(&db).await.unwrap(), 1, "30일 넘은 것만");
+    }
+
+    // ---- 1-F-3-3 장기 오프라인 ----
+    const DAY: i64 = 86_400_000;
+
+    async fn tombstones(d: &Dev) -> i64 {
+        sqlx::query_scalar("SELECT COUNT(*) FROM sync_tombstones").fetch_one(&d.db).await.unwrap()
+    }
+
+    async fn add_char(d: &Dev, id: &str, name: &str) {
+        sqlx::query("INSERT INTO characters (id, name, created_at, updated_at) VALUES (?, ?, 1, 0)")
+            .bind(id)
+            .bind(name)
+            .execute(&d.db)
+            .await
+            .unwrap();
+    }
+
+    /// 셋이 모두 서로의 내용을 한 번씩 본 상태 (acks가 퍼짐)
+    async fn settle(ds: &[&Dev], t: &FolderTarget) {
+        for _ in 0..2 {
+            for d in ds {
+                sync(d, t).await;
+            }
+        }
+    }
+
+    #[tokio::test]
+    async fn a_device_offline_for_weeks_keeps_its_edits_and_deleted_rows_stay_deleted() {
+        let root = tempfile::tempdir().unwrap();
+        let shared = root.path().join("Drive");
+        std::fs::create_dir_all(&shared).unwrap();
+        let folder = FolderTarget::new(&shared).unwrap();
+        let (a, b, c) = (dev(root.path(), "a").await, dev(root.path(), "b").await, dev(root.path(), "c").await);
+        add_char(&a, "gone", "곧 지움").await;
+        add_char(&a, "kept", "원래 이름").await;
+        settle(&[&a, &b, &c], &folder).await;
+        assert_eq!(names(&c).await.len(), 2);
+
+        // C가 오프라인: 그동안 A가 지우고 고치고, C도 같은 것을 고친다
+        sqlx::query("DELETE FROM characters WHERE id = 'gone'").execute(&a.db).await.unwrap();
+        sqlx::query("UPDATE characters SET name = 'A가 고침' WHERE id = 'kept'")
+            .execute(&a.db)
+            .await
+            .unwrap();
+        sqlx::query("UPDATE characters SET name = 'C가 고침' WHERE id = 'kept'")
+            .execute(&c.db)
+            .await
+            .unwrap();
+        for _ in 0..3 {
+            sync(&a, &folder).await;
+            sync(&b, &folder).await;
+        }
+        assert_eq!(tombstones(&a).await, 1);
+        // ① 45일이 지나도 C가 아직 못 봤으므로 지운 기록은 남는다
+        let later = chrono::Utc::now().timestamp_millis() + 45 * DAY;
+        assert_eq!(cleanup_tombstones_at(&a.db, later).await.unwrap(), 0);
+        assert_eq!(cleanup_tombstones_at(&b.db, later).await.unwrap(), 0);
+        assert_eq!(tombstones(&a).await, 1);
+
+        // ② C가 돌아온다: 지운 것은 되살아나지 않고, C의 오프라인 수정은 충돌로 남는다
+        let r = sync(&c, &folder).await;
+        assert!(
+            r.merged.iter().map(|m| m.report.conflicts).sum::<u32>() >= 1,
+            "C의 수정과 A의 수정이 둘 다 남아야 함: {r:?}"
+        );
+        assert!(r.merged.iter().all(|m| !m.returned_after_exclusion));
+        let ids: Vec<String> = sqlx::query_scalar("SELECT id FROM characters ORDER BY id").fetch_all(&c.db).await.unwrap();
+        assert_eq!(ids, vec!["kept"], "지운 항목이 C에서도 지워짐");
+        settle(&[&a, &b, &c], &folder).await;
+        assert_eq!(names(&a).await.len(), 1, "A에도 되살아나지 않음");
+        // C가 봤으니 이제 정리된다
+        assert_eq!(cleanup_tombstones_at(&a.db, later).await.unwrap(), 1);
+    }
+
+    #[tokio::test]
+    async fn excluding_a_stale_device_lets_cleanup_proceed_and_its_return_is_flagged() {
+        let root = tempfile::tempdir().unwrap();
+        let shared = root.path().join("Drive");
+        std::fs::create_dir_all(&shared).unwrap();
+        let folder = FolderTarget::new(&shared).unwrap();
+        let (a, b, d) = (dev(root.path(), "a").await, dev(root.path(), "b").await, dev(root.path(), "d").await);
+        add_char(&a, "x", "남은 것").await;
+        add_char(&a, "y", "지울 것").await;
+        settle(&[&a, &b, &d], &folder).await;
+
+        // D가 사라진 채 A가 지운다
+        sqlx::query("DELETE FROM characters WHERE id = 'y'").execute(&a.db).await.unwrap();
+        for _ in 0..3 {
+            sync(&a, &folder).await;
+            sync(&b, &folder).await;
+        }
+        let much_later = chrono::Utc::now().timestamp_millis() + 100 * DAY;
+        assert_eq!(cleanup_tombstones_at(&a.db, much_later).await.unwrap(), 0, "D를 기다리는 중");
+
+        // 사용자가 D를 제외 → 정리됨
+        sqlx::query("UPDATE sync_peers SET excluded = 1 WHERE device_id = ?")
+            .bind(&d.id)
+            .execute(&a.db)
+            .await
+            .unwrap();
+        assert_eq!(cleanup_tombstones_at(&a.db, much_later).await.unwrap(), 1);
+        assert_eq!(tombstones(&a).await, 0);
+
+        // D가 돌아오면 전체를 다시 합치고 표시된다. 지운 기록이 없으므로 D에 남은 항목이 되살아날 수 있다 (알려진 한계)
+        let r = sync(&d, &folder).await;
+        assert!(r.merged.len() >= 1);
+        let r = sync(&a, &folder).await;
+        let back: Vec<_> = r.merged.iter().filter(|m| m.device_id == d.id).collect();
+        assert_eq!(back.len(), 1);
+        assert!(back[0].returned_after_exclusion, "{r:?}");
+        let excluded: bool = sqlx::query_scalar("SELECT excluded FROM sync_peers WHERE device_id = ?")
+            .bind(&d.id)
+            .fetch_one(&a.db)
+            .await
+            .unwrap();
+        assert!(!excluded, "돌아오면 제외가 풀림");
+    }
+
+    // ---- 1-F-3-4 중단·깨진 묶음 ----
+    #[tokio::test]
+    async fn a_bundle_that_cannot_be_opened_is_reported_and_does_not_block_the_others() {
+        let root = tempfile::tempdir().unwrap();
+        let shared = root.path().join("Drive");
+        std::fs::create_dir_all(&shared).unwrap();
+        let folder = FolderTarget::new(&shared).unwrap();
+        let (a, b) = (dev(root.path(), "a").await, dev(root.path(), "b").await);
+        add_char(&a, "c1", "Aria").await;
+        sync(&a, &folder).await;
+        // 업로드가 도중에 끊겨 내용이 깨진 다른 기기의 묶음 (이름은 정상)
+        let broken = uuid::Uuid::new_v4().to_string();
+        std::fs::write(folder.root().join(format!("devices/{broken}.scsync")), b"PK not a zip").unwrap();
+        let r = sync(&b, &folder).await;
+        assert_eq!(r.skipped_devices.len(), 1, "{r:?}");
+        assert_eq!(r.skipped_devices[0].device_id, broken);
+        assert!(!r.skipped_devices[0].reason.is_empty());
+        assert_eq!(names(&b).await, vec!["Aria"], "깨진 묶음 때문에 정상 기기와의 동기화가 막히지 않음");
+        // 쓰는 중인 파일(.partial)은 보이지도 않는다
+        std::fs::write(folder.root().join(format!("devices/{}.scsync.partial", uuid::Uuid::new_v4())), b"half").unwrap();
+        let r = sync(&b, &folder).await;
+        assert_eq!(r.skipped_devices.len(), 1);
+    }
+
+    #[tokio::test]
+    async fn a_corrupted_file_in_the_folder_stops_before_the_database_changes_and_resumes_after_repair() {
+        let root = tempfile::tempdir().unwrap();
+        let shared = root.path().join("Drive");
+        std::fs::create_dir_all(&shared).unwrap();
+        let folder = FolderTarget::new(&shared).unwrap();
+        let (a, b) = (dev(root.path(), "a").await, dev(root.path(), "b").await);
+        let avatar = a.base.join("characters/avatars/x.png");
+        std::fs::create_dir_all(avatar.parent().unwrap()).unwrap();
+        std::fs::write(&avatar, b"png-bytes").unwrap();
+        sqlx::query("INSERT INTO characters (id, name, avatar, created_at, updated_at) VALUES ('c1', 'Aria', ?, 1, 0)")
+            .bind(avatar.to_string_lossy().to_string())
+            .execute(&a.db)
+            .await
+            .unwrap();
+        sync(&a, &folder).await;
+        let blob = std::fs::read_dir(folder.root().join("blobs")).unwrap().next().unwrap().unwrap().path();
+        let good = std::fs::read(&blob).unwrap();
+        std::fs::write(&blob, b"half-written").unwrap();
+
+        // 내용이 해시와 다른 파일: 멈추고, 행은 하나도 합치지 않음 (파일보다 DB를 먼저 바꾸지 않으므로)
+        tokio::time::sleep(std::time::Duration::from_millis(4)).await;
+        let err = run(&b.db, &b.base, &mut Map::new(), &b.id, &folder, &|_| {}).await.err().expect("멈춰야 함");
+        assert!(err.to_string().contains("해시와 다름"), "{err}");
+        assert!(names(&b).await.is_empty(), "DB는 그대로");
+        assert!(!b.base.join("characters/avatars/x.png").exists() || std::fs::read(b.base.join("characters/avatars/x.png")).unwrap() != b"half-written");
+
+        // 고쳐지면 다음 동기화에서 이어진다
+        std::fs::write(&blob, good).unwrap();
+        let r = sync(&b, &folder).await;
+        assert_eq!((r.merged.len(), r.files_down), (1, 1), "{r:?}");
+        assert_eq!(names(&b).await, vec!["Aria"]);
     }
 }
