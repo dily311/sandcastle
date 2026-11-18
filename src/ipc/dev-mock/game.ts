@@ -53,6 +53,7 @@ let state = {
 	relationships: {},
 	stage: { background: null, bgm: null, standings: {} },
 	presentNpcs: ["gc1"],
+	storyPlanDue: true,
 };
 
 const intro = [
@@ -72,7 +73,39 @@ const moves = () =>
 		.map((c) => ({ toId: c.toId, travelSeconds: c.travelSeconds, available: !state.currentSceneId && (c.toId !== "l3" || (state.inventory.it1 ?? 0) >= 5) }));
 const respond = (events: unknown[]) => ({ state: { ...structuredClone(state), availableMoves: moves() }, events });
 
+// 각본가(StoryPlan): 미리보기에서는 고정된 플랜 하나. 새로 세우면 seq만 올라간다
+let planSeq = 1;
+const makePlan = (reason: string) => ({
+	sessionId: "ss1",
+	seq: planSeq,
+	reason,
+	plan: {
+		premise: "숲에서 길을 잃은 주인공이 견습 마법사 엘리안을 만나 숲의 비밀을 알아간다",
+		beats: [
+			{ title: "오두막에 닿기", goal: "비를 피하고 엘리안과 가까워진다", status: "active" },
+			{ title: "샘터의 약초", goal: "약초를 모아 엘리안을 돕는다", status: "pending" },
+		],
+		openThreads: ["숲에서 들린 목소리의 정체"],
+		facts: ["엘리안은 숲을 지키는 견습 마법사다"],
+		summary: "첫날 숲 입구에서 목소리를 따라 걸었다",
+		suggestions: [{ kind: "scene", id: "s2", reason: "비가 오기 전에 오두막으로 안내한다" }],
+	},
+});
+
 export const gameHandlers: Record<string, (a: Args) => unknown> = {
+	get_story_plan: () => makePlan("session_start"),
+	refresh_story_plan: ({ force }) => {
+		if (!force && !state.storyPlanDue) return null;
+		planSeq++;
+		state.storyPlanDue = false;
+		return makePlan(force ? "manual" : "scene_end");
+	},
+	stage_story_suggestion: () => respond([]),
+	add_game_asset: ({ asset }) => ({
+		asset: { id: crypto.randomUUID(), gameId: "g1", key: asset.key ?? asset.name ?? "asset", name: asset.name ?? "asset", category: asset.category, kind: "image", path: `assets/${asset.category}/new.png`, settingsJson: null, createdAt: 0, updatedAt: 0 },
+		diagnostics: [],
+	}),
+	remove_game_asset: () => ({ deleted: true, references: [], diagnostics: [] }),
 	start_new_game: () => respond(intro),
 	continue_game: () => ({ ...respond(intro), history: { entries: [], hasMore: false, oldestSeq: null } }),
 	dispatch_command: ({ command }) => {

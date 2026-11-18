@@ -3,7 +3,7 @@
 	import { onMount, untrack } from "svelte";
 	import { ChevronDown, FileArchive, FolderOpen, Puzzle } from "@lucide/svelte";
 	import type { PluginPreview, UserPlugin_Serialize as UserPlugin } from "$ipc/bindings";
-	import { Badge, Button, EmptyState, IconButton, Segmented, Switch } from "$shared/ui";
+	import { Badge, Button, EmptyState, IconButton, Segmented, Select, Switch } from "$shared/ui";
 	import { pickFiles, pickFolder, type Filter } from "$shared/ipc/dialog";
 	import { confirmAction } from "$shared/stores/confirm.svelte";
 	import { toasts } from "$shared/stores/toast.svelte";
@@ -98,6 +98,13 @@
 		if (ok) await admin.uninstall(p.id);
 	}
 
+	async function useVersion(p: UserPlugin, dir: string) {
+		if (dir === p.activeDir) return;
+		const r = await admin.switchVersion(p.id, dir);
+		rev++;
+		if (r) toasts.success(`${r.versions.find((v) => v.dir === dir)?.version ?? dir} 판으로 바꿨습니다 (꺼져 있음 — 켜서 권한에 동의하세요)`);
+	}
+
 	/** 업데이트로 권한이 늘어 꺼진 플러그인: 이전에 허락한 것이 있는데 지금 manifest가 더 요구함 */
 	const needsConsent = (p: UserPlugin) => !p.enabled && p.granted.length > 0 && !!p.manifest && p.manifest.permissions.some((x) => !p.granted.includes(x));
 	const has = (p: UserPlugin, perm: string) => !!p.manifest?.permissions.includes(perm);
@@ -144,6 +151,15 @@
 						{/if}
 						{#if p.codeChanged}
 							<p class="err">켤 때 본 코드와 폴더의 파일이 달라져서 꺼 두었습니다 (직접 고쳤거나 다른 곳에서 바뀜). 믿을 수 있는 변경인지 확인하고, 괜찮으면 다시 켜세요.</p>
+						{/if}
+						{#if p.versions.length > 1}
+							<h4>사용할 판</h4>
+							<Select
+								value={p.activeDir}
+								aria-label="사용할 판"
+								options={p.versions.map((v) => ({ value: v.dir, label: `v${v.version}${v.dir === p.activeDir ? " (사용 중)" : ""}${v.error ? " — 읽을 수 없음" : ""}`, disabled: !!v.error }))}
+								onchange={(e) => useVersion(p, e.currentTarget.value)}
+							/>
 						{/if}
 						{#if m}
 							<h4>권한</h4>

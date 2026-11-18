@@ -394,6 +394,25 @@ fn raw_validate(def: &GameDefinition) -> Vec<Raw> {
         }
     }
 
+    // ---- StoryPlan 표시
+    let plan_on = crate::game::story_plan::settings(def).enabled;
+    for e in &events {
+        if e.config_json.get("planUsable").and_then(|v| v.as_bool()) == Some(true) && e.trigger_type != "manual" {
+            warn(
+                &mut out,
+                "StoryPlan이 올릴 수 있는 이벤트는 trigger_type이 manual이어야 합니다 (planUsable이 무시됩니다)",
+                format!("이벤트 '{}' (지금 {})", e.name, e.trigger_type),
+            );
+        }
+    }
+    if !plan_on && (events.iter().any(|e| crate::game::story_plan::event_plan_usable(e)) || def.scenes.iter().any(crate::game::story_plan::scene_plan_usable)) {
+        warn(
+            &mut out,
+            "planUsable로 표시한 이벤트/씬이 있지만 StoryPlan이 꺼져 있습니다 (settings.storyPlan.enabled)",
+            "프로젝트 설정",
+        );
+    }
+
     // ---- 이벤트 종류별 연결/조건
     for e in &events {
         let conds: &[Condition] = def.event_conditions.get(&e.id).map(|v| v.as_slice()).unwrap_or(&[]);
@@ -419,7 +438,8 @@ fn raw_validate(def: &GameDefinition) -> Vec<Raw> {
                     target.clone(),
                 );
             }
-            "manual" if !fired.contains(&e.id) => {
+            // StoryPlan을 켠 게임에서 제작자가 맡긴(planUsable) manual 이벤트는 각본가가 올릴 수 있다.
+            "manual" if !fired.contains(&e.id) && !(plan_on && crate::game::story_plan::event_plan_usable(e)) => {
                 warn(&mut out, "manual 이벤트를 fire_event로 부르는 곳이 없어 발동하지 않습니다", target.clone());
             }
             _ => {}
@@ -473,6 +493,7 @@ fn raw_validate(def: &GameDefinition) -> Vec<Raw> {
     }
 
     validate_assets(def, &mut out);
+    validate_capabilities(def, &mut out);
 
     // ---- AI 변수 설정
     for d in &def.state_defs {
@@ -485,6 +506,104 @@ fn raw_validate(def: &GameDefinition) -> Vec<Raw> {
         }
     }
     out
+}
+
+/// 꺼진 기능(capabilities)을 쓰는 데이터. 발동할 수 없는 이벤트(scheduled/random/location/interaction)는 Error,
+/// 시작 값에 고정되어 의미가 없어지는 조건과 만날 수 없는 NPC는 Warning이다.
+fn validate_capabilities(def: &GameDefinition, out: &mut Vec<Raw>) {
+    use crate::game::engine::Condition;
+    let caps = def.capabilities();
+    if caps.time && caps.movement() && caps.location {
+        return;
+    }
+    let time_cond = |c: &Condition| {
+        matches!(
+            c,
+            Condition::MinTime { .. } | Condition::AtMinuteOfDay { .. } | Condition::TimePeriod { .. } | Condition::Weather { .. }
+        )
+    };
+    let place_cond = |c: &Condition| matches!(c, Condition::InLocation { .. } | Condition::InZone { .. });
+    // 조건이 놓인 곳(이름)과 조건들. 저장된 문자열 조건은 읽을 수 있는 것만 본다 (못 읽는 건 다른 진단이 알린다).
+    let parse = |raw: &str| serde_json::from_str::<Condition>(raw).ok();
+    let mut conds: Vec<(String, Condition)> = Vec::new();
+    let mut events: Vec<_> = def.events.values().collect();
+    events.sort_by(|a, b| a.name.cmp(&b.name));
+    for e in &events {
+        for c in def.event_conditions.get(&e.id).into_iter().flatten() {
+            conds.push((format!("이벤트 '{}'", e.name), c.clone()));
+        }
+    }
+    for c in &def.location_connections {
+        if let Some(cond) = c.condition.as_deref().and_then(parse) {
+            conds.push((format!("이동 경로 {} → {}", location_name(def, &c.from_id), location_name(def, &c.to_id)), cond));
+        }
+    }
+    for scene in &def.scenes {
+        for ch in scene.choices.iter().flatten() {
+            if let Some(cond) = ch.condition.as_deref().and_then(parse) {
+                conds.push((format!("씬 '{}' › 선택지 '{}'", scene.scene_name, ch.text), cond));
+            }
+        }
+    }
+    let mut items: Vec<_> = def.items.values().collect();
+    items.sort_by(|a, b| a.name.cmp(&b.name));
+    for i in items {
+        if let Ok(cond) = serde_json::from_value::<Condition>(i.use_condition.clone()) {
+            conds.push((format!("아이템 '{}' (사용 조건)", i.name), cond));
+        }
+    }
+
+    if !caps.time {
+        for e in &events {
+            if matches!(e.trigger_type.as_str(), "scheduled" | "random") {
+                err(
+                    out,
+                    "시간 기능이 꺼진 게임이라 시간이 흐를 때 발동하는 이벤트(scheduled/random)는 발동하지 않습니다",
+                    format!("이벤트 '{}' ({})", e.name, e.trigger_type),
+                );
+            }
+        }
+        for (who, _) in conds.iter().filter(|(_, c)| time_cond(c)) {
+            warn(out, "시간 기능이 꺼진 게임이라 시간/시간대/날씨 조건은 시작 값에 고정됩니다", who.clone());
+        }
+    }
+    if !caps.movement() {
+        for e in &events {
+            if e.trigger_type == "location" {
+                err(
+                    out,
+                    "지도/이동 기능이 꺼진 게임이라 location 이벤트는 발동하지 않습니다",
+                    format!("이벤트 '{}'", e.name),
+                );
+            }
+        }
+        for (who, _) in conds.iter().filter(|(_, c)| place_cond(c)) {
+            warn(out, "지도/이동 기능이 꺼진 게임이라 위치 조건은 시작 위치에 고정됩니다", who.clone());
+        }
+        // 플레이어는 시작 위치를 떠날 수 없으니, 거기에 나올 수 없는 NPC는 만날 수 없다.
+        let start = def.project.start_location_id.clone().or_else(|| def.locations.first().map(|l| l.id.clone()));
+        let mut unreachable: Vec<String> = def
+            .spawn_locations
+            .iter()
+            .filter(|(_, rows)| !rows.is_empty() && !rows.iter().any(|r| Some(&r.location_id) == start.as_ref()))
+            .map(|(cid, _)| char_name(def, cid))
+            .collect();
+        unreachable.sort();
+        for name in unreachable {
+            warn(out, "지도/이동 기능이 꺼진 게임인데 시작 위치에 나오지 않는 NPC라 만날 수 없습니다", name);
+        }
+    }
+    if !caps.location {
+        for e in &events {
+            if e.trigger_type == "interaction" {
+                err(
+                    out,
+                    "위치 기능이 꺼진 게임이라 오브젝트 상호작용(interaction) 이벤트는 발동하지 않습니다",
+                    format!("이벤트 '{}'", e.name),
+                );
+            }
+        }
+    }
 }
 
 /// 게임의 진단 결과 전체: 데이터 일관성 + 에셋 파일 존재(game_dir를 주면). 같은 문구는 하나로 묶인다.

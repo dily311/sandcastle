@@ -32,6 +32,15 @@ class RuntimeStore {
 		this.#store = { ...(this.#store ?? { history: { entries: [], hasMore: false, oldestSeq: 0 } }), ...(res as unknown as ContinueGameResponse) };
 	}
 
+	/** 각본가 제안을 무대에 올림: dispatch와 같은 응답(GameResponse)을 같은 방식으로 반영 */
+	async stageSuggestion(kind: "event" | "scene", targetId: string) {
+		const res = await call(commands.stageStorySuggestion(kind, targetId), { ...src, silent: true }).catch((e) => {
+			reportGameError(e, gameStore.project?.id);
+			throw e;
+		});
+		this.#store = { ...(this.#store ?? { history: { entries: [], hasMore: false, oldestSeq: 0 } }), ...(res as unknown as ContinueGameResponse) };
+	}
+
 	get value() {
 		return this.#store;
 	}

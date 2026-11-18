@@ -27,6 +27,8 @@ pub mod sync_exchange;
 pub mod sync_merge;
 #[cfg(test)]
 mod sync_merge_tests;
+#[cfg(test)]
+mod sync_perf_tests;
 pub mod sync_run;
 pub mod sync_target;
 pub mod trash;

@@ -46,6 +46,14 @@ impl GameDefinition {
         let mut interactables: Vec<&_> = self.interactables.values().flatten().collect();
         interactables.sort_by(|a, b| a.id.cmp(&b.id));
 
+        // 게임이 쓰지 않는 기능(capabilities)의 정적 데이터는 내보내지 않는다 (빈 배열).
+        let caps = self.capabilities();
+        let movement = caps.movement();
+        let mut template = crate::game::template::find(&self.project.template_id);
+        if let Some(t) = &mut template {
+            t.capabilities = caps.clone(); // 게임 설정으로 끈 것까지 반영한 실제 값
+        }
+
         json!({
             "game": {
                 "id": self.project.id,
@@ -55,32 +63,34 @@ impl GameDefinition {
                 "customCss": self.project.custom_css,
                 "settings": self.project.settings_json,
             },
-            // 이 게임의 템플릿과 capabilities. 프론트가 지도/인벤토리 같은 UI를 켜고 끄는 데 쓴다. (엔진이 강제하지는 않는다)
-            "template": crate::game::template::find(&self.project.template_id),
-            "maps": self.maps.iter().map(|m| json!({
+            // 이 게임의 템플릿과 실제로 쓰는 capabilities (템플릿 값에서 게임 설정이 끈 것을 뺀 것).
+            // map/location/time은 엔진이 강제한다: 꺼진 기능의 데이터는 아래에서 빈 배열로 나가고 해당 커맨드는 거절된다.
+            "template": template,
+            "capabilities": caps,
+            "maps": self.maps.iter().filter(|_| movement).map(|m| json!({
                 "id": m.id, "name": m.name, "dangerLevel": m.danger_level, "settings": m.settings_json,
             })).collect::<Vec<_>>(),
-            "zones": self.zones.iter().map(|z| json!({
+            "zones": self.zones.iter().filter(|_| movement).map(|z| json!({
                 "id": z.id, "mapId": z.map_id, "name": z.name, "tags": z.tags, "settings": z.settings_json,
             })).collect::<Vec<_>>(),
-            "locations": self.locations.iter().map(|l| json!({
+            "locations": self.locations.iter().filter(|_| caps.location).map(|l| json!({
                 "id": l.id, "zoneId": l.zone_id, "name": l.name, "description": l.description, "settings": l.settings_json,
             })).collect::<Vec<_>>(),
             // 이동 조건은 안 준다. 막혀 있으면 MoveTo가 에러로 알려준다.
-            "connections": self.location_connections.iter().map(|c| json!({
+            "connections": self.location_connections.iter().filter(|_| movement).map(|c| json!({
                 "fromId": c.from_id, "toId": c.to_id, "travelSeconds": c.travel_seconds, "settings": c.settings_json,
             })).collect::<Vec<_>>(),
-            "interactables": interactables.iter().map(|i| json!({
+            "interactables": interactables.iter().filter(|_| caps.location).map(|i| json!({
                 "id": i.id, "locationId": i.location_id, "name": i.name,
             })).collect::<Vec<_>>(),
             "characters": characters.iter().map(|c| json!({
                 "id": c.id, "name": c.name, "avatar": c.avatar, "description": c.description,
                 "firstMessage": c.first_message, "tags": c.tags, "settings": c.settings_json,
             })).collect::<Vec<_>>(),
-            "timePeriods": self.time_periods.iter().map(|p| json!({
+            "timePeriods": self.time_periods.iter().filter(|_| caps.time).map(|p| json!({
                 "id": p.id, "name": p.name, "startMinute": p.start_minute, "endMinute": p.end_minute,
             })).collect::<Vec<_>>(),
-            "weatherTypes": self.weather_types.iter().map(|w| json!({ "id": w.id, "name": w.name })).collect::<Vec<_>>(),
+            "weatherTypes": self.weather_types.iter().filter(|_| caps.time).map(|w| json!({ "id": w.id, "name": w.name })).collect::<Vec<_>>(),
             "scenes": self.scenes.iter().map(|s| json!({
                 "id": s.id, "sceneKey": s.scene_key, "name": s.scene_name, "description": s.description,
                 "isEnding": s.is_ending, "settings": s.settings_json,

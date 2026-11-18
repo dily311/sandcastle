@@ -38,6 +38,8 @@ use crate::error::{AppError, Result};
 pub struct BundleData {
     pub manifest: SyncManifest,
     pub tables: BTreeMap<String, Vec<Map<String, Value>>>,
+    /// 이 기기가 동기화하는 테이블 중 묶음에 든 것 (`tables`가 비어 있어도 — `read_meta`)
+    pub table_names: Vec<String>,
     pub tombstones: Vec<Tombstone>,
     pub settings: Map<String, Value>,
 }
@@ -54,7 +56,20 @@ impl BundleData {
         }
         Ok(Self {
             manifest: bundle.manifest.clone(),
+            table_names: tables.keys().cloned().collect(),
             tables,
+            tombstones: bundle.tombstones()?,
+            settings: bundle.settings()?,
+        })
+    }
+
+    /// 행 없이 나머지만 (지운 기록·설정·목록). 행은 `merge_bundle`이 묶음에서 나눠 읽는다
+    pub async fn read_meta(bundle: &mut Bundle, db: &SqlitePool) -> Result<Self> {
+        let synced: HashSet<String> = change_tracking::synced_tables(db).await?.into_iter().collect();
+        Ok(Self {
+            manifest: bundle.manifest.clone(),
+            table_names: bundle.manifest.tables.keys().filter(|t| synced.contains(*t)).cloned().collect(),
+            tables: BTreeMap::new(),
             tombstones: bundle.tombstones()?,
             settings: bundle.settings()?,
         })
@@ -374,8 +389,7 @@ async fn apply_tombstones(conn: &mut SqliteConnection, ctx: &mut Ctx<'_>, tombst
 
 /// 같은 대화에 양쪽이 이어 쓴 곳 찾기: (대화 id → 처음 겹친 번호)
 /// 그 기기에서 이미 본 행(remote_seen 이전)은 빼고 본다 — 같은 내용을 다시 받아도 분기를 또 만들지 않게
-async fn diverged_conversations(conn: &mut SqliteConnection, rows: &[Map<String, Value>], remote_seen: i64) -> Result<BTreeMap<String, i64>> {
-    let mut out: BTreeMap<String, i64> = BTreeMap::new();
+async fn diverged_conversations(conn: &mut SqliteConnection, rows: &[&Map<String, Value>], remote_seen: i64, out: &mut BTreeMap<String, i64>) -> Result<()> {
     for r in rows {
         let (Some(id), Some(conv), Some(seq)) = (
             r.get("id").and_then(Value::as_str),
@@ -397,7 +411,87 @@ async fn diverged_conversations(conn: &mut SqliteConnection, rows: &[Map<String,
             *e = (*e).min(seq);
         }
     }
-    Ok(out)
+    Ok(())
+}
+
+/// 한 덩어리의 행 (빌려 온 것 또는 읽어 온 것)
+type Rows<'a> = std::borrow::Cow<'a, [Map<String, Value>]>;
+
+/// 분기로 옮길 대화: 대화 id → (분기 대화 id, 겹친 처음 번호)
+type BranchOf = HashMap<String, (String, i64)>;
+
+/// 받은 행을 읽는 곳: 이미 올려 둔 것(시험·미리보기) 또는 묶음에서 나눠 읽기 (행 수에 비례해 메모리를 쓰지 않게)
+enum Src<'a> {
+    Loaded(&'a BTreeMap<String, Vec<Map<String, Value>>>),
+    Stream(&'a mut Bundle),
+}
+
+/// 한 테이블을 `RowChunks::next`로 나눠 받는다 (Loaded는 통째로 한 번)
+enum RowChunks<'a> {
+    Whole(Option<&'a [Map<String, Value>]>),
+    Reader(super::sync_bundle::RowReader),
+}
+
+/// 시험에서는 아주 작게 (여러 덩어리에 걸친 경우를 모든 시험이 지나가게)
+fn row_chunk() -> usize {
+    if cfg!(test) {
+        std::env::var("SYNC_ROW_CHUNK").ok().and_then(|v| v.parse().ok()).unwrap_or(3)
+    } else {
+        2000
+    }
+}
+
+impl<'a> RowChunks<'a> {
+    fn next(&mut self) -> Result<Option<Rows<'a>>> {
+        match self {
+            RowChunks::Whole(rows) => Ok(rows.take().map(std::borrow::Cow::Borrowed)),
+            RowChunks::Reader(r) => {
+                let c = r.next_chunk(row_chunk())?;
+                Ok(if c.is_empty() { None } else { Some(std::borrow::Cow::Owned(c)) })
+            }
+        }
+    }
+}
+
+impl Src<'_> {
+    fn chunks(&mut self, table: &str) -> Result<RowChunks<'_>> {
+        Ok(match self {
+            Src::Loaded(m) => RowChunks::Whole(m.get(table).map(|v| v.as_slice())),
+            Src::Stream(b) => RowChunks::Reader(b.row_reader(table)?),
+        })
+    }
+}
+
+/// 같은 대화에 양쪽이 이어 씀 → 받은 메시지는 분기 대화로. 메시지 전체를 먼저 훑어(나눠 읽어서) 겹친 대화를 찾고 분기를 만든다
+async fn branch_prepass(conn: &mut SqliteConnection, ctx: &mut Ctx<'_>, src: &mut Src<'_>, table: &str) -> Result<BranchOf> {
+    let mut diverged: BTreeMap<String, i64> = BTreeMap::new();
+    let mut chunks = src.chunks(table)?;
+    while let Some(rows) = chunks.next()? {
+        // 전에 분기로 옮긴 메시지는 빼고 본다 (이미 이 기기에 있음)
+        let fresh: Vec<&Map<String, Value>> = rows
+            .iter()
+            .filter(|r| !matches!(r.get("id"), Some(Value::String(id)) if ctx.id_map.contains_key(&(table.to_string(), id.clone()))))
+            .collect();
+        diverged_conversations(conn, &fresh, ctx.remote_seen, &mut diverged).await?;
+    }
+    let mut branch_of: BranchOf = HashMap::new();
+    for (conv, from_seq) in diverged {
+        let b = make_branch(conn, ctx, &conv, from_seq).await?;
+        let key = key_text(&[Value::from(conv.clone())]);
+        record_conflict(
+            conn,
+            ctx,
+            "branch",
+            "conversations",
+            &key,
+            None,
+            Some(serde_json::json!({ "branchId": b, "fromSeq": from_seq })),
+        )
+        .await?;
+        ctx.report.branches += 1;
+        branch_of.insert(conv, (b, from_seq));
+    }
+    Ok(branch_of)
 }
 
 /// 분기 대화 만들기: 겹치기 전까지의 이 기기 메시지를 복사한 새 대화. 새 대화 id
@@ -433,39 +527,18 @@ async fn make_branch(conn: &mut SqliteConnection, ctx: &Ctx<'_>, conv: &str, fro
     Ok(id)
 }
 
-async fn apply_rows(conn: &mut SqliteConnection, ctx: &mut Ctx<'_>, table: &str, rows: &[Map<String, Value>]) -> Result<()> {
+async fn apply_rows(
+    conn: &mut SqliteConnection,
+    ctx: &mut Ctx<'_>,
+    table: &str,
+    rows: &[Map<String, Value>],
+    branch_of: &HashMap<String, (String, i64)>,
+) -> Result<()> {
     let Some(key_cols) = ctx.schema.keys.get(table).filter(|k| !k.is_empty()).cloned() else {
         ctx.report.skipped += rows.len() as u32;
         return Ok(());
     };
     let fks = ctx.out.get(table).cloned().unwrap_or_default();
-
-    // 같은 대화에 양쪽이 이어 씀 → 받은 메시지는 분기 대화로
-    let mut branch_of: HashMap<String, (String, i64)> = HashMap::new();
-    if table == "messages" {
-        // 전에 분기로 옮긴 메시지는 빼고 본다 (이미 이 기기에 있음)
-        let fresh: Vec<Map<String, Value>> = rows
-            .iter()
-            .filter(|r| !matches!(r.get("id"), Some(Value::String(id)) if ctx.id_map.contains_key(&(table.to_string(), id.clone()))))
-            .cloned()
-            .collect();
-        for (conv, from_seq) in diverged_conversations(conn, &fresh, ctx.remote_seen).await? {
-            let b = make_branch(conn, ctx, &conv, from_seq).await?;
-            let key = key_text(&[Value::from(conv.clone())]);
-            record_conflict(
-                conn,
-                ctx,
-                "branch",
-                "conversations",
-                &key,
-                None,
-                Some(serde_json::json!({ "branchId": b, "fromSeq": from_seq })),
-            )
-            .await?;
-            ctx.report.branches += 1;
-            branch_of.insert(conv, (b, from_seq));
-        }
-    }
 
     for original in rows {
         // 전에 분기 대화로 옮긴 메시지가 다른 기기를 거쳐 다시 옴 → 이미 있음 (분기를 또 만들지 않는다)
@@ -651,6 +724,29 @@ async fn fix_orphans(conn: &mut SqliteConnection, ctx: &mut Ctx<'_>, tables: &[S
 /// 묶음 합치기. `settings`는 이 기기의 settings.json 전체 — 같이 쓰는 칸을 받은 것으로 바꾼다(dry_run이면 그대로).
 /// 호출하는 쪽이 바뀐 settings를 저장한다
 pub async fn merge(db: &SqlitePool, data: &BundleData, local_device: &str, settings: &mut Map<String, Value>, dry_run: bool) -> Result<MergeReport> {
+    merge_core(db, data, Src::Loaded(&data.tables), local_device, settings, dry_run).await
+}
+
+/// `merge`와 같지만 행을 묶음에서 나눠 읽는다 — 메모리가 묶음 크기에 비례해 늘지 않는다. `meta`는 `BundleData::read_meta`로 읽은 것 (행 없음)
+pub async fn merge_bundle(
+    db: &SqlitePool,
+    bundle: &mut Bundle,
+    meta: &BundleData,
+    local_device: &str,
+    settings: &mut Map<String, Value>,
+    dry_run: bool,
+) -> Result<MergeReport> {
+    merge_core(db, meta, Src::Stream(bundle), local_device, settings, dry_run).await
+}
+
+async fn merge_core(
+    db: &SqlitePool,
+    data: &BundleData,
+    mut src: Src<'_>,
+    local_device: &str,
+    settings: &mut Map<String, Value>,
+    dry_run: bool,
+) -> Result<MergeReport> {
     let m = &data.manifest;
     if m.device_id == local_device {
         return Err(AppError::validation("이 기기에서 만든 묶음은 합치지 않음", None));
@@ -713,16 +809,24 @@ pub async fn merge(db: &SqlitePool, data: &BundleData, local_device: &str, setti
     };
 
     apply_tombstones(&mut tx, &mut ctx, &data.tombstones).await?;
-    let names: Vec<String> = data.tables.keys().filter(|t| schema.columns.contains_key(*t)).cloned().collect();
+    let names: Vec<String> = data.table_names.iter().filter(|t| schema.columns.contains_key(*t)).cloned().collect();
     ctx.report.skipped += data
-        .tables
+        .table_names
         .iter()
-        .filter(|(t, _)| !schema.columns.contains_key(*t))
-        .map(|(_, r)| r.len() as u32)
+        .filter(|t| !schema.columns.contains_key(*t))
+        .map(|t| m.tables.get(t).copied().unwrap_or(0) as u32)
         .sum::<u32>();
     let order = table_order(&schema, &names);
     for t in &order {
-        apply_rows(&mut tx, &mut ctx, t, &data.tables[t]).await?;
+        let branch_of = if t == "messages" {
+            branch_prepass(&mut tx, &mut ctx, &mut src, t).await?
+        } else {
+            HashMap::new()
+        };
+        let mut chunks = src.chunks(t)?;
+        while let Some(rows) = chunks.next()? {
+            apply_rows(&mut tx, &mut ctx, t, &rows, &branch_of).await?;
+        }
     }
     let mut touched = order.clone();
     touched.push("conversations".into());

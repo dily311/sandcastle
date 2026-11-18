@@ -15,7 +15,7 @@ export interface GameProject {
 	startLocationId: string | null;
 	worldInfoIds: string[];
 	customCss: string | null;
-	settingJson: string;
+	settingsJson: Record<string, unknown> | null;
 	createdAt: number;
 	updatedAt: number;
 }
@@ -310,6 +310,8 @@ export interface RenderState {
 	relationships: Record<string, RelationshipDetail>;
 	stage: Stage;
 	presentNpcs: string[];
+	/** StoryPlan 체크포인트에 도달함 (켜진 게임만) */
+	storyPlanDue?: boolean;
 }
 
 export interface AvailableMove {
@@ -577,7 +579,7 @@ export interface GameProjectInput {
 	startLocationId: string | null;
 	worldInfoIds: string[];
 	customCss: string | null;
-	settingJson: string;
+	settingsJson: string | null;
 	createdAt: number;
 	updatedAt: number;
 }
