@@ -40,6 +40,7 @@ impl Drop for Guard {
 }
 
 /// 초안(없을 수 있음)으로 사용자의 다음 대사를 쓴다. 쓰는 동안 글 조각을 `on_event`로 흘려보내고, 끝나면 정리한 글을 돌려준다.
+#[allow(clippy::too_many_arguments)]
 #[tauri::command]
 #[specta::specta]
 pub async fn ghostwrite(

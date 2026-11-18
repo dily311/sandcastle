@@ -22,7 +22,7 @@
 		game: "게임",
 		translate: "번역",
 		tts: "음성",
-		imagegen: "이미지",
+		imagegen: "이미지", memory: "메모리", summary: "대화 요약", rewrite: "자동 재생성", ghostwrite: "대필",
 		settings: "설정",
 	};
 	const STATUS: Record<string, { label: string; tone: "neutral" | "accent" | "success" | "warning" | "danger" | "info" }> = {

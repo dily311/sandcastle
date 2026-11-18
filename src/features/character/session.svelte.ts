@@ -154,11 +154,11 @@ export class ChatSession {
 	}
 
 	/** 보내기. 빈 입력(첨부도 없음)이면 저장 없이 이어서 응답. attachments: 디스크에 저장된 이미지 경로 */
-	async send(text: string, attachments: string[] = [], previews: string[] = []) {
+	async send(text: string, attachments: string[] = [], previews: string[] = [], ghost = false) {
 		if (this.busy) return;
 		this.live = { kind: "send", text: "", userText: text.trim() || undefined, userImages: previews.length ? previews : undefined };
 		try {
-			const turn = await call(commands.chatSend(this.convId, text, attachments, this.channel()), src);
+			const turn = await call(commands.chatSend(this.convId, text, attachments, ghost, this.channel()), src);
 			if (turn.user) this.messages.push(turn.user);
 			this.messages.push(turn.assistant);
 			this.runAfterReply(turn.assistant);

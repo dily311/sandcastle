@@ -139,6 +139,7 @@ let pluginSetting = {
 	memory: { apiProfileId: null as string | null, model: "", dimensions: null as number | null, tokenCap: 200000, docPrefix: "", queryPrefix: "", autoRecall: false, recallTokens: 1500, recallTopK: 4, recallScope: "character" },
 	summary: { apiProfileId: null as string | null },
 	rewrite: { maxAttempts: 1, banned: true, stuck: true },
+	ghost: { apiProfileId: null as string | null, length: "medium", guide: "", sendWithoutDraft: false },
 	lint: { unclosed: "report", repeat: "report", stuck: "report", impersonate: "report", banned: "off", bannedWords: [] as string[], length: "off", minChars: 0, maxChars: 0 },
 	sync: { folder: null as string | null, auto: false, intervalMinutes: 30, target: "folder", driveEmail: null as string | null, wifiOnly: true },
 };
@@ -289,6 +290,8 @@ async function generate(convId: string, onEvent: { onmessage: (m: { chunk: strin
 
 export const chatHandlers: Record<string, (a: Args) => unknown> = {
 	// ---- 코어 플러그인 AI 도구 (흉내만) ----
+	ghostwrite: ({ brief }) => (brief ? `${String(brief)} — 그래, 그렇게 하자.` : "응, 좋아. 다음엔 어떻게 할까?"),
+	ghostwrite_cancel: () => false,
 	revert_lint: () => null,
 	get_conversation_summary: () => ({ text: "- 숲에서 열쇠를 찾음\n- 약속을 함", coveredCount: 12, rev: 2, editedByUser: false, hasPrev: true, tokens: 24, updatedAt: Date.now(), failure: null }),
 	set_conversation_summary: ({ text }) => ({ text, coveredCount: 12, rev: 3, editedByUser: true, hasPrev: true, tokens: 10, updatedAt: Date.now(), failure: null }),
