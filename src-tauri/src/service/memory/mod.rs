@@ -8,6 +8,7 @@
 //! 유료 호출(색인·질의 임베딩)은 부르는 커맨드가 TaskManager 작업(`TaskType::Embedding`, feature `memory`) 안에서 한다.
 pub mod chunker;
 pub mod index;
+pub mod recall;
 pub mod search;
 pub mod store;
 #[cfg(test)]
@@ -61,6 +62,12 @@ pub fn check_config(cfg: &MemorySetting) -> Result<String> {
     }
 }
 
+/// 메모리에서 뺀(`meta.memory = "off"`) 대화와 캐릭터 폰 엿보기(`meta.phone`)는 색인·검색·회상하지 않는다
+pub fn is_eligible(meta: Option<&str>) -> bool {
+    let m: Value = meta.and_then(|r| serde_json::from_str(r).ok()).unwrap_or(Value::Null);
+    m.get("memory").and_then(Value::as_str) != Some("off") && m.get("phone").is_none()
+}
+
 /// 색인할 수 있는 대화: 메모리에서 뺀(`meta.memory = "off"`) 대화와 캐릭터 폰 엿보기(`meta.phone`)는 제외
 pub async fn eligible_conversations(db: &SqlitePool, scope: &MemoryScope) -> Result<Vec<(String, String)>> {
     let rows: Vec<(String, Option<String>, Option<String>)> = match &scope.conversation_id {
@@ -78,10 +85,7 @@ pub async fn eligible_conversations(db: &SqlitePool, scope: &MemoryScope) -> Res
     };
     let out: Vec<(String, String)> = rows
         .into_iter()
-        .filter(|(_, _, meta)| {
-            let m: Value = meta.as_deref().and_then(|r| serde_json::from_str(r).ok()).unwrap_or(Value::Null);
-            m.get("memory").and_then(Value::as_str) != Some("off") && m.get("phone").is_none()
-        })
+        .filter(|(_, _, meta)| is_eligible(meta.as_deref()))
         .map(|(id, title, _)| (id, title.unwrap_or_default()))
         .collect();
     if out.is_empty() && scope.conversation_id.is_some() {

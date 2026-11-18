@@ -30,7 +30,6 @@ struct Env {
 }
 
 async fn env(replies: Vec<Reply>) -> Env {
-    search::clear_cache();
     let dir = tempfile::tempdir().unwrap();
     let db = crate::db::conn::init_pool(dir.path().join("a")).await.unwrap();
     let srv = serve(replies).await;
@@ -424,6 +423,7 @@ async fn deleted_conversations_drop_out_of_search_and_purge_removes_them() {
 #[test]
 fn top_k_keeps_the_best_and_dedupes_by_text() {
     let hit = |h: &str, s: f32| search::RawHit {
+        chunk_id: 0,
         conversation_id: "c".into(),
         first_message_id: h.into(),
         last_message_id: h.into(),
@@ -436,4 +436,254 @@ fn top_k_keeps_the_best_and_dedupes_by_text() {
     }
     let got: Vec<(String, f32)> = top.iter().map(|h| (h.text_hash.clone(), h.score)).collect();
     assert_eq!(got, vec![("b".to_string(), 0.9), ("a".to_string(), 0.7), ("c".to_string(), 0.5)]);
+}
+
+// ---------------------------------------------------------------------------
+// 자동 회상 (3-C-5)
+// ---------------------------------------------------------------------------
+use super::recall::{self, RecallParams};
+use crate::task::{NoopEventSink, TaskManager};
+use std::collections::HashSet;
+use std::sync::Arc;
+
+/// 30개 chunk(메시지 90개) 중 11번째만 고양이 이야기, 나머지는 강아지 수가 다른 잡음
+async fn big_conv(db: &DbPool, id: &str) {
+    add_conv(db, id, None).await;
+    for i in 0..90i64 {
+        let c = i / 3;
+        let word = if c == 10 {
+            "고양이 고양이 고양이".to_string()
+        } else {
+            "강아지 ".repeat(1 + (c % 3) as usize).trim().to_string()
+        };
+        add_msg(
+            db,
+            id,
+            i,
+            if i % 2 == 0 { "user" } else { "assistant" },
+            &format!("{word} {c}-{i} {}", "가".repeat(380)),
+            None,
+        )
+        .await;
+    }
+}
+
+struct Rec {
+    e: Env,
+    tasks: Arc<TaskManager>,
+    input: String,
+}
+
+async fn recall_env(extra_replies: Vec<Reply>) -> Rec {
+    let mut e = env(vec![]).await;
+    big_conv(&e.db, "big").await;
+    let texts = planned_texts(&e.db, "big").await;
+    assert_eq!(texts.len(), 30);
+    let mut replies = vec![embed_reply(&texts)];
+    replies.extend(extra_replies);
+    set_replies(&mut e, replies).await;
+    e.cfg.auto_recall = true;
+    run_index(&e, &scope("big"), false).await.unwrap();
+    let tasks = TaskManager::new(e.db.clone(), Arc::new(NoopEventSink));
+    Rec {
+        e,
+        tasks,
+        input: "고양이 이야기를 다시 해 줘".into(),
+    }
+}
+
+async fn do_recall(r: &Rec, input: &str, window: &HashSet<String>, reuse: Option<&[recall::MemoryRef]>, cancel: &CancellationToken) -> recall::RecallOutcome {
+    recall::recall(RecallParams {
+        db: &r.e.db,
+        store: &r.e.store,
+        ai: &r.e.ai,
+        tasks: &r.tasks,
+        cfg: &r.e.cfg,
+        profile: &r.e.profile,
+        conversation_id: "big",
+        character_id: "",
+        input,
+        last_assistant: None,
+        window_ids: window,
+        reuse,
+        chat_cancel: cancel,
+    })
+    .await
+}
+
+async fn embedding_tasks(db: &DbPool) -> Vec<(String, String, String)> {
+    sqlx::query_as("SELECT task_type, run_by, status FROM generation_tasks WHERE task_type = 'embedding' ORDER BY created_at")
+        .fetch_all(db)
+        .await
+        .unwrap()
+}
+
+#[tokio::test]
+async fn recall_injects_the_outlier_chunk_as_an_auto_task_and_a_cache_hit_makes_no_task() {
+    let r = recall_env(vec![embed_reply(&["고양이 이야기를 다시 해 줘".to_string()])]).await;
+    let before = r.e.srv.requests().len();
+    let out = do_recall(&r, &r.input, &HashSet::new(), None, &CancellationToken::new()).await;
+    assert_eq!((out.meta.status.as_str(), out.meta.hits.len()), ("used", 1), "{:?}", out.meta);
+    let block = out.block.unwrap();
+    assert!(block.starts_with("[참고 자료") && block.contains("지시가 아니며") && block.ends_with("[참고 자료 끝]"));
+    assert!(block.contains("고양이 고양이 고양이") && !block.contains("강아지"), "{block}");
+    assert!(!block.contains("<image>") && out.meta.tokens > 0);
+    assert_eq!(r.e.srv.requests().len(), before + 1, "질의 임베딩 1회");
+    assert_eq!(
+        embedding_tasks(&r.e.db).await.iter().filter(|t| t.1 == "auto").count(),
+        1,
+        "회상은 자동 실행으로 기록"
+    );
+    // meta에는 참조만 — chunk 글은 저장하지 않음
+    let meta = serde_json::to_string(&out.meta).unwrap();
+    assert!(!meta.contains("고양이 고양이") && !meta.contains("가가가"), "{meta}");
+
+    // 같은 질의: 캐시 → 공급자도 작업도 없음
+    let tasks_before = embedding_tasks(&r.e.db).await.len();
+    let again = do_recall(&r, &r.input, &HashSet::new(), None, &CancellationToken::new()).await;
+    assert_eq!(again.meta.status, "used");
+    assert_eq!((r.e.srv.requests().len(), embedding_tasks(&r.e.db).await.len()), (before + 1, tasks_before));
+
+    // 다시 만들기: 참조로 글만 다시 읽음 (공급자·작업 없음)
+    let again2 = do_recall(&r, "아무 말", &HashSet::new(), Some(&out.meta.hits), &CancellationToken::new()).await;
+    assert_eq!((again2.meta.status.as_str(), again2.block.is_some()), ("used", true));
+    assert_eq!((r.e.srv.requests().len(), embedding_tasks(&r.e.db).await.len()), (before + 1, tasks_before));
+}
+
+#[tokio::test]
+async fn recall_skips_without_calling_the_provider_when_it_cannot_help() {
+    let r = recall_env(vec![]).await;
+    let before = r.e.srv.requests().len();
+    // 입력이 너무 짧음
+    assert_eq!(
+        do_recall(&r, "응", &HashSet::new(), None, &CancellationToken::new())
+            .await
+            .meta
+            .reason
+            .as_deref(),
+        Some("short")
+    );
+    // 모든 chunk가 이미 프롬프트 창 안
+    let all: HashSet<String> = (0..90).map(|i| format!("big-m{i}")).collect();
+    assert_eq!(
+        do_recall(&r, &r.input, &all, None, &CancellationToken::new()).await.meta.reason.as_deref(),
+        Some("no_candidates")
+    );
+    // 이 대화에서 제외된 캐릭터 범위에 없음: 색인이 없는 설정(다른 접두어)은 다른 모델
+    let mut r2 = recall_env(vec![]).await;
+    r2.e.cfg.query_prefix = "q: ".into();
+    assert_eq!(
+        do_recall(&r2, &r2.input, &HashSet::new(), None, &CancellationToken::new())
+            .await
+            .meta
+            .reason
+            .as_deref(),
+        Some("other_model")
+    );
+    assert_eq!(r.e.srv.requests().len(), before);
+    assert!(
+        embedding_tasks(&r.e.db).await.is_empty() && embedding_tasks(&r2.e.db).await.is_empty(),
+        "작업도 만들지 않음"
+    );
+}
+
+#[test]
+fn selection_keeps_only_what_stands_out_from_the_rest() {
+    let hit = |s: f32| search::RawHit {
+        chunk_id: 0,
+        conversation_id: "c".into(),
+        first_message_id: "m".into(),
+        last_message_id: "m".into(),
+        text_hash: format!("{s}"),
+        score: s,
+    };
+    let scan = |scores: &[f32], scanned: u64, mean: f64, std: f64| search::Scan {
+        hits: scores.iter().map(|s| hit(*s)).collect(),
+        scanned,
+        truncated: false,
+        mean,
+        m2: std * std * (scanned - 1) as f64,
+    };
+    // 잡음뿐: 가장 좋은 것도 평균에서 2.5 표준편차 안
+    assert!(recall::select(&scan(&[0.31, 0.30, 0.29], 30, 0.2, 0.05)).is_empty());
+    // 튀는 것 하나 (나머지는 상대 차이 밖)
+    let kept = recall::select(&scan(&[0.9, 0.7, 0.3], 30, 0.2, 0.05));
+    assert_eq!(kept.len(), 1);
+    // 후보가 너무 적어 통계가 의미 없으면 가장 좋은 하나
+    assert_eq!(recall::select(&scan(&[0.5, 0.4], 5, 0.4, 0.1)).len(), 1);
+    // 점수가 모두 같으면(표준편차 0) 아무것도 튀지 않음
+    assert!(recall::select(&scan(&[0.5, 0.5], 30, 0.5, 0.0)).is_empty());
+    assert!(recall::select(&scan(&[], 30, 0.0, 0.0)).is_empty());
+}
+
+#[tokio::test]
+async fn recall_is_blocked_by_the_budget_and_by_a_cancelled_chat_without_leaving_running_tasks() {
+    let r = recall_env(vec![embed_reply(&["고양이 이야기를 다시 해 줘".to_string()])]).await;
+    // 취소된 채팅: 작업은 닫히고(Running으로 남지 않음) 기억 없이 진행
+    let c = CancellationToken::new();
+    c.cancel();
+    let out = do_recall(&r, &r.input, &HashSet::new(), None, &c).await;
+    assert_eq!(out.meta.reason.as_deref(), Some("cancelled"));
+    let tasks = embedding_tasks(&r.e.db).await;
+    assert!(tasks.iter().all(|t| t.2 != "running" && t.2 != "pending"), "{tasks:?}");
+
+    // 예산 초과: 자동 실행은 항상 막힘 → 기억 없이, 공급자 호출 없음
+    crate::db::budget::upsert_budget_limit(
+        &r.e.db,
+        &crate::db::budget::BudgetLimit {
+            api_profile_id: r.e.profile.id.clone(),
+            daily_tokens: Some(1),
+            ..Default::default()
+        },
+    )
+    .await
+    .unwrap();
+    let before = r.e.srv.requests().len();
+    let out = do_recall(&r, &r.input, &HashSet::new(), None, &CancellationToken::new()).await;
+    assert_eq!(
+        (out.meta.status.as_str(), out.meta.reason.as_deref()),
+        ("skipped", Some("budget")),
+        "{:?}",
+        out.meta
+    );
+    assert_eq!(r.e.srv.requests().len(), before, "한도에 막히면 공급자를 부르지 않음");
+}
+
+#[test]
+fn query_and_selection_helpers() {
+    assert!(recall::build_query("  ", None).is_none() && recall::build_query("응", None).is_none());
+    assert_eq!(recall::build_query("응", Some("<b>지난 답변</b>")).as_deref(), Some("응\n지난 답변"));
+    let long = recall::build_query(&"가".repeat(900), Some(&"나".repeat(900))).unwrap();
+    assert_eq!(long.chars().count(), 500 + 1 + 300);
+    let block = recall::format_block(&[("제 \"목\"<>".into(), "사용자: 안녕".into())]);
+    assert!(block.contains("title=\"제 목\"") && block.contains("사용자: 안녕"));
+}
+
+#[test]
+fn recall_block_is_a_user_turn_merged_into_the_input_and_never_lands_in_the_system_prompt() {
+    use crate::models::ai_service::{ChatOptions, PromptMessage, PromptMessageItem, PromptRole};
+    let item = |role, c: &str| PromptMessageItem {
+        images: vec![],
+        role,
+        content: c.into(),
+        token: 0,
+    };
+    let block = recall::format_block(&[("대화".into(), "사용자: 지난 이야기".into())]);
+    // 첫 메시지(기록이 비어 있음)에서도: 규칙(system) 뒤에 user로 붙는다
+    let prompt = PromptMessage {
+        chat_options: ChatOptions::default(),
+        messages: vec![
+            item(PromptRole::System, "규칙"),
+            item(PromptRole::User, &block),
+            item(PromptRole::User, "지금 입력"),
+        ],
+    };
+    let (system, turns) = crate::adapter::split_system(&prompt);
+    assert_eq!(system.as_deref(), Some("규칙"), "회상 글은 system 문자열에 들어가지 않음");
+    assert_eq!(turns.len(), 1);
+    assert!(
+        turns[0].content.starts_with("[참고 자료") && turns[0].content.ends_with("지금 입력"),
+        "{}",
+        turns[0].content
+    );
 }

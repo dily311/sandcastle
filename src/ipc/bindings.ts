@@ -1219,6 +1219,8 @@ export type ContextUsage_Deserialize = {
 	presetName?: string | null,
 	/**  커뮤니티 플러그인이 더한 프롬프트 블록 (6-D-5, 시스템 토큰에 들어 있음) */
 	plugins: PluginPromptUse[],
+	/**  마지막 응답에서 지난 대화를 떠올린 기록 (3-C-5, 대화 기록 토큰에 들어 있음). 자동 회상이 꺼져 있었으면 None */
+	memoryRecall?: RecallMeta_Deserialize | null,
 };
 
 /**  컨텍스트 사용량 (오른쪽 패널). 마지막으로 보낸 프롬프트 기준 */
@@ -1239,6 +1241,8 @@ export type ContextUsage_Serialize = {
 	presetName: string | null,
 	/**  커뮤니티 플러그인이 더한 프롬프트 블록 (6-D-5, 시스템 토큰에 들어 있음) */
 	plugins: PluginPromptUse[],
+	/**  마지막 응답에서 지난 대화를 떠올린 기록 (3-C-5, 대화 기록 토큰에 들어 있음). 자동 회상이 꺼져 있었으면 None */
+	memoryRecall: RecallMeta_Serialize | null,
 };
 
 /**  continue_game / load_save의 응답. events는 항상 비어 있고(새로 생긴 일이 없다), 화면은 state + history로 복원한다. */
@@ -2772,6 +2776,15 @@ export type MacroMode = "none" |
 /**  정규식 특수문자를 이스케이프해서 넣음 */
 "escaped";
 
+export type MemoryRef = {
+	conversationId: string,
+	conversationTitle: string,
+	firstMessageId: string,
+	lastMessageId: string,
+	score: number | null,
+	tokens: number,
+};
+
 /**  색인·검색 범위. 대화 id가 없으면 전체 */
 export type MemoryScope = MemoryScope_Serialize | MemoryScope_Deserialize;
 
@@ -2801,6 +2814,14 @@ export type MemorySetting_Deserialize = {
 	/**  문서·질의 앞에 붙일 글 (e5의 "passage: "/"query: " 같은 모델용) */
 	docPrefix?: string,
 	queryPrefix?: string,
+	/**  보낼 때 관련된 지난 대화를 프롬프트에 넣기 (3-C-5). 보낼 때마다 임베딩 1회가 자동 실행으로 듦 — 기본 꺼짐 */
+	autoRecall?: boolean,
+	/**  넣는 글의 토큰 상한 */
+	recallTokens?: number,
+	/**  최대 chunk 수 */
+	recallTopK?: number,
+	/**  어디서 찾나: "conversation"(이 대화) / "character"(같은 캐릭터의 대화) / "all"(전체) */
+	recallScope?: string,
 };
 
 /**  메모리 임베딩 검색 설정. API 프로필·모델은 기기마다 다르므로 통째로 기기 전용 */
@@ -2816,6 +2837,14 @@ export type MemorySetting_Serialize = {
 	/**  문서·질의 앞에 붙일 글 (e5의 "passage: "/"query: " 같은 모델용) */
 	docPrefix: string,
 	queryPrefix: string,
+	/**  보낼 때 관련된 지난 대화를 프롬프트에 넣기 (3-C-5). 보낼 때마다 임베딩 1회가 자동 실행으로 듦 — 기본 꺼짐 */
+	autoRecall: boolean,
+	/**  넣는 글의 토큰 상한 */
+	recallTokens: number,
+	/**  최대 chunk 수 */
+	recallTopK: number,
+	/**  어디서 찾나: "conversation"(이 대화) / "character"(같은 캐릭터의 대화) / "all"(전체) */
+	recallScope: string,
 };
 
 export type MemoryStatus = {
@@ -3783,6 +3812,29 @@ export type ProposalKind = "character" | "persona" |
 "lorebook" | "lorebook_entry" | 
 /**  대화의 메시지 글 */
 "message";
+
+/**  응답 meta.info.memoryRecall에 남기는 기록 (chunk 글은 저장하지 않는다) */
+export type RecallMeta = RecallMeta_Serialize | RecallMeta_Deserialize;
+
+/**  응답 meta.info.memoryRecall에 남기는 기록 (chunk 글은 저장하지 않는다) */
+export type RecallMeta_Deserialize = {
+	/**  used / skipped */
+	status: string,
+	/**  건너뛴 이유: short · no_index · other_model · no_candidates · no_relevant · timeout · budget · cancelled · error · regenerate */
+	reason?: string | null,
+	hits: MemoryRef[],
+	tokens: number,
+};
+
+/**  응답 meta.info.memoryRecall에 남기는 기록 (chunk 글은 저장하지 않는다) */
+export type RecallMeta_Serialize = {
+	/**  used / skipped */
+	status: string,
+	/**  건너뛴 이유: short · no_index · other_model · no_candidates · no_relevant · timeout · budget · cancelled · error · regenerate */
+	reason: string | null,
+	hits: MemoryRef[],
+	tokens: number,
+};
 
 /**  어떤 텍스트에 적용할지 */
 export type RegexPlacement = 

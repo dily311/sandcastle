@@ -5,7 +5,7 @@
 use sha2::{Digest, Sha256};
 
 /// 규칙(글 뽑기·경계)을 바꾸면 올린다 — 해시가 달라져 옛 벡터를 쓰지 않는다
-pub const CHUNKER_VERSION: u32 = 1;
+pub const CHUNKER_VERSION: u32 = 2;
 /// 닫는 목표 글자 수 (한국어 대화 기준)
 pub const TARGET_CHARS: usize = 1000;
 /// 한 메시지에서 쓰는 최대 글자 수 (임베딩 입력 한도)
@@ -48,6 +48,7 @@ pub fn indexable(m: &MemMsg) -> bool {
 
 /// 코드 블록·HTML 태그·앱 태그(<image>·<cg>)를 빼고 공백을 정리한다
 pub fn clean(text: &str) -> String {
+    let text = &strip_blocks(text, &["image", "cg"]);
     let mut out = String::new();
     let mut in_fence = false;
     for line in text.split('\n') {
@@ -77,6 +78,25 @@ pub fn clean(text: &str) -> String {
         out.push('\n');
     }
     out.split_whitespace().collect::<Vec<_>>().join(" ")
+}
+
+/// `<image>…</image>`처럼 안쪽 글까지 지울 앱 태그 (그림 프롬프트·그림 키가 기억에 섞이지 않게). 닫히지 않으면 끝까지
+fn strip_blocks(text: &str, names: &[&str]) -> String {
+    let mut out = text.to_string();
+    for n in names {
+        let (open, close) = (format!("<{n}>"), format!("</{n}>"));
+        loop {
+            let lower = out.to_lowercase();
+            let Some(i) = lower.find(&open) else { break };
+            // to_lowercase가 글자 위치를 바꾸지 않는 경우(영문 태그)에만 위치를 믿는다
+            if lower.len() != out.len() {
+                break;
+            }
+            let end = lower[i..].find(&close).map(|j| i + j + close.len()).unwrap_or(out.len());
+            out.replace_range(i..end, " ");
+        }
+    }
+    out
 }
 
 fn line_of(m: &MemMsg) -> String {
@@ -209,8 +229,8 @@ mod tests {
     #[test]
     fn clean_strips_markup_and_keeps_plain_angle_brackets() {
         assert_eq!(
-            clean("안녕 <b>세계</b>\n```html\n<div>x</div>\n```\n<image>그림</image>끝 3 < 5"),
-            "안녕 세계 그림끝 3 < 5"
+            clean("안녕 <b>세계</b>\n```html\n<div>x</div>\n```\n<image>그림 프롬프트</image>끝 <cg>smile</cg> 3 < 5"),
+            "안녕 세계 끝 3 < 5"
         );
         assert!(!indexable(&m("a", "assistant", "```\ncode\n```")), "코드뿐이면 색인하지 않음");
         assert!(

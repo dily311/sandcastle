@@ -262,6 +262,14 @@ pub struct MemorySetting {
     /// 문서·질의 앞에 붙일 글 (e5의 "passage: "/"query: " 같은 모델용)
     pub doc_prefix: String,
     pub query_prefix: String,
+    /// 보낼 때 관련된 지난 대화를 프롬프트에 넣기 (3-C-5). 보낼 때마다 임베딩 1회가 자동 실행으로 듦 — 기본 꺼짐
+    pub auto_recall: bool,
+    /// 넣는 글의 토큰 상한
+    pub recall_tokens: u32,
+    /// 최대 chunk 수
+    pub recall_top_k: u32,
+    /// 어디서 찾나: "conversation"(이 대화) / "character"(같은 캐릭터의 대화) / "all"(전체)
+    pub recall_scope: String,
 }
 
 impl Default for MemorySetting {
@@ -273,6 +281,10 @@ impl Default for MemorySetting {
             token_cap: 200_000,
             doc_prefix: String::new(),
             query_prefix: String::new(),
+            auto_recall: false,
+            recall_tokens: 1500,
+            recall_top_k: 4,
+            recall_scope: "character".into(),
         }
     }
 }

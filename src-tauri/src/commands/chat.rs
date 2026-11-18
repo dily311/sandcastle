@@ -210,6 +210,8 @@ pub struct ContextUsage {
     pub preset_name: Option<String>,
     /// 커뮤니티 플러그인이 더한 프롬프트 블록 (6-D-5, 시스템 토큰에 들어 있음)
     pub plugins: Vec<crate::service::community::prompt_hook::PluginPromptUse>,
+    /// 마지막 응답에서 지난 대화를 떠올린 기록 (3-C-5, 대화 기록 토큰에 들어 있음). 자동 회상이 꺼져 있었으면 None
+    pub memory_recall: Option<crate::service::memory::recall::RecallMeta>,
 }
 
 #[tauri::command]
@@ -241,6 +243,7 @@ pub async fn context_usage(state: State<'_, AppState>, settings: State<'_, Setti
     let recent = conversation::get_messages(&state.db, &conversation_id, 30, None).await?;
     let mut prompt: Option<PromptMessage> = None;
     let mut plugins = vec![];
+    let mut memory_recall = None;
     for m in recent.iter().rev().filter(|m| m.role == "assistant") {
         if let Some(v) = chat_ui::get_prompt(&state.db, &m.id).await? {
             if let Ok(p) = serde_json::from_value::<PromptMessage>(v) {
@@ -251,6 +254,11 @@ pub async fn context_usage(state: State<'_, AppState>, settings: State<'_, Setti
                     .and_then(|meta| meta.pointer("/info/pluginPrompt"))
                     .and_then(|v| serde_json::from_value(v.clone()).ok())
                     .unwrap_or_default();
+                memory_recall = m
+                    .meta
+                    .as_ref()
+                    .and_then(|meta| meta.pointer("/info/memoryRecall"))
+                    .and_then(|v| serde_json::from_value(v.clone()).ok());
                 break;
             }
         }
@@ -277,6 +285,7 @@ pub async fn context_usage(state: State<'_, AppState>, settings: State<'_, Setti
         preset_name: preset.as_ref().map(|p| p.preset.name.clone()),
         preset_id,
         plugins,
+        memory_recall,
     })
 }
 

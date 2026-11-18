@@ -291,6 +291,74 @@ fn replace_meta(old: &Message, info: &Value, images: &Value) -> Value {
     Value::Object(m)
 }
 
+/// 자동 회상에 필요한 것 (3-C-5)
+struct RecallPlan {
+    cfg: crate::models::settings::MemorySetting,
+    profile: crate::models::ai_service::ApiProfiles,
+    window: std::collections::HashSet<String>,
+    reuse: Option<Vec<crate::service::memory::recall::MemoryRef>>,
+    last_assistant: Option<String>,
+}
+
+/// 켜져 있고 쓸 수 있을 때만 계획을 만든다 (꺼져 있으면 아무것도 읽지 않음). 다시 만들기는 이전 응답에서 떠올린 참조를 이어 쓴다
+async fn recall_setup(
+    app: &AppHandle,
+    db: &crate::db::conn::DbPool,
+    conv: &crate::models::conversation::Conversation,
+    kind: &TurnKind,
+    target: &Option<Message>,
+    context: &ChatContext,
+    preset_id: &str,
+) -> Option<RecallPlan> {
+    use crate::service::memory::{self, recall::RecallMeta};
+    if !crate::sys::plugins::is_enabled(app, crate::sys::plugins::id::MEMORY) {
+        return None;
+    }
+    let cfg = app
+        .try_state::<SettingsState<crate::models::settings::PluginSetting>>()?
+        .0
+        .lock()
+        .ok()?
+        .memory
+        .clone();
+    if !cfg.auto_recall || conv.meta.as_ref().and_then(|m| m.get("memory")).and_then(Value::as_str) == Some("off") {
+        return None;
+    }
+    let profile_id = memory::check_config(&cfg).ok()?;
+    let profile = app.state::<Arc<AiService>>().load_profile(&profile_id).await.ok()?;
+    let reuse = match (kind, target) {
+        (TurnKind::Regenerate { .. }, Some(old)) => {
+            let prev: Option<RecallMeta> = old
+                .meta
+                .as_ref()
+                .and_then(|m| m.pointer("/info/memoryRecall"))
+                .and_then(|v| serde_json::from_value(v.clone()).ok());
+            Some(prev.filter(|m| m.status == "used").map(|m| m.hits).unwrap_or_default())
+        }
+        (TurnKind::Regenerate { .. }, None) => Some(vec![]),
+        _ => None,
+    };
+    let loaded = PromptManager::load_preset(db, Some(preset_id)).await.ok().flatten();
+    let limit = loaded
+        .as_ref()
+        .and_then(|p| crate::service::prompt::prompt_manager::context_limit_from(&p.preset))
+        .unwrap_or(DEFAULT_CONTEXT_LIMIT);
+    let hist: Vec<(String, usize)> = context
+        .history
+        .iter()
+        .map(|h| (h.role.clone(), crate::service::prompt::token::count_tokens(&h.content)))
+        .collect();
+    let window = memory::recall::window_ids(db, &conv.id, &hist, limit as usize).await.unwrap_or_default();
+    let last_assistant = context.history.last().filter(|h| h.role == "assistant").map(|h| h.content.clone());
+    Some(RecallPlan {
+        cfg,
+        profile,
+        window,
+        reuse,
+        last_assistant,
+    })
+}
+
 impl ChatManager {
     /// 대화 화면의 한 차례. 메시지 저장까지 여기서 끝낸다 (프론트는 결과만 반영).
     /// - 캐릭터·페르소나·프리셋·API는 대화에 저장된 값, 없으면 앱 설정의 선택값
@@ -408,6 +476,9 @@ impl ChatManager {
             _ => unreachable!(),
         };
 
+        // 자동 회상 (3-C-5): 켜져 있을 때만. 프롬프트 창에 든 메시지는 메모·플러그인 블록이 history에 끼기 전에 계산한다
+        let recall_plan = recall_setup(app, db, &conv, &kind, &target, &context, &preset_id).await;
+
         // 대화별 메모·작가 노트 (오른쪽 패널)
         crate::service::chat::notes::apply(&mut context, conv.meta.as_ref());
 
@@ -445,6 +516,43 @@ impl ChatManager {
             prompt_hook::apply(&mut context, answers)
         } else {
             vec![]
+        };
+
+        // 지난 대화 떠올리기: 보낼 때마다 질의 임베딩 1회가 자동 실행으로 듦 (사용자가 켠 스위치가 있을 때만). 실패하면 기억 없이 보냄
+        let recall_meta = match recall_plan {
+            Some(plan) => {
+                let (tasks, ai, store) = (
+                    app.state::<Arc<crate::task::TaskManager>>(),
+                    app.state::<Arc<AiService>>(),
+                    app.state::<Arc<crate::service::memory::store::MemoryStore>>(),
+                );
+                let out = crate::service::memory::recall::recall(crate::service::memory::recall::RecallParams {
+                    db,
+                    store: &store,
+                    ai: &ai,
+                    tasks: &tasks,
+                    cfg: &plan.cfg,
+                    profile: &plan.profile,
+                    conversation_id,
+                    character_id: &conv.character_id,
+                    input: &input,
+                    last_assistant: plan.last_assistant.as_deref(),
+                    window_ids: &plan.window,
+                    reuse: plan.reuse.as_deref(),
+                    chat_cancel: cancel,
+                })
+                .await;
+                if let Some(block) = out.block {
+                    // user 역할로 현재 입력 바로 앞에 (system으로 넣으면 공급자에 따라 지시 권한이 생기거나 캐시 앞부분이 깨짐)
+                    context.history.push(crate::models::ai_service::HistoryItem {
+                        images: vec![],
+                        role: "user".into(),
+                        content: block,
+                    });
+                }
+                serde_json::to_value(&out.meta).ok()
+            }
+            None => None,
         };
 
         let regex = RegexProcessor::load(
@@ -547,6 +655,7 @@ impl ChatManager {
             "finishReason": finish_reason,
             "cancelled": cancelled,
             "pluginPrompt": plugin_prompt,
+            "memoryRecall": recall_meta,
         });
         let images_json = serde_json::to_value(&used_images).unwrap_or(Value::Array(vec![]));
 

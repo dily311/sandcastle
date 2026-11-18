@@ -136,7 +136,7 @@ let pluginSetting = {
 		sampler: "k_euler_ancestral",
 	},
 	phone: { apiProfileId: null as string | null, presetId: null as string | null },
-	memory: { apiProfileId: null as string | null, model: "", dimensions: null as number | null, tokenCap: 200000, docPrefix: "", queryPrefix: "" },
+	memory: { apiProfileId: null as string | null, model: "", dimensions: null as number | null, tokenCap: 200000, docPrefix: "", queryPrefix: "", autoRecall: false, recallTokens: 1500, recallTopK: 4, recallScope: "character" },
 	lint: { unclosed: "report", repeat: "report", impersonate: "report", banned: "off", bannedWords: [] as string[], length: "off", minChars: 0, maxChars: 0 },
 	sync: { folder: null as string | null, auto: false, intervalMinutes: 30, target: "folder", driveEmail: null as string | null, wifiOnly: true },
 };
@@ -432,7 +432,7 @@ AI: 그때 이야기를 다시 해 볼까요?`, stale: false },
 		const msgs = msgsOf(conversationId as string);
 		const history = msgs.reduce((n, m) => n + Math.ceil(m.content.length / 1.5), 0);
 		const presetId = c.promptPresetId || "default";
-		return { used: msgs.length ? 640 + history : null, system: 640, history, historyCount: msgs.length, limit: 8192, reserved: 1024, presetId, presetName: presetId === "default" ? "기본 배치" : presetId, plugins: [] };
+		return { used: msgs.length ? 640 + history : null, system: 640, history, historyCount: msgs.length, limit: 8192, reserved: 1024, presetId, presetName: presetId === "default" ? "기본 배치" : presetId, plugins: [], memoryRecall: null };
 	},
 	patch_conversation_meta: ({ id, patch }) => {
 		const c = conv(id);

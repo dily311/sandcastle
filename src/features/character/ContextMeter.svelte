@@ -5,6 +5,19 @@
 	let { usage }: { usage: ContextUsage | null } = $props();
 
 	const n = (v: number) => v.toLocaleString();
+	/** 메모리 회상을 건너뛴 이유 (백엔드 service/memory/recall.rs의 코드) */
+	const RECALL_REASON: Record<string, string> = {
+		short: "입력이 너무 짧음",
+		no_index: "색인이 없음",
+		other_model: "다른 모델로 색인되어 있음 (다시 색인 필요)",
+		no_candidates: "찾을 만한 지난 내용이 없음 (최근 대화는 이미 프롬프트에 있음)",
+		no_relevant: "관련 있어 보이는 것이 없음",
+		timeout: "질의 임베딩이 오래 걸려 기억 없이 보냄",
+		budget: "예산 한도로 막힘 (자동 실행은 한도를 넘지 않음)",
+		cancelled: "취소됨",
+		error: "질의 임베딩 실패 (기억 없이 보냄, 다시 시도하지 않음)",
+		regenerate: "다시 만들기: 이전에 떠올린 기억이 없었음",
+	};
 	const pct = (v: number) => (usage && usage.limit ? `${Math.min(100, (v / usage.limit) * 100)}%` : "0%");
 	const total = $derived(usage?.used != null ? usage.used + usage.reserved : 0);
 	const ratio = $derived(usage && usage.limit ? total / usage.limit : 0);
@@ -34,6 +47,14 @@
 		{#if usage.plugins?.length}
 			<!-- 커뮤니티 플러그인이 더한 블록 (6-D-5). 설정·캐릭터 몫 안에 들어 있다 -->
 			<p class="faint small plugins">플러그인이 더함: {usage.plugins.map((p) => `${p.name} ${n(p.tokens)}`).join(" · ")} <small>(설정·캐릭터에 포함)</small></p>
+		{/if}
+		{#if usage.memoryRecall}
+			<!-- 자동 회상 (3-C-5): 지난 대화에서 가져온 글. 대화 몫 안에 들어 있다 -->
+			{#if usage.memoryRecall.status === "used"}
+				<p class="faint small plugins">메모리에서 가져옴: {usage.memoryRecall.hits.map((h) => `${h.conversationTitle || "(제목 없음)"} ${n(h.tokens)}`).join(" · ")} <small>(대화에 포함 · 합계 {n(usage.memoryRecall.tokens)})</small></p>
+			{:else}
+				<p class="faint small plugins">메모리 회상 건너뜀: {RECALL_REASON[usage.memoryRecall.reason ?? ""] ?? usage.memoryRecall.reason}</p>
+			{/if}
 		{/if}
 		{#if ratio >= 0.8}<p class="note">한도에 가까우면 오래된 메시지부터 빠짐. 메모에 꼭 남길 내용을 적어 두면 좋음</p>{/if}
 	{/if}

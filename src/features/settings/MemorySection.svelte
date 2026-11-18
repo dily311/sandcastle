@@ -2,7 +2,7 @@
 	// 메모리 검색 (3-C, ADR-015): 임베딩 설정, 색인, 정리, 뜻으로 찾기
 	import { onMount } from "svelte";
 	import type { MemoryStatus, SearchHit } from "$ipc/bindings";
-	import { Button, Input, Select } from "$shared/ui";
+	import { Button, Input, Select, Switch } from "$shared/ui";
 	import Section from "./Section.svelte";
 	import Group from "./Group.svelte";
 	import Row from "./Row.svelte";
@@ -25,6 +25,11 @@
 	async function refresh() {
 		status = await call(commands.getMemoryStatus(), { ...src, silent: true }).catch(() => null);
 	}
+	const SCOPES = [
+		{ value: "conversation", label: "이 대화만" },
+		{ value: "character", label: "같은 캐릭터의 대화" },
+		{ value: "all", label: "모든 대화" },
+	];
 	const mb = (n: number) => (n / 1024 / 1024).toFixed(1);
 	const int = (v: string, min: number, fallback: number) => Math.max(min, Math.floor(Number(v)) || fallback);
 
@@ -55,7 +60,7 @@
 			<Row label="실행당 토큰 상한" desc="한 번 색인에서 임베딩할 예상 입력 토큰. 넘으면 한 번 더 확인">
 				<Input type="number" min="1000" value={String(cur.memory.tokenCap)} onchange={(e) => save("memory", { tokenCap: int(e.currentTarget.value, 1000, 200000) })} />
 			</Row>
-			<Row label="접두어" desc="문서용 · 질의용. e5·nomic 같은 로컬 모델이 요구할 때만 (예: passage: / query: ). 바꾸면 다시 색인해야 함">
+			<Row label="접두어" desc="e5·nomic 같은 모델이 요구할 때만. 바꾸면 다시 색인">
 				<div class="pair">
 					<Input value={cur.memory.docPrefix} placeholder="passage: " onchange={(e) => save("memory", { docPrefix: e.currentTarget.value })} />
 					<Input value={cur.memory.queryPrefix} placeholder="query: " onchange={(e) => save("memory", { queryPrefix: e.currentTarget.value })} />
@@ -78,6 +83,22 @@
 					<Button size="sm" variant="danger" onclick={() => purge("all")}>전부 지우기</Button>
 				</div>
 			</Row>
+		</Group>
+		<Group title="보낼 때 자동으로 떠올리기">
+			<Row label="자동 회상" desc="메시지를 보낼 때마다 지난 대화에서 관련된 부분을 찾아 프롬프트에 넣음. 보낼 때마다 질의 임베딩 1회 요금이 자동 실행으로 기록되고, 예산 한도에 걸리면 기억 없이 보냄. 색인이 있어야 함">
+				<Switch checked={cur.memory.autoRecall} label="자동 회상" hideLabel onchange={(v) => save("memory", { autoRecall: v })} />
+			</Row>
+			{#if cur.memory.autoRecall}
+				<Row label="어디서 찾을까" desc="'전체'는 다른 캐릭터·페르소나와 나눈 대화도 이 대화의 프롬프트에 들어갈 수 있음. 메모리에서 뺀 대화는 어느 쪽이든 제외">
+					<Select value={cur.memory.recallScope} options={SCOPES} onchange={(e) => save("memory", { recallScope: e.currentTarget.value })} />
+				</Row>
+				<Row label="넣는 글 상한 (토큰)" desc="한 번에 프롬프트에 넣는 최대 분량. chunk 하나가 약 1000자라 너무 작으면 앞부분만 들어감">
+					<Input type="number" min="100" value={String(cur.memory.recallTokens)} onchange={(e) => save("memory", { recallTokens: int(e.currentTarget.value, 100, 1500) })} />
+				</Row>
+				<Row label="최대 chunk 수" desc="튀는 것만 남기므로 보통 이보다 적게 들어감">
+					<Input type="number" min="1" max="10" value={String(cur.memory.recallTopK)} onchange={(e) => save("memory", { recallTopK: Math.min(10, int(e.currentTarget.value, 1, 4)) })} />
+				</Row>
+			{/if}
 		</Group>
 		<Group title="뜻으로 찾기">
 			<MemorySearch onopen={open} />

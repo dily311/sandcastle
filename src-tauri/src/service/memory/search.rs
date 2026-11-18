@@ -62,6 +62,8 @@ pub struct SearchResult {
 
 #[derive(Debug, Clone)]
 pub struct RawHit {
+    /// chunks.id (색인한 순서 — 시간 순서의 근사)
+    pub chunk_id: i64,
     pub conversation_id: String,
     pub first_message_id: String,
     pub last_message_id: String,
@@ -74,6 +76,26 @@ pub struct Scan {
     pub hits: Vec<RawHit>,
     pub scanned: u64,
     pub truncated: bool,
+    /// 훑은 모든 점수의 평균·분산 (Welford) — 모델마다 점수 분포가 달라 "튀는 것"을 가릴 때 쓴다
+    pub mean: f64,
+    pub m2: f64,
+}
+
+impl Scan {
+    pub fn std(&self) -> f64 {
+        if self.scanned < 2 {
+            0.0
+        } else {
+            (self.m2 / (self.scanned - 1) as f64).sqrt()
+        }
+    }
+    fn push_stat(&mut self, x: f64) {
+        // scanned는 이미 올린 뒤에 부른다
+        let n = self.scanned as f64;
+        let d = x - self.mean;
+        self.mean += d / n;
+        self.m2 += d * (x - self.mean);
+    }
 }
 
 type QueryCache = Mutex<VecDeque<(String, Vec<f32>)>>;
@@ -95,10 +117,6 @@ fn cache_put(key: String, v: Vec<f32>) {
         }
     }
 }
-#[cfg(test)]
-pub fn clear_cache() {
-    QUERY_CACHE.lock().unwrap().clear();
-}
 
 /// 상위 K 유지 (K는 작아 정렬된 배열에 끼워 넣음). 같은 글(해시)은 점수가 높은 하나만
 pub(crate) fn offer(top: &mut Vec<RawHit>, k: usize, hit: RawHit) {
@@ -117,7 +135,8 @@ pub(crate) fn offer(top: &mut Vec<RawHit>, k: usize, hit: RawHit) {
 }
 
 /// chunk를 쪽 단위로 읽어 질의 벡터(정규화됨)와 내적. `allowed`에 든 대화만 (지워졌거나 제외한 대화는 건너뜀)
-pub async fn scan(pool: &SqlitePool, key: &str, allowed: &HashSet<String>, q: &[f32], k: usize, scan_cap: u64) -> Result<Scan> {
+/// `exclude`: 이 메시지 id에서 시작하거나 끝나는 chunk는 건너뜀 (이미 프롬프트에 든 대화 등 — 통계에도 넣지 않음)
+pub async fn scan(pool: &SqlitePool, key: &str, allowed: &HashSet<String>, exclude: &HashSet<String>, q: &[f32], k: usize, scan_cap: u64) -> Result<Scan> {
     let mut out = Scan::default();
     let mut last_id = 0i64;
     loop {
@@ -136,7 +155,7 @@ pub async fn scan(pool: &SqlitePool, key: &str, allowed: &HashSet<String>, q: &[
         }
         for (id, conversation_id, first_message_id, last_message_id, text_hash, dim, blob) in rows {
             last_id = id;
-            if !allowed.contains(&conversation_id) {
+            if !allowed.contains(&conversation_id) || exclude.contains(&first_message_id) || exclude.contains(&last_message_id) {
                 continue;
             }
             if out.scanned >= scan_cap {
@@ -147,15 +166,18 @@ pub async fn scan(pool: &SqlitePool, key: &str, allowed: &HashSet<String>, q: &[
             let Some(v) = decode_vector(&blob).filter(|v| v.len() as i64 == dim && v.len() == q.len()) else {
                 continue;
             };
+            let score = dot(q, &v);
+            out.push_stat(score as f64);
             offer(
                 &mut out.hits,
                 k,
                 RawHit {
+                    chunk_id: id,
                     conversation_id,
                     first_message_id,
                     last_message_id,
                     text_hash,
-                    score: dot(q, &v),
+                    score,
                 },
             );
         }
@@ -196,6 +218,37 @@ pub async fn resolve(db: &SqlitePool, hits: Vec<RawHit>, titles: &HashMap<String
     Ok(out)
 }
 
+/// 같은 모델·같은 질의의 벡터가 이미 있으면 (공급자를 부르지 않으므로 작업도 만들 필요가 없다)
+pub fn cached_query(key: &str, query: &str) -> Option<Vec<f32>> {
+    cache_get(&format!("{key}\u{0}{query}"))
+}
+
+/// 질의 벡터(정규화됨): 캐시에 없으면 공급자를 한 번 부른다. 부르는 쪽이 작업 안에서 부른다
+pub async fn query_vector(ai: &AiService, cfg: &MemorySetting, profile_id: &str, key: &str, query: &str, cancel: &CancellationToken) -> Result<Vec<f32>> {
+    let cache_key = format!("{key}\u{0}{query}");
+    if let Some(v) = cache_get(&cache_key) {
+        return Ok(v);
+    }
+    let out = ai
+        .embed(
+            EmbedInput {
+                profile_id: profile_id.to_string(),
+                model: cfg.model.trim().to_string(),
+                inputs: vec![format!("{}{query}", cfg.query_prefix)],
+                task: EmbedTask::Query,
+                dimensions: cfg.dimensions,
+            },
+            cancel,
+        )
+        .await?;
+    let mut v = out.vectors.into_iter().next().ok_or_else(|| AppError::internal("질의 임베딩이 비어 있음"))?;
+    if !normalize(&mut v) {
+        return Err(AppError::validation("공급자가 0이거나 숫자가 아닌 벡터를 돌려줌", None));
+    }
+    cache_put(cache_key, v.clone());
+    Ok(v)
+}
+
 /// 질의 임베딩(공급자 호출) → 검색. 부르는 쪽이 작업 안에서 부른다
 pub async fn search(
     db: &SqlitePool,
@@ -227,32 +280,9 @@ pub async fn search(
     let allowed: HashSet<String> = convs.iter().map(|(id, _)| id.clone()).collect();
     let titles: HashMap<String, String> = convs.into_iter().collect();
 
-    let cache_key = format!("{key}\u{0}{query}");
-    let q = match cache_get(&cache_key) {
-        Some(v) => v,
-        None => {
-            let out = ai
-                .embed(
-                    EmbedInput {
-                        profile_id: prof_id,
-                        model: cfg.model.trim().to_string(),
-                        inputs: vec![format!("{}{query}", cfg.query_prefix)],
-                        task: EmbedTask::Query,
-                        dimensions: cfg.dimensions,
-                    },
-                    cancel,
-                )
-                .await?;
-            let mut v = out.vectors.into_iter().next().ok_or_else(|| AppError::internal("질의 임베딩이 비어 있음"))?;
-            if !normalize(&mut v) {
-                return Err(AppError::validation("공급자가 0이거나 숫자가 아닌 벡터를 돌려줌", None));
-            }
-            cache_put(cache_key, v.clone());
-            v
-        }
-    };
+    let q = query_vector(ai, cfg, &prof_id, &key, query, cancel).await?;
     let limit = req.limit.unwrap_or(10).clamp(1, MAX_LIMIT) as usize;
-    let s = scan(&pool, &key, &allowed, &q, limit, SCAN_CAP).await?;
+    let s = scan(&pool, &key, &allowed, &HashSet::new(), &q, limit, SCAN_CAP).await?;
     let other: i64 = sqlx::query_scalar("SELECT COUNT(*) FROM chunks WHERE model_key <> ?")
         .bind(&key)
         .fetch_one(&pool)
