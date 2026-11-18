@@ -2,11 +2,14 @@ pub mod ai_service;
 pub mod character_image;
 pub mod community;
 pub mod data;
+pub mod ghost;
 pub mod import;
+pub mod memory;
 pub mod preset;
 pub mod proposals;
 pub mod regex;
 pub mod settings;
+pub mod summary;
 pub mod sync;
 pub mod task;
 

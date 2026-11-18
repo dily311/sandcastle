@@ -55,17 +55,17 @@
 		gap: 0.4rem;
 		height: 2rem;
 		padding: 0.6rem;
-		/* border-bottom: 1px solid var(--card-border-color); */
+		/* border-bottom: 1px solid var(--border); */
 		position: sticky;
 		top: 0;
 		z-index: 99;
-		background: var(--background-primary);
+		background: var(--surface);
 		cursor: pointer;
 		--icon-size: 1rem;
 	}
 	.folderTitle .label {
 		font-size: 0.8rem;
-		color: var(--text-color);
+		color: var(--text);
 	}
 	.folderContent {
 		display: flex;
@@ -77,7 +77,7 @@
 		align-items: center;
 		gap: 0.4rem;
 		padding: 0.6rem;
-		border-bottom: 1px solid var(--card-border-color);
+		border-bottom: 1px solid var(--border);
 	}
 	.fileNode:last-child {
 		border-bottom: none;

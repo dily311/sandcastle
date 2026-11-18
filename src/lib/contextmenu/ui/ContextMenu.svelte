@@ -127,8 +127,8 @@
 	.contextmenu {
 		width: auto;
 		max-height: 100%;
-		background: var(--background-primary);
-		border: 1px solid var(--card-border-color);
+		background: var(--surface);
+		border: 1px solid var(--border);
 		border-radius: 0.4rem;
 		padding: 0.2rem;
 		display: flex;
@@ -138,7 +138,7 @@
 	}
 
 	.contextmenu hr {
-		border-top: 1px solid var(--hr-color);
+		border-top: 1px solid var(--border-strong);
 		margin: 0.2rem 0;
 	}
 
@@ -158,7 +158,7 @@
 		text-align: start;
 	}
 	.contextmenu-item button:hover {
-		background-color: var(--button-hover-bg);
+		background-color: var(--surface-hover);
 	}
 	.menu-item-icon {
 		display: flex;

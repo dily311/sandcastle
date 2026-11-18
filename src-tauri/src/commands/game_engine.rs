@@ -473,6 +473,9 @@ pub async fn game_context_usage(
         preset_id,
         // 게임 대사에는 플러그인 프롬프트 훅을 쓰지 않는다
         plugins: vec![],
+        // 자동 회상은 채팅에서만 (게임 대사에는 쓰지 않음)
+        memory_recall: None,
+        summary: None,
     })
 }
 

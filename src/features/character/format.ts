@@ -2,7 +2,7 @@
 // - 줄마다 문단, 빈 줄은 버림
 // - *지문* → 기울임, "대사" → 대사 강조, **굵게**, `코드`
 // - 마크다운 줄: # 제목, - 목록, > 인용, --- 가로줄
-// - <cg>키</cg> → 캐릭터 이미지 (문단 사이 블록)
+// - <cg>키</cg> → 캐릭터 에셋 (문단 사이 블록)
 // - ```html … ``` → HTML 블록 (iframe으로 그림, shared/html/blocks.ts)
 import { splitHtmlBlocks } from "$shared/html/blocks";
 

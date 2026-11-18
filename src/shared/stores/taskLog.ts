@@ -7,7 +7,7 @@ import { onEvent } from "$shared/ipc/events";
 import { logs } from "./log.svelte";
 import { toasts } from "./toast.svelte";
 
-const FEATURE: Record<string, string> = { chat: "대화", phone: "폰", game: "게임", translate: "번역", tts: "음성", imagegen: "이미지", settings: "설정" };
+const FEATURE: Record<string, string> = { chat: "대화", phone: "폰", game: "게임", translate: "번역", tts: "음성", imagegen: "이미지", memory: "메모리", summary: "대화 요약", rewrite: "자동 재생성", ghostwrite: "대필", settings: "설정" };
 
 type Ev = { type: string; data: { taskId: string; attemptNo?: number; error?: TaskErrorInfo } };
 

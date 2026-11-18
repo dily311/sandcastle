@@ -1,10 +1,11 @@
 // 위젯 창의 테마: 앱 설정의 화면 모드·강조색·글자 크기를 위젯 화면 변수에 반영한다.
-// (위젯은 예전 색 변수 --accent-color 등을 쓴다. 메인 앱 테마는 $app/theme.svelte.ts)
+// 메인 앱과 같은 토큰(shared/ui/tokens.css)을 쓰도록 <html data-theme>·--accent·회색 단계를 넣는다. (메인 앱 테마는 $app/theme.svelte.ts)
 import type { ThemeSetting } from "$ipc/bindings";
 import { commands } from "$ipc/bindings";
 import { onEvent } from "$shared/ipc/events";
 import { ACCENTS, DEFAULT_ACCENT, accentValue } from "$shared/ui/accents";
-import { generateColorPalette } from "../utils/ContrastColorPalette";
+import { DEFAULT_GRAY, grayScale } from "$shared/ui/grays";
+import { applyUserFont } from "$shared/ui/userFont";
 
 export const defaultThemeSetting: ThemeSetting = {
 	mode: "system",
@@ -17,6 +18,8 @@ export const defaultThemeSetting: ThemeSetting = {
 	backgroundImage: null,
 	backgrounds: [],
 	backgroundOpacity: 0.82,
+	fonts: [],
+	appFont: null,
 };
 
 class ThemeStore {
@@ -64,14 +67,12 @@ class ThemeStore {
 		const isSystemDark = window.matchMedia("(prefers-color-scheme: dark)").matches;
 		const isDark = theme.mode === "dark" || (theme.mode === "system" && isSystemDark);
 		document.body.classList.toggle("is-frameless", !!theme.isFrameless);
-		document.body.classList.toggle("theme-dark", isDark);
-		document.body.classList.toggle("theme-light", !isDark);
-
-		const palette = generateColorPalette(isDark, this.accentHex(isDark, theme.accentColor));
-		document.documentElement.style.setProperty("font-size", `${theme.fontSize}px`);
-		document.body.style.setProperty("--color-text", palette.textColor);
-		document.body.style.setProperty("--color-bg-light", palette.bgLightColor);
-		document.body.style.setProperty("--accent-color", palette.accentColor);
+		const root = document.documentElement;
+		root.dataset.theme = isDark ? "dark" : "light";
+		root.style.setProperty("font-size", `${theme.fontSize}px`);
+		root.style.setProperty("--accent", this.accentHex(isDark, theme.accentColor));
+		applyUserFont(root, theme);
+		grayScale(theme.grayTone ?? DEFAULT_GRAY, isDark).forEach((c, i) => root.style.setProperty(`--gray-${i + 1}`, c));
 	}
 
 	private setupSystemWatcher(theme: ThemeSetting) {

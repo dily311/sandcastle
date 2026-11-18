@@ -61,13 +61,23 @@ const base: Record<string, Handler> = {
 		const cur = db.themeSetting as { backgrounds?: string[]; backgroundImage?: string | null };
 		return (db.themeSetting = { ...db.themeSetting, backgrounds: (cur.backgrounds ?? []).filter((p) => p !== path), backgroundImage: cur.backgroundImage === path ? null : (cur.backgroundImage ?? null) });
 	},
+	add_fonts: ({ paths, select }) => {
+		const cur = db.themeSetting as { fonts?: { path: string; name: string }[] };
+		const added = (paths as string[]).map((p) => ({ path: p, name: (p.split(/[\\/]/).pop() ?? "글꼴").replace(/\.[^.]+$/, "") }));
+		const list = [...(cur.fonts ?? []), ...added];
+		return (db.themeSetting = { ...db.themeSetting, fonts: list, ...(select ? { appFont: list.at(-1)?.path ?? null } : {}) });
+	},
+	remove_font: ({ path }) => {
+		const cur = db.themeSetting as { fonts?: { path: string; name: string }[]; appFont?: string | null };
+		return (db.themeSetting = { ...db.themeSetting, fonts: (cur.fonts ?? []).filter((f) => f.path !== path), appFont: cur.appFont === path ? null : (cur.appFont ?? null) });
+	},
 	get_feature_setting: () => db.feature,
 	list_core_plugins: () =>
 		(
 			[
 				["phone", "폰", "캐릭터와 메신저처럼 대화하는 폰 화면", true, false],
 				["game", "게임 모드", "게임 만들기·가져오기와 플레이", true, false],
-				["chat.images", "캐릭터 이미지", "캐릭터 이미지 에셋과 <cg> 태그", true, false],
+				["chat.images", "캐릭터 에셋", "캐릭터 에셋 에셋과 <cg> 태그", true, false],
 				["html", "HTML 렌더링", "AI 답변의 html 코드 블록 실행", false, false],
 				["regex", "정규식", "메시지 글자 찾아 바꾸기", true, false],
 				["widget", "위젯", "바탕화면 위젯", false, true],
@@ -76,6 +86,11 @@ const base: Record<string, Handler> = {
 				["imagegen", "이미지 생성", "직접 그림 만들기", false, false],
 				["imageauto", "이미지 자동 생성", "글쓰기 AI가 그림 프롬프트도 쓰고 응답 뒤 자동으로 그림", false, false],
 				["sync", "동기화", "다른 기기와 파일로 주고받아 합치기. API 키는 넘어가지 않음", false, false],
+				["lint", "메시지 linter", "AI 응답이 저장될 때 닫히지 않은 태그·따옴표 등을 검사", false, false],
+				["ghostwrite", "대필", "내가 적은 초안을 AI가 내 말투의 다음 대사로 써서 입력칸에 채움", false, false],
+				["rewrite", "자동 재생성", "linter가 금지어·단어 반복 오류를 찾으면 응답을 새 스와이프로 다시 만듦", false, false],
+				["summary", "메모리 확장 · 대화 요약", "프롬프트 창 밖으로 밀려난 오래된 대화를 줄거리로 요약해 AI에게 전달", false, false],
+				["memory", "메모리 검색", "지난 대화를 뜻으로 찾기. 색인하면 대화 글이 임베딩 공급자에게 전송됨", false, false],
 				["community", "커뮤니티 플러그인", "직접 만들거나 받은 플러그인을 파일로 설치. 격리된 곳에서 허락한 권한만으로 동작", false, false],
 			] as const
 		).map(([id, name, description, def, desktopOnly]) => ({ id, name, description, defaultEnabled: def, desktopOnly, enabled: db.feature.feature[id] ?? def })),

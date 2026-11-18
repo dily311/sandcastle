@@ -20,6 +20,13 @@ export const commands = {
 	addBackgrounds: (paths: string[], select: boolean, options?: InvokeOptions) => __TAURI_INVOKE<ThemeSetting_Serialize>("add_backgrounds", { paths, select }, options),
 	/**  배경 목록에서 빼고 복사해 둔 파일을 지운다 (앱 배경이었으면 배경 없음으로) */
 	removeBackground: (path: string, options?: InvokeOptions) => __TAURI_INVOKE<ThemeSetting_Serialize>("remove_background", { path }, options),
+	/**
+	 *  글꼴 올리기: 고른 파일들(ttf·otf·woff·woff2)을 앱 데이터 fonts/에 복사한다 (원본은 건드리지 않음).
+	 *  확장자와 파일 머리가 글꼴이 아니면 하나도 복사하지 않고 거절한다. select면 마지막 것을 앱 글꼴로 고른다
+	 */
+	addFonts: (paths: string[], select: boolean, options?: InvokeOptions) => __TAURI_INVOKE<ThemeSetting_Serialize>("add_fonts", { paths, select }, options),
+	/**  글꼴 목록에서 빼고 복사해 둔 파일을 지운다 (앱 글꼴이었으면 기본 글꼴로) */
+	removeFont: (path: string, options?: InvokeOptions) => __TAURI_INVOKE<ThemeSetting_Serialize>("remove_font", { path }, options),
 	getConvSettings: (options?: InvokeOptions) => __TAURI_INVOKE<ConvSettings_Serialize>("get_conv_settings", undefined, options),
 	setSystemDefaultPersona: (id: string, options?: InvokeOptions) => __TAURI_INVOKE<null>("set_system_default_persona", { id }, options),
 	getThemeList: (options?: InvokeOptions) => __TAURI_INVOKE<CssThemeMeta_Serialize[]>("get_theme_list", undefined, options),
@@ -37,9 +44,9 @@ export const commands = {
 	 *  생성은 작업(ChatStream)으로 돌아서 다른 대화로 옮겨 가도 계속되고, 앱이 꺼지면 다시 시도할 수 있다.
 	 *  응답 조각은 `on_event`로 흐르고, 저장된 메시지는 반환값으로 온다.
 	 */
-	chatSend: (conversationId: string, text: string, attachments: string[], onEvent: Channel<StreamPayload>, options?: InvokeOptions) => __TAURI_INVOKE<ChatTurn_Serialize>("chat_send", { conversationId, text, attachments, onEvent }, options),
-	/**  마지막 AI 메시지 다시 만들기. `swipe`면 스와이프로 쌓고, 아니면 스와이프를 버리고 바꾼다. */
-	chatRegenerate: (conversationId: string, swipe: boolean, onEvent: Channel<StreamPayload>, options?: InvokeOptions) => __TAURI_INVOKE<ChatTurn_Serialize>("chat_regenerate", { conversationId, swipe, onEvent }, options),
+	chatSend: (conversationId: string, text: string, attachments: string[], ghost: boolean, onEvent: Channel<StreamPayload>, options?: InvokeOptions) => __TAURI_INVOKE<ChatTurn_Serialize>("chat_send", { conversationId, text, attachments, ghost, onEvent }, options),
+	/**  마지막 AI 메시지 다시 만들기. `swipe`면 스와이프로 쌓고, 아니면 스와이프를 버리고 바꾼다. `extra`는 이번 생성에만 붙이는 지시. */
+	chatRegenerate: (conversationId: string, swipe: boolean, extra: string | null, onEvent: Channel<StreamPayload>, options?: InvokeOptions) => __TAURI_INVOKE<ChatTurn_Serialize>("chat_regenerate", { conversationId, swipe, extra, onEvent }, options),
 	/**  진행 중인 응답 멈추기 (받은 데까지는 저장됨). 멈출 게 있었으면 true */
 	chatCancel: (conversationId: string, options?: InvokeOptions) => __TAURI_INVOKE<boolean>("chat_cancel", { conversationId }, options),
 	listPhoneContacts: (ownerKind: string, ownerId: string, options?: InvokeOptions) => __TAURI_INVOKE<PhoneContact[]>("list_phone_contacts", { ownerKind, ownerId }, options),
@@ -193,6 +200,33 @@ export const commands = {
 	applyPluginPostprocess: (messageId: string, expected: string, content: string, results: PostProcessResult[], options?: InvokeOptions) => __TAURI_INVOKE<Message_Serialize>("apply_plugin_postprocess", { messageId, expected, content, results }, options),
 	/**  플러그인이 고친 글을 원문으로 (그 뒤 또 고쳤으면 거절). 코어 플러그인이 꺼져 있어도 된다 — 되돌리기는 언제나 */
 	revertPluginPostprocess: (messageId: string, options?: InvokeOptions) => __TAURI_INVOKE<Message_Serialize>("revert_plugin_postprocess", { messageId }, options),
+	/**  linter가 고친 글을 원문으로 (그 뒤 또 고쳤으면 거절). 플러그인이 꺼져 있어도 된다 — 되돌리기는 언제나 (3-B-3) */
+	revertLint: (messageId: string, options?: InvokeOptions) => __TAURI_INVOKE<Message_Serialize>("revert_lint", { messageId }, options),
+	/**  상태 보기: 플러그인이 꺼져 있어도 부를 수 있다(지우기 화면용). 파일이 없으면 만들지 않는다 */
+	getMemoryStatus: (options?: InvokeOptions) => __TAURI_INVOKE<MemoryStatus>("get_memory_status", undefined, options),
+	/**  색인 미리보기: 요금 없음 (공급자를 부르지 않음) */
+	previewMemoryIndex: (scope: MemoryScope_Deserialize, options?: InvokeOptions) => __TAURI_INVOKE<IndexPreview>("preview_memory_index", { scope }, options),
+	/**  색인 실행: 사용자가 미리보기를 보고 누른 것만. 상한을 넘는 계획은 `allow_over_cap`(두 번째 확인)이 있어야 돈다 */
+	runMemoryIndex: (scope: MemoryScope_Deserialize, allowOverCap: boolean, options?: InvokeOptions) => __TAURI_INVOKE<IndexResult>("run_memory_index", { scope, allowOverCap }, options),
+	/**  뜻으로 찾기: 질의 임베딩 한 번(작업 하나) */
+	searchMemory: (request: SearchRequest_Deserialize, options?: InvokeOptions) => __TAURI_INVOKE<SearchResult>("search_memory", { request }, options),
+	/**
+	 *  정리: "other" 다른 모델로 색인된 것 / "orphans" 없어진 대화·가리키지 않는 벡터 / "all" 메모리 파일 전부.
+	 *  플러그인이 꺼져 있어도 된다 — 데이터를 지우는 길은 늘 열려 있어야 함. 지운 chunk 수(all은 0)
+	 */
+	purgeMemory: (kind: string, options?: InvokeOptions) => __TAURI_INVOKE<number>("purge_memory", { kind }, options),
+	getConversationSummary: (conversationId: string, options?: InvokeOptions) => __TAURI_INVOKE<SummaryInfo_Serialize | null>("get_conversation_summary", { conversationId }, options),
+	/**  사용자가 요약 글을 고침 (고친 글은 그대로 AI에게 가고, 다음 자동 요약이 그 위에 이어 씀) */
+	setConversationSummary: (conversationId: string, text: string, options?: InvokeOptions) => __TAURI_INVOKE<SummaryInfo_Serialize>("set_conversation_summary", { conversationId, text }, options),
+	clearConversationSummary: (conversationId: string, options?: InvokeOptions) => __TAURI_INVOKE<null>("clear_conversation_summary", { conversationId }, options),
+	/**  한 단계 전 글로 되돌리기 (없으면 None) */
+	undoConversationSummary: (conversationId: string, options?: InvokeOptions) => __TAURI_INVOKE<SummaryInfo_Serialize | null>("undo_conversation_summary", { conversationId }, options),
+	/**  지금 요약: 사용자가 누른 것(`run_by = user`). 창과 상관없이 최근 몇 개만 원문으로 남기고 요약한다. 요약할 것이 없으면 오류 */
+	summarizeConversationNow: (conversationId: string, options?: InvokeOptions) => __TAURI_INVOKE<SummaryInfo_Serialize>("summarize_conversation_now", { conversationId }, options),
+	/**  초안(없을 수 있음)으로 사용자의 다음 대사를 쓴다. 쓰는 동안 글 조각을 `on_event`로 흘려보내고, 끝나면 정리한 글을 돌려준다. */
+	ghostwrite: (conversationId: string, brief: string | null, onEvent: Channel<StreamPayload>, options?: InvokeOptions) => __TAURI_INVOKE<string>("ghostwrite", { conversationId, brief, onEvent }, options),
+	/**  진행 중인 대필 멈추기 (받은 데까지는 화면이 이미 입력칸에 가지고 있다). 멈출 게 있었으면 true */
+	ghostwriteCancel: (conversationId: string, options?: InvokeOptions) => __TAURI_INVOKE<boolean>("ghostwrite_cancel", { conversationId }, options),
 	/**  화면의 호스트가 프롬프트 요청(user-plugin-prompt)에 답한다. 늦게 와서 기다리는 요청이 없으면 false */
 	answerPluginPrompt: (requestId: string, answers: PluginPromptAnswer_Deserialize[], options?: InvokeOptions) => __TAURI_INVOKE<boolean>("answer_plugin_prompt", { requestId, answers }, options),
 	/**  누른 명령 밖에서도 플러그인이 AI를 부르게 할지 (기본 꺼짐, 요금이 들 수 있음) */
@@ -1204,6 +1238,10 @@ export type ContextUsage_Deserialize = {
 	presetName?: string | null,
 	/**  커뮤니티 플러그인이 더한 프롬프트 블록 (6-D-5, 시스템 토큰에 들어 있음) */
 	plugins: PluginPromptUse[],
+	/**  마지막 응답에서 지난 대화를 떠올린 기록 (3-C-5, 대화 기록 토큰에 들어 있음). 자동 회상이 꺼져 있었으면 None */
+	memoryRecall?: RecallMeta_Deserialize | null,
+	/**  마지막 응답을 만들 때 쓴 대화 요약 (3-D, 시스템 토큰에 들어 있음) */
+	summary?: SummaryUse | null,
 };
 
 /**  컨텍스트 사용량 (오른쪽 패널). 마지막으로 보낸 프롬프트 기준 */
@@ -1224,6 +1262,10 @@ export type ContextUsage_Serialize = {
 	presetName: string | null,
 	/**  커뮤니티 플러그인이 더한 프롬프트 블록 (6-D-5, 시스템 토큰에 들어 있음) */
 	plugins: PluginPromptUse[],
+	/**  마지막 응답에서 지난 대화를 떠올린 기록 (3-C-5, 대화 기록 토큰에 들어 있음). 자동 회상이 꺼져 있었으면 None */
+	memoryRecall: RecallMeta_Serialize | null,
+	/**  마지막 응답을 만들 때 쓴 대화 요약 (3-D, 시스템 토큰에 들어 있음) */
+	summary: SummaryUse | null,
 };
 
 /**  continue_game / load_save의 응답. events는 항상 비어 있고(새로 생긴 일이 없다), 화면은 state + history로 복원한다. */
@@ -2572,6 +2614,33 @@ export type GeneratedImage_Serialize = {
 	readonly: boolean,
 };
 
+/**  대필 설정. 켜짐/꺼짐은 코어 플러그인 `ghostwrite`(기본 꺼짐) */
+export type GhostSetting = GhostSetting_Serialize | GhostSetting_Deserialize;
+
+/**  대필 설정. 켜짐/꺼짐은 코어 플러그인 `ghostwrite`(기본 꺼짐) */
+export type GhostSetting_Deserialize = {
+	/**  대필에 쓸 API (비우면 그 대화의 API) */
+	apiProfileId?: string | null,
+	/**  short / medium / long */
+	length?: string,
+	/**  추가 지침 한 줄 (300자까지) */
+	guide?: string,
+	/**  펜 버튼을 누르면 초안 작성 없이 바로 AI에게 요청 (한 번 누르면 한 번의 요금) */
+	sendWithoutDraft?: boolean,
+};
+
+/**  대필 설정. 켜짐/꺼짐은 코어 플러그인 `ghostwrite`(기본 꺼짐) */
+export type GhostSetting_Serialize = {
+	/**  대필에 쓸 API (비우면 그 대화의 API) */
+	apiProfileId: string | null,
+	/**  short / medium / long */
+	length: string,
+	/**  추가 지침 한 줄 (300자까지) */
+	guide: string,
+	/**  펜 버튼을 누르면 초안 작성 없이 바로 AI에게 요청 (한 번 누르면 한 번의 요금) */
+	sendWithoutDraft: boolean,
+};
+
 /**  홈 화면: 보일 블록과 순서, 인사말, 내 글. 리소스를 쓰지 않는 화면이라 블록은 기본으로 보인다 */
 export type HomeSetting = HomeSetting_Serialize | HomeSetting_Deserialize;
 
@@ -2649,6 +2718,29 @@ export type ImportedCharacterRef = {
 	name: string,
 };
 
+export type IndexPreview = {
+	conversations: number,
+	/**  계획한 chunk 수 */
+	chunks: number,
+	/**  이미 벡터가 있어 건너뛸 chunk 수 */
+	cached: number,
+	/**  새로 임베딩할 글 수 (같은 글은 한 번) */
+	toEmbed: number,
+	/**  새로 임베딩할 입력 토큰 (앱이 센 추정 — 채팅 모델의 토크나이저 기준) */
+	estTokens: number,
+	tokenCap: number,
+	overCap: boolean,
+};
+
+export type IndexResult = {
+	conversations: number,
+	chunks: number,
+	embedded: number,
+	cached: number,
+	/**  공급자가 알려 준(없으면 추정) 입력 토큰 */
+	tokens: number,
+};
+
 export type InstalledPluginInfo = {
 	version: string,
 	enabled: boolean,
@@ -2681,12 +2773,142 @@ export type LineKind = "narration" | "dialogue" |
 /**  텍스트 없이 연출만 있는 줄 */
 "direction";
 
+/**  linter 규칙 하나의 동작 */
+export type LintMode = "off" | 
+/**  표시만: 글은 그대로 두고 메시지 아래에 알림 */
+"report" | 
+/**  자동 고침: 고치고 원문을 meta에 남김 (되돌리기 가능) */
+"fix";
+
+/**  메시지 linter 규칙 (요금 없이 앱 안에서 도는 것만 — 3-B-2). 글자 수 규칙은 표시만 할 수 있다 */
+export type LintSetting = LintSetting_Serialize | LintSetting_Deserialize;
+
+/**  메시지 linter 규칙 (요금 없이 앱 안에서 도는 것만 — 3-B-2). 글자 수 규칙은 표시만 할 수 있다 */
+export type LintSetting_Deserialize = {
+	/**  닫히지 않은 태그·따옴표·마크다운(코드 펜스·`**`·`*`) */
+	unclosed?: LintMode,
+	/**  같은 문단 반복 */
+	repeat?: LintMode,
+	/**  단어 반복 오류: 같은 말을 끝없이 되풀이하는 고장 (고치면 두 번까지만 남김) */
+	stuck?: LintMode,
+	/**  내 대사를 AI가 대신 쓴 줄(`이름: …`) */
+	impersonate?: LintMode,
+	/**  금지어 */
+	banned?: LintMode,
+	bannedWords?: string[],
+	/**  글자 수 범위 (표시만) */
+	length?: LintMode,
+	/**  0 = 제한 없음 */
+	minChars?: number,
+	maxChars?: number,
+};
+
+/**  메시지 linter 규칙 (요금 없이 앱 안에서 도는 것만 — 3-B-2). 글자 수 규칙은 표시만 할 수 있다 */
+export type LintSetting_Serialize = {
+	/**  닫히지 않은 태그·따옴표·마크다운(코드 펜스·`**`·`*`) */
+	unclosed: LintMode,
+	/**  같은 문단 반복 */
+	repeat: LintMode,
+	/**  단어 반복 오류: 같은 말을 끝없이 되풀이하는 고장 (고치면 두 번까지만 남김) */
+	stuck: LintMode,
+	/**  내 대사를 AI가 대신 쓴 줄(`이름: …`) */
+	impersonate: LintMode,
+	/**  금지어 */
+	banned: LintMode,
+	bannedWords: string[],
+	/**  글자 수 범위 (표시만) */
+	length: LintMode,
+	/**  0 = 제한 없음 */
+	minChars: number,
+	maxChars: number,
+};
+
 /**  find_regex 안의 매크로 치환 방식 */
 export type MacroMode = "none" | 
 /**  값을 그대로 넣음 (값 안의 정규식 특수문자가 패턴으로 해석됨) */
 "raw" | 
 /**  정규식 특수문자를 이스케이프해서 넣음 */
 "escaped";
+
+export type MemoryRef = {
+	conversationId: string,
+	conversationTitle: string,
+	firstMessageId: string,
+	lastMessageId: string,
+	score: number | null,
+	tokens: number,
+};
+
+/**  색인·검색 범위. 대화 id가 없으면 전체 */
+export type MemoryScope = MemoryScope_Serialize | MemoryScope_Deserialize;
+
+/**  색인·검색 범위. 대화 id가 없으면 전체 */
+export type MemoryScope_Deserialize = {
+	conversationId?: string | null,
+};
+
+/**  색인·검색 범위. 대화 id가 없으면 전체 */
+export type MemoryScope_Serialize = {
+	conversationId: string | null,
+};
+
+/**  메모리 임베딩 검색 설정. API 프로필·모델은 기기마다 다르므로 통째로 기기 전용 */
+export type MemorySetting = MemorySetting_Serialize | MemorySetting_Deserialize;
+
+/**  메모리 임베딩 검색 설정. API 프로필·모델은 기기마다 다르므로 통째로 기기 전용 */
+export type MemorySetting_Deserialize = {
+	/**  임베딩에 쓸 API 프로필 (비우면 색인·검색을 할 수 없음 — 앱이 고른 채팅 API를 몰래 쓰지 않는다) */
+	apiProfileId?: string | null,
+	/**  임베딩 모델 이름 (사용자가 입력. 앱은 모델·가격을 내장하지 않음) */
+	model?: string,
+	/**  줄일 차원 (지원하는 모델만). 비우면 모델 기본 */
+	dimensions?: number | null,
+	/**  한 번 색인에서 임베딩할 최대 토큰(추정). 넘으면 한 번 더 확인 */
+	tokenCap?: number,
+	/**  문서·질의 앞에 붙일 글 (e5의 "passage: "/"query: " 같은 모델용) */
+	docPrefix?: string,
+	queryPrefix?: string,
+	/**  보낼 때 관련된 지난 대화를 프롬프트에 넣기 (3-C-5). 보낼 때마다 임베딩 1회가 자동 실행으로 듦 — 기본 꺼짐 */
+	autoRecall?: boolean,
+	/**  넣는 글의 토큰 상한 */
+	recallTokens?: number,
+	/**  최대 chunk 수 */
+	recallTopK?: number,
+	/**  어디서 찾나: "conversation"(이 대화) / "character"(같은 캐릭터의 대화) / "all"(전체) */
+	recallScope?: string,
+};
+
+/**  메모리 임베딩 검색 설정. API 프로필·모델은 기기마다 다르므로 통째로 기기 전용 */
+export type MemorySetting_Serialize = {
+	/**  임베딩에 쓸 API 프로필 (비우면 색인·검색을 할 수 없음 — 앱이 고른 채팅 API를 몰래 쓰지 않는다) */
+	apiProfileId: string | null,
+	/**  임베딩 모델 이름 (사용자가 입력. 앱은 모델·가격을 내장하지 않음) */
+	model: string,
+	/**  줄일 차원 (지원하는 모델만). 비우면 모델 기본 */
+	dimensions: number | null,
+	/**  한 번 색인에서 임베딩할 최대 토큰(추정). 넘으면 한 번 더 확인 */
+	tokenCap: number,
+	/**  문서·질의 앞에 붙일 글 (e5의 "passage: "/"query: " 같은 모델용) */
+	docPrefix: string,
+	queryPrefix: string,
+	/**  보낼 때 관련된 지난 대화를 프롬프트에 넣기 (3-C-5). 보낼 때마다 임베딩 1회가 자동 실행으로 듦 — 기본 꺼짐 */
+	autoRecall: boolean,
+	/**  넣는 글의 토큰 상한 */
+	recallTokens: number,
+	/**  최대 chunk 수 */
+	recallTopK: number,
+	/**  어디서 찾나: "conversation"(이 대화) / "character"(같은 캐릭터의 대화) / "all"(전체) */
+	recallScope: string,
+};
+
+export type MemoryStatus = {
+	/**  지금 설정(모델)으로 색인된 chunk 수 */
+	chunksCurrent: number,
+	/**  다른 모델·차원·접두어로 색인된 chunk 수 (다시 색인하거나 지워야 검색됨) */
+	chunksOther: number,
+	vectors: number,
+	fileBytes: number,
+};
 
 export type MergeReport = {
 	added: number,
@@ -3375,6 +3597,16 @@ export type PluginSetting_Deserialize = {
 	prompts?: AppPrompts_Deserialize,
 	/**  폴더 동기화 (2-C) — 경로가 기기마다 달라 기기 전용 (settings_scope) */
 	sync?: SyncSetting_Deserialize,
+	/**  메시지 linter 규칙 (3-B, ADR-014). 켜짐/꺼짐은 코어 플러그인 `lint`(기본 꺼짐) */
+	lint?: LintSetting_Deserialize,
+	/**  메모리 임베딩 검색 (3-C, ADR-015) — 기기 전용 */
+	memory?: MemorySetting_Deserialize,
+	/**  메모리 확장: 대화 요약 (3-D, ADR-016) — 기기 전용 */
+	summary?: SummarySetting_Deserialize,
+	/**  자동 재생성 (3-B-4, ADR-017) — 기기 전용 */
+	rewrite?: RewriteSetting_Deserialize,
+	/**  대필 (5-D, ADR-018) — 기기 전용 */
+	ghost?: GhostSetting_Deserialize,
 };
 
 export type PluginSetting_Serialize = {
@@ -3386,6 +3618,16 @@ export type PluginSetting_Serialize = {
 	prompts: AppPrompts_Serialize,
 	/**  폴더 동기화 (2-C) — 경로가 기기마다 달라 기기 전용 (settings_scope) */
 	sync: SyncSetting_Serialize,
+	/**  메시지 linter 규칙 (3-B, ADR-014). 켜짐/꺼짐은 코어 플러그인 `lint`(기본 꺼짐) */
+	lint: LintSetting_Serialize,
+	/**  메모리 임베딩 검색 (3-C, ADR-015) — 기기 전용 */
+	memory: MemorySetting_Serialize,
+	/**  메모리 확장: 대화 요약 (3-D, ADR-016) — 기기 전용 */
+	summary: SummarySetting_Serialize,
+	/**  자동 재생성 (3-B-4, ADR-017) — 기기 전용 */
+	rewrite: RewriteSetting_Serialize,
+	/**  대필 (5-D, ADR-018) — 기기 전용 */
+	ghost: GhostSetting_Serialize,
 };
 
 export type PostProcessResult = {
@@ -3637,6 +3879,29 @@ export type ProposalKind = "character" | "persona" |
 /**  대화의 메시지 글 */
 "message";
 
+/**  응답 meta.info.memoryRecall에 남기는 기록 (chunk 글은 저장하지 않는다) */
+export type RecallMeta = RecallMeta_Serialize | RecallMeta_Deserialize;
+
+/**  응답 meta.info.memoryRecall에 남기는 기록 (chunk 글은 저장하지 않는다) */
+export type RecallMeta_Deserialize = {
+	/**  used / skipped */
+	status: string,
+	/**  건너뛴 이유: short · no_index · other_model · no_candidates · no_relevant · timeout · budget · cancelled · error · regenerate */
+	reason?: string | null,
+	hits: MemoryRef[],
+	tokens: number,
+};
+
+/**  응답 meta.info.memoryRecall에 남기는 기록 (chunk 글은 저장하지 않는다) */
+export type RecallMeta_Serialize = {
+	/**  used / skipped */
+	status: string,
+	/**  건너뛴 이유: short · no_index · other_model · no_candidates · no_relevant · timeout · budget · cancelled · error · regenerate */
+	reason: string | null,
+	hits: MemoryRef[],
+	tokens: number,
+};
+
 /**  어떤 텍스트에 적용할지 */
 export type RegexPlacement = 
 /**  사용자가 보낸 메시지 */
@@ -3815,6 +4080,29 @@ export type RestorePreview = {
 	willMigrate: boolean,
 };
 
+/**  자동 재생성 설정. 켜짐/꺼짐은 코어 플러그인 `rewrite`(기본 꺼짐, 켜는 것이 동의). 꺼져 있으면 linter가 쓸 수 없다 */
+export type RewriteSetting = RewriteSetting_Serialize | RewriteSetting_Deserialize;
+
+/**  자동 재생성 설정. 켜짐/꺼짐은 코어 플러그인 `rewrite`(기본 꺼짐, 켜는 것이 동의). 꺼져 있으면 linter가 쓸 수 없다 */
+export type RewriteSetting_Deserialize = {
+	/**  한 응답에 자동으로 더 만드는 최대 횟수 (기본 1, 안전상 3까지) — 한 번마다 응답 하나의 요금 */
+	maxAttempts?: number,
+	/**  금지어가 걸리면 다시 쓰기 (linter의 금지어 규칙이 표시만이어야 함) */
+	banned?: boolean,
+	/**  단어 반복 오류가 걸리면 다시 쓰기 */
+	stuck?: boolean,
+};
+
+/**  자동 재생성 설정. 켜짐/꺼짐은 코어 플러그인 `rewrite`(기본 꺼짐, 켜는 것이 동의). 꺼져 있으면 linter가 쓸 수 없다 */
+export type RewriteSetting_Serialize = {
+	/**  한 응답에 자동으로 더 만드는 최대 횟수 (기본 1, 안전상 3까지) — 한 번마다 응답 하나의 요금 */
+	maxAttempts: number,
+	/**  금지어가 걸리면 다시 쓰기 (linter의 금지어 규칙이 표시만이어야 함) */
+	banned: boolean,
+	/**  단어 반복 오류가 걸리면 다시 쓰기 */
+	stuck: boolean,
+};
+
 /**  작업을 누가 시작했나. 비용이 드는 작업은 항상 실행 주체가 분명해야 한다 (CLAUDE.md 원칙) */
 export type RunBy = 
 /**  사용자가 누른 버튼·전송 */
@@ -3855,6 +4143,44 @@ export type SaveReport = {
 	deleted: { [key in string]: number },
 	/**  저장 후 상태의 진단 결과 (open_game의 diagnostics와 같은 형식) */
 	diagnostics: Issue[],
+};
+
+export type SearchHit = {
+	conversationId: string,
+	conversationTitle: string,
+	firstMessageId: string,
+	lastMessageId: string,
+	/**  코사인 유사도 (−1~1, 모델마다 분포가 달라 절대값보다 순서가 의미 있음) */
+	score: number | null,
+	/**  지금 메시지에서 다시 읽은 chunk 글 */
+	snippet: string,
+	/**  색인한 뒤 글이 바뀜 (다시 색인하면 갱신) */
+	stale: boolean,
+};
+
+export type SearchRequest = SearchRequest_Serialize | SearchRequest_Deserialize;
+
+export type SearchRequest_Deserialize = {
+	query: string,
+	scope: MemoryScope_Deserialize,
+	/**  기본 10, 최대 20 */
+	limit?: number | null,
+};
+
+export type SearchRequest_Serialize = {
+	query: string,
+	scope: MemoryScope_Serialize,
+	/**  기본 10, 최대 20 */
+	limit: number | null,
+};
+
+export type SearchResult = {
+	hits: SearchHit[],
+	scanned: number,
+	/**  훑는 상한에 걸려 일부만 검색함 */
+	truncated: boolean,
+	/**  다른 모델로 색인되어 이번에 찾지 못한 chunk 수 */
+	otherModelChunks: number,
 };
 
 export type Severity = "error" | "warning";
@@ -3898,6 +4224,60 @@ export type StorageUsage = {
 
 export type StreamPayload = {
 	chunk: string,
+};
+
+export type SummaryFailure = {
+	at: number,
+	/**  budget / timeout / cancelled / error / empty */
+	reason: string,
+	/**  실패했을 때의 보이는 메시지 수 */
+	visibleCount: number,
+};
+
+export type SummaryInfo = SummaryInfo_Serialize | SummaryInfo_Deserialize;
+
+export type SummaryInfo_Deserialize = {
+	text: string,
+	coveredCount: number,
+	rev: number,
+	editedByUser: boolean,
+	hasPrev: boolean,
+	tokens: number,
+	updatedAt: number,
+	failure?: SummaryFailure | null,
+};
+
+export type SummaryInfo_Serialize = {
+	text: string,
+	coveredCount: number,
+	rev: number,
+	editedByUser: boolean,
+	hasPrev: boolean,
+	tokens: number,
+	updatedAt: number,
+	failure: SummaryFailure | null,
+};
+
+/**  대화 요약 설정. 켜짐/꺼짐은 코어 플러그인 `summary`(기본 꺼짐, 켜는 것이 동의) */
+export type SummarySetting = SummarySetting_Serialize | SummarySetting_Deserialize;
+
+/**  대화 요약 설정. 켜짐/꺼짐은 코어 플러그인 `summary`(기본 꺼짐, 켜는 것이 동의) */
+export type SummarySetting_Deserialize = {
+	/**  요약에 쓸 API 프로필 (비우면 그 대화가 쓰는 API) */
+	apiProfileId?: string | null,
+};
+
+/**  대화 요약 설정. 켜짐/꺼짐은 코어 플러그인 `summary`(기본 꺼짐, 켜는 것이 동의) */
+export type SummarySetting_Serialize = {
+	/**  요약에 쓸 API 프로필 (비우면 그 대화가 쓰는 API) */
+	apiProfileId: string | null,
+};
+
+/**  응답 meta.info.summary와 컨텍스트 탭: 이 응답을 만들 때 쓴 요약 */
+export type SummaryUse = {
+	rev: number,
+	tokens: number,
+	coveredCount: number,
 };
 
 export type Support = {
@@ -4337,7 +4717,9 @@ export type TaskType =
 /**  API 연결 확인 등 설정 화면의 짧은 호출 */
 "api_call" | 
 /**  커뮤니티 플러그인이 부른 AI 글 생성 (feature `plugin:<id>`, 6-D-7) */
-"plugin_ai";
+"plugin_ai" | 
+/**  대필 (코어 플러그인 ghostwrite, 5-D) — 입력칸에 채울 글 한 번 */
+"ghostwrite";
 
 export type Template = Template_Serialize | Template_Deserialize;
 
@@ -4390,6 +4772,10 @@ export type ThemeSetting_Deserialize = {
 	backgrounds?: string[],
 	/**  배경 위 화면의 불투명도 (0.3~1). 낮을수록 배경이 잘 보임 */
 	backgroundOpacity?: number | null,
+	/**  올려 둔 글꼴 (앱 데이터 fonts/에 복사한 파일). 앱에 글꼴을 넣어 두지 않으므로 목록은 사용자가 올린 것뿐 */
+	fonts?: UserFont[],
+	/**  앱 글꼴: `fonts` 중 하나의 파일 경로. 없으면 기본 글꼴 */
+	appFont?: string | null,
 };
 
 export type ThemeSetting_Serialize = {
@@ -4408,6 +4794,10 @@ export type ThemeSetting_Serialize = {
 	backgrounds: string[],
 	/**  배경 위 화면의 불투명도 (0.3~1). 낮을수록 배경이 잘 보임 */
 	backgroundOpacity: number | null,
+	/**  올려 둔 글꼴 (앱 데이터 fonts/에 복사한 파일). 앱에 글꼴을 넣어 두지 않으므로 목록은 사용자가 올린 것뿐 */
+	fonts: UserFont[],
+	/**  앱 글꼴: `fonts` 중 하나의 파일 경로. 없으면 기본 글꼴 */
+	appFont: string | null,
 };
 
 export type TranscriptEntry = TranscriptEntry_Serialize | TranscriptEntry_Deserialize;
@@ -4621,6 +5011,14 @@ export type UsageSummary_Serialize = {
 	/**  단가표로 계산한 추정 금액 (단가표에 이 모델이 없으면 None) */
 	estimatedCost: number | null,
 	currency: string | null,
+};
+
+/**  올린 글꼴 한 개 */
+export type UserFont = {
+	/**  앱 데이터 fonts/ 안의 파일 경로 */
+	path: string,
+	/**  목록에 보일 이름 (올릴 때의 파일 이름) */
+	name: string,
 };
 
 /**  목록의 한 줄. manifest를 읽지 못한 폴더도 보여준다(지울 수 있게) */

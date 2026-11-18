@@ -1,5 +1,5 @@
 <script lang="ts">
-	import { Bookmark, BookmarkX, ChevronDown, ChevronLeft, ChevronRight, Copy, Eye, EyeOff, FileSearch, GitBranch, ImagePlus, Languages, Pencil, RefreshCw, Square, Trash2, Volume2 } from "@lucide/svelte";
+	import { Bookmark, BookmarkX, ChevronDown, ChevronLeft, ChevronRight, Copy, Eye, EyeOff, FileSearch, GitBranch, ImagePlus, Languages, Pencil, RefreshCw, Square, Trash2, Volume2, Sparkles, PenLine } from "@lucide/svelte";
 	import { plugins } from "$shared/stores/plugins.svelte";
 	import { drawMessage, generatedImagesOf, speak, speech, translateMessage, translationOf } from "$shared/stores/aiTools.svelte";
 	import { Badge, Button, IconButton, ProviderIcon, Textarea } from "$shared/ui";
@@ -13,6 +13,8 @@
 	import { fileSrc } from "$shared/ipc/file";
 	import { layout } from "$app/layout.svelte";
 	import PluginProcessNote from "$features/community/PluginProcessNote.svelte";
+	import LintNote from "./LintNote.svelte";
+	import { lintOf } from "./lint";
 	import { pluginProcessOf } from "$features/community/postprocess";
 
 	interface Props {
@@ -40,12 +42,16 @@
 	// 받는 중에는 응답 끝의 <image> 그림 프롬프트(이미지 자동 생성)를 숨긴다 (저장할 때 백엔드가 뺀다)
 	/** 플러그인이 고친 메시지의 원문 보기 (6-D-4) */
 	let pluginOriginal = $state(false);
+	/** linter가 고친 메시지의 원문 보기 (3-B-3) */
+	let lintOriginal = $state(false);
 	const text = $derived(
 		live
 			? live.text.replace(/<image>[\s\S]*?(<\/image>|$)/i, "")
 			: translation && !showOriginal
 				? translation.text
-				: pluginOriginal
+				: lintOriginal
+					? (lintOf(msg)?.original ?? msg.content)
+					: pluginOriginal
 					? (pluginProcessOf(msg)?.original ?? msg.content)
 					: (session.display[msg.id] ?? msg.content),
 	);
@@ -119,6 +125,11 @@
 		const t = await promptText({ title: "여기서 챕터 시작", message: `#${no} 메시지부터 새 챕터`, input: { value: "", placeholder: "챕터 제목" }, confirmLabel: "만들기" });
 		if (t) await session.setChapter(msg, t);
 	}
+	/** 이번 생성에만 붙는 지시를 받아 다른 응답(스와이프)으로 다시 생성 */
+	async function regenerateWith() {
+		const t = await promptText({ title: "지시와 함께 다시 생성", message: "이번 응답에만 적용 · 저장되는 글에는 들어가지 않음", input: { value: "", placeholder: "예) 묘사는 짧게, 대사를 더 많이" }, confirmLabel: "다시 생성" });
+		if (t?.trim()) await session.regenerate(true, t.trim());
+	}
 	async function remove() {
 		if (await confirmAction({ title: "메시지 삭제", message: `#${no} 메시지를 지움. 되돌릴 수 없음`, confirmLabel: "삭제", danger: true })) await session.remove(msg);
 	}
@@ -127,11 +138,14 @@
 <!-- svelte-ignore a11y_click_events_have_key_events, a11y_no_static_element_interactions -->
 <div bind:this={el} class="block" class:ai={isAi} class:user={!isAi} class:hidden={meta.hidden} class:selecting class:picked={selected} id="msg-{msg.id}" data-no={no} class:tapped onclick={tap}>
 	<div class="who">
-		{#if selecting}<input class="pick" type="checkbox" checked={selected} aria-label="#{no} 메시지 고르기" onclick={(e) => e.stopPropagation()} onchange={(e) => onselect?.(msg, e.currentTarget.checked)} />{/if}
+		{#if selecting}<input class="pick" type="checkbox" checked={selected} aria-label="#{no} 메시지 선택" onclick={(e) => e.stopPropagation()} onchange={(e) => onselect?.(msg, e.currentTarget.checked)} />{/if}
 		<span class="no">#{no}</span><b>{msg.name ?? (isAi ? "AI" : "나")}</b>
 		{#if meta.hidden}<Badge><EyeOff /> AI에게 숨김</Badge>{/if}
+		{#if (msg.meta as { ghost?: boolean } | null)?.ghost}<span class="ghost" role="img" aria-label="대필" title="대필"><PenLine size={12} /></span>{/if}
 		{#if live}
 			<span class="stamp">만드는 중…</span>
+		{:else if isAi && isLast && session.rewriting}
+			<span class="stamp">다시 쓰는 중…</span>
 		{:else}
 			<span class="stamp">
 				{#if appSetting.showTimestamps}<time datetime={new Date(msg.createdAt).toISOString()} title={absolute(msg.createdAt)}>{relative(msg.createdAt)}</time>{/if}
@@ -152,6 +166,7 @@
 				</IconButton>
 				{#if isAi && isLast}
 					<IconButton label="처음부터 다시 생성 (스와이프 버림)" size="sm" disabled={session.busy} onclick={() => session.regenerate(false)}><RefreshCw /></IconButton>
+					<IconButton label="지시와 함께 다시 생성" size="sm" disabled={session.busy} onclick={regenerateWith}><Sparkles /></IconButton>
 				{/if}
 				{#if isAi}
 					<IconButton label="보낸 컨텍스트 보기" size="sm" onclick={() => onprompt(msg)}><FileSearch /></IconButton>
@@ -188,6 +203,7 @@
 				{#each meta.attachments as a (a)}<a href={fileSrc(a)} target="_blank" rel="noreferrer"><img src={fileSrc(a)} alt="첨부 이미지" loading="lazy" /></a>{/each}
 			</div>
 		{/if}
+		{#if !live}<LintNote {msg} bind:showOriginal={lintOriginal} onupdate={(m) => session.update(m)} />{/if}
 		{#if !live}<PluginProcessNote {msg} bind:showOriginal={pluginOriginal} onupdate={(m) => session.update(m)} />{/if}
 		{#if translation && !live}<p class="tr-note">{showOriginal ? "원문" : `${translation.lang} 번역`} · <button class="link" onclick={() => (showOriginal = !showOriginal)}>{showOriginal ? "번역 보기" : "원문 보기"}</button></p>{/if}
 		{#if blocks.length}
@@ -223,6 +239,10 @@
 </div>
 
 <style>
+	.ghost {
+		display: inline-flex;
+		color: var(--text-faint);
+	}
 	.fold {
 		display: inline-flex;
 		align-items: center;

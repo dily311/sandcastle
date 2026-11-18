@@ -51,6 +51,7 @@
 	.textarea {
 		display: block;
 		width: 100%;
+		min-height: 1.8rem;
 		padding: var(--space-2) var(--space-3);
 		background: var(--surface);
 		border: 1px solid var(--border-strong);

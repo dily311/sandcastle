@@ -31,7 +31,7 @@
 		void loadVoices();
 	});
 	const voiceOptions = $derived([
-		{ value: "", label: eleven ? "목소리 고르기" : "기본" },
+		{ value: "", label: eleven ? "목소리 선택" : "기본" },
 		...voices.map((v) => ({ value: v.id, label: v.description ? `${v.name} · ${v.description}` : v.name })),
 	]);
 	const MODELS: Record<string, string[]> = {
@@ -45,7 +45,7 @@
 	{#if cur}
 		<Group>
 			<Row label="음성 API" desc="API 키 화면에서 'ElevenLabs (음성)' 연결을 만들어 고름">
-				<Select value={profileId} options={apiOptions("고르기", ["elevenlabs", "openai"])} onchange={(e) => save("tts", { apiProfileId: orNull(e.currentTarget.value), voice: "" })} />
+				<Select value={profileId} options={apiOptions("미선택", ["elevenlabs", "openai"])} onchange={(e) => save("tts", { apiProfileId: orNull(e.currentTarget.value), voice: "" })} />
 			</Row>
 			<Row label="모델">
 				{#if modelOptions.some((m) => m.value === cur.tts.model)}

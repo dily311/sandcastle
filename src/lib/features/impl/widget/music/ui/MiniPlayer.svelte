@@ -113,11 +113,11 @@
 		align-items: center;
 		gap: 0.2rem;
 		width: 300px;
-		border-radius: var(--card-radius);
+		border-radius: var(--radius-xs);
 		padding: 0.2rem;
-		background: var(--card-bg);
+		background: var(--surface);
 		backdrop-filter: blur(20px);
-		box-shadow: 0 0 0 1px var(--card-border-color);
+		box-shadow: 0 0 0 1px var(--border);
 		cursor: default;
 		z-index: 900;
 	}
@@ -131,20 +131,20 @@
 	.loop-btn {
 		width: 0.6rem;
 		height: 0.6rem;
-		background: var(--color-50);
+		background: var(--text-muted);
 		border-radius: 100%;
 	}
 	.loop-btn.LOOP_ALL {
-		background: var(--color-red);
+		background: var(--danger);
 	}
 	.loop-btn.ONCE_ONE {
-		background: var(--color-blue);
+		background: var(--info);
 	}
 	.loop-btn.LOOP_ONE {
-		background: var(--color-green);
+		background: var(--success);
 	}
 	.move-btn {
-		color: var(--icon-color);
+		color: var(--text-muted);
 		font-size: 0.8rem;
 		padding: 0;
 		cursor: grab;
@@ -207,7 +207,7 @@
 	}
 
 	.play-btn:hover {
-		background: var(--icon-hover-bg);
-		color: var(--icon-hover-color);
+		background: var(--surface-hover);
+		color: var(--text);
 	}
 </style>

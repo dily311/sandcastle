@@ -60,6 +60,40 @@ function readAsDataUrl(f: File): Promise<string> {
 	});
 }
 
+/** avif까지 (테마 배경·폰 배경·글 카드 배경 버튼이 받는 형식) */
+export const isImageAvif = (f: File) => isImage(f) || extOf(f) === "avif";
+export const isAudio = (f: File) => ["mp3", "wav", "ogg", "flac", "m4a", "aac"].includes(extOf(f));
+export const isFont = (f: File) => ["ttf", "otf", "woff", "woff2"].includes(extOf(f));
+
+export interface PathDrop {
+	label: string;
+	hint?: string;
+	/** 받을 파일. 기본은 그림 */
+	accept?: (f: File) => boolean;
+	/** false면 여러 개를 놓아도 첫 파일만 (버튼이 파일 하나만 고르는 곳). 기본 true */
+	multiple?: boolean;
+	/** 이보다 큰 파일은 받지 않음 (놓은 파일은 통째로 메모리에 읽혀 디스크에 쓰이므로 큰 파일은 버튼으로) */
+	maxBytes?: number;
+	priority?: number;
+	/** 파일 고르기 버튼과 같은 처리: 디스크 경로를 받음 */
+	onpaths: (paths: string[]) => void | Promise<void>;
+}
+
+/** 업로드 버튼이 있는 곳의 끌어다 놓기. 버튼과 같은 처리를 경로로 넘긴다. $effect 안에서: $effect(() => dropPaths({...})) */
+export function dropPaths(t: PathDrop) {
+	const base = t.accept ?? isImage;
+	return drops.register({
+		label: t.label,
+		hint: t.hint,
+		priority: t.priority,
+		accept: (f) => base(f) && (t.maxBytes === undefined || f.size <= t.maxBytes),
+		ondrop: async (files) => {
+			const use = t.multiple === false ? files.slice(0, 1) : files;
+			await t.onpaths(await Promise.all(use.map((f) => storeFile(f))));
+		},
+	});
+}
+
 /** 놓은 파일을 디스크에 저장하고 경로를 받음. keep: 메시지 첨부처럼 계속 둘 파일 */
 export async function storeFile(f: File, keep = false): Promise<string> {
 	const data = await readAsDataUrl(f);

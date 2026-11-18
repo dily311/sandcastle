@@ -1,5 +1,5 @@
 <script lang="ts">
-	// 작가 노트·메모 (대화 meta에 저장, 보낼 때 프롬프트에 들어감). 대화·폰 패널이 같이 씀
+	// 메모(내 것, AI에게 보내지 않음)와 작가 노트(보낼 때 프롬프트에 들어감) — 대화 meta에 저장. 대화·폰 패널이 같이 씀
 	import { Input, Textarea } from "$shared/ui";
 	import { library, type Conversation } from "./library.svelte";
 
@@ -13,12 +13,14 @@
 	let noteDepth = $state(4);
 	$effect(() => {
 		// 대화가 바뀌거나 저장된 값이 바뀌면 다시 채움
-		memory = notes.memory ?? "";
+		memory = memoOf(notes.memory);
 		noteText = notes.authorNote?.text ?? "";
 		noteDepth = notes.authorNote?.depth ?? 4;
 	});
+	// 예전 버전이 메모 칸에 "off"를 메모리 검색 스위치로 썼다 — 메모가 아니다
+	const memoOf = (m: string | undefined) => (m === "off" ? "" : (m ?? ""));
 	function saveMemory() {
-		if (memory === (notes.memory ?? "")) return;
+		if (memory === memoOf(notes.memory)) return;
 		void library.patchMeta(conv.id, { memory: memory.trim() ? memory : null });
 	}
 	function saveNote() {
@@ -31,8 +33,8 @@
 
 {#snippet fields()}
 	<section>
-		<h4>메모리</h4>
-		<Textarea bind:value={memory} autosize rows={4} maxRows={14} placeholder={"시스템 규칙 끝에 붙음\n긴 대화에서 잊으면 안 되는 사실\n예) {{user}}는 3장에서 열쇠를 잃어버림"} aria-label="메모" onblur={saveMemory} />
+		<h4>메모 <span class="faint">AI에게 보내지 않음</span></h4>
+		<Textarea bind:value={memory} autosize rows={4} maxRows={14} placeholder="내 메모" aria-label="메모" onblur={saveMemory} />
 	</section>
 	<section>
 		<h4>작가 노트 <span class="faint">지금 장면의 방향</span></h4>

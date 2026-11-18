@@ -2,6 +2,8 @@
 	import { onMount, tick } from "svelte";
 	import { BookOpen, ChevronLeft, Copy, Eye, ImagePlus, Languages, Menu, MessageCirclePlus, RefreshCw, Send, Square, Trash2, Volume2 } from "@lucide/svelte";
 	import { plugins } from "$shared/stores/plugins.svelte";
+	import Ghostwrite from "$features/ghost/Ghostwrite.svelte";
+	import { ghost } from "$features/ghost/ghost.svelte";
 	import { drawMessage, generatedImagesOf, speak, speech, translateMessage, translationOf } from "$shared/stores/aiTools.svelte";
 	import { Avatar, ContextMenu, HtmlView, type MenuItem } from "$shared/ui";
 	import { fileSrc } from "$shared/ipc/file";
@@ -59,7 +61,7 @@
 		const text = draft.trim();
 		if (!text || session.busy) return;
 		draft = "";
-		await session.send(text);
+		await session.send(text, [], [], ghost.takeUsed(session.convId));
 		await done();
 	}
 	/** 내 메시지 없이 답장만 더 받기 */
@@ -273,7 +275,10 @@
 		{#if phone.isCharacterPhone}
 			<button type="button" class="peek" aria-label="엿보기 (AI가 두 사람 대화를 이어서 씀)" title="엿보기: 두 사람 대화를 AI가 이어서 씀" disabled={session.busy} onclick={peek}><Eye /></button>
 		{/if}
-		<textarea bind:value={draft} rows="1" placeholder={phone.isCharacterPhone ? `${me?.name ?? "나"}(으)로 보내기` : "메시지 입력"} aria-label="메시지" {onkeydown}></textarea>
+		{#if plugins.on("ghostwrite")}
+			<Ghostwrite convId={session.convId} getDraft={() => draft} setDraft={(v) => (draft = v)} disabled={session.busy} />
+		{/if}
+		<textarea bind:value={draft} rows="1" readonly={ghost.isRunning(session.convId)} placeholder={phone.isCharacterPhone ? `${me?.name ?? "나"}(으)로 보내기` : "메시지 입력"} aria-label="메시지" {onkeydown}></textarea>
 		{#if session.busy}
 			<button type="button" class="send on" aria-label="멈추기" onclick={() => session.cancel()}><Square /></button>
 		{:else}

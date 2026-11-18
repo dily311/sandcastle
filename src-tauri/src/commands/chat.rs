@@ -43,16 +43,31 @@ fn required(name: &str) -> Result<String> {
 /// 응답 조각은 `on_event`로 흐르고, 저장된 메시지는 반환값으로 온다.
 #[tauri::command]
 #[specta::specta]
-pub async fn chat_send(app: AppHandle, conversation_id: String, text: String, attachments: Vec<String>, on_event: Channel<StreamPayload>) -> Result<ChatTurn> {
-    let saved = chat_task::run(&app, &conversation_id, ChatJob::Send { text, attachments }, on_event).await?;
+pub async fn chat_send(
+    app: AppHandle,
+    conversation_id: String,
+    text: String,
+    attachments: Vec<String>,
+    ghost: bool,
+    on_event: Channel<StreamPayload>,
+) -> Result<ChatTurn> {
+    let saved = chat_task::run(&app, &conversation_id, ChatJob::Send { text, attachments, ghost }, on_event).await?;
     chat_task::into_turn(saved)
 }
 
-/// 마지막 AI 메시지 다시 만들기. `swipe`면 스와이프로 쌓고, 아니면 스와이프를 버리고 바꾼다.
+/// 마지막 AI 메시지 다시 만들기. `swipe`면 스와이프로 쌓고, 아니면 스와이프를 버리고 바꾼다. `extra`는 이번 생성에만 붙이는 지시.
 #[tauri::command]
 #[specta::specta]
-pub async fn chat_regenerate(app: AppHandle, conversation_id: String, swipe: bool, on_event: Channel<StreamPayload>) -> Result<ChatTurn> {
-    let saved = chat_task::run(&app, &conversation_id, ChatJob::Regenerate { swipe }, on_event).await?;
+pub async fn chat_regenerate(
+    app: AppHandle,
+    conversation_id: String,
+    swipe: bool,
+    extra: Option<String>,
+    on_event: Channel<StreamPayload>,
+) -> Result<ChatTurn> {
+    // 지시는 이번 생성에만 붙는다 (비면 평범한 다시 생성)
+    let extra = extra.as_deref().and_then(crate::service::chat::chat_manager::clean_extra);
+    let saved = chat_task::run(&app, &conversation_id, ChatJob::Regenerate { swipe, extra, auto: None }, on_event).await?;
     chat_task::into_turn(saved)
 }
 
@@ -150,6 +165,8 @@ pub async fn branch_conversation(state: State<'_, AppState>, id: String, message
     // 어디서 갈라졌는지 기억 (부모 대화로 돌아가기·분기 경로 표시용)
     let branch = serde_json::json!({ "branch": { "parentId": id, "messageId": message_id, "seq": msg.seq } });
     chat_ui::patch_conversation_meta(&state.db, &new_id, &branch).await?;
+    // 요약은 메시지 id가 아니라 개수(위치)로 옮긴다 — 분기 대화는 id가 새로 붙으므로
+    crate::service::summary::copy_for_branch(&state.db, &id, &new_id).await?;
     Ok(conversation::get_conversation(&state.db, &new_id).await?)
 }
 
@@ -210,6 +227,10 @@ pub struct ContextUsage {
     pub preset_name: Option<String>,
     /// 커뮤니티 플러그인이 더한 프롬프트 블록 (6-D-5, 시스템 토큰에 들어 있음)
     pub plugins: Vec<crate::service::community::prompt_hook::PluginPromptUse>,
+    /// 마지막 응답에서 지난 대화를 떠올린 기록 (3-C-5, 대화 기록 토큰에 들어 있음). 자동 회상이 꺼져 있었으면 None
+    pub memory_recall: Option<crate::service::memory::recall::RecallMeta>,
+    /// 마지막 응답을 만들 때 쓴 대화 요약 (3-D, 시스템 토큰에 들어 있음)
+    pub summary: Option<crate::service::summary::SummaryUse>,
 }
 
 #[tauri::command]
@@ -241,6 +262,8 @@ pub async fn context_usage(state: State<'_, AppState>, settings: State<'_, Setti
     let recent = conversation::get_messages(&state.db, &conversation_id, 30, None).await?;
     let mut prompt: Option<PromptMessage> = None;
     let mut plugins = vec![];
+    let mut memory_recall = None;
+    let mut summary_use = None;
     for m in recent.iter().rev().filter(|m| m.role == "assistant") {
         if let Some(v) = chat_ui::get_prompt(&state.db, &m.id).await? {
             if let Ok(p) = serde_json::from_value::<PromptMessage>(v) {
@@ -251,6 +274,16 @@ pub async fn context_usage(state: State<'_, AppState>, settings: State<'_, Setti
                     .and_then(|meta| meta.pointer("/info/pluginPrompt"))
                     .and_then(|v| serde_json::from_value(v.clone()).ok())
                     .unwrap_or_default();
+                memory_recall = m
+                    .meta
+                    .as_ref()
+                    .and_then(|meta| meta.pointer("/info/memoryRecall"))
+                    .and_then(|v| serde_json::from_value(v.clone()).ok());
+                summary_use = m
+                    .meta
+                    .as_ref()
+                    .and_then(|meta| meta.pointer("/info/summary"))
+                    .and_then(|v| serde_json::from_value(v.clone()).ok());
                 break;
             }
         }
@@ -277,6 +310,8 @@ pub async fn context_usage(state: State<'_, AppState>, settings: State<'_, Setti
         preset_name: preset.as_ref().map(|p| p.preset.name.clone()),
         preset_id,
         plugins,
+        memory_recall,
+        summary: summary_use,
     })
 }
 
@@ -359,7 +394,8 @@ pub async fn patch_conversation_meta(state: State<'_, AppState>, id: String, pat
 /// 메시지 여러 개 한 번에 지우기. 지운 개수를 돌려준다
 #[tauri::command]
 #[specta::specta]
-pub async fn delete_messages(state: State<'_, AppState>, ids: Vec<String>) -> Result<u32> {
+pub async fn delete_messages(app: AppHandle, state: State<'_, AppState>, ids: Vec<String>) -> Result<u32> {
+    let convs = crate::service::memory::maintain::conversations_of(&state.db, &ids).await;
     let mut tx = state.db.begin().await?;
     let mut n = 0;
     for id in &ids {
@@ -370,5 +406,14 @@ pub async fn delete_messages(state: State<'_, AppState>, ids: Vec<String>) -> Re
             .rows_affected() as u32;
     }
     tx.commit().await?;
+    crate::service::memory::maintain::after_message_change(&app, &state.db, convs);
     Ok(n)
+}
+
+/// linter가 고친 글을 원문으로 (그 뒤 또 고쳤으면 거절). 플러그인이 꺼져 있어도 된다 — 되돌리기는 언제나 (3-B-3)
+#[tauri::command]
+#[specta::specta]
+pub async fn revert_lint(state: State<'_, AppState>, message_id: String) -> Result<crate::models::conversation::Message> {
+    crate::service::chat::lint::revert(&state.db, &message_id).await?;
+    Ok(crate::db::chat_ui::get_message(&state.db, &message_id).await?)
 }

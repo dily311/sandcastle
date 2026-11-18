@@ -124,6 +124,22 @@ pub struct ThemeSetting {
     /// 배경 위 화면의 불투명도 (0.3~1). 낮을수록 배경이 잘 보임
     #[serde(default = "default_background_opacity")]
     pub background_opacity: f32,
+    /// 올려 둔 글꼴 (앱 데이터 fonts/에 복사한 파일). 앱에 글꼴을 넣어 두지 않으므로 목록은 사용자가 올린 것뿐
+    #[serde(default)]
+    pub fonts: Vec<UserFont>,
+    /// 앱 글꼴: `fonts` 중 하나의 파일 경로. 없으면 기본 글꼴
+    #[serde(default)]
+    pub app_font: Option<String>,
+}
+
+/// 올린 글꼴 한 개
+#[derive(Debug, Serialize, Deserialize, Clone, specta::Type)]
+#[serde(rename_all = "camelCase")]
+pub struct UserFont {
+    /// 앱 데이터 fonts/ 안의 파일 경로
+    pub path: String,
+    /// 목록에 보일 이름 (올릴 때의 파일 이름)
+    pub name: String,
 }
 
 fn default_background_opacity() -> f32 {
@@ -156,6 +172,8 @@ impl Default for ThemeSetting {
             background_image: None,
             backgrounds: vec![],
             background_opacity: default_background_opacity(),
+            fonts: vec![],
+            app_font: None,
         }
     }
 }
@@ -239,6 +257,168 @@ pub struct PluginSetting {
     /// 폴더 동기화 (2-C) — 경로가 기기마다 달라 기기 전용 (settings_scope)
     #[serde(default)]
     pub sync: SyncSetting,
+    /// 메시지 linter 규칙 (3-B, ADR-014). 켜짐/꺼짐은 코어 플러그인 `lint`(기본 꺼짐)
+    #[serde(default)]
+    pub lint: LintSetting,
+    /// 메모리 임베딩 검색 (3-C, ADR-015) — 기기 전용
+    #[serde(default)]
+    pub memory: MemorySetting,
+    /// 메모리 확장: 대화 요약 (3-D, ADR-016) — 기기 전용
+    #[serde(default)]
+    pub summary: SummarySetting,
+    /// 자동 재생성 (3-B-4, ADR-017) — 기기 전용
+    #[serde(default)]
+    pub rewrite: RewriteSetting,
+    /// 대필 (5-D, ADR-018) — 기기 전용
+    #[serde(default)]
+    pub ghost: GhostSetting,
+}
+
+/// 대필 설정. 켜짐/꺼짐은 코어 플러그인 `ghostwrite`(기본 꺼짐)
+#[derive(Debug, Serialize, Deserialize, Clone, specta::Type)]
+#[serde(rename_all = "camelCase", default)]
+pub struct GhostSetting {
+    /// 대필에 쓸 API (비우면 그 대화의 API)
+    pub api_profile_id: Option<String>,
+    /// short / medium / long
+    pub length: String,
+    /// 추가 지침 한 줄 (300자까지)
+    pub guide: String,
+    /// 펜 버튼을 누르면 초안 작성 없이 바로 AI에게 요청 (한 번 누르면 한 번의 요금)
+    pub send_without_draft: bool,
+}
+
+impl Default for GhostSetting {
+    fn default() -> Self {
+        Self {
+            api_profile_id: None,
+            length: "medium".into(),
+            guide: String::new(),
+            send_without_draft: false,
+        }
+    }
+}
+
+/// 자동 재생성 설정. 켜짐/꺼짐은 코어 플러그인 `rewrite`(기본 꺼짐, 켜는 것이 동의). 꺼져 있으면 linter가 쓸 수 없다
+#[derive(Debug, Serialize, Deserialize, Clone, specta::Type)]
+#[serde(rename_all = "camelCase", default)]
+pub struct RewriteSetting {
+    /// 한 응답에 자동으로 더 만드는 최대 횟수 (기본 1, 안전상 3까지) — 한 번마다 응답 하나의 요금
+    pub max_attempts: u32,
+    /// 금지어가 걸리면 다시 쓰기 (linter의 금지어 규칙이 표시만이어야 함)
+    pub banned: bool,
+    /// 단어 반복 오류가 걸리면 다시 쓰기
+    pub stuck: bool,
+}
+
+impl Default for RewriteSetting {
+    fn default() -> Self {
+        Self {
+            max_attempts: 1,
+            banned: true,
+            stuck: true,
+        }
+    }
+}
+
+/// 대화 요약 설정. 켜짐/꺼짐은 코어 플러그인 `summary`(기본 꺼짐, 켜는 것이 동의)
+#[derive(Debug, Serialize, Deserialize, Clone, Default, specta::Type)]
+#[serde(rename_all = "camelCase", default)]
+pub struct SummarySetting {
+    /// 요약에 쓸 API 프로필 (비우면 그 대화가 쓰는 API)
+    pub api_profile_id: Option<String>,
+}
+
+/// 메모리 임베딩 검색 설정. API 프로필·모델은 기기마다 다르므로 통째로 기기 전용
+#[derive(Debug, Serialize, Deserialize, Clone, specta::Type)]
+#[serde(rename_all = "camelCase", default)]
+pub struct MemorySetting {
+    /// 임베딩에 쓸 API 프로필 (비우면 색인·검색을 할 수 없음 — 앱이 고른 채팅 API를 몰래 쓰지 않는다)
+    pub api_profile_id: Option<String>,
+    /// 임베딩 모델 이름 (사용자가 입력. 앱은 모델·가격을 내장하지 않음)
+    pub model: String,
+    /// 줄일 차원 (지원하는 모델만). 비우면 모델 기본
+    pub dimensions: Option<u32>,
+    /// 한 번 색인에서 임베딩할 최대 토큰(추정). 넘으면 한 번 더 확인
+    pub token_cap: u32,
+    /// 문서·질의 앞에 붙일 글 (e5의 "passage: "/"query: " 같은 모델용)
+    pub doc_prefix: String,
+    pub query_prefix: String,
+    /// 보낼 때 관련된 지난 대화를 프롬프트에 넣기 (3-C-5). 보낼 때마다 임베딩 1회가 자동 실행으로 듦 — 기본 꺼짐
+    pub auto_recall: bool,
+    /// 넣는 글의 토큰 상한
+    pub recall_tokens: u32,
+    /// 최대 chunk 수
+    pub recall_top_k: u32,
+    /// 어디서 찾나: "conversation"(이 대화) / "character"(같은 캐릭터의 대화) / "all"(전체)
+    pub recall_scope: String,
+}
+
+impl Default for MemorySetting {
+    fn default() -> Self {
+        Self {
+            api_profile_id: None,
+            model: String::new(),
+            dimensions: None,
+            token_cap: 200_000,
+            doc_prefix: String::new(),
+            query_prefix: String::new(),
+            auto_recall: false,
+            recall_tokens: 1500,
+            recall_top_k: 4,
+            recall_scope: "character".into(),
+        }
+    }
+}
+
+/// linter 규칙 하나의 동작
+#[derive(Debug, Serialize, Deserialize, Clone, Copy, PartialEq, Eq, Default, specta::Type)]
+#[serde(rename_all = "lowercase")]
+pub enum LintMode {
+    Off,
+    /// 표시만: 글은 그대로 두고 메시지 아래에 알림
+    #[default]
+    Report,
+    /// 자동 고침: 고치고 원문을 meta에 남김 (되돌리기 가능)
+    Fix,
+}
+
+/// 메시지 linter 규칙 (요금 없이 앱 안에서 도는 것만 — 3-B-2). 글자 수 규칙은 표시만 할 수 있다
+#[derive(Debug, Serialize, Deserialize, Clone, specta::Type)]
+#[serde(rename_all = "camelCase", default)]
+pub struct LintSetting {
+    /// 닫히지 않은 태그·따옴표·마크다운(코드 펜스·`**`·`*`)
+    pub unclosed: LintMode,
+    /// 같은 문단 반복
+    pub repeat: LintMode,
+    /// 단어 반복 오류: 같은 말을 끝없이 되풀이하는 고장 (고치면 두 번까지만 남김)
+    pub stuck: LintMode,
+    /// 내 대사를 AI가 대신 쓴 줄(`이름: …`)
+    pub impersonate: LintMode,
+    /// 금지어
+    pub banned: LintMode,
+    pub banned_words: Vec<String>,
+    /// 글자 수 범위 (표시만)
+    pub length: LintMode,
+    /// 0 = 제한 없음
+    pub min_chars: u32,
+    pub max_chars: u32,
+}
+
+impl Default for LintSetting {
+    fn default() -> Self {
+        Self {
+            unclosed: LintMode::Report,
+            repeat: LintMode::Report,
+            stuck: LintMode::Report,
+            impersonate: LintMode::Report,
+            banned: LintMode::Off,
+            banned_words: vec![],
+            length: LintMode::Off,
+            min_chars: 0,
+            max_chars: 0,
+        }
+    }
 }
 
 /// 폴더 동기화 설정 (CLAUDE.md 2-C, ADR-011)

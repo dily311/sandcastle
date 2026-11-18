@@ -1,6 +1,7 @@
 //! 대화별 작가 노트·메모 (대화 meta에 저장, 오른쪽 패널에서 씀)
 //!
-//! - memory: 긴 대화에서 잊으면 안 되는 사실. 시스템 규칙 끝에 붙는다
+//! - memory: **사용자의 메모**. AI에게 보내지 않는다 (ADR-016 — 긴 대화의 기억은 대화 요약이 맡는다). 이 키에 예전 버전이 `"off"`를
+//!   메모리 검색 스위치로 쓴 값이 남아 있을 수 있어 `memory`는 어디서도 읽어 쓰지 않는다 (스위치는 `memoryOff`)
 //! - authorNote { text, depth }: 지금 장면의 방향. 대화 기록의 뒤에서 depth번째 앞에 시스템 메시지로 끼운다
 //!   (SillyTavern의 Author's Note와 같은 자리. depth 0이면 맨 끝 = 이번 입력 바로 앞)
 use serde_json::Value;
@@ -23,9 +24,6 @@ pub fn apply(ctx: &mut ChatContext, meta: Option<&Value>) {
     let char_name = ctx.char_name.clone().unwrap_or_default();
     let user_name = ctx.user_name.clone().unwrap_or_default();
 
-    if let Some(mem) = text(meta.get("memory")) {
-        ctx.system_rules.push(format!("[기억할 것]\n{}", macros(&mem, &char_name, &user_name)));
-    }
     let note = meta.get("authorNote");
     if let Some(t) = text(note.and_then(|n| n.get("text"))) {
         let depth = note
@@ -67,13 +65,13 @@ mod tests {
     }
 
     #[test]
-    fn memory_goes_to_rules_and_note_into_history() {
+    fn memo_is_not_sent_and_note_goes_into_history() {
         let mut c = ctx(6);
         apply(
             &mut c,
             Some(&json!({ "memory": "{{user}}는 열쇠를 잃음", "authorNote": { "text": "{{char}}는 긴장함", "depth": 2 } })),
         );
-        assert_eq!(c.system_rules, vec!["[기억할 것]\nMin는 열쇠를 잃음"]);
+        assert!(c.system_rules.is_empty(), "메모는 사용자의 것 — AI에게 보내지 않음");
         assert_eq!(c.history.len(), 7);
         assert_eq!(c.history[4].role, "system");
         assert!(c.history[4].content.contains("Aria는 긴장함"));

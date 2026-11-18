@@ -11,6 +11,8 @@
 	import { confirmAction, promptText } from "$shared/stores/confirm.svelte";
 	import { toasts } from "$shared/stores/toast.svelte";
 	import { ContextMenu, Dialog, EmptyState, IconButton, Spinner, Textarea } from "$shared/ui";
+	import Ghostwrite from "$features/ghost/Ghostwrite.svelte";
+	import { ghost } from "$features/ghost/ghost.svelte";
 	import { panel } from "$app/panel.svelte";
 	import { appSetting } from "$shared/stores/appSetting.svelte";
 	appSetting.load();
@@ -98,9 +100,9 @@
 	})());
 	// 휴대폰: 목록은 겹쳐 여는 서랍, 기본 닫힘 (기억하지 않음)
 	let mobileList = $state(false);
-	const listShown = $derived(layout.mobile ? mobileList : showList);
+	const listShown = $derived(layout.narrow ? mobileList : showList);
 	function toggleList() {
-		if (layout.mobile) return void (mobileList = !mobileList);
+		if (layout.narrow) return void (mobileList = !mobileList);
 		showList = !showList;
 		try {
 			localStorage.setItem(LIST_KEY, showList ? "1" : "0");
@@ -186,7 +188,7 @@
 		pending = [];
 		sending = false;
 		stick = true;
-		await session.send(text, paths, items.map((p) => p.url));
+		await session.send(text, paths, items.map((p) => p.url), ghost.takeUsed(session.convId));
 		for (const p of items) URL.revokeObjectURL(p.url);
 	}
 
@@ -343,8 +345,8 @@
 	const roleName = { system: "시스템", user: "사용자", assistant: "AI" } as const;
 </script>
 
-<div class="chat" class:no-list={!listShown || layout.mobile} class:no-panel={!panel.open || layout.mobile}>
-	{#if listShown && layout.mobile}
+<div class="chat" class:no-list={!listShown || layout.narrow} class:no-panel={!panel.open || layout.narrow}>
+	{#if listShown && layout.narrow}
 		<!-- svelte-ignore a11y_click_events_have_key_events, a11y_no_static_element_interactions (목록 버튼으로도 닫힘) -->
 		<div class="list-scrim" transition:fade={{ duration: 150 }} onclick={() => (mobileList = false)}></div>
 		<div class="list-drawer" transition:fly={{ x: -320, duration: 200 }}>
@@ -455,7 +457,10 @@
 			}}
 		>
 			<IconButton label="추가 기능" onclick={openPlus} disabled={!session || session.busy}><Plus /></IconButton>
-			<Textarea bind:value={draft} rows={1} autosize maxRows={8} placeholder={!layout.desktop ? "메시지 입력" : appSetting.sendOnEnter ? "메시지 입력 (Shift+Enter 줄바꿈)" : "메시지 입력 (Ctrl+Enter 보내기)"} aria-label="메시지" {onkeydown} {onpaste} />
+			{#if session && plugins.on("ghostwrite")}
+				<Ghostwrite convId={session.convId} getDraft={() => draft} setDraft={(v) => (draft = v)} disabled={session.busy} />
+			{/if}
+			<Textarea bind:value={draft} rows={1} autosize maxRows={8} placeholder={!layout.desktop ? "메시지 입력" : appSetting.sendOnEnter ? "메시지 입력 (Shift+Enter 줄바꿈)" : "메시지 입력 (Ctrl+Enter 보내기)"} aria-label="메시지" readonly={!!session && ghost.isRunning(session.convId)} {onkeydown} {onpaste} />
 			{#if session?.busy}
 				<IconButton label="멈추기 (받은 데까지 저장)" variant="solid" onclick={() => session?.cancel()}><Square /></IconButton>
 			{:else}
@@ -736,6 +741,7 @@
 		display: flex;
 		width: min(88vw, 340px);
 		padding-top: var(--safe-top);
+		padding-bottom: var(--safe-bottom);
 		background: var(--bg);
 		box-shadow: var(--shadow-lg);
 	}

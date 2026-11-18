@@ -23,8 +23,8 @@ use crate::{
     sys::{settings::SettingsState, themes::ThemeManager},
 };
 use commands::{
-    ai_service::*, character_image::*, chat::*, community::*, conversation::*, convert::*, data::*, game_engine::*, game_manager::*, import::*, phone::*,
-    preset::*, proposals::*, regex::*, settings::*, sync::*, task::*,
+    ai_service::*, character_image::*, chat::*, community::*, conversation::*, convert::*, data::*, game_engine::*, game_manager::*, ghost::*, import::*,
+    memory::*, phone::*, preset::*, proposals::*, regex::*, settings::*, summary::*, sync::*, task::*,
 };
 use task::{TaskEventEmitter, TaskManager};
 
@@ -129,6 +129,10 @@ pub fn run() {
 
         // 2-2. AI 호출 서비스 (API 키·프로필·공급자 어댑터)
         app.manage(Arc::new(AiService::new(pool.clone(), reqwest::Client::new())));
+        // 메모리 검색의 벡터 파일 (3-C, ADR-015): 경로만 들고 있다가 처음 쓸 때 연다 — 플러그인이 꺼져 있으면 열지 않음
+        app.manage(Arc::new(service::memory::store::MemoryStore::new(
+            app.path().app_data_dir().expect("App data dir not found").join("memory.db"),
+        )));
 
         // 3. 앱 설정 로드
         let settings_handle = app.handle().clone();
@@ -240,6 +244,8 @@ pub fn specta_builder() -> tauri_specta::Builder<tauri::Wry> {
         update_theme_setting,
         add_backgrounds,
         remove_background,
+        add_fonts,
+        remove_font,
         get_conv_settings,
         set_system_default_persona,
         // theme
@@ -333,6 +339,19 @@ pub fn specta_builder() -> tauri_specta::Builder<tauri::Wry> {
         set_user_plugin_process_mode,
         apply_plugin_postprocess,
         revert_plugin_postprocess,
+        revert_lint,
+        get_memory_status,
+        preview_memory_index,
+        run_memory_index,
+        search_memory,
+        purge_memory,
+        get_conversation_summary,
+        set_conversation_summary,
+        clear_conversation_summary,
+        undo_conversation_summary,
+        summarize_conversation_now,
+        ghostwrite,
+        ghostwrite_cancel,
         answer_plugin_prompt,
         set_user_plugin_ai_auto,
         get_user_plugin_settings,
@@ -527,6 +546,8 @@ pub fn specta_builder() -> tauri_specta::Builder<tauri::Wry> {
         update_theme_setting,
         add_backgrounds,
         remove_background,
+        add_fonts,
+        remove_font,
         get_conv_settings,
         set_system_default_persona,
         // theme
@@ -620,6 +641,19 @@ pub fn specta_builder() -> tauri_specta::Builder<tauri::Wry> {
         set_user_plugin_process_mode,
         apply_plugin_postprocess,
         revert_plugin_postprocess,
+        revert_lint,
+        get_memory_status,
+        preview_memory_index,
+        run_memory_index,
+        search_memory,
+        purge_memory,
+        get_conversation_summary,
+        set_conversation_summary,
+        clear_conversation_summary,
+        undo_conversation_summary,
+        summarize_conversation_now,
+        ghostwrite,
+        ghostwrite_cancel,
         answer_plugin_prompt,
         set_user_plugin_ai_auto,
         get_user_plugin_settings,

@@ -5,6 +5,7 @@
 	import { Badge, Button, Spinner } from "$shared/ui";
 	import { call, commands } from "$shared/ipc/client";
 	import { pickFiles, saveTo, BACKUP_FILES } from "$shared/ipc/dialog";
+	import { dropPaths, extOf } from "$app/drop.svelte";
 	import { confirmAction } from "$shared/stores/confirm.svelte";
 	import { toasts } from "$shared/stores/toast.svelte";
 	import { absolute, relative } from "$shared/time";
@@ -98,7 +99,20 @@
 	}
 	async function restore() {
 		const [path] = await pickFiles([BACKUP_FILES], false);
-		if (!path) return;
+		if (path) await restoreFrom(path);
+	}
+	// 끌어다 놓아도 같은 확인을 거침 (놓은 파일은 통째로 읽혀 옮겨지므로 아주 큰 백업은 버튼으로)
+	$effect(() =>
+		dropPaths({
+			label: "백업에서 복원",
+			hint: "샌드캐슬 백업(.scbackup), 300MB까지. 더 큰 백업은 복원 버튼으로",
+			accept: (f) => extOf(f) === "scbackup",
+			multiple: false,
+			maxBytes: 300 * 1024 * 1024,
+			onpaths: ([path]) => restoreFrom(path),
+		}),
+	);
+	async function restoreFrom(path: string) {
 		busy = "restore";
 		try {
 			const p = await call(commands.prepareRestore(path), src);

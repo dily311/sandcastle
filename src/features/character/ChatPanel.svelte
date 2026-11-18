@@ -15,7 +15,7 @@
 	import type { RegexScript_Serialize as RegexScript } from "$ipc/bindings";
 	import { call, commands } from "$shared/ipc/client";
 	import { IMAGE_FILES, pickFiles } from "$shared/ipc/dialog";
-	import { drops, isImage, storeFile } from "$app/drop.svelte";
+	import { drops, extOf, isImage, storeFile } from "$app/drop.svelte";
 	import { Sortable, moveItem } from "$shared/dnd/sortable.svelte";
 	import { fileSrc } from "$shared/ipc/file";
 	import { confirmAction, promptText } from "$shared/stores/confirm.svelte";
@@ -24,6 +24,10 @@
 	import { preview } from "./format";
 	import { library, type CharacterImage, type Conversation } from "./library.svelte";
 	import { metaOf, type ChatSession } from "./session.svelte";
+	import { lintOf } from "./lint";
+	import MemoryIndex from "$features/memory/MemoryIndex.svelte";
+	import SummaryPanel from "$features/memory/SummaryPanel.svelte";
+	import MemorySearch from "$features/memory/MemorySearch.svelte";
 
 	interface Props {
 		conv: Conversation;
@@ -36,6 +40,21 @@
 		me?: { label: string; options: ProfileOption[]; value: string | null; hint?: string; onchange: (id: string) => void };
 	}
 	let { conv, session, chapters, onjump, onopen, me }: Props = $props();
+
+	// ---- 메시지 linter: 이 대화의 덮어쓰기와 마지막 응답에서 걸린 규칙 (3-B-5) ----
+	// 스위치는 `memoryOff`. 예전 버전은 메모(`memory`) 칸에 "off"를 썼다 — 그 값도 꺼짐으로 읽고 새로 바꿀 때 지운다
+	const legacyMemoryOff = $derived((conv.meta as { memory?: string } | null)?.memory === "off");
+	const memoryOff = $derived((conv.meta as { memoryOff?: boolean } | null)?.memoryOff === true || legacyMemoryOff);
+	const memoText = $derived.by(() => {
+		const m = (conv.meta as { memory?: string } | null)?.memory ?? "";
+		return m === "off" ? "" : m;
+	});
+	const rewriteOff = $derived((conv.meta as { rewriteOff?: boolean } | null)?.rewriteOff === true);
+	const lintOff = $derived((conv.meta as { lint?: string } | null)?.lint === "off");
+	const lastLint = $derived.by(() => {
+		const last = [...session.messages].reverse().find((m) => m.role === "assistant");
+		return last ? lintOf(last) : null;
+	});
 
 	// ---- 대화 설정: API → 프리셋 → 페르소나 ----
 	const DEFAULT = "";
@@ -183,11 +202,16 @@
 		return drops.register({
 			priority: 2,
 			label: "캐릭터 에셋에 넣기",
-			hint: "파일 이름이 이미지 키가 됨 (<cg>키</cg>)",
-			accept: isImage,
+			hint: "파일 이름이 이미지 키가 됨 (<cg>키</cg>). 그림이 든 ZIP도 가능",
+			accept: (f) => isImage(f) || extOf(f) === "zip",
 			ondrop: async (files) => {
 				const paths = await Promise.all(files.filter(isImage).map((f) => storeFile(f)));
 				if (paths.length) await library.addImages(charId, paths);
+					// ZIP은 에셋 추가 메뉴의 "ZIP"과 같은 처리
+					for (const z of files.filter((f) => extOf(f) === "zip")) {
+						const n = await library.addImagesZip(charId, await storeFile(z));
+						toasts.success(n ? `에셋 ${n}개 넣음 (같은 이름은 덮어씀)` : "ZIP에 그림이 없음");
+					}
 			},
 		});
 	});
@@ -233,9 +257,9 @@
 	{#if panel.tab === "assets"}
 		<div class="panel-body">
 			{#if plugins.on("chat.images")}
-				<Switch checked={conv.imagesEnabled} label="이 대화에서 캐릭터 이미지 쓰기" description="키 목록을 AI에게 보내고 <cg>로 보여줌" onchange={(v) => library.setImagesEnabled(conv.id, v)} />
+				<Switch checked={conv.imagesEnabled} label="이 대화에서 캐릭터 에셋 사용" onchange={(v) => library.setImagesEnabled(conv.id, v)} />
 			{:else}
-				<p class="faint">캐릭터 이미지 기능이 꺼져 있음 (설정 > 코어 플러그인)</p>
+				<p class="faint">캐릭터 에셋 기능이 꺼져 있음 (설정 > 코어 플러그인)</p>
 			{/if}
 			<div class="atools">
 				<span class="faint">{assets.length}개 · 오른쪽 클릭으로 관리</span>
@@ -273,7 +297,7 @@
 			<div class="aview" role="dialog" aria-modal="true" aria-label="에셋 크게 보기">
 				<button class="ascrim" aria-label="닫기" onclick={() => (assetView = null)}></button>
 				<figure>
-					<img src={fileSrc(v.path)} alt={v.key} />
+					<img src={fileSrc(v.path)} alt={v.key} data-no-zoom />
 					<figcaption><code>&lt;cg&gt;{v.key}&lt;/cg&gt;</code>{v.enabled ? "" : " · AI에게 안 보냄"}</figcaption>
 				</figure>
 			</div>
@@ -349,6 +373,43 @@
 					{/if}
 				</div>
 			</section>
+			{#if plugins.on("lint")}
+				<hr />
+				<section>
+					<h4>메시지 linter <span class="faint">응답이 저장될 때 검사</span></h4>
+					<Switch checked={!lintOff} label="이 대화에서 linter 쓰기" description="끄면 이 대화의 새 응답은 검사하지 않음 (규칙은 설정 > 메시지 linter)" onchange={(v) => library.patchMeta(conv.id, { lint: v ? null : "off" })} />
+					{#if plugins.on("rewrite")}
+						<Switch checked={!rewriteOff} label="이 대화에서 자동 재생성" onchange={(v) => library.patchMeta(conv.id, { rewriteOff: v ? null : true })} />
+					{/if}
+					{#if !lintOff}
+						{#if lastLint}
+							<p class="faint">마지막 응답에서 걸린 것</p>
+							<ul class="lint-hits">
+								{#each lastLint.findings as f, i (i)}
+									<li class:warn={f.level === "warn"}>{f.text}{f.fixed ? " → 고침" : ""}</li>
+								{/each}
+							</ul>
+						{:else}
+							<p class="faint">마지막 응답에서 걸린 것 없음</p>
+						{/if}
+					{/if}
+				</section>
+			{/if}
+			{#if plugins.on("summary")}
+				<hr />
+				<SummaryPanel {conv} memo={memoText} />
+			{/if}
+			{#if plugins.on("memory")}
+				<hr />
+				<section>
+					<h4>메모리 검색 <span class="faint">지난 대화를 뜻으로 찾기</span></h4>
+					<Switch checked={!memoryOff} label="이 대화를 메모리에 포함" description="끄면 색인과 전체 검색에서 이 대화를 뺌" onchange={(v) => library.patchMeta(conv.id, { memoryOff: v ? null : true, ...(legacyMemoryOff ? { memory: null } : {}) })} />
+					{#if !memoryOff}
+						<div class="mem-actions"><MemoryIndex conversationId={conv.id} /></div>
+						<MemorySearch conversationId={conv.id} onopen={(h) => onopen(conv.id, h.firstMessageId)} />
+					{/if}
+				</section>
+			{/if}
 			<hr />
 			<section>
 				<h4>월드인포</h4>
@@ -441,6 +502,18 @@
 		gap: var(--space-5);
 		padding: var(--space-3) var(--space-4) var(--space-4);
 		overflow: auto;
+	}
+	.mem-actions {
+		margin: var(--space-2) 0;
+	}
+	.lint-hits {
+		margin: var(--space-1) 0 0;
+		padding-left: var(--space-4);
+		font-size: var(--text-xs);
+		color: var(--text-muted);
+	}
+	.lint-hits li.warn {
+		color: var(--warning);
 	}
 	section {
 		display: flex;

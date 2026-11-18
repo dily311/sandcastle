@@ -1,8 +1,12 @@
 // 앱 레이아웃 상태: 왼쪽 사이드바, 모바일(좁은 화면·터치) 여부
 // - 데스크톱: 사이드바를 접고 펴며 이 컴퓨터에 기억
+
+import { platform } from "@tauri-apps/plugin-os";
+
 // - 모바일(폭 900px 이하: 휴대폰·좁은 창 — 대화 목록·패널을 겹쳐 열 자리만 있음): 사이드바는 위에 겹쳐 열리는 서랍, 기본은 닫힘
 const KEY = "sc.sidebar";
 export const MOBILE_QUERY = "(max-width: 900px)";
+const PLATFORM = platform();
 
 function load() {
 	try {
@@ -19,8 +23,10 @@ class Layout {
 	private pinned = $state(load());
 	/** 모바일 서랍 열림 */
 	drawer = $state(false);
-	/** 좁은 화면 (휴대폰, 또는 좁힌 창) */
-	mobile = $state(media(MOBILE_QUERY)?.matches ?? false);
+	/** 휴대폰만 적용 */
+	mobile = $state(PLATFORM === "android" || PLATFORM === "ios");
+	/** 좁은 창인지 판단 */
+	narrow = $state(media(MOBILE_QUERY)?.matches ?? false);
 	/** 마우스 대신 손가락 (hover가 없음) */
 	/** 데스크톱 앱인가 (창 크기와 무관). 좁은 창이라 모바일 레이아웃이어도 창 버튼은 데스크톱이면 보여야 한다 */
 	readonly desktop = typeof navigator === "undefined" || !/Android|iPhone|iPad|iPod/i.test(navigator.userAgent);
@@ -28,7 +34,7 @@ class Layout {
 
 	constructor() {
 		media(MOBILE_QUERY)?.addEventListener("change", (e) => {
-			this.mobile = e.matches;
+			this.narrow = e.matches;
 			this.drawer = false;
 		});
 		media("(hover: none)")?.addEventListener("change", (e) => (this.touch = e.matches));
@@ -36,10 +42,10 @@ class Layout {
 
 	/** 사이드바가 보이는지 (모바일이면 서랍) */
 	get sidebar() {
-		return this.mobile ? this.drawer : this.pinned;
+		return this.narrow ? this.drawer : this.pinned;
 	}
 	toggleSidebar() {
-		if (this.mobile) {
+		if (this.narrow) {
 			this.drawer = !this.drawer;
 			return;
 		}

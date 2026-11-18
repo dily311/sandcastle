@@ -5,6 +5,7 @@
 	import { call, commands } from "$shared/ipc/client";
 	import { GAME_FILES, IMAGE_FILES, pickFiles, saveIntoPicked } from "$shared/ipc/dialog";
 	import { layout } from "$app/layout.svelte";
+	import { dropPaths } from "$app/drop.svelte";
 	import { confirmAction } from "$shared/stores/confirm.svelte";
 	import { toasts } from "$shared/stores/toast.svelte";
 	import { absolute, relative } from "$shared/time";
@@ -45,11 +46,16 @@
 			[path] = await pickFiles([IMAGE_FILES], false);
 			if (!path) return;
 		}
+		await setCover(path);
+	}
+	async function setCover(path: string | null) {
 		const saved = await call(commands.setGameCover(gameId, path), { source: "game" });
 		if (games.opened?.project.id === gameId) games.opened.project.coverImage = saved.coverImage;
 		const g = games.game(gameId);
 		if (g) g.coverImage = saved.coverImage;
 	}
+	// 끌어다 놓은 그림은 이 게임의 커버로 (커버 버튼과 같은 처리)
+	$effect(() => dropPaths({ label: "게임 커버로 쓰기", hint: "PNG·JPG·WEBP·GIF 한 장", multiple: false, onpaths: ([path]) => setCover(path) }));
 
 	let tab = $state<"sessions" | "characters" | "check">("sessions");
 	let starting = $state(false);

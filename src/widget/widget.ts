@@ -1,4 +1,6 @@
-import "$/styles/styles.css";
+import "$/styles/font.css";
+import "$shared/ui/base.css";
+import "./widget.css";
 import Widget from "./WidgetApp.svelte";
 import { mount } from "svelte";
 import "$/lib/utils/i18n";

@@ -9,11 +9,15 @@ import { toasts } from "$shared/stores/toast.svelte";
 const src = { source: "task" };
 
 export function interruptedChats(tasks: TaskInfo_Serialize[]): TaskInfo_Serialize[] {
-	return tasks.filter((t) => t.taskType === "chat_stream" && t.status === "interrupted");
+	return tasks.filter((t) => t.taskType === "chat_stream" && t.status === "interrupted" && t.feature !== "rewrite");
 }
 
 export async function recoverInterruptedChats() {
 	const all = await call(commands.getRecoverableTasks(), { ...src, silent: true }).catch(() => []);
+	// 앱이 꺼지며 끊긴 자동 재생성은 이어서 만들지 않고 조용히 버린다 (사용자가 시킨 것이 아니라 정책이 낸 작업)
+	for (const t of all.filter((x) => x.taskType === "chat_stream" && x.status === "interrupted" && x.feature === "rewrite")) {
+		await call(commands.dismissTask(t.id), { ...src, silent: true }).catch(() => {});
+	}
 	const tasks = interruptedChats(all);
 	if (!tasks.length) return;
 

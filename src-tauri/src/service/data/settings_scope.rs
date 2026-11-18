@@ -48,6 +48,8 @@ pub const SETTINGS_SCOPE: &[(&str, Scope)] = &[
     ("theme-setting/backgroundImage", Scope::SharedPath),
     ("theme-setting/backgrounds", Scope::SharedPath),
     ("theme-setting/backgroundOpacity", Scope::Shared),
+    ("theme-setting/fonts", Scope::SharedPath),
+    ("theme-setting/appFont", Scope::SharedPath),
     // ---- feature-setting: 기능 켜기는 기기마다 ----
     ("feature-setting", Scope::Device),
     // ---- plugin-setting ----
@@ -75,7 +77,12 @@ pub const SETTINGS_SCOPE: &[(&str, Scope)] = &[
     ("plugin-setting/phone/apiProfileId", Scope::Device),
     ("plugin-setting/phone/presetId", Scope::Shared),
     ("plugin-setting/prompts", Scope::Shared),
-    ("plugin-setting/sync", Scope::Device), // 폴더 경로·자동 동기화는 기기마다
+    ("plugin-setting/ghost", Scope::Device),   // 대필 API·옵션은 기기마다
+    ("plugin-setting/rewrite", Scope::Device), // 요금이 나가는 자동 동작은 기기마다 켠다
+    ("plugin-setting/summary", Scope::Device), // 요약 API는 기기마다
+    ("plugin-setting/memory", Scope::Device),  // 임베딩 API·모델은 기기마다 (벡터 파일도 기기 전용)
+    ("plugin-setting/lint", Scope::Shared),    // 규칙은 취향. 켜기(feature-setting)는 기기마다
+    ("plugin-setting/sync", Scope::Device),    // 폴더 경로·자동 동기화는 기기마다
 ];
 
 /// settings.json에 있는 설정 묶음 키 (sys::settings의 STORE_KEY)

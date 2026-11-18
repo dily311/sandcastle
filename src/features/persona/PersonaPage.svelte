@@ -11,12 +11,13 @@
 	import { confirmAction, promptText } from "$shared/stores/confirm.svelte";
 	import { toasts } from "$shared/stores/toast.svelte";
 	import { nav } from "$app/nav.svelte";
+	import { dropPaths } from "$app/drop.svelte";
 	import { library, type Persona } from "$features/character/library.svelte";
 	import PersonaEditor from "./PersonaEditor.svelte";
 
 	let { personaId }: { personaId?: string } = $props();
 	// 휴대폰: 페르소나를 고르기 전에는 목록만, 고르면 편집만
-	const mobileList = $derived(layout.mobile && !personaId);
+	const mobileList = $derived(layout.narrow && !personaId);
 
 	const src = { source: "persona" };
 	let defaultId = $state<string | null>(null);
@@ -49,7 +50,7 @@
 
 	// 첫 진입이면 첫 페르소나를 주소에 고정 (뒤로 가기 기록은 남기지 않음)
 	$effect(() => {
-		if (ready && !personaId && current && !layout.mobile) nav.replace({ page: "persona", personaId: current.id });
+		if (ready && !personaId && current && !layout.narrow) nav.replace({ page: "persona", personaId: current.id });
 	});
 
 	// 고친 내용이 있으면 다른 페르소나·다른 화면으로 가기 전에 물어봄
@@ -70,7 +71,7 @@
 	}
 
 	function select(id: string) {
-		if (layout.mobile) return void nav.go({ page: "persona", personaId: id });
+		if (layout.narrow) return void nav.go({ page: "persona", personaId: id });
 		if (id !== current?.id) void nav.replace({ page: "persona", personaId: id });
 	}
 
@@ -113,6 +114,17 @@
 		}
 		put(await call(commands.setPersonaAvatar(current.id, path), src));
 	}
+	// 끌어다 놓은 그림은 지금 보고 있는 페르소나의 아바타로 (아바타 버튼과 같은 처리)
+	$effect(() => {
+		const p = current;
+		if (!p) return;
+		return dropPaths({
+			label: `${p.name}의 아바타로 쓰기`,
+			hint: "PNG·JPG·WEBP·GIF 한 장",
+			multiple: false,
+			onpaths: async ([path]) => put(await call(commands.setPersonaAvatar(p.id, path), src)),
+		});
+	});
 	async function makeDefault() {
 		if (!current) return;
 		await call(commands.setSystemDefaultPersona(current.id), src);
@@ -155,7 +167,7 @@
 {#if !library.loaded || !ready}
 	<div class="center"><Spinner /></div>
 {:else}
-	<div class="page" class:mobile={layout.mobile} class:listing={mobileList}>
+	<div class="page" class:desktop={!layout.mobile} class:mobile={layout.mobile} class:narrow={layout.narrow} class:listing={mobileList}>
 		<aside class="side" aria-label="페르소나 목록">
 			<div class="top">
 				<Input bind:value={query} placeholder="이름·태그 검색" aria-label="페르소나 검색" type="search">
@@ -301,10 +313,11 @@
 		overflow: auto;
 		background: var(--surface-2);
 	}
-	.page.mobile {
+	/* 좁은 화면: 목록과 편집을 한 번에 하나만 (mobileList와 같은 기준 layout.narrow) */
+	.page.narrow {
 		grid-template-columns: minmax(0, 1fr);
 	}
-	.page.mobile:not(.listing) .side,
+	.page.narrow:not(.listing) .side,
 	.page.listing .main {
 		display: none;
 	}

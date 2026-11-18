@@ -6,6 +6,7 @@
 	import type { GameAssetsInput, GameCharactersInput, GameCharacterAssetsInput } from "$features/game/types";
 	import { editorAssetPreviewUrl } from "./assetPreview";
 	import { open } from "@tauri-apps/plugin-dialog";
+	import { dropPaths } from "$app/drop.svelte";
 	import Input from "$/shared/ui/Input.svelte";
 	import { Plus, Search, X } from "@lucide/svelte";
 	import IconButton from "$/shared/ui/IconButton.svelte";
@@ -111,6 +112,20 @@
 		if (path && activeChar) activeChar.avatar = path;
 		avatarPickerOpen = false;
 	}
+
+	// 끌어다 놓은 그림은 지금 고른 캐릭터의 아바타로 (아바타 파일 선택과 같은 처리)
+	$effect(() => {
+		if (!activeChar) return;
+		const name = activeChar.name;
+		return dropPaths({
+			label: `${name}의 아바타로 쓰기`,
+			hint: "PNG·JPG·WEBP·GIF 한 장",
+			multiple: false,
+			onpaths: ([path]) => {
+				if (activeChar) activeChar.avatar = path;
+			},
+		});
+	});
 
 	async function chooseCharacterAssetFile(asset: GameCharacterAssetsInput) {
 		const path = await chooseImageFile();
@@ -275,7 +290,7 @@
 					</div>
 				</details>
 				<details class="accordion character-assets" open>
-					<summary><span>캐릭터 이미지</span><small>스탠딩과 맵 이미지 관리</small></summary>
+					<summary><span>캐릭터 에셋</span><small>스탠딩과 맵 이미지 관리</small></summary>
 					<div class="accordion-content">
 						<div class="section-heading">
 							<button class="add-btn" onclick={handleAddCharacterAsset} disabled={!activeChar.id}
@@ -367,7 +382,7 @@
 								{/each}
 							</div>
 						{:else}<div class="asset-empty">
-								아직 등록된 이미지가 없습니다. 이곳에서 캐릭터 이미지를 추가하세요.
+								아직 등록된 이미지가 없습니다. 이곳에서 캐릭터 에셋을 추가하세요.
 							</div>
 						{/if}
 					</div>

@@ -379,7 +379,7 @@
 								</button>
 							</div>
 						</div>
-						<Switch bind:checked={imagesOn} label="캐릭터 이미지" description="키 목록 전송, <cg>로 표시" />
+						<Switch bind:checked={imagesOn} label="캐릭터 에셋" description="키 목록 전송, <cg>로 표시" />
 					</section>
 					<section>
 						<h4>정규식 <span class="faint">적용 중 2개</span></h4>

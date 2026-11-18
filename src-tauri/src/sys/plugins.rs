@@ -33,6 +33,16 @@ pub mod id {
     pub const SYNC: &str = "sync";
     /// 사용자가 설치한 플러그인 (6-D, ADR-012)
     pub const COMMUNITY: &str = "community";
+    /// 응답 저장 직전 메시지 검사·고침 (3-B, ADR-014)
+    pub const LINT: &str = "lint";
+    /// 대화 메모리 임베딩 검색 (3-C, ADR-015)
+    pub const MEMORY: &str = "memory";
+    /// 메모리 확장: 대화 요약 (3-D, ADR-016) — 임베딩 메모리와 무관
+    pub const SUMMARY: &str = "summary";
+    /// 자동 재생성 (3-B-4, ADR-017): linter가 찾은 문제로 응답을 새 스와이프로 다시 만듦
+    pub const REWRITE: &str = "rewrite";
+    /// 대필 (5-D, ADR-018): 초안을 AI가 내 말투의 대사로 써 입력칸에 채움
+    pub const GHOSTWRITE: &str = "ghostwrite";
 }
 
 #[derive(Debug, Clone, Serialize, specta::Type)]
@@ -135,6 +145,41 @@ const CATALOG: &[Def] = &[
         id: id::SYNC,
         name: "동기화",
         description: "다른 기기(PC·폰)와 캐릭터·대화·설정을 파일로 주고받아 합치기. API 키는 넘어가지 않음",
+        default_enabled: false,
+        desktop_only: false,
+    },
+    Def {
+        id: id::LINT,
+        name: "메시지 linter",
+        description: "AI 응답이 저장될 때 닫히지 않은 태그·따옴표, 반복, 내 대사 대신 쓰기, 금지어, 길이를 검사 (요금 없음, 고치면 원문 보존)",
+        default_enabled: false,
+        desktop_only: false,
+    },
+    Def {
+        id: id::MEMORY,
+        name: "메모리 검색",
+        description: "지난 대화를 뜻으로 찾기. 색인하면 대화 글이 임베딩 공급자에게 전송되고 요금이 듦 (버튼을 눌렀을 때만)",
+        default_enabled: false,
+        desktop_only: false,
+    },
+    Def {
+        id: id::SUMMARY,
+        name: "메모리 확장 · 대화 요약",
+        description: "프롬프트 창 밖으로 밀려난 오래된 대화를 줄거리로 요약해 AI에게 전달. 켜면 쌓인 만큼 자동으로 요약하고 요금이 듦",
+        default_enabled: false,
+        desktop_only: false,
+    },
+    Def {
+        id: id::REWRITE,
+        name: "자동 재생성",
+        description: "linter가 금지어·단어 반복 오류를 찾으면 응답을 새 스와이프로 다시 만듦 (원본은 남음). 켜면 걸릴 때마다 응답 하나의 요금이 더 듦",
+        default_enabled: false,
+        desktop_only: false,
+    },
+    Def {
+        id: id::GHOSTWRITE,
+        name: "대필",
+        description: "내가 적은 초안을 AI가 내 말투의 다음 대사로 써서 입력칸에 채움 (보내지는 않음). 누를 때마다 응답 하나의 요금이 듦",
         default_enabled: false,
         desktop_only: false,
     },

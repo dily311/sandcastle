@@ -336,56 +336,69 @@ pub async fn append_message(state: State<'_, AppState>, settings: State<'_, Sett
     Ok(mes)
 }
 
+/// 메시지가 바뀐 뒤 메모리 색인을 맞춘다 (플러그인이 꺼져 있거나 색인 파일이 없으면 아무것도 하지 않음, 백그라운드)
+async fn memory_changed(app: &tauri::AppHandle, state: &AppState, message_ids: &[String]) {
+    let convs = crate::service::memory::maintain::conversations_of(&state.db, message_ids).await;
+    crate::service::memory::maintain::after_message_change(app, &state.db, convs);
+}
+
 #[tauri::command]
 #[specta::specta]
-pub async fn update_message(state: State<'_, AppState>, id: String, content: String, meta: Option<serde_json::Value>) -> Result<()> {
+pub async fn update_message(app: tauri::AppHandle, state: State<'_, AppState>, id: String, content: String, meta: Option<serde_json::Value>) -> Result<()> {
     let result = conversation::update_message(&state.db, &id, &content, &meta).await?;
     if !result {
         return Err(AppError::not_found(format!("메시지를 찾을 수 없습니다: {id}")));
     }
+    memory_changed(&app, &state, &[id]).await;
     Ok(())
 }
 
 #[tauri::command]
 #[specta::specta]
-pub async fn update_message_swipe_id(state: State<'_, AppState>, id: String, swipe_id: i64) -> Result<()> {
+pub async fn update_message_swipe_id(app: tauri::AppHandle, state: State<'_, AppState>, id: String, swipe_id: i64) -> Result<()> {
     let mut meta = conversation::get_message_meta(&state.db, &id).await?.unwrap_or_default();
     if let Some(obj) = meta.as_object_mut() {
         obj.insert("swipeId".to_string(), serde_json::json!(swipe_id));
     }
     // 업데이트
     conversation::update_message_meta(&state.db, &id, meta).await?;
+    memory_changed(&app, &state, &[id]).await;
 
     Ok(())
 }
 
 #[tauri::command]
 #[specta::specta]
-pub async fn update_message_content(state: State<'_, AppState>, id: String, content: String) -> Result<()> {
+pub async fn update_message_content(app: tauri::AppHandle, state: State<'_, AppState>, id: String, content: String) -> Result<()> {
     let result = conversation::update_message_content(&state.db, &id, &content).await?;
     if !result {
         return Err(AppError::not_found(format!("메시지를 찾을 수 없습니다: {id}")));
     }
+    memory_changed(&app, &state, &[id]).await;
     Ok(())
 }
 
 #[tauri::command]
 #[specta::specta]
-pub async fn update_message_meta(state: State<'_, AppState>, id: String, meta: serde_json::Value) -> Result<()> {
+pub async fn update_message_meta(app: tauri::AppHandle, state: State<'_, AppState>, id: String, meta: serde_json::Value) -> Result<()> {
     let result = conversation::update_message_meta(&state.db, &id, meta).await?;
     if !result {
         return Err(AppError::not_found(format!("메시지를 찾을 수 없습니다: {id}")));
     }
+    memory_changed(&app, &state, &[id]).await;
     Ok(())
 }
 
 #[tauri::command]
 #[specta::specta]
-pub async fn delete_message(state: State<'_, AppState>, id: String) -> Result<()> {
+pub async fn delete_message(app: tauri::AppHandle, state: State<'_, AppState>, id: String) -> Result<()> {
+    // 지우기 전에 어느 대화인지 알아 둔다
+    let convs = crate::service::memory::maintain::conversations_of(&state.db, std::slice::from_ref(&id)).await;
     let result = conversation::delete_message(&state.db, &id).await?;
     if !result {
         return Err(AppError::not_found(format!("메시지를 찾을 수 없습니다: {id}")));
     }
+    crate::service::memory::maintain::after_message_change(&app, &state.db, convs);
     Ok(())
 }
 // =======================================

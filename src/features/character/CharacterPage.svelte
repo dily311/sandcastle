@@ -574,8 +574,7 @@
 	}
 	.cta {
 		display: flex;
-		flex-direction: column;
-		align-items: flex-end;
+		align-items: center;
 		gap: var(--space-1);
 		padding-bottom: var(--space-1);
 	}
@@ -681,5 +680,11 @@
 	}
 	.link:hover {
 		text-decoration: underline;
+	}
+	/* 휴대폰 폭: 좌우 여백을 홈과 같게 줄여 도구 줄(찾기·거르기·정렬·선택 + 새로 만들기)이 한 줄에 들어가게 */
+	@media (max-width: 600px) {
+		.page {
+			padding: var(--space-4);
+		}
 	}
 </style>

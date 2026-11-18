@@ -1,0 +1,59 @@
+//! 대화 요약의 앱 연결: 응답이 저장된 뒤 자동 요약 (백그라운드). 켜져 있을 때만 아무것도 읽거나 부른다.
+use std::sync::Arc;
+
+use sqlx::SqlitePool;
+use tauri::{AppHandle, Manager};
+
+use super::*;
+use crate::{
+    models::{conversation::Conversation, settings::PluginSetting},
+    service::prompt::{
+        prompt_manager::{context_limit_from, DEFAULT_CONTEXT_LIMIT},
+        PromptManager,
+    },
+    state::AppState,
+    sys::{plugins, settings::SettingsState},
+};
+
+/// 이 대화의 컨텍스트 한도 (프리셋에서, 없으면 기본)
+pub async fn limit_of(db: &SqlitePool, preset_id: &str) -> usize {
+    let loaded = PromptManager::load_preset(db, Some(preset_id)).await.ok().flatten();
+    loaded.as_ref().and_then(|p| context_limit_from(&p.preset)).unwrap_or(DEFAULT_CONTEXT_LIMIT) as usize
+}
+
+/// 요약에 쓸 API: 플러그인 설정의 것, 없으면 이 대화가 쓴 것
+pub fn profile_for(app: &AppHandle, fallback: &str) -> String {
+    app.try_state::<SettingsState<PluginSetting>>()
+        .and_then(|s| s.0.lock().ok().and_then(|p| p.summary.api_profile_id.clone()))
+        .filter(|s| !s.is_empty())
+        .unwrap_or_else(|| fallback.to_string())
+}
+
+/// 응답이 저장된 뒤 부른다 (스트리밍이 끝나고 화면에 돌려준 다음이라 보내기를 늦추지 않음). 쌓인 만큼이 안 되었으면 아무 일도 없다.
+/// 실패는 다시 시도하지 않고 기록만 남긴다 (메시지가 더 쌓인 뒤에만 다시).
+pub fn after_response(app: &AppHandle, conv: &Conversation, api_profile_id: &str, preset_id: &str) {
+    if !plugins::is_enabled(app, plugins::id::SUMMARY) || disabled_for(conv.meta.as_ref()) || api_profile_id.is_empty() {
+        return;
+    }
+    let (app, conv_id, profile, preset) = (app.clone(), conv.id.clone(), profile_for(app, api_profile_id), preset_id.to_string());
+    tauri::async_runtime::spawn(async move {
+        let state = app.state::<AppState>();
+        let ai = app.state::<Arc<AiService>>();
+        let tasks = app.state::<Arc<TaskManager>>();
+        let limit = limit_of(&state.db, &preset).await;
+        let ctx = RunCtx {
+            db: &state.db,
+            ai: &ai,
+            tasks: &tasks,
+            conversation_id: &conv_id,
+            profile_id: &profile,
+            limit_tokens: limit,
+            guards: &GLOBAL,
+        };
+        match run_once(&ctx, true).await {
+            Ok(RunOutcome::Failed(reason)) => eprintln!("[summary] 자동 요약 실패({reason}) — 메시지가 더 쌓인 뒤에 다시"),
+            Ok(_) => {}
+            Err(e) => eprintln!("[summary] 자동 요약을 시작하지 못함: {e}"),
+        }
+    });
+}

@@ -136,6 +136,11 @@ let pluginSetting = {
 		sampler: "k_euler_ancestral",
 	},
 	phone: { apiProfileId: null as string | null, presetId: null as string | null },
+	memory: { apiProfileId: null as string | null, model: "", dimensions: null as number | null, tokenCap: 200000, docPrefix: "", queryPrefix: "", autoRecall: false, recallTokens: 1500, recallTopK: 4, recallScope: "character" },
+	summary: { apiProfileId: null as string | null },
+	rewrite: { maxAttempts: 1, banned: true, stuck: true },
+	ghost: { apiProfileId: null as string | null, length: "medium", guide: "", sendWithoutDraft: false },
+	lint: { unclosed: "report", repeat: "report", stuck: "report", impersonate: "report", banned: "off", bannedWords: [] as string[], length: "off", minChars: 0, maxChars: 0 },
 	sync: { folder: null as string | null, auto: false, intervalMinutes: 30, target: "folder", driveEmail: null as string | null, wifiOnly: true },
 };
 // 공용 번역 캐시 (언어 + 원문 → 번역문)
@@ -285,6 +290,28 @@ async function generate(convId: string, onEvent: { onmessage: (m: { chunk: strin
 
 export const chatHandlers: Record<string, (a: Args) => unknown> = {
 	// ---- 코어 플러그인 AI 도구 (흉내만) ----
+	ghostwrite: ({ brief }) => (brief ? `${String(brief)} — 그래, 그렇게 하자.` : "응, 좋아. 다음엔 어떻게 할까?"),
+	ghostwrite_cancel: () => false,
+	revert_lint: () => null,
+	get_conversation_summary: () => ({ text: "- 숲에서 열쇠를 찾음\n- 약속을 함", coveredCount: 12, rev: 2, editedByUser: false, hasPrev: true, tokens: 24, updatedAt: Date.now(), failure: null }),
+	set_conversation_summary: ({ text }) => ({ text, coveredCount: 12, rev: 3, editedByUser: true, hasPrev: true, tokens: 10, updatedAt: Date.now(), failure: null }),
+	clear_conversation_summary: () => null,
+	undo_conversation_summary: () => null,
+	summarize_conversation_now: () => ({ text: "- 새 요약", coveredCount: 20, rev: 4, editedByUser: false, hasPrev: true, tokens: 8, updatedAt: Date.now(), failure: null }),
+	get_memory_status: () => ({ chunksCurrent: 12, chunksOther: 0, vectors: 12, fileBytes: 262144 }),
+	preview_memory_index: () => ({ conversations: 3, chunks: 12, cached: 4, toEmbed: 8, estTokens: 9600, tokenCap: 200000, overCap: false }),
+	run_memory_index: () => ({ conversations: 3, chunks: 12, embedded: 8, cached: 4, tokens: 9600 }),
+	search_memory: ({ request }) => ({
+		hits: [
+			{ conversationId: "mock", conversationTitle: "예시 대화", firstMessageId: "m1", lastMessageId: "m3", score: 0.81, snippet: `사용자: ${(request as { query: string }).query} 이야기
+AI: 그때 이야기를 다시 해 볼까요?`, stale: false },
+			{ conversationId: "mock", conversationTitle: "예시 대화", firstMessageId: "m9", lastMessageId: "m11", score: 0.42, snippet: "AI: 비슷한 장면이 있었어요.", stale: true },
+		],
+		scanned: 12,
+		truncated: false,
+		otherModelChunks: 0,
+	}),
+	purge_memory: () => 0,
 	get_plugin_setting: () => pluginSetting,
 	update_plugin_setting: ({ setting }) => (pluginSetting = setting as typeof pluginSetting),
 	translate_text: ({ text, to }) => {
@@ -415,7 +442,7 @@ export const chatHandlers: Record<string, (a: Args) => unknown> = {
 		const msgs = msgsOf(conversationId as string);
 		const history = msgs.reduce((n, m) => n + Math.ceil(m.content.length / 1.5), 0);
 		const presetId = c.promptPresetId || "default";
-		return { used: msgs.length ? 640 + history : null, system: 640, history, historyCount: msgs.length, limit: 8192, reserved: 1024, presetId, presetName: presetId === "default" ? "기본 배치" : presetId, plugins: [] };
+		return { used: msgs.length ? 640 + history : null, system: 640, history, historyCount: msgs.length, limit: 8192, reserved: 1024, presetId, presetName: presetId === "default" ? "기본 배치" : presetId, plugins: [], memoryRecall: null, summary: null };
 	},
 	patch_conversation_meta: ({ id, patch }) => {
 		const c = conv(id);
