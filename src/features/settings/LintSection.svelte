@@ -30,6 +30,9 @@
 			<Row label="반복된 문단" desc="같은 문단이 한 응답에 또 나옴. 고치면 두 번째부터 지움">
 				<Select value={cur.lint.repeat} options={MODES} onchange={(e) => save("lint", { repeat: e.currentTarget.value as LintMode })} />
 			</Row>
+			<Row label="단어 반복 오류" desc="같은 말을 끝없이 되풀이하는 고장. 고치면 두 번까지만 남김">
+				<Select value={cur.lint.stuck} options={MODES} onchange={(e) => save("lint", { stuck: e.currentTarget.value as LintMode })} />
+			</Row>
 			<Row label="내 대사 대신 쓰기" desc="'내 이름: …'으로 시작하는 줄. 고치면 그 줄부터 잘라 냄">
 				<Select value={cur.lint.impersonate} options={MODES} onchange={(e) => save("lint", { impersonate: e.currentTarget.value as LintMode })} />
 			</Row>

@@ -2758,6 +2758,8 @@ export type LintSetting_Deserialize = {
 	unclosed?: LintMode,
 	/**  같은 문단 반복 */
 	repeat?: LintMode,
+	/**  단어 반복 오류: 같은 말을 끝없이 되풀이하는 고장 (고치면 두 번까지만 남김) */
+	stuck?: LintMode,
 	/**  내 대사를 AI가 대신 쓴 줄(`이름: …`) */
 	impersonate?: LintMode,
 	/**  금지어 */
@@ -2776,6 +2778,8 @@ export type LintSetting_Serialize = {
 	unclosed: LintMode,
 	/**  같은 문단 반복 */
 	repeat: LintMode,
+	/**  단어 반복 오류: 같은 말을 끝없이 되풀이하는 고장 (고치면 두 번까지만 남김) */
+	stuck: LintMode,
 	/**  내 대사를 AI가 대신 쓴 줄(`이름: …`) */
 	impersonate: LintMode,
 	/**  금지어 */

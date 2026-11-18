@@ -13,13 +13,16 @@ use crate::models::settings::{LintMode, LintSetting};
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, specta::Type)]
 #[serde(rename_all = "camelCase")]
 pub struct Finding {
-    /// unclosed / repeat / impersonate / banned / length
+    /// unclosed / repeat / stuck / impersonate / banned / length
     pub rule: String,
     /// info / warn
     pub level: String,
     pub text: String,
     /// 이 건을 글에서 고쳤나
     pub fixed: bool,
+    /// 규칙이 알려 주는 상세: banned는 걸린 단어들(\u{1f}로 이음), stuck은 반복된 말(20자까지) — 자동 재생성 지시를 만들 때 쓴다
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub detail: Option<String>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -82,6 +85,14 @@ fn finding(rule: &str, level: &str, text: impl Into<String>, fixed: bool) -> Fin
         level: level.into(),
         text: text.into(),
         fixed,
+        detail: None,
+    }
+}
+
+fn finding_d(rule: &str, level: &str, text: impl Into<String>, fixed: bool, detail: String) -> Finding {
+    Finding {
+        detail: Some(detail),
+        ..finding(rule, level, text, fixed)
     }
 }
 
@@ -321,62 +332,295 @@ fn check_impersonate(text: &str, user_name: &str, mode: LintMode, findings: &mut
     None
 }
 
+/// 단어가 나온 곳(글자 위치 범위). 영문·숫자로만 된 단어는 단어 경계에서만 (ai가 said에 걸리지 않게), 한글은 조사·어미가 붙으므로 부분 일치.
+/// 대소문자는 가리지 않는다 (글자 수가 바뀌지 않게 글자마다 소문자로)
+fn word_spans(chars: &[char], word: &str) -> Vec<(usize, usize)> {
+    let low = |c: char| c.to_lowercase().next().unwrap_or(c);
+    let w: Vec<char> = word.chars().map(low).collect();
+    if w.is_empty() {
+        return vec![];
+    }
+    let boundary = w.iter().all(|c| c.is_ascii_alphanumeric());
+    let word_char = |c: char| c.is_ascii_alphanumeric();
+    let mut out = vec![];
+    let mut i = 0;
+    while i + w.len() <= chars.len() {
+        let hit = chars[i..i + w.len()].iter().map(|c| low(*c)).eq(w.iter().copied());
+        let ok = hit && (!boundary || ((i == 0 || !word_char(chars[i - 1])) && (i + w.len() == chars.len() || !word_char(chars[i + w.len()]))));
+        if ok {
+            out.push((i, i + w.len()));
+            i += w.len();
+        } else {
+            i += 1;
+        }
+    }
+    out
+}
+
 fn check_banned(text: &str, words: &[String], mode: LintMode, findings: &mut Vec<Finding>) -> Option<String> {
-    let lower = text.to_lowercase();
-    let mut hits = vec![];
-    for w in words.iter().map(|w| w.trim()).filter(|w| !w.is_empty()) {
-        let n = lower.matches(&w.to_lowercase()).count();
-        if n > 0 {
-            hits.push((w, n));
+    let chars: Vec<char> = text.chars().collect();
+    let mut hits: Vec<(&str, Vec<(usize, usize)>)> = vec![];
+    let mut seen = std::collections::HashSet::new();
+    for w in words.iter().map(|w| w.trim()).filter(|w| !w.is_empty() && seen.insert(w.to_lowercase())) {
+        let spans = word_spans(&chars, w);
+        if !spans.is_empty() {
+            hits.push((w, spans));
         }
     }
     if hits.is_empty() {
         return None;
     }
-    let mut out = text.to_string();
+    let list = hits.iter().map(|(w, s)| format!("{w} ×{}", s.len())).collect::<Vec<_>>().join(", ");
+    let detail = hits.iter().map(|(w, _)| *w).collect::<Vec<_>>().join("\u{1f}");
+    let mut out = None;
     if mode == LintMode::Fix {
-        for (w, _) in &hits {
-            out = remove_ci(&out, w);
+        let mut gone = vec![false; chars.len()];
+        for (_, spans) in &hits {
+            for (a, b) in spans {
+                gone[*a..*b].iter_mut().for_each(|g| *g = true);
+            }
         }
-        if out.trim().is_empty() {
+        let rest: String = chars.iter().zip(&gone).filter(|(_, g)| !**g).map(|(c, _)| *c).collect();
+        if rest.trim().is_empty() {
             // 전부 지우면 빈 메시지가 됨 — 고치지 않고 표시만
-            findings.push(finding(
+            findings.push(finding_d(
                 "banned",
                 "warn",
-                format!(
-                    "금지어: {} (모두 지우면 빈 글이라 표시만)",
-                    hits.iter().map(|(w, n)| format!("{w} ×{n}")).collect::<Vec<_>>().join(", ")
-                ),
+                format!("금지어: {list} (모두 지우면 빈 글이라 표시만)"),
                 false,
+                detail,
             ));
             return None;
         }
+        out = Some(rest);
     }
-    let fix = mode == LintMode::Fix;
-    findings.push(finding(
-        "banned",
-        "warn",
-        format!("금지어: {}", hits.iter().map(|(w, n)| format!("{w} ×{n}")).collect::<Vec<_>>().join(", ")),
-        fix,
-    ));
-    fix.then_some(out)
+    findings.push(finding_d("banned", "warn", format!("금지어: {list}"), out.is_some(), detail));
+    out
 }
 
-/// 대소문자를 가리지 않고 지운다 (글자 위치가 바뀌는 `to_lowercase` 결과가 아니라 원문에서 찾는다)
-fn remove_ci(text: &str, word: &str) -> String {
-    let w: Vec<char> = word.to_lowercase().chars().collect();
-    let chars: Vec<char> = text.chars().collect();
-    let mut out = String::new();
-    let mut i = 0;
-    while i < chars.len() {
-        if i + w.len() <= chars.len() && chars[i..i + w.len()].iter().flat_map(|c| c.to_lowercase()).eq(w.iter().copied()) {
-            i += w.len();
-        } else {
-            out.push(chars[i]);
-            i += 1;
+// ---------------------------------------------------------------------------
+// 단어 반복 오류 (3-B-4): 모델이 같은 말을 끝없이 되풀이하는 고장. 문단이 겹치는 "반복 문단"과는 다르다
+// ---------------------------------------------------------------------------
+
+struct Tok {
+    start: usize,
+    end: usize,
+    norm: String,
+    ignorable: bool,
+}
+
+/// 공백으로 나눈 낱말 (코드 블록 안은 뺌). 구두점·숫자·이모지뿐인 것, 한 글자만 되풀이한 것(ㅋㅋㅋ·하하하·아아아), 태그 조각은 "무시"로 표시한다
+fn tokenize(text: &str) -> Vec<Tok> {
+    let mut out = vec![];
+    let (mut in_fence, mut offset) = (false, 0usize);
+    for line in text.split_inclusive('\n') {
+        let base = offset;
+        offset += line.len();
+        if line.trim_start().starts_with("```") {
+            in_fence = !in_fence;
+            continue;
+        }
+        if in_fence {
+            continue;
+        }
+        for tok in line.split_whitespace() {
+            let start = base + (tok.as_ptr() as usize - line.as_ptr() as usize);
+            let norm = tok.trim_matches(|c: char| !c.is_alphanumeric()).to_lowercase();
+            let first = norm.chars().next();
+            let ignorable =
+                tok.contains('<') || tok.contains('>') || !norm.chars().any(char::is_alphabetic) || first.is_some_and(|f| norm.chars().all(|c| c == f));
+            out.push(Tok {
+                start,
+                end: start + tok.len(),
+                norm,
+                ignorable,
+            });
         }
     }
     out
+}
+
+#[derive(Debug, Clone)]
+struct Run {
+    /// 반복 구간의 바이트 범위
+    start: usize,
+    end: usize,
+    /// 고칠 때 남기는 끝 (두 번까지)
+    keep_end: usize,
+    unit: String,
+    count: usize,
+}
+
+/// 낱말 n개(1~4)가 연달아 되풀이: n=1은 8번, n≥2는 5번 이상 (응답이 한도에서 잘렸으면 30% 낮춤 — 진짜 반복은 대개 한도까지 간다)
+fn token_runs(toks: &[Tok], low: bool) -> Vec<Run> {
+    let (min1, minn) = if low { (6, 4) } else { (8, 5) };
+    let mut taken = vec![false; toks.len()];
+    let mut runs = vec![];
+    for n in 1..=4usize {
+        let min = if n == 1 { min1 } else { minn };
+        let mut i = 0;
+        while i + n <= toks.len() {
+            let unit = &toks[i..i + n];
+            let valid = !taken[i] && unit.iter().all(|t| !t.ignorable) && (n > 1 || unit[0].norm.chars().count() >= 2);
+            if !valid {
+                i += 1;
+                continue;
+            }
+            let mut j = i + n;
+            while j + n <= toks.len() && !taken[j] && toks[j..j + n].iter().zip(unit).all(|(a, b)| a.norm == b.norm) {
+                j += n;
+            }
+            let count = (j - i) / n;
+            if count >= min {
+                taken[i..j].iter_mut().for_each(|t| *t = true);
+                runs.push(Run {
+                    start: unit[0].start,
+                    end: toks[j - 1].end,
+                    keep_end: toks[i + 2 * n - 1].end,
+                    unit: unit.iter().map(|t| t.norm.as_str()).collect::<Vec<_>>().join(" "),
+                    count,
+                });
+                i = j;
+            } else {
+                i += 1;
+            }
+        }
+    }
+    runs
+}
+
+/// 같은 문장이 연달아 3번 이상
+fn sentence_runs(text: &str) -> Vec<Run> {
+    if text.contains("```") {
+        return vec![];
+    }
+    let mut sents: Vec<(usize, usize, String)> = vec![];
+    let mut start = 0;
+    for (i, c) in text.char_indices() {
+        if matches!(c, '.' | '!' | '?' | '。' | '…' | '\n') {
+            let end = i + c.len_utf8();
+            sents.push((start, end, text[start..end].split_whitespace().collect::<Vec<_>>().join(" ")));
+            start = end;
+        }
+    }
+    let mut runs = vec![];
+    let mut i = 0;
+    while i < sents.len() {
+        let norm = &sents[i].2;
+        if norm.chars().filter(|c| c.is_alphanumeric()).count() < 6 {
+            i += 1;
+            continue;
+        }
+        let mut j = i + 1;
+        while j < sents.len() && sents[j].2 == *norm {
+            j += 1;
+        }
+        if j - i >= 3 {
+            runs.push(Run {
+                start: sents[i].0,
+                end: sents[j - 1].1,
+                keep_end: sents[i + 1].1,
+                unit: norm.clone(),
+                count: j - i,
+            });
+            i = j;
+        } else {
+            i += 1;
+        }
+    }
+    runs
+}
+
+/// 띄어쓰기 없이 2~10글자 덩어리가 연달아 10번 이상(40자 이상)
+fn char_runs(text: &str, low: bool) -> Vec<Run> {
+    let chars: Vec<(usize, char)> = text.char_indices().collect();
+    let n = chars.len();
+    let byte = |i: usize| if i < n { chars[i].0 } else { text.len() };
+    let (min_count, min_len) = if low { (7, 28) } else { (10, 40) };
+    let mut runs = vec![];
+    let mut i = 0;
+    while i < n {
+        let mut found = None;
+        for l in 2..=10usize {
+            if i + 2 * l > n || chars[i].1 != chars[i + l].1 {
+                continue;
+            }
+            let unit: Vec<char> = chars[i..i + l].iter().map(|c| c.1).collect();
+            let distinct = unit.iter().collect::<std::collections::HashSet<_>>().len();
+            if distinct < 2 || !unit.iter().any(|c| c.is_alphanumeric()) || unit.iter().any(|c| matches!(c, '<' | '>')) {
+                continue;
+            }
+            let mut k = 1;
+            while i + (k + 1) * l <= n && chars[i + k * l..i + (k + 1) * l].iter().map(|c| c.1).eq(unit.iter().copied()) {
+                k += 1;
+            }
+            if k >= min_count && k * l >= min_len {
+                found = Some((l, k, unit.iter().collect::<String>()));
+                break;
+            }
+        }
+        match found {
+            Some((l, k, unit)) => {
+                runs.push(Run {
+                    start: byte(i),
+                    end: byte(i + k * l),
+                    keep_end: byte(i + 2 * l),
+                    unit,
+                    count: k,
+                });
+                i += k * l;
+            }
+            None => i += 1,
+        }
+    }
+    runs
+}
+
+/// 반복 구간을 찾는다 (겹치면 앞의 것만)
+fn find_stuck(text: &str, low: bool) -> Vec<Run> {
+    fn merge(mut runs: Vec<Run>) -> Vec<Run> {
+        runs.sort_by_key(|r| (r.start, std::cmp::Reverse(r.end)));
+        let mut kept: Vec<Run> = vec![];
+        for r in runs {
+            if kept.last().is_none_or(|l| r.start >= l.end) {
+                kept.push(r);
+            }
+        }
+        kept
+    }
+    // 낱말·문장 단위를 먼저 (띄어쓰기 바로 앞 공백까지 끌어들이는 글자 단위보다 정확한 단위). 글자 단위는 그 밖에서만
+    let mut kept = merge(token_runs(&tokenize(text), low).into_iter().chain(sentence_runs(text)).collect());
+    let extra: Vec<Run> = char_runs(text, low)
+        .into_iter()
+        .filter(|c| kept.iter().all(|k| c.end <= k.start || c.start >= k.end))
+        .collect();
+    kept.extend(extra);
+    merge(kept)
+}
+
+/// 고치면 반복 구간을 두 번까지만 남긴다
+fn check_stuck(text: &str, mode: LintMode, hit_limit: bool, findings: &mut Vec<Finding>) -> Option<String> {
+    let runs = find_stuck(text, hit_limit);
+    let first = runs.first()?;
+    let unit: String = first.unit.chars().take(20).collect();
+    let mut out = text.to_string();
+    for r in runs.iter().rev() {
+        out.replace_range(r.keep_end..r.end, "");
+    }
+    let fixed = mode == LintMode::Fix && !out.trim().is_empty();
+    let more = if runs.len() > 1 {
+        format!(" 외 {}곳", runs.len() - 1)
+    } else {
+        String::new()
+    };
+    findings.push(finding_d(
+        "stuck",
+        "warn",
+        format!("같은 말 '{unit}'이(가) {}번 연달아 반복됨{more}", first.count),
+        fixed,
+        unit,
+    ));
+    fixed.then_some(out)
 }
 
 fn check_length(text: &str, s: &LintSetting, findings: &mut Vec<Finding>) {
@@ -391,11 +635,21 @@ fn check_length(text: &str, s: &LintSetting, findings: &mut Vec<Finding>) {
 
 /// 응답 글을 검사하고 고칠 규칙은 고친다. `user_name`은 내 이름(페르소나)
 pub fn run(text: &str, user_name: &str, s: &LintSetting) -> LintOutcome {
+    run_with(text, user_name, s, false)
+}
+
+/// `hit_limit`: 응답이 출력 한도에서 잘렸음 (반복 오류 판정을 조금 낮춘다)
+pub fn run_with(text: &str, user_name: &str, s: &LintSetting, hit_limit: bool) -> LintOutcome {
     let mut findings = vec![];
     let mut content = text.to_string();
     // 글이 바뀌는 규칙을 먼저(길이는 마지막), 닫기는 다른 고침이 끝난 뒤에 (잘라 낸 글 기준으로 닫아야 하므로)
     if s.impersonate != LintMode::Off {
         if let Some(c) = check_impersonate(&content, user_name, s.impersonate, &mut findings) {
+            content = c;
+        }
+    }
+    if s.stuck != LintMode::Off {
+        if let Some(c) = check_stuck(&content, s.stuck, hit_limit, &mut findings) {
             content = c;
         }
     }
@@ -425,7 +679,13 @@ pub fn run(text: &str, user_name: &str, s: &LintSetting) -> LintOutcome {
 
 /// 응답 저장 직전에 부른다. 꺼져 있으면 글을 그대로 돌려주고 아무것도 읽지 않는다 (Lazy Initialization).
 /// 돌려주는 값: (저장할 글, meta.lint에 넣을 값 — 걸린 것이 없으면 None)
-pub fn apply_to_response(app: &tauri::AppHandle, text: &str, user_name: &str, conv_meta: Option<&serde_json::Value>) -> (String, Option<serde_json::Value>) {
+pub fn apply_to_response(
+    app: &tauri::AppHandle,
+    text: &str,
+    user_name: &str,
+    conv_meta: Option<&serde_json::Value>,
+    hit_limit: bool,
+) -> (String, Option<serde_json::Value>) {
     use tauri::Manager;
     if !crate::sys::plugins::is_enabled(app, crate::sys::plugins::id::LINT) || disabled_for(conv_meta) {
         return (text.to_string(), None);
@@ -436,7 +696,7 @@ pub fn apply_to_response(app: &tauri::AppHandle, text: &str, user_name: &str, co
     let Ok(setting) = state.0.lock().map(|s| s.lint.clone()) else {
         return (text.to_string(), None);
     };
-    let outcome = run(text, user_name, &setting);
+    let outcome = run_with(text, user_name, &setting, hit_limit);
     let meta = meta_of(text, &outcome);
     (outcome.content, meta)
 }
@@ -712,5 +972,101 @@ mod tests {
             ("*웃었다", true, Some("*웃었다"))
         );
         assert!(revert(&db, "m").await.is_err(), "두 번 되돌리지 않음");
+    }
+}
+
+#[cfg(test)]
+mod stuck_tests {
+    use super::*;
+
+    fn only_stuck(mode: LintMode) -> LintSetting {
+        LintSetting {
+            unclosed: LintMode::Off,
+            repeat: LintMode::Off,
+            stuck: mode,
+            impersonate: LintMode::Off,
+            banned: LintMode::Off,
+            length: LintMode::Off,
+            ..Default::default()
+        }
+    }
+    fn stuck(text: &str) -> Vec<Finding> {
+        run(text, "나", &only_stuck(LintMode::Report)).findings
+    }
+
+    #[test]
+    fn natural_repetition_is_not_a_loop() {
+        for t in [
+            "ㅋㅋㅋㅋㅋㅋㅋㅋㅋㅋㅋㅋ",
+            "하하하하하하하하하하하하",
+            "…………………………………………",
+            "쿵쿵쿵쿵쿵쿵쿵쿵쿵쿵",
+            "가자, 가자, 가자, 가자",
+            "1. 항목\n2. 항목\n3. 항목\n4. 항목\n5. 항목\n6. 항목\n7. 항목\n8. 항목\n9. 항목",
+            "아니, 아니야. 아니, 아니야.",
+            "<br><br><br><br><br><br><br><br><br><br>",
+            "```\n그래서 그래서 그래서 그래서 그래서 그래서 그래서 그래서 그래서 그래서\n```",
+            "똑똑 똑똑 똑똑 똑똑 똑똑 똑똑", // 단어 하나가 아니라 같은 낱말 6번 — 8번 미만
+        ] {
+            assert!(stuck(t).is_empty(), "{t}: {:?}", stuck(t));
+        }
+    }
+
+    #[test]
+    fn degenerate_loops_are_caught_and_collapsed_to_two() {
+        let f = stuck(&format!("그가 말했다. {}", "그래서 ".repeat(10)));
+        assert_eq!((f.len(), f[0].rule.as_str(), f[0].detail.as_deref()), (1, "stuck", Some("그래서")), "{f:?}");
+        assert!(f[0].text.contains("10번"));
+        let two = stuck(&"아니 그래도 ".repeat(6));
+        assert_eq!(two[0].detail.as_deref(), Some("아니 그래도"), "{two:?}");
+        assert_eq!(stuck(&"나는 집에 갔다. ".repeat(4))[0].detail.as_deref(), Some("나는 집에 갔다."));
+        assert_eq!(stuck(&"하나둘셋넷".repeat(12))[0].rule, "stuck", "띄어쓰기 없는 반복");
+
+        let o = run(&format!("그가 말했다. {}끝", "그래서 ".repeat(10)), "나", &only_stuck(LintMode::Fix));
+        assert_eq!(o.content, "그가 말했다. 그래서 그래서 끝");
+        assert!(o.findings[0].fixed);
+        let o = run(&"하나둘셋넷".repeat(12), "나", &only_stuck(LintMode::Fix));
+        assert_eq!(o.content, "하나둘셋넷하나둘셋넷");
+        // 표시만이면 글은 그대로
+        let t = "그래서 ".repeat(10);
+        assert_eq!(run(&t, "나", &only_stuck(LintMode::Report)).content, t);
+    }
+
+    #[test]
+    fn a_response_cut_at_the_limit_is_judged_a_little_stricter() {
+        let t = "그래서 ".repeat(6);
+        assert!(run_with(&t, "나", &only_stuck(LintMode::Report), false).findings.is_empty());
+        assert_eq!(run_with(&t, "나", &only_stuck(LintMode::Report), true).findings.len(), 1);
+    }
+
+    #[test]
+    fn banned_words_use_boundaries_for_latin_and_substrings_for_hangul() {
+        let s = |words: &[&str], mode| LintSetting {
+            unclosed: LintMode::Off,
+            repeat: LintMode::Off,
+            stuck: LintMode::Off,
+            impersonate: LintMode::Off,
+            length: LintMode::Off,
+            banned: mode,
+            banned_words: words.iter().map(|w| w.to_string()).collect(),
+            ..Default::default()
+        };
+        assert!(
+            run("He said hello", "나", &s(&["ai"], LintMode::Report)).findings.is_empty(),
+            "said에 걸리지 않음"
+        );
+        assert_eq!(
+            run("The AI replied. ai!", "나", &s(&["ai"], LintMode::Report)).findings[0].text,
+            "금지어: ai ×2"
+        );
+        let o = run(
+            "알량한 그의 알량한을 본 사슴",
+            "나",
+            &s(&["알량한", "헤드라이트 사슴", "알량한"], LintMode::Report),
+        );
+        assert_eq!(o.findings[0].detail.as_deref(), Some("알량한"), "걸린 단어만, 중복 없이 나열: {:?}", o.findings);
+        let o = run("알량한 척하는 사슴", "나", &s(&["알량한", "사슴"], LintMode::Fix));
+        assert_eq!(o.content, " 척하는 ");
+        assert_eq!(o.findings[0].detail.as_deref(), Some("알량한\u{1f}사슴"));
     }
 }

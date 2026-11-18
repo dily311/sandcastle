@@ -338,6 +338,8 @@ pub struct LintSetting {
     pub unclosed: LintMode,
     /// 같은 문단 반복
     pub repeat: LintMode,
+    /// 단어 반복 오류: 같은 말을 끝없이 되풀이하는 고장 (고치면 두 번까지만 남김)
+    pub stuck: LintMode,
     /// 내 대사를 AI가 대신 쓴 줄(`이름: …`)
     pub impersonate: LintMode,
     /// 금지어
@@ -355,6 +357,7 @@ impl Default for LintSetting {
         Self {
             unclosed: LintMode::Report,
             repeat: LintMode::Report,
+            stuck: LintMode::Report,
             impersonate: LintMode::Report,
             banned: LintMode::Off,
             banned_words: vec![],
