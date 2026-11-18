@@ -1,0 +1,14 @@
+{
+  "id": "chat-summary",
+  "name": "대화 요약",
+  "version": "1.0.0",
+  "apiVersion": 1,
+  "author": "Sandcastle 예제",
+  "description": "명령을 누르면 지금 대화를 AI에게 요약시켜 패널에 보여줍니다. AI를 부르므로 요금이 들 수 있습니다",
+  "permissions": ["ai", "ui.command", "ui.panel", "data.read:chat", "storage"],
+  "panels": [{ "id": "main", "title": "요약", "page": "ui/panel.html" }],
+  "commands": [{ "id": "summarize", "title": "대화 요약하기 (AI 호출)" }],
+  "settings": [
+    { "key": "length", "type": "select", "label": "요약 길이", "options": ["한 줄", "짧게", "자세히"], "default": "짧게" }
+  ]
+}

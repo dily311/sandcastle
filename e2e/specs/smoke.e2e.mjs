@@ -83,4 +83,37 @@ describe("스모크", () => {
 		expect(fs.readFileSync(out).includes("sk-e2e-fake-key")).toBe(false);
 		fs.rmSync(out, { force: true });
 	});
+
+	// 커뮤니티 플러그인 (6-D-9): 예제를 설치해 켜면 격리된 곳에서 실제로 돈다
+	it("예제 플러그인을 설치해 켜면 돌아간다", async () => {
+		const dir = path.join(root, "examples", "plugins", "word-count");
+		const id = "word-count";
+		try {
+			await must("update_feature_setting", { id: "community", enabled: true });
+			const pv = await must("preview_user_plugin", { path: dir });
+			expect(pv.manifest.id).toBe(id);
+			expect(pv.addedPermissions.length).toBeGreaterThan(0);
+			// 설치해도 꺼진 채
+			const installed = await must("install_user_plugin", { path: dir, hash: pv.hash });
+			expect(installed.enabled).toBe(false);
+			// 켜기는 요청한 권한 전부에 동의해야 한다 (일부만으로는 거절)
+			const partial = await invoke("set_user_plugin_enabled", { pluginId: id, enabled: true, grant: ["storage"] });
+			expect(partial.err).toBeDefined();
+			expect((await must("set_user_plugin_enabled", { pluginId: id, enabled: true, grant: pv.manifest.permissions })).enabled).toBe(true);
+			// 켜면 숨은 iframe이 뜨고 main.js가 돌아 저장소에 시작 표시를 남긴다 (프로토콜 서빙 → 격리된 iframe → SDK → 권한 확인)
+			await browser.waitUntil(
+				async () => {
+					const r = await invoke("call_user_plugin", { pluginId: id, method: "storage.get", args: { key: "started" }, by: null });
+					return r.ok != null;
+				},
+				{ timeout: 30_000, interval: 500, timeoutMsg: "예제 플러그인이 시작하지 않음" },
+			);
+			// 선언하지 않은 권한(ai)의 호출은 막힌다
+			const denied = await invoke("call_user_plugin", { pluginId: id, method: "ai.generate", args: { prompt: "x" }, by: "user" });
+			expect(denied.err).toBeDefined();
+		} finally {
+			await invoke("uninstall_user_plugin", { pluginId: id });
+			await invoke("update_feature_setting", { id: "community", enabled: false });
+		}
+	});
 });

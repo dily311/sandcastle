@@ -1,0 +1,6 @@
+/* 배경·글자색·버튼 모양은 앱이 넣어 준다. 아래는 이 패널만의 모양.
+   앱의 색 변수(var(--accent) 등)를 쓰면 테마를 따라간다 */
+body { margin: 12px; }
+h3 { margin: 0 0 8px; color: var(--accent-text); }
+.big { font-size: 28px; font-weight: 700; margin: 0 0 4px; }
+.muted { color: var(--text-muted); font-size: 13px; margin: 2px 0; }

@@ -433,3 +433,59 @@ async fn restored_backup_and_trash_do_not_start_plugins_on_their_own() {
     let back = get(&db, &base, "rb").await.unwrap();
     assert!(!back.enabled && !back.ai_auto);
 }
+
+// ---------------------------------------------------------------------------
+// 예제 플러그인 (examples/plugins, CLAUDE.md 6-D-9): 항상 설치 검사를 통과해야 한다
+// ---------------------------------------------------------------------------
+
+fn example_dirs() -> Vec<PathBuf> {
+    let root = Path::new(env!("CARGO_MANIFEST_DIR")).join("../examples/plugins");
+    let mut v: Vec<PathBuf> = std::fs::read_dir(&root)
+        .unwrap()
+        .flatten()
+        .map(|e| e.path())
+        .filter(|p| p.join("manifest.json").is_file())
+        .collect();
+    v.sort();
+    v
+}
+
+#[tokio::test]
+async fn bundled_examples_install_and_follow_the_rules() {
+    let dirs = example_dirs();
+    assert!(dirs.len() >= 3, "예제가 줄었음: {dirs:?}");
+    let (_d, base, db) = app_dir().await;
+    for dir in &dirs {
+        let name = dir.file_name().unwrap().to_string_lossy().to_string();
+        let pv = preview(&db, &base, dir).await.unwrap_or_else(|e| panic!("{name}: {e}"));
+        assert_eq!(pv.manifest.id, name, "폴더 이름과 id가 같아야 함");
+        assert!(!pv.manifest.description.is_empty() && !pv.manifest.author.is_empty(), "{name}: 설명·작성자");
+        // 선언한 권한만 쓰는지: 후처리/프롬프트/AI/패널/명령 선언과 main.js의 사용이 맞는다
+        let main = std::fs::read_to_string(dir.join(&pv.manifest.main)).unwrap();
+        let perms = &pv.manifest.permissions;
+        let has = |p: &str| perms.iter().any(|x| x == p);
+        assert_eq!(main.contains("sandcastle.ai."), has("ai"), "{name}: ai 권한과 사용이 어긋남");
+        assert_eq!(main.contains("\"message.process\""), has("messages.process"), "{name}: messages.process");
+        assert_eq!(main.contains("\"prompt.build\""), has("prompt.modify"), "{name}: prompt.modify");
+        assert_eq!(!pv.manifest.commands.is_empty(), main.contains("on(\"command\""), "{name}: 명령 선언과 처리");
+        assert_eq!(!pv.manifest.commands.is_empty(), has("ui.command"), "{name}: ui.command");
+        assert_eq!(!pv.manifest.panels.is_empty(), has("ui.panel"), "{name}: ui.panel");
+        for p in &pv.manifest.panels {
+            let mut html = std::fs::read_to_string(dir.join(&p.page)).unwrap();
+            // 설명 주석은 건너뛴다
+            while let (Some(a), Some(b)) = (html.find("<!--"), html.find("-->")) {
+                html.replace_range(a..b + 3, "");
+            }
+            // 패널 페이지는 인라인 스크립트를 쓸 수 없다 (CSP) — <script src=…>만
+            for chunk in html.split("<script").skip(1) {
+                let tag = chunk.split('>').next().unwrap_or("");
+                assert!(tag.contains("src="), "{name}: {} 에 인라인 <script>가 있음", p.page);
+            }
+        }
+        install(&db, &base, dir, &pv.hash).await.unwrap_or_else(|e| panic!("{name}: {e}"));
+    }
+    // 설치된 것은 꺼진 채
+    let all = list(&db, &base).await.unwrap();
+    assert_eq!(all.len(), dirs.len());
+    assert!(all.iter().all(|p| !p.enabled && p.manifest.is_some() && p.error.is_none()));
+}
