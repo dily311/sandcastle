@@ -319,6 +319,10 @@ async fn recall_inner(p: &RecallParams<'_>) -> Result<RecallOutcome> {
     let budget = p.cfg.recall_tokens.max(100) as usize;
     let (mut total, mut chosen) = (0usize, vec![]);
     for h in resolved {
+        // 색인한 뒤 글이 바뀐 chunk는 넣지 않는다 (벡터는 옛 글의 것이라 순위가 맞지 않음). 다시 만들기는 참조뿐이라 해시가 없어 검사하지 않음
+        if h.stale && p.reuse.is_none() {
+            continue;
+        }
         let mut body = h.snippet.clone(); // chunk 글은 색인할 때 이미 코드·HTML·앱 태그를 뺀 것
         let mut t = count_tokens(&body);
         if t > budget && chosen.is_empty() {

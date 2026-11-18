@@ -8,6 +8,7 @@
 //! 유료 호출(색인·질의 임베딩)은 부르는 커맨드가 TaskManager 작업(`TaskType::Embedding`, feature `memory`) 안에서 한다.
 pub mod chunker;
 pub mod index;
+pub mod maintain;
 pub mod recall;
 pub mod search;
 pub mod store;

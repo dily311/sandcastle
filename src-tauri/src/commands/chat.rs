@@ -368,7 +368,8 @@ pub async fn patch_conversation_meta(state: State<'_, AppState>, id: String, pat
 /// 메시지 여러 개 한 번에 지우기. 지운 개수를 돌려준다
 #[tauri::command]
 #[specta::specta]
-pub async fn delete_messages(state: State<'_, AppState>, ids: Vec<String>) -> Result<u32> {
+pub async fn delete_messages(app: AppHandle, state: State<'_, AppState>, ids: Vec<String>) -> Result<u32> {
+    let convs = crate::service::memory::maintain::conversations_of(&state.db, &ids).await;
     let mut tx = state.db.begin().await?;
     let mut n = 0;
     for id in &ids {
@@ -379,6 +380,7 @@ pub async fn delete_messages(state: State<'_, AppState>, ids: Vec<String>) -> Re
             .rows_affected() as u32;
     }
     tx.commit().await?;
+    crate::service::memory::maintain::after_message_change(&app, &state.db, convs);
     Ok(n)
 }
 

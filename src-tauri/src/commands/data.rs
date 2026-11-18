@@ -109,8 +109,14 @@ fn trash_retention(app: &AppHandle) -> Option<u32> {
 pub async fn move_to_trash(app: &AppHandle, state: &AppState, kind: TrashKind, id: &str) -> Result<TrashItem> {
     let base = app_data_dir(app)?;
     let item = trash::move_to_trash(&state.db, &base, kind, id).await?;
-    if let Err(e) = trash::purge_expired(&state.db, &base, trash_retention(app)).await {
-        eprintln!("[trash] 기간 지난 항목 정리 실패: {e}");
+    // 지운 대화의 메모리 색인 행도 지운다 (벡터 캐시는 남겨 되살리면 다시 임베딩하지 않게)
+    if kind == TrashKind::Conversation {
+        crate::service::memory::maintain::after_conversation_deleted(app, id);
+    }
+    match trash::purge_expired(&state.db, &base, trash_retention(app)).await {
+        Ok(n) if n > 0 => crate::service::memory::maintain::after_permanent_delete(app, &state.db),
+        Ok(_) => {}
+        Err(e) => eprintln!("[trash] 기간 지난 항목 정리 실패: {e}"),
     }
     Ok(item)
 }
@@ -120,7 +126,9 @@ pub async fn move_to_trash(app: &AppHandle, state: &AppState, kind: TrashKind, i
 #[specta::specta]
 pub async fn list_trash(app: AppHandle, state: State<'_, AppState>) -> Result<Vec<TrashItem>> {
     let base = app_data_dir(&app)?;
-    trash::purge_expired(&state.db, &base, trash_retention(&app)).await?;
+    if trash::purge_expired(&state.db, &base, trash_retention(&app)).await? > 0 {
+        crate::service::memory::maintain::after_permanent_delete(&app, &state.db);
+    }
     trash::list(&state.db).await
 }
 
@@ -135,14 +143,22 @@ pub async fn restore_trash_item(app: AppHandle, state: State<'_, AppState>, id: 
 #[tauri::command]
 #[specta::specta]
 pub async fn purge_trash_item(app: AppHandle, state: State<'_, AppState>, id: String) -> Result<bool> {
-    trash::purge(&state.db, &app_data_dir(&app)?, &id).await
+    let removed = trash::purge(&state.db, &app_data_dir(&app)?, &id).await?;
+    if removed {
+        crate::service::memory::maintain::after_permanent_delete(&app, &state.db);
+    }
+    Ok(removed)
 }
 
 /// 휴지통 비우기 (되돌릴 수 없음 — 화면에서 확인을 받는다). 지운 개수
 #[tauri::command]
 #[specta::specta]
 pub async fn empty_trash(app: AppHandle, state: State<'_, AppState>) -> Result<u32> {
-    trash::purge_all(&state.db, &app_data_dir(&app)?).await
+    let n = trash::purge_all(&state.db, &app_data_dir(&app)?).await?;
+    if n > 0 {
+        crate::service::memory::maintain::after_permanent_delete(&app, &state.db);
+    }
+    Ok(n)
 }
 
 /// 캐릭터 팩 내보내기. `path`는 프론트의 저장 대화상자에서 고른 경로 (.scpack).

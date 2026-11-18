@@ -687,3 +687,108 @@ fn recall_block_is_a_user_turn_merged_into_the_input_and_never_lands_in_the_syst
         turns[0].content
     );
 }
+
+// ---------------------------------------------------------------------------
+// 색인 무효화 (3-C-6)
+// ---------------------------------------------------------------------------
+use super::maintain;
+
+async fn rows_of(e: &Env, conv: &str) -> Vec<String> {
+    let pool = e.store.pool().await.unwrap();
+    sqlx::query_scalar("SELECT first_message_id FROM chunks WHERE conversation_id = ? ORDER BY id")
+        .bind(conv)
+        .fetch_all(&pool)
+        .await
+        .unwrap()
+}
+
+async fn indexed_pets(extra: Vec<Reply>) -> Env {
+    let mut e = env(vec![]).await;
+    pets_conv(&e.db, "c1").await;
+    let texts = planned_texts(&e.db, "c1").await;
+    let mut replies = vec![embed_reply(&texts)];
+    replies.extend(extra);
+    set_replies(&mut e, replies).await;
+    run_index(&e, &scope("c1"), false).await.unwrap();
+    e
+}
+
+#[tokio::test]
+async fn editing_a_message_drops_only_its_chunk_row_and_reindexing_embeds_only_that_one() {
+    let e = indexed_pets(vec![]).await;
+    assert_eq!(maintain::reconcile(&e.db, &e.store, "c1").await.unwrap(), 0, "바뀐 것이 없으면 지우지 않음");
+    let vectors = status(&e.store, None).await.unwrap().vectors;
+
+    sqlx::query("UPDATE messages SET content = ? WHERE id = 'c1-m4'")
+        .bind(body("고양이"))
+        .execute(&e.db)
+        .await
+        .unwrap();
+    assert_eq!(maintain::reconcile(&e.db, &e.store, "c1").await.unwrap(), 1);
+    assert_eq!(rows_of(&e, "c1").await, vec!["c1-m0".to_string()], "고친 메시지가 든 chunk의 행만 사라짐");
+    assert_eq!(status(&e.store, None).await.unwrap().vectors, vectors, "벡터 캐시는 남김");
+    // 되돌려 놓은 글은 캐시에 있어 다시 임베딩하지 않아도 된다 (색인 미리보기에서 새로 할 것 없음)
+    sqlx::query("UPDATE messages SET content = ? WHERE id = 'c1-m4'")
+        .bind(body("강아지"))
+        .execute(&e.db)
+        .await
+        .unwrap();
+    let pv = index::preview(&e.db, &e.store, &e.profile, &e.cfg, &scope("c1")).await.unwrap();
+    assert_eq!((pv.cached, pv.to_embed), (2, 0));
+}
+
+#[tokio::test]
+async fn deleting_or_hiding_messages_drops_the_affected_chunk_rows() {
+    let e = indexed_pets(vec![]).await;
+    // 첫 chunk의 끝 메시지를 지움
+    sqlx::query("DELETE FROM messages WHERE id = 'c1-m2'").execute(&e.db).await.unwrap();
+    assert!(maintain::reconcile(&e.db, &e.store, "c1").await.unwrap() >= 1);
+    assert!(!rows_of(&e, "c1").await.contains(&"c1-m0".to_string()));
+    // 숨김 처리도 글이 달라지는 것
+    let e = indexed_pets(vec![]).await;
+    sqlx::query("UPDATE messages SET meta = ? WHERE id = 'c1-m1'")
+        .bind(r#"{"hidden":true}"#)
+        .execute(&e.db)
+        .await
+        .unwrap();
+    assert_eq!(maintain::reconcile(&e.db, &e.store, "c1").await.unwrap(), 1);
+    assert_eq!(rows_of(&e, "c1").await, vec!["c1-m3".to_string()]);
+}
+
+#[tokio::test]
+async fn conversation_delete_forgets_rows_and_permanent_delete_purges_vectors() {
+    let e = indexed_pets(vec![]).await;
+    assert_eq!(maintain::forget_conversation(&e.store, "c1").await.unwrap(), 2);
+    assert!(rows_of(&e, "c1").await.is_empty());
+    assert_eq!(status(&e.store, None).await.unwrap().vectors, 2, "되살릴 때를 위해 벡터는 남김");
+    // 휴지통에서 완전히 지운 뒤: 가리키지 않는 벡터까지
+    purge(&e.store, &e.db, None, false).await.unwrap();
+    assert_eq!(status(&e.store, None).await.unwrap().vectors, 0);
+    // 대화가 이미 없으면 reconcile도 모든 행을 지움
+    let e = indexed_pets(vec![]).await;
+    sqlx::query("DELETE FROM conversations WHERE id = 'c1'").execute(&e.db).await.unwrap();
+    assert_eq!(maintain::reconcile(&e.db, &e.store, "c1").await.unwrap(), 2);
+    // 색인 파일이 없으면 아무것도 열지 않음
+    let none = env(vec![]).await;
+    assert_eq!(maintain::reconcile(&none.db, &none.store, "c1").await.unwrap(), 0);
+    assert!(!none.store.exists());
+    assert_eq!(
+        maintain::conversations_of(&e.db, &["c1-m0".into()]).await.len(),
+        0,
+        "지운 뒤에는 대화를 알 수 없음"
+    );
+}
+
+#[tokio::test]
+async fn recall_does_not_inject_a_chunk_edited_after_indexing() {
+    let r = recall_env(vec![embed_reply(&["고양이 이야기를 다시 해 줘".to_string()])]).await;
+    // 색인한 뒤 목표 chunk(메시지 30~32)의 글을 고침 — 아직 맞추지 않은 상태
+    sqlx::query("UPDATE messages SET content = '고친 글' WHERE id = 'big-m31'")
+        .execute(&r.e.db)
+        .await
+        .unwrap();
+    let out = do_recall(&r, &r.input, &HashSet::new(), None, &CancellationToken::new()).await;
+    assert_eq!((out.meta.status.as_str(), out.block.is_none()), ("skipped", true), "{:?}", out.meta);
+    // 맞춘 뒤 다시 색인하면 새 글로 돌아온다
+    assert_eq!(maintain::reconcile(&r.e.db, &r.e.store, "big").await.unwrap(), 1);
+}

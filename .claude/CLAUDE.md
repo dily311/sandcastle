@@ -72,6 +72,6 @@
 - **코드 구조** (게임 ADR-017): `commands/`는 얇게, 로직은 `service/`·`game/`, DB 함수는 `get / get_all / upsert / delete + 테이블명`, 모델은 `X / XRow / XInput`. 병렬 조회는 `futures::try_join!`(모바일 빌드 제한), 네트워크는 rustls.
 - **DB**: 새 마이그레이션 파일을 `src-tauri/src/db/migrations/`에 번호를 올려 추가한다. 이미 있는 마이그레이션 파일은 주석 한 글자도 고치지 않는다(백업이 체크섬을 비교함). 새 설정 칸은 `service/data/settings_scope.rs` 분류표에, 새 테이블은 `db/change_tracking.rs` 분류에 적는다(테스트가 강제).
 - **IPC**: 커맨드·타입을 바꾸면 `cd src-tauri && cargo run --bin export-bindings`로 `src/ipc/bindings.ts`를 다시 만들어 같이 커밋한다(CI가 검사). 브라우저 미리보기에서 보이려면 `src/ipc/dev-mock/`에 가짜 응답도 추가한다.
-- **화면**: `src/shared/ui`의 공용 컴포넌트를 먼저 쓴다. 폭·겹침 순서·색은 `tokens.css` 변수로(숫자 하드코딩 금지). 목록 화면은 `ListToolbar`·`SelectBar`·`ItemCard`. 새 화면의 글자는 `src/locales/`의 키로. 데이터 저장소와 화면 상태(열림·선택·정렬)를 한 store에 섞지 않는다. 데스크톱 전용 기능은 Android에서 숨긴다.
+- **화면**: 불필요한 보조 라벨·설명 글을 피하고 **레이아웃(배치·묶음·위계·아이콘·기본값)으로 설명**한다. 라벨은 이름만 짧게, 부연 설명 줄은 요금이 드는 것·되돌릴 수 없는 것·실패 이유처럼 빠뜨리면 사용자가 손해 보는 경우에만 둔다. `src/shared/ui`의 공용 컴포넌트를 먼저 쓴다. 폭·겹침 순서·색은 `tokens.css` 변수로(숫자 하드코딩 금지). 목록 화면은 `ListToolbar`·`SelectBar`·`ItemCard`. 새 화면의 글자는 `src/locales/`의 키로. 데이터 저장소와 화면 상태(열림·선택·정렬)를 한 store에 섞지 않는다. 데스크톱 전용 기능은 Android에서 숨긴다.
 - **검증**: `pnpm check`, `pnpm test:run`, `cd src-tauri && cargo fmt --check && cargo test && cargo clippy --all-targets`(경고 수가 늘지 않게). 화면이 바뀌면 미리보기로 직접 확인한다. 테스트에서 실제 유료 API를 부르지 않는다(가짜 공급자).
 - **보고는 정직하게**: 테스트가 실패했으면 출력과 함께 그대로 말하고, 건너뛴 단계·확인하지 못한 것을 숨기지 않는다. 확인한 것은 군더더기 없이 확인했다고 쓴다.
