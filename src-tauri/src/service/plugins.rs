@@ -61,7 +61,16 @@ async fn ask(ai: &AiService, profile_id: String, system: String, user: String, m
         },
         messages: vec![message(PromptRole::System, system), message(PromptRole::User, user)],
     };
-    Ok(ai.generate_once(AiRequest { profile_id, prompt }).await?.content.trim().to_string())
+    Ok(ai
+        .generate_once(AiRequest {
+            profile_id,
+            prompt,
+            model: None,
+        })
+        .await?
+        .content
+        .trim()
+        .to_string())
 }
 
 // =========================================================

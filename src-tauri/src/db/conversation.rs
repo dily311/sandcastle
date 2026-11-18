@@ -67,6 +67,7 @@ where
         folder_id: None,
         prompt_preset_id: None,
         api_profile_id: None,
+        model: None,
     })
 }
 

@@ -581,7 +581,12 @@ where
     prompt.chat_options.temperature = Some(0.7);
 
     // 2) AI 호출 (락 없이)
-    let raw = generate(AiRequest { profile_id, prompt }).await?;
+    let raw = generate(AiRequest {
+        profile_id,
+        prompt,
+        model: None,
+    })
+    .await?;
     let plan =
         parse_plan(&raw, &def).map_err(|why| AppError::ai_provider(ErrorCode::AiProviderError, format!("각본가 응답을 읽을 수 없습니다: {why}"), true))?;
 

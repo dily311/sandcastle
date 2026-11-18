@@ -1417,6 +1417,8 @@ export type ConversationOptions_Deserialize = {
 	personaId: string,
 	promptPresetId?: string | null,
 	apiProfileId?: string | null,
+	/**  이 대화의 모델 (None = API 프로필의 기본 모델) */
+	model?: string | null,
 };
 
 /**  대화별 설정 (오른쪽 패널). None이면 앱 설정의 선택값을 쓴다. */
@@ -1424,6 +1426,8 @@ export type ConversationOptions_Serialize = {
 	personaId: string,
 	promptPresetId: string | null,
 	apiProfileId: string | null,
+	/**  이 대화의 모델 (None = API 프로필의 기본 모델) */
+	model: string | null,
 };
 
 export type ConversationSummary = ConversationSummary_Serialize | ConversationSummary_Deserialize;
@@ -1473,6 +1477,8 @@ export type Conversation_Deserialize = {
 	/**  이 대화의 프리셋/API. 없으면 앱 설정의 선택값 */
 	promptPresetId?: string | null,
 	apiProfileId?: string | null,
+	/**  이 대화에서 고른 모델. 없으면 API 프로필의 기본 모델 (ADR-020) */
+	model?: string | null,
 };
 
 export type Conversation_Serialize = {
@@ -1494,6 +1500,8 @@ export type Conversation_Serialize = {
 	/**  이 대화의 프리셋/API. 없으면 앱 설정의 선택값 */
 	promptPresetId: string | null,
 	apiProfileId: string | null,
+	/**  이 대화에서 고른 모델. 없으면 API 프로필의 기본 모델 (ADR-020) */
+	model: string | null,
 };
 
 export type CorePlugin = {

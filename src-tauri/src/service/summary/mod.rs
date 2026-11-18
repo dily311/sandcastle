@@ -492,6 +492,7 @@ pub async fn run_once(c: &RunCtx<'_>, auto: bool) -> Result<RunOutcome> {
             c.ai.generate_once(AiRequest {
                 profile_id: c.profile_id.to_string(),
                 prompt,
+                model: None,
             })
             .await
         })

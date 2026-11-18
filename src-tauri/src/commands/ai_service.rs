@@ -175,6 +175,14 @@ pub async fn test_message(ai: State<'_, Arc<AiService>>, tasks: State<'_, Arc<cr
     }
     use crate::task::{CreateTaskRequest, TaskOwner, TaskType};
     let job = CreateTaskRequest::inline(TaskType::ApiCall, TaskOwner::System, "settings", "API 연결 확인", false);
-    let res = tasks.run_inline(job, |_| ai.generate_once(AiRequest { profile_id, prompt })).await?;
+    let res = tasks
+        .run_inline(job, |_| {
+            ai.generate_once(AiRequest {
+                profile_id,
+                prompt,
+                model: None,
+            })
+        })
+        .await?;
     Ok(res.content)
 }

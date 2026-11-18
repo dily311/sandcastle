@@ -31,6 +31,8 @@ pub struct AiRequest {
     pub profile_id: String,
     /// PromptManager가 만든 최종 프롬프트 (stream 여부는 prompt.chat_options.stream)
     pub prompt: PromptMessage,
+    /// 이 요청에서 프로필의 기본 모델 대신 쓸 모델 (대화·기능이 고른 모델, ADR-020). None이면 프로필의 기본 모델
+    pub model: Option<String>,
 }
 
 #[derive(Debug, Clone)]
@@ -216,6 +218,7 @@ impl AiService {
                 AiRequest {
                     profile_id: profile.id.clone(),
                     prompt,
+                    model: None,
                 },
                 &extras,
                 cancel,
@@ -321,7 +324,11 @@ impl AiService {
     where
         F: FnMut(&str) + Send,
     {
-        let profile = self.load_profile(&request.profile_id).await?;
+        let mut profile = self.load_profile(&request.profile_id).await?;
+        // 요청이 모델을 골랐으면 프로필의 기본 모델 대신 그것을 쓴다 (어댑터·사용량 기록·금액 계산이 모두 profile.model을 본다)
+        if let Some(m) = request.model.as_deref().map(str::trim).filter(|m| !m.is_empty()) {
+            profile.model = m.to_string();
+        }
         let provider = provider_for(&profile.format_type)?;
         // 요금이 나가기 전에: 요청 모양과 연결의 지원 여부
         if !extras.is_empty() {

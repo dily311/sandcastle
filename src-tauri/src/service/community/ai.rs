@@ -187,7 +187,14 @@ pub async fn generate(
         auto,
     );
     let resp = tasks
-        .run_inline(job, |_| async { ai.generate_once(AiRequest { profile_id, prompt }).await })
+        .run_inline(job, |_| async {
+            ai.generate_once(AiRequest {
+                profile_id,
+                prompt,
+                model: None,
+            })
+            .await
+        })
         .await?;
     Ok(serde_json::json!({ "text": resp.content.trim(), "model": resp.model }))
 }

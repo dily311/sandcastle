@@ -65,6 +65,12 @@ fn phone_defaults(app: &AppHandle, mode: &str, req: &mut ChatRequest) {
     }
 }
 
+/// 대화에서 고른 모델 (ADR-020). 대화에 API 프로필이 정해져 있을 때만 쓴다 — 앱 기본 API를 따라가는 대화에는 모델 이름이 딸려 있지 않다
+fn conv_model(conv: &crate::models::conversation::Conversation) -> Option<String> {
+    conv.api_profile_id.as_deref().filter(|s| !s.is_empty())?;
+    conv.model.clone().filter(|m| !m.trim().is_empty())
+}
+
 pub fn current_conv_request(state: &SettingsState<AppSetting>) -> Result<ChatRequest> {
     let guard = state.0.lock().map_err(|_| AppError::internal("settings lock poisoned"))?;
     Ok(ChatRequest {
@@ -154,6 +160,7 @@ impl ChatManager {
                     &app,
                     &state.db,
                     profile,
+                    None,
                     Some(preset),
                     context,
                     message,
@@ -179,6 +186,7 @@ impl ChatManager {
         app: &AppHandle,
         db: &crate::db::conn::DbPool,
         profile_id: String,
+        model: Option<String>,
         preset_id: Option<String>,
         context: ChatContext,
         message: String,
@@ -212,6 +220,7 @@ impl ChatManager {
             .generate(
                 AiRequest {
                     profile_id,
+                    model,
                     prompt: prompt.clone(),
                 },
                 cancel,
@@ -675,6 +684,7 @@ impl ChatManager {
                 app,
                 db,
                 api_profile_id.clone(),
+                conv_model(&conv),
                 Some(preset_id.clone()),
                 context,
                 prompt_input,
@@ -905,6 +915,11 @@ impl ChatManager {
             .generate(
                 AiRequest {
                     profile_id: api_profile_id,
+                    model: if cfg.api_profile_id.as_deref().is_some_and(|s| !s.is_empty()) {
+                        None
+                    } else {
+                        conv_model(&conv)
+                    },
                     prompt,
                 },
                 cancel,
@@ -992,6 +1007,7 @@ impl ChatManager {
                 app,
                 db,
                 api_profile_id.clone(),
+                conv_model(&conv),
                 Some(preset_id.clone()),
                 context,
                 format!("({}와 {}의 메신저 대화를 이어서 써)", me.name, other.name),

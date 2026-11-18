@@ -208,6 +208,32 @@ async fn embeddings_count_against_the_monthly_budget() {
     assert!(e.srv.requests().is_empty(), "한도를 넘으면 공급자를 부르지 않음");
 }
 
+// 같은 프로필(키)로 요청마다 다른 모델을 쓴다 (ADR-020): 요청 본문·사용량 기록의 모델이 요청이 고른 것이다
+#[tokio::test]
+async fn a_request_can_pick_a_model_other_than_the_profiles_default() {
+    let ok = || {
+        Reply::ok(
+            json!({ "choices": [{ "message": { "content": "안녕" }, "finish_reason": "stop" }], "usage": { "prompt_tokens": 10, "completion_tokens": 2 } }),
+        )
+    };
+    let e = env("openai", "gpt-4o", "", vec![ok(), ok(), ok()]).await;
+    let call = |model: Option<&str>| {
+        e.ai.generate_once(AiRequest {
+            profile_id: e.profile_id.clone(),
+            prompt: prompt(200),
+            model: model.map(Into::into),
+        })
+    };
+    call(None).await.unwrap();
+    assert_eq!(e.srv.last().json()["model"], "gpt-4o", "고르지 않으면 프로필의 기본 모델");
+    call(Some(" gpt-4.1 ")).await.unwrap();
+    assert_eq!(e.srv.last().json()["model"], "gpt-4.1", "고른 모델로 요청 (앞뒤 공백은 뗌)");
+    call(Some("  ")).await.unwrap();
+    assert_eq!(e.srv.last().json()["model"], "gpt-4o", "빈 이름은 고르지 않은 것");
+    let models: Vec<String> = usage_rows(&e.db).await.into_iter().map(|r| r.1).collect();
+    assert_eq!(models, vec!["gpt-4o", "gpt-4.1", "gpt-4o"], "사용량 기록(금액 계산)도 실제로 쓴 모델");
+}
+
 #[tokio::test]
 async fn tool_calls_come_back_with_floor_on_output_limit() {
     let reply = Reply::ok(json!({
@@ -224,6 +250,7 @@ async fn tool_calls_come_back_with_floor_on_output_limit() {
             AiRequest {
                 profile_id: e.profile_id.clone(),
                 prompt: prompt(200),
+                model: None,
             },
             extras,
             &CancellationToken::new(),
@@ -249,6 +276,7 @@ async fn tool_calls_come_back_with_floor_on_output_limit() {
         .generate_once(AiRequest {
             profile_id: e2.profile_id.clone(),
             prompt: prompt(200),
+            model: None,
         })
         .await
         .unwrap();
@@ -262,6 +290,7 @@ async fn bad_tool_requests_are_refused_before_any_request() {
     let req = |e: &Env| AiRequest {
         profile_id: e.profile_id.clone(),
         prompt: prompt(200),
+        model: None,
     };
     let e = c2
         .ai
@@ -328,6 +357,7 @@ async fn a_tool_call_cut_off_by_the_output_limit_is_not_run() {
             AiRequest {
                 profile_id: e.profile_id.clone(),
                 prompt: prompt(200),
+                model: None,
             },
             ChatExtras {
                 tools: vec![weather()],

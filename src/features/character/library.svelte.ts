@@ -186,8 +186,8 @@ class Library {
 		this.conversations = this.conversations.filter((c) => c.id !== id);
 		trashedToast(item, () => this.load());
 	}
-	async setOptions(id: string, o: { personaId: string; promptPresetId: string | null; apiProfileId: string | null }) {
-		this.put(await call(commands.setConversationOptions(id, o), src));
+	async setOptions(id: string, o: { personaId: string; promptPresetId: string | null; apiProfileId: string | null; model?: string | null }) {
+		this.put(await call(commands.setConversationOptions(id, { ...o, model: o.model ?? null }), src));
 	}
 	async setImagesEnabled(id: string, enabled: boolean) {
 		await call(commands.setConversationImagesEnabled(id, enabled), src);
