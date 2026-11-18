@@ -371,3 +371,29 @@ reason(BlockReason): conditionNotMet, sceneActive, notPresent, noRoute, noActive
 
 - 프론트 재생기(타자기, 연출 실행, 효과/모션 구현), 에셋 추가/삭제 커맨드(파일 복사와 행 생성), RenderState의 stage를 에셋 참조로 풀어서 내려주기, 스트리밍 시 태그 버퍼링.
 - 외부 이미지 생성 API로 CG 만들기(Deferred), 음성 생성 API 연결(Deferred).
+
+## ADR-016 갱신 — capabilities 강제 (지도·시간 끄기)
+
+**상태** Accepted
+
+- 실제로 쓰는 기능 = 템플릿 capabilities에서 게임 설정 `settings_json.capabilities`가 **끈 것**을 뺀 값(게임 데이터가 템플릿이 끈 기능을 켤 수는 없다). `GameDefinition::capabilities()` 하나를 커맨드·화면용 데이터·검증·AI 프롬프트가 같이 쓴다.
+- map 또는 location이 꺼지면 MoveTo가, location이 꺼지면 Interact가, time이 꺼지면 AdvanceTime이 `GAME_ACTION_BLOCKED`(details.reason = `capabilityDisabled`)로 거절된다. time이 꺼진 게임은 이동해도 시간이 흐르지 않고 시간 시스템도 요청을 무시한다.
+- 꺼진 기능의 값은 get_game_view(maps/zones/connections, locations/interactables, timePeriods/weatherTypes는 빈 배열)와 RenderState(mapId/zoneId/locationId, gameTime/timePeriodId/weatherId는 null, availableMoves는 빈 배열), NPC/씬 프롬프트에서 빠진다. view에는 실제 값 `capabilities`가 추가된다.
+- validate: 발동할 수 없는 이벤트(time 꺼짐 + scheduled/random, 이동 꺼짐 + location, location 꺼짐 + interaction)는 Error, 시작 값에 고정되는 시간/위치 조건과 만날 수 없는 NPC는 Warning.
+
+## ADR-018 갱신 — 에셋 추가/삭제 커맨드
+
+**상태** Accepted
+
+- add_game_asset: 파일 형식은 내용(infer)으로 판정하고 저장 확장자도 판정 결과로 정한다. 서빙 허용 목록·크기 상한(protocol)과 같은 기준이고, mime_guess로 한 번 더 확인한다. 저장 경로는 `assets/<category>/<uuid>.<ext>`, 폴더가 게임 폴더 밖이면 ARCHIVE_UNSAFE_PATH. 복사 후 다시 판정하고, DB(트랜잭션)가 실패하면 복사한 파일을 지운다.
+- remove_game_asset: 씬 대본·이벤트/선택지/아이템 효과의 stage(cg/voice 키, 그룹의 마지막 sfx/bgm, 캐릭터+감정의 마지막 스탠딩), 표지/아바타/아이콘 경로가 쓰는 에셋은 거절(details.reason = `assetInUse`, references). force면 지우고 진단을 돌려준다. DB 커밋 후 파일을 지운다.
+
+## ADR-019 갱신 — StoryPlan 구현
+
+**상태** Accepted
+
+- 켜기: `settings_json.storyPlan = {enabled, everyNTurns(기본 10)}`. 제작자 표시: 이벤트 `config_json.planUsable`(manual만), 씬 `settings_json.planUsable`.
+- 체크포인트(세션 시작/이어하기, 씬 종료, 하루 경계, random 이외 이벤트 발동, N턴)는 런타임이 RenderState.storyPlanDue로 표시만 하고, refresh_story_plan이 AiService.generate_once로 부른다(사용자 프리셋은 쓰지 않음, 앱 고정 규칙이 맨 앞). AI 대기 중에는 런타임 락을 잡지 않는다.
+- 출력은 크기 상한·스키마·길이/개수 상한·`<` `>` 제거·planUsable id만 남긴 뒤 game_story_plans(session_id, seq)에 저장한다. 제안을 올리는 stage_story_suggestion은 fire_event/enter_scene과 같은 검증을 다시 하고, 같은 플랜의 같은 제안은 한 번만 올린다.
+- NPC/씬 대화에는 활성 단계와 확정된 사실만 캐릭터 설정 끝에 붙인다. 호출 상한은 npc_say의 게임별 분당 제한을 같이 쓴다.
+- 한 번의 짧은 호출이라 TaskManager 작업으로 만들지 않았다(취소/진행 표시가 필요해지면 GameDialogue Executor로 옮긴다).

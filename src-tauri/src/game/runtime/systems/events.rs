@@ -45,13 +45,13 @@ pub(super) fn engine_state(state: &GameState, time_from: i64) -> EngineState {
     }
 }
 
-fn conditions_pass(def: &GameDefinition, event_id: &str, es: &EngineState) -> bool {
+pub(in crate::game::runtime) fn conditions_pass(def: &GameDefinition, event_id: &str, es: &EngineState) -> bool {
     def.event_conditions.get(event_id).map_or(true, |cs| cs.iter().all(|c| c.eval(es)))
 }
 
 /// repeat_policy/쿨다운 확인. cooldowns에는 이 세션에서 한 번이라도 발동한 이벤트가 전부 들어 있다
 /// (load_cooldowns가 이벤트 로그에서 채운다) — 그래서 once는 "키가 있는가"만 보면 된다.
-fn can_fire(state: &GameState, e: &GameEvents) -> bool {
+pub(in crate::game::runtime) fn can_fire(state: &GameState, e: &GameEvents) -> bool {
     match e.repeat_policy.as_str() {
         "once" => !state.cooldowns.contains_key(&e.id),
         _ => state.cooldowns.get(&e.id).map_or(true, |t| state.game_time - *t >= e.cooldown_seconds),

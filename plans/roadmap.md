@@ -153,7 +153,7 @@
   - **현재 어긋난 것**: 프로젝트 ADR-001의 "추가 논의" 두 건이 **Proposed**로 남음(폰 대화의 여러 세션·1:n, 최상위 탐색과 폰 진입 버튼). ADR-003 **Deferred**는 "장기 기억"(→ ADR-015·016으로 구현됨), 선톡(5-A), 다국어(5-C), 게임 iframe SDK(6-C)를 한 항목에 묶고 있다. 게임 ADR은 018이 **Proposed**인데 "ADR-018 갱신"이 Accepted로 확정했고(그 후속인 에셋 추가/삭제·프론트 재생기는 `claude/game-assets-storyplan` 브랜치에 구현이 있고 **아직 dev에 합치지 않음**), 019 StoryPlan은 Deferred(4-D), "미결·후속 작업" 6개 항목은 코드와 대조한 적이 없다.
   - 1-F-2-1 감사표 — 모든 Proposed·Deferred·"미결"을 코드와 대조해 구현됨 / 남음(번호 부여) / 폐기 / 보류로 분류한 표(`docs/ADR 미결 정리.md`). 완료: 항목마다 결론과 근거가 있음.
   - (완료 2026-11-18) 1-F-2-1 감사표 `docs/ADR 미결 정리.md`, 1-F-2-2 ADR 상태·미결 절 갱신.
-  - 1-F-2-3 미병합 브랜치 `claude/game-assets-storyplan` 병합 — 충돌 5개 파일(`commands/game_engine.rs`, `game/mod.rs`, `game/npc.rs`, `game/runtime/mod.rs`, `game/template.rs`)과 `lib.rs` 등록을 풀고 게임 테스트·`cargo test` 통과, 코드 검토. 병합하면 4-A의 에셋 추가/삭제, 4-B-1, 4-D의 큰 부분이 끝난다. **결정 필요(사용자)**: 병합할지(추천: 병합).
+  - [x] 1-F-2-3 미병합 브랜치 `claude/game-assets-storyplan` 병합 — 충돌 5개 파일(`commands/game_engine.rs`, `game/mod.rs`, `game/npc.rs`, `game/runtime/mod.rs`, `game/template.rs`)과 `lib.rs` 등록을 풀고 게임 테스트·`cargo test` 통과, 코드 검토. 병합하면 4-A의 에셋 추가/삭제, 4-B-1, 4-D의 큰 부분이 끝난다. **결정 필요(사용자)**: 병합할지(추천: 병합). — 병합 끝(2026-11-18): dev의 specta·AppError 반환에 맞춰 ActionBlocked를 AppError로 바꾸고 새 커맨드 5개에 `#[specta::specta]`·타입 derive를 더함. 새 코드 clippy 경고 11개 늘어남(180→191, 같은 종류), 게임 에셋·StoryPlan 화면·dev-mock은 아직 없음.
   - 1-F-2-2 ADR 갱신 — 상태를 바꾸고, 구현된 것은 미결에서 지우고, 남은 것은 roadmap 번호로 옮긴다. ADR 목록 표·상호 참조·코드 주석의 번호를 점검. 완료: Proposed·Deferred에는 이유와 재개 조건이 있고 "미결" 절의 항목이 모두 번호가 있거나 삭제됨.
   - 결정 필요(감사 뒤 목록으로 확인): 폐기할 항목, 그리고 `claude/game-assets-storyplan`(게임 에셋·StoryPlan·capabilities 강제) 브랜치를 dev에 합칠지·4단계에서 다시 볼지.
 - **1-F-3 동기화 대용량·장기 오프라인 시험** (ADR-011 보강)

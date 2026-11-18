@@ -466,6 +466,11 @@ pub fn specta_builder() -> tauri_specta::Builder<tauri::Wry> {
         delete_game,
         import_game,
         export_game,
+        add_game_asset,
+        remove_game_asset,
+        refresh_story_plan,
+        get_story_plan,
+        stage_story_suggestion,
         // game_engine
         start_new_game,
         get_game_view,
@@ -771,6 +776,11 @@ pub fn specta_builder() -> tauri_specta::Builder<tauri::Wry> {
         delete_game,
         import_game,
         export_game,
+        add_game_asset,
+        remove_game_asset,
+        refresh_story_plan,
+        get_story_plan,
+        stage_story_suggestion,
         // game_engine
         start_new_game,
         get_game_view,

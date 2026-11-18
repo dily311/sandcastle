@@ -274,6 +274,7 @@ pub async fn dispatch_command(state: State<'_, AppState>, command: GameCommand) 
     let mut guard = state.active_runtime.lock().await;
     let runtime = guard.as_mut().ok_or_else(AppError::game_no_session)?;
 
+    // 게임이 쓰지 않는 기능(capabilities)의 커맨드는 GAME_ACTION_BLOCKED(details.reason = "capabilityDisabled")로 거절된다.
     let response = runtime.dispatch(command.clone())?;
 
     // 일지/이벤트 로그/세션 저장을 한꺼번에 (npc_say의 AI 변수 변경도 같은 함수를 쓴다).
@@ -496,4 +497,58 @@ pub async fn regenerate_game_reply(
     message_id: String,
 ) -> Result<crate::game::npc::NpcReply, AppError> {
     crate::game::npc::regenerate_reply(app, &state, &settings, message_id).await
+}
+
+/// StoryPlan(각본가) 갱신. 체크포인트(RenderState.storyPlanDue)일 때 부르면 AI가 새 플랜을 세워 저장한다.
+/// StoryPlan이 꺼진 게임이거나 체크포인트가 아니면(force가 아닌 한) AI를 부르지 않고 null.
+/// 플랜은 조언일 뿐 상태를 바꾸지 않는다. 제안을 실제로 올리려면 stage_story_suggestion.
+#[tauri::command]
+#[specta::specta]
+pub async fn refresh_story_plan(
+    app: AppHandle,
+    state: State<'_, AppState>,
+    settings: State<'_, SettingsState<AppSetting>>,
+    force: Option<bool>,
+) -> Result<Option<crate::game::story_plan::StoryPlanRecord>, AppError> {
+    use tauri::Manager;
+    let game_id = current_game_id(&state)?;
+    let profile_id = settings
+        .0
+        .lock()
+        .map_err(|_| AppError::internal("settings lock poisoned"))?
+        .selected_api_profile
+        .clone()
+        .unwrap_or_default();
+    let ai = app
+        .try_state::<std::sync::Arc<crate::service::ai::AiService>>()
+        .ok_or_else(|| AppError::internal("AiService가 초기화되지 않았습니다"))?
+        .inner()
+        .clone();
+    crate::game::story_plan::refresh(state.inner(), &game_id, profile_id, force.unwrap_or(false), |request| async move {
+        Ok(ai.generate_once(request).await?.content)
+    })
+    .await
+}
+
+/// 지금 세션의 가장 최근 플랜 (없으면 null). 호스트 UI용 — 게임 iframe에 주면 스포일러가 된다.
+#[tauri::command]
+#[specta::specta]
+pub async fn get_story_plan(state: State<'_, AppState>) -> Result<Option<crate::game::story_plan::StoryPlanRecord>, AppError> {
+    current_game_id(&state)?;
+    let (session_id, head_seq) = {
+        let guard = state.active_runtime.lock().await;
+        let runtime = guard.as_ref().ok_or_else(|| AppError::not_found("진행 중인 세션이 없습니다"))?;
+        (runtime.state().session_id.clone(), runtime.state().head_seq)
+    };
+    crate::game::story_plan::latest(&state.db, &session_id, head_seq).await
+}
+
+/// 최근 플랜의 제안(kind = "event" | "scene", targetId)을 무대에 올린다. fire_event/enter_scene과 같은 검증을 다시 하고,
+/// 막히면 GAME_ACTION_BLOCKED(details.reason: notSuggested, notPlanUsable, conditionNotMet, alreadyQueued, alreadyStaged, storyPlanDisabled).
+/// 응답은 dispatch_command와 같은 GameResponse다.
+#[tauri::command]
+#[specta::specta]
+pub async fn stage_story_suggestion(state: State<'_, AppState>, kind: String, target_id: String) -> Result<GameResponse, AppError> {
+    let game_id = current_game_id(&state)?;
+    crate::game::story_plan::stage_suggestion(state.inner(), &game_id, &kind, &target_id).await
 }

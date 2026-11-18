@@ -420,6 +420,31 @@ export const commands = {
 	importGame: (zipPath: string, options?: InvokeOptions) => __TAURI_INVOKE<GameProject_Serialize>("import_game", { zipPath }, options),
 	exportGame: (gameId: string, outputDir: string | null, options?: InvokeOptions) => __TAURI_INVOKE<string>("export_game", { gameId, outputDir }, options),
 	/**
+	 *  에셋 추가: 파일 대화상자로 고른 이미지/오디오(sourcePath)를 게임 폴더(assets/<category>/)로 복사하고 에셋 행을 만든다.
+	 *  형식은 파일 내용으로 판정하고(확장자는 믿지 않는다), 크기 상한은 서빙 상한과 같다. 호스트 에디터 전용.
+	 *  응답의 diagnostics를 사용자에게 보여줄 것. 플레이 중인 게임이면 다시 open_game을 불러야 반영된다.
+	 */
+	addGameAsset: (gameId: string, sourcePath: string, asset: NewGameAsset_Deserialize, options?: InvokeOptions) => __TAURI_INVOKE<AddAssetReport_Serialize>("add_game_asset", { gameId, sourcePath, asset }, options),
+	/**
+	 *  에셋 삭제 (행 + 파일). 씬 대본/효과의 연출, 표지/아바타/아이콘이 쓰는 에셋이면 거절한다
+	 *  (INVALID_INPUT, details.reason = "assetInUse", details.references = 쓰는 곳). force=true면 지우고 진단을 돌려준다.
+	 */
+	removeGameAsset: (gameId: string, assetId: string, force: boolean | null, options?: InvokeOptions) => __TAURI_INVOKE<RemoveAssetReport>("remove_game_asset", { gameId, assetId, force }, options),
+	/**
+	 *  StoryPlan(각본가) 갱신. 체크포인트(RenderState.storyPlanDue)일 때 부르면 AI가 새 플랜을 세워 저장한다.
+	 *  StoryPlan이 꺼진 게임이거나 체크포인트가 아니면(force가 아닌 한) AI를 부르지 않고 null.
+	 *  플랜은 조언일 뿐 상태를 바꾸지 않는다. 제안을 실제로 올리려면 stage_story_suggestion.
+	 */
+	refreshStoryPlan: (force: boolean | null, options?: InvokeOptions) => __TAURI_INVOKE<StoryPlanRecord | null>("refresh_story_plan", { force }, options),
+	/**  지금 세션의 가장 최근 플랜 (없으면 null). 호스트 UI용 — 게임 iframe에 주면 스포일러가 된다. */
+	getStoryPlan: (options?: InvokeOptions) => __TAURI_INVOKE<StoryPlanRecord | null>("get_story_plan", undefined, options),
+	/**
+	 *  최근 플랜의 제안(kind = "event" | "scene", targetId)을 무대에 올린다. fire_event/enter_scene과 같은 검증을 다시 하고,
+	 *  막히면 GAME_ACTION_BLOCKED(details.reason: notSuggested, notPlanUsable, conditionNotMet, alreadyQueued, alreadyStaged, storyPlanDisabled).
+	 *  응답은 dispatch_command와 같은 GameResponse다.
+	 */
+	stageStorySuggestion: (kind: string, targetId: string, options?: InvokeOptions) => __TAURI_INVOKE<GameResponse_Serialize>("stage_story_suggestion", { kind, targetId }, options),
+	/**
 	 *  새 게임(새 책) 시작. 세션을 만들어 바로 저장해서 세션 목록에 보이게 하고,
 	 *  GameRuntime을 active_runtime에 넣어둔다.
 	 */
@@ -571,6 +596,22 @@ export const commands = {
 };
 
 /* Types */
+export type AddAssetReport = AddAssetReport_Serialize | AddAssetReport_Deserialize;
+
+export type AddAssetReport_Deserialize = {
+	/**  만들어진 에셋 기본 행 (path는 게임 폴더 기준 상대경로: `assets/<category>/<uuid>.<ext>`) */
+	asset: GameAssets_Deserialize,
+	/**  추가 후 상태의 진단 결과 (open_game/save_package와 같은 형식) */
+	diagnostics: Issue[],
+};
+
+export type AddAssetReport_Serialize = {
+	/**  만들어진 에셋 기본 행 (path는 게임 폴더 기준 상대경로: `assets/<category>/<uuid>.<ext>`) */
+	asset: GameAssets_Serialize,
+	/**  추가 후 상태의 진단 결과 (open_game/save_package와 같은 형식) */
+	diagnostics: Issue[],
+};
+
 export type AiCapabilities = {
 	embeddings: Support,
 	tools: Support,
@@ -791,6 +832,14 @@ export type BackupSummary = {
 	totals: DataTotals,
 };
 
+export type Beat = {
+	title: string,
+	goal: string,
+	status: BeatStatus,
+};
+
+export type BeatStatus = "pending" | "active" | "done" | "dropped";
+
 /**  GAME_ACTION_BLOCKED의 details.reason */
 export type BlockReason = 
 /**  이동·아이템 사용 조건이 맞지 않음 */
@@ -896,9 +945,9 @@ export type Capabilities_Deserialize = {
 	inventory?: boolean,
 	map?: boolean,
 	aiNarration?: boolean,
-	/**  위치(location) 개념을 쓰는가. 빠져 있으면 켜진 것으로 본다. (엔진 강제는 아직 없음) */
+	/**  위치(location) 개념을 쓰는가. 빠져 있으면 켜진 것으로 본다. */
 	location?: boolean,
-	/**  시간/날씨 개념을 쓰는가. 빠져 있으면 켜진 것으로 본다. (엔진 강제는 아직 없음) */
+	/**  시간/날씨 개념을 쓰는가. 빠져 있으면 켜진 것으로 본다. */
 	time?: boolean,
 };
 
@@ -908,9 +957,9 @@ export type Capabilities_Serialize = {
 	inventory: boolean,
 	map: boolean,
 	aiNarration: boolean,
-	/**  위치(location) 개념을 쓰는가. 빠져 있으면 켜진 것으로 본다. (엔진 강제는 아직 없음) */
+	/**  위치(location) 개념을 쓰는가. 빠져 있으면 켜진 것으로 본다. */
 	location: boolean,
-	/**  시간/날씨 개념을 쓰는가. 빠져 있으면 켜진 것으로 본다. (엔진 강제는 아직 없음) */
+	/**  시간/날씨 개념을 쓰는가. 빠져 있으면 켜진 것으로 본다. */
 	time: boolean,
 };
 
@@ -1619,6 +1668,8 @@ export type FolderNode = {
 	files: Value[],
 };
 
+export type GameAssets = GameAssets_Serialize | GameAssets_Deserialize;
+
 export type GameAssetsInput = GameAssetsInput_Serialize | GameAssetsInput_Deserialize;
 
 export type GameAssetsInput_Deserialize = {
@@ -1641,6 +1692,32 @@ export type GameAssetsInput_Serialize = {
 	kind: string,
 	filePath: string,
 	settingsJson: Value | null,
+};
+
+export type GameAssets_Deserialize = {
+	id: string,
+	gameId: string,
+	key: string,
+	name: string,
+	category: string,
+	kind: string,
+	filePath: string,
+	settingsJson?: Value | null,
+	createdAt: number,
+	updatedAt: number,
+};
+
+export type GameAssets_Serialize = {
+	id: string,
+	gameId: string,
+	key: string,
+	name: string,
+	category: string,
+	kind: string,
+	filePath: string,
+	settingsJson: Value | null,
+	createdAt: number,
+	updatedAt: number,
 };
 
 export type GameBranchInput = GameBranchInput_Serialize | GameBranchInput_Deserialize;
@@ -3101,6 +3178,65 @@ export type MusicMeta_Serialize = {
 };
 
 /**
+ *  추가할 에셋의 정보. 카테고리별로 필요한 필드만 쓰고 나머지는 무시한다.
+ *    voice/sfx/bgm: tag(sfx는 소리 그룹 이름 필수, bgm은 분위기 필수), gameCharacterId(voice의 화자), transcript
+ *    character: gameCharacterId(필수), usage(standing|map, 필수), emotion(standing이면 필수)
+ *    cg: description, aiUsable(기본 true), gameCharacterId
+ *    background: locationId/timeId/weatherId (비우면 그 조건은 전체)
+ */
+export type NewGameAsset = NewGameAsset_Serialize | NewGameAsset_Deserialize;
+
+/**
+ *  추가할 에셋의 정보. 카테고리별로 필요한 필드만 쓰고 나머지는 무시한다.
+ *    voice/sfx/bgm: tag(sfx는 소리 그룹 이름 필수, bgm은 분위기 필수), gameCharacterId(voice의 화자), transcript
+ *    character: gameCharacterId(필수), usage(standing|map, 필수), emotion(standing이면 필수)
+ *    cg: description, aiUsable(기본 true), gameCharacterId
+ *    background: locationId/timeId/weatherId (비우면 그 조건은 전체)
+ */
+export type NewGameAsset_Deserialize = {
+	category: string,
+	/**  게임 안에서 유일한 키. 비우면 원본 파일 이름으로 만든다(겹치면 _2, _3...). */
+	key?: string | null,
+	name?: string | null,
+	settingsJson?: Value | null,
+	tag?: string | null,
+	gameCharacterId?: string | null,
+	transcript?: string | null,
+	usage?: string | null,
+	emotion?: string | null,
+	description?: string | null,
+	aiUsable?: boolean | null,
+	locationId?: string | null,
+	timeId?: string | null,
+	weatherId?: string | null,
+};
+
+/**
+ *  추가할 에셋의 정보. 카테고리별로 필요한 필드만 쓰고 나머지는 무시한다.
+ *    voice/sfx/bgm: tag(sfx는 소리 그룹 이름 필수, bgm은 분위기 필수), gameCharacterId(voice의 화자), transcript
+ *    character: gameCharacterId(필수), usage(standing|map, 필수), emotion(standing이면 필수)
+ *    cg: description, aiUsable(기본 true), gameCharacterId
+ *    background: locationId/timeId/weatherId (비우면 그 조건은 전체)
+ */
+export type NewGameAsset_Serialize = {
+	category: string,
+	/**  게임 안에서 유일한 키. 비우면 원본 파일 이름으로 만든다(겹치면 _2, _3...). */
+	key: string | null,
+	name: string | null,
+	settingsJson: Value | null,
+	tag: string | null,
+	gameCharacterId: string | null,
+	transcript: string | null,
+	usage: string | null,
+	emotion: string | null,
+	description: string | null,
+	aiUsable: boolean | null,
+	locationId: string | null,
+	timeId: string | null,
+	weatherId: string | null,
+};
+
+/**
  *  dispatch_command의 GameResponse와 같은 취지: 프론트가 "이벤트 배열 받아서 처리"
  *  하나로 엔진 커맨드/AI 대화 두 경로를 똑같이 다루게 한다.
  */
@@ -4053,6 +4189,13 @@ export type RegexTarget =
 /**  화면 표시에서만 바꿈 */
 "display";
 
+export type RemoveAssetReport = {
+	deleted: boolean,
+	/**  지우기 전에 이 에셋을 쓰고 있던 곳 (force로 지웠을 때만 비어 있지 않다) */
+	references: string[],
+	diagnostics: Issue[],
+};
+
 /**  iframe에 노출하는 부분만 추린 뷰. 내부 상태를 그대로 노출하지 않는다. */
 export type RenderState = RenderState_Serialize | RenderState_Deserialize;
 
@@ -4060,17 +4203,20 @@ export type RenderState = RenderState_Serialize | RenderState_Deserialize;
 export type RenderState_Deserialize = {
 	/**  지금 플레이 중인 세션(책). 분기로 불러오면 새 세션 id가 여기로 온다. */
 	sessionId: string,
+	/**  위치 기능(capabilities.location)이 꺼진 게임이면 null. */
 	locationId?: string | null,
-	mapId: string,
+	/**  지도/이동 기능(capabilities.map && location)이 꺼진 게임이면 null (zone_id도 같다). */
+	mapId?: string | null,
 	zoneId?: string | null,
-	gameTime: number,
-	weatherId: string,
-	timePeriodId: string,
+	/**  시간 기능(capabilities.time)이 꺼진 게임이면 game_time/weather_id/time_period_id가 null. */
+	gameTime?: number | null,
+	weatherId?: string | null,
+	timePeriodId?: string | null,
 	currentSceneId?: string | null,
 	activeNpcId?: string | null,
 	/**  지금 열려 있는 씬에서 고를 수 있는 선택지 id (표시 조건을 통과한 것만). GameRuntime::render_state가 채운다. */
 	availableChoices: string[],
-	/**  지금 위치에서 연결된 곳들과 갈 수 있는지 (MoveTo의 조건을 엔진이 미리 평가한 결과). get_game_view의 connections는 전체 지도다. */
+	/**  지금 위치에서 연결된 곳들과 갈 수 있는지 (지도/이동 기능이 꺼진 게임이면 항상 빈 배열) (MoveTo의 조건을 엔진이 미리 평가한 결과). get_game_view의 connections는 전체 지도다. */
 	availableMoves: AvailableMove[],
 	/**  지금 씬 입력(sceneSay)과 씬 종료 버튼을 쓸 수 있는가 (씬이 열려 있고 엔딩이 아니며 AI 이어가기가 켜져 있다). */
 	sceneChat: boolean,
@@ -4082,23 +4228,28 @@ export type RenderState_Deserialize = {
 	stage: Value,
 	/**  지금 플레이어가 있는 위치에 있는 NPC들 (game_character_id). GameRuntime::render_state가 채운다. */
 	presentNpcs: string[],
+	/**  StoryPlan 체크포인트에 도달했는가 (켜진 게임만). true면 프론트가 refresh_story_plan을 부르면 된다. */
+	storyPlanDue: boolean,
 };
 
 /**  iframe에 노출하는 부분만 추린 뷰. 내부 상태를 그대로 노출하지 않는다. */
 export type RenderState_Serialize = {
 	/**  지금 플레이 중인 세션(책). 분기로 불러오면 새 세션 id가 여기로 온다. */
 	sessionId: string,
+	/**  위치 기능(capabilities.location)이 꺼진 게임이면 null. */
 	locationId: string | null,
-	mapId: string,
+	/**  지도/이동 기능(capabilities.map && location)이 꺼진 게임이면 null (zone_id도 같다). */
+	mapId: string | null,
 	zoneId: string | null,
-	gameTime: number,
-	weatherId: string,
-	timePeriodId: string,
+	/**  시간 기능(capabilities.time)이 꺼진 게임이면 game_time/weather_id/time_period_id가 null. */
+	gameTime: number | null,
+	weatherId: string | null,
+	timePeriodId: string | null,
 	currentSceneId: string | null,
 	activeNpcId: string | null,
 	/**  지금 열려 있는 씬에서 고를 수 있는 선택지 id (표시 조건을 통과한 것만). GameRuntime::render_state가 채운다. */
 	availableChoices: string[],
-	/**  지금 위치에서 연결된 곳들과 갈 수 있는지 (MoveTo의 조건을 엔진이 미리 평가한 결과). get_game_view의 connections는 전체 지도다. */
+	/**  지금 위치에서 연결된 곳들과 갈 수 있는지 (지도/이동 기능이 꺼진 게임이면 항상 빈 배열) (MoveTo의 조건을 엔진이 미리 평가한 결과). get_game_view의 connections는 전체 지도다. */
 	availableMoves: AvailableMove[],
 	/**  지금 씬 입력(sceneSay)과 씬 종료 버튼을 쓸 수 있는가 (씬이 열려 있고 엔딩이 아니며 AI 이어가기가 켜져 있다). */
 	sceneChat: boolean,
@@ -4110,6 +4261,8 @@ export type RenderState_Serialize = {
 	stage: Value,
 	/**  지금 플레이어가 있는 위치에 있는 NPC들 (game_character_id). GameRuntime::render_state가 채운다. */
 	presentNpcs: string[],
+	/**  StoryPlan 체크포인트에 도달했는가 (켜진 게임만). true면 프론트가 refresh_story_plan을 부르면 된다. */
+	storyPlanDue: boolean,
 };
 
 export type RestorePreview = {
@@ -4262,9 +4415,35 @@ export type StorageUsage = {
 	totalBytes: number,
 };
 
+export type StoryPlan = {
+	premise: string,
+	beats: Beat[],
+	openThreads: string[],
+	facts: string[],
+	summary: string,
+	suggestions: Suggestion[],
+};
+
+/**  저장된 플랜 하나 (조회/갱신 커맨드의 응답). */
+export type StoryPlanRecord = {
+	sessionId: string,
+	seq: number,
+	/**  체크포인트 이유: session_start / session_resume / scene_end / day_boundary / event_fired / turns / manual */
+	reason: string,
+	plan: StoryPlan,
+};
+
 export type StreamPayload = {
 	chunk: string,
 };
+
+export type Suggestion = {
+	kind: SuggestionKind,
+	id: string,
+	reason: string,
+};
+
+export type SuggestionKind = "event" | "scene";
 
 export type SummaryFailure = {
 	at: number,
