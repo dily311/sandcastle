@@ -45,8 +45,8 @@ export const commands = {
 	 *  응답 조각은 `on_event`로 흐르고, 저장된 메시지는 반환값으로 온다.
 	 */
 	chatSend: (conversationId: string, text: string, attachments: string[], onEvent: Channel<StreamPayload>, options?: InvokeOptions) => __TAURI_INVOKE<ChatTurn_Serialize>("chat_send", { conversationId, text, attachments, onEvent }, options),
-	/**  마지막 AI 메시지 다시 만들기. `swipe`면 스와이프로 쌓고, 아니면 스와이프를 버리고 바꾼다. */
-	chatRegenerate: (conversationId: string, swipe: boolean, onEvent: Channel<StreamPayload>, options?: InvokeOptions) => __TAURI_INVOKE<ChatTurn_Serialize>("chat_regenerate", { conversationId, swipe, onEvent }, options),
+	/**  마지막 AI 메시지 다시 만들기. `swipe`면 스와이프로 쌓고, 아니면 스와이프를 버리고 바꾼다. `extra`는 이번 생성에만 붙이는 지시. */
+	chatRegenerate: (conversationId: string, swipe: boolean, extra: string | null, onEvent: Channel<StreamPayload>, options?: InvokeOptions) => __TAURI_INVOKE<ChatTurn_Serialize>("chat_regenerate", { conversationId, swipe, extra, onEvent }, options),
 	/**  진행 중인 응답 멈추기 (받은 데까지는 저장됨). 멈출 게 있었으면 true */
 	chatCancel: (conversationId: string, options?: InvokeOptions) => __TAURI_INVOKE<boolean>("chat_cancel", { conversationId }, options),
 	listPhoneContacts: (ownerKind: string, ownerId: string, options?: InvokeOptions) => __TAURI_INVOKE<PhoneContact[]>("list_phone_contacts", { ownerKind, ownerId }, options),

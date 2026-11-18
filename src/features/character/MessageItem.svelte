@@ -1,5 +1,5 @@
 <script lang="ts">
-	import { Bookmark, BookmarkX, ChevronDown, ChevronLeft, ChevronRight, Copy, Eye, EyeOff, FileSearch, GitBranch, ImagePlus, Languages, Pencil, RefreshCw, Square, Trash2, Volume2 } from "@lucide/svelte";
+	import { Bookmark, BookmarkX, ChevronDown, ChevronLeft, ChevronRight, Copy, Eye, EyeOff, FileSearch, GitBranch, ImagePlus, Languages, Pencil, RefreshCw, Square, Trash2, Volume2, Sparkles } from "@lucide/svelte";
 	import { plugins } from "$shared/stores/plugins.svelte";
 	import { drawMessage, generatedImagesOf, speak, speech, translateMessage, translationOf } from "$shared/stores/aiTools.svelte";
 	import { Badge, Button, IconButton, ProviderIcon, Textarea } from "$shared/ui";
@@ -125,6 +125,11 @@
 		const t = await promptText({ title: "여기서 챕터 시작", message: `#${no} 메시지부터 새 챕터`, input: { value: "", placeholder: "챕터 제목" }, confirmLabel: "만들기" });
 		if (t) await session.setChapter(msg, t);
 	}
+	/** 이번 생성에만 붙는 지시를 받아 다른 응답(스와이프)으로 다시 생성 */
+	async function regenerateWith() {
+		const t = await promptText({ title: "지시와 함께 다시 생성", message: "이번 응답에만 적용 · 저장되는 글에는 들어가지 않음", input: { value: "", placeholder: "예) 묘사는 짧게, 대사를 더 많이" }, confirmLabel: "다시 생성" });
+		if (t?.trim()) await session.regenerate(true, t.trim());
+	}
 	async function remove() {
 		if (await confirmAction({ title: "메시지 삭제", message: `#${no} 메시지를 지움. 되돌릴 수 없음`, confirmLabel: "삭제", danger: true })) await session.remove(msg);
 	}
@@ -158,6 +163,7 @@
 				</IconButton>
 				{#if isAi && isLast}
 					<IconButton label="처음부터 다시 생성 (스와이프 버림)" size="sm" disabled={session.busy} onclick={() => session.regenerate(false)}><RefreshCw /></IconButton>
+					<IconButton label="지시와 함께 다시 생성" size="sm" disabled={session.busy} onclick={regenerateWith}><Sparkles /></IconButton>
 				{/if}
 				{#if isAi}
 					<IconButton label="보낸 컨텍스트 보기" size="sm" onclick={() => onprompt(msg)}><FileSearch /></IconButton>

@@ -36,8 +36,16 @@ const CANCEL_GRACE: Duration = Duration::from_secs(10);
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 #[serde(tag = "kind", rename_all = "camelCase")]
 pub enum ChatJob {
-    Send { text: String, attachments: Vec<String> },
-    Regenerate { swipe: bool },
+    Send {
+        text: String,
+        attachments: Vec<String>,
+    },
+    Regenerate {
+        swipe: bool,
+        /// 이번 생성에만 붙이는 지시 (없으면 평범한 다시 생성). 예전에 저장된 작업에는 없으므로 기본값 필요
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        extra: Option<String>,
+    },
     Peek,
 }
 
@@ -109,7 +117,7 @@ impl TaskExecutor for ChatTaskExecutor {
                     message_ids: saved.into_iter().map(|m| m.id).collect(),
                 });
             }
-            ChatJob::Regenerate { swipe } => TurnKind::Regenerate { swipe },
+            ChatJob::Regenerate { swipe, extra } => TurnKind::Regenerate { swipe, extra },
             ChatJob::Send { text, attachments } => {
                 if input_already_saved(db, &conversation_id, &task.id).await? {
                     TurnKind::Reply
@@ -167,8 +175,9 @@ pub async fn run(app: &AppHandle, conversation_id: &str, job: ChatJob, channel: 
     let feature = if is_phone { crate::sys::plugins::id::PHONE } else { "chat" };
     let label = match &job {
         ChatJob::Send { .. } => "응답 생성",
-        ChatJob::Regenerate { swipe: true } => "다른 응답",
-        ChatJob::Regenerate { swipe: false } => "다시 생성",
+        ChatJob::Regenerate { extra: Some(_), .. } => "지시와 함께 다시 생성",
+        ChatJob::Regenerate { swipe: true, .. } => "다른 응답",
+        ChatJob::Regenerate { swipe: false, .. } => "다시 생성",
         ChatJob::Peek => "엿보기",
     };
     let payload = serde_json::to_value(&job).map_err(|e| AppError::internal(e.to_string()))?;
@@ -222,7 +231,11 @@ mod tests {
                 text: "안녕".into(),
                 attachments: vec!["a.png".into()],
             },
-            ChatJob::Regenerate { swipe: true },
+            ChatJob::Regenerate { swipe: true, extra: None },
+            ChatJob::Regenerate {
+                swipe: false,
+                extra: Some("묘사는 짧게".into()),
+            },
             ChatJob::Peek,
         ];
         for job in jobs {
@@ -230,5 +243,11 @@ mod tests {
             assert_eq!(serde_json::from_value::<ChatJob>(v).unwrap(), job);
         }
         assert_eq!(serde_json::to_value(ChatJob::Peek).unwrap(), serde_json::json!({ "kind": "peek" }));
+        // 지시가 생기기 전에 저장된 작업도 읽힌다
+        let old = serde_json::json!({ "kind": "regenerate", "swipe": true });
+        assert_eq!(
+            serde_json::from_value::<ChatJob>(old).unwrap(),
+            ChatJob::Regenerate { swipe: true, extra: None }
+        );
     }
 }

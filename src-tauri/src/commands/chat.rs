@@ -48,11 +48,19 @@ pub async fn chat_send(app: AppHandle, conversation_id: String, text: String, at
     chat_task::into_turn(saved)
 }
 
-/// 마지막 AI 메시지 다시 만들기. `swipe`면 스와이프로 쌓고, 아니면 스와이프를 버리고 바꾼다.
+/// 마지막 AI 메시지 다시 만들기. `swipe`면 스와이프로 쌓고, 아니면 스와이프를 버리고 바꾼다. `extra`는 이번 생성에만 붙이는 지시.
 #[tauri::command]
 #[specta::specta]
-pub async fn chat_regenerate(app: AppHandle, conversation_id: String, swipe: bool, on_event: Channel<StreamPayload>) -> Result<ChatTurn> {
-    let saved = chat_task::run(&app, &conversation_id, ChatJob::Regenerate { swipe }, on_event).await?;
+pub async fn chat_regenerate(
+    app: AppHandle,
+    conversation_id: String,
+    swipe: bool,
+    extra: Option<String>,
+    on_event: Channel<StreamPayload>,
+) -> Result<ChatTurn> {
+    // 지시는 이번 생성에만 붙는다 (비면 평범한 다시 생성)
+    let extra = extra.as_deref().and_then(crate::service::chat::chat_manager::clean_extra);
+    let saved = chat_task::run(&app, &conversation_id, ChatJob::Regenerate { swipe, extra }, on_event).await?;
     chat_task::into_turn(saved)
 }
 

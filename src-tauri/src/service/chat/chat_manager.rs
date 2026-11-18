@@ -241,8 +241,9 @@ pub enum TurnKind {
     /// 사용자 입력을 저장하고 응답을 만든다. 입력이 비었으면 저장 없이 이어서 응답 (이어쓰기)
     /// 두 번째 값은 붙인 이미지 경로 (글 없이 이미지만 보내도 됨)
     Send(String, Vec<String>),
-    /// 마지막 AI 메시지를 다시 만든다. `swipe`면 스와이프로 쌓고, 아니면 스와이프를 버리고 바꾼다
-    Regenerate { swipe: bool },
+    /// 마지막 AI 메시지를 다시 만든다. `swipe`면 스와이프로 쌓고, 아니면 스와이프를 버리고 바꾼다.
+    /// `extra`: 이번 생성에만 붙이는 지시 ("지시와 함께 다시 생성")
+    Regenerate { swipe: bool, extra: Option<String> },
     /// 이미 저장된 마지막 사용자 메시지에 응답한다 (보내기 작업을 다시 시도할 때: 입력은 첫 시도에 저장됨)
     Reply,
 }
@@ -290,6 +291,14 @@ fn replace_meta(old: &Message, info: &Value, images: &Value) -> Value {
     m.insert("images".into(), images.clone());
     Value::Object(m)
 }
+
+/// 지시 글 정리: 앞뒤 공백을 자르고 비면 없음, 1000자까지
+pub fn clean_extra(e: &str) -> Option<String> {
+    let t: String = e.trim().chars().take(MAX_EXTRA_CHARS).collect();
+    (!t.is_empty()).then_some(t)
+}
+
+pub const MAX_EXTRA_CHARS: usize = 1000;
 
 /// 자동 회상에 필요한 것 (3-C-5)
 struct RecallPlan {
@@ -449,7 +458,7 @@ impl ChatManager {
                 };
                 (t, false, gt)
             }
-            (TurnKind::Regenerate { swipe }, Some(t)) => {
+            (TurnKind::Regenerate { swipe, .. }, Some(t)) => {
                 if !is_hidden(t.meta.as_ref()) {
                     context.history.pop();
                 }
@@ -569,6 +578,19 @@ impl ChatManager {
             None => None,
         };
 
+        // 이번 생성에만 붙이는 지시 (코어 "지시와 함께 다시 생성"): 입력 바로 앞에 user 역할로, 회상 블록 뒤. 저장하는 글에는 들어가지 않는다
+        let regen_extra = match &kind {
+            TurnKind::Regenerate { extra: Some(e), .. } => clean_extra(e),
+            _ => None,
+        };
+        if let Some(e) = &regen_extra {
+            context.history.push(crate::models::ai_service::HistoryItem {
+                images: vec![],
+                role: "user".into(),
+                content: format!("[이번 응답 지침]\n{e}"),
+            });
+        }
+
         let regex = RegexProcessor::load(
             db,
             Some(&conv.character_id),
@@ -671,6 +693,7 @@ impl ChatManager {
             "pluginPrompt": plugin_prompt,
             "memoryRecall": recall_meta,
             "summary": summary_use,
+            "regenExtra": regen_extra,
         });
         let images_json = serde_json::to_value(&used_images).unwrap_or(Value::Array(vec![]));
 
@@ -694,7 +717,7 @@ impl ChatManager {
             .await
             .map_err(AppError::from)?,
             Some(old) => {
-                let swipe = matches!(kind, TurnKind::Regenerate { swipe: true });
+                let swipe = matches!(kind, TurnKind::Regenerate { swipe: true, .. });
                 let meta = if swipe {
                     push_swipe(old, &content, &info, &images_json)
                 } else {
@@ -912,5 +935,17 @@ mod image_tag_tests {
         let (body, p) = take_image_tag("끊김 <IMAGE>1girl, night");
         assert_eq!(body, "끊김");
         assert_eq!(p.as_deref(), Some("1girl, night"));
+    }
+}
+
+#[cfg(test)]
+mod extra_tests {
+    use super::*;
+
+    #[test]
+    fn extra_instruction_is_trimmed_capped_and_empty_means_none() {
+        assert_eq!(clean_extra("  묘사는 짧게  ").as_deref(), Some("묘사는 짧게"));
+        assert_eq!(clean_extra("   \n "), None);
+        assert_eq!(clean_extra(&"가".repeat(5000)).unwrap().chars().count(), MAX_EXTRA_CHARS);
     }
 }

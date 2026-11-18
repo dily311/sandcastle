@@ -142,12 +142,12 @@ export class ChatSession {
 	}
 
 	/** 마지막 AI 메시지 다시 만들기 (swipe: 스와이프로 쌓기, 아니면 스와이프 버리고 교체) */
-	async regenerate(swipe: boolean) {
+	async regenerate(swipe: boolean, extra: string | null = null) {
 		const last = this.last;
 		if (this.busy || !last || last.role !== "assistant") return;
 		this.live = { kind: "regenerate", text: "", targetId: last.id };
 		try {
-			const turn = await call(commands.chatRegenerate(this.convId, swipe, this.channel()), src);
+			const turn = await call(commands.chatRegenerate(this.convId, swipe, extra, this.channel()), src);
 			this.replace(turn.assistant);
 			void afterReply(turn.assistant, (m) => this.replace(m)).then((m) => m !== turn.assistant && this.replace(m));
 		} catch {
