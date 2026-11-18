@@ -258,6 +258,7 @@ fn meta_obj(meta: &Option<Value>) -> Map<String, Value> {
 /// 다시 생성(스와이프): 기존 내용을 첫 스와이프로 보존하고 새 응답을 뒤에 쌓는다
 fn push_swipe(old: &Message, content: &str, info: &Value, images: &Value) -> Value {
     let mut m = meta_obj(&old.meta);
+    m.remove("lint"); // 새 응답의 linter 결과는 저장한 뒤 따로 넣는다
     let mut swipes = m.get("swipes").and_then(Value::as_array).cloned().unwrap_or_default();
     if swipes.is_empty() {
         let mut first = Map::new();
@@ -284,6 +285,7 @@ fn replace_meta(old: &Message, info: &Value, images: &Value) -> Value {
     m.remove("swipes");
     m.remove("swipeId");
     m.remove("reasoning");
+    m.remove("lint");
     m.insert("info".into(), info.clone());
     m.insert("images".into(), images.clone());
     Value::Object(m)
@@ -534,6 +536,8 @@ impl ChatManager {
         let (result, auto_image_prompt) = take_image_tag(&result);
         let auto_image_prompt = auto_image_prompt.filter(|_| auto_image);
         let (content, used_images) = sanitize_cg_tags(&result, &images);
+        // 메시지 linter (3-B, ADR-014): 정규식·태그 정리 뒤, 저장 직전. 플러그인 후처리(화면)보다 먼저라 플러그인은 늘 검사된 글을 받는다
+        let (content, lint_meta) = super::lint::apply_to_response(app, &content, &me.name);
         let info = json!({
             "apiProfileId": api_profile_id,
             "presetId": preset_id,
@@ -584,9 +588,14 @@ impl ChatManager {
                 chat_ui::save_prompt(db, &assistant.id, &v).await.map_err(AppError::from)?;
             }
         }
-        if let Some(p) = auto_image_prompt {
+        if auto_image_prompt.is_some() || lint_meta.is_some() {
             let mut meta = assistant.meta.clone().filter(Value::is_object).unwrap_or_else(|| json!({}));
-            meta["autoImagePrompt"] = json!(p);
+            if let Some(p) = auto_image_prompt {
+                meta["autoImagePrompt"] = json!(p);
+            }
+            if let Some(l) = lint_meta {
+                meta["lint"] = l;
+            }
             crate::db::conversation::update_message_meta(db, &assistant.id, meta)
                 .await
                 .map_err(AppError::from)?;

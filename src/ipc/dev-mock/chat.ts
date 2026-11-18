@@ -136,6 +136,7 @@ let pluginSetting = {
 		sampler: "k_euler_ancestral",
 	},
 	phone: { apiProfileId: null as string | null, presetId: null as string | null },
+	lint: { unclosed: "report", repeat: "report", impersonate: "report", banned: "off", bannedWords: [] as string[], length: "off", minChars: 0, maxChars: 0 },
 	sync: { folder: null as string | null, auto: false, intervalMinutes: 30, target: "folder", driveEmail: null as string | null, wifiOnly: true },
 };
 // 공용 번역 캐시 (언어 + 원문 → 번역문)
@@ -285,6 +286,7 @@ async function generate(convId: string, onEvent: { onmessage: (m: { chunk: strin
 
 export const chatHandlers: Record<string, (a: Args) => unknown> = {
 	// ---- 코어 플러그인 AI 도구 (흉내만) ----
+	revert_lint: () => null,
 	get_plugin_setting: () => pluginSetting,
 	update_plugin_setting: ({ setting }) => (pluginSetting = setting as typeof pluginSetting),
 	translate_text: ({ text, to }) => {

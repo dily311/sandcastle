@@ -239,6 +239,56 @@ pub struct PluginSetting {
     /// 폴더 동기화 (2-C) — 경로가 기기마다 달라 기기 전용 (settings_scope)
     #[serde(default)]
     pub sync: SyncSetting,
+    /// 메시지 linter 규칙 (3-B, ADR-014). 켜짐/꺼짐은 코어 플러그인 `lint`(기본 꺼짐)
+    #[serde(default)]
+    pub lint: LintSetting,
+}
+
+/// linter 규칙 하나의 동작
+#[derive(Debug, Serialize, Deserialize, Clone, Copy, PartialEq, Eq, Default, specta::Type)]
+#[serde(rename_all = "lowercase")]
+pub enum LintMode {
+    Off,
+    /// 표시만: 글은 그대로 두고 메시지 아래에 알림
+    #[default]
+    Report,
+    /// 자동 고침: 고치고 원문을 meta에 남김 (되돌리기 가능)
+    Fix,
+}
+
+/// 메시지 linter 규칙 (요금 없이 앱 안에서 도는 것만 — 3-B-2). 글자 수 규칙은 표시만 할 수 있다
+#[derive(Debug, Serialize, Deserialize, Clone, specta::Type)]
+#[serde(rename_all = "camelCase", default)]
+pub struct LintSetting {
+    /// 닫히지 않은 태그·따옴표·마크다운(코드 펜스·`**`·`*`)
+    pub unclosed: LintMode,
+    /// 같은 문단 반복
+    pub repeat: LintMode,
+    /// 내 대사를 AI가 대신 쓴 줄(`이름: …`)
+    pub impersonate: LintMode,
+    /// 금지어
+    pub banned: LintMode,
+    pub banned_words: Vec<String>,
+    /// 글자 수 범위 (표시만)
+    pub length: LintMode,
+    /// 0 = 제한 없음
+    pub min_chars: u32,
+    pub max_chars: u32,
+}
+
+impl Default for LintSetting {
+    fn default() -> Self {
+        Self {
+            unclosed: LintMode::Report,
+            repeat: LintMode::Report,
+            impersonate: LintMode::Report,
+            banned: LintMode::Off,
+            banned_words: vec![],
+            length: LintMode::Off,
+            min_chars: 0,
+            max_chars: 0,
+        }
+    }
 }
 
 /// 폴더 동기화 설정 (CLAUDE.md 2-C, ADR-011)

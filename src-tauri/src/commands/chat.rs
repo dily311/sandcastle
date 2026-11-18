@@ -372,3 +372,11 @@ pub async fn delete_messages(state: State<'_, AppState>, ids: Vec<String>) -> Re
     tx.commit().await?;
     Ok(n)
 }
+
+/// linter가 고친 글을 원문으로 (그 뒤 또 고쳤으면 거절). 플러그인이 꺼져 있어도 된다 — 되돌리기는 언제나 (3-B-3)
+#[tauri::command]
+#[specta::specta]
+pub async fn revert_lint(state: State<'_, AppState>, message_id: String) -> Result<crate::models::conversation::Message> {
+    crate::service::chat::lint::revert(&state.db, &message_id).await?;
+    Ok(crate::db::chat_ui::get_message(&state.db, &message_id).await?)
+}

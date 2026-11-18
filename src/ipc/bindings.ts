@@ -193,6 +193,8 @@ export const commands = {
 	applyPluginPostprocess: (messageId: string, expected: string, content: string, results: PostProcessResult[], options?: InvokeOptions) => __TAURI_INVOKE<Message_Serialize>("apply_plugin_postprocess", { messageId, expected, content, results }, options),
 	/**  플러그인이 고친 글을 원문으로 (그 뒤 또 고쳤으면 거절). 코어 플러그인이 꺼져 있어도 된다 — 되돌리기는 언제나 */
 	revertPluginPostprocess: (messageId: string, options?: InvokeOptions) => __TAURI_INVOKE<Message_Serialize>("revert_plugin_postprocess", { messageId }, options),
+	/**  linter가 고친 글을 원문으로 (그 뒤 또 고쳤으면 거절). 플러그인이 꺼져 있어도 된다 — 되돌리기는 언제나 (3-B-3) */
+	revertLint: (messageId: string, options?: InvokeOptions) => __TAURI_INVOKE<Message_Serialize>("revert_lint", { messageId }, options),
 	/**  화면의 호스트가 프롬프트 요청(user-plugin-prompt)에 답한다. 늦게 와서 기다리는 요청이 없으면 false */
 	answerPluginPrompt: (requestId: string, answers: PluginPromptAnswer_Deserialize[], options?: InvokeOptions) => __TAURI_INVOKE<boolean>("answer_plugin_prompt", { requestId, answers }, options),
 	/**  누른 명령 밖에서도 플러그인이 AI를 부르게 할지 (기본 꺼짐, 요금이 들 수 있음) */
@@ -2681,6 +2683,52 @@ export type LineKind = "narration" | "dialogue" |
 /**  텍스트 없이 연출만 있는 줄 */
 "direction";
 
+/**  linter 규칙 하나의 동작 */
+export type LintMode = "off" | 
+/**  표시만: 글은 그대로 두고 메시지 아래에 알림 */
+"report" | 
+/**  자동 고침: 고치고 원문을 meta에 남김 (되돌리기 가능) */
+"fix";
+
+/**  메시지 linter 규칙 (요금 없이 앱 안에서 도는 것만 — 3-B-2). 글자 수 규칙은 표시만 할 수 있다 */
+export type LintSetting = LintSetting_Serialize | LintSetting_Deserialize;
+
+/**  메시지 linter 규칙 (요금 없이 앱 안에서 도는 것만 — 3-B-2). 글자 수 규칙은 표시만 할 수 있다 */
+export type LintSetting_Deserialize = {
+	/**  닫히지 않은 태그·따옴표·마크다운(코드 펜스·`**`·`*`) */
+	unclosed?: LintMode,
+	/**  같은 문단 반복 */
+	repeat?: LintMode,
+	/**  내 대사를 AI가 대신 쓴 줄(`이름: …`) */
+	impersonate?: LintMode,
+	/**  금지어 */
+	banned?: LintMode,
+	bannedWords?: string[],
+	/**  글자 수 범위 (표시만) */
+	length?: LintMode,
+	/**  0 = 제한 없음 */
+	minChars?: number,
+	maxChars?: number,
+};
+
+/**  메시지 linter 규칙 (요금 없이 앱 안에서 도는 것만 — 3-B-2). 글자 수 규칙은 표시만 할 수 있다 */
+export type LintSetting_Serialize = {
+	/**  닫히지 않은 태그·따옴표·마크다운(코드 펜스·`**`·`*`) */
+	unclosed: LintMode,
+	/**  같은 문단 반복 */
+	repeat: LintMode,
+	/**  내 대사를 AI가 대신 쓴 줄(`이름: …`) */
+	impersonate: LintMode,
+	/**  금지어 */
+	banned: LintMode,
+	bannedWords: string[],
+	/**  글자 수 범위 (표시만) */
+	length: LintMode,
+	/**  0 = 제한 없음 */
+	minChars: number,
+	maxChars: number,
+};
+
 /**  find_regex 안의 매크로 치환 방식 */
 export type MacroMode = "none" | 
 /**  값을 그대로 넣음 (값 안의 정규식 특수문자가 패턴으로 해석됨) */
@@ -3375,6 +3423,8 @@ export type PluginSetting_Deserialize = {
 	prompts?: AppPrompts_Deserialize,
 	/**  폴더 동기화 (2-C) — 경로가 기기마다 달라 기기 전용 (settings_scope) */
 	sync?: SyncSetting_Deserialize,
+	/**  메시지 linter 규칙 (3-B, ADR-014). 켜짐/꺼짐은 코어 플러그인 `lint`(기본 꺼짐) */
+	lint?: LintSetting_Deserialize,
 };
 
 export type PluginSetting_Serialize = {
@@ -3386,6 +3436,8 @@ export type PluginSetting_Serialize = {
 	prompts: AppPrompts_Serialize,
 	/**  폴더 동기화 (2-C) — 경로가 기기마다 달라 기기 전용 (settings_scope) */
 	sync: SyncSetting_Serialize,
+	/**  메시지 linter 규칙 (3-B, ADR-014). 켜짐/꺼짐은 코어 플러그인 `lint`(기본 꺼짐) */
+	lint: LintSetting_Serialize,
 };
 
 export type PostProcessResult = {
