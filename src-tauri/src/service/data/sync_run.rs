@@ -172,8 +172,8 @@ async fn run_in<T: SyncTarget>(
             .bind(&id)
             .fetch_one(db)
             .await?;
-        let data = BundleData::read(&mut b, db).await?;
-        let report = sync_merge::merge(db, &data, me, settings, false).await?;
+        let data = BundleData::read_meta(&mut b, db).await?;
+        let report = sync_merge::merge_bundle(db, &mut b, &data, me, settings, false).await?;
         if let Some(ack) = data.manifest.acks.get(me) {
             sqlx::query("UPDATE sync_peers SET their_ack = ? WHERE device_id = ?")
                 .bind(ack)

@@ -16,7 +16,7 @@ use std::time::Instant;
 use serde_json::Map;
 
 use super::sync_bundle::{self, BundleOptions};
-use super::sync_merge::{merge, BundleData};
+use super::sync_merge::{merge_bundle, BundleData};
 use super::sync_run;
 use super::sync_target::FolderTarget;
 
@@ -138,11 +138,11 @@ async fn sync_perf_report() {
     let t = Instant::now();
     let local = sync_bundle::schema_version(&b).await.unwrap();
     let mut bundle = sync_bundle::open(&out, local, &b_base).unwrap();
-    let data = BundleData::read(&mut bundle, &b).await.unwrap();
+    let data = BundleData::read_meta(&mut bundle, &b).await.unwrap();
     line("묶음 열기·읽기", t, &peak, "");
 
     let t = Instant::now();
-    let rep = merge(&b, &data, &b_id, &mut Map::new(), false).await.unwrap();
+    let rep = merge_bundle(&b, &mut bundle, &data, &b_id, &mut Map::new(), false).await.unwrap();
     line("합치기(빈 기기에)", t, &peak, &format!("추가 {}", rep.added));
 
     // 폴더 동기화 왕복: A가 올리고 B가 받는다 (파일 포함)
