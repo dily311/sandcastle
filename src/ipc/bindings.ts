@@ -435,7 +435,7 @@ export const commands = {
 	 *  StoryPlan이 꺼진 게임이거나 체크포인트가 아니면(force가 아닌 한) AI를 부르지 않고 null.
 	 *  플랜은 조언일 뿐 상태를 바꾸지 않는다. 제안을 실제로 올리려면 stage_story_suggestion.
 	 */
-	refreshStoryPlan: (force: boolean | null, options?: InvokeOptions) => __TAURI_INVOKE<StoryPlanRecord | null>("refresh_story_plan", { force }, options),
+	refreshStoryPlan: (force: boolean | null, auto: boolean | null, options?: InvokeOptions) => __TAURI_INVOKE<StoryPlanRecord | null>("refresh_story_plan", { force, auto }, options),
 	/**  지금 세션의 가장 최근 플랜 (없으면 null). 호스트 UI용 — 게임 iframe에 주면 스포일러가 된다. */
 	getStoryPlan: (options?: InvokeOptions) => __TAURI_INVOKE<StoryPlanRecord | null>("get_story_plan", undefined, options),
 	/**

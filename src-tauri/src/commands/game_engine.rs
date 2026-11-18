@@ -508,7 +508,9 @@ pub async fn refresh_story_plan(
     app: AppHandle,
     state: State<'_, AppState>,
     settings: State<'_, SettingsState<AppSetting>>,
+    tasks: State<'_, std::sync::Arc<crate::task::TaskManager>>,
     force: Option<bool>,
+    auto: Option<bool>,
 ) -> Result<Option<crate::game::story_plan::StoryPlanRecord>, AppError> {
     use tauri::Manager;
     let game_id = current_game_id(&state)?;
@@ -524,8 +526,18 @@ pub async fn refresh_story_plan(
         .ok_or_else(|| AppError::internal("AiService가 초기화되지 않았습니다"))?
         .inner()
         .clone();
+    // 유료 호출은 TaskManager 작업 안에서 (기능 id·실행 주체·이름이 기록된다). 자동 호출(auto)은 화면의 자동 갱신 스위치가 켜졌을 때만 온다.
+    let job = crate::task::CreateTaskRequest::inline(
+        crate::task::TaskType::GameDialogue,
+        crate::task::TaskOwner::Game,
+        "game.storyplan",
+        "각본가",
+        auto.unwrap_or(false),
+    )
+    .owner_ref(&game_id);
+    let tasks = tasks.inner().clone();
     crate::game::story_plan::refresh(state.inner(), &game_id, profile_id, force.unwrap_or(false), |request| async move {
-        Ok(ai.generate_once(request).await?.content)
+        tasks.run_inline(job, |_| async move { Ok(ai.generate_once(request).await?.content) }).await
     })
     .await
 }

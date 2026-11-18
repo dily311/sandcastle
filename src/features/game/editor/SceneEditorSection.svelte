@@ -26,6 +26,15 @@
 
 	let activeScene = $derived(selectedIndex !== null && scenes[selectedIndex] ? scenes[selectedIndex] : null);
 
+	/** 씬 설정은 JSON 문자열로 저장된다 */
+	function sceneSetting(raw: string | null): Record<string, unknown> {
+		try {
+			return raw ? (JSON.parse(raw) as Record<string, unknown>) : {};
+		} catch {
+			return {};
+		}
+	}
+
 	function handleAddScene() {
 		const newScene: GameSceneInput = {
 			id: crypto.randomUUID(), // 고유 ID 생성 (UUID v4)
@@ -217,6 +226,15 @@
 							<label class="checkbox-label">
 								<input type="checkbox" bind:checked={activeScene.isEnding} />
 								<span>엔딩 씬으로 표시</span>
+							</label>
+						</div>
+						<div class="field-row">
+							<label class="checkbox-label">
+								<input
+									type="checkbox"
+									checked={sceneSetting(activeScene.settingsJson).planUsable === true}
+									onchange={(e) => (activeScene!.settingsJson = JSON.stringify({ ...sceneSetting(activeScene!.settingsJson), planUsable: e.currentTarget.checked }))} />
+								<span>각본가가 무대에 올려도 됨</span>
 							</label>
 						</div>
 						<div class="field">

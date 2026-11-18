@@ -17,12 +17,13 @@
 	import type { PackageData } from "$features/game/types";
 	import type { Issue } from "$ipc/bindings";
 	import { appDataDir, join } from "@tauri-apps/api/path";
-	import { Badge, Button, EmptyState, Field, IconButton, Input, Spinner, Textarea } from "$shared/ui";
+	import { Badge, Button, EmptyState, Field, IconButton, Input, Spinner, Switch, Textarea } from "$shared/ui";
 	import { call, commands } from "$shared/ipc/client";
 	import { confirmAction } from "$shared/stores/confirm.svelte";
 	import { toasts } from "$shared/stores/toast.svelte";
 	import { nav } from "$app/nav.svelte";
 	import { games } from "../game.svelte";
+	import { planSettings } from "../runtime/storyPlan.svelte";
 	import "./editor.css";
 	import SceneEditorSection from "./SceneEditorSection.svelte";
 	import StateDefEditorSection from "./StateDefEditorSection.svelte";
@@ -39,6 +40,43 @@
 	type Tab = "project" | "scenes" | "stateDefs" | "characters" | "maps" | "weather" | "time" | "event" | "assets";
 	let tab = $state<Tab>("project");
 	let data = $state<PackageData | null>(null);
+
+	// 게임 설정(settingsJson)의 일부를 화면 칸으로: 각본가(storyPlan), 쓰지 않는 기능(capabilities — false인 것만 기록)
+	const settingObj = () => {
+		try {
+			return JSON.parse(data?.project.settingsJson || "{}") as Record<string, any>;
+		} catch {
+			return {};
+		}
+	};
+	const plan = $derived(planSettings(data?.project.settingsJson));
+	function setPlan(patch: { enabled?: boolean; everyNTurns?: number }) {
+		if (!data) return;
+		const o = settingObj();
+		const n = patch.everyNTurns;
+		o.storyPlan = { ...(o.storyPlan ?? {}), ...patch, ...(n !== undefined ? { everyNTurns: Math.min(100, Math.max(3, Math.round(n) || 10)) } : {}) };
+		data.project.settingsJson = JSON.stringify(o);
+	}
+	const CAPS = [
+		["choices", "선택지"],
+		["freeText", "자유 입력"],
+		["inventory", "소지품"],
+		["map", "지도"],
+		["aiNarration", "AI 서술"],
+		["location", "위치"],
+		["time", "시간"],
+	] as const;
+	const capOn = (key: string) => (settingObj().capabilities ?? {})[key] !== false;
+	function setCap(key: string, on: boolean) {
+		if (!data) return;
+		const o = settingObj();
+		const caps = { ...(o.capabilities ?? {}) };
+		if (on) delete caps[key];
+		else caps[key] = false;
+		if (Object.keys(caps).length) o.capabilities = caps;
+		else delete o.capabilities;
+		data.project.settingsJson = JSON.stringify(o);
+	}
 	let loading = $state(true);
 	let saving = $state(false);
 	let assetRoot = $state("");
@@ -182,6 +220,23 @@
 						<div class="card">
 							<Field label="제목" required><Input bind:value={data.project.title} /></Field>
 							<Field label="설명" hint="게임 목록과 상세에 보임"><Textarea bind:value={data.project.description} rows={3} autosize maxRows={10} /></Field>
+						</div>
+						<h2>각본가</h2>
+						<div class="card">
+							<Switch
+								checked={plan.enabled}
+								label="각본가 쓰기"
+								description="켜면 플레이 중 체크포인트마다 AI가 줄거리 계획을 세웁니다 (플레이하는 사람이 누르거나 자동 갱신을 켤 때만 요금이 듭니다)"
+								onchange={(v) => setPlan({ enabled: v })} />
+							{#if plan.enabled}
+								<Field label="몇 턴마다" hint="3~100"><Input type="number" value={String(plan.everyNTurns)} onchange={(e) => setPlan({ everyNTurns: Number(e.currentTarget.value) })} /></Field>
+							{/if}
+						</div>
+						<h2>쓸 기능</h2>
+						<div class="card">
+							{#each CAPS as [key, label] (key)}
+								{#key data.project.settingsJson}<Switch checked={capOn(key)} label={label} onchange={(v) => setCap(key, v)} />{/key}
+							{/each}
 						</div>
 						<h2>사용자 CSS</h2>
 						<div class="card">

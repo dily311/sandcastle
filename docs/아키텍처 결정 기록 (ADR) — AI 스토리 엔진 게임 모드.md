@@ -270,7 +270,7 @@
 
 ## ADR-019 StoryPlan(각본가)
 
-**상태** Deferred — dev에는 없고 구현이 브랜치 `claude/game-assets-storyplan`에 있다(병합 결정은 `ADR 미결 정리.md`, roadmap 4-D)
+**상태** Accepted (2026-11-18) — 백엔드는 브랜치 병합(1-F-2-3), 화면은 1-F-2-4에서 붙임. 아래 "ADR-019 갱신"을 본다
 
 **결정**
 
@@ -396,4 +396,5 @@ reason(BlockReason): conditionNotMet, sceneActive, notPresent, noRoute, noActive
 - 체크포인트(세션 시작/이어하기, 씬 종료, 하루 경계, random 이외 이벤트 발동, N턴)는 런타임이 RenderState.storyPlanDue로 표시만 하고, refresh_story_plan이 AiService.generate_once로 부른다(사용자 프리셋은 쓰지 않음, 앱 고정 규칙이 맨 앞). AI 대기 중에는 런타임 락을 잡지 않는다.
 - 출력은 크기 상한·스키마·길이/개수 상한·`<` `>` 제거·planUsable id만 남긴 뒤 game_story_plans(session_id, seq)에 저장한다. 제안을 올리는 stage_story_suggestion은 fire_event/enter_scene과 같은 검증을 다시 하고, 같은 플랜의 같은 제안은 한 번만 올린다.
 - NPC/씬 대화에는 활성 단계와 확정된 사실만 캐릭터 설정 끝에 붙인다. 호출 상한은 npc_say의 게임별 분당 제한을 같이 쓴다.
-- 한 번의 짧은 호출이라 TaskManager 작업으로 만들지 않았다(취소/진행 표시가 필요해지면 GameDialogue Executor로 옮긴다).
+- (바뀜, 2026-11-18) 처음에는 TaskManager 작업으로 만들지 않았지만, 유료 호출은 작업 기록에 남아야 한다는 원칙에 맞춰 `refresh_story_plan`이 `run_inline` 안에서 부른다: 기능 id `game.storyplan`, 표시 이름 "각본가", `auto`가 참이면 실행 주체 auto. 취소·시간 제한은 아직 없다(짧은 호출).
+- 화면(1-F-2-4): 오른쪽 패널 "이동·행동" 아래 각본가 구역(꺼진 게임에는 안 보임) — 플랜(전제·단계·열린 복선)과 제안의 "올리기", "플랜 새로 세우기"(사용자가 누른 호출, auto=false). 체크포인트마다 자동 갱신은 패널의 스위치(기본 꺼짐, 세션 안에서만 유지)를 켠 때만 auto=true로 부른다. 편집기: 게임 설정의 각본가 켜기·턴 수, 수동 이벤트·씬의 "각본가가 무대에 올려도 됨"(planUsable). 선택하지 않은 안: 게임 제작자가 자동 갱신을 켜 두는 설정(요금을 내는 사람은 플레이하는 사람이라서).

@@ -3,6 +3,9 @@
 	import { toasts } from "$shared/stores/toast.svelte";
 	/** 지우기 전에 앱 확인 창으로 물어봄 */
 	const ask = (message: string) => confirmAction({ title: "삭제", message, confirmLabel: "삭제", danger: true });
+	import type { PackageData } from "$features/game/types";
+	import { call, commands, toAppError } from "$shared/ipc/client";
+	import { reportGameError } from "$features/game/errors";
 	import type {
 		GameAssetsInput,
 		GameAudioAssetsInput,
@@ -119,7 +122,35 @@
 		return key;
 	}
 	const IMAGE_TYPES = ["character", "cg", "background"];
-	function addDropped(paths: string[]) {
+	/** 그림을 '일러스트'·'배경' 종류로 놓으면 백엔드가 파일 내용으로 형식을 확인하고 바로 게임 폴더에 넣는다 (저장을 기다리지 않음) */
+	const isImagePath = (p: string) => ["png", "jpg", "jpeg", "webp", "gif"].includes(p.split(".").pop()?.toLowerCase() ?? "");
+	async function addChecked(paths: string[], category: "cg" | "background") {
+		const added: string[] = [];
+		let problems = 0;
+		for (const path of paths) {
+			try {
+				const r = await call(commands.addGameAsset(gameId, path, { category, name: stemOf(path) || null }), { source: "game", silent: true });
+				added.push(r.asset.id);
+				problems += r.diagnostics.length;
+			} catch (e) {
+				reportGameError(e, gameId);
+			}
+		}
+		if (!added.length) return;
+		// 안 저장한 다른 편집은 그대로 두고, 방금 넣은 행만 서버에서 가져와 덧붙인다
+		const fresh = (await call(commands.getPackageData(gameId), { source: "game" })) as unknown as PackageData;
+		const have = new Set(entries.map((e) => e.asset.id).filter(Boolean));
+		const pick = category === "cg" ? fresh.cgAssets : fresh.backgroundAssets;
+		for (const a of pick) if (a.id && added.includes(a.id) && !have.has(a.id)) (category === "cg" ? cgAssets : backgroundAssets).push(a as never);
+		toasts.success(`에셋 ${added.length}개를 게임 폴더에 넣음${problems ? ` (확인할 점 ${problems}개 — 저장하면 진단에 보임)` : ""}`);
+	}
+	function addDropped(all: string[]) {
+		let paths = all;
+		if ((filter === "cg" || filter === "background") && all.some(isImagePath)) {
+			const images = all.filter(isImagePath);
+			paths = all.filter((p) => !isImagePath(p));
+			void addChecked(images, filter);
+		}
 		for (const path of paths) {
 			const ext = path.split(".").pop()?.toLowerCase() ?? "";
 			const audio = ["mp3", "wav", "ogg", "flac", "m4a", "aac"].includes(ext);
@@ -145,6 +176,26 @@
 	);
 	async function remove(type: string, index: number) {
 		if (!await ask("이 에셋을 삭제할까요?")) return;
+		const list = type === "audio" ? audioAssets : type === "character" ? characterAssets : type === "cg" ? cgAssets : type === "background" ? backgroundAssets : assets;
+		const target = list[index];
+		// 이미 게임 폴더에 있는 에셋은 백엔드가 지운다: 대본·표지·아이콘이 쓰고 있으면 거절하고, 그래도 지울지 다시 묻는다
+		if (target?.filePath.startsWith("assets/")) {
+			let force = false;
+			for (;;) {
+				try {
+					const r = await call(commands.removeGameAsset(gameId, target.id ?? "", force), { source: "game", silent: true });
+					if (r.diagnostics.length) toasts.info(`지운 뒤 확인할 점 ${r.diagnostics.length}개`);
+					break;
+				} catch (e) {
+					const err = toAppError(e);
+					const d = err.details as { reason?: string; references?: string[] } | undefined;
+					if (d?.reason !== "assetInUse" || force) return void reportGameError(e, gameId);
+					const refs = (d.references ?? []).join(", ");
+					if (!(await confirmAction({ title: "쓰고 있는 에셋", message: `${refs}에서 쓰고 있습니다. 그래도 지우면 그 자리가 비어 오류로 표시됩니다.`, confirmLabel: "그래도 삭제", danger: true }))) return;
+					force = true;
+				}
+			}
+		}
 		if (type === "audio") audioAssets.splice(index, 1);
 		else if (type === "character") characterAssets.splice(index, 1);
 		else if (type === "cg") cgAssets.splice(index, 1);

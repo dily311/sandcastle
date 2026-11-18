@@ -240,6 +240,18 @@
 					</div>
 				</div>
 
+				{#if activeEvent.triggerType === "manual"}
+					<div class="field checkbox-field">
+						<label class="checkbox-label">
+							<input
+								type="checkbox"
+								checked={(activeEvent.configJson as Record<string, unknown>)?.planUsable === true}
+								onchange={(e) => (activeEvent!.configJson = { ...(activeEvent!.configJson as Record<string, unknown>), planUsable: e.currentTarget.checked })} />
+							<span>각본가가 무대에 올려도 됨</span>
+						</label>
+					</div>
+				{/if}
+
 				<div class="field">
 					<label for="event_setting">고급 설정 JSON</label>
 					<textarea
