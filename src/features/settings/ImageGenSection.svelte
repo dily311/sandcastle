@@ -187,5 +187,11 @@
 		display: flex;
 		gap: var(--space-2);
 		align-items: center;
+		/* 좁은 화면: 입력칸이 줄어들고 버튼은 칸 밖으로 나가지 않음 */
+		max-width: 100%;
+	}
+	.pair > :global(input),
+	.pair > :global(.input) {
+		min-width: 0;
 	}
 </style>
