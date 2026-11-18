@@ -136,6 +136,7 @@ let pluginSetting = {
 		sampler: "k_euler_ancestral",
 	},
 	phone: { apiProfileId: null as string | null, presetId: null as string | null },
+	memory: { apiProfileId: null as string | null, model: "", dimensions: null as number | null, tokenCap: 200000, docPrefix: "", queryPrefix: "" },
 	lint: { unclosed: "report", repeat: "report", impersonate: "report", banned: "off", bannedWords: [] as string[], length: "off", minChars: 0, maxChars: 0 },
 	sync: { folder: null as string | null, auto: false, intervalMinutes: 30, target: "folder", driveEmail: null as string | null, wifiOnly: true },
 };
@@ -287,6 +288,20 @@ async function generate(convId: string, onEvent: { onmessage: (m: { chunk: strin
 export const chatHandlers: Record<string, (a: Args) => unknown> = {
 	// ---- 코어 플러그인 AI 도구 (흉내만) ----
 	revert_lint: () => null,
+	get_memory_status: () => ({ chunksCurrent: 12, chunksOther: 0, vectors: 12, fileBytes: 262144 }),
+	preview_memory_index: () => ({ conversations: 3, chunks: 12, cached: 4, toEmbed: 8, estTokens: 9600, tokenCap: 200000, overCap: false }),
+	run_memory_index: () => ({ conversations: 3, chunks: 12, embedded: 8, cached: 4, tokens: 9600 }),
+	search_memory: ({ request }) => ({
+		hits: [
+			{ conversationId: "mock", conversationTitle: "예시 대화", firstMessageId: "m1", lastMessageId: "m3", score: 0.81, snippet: `사용자: ${(request as { query: string }).query} 이야기
+AI: 그때 이야기를 다시 해 볼까요?`, stale: false },
+			{ conversationId: "mock", conversationTitle: "예시 대화", firstMessageId: "m9", lastMessageId: "m11", score: 0.42, snippet: "AI: 비슷한 장면이 있었어요.", stale: true },
+		],
+		scanned: 12,
+		truncated: false,
+		otherModelChunks: 0,
+	}),
+	purge_memory: () => 0,
 	get_plugin_setting: () => pluginSetting,
 	update_plugin_setting: ({ setting }) => (pluginSetting = setting as typeof pluginSetting),
 	translate_text: ({ text, to }) => {

@@ -1,7 +1,7 @@
 <script lang="ts">
 	import { layout } from "$app/layout.svelte";
 	import type { Component } from "svelte";
-	import { Activity, ArrowLeftRight, Gamepad2, Images, AudioLines, Blocks, Database, ImagePlus, Keyboard, KeyRound, Languages, ListChecks, MessagesSquare, Music, Palette, Puzzle, Regex, ScrollText, Search, Settings2, SlidersHorizontal, Smartphone } from "@lucide/svelte";
+	import { Activity, ArrowLeftRight, Gamepad2, Images, AudioLines, Blocks, Database, ImagePlus, Keyboard, KeyRound, Languages, ListChecks, MemoryStick, MessagesSquare, Music, Palette, Puzzle, Regex, ScrollText, Search, Settings2, SlidersHorizontal, Smartphone } from "@lucide/svelte";
 	import { Badge, Input } from "$shared/ui";
 	import { nav, type SettingsTab } from "$app/nav.svelte";
 	import { logs } from "$shared/stores/log.svelte";
@@ -26,6 +26,7 @@
 	import PluginsSection from "./PluginsSection.svelte";
 	import TranslateSection from "./TranslateSection.svelte";
 	import LintSection from "./LintSection.svelte";
+	import MemorySection from "./MemorySection.svelte";
 	import TtsSection from "./TtsSection.svelte";
 	import ImageGenSection from "./ImageGenSection.svelte";
 	import { plugins, type PluginId } from "$shared/stores/plugins.svelte";
@@ -68,6 +69,7 @@
 				{ id: "phone", label: "폰", icon: Smartphone, keywords: "폰 모드 메신저 프롬프트", view: PhoneSection, plugin: "phone" },
 				{ id: "translate", label: "번역", icon: Languages, keywords: "번역 언어 자동 번역 입력", view: TranslateSection, plugin: "translate" },
 				{ id: "lint", label: "메시지 linter", icon: ListChecks, keywords: "linter 검사 후처리 태그 따옴표 반복 금지어 길이 고침", view: LintSection, plugin: "lint" },
+				{ id: "memory", label: "메모리 검색", icon: MemoryStick, keywords: "메모리 임베딩 검색 뜻으로 찾기 색인 벡터 기억", view: MemorySection, plugin: "memory" },
 				{ id: "tts", label: "음성 읽기", icon: AudioLines, keywords: "음성 tts 읽기 목소리 elevenlabs", view: TtsSection, plugin: "tts" },
 				{ id: "imagegen", label: "이미지 생성", icon: ImagePlus, keywords: "이미지 그림 생성 novelai 프롬프트 네거티브 샘플러", view: ImageGenSection, plugin: ["imagegen", "imageauto"] },
 				{ id: "community", label: "커뮤니티 플러그인", icon: Puzzle, keywords: "플러그인 확장 설치 권한 zip 폴더 후처리 프롬프트 패널 명령 ai 제안", view: CommunitySection, plugin: "community" },

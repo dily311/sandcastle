@@ -195,6 +195,19 @@ export const commands = {
 	revertPluginPostprocess: (messageId: string, options?: InvokeOptions) => __TAURI_INVOKE<Message_Serialize>("revert_plugin_postprocess", { messageId }, options),
 	/**  linter가 고친 글을 원문으로 (그 뒤 또 고쳤으면 거절). 플러그인이 꺼져 있어도 된다 — 되돌리기는 언제나 (3-B-3) */
 	revertLint: (messageId: string, options?: InvokeOptions) => __TAURI_INVOKE<Message_Serialize>("revert_lint", { messageId }, options),
+	/**  상태 보기: 플러그인이 꺼져 있어도 부를 수 있다(지우기 화면용). 파일이 없으면 만들지 않는다 */
+	getMemoryStatus: (options?: InvokeOptions) => __TAURI_INVOKE<MemoryStatus>("get_memory_status", undefined, options),
+	/**  색인 미리보기: 요금 없음 (공급자를 부르지 않음) */
+	previewMemoryIndex: (scope: MemoryScope_Deserialize, options?: InvokeOptions) => __TAURI_INVOKE<IndexPreview>("preview_memory_index", { scope }, options),
+	/**  색인 실행: 사용자가 미리보기를 보고 누른 것만. 상한을 넘는 계획은 `allow_over_cap`(두 번째 확인)이 있어야 돈다 */
+	runMemoryIndex: (scope: MemoryScope_Deserialize, allowOverCap: boolean, options?: InvokeOptions) => __TAURI_INVOKE<IndexResult>("run_memory_index", { scope, allowOverCap }, options),
+	/**  뜻으로 찾기: 질의 임베딩 한 번(작업 하나) */
+	searchMemory: (request: SearchRequest_Deserialize, options?: InvokeOptions) => __TAURI_INVOKE<SearchResult>("search_memory", { request }, options),
+	/**
+	 *  정리: "other" 다른 모델로 색인된 것 / "orphans" 없어진 대화·가리키지 않는 벡터 / "all" 메모리 파일 전부.
+	 *  플러그인이 꺼져 있어도 된다 — 데이터를 지우는 길은 늘 열려 있어야 함. 지운 chunk 수(all은 0)
+	 */
+	purgeMemory: (kind: string, options?: InvokeOptions) => __TAURI_INVOKE<number>("purge_memory", { kind }, options),
 	/**  화면의 호스트가 프롬프트 요청(user-plugin-prompt)에 답한다. 늦게 와서 기다리는 요청이 없으면 false */
 	answerPluginPrompt: (requestId: string, answers: PluginPromptAnswer_Deserialize[], options?: InvokeOptions) => __TAURI_INVOKE<boolean>("answer_plugin_prompt", { requestId, answers }, options),
 	/**  누른 명령 밖에서도 플러그인이 AI를 부르게 할지 (기본 꺼짐, 요금이 들 수 있음) */
@@ -2651,6 +2664,29 @@ export type ImportedCharacterRef = {
 	name: string,
 };
 
+export type IndexPreview = {
+	conversations: number,
+	/**  계획한 chunk 수 */
+	chunks: number,
+	/**  이미 벡터가 있어 건너뛸 chunk 수 */
+	cached: number,
+	/**  새로 임베딩할 글 수 (같은 글은 한 번) */
+	toEmbed: number,
+	/**  새로 임베딩할 입력 토큰 (앱이 센 추정 — 채팅 모델의 토크나이저 기준) */
+	estTokens: number,
+	tokenCap: number,
+	overCap: boolean,
+};
+
+export type IndexResult = {
+	conversations: number,
+	chunks: number,
+	embedded: number,
+	cached: number,
+	/**  공급자가 알려 준(없으면 추정) 입력 토큰 */
+	tokens: number,
+};
+
 export type InstalledPluginInfo = {
 	version: string,
 	enabled: boolean,
@@ -2735,6 +2771,61 @@ export type MacroMode = "none" |
 "raw" | 
 /**  정규식 특수문자를 이스케이프해서 넣음 */
 "escaped";
+
+/**  색인·검색 범위. 대화 id가 없으면 전체 */
+export type MemoryScope = MemoryScope_Serialize | MemoryScope_Deserialize;
+
+/**  색인·검색 범위. 대화 id가 없으면 전체 */
+export type MemoryScope_Deserialize = {
+	conversationId?: string | null,
+};
+
+/**  색인·검색 범위. 대화 id가 없으면 전체 */
+export type MemoryScope_Serialize = {
+	conversationId: string | null,
+};
+
+/**  메모리 임베딩 검색 설정. API 프로필·모델은 기기마다 다르므로 통째로 기기 전용 */
+export type MemorySetting = MemorySetting_Serialize | MemorySetting_Deserialize;
+
+/**  메모리 임베딩 검색 설정. API 프로필·모델은 기기마다 다르므로 통째로 기기 전용 */
+export type MemorySetting_Deserialize = {
+	/**  임베딩에 쓸 API 프로필 (비우면 색인·검색을 할 수 없음 — 앱이 고른 채팅 API를 몰래 쓰지 않는다) */
+	apiProfileId?: string | null,
+	/**  임베딩 모델 이름 (사용자가 입력. 앱은 모델·가격을 내장하지 않음) */
+	model?: string,
+	/**  줄일 차원 (지원하는 모델만). 비우면 모델 기본 */
+	dimensions?: number | null,
+	/**  한 번 색인에서 임베딩할 최대 토큰(추정). 넘으면 한 번 더 확인 */
+	tokenCap?: number,
+	/**  문서·질의 앞에 붙일 글 (e5의 "passage: "/"query: " 같은 모델용) */
+	docPrefix?: string,
+	queryPrefix?: string,
+};
+
+/**  메모리 임베딩 검색 설정. API 프로필·모델은 기기마다 다르므로 통째로 기기 전용 */
+export type MemorySetting_Serialize = {
+	/**  임베딩에 쓸 API 프로필 (비우면 색인·검색을 할 수 없음 — 앱이 고른 채팅 API를 몰래 쓰지 않는다) */
+	apiProfileId: string | null,
+	/**  임베딩 모델 이름 (사용자가 입력. 앱은 모델·가격을 내장하지 않음) */
+	model: string,
+	/**  줄일 차원 (지원하는 모델만). 비우면 모델 기본 */
+	dimensions: number | null,
+	/**  한 번 색인에서 임베딩할 최대 토큰(추정). 넘으면 한 번 더 확인 */
+	tokenCap: number,
+	/**  문서·질의 앞에 붙일 글 (e5의 "passage: "/"query: " 같은 모델용) */
+	docPrefix: string,
+	queryPrefix: string,
+};
+
+export type MemoryStatus = {
+	/**  지금 설정(모델)으로 색인된 chunk 수 */
+	chunksCurrent: number,
+	/**  다른 모델·차원·접두어로 색인된 chunk 수 (다시 색인하거나 지워야 검색됨) */
+	chunksOther: number,
+	vectors: number,
+	fileBytes: number,
+};
 
 export type MergeReport = {
 	added: number,
@@ -3425,6 +3516,8 @@ export type PluginSetting_Deserialize = {
 	sync?: SyncSetting_Deserialize,
 	/**  메시지 linter 규칙 (3-B, ADR-014). 켜짐/꺼짐은 코어 플러그인 `lint`(기본 꺼짐) */
 	lint?: LintSetting_Deserialize,
+	/**  메모리 임베딩 검색 (3-C, ADR-015) — 기기 전용 */
+	memory?: MemorySetting_Deserialize,
 };
 
 export type PluginSetting_Serialize = {
@@ -3438,6 +3531,8 @@ export type PluginSetting_Serialize = {
 	sync: SyncSetting_Serialize,
 	/**  메시지 linter 규칙 (3-B, ADR-014). 켜짐/꺼짐은 코어 플러그인 `lint`(기본 꺼짐) */
 	lint: LintSetting_Serialize,
+	/**  메모리 임베딩 검색 (3-C, ADR-015) — 기기 전용 */
+	memory: MemorySetting_Serialize,
 };
 
 export type PostProcessResult = {
@@ -3907,6 +4002,44 @@ export type SaveReport = {
 	deleted: { [key in string]: number },
 	/**  저장 후 상태의 진단 결과 (open_game의 diagnostics와 같은 형식) */
 	diagnostics: Issue[],
+};
+
+export type SearchHit = {
+	conversationId: string,
+	conversationTitle: string,
+	firstMessageId: string,
+	lastMessageId: string,
+	/**  코사인 유사도 (−1~1, 모델마다 분포가 달라 절대값보다 순서가 의미 있음) */
+	score: number | null,
+	/**  지금 메시지에서 다시 읽은 chunk 글 */
+	snippet: string,
+	/**  색인한 뒤 글이 바뀜 (다시 색인하면 갱신) */
+	stale: boolean,
+};
+
+export type SearchRequest = SearchRequest_Serialize | SearchRequest_Deserialize;
+
+export type SearchRequest_Deserialize = {
+	query: string,
+	scope: MemoryScope_Deserialize,
+	/**  기본 10, 최대 20 */
+	limit?: number | null,
+};
+
+export type SearchRequest_Serialize = {
+	query: string,
+	scope: MemoryScope_Serialize,
+	/**  기본 10, 최대 20 */
+	limit: number | null,
+};
+
+export type SearchResult = {
+	hits: SearchHit[],
+	scanned: number,
+	/**  훑는 상한에 걸려 일부만 검색함 */
+	truncated: boolean,
+	/**  다른 모델로 색인되어 이번에 찾지 못한 chunk 수 */
+	otherModelChunks: number,
 };
 
 export type Severity = "error" | "warning";

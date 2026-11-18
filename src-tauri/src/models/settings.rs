@@ -242,6 +242,39 @@ pub struct PluginSetting {
     /// 메시지 linter 규칙 (3-B, ADR-014). 켜짐/꺼짐은 코어 플러그인 `lint`(기본 꺼짐)
     #[serde(default)]
     pub lint: LintSetting,
+    /// 메모리 임베딩 검색 (3-C, ADR-015) — 기기 전용
+    #[serde(default)]
+    pub memory: MemorySetting,
+}
+
+/// 메모리 임베딩 검색 설정. API 프로필·모델은 기기마다 다르므로 통째로 기기 전용
+#[derive(Debug, Serialize, Deserialize, Clone, specta::Type)]
+#[serde(rename_all = "camelCase", default)]
+pub struct MemorySetting {
+    /// 임베딩에 쓸 API 프로필 (비우면 색인·검색을 할 수 없음 — 앱이 고른 채팅 API를 몰래 쓰지 않는다)
+    pub api_profile_id: Option<String>,
+    /// 임베딩 모델 이름 (사용자가 입력. 앱은 모델·가격을 내장하지 않음)
+    pub model: String,
+    /// 줄일 차원 (지원하는 모델만). 비우면 모델 기본
+    pub dimensions: Option<u32>,
+    /// 한 번 색인에서 임베딩할 최대 토큰(추정). 넘으면 한 번 더 확인
+    pub token_cap: u32,
+    /// 문서·질의 앞에 붙일 글 (e5의 "passage: "/"query: " 같은 모델용)
+    pub doc_prefix: String,
+    pub query_prefix: String,
+}
+
+impl Default for MemorySetting {
+    fn default() -> Self {
+        Self {
+            api_profile_id: None,
+            model: String::new(),
+            dimensions: None,
+            token_cap: 200_000,
+            doc_prefix: String::new(),
+            query_prefix: String::new(),
+        }
+    }
 }
 
 /// linter 규칙 하나의 동작

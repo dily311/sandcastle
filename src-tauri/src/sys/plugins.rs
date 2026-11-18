@@ -35,6 +35,8 @@ pub mod id {
     pub const COMMUNITY: &str = "community";
     /// 응답 저장 직전 메시지 검사·고침 (3-B, ADR-014)
     pub const LINT: &str = "lint";
+    /// 대화 메모리 임베딩 검색 (3-C, ADR-015)
+    pub const MEMORY: &str = "memory";
 }
 
 #[derive(Debug, Clone, Serialize, specta::Type)]
@@ -144,6 +146,13 @@ const CATALOG: &[Def] = &[
         id: id::LINT,
         name: "메시지 linter",
         description: "AI 응답이 저장될 때 닫히지 않은 태그·따옴표, 반복, 내 대사 대신 쓰기, 금지어, 길이를 검사 (요금 없음, 고치면 원문 보존)",
+        default_enabled: false,
+        desktop_only: false,
+    },
+    Def {
+        id: id::MEMORY,
+        name: "메모리 검색",
+        description: "지난 대화를 뜻으로 찾기. 색인하면 대화 글이 임베딩 공급자에게 전송되고 요금이 듦 (버튼을 눌렀을 때만)",
         default_enabled: false,
         desktop_only: false,
     },

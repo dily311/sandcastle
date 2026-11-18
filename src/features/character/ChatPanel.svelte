@@ -25,6 +25,8 @@
 	import { library, type CharacterImage, type Conversation } from "./library.svelte";
 	import { metaOf, type ChatSession } from "./session.svelte";
 	import { lintOf } from "./lint";
+	import MemoryIndex from "$features/memory/MemoryIndex.svelte";
+	import MemorySearch from "$features/memory/MemorySearch.svelte";
 
 	interface Props {
 		conv: Conversation;
@@ -39,6 +41,7 @@
 	let { conv, session, chapters, onjump, onopen, me }: Props = $props();
 
 	// ---- 메시지 linter: 이 대화의 덮어쓰기와 마지막 응답에서 걸린 규칙 (3-B-5) ----
+	const memoryOff = $derived((conv.meta as { memory?: string } | null)?.memory === "off");
 	const lintOff = $derived((conv.meta as { lint?: string } | null)?.lint === "off");
 	const lastLint = $derived.by(() => {
 		const last = [...session.messages].reverse().find((m) => m.role === "assistant");
@@ -376,6 +379,17 @@
 					{/if}
 				</section>
 			{/if}
+			{#if plugins.on("memory")}
+				<hr />
+				<section>
+					<h4>메모리 검색 <span class="faint">지난 대화를 뜻으로 찾기</span></h4>
+					<Switch checked={!memoryOff} label="이 대화를 메모리에 포함" description="끄면 색인과 전체 검색에서 이 대화를 뺌" onchange={(v) => library.patchMeta(conv.id, { memory: v ? null : "off" })} />
+					{#if !memoryOff}
+						<div class="mem-actions"><MemoryIndex conversationId={conv.id} /></div>
+						<MemorySearch conversationId={conv.id} onopen={(h) => onopen(conv.id, h.firstMessageId)} />
+					{/if}
+				</section>
+			{/if}
 			<hr />
 			<section>
 				<h4>월드인포</h4>
@@ -468,6 +482,9 @@
 		gap: var(--space-5);
 		padding: var(--space-3) var(--space-4) var(--space-4);
 		overflow: auto;
+	}
+	.mem-actions {
+		margin: var(--space-2) 0;
 	}
 	.lint-hits {
 		margin: var(--space-1) 0 0;

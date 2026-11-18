@@ -75,8 +75,9 @@ pub const SETTINGS_SCOPE: &[(&str, Scope)] = &[
     ("plugin-setting/phone/apiProfileId", Scope::Device),
     ("plugin-setting/phone/presetId", Scope::Shared),
     ("plugin-setting/prompts", Scope::Shared),
-    ("plugin-setting/lint", Scope::Shared), // 규칙은 취향. 켜기(feature-setting)는 기기마다
-    ("plugin-setting/sync", Scope::Device), // 폴더 경로·자동 동기화는 기기마다
+    ("plugin-setting/memory", Scope::Device), // 임베딩 API·모델은 기기마다 (벡터 파일도 기기 전용)
+    ("plugin-setting/lint", Scope::Shared),   // 규칙은 취향. 켜기(feature-setting)는 기기마다
+    ("plugin-setting/sync", Scope::Device),   // 폴더 경로·자동 동기화는 기기마다
 ];
 
 /// settings.json에 있는 설정 묶음 키 (sys::settings의 STORE_KEY)
