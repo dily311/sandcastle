@@ -175,6 +175,12 @@ export const commands = {
 	listTrash: (options?: InvokeOptions) => __TAURI_INVOKE<TrashItem[]>("list_trash", undefined, options),
 	/**  설치된 플러그인 목록 */
 	listUserPlugins: (options?: InvokeOptions) => __TAURI_INVOKE<UserPlugin_Serialize[]>("list_user_plugins", undefined, options),
+	/**  설치된 플러그인의 판 폴더 목록 (설정 > 데이터). 코어 플러그인이 꺼져 있어도 폴더를 보고 지울 수 있다 — 코드는 읽지도 돌리지도 않고 폴더만 본다 */
+	listPluginFolders: (options?: InvokeOptions) => __TAURI_INVOKE<UserPlugin_Serialize[]>("list_plugin_folders", undefined, options),
+	/**  쓰는 판 바꾸기(되돌리기 포함): 꺼진 채로 돌아오고 다시 켜서 동의해야 한다. 플러그인이 꺼져 있어도 고를 수 있다(코드를 돌리지 않음) */
+	switchUserPluginVersion: (pluginId: string, dir: string, options?: InvokeOptions) => __TAURI_INVOKE<UserPlugin_Serialize>("switch_user_plugin_version", { pluginId, dir }, options),
+	/**  쓰지 않는 판 폴더 지우기 (되돌릴 수 없음 — 화면이 확인을 받는다). 지금 쓰는 판은 거절 */
+	deleteUserPluginVersion: (pluginId: string, dir: string, options?: InvokeOptions) => __TAURI_INVOKE<UserPlugin_Serialize>("delete_user_plugin_version", { pluginId, dir }, options),
 	/**  zip 파일이나 폴더를 읽어 미리보기 (아무것도 쓰지 않음) */
 	previewUserPlugin: (path: string, options?: InvokeOptions) => __TAURI_INVOKE<PluginPreview_Serialize>("preview_user_plugin", { path }, options),
 	/**  미리보기에서 확인한 것을 설치 (hash가 다르면 거절). 새로 설치한 플러그인은 꺼져 있다 */
@@ -3630,6 +3636,40 @@ export type PluginSetting_Serialize = {
 	ghost: GhostSetting_Serialize,
 };
 
+export type PluginVersion = PluginVersion_Serialize | PluginVersion_Deserialize;
+
+export type PluginVersion_Deserialize = {
+	/**  폴더 이름 (판 문자열을 폴더 이름으로 쓸 수 있게 고친 것) */
+	dir: string,
+	/**  manifest의 version (읽지 못하면 폴더 이름) */
+	version: string,
+	size: number,
+	/**  폴더를 만든(마지막으로 쓴) 시각 (ms) */
+	modifiedAt: number,
+	/**  지금 쓰는 판 */
+	active: boolean,
+	/**  manifest를 읽지 못한 이유 (그런 판은 고를 수 없고 지울 수만 있음) */
+	error?: string | null,
+	/**  이 판의 저장소 보관본이 있음 (이 판으로 돌아가면 그때 값으로 복원) */
+	hasStorage: boolean,
+};
+
+export type PluginVersion_Serialize = {
+	/**  폴더 이름 (판 문자열을 폴더 이름으로 쓸 수 있게 고친 것) */
+	dir: string,
+	/**  manifest의 version (읽지 못하면 폴더 이름) */
+	version: string,
+	size: number,
+	/**  폴더를 만든(마지막으로 쓴) 시각 (ms) */
+	modifiedAt: number,
+	/**  지금 쓰는 판 */
+	active: boolean,
+	/**  manifest를 읽지 못한 이유 (그런 판은 고를 수 없고 지울 수만 있음) */
+	error: string | null,
+	/**  이 판의 저장소 보관본이 있음 (이 판으로 돌아가면 그때 값으로 복원) */
+	hasStorage: boolean,
+};
+
 export type PostProcessResult = {
 	pluginId: string,
 	/**  이 플러그인이 글을 바꿨나 */
@@ -5040,6 +5080,10 @@ export type UserPlugin_Deserialize = {
 	aiAuto: boolean,
 	/**  켤 때 본 코드와 폴더의 코드가 달라졌나 (파일을 손으로 고침·다른 곳에서 바뀜). 그러면 꺼진 것으로 보고 다시 켜서 동의해야 한다 (6-D-8) */
 	codeChanged: boolean,
+	/**  지금 쓰는 판 폴더 이름 (`plugins/<id>/<이 이름>/`) */
+	activeDir: string,
+	/**  폴더로 있는 판들 (쓰는 판 표시, 고르기·지우기에 쓰임) */
+	versions: PluginVersion_Deserialize[],
 };
 
 /**  목록의 한 줄. manifest를 읽지 못한 폴더도 보여준다(지울 수 있게) */
@@ -5058,6 +5102,10 @@ export type UserPlugin_Serialize = {
 	aiAuto: boolean,
 	/**  켤 때 본 코드와 폴더의 코드가 달라졌나 (파일을 손으로 고침·다른 곳에서 바뀜). 그러면 꺼진 것으로 보고 다시 켜서 동의해야 한다 (6-D-8) */
 	codeChanged: boolean,
+	/**  지금 쓰는 판 폴더 이름 (`plugins/<id>/<이 이름>/`) */
+	activeDir: string,
+	/**  폴더로 있는 판들 (쓰는 판 표시, 고르기·지우기에 쓰임) */
+	versions: PluginVersion_Serialize[],
 };
 
 export type Value = null | boolean | number | string | Value[] | { [key in string]: Value };

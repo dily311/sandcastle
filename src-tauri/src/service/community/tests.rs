@@ -17,6 +17,13 @@ async fn app_dir() -> (tempfile::TempDir, PathBuf, DbPool) {
     (dir, base, db)
 }
 
+/// 설치된 플러그인의 (유일한) 판 폴더 안 파일 — 판 폴더 배치(`plugins/<id>/<판>/`)
+fn vfile(base: &Path, id: &str, rel: &str) -> std::path::PathBuf {
+    let dirs = versions::dirs_of(&base.join("plugins").join(id));
+    assert_eq!(dirs.len(), 1, "{id}: 판 폴더가 하나여야 함: {dirs:?}");
+    dirs[0].1.join(rel)
+}
+
 fn manifest(id: &str, version: &str, perms: &[&str]) -> String {
     json!({ "id": id, "name": "Word Count", "version": version, "apiVersion": 1, "author": "me", "permissions": perms }).to_string()
 }
@@ -63,7 +70,7 @@ async fn installs_from_folder_and_zip_disabled_by_default() {
     assert_eq!(p.id, "word-count");
     assert!(!p.enabled, "새 플러그인은 꺼진 채로");
     assert!(p.granted.is_empty());
-    assert!(base.join("plugins/word-count/panel/index.html").is_file());
+    assert!(vfile(&base, "word-count", "panel/index.html").is_file());
 
     // zip: 폴더 하나로 감싼 것도 (my-plugin/manifest.json), 숨김·macOS 군더더기는 건너뜀
     let z = zip_of(
@@ -76,8 +83,8 @@ async fn installs_from_folder_and_zip_disabled_by_default() {
         ],
     );
     install_from(&db, &base, &z).await.unwrap();
-    assert!(base.join("plugins/lint/main.js").is_file());
-    assert!(!base.join("plugins/lint/.git").exists());
+    assert!(vfile(&base, "lint", "main.js").is_file());
+    assert!(!vfile(&base, "lint", ".git").exists());
 
     let all = list(&db, &base).await.unwrap();
     assert_eq!(all.iter().map(|p| p.id.as_str()).collect::<Vec<_>>(), ["lint", "word-count"]);
@@ -209,7 +216,12 @@ async fn enabling_needs_full_consent_and_new_permissions_disable() {
     assert!(pv.added_permissions.is_empty());
     assert!(!pv.downgrade);
     assert!(install(&db, &base, &v2, &pv.hash).await.unwrap().enabled);
-    assert_eq!(std::fs::read_to_string(base.join("plugins/pp/main.js")).unwrap(), "2");
+    assert_eq!(std::fs::read_to_string(base.join("plugins/pp/1.1.0/main.js")).unwrap(), "2");
+    assert_eq!(
+        std::fs::read_to_string(base.join("plugins/pp/1.0.0/main.js")).unwrap(),
+        "1",
+        "옛 판은 지우지 않음"
+    );
 
     // 권한이 늘어난 새 판 → 꺼짐 (다시 동의)
     let v3 = folder(
@@ -266,7 +278,7 @@ async fn uninstall_goes_to_trash_and_restores_disabled() {
     trash::restore(&db, &base, &item.id).await.unwrap();
     let back = get(&db, &base, "tr").await.unwrap();
     assert!(!back.enabled, "되살린 플러그인은 꺼진 채");
-    assert!(base.join("plugins/tr/main.js").is_file());
+    assert!(vfile(&base, "tr", "main.js").is_file());
 
     // 폴더만 있는(행 없는) 플러그인도 지울 수 있다
     let dir = base.join("plugins/loose");
@@ -387,13 +399,13 @@ async fn changed_code_is_not_enabled_until_consent_again() {
     assert!(!get(&db, &base, "hashy").await.unwrap().code_changed);
 
     // 폴더의 코드를 손으로 바꾸면 켜진 것으로 치지 않는다 (같은 manifest여도)
-    std::fs::write(base.join("plugins/hashy/main.js"), "evil").unwrap();
+    std::fs::write(vfile(&base, "hashy", "main.js"), "evil").unwrap();
     let p = get(&db, &base, "hashy").await.unwrap();
     assert!(!p.enabled && p.code_changed);
     // 파일을 더하는 것도 마찬가지
-    std::fs::write(base.join("plugins/hashy/main.js"), "good").unwrap();
+    std::fs::write(vfile(&base, "hashy", "main.js"), "good").unwrap();
     assert!(get(&db, &base, "hashy").await.unwrap().enabled, "원래대로 돌리면 다시 켜진 것");
-    std::fs::write(base.join("plugins/hashy/extra.js"), "x").unwrap();
+    std::fs::write(vfile(&base, "hashy", "extra.js"), "x").unwrap();
     assert!(get(&db, &base, "hashy").await.unwrap().code_changed);
 
     // 다시 켜면(동의) 지금 코드가 기준이 된다
@@ -415,7 +427,7 @@ async fn restored_backup_and_trash_do_not_start_plugins_on_their_own() {
     backup::finish_restore_fixups(&db, &base).await.unwrap();
     let p = get(&db, &base, "rb").await.unwrap();
     assert!(!p.enabled && !p.ai_auto);
-    assert!(base.join("plugins/rb/main.js").is_file());
+    assert!(vfile(&base, "rb", "main.js").is_file());
 
     // 휴지통에서 되살린 플러그인도 꺼진 채 (스냅샷 안의 enabled=1을 믿지 않음)
     set_enabled(&db, &base, "rb", true, vec!["ai".into(), "storage".into()]).await.unwrap();
@@ -488,4 +500,99 @@ async fn bundled_examples_install_and_follow_the_rules() {
     let all = list(&db, &base).await.unwrap();
     assert_eq!(all.len(), dirs.len());
     assert!(all.iter().all(|p| !p.enabled && p.manifest.is_some() && p.error.is_none()));
+}
+
+// ---------------------------------------------------------------------------
+// 판 폴더 (1-F-1): plugins/<id>/<판>/, 쓰는 판 고르기(되돌리기), 판 폴더 지우기
+// ---------------------------------------------------------------------------
+
+#[tokio::test]
+async fn updates_keep_old_versions_and_the_user_picks_which_one_to_use() {
+    let (d, base, db) = app_dir().await;
+    let v1 = folder(d.path(), &[("manifest.json", &manifest("vp", "1.0.0", &["storage"])), ("main.js", "one")]);
+    install_from(&db, &base, &v1).await.unwrap();
+    set_enabled(&db, &base, "vp", true, vec!["storage".into()]).await.unwrap();
+    storage::set(&db, "vp", "k", &json!("a")).await.unwrap();
+
+    // 업데이트: 새 판 폴더가 생기고 옛 판은 남는다. 권한이 그대로면 켜진 채 이어받음, 저장소도 이어받음
+    let v2 = folder(d.path(), &[("manifest.json", &manifest("vp", "1.1.0", &["storage"])), ("main.js", "two")]);
+    let p = install_from(&db, &base, &v2).await.unwrap();
+    assert_eq!((p.versions.len(), p.active_dir.as_str(), p.enabled), (2, "1.1.0", true));
+    assert!(base.join("plugins/vp/1.0.0/main.js").is_file() && base.join("plugins/vp/1.1.0/main.js").is_file());
+    assert_eq!(
+        p.versions.iter().filter(|v| v.active).map(|v| v.version.as_str()).collect::<Vec<_>>(),
+        ["1.1.0"]
+    );
+    assert_eq!(storage::get(&db, "vp", "k").await.unwrap(), json!("a"));
+    storage::set(&db, "vp", "k", &json!("b")).await.unwrap();
+
+    // 되돌리기: 꺼진 채로(코드가 바뀜), 저장소는 그 판을 떠날 때의 값으로
+    let back = switch_version(&db, &base, "vp", "1.0.0").await.unwrap();
+    assert_eq!((back.active_dir.as_str(), back.enabled, back.ai_auto), ("1.0.0", false, false));
+    assert_eq!(back.manifest.as_ref().map(|m| m.version.as_str()), Some("1.0.0"));
+    assert_eq!(storage::get(&db, "vp", "k").await.unwrap(), json!("a"), "옛 판의 저장소로 복원");
+    // 다시 켜서 동의하면 쓸 수 있고, 판 폴더의 보관 파일은 코드 지문에 들어가지 않는다
+    let on = set_enabled(&db, &base, "vp", true, vec!["storage".into()]).await.unwrap();
+    assert!(on.enabled && !on.code_changed);
+    // 새 판으로 다시: 새 판을 떠날 때 보관한 값(b)
+    let fwd = switch_version(&db, &base, "vp", "1.1.0").await.unwrap();
+    assert_eq!((fwd.active_dir.as_str(), fwd.enabled), ("1.1.0", false));
+    assert_eq!(storage::get(&db, "vp", "k").await.unwrap(), json!("b"));
+    assert!(base.join("plugins/vp/1.0.0").join(versions::STORAGE_SNAPSHOT).is_file());
+
+    // 지우기: 쓰는 판은 거절, 쓰지 않는 판은 지워짐, 폴더 밖·없는 폴더는 거절
+    assert!(delete_version(&db, &base, "vp", "1.1.0").await.is_err());
+    for bad in ["..", "../x", ".", "", "nope", "1.0.0/../1.1.0"] {
+        assert!(
+            delete_version(&db, &base, "vp", bad).await.is_err() && switch_version(&db, &base, "vp", bad).await.is_err(),
+            "{bad}"
+        );
+    }
+    let after = delete_version(&db, &base, "vp", "1.0.0").await.unwrap();
+    assert_eq!(after.versions.len(), 1);
+    assert!(!base.join("plugins/vp/1.0.0").exists() && base.join("plugins/vp/1.1.0/main.js").is_file());
+}
+
+#[tokio::test]
+async fn same_version_is_reused_when_the_code_matches_and_split_when_it_does_not() {
+    let (d, base, db) = app_dir().await;
+    let a = folder(d.path(), &[("manifest.json", &manifest("sv", "1.0.0", &[])), ("main.js", "one")]);
+    install_from(&db, &base, &a).await.unwrap();
+    // 같은 판·같은 코드를 다시 설치해도 폴더가 늘지 않는다
+    assert_eq!(install_from(&db, &base, &a).await.unwrap().versions.len(), 1);
+    // 같은 판 이름에 다른 코드: 코드 지문을 붙인 다른 폴더, 옛 것은 그대로 (같은 코드를 또 설치하면 그 폴더를 다시 씀)
+    let b = folder(d.path(), &[("manifest.json", &manifest("sv", "1.0.0", &[])), ("main.js", "patched")]);
+    let p = install_from(&db, &base, &b).await.unwrap();
+    assert_eq!(p.versions.len(), 2);
+    assert!(p.active_dir.starts_with("1.0.0-") && std::fs::read_to_string(base.join("plugins/sv/1.0.0/main.js")).unwrap() == "one");
+    assert_eq!(install_from(&db, &base, &b).await.unwrap().versions.len(), 2);
+    // 판 문자열이 폴더 이름으로 쓸 수 없는 글자를 가져도 안전하게
+    assert_eq!(versions::dir_name("v1/../x y"), "v1_.._x_y");
+    assert_eq!(versions::dir_name("..."), "v");
+    assert!(
+        versions::valid_dir_name("1.0.0-ab12") && !versions::valid_dir_name("..") && !versions::valid_dir_name(".hidden") && !versions::valid_dir_name("a/b")
+    );
+}
+
+#[tokio::test]
+async fn the_old_flat_layout_is_moved_into_a_version_folder_once() {
+    let (_d, base, db) = app_dir().await;
+    let flat = base.join("plugins/old-flat");
+    std::fs::create_dir_all(flat.join("panel")).unwrap();
+    std::fs::write(flat.join("manifest.json"), manifest("old-flat", "2.3.0", &[])).unwrap();
+    std::fs::write(flat.join("main.js"), "x").unwrap();
+    std::fs::write(flat.join("panel/p.html"), "<p>").unwrap();
+
+    let all = list(&db, &base).await.unwrap();
+    let p = all.iter().find(|p| p.id == "old-flat").unwrap();
+    assert_eq!((p.active_dir.as_str(), p.versions.len(), p.manifest.is_some()), ("2.3.0", 1, true));
+    assert!(base.join("plugins/old-flat/2.3.0/panel/p.html").is_file() && !base.join("plugins/old-flat/manifest.json").exists());
+    // 다시 불러도 그대로 (두 번 옮기지 않음)
+    assert_eq!(versions::migrate_layout(&base).unwrap(), 0);
+    assert_eq!(list(&db, &base).await.unwrap().iter().find(|p| p.id == "old-flat").unwrap().versions.len(), 1);
+}
+
+#[test]
+fn sdk_support_range_is_consistent() {
+    const { assert!(manifest::MIN_API_VERSION >= 1 && manifest::MIN_API_VERSION <= manifest::API_VERSION) };
 }

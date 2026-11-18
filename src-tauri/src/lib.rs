@@ -328,6 +328,9 @@ pub fn specta_builder() -> tauri_specta::Builder<tauri::Wry> {
         list_trash,
         // 커뮤니티 플러그인 (6-D)
         list_user_plugins,
+        list_plugin_folders,
+        switch_user_plugin_version,
+        delete_user_plugin_version,
         preview_user_plugin,
         install_user_plugin,
         set_user_plugin_enabled,
@@ -630,6 +633,9 @@ pub fn specta_builder() -> tauri_specta::Builder<tauri::Wry> {
         list_trash,
         // 커뮤니티 플러그인 (6-D)
         list_user_plugins,
+        list_plugin_folders,
+        switch_user_plugin_version,
+        delete_user_plugin_version,
         preview_user_plugin,
         install_user_plugin,
         set_user_plugin_enabled,

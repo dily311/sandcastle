@@ -10,6 +10,9 @@ use crate::error::{AppError, Result};
 
 /// 앱이 지원하는 플러그인 SDK 판. 플러그인의 `apiVersion`이 이보다 크면 설치하지 않는다.
 pub const API_VERSION: u32 = 1;
+/// 앱이 아직 돌려 주는 가장 낮은 SDK 판. 새 SDK가 나와도 이 아래로 내리기 전까지 옛 판 플러그인은 그대로 돈다 (깨지는 변경만 `API_VERSION`을 올리고,
+/// 옛 판은 최소 한 판 이전까지 유지한다 — ADR-012 갱신)
+pub const MIN_API_VERSION: u32 = 1;
 
 /// 데이터 권한이 다루는 종류 (`data.read:<종류>`, `data.write:<종류>`)
 pub const DATA_KINDS: [&str; 4] = ["character", "persona", "lorebook", "chat"];
@@ -194,6 +197,12 @@ pub fn parse(bytes: &[u8], app_version: &str) -> Result<PluginManifest> {
     }
     if m.api_version == 0 {
         return Err(bad("apiVersion이 없음"));
+    }
+    if m.api_version < MIN_API_VERSION {
+        return Err(bad(format!(
+            "이 앱이 더는 지원하지 않는 오래된 플러그인 API (apiVersion {} < {MIN_API_VERSION}) — 플러그인을 새 판으로 업데이트하세요",
+            m.api_version
+        )));
     }
     if m.api_version > API_VERSION {
         return Err(bad(format!(
