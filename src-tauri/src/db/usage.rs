@@ -12,6 +12,8 @@ pub enum UsageKind {
     Chat,
     Tts,
     Image,
+    /// 임베딩 (입력 토큰만 센다, CLAUDE.md 3-A-1)
+    Embedding,
 }
 
 impl UsageKind {
@@ -20,6 +22,7 @@ impl UsageKind {
             Self::Chat => "chat",
             Self::Tts => "tts",
             Self::Image => "image",
+            Self::Embedding => "embedding",
         }
     }
 }

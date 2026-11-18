@@ -1,3 +1,22 @@
 {
-  "identifier": "com.dilly311.sandcastle.e2e"
+  "identifier": "com.dilly311.sandcastle.e2e",
+  "app": {
+    "windows": [
+      {
+        "label": "main",
+        "url": "index.html",
+        "title": "sand",
+        "hiddenTitle": true,
+        "decorations": false,
+        "transparent": true,
+        "dragDropEnabled": false,
+        "width": 800,
+        "height": 600,
+        "resizable": true,
+        "fullscreen": false,
+        "visible": false,
+        "additionalBrowserArgs": "--remote-debugging-port=9333"
+      }
+    ]
+  }
 }

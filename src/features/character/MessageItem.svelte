@@ -12,6 +12,10 @@
 	import { metaOf, type ChatSession, type Message } from "./session.svelte";
 	import { fileSrc } from "$shared/ipc/file";
 	import { layout } from "$app/layout.svelte";
+	import PluginProcessNote from "$features/community/PluginProcessNote.svelte";
+	import LintNote from "./LintNote.svelte";
+	import { lintOf } from "./lint";
+	import { pluginProcessOf } from "$features/community/postprocess";
 
 	interface Props {
 		msg: Message;
@@ -36,7 +40,21 @@
 	const translation = $derived(plugins.on("translate") ? translationOf(msg) : null);
 	let showOriginal = $state(false);
 	// 받는 중에는 응답 끝의 <image> 그림 프롬프트(이미지 자동 생성)를 숨긴다 (저장할 때 백엔드가 뺀다)
-	const text = $derived(live ? live.text.replace(/<image>[\s\S]*?(<\/image>|$)/i, "") : translation && !showOriginal ? translation.text : (session.display[msg.id] ?? msg.content));
+	/** 플러그인이 고친 메시지의 원문 보기 (6-D-4) */
+	let pluginOriginal = $state(false);
+	/** linter가 고친 메시지의 원문 보기 (3-B-3) */
+	let lintOriginal = $state(false);
+	const text = $derived(
+		live
+			? live.text.replace(/<image>[\s\S]*?(<\/image>|$)/i, "")
+			: translation && !showOriginal
+				? translation.text
+				: lintOriginal
+					? (lintOf(msg)?.original ?? msg.content)
+					: pluginOriginal
+					? (pluginProcessOf(msg)?.original ?? msg.content)
+					: (session.display[msg.id] ?? msg.content),
+	);
 	const drawn = $derived(plugins.on("imagegen") ? generatedImagesOf(msg) : []);
 	let toolBusy = $state<"" | "translate" | "draw">("");
 	async function translate() {
@@ -176,6 +194,8 @@
 				{#each meta.attachments as a (a)}<a href={fileSrc(a)} target="_blank" rel="noreferrer"><img src={fileSrc(a)} alt="첨부 이미지" loading="lazy" /></a>{/each}
 			</div>
 		{/if}
+		{#if !live}<LintNote {msg} bind:showOriginal={lintOriginal} onupdate={(m) => session.update(m)} />{/if}
+		{#if !live}<PluginProcessNote {msg} bind:showOriginal={pluginOriginal} onupdate={(m) => session.update(m)} />{/if}
 		{#if translation && !live}<p class="tr-note">{showOriginal ? "원문" : `${translation.lang} 번역`} · <button class="link" onclick={() => (showOriginal = !showOriginal)}>{showOriginal ? "번역 보기" : "원문 보기"}</button></p>{/if}
 		{#if blocks.length}
 			<RichText {blocks} {images} />

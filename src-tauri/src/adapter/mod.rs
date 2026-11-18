@@ -19,6 +19,17 @@ pub mod vertexai_adapter;
 // 그림모델
 pub mod nai_adapter;
 
+pub mod capabilities;
+pub mod schema;
+pub mod tools;
+
+#[cfg(test)]
+pub(crate) mod testutil;
+
+pub use tools::{ChatExtras, ProviderState, ResponseSchema, StopKind, ToolCall, ToolChoice, ToolTurn};
+#[cfg(test)]
+pub(crate) use tools::{ToolResult, ToolSpec};
+
 mod sse;
 
 /// 어댑터 호출에 필요한 공통 재료
@@ -46,6 +57,55 @@ pub struct Generation {
     pub finish_reason: Option<String>,
     /// 공급자가 알려준 토큰 사용량 (입력, 출력). 없으면 None → 앱이 추정 (ResourceManager)
     pub usage: Option<(u64, u64)>,
+    /// 모델이 한 도구 호출 (도구를 보내지 않았으면 늘 비어 있다). 스트림이 끝난 뒤에 모아서 돌려준다
+    pub tool_calls: Vec<ToolCall>,
+    /// 멈춘 이유를 정규화한 것 (원문은 `finish_reason`)
+    pub stop: StopKind,
+    /// 도구 호출이 있을 때, 다음 턴에 그대로 돌려보낼 응답 원본 (`ToolTurn::Assistant.state`)
+    pub state: Option<ProviderState>,
+}
+
+/// 임베딩 목적 (공급자가 검색용 문서/질의를 구분해 더 잘 맞추는 경우)
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
+pub enum EmbedTask {
+    /// 저장해 둘 글
+    #[default]
+    Document,
+    /// 검색어
+    Query,
+}
+
+pub struct EmbedRequest<'a> {
+    /// 임베딩 모델 (프로필의 채팅 모델과 다르다 — 호출하는 쪽이 정한다)
+    pub model: &'a str,
+    pub inputs: &'a [String],
+    pub task: EmbedTask,
+    /// 벡터 길이를 줄일 때 (지원하는 모델만)
+    pub dimensions: Option<u32>,
+}
+
+#[derive(Debug, Clone, Default)]
+pub struct Embeddings {
+    /// 입력 순서대로
+    pub vectors: Vec<Vec<f32>>,
+    /// 공급자가 알려준 입력 토큰 수 (없으면 None → 앱이 추정)
+    pub tokens: Option<u64>,
+}
+
+/// 벡터를 길이 1로 (Gemini는 차원을 줄이면 직접 정규화해야 한다)
+pub(crate) fn l2_normalize(v: &mut [f32]) {
+    let norm = v.iter().map(|x| x * x).sum::<f32>().sqrt();
+    if norm > 0.0 {
+        v.iter_mut().for_each(|x| *x /= norm);
+    }
+}
+
+pub(crate) fn unsupported(what: &str, why: &str) -> AppError {
+    AppError::ai_provider(
+        ErrorCode::AiFeatureUnsupported,
+        format!("이 API 형식은 {what}을(를) 지원하지 않음: {why}"),
+        false,
+    )
 }
 
 /// JSON 안의 두 숫자로 (입력, 출력) 토큰. 둘 다 없으면 None
@@ -59,10 +119,14 @@ pub(crate) fn usage_from(v: &serde_json::Value, input_key: &str, output_key: &st
 pub trait AiProvider: Send + Sync {
     async fn list_models(&self, call: &ProviderCall<'_>) -> Result<Vec<String>>;
 
-    /// 텍스트 생성.
-    /// `prompt.chat_options.stream`이 true면 스트리밍으로 받으며 조각마다 `on_delta`를 부른다.
-    /// false면 `on_delta`를 부르지 않고 전체 응답만 돌려준다.
-    async fn generate(&self, call: &ProviderCall<'_>, prompt: &PromptMessage, on_delta: &mut OnDelta<'_>) -> Result<Generation>;
+    /// 텍스트 생성 + 도구 호출·구조화 출력 (3-A). `extras`가 비어 있으면 도구·구조화 출력이 없는 평범한 요청이다.
+    /// 스트리밍이어도 글 조각만 `on_delta`로 가고, 도구 호출은 끝난 뒤 `Generation.tool_calls`로 돌려준다
+    async fn generate_with(&self, call: &ProviderCall<'_>, prompt: &PromptMessage, extras: &ChatExtras, on_delta: &mut OnDelta<'_>) -> Result<Generation>;
+
+    /// 임베딩 (3-A-1). 지원하지 않는 형식은 기본 구현이 거절한다
+    async fn embed(&self, _call: &ProviderCall<'_>, _req: &EmbedRequest<'_>) -> Result<Embeddings> {
+        Err(unsupported("임베딩", "이 공급자에는 임베딩 API가 없음"))
+    }
 }
 
 /// api_profiles.format_type → 어댑터

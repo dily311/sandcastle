@@ -35,7 +35,10 @@ pub enum ErrorCode {
     AiProviderTimeout,
     AiProviderConnectionFailed,
     AiRequestCancelled,
-    AiContextOverflow, // 고정 프롬프트만으로 컨텍스트 한도를 넘음
+    AiContextOverflow,         // 고정 프롬프트만으로 컨텍스트 한도를 넘음
+    AiFeatureUnsupported,      // 이 연결(공급자·모델)이 임베딩·도구·구조화 출력을 지원하지 않음 (공급자를 부르지 않고 거절)
+    AiStructuredOutputInvalid, // 응답이 JSON이 아니거나 스키마에 맞지 않음 (details: problems, raw)
+    AiOutputTruncated,         // 출력 한도(max_tokens)에서 잘려 도구 호출·JSON이 끊김 — 실행하지 않음
 
     // Task
     TaskInvalidTransition, // 현재 상태에서 허용되지 않는 요청 (이미 끝난 작업 취소 등)

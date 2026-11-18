@@ -22,6 +22,7 @@
 	import { recoverInterruptedChats } from "$features/character/recovery";
 	import { plugins } from "$shared/stores/plugins.svelte";
 	import PluginOff from "./PluginOff.svelte";
+	import PluginHost from "$features/community/PluginHost.svelte";
 	import ImagesPage from "$features/images/ImagesPage.svelte";
 	import HomePage from "$features/home/HomePage.svelte";
 	import { watchTaskErrors } from "$shared/stores/taskLog";
@@ -133,6 +134,7 @@
 <Toasts />
 <ConfirmHost />
 <ImageViewerHost />
+<PluginHost enabled={plugins.on("community")} />
 
 <style>
 	.app {

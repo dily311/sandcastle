@@ -21,7 +21,7 @@ export function watchTaskErrors() {
 		if (e.type !== "failed" && e.type !== "retrying") return;
 		const err = e.data.error;
 		const task = await call(commands.getTask(e.data.taskId), { source: "task", silent: true }).catch(() => null);
-		const who = task ? `${FEATURE[task.feature ?? ""] ?? task.feature ?? "작업"}${task.label ? ` · ${task.label}` : ""}` : "작업";
+		const who = task ? `${FEATURE[task.feature ?? ""] ?? (task.feature?.startsWith("plugin:") ? "플러그인" : task.feature) ?? "작업"}${task.label ? ` · ${task.label}` : ""}` : "작업";
 		const auto = task?.runBy === "auto" ? " (자동)" : "";
 		const details = { taskId: e.data.taskId, code: err?.code, retryable: err?.retryable, attempt: e.data.attemptNo, feature: task?.feature, runBy: task?.runBy };
 		if (e.type === "failed" && err?.code === "BUDGET_EXCEEDED") budgetToast(err.message, task?.runBy !== "auto");

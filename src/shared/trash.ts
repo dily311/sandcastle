@@ -12,6 +12,7 @@ export const TRASH_KIND_LABEL: Record<TrashKind, string> = {
 	prompt_preset: "프리셋",
 	game: "게임",
 	game_session: "플레이 기록",
+	user_plugin: "플러그인",
 };
 
 /** 휴지통에서 되살린다. 실패하면(연결된 항목이 없음 등) call이 이유를 토스트로 보여 준다 */

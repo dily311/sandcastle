@@ -31,6 +31,10 @@ pub mod id {
     pub const IMAGE_AUTO: &str = "imageauto";
     /// 기기 사이 동기화 (2단계, ADR-011)
     pub const SYNC: &str = "sync";
+    /// 사용자가 설치한 플러그인 (6-D, ADR-012)
+    pub const COMMUNITY: &str = "community";
+    /// 응답 저장 직전 메시지 검사·고침 (3-B, ADR-014)
+    pub const LINT: &str = "lint";
 }
 
 #[derive(Debug, Clone, Serialize, specta::Type)]
@@ -133,6 +137,21 @@ const CATALOG: &[Def] = &[
         id: id::SYNC,
         name: "동기화",
         description: "다른 기기(PC·폰)와 캐릭터·대화·설정을 파일로 주고받아 합치기. API 키는 넘어가지 않음",
+        default_enabled: false,
+        desktop_only: false,
+    },
+    Def {
+        id: id::LINT,
+        name: "메시지 linter",
+        description: "AI 응답이 저장될 때 닫히지 않은 태그·따옴표, 반복, 내 대사 대신 쓰기, 금지어, 길이를 검사 (요금 없음, 고치면 원문 보존)",
+        default_enabled: false,
+        desktop_only: false,
+    },
+    // 남이 만든 코드를 실행하므로 기본 꺼짐. 켜도 플러그인마다 따로 켜고 권한을 허락해야 돈다
+    Def {
+        id: id::COMMUNITY,
+        name: "커뮤니티 플러그인",
+        description: "직접 만들거나 받은 플러그인을 파일로 설치. 격리된 곳에서 허락한 권한만으로 동작",
         default_enabled: false,
         desktop_only: false,
     },

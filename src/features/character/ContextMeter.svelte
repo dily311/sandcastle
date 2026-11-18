@@ -31,6 +31,10 @@
 			<li><span class="dot history"></span>대화 {n(usage.history)} <small>(메시지 {usage.historyCount}개)</small></li>
 			{#if usage.reserved}<li><span class="dot reserved"></span>응답 몫 {n(usage.reserved)}</li>{/if}
 		</ul>
+		{#if usage.plugins?.length}
+			<!-- 커뮤니티 플러그인이 더한 블록 (6-D-5). 설정·캐릭터 몫 안에 들어 있다 -->
+			<p class="faint small plugins">플러그인이 더함: {usage.plugins.map((p) => `${p.name} ${n(p.tokens)}`).join(" · ")} <small>(설정·캐릭터에 포함)</small></p>
+		{/if}
 		{#if ratio >= 0.8}<p class="note">한도에 가까우면 오래된 메시지부터 빠짐. 메모에 꼭 남길 내용을 적어 두면 좋음</p>{/if}
 	{/if}
 	<p class="faint small">마지막으로 보낸 프롬프트 기준{usage?.presetName ? ` · 프리셋 '${usage.presetName}'` : ""}</p>

@@ -471,6 +471,8 @@ pub async fn game_context_usage(
         reserved,
         preset_name: loaded.as_ref().map(|p| p.preset.name.clone()),
         preset_id,
+        // 게임 대사에는 플러그인 프롬프트 훅을 쓰지 않는다
+        plugins: vec![],
     })
 }
 

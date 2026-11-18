@@ -4,10 +4,10 @@ import type { CorePlugin } from "$ipc/bindings";
 import { call, commands } from "$shared/ipc/client";
 import { onEvent } from "$shared/ipc/events";
 
-export type PluginId = "phone" | "game" | "chat.images" | "html" | "regex" | "widget" | "translate" | "tts" | "imagegen" | "imageauto" | "sync";
+export type PluginId = "phone" | "game" | "chat.images" | "html" | "regex" | "widget" | "translate" | "tts" | "imagegen" | "imageauto" | "sync" | "community" | "lint";
 
 /** 백엔드 목록을 읽기 전에 꺼진 것으로 볼 기능 (sys/plugins.rs의 default_enabled: false) */
-const DEFAULT_OFF: PluginId[] = ["translate", "tts", "imagegen", "imageauto", "widget", "html", "sync"];
+const DEFAULT_OFF: PluginId[] = ["translate", "tts", "imagegen", "imageauto", "widget", "html", "sync", "community", "lint"];
 
 class Plugins {
 	list = $state<CorePlugin[]>([]);

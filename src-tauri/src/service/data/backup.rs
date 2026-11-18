@@ -41,10 +41,11 @@ use super::{
 };
 
 pub const BACKUP_FORMAT: &str = "sandcastle-backup";
-/// 2: generated·backgrounds 추가, manifest.dirs
-pub const BACKUP_VERSION: u32 = 2;
-/// 백업에 들어가는 폴더 (album_arts 같은 캐시, exports, tmp는 제외). trash는 DB의 휴지통 항목과 짝이라 같이 담는다 (2-A-3)
-pub const BACKUP_DIRS: [&str; 6] = ["characters", "games", "themes", "generated", "backgrounds", "trash"];
+/// 2: generated·backgrounds 추가, manifest.dirs / 3: plugins(커뮤니티 플러그인, 6-D-1) 추가
+pub const BACKUP_VERSION: u32 = 3;
+/// 백업에 들어가는 폴더 (album_arts 같은 캐시, exports, tmp는 제외). trash는 DB의 휴지통 항목과 짝이라 같이 담는다 (2-A-3).
+/// plugins는 사용자가 설치한 플러그인 코드 (켜짐·허락은 DB의 user_plugins — 같이 복원된다)
+pub const BACKUP_DIRS: [&str; 7] = ["characters", "games", "themes", "generated", "backgrounds", "trash", "plugins"];
 /// v1 백업에 들어 있던 폴더 (manifest.dirs가 없을 때)
 const V1_DIRS: [&str; 3] = ["characters", "games", "themes"];
 const DB_FILE: &str = "app.db";
@@ -357,6 +358,9 @@ pub fn apply_pending_restore(app_data_dir: &Path) -> Result<bool> {
 pub async fn finish_restore_fixups(db: &DbPool, app_data_dir: &Path) -> Result<()> {
     let fixup = app_data_dir.join(FIXUP_FILE);
     let Ok(raw) = std::fs::read(&fixup) else { return Ok(()) };
+    // 복원한 백업 안의 커뮤니티 플러그인은 켜진 채 시작하지 않는다 (남이 만든 백업이 동의 없이 코드를 돌리지 않게, ADR-012).
+    // 플러그인 폴더는 그대로 두고 켜짐·자동 AI 호출만 끈다 — 설정 > 커뮤니티 플러그인에서 다시 켜서 동의한다
+    sqlx::query("UPDATE user_plugins SET enabled = 0, ai_auto = 0").execute(db).await?;
     let v: serde_json::Value = serde_json::from_slice(&raw).unwrap_or_default();
     let old = v["oldAppDataDir"].as_str().unwrap_or_default().to_string();
     let new = app_data_dir.to_string_lossy().to_string();

@@ -23,8 +23,8 @@ use crate::{
     sys::{settings::SettingsState, themes::ThemeManager},
 };
 use commands::{
-    ai_service::*, character_image::*, chat::*, conversation::*, convert::*, data::*, game_engine::*, game_manager::*, import::*, phone::*, preset::*,
-    regex::*, settings::*, sync::*, task::*,
+    ai_service::*, character_image::*, chat::*, community::*, conversation::*, convert::*, data::*, game_engine::*, game_manager::*, import::*, phone::*,
+    preset::*, proposals::*, regex::*, settings::*, sync::*, task::*,
 };
 use task::{TaskEventEmitter, TaskManager};
 
@@ -189,6 +189,14 @@ pub fn run() {
     // AI 답변의 HTML 코드 블록 (iframe, sys/html_view.rs)
     builder = builder.register_uri_scheme_protocol("htmlview", |_app, req| sys::html_view::handle(req));
 
+    // 커뮤니티 플러그인 코드 (iframe, service/community/runtime.rs). 도는 플러그인의 것만, 코어 플러그인이 켜져 있을 때만
+    builder = builder.register_uri_scheme_protocol("plugin", |ctx, req| {
+        if sys::plugins::require(ctx.app_handle(), sys::plugins::id::COMMUNITY).is_err() {
+            service::community::runtime::stop_all();
+        }
+        service::community::runtime::handle(&req)
+    });
+
     // game 에셋 서빙
     builder = builder.register_uri_scheme_protocol("game", |app, req| {
         let app_handle = app.app_handle();
@@ -212,6 +220,8 @@ fn with_event_types(b: tauri_specta::Builder<tauri::Wry>) -> tauri_specta::Build
         .typ::<error::BlockReason>()
         // 동기화 진행 (sync::progress)
         .typ::<commands::sync::SyncProgress>()
+        // 커뮤니티 플러그인 프롬프트 요청 (user-plugin-prompt, 6-D-5)
+        .typ::<service::community::prompt_hook::PromptHookRequest>()
         // 타임스탬프(밀리초)·개수는 2^53 안이라 number로 충분
         .dangerously_cast_bigints_to_number()
 }
@@ -240,6 +250,7 @@ pub fn specta_builder() -> tauri_specta::Builder<tauri::Wry> {
         delete_theme,
         // ai
         get_models,
+        get_ai_capabilities,
         test_message,
         chat_send,
         chat_regenerate,
@@ -309,6 +320,30 @@ pub fn specta_builder() -> tauri_specta::Builder<tauri::Wry> {
         get_data_overview,
         check_data,
         list_trash,
+        // 커뮤니티 플러그인 (6-D)
+        list_user_plugins,
+        preview_user_plugin,
+        install_user_plugin,
+        set_user_plugin_enabled,
+        uninstall_user_plugin,
+        start_user_plugins,
+        stop_user_plugins,
+        call_user_plugin,
+        get_user_plugin_log,
+        set_user_plugin_process_mode,
+        apply_plugin_postprocess,
+        revert_plugin_postprocess,
+        revert_lint,
+        answer_plugin_prompt,
+        set_user_plugin_ai_auto,
+        get_user_plugin_settings,
+        set_user_plugin_setting,
+        // 고치기 제안 (6-D-3)
+        list_change_proposals,
+        count_pending_proposals,
+        apply_change_proposal,
+        reject_change_proposal,
+        revert_change_proposal,
         restore_trash_item,
         purge_trash_item,
         empty_trash,
@@ -503,6 +538,7 @@ pub fn specta_builder() -> tauri_specta::Builder<tauri::Wry> {
         delete_theme,
         // ai
         get_models,
+        get_ai_capabilities,
         test_message,
         chat_send,
         chat_regenerate,
@@ -572,6 +608,30 @@ pub fn specta_builder() -> tauri_specta::Builder<tauri::Wry> {
         get_data_overview,
         check_data,
         list_trash,
+        // 커뮤니티 플러그인 (6-D)
+        list_user_plugins,
+        preview_user_plugin,
+        install_user_plugin,
+        set_user_plugin_enabled,
+        uninstall_user_plugin,
+        start_user_plugins,
+        stop_user_plugins,
+        call_user_plugin,
+        get_user_plugin_log,
+        set_user_plugin_process_mode,
+        apply_plugin_postprocess,
+        revert_plugin_postprocess,
+        revert_lint,
+        answer_plugin_prompt,
+        set_user_plugin_ai_auto,
+        get_user_plugin_settings,
+        set_user_plugin_setting,
+        // 고치기 제안 (6-D-3)
+        list_change_proposals,
+        count_pending_proposals,
+        apply_change_proposal,
+        reject_change_proposal,
+        revert_change_proposal,
         restore_trash_item,
         purge_trash_item,
         empty_trash,

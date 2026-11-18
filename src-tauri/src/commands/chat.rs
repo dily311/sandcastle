@@ -208,6 +208,8 @@ pub struct ContextUsage {
     pub reserved: u32,
     pub preset_id: Option<String>,
     pub preset_name: Option<String>,
+    /// 커뮤니티 플러그인이 더한 프롬프트 블록 (6-D-5, 시스템 토큰에 들어 있음)
+    pub plugins: Vec<crate::service::community::prompt_hook::PluginPromptUse>,
 }
 
 #[tauri::command]
@@ -238,10 +240,17 @@ pub async fn context_usage(state: State<'_, AppState>, settings: State<'_, Setti
     // 마지막 AI 메시지에 저장된 프롬프트
     let recent = conversation::get_messages(&state.db, &conversation_id, 30, None).await?;
     let mut prompt: Option<PromptMessage> = None;
+    let mut plugins = vec![];
     for m in recent.iter().rev().filter(|m| m.role == "assistant") {
         if let Some(v) = chat_ui::get_prompt(&state.db, &m.id).await? {
             if let Ok(p) = serde_json::from_value::<PromptMessage>(v) {
                 prompt = Some(p);
+                plugins = m
+                    .meta
+                    .as_ref()
+                    .and_then(|meta| meta.pointer("/info/pluginPrompt"))
+                    .and_then(|v| serde_json::from_value(v.clone()).ok())
+                    .unwrap_or_default();
                 break;
             }
         }
@@ -267,6 +276,7 @@ pub async fn context_usage(state: State<'_, AppState>, settings: State<'_, Setti
         reserved,
         preset_name: preset.as_ref().map(|p| p.preset.name.clone()),
         preset_id,
+        plugins,
     })
 }
 
@@ -361,4 +371,12 @@ pub async fn delete_messages(state: State<'_, AppState>, ids: Vec<String>) -> Re
     }
     tx.commit().await?;
     Ok(n)
+}
+
+/// linter가 고친 글을 원문으로 (그 뒤 또 고쳤으면 거절). 플러그인이 꺼져 있어도 된다 — 되돌리기는 언제나 (3-B-3)
+#[tauri::command]
+#[specta::specta]
+pub async fn revert_lint(state: State<'_, AppState>, message_id: String) -> Result<crate::models::conversation::Message> {
+    crate::service::chat::lint::revert(&state.db, &message_id).await?;
+    Ok(crate::db::chat_ui::get_message(&state.db, &message_id).await?)
 }
