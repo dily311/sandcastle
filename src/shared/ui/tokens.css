@@ -145,7 +145,7 @@
 	--control-md: 34px;
 	--control-lg: 42px;
 	/* 손가락으로 누르는 곳의 최소 크기 (보이는 크기는 그대로, 누르는 범위만 넓힘) */
-	--touch-target: 44px;
+	--touch-target: 36px;
 
 	.mobile {
 		--titlebar-height: 52px;

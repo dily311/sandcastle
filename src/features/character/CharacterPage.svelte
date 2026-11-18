@@ -7,7 +7,7 @@
 	import { nav } from "$app/nav.svelte";
 	import { call, commands } from "$shared/ipc/client";
 	import { IMAGE_FILES, PACK_FILES, ST_FILES, pickFiles, pickSavePath } from "$shared/ipc/dialog";
-	import { fileSrc } from "$shared/ipc/file";
+	import { fileSrc, imageSrc } from "$shared/ipc/file";
 	import { confirmAction, promptText } from "$shared/stores/confirm.svelte";
 	import { toasts } from "$shared/stores/toast.svelte";
 	import { absolute, relative } from "$shared/time";
@@ -187,7 +187,7 @@
 
 	// ---- 상세 ----
 	const character = $derived(library.character(charId));
-	const overviewImages = $derived(charId ? Object.fromEntries((library.images[charId] ?? []).map((i) => [i.key, fileSrc(i.path) ?? ""])) : {});
+	const overviewImages = $derived(charId ? Object.fromEntries((library.images[charId] ?? []).map((i) => [i.key, imageSrc(i) ?? ""])) : {});
 	$effect(() => {
 		if (charId && !edit && !convId && !library.images[charId]) void library.loadImages(charId);
 	});
@@ -448,7 +448,7 @@
 	}
 	.grid {
 		display: grid;
-		grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
+		grid-template-columns: repeat(auto-fill, minmax(min(220px, 45%), 1fr));
 		gap: var(--space-3);
 		max-width: var(--page-wide);
 		margin: 0 auto;
@@ -685,6 +685,21 @@
 	@media (max-width: 600px) {
 		.page {
 			padding: var(--space-4);
+		}
+	}
+	/* 좁은 화면: 이름이 한 줄에 잘리지 않게 버튼 줄은 아래로 내리고, 긴 이름은 줄바꿈 */
+	.ident h1 {
+		overflow-wrap: anywhere;
+	}
+	@media (max-width: 900px) {
+		.profile {
+			grid-template-columns: auto minmax(0, 1fr);
+			padding: 0 var(--space-4);
+		}
+		.cta {
+			grid-column: 1 / -1;
+			flex-wrap: wrap;
+			margin-top: 0;
 		}
 	}
 </style>

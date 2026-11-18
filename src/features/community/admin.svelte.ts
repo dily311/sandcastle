@@ -71,6 +71,19 @@ class CommunityAdmin {
 		return item;
 	}
 
+	/** 쓸 판 고르기 (꺼진 채로 바뀜 — 다시 켜서 권한에 동의해야 함) */
+	switchVersion(id: string, dir: string) {
+		return this.after(call(commands.switchUserPluginVersion(id, dir), src).catch(() => null));
+	}
+	/** 쓰지 않는 판 폴더 지우기 (되돌릴 수 없음) */
+	deleteVersion(id: string, dir: string) {
+		return this.after(call(commands.deleteUserPluginVersion(id, dir), src).catch(() => null));
+	}
+	/** 설정 > 데이터용: 코어 플러그인 community가 꺼져 있어도 폴더는 볼 수 있다 */
+	folders(): Promise<UserPlugin[]> {
+		return call(commands.listPluginFolders(), { ...src, silent: true }).catch(() => []);
+	}
+
 	settings(id: string): Promise<Record<string, unknown>> {
 		return call(commands.getUserPluginSettings(id), { ...src, silent: true }).then((v) => (v ?? {}) as Record<string, unknown>).catch(() => ({}));
 	}

@@ -104,6 +104,46 @@ pub async fn delete_raw(db: &SqlitePool, plugin: &str, key: &str) -> Result<()> 
     Ok(())
 }
 
+/// 이 플러그인의 저장소 전체를 {키: 값} 객체로 (예약 키 포함 — 설정도 판과 함께 돌아가야 하므로). 판 폴더에 보관하는 데 쓴다
+pub async fn snapshot(db: &SqlitePool, plugin: &str) -> Result<Value> {
+    let rows: Vec<(String, String)> = sqlx::query_as("SELECT key, value FROM user_plugin_storage WHERE plugin_id = ? ORDER BY key")
+        .bind(plugin)
+        .fetch_all(db)
+        .await?;
+    let mut m = serde_json::Map::new();
+    for (k, v) in rows {
+        m.insert(k, serde_json::from_str(&v).unwrap_or(Value::Null));
+    }
+    Ok(Value::Object(m))
+}
+
+/// 보관한 저장소로 통째로 바꾼다 (한 번에: 중간에 실패하면 원래대로). 상한은 보관할 때의 것이라 다시 검사하지 않는다
+pub async fn restore(db: &SqlitePool, plugin: &str, snap: &Value) -> Result<()> {
+    let Some(map) = snap.as_object() else {
+        return Err(AppError::validation("저장소 보관본의 모양이 올바르지 않음", None));
+    };
+    let mut tx = db.begin().await?;
+    sqlx::query("DELETE FROM user_plugin_storage WHERE plugin_id = ?")
+        .bind(plugin)
+        .execute(&mut *tx)
+        .await?;
+    for (k, v) in map {
+        if v.is_null() || k.is_empty() || k.chars().count() > MAX_KEY {
+            continue;
+        }
+        let raw = serde_json::to_string(v).map_err(|e| AppError::internal(e.to_string()))?;
+        sqlx::query("INSERT INTO user_plugin_storage (plugin_id, key, value, updated_at) VALUES (?, ?, ?, ?)")
+            .bind(plugin)
+            .bind(k)
+            .bind(raw)
+            .bind(chrono::Utc::now().timestamp_millis())
+            .execute(&mut *tx)
+            .await?;
+    }
+    tx.commit().await?;
+    Ok(())
+}
+
 pub async fn keys(db: &SqlitePool, plugin: &str) -> Result<Vec<String>> {
     // 앱이 쓰는 예약 키(`__…`)는 플러그인에 보이지 않는다
     Ok(

@@ -67,6 +67,19 @@
 		await load();
 	}
 
+	async function setExcluded(deviceId: string, excluded: boolean) {
+		await call(commands.setSyncPeerExcluded(deviceId, excluded), src);
+		await load();
+	}
+	async function excludePeer(deviceId: string) {
+		const ok = await confirmAction({
+			title: "오래 못 본 기기 제외",
+			message: `${short(deviceId)} 기기를 기다리지 않고 지운 기록을 정리합니다. 그 기기가 나중에 돌아오면 전체를 다시 합치고, 그동안 지운 항목이 되살아날 수 있습니다.`,
+			confirmLabel: "제외",
+			danger: true,
+		});
+		if (ok) await setExcluded(deviceId, true);
+	}
 	async function load() {
 		status = await call(commands.getSyncStatus(), src).catch(() => null);
 		backups = await call(commands.listSyncBackups(), { ...src, silent: true }).catch(() => []);
@@ -152,6 +165,8 @@
 					? `동기화함: 기기 ${r.merged.length}개 · 추가 ${n(m.added)} · 변경 ${n(m.updated)} · 지움 ${n(m.deleted)}${m.both ? ` · 둘 다 남김 ${n(m.both)}` : ""}`
 					: "동기화함: 다른 기기에서 새로 바뀐 것 없음",
 			);
+			for (const d of r.skippedDevices ?? []) toasts.error(`기기 ${short(d.deviceId)}의 묶음을 열지 못해 건너뜀: ${d.reason}`);
+			if (r.merged.some((d) => d.returnedAfterExclusion)) toasts.info("제외했던 기기가 돌아와 전체를 다시 합쳤습니다. 그동안 지운 항목이 되살아났을 수 있으니 확인하세요");
 			await library.load();
 			conflictsKey++;
 		} catch {
@@ -308,14 +323,14 @@
 					<Row label="지금 동기화" desc={syncing ? step || "준비 중" : "다른 기기가 올린 것을 받아 합치고, 이 기기 것을 올림. 합치기 전에 이 기기 DB·설정 사본을 만듦"}>
 						<Button size="sm" variant="primary" loading={syncing} disabled={syncing} onclick={syncNow}>{#snippet icon()}<RefreshCw />{/snippet}지금 동기화</Button>
 					</Row>
-					<Row label="자동 동기화" desc="켜면 앱을 켤 때 한 번, 그 뒤 정한 간격마다 (앱이 켜져 있는 동안만). 요금은 들지 않음">
+					<Row label="자동 동기화" desc="켜면 앱을 켤 때 한 번, 그 뒤 정한 간격마다 (앱이 켜져 있는 동안만). 요금은 들지 않음" nowrap>
 						{#if sync.auto}
 							<Select value={String(sync.intervalMinutes)} options={INTERVALS} aria-label="자동 동기화 간격" onchange={(e) => savePart("sync", { intervalMinutes: Number(e.currentTarget.value) })} />
 						{/if}
 						<Switch checked={sync.auto} label="자동 동기화" hideLabel onchange={(v) => savePart("sync", { auto: v })} />
 					</Row>
 					{#if phone}
-						<Row label="Wi-Fi에서만" desc="켜면 자동 동기화는 Wi-Fi(요금이 들지 않는 연결)일 때만 하고, 직접 누를 때는 먼저 물어봄" nowrap={true}>
+						<Row label="Wi-Fi에서만" desc="켜면 자동 동기화는 Wi-Fi(요금이 들지 않는 연결)일 때만 하고, 직접 누를 때는 먼저 물어봄" nowrap>
 							<Switch checked={sync.wifiOnly} label="Wi-Fi에서만" hideLabel onchange={(v) => savePart("sync", { wifiOnly: v })} />
 						</Row>
 					{/if}
@@ -335,16 +350,16 @@
 		{/if}
 
 		<Group title="파일로 보내기">
-			<Row label="그림·파일 포함" desc="끄면 항목과 설정만 (파일 목록은 들어가서, 받는 쪽이 빠진 파일 수를 알 수 있음)" nowrap={true}>
+			<Row label="그림·파일 포함" desc="끄면 항목과 설정만 (파일 목록은 들어가서, 받는 쪽이 빠진 파일 수를 알 수 있음)" nowrap>
 				<Switch checked={includeFiles} label="그림·파일 포함" hideLabel onchange={(v) => (includeFiles = v)} />
 			</Row>
-			<Row label="동기화 파일 만들기" desc="캐릭터·대화·로어북·프리셋·게임·같이 쓰는 설정. 실행 기록·휴지통·이 기기 전용 설정은 빠짐">
+			<Row label="동기화 파일 만들기" desc="캐릭터·대화·로어북·프리셋·게임·같이 쓰는 설정. 실행 기록·휴지통·이 기기 전용 설정은 빠짐" nowrap>
 				<Button size="sm" loading={busy === "export"} disabled={busy !== null} onclick={exportBundle}>{#snippet icon()}<Download />{/snippet}만들기</Button>
 			</Row>
 		</Group>
 
 		<Group title="파일로 받기">
-			<Row label="동기화 파일 열기" desc="합치기 전에 무엇이 바뀌는지 먼저 보여줌. 적용하면 이 기기 DB·설정 사본을 먼저 만듦">
+			<Row label="동기화 파일 열기" desc="합치기 전에 무엇이 바뀌는지 먼저 보여줌. 적용하면 이 기기 DB·설정 사본을 먼저 만듦" nowrap>
 				<Button size="sm" loading={busy === "open"} disabled={busy !== null} onclick={openBundle}>{#snippet icon()}<FolderOpen />{/snippet}열기</Button>
 			</Row>
 			{#if pending}
@@ -387,8 +402,14 @@
 					{#each status.peers as p (p.deviceId)}
 						<li>
 							<code>{short(p.deviceId)}</code>
+							{#if p.excluded}<Badge>제외됨</Badge>{:else if p.stale}<Badge tone="warning">오래 못 봄</Badge>{/if}
 							<span title={absolute(p.lastMergeAt)}>그 기기 것을 받음 {relative(p.lastMergeAt)}</span>
 							<span class="meta" title={p.theirAck ? absolute(p.theirAck) : undefined}>{p.theirAck ? `이 기기 것을 받아 감 ${relative(p.theirAck)}` : "이 기기 것은 아직 안 받아 감"} · {n(p.merges)}번</span>
+							{#if p.excluded}
+								<Button size="sm" variant="ghost" onclick={() => setExcluded(p.deviceId, false)}>다시 포함</Button>
+							{:else if p.stale}
+								<Button size="sm" variant="ghost" onclick={() => excludePeer(p.deviceId)}>제외</Button>
+							{/if}
 						</li>
 					{/each}
 				</ul>

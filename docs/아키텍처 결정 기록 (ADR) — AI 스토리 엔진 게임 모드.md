@@ -32,8 +32,8 @@
 | 015 | 정의 편집·무결성·화면용 데이터 | Accepted |
 | 016 | 템플릿과 템플릿 패키지 | Accepted |
 | 017 | 코드 구조와 관례 | Accepted |
-| 018 | 에셋 서빙과 연출 | Proposed |
-| 019 | StoryPlan(각본가) | Deferred |
+| 018 | 에셋 서빙과 연출 | Accepted("갱신" 절이 확정, 후속 있음) |
+| 019 | StoryPlan(각본가) | Deferred — 구현이 미병합 브랜치에 있음(`ADR 미결 정리.md`) |
 
 ## ADR-001 신뢰 경계와 책임 분리
 
@@ -257,7 +257,7 @@
 
 ## ADR-018 에셋 서빙과 연출
 
-**상태** Proposed — game\_assets 새 컬럼이 확정되면 구현
+**상태** Accepted — 아래 "ADR-018 갱신"이 이 항목을 확정·대체했다 (2026-11-18 감사에서 Proposed를 정정)
 
 **결정**
 
@@ -270,7 +270,7 @@
 
 ## ADR-019 StoryPlan(각본가)
 
-**상태** Deferred
+**상태** Accepted (2026-11-18) — 백엔드는 브랜치 병합(1-F-2-3), 화면은 1-F-2-4에서 붙임. 아래 "ADR-019 갱신"을 본다
 
 **결정**
 
@@ -317,12 +317,14 @@ reason(BlockReason): conditionNotMet, sceneActive, notPresent, noRoute, noActive
 
 ## 미결·후속 작업
 
-- iframe SDK와 호스트 postMessage 브릿지, 호스트 전용 커맨드와 게임 접근 커맨드의 capabilities 분리.
-- 에셋: game\_assets 새 컬럼과 stage\_json 추가 → protocol의 Range·허용 목록 → 정의·패키지·검증·view 연결 → StageCue → AI 태그 파서와 프롬프트.
-- capabilities 강제(지도·시간 끄기)와 chat 전용 템플릿. 사용자 템플릿은 요청이 있을 때만.
-- 호출 예산(토큰·비용), 일지 성장 정책. (8라운드 초과 로깅, 스트리밍 태그 버퍼링은 2026-11-15 구현)
-- AI의 아이템 지급, NPC끼리의 관계 변화(시뮬레이션), 관계 tags 변경 효과, 게임 삭제 시 월드인포 북 정리.
-- 이전 형식(snake\_case) 패키지 호환이 필요하면 format\_version으로 구분한다.
+> 2026-11-18 코드와 대조해 정리했다(`ADR 미결 정리.md`). 번호는 `plans/roadmap.md`.
+
+- **iframe SDK·호스트 postMessage 브릿지**, 호스트 전용 커맨드와 게임이 부를 수 있는 커맨드의 capabilities 분리 — 보류, 6-C.
+- **에셋**: 서빙·정의·검증·view·StageCue·태그 파서·프롬프트는 구현됨. 남음: 에셋 추가/삭제 커맨드(브랜치 `claude/game-assets-storyplan`에 있음)와 프론트 재생기 — 4-A.
+- **capabilities 강제**(지도·시간 끄기): 브랜치에 구현이 있음, 병합 시 해결 — 4-B-1. chat 전용 템플릿 4-C-1, 사용자 템플릿은 요청이 있을 때(6-C).
+- 호출 예산: 구현됨(게임 대사도 `AiService`를 거쳐 ADR-007 한도가 적용됨). **일지 성장 정책** 남음 — 4-A.
+- **AI의 아이템 지급**(결정 필요: 지급 조건)·**게임 삭제 시 월드인포 북 정리**(확인 필요) 남음 — 4-A. NPC끼리의 관계 변화(시뮬레이션)·관계 tags 변경 효과는 보류(요청이 있을 때, 호출 비용 때문에 ADR이 먼저).
+- 이전 형식(snake\_case) 패키지 호환은 폐기 — 필요가 생기면 format\_version으로 구분한다.
 
 ## ADR-018 갱신 — 에셋·연출 결정 확정
 
@@ -369,3 +371,30 @@ reason(BlockReason): conditionNotMet, sceneActive, notPresent, noRoute, noActive
 
 - 프론트 재생기(타자기, 연출 실행, 효과/모션 구현), 에셋 추가/삭제 커맨드(파일 복사와 행 생성), RenderState의 stage를 에셋 참조로 풀어서 내려주기, 스트리밍 시 태그 버퍼링.
 - 외부 이미지 생성 API로 CG 만들기(Deferred), 음성 생성 API 연결(Deferred).
+
+## ADR-016 갱신 — capabilities 강제 (지도·시간 끄기)
+
+**상태** Accepted
+
+- 실제로 쓰는 기능 = 템플릿 capabilities에서 게임 설정 `settings_json.capabilities`가 **끈 것**을 뺀 값(게임 데이터가 템플릿이 끈 기능을 켤 수는 없다). `GameDefinition::capabilities()` 하나를 커맨드·화면용 데이터·검증·AI 프롬프트가 같이 쓴다.
+- map 또는 location이 꺼지면 MoveTo가, location이 꺼지면 Interact가, time이 꺼지면 AdvanceTime이 `GAME_ACTION_BLOCKED`(details.reason = `capabilityDisabled`)로 거절된다. time이 꺼진 게임은 이동해도 시간이 흐르지 않고 시간 시스템도 요청을 무시한다.
+- 꺼진 기능의 값은 get_game_view(maps/zones/connections, locations/interactables, timePeriods/weatherTypes는 빈 배열)와 RenderState(mapId/zoneId/locationId, gameTime/timePeriodId/weatherId는 null, availableMoves는 빈 배열), NPC/씬 프롬프트에서 빠진다. view에는 실제 값 `capabilities`가 추가된다.
+- validate: 발동할 수 없는 이벤트(time 꺼짐 + scheduled/random, 이동 꺼짐 + location, location 꺼짐 + interaction)는 Error, 시작 값에 고정되는 시간/위치 조건과 만날 수 없는 NPC는 Warning.
+
+## ADR-018 갱신 — 에셋 추가/삭제 커맨드
+
+**상태** Accepted
+
+- add_game_asset: 파일 형식은 내용(infer)으로 판정하고 저장 확장자도 판정 결과로 정한다. 서빙 허용 목록·크기 상한(protocol)과 같은 기준이고, mime_guess로 한 번 더 확인한다. 저장 경로는 `assets/<category>/<uuid>.<ext>`, 폴더가 게임 폴더 밖이면 ARCHIVE_UNSAFE_PATH. 복사 후 다시 판정하고, DB(트랜잭션)가 실패하면 복사한 파일을 지운다.
+- remove_game_asset: 씬 대본·이벤트/선택지/아이템 효과의 stage(cg/voice 키, 그룹의 마지막 sfx/bgm, 캐릭터+감정의 마지막 스탠딩), 표지/아바타/아이콘 경로가 쓰는 에셋은 거절(details.reason = `assetInUse`, references). force면 지우고 진단을 돌려준다. DB 커밋 후 파일을 지운다.
+
+## ADR-019 갱신 — StoryPlan 구현
+
+**상태** Accepted
+
+- 켜기: `settings_json.storyPlan = {enabled, everyNTurns(기본 10)}`. 제작자 표시: 이벤트 `config_json.planUsable`(manual만), 씬 `settings_json.planUsable`.
+- 체크포인트(세션 시작/이어하기, 씬 종료, 하루 경계, random 이외 이벤트 발동, N턴)는 런타임이 RenderState.storyPlanDue로 표시만 하고, refresh_story_plan이 AiService.generate_once로 부른다(사용자 프리셋은 쓰지 않음, 앱 고정 규칙이 맨 앞). AI 대기 중에는 런타임 락을 잡지 않는다.
+- 출력은 크기 상한·스키마·길이/개수 상한·`<` `>` 제거·planUsable id만 남긴 뒤 game_story_plans(session_id, seq)에 저장한다. 제안을 올리는 stage_story_suggestion은 fire_event/enter_scene과 같은 검증을 다시 하고, 같은 플랜의 같은 제안은 한 번만 올린다.
+- NPC/씬 대화에는 활성 단계와 확정된 사실만 캐릭터 설정 끝에 붙인다. 호출 상한은 npc_say의 게임별 분당 제한을 같이 쓴다.
+- (바뀜, 2026-11-18) 처음에는 TaskManager 작업으로 만들지 않았지만, 유료 호출은 작업 기록에 남아야 한다는 원칙에 맞춰 `refresh_story_plan`이 `run_inline` 안에서 부른다: 기능 id `game.storyplan`, 표시 이름 "각본가", `auto`가 참이면 실행 주체 auto. 취소·시간 제한은 아직 없다(짧은 호출).
+- 화면(1-F-2-4): 오른쪽 패널 "이동·행동" 아래 각본가 구역(꺼진 게임에는 안 보임) — 플랜(전제·단계·열린 복선)과 제안의 "올리기", "플랜 새로 세우기"(사용자가 누른 호출, auto=false). 체크포인트마다 자동 갱신은 패널의 스위치(기본 꺼짐, 세션 안에서만 유지)를 켠 때만 auto=true로 부른다. 편집기: 게임 설정의 각본가 켜기·턴 수, 수동 이벤트·씬의 "각본가가 무대에 올려도 됨"(planUsable). 선택하지 않은 안: 게임 제작자가 자동 갱신을 켜 두는 설정(요금을 내는 사람은 플레이하는 사람이라서).

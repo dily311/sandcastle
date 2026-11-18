@@ -4,6 +4,7 @@
 	import { panel } from "$app/panel.svelte";
 	import type { GameCommand } from "../types";
 	import { playBridge } from "../runtime/playBridge.svelte";
+	import StoryPlanPanel from "./StoryPlanPanel.svelte";
 	import { runtimeStore } from "../runtime/runtimeStore.svelte";
 
 	const canMove = $derived(runtimeStore.canWait);
@@ -105,6 +106,7 @@
 			</section>
 		{/if}
 		{#if nothingToDo}<p class="note">지금 할 수 있는 것 없음</p>{/if}
+		<StoryPlanPanel />
 	</div>
 {/if}
 

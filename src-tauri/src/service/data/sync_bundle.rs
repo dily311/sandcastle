@@ -263,7 +263,8 @@ pub async fn write_bundle(
     // ---- DB에서 읽기 ----
     let mut conn = db.acquire().await?;
     let schema = Schema::load(&mut conn).await?;
-    let mut tables: Vec<(String, Vec<String>)> = vec![];
+    // 테이블마다 임시 파일에 한 줄씩 써 둔다 — 행 전체를 메모리에 올리지 않는다 (1-F-3): (이름, 행 수, 파일)
+    let mut tables: Vec<(String, u64, tempfile::NamedTempFile)> = vec![];
     for t in change_tracking::synced_tables(&mut *conn).await? {
         let Some(cols) = schema.columns.get(&t) else { continue };
         if !cols.iter().any(|c| c == "updated_at") {
@@ -278,15 +279,20 @@ pub async fn write_bundle(
             "SELECT json_object({obj}) FROM {} WHERE updated_at > ? ORDER BY rowid",
             crate::db::schema::quote(&t)
         );
-        let rows: Vec<String> = sqlx::query_scalar(sqlx::AssertSqlSafe(sql)).bind(since).fetch_all(&mut *conn).await?;
-        let mut lines = Vec::with_capacity(rows.len());
-        for r in rows {
+        let mut stream = sqlx::query_scalar::<_, String>(sqlx::AssertSqlSafe(sql)).bind(since).fetch(&mut *conn);
+        let mut out = std::io::BufWriter::new(tempfile::NamedTempFile::new()?);
+        let mut count = 0u64;
+        while let Some(r) = futures::TryStreamExt::try_next(&mut stream).await? {
             let mut v: Value = serde_json::from_str(&r).map_err(|e| AppError::internal(format!("{t} 행을 읽지 못함: {e}")))?;
             portable(&mut v);
-            lines.push(v.to_string());
+            out.write_all(v.to_string().as_bytes())?;
+            out.write_all(b"\n")?;
+            count += 1;
         }
-        if !lines.is_empty() {
-            tables.push((t, lines));
+        drop(stream);
+        if count > 0 {
+            let file = out.into_inner().map_err(|e| AppError::io(e.to_string()))?;
+            tables.push((t, count, file));
         }
     }
     let tombstones: Vec<Tombstone> =
@@ -327,7 +333,7 @@ pub async fn write_bundle(
         device_id: device_id.into(),
         created_at,
         since: opts.since,
-        tables: tables.iter().map(|(t, l)| (t.clone(), l.len() as u64)).collect(),
+        tables: tables.iter().map(|(t, n, _)| (t.clone(), *n)).collect(),
         tombstones: tombstones.len() as u64,
         files: 0,
         blobs: 0,
@@ -348,12 +354,10 @@ pub async fn write_bundle(
 
         let tmp = out.with_extension("partial");
         let mut zip = ZipWriter::new(File::create(&tmp)?);
-        for (t, lines) in &tables {
+        for (t, _, file) in &mut tables {
             zip.start_file(format!("tables/{t}.jsonl"), archive::options()).map_err(zip_err)?;
-            for l in lines {
-                zip.write_all(l.as_bytes())?;
-                zip.write_all(b"\n")?;
-            }
+            std::io::Seek::rewind(file)?;
+            std::io::copy(file, &mut zip)?;
         }
         archive::write_json(&mut zip, "tombstones.json", &tombstones)?;
         archive::write_json(&mut zip, "settings.json", &shared)?;
@@ -377,6 +381,34 @@ pub async fn write_bundle(
 // ---------------------------------------------------------------------------
 // 읽기
 // ---------------------------------------------------------------------------
+
+/// `Bundle::row_reader`가 주는 읽개: 호출할 때마다 최대 `max`개 행 (끝이면 빈 목록)
+pub struct RowReader {
+    lines: std::io::Lines<BufReader<tempfile::NamedTempFile>>,
+    table: String,
+    base: String,
+}
+
+impl RowReader {
+    pub fn next_chunk(&mut self, max: usize) -> Result<Vec<Map<String, Value>>> {
+        let mut out = Vec::with_capacity(max.min(4096));
+        while out.len() < max {
+            let Some(line) = self.lines.next() else { break };
+            let line = line?;
+            if line.trim().is_empty() {
+                continue;
+            }
+            let mut v: Value = serde_json::from_str(&line).map_err(|e| invalid(format!("{} 행을 읽지 못함: {e}", self.table)))?;
+            let base = self.base.clone();
+            map_strings(&mut v, &|s| from_portable(s, &base));
+            match v {
+                Value::Object(m) => out.push(m),
+                _ => return Err(invalid(format!("{} 행 모양이 이상함", self.table))),
+            }
+        }
+        Ok(out)
+    }
+}
 
 pub struct Bundle {
     pub manifest: SyncManifest,
@@ -425,30 +457,37 @@ impl Bundle {
         map_strings(v, &move |s| from_portable(s, &base));
     }
 
-    /// 한 테이블의 행 (경로는 이 기기 것으로). 이 기기가 동기화하지 않는 테이블은 읽지 않는다 (호출하는 쪽이 거름)
+    /// 한 테이블의 행 (경로는 이 기기 것으로). 이 기기가 동기화하지 않는 테이블은 읽지 않는다 (호출하는 쪽이 거름).
+    /// 한꺼번에 올리므로 큰 테이블은 `row_reader`로 나눠 읽는다
     pub fn rows(&mut self, table: &str) -> Result<Vec<Map<String, Value>>> {
-        if !self.manifest.tables.contains_key(table) {
-            return Ok(vec![]);
-        }
-        let base = self.base.clone();
-        let entry = self
-            .archive
-            .by_name(&format!("tables/{table}.jsonl"))
-            .map_err(|_| invalid(format!("{table} 행이 없음")))?;
+        let mut reader = self.row_reader(table)?;
         let mut out = vec![];
-        for line in BufReader::new(entry).lines() {
-            let line = line?;
-            if line.trim().is_empty() {
-                continue;
+        loop {
+            let chunk = reader.next_chunk(4096)?;
+            if chunk.is_empty() {
+                return Ok(out);
             }
-            let mut v: Value = serde_json::from_str(&line).map_err(|e| invalid(format!("{table} 행을 읽지 못함: {e}")))?;
-            map_strings(&mut v, &|s| from_portable(s, &base));
-            match v {
-                Value::Object(m) => out.push(m),
-                _ => return Err(invalid(format!("{table} 행 모양이 이상함"))),
-            }
+            out.extend(chunk);
         }
-        Ok(out)
+    }
+
+    /// 한 테이블의 행을 나눠서 읽는 읽개 (메모리가 행 수에 비례하지 않게, 1-F-3). 묶음 안의 파일을 임시 파일로 풀어 한 줄씩 읽는다
+    pub fn row_reader(&mut self, table: &str) -> Result<RowReader> {
+        let empty = !self.manifest.tables.contains_key(table);
+        let mut tmp = tempfile::NamedTempFile::new()?;
+        if !empty {
+            let mut entry = self
+                .archive
+                .by_name(&format!("tables/{table}.jsonl"))
+                .map_err(|_| invalid(format!("{table} 행이 없음")))?;
+            std::io::copy(&mut entry, &mut tmp)?;
+            std::io::Seek::rewind(&mut tmp)?;
+        }
+        Ok(RowReader {
+            lines: BufReader::new(tmp).lines(),
+            table: table.to_string(),
+            base: self.base.clone(),
+        })
     }
 
     pub fn tombstones(&mut self) -> Result<Vec<Tombstone>> {

@@ -19,6 +19,51 @@ use anyhow::Result;
 use rand::rngs::StdRng;
 use serde::Serialize;
 
+/// 규칙상 할 수 없는 행동이라 거절한 커맨드: GAME_ACTION_BLOCKED(details.reason)로 바로 만든다.
+/// reason: "capabilityDisabled"(게임이 그 기능을 쓰지 않는다), "notPlanUsable", "conditionNotMet", "alreadyQueued", "alreadyStaged" 등.
+pub struct ActionBlocked;
+
+impl ActionBlocked {
+    pub fn new(reason: &'static str, message: impl Into<String>) -> AppError {
+        AppError::Game {
+            code: crate::error::ErrorCode::GameActionBlocked,
+            message: message.into(),
+            details: Some(serde_json::json!({ "reason": reason })),
+        }
+    }
+
+    pub fn capability(message: impl Into<String>) -> AppError {
+        Self::new("capabilityDisabled", message)
+    }
+
+    /// 거절 이유 (GAME_ACTION_BLOCKED가 아니면 None)
+    pub fn reason(e: &AppError) -> Option<String> {
+        match e {
+            AppError::Game { code, details, .. } if *code == crate::error::ErrorCode::GameActionBlocked => {
+                details.as_ref()?.get("reason")?.as_str().map(str::to_string)
+            }
+            _ => None,
+        }
+    }
+}
+
+/// 예전 호출 자리 호환: 이미 커맨드 에러다
+pub fn command_error(e: AppError) -> AppError {
+    e
+}
+
+/// StoryPlan 체크포인트 추적 (메모리에만 둔다). 런타임은 "지금 각본가를 부를 때다"를 표시만 하고,
+/// 부르는 건 refresh_story_plan 커맨드다. 저장하지 않으므로 이어하기 직후에는 session_resume으로 시작한다.
+#[derive(Default)]
+struct PlanTracker {
+    /// 마지막 플랜 이후 지난 턴 수 (dispatch, NPC/씬 대화 한 번 = 1턴)
+    turns_since: u32,
+    /// 지금 부를 이유. 한 번 표시되면 플랜이 갱신될 때까지 유지된다.
+    due: Option<&'static str>,
+    /// 이미 무대에 올린 제안 ("플랜seq:종류:id"). 같은 플랜의 같은 제안을 반복해서 올리지 못하게.
+    staged: std::collections::HashSet<String>,
+}
+
 /// 이벤트 전파를 몇 단계까지 허용할지. 데이터 설계 실수로 두 시스템이 서로
 /// 계속 이벤트를 내는 순환이 생겨도, 여기서 끊겨서 앱이 안 멈춘다.
 const MAX_EVENT_DEPTH: usize = 8;
@@ -75,6 +120,24 @@ fn repair_state(def: &GameDefinition, state: &mut GameState) {
     }
 }
 
+/// 게임이 쓰지 않는 기능의 값은 화면용 상태에서 뺀다 (null / 빈 배열). 엔진 내부 상태는 그대로 둔다
+/// (시작 위치/시각은 조건 평가와 배경 선택에 계속 쓰인다).
+fn mask_capabilities(render: &mut RenderState, caps: &crate::game::template::Capabilities) {
+    if !caps.movement() {
+        render.map_id = None;
+        render.zone_id = None;
+        render.available_moves.clear();
+    }
+    if !caps.location {
+        render.location_id = None;
+    }
+    if !caps.time {
+        render.game_time = None;
+        render.time_period_id = None;
+        render.weather_id = None;
+    }
+}
+
 #[derive(Serialize, specta::Type)]
 #[serde(rename_all = "camelCase")]
 pub struct GameResponse {
@@ -91,6 +154,7 @@ pub struct GameRuntime {
     /// dispatch() 호출 사이에는 항상 비어 있어야 한다.
     queue: Vec<GameEvent>,
     rng: StdRng,
+    plan: PlanTracker,
 }
 
 impl GameRuntime {
@@ -100,6 +164,7 @@ impl GameRuntime {
             state,
             queue: Vec::new(),
             rng: rand::make_rng(),
+            plan: PlanTracker::default(),
         }
     }
 
@@ -213,7 +278,9 @@ impl GameRuntime {
         // 지금 이미 참인 auto 이벤트는 "참인 상태"로 표시만 해둔다 (이어하기 직후 재발동 방지).
         systems::prime_auto_state(&definition, &mut state);
 
-        Ok(Self::new(definition, state))
+        let mut runtime = Self::new(definition, state);
+        runtime.plan.due = Some("session_resume"); // 이어하기도 세션 시작 체크포인트다 (플랜이 이미 있으면 refresh가 다시 부르지 않는다)
+        Ok(runtime)
     }
 
     /// 새 게임의 첫 턴: GameStarted를 흘려서 NPC의 처음 위치를 굴린다. 돌려주는 이벤트(GameStarted 포함)를
@@ -221,13 +288,16 @@ impl GameRuntime {
     pub fn start(&mut self) -> Vec<GameEvent> {
         self.state.turn_fired = false;
         self.queue.push(GameEvent::GameStarted);
-        self.process_events()
+        let events = self.process_events();
+        self.note_story_plan_turn(&events);
+        events
     }
 
     pub fn dispatch(&mut self, command: GameCommand) -> std::result::Result<GameResponse, AppError> {
         self.state.turn_fired = false; // random 억제 플래그는 dispatch마다 새로 시작
         self.handle_command(command)?;
         let events = self.process_events();
+        self.note_story_plan_turn(&events);
         Ok(GameResponse {
             events,
             state: self.render_state(),
@@ -247,6 +317,10 @@ impl GameRuntime {
     fn handle_command(&mut self, command: GameCommand) -> std::result::Result<(), AppError> {
         match command {
             GameCommand::MoveTo { location_id } => {
+                let caps = self.definition.capabilities();
+                if !caps.movement() {
+                    return Err(ActionBlocked::capability("이 게임은 지도/이동 기능을 쓰지 않습니다"));
+                }
                 if self.state.current_scene_id.is_some() {
                     return Err(AppError::game_blocked(BlockReason::SceneActive, "씬이 진행 중일 때는 이동할 수 없습니다"));
                 }
@@ -264,9 +338,16 @@ impl GameRuntime {
                 }
                 let seconds = connection.travel_seconds as i64;
                 self.emit(GameEvent::LocationChanged { from, to: location_id });
-                self.emit(GameEvent::TimeAdvanceRequested { seconds });
+                // 시간 기능이 꺼진 게임은 이동해도 시간이 흐르지 않는다.
+                if caps.time {
+                    self.emit(GameEvent::TimeAdvanceRequested { seconds });
+                }
             }
             GameCommand::Interact { entity_id } => {
+                // 상호작용 대상은 위치에 놓인 것이라, 위치 개념이 없는 게임에서는 쓸 수 없다.
+                if !self.definition.capabilities().location {
+                    return Err(ActionBlocked::capability("이 게임은 위치 기능을 쓰지 않습니다"));
+                }
                 self.definition
                     .interactable(&entity_id)
                     .ok_or_else(|| AppError::validation(format!("존재하지 않는 상호작용 대상입니다: {entity_id}"), None))?;
@@ -349,6 +430,9 @@ impl GameRuntime {
                 self.emit(GameEvent::SceneEndRequested);
             }
             GameCommand::AdvanceTime { minutes } => {
+                if !self.definition.capabilities().time {
+                    return Err(ActionBlocked::capability("이 게임은 시간 기능을 쓰지 않습니다"));
+                }
                 if minutes < 0 {
                     return Err(AppError::validation("minutes는 음수일 수 없습니다", None));
                 }
@@ -528,7 +612,101 @@ impl GameRuntime {
                 .map(|c| c.id.clone())
                 .collect();
         }
+        mask_capabilities(&mut render, &self.definition.capabilities());
+        render.story_plan_due = self.story_plan_due().is_some();
         render
+    }
+
+    /// open_game이 올려둔 정의를 같이 쓴다 (AI 호출 동안 락 없이 정의를 읽을 때).
+    pub fn shared_definition(&self) -> std::sync::Arc<GameDefinition> {
+        self.definition.clone()
+    }
+
+    // ---- StoryPlan ------------------------------------------------------
+
+    /// 한 턴이 지났다. 이번 턴의 이벤트가 체크포인트면 표시한다 (dispatch/start는 스스로 부르고, AI 대화는 npc.rs가 부른다).
+    pub fn note_story_plan_turn(&mut self, events: &[GameEvent]) {
+        self.plan.turns_since = self.plan.turns_since.saturating_add(1);
+        if self.plan.due.is_none() {
+            let every = crate::game::story_plan::settings(&self.definition).every_n_turns;
+            self.plan.due = crate::game::story_plan::checkpoint_reason(events, self.plan.turns_since, every);
+        }
+    }
+
+    /// 지금 각본가를 부를 이유 (StoryPlan이 꺼진 게임이면 항상 None).
+    pub fn story_plan_due(&self) -> Option<&'static str> {
+        if crate::game::story_plan::settings(&self.definition).enabled {
+            self.plan.due
+        } else {
+            None
+        }
+    }
+
+    /// 새 플랜이 저장됐다: 체크포인트와 턴 수, 올린 제안 기록을 비운다.
+    pub fn story_plan_refreshed(&mut self) {
+        self.plan = PlanTracker::default();
+    }
+
+    /// 플랜을 새로 만들지 않고 체크포인트 표시만 지운다 (이어하기인데 이미 플랜이 있을 때).
+    pub fn clear_story_plan_due(&mut self) {
+        self.plan.due = None;
+    }
+
+    /// 플랜의 제안이 지금 무대에 올릴 수 있는 것인지 확인하고 씨앗 이벤트를 만든다 (상태는 안 바꾼다).
+    /// 이벤트는 fire_event와 같은 검증: 존재, 제작자 표시(planUsable + manual), 조건, once/쿨다운.
+    /// 씬은 enter_scene과 같은 경로(SceneRequested)이고, 이미 열려 있거나 대기 중이면 거절한다.
+    fn check_plan_suggestion(&self, s: &crate::game::story_plan::Suggestion) -> std::result::Result<GameEvent, AppError> {
+        use crate::game::story_plan::{event_plan_usable, scene_plan_usable, SuggestionKind};
+        match s.kind {
+            SuggestionKind::Event => {
+                let e = self
+                    .definition
+                    .events
+                    .get(&s.id)
+                    .ok_or_else(|| AppError::validation(format!("존재하지 않는 이벤트입니다: {}", s.id), None))?;
+                if !event_plan_usable(e) {
+                    return Err(ActionBlocked::new("notPlanUsable", "제작자가 StoryPlan에 맡긴 manual 이벤트가 아닙니다"));
+                }
+                let es = self.engine_state_snapshot();
+                if !systems::conditions_pass(&self.definition, &e.id, &es) || !systems::can_fire(&self.state, e) {
+                    return Err(ActionBlocked::new("conditionNotMet", "지금은 이 이벤트를 발동할 수 없습니다"));
+                }
+                Ok(GameEvent::EventRequested { event_id: e.id.clone() })
+            }
+            SuggestionKind::Scene => {
+                let scene = self
+                    .definition
+                    .scene(&s.id)
+                    .ok_or_else(|| AppError::validation(format!("존재하지 않는 씬입니다: {}", s.id), None))?;
+                if !scene_plan_usable(scene) {
+                    return Err(ActionBlocked::new("notPlanUsable", "제작자가 StoryPlan에 맡긴 씬이 아닙니다"));
+                }
+                let queued = self
+                    .state
+                    .pending_scenes_json
+                    .as_array()
+                    .map_or(false, |a| a.iter().any(|v| v.as_str() == Some(scene.id.as_str())));
+                if self.state.current_scene_id.as_deref() == Some(scene.id.as_str()) || queued {
+                    return Err(ActionBlocked::new("alreadyQueued", "이미 열려 있거나 대기 중인 씬입니다"));
+                }
+                Ok(GameEvent::SceneRequested { scene_id: scene.id.clone() })
+            }
+        }
+    }
+
+    /// 플랜(plan_seq)의 제안 하나를 무대에 올린다. 검증을 통과한 요청 이벤트만 평소 전파를 탄다 —
+    /// 플랜이 상태를 직접 쓰는 경로는 없다. 같은 플랜의 같은 제안은 한 번만 올릴 수 있다.
+    pub fn stage_plan_suggestion(&mut self, plan_seq: u32, s: &crate::game::story_plan::Suggestion) -> std::result::Result<Vec<GameEvent>, AppError> {
+        let key = format!("{plan_seq}:{}:{}", s.kind.as_str(), s.id);
+        if self.plan.staged.contains(&key) {
+            return Err(ActionBlocked::new("alreadyStaged", "이 제안은 이미 무대에 올렸습니다"));
+        }
+        let seed = self.check_plan_suggestion(s)?;
+        self.state.turn_fired = false;
+        self.queue.push(seed);
+        let events = self.process_events();
+        self.plan.staged.insert(key);
+        Ok(events)
     }
 
     /// 지금 플레이어와 같은 위치에 있는 NPC들 (정렬). AI 응답에서 말할 수 있는 인물의 범위다.
@@ -737,5 +915,158 @@ impl GameRuntime {
     /// (game_saves.state_snapshot)은 별개 — 그건 명시적 "저장하기" 액션에서만.
     pub async fn save(&self, repository: &impl GameRepository, game_id: &str) -> Result<()> {
         repository.persist_session(self.state.to_session_input(game_id.to_string())).await
+    }
+}
+
+#[cfg(test)]
+mod capability_tests {
+    use super::*;
+    use crate::game::test_support;
+    use crate::game::validate::{self, Severity};
+
+    /// 번들 템플릿에 capabilities 덮어쓰기를 얹은 정의.
+    async fn definition_with(caps: serde_json::Value) -> GameDefinition {
+        let root = tempfile::tempdir().unwrap();
+        let (pool, game_id) = test_support::dating_sim(root.path()).await;
+        let mut def = test_support::definition(&pool, &game_id).await;
+        let mut settings = def
+            .project
+            .settings_json
+            .clone()
+            .filter(|v| v.is_object())
+            .unwrap_or_else(|| serde_json::json!({}));
+        settings["capabilities"] = caps;
+        def.project.settings_json = Some(settings);
+        def
+    }
+
+    fn runtime(def: GameDefinition) -> GameRuntime {
+        let mut rt = GameRuntime::from_new_game(std::sync::Arc::new(def), "session".into(), "player".into()).unwrap();
+        rt.state.current_scene_id = None; // 시작 씬이 열려 있으면 이동이 막히므로 닫고 시험한다
+        rt
+    }
+
+    /// 지금 위치에서 조건 없이 갈 수 있는 곳
+    fn open_move(rt: &GameRuntime) -> Option<(String, u32)> {
+        let here = rt.state.location_id.clone()?;
+        rt.definition
+            .location_connections
+            .iter()
+            .find(|c| c.from_id == here && c.condition.as_deref().map_or(true, |s| s.trim().is_empty()))
+            .map(|c| (c.to_id.clone(), c.travel_seconds))
+    }
+
+    fn blocked_reason(e: AppError) -> Option<String> {
+        ActionBlocked::reason(&e)
+    }
+
+    #[tokio::test]
+    async fn everything_on_by_default() {
+        let def = definition_with(serde_json::json!({})).await;
+        assert!(def.capabilities().movement() && def.capabilities().time);
+        let mut rt = runtime(def);
+        let render = rt.render_state();
+        assert!(render.map_id.is_some() && render.game_time.is_some() && render.weather_id.is_some());
+        let (to, secs) = open_move(&rt).expect("템플릿 시작 위치에서 갈 곳이 있다");
+        let before = rt.state.game_time;
+        rt.dispatch(GameCommand::MoveTo { location_id: to.clone() }).unwrap();
+        assert_eq!(rt.state.location_id.as_deref(), Some(to.as_str()));
+        assert_eq!(rt.state.game_time, before + secs as i64);
+        assert!(validate::validate(rt.definition()).iter().all(|i| !i.message.contains("기능이 꺼진")));
+    }
+
+    #[tokio::test]
+    async fn map_off_blocks_movement_and_hides_map_data() {
+        let def = definition_with(serde_json::json!({ "map": false })).await;
+        let mut rt = runtime(def);
+        let (to, _) = open_move(&rt).unwrap();
+        let err = rt.dispatch(GameCommand::MoveTo { location_id: to }).err().expect("이동이 막혀야 한다");
+        assert_eq!(blocked_reason(err).as_deref(), Some("capabilityDisabled"));
+
+        let app_err = command_error(ActionBlocked::capability("x"));
+        match app_err {
+            crate::error::AppError::Game { code, details, .. } => {
+                assert_eq!(code, crate::error::ErrorCode::GameActionBlocked);
+                assert_eq!(details.unwrap()["reason"], "capabilityDisabled");
+            }
+            other => panic!("GameActionBlocked여야 한다: {other:?}"),
+        }
+
+        let render = rt.render_state();
+        assert!(render.map_id.is_none() && render.zone_id.is_none() && render.available_moves.is_empty());
+        assert!(render.location_id.is_some(), "위치 개념은 켜져 있다");
+        assert!(render.game_time.is_some());
+        let view = rt.definition().view();
+        assert_eq!(view["maps"].as_array().unwrap().len(), 0);
+        assert_eq!(view["zones"].as_array().unwrap().len(), 0);
+        assert_eq!(view["connections"].as_array().unwrap().len(), 0);
+        assert!(!view["locations"].as_array().unwrap().is_empty());
+        assert_eq!(view["capabilities"]["map"], false);
+        assert_eq!(view["template"]["capabilities"]["map"], false, "템플릿 정보에도 실제 값이 나간다");
+
+        // location 이벤트는 발동할 수 없다는 진단
+        let has_location_event = rt.definition().events.values().any(|e| e.trigger_type == "location");
+        let issues = validate::validate(rt.definition());
+        assert_eq!(
+            has_location_event,
+            issues
+                .iter()
+                .any(|i| i.severity == Severity::Error && i.message.contains("location 이벤트는 발동하지 않습니다"))
+        );
+    }
+
+    #[tokio::test]
+    async fn location_off_also_blocks_interaction_and_hides_place() {
+        let def = definition_with(serde_json::json!({ "location": false })).await;
+        assert!(!def.capabilities().movement());
+        let some_interactable = def.interactables.values().flatten().next().map(|i| i.id.clone());
+        let mut rt = runtime(def);
+        if let Some(id) = some_interactable {
+            let err = rt.dispatch(GameCommand::Interact { entity_id: id }).err().expect("상호작용이 막혀야 한다");
+            assert_eq!(blocked_reason(err).as_deref(), Some("capabilityDisabled"));
+        }
+        let render = rt.render_state();
+        assert!(render.location_id.is_none() && render.map_id.is_none());
+        let view = rt.definition().view();
+        assert_eq!(view["locations"].as_array().unwrap().len(), 0);
+        assert_eq!(view["interactables"].as_array().unwrap().len(), 0);
+    }
+
+    #[tokio::test]
+    async fn time_off_blocks_time_and_freezes_clock() {
+        let def = definition_with(serde_json::json!({ "time": false })).await;
+        let mut rt = runtime(def);
+        let err = rt.dispatch(GameCommand::AdvanceTime { minutes: 30 }).err().expect("시간 진행이 막혀야 한다");
+        assert_eq!(blocked_reason(err).as_deref(), Some("capabilityDisabled"));
+
+        // 이동은 되지만 시간이 흐르지 않는다
+        let (to, _) = open_move(&rt).unwrap();
+        let before = rt.state.game_time;
+        let response = rt.dispatch(GameCommand::MoveTo { location_id: to }).unwrap();
+        assert_eq!(rt.state.game_time, before);
+        assert!(!response.events.iter().any(|e| matches!(e, GameEvent::TimeAdvanced { .. })));
+        // 다른 경로로 시간 요청이 와도 시간 시스템이 무시한다
+        rt.queue.push(GameEvent::TimeAdvanceRequested { seconds: 600 });
+        rt.process_events();
+        assert_eq!(rt.state.game_time, before);
+
+        let render = rt.render_state();
+        assert!(render.game_time.is_none() && render.time_period_id.is_none() && render.weather_id.is_none());
+        let view = rt.definition().view();
+        assert_eq!(view["timePeriods"].as_array().unwrap().len(), 0);
+        assert_eq!(view["weatherTypes"].as_array().unwrap().len(), 0);
+
+        let timed = rt
+            .definition()
+            .events
+            .values()
+            .any(|e| matches!(e.trigger_type.as_str(), "scheduled" | "random"));
+        let issues = validate::validate(rt.definition());
+        assert_eq!(
+            timed,
+            issues
+                .iter()
+                .any(|i| i.severity == Severity::Error && i.message.contains("시간 기능이 꺼진 게임"))
+        );
     }
 }

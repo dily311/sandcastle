@@ -177,7 +177,7 @@ pub fn start(plugins: &[UserPlugin], base: &Path) -> RuntimeStart {
                 version: m.version.clone(),
                 main: m.main.clone(),
                 granted,
-                dir: base.join(super::PLUGINS_DIR).join(&p.id),
+                dir: base.join(super::PLUGINS_DIR).join(&p.id).join(&p.active_dir),
                 panels: m.panels.iter().map(|x| (x.id.clone(), x.page.clone())).collect(),
                 settings: m.settings.clone(),
             },

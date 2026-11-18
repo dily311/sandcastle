@@ -15,6 +15,7 @@
 	import Group from "./Group.svelte";
 	import Row from "./Row.svelte";
 	import PresetEditor from "./PresetEditor.svelte";
+	import { importPresetPaths } from "./presetImport";
 
 	const src = { source: "preset" };
 	let editing = $state<Detail | null>(null);
@@ -87,33 +88,7 @@
 			},
 		}),
 	);
-	/**
-	 * 여러 파일 가져오기: 종류를 먼저 보고 프리셋부터 가져온 뒤, 정규식 파일은 그 프리셋에 묶는다.
-	 * 프리셋 안에 든 정규식(SillyTavern·SPreset 등)은 백엔드가 프리셋과 함께 가져온다.
-	 * 프리셋이 없거나 여러 개면 정규식은 전역으로 간다.
-	 */
-	async function importPaths(paths: string[]) {
-		const kinds = await Promise.all(paths.map((p) => call(commands.detectSillytavern(p), { ...src, silent: true }).catch(() => null)));
-		const presets = paths.filter((_, i) => kinds[i] === "preset");
-		const regexes = paths.filter((_, i) => kinds[i] === "regex");
-		const others = paths.filter((_, i) => kinds[i] !== "preset" && kinds[i] !== "regex");
-		let bindTo: string | null = null;
-		for (const path of presets) {
-			const r = await call(commands.importSillytavern(path, null, null, null), src).catch(() => null);
-			if (r?.kind !== "preset") continue;
-			bindTo = presets.length === 1 ? r.presetId : null;
-			toasts.success(`'${r.name}' 가져옴 · 블록 ${r.blockCount}개${r.regexCount ? ` · 정규식 ${r.regexCount}개` : ""}`);
-			for (const w of r.warnings) toasts.info(w);
-		}
-		let regexCount = 0;
-		for (const path of regexes) {
-			const r = await call(commands.importSillytavern(path, null, null, bindTo), src).catch(() => null);
-			if (r?.kind === "regex") regexCount += r.scripts.length;
-		}
-		if (regexCount) toasts.success(`정규식 ${regexCount}개 가져옴${bindTo ? " · 이 프리셋에 묶음" : " · 전역"}`);
-		if (others.length) toasts.info("프리셋·정규식이 아닌 파일은 건너뜀. 캐릭터·대화는 캐릭터 화면에서 가져옴");
-		await reload();
-	}
+	const importPaths = importPresetPaths;
 	async function save(preset: Detail["preset"], blocks: BlockInput[]) {
 		saving = true;
 		try {

@@ -1,7 +1,9 @@
 <script lang="ts">
-	import { ArrowUpDown, GripVertical, Bookmark, Check, ChevronDown, Eye, EyeOff, FileArchive, ImagePlus, Pencil, Plus, Search, Trash2, X } from "@lucide/svelte";
-	import { Avatar, Button, ContextMenu, IconButton, Input, ProfilePicker, Select, Switch, type MenuItem, type ProfileOption } from "$shared/ui";
-	import { bookmarks, bookmarksOf } from "./bookmarks";
+	import { ArrowUpDown, GripVertical, Bookmark, Check, ChevronDown, Eye, EyeOff, FileArchive, IdCard, ImagePlus, Pencil, Plus, Search, Trash2, X } from "@lucide/svelte";
+	import { Avatar, Button, ContextMenu, IconButton, Input, ProfilePicker, Select, Spinner, Switch, type MenuItem, type ProfileOption } from "$shared/ui";
+	import { bookmarks, bookmarksOf, onCurrentSwipe, type ChatBookmark } from "./bookmarks";
+	import { assetImport } from "./assetImport.svelte";
+	import { importPresetPaths } from "$features/settings/presetImport";
 	import NotesPanel from "./NotesPanel.svelte";
 	import BranchTree from "./BranchTree.svelte";
 	import BookPicker from "$features/lorebook/BookPicker.svelte";
@@ -17,7 +19,8 @@
 	import { IMAGE_FILES, pickFiles } from "$shared/ipc/dialog";
 	import { drops, extOf, isImage, storeFile } from "$app/drop.svelte";
 	import { Sortable, moveItem } from "$shared/dnd/sortable.svelte";
-	import { fileSrc } from "$shared/ipc/file";
+	import { imageSrc } from "$shared/ipc/file";
+	import { imageViewer } from "$shared/stores/imageViewer.svelte";
 	import { confirmAction, promptText } from "$shared/stores/confirm.svelte";
 	import { convActions } from "./actions";
 	import { plugins } from "$shared/stores/plugins.svelte";
@@ -33,13 +36,16 @@
 		conv: Conversation;
 		session: ChatSession;
 		chapters: Record<string, number>;
-		onjump: (messageId: string) => void;
+		/** 메시지로 이동. 북마크면 그 글이 있는 자리로 */
+		onjump: (messageId: string, mark?: ChatBookmark) => void;
+		/** 북마크한 글을 이미지 카드로 */
+		oncard?: (mark: ChatBookmark) => void;
 		/** 다른 대화 열기 (주면 그 메시지로) */
 		onopen: (id: string, messageId?: string) => void;
 		/** "나" 고르기를 바꿔 끼움 (폰: 폰 주인). 없으면 이 대화의 페르소나 */
 		me?: { label: string; options: ProfileOption[]; value: string | null; hint?: string; onchange: (id: string) => void };
 	}
-	let { conv, session, chapters, onjump, onopen, me }: Props = $props();
+	let { conv, session, chapters, onjump, oncard, onopen, me }: Props = $props();
 
 	// ---- 메시지 linter: 이 대화의 덮어쓰기와 마지막 응답에서 걸린 규칙 (3-B-5) ----
 	// 스위치는 `memoryOff`. 예전 버전은 메모(`memory`) 칸에 "off"를 썼다 — 그 값도 꺼짐으로 읽고 새로 바꿀 때 지운다
@@ -130,38 +136,46 @@
 	const assets = $derived(library.images[conv.characterId] ?? []);
 	let menu = $state<{ x: number; y: number; align?: "start" | "end" } | null>(null);
 	let menuItems: MenuItem[] = $state([]);
+	async function renameAsset(a: CharacterImage) {
+		const key = await promptText({ title: "키 이름 바꾸기", message: "AI가 <cg>키</cg>로 부르는 이름", input: { value: a.key }, confirmLabel: "바꾸기" });
+		if (!key || key === a.key) return;
+		await library.updateImage(a, { key });
+		const now = assets.find((x) => x.id === a.id);
+		if (now && imageViewer.current?.src === imageSrc(a)) imageViewer.patch({ name: now.key, info: assetInfo(now) });
+	}
+	async function deleteAsset(a: CharacterImage) {
+		if (!(await confirmAction({ title: "에셋 삭제", message: `'${a.key}' 이미지를 지움`, confirmLabel: "삭제", danger: true }))) return;
+		await library.removeImage(a);
+		imageViewer.close();
+	}
+	const assetInfo = (a: CharacterImage) => [
+		{ label: "이미지 키", value: `<cg>${a.key}</cg>` },
+		{ label: "AI에게", value: a.enabled ? "보냄" : "안 보냄" },
+	];
+	/** 에셋 크게 보기: 앱 공통 그림 뷰어에 이름 바꾸기·삭제를 이어 줌 */
+	function openAsset(a: CharacterImage) {
+		const src = imageSrc(a);
+		if (src) imageViewer.open({ src, name: a.key, rename: () => renameAsset(a), remove: () => deleteAsset(a), info: assetInfo(a) });
+	}
 	function assetMenu(e: MouseEvent, a: CharacterImage) {
 		e.preventDefault();
 		menuItems = [
 			{ label: a.enabled ? "AI에게 보내지 않기" : "AI에게 보내기", icon: a.enabled ? EyeOff : Eye, onselect: () => library.updateImage(a, { enabled: !a.enabled }) },
-			{
-				label: "키 이름 바꾸기",
-				icon: Pencil,
-				onselect: async () => {
-					const key = await promptText({ title: "키 이름 바꾸기", message: "AI가 <cg>키</cg>로 부르는 이름", input: { value: a.key }, confirmLabel: "바꾸기" });
-					if (key && key !== a.key) await library.updateImage(a, { key });
-				},
-			},
-			{
-				label: "삭제",
-				icon: Trash2,
-				danger: true,
-				separator: true,
-				onselect: async () => {
-					if (await confirmAction({ title: "에셋 삭제", message: `'${a.key}' 이미지를 지움`, confirmLabel: "삭제", danger: true })) await library.removeImage(a);
-				},
-			},
+			{ label: "키 이름 바꾸기", icon: Pencil, onselect: () => renameAsset(a) },
+			{ label: "삭제", icon: Trash2, danger: true, separator: true, onselect: () => deleteAsset(a) },
 		];
 		menu = { x: e.clientX, y: e.clientY };
 	}
+	/** 에셋을 넣는 작업은 앱에 두어 이 화면을 나가도 이어진다 (패널엔 로딩으로, 나가면 토스트로 보임). 변환은 한 장씩이라 ZIP이 크면 오래 걸림 */
+	const withBusy = assetImport.run.bind(assetImport);
+	const zipDone = (n: number) => toasts.success(n ? `에셋 ${n}개 넣음 (같은 이름은 덮어씀)` : "ZIP에 그림이 없음");
 	async function addImages() {
-		await library.addImages(conv.characterId, await pickFiles([IMAGE_FILES]));
+		const paths = await pickFiles([IMAGE_FILES]);
+		if (paths.length) await withBusy(`이미지 ${paths.length}장 넣는 중…`, () => library.addImages(conv.characterId, paths));
 	}
 	async function addZip() {
 		const [zip] = await pickFiles([{ name: "ZIP", extensions: ["zip"] }], false);
-		if (!zip) return;
-		const n = await library.addImagesZip(conv.characterId, zip);
-		toasts.success(n ? `에셋 ${n}개 넣음 (같은 이름은 덮어씀)` : "ZIP에 그림이 없음");
+		if (zip) await withBusy("ZIP 속 이미지를 변환하는 중… (많으면 몇 분 걸림)", async () => zipDone(await library.addImagesZip(conv.characterId, zip)));
 	}
 	// 정렬 · 여러 개 고르기 · 크게 보기
 	let assetSort = $state<"order" | "name" | "new">("order");
@@ -184,7 +198,6 @@
 		assetPicked = new Set();
 		assetPicking = false;
 	}
-	let assetView = $state<CharacterImage | null>(null);
 	function assetSortMenu(e: MouseEvent) {
 		const r = (e.currentTarget as HTMLElement).getBoundingClientRect();
 		const opts = [
@@ -195,23 +208,52 @@
 		menuItems = opts.map((o) => ({ label: o.l, icon: assetSort === o.v ? Check : undefined, onselect: () => (assetSort = o.v) }));
 		menu = { x: r.right, y: r.bottom + 4, align: "end" };
 	}
-	// 에셋 탭이 열려 있으면 끌어다 놓은 그림은 캐릭터 에셋으로 (메시지 첨부보다 우선)
+	/** 오른쪽 패널 영역 (파일 끌어다 놓기를 이 안에서만 받음) */
+	const panelZone = () => document.querySelector(".side-panel, .sheet");
+	// 에셋 탭: 패널에 끌어다 놓은 그림은 캐릭터 에셋으로
 	$effect(() => {
 		if (panel.tab !== "assets" || !plugins.on("chat.images")) return;
 		const charId = conv.characterId;
 		return drops.register({
 			priority: 2,
+			zone: panelZone,
 			label: "캐릭터 에셋에 넣기",
 			hint: "파일 이름이 이미지 키가 됨 (<cg>키</cg>). 그림이 든 ZIP도 가능",
 			accept: (f) => isImage(f) || extOf(f) === "zip",
-			ondrop: async (files) => {
-				const paths = await Promise.all(files.filter(isImage).map((f) => storeFile(f)));
-				if (paths.length) await library.addImages(charId, paths);
+			ondrop: (files) =>
+				withBusy("파일을 옮기는 중…", async (set) => {
+					const paths = await Promise.all(files.filter(isImage).map((f) => storeFile(f)));
+					if (paths.length) {
+						set(`이미지 ${paths.length}장 넣는 중…`);
+						await library.addImages(charId, paths);
+					}
 					// ZIP은 에셋 추가 메뉴의 "ZIP"과 같은 처리
 					for (const z of files.filter((f) => extOf(f) === "zip")) {
-						const n = await library.addImagesZip(charId, await storeFile(z));
-						toasts.success(n ? `에셋 ${n}개 넣음 (같은 이름은 덮어씀)` : "ZIP에 그림이 없음");
+						set(`ZIP 옮기는 중… (${z.name})`);
+						const path = await storeFile(z);
+						set("ZIP 속 이미지를 변환하는 중… (많으면 몇 분 걸림)");
+						zipDone(await library.addImagesZip(charId, path));
 					}
+				}),
+		});
+	});
+
+	// 프리셋 탭: 패널에 끌어다 놓은 프리셋 JSON을 가져와 이 대화에 적용
+	$effect(() => {
+		if (panel.tab !== "context") return;
+		return drops.register({
+			priority: 2,
+			zone: panelZone,
+			label: "프리셋 가져오기",
+			hint: "SillyTavern 프리셋 JSON. 하나만 놓으면 이 대화의 프리셋이 됨 (정규식 JSON을 같이 놓으면 그 프리셋에 묶임)",
+			accept: (f) => extOf(f) === "json",
+			ondrop: async (files) => {
+				const paths = await Promise.all(files.map((f) => storeFile(f)));
+				const id = await importPresetPaths(paths).catch(() => null);
+				if (id) {
+					setOption({ promptPresetId: id });
+					toasts.info("이 대화의 프리셋으로 골랐음");
+				}
 			},
 		});
 	});
@@ -219,12 +261,28 @@
 	// ---- 북마크 ----
 	const marks = $derived(bookmarksOf(conv));
 	const msgNo = $derived(new Map(session.messages.map((m, i) => [m.id, i + 1])));
+	const msgById = $derived(new Map(session.messages.map((m) => [m.id, m])));
+	/** 북마크가 어느 스와이프의 것인지 (스와이프가 하나뿐이면 말하지 않음) */
+	function swipeLabel(b: ChatBookmark): string {
+		const m = msgById.get(b.messageId);
+		const total = m ? (metaOf(m).swipes?.length ?? 0) : 0;
+		return b.swipeId !== undefined && total > 1 ? `스와이프 ${b.swipeId + 1}/${total}` : "";
+	}
+	const onShownSwipe = (b: ChatBookmark) => {
+		const m = msgById.get(b.messageId);
+		return !m || onCurrentSwipe(b, metaOf(m).swipeId ?? 0);
+	};
+	const marksOfMsg = $derived.by(() => {
+		const map = new Map<string, ChatBookmark[]>();
+		for (const b of marks) map.set(b.messageId, [...(map.get(b.messageId) ?? []), b]);
+		return map;
+	});
 
 	// ---- 목차 ----
 	let tocQuery = $state("");
 	const toc = $derived.by(() => {
 		// under: 이 메시지가 속한 챕터(그 챕터를 시작한 메시지 id)
-		const out: { kind: "chapter" | "msg"; id: string; n: number; label: string; under?: string }[] = [];
+		const out: { kind: "chapter" | "msg"; id: string; n: number; label: string; under?: string; marks?: ChatBookmark[] }[] = [];
 		let cur: string | undefined;
 		session.messages.forEach((m, i) => {
 			const meta = metaOf(m);
@@ -232,7 +290,7 @@
 				cur = m.id;
 				out.push({ kind: "chapter", id: m.id, n: chapters[m.id], label: `${chapters[m.id]}장 · ${meta.chapter}` });
 			}
-			out.push({ kind: "msg", id: m.id, n: i + 1, label: meta.hidden ? "(숨긴 메시지)" : preview(m.content) || "(빈 메시지)", under: cur });
+			out.push({ kind: "msg", id: m.id, n: i + 1, label: meta.hidden ? "(숨긴 메시지)" : preview(m.content) || "(빈 메시지)", under: cur, marks: marksOfMsg.get(m.id) });
 		});
 		return out;
 	});
@@ -249,8 +307,33 @@
 		const q = tocQuery.trim().toLowerCase();
 		if (!q) return toc.filter((t) => !(t.kind === "msg" && t.under && folded.has(t.under)));
 		const num = Number(q.replace("#", ""));
-		return toc.filter((t) => t.label.toLowerCase().includes(q) || (t.kind === "msg" && t.n === num));
+		return toc.filter((t) => t.label.toLowerCase().includes(q) || (t.kind === "msg" && (t.n === num || !!t.marks?.some((b) => b.text.toLowerCase().includes(q)))));
 	});
+
+	// 목차 항목 오른쪽 클릭(폰: 꾹 누르기): 챕터 등록·이름 바꾸기·해제
+	let tocMenuAt = $state<{ x: number; y: number } | null>(null);
+	let tocMenuItems: MenuItem[] = $state([]);
+	function tocContext(e: MouseEvent, id: string) {
+		e.preventDefault();
+		const m = session.messages.find((x) => x.id === id);
+		if (!m) return;
+		const cur = metaOf(m).chapter;
+		const rename = async () => {
+			const t = await promptText({ title: cur ? "챕터 이름 바꾸기" : "챕터로 등록", message: cur ? "비우면 챕터 표시를 지움" : `#${msgNo.get(id)} 메시지부터 새 챕터`, input: { value: cur ?? "", placeholder: "챕터 제목" }, confirmLabel: cur ? "바꾸기" : "만들기" });
+			if (t !== null && t !== undefined) await session.setChapter(m, t.trim() || null);
+		};
+		tocMenuItems = cur
+			? [
+					{ label: "챕터 이름 바꾸기", icon: Pencil, onselect: rename },
+					{ label: "챕터 표시 지우기", icon: X, danger: true, separator: true, onselect: () => session.setChapter(m, null) },
+				]
+			: [
+					// 제목은 메시지 앞부분으로 바로 등록 (나중에 이름 바꾸기)
+					{ label: "여기서 챕터 시작", icon: Bookmark, onselect: () => session.setChapter(m, preview(m.content).slice(0, 20).trim() || `#${msgNo.get(id)}`) },
+					{ label: "이름 정해서 챕터 시작", icon: Pencil, onselect: rename },
+				];
+		tocMenuAt = { x: e.clientX, y: e.clientY };
+	}
 </script>
 
 
@@ -261,6 +344,7 @@
 			{:else}
 				<p class="faint">캐릭터 에셋 기능이 꺼져 있음 (설정 > 코어 플러그인)</p>
 			{/if}
+			{#if assetImport.busy}<p class="abusy" role="status"><Spinner />{assetImport.busy}</p>{/if}
 			<div class="atools">
 				<span class="faint">{assets.length}개 · 오른쪽 클릭으로 관리</span>
 				<IconButton label="정렬" size="sm" onclick={assetSortMenu}><ArrowUpDown /></IconButton>
@@ -278,9 +362,9 @@
 			{#if assets.length}
 				<div class="agrid">
 					{#each sortedAssets as a (a.id)}
-						<button class="tile" class:off={!a.enabled} class:picked={assetPicked.has(a.id)} title={a.enabled ? a.key : `${a.key} (AI에게 안 보냄)`} onclick={() => (assetPicking ? pickAsset(a) : (assetView = a))} oncontextmenu={(e) => assetMenu(e, a)}>
+						<button class="tile" class:off={!a.enabled} class:picked={assetPicked.has(a.id)} title={a.enabled ? a.key : `${a.key} (AI에게 안 보냄)`} onclick={() => (assetPicking ? pickAsset(a) : openAsset(a))} oncontextmenu={(e) => assetMenu(e, a)}>
 							<span class="thumb">
-								<img src={fileSrc(a.thumbnailPath ?? a.path)} alt="" loading="lazy" />
+								<img src={imageSrc(a, true)} alt="" loading="lazy" />
 								{#if !a.enabled}<EyeOff />{/if}
 							</span>
 							<span class="key">{a.key}</span>
@@ -292,26 +376,17 @@
 			{/if}
 			<ContextMenu at={menu} items={menuItems} label="에셋 메뉴" onclose={() => (menu = null)} />
 		</div>
-		{#if assetView}
-			{@const v = assetView}
-			<div class="aview" role="dialog" aria-modal="true" aria-label="에셋 크게 보기">
-				<button class="ascrim" aria-label="닫기" onclick={() => (assetView = null)}></button>
-				<figure>
-					<img src={fileSrc(v.path)} alt={v.key} data-no-zoom />
-					<figcaption><code>&lt;cg&gt;{v.key}&lt;/cg&gt;</code>{v.enabled ? "" : " · AI에게 안 보냄"}</figcaption>
-				</figure>
-			</div>
-		{/if}
 	{:else if panel.tab === "branches"}
 		<BranchTree {conv} {onopen} />
 	{:else if panel.tab === "bookmarks"}
 			<ol class="marks">
 				{#each [...marks].reverse() as b (b.id)}
-					<li>
-						<button class="mark" onclick={() => onjump(b.messageId)}>
+					<li class:dim={!onShownSwipe(b)}>
+						<button class="mark" onclick={() => onjump(b.messageId, b)} title={onShownSwipe(b) ? "이 글로 이동" : "지금 보는 스와이프가 아님 (메시지로 이동)"} disabled={!msgNo.has(b.messageId)}>
 							<span class="mtext">{b.text}</span>
-							<span class="mmeta">{msgNo.has(b.messageId) ? `#${msgNo.get(b.messageId)}` : "지운 메시지"} · {new Date(b.createdAt).toLocaleDateString()}</span>
+							<span class="mmeta">{msgNo.has(b.messageId) ? `#${msgNo.get(b.messageId)}` : "지운 메시지"}{swipeLabel(b) ? ` · ${swipeLabel(b)}` : ""} · {new Date(b.createdAt).toLocaleDateString()}</span>
 						</button>
+						{#if oncard}<IconButton label="이미지 카드로 만들기" size="sm" onclick={() => oncard(b)}><IdCard /></IconButton>{/if}
 						<IconButton label="북마크 지우기" size="sm" onclick={() => bookmarks.remove(conv, b.id)}><X /></IconButton>
 					</li>
 				{:else}
@@ -333,12 +408,20 @@
 					{#if t.kind === "chapter"}
 						<button class="fold" aria-label={folded.has(t.id) ? "챕터 펼치기" : "챕터 접기"} aria-expanded={!folded.has(t.id)} onclick={() => toggleChapter(t.id)}><ChevronDown class={folded.has(t.id) ? "rot" : ""} /></button>
 					{/if}
-					<button onclick={() => onjump(t.id)}><span class="no">{t.kind === "msg" ? `#${t.n}` : ""}</span>{t.label}</button>
+					<button onclick={() => onjump(t.id)} oncontextmenu={(e) => tocContext(e, t.id)}><span class="no">{t.kind === "msg" ? `#${t.n}` : ""}</span>{t.label}</button>
+					{#if t.marks?.length}
+						<ul class="tbm">
+							{#each t.marks as b (b.id)}
+								<li class:dim={!onShownSwipe(b)}><button onclick={() => onjump(t.id, b)} title="이 글로 이동"><Bookmark />{b.text}</button></li>
+							{/each}
+						</ul>
+					{/if}
 				</li>
 			{:else}
 				<li class="none">{tocQuery ? "찾는 항목 없음" : "메시지 없음"}</li>
 			{/each}
 		</ol>
+		<ContextMenu at={tocMenuAt} items={tocMenuItems} label="목차 메뉴" onclose={() => (tocMenuAt = null)} />
 	{:else if panel.tab === "context"}
 		<div class="panel-body preset-edit">
 			<section>
@@ -402,7 +485,7 @@
 			{#if plugins.on("memory")}
 				<hr />
 				<section>
-					<h4>메모리 검색 <span class="faint">지난 대화를 뜻으로 찾기</span></h4>
+					<h4>메모리 검색</h4>
 					<Switch checked={!memoryOff} label="이 대화를 메모리에 포함" description="끄면 색인과 전체 검색에서 이 대화를 뺌" onchange={(v) => library.patchMeta(conv.id, { memoryOff: v ? null : true, ...(legacyMemoryOff ? { memory: null } : {}) })} />
 					{#if !memoryOff}
 						<div class="mem-actions"><MemoryIndex conversationId={conv.id} /></div>
@@ -434,8 +517,8 @@
 							{@const sort = sorters[g.scope]}
 							<li {...sort.item(i)} class:dragging={sort.from === i} class:over={sort.over === i && sort.from !== i}>
 								<span class="grip" aria-hidden="true" {...sort.handle(i)}><GripVertical /></span>
-								<Switch checked={s.enabled} label={s.name} onchange={(v) => toggleScript(s, v)} />
 								<IconButton label="{s.name} 편집" size="sm" onclick={() => regexEditor?.startEdit(s)}><Pencil /></IconButton>
+								<Switch checked={s.enabled} label={s.name} onchange={(v) => toggleScript(s, v)} />
 							</li>
 						{/each}
 					</ul>
@@ -547,6 +630,16 @@
 		gap: 2px;
 		margin-bottom: calc(var(--space-2) * -1);
 	}
+	.abusy {
+		display: flex;
+		align-items: center;
+		gap: var(--space-2);
+		margin: 0;
+		padding: var(--space-2) var(--space-3);
+		border-radius: var(--radius-md);
+		background: var(--accent-soft);
+		font-size: var(--text-sm);
+	}
 	.atools span {
 		margin-right: auto;
 		font-size: var(--text-xs);
@@ -612,40 +705,6 @@
 		outline: 2px solid var(--accent);
 		outline-offset: -2px;
 	}
-	.aview {
-		position: fixed;
-		inset: 0;
-		z-index: var(--z-viewer);
-		display: grid;
-		place-items: center;
-		padding: var(--space-5);
-	}
-	.ascrim {
-		position: absolute;
-		inset: 0;
-		border: none;
-		background: rgb(0 0 0 / 0.6);
-	}
-	.aview figure {
-		position: relative;
-		margin: 0;
-		padding: var(--space-3);
-		border-radius: var(--radius-lg);
-		background: var(--surface);
-		box-shadow: var(--shadow-lg);
-	}
-	.aview img {
-		display: block;
-		max-width: 80vw;
-		max-height: 80vh;
-		object-fit: contain;
-		border-radius: var(--radius-md);
-	}
-	.aview figcaption {
-		padding-top: var(--space-2);
-		font-size: var(--text-sm);
-		color: var(--text-muted);
-	}
 	.agrid {
 		display: grid;
 		grid-template-columns: repeat(3, 1fr);
@@ -710,6 +769,36 @@
 
 	.toc li {
 		overflow: hidden;
+	}
+	/* 메시지 아래에 붙는 북마크 */
+	.tbm {
+		list-style: none;
+		margin: 0 0 var(--space-1);
+		padding: 0 0 0 calc(var(--space-2) + 30px + var(--space-2));
+	}
+	.toc .tbm button {
+		display: block;
+		padding: 2px var(--space-2);
+		border-left: 2px solid var(--warning);
+		border-radius: 0 var(--radius-xs) var(--radius-xs) 0;
+		font-size: var(--text-xs);
+		white-space: normal;
+		display: -webkit-box;
+		-webkit-line-clamp: 2;
+		line-clamp: 2;
+		-webkit-box-orient: vertical;
+	}
+	.tbm :global(svg) {
+		display: inline;
+		width: 11px;
+		height: 11px;
+		margin-right: 4px;
+		vertical-align: -1px;
+		color: var(--warning);
+	}
+	/* 지금 보는 스와이프의 북마크가 아님 */
+	.dim {
+		opacity: 0.45;
 	}
 	
 	.toc button {
@@ -804,6 +893,9 @@
 		background: transparent;
 		text-align: left;
 		cursor: pointer;
+	}
+	.mark:disabled {
+		cursor: default;
 	}
 	.mtext {
 		font-size: var(--text-sm);

@@ -228,13 +228,32 @@ pub fn restart_app(app: AppHandle) {
 /// 끌어다 놓은 파일을 디스크에 저장하고 경로를 돌려준다 (웹뷰의 드롭은 경로 없이 내용만 줌).
 /// - `keep = true`: 메시지 첨부 이미지. 앱 데이터의 attachments 폴더에 계속 둔다
 /// - `keep = false`: 가져오기용 임시 파일. 원래 이름을 살려 임시 폴더에 두고, 하루 지난 것은 지운다
+/// - `append_to`: 큰 파일을 조각으로 나눠 보낼 때, 앞 조각이 돌려준 경로를 주면 거기에 이어 붙인다 (임시 폴더 안의 파일만).
+///   한 번에 보내면 수백 MB가 IPC 한 덩어리로 오가며 화면이 얼어붙기 때문
 #[tauri::command]
 #[specta::specta]
-pub async fn store_dropped_file(app: AppHandle, name: String, data_base64: String, keep: bool) -> Result<String> {
+pub async fn store_dropped_file(app: AppHandle, name: String, data_base64: String, keep: bool, append_to: Option<String>) -> Result<String> {
     use base64::Engine;
     let bytes = base64::engine::general_purpose::STANDARD
         .decode(data_base64.split_once(',').map(|(_, b)| b).unwrap_or(&data_base64))
         .map_err(|e| crate::error::AppError::validation(format!("파일 내용을 읽을 수 없습니다: {e}"), None))?;
+    if let Some(prev) = append_to {
+        use std::io::Write;
+        let root = std::env::temp_dir().join("sandcastle-drop");
+        let p = std::path::PathBuf::from(&prev);
+        // 우리가 만든 임시 파일에만 이어 붙인다 (.. 로 밖을 가리키는 경로는 거절)
+        let inside = p.starts_with(&root) && !p.components().any(|c| matches!(c, std::path::Component::ParentDir));
+        if keep || !inside || !p.is_file() {
+            return Err(crate::error::AppError::validation("이어 붙일 수 없는 파일입니다", None));
+        }
+        let mut w = std::fs::OpenOptions::new()
+            .append(true)
+            .open(&p)
+            .map_err(|e| crate::error::AppError::io(format!("파일을 열 수 없습니다: {e}")))?;
+        w.write_all(&bytes)
+            .map_err(|e| crate::error::AppError::io(format!("파일을 쓸 수 없습니다: {e}")))?;
+        return Ok(prev);
+    }
     let file_name = safe_file_name(&name);
     let path = if keep {
         let ext = std::path::Path::new(&file_name)

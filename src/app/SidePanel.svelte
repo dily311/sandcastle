@@ -12,6 +12,14 @@
 
 	let { label, children }: { label: string; children: Snippet } = $props();
 
+	// 탭이 많아 넘치면 휠·끌기로 옆으로 넘김 (좁은 화면에서도 창을 키우지 않고 다른 탭으로 가게)
+	function wheelTabs(e: WheelEvent) {
+		const el = e.currentTarget as HTMLElement;
+		if (el.scrollWidth <= el.clientWidth || Math.abs(e.deltaX) > Math.abs(e.deltaY)) return;
+		e.preventDefault();
+		el.scrollLeft += e.deltaY;
+	}
+
 	function startResize(e: PointerEvent) {
 		e.preventDefault();
 		const startX = e.clientX;
@@ -35,7 +43,7 @@
 	<div class="sheet-scrim" transition:fade={{ duration: 150 }} onclick={() => panel.toggle()}></div>
 	<div class="sheet" transition:fly={{ x: 400, duration: 220 }}>
 		<header class="sheet-head">
-			<div class="stabs" role="tablist" aria-label={label}>
+			<div class="stabs" role="tablist" aria-label={label} onwheel={wheelTabs}>
 				{#each panel.allTabs as t (t.id)}
 					<button role="tab" class:on={panel.tab === t.id} aria-selected={panel.tab === t.id} onclick={() => (panel.tab = t.id)} {...panel.tabDrag(t.id)}>
 						<t.icon /><span>{t.label}</span>

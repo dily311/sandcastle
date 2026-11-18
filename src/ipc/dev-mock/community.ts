@@ -41,6 +41,11 @@ const plugins: UserPlugin[] = [
 		installedAt: Date.now() - 3 * 86_400_000,
 		size: 8_200,
 		processMode: "notes", aiAuto: false, codeChanged: false,
+		activeDir: "0.3.1",
+		versions: [
+			{ dir: "0.3.0", version: "0.3.0", size: 7_900, modifiedAt: Date.now() - 9 * 86_400_000, active: false, error: null, hasStorage: true },
+			{ dir: "0.3.1", version: "0.3.1", size: 8_200, modifiedAt: Date.now() - 3 * 86_400_000, active: true, error: null, hasStorage: false },
+		],
 	},
 ];
 
@@ -111,6 +116,19 @@ export const communityHandlers: Record<string, Handler> = {
 	reject_change_proposal: ({ id }) => decide(id, "rejected"),
 	revert_change_proposal: ({ id }) => decide(id, "reverted"),
 	list_user_plugins: () => plugins.map((p) => ({ ...p })),
+	list_plugin_folders: () => plugins.map((p) => ({ ...p })),
+	switch_user_plugin_version: ({ pluginId, dir }) => {
+		const p = find(pluginId);
+		p.versions = p.versions.map((v) => ({ ...v, active: v.dir === dir }));
+		p.activeDir = String(dir);
+		p.enabled = false;
+		return { ...p };
+	},
+	delete_user_plugin_version: ({ pluginId, dir }) => {
+		const p = find(pluginId);
+		p.versions = p.versions.filter((v) => v.dir !== dir || v.active);
+		return { ...p };
+	},
 	preview_user_plugin: (): PluginPreview => {
 		const existing = plugins.find((p) => p.id === sample.id);
 		return {
@@ -125,7 +143,7 @@ export const communityHandlers: Record<string, Handler> = {
 	},
 	install_user_plugin: () => {
 		const old = plugins.findIndex((p) => p.id === sample.id);
-		const p: UserPlugin = { id: sample.id, manifest: sample, error: null, enabled: false, granted: [], installedAt: Date.now(), size: 5_400, processMode: "notes", aiAuto: false, codeChanged: false };
+		const p: UserPlugin = { id: sample.id, manifest: sample, error: null, enabled: false, granted: [], installedAt: Date.now(), size: 5_400, processMode: "notes", aiAuto: false, codeChanged: false, activeDir: sample.version, versions: [{ dir: sample.version, version: sample.version, size: 5_400, modifiedAt: Date.now(), active: true, error: null, hasStorage: false }] };
 		if (old >= 0) plugins.splice(old, 1, p);
 		else plugins.push(p);
 		return { ...p };

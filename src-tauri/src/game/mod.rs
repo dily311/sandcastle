@@ -7,6 +7,8 @@
 //!     protocol.rs         — game:// 커스텀 프로토콜 (에셋 서빙 + CSP)
 //!     journal.rs           — 턴 결과(일지/이벤트 로그/세션 저장) 기록 공용 함수
 //!     validate.rs          — 게임 정의 일관성 검사 (start_new_game이 Error면 시작을 막음)
+//!     asset_store.rs       — 에셋 파일 추가/삭제 (형식·크기 검증, 게임 폴더로 복사, game_assets 반영, 참조 검사)
+//!     story_plan.rs        — StoryPlan(각본가): 체크포인트에서 AI가 세우는 조언용 플랜. 엔진 상태를 직접 바꾸지 않는다
 //!     template.rs          — 템플릿(규칙/capabilities)과 번들된 템플릿 패키지(.tgame)
 //!     session.rs           — 책갈피에서 분기(fork)한 새 세션 만들기
 //!     guard.rs             — current_game_id 등 커맨드 공용 검증 헬퍼
@@ -23,6 +25,7 @@
 //!         mod.rs                       — GameSystem trait, 시스템 목록/실행 순서
 //!         movement.rs / time.rs / map.rs / trigger.rs / encounter.rs / relationship.rs /
 //!         dialogue.rs / scene.rs / inventory.rs
+pub mod asset_store;
 pub mod engine;
 pub mod guard;
 pub mod journal;
@@ -33,8 +36,11 @@ pub mod protocol;
 pub mod runtime;
 pub mod session;
 pub mod stage;
+pub mod story_plan;
 pub mod stream_filter;
 pub mod template;
+#[cfg(test)]
+pub(crate) mod test_support;
 pub mod transcript;
 pub mod validate;
 

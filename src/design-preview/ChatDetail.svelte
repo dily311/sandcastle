@@ -218,6 +218,7 @@
 	{#if showList}
 		<aside class="convs" aria-label="대화 목록">
 			<div class="convs-head">
+				<IconButton label="닫기" size="sm" variant="soft"><PanelLeft /></IconButton>
 				<span class="spacer"></span>
 				<IconButton label="새 대화" size="sm" variant="soft"><Plus /></IconButton>
 				<IconButton label="대화 가져오기 (SillyTavern .jsonl 등)" size="sm"><Upload /></IconButton>

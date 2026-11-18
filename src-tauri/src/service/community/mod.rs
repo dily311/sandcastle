@@ -1,6 +1,6 @@
 //! 커뮤니티 플러그인 — 설치·목록·켜기·삭제 (CLAUDE.md 6-D-1, ADR-012).
 //!
-//! - 설치된 것 = `<앱 데이터>/plugins/<id>/` 폴더(manifest.json). 백업에는 들어가고(ADR-008) 동기화에는 빠진다.
+//! - 설치된 것 = `<앱 데이터>/plugins/<id>/<판>/` 폴더들(각 판에 manifest.json, `versions.rs`). 지금 쓰는 판은 사용자가 고른다(되돌리기). 백업에는 들어가고(ADR-008) 동기화에는 빠진다.
 //! - 기기마다의 상태(켜짐·허락한 권한·코드 해시)는 `user_plugins` 표. 행이 없으면 꺼짐·허락 없음으로 본다
 //!   (예전 백업을 되살려 폴더만 있는 경우 등).
 //! - 켜기는 manifest의 권한 전부에 대한 동의와 같이 온다. 권한이 늘어난 새 판을 설치하면 꺼진다(다시 동의).
@@ -16,6 +16,7 @@ pub mod prompt_hook;
 pub mod runtime;
 pub mod settings;
 pub mod storage;
+pub mod versions;
 
 use std::{
     collections::BTreeSet,
@@ -25,7 +26,7 @@ use std::{
 use serde::Serialize;
 use sqlx::SqlitePool;
 
-use self::{manifest::PluginManifest, package::MANIFEST};
+use self::{manifest::PluginManifest, package::MANIFEST, versions::PluginVersion};
 use crate::{
     error::{AppError, Result},
     service::data::trash::{self, TrashItem, TrashKind},
@@ -76,10 +77,14 @@ pub struct UserPlugin {
     pub ai_auto: bool,
     /// 켤 때 본 코드와 폴더의 코드가 달라졌나 (파일을 손으로 고침·다른 곳에서 바뀜). 그러면 꺼진 것으로 보고 다시 켜서 동의해야 한다 (6-D-8)
     pub code_changed: bool,
+    /// 지금 쓰는 판 폴더 이름 (`plugins/<id>/<이 이름>/`)
+    pub active_dir: String,
+    /// 폴더로 있는 판들 (쓰는 판 표시, 고르기·지우기에 쓰임)
+    pub versions: Vec<PluginVersion>,
 }
 
-/// (name, version, enabled, granted, code_hash, installed_at, process_mode, ai_auto)
-type StateRow = (String, String, i64, String, String, i64, String, i64);
+/// (name, version, enabled, granted, code_hash, installed_at, process_mode, ai_auto, active_dir)
+type StateRow = (String, String, i64, String, String, i64, String, i64, String);
 
 fn now_ms() -> i64 {
     chrono::Utc::now().timestamp_millis()
@@ -102,7 +107,7 @@ fn plugin_dir(base: &Path, id: &str) -> Result<PathBuf> {
 
 async fn state_of(db: &SqlitePool, id: &str) -> Result<Option<StateRow>> {
     Ok(
-        sqlx::query_as("SELECT name, version, enabled, granted, code_hash, installed_at, process_mode, ai_auto FROM user_plugins WHERE id = ?")
+        sqlx::query_as("SELECT name, version, enabled, granted, code_hash, installed_at, process_mode, ai_auto, active_dir FROM user_plugins WHERE id = ?")
             .bind(id)
             .fetch_optional(db)
             .await?,
@@ -138,6 +143,13 @@ fn read_installed_manifest(dir: &Path, id: &str) -> std::result::Result<PluginMa
     Ok(m)
 }
 
+/// 저장된 상태로 쓸 판 폴더를 정한다 (판 폴더가 하나도 없으면 None)
+fn active_of(base: &Path, id: &str, state: &Option<StateRow>) -> Option<(String, PathBuf)> {
+    let dirs = versions::dirs_of(&plugins_dir(base).join(id));
+    let (saved_dir, saved_version) = state.as_ref().map(|s| (s.8.as_str(), s.1.as_str())).unwrap_or(("", ""));
+    versions::pick_active(&dirs, saved_dir, saved_version)
+}
+
 fn not_subset(want: &[String], have: &[String]) -> Vec<String> {
     let have: BTreeSet<&String> = have.iter().collect();
     want.iter().filter(|p| !have.contains(p)).cloned().collect()
@@ -149,6 +161,7 @@ fn not_subset(want: &[String], have: &[String]) -> Vec<String> {
 
 /// 설치된 플러그인 (폴더 이름 순)
 pub async fn list(db: &SqlitePool, base: &Path) -> Result<Vec<UserPlugin>> {
+    versions::migrate_layout(base)?;
     let mut out = vec![];
     let mut dirs: Vec<(String, PathBuf)> = std::fs::read_dir(plugins_dir(base))
         .into_iter()
@@ -156,34 +169,42 @@ pub async fn list(db: &SqlitePool, base: &Path) -> Result<Vec<UserPlugin>> {
         .flatten()
         .filter(|e| e.file_type().is_ok_and(|t| t.is_dir()))
         .filter_map(|e| Some((e.file_name().to_str()?.to_string(), e.path())))
-        // .staging-… / .old-…는 설치 도중의 것
+        // .staging-…는 설치 도중의 것
         .filter(|(name, _)| !name.starts_with('.') && manifest::valid_id(name))
         .collect();
     dirs.sort();
-    for (id, dir) in dirs {
+    for (id, id_dir) in dirs {
         let state = state_of(db, &id).await?;
-        let (manifest, error) = match read_installed_manifest(&dir, &id) {
-            Ok(m) => (Some(m), None),
-            Err(e) => (None, Some(e)),
+        let version_dirs = versions::dirs_of(&id_dir);
+        let active = active_of(base, &id, &state);
+        let active_dir = active.as_ref().map(|a| a.0.clone()).unwrap_or_default();
+        let (manifest, error) = match &active {
+            Some((_, d)) => match read_installed_manifest(d, &id) {
+                Ok(m) => (Some(m), None),
+                Err(e) => (None, Some(e)),
+            },
+            None => (None, Some("판 폴더가 없음".to_string())),
         };
         // 켤 때 저장한 코드 지문과 지금 폴더가 다르면 켜지 않은 것으로 본다 (읽을 수 없어도 같음)
         let code_changed = state
             .as_ref()
-            .is_some_and(|s| s.2 != 0 && package::folder_hash(&dir).as_deref() != Some(s.4.as_str()));
+            .is_some_and(|s| s.2 != 0 && active.as_ref().and_then(|a| package::folder_hash(&a.1)).as_deref() != Some(s.4.as_str()));
         let (enabled, granted, installed_at, process_mode, ai_auto) = state
             .map(|s| (s.2 != 0 && !code_changed, granted_of(&s.3), s.5, s.6, s.7 != 0))
             .unwrap_or((false, vec![], 0, postprocess::MODE_NOTES.to_string(), false));
         out.push(UserPlugin {
+            versions: versions::describe(&id, &version_dirs, Some(active_dir.as_str()).filter(|d| !d.is_empty()), dir_size),
             id,
             enabled: enabled && manifest.is_some(),
             manifest,
             error,
             granted,
             installed_at,
-            size: dir_size(&dir),
+            size: active.as_ref().map(|a| dir_size(&a.1)).unwrap_or(0),
             process_mode,
             ai_auto,
             code_changed,
+            active_dir,
         });
     }
     Ok(out)
@@ -203,12 +224,13 @@ pub async fn get(db: &SqlitePool, base: &Path, id: &str) -> Result<UserPlugin> {
 
 /// 설치 전 미리보기 — 아무것도 쓰지 않는다
 pub async fn preview(db: &SqlitePool, base: &Path, path: &Path) -> Result<PluginPreview> {
+    versions::migrate_layout(base)?;
     let pkg = package::read(path, app_version())?;
     let id = pkg.manifest.id.clone();
     let installed = plugin_dir(base, &id)?.is_dir();
     let state = state_of(db, &id).await?;
     let existing_manifest = if installed {
-        read_installed_manifest(&plugin_dir(base, &id)?, &id).ok()
+        active_of(base, &id, &state).and_then(|(_, d)| read_installed_manifest(&d, &id).ok())
     } else {
         None
     };
@@ -240,12 +262,25 @@ pub async fn install(db: &SqlitePool, base: &Path, path: &Path, expected_hash: &
     if pkg.hash != expected_hash {
         return Err(AppError::validation("미리보기 뒤에 플러그인 파일이 바뀌었음 — 다시 열어 확인하세요", None));
     }
+    versions::migrate_layout(base)?;
     let id = pkg.manifest.id.clone();
     let root = plugins_dir(base);
     std::fs::create_dir_all(&root)?;
-    let target = plugin_dir(base, &id)?;
+    let id_dir = plugin_dir(base, &id)?;
+    let prev = state_of(db, &id).await?;
+    let existing = versions::dirs_of(&id_dir);
+    let had_old = !existing.is_empty();
+    let prev_active = if had_old {
+        versions::pick_active(
+            &existing,
+            prev.as_ref().map(|s| s.8.as_str()).unwrap_or(""),
+            prev.as_ref().map(|s| s.1.as_str()).unwrap_or(""),
+        )
+    } else {
+        None
+    };
 
-    // 1) 임시 폴더에 다 쓰고 2) 바꿔 끼운다 — 중간에 실패해도 있던 판은 그대로
+    // 1) 임시 폴더에 다 쓰고 2) 판 폴더로 옮긴다 — 중간에 실패해도 있던 판은 그대로 (옛 판은 지우지 않는다)
     let token = uuid::Uuid::new_v4().simple().to_string();
     let staging = root.join(format!(".staging-{token}"));
     let write = (|| -> Result<()> {
@@ -262,26 +297,38 @@ pub async fn install(db: &SqlitePool, base: &Path, path: &Path, expected_hash: &
         let _ = std::fs::remove_dir_all(&staging);
         return Err(e);
     }
-    let old = root.join(format!(".old-{token}"));
-    let had_old = target.exists();
-    if had_old {
-        if let Err(e) = std::fs::rename(&target, &old) {
-            let _ = std::fs::remove_dir_all(&staging);
-            return Err(AppError::io(format!("있던 플러그인을 옮길 수 없음 (사용 중인지 확인): {e}")));
+    // 판 폴더 이름: 판 문자열, 같은 이름에 다른 코드가 있으면 코드 지문을 붙인다. 같은 코드가 이미 있으면 그 폴더를 다시 쓴다
+    let plain = versions::dir_name(&pkg.manifest.version);
+    let short: String = pkg.hash.chars().take(8).collect();
+    let (vdir, reuse) = match existing.iter().find(|(n, _)| *n == plain) {
+        None => (plain, false),
+        Some((_, p)) if versions::hash_of(p).as_deref() == Some(pkg.hash.as_str()) => (plain, true),
+        Some(_) => {
+            let alt = format!("{plain}-{short}");
+            let reuse = existing.iter().any(|(n, _)| *n == alt);
+            (alt, reuse)
         }
-    }
-    if let Err(e) = std::fs::rename(&staging, &target) {
-        if had_old {
-            let _ = std::fs::rename(&old, &target);
-        }
+    };
+    let target = id_dir.join(&vdir);
+    if reuse {
         let _ = std::fs::remove_dir_all(&staging);
-        return Err(AppError::io(format!("플러그인을 설치할 수 없음: {e}")));
+    } else {
+        std::fs::create_dir_all(&id_dir)?;
+        if let Err(e) = std::fs::rename(&staging, &target) {
+            let _ = std::fs::remove_dir_all(&staging);
+            return Err(AppError::io(format!("플러그인을 설치할 수 없음: {e}")));
+        }
     }
-
-    let prev = state_of(db, &id).await?;
+    let switching = prev_active.as_ref().is_some_and(|(n, _)| *n != vdir);
+    // 판이 바뀌면 떠나는 판의 저장소를 그 판 폴더에 보관한다 (그 판으로 돌아오면 그때 값으로 복원)
+    if let (true, Some((_, from))) = (switching, prev_active.as_ref()) {
+        if let Ok(snap) = storage::snapshot(db, &id).await {
+            let _ = std::fs::write(from.join(versions::STORAGE_SNAPSHOT), serde_json::to_vec(&snap).unwrap_or_default());
+        }
+    }
     let perms = &pkg.manifest.permissions;
     let has = |p: &str| perms.iter().any(|x| x == p);
-    // 업데이트(폴더가 있었음)일 때만 이전 상태를 이어받는다. 폴더 없이 행만 남은 id는 새로 시작한다 — 다른 사람의 같은 id 플러그인이
+    // 업데이트(판 폴더가 있었음)일 때만 이전 상태를 이어받는다. 폴더 없이 행만 남은 id는 새로 시작한다 — 다른 사람의 같은 id 플러그인이
     // 이전 허락·자동 AI 호출·저장한 값을 물려받지 않게
     let carry = prev.as_ref().filter(|_| had_old);
     // 허락은 새 manifest가 요구하는 것과의 교집합으로만 (빠졌다가 다시 생긴 권한을 몰래 되살리지 않음)
@@ -299,12 +346,20 @@ pub async fn install(db: &SqlitePool, base: &Path, path: &Path, expected_hash: &
         .unwrap_or_else(|| postprocess::MODE_NOTES.to_string());
     if carry.is_none() {
         sqlx::query("DELETE FROM user_plugin_storage WHERE plugin_id = ?").bind(&id).execute(db).await?;
+    } else if switching && reuse {
+        // 예전에 쓰던 판을 다시 설치해 돌아온 것: 그 판의 저장소 보관본이 있으면 그것으로
+        if let Some(snap) = std::fs::read(target.join(versions::STORAGE_SNAPSHOT))
+            .ok()
+            .and_then(|raw| serde_json::from_slice::<serde_json::Value>(&raw).ok())
+        {
+            storage::restore(db, &id, &snap).await?;
+        }
     }
     let saved = sqlx::query(
-        "INSERT INTO user_plugins (id, name, version, enabled, granted, code_hash, installed_at, process_mode, ai_auto) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+        "INSERT INTO user_plugins (id, name, version, enabled, granted, code_hash, installed_at, process_mode, ai_auto, active_dir) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
          ON CONFLICT(id) DO UPDATE SET name = excluded.name, version = excluded.version, enabled = excluded.enabled,
            granted = excluded.granted, code_hash = excluded.code_hash, installed_at = excluded.installed_at,
-           process_mode = excluded.process_mode, ai_auto = excluded.ai_auto",
+           process_mode = excluded.process_mode, ai_auto = excluded.ai_auto, active_dir = excluded.active_dir",
     )
     .bind(&id)
     .bind(&pkg.manifest.name)
@@ -315,22 +370,83 @@ pub async fn install(db: &SqlitePool, base: &Path, path: &Path, expected_hash: &
     .bind(now_ms())
     .bind(&mode)
     .bind(ai_auto as i64)
+    .bind(&vdir)
     .execute(db)
     .await;
     if let Err(e) = saved {
-        // 상태를 못 남겼으면 파일도 원래대로
-        let _ = std::fs::remove_dir_all(&target);
-        if had_old {
-            let _ = std::fs::rename(&old, &target);
+        // 상태를 못 남겼으면 새로 만든 판 폴더는 치운다 (옛 판은 그대로)
+        if !reuse {
+            let _ = std::fs::remove_dir_all(&target);
         }
         return Err(e.into());
-    }
-    if had_old {
-        let _ = std::fs::remove_dir_all(&old);
     }
     // 도는 중이면 내린다 — 화면이 목록이 바뀐 것을 알고 새 코드로 다시 시작한다
     runtime::stop(&id);
     get(db, base, &id).await
+}
+
+/// 쓰는 판 바꾸기(되돌리기 포함). 코드가 바뀌므로 **꺼진 채로** 돌아오고 다시 켜서 동의해야 한다. 허락은 그 판의 manifest가 요구하는 것과의 교집합,
+/// 자동 AI 호출은 꺼짐. 떠나는 판의 저장소는 그 판 폴더에 보관하고, 가는 판에 보관본이 있으면 그것으로 복원한다.
+pub async fn switch_version(db: &SqlitePool, base: &Path, id: &str, dir: &str) -> Result<UserPlugin> {
+    let p = get(db, base, id).await?;
+    let Some(target) = p.versions.iter().find(|v| v.dir == dir) else {
+        return Err(AppError::not_found(format!("그런 판 폴더가 없음: {dir}")));
+    };
+    if target.active {
+        return Ok(p);
+    }
+    if let Some(e) = &target.error {
+        return Err(AppError::validation(format!("이 판은 쓸 수 없음: {e}"), None));
+    }
+    let id_dir = plugin_dir(base, id)?;
+    let target_path = id_dir.join(dir);
+    let m = read_installed_manifest(&target_path, id).map_err(|e| AppError::validation(format!("이 판은 쓸 수 없음: {e}"), None))?;
+    runtime::stop(id);
+    // 1) 떠나는 판의 저장소 보관 (2) 가는 판의 보관본 복원
+    if !p.active_dir.is_empty() {
+        let snap = storage::snapshot(db, id).await?;
+        std::fs::write(
+            id_dir.join(&p.active_dir).join(versions::STORAGE_SNAPSHOT),
+            serde_json::to_vec(&snap).unwrap_or_default(),
+        )?;
+    }
+    if let Some(snap) = std::fs::read(target_path.join(versions::STORAGE_SNAPSHOT))
+        .ok()
+        .and_then(|raw| serde_json::from_slice::<serde_json::Value>(&raw).ok())
+    {
+        storage::restore(db, id, &snap).await?;
+    }
+    let granted: Vec<String> = p.granted.iter().filter(|g| m.permissions.contains(g)).cloned().collect();
+    let mode = if m.permissions.iter().any(|x| x == "messages.process") {
+        p.process_mode.clone()
+    } else {
+        postprocess::MODE_NOTES.to_string()
+    };
+    sqlx::query(
+        "UPDATE user_plugins SET name = ?, version = ?, enabled = 0, granted = ?, code_hash = '', process_mode = ?, ai_auto = 0, active_dir = ? WHERE id = ?",
+    )
+    .bind(&m.name)
+    .bind(&m.version)
+    .bind(serde_json::to_string(&granted).unwrap_or_else(|_| "[]".into()))
+    .bind(&mode)
+    .bind(dir)
+    .bind(id)
+    .execute(db)
+    .await?;
+    get(db, base, id).await
+}
+
+/// 쓰지 않는 판 폴더 지우기 (설정 > 데이터). 지금 쓰는 판은 지울 수 없다. 되돌릴 수 없음 — 화면이 확인을 받는다
+pub async fn delete_version(db: &SqlitePool, base: &Path, id: &str, dir: &str) -> Result<UserPlugin> {
+    let p = get(db, base, id).await?;
+    let Some(v) = p.versions.iter().find(|v| v.dir == dir) else {
+        return Err(AppError::not_found(format!("그런 판 폴더가 없음: {dir}")));
+    };
+    if v.active {
+        return Err(AppError::validation("지금 쓰는 판은 지울 수 없음 — 다른 판을 고른 뒤에 지우세요", None));
+    }
+    std::fs::remove_dir_all(plugin_dir(base, id)?.join(dir))?;
+    get(db, base, id).await
 }
 
 /// 켜기·끄기. 켤 때는 manifest의 권한 전부를 `grant`로 받아야 한다(화면이 보여주고 동의를 받은 목록)
@@ -349,14 +465,14 @@ pub async fn set_enabled(db: &SqlitePool, base: &Path, id: &str, enabled: bool, 
     let granted = if enabled { m.permissions.clone() } else { p.granted.clone() };
     // 켤 때 폴더의 지금 코드를 기억한다 — 나중에 폴더가 바뀌면(code_changed) 다시 켜서 동의해야 한다
     let hash = if enabled {
-        package::folder_hash(&plugin_dir(base, id)?).ok_or_else(|| AppError::validation("플러그인 폴더를 읽을 수 없음", None))?
+        package::folder_hash(&plugin_dir(base, id)?.join(&p.active_dir)).ok_or_else(|| AppError::validation("플러그인 폴더를 읽을 수 없음", None))?
     } else {
         String::new()
     };
     sqlx::query(
-        "INSERT INTO user_plugins (id, name, version, enabled, granted, code_hash) VALUES (?, ?, ?, ?, ?, ?)
+        "INSERT INTO user_plugins (id, name, version, enabled, granted, code_hash, active_dir) VALUES (?, ?, ?, ?, ?, ?, ?)
          ON CONFLICT(id) DO UPDATE SET name = excluded.name, version = excluded.version, enabled = excluded.enabled, granted = excluded.granted,
-           code_hash = CASE WHEN excluded.code_hash <> '' THEN excluded.code_hash ELSE user_plugins.code_hash END",
+           code_hash = CASE WHEN excluded.code_hash <> '' THEN excluded.code_hash ELSE user_plugins.code_hash END, active_dir = excluded.active_dir",
     )
     .bind(id)
     .bind(&m.name)
@@ -364,6 +480,7 @@ pub async fn set_enabled(db: &SqlitePool, base: &Path, id: &str, enabled: bool, 
     .bind(enabled as i64)
     .bind(serde_json::to_string(&granted).unwrap_or_else(|_| "[]".into()))
     .bind(&hash)
+    .bind(&p.active_dir)
     .execute(db)
     .await?;
     if enabled {

@@ -10,6 +10,7 @@
 	import { library, type Conversation } from "$features/character/library.svelte";
 	import { convActions } from "$features/character/actions";
 	import { nav, type Page } from "./nav.svelte";
+	import { layout } from "./layout.svelte";
 	import { plugins, type PluginId } from "$shared/stores/plugins.svelte";
 
 	// 화면이 늘어나면 여기에 추가 (페르소나는 아래 사용자 프로필에서)
@@ -31,11 +32,13 @@
 	const chats = (pinned: boolean) =>
 		library.conversations
 			.filter((c) => c.mode !== "phone" && c.pinned === pinned && library.character(c.characterId))
-			.sort((a, b) => b.updatedAt - a.updatedAt)
-			.slice(0, 10);
-	// 고정된 대화 / 최근 대화 (폰 대화 제외)
+			.sort((a, b) => b.updatedAt - a.updatedAt);
+	// 고정된 대화 / 최근 대화 (폰 대화 제외). 최근 대화는 10개씩 더 보기
+	const PAGE = 10;
+	let shown = $state(PAGE);
 	const pinned = $derived(chats(true));
-	const recent = $derived(chats(false));
+	const allRecent = $derived(chats(false));
+	const recent = $derived(allRecent.slice(0, shown));
 	const cur = $derived(nav.current);
 	const openConv = $derived(cur.page === "character" ? cur.convId : undefined);
 
@@ -158,6 +161,9 @@
 			<ul>
 				{#each recent as c (c.id)}{@render row(c)}{/each}
 			</ul>
+			{#if allRecent.length > recent.length}
+				<button class="show-more" onclick={() => (shown += PAGE)}>더 보기 <small>({allRecent.length - recent.length}개 남음)</small></button>
+			{/if}
 		{/if}
 	</div>
 
@@ -187,7 +193,8 @@
 						<button
 							onclick={() => {
 								profileOpen = false;
-								nav.go({ page: "persona", personaId: me?.id });
+								// 좁은 화면은 목록과 편집을 한 번에 하나만 보여서, 특정 프로필을 주면 목록을 건너뛰고 편집만 뜸
+								nav.go({ page: "persona", personaId: layout.narrow ? undefined : me?.id });
 							}}><UserCog />관리</button
 						>
 					</div>
@@ -252,6 +259,25 @@
 		flex: 1;
 		min-height: 0;
 		overflow: auto;
+	}
+	.show-more {
+		display: block;
+		width: 100%;
+		padding: var(--space-2);
+		border: none;
+		border-radius: var(--radius-sm);
+		background: transparent;
+		color: var(--text-muted);
+		font: inherit;
+		font-size: var(--text-sm);
+		cursor: pointer;
+	}
+	.show-more:hover {
+		background: var(--surface-hover);
+		color: var(--text);
+	}
+	.show-more small {
+		color: var(--text-faint);
 	}
 	.group {
 		margin: var(--space-4) var(--space-2) var(--space-1);

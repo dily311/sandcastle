@@ -5,6 +5,8 @@ import { fileSrc } from "$shared/ipc/file";
 
 export type CardStyle = "theme" | "paper" | "night" | "light" | "dark";
 export type CardFont = "app" | "sans" | "serif" | "mono";
+/** 글 정렬. auto = 디자인 기본값 (미니멀·자막은 가운데, 나머지는 왼쪽) */
+export type CardAlign = "auto" | "left" | "center" | "right";
 export type CardDesign = "none" | "footnote" | "bubble" | "letter" | "subtitle" | "minimal";
 
 export const CARD_DESIGNS: { value: CardDesign; label: string }[] = [
@@ -14,6 +16,12 @@ export const CARD_DESIGNS: { value: CardDesign; label: string }[] = [
 	{ value: "letter", label: "편지" },
 	{ value: "subtitle", label: "영화 자막" },
 	{ value: "minimal", label: "미니멀" },
+];
+export const CARD_ALIGNS: { value: CardAlign; label: string }[] = [
+	{ value: "auto", label: "디자인 기본" },
+	{ value: "left", label: "왼쪽" },
+	{ value: "center", label: "가운데" },
+	{ value: "right", label: "오른쪽" },
 ];
 export const CARD_STYLES: { value: CardStyle; label: string }[] = [
 	{ value: "theme", label: "지금 테마" },
@@ -55,6 +63,8 @@ export interface CardInput {
 	/** 사용자가 고친 색 (빈 값은 색 묶음 그대로) */
 	colors?: Partial<CardColors>;
 	font: CardFont;
+	/** 글 정렬 (없으면 디자인 기본) */
+	align?: CardAlign;
 	/** 글자 크기(px), 0이면 자동 */
 	size: number;
 	/** 배경: null / "preset:<id>" / 이미지 경로 */
@@ -178,7 +188,11 @@ export async function renderCard(input: CardInput): Promise<HTMLCanvasElement> {
 	const inset = design === "subtitle" || design === "none" ? 0 : hasBg || design === "bubble" || design === "letter" ? 72 : 0;
 	const pad = design === "subtitle" ? 80 : design === "minimal" || design === "none" ? 110 : 84;
 	const textW = W - inset * 2 - pad * 2;
-	const align: CanvasTextAlign = design === "minimal" || design === "subtitle" || design === "none" ? "center" : "left";
+	// 정렬: 직접 고르지 않으면 미니멀·자막만 가운데 ("없음"은 왼쪽)
+	const pick = input.align ?? "auto";
+	const align: CanvasTextAlign = pick === "auto" ? (design === "minimal" || design === "subtitle" ? "center" : "left") : pick;
+	/** 글을 놓을 x: 왼쪽·가운데·오른쪽 기준점 (양옆 여백 l, r) */
+	const anchor = (l: number, r: number) => (align === "center" ? (l + r) / 2 : align === "right" ? r : l);
 	const captionH = input.caption ? 70 : 0;
 	const tailH = design === "bubble" ? 60 : 0;
 	const measure = document.createElement("canvas").getContext("2d")!;
@@ -219,7 +233,8 @@ export async function renderCard(input: CardInput): Promise<HTMLCanvasElement> {
 	const cx = W / 2;
 
 	if (design === "none") {
-		// 장식 없음: 배경을 살리고 글만 가운데 (배경이 있으면 흰 글씨 + 그림자)
+		// 장식 없음: 배경을 살리고 글만 (배경이 있으면 흰 글씨 + 그림자). 정렬은 왼쪽이 기본
+		const nx = anchor(pad, W - pad);
 		let y = Math.round((H - (bodyH + speakerH + captionH)) / 2);
 		const fg = input.colors?.text || (hasBg ? "#ffffff" : c.text);
 		if (hasBg) {
@@ -229,19 +244,19 @@ export async function renderCard(input: CardInput): Promise<HTMLCanvasElement> {
 		if (input.speaker) {
 			ctx.fillStyle = input.colors?.accent || (hasBg ? "#ffffff" : c.accent);
 			ctx.font = `700 ${Math.round(size * 0.66)}px ${family}`;
-			ctx.fillText(input.speaker, cx, y + size * 0.66);
+			ctx.fillText(input.speaker, nx, y + size * 0.66);
 			y += speakerH;
 		}
 		ctx.fillStyle = fg;
 		ctx.font = `500 ${size}px ${family}`;
 		for (const line of lines) {
 			y += lh;
-			ctx.fillText(line, cx, y - (lh - size) / 2);
+			ctx.fillText(line, nx, y - (lh - size) / 2);
 		}
 		if (input.caption) {
 			ctx.font = `400 28px ${family}`;
 			ctx.fillStyle = hasBg ? "rgba(255,255,255,0.8)" : c.muted;
-			ctx.fillText(input.caption, cx, y + 56);
+			ctx.fillText(input.caption, nx, y + 56);
 		}
 		ctx.shadowBlur = 0;
 		return canvas;
@@ -257,10 +272,11 @@ export async function renderCard(input: CardInput): Promise<HTMLCanvasElement> {
 		ctx.fillStyle = grad;
 		ctx.fillRect(0, H - bandH - 80, W, bandH + 80);
 		let y = H - bandH + pad * 0.6;
+		const sx = anchor(pad, W - pad);
 		if (input.speaker) {
 			ctx.fillStyle = input.colors?.accent || "#ffd56b";
 			ctx.font = `700 ${Math.round(size * 0.62)}px ${family}`;
-			ctx.fillText(input.speaker, cx, y + size * 0.6);
+			ctx.fillText(input.speaker, sx, y + size * 0.6);
 			y += speakerH;
 		}
 		ctx.font = `600 ${size}px ${family}`;
@@ -269,13 +285,13 @@ export async function renderCard(input: CardInput): Promise<HTMLCanvasElement> {
 		ctx.fillStyle = input.colors?.text || "#ffffff";
 		for (const line of lines) {
 			y += lh;
-			ctx.fillText(line, cx, y - (lh - size) / 2);
+			ctx.fillText(line, sx, y - (lh - size) / 2);
 		}
 		ctx.shadowBlur = 0;
 		if (input.caption) {
 			ctx.fillStyle = "rgba(255,255,255,0.7)";
 			ctx.font = `400 26px ${family}`;
-			ctx.fillText(input.caption, cx, y + 50);
+			ctx.fillText(input.caption, sx, y + 50);
 		}
 		return canvas;
 	}
@@ -341,7 +357,7 @@ export async function renderCard(input: CardInput): Promise<HTMLCanvasElement> {
 	}
 
 	ctx.textAlign = align;
-	const tx = align === "center" ? cx : px + pad;
+	const tx = anchor(px + pad, px + pw - pad);
 	let y = py + pad + (design === "footnote" ? 30 : 0);
 	if (input.speaker && design === "footnote") {
 		ctx.fillStyle = c.accent;
@@ -360,8 +376,8 @@ export async function renderCard(input: CardInput): Promise<HTMLCanvasElement> {
 		y += Math.round(size * 1.3);
 		ctx.fillStyle = design === "letter" ? c.text : c.accent;
 		ctx.font = `${design === "letter" ? "italic 500" : "700"} ${Math.round(size * 0.66)}px ${family}`;
-		ctx.textAlign = design === "letter" ? "right" : "center";
-		ctx.fillText(`— ${input.speaker}`, design === "letter" ? px + pw - pad : cx, y);
+		ctx.textAlign = design === "letter" ? "right" : align;
+		ctx.fillText(`— ${input.speaker}`, design === "letter" ? px + pw - pad : tx, y);
 		ctx.textAlign = align;
 	}
 	if (input.caption) {

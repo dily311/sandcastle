@@ -3,7 +3,7 @@
 
 [package]
 name = "sandcastle"
-version = "0.3.0"
+version = "0.3.1"
 description = "A Tauri App"
 authors = ["you"]
 edition = "2021"
@@ -28,6 +28,8 @@ crate-type = ["staticlib", "cdylib", "rlib"]
 tauri-build = { version = "2", features = [] }
 
 [dependencies]
+# 묶음 행을 임시 파일로 주고받는다 (동기화, 1-F-3) — Android에서도 필요해 모든 대상에
+tempfile = "3"
 tauri = { version = "2", features = ["protocol-asset",  "tray-icon" ] }
 tauri-plugin-opener = "2"
 tauri-plugin-log = "2"
@@ -89,9 +91,6 @@ windows = { version = "0.58", features = [
 [target.'cfg(any(target_os = "macos", target_os = "windows", target_os = "linux"))'.dependencies]
 tauri-plugin-autostart = "2.7.0"
 
-# [dev-dependencies]
-tempfile = "3"
-
 # Read the optimization guideline for more details: https://tauri.app/concept/size/#cargo-configuration
 [profile.release]
 codegen-units = 1
@@ -99,3 +98,6 @@ lto = true
 opt-level = 3
 panic = "abort"
 strip = true
+
+[dev-dependencies]
+memory-stats = "1.2.0"

@@ -8,7 +8,7 @@
 	import { toasts } from "$shared/stores/toast.svelte";
 	import { theme } from "$app/theme.svelte";
 	import { dropPaths, isImageAvif } from "$app/drop.svelte";
-	import { CARD_DESIGNS, CARD_FONTS, CARD_SIZES, CARD_STYLES, blobBase64, cardBlob, palette, renderCard, type CardDesign, type CardFont, type CardStyle } from "./textCard";
+	import { CARD_ALIGNS, CARD_DESIGNS, CARD_FONTS, CARD_SIZES, CARD_STYLES, blobBase64, cardBlob, palette, renderCard, type CardAlign, type CardDesign, type CardFont, type CardStyle } from "./textCard";
 
 	interface Props {
 		card: { text: string; speaker?: string; time?: number } | null;
@@ -17,7 +17,7 @@
 	let { card, onclose }: Props = $props();
 
 	// 고른 옵션은 이번 실행 동안 기억 (다음 카드도 같은 모양으로)
-	const opts = $state({ design: "footnote" as CardDesign, style: "theme" as CardStyle, font: "app" as CardFont, size: "0", background: null as string | null, speaker: true, time: false });
+	const opts = $state({ design: "footnote" as CardDesign, style: "theme" as CardStyle, font: "app" as CardFont, align: "auto" as CardAlign, size: "0", background: null as string | null, speaker: true, time: false });
 	// 사용자가 고친 색 (빈 값 = 색 묶음 그대로)
 	const colors = $state({ bg: "", text: "", accent: "" });
 	const base = $derived(palette(opts.style));
@@ -44,6 +44,7 @@
 			style: opts.style,
 			colors: { bg: colors.bg, text: colors.text, accent: colors.accent },
 			font: opts.font,
+			align: opts.align,
 			size: Number(opts.size),
 			background: opts.background,
 		};
@@ -94,7 +95,7 @@
 		<div class="preview">{#if url}<img src={url} alt="카드 미리보기" />{/if}</div>
 		<div class="opts">
 			<label class="field"><span>디자인</span><Select bind:value={opts.design} options={CARD_DESIGNS} aria-label="카드 디자인" /></label>
-			<label class="field"><span>색 묶음</span><Select bind:value={opts.style} options={CARD_STYLES} aria-label="카드 색 묶음" /></label>
+			<label class="field"><span>색 조합</span><Select bind:value={opts.style} options={CARD_STYLES} aria-label="카드 색 조합" /></label>
 			<div class="field">
 				<span>색 고치기</span>
 				<div class="colors">
@@ -108,6 +109,7 @@
 				</div>
 			</div>
 			<label class="field"><span>글꼴</span><Select bind:value={opts.font} options={CARD_FONTS} aria-label="글꼴" /></label>
+			<label class="field"><span>글 정렬</span><Select bind:value={opts.align} options={CARD_ALIGNS} aria-label="글 정렬" /></label>
 			<label class="field"><span>글자 크기</span><Select bind:value={opts.size} options={CARD_SIZES} aria-label="글자 크기" /></label>
 			<div class="field">
 				<span>배경</span>

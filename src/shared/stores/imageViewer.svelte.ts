@@ -5,7 +5,23 @@ export interface ViewedImage {
 	src: string;
 	/** 그림 아래에 보일 이름. 없으면 src에서 파일 이름을 뽑음 */
 	name?: string;
+	/** 이름 바꾸기·삭제는 이 그림이 무엇인지 아는 쪽(에셋 등)만 줄 수 있다. 주지 않으면 메뉴에 나오지 않음 */
+	rename?: () => void | Promise<void>;
+	remove?: () => void | Promise<void>;
+	/** 정보 보기에 더할 줄 (프롬프트 등) */
+	info?: { label: string; value: string }[];
 }
+
+/** 그림 요소에 붙여 두는 동작: 눌러서 크게 볼 때(imageZoom) 뷰어가 가져다 쓴다. `use:viewerActions={{ rename, remove }}` */
+const actionsOf = new WeakMap<Element, Pick<ViewedImage, "name" | "rename" | "remove" | "info">>();
+export function viewerActions(node: Element, actions: Pick<ViewedImage, "name" | "rename" | "remove" | "info">) {
+	actionsOf.set(node, actions);
+	return {
+		update: (a: typeof actions) => void actionsOf.set(node, a),
+		destroy: () => void actionsOf.delete(node),
+	};
+}
+export const viewerActionsOf = (node: Element) => actionsOf.get(node);
 
 /** src(URL)에서 사람이 읽을 파일 이름과 디스크 경로를 뽑는다. 파일이 아닌 그림(data:, blob:)은 이름만 비움 */
 export function describeSrc(src: string): { name: string; path: string | null } {
@@ -36,6 +52,10 @@ class ImageViewerStore {
 
 	open(img: ViewedImage) {
 		this.current = img;
+	}
+	/** 열려 있는 그림의 이름 등을 바꿈 (이름 바꾸기 뒤) */
+	patch(p: Partial<ViewedImage>) {
+		if (this.current) this.current = { ...this.current, ...p };
 	}
 	close() {
 		this.current = null;

@@ -80,8 +80,10 @@ export const commands = {
 	 *  끌어다 놓은 파일을 디스크에 저장하고 경로를 돌려준다 (웹뷰의 드롭은 경로 없이 내용만 줌).
 	 *  - `keep = true`: 메시지 첨부 이미지. 앱 데이터의 attachments 폴더에 계속 둔다
 	 *  - `keep = false`: 가져오기용 임시 파일. 원래 이름을 살려 임시 폴더에 두고, 하루 지난 것은 지운다
+	 *  - `append_to`: 큰 파일을 조각으로 나눠 보낼 때, 앞 조각이 돌려준 경로를 주면 거기에 이어 붙인다 (임시 폴더 안의 파일만).
+	 *    한 번에 보내면 수백 MB가 IPC 한 덩어리로 오가며 화면이 얼어붙기 때문
 	 */
-	storeDroppedFile: (name: string, dataBase64: string, keep: boolean, options?: InvokeOptions) => __TAURI_INVOKE<string>("store_dropped_file", { name, dataBase64, keep }, options),
+	storeDroppedFile: (name: string, dataBase64: string, keep: boolean, appendTo: string | null, options?: InvokeOptions) => __TAURI_INVOKE<string>("store_dropped_file", { name, dataBase64, keep, appendTo }, options),
 	contextUsage: (conversationId: string, options?: InvokeOptions) => __TAURI_INVOKE<ContextUsage_Serialize>("context_usage", { conversationId }, options),
 	/**  메시지들을 화면용으로: 표시용 정규식 + {{char}}/{{user}} 이름. 순서대로, 마지막이 가장 최근 */
 	displayMessages: (conversationId: string, items: DisplayItem[], options?: InvokeOptions) => __TAURI_INVOKE<string[]>("display_messages", { conversationId, items }, options),
@@ -175,6 +177,12 @@ export const commands = {
 	listTrash: (options?: InvokeOptions) => __TAURI_INVOKE<TrashItem[]>("list_trash", undefined, options),
 	/**  설치된 플러그인 목록 */
 	listUserPlugins: (options?: InvokeOptions) => __TAURI_INVOKE<UserPlugin_Serialize[]>("list_user_plugins", undefined, options),
+	/**  설치된 플러그인의 판 폴더 목록 (설정 > 데이터). 코어 플러그인이 꺼져 있어도 폴더를 보고 지울 수 있다 — 코드는 읽지도 돌리지도 않고 폴더만 본다 */
+	listPluginFolders: (options?: InvokeOptions) => __TAURI_INVOKE<UserPlugin_Serialize[]>("list_plugin_folders", undefined, options),
+	/**  쓰는 판 바꾸기(되돌리기 포함): 꺼진 채로 돌아오고 다시 켜서 동의해야 한다. 플러그인이 꺼져 있어도 고를 수 있다(코드를 돌리지 않음) */
+	switchUserPluginVersion: (pluginId: string, dir: string, options?: InvokeOptions) => __TAURI_INVOKE<UserPlugin_Serialize>("switch_user_plugin_version", { pluginId, dir }, options),
+	/**  쓰지 않는 판 폴더 지우기 (되돌릴 수 없음 — 화면이 확인을 받는다). 지금 쓰는 판은 거절 */
+	deleteUserPluginVersion: (pluginId: string, dir: string, options?: InvokeOptions) => __TAURI_INVOKE<UserPlugin_Serialize>("delete_user_plugin_version", { pluginId, dir }, options),
 	/**  zip 파일이나 폴더를 읽어 미리보기 (아무것도 쓰지 않음) */
 	previewUserPlugin: (path: string, options?: InvokeOptions) => __TAURI_INVOKE<PluginPreview_Serialize>("preview_user_plugin", { path }, options),
 	/**  미리보기에서 확인한 것을 설치 (hash가 다르면 거절). 새로 설치한 플러그인은 꺼져 있다 */
@@ -252,6 +260,8 @@ export const commands = {
 	emptyTrash: (options?: InvokeOptions) => __TAURI_INVOKE<number>("empty_trash", undefined, options),
 	/**  이 기기 id, 합친 적 있는 기기, 남은 충돌 수. 동기화 화면을 열 때 (기기 id는 이때 처음 만든다) */
 	getSyncStatus: (options?: InvokeOptions) => __TAURI_INVOKE<SyncStatus_Serialize>("get_sync_status", undefined, options),
+	/**  오래 못 본 기기를 제외하거나(지운 기록 정리가 기다리지 않음) 다시 포함한다. 제외한 기기가 돌아와 합치면 저절로 풀리고, 그때는 전체를 다시 합친다 */
+	setSyncPeerExcluded: (deviceId: string, excluded: boolean, options?: InvokeOptions) => __TAURI_INVOKE<null>("set_sync_peer_excluded", { deviceId, excluded }, options),
 	/**  동기화 파일 만들기. `path`는 저장 대화상자에서 고른 경로 (.scsync) */
 	exportSyncBundle: (path: string, includeFiles: boolean, options?: InvokeOptions) => __TAURI_INVOKE<SyncBundleInfo>("export_sync_bundle", { path, includeFiles }, options),
 	/**  합치기 전에 숫자만 (DB·파일·설정을 바꾸지 않음) */
@@ -414,6 +424,31 @@ export const commands = {
 	importGame: (zipPath: string, options?: InvokeOptions) => __TAURI_INVOKE<GameProject_Serialize>("import_game", { zipPath }, options),
 	exportGame: (gameId: string, outputDir: string | null, options?: InvokeOptions) => __TAURI_INVOKE<string>("export_game", { gameId, outputDir }, options),
 	/**
+	 *  에셋 추가: 파일 대화상자로 고른 이미지/오디오(sourcePath)를 게임 폴더(assets/<category>/)로 복사하고 에셋 행을 만든다.
+	 *  형식은 파일 내용으로 판정하고(확장자는 믿지 않는다), 크기 상한은 서빙 상한과 같다. 호스트 에디터 전용.
+	 *  응답의 diagnostics를 사용자에게 보여줄 것. 플레이 중인 게임이면 다시 open_game을 불러야 반영된다.
+	 */
+	addGameAsset: (gameId: string, sourcePath: string, asset: NewGameAsset_Deserialize, options?: InvokeOptions) => __TAURI_INVOKE<AddAssetReport_Serialize>("add_game_asset", { gameId, sourcePath, asset }, options),
+	/**
+	 *  에셋 삭제 (행 + 파일). 씬 대본/효과의 연출, 표지/아바타/아이콘이 쓰는 에셋이면 거절한다
+	 *  (INVALID_INPUT, details.reason = "assetInUse", details.references = 쓰는 곳). force=true면 지우고 진단을 돌려준다.
+	 */
+	removeGameAsset: (gameId: string, assetId: string, force: boolean | null, options?: InvokeOptions) => __TAURI_INVOKE<RemoveAssetReport>("remove_game_asset", { gameId, assetId, force }, options),
+	/**
+	 *  StoryPlan(각본가) 갱신. 체크포인트(RenderState.storyPlanDue)일 때 부르면 AI가 새 플랜을 세워 저장한다.
+	 *  StoryPlan이 꺼진 게임이거나 체크포인트가 아니면(force가 아닌 한) AI를 부르지 않고 null.
+	 *  플랜은 조언일 뿐 상태를 바꾸지 않는다. 제안을 실제로 올리려면 stage_story_suggestion.
+	 */
+	refreshStoryPlan: (force: boolean | null, auto: boolean | null, options?: InvokeOptions) => __TAURI_INVOKE<StoryPlanRecord | null>("refresh_story_plan", { force, auto }, options),
+	/**  지금 세션의 가장 최근 플랜 (없으면 null). 호스트 UI용 — 게임 iframe에 주면 스포일러가 된다. */
+	getStoryPlan: (options?: InvokeOptions) => __TAURI_INVOKE<StoryPlanRecord | null>("get_story_plan", undefined, options),
+	/**
+	 *  최근 플랜의 제안(kind = "event" | "scene", targetId)을 무대에 올린다. fire_event/enter_scene과 같은 검증을 다시 하고,
+	 *  막히면 GAME_ACTION_BLOCKED(details.reason: notSuggested, notPlanUsable, conditionNotMet, alreadyQueued, alreadyStaged, storyPlanDisabled).
+	 *  응답은 dispatch_command와 같은 GameResponse다.
+	 */
+	stageStorySuggestion: (kind: string, targetId: string, options?: InvokeOptions) => __TAURI_INVOKE<GameResponse_Serialize>("stage_story_suggestion", { kind, targetId }, options),
+	/**
 	 *  새 게임(새 책) 시작. 세션을 만들어 바로 저장해서 세션 목록에 보이게 하고,
 	 *  GameRuntime을 active_runtime에 넣어둔다.
 	 */
@@ -565,6 +600,22 @@ export const commands = {
 };
 
 /* Types */
+export type AddAssetReport = AddAssetReport_Serialize | AddAssetReport_Deserialize;
+
+export type AddAssetReport_Deserialize = {
+	/**  만들어진 에셋 기본 행 (path는 게임 폴더 기준 상대경로: `assets/<category>/<uuid>.<ext>`) */
+	asset: GameAssets_Deserialize,
+	/**  추가 후 상태의 진단 결과 (open_game/save_package와 같은 형식) */
+	diagnostics: Issue[],
+};
+
+export type AddAssetReport_Serialize = {
+	/**  만들어진 에셋 기본 행 (path는 게임 폴더 기준 상대경로: `assets/<category>/<uuid>.<ext>`) */
+	asset: GameAssets_Serialize,
+	/**  추가 후 상태의 진단 결과 (open_game/save_package와 같은 형식) */
+	diagnostics: Issue[],
+};
+
 export type AiCapabilities = {
 	embeddings: Support,
 	tools: Support,
@@ -785,6 +836,14 @@ export type BackupSummary = {
 	totals: DataTotals,
 };
 
+export type Beat = {
+	title: string,
+	goal: string,
+	status: BeatStatus,
+};
+
+export type BeatStatus = "pending" | "active" | "done" | "dropped";
+
 /**  GAME_ACTION_BLOCKED의 details.reason */
 export type BlockReason = 
 /**  이동·아이템 사용 조건이 맞지 않음 */
@@ -890,9 +949,9 @@ export type Capabilities_Deserialize = {
 	inventory?: boolean,
 	map?: boolean,
 	aiNarration?: boolean,
-	/**  위치(location) 개념을 쓰는가. 빠져 있으면 켜진 것으로 본다. (엔진 강제는 아직 없음) */
+	/**  위치(location) 개념을 쓰는가. 빠져 있으면 켜진 것으로 본다. */
 	location?: boolean,
-	/**  시간/날씨 개념을 쓰는가. 빠져 있으면 켜진 것으로 본다. (엔진 강제는 아직 없음) */
+	/**  시간/날씨 개념을 쓰는가. 빠져 있으면 켜진 것으로 본다. */
 	time?: boolean,
 };
 
@@ -902,9 +961,9 @@ export type Capabilities_Serialize = {
 	inventory: boolean,
 	map: boolean,
 	aiNarration: boolean,
-	/**  위치(location) 개념을 쓰는가. 빠져 있으면 켜진 것으로 본다. (엔진 강제는 아직 없음) */
+	/**  위치(location) 개념을 쓰는가. 빠져 있으면 켜진 것으로 본다. */
 	location: boolean,
-	/**  시간/날씨 개념을 쓰는가. 빠져 있으면 켜진 것으로 본다. (엔진 강제는 아직 없음) */
+	/**  시간/날씨 개념을 쓰는가. 빠져 있으면 켜진 것으로 본다. */
 	time: boolean,
 };
 
@@ -1613,6 +1672,8 @@ export type FolderNode = {
 	files: Value[],
 };
 
+export type GameAssets = GameAssets_Serialize | GameAssets_Deserialize;
+
 export type GameAssetsInput = GameAssetsInput_Serialize | GameAssetsInput_Deserialize;
 
 export type GameAssetsInput_Deserialize = {
@@ -1635,6 +1696,32 @@ export type GameAssetsInput_Serialize = {
 	kind: string,
 	filePath: string,
 	settingsJson: Value | null,
+};
+
+export type GameAssets_Deserialize = {
+	id: string,
+	gameId: string,
+	key: string,
+	name: string,
+	category: string,
+	kind: string,
+	filePath: string,
+	settingsJson?: Value | null,
+	createdAt: number,
+	updatedAt: number,
+};
+
+export type GameAssets_Serialize = {
+	id: string,
+	gameId: string,
+	key: string,
+	name: string,
+	category: string,
+	kind: string,
+	filePath: string,
+	settingsJson: Value | null,
+	createdAt: number,
+	updatedAt: number,
 };
 
 export type GameBranchInput = GameBranchInput_Serialize | GameBranchInput_Deserialize;
@@ -2929,11 +3016,24 @@ export type MergeReport = {
 	dryRun: boolean,
 };
 
-export type MergedDevice = {
+export type MergedDevice = MergedDevice_Serialize | MergedDevice_Deserialize;
+
+export type MergedDevice_Deserialize = {
 	deviceId: string,
 	/**  그 묶음을 만든 시각 (그 기기 시계) */
 	createdAt: number,
 	report: MergeReport,
+	/**  사용자가 제외했던 기기가 돌아와 전체를 다시 합쳤다. 그동안 지운 기록이 정리됐을 수 있어, 그 기기에 남아 있던 항목이 되살아났을 수 있다 */
+	returnedAfterExclusion?: boolean,
+};
+
+export type MergedDevice_Serialize = {
+	deviceId: string,
+	/**  그 묶음을 만든 시각 (그 기기 시계) */
+	createdAt: number,
+	report: MergeReport,
+	/**  사용자가 제외했던 기기가 돌아와 전체를 다시 합쳤다. 그동안 지운 기록이 정리됐을 수 있어, 그 기기에 남아 있던 항목이 되살아났을 수 있다 */
+	returnedAfterExclusion: boolean,
 };
 
 export type Message = Message_Serialize | Message_Deserialize;
@@ -3092,6 +3192,65 @@ export type MusicMeta_Serialize = {
 	duration: number | null,
 	imgPos: Value | null,
 	updatedAt: number,
+};
+
+/**
+ *  추가할 에셋의 정보. 카테고리별로 필요한 필드만 쓰고 나머지는 무시한다.
+ *    voice/sfx/bgm: tag(sfx는 소리 그룹 이름 필수, bgm은 분위기 필수), gameCharacterId(voice의 화자), transcript
+ *    character: gameCharacterId(필수), usage(standing|map, 필수), emotion(standing이면 필수)
+ *    cg: description, aiUsable(기본 true), gameCharacterId
+ *    background: locationId/timeId/weatherId (비우면 그 조건은 전체)
+ */
+export type NewGameAsset = NewGameAsset_Serialize | NewGameAsset_Deserialize;
+
+/**
+ *  추가할 에셋의 정보. 카테고리별로 필요한 필드만 쓰고 나머지는 무시한다.
+ *    voice/sfx/bgm: tag(sfx는 소리 그룹 이름 필수, bgm은 분위기 필수), gameCharacterId(voice의 화자), transcript
+ *    character: gameCharacterId(필수), usage(standing|map, 필수), emotion(standing이면 필수)
+ *    cg: description, aiUsable(기본 true), gameCharacterId
+ *    background: locationId/timeId/weatherId (비우면 그 조건은 전체)
+ */
+export type NewGameAsset_Deserialize = {
+	category: string,
+	/**  게임 안에서 유일한 키. 비우면 원본 파일 이름으로 만든다(겹치면 _2, _3...). */
+	key?: string | null,
+	name?: string | null,
+	settingsJson?: Value | null,
+	tag?: string | null,
+	gameCharacterId?: string | null,
+	transcript?: string | null,
+	usage?: string | null,
+	emotion?: string | null,
+	description?: string | null,
+	aiUsable?: boolean | null,
+	locationId?: string | null,
+	timeId?: string | null,
+	weatherId?: string | null,
+};
+
+/**
+ *  추가할 에셋의 정보. 카테고리별로 필요한 필드만 쓰고 나머지는 무시한다.
+ *    voice/sfx/bgm: tag(sfx는 소리 그룹 이름 필수, bgm은 분위기 필수), gameCharacterId(voice의 화자), transcript
+ *    character: gameCharacterId(필수), usage(standing|map, 필수), emotion(standing이면 필수)
+ *    cg: description, aiUsable(기본 true), gameCharacterId
+ *    background: locationId/timeId/weatherId (비우면 그 조건은 전체)
+ */
+export type NewGameAsset_Serialize = {
+	category: string,
+	/**  게임 안에서 유일한 키. 비우면 원본 파일 이름으로 만든다(겹치면 _2, _3...). */
+	key: string | null,
+	name: string | null,
+	settingsJson: Value | null,
+	tag: string | null,
+	gameCharacterId: string | null,
+	transcript: string | null,
+	usage: string | null,
+	emotion: string | null,
+	description: string | null,
+	aiUsable: boolean | null,
+	locationId: string | null,
+	timeId: string | null,
+	weatherId: string | null,
 };
 
 /**
@@ -3630,6 +3789,40 @@ export type PluginSetting_Serialize = {
 	ghost: GhostSetting_Serialize,
 };
 
+export type PluginVersion = PluginVersion_Serialize | PluginVersion_Deserialize;
+
+export type PluginVersion_Deserialize = {
+	/**  폴더 이름 (판 문자열을 폴더 이름으로 쓸 수 있게 고친 것) */
+	dir: string,
+	/**  manifest의 version (읽지 못하면 폴더 이름) */
+	version: string,
+	size: number,
+	/**  폴더를 만든(마지막으로 쓴) 시각 (ms) */
+	modifiedAt: number,
+	/**  지금 쓰는 판 */
+	active: boolean,
+	/**  manifest를 읽지 못한 이유 (그런 판은 고를 수 없고 지울 수만 있음) */
+	error?: string | null,
+	/**  이 판의 저장소 보관본이 있음 (이 판으로 돌아가면 그때 값으로 복원) */
+	hasStorage: boolean,
+};
+
+export type PluginVersion_Serialize = {
+	/**  폴더 이름 (판 문자열을 폴더 이름으로 쓸 수 있게 고친 것) */
+	dir: string,
+	/**  manifest의 version (읽지 못하면 폴더 이름) */
+	version: string,
+	size: number,
+	/**  폴더를 만든(마지막으로 쓴) 시각 (ms) */
+	modifiedAt: number,
+	/**  지금 쓰는 판 */
+	active: boolean,
+	/**  manifest를 읽지 못한 이유 (그런 판은 고를 수 없고 지울 수만 있음) */
+	error: string | null,
+	/**  이 판의 저장소 보관본이 있음 (이 판으로 돌아가면 그때 값으로 복원) */
+	hasStorage: boolean,
+};
+
 export type PostProcessResult = {
 	pluginId: string,
 	/**  이 플러그인이 글을 바꿨나 */
@@ -4013,6 +4206,13 @@ export type RegexTarget =
 /**  화면 표시에서만 바꿈 */
 "display";
 
+export type RemoveAssetReport = {
+	deleted: boolean,
+	/**  지우기 전에 이 에셋을 쓰고 있던 곳 (force로 지웠을 때만 비어 있지 않다) */
+	references: string[],
+	diagnostics: Issue[],
+};
+
 /**  iframe에 노출하는 부분만 추린 뷰. 내부 상태를 그대로 노출하지 않는다. */
 export type RenderState = RenderState_Serialize | RenderState_Deserialize;
 
@@ -4020,17 +4220,20 @@ export type RenderState = RenderState_Serialize | RenderState_Deserialize;
 export type RenderState_Deserialize = {
 	/**  지금 플레이 중인 세션(책). 분기로 불러오면 새 세션 id가 여기로 온다. */
 	sessionId: string,
+	/**  위치 기능(capabilities.location)이 꺼진 게임이면 null. */
 	locationId?: string | null,
-	mapId: string,
+	/**  지도/이동 기능(capabilities.map && location)이 꺼진 게임이면 null (zone_id도 같다). */
+	mapId?: string | null,
 	zoneId?: string | null,
-	gameTime: number,
-	weatherId: string,
-	timePeriodId: string,
+	/**  시간 기능(capabilities.time)이 꺼진 게임이면 game_time/weather_id/time_period_id가 null. */
+	gameTime?: number | null,
+	weatherId?: string | null,
+	timePeriodId?: string | null,
 	currentSceneId?: string | null,
 	activeNpcId?: string | null,
 	/**  지금 열려 있는 씬에서 고를 수 있는 선택지 id (표시 조건을 통과한 것만). GameRuntime::render_state가 채운다. */
 	availableChoices: string[],
-	/**  지금 위치에서 연결된 곳들과 갈 수 있는지 (MoveTo의 조건을 엔진이 미리 평가한 결과). get_game_view의 connections는 전체 지도다. */
+	/**  지금 위치에서 연결된 곳들과 갈 수 있는지 (지도/이동 기능이 꺼진 게임이면 항상 빈 배열) (MoveTo의 조건을 엔진이 미리 평가한 결과). get_game_view의 connections는 전체 지도다. */
 	availableMoves: AvailableMove[],
 	/**  지금 씬 입력(sceneSay)과 씬 종료 버튼을 쓸 수 있는가 (씬이 열려 있고 엔딩이 아니며 AI 이어가기가 켜져 있다). */
 	sceneChat: boolean,
@@ -4042,23 +4245,28 @@ export type RenderState_Deserialize = {
 	stage: Value,
 	/**  지금 플레이어가 있는 위치에 있는 NPC들 (game_character_id). GameRuntime::render_state가 채운다. */
 	presentNpcs: string[],
+	/**  StoryPlan 체크포인트에 도달했는가 (켜진 게임만). true면 프론트가 refresh_story_plan을 부르면 된다. */
+	storyPlanDue: boolean,
 };
 
 /**  iframe에 노출하는 부분만 추린 뷰. 내부 상태를 그대로 노출하지 않는다. */
 export type RenderState_Serialize = {
 	/**  지금 플레이 중인 세션(책). 분기로 불러오면 새 세션 id가 여기로 온다. */
 	sessionId: string,
+	/**  위치 기능(capabilities.location)이 꺼진 게임이면 null. */
 	locationId: string | null,
-	mapId: string,
+	/**  지도/이동 기능(capabilities.map && location)이 꺼진 게임이면 null (zone_id도 같다). */
+	mapId: string | null,
 	zoneId: string | null,
-	gameTime: number,
-	weatherId: string,
-	timePeriodId: string,
+	/**  시간 기능(capabilities.time)이 꺼진 게임이면 game_time/weather_id/time_period_id가 null. */
+	gameTime: number | null,
+	weatherId: string | null,
+	timePeriodId: string | null,
 	currentSceneId: string | null,
 	activeNpcId: string | null,
 	/**  지금 열려 있는 씬에서 고를 수 있는 선택지 id (표시 조건을 통과한 것만). GameRuntime::render_state가 채운다. */
 	availableChoices: string[],
-	/**  지금 위치에서 연결된 곳들과 갈 수 있는지 (MoveTo의 조건을 엔진이 미리 평가한 결과). get_game_view의 connections는 전체 지도다. */
+	/**  지금 위치에서 연결된 곳들과 갈 수 있는지 (지도/이동 기능이 꺼진 게임이면 항상 빈 배열) (MoveTo의 조건을 엔진이 미리 평가한 결과). get_game_view의 connections는 전체 지도다. */
 	availableMoves: AvailableMove[],
 	/**  지금 씬 입력(sceneSay)과 씬 종료 버튼을 쓸 수 있는가 (씬이 열려 있고 엔딩이 아니며 AI 이어가기가 켜져 있다). */
 	sceneChat: boolean,
@@ -4070,6 +4278,8 @@ export type RenderState_Serialize = {
 	stage: Value,
 	/**  지금 플레이어가 있는 위치에 있는 NPC들 (game_character_id). GameRuntime::render_state가 채운다. */
 	presentNpcs: string[],
+	/**  StoryPlan 체크포인트에 도달했는가 (켜진 게임만). true면 프론트가 refresh_story_plan을 부르면 된다. */
+	storyPlanDue: boolean,
 };
 
 export type RestorePreview = {
@@ -4193,6 +4403,12 @@ export type SillyTavernImport_Serialize = { kind: "character"; character: Charac
 
 export type SillyTavernKind = "character" | "preset" | "regex" | "worldInfo" | "chat";
 
+/**  열지 못해 건너뛴 기기의 묶음 (더 새 앱에서 만든 것, 깨진 것 등). 다른 기기와의 동기화는 막지 않는다 — 이유를 보여 주고 다음 동기화 때 다시 본다 */
+export type SkippedDevice = {
+	deviceId: string,
+	reason: string,
+};
+
 /**  프론트로 나가는 한 줄. cues는 이 줄을 보여주기 직전에 순서대로 실행한다. */
 export type StageLine = StageLine_Serialize | StageLine_Deserialize;
 
@@ -4222,9 +4438,35 @@ export type StorageUsage = {
 	totalBytes: number,
 };
 
+export type StoryPlan = {
+	premise: string,
+	beats: Beat[],
+	openThreads: string[],
+	facts: string[],
+	summary: string,
+	suggestions: Suggestion[],
+};
+
+/**  저장된 플랜 하나 (조회/갱신 커맨드의 응답). */
+export type StoryPlanRecord = {
+	sessionId: string,
+	seq: number,
+	/**  체크포인트 이유: session_start / session_resume / scene_end / day_boundary / event_fired / turns / manual */
+	reason: string,
+	plan: StoryPlan,
+};
+
 export type StreamPayload = {
 	chunk: string,
 };
+
+export type Suggestion = {
+	kind: SuggestionKind,
+	id: string,
+	reason: string,
+};
+
+export type SuggestionKind = "event" | "scene";
 
 export type SummaryFailure = {
 	at: number,
@@ -4357,6 +4599,10 @@ export type SyncPeer_Deserialize = {
 	merges: number,
 	/**  그 기기가 이 기기 내용을 어디까지 받았나 (이 기기 시각, 그 기기 묶음의 acks). 아직이면 없음 */
 	theirAck?: number | null,
+	/**  오래(STALE_PEER_MS) 못 본 기기. 지운 기록 정리가 이 기기를 기다리는 중이라 사용자가 제외할 수 있다 */
+	stale: boolean,
+	/**  사용자가 제외함: 지운 기록 정리가 기다리지 않는다. 돌아와 합치면 저절로 풀린다 */
+	excluded: boolean,
 };
 
 export type SyncPeer_Serialize = {
@@ -4366,6 +4612,10 @@ export type SyncPeer_Serialize = {
 	merges: number,
 	/**  그 기기가 이 기기 내용을 어디까지 받았나 (이 기기 시각, 그 기기 묶음의 acks). 아직이면 없음 */
 	theirAck: number | null,
+	/**  오래(STALE_PEER_MS) 못 본 기기. 지운 기록 정리가 이 기기를 기다리는 중이라 사용자가 제외할 수 있다 */
+	stale: boolean,
+	/**  사용자가 제외함: 지운 기록 정리가 기다리지 않는다. 돌아와 합치면 저절로 풀린다 */
+	excluded: boolean,
 };
 
 export type SyncPreview = {
@@ -4384,7 +4634,9 @@ export type SyncRun = SyncRun_Serialize | SyncRun_Deserialize;
 export type SyncRunReport = SyncRunReport_Serialize | SyncRunReport_Deserialize;
 
 export type SyncRunReport_Deserialize = {
-	merged: MergedDevice[],
+	/**  열지 못해 건너뛴 기기 */
+	skippedDevices?: SkippedDevice[],
+	merged: MergedDevice_Deserialize[],
 	/**  새로 쓰인 것이 없어 건너뛴 기기 */
 	unchangedDevices: number,
 	filesDown: number,
@@ -4397,7 +4649,9 @@ export type SyncRunReport_Deserialize = {
 };
 
 export type SyncRunReport_Serialize = {
-	merged: MergedDevice[],
+	/**  열지 못해 건너뛴 기기 */
+	skippedDevices: SkippedDevice[],
+	merged: MergedDevice_Serialize[],
 	/**  새로 쓰인 것이 없어 건너뛴 기기 */
 	unchangedDevices: number,
 	filesDown: number,
@@ -5040,6 +5294,10 @@ export type UserPlugin_Deserialize = {
 	aiAuto: boolean,
 	/**  켤 때 본 코드와 폴더의 코드가 달라졌나 (파일을 손으로 고침·다른 곳에서 바뀜). 그러면 꺼진 것으로 보고 다시 켜서 동의해야 한다 (6-D-8) */
 	codeChanged: boolean,
+	/**  지금 쓰는 판 폴더 이름 (`plugins/<id>/<이 이름>/`) */
+	activeDir: string,
+	/**  폴더로 있는 판들 (쓰는 판 표시, 고르기·지우기에 쓰임) */
+	versions: PluginVersion_Deserialize[],
 };
 
 /**  목록의 한 줄. manifest를 읽지 못한 폴더도 보여준다(지울 수 있게) */
@@ -5058,6 +5316,10 @@ export type UserPlugin_Serialize = {
 	aiAuto: boolean,
 	/**  켤 때 본 코드와 폴더의 코드가 달라졌나 (파일을 손으로 고침·다른 곳에서 바뀜). 그러면 꺼진 것으로 보고 다시 켜서 동의해야 한다 (6-D-8) */
 	codeChanged: boolean,
+	/**  지금 쓰는 판 폴더 이름 (`plugins/<id>/<이 이름>/`) */
+	activeDir: string,
+	/**  폴더로 있는 판들 (쓰는 판 표시, 고르기·지우기에 쓰임) */
+	versions: PluginVersion_Serialize[],
 };
 
 export type Value = null | boolean | number | string | Value[] | { [key in string]: Value };

@@ -58,8 +58,8 @@
 	<div class="bar" class:folded>
 		<button type="button" class="fold" title={folded ? "펼치기" : "접기"} aria-label={folded ? "HTML 펼치기" : "HTML 접기"} aria-expanded={!folded} onclick={(e) => { e.stopPropagation(); folded = !folded; }}>
 			<ChevronDown class={folded ? "rot" : ""} />
+			<span>HTML{#if !enabled} · 실행 꺼짐 (코어 플러그인){/if}</span>
 		</button>
-		<span>HTML{#if !enabled} · 실행 꺼짐 (코어 플러그인){/if}{#if folded} · 접힘{/if}</span>
 		<button type="button" title="다시 실행" aria-label="다시 실행" onclick={() => reloadKey++}><RotateCw /></button>
 		<button type="button" title={showCode ? "결과 보기" : "코드 보기"} aria-label={showCode ? "결과 보기" : "코드 보기"} aria-pressed={showCode} onclick={() => (showCode = !showCode)}>
 			{#if showCode}<Eye />{:else}<Code />{/if}
@@ -93,11 +93,15 @@
 		font-size: var(--text-xs);
 		color: var(--text-muted);
 	}
-	.bar span {
+	.bar :first-child {
 		flex: 1;
 	}
 	.bar.folded {
 		border-bottom: none;
+	}
+	.bar .fold {
+		display: flex;
+		gap: var(--space-1);
 	}
 	.bar .fold :global(svg) {
 		transition: transform var(--duration-fast) var(--ease);
@@ -115,9 +119,6 @@
 		background: transparent;
 		color: inherit;
 		cursor: pointer;
-	}
-	.bar button:hover {
-		background: var(--surface-hover);
 	}
 	.bar :global(svg) {
 		width: 14px;

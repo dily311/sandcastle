@@ -1,12 +1,12 @@
 <script lang="ts">
-	import { ArrowDownUp, ChevronDown, Folder, FolderOpen, FolderPlus, Pencil, Plus, Search, Trash2, Upload } from "@lucide/svelte";
+	import { ArrowDownUp, ChevronDown, Folder, FolderOpen, FolderPlus, PanelLeft, Pencil, Plus, Search, Trash2, Upload } from "@lucide/svelte";
 	import { ContextMenu, IconButton, Input, type MenuItem } from "$shared/ui";
 	import { CHAT_FILES, pickFiles } from "$shared/ipc/dialog";
 	import { confirmAction } from "$shared/stores/confirm.svelte";
 	import ConvCard from "./ConvCard.svelte";
 	import { library, type Conversation } from "./library.svelte";
 
-	let { charId, convId, onopen, oncreate }: { charId: string; convId: string; onopen: (id: string) => void; oncreate: () => void } = $props();
+	let { charId, convId, onopen, oncreate, onclose }: { charId: string; convId: string; onopen: (id: string) => void; oncreate: () => void, onclose: () => void } = $props();
 
 	$effect(() => {
 		void library.loadFolders(charId);
@@ -134,6 +134,7 @@
 
 <aside class="convs" aria-label="대화 목록">
 	<div class="convs-head">
+		<IconButton label="닫기" size="sm" variant="soft" onclick={onclose}><PanelLeft /></IconButton>
 		<span class="spacer"></span>
 		<IconButton label="새 대화" size="sm" variant="soft" onclick={oncreate}><Plus /></IconButton>
 		<IconButton label="대화 가져오기 (SillyTavern .jsonl)" size="sm" onclick={importChat}><Upload /></IconButton>

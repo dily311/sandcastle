@@ -47,6 +47,31 @@ pub async fn list_user_plugins(app: AppHandle, state: State<'_, AppState>) -> Re
     community::list(&state.db, &app_data_dir(&app)?).await
 }
 
+/// 설치된 플러그인의 판 폴더 목록 (설정 > 데이터). 코어 플러그인이 꺼져 있어도 폴더를 보고 지울 수 있다 — 코드는 읽지도 돌리지도 않고 폴더만 본다
+#[tauri::command]
+#[specta::specta]
+pub async fn list_plugin_folders(app: AppHandle, state: State<'_, AppState>) -> Result<Vec<UserPlugin>> {
+    community::list(&state.db, &app_data_dir(&app)?).await
+}
+
+/// 쓰는 판 바꾸기(되돌리기 포함): 꺼진 채로 돌아오고 다시 켜서 동의해야 한다. 플러그인이 꺼져 있어도 고를 수 있다(코드를 돌리지 않음)
+#[tauri::command]
+#[specta::specta]
+pub async fn switch_user_plugin_version(app: AppHandle, state: State<'_, AppState>, plugin_id: String, dir: String) -> Result<UserPlugin> {
+    let p = community::switch_version(&state.db, &app_data_dir(&app)?, &plugin_id, &dir).await?;
+    changed(&app);
+    Ok(p)
+}
+
+/// 쓰지 않는 판 폴더 지우기 (되돌릴 수 없음 — 화면이 확인을 받는다). 지금 쓰는 판은 거절
+#[tauri::command]
+#[specta::specta]
+pub async fn delete_user_plugin_version(app: AppHandle, state: State<'_, AppState>, plugin_id: String, dir: String) -> Result<UserPlugin> {
+    let p = community::delete_version(&state.db, &app_data_dir(&app)?, &plugin_id, &dir).await?;
+    changed(&app);
+    Ok(p)
+}
+
 /// zip 파일이나 폴더를 읽어 미리보기 (아무것도 쓰지 않음)
 #[tauri::command]
 #[specta::specta]

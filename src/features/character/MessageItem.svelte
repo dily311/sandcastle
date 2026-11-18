@@ -1,8 +1,10 @@
 <script lang="ts">
-	import { Bookmark, BookmarkX, ChevronDown, ChevronLeft, ChevronRight, Copy, Eye, EyeOff, FileSearch, GitBranch, ImagePlus, Languages, Pencil, RefreshCw, Square, Trash2, Volume2, Sparkles, PenLine } from "@lucide/svelte";
+	import { Bookmark, BookmarkX, ChevronDown, ChevronLeft, ChevronRight, Copy, Eye, EyeOff, FileSearch, GitBranch, ImagePlus, Languages, Pencil, RefreshCw, Square, Trash2, Volume2, Sparkles, PenLine, ChevronsDownUp, ChevronsUpDown, Ellipsis } from "@lucide/svelte";
 	import { plugins } from "$shared/stores/plugins.svelte";
 	import { drawMessage, generatedImagesOf, speak, speech, translateMessage, translationOf } from "$shared/stores/aiTools.svelte";
-	import { Badge, Button, IconButton, ProviderIcon, Textarea } from "$shared/ui";
+	import { Badge, Button, ContextMenu, IconButton, ProviderIcon, Textarea, type MenuItem } from "$shared/ui";
+	import { onCurrentSwipe, type ChatBookmark } from "./bookmarks";
+	import { findTextRange, paintBookmarks } from "./highlight";
 	import { absolute, relative } from "$shared/time";
 	import { confirmAction, promptText } from "$shared/stores/confirm.svelte";
 	import { toasts } from "$shared/stores/toast.svelte";
@@ -30,8 +32,12 @@
 		selecting?: boolean;
 		selected?: boolean;
 		onselect?: (m: Message, on: boolean) => void;
+		/** 이 메시지의 북마크 (본문에 형광펜으로 칠함) */
+		marks?: ChatBookmark[];
+		/** 형광펜 칠한 글을 눌러 지움 */
+		onmarkremove?: (b: ChatBookmark) => void;
 	}
-	let { msg, no, session, images, isLast, onbranch, onprompt, selecting = false, selected = false, onselect }: Props = $props();
+	let { msg, no, session, images, isLast, onbranch, onprompt, selecting = false, selected = false, onselect, marks = [], onmarkremove }: Props = $props();
 
 	const meta = $derived(metaOf(msg));
 	const isAi = $derived(msg.role === "assistant");
@@ -81,9 +87,13 @@
 	const swipeId = $derived(meta.swipeId ?? 0);
 	const model = $derived(meta.info?.model || undefined);
 
-	// AI에게 숨긴 메시지는 한 줄로 접어 둔다 (눌러서 펼침)
-	let unfolded = $state(false);
-	const folded = $derived(!!meta.hidden && !unfolded && !live);
+	// 접기: 화면에 보이는 것만 바꿈 (저장하지 않고 AI에게 보내는 글도 그대로).
+	// 직접 접거나 펼치기 전에는 AI에게 숨긴 메시지만 접혀 있다
+	let open = $state<boolean | null>(null);
+	const folded = $derived(!live && (open === null ? !!meta.hidden : !open));
+	function toggleFold() {
+		open = folded;
+	}
 	const preview = $derived(text.replace(/<[^>]+>/g, " ").replace(/\s+/g, " ").trim().slice(0, 120));
 
 	let editing = $state(false);
@@ -92,6 +102,7 @@
 	let el: HTMLDivElement | undefined = $state();
 	function tap(e: MouseEvent) {
 		if (selecting) return onselect?.(msg, !selected);
+		if (markClick(e)) return;
 		if (!layout.touch || editing) return;
 		if ((e.target as Element).closest("button, a, input, textarea")) return;
 		if (window.getSelection()?.toString()) return;
@@ -130,13 +141,82 @@
 		const t = await promptText({ title: "지시와 함께 다시 생성", message: "이번 응답에만 적용 · 저장되는 글에는 들어가지 않음", input: { value: "", placeholder: "예) 묘사는 짧게, 대사를 더 많이" }, confirmLabel: "다시 생성" });
 		if (t?.trim()) await session.regenerate(true, t.trim());
 	}
+	// 북마크한 글을 본문에 형광펜으로 칠한다 (보고 있는 스와이프의 것만. 접히거나 고치는 중이면 칠하지 않음)
+	$effect(() => {
+		void text;
+		void blocks;
+		const list = marks.filter((b) => onCurrentSwipe(b, swipeId));
+		const root = el;
+		painted = root && !folded && !editing && list.length ? list.flatMap((b) => { const range = findTextRange(root, b.text); return range ? [{ b, range }] : []; }) : [];
+		paintBookmarks(msg.id, painted.map((p) => p.range));
+		return () => {
+			painted = [];
+			paintBookmarks(msg.id, []);
+		};
+	});
+	let painted: { b: ChatBookmark; range: Range }[] = [];
+	/** 형광펜 칠한 글을 누르면 북마크 메뉴 (글을 고르는 중이거나 버튼·링크 위면 아님) */
+	let markMenuAt = $state<{ x: number; y: number; b: ChatBookmark } | null>(null);
+	function markClick(e: MouseEvent): boolean {
+		if (!painted.length || editing || live) return false;
+		if ((e.target as Element).closest("button, a, input, textarea")) return false;
+		if (window.getSelection()?.toString().trim()) return false;
+		const pos = document.caretPositionFromPoint?.(e.clientX, e.clientY);
+		const at = pos ? { node: pos.offsetNode, offset: pos.offset } : (() => { const r = document.caretRangeFromPoint?.(e.clientX, e.clientY); return r ? { node: r.startContainer, offset: r.startOffset } : null; })();
+		if (!at) return false;
+		// 끝 글자 뒤(경계)는 칠한 글이 아니므로 안쪽만
+		const hit = painted.find((p) => p.range.comparePoint(at.node, at.offset) === 0 && !(at.node === p.range.endContainer && at.offset === p.range.endOffset));
+		if (!hit) return false;
+		markMenuAt = { x: e.clientX, y: e.clientY, b: hit.b };
+		return true;
+	}
+	const markMenuItems = $derived<MenuItem[]>(
+		markMenuAt
+			? [
+					{ label: "북마크 삭제", icon: BookmarkX, danger: true, onselect: () => onmarkremove?.(markMenuAt!.b) },
+				]
+			: [],
+	);
+
+	// 오른쪽 클릭: 도구 줄의 동작을 전부 메뉴로 (긴 메시지에서 위로 올라가지 않고 쓰게)
+	let menuAt = $state<{ x: number; y: number; align?: "start" | "end" } | null>(null);
+	function openMenu(e: MouseEvent) {
+		if (selecting || editing || live) return;
+		if ((e.target as Element).closest("button, a, input, textarea")) return;
+		// 글을 고른 채면 고른 글 메뉴(ChatView)가 뜬다
+		if (window.getSelection()?.toString().trim()) return;
+		e.preventDefault();
+		menuAt = { x: e.clientX, y: e.clientY };
+	}
+	const menuItems = $derived.by<MenuItem[]>(() => {
+		const out: MenuItem[] = [
+			{ label: "복사", icon: Copy, onselect: copy },
+			{ label: "수정", icon: Pencil, onselect: startEdit },
+			{ label: folded ? "펼치기" : "접기", icon: folded ? ChevronsUpDown : ChevronsDownUp, onselect: toggleFold },
+			{ label: "여기서 분기 나누기", icon: GitBranch, separator: true, onselect: () => onbranch(msg) },
+			{ label: meta.chapter ? "챕터 표시 지우기" : "여기서 챕터 시작", icon: meta.chapter ? BookmarkX : Bookmark, onselect: chapter },
+			{ label: meta.hidden ? "AI에게 다시 보이기" : "AI에게 숨기기", icon: meta.hidden ? Eye : EyeOff, onselect: () => session.setHidden(msg, !meta.hidden) },
+		];
+		if (isAi && isLast) {
+			out.push(
+				{ label: "처음부터 다시 생성 (스와이프 버림)", icon: RefreshCw, separator: true, disabled: session.busy, onselect: () => session.regenerate(false) },
+				{ label: "지시와 함께 다시 생성", icon: Sparkles, disabled: session.busy, onselect: regenerateWith },
+			);
+		}
+		if (isAi) out.push({ label: "보낸 컨텍스트 보기", icon: FileSearch, separator: !(isAi && isLast), onselect: () => onprompt(msg) });
+		if (plugins.on("translate")) out.push({ label: translation ? (showOriginal ? "번역 보기" : "원문 보기") : "번역", icon: Languages, disabled: toolBusy === "translate", onselect: translate });
+		if (plugins.on("tts")) out.push({ label: speech.messageId === msg.id ? "읽기 멈추기" : "소리 내어 읽기", icon: speech.messageId === msg.id ? Square : Volume2, onselect: () => speak(msg, translation && !showOriginal ? translation.text : msg.content) });
+		if (plugins.on("imagegen") && isAi) out.push({ label: "이 장면 그리기", icon: ImagePlus, disabled: toolBusy === "draw", onselect: draw });
+		out.push({ label: "삭제", icon: Trash2, danger: true, separator: true, onselect: remove });
+		return out;
+	});
 	async function remove() {
 		if (await confirmAction({ title: "메시지 삭제", message: `#${no} 메시지를 지움. 되돌릴 수 없음`, confirmLabel: "삭제", danger: true })) await session.remove(msg);
 	}
 </script>
 
 <!-- svelte-ignore a11y_click_events_have_key_events, a11y_no_static_element_interactions -->
-<div bind:this={el} class="block" class:ai={isAi} class:user={!isAi} class:hidden={meta.hidden} class:selecting class:picked={selected} id="msg-{msg.id}" data-no={no} class:tapped onclick={tap}>
+<div bind:this={el} class="block" class:ai={isAi} class:user={!isAi} class:hidden={meta.hidden} class:selecting class:picked={selected} id="msg-{msg.id}" data-no={no} class:tapped onclick={tap} oncontextmenu={openMenu}>
 	<div class="who">
 		{#if selecting}<input class="pick" type="checkbox" checked={selected} aria-label="#{no} 메시지 선택" onclick={(e) => e.stopPropagation()} onchange={(e) => onselect?.(msg, e.currentTarget.checked)} />{/if}
 		<span class="no">#{no}</span><b>{msg.name ?? (isAi ? "AI" : "나")}</b>
@@ -155,9 +235,16 @@
 		{/if}
 		{#if !editing && !live && !selecting}
 			<div class="actions" role="toolbar" aria-label="메시지 {no} 동작">
-				<IconButton label="여기서 분기 나누기" size="sm" onclick={() => onbranch(msg)}><GitBranch /></IconButton>
+				{#if !layout.narrow}<IconButton label="여기서 분기 나누기" size="sm" onclick={() => onbranch(msg)}><GitBranch /></IconButton>{/if}
 				<IconButton label="복사" size="sm" onclick={copy}><Copy /></IconButton>
 				<IconButton label="수정" size="sm" onclick={startEdit}><Pencil /></IconButton>
+				<IconButton label={folded ? "펼치기" : "접기 (화면에서만)"} size="sm" onclick={toggleFold}>
+					{#if folded}<ChevronsUpDown />{:else}<ChevronsDownUp />{/if}
+				</IconButton>
+				<!-- 좁은 화면: 나머지 동작은 메뉴로 (버튼이 많으면 화면 밖으로 나감) -->
+				{#if layout.narrow}
+					<IconButton label="더 보기" size="sm" onclick={(e) => { const r = e.currentTarget.getBoundingClientRect(); menuAt = { x: r.right, y: r.bottom + 4, align: "end" }; }}><Ellipsis /></IconButton>
+				{:else}
 				<IconButton label={meta.chapter ? "챕터 표시 지우기" : "여기서 챕터 시작"} size="sm" onclick={chapter}>
 					{#if meta.chapter}<BookmarkX />{:else}<Bookmark />{/if}
 				</IconButton>
@@ -183,12 +270,13 @@
 					<IconButton label="이 장면 그리기" size="sm" disabled={toolBusy === "draw"} onclick={draw}><ImagePlus /></IconButton>
 				{/if}
 				<IconButton label="삭제" size="sm" onclick={remove}><Trash2 /></IconButton>
+				{/if}
 			</div>
 		{/if}
 	</div>
 
 	{#if folded && !editing}
-		<button class="folded-line" onclick={(e) => { e.stopPropagation(); unfolded = true; }} title="눌러서 펼치기">{preview || "(빈 메시지)"}</button>
+		<button class="folded-line" onclick={(e) => { e.stopPropagation(); open = true; }} title="눌러서 펼치기">{preview || "(빈 메시지)"}</button>
 	{:else if editing}
 		<div class="edit">
 			<Textarea bind:value={draft} autosize maxRows={20} aria-label="메시지 수정" />
@@ -213,8 +301,8 @@
 		{/if}
 	{/if}
 	<!-- AI에게 숨긴 메시지: 접기·펼치기는 본문(한 줄 미리보기) 아래 -->
-	{#if meta.hidden && !live && !editing}
-		<button class="fold" aria-expanded={!folded} onclick={(e) => { e.stopPropagation(); unfolded = !unfolded; }}>
+	{#if (meta.hidden || open === false) && !live && !editing}
+		<button class="fold" aria-expanded={!folded} onclick={(e) => { e.stopPropagation(); toggleFold(); }}>
 			<ChevronDown class={folded ? "rot" : ""} />{folded ? "펼치기" : "접기"}
 		</button>
 	{/if}
@@ -237,6 +325,8 @@
 		</div>
 	{/if}
 </div>
+<ContextMenu at={markMenuAt} items={markMenuItems} label="북마크 메뉴" onclose={() => (markMenuAt = null)} />
+<ContextMenu at={menuAt} items={menuItems} label="메시지 {no} 메뉴" onclose={() => (menuAt = null)} />
 
 <style>
 	.ghost {

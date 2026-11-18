@@ -168,13 +168,32 @@ pub async fn add_images(db: &DbPool, app_data_dir: &Path, character_id: &str, pa
     Ok(added)
 }
 
-/// ZIP 안의 그림들을 임시 폴더에 풀어 경로를 돌려준다 (폴더 구조는 버리고 파일 이름만, 최대 500장)
+/// 한 ZIP에 넣을 수 있는 그림 수
+pub const MAX_ZIP_IMAGES: usize = 1000;
+
+fn is_zip_image_name(name: &str) -> bool {
+    let Some(file) = std::path::Path::new(name).file_name().map(|n| n.to_string_lossy().into_owned()) else {
+        return false;
+    };
+    let ext = file.rsplit('.').next().unwrap_or_default().to_ascii_lowercase();
+    !file.starts_with('.') && ["png", "jpg", "jpeg", "webp", "gif"].contains(&ext.as_str())
+}
+
+/// ZIP 안의 그림들을 임시 폴더에 풀어 경로를 돌려준다 (폴더 구조는 버리고 파일 이름만).
+/// 그림이 MAX_ZIP_IMAGES장을 넘으면 풀기 전에 거절한다 (일부만 넣고 나머지를 조용히 버리지 않게)
 pub fn extract_zip_images(zip_path: &Path, out_dir: &Path) -> Result<Vec<PathBuf>> {
     let file = std::fs::File::open(zip_path).map_err(|e| AppError::io(format!("ZIP을 열 수 없습니다: {e}")))?;
     let mut zip = zip::ZipArchive::new(file).map_err(|e| AppError::validation(format!("ZIP 파일이 아닙니다: {e}"), None))?;
+    let total = (0..zip.len()).filter(|&i| zip.name_for_index(i).is_some_and(is_zip_image_name)).count();
+    if total > MAX_ZIP_IMAGES {
+        return Err(AppError::validation(
+            format!("ZIP에 그림이 {total}장 있어 넣을 수 없습니다 (한 번에 {MAX_ZIP_IMAGES}장까지). 나눠서 넣어 주세요"),
+            None,
+        ));
+    }
     std::fs::create_dir_all(out_dir)?;
     let mut out = Vec::new();
-    for i in 0..zip.len().min(2000) {
+    for i in 0..zip.len() {
         let mut f = zip.by_index(i).map_err(|e| AppError::io(e.to_string()))?;
         if f.is_dir() || f.size() > MAX_IMAGE_BYTES {
             continue;
@@ -190,9 +209,6 @@ pub fn extract_zip_images(zip_path: &Path, out_dir: &Path) -> Result<Vec<PathBuf
         let mut w = std::fs::File::create(&dest)?;
         std::io::copy(&mut f, &mut w)?;
         out.push(dest);
-        if out.len() >= 500 {
-            break;
-        }
     }
     Ok(out)
 }
@@ -290,6 +306,35 @@ fn rewrite_cg_tags(text: &str, mut replace: impl FnMut(&str) -> Option<String>) 
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    fn zip_with(dir: &Path, names: &[String]) -> PathBuf {
+        use std::io::Write;
+        let path = dir.join("pack.zip");
+        let mut w = zip::ZipWriter::new(std::fs::File::create(&path).unwrap());
+        let opts = zip::write::SimpleFileOptions::default();
+        for n in names {
+            w.start_file(n.as_str(), opts).unwrap();
+            w.write_all(b"x").unwrap();
+        }
+        w.finish().unwrap();
+        path
+    }
+
+    #[test]
+    fn zip_over_the_limit_is_rejected_before_extracting() {
+        let dir = std::env::temp_dir().join(format!("sc-zip-{}", Uuid::new_v4()));
+        std::fs::create_dir_all(&dir).unwrap();
+        let mut names: Vec<String> = (0..=MAX_ZIP_IMAGES).map(|i| format!("a/{i}.png")).collect();
+        names.push("readme.txt".into()); // 그림이 아닌 파일은 세지 않음
+        let zip = zip_with(&dir, &names);
+        let out = dir.join("out");
+        assert!(extract_zip_images(&zip, &out).is_err());
+        assert!(!out.exists(), "거절하면 아무것도 풀지 않음");
+        // 딱 한도면 통과 (내용은 그림이 아니어도 파일은 풀림)
+        let ok = zip_with(&dir, &names[..MAX_ZIP_IMAGES].to_vec());
+        assert_eq!(extract_zip_images(&ok, &out).unwrap().len(), MAX_ZIP_IMAGES);
+        std::fs::remove_dir_all(dir).ok();
+    }
 
     fn img(id: &str, key: &str, enabled: bool) -> CharacterImage {
         CharacterImage {

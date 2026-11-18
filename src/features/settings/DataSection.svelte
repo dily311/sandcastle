@@ -13,6 +13,7 @@
 	import Section from "./Section.svelte";
 	import Group from "./Group.svelte";
 	import Row from "./Row.svelte";
+	import PluginVersionsGroup from "./PluginVersionsGroup.svelte";
 	import TrashGroup from "./TrashGroup.svelte";
 
 	const src = { source: "data" };
@@ -231,6 +232,8 @@
 				</div>
 			{/if}
 		</Group>
+
+		<PluginVersionsGroup />
 
 		{#key trashKey}<TrashGroup onrestored={() => Promise.all([load(), library.load()])} />{/key}
 

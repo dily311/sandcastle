@@ -1,77 +1,77 @@
 /* =========================================================
-   위젯 창 전용 바탕 스타일. 공용 토큰(shared/ui/tokens.css)·base.css 다음에 불러온다.
+   위젯 창 전용 바탕 스타일. 빌드가 CSS를 한 파일로 합치므로(cssCodeSplit: false) 모두 <html class="widget"> 아래로 한정 — 안 그러면 메인 창 body까지 투명해짐. 공용 토큰(shared/ui/tokens.css)·base.css 다음에 불러온다.
    - 위젯 창은 투명 창 위에 그려지므로 바탕을 비운다
    - 예전 전역 reset(styles/reset.css)이 하던 일 중 위젯 화면이 기대는 것만 옮겼다
    ========================================================= */
 
-html,
-body {
+:where(html.widget),
+:where(html.widget) body {
 	background: transparent;
 }
 
-body {
+:where(html.widget) body {
 	line-height: 1;
 	overflow: hidden;
 }
 
 /* 요소 기본 여백·모양 초기화 (위젯 화면은 이 전제로 만들어짐) */
-html,
-body,
-div,
-span,
-iframe,
-h1,
-h2,
-h3,
-h4,
-h5,
-h6,
-p,
-blockquote,
-pre,
-cite,
-code,
-del,
-em,
-img,
-ins,
-q,
-small,
-strong,
-sub,
-sup,
-dl,
-dt,
-dd,
-ol,
-ul,
-li,
-fieldset,
-form,
-legend,
-table,
-caption,
-thead,
-tfoot,
-tr,
-th,
-td,
-article,
-aside,
-canvas,
-details,
-figcaption,
-figure,
-footer,
-header,
-nav,
-section,
-summary,
-time,
-mark,
-audio,
-video,
-button {
+:where(html.widget),
+:where(html.widget) body,
+:where(html.widget) div,
+:where(html.widget) span,
+:where(html.widget) iframe,
+:where(html.widget) h1,
+:where(html.widget) h2,
+:where(html.widget) h3,
+:where(html.widget) h4,
+:where(html.widget) h5,
+:where(html.widget) h6,
+:where(html.widget) p,
+:where(html.widget) blockquote,
+:where(html.widget) pre,
+:where(html.widget) cite,
+:where(html.widget) code,
+:where(html.widget) del,
+:where(html.widget) em,
+:where(html.widget) img,
+:where(html.widget) ins,
+:where(html.widget) q,
+:where(html.widget) small,
+:where(html.widget) strong,
+:where(html.widget) sub,
+:where(html.widget) sup,
+:where(html.widget) dl,
+:where(html.widget) dt,
+:where(html.widget) dd,
+:where(html.widget) ol,
+:where(html.widget) ul,
+:where(html.widget) li,
+:where(html.widget) fieldset,
+:where(html.widget) form,
+:where(html.widget) legend,
+:where(html.widget) table,
+:where(html.widget) caption,
+:where(html.widget) thead,
+:where(html.widget) tfoot,
+:where(html.widget) tr,
+:where(html.widget) th,
+:where(html.widget) td,
+:where(html.widget) article,
+:where(html.widget) aside,
+:where(html.widget) canvas,
+:where(html.widget) details,
+:where(html.widget) figcaption,
+:where(html.widget) figure,
+:where(html.widget) footer,
+:where(html.widget) header,
+:where(html.widget) nav,
+:where(html.widget) section,
+:where(html.widget) summary,
+:where(html.widget) time,
+:where(html.widget) mark,
+:where(html.widget) audio,
+:where(html.widget) video,
+:where(html.widget) button {
 	margin: 0;
 	padding: 0;
 	border: 0;
@@ -81,13 +81,13 @@ button {
 	vertical-align: baseline;
 }
 
-ul,
-li,
-ol {
+:where(html.widget) ul,
+:where(html.widget) li,
+:where(html.widget) ol {
 	list-style: none;
 }
 
-a {
+:where(html.widget) a {
 	color: inherit;
 	font-size: 1em;
 	vertical-align: baseline;
@@ -95,45 +95,45 @@ a {
 	text-decoration: none;
 }
 
-img {
+:where(html.widget) img {
 	vertical-align: top;
 }
 
-button {
+:where(html.widget) button {
 	text-align: unset;
 	background: none;
 }
 
 /* 아이콘은 글자색을 따라가고 클릭을 가로채지 않음 */
-svg,
-path {
+:where(html.widget) svg,
+:where(html.widget) path {
 	pointer-events: none;
 }
 
-svg.svg-icon {
+:where(html.widget) svg.svg-icon {
 	stroke: currentColor;
 	stroke-width: 1px;
 }
 
-button:has(.svg-icon) {
+:where(html.widget) button:has(.svg-icon) {
 	display: flex;
 	align-items: center;
 	padding: 0 0.2rem;
 }
 
 /* 위젯 안 스크롤바: 얇게, 바탕에 묻히게 */
-*::-webkit-scrollbar {
+:where(html.widget) *::-webkit-scrollbar {
 	appearance: none;
 	width: 4px;
 	background: transparent;
 }
 
-*::-webkit-scrollbar-thumb {
+:where(html.widget) *::-webkit-scrollbar-thumb {
 	background: var(--border-strong);
 	border-radius: 10px;
 }
 
-*::-webkit-scrollbar-track {
+:where(html.widget) *::-webkit-scrollbar-track {
 	background: transparent;
 	box-shadow: none;
 }

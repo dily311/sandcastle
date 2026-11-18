@@ -628,13 +628,15 @@
 		else if (e.key === "h") uiHidden = !uiHidden;
 	}
 	const focusMode = $derived(!layout.sidebar);
+	/** 대사창 높이: 좁은 화면에서 캐릭터가 대사창에 가려지지 않게 그 위에 세움 */
+	let dockHeight = $state(0);
 </script>
 
 <svelte:window onkeydown={onKey} />
 
 <main class="vn-player game-theme">
 
-	<section class="stage-area" aria-labelledby="scene-name">
+	<section class="stage-area" aria-labelledby="scene-name" style:--dock-h="{dockHeight}px">
 		<StageView onAdvance={handleStageClick} {standingOverrides} {focusedCharacterId} />
 		{#if !uiHidden}
 			<PlayInfo
@@ -652,6 +654,7 @@
 			/>
 		{/if}
 		<DialoguePanel
+			onDockHeight={(h) => (dockHeight = h)}
 			show={!uiHidden && Boolean(currentLine || runtimeStore.currentScene || activeNpcId || scriptFinished)}
 			line={currentLine && lineTranslation && showTranslated ? { ...currentLine, text: lineTranslation } : currentLine}
 			{speakerName}

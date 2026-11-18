@@ -1,7 +1,5 @@
 <script lang="ts">
 	import { _ } from "svelte-i18n";
-	// prettier-ignore
-	import { Heart, Menu, Pause, Play, Repeat, Repeat1, Shuffle, SkipBack, SkipForward, Volume, Volume1, Volume2, VolumeOff, VolumeX } from "@lucide/svelte";
 	import Playlist from "./PlaylistScreen.svelte";
 	// prettier-ignore
 	import { audioStore, handleNextSong, handlePrevSong, widgetMusicSetting, playlistStore, formatAlbumArt, } from "../musicPlyerStore.svelte";
@@ -127,10 +125,11 @@
 						<input
 							type="range"
 							class="volume-slider base-slider"
+							aria-label="볼륨"
 							min="0"
 							max="100"
 							value={audioStore.volumeSliderValue}
-							style="--current-fill: {audioStore.volumeSliderValue}%;"
+							style="--pct: {audioStore.volumeSliderValue}%;"
 							oninput={(e: Event) => {
 								const value = (<HTMLInputElement>e.target).value;
 								audioStore.setVolume(Number(value) / 100);
@@ -308,6 +307,22 @@
 		width: 100%;
 		/* resize: both; */
 	}
+	.music-player-container:global(.snap-left) {
+		border-top-left-radius: 0;
+		border-bottom-left-radius: 0;
+	}
+	.music-player-container:global(.snap-right) {
+		border-top-right-radius: 0;
+		border-bottom-right-radius: 0;
+	}
+	.music-player-container:global(.snap-top) {
+		border-top-left-radius: 0;
+		border-top-right-radius: 0;
+	}
+	.music-player-container:global(.snap-bottom) {
+		border-bottom-left-radius: 0;
+		border-bottom-right-radius: 0;
+	}
 	.music-player-container.resize {
 		display: flex;
 		width: auto;
@@ -448,4 +463,24 @@
 		width: 100px;
 		padding: 0.4rem 0.8rem;
 	}
+
+	.volume-slider {
+		appearance: none;
+		width: 100%;
+		height: 6px;
+		margin: 6px 0;
+		border-radius: 999px;
+		background: linear-gradient(to right, var(--accent) var(--pct), var(--surface-active) var(--pct));
+		cursor: pointer;
+	}
+	.volume-slider::-webkit-slider-thumb {
+		appearance: none;
+		width: 16px;
+		height: 16px;
+		border-radius: 50%;
+		background: var(--surface);
+		border: 2px solid var(--accent);
+		box-shadow: var(--shadow-sm);
+	}
+
 </style>

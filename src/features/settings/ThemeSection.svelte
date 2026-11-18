@@ -195,7 +195,6 @@
 	<Group title="글꼴 파일">
 		{#snippet aside()}<Button size="sm" onclick={uploadFonts}>{#snippet icon()}<Upload />{/snippet}글꼴 올리기</Button>{/snippet}
 		<div class="bg-row">
-			<p class="bg-desc">컴퓨터나 폰에 있는 글꼴 파일(TTF·OTF·WOFF·WOFF2)을 올려 앱 글꼴로 씀. 앱 데이터에 복사하고 원본은 건드리지 않음. 파일을 이 화면에 끌어다 놓아도 됨. 글꼴의 라이선스는 직접 확인할 것</p>
 			{#if fonts.length}
 				<ul class="fonts">
 					{#each fonts as f (f.path)}
@@ -205,16 +204,16 @@
 								<span class="sample" style:font-family={`"${fontFamilyOf(f.path)}", var(--font-sans)`}>가나다라마바사 ABC abc 123</span>
 							</div>
 							{#if theme.setting.appFont === f.path}
-								<Button size="sm" variant="ghost" onclick={() => theme.update({ appFont: null })}>기본으로</Button>
+								<Button size="sm" variant="ghost" onclick={() => theme.update({ appFont: null })}>해제</Button>
 							{:else}
-								<Button size="sm" variant="secondary" onclick={() => theme.update({ appFont: f.path })}>쓰기</Button>
+								<Button size="sm" variant="secondary" onclick={() => theme.update({ appFont: f.path })}>사용</Button>
 							{/if}
 							<Button size="sm" variant="ghost" aria-label="{f.name} 삭제" onclick={() => removeFont(f.path, f.name)}>{#snippet icon()}<Trash2 />{/snippet}</Button>
 						</li>
 					{/each}
 				</ul>
 			{:else}
-				<p class="font-empty">올린 글꼴이 없음. 지금은 기본 글꼴(Pretendard)을 씀</p>
+				<p class="font-empty">올린 글꼴이 없음. 지금은 기본 글꼴 사용</p>
 			{/if}
 		</div>
 	</Group>
@@ -366,7 +365,7 @@
 	}
 	.gallery {
 		display: grid;
-		grid-template-columns: repeat(auto-fill, minmax(190px, 1fr));
+		grid-template-columns: repeat(auto-fill, minmax(min(190px, 45%), 1fr));
 		gap: var(--space-3);
 		padding: var(--space-4) 0;
 	}

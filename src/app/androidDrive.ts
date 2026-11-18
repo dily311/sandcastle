@@ -52,7 +52,7 @@ export function nativeDriveToken(interactive: boolean): Promise<string> {
 }
 
 function explain(code?: string) {
-	if (code === "cancelled") return "구글 로그인을 취소함";
+	if (code === "cancelled") return "구글 로그인이 취소됨 — 직접 취소한 게 아니라면 구글 클라우드의 Android 클라이언트(패키지 이름·서명 키 SHA-1)와 테스트 사용자를 확인";
 	if (code === "needs_consent") return "구글 드라이브 권한을 다시 허락해야 함 (설정 > 동기화에서 로그인)";
 	// 10 = DEVELOPER_ERROR: 구글 클라우드의 Android 클라이언트(패키지 이름·서명 키 SHA-1)가 이 앱과 다름
 	if (code === "api:10") return "구글이 이 앱을 알아보지 못함 — 구글 클라우드의 Android 클라이언트에 이 앱의 패키지 이름과 서명 키 SHA-1이 맞게 들어 있는지 확인";
