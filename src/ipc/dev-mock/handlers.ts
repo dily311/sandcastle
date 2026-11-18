@@ -137,6 +137,8 @@ const base: Record<string, Handler> = {
 		},
 	],
 	upsert_budget_limit: () => null,
+	add_api_profile_model: ({ model }: { model?: unknown }) => [String(model ?? "").trim()].filter(Boolean),
+	remove_api_profile_model: () => [],
 	take_budget_warnings: () => [],
 	get_model_price: ({ model }: { model?: unknown }) => (String(model).startsWith("claude") ? { input: 2, output: 10, builtin: true } : null),
 	get_provider_quota: ({ profileId }: { profileId?: unknown }) =>

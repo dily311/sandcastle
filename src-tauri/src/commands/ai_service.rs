@@ -101,6 +101,19 @@ pub async fn update_api_profile(state: State<'_, AppState>, ai: State<'_, Arc<Ai
     Ok(())
 }
 
+/// 직접 입력한 모델 이름을 이 프로필의 "내가 추가한 모델"로 남긴다. 바뀐 목록을 돌려준다
+#[tauri::command]
+#[specta::specta]
+pub async fn add_api_profile_model(state: State<'_, AppState>, id: String, model: String) -> Result<Vec<String>> {
+    Ok(ai_service::add_custom_model(&state.db, &id, &model).await?)
+}
+
+#[tauri::command]
+#[specta::specta]
+pub async fn remove_api_profile_model(state: State<'_, AppState>, id: String, model: String) -> Result<Vec<String>> {
+    Ok(ai_service::remove_custom_model(&state.db, &id, &model).await?)
+}
+
 #[tauri::command]
 #[specta::specta]
 pub async fn delete_api_profile(state: State<'_, AppState>, id: String) -> Result<()> {

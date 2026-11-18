@@ -9,7 +9,7 @@ use sqlx::prelude::FromRow;
 // ---------------------------------------
 // API 프로필
 // ---------------------------------------
-#[derive(FromRow, Deserialize, Serialize, Clone, Debug, specta::Type)]
+#[derive(Deserialize, Serialize, Clone, Debug, specta::Type)]
 #[serde(rename_all = "camelCase")]
 pub struct ApiProfiles {
     pub id: String,
@@ -17,9 +17,32 @@ pub struct ApiProfiles {
     pub provider: String,
     pub format_type: String,
     pub base_url: String,
+    /// 이 프로필의 기본 모델. 대화·기능이 따로 정하지 않으면 이것을 쓴다
     pub model: String,
+    /// 사용자가 직접 입력해 남겨 둔 모델 이름 (목록에 계속 보임, ADR-020)
+    #[serde(default)]
+    pub custom_models: Vec<String>,
     pub created_at: i64,
     pub updated_at: i64,
+}
+
+// custom_models가 JSON 문자열로 저장돼 있어 손으로 읽는다 (깨져 있으면 빈 목록)
+impl<'r> FromRow<'r, sqlx::sqlite::SqliteRow> for ApiProfiles {
+    fn from_row(row: &'r sqlx::sqlite::SqliteRow) -> Result<Self, sqlx::Error> {
+        use sqlx::Row;
+        let custom: String = row.try_get("custom_models").unwrap_or_default();
+        Ok(Self {
+            id: row.try_get("id")?,
+            name: row.try_get("name")?,
+            provider: row.try_get("provider")?,
+            format_type: row.try_get("format_type")?,
+            base_url: row.try_get("base_url")?,
+            model: row.try_get("model")?,
+            custom_models: serde_json::from_str(&custom).unwrap_or_default(),
+            created_at: row.try_get("created_at")?,
+            updated_at: row.try_get("updated_at")?,
+        })
+    }
 }
 
 #[derive(Deserialize, specta::Type)]

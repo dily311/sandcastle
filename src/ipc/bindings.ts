@@ -330,10 +330,13 @@ export const commands = {
 	/**  프리셋과 블록을 한 번에 저장. `blocks` 순서가 실행 순서가 되고, 목록에 없는 기존 블록은 지워진다. */
 	savePromptPreset: (preset: PromptPresetsInput_Deserialize, blocks: PromptBlocksInput_Deserialize[], options?: InvokeOptions) => __TAURI_INVOKE<PromptPresetDetail_Serialize>("save_prompt_preset", { preset, blocks }, options),
 	deletePromptPreset: (id: string, options?: InvokeOptions) => __TAURI_INVOKE<TrashItem>("delete_prompt_preset", { id }, options),
-	getApiProfile: (id: string, options?: InvokeOptions) => __TAURI_INVOKE<ApiProfiles>("get_api_profile", { id }, options),
-	getAllApiProfile: (options?: InvokeOptions) => __TAURI_INVOKE<ApiProfiles[]>("get_all_api_profile", undefined, options),
-	createApiProfile: (input: ApiProfilesInput, apiKey: string, options?: InvokeOptions) => __TAURI_INVOKE<ApiProfiles>("create_api_profile", { input, apiKey }, options),
+	getApiProfile: (id: string, options?: InvokeOptions) => __TAURI_INVOKE<ApiProfiles_Serialize>("get_api_profile", { id }, options),
+	getAllApiProfile: (options?: InvokeOptions) => __TAURI_INVOKE<ApiProfiles_Serialize[]>("get_all_api_profile", undefined, options),
+	createApiProfile: (input: ApiProfilesInput, apiKey: string, options?: InvokeOptions) => __TAURI_INVOKE<ApiProfiles_Serialize>("create_api_profile", { input, apiKey }, options),
 	updateApiProfile: (id: string, input: ApiProfilesInput, apiKey: string, options?: InvokeOptions) => __TAURI_INVOKE<null>("update_api_profile", { id, input, apiKey }, options),
+	/**  직접 입력한 모델 이름을 이 프로필의 "내가 추가한 모델"로 남긴다. 바뀐 목록을 돌려준다 */
+	addApiProfileModel: (id: string, model: string, options?: InvokeOptions) => __TAURI_INVOKE<string[]>("add_api_profile_model", { id, model }, options),
+	removeApiProfileModel: (id: string, model: string, options?: InvokeOptions) => __TAURI_INVOKE<string[]>("remove_api_profile_model", { id, model }, options),
 	deleteApiProfile: (id: string, options?: InvokeOptions) => __TAURI_INVOKE<null>("delete_api_profile", { id }, options),
 	setApiKey: (profileId: string, apiKey: string, options?: InvokeOptions) => __TAURI_INVOKE<null>("set_api_key", { profileId, apiKey }, options),
 	deleteApiKey: (profileId: string, options?: InvokeOptions) => __TAURI_INVOKE<null>("delete_api_key", { profileId }, options),
@@ -626,16 +629,7 @@ export type AiCapabilities = {
 	structured: Support,
 };
 
-export type ApiProfiles = {
-	id: string,
-	name: string,
-	provider: string,
-	formatType: string,
-	baseUrl: string,
-	model: string,
-	createdAt: number,
-	updatedAt: number,
-};
+export type ApiProfiles = ApiProfiles_Serialize | ApiProfiles_Deserialize;
 
 export type ApiProfilesInput = {
 	name: string,
@@ -643,6 +637,34 @@ export type ApiProfilesInput = {
 	formatType: string,
 	baseUrl: string,
 	model: string,
+};
+
+export type ApiProfiles_Deserialize = {
+	id: string,
+	name: string,
+	provider: string,
+	formatType: string,
+	baseUrl: string,
+	/**  이 프로필의 기본 모델. 대화·기능이 따로 정하지 않으면 이것을 쓴다 */
+	model: string,
+	/**  사용자가 직접 입력해 남겨 둔 모델 이름 (목록에 계속 보임, ADR-020) */
+	customModels?: string[],
+	createdAt: number,
+	updatedAt: number,
+};
+
+export type ApiProfiles_Serialize = {
+	id: string,
+	name: string,
+	provider: string,
+	formatType: string,
+	baseUrl: string,
+	/**  이 프로필의 기본 모델. 대화·기능이 따로 정하지 않으면 이것을 쓴다 */
+	model: string,
+	/**  사용자가 직접 입력해 남겨 둔 모델 이름 (목록에 계속 보임, ADR-020) */
+	customModels: string[],
+	createdAt: number,
+	updatedAt: number,
 };
 
 export type AppErrorResponse = AppErrorResponse_Serialize | AppErrorResponse_Deserialize;

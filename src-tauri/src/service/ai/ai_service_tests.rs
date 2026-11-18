@@ -499,6 +499,7 @@ fn capabilities_of_a_profile_are_available_without_a_request() {
         format_type: "claude".into(),
         base_url: "https://api.anthropic.com/v1".into(),
         model: "claude-sonnet-5-5".into(),
+        custom_models: vec![],
         created_at: 0,
         updated_at: 0,
     };
