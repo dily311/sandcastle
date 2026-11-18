@@ -51,7 +51,7 @@ fn message(role: PromptRole, content: String) -> PromptMessageItem {
 }
 
 /// 채팅 AI에 지시 하나를 보내 답을 받는다 (번역, 이미지 프롬프트 쓰기)
-async fn ask(ai: &AiService, profile_id: String, system: String, user: String, max_tokens: u32) -> Result<String> {
+async fn ask(ai: &AiService, profile_id: String, model: Option<String>, system: String, user: String, max_tokens: u32) -> Result<String> {
     let prompt = PromptMessage {
         chat_options: ChatOptions {
             max_tokens: Some(max_tokens),
@@ -61,21 +61,18 @@ async fn ask(ai: &AiService, profile_id: String, system: String, user: String, m
         },
         messages: vec![message(PromptRole::System, system), message(PromptRole::User, user)],
     };
-    Ok(ai
-        .generate_once(AiRequest {
-            profile_id,
-            prompt,
-            model: None,
-        })
-        .await?
-        .content
-        .trim()
-        .to_string())
+    Ok(ai.generate_once(AiRequest { profile_id, prompt, model }).await?.content.trim().to_string())
 }
 
 // =========================================================
 // 번역
 // =========================================================
+
+/// 기능 설정에 API를 따로 정했을 때만 그 기능의 모델을 쓴다 (모델은 API에 딸린 이름 — API가 앱·대화 기본이면 그 API의 기본 모델, ADR-020)
+fn own_model(api_profile_id: &Option<String>, model: &str) -> Option<String> {
+    api_profile_id.as_deref().filter(|s| !s.is_empty())?;
+    Some(model.trim().to_string()).filter(|m| !m.is_empty())
+}
 
 pub fn translate_rules(to: &str) -> String {
     crate::service::app_prompts::translate(to)
@@ -87,7 +84,15 @@ pub async fn translate(ai: &AiService, setting: &TranslateSetting, fallback_prof
     }
     let profile = pick_profile(&setting.api_profile_id, fallback_profile)?;
     let max = ((text.chars().count() * 3) as u32).clamp(256, 8192);
-    ask(ai, profile, translate_rules(to), text.to_string(), max).await
+    ask(
+        ai,
+        profile,
+        own_model(&setting.api_profile_id, &setting.model),
+        translate_rules(to),
+        text.to_string(),
+        max,
+    )
+    .await
 }
 
 // =========================================================
@@ -288,7 +293,8 @@ pub async fn image_prompt(ai: &AiService, setting: &ImageGenSetting, chat_profil
             format!("[Characters]\n{context}\n\n[Message]\n{message}")
         };
         let rules = crate::service::app_prompts::image_prompt(image_is_novelai(ai, setting, chat_profile).await);
-        ask(ai, pick_profile(&setting.prompt_api_profile_id, chat_profile)?, rules.into(), user, 300).await?
+        let model = own_model(&setting.prompt_api_profile_id, &setting.prompt_model);
+        ask(ai, pick_profile(&setting.prompt_api_profile_id, chat_profile)?, model, rules.into(), user, 300).await?
     } else {
         speakable(message, false)
     };
@@ -811,6 +817,16 @@ async fn ok_bytes(res: reqwest::Response) -> Result<Vec<u8>> {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    // 기능의 모델은 그 기능에 API를 따로 정했을 때만 쓴다 (모델은 API에 딸린 이름 — ADR-020)
+    #[test]
+    fn a_features_model_only_applies_with_its_own_api() {
+        let api = Some("a1".to_string());
+        assert_eq!(own_model(&api, " m1 ").as_deref(), Some("m1"));
+        assert_eq!(own_model(&api, "  "), None, "비우면 그 API의 기본 모델");
+        assert_eq!(own_model(&None, "m1"), None, "API가 앱·대화 기본이면 모델도 따르지 않는다");
+        assert_eq!(own_model(&Some(String::new()), "m1"), None);
+    }
 
     #[test]
     fn speakable_strips_markup() {

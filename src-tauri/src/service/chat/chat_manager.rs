@@ -44,6 +44,8 @@ use crate::service::prompt::prompt_manager::{DEFAULT_CONTEXT_LIMIT, DEFAULT_WORL
 
 pub struct ChatRequest {
     api_profile_id: String,
+    /// 폰의 기본 API를 따라갈 때 폰 설정의 모델 (ADR-020)
+    model: Option<String>,
     pub(crate) preset_id: String,
     phone_mode_prompt: String,
 }
@@ -59,6 +61,7 @@ fn phone_defaults(app: &AppHandle, mode: &str, req: &mut ChatRequest) {
     let Ok(p) = state.0.lock().map(|s| s.phone.clone()) else { return };
     if let Some(id) = p.api_profile_id.filter(|s| !s.is_empty()) {
         req.api_profile_id = id;
+        req.model = Some(p.model.trim().to_string()).filter(|m| !m.is_empty());
     }
     if let Some(id) = p.preset_id.filter(|s| !s.is_empty()) {
         req.preset_id = id;
@@ -71,10 +74,19 @@ fn conv_model(conv: &crate::models::conversation::Conversation) -> Option<String
     conv.model.clone().filter(|m| !m.trim().is_empty())
 }
 
+/// 대화에 API가 없어 폰·앱의 기본 API를 따라갈 때, 폰 설정의 모델 (ADR-020)
+fn fallback_model(conv: &crate::models::conversation::Conversation, model: &Option<String>) -> Option<String> {
+    if conv.api_profile_id.as_deref().is_some_and(|s| !s.is_empty()) {
+        return None;
+    }
+    model.clone()
+}
+
 pub fn current_conv_request(state: &SettingsState<AppSetting>) -> Result<ChatRequest> {
     let guard = state.0.lock().map_err(|_| AppError::internal("settings lock poisoned"))?;
     Ok(ChatRequest {
         api_profile_id: guard.selected_api_profile.clone().unwrap_or_default(),
+        model: None,
         preset_id: guard.selected_preset.clone(),
         phone_mode_prompt: guard.phone_mode_prompt.clone(),
     })
@@ -684,7 +696,7 @@ impl ChatManager {
                 app,
                 db,
                 api_profile_id.clone(),
-                conv_model(&conv),
+                conv_model(&conv).or_else(|| fallback_model(&conv, &fallback.model)),
                 Some(preset_id.clone()),
                 context,
                 prompt_input,
@@ -915,8 +927,9 @@ impl ChatManager {
             .generate(
                 AiRequest {
                     profile_id: api_profile_id,
+                    // 대필 API를 따로 정했으면 대필 모델(비우면 그 API의 기본), 아니면 이 대화의 모델
                     model: if cfg.api_profile_id.as_deref().is_some_and(|s| !s.is_empty()) {
-                        None
+                        Some(cfg.model.trim().to_string()).filter(|m| !m.is_empty())
                     } else {
                         conv_model(&conv)
                     },
@@ -1007,7 +1020,7 @@ impl ChatManager {
                 app,
                 db,
                 api_profile_id.clone(),
-                conv_model(&conv),
+                conv_model(&conv).or_else(|| fallback_model(&conv, &fallback.model)),
                 Some(preset_id.clone()),
                 context,
                 format!("({}와 {}의 메신저 대화를 이어서 써)", me.name, other.name),

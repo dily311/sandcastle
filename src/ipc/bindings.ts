@@ -2736,6 +2736,8 @@ export type GhostSetting = GhostSetting_Serialize | GhostSetting_Deserialize;
 export type GhostSetting_Deserialize = {
 	/**  대필에 쓸 API (비우면 그 대화의 API) */
 	apiProfileId?: string | null,
+	/**  대필에 쓸 모델 (비우면 그 API의 기본 모델. 대필 API를 따로 정했을 때만 쓴다, ADR-020) */
+	model?: string,
 	/**  short / medium / long */
 	length?: string,
 	/**  추가 지침 한 줄 (300자까지) */
@@ -2748,6 +2750,8 @@ export type GhostSetting_Deserialize = {
 export type GhostSetting_Serialize = {
 	/**  대필에 쓸 API (비우면 그 대화의 API) */
 	apiProfileId: string | null,
+	/**  대필에 쓸 모델 (비우면 그 API의 기본 모델. 대필 API를 따로 정했을 때만 쓴다, ADR-020) */
+	model: string,
 	/**  short / medium / long */
 	length: string,
 	/**  추가 지침 한 줄 (300자까지) */
@@ -2797,6 +2801,8 @@ export type ImageGenSetting_Deserialize = {
 	aiPrompt?: boolean,
 	/**  이미지 프롬프트를 쓸 채팅 API (비우면 대화/앱의 것) */
 	promptApiProfileId?: string | null,
+	/**  이미지 프롬프트를 쓸 채팅 모델 (비우면 그 API의 기본 모델. ADR-020) */
+	promptModel?: string,
 	/**  NovelAI 생성 프리셋 (OpenAI는 쓰지 않음) */
 	negativePrompt?: string,
 	steps?: number,
@@ -2818,6 +2824,8 @@ export type ImageGenSetting_Serialize = {
 	aiPrompt: boolean,
 	/**  이미지 프롬프트를 쓸 채팅 API (비우면 대화/앱의 것) */
 	promptApiProfileId: string | null,
+	/**  이미지 프롬프트를 쓸 채팅 모델 (비우면 그 API의 기본 모델. ADR-020) */
+	promptModel: string,
 	/**  NovelAI 생성 프리셋 (OpenAI는 쓰지 않음) */
 	negativePrompt: string,
 	steps: number,
@@ -3596,12 +3604,16 @@ export type PhoneSetting = PhoneSetting_Serialize | PhoneSetting_Deserialize;
 /**  폰 대화의 기본 API·프리셋 (대화에 따로 고르지 않았을 때. 비우면 앱 기본값) */
 export type PhoneSetting_Deserialize = {
 	apiProfileId?: string | null,
+	/**  폰 대화의 기본 모델 (비우면 그 API의 기본 모델. ADR-020). API를 정했을 때만 쓴다 */
+	model?: string,
 	presetId?: string | null,
 };
 
 /**  폰 대화의 기본 API·프리셋 (대화에 따로 고르지 않았을 때. 비우면 앱 기본값) */
 export type PhoneSetting_Serialize = {
 	apiProfileId: string | null,
+	/**  폰 대화의 기본 모델 (비우면 그 API의 기본 모델. ADR-020). API를 정했을 때만 쓴다 */
+	model: string,
 	presetId: string | null,
 };
 
@@ -4550,12 +4562,16 @@ export type SummarySetting = SummarySetting_Serialize | SummarySetting_Deseriali
 export type SummarySetting_Deserialize = {
 	/**  요약에 쓸 API 프로필 (비우면 그 대화가 쓰는 API) */
 	apiProfileId?: string | null,
+	/**  요약에 쓸 모델 (비우면 그 API의 기본 모델. 요약 API를 따로 정했을 때만 쓴다, ADR-020) */
+	model?: string,
 };
 
 /**  대화 요약 설정. 켜짐/꺼짐은 코어 플러그인 `summary`(기본 꺼짐, 켜는 것이 동의) */
 export type SummarySetting_Serialize = {
 	/**  요약에 쓸 API 프로필 (비우면 그 대화가 쓰는 API) */
 	apiProfileId: string | null,
+	/**  요약에 쓸 모델 (비우면 그 API의 기본 모델. 요약 API를 따로 정했을 때만 쓴다, ADR-020) */
+	model: string,
 };
 
 /**  응답 meta.info.summary와 컨텍스트 탭: 이 응답을 만들 때 쓴 요약 */
@@ -5152,6 +5168,8 @@ export type TranslateSetting = TranslateSetting_Serialize | TranslateSetting_Des
 export type TranslateSetting_Deserialize = {
 	/**  번역에 쓸 API 프로필 (비우면 앱에서 고른 API) */
 	apiProfileId?: string | null,
+	/**  번역에 쓸 모델 (비우면 그 API의 기본 모델. ADR-020) */
+	model?: string,
 	/**  AI 답변을 이 언어로 (예: "한국어") */
 	targetLang?: string,
 	/**  내 입력을 이 언어로 (예: "English") */
@@ -5163,6 +5181,8 @@ export type TranslateSetting_Deserialize = {
 export type TranslateSetting_Serialize = {
 	/**  번역에 쓸 API 프로필 (비우면 앱에서 고른 API) */
 	apiProfileId: string | null,
+	/**  번역에 쓸 모델 (비우면 그 API의 기본 모델. ADR-020) */
+	model: string,
 	/**  AI 답변을 이 언어로 (예: "한국어") */
 	targetLang: string,
 	/**  내 입력을 이 언어로 (예: "English") */

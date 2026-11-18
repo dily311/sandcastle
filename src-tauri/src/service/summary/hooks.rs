@@ -21,12 +21,24 @@ pub async fn limit_of(db: &SqlitePool, preset_id: &str) -> usize {
     loaded.as_ref().and_then(|p| context_limit_from(&p.preset)).unwrap_or(DEFAULT_CONTEXT_LIMIT) as usize
 }
 
-/// 요약에 쓸 API: 플러그인 설정의 것, 없으면 이 대화가 쓴 것
-pub fn profile_for(app: &AppHandle, fallback: &str) -> String {
-    app.try_state::<SettingsState<PluginSetting>>()
-        .and_then(|s| s.0.lock().ok().and_then(|p| p.summary.api_profile_id.clone()))
+/// 요약에 쓸 (API, 모델): 플러그인 설정에 API를 따로 정했으면 그 API와 요약 모델(비우면 그 API의 기본 모델),
+/// 아니면 이 대화가 쓴 API와 이 대화에서 고른 모델 (ADR-020)
+pub fn route_for(app: &AppHandle, conv: &Conversation, fallback: &str) -> (String, Option<String>) {
+    let own = app
+        .try_state::<SettingsState<PluginSetting>>()
+        .and_then(|s| s.0.lock().ok().map(|p| p.summary.clone()));
+    if let Some(s) = own {
+        if let Some(id) = s.api_profile_id.filter(|s| !s.is_empty()) {
+            return (id, Some(s.model.trim().to_string()).filter(|m| !m.is_empty()));
+        }
+    }
+    let model = conv
+        .api_profile_id
+        .as_deref()
         .filter(|s| !s.is_empty())
-        .unwrap_or_else(|| fallback.to_string())
+        .and(conv.model.clone())
+        .filter(|m| !m.trim().is_empty());
+    (fallback.to_string(), model)
 }
 
 /// 응답이 저장된 뒤 부른다 (스트리밍이 끝나고 화면에 돌려준 다음이라 보내기를 늦추지 않음). 쌓인 만큼이 안 되었으면 아무 일도 없다.
@@ -35,7 +47,8 @@ pub fn after_response(app: &AppHandle, conv: &Conversation, api_profile_id: &str
     if !plugins::is_enabled(app, plugins::id::SUMMARY) || disabled_for(conv.meta.as_ref()) || api_profile_id.is_empty() {
         return;
     }
-    let (app, conv_id, profile, preset) = (app.clone(), conv.id.clone(), profile_for(app, api_profile_id), preset_id.to_string());
+    let (profile, model) = route_for(app, conv, api_profile_id);
+    let (app, conv_id, preset) = (app.clone(), conv.id.clone(), preset_id.to_string());
     tauri::async_runtime::spawn(async move {
         let state = app.state::<AppState>();
         let ai = app.state::<Arc<AiService>>();
@@ -47,6 +60,7 @@ pub fn after_response(app: &AppHandle, conv: &Conversation, api_profile_id: &str
             tasks: &tasks,
             conversation_id: &conv_id,
             profile_id: &profile,
+            model: model.as_deref(),
             limit_tokens: limit,
             guards: &GLOBAL,
         };

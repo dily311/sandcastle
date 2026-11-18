@@ -82,6 +82,7 @@ fn ctx<'a>(e: &'a Env, conv: &'a str, limit: usize) -> RunCtx<'a> {
         tasks: &e.tasks,
         conversation_id: conv,
         profile_id: &e.profile_id,
+        model: None,
         limit_tokens: limit,
         guards: &e.guards,
     }

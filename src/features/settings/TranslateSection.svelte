@@ -1,4 +1,6 @@
 <script lang="ts">
+	import ModelPicker from "$features/settings/ModelPicker.svelte";
+	import { library } from "$features/character/library.svelte";
 	import { onMount } from "svelte";
 	import { Input, Select, Switch } from "$shared/ui";
 	import Section from "./Section.svelte";
@@ -17,6 +19,11 @@
 			<Row label="번역에 쓸 API" desc="싸고 빠른 모델이면 충분">
 				<Select value={cur.translate.apiProfileId ?? ""} options={chatApiOptions()} onchange={(e) => save("translate", { apiProfileId: orNull(e.currentTarget.value) })} />
 			</Row>
+			{#if cur.translate.apiProfileId}
+				<Row label="번역 모델" desc="비우면 그 API의 기본 모델">
+					<ModelPicker profile={library.apis.find((a) => a.id === cur.translate.apiProfileId)} value={cur.translate.model || null} onchange={(m) => save("translate", { model: m ?? "" })} label="번역 모델" />
+				</Row>
+			{/if}
 			<Row label="AI 답변을 이 언어로">
 				<Input value={cur.translate.targetLang} onchange={(e) => save("translate", { targetLang: e.currentTarget.value.trim() || "한국어" })} />
 			</Row>
