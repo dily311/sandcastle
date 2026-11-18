@@ -1,0 +1,39 @@
+{
+  "asOf": "2026-11-19",
+  "note": "앱의 추정 금액 계산에만 쓰는 기본 단가(달러, 100만 토큰당). 사용자가 단가표에 적은 값이 항상 먼저다. id는 소문자이고 점·하이픈은 같게 본다. from은 그 날부터 적용(가격 인상 예고), long은 한 요청의 입력이 above 토큰을 넘을 때의 단가. 시간대별 요금이 있는 DeepSeek은 혼잡 시간(비싼 쪽)을 쓴다. 캐시 입력 단가는 따로 두지 않는다(캐시를 구분해 기록하지 않아 조금 많게 나옴). 2026-11-19 사용자가 정리해 준 가격표 기준이며, 모델 id는 표시 이름에서 옮긴 것이라 실제 API id와 다르면 단가 없음으로 보인다.",
+  "models": [
+    { "id": "claude-fable-5-1", "input": 10, "output": 50 },
+    { "id": "claude-opus-5-5", "input": 4, "output": 20 },
+    { "id": "claude-opus-5", "input": 5, "output": 25 },
+    { "id": "claude-opus-4-8", "input": 5, "output": 25 },
+    { "id": "claude-opus-4-7", "input": 5, "output": 25 },
+    { "id": "claude-sonnet-5-5", "input": 2, "output": 10 },
+    { "id": "claude-sonnet-5", "input": 2, "output": 10 },
+    { "id": "claude-sonnet-4-6", "input": 3, "output": 15 },
+    { "id": "claude-haiku-5-5", "input": 0.1, "output": 0.5, "long": { "above": 100000, "input": 0.5, "output": 2.5 } },
+    { "id": "claude-haiku-4-5", "input": 1, "output": 5 },
+
+    { "id": "gpt-6-2-astra", "input": 8, "output": 40 },
+    { "id": "gpt-6-2-sol", "input": 2, "output": 10 },
+    { "id": "gpt-6-1-terra", "input": 1, "output": 5 },
+    { "id": "gpt-6-luna", "input": 0.1, "output": 0.5 },
+    { "id": "gpt-4o", "input": 2.5, "output": 10 },
+    { "id": "gpt-4o-mini", "input": 0.15, "output": 0.6 },
+    { "id": "gpt-4.1", "input": 2, "output": 8 },
+    { "id": "gpt-4.1-mini", "input": 0.4, "output": 1.6 },
+    { "id": "gpt-4.1-nano", "input": 0.1, "output": 0.4 },
+    { "id": "text-embedding-3-small", "input": 0.02, "output": 0 },
+    { "id": "text-embedding-3-large", "input": 0.13, "output": 0 },
+
+    { "id": "gemini-4-argon", "input": 2, "output": 10 },
+    { "id": "gemini-4-argon", "input": 4, "output": 20, "from": "2026-12-01" },
+    { "id": "gemini-3-8-flash", "input": 0.75, "output": 3.75 },
+    { "id": "gemini-3-8-flash", "input": 1.5, "output": 7.5, "from": "2027-01-01" },
+    { "id": "gemini-2.5-pro", "input": 1.25, "output": 10, "long": { "above": 200000, "input": 2.5, "output": 15 } },
+    { "id": "gemini-2.5-flash", "input": 0.3, "output": 2.5 },
+    { "id": "gemini-2.5-flash-lite", "input": 0.1, "output": 0.4 },
+
+    { "id": "deepseek-v4-1-flash", "input": 0.3, "output": 1.2 },
+    { "id": "deepseek-v4-pro", "input": 1.32, "output": 3.96 }
+  ]
+}

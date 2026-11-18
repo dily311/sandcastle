@@ -125,6 +125,14 @@ pub async fn get_models(ai: State<'_, Arc<AiService>>, profile_id: String) -> Re
     ai.list_models(&profile_id).await
 }
 
+/// 공급자 계정의 잔여 (NovelAI·ElevenLabs. 요금 없음, 사용자가 누를 때만)
+#[tauri::command]
+#[specta::specta]
+pub async fn get_provider_quota(ai: State<'_, Arc<AiService>>, profile_id: String) -> Result<Vec<crate::service::plugins::QuotaLine>> {
+    let profile = ai.load_profile(&profile_id).await?;
+    crate::service::plugins::provider_quota(&ai, &profile).await
+}
+
 /// 연결 확인: 짧은 메시지 하나를 보내고 받은 답을 돌려준다 (저장하지 않음)
 #[tauri::command]
 #[specta::specta]

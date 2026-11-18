@@ -136,24 +136,19 @@ pub async fn list_budget_status(state: State<'_, crate::state::AppState>) -> Res
     Ok(crate::service::budget::overview(&state.db).await?)
 }
 
-/// 한도 저장. 칸을 모두 비우면 한도를 지운다
+/// 이 모델의 단가 (사용자 단가표 → 앱 기본 단가). 없으면 null — 한도를 걸어도 금액을 셀 수 없다
+#[tauri::command]
+#[specta::specta]
+pub async fn get_model_price(state: State<'_, crate::state::AppState>, model: String) -> Result<Option<crate::service::prices::ModelPriceInfo>> {
+    Ok(crate::service::prices::info(&state.db, &model).await)
+}
+
+/// 한도 저장. 금액을 비우면 한도를 지운다
 #[tauri::command]
 #[specta::specta]
 pub async fn upsert_budget_limit(state: State<'_, crate::state::AppState>, limit: crate::db::budget::BudgetLimit) -> Result<()> {
     use crate::db::budget;
-    if limit.is_empty()
-        || [
-            limit.daily_tokens,
-            limit.monthly_tokens,
-            limit.daily_characters,
-            limit.monthly_characters,
-            limit.daily_images,
-            limit.monthly_images,
-        ]
-        .iter()
-        .flatten()
-        .all(|n| *n <= 0)
-    {
+    if limit.is_empty() {
         return Ok(budget::delete_budget_limit(&state.db, &limit.api_profile_id).await?);
     }
     Ok(budget::upsert_budget_limit(&state.db, &limit).await?)

@@ -128,8 +128,12 @@ export const commands = {
 	compactUsage: (options?: InvokeOptions) => __TAURI_INVOKE<CompactResult>("compact_usage", undefined, options),
 	/**  한도가 있는 프로필과 지금 사용량 (한도 막대) */
 	listBudgetStatus: (options?: InvokeOptions) => __TAURI_INVOKE<BudgetOverview_Serialize[]>("list_budget_status", undefined, options),
-	/**  한도 저장. 칸을 모두 비우면 한도를 지운다 */
+	/**  한도 저장. 금액을 비우면 한도를 지운다 */
 	upsertBudgetLimit: (limit: BudgetLimit_Deserialize, options?: InvokeOptions) => __TAURI_INVOKE<null>("upsert_budget_limit", { limit }, options),
+	/**  공급자 계정의 잔여 (NovelAI·ElevenLabs. 요금 없음, 사용자가 누를 때만) */
+	getProviderQuota: (profileId: string, options?: InvokeOptions) => __TAURI_INVOKE<QuotaLine[]>("get_provider_quota", { profileId }, options),
+	/**  이 모델의 단가 (사용자 단가표 → 앱 기본 단가). 없으면 null — 한도를 걸어도 금액을 셀 수 없다 */
+	getModelPrice: (model: string, options?: InvokeOptions) => __TAURI_INVOKE<ModelPriceInfo | null>("get_model_price", { model }, options),
 	/**  새로 80%에 닿은 한도 (작업이 끝날 때 프론트가 물어 앱 안 알림으로) */
 	takeBudgetWarnings: (options?: InvokeOptions) => __TAURI_INVOKE<BudgetWarning_Serialize[]>("take_budget_warnings", undefined, options),
 	listModelPrices: (options?: InvokeOptions) => __TAURI_INVOKE<ModelPrice_Serialize[]>("list_model_prices", undefined, options),
@@ -879,36 +883,30 @@ export type BudgetLimit = BudgetLimit_Serialize | BudgetLimit_Deserialize;
 /**  한 프로필의 한도. None = 한도 없음 */
 export type BudgetLimit_Deserialize = {
 	apiProfileId: string,
-	dailyTokens?: number | null,
-	monthlyTokens?: number | null,
-	dailyCharacters?: number | null,
-	monthlyCharacters?: number | null,
-	dailyImages?: number | null,
-	monthlyImages?: number | null,
+	/**  한 달 금액 한도 (달러) */
+	monthlyUsd?: number | null,
+	/**  예전 "한 달 토큰" 한도 (읽기 전용 안내용. 새 한도를 저장하면 지워진다) */
+	legacyMonthlyTokens?: number | null,
 };
 
 /**  한 프로필의 한도. None = 한도 없음 */
 export type BudgetLimit_Serialize = {
 	apiProfileId: string,
-	dailyTokens: number | null,
-	monthlyTokens: number | null,
-	dailyCharacters: number | null,
-	monthlyCharacters: number | null,
-	dailyImages: number | null,
-	monthlyImages: number | null,
+	/**  한 달 금액 한도 (달러) */
+	monthlyUsd: number | null,
+	/**  예전 "한 달 토큰" 한도 (읽기 전용 안내용. 새 한도를 저장하면 지워진다) */
+	legacyMonthlyTokens: number | null,
 };
 
-/**  한도가 걸린 칸 하나 (한도 없는 칸은 만들지 않는다) */
+/**  한도가 걸린 칸 (한도 없으면 만들지 않는다) */
 export type BudgetMeter = {
-	metric: BudgetMetric,
-	period: BudgetPeriod,
-	used: number,
-	limit: number,
+	usedUsd: number | null,
+	limitUsd: number | null,
 	/**  0 이상 (넘었으면 0) */
-	remaining: number,
+	remainingUsd: number | null,
+	/**  이번 달, 단가를 몰라 금액에 못 넣은 글 호출 수 (0이면 빠짐없이 센 것) */
+	unpricedCalls: number,
 };
-
-export type BudgetMetric = "tokens" | "characters" | "images";
 
 /**  한도가 있는 프로필 하나 (설정 > 실행 기록의 한도 막대) */
 export type BudgetOverview = BudgetOverview_Serialize | BudgetOverview_Deserialize;
@@ -916,16 +914,16 @@ export type BudgetOverview = BudgetOverview_Serialize | BudgetOverview_Deseriali
 /**  한도가 있는 프로필 하나 (설정 > 실행 기록의 한도 막대) */
 export type BudgetOverview_Deserialize = {
 	limit: BudgetLimit_Deserialize,
-	meters: BudgetMeter[],
+	/**  이번 달 사용 금액 (금액 한도가 없고 예전 토큰 한도만 남은 프로필은 None) */
+	meter?: BudgetMeter | null,
 };
 
 /**  한도가 있는 프로필 하나 (설정 > 실행 기록의 한도 막대) */
 export type BudgetOverview_Serialize = {
 	limit: BudgetLimit_Serialize,
-	meters: BudgetMeter[],
+	/**  이번 달 사용 금액 (금액 한도가 없고 예전 토큰 한도만 남은 프로필은 None) */
+	meter: BudgetMeter | null,
 };
-
-export type BudgetPeriod = "day" | "month";
 
 export type BudgetWarning = BudgetWarning_Serialize | BudgetWarning_Deserialize;
 
@@ -3100,6 +3098,15 @@ export type MigrationInfo = {
 
 export type ModelPrice = ModelPrice_Serialize | ModelPrice_Deserialize;
 
+/**  화면에 보여줄 단가 (슬라이더 아래 환산 문구) */
+export type ModelPriceInfo = {
+	/**  100만 토큰당 달러 */
+	input: number | null,
+	output: number | null,
+	/**  앱의 기본 단가를 썼으면 true (사용자가 적은 값이면 false) */
+	builtin: boolean,
+};
+
 export type ModelPrice_Deserialize = {
 	model: string,
 	currency: string,
@@ -4071,6 +4078,12 @@ export type ProposalKind = "character" | "persona" |
 "lorebook" | "lorebook_entry" | 
 /**  대화의 메시지 글 */
 "message";
+
+/**  공급자 계정의 잔여 (구독형은 우리 앱이 막지 않고 보여주기만 한다. 요금 없음, 누를 때만 읽음) */
+export type QuotaLine = {
+	label: string,
+	value: string,
+};
 
 /**  응답 meta.info.memoryRecall에 남기는 기록 (chunk 글은 저장하지 않는다) */
 export type RecallMeta = RecallMeta_Serialize | RecallMeta_Deserialize;

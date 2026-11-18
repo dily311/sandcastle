@@ -630,18 +630,98 @@ fn save_image(png: Vec<u8>, setting: &ImageGenSetting, prompt: &str, out_dir: &P
 
 /// NovelAI 연결 확인 (요금 없음): 계정 구독 정보를 읽는다. 이미지 주소와 다른 api.novelai.net을 쓴다
 pub async fn novelai_check(ai: &AiService, profile: &ApiProfiles) -> Result<String> {
+    let v = novelai_subscription(ai, profile).await?;
+    Ok(format!("{} · Anlas {}", novelai_tier(&v), novelai_anlas(&v)))
+}
+
+async fn novelai_subscription(ai: &AiService, profile: &ApiProfiles) -> Result<Value> {
     let key = ai.credential(profile)?;
     let res = ai.http().get("https://api.novelai.net/user/subscription").bearer_auth(key).send().await?;
-    let v: Value = serde_json::from_slice(&ok_bytes(res).await?).unwrap_or(Value::Null);
-    let tier = match v["tier"].as_i64() {
+    Ok(serde_json::from_slice(&ok_bytes(res).await?).unwrap_or(Value::Null))
+}
+
+fn novelai_tier(v: &Value) -> &'static str {
+    match v["tier"].as_i64() {
         Some(0) => "무료",
         Some(1) => "Tablet",
         Some(2) => "Scroll",
         Some(3) => "Opus",
         _ => "구독 정보 없음",
-    };
-    let anlas = v["trainingStepsLeft"]["fixedTrainingStepsLeft"].as_i64().unwrap_or(0) + v["trainingStepsLeft"]["purchasedTrainingSteps"].as_i64().unwrap_or(0);
-    Ok(format!("{tier} · Anlas {anlas}"))
+    }
+}
+
+fn novelai_anlas(v: &Value) -> i64 {
+    v["trainingStepsLeft"]["fixedTrainingStepsLeft"].as_i64().unwrap_or(0) + v["trainingStepsLeft"]["purchasedTrainingSteps"].as_i64().unwrap_or(0)
+}
+
+/// 공급자 계정의 잔여 (구독형은 우리 앱이 막지 않고 보여주기만 한다. 요금 없음, 누를 때만 읽음)
+#[derive(Debug, Clone, serde::Serialize, specta::Type)]
+#[serde(rename_all = "camelCase")]
+pub struct QuotaLine {
+    pub label: String,
+    pub value: String,
+}
+
+fn line(label: &str, value: impl Into<String>) -> QuotaLine {
+    QuotaLine {
+        label: label.into(),
+        value: value.into(),
+    }
+}
+
+/// NovelAI·ElevenLabs의 잔여. 다른 공급자는 빈 목록
+pub async fn provider_quota(ai: &AiService, profile: &ApiProfiles) -> Result<Vec<QuotaLine>> {
+    match profile.format_type.as_str() {
+        "novelai" => {
+            let v = novelai_subscription(ai, profile).await?;
+            let mut out = vec![line("구독", novelai_tier(&v)), line("Anlas", novelai_anlas(&v).to_string())];
+            if let Some(unlimited) = v["perks"]["unlimitedImageGeneration"].as_bool() {
+                out.push(line("무제한 그림", if unlimited { "가능" } else { "아님" }));
+            }
+            // 공식 문서가 없어 응답에서 알아볼 수 있는 값(숫자·참/거짓)을 그대로 모아 보여준다 (남은 한도 항목을 찾는 데 씀)
+            if let Some(perks) = v["perks"].as_object() {
+                let rest: Vec<String> = perks
+                    .iter()
+                    .filter(|(k, _)| k.as_str() != "unlimitedImageGeneration")
+                    .filter_map(|(k, x)| match x {
+                        Value::Bool(b) => Some(format!("{k}={b}")),
+                        Value::Number(n) => Some(format!("{k}={n}")),
+                        _ => None,
+                    })
+                    .collect();
+                if !rest.is_empty() {
+                    out.push(line("기타", rest.join(" · ")));
+                }
+            }
+            Ok(out)
+        }
+        "elevenlabs" => {
+            let key = ai.credential(profile)?;
+            let res = ai
+                .http()
+                .get(format!("{}/user/subscription", base_url_or(profile, ELEVENLABS_BASE)))
+                .header("xi-api-key", key)
+                .send()
+                .await?;
+            let v: Value = serde_json::from_slice(&ok_bytes(res).await?).unwrap_or(Value::Null);
+            let (used, limit) = (v["character_count"].as_i64().unwrap_or(0), v["character_limit"].as_i64().unwrap_or(0));
+            let mut out = vec![
+                line("남은 크레딧", (limit - used).max(0).to_string()),
+                line("사용", format!("{used} / {limit}")),
+            ];
+            if let Some(tier) = v["tier"].as_str() {
+                out.push(line("요금제", tier));
+            }
+            if let Some(at) = v["next_character_count_reset_unix"]
+                .as_i64()
+                .and_then(|s| chrono::DateTime::from_timestamp(s, 0))
+            {
+                out.push(line("초기화", at.with_timezone(&chrono::Local).format("%Y-%m-%d").to_string()));
+            }
+            Ok(out)
+        }
+        _ => Ok(vec![]),
+    }
 }
 
 /// 갤러리: out_dir의 그림들 (최신 순). 정보 파일이 없는 그림도 보인다

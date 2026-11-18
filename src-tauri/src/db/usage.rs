@@ -41,6 +41,10 @@ pub struct UsageEntry {
     pub ok: bool,
     pub error: Option<String>,
     pub duration_ms: u64,
+    /// 그때의 단가로 계산한 금액(달러). 글 호출(채팅·임베딩)만, 단가를 모르면 None
+    pub cost_usd: Option<f64>,
+    /// 단가를 몰라 금액을 계산하지 못한 글 호출
+    pub unpriced: bool,
 }
 
 impl UsageEntry {
@@ -57,6 +61,8 @@ impl UsageEntry {
             ok: true,
             error: None,
             duration_ms: 0,
+            cost_usd: None,
+            unpriced: false,
         }
     }
 }
@@ -71,8 +77,8 @@ where
 {
     let task = current_task();
     sqlx::query(
-        "INSERT INTO usage_log (task_id, feature, api_profile_id, model, kind, input_tokens, output_tokens, characters, images, estimated, ok, error, duration_ms, created_at)
-         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+        "INSERT INTO usage_log (task_id, feature, api_profile_id, model, kind, input_tokens, output_tokens, characters, images, estimated, ok, error, duration_ms, created_at, cost_usd, unpriced)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
     )
     .bind(task.as_ref().map(|t| t.task_id.clone()))
     .bind(task.and_then(|t| t.feature))
@@ -88,6 +94,8 @@ where
     .bind(&entry.error)
     .bind(to_i64(entry.duration_ms))
     .bind(chrono::Utc::now().timestamp_millis())
+    .bind(entry.cost_usd)
+    .bind(entry.unpriced)
     .execute(executor)
     .await?;
     Ok(())
@@ -133,10 +141,10 @@ where
     sqlx::query_as::<_, UsageSummary>(
         "WITH u AS (
              SELECT api_profile_id, model, kind, 1 AS calls, CASE WHEN ok = 0 THEN 1 ELSE 0 END AS failed,
-                    input_tokens, output_tokens, characters, images, estimated AS estimated_calls
+                    input_tokens, output_tokens, characters, images, estimated AS estimated_calls, cost_usd
              FROM usage_log WHERE created_at >= ?1
              UNION ALL
-             SELECT api_profile_id, model, kind, calls, failed, input_tokens, output_tokens, characters, images, estimated_calls
+             SELECT api_profile_id, model, kind, calls, failed, input_tokens, output_tokens, characters, images, estimated_calls, cost_usd
              FROM usage_daily WHERE day_start >= ?1
          )
          SELECT u.api_profile_id, p.name AS profile_name, u.kind,
@@ -148,13 +156,15 @@ where
                 SUM(u.images) AS images,
                 SUM(u.estimated_calls) AS estimated_calls,
                 u.model,
-                CASE WHEN mp.model IS NULL THEN NULL ELSE
+                -- 호출할 때 계산해 둔 금액(달러)이 있으면 그것, 없으면(음성·그림·옛 기록) 단가표로 계산
+                CASE WHEN SUM(u.cost_usd) IS NOT NULL THEN SUM(u.cost_usd)
+                     WHEN mp.model IS NULL THEN NULL ELSE
                     SUM(u.input_tokens) * COALESCE(mp.input_per_mtok, 0) / 1000000.0
                   + SUM(u.output_tokens) * COALESCE(mp.output_per_mtok, 0) / 1000000.0
                   + SUM(u.characters) * COALESCE(mp.per_1k_chars, 0) / 1000.0
                   + SUM(u.images) * COALESCE(mp.per_image, 0)
                 END AS estimated_cost,
-                mp.currency
+                CASE WHEN SUM(u.cost_usd) IS NOT NULL THEN '$' ELSE mp.currency END AS currency
          FROM u
          LEFT JOIN api_profiles p ON p.id = u.api_profile_id
          LEFT JOIN model_prices mp ON mp.model = u.model
@@ -284,11 +294,24 @@ where
     Ok(())
 }
 
-/// 사용량 기록 비우기 (작업 기록은 남긴다). 정리된 일별 합계도 지운다
+/// 사용량 기록 비우기 (작업 기록은 남긴다). 정리된 일별 합계도 지운다.
+/// 금액 한도가 걸린 프로필이 있으면 이번 달 글 호출 기록은 남긴다 — 지우면 한도가 0으로 돌아가 막힌 호출이 풀리기 때문
 pub async fn clear(pool: &sqlx::SqlitePool) -> Result<u64, sqlx::Error> {
+    let month_start = super::budget::month_start(&chrono::Local::now());
     let mut tx = pool.begin().await?;
-    let n = sqlx::query("DELETE FROM usage_log").execute(&mut *tx).await?.rows_affected();
-    sqlx::query("DELETE FROM usage_daily").execute(&mut *tx).await?;
+    let n = sqlx::query(
+        "DELETE FROM usage_log WHERE NOT (created_at >= ?1 AND kind IN ('chat', 'embedding') AND EXISTS (SELECT 1 FROM budget_limits WHERE monthly_usd IS NOT NULL))",
+    )
+    .bind(month_start)
+        .execute(&mut *tx)
+        .await?
+        .rows_affected();
+    sqlx::query(
+        "DELETE FROM usage_daily WHERE NOT (day_start >= ?1 AND kind IN ('chat', 'embedding') AND EXISTS (SELECT 1 FROM budget_limits WHERE monthly_usd IS NOT NULL))",
+    )
+    .bind(month_start)
+        .execute(&mut *tx)
+        .await?;
     tx.commit().await?;
     Ok(n)
 }
@@ -320,12 +343,12 @@ pub fn retention_cutoff<Tz: chrono::TimeZone>(now: &chrono::DateTime<Tz>, days: 
 pub async fn compact_before(pool: &sqlx::SqlitePool, cutoff: i64) -> Result<CompactResult, sqlx::Error> {
     let mut tx = pool.begin().await?;
     sqlx::query(
-        "INSERT INTO usage_daily (day, day_start, api_profile_id, model, kind, feature, calls, failed, input_tokens, output_tokens, characters, images, estimated_calls)
+        "INSERT INTO usage_daily (day, day_start, api_profile_id, model, kind, feature, calls, failed, input_tokens, output_tokens, characters, images, estimated_calls, cost_usd, unpriced_calls)
          SELECT date(created_at / 1000, 'unixepoch', 'localtime') AS d,
                 CAST(strftime('%s', date(created_at / 1000, 'unixepoch', 'localtime'), 'utc') AS INTEGER) * 1000,
                 api_profile_id, model, kind, feature,
                 COUNT(*), SUM(CASE WHEN ok = 0 THEN 1 ELSE 0 END),
-                SUM(input_tokens), SUM(output_tokens), SUM(characters), SUM(images), SUM(estimated)
+                SUM(input_tokens), SUM(output_tokens), SUM(characters), SUM(images), SUM(estimated), SUM(cost_usd), SUM(unpriced)
          FROM usage_log WHERE created_at < ?
          GROUP BY d, api_profile_id, model, kind, feature",
     )
@@ -425,8 +448,8 @@ mod tests {
         }
         let before = summary(&db, 0).await.unwrap();
         let month_start = crate::db::budget::period_starts(&now).1;
-        let all_before = crate::db::budget::usage_since(&db, "p1", 0).await.unwrap();
-        let month_before = crate::db::budget::usage_since(&db, "p1", month_start).await.unwrap();
+        let all_before = crate::db::budget::cost_since(&db, "p1", 0).await.unwrap();
+        let month_before = crate::db::budget::cost_since(&db, "p1", month_start).await.unwrap();
 
         let r = compact_before(&db, retention_cutoff(&now, 30)).await.unwrap();
         assert_eq!(r, CompactResult { usage_rows: 3, tasks: 1 });
@@ -439,8 +462,8 @@ mod tests {
         let after = summary(&db, 0).await.unwrap();
         assert_eq!(pick(&before), pick(&after));
         assert_eq!(pick(&after), vec![(4, 1, 187, 4, 4)]);
-        assert_eq!(crate::db::budget::usage_since(&db, "p1", 0).await.unwrap(), all_before);
-        assert_eq!(crate::db::budget::usage_since(&db, "p1", month_start).await.unwrap(), month_before);
+        assert_eq!(crate::db::budget::cost_since(&db, "p1", 0).await.unwrap(), all_before);
+        assert_eq!(crate::db::budget::cost_since(&db, "p1", month_start).await.unwrap(), month_before);
         let left: i64 = sqlx::query_scalar("SELECT COUNT(*) FROM usage_log").fetch_one(&db).await.unwrap();
         assert_eq!(left, 1);
         let tasks: Vec<String> = sqlx::query_scalar("SELECT id FROM generation_tasks ORDER BY id").fetch_all(&db).await.unwrap();

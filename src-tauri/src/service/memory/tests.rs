@@ -632,12 +632,16 @@ async fn recall_is_blocked_by_the_budget_and_by_a_cancelled_chat_without_leaving
         &r.e.db,
         &crate::db::budget::BudgetLimit {
             api_profile_id: r.e.profile.id.clone(),
-            daily_tokens: Some(1),
+            monthly_usd: Some(0.01),
             ..Default::default()
         },
     )
     .await
     .unwrap();
+    let mut used = crate::db::usage::UsageEntry::new(crate::db::usage::UsageKind::Chat, &r.e.profile.id, "m");
+    used.input_tokens = 5;
+    used.cost_usd = Some(0.01);
+    crate::db::usage::record(&r.e.db, used).await;
     let before = r.e.srv.requests().len();
     let out = do_recall(&r, &r.input, &HashSet::new(), None, &CancellationToken::new()).await;
     assert_eq!(

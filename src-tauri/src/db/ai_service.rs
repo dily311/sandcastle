@@ -74,23 +74,20 @@ where
     E: Executor<'e, Database = Sqlite>,
 {
     let now = chrono::Utc::now().timestamp_millis();
-    sqlx::query(
-        r#"
-        UPDATE api_profiles SET (name, provider,format_type, base_url, model,  updated_at) 
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
-        WHERE id=?
-
-    "#,
-    )
-    .bind(&input.name)
-    .bind(&input.provider)
-    .bind(&input.format_type)
-    .bind(&input.base_url)
-    .bind(&input.model)
-    .bind(now)
-    .bind(id)
-    .execute(executor)
-    .await?;
+    let done = sqlx::query("UPDATE api_profiles SET name = ?, provider = ?, format_type = ?, base_url = ?, model = ?, updated_at = ? WHERE id = ?")
+        .bind(&input.name)
+        .bind(&input.provider)
+        .bind(&input.format_type)
+        .bind(&input.base_url)
+        .bind(&input.model)
+        .bind(now)
+        .bind(id)
+        .execute(executor)
+        .await?;
+    // 없는 프로필을 고치려 하면 조용히 넘어가지 않는다
+    if done.rows_affected() == 0 {
+        return Err(Error::RowNotFound);
+    }
 
     Ok(())
 }
@@ -319,4 +316,45 @@ pub async fn replace_prompt_blocks(conn: &mut sqlx::SqliteConnection, preset_id:
         upsert_prompt_block(&mut *conn, preset_id, b).await?;
     }
     Ok(())
+}
+
+#[cfg(test)]
+mod profile_tests {
+    use super::*;
+
+    async fn pool() -> sqlx::SqlitePool {
+        let pool = sqlx::sqlite::SqlitePoolOptions::new()
+            .max_connections(1)
+            .connect("sqlite::memory:")
+            .await
+            .unwrap();
+        sqlx::migrate!("src/db/migrations").run(&pool).await.unwrap();
+        pool
+    }
+
+    fn input(name: &str, model: &str) -> ApiProfilesInput {
+        ApiProfilesInput {
+            name: name.into(),
+            provider: "openai".into(),
+            format_type: "openai".into(),
+            base_url: "https://example.com/v1".into(),
+            model: model.into(),
+        }
+    }
+
+    // 프로필을 고치는 SQL이 문법 오류였던 적이 있다: 모델만 바꾸는 편집이 저장되어야 한다
+    #[tokio::test]
+    async fn editing_a_profile_keeps_its_id_and_changes_the_model() {
+        let db = pool().await;
+        let made = create_api_profile(&db, input("내 API", "gpt-4o")).await.unwrap();
+        update_api_profile(&db, &made.id, input("내 API", "gpt-4.1")).await.unwrap();
+        let got = get_api_profile(&db, &made.id).await.unwrap();
+        assert_eq!(
+            (got.id.as_str(), got.name.as_str(), got.model.as_str()),
+            (made.id.as_str(), "내 API", "gpt-4.1")
+        );
+        assert!(got.updated_at >= made.updated_at);
+        // 없는 프로필은 조용히 넘어가지 않는다
+        assert!(update_api_profile(&db, "nope", input("x", "y")).await.is_err());
+    }
 }

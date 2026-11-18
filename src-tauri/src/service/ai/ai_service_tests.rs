@@ -179,13 +179,13 @@ async fn embeddings_are_refused_before_any_request_when_they_cannot_work() {
 }
 
 #[tokio::test]
-async fn embeddings_count_against_the_token_budget() {
+async fn embeddings_count_against_the_monthly_budget() {
     let e = env("openai", "gpt-4o", "", vec![]).await;
     upsert_budget_limit(
         &e.db,
         &BudgetLimit {
             api_profile_id: e.profile_id.clone(),
-            daily_tokens: Some(5),
+            monthly_usd: Some(1.0),
             ..Default::default()
         },
     )
@@ -193,6 +193,7 @@ async fn embeddings_count_against_the_token_budget() {
     .unwrap();
     let mut used = UsageEntry::new(UsageKind::Chat, &e.profile_id, "gpt-4o");
     used.input_tokens = 5;
+    used.cost_usd = Some(1.0);
     record(&e.db, used).await;
     let task = CurrentTask {
         task_id: "t".into(),
@@ -203,7 +204,7 @@ async fn embeddings_count_against_the_token_budget() {
         .await
         .unwrap_err()
         .to_response();
-    assert_eq!(err.code, ErrorCode::BudgetExceeded, "임베딩은 토큰 한도에 같이 센다");
+    assert_eq!(err.code, ErrorCode::BudgetExceeded, "임베딩은 글 호출이라 같은 금액 한도에 센다");
     assert!(e.srv.requests().is_empty(), "한도를 넘으면 공급자를 부르지 않음");
 }
 

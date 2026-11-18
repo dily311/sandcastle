@@ -49,17 +49,15 @@ function budgetToast(message: string, canOverride: boolean) {
 }
 
 // 한도의 80%에 새로 닿으면 한 번 알림 (작업이 끝날 때 묻는다, 요금 없음). 몰려도 한 번만
-const METRIC: Record<string, string> = { tokens: "토큰", characters: "음성 글자", images: "그림" };
 let budgetTimer: ReturnType<typeof setTimeout> | undefined;
 function checkBudget() {
 	clearTimeout(budgetTimer);
 	budgetTimer = setTimeout(async () => {
 		const list = await call(commands.takeBudgetWarnings(), { source: "budget", silent: true }).catch(() => []);
 		for (const w of list) {
-			const m = w.meter;
-			const when = m.period === "day" ? "오늘" : "이번 달";
-			const p = Math.round((m.used / m.limit) * 100);
-			toasts.show({ tone: "warning", message: `${w.profileName ?? "API"} ${when} ${METRIC[m.metric] ?? m.metric} 한도의 ${p}%를 씀 (${m.used.toLocaleString()} / ${m.limit.toLocaleString()})`, detail: m.used >= m.limit ? "자동 실행은 이제 막힘" : undefined }, 8000);
+			const m = { usedUsd: w.meter.usedUsd ?? 0, limitUsd: w.meter.limitUsd ?? 0 };
+						const p = Math.round((m.usedUsd / m.limitUsd) * 100);
+			toasts.show({ tone: "warning", message: `${w.profileName ?? "API"} 이번 달 예산의 ${p}%를 씀 ($${m.usedUsd.toFixed(2)} / $${m.limitUsd.toFixed(2)})`, detail: m.usedUsd >= m.limitUsd ? "자동 실행은 이제 막힘" : undefined }, 8000);
 		}
 	}, 500);
 }
