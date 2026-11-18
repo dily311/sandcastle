@@ -8,6 +8,7 @@ import { BUILTIN_THEMES, builtinId, colorsToCss, withLegacy, type ThemeColors } 
 import { fileSrc } from "$shared/ipc/file";
 import { onEvent } from "$shared/ipc/events";
 import { gradientCss, gradientOf } from "$shared/ui/backgrounds";
+import { applyUserFont } from "$shared/ui/userFont";
 
 export type { CssSnippet };
 
@@ -22,6 +23,8 @@ const FALLBACK: ThemeSetting = {
 	backgroundImage: null,
 	backgrounds: [],
 	backgroundOpacity: 0.82,
+	fonts: [],
+	appFont: null,
 };
 
 /** 지금 적용할 테마 내용 */
@@ -111,6 +114,7 @@ class Theme {
 		root.style.setProperty("--accent", cur.colors[mode]["--accent"]?.trim() || accentValue(this.accentId, this.dark));
 		grayScale(this.setting.grayTone ?? DEFAULT_GRAY, this.dark).forEach((c, i) => root.style.setProperty(`--gray-${i + 1}`, c));
 		root.style.fontSize = `${this.setting.fontSize}px`;
+		applyUserFont(root, this.setting);
 		this.style("user-theme").textContent = [colorsToCss(cur.colors), cur.css].filter((s) => s.trim()).join("\n\n");
 		this.applyBackground();
 		this.style("user-snippets").textContent = this.snippets
@@ -153,6 +157,16 @@ class Theme {
 	async addBackgrounds(paths: string[], select = false) {
 		if (!paths.length) return;
 		this.setting = await call(commands.addBackgrounds(paths, select), { source: "theme" });
+		this.apply();
+	}
+	/** 글꼴 올리기: 앱 데이터에 복사. select면 마지막 것을 앱 글꼴로 */
+	async addFonts(paths: string[], select = false) {
+		if (!paths.length) return;
+		this.setting = await call(commands.addFonts(paths, select), { source: "theme" });
+		this.apply();
+	}
+	async removeFont(path: string) {
+		this.setting = await call(commands.removeFont(path), { source: "theme" });
 		this.apply();
 	}
 	async removeBackground(path: string) {

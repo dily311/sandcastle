@@ -5,6 +5,7 @@ import { commands } from "$ipc/bindings";
 import { onEvent } from "$shared/ipc/events";
 import { ACCENTS, DEFAULT_ACCENT, accentValue } from "$shared/ui/accents";
 import { DEFAULT_GRAY, grayScale } from "$shared/ui/grays";
+import { applyUserFont } from "$shared/ui/userFont";
 
 export const defaultThemeSetting: ThemeSetting = {
 	mode: "system",
@@ -17,6 +18,8 @@ export const defaultThemeSetting: ThemeSetting = {
 	backgroundImage: null,
 	backgrounds: [],
 	backgroundOpacity: 0.82,
+	fonts: [],
+	appFont: null,
 };
 
 class ThemeStore {
@@ -68,6 +71,7 @@ class ThemeStore {
 		root.dataset.theme = isDark ? "dark" : "light";
 		root.style.setProperty("font-size", `${theme.fontSize}px`);
 		root.style.setProperty("--accent", this.accentHex(isDark, theme.accentColor));
+		applyUserFont(root, theme);
 		grayScale(theme.grayTone ?? DEFAULT_GRAY, isDark).forEach((c, i) => root.style.setProperty(`--gray-${i + 1}`, c));
 	}
 

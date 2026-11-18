@@ -48,6 +48,8 @@ pub const SETTINGS_SCOPE: &[(&str, Scope)] = &[
     ("theme-setting/backgroundImage", Scope::SharedPath),
     ("theme-setting/backgrounds", Scope::SharedPath),
     ("theme-setting/backgroundOpacity", Scope::Shared),
+    ("theme-setting/fonts", Scope::SharedPath),
+    ("theme-setting/appFont", Scope::SharedPath),
     // ---- feature-setting: 기능 켜기는 기기마다 ----
     ("feature-setting", Scope::Device),
     // ---- plugin-setting ----

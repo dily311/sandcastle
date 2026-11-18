@@ -240,6 +240,8 @@ pub fn specta_builder() -> tauri_specta::Builder<tauri::Wry> {
         update_theme_setting,
         add_backgrounds,
         remove_background,
+        add_fonts,
+        remove_font,
         get_conv_settings,
         set_system_default_persona,
         // theme
@@ -528,6 +530,8 @@ pub fn specta_builder() -> tauri_specta::Builder<tauri::Wry> {
         update_theme_setting,
         add_backgrounds,
         remove_background,
+        add_fonts,
+        remove_font,
         get_conv_settings,
         set_system_default_persona,
         // theme

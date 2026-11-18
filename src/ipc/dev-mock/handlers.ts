@@ -61,6 +61,16 @@ const base: Record<string, Handler> = {
 		const cur = db.themeSetting as { backgrounds?: string[]; backgroundImage?: string | null };
 		return (db.themeSetting = { ...db.themeSetting, backgrounds: (cur.backgrounds ?? []).filter((p) => p !== path), backgroundImage: cur.backgroundImage === path ? null : (cur.backgroundImage ?? null) });
 	},
+	add_fonts: ({ paths, select }) => {
+		const cur = db.themeSetting as { fonts?: { path: string; name: string }[] };
+		const added = (paths as string[]).map((p) => ({ path: p, name: (p.split(/[\\/]/).pop() ?? "글꼴").replace(/\.[^.]+$/, "") }));
+		const list = [...(cur.fonts ?? []), ...added];
+		return (db.themeSetting = { ...db.themeSetting, fonts: list, ...(select ? { appFont: list.at(-1)?.path ?? null } : {}) });
+	},
+	remove_font: ({ path }) => {
+		const cur = db.themeSetting as { fonts?: { path: string; name: string }[]; appFont?: string | null };
+		return (db.themeSetting = { ...db.themeSetting, fonts: (cur.fonts ?? []).filter((f) => f.path !== path), appFont: cur.appFont === path ? null : (cur.appFont ?? null) });
+	},
 	get_feature_setting: () => db.feature,
 	list_core_plugins: () =>
 		(
