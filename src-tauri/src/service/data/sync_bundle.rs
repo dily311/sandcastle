@@ -41,7 +41,7 @@ pub const FORMAT_VERSION: u32 = 1;
 pub const EXTENSION: &str = "scsync";
 /// 동기화하는 파일 폴더 (ADR-008의 사용자 데이터 폴더. 휴지통 `trash/`는 기기마다라 뺀다.
 /// 커뮤니티 플러그인 `plugins/`도 뺀다 — 다른 기기에서 받은 코드가 저절로 생기지 않게, ADR-012)
-pub const SYNC_DIRS: [&str; 5] = ["characters", "games", "themes", "generated", "backgrounds"];
+pub const SYNC_DIRS: [&str; 6] = ["characters", "games", "themes", "generated", "backgrounds", "fonts"];
 /// 앱 데이터 경로 자리표시
 pub const DATA_MARK: &str = "$SANDCASTLE_DATA$";
 

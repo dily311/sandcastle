@@ -104,6 +104,8 @@
 
 	/* 위쪽 안전 영역 (상태 표시줄). Android는 WebView가 화면을 다 덮지 않으면 env()가 0이라 앱이 알려 준 값과 큰 쪽 (systemInsets.ts) */
 	--safe-top: max(env(safe-area-inset-top, 0px), var(--native-inset-top, 0px));
+	/* 아래쪽 안전 영역 (하단 탐색 막대). Android는 앱이 알려 준 값만 쓴다 — env()와 겹치면 두 번 비워져 아래에 빈 띠가 생김 (systemInsets.ts) */
+	--safe-bottom: var(--native-inset-bottom, env(safe-area-inset-bottom, 0px));
 
 	/* ---- 간격 (4px 단위) ---- */
 	--space-1: 4px;
@@ -116,7 +118,8 @@
 	--space-10: 40px;
 
 	/* ---- 글꼴 ---- */
-	--font-sans: "Pretendard", "Pretendard Variable", -apple-system, BlinkMacSystemFont, "Apple SD Gothic Neo",
+	/* --font-user: 사용자가 올린 글꼴 (shared/ui/userFont.ts가 고른 글꼴이 있을 때만 넣음) */
+	--font-sans: var(--font-user, "Pretendard"), "Pretendard", "Pretendard Variable", -apple-system, BlinkMacSystemFont, "Apple SD Gothic Neo",
 		"Malgun Gothic", "Segoe UI", system-ui, sans-serif;
 	--font-mono: "JetBrains Mono", "D2Coding", ui-monospace, "Cascadia Code", Consolas, monospace;
 
@@ -143,6 +146,10 @@
 	--control-lg: 42px;
 	/* 손가락으로 누르는 곳의 최소 크기 (보이는 크기는 그대로, 누르는 범위만 넓힘) */
 	--touch-target: 44px;
+
+	.mobile {
+		--titlebar-height: 52px;
+	}
 }
 
 :root[data-theme="dark"] {

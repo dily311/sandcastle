@@ -367,7 +367,7 @@
 	<div class="viewer" role="dialog" aria-modal="true" aria-label="그림 크게 보기">
 		<button class="scrim" aria-label="닫기" onclick={() => (viewing = null)}></button>
 		<div class="box">
-			<img src={fileSrc(v.path)} alt={v.prompt} />
+			<img src={fileSrc(v.path)} alt={v.prompt} data-no-zoom />
 			<div class="info">
 				<p class="vname">{title(v)}</p>
 				<div class="acts">
@@ -552,6 +552,8 @@
 		border-radius: var(--radius-lg);
 		background: var(--surface);
 		box-shadow: var(--shadow-lg);
+		flex-direction: column;
+		overflow: auto;
 	}
 	.box > img {
 		max-width: 58vw;

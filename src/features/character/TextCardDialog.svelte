@@ -7,6 +7,7 @@
 	import { pickFiles, saveTo } from "$shared/ipc/dialog";
 	import { toasts } from "$shared/stores/toast.svelte";
 	import { theme } from "$app/theme.svelte";
+	import { dropPaths, isImageAvif } from "$app/drop.svelte";
 	import { CARD_DESIGNS, CARD_FONTS, CARD_SIZES, CARD_STYLES, blobBase64, cardBlob, palette, renderCard, type CardDesign, type CardFont, type CardStyle } from "./textCard";
 
 	interface Props {
@@ -54,12 +55,19 @@
 		});
 	});
 
-	async function upload() {
-		const paths = await pickFiles([{ name: "이미지", extensions: ["png", "jpg", "jpeg", "webp", "gif", "avif"] }], true);
+	async function addBackgrounds(paths: string[]) {
 		if (!paths.length) return;
 		await theme.addBackgrounds(paths, false);
 		opts.background = theme.setting.backgrounds?.at(-1) ?? opts.background;
 	}
+	async function upload() {
+		await addBackgrounds(await pickFiles([{ name: "이미지", extensions: ["png", "jpg", "jpeg", "webp", "gif", "avif"] }], true));
+	}
+	// 카드 창이 열려 있는 동안에는 이 창의 배경으로 (뒤 화면의 끌어다 놓기보다 우선)
+	$effect(() => {
+		if (!card) return;
+		return dropPaths({ priority: 10, label: "카드 배경으로 올리기", hint: "PNG·JPG·WEBP·GIF·AVIF", accept: isImageAvif, onpaths: addBackgrounds });
+	});
 	async function copy() {
 		if (!canvas) return;
 		try {

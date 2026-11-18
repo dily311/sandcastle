@@ -15,7 +15,7 @@
 	import type { RegexScript_Serialize as RegexScript } from "$ipc/bindings";
 	import { call, commands } from "$shared/ipc/client";
 	import { IMAGE_FILES, pickFiles } from "$shared/ipc/dialog";
-	import { drops, isImage, storeFile } from "$app/drop.svelte";
+	import { drops, extOf, isImage, storeFile } from "$app/drop.svelte";
 	import { Sortable, moveItem } from "$shared/dnd/sortable.svelte";
 	import { fileSrc } from "$shared/ipc/file";
 	import { confirmAction, promptText } from "$shared/stores/confirm.svelte";
@@ -194,11 +194,16 @@
 		return drops.register({
 			priority: 2,
 			label: "캐릭터 에셋에 넣기",
-			hint: "파일 이름이 이미지 키가 됨 (<cg>키</cg>)",
-			accept: isImage,
+			hint: "파일 이름이 이미지 키가 됨 (<cg>키</cg>). 그림이 든 ZIP도 가능",
+			accept: (f) => isImage(f) || extOf(f) === "zip",
 			ondrop: async (files) => {
 				const paths = await Promise.all(files.filter(isImage).map((f) => storeFile(f)));
 				if (paths.length) await library.addImages(charId, paths);
+					// ZIP은 에셋 추가 메뉴의 "ZIP"과 같은 처리
+					for (const z of files.filter((f) => extOf(f) === "zip")) {
+						const n = await library.addImagesZip(charId, await storeFile(z));
+						toasts.success(n ? `에셋 ${n}개 넣음 (같은 이름은 덮어씀)` : "ZIP에 그림이 없음");
+					}
 			},
 		});
 	});
@@ -244,9 +249,9 @@
 	{#if panel.tab === "assets"}
 		<div class="panel-body">
 			{#if plugins.on("chat.images")}
-				<Switch checked={conv.imagesEnabled} label="이 대화에서 캐릭터 이미지 쓰기" description="키 목록을 AI에게 보내고 <cg>로 보여줌" onchange={(v) => library.setImagesEnabled(conv.id, v)} />
+				<Switch checked={conv.imagesEnabled} label="이 대화에서 캐릭터 에셋 사용" onchange={(v) => library.setImagesEnabled(conv.id, v)} />
 			{:else}
-				<p class="faint">캐릭터 이미지 기능이 꺼져 있음 (설정 > 코어 플러그인)</p>
+				<p class="faint">캐릭터 에셋 기능이 꺼져 있음 (설정 > 코어 플러그인)</p>
 			{/if}
 			<div class="atools">
 				<span class="faint">{assets.length}개 · 오른쪽 클릭으로 관리</span>
@@ -284,7 +289,7 @@
 			<div class="aview" role="dialog" aria-modal="true" aria-label="에셋 크게 보기">
 				<button class="ascrim" aria-label="닫기" onclick={() => (assetView = null)}></button>
 				<figure>
-					<img src={fileSrc(v.path)} alt={v.key} />
+					<img src={fileSrc(v.path)} alt={v.key} data-no-zoom />
 					<figcaption><code>&lt;cg&gt;{v.key}&lt;/cg&gt;</code>{v.enabled ? "" : " · AI에게 안 보냄"}</figcaption>
 				</figure>
 			</div>

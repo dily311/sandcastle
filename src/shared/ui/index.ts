@@ -17,6 +17,8 @@ export { default as Textarea } from "./Textarea.svelte";
 export { default as ContextMenu, type MenuItem } from "./ContextMenu.svelte";
 export { default as Toasts } from "./Toasts.svelte";
 export { default as ConfirmHost } from "./ConfirmHost.svelte";
+export { default as ImageViewerHost } from "./ImageViewerHost.svelte";
+export { installImageZoom } from "./imageZoom";
 export { default as TagInput } from "./TagInput.svelte";
 export { default as ColorPicker } from "./ColorPicker.svelte";
 export { default as Slider } from "./Slider.svelte";

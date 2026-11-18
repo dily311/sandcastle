@@ -124,6 +124,22 @@ pub struct ThemeSetting {
     /// 배경 위 화면의 불투명도 (0.3~1). 낮을수록 배경이 잘 보임
     #[serde(default = "default_background_opacity")]
     pub background_opacity: f32,
+    /// 올려 둔 글꼴 (앱 데이터 fonts/에 복사한 파일). 앱에 글꼴을 넣어 두지 않으므로 목록은 사용자가 올린 것뿐
+    #[serde(default)]
+    pub fonts: Vec<UserFont>,
+    /// 앱 글꼴: `fonts` 중 하나의 파일 경로. 없으면 기본 글꼴
+    #[serde(default)]
+    pub app_font: Option<String>,
+}
+
+/// 올린 글꼴 한 개
+#[derive(Debug, Serialize, Deserialize, Clone, specta::Type)]
+#[serde(rename_all = "camelCase")]
+pub struct UserFont {
+    /// 앱 데이터 fonts/ 안의 파일 경로
+    pub path: String,
+    /// 목록에 보일 이름 (올릴 때의 파일 이름)
+    pub name: String,
 }
 
 fn default_background_opacity() -> f32 {
@@ -156,6 +172,8 @@ impl Default for ThemeSetting {
             background_image: None,
             backgrounds: vec![],
             background_opacity: default_background_opacity(),
+            fonts: vec![],
+            app_font: None,
         }
     }
 }

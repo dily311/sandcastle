@@ -61,13 +61,23 @@ const base: Record<string, Handler> = {
 		const cur = db.themeSetting as { backgrounds?: string[]; backgroundImage?: string | null };
 		return (db.themeSetting = { ...db.themeSetting, backgrounds: (cur.backgrounds ?? []).filter((p) => p !== path), backgroundImage: cur.backgroundImage === path ? null : (cur.backgroundImage ?? null) });
 	},
+	add_fonts: ({ paths, select }) => {
+		const cur = db.themeSetting as { fonts?: { path: string; name: string }[] };
+		const added = (paths as string[]).map((p) => ({ path: p, name: (p.split(/[\\/]/).pop() ?? "글꼴").replace(/\.[^.]+$/, "") }));
+		const list = [...(cur.fonts ?? []), ...added];
+		return (db.themeSetting = { ...db.themeSetting, fonts: list, ...(select ? { appFont: list.at(-1)?.path ?? null } : {}) });
+	},
+	remove_font: ({ path }) => {
+		const cur = db.themeSetting as { fonts?: { path: string; name: string }[]; appFont?: string | null };
+		return (db.themeSetting = { ...db.themeSetting, fonts: (cur.fonts ?? []).filter((f) => f.path !== path), appFont: cur.appFont === path ? null : (cur.appFont ?? null) });
+	},
 	get_feature_setting: () => db.feature,
 	list_core_plugins: () =>
 		(
 			[
 				["phone", "폰", "캐릭터와 메신저처럼 대화하는 폰 화면", true, false],
 				["game", "게임 모드", "게임 만들기·가져오기와 플레이", true, false],
-				["chat.images", "캐릭터 이미지", "캐릭터 이미지 에셋과 <cg> 태그", true, false],
+				["chat.images", "캐릭터 에셋", "캐릭터 에셋 에셋과 <cg> 태그", true, false],
 				["html", "HTML 렌더링", "AI 답변의 html 코드 블록 실행", false, false],
 				["regex", "정규식", "메시지 글자 찾아 바꾸기", true, false],
 				["widget", "위젯", "바탕화면 위젯", false, true],

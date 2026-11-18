@@ -2,7 +2,7 @@
 	import { checkOnStart } from "./updateCheck";
 	import { watchAutoSync } from "./autoSync.svelte";
 	import { onMount } from "svelte";
-	import { ConfirmHost, Toasts } from "$shared/ui";
+	import { ConfirmHost, ImageViewerHost, installImageZoom, Toasts } from "$shared/ui";
 	import CharacterPage from "$features/character/CharacterPage.svelte";
 	import { captureGlobalErrors, logs } from "$shared/stores/log.svelte";
 	import { nav } from "./nav.svelte";
@@ -41,7 +41,7 @@
 	let swipe: { x: number; y: number } | null = null;
 	function touchStart(e: TouchEvent) {
 		const t = e.touches[0];
-		swipe = layout.mobile && !layout.drawer && t.clientX < 24 ? { x: t.clientX, y: t.clientY } : null;
+		swipe = layout.narrow && !layout.drawer && t.clientX < 24 ? { x: t.clientX, y: t.clientY } : null;
 	}
 	function touchMove(e: TouchEvent) {
 		if (!swipe) return;
@@ -51,6 +51,9 @@
 			swipe = null;
 		}
 	}
+
+	// 모든 그림은 눌러서 크게 보기 (링크·버튼 안의 그림은 제외, 이유는 imageZoom.ts)
+	onMount(() => installImageZoom());
 
 	onMount(async () => {
 		captureGlobalErrors();
@@ -90,10 +93,10 @@
 	}}
 />
 
-<div class="app" class:mobile={layout.mobile}>
+<div class="app" class:desktop={!layout.mobile} class:mobile={layout.mobile}>
 	<Titlebar />
 	<div class="body">
-		{#if layout.mobile}
+		{#if layout.narrow}
 			{#if layout.drawer}
 				<!-- svelte-ignore a11y_click_events_have_key_events, a11y_no_static_element_interactions (Esc·뒤로로도 닫힘) -->
 				<div class="scrim" transition:fade={{ duration: 150 }} onclick={() => layout.closeDrawer()}></div>
@@ -130,6 +133,7 @@
 <ExportPicker />
 <Toasts />
 <ConfirmHost />
+<ImageViewerHost />
 <PluginHost enabled={plugins.on("community")} />
 
 <style>
@@ -142,7 +146,7 @@
 	}
 	/* 휴대폰: 노치·홈 막대 피하기 */
 	.app.mobile {
-		padding: var(--safe-top) env(safe-area-inset-right) env(safe-area-inset-bottom) env(safe-area-inset-left);
+		padding: var(--safe-top) env(safe-area-inset-right) var(--safe-bottom) env(safe-area-inset-left);
 	}
 	.scrim {
 		position: fixed;
@@ -159,7 +163,7 @@
 		display: flex;
 		width: min(84vw, 300px);
 		padding-top: var(--safe-top);
-		padding-bottom: env(safe-area-inset-bottom);
+		padding-bottom: var(--safe-bottom);
 		background: var(--bg);
 		box-shadow: var(--shadow-lg);
 	}

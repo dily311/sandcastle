@@ -191,3 +191,43 @@ pub async fn remove_background(app: AppHandle, state: State<'_, SettingsState<Th
     app.emit(ThemeSetting::EVENT_NAME, &settings).map_err(|e| AppError::io(e.to_string()))?;
     Ok(settings)
 }
+
+/// 글꼴 올리기: 고른 파일들(ttf·otf·woff·woff2)을 앱 데이터 fonts/에 복사한다 (원본은 건드리지 않음).
+/// 확장자와 파일 머리가 글꼴이 아니면 하나도 복사하지 않고 거절한다. select면 마지막 것을 앱 글꼴로 고른다
+#[tauri::command]
+#[specta::specta]
+pub async fn add_fonts(app: AppHandle, state: State<'_, SettingsState<ThemeSetting>>, paths: Vec<String>, select: bool) -> Result<ThemeSetting> {
+    let dir = crate::commands::character_image::app_data_dir(&app)?.join(crate::service::data::fonts::FONTS_DIR);
+    let srcs: Vec<std::path::PathBuf> = paths.iter().map(std::path::PathBuf::from).collect();
+    let added = crate::service::data::fonts::import_fonts(&dir, &srcs)?;
+    let mut list = state.0.lock().map_err(|_| AppError::internal("settings lock poisoned"))?.fonts.clone();
+    list.extend(added.iter().cloned());
+    let mut patch = json!({ "fonts": list });
+    if select {
+        if let Some(last) = added.last() {
+            patch["appFont"] = json!(last.path);
+        }
+    }
+    let settings = apply_patch(&app, &state.0, patch)?;
+    app.emit(ThemeSetting::EVENT_NAME, &settings).map_err(|e| AppError::io(e.to_string()))?;
+    Ok(settings)
+}
+
+/// 글꼴 목록에서 빼고 복사해 둔 파일을 지운다 (앱 글꼴이었으면 기본 글꼴로)
+#[tauri::command]
+#[specta::specta]
+pub async fn remove_font(app: AppHandle, state: State<'_, SettingsState<ThemeSetting>>, path: String) -> Result<ThemeSetting> {
+    let dir = crate::commands::character_image::app_data_dir(&app)?.join(crate::service::data::fonts::FONTS_DIR);
+    let (list, selected) = {
+        let cur = state.0.lock().map_err(|_| AppError::internal("settings lock poisoned"))?;
+        (cur.fonts.iter().filter(|f| f.path != path).cloned().collect::<Vec<_>>(), cur.app_font.clone())
+    };
+    let mut patch = json!({ "fonts": list });
+    if selected.as_deref() == Some(path.as_str()) {
+        patch["appFont"] = serde_json::Value::Null;
+    }
+    let settings = apply_patch(&app, &state.0, patch)?;
+    crate::service::data::fonts::remove_font_file(&dir, &path);
+    app.emit(ThemeSetting::EVENT_NAME, &settings).map_err(|e| AppError::io(e.to_string()))?;
+    Ok(settings)
+}

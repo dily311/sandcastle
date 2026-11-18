@@ -220,7 +220,7 @@ class Library {
 		for (const c of this.conversations) if (c.folderId === id) c.folderId = null;
 	}
 
-	// ---- 캐릭터 이미지 에셋 ----
+	// ---- 캐릭터 에셋 에셋 ----
 	async loadImages(charId: string) {
 		this.images[charId] = await call(commands.listCharacterImages(charId), { ...src, silent: true }).catch(() => []);
 	}

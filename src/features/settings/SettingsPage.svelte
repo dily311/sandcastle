@@ -34,7 +34,7 @@
 	let { tab: routeTab, edit }: { tab?: SettingsTab; edit?: string } = $props();
 	const tab = $derived(routeTab ?? "general");
 	// 휴대폰: 탭을 고르기 전에는 메뉴 목록만, 고르면 그 화면만 (뒤로·경로로 목록에)
-	const mobileList = $derived(layout.mobile && !routeTab);
+	const mobileList = $derived(layout.narrow && !routeTab);
 
 	interface Item {
 		id: SettingsTab;
@@ -65,7 +65,7 @@
 			items: [
 				{ id: "plugins", label: "코어 플러그인", icon: Blocks, keywords: "기능 켜기 끄기 토글 플러그인 폰 게임 위젯 정규식 이미지 html 번역 음성 tts 이미지 생성 동기화", view: PluginsSection },
 				{ id: "game", label: "게임 모드", icon: Gamepad2, keywords: "게임 규칙 씬 서술자 npc 프롬프트", view: GameSection, plugin: "game" },
-				{ id: "cg", label: "캐릭터 이미지", icon: Images, keywords: "cg 이미지 키 프롬프트 에셋", view: CgSection, plugin: "chat.images" },
+				{ id: "cg", label: "캐릭터 에셋", icon: Images, keywords: "cg 이미지 키 프롬프트 에셋", view: CgSection, plugin: "chat.images" },
 				{ id: "phone", label: "폰", icon: Smartphone, keywords: "폰 모드 메신저 프롬프트", view: PhoneSection, plugin: "phone" },
 				{ id: "translate", label: "번역", icon: Languages, keywords: "번역 언어 자동 번역 입력", view: TranslateSection, plugin: "translate" },
 				{ id: "lint", label: "메시지 linter", icon: ListChecks, keywords: "linter 검사 후처리 태그 따옴표 반복 금지어 길이 고침", view: LintSection, plugin: "lint" },
@@ -107,7 +107,7 @@
 
 	// 탭 전환은 기록에 남기지 않음 (뒤로 가기는 설정 전 화면으로)
 	function select(id: SettingsTab) {
-		if (layout.mobile) return void nav.go({ page: "settings", tab: id });
+		if (layout.narrow) return void nav.go({ page: "settings", tab: id });
 		nav.replace({ page: "settings", tab: id });
 	}
 
@@ -119,7 +119,7 @@
 	});
 </script>
 
-<div class="settings" class:mobile={layout.mobile} class:listing={mobileList}>
+<div class="settings" class:desktop={!layout.mobile} class:mobile={layout.mobile} class:narrow={layout.narrow} class:listing={mobileList}>
 	<nav class="side" aria-label="설정 메뉴">
 		<div class="search">
 			<Input bind:value={query} placeholder="설정 검색" aria-label="설정 검색" type="search">
@@ -229,14 +229,19 @@
 		margin: 0 auto;
 		padding: var(--space-8) var(--space-6);
 	}
-	.settings.mobile {
+	/* 좁은 화면(휴대폰·좁힌 창): 목록과 화면을 한 번에 하나만. 고르는 흐름(mobileList)이 layout.narrow를 따르므로 클래스도 narrow로 */
+	.settings.narrow {
 		grid-template-columns: minmax(0, 1fr);
 	}
-	.settings.mobile:not(.listing) .side,
+	.settings.narrow:not(.listing) .side,
 	.settings.listing .body {
 		display: none;
 	}
 	.settings.listing .side {
 		border-right: none;
+	}
+	/* 휴대폰 메뉴 목록: 손가락으로 누르기 쉽게 줄 높이를 --touch-target까지 */
+	.settings.listing .side button {
+		height: var(--touch-target);
 	}
 </style>

@@ -1,7 +1,9 @@
 <script lang="ts">
 	import { onMount } from "svelte";
-	import { Copy, Pencil, Plus, Trash2 } from "@lucide/svelte";
+	import { Copy, Pencil, Plus, Trash2, Upload } from "@lucide/svelte";
 	import { pickFiles } from "$shared/ipc/dialog";
+	import { drops, isFont, isImageAvif, storeFile } from "$app/drop.svelte";
+	import { declarePreviewFonts, fontFamilyOf } from "$shared/ui/userFont";
 	import BackgroundPicker from "$shared/ui/BackgroundPicker.svelte";
 	import type { CssThemeMeta_Serialize as ThemeMeta } from "$ipc/bindings";
 	import { Button, ContextMenu, Input, Segmented, Select, Switch, Textarea, type MenuItem } from "$shared/ui";
@@ -47,6 +49,41 @@
 		const paths = await pickFiles([{ name: "이미지", extensions: ["png", "jpg", "jpeg", "webp", "gif", "avif"] }], true);
 		await theme.addBackgrounds(paths, true);
 	}
+	// ---- 글꼴 (올린 글꼴 중에서 앱 글꼴을 고름) ----
+	const fonts = $derived(theme.setting.fonts ?? []);
+	const fontOptions = $derived([{ value: "", label: "기본 (Pretendard)" }, ...fonts.map((f) => ({ value: f.path, label: f.name }))]);
+	// 글꼴 목록의 미리보기용 @font-face: 이 화면이 열려 있는 동안만 올린 글꼴을 모두 불러옴
+	$effect(() => declarePreviewFonts(fonts));
+	async function uploadFonts() {
+		await addFonts(await pickFiles([{ name: "글꼴", extensions: ["ttf", "otf", "woff", "woff2"] }], true));
+	}
+	async function addFonts(paths: string[]) {
+		if (!paths.length) return;
+		const before = new Set(fonts.map((f) => f.path));
+		await theme.addFonts(paths, false);
+		const added = (theme.setting.fonts ?? []).filter((f) => !before.has(f.path));
+		// 올리자마자 바꾸지는 않고, 한 개를 올렸으면 바로 쓸 수 있게 알림에 버튼을 둠
+		if (added.length === 1) toasts.show({ tone: "success", message: `글꼴 '${added[0].name}'을(를) 올림`, action: { label: "앱 글꼴로 쓰기", run: () => void theme.update({ appFont: added[0].path }) } });
+		else toasts.success(`글꼴 ${added.length}개를 올림`);
+	}
+	async function removeFont(path: string, name: string) {
+		if (!(await confirmAction({ title: "글꼴 삭제", message: `'${name}' 글꼴을 목록에서 지우고 복사해 둔 파일도 지움 (올릴 때 고른 원본 파일은 그대로)`, confirmLabel: "삭제", danger: true }))) return;
+		await theme.removeFont(path);
+	}
+	// 이 화면에 놓은 파일: 그림은 배경으로, 글꼴은 글꼴로 (같은 화면에 드롭 대상을 둘 등록하면 나중 것이 앞의 것을 가려서 하나로)
+	$effect(() =>
+		drops.register({
+			label: "배경 이미지·글꼴 올리기",
+			hint: "그림(PNG·JPG·WEBP·GIF·AVIF)은 배경으로, 글꼴(TTF·OTF·WOFF·WOFF2)은 글꼴 목록으로",
+			accept: (f) => isImageAvif(f) || isFont(f),
+			ondrop: async (files) => {
+				const images = files.filter(isImageAvif);
+				const fontFiles = files.filter(isFont);
+				if (images.length) await theme.addBackgrounds(await Promise.all(images.map((f) => storeFile(f))), true);
+				if (fontFiles.length) await addFonts(await Promise.all(fontFiles.map((f) => storeFile(f))));
+			},
+		}),
+	);
 	const opacities = [0.5, 0.65, 0.75, 0.82, 0.9, 0.95].map((v) => ({ value: String(v), label: `${Math.round(v * 100)}%` }));
 	const selectKey = (key: string) => theme.update({ selectTheme: key });
 
@@ -147,9 +184,39 @@
 		<Row label="글자 크기" desc="앱 전체 기본 글자 크기">
 			<Select value={String(theme.setting.fontSize)} options={fontSizes} aria-label="글자 크기" onchange={(e) => theme.update({ fontSize: Number(e.currentTarget.value) })} />
 		</Row>
+		<Row label="글꼴" desc="아래 '글꼴 파일'에서 올린 글꼴 중에서 고름">
+			<Select value={theme.setting.appFont ?? ""} options={fontOptions} aria-label="글꼴" onchange={(e) => theme.update({ appFont: e.currentTarget.value || null })} />
+		</Row>
 		<Row label="프레임 없는 창" desc="운영체제 제목 표시줄 대신 앱 헤더 사용">
 			<Switch checked={theme.setting.isFrameless} label="프레임 없는 창" hideLabel onchange={(v) => theme.update({ isFrameless: v })} />
 		</Row>
+	</Group>
+
+	<Group title="글꼴 파일">
+		{#snippet aside()}<Button size="sm" onclick={uploadFonts}>{#snippet icon()}<Upload />{/snippet}글꼴 올리기</Button>{/snippet}
+		<div class="bg-row">
+			<p class="bg-desc">컴퓨터나 폰에 있는 글꼴 파일(TTF·OTF·WOFF·WOFF2)을 올려 앱 글꼴로 씀. 앱 데이터에 복사하고 원본은 건드리지 않음. 파일을 이 화면에 끌어다 놓아도 됨. 글꼴의 라이선스는 직접 확인할 것</p>
+			{#if fonts.length}
+				<ul class="fonts">
+					{#each fonts as f (f.path)}
+						<li class:on={theme.setting.appFont === f.path}>
+							<div class="font-txt">
+								<b>{f.name}</b>
+								<span class="sample" style:font-family={`"${fontFamilyOf(f.path)}", var(--font-sans)`}>가나다라마바사 ABC abc 123</span>
+							</div>
+							{#if theme.setting.appFont === f.path}
+								<Button size="sm" variant="ghost" onclick={() => theme.update({ appFont: null })}>기본으로</Button>
+							{:else}
+								<Button size="sm" variant="secondary" onclick={() => theme.update({ appFont: f.path })}>쓰기</Button>
+							{/if}
+							<Button size="sm" variant="ghost" aria-label="{f.name} 삭제" onclick={() => removeFont(f.path, f.name)}>{#snippet icon()}<Trash2 />{/snippet}</Button>
+						</li>
+					{/each}
+				</ul>
+			{:else}
+				<p class="font-empty">올린 글꼴이 없음. 지금은 기본 글꼴(Pretendard)을 씀</p>
+			{/if}
+		</div>
 	</Group>
 
 	<Group title="배경 이미지">
@@ -233,6 +300,48 @@
 	.bg-desc {
 		margin-bottom: var(--space-3);
 		color: var(--text-muted);
+		font-size: var(--text-sm);
+	}
+	.fonts {
+		display: flex;
+		flex-direction: column;
+		gap: var(--space-2);
+		margin: 0;
+		padding: 0;
+		list-style: none;
+	}
+	.fonts li {
+		display: flex;
+		align-items: center;
+		gap: var(--space-2);
+		padding: var(--space-2) var(--space-3);
+		border: 1px solid var(--border);
+		border-radius: var(--radius-md);
+		background: var(--surface);
+	}
+	.fonts li.on {
+		border-color: var(--accent);
+	}
+	.font-txt {
+		display: flex;
+		flex: 1;
+		flex-direction: column;
+		gap: 2px;
+		min-width: 0;
+	}
+	.font-txt b {
+		overflow: hidden;
+		text-overflow: ellipsis;
+		white-space: nowrap;
+	}
+	.sample {
+		overflow: hidden;
+		text-overflow: ellipsis;
+		white-space: nowrap;
+		font-size: var(--text-lg);
+	}
+	.font-empty {
+		color: var(--text-faint);
 		font-size: var(--text-sm);
 	}
 	.accents,

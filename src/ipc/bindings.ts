@@ -20,6 +20,13 @@ export const commands = {
 	addBackgrounds: (paths: string[], select: boolean, options?: InvokeOptions) => __TAURI_INVOKE<ThemeSetting_Serialize>("add_backgrounds", { paths, select }, options),
 	/**  배경 목록에서 빼고 복사해 둔 파일을 지운다 (앱 배경이었으면 배경 없음으로) */
 	removeBackground: (path: string, options?: InvokeOptions) => __TAURI_INVOKE<ThemeSetting_Serialize>("remove_background", { path }, options),
+	/**
+	 *  글꼴 올리기: 고른 파일들(ttf·otf·woff·woff2)을 앱 데이터 fonts/에 복사한다 (원본은 건드리지 않음).
+	 *  확장자와 파일 머리가 글꼴이 아니면 하나도 복사하지 않고 거절한다. select면 마지막 것을 앱 글꼴로 고른다
+	 */
+	addFonts: (paths: string[], select: boolean, options?: InvokeOptions) => __TAURI_INVOKE<ThemeSetting_Serialize>("add_fonts", { paths, select }, options),
+	/**  글꼴 목록에서 빼고 복사해 둔 파일을 지운다 (앱 글꼴이었으면 기본 글꼴로) */
+	removeFont: (path: string, options?: InvokeOptions) => __TAURI_INVOKE<ThemeSetting_Serialize>("remove_font", { path }, options),
 	getConvSettings: (options?: InvokeOptions) => __TAURI_INVOKE<ConvSettings_Serialize>("get_conv_settings", undefined, options),
 	setSystemDefaultPersona: (id: string, options?: InvokeOptions) => __TAURI_INVOKE<null>("set_system_default_persona", { id }, options),
 	getThemeList: (options?: InvokeOptions) => __TAURI_INVOKE<CssThemeMeta_Serialize[]>("get_theme_list", undefined, options),
@@ -4627,6 +4634,10 @@ export type ThemeSetting_Deserialize = {
 	backgrounds?: string[],
 	/**  배경 위 화면의 불투명도 (0.3~1). 낮을수록 배경이 잘 보임 */
 	backgroundOpacity?: number | null,
+	/**  올려 둔 글꼴 (앱 데이터 fonts/에 복사한 파일). 앱에 글꼴을 넣어 두지 않으므로 목록은 사용자가 올린 것뿐 */
+	fonts?: UserFont[],
+	/**  앱 글꼴: `fonts` 중 하나의 파일 경로. 없으면 기본 글꼴 */
+	appFont?: string | null,
 };
 
 export type ThemeSetting_Serialize = {
@@ -4645,6 +4656,10 @@ export type ThemeSetting_Serialize = {
 	backgrounds: string[],
 	/**  배경 위 화면의 불투명도 (0.3~1). 낮을수록 배경이 잘 보임 */
 	backgroundOpacity: number | null,
+	/**  올려 둔 글꼴 (앱 데이터 fonts/에 복사한 파일). 앱에 글꼴을 넣어 두지 않으므로 목록은 사용자가 올린 것뿐 */
+	fonts: UserFont[],
+	/**  앱 글꼴: `fonts` 중 하나의 파일 경로. 없으면 기본 글꼴 */
+	appFont: string | null,
 };
 
 export type TranscriptEntry = TranscriptEntry_Serialize | TranscriptEntry_Deserialize;
@@ -4858,6 +4873,14 @@ export type UsageSummary_Serialize = {
 	/**  단가표로 계산한 추정 금액 (단가표에 이 모델이 없으면 None) */
 	estimatedCost: number | null,
 	currency: string | null,
+};
+
+/**  올린 글꼴 한 개 */
+export type UserFont = {
+	/**  앱 데이터 fonts/ 안의 파일 경로 */
+	path: string,
+	/**  목록에 보일 이름 (올릴 때의 파일 이름) */
+	name: string,
 };
 
 /**  목록의 한 줄. manifest를 읽지 못한 폴더도 보여준다(지울 수 있게) */

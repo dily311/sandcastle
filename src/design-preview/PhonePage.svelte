@@ -239,7 +239,6 @@
 		flex: none;
 		border-radius: 46px;
 		border: 10px solid #1b1a18;
-		box-shadow: var(--shadow-lg), inset 0 0 0 1px #000;
 	}
 	.status {
 		display: flex;

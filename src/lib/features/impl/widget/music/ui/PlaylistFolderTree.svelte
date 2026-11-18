@@ -53,7 +53,7 @@
 		align-items: center;
 		gap: 0.4rem;
 		padding: 0.6rem 0.8rem;
-		border-bottom: 1px solid var(--card-border-color);
+		border-bottom: 1px solid var(--border);
 		--icon-size: 1rem;
 	}
 	.fileNode:last-child {

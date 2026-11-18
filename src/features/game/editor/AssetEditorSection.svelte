@@ -16,6 +16,7 @@
 	import { editorAssetPreviewUrl } from "./assetPreview";
 	import { open } from "@tauri-apps/plugin-dialog";
 	import { Button } from "$shared/ui";
+	import { dropPaths, isAudio, isFont, isImage } from "$app/drop.svelte";
 
 	type Props = {
 		assets: GameAssetsInput[];
@@ -105,6 +106,43 @@
 			});
 		else assets.push(common);
 	}
+	// ---- 끌어다 놓아 에셋 추가 ----
+	// 파일마다 에셋 하나: 소리는 오디오, 그림은 지금 보는 종류(캐릭터·일러스트·배경, 그 외는 기타), 글꼴은 기타
+	const lastOf = (type: string) =>
+		(type === "audio" ? audioAssets : type === "character" ? characterAssets : type === "cg" ? cgAssets : type === "background" ? backgroundAssets : assets).at(-1);
+	const stemOf = (path: string) => (path.split(/[\\/]/).pop() ?? "").replace(/\.[^.]+$/, "");
+	function uniqueKey(base: string) {
+		const used = new Set(entries.map((e) => e.asset.key));
+		const stem = base.replace(/[^\p{L}\p{N}_-]+/gu, "_").slice(0, 40) || "asset";
+		let key = stem;
+		for (let n = 2; used.has(key); n++) key = `${stem}_${n}`;
+		return key;
+	}
+	const IMAGE_TYPES = ["character", "cg", "background"];
+	function addDropped(paths: string[]) {
+		for (const path of paths) {
+			const ext = path.split(".").pop()?.toLowerCase() ?? "";
+			const audio = ["mp3", "wav", "ogg", "flac", "m4a", "aac"].includes(ext);
+			const font = ["ttf", "otf", "woff", "woff2"].includes(ext);
+			const type = audio ? "audio" : !font && IMAGE_TYPES.includes(filter) ? filter : "asset";
+			add(type);
+			const created = lastOf(type);
+			if (!created) continue;
+			created.filePath = path;
+			created.name = stemOf(path) || created.name;
+			created.key = uniqueKey(stemOf(path));
+			if (type === "asset") created.kind = font ? "font" : audio ? "audio" : "image";
+		}
+		if (paths.length) toasts.success(`에셋 ${paths.length}개 추가함. 저장하면 게임에 들어감`);
+	}
+	$effect(() =>
+		dropPaths({
+			label: "게임 에셋으로 추가",
+			hint: `그림·소리·글꼴. ${IMAGE_TYPES.includes(filter) ? `그림은 '${filter}' 종류로` : "그림은 기타 종류로"} 들어감`,
+			accept: (f) => isImage(f) || isAudio(f) || isFont(f),
+			onpaths: addDropped,
+		}),
+	);
 	async function remove(type: string, index: number) {
 		if (!await ask("이 에셋을 삭제할까요?")) return;
 		if (type === "audio") audioAssets.splice(index, 1);
@@ -357,6 +395,7 @@
 		display: flex;
 		flex-direction: column;
 		gap: 1rem;
+		height: 100%;
 		padding: var(--space-6);
 		overflow: auto;
 	}
@@ -403,19 +442,20 @@
 		font-size: 2rem;
 	}
 	.preview-select {
-		display: grid;
 		place-items: center;
 		width: 100%;
-		height: 100%;
+		height: 155px;
+		max-height: 155px;
 		overflow: hidden;
 		padding: 0;
 		border: 0;
-		background: transparent;
-		color: var(--text-muted);
+		border-radius: var(--radius-md);
+		background: var(--surface-active);
+		color: var(--text-faint);
+		font-size: 1.4rem;
 		cursor: pointer;
 	}
 	.asset-preview img {
-		display: block;
 		width: 100%;
 		height: 100%;
 		max-width: 100%;

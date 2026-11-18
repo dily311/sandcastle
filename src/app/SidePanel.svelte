@@ -29,7 +29,7 @@
 	}
 </script>
 
-{#if layout.mobile}
+{#if layout.narrow}
 	<!-- 휴대폰: 화면 전체를 덮는 패널. 탭은 위에, 닫기는 오른쪽 위 -->
 	<!-- svelte-ignore a11y_click_events_have_key_events, a11y_no_static_element_interactions (닫기 버튼이 따로 있음) -->
 	<div class="sheet-scrim" transition:fade={{ duration: 150 }} onclick={() => panel.toggle()}></div>
@@ -97,7 +97,7 @@
 		flex-direction: column;
 		background: var(--bg);
 		overflow: hidden;
-		padding: var(--safe-top) env(safe-area-inset-right) env(safe-area-inset-bottom) env(safe-area-inset-left);
+		padding: var(--safe-top) env(safe-area-inset-right) var(--safe-bottom) env(safe-area-inset-left);
 	}
 	.sheet-head {
 		display: flex;

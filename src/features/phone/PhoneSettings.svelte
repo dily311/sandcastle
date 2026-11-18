@@ -10,6 +10,7 @@
 	import { toasts } from "$shared/stores/toast.svelte";
 	import { theme } from "$app/theme.svelte";
 	import { pickFiles } from "$shared/ipc/dialog";
+	import { dropPaths, isImageAvif } from "$app/drop.svelte";
 	import { phone, type Who } from "./phone.svelte";
 
 	let phonePrompt = $state("");
@@ -36,13 +37,16 @@
 		const [kind, ...rest] = id.split(":");
 		void phone.switchOwner({ kind: kind as Who["kind"], id: rest.join(":") });
 	}
-	async function uploadWallpaper() {
-		const paths = await pickFiles([{ name: "그림", extensions: ["png", "jpg", "jpeg", "webp", "gif", "avif"] }], true);
+	async function addWallpapers(paths: string[]) {
 		if (!paths.length) return;
 		await theme.addBackgrounds(paths, false);
 		const last = theme.setting.backgrounds?.at(-1);
 		if (last) phone.setWallpaper(last);
 	}
+	async function uploadWallpaper() {
+		await addWallpapers(await pickFiles([{ name: "그림", extensions: ["png", "jpg", "jpeg", "webp", "gif", "avif"] }], true));
+	}
+	$effect(() => dropPaths({ label: "폰 배경화면으로 올리기", hint: "PNG·JPG·WEBP·GIF·AVIF", accept: isImageAvif, onpaths: addWallpapers }));
 </script>
 
 <div class="phone-settings">
