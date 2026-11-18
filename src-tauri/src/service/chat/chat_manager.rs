@@ -537,7 +537,7 @@ impl ChatManager {
         let auto_image_prompt = auto_image_prompt.filter(|_| auto_image);
         let (content, used_images) = sanitize_cg_tags(&result, &images);
         // 메시지 linter (3-B, ADR-014): 정규식·태그 정리 뒤, 저장 직전. 플러그인 후처리(화면)보다 먼저라 플러그인은 늘 검사된 글을 받는다
-        let (content, lint_meta) = super::lint::apply_to_response(app, &content, &me.name);
+        let (content, lint_meta) = super::lint::apply_to_response(app, &content, &me.name, conv.meta.as_ref());
         let info = json!({
             "apiProfileId": api_profile_id,
             "presetId": preset_id,

@@ -24,6 +24,7 @@
 	import { preview } from "./format";
 	import { library, type CharacterImage, type Conversation } from "./library.svelte";
 	import { metaOf, type ChatSession } from "./session.svelte";
+	import { lintOf } from "./lint";
 
 	interface Props {
 		conv: Conversation;
@@ -36,6 +37,13 @@
 		me?: { label: string; options: ProfileOption[]; value: string | null; hint?: string; onchange: (id: string) => void };
 	}
 	let { conv, session, chapters, onjump, onopen, me }: Props = $props();
+
+	// ---- 메시지 linter: 이 대화의 덮어쓰기와 마지막 응답에서 걸린 규칙 (3-B-5) ----
+	const lintOff = $derived((conv.meta as { lint?: string } | null)?.lint === "off");
+	const lastLint = $derived.by(() => {
+		const last = [...session.messages].reverse().find((m) => m.role === "assistant");
+		return last ? lintOf(last) : null;
+	});
 
 	// ---- 대화 설정: API → 프리셋 → 페르소나 ----
 	const DEFAULT = "";
@@ -349,6 +357,25 @@
 					{/if}
 				</div>
 			</section>
+			{#if plugins.on("lint")}
+				<hr />
+				<section>
+					<h4>메시지 linter <span class="faint">응답이 저장될 때 검사</span></h4>
+					<Switch checked={!lintOff} label="이 대화에서 linter 쓰기" description="끄면 이 대화의 새 응답은 검사하지 않음 (규칙은 설정 > 메시지 linter)" onchange={(v) => library.patchMeta(conv.id, { lint: v ? null : "off" })} />
+					{#if !lintOff}
+						{#if lastLint}
+							<p class="faint">마지막 응답에서 걸린 것</p>
+							<ul class="lint-hits">
+								{#each lastLint.findings as f, i (i)}
+									<li class:warn={f.level === "warn"}>{f.text}{f.fixed ? " → 고침" : ""}</li>
+								{/each}
+							</ul>
+						{:else}
+							<p class="faint">마지막 응답에서 걸린 것 없음</p>
+						{/if}
+					{/if}
+				</section>
+			{/if}
 			<hr />
 			<section>
 				<h4>월드인포</h4>
@@ -441,6 +468,15 @@
 		gap: var(--space-5);
 		padding: var(--space-3) var(--space-4) var(--space-4);
 		overflow: auto;
+	}
+	.lint-hits {
+		margin: var(--space-1) 0 0;
+		padding-left: var(--space-4);
+		font-size: var(--text-xs);
+		color: var(--text-muted);
+	}
+	.lint-hits li.warn {
+		color: var(--warning);
 	}
 	section {
 		display: flex;

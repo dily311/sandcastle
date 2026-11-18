@@ -425,9 +425,9 @@ pub fn run(text: &str, user_name: &str, s: &LintSetting) -> LintOutcome {
 
 /// 응답 저장 직전에 부른다. 꺼져 있으면 글을 그대로 돌려주고 아무것도 읽지 않는다 (Lazy Initialization).
 /// 돌려주는 값: (저장할 글, meta.lint에 넣을 값 — 걸린 것이 없으면 None)
-pub fn apply_to_response(app: &tauri::AppHandle, text: &str, user_name: &str) -> (String, Option<serde_json::Value>) {
+pub fn apply_to_response(app: &tauri::AppHandle, text: &str, user_name: &str, conv_meta: Option<&serde_json::Value>) -> (String, Option<serde_json::Value>) {
     use tauri::Manager;
-    if !crate::sys::plugins::is_enabled(app, crate::sys::plugins::id::LINT) {
+    if !crate::sys::plugins::is_enabled(app, crate::sys::plugins::id::LINT) || disabled_for(conv_meta) {
         return (text.to_string(), None);
     }
     let Some(state) = app.try_state::<crate::sys::settings::SettingsState<crate::models::settings::PluginSetting>>() else {
@@ -439,6 +439,11 @@ pub fn apply_to_response(app: &tauri::AppHandle, text: &str, user_name: &str) ->
     let outcome = run(text, user_name, &setting);
     let meta = meta_of(text, &outcome);
     (outcome.content, meta)
+}
+
+/// 이 대화에서 linter를 껐나 (대화 meta의 `lint: "off"`)
+pub fn disabled_for(conv_meta: Option<&serde_json::Value>) -> bool {
+    conv_meta.and_then(|m| m.get("lint")).and_then(serde_json::Value::as_str) == Some("off")
 }
 
 /// meta.lint: `original`은 고쳤을 때만. 화면은 `content`가 지금 글과 같을 때만 보여 준다(그 뒤 고쳤으면 숨김)
@@ -528,6 +533,14 @@ mod tests {
     }
     fn rules(o: &LintOutcome) -> Vec<&str> {
         o.findings.iter().map(|f| f.rule.as_str()).collect()
+    }
+
+    #[test]
+    fn conversation_can_switch_the_linter_off() {
+        let on = serde_json::json!({ "lint": "on" });
+        let off = serde_json::json!({ "lint": "off" });
+        assert!(!disabled_for(None) && !disabled_for(Some(&on)) && !disabled_for(Some(&serde_json::json!({}))));
+        assert!(disabled_for(Some(&off)));
     }
 
     #[test]
