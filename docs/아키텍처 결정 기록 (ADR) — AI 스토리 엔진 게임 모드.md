@@ -32,8 +32,8 @@
 | 015 | 정의 편집·무결성·화면용 데이터 | Accepted |
 | 016 | 템플릿과 템플릿 패키지 | Accepted |
 | 017 | 코드 구조와 관례 | Accepted |
-| 018 | 에셋 서빙과 연출 | Proposed |
-| 019 | StoryPlan(각본가) | Deferred |
+| 018 | 에셋 서빙과 연출 | Accepted("갱신" 절이 확정, 후속 있음) |
+| 019 | StoryPlan(각본가) | Deferred — 구현이 미병합 브랜치에 있음(`ADR 미결 정리.md`) |
 
 ## ADR-001 신뢰 경계와 책임 분리
 
@@ -257,7 +257,7 @@
 
 ## ADR-018 에셋 서빙과 연출
 
-**상태** Proposed — game\_assets 새 컬럼이 확정되면 구현
+**상태** Accepted — 아래 "ADR-018 갱신"이 이 항목을 확정·대체했다 (2026-11-18 감사에서 Proposed를 정정)
 
 **결정**
 
@@ -270,7 +270,7 @@
 
 ## ADR-019 StoryPlan(각본가)
 
-**상태** Deferred
+**상태** Deferred — dev에는 없고 구현이 브랜치 `claude/game-assets-storyplan`에 있다(병합 결정은 `ADR 미결 정리.md`, roadmap 4-D)
 
 **결정**
 
@@ -317,12 +317,14 @@ reason(BlockReason): conditionNotMet, sceneActive, notPresent, noRoute, noActive
 
 ## 미결·후속 작업
 
-- iframe SDK와 호스트 postMessage 브릿지, 호스트 전용 커맨드와 게임 접근 커맨드의 capabilities 분리.
-- 에셋: game\_assets 새 컬럼과 stage\_json 추가 → protocol의 Range·허용 목록 → 정의·패키지·검증·view 연결 → StageCue → AI 태그 파서와 프롬프트.
-- capabilities 강제(지도·시간 끄기)와 chat 전용 템플릿. 사용자 템플릿은 요청이 있을 때만.
-- 호출 예산(토큰·비용), 일지 성장 정책. (8라운드 초과 로깅, 스트리밍 태그 버퍼링은 2026-11-15 구현)
-- AI의 아이템 지급, NPC끼리의 관계 변화(시뮬레이션), 관계 tags 변경 효과, 게임 삭제 시 월드인포 북 정리.
-- 이전 형식(snake\_case) 패키지 호환이 필요하면 format\_version으로 구분한다.
+> 2026-11-18 코드와 대조해 정리했다(`ADR 미결 정리.md`). 번호는 `plans/roadmap.md`.
+
+- **iframe SDK·호스트 postMessage 브릿지**, 호스트 전용 커맨드와 게임이 부를 수 있는 커맨드의 capabilities 분리 — 보류, 6-C.
+- **에셋**: 서빙·정의·검증·view·StageCue·태그 파서·프롬프트는 구현됨. 남음: 에셋 추가/삭제 커맨드(브랜치 `claude/game-assets-storyplan`에 있음)와 프론트 재생기 — 4-A.
+- **capabilities 강제**(지도·시간 끄기): 브랜치에 구현이 있음, 병합 시 해결 — 4-B-1. chat 전용 템플릿 4-C-1, 사용자 템플릿은 요청이 있을 때(6-C).
+- 호출 예산: 구현됨(게임 대사도 `AiService`를 거쳐 ADR-007 한도가 적용됨). **일지 성장 정책** 남음 — 4-A.
+- **AI의 아이템 지급**(결정 필요: 지급 조건)·**게임 삭제 시 월드인포 북 정리**(확인 필요) 남음 — 4-A. NPC끼리의 관계 변화(시뮬레이션)·관계 tags 변경 효과는 보류(요청이 있을 때, 호출 비용 때문에 ADR이 먼저).
+- 이전 형식(snake\_case) 패키지 호환은 폐기 — 필요가 생기면 format\_version으로 구분한다.
 
 ## ADR-018 갱신 — 에셋·연출 결정 확정
 
