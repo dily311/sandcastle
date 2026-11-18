@@ -241,7 +241,7 @@
 	}
 	.grid {
 		display: grid;
-		grid-template-columns: repeat(auto-fill, minmax(210px, 1fr));
+		grid-template-columns: repeat(auto-fill, minmax(min(210px, 45%), 1fr));
 		gap: var(--space-2);
 	}
 	.conv {

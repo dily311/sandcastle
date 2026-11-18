@@ -4,12 +4,13 @@
 	 * 그림 아래에 파일 이름, 그림이나 이름에서 오른쪽 클릭(Android는 꾹 누르기)하면 메뉴.
 	 * <dialog>로 열어서 다른 대화상자 위에서 눌러도 맨 위에 뜬다.
 	 */
-	import { Copy, ExternalLink, FileText, X } from "@lucide/svelte";
+	import { Copy, Ellipsis, ExternalLink, FileText, Info, Pencil, Trash2, X } from "@lucide/svelte";
 	import { revealItemInDir } from "@tauri-apps/plugin-opener";
 	import { layout } from "$app/layout.svelte";
 	import { describeSrc, imageViewer } from "$shared/stores/imageViewer.svelte";
 	import { toasts } from "$shared/stores/toast.svelte";
 	import ContextMenu, { type MenuItem } from "./ContextMenu.svelte";
+	import Dialog from "./Dialog.svelte";
 	import IconButton from "./IconButton.svelte";
 
 	const img = $derived(imageViewer.current);
@@ -17,14 +18,48 @@
 	const title = $derived(img?.name || info?.name || "");
 
 	let dialog: HTMLDialogElement | undefined = $state();
-	let menu = $state<{ x: number; y: number } | null>(null);
+	let menu = $state<{ x: number; y: number; align?: "start" | "end" } | null>(null);
+	let imgEl: HTMLImageElement | undefined = $state();
+	/** 정보 보기 줄 (열 때 계산) */
+	let details = $state<{ label: string; value: string }[] | null>(null);
 
 	$effect(() => {
 		if (!dialog) return;
 		if (img && !dialog.open) dialog.showModal();
 		if (!img && dialog.open) dialog.close();
-		if (!img) menu = null;
+		if (!img) {
+			menu = null;
+			details = null;
+		}
 	});
+	// 다른 그림으로 바뀌면 정보는 닫음
+	$effect(() => {
+		void img?.src;
+		details = null;
+	});
+	function openMenu(e: MouseEvent) {
+		const r = (e.currentTarget as HTMLElement).getBoundingClientRect();
+		menu = { x: r.right, y: r.bottom + 4, align: "end" };
+	}
+	const KB = 1024;
+	const sizeText = (n: number) => (n >= KB * KB ? `${(n / KB / KB).toFixed(1)}MB` : `${Math.max(1, Math.round(n / KB))}KB`);
+	async function showInfo() {
+		if (!img) return;
+		const rows: { label: string; value: string }[] = [];
+		if (title) rows.push({ label: "이름", value: title });
+		if (info?.path) rows.push({ label: "위치", value: info.path });
+		if (imgEl?.naturalWidth) rows.push({ label: "크기", value: `${imgEl.naturalWidth} × ${imgEl.naturalHeight}px` });
+		const ext = /\.([a-z0-9]+)$/i.exec(title)?.[1];
+		if (ext) rows.push({ label: "형식", value: ext.toUpperCase() });
+		details = [...rows, ...(img.info ?? [])];
+		// 용량은 읽어 봐야 알 수 있어 뒤늦게 덧붙임
+		try {
+			const blob = await (await fetch(img.src)).blob();
+			if (details && imageViewer.current === img) details = [...details, { label: "용량", value: sizeText(blob.size) }];
+		} catch {
+			/* 못 읽으면 생략 */
+		}
+	}
 
 	function oncontextmenu(e: MouseEvent) {
 		e.preventDefault();
@@ -67,8 +102,11 @@
 	const items = $derived<MenuItem[]>([
 		{ label: "그림 복사", icon: Copy, onselect: copyImage },
 		{ label: "파일 이름 복사", icon: FileText, disabled: !title, onselect: copyName },
+		{ label: "정보 보기", icon: Info, onselect: showInfo },
+		...(img?.rename ? [{ label: "이름 바꾸기", icon: Pencil, separator: true, onselect: () => void img.rename?.() }] : []),
 		// 파일 위치 열기는 데스크톱의 내 파일만 (Android에는 탐색기가 없고, 인터넷 그림은 파일이 아님)
 		...(layout.desktop && info?.path ? [{ label: "파일 위치 열기", icon: ExternalLink, separator: true, onselect: reveal }] : []),
+		...(img?.remove ? [{ label: "삭제", icon: Trash2, danger: true, separator: true, onselect: () => void img.remove?.() }] : []),
 	]);
 </script>
 
@@ -76,12 +114,22 @@
 	{#if img}
 		<figure>
 			<div class="top"><IconButton label="닫기" size="sm" onclick={() => imageViewer.close()}><X /></IconButton></div>
-			<img src={img.src} alt={title} {oncontextmenu} />
-			{#if title}<figcaption {oncontextmenu}>{title}</figcaption>{/if}
+			<img bind:this={imgEl} src={img.src} alt={title} {oncontextmenu} />
+			<div class="cap" role="group" aria-label="파일 이름" {oncontextmenu}>
+				<span class="name">{title || "그림"}</span>
+				<IconButton label="그림 메뉴" size="sm" onclick={openMenu}><Ellipsis /></IconButton>
+			</div>
 		</figure>
 	{/if}
 	<ContextMenu at={menu} {items} label="그림 메뉴" onclose={() => (menu = null)} />
 </dialog>
+
+<!-- 정보는 그림 위에 따로 뜨는 창 (그림이 크면 아래에 붙여서는 화면 밖으로 나감) -->
+<Dialog open={!!details} title="정보" size="sm" onclose={() => (details = null)}>
+	<dl class="details">
+		{#each details ?? [] as d (d.label)}<dt>{d.label}</dt><dd>{d.value}</dd>{/each}
+	</dl>
+</Dialog>
 
 <style>
 	.image-viewer {
@@ -128,14 +176,36 @@
 		/* 눌러서 닫히는 배경과 달리 그림은 길게 눌러 메뉴를 열 수 있게 */
 		-webkit-touch-callout: none;
 	}
-	figcaption {
+	/* 파일 이름 + … 메뉴 버튼 */
+	.cap {
+		display: flex;
+		align-items: center;
+		gap: var(--space-1);
 		max-width: min(100%, 640px);
-		padding: var(--space-1) var(--space-3);
+		padding: 2px 2px 2px var(--space-3);
 		border-radius: var(--radius-sm);
 		background: var(--surface);
 		font-size: var(--text-sm);
 		color: var(--text-muted);
-		text-align: center;
+	}
+	.name {
+		min-width: 0;
 		overflow-wrap: anywhere;
+	}
+	.details {
+		display: grid;
+		grid-template-columns: auto minmax(0, 1fr);
+		gap: 2px var(--space-3);
+		margin: 0;
+		font-size: var(--text-sm);
+	}
+	.details dt {
+		color: var(--text-faint);
+	}
+	.details dd {
+		margin: 0;
+		color: var(--text);
+		overflow-wrap: anywhere;
+		user-select: text;
 	}
 </style>

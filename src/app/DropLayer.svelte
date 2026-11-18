@@ -8,28 +8,39 @@
 	let depth = 0;
 	const hasFiles = (e: DragEvent) => !!e.dataTransfer && Array.from(e.dataTransfer.types).includes("Files");
 
+	function track(e: DragEvent) {
+		const el = document.elementFromPoint(e.clientX, e.clientY);
+		if (el !== drops.over) drops.over = el;
+	}
 	function enter(e: DragEvent) {
 		if (!hasFiles(e)) return;
 		depth++;
 		drops.dragging = true;
+		track(e);
 	}
 	function over(e: DragEvent) {
 		if (!hasFiles(e)) return;
 		// 기본 동작(웹뷰가 파일을 열어 버림)을 늘 막음
 		e.preventDefault();
+		track(e);
 		if (e.dataTransfer) e.dataTransfer.dropEffect = drops.target ? "copy" : "none";
 	}
 	function leave(e: DragEvent) {
 		if (!hasFiles(e)) return;
 		depth = Math.max(0, depth - 1);
-		if (depth === 0) drops.dragging = false;
+		if (depth === 0) {
+			drops.dragging = false;
+			drops.over = null;
+		}
 	}
 	async function drop(e: DragEvent) {
 		if (!hasFiles(e)) return;
 		e.preventDefault();
 		depth = 0;
 		drops.dragging = false;
+		track(e);
 		const t = drops.target;
+		drops.over = null;
 		const files = Array.from(e.dataTransfer?.files ?? []);
 		if (!t || !files.length) return;
 		const ok = files.filter(t.accept);
@@ -42,7 +53,17 @@
 <svelte:window ondragenter={enter} ondragover={over} ondragleave={leave} ondrop={drop} />
 
 {#if drops.dragging}
-	<div class="layer" class:none={!drops.target} aria-hidden="true">
+	{@const zone = drops.target?.zone?.()?.getBoundingClientRect()}
+	<div
+		class="layer"
+		class:none={!drops.target}
+		class:zoned={!!zone}
+		style:left={zone ? `${zone.left}px` : undefined}
+		style:top={zone ? `${zone.top}px` : undefined}
+		style:width={zone ? `${zone.width}px` : undefined}
+		style:height={zone ? `${zone.height}px` : undefined}
+		aria-hidden="true"
+	>
 		<div class="box">
 			{#if drops.target}
 				<FileDown />
@@ -68,6 +89,11 @@
 		backdrop-filter: blur(2px);
 		pointer-events: none;
 		animation: fade var(--duration-fast) var(--ease);
+	}
+	/* 영역이 있는 대상: 그 영역만 덮음 */
+	.layer.zoned {
+		inset: auto;
+		padding: var(--space-3);
 	}
 	.box {
 		display: flex;

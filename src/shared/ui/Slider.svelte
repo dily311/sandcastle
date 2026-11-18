@@ -56,6 +56,7 @@
 		font-size: var(--text-sm);
 		font-variant-numeric: tabular-nums;
 		color: var(--text);
+		opacity: 0;
 	}
 	.unset .val {
 		color: var(--text-faint);

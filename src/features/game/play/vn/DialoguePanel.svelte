@@ -8,6 +8,8 @@
 
 	// 화면 아래 대사창: 대사 읽기 → 다 읽으면 선택지 / 대화 입력
 	type Props = {
+		/** 대사창(독) 높이를 알림: 좁은 화면에서 캐릭터를 그 위에 세우려고 */
+		onDockHeight?: (h: number) => void;
 		show: boolean;
 		line: StageLine | null;
 		speakerName: string | null;
@@ -69,6 +71,8 @@
 		drawing?: boolean;
 	};
 	let p: Props = $props();
+	let dockH = $state(0);
+	$effect(() => p.onDockHeight?.(p.show ? dockH : 0));
 	const actionIcon = { talk: MessageCircle, look: Search, move: MapPin, wait: Clock } as const;
 
 	const narration = $derived(isNarration(p.line));
@@ -84,7 +88,7 @@
 </script>
 
 {#if p.show}
-	<div class="dock">
+	<div class="dock" bind:offsetHeight={dockH}>
 	<section class="dialogue" aria-live="polite">
 		{#if p.editing}
 			<!-- 메시지 전체를 고침: 한 줄에 하나씩, 대사는 `이름: 내용`, 지문은 이름 없이 -->

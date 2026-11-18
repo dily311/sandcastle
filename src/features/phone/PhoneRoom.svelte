@@ -6,7 +6,7 @@
 	import { ghost } from "$features/ghost/ghost.svelte";
 	import { drawMessage, generatedImagesOf, speak, speech, translateMessage, translationOf } from "$shared/stores/aiTools.svelte";
 	import { Avatar, ContextMenu, HtmlView, type MenuItem } from "$shared/ui";
-	import { fileSrc } from "$shared/ipc/file";
+	import { fileSrc, imageSrc } from "$shared/ipc/file";
 	import { confirmAction } from "$shared/stores/confirm.svelte";
 	import { toasts } from "$shared/stores/toast.svelte";
 	import { appSetting } from "$shared/stores/appSetting.svelte";
@@ -24,7 +24,7 @@
 	const ch = $derived(lookup(phone.contactOf(conv)));
 	const me = $derived(phone.owner);
 	const imgChar = $derived(ch?.kind === "character" ? ch.id : null);
-	const images = $derived(Object.fromEntries((library.images[imgChar ?? ""] ?? []).map((i) => [i.key, fileSrc(i.path) ?? ""])));
+	const images = $derived(Object.fromEntries((library.images[imgChar ?? ""] ?? []).map((i) => [i.key, imageSrc(i) ?? ""])));
 	let draft = $state("");
 	let scroller: HTMLDivElement | undefined = $state();
 

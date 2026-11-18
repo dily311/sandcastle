@@ -153,6 +153,7 @@
 	}
 	.none {
 		margin: var(--space-1) 0 0;
+		padding: var(--space-4) 0;
 		color: var(--text-faint);
 		font-size: var(--text-sm);
 	}

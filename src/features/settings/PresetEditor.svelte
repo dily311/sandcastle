@@ -215,13 +215,8 @@
 	}
 </script>
 
-{#if autosave}
-	<p class="auto" class:warn={autoState === "failed"}>{autoState === "saving" ? "저장 중…" : autoState === "saved" ? "저장됨" : autoState === "failed" ? "저장 못 함 · 다시 고치면 또 시도" : autoState === "dirty" ? "고치는 중" : "고치면 저절로 저장됨"}</p>
-{:else}
-	<div class="bar">
-		<Button variant="ghost" onclick={oncancel}>취소</Button>
-		<Button variant="primary" loading={saving} disabled={!name.trim()} onclick={save}>저장</Button>
-	</div>
+{#if autosave && autoState === "failed"}
+	<p class="auto" class:warn={autoState === "failed"}>{autoState === "failed" ? "저장 못 함 · 다시 고치면 또 시도" : autoState === "dirty" ? "고치는 중" : "고치면 저절로 저장됨"}</p>
 {/if}
 
 {#if !quick}
@@ -233,9 +228,11 @@
 
 <Group title="생성 옵션">
 	<div class="sliders">
-		<Slider label="온도" hint="높을수록 다양하고 낮을수록 일정함" bind:value={temperature} min={0} max={2} step={0.05} fallback={1} unsetLabel="공급자 기본" format={(n) => n.toFixed(2)} />
 		<Slider label="응답 길이 (토큰)" hint="AI가 한 번에 쓰는 최대 길이" bind:value={maxTokens} min={64} max={8192} step={64} fallback={1024} unsetLabel="1,024" format={(n) => n.toLocaleString()} />
 		<Slider label="컨텍스트 크기 (토큰)" hint="넘치면 오래된 대화부터 뺌. 0은 제한 없음" bind:value={contextSize} min={0} max={200000} step={1024} fallback={8192} unsetLabel="기본 (8,192)" format={(n) => (n ? n.toLocaleString() : "제한 없음")} />
+	</div>
+	<div class="sliders">
+		<Slider label="온도" hint="높을수록 다양하고 낮을수록 일정함" bind:value={temperature} min={0} max={2} step={0.05} fallback={1} unsetLabel="공급자 기본" format={(n) => n.toFixed(2)} />
 		<Slider label="월드인포 비율 (%)" hint="고정 프롬프트를 뺀 나머지 중 월드인포에 줄 몫. 남는 만큼 대화 기록이 들어감" bind:value={worldInfoPercent} min={0} max={100} step={5} fallback={50} unsetLabel="기본 (50%)" format={(n) => `${n}%`} />
 		<Slider label="Top P" hint="확률이 높은 낱말 몇 %에서만 고름" bind:value={topP} min={0} max={1} step={0.01} fallback={1} unsetLabel="공급자 기본" format={(n) => n.toFixed(2)} />
 		<Slider label="Top K" hint="후보 낱말을 몇 개까지 볼지. 0은 끔" bind:value={topK} min={0} max={200} step={1} fallback={0} unsetLabel="공급자 기본" format={(n) => (n ? String(n) : "끔")} />

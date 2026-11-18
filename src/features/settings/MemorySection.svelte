@@ -49,7 +49,7 @@
 	{#if cur}
 		<Group title="임베딩 연결">
 			<Row label="임베딩 API" desc="채팅 API와 따로 고름. 비워 두면 색인·검색을 할 수 없음">
-				<Select value={cur.memory.apiProfileId ?? ""} options={apiOptions("고르세요")} onchange={(e) => save("memory", { apiProfileId: orNull(e.currentTarget.value) })} />
+				<Select value={cur.memory.apiProfileId ?? ""} options={apiOptions("미선택")} onchange={(e) => save("memory", { apiProfileId: orNull(e.currentTarget.value) })} />
 			</Row>
 			<Row label="모델 이름" desc="예: text-embedding-3-small, gemini-embedding-001. 직접 입력">
 				<Input value={cur.memory.model} placeholder="임베딩 모델" onchange={(e) => save("memory", { model: e.currentTarget.value.trim() })} />
@@ -85,7 +85,7 @@
 			</Row>
 		</Group>
 		<Group title="보낼 때 자동으로 떠올리기">
-			<Row label="자동 회상" desc="메시지를 보낼 때마다 지난 대화에서 관련된 부분을 찾아 프롬프트에 넣음. 보낼 때마다 질의 임베딩 1회 요금이 자동 실행으로 기록되고, 예산 한도에 걸리면 기억 없이 보냄. 색인이 있어야 함">
+			<Row label="자동 회상" desc="메시지를 보낼 때마다 지난 대화에서 관련된 부분을 찾아 프롬프트에 넣음. 보낼 때마다 질의 임베딩 1회 요금이 자동 실행으로 기록되고, 예산 한도에 걸리면 기억 없이 보냄. 색인이 있어야 함" nowrap>
 				<Switch checked={cur.memory.autoRecall} label="자동 회상" hideLabel onchange={(v) => save("memory", { autoRecall: v })} />
 			</Row>
 			{#if cur.memory.autoRecall}

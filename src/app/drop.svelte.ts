@@ -13,6 +13,8 @@ export interface DropTarget {
 	ondrop: (files: File[]) => void | Promise<void>;
 	/** 겹칠 때 높은 것이 이김 (화면 안의 더 구체적인 부분, 예: 대화 > 캐릭터 화면). 같으면 나중 것 */
 	priority?: number;
+	/** 주면 이 영역 안에 놓은 파일만 받는다 (예: 대화의 읽는 영역, 오른쪽 패널). 영역 밖에서는 영역 없는 대상이 받는다 */
+	zone?: () => Element | null | undefined;
 }
 
 class Drops {
@@ -25,12 +27,28 @@ class Drops {
 	private seq = 0;
 	/** 파일을 끌고 들어온 중 */
 	dragging = $state(false);
+	/** 끌고 있는 포인터 아래의 요소 (영역 있는 대상을 고르는 데 씀) */
+	over = $state<Element | null>(null);
+
+	/** 포인터가 el 위일 때 받을 대상: 그 자리를 영역으로 가진 것이 먼저, 없으면 영역 없는 것 */
+	targetAt(el: Element | null): DropTarget | null {
+		void this.version;
+		let best: DropTarget | null = null;
+		let bestZoned = false;
+		for (const x of this.stack) {
+			const zone = x.t.zone;
+			const zoned = !!zone;
+			if (zone && !(el && zone()?.contains(el))) continue;
+			if (!best || (zoned && !bestZoned) || (zoned === bestZoned && (x.t.priority ?? 0) >= (best.priority ?? 0))) {
+				best = x.t;
+				bestZoned = zoned;
+			}
+		}
+		return best;
+	}
 
 	get target(): DropTarget | null {
-		void this.version;
-		let best: { id: number; t: DropTarget } | null = null;
-		for (const x of this.stack) if (!best || (x.t.priority ?? 0) >= (best.t.priority ?? 0)) best = x;
-		return best?.t ?? null;
+		return this.targetAt(this.over);
 	}
 
 	register(t: DropTarget) {
@@ -51,7 +69,7 @@ export const drops = new Drops();
 export const extOf = (f: File) => f.name.split(".").pop()?.toLowerCase() ?? "";
 export const isImage = (f: File) => ["png", "jpg", "jpeg", "webp", "gif"].includes(extOf(f));
 
-function readAsDataUrl(f: File): Promise<string> {
+function readAsDataUrl(f: Blob): Promise<string> {
 	return new Promise((resolve, reject) => {
 		const r = new FileReader();
 		r.onload = () => resolve(String(r.result));
@@ -94,8 +112,17 @@ export function dropPaths(t: PathDrop) {
 	});
 }
 
+/** 이보다 큰 파일은 조각으로 나눠 보냄 (한 번에 읽어 base64로 IPC에 실으면 수백 MB에서 화면이 얼어붙음) */
+const CHUNK = 8 * 1024 * 1024;
+
 /** 놓은 파일을 디스크에 저장하고 경로를 받음. keep: 메시지 첨부처럼 계속 둘 파일 */
 export async function storeFile(f: File, keep = false): Promise<string> {
-	const data = await readAsDataUrl(f);
-	return call(commands.storeDroppedFile(f.name, data, keep), { source: "drop" });
+	const src = { source: "drop" };
+	if (keep || f.size <= CHUNK) return call(commands.storeDroppedFile(f.name, await readAsDataUrl(f), keep, null), src);
+	let path = "";
+	for (let at = 0; at < f.size; at += CHUNK) {
+		const data = await readAsDataUrl(f.slice(at, at + CHUNK));
+		path = await call(commands.storeDroppedFile(f.name, data, false, at === 0 ? null : path), src);
+	}
+	return path;
 }

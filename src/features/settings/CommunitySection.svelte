@@ -105,12 +105,12 @@
 
 <Section title="커뮤니티 플러그인" lead="남이 만든 플러그인을 파일로 설치합니다. 격리된 곳에서 허락한 권한만으로 동작하고, 설치해도 꺼진 채로 시작합니다. 믿을 수 있는 곳에서 받은 것만 설치하세요">
 	<Group title="설치">
-		<Row label="묶음(zip)에서 설치" desc="manifest.json이 든 zip 파일. 설치 전에 내용과 권한을 미리 봅니다">
-			<Button size="sm" onclick={() => pick("zip")}><FileArchive />zip 고르기</Button>
+		<Row label="zip으로 설치" desc="manifest.json이 든 zip 파일. 설치 전에 내용과 권한을 미리 봅니다">
+			<Button size="sm" onclick={() => pick("zip")}>{#snippet icon()}<FileArchive />{/snippet}zip 고르기</Button>
 		</Row>
 		{#if !layout.mobile}
 			<Row label="폴더에서 설치" desc="만들고 있는 플러그인 폴더를 그대로">
-				<Button size="sm" onclick={() => pick("folder")}><FolderOpen />폴더 고르기</Button>
+				<Button size="sm" onclick={() => pick("folder")}>{#snippet icon()}<FolderOpen />{/snippet}폴더 고르기</Button>
 			</Row>
 		{/if}
 		<Row label="플러그인의 고치기 제안" desc="플러그인이 캐릭터·로어북 등을 고치자고 한 것. 바뀌는 곳을 보고 승인해야만 바뀝니다">

@@ -111,6 +111,14 @@
 		menu = { x: r.left, y: r.bottom + 4 };
 	}
 
+	/** 좁은 화면은 마지막 이름만 보이므로, 그 옆 ▾ 메뉴에서 상위 경로 전부로 바로 이동 (캐릭터 › 이름 › 대화) */
+	const crumbMenu = $derived.by((): MenuItem[] => (layout.narrow ? title.slice(0, -1).flatMap((t) => (t.to ? [{ label: t.label, icon: ChevronLeft, onselect: () => nav.go(t.to!) }] : [])) : []));
+	const fullMenu = $derived.by((): MenuItem[] => {
+		const [first, ...rest] = menuItems;
+		// 이동 항목과 대화 동작 사이에 구분선
+		return crumbMenu.length && first ? [...crumbMenu, { ...first, separator: true }, ...rest] : [...crumbMenu, ...menuItems];
+	});
+
 	// 지금 화면 이름 (Claude Code 헤더처럼 가운데 왼쪽에 보임)
 	// 누르면 그 자리로 가는 경로 (마지막은 지금 화면)
 	type Crumb = { label: string; to?: Route };
@@ -196,15 +204,18 @@
 				{:else}
 					<button class="crumb last" title="눌러서 이름 바꾸기" onclick={startRename}>{t.label}</button>
 				{/if}
-				<IconButton label="대화 동작" size="sm" onclick={openMenu}><ChevronDown /></IconButton>
+				<IconButton label={layout.narrow ? "상위 화면·대화 동작" : "대화 동작"} size="sm" onclick={openMenu}><ChevronDown /></IconButton>
 			{:else if t.to && i < title.length - 1}
 				<button class="crumb" title="{t.label}(으)로" onclick={() => nav.go(t.to!)}>{t.label}</button>
 			{:else}
 				<span class:last={i === title.length - 1}>{t.label}</span>
 			{/if}
 		{/each}
+		{#if layout.narrow && !conv && crumbMenu.length}
+			<IconButton label="상위 화면" size="sm" onclick={openMenu}><ChevronDown /></IconButton>
+		{/if}
 	</h1>
-	<ContextMenu at={menu} items={menuItems} label="대화 동작" onclose={() => (menu = null)} />
+	<ContextMenu at={menu} items={fullMenu} label="화면 이동" onclose={() => (menu = null)} />
 	<div class="drag" data-tauri-drag-region></div>
 
 	<PluginCommands />

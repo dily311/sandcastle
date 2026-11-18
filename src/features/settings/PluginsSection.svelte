@@ -25,14 +25,14 @@
 	const byId = (id: string) => plugins.list.find((p) => p.id === id);
 </script>
 
-<Section title="코어 플러그인" lead="필요 없는 부가 기능은 꺼 두면 메뉴와 설정에서 사라지고 AI에게도 쓰이지 않음. 끈 기능의 데이터는 지우지 않음">
+<Section title="코어 플러그인">
 	{#each GROUPS as g (g.title)}
 		<Group title={g.title}>
 			{#each g.ids as id (id)}
 				{@const p = byId(id)}
 				{@const tab = TAB[id]}
 				{#if p}
-					<Row label={p.name} desc={p.description}>
+					<Row label={p.name} desc={p.description} nowrap>
 						{#if p.desktopOnly && layout.mobile}<Badge>데스크톱 전용</Badge>{/if}
 						{#if tab && p.enabled}<IconButton label="{p.name} 설정" size="sm" onclick={() => nav.replace({ page: "settings", tab })}><Settings2 /></IconButton>{/if}
 						<Switch checked={p.enabled} label="{p.name} 사용" hideLabel disabled={p.desktopOnly && layout.mobile} onchange={(v) => plugins.set(id, v)} />

@@ -339,7 +339,7 @@
 	}
 	.grid {
 		display: grid;
-		grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
+		grid-template-columns: repeat(auto-fill, minmax(min(220px, 45%), 1fr));
 		gap: var(--space-3);
 	}
 	.info {

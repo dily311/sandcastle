@@ -265,6 +265,7 @@
 			linear-gradient(180deg, var(--gray-4), var(--gray-2));
 		background-size: cover;
 		background-position: center;
+		z-index: -1;
 	}
 	.profile {
 		display: flex;
@@ -420,5 +421,22 @@
 		gap: var(--space-2);
 		padding: var(--space-3);
 		font-size: var(--text-sm);
+	}
+	/* 좁은 화면: 제목이 한 줄에 잘리지 않게 버튼 줄은 아래로 내리고, 긴 제목은 줄바꿈 */
+	.ident h1 {
+		overflow-wrap: anywhere;
+	}
+	@media (max-width: 900px) {
+		.profile {
+			flex-direction: column;
+			align-items: stretch;
+			padding: 0 var(--space-4);
+		}
+		.ident {
+			min-width: 0;
+		}
+		.cta {
+			flex-wrap: wrap;
+		}
 	}
 </style>

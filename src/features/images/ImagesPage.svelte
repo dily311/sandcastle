@@ -2,9 +2,9 @@
 	// 이미지 페이지 = 갤러리: 만든 그림과 올린 그림 전부. 위의 "만들기"를 누르면 만들기 칸이 열린다.
 	// 그림은 앱 데이터 generated/ 폴더에 있고, 같은 이름 .json에 프롬프트·출처·생성 정보가 있다 (service/plugins.rs)
 	import { onMount } from "svelte";
-	import { ArrowUpDown, Check, Info, Plus, Copy, ExternalLink, Eye, Filter, FolderOpen, MessageSquare, Pencil, Search, Sparkles, Tag, Trash2, Upload, Wand2, X } from "@lucide/svelte";
+	import { ArrowUpDown, Check, Ellipsis, Info, Plus, Copy, ExternalLink, Eye, Filter, FolderOpen, MessageSquare, Pencil, Search, Sparkles, Tag, Trash2, Upload, Wand2, X } from "@lucide/svelte";
 	import type { GeneratedImage_Serialize as GeneratedImage } from "$ipc/bindings";
-	import { Badge, Button, ContextMenu, EmptyState, IconButton, Input, ItemCard, ListToolbar, SelectBar, SplitButton, Spinner, type MenuItem } from "$shared/ui";
+	import { Badge, Button, ContextMenu, Dialog, EmptyState, IconButton, Input, ItemCard, ListToolbar, SelectBar, SplitButton, Spinner, type MenuItem } from "$shared/ui";
 	import { call, commands } from "$shared/ipc/client";
 	import { fileSrc } from "$shared/ipc/file";
 	import { pickFiles } from "$shared/ipc/dialog";
@@ -137,6 +137,20 @@
 				// 파일 위치 열기는 데스크톱만 (Android에는 탐색기가 없음)
 				...(layout.desktop ? [{ label: "파일 위치 열기", icon: FolderOpen, separator: true, onselect: () => reveal(img) }] : []),
 				...(mine ? [{ label: "삭제", icon: Trash2, danger: true, onselect: () => remove(img) }] : []),
+			],
+		};
+	}
+	/** 크게 보기 창의 … 메뉴: 다른 그림 뷰어와 같은 작업 (파일 위치·이름·삭제·정보) */
+	function viewMenu(e: MouseEvent, img: GeneratedImage) {
+		const r = (e.currentTarget as HTMLElement).getBoundingClientRect();
+		menu = {
+			at: { x: r.right, y: r.bottom + 4, align: "end" },
+			label: "그림 메뉴",
+			items: [
+				{ label: "정보 보기", icon: Info, onselect: () => (showInfo = true) },
+				...(layout.desktop ? [{ label: "파일 위치 열기", icon: ExternalLink, onselect: () => reveal(img) }] : []),
+				...(owned(img) ? [{ label: "이름 바꾸기", icon: Pencil, separator: true, onselect: () => rename(img) }] : []),
+				...(owned(img) ? [{ label: "삭제", icon: Trash2, danger: true, separator: true, onselect: () => remove(img) }] : []),
 			],
 		};
 	}
@@ -369,14 +383,13 @@
 		<div class="box">
 			<img src={fileSrc(v.path)} alt={v.prompt} data-no-zoom />
 			<div class="info">
-				<p class="vname">{title(v)}</p>
+				<div class="vhead">
+					<p class="vname">{title(v)}</p>
+					<IconButton label="그림 메뉴" size="sm" onclick={(e) => viewMenu(e, v)}><Ellipsis /></IconButton>
+				</div>
 				<div class="acts">
 					{#if v.prompt && plugins.on("imagegen")}<Button size="sm" onclick={() => reuse(v)}>{#snippet icon()}<Sparkles />{/snippet}이 프롬프트로 다시</Button>{/if}
 					{#if v.conversationId}<Button size="sm" onclick={() => openSource(v)}>{#snippet icon()}<MessageSquare />{/snippet}대화로</Button>{/if}
-					{#if layout.desktop}<Button size="sm" variant="ghost" onclick={() => reveal(v)}>{#snippet icon()}<ExternalLink />{/snippet}파일 위치</Button>{/if}
-					{#if owned(v)}<Button size="sm" variant="ghost" onclick={() => rename(v)}>{#snippet icon()}<Pencil />{/snippet}이름</Button>{/if}
-					<span class="sp"></span>
-					{#if owned(v)}<Button size="sm" variant="ghost" onclick={() => remove(v)}>{#snippet icon()}<Trash2 />{/snippet}삭제</Button>{/if}
 				</div>
 				{#if taggable(v)}
 					<div class="tags" role="group" aria-label="태그">
@@ -386,8 +399,8 @@
 						<button class="tag add" onclick={() => addCustomTag(v)}>+ 태그</button>
 					</div>
 				{/if}
-				<button class="info-toggle" aria-expanded={showInfo} onclick={() => (showInfo = !showInfo)}><Info />{showInfo ? "정보 접기" : "정보 보기"}</button>
-				{#if showInfo}
+				<!-- 정보는 그림 위에 따로 뜨는 창 (… 메뉴의 "정보 보기") -->
+				<Dialog open={showInfo} title="정보" size="md" onclose={() => (showInfo = false)}>
 				<p class="meta"><Badge>{SOURCE[v.source] ?? v.source}</Badge> {v.model ? `${v.model} · ` : ""}{when(v.createdAt)}</p>
 				{#if v.prompt}
 					<div class="block">
@@ -411,7 +424,7 @@
 				{:else if !v.prompt && !neg}
 					<p class="meta">생성 정보 없음</p>
 				{/if}
-				{/if}
+				</Dialog>
 			</div>
 		</div>
 	</div>
@@ -474,8 +487,14 @@
 	}
 	.grid {
 		display: grid;
-		grid-template-columns: repeat(auto-fill, minmax(180px, 1fr));
+		grid-template-columns: repeat(auto-fill, minmax(min(180px, 45%), 1fr));
 		gap: var(--space-3);
+	}
+	.vhead {
+		display: flex;
+		align-items: center;
+		justify-content: space-between;
+		gap: var(--space-2);
 	}
 	.vname {
 		margin: 0;
@@ -503,24 +522,6 @@
 	}
 	.tag.add {
 		border-style: dashed;
-	}
-	.info-toggle {
-		display: inline-flex;
-		align-items: center;
-		gap: 6px;
-		align-self: flex-start;
-		padding: 4px 8px;
-		border: none;
-		border-radius: var(--radius-sm);
-		background: var(--surface-2);
-		color: var(--text-muted);
-		font: inherit;
-		font-size: var(--text-xs);
-		cursor: pointer;
-	}
-	.info-toggle :global(svg) {
-		width: 14px;
-		height: 14px;
 	}
 	.tag.on {
 		border-color: var(--accent);
@@ -556,7 +557,6 @@
 		overflow: auto;
 	}
 	.box > img {
-		max-width: 58vw;
 		width: 100%;
 		height: 100%;
 		max-height: calc(90vh - 2 * var(--space-4));
@@ -569,9 +569,7 @@
 		flex-direction: column;
 		gap: var(--space-3);
 		width: 100%;
-    	max-width: 25vw;
 		min-width: 0;
-		overflow: auto;
 	}
 	.meta {
 		margin: 0;
@@ -647,16 +645,6 @@
 	@media (max-width: 720px) {
 		.page {
 			padding: var(--space-4);
-		}
-		.box {
-			flex-direction: column;
-			overflow: auto;
-		}
-		.box > img {
-			max-width: none;
-		}
-		.info {
-			max-width: none;
 		}
 	}
 </style>

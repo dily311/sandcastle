@@ -100,3 +100,9 @@ a:hover {
 .faint {
 	color: var(--text-faint);
 }
+
+/* 북마크한 글 (대화 본문, features/character/highlight.ts) */
+::highlight(bookmark) {
+	background-color: color-mix(in oklab, var(--accent) 38%, transparent);
+	color: inherit;
+}

@@ -123,13 +123,15 @@
 		filter: var(--game-character-dim-shadow);
 	}
 	@media (max-width: 620px) {
+		/* 대사창이 화면 아래를 덮으므로 캐릭터는 그 위에서 시작 (--dock-h는 VisualNovelTemplatePlay가 잼) */
 		.characters {
+			bottom: calc(var(--dock-h, 0px) + 10px);
 			gap: 0;
 			padding: 0 2%;
 		}
 		.character-sprite {
 			max-width: 52%;
-			max-height: 76%;
+			max-height: 100%;
 		}
 	}
 </style>

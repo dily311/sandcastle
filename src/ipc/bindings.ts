@@ -80,8 +80,10 @@ export const commands = {
 	 *  끌어다 놓은 파일을 디스크에 저장하고 경로를 돌려준다 (웹뷰의 드롭은 경로 없이 내용만 줌).
 	 *  - `keep = true`: 메시지 첨부 이미지. 앱 데이터의 attachments 폴더에 계속 둔다
 	 *  - `keep = false`: 가져오기용 임시 파일. 원래 이름을 살려 임시 폴더에 두고, 하루 지난 것은 지운다
+	 *  - `append_to`: 큰 파일을 조각으로 나눠 보낼 때, 앞 조각이 돌려준 경로를 주면 거기에 이어 붙인다 (임시 폴더 안의 파일만).
+	 *    한 번에 보내면 수백 MB가 IPC 한 덩어리로 오가며 화면이 얼어붙기 때문
 	 */
-	storeDroppedFile: (name: string, dataBase64: string, keep: boolean, options?: InvokeOptions) => __TAURI_INVOKE<string>("store_dropped_file", { name, dataBase64, keep }, options),
+	storeDroppedFile: (name: string, dataBase64: string, keep: boolean, appendTo: string | null, options?: InvokeOptions) => __TAURI_INVOKE<string>("store_dropped_file", { name, dataBase64, keep, appendTo }, options),
 	contextUsage: (conversationId: string, options?: InvokeOptions) => __TAURI_INVOKE<ContextUsage_Serialize>("context_usage", { conversationId }, options),
 	/**  메시지들을 화면용으로: 표시용 정규식 + {{char}}/{{user}} 이름. 순서대로, 마지막이 가장 최근 */
 	displayMessages: (conversationId: string, items: DisplayItem[], options?: InvokeOptions) => __TAURI_INVOKE<string[]>("display_messages", { conversationId, items }, options),

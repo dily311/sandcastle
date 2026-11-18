@@ -1,7 +1,8 @@
 <script lang="ts">
 	import { tick } from "svelte";
 	import { Bookmark, ChevronRight, Gauge, Copy, CornerUpLeft, FastForward, GitBranch, ImagePlus, Images, IdCard, Languages, ListChecks, ListTree, PanelLeft, Plus, RefreshCw, Send, SlidersHorizontal, Square, Trash2, X } from "@lucide/svelte";
-	import { bookmarks } from "./bookmarks";
+	import { bookmarks, bookmarksOf, type ChatBookmark } from "./bookmarks";
+	import { findTextRange } from "./highlight";
 	import { childrenOf, pathOf } from "./branches";
 	import SidePanel from "$app/SidePanel.svelte";
 	import { layout } from "$app/layout.svelte";
@@ -16,7 +17,7 @@
 	import { panel } from "$app/panel.svelte";
 	import { appSetting } from "$shared/stores/appSetting.svelte";
 	appSetting.load();
-	import { fileSrc } from "$shared/ipc/file";
+	import { fileSrc, imageSrc } from "$shared/ipc/file";
 	import type { PromptMessage_Serialize } from "$ipc/bindings";
 	import ChatPanel from "./ChatPanel.svelte";
 	import ConvSidebar from "./ConvSidebar.svelte";
@@ -112,7 +113,7 @@
 	}
 
 	/** <cg>키</cg> → 이미지 주소 (켜진 것만이 아니라 전부: 예전 응답도 그대로 보이게) */
-	const images = $derived(Object.fromEntries((library.images[charId] ?? []).map((i) => [i.key, fileSrc(i.path) ?? ""])));
+	const images = $derived(Object.fromEntries((library.images[charId] ?? []).map((i) => [i.key, imageSrc(i) ?? ""])));
 
 	// 챕터 번호
 	const chapters = $derived.by(() => {
@@ -139,15 +140,30 @@
 		void session?.live?.text;
 		void scrollToEnd();
 	});
-	export async function jumpTo(id: string) {
+	export async function jumpTo(id: string, mark?: ChatBookmark) {
 		// 아직 그리지 않은 앞쪽 메시지면 거기까지 먼저 그린다
 		const at = session?.messages.findIndex((m) => m.id === id) ?? -1;
 		if (at >= 0 && at < start) {
 			shownFrom = Math.max(0, at - 5);
 			await tick();
 		}
-		document.getElementById(`msg-${id}`)?.scrollIntoView({ behavior: "smooth", block: "start" });
+		const block = document.getElementById(`msg-${id}`);
+		// 북마크면 그 글이 있는 자리로 (접혔거나 다른 스와이프라 못 찾으면 메시지 처음으로)
+		const hit = block && mark ? findTextRange(block, mark.text) : null;
+		const target = hit ? (hit.startContainer.parentElement ?? block) : block;
+		target?.scrollIntoView({ behavior: "smooth", block: hit ? "center" : "start" });
 	}
+	/** 패널에서 이동: 폰에서는 패널이 화면을 덮으므로 닫고 그 자리를 바로 보여줌 */
+	function jumpFromPanel(id: string, mark?: ChatBookmark) {
+		if (layout.narrow && panel.open) panel.toggle();
+		return jumpTo(id, mark);
+	}
+	/** 메시지별 북마크 (본문에 형광펜으로 칠함) */
+	const marksByMsg = $derived.by(() => {
+		const map = new Map<string, ChatBookmark[]>();
+		for (const b of bookmarksOf(conv)) map.set(b.messageId, [...(map.get(b.messageId) ?? []), b]);
+		return map;
+	});
 
 	// ---- 입력 ----
 	let draft = $state("");
@@ -192,10 +208,13 @@
 		for (const p of items) URL.revokeObjectURL(p.url);
 	}
 
+	let readerEl: HTMLElement | undefined = $state();
 	// 파일을 끌어다 놓으면: 이미지는 첨부, .jsonl은 이 캐릭터의 대화로 가져오기
 	$effect(() =>
 		drops.register({
 			priority: 1,
+			// 읽는 영역에 놓은 것만 (오른쪽 패널은 에셋·프리셋이 받음)
+			zone: () => readerEl,
 			label: "이미지 첨부 · 대화 가져오기",
 			hint: "이미지는 다음 메시지에 붙고, SillyTavern 채팅(.jsonl)은 이 캐릭터의 대화로 들어옴",
 			accept: (f) => isImage(f) || extOf(f) === "jsonl",
@@ -262,11 +281,22 @@
 		const msg = session?.messages.find((x) => x.id === m.messageId);
 		card = { text: m.text, speaker: msg?.name ?? (msg?.role === "assistant" ? character?.name : undefined), time: msg?.createdAt };
 	}
+	/** 북마크 탭에서: 북마크한 글을 이미지 카드로 */
+	function cardFromMark(b: ChatBookmark) {
+		const msg = session?.messages.find((x) => x.id === b.messageId);
+		card = { text: b.text, speaker: msg?.name ?? (msg?.role === "assistant" ? character?.name : undefined), time: msg?.createdAt };
+	}
 	async function bookmarkSelection() {
 		const m = selMenu; // 메뉴가 닫히며 selMenu가 비워지므로 먼저 잡아 둠
 		if (!m || !conv) return;
-		await bookmarks.add(conv, m.messageId, m.text);
+		const msg = session?.messages.find((x) => x.id === m.messageId);
+		await bookmarks.add(conv, m.messageId, m.text, msg ? (metaOf(msg).swipeId ?? 0) : 0);
 		window.getSelection()?.removeAllRanges();
+	}
+
+	// ---- 북마크 삭제 (본문의 형광펜을 눌러서) ----
+	async function removeMark(b: ChatBookmark) {
+		if (conv) await bookmarks.remove(conv, b.id);
 	}
 
 	// ---- 챕터 이름 바꾸기 (오른쪽 클릭 / 꾹 누르기) ----
@@ -350,13 +380,13 @@
 		<!-- svelte-ignore a11y_click_events_have_key_events, a11y_no_static_element_interactions (목록 버튼으로도 닫힘) -->
 		<div class="list-scrim" transition:fade={{ duration: 150 }} onclick={() => (mobileList = false)}></div>
 		<div class="list-drawer" transition:fly={{ x: -320, duration: 200 }}>
-			<ConvSidebar {charId} {convId} onopen={(id) => { mobileList = false; onopen(id); }} oncreate={async () => { mobileList = false; onopen((await library.createConversation(charId)).id); }} />
+			<ConvSidebar {charId} {convId} onopen={(id) => { mobileList = false; onopen(id); }} oncreate={async () => { mobileList = false; onopen((await library.createConversation(charId)).id); }} onclose={toggleList} />
 		</div>
 	{:else if listShown}
-		<ConvSidebar {charId} {convId} {onopen} oncreate={async () => onopen((await library.createConversation(charId)).id)} />
+		<ConvSidebar {charId} {convId} {onopen} oncreate={async () => onopen((await library.createConversation(charId)).id)} onclose={toggleList} />
 	{/if}
 
-	<section class="reader">
+	<section class="reader" bind:this={readerEl}>
 		<header class="bar" class:listing={listShown}>
 			{#if path.length > 1}
 				<nav class="bpath" aria-label="분기 경로">
@@ -411,7 +441,7 @@
 							<!-- svelte-ignore a11y_no_noninteractive_element_interactions (오른쪽 클릭·꾹 누르기로 이름 바꾸기, 키보드는 메시지 동작의 챕터 버튼) -->
 							<h2 class="chapter" id="chapter-{m.id}" title="오른쪽 클릭하거나 꾹 눌러 이름 바꾸기" oncontextmenu={(e) => { e.preventDefault(); void renameChapter(m); }} onpointerdown={(e) => pressStart(e, m)} onpointerup={pressEnd} onpointerleave={pressEnd}><span>{chapters[m.id]}장</span>{ch}</h2>
 						{/if}
-						<MessageItem msg={m} no={i + 1} {session} {images} isLast={i === session.messages.length - 1} onbranch={branch} onprompt={showPrompt} {selecting} selected={picked.has(m.id)} onselect={pick} />
+						<MessageItem msg={m} no={i + 1} {session} {images} isLast={i === session.messages.length - 1} onbranch={branch} onprompt={showPrompt} {selecting} selected={picked.has(m.id)} onselect={pick} marks={marksByMsg.get(m.id)} onmarkremove={removeMark} />
 					{/each}
 
 					{#if session.live?.kind === "send"}
@@ -504,7 +534,7 @@
 
 	{#if panel.open && conv && session}
 		<SidePanel label="대화 패널">
-			<ChatPanel {conv} {session} {chapters} onjump={jumpTo} onopen={openAt} />
+			<ChatPanel {conv} {session} {chapters} onjump={jumpFromPanel} oncard={cardFromMark} onopen={openAt} />
 		</SidePanel>
 	{/if}
 	<ContextMenu
