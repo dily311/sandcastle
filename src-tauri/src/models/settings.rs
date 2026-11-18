@@ -269,6 +269,34 @@ pub struct PluginSetting {
     /// 자동 재생성 (3-B-4, ADR-017) — 기기 전용
     #[serde(default)]
     pub rewrite: RewriteSetting,
+    /// 대필 (5-D, ADR-018) — 기기 전용
+    #[serde(default)]
+    pub ghost: GhostSetting,
+}
+
+/// 대필 설정. 켜짐/꺼짐은 코어 플러그인 `ghostwrite`(기본 꺼짐)
+#[derive(Debug, Serialize, Deserialize, Clone, specta::Type)]
+#[serde(rename_all = "camelCase", default)]
+pub struct GhostSetting {
+    /// 대필에 쓸 API (비우면 그 대화의 API)
+    pub api_profile_id: Option<String>,
+    /// short / medium / long
+    pub length: String,
+    /// 추가 지침 한 줄 (300자까지)
+    pub guide: String,
+    /// 펜 버튼을 누르면 초안 작성 없이 바로 AI에게 요청 (한 번 누르면 한 번의 요금)
+    pub send_without_draft: bool,
+}
+
+impl Default for GhostSetting {
+    fn default() -> Self {
+        Self {
+            api_profile_id: None,
+            length: "medium".into(),
+            guide: String::new(),
+            send_without_draft: false,
+        }
+    }
 }
 
 /// 자동 재생성 설정. 켜짐/꺼짐은 코어 플러그인 `rewrite`(기본 꺼짐, 켜는 것이 동의). 꺼져 있으면 linter가 쓸 수 없다

@@ -41,6 +41,8 @@ pub mod id {
     pub const SUMMARY: &str = "summary";
     /// 자동 재생성 (3-B-4, ADR-017): linter가 찾은 문제로 응답을 새 스와이프로 다시 만듦
     pub const REWRITE: &str = "rewrite";
+    /// 대필 (5-D, ADR-018): 초안을 AI가 내 말투의 대사로 써 입력칸에 채움
+    pub const GHOSTWRITE: &str = "ghostwrite";
 }
 
 #[derive(Debug, Clone, Serialize, specta::Type)]
@@ -171,6 +173,13 @@ const CATALOG: &[Def] = &[
         id: id::REWRITE,
         name: "자동 재생성",
         description: "linter가 금지어·단어 반복 오류를 찾으면 응답을 새 스와이프로 다시 만듦 (원본은 남음). 켜면 걸릴 때마다 응답 하나의 요금이 더 듦",
+        default_enabled: false,
+        desktop_only: false,
+    },
+    Def {
+        id: id::GHOSTWRITE,
+        name: "대필",
+        description: "내가 적은 초안을 AI가 내 말투의 다음 대사로 써서 입력칸에 채움 (보내지는 않음). 누를 때마다 응답 하나의 요금이 듦",
         default_enabled: false,
         desktop_only: false,
     },

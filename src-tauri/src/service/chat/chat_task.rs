@@ -42,6 +42,9 @@ pub enum ChatJob {
     Send {
         text: String,
         attachments: Vec<String>,
+        /// 대필을 거친 글 (사용자 메시지 meta.ghost)
+        #[serde(default, skip_serializing_if = "std::ops::Not::not")]
+        ghost: bool,
     },
     Regenerate {
         swipe: bool,
@@ -129,11 +132,11 @@ impl TaskExecutor for ChatTaskExecutor {
                 });
             }
             ChatJob::Regenerate { swipe, extra, auto } => TurnKind::Regenerate { swipe, extra, auto },
-            ChatJob::Send { text, attachments } => {
+            ChatJob::Send { text, attachments, ghost } => {
                 if input_already_saved(db, &conversation_id, &task.id).await? {
                     TurnKind::Reply
                 } else {
-                    TurnKind::Send(text, attachments)
+                    TurnKind::Send(text, attachments, ghost)
                 }
             }
         };
@@ -291,6 +294,12 @@ mod tests {
             ChatJob::Send {
                 text: "안녕".into(),
                 attachments: vec!["a.png".into()],
+                ghost: false,
+            },
+            ChatJob::Send {
+                text: "대필한 글".into(),
+                attachments: vec![],
+                ghost: true,
             },
             ChatJob::Regenerate {
                 swipe: true,

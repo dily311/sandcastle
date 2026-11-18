@@ -240,7 +240,8 @@ pub(crate) static LAST_GAME_PROMPT: LazyLock<Mutex<HashMap<String, PromptMessage
 pub enum TurnKind {
     /// 사용자 입력을 저장하고 응답을 만든다. 입력이 비었으면 저장 없이 이어서 응답 (이어쓰기)
     /// 두 번째 값은 붙인 이미지 경로 (글 없이 이미지만 보내도 됨)
-    Send(String, Vec<String>),
+    /// 세 번째 값: 대필을 거친 글이면 true (사용자 메시지 meta.ghost)
+    Send(String, Vec<String>, bool),
     /// 마지막 AI 메시지를 다시 만든다. `swipe`면 스와이프로 쌓고, 아니면 스와이프를 버리고 바꾼다.
     /// `extra`: 이번 생성에만 붙이는 지시 ("지시와 함께 다시 생성")
     /// `auto`: 자동 재생성(3-B-4)이 낸 것이면 묶은 메시지·시도 횟수 — 그 메시지가 바뀌었으면 만들지 않고, 멈추면 받은 글을 버린다
@@ -465,7 +466,7 @@ impl ChatManager {
 
         // 이번에 보낼 사용자 입력: 새로 쓴 것, 또는 (다시 생성일 때) 기록의 마지막 사용자 메시지
         let (input, already_stored, generation_type) = match (&kind, &target) {
-            (TurnKind::Send(text, images), _) => {
+            (TurnKind::Send(text, images, _), _) => {
                 let t = text.trim().to_string();
                 context.user_images = images.clone();
                 let gt = if t.is_empty() && images.is_empty() {
@@ -622,7 +623,7 @@ impl ChatManager {
         // 새 입력은 저장용 정규식을 거쳐 먼저 저장한다 (응답이 실패해도 입력은 남는다)
         let mut user_msg = None;
         let attachments = match &kind {
-            TurnKind::Send(_, images) => images.clone(),
+            TurnKind::Send(_, images, _) => images.clone(),
             _ => vec![],
         };
         let prompt_input = if already_stored || (input.is_empty() && attachments.is_empty()) {
@@ -645,6 +646,9 @@ impl ChatManager {
                         }
                         if !attachments.is_empty() {
                             meta["attachments"] = json!(attachments);
+                        }
+                        if matches!(&kind, TurnKind::Send(_, _, true)) {
+                            meta["ghost"] = json!(true);
                         }
                         meta
                     }),
@@ -803,6 +807,116 @@ impl ChatManager {
         // 쌓인 만큼이 되었으면 백그라운드로 요약 (켜져 있을 때만, 보내기를 늦추지 않음)
         crate::service::summary::hooks::after_response(app, &conv, &api_profile_id, &preset_id);
         Ok(ChatTurn { user: user_msg, assistant })
+    }
+
+    /// 대필 (5-D, ADR-018): 사용자의 다음 대사를 사용자의 말투로 쓴다. 메시지로 저장하지 않고 글만 돌려준다 (화면이 입력칸에 채움).
+    /// 컨텍스트는 보통 응답과 같지만 자동 회상·정규식·linter·커뮤니티 프롬프트 훅은 거치지 않는다.
+    /// 프리셋의 뒤쪽 블록(지침·prefill)이 마지막 말이 되지 않게, 지시를 **맨 끝 user 메시지**로 붙이고 끝의 assistant prefill은 뗀다.
+    #[allow(clippy::too_many_arguments)]
+    pub async fn ghost(
+        &self,
+        app: &AppHandle,
+        db: &crate::db::conn::DbPool,
+        settings: &SettingsState<AppSetting>,
+        conversation_id: &str,
+        brief: Option<String>,
+        cfg: &crate::models::settings::GhostSetting,
+        channel: Option<Channel<StreamPayload>>,
+        cancel: &CancellationToken,
+    ) -> Result<String> {
+        let conv = match get_conversation(db, conversation_id).await {
+            Ok(c) => c,
+            Err(sqlx::Error::RowNotFound) => return Err(AppError::not_found("대화를 찾을 수 없음").into()),
+            Err(e) => return Err(AppError::from(e).into()),
+        };
+        let mut fallback = current_conv_request(settings)?;
+        phone_defaults(app, &conv.mode, &mut fallback);
+        let api_profile_id = cfg
+            .api_profile_id
+            .clone()
+            .filter(|s| !s.is_empty())
+            .or(conv.api_profile_id.clone().filter(|s| !s.is_empty()))
+            .or(Some(fallback.api_profile_id.clone()).filter(|s| !s.is_empty()))
+            .ok_or_else(|| AppError::validation("API를 먼저 고르세요 (대화 설정 또는 설정 > API 키)", None))?;
+        let persona_id = match conv.persona_id.as_str() {
+            "" => get_system_default_persona(db).await.unwrap_or_else(|_| "default".into()),
+            id => id.to_string(),
+        };
+        if conv.character_id.is_empty() {
+            return Err(AppError::validation("캐릭터가 지워진 대화", None).into());
+        }
+        let character = get_character(db, &conv.character_id).await.map_err(AppError::from)?;
+        let persona = get_persona(db, &persona_id).await.map_err(AppError::from)?;
+        let preset_id = conv
+            .prompt_preset_id
+            .clone()
+            .filter(|s| !s.is_empty())
+            .or(character.default_prompt_preset_id.clone().filter(|s| !s.is_empty()))
+            .unwrap_or(fallback.preset_id);
+        // 나/상대: 캐릭터 폰이면 주인 캐릭터와 연락처 — "내 대사"는 `me`의 것
+        let (me, other, char_phone) = phone_sides::sides(db, conv.meta.as_ref(), &character, &persona).await?;
+
+        let mut context = ContextManager
+            .build_context(
+                db,
+                ContextRequest {
+                    conversation_id: conversation_id.to_string(),
+                    character_id: conv.character_id.clone(),
+                    persona_id: persona_id.clone(),
+                    history_limit: HISTORY_FETCH_LIMIT,
+                },
+            )
+            .await?;
+        if char_phone {
+            phone_sides::apply_sides(&mut context, &me, &other);
+        }
+        crate::service::chat::notes::apply(&mut context, conv.meta.as_ref());
+        if crate::sys::plugins::is_enabled(app, crate::sys::plugins::id::SUMMARY) && !crate::service::summary::disabled_for(conv.meta.as_ref()) {
+            if let Some((block, _)) = crate::service::summary::block_for(db, conversation_id).await {
+                context.system_rules.push(block);
+            }
+        }
+        let history: Vec<(String, String)> = context.history.iter().map(|h| (h.role.clone(), h.content.clone())).collect();
+        let samples = super::ghost::style_samples(&history);
+        let instruction = super::ghost::build_instruction(&me.name, &other.name, brief.as_deref(), &samples, cfg);
+
+        // 프롬프트: 입력 없이(user_message 비움) Impersonate로 짜서 프리셋이 대필용 블록을 고르게 하고, 마지막에 지시를 붙인다
+        let mut prompt = PromptManager
+            .build_with_db(
+                db,
+                PromptRequest {
+                    context,
+                    user_message: String::new(),
+                    preset_id: Some(preset_id),
+                    context_limit: DEFAULT_CONTEXT_LIMIT,
+                    world_info_ratio: DEFAULT_WORLD_INFO_RATIO,
+                    generation_type: GenerationType::Impersonate,
+                },
+            )
+            .await?;
+        super::ghost::finish_prompt(&mut prompt, instruction, &cfg.length, channel.is_some());
+
+        let ai = app
+            .try_state::<Arc<AiService>>()
+            .ok_or_else(|| AppError::internal("AiService가 초기화되지 않았습니다"))?
+            .inner()
+            .clone();
+        let response = ai
+            .generate(
+                AiRequest {
+                    profile_id: api_profile_id,
+                    prompt,
+                },
+                cancel,
+                |d| {
+                    if let Some(ch) = &channel {
+                        let _ = ch.send(StreamPayload { chunk: d.to_string() });
+                    }
+                },
+            )
+            .await?;
+        super::ghost::clean_output(&response.content, &me.name, &other.name)
+            .ok_or_else(|| AppError::validation("대필 결과가 비어 있음 — 다시 눌러 보세요", None).into())
     }
 
     /// 폰 엿보기: 두 사람 몫을 AI가 모두 이어서 쓰고, 말풍선 메시지로 나눠 저장한다.

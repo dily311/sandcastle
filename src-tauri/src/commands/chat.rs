@@ -43,8 +43,15 @@ fn required(name: &str) -> Result<String> {
 /// 응답 조각은 `on_event`로 흐르고, 저장된 메시지는 반환값으로 온다.
 #[tauri::command]
 #[specta::specta]
-pub async fn chat_send(app: AppHandle, conversation_id: String, text: String, attachments: Vec<String>, on_event: Channel<StreamPayload>) -> Result<ChatTurn> {
-    let saved = chat_task::run(&app, &conversation_id, ChatJob::Send { text, attachments }, on_event).await?;
+pub async fn chat_send(
+    app: AppHandle,
+    conversation_id: String,
+    text: String,
+    attachments: Vec<String>,
+    ghost: bool,
+    on_event: Channel<StreamPayload>,
+) -> Result<ChatTurn> {
+    let saved = chat_task::run(&app, &conversation_id, ChatJob::Send { text, attachments, ghost }, on_event).await?;
     chat_task::into_turn(saved)
 }
 

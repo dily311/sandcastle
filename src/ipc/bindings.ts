@@ -44,7 +44,7 @@ export const commands = {
 	 *  생성은 작업(ChatStream)으로 돌아서 다른 대화로 옮겨 가도 계속되고, 앱이 꺼지면 다시 시도할 수 있다.
 	 *  응답 조각은 `on_event`로 흐르고, 저장된 메시지는 반환값으로 온다.
 	 */
-	chatSend: (conversationId: string, text: string, attachments: string[], onEvent: Channel<StreamPayload>, options?: InvokeOptions) => __TAURI_INVOKE<ChatTurn_Serialize>("chat_send", { conversationId, text, attachments, onEvent }, options),
+	chatSend: (conversationId: string, text: string, attachments: string[], ghost: boolean, onEvent: Channel<StreamPayload>, options?: InvokeOptions) => __TAURI_INVOKE<ChatTurn_Serialize>("chat_send", { conversationId, text, attachments, ghost, onEvent }, options),
 	/**  마지막 AI 메시지 다시 만들기. `swipe`면 스와이프로 쌓고, 아니면 스와이프를 버리고 바꾼다. `extra`는 이번 생성에만 붙이는 지시. */
 	chatRegenerate: (conversationId: string, swipe: boolean, extra: string | null, onEvent: Channel<StreamPayload>, options?: InvokeOptions) => __TAURI_INVOKE<ChatTurn_Serialize>("chat_regenerate", { conversationId, swipe, extra, onEvent }, options),
 	/**  진행 중인 응답 멈추기 (받은 데까지는 저장됨). 멈출 게 있었으면 true */
@@ -223,6 +223,10 @@ export const commands = {
 	undoConversationSummary: (conversationId: string, options?: InvokeOptions) => __TAURI_INVOKE<SummaryInfo_Serialize | null>("undo_conversation_summary", { conversationId }, options),
 	/**  지금 요약: 사용자가 누른 것(`run_by = user`). 창과 상관없이 최근 몇 개만 원문으로 남기고 요약한다. 요약할 것이 없으면 오류 */
 	summarizeConversationNow: (conversationId: string, options?: InvokeOptions) => __TAURI_INVOKE<SummaryInfo_Serialize>("summarize_conversation_now", { conversationId }, options),
+	/**  초안(없을 수 있음)으로 사용자의 다음 대사를 쓴다. 쓰는 동안 글 조각을 `on_event`로 흘려보내고, 끝나면 정리한 글을 돌려준다. */
+	ghostwrite: (conversationId: string, brief: string | null, onEvent: Channel<StreamPayload>, options?: InvokeOptions) => __TAURI_INVOKE<string>("ghostwrite", { conversationId, brief, onEvent }, options),
+	/**  진행 중인 대필 멈추기 (받은 데까지는 화면이 이미 입력칸에 가지고 있다). 멈출 게 있었으면 true */
+	ghostwriteCancel: (conversationId: string, options?: InvokeOptions) => __TAURI_INVOKE<boolean>("ghostwrite_cancel", { conversationId }, options),
 	/**  화면의 호스트가 프롬프트 요청(user-plugin-prompt)에 답한다. 늦게 와서 기다리는 요청이 없으면 false */
 	answerPluginPrompt: (requestId: string, answers: PluginPromptAnswer_Deserialize[], options?: InvokeOptions) => __TAURI_INVOKE<boolean>("answer_plugin_prompt", { requestId, answers }, options),
 	/**  누른 명령 밖에서도 플러그인이 AI를 부르게 할지 (기본 꺼짐, 요금이 들 수 있음) */
@@ -2610,6 +2614,33 @@ export type GeneratedImage_Serialize = {
 	readonly: boolean,
 };
 
+/**  대필 설정. 켜짐/꺼짐은 코어 플러그인 `ghostwrite`(기본 꺼짐) */
+export type GhostSetting = GhostSetting_Serialize | GhostSetting_Deserialize;
+
+/**  대필 설정. 켜짐/꺼짐은 코어 플러그인 `ghostwrite`(기본 꺼짐) */
+export type GhostSetting_Deserialize = {
+	/**  대필에 쓸 API (비우면 그 대화의 API) */
+	apiProfileId?: string | null,
+	/**  short / medium / long */
+	length?: string,
+	/**  추가 지침 한 줄 (300자까지) */
+	guide?: string,
+	/**  펜 버튼을 누르면 초안 작성 없이 바로 AI에게 요청 (한 번 누르면 한 번의 요금) */
+	sendWithoutDraft?: boolean,
+};
+
+/**  대필 설정. 켜짐/꺼짐은 코어 플러그인 `ghostwrite`(기본 꺼짐) */
+export type GhostSetting_Serialize = {
+	/**  대필에 쓸 API (비우면 그 대화의 API) */
+	apiProfileId: string | null,
+	/**  short / medium / long */
+	length: string,
+	/**  추가 지침 한 줄 (300자까지) */
+	guide: string,
+	/**  펜 버튼을 누르면 초안 작성 없이 바로 AI에게 요청 (한 번 누르면 한 번의 요금) */
+	sendWithoutDraft: boolean,
+};
+
 /**  홈 화면: 보일 블록과 순서, 인사말, 내 글. 리소스를 쓰지 않는 화면이라 블록은 기본으로 보인다 */
 export type HomeSetting = HomeSetting_Serialize | HomeSetting_Deserialize;
 
@@ -3574,6 +3605,8 @@ export type PluginSetting_Deserialize = {
 	summary?: SummarySetting_Deserialize,
 	/**  자동 재생성 (3-B-4, ADR-017) — 기기 전용 */
 	rewrite?: RewriteSetting_Deserialize,
+	/**  대필 (5-D, ADR-018) — 기기 전용 */
+	ghost?: GhostSetting_Deserialize,
 };
 
 export type PluginSetting_Serialize = {
@@ -3593,6 +3626,8 @@ export type PluginSetting_Serialize = {
 	summary: SummarySetting_Serialize,
 	/**  자동 재생성 (3-B-4, ADR-017) — 기기 전용 */
 	rewrite: RewriteSetting_Serialize,
+	/**  대필 (5-D, ADR-018) — 기기 전용 */
+	ghost: GhostSetting_Serialize,
 };
 
 export type PostProcessResult = {
@@ -4682,7 +4717,9 @@ export type TaskType =
 /**  API 연결 확인 등 설정 화면의 짧은 호출 */
 "api_call" | 
 /**  커뮤니티 플러그인이 부른 AI 글 생성 (feature `plugin:<id>`, 6-D-7) */
-"plugin_ai";
+"plugin_ai" | 
+/**  대필 (코어 플러그인 ghostwrite, 5-D) — 입력칸에 채울 글 한 번 */
+"ghostwrite";
 
 export type Template = Template_Serialize | Template_Deserialize;
 

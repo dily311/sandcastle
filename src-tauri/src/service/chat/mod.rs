@@ -2,6 +2,7 @@ pub mod chat_images;
 pub mod chat_manager;
 pub mod chat_task;
 pub(crate) mod context_manager;
+pub mod ghost;
 pub mod lint;
 pub mod notes;
 pub mod phone;

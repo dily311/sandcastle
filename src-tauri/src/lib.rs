@@ -23,8 +23,8 @@ use crate::{
     sys::{settings::SettingsState, themes::ThemeManager},
 };
 use commands::{
-    ai_service::*, character_image::*, chat::*, community::*, conversation::*, convert::*, data::*, game_engine::*, game_manager::*, import::*, memory::*,
-    phone::*, preset::*, proposals::*, regex::*, settings::*, summary::*, sync::*, task::*,
+    ai_service::*, character_image::*, chat::*, community::*, conversation::*, convert::*, data::*, game_engine::*, game_manager::*, ghost::*, import::*,
+    memory::*, phone::*, preset::*, proposals::*, regex::*, settings::*, summary::*, sync::*, task::*,
 };
 use task::{TaskEventEmitter, TaskManager};
 
@@ -350,6 +350,8 @@ pub fn specta_builder() -> tauri_specta::Builder<tauri::Wry> {
         clear_conversation_summary,
         undo_conversation_summary,
         summarize_conversation_now,
+        ghostwrite,
+        ghostwrite_cancel,
         answer_plugin_prompt,
         set_user_plugin_ai_auto,
         get_user_plugin_settings,
@@ -650,6 +652,8 @@ pub fn specta_builder() -> tauri_specta::Builder<tauri::Wry> {
         clear_conversation_summary,
         undo_conversation_summary,
         summarize_conversation_now,
+        ghostwrite,
+        ghostwrite_cancel,
         answer_plugin_prompt,
         set_user_plugin_ai_auto,
         get_user_plugin_settings,
