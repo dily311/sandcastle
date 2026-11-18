@@ -14,6 +14,8 @@
 	import { library } from "$features/character/library.svelte";
 	import ContextMeter from "$features/character/ContextMeter.svelte";
 	import PresetInline from "$features/settings/PresetInline.svelte";
+	import ModelPicker from "$features/settings/ModelPicker.svelte";
+	import { appSetting } from "$shared/stores/appSetting.svelte";
 	import { runtimeStore } from "../runtime/runtimeStore.svelte";
 	import { formatGameTime } from "./vn/playUtils";
 
@@ -37,12 +39,22 @@
 	const apiOptions = $derived([{ value: DEFAULT, label: "앱 기본값" }, ...library.apis.map((a) => ({ value: a.id, label: `${a.name} · ${a.model}` }))]);
 	const presetOptions = $derived([{ value: DEFAULT, label: "앱 기본값" }, ...library.presets.map((p) => ({ value: p.id, label: p.name }))]);
 	const personaOptions = $derived<ProfileOption[]>(library.personas.map((p) => ({ id: p.id, name: p.name, avatar: p.avatar, color: p.color, description: p.description })));
-	async function setOption(p: Partial<{ apiProfileId: string; promptPresetId: string; playerId: string }>) {
+	async function setOption(p: Partial<{ apiProfileId: string; promptPresetId: string; playerId: string }>, model?: string | null) {
 		if (!options) return;
 		const next = { ...options, ...p };
-		await call(commands.setGameSessionOptions(sessionId, next.apiProfileId || null, next.promptPresetId || null, p.playerId ?? null), src);
-		options = { ...next, apiProfileId: next.apiProfileId || null, promptPresetId: next.promptPresetId || null };
+		// 모델은 API에 딸린 이름: API가 바뀌면 백엔드가 초기화한다 (ADR-020). 모델을 안 바꾸는 저장은 지금 모델을 그대로 보냄
+		const nextModel = model !== undefined ? model : (options.model ?? null);
+		await call(commands.setGameSessionOptions(sessionId, next.apiProfileId || null, next.promptPresetId || null, p.playerId ?? null, nextModel), src);
+		const apiChanged = (p.apiProfileId ?? options.apiProfileId ?? "") !== (options.apiProfileId ?? "") && !!options.apiProfileId;
+		options = { ...next, apiProfileId: next.apiProfileId || null, promptPresetId: next.promptPresetId || null, model: apiChanged ? null : nextModel };
 		void loadUsage();
+	}
+	// 이 플레이가 쓰는 API 프로필 (정한 것, 없으면 앱 기본값) — 모델 고르기가 그 프로필의 목록을 보여준다
+	const effectiveApi = $derived(library.apis.find((a) => a.id === (options?.apiProfileId || appSetting.value?.selectedApiProfile || "")));
+	/** 모델을 고르면 그 API도 이 플레이에 못 박는다 (앱 기본 API가 나중에 바뀌어도 모델이 엉뚱한 공급자로 가지 않게) */
+	function pickModel(model: string | null) {
+		if (!options?.apiProfileId && effectiveApi) return setOption({ apiProfileId: effectiveApi.id }, model);
+		return setOption({}, model);
 	}
 
 	// ---- 컨텍스트: 이번에 앱을 켠 뒤 마지막으로 보낸 프롬프트 ----
@@ -147,6 +159,7 @@
 			<h4>이 플레이 <span class="faint">NPC 대화와 씬 서술에 씀</span></h4>
 			{#if options}
 				<label class="row"><span>API</span><Select value={options.apiProfileId ?? DEFAULT} options={apiOptions} onchange={(e) => setOption({ apiProfileId: e.currentTarget.value })} /></label>
+				<div class="row"><span>모델</span><ModelPicker profile={effectiveApi} value={options.model} onchange={pickModel} label="이 플레이의 모델" /></div>
 				<label class="row"><span>프리셋</span><Select value={options.promptPresetId ?? DEFAULT} options={presetOptions} onchange={(e) => setOption({ promptPresetId: e.currentTarget.value })} /></label>
 				<div class="row">
 					<span>플레이어</span>

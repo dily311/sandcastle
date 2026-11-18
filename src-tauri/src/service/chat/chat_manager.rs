@@ -143,6 +143,12 @@ impl ChatManager {
         target: GameChatTarget,
     ) -> Result<String> {
         let chat_req = current_conv_request(settings)?;
+        let game_model = target
+            .api_profile_id
+            .as_deref()
+            .filter(|s| !s.is_empty())
+            .and(target.model.clone())
+            .filter(|m| !m.trim().is_empty());
         let profile = target.api_profile_id.filter(|s| !s.is_empty()).unwrap_or(chat_req.api_profile_id);
         let preset = target.prompt_preset_id.filter(|s| !s.is_empty()).unwrap_or(chat_req.preset_id);
         // 스트리밍: 받은 조각은 호출자(game::npc)가 태그를 걸러 화면으로 보낸다
@@ -172,7 +178,7 @@ impl ChatManager {
                     &app,
                     &state.db,
                     profile,
-                    None,
+                    game_model,
                     Some(preset),
                     context,
                     message,
@@ -252,6 +258,8 @@ pub struct GameChatTarget {
     pub session_id: String,
     pub api_profile_id: Option<String>,
     pub prompt_preset_id: Option<String>,
+    /// 이 플레이에서 고른 모델 (ADR-020). 플레이에 API가 정해져 있을 때만 쓴다
+    pub model: Option<String>,
 }
 
 /// 게임 세션별 마지막으로 보낸 프롬프트 (컨텍스트 사용량 표시용, 앱을 끄면 사라짐)

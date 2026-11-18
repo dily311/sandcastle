@@ -93,7 +93,7 @@ export const commands = {
 	 *  세션의 AI 설정·플레이어 페르소나 바꾸기. 비운 값은 앱 기본값.
 	 *  플레이어를 바꿨고 지금 열린 세션이면 런타임을 다시 불러와 바로 반영한다.
 	 */
-	setGameSessionOptions: (sessionId: string, apiProfileId: string | null, promptPresetId: string | null, playerId: string | null, options?: InvokeOptions) => __TAURI_INVOKE<null>("set_game_session_options", { sessionId, apiProfileId, promptPresetId, playerId }, options),
+	setGameSessionOptions: (sessionId: string, apiProfileId: string | null, promptPresetId: string | null, playerId: string | null, model: string | null, options?: InvokeOptions) => __TAURI_INVOKE<null>("set_game_session_options", { sessionId, apiProfileId, promptPresetId, playerId, model }, options),
 	/**  게임 세션의 컨텍스트 사용량: 이번에 앱을 켠 뒤 마지막으로 보낸 프롬프트 기준 */
 	gameContextUsage: (sessionId: string, options?: InvokeOptions) => __TAURI_INVOKE<ContextUsage_Serialize>("game_context_usage", { sessionId }, options),
 	/**  게임 메시지 고치기 (AI 응답은 줄로 다시 나눠 화면·지난 대사에 반영) */
@@ -2604,12 +2604,16 @@ export type GameSessionOptions = GameSessionOptions_Serialize | GameSessionOptio
 export type GameSessionOptions_Deserialize = {
 	apiProfileId?: string | null,
 	promptPresetId?: string | null,
+	/**  이 플레이의 모델 (None = API의 기본 모델, ADR-020) */
+	model?: string | null,
 	playerId: string,
 };
 
 export type GameSessionOptions_Serialize = {
 	apiProfileId: string | null,
 	promptPresetId: string | null,
+	/**  이 플레이의 모델 (None = API의 기본 모델, ADR-020) */
+	model: string | null,
 	playerId: string,
 };
 

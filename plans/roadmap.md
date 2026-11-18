@@ -174,7 +174,7 @@
 - [x] 1-H-1 프로필 기본 모델 + 내가 추가한 모델 — 프로필의 `model`은 그대로 "기본 모델"로 둔다(옮길 데이터 없음). 직접 입력한 이름은 프로필에 남겨 목록에 계속 보인다(`api_profiles.custom_models`, 마이그레이션 171). 프로필 수정 SQL 문법 오류도 함께 고침. 어디: `db/ai_service.rs`, `models/ai_service.rs`, `features/settings/ApiEditor.svelte`, `providers.ts`. 완료: 직접 입력한 모델이 저장 뒤 칩으로 남고 지울 수 있다, 프로필 편집이 저장된다(단위 테스트).
 - [x] 1-H-2 대화 모델 — 대화에 모델 칸(`conversations.model`, NULL = 프로필의 기본 모델을 따라감). 대화 설정 탭에서 바꾸면 그 대화에 저장. 대화의 API를 바꾸면 NULL로 초기화. 프리셋은 모델을 고르지 않는다. 어디: 새 마이그레이션, `ChatManager`·`AiService`(요청의 모델 덮어쓰기), `ChatPanel.svelte`. 완료: 같은 키로 두 대화가 서로 다른 모델로 응답하고, 사용량·금액이 그 모델로 기록된다.
 - [x] 1-H-3 기능별 모델 — 번역·요약·메모리·폰·대필의 API 설정에 모델 칸(비우면 프로필 기본). 음성·그림은 이미 모델 칸이 있어 목록만 연결.
-- [ ] 1-H-4 게임 NPC 모델.
+- [x] 1-H-4 게임 플레이 모델 — 게임 세션 설정(`game_session_options.model`, 마이그레이션 173)에 모델 칸. 어디: `db/game.rs`, `GameChatTarget`, `GameSessionTabs.svelte`. 각본가(4-D StoryPlan)는 자기 API를 따로 쓰므로 이 단계에 넣지 않았다.
 
 ### 2단계 — 데이터 관리 및 동기화
 
