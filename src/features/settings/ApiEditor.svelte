@@ -2,7 +2,7 @@
 	// API 연결 추가·편집 (모달 대신 설정 안 페이지, 테마 편집과 같은 방식)
 	import { onMount } from "svelte";
 	import { CircleAlert, CircleCheck, ChevronLeft, FileJson, KeyRound, Zap } from "@lucide/svelte";
-	import { apiLists } from "./providers";
+	import { apiLists, firstModel, modelIdsOf, modelLabel } from "./providers";
 	import { Badge, Button, Field, IconButton, Input, Select, Spinner } from "$shared/ui";
 	import { nav } from "$app/nav.svelte";
 	import { call, commands } from "$shared/ipc/client";
@@ -24,7 +24,7 @@
 	let providerId = $state(apiLists[0].provider);
 	let name = $state(apiLists[0].label);
 	let baseUrl = $state(apiLists[0].baseUrl);
-	let model = $state(apiLists[0].modelList[0]?.model[0] ?? "");
+	let model = $state(firstModel(apiLists[0]));
 	let key = $state("");
 	let hasKey = $state(false);
 	let models = $state<string[]>([]);
@@ -49,7 +49,7 @@
 	const provider = $derived(apiLists.find((p) => p.provider === providerId));
 	const vertex = $derived(provider?.formatType === "vertexai");
 	/** 내장 목록 → 내가 추가한 모델 → 공급자에서 불러온 목록 */
-	const builtinModels = $derived(provider?.modelList.flatMap((g) => g.model) ?? []);
+	const builtinModels = $derived(modelIdsOf(provider));
 	const knownModels = $derived([...new Set([...builtinModels, ...customModels, ...models])]);
 	/** 목록에 없는 이름을 직접 입력했는가 (저장하면 "내가 추가한 모델"로 남음) */
 	const typedNew = $derived(!!model.trim() && !knownModels.includes(model.trim()));
@@ -115,7 +115,7 @@
 		if (!name || name === prev?.label) name = p.label;
 		providerId = p.provider;
 		baseUrl = p.baseUrl;
-		model = p.modelList[0]?.model[0] ?? "";
+		model = firstModel(p);
 		models = [];
 		customModels = [];
 	}
@@ -280,7 +280,7 @@
 				</ul>
 			{/if}
 			<datalist id="api-models">
-				{#each knownModels as m (m)}<option value={m}></option>{/each}
+				{#each knownModels as m (m)}<option value={m} label={modelLabel(provider, m)}></option>{/each}
 			</datalist>
 		</Field>
 	</div>

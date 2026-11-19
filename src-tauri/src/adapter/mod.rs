@@ -139,7 +139,8 @@ pub fn provider_for(format_type: &str) -> Result<&'static dyn AiProvider> {
     match format_type {
         "openai" => Ok(&OPENAI),
         "claude" | "anthropic" => Ok(&CLAUDE),
-        "gemini" => Ok(&GEMINI),
+        // "google"은 예전 화면이 저장하던 이름
+        "gemini" | "google" => Ok(&GEMINI),
         "vertexai" | "vertex" => Ok(&VERTEX),
         other => Err(AppError::validation(format!("지원하지 않는 API 형식입니다: {other}"), None)),
     }

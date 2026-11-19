@@ -9,7 +9,7 @@
 	import { promptText } from "$shared/stores/confirm.svelte";
 	import { toasts } from "$shared/stores/toast.svelte";
 	import { library } from "$features/character/library.svelte";
-	import { apiLists } from "./providers";
+	import { apiLists, modelIdsOf, modelLabel } from "./providers";
 
 	interface Props {
 		/** 모델을 고를 API 프로필 */
@@ -30,7 +30,14 @@
 		fetched = [];
 	});
 
-	const builtin = $derived(apiLists.find((p) => p.provider === profile?.provider)?.modelList.flatMap((g) => g.model) ?? []);
+	// 공급자 이름은 대소문자를 가리지 않고 맞춘다 (예전에 저장된 연결은 "OpenAI", 카탈로그는 "openai")
+	const entry = $derived(apiLists.find((p) => p.provider.toLowerCase() === (profile?.provider ?? "").toLowerCase()));
+	const builtin = $derived(modelIdsOf(entry));
+	/** 목록에 보이는 이름: 사람이 읽는 이름이 있으면 "이름 (id)" */
+	const nameOf = (id: string) => {
+		const l = modelLabel(entry, id);
+		return l === id ? id : `${l} (${id})`;
+	};
 	const choices = $derived.by(() => {
 		if (!profile) return [];
 		const seen = new Set<string>([profile.model]);
@@ -43,7 +50,7 @@
 		}
 		return out;
 	});
-	const options = $derived([{ value: DEFAULT, label: `기본 모델 (${profile?.model ?? "-"})` }, ...choices.map((m) => ({ value: m, label: m }))]);
+	const options = $derived([{ value: DEFAULT, label: `기본 모델 (${profile ? nameOf(profile.model) : "-"})` }, ...choices.map((m) => ({ value: m, label: nameOf(m) }))]);
 
 	let menu = $state<{ x: number; y: number; align?: "start" | "end" } | null>(null);
 	const items = $derived<MenuItem[]>([
