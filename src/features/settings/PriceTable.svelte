@@ -45,9 +45,9 @@
 	}
 	function dirty(r: Row) {
 		const p = saved.find((x) => x.model === r.model);
-		if (!p) return [r.input, r.output, r.chars, r.image].some((v) => v.trim() !== "");
+		if (!p) return [r.input, r.output].some((v) => v.trim() !== "");
 		const o = toRow(p);
-		return o.currency !== r.currency || o.input !== r.input || o.output !== r.output || o.chars !== r.chars || o.image !== r.image;
+		return o.currency !== r.currency || o.input !== r.input || o.output !== r.output;
 	}
 	async function save(r: Row) {
 		await call(commands.upsertModelPrice({ model: r.model, currency: r.currency, inputPerMtok: num(r.input), outputPerMtok: num(r.output), per1kChars: num(r.chars), perImage: num(r.image) }), src);
@@ -75,8 +75,6 @@
 		<span role="columnheader">통화</span>
 		<span role="columnheader">입력 /100만 토큰</span>
 		<span role="columnheader">출력 /100만 토큰</span>
-		<span role="columnheader">음성 /1000자</span>
-		<span role="columnheader">그림 /장</span>
 		<span></span>
 	</div>
 	{#each rows as r (r.model)}
@@ -85,8 +83,6 @@
 			<Input class="cur" value={r.currency} maxlength={4} aria-label="통화 기호" oninput={(e) => field(r, "currency", e.currentTarget.value)} />
 			<Input type="number" min="0" step="any" value={r.input} aria-label="입력 100만 토큰당" oninput={(e) => field(r, "input", e.currentTarget.value)} />
 			<Input type="number" min="0" step="any" value={r.output} aria-label="출력 100만 토큰당" oninput={(e) => field(r, "output", e.currentTarget.value)} />
-			<Input type="number" min="0" step="any" value={r.chars} aria-label="음성 1000자당" oninput={(e) => field(r, "chars", e.currentTarget.value)} />
-			<Input type="number" min="0" step="any" value={r.image} aria-label="그림 1장당" oninput={(e) => field(r, "image", e.currentTarget.value)} />
 			<span class="acts">
 				<Button size="sm" variant="primary" disabled={!dirty(r)} onclick={() => save(r)}>저장</Button>
 				{#if r.saved || drafts[r.model]}<IconButton label="단가 지우기" size="sm" onclick={() => remove(r)}><Trash2 /></IconButton>{/if}
@@ -122,10 +118,10 @@
 	.head,
 	.row {
 		display: grid;
-		grid-template-columns: minmax(120px, 1.4fr) 56px repeat(4, minmax(84px, 1fr)) auto;
+		grid-template-columns: minmax(120px, 1.4fr) 56px repeat(2, minmax(84px, 1fr)) auto;
 		align-items: center;
 		gap: var(--space-2);
-		min-width: 680px;
+		min-width: 440px;
 	}
 	.head {
 		color: var(--text-faint);

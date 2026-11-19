@@ -152,6 +152,9 @@ pub(crate) fn gemini_body_with(prompt: &PromptMessage, extras: &ChatExtras) -> V
     if let Some(v) = opts.top_k {
         config.insert("topK".into(), json!(v));
     }
+    if let Some(level) = &opts.reasoning_effort {
+        config.insert("thinkingConfig".into(), json!({ "thinkingLevel": level }));
+    }
     if let Some(rs) = &extras.response_schema {
         config.insert("responseMimeType".into(), json!("application/json"));
         config.insert("responseSchema".into(), to_gemini_schema(&rs.schema));
@@ -512,6 +515,10 @@ mod tests {
         assert_eq!(b["generationConfig"]["responseMimeType"], "application/json");
         assert_eq!(b["generationConfig"]["responseSchema"]["properties"]["a"]["type"], "STRING");
         assert_eq!(b["generationConfig"]["maxOutputTokens"], 300, "기존 설정은 그대로");
+        let mut p = prompt(false);
+        p.chat_options.reasoning_effort = Some("low".into());
+        assert_eq!(gemini_body(&p)["generationConfig"]["thinkingConfig"]["thinkingLevel"], "low");
+
         // 평범한 요청에는 도구·구성이 없다
         let plain = gemini_body(&prompt(false));
         assert!(plain.get("tools").is_none() && plain.get("toolConfig").is_none());

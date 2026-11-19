@@ -14,6 +14,7 @@ CREATE TABLE IF NOT EXISTS budget_limits (
   monthly_characters INTEGER,
   daily_images INTEGER,
   monthly_images INTEGER,
+  monthly_usd REAL,
   updated_at INTEGER NOT NULL
 );
 

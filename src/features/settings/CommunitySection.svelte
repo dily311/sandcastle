@@ -8,6 +8,7 @@
 	import { confirmAction } from "$shared/stores/confirm.svelte";
 	import { toasts } from "$shared/stores/toast.svelte";
 	import { layout } from "$app/layout.svelte";
+	import { plugins } from "$shared/stores/plugins.svelte";
 	import { admin } from "$features/community/admin.svelte";
 	import { proposals, proposalsUi } from "$features/community/proposals.svelte";
 	import ConsentDialog from "$features/community/ConsentDialog.svelte";
@@ -36,11 +37,19 @@
 		if (!consentOpen) untrack(() => rev++);
 	});
 
-	onMount(() => {
+	onMount(() => void plugins.load());
+	const on = $derived(plugins.on("community"));
+	// 코어 플러그인이 꺼져 있으면 백엔드가 거절하므로 켜진 동안에만 불러오고 지켜봄
+	$effect(() => {
+		if (!on) return;
 		let stop: (() => void) | undefined;
-		void admin.watch().then((s) => (stop = s));
+		let gone = false;
+		void admin.watch().then((s) => (gone ? s() : (stop = s)));
 		void proposals.watch();
-		return () => stop?.();
+		return () => {
+			gone = true;
+			stop?.();
+		};
 	});
 
 	/** 묶음을 고르고 미리보기. updateId가 있으면 그 플러그인의 업데이트여야 한다 */
@@ -111,6 +120,12 @@
 </script>
 
 <Section title="커뮤니티 플러그인" lead="남이 만든 플러그인을 파일로 설치합니다. 격리된 곳에서 허락한 권한만으로 동작하고, 설치해도 꺼진 채로 시작합니다. 믿을 수 있는 곳에서 받은 것만 설치하세요">
+	<Group>
+		<Row label="커뮤니티 플러그인 사용" desc={on ? "" : "꺼져 있는 동안은 설치된 플러그인을 읽지도 실행하지도 않습니다"}>
+			<Switch checked={on} label="커뮤니티 플러그인 사용" hideLabel onchange={(v) => plugins.set("community", v)} />
+		</Row>
+	</Group>
+	{#if on}
 	<Group title="설치">
 		<Row label="zip으로 설치" desc="manifest.json이 든 zip 파일. 설치 전에 내용과 권한을 미리 봅니다">
 			<Button size="sm" onclick={() => pick("zip")}>{#snippet icon()}<FileArchive />{/snippet}zip 고르기</Button>
@@ -207,6 +222,7 @@
 			</div>
 		{/each}
 	</Group>
+	{/if}
 </Section>
 
 <InstallDialog bind:open={installOpen} target={installing} {busy} oninstall={install} />

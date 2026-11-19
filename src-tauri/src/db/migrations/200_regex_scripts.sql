@@ -40,3 +40,18 @@ CREATE TABLE IF NOT EXISTS regex_scripts (
 );
 
 CREATE INDEX IF NOT EXISTS idx_regex_scripts_scope ON regex_scripts(scope, scope_id, sort_order);
+
+-- ---------------------------------------------------------------------------
+-- 변경 추적(updated_at 보정·트리거)과 지운 기록 트리거: 이 파일의 테이블 몫. 공통 테이블(trash_items·sync_tombstones)은 1xx에서 먼저 만들어짐
+-- ---------------------------------------------------------------------------
+
+-- regex_scripts
+UPDATE regex_scripts SET created_at = created_at * 1000 WHERE created_at IS NOT NULL AND created_at > 0 AND created_at < 100000000000;
+UPDATE regex_scripts SET updated_at = updated_at * 1000 WHERE updated_at IS NOT NULL AND updated_at > 0 AND updated_at < 100000000000;
+UPDATE regex_scripts SET updated_at = COALESCE(created_at, CAST((julianday('now') - 2440587.5) * 86400000 AS INTEGER)) WHERE updated_at IS NULL OR updated_at = 0;
+CREATE TRIGGER regex_scripts_touch_insert AFTER INSERT ON regex_scripts FOR EACH ROW WHEN NEW.updated_at IS NULL OR NEW.updated_at = 0 BEGIN UPDATE regex_scripts SET updated_at = CAST((julianday('now') - 2440587.5) * 86400000 AS INTEGER) WHERE rowid = NEW.rowid; END;
+CREATE TRIGGER regex_scripts_touch_update AFTER UPDATE ON regex_scripts FOR EACH ROW WHEN NEW.updated_at IS OLD.updated_at BEGIN UPDATE regex_scripts SET updated_at = CAST((julianday('now') - 2440587.5) * 86400000 AS INTEGER) WHERE rowid = NEW.rowid; END;
+
+-- regex_scripts (id)
+CREATE TRIGGER regex_scripts_tombstone AFTER DELETE ON regex_scripts FOR EACH ROW BEGIN INSERT OR REPLACE INTO sync_tombstones (tbl, key, deleted_at) VALUES ('regex_scripts', json_array(OLD.id), CAST((julianday('now') - 2440587.5) * 86400000 AS INTEGER)); END;
+CREATE TRIGGER regex_scripts_untombstone AFTER INSERT ON regex_scripts FOR EACH ROW BEGIN DELETE FROM sync_tombstones WHERE tbl = 'regex_scripts' AND key = json_array(NEW.id); END;

@@ -3,6 +3,9 @@
 	import { flip } from "svelte/animate";
 	import type { PromptBlocksInput_Deserialize as BlockInput, PromptPresetDetail_Serialize as Detail } from "$ipc/bindings";
 	import { Badge, Button, Field, Input, Select, Slider, Switch, Textarea } from "$shared/ui";
+	import { appSetting } from "$shared/stores/appSetting.svelte";
+	import { library } from "$features/character/library.svelte";
+	import { reasoningOf } from "./providers";
 	import Group from "./Group.svelte";
 	import Row from "./Row.svelte";
 
@@ -16,8 +19,14 @@
 		quick?: boolean;
 		/** 저장·취소 버튼 없이 고치면 잠시 뒤 저절로 저장 */
 		autosave?: boolean;
+		/** 이 프리셋으로 대화할 모델 (추론 강도를 고를 수 있는지 판단). 없으면 앱 기본 API의 모델 */
+		model?: string | null;
 	}
-	let { detail, saving, onsave, oncancel, quick = false, autosave = false }: Props = $props();
+	let { detail, saving, onsave, oncancel, quick = false, autosave = false, model = null }: Props = $props();
+
+	// 추론 강도: 모델 목록(default_text_models.json)에 그 값을 받는다고 적힌 모델일 때만 보인다
+	const effModel = $derived(model || library.apis.find((a) => a.id === appSetting.value?.selectedApiProfile)?.model || null);
+	const reasoning = $derived(reasoningOf(effModel));
 
 	// 마커 블록: 내용 대신 앱이 채움
 	const MARKERS: Record<string, string> = {
@@ -56,6 +65,9 @@
 	let topP = $state(numStr(pick("top_p", "topP")));
 	let topK = $state(numStr(pick("top_k", "topK")));
 	let stream = $state(pick("stream", "stream_openai", "streaming") !== false);
+	// "auto"는 정하지 않음 (SillyTavern 프리셋)
+	const re0 = pick("reasoning_effort", "reasoningEffort");
+	let effort = $state(typeof re0 === "string" && re0.toLowerCase() !== "auto" ? re0.toLowerCase() : "");
 
 	type Block = BlockInput & { key: string };
 	let seq = 0;
@@ -150,7 +162,7 @@
 	}
 
 	// ---- 자동 저장: 값이 바뀌고 잠시 멈추면 ----
-	const snapshot = () => JSON.stringify([name, description, temperature, maxTokens, contextSize, worldInfoPercent, topP, topK, stream, blocks.map(({ key: _k, id: _i, ...b }) => b)]);
+	const snapshot = () => JSON.stringify([name, description, temperature, maxTokens, contextSize, worldInfoPercent, topP, topK, stream, effort, blocks.map(({ key: _k, id: _i, ...b }) => b)]);
 	let lastSaved = snapshot();
 	let autoState = $state<"" | "dirty" | "saving" | "saved" | "failed">("");
 	$effect(() => {
@@ -191,6 +203,8 @@
 		put("top_p", num(topP));
 		put("top_k", num(topK));
 		put("stream", stream);
+		// 이 모델이 못 받는 값이어도 지우지 않는다 (모델을 바꾸면 다시 쓰임). 백엔드가 받는 모델에만 보냄
+		put("reasoning_effort", effort || undefined);
 		const saved = await onsave(
 			{ ...p, name: name.trim(), description: description.trim() || null, settingsJson: settings as Detail["preset"]["settingsJson"] },
 			blocks.map(({ key: _k, ...b }) => ({ ...b, depth: Number(b.depth) || 0 })),
@@ -219,6 +233,13 @@
 	<p class="auto" class:warn={autoState === "failed"}>{autoState === "failed" ? "저장 못 함 · 다시 고치면 또 시도" : autoState === "dirty" ? "고치는 중" : "고치면 저절로 저장됨"}</p>
 {/if}
 
+{#if !autosave}
+	<div class="bar">
+		<Button variant="ghost" onclick={oncancel}>취소</Button>
+		<Button variant="primary" loading={saving} disabled={!name.trim()} onclick={save}>저장</Button>
+	</div>
+{/if}
+
 {#if !quick}
 	<Group>
 		<Row label="이름" stacked><Input bind:value={name} aria-label="프리셋 이름" /></Row>
@@ -237,6 +258,15 @@
 		<Slider label="Top P" hint="확률이 높은 낱말 몇 %에서만 고름" bind:value={topP} min={0} max={1} step={0.01} fallback={1} unsetLabel="공급자 기본" format={(n) => n.toFixed(2)} />
 		<Slider label="Top K" hint="후보 낱말을 몇 개까지 볼지. 0은 끔" bind:value={topK} min={0} max={200} step={1} fallback={0} unsetLabel="공급자 기본" format={(n) => (n ? String(n) : "끔")} />
 	</div>
+	{#if reasoning}
+		<Row label="추론 강도" desc={reasoning.default ? `기본은 ${reasoning.default}` : undefined}>
+			<Select
+				bind:value={effort}
+				aria-label="추론 강도"
+				options={[{ value: "", label: "공급자 기본" }, ...reasoning.levels.map((l) => ({ value: l, label: l }))]}
+			/>
+		</Row>
+	{/if}
 	<Row label="실시간 응답 (스트리밍)" desc="끄면 응답이 다 만들어진 뒤 한 번에 보임">
 		<Switch bind:checked={stream} label="스트리밍" hideLabel />
 	</Row>

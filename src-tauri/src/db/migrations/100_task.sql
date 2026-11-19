@@ -22,6 +22,25 @@ CREATE TABLE IF NOT EXISTS generation_tasks (
   payload_json TEXT,
   -- 실패 시 오류 기록
   error_message TEXT,
+  -- chat / game / image / system
+  owner TEXT NOT NULL DEFAULT 'system',
+  -- conversation_id, game session_id 등 owner 쪽 식별자
+  owner_ref TEXT,
+  -- 성공 시 TaskOutput (JSON)
+  result_json TEXT,
+  -- 실패 시 ErrorCode 문자열 (error_message와 함께 사용)
+  error_code TEXT,
+  attempt_count INTEGER NOT NULL DEFAULT 0,
+  -- 한 번의 실행에서 허용하는 최대 시도 횟수 (재시도 가능한 오류일 때만 다시 시도)
+  max_attempts INTEGER NOT NULL DEFAULT 1,
+
+  -- generation_tasks: 어느 기능이(feature), 누가 시작했는지(run_by), 화면에 보일 이름(label)
+  -- 코어 플러그인·기능 id: chat / phone / game / translate / tts / imagegen / settings
+  feature TEXT,
+  -- user: 사용자가 누른 실행 / auto: 사용자가 켜 둔 자동 실행(자동 번역·자동 읽기 등)
+  run_by TEXT NOT NULL DEFAULT 'user',
+  -- 화면 표시용 한 줄 ("번역", "NPC 대화 · 엘리안")
+  label TEXT,
 
   created_at INTEGER NOT NULL,
   started_at INTEGER,
@@ -78,6 +97,23 @@ CREATE TABLE IF NOT EXISTS conversation_events (
   UNIQUE(conversation_id, seq)
 );
 
+-- - task_attempts: 작업 종류와 무관한 실행 시도 기록
+--   (ai_attempts는 채팅 submission 전용이라 이미지/동기화 작업에는 쓸 수 없음)
+-- - 상태 변경은 앱 코드에서 TaskManager만 수행한다.
+CREATE TABLE IF NOT EXISTS task_attempts (
+  id TEXT PRIMARY KEY,
+  task_id TEXT NOT NULL REFERENCES generation_tasks(id) ON DELETE CASCADE,
+  -- 작업 전체 기준 순번 (재개해도 이어서 증가)
+  attempt_no INTEGER NOT NULL,
+  -- running / completed / failed / cancelled / interrupted
+  status TEXT NOT NULL,
+  error_code TEXT,
+  error_message TEXT,
+  started_at INTEGER NOT NULL,
+  finished_at INTEGER,
+  UNIQUE(task_id, attempt_no)
+);
+
 -- ---------------------------------------------------------
 -- 에이전트
 -- ---------------------------------------------------------
@@ -127,3 +163,7 @@ CREATE TABLE IF NOT EXISTS agent_tool_calls (
 
 CREATE INDEX IF NOT EXISTS idx_ai_submissions_status ON ai_submissions(status);
 CREATE INDEX IF NOT EXISTS idx_ai_submissions_conversation ON ai_submissions(conversation_id);
+CREATE INDEX IF NOT EXISTS idx_generation_tasks_status ON generation_tasks(status);
+CREATE INDEX IF NOT EXISTS idx_generation_tasks_owner ON generation_tasks(owner, owner_ref);
+CREATE INDEX IF NOT EXISTS idx_task_attempts_task ON task_attempts(task_id, attempt_no);
+CREATE INDEX IF NOT EXISTS idx_generation_tasks_created ON generation_tasks(created_at);

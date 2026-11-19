@@ -329,6 +329,13 @@ impl AiService {
         if let Some(m) = request.model.as_deref().map(str::trim).filter(|m| !m.is_empty()) {
             profile.model = m.to_string();
         }
+        // 추론 강도는 모델 목록에 그 값을 받는다고 적힌 모델에만 보낸다 (프리셋은 모델과 무관하게 값을 가질 수 있음)
+        let mut request = request;
+        if let Some(level) = request.prompt.chat_options.reasoning_effort.take() {
+            if crate::adapter::catalog::accepts_effort(&profile.model, &level) {
+                request.prompt.chat_options.reasoning_effort = Some(level);
+            }
+        }
         let provider = provider_for(&profile.format_type)?;
         // 요금이 나가기 전에: 요청 모양과 연결의 지원 여부
         if !extras.is_empty() {
@@ -343,7 +350,6 @@ impl AiService {
         }
         let credential = load_credential(&profile)?;
         self.ensure_budget(&profile.id, UsageKind::Chat).await?;
-        let mut request = request;
         if !extras.tools.is_empty() || extras.response_schema.is_some() {
             let opts = &mut request.prompt.chat_options;
             opts.max_tokens = Some(opts.max_tokens.unwrap_or(0).max(MIN_EXT_TOKENS));

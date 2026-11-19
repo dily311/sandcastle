@@ -1,7 +1,7 @@
 -- 2-C 폴더 동기화 (CLAUDE.md, ADR-011)
 
 -- 동기화 실행 기록 (설정 > 동기화의 기록). 작업·시도 기록(generation_tasks)과 따로, 숫자 요약을 남긴다
-CREATE TABLE sync_runs (
+CREATE TABLE IF NOT EXISTS sync_runs (
   id TEXT PRIMARY KEY,
   target TEXT NOT NULL,            -- 'folder' (나중에 'drive')
   run_by TEXT NOT NULL,            -- user / auto
@@ -11,15 +11,11 @@ CREATE TABLE sync_runs (
   error TEXT,
   summary TEXT                     -- SyncRunReport JSON
 );
-CREATE INDEX idx_sync_runs_started ON sync_runs(started_at);
-
--- 그 기기가 이 기기의 묶음을 어디까지 합쳤나 (그 기기 묶음의 acks[이 기기], 이 기기 시계).
--- 모든 기기가 본 지운 기록은 정리할 수 있다
-ALTER TABLE sync_peers ADD COLUMN their_ack INTEGER;
+CREATE INDEX IF NOT EXISTS idx_sync_runs_started ON sync_runs(started_at);
 
 -- 받은 행이 어느 기기의 어느 판이었나 (기기가 셋 이상일 때). 이 기기가 그 뒤로 안 고쳤고(updated_at = merged_at),
 -- 다른 기기의 묶음이 그 판을 봤다고 하면(acks) 그 기기의 고침을 충돌이 아니라 새 판으로 받는다
-CREATE TABLE sync_row_origin (
+CREATE TABLE IF NOT EXISTS sync_row_origin (
   tbl TEXT NOT NULL,
   key TEXT NOT NULL,
   device_id TEXT NOT NULL,

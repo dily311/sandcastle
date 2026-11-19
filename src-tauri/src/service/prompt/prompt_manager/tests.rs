@@ -362,3 +362,11 @@ fn world_info_ratio_reads_fraction_or_percent() {
     assert_eq!(world_info_ratio_from(&preset(vec![], json!({ "world_info_budget": 250 })).preset), Some(1.0));
     assert_eq!(world_info_ratio_from(&preset(vec![], json!({})).preset), None);
 }
+
+#[test]
+fn reasoning_effort_comes_from_the_preset_and_auto_means_unset() {
+    let with = |settings: Value| chat_options_from(&preset(vec![], settings).preset).reasoning_effort;
+    assert_eq!(with(json!({ "reasoning_effort": "High" })).as_deref(), Some("high"));
+    assert_eq!(with(json!({ "reasoning_effort": "auto" })), None);
+    assert_eq!(with(json!({ "temperature": 1 })), None);
+}

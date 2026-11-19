@@ -1,18 +1,8 @@
 -- =========================================================
--- 작업 실행 관리 · 사용량 (CLAUDE.md M2, ADR-006)
+-- 사용량 (CLAUDE.md M2, ADR-006)
 -- ---------------------------------------------------------
--- generation_tasks: 어느 기능이(feature), 누가 시작했는지(run_by), 화면에 보일 이름(label)
 -- usage_log: 공급자 호출 한 번마다 사용량 (ResourceManager). 작업이 지워져도 사용량은 남긴다
 -- =========================================================
-
--- 코어 플러그인·기능 id: chat / phone / game / translate / tts / imagegen / settings
-ALTER TABLE generation_tasks ADD COLUMN feature TEXT;
--- user: 사용자가 누른 실행 / auto: 사용자가 켜 둔 자동 실행(자동 번역·자동 읽기 등)
-ALTER TABLE generation_tasks ADD COLUMN run_by TEXT NOT NULL DEFAULT 'user';
--- 화면 표시용 한 줄 ("번역", "NPC 대화 · 엘리안")
-ALTER TABLE generation_tasks ADD COLUMN label TEXT;
-
-CREATE INDEX IF NOT EXISTS idx_generation_tasks_created ON generation_tasks(created_at);
 
 CREATE TABLE IF NOT EXISTS usage_log (
   id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -34,6 +24,12 @@ CREATE TABLE IF NOT EXISTS usage_log (
   ok INTEGER NOT NULL DEFAULT 1,
   error TEXT,
   duration_ms INTEGER,
+  -- - 호출마다 그때의 단가로 계산한 금액(cost_usd)을 같이 기록한다. 나중에 단가를 고쳐도 지난 기록은 안 바뀐다.
+  --   cost_usd가 NULL이면 계산하지 않은 줄(음성·그림·이 기능 이전의 줄). 단가를 몰라 계산하지 못한 호출은 unpriced = 1.
+  -- - budget_limits에는 monthly_usd를 더한다. 예전 칸(하루·한 달 토큰, 음성 글자, 그림 장 수)은 더 이상 쓰지 않지만
+  --   지우지 않는다(새 한도를 정할 때 비워 "이전 한도" 안내가 사라진다).
+  cost_usd REAL,
+  unpriced INTEGER NOT NULL DEFAULT 0,
   created_at INTEGER NOT NULL
 );
 

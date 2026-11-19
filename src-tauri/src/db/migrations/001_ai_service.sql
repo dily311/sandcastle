@@ -13,6 +13,10 @@ CREATE TABLE IF NOT EXISTS api_profiles (
   base_url TEXT NOT NULL,
   model TEXT NOT NULL,
   selected_preset_id TEXT,
+  -- 한 키로 여러 모델을 쓰려고, 직접 입력한 모델 이름을 프로필에 남겨 목록에 계속 보이게 한다.
+  -- JSON 문자열 배열(예: ["gpt-6-luna"]). 프로필 행에 들어 있어 프로필과 함께 동기화된다.
+  -- 앱에 내장된 모델 목록은 앱 코드에 있고 여기에 넣지 않는다.
+  custom_models TEXT NOT NULL DEFAULT '[]',
   -- api_key 컬럼 없음! 키링에만 존재
   created_at INTEGER NOT NULL,
   updated_at INTEGER NOT NULL

@@ -1,0 +1,1131 @@
+-- =========================================================
+-- 게임 모드
+-- ---------------------------------------------------------
+-- 설명
+-- 게임모드에서 사용되는 테이블 정의
+-- ---------------------------------------------------------
+-- 테이블 추가원칙
+-- 1. 이전 테이블과 연결되어 있는지 생각하고 추가할 것
+-- =========================================================
+
+-- ---------------------------------------------------------
+--  게임 프로젝트
+-- ---------------------------------------------------------
+CREATE TABLE IF NOT EXISTS game_projects (
+  id TEXT PRIMARY KEY,
+  title TEXT NOT NULL,
+  description TEXT,
+  -- 게임 프로젝트의 설정값
+  template_id TEXT NOT NULL,        -- 사용한 템플릿 식별자
+  version TEXT NOT NULL DEFAULT '1.0',
+  api_version TEXT NOT NULL DEFAULT '1.0',
+  cover_image TEXT,
+  custom_css TEXT,           -- 커스텀 css
+  start_scene_key TEXT,
+  start_map_id TEXT,
+  start_location_id TEXT,
+  settings_json TEXT,        -- 템플릿별 추가 설정
+  created_at INTEGER,
+  updated_at INTEGER
+);
+
+CREATE TABLE IF NOT EXISTS game_worldinfo (
+  game_id TEXT NOT NULL REFERENCES game_projects(id) ON DELETE CASCADE,
+  book_id TEXT NOT NULL REFERENCES worldinfo_books(id) ON DELETE CASCADE,
+  updated_at INTEGER NOT NULL DEFAULT 0,
+  PRIMARY KEY (game_id, book_id)
+);
+
+-- ---------------------------------------------------------
+-- 게임 변수
+-- ---------------------------------------------------------
+CREATE TABLE IF NOT EXISTS game_state_defs ( -- game_variables
+  id TEXT PRIMARY KEY,
+  game_id TEXT NOT NULL REFERENCES game_projects(id) ON DELETE CASCADE,
+  description TEXT,
+  key TEXT NOT NULL,                -- 예: affection_yuna
+  type TEXT NOT NULL CHECK (type IN ('number', 'boolean', 'string', 'array')),
+  default_value TEXT,               -- JSON으로 직렬화된 기본값
+  config_json TEXT,                 -- 설정 / AI 변수 사용 여부, 한번에 변수 최대/최소 증감 기록
+  created_at INTEGER NOT NULL,
+  updated_at INTEGER NOT NULL,
+  UNIQUE (game_id, key)
+);
+
+-- ---------------------------------------------------------
+-- 게임 캐릭터
+-- ---------------------------------------------------------
+CREATE TABLE IF NOT EXISTS game_characters (
+  id TEXT PRIMARY KEY,
+  game_id TEXT NOT NULL REFERENCES game_projects(id) ON DELETE CASCADE,
+  character_id TEXT REFERENCES characters(id) ON DELETE SET NULL, -- NULL이면 게임 전욜 캐릭터
+  name TEXT NOT NULL,
+  avatar TEXT,
+  description TEXT,
+  first_message TEXT,
+  example_dialogue TEXT,
+  system_prompt_override TEXT,
+  
+  -- AI NPC 행동 프로필
+  behavior_type TEXT,
+  tags TEXT,
+
+  -- 게임에서만 사용하는 설정
+  settings_json TEXT,
+
+  created_at INTEGER NOT NULL,
+  updated_at INTEGER NOT NULL
+);
+
+CREATE TABLE IF NOT EXISTS game_character_worldinfo (
+  game_character_id TEXT NOT NULL REFERENCES game_characters(id) ON DELETE CASCADE,
+  book_id TEXT NOT NULL REFERENCES worldinfo_books(id) ON DELETE CASCADE,
+  updated_at INTEGER NOT NULL DEFAULT 0,
+  PRIMARY KEY (game_character_id, book_id)
+);
+
+CREATE TABLE IF NOT EXISTS game_character_spawn_locations (
+  id TEXT PRIMARY KEY,
+  game_character_id TEXT NOT NULL REFERENCES game_characters(id) ON DELETE CASCADE,
+  location_id TEXT NOT NULL REFERENCES game_locations(id) ON DELETE CASCADE,
+  -- 다른 장소와 비교하는 출현 가중치
+  spawn_weight INTEGER NOT NULL DEFAULT 1 CHECK (spawn_weight > 0),
+  -- 시간대, 날씨, 플래그 등의 추가 출현 조건
+  condition_json TEXT,
+  created_at INTEGER NOT NULL,
+  updated_at INTEGER NOT NULL
+);
+
+-- ---------------------------------------------------------
+-- 게임 에셋
+-- ---------------------------------------------------------
+CREATE TABLE IF NOT EXISTS game_assets (
+  id TEXT PRIMARY KEY,
+  game_id TEXT NOT NULL REFERENCES game_projects(id) ON DELETE CASCADE,
+  key TEXT NOT NULL,
+  name TEXT NOT NULL,
+  category TEXT NOT NULL CHECK (category IN ('voice','sfx','bgm','character','cg','background','font','other')),
+  kind TEXT NOT NULL CHECK (kind IN ('image','audio','font','other')),
+  file_path TEXT NOT NULL,
+  settings_json TEXT,                       -- 볼륨, 루프, 페이드
+  created_at INTEGER NOT NULL, 
+  updated_at INTEGER NOT NULL,
+  UNIQUE (game_id, key)
+);
+
+-- 오디오 에셋
+CREATE TABLE IF NOT EXISTS audio_assets (                  -- voice / sfx / bgm
+  assets_id TEXT PRIMARY KEY REFERENCES game_assets(id) ON DELETE CASCADE,
+  tag TEXT,                                  -- sfx: 소리 그룹 이름, bgm: 분위기 id
+  game_character_id TEXT REFERENCES game_characters(id) ON DELETE SET NULL,  -- voice의 화자
+  transcript TEXT,                            -- voice의 대사 텍스트
+  updated_at INTEGER NOT NULL DEFAULT 0
+);
+
+-- 이미지 에셋
+CREATE TABLE IF NOT EXISTS character_assets (
+  assets_id TEXT PRIMARY KEY REFERENCES game_assets(id) ON DELETE CASCADE,
+  game_character_id TEXT REFERENCES game_characters(id) ON DELETE SET NULL,
+  usage TEXT NOT NULL CHECK (usage IN ('standing','map')),
+  emotion TEXT,                              -- standing은 필수, map은 NULL 또는 variant
+  updated_at INTEGER NOT NULL DEFAULT 0
+);
+
+CREATE TABLE IF NOT EXISTS cg_assets (
+  assets_id TEXT PRIMARY KEY REFERENCES game_assets(id) ON DELETE CASCADE,
+  game_character_id TEXT REFERENCES game_characters(id) ON DELETE SET NULL,
+  description TEXT,                          -- AI에게 보낼 설명
+  prompt TEXT, 
+  negative_prompt TEXT, 
+  seed INTEGER, 
+  generation_params TEXT,
+  ai_usable INTEGER NOT NULL DEFAULT 1,
+  updated_at INTEGER NOT NULL DEFAULT 0
+);
+
+CREATE TABLE IF NOT EXISTS background_assets (
+  assets_id TEXT PRIMARY KEY REFERENCES game_assets(id) ON DELETE CASCADE,
+  location_id TEXT REFERENCES game_locations(id) ON DELETE SET NULL,
+  time_id TEXT REFERENCES game_time_periods(id) ON DELETE SET NULL,
+  weather_id TEXT REFERENCES game_weather_types(id) ON DELETE SET NULL,
+  updated_at INTEGER NOT NULL DEFAULT 0
+);
+-- ---------------------------------------------------------
+-- 게임 맵
+-- ---------------------------------------------------------
+CREATE TABLE IF NOT EXISTS game_maps (
+  id TEXT PRIMARY KEY,
+  game_id TEXT NOT NULL REFERENCES game_projects(id) ON DELETE CASCADE,
+  name TEXT NOT NULL,
+  danger_level INTEGER NOT NULL DEFAULT 0,
+  default_weather_pool_id TEXT, -- 기본 날씨 pool
+  settings_json TEXT,  -- 맵 표시 세팅
+  created_at INTEGER NOT NULL,
+  updated_at INTEGER NOT NULL
+);
+
+CREATE TABLE IF NOT EXISTS game_map_zones (
+  id TEXT PRIMARY KEY,
+  map_id TEXT NOT NULL REFERENCES game_maps(id) ON DELETE CASCADE,
+  name TEXT NOT NULL,
+  tags TEXT, -- 예시: ["forest", "dark", "dangerous"]
+  settings_json TEXT,  -- 맵 표시 세팅
+  created_at INTEGER NOT NULL,
+  updated_at INTEGER NOT NULL
+);
+
+CREATE TABLE IF NOT EXISTS game_locations (
+  id TEXT PRIMARY KEY,
+  zone_id TEXT NOT NULL REFERENCES game_map_zones(id) ON DELETE CASCADE,
+  name TEXT NOT NULL,
+  description TEXT,
+  settings_json TEXT,  -- 맵 표시 세팅
+  updated_at INTEGER NOT NULL DEFAULT 0
+);
+
+CREATE TABLE IF NOT EXISTS game_location_connections (
+  from_id TEXT NOT NULL REFERENCES game_locations(id) ON DELETE CASCADE,
+  to_id   TEXT NOT NULL REFERENCES game_locations(id) ON DELETE CASCADE,
+  travel_seconds INTEGER NOT NULL,
+  condition TEXT,
+  settings_json TEXT,
+  updated_at INTEGER NOT NULL DEFAULT 0,
+  PRIMARY KEY (from_id, to_id)
+);
+
+
+-- ---------------------------------------------------------
+-- 게임 시간
+-- ---------------------------------------------------------
+CREATE TABLE IF NOT EXISTS game_time_periods (
+  id TEXT PRIMARY KEY,
+  game_id TEXT NOT NULL REFERENCES game_projects(id) ON DELETE CASCADE,
+  name TEXT NOT NULL,
+  sort_order INTEGER NOT NULL DEFAULT 0,
+  start_minute INTEGER NOT NULL,
+  end_minute INTEGER NOT NULL,
+  updated_at INTEGER NOT NULL DEFAULT 0,
+  UNIQUE (game_id, id)
+);
+
+-- ---------------------------------------------------------
+-- 게임 날씨
+-- ---------------------------------------------------------
+CREATE TABLE IF NOT EXISTS game_weather_types (
+  id TEXT PRIMARY KEY,
+  game_id TEXT NOT NULL REFERENCES game_projects(id) ON DELETE CASCADE,
+  name TEXT NOT NULL,
+  -- Encounter 확률에 미치는 배율
+  encounter_rate_modifier REAL NOT NULL DEFAULT 1.0,
+  -- 시야 배율
+  visibility_modifier REAL NOT NULL DEFAULT 1.0,
+  created_at INTEGER NOT NULL,
+  updated_at INTEGER NOT NULL,
+  UNIQUE (game_id, id)
+);
+
+CREATE TABLE IF NOT EXISTS game_weather_pools (
+  id TEXT PRIMARY KEY,
+  game_id TEXT NOT NULL REFERENCES game_projects(id) ON DELETE CASCADE,
+  name TEXT NOT NULL,
+  created_at INTEGER NOT NULL,
+  updated_at INTEGER NOT NULL,
+  UNIQUE (game_id, id)
+);
+
+CREATE TABLE IF NOT EXISTS game_weather_pool_entries (
+  pool_id TEXT NOT NULL REFERENCES game_weather_pools(id) ON DELETE CASCADE,
+  weather_id TEXT NOT NULL REFERENCES game_weather_types(id) ON DELETE CASCADE,
+  -- 랜덤 선택 가중치
+  weight INTEGER NOT NULL DEFAULT 1 CHECK (weight > 0),
+  updated_at INTEGER NOT NULL DEFAULT 0,
+  UNIQUE (pool_id, weather_id)
+);
+
+CREATE TABLE IF NOT EXISTS game_weather_transitions (
+  from_weather_id TEXT NOT NULL REFERENCES game_weather_types(id) ON DELETE CASCADE,
+  to_weather_id TEXT NOT NULL REFERENCES game_weather_types(id) ON DELETE CASCADE,
+  map_id TEXT NOT NULL REFERENCES game_maps(id) ON DELETE CASCADE,
+  probability REAL NOT NULL CHECK (probability >= 0.0 AND probability <= 1.0),
+  updated_at INTEGER NOT NULL DEFAULT 0,
+  PRIMARY KEY (from_weather_id, to_weather_id, map_id)
+);
+
+-- ---------------------------------------------------------
+-- 게임 이벤트
+-- ---------------------------------------------------------
+CREATE TABLE IF NOT EXISTS game_events (
+  id TEXT PRIMARY KEY,
+  game_id TEXT NOT NULL REFERENCES game_projects(id) ON DELETE CASCADE,
+  event_type TEXT NOT NULL,                     -- 사용자가 정의하는 이벤트 타입
+  trigger_type TEXT NOT NULL DEFAULT 'auto' CHECK (trigger_type IN ('manual','auto','interaction','location','scheduled','random')),
+  repeat_policy TEXT NOT NULL DEFAULT 'once' CHECK (repeat_policy IN ('once','repeatable')),
+  name TEXT NOT NULL,
+  description TEXT NOT NULL,
+  requires_npc INTEGER NOT NULL DEFAULT 0 CHECK (requires_npc IN (0, 1)),
+  -- 이벤트별 추가설정
+  config_json TEXT,
+  effect_json TEXT,
+  -- 동일 이벤트 재발생 방지 시간
+  cooldown_seconds INTEGER NOT NULL DEFAULT 0 CHECK (cooldown_seconds >= 0),
+  created_at INTEGER NOT NULL,
+  updated_at INTEGER NOT NULL
+);
+
+CREATE TABLE IF NOT EXISTS game_event_conditions (
+  id TEXT PRIMARY KEY,
+  event_id TEXT NOT NULL REFERENCES game_events(id) ON DELETE CASCADE,
+  condition_type TEXT NOT NULL,
+  condition_value TEXT,
+  updated_at INTEGER NOT NULL DEFAULT 0
+);
+
+CREATE TABLE IF NOT EXISTS game_interactables (
+  id TEXT PRIMARY KEY,
+  location_id TEXT NOT NULL REFERENCES game_locations(id) ON DELETE CASCADE,
+  name TEXT NOT NULL,
+  event_id TEXT REFERENCES game_events(id) ON DELETE SET NULL,
+  updated_at INTEGER NOT NULL DEFAULT 0
+);
+
+
+CREATE TABLE IF NOT EXISTS game_event_character_pool (
+  event_id TEXT NOT NULL REFERENCES game_events(id) ON DELETE CASCADE,
+  game_character_id TEXT NOT NULL REFERENCES game_characters(id) ON DELETE CASCADE,
+  spawn_weight INTEGER NOT NULL DEFAULT 1 CHECK (spawn_weight > 0),
+  updated_at INTEGER NOT NULL DEFAULT 0,
+  PRIMARY KEY (event_id, game_character_id)
+);
+
+-- ---------------------------------------------------------
+-- 게임 인카운트 테이블
+-- ---------------------------------------------------------
+CREATE TABLE IF NOT EXISTS game_encounter_tables (
+  id TEXT PRIMARY KEY,
+  map_id TEXT NOT NULL REFERENCES game_maps(id) ON DELETE CASCADE,
+  -- NULL이면 Map 전체
+  zone_id TEXT REFERENCES game_map_zones(id) ON DELETE CASCADE,
+  location_id TEXT REFERENCES game_locations(id) ON DELETE CASCADE,
+  -- 이동 시 Encounter Table 자체가 발동할 확률
+  base_trigger_chance REAL NOT NULL DEFAULT 1.0 CHECK (base_trigger_chance >= 0.0 AND base_trigger_chance <= 1.0),
+  updated_at INTEGER NOT NULL DEFAULT 0
+);
+
+CREATE TABLE IF NOT EXISTS game_encounter_entries (
+  id TEXT PRIMARY KEY,
+  encounter_table_id TEXT NOT NULL REFERENCES game_encounter_tables(id) ON DELETE CASCADE,
+  event_id TEXT NOT NULL REFERENCES game_events(id) ON DELETE CASCADE,
+  -- 랜덤 가중치
+  weight INTEGER NOT NULL DEFAULT 1 CHECK (weight > 0),
+  -- NULL이면 모든 시간대
+  time_period_id TEXT REFERENCES game_time_periods(id) ON DELETE CASCADE,
+  -- NULL이면 모든 날씨
+  weather_id TEXT REFERENCES game_weather_types(id)ON DELETE CASCADE,
+  updated_at INTEGER NOT NULL DEFAULT 0
+);
+
+-- ---------------------------------------------------------
+-- 게임 씬
+-- ---------------------------------------------------------
+CREATE TABLE IF NOT EXISTS game_scenes (
+  id TEXT PRIMARY KEY,
+  game_id TEXT NOT NULL REFERENCES game_projects(id) ON DELETE CASCADE,
+  scene_name TEXT NOT NULL,
+  description TEXT,
+  scene_key TEXT NOT NULL,          -- 예: yuna_intro
+  is_ending INTEGER DEFAULT 0,
+  ending_id TEXT,
+  -- Scene 진입 시 실행되는 설정
+  settings_json TEXT,
+  script TEXT,
+
+  -- Editor에서의 정렬 순서
+  sort_order INTEGER DEFAULT 0,
+  created_at INTEGER NOT NULL,
+  updated_at INTEGER NOT NULL,
+  UNIQUE (game_id, scene_key)
+);
+
+ -- branch 노드의 분기 목록을 담을 테이블 (choices와 비슷하지만 유저 입력 없이 조건만 평가됨)
+CREATE TABLE IF NOT EXISTS game_branches (
+  id TEXT PRIMARY KEY,
+  scene_id TEXT NOT NULL REFERENCES game_scenes(id) ON DELETE CASCADE,
+  condition TEXT,
+  next_scene_id TEXT REFERENCES game_scenes(id) ON DELETE SET NULL,
+  sort_order INTEGER DEFAULT 0,
+  updated_at INTEGER NOT NULL DEFAULT 0
+);
+
+CREATE TABLE IF NOT EXISTS game_choices (
+  id TEXT PRIMARY KEY,
+  scene_id TEXT NOT NULL REFERENCES game_scenes(id) ON DELETE CASCADE,
+  text TEXT NOT NULL,
+  next_scene_id TEXT REFERENCES game_scenes(id) ON DELETE SET NULL,
+  -- 선택지가 표시되는 조건
+  condition TEXT,
+  effect TEXT,                      -- JSON: {"add": {"affection_yuna": 3}}
+  sort_order INTEGER DEFAULT 0,
+  updated_at INTEGER NOT NULL DEFAULT 0
+);
+
+-- ---------------------------------------------------------
+-- 게임 엔딩
+-- ---------------------------------------------------------
+CREATE TABLE IF NOT EXISTS game_endings (
+  id TEXT PRIMARY KEY,
+  game_id TEXT NOT NULL REFERENCES game_projects(id) ON DELETE CASCADE,
+  ending_key TEXT NOT NULL,
+  title TEXT NOT NULL,
+  description TEXT,
+  updated_at INTEGER NOT NULL DEFAULT 0,
+  UNIQUE (game_id, ending_key)
+);
+
+-- ---------------------------------------------------------
+-- 아이템
+-- ---------------------------------------------------------
+CREATE TABLE IF NOT EXISTS game_items (
+  id TEXT PRIMARY KEY,
+  game_id TEXT NOT NULL REFERENCES game_projects(id) ON DELETE CASCADE,
+  name TEXT NOT NULL,
+  description TEXT,
+  icon TEXT,                       -- 에셋 경로 등 (표시용)
+  kind TEXT,                       -- 제작자가 정하는 열린 분류 (consumable/key/gift...). 엔진은 해석하지 않음
+  max_stack INTEGER NOT NULL DEFAULT 99 CHECK (max_stack >= 1),
+  is_unique INTEGER NOT NULL DEFAULT 0 CHECK (is_unique IN (0, 1)),   -- 하나만 소지 가능
+  is_key INTEGER NOT NULL DEFAULT 0 CHECK (is_key IN (0, 1)),         -- 핵심 아이템
+  consumable INTEGER NOT NULL DEFAULT 0 CHECK (consumable IN (0, 1)), -- 사용하면 하나 줄어듦
+  use_effect TEXT,                 -- 이벤트 effect_json과 같은 형식. NULL이면 사용 불가 아이템
+  use_condition TEXT,              -- Condition JSON. 사용할 수 있는 조건
+  on_acquire_event_id TEXT REFERENCES game_events(id) ON DELETE SET NULL, -- 처음 입수할 때 발동할 manual 이벤트
+  settings_json TEXT,
+  created_at INTEGER NOT NULL,
+  updated_at INTEGER NOT NULL,
+  CHECK (is_unique = 0 OR max_stack = 1)   -- 고유 아이템은 스택 1
+);
+
+-- ---------------------------------------------------------
+-- 관계도
+-- ---------------------------------------------------------
+CREATE TABLE IF NOT EXISTS game_relationship_defs (
+  id TEXT PRIMARY KEY,
+  game_id TEXT NOT NULL REFERENCES game_projects(id) ON DELETE CASCADE,
+  from_id TEXT NOT NULL,   -- 'player' 또는 game_characters.id
+  to_id TEXT NOT NULL,
+  values_json TEXT,        -- {"affection": 10}
+  tags TEXT,               -- ["자매"]
+  updated_at INTEGER NOT NULL DEFAULT 0,
+  UNIQUE (game_id, from_id, to_id)
+);
+
+-- ---------------------------------------------------------
+-- Runtime (플레이 세션 & 로그)
+-- ---------------------------------------------------------
+-- game_saves 테이블과 달리 현재 실행 중인 상태
+CREATE TABLE IF NOT EXISTS game_player_sessions (
+  id TEXT PRIMARY KEY,
+  game_id TEXT NOT NULL REFERENCES game_projects(id) ON DELETE CASCADE,
+  player_id TEXT REFERENCES personas(id) ON DELETE SET NULL, -- personas id와 연결
+  current_scene_id TEXT REFERENCES game_scenes(id) ON DELETE SET NULL,
+  current_map_id TEXT REFERENCES game_maps(id) ON DELETE SET NULL,
+  current_zone_id TEXT REFERENCES game_map_zones(id) ON DELETE SET NULL,
+  current_location_id TEXT REFERENCES game_locations(id) ON DELETE SET NULL,
+  current_weather_id TEXT REFERENCES game_weather_types(id) ON DELETE SET NULL,
+  game_time INTEGER NOT NULL DEFAULT 0,
+
+  -- Runtime에서 사용하는 진행 상태
+  -- JSON TEXT
+  flags_json TEXT,
+  pending_scenes_json TEXT, -- 씬 대기열
+  inventory_json TEXT,       -- {"key_card": 1, "potion": 3}  (item_id → 수량)
+  relationships_json TEXT,
+  stage_json TEXT,
+  -- zone별 날씨: {zone_id: {"weather": 날씨 id, "day": 일차, "period": 시간대 id}}
+  -- 같은 zone·같은 날·같은 시간대 안에서는 날씨가 그대로다 (game/runtime/systems/time.rs)
+  zone_weather_json TEXT,
+
+  -- 분기용
+  parent_session_id TEXT REFERENCES game_player_sessions(id) ON DELETE SET NULL, -- 이전 세션 id를 가지고 있으면 분기로, 메시지와 대화 세션을 불러오는 역할을 한다.
+  forked_from_seq INTEGER, -- 분기 순서
+
+  -- 현재 진행 위치
+  head_seq INTEGER NOT NULL,
+  updated_at INTEGER
+);
+
+-- 세션별 AI 설정 (비우면 앱 기본값). 분기하면 같이 복사한다
+CREATE TABLE IF NOT EXISTS game_session_options (
+  session_id TEXT PRIMARY KEY REFERENCES game_player_sessions(id) ON DELETE CASCADE,
+  api_profile_id TEXT,
+  prompt_preset_id TEXT,
+  -- 게임 플레이(세션)별 모델: NULL = 이 플레이의 API 프로필의 기본 모델을 따라간다. 플레이의 API를 바꾸면 NULL로 돌아간다 (대화와 같은 규칙).
+  model TEXT,
+  updated_at INTEGER NOT NULL
+);
+
+CREATE TABLE IF NOT EXISTS game_saves (
+  name TEXT,
+  seq INTEGER NOT NULL,
+  slot_number INTEGER NOT NULL,
+  session_id TEXT NOT NULL REFERENCES game_player_sessions(id) ON DELETE CASCADE,
+  current_scene_id TEXT REFERENCES game_scenes(id) ON DELETE SET NULL,
+  current_map_id TEXT REFERENCES game_maps(id) ON DELETE SET NULL,
+  current_zone_id TEXT REFERENCES game_map_zones(id) ON DELETE SET NULL,
+  current_location_id TEXT REFERENCES game_locations(id) ON DELETE SET NULL,
+  current_weather_id TEXT REFERENCES game_weather_types(id) ON DELETE SET NULL,
+  game_time INTEGER NOT NULL DEFAULT 0,
+  state_snapshot TEXT,
+  updated_at INTEGER,
+  UNIQUE (session_id, slot_number)
+);
+
+CREATE TABLE IF NOT EXISTS game_journal (
+  session_id TEXT NOT NULL REFERENCES game_player_sessions(id) ON DELETE CASCADE,
+  seq INTEGER NOT NULL,
+  kind TEXT NOT NULL,
+  payload_json TEXT,
+  game_time INTEGER NOT NULL DEFAULT 0,
+  created_at INTEGER NOT NULL,
+  updated_at INTEGER NOT NULL DEFAULT 0,
+  UNIQUE (session_id, seq)
+);
+
+-- plans
+CREATE TABLE IF NOT EXISTS game_story_plans (
+  session_id TEXT NOT NULL REFERENCES game_player_sessions(id) ON DELETE CASCADE,
+  seq INTEGER NOT NULL,
+  plan_json TEXT,
+  reason TEXT,
+  updated_at INTEGER NOT NULL DEFAULT 0,
+  PRIMARY KEY (session_id, seq)
+);
+
+CREATE TABLE IF NOT EXISTS game_relationship_snapshots (
+  session_id TEXT NOT NULL REFERENCES game_player_sessions(id) ON DELETE CASCADE,
+  seq INTEGER NOT NULL,
+  relationships_json TEXT NOT NULL,
+  created_at INTEGER NOT NULL,
+  updated_at INTEGER NOT NULL DEFAULT 0,
+  PRIMARY KEY (session_id, seq)
+);
+
+CREATE TABLE IF NOT EXISTS game_character_state_snapshots (
+  session_id TEXT NOT NULL REFERENCES game_player_sessions(id) ON DELETE CASCADE,
+  seq INTEGER NOT NULL,
+  game_character_id TEXT NOT NULL REFERENCES game_characters(id) ON DELETE CASCADE,
+  -- null이면 현재 맵에 등장 X
+  current_location_id TEXT REFERENCES game_locations(id) ON DELETE SET NULL,
+  -- active, absent, traveling, dead 등
+  status TEXT NOT NULL DEFAULT 'active',
+  state_json TEXT,
+  updated_at INTEGER NOT NULL,
+
+  PRIMARY KEY (session_id, seq, game_character_id)
+);
+
+-- event log
+CREATE TABLE IF NOT EXISTS game_event_log (
+  session_id TEXT NOT NULL REFERENCES game_player_sessions(id) ON DELETE CASCADE,
+  seq INTEGER NOT NULL, -- 순서용
+  event_id TEXT NOT NULL REFERENCES game_events(id) ON DELETE CASCADE,
+  weather_id TEXT REFERENCES game_weather_types(id) ON DELETE SET NULL,
+  -- game_time 기준
+  triggered_at REAL NOT NULL,
+  -- 이벤트 실행 결과
+  -- JSON TEXT
+  result_json TEXT,
+  updated_at INTEGER NOT NULL DEFAULT 0,
+  PRIMARY KEY (session_id, seq)
+);
+
+CREATE TABLE IF NOT EXISTS game_event_log_characters (
+  session_id TEXT NOT NULL REFERENCES game_player_sessions(id) ON DELETE CASCADE,
+  seq INTEGER NOT NULL, -- 순서용
+  game_character_id TEXT NOT NULL REFERENCES game_characters(id) ON DELETE CASCADE,
+  role TEXT,              -- participant, speaker, target 등
+  sort_order INTEGER DEFAULT 0,
+  updated_at INTEGER NOT NULL DEFAULT 0,
+  PRIMARY KEY (session_id, seq, game_character_id),
+  FOREIGN KEY (session_id, seq) REFERENCES game_event_log(session_id, seq) ON DELETE CASCADE
+);
+
+CREATE TABLE IF NOT EXISTS game_conversations (
+  id TEXT PRIMARY KEY,
+  game_id TEXT NOT NULL REFERENCES game_projects(id) ON DELETE CASCADE,
+  session_id TEXT NOT NULL REFERENCES game_player_sessions(id) ON DELETE CASCADE,
+  branch_key TEXT NOT NULL DEFAULT '_default',
+  -- 참여자 id를 정렬해서 ','로 이은 값. "이 참여자 조합의 대화"를 찾는 키.
+  participants_key TEXT NOT NULL,
+  title TEXT,
+  created_at INTEGER NOT NULL,
+  updated_at INTEGER NOT NULL,
+  UNIQUE (session_id, branch_key, participants_key)
+);
+
+CREATE TABLE IF NOT EXISTS game_messages (
+  id TEXT PRIMARY KEY,
+  seq INTEGER NOT NULL, -- 순서용
+  conversation_id TEXT NOT NULL REFERENCES game_conversations(id) ON DELETE CASCADE,
+  role TEXT NOT NULL,
+  name TEXT, -- 스냅샷 역할
+  content TEXT NOT NULL,
+  character_id TEXT REFERENCES game_characters(id) ON DELETE SET NULL,
+  meta TEXT,
+  created_at INTEGER NOT NULL,
+  updated_at INTEGER
+);
+
+CREATE TABLE IF NOT EXISTS game_conversation_participants (
+  conversation_id TEXT NOT NULL REFERENCES game_conversations(id) ON DELETE CASCADE,
+  game_character_id TEXT NOT NULL REFERENCES game_characters(id) ON DELETE CASCADE,
+  sort_order INTEGER NOT NULL DEFAULT 0,
+  updated_at INTEGER NOT NULL DEFAULT 0,
+  PRIMARY KEY (conversation_id, game_character_id)
+);
+
+CREATE TABLE IF NOT EXISTS game_scene_conversations (
+  scene_id TEXT NOT NULL REFERENCES game_scenes(id) ON DELETE CASCADE,
+  conversation_id TEXT NOT NULL REFERENCES game_conversations(id) ON DELETE CASCADE,
+  sort_order INTEGER NOT NULL DEFAULT 0,
+  updated_at INTEGER NOT NULL DEFAULT 0,
+  PRIMARY KEY (scene_id, conversation_id)
+);
+-- =========================================================
+-- 인덱스
+-- =========================================================
+--  project
+CREATE INDEX IF NOT EXISTS idx_game_worldinfo ON game_worldinfo(game_id);
+CREATE INDEX IF NOT EXISTS idx_game_state_defs_game ON game_state_defs(game_id);
+CREATE INDEX IF NOT EXISTS idx_game_characters_project ON game_characters(game_id);
+CREATE INDEX IF NOT EXISTS idx_game_character_worldinfo_character ON game_character_worldinfo(game_character_id);
+
+-- scene
+CREATE INDEX IF NOT EXISTS idx_game_scenes_game ON game_scenes(game_id);
+CREATE INDEX IF NOT EXISTS idx_game_choices_node ON game_choices(scene_id);
+CREATE INDEX IF NOT EXISTS idx_game_branches_node ON game_branches(scene_id);
+
+-- character
+CREATE INDEX IF NOT EXISTS idx_game_character ON game_characters(game_id);
+CREATE INDEX IF NOT EXISTS idx_character_spawn_location ON game_character_spawn_locations(location_id);
+CREATE INDEX IF NOT EXISTS idx_character_spawn_character ON game_character_spawn_locations(game_character_id);
+
+-- assets
+CREATE INDEX IF NOT EXISTS idx_game_assets_game ON game_assets(game_id);
+CREATE INDEX IF NOT EXISTS idx_game_assets_game_category ON game_assets(game_id, category);
+CREATE INDEX IF NOT EXISTS idx_audio_assets_character ON audio_assets(game_character_id);
+CREATE INDEX IF NOT EXISTS idx_character_assets ON character_assets (game_character_id, usage, emotion);
+CREATE INDEX IF NOT EXISTS idx_cg_assets_character ON cg_assets(game_character_id);
+CREATE INDEX IF NOT EXISTS idx_background_assets ON background_assets (location_id, time_id, weather_id);
+-- Map
+CREATE INDEX IF NOT EXISTS idx_game_maps_game ON game_maps(game_id);
+CREATE INDEX IF NOT EXISTS idx_map_zones_map_id ON game_map_zones(map_id);
+CREATE INDEX IF NOT EXISTS idx_map_locations_zone_id ON game_locations(zone_id);
+CREATE INDEX IF NOT EXISTS idx_map_locations_lockup ON game_location_connections(from_id, to_id);
+
+-- time / weather
+CREATE INDEX IF NOT EXISTS idx_time_periods_game ON game_time_periods(game_id);
+CREATE INDEX IF NOT EXISTS idx_weather_types_game ON game_weather_types(game_id);
+CREATE INDEX IF NOT EXISTS idx_weather_pools_game ON game_weather_pools(game_id);
+CREATE INDEX IF NOT EXISTS idx_weather_pool_entries_weather ON game_weather_pool_entries(weather_id);
+CREATE INDEX IF NOT EXISTS idx_weather_transitions_lookup ON game_weather_transitions(map_id, from_weather_id);
+
+-- events
+CREATE INDEX IF NOT EXISTS idx_events_game ON game_events(game_id);
+CREATE INDEX IF NOT EXISTS idx_events_event_type ON game_events(event_type);
+CREATE INDEX IF NOT EXISTS idx_event_conditions_event_id ON game_event_conditions(event_id);
+CREATE INDEX IF NOT EXISTS idx_event_interactables_location_id ON game_interactables(location_id);
+CREATE INDEX IF NOT EXISTS idx_event_character_pool_event ON game_event_character_pool(event_id);
+CREATE INDEX IF NOT EXISTS idx_event_character_pool_character ON game_event_character_pool(game_character_id);
+CREATE INDEX IF NOT EXISTS idx_event_trigger_type ON game_events(game_id, trigger_type);
+CREATE INDEX IF NOT EXISTS idx_event_log_session_event_id ON game_event_log(session_id, event_id);
+
+-- encounters
+CREATE INDEX IF NOT EXISTS idx_encounter_tables_map_zone ON game_encounter_tables(map_id, zone_id);
+CREATE INDEX IF NOT EXISTS idx_encounter_entries_lookup ON game_encounter_entries(encounter_table_id, time_period_id, weather_id);
+CREATE INDEX IF NOT EXISTS idx_encounter_entries_event ON game_encounter_entries(event_id);
+
+-- item
+CREATE INDEX IF NOT EXISTS idx_game_items_game ON game_items(game_id);
+
+-- runtime
+CREATE INDEX IF NOT EXISTS idx_player_sessions_game ON game_player_sessions(game_id);
+CREATE INDEX IF NOT EXISTS idx_player_sessions_player_id ON game_player_sessions(player_id);
+CREATE INDEX IF NOT EXISTS idx_event_log_session_time ON game_event_log(session_id, triggered_at);
+CREATE INDEX IF NOT EXISTS idx_event_log_event ON game_event_log(event_id);
+CREATE INDEX IF NOT EXISTS idx_event_log_characters_character_id ON game_event_log_characters(game_character_id);
+CREATE INDEX IF NOT EXISTS idx_character_states_location ON game_character_state_snapshots(session_id, seq, current_location_id);
+
+-- conversation
+CREATE INDEX IF NOT EXISTS idx_game_messages_conversation ON game_messages(conversation_id, seq);
+CREATE INDEX IF NOT EXISTS idx_game_conversation_participants ON game_conversation_participants(conversation_id, game_character_id);
+CREATE INDEX IF NOT EXISTS idx_game_scene_conversations ON game_scene_conversations(scene_id, conversation_id);
+
+-- ---------------------------------------------------------------------------
+-- 변경 추적(updated_at 보정·트리거)과 지운 기록 트리거: 이 파일의 테이블 몫. 공통 테이블(trash_items·sync_tombstones)은 1xx에서 먼저 만들어짐
+-- ---------------------------------------------------------------------------
+
+-- audio_assets
+UPDATE audio_assets SET updated_at = updated_at * 1000 WHERE updated_at IS NOT NULL AND updated_at > 0 AND updated_at < 100000000000;
+UPDATE audio_assets SET updated_at = CAST((julianday('now') - 2440587.5) * 86400000 AS INTEGER) WHERE updated_at IS NULL OR updated_at = 0;
+CREATE TRIGGER audio_assets_touch_insert AFTER INSERT ON audio_assets FOR EACH ROW WHEN NEW.updated_at IS NULL OR NEW.updated_at = 0 BEGIN UPDATE audio_assets SET updated_at = CAST((julianday('now') - 2440587.5) * 86400000 AS INTEGER) WHERE rowid = NEW.rowid; END;
+CREATE TRIGGER audio_assets_touch_update AFTER UPDATE ON audio_assets FOR EACH ROW WHEN NEW.updated_at IS OLD.updated_at BEGIN UPDATE audio_assets SET updated_at = CAST((julianday('now') - 2440587.5) * 86400000 AS INTEGER) WHERE rowid = NEW.rowid; END;
+
+-- background_assets
+UPDATE background_assets SET updated_at = updated_at * 1000 WHERE updated_at IS NOT NULL AND updated_at > 0 AND updated_at < 100000000000;
+UPDATE background_assets SET updated_at = CAST((julianday('now') - 2440587.5) * 86400000 AS INTEGER) WHERE updated_at IS NULL OR updated_at = 0;
+CREATE TRIGGER background_assets_touch_insert AFTER INSERT ON background_assets FOR EACH ROW WHEN NEW.updated_at IS NULL OR NEW.updated_at = 0 BEGIN UPDATE background_assets SET updated_at = CAST((julianday('now') - 2440587.5) * 86400000 AS INTEGER) WHERE rowid = NEW.rowid; END;
+CREATE TRIGGER background_assets_touch_update AFTER UPDATE ON background_assets FOR EACH ROW WHEN NEW.updated_at IS OLD.updated_at BEGIN UPDATE background_assets SET updated_at = CAST((julianday('now') - 2440587.5) * 86400000 AS INTEGER) WHERE rowid = NEW.rowid; END;
+
+-- cg_assets
+UPDATE cg_assets SET updated_at = updated_at * 1000 WHERE updated_at IS NOT NULL AND updated_at > 0 AND updated_at < 100000000000;
+UPDATE cg_assets SET updated_at = CAST((julianday('now') - 2440587.5) * 86400000 AS INTEGER) WHERE updated_at IS NULL OR updated_at = 0;
+CREATE TRIGGER cg_assets_touch_insert AFTER INSERT ON cg_assets FOR EACH ROW WHEN NEW.updated_at IS NULL OR NEW.updated_at = 0 BEGIN UPDATE cg_assets SET updated_at = CAST((julianday('now') - 2440587.5) * 86400000 AS INTEGER) WHERE rowid = NEW.rowid; END;
+CREATE TRIGGER cg_assets_touch_update AFTER UPDATE ON cg_assets FOR EACH ROW WHEN NEW.updated_at IS OLD.updated_at BEGIN UPDATE cg_assets SET updated_at = CAST((julianday('now') - 2440587.5) * 86400000 AS INTEGER) WHERE rowid = NEW.rowid; END;
+
+-- character_assets
+UPDATE character_assets SET updated_at = updated_at * 1000 WHERE updated_at IS NOT NULL AND updated_at > 0 AND updated_at < 100000000000;
+UPDATE character_assets SET updated_at = CAST((julianday('now') - 2440587.5) * 86400000 AS INTEGER) WHERE updated_at IS NULL OR updated_at = 0;
+CREATE TRIGGER character_assets_touch_insert AFTER INSERT ON character_assets FOR EACH ROW WHEN NEW.updated_at IS NULL OR NEW.updated_at = 0 BEGIN UPDATE character_assets SET updated_at = CAST((julianday('now') - 2440587.5) * 86400000 AS INTEGER) WHERE rowid = NEW.rowid; END;
+CREATE TRIGGER character_assets_touch_update AFTER UPDATE ON character_assets FOR EACH ROW WHEN NEW.updated_at IS OLD.updated_at BEGIN UPDATE character_assets SET updated_at = CAST((julianday('now') - 2440587.5) * 86400000 AS INTEGER) WHERE rowid = NEW.rowid; END;
+
+-- game_assets
+UPDATE game_assets SET created_at = created_at * 1000 WHERE created_at IS NOT NULL AND created_at > 0 AND created_at < 100000000000;
+UPDATE game_assets SET updated_at = updated_at * 1000 WHERE updated_at IS NOT NULL AND updated_at > 0 AND updated_at < 100000000000;
+UPDATE game_assets SET updated_at = COALESCE(created_at, CAST((julianday('now') - 2440587.5) * 86400000 AS INTEGER)) WHERE updated_at IS NULL OR updated_at = 0;
+CREATE TRIGGER game_assets_touch_insert AFTER INSERT ON game_assets FOR EACH ROW WHEN NEW.updated_at IS NULL OR NEW.updated_at = 0 BEGIN UPDATE game_assets SET updated_at = CAST((julianday('now') - 2440587.5) * 86400000 AS INTEGER) WHERE rowid = NEW.rowid; END;
+CREATE TRIGGER game_assets_touch_update AFTER UPDATE ON game_assets FOR EACH ROW WHEN NEW.updated_at IS OLD.updated_at BEGIN UPDATE game_assets SET updated_at = CAST((julianday('now') - 2440587.5) * 86400000 AS INTEGER) WHERE rowid = NEW.rowid; END;
+
+-- game_branches
+UPDATE game_branches SET updated_at = updated_at * 1000 WHERE updated_at IS NOT NULL AND updated_at > 0 AND updated_at < 100000000000;
+UPDATE game_branches SET updated_at = CAST((julianday('now') - 2440587.5) * 86400000 AS INTEGER) WHERE updated_at IS NULL OR updated_at = 0;
+CREATE TRIGGER game_branches_touch_insert AFTER INSERT ON game_branches FOR EACH ROW WHEN NEW.updated_at IS NULL OR NEW.updated_at = 0 BEGIN UPDATE game_branches SET updated_at = CAST((julianday('now') - 2440587.5) * 86400000 AS INTEGER) WHERE rowid = NEW.rowid; END;
+CREATE TRIGGER game_branches_touch_update AFTER UPDATE ON game_branches FOR EACH ROW WHEN NEW.updated_at IS OLD.updated_at BEGIN UPDATE game_branches SET updated_at = CAST((julianday('now') - 2440587.5) * 86400000 AS INTEGER) WHERE rowid = NEW.rowid; END;
+
+-- game_character_spawn_locations
+UPDATE game_character_spawn_locations SET created_at = created_at * 1000 WHERE created_at IS NOT NULL AND created_at > 0 AND created_at < 100000000000;
+UPDATE game_character_spawn_locations SET updated_at = updated_at * 1000 WHERE updated_at IS NOT NULL AND updated_at > 0 AND updated_at < 100000000000;
+UPDATE game_character_spawn_locations SET updated_at = COALESCE(created_at, CAST((julianday('now') - 2440587.5) * 86400000 AS INTEGER)) WHERE updated_at IS NULL OR updated_at = 0;
+CREATE TRIGGER game_character_spawn_locations_touch_insert AFTER INSERT ON game_character_spawn_locations FOR EACH ROW WHEN NEW.updated_at IS NULL OR NEW.updated_at = 0 BEGIN UPDATE game_character_spawn_locations SET updated_at = CAST((julianday('now') - 2440587.5) * 86400000 AS INTEGER) WHERE rowid = NEW.rowid; END;
+CREATE TRIGGER game_character_spawn_locations_touch_update AFTER UPDATE ON game_character_spawn_locations FOR EACH ROW WHEN NEW.updated_at IS OLD.updated_at BEGIN UPDATE game_character_spawn_locations SET updated_at = CAST((julianday('now') - 2440587.5) * 86400000 AS INTEGER) WHERE rowid = NEW.rowid; END;
+
+-- game_character_state_snapshots
+UPDATE game_character_state_snapshots SET updated_at = updated_at * 1000 WHERE updated_at IS NOT NULL AND updated_at > 0 AND updated_at < 100000000000;
+UPDATE game_character_state_snapshots SET updated_at = CAST((julianday('now') - 2440587.5) * 86400000 AS INTEGER) WHERE updated_at IS NULL OR updated_at = 0;
+CREATE TRIGGER game_character_state_snapshots_touch_insert AFTER INSERT ON game_character_state_snapshots FOR EACH ROW WHEN NEW.updated_at IS NULL OR NEW.updated_at = 0 BEGIN UPDATE game_character_state_snapshots SET updated_at = CAST((julianday('now') - 2440587.5) * 86400000 AS INTEGER) WHERE rowid = NEW.rowid; END;
+CREATE TRIGGER game_character_state_snapshots_touch_update AFTER UPDATE ON game_character_state_snapshots FOR EACH ROW WHEN NEW.updated_at IS OLD.updated_at BEGIN UPDATE game_character_state_snapshots SET updated_at = CAST((julianday('now') - 2440587.5) * 86400000 AS INTEGER) WHERE rowid = NEW.rowid; END;
+
+-- game_character_worldinfo
+UPDATE game_character_worldinfo SET updated_at = updated_at * 1000 WHERE updated_at IS NOT NULL AND updated_at > 0 AND updated_at < 100000000000;
+UPDATE game_character_worldinfo SET updated_at = CAST((julianday('now') - 2440587.5) * 86400000 AS INTEGER) WHERE updated_at IS NULL OR updated_at = 0;
+CREATE TRIGGER game_character_worldinfo_touch_insert AFTER INSERT ON game_character_worldinfo FOR EACH ROW WHEN NEW.updated_at IS NULL OR NEW.updated_at = 0 BEGIN UPDATE game_character_worldinfo SET updated_at = CAST((julianday('now') - 2440587.5) * 86400000 AS INTEGER) WHERE rowid = NEW.rowid; END;
+CREATE TRIGGER game_character_worldinfo_touch_update AFTER UPDATE ON game_character_worldinfo FOR EACH ROW WHEN NEW.updated_at IS OLD.updated_at BEGIN UPDATE game_character_worldinfo SET updated_at = CAST((julianday('now') - 2440587.5) * 86400000 AS INTEGER) WHERE rowid = NEW.rowid; END;
+
+-- game_characters
+UPDATE game_characters SET created_at = created_at * 1000 WHERE created_at IS NOT NULL AND created_at > 0 AND created_at < 100000000000;
+UPDATE game_characters SET updated_at = updated_at * 1000 WHERE updated_at IS NOT NULL AND updated_at > 0 AND updated_at < 100000000000;
+UPDATE game_characters SET updated_at = COALESCE(created_at, CAST((julianday('now') - 2440587.5) * 86400000 AS INTEGER)) WHERE updated_at IS NULL OR updated_at = 0;
+CREATE TRIGGER game_characters_touch_insert AFTER INSERT ON game_characters FOR EACH ROW WHEN NEW.updated_at IS NULL OR NEW.updated_at = 0 BEGIN UPDATE game_characters SET updated_at = CAST((julianday('now') - 2440587.5) * 86400000 AS INTEGER) WHERE rowid = NEW.rowid; END;
+CREATE TRIGGER game_characters_touch_update AFTER UPDATE ON game_characters FOR EACH ROW WHEN NEW.updated_at IS OLD.updated_at BEGIN UPDATE game_characters SET updated_at = CAST((julianday('now') - 2440587.5) * 86400000 AS INTEGER) WHERE rowid = NEW.rowid; END;
+
+-- game_choices
+UPDATE game_choices SET updated_at = updated_at * 1000 WHERE updated_at IS NOT NULL AND updated_at > 0 AND updated_at < 100000000000;
+UPDATE game_choices SET updated_at = CAST((julianday('now') - 2440587.5) * 86400000 AS INTEGER) WHERE updated_at IS NULL OR updated_at = 0;
+CREATE TRIGGER game_choices_touch_insert AFTER INSERT ON game_choices FOR EACH ROW WHEN NEW.updated_at IS NULL OR NEW.updated_at = 0 BEGIN UPDATE game_choices SET updated_at = CAST((julianday('now') - 2440587.5) * 86400000 AS INTEGER) WHERE rowid = NEW.rowid; END;
+CREATE TRIGGER game_choices_touch_update AFTER UPDATE ON game_choices FOR EACH ROW WHEN NEW.updated_at IS OLD.updated_at BEGIN UPDATE game_choices SET updated_at = CAST((julianday('now') - 2440587.5) * 86400000 AS INTEGER) WHERE rowid = NEW.rowid; END;
+
+-- game_conversation_participants
+UPDATE game_conversation_participants SET updated_at = updated_at * 1000 WHERE updated_at IS NOT NULL AND updated_at > 0 AND updated_at < 100000000000;
+UPDATE game_conversation_participants SET updated_at = CAST((julianday('now') - 2440587.5) * 86400000 AS INTEGER) WHERE updated_at IS NULL OR updated_at = 0;
+CREATE TRIGGER game_conversation_participants_touch_insert AFTER INSERT ON game_conversation_participants FOR EACH ROW WHEN NEW.updated_at IS NULL OR NEW.updated_at = 0 BEGIN UPDATE game_conversation_participants SET updated_at = CAST((julianday('now') - 2440587.5) * 86400000 AS INTEGER) WHERE rowid = NEW.rowid; END;
+CREATE TRIGGER game_conversation_participants_touch_update AFTER UPDATE ON game_conversation_participants FOR EACH ROW WHEN NEW.updated_at IS OLD.updated_at BEGIN UPDATE game_conversation_participants SET updated_at = CAST((julianday('now') - 2440587.5) * 86400000 AS INTEGER) WHERE rowid = NEW.rowid; END;
+
+-- game_conversations
+UPDATE game_conversations SET created_at = created_at * 1000 WHERE created_at IS NOT NULL AND created_at > 0 AND created_at < 100000000000;
+UPDATE game_conversations SET updated_at = updated_at * 1000 WHERE updated_at IS NOT NULL AND updated_at > 0 AND updated_at < 100000000000;
+UPDATE game_conversations SET updated_at = COALESCE(created_at, CAST((julianday('now') - 2440587.5) * 86400000 AS INTEGER)) WHERE updated_at IS NULL OR updated_at = 0;
+CREATE TRIGGER game_conversations_touch_insert AFTER INSERT ON game_conversations FOR EACH ROW WHEN NEW.updated_at IS NULL OR NEW.updated_at = 0 BEGIN UPDATE game_conversations SET updated_at = CAST((julianday('now') - 2440587.5) * 86400000 AS INTEGER) WHERE rowid = NEW.rowid; END;
+CREATE TRIGGER game_conversations_touch_update AFTER UPDATE ON game_conversations FOR EACH ROW WHEN NEW.updated_at IS OLD.updated_at BEGIN UPDATE game_conversations SET updated_at = CAST((julianday('now') - 2440587.5) * 86400000 AS INTEGER) WHERE rowid = NEW.rowid; END;
+
+-- game_encounter_entries
+UPDATE game_encounter_entries SET updated_at = updated_at * 1000 WHERE updated_at IS NOT NULL AND updated_at > 0 AND updated_at < 100000000000;
+UPDATE game_encounter_entries SET updated_at = CAST((julianday('now') - 2440587.5) * 86400000 AS INTEGER) WHERE updated_at IS NULL OR updated_at = 0;
+CREATE TRIGGER game_encounter_entries_touch_insert AFTER INSERT ON game_encounter_entries FOR EACH ROW WHEN NEW.updated_at IS NULL OR NEW.updated_at = 0 BEGIN UPDATE game_encounter_entries SET updated_at = CAST((julianday('now') - 2440587.5) * 86400000 AS INTEGER) WHERE rowid = NEW.rowid; END;
+CREATE TRIGGER game_encounter_entries_touch_update AFTER UPDATE ON game_encounter_entries FOR EACH ROW WHEN NEW.updated_at IS OLD.updated_at BEGIN UPDATE game_encounter_entries SET updated_at = CAST((julianday('now') - 2440587.5) * 86400000 AS INTEGER) WHERE rowid = NEW.rowid; END;
+
+-- game_encounter_tables
+UPDATE game_encounter_tables SET updated_at = updated_at * 1000 WHERE updated_at IS NOT NULL AND updated_at > 0 AND updated_at < 100000000000;
+UPDATE game_encounter_tables SET updated_at = CAST((julianday('now') - 2440587.5) * 86400000 AS INTEGER) WHERE updated_at IS NULL OR updated_at = 0;
+CREATE TRIGGER game_encounter_tables_touch_insert AFTER INSERT ON game_encounter_tables FOR EACH ROW WHEN NEW.updated_at IS NULL OR NEW.updated_at = 0 BEGIN UPDATE game_encounter_tables SET updated_at = CAST((julianday('now') - 2440587.5) * 86400000 AS INTEGER) WHERE rowid = NEW.rowid; END;
+CREATE TRIGGER game_encounter_tables_touch_update AFTER UPDATE ON game_encounter_tables FOR EACH ROW WHEN NEW.updated_at IS OLD.updated_at BEGIN UPDATE game_encounter_tables SET updated_at = CAST((julianday('now') - 2440587.5) * 86400000 AS INTEGER) WHERE rowid = NEW.rowid; END;
+
+-- game_endings
+UPDATE game_endings SET updated_at = updated_at * 1000 WHERE updated_at IS NOT NULL AND updated_at > 0 AND updated_at < 100000000000;
+UPDATE game_endings SET updated_at = CAST((julianday('now') - 2440587.5) * 86400000 AS INTEGER) WHERE updated_at IS NULL OR updated_at = 0;
+CREATE TRIGGER game_endings_touch_insert AFTER INSERT ON game_endings FOR EACH ROW WHEN NEW.updated_at IS NULL OR NEW.updated_at = 0 BEGIN UPDATE game_endings SET updated_at = CAST((julianday('now') - 2440587.5) * 86400000 AS INTEGER) WHERE rowid = NEW.rowid; END;
+CREATE TRIGGER game_endings_touch_update AFTER UPDATE ON game_endings FOR EACH ROW WHEN NEW.updated_at IS OLD.updated_at BEGIN UPDATE game_endings SET updated_at = CAST((julianday('now') - 2440587.5) * 86400000 AS INTEGER) WHERE rowid = NEW.rowid; END;
+
+-- game_event_character_pool
+UPDATE game_event_character_pool SET updated_at = updated_at * 1000 WHERE updated_at IS NOT NULL AND updated_at > 0 AND updated_at < 100000000000;
+UPDATE game_event_character_pool SET updated_at = CAST((julianday('now') - 2440587.5) * 86400000 AS INTEGER) WHERE updated_at IS NULL OR updated_at = 0;
+CREATE TRIGGER game_event_character_pool_touch_insert AFTER INSERT ON game_event_character_pool FOR EACH ROW WHEN NEW.updated_at IS NULL OR NEW.updated_at = 0 BEGIN UPDATE game_event_character_pool SET updated_at = CAST((julianday('now') - 2440587.5) * 86400000 AS INTEGER) WHERE rowid = NEW.rowid; END;
+CREATE TRIGGER game_event_character_pool_touch_update AFTER UPDATE ON game_event_character_pool FOR EACH ROW WHEN NEW.updated_at IS OLD.updated_at BEGIN UPDATE game_event_character_pool SET updated_at = CAST((julianday('now') - 2440587.5) * 86400000 AS INTEGER) WHERE rowid = NEW.rowid; END;
+
+-- game_event_conditions
+UPDATE game_event_conditions SET updated_at = updated_at * 1000 WHERE updated_at IS NOT NULL AND updated_at > 0 AND updated_at < 100000000000;
+UPDATE game_event_conditions SET updated_at = CAST((julianday('now') - 2440587.5) * 86400000 AS INTEGER) WHERE updated_at IS NULL OR updated_at = 0;
+CREATE TRIGGER game_event_conditions_touch_insert AFTER INSERT ON game_event_conditions FOR EACH ROW WHEN NEW.updated_at IS NULL OR NEW.updated_at = 0 BEGIN UPDATE game_event_conditions SET updated_at = CAST((julianday('now') - 2440587.5) * 86400000 AS INTEGER) WHERE rowid = NEW.rowid; END;
+CREATE TRIGGER game_event_conditions_touch_update AFTER UPDATE ON game_event_conditions FOR EACH ROW WHEN NEW.updated_at IS OLD.updated_at BEGIN UPDATE game_event_conditions SET updated_at = CAST((julianday('now') - 2440587.5) * 86400000 AS INTEGER) WHERE rowid = NEW.rowid; END;
+
+-- game_event_log
+UPDATE game_event_log SET updated_at = updated_at * 1000 WHERE updated_at IS NOT NULL AND updated_at > 0 AND updated_at < 100000000000;
+UPDATE game_event_log SET updated_at = CAST((julianday('now') - 2440587.5) * 86400000 AS INTEGER) WHERE updated_at IS NULL OR updated_at = 0;
+CREATE TRIGGER game_event_log_touch_insert AFTER INSERT ON game_event_log FOR EACH ROW WHEN NEW.updated_at IS NULL OR NEW.updated_at = 0 BEGIN UPDATE game_event_log SET updated_at = CAST((julianday('now') - 2440587.5) * 86400000 AS INTEGER) WHERE rowid = NEW.rowid; END;
+CREATE TRIGGER game_event_log_touch_update AFTER UPDATE ON game_event_log FOR EACH ROW WHEN NEW.updated_at IS OLD.updated_at BEGIN UPDATE game_event_log SET updated_at = CAST((julianday('now') - 2440587.5) * 86400000 AS INTEGER) WHERE rowid = NEW.rowid; END;
+
+-- game_event_log_characters
+UPDATE game_event_log_characters SET updated_at = updated_at * 1000 WHERE updated_at IS NOT NULL AND updated_at > 0 AND updated_at < 100000000000;
+UPDATE game_event_log_characters SET updated_at = CAST((julianday('now') - 2440587.5) * 86400000 AS INTEGER) WHERE updated_at IS NULL OR updated_at = 0;
+CREATE TRIGGER game_event_log_characters_touch_insert AFTER INSERT ON game_event_log_characters FOR EACH ROW WHEN NEW.updated_at IS NULL OR NEW.updated_at = 0 BEGIN UPDATE game_event_log_characters SET updated_at = CAST((julianday('now') - 2440587.5) * 86400000 AS INTEGER) WHERE rowid = NEW.rowid; END;
+CREATE TRIGGER game_event_log_characters_touch_update AFTER UPDATE ON game_event_log_characters FOR EACH ROW WHEN NEW.updated_at IS OLD.updated_at BEGIN UPDATE game_event_log_characters SET updated_at = CAST((julianday('now') - 2440587.5) * 86400000 AS INTEGER) WHERE rowid = NEW.rowid; END;
+
+-- game_events
+UPDATE game_events SET created_at = created_at * 1000 WHERE created_at IS NOT NULL AND created_at > 0 AND created_at < 100000000000;
+UPDATE game_events SET updated_at = updated_at * 1000 WHERE updated_at IS NOT NULL AND updated_at > 0 AND updated_at < 100000000000;
+UPDATE game_events SET updated_at = COALESCE(created_at, CAST((julianday('now') - 2440587.5) * 86400000 AS INTEGER)) WHERE updated_at IS NULL OR updated_at = 0;
+CREATE TRIGGER game_events_touch_insert AFTER INSERT ON game_events FOR EACH ROW WHEN NEW.updated_at IS NULL OR NEW.updated_at = 0 BEGIN UPDATE game_events SET updated_at = CAST((julianday('now') - 2440587.5) * 86400000 AS INTEGER) WHERE rowid = NEW.rowid; END;
+CREATE TRIGGER game_events_touch_update AFTER UPDATE ON game_events FOR EACH ROW WHEN NEW.updated_at IS OLD.updated_at BEGIN UPDATE game_events SET updated_at = CAST((julianday('now') - 2440587.5) * 86400000 AS INTEGER) WHERE rowid = NEW.rowid; END;
+
+-- game_interactables
+UPDATE game_interactables SET updated_at = updated_at * 1000 WHERE updated_at IS NOT NULL AND updated_at > 0 AND updated_at < 100000000000;
+UPDATE game_interactables SET updated_at = CAST((julianday('now') - 2440587.5) * 86400000 AS INTEGER) WHERE updated_at IS NULL OR updated_at = 0;
+CREATE TRIGGER game_interactables_touch_insert AFTER INSERT ON game_interactables FOR EACH ROW WHEN NEW.updated_at IS NULL OR NEW.updated_at = 0 BEGIN UPDATE game_interactables SET updated_at = CAST((julianday('now') - 2440587.5) * 86400000 AS INTEGER) WHERE rowid = NEW.rowid; END;
+CREATE TRIGGER game_interactables_touch_update AFTER UPDATE ON game_interactables FOR EACH ROW WHEN NEW.updated_at IS OLD.updated_at BEGIN UPDATE game_interactables SET updated_at = CAST((julianday('now') - 2440587.5) * 86400000 AS INTEGER) WHERE rowid = NEW.rowid; END;
+
+-- game_items
+UPDATE game_items SET created_at = created_at * 1000 WHERE created_at IS NOT NULL AND created_at > 0 AND created_at < 100000000000;
+UPDATE game_items SET updated_at = updated_at * 1000 WHERE updated_at IS NOT NULL AND updated_at > 0 AND updated_at < 100000000000;
+UPDATE game_items SET updated_at = COALESCE(created_at, CAST((julianday('now') - 2440587.5) * 86400000 AS INTEGER)) WHERE updated_at IS NULL OR updated_at = 0;
+CREATE TRIGGER game_items_touch_insert AFTER INSERT ON game_items FOR EACH ROW WHEN NEW.updated_at IS NULL OR NEW.updated_at = 0 BEGIN UPDATE game_items SET updated_at = CAST((julianday('now') - 2440587.5) * 86400000 AS INTEGER) WHERE rowid = NEW.rowid; END;
+CREATE TRIGGER game_items_touch_update AFTER UPDATE ON game_items FOR EACH ROW WHEN NEW.updated_at IS OLD.updated_at BEGIN UPDATE game_items SET updated_at = CAST((julianday('now') - 2440587.5) * 86400000 AS INTEGER) WHERE rowid = NEW.rowid; END;
+
+-- game_journal
+UPDATE game_journal SET created_at = created_at * 1000 WHERE created_at IS NOT NULL AND created_at > 0 AND created_at < 100000000000;
+UPDATE game_journal SET updated_at = updated_at * 1000 WHERE updated_at IS NOT NULL AND updated_at > 0 AND updated_at < 100000000000;
+UPDATE game_journal SET updated_at = COALESCE(created_at, CAST((julianday('now') - 2440587.5) * 86400000 AS INTEGER)) WHERE updated_at IS NULL OR updated_at = 0;
+CREATE TRIGGER game_journal_touch_insert AFTER INSERT ON game_journal FOR EACH ROW WHEN NEW.updated_at IS NULL OR NEW.updated_at = 0 BEGIN UPDATE game_journal SET updated_at = CAST((julianday('now') - 2440587.5) * 86400000 AS INTEGER) WHERE rowid = NEW.rowid; END;
+CREATE TRIGGER game_journal_touch_update AFTER UPDATE ON game_journal FOR EACH ROW WHEN NEW.updated_at IS OLD.updated_at BEGIN UPDATE game_journal SET updated_at = CAST((julianday('now') - 2440587.5) * 86400000 AS INTEGER) WHERE rowid = NEW.rowid; END;
+
+-- game_location_connections
+UPDATE game_location_connections SET updated_at = updated_at * 1000 WHERE updated_at IS NOT NULL AND updated_at > 0 AND updated_at < 100000000000;
+UPDATE game_location_connections SET updated_at = CAST((julianday('now') - 2440587.5) * 86400000 AS INTEGER) WHERE updated_at IS NULL OR updated_at = 0;
+CREATE TRIGGER game_location_connections_touch_insert AFTER INSERT ON game_location_connections FOR EACH ROW WHEN NEW.updated_at IS NULL OR NEW.updated_at = 0 BEGIN UPDATE game_location_connections SET updated_at = CAST((julianday('now') - 2440587.5) * 86400000 AS INTEGER) WHERE rowid = NEW.rowid; END;
+CREATE TRIGGER game_location_connections_touch_update AFTER UPDATE ON game_location_connections FOR EACH ROW WHEN NEW.updated_at IS OLD.updated_at BEGIN UPDATE game_location_connections SET updated_at = CAST((julianday('now') - 2440587.5) * 86400000 AS INTEGER) WHERE rowid = NEW.rowid; END;
+
+-- game_locations
+UPDATE game_locations SET updated_at = updated_at * 1000 WHERE updated_at IS NOT NULL AND updated_at > 0 AND updated_at < 100000000000;
+UPDATE game_locations SET updated_at = CAST((julianday('now') - 2440587.5) * 86400000 AS INTEGER) WHERE updated_at IS NULL OR updated_at = 0;
+CREATE TRIGGER game_locations_touch_insert AFTER INSERT ON game_locations FOR EACH ROW WHEN NEW.updated_at IS NULL OR NEW.updated_at = 0 BEGIN UPDATE game_locations SET updated_at = CAST((julianday('now') - 2440587.5) * 86400000 AS INTEGER) WHERE rowid = NEW.rowid; END;
+CREATE TRIGGER game_locations_touch_update AFTER UPDATE ON game_locations FOR EACH ROW WHEN NEW.updated_at IS OLD.updated_at BEGIN UPDATE game_locations SET updated_at = CAST((julianday('now') - 2440587.5) * 86400000 AS INTEGER) WHERE rowid = NEW.rowid; END;
+
+-- game_map_zones
+UPDATE game_map_zones SET created_at = created_at * 1000 WHERE created_at IS NOT NULL AND created_at > 0 AND created_at < 100000000000;
+UPDATE game_map_zones SET updated_at = updated_at * 1000 WHERE updated_at IS NOT NULL AND updated_at > 0 AND updated_at < 100000000000;
+UPDATE game_map_zones SET updated_at = COALESCE(created_at, CAST((julianday('now') - 2440587.5) * 86400000 AS INTEGER)) WHERE updated_at IS NULL OR updated_at = 0;
+CREATE TRIGGER game_map_zones_touch_insert AFTER INSERT ON game_map_zones FOR EACH ROW WHEN NEW.updated_at IS NULL OR NEW.updated_at = 0 BEGIN UPDATE game_map_zones SET updated_at = CAST((julianday('now') - 2440587.5) * 86400000 AS INTEGER) WHERE rowid = NEW.rowid; END;
+CREATE TRIGGER game_map_zones_touch_update AFTER UPDATE ON game_map_zones FOR EACH ROW WHEN NEW.updated_at IS OLD.updated_at BEGIN UPDATE game_map_zones SET updated_at = CAST((julianday('now') - 2440587.5) * 86400000 AS INTEGER) WHERE rowid = NEW.rowid; END;
+
+-- game_maps
+UPDATE game_maps SET created_at = created_at * 1000 WHERE created_at IS NOT NULL AND created_at > 0 AND created_at < 100000000000;
+UPDATE game_maps SET updated_at = updated_at * 1000 WHERE updated_at IS NOT NULL AND updated_at > 0 AND updated_at < 100000000000;
+UPDATE game_maps SET updated_at = COALESCE(created_at, CAST((julianday('now') - 2440587.5) * 86400000 AS INTEGER)) WHERE updated_at IS NULL OR updated_at = 0;
+CREATE TRIGGER game_maps_touch_insert AFTER INSERT ON game_maps FOR EACH ROW WHEN NEW.updated_at IS NULL OR NEW.updated_at = 0 BEGIN UPDATE game_maps SET updated_at = CAST((julianday('now') - 2440587.5) * 86400000 AS INTEGER) WHERE rowid = NEW.rowid; END;
+CREATE TRIGGER game_maps_touch_update AFTER UPDATE ON game_maps FOR EACH ROW WHEN NEW.updated_at IS OLD.updated_at BEGIN UPDATE game_maps SET updated_at = CAST((julianday('now') - 2440587.5) * 86400000 AS INTEGER) WHERE rowid = NEW.rowid; END;
+
+-- game_messages
+UPDATE game_messages SET created_at = created_at * 1000 WHERE created_at IS NOT NULL AND created_at > 0 AND created_at < 100000000000;
+UPDATE game_messages SET updated_at = updated_at * 1000 WHERE updated_at IS NOT NULL AND updated_at > 0 AND updated_at < 100000000000;
+UPDATE game_messages SET updated_at = COALESCE(created_at, CAST((julianday('now') - 2440587.5) * 86400000 AS INTEGER)) WHERE updated_at IS NULL OR updated_at = 0;
+CREATE TRIGGER game_messages_touch_insert AFTER INSERT ON game_messages FOR EACH ROW WHEN NEW.updated_at IS NULL OR NEW.updated_at = 0 BEGIN UPDATE game_messages SET updated_at = CAST((julianday('now') - 2440587.5) * 86400000 AS INTEGER) WHERE rowid = NEW.rowid; END;
+CREATE TRIGGER game_messages_touch_update AFTER UPDATE ON game_messages FOR EACH ROW WHEN NEW.updated_at IS OLD.updated_at BEGIN UPDATE game_messages SET updated_at = CAST((julianday('now') - 2440587.5) * 86400000 AS INTEGER) WHERE rowid = NEW.rowid; END;
+
+-- game_player_sessions
+UPDATE game_player_sessions SET updated_at = updated_at * 1000 WHERE updated_at IS NOT NULL AND updated_at > 0 AND updated_at < 100000000000;
+UPDATE game_player_sessions SET updated_at = CAST((julianday('now') - 2440587.5) * 86400000 AS INTEGER) WHERE updated_at IS NULL OR updated_at = 0;
+CREATE TRIGGER game_player_sessions_touch_insert AFTER INSERT ON game_player_sessions FOR EACH ROW WHEN NEW.updated_at IS NULL OR NEW.updated_at = 0 BEGIN UPDATE game_player_sessions SET updated_at = CAST((julianday('now') - 2440587.5) * 86400000 AS INTEGER) WHERE rowid = NEW.rowid; END;
+CREATE TRIGGER game_player_sessions_touch_update AFTER UPDATE ON game_player_sessions FOR EACH ROW WHEN NEW.updated_at IS OLD.updated_at BEGIN UPDATE game_player_sessions SET updated_at = CAST((julianday('now') - 2440587.5) * 86400000 AS INTEGER) WHERE rowid = NEW.rowid; END;
+
+-- game_projects
+UPDATE game_projects SET created_at = created_at * 1000 WHERE created_at IS NOT NULL AND created_at > 0 AND created_at < 100000000000;
+UPDATE game_projects SET updated_at = updated_at * 1000 WHERE updated_at IS NOT NULL AND updated_at > 0 AND updated_at < 100000000000;
+UPDATE game_projects SET updated_at = COALESCE(created_at, CAST((julianday('now') - 2440587.5) * 86400000 AS INTEGER)) WHERE updated_at IS NULL OR updated_at = 0;
+CREATE TRIGGER game_projects_touch_insert AFTER INSERT ON game_projects FOR EACH ROW WHEN NEW.updated_at IS NULL OR NEW.updated_at = 0 BEGIN UPDATE game_projects SET updated_at = CAST((julianday('now') - 2440587.5) * 86400000 AS INTEGER) WHERE rowid = NEW.rowid; END;
+CREATE TRIGGER game_projects_touch_update AFTER UPDATE ON game_projects FOR EACH ROW WHEN NEW.updated_at IS OLD.updated_at BEGIN UPDATE game_projects SET updated_at = CAST((julianday('now') - 2440587.5) * 86400000 AS INTEGER) WHERE rowid = NEW.rowid; END;
+
+-- game_relationship_defs
+UPDATE game_relationship_defs SET updated_at = updated_at * 1000 WHERE updated_at IS NOT NULL AND updated_at > 0 AND updated_at < 100000000000;
+UPDATE game_relationship_defs SET updated_at = CAST((julianday('now') - 2440587.5) * 86400000 AS INTEGER) WHERE updated_at IS NULL OR updated_at = 0;
+CREATE TRIGGER game_relationship_defs_touch_insert AFTER INSERT ON game_relationship_defs FOR EACH ROW WHEN NEW.updated_at IS NULL OR NEW.updated_at = 0 BEGIN UPDATE game_relationship_defs SET updated_at = CAST((julianday('now') - 2440587.5) * 86400000 AS INTEGER) WHERE rowid = NEW.rowid; END;
+CREATE TRIGGER game_relationship_defs_touch_update AFTER UPDATE ON game_relationship_defs FOR EACH ROW WHEN NEW.updated_at IS OLD.updated_at BEGIN UPDATE game_relationship_defs SET updated_at = CAST((julianday('now') - 2440587.5) * 86400000 AS INTEGER) WHERE rowid = NEW.rowid; END;
+
+-- game_relationship_snapshots
+UPDATE game_relationship_snapshots SET created_at = created_at * 1000 WHERE created_at IS NOT NULL AND created_at > 0 AND created_at < 100000000000;
+UPDATE game_relationship_snapshots SET updated_at = updated_at * 1000 WHERE updated_at IS NOT NULL AND updated_at > 0 AND updated_at < 100000000000;
+UPDATE game_relationship_snapshots SET updated_at = COALESCE(created_at, CAST((julianday('now') - 2440587.5) * 86400000 AS INTEGER)) WHERE updated_at IS NULL OR updated_at = 0;
+CREATE TRIGGER game_relationship_snapshots_touch_insert AFTER INSERT ON game_relationship_snapshots FOR EACH ROW WHEN NEW.updated_at IS NULL OR NEW.updated_at = 0 BEGIN UPDATE game_relationship_snapshots SET updated_at = CAST((julianday('now') - 2440587.5) * 86400000 AS INTEGER) WHERE rowid = NEW.rowid; END;
+CREATE TRIGGER game_relationship_snapshots_touch_update AFTER UPDATE ON game_relationship_snapshots FOR EACH ROW WHEN NEW.updated_at IS OLD.updated_at BEGIN UPDATE game_relationship_snapshots SET updated_at = CAST((julianday('now') - 2440587.5) * 86400000 AS INTEGER) WHERE rowid = NEW.rowid; END;
+
+-- game_saves
+UPDATE game_saves SET updated_at = updated_at * 1000 WHERE updated_at IS NOT NULL AND updated_at > 0 AND updated_at < 100000000000;
+UPDATE game_saves SET updated_at = CAST((julianday('now') - 2440587.5) * 86400000 AS INTEGER) WHERE updated_at IS NULL OR updated_at = 0;
+CREATE TRIGGER game_saves_touch_insert AFTER INSERT ON game_saves FOR EACH ROW WHEN NEW.updated_at IS NULL OR NEW.updated_at = 0 BEGIN UPDATE game_saves SET updated_at = CAST((julianday('now') - 2440587.5) * 86400000 AS INTEGER) WHERE rowid = NEW.rowid; END;
+CREATE TRIGGER game_saves_touch_update AFTER UPDATE ON game_saves FOR EACH ROW WHEN NEW.updated_at IS OLD.updated_at BEGIN UPDATE game_saves SET updated_at = CAST((julianday('now') - 2440587.5) * 86400000 AS INTEGER) WHERE rowid = NEW.rowid; END;
+
+-- game_scene_conversations
+UPDATE game_scene_conversations SET updated_at = updated_at * 1000 WHERE updated_at IS NOT NULL AND updated_at > 0 AND updated_at < 100000000000;
+UPDATE game_scene_conversations SET updated_at = CAST((julianday('now') - 2440587.5) * 86400000 AS INTEGER) WHERE updated_at IS NULL OR updated_at = 0;
+CREATE TRIGGER game_scene_conversations_touch_insert AFTER INSERT ON game_scene_conversations FOR EACH ROW WHEN NEW.updated_at IS NULL OR NEW.updated_at = 0 BEGIN UPDATE game_scene_conversations SET updated_at = CAST((julianday('now') - 2440587.5) * 86400000 AS INTEGER) WHERE rowid = NEW.rowid; END;
+CREATE TRIGGER game_scene_conversations_touch_update AFTER UPDATE ON game_scene_conversations FOR EACH ROW WHEN NEW.updated_at IS OLD.updated_at BEGIN UPDATE game_scene_conversations SET updated_at = CAST((julianday('now') - 2440587.5) * 86400000 AS INTEGER) WHERE rowid = NEW.rowid; END;
+
+-- game_scenes
+UPDATE game_scenes SET created_at = created_at * 1000 WHERE created_at IS NOT NULL AND created_at > 0 AND created_at < 100000000000;
+UPDATE game_scenes SET updated_at = updated_at * 1000 WHERE updated_at IS NOT NULL AND updated_at > 0 AND updated_at < 100000000000;
+UPDATE game_scenes SET updated_at = COALESCE(created_at, CAST((julianday('now') - 2440587.5) * 86400000 AS INTEGER)) WHERE updated_at IS NULL OR updated_at = 0;
+CREATE TRIGGER game_scenes_touch_insert AFTER INSERT ON game_scenes FOR EACH ROW WHEN NEW.updated_at IS NULL OR NEW.updated_at = 0 BEGIN UPDATE game_scenes SET updated_at = CAST((julianday('now') - 2440587.5) * 86400000 AS INTEGER) WHERE rowid = NEW.rowid; END;
+CREATE TRIGGER game_scenes_touch_update AFTER UPDATE ON game_scenes FOR EACH ROW WHEN NEW.updated_at IS OLD.updated_at BEGIN UPDATE game_scenes SET updated_at = CAST((julianday('now') - 2440587.5) * 86400000 AS INTEGER) WHERE rowid = NEW.rowid; END;
+
+-- game_session_options
+UPDATE game_session_options SET updated_at = updated_at * 1000 WHERE updated_at IS NOT NULL AND updated_at > 0 AND updated_at < 100000000000;
+UPDATE game_session_options SET updated_at = CAST((julianday('now') - 2440587.5) * 86400000 AS INTEGER) WHERE updated_at IS NULL OR updated_at = 0;
+CREATE TRIGGER game_session_options_touch_insert AFTER INSERT ON game_session_options FOR EACH ROW WHEN NEW.updated_at IS NULL OR NEW.updated_at = 0 BEGIN UPDATE game_session_options SET updated_at = CAST((julianday('now') - 2440587.5) * 86400000 AS INTEGER) WHERE rowid = NEW.rowid; END;
+CREATE TRIGGER game_session_options_touch_update AFTER UPDATE ON game_session_options FOR EACH ROW WHEN NEW.updated_at IS OLD.updated_at BEGIN UPDATE game_session_options SET updated_at = CAST((julianday('now') - 2440587.5) * 86400000 AS INTEGER) WHERE rowid = NEW.rowid; END;
+
+-- game_state_defs
+UPDATE game_state_defs SET created_at = created_at * 1000 WHERE created_at IS NOT NULL AND created_at > 0 AND created_at < 100000000000;
+UPDATE game_state_defs SET updated_at = updated_at * 1000 WHERE updated_at IS NOT NULL AND updated_at > 0 AND updated_at < 100000000000;
+UPDATE game_state_defs SET updated_at = COALESCE(created_at, CAST((julianday('now') - 2440587.5) * 86400000 AS INTEGER)) WHERE updated_at IS NULL OR updated_at = 0;
+CREATE TRIGGER game_state_defs_touch_insert AFTER INSERT ON game_state_defs FOR EACH ROW WHEN NEW.updated_at IS NULL OR NEW.updated_at = 0 BEGIN UPDATE game_state_defs SET updated_at = CAST((julianday('now') - 2440587.5) * 86400000 AS INTEGER) WHERE rowid = NEW.rowid; END;
+CREATE TRIGGER game_state_defs_touch_update AFTER UPDATE ON game_state_defs FOR EACH ROW WHEN NEW.updated_at IS OLD.updated_at BEGIN UPDATE game_state_defs SET updated_at = CAST((julianday('now') - 2440587.5) * 86400000 AS INTEGER) WHERE rowid = NEW.rowid; END;
+
+-- game_story_plans
+UPDATE game_story_plans SET updated_at = updated_at * 1000 WHERE updated_at IS NOT NULL AND updated_at > 0 AND updated_at < 100000000000;
+UPDATE game_story_plans SET updated_at = CAST((julianday('now') - 2440587.5) * 86400000 AS INTEGER) WHERE updated_at IS NULL OR updated_at = 0;
+CREATE TRIGGER game_story_plans_touch_insert AFTER INSERT ON game_story_plans FOR EACH ROW WHEN NEW.updated_at IS NULL OR NEW.updated_at = 0 BEGIN UPDATE game_story_plans SET updated_at = CAST((julianday('now') - 2440587.5) * 86400000 AS INTEGER) WHERE rowid = NEW.rowid; END;
+CREATE TRIGGER game_story_plans_touch_update AFTER UPDATE ON game_story_plans FOR EACH ROW WHEN NEW.updated_at IS OLD.updated_at BEGIN UPDATE game_story_plans SET updated_at = CAST((julianday('now') - 2440587.5) * 86400000 AS INTEGER) WHERE rowid = NEW.rowid; END;
+
+-- game_time_periods
+UPDATE game_time_periods SET updated_at = updated_at * 1000 WHERE updated_at IS NOT NULL AND updated_at > 0 AND updated_at < 100000000000;
+UPDATE game_time_periods SET updated_at = CAST((julianday('now') - 2440587.5) * 86400000 AS INTEGER) WHERE updated_at IS NULL OR updated_at = 0;
+CREATE TRIGGER game_time_periods_touch_insert AFTER INSERT ON game_time_periods FOR EACH ROW WHEN NEW.updated_at IS NULL OR NEW.updated_at = 0 BEGIN UPDATE game_time_periods SET updated_at = CAST((julianday('now') - 2440587.5) * 86400000 AS INTEGER) WHERE rowid = NEW.rowid; END;
+CREATE TRIGGER game_time_periods_touch_update AFTER UPDATE ON game_time_periods FOR EACH ROW WHEN NEW.updated_at IS OLD.updated_at BEGIN UPDATE game_time_periods SET updated_at = CAST((julianday('now') - 2440587.5) * 86400000 AS INTEGER) WHERE rowid = NEW.rowid; END;
+
+-- game_weather_pool_entries
+UPDATE game_weather_pool_entries SET updated_at = updated_at * 1000 WHERE updated_at IS NOT NULL AND updated_at > 0 AND updated_at < 100000000000;
+UPDATE game_weather_pool_entries SET updated_at = CAST((julianday('now') - 2440587.5) * 86400000 AS INTEGER) WHERE updated_at IS NULL OR updated_at = 0;
+CREATE TRIGGER game_weather_pool_entries_touch_insert AFTER INSERT ON game_weather_pool_entries FOR EACH ROW WHEN NEW.updated_at IS NULL OR NEW.updated_at = 0 BEGIN UPDATE game_weather_pool_entries SET updated_at = CAST((julianday('now') - 2440587.5) * 86400000 AS INTEGER) WHERE rowid = NEW.rowid; END;
+CREATE TRIGGER game_weather_pool_entries_touch_update AFTER UPDATE ON game_weather_pool_entries FOR EACH ROW WHEN NEW.updated_at IS OLD.updated_at BEGIN UPDATE game_weather_pool_entries SET updated_at = CAST((julianday('now') - 2440587.5) * 86400000 AS INTEGER) WHERE rowid = NEW.rowid; END;
+
+-- game_weather_pools
+UPDATE game_weather_pools SET created_at = created_at * 1000 WHERE created_at IS NOT NULL AND created_at > 0 AND created_at < 100000000000;
+UPDATE game_weather_pools SET updated_at = updated_at * 1000 WHERE updated_at IS NOT NULL AND updated_at > 0 AND updated_at < 100000000000;
+UPDATE game_weather_pools SET updated_at = COALESCE(created_at, CAST((julianday('now') - 2440587.5) * 86400000 AS INTEGER)) WHERE updated_at IS NULL OR updated_at = 0;
+CREATE TRIGGER game_weather_pools_touch_insert AFTER INSERT ON game_weather_pools FOR EACH ROW WHEN NEW.updated_at IS NULL OR NEW.updated_at = 0 BEGIN UPDATE game_weather_pools SET updated_at = CAST((julianday('now') - 2440587.5) * 86400000 AS INTEGER) WHERE rowid = NEW.rowid; END;
+CREATE TRIGGER game_weather_pools_touch_update AFTER UPDATE ON game_weather_pools FOR EACH ROW WHEN NEW.updated_at IS OLD.updated_at BEGIN UPDATE game_weather_pools SET updated_at = CAST((julianday('now') - 2440587.5) * 86400000 AS INTEGER) WHERE rowid = NEW.rowid; END;
+
+-- game_weather_transitions
+UPDATE game_weather_transitions SET updated_at = updated_at * 1000 WHERE updated_at IS NOT NULL AND updated_at > 0 AND updated_at < 100000000000;
+UPDATE game_weather_transitions SET updated_at = CAST((julianday('now') - 2440587.5) * 86400000 AS INTEGER) WHERE updated_at IS NULL OR updated_at = 0;
+CREATE TRIGGER game_weather_transitions_touch_insert AFTER INSERT ON game_weather_transitions FOR EACH ROW WHEN NEW.updated_at IS NULL OR NEW.updated_at = 0 BEGIN UPDATE game_weather_transitions SET updated_at = CAST((julianday('now') - 2440587.5) * 86400000 AS INTEGER) WHERE rowid = NEW.rowid; END;
+CREATE TRIGGER game_weather_transitions_touch_update AFTER UPDATE ON game_weather_transitions FOR EACH ROW WHEN NEW.updated_at IS OLD.updated_at BEGIN UPDATE game_weather_transitions SET updated_at = CAST((julianday('now') - 2440587.5) * 86400000 AS INTEGER) WHERE rowid = NEW.rowid; END;
+
+-- game_weather_types
+UPDATE game_weather_types SET created_at = created_at * 1000 WHERE created_at IS NOT NULL AND created_at > 0 AND created_at < 100000000000;
+UPDATE game_weather_types SET updated_at = updated_at * 1000 WHERE updated_at IS NOT NULL AND updated_at > 0 AND updated_at < 100000000000;
+UPDATE game_weather_types SET updated_at = COALESCE(created_at, CAST((julianday('now') - 2440587.5) * 86400000 AS INTEGER)) WHERE updated_at IS NULL OR updated_at = 0;
+CREATE TRIGGER game_weather_types_touch_insert AFTER INSERT ON game_weather_types FOR EACH ROW WHEN NEW.updated_at IS NULL OR NEW.updated_at = 0 BEGIN UPDATE game_weather_types SET updated_at = CAST((julianday('now') - 2440587.5) * 86400000 AS INTEGER) WHERE rowid = NEW.rowid; END;
+CREATE TRIGGER game_weather_types_touch_update AFTER UPDATE ON game_weather_types FOR EACH ROW WHEN NEW.updated_at IS OLD.updated_at BEGIN UPDATE game_weather_types SET updated_at = CAST((julianday('now') - 2440587.5) * 86400000 AS INTEGER) WHERE rowid = NEW.rowid; END;
+
+-- game_worldinfo
+UPDATE game_worldinfo SET updated_at = updated_at * 1000 WHERE updated_at IS NOT NULL AND updated_at > 0 AND updated_at < 100000000000;
+UPDATE game_worldinfo SET updated_at = CAST((julianday('now') - 2440587.5) * 86400000 AS INTEGER) WHERE updated_at IS NULL OR updated_at = 0;
+CREATE TRIGGER game_worldinfo_touch_insert AFTER INSERT ON game_worldinfo FOR EACH ROW WHEN NEW.updated_at IS NULL OR NEW.updated_at = 0 BEGIN UPDATE game_worldinfo SET updated_at = CAST((julianday('now') - 2440587.5) * 86400000 AS INTEGER) WHERE rowid = NEW.rowid; END;
+CREATE TRIGGER game_worldinfo_touch_update AFTER UPDATE ON game_worldinfo FOR EACH ROW WHEN NEW.updated_at IS OLD.updated_at BEGIN UPDATE game_worldinfo SET updated_at = CAST((julianday('now') - 2440587.5) * 86400000 AS INTEGER) WHERE rowid = NEW.rowid; END;
+
+-- audio_assets (assets_id)
+CREATE TRIGGER audio_assets_tombstone AFTER DELETE ON audio_assets FOR EACH ROW BEGIN INSERT OR REPLACE INTO sync_tombstones (tbl, key, deleted_at) VALUES ('audio_assets', json_array(OLD.assets_id), CAST((julianday('now') - 2440587.5) * 86400000 AS INTEGER)); END;
+CREATE TRIGGER audio_assets_untombstone AFTER INSERT ON audio_assets FOR EACH ROW BEGIN DELETE FROM sync_tombstones WHERE tbl = 'audio_assets' AND key = json_array(NEW.assets_id); END;
+
+-- background_assets (assets_id)
+CREATE TRIGGER background_assets_tombstone AFTER DELETE ON background_assets FOR EACH ROW BEGIN INSERT OR REPLACE INTO sync_tombstones (tbl, key, deleted_at) VALUES ('background_assets', json_array(OLD.assets_id), CAST((julianday('now') - 2440587.5) * 86400000 AS INTEGER)); END;
+CREATE TRIGGER background_assets_untombstone AFTER INSERT ON background_assets FOR EACH ROW BEGIN DELETE FROM sync_tombstones WHERE tbl = 'background_assets' AND key = json_array(NEW.assets_id); END;
+
+-- cg_assets (assets_id)
+CREATE TRIGGER cg_assets_tombstone AFTER DELETE ON cg_assets FOR EACH ROW BEGIN INSERT OR REPLACE INTO sync_tombstones (tbl, key, deleted_at) VALUES ('cg_assets', json_array(OLD.assets_id), CAST((julianday('now') - 2440587.5) * 86400000 AS INTEGER)); END;
+CREATE TRIGGER cg_assets_untombstone AFTER INSERT ON cg_assets FOR EACH ROW BEGIN DELETE FROM sync_tombstones WHERE tbl = 'cg_assets' AND key = json_array(NEW.assets_id); END;
+
+-- character_assets (assets_id)
+CREATE TRIGGER character_assets_tombstone AFTER DELETE ON character_assets FOR EACH ROW BEGIN INSERT OR REPLACE INTO sync_tombstones (tbl, key, deleted_at) VALUES ('character_assets', json_array(OLD.assets_id), CAST((julianday('now') - 2440587.5) * 86400000 AS INTEGER)); END;
+CREATE TRIGGER character_assets_untombstone AFTER INSERT ON character_assets FOR EACH ROW BEGIN DELETE FROM sync_tombstones WHERE tbl = 'character_assets' AND key = json_array(NEW.assets_id); END;
+
+-- game_assets (id)
+CREATE TRIGGER game_assets_tombstone AFTER DELETE ON game_assets FOR EACH ROW BEGIN INSERT OR REPLACE INTO sync_tombstones (tbl, key, deleted_at) VALUES ('game_assets', json_array(OLD.id), CAST((julianday('now') - 2440587.5) * 86400000 AS INTEGER)); END;
+CREATE TRIGGER game_assets_untombstone AFTER INSERT ON game_assets FOR EACH ROW BEGIN DELETE FROM sync_tombstones WHERE tbl = 'game_assets' AND key = json_array(NEW.id); END;
+
+-- game_branches (id)
+CREATE TRIGGER game_branches_tombstone AFTER DELETE ON game_branches FOR EACH ROW BEGIN INSERT OR REPLACE INTO sync_tombstones (tbl, key, deleted_at) VALUES ('game_branches', json_array(OLD.id), CAST((julianday('now') - 2440587.5) * 86400000 AS INTEGER)); END;
+CREATE TRIGGER game_branches_untombstone AFTER INSERT ON game_branches FOR EACH ROW BEGIN DELETE FROM sync_tombstones WHERE tbl = 'game_branches' AND key = json_array(NEW.id); END;
+
+-- game_character_spawn_locations (id)
+CREATE TRIGGER game_character_spawn_locations_tombstone AFTER DELETE ON game_character_spawn_locations FOR EACH ROW BEGIN INSERT OR REPLACE INTO sync_tombstones (tbl, key, deleted_at) VALUES ('game_character_spawn_locations', json_array(OLD.id), CAST((julianday('now') - 2440587.5) * 86400000 AS INTEGER)); END;
+CREATE TRIGGER game_character_spawn_locations_untombstone AFTER INSERT ON game_character_spawn_locations FOR EACH ROW BEGIN DELETE FROM sync_tombstones WHERE tbl = 'game_character_spawn_locations' AND key = json_array(NEW.id); END;
+
+-- game_character_state_snapshots (session_id, seq, game_character_id)
+CREATE TRIGGER game_character_state_snapshots_tombstone AFTER DELETE ON game_character_state_snapshots FOR EACH ROW BEGIN INSERT OR REPLACE INTO sync_tombstones (tbl, key, deleted_at) VALUES ('game_character_state_snapshots', json_array(OLD.session_id, OLD.seq, OLD.game_character_id), CAST((julianday('now') - 2440587.5) * 86400000 AS INTEGER)); END;
+CREATE TRIGGER game_character_state_snapshots_untombstone AFTER INSERT ON game_character_state_snapshots FOR EACH ROW BEGIN DELETE FROM sync_tombstones WHERE tbl = 'game_character_state_snapshots' AND key = json_array(NEW.session_id, NEW.seq, NEW.game_character_id); END;
+
+-- game_character_worldinfo (game_character_id, book_id)
+CREATE TRIGGER game_character_worldinfo_tombstone AFTER DELETE ON game_character_worldinfo FOR EACH ROW BEGIN INSERT OR REPLACE INTO sync_tombstones (tbl, key, deleted_at) VALUES ('game_character_worldinfo', json_array(OLD.game_character_id, OLD.book_id), CAST((julianday('now') - 2440587.5) * 86400000 AS INTEGER)); END;
+CREATE TRIGGER game_character_worldinfo_untombstone AFTER INSERT ON game_character_worldinfo FOR EACH ROW BEGIN DELETE FROM sync_tombstones WHERE tbl = 'game_character_worldinfo' AND key = json_array(NEW.game_character_id, NEW.book_id); END;
+
+-- game_characters (id)
+CREATE TRIGGER game_characters_tombstone AFTER DELETE ON game_characters FOR EACH ROW BEGIN INSERT OR REPLACE INTO sync_tombstones (tbl, key, deleted_at) VALUES ('game_characters', json_array(OLD.id), CAST((julianday('now') - 2440587.5) * 86400000 AS INTEGER)); END;
+CREATE TRIGGER game_characters_untombstone AFTER INSERT ON game_characters FOR EACH ROW BEGIN DELETE FROM sync_tombstones WHERE tbl = 'game_characters' AND key = json_array(NEW.id); END;
+
+-- game_choices (id)
+CREATE TRIGGER game_choices_tombstone AFTER DELETE ON game_choices FOR EACH ROW BEGIN INSERT OR REPLACE INTO sync_tombstones (tbl, key, deleted_at) VALUES ('game_choices', json_array(OLD.id), CAST((julianday('now') - 2440587.5) * 86400000 AS INTEGER)); END;
+CREATE TRIGGER game_choices_untombstone AFTER INSERT ON game_choices FOR EACH ROW BEGIN DELETE FROM sync_tombstones WHERE tbl = 'game_choices' AND key = json_array(NEW.id); END;
+
+-- game_conversation_participants (conversation_id, game_character_id)
+CREATE TRIGGER game_conversation_participants_tombstone AFTER DELETE ON game_conversation_participants FOR EACH ROW BEGIN INSERT OR REPLACE INTO sync_tombstones (tbl, key, deleted_at) VALUES ('game_conversation_participants', json_array(OLD.conversation_id, OLD.game_character_id), CAST((julianday('now') - 2440587.5) * 86400000 AS INTEGER)); END;
+CREATE TRIGGER game_conversation_participants_untombstone AFTER INSERT ON game_conversation_participants FOR EACH ROW BEGIN DELETE FROM sync_tombstones WHERE tbl = 'game_conversation_participants' AND key = json_array(NEW.conversation_id, NEW.game_character_id); END;
+
+-- game_conversations (id)
+CREATE TRIGGER game_conversations_tombstone AFTER DELETE ON game_conversations FOR EACH ROW BEGIN INSERT OR REPLACE INTO sync_tombstones (tbl, key, deleted_at) VALUES ('game_conversations', json_array(OLD.id), CAST((julianday('now') - 2440587.5) * 86400000 AS INTEGER)); END;
+CREATE TRIGGER game_conversations_untombstone AFTER INSERT ON game_conversations FOR EACH ROW BEGIN DELETE FROM sync_tombstones WHERE tbl = 'game_conversations' AND key = json_array(NEW.id); END;
+
+-- game_encounter_entries (id)
+CREATE TRIGGER game_encounter_entries_tombstone AFTER DELETE ON game_encounter_entries FOR EACH ROW BEGIN INSERT OR REPLACE INTO sync_tombstones (tbl, key, deleted_at) VALUES ('game_encounter_entries', json_array(OLD.id), CAST((julianday('now') - 2440587.5) * 86400000 AS INTEGER)); END;
+CREATE TRIGGER game_encounter_entries_untombstone AFTER INSERT ON game_encounter_entries FOR EACH ROW BEGIN DELETE FROM sync_tombstones WHERE tbl = 'game_encounter_entries' AND key = json_array(NEW.id); END;
+
+-- game_encounter_tables (id)
+CREATE TRIGGER game_encounter_tables_tombstone AFTER DELETE ON game_encounter_tables FOR EACH ROW BEGIN INSERT OR REPLACE INTO sync_tombstones (tbl, key, deleted_at) VALUES ('game_encounter_tables', json_array(OLD.id), CAST((julianday('now') - 2440587.5) * 86400000 AS INTEGER)); END;
+CREATE TRIGGER game_encounter_tables_untombstone AFTER INSERT ON game_encounter_tables FOR EACH ROW BEGIN DELETE FROM sync_tombstones WHERE tbl = 'game_encounter_tables' AND key = json_array(NEW.id); END;
+
+-- game_endings (id)
+CREATE TRIGGER game_endings_tombstone AFTER DELETE ON game_endings FOR EACH ROW BEGIN INSERT OR REPLACE INTO sync_tombstones (tbl, key, deleted_at) VALUES ('game_endings', json_array(OLD.id), CAST((julianday('now') - 2440587.5) * 86400000 AS INTEGER)); END;
+CREATE TRIGGER game_endings_untombstone AFTER INSERT ON game_endings FOR EACH ROW BEGIN DELETE FROM sync_tombstones WHERE tbl = 'game_endings' AND key = json_array(NEW.id); END;
+
+-- game_event_character_pool (event_id, game_character_id)
+CREATE TRIGGER game_event_character_pool_tombstone AFTER DELETE ON game_event_character_pool FOR EACH ROW BEGIN INSERT OR REPLACE INTO sync_tombstones (tbl, key, deleted_at) VALUES ('game_event_character_pool', json_array(OLD.event_id, OLD.game_character_id), CAST((julianday('now') - 2440587.5) * 86400000 AS INTEGER)); END;
+CREATE TRIGGER game_event_character_pool_untombstone AFTER INSERT ON game_event_character_pool FOR EACH ROW BEGIN DELETE FROM sync_tombstones WHERE tbl = 'game_event_character_pool' AND key = json_array(NEW.event_id, NEW.game_character_id); END;
+
+-- game_event_conditions (id)
+CREATE TRIGGER game_event_conditions_tombstone AFTER DELETE ON game_event_conditions FOR EACH ROW BEGIN INSERT OR REPLACE INTO sync_tombstones (tbl, key, deleted_at) VALUES ('game_event_conditions', json_array(OLD.id), CAST((julianday('now') - 2440587.5) * 86400000 AS INTEGER)); END;
+CREATE TRIGGER game_event_conditions_untombstone AFTER INSERT ON game_event_conditions FOR EACH ROW BEGIN DELETE FROM sync_tombstones WHERE tbl = 'game_event_conditions' AND key = json_array(NEW.id); END;
+
+-- game_event_log (session_id, seq)
+CREATE TRIGGER game_event_log_tombstone AFTER DELETE ON game_event_log FOR EACH ROW BEGIN INSERT OR REPLACE INTO sync_tombstones (tbl, key, deleted_at) VALUES ('game_event_log', json_array(OLD.session_id, OLD.seq), CAST((julianday('now') - 2440587.5) * 86400000 AS INTEGER)); END;
+CREATE TRIGGER game_event_log_untombstone AFTER INSERT ON game_event_log FOR EACH ROW BEGIN DELETE FROM sync_tombstones WHERE tbl = 'game_event_log' AND key = json_array(NEW.session_id, NEW.seq); END;
+
+-- game_event_log_characters (session_id, seq, game_character_id)
+CREATE TRIGGER game_event_log_characters_tombstone AFTER DELETE ON game_event_log_characters FOR EACH ROW BEGIN INSERT OR REPLACE INTO sync_tombstones (tbl, key, deleted_at) VALUES ('game_event_log_characters', json_array(OLD.session_id, OLD.seq, OLD.game_character_id), CAST((julianday('now') - 2440587.5) * 86400000 AS INTEGER)); END;
+CREATE TRIGGER game_event_log_characters_untombstone AFTER INSERT ON game_event_log_characters FOR EACH ROW BEGIN DELETE FROM sync_tombstones WHERE tbl = 'game_event_log_characters' AND key = json_array(NEW.session_id, NEW.seq, NEW.game_character_id); END;
+
+-- game_events (id)
+CREATE TRIGGER game_events_tombstone AFTER DELETE ON game_events FOR EACH ROW BEGIN INSERT OR REPLACE INTO sync_tombstones (tbl, key, deleted_at) VALUES ('game_events', json_array(OLD.id), CAST((julianday('now') - 2440587.5) * 86400000 AS INTEGER)); END;
+CREATE TRIGGER game_events_untombstone AFTER INSERT ON game_events FOR EACH ROW BEGIN DELETE FROM sync_tombstones WHERE tbl = 'game_events' AND key = json_array(NEW.id); END;
+
+-- game_interactables (id)
+CREATE TRIGGER game_interactables_tombstone AFTER DELETE ON game_interactables FOR EACH ROW BEGIN INSERT OR REPLACE INTO sync_tombstones (tbl, key, deleted_at) VALUES ('game_interactables', json_array(OLD.id), CAST((julianday('now') - 2440587.5) * 86400000 AS INTEGER)); END;
+CREATE TRIGGER game_interactables_untombstone AFTER INSERT ON game_interactables FOR EACH ROW BEGIN DELETE FROM sync_tombstones WHERE tbl = 'game_interactables' AND key = json_array(NEW.id); END;
+
+-- game_items (id)
+CREATE TRIGGER game_items_tombstone AFTER DELETE ON game_items FOR EACH ROW BEGIN INSERT OR REPLACE INTO sync_tombstones (tbl, key, deleted_at) VALUES ('game_items', json_array(OLD.id), CAST((julianday('now') - 2440587.5) * 86400000 AS INTEGER)); END;
+CREATE TRIGGER game_items_untombstone AFTER INSERT ON game_items FOR EACH ROW BEGIN DELETE FROM sync_tombstones WHERE tbl = 'game_items' AND key = json_array(NEW.id); END;
+
+-- game_journal (session_id, seq)
+CREATE TRIGGER game_journal_tombstone AFTER DELETE ON game_journal FOR EACH ROW BEGIN INSERT OR REPLACE INTO sync_tombstones (tbl, key, deleted_at) VALUES ('game_journal', json_array(OLD.session_id, OLD.seq), CAST((julianday('now') - 2440587.5) * 86400000 AS INTEGER)); END;
+CREATE TRIGGER game_journal_untombstone AFTER INSERT ON game_journal FOR EACH ROW BEGIN DELETE FROM sync_tombstones WHERE tbl = 'game_journal' AND key = json_array(NEW.session_id, NEW.seq); END;
+
+-- game_location_connections (from_id, to_id)
+CREATE TRIGGER game_location_connections_tombstone AFTER DELETE ON game_location_connections FOR EACH ROW BEGIN INSERT OR REPLACE INTO sync_tombstones (tbl, key, deleted_at) VALUES ('game_location_connections', json_array(OLD.from_id, OLD.to_id), CAST((julianday('now') - 2440587.5) * 86400000 AS INTEGER)); END;
+CREATE TRIGGER game_location_connections_untombstone AFTER INSERT ON game_location_connections FOR EACH ROW BEGIN DELETE FROM sync_tombstones WHERE tbl = 'game_location_connections' AND key = json_array(NEW.from_id, NEW.to_id); END;
+
+-- game_locations (id)
+CREATE TRIGGER game_locations_tombstone AFTER DELETE ON game_locations FOR EACH ROW BEGIN INSERT OR REPLACE INTO sync_tombstones (tbl, key, deleted_at) VALUES ('game_locations', json_array(OLD.id), CAST((julianday('now') - 2440587.5) * 86400000 AS INTEGER)); END;
+CREATE TRIGGER game_locations_untombstone AFTER INSERT ON game_locations FOR EACH ROW BEGIN DELETE FROM sync_tombstones WHERE tbl = 'game_locations' AND key = json_array(NEW.id); END;
+
+-- game_map_zones (id)
+CREATE TRIGGER game_map_zones_tombstone AFTER DELETE ON game_map_zones FOR EACH ROW BEGIN INSERT OR REPLACE INTO sync_tombstones (tbl, key, deleted_at) VALUES ('game_map_zones', json_array(OLD.id), CAST((julianday('now') - 2440587.5) * 86400000 AS INTEGER)); END;
+CREATE TRIGGER game_map_zones_untombstone AFTER INSERT ON game_map_zones FOR EACH ROW BEGIN DELETE FROM sync_tombstones WHERE tbl = 'game_map_zones' AND key = json_array(NEW.id); END;
+
+-- game_maps (id)
+CREATE TRIGGER game_maps_tombstone AFTER DELETE ON game_maps FOR EACH ROW BEGIN INSERT OR REPLACE INTO sync_tombstones (tbl, key, deleted_at) VALUES ('game_maps', json_array(OLD.id), CAST((julianday('now') - 2440587.5) * 86400000 AS INTEGER)); END;
+CREATE TRIGGER game_maps_untombstone AFTER INSERT ON game_maps FOR EACH ROW BEGIN DELETE FROM sync_tombstones WHERE tbl = 'game_maps' AND key = json_array(NEW.id); END;
+
+-- game_messages (id)
+CREATE TRIGGER game_messages_tombstone AFTER DELETE ON game_messages FOR EACH ROW BEGIN INSERT OR REPLACE INTO sync_tombstones (tbl, key, deleted_at) VALUES ('game_messages', json_array(OLD.id), CAST((julianday('now') - 2440587.5) * 86400000 AS INTEGER)); END;
+CREATE TRIGGER game_messages_untombstone AFTER INSERT ON game_messages FOR EACH ROW BEGIN DELETE FROM sync_tombstones WHERE tbl = 'game_messages' AND key = json_array(NEW.id); END;
+
+-- game_player_sessions (id)
+CREATE TRIGGER game_player_sessions_tombstone AFTER DELETE ON game_player_sessions FOR EACH ROW BEGIN INSERT OR REPLACE INTO sync_tombstones (tbl, key, deleted_at) VALUES ('game_player_sessions', json_array(OLD.id), CAST((julianday('now') - 2440587.5) * 86400000 AS INTEGER)); END;
+CREATE TRIGGER game_player_sessions_untombstone AFTER INSERT ON game_player_sessions FOR EACH ROW BEGIN DELETE FROM sync_tombstones WHERE tbl = 'game_player_sessions' AND key = json_array(NEW.id); END;
+
+-- game_projects (id)
+CREATE TRIGGER game_projects_tombstone AFTER DELETE ON game_projects FOR EACH ROW BEGIN INSERT OR REPLACE INTO sync_tombstones (tbl, key, deleted_at) VALUES ('game_projects', json_array(OLD.id), CAST((julianday('now') - 2440587.5) * 86400000 AS INTEGER)); END;
+CREATE TRIGGER game_projects_untombstone AFTER INSERT ON game_projects FOR EACH ROW BEGIN DELETE FROM sync_tombstones WHERE tbl = 'game_projects' AND key = json_array(NEW.id); END;
+
+-- game_relationship_defs (id)
+CREATE TRIGGER game_relationship_defs_tombstone AFTER DELETE ON game_relationship_defs FOR EACH ROW BEGIN INSERT OR REPLACE INTO sync_tombstones (tbl, key, deleted_at) VALUES ('game_relationship_defs', json_array(OLD.id), CAST((julianday('now') - 2440587.5) * 86400000 AS INTEGER)); END;
+CREATE TRIGGER game_relationship_defs_untombstone AFTER INSERT ON game_relationship_defs FOR EACH ROW BEGIN DELETE FROM sync_tombstones WHERE tbl = 'game_relationship_defs' AND key = json_array(NEW.id); END;
+
+-- game_relationship_snapshots (session_id, seq)
+CREATE TRIGGER game_relationship_snapshots_tombstone AFTER DELETE ON game_relationship_snapshots FOR EACH ROW BEGIN INSERT OR REPLACE INTO sync_tombstones (tbl, key, deleted_at) VALUES ('game_relationship_snapshots', json_array(OLD.session_id, OLD.seq), CAST((julianday('now') - 2440587.5) * 86400000 AS INTEGER)); END;
+CREATE TRIGGER game_relationship_snapshots_untombstone AFTER INSERT ON game_relationship_snapshots FOR EACH ROW BEGIN DELETE FROM sync_tombstones WHERE tbl = 'game_relationship_snapshots' AND key = json_array(NEW.session_id, NEW.seq); END;
+
+-- game_saves (session_id, slot_number)
+CREATE TRIGGER game_saves_tombstone AFTER DELETE ON game_saves FOR EACH ROW BEGIN INSERT OR REPLACE INTO sync_tombstones (tbl, key, deleted_at) VALUES ('game_saves', json_array(OLD.session_id, OLD.slot_number), CAST((julianday('now') - 2440587.5) * 86400000 AS INTEGER)); END;
+CREATE TRIGGER game_saves_untombstone AFTER INSERT ON game_saves FOR EACH ROW BEGIN DELETE FROM sync_tombstones WHERE tbl = 'game_saves' AND key = json_array(NEW.session_id, NEW.slot_number); END;
+
+-- game_scene_conversations (scene_id, conversation_id)
+CREATE TRIGGER game_scene_conversations_tombstone AFTER DELETE ON game_scene_conversations FOR EACH ROW BEGIN INSERT OR REPLACE INTO sync_tombstones (tbl, key, deleted_at) VALUES ('game_scene_conversations', json_array(OLD.scene_id, OLD.conversation_id), CAST((julianday('now') - 2440587.5) * 86400000 AS INTEGER)); END;
+CREATE TRIGGER game_scene_conversations_untombstone AFTER INSERT ON game_scene_conversations FOR EACH ROW BEGIN DELETE FROM sync_tombstones WHERE tbl = 'game_scene_conversations' AND key = json_array(NEW.scene_id, NEW.conversation_id); END;
+
+-- game_scenes (id)
+CREATE TRIGGER game_scenes_tombstone AFTER DELETE ON game_scenes FOR EACH ROW BEGIN INSERT OR REPLACE INTO sync_tombstones (tbl, key, deleted_at) VALUES ('game_scenes', json_array(OLD.id), CAST((julianday('now') - 2440587.5) * 86400000 AS INTEGER)); END;
+CREATE TRIGGER game_scenes_untombstone AFTER INSERT ON game_scenes FOR EACH ROW BEGIN DELETE FROM sync_tombstones WHERE tbl = 'game_scenes' AND key = json_array(NEW.id); END;
+
+-- game_session_options (session_id)
+CREATE TRIGGER game_session_options_tombstone AFTER DELETE ON game_session_options FOR EACH ROW BEGIN INSERT OR REPLACE INTO sync_tombstones (tbl, key, deleted_at) VALUES ('game_session_options', json_array(OLD.session_id), CAST((julianday('now') - 2440587.5) * 86400000 AS INTEGER)); END;
+CREATE TRIGGER game_session_options_untombstone AFTER INSERT ON game_session_options FOR EACH ROW BEGIN DELETE FROM sync_tombstones WHERE tbl = 'game_session_options' AND key = json_array(NEW.session_id); END;
+
+-- game_state_defs (id)
+CREATE TRIGGER game_state_defs_tombstone AFTER DELETE ON game_state_defs FOR EACH ROW BEGIN INSERT OR REPLACE INTO sync_tombstones (tbl, key, deleted_at) VALUES ('game_state_defs', json_array(OLD.id), CAST((julianday('now') - 2440587.5) * 86400000 AS INTEGER)); END;
+CREATE TRIGGER game_state_defs_untombstone AFTER INSERT ON game_state_defs FOR EACH ROW BEGIN DELETE FROM sync_tombstones WHERE tbl = 'game_state_defs' AND key = json_array(NEW.id); END;
+
+-- game_story_plans (session_id, seq)
+CREATE TRIGGER game_story_plans_tombstone AFTER DELETE ON game_story_plans FOR EACH ROW BEGIN INSERT OR REPLACE INTO sync_tombstones (tbl, key, deleted_at) VALUES ('game_story_plans', json_array(OLD.session_id, OLD.seq), CAST((julianday('now') - 2440587.5) * 86400000 AS INTEGER)); END;
+CREATE TRIGGER game_story_plans_untombstone AFTER INSERT ON game_story_plans FOR EACH ROW BEGIN DELETE FROM sync_tombstones WHERE tbl = 'game_story_plans' AND key = json_array(NEW.session_id, NEW.seq); END;
+
+-- game_time_periods (id)
+CREATE TRIGGER game_time_periods_tombstone AFTER DELETE ON game_time_periods FOR EACH ROW BEGIN INSERT OR REPLACE INTO sync_tombstones (tbl, key, deleted_at) VALUES ('game_time_periods', json_array(OLD.id), CAST((julianday('now') - 2440587.5) * 86400000 AS INTEGER)); END;
+CREATE TRIGGER game_time_periods_untombstone AFTER INSERT ON game_time_periods FOR EACH ROW BEGIN DELETE FROM sync_tombstones WHERE tbl = 'game_time_periods' AND key = json_array(NEW.id); END;
+
+-- game_weather_pool_entries (pool_id, weather_id)
+CREATE TRIGGER game_weather_pool_entries_tombstone AFTER DELETE ON game_weather_pool_entries FOR EACH ROW BEGIN INSERT OR REPLACE INTO sync_tombstones (tbl, key, deleted_at) VALUES ('game_weather_pool_entries', json_array(OLD.pool_id, OLD.weather_id), CAST((julianday('now') - 2440587.5) * 86400000 AS INTEGER)); END;
+CREATE TRIGGER game_weather_pool_entries_untombstone AFTER INSERT ON game_weather_pool_entries FOR EACH ROW BEGIN DELETE FROM sync_tombstones WHERE tbl = 'game_weather_pool_entries' AND key = json_array(NEW.pool_id, NEW.weather_id); END;
+
+-- game_weather_pools (id)
+CREATE TRIGGER game_weather_pools_tombstone AFTER DELETE ON game_weather_pools FOR EACH ROW BEGIN INSERT OR REPLACE INTO sync_tombstones (tbl, key, deleted_at) VALUES ('game_weather_pools', json_array(OLD.id), CAST((julianday('now') - 2440587.5) * 86400000 AS INTEGER)); END;
+CREATE TRIGGER game_weather_pools_untombstone AFTER INSERT ON game_weather_pools FOR EACH ROW BEGIN DELETE FROM sync_tombstones WHERE tbl = 'game_weather_pools' AND key = json_array(NEW.id); END;
+
+-- game_weather_transitions (from_weather_id, to_weather_id, map_id)
+CREATE TRIGGER game_weather_transitions_tombstone AFTER DELETE ON game_weather_transitions FOR EACH ROW BEGIN INSERT OR REPLACE INTO sync_tombstones (tbl, key, deleted_at) VALUES ('game_weather_transitions', json_array(OLD.from_weather_id, OLD.to_weather_id, OLD.map_id), CAST((julianday('now') - 2440587.5) * 86400000 AS INTEGER)); END;
+CREATE TRIGGER game_weather_transitions_untombstone AFTER INSERT ON game_weather_transitions FOR EACH ROW BEGIN DELETE FROM sync_tombstones WHERE tbl = 'game_weather_transitions' AND key = json_array(NEW.from_weather_id, NEW.to_weather_id, NEW.map_id); END;
+
+-- game_weather_types (id)
+CREATE TRIGGER game_weather_types_tombstone AFTER DELETE ON game_weather_types FOR EACH ROW BEGIN INSERT OR REPLACE INTO sync_tombstones (tbl, key, deleted_at) VALUES ('game_weather_types', json_array(OLD.id), CAST((julianday('now') - 2440587.5) * 86400000 AS INTEGER)); END;
+CREATE TRIGGER game_weather_types_untombstone AFTER INSERT ON game_weather_types FOR EACH ROW BEGIN DELETE FROM sync_tombstones WHERE tbl = 'game_weather_types' AND key = json_array(NEW.id); END;
+
+-- game_worldinfo (game_id, book_id)
+CREATE TRIGGER game_worldinfo_tombstone AFTER DELETE ON game_worldinfo FOR EACH ROW BEGIN INSERT OR REPLACE INTO sync_tombstones (tbl, key, deleted_at) VALUES ('game_worldinfo', json_array(OLD.game_id, OLD.book_id), CAST((julianday('now') - 2440587.5) * 86400000 AS INTEGER)); END;
+CREATE TRIGGER game_worldinfo_untombstone AFTER INSERT ON game_worldinfo FOR EACH ROW BEGIN DELETE FROM sync_tombstones WHERE tbl = 'game_worldinfo' AND key = json_array(NEW.game_id, NEW.book_id); END;

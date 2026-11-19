@@ -22,7 +22,9 @@ CREATE TABLE IF NOT EXISTS usage_daily (
   output_tokens INTEGER NOT NULL DEFAULT 0,
   characters INTEGER NOT NULL DEFAULT 0,
   images INTEGER NOT NULL DEFAULT 0,
-  estimated_calls INTEGER NOT NULL DEFAULT 0
+  estimated_calls INTEGER NOT NULL DEFAULT 0,
+  cost_usd REAL,
+  unpriced_calls INTEGER NOT NULL DEFAULT 0
 );
 
 CREATE INDEX IF NOT EXISTS idx_usage_daily_profile_day ON usage_daily(api_profile_id, day_start);

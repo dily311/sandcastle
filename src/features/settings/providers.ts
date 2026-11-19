@@ -25,7 +25,7 @@ export interface Provider {
 interface CatalogProvider {
 	label: string;
 	provider: string;
-	modelList: { label: string; model: { label: string; modelId: string; metadata?: unknown }[] }[];
+	modelList: { label: string; model: { label: string; modelId: string; metadata?: TextModelMeta }[] }[];
 }
 
 /** 카탈로그에서 공급자(대소문자 무시)의 모델 묶음을 꺼낸다. 없으면 빈 목록 */
@@ -60,6 +60,29 @@ export const apiLists: Provider[] = [
 		modelList: ids("이미지 모델", ["nai-diffusion-4-5-full", "nai-diffusion-4-5-curated", "nai-diffusion-4-full", "nai-diffusion-4-curated-preview", "nai-diffusion-3"]),
 	},
 ];
+
+/** 모델 목록 JSON에 적어 둔 모델 정보 (적은 것만 있음). 백엔드 adapter/catalog.rs와 같은 모양 */
+export interface TextModelMeta {
+	contextWindow?: number;
+	maxOutputTokens?: number;
+	inputModalities?: string[];
+	/** tools · structuredOutput · reasoning */
+	features?: string[];
+	/** 추론 강도를 조절할 수 있는 모델: 고를 수 있는 값(낮은 것부터)과 공급자 기본값 */
+	reasoning?: { param?: string; levels: string[]; default?: string };
+	/** 100만 토큰당 달러 */
+	pricing?: { input: number; output: number; long?: { above: number; input: number; output: number } };
+}
+const metaById = new Map<string, TextModelMeta>();
+for (const p of (textCatalog as { data: CatalogProvider[] }).data)
+	for (const g of p.modelList) for (const m of g.model) if (m.metadata && !metaById.has(m.modelId.toLowerCase())) metaById.set(m.modelId.toLowerCase(), m.metadata as TextModelMeta);
+/** 모델 id로 모델 정보를 찾는다 (정확히 같은 id만, 대소문자 무시). 적어 두지 않았으면 undefined */
+export const modelMeta = (modelId: string | null | undefined): TextModelMeta | undefined => (modelId ? metaById.get(modelId.trim().toLowerCase()) : undefined);
+/** 추론 강도를 조절할 수 있는 모델이면 그 정보 */
+export const reasoningOf = (modelId: string | null | undefined) => {
+	const r = modelMeta(modelId)?.reasoning;
+	return r?.levels?.length ? r : undefined;
+};
 
 /** 그 공급자의 모델 id 전부 (묶음 순서대로) */
 export const modelIdsOf = (p: Provider | undefined): string[] => p?.modelList.flatMap((g) => g.model.map((m) => m.modelId)) ?? [];

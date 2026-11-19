@@ -9,7 +9,7 @@
 	import { promptText } from "$shared/stores/confirm.svelte";
 	import { toasts } from "$shared/stores/toast.svelte";
 	import { library } from "$features/character/library.svelte";
-	import { apiLists, modelIdsOf, modelLabel } from "./providers";
+	import { apiLists, modelLabel } from "./providers";
 
 	interface Props {
 		/** 모델을 고를 API 프로필 */
@@ -32,25 +32,29 @@
 
 	// 공급자 이름은 대소문자를 가리지 않고 맞춘다 (예전에 저장된 연결은 "OpenAI", 카탈로그는 "openai")
 	const entry = $derived(apiLists.find((p) => p.provider.toLowerCase() === (profile?.provider ?? "").toLowerCase()));
-	const builtin = $derived(modelIdsOf(entry));
 	/** 목록에 보이는 이름: 사람이 읽는 이름이 있으면 "이름 (id)" */
 	const nameOf = (id: string) => {
 		const l = modelLabel(entry, id);
 		return l === id ? id : `${l} (${id})`;
 	};
+	/** 목록에 보일 모델과 묶음 이름: 내장 목록은 카탈로그의 묶음, 그 뒤로 내가 추가한 모델 · 불러온 모델 */
 	const choices = $derived.by(() => {
 		if (!profile) return [];
 		const seen = new Set<string>([profile.model]);
-		const out: string[] = [];
-		for (const m of [...builtin, ...(profile.customModels ?? []), ...fetched, ...(value ? [value] : [])]) {
-			if (m && !seen.has(m)) {
-				seen.add(m);
-				out.push(m);
+		const out: { id: string; group: string }[] = [];
+		const add = (id: string | null | undefined, group: string) => {
+			if (id && !seen.has(id)) {
+				seen.add(id);
+				out.push({ id, group });
 			}
-		}
+		};
+		for (const g of entry?.modelList ?? []) for (const m of g.model) add(m.modelId, g.label);
+		for (const m of profile.customModels ?? []) add(m, "내가 추가한 모델");
+		for (const m of fetched) add(m, "공급자에서 불러온 모델");
+		add(value, "내가 추가한 모델");
 		return out;
 	});
-	const options = $derived([{ value: DEFAULT, label: `기본 모델 (${profile ? nameOf(profile.model) : "-"})` }, ...choices.map((m) => ({ value: m, label: nameOf(m) }))]);
+	const options = $derived([{ value: DEFAULT, label: `기본 모델 (${profile ? nameOf(profile.model) : "-"})` }, ...choices.map((m) => ({ value: m.id, label: nameOf(m.id), group: m.group }))]);
 
 	let menu = $state<{ x: number; y: number; align?: "start" | "end" } | null>(null);
 	const items = $derived<MenuItem[]>([

@@ -704,6 +704,8 @@ export type AppPrompts_Deserialize = {
 	gameRules?: PromptSlot,
 	/**  씬 입력(서술자) 규칙 (한 줄에 하나) */
 	sceneRules?: PromptSlot,
+	/**  대화 요약 지시 ({max} = 요약 최대 토큰) */
+	summary?: PromptSlot,
 };
 
 /**  앱이 AI에 보내는 고정 지시문. 자리마다 사용자가 여러 개 만들어 두고 하나를 고른다 (고르지 않으면 기본값) */
@@ -722,6 +724,8 @@ export type AppPrompts_Serialize = {
 	gameRules: PromptSlot,
 	/**  씬 입력(서술자) 규칙 (한 줄에 하나) */
 	sceneRules: PromptSlot,
+	/**  대화 요약 지시 ({max} = 요약 최대 토큰) */
+	summary: PromptSlot,
 };
 
 export type AppSetting = AppSetting_Serialize | AppSetting_Deserialize;
@@ -1252,6 +1256,8 @@ export type ChatOptions_Deserialize = {
 	topP?: number | null,
 	topK?: number | null,
 	stream: boolean,
+	/**  추론 강도 (low·medium·high 등). 모델 목록에 이 값을 받는다고 적힌 모델에서만 보냄 (AiService가 걸러냄) */
+	reasoningEffort?: string | null,
 };
 
 export type ChatOptions_Serialize = {
@@ -1260,6 +1266,8 @@ export type ChatOptions_Serialize = {
 	topP: number | null,
 	topK: number | null,
 	stream: boolean,
+	/**  추론 강도 (low·medium·high 등). 모델 목록에 이 값을 받는다고 적힌 모델에서만 보냄 (AiService가 걸러냄) */
+	reasoningEffort: string | null,
 };
 
 /**  한 번의 대화 차례 결과 */
