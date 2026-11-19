@@ -5,6 +5,7 @@
 	import { Button, ProfilePicker, Segmented, Select, Textarea, type ProfileOption } from "$shared/ui";
 	import BackgroundPicker from "$shared/ui/BackgroundPicker.svelte";
 	import { library } from "$features/character/library.svelte";
+	import ModelPicker from "$features/settings/ModelPicker.svelte";
 	import { chatApiOptions, current, ensureLoaded, orNull, save } from "$features/settings/pluginSettingForm.svelte";
 	import { appSetting } from "$shared/stores/appSetting.svelte";
 	import { toasts } from "$shared/stores/toast.svelte";
@@ -81,6 +82,12 @@
 				><span>API <small>채팅방 설정에서 고른 것이 먼저</small></span>
 				<Select value={plug.phone.apiProfileId ?? ""} options={chatApiOptions("앱 기본 API")} onchange={(e) => save("phone", { apiProfileId: orNull(e.currentTarget.value) })} />
 			</label>
+			{#if plug.phone.apiProfileId}
+				<label class="field"
+					><span>모델 <small>비우면 그 API의 기본 모델</small></span>
+					<ModelPicker profile={library.apis.find((a) => a.id === plug?.phone.apiProfileId)} value={plug.phone.model || null} onchange={(m) => save("phone", { model: m ?? "" })} label="폰 기본 모델" />
+				</label>
+			{/if}
 			<label class="field"
 				><span>프리셋 <small>짧은 메신저 답장용 프리셋을 따로 두면 좋음</small></span>
 				<Select value={plug.phone.presetId ?? ""} options={presetOptions} onchange={(e) => save("phone", { presetId: orNull(e.currentTarget.value) })} />

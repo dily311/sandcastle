@@ -8,6 +8,8 @@
 	import BranchTree from "./BranchTree.svelte";
 	import BookPicker from "$features/lorebook/BookPicker.svelte";
 	import ContextMeter from "./ContextMeter.svelte";
+	import ModelPicker from "$features/settings/ModelPicker.svelte";
+	import { appSetting } from "$shared/stores/appSetting.svelte";
 	import ExportButton from "./ExportButton.svelte";
 	import PresetInline from "$features/settings/PresetInline.svelte";
 	import RegexEditDialog from "$features/settings/RegexEditDialog.svelte";
@@ -66,12 +68,21 @@
 	const DEFAULT = "";
 	const apiOptions = $derived([{ value: DEFAULT, label: "앱 기본값" }, ...library.apis.map((a) => ({ value: a.id, label: `${a.name} · ${a.model}` }))]);
 	const presetOptions = $derived([{ value: DEFAULT, label: "앱 기본값" }, ...library.presets.map((p) => ({ value: p.id, label: p.name }))]);
-	function setOption(p: { apiProfileId?: string; promptPresetId?: string; personaId?: string }) {
+	function setOption(p: { apiProfileId?: string; promptPresetId?: string; personaId?: string; model?: string | null }) {
 		void library.setOptions(conv.id, {
 			personaId: p.personaId ?? conv.personaId,
 			promptPresetId: (p.promptPresetId ?? conv.promptPresetId ?? "") || null,
 			apiProfileId: (p.apiProfileId ?? conv.apiProfileId ?? "") || null,
+			// 모델은 API에 딸린 이름: API를 바꾸면 백엔드가 초기화하므로 그대로 보낸다 (ADR-020)
+			model: p.model !== undefined ? p.model : (conv.model ?? null),
 		});
+	}
+	// 이 대화가 쓰는 API 프로필 (대화에 정한 것, 없으면 앱 기본값) — 모델 고르기가 그 프로필의 목록을 보여준다
+	const effectiveApi = $derived(library.apis.find((a) => a.id === (conv.apiProfileId || appSetting.value?.selectedApiProfile || "")));
+	/** 모델을 고르면 그 API도 이 대화에 못 박는다 (앱 기본 API가 나중에 바뀌어도 이 모델이 엉뚱한 공급자로 가지 않게) */
+	function pickModel(model: string | null) {
+		if (!conv.apiProfileId && effectiveApi) return setOption({ apiProfileId: effectiveApi.id, model });
+		setOption({ model });
 	}
 
 	// ---- 컨텍스트 사용량: 대화가 바뀌거나 응답이 끝날 때마다 ----
@@ -439,6 +450,7 @@
 			<section>
 				<h4>이 대화</h4>
 				<label class="row"><span>API</span><Select value={conv.apiProfileId ?? DEFAULT} options={apiOptions} onchange={(e) => setOption({ apiProfileId: e.currentTarget.value })} /></label>
+					<div class="row"><span>모델</span><ModelPicker profile={effectiveApi} value={conv.model} onchange={pickModel} label="이 대화의 모델" /></div>
 				<div class="row">
 					<span>프리셋</span>
 					<div class="with-btn">

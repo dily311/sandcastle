@@ -31,6 +31,8 @@ pub struct AiRequest {
     pub profile_id: String,
     /// PromptManager가 만든 최종 프롬프트 (stream 여부는 prompt.chat_options.stream)
     pub prompt: PromptMessage,
+    /// 이 요청에서 프로필의 기본 모델 대신 쓸 모델 (대화·기능이 고른 모델, ADR-020). None이면 프로필의 기본 모델
+    pub model: Option<String>,
 }
 
 #[derive(Debug, Clone)]
@@ -110,7 +112,15 @@ impl AiService {
     }
 
     /// 사용량 한 줄 기록 (음성·이미지 플러그인도 이걸로 남긴다)
-    pub async fn record_usage(&self, entry: UsageEntry) {
+    pub async fn record_usage(&self, mut entry: UsageEntry) {
+        // 글 호출은 그때의 단가로 금액을 계산해 같이 남긴다 (나중에 단가를 고쳐도 지난 기록은 그대로).
+        // 단가를 모르면 금액 없이 "단가 없음"으로 표시해 예산 막대가 빠뜨린 호출을 알려 주게 한다
+        if db::budget::is_limited(entry.kind) && entry.cost_usd.is_none() {
+            match crate::service::prices::price_for(&self.db, &entry.model).await {
+                Some(p) => entry.cost_usd = Some(p.cost(entry.input_tokens, entry.output_tokens)),
+                None => entry.unpriced = entry.input_tokens + entry.output_tokens > 0,
+            }
+        }
         db::usage::record(&self.db, entry).await;
     }
 
@@ -208,6 +218,7 @@ impl AiService {
                 AiRequest {
                     profile_id: profile.id.clone(),
                     prompt,
+                    model: None,
                 },
                 &extras,
                 cancel,
@@ -313,7 +324,11 @@ impl AiService {
     where
         F: FnMut(&str) + Send,
     {
-        let profile = self.load_profile(&request.profile_id).await?;
+        let mut profile = self.load_profile(&request.profile_id).await?;
+        // 요청이 모델을 골랐으면 프로필의 기본 모델 대신 그것을 쓴다 (어댑터·사용량 기록·금액 계산이 모두 profile.model을 본다)
+        if let Some(m) = request.model.as_deref().map(str::trim).filter(|m| !m.is_empty()) {
+            profile.model = m.to_string();
+        }
         let provider = provider_for(&profile.format_type)?;
         // 요금이 나가기 전에: 요청 모양과 연결의 지원 여부
         if !extras.is_empty() {

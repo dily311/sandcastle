@@ -85,6 +85,7 @@ async fn branch_copies_messages_up_to_the_chosen_one() {
             persona_id: "default".into(),
             prompt_preset_id: None,
             api_profile_id: None,
+            model: None,
         },
     )
     .await
@@ -106,6 +107,48 @@ async fn branch_copies_messages_up_to_the_chosen_one() {
     assert_eq!(conv::get_messages(&pool, &all, 100, None).await.unwrap().len(), 3);
 
     assert!(ui::copy_conversation(&pool, &c, "x", Some("없는 메시지")).await.is_err());
+}
+
+// 대화의 모델(ADR-020): API가 같으면 유지, API를 바꾸면 NULL로 초기화, 분기·복제에 따라간다
+#[tokio::test]
+async fn conversation_model_follows_its_api_and_is_copied_on_branch() {
+    let pool = pool().await;
+    let c = new_conv(&pool).await;
+    for id in ["a1", "a2"] {
+        sqlx::query("INSERT INTO api_profiles (id, name, provider, format_type, base_url, model, created_at, updated_at) VALUES (?, ?, 'openai', 'openai', '', 'm', 0, 0)")
+            .bind(id)
+            .bind(id)
+            .execute(&pool)
+            .await
+            .unwrap();
+    }
+    let opts = |api: Option<&str>, model: Option<&str>| ConversationOptions {
+        persona_id: "default".into(),
+        prompt_preset_id: None,
+        api_profile_id: api.map(Into::into),
+        model: model.map(Into::into),
+    };
+    let model_of = |id: String| {
+        let pool = pool.clone();
+        async move { conv::get_conversation(&pool, &id).await.unwrap().model }
+    };
+    assert_eq!(model_of(c.clone()).await, None, "시작할 때는 프로필의 기본 모델을 따라감");
+    // API를 정하고 모델을 고름 (API가 처음 정해지는 저장이라 모델은 초기화되지 않게 한 번에 보낸다)
+    ui::set_options(&pool, &c, &opts(Some("a1"), None)).await.unwrap();
+    ui::set_options(&pool, &c, &opts(Some("a1"), Some(" my-model "))).await.unwrap();
+    assert_eq!(model_of(c.clone()).await.as_deref(), Some("my-model"));
+    // 같은 API로 다른 설정만 저장해도 모델은 그대로 보낸 값
+    ui::set_options(&pool, &c, &opts(Some("a1"), Some("my-model"))).await.unwrap();
+    assert_eq!(model_of(c.clone()).await.as_deref(), Some("my-model"));
+    // 분기·복제는 모델도 가져감
+    let b = ui::copy_conversation(&pool, &c, "복제", None).await.unwrap();
+    assert_eq!(model_of(b).await.as_deref(), Some("my-model"));
+    // API를 바꾸면 초기화 (보낸 모델이 있어도 다른 공급자의 이름일 수 있으므로)
+    ui::set_options(&pool, &c, &opts(Some("a2"), Some("my-model"))).await.unwrap();
+    assert_eq!(model_of(c.clone()).await, None);
+    // 빈 이름은 NULL
+    ui::set_options(&pool, &c, &opts(Some("a2"), Some("  "))).await.unwrap();
+    assert_eq!(model_of(c).await, None);
 }
 
 #[tokio::test]

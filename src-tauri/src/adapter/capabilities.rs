@@ -108,7 +108,7 @@ pub fn capabilities(format_type: &str, base_url: &str, model: &str) -> AiCapabil
     match format_type {
         "openai" => openai(base_url, m),
         "claude" | "anthropic" => claude(m),
-        "gemini" => gemini(m, false),
+        "gemini" | "google" => gemini(m, false),
         "vertexai" | "vertex" => gemini(m, true),
         other => {
             let none = Support::no(&format!("지원하지 않는 API 형식 ({other})"));

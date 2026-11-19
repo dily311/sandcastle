@@ -70,7 +70,7 @@ pub fn max_attempts(cfg: &RewriteSetting) -> u32 {
 pub fn eligible(f: &Finding, cfg: &RewriteSetting) -> bool {
     !f.fixed
         && match f.rule.as_str() {
-            "banned" => cfg.banned,
+            "rewriteBanned" => cfg.banned,
             "stuck" => cfg.stuck,
             _ => false,
         }
@@ -88,7 +88,7 @@ pub fn build_instruction(findings: &[&Finding]) -> String {
     for f in findings {
         let detail = f.detail.as_deref().unwrap_or("");
         match f.rule.as_str() {
-            "banned" => {
+            "rewriteBanned" => {
                 let words: Vec<String> = detail.split('\u{1f}').filter(|w| !w.is_empty()).map(|w| format!("「{w}」")).collect();
                 if !words.is_empty() {
                     lines.push(format!("다음 표현은 쓰지 말고 다른 말로 바꿔 쓸 것: {}", words.join(", ")));

@@ -65,7 +65,7 @@ pub async fn summarize_conversation_now(
     if conv_profile.is_empty() {
         return Err(AppError::validation("API를 먼저 고르세요 (대화 설정 또는 설정 > API 키)", None));
     }
-    let profile = hooks::profile_for(&app, &conv_profile);
+    let (profile, model) = hooks::route_for(&app, &conv, &conv_profile);
     let preset = conv.prompt_preset_id.clone().filter(|s| !s.is_empty()).unwrap_or(app_preset);
     let limit = hooks::limit_of(&state.db, &preset).await;
     let ctx = RunCtx {
@@ -74,6 +74,7 @@ pub async fn summarize_conversation_now(
         tasks: &tasks,
         conversation_id: &conversation_id,
         profile_id: &profile,
+        model: model.as_deref(),
         limit_tokens: limit,
         guards: &summary::GLOBAL,
     };

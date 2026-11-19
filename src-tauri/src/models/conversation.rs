@@ -321,6 +321,7 @@ pub struct ConversationRow {
     pub folder_id: Option<String>,
     pub prompt_preset_id: Option<String>,
     pub api_profile_id: Option<String>,
+    pub model: Option<String>,
 }
 
 #[derive(Serialize, specta::Type)]
@@ -344,6 +345,8 @@ pub struct Conversation {
     /// 이 대화의 프리셋/API. 없으면 앱 설정의 선택값
     pub prompt_preset_id: Option<String>,
     pub api_profile_id: Option<String>,
+    /// 이 대화에서 고른 모델. 없으면 API 프로필의 기본 모델 (ADR-020)
+    pub model: Option<String>,
 }
 
 impl From<ConversationRow> for Conversation {
@@ -364,6 +367,7 @@ impl From<ConversationRow> for Conversation {
             folder_id: r.folder_id,
             prompt_preset_id: r.prompt_preset_id,
             api_profile_id: r.api_profile_id,
+            model: r.model,
         }
     }
 }
@@ -504,6 +508,9 @@ pub struct ConversationOptions {
     pub persona_id: String,
     pub prompt_preset_id: Option<String>,
     pub api_profile_id: Option<String>,
+    /// 이 대화의 모델 (None = API 프로필의 기본 모델)
+    #[serde(default)]
+    pub model: Option<String>,
 }
 
 /// 한 번의 대화 차례 결과

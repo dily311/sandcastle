@@ -13,12 +13,27 @@
 	import { toasts } from "$shared/stores/toast.svelte";
 	import { confirmAction } from "$shared/stores/confirm.svelte";
 	import { apiOptions, current, ensureLoaded, orNull, save } from "./pluginSettingForm.svelte";
+	import { library } from "$features/character/library.svelte";
+	import { embeddingModelInfo, embeddingModelsFor } from "./providers";
 
 	onMount(() => {
 		ensureLoaded();
 		void refresh();
 	});
 	const cur = $derived(current());
+	// 임베딩 모델 추천: 고른 임베딩 API의 공급자에 맞는 내장 목록 (직접 입력도 됨)
+	const embedProfile = $derived(library.apis.find((a) => a.id === cur?.memory.apiProfileId));
+	const embedChoices = $derived(embeddingModelsFor(embedProfile?.provider));
+	const embedInfo = $derived(embeddingModelInfo(cur?.memory.model ?? ""));
+	const nf = (n: number) => n.toLocaleString();
+	/** 고른 모델에 대해 앱이 아는 것 (기본 차원 · 최대 입력 · 가격) */
+	const embedFacts = $derived(
+		embedInfo
+			? [embedInfo.dimensions ? `기본 ${nf(embedInfo.dimensions)}차원` : "", embedInfo.maxInputTokens ? `최대 입력 ${nf(embedInfo.maxInputTokens)}토큰` : "", embedInfo.price != null ? `100만 토큰당 $${embedInfo.price}` : ""].filter(Boolean).join(" · ")
+			: "",
+	);
+	/** 상한 슬라이더를 끄는 동안의 값 (놓으면 저장) */
+	let capDraft = $state<number | null>(null);
 	let status = $state<MemoryStatus | null>(null);
 	const src = { source: "memory" };
 
@@ -51,14 +66,40 @@
 			<Row label="임베딩 API" desc="채팅 API와 따로 고름. 비워 두면 색인·검색을 할 수 없음">
 				<Select value={cur.memory.apiProfileId ?? ""} options={apiOptions("미선택")} onchange={(e) => save("memory", { apiProfileId: orNull(e.currentTarget.value) })} />
 			</Row>
-			<Row label="모델 이름" desc="예: text-embedding-3-small, gemini-embedding-001. 직접 입력">
-				<Input value={cur.memory.model} placeholder="임베딩 모델" onchange={(e) => save("memory", { model: e.currentTarget.value.trim() })} />
+			<Row label="모델 이름" desc={embedFacts || "목록에서 고르거나 직접 입력"}>
+				<Input value={cur.memory.model} list="embed-models" placeholder="임베딩 모델" onchange={(e) => save("memory", { model: e.currentTarget.value.trim() })} />
+				<datalist id="embed-models">
+					{#each embedChoices as m (m.modelId)}<option value={m.modelId} label={m.label}></option>{/each}
+				</datalist>
 			</Row>
-			<Row label="차원" desc="줄이기를 지원하는 모델만. 비우면 모델 기본 (작을수록 저장·검색이 가벼움)">
-				<Input type="number" min="1" value={cur.memory.dimensions ? String(cur.memory.dimensions) : ""} onchange={(e) => save("memory", { dimensions: e.currentTarget.value ? int(e.currentTarget.value, 1, 768) : null })} />
+			<Row
+				label="차원"
+				desc={embedInfo
+					? embedInfo.adjustable
+						? `줄일 수 있는 모델${embedInfo.supportedDimensions ? ` (${embedInfo.supportedDimensions.map(nf).join(" · ")})` : ""}. 비우면 모델 기본 (작을수록 저장·검색이 가벼움)`
+						: "이 모델은 차원을 줄일 수 없음 (비워 두기)"
+					: "줄이기를 지원하는 모델만. 비우면 모델 기본 (작을수록 저장·검색이 가벼움)"}
+			>
+				<Input type="number" min="1" placeholder={embedInfo?.dimensions ? String(embedInfo.dimensions) : ""} value={cur.memory.dimensions ? String(cur.memory.dimensions) : ""} onchange={(e) => save("memory", { dimensions: e.currentTarget.value ? int(e.currentTarget.value, 1, 768) : null })} />
 			</Row>
 			<Row label="실행당 토큰 상한" desc="한 번 색인에서 임베딩할 예상 입력 토큰. 넘으면 한 번 더 확인">
-				<Input type="number" min="1000" value={String(cur.memory.tokenCap)} onchange={(e) => save("memory", { tokenCap: int(e.currentTarget.value, 1000, 200000) })} />
+				<div class="cap">
+					<input
+						type="range"
+						min="1000"
+						max="200000"
+						step="1000"
+						aria-label="실행당 토큰 상한"
+						value={capDraft ?? cur.memory.tokenCap}
+						style:--pct="{(((capDraft ?? cur.memory.tokenCap) - 1000) / 199000) * 100}%"
+						oninput={(e) => (capDraft = Number(e.currentTarget.value))}
+						onchange={(e) => {
+							void save("memory", { tokenCap: int(e.currentTarget.value, 1000, 200000) });
+							capDraft = null;
+						}}
+					/>
+					<b>{(capDraft ?? cur.memory.tokenCap).toLocaleString()}</b>
+				</div>
 			</Row>
 			<Row label="접두어" desc="e5·nomic 같은 모델이 요구할 때만. 바꾸면 다시 색인">
 				<div class="pair">
@@ -115,5 +156,23 @@
 	.stat {
 		font-size: var(--text-sm);
 		color: var(--text-muted);
+	}
+	.cap {
+		display: flex;
+		align-items: center;
+		gap: var(--space-3);
+		min-width: min(260px, 100%);
+	}
+	.cap input[type="range"] {
+		flex: 1;
+		min-width: 0;
+		accent-color: var(--accent);
+		cursor: pointer;
+	}
+	.cap b {
+		min-width: 6ch;
+		text-align: right;
+		font-variant-numeric: tabular-nums;
+		font-weight: 600;
 	}
 </style>

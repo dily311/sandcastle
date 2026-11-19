@@ -107,13 +107,22 @@ pub async fn set_options<'e, E>(executor: E, id: &str, o: &ConversationOptions) 
 where
     E: Executor<'e, Database = Sqlite>,
 {
-    let r = sqlx::query("UPDATE conversations SET persona_id = ?, prompt_preset_id = ?, api_profile_id = ? WHERE id = ?")
-        .bind(&o.persona_id)
-        .bind(&o.prompt_preset_id)
-        .bind(&o.api_profile_id)
-        .bind(id)
-        .execute(executor)
-        .await?;
+    // 모델은 API 프로필에 딸린 이름이라, 대화의 API가 (정해진 것에서) 다른 것으로 바뀌면 NULL로 돌아간다 (다른 공급자의 모델 이름이 남아 요청이 실패하는 일을 막음).
+    // 앱 기본 API를 따라가던 대화(NULL)가 API와 모델을 한꺼번에 정하는 경우는 모델을 둔다
+    let r = sqlx::query(
+        "UPDATE conversations SET persona_id = ?, prompt_preset_id = ?,
+             model = CASE WHEN api_profile_id IS ? OR api_profile_id IS NULL THEN ? ELSE NULL END,
+             api_profile_id = ?
+         WHERE id = ?",
+    )
+    .bind(&o.persona_id)
+    .bind(&o.prompt_preset_id)
+    .bind(&o.api_profile_id)
+    .bind(o.model.as_deref().map(str::trim).filter(|m| !m.is_empty()))
+    .bind(&o.api_profile_id)
+    .bind(id)
+    .execute(executor)
+    .await?;
     Ok(r.rows_affected() != 0)
 }
 
@@ -124,8 +133,8 @@ pub async fn copy_conversation(pool: &SqlitePool, id: &str, title: &str, upto: O
     let new_id = Uuid::new_v4().to_string();
     let t = now();
     sqlx::query(
-        "INSERT INTO conversations (id,title,character_id,persona_id,prompt_preset_id,world_info_ids,mode,meta,pinned,images_enabled,folder_id,api_profile_id,created_at,updated_at)
-         SELECT ?,?,character_id,persona_id,prompt_preset_id,world_info_ids,mode,meta,0,images_enabled,folder_id,api_profile_id,?,? FROM conversations WHERE id = ?",
+        "INSERT INTO conversations (id,title,character_id,persona_id,prompt_preset_id,world_info_ids,mode,meta,pinned,images_enabled,folder_id,api_profile_id,model,created_at,updated_at)
+         SELECT ?,?,character_id,persona_id,prompt_preset_id,world_info_ids,mode,meta,0,images_enabled,folder_id,api_profile_id,model,?,? FROM conversations WHERE id = ?",
     )
     .bind(&new_id)
     .bind(title)

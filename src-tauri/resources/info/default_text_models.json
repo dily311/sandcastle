@@ -1,0 +1,237 @@
+{
+    "asOf": "2026-11-19",
+    "data": [
+        {
+            "label": "OpenAI",
+            "provider": "openai",
+            "formatType": "openai",
+            "baseUrl": "https://api.openai.com/v1",
+            "modelList": [
+                {
+                    "label": "GPT-6",
+                    "model": [
+                        {
+                            "label": "GPT-6.2 Astra",
+                            "modelId": "gpt-6.2-astra"
+                        },
+                        {
+                            "label": "GPT-6.2 Sol",
+                            "modelId": "gpt-6.2-sol"
+                        },
+                        {
+                            "label": "GPT-6.1 Terra",
+                            "modelId": "gpt-6.1-terra"
+                        },
+                        {
+                            "label": "GPT-6 Luna",
+                            "modelId": "gpt-6-luna"
+                        }
+                    ]
+                },
+                {
+                    "label": "GPT-5",
+                    "model": [
+                        {
+                            "label": "GPT-5.6 Sol",
+                            "modelId": "gpt-5.6-sol"
+                        },
+                        {
+                            "label": "GPT-5.6 Terra",
+                            "modelId": "gpt-5.6-terra"
+                        },
+                        {
+                            "label": "GPT-5.6 Luna",
+                            "modelId": "gpt-5.6-luna"
+                        },
+                        {
+                            "label": "GPT-5.5",
+                            "modelId": "gpt-5.5"
+                        },
+                        {
+                            "label": "GPT-5.4",
+                            "modelId": "gpt-5.4"
+                        },
+                        {
+                            "label": "GPT-5.4 mini",
+                            "modelId": "gpt-5.4-mini"
+                        }
+                    ]
+                }
+            ]
+        },
+        {
+            "label": "Claude Model",
+            "provider": "Anthropic",
+            "formatType": "anthropic",
+            "baseUrl": "https://api.anthropic.com/v1",
+            "modelList": [
+                {
+                    "label": "Claude 5",
+                    "model": [
+                        {
+                            "label": "Claude Fable 5.2",
+                            "modelId": "claude-fable-5-2"
+                        },
+                        {
+                            "label": "Claude Opus 5.5",
+                            "modelId": "claude-opus-5-5"
+                        },
+                        {
+                            "label": "Claude Sonnet 5.5",
+                            "modelId": "claude-sonnet-5-5"
+                        },
+                        {
+                            "label": "Claude Haiku 5.5",
+                            "modelId": "claude-haiku-5-5"
+                        }
+                    ]
+                }
+            ]
+        },
+        {
+            "label": "Google",
+            "provider": "google",
+            "formatType": "gemini",
+            "baseUrl": "https://generativelanguage.googleapis.com/v1beta",
+            "modelList": [
+                {
+                    "label": "Gemini 4",
+                    "model": [
+                        {
+                            "label": "Gemini 4 Hydrogen",
+                            "modelId": "gemini-4-hydrogen"
+                        },
+                        {
+                            "label": "Gemini 4 Neon",
+                            "modelId": "gemini-4-neon"
+                        },
+                        {
+                            "label": "Gemini 4 Carbon",
+                            "modelId": "gemini-4-carbon"
+                        },
+                        {
+                            "label": "Gemini 4 Argon",
+                            "modelId": "gemini-4-argon"
+                        }
+                    ]
+                },
+                {
+                    "label": "Gemini 3",
+                    "model": [
+                        {
+                            "label": "Gemini 3.8 Flash",
+                            "modelId": "gemini-3.8-flash"
+                        },
+                        {
+                            "label": "Gemini 3.7 Flash",
+                            "modelId": "gemini-3.7-flash"
+                        },
+                        {
+                            "label": "Gemini 3.6 Flash",
+                            "modelId": "gemini-3.6-flash"
+                        },
+                        {
+                            "label": "Gemini 3.5 Flash",
+                            "modelId": "gemini-3.5-flash"
+                        },
+                        {
+                            "label": "Gemini 3.5 Flash-Lite",
+                            "modelId": "gemini-3.5-flash-lite"
+                        },
+                        {
+                            "label": "Gemini 3.1 Pro",
+                            "modelId": "gemini-3.1-pro-preview"
+                        },
+                        {
+                            "label": "Gemini 3 Flash",
+                            "modelId": "gemini-3-flash-preview"
+                        }
+                    ]
+                }
+            ]
+        },
+        {
+            "label": "Google VertexAI",
+            "provider": "VertexAI",
+            "formatType": "vertexai",
+            "baseUrl": "https://generativelanguage.googleapis.com/v1beta",
+            "modelList": [
+                {
+                    "label": "Gemini 4",
+                    "model": [
+                        {
+                            "label": "Gemini 4 Hydrogen",
+                            "modelId": "gemini-4-hydrogen"
+                        },
+                        {
+                            "label": "Gemini 4 Neon",
+                            "modelId": "gemini-4-neon"
+                        },
+                        {
+                            "label": "Gemini 4 Carbon",
+                            "modelId": "gemini-4-carbon"
+                        },
+                        {
+                            "label": "Gemini 4 Argon",
+                            "modelId": "gemini-4-argon"
+                        }
+                    ]
+                },
+                {
+                    "label": "Gemini 3",
+                    "model": [
+                        {
+                            "label": "Gemini 3.8 Flash",
+                            "modelId": "gemini-3.8-flash"
+                        },
+                        {
+                            "label": "Gemini 3.7 Flash",
+                            "modelId": "gemini-3.7-flash"
+                        },
+                        {
+                            "label": "Gemini 3.6 Flash",
+                            "modelId": "gemini-3.6-flash"
+                        },
+                        {
+                            "label": "Gemini 3.5 Flash",
+                            "modelId": "gemini-3.5-flash"
+                        },
+                        {
+                            "label": "Gemini 3.5 Flash-Lite",
+                            "modelId": "gemini-3.5-flash-lite"
+                        },
+                        {
+                            "label": "Gemini 3.1 Pro",
+                            "modelId": "gemini-3.1-pro-preview"
+                        },
+                        {
+                            "label": "Gemini 3 Flash",
+                            "modelId": "gemini-3-flash-preview"
+                        }
+                    ]
+                }
+            ]
+        },
+        {
+            "label": "DeepSeek",
+            "provider": "deepseek",
+            "formatType": "openai",
+            "baseUrl": "https://api.deepseek.com",
+            "modelList": [
+                {
+                    "label": "DeepSeek V4",
+                    "model": [
+                        {
+                            "label": "DeepSeek V4.1 Flash",
+                            "modelId": "deepseek-flash"
+                        },
+                        {
+                            "label": "DeepSeek V4 Pro",
+                            "modelId": "deepseek-v4-pro"
+                        }
+                    ]
+                }
+            ]
+        }
+    ]
+}

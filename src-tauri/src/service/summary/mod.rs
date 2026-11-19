@@ -446,6 +446,8 @@ pub struct RunCtx<'a> {
     pub tasks: &'a TaskManager,
     pub conversation_id: &'a str,
     pub profile_id: &'a str,
+    /// 이 요약에 쓸 모델 (None이면 API의 기본 모델)
+    pub model: Option<&'a str>,
     pub limit_tokens: usize,
     pub guards: &'a Guards,
 }
@@ -492,6 +494,7 @@ pub async fn run_once(c: &RunCtx<'_>, auto: bool) -> Result<RunOutcome> {
             c.ai.generate_once(AiRequest {
                 profile_id: c.profile_id.to_string(),
                 prompt,
+                model: c.model.map(str::to_string),
             })
             .await
         })

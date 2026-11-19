@@ -64,6 +64,7 @@ where
         format_type: input.format_type,
         base_url: input.base_url,
         model: input.model,
+        custom_models: vec![],
         created_at: now,
         updated_at: now,
     })
@@ -74,24 +75,60 @@ where
     E: Executor<'e, Database = Sqlite>,
 {
     let now = chrono::Utc::now().timestamp_millis();
-    sqlx::query(
-        r#"
-        UPDATE api_profiles SET (name, provider,format_type, base_url, model,  updated_at) 
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
-        WHERE id=?
+    let done = sqlx::query("UPDATE api_profiles SET name = ?, provider = ?, format_type = ?, base_url = ?, model = ?, updated_at = ? WHERE id = ?")
+        .bind(&input.name)
+        .bind(&input.provider)
+        .bind(&input.format_type)
+        .bind(&input.base_url)
+        .bind(&input.model)
+        .bind(now)
+        .bind(id)
+        .execute(executor)
+        .await?;
+    // 없는 프로필을 고치려 하면 조용히 넘어가지 않는다
+    if done.rows_affected() == 0 {
+        return Err(Error::RowNotFound);
+    }
 
-    "#,
-    )
-    .bind(&input.name)
-    .bind(&input.provider)
-    .bind(&input.format_type)
-    .bind(&input.base_url)
-    .bind(&input.model)
-    .bind(now)
-    .bind(id)
-    .execute(executor)
-    .await?;
+    Ok(())
+}
 
+/// 한 프로필에 남겨 둘 수 있는 "내가 추가한 모델" 수와 이름 길이
+pub const MAX_CUSTOM_MODELS: usize = 50;
+const MAX_MODEL_NAME_CHARS: usize = 120;
+
+/// 직접 입력한 모델 이름을 프로필에 남긴다 (앞뒤 공백 제거, 같은 이름은 한 번만). 바뀐 목록을 돌려준다
+pub async fn add_custom_model(pool: &sqlx::SqlitePool, id: &str, model: &str) -> Result<Vec<String>, Error> {
+    let name = model.trim();
+    let mut list = get_api_profile(pool, id).await?.custom_models;
+    if name.is_empty() || name.chars().count() > MAX_MODEL_NAME_CHARS || name.chars().any(char::is_control) {
+        return Ok(list);
+    }
+    if !list.iter().any(|m| m == name) && list.len() < MAX_CUSTOM_MODELS {
+        list.push(name.to_string());
+        save_custom_models(pool, id, &list).await?;
+    }
+    Ok(list)
+}
+
+/// 남겨 둔 모델 이름을 지운다. 바뀐 목록을 돌려준다
+pub async fn remove_custom_model(pool: &sqlx::SqlitePool, id: &str, model: &str) -> Result<Vec<String>, Error> {
+    let mut list = get_api_profile(pool, id).await?.custom_models;
+    let before = list.len();
+    list.retain(|m| m != model);
+    if list.len() != before {
+        save_custom_models(pool, id, &list).await?;
+    }
+    Ok(list)
+}
+
+async fn save_custom_models(pool: &sqlx::SqlitePool, id: &str, list: &[String]) -> Result<(), Error> {
+    sqlx::query("UPDATE api_profiles SET custom_models = ?, updated_at = ? WHERE id = ?")
+        .bind(serde_json::to_string(list).unwrap_or_else(|_| "[]".into()))
+        .bind(chrono::Utc::now().timestamp_millis())
+        .bind(id)
+        .execute(pool)
+        .await?;
     Ok(())
 }
 
@@ -319,4 +356,69 @@ pub async fn replace_prompt_blocks(conn: &mut sqlx::SqliteConnection, preset_id:
         upsert_prompt_block(&mut *conn, preset_id, b).await?;
     }
     Ok(())
+}
+
+#[cfg(test)]
+mod profile_tests {
+    use super::*;
+
+    async fn pool() -> sqlx::SqlitePool {
+        let pool = sqlx::sqlite::SqlitePoolOptions::new()
+            .max_connections(1)
+            .connect("sqlite::memory:")
+            .await
+            .unwrap();
+        sqlx::migrate!("src/db/migrations").run(&pool).await.unwrap();
+        pool
+    }
+
+    fn input(name: &str, model: &str) -> ApiProfilesInput {
+        ApiProfilesInput {
+            name: name.into(),
+            provider: "openai".into(),
+            format_type: "openai".into(),
+            base_url: "https://example.com/v1".into(),
+            model: model.into(),
+        }
+    }
+
+    #[tokio::test]
+    async fn custom_models_are_kept_per_profile_trimmed_and_deduped() {
+        let db = pool().await;
+        let a = create_api_profile(&db, input("A", "m1")).await.unwrap();
+        let b = create_api_profile(&db, input("B", "m1")).await.unwrap();
+        assert!(a.custom_models.is_empty());
+        assert_eq!(add_custom_model(&db, &a.id, "  gpt-6-luna ").await.unwrap(), vec!["gpt-6-luna"]);
+        assert_eq!(add_custom_model(&db, &a.id, "gpt-6-luna").await.unwrap().len(), 1, "같은 이름은 한 번만");
+        assert_eq!(add_custom_model(&db, &a.id, "   ").await.unwrap().len(), 1, "빈 이름은 무시");
+        assert_eq!(add_custom_model(&db, &a.id, "x\ny").await.unwrap().len(), 1, "제어 문자가 든 이름은 무시");
+        // 프로필마다 따로, 프로필을 읽을 때 같이 나옴
+        assert!(get_api_profile(&db, &b.id).await.unwrap().custom_models.is_empty());
+        assert_eq!(get_api_profile(&db, &a.id).await.unwrap().custom_models, vec!["gpt-6-luna"]);
+        // 프로필 편집(기본 모델 바꾸기)은 남긴 목록을 건드리지 않음
+        update_api_profile(&db, &a.id, input("A", "m2")).await.unwrap();
+        assert_eq!(get_api_profile(&db, &a.id).await.unwrap().custom_models, vec!["gpt-6-luna"]);
+        assert!(remove_custom_model(&db, &a.id, "gpt-6-luna").await.unwrap().is_empty());
+        // 개수 상한
+        for i in 0..MAX_CUSTOM_MODELS + 5 {
+            add_custom_model(&db, &a.id, &format!("m-{i}")).await.unwrap();
+        }
+        assert_eq!(get_api_profile(&db, &a.id).await.unwrap().custom_models.len(), MAX_CUSTOM_MODELS);
+        assert!(add_custom_model(&db, "nope", "x").await.is_err());
+    }
+
+    // 프로필을 고치는 SQL이 문법 오류였던 적이 있다: 모델만 바꾸는 편집이 저장되어야 한다
+    #[tokio::test]
+    async fn editing_a_profile_keeps_its_id_and_changes_the_model() {
+        let db = pool().await;
+        let made = create_api_profile(&db, input("내 API", "gpt-4o")).await.unwrap();
+        update_api_profile(&db, &made.id, input("내 API", "gpt-4.1")).await.unwrap();
+        let got = get_api_profile(&db, &made.id).await.unwrap();
+        assert_eq!(
+            (got.id.as_str(), got.name.as_str(), got.model.as_str()),
+            (made.id.as_str(), "내 API", "gpt-4.1")
+        );
+        // 없는 프로필은 조용히 넘어가지 않는다
+        assert!(update_api_profile(&db, "nope", input("x", "y")).await.is_err());
+    }
 }

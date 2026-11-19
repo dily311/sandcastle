@@ -634,6 +634,33 @@ fn check_length(text: &str, s: &LintSetting, findings: &mut Vec<Finding>) {
 }
 
 /// 응답 글을 검사하고 고칠 규칙은 고친다. `user_name`은 내 이름(페르소나)
+/// 자동 재생성의 금지어 검사 (메시지 linter와 목록·규칙이 따로다). 걸린 것이 있으면 `rewriteBanned` 결과 하나 (글은 고치지 않음)
+pub fn rewrite_banned_finding(text: &str, words: &[String]) -> Option<Finding> {
+    let mut found = vec![];
+    check_banned(text, words, LintMode::Report, &mut found);
+    found.pop().map(|f| Finding {
+        rule: "rewriteBanned".into(),
+        text: f.text.replace("금지어", "재생성 금지어"),
+        ..f
+    })
+}
+
+/// meta.lint에 결과 하나를 더한다 (없으면 새로 만든다). 자동 재생성이 자기 검사 결과를 같은 자리에 남겨 화면·다시 쓰기 판정이 한 곳을 보게 한다
+pub fn with_finding(meta: Option<serde_json::Value>, content: &str, finding: Finding) -> serde_json::Value {
+    let mut meta = meta.unwrap_or_else(|| {
+        serde_json::json!({
+            "content": content,
+            "findings": [],
+            "fixedRules": [],
+            "at": chrono::Utc::now().timestamp_millis(),
+        })
+    });
+    if let Some(list) = meta.get_mut("findings").and_then(serde_json::Value::as_array_mut) {
+        list.push(serde_json::to_value(&finding).unwrap_or_default());
+    }
+    meta
+}
+
 pub fn run(text: &str, user_name: &str, s: &LintSetting) -> LintOutcome {
     run_with(text, user_name, s, false)
 }

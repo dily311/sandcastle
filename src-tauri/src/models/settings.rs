@@ -280,6 +280,8 @@ pub struct PluginSetting {
 pub struct GhostSetting {
     /// 대필에 쓸 API (비우면 그 대화의 API)
     pub api_profile_id: Option<String>,
+    /// 대필에 쓸 모델 (비우면 그 API의 기본 모델. 대필 API를 따로 정했을 때만 쓴다, ADR-020)
+    pub model: String,
     /// short / medium / long
     pub length: String,
     /// 추가 지침 한 줄 (300자까지)
@@ -292,6 +294,7 @@ impl Default for GhostSetting {
     fn default() -> Self {
         Self {
             api_profile_id: None,
+            model: String::new(),
             length: "medium".into(),
             guide: String::new(),
             send_without_draft: false,
@@ -305,8 +308,10 @@ impl Default for GhostSetting {
 pub struct RewriteSetting {
     /// 한 응답에 자동으로 더 만드는 최대 횟수 (기본 1, 안전상 3까지) — 한 번마다 응답 하나의 요금
     pub max_attempts: u32,
-    /// 금지어가 걸리면 다시 쓰기 (linter의 금지어 규칙이 표시만이어야 함)
+    /// 아래 금지어가 응답에 나오면 다시 쓰기. 메시지 linter의 금지어 목록과는 따로다(linter는 표시·지우기, 여기는 다시 만들기)
     pub banned: bool,
+    /// 자동 재생성의 금지어 목록 (대소문자 구분 없음, 100개까지)
+    pub banned_words: Vec<String>,
     /// 단어 반복 오류가 걸리면 다시 쓰기
     pub stuck: bool,
 }
@@ -316,6 +321,7 @@ impl Default for RewriteSetting {
         Self {
             max_attempts: 1,
             banned: true,
+            banned_words: vec![],
             stuck: true,
         }
     }
@@ -327,6 +333,8 @@ impl Default for RewriteSetting {
 pub struct SummarySetting {
     /// 요약에 쓸 API 프로필 (비우면 그 대화가 쓰는 API)
     pub api_profile_id: Option<String>,
+    /// 요약에 쓸 모델 (비우면 그 API의 기본 모델. 요약 API를 따로 정했을 때만 쓴다, ADR-020)
+    pub model: String,
 }
 
 /// 메모리 임베딩 검색 설정. API 프로필·모델은 기기마다 다르므로 통째로 기기 전용
@@ -536,6 +544,8 @@ impl<'de> Deserialize<'de> for PromptSlot {
 #[serde(rename_all = "camelCase", default)]
 pub struct PhoneSetting {
     pub api_profile_id: Option<String>,
+    /// 폰 대화의 기본 모델 (비우면 그 API의 기본 모델. ADR-020). API를 정했을 때만 쓴다
+    pub model: String,
     pub preset_id: Option<String>,
 }
 
@@ -544,6 +554,8 @@ pub struct PhoneSetting {
 pub struct TranslateSetting {
     /// 번역에 쓸 API 프로필 (비우면 앱에서 고른 API)
     pub api_profile_id: Option<String>,
+    /// 번역에 쓸 모델 (비우면 그 API의 기본 모델. ADR-020)
+    pub model: String,
     /// AI 답변을 이 언어로 (예: "한국어")
     pub target_lang: String,
     /// 내 입력을 이 언어로 (예: "English")
@@ -556,6 +568,7 @@ impl Default for TranslateSetting {
     fn default() -> Self {
         Self {
             api_profile_id: None,
+            model: String::new(),
             target_lang: "한국어".into(),
             input_lang: "English".into(),
             auto_translate: false,
@@ -607,6 +620,8 @@ pub struct ImageGenSetting {
     pub ai_prompt: bool,
     /// 이미지 프롬프트를 쓸 채팅 API (비우면 대화/앱의 것)
     pub prompt_api_profile_id: Option<String>,
+    /// 이미지 프롬프트를 쓸 채팅 모델 (비우면 그 API의 기본 모델. ADR-020)
+    pub prompt_model: String,
     /// NovelAI 생성 프리셋 (OpenAI는 쓰지 않음)
     pub negative_prompt: String,
     pub steps: u32,
@@ -630,6 +645,7 @@ impl Default for ImageGenSetting {
             style_prompt: String::new(),
             ai_prompt: true,
             prompt_api_profile_id: None,
+            prompt_model: String::new(),
             negative_prompt: "lowres, bad anatomy, bad hands, text, error, missing fingers, worst quality, low quality, jpeg artifacts, watermark, blurry"
                 .into(),
             steps: 28,

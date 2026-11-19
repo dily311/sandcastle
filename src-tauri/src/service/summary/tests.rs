@@ -82,6 +82,7 @@ fn ctx<'a>(e: &'a Env, conv: &'a str, limit: usize) -> RunCtx<'a> {
         tasks: &e.tasks,
         conversation_id: conv,
         profile_id: &e.profile_id,
+        model: None,
         limit_tokens: limit,
         guards: &e.guards,
     }
@@ -233,7 +234,7 @@ async fn failure_is_not_retried_until_more_messages_pile_up_and_budget_blocks_be
         &b.db,
         &BudgetLimit {
             api_profile_id: b.profile_id.clone(),
-            daily_tokens: Some(1),
+            monthly_usd: Some(0.01),
             ..Default::default()
         },
     )
@@ -241,6 +242,7 @@ async fn failure_is_not_retried_until_more_messages_pile_up_and_budget_blocks_be
     .unwrap();
     let mut used = crate::db::usage::UsageEntry::new(crate::db::usage::UsageKind::Chat, &b.profile_id, "m");
     used.input_tokens = 5;
+    used.cost_usd = Some(0.01);
     crate::db::usage::record(&b.db, used).await;
     assert_eq!(run_once(&ctx(&b, "c", 4000), true).await.unwrap(), RunOutcome::Failed("budget".into()));
     assert!(b.srv.requests().is_empty());

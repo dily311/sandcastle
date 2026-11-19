@@ -453,6 +453,7 @@ async fn converse(
         session_id: snap.session_id.clone(),
         api_profile_id,
         prompt_preset_id,
+        model: crate::db::game::get_game_session_model(&state.db, &snap.session_id).await?,
     };
     let mut filter = crate::game::stream_filter::StreamTagFilter::default();
     let mut forward = |delta: &str| {

@@ -196,6 +196,7 @@ function addConv(c: Partial<Conv> & { title: string; characterId: string }, ago:
 		folderId: null,
 		promptPresetId: null,
 		apiProfileId: null,
+		model: null,
 		...c,
 	};
 	convs.push(conv);

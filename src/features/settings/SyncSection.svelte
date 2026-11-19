@@ -2,7 +2,7 @@
 	// 동기화 (CLAUDE.md 2-B-3, ADR-011): 파일로 주고받기. 누를 때만 만들고, 합치기 전에 미리보기 → 자동 사본 → 적용
 	import { onMount } from "svelte";
 	import { Cloud, Download, FolderOpen, Info, LogOut, RefreshCw, RotateCcw } from "@lucide/svelte";
-	import type { DriveStatus, SyncBackup, SyncPreview, SyncRun, SyncStatus } from "$ipc/bindings";
+	import type { DriveStatus, SyncBackup, SyncPreview, SyncStatus } from "$ipc/bindings";
 	import { confirmAction } from "$shared/stores/confirm.svelte";
 	import SyncConflicts from "./SyncConflicts.svelte";
 	import { Badge, Button, Segmented, Select, Spinner, Switch } from "$shared/ui";
@@ -28,7 +28,6 @@
 	let pending = $state<{ path: string; preview: SyncPreview } | null>(null);
 
 	// ---- 폴더 동기화 (2-C, 데스크톱) ----
-	let runs = $state<SyncRun[]>([]);
 	let syncing = $state(false);
 	let step = $state("");
 	const sync = $derived(current()?.sync ?? null);
@@ -84,7 +83,6 @@
 		status = await call(commands.getSyncStatus(), src).catch(() => null);
 		backups = await call(commands.listSyncBackups(), { ...src, silent: true }).catch(() => []);
 		if (showAuto) {
-			runs = await call(commands.listSyncRuns(10), { ...src, silent: true }).catch(() => []);
 			drive = await call(commands.driveStatus(), { ...src, silent: true }).catch(() => null);
 		}
 	}
@@ -162,7 +160,7 @@
 			const m = r.merged.reduce((a, d) => ({ added: a.added + d.report.added, updated: a.updated + d.report.updated, deleted: a.deleted + d.report.deleted, both: a.both + d.report.conflicts + d.report.branches }), { added: 0, updated: 0, deleted: 0, both: 0 });
 			toasts.success(
 				r.merged.length
-					? `동기화함: 기기 ${r.merged.length}개 · 추가 ${n(m.added)} · 변경 ${n(m.updated)} · 지움 ${n(m.deleted)}${m.both ? ` · 둘 다 남김 ${n(m.both)}` : ""}`
+					? `동기화함: 기기 ${r.merged.length}개 · 추가 ${n(m.added)} · 변경 ${n(m.updated)} · 지움 ${n(m.deleted)}${m.both ? ` · 충돌 ${n(m.both)}` : ""}`
 					: "동기화함: 다른 기기에서 새로 바뀐 것 없음",
 			);
 			for (const d of r.skippedDevices ?? []) toasts.error(`기기 ${short(d.deviceId)}의 묶음을 열지 못해 건너뜀: ${d.reason}`);
@@ -176,16 +174,6 @@
 			step = "";
 			await load();
 		}
-	}
-	function runText(r: SyncRun) {
-		if (!r.ok) return r.error ?? "실패";
-		const s = r.summary;
-		if (!s) return "";
-		const merged = s.merged.reduce((a, d) => a + d.report.added + d.report.updated + d.report.deleted + d.report.restored, 0);
-		const both = s.merged.reduce((a, d) => a + d.report.conflicts + d.report.branches, 0);
-		return [s.merged.length ? `기기 ${s.merged.length}개에서 ${n(merged)}개 반영` : "받을 것 없음", both && `둘 다 남김 ${n(both)}`, s.filesDown && `파일 받음 ${n(s.filesDown)}`, s.filesUp && `올림 ${n(s.filesUp)}`, s.filesMissing && `아직 없는 파일 ${n(s.filesMissing)}`]
-			.filter(Boolean)
-			.join(" · ");
 	}
 	const short = (id: string) => id.slice(0, 8);
 	const n = (v: number) => v.toLocaleString();
@@ -245,7 +233,7 @@
 				m.deleted && `지움 ${n(m.deleted)}`,
 				m.restored && `되살림 ${n(m.restored)}`,
 				r.files.added && `파일 ${n(r.files.added)}`,
-				m.conflicts + m.branches && `둘 다 남김 ${n(m.conflicts + m.branches)}`,
+				m.conflicts + m.branches && `충돌 ${n(m.conflicts + m.branches)}`,
 			].filter(Boolean);
 			toasts.success(parts.length ? `합침: ${parts.join(" · ")}` : "합침: 바뀐 것 없음");
 			pending = null;
@@ -266,7 +254,7 @@
 			{ label: "지움", value: m.deleted, hint: "다른 기기에서 지웠고 이 기기는 그 뒤로 안 고친 항목" },
 			{ label: "되살림", value: m.restored, hint: "이 기기에서 지웠지만 다른 기기에서 고친 항목 (고친 쪽을 살림)" },
 			{ label: "이 기기 고침 유지", value: m.keptLocalEdits, hint: "다른 기기에서 지웠지만 이 기기에서 고친 항목" },
-			{ label: "둘 다 남김", value: m.conflicts, hint: "양쪽에서 고친 항목. 이 기기 것을 두고 받은 것은 따로 보관" },
+			{ label: "충돌", value: m.conflicts, hint: "양쪽에서 고친 항목. 이 기기 것을 두고 받은 것은 따로 보관" },
 			{ label: "분기 대화", value: m.branches, hint: "같은 대화에 양쪽이 이어 씀. 받은 쪽을 새 분기로" },
 			{ label: "파일 추가", value: f.added, hint: "이 기기에 없는 그림·파일" },
 			{ label: "빠진 파일", value: f.missing, hint: "묶음에 내용이 없음 — 보낸 기기에서 '파일 포함'으로 다시 만들면 들어옴" },
@@ -335,17 +323,6 @@
 						</Row>
 					{/if}
 				{/if}
-				{#if runs.length}
-					<ul class="runs" aria-label="동기화 기록">
-						{#each runs as r (r.id)}
-							<li class:fail={!r.ok}>
-								<span title={absolute(r.startedAt)}>{relative(r.startedAt)}</span>
-								<Badge tone={r.ok ? undefined : "danger"}>{r.runBy === "auto" ? "자동" : "직접"}</Badge>
-								<span class="what">{runText(r)}</span>
-							</li>
-						{/each}
-					</ul>
-				{/if}
 			</Group>
 		{/if}
 
@@ -383,7 +360,7 @@
 						<p class="note"><Info /> 같이 쓰는 설정(테마·언어·프롬프트 등)은 받은 것으로 바뀜. 이 기기 전용(API 선택·기능 켜기·글자 크기 등)은 그대로</p>
 					{/if}
 					{#if pending.preview.report.conflicts + pending.preview.report.branches > 0}
-						<p class="note"><Info /> 둘 다 남긴 항목은 지금은 이 기기 것이 보이고, 받은 것은 따로 보관됨 — 합친 뒤 이 화면 위쪽 "둘 다 남긴 항목"에서 고름</p>
+						<p class="note"><Info /> 충돌 항목은 지금은 이 기기 것이 보이고, 받은 것은 따로 보관됨 — 합친 뒤 이 화면 위쪽 "충돌 항목"에서 확인하고 고름</p>
 					{/if}
 					<div class="acts">
 						<Button size="sm" variant="ghost" disabled={busy !== null} onclick={() => (pending = null)}>취소</Button>
@@ -507,28 +484,6 @@
 	.empty {
 		margin: 0;
 		padding: var(--space-3) 0;
-	}
-	.runs {
-		list-style: none;
-		margin: 0;
-		padding: 0;
-	}
-	.runs li {
-		display: flex;
-		align-items: center;
-		gap: var(--space-3);
-		padding: var(--space-2) 0;
-		border-top: 1px solid var(--border);
-		font-size: var(--text-sm);
-		flex-wrap: wrap;
-	}
-	.runs .what {
-		color: var(--text-muted);
-		flex: 1;
-		min-width: 12rem;
-	}
-	.runs .fail .what {
-		color: var(--danger, var(--text-muted));
 	}
 	.banner {
 		display: flex;

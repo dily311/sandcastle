@@ -54,6 +54,7 @@ pub const SETTINGS_SCOPE: &[(&str, Scope)] = &[
     ("feature-setting", Scope::Device),
     // ---- plugin-setting ----
     ("plugin-setting/translate/apiProfileId", Scope::Device),
+    ("plugin-setting/translate/model", Scope::Device), // 모델은 API에 딸린 이름이라 API와 같이 기기마다 (ADR-020)
     ("plugin-setting/translate/targetLang", Scope::Shared),
     ("plugin-setting/translate/inputLang", Scope::Shared),
     ("plugin-setting/translate/autoTranslate", Scope::Device),
@@ -65,6 +66,7 @@ pub const SETTINGS_SCOPE: &[(&str, Scope)] = &[
     ("plugin-setting/tts/dialogueOnly", Scope::Shared),
     ("plugin-setting/imageGen/apiProfileId", Scope::Device),
     ("plugin-setting/imageGen/promptApiProfileId", Scope::Device),
+    ("plugin-setting/imageGen/promptModel", Scope::Device),
     ("plugin-setting/imageGen/model", Scope::Shared),
     ("plugin-setting/imageGen/size", Scope::Shared),
     ("plugin-setting/imageGen/stylePrompt", Scope::Shared),
@@ -75,6 +77,7 @@ pub const SETTINGS_SCOPE: &[(&str, Scope)] = &[
     ("plugin-setting/imageGen/sampler", Scope::Shared),
     ("plugin-setting/imageGen/quality", Scope::Shared),
     ("plugin-setting/phone/apiProfileId", Scope::Device),
+    ("plugin-setting/phone/model", Scope::Device),
     ("plugin-setting/phone/presetId", Scope::Shared),
     ("plugin-setting/prompts", Scope::Shared),
     ("plugin-setting/ghost", Scope::Device),   // 대필 API·옵션은 기기마다

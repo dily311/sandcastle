@@ -93,7 +93,7 @@ export const commands = {
 	 *  세션의 AI 설정·플레이어 페르소나 바꾸기. 비운 값은 앱 기본값.
 	 *  플레이어를 바꿨고 지금 열린 세션이면 런타임을 다시 불러와 바로 반영한다.
 	 */
-	setGameSessionOptions: (sessionId: string, apiProfileId: string | null, promptPresetId: string | null, playerId: string | null, options?: InvokeOptions) => __TAURI_INVOKE<null>("set_game_session_options", { sessionId, apiProfileId, promptPresetId, playerId }, options),
+	setGameSessionOptions: (sessionId: string, apiProfileId: string | null, promptPresetId: string | null, playerId: string | null, model: string | null, options?: InvokeOptions) => __TAURI_INVOKE<null>("set_game_session_options", { sessionId, apiProfileId, promptPresetId, playerId, model }, options),
 	/**  게임 세션의 컨텍스트 사용량: 이번에 앱을 켠 뒤 마지막으로 보낸 프롬프트 기준 */
 	gameContextUsage: (sessionId: string, options?: InvokeOptions) => __TAURI_INVOKE<ContextUsage_Serialize>("game_context_usage", { sessionId }, options),
 	/**  게임 메시지 고치기 (AI 응답은 줄로 다시 나눠 화면·지난 대사에 반영) */
@@ -128,8 +128,12 @@ export const commands = {
 	compactUsage: (options?: InvokeOptions) => __TAURI_INVOKE<CompactResult>("compact_usage", undefined, options),
 	/**  한도가 있는 프로필과 지금 사용량 (한도 막대) */
 	listBudgetStatus: (options?: InvokeOptions) => __TAURI_INVOKE<BudgetOverview_Serialize[]>("list_budget_status", undefined, options),
-	/**  한도 저장. 칸을 모두 비우면 한도를 지운다 */
+	/**  한도 저장. 금액을 비우면 한도를 지운다 */
 	upsertBudgetLimit: (limit: BudgetLimit_Deserialize, options?: InvokeOptions) => __TAURI_INVOKE<null>("upsert_budget_limit", { limit }, options),
+	/**  공급자 계정의 잔여 (NovelAI·ElevenLabs. 요금 없음, 사용자가 누를 때만) */
+	getProviderQuota: (profileId: string, options?: InvokeOptions) => __TAURI_INVOKE<QuotaLine[]>("get_provider_quota", { profileId }, options),
+	/**  이 모델의 단가 (사용자 단가표 → 앱 기본 단가). 없으면 null — 한도를 걸어도 금액을 셀 수 없다 */
+	getModelPrice: (model: string, options?: InvokeOptions) => __TAURI_INVOKE<ModelPriceInfo | null>("get_model_price", { model }, options),
 	/**  새로 80%에 닿은 한도 (작업이 끝날 때 프론트가 물어 앱 안 알림으로) */
 	takeBudgetWarnings: (options?: InvokeOptions) => __TAURI_INVOKE<BudgetWarning_Serialize[]>("take_budget_warnings", undefined, options),
 	listModelPrices: (options?: InvokeOptions) => __TAURI_INVOKE<ModelPrice_Serialize[]>("list_model_prices", undefined, options),
@@ -326,10 +330,13 @@ export const commands = {
 	/**  프리셋과 블록을 한 번에 저장. `blocks` 순서가 실행 순서가 되고, 목록에 없는 기존 블록은 지워진다. */
 	savePromptPreset: (preset: PromptPresetsInput_Deserialize, blocks: PromptBlocksInput_Deserialize[], options?: InvokeOptions) => __TAURI_INVOKE<PromptPresetDetail_Serialize>("save_prompt_preset", { preset, blocks }, options),
 	deletePromptPreset: (id: string, options?: InvokeOptions) => __TAURI_INVOKE<TrashItem>("delete_prompt_preset", { id }, options),
-	getApiProfile: (id: string, options?: InvokeOptions) => __TAURI_INVOKE<ApiProfiles>("get_api_profile", { id }, options),
-	getAllApiProfile: (options?: InvokeOptions) => __TAURI_INVOKE<ApiProfiles[]>("get_all_api_profile", undefined, options),
-	createApiProfile: (input: ApiProfilesInput, apiKey: string, options?: InvokeOptions) => __TAURI_INVOKE<ApiProfiles>("create_api_profile", { input, apiKey }, options),
+	getApiProfile: (id: string, options?: InvokeOptions) => __TAURI_INVOKE<ApiProfiles_Serialize>("get_api_profile", { id }, options),
+	getAllApiProfile: (options?: InvokeOptions) => __TAURI_INVOKE<ApiProfiles_Serialize[]>("get_all_api_profile", undefined, options),
+	createApiProfile: (input: ApiProfilesInput, apiKey: string, options?: InvokeOptions) => __TAURI_INVOKE<ApiProfiles_Serialize>("create_api_profile", { input, apiKey }, options),
 	updateApiProfile: (id: string, input: ApiProfilesInput, apiKey: string, options?: InvokeOptions) => __TAURI_INVOKE<null>("update_api_profile", { id, input, apiKey }, options),
+	/**  직접 입력한 모델 이름을 이 프로필의 "내가 추가한 모델"로 남긴다. 바뀐 목록을 돌려준다 */
+	addApiProfileModel: (id: string, model: string, options?: InvokeOptions) => __TAURI_INVOKE<string[]>("add_api_profile_model", { id, model }, options),
+	removeApiProfileModel: (id: string, model: string, options?: InvokeOptions) => __TAURI_INVOKE<string[]>("remove_api_profile_model", { id, model }, options),
 	deleteApiProfile: (id: string, options?: InvokeOptions) => __TAURI_INVOKE<null>("delete_api_profile", { id }, options),
 	setApiKey: (profileId: string, apiKey: string, options?: InvokeOptions) => __TAURI_INVOKE<null>("set_api_key", { profileId, apiKey }, options),
 	deleteApiKey: (profileId: string, options?: InvokeOptions) => __TAURI_INVOKE<null>("delete_api_key", { profileId }, options),
@@ -622,16 +629,7 @@ export type AiCapabilities = {
 	structured: Support,
 };
 
-export type ApiProfiles = {
-	id: string,
-	name: string,
-	provider: string,
-	formatType: string,
-	baseUrl: string,
-	model: string,
-	createdAt: number,
-	updatedAt: number,
-};
+export type ApiProfiles = ApiProfiles_Serialize | ApiProfiles_Deserialize;
 
 export type ApiProfilesInput = {
 	name: string,
@@ -639,6 +637,34 @@ export type ApiProfilesInput = {
 	formatType: string,
 	baseUrl: string,
 	model: string,
+};
+
+export type ApiProfiles_Deserialize = {
+	id: string,
+	name: string,
+	provider: string,
+	formatType: string,
+	baseUrl: string,
+	/**  이 프로필의 기본 모델. 대화·기능이 따로 정하지 않으면 이것을 쓴다 */
+	model: string,
+	/**  사용자가 직접 입력해 남겨 둔 모델 이름 (목록에 계속 보임, ADR-020) */
+	customModels?: string[],
+	createdAt: number,
+	updatedAt: number,
+};
+
+export type ApiProfiles_Serialize = {
+	id: string,
+	name: string,
+	provider: string,
+	formatType: string,
+	baseUrl: string,
+	/**  이 프로필의 기본 모델. 대화·기능이 따로 정하지 않으면 이것을 쓴다 */
+	model: string,
+	/**  사용자가 직접 입력해 남겨 둔 모델 이름 (목록에 계속 보임, ADR-020) */
+	customModels: string[],
+	createdAt: number,
+	updatedAt: number,
 };
 
 export type AppErrorResponse = AppErrorResponse_Serialize | AppErrorResponse_Deserialize;
@@ -879,36 +905,30 @@ export type BudgetLimit = BudgetLimit_Serialize | BudgetLimit_Deserialize;
 /**  한 프로필의 한도. None = 한도 없음 */
 export type BudgetLimit_Deserialize = {
 	apiProfileId: string,
-	dailyTokens?: number | null,
-	monthlyTokens?: number | null,
-	dailyCharacters?: number | null,
-	monthlyCharacters?: number | null,
-	dailyImages?: number | null,
-	monthlyImages?: number | null,
+	/**  한 달 금액 한도 (달러) */
+	monthlyUsd?: number | null,
+	/**  예전 "한 달 토큰" 한도 (읽기 전용 안내용. 새 한도를 저장하면 지워진다) */
+	legacyMonthlyTokens?: number | null,
 };
 
 /**  한 프로필의 한도. None = 한도 없음 */
 export type BudgetLimit_Serialize = {
 	apiProfileId: string,
-	dailyTokens: number | null,
-	monthlyTokens: number | null,
-	dailyCharacters: number | null,
-	monthlyCharacters: number | null,
-	dailyImages: number | null,
-	monthlyImages: number | null,
+	/**  한 달 금액 한도 (달러) */
+	monthlyUsd: number | null,
+	/**  예전 "한 달 토큰" 한도 (읽기 전용 안내용. 새 한도를 저장하면 지워진다) */
+	legacyMonthlyTokens: number | null,
 };
 
-/**  한도가 걸린 칸 하나 (한도 없는 칸은 만들지 않는다) */
+/**  한도가 걸린 칸 (한도 없으면 만들지 않는다) */
 export type BudgetMeter = {
-	metric: BudgetMetric,
-	period: BudgetPeriod,
-	used: number,
-	limit: number,
+	usedUsd: number | null,
+	limitUsd: number | null,
 	/**  0 이상 (넘었으면 0) */
-	remaining: number,
+	remainingUsd: number | null,
+	/**  이번 달, 단가를 몰라 금액에 못 넣은 글 호출 수 (0이면 빠짐없이 센 것) */
+	unpricedCalls: number,
 };
-
-export type BudgetMetric = "tokens" | "characters" | "images";
 
 /**  한도가 있는 프로필 하나 (설정 > 실행 기록의 한도 막대) */
 export type BudgetOverview = BudgetOverview_Serialize | BudgetOverview_Deserialize;
@@ -916,16 +936,16 @@ export type BudgetOverview = BudgetOverview_Serialize | BudgetOverview_Deseriali
 /**  한도가 있는 프로필 하나 (설정 > 실행 기록의 한도 막대) */
 export type BudgetOverview_Deserialize = {
 	limit: BudgetLimit_Deserialize,
-	meters: BudgetMeter[],
+	/**  이번 달 사용 금액 (금액 한도가 없고 예전 토큰 한도만 남은 프로필은 None) */
+	meter?: BudgetMeter | null,
 };
 
 /**  한도가 있는 프로필 하나 (설정 > 실행 기록의 한도 막대) */
 export type BudgetOverview_Serialize = {
 	limit: BudgetLimit_Serialize,
-	meters: BudgetMeter[],
+	/**  이번 달 사용 금액 (금액 한도가 없고 예전 토큰 한도만 남은 프로필은 None) */
+	meter: BudgetMeter | null,
 };
-
-export type BudgetPeriod = "day" | "month";
 
 export type BudgetWarning = BudgetWarning_Serialize | BudgetWarning_Deserialize;
 
@@ -1397,6 +1417,8 @@ export type ConversationOptions_Deserialize = {
 	personaId: string,
 	promptPresetId?: string | null,
 	apiProfileId?: string | null,
+	/**  이 대화의 모델 (None = API 프로필의 기본 모델) */
+	model?: string | null,
 };
 
 /**  대화별 설정 (오른쪽 패널). None이면 앱 설정의 선택값을 쓴다. */
@@ -1404,6 +1426,8 @@ export type ConversationOptions_Serialize = {
 	personaId: string,
 	promptPresetId: string | null,
 	apiProfileId: string | null,
+	/**  이 대화의 모델 (None = API 프로필의 기본 모델) */
+	model: string | null,
 };
 
 export type ConversationSummary = ConversationSummary_Serialize | ConversationSummary_Deserialize;
@@ -1453,6 +1477,8 @@ export type Conversation_Deserialize = {
 	/**  이 대화의 프리셋/API. 없으면 앱 설정의 선택값 */
 	promptPresetId?: string | null,
 	apiProfileId?: string | null,
+	/**  이 대화에서 고른 모델. 없으면 API 프로필의 기본 모델 (ADR-020) */
+	model?: string | null,
 };
 
 export type Conversation_Serialize = {
@@ -1474,6 +1500,8 @@ export type Conversation_Serialize = {
 	/**  이 대화의 프리셋/API. 없으면 앱 설정의 선택값 */
 	promptPresetId: string | null,
 	apiProfileId: string | null,
+	/**  이 대화에서 고른 모델. 없으면 API 프로필의 기본 모델 (ADR-020) */
+	model: string | null,
 };
 
 export type CorePlugin = {
@@ -2576,12 +2604,16 @@ export type GameSessionOptions = GameSessionOptions_Serialize | GameSessionOptio
 export type GameSessionOptions_Deserialize = {
 	apiProfileId?: string | null,
 	promptPresetId?: string | null,
+	/**  이 플레이의 모델 (None = API의 기본 모델, ADR-020) */
+	model?: string | null,
 	playerId: string,
 };
 
 export type GameSessionOptions_Serialize = {
 	apiProfileId: string | null,
 	promptPresetId: string | null,
+	/**  이 플레이의 모델 (None = API의 기본 모델, ADR-020) */
+	model: string | null,
 	playerId: string,
 };
 
@@ -2708,6 +2740,8 @@ export type GhostSetting = GhostSetting_Serialize | GhostSetting_Deserialize;
 export type GhostSetting_Deserialize = {
 	/**  대필에 쓸 API (비우면 그 대화의 API) */
 	apiProfileId?: string | null,
+	/**  대필에 쓸 모델 (비우면 그 API의 기본 모델. 대필 API를 따로 정했을 때만 쓴다, ADR-020) */
+	model?: string,
 	/**  short / medium / long */
 	length?: string,
 	/**  추가 지침 한 줄 (300자까지) */
@@ -2720,6 +2754,8 @@ export type GhostSetting_Deserialize = {
 export type GhostSetting_Serialize = {
 	/**  대필에 쓸 API (비우면 그 대화의 API) */
 	apiProfileId: string | null,
+	/**  대필에 쓸 모델 (비우면 그 API의 기본 모델. 대필 API를 따로 정했을 때만 쓴다, ADR-020) */
+	model: string,
 	/**  short / medium / long */
 	length: string,
 	/**  추가 지침 한 줄 (300자까지) */
@@ -2769,6 +2805,8 @@ export type ImageGenSetting_Deserialize = {
 	aiPrompt?: boolean,
 	/**  이미지 프롬프트를 쓸 채팅 API (비우면 대화/앱의 것) */
 	promptApiProfileId?: string | null,
+	/**  이미지 프롬프트를 쓸 채팅 모델 (비우면 그 API의 기본 모델. ADR-020) */
+	promptModel?: string,
 	/**  NovelAI 생성 프리셋 (OpenAI는 쓰지 않음) */
 	negativePrompt?: string,
 	steps?: number,
@@ -2790,6 +2828,8 @@ export type ImageGenSetting_Serialize = {
 	aiPrompt: boolean,
 	/**  이미지 프롬프트를 쓸 채팅 API (비우면 대화/앱의 것) */
 	promptApiProfileId: string | null,
+	/**  이미지 프롬프트를 쓸 채팅 모델 (비우면 그 API의 기본 모델. ADR-020) */
+	promptModel: string,
 	/**  NovelAI 생성 프리셋 (OpenAI는 쓰지 않음) */
 	negativePrompt: string,
 	steps: number,
@@ -3099,6 +3139,15 @@ export type MigrationInfo = {
 };
 
 export type ModelPrice = ModelPrice_Serialize | ModelPrice_Deserialize;
+
+/**  화면에 보여줄 단가 (슬라이더 아래 환산 문구) */
+export type ModelPriceInfo = {
+	/**  100만 토큰당 달러 */
+	input: number | null,
+	output: number | null,
+	/**  앱의 기본 단가를 썼으면 true (사용자가 적은 값이면 false) */
+	builtin: boolean,
+};
 
 export type ModelPrice_Deserialize = {
 	model: string,
@@ -3559,12 +3608,16 @@ export type PhoneSetting = PhoneSetting_Serialize | PhoneSetting_Deserialize;
 /**  폰 대화의 기본 API·프리셋 (대화에 따로 고르지 않았을 때. 비우면 앱 기본값) */
 export type PhoneSetting_Deserialize = {
 	apiProfileId?: string | null,
+	/**  폰 대화의 기본 모델 (비우면 그 API의 기본 모델. ADR-020). API를 정했을 때만 쓴다 */
+	model?: string,
 	presetId?: string | null,
 };
 
 /**  폰 대화의 기본 API·프리셋 (대화에 따로 고르지 않았을 때. 비우면 앱 기본값) */
 export type PhoneSetting_Serialize = {
 	apiProfileId: string | null,
+	/**  폰 대화의 기본 모델 (비우면 그 API의 기본 모델. ADR-020). API를 정했을 때만 쓴다 */
+	model: string,
 	presetId: string | null,
 };
 
@@ -4072,6 +4125,12 @@ export type ProposalKind = "character" | "persona" |
 /**  대화의 메시지 글 */
 "message";
 
+/**  공급자 계정의 잔여 (구독형은 우리 앱이 막지 않고 보여주기만 한다. 요금 없음, 누를 때만 읽음) */
+export type QuotaLine = {
+	label: string,
+	value: string,
+};
+
 /**  응답 meta.info.memoryRecall에 남기는 기록 (chunk 글은 저장하지 않는다) */
 export type RecallMeta = RecallMeta_Serialize | RecallMeta_Deserialize;
 
@@ -4297,8 +4356,10 @@ export type RewriteSetting = RewriteSetting_Serialize | RewriteSetting_Deseriali
 export type RewriteSetting_Deserialize = {
 	/**  한 응답에 자동으로 더 만드는 최대 횟수 (기본 1, 안전상 3까지) — 한 번마다 응답 하나의 요금 */
 	maxAttempts?: number,
-	/**  금지어가 걸리면 다시 쓰기 (linter의 금지어 규칙이 표시만이어야 함) */
+	/**  아래 금지어가 응답에 나오면 다시 쓰기. 메시지 linter의 금지어 목록과는 따로다(linter는 표시·지우기, 여기는 다시 만들기) */
 	banned?: boolean,
+	/**  자동 재생성의 금지어 목록 (대소문자 구분 없음, 100개까지) */
+	bannedWords?: string[],
 	/**  단어 반복 오류가 걸리면 다시 쓰기 */
 	stuck?: boolean,
 };
@@ -4307,8 +4368,10 @@ export type RewriteSetting_Deserialize = {
 export type RewriteSetting_Serialize = {
 	/**  한 응답에 자동으로 더 만드는 최대 횟수 (기본 1, 안전상 3까지) — 한 번마다 응답 하나의 요금 */
 	maxAttempts: number,
-	/**  금지어가 걸리면 다시 쓰기 (linter의 금지어 규칙이 표시만이어야 함) */
+	/**  아래 금지어가 응답에 나오면 다시 쓰기. 메시지 linter의 금지어 목록과는 따로다(linter는 표시·지우기, 여기는 다시 만들기) */
 	banned: boolean,
+	/**  자동 재생성의 금지어 목록 (대소문자 구분 없음, 100개까지) */
+	bannedWords: string[],
 	/**  단어 반복 오류가 걸리면 다시 쓰기 */
 	stuck: boolean,
 };
@@ -4507,12 +4570,16 @@ export type SummarySetting = SummarySetting_Serialize | SummarySetting_Deseriali
 export type SummarySetting_Deserialize = {
 	/**  요약에 쓸 API 프로필 (비우면 그 대화가 쓰는 API) */
 	apiProfileId?: string | null,
+	/**  요약에 쓸 모델 (비우면 그 API의 기본 모델. 요약 API를 따로 정했을 때만 쓴다, ADR-020) */
+	model?: string,
 };
 
 /**  대화 요약 설정. 켜짐/꺼짐은 코어 플러그인 `summary`(기본 꺼짐, 켜는 것이 동의) */
 export type SummarySetting_Serialize = {
 	/**  요약에 쓸 API 프로필 (비우면 그 대화가 쓰는 API) */
 	apiProfileId: string | null,
+	/**  요약에 쓸 모델 (비우면 그 API의 기본 모델. 요약 API를 따로 정했을 때만 쓴다, ADR-020) */
+	model: string,
 };
 
 /**  응답 meta.info.summary와 컨텍스트 탭: 이 응답을 만들 때 쓴 요약 */
@@ -5109,6 +5176,8 @@ export type TranslateSetting = TranslateSetting_Serialize | TranslateSetting_Des
 export type TranslateSetting_Deserialize = {
 	/**  번역에 쓸 API 프로필 (비우면 앱에서 고른 API) */
 	apiProfileId?: string | null,
+	/**  번역에 쓸 모델 (비우면 그 API의 기본 모델. ADR-020) */
+	model?: string,
 	/**  AI 답변을 이 언어로 (예: "한국어") */
 	targetLang?: string,
 	/**  내 입력을 이 언어로 (예: "English") */
@@ -5120,6 +5189,8 @@ export type TranslateSetting_Deserialize = {
 export type TranslateSetting_Serialize = {
 	/**  번역에 쓸 API 프로필 (비우면 앱에서 고른 API) */
 	apiProfileId: string | null,
+	/**  번역에 쓸 모델 (비우면 그 API의 기본 모델. ADR-020) */
+	model: string,
 	/**  AI 답변을 이 언어로 (예: "한국어") */
 	targetLang: string,
 	/**  내 입력을 이 언어로 (예: "English") */

@@ -2,7 +2,7 @@
 	// 메시지 linter 규칙 (3-B, ADR-014). 요금 없이 앱 안에서 도는 검사. 응답이 저장될 때 한 번, 플러그인 후처리보다 먼저
 	import { onMount } from "svelte";
 	import type { LintMode } from "$ipc/bindings";
-	import { Input, Select, Textarea } from "$shared/ui";
+	import { Input, Select, TagInput } from "$shared/ui";
 	import Section from "./Section.svelte";
 	import Group from "./Group.svelte";
 	import Row from "./Row.svelte";
@@ -18,7 +18,15 @@
 	];
 	const REPORT_ONLY = MODES.filter((m) => m.value !== "fix");
 	const num = (v: string) => Math.max(0, Math.min(100000, Math.floor(Number(v)) || 0));
-	const words = (v: string) => [...new Set(v.split(/[\n,]/).map((w) => w.trim()).filter(Boolean))].slice(0, 100);
+	// 금지어 목록은 태그로 (월드인포 키워드처럼). 태그가 바뀌면 저장한다
+	let bannedWords = $state<string[]>([]);
+	$effect(() => {
+		bannedWords = [...(cur?.lint.bannedWords ?? [])];
+	});
+	$effect(() => {
+		const next = [...new Set(bannedWords.map((w) => w.trim()).filter(Boolean))].slice(0, 100);
+		if (cur && JSON.stringify(next) !== JSON.stringify(cur.lint.bannedWords)) void save("lint", { bannedWords: next });
+	});
 </script>
 
 <Section title="메시지 linter" lead="응답이 저장될 때 글을 검사함. 요금은 들지 않음. 고치면 원문이 남고 메시지 아래에서 되돌릴 수 있음. 스트리밍 중에는 돌지 않음">
@@ -40,8 +48,8 @@
 				<Select value={cur.lint.banned} options={MODES} onchange={(e) => save("lint", { banned: e.currentTarget.value as LintMode })} />
 			</Row>
 			{#if cur.lint.banned !== "off"}
-				<Row label="금지어 목록" desc="쉼표나 줄바꿈으로 나눔 (100개까지)">
-					<Textarea rows={3} value={cur.lint.bannedWords.join("\n")} onchange={(e) => save("lint", { bannedWords: words(e.currentTarget.value) })} />
+				<Row label="금지어 목록" desc="Enter나 쉼표로 추가 (100개까지). 자동 재생성의 금지어와는 따로임" stacked>
+					<TagInput bind:value={bannedWords} placeholder="금지어 입력" label="금지어 추가" />
 				</Row>
 			{/if}
 			<Row label="글자 수" desc="범위를 벗어나면 알림만 (고치지 않음)">

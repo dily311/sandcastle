@@ -1,0 +1,642 @@
+{
+    "asOf": "2026-11-19",
+    "data": [
+        {
+            "label": "OpenAI",
+            "provider": "openai",
+            "formatType": "openai",
+            "baseUrl": "https://api.openai.com/v1",
+            "modelList": [
+                {
+                    "label": "Embedding 3",
+                    "model": [
+                        {
+                            "label": "Text Embedding 3 Small",
+                            "modelId": "text-embedding-3-small",
+                            "metadata": {
+                                "dimensions": {
+                                    "default": 1536,
+                                    "supported": null,
+                                    "adjustable": true
+                                },
+                                "maxInputTokens": 8192,
+                                "inputModalities": [
+                                    "text"
+                                ],
+                                "outputType": [
+                                    "dense"
+                                ],
+                                "taskTypes": [
+                                    "retrieval",
+                                    "similarity",
+                                    "clustering",
+                                    "classification"
+                                ],
+                                "inputTypes": [
+                                    "query",
+                                    "document"
+                                ],
+                                "normalized": true,
+                                "distanceMetrics": [
+                                    "cosine",
+                                    "dot",
+                                    "euclidean"
+                                ],
+                                "maxBatchSize": 2048,
+                                "pricing": {
+                                    "input": 0.02,
+                                    "unit": "per_million_tokens"
+                                }
+                            }
+                        },
+                        {
+                            "label": "Text Embedding 3 Large",
+                            "modelId": "text-embedding-3-large",
+                            "metadata": {
+                                "dimensions": {
+                                    "default": 3072,
+                                    "supported": null,
+                                    "adjustable": true
+                                },
+                                "maxInputTokens": 8192,
+                                "inputModalities": [
+                                    "text"
+                                ],
+                                "outputType": [
+                                    "dense"
+                                ],
+                                "taskTypes": [
+                                    "retrieval",
+                                    "similarity",
+                                    "clustering",
+                                    "classification"
+                                ],
+                                "inputTypes": [
+                                    "query",
+                                    "document"
+                                ],
+                                "normalized": true,
+                                "distanceMetrics": [
+                                    "cosine",
+                                    "dot",
+                                    "euclidean"
+                                ],
+                                "maxBatchSize": 2048,
+                                "pricing": {
+                                    "input": 0.13,
+                                    "unit": "per_million_tokens"
+                                }
+                            }
+                        }
+                    ]
+                }
+            ]
+        },
+        {
+            "label": "Google",
+            "provider": "google",
+            "formatType": "gemini",
+            "baseUrl": "https://generativelanguage.googleapis.com/v1beta",
+            "modelList": [
+                {
+                    "label": "Gemini Embedding",
+                    "model": [
+                        {
+                            "label": "Gemini Embedding 001",
+                            "modelId": "gemini-embedding-001",
+                            "metadata": {
+                                "dimensions": {
+                                    "default": 3072,
+                                    "supported": null,
+                                    "min": 128,
+                                    "max": 3072,
+                                    "adjustable": true
+                                },
+                                "maxInputTokens": 2048,
+                                "inputModalities": [
+                                    "text"
+                                ],
+                                "outputType": [
+                                    "dense"
+                                ],
+                                "taskTypes": [
+                                    "retrieval",
+                                    "similarity",
+                                    "classification",
+                                    "clustering",
+                                    "question_answering",
+                                    "fact_verification",
+                                    "code_retrieval"
+                                ],
+                                "inputTypes": [
+                                    "query",
+                                    "document"
+                                ],
+                                "normalized": null,
+                                "distanceMetrics": [
+                                    "cosine"
+                                ],
+                                "maxBatchSize": null,
+                                "compatibilityGroup": "gemini-embedding-001",
+                                "pricing": null
+                            }
+                        },
+                        {
+                            "label": "Gemini Embedding 2",
+                            "modelId": "gemini-embedding-2",
+                            "metadata": {
+                                "dimensions": {
+                                    "default": 3072,
+                                    "supported": null,
+                                    "min": 128,
+                                    "max": 3072,
+                                    "adjustable": true
+                                },
+                                "maxInputTokens": 8192,
+                                "inputModalities": [
+                                    "text",
+                                    "image",
+                                    "audio",
+                                    "video",
+                                    "document"
+                                ],
+                                "outputType": [
+                                    "dense"
+                                ],
+                                "taskTypes": [
+                                    "retrieval",
+                                    "similarity",
+                                    "classification",
+                                    "clustering",
+                                    "question_answering",
+                                    "fact_verification",
+                                    "code_retrieval"
+                                ],
+                                "inputTypes": [
+                                    "query",
+                                    "document"
+                                ],
+                                "normalized": null,
+                                "distanceMetrics": [
+                                    "cosine"
+                                ],
+                                "maxBatchSize": null,
+                                "compatibilityGroup": "gemini-embedding-2",
+                                "preprocessing": {
+                                    "queryPrefix": "task: search result | query: ",
+                                    "documentPrefix": "title: {title} | text: "
+                                },
+                                "pricing": null
+                            }
+                        }
+                    ]
+                }
+            ]
+        },
+        {
+            "label": "Cohere",
+            "provider": "cohere",
+            "formatType": "cohere",
+            "baseUrl": "https://api.cohere.com/v2",
+            "modelList": [
+                {
+                    "label": "Embed 5",
+                    "model": [
+                        {
+                            "label": "Embed 5 Pro",
+                            "modelId": "embed-v5.0-pro",
+                            "metadata": {
+                                "dimensions": {
+                                    "default": 2048,
+                                    "supported": [
+                                        256,
+                                        512,
+                                        768,
+                                        1024,
+                                        1536,
+                                        2048
+                                    ],
+                                    "adjustable": true
+                                },
+                                "maxInputTokens": 131072,
+                                "inputModalities": [
+                                    "text",
+                                    "image"
+                                ],
+                                "outputType": [
+                                    "dense"
+                                ],
+                                "outputDtypes": [
+                                    "float",
+                                    "int8",
+                                    "uint8",
+                                    "binary",
+                                    "ubinary"
+                                ],
+                                "taskTypes": [
+                                    "retrieval",
+                                    "similarity",
+                                    "classification",
+                                    "clustering"
+                                ],
+                                "inputTypes": [
+                                    "search_query",
+                                    "search_document",
+                                    "classification",
+                                    "clustering"
+                                ],
+                                "normalized": null,
+                                "distanceMetrics": [
+                                    "cosine",
+                                    "dot",
+                                    "euclidean"
+                                ],
+                                "maxBatchSize": 96,
+                                "compatibilityGroup": "cohere-embed-v5",
+                                "pricing": null
+                            }
+                        },
+                        {
+                            "label": "Embed 5 Fast",
+                            "modelId": "embed-v5.0-fast",
+                            "metadata": {
+                                "dimensions": {
+                                    "default": 2048,
+                                    "supported": [
+                                        256,
+                                        512,
+                                        768,
+                                        1024,
+                                        1536,
+                                        2048
+                                    ],
+                                    "adjustable": true
+                                },
+                                "maxInputTokens": 131072,
+                                "inputModalities": [
+                                    "text",
+                                    "image"
+                                ],
+                                "outputType": [
+                                    "dense"
+                                ],
+                                "outputDtypes": [
+                                    "float",
+                                    "int8",
+                                    "uint8",
+                                    "binary",
+                                    "ubinary"
+                                ],
+                                "taskTypes": [
+                                    "retrieval",
+                                    "similarity",
+                                    "classification",
+                                    "clustering"
+                                ],
+                                "inputTypes": [
+                                    "search_query",
+                                    "search_document",
+                                    "classification",
+                                    "clustering"
+                                ],
+                                "normalized": null,
+                                "distanceMetrics": [
+                                    "cosine",
+                                    "dot",
+                                    "euclidean"
+                                ],
+                                "maxBatchSize": 96,
+                                "compatibilityGroup": "cohere-embed-v5",
+                                "pricing": null
+                            }
+                        }
+                    ]
+                }
+            ]
+        },
+        {
+            "label": "Voyage AI",
+            "provider": "voyage",
+            "formatType": "voyage",
+            "baseUrl": "https://api.voyageai.com/v1",
+            "modelList": [
+                {
+                    "label": "Voyage 4",
+                    "model": [
+                        {
+                            "label": "Voyage 4 Large",
+                            "modelId": "voyage-4-large",
+                            "metadata": {
+                                "dimensions": {
+                                    "default": 1024,
+                                    "supported": [
+                                        256,
+                                        512,
+                                        1024,
+                                        2048
+                                    ],
+                                    "adjustable": true
+                                },
+                                "maxInputTokens": 32000,
+                                "inputModalities": [
+                                    "text"
+                                ],
+                                "outputType": [
+                                    "dense"
+                                ],
+                                "outputDtypes": [
+                                    "float",
+                                    "int8",
+                                    "uint8",
+                                    "binary",
+                                    "ubinary"
+                                ],
+                                "taskTypes": [
+                                    "retrieval",
+                                    "similarity",
+                                    "clustering",
+                                    "classification"
+                                ],
+                                "inputTypes": [
+                                    "query",
+                                    "document"
+                                ],
+                                "normalized": true,
+                                "distanceMetrics": [
+                                    "cosine",
+                                    "dot",
+                                    "euclidean"
+                                ],
+                                "maxBatchSize": 1000,
+                                "compatibilityGroup": "voyage-4",
+                                "pricing": {
+                                    "input": 0.12,
+                                    "unit": "per_million_tokens"
+                                }
+                            }
+                        },
+                        {
+                            "label": "Voyage 4",
+                            "modelId": "voyage-4",
+                            "metadata": {
+                                "dimensions": {
+                                    "default": 1024,
+                                    "supported": [
+                                        256,
+                                        512,
+                                        1024,
+                                        2048
+                                    ],
+                                    "adjustable": true
+                                },
+                                "maxInputTokens": 32000,
+                                "inputModalities": [
+                                    "text"
+                                ],
+                                "outputType": [
+                                    "dense"
+                                ],
+                                "outputDtypes": [
+                                    "float",
+                                    "int8",
+                                    "uint8",
+                                    "binary",
+                                    "ubinary"
+                                ],
+                                "taskTypes": [
+                                    "retrieval",
+                                    "similarity",
+                                    "clustering",
+                                    "classification"
+                                ],
+                                "inputTypes": [
+                                    "query",
+                                    "document"
+                                ],
+                                "normalized": true,
+                                "distanceMetrics": [
+                                    "cosine",
+                                    "dot",
+                                    "euclidean"
+                                ],
+                                "maxBatchSize": 1000,
+                                "compatibilityGroup": "voyage-4",
+                                "pricing": {
+                                    "input": 0.06,
+                                    "unit": "per_million_tokens"
+                                }
+                            }
+                        },
+                        {
+                            "label": "Voyage 4 Lite",
+                            "modelId": "voyage-4-lite",
+                            "metadata": {
+                                "dimensions": {
+                                    "default": 1024,
+                                    "supported": [
+                                        256,
+                                        512,
+                                        1024,
+                                        2048
+                                    ],
+                                    "adjustable": true
+                                },
+                                "maxInputTokens": 32000,
+                                "inputModalities": [
+                                    "text"
+                                ],
+                                "outputType": [
+                                    "dense"
+                                ],
+                                "outputDtypes": [
+                                    "float",
+                                    "int8",
+                                    "uint8",
+                                    "binary",
+                                    "ubinary"
+                                ],
+                                "taskTypes": [
+                                    "retrieval",
+                                    "similarity",
+                                    "clustering",
+                                    "classification"
+                                ],
+                                "inputTypes": [
+                                    "query",
+                                    "document"
+                                ],
+                                "normalized": true,
+                                "distanceMetrics": [
+                                    "cosine",
+                                    "dot",
+                                    "euclidean"
+                                ],
+                                "maxBatchSize": 1000,
+                                "compatibilityGroup": "voyage-4",
+                                "pricing": {
+                                    "input": 0.02,
+                                    "unit": "per_million_tokens"
+                                }
+                            }
+                        },
+                        {
+                            "label": "Voyage Code 4",
+                            "modelId": "voyage-code-4",
+                            "metadata": {
+                                "dimensions": {
+                                    "default": 1024,
+                                    "supported": [
+                                        256,
+                                        512,
+                                        1024,
+                                        2048
+                                    ],
+                                    "adjustable": true
+                                },
+                                "maxInputTokens": 32000,
+                                "inputModalities": [
+                                    "text"
+                                ],
+                                "outputType": [
+                                    "dense"
+                                ],
+                                "outputDtypes": [
+                                    "float",
+                                    "int8",
+                                    "uint8",
+                                    "binary",
+                                    "ubinary"
+                                ],
+                                "taskTypes": [
+                                    "code_retrieval",
+                                    "retrieval",
+                                    "similarity"
+                                ],
+                                "inputTypes": [
+                                    "query",
+                                    "document"
+                                ],
+                                "normalized": true,
+                                "distanceMetrics": [
+                                    "cosine",
+                                    "dot",
+                                    "euclidean"
+                                ],
+                                "maxBatchSize": 1000,
+                                "compatibilityGroup": "voyage-4",
+                                "pricing": {
+                                    "input": 0.12,
+                                    "unit": "per_million_tokens"
+                                }
+                            }
+                        }
+                    ]
+                }
+            ]
+        },
+        {
+            "label": "Mistral",
+            "provider": "mistral",
+            "formatType": "mistral",
+            "baseUrl": "https://api.mistral.ai/v1",
+            "modelList": [
+                {
+                    "label": "Embedding",
+                    "model": [
+                        {
+                            "label": "Mistral Embed",
+                            "modelId": "mistral-embed",
+                            "metadata": {
+                                "dimensions": {
+                                    "default": 1024,
+                                    "supported": [
+                                        1024
+                                    ],
+                                    "adjustable": false
+                                },
+                                "maxInputTokens": null,
+                                "inputModalities": [
+                                    "text"
+                                ],
+                                "outputType": [
+                                    "dense"
+                                ],
+                                "outputDtypes": [
+                                    "float",
+                                    "int8",
+                                    "uint8",
+                                    "binary",
+                                    "ubinary"
+                                ],
+                                "taskTypes": [
+                                    "retrieval",
+                                    "similarity",
+                                    "classification",
+                                    "clustering"
+                                ],
+                                "inputTypes": [],
+                                "normalized": true,
+                                "distanceMetrics": [
+                                    "cosine",
+                                    "dot",
+                                    "euclidean"
+                                ],
+                                "maxBatchSize": null,
+                                "compatibilityGroup": "mistral-embed-1024",
+                                "pricing": {
+                                    "input": 0.10,
+                                    "unit": "per_million_tokens"
+                                }
+                            }
+                        },
+                        {
+                            "label": "Codestral Embed",
+                            "modelId": "codestral-embed",
+                            "metadata": {
+                                "dimensions": {
+                                    "default": 1536,
+                                    "supported": null,
+                                    "min": 1,
+                                    "max": 3072,
+                                    "adjustable": true
+                                },
+                                "maxInputTokens": 8192,
+                                "inputModalities": [
+                                    "text"
+                                ],
+                                "outputType": [
+                                    "dense"
+                                ],
+                                "outputDtypes": [
+                                    "float",
+                                    "int8",
+                                    "uint8",
+                                    "binary",
+                                    "ubinary"
+                                ],
+                                "taskTypes": [
+                                    "code_retrieval",
+                                    "retrieval",
+                                    "similarity"
+                                ],
+                                "inputTypes": [],
+                                "normalized": null,
+                                "distanceMetrics": [
+                                    "cosine",
+                                    "dot",
+                                    "euclidean"
+                                ],
+                                "maxBatchSize": 128,
+                                "compatibilityGroup": "codestral-embed",
+                                "pricing": {
+                                    "input": 0.15,
+                                    "unit": "per_million_tokens"
+                                }
+                            }
+                        }
+                    ]
+                }
+            ]
+        }
+    ]
+}

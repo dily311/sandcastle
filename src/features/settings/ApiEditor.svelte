@@ -2,7 +2,7 @@
 	// API 연결 추가·편집 (모달 대신 설정 안 페이지, 테마 편집과 같은 방식)
 	import { onMount } from "svelte";
 	import { CircleAlert, CircleCheck, ChevronLeft, FileJson, KeyRound, Zap } from "@lucide/svelte";
-	import { apiLists } from "./providers";
+	import { apiLists, firstModel, modelIdsOf, modelLabel } from "./providers";
 	import { Badge, Button, Field, IconButton, Input, Select, Spinner } from "$shared/ui";
 	import { nav } from "$app/nav.svelte";
 	import { call, commands } from "$shared/ipc/client";
@@ -24,10 +24,12 @@
 	let providerId = $state(apiLists[0].provider);
 	let name = $state(apiLists[0].label);
 	let baseUrl = $state(apiLists[0].baseUrl);
-	let model = $state(apiLists[0].modelList[0]?.model[0] ?? "");
+	let model = $state(firstModel(apiLists[0]));
 	let key = $state("");
 	let hasKey = $state(false);
 	let models = $state<string[]>([]);
+	/** 이 프로필에 남겨 둔 "내가 추가한 모델" (직접 입력한 이름, ADR-020) */
+	let customModels = $state<string[]>([]);
 	let loadingModels = $state(false);
 	let saving = $state(false);
 	let testing = $state(false);
@@ -46,7 +48,11 @@
 
 	const provider = $derived(apiLists.find((p) => p.provider === providerId));
 	const vertex = $derived(provider?.formatType === "vertexai");
-	const knownModels = $derived([...new Set([...(provider?.modelList.flatMap((g) => g.model) ?? []), ...models])]);
+	/** 내장 목록 → 내가 추가한 모델 → 공급자에서 불러온 목록 */
+	const builtinModels = $derived(modelIdsOf(provider));
+	const knownModels = $derived([...new Set([...builtinModels, ...customModels, ...models])]);
+	/** 목록에 없는 이름을 직접 입력했는가 (저장하면 "내가 추가한 모델"로 남음) */
+	const typedNew = $derived(!!model.trim() && !knownModels.includes(model.trim()));
 
 	// 이 연결로 되는 것 (3-A-4). 요청을 보내지 않는 계산이라 입력이 바뀔 때마다 다시 구함
 	let caps = $state<AiCapabilities | null>(null);
@@ -85,6 +91,7 @@
 			name = a.name;
 			baseUrl = a.baseUrl;
 			model = a.model;
+			customModels = [...(a.customModels ?? [])];
 			hasKey = await call(commands.hasApiKey(a.id), { ...src, silent: true }).catch(() => false);
 		}
 		initial = snapshot();
@@ -108,8 +115,9 @@
 		if (!name || name === prev?.label) name = p.label;
 		providerId = p.provider;
 		baseUrl = p.baseUrl;
-		model = p.modelList[0]?.model[0] ?? "";
+		model = firstModel(p);
 		models = [];
+		customModels = [];
 	}
 
 	let fileInput: HTMLInputElement | undefined = $state();
@@ -189,11 +197,13 @@
 				const a = library.apis.find((x) => x.id === id);
 				if (a) Object.assign(a, input, { updatedAt: Date.now() });
 				if (cred) hasKey = true;
+				await rememberTyped(id);
 			} else {
 				const created = await call(commands.createApiProfile(input, cred), src);
 				library.apis = [...library.apis, created];
 				id = created.id;
 				hasKey = !!cred;
+				await rememberTyped(created.id);
 				// 첫 연결이면 기본값으로
 				if (!appSetting.value?.selectedApiProfile) await appSetting.update({ selectedApiProfile: created.id });
 			}
@@ -207,6 +217,20 @@
 		} finally {
 			saving = false;
 		}
+	}
+	/** 저장할 때 목록에 없는 이름을 직접 입력했으면 이 프로필의 "내가 추가한 모델"로 남긴다 */
+	async function rememberTyped(profileId: string) {
+		const m = model.trim();
+		if (!m || builtinModels.includes(m) || customModels.includes(m) || models.includes(m)) return;
+		customModels = await call(commands.addApiProfileModel(profileId, m), { ...src, silent: true }).catch(() => customModels);
+		const a = library.apis.find((x) => x.id === profileId);
+		if (a) a.customModels = customModels;
+	}
+	async function forgetModel(m: string) {
+		if (!id) return;
+		customModels = await call(commands.removeApiProfileModel(id, m), src);
+		const a = library.apis.find((x) => x.id === id);
+		if (a) a.customModels = customModels;
 	}
 	async function removeKey() {
 		if (!id) return;
@@ -240,13 +264,23 @@
 			</Field>
 			<Field label="이름"><Input bind:value={name} placeholder={provider?.label} /></Field>
 		</div>
-		<Field label="모델" hint={id ? "목록에 없으면 직접 입력" : "저장한 뒤 공급자의 모델 목록을 불러올 수 있음"}>
+		<Field label="기본 모델" hint={typedNew ? "목록에 없는 이름 — 저장하면 '내가 추가한 모델'로 남음" : id ? "대화·기능에서 따로 고르지 않으면 이 모델을 씀. 목록에 없으면 직접 입력" : "저장한 뒤 공급자의 모델 목록을 불러올 수 있음"}>
 			<div class="inline">
 				<Input bind:value={model} list="api-models" placeholder="모델 이름" />
 				{#if id}<Button loading={loadingModels} disabled={!hasKey} onclick={fetchModels}>목록 불러오기</Button>{/if}
 			</div>
+			{#if customModels.length}
+				<ul class="chips" aria-label="내가 추가한 모델">
+					{#each customModels as m (m)}
+						<li class:on={model.trim() === m}>
+							<button type="button" class="pick" onclick={() => (model = m)}>{m}</button>
+							{#if id}<button type="button" class="del" aria-label="{m} 목록에서 지우기" onclick={() => forgetModel(m)}>×</button>{/if}
+						</li>
+					{/each}
+				</ul>
+			{/if}
 			<datalist id="api-models">
-				{#each knownModels as m (m)}<option value={m}></option>{/each}
+				{#each knownModels as m (m)}<option value={m} label={modelLabel(provider, m)}></option>{/each}
 			</datalist>
 		</Field>
 	</div>
@@ -410,6 +444,40 @@
 		display: grid;
 		grid-template-columns: 1fr 1fr;
 		gap: var(--space-3);
+	}
+	.chips {
+		display: flex;
+		flex-wrap: wrap;
+		gap: var(--space-1);
+		margin: var(--space-2) 0 0;
+		padding: 0;
+		list-style: none;
+	}
+	.chips li {
+		display: inline-flex;
+		align-items: center;
+		border: 1px solid var(--border);
+		border-radius: var(--radius-full, 999px);
+		background: var(--surface);
+		font-size: var(--text-xs);
+	}
+	.chips li.on {
+		border-color: var(--accent);
+		background: var(--accent-soft);
+	}
+	.chips button {
+		border: none;
+		background: none;
+		color: inherit;
+		font: inherit;
+		cursor: pointer;
+	}
+	.chips .pick {
+		padding: 2px var(--space-2);
+	}
+	.chips .del {
+		padding: 2px var(--space-2) 2px 0;
+		color: var(--text-faint);
 	}
 	.inline {
 		display: flex;

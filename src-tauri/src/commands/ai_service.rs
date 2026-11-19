@@ -101,6 +101,19 @@ pub async fn update_api_profile(state: State<'_, AppState>, ai: State<'_, Arc<Ai
     Ok(())
 }
 
+/// 직접 입력한 모델 이름을 이 프로필의 "내가 추가한 모델"로 남긴다. 바뀐 목록을 돌려준다
+#[tauri::command]
+#[specta::specta]
+pub async fn add_api_profile_model(state: State<'_, AppState>, id: String, model: String) -> Result<Vec<String>> {
+    Ok(ai_service::add_custom_model(&state.db, &id, &model).await?)
+}
+
+#[tauri::command]
+#[specta::specta]
+pub async fn remove_api_profile_model(state: State<'_, AppState>, id: String, model: String) -> Result<Vec<String>> {
+    Ok(ai_service::remove_custom_model(&state.db, &id, &model).await?)
+}
+
 #[tauri::command]
 #[specta::specta]
 pub async fn delete_api_profile(state: State<'_, AppState>, id: String) -> Result<()> {
@@ -123,6 +136,14 @@ pub fn get_ai_capabilities(format_type: String, base_url: String, model: String)
 #[specta::specta]
 pub async fn get_models(ai: State<'_, Arc<AiService>>, profile_id: String) -> Result<Vec<String>> {
     ai.list_models(&profile_id).await
+}
+
+/// 공급자 계정의 잔여 (NovelAI·ElevenLabs. 요금 없음, 사용자가 누를 때만)
+#[tauri::command]
+#[specta::specta]
+pub async fn get_provider_quota(ai: State<'_, Arc<AiService>>, profile_id: String) -> Result<Vec<crate::service::plugins::QuotaLine>> {
+    let profile = ai.load_profile(&profile_id).await?;
+    crate::service::plugins::provider_quota(&ai, &profile).await
 }
 
 /// 연결 확인: 짧은 메시지 하나를 보내고 받은 답을 돌려준다 (저장하지 않음)
@@ -154,6 +175,14 @@ pub async fn test_message(ai: State<'_, Arc<AiService>>, tasks: State<'_, Arc<cr
     }
     use crate::task::{CreateTaskRequest, TaskOwner, TaskType};
     let job = CreateTaskRequest::inline(TaskType::ApiCall, TaskOwner::System, "settings", "API 연결 확인", false);
-    let res = tasks.run_inline(job, |_| ai.generate_once(AiRequest { profile_id, prompt })).await?;
+    let res = tasks
+        .run_inline(job, |_| {
+            ai.generate_once(AiRequest {
+                profile_id,
+                prompt,
+                model: None,
+            })
+        })
+        .await?;
     Ok(res.content)
 }

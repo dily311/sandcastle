@@ -139,7 +139,7 @@
 	}
 
 	async function clearUsage() {
-		const ok = await confirmAction({ title: "사용량 기록 비우기", message: "API별 사용량 합계를 지움. 실행 내역은 남지만 작업별 토큰 수는 사라짐", danger: true, confirmLabel: "비우기" });
+		const ok = await confirmAction({ title: "사용량 기록 비우기", message: "API별 사용량 합계를 지움. 실행 내역은 남지만 작업별 토큰 수는 사라짐. 금액 한도를 건 프로필의 이번 달 글 호출 기록은 한도 계산 때문에 남김", danger: true, confirmLabel: "비우기" });
 		if (!ok) return;
 		await call(commands.clearUsage(), src);
 		toasts.success("사용량 기록을 비움");

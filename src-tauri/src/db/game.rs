@@ -3605,17 +3605,40 @@ where
     Ok(row.unwrap_or((None, None)))
 }
 
-pub async fn set_game_session_options<'e, E>(executor: E, session_id: &str, api_profile_id: Option<&str>, prompt_preset_id: Option<&str>) -> Result<(), Error>
+/// 이 플레이의 모델 (NULL = API의 기본 모델, ADR-020)
+pub async fn get_game_session_model<'e, E>(executor: E, session_id: &str) -> Result<Option<String>, Error>
 where
     E: Executor<'e, Database = Sqlite>,
 {
+    let row = sqlx::query_scalar::<_, Option<String>>("SELECT model FROM game_session_options WHERE session_id = ?")
+        .bind(session_id)
+        .fetch_optional(executor)
+        .await?;
+    Ok(row.flatten())
+}
+
+/// 플레이의 API·프리셋·모델 저장. 모델은 API에 딸린 이름이라 API가 (정해진 것에서) 다른 것으로 바뀌면 NULL로 돌아간다
+pub async fn set_game_session_options<'e, E>(
+    executor: E,
+    session_id: &str,
+    api_profile_id: Option<&str>,
+    prompt_preset_id: Option<&str>,
+    model: Option<&str>,
+) -> Result<(), Error>
+where
+    E: Executor<'e, Database = Sqlite>,
+{
+    let api = api_profile_id.filter(|s| !s.is_empty());
     sqlx::query(
-        "INSERT INTO game_session_options (session_id, api_profile_id, prompt_preset_id, updated_at) VALUES (?,?,?,?)
-         ON CONFLICT(session_id) DO UPDATE SET api_profile_id=excluded.api_profile_id, prompt_preset_id=excluded.prompt_preset_id, updated_at=excluded.updated_at",
+        "INSERT INTO game_session_options (session_id, api_profile_id, prompt_preset_id, model, updated_at) VALUES (?,?,?,?,?)
+         ON CONFLICT(session_id) DO UPDATE SET
+           model = CASE WHEN game_session_options.api_profile_id IS excluded.api_profile_id OR game_session_options.api_profile_id IS NULL THEN excluded.model ELSE NULL END,
+           api_profile_id = excluded.api_profile_id, prompt_preset_id = excluded.prompt_preset_id, updated_at = excluded.updated_at",
     )
     .bind(session_id)
-    .bind(api_profile_id.filter(|s| !s.is_empty()))
+    .bind(api)
     .bind(prompt_preset_id.filter(|s| !s.is_empty()))
+    .bind(model.map(str::trim).filter(|m| !m.is_empty()))
     .bind(chrono::Utc::now().timestamp_millis())
     .execute(executor)
     .await?;
@@ -3628,8 +3651,8 @@ where
     E: Executor<'e, Database = Sqlite>,
 {
     sqlx::query(
-        "INSERT OR IGNORE INTO game_session_options (session_id, api_profile_id, prompt_preset_id, updated_at)
-         SELECT ?, api_profile_id, prompt_preset_id, updated_at FROM game_session_options WHERE session_id = ?",
+        "INSERT OR IGNORE INTO game_session_options (session_id, api_profile_id, prompt_preset_id, model, updated_at)
+         SELECT ?, api_profile_id, prompt_preset_id, model, updated_at FROM game_session_options WHERE session_id = ?",
     )
     .bind(new_session_id)
     .bind(parent_session_id)
@@ -3673,15 +3696,33 @@ mod session_options_tests {
         }
 
         assert_eq!(get_game_session_options(&pool, "s1").await.unwrap(), (None, None), "없으면 앱 기본값");
-        set_game_session_options(&pool, "s1", Some("api1"), Some("")).await.unwrap();
+        set_game_session_options(&pool, "s1", Some("api1"), Some(""), None).await.unwrap();
         assert_eq!(
             get_game_session_options(&pool, "s1").await.unwrap(),
             (Some("api1".into()), None),
             "빈 값은 기본값으로"
         );
+        assert_eq!(
+            get_game_session_model(&pool, "s1").await.unwrap(),
+            None,
+            "모델은 따로 고르기 전엔 API의 기본 모델"
+        );
 
+        // 모델 (ADR-020): 같은 API에서 고르면 저장, API가 다른 것으로 바뀌면 초기화, 앱 기본 API를 따라가던 플레이는 API와 한꺼번에 정해도 유지
+        set_game_session_options(&pool, "s1", Some("api1"), None, Some(" m1 ")).await.unwrap();
+        assert_eq!(get_game_session_model(&pool, "s1").await.unwrap().as_deref(), Some("m1"));
         forked_game_session_options(&pool, "s1", "s2").await.unwrap();
         assert_eq!(get_game_session_options(&pool, "s2").await.unwrap(), (Some("api1".into()), None));
+        assert_eq!(
+            get_game_session_model(&pool, "s2").await.unwrap().as_deref(),
+            Some("m1"),
+            "분기는 모델도 가져감"
+        );
+        set_game_session_options(&pool, "s1", Some("api2"), None, Some("m1")).await.unwrap();
+        assert_eq!(get_game_session_model(&pool, "s1").await.unwrap(), None, "API를 바꾸면 모델은 초기화");
+        set_game_session_options(&pool, "s3", None, None, None).await.unwrap();
+        set_game_session_options(&pool, "s3", Some("api1"), None, Some("m2")).await.unwrap();
+        assert_eq!(get_game_session_model(&pool, "s3").await.unwrap().as_deref(), Some("m2"));
 
         assert!(set_game_session_player(&pool, "s2", "min").await.unwrap());
         let player: String = sqlx::query_scalar("SELECT player_id FROM game_player_sessions WHERE id = 's2'")

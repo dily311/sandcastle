@@ -250,7 +250,7 @@
 		border: none;
 		border-radius: 8px;
 		background: transparent;
-		color: var(--game-text-muted);
+		color: var(--game-icon-color);
 		cursor: pointer;
 	}
 	.act :global(svg) {

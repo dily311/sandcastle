@@ -132,15 +132,19 @@ const base: Record<string, Handler> = {
 	check_data: () => ({ ok: true, problems: [], checkedFiles: 42, orphanCount: 2, orphanBytes: 380_000, orphans: [{ path: "characters/avatars/old.png", bytes: 300_000 }, { path: "characters/c9/images/x.webp", bytes: 80_000 }] }),
 	list_budget_status: () => [
 		{
-			limit: { apiProfileId: "gemini", dailyTokens: 100_000, monthlyTokens: 2_000_000, dailyCharacters: null, monthlyCharacters: null, dailyImages: null, monthlyImages: null },
-			meters: [
-				{ metric: "tokens", period: "day", used: 84_200, limit: 100_000, remaining: 15_800 },
-				{ metric: "tokens", period: "month", used: 610_000, limit: 2_000_000, remaining: 1_390_000 },
-			],
+			limit: { apiProfileId: "gemini", monthlyUsd: 20, legacyMonthlyTokens: null },
+			meter: { usedUsd: 6.4, limitUsd: 20, remainingUsd: 13.6, unpricedCalls: 2 },
 		},
 	],
 	upsert_budget_limit: () => null,
+	add_api_profile_model: ({ model }: { model?: unknown }) => [String(model ?? "").trim()].filter(Boolean),
+	remove_api_profile_model: () => [],
 	take_budget_warnings: () => [],
+	get_model_price: ({ model }: { model?: unknown }) => (String(model).startsWith("claude") ? { input: 2, output: 10, builtin: true } : null),
+	get_provider_quota: ({ profileId }: { profileId?: unknown }) =>
+		profileId === "elevenlabs"
+			? [{ label: "남은 크레딧", value: "8,420" }, { label: "사용", value: "1,580 / 10,000" }, { label: "초기화", value: "2026-12-01" }]
+			: [{ label: "구독", value: "Opus" }, { label: "Anlas", value: "10,000" }, { label: "무제한 그림", value: "가능" }],
 	list_model_prices: () => [{ model: "claude-sonnet-5-5", currency: "$", inputPerMtok: 3, outputPerMtok: 15, per1kChars: null, perImage: null }],
 	upsert_model_price: () => null,
 	delete_model_price: () => null,

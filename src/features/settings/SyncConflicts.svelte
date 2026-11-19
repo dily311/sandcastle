@@ -1,15 +1,16 @@
 <script lang="ts">
-	// 둘 다 남긴 항목 고르기 (CLAUDE.md 2-E): 양쪽에서 고친 것은 나란히 보고 하나를 고르고,
+	// 충돌 항목 고르기 (CLAUDE.md 2-E): 양쪽에서 고친 것은 나란히 보고 하나를 고르고,
 	// 넣지 못한 받은 행은 보고 버리고, 분기 대화는 열어 보고 확인함
 	import { onMount } from "svelte";
 	import type { SyncConflict } from "$ipc/bindings";
-	import { Badge, Button, Spinner } from "$shared/ui";
+	import { Badge, Button, Dialog, Spinner } from "$shared/ui";
 	import { call, commands } from "$shared/ipc/client";
 	import { toasts } from "$shared/stores/toast.svelte";
 	import { absolute, relative } from "$shared/time";
 	import { nav } from "$app/nav.svelte";
 	import { library } from "$features/character/library.svelte";
 	import Group from "./Group.svelte";
+	import Row from "./Row.svelte";
 
 	interface Props {
 		/** 고른 뒤 (남은 수를 다시 읽게) */
@@ -21,10 +22,24 @@
 	let items = $state<SyncConflict[] | null>(null);
 	let busy = $state<string | null>(null);
 
+	/** 한쪽이 비어 있는 것과 같은 값: 비어 있음끼리는 다른 것이 아니다 (null · "" · [] · {}) */
+	const emptyish = (v: unknown) => v === null || v === undefined || v === "" || v === "[]" || v === "{}" || (Array.isArray(v) && v.length === 0);
+	/** 진짜 다른 칸만 (양쪽이 다 비어 있는 칸은 충돌이 아니라 표기 차이) */
+	const realDiff = (c: SyncConflict) => c.diff.filter((d) => !(emptyish(d.local) && emptyish(d.remote)));
+	/** 사람이 고를 것이 없는 충돌: 칸이 모두 비어 있음끼리라 같은 내용 */
+	const phantom = (c: SyncConflict) => c.kind === "edit" && realDiff(c).length === 0;
+	const visible = $derived((items ?? []).filter((c) => !phantom(c)));
+
 	onMount(load);
 	async function load() {
 		items = await call(commands.listSyncConflicts(), src).catch(() => []);
+		// 같은 내용인 충돌 기록은 고를 것이 없으니 조용히 치운다
+		for (const c of items.filter(phantom)) await call(commands.resolveSyncConflict(c.id, "dismiss"), { ...src, silent: true }).catch(() => {});
 	}
+	let open = $state(false);
+	$effect(() => {
+		if (items !== null && visible.length === 0) open = false;
+	});
 
 	const TABLE: Record<string, string> = {
 		characters: "캐릭터",
@@ -63,7 +78,7 @@
 		branch: "같은 대화에 양쪽이 이어 씀",
 	};
 	const show = (v: unknown) => {
-		if (v === null || v === undefined || v === "") return "(비어 있음)";
+		if (emptyish(v)) return "(비어 있음)";
 		const s = typeof v === "string" ? v : JSON.stringify(v);
 		return s.length > 400 ? `${s.slice(0, 400)}…` : s;
 	};
@@ -90,10 +105,15 @@
 
 {#if items === null}
 	<div class="loading"><Spinner /></div>
-{:else if items.length}
-	<Group title="둘 다 남긴 항목">
+{:else if visible.length}
+	<Group title="충돌 항목">
+		<Row label="충돌 {visible.length}건" desc="양쪽에서 고쳤거나 합치지 못한 항목. 확인하고 하나씩 고름" nowrap>
+			<Button size="sm" variant="primary" onclick={() => (open = true)}>확인하기</Button>
+		</Row>
+	</Group>
+	<Dialog bind:open title="충돌 항목" description="이 기기 것을 둘지 받은 것으로 바꿀지 고르세요. 고르면 다음 동기화 때 다른 기기도 같아집니다" size="lg">
 		<ul class="list">
-			{#each items as c (c.id)}
+			{#each visible as c (c.id)}
 				<li>
 					<div class="head">
 						<Badge>{TABLE[c.tbl] ?? c.tbl}</Badge>
@@ -101,11 +121,11 @@
 						<span class="meta" title={absolute(c.createdAt)}>{KIND[c.kind] ?? c.kind} · 기기 {c.deviceId.slice(0, 8)} · {relative(c.createdAt)}</span>
 					</div>
 					{#if c.kind === "edit"}
-						{#if c.diff.length}
+						{#if realDiff(c).length}
 							<table class="diff">
 								<thead><tr><th scope="col">칸</th><th scope="col">이 기기</th><th scope="col">받은 것</th></tr></thead>
 								<tbody>
-									{#each c.diff as d (d.column)}
+									{#each realDiff(c) as d (d.column)}
 										<tr><th scope="row">{COLUMN[d.column] ?? d.column}</th><td>{show(d.local)}</td><td>{show(d.remote)}</td></tr>
 									{/each}
 								</tbody>
@@ -135,7 +155,7 @@
 				</li>
 			{/each}
 		</ul>
-	</Group>
+	</Dialog>
 {/if}
 
 <style>

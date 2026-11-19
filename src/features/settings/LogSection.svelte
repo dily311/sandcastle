@@ -9,6 +9,7 @@
 	import { toasts } from "$shared/stores/toast.svelte";
 	import Section from "./Section.svelte";
 	import Group from "./Group.svelte";
+	import SyncRunsGroup from "./SyncRunsGroup.svelte";
 
 	let level = $state<"all" | LogLevel>("all");
 	let open = $state<number | null>(null);
@@ -103,6 +104,8 @@ ${d}` : ""}`);
 			<EmptyState title="기록 없음" description="오류나 알림이 생기면 여기 쌓임" />
 		{/each}
 	</Group>
+
+	<SyncRunsGroup />
 
 	<Group title="앱 오류 기록 (지난 실행 포함)" flush>
 		{#snippet aside()}

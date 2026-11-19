@@ -384,6 +384,8 @@ pub async fn scene_say(
 pub struct GameSessionOptions {
     pub api_profile_id: Option<String>,
     pub prompt_preset_id: Option<String>,
+    /// 이 플레이의 모델 (None = API의 기본 모델, ADR-020)
+    pub model: Option<String>,
     pub player_id: String,
 }
 
@@ -393,9 +395,11 @@ pub struct GameSessionOptions {
 pub async fn get_game_session_options(state: State<'_, AppState>, session_id: String) -> Result<GameSessionOptions, AppError> {
     let session = get_game_player_sessions(&state.db, &session_id).await?;
     let (api_profile_id, prompt_preset_id) = crate::db::game::get_game_session_options(&state.db, &session_id).await?;
+    let model = crate::db::game::get_game_session_model(&state.db, &session_id).await?;
     Ok(GameSessionOptions {
         api_profile_id,
         prompt_preset_id,
+        model,
         player_id: session.player_id,
     })
 }
@@ -410,8 +414,9 @@ pub async fn set_game_session_options(
     api_profile_id: Option<String>,
     prompt_preset_id: Option<String>,
     player_id: Option<String>,
+    model: Option<String>,
 ) -> Result<(), AppError> {
-    crate::db::game::set_game_session_options(&state.db, &session_id, api_profile_id.as_deref(), prompt_preset_id.as_deref()).await?;
+    crate::db::game::set_game_session_options(&state.db, &session_id, api_profile_id.as_deref(), prompt_preset_id.as_deref(), model.as_deref()).await?;
     if let Some(player) = player_id.filter(|s| !s.is_empty()) {
         let changed = {
             let guard = state.active_runtime.lock().await;

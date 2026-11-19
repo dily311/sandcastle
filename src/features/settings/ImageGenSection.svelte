@@ -1,4 +1,5 @@
 <script lang="ts">
+	import ModelPicker from "$features/settings/ModelPicker.svelte";
 	import { onMount } from "svelte";
 	import { Images } from "@lucide/svelte";
 	import { Button, Input, Select, Switch, Textarea } from "$shared/ui";
@@ -83,6 +84,11 @@
 			<Row label="그림 프롬프트를 쓸 API" desc="메시지로 그릴 때 장면을 프롬프트로 정리하는 채팅 AI (NovelAI면 태그로 씀)">
 				<Select value={cur.imageGen.promptApiProfileId ?? ""} options={chatApiOptions("대화에 고른 API")} onchange={(e) => save("imageGen", { promptApiProfileId: orNull(e.currentTarget.value) })} />
 			</Row>
+			{#if cur.imageGen.promptApiProfileId}
+				<Row label="그림 프롬프트 모델" desc="비우면 그 API의 기본 모델">
+					<ModelPicker profile={library.apis.find((a) => a.id === cur.imageGen.promptApiProfileId)} value={cur.imageGen.promptModel || null} onchange={(m) => save("imageGen", { promptModel: m ?? "" })} label="그림 프롬프트 모델" />
+				</Row>
+			{/if}
 			<Row label="AI가 그림 프롬프트 쓰기" desc="끄면 메시지 글을 그대로 프롬프트로 보냄" nowrap>
 				<Switch checked={cur.imageGen.aiPrompt} label="AI 프롬프트" hideLabel onchange={(v) => save("imageGen", { aiPrompt: v })} />
 			</Row>

@@ -16,6 +16,7 @@ pub mod import;
 pub mod memory;
 pub mod picked_file;
 pub mod plugins;
+pub mod prices;
 pub mod prompt;
 pub mod proposals;
 pub mod summary;
