@@ -50,6 +50,8 @@
 		view: Component<any>;
 		/** 화면에 넘길 값 (설치된 커뮤니티 플러그인 탭이 플러그인 id를 받음) */
 		props?: Record<string, unknown>;
+		/** 그룹의 맨 아래에 둠 (이 그룹에 항목이 늘어도 늘 마지막) */
+		last?: boolean;
 		/** 이 코어 플러그인이 꺼져 있으면 탭을 숨김 */
 		/** 이 코어 플러그인(여럿이면 하나라도)이 꺼져 있으면 탭을 숨김 */
 		plugin?: PluginId | PluginId[];
@@ -83,14 +85,14 @@
 				{ id: "chat", label: "대화", icon: MessagesSquare, keywords: "enter 보내기 메시지 시각 시간 새 대화 기본값 api 프리셋 페르소나", view: ChatSection },
 				{ id: "theme", label: "테마", icon: Palette, keywords: "화면 모드 다크 어둡게 밝게 강조색 글자 크기 프레임 창 css", view: ThemeSection },
 				{ id: "shortcut", label: "단축키", icon: Keyboard, keywords: "키 단축 뒤로 앞으로", view: ShortcutSection },
+				// 코어·커뮤니티 플러그인은 앱 그룹의 맨 아래 (앱 설정이 늘어도 늘 마지막, last: true). 꺼져 있어도 항상 보임
+				{ id: "plugins", label: "코어 플러그인", icon: Blocks, keywords: "기능 켜기 끄기 토글 플러그인 폰 게임 위젯 정규식 이미지 html 번역 음성 tts 이미지 생성 동기화", view: PluginsSection, last: true },
+				{ id: "community", label: "커뮤니티 플러그인", icon: Puzzle, keywords: "플러그인 확장 설치 권한 zip 폴더 후처리 프롬프트 패널 명령 ai 제안", view: CommunitySection, last: true },
 			],
 		},
 		{
 			title: "플러그인",
 			items: [
-				{ id: "plugins", label: "코어 플러그인", icon: Blocks, keywords: "기능 켜기 끄기 토글 플러그인 폰 게임 위젯 정규식 이미지 html 번역 음성 tts 이미지 생성 동기화", view: PluginsSection },
-				// 코어 플러그인 바로 아래, 항상 보임 (꺼져 있어도 여기서 안내를 보고 켤 수 있게)
-				{ id: "community", label: "커뮤니티 플러그인", icon: Puzzle, keywords: "플러그인 확장 설치 권한 zip 폴더 후처리 프롬프트 패널 명령 ai 제안", view: CommunitySection },
 				{ id: "game", label: "게임 모드", icon: Gamepad2, keywords: "게임 규칙 씬 서술자 npc 프롬프트", view: GameSection, plugin: "game" },
 				{ id: "cg", label: "캐릭터 에셋", icon: Images, keywords: "cg 이미지 키 프롬프트 에셋", view: CgSection, plugin: "chat.images" },
 				{ id: "phone", label: "폰", icon: Smartphone, keywords: "폰 모드 메신저 프롬프트", view: PhoneSection, plugin: "phone" },
@@ -127,7 +129,7 @@
 	/** 그룹 순서 */
 	const ORDER = ["앱", "AI", "플러그인", "관리", "커뮤니티 플러그인"];
 	/** 꺼진 코어 플러그인의 설정 탭은 숨긴다 */
-	const groups = $derived([...allGroups].sort((a, b) => ORDER.indexOf(a.title) - ORDER.indexOf(b.title)).map((g) => ({ ...g, items: g.items.filter((i) => !i.plugin || (Array.isArray(i.plugin) ? i.plugin.some((p) => plugins.on(p)) : plugins.on(i.plugin))) })).filter((g) => g.items.length));
+	const groups = $derived([...allGroups].sort((a, b) => ORDER.indexOf(a.title) - ORDER.indexOf(b.title)).map((g) => ({ ...g, items: [...g.items.filter((i) => !i.last), ...g.items.filter((i) => i.last)].filter((i) => !i.plugin || (Array.isArray(i.plugin) ? i.plugin.some((p) => plugins.on(p)) : plugins.on(i.plugin))) })).filter((g) => g.items.length));
 	const all = $derived(groups.flatMap((g) => g.items));
 
 	let query = $state("");
