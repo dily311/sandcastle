@@ -41,7 +41,7 @@ export const apiLists: Provider[] = [
                 ]
             },
             {
-                label: "Versions",
+                label: "Claude 4",
                 model: [
                     "claude-opus-4-7",
                     "claude-opus-4-6",
@@ -62,7 +62,6 @@ export const apiLists: Provider[] = [
                     "gemini-3.1-pro-preview",
                     "gemini-3.7-flash",
                     "gemini-3.5-flash",
-                    "gemini-3.1-flash-lite-preview",
                 ]
             },
             {
@@ -85,7 +84,6 @@ export const apiLists: Provider[] = [
                     "gemini-3.1-pro-preview",
                     "gemini-3.7-flash",
                     "gemini-3.5-flash",
-                    "gemini-3.1-flash-lite-preview",
                 ]
             },
             {

@@ -54,7 +54,7 @@ struct DefaultFile {
 fn defaults() -> &'static [DefaultEntry] {
     static TABLE: OnceLock<Vec<DefaultEntry>> = OnceLock::new();
     TABLE.get_or_init(|| {
-        serde_json::from_str::<DefaultFile>(include_str!("default_prices.json"))
+        serde_json::from_str::<DefaultFile>(include_str!(concat!(env!("CARGO_MANIFEST_DIR"), "/resources/info/default_prices.json")))
             .map(|f| f.models)
             .unwrap_or_default()
     })
