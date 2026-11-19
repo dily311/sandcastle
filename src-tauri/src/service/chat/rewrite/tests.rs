@@ -27,7 +27,10 @@ fn only_unfixed_banned_and_stuck_findings_the_user_enabled_can_trigger() {
         finding("stuck", false, "그래서"),
     ]);
     let p = decide(&cfg(1, true, true), Some(&l), 0).unwrap();
-    assert_eq!((p.attempt, p.max, p.rules.clone()), (1, 1, vec!["rewriteBanned".to_string(), "stuck".to_string()]));
+    assert_eq!(
+        (p.attempt, p.max, p.rules.clone()),
+        (1, 1, vec!["rewriteBanned".to_string(), "stuck".to_string()])
+    );
     assert!(
         p.instruction.contains("「알량한」, 「헤드라이트 사슴」") && p.instruction.contains("「그래서」"),
         "{}",
