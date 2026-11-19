@@ -1,4 +1,6 @@
 fn main() {
+    // sqlx::migrate!는 파일 목록을 빌드 때 박는다. 이 줄이 없으면 마이그레이션 파일을 더하거나 옮겨도 다시 빌드되지 않아 테스트가 옛 목록으로 돈다
+    println!("cargo:rerun-if-changed=src/db/migrations");
     google_oauth_client();
     tauri_build::build()
 }

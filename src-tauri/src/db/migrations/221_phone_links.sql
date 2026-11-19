@@ -29,3 +29,18 @@ BEGIN
   DELETE FROM phone_links
    WHERE (owner_kind = 'persona' AND owner_id = OLD.id) OR (contact_kind = 'persona' AND contact_id = OLD.id);
 END;
+
+-- ---------------------------------------------------------------------------
+-- 변경 추적(updated_at 보정·트리거)과 지운 기록 트리거: 이 파일의 테이블 몫. 공통 테이블(trash_items·sync_tombstones)은 1xx에서 먼저 만들어짐
+-- ---------------------------------------------------------------------------
+
+-- phone_links
+UPDATE phone_links SET created_at = created_at * 1000 WHERE created_at IS NOT NULL AND created_at > 0 AND created_at < 100000000000;
+UPDATE phone_links SET updated_at = updated_at * 1000 WHERE updated_at IS NOT NULL AND updated_at > 0 AND updated_at < 100000000000;
+UPDATE phone_links SET updated_at = COALESCE(created_at, CAST((julianday('now') - 2440587.5) * 86400000 AS INTEGER)) WHERE updated_at IS NULL OR updated_at = 0;
+CREATE TRIGGER phone_links_touch_insert AFTER INSERT ON phone_links FOR EACH ROW WHEN NEW.updated_at IS NULL OR NEW.updated_at = 0 BEGIN UPDATE phone_links SET updated_at = CAST((julianday('now') - 2440587.5) * 86400000 AS INTEGER) WHERE rowid = NEW.rowid; END;
+CREATE TRIGGER phone_links_touch_update AFTER UPDATE ON phone_links FOR EACH ROW WHEN NEW.updated_at IS OLD.updated_at BEGIN UPDATE phone_links SET updated_at = CAST((julianday('now') - 2440587.5) * 86400000 AS INTEGER) WHERE rowid = NEW.rowid; END;
+
+-- phone_links (owner_kind, owner_id, contact_kind, contact_id)
+CREATE TRIGGER phone_links_tombstone AFTER DELETE ON phone_links FOR EACH ROW BEGIN INSERT OR REPLACE INTO sync_tombstones (tbl, key, deleted_at) VALUES ('phone_links', json_array(OLD.owner_kind, OLD.owner_id, OLD.contact_kind, OLD.contact_id), CAST((julianday('now') - 2440587.5) * 86400000 AS INTEGER)); END;
+CREATE TRIGGER phone_links_untombstone AFTER INSERT ON phone_links FOR EACH ROW BEGIN DELETE FROM sync_tombstones WHERE tbl = 'phone_links' AND key = json_array(NEW.owner_kind, NEW.owner_id, NEW.contact_kind, NEW.contact_id); END;
