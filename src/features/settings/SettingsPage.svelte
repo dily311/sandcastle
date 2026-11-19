@@ -15,6 +15,8 @@
 	import DataSection from "./DataSection.svelte";
 	import SyncSection from "./SyncSection.svelte";
 	import CommunitySection from "./CommunitySection.svelte";
+	import CommunityPluginSettings from "./CommunityPluginSettings.svelte";
+	import { admin } from "$features/community/admin.svelte";
 	import LogSection from "./LogSection.svelte";
 	import ActivitySection from "./ActivitySection.svelte";
 	import GameSection from "./GameSection.svelte";
@@ -45,7 +47,9 @@
 		icon: typeof Settings2;
 		/** 검색어로 찾을 낱말 */
 		keywords: string;
-		view: Component;
+		view: Component<any>;
+		/** 화면에 넘길 값 (설치된 커뮤니티 플러그인 탭이 플러그인 id를 받음) */
+		props?: Record<string, unknown>;
 		/** 이 코어 플러그인이 꺼져 있으면 탭을 숨김 */
 		/** 이 코어 플러그인(여럿이면 하나라도)이 꺼져 있으면 탭을 숨김 */
 		plugin?: PluginId | PluginId[];
@@ -53,7 +57,25 @@
 	$effect(() => {
 		if (!plugins.loaded) void plugins.load();
 	});
-	const allGroups: { title: string; items: Item[] }[] = [
+	// 설치된 커뮤니티 플러그인 중 설정칸이 있는 것이 이 그룹의 탭이 된다 (코어 플러그인이 켜져 있을 때)
+	$effect(() => {
+		if (plugins.on("community") && !admin.loaded) void admin.load();
+	});
+	const communityItems = $derived<Item[]>(
+		plugins.on("community")
+			? admin.list
+					.filter((p) => p.manifest?.settings.length)
+					.map((p) => ({
+						id: `community:${p.id}` as SettingsTab,
+						label: p.manifest?.name ?? p.id,
+						icon: Puzzle,
+						keywords: `${p.id} 커뮤니티 플러그인 설정`,
+						view: CommunityPluginSettings,
+						props: { pluginId: p.id },
+					}))
+			: [],
+	);
+	const allGroups = $derived<{ title: string; items: Item[] }[]>([
 		{
 			title: "앱",
 			items: [
@@ -67,6 +89,8 @@
 			title: "플러그인",
 			items: [
 				{ id: "plugins", label: "코어 플러그인", icon: Blocks, keywords: "기능 켜기 끄기 토글 플러그인 폰 게임 위젯 정규식 이미지 html 번역 음성 tts 이미지 생성 동기화", view: PluginsSection },
+				// 코어 플러그인 바로 아래, 항상 보임 (꺼져 있어도 여기서 안내를 보고 켤 수 있게)
+				{ id: "community", label: "커뮤니티 플러그인", icon: Puzzle, keywords: "플러그인 확장 설치 권한 zip 폴더 후처리 프롬프트 패널 명령 ai 제안", view: CommunitySection },
 				{ id: "game", label: "게임 모드", icon: Gamepad2, keywords: "게임 규칙 씬 서술자 npc 프롬프트", view: GameSection, plugin: "game" },
 				{ id: "cg", label: "캐릭터 에셋", icon: Images, keywords: "cg 이미지 키 프롬프트 에셋", view: CgSection, plugin: "chat.images" },
 				{ id: "phone", label: "폰", icon: Smartphone, keywords: "폰 모드 메신저 프롬프트", view: PhoneSection, plugin: "phone" },
@@ -78,7 +102,6 @@
 				{ id: "summary", label: "대화 요약", icon: NotebookText, keywords: "요약 줄거리 메모리 확장 기억 긴 대화", view: SummarySection, plugin: "summary" },
 				{ id: "tts", label: "음성 읽기", icon: AudioLines, keywords: "음성 tts 읽기 목소리 elevenlabs", view: TtsSection, plugin: "tts" },
 				{ id: "imagegen", label: "이미지 생성", icon: ImagePlus, keywords: "이미지 그림 생성 novelai 프롬프트 네거티브 샘플러", view: ImageGenSection, plugin: ["imagegen", "imageauto"] },
-				{ id: "community", label: "커뮤니티 플러그인", icon: Puzzle, keywords: "플러그인 확장 설치 권한 zip 폴더 후처리 프롬프트 패널 명령 ai 제안", view: CommunitySection, plugin: "community" },
 				{ id: "widget", label: "위젯", icon: Music, keywords: "음악 플레이어 자동 실행 바탕화면", view: WidgetSection, plugin: "widget" },
 			],
 		},
@@ -99,9 +122,12 @@
 				{ id: "log", label: "로그", icon: ScrollText, keywords: "오류 경고 기록", view: LogSection },
 			],
 		},
-	];
+		{ title: "커뮤니티 플러그인", items: communityItems },
+	]);
+	/** 그룹 순서 */
+	const ORDER = ["앱", "AI", "플러그인", "관리", "커뮤니티 플러그인"];
 	/** 꺼진 코어 플러그인의 설정 탭은 숨긴다 */
-	const groups = $derived(allGroups.map((g) => ({ ...g, items: g.items.filter((i) => !i.plugin || (Array.isArray(i.plugin) ? i.plugin.some((p) => plugins.on(p)) : plugins.on(i.plugin))) })).filter((g) => g.items.length));
+	const groups = $derived([...allGroups].sort((a, b) => ORDER.indexOf(a.title) - ORDER.indexOf(b.title)).map((g) => ({ ...g, items: g.items.filter((i) => !i.plugin || (Array.isArray(i.plugin) ? i.plugin.some((p) => plugins.on(p)) : plugins.on(i.plugin))) })).filter((g) => g.items.length));
 	const all = $derived(groups.flatMap((g) => g.items));
 
 	let query = $state("");
@@ -157,7 +183,7 @@
 				{#key edit}<ApiEditor editId={edit} />{/key}
 			{:else}
 				{#key current.id}
-					<current.view />
+					<current.view {...current.props ?? {}} />
 				{/key}
 			{/if}
 		</div>

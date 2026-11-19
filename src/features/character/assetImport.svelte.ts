@@ -10,7 +10,7 @@ class AssetImport {
 	private show(label: string) {
 		if (this.toastId) toasts.dismiss(this.toastId);
 		// 끝날 때까지 떠 있는 토스트 (다른 화면에서도 진행이 보이게)
-		this.toastId = toasts.show({ tone: "info", message: label }, 0);
+		this.toastId = toasts.show({ tone: "info", message: label, log: false }, 0);
 	}
 
 	/** 하나씩만 한다. 도중에 또 오면 거절. `set`으로 단계를 바꿔 알림 */

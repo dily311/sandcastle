@@ -747,11 +747,16 @@ impl ChatManager {
             TurnKind::Regenerate { auto: Some(a), .. } => (a.attempt, Some(json!({ "attempt": a.attempt, "max": a.max, "rules": a.rules }))),
             _ => (0, None),
         };
-        let rewrite_pending = if cancelled {
-            None
-        } else {
-            super::rewrite::enabled_for(app, &conv).and_then(|cfg| super::rewrite::decide(&cfg, lint_meta.as_ref(), attempts_done))
+        let rewrite_cfg = if cancelled { None } else { super::rewrite::enabled_for(app, &conv) };
+        // 자동 재생성의 금지어는 linter와 따로: 자기 목록으로 검사해 결과를 meta.lint에 남긴다 (linter의 금지어는 다시 쓰기를 일으키지 않음)
+        let lint_meta = match &rewrite_cfg {
+            Some(cfg) if cfg.banned => match super::lint::rewrite_banned_finding(&content, &cfg.banned_words) {
+                Some(f) => Some(super::lint::with_finding(lint_meta, &content, f)),
+                None => lint_meta,
+            },
+            _ => lint_meta,
         };
+        let rewrite_pending = rewrite_cfg.and_then(|cfg| super::rewrite::decide(&cfg, lint_meta.as_ref(), attempts_done));
         let info = json!({
             "apiProfileId": api_profile_id,
             "presetId": preset_id,

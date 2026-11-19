@@ -255,23 +255,24 @@
 
 	// ---- 글을 끌어서 고르면: 북마크 / 복사 ----
 	let selMenu = $state<{ x: number; y: number; text: string; messageId: string } | null>(null);
-	function onSelectEnd() {
-		setTimeout(() => {
-			const sel = window.getSelection();
-			const text = sel?.toString().trim() ?? "";
-			if (!sel || !text || selecting) return;
-			const el = (n: Node | null) => (n instanceof Element ? n : (n?.parentElement ?? null));
-			const node = el(sel.anchorNode);
-			const block = node?.closest<HTMLElement>("[id^=msg-]");
-			if (!block) return;
-			// 본문 글만: 머리줄(번호·이름·시각)·도구 줄에서 고른 것은 메뉴를 띄우지 않는다
-			const inMeta = (n: Element | null) => !!n?.closest(".who, .actions, .swipe, .tr-note");
-			if (inMeta(node) || inMeta(el(sel.focusNode))) return;
-			// 고른 범위가 다른 메시지로 넘어가면 메뉴를 띄우지 않는다
-			if (el(sel.focusNode)?.closest("[id^=msg-]") !== block) return;
-			const r = sel.getRangeAt(0).getBoundingClientRect();
-			selMenu = { x: r.left, y: r.bottom + 6, text, messageId: block.id.slice(4) };
-		}, 0);
+	/** 글을 끌어서 고른 뒤 오른쪽 클릭(폰은 꾹 누르기)하면 고른 글 메뉴. 고치는 중(입력칸)이거나 고른 글이 없으면 띄우지 않는다 */
+	function onSelectMenu(e: MouseEvent) {
+		if (selecting) return;
+		if ((e.target as Element | null)?.closest("textarea, input, [contenteditable='true']")) return;
+		const sel = window.getSelection();
+		const text = sel?.toString().trim() ?? "";
+		if (!sel || !text) return;
+		const el = (n: Node | null) => (n instanceof Element ? n : (n?.parentElement ?? null));
+		const node = el(sel.anchorNode);
+		const block = node?.closest<HTMLElement>("[id^=msg-]");
+		if (!block) return;
+		// 본문 글만: 머리줄(번호·이름·시각)·도구 줄에서 고른 것은 메뉴를 띄우지 않는다
+		const inMeta = (n: Element | null) => !!n?.closest(".who, .actions, .swipe, .tr-note");
+		if (inMeta(node) || inMeta(el(sel.focusNode))) return;
+		// 고른 범위가 다른 메시지로 넘어가면 메뉴를 띄우지 않는다
+		if (el(sel.focusNode)?.closest("[id^=msg-]") !== block) return;
+		e.preventDefault();
+		selMenu = { x: e.clientX, y: e.clientY, text, messageId: block.id.slice(4) };
 	}
 	// 고른 글 → 이미지 카드
 	let card = $state<{ text: string; speaker?: string; time?: number } | null>(null);
@@ -421,7 +422,7 @@
 		{/if}
 
 		<!-- svelte-ignore a11y_no_static_element_interactions (글 고르기 끝 감지) -->
-		<div class="scroll" bind:this={scroller} {onscroll} onmouseup={onSelectEnd}>
+		<div class="scroll" bind:this={scroller} {onscroll} oncontextmenu={onSelectMenu}>
 			{#if !session || session.loading}
 				<div class="center"><Spinner /></div>
 			{:else if !conv}

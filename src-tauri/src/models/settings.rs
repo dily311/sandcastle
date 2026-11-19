@@ -308,8 +308,10 @@ impl Default for GhostSetting {
 pub struct RewriteSetting {
     /// 한 응답에 자동으로 더 만드는 최대 횟수 (기본 1, 안전상 3까지) — 한 번마다 응답 하나의 요금
     pub max_attempts: u32,
-    /// 금지어가 걸리면 다시 쓰기 (linter의 금지어 규칙이 표시만이어야 함)
+    /// 아래 금지어가 응답에 나오면 다시 쓰기. 메시지 linter의 금지어 목록과는 따로다(linter는 표시·지우기, 여기는 다시 만들기)
     pub banned: bool,
+    /// 자동 재생성의 금지어 목록 (대소문자 구분 없음, 100개까지)
+    pub banned_words: Vec<String>,
     /// 단어 반복 오류가 걸리면 다시 쓰기
     pub stuck: bool,
 }
@@ -319,6 +321,7 @@ impl Default for RewriteSetting {
         Self {
             max_attempts: 1,
             banned: true,
+            banned_words: vec![],
             stuck: true,
         }
     }

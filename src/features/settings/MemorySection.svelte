@@ -19,6 +19,8 @@
 		void refresh();
 	});
 	const cur = $derived(current());
+	/** 상한 슬라이더를 끄는 동안의 값 (놓으면 저장) */
+	let capDraft = $state<number | null>(null);
 	let status = $state<MemoryStatus | null>(null);
 	const src = { source: "memory" };
 
@@ -58,7 +60,23 @@
 				<Input type="number" min="1" value={cur.memory.dimensions ? String(cur.memory.dimensions) : ""} onchange={(e) => save("memory", { dimensions: e.currentTarget.value ? int(e.currentTarget.value, 1, 768) : null })} />
 			</Row>
 			<Row label="실행당 토큰 상한" desc="한 번 색인에서 임베딩할 예상 입력 토큰. 넘으면 한 번 더 확인">
-				<Input type="number" min="1000" value={String(cur.memory.tokenCap)} onchange={(e) => save("memory", { tokenCap: int(e.currentTarget.value, 1000, 200000) })} />
+				<div class="cap">
+					<input
+						type="range"
+						min="1000"
+						max="200000"
+						step="1000"
+						aria-label="실행당 토큰 상한"
+						value={capDraft ?? cur.memory.tokenCap}
+						style:--pct="{(((capDraft ?? cur.memory.tokenCap) - 1000) / 199000) * 100}%"
+						oninput={(e) => (capDraft = Number(e.currentTarget.value))}
+						onchange={(e) => {
+							void save("memory", { tokenCap: int(e.currentTarget.value, 1000, 200000) });
+							capDraft = null;
+						}}
+					/>
+					<b>{(capDraft ?? cur.memory.tokenCap).toLocaleString()}</b>
+				</div>
 			</Row>
 			<Row label="접두어" desc="e5·nomic 같은 모델이 요구할 때만. 바꾸면 다시 색인">
 				<div class="pair">
@@ -115,5 +133,23 @@
 	.stat {
 		font-size: var(--text-sm);
 		color: var(--text-muted);
+	}
+	.cap {
+		display: flex;
+		align-items: center;
+		gap: var(--space-3);
+		min-width: min(260px, 100%);
+	}
+	.cap input[type="range"] {
+		flex: 1;
+		min-width: 0;
+		accent-color: var(--accent);
+		cursor: pointer;
+	}
+	.cap b {
+		min-width: 6ch;
+		text-align: right;
+		font-variant-numeric: tabular-nums;
+		font-weight: 600;
 	}
 </style>

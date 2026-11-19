@@ -7,6 +7,7 @@ fn cfg(max: u32, banned: bool, stuck: bool) -> RewriteSetting {
     RewriteSetting {
         max_attempts: max,
         banned,
+        banned_words: vec![],
         stuck,
     }
 }
@@ -21,9 +22,12 @@ fn lint(findings: Vec<Value>) -> Value {
 
 #[test]
 fn only_unfixed_banned_and_stuck_findings_the_user_enabled_can_trigger() {
-    let l = lint(vec![finding("banned", false, "알량한\u{1f}헤드라이트 사슴"), finding("stuck", false, "그래서")]);
+    let l = lint(vec![
+        finding("rewriteBanned", false, "알량한\u{1f}헤드라이트 사슴"),
+        finding("stuck", false, "그래서"),
+    ]);
     let p = decide(&cfg(1, true, true), Some(&l), 0).unwrap();
-    assert_eq!((p.attempt, p.max, p.rules.clone()), (1, 1, vec!["banned".to_string(), "stuck".to_string()]));
+    assert_eq!((p.attempt, p.max, p.rules.clone()), (1, 1, vec!["rewriteBanned".to_string(), "stuck".to_string()]));
     assert!(
         p.instruction.contains("「알량한」, 「헤드라이트 사슴」") && p.instruction.contains("「그래서」"),
         "{}",
@@ -31,12 +35,12 @@ fn only_unfixed_banned_and_stuck_findings_the_user_enabled_can_trigger() {
     );
     assert!(!p.instruction.contains("원문"), "결함이 있는 글은 넣지 않음");
     // 규칙별로 사용자가 고른다
-    assert_eq!(decide(&cfg(1, true, false), Some(&l), 0).unwrap().rules, vec!["banned".to_string()]);
+    assert_eq!(decide(&cfg(1, true, false), Some(&l), 0).unwrap().rules, vec!["rewriteBanned".to_string()]);
     assert_eq!(decide(&cfg(1, false, true), Some(&l), 0).unwrap().rules, vec!["stuck".to_string()]);
     assert!(decide(&cfg(1, false, false), Some(&l), 0).is_none());
     // 무료 자동 고침이 이미 고친 것, 다른 규칙(반복 문단·대사 대신 쓰기·글자 수·닫힘)은 방아쇠가 아니다
     let other = lint(vec![
-        finding("banned", true, "알량한"),
+        finding("rewriteBanned", true, "알량한"),
         finding("repeat", false, ""),
         finding("impersonate", false, ""),
         finding("length", false, ""),
@@ -107,7 +111,7 @@ async fn db_with_message(meta: Value) -> (SqlitePool, tempfile::TempDir) {
 
 #[tokio::test]
 async fn when_attempts_run_out_the_swipe_with_the_fewest_hits_wins_and_ties_go_to_the_latest() {
-    let bad = |n: usize| lint((0..n).map(|_| finding("banned", false, "알량한")).collect());
+    let bad = |n: usize| lint((0..n).map(|_| finding("rewriteBanned", false, "알량한")).collect());
     let swipe = |content: &str, hits: usize| json!({ "content": content, "meta": { "info": { "model": content }, "images": [], "lint": bad(hits) } });
     // 원본(2건) → 다시 쓰기 1(1건) → 다시 쓰기 2(1건, 선택되어 있음): 가장 나은 것 중 나중 것이 남는다
     let meta = json!({ "swipeId": 2, "swipes": [swipe("원본", 2), swipe("고침1", 1), swipe("고침2", 1)], "lint": bad(1), "info": { "model": "고침2" } });
@@ -168,4 +172,25 @@ fn pending_signal_is_read_from_the_response_info() {
     assert!(pending_of(&m).is_none());
     m.meta = None;
     assert!(pending_of(&m).is_none());
+}
+
+#[test]
+fn rewrite_has_its_own_banned_words_separate_from_the_linters() {
+    use crate::service::chat::lint as l;
+    let words = vec!["알량한".to_string()];
+    let f = l::rewrite_banned_finding("그 알량한 말", &words).unwrap();
+    assert_eq!(f.rule, "rewriteBanned");
+    assert!(f.detail.as_deref().unwrap().contains("알량한") && f.text.contains("재생성 금지어"), "{f:?}");
+    assert!(l::rewrite_banned_finding("깨끗한 글", &words).is_none());
+    assert!(l::rewrite_banned_finding("그 알량한 말", &[]).is_none(), "목록이 비면 아무것도 걸리지 않음");
+    // 결과는 meta.lint에 남고 다시 쓰기 판정이 그것을 본다
+    let meta = l::with_finding(None, "그 알량한 말", f);
+    let p = decide(&cfg(1, true, false), Some(&meta), 0).unwrap();
+    assert_eq!(p.rules, vec!["rewriteBanned".to_string()]);
+    assert!(p.instruction.contains("「알량한」"));
+    // 금지어 스위치를 끄면 방아쇠가 아님
+    assert!(decide(&cfg(1, false, false), Some(&meta), 0).is_none());
+    // 메시지 linter의 금지어 결과(banned)는 다시 쓰기를 일으키지 않는다
+    let linter_only = lint(vec![finding("banned", false, "알량한")]);
+    assert!(decide(&cfg(1, true, true), Some(&linter_only), 0).is_none());
 }
