@@ -32,7 +32,7 @@ CREATE TABLE IF NOT EXISTS game_projects (
 CREATE TABLE IF NOT EXISTS game_worldinfo (
   game_id TEXT NOT NULL REFERENCES game_projects(id) ON DELETE CASCADE,
   book_id TEXT NOT NULL REFERENCES worldinfo_books(id) ON DELETE CASCADE,
-
+  updated_at INTEGER NOT NULL DEFAULT 0,
   PRIMARY KEY (game_id, book_id)
 );
 
@@ -80,7 +80,7 @@ CREATE TABLE IF NOT EXISTS game_characters (
 CREATE TABLE IF NOT EXISTS game_character_worldinfo (
   game_character_id TEXT NOT NULL REFERENCES game_characters(id) ON DELETE CASCADE,
   book_id TEXT NOT NULL REFERENCES worldinfo_books(id) ON DELETE CASCADE,
-
+  updated_at INTEGER NOT NULL DEFAULT 0,
   PRIMARY KEY (game_character_id, book_id)
 );
 
@@ -118,7 +118,8 @@ CREATE TABLE IF NOT EXISTS audio_assets (                  -- voice / sfx / bgm
   assets_id TEXT PRIMARY KEY REFERENCES game_assets(id) ON DELETE CASCADE,
   tag TEXT,                                  -- sfx: 소리 그룹 이름, bgm: 분위기 id
   game_character_id TEXT REFERENCES game_characters(id) ON DELETE SET NULL,  -- voice의 화자
-  transcript TEXT                            -- voice의 대사 텍스트
+  transcript TEXT,                            -- voice의 대사 텍스트
+  updated_at INTEGER NOT NULL DEFAULT 0
 );
 
 -- 이미지 에셋
@@ -126,7 +127,8 @@ CREATE TABLE IF NOT EXISTS character_assets (
   assets_id TEXT PRIMARY KEY REFERENCES game_assets(id) ON DELETE CASCADE,
   game_character_id TEXT REFERENCES game_characters(id) ON DELETE SET NULL,
   usage TEXT NOT NULL CHECK (usage IN ('standing','map')),
-  emotion TEXT                              -- standing은 필수, map은 NULL 또는 variant
+  emotion TEXT,                              -- standing은 필수, map은 NULL 또는 variant
+  updated_at INTEGER NOT NULL DEFAULT 0
 );
 
 CREATE TABLE IF NOT EXISTS cg_assets (
@@ -137,14 +139,16 @@ CREATE TABLE IF NOT EXISTS cg_assets (
   negative_prompt TEXT, 
   seed INTEGER, 
   generation_params TEXT,
-  ai_usable INTEGER NOT NULL DEFAULT 1
+  ai_usable INTEGER NOT NULL DEFAULT 1,
+  updated_at INTEGER NOT NULL DEFAULT 0
 );
 
 CREATE TABLE IF NOT EXISTS background_assets (
   assets_id TEXT PRIMARY KEY REFERENCES game_assets(id) ON DELETE CASCADE,
   location_id TEXT REFERENCES game_locations(id) ON DELETE SET NULL,
   time_id TEXT REFERENCES game_time_periods(id) ON DELETE SET NULL,
-  weather_id TEXT REFERENCES game_weather_types(id) ON DELETE SET NULL
+  weather_id TEXT REFERENCES game_weather_types(id) ON DELETE SET NULL,
+  updated_at INTEGER NOT NULL DEFAULT 0
 );
 -- ---------------------------------------------------------
 -- 게임 맵
@@ -175,7 +179,8 @@ CREATE TABLE IF NOT EXISTS game_locations (
   zone_id TEXT NOT NULL REFERENCES game_map_zones(id) ON DELETE CASCADE,
   name TEXT NOT NULL,
   description TEXT,
-  settings_json TEXT  -- 맵 표시 세팅
+  settings_json TEXT,  -- 맵 표시 세팅
+  updated_at INTEGER NOT NULL DEFAULT 0
 );
 
 CREATE TABLE IF NOT EXISTS game_location_connections (
@@ -184,6 +189,7 @@ CREATE TABLE IF NOT EXISTS game_location_connections (
   travel_seconds INTEGER NOT NULL,
   condition TEXT,
   settings_json TEXT,
+  updated_at INTEGER NOT NULL DEFAULT 0,
   PRIMARY KEY (from_id, to_id)
 );
 
@@ -198,6 +204,7 @@ CREATE TABLE IF NOT EXISTS game_time_periods (
   sort_order INTEGER NOT NULL DEFAULT 0,
   start_minute INTEGER NOT NULL,
   end_minute INTEGER NOT NULL,
+  updated_at INTEGER NOT NULL DEFAULT 0,
   UNIQUE (game_id, id)
 );
 
@@ -231,6 +238,7 @@ CREATE TABLE IF NOT EXISTS game_weather_pool_entries (
   weather_id TEXT NOT NULL REFERENCES game_weather_types(id) ON DELETE CASCADE,
   -- 랜덤 선택 가중치
   weight INTEGER NOT NULL DEFAULT 1 CHECK (weight > 0),
+  updated_at INTEGER NOT NULL DEFAULT 0,
   UNIQUE (pool_id, weather_id)
 );
 
@@ -239,6 +247,7 @@ CREATE TABLE IF NOT EXISTS game_weather_transitions (
   to_weather_id TEXT NOT NULL REFERENCES game_weather_types(id) ON DELETE CASCADE,
   map_id TEXT NOT NULL REFERENCES game_maps(id) ON DELETE CASCADE,
   probability REAL NOT NULL CHECK (probability >= 0.0 AND probability <= 1.0),
+  updated_at INTEGER NOT NULL DEFAULT 0,
   PRIMARY KEY (from_weather_id, to_weather_id, map_id)
 );
 
@@ -267,14 +276,16 @@ CREATE TABLE IF NOT EXISTS game_event_conditions (
   id TEXT PRIMARY KEY,
   event_id TEXT NOT NULL REFERENCES game_events(id) ON DELETE CASCADE,
   condition_type TEXT NOT NULL,
-  condition_value TEXT
+  condition_value TEXT,
+  updated_at INTEGER NOT NULL DEFAULT 0
 );
 
 CREATE TABLE IF NOT EXISTS game_interactables (
   id TEXT PRIMARY KEY,
   location_id TEXT NOT NULL REFERENCES game_locations(id) ON DELETE CASCADE,
   name TEXT NOT NULL,
-  event_id TEXT REFERENCES game_events(id) ON DELETE SET NULL
+  event_id TEXT REFERENCES game_events(id) ON DELETE SET NULL,
+  updated_at INTEGER NOT NULL DEFAULT 0
 );
 
 
@@ -282,6 +293,7 @@ CREATE TABLE IF NOT EXISTS game_event_character_pool (
   event_id TEXT NOT NULL REFERENCES game_events(id) ON DELETE CASCADE,
   game_character_id TEXT NOT NULL REFERENCES game_characters(id) ON DELETE CASCADE,
   spawn_weight INTEGER NOT NULL DEFAULT 1 CHECK (spawn_weight > 0),
+  updated_at INTEGER NOT NULL DEFAULT 0,
   PRIMARY KEY (event_id, game_character_id)
 );
 
@@ -295,7 +307,8 @@ CREATE TABLE IF NOT EXISTS game_encounter_tables (
   zone_id TEXT REFERENCES game_map_zones(id) ON DELETE CASCADE,
   location_id TEXT REFERENCES game_locations(id) ON DELETE CASCADE,
   -- 이동 시 Encounter Table 자체가 발동할 확률
-  base_trigger_chance REAL NOT NULL DEFAULT 1.0 CHECK (base_trigger_chance >= 0.0 AND base_trigger_chance <= 1.0)
+  base_trigger_chance REAL NOT NULL DEFAULT 1.0 CHECK (base_trigger_chance >= 0.0 AND base_trigger_chance <= 1.0),
+  updated_at INTEGER NOT NULL DEFAULT 0
 );
 
 CREATE TABLE IF NOT EXISTS game_encounter_entries (
@@ -307,7 +320,8 @@ CREATE TABLE IF NOT EXISTS game_encounter_entries (
   -- NULL이면 모든 시간대
   time_period_id TEXT REFERENCES game_time_periods(id) ON DELETE CASCADE,
   -- NULL이면 모든 날씨
-  weather_id TEXT REFERENCES game_weather_types(id)ON DELETE CASCADE
+  weather_id TEXT REFERENCES game_weather_types(id)ON DELETE CASCADE,
+  updated_at INTEGER NOT NULL DEFAULT 0
 );
 
 -- ---------------------------------------------------------
@@ -338,7 +352,8 @@ CREATE TABLE IF NOT EXISTS game_branches (
   scene_id TEXT NOT NULL REFERENCES game_scenes(id) ON DELETE CASCADE,
   condition TEXT,
   next_scene_id TEXT REFERENCES game_scenes(id) ON DELETE SET NULL,
-  sort_order INTEGER DEFAULT 0
+  sort_order INTEGER DEFAULT 0,
+  updated_at INTEGER NOT NULL DEFAULT 0
 );
 
 CREATE TABLE IF NOT EXISTS game_choices (
@@ -349,7 +364,8 @@ CREATE TABLE IF NOT EXISTS game_choices (
   -- 선택지가 표시되는 조건
   condition TEXT,
   effect TEXT,                      -- JSON: {"add": {"affection_yuna": 3}}
-  sort_order INTEGER DEFAULT 0
+  sort_order INTEGER DEFAULT 0,
+  updated_at INTEGER NOT NULL DEFAULT 0
 );
 
 -- ---------------------------------------------------------
@@ -361,6 +377,7 @@ CREATE TABLE IF NOT EXISTS game_endings (
   ending_key TEXT NOT NULL,
   title TEXT NOT NULL,
   description TEXT,
+  updated_at INTEGER NOT NULL DEFAULT 0,
   UNIQUE (game_id, ending_key)
 );
 
@@ -397,6 +414,7 @@ CREATE TABLE IF NOT EXISTS game_relationship_defs (
   to_id TEXT NOT NULL,
   values_json TEXT,        -- {"affection": 10}
   tags TEXT,               -- ["자매"]
+  updated_at INTEGER NOT NULL DEFAULT 0,
   UNIQUE (game_id, from_id, to_id)
 );
 
@@ -422,6 +440,9 @@ CREATE TABLE IF NOT EXISTS game_player_sessions (
   inventory_json TEXT,       -- {"key_card": 1, "potion": 3}  (item_id → 수량)
   relationships_json TEXT,
   stage_json TEXT,
+  -- zone별 날씨: {zone_id: {"weather": 날씨 id, "day": 일차, "period": 시간대 id}}
+  -- 같은 zone·같은 날·같은 시간대 안에서는 날씨가 그대로다 (game/runtime/systems/time.rs)
+  zone_weather_json TEXT,
 
   -- 분기용
   parent_session_id TEXT REFERENCES game_player_sessions(id) ON DELETE SET NULL, -- 이전 세션 id를 가지고 있으면 분기로, 메시지와 대화 세션을 불러오는 역할을 한다.
@@ -437,6 +458,8 @@ CREATE TABLE IF NOT EXISTS game_session_options (
   session_id TEXT PRIMARY KEY REFERENCES game_player_sessions(id) ON DELETE CASCADE,
   api_profile_id TEXT,
   prompt_preset_id TEXT,
+  -- 게임 플레이(세션)별 모델: NULL = 이 플레이의 API 프로필의 기본 모델을 따라간다. 플레이의 API를 바꾸면 NULL로 돌아간다 (대화와 같은 규칙).
+  model TEXT,
   updated_at INTEGER NOT NULL
 );
 
@@ -463,6 +486,7 @@ CREATE TABLE IF NOT EXISTS game_journal (
   payload_json TEXT,
   game_time INTEGER NOT NULL DEFAULT 0,
   created_at INTEGER NOT NULL,
+  updated_at INTEGER NOT NULL DEFAULT 0,
   UNIQUE (session_id, seq)
 );
 
@@ -472,6 +496,7 @@ CREATE TABLE IF NOT EXISTS game_story_plans (
   seq INTEGER NOT NULL,
   plan_json TEXT,
   reason TEXT,
+  updated_at INTEGER NOT NULL DEFAULT 0,
   PRIMARY KEY (session_id, seq)
 );
 
@@ -480,6 +505,7 @@ CREATE TABLE IF NOT EXISTS game_relationship_snapshots (
   seq INTEGER NOT NULL,
   relationships_json TEXT NOT NULL,
   created_at INTEGER NOT NULL,
+  updated_at INTEGER NOT NULL DEFAULT 0,
   PRIMARY KEY (session_id, seq)
 );
 
@@ -508,6 +534,7 @@ CREATE TABLE IF NOT EXISTS game_event_log (
   -- 이벤트 실행 결과
   -- JSON TEXT
   result_json TEXT,
+  updated_at INTEGER NOT NULL DEFAULT 0,
   PRIMARY KEY (session_id, seq)
 );
 
@@ -517,6 +544,7 @@ CREATE TABLE IF NOT EXISTS game_event_log_characters (
   game_character_id TEXT NOT NULL REFERENCES game_characters(id) ON DELETE CASCADE,
   role TEXT,              -- participant, speaker, target 등
   sort_order INTEGER DEFAULT 0,
+  updated_at INTEGER NOT NULL DEFAULT 0,
   PRIMARY KEY (session_id, seq, game_character_id),
   FOREIGN KEY (session_id, seq) REFERENCES game_event_log(session_id, seq) ON DELETE CASCADE
 );
@@ -551,6 +579,7 @@ CREATE TABLE IF NOT EXISTS game_conversation_participants (
   conversation_id TEXT NOT NULL REFERENCES game_conversations(id) ON DELETE CASCADE,
   game_character_id TEXT NOT NULL REFERENCES game_characters(id) ON DELETE CASCADE,
   sort_order INTEGER NOT NULL DEFAULT 0,
+  updated_at INTEGER NOT NULL DEFAULT 0,
   PRIMARY KEY (conversation_id, game_character_id)
 );
 
@@ -558,7 +587,7 @@ CREATE TABLE IF NOT EXISTS game_scene_conversations (
   scene_id TEXT NOT NULL REFERENCES game_scenes(id) ON DELETE CASCADE,
   conversation_id TEXT NOT NULL REFERENCES game_conversations(id) ON DELETE CASCADE,
   sort_order INTEGER NOT NULL DEFAULT 0,
-
+  updated_at INTEGER NOT NULL DEFAULT 0,
   PRIMARY KEY (scene_id, conversation_id)
 );
 -- =========================================================

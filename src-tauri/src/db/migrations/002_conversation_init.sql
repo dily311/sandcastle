@@ -39,6 +39,11 @@ CREATE TABLE IF NOT EXISTS characters (
   default_prompt_preset_id TEXT REFERENCES prompt_presets(id) ON DELETE SET NULL,
   favorite INTEGER DEFAULT 0,
   creator_notes TEXT,
+  -- 캐릭터 페이지 위쪽 커버(배너) 이미지. 앱 데이터 characters/covers/에 복사한 파일 경로. 없으면 기본 그라데이션
+  cover TEXT,
+  -- 커버 이미지에서 보일 세로 위치 (0 = 맨 위, 100 = 맨 아래, background-position-y %)
+  -- cover_position으로 변경 필요 (x/y 값 및 확대를 했는지도 저장하려면)
+  cover_y REAL NOT NULL DEFAULT 50,
   created_at INTEGER,
   updated_at INTEGER
 );
@@ -85,24 +90,37 @@ CREATE TABLE IF NOT EXISTS worldinfo_entries (
   comment TEXT NOT NULL DEFAULT '',
   enabled INTEGER DEFAULT 1,
   priority INTEGER DEFAULT 0,
-  constant INTEGER DEFAULT 0
+  constant INTEGER DEFAULT 0,
+  updated_at INTEGER NOT NULL DEFAULT 0
 );
 
 CREATE TABLE IF NOT EXISTS persona_worldinfo (
   persona_id TEXT REFERENCES personas(id) ON DELETE CASCADE,
   book_id TEXT REFERENCES worldinfo_books(id) ON DELETE CASCADE,
+  updated_at INTEGER NOT NULL DEFAULT 0,
   PRIMARY KEY (persona_id, book_id)
 );
 
 CREATE TABLE IF NOT EXISTS character_worldinfo (
   character_id TEXT REFERENCES characters(id) ON DELETE CASCADE,
   book_id TEXT REFERENCES worldinfo_books(id) ON DELETE CASCADE,
+  updated_at INTEGER NOT NULL DEFAULT 0,
   PRIMARY KEY (character_id, book_id)
 );
 
 -- ---------------------------------------------------------
 --  대화
 -- ---------------------------------------------------------
+-- conversation_folders: 캐릭터별 대화 폴더 (대화 상세 왼쪽 목록)
+CREATE TABLE IF NOT EXISTS conversation_folders (
+  id TEXT PRIMARY KEY,
+  character_id TEXT NOT NULL REFERENCES characters(id) ON DELETE CASCADE,
+  name TEXT NOT NULL,
+  sort_order INTEGER NOT NULL DEFAULT 0,
+  created_at INTEGER NOT NULL,
+  updated_at INTEGER NOT NULL
+);
+
 CREATE TABLE IF NOT EXISTS conversations (
   id TEXT PRIMARY KEY,
   title TEXT,
@@ -112,8 +130,16 @@ CREATE TABLE IF NOT EXISTS conversations (
   world_info_ids TEXT,
   mode TEXT,
   meta TEXT,
+  -- 대화별 모델 (ADR-020, 1-H-2)
+  -- NULL = 이 대화의 API 프로필의 기본 모델을 따라간다 (프로필의 기본 모델을 바꾸면 같이 바뀜).
+  -- 사용자가 대화 설정에서 모델을 고르면 그 이름이 여기 저장된다. 대화의 API를 바꾸면 NULL로 돌아간다.
+  model TEXT,
   pinned INTEGER DEFAULT 0,
   images_enabled INTEGER NOT NULL DEFAULT 0,
+  -- folder_id / api_profile_id: 대화별 폴더·API (프리셋은 prompt_preset_id가 이미 있음)
+  -- 비어 있으면 앱 설정의 선택값을 쓴다
+  folder_id TEXT REFERENCES conversation_folders(id) ON DELETE SET NULL,
+  api_profile_id TEXT REFERENCES api_profiles(id) ON DELETE SET NULL,
   created_at INTEGER,
   updated_at INTEGER
 );
@@ -137,6 +163,14 @@ CREATE TABLE IF NOT EXISTS messages (
   UNIQUE(conversation_id, seq)
 );
 
+-- message_prompts: AI 응답을 만들 때 실제로 보낸 프롬프트 ("보낸 컨텍스트 보기")
+CREATE TABLE IF NOT EXISTS message_prompts (
+  message_id TEXT PRIMARY KEY REFERENCES messages(id) ON DELETE CASCADE,
+  prompt TEXT NOT NULL,
+  created_at INTEGER NOT NULL
+);
+
+
 -- 메시지 즐겨찾기
 CREATE TABLE IF NOT EXISTS message_bookmarks (
   id TEXT PRIMARY KEY,
@@ -148,13 +182,15 @@ CREATE TABLE IF NOT EXISTS message_bookmarks (
 -- 태그
 CREATE TABLE IF NOT EXISTS message_tags (
   id TEXT PRIMARY KEY,
-  name TEXT NOT NULL
+  name TEXT NOT NULL,
+  updated_at INTEGER NOT NULL DEFAULT 0
 );
 
 -- 메시지와 태그 연결
 CREATE TABLE IF NOT EXISTS message_tag_relations (
   message_id TEXT NOT NULL REFERENCES messages(id) ON DELETE CASCADE,
   tag_id TEXT NOT NULL,
+  updated_at INTEGER NOT NULL DEFAULT 0,
   PRIMARY KEY (message_id, tag_id)
 );
 
@@ -163,7 +199,8 @@ CREATE TABLE IF NOT EXISTS message_collections (
   id TEXT PRIMARY KEY,
   title TEXT NOT NULL,
   description TEXT,
-  created_at INTEGER NOT NULL
+  created_at INTEGER NOT NULL,
+  updated_at INTEGER NOT NULL DEFAULT 0
 );
 
 -- 컬렉션에 포함된 메시지
@@ -171,12 +208,14 @@ CREATE TABLE IF NOT EXISTS collection_messages (
   collection_id TEXT NOT NULL REFERENCES message_collections(id) ON DELETE CASCADE,
   message_id TEXT NOT NULL REFERENCES messages(id) ON DELETE CASCADE,
   sort_order INTEGER NOT NULL,
+  updated_at INTEGER NOT NULL DEFAULT 0,
   PRIMARY KEY (collection_id, message_id)
 );
 
 -- =========================================================
 -- 인덱스
 -- =========================================================
+CREATE INDEX IF NOT EXISTS idx_conversation_folders_char ON conversation_folders(character_id, sort_order);
 CREATE INDEX IF NOT EXISTS idx_messages_conv ON messages(conversation_id, created_at);
 CREATE UNIQUE INDEX IF NOT EXISTS idx_character_images_key ON character_images(character_id, key COLLATE NOCASE);
 

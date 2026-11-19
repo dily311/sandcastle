@@ -19,14 +19,12 @@ CREATE TRIGGER api_profiles_touch_insert AFTER INSERT ON api_profiles FOR EACH R
 CREATE TRIGGER api_profiles_touch_update AFTER UPDATE ON api_profiles FOR EACH ROW WHEN NEW.updated_at IS OLD.updated_at BEGIN UPDATE api_profiles SET updated_at = CAST((julianday('now') - 2440587.5) * 86400000 AS INTEGER) WHERE rowid = NEW.rowid; END;
 
 -- audio_assets
-ALTER TABLE audio_assets ADD COLUMN updated_at INTEGER NOT NULL DEFAULT 0;
 UPDATE audio_assets SET updated_at = updated_at * 1000 WHERE updated_at IS NOT NULL AND updated_at > 0 AND updated_at < 100000000000;
 UPDATE audio_assets SET updated_at = CAST((julianday('now') - 2440587.5) * 86400000 AS INTEGER) WHERE updated_at IS NULL OR updated_at = 0;
 CREATE TRIGGER audio_assets_touch_insert AFTER INSERT ON audio_assets FOR EACH ROW WHEN NEW.updated_at IS NULL OR NEW.updated_at = 0 BEGIN UPDATE audio_assets SET updated_at = CAST((julianday('now') - 2440587.5) * 86400000 AS INTEGER) WHERE rowid = NEW.rowid; END;
 CREATE TRIGGER audio_assets_touch_update AFTER UPDATE ON audio_assets FOR EACH ROW WHEN NEW.updated_at IS OLD.updated_at BEGIN UPDATE audio_assets SET updated_at = CAST((julianday('now') - 2440587.5) * 86400000 AS INTEGER) WHERE rowid = NEW.rowid; END;
 
 -- background_assets
-ALTER TABLE background_assets ADD COLUMN updated_at INTEGER NOT NULL DEFAULT 0;
 UPDATE background_assets SET updated_at = updated_at * 1000 WHERE updated_at IS NOT NULL AND updated_at > 0 AND updated_at < 100000000000;
 UPDATE background_assets SET updated_at = CAST((julianday('now') - 2440587.5) * 86400000 AS INTEGER) WHERE updated_at IS NULL OR updated_at = 0;
 CREATE TRIGGER background_assets_touch_insert AFTER INSERT ON background_assets FOR EACH ROW WHEN NEW.updated_at IS NULL OR NEW.updated_at = 0 BEGIN UPDATE background_assets SET updated_at = CAST((julianday('now') - 2440587.5) * 86400000 AS INTEGER) WHERE rowid = NEW.rowid; END;
@@ -39,14 +37,12 @@ CREATE TRIGGER budget_limits_touch_insert AFTER INSERT ON budget_limits FOR EACH
 CREATE TRIGGER budget_limits_touch_update AFTER UPDATE ON budget_limits FOR EACH ROW WHEN NEW.updated_at IS OLD.updated_at BEGIN UPDATE budget_limits SET updated_at = CAST((julianday('now') - 2440587.5) * 86400000 AS INTEGER) WHERE rowid = NEW.rowid; END;
 
 -- cg_assets
-ALTER TABLE cg_assets ADD COLUMN updated_at INTEGER NOT NULL DEFAULT 0;
 UPDATE cg_assets SET updated_at = updated_at * 1000 WHERE updated_at IS NOT NULL AND updated_at > 0 AND updated_at < 100000000000;
 UPDATE cg_assets SET updated_at = CAST((julianday('now') - 2440587.5) * 86400000 AS INTEGER) WHERE updated_at IS NULL OR updated_at = 0;
 CREATE TRIGGER cg_assets_touch_insert AFTER INSERT ON cg_assets FOR EACH ROW WHEN NEW.updated_at IS NULL OR NEW.updated_at = 0 BEGIN UPDATE cg_assets SET updated_at = CAST((julianday('now') - 2440587.5) * 86400000 AS INTEGER) WHERE rowid = NEW.rowid; END;
 CREATE TRIGGER cg_assets_touch_update AFTER UPDATE ON cg_assets FOR EACH ROW WHEN NEW.updated_at IS OLD.updated_at BEGIN UPDATE cg_assets SET updated_at = CAST((julianday('now') - 2440587.5) * 86400000 AS INTEGER) WHERE rowid = NEW.rowid; END;
 
 -- character_assets
-ALTER TABLE character_assets ADD COLUMN updated_at INTEGER NOT NULL DEFAULT 0;
 UPDATE character_assets SET updated_at = updated_at * 1000 WHERE updated_at IS NOT NULL AND updated_at > 0 AND updated_at < 100000000000;
 UPDATE character_assets SET updated_at = CAST((julianday('now') - 2440587.5) * 86400000 AS INTEGER) WHERE updated_at IS NULL OR updated_at = 0;
 CREATE TRIGGER character_assets_touch_insert AFTER INSERT ON character_assets FOR EACH ROW WHEN NEW.updated_at IS NULL OR NEW.updated_at = 0 BEGIN UPDATE character_assets SET updated_at = CAST((julianday('now') - 2440587.5) * 86400000 AS INTEGER) WHERE rowid = NEW.rowid; END;
@@ -60,7 +56,6 @@ CREATE TRIGGER character_images_touch_insert AFTER INSERT ON character_images FO
 CREATE TRIGGER character_images_touch_update AFTER UPDATE ON character_images FOR EACH ROW WHEN NEW.updated_at IS OLD.updated_at BEGIN UPDATE character_images SET updated_at = CAST((julianday('now') - 2440587.5) * 86400000 AS INTEGER) WHERE rowid = NEW.rowid; END;
 
 -- character_worldinfo
-ALTER TABLE character_worldinfo ADD COLUMN updated_at INTEGER NOT NULL DEFAULT 0;
 UPDATE character_worldinfo SET updated_at = updated_at * 1000 WHERE updated_at IS NOT NULL AND updated_at > 0 AND updated_at < 100000000000;
 UPDATE character_worldinfo SET updated_at = CAST((julianday('now') - 2440587.5) * 86400000 AS INTEGER) WHERE updated_at IS NULL OR updated_at = 0;
 CREATE TRIGGER character_worldinfo_touch_insert AFTER INSERT ON character_worldinfo FOR EACH ROW WHEN NEW.updated_at IS NULL OR NEW.updated_at = 0 BEGIN UPDATE character_worldinfo SET updated_at = CAST((julianday('now') - 2440587.5) * 86400000 AS INTEGER) WHERE rowid = NEW.rowid; END;
@@ -74,7 +69,6 @@ CREATE TRIGGER characters_touch_insert AFTER INSERT ON characters FOR EACH ROW W
 CREATE TRIGGER characters_touch_update AFTER UPDATE ON characters FOR EACH ROW WHEN NEW.updated_at IS OLD.updated_at BEGIN UPDATE characters SET updated_at = CAST((julianday('now') - 2440587.5) * 86400000 AS INTEGER) WHERE rowid = NEW.rowid; END;
 
 -- collection_messages
-ALTER TABLE collection_messages ADD COLUMN updated_at INTEGER NOT NULL DEFAULT 0;
 UPDATE collection_messages SET updated_at = updated_at * 1000 WHERE updated_at IS NOT NULL AND updated_at > 0 AND updated_at < 100000000000;
 UPDATE collection_messages SET updated_at = CAST((julianday('now') - 2440587.5) * 86400000 AS INTEGER) WHERE updated_at IS NULL OR updated_at = 0;
 CREATE TRIGGER collection_messages_touch_insert AFTER INSERT ON collection_messages FOR EACH ROW WHEN NEW.updated_at IS NULL OR NEW.updated_at = 0 BEGIN UPDATE collection_messages SET updated_at = CAST((julianday('now') - 2440587.5) * 86400000 AS INTEGER) WHERE rowid = NEW.rowid; END;
@@ -108,7 +102,6 @@ CREATE TRIGGER game_assets_touch_insert AFTER INSERT ON game_assets FOR EACH ROW
 CREATE TRIGGER game_assets_touch_update AFTER UPDATE ON game_assets FOR EACH ROW WHEN NEW.updated_at IS OLD.updated_at BEGIN UPDATE game_assets SET updated_at = CAST((julianday('now') - 2440587.5) * 86400000 AS INTEGER) WHERE rowid = NEW.rowid; END;
 
 -- game_branches
-ALTER TABLE game_branches ADD COLUMN updated_at INTEGER NOT NULL DEFAULT 0;
 UPDATE game_branches SET updated_at = updated_at * 1000 WHERE updated_at IS NOT NULL AND updated_at > 0 AND updated_at < 100000000000;
 UPDATE game_branches SET updated_at = CAST((julianday('now') - 2440587.5) * 86400000 AS INTEGER) WHERE updated_at IS NULL OR updated_at = 0;
 CREATE TRIGGER game_branches_touch_insert AFTER INSERT ON game_branches FOR EACH ROW WHEN NEW.updated_at IS NULL OR NEW.updated_at = 0 BEGIN UPDATE game_branches SET updated_at = CAST((julianday('now') - 2440587.5) * 86400000 AS INTEGER) WHERE rowid = NEW.rowid; END;
@@ -128,7 +121,6 @@ CREATE TRIGGER game_character_state_snapshots_touch_insert AFTER INSERT ON game_
 CREATE TRIGGER game_character_state_snapshots_touch_update AFTER UPDATE ON game_character_state_snapshots FOR EACH ROW WHEN NEW.updated_at IS OLD.updated_at BEGIN UPDATE game_character_state_snapshots SET updated_at = CAST((julianday('now') - 2440587.5) * 86400000 AS INTEGER) WHERE rowid = NEW.rowid; END;
 
 -- game_character_worldinfo
-ALTER TABLE game_character_worldinfo ADD COLUMN updated_at INTEGER NOT NULL DEFAULT 0;
 UPDATE game_character_worldinfo SET updated_at = updated_at * 1000 WHERE updated_at IS NOT NULL AND updated_at > 0 AND updated_at < 100000000000;
 UPDATE game_character_worldinfo SET updated_at = CAST((julianday('now') - 2440587.5) * 86400000 AS INTEGER) WHERE updated_at IS NULL OR updated_at = 0;
 CREATE TRIGGER game_character_worldinfo_touch_insert AFTER INSERT ON game_character_worldinfo FOR EACH ROW WHEN NEW.updated_at IS NULL OR NEW.updated_at = 0 BEGIN UPDATE game_character_worldinfo SET updated_at = CAST((julianday('now') - 2440587.5) * 86400000 AS INTEGER) WHERE rowid = NEW.rowid; END;
@@ -142,14 +134,12 @@ CREATE TRIGGER game_characters_touch_insert AFTER INSERT ON game_characters FOR 
 CREATE TRIGGER game_characters_touch_update AFTER UPDATE ON game_characters FOR EACH ROW WHEN NEW.updated_at IS OLD.updated_at BEGIN UPDATE game_characters SET updated_at = CAST((julianday('now') - 2440587.5) * 86400000 AS INTEGER) WHERE rowid = NEW.rowid; END;
 
 -- game_choices
-ALTER TABLE game_choices ADD COLUMN updated_at INTEGER NOT NULL DEFAULT 0;
 UPDATE game_choices SET updated_at = updated_at * 1000 WHERE updated_at IS NOT NULL AND updated_at > 0 AND updated_at < 100000000000;
 UPDATE game_choices SET updated_at = CAST((julianday('now') - 2440587.5) * 86400000 AS INTEGER) WHERE updated_at IS NULL OR updated_at = 0;
 CREATE TRIGGER game_choices_touch_insert AFTER INSERT ON game_choices FOR EACH ROW WHEN NEW.updated_at IS NULL OR NEW.updated_at = 0 BEGIN UPDATE game_choices SET updated_at = CAST((julianday('now') - 2440587.5) * 86400000 AS INTEGER) WHERE rowid = NEW.rowid; END;
 CREATE TRIGGER game_choices_touch_update AFTER UPDATE ON game_choices FOR EACH ROW WHEN NEW.updated_at IS OLD.updated_at BEGIN UPDATE game_choices SET updated_at = CAST((julianday('now') - 2440587.5) * 86400000 AS INTEGER) WHERE rowid = NEW.rowid; END;
 
 -- game_conversation_participants
-ALTER TABLE game_conversation_participants ADD COLUMN updated_at INTEGER NOT NULL DEFAULT 0;
 UPDATE game_conversation_participants SET updated_at = updated_at * 1000 WHERE updated_at IS NOT NULL AND updated_at > 0 AND updated_at < 100000000000;
 UPDATE game_conversation_participants SET updated_at = CAST((julianday('now') - 2440587.5) * 86400000 AS INTEGER) WHERE updated_at IS NULL OR updated_at = 0;
 CREATE TRIGGER game_conversation_participants_touch_insert AFTER INSERT ON game_conversation_participants FOR EACH ROW WHEN NEW.updated_at IS NULL OR NEW.updated_at = 0 BEGIN UPDATE game_conversation_participants SET updated_at = CAST((julianday('now') - 2440587.5) * 86400000 AS INTEGER) WHERE rowid = NEW.rowid; END;
@@ -163,49 +153,42 @@ CREATE TRIGGER game_conversations_touch_insert AFTER INSERT ON game_conversation
 CREATE TRIGGER game_conversations_touch_update AFTER UPDATE ON game_conversations FOR EACH ROW WHEN NEW.updated_at IS OLD.updated_at BEGIN UPDATE game_conversations SET updated_at = CAST((julianday('now') - 2440587.5) * 86400000 AS INTEGER) WHERE rowid = NEW.rowid; END;
 
 -- game_encounter_entries
-ALTER TABLE game_encounter_entries ADD COLUMN updated_at INTEGER NOT NULL DEFAULT 0;
 UPDATE game_encounter_entries SET updated_at = updated_at * 1000 WHERE updated_at IS NOT NULL AND updated_at > 0 AND updated_at < 100000000000;
 UPDATE game_encounter_entries SET updated_at = CAST((julianday('now') - 2440587.5) * 86400000 AS INTEGER) WHERE updated_at IS NULL OR updated_at = 0;
 CREATE TRIGGER game_encounter_entries_touch_insert AFTER INSERT ON game_encounter_entries FOR EACH ROW WHEN NEW.updated_at IS NULL OR NEW.updated_at = 0 BEGIN UPDATE game_encounter_entries SET updated_at = CAST((julianday('now') - 2440587.5) * 86400000 AS INTEGER) WHERE rowid = NEW.rowid; END;
 CREATE TRIGGER game_encounter_entries_touch_update AFTER UPDATE ON game_encounter_entries FOR EACH ROW WHEN NEW.updated_at IS OLD.updated_at BEGIN UPDATE game_encounter_entries SET updated_at = CAST((julianday('now') - 2440587.5) * 86400000 AS INTEGER) WHERE rowid = NEW.rowid; END;
 
 -- game_encounter_tables
-ALTER TABLE game_encounter_tables ADD COLUMN updated_at INTEGER NOT NULL DEFAULT 0;
 UPDATE game_encounter_tables SET updated_at = updated_at * 1000 WHERE updated_at IS NOT NULL AND updated_at > 0 AND updated_at < 100000000000;
 UPDATE game_encounter_tables SET updated_at = CAST((julianday('now') - 2440587.5) * 86400000 AS INTEGER) WHERE updated_at IS NULL OR updated_at = 0;
 CREATE TRIGGER game_encounter_tables_touch_insert AFTER INSERT ON game_encounter_tables FOR EACH ROW WHEN NEW.updated_at IS NULL OR NEW.updated_at = 0 BEGIN UPDATE game_encounter_tables SET updated_at = CAST((julianday('now') - 2440587.5) * 86400000 AS INTEGER) WHERE rowid = NEW.rowid; END;
 CREATE TRIGGER game_encounter_tables_touch_update AFTER UPDATE ON game_encounter_tables FOR EACH ROW WHEN NEW.updated_at IS OLD.updated_at BEGIN UPDATE game_encounter_tables SET updated_at = CAST((julianday('now') - 2440587.5) * 86400000 AS INTEGER) WHERE rowid = NEW.rowid; END;
 
 -- game_endings
-ALTER TABLE game_endings ADD COLUMN updated_at INTEGER NOT NULL DEFAULT 0;
 UPDATE game_endings SET updated_at = updated_at * 1000 WHERE updated_at IS NOT NULL AND updated_at > 0 AND updated_at < 100000000000;
 UPDATE game_endings SET updated_at = CAST((julianday('now') - 2440587.5) * 86400000 AS INTEGER) WHERE updated_at IS NULL OR updated_at = 0;
 CREATE TRIGGER game_endings_touch_insert AFTER INSERT ON game_endings FOR EACH ROW WHEN NEW.updated_at IS NULL OR NEW.updated_at = 0 BEGIN UPDATE game_endings SET updated_at = CAST((julianday('now') - 2440587.5) * 86400000 AS INTEGER) WHERE rowid = NEW.rowid; END;
 CREATE TRIGGER game_endings_touch_update AFTER UPDATE ON game_endings FOR EACH ROW WHEN NEW.updated_at IS OLD.updated_at BEGIN UPDATE game_endings SET updated_at = CAST((julianday('now') - 2440587.5) * 86400000 AS INTEGER) WHERE rowid = NEW.rowid; END;
 
 -- game_event_character_pool
-ALTER TABLE game_event_character_pool ADD COLUMN updated_at INTEGER NOT NULL DEFAULT 0;
 UPDATE game_event_character_pool SET updated_at = updated_at * 1000 WHERE updated_at IS NOT NULL AND updated_at > 0 AND updated_at < 100000000000;
 UPDATE game_event_character_pool SET updated_at = CAST((julianday('now') - 2440587.5) * 86400000 AS INTEGER) WHERE updated_at IS NULL OR updated_at = 0;
 CREATE TRIGGER game_event_character_pool_touch_insert AFTER INSERT ON game_event_character_pool FOR EACH ROW WHEN NEW.updated_at IS NULL OR NEW.updated_at = 0 BEGIN UPDATE game_event_character_pool SET updated_at = CAST((julianday('now') - 2440587.5) * 86400000 AS INTEGER) WHERE rowid = NEW.rowid; END;
 CREATE TRIGGER game_event_character_pool_touch_update AFTER UPDATE ON game_event_character_pool FOR EACH ROW WHEN NEW.updated_at IS OLD.updated_at BEGIN UPDATE game_event_character_pool SET updated_at = CAST((julianday('now') - 2440587.5) * 86400000 AS INTEGER) WHERE rowid = NEW.rowid; END;
 
 -- game_event_conditions
-ALTER TABLE game_event_conditions ADD COLUMN updated_at INTEGER NOT NULL DEFAULT 0;
 UPDATE game_event_conditions SET updated_at = updated_at * 1000 WHERE updated_at IS NOT NULL AND updated_at > 0 AND updated_at < 100000000000;
 UPDATE game_event_conditions SET updated_at = CAST((julianday('now') - 2440587.5) * 86400000 AS INTEGER) WHERE updated_at IS NULL OR updated_at = 0;
 CREATE TRIGGER game_event_conditions_touch_insert AFTER INSERT ON game_event_conditions FOR EACH ROW WHEN NEW.updated_at IS NULL OR NEW.updated_at = 0 BEGIN UPDATE game_event_conditions SET updated_at = CAST((julianday('now') - 2440587.5) * 86400000 AS INTEGER) WHERE rowid = NEW.rowid; END;
 CREATE TRIGGER game_event_conditions_touch_update AFTER UPDATE ON game_event_conditions FOR EACH ROW WHEN NEW.updated_at IS OLD.updated_at BEGIN UPDATE game_event_conditions SET updated_at = CAST((julianday('now') - 2440587.5) * 86400000 AS INTEGER) WHERE rowid = NEW.rowid; END;
 
 -- game_event_log
-ALTER TABLE game_event_log ADD COLUMN updated_at INTEGER NOT NULL DEFAULT 0;
 UPDATE game_event_log SET updated_at = updated_at * 1000 WHERE updated_at IS NOT NULL AND updated_at > 0 AND updated_at < 100000000000;
 UPDATE game_event_log SET updated_at = CAST((julianday('now') - 2440587.5) * 86400000 AS INTEGER) WHERE updated_at IS NULL OR updated_at = 0;
 CREATE TRIGGER game_event_log_touch_insert AFTER INSERT ON game_event_log FOR EACH ROW WHEN NEW.updated_at IS NULL OR NEW.updated_at = 0 BEGIN UPDATE game_event_log SET updated_at = CAST((julianday('now') - 2440587.5) * 86400000 AS INTEGER) WHERE rowid = NEW.rowid; END;
 CREATE TRIGGER game_event_log_touch_update AFTER UPDATE ON game_event_log FOR EACH ROW WHEN NEW.updated_at IS OLD.updated_at BEGIN UPDATE game_event_log SET updated_at = CAST((julianday('now') - 2440587.5) * 86400000 AS INTEGER) WHERE rowid = NEW.rowid; END;
 
 -- game_event_log_characters
-ALTER TABLE game_event_log_characters ADD COLUMN updated_at INTEGER NOT NULL DEFAULT 0;
 UPDATE game_event_log_characters SET updated_at = updated_at * 1000 WHERE updated_at IS NOT NULL AND updated_at > 0 AND updated_at < 100000000000;
 UPDATE game_event_log_characters SET updated_at = CAST((julianday('now') - 2440587.5) * 86400000 AS INTEGER) WHERE updated_at IS NULL OR updated_at = 0;
 CREATE TRIGGER game_event_log_characters_touch_insert AFTER INSERT ON game_event_log_characters FOR EACH ROW WHEN NEW.updated_at IS NULL OR NEW.updated_at = 0 BEGIN UPDATE game_event_log_characters SET updated_at = CAST((julianday('now') - 2440587.5) * 86400000 AS INTEGER) WHERE rowid = NEW.rowid; END;
@@ -219,7 +202,6 @@ CREATE TRIGGER game_events_touch_insert AFTER INSERT ON game_events FOR EACH ROW
 CREATE TRIGGER game_events_touch_update AFTER UPDATE ON game_events FOR EACH ROW WHEN NEW.updated_at IS OLD.updated_at BEGIN UPDATE game_events SET updated_at = CAST((julianday('now') - 2440587.5) * 86400000 AS INTEGER) WHERE rowid = NEW.rowid; END;
 
 -- game_interactables
-ALTER TABLE game_interactables ADD COLUMN updated_at INTEGER NOT NULL DEFAULT 0;
 UPDATE game_interactables SET updated_at = updated_at * 1000 WHERE updated_at IS NOT NULL AND updated_at > 0 AND updated_at < 100000000000;
 UPDATE game_interactables SET updated_at = CAST((julianday('now') - 2440587.5) * 86400000 AS INTEGER) WHERE updated_at IS NULL OR updated_at = 0;
 CREATE TRIGGER game_interactables_touch_insert AFTER INSERT ON game_interactables FOR EACH ROW WHEN NEW.updated_at IS NULL OR NEW.updated_at = 0 BEGIN UPDATE game_interactables SET updated_at = CAST((julianday('now') - 2440587.5) * 86400000 AS INTEGER) WHERE rowid = NEW.rowid; END;
@@ -233,7 +215,6 @@ CREATE TRIGGER game_items_touch_insert AFTER INSERT ON game_items FOR EACH ROW W
 CREATE TRIGGER game_items_touch_update AFTER UPDATE ON game_items FOR EACH ROW WHEN NEW.updated_at IS OLD.updated_at BEGIN UPDATE game_items SET updated_at = CAST((julianday('now') - 2440587.5) * 86400000 AS INTEGER) WHERE rowid = NEW.rowid; END;
 
 -- game_journal
-ALTER TABLE game_journal ADD COLUMN updated_at INTEGER NOT NULL DEFAULT 0;
 UPDATE game_journal SET created_at = created_at * 1000 WHERE created_at IS NOT NULL AND created_at > 0 AND created_at < 100000000000;
 UPDATE game_journal SET updated_at = updated_at * 1000 WHERE updated_at IS NOT NULL AND updated_at > 0 AND updated_at < 100000000000;
 UPDATE game_journal SET updated_at = COALESCE(created_at, CAST((julianday('now') - 2440587.5) * 86400000 AS INTEGER)) WHERE updated_at IS NULL OR updated_at = 0;
@@ -241,14 +222,12 @@ CREATE TRIGGER game_journal_touch_insert AFTER INSERT ON game_journal FOR EACH R
 CREATE TRIGGER game_journal_touch_update AFTER UPDATE ON game_journal FOR EACH ROW WHEN NEW.updated_at IS OLD.updated_at BEGIN UPDATE game_journal SET updated_at = CAST((julianday('now') - 2440587.5) * 86400000 AS INTEGER) WHERE rowid = NEW.rowid; END;
 
 -- game_location_connections
-ALTER TABLE game_location_connections ADD COLUMN updated_at INTEGER NOT NULL DEFAULT 0;
 UPDATE game_location_connections SET updated_at = updated_at * 1000 WHERE updated_at IS NOT NULL AND updated_at > 0 AND updated_at < 100000000000;
 UPDATE game_location_connections SET updated_at = CAST((julianday('now') - 2440587.5) * 86400000 AS INTEGER) WHERE updated_at IS NULL OR updated_at = 0;
 CREATE TRIGGER game_location_connections_touch_insert AFTER INSERT ON game_location_connections FOR EACH ROW WHEN NEW.updated_at IS NULL OR NEW.updated_at = 0 BEGIN UPDATE game_location_connections SET updated_at = CAST((julianday('now') - 2440587.5) * 86400000 AS INTEGER) WHERE rowid = NEW.rowid; END;
 CREATE TRIGGER game_location_connections_touch_update AFTER UPDATE ON game_location_connections FOR EACH ROW WHEN NEW.updated_at IS OLD.updated_at BEGIN UPDATE game_location_connections SET updated_at = CAST((julianday('now') - 2440587.5) * 86400000 AS INTEGER) WHERE rowid = NEW.rowid; END;
 
 -- game_locations
-ALTER TABLE game_locations ADD COLUMN updated_at INTEGER NOT NULL DEFAULT 0;
 UPDATE game_locations SET updated_at = updated_at * 1000 WHERE updated_at IS NOT NULL AND updated_at > 0 AND updated_at < 100000000000;
 UPDATE game_locations SET updated_at = CAST((julianday('now') - 2440587.5) * 86400000 AS INTEGER) WHERE updated_at IS NULL OR updated_at = 0;
 CREATE TRIGGER game_locations_touch_insert AFTER INSERT ON game_locations FOR EACH ROW WHEN NEW.updated_at IS NULL OR NEW.updated_at = 0 BEGIN UPDATE game_locations SET updated_at = CAST((julianday('now') - 2440587.5) * 86400000 AS INTEGER) WHERE rowid = NEW.rowid; END;
@@ -289,14 +268,12 @@ CREATE TRIGGER game_projects_touch_insert AFTER INSERT ON game_projects FOR EACH
 CREATE TRIGGER game_projects_touch_update AFTER UPDATE ON game_projects FOR EACH ROW WHEN NEW.updated_at IS OLD.updated_at BEGIN UPDATE game_projects SET updated_at = CAST((julianday('now') - 2440587.5) * 86400000 AS INTEGER) WHERE rowid = NEW.rowid; END;
 
 -- game_relationship_defs
-ALTER TABLE game_relationship_defs ADD COLUMN updated_at INTEGER NOT NULL DEFAULT 0;
 UPDATE game_relationship_defs SET updated_at = updated_at * 1000 WHERE updated_at IS NOT NULL AND updated_at > 0 AND updated_at < 100000000000;
 UPDATE game_relationship_defs SET updated_at = CAST((julianday('now') - 2440587.5) * 86400000 AS INTEGER) WHERE updated_at IS NULL OR updated_at = 0;
 CREATE TRIGGER game_relationship_defs_touch_insert AFTER INSERT ON game_relationship_defs FOR EACH ROW WHEN NEW.updated_at IS NULL OR NEW.updated_at = 0 BEGIN UPDATE game_relationship_defs SET updated_at = CAST((julianday('now') - 2440587.5) * 86400000 AS INTEGER) WHERE rowid = NEW.rowid; END;
 CREATE TRIGGER game_relationship_defs_touch_update AFTER UPDATE ON game_relationship_defs FOR EACH ROW WHEN NEW.updated_at IS OLD.updated_at BEGIN UPDATE game_relationship_defs SET updated_at = CAST((julianday('now') - 2440587.5) * 86400000 AS INTEGER) WHERE rowid = NEW.rowid; END;
 
 -- game_relationship_snapshots
-ALTER TABLE game_relationship_snapshots ADD COLUMN updated_at INTEGER NOT NULL DEFAULT 0;
 UPDATE game_relationship_snapshots SET created_at = created_at * 1000 WHERE created_at IS NOT NULL AND created_at > 0 AND created_at < 100000000000;
 UPDATE game_relationship_snapshots SET updated_at = updated_at * 1000 WHERE updated_at IS NOT NULL AND updated_at > 0 AND updated_at < 100000000000;
 UPDATE game_relationship_snapshots SET updated_at = COALESCE(created_at, CAST((julianday('now') - 2440587.5) * 86400000 AS INTEGER)) WHERE updated_at IS NULL OR updated_at = 0;
@@ -310,7 +287,6 @@ CREATE TRIGGER game_saves_touch_insert AFTER INSERT ON game_saves FOR EACH ROW W
 CREATE TRIGGER game_saves_touch_update AFTER UPDATE ON game_saves FOR EACH ROW WHEN NEW.updated_at IS OLD.updated_at BEGIN UPDATE game_saves SET updated_at = CAST((julianday('now') - 2440587.5) * 86400000 AS INTEGER) WHERE rowid = NEW.rowid; END;
 
 -- game_scene_conversations
-ALTER TABLE game_scene_conversations ADD COLUMN updated_at INTEGER NOT NULL DEFAULT 0;
 UPDATE game_scene_conversations SET updated_at = updated_at * 1000 WHERE updated_at IS NOT NULL AND updated_at > 0 AND updated_at < 100000000000;
 UPDATE game_scene_conversations SET updated_at = CAST((julianday('now') - 2440587.5) * 86400000 AS INTEGER) WHERE updated_at IS NULL OR updated_at = 0;
 CREATE TRIGGER game_scene_conversations_touch_insert AFTER INSERT ON game_scene_conversations FOR EACH ROW WHEN NEW.updated_at IS NULL OR NEW.updated_at = 0 BEGIN UPDATE game_scene_conversations SET updated_at = CAST((julianday('now') - 2440587.5) * 86400000 AS INTEGER) WHERE rowid = NEW.rowid; END;
@@ -337,21 +313,18 @@ CREATE TRIGGER game_state_defs_touch_insert AFTER INSERT ON game_state_defs FOR 
 CREATE TRIGGER game_state_defs_touch_update AFTER UPDATE ON game_state_defs FOR EACH ROW WHEN NEW.updated_at IS OLD.updated_at BEGIN UPDATE game_state_defs SET updated_at = CAST((julianday('now') - 2440587.5) * 86400000 AS INTEGER) WHERE rowid = NEW.rowid; END;
 
 -- game_story_plans
-ALTER TABLE game_story_plans ADD COLUMN updated_at INTEGER NOT NULL DEFAULT 0;
 UPDATE game_story_plans SET updated_at = updated_at * 1000 WHERE updated_at IS NOT NULL AND updated_at > 0 AND updated_at < 100000000000;
 UPDATE game_story_plans SET updated_at = CAST((julianday('now') - 2440587.5) * 86400000 AS INTEGER) WHERE updated_at IS NULL OR updated_at = 0;
 CREATE TRIGGER game_story_plans_touch_insert AFTER INSERT ON game_story_plans FOR EACH ROW WHEN NEW.updated_at IS NULL OR NEW.updated_at = 0 BEGIN UPDATE game_story_plans SET updated_at = CAST((julianday('now') - 2440587.5) * 86400000 AS INTEGER) WHERE rowid = NEW.rowid; END;
 CREATE TRIGGER game_story_plans_touch_update AFTER UPDATE ON game_story_plans FOR EACH ROW WHEN NEW.updated_at IS OLD.updated_at BEGIN UPDATE game_story_plans SET updated_at = CAST((julianday('now') - 2440587.5) * 86400000 AS INTEGER) WHERE rowid = NEW.rowid; END;
 
 -- game_time_periods
-ALTER TABLE game_time_periods ADD COLUMN updated_at INTEGER NOT NULL DEFAULT 0;
 UPDATE game_time_periods SET updated_at = updated_at * 1000 WHERE updated_at IS NOT NULL AND updated_at > 0 AND updated_at < 100000000000;
 UPDATE game_time_periods SET updated_at = CAST((julianday('now') - 2440587.5) * 86400000 AS INTEGER) WHERE updated_at IS NULL OR updated_at = 0;
 CREATE TRIGGER game_time_periods_touch_insert AFTER INSERT ON game_time_periods FOR EACH ROW WHEN NEW.updated_at IS NULL OR NEW.updated_at = 0 BEGIN UPDATE game_time_periods SET updated_at = CAST((julianday('now') - 2440587.5) * 86400000 AS INTEGER) WHERE rowid = NEW.rowid; END;
 CREATE TRIGGER game_time_periods_touch_update AFTER UPDATE ON game_time_periods FOR EACH ROW WHEN NEW.updated_at IS OLD.updated_at BEGIN UPDATE game_time_periods SET updated_at = CAST((julianday('now') - 2440587.5) * 86400000 AS INTEGER) WHERE rowid = NEW.rowid; END;
 
 -- game_weather_pool_entries
-ALTER TABLE game_weather_pool_entries ADD COLUMN updated_at INTEGER NOT NULL DEFAULT 0;
 UPDATE game_weather_pool_entries SET updated_at = updated_at * 1000 WHERE updated_at IS NOT NULL AND updated_at > 0 AND updated_at < 100000000000;
 UPDATE game_weather_pool_entries SET updated_at = CAST((julianday('now') - 2440587.5) * 86400000 AS INTEGER) WHERE updated_at IS NULL OR updated_at = 0;
 CREATE TRIGGER game_weather_pool_entries_touch_insert AFTER INSERT ON game_weather_pool_entries FOR EACH ROW WHEN NEW.updated_at IS NULL OR NEW.updated_at = 0 BEGIN UPDATE game_weather_pool_entries SET updated_at = CAST((julianday('now') - 2440587.5) * 86400000 AS INTEGER) WHERE rowid = NEW.rowid; END;
@@ -365,7 +338,6 @@ CREATE TRIGGER game_weather_pools_touch_insert AFTER INSERT ON game_weather_pool
 CREATE TRIGGER game_weather_pools_touch_update AFTER UPDATE ON game_weather_pools FOR EACH ROW WHEN NEW.updated_at IS OLD.updated_at BEGIN UPDATE game_weather_pools SET updated_at = CAST((julianday('now') - 2440587.5) * 86400000 AS INTEGER) WHERE rowid = NEW.rowid; END;
 
 -- game_weather_transitions
-ALTER TABLE game_weather_transitions ADD COLUMN updated_at INTEGER NOT NULL DEFAULT 0;
 UPDATE game_weather_transitions SET updated_at = updated_at * 1000 WHERE updated_at IS NOT NULL AND updated_at > 0 AND updated_at < 100000000000;
 UPDATE game_weather_transitions SET updated_at = CAST((julianday('now') - 2440587.5) * 86400000 AS INTEGER) WHERE updated_at IS NULL OR updated_at = 0;
 CREATE TRIGGER game_weather_transitions_touch_insert AFTER INSERT ON game_weather_transitions FOR EACH ROW WHEN NEW.updated_at IS NULL OR NEW.updated_at = 0 BEGIN UPDATE game_weather_transitions SET updated_at = CAST((julianday('now') - 2440587.5) * 86400000 AS INTEGER) WHERE rowid = NEW.rowid; END;
@@ -379,7 +351,6 @@ CREATE TRIGGER game_weather_types_touch_insert AFTER INSERT ON game_weather_type
 CREATE TRIGGER game_weather_types_touch_update AFTER UPDATE ON game_weather_types FOR EACH ROW WHEN NEW.updated_at IS OLD.updated_at BEGIN UPDATE game_weather_types SET updated_at = CAST((julianday('now') - 2440587.5) * 86400000 AS INTEGER) WHERE rowid = NEW.rowid; END;
 
 -- game_worldinfo
-ALTER TABLE game_worldinfo ADD COLUMN updated_at INTEGER NOT NULL DEFAULT 0;
 UPDATE game_worldinfo SET updated_at = updated_at * 1000 WHERE updated_at IS NOT NULL AND updated_at > 0 AND updated_at < 100000000000;
 UPDATE game_worldinfo SET updated_at = CAST((julianday('now') - 2440587.5) * 86400000 AS INTEGER) WHERE updated_at IS NULL OR updated_at = 0;
 CREATE TRIGGER game_worldinfo_touch_insert AFTER INSERT ON game_worldinfo FOR EACH ROW WHEN NEW.updated_at IS NULL OR NEW.updated_at = 0 BEGIN UPDATE game_worldinfo SET updated_at = CAST((julianday('now') - 2440587.5) * 86400000 AS INTEGER) WHERE rowid = NEW.rowid; END;
@@ -400,7 +371,6 @@ CREATE TRIGGER message_bookmarks_touch_insert AFTER INSERT ON message_bookmarks 
 CREATE TRIGGER message_bookmarks_touch_update AFTER UPDATE ON message_bookmarks FOR EACH ROW WHEN NEW.updated_at IS OLD.updated_at BEGIN UPDATE message_bookmarks SET updated_at = CAST((julianday('now') - 2440587.5) * 86400000 AS INTEGER) WHERE rowid = NEW.rowid; END;
 
 -- message_collections
-ALTER TABLE message_collections ADD COLUMN updated_at INTEGER NOT NULL DEFAULT 0;
 UPDATE message_collections SET created_at = created_at * 1000 WHERE created_at IS NOT NULL AND created_at > 0 AND created_at < 100000000000;
 UPDATE message_collections SET updated_at = updated_at * 1000 WHERE updated_at IS NOT NULL AND updated_at > 0 AND updated_at < 100000000000;
 UPDATE message_collections SET updated_at = COALESCE(created_at, CAST((julianday('now') - 2440587.5) * 86400000 AS INTEGER)) WHERE updated_at IS NULL OR updated_at = 0;
@@ -408,14 +378,12 @@ CREATE TRIGGER message_collections_touch_insert AFTER INSERT ON message_collecti
 CREATE TRIGGER message_collections_touch_update AFTER UPDATE ON message_collections FOR EACH ROW WHEN NEW.updated_at IS OLD.updated_at BEGIN UPDATE message_collections SET updated_at = CAST((julianday('now') - 2440587.5) * 86400000 AS INTEGER) WHERE rowid = NEW.rowid; END;
 
 -- message_tag_relations
-ALTER TABLE message_tag_relations ADD COLUMN updated_at INTEGER NOT NULL DEFAULT 0;
 UPDATE message_tag_relations SET updated_at = updated_at * 1000 WHERE updated_at IS NOT NULL AND updated_at > 0 AND updated_at < 100000000000;
 UPDATE message_tag_relations SET updated_at = CAST((julianday('now') - 2440587.5) * 86400000 AS INTEGER) WHERE updated_at IS NULL OR updated_at = 0;
 CREATE TRIGGER message_tag_relations_touch_insert AFTER INSERT ON message_tag_relations FOR EACH ROW WHEN NEW.updated_at IS NULL OR NEW.updated_at = 0 BEGIN UPDATE message_tag_relations SET updated_at = CAST((julianday('now') - 2440587.5) * 86400000 AS INTEGER) WHERE rowid = NEW.rowid; END;
 CREATE TRIGGER message_tag_relations_touch_update AFTER UPDATE ON message_tag_relations FOR EACH ROW WHEN NEW.updated_at IS OLD.updated_at BEGIN UPDATE message_tag_relations SET updated_at = CAST((julianday('now') - 2440587.5) * 86400000 AS INTEGER) WHERE rowid = NEW.rowid; END;
 
 -- message_tags
-ALTER TABLE message_tags ADD COLUMN updated_at INTEGER NOT NULL DEFAULT 0;
 UPDATE message_tags SET updated_at = updated_at * 1000 WHERE updated_at IS NOT NULL AND updated_at > 0 AND updated_at < 100000000000;
 UPDATE message_tags SET updated_at = CAST((julianday('now') - 2440587.5) * 86400000 AS INTEGER) WHERE updated_at IS NULL OR updated_at = 0;
 CREATE TRIGGER message_tags_touch_insert AFTER INSERT ON message_tags FOR EACH ROW WHEN NEW.updated_at IS NULL OR NEW.updated_at = 0 BEGIN UPDATE message_tags SET updated_at = CAST((julianday('now') - 2440587.5) * 86400000 AS INTEGER) WHERE rowid = NEW.rowid; END;
@@ -435,7 +403,6 @@ CREATE TRIGGER model_prices_touch_insert AFTER INSERT ON model_prices FOR EACH R
 CREATE TRIGGER model_prices_touch_update AFTER UPDATE ON model_prices FOR EACH ROW WHEN NEW.updated_at IS OLD.updated_at BEGIN UPDATE model_prices SET updated_at = CAST((julianday('now') - 2440587.5) * 86400000 AS INTEGER) WHERE rowid = NEW.rowid; END;
 
 -- persona_worldinfo
-ALTER TABLE persona_worldinfo ADD COLUMN updated_at INTEGER NOT NULL DEFAULT 0;
 UPDATE persona_worldinfo SET updated_at = updated_at * 1000 WHERE updated_at IS NOT NULL AND updated_at > 0 AND updated_at < 100000000000;
 UPDATE persona_worldinfo SET updated_at = CAST((julianday('now') - 2440587.5) * 86400000 AS INTEGER) WHERE updated_at IS NULL OR updated_at = 0;
 CREATE TRIGGER persona_worldinfo_touch_insert AFTER INSERT ON persona_worldinfo FOR EACH ROW WHEN NEW.updated_at IS NULL OR NEW.updated_at = 0 BEGIN UPDATE persona_worldinfo SET updated_at = CAST((julianday('now') - 2440587.5) * 86400000 AS INTEGER) WHERE rowid = NEW.rowid; END;
@@ -449,7 +416,6 @@ CREATE TRIGGER personas_touch_insert AFTER INSERT ON personas FOR EACH ROW WHEN 
 CREATE TRIGGER personas_touch_update AFTER UPDATE ON personas FOR EACH ROW WHEN NEW.updated_at IS OLD.updated_at BEGIN UPDATE personas SET updated_at = CAST((julianday('now') - 2440587.5) * 86400000 AS INTEGER) WHERE rowid = NEW.rowid; END;
 
 -- phone_links
-ALTER TABLE phone_links ADD COLUMN updated_at INTEGER NOT NULL DEFAULT 0;
 UPDATE phone_links SET created_at = created_at * 1000 WHERE created_at IS NOT NULL AND created_at > 0 AND created_at < 100000000000;
 UPDATE phone_links SET updated_at = updated_at * 1000 WHERE updated_at IS NOT NULL AND updated_at > 0 AND updated_at < 100000000000;
 UPDATE phone_links SET updated_at = COALESCE(created_at, CAST((julianday('now') - 2440587.5) * 86400000 AS INTEGER)) WHERE updated_at IS NULL OR updated_at = 0;
@@ -491,7 +457,6 @@ CREATE TRIGGER worldinfo_books_touch_insert AFTER INSERT ON worldinfo_books FOR 
 CREATE TRIGGER worldinfo_books_touch_update AFTER UPDATE ON worldinfo_books FOR EACH ROW WHEN NEW.updated_at IS OLD.updated_at BEGIN UPDATE worldinfo_books SET updated_at = CAST((julianday('now') - 2440587.5) * 86400000 AS INTEGER) WHERE rowid = NEW.rowid; END;
 
 -- worldinfo_entries
-ALTER TABLE worldinfo_entries ADD COLUMN updated_at INTEGER NOT NULL DEFAULT 0;
 UPDATE worldinfo_entries SET updated_at = updated_at * 1000 WHERE updated_at IS NOT NULL AND updated_at > 0 AND updated_at < 100000000000;
 UPDATE worldinfo_entries SET updated_at = CAST((julianday('now') - 2440587.5) * 86400000 AS INTEGER) WHERE updated_at IS NULL OR updated_at = 0;
 CREATE TRIGGER worldinfo_entries_touch_insert AFTER INSERT ON worldinfo_entries FOR EACH ROW WHEN NEW.updated_at IS NULL OR NEW.updated_at = 0 BEGIN UPDATE worldinfo_entries SET updated_at = CAST((julianday('now') - 2440587.5) * 86400000 AS INTEGER) WHERE rowid = NEW.rowid; END;
