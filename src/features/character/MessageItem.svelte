@@ -288,7 +288,7 @@
 	{:else}
 		{#if meta.attachments?.length}
 			<div class="attach">
-				{#each meta.attachments as a (a)}<a href={fileSrc(a)} target="_blank" rel="noreferrer"><img src={fileSrc(a)} alt="첨부 이미지" loading="lazy" /></a>{/each}
+				{#each meta.attachments as a (a)}<img src={fileSrc(a)} alt="첨부 이미지" loading="lazy" />{/each}
 			</div>
 		{/if}
 		{#if !live}<LintNote {msg} bind:showOriginal={lintOriginal} onupdate={(m) => session.update(m)} />{/if}

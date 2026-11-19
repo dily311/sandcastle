@@ -189,8 +189,8 @@
 	let fileInput: HTMLInputElement | undefined = $state();
 	async function send() {
 		if (!session || session.busy || sending) return;
+		// 빈 입력도 보낼 수 있다: 사용자 메시지 없이 AI가 이어서 답함 (답이 오류로 안 왔을 때 다시 시도)
 		const text = draft;
-		if (!text.trim() && !pending.length) return;
 		const items = pending;
 		sending = true;
 		let paths: string[];
@@ -495,7 +495,7 @@
 			{#if session?.busy}
 				<IconButton label="멈추기 (받은 데까지 저장)" variant="solid" onclick={() => session?.cancel()}><Square /></IconButton>
 			{:else}
-				<IconButton label="보내기" variant="solid" type="submit" disabled={(!draft.trim() && !pending.length) || sending}><Send /></IconButton>
+				<IconButton label="보내기" variant="solid" type="submit" disabled={sending}><Send /></IconButton>
 			{/if}
 		</form>
 		<input

@@ -7,6 +7,7 @@
 	import Section from "./Section.svelte";
 	import Group from "./Group.svelte";
 	import Row from "./Row.svelte";
+	import PromptSlotEditor from "./PromptSlotEditor.svelte";
 	import { apiOptions, current, ensureLoaded, orNull, save } from "./pluginSettingForm.svelte";
 
 	onMount(ensureLoaded);
@@ -24,6 +25,9 @@
 					<ModelPicker profile={library.apis.find((a) => a.id === cur.summary.apiProfileId)} value={cur.summary.model || null} onchange={(m) => save("summary", { model: m ?? "" })} label="요약 모델" />
 				</Row>
 			{/if}
+		</Group>
+		<Group title="요약 프롬프트">
+			<PromptSlotEditor key="summary" desc="오래된 대화를 줄거리로 줄일 때 보내는 지시" vars={"{max} 요약 최대 토큰"} />
 		</Group>
 	{/if}
 </Section>

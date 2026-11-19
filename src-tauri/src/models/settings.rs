@@ -477,6 +477,8 @@ pub struct AppPrompts {
     pub game_rules: PromptSlot,
     /// 씬 입력(서술자) 규칙 (한 줄에 하나)
     pub scene_rules: PromptSlot,
+    /// 대화 요약 지시 ({max} = 요약 최대 토큰)
+    pub summary: PromptSlot,
 }
 
 /// 사용자가 만든 프롬프트 하나
