@@ -103,6 +103,22 @@ pub(crate) fn is_official_openai(base_url: &str) -> bool {
 }
 
 pub fn capabilities(format_type: &str, base_url: &str, model: &str) -> AiCapabilities {
+    let mut c = by_name(format_type, base_url, model);
+    // 모델 목록(default_text_models.json)에 이 모델이 할 수 있다고 적어 둔 것은 이름 규칙보다 우선한다.
+    // 적어 두지 않은 것은 이름 규칙 그대로 (없다고 단정하지 않음). OpenAI 호환 서버는 같은 id여도 서버마다 달라 건드리지 않는다
+    let official = !matches!(format_type, "openai") || is_official_openai(base_url);
+    if let (true, Some(meta)) = (official, crate::adapter::catalog::meta(model)) {
+        if meta.has("tools") && c.tools.status != SupportStatus::Unsupported {
+            c.tools = Support::yes("모델 목록에 도구 호출이 적혀 있음");
+        }
+        if meta.has("structuredOutput") && c.structured.status != SupportStatus::Unsupported {
+            c.structured = Support::yes("모델 목록에 구조화 출력이 적혀 있음");
+        }
+    }
+    c
+}
+
+fn by_name(format_type: &str, base_url: &str, model: &str) -> AiCapabilities {
     let m = model.trim().to_ascii_lowercase();
     let m = m.trim_start_matches("models/");
     match format_type {

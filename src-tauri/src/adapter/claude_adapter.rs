@@ -124,6 +124,9 @@ impl ClaudeClient {
         if let Some(v) = opts.top_k {
             body.insert("top_k".into(), json!(v));
         }
+        if let Some(level) = &opts.reasoning_effort {
+            body.insert("output_config".into(), json!({ "effort": level }));
+        }
 
         if !extras.tools.is_empty() {
             let tools: Vec<Value> = extras
@@ -324,6 +327,14 @@ mod tests {
             profile: p,
             credential: "test-key",
         }
+    }
+
+    #[test]
+    fn reasoning_effort_goes_to_output_config() {
+        let mut p = prompt(false);
+        assert!(ClaudeClient::body("claude-opus-5-5", &p).get("output_config").is_none());
+        p.chat_options.reasoning_effort = Some("high".into());
+        assert_eq!(ClaudeClient::body("claude-opus-5-5", &p)["output_config"]["effort"], "high");
     }
 
     #[test]

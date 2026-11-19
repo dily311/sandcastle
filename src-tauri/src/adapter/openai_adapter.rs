@@ -114,6 +114,9 @@ impl OpenAIClient {
         if let Some(v) = opts.top_p {
             body.insert("top_p".into(), json!(v));
         }
+        if let Some(level) = &opts.reasoning_effort {
+            body.insert("reasoning_effort".into(), json!(level));
+        }
 
         if !extras.tools.is_empty() {
             let mut any_strict = false;
@@ -338,6 +341,14 @@ mod tests {
             profile: p,
             credential: "test-key",
         }
+    }
+
+    #[test]
+    fn reasoning_effort_is_sent_only_when_set() {
+        let mut p = prompt(false);
+        assert!(OpenAIClient::body("m", &p).get("reasoning_effort").is_none());
+        p.chat_options.reasoning_effort = Some("low".into());
+        assert_eq!(OpenAIClient::body("m", &p)["reasoning_effort"], "low");
     }
 
     #[test]

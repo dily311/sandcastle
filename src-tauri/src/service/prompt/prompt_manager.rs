@@ -472,6 +472,11 @@ pub(crate) fn chat_options_from(preset: &PromptPresets) -> ChatOptions {
         if let Some(v) = num(src, &["top_k", "topK"]) {
             o.top_k = (v > 0.0).then_some(v as u32);
         }
+        // "auto"·빈 값은 정하지 않음 (SillyTavern 프리셋의 "auto"도 여기로 들어옴)
+        if let Some(v) = ["reasoning_effort", "reasoningEffort"].iter().find_map(|k| src.get(*k).and_then(Value::as_str)) {
+            let v = v.trim();
+            o.reasoning_effort = (!v.is_empty() && !v.eq_ignore_ascii_case("auto")).then(|| v.to_ascii_lowercase());
+        }
         if let Some(v) = ["stream", "stream_openai", "streaming"]
             .iter()
             .find_map(|k| src.get(*k).and_then(Value::as_bool))

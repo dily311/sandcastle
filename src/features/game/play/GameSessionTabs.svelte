@@ -181,7 +181,7 @@
 			<h4>프리셋 <span class="faint">{options?.promptPresetId ? "이 플레이에서 고름" : "앱 기본값"}</span></h4>
 			<Select value={options?.promptPresetId ?? DEFAULT} options={presetOptions} aria-label="이 플레이의 프리셋" onchange={(e) => setOption({ promptPresetId: e.currentTarget.value })} />
 		</section>
-		<PresetInline presetId={activePresetId} onsaved={loadUsage} />
+		<PresetInline presetId={activePresetId} onsaved={loadUsage} model={options?.model || effectiveApi?.model || null} />
 	</div>
 {:else}
 	<div class="panel-body">

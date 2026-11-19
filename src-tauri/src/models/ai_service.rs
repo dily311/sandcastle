@@ -336,6 +336,9 @@ pub struct ChatOptions {
     pub top_p: Option<f32>,
     pub top_k: Option<u32>, // Gemini, Anthropic 등에서 주로 사용
     pub stream: bool,
+    /// 추론 강도 (low·medium·high 등). 모델 목록에 이 값을 받는다고 적힌 모델에서만 보냄 (AiService가 걸러냄)
+    #[serde(default)]
+    pub reasoning_effort: Option<String>,
 }
 
 impl Default for ChatOptions {
@@ -346,6 +349,7 @@ impl Default for ChatOptions {
             top_p: None,
             top_k: None,
             stream: true,
+            reasoning_effort: None,
         }
     }
 }

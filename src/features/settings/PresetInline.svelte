@@ -4,7 +4,7 @@
 	import { call, commands } from "$shared/ipc/client";
 	import PresetEditor from "./PresetEditor.svelte";
 
-	let { presetId, onsaved }: { presetId: string | null; onsaved?: () => void } = $props();
+	let { presetId, onsaved, model = null }: { presetId: string | null; onsaved?: () => void; model?: string | null } = $props();
 
 	let detail = $state<PresetDetail | null>(null);
 	let saving = $state(false);
@@ -31,7 +31,7 @@
 
 {#if detail}
 	{#key detail.preset.id}
-		<PresetEditor {detail} {saving} onsave={save} quick autosave />
+		<PresetEditor {detail} {saving} onsave={save} quick autosave {model} />
 	{/key}
 {:else if presetId}
 	<p class="note">프리셋 불러오는 중…</p>

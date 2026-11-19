@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { apiLists, embeddingModelInfo, embeddingModelsFor, firstModel, modelIdsOf, modelLabel } from "./providers";
+import { apiLists, embeddingModelInfo, embeddingModelsFor, firstModel, modelIdsOf, modelLabel, modelMeta, reasoningOf } from "./providers";
 
 // 앱에 내장한 모델 목록(src-tauri/resources/info/*.json)이 화면이 기대하는 모양인지 — 사람이 JSON을 고쳐도 깨지지 않게
 describe("내장 모델 목록", () => {
@@ -54,5 +54,31 @@ describe("내장 임베딩 모델 목록", () => {
 		const all = embeddingModelsFor(undefined);
 		expect(all.every((m) => m.modelId && m.label)).toBe(true);
 		expect(new Set(all.map((m) => `${m.provider}/${m.modelId}`)).size).toBe(all.length);
+	});
+});
+
+describe("모델 metadata", () => {
+	it("추론 강도는 JSON에 적힌 모델에서만 고를 수 있다", () => {
+		const r = reasoningOf("claude-opus-5-5");
+		expect(r?.levels).toEqual(["low", "medium", "high", "xhigh", "max"]);
+		expect(r?.default).toBe("medium");
+		expect(reasoningOf("Claude-Opus-5-5")?.levels.length).toBe(5);
+		expect(reasoningOf("gemini-4-argon")?.levels).toEqual(["low", "medium", "high"]);
+		expect(reasoningOf("deepseek-v4-pro")?.levels).toEqual(["low", "high", "max"]);
+		expect(reasoningOf("내가-만든-모델")).toBeUndefined();
+		expect(reasoningOf(null)).toBeUndefined();
+	});
+
+	it("단가와 입력 형식을 읽는다", () => {
+		expect(modelMeta("claude-haiku-5-5")?.pricing?.long?.above).toBe(100_000);
+		expect(modelMeta("deepseek-flash")?.pricing?.output).toBe(1.2);
+		expect(modelMeta("claude-opus-5-5")?.inputModalities).toContain("image");
+	});
+
+	it("기본값은 고를 수 있는 값 안에 있다", () => {
+		for (const p of apiLists) for (const g of p.modelList) for (const m of g.model) {
+			const r = reasoningOf(m.modelId);
+			if (r?.default) expect(r.levels, m.modelId).toContain(r.default);
+		}
 	});
 });

@@ -1,7 +1,8 @@
 //! 모델 단가 → 호출 금액(달러) 계산 (ADR-007 추가).
 //!
 //! 단가는 두 곳에서 온다. 사용자가 단가표(model_prices)에 적은 값(달러 `$`만)이 먼저이고,
-//! 없으면 앱에 넣어 둔 기본 단가(default_prices.json)를 쓴다. 둘 다 없으면 계산하지 못한다(= 단가 없음).
+//! 없으면 앱에 넣어 둔 기본 단가(default_prices.json), 그것도 없으면 모델 목록(default_text_models.json)의 metadata.pricing을 쓴다.
+//! 모두 없으면 계산하지 못한다(= 단가 없음).
 //! 금액은 어디까지나 추정이다: 캐시된 입력은 더 싸지만 구분해 기록하지 않아 실제보다 조금 많게 나온다.
 use std::sync::OnceLock;
 
@@ -95,6 +96,18 @@ pub fn default_price_on(model: &str, today: &str) -> Option<Price> {
             output: e.output,
             long: e.long.as_ref().map(|l| (l.above, l.input, l.output)),
         })
+        // 기본 단가표(default_prices.json)에 없으면 모델 목록(default_text_models.json)의 metadata.pricing
+        .or_else(|| catalog_price(model))
+}
+
+/// 모델 목록에 적어 둔 단가 (id가 정확히 같은 모델만)
+fn catalog_price(model: &str) -> Option<Price> {
+    let p = crate::adapter::catalog::meta(model)?.pricing.as_ref()?;
+    Some(Price {
+        input: p.input,
+        output: p.output,
+        long: p.long.as_ref().map(|l| (l.above, l.input, l.output)),
+    })
 }
 
 /// 이 모델의 단가: 사용자 단가표(달러) → 기본 단가. 둘 다 없으면 None. 두 번째 값은 앱의 기본 단가를 썼는지
@@ -203,6 +216,18 @@ mod tests {
         assert_eq!(default_price_on("deepseek/deepseek-v4.1-flash", TODAY).map(|p| p.output), Some(1.2));
         // 버전 번호가 더 붙은 것은 다른 모델
         assert!(default_price_on("gpt-6-2-astra-2", TODAY).is_none());
+    }
+
+    #[test]
+    fn falls_back_to_the_model_list_pricing_when_the_default_table_has_none() {
+        // default_prices.json에 없는 id: 모델 목록(default_text_models.json)의 단가
+        assert!(defaults().iter().all(|e| e.id != "claude-fable-5-2" && e.id != "deepseek-flash"));
+        assert_eq!(default_price_on("claude-fable-5-2", TODAY).map(|p| (p.input, p.output)), Some((8.0, 40.0)));
+        assert_eq!(default_price_on("deepseek-flash", TODAY).map(|p| (p.input, p.output)), Some((0.3, 1.2)));
+        // 기본 단가표에 있으면 그쪽이 먼저 (날짜별 인상도 표의 값)
+        assert_eq!(default_price_on("gemini-4-argon", "2026-12-01").map(|p| p.input), Some(4.0));
+        // 목록에 단가를 적지 않은 모델은 계속 단가 없음
+        assert!(default_price_on("gemini-4-neon", TODAY).is_none());
     }
 
     #[test]

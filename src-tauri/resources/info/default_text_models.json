@@ -1,5 +1,13 @@
 {
     "asOf": "2026-11-19",
+    "metadataGuide": {
+        "contextWindow": "입력 토큰 한도",
+        "maxOutputTokens": "한 번에 낼 수 있는 최대 출력 토큰",
+        "inputModalities": "받을 수 있는 입력: text, image, audio, video, pdf",
+        "features": "tools(도구 호출), structuredOutput(스키마 응답), reasoning(추론 강도 조절). 적지 않으면 앱이 모르는 것으로 보고 이름 규칙으로 판단",
+        "reasoning": "추론 강도를 조절할 수 있는 모델만. param=effort(공급자 형식에 맞게 보냄), levels=고를 수 있는 값(낮은 것부터), default=안 정했을 때 공급자 기본값",
+        "pricing": "입력·출력 단가, 100만 토큰당 달러. long={above,input,output}은 한 요청의 입력이 above 토큰을 넘을 때의 단가. 단가표(사용자)와 default_prices.json에 값이 없을 때만 쓴다"
+    },
     "data": [
         {
             "label": "OpenAI",
@@ -12,19 +20,134 @@
                     "model": [
                         {
                             "label": "GPT-6.2 Astra",
-                            "modelId": "gpt-6.2-astra"
+                            "modelId": "gpt-6.2-astra",
+                            "metadata": {
+                                "pricing": {
+                                    "input": 8,
+                                    "output": 40,
+                                    "unit": "per_million_tokens"
+                                },
+                                "contextWindow": 1050000,
+                                "maxOutputTokens": 128000,
+                                "inputModalities": [
+                                    "text",
+                                    "image"
+                                ],
+                                "features": [
+                                    "tools",
+                                    "structuredOutput",
+                                    "reasoning"
+                                ],
+                                "reasoning": {
+                                    "param": "reasoning.effort",
+                                    "levels": [
+                                        "low",
+                                        "medium",
+                                        "high",
+                                        "xhigh",
+                                        "max"
+                                    ]
+                                }
+                            }
                         },
                         {
                             "label": "GPT-6.2 Sol",
-                            "modelId": "gpt-6.2-sol"
+                            "modelId": "gpt-6.2-sol",
+                            "metadata": {
+                                "pricing": {
+                                    "input": 2,
+                                    "output": 10,
+                                    "unit": "per_million_tokens"
+                                },
+                                "contextWindow": 1050000,
+                                "maxOutputTokens": 128000,
+                                "inputModalities": [
+                                    "text",
+                                    "image"
+                                ],
+                                "features": [
+                                    "tools",
+                                    "structuredOutput",
+                                    "reasoning"
+                                ],
+                                "reasoning": {
+                                    "param": "reasoning.effort",
+                                    "levels": [
+                                        "low",
+                                        "medium",
+                                        "high",
+                                        "xhigh",
+                                        "max"
+                                    ]
+                                }
+                            }
                         },
                         {
                             "label": "GPT-6.1 Terra",
-                            "modelId": "gpt-6.1-terra"
+                            "modelId": "gpt-6.1-terra",
+                            "metadata": {
+                                "pricing": {
+                                    "input": 1,
+                                    "output": 5,
+                                    "unit": "per_million_tokens"
+                                },
+                                "contextWindow": 1050000,
+                                "maxOutputTokens": 128000,
+                                "inputModalities": [
+                                    "text",
+                                    "image"
+                                ],
+                                "features": [
+                                    "tools",
+                                    "structuredOutput",
+                                    "reasoning"
+                                ],
+                                "reasoning": {
+                                    "param": "reasoning.effort",
+                                    "levels": [
+                                        "none",
+                                        "low",
+                                        "medium",
+                                        "high",
+                                        "xhigh",
+                                        "max"
+                                    ]
+                                }
+                            }
                         },
                         {
                             "label": "GPT-6 Luna",
-                            "modelId": "gpt-6-luna"
+                            "modelId": "gpt-6-luna",
+                            "metadata": {
+                                "pricing": {
+                                    "input": 0.1,
+                                    "output": 0.5,
+                                    "unit": "per_million_tokens"
+                                },
+                                "contextWindow": 1050000,
+                                "maxOutputTokens": 128000,
+                                "inputModalities": [
+                                    "text",
+                                    "image"
+                                ],
+                                "features": [
+                                    "tools",
+                                    "structuredOutput",
+                                    "reasoning"
+                                ],
+                                "reasoning": {
+                                    "param": "reasoning.effort",
+                                    "levels": [
+                                        "none",
+                                        "low",
+                                        "medium",
+                                        "high",
+                                        "xhigh",
+                                        "max"
+                                    ],
+                                    "default": "medium"
+                                }
+                            }
                         }
                     ]
                 },
@@ -33,27 +156,174 @@
                     "model": [
                         {
                             "label": "GPT-5.6 Sol",
-                            "modelId": "gpt-5.6-sol"
+                            "modelId": "gpt-5.6-sol",
+                            "metadata": {
+                                "contextWindow": 1050000,
+                                "maxOutputTokens": 128000,
+                                "inputModalities": [
+                                    "text",
+                                    "image"
+                                ],
+                                "features": [
+                                    "tools",
+                                    "structuredOutput",
+                                    "reasoning"
+                                ],
+                                "reasoning": {
+                                    "param": "reasoning.effort",
+                                    "levels": [
+                                        "none",
+                                        "low",
+                                        "medium",
+                                        "high",
+                                        "xhigh",
+                                        "max"
+                                    ],
+                                    "default": "medium"
+                                }
+                            }
                         },
                         {
                             "label": "GPT-5.6 Terra",
-                            "modelId": "gpt-5.6-terra"
+                            "modelId": "gpt-5.6-terra",
+                            "metadata": {
+                                "contextWindow": 1050000,
+                                "maxOutputTokens": 128000,
+                                "inputModalities": [
+                                    "text",
+                                    "image"
+                                ],
+                                "features": [
+                                    "tools",
+                                    "structuredOutput",
+                                    "reasoning"
+                                ],
+                                "reasoning": {
+                                    "param": "reasoning.effort",
+                                    "levels": [
+                                        "none",
+                                        "low",
+                                        "medium",
+                                        "high",
+                                        "xhigh",
+                                        "max"
+                                    ],
+                                    "default": "medium"
+                                }
+                            }
                         },
                         {
                             "label": "GPT-5.6 Luna",
-                            "modelId": "gpt-5.6-luna"
+                            "modelId": "gpt-5.6-luna",
+                            "metadata": {
+                                "contextWindow": 1050000,
+                                "maxOutputTokens": 128000,
+                                "inputModalities": [
+                                    "text",
+                                    "image"
+                                ],
+                                "features": [
+                                    "tools",
+                                    "structuredOutput",
+                                    "reasoning"
+                                ],
+                                "reasoning": {
+                                    "param": "reasoning.effort",
+                                    "levels": [
+                                        "none",
+                                        "low",
+                                        "medium",
+                                        "high",
+                                        "xhigh",
+                                        "max"
+                                    ],
+                                    "default": "medium"
+                                }
+                            }
                         },
                         {
                             "label": "GPT-5.5",
-                            "modelId": "gpt-5.5"
+                            "modelId": "gpt-5.5",
+                            "metadata": {
+                                "contextWindow": 1050000,
+                                "maxOutputTokens": 128000,
+                                "inputModalities": [
+                                    "text",
+                                    "image"
+                                ],
+                                "features": [
+                                    "tools",
+                                    "structuredOutput",
+                                    "reasoning"
+                                ],
+                                "reasoning": {
+                                    "param": "reasoning.effort",
+                                    "levels": [
+                                        "none",
+                                        "low",
+                                        "medium",
+                                        "high",
+                                        "xhigh"
+                                    ],
+                                    "default": "medium"
+                                }
+                            }
                         },
                         {
                             "label": "GPT-5.4",
-                            "modelId": "gpt-5.4"
+                            "modelId": "gpt-5.4",
+                            "metadata": {
+                                "contextWindow": 1050000,
+                                "maxOutputTokens": 128000,
+                                "inputModalities": [
+                                    "text",
+                                    "image"
+                                ],
+                                "features": [
+                                    "tools",
+                                    "structuredOutput",
+                                    "reasoning"
+                                ],
+                                "reasoning": {
+                                    "param": "reasoning.effort",
+                                    "levels": [
+                                        "none",
+                                        "low",
+                                        "medium",
+                                        "high",
+                                        "xhigh"
+                                    ],
+                                    "default": "none"
+                                }
+                            }
                         },
                         {
                             "label": "GPT-5.4 mini",
-                            "modelId": "gpt-5.4-mini"
+                            "modelId": "gpt-5.4-mini",
+                            "metadata": {
+                                "contextWindow": 400000,
+                                "maxOutputTokens": 128000,
+                                "inputModalities": [
+                                    "text",
+                                    "image"
+                                ],
+                                "features": [
+                                    "tools",
+                                    "structuredOutput",
+                                    "reasoning"
+                                ],
+                                "reasoning": {
+                                    "param": "reasoning.effort",
+                                    "levels": [
+                                        "none",
+                                        "low",
+                                        "medium",
+                                        "high",
+                                        "xhigh"
+                                    ],
+                                    "default": "none"
+                                }
+                            }
                         }
                     ]
                 }
@@ -70,19 +340,140 @@
                     "model": [
                         {
                             "label": "Claude Fable 5.2",
-                            "modelId": "claude-fable-5-2"
+                            "modelId": "claude-fable-5-2",
+                            "metadata": {
+                                "contextWindow": 1000000,
+                                "maxOutputTokens": 128000,
+                                "inputModalities": [
+                                    "text",
+                                    "image"
+                                ],
+                                "features": [
+                                    "tools",
+                                    "structuredOutput",
+                                    "reasoning"
+                                ],
+                                "reasoning": {
+                                    "param": "effort",
+                                    "levels": [
+                                        "low",
+                                        "medium",
+                                        "high",
+                                        "xhigh",
+                                        "max"
+                                    ],
+                                    "default": "high"
+                                },
+                                "pricing": {
+                                    "input": 8,
+                                    "output": 40,
+                                    "unit": "per_million_tokens"
+                                }
+                            }
                         },
                         {
                             "label": "Claude Opus 5.5",
-                            "modelId": "claude-opus-5-5"
+                            "modelId": "claude-opus-5-5",
+                            "metadata": {
+                                "contextWindow": 1000000,
+                                "maxOutputTokens": 128000,
+                                "inputModalities": [
+                                    "text",
+                                    "image"
+                                ],
+                                "features": [
+                                    "tools",
+                                    "structuredOutput",
+                                    "reasoning"
+                                ],
+                                "reasoning": {
+                                    "param": "effort",
+                                    "levels": [
+                                        "low",
+                                        "medium",
+                                        "high",
+                                        "xhigh",
+                                        "max"
+                                    ],
+                                    "default": "medium"
+                                },
+                                "pricing": {
+                                    "input": 4,
+                                    "output": 20,
+                                    "unit": "per_million_tokens"
+                                }
+                            }
                         },
                         {
                             "label": "Claude Sonnet 5.5",
-                            "modelId": "claude-sonnet-5-5"
+                            "modelId": "claude-sonnet-5-5",
+                            "metadata": {
+                                "contextWindow": 1000000,
+                                "maxOutputTokens": 128000,
+                                "inputModalities": [
+                                    "text",
+                                    "image"
+                                ],
+                                "features": [
+                                    "tools",
+                                    "structuredOutput",
+                                    "reasoning"
+                                ],
+                                "reasoning": {
+                                    "param": "effort",
+                                    "levels": [
+                                        "low",
+                                        "medium",
+                                        "high",
+                                        "xhigh",
+                                        "max"
+                                    ],
+                                    "default": "high"
+                                },
+                                "pricing": {
+                                    "input": 2,
+                                    "output": 10,
+                                    "unit": "per_million_tokens"
+                                }
+                            }
                         },
                         {
                             "label": "Claude Haiku 5.5",
-                            "modelId": "claude-haiku-5-5"
+                            "modelId": "claude-haiku-5-5",
+                            "metadata": {
+                                "contextWindow": 1000000,
+                                "maxOutputTokens": 128000,
+                                "inputModalities": [
+                                    "text",
+                                    "image"
+                                ],
+                                "features": [
+                                    "tools",
+                                    "structuredOutput",
+                                    "reasoning"
+                                ],
+                                "reasoning": {
+                                    "param": "effort",
+                                    "levels": [
+                                        "low",
+                                        "medium",
+                                        "high",
+                                        "xhigh",
+                                        "max"
+                                    ],
+                                    "default": "medium"
+                                },
+                                "pricing": {
+                                    "input": 0.1,
+                                    "output": 0.5,
+                                    "long": {
+                                        "above": 100000,
+                                        "input": 0.5,
+                                        "output": 2.5
+                                    },
+                                    "unit": "per_million_tokens"
+                                }
+                            }
                         }
                     ]
                 }
@@ -99,19 +490,122 @@
                     "model": [
                         {
                             "label": "Gemini 4 Hydrogen",
-                            "modelId": "gemini-4-hydrogen"
+                            "modelId": "gemini-4-hydrogen",
+                            "metadata": {
+                                "inputModalities": [
+                                    "text",
+                                    "image",
+                                    "audio",
+                                    "video"
+                                ],
+                                "features": [
+                                    "tools",
+                                    "structuredOutput",
+                                    "reasoning"
+                                ],
+                                "contextWindow": 1048576,
+                                "maxOutputTokens": 1048576,
+                                "reasoning": {
+                                    "param": "thinkingLevel",
+                                    "levels": [
+                                        "low",
+                                        "medium",
+                                        "high",
+                                        "xhigh"
+                                    ],
+                                    "default": "high"
+                                }
+                            }
                         },
                         {
                             "label": "Gemini 4 Neon",
-                            "modelId": "gemini-4-neon"
+                            "modelId": "gemini-4-neon",
+                            "metadata": {
+                                "inputModalities": [
+                                    "text",
+                                    "image",
+                                    "audio",
+                                    "video"
+                                ],
+                                "features": [
+                                    "tools",
+                                    "structuredOutput",
+                                    "reasoning"
+                                ],
+                                "contextWindow": 1048576,
+                                "maxOutputTokens": 1048576,
+                                "reasoning": {
+                                    "param": "thinkingLevel",
+                                    "levels": [
+                                        "low",
+                                        "medium",
+                                        "high",
+                                        "xhigh"
+                                    ],
+                                    "default": "high"
+                                }
+                            }
                         },
                         {
                             "label": "Gemini 4 Carbon",
-                            "modelId": "gemini-4-carbon"
+                            "modelId": "gemini-4-carbon",
+                            "metadata": {
+                                "inputModalities": [
+                                    "text",
+                                    "image",
+                                    "audio",
+                                    "video"
+                                ],
+                                "features": [
+                                    "tools",
+                                    "structuredOutput",
+                                    "reasoning"
+                                ],
+                                "contextWindow": 1048576,
+                                "maxOutputTokens": 1048576,
+                                "reasoning": {
+                                    "param": "thinkingLevel",
+                                    "levels": [
+                                        "low",
+                                        "medium",
+                                        "high"
+                                    ],
+                                    "default": "medium"
+                                }
+                            }
                         },
                         {
                             "label": "Gemini 4 Argon",
-                            "modelId": "gemini-4-argon"
+                            "modelId": "gemini-4-argon",
+                            "metadata": {
+                                "inputModalities": [
+                                    "text",
+                                    "image",
+                                    "audio",
+                                    "video"
+                                ],
+                                "features": [
+                                    "tools",
+                                    "structuredOutput",
+                                    "reasoning"
+                                ],
+                                "pricing": {
+                                    "input": 2,
+                                    "output": 10,
+                                    "unit": "per_million_tokens"
+                                },
+                                "contextWindow": 1048576,
+                                "maxOutputTokens": 1048576,
+                                "reasoning": {
+                                    "param": "thinkingLevel",
+                                    "levels": [
+                                        "low",
+                                        "medium",
+                                        "high"
+                                    ],
+                                    "default": "medium"
+                                }
+                            }
                         }
                     ]
                 },
@@ -120,31 +614,208 @@
                     "model": [
                         {
                             "label": "Gemini 3.8 Flash",
-                            "modelId": "gemini-3.8-flash"
+                            "modelId": "gemini-3.8-flash",
+                            "metadata": {
+                                "inputModalities": [
+                                    "text",
+                                    "image",
+                                    "audio",
+                                    "video"
+                                ],
+                                "features": [
+                                    "tools",
+                                    "structuredOutput",
+                                    "reasoning"
+                                ],
+                                "pricing": {
+                                    "input": 0.75,
+                                    "output": 3.75,
+                                    "unit": "per_million_tokens"
+                                },
+                                "contextWindow": 1048576,
+                                "maxOutputTokens": 65536,
+                                "reasoning": {
+                                    "param": "thinkingLevel",
+                                    "levels": [
+                                        "low",
+                                        "medium",
+                                        "high"
+                                    ],
+                                    "default": "medium"
+                                }
+                            }
                         },
                         {
                             "label": "Gemini 3.7 Flash",
-                            "modelId": "gemini-3.7-flash"
+                            "modelId": "gemini-3.7-flash",
+                            "metadata": {
+                                "inputModalities": [
+                                    "text",
+                                    "image",
+                                    "audio",
+                                    "video"
+                                ],
+                                "features": [
+                                    "tools",
+                                    "structuredOutput",
+                                    "reasoning"
+                                ],
+                                "contextWindow": 1048576,
+                                "maxOutputTokens": 65536,
+                                "reasoning": {
+                                    "param": "thinkingLevel",
+                                    "levels": [
+                                        "low",
+                                        "medium",
+                                        "high"
+                                    ],
+                                    "default": "medium"
+                                }
+                            }
                         },
                         {
                             "label": "Gemini 3.6 Flash",
-                            "modelId": "gemini-3.6-flash"
+                            "modelId": "gemini-3.6-flash",
+                            "metadata": {
+                                "inputModalities": [
+                                    "text",
+                                    "image",
+                                    "audio",
+                                    "video"
+                                ],
+                                "features": [
+                                    "tools",
+                                    "structuredOutput",
+                                    "reasoning"
+                                ],
+                                "contextWindow": 1048576,
+                                "maxOutputTokens": 65536,
+                                "reasoning": {
+                                    "param": "thinkingLevel",
+                                    "levels": [
+                                        "minimal",
+                                        "low",
+                                        "medium",
+                                        "high"
+                                    ],
+                                    "default": "medium"
+                                }
+                            }
                         },
                         {
                             "label": "Gemini 3.5 Flash",
-                            "modelId": "gemini-3.5-flash"
+                            "modelId": "gemini-3.5-flash",
+                            "metadata": {
+                                "inputModalities": [
+                                    "text",
+                                    "image",
+                                    "audio",
+                                    "video"
+                                ],
+                                "features": [
+                                    "tools",
+                                    "structuredOutput",
+                                    "reasoning"
+                                ],
+                                "contextWindow": 1048576,
+                                "maxOutputTokens": 65536,
+                                "reasoning": {
+                                    "param": "thinkingLevel",
+                                    "levels": [
+                                        "minimal",
+                                        "low",
+                                        "medium",
+                                        "high"
+                                    ],
+                                    "default": "medium"
+                                }
+                            }
                         },
                         {
                             "label": "Gemini 3.5 Flash-Lite",
-                            "modelId": "gemini-3.5-flash-lite"
+                            "modelId": "gemini-3.5-flash-lite",
+                            "metadata": {
+                                "inputModalities": [
+                                    "text",
+                                    "image",
+                                    "audio",
+                                    "video"
+                                ],
+                                "features": [
+                                    "tools",
+                                    "structuredOutput",
+                                    "reasoning"
+                                ],
+                                "contextWindow": 1048576,
+                                "maxOutputTokens": 65536,
+                                "reasoning": {
+                                    "param": "thinkingLevel",
+                                    "levels": [
+                                        "minimal",
+                                        "low",
+                                        "medium",
+                                        "high"
+                                    ],
+                                    "default": "minimal"
+                                }
+                            }
                         },
                         {
                             "label": "Gemini 3.1 Pro",
-                            "modelId": "gemini-3.1-pro-preview"
+                            "modelId": "gemini-3.1-pro-preview",
+                            "metadata": {
+                                "inputModalities": [
+                                    "text",
+                                    "image",
+                                    "audio",
+                                    "video"
+                                ],
+                                "features": [
+                                    "tools",
+                                    "structuredOutput",
+                                    "reasoning"
+                                ],
+                                "contextWindow": 1048576,
+                                "maxOutputTokens": 65536,
+                                "reasoning": {
+                                    "param": "thinkingLevel",
+                                    "levels": [
+                                        "low",
+                                        "medium",
+                                        "high"
+                                    ],
+                                    "default": "high"
+                                }
+                            }
                         },
                         {
                             "label": "Gemini 3 Flash",
-                            "modelId": "gemini-3-flash-preview"
+                            "modelId": "gemini-3-flash-preview",
+                            "metadata": {
+                                "inputModalities": [
+                                    "text",
+                                    "image",
+                                    "audio",
+                                    "video"
+                                ],
+                                "features": [
+                                    "tools",
+                                    "structuredOutput",
+                                    "reasoning"
+                                ],
+                                "contextWindow": 1048576,
+                                "maxOutputTokens": 65536,
+                                "reasoning": {
+                                    "param": "thinkingLevel",
+                                    "levels": [
+                                        "minimal",
+                                        "low",
+                                        "medium",
+                                        "high"
+                                    ],
+                                    "default": "high"
+                                }
+                            }
                         }
                     ]
                 }
@@ -154,26 +825,129 @@
             "label": "Google VertexAI",
             "provider": "VertexAI",
             "formatType": "vertexai",
-            "baseUrl": "https://generativelanguage.googleapis.com/v1beta",
+            "baseUrl": "https://www.googleapis.com/auth/cloud-platform",
             "modelList": [
                 {
                     "label": "Gemini 4",
                     "model": [
                         {
                             "label": "Gemini 4 Hydrogen",
-                            "modelId": "gemini-4-hydrogen"
+                            "modelId": "gemini-4-hydrogen",
+                            "metadata": {
+                                "inputModalities": [
+                                    "text",
+                                    "image",
+                                    "audio",
+                                    "video"
+                                ],
+                                "features": [
+                                    "tools",
+                                    "structuredOutput",
+                                    "reasoning"
+                                ],
+                                "contextWindow": 1048576,
+                                "maxOutputTokens": 1048576,
+                                "reasoning": {
+                                    "param": "thinkingLevel",
+                                    "levels": [
+                                        "low",
+                                        "medium",
+                                        "high",
+                                        "xhigh"
+                                    ],
+                                    "default": "high"
+                                }
+                            }
                         },
                         {
                             "label": "Gemini 4 Neon",
-                            "modelId": "gemini-4-neon"
+                            "modelId": "gemini-4-neon",
+                            "metadata": {
+                                "inputModalities": [
+                                    "text",
+                                    "image",
+                                    "audio",
+                                    "video"
+                                ],
+                                "features": [
+                                    "tools",
+                                    "structuredOutput",
+                                    "reasoning"
+                                ],
+                                "contextWindow": 1048576,
+                                "maxOutputTokens": 1048576,
+                                "reasoning": {
+                                    "param": "thinkingLevel",
+                                    "levels": [
+                                        "low",
+                                        "medium",
+                                        "high",
+                                        "xhigh"
+                                    ],
+                                    "default": "high"
+                                }
+                            }
                         },
                         {
                             "label": "Gemini 4 Carbon",
-                            "modelId": "gemini-4-carbon"
+                            "modelId": "gemini-4-carbon",
+                            "metadata": {
+                                "inputModalities": [
+                                    "text",
+                                    "image",
+                                    "audio",
+                                    "video"
+                                ],
+                                "features": [
+                                    "tools",
+                                    "structuredOutput",
+                                    "reasoning"
+                                ],
+                                "contextWindow": 1048576,
+                                "maxOutputTokens": 1048576,
+                                "reasoning": {
+                                    "param": "thinkingLevel",
+                                    "levels": [
+                                        "low",
+                                        "medium",
+                                        "high"
+                                    ],
+                                    "default": "medium"
+                                }
+                            }
                         },
                         {
                             "label": "Gemini 4 Argon",
-                            "modelId": "gemini-4-argon"
+                            "modelId": "gemini-4-argon",
+                            "metadata": {
+                                "inputModalities": [
+                                    "text",
+                                    "image",
+                                    "audio",
+                                    "video"
+                                ],
+                                "features": [
+                                    "tools",
+                                    "structuredOutput",
+                                    "reasoning"
+                                ],
+                                "pricing": {
+                                    "input": 2,
+                                    "output": 10,
+                                    "unit": "per_million_tokens"
+                                },
+                                "contextWindow": 1048576,
+                                "maxOutputTokens": 1048576,
+                                "reasoning": {
+                                    "param": "thinkingLevel",
+                                    "levels": [
+                                        "low",
+                                        "medium",
+                                        "high"
+                                    ],
+                                    "default": "medium"
+                                }
+                            }
                         }
                     ]
                 },
@@ -182,31 +956,208 @@
                     "model": [
                         {
                             "label": "Gemini 3.8 Flash",
-                            "modelId": "gemini-3.8-flash"
+                            "modelId": "gemini-3.8-flash",
+                            "metadata": {
+                                "inputModalities": [
+                                    "text",
+                                    "image",
+                                    "audio",
+                                    "video"
+                                ],
+                                "features": [
+                                    "tools",
+                                    "structuredOutput",
+                                    "reasoning"
+                                ],
+                                "pricing": {
+                                    "input": 0.75,
+                                    "output": 3.75,
+                                    "unit": "per_million_tokens"
+                                },
+                                "contextWindow": 1048576,
+                                "maxOutputTokens": 65536,
+                                "reasoning": {
+                                    "param": "thinkingLevel",
+                                    "levels": [
+                                        "low",
+                                        "medium",
+                                        "high"
+                                    ],
+                                    "default": "medium"
+                                }
+                            }
                         },
                         {
                             "label": "Gemini 3.7 Flash",
-                            "modelId": "gemini-3.7-flash"
+                            "modelId": "gemini-3.7-flash",
+                            "metadata": {
+                                "inputModalities": [
+                                    "text",
+                                    "image",
+                                    "audio",
+                                    "video"
+                                ],
+                                "features": [
+                                    "tools",
+                                    "structuredOutput",
+                                    "reasoning"
+                                ],
+                                "contextWindow": 1048576,
+                                "maxOutputTokens": 65536,
+                                "reasoning": {
+                                    "param": "thinkingLevel",
+                                    "levels": [
+                                        "low",
+                                        "medium",
+                                        "high"
+                                    ],
+                                    "default": "medium"
+                                }
+                            }
                         },
                         {
                             "label": "Gemini 3.6 Flash",
-                            "modelId": "gemini-3.6-flash"
+                            "modelId": "gemini-3.6-flash",
+                            "metadata": {
+                                "inputModalities": [
+                                    "text",
+                                    "image",
+                                    "audio",
+                                    "video"
+                                ],
+                                "features": [
+                                    "tools",
+                                    "structuredOutput",
+                                    "reasoning"
+                                ],
+                                "contextWindow": 1048576,
+                                "maxOutputTokens": 65536,
+                                "reasoning": {
+                                    "param": "thinkingLevel",
+                                    "levels": [
+                                        "minimal",
+                                        "low",
+                                        "medium",
+                                        "high"
+                                    ],
+                                    "default": "medium"
+                                }
+                            }
                         },
                         {
                             "label": "Gemini 3.5 Flash",
-                            "modelId": "gemini-3.5-flash"
+                            "modelId": "gemini-3.5-flash",
+                            "metadata": {
+                                "inputModalities": [
+                                    "text",
+                                    "image",
+                                    "audio",
+                                    "video"
+                                ],
+                                "features": [
+                                    "tools",
+                                    "structuredOutput",
+                                    "reasoning"
+                                ],
+                                "contextWindow": 1048576,
+                                "maxOutputTokens": 65536,
+                                "reasoning": {
+                                    "param": "thinkingLevel",
+                                    "levels": [
+                                        "minimal",
+                                        "low",
+                                        "medium",
+                                        "high"
+                                    ],
+                                    "default": "medium"
+                                }
+                            }
                         },
                         {
                             "label": "Gemini 3.5 Flash-Lite",
-                            "modelId": "gemini-3.5-flash-lite"
+                            "modelId": "gemini-3.5-flash-lite",
+                            "metadata": {
+                                "inputModalities": [
+                                    "text",
+                                    "image",
+                                    "audio",
+                                    "video"
+                                ],
+                                "features": [
+                                    "tools",
+                                    "structuredOutput",
+                                    "reasoning"
+                                ],
+                                "contextWindow": 1048576,
+                                "maxOutputTokens": 65536,
+                                "reasoning": {
+                                    "param": "thinkingLevel",
+                                    "levels": [
+                                        "minimal",
+                                        "low",
+                                        "medium",
+                                        "high"
+                                    ],
+                                    "default": "minimal"
+                                }
+                            }
                         },
                         {
                             "label": "Gemini 3.1 Pro",
-                            "modelId": "gemini-3.1-pro-preview"
+                            "modelId": "gemini-3.1-pro-preview",
+                            "metadata": {
+                                "inputModalities": [
+                                    "text",
+                                    "image",
+                                    "audio",
+                                    "video"
+                                ],
+                                "features": [
+                                    "tools",
+                                    "structuredOutput",
+                                    "reasoning"
+                                ],
+                                "contextWindow": 1048576,
+                                "maxOutputTokens": 65536,
+                                "reasoning": {
+                                    "param": "thinkingLevel",
+                                    "levels": [
+                                        "low",
+                                        "medium",
+                                        "high"
+                                    ],
+                                    "default": "high"
+                                }
+                            }
                         },
                         {
                             "label": "Gemini 3 Flash",
-                            "modelId": "gemini-3-flash-preview"
+                            "modelId": "gemini-3-flash-preview",
+                            "metadata": {
+                                "inputModalities": [
+                                    "text",
+                                    "image",
+                                    "audio",
+                                    "video"
+                                ],
+                                "features": [
+                                    "tools",
+                                    "structuredOutput",
+                                    "reasoning"
+                                ],
+                                "contextWindow": 1048576,
+                                "maxOutputTokens": 65536,
+                                "reasoning": {
+                                    "param": "thinkingLevel",
+                                    "levels": [
+                                        "minimal",
+                                        "low",
+                                        "medium",
+                                        "high"
+                                    ],
+                                    "default": "high"
+                                }
+                            }
                         }
                     ]
                 }
@@ -223,11 +1174,64 @@
                     "model": [
                         {
                             "label": "DeepSeek V4.1 Flash",
-                            "modelId": "deepseek-flash"
+                            "modelId": "deepseek-flash",
+                            "metadata": {
+                                "pricing": {
+                                    "input": 0.3,
+                                    "output": 1.2,
+                                    "unit": "per_million_tokens"
+                                },
+                                "contextWindow": 1048576,
+                                "maxOutputTokens": 393216,
+                                "inputModalities": [
+                                    "text",
+                                    "image"
+                                ],
+                                "features": [
+                                    "tools",
+                                    "structuredOutput",
+                                    "reasoning"
+                                ],
+                                "reasoning": {
+                                    "param": "reasoning_effort",
+                                    "levels": [
+                                        "low",
+                                        "high",
+                                        "max"
+                                    ],
+                                    "default": "high"
+                                }
+                            }
                         },
                         {
                             "label": "DeepSeek V4 Pro",
-                            "modelId": "deepseek-v4-pro"
+                            "modelId": "deepseek-v4-pro",
+                            "metadata": {
+                                "pricing": {
+                                    "input": 1.32,
+                                    "output": 3.96,
+                                    "unit": "per_million_tokens"
+                                },
+                                "contextWindow": 1048576,
+                                "maxOutputTokens": 393216,
+                                "inputModalities": [
+                                    "text"
+                                ],
+                                "features": [
+                                    "tools",
+                                    "structuredOutput",
+                                    "reasoning"
+                                ],
+                                "reasoning": {
+                                    "param": "reasoning_effort",
+                                    "levels": [
+                                        "low",
+                                        "high",
+                                        "max"
+                                    ],
+                                    "default": "high"
+                                }
+                            }
                         }
                     ]
                 }

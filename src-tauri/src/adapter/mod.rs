@@ -20,6 +20,7 @@ pub mod vertexai_adapter;
 pub mod nai_adapter;
 
 pub mod capabilities;
+pub mod catalog;
 pub mod schema;
 pub mod tools;
 
