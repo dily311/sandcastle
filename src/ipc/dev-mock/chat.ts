@@ -276,7 +276,15 @@ async function generate(convId: string, onEvent: { onmessage: (m: { chunk: strin
 	let out = "";
 	try {
 		await sleep(400);
-		for (const piece of text.match(/.{1,3}/gsu) ?? []) {
+		// localStorage.mockChunk = "big" 이면 Gemini처럼 큰 덩어리 몇 개로 보낸다 (화면의 나눠 보이기 확인용)
+		const big = (() => {
+			try {
+				return localStorage.getItem("mockChunk") === "big";
+			} catch {
+				return false;
+			}
+		})();
+		for (const piece of big ? (text.repeat(4).match(/.{1,200}/gsu) ?? []) : (text.match(/.{1,3}/gsu) ?? [])) {
 			if (state.cancelled) break;
 			out += piece;
 			onEvent.onmessage({ chunk: piece });
@@ -522,6 +530,17 @@ AI: 그때 이야기를 다시 해 볼까요?`, stale: false },
 		let user: Message_Serialize | null = null;
 		const files = (attachments as string[] | undefined) ?? [];
 		if (text.trim() || files.length) user = addMsg(c, "user", text.trim(), 0, files.length ? { attachments: files } : {});
+		// 이어쓰기: 일반 대화에서 빈 입력이고 마지막이 AI 메시지면 그 뒤에 붙인다 (백엔드와 같은 규칙)
+		const last = msgsOf(conversationId).at(-1);
+		if (!user && c.mode !== "phone" && last?.role === "assistant" && !(last.meta as { hidden?: boolean } | null)?.hidden) {
+			const r = await generate(conversationId, onEvent);
+			const meta = { ...((last.meta as Record<string, unknown>) ?? {}), info: r.info } as Record<string, any>; // eslint-disable-line @typescript-eslint/no-explicit-any
+			const content = last.content + r.content;
+			if (meta.swipes?.length) meta.swipes = meta.swipes.map((s: { content: string }, i: number) => (i === (meta.swipeId ?? 0) ? { ...s, content } : s));
+			Object.assign(last, { content, meta, updatedAt: now() });
+			c.updatedAt = now();
+			return { user: null, assistant: { ...last } };
+		}
 		const r = await generate(conversationId, onEvent);
 		const assistant = addMsg(c, "assistant", r.content, 0, { info: r.info });
 		c.updatedAt = now();

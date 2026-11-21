@@ -61,13 +61,13 @@
 		const text = draft.trim();
 		if (!text || session.busy) return;
 		draft = "";
-		await session.send(text, [], [], ghost.takeUsed(session.convId));
+		await session.send(text, [], [], ghost.takeUsed(session.convId), "phone");
 		await done();
 	}
 	/** 내 메시지 없이 답장만 더 받기 */
 	async function nudge() {
 		if (session.busy) return;
-		await session.send("");
+		await session.send("", [], [], false, "phone");
 		await done();
 	}
 	/** 엿보기: 두 사람 몫을 AI가 이어서 씀 */

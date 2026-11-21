@@ -59,16 +59,21 @@ function watchDone() {
 
 /** 진행 중인 응답 */
 interface Live {
-	/** send: 새 응답 / regenerate: 기존 메시지 다시 만들기 / peek: 폰 엿보기 (AI가 두 사람 몫을 모두 씀) */
-	kind: "send" | "regenerate" | "peek";
+	/** send: 새 응답 / regenerate: 기존 메시지 다시 만들기 / continue: 마지막 AI 메시지 뒤에 이어 쓰기 / peek: 폰 엿보기 (AI가 두 사람 몫을 모두 씀) */
+	kind: "send" | "regenerate" | "continue" | "peek";
 	text: string;
-	/** 다시 만드는 메시지 */
+	/** 다시 만들거나 이어 쓰는 메시지 */
 	targetId?: string;
+	/** 이어 쓰기: 받은 조각 앞에 보일 원래 글 */
+	base?: string;
 	/** 저장 전 보여줄 내 입력 */
 	userText?: string;
 	/** 저장 전 보여줄 첨부 이미지 (미리보기 주소) */
 	userImages?: string[];
 }
+
+/** 받은 조각을 나눠 붙이는 간격 (ms) */
+const REVEAL_TICK_MS = 30;
 
 export class ChatSession {
 	messages = $state<Message[]>([]);
@@ -117,12 +122,55 @@ export class ChatSession {
 		}
 	}
 
+	/** 받았지만 아직 화면에 붙이지 않은 조각 */
+	private pending = "";
+	private frame: ReturnType<typeof setTimeout> | 0 = 0;
+
 	private channel() {
+		this.stopReveal();
 		const ch = new Channel<StreamPayload>();
 		ch.onmessage = (p) => {
-			if (this.live) this.live.text += p.chunk;
+			this.pending += p.chunk;
+			this.reveal();
 		};
 		return ch;
+	}
+
+	/** 받은 조각을 한 번에 다 붙이지 않고 짧은 간격마다 나눠 붙인다. Gemini처럼 큰 덩어리 몇 개로 보내는 공급자도 흘러나오듯 보이게 —
+	 * 밀린 글이 많을수록 한 번에 많이 붙여서 늦어도 1~2초 안에 따라잡는다 */
+	private reveal() {
+		if (this.frame) return;
+		const step = () => {
+			this.frame = 0;
+			if (!this.live || !this.pending) return;
+			let cut = Math.min(this.pending.length, Math.max(4, Math.ceil(this.pending.length / 15)));
+			// 이모지 같은 서로게이트 쌍을 가르지 않게
+			const code = this.pending.charCodeAt(cut - 1);
+			if (code >= 0xd800 && code <= 0xdbff) cut++;
+			this.live.text += this.pending.slice(0, cut);
+			this.pending = this.pending.slice(cut);
+			if (this.pending) this.frame = setTimeout(step, REVEAL_TICK_MS);
+		};
+		this.frame = setTimeout(step, REVEAL_TICK_MS);
+	}
+
+	private flushPending() {
+		if (this.live && this.pending) this.live.text += this.pending;
+		this.pending = "";
+	}
+
+	private stopReveal() {
+		if (this.frame) clearTimeout(this.frame);
+		this.frame = 0;
+		this.pending = "";
+	}
+
+	/** 응답이 끝나면 남은 조각이 마저 흘러나오게 잠깐 기다린다 (늦어도 1.5초 뒤 한 번에) */
+	private async drain() {
+		const until = Date.now() + 1500;
+		while (this.pending && this.live && Date.now() < until) await new Promise((r) => setTimeout(r, 40));
+		this.flushPending();
+		this.stopReveal();
 	}
 
 	/** 응답 뒤 자동 번역·읽기·그림·플러그인 후처리. 자동 재생성이 곧 이 응답을 바꿀 예정이면 미루고, 사슬이 끝난 마지막 응답에 한 번만 돌린다 */
@@ -153,19 +201,26 @@ export class ChatSession {
 		else this.messages.push(m);
 	}
 
-	/** 보내기. 빈 입력(첨부도 없음)이면 저장 없이 이어서 응답. attachments: 디스크에 저장된 이미지 경로 */
-	async send(text: string, attachments: string[] = [], previews: string[] = [], ghost = false) {
+	/** 보내기. 빈 입력(첨부도 없음)이면 저장 없이 이어서 응답 — 일반 대화에서 마지막이 AI 메시지면 그 메시지 뒤에 이어 쓴다(백엔드와 같은 규칙).
+	 * attachments: 디스크에 저장된 이미지 경로 */
+	async send(text: string, attachments: string[] = [], previews: string[] = [], ghost = false, mode: "chat" | "phone" = "chat") {
 		if (this.busy) return;
-		this.live = { kind: "send", text: "", userText: text.trim() || undefined, userImages: previews.length ? previews : undefined };
+		const last = this.last;
+		const cont = mode === "chat" && !text.trim() && !attachments.length && last?.role === "assistant" && !metaOf(last).hidden ? last : null;
+		this.live = cont
+			? { kind: "continue", text: "", targetId: cont.id, base: cont.content }
+			: { kind: "send", text: "", userText: text.trim() || undefined, userImages: previews.length ? previews : undefined };
 		try {
 			const turn = await call(commands.chatSend(this.convId, text, attachments, ghost, this.channel()), src);
+			await this.drain();
 			if (turn.user) this.messages.push(turn.user);
-			this.messages.push(turn.assistant);
+			this.replace(turn.assistant);
 			this.runAfterReply(turn.assistant);
 		} catch {
 			// 입력은 응답 실패와 상관없이 저장돼 있을 수 있다
 			await this.load().catch(() => {});
 		} finally {
+			this.stopReveal();
 			this.live = null;
 			void library.refresh(this.convId);
 		}
@@ -178,11 +233,13 @@ export class ChatSession {
 		this.live = { kind: "regenerate", text: "", targetId: last.id };
 		try {
 			const turn = await call(commands.chatRegenerate(this.convId, swipe, extra, this.channel()), src);
+			await this.drain();
 			this.replace(turn.assistant);
 			this.runAfterReply(turn.assistant);
 		} catch {
 			/* 토스트로 알림 */
 		} finally {
+			this.stopReveal();
 			this.live = null;
 			void library.refresh(this.convId);
 		}
@@ -194,11 +251,13 @@ export class ChatSession {
 		this.live = { kind: "peek", text: "" };
 		try {
 			const saved = await call(commands.phonePeek(this.convId, this.channel()), src);
+			await this.drain();
 			this.messages.push(...saved);
 		} catch {
 			// 멈췄을 때 받은 데까지 저장됐을 수 있음
 			await this.load().catch(() => {});
 		} finally {
+			this.stopReveal();
 			this.live = null;
 			void library.refresh(this.convId);
 		}

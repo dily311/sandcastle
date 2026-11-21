@@ -259,24 +259,79 @@
 
 	// ---- 글을 끌어서 고르면: 북마크 / 복사 ----
 	let selMenu = $state<{ x: number; y: number; text: string; messageId: string } | null>(null);
-	/** 글을 끌어서 고른 뒤 오른쪽 클릭(폰은 꾹 누르기)하면 고른 글 메뉴. 고치는 중(입력칸)이거나 고른 글이 없으면 띄우지 않는다 */
+	/** 본문이 아닌 곳: 머리줄(번호·이름·시각)·도구 줄·번역 안내·접기·CG 그림 이름 */
+	const inMeta = (n: Element | null) => !!n?.closest(".who, .actions, .swipe, .tr-note, .fold, figcaption");
+	/** 고른 글 중 한 메시지 본문에 든 부분. 끝까지 끌어 도구 줄·다음 칸까지 넘어가도 본문만 잘라 쓴다 */
+	function pickedText(): { text: string; messageId: string; rect: DOMRect } | null {
+		const sel = window.getSelection();
+		if (!sel || sel.isCollapsed || !sel.rangeCount) return null;
+		const el = (n: Node | null) => (n instanceof Element ? n : (n?.parentElement ?? null));
+		if (el(sel.anchorNode)?.closest("textarea, input, [contenteditable='true']")) return null;
+		const block = el(sel.anchorNode)?.closest<HTMLElement>("[id^=msg-]") ?? el(sel.focusNode)?.closest<HTMLElement>("[id^=msg-]");
+		if (!block || !scroller?.contains(block)) return null;
+		const range = sel.getRangeAt(0);
+		let text = "";
+		let lastLine: Element | null = null;
+		const walker = document.createTreeWalker(block, NodeFilter.SHOW_TEXT);
+		for (let n = walker.nextNode(); n; n = walker.nextNode()) {
+			if (!range.intersectsNode(n) || inMeta(n.parentElement)) continue;
+			const raw = n.textContent ?? "";
+			const s = n === range.startContainer ? range.startOffset : 0;
+			const e = n === range.endContainer ? range.endOffset : raw.length;
+			const line = n.parentElement?.closest("p, h2, h3, h4, li, blockquote, pre") ?? null;
+			if (lastLine && line !== lastLine) text += "\n";
+			lastLine = line;
+			text += raw.slice(s, e);
+		}
+		text = text.trim();
+		return text ? { text, messageId: block.id.slice(4), rect: range.getBoundingClientRect() } : null;
+	}
+	/** 손가락: 꾹 눌러 고르는 동안 메뉴를 띄우면 포커스가 옮겨 가 고르기가 끊긴다 → 손을 떼고 고른 범위가 멈춘 뒤에 띄운다 */
+	const coarse = typeof matchMedia !== "undefined" && matchMedia("(pointer: coarse)").matches;
+	let touching = false;
+	let selTimer: ReturnType<typeof setTimeout> | undefined;
+	function menuAfterSettle() {
+		clearTimeout(selTimer);
+		selTimer = setTimeout(() => {
+			if (touching || selecting || selMenu) return;
+			const p = pickedText();
+			if (p) selMenu = { x: p.rect.left + p.rect.width / 2, y: p.rect.bottom + 8, text: p.text, messageId: p.messageId };
+		}, 450);
+	}
+	$effect(() => {
+		if (!coarse) return;
+		const down = () => {
+			touching = true;
+			clearTimeout(selTimer);
+		};
+		const up = () => {
+			touching = false;
+			menuAfterSettle();
+		};
+		const change = () => {
+			if (!touching) menuAfterSettle();
+		};
+		document.addEventListener("touchstart", down, { passive: true });
+		document.addEventListener("touchend", up, { passive: true });
+		document.addEventListener("touchcancel", up, { passive: true });
+		document.addEventListener("selectionchange", change);
+		return () => {
+			clearTimeout(selTimer);
+			document.removeEventListener("touchstart", down);
+			document.removeEventListener("touchend", up);
+			document.removeEventListener("touchcancel", up);
+			document.removeEventListener("selectionchange", change);
+		};
+	});
+	/** 글을 끌어서 고른 뒤 오른쪽 클릭하면 고른 글 메뉴 (폰은 손을 뗀 뒤 저절로). 고치는 중(입력칸)이거나 고른 글이 없으면 띄우지 않는다 */
 	function onSelectMenu(e: MouseEvent) {
 		if (selecting) return;
 		if ((e.target as Element | null)?.closest("textarea, input, [contenteditable='true']")) return;
-		const sel = window.getSelection();
-		const text = sel?.toString().trim() ?? "";
-		if (!sel || !text) return;
-		const el = (n: Node | null) => (n instanceof Element ? n : (n?.parentElement ?? null));
-		const node = el(sel.anchorNode);
-		const block = node?.closest<HTMLElement>("[id^=msg-]");
-		if (!block) return;
-		// 본문 글만: 머리줄(번호·이름·시각)·도구 줄에서 고른 것은 메뉴를 띄우지 않는다
-		const inMeta = (n: Element | null) => !!n?.closest(".who, .actions, .swipe, .tr-note");
-		if (inMeta(node) || inMeta(el(sel.focusNode))) return;
-		// 고른 범위가 다른 메시지로 넘어가면 메뉴를 띄우지 않는다
-		if (el(sel.focusNode)?.closest("[id^=msg-]") !== block) return;
+		const p = pickedText();
+		if (!p) return;
 		e.preventDefault();
-		selMenu = { x: e.clientX, y: e.clientY, text, messageId: block.id.slice(4) };
+		if (coarse) return menuAfterSettle();
+		selMenu = { x: e.clientX, y: e.clientY, text: p.text, messageId: p.messageId };
 	}
 	// 고른 글 → 이미지 카드
 	let card = $state<{ text: string; speaker?: string; time?: number } | null>(null);

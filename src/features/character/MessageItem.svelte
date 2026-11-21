@@ -43,7 +43,7 @@
 
 	const meta = $derived(metaOf(msg));
 	const isAi = $derived(msg.role === "assistant");
-	const live = $derived(session.live?.kind === "regenerate" && session.live.targetId === msg.id ? session.live : null);
+	const live = $derived((session.live?.kind === "regenerate" || session.live?.kind === "continue") && session.live.targetId === msg.id ? session.live : null);
 	// 번역이 있으면 번역문을 보여주고 "원문"으로 바꿔 볼 수 있다
 	const translation = $derived(plugins.on("translate") ? translationOf(msg) : null);
 	let showOriginal = $state(false);
@@ -54,7 +54,7 @@
 	let lintOriginal = $state(false);
 	const text = $derived(
 		live
-			? live.text.replace(/<image>[\s\S]*?(<\/image>|$)/i, "")
+			? (live.kind === "continue" ? (session.display[msg.id] ?? live.base ?? "") : "") + live.text.replace(/<image>[\s\S]*?(<\/image>|$)/i, "")
 			: translation && !showOriginal
 				? translation.text
 				: lintOriginal

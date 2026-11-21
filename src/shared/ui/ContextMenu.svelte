@@ -46,9 +46,11 @@
 		else inline = window.innerWidth < 640;
 	});
 	const keyOf = (it: MenuItem) => it.id ?? it.label;
-	/** 메뉴를 body로 옮겨 그린다: 서랍처럼 transform이 걸린 조상 안에서는 position: fixed가 화면이 아니라 그 조상을 기준으로 잡혀 메뉴가 화면 밖에 뜸 */
+	/** 메뉴를 body로 옮겨 그린다: 서랍처럼 transform이 걸린 조상 안에서는 position: fixed가 화면이 아니라 그 조상을 기준으로 잡혀 메뉴가 화면 밖에 뜸.
+	 * 열린 <dialog>(그림 크게 보기·대화 상자) 안이면 그 dialog로 옮긴다 — 모달 dialog는 맨 위 층이라 body의 메뉴는 z-index와 상관없이 뒤에 묻히고 누를 수도 없다 */
 	function portal(node: HTMLElement) {
-		document.body.appendChild(node);
+		const host = node.parentElement?.closest("dialog[open]") ?? document.body;
+		host.appendChild(node);
 		return { destroy: () => node.remove() };
 	}
 	/** 하위 메뉴가 화면 밖으로 나가면 왼쪽으로 뒤집고, 아래로 넘치면 위로 올린다 */

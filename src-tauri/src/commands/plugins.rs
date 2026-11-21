@@ -1,6 +1,7 @@
 //! 코어 플러그인 커맨드: 설정, 번역, 음성 읽기, 이미지 생성. 기능이 꺼져 있으면 모두 거절한다.
 use std::sync::Arc;
 
+use crate::service::data::settings_scope::same_path;
 use serde_json::{json, Value};
 use tauri::{AppHandle, Emitter, Manager, State};
 
@@ -326,8 +327,9 @@ pub fn delete_generated_image(app: AppHandle, theme: State<'_, SettingsState<cra
 /// 지운 그림을 테마 배경 목록·앱 배경에서도 뺀다 (배경 태그를 단 갤러리 그림)
 fn forget_backgrounds(app: &AppHandle, theme: &SettingsState<crate::models::settings::ThemeSetting>, paths: &[String]) -> Result<()> {
     let cur = read(theme)?;
-    let list: Vec<String> = cur.backgrounds.iter().filter(|b| !paths.contains(b)).cloned().collect();
-    let selected_gone = cur.background_image.as_ref().is_some_and(|b| paths.contains(b));
+    let gone = |b: &String| paths.iter().any(|p| same_path(p, b));
+    let list: Vec<String> = cur.backgrounds.iter().filter(|b| !gone(b)).cloned().collect();
+    let selected_gone = cur.background_image.as_ref().is_some_and(gone);
     if list.len() == cur.backgrounds.len() && !selected_gone {
         return Ok(());
     }
@@ -352,13 +354,24 @@ pub async fn list_all_images(
     use tools::GeneratedImage as G;
     let gen_dir = generated_dir(&app)?;
     let data_dir = app_data_dir(&app)?;
-    let backgrounds = read(&theme)?.backgrounds;
+    let mut backgrounds = read(&theme)?.backgrounds;
     let mut out = tools::list_images(&gen_dir);
-    // 갤러리 그림 중 배경 목록에 든 것은 배경 태그를 보인다
+    // 갤러리 그림 중 배경 목록에 든 것은 배경 태그를 보인다.
+    // 거꾸로 배경 태그(그림 옆 .json)가 있는데 목록에서 빠졌으면 다시 넣는다 — 예전 동기화가 다른 기기의 목록으로 덮어써서 빠진 것
+    let mut missing = vec![];
     for img in &mut out {
-        if backgrounds.iter().any(|b| b == &img.path) && !img.tags.iter().any(|t| t == "background") {
+        let listed = backgrounds.iter().any(|b| same_path(b, &img.path));
+        let tagged = img.tags.iter().any(|t| t == "background");
+        if listed && !tagged {
             img.tags.push("background".into());
+        } else if tagged && !listed {
+            missing.push(img.path.clone());
         }
+    }
+    if !missing.is_empty() {
+        backgrounds.extend(missing);
+        let settings = crate::sys::settings::apply_patch(&app, &theme.0, json!({ "backgrounds": backgrounds }))?;
+        let _ = app.emit(<crate::models::settings::ThemeSetting as SettingsDomain>::EVENT_NAME, &settings);
     }
     let file_name = |p: &str| {
         std::path::Path::new(p)
@@ -425,12 +438,12 @@ pub fn set_image_tags(
     let info = tools::set_image_tags(&generated_dir(&app)?, &path, tags)?;
     let wants_bg = info.tags.iter().any(|t| t == "background");
     let mut list = read(&theme)?.backgrounds;
-    let has = list.iter().any(|b| b == &path);
+    let has = list.iter().any(|b| same_path(b, &path));
     if wants_bg != has {
         if wants_bg {
             list.push(path.clone());
         } else {
-            list.retain(|b| b != &path);
+            list.retain(|b| !same_path(b, &path));
         }
         let settings = crate::sys::settings::apply_patch(&app, &theme.0, json!({ "backgrounds": list }))?;
         let _ = app.emit(<crate::models::settings::ThemeSetting as SettingsDomain>::EVENT_NAME, &settings);

@@ -319,6 +319,48 @@ fn push_swipe(old: &Message, content: &str, info: &Value, images: &Value) -> Val
     Value::Object(m)
 }
 
+/// 이어쓰기로 받은 글을 원래 글 뒤에 붙인다. 문장이 끝난 자리(마침표·따옴표 등) 바로 뒤에 공백 없이 이어 오면 한 칸 띄운다.
+/// 단어 중간에서 끊긴 글은 그대로 붙인다 (공급자는 보통 필요한 공백을 스스로 넣는다)
+fn join_continue(old: &str, add: &str) -> String {
+    let ends_sentence = old
+        .chars()
+        .last()
+        .is_some_and(|c| matches!(c, '.' | '!' | '?' | '…' | '"' | '”' | '\'' | '’' | '」' | '』' | ')' | '*' | '~'));
+    let starts_bare = add.chars().next().is_some_and(|c| !c.is_whitespace());
+    if ends_sentence && starts_bare {
+        format!("{old} {add}")
+    } else {
+        format!("{old}{add}")
+    }
+}
+
+/// 이어쓰기: 마지막 AI 메시지 뒤에 붙인 글을 지금 보고 있는 스와이프에도 반영한다.
+/// 생성 정보는 이번 것으로, 쓴 그림은 앞의 것 뒤에 더한다. 앞 조각 기준이던 linter 결과는 위치가 맞지 않아 지운다
+fn continue_meta(old: &Message, joined: &str, info: &Value, added: &[crate::models::character_image::ChatImageRef]) -> Value {
+    let mut m = meta_obj(&old.meta);
+    m.remove("lint");
+    m.remove("rewriteNote");
+    let mut images = m.get("images").and_then(Value::as_array).cloned().unwrap_or_default();
+    images.extend(added.iter().filter_map(|r| serde_json::to_value(r).ok()));
+    let images = Value::Array(images);
+    let sid = m.get("swipeId").and_then(Value::as_u64);
+    if let Some(s) = sid.and_then(|i| m.get_mut("swipes").and_then(Value::as_array_mut).and_then(|a| a.get_mut(i as usize))) {
+        s["content"] = json!(joined);
+        s["updatedAt"] = json!(now_ms());
+        if !s["meta"].is_object() {
+            s["meta"] = json!({});
+        }
+        s["meta"]["info"] = info.clone();
+        s["meta"]["images"] = images.clone();
+        if let Some(sm) = s["meta"].as_object_mut() {
+            sm.remove("lint");
+        }
+    }
+    m.insert("info".into(), info.clone());
+    m.insert("images".into(), images);
+    Value::Object(m)
+}
+
 /// 다시 생성(처음부터): 스와이프를 버리고 내용만 바꾼다. 숨김·챕터 같은 표시는 남긴다
 fn replace_meta(old: &Message, info: &Value, images: &Value) -> Value {
     let mut m = meta_obj(&old.meta);
@@ -476,6 +518,20 @@ impl ChatManager {
                 }
             }
             TurnKind::Send(..) | TurnKind::Reply => None,
+        };
+        // 이어쓰기: 빈 입력(첨부도 없음)이고 마지막이 숨기지 않은 AI 메시지면 새 메시지를 만들지 않고 그 뒤에 이어 붙인다.
+        // 마지막이 사용자 메시지면(응답이 오류로 안 왔을 때) 지금처럼 새 응답을 만든다
+        // 폰 대화는 말풍선마다 한 메시지라 빈 보내기는 지금처럼 새 말풍선을 만든다
+        let continue_of = match &kind {
+            TurnKind::Send(t, imgs, _)
+                if t.trim().is_empty() && imgs.is_empty() && matches!(ConversationMode::parse_or_default(&conv.mode), ConversationMode::Chat) =>
+            {
+                chat_ui::last_message(db, conversation_id)
+                    .await
+                    .map_err(AppError::from)?
+                    .filter(|m| m.role == "assistant" && !is_hidden(m.meta.as_ref()))
+            }
+            _ => None,
         };
 
         let mut context = ContextManager
@@ -747,7 +803,12 @@ impl ChatManager {
             TurnKind::Regenerate { auto: Some(a), .. } => (a.attempt, Some(json!({ "attempt": a.attempt, "max": a.max, "rules": a.rules }))),
             _ => (0, None),
         };
-        let rewrite_cfg = if cancelled { None } else { super::rewrite::enabled_for(app, &conv) };
+        // 이어쓰기에는 자동 재생성을 걸지 않는다 (다시 만들면 이어 붙이기 전의 글까지 바뀐다)
+        let rewrite_cfg = if cancelled || continue_of.is_some() {
+            None
+        } else {
+            super::rewrite::enabled_for(app, &conv)
+        };
         // 자동 재생성의 금지어는 linter와 따로: 자기 목록으로 검사해 결과를 meta.lint에 남긴다 (linter의 금지어는 다시 쓰기를 일으키지 않음)
         let lint_meta = match &rewrite_cfg {
             Some(cfg) if cfg.banned => match super::lint::rewrite_banned_finding(&content, &cfg.banned_words) {
@@ -757,6 +818,8 @@ impl ChatManager {
             _ => lint_meta,
         };
         let rewrite_pending = rewrite_cfg.and_then(|cfg| super::rewrite::decide(&cfg, lint_meta.as_ref(), attempts_done));
+        // 이어쓰기: linter 결과의 위치는 이어 붙인 조각 기준이라 합친 글과 맞지 않는다 — 고친 글은 쓰고 결과 표시는 남기지 않는다
+        let lint_meta = if continue_of.is_some() { None } else { lint_meta };
         let info = json!({
             "apiProfileId": api_profile_id,
             "presetId": preset_id,
@@ -774,8 +837,17 @@ impl ChatManager {
         });
         let images_json = serde_json::to_value(&used_images).unwrap_or(Value::Array(vec![]));
 
-        let mut assistant = match &target {
-            None => chat_ui::push_message(
+        let mut assistant = match (&target, &continue_of) {
+            (None, Some(old)) => {
+                let joined = join_continue(&old.content, &content);
+                let meta = continue_meta(old, &joined, &info, &used_images);
+                crate::db::conversation::update_message(db, &old.id, &joined, &Some(meta))
+                    .await
+                    .map_err(AppError::from)?;
+                crate::db::conversation::touch_conversation(db, conversation_id).await.map_err(AppError::from)?;
+                chat_ui::get_message(db, &old.id).await.map_err(AppError::from)?
+            }
+            (None, None) => chat_ui::push_message(
                 db,
                 MessageInput {
                     conversation_id: conversation_id.to_string(),
@@ -793,7 +865,7 @@ impl ChatManager {
             )
             .await
             .map_err(AppError::from)?,
-            Some(old) => {
+            (Some(old), _) => {
                 let swipe = matches!(kind, TurnKind::Regenerate { swipe: true, .. });
                 let meta = if swipe {
                     push_swipe(old, &content, &info, &images_json)
@@ -1146,5 +1218,75 @@ mod extra_tests {
         assert_eq!(clean_extra("  묘사는 짧게  ").as_deref(), Some("묘사는 짧게"));
         assert_eq!(clean_extra("   \n "), None);
         assert_eq!(clean_extra(&"가".repeat(5000)).unwrap().chars().count(), MAX_EXTRA_CHARS);
+    }
+}
+
+#[cfg(test)]
+mod continue_tests {
+    use super::*;
+
+    fn msg(meta: Value) -> Message {
+        Message {
+            id: "m1".into(),
+            conversation_id: "c1".into(),
+            seq: 2,
+            role: "assistant".into(),
+            name: None,
+            content: "앞부분".into(),
+            character_id: None,
+            meta: Some(meta),
+            created_at: 1,
+            updated_at: 1,
+        }
+    }
+
+    #[test]
+    fn continue_updates_current_swipe_and_keeps_other_marks() {
+        let old = msg(json!({
+            "chapter": "1장",
+            "lint": { "findings": [] },
+            "images": [{ "key": "a" }],
+            "swipeId": 1,
+            "swipes": [
+                { "content": "첫째", "meta": {} },
+                { "content": "앞부분", "meta": { "lint": {} } }
+            ]
+        }));
+        let info = json!({ "model": "m" });
+        let m = continue_meta(&old, "앞부분 뒷부분", &info, &[]);
+        assert_eq!(m["chapter"], "1장");
+        assert!(m.get("lint").is_none());
+        assert_eq!(m["info"], info);
+        assert_eq!(m["images"], json!([{ "key": "a" }]));
+        assert_eq!(m["swipes"][0]["content"], "첫째");
+        assert_eq!(m["swipes"][1]["content"], "앞부분 뒷부분");
+        assert_eq!(m["swipes"][1]["meta"]["info"], info);
+        assert!(m["swipes"][1]["meta"].get("lint").is_none());
+    }
+
+    #[test]
+    fn continue_join_adds_space_only_after_sentence_end() {
+        assert_eq!(join_continue("굳는다.", "세라피나가"), "굳는다. 세라피나가");
+        assert_eq!(
+            join_continue(
+                "굳는다.",
+                "
+
+세라피나가"
+            ),
+            "굳는다.
+
+세라피나가"
+        );
+        assert_eq!(join_continue("세라피", "나가"), "세라피나가");
+        assert_eq!(join_continue("\"좋아\"", "그녀가"), "\"좋아\" 그녀가");
+        assert_eq!(join_continue("", "처음"), "처음");
+    }
+
+    #[test]
+    fn continue_without_swipes_only_sets_info() {
+        let m = continue_meta(&msg(json!({})), "합친 글", &json!({ "model": "m" }), &[]);
+        assert!(m.get("swipes").is_none());
+        assert_eq!(m["images"], json!([]));
     }
 }
