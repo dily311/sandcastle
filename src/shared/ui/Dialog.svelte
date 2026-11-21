@@ -7,7 +7,7 @@
 		open?: boolean;
 		title: string;
 		description?: string;
-		size?: "sm" | "md" | "lg";
+		size?: "sm" | "md" | "lg" | "xl";
 		/** 바닥 버튼 영역 */
 		footer?: Snippet;
 		onclose?: () => void;
@@ -68,6 +68,9 @@
 	}
 	.lg {
 		width: min(calc(100vw - 32px), 720px);
+	}
+	.xl {
+		width: min(calc(100vw - 32px), 1020px);
 	}
 	.dialog::backdrop {
 		background: var(--overlay);

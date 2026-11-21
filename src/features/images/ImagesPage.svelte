@@ -401,29 +401,31 @@
 				{/if}
 				<!-- 정보는 그림 위에 따로 뜨는 창 (… 메뉴의 "정보 보기") -->
 				<Dialog open={showInfo} title="정보" size="md" onclose={() => (showInfo = false)}>
-				<p class="meta"><Badge>{SOURCE[v.source] ?? v.source}</Badge> {v.model ? `${v.model} · ` : ""}{when(v.createdAt)}</p>
-				{#if v.prompt}
-					<div class="block">
-						<div class="bh"><b>프롬프트</b><button class="mini" aria-label="프롬프트 복사" onclick={() => copyText(v.prompt, "프롬프트")}><Copy /></button></div>
-						<p class="prompt">{v.prompt}</p>
+					<div class="img_meta_wrap">
+						<p class="meta"><Badge>{SOURCE[v.source] ?? v.source}</Badge> {v.model ? `${v.model} · ` : ""}{when(v.createdAt)}</p>
+						{#if v.prompt}
+							<div class="block">
+								<div class="bh"><b>프롬프트</b><button class="mini" aria-label="프롬프트 복사" onclick={() => copyText(v.prompt, "프롬프트")}><Copy /></button></div>
+								<p class="prompt">{v.prompt}</p>
+							</div>
+						{/if}
+						{#if neg}
+							<div class="block">
+								<div class="bh"><b>네거티브 프롬프트</b><button class="mini" aria-label="네거티브 프롬프트 복사" onclick={() => copyText(neg, "네거티브 프롬프트")}><Copy /></button></div>
+								<p class="prompt">{neg}</p>
+							</div>
+						{/if}
+						{#if rest.length}
+							<dl class="kv">
+								{#each rest as m, i (`${m.key}-${i}`)}
+									<dt>{m.key}</dt>
+									<dd title={m.value}>{m.value}</dd>
+								{/each}
+							</dl>
+						{:else if !v.prompt && !neg}
+							<p class="meta">생성 정보 없음</p>
+						{/if}
 					</div>
-				{/if}
-				{#if neg}
-					<div class="block">
-						<div class="bh"><b>네거티브 프롬프트</b><button class="mini" aria-label="네거티브 프롬프트 복사" onclick={() => copyText(neg, "네거티브 프롬프트")}><Copy /></button></div>
-						<p class="prompt">{neg}</p>
-					</div>
-				{/if}
-				{#if rest.length}
-					<dl class="kv">
-						{#each rest as m, i (`${m.key}-${i}`)}
-							<dt>{m.key}</dt>
-							<dd title={m.value}>{m.value}</dd>
-						{/each}
-					</dl>
-				{:else if !v.prompt && !neg}
-					<p class="meta">생성 정보 없음</p>
-				{/if}
 				</Dialog>
 			</div>
 		</div>
@@ -570,6 +572,12 @@
 		gap: var(--space-3);
 		width: 100%;
 		min-width: 0;
+	}
+
+	.img_meta_wrap {
+		display: flex;
+		flex-direction: column;
+		gap: var(--space-4);
 	}
 	.meta {
 		margin: 0;

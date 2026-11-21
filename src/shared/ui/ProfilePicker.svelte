@@ -74,7 +74,7 @@
 			{#if g.title}<p class="grp">{g.title}</p>{/if}
 			{#each g.items as o (o.id)}
 				<button role="option" aria-selected={o.id === value} class:on={o.id === value} onclick={() => pick(o.id)}>
-					<Avatar name={o.name} src={fileSrc(o.avatar)} color={o.color || null} size={32} />
+					<Avatar name={o.name} src={fileSrc(o.avatar)} color={o.color || null} size={28} />
 					<span class="pt"><b>{o.name}</b>{#if o.description}<small>{o.description}</small>{/if}</span>
 				</button>
 			{/each}

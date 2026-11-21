@@ -1,11 +1,12 @@
 <script lang="ts">
+	import { cn } from "$/lib/utils/cn";
 	import type { Snippet } from "svelte";
 	import type { HTMLButtonAttributes } from "svelte/elements";
 
 	interface Props extends HTMLButtonAttributes {
 		/** 화면 낭독기와 툴팁에 쓰는 이름 (필수) */
 		label: string;
-		variant?: "ghost" | "soft" | "solid";
+		variant?: "ghost" | "soft" | "solid" | "static-white";
 		size?: "sm" | "md" | "lg";
 		active?: boolean;
 		children: Snippet;
@@ -23,7 +24,7 @@
 	}: Props = $props();
 </script>
 
-<button {type} class="icon-btn {variant} {size} {className}" class:active aria-label={label} title={label} {...rest}>
+<button {type} class={cn("icon-btn", variant, size, className)} class:active aria-label={label} title={label} {...rest}>
 	{@render children()}
 </button>
 
@@ -86,6 +87,11 @@
 		background: var(--surface-hover);
 		color: var(--text);
 	}
+
+	.static-white {
+		color: var(--icon-static-white);
+	}
+	
 	.soft {
 		background: var(--accent-soft);
 		color: var(--accent-text);

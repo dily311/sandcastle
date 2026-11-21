@@ -50,7 +50,7 @@
 	label {
 		flex: 1;
 		font-size: var(--text-sm);
-		font-weight: 600;
+		color: var(--text-muted);
 	}
 	.val {
 		font-size: var(--text-sm);

@@ -86,7 +86,7 @@
 		border-top: 1px solid var(--border);
 	}
 	.cg {
-		margin: var(--space-4) auto 0;
+		margin: var(--space-4) auto;
 		width: min(600px, 100%);
 		border-radius: var(--radius-lg);
 		overflow: hidden;
@@ -97,8 +97,10 @@
 		width: 100%;
 	}
 	.cg figcaption {
-		padding: 4px var(--space-2);
+		padding: 0;
 		font-size: var(--text-xs);
 		color: var(--text-faint);
+		opacity: 0;
+		height: 0;
 	}
 </style>

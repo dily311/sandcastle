@@ -3,25 +3,27 @@
 import { drawCover, fillGradient, gradientOf } from "$shared/ui/backgrounds";
 import { fileSrc } from "$shared/ipc/file";
 
+export type CardImgRatio = "1:1" | "3:4" | "5:4" | "9:16";
 export type CardStyle = "theme" | "paper" | "night" | "light" | "dark";
 export type CardFont = "app" | "sans" | "serif" | "mono";
 /** 글 정렬. auto = 디자인 기본값 (미니멀·자막은 가운데, 나머지는 왼쪽) */
-export type CardAlign = "auto" | "left" | "center" | "right";
+export type CardAlign = "start" | "left" | "center" | "right";
 export type CardDesign = "none" | "footnote" | "bubble" | "letter" | "subtitle" | "minimal";
 
+export const CARD_IMG_RATIO: { value: CardImgRatio; label: string }[] = [
+	{ value: "1:1", label: "1:1"},
+	{ value: "3:4", label: "3:4"},
+	{ value: "5:4", label: "5:4"},
+	{ value: "9:16", label: "9:16"},
+];
+
 export const CARD_DESIGNS: { value: CardDesign; label: string }[] = [
-	{ value: "none", label: "없음 (배경 강조)" },
+	{ value: "none", label: "없음" },
 	{ value: "footnote", label: "각주" },
 	{ value: "bubble", label: "말풍선" },
 	{ value: "letter", label: "편지" },
 	{ value: "subtitle", label: "영화 자막" },
 	{ value: "minimal", label: "미니멀" },
-];
-export const CARD_ALIGNS: { value: CardAlign; label: string }[] = [
-	{ value: "auto", label: "디자인 기본" },
-	{ value: "left", label: "왼쪽" },
-	{ value: "center", label: "가운데" },
-	{ value: "right", label: "오른쪽" },
 ];
 export const CARD_STYLES: { value: CardStyle; label: string }[] = [
 	{ value: "theme", label: "지금 테마" },
@@ -58,13 +60,18 @@ export interface CardInput {
 	speaker?: string;
 	/** 작은 글씨 (답변 시간 등) */
 	caption?: string;
+	/** 이미지 비율 */
+	imgRatio: CardImgRatio;
+	/** 디자인 */
 	design: CardDesign;
 	style: CardStyle;
 	/** 사용자가 고친 색 (빈 값은 색 묶음 그대로) */
 	colors?: Partial<CardColors>;
+	txtShadow?: boolean;
 	font: CardFont;
+	bold: number;
 	/** 글 정렬 (없으면 디자인 기본) */
-	align?: CardAlign;
+	align: CardAlign;
 	/** 글자 크기(px), 0이면 자동 */
 	size: number;
 	/** 배경: null / "preset:<id>" / 이미지 경로 */
@@ -173,10 +180,19 @@ function withAlpha(hex: string, a: number) {
 	return `rgba(${(n >> 16) & 255}, ${(n >> 8) & 255}, ${n & 255}, ${a})`;
 }
 
+function getScaledFontSize(canvas: HTMLCanvasElement, baseFontSize: number, referenceWidth = 800) {
+  const rect = canvas.getBoundingClientRect();
+  if (!rect.width) return baseFontSize;
+
+  const scale = rect.width / referenceWidth;
+  return Math.round(baseFontSize * scale);
+}
+
 /** 카드를 그린 캔버스 */
 export async function renderCard(input: CardInput): Promise<HTMLCanvasElement> {
 	const c: CardColors = { ...palette(input.style), ...Object.fromEntries(Object.entries(input.colors ?? {}).filter(([, v]) => v)) };
 	const family = fontFamily(input.font);
+	const bold = input.bold;
 	const text = input.text.trim().slice(0, 2000);
 	const design = input.design;
 	const auto = text.length > 600 ? 34 : text.length > 250 ? 40 : design === "minimal" ? 54 : 48;
@@ -189,8 +205,7 @@ export async function renderCard(input: CardInput): Promise<HTMLCanvasElement> {
 	const pad = design === "subtitle" ? 80 : design === "minimal" || design === "none" ? 110 : 84;
 	const textW = W - inset * 2 - pad * 2;
 	// 정렬: 직접 고르지 않으면 미니멀·자막만 가운데 ("없음"은 왼쪽)
-	const pick = input.align ?? "auto";
-	const align: CanvasTextAlign = pick === "auto" ? (design === "minimal" || design === "subtitle" ? "center" : "left") : pick;
+	const align: CanvasTextAlign = input.align ?? "start";
 	/** 글을 놓을 x: 왼쪽·가운데·오른쪽 기준점 (양옆 여백 l, r) */
 	const anchor = (l: number, r: number) => (align === "center" ? (l + r) / 2 : align === "right" ? r : l);
 	const captionH = input.caption ? 70 : 0;
@@ -198,7 +213,22 @@ export async function renderCard(input: CardInput): Promise<HTMLCanvasElement> {
 	const measure = document.createElement("canvas").getContext("2d")!;
 
 	// 3:4 세로 카드로 고정: 글이 넘치면 글자를 줄여 맞춘다
-	const H = Math.round((W * 4) / 3);
+	let H = W;
+	switch (input.imgRatio) {
+		default:
+		case "1:1":
+			break;
+		case "3:4":
+			H = Math.round((W * 4) / 3);
+			break;
+		case "5:4":
+			H = Math.round((W * 4) / 5);
+			break;
+		case "9:16":
+			H = Math.round((W * 16) / 9);
+			break;
+	}
+
 	let size = input.size > 0 ? input.size : auto;
 	let lh = 0;
 	let lines: string[] = [];
@@ -216,47 +246,55 @@ export async function renderCard(input: CardInput): Promise<HTMLCanvasElement> {
 	}
 	const bodyH = lines.length * lh;
 
+	const dpr = window.devicePixelRatio || 1;
 	const canvas = document.createElement("canvas");
 	canvas.width = W;
 	canvas.height = H;
 	const ctx = canvas.getContext("2d")!;
+	/** 폰트 사이즈 조정 */
+	const fontPx = getScaledFontSize(canvas, size, W) * dpr;
 
 	// 바탕
 	if (gradient) fillGradient(ctx, gradient, W, H);
 	else if (bgImage) drawCover(ctx, bgImage, W, H);
 	else {
-		ctx.fillStyle = design === "subtitle" ? "#000" : c.bg;
+		ctx.fillStyle = c.bg;
 		ctx.fillRect(0, 0, W, H);
 	}
 
+	// 텍스트 설정
 	ctx.textAlign = align;
-	const cx = W / 2;
-
+	ctx.lineWidth = 1;
+	
+	if (input.txtShadow) {
+		ctx.shadowColor = "rgba(0,0,0,0.5)";
+		ctx.shadowBlur = 6;
+	}
+	
+	// 디자인별 추가 설정
 	if (design === "none") {
 		// 장식 없음: 배경을 살리고 글만 (배경이 있으면 흰 글씨 + 그림자). 정렬은 왼쪽이 기본
+	
 		const nx = anchor(pad, W - pad);
 		let y = Math.round((H - (bodyH + speakerH + captionH)) / 2);
 		const fg = input.colors?.text || (hasBg ? "#ffffff" : c.text);
-		if (hasBg) {
-			ctx.shadowColor = "rgba(0,0,0,0.65)";
-			ctx.shadowBlur = 12;
-		}
+		
 		if (input.speaker) {
 			ctx.fillStyle = input.colors?.accent || (hasBg ? "#ffffff" : c.accent);
-			ctx.font = `700 ${Math.round(size * 0.66)}px ${family}`;
-			ctx.fillText(input.speaker, nx, y + size * 0.66);
+			ctx.font = `700 ${Math.round(fontPx * 0.66)}px ${family}`;
+			ctx.fillText(input.speaker, nx * dpr, (y + size * 0.66) * dpr);
 			y += speakerH;
 		}
 		ctx.fillStyle = fg;
-		ctx.font = `500 ${size}px ${family}`;
+		ctx.font = `${bold} ${fontPx}px ${family}`;
 		for (const line of lines) {
 			y += lh;
-			ctx.fillText(line, nx, y - (lh - size) / 2);
+			ctx.fillText(line, nx * dpr, (y - (lh - size) / 2) * dpr);
 		}
 		if (input.caption) {
 			ctx.font = `400 28px ${family}`;
 			ctx.fillStyle = hasBg ? "rgba(255,255,255,0.8)" : c.muted;
-			ctx.fillText(input.caption, nx, y + 56);
+			ctx.fillText(input.caption, nx * dpr, (y + 56) * dpr);
 		}
 		ctx.shadowBlur = 0;
 		return canvas;
@@ -274,24 +312,24 @@ export async function renderCard(input: CardInput): Promise<HTMLCanvasElement> {
 		let y = H - bandH + pad * 0.6;
 		const sx = anchor(pad, W - pad);
 		if (input.speaker) {
-			ctx.fillStyle = input.colors?.accent || "#ffd56b";
-			ctx.font = `700 ${Math.round(size * 0.62)}px ${family}`;
-			ctx.fillText(input.speaker, sx, y + size * 0.6);
+			ctx.fillStyle = input.colors?.accent || "#eee";
+			ctx.font = `700 ${Math.round(fontPx * 0.62)}px ${family}`;
+			ctx.fillText(input.speaker, sx * dpr, (y + size * 0.6) * dpr);
 			y += speakerH;
 		}
-		ctx.font = `600 ${size}px ${family}`;
+		ctx.font = `${bold} ${fontPx}px ${family}`;
 		ctx.shadowColor = "rgba(0,0,0,0.8)";
 		ctx.shadowBlur = 8;
 		ctx.fillStyle = input.colors?.text || "#ffffff";
 		for (const line of lines) {
 			y += lh;
-			ctx.fillText(line, sx, y - (lh - size) / 2);
+			ctx.fillText(line, sx * dpr, (y - (lh - size) / 2) * dpr);
 		}
 		ctx.shadowBlur = 0;
 		if (input.caption) {
 			ctx.fillStyle = "rgba(255,255,255,0.7)";
 			ctx.font = `400 26px ${family}`;
-			ctx.fillText(input.caption, sx, y + 50);
+			ctx.fillText(input.caption, sx * dpr, (y + 50) * dpr);
 		}
 		return canvas;
 	}
@@ -304,12 +342,8 @@ export async function renderCard(input: CardInput): Promise<HTMLCanvasElement> {
 		// 말한 사람은 말풍선 위 바깥에
 		ctx.textAlign = "left";
 		ctx.fillStyle = hasBg ? "#ffffff" : c.accent;
-		ctx.font = `700 ${Math.round(size * 0.7)}px ${family}`;
-		if (hasBg) {
-			ctx.shadowColor = "rgba(0,0,0,0.5)";
-			ctx.shadowBlur = 6;
-		}
-		ctx.fillText(input.speaker, px + 20, py + size * 0.7);
+		ctx.font = `700 ${Math.round(fontPx * 0.7)}px ${family}`;
+		ctx.fillText(input.speaker, (px + 20) * dpr, (py + size * 0.7) * dpr);
 		ctx.shadowBlur = 0;
 		py += speakerH;
 	}
@@ -342,7 +376,7 @@ export async function renderCard(input: CardInput): Promise<HTMLCanvasElement> {
 		ctx.globalAlpha = 0.18;
 		ctx.textAlign = "left";
 		ctx.font = `700 220px Georgia, serif`;
-		ctx.fillText("“", px + pw - pad - 120, py + pad + 150);
+		ctx.fillText("“", (px + pw - pad - 120) * dpr, (py + pad + 150) * dpr);
 		ctx.globalAlpha = 1;
 	}
 	if (design === "letter") {
@@ -361,23 +395,23 @@ export async function renderCard(input: CardInput): Promise<HTMLCanvasElement> {
 	let y = py + pad + (design === "footnote" ? 30 : 0);
 	if (input.speaker && design === "footnote") {
 		ctx.fillStyle = c.accent;
-		ctx.font = `700 ${Math.round(size * 0.7)}px ${family}`;
-		ctx.fillText(input.speaker, tx, y + size * 0.7);
+		ctx.font = `700 ${Math.round(fontPx * 0.7)}px ${family}`;
+		ctx.fillText(input.speaker, tx * dpr, (y + size * 0.7) * dpr);
 		y += speakerH;
 	}
 	ctx.fillStyle = c.text;
-	ctx.font = `500 ${size}px ${family}`;
+	ctx.font = `${bold} ${fontPx}px ${family}`;
 	for (const line of lines) {
 		y += lh;
-		ctx.fillText(line, tx, y - (lh - size) / 2);
+		ctx.fillText(line, tx * dpr, (y - (lh - size) / 2) * dpr);
 	}
 	// 편지·미니멀: 이름은 글 아래 서명처럼
 	if (input.speaker && (design === "letter" || design === "minimal")) {
-		y += Math.round(size * 1.3);
+		y += Math.round(fontPx * 1.3);
 		ctx.fillStyle = design === "letter" ? c.text : c.accent;
-		ctx.font = `${design === "letter" ? "italic 500" : "700"} ${Math.round(size * 0.66)}px ${family}`;
+		ctx.font = `${design === "letter" ? "italic 500" : "700"} ${Math.round(fontPx * 0.66)}px ${family}`;
 		ctx.textAlign = design === "letter" ? "right" : align;
-		ctx.fillText(`— ${input.speaker}`, design === "letter" ? px + pw - pad : tx, y);
+		ctx.fillText(`— ${input.speaker}`, (design === "letter" ? px + pw - pad : tx) * dpr, y * dpr);
 		ctx.textAlign = align;
 	}
 	if (input.caption) {
@@ -385,9 +419,9 @@ export async function renderCard(input: CardInput): Promise<HTMLCanvasElement> {
 		ctx.font = `400 28px ${family}`;
 		if (design === "letter") {
 			ctx.textAlign = "right";
-			ctx.fillText(input.caption, px + pw - pad, py + pad - 20);
+			ctx.fillText(input.caption, (px + pw - pad) * dpr, (py + pad - 20) * dpr);
 		} else {
-			ctx.fillText(input.caption, tx, py + ph - pad + 20);
+			ctx.fillText(input.caption, tx * dpr, (py + ph - pad + 20) * dpr);
 		}
 	}
 	return canvas;

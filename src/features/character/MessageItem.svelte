@@ -1,5 +1,5 @@
 <script lang="ts">
-	import { Bookmark, BookmarkX, ChevronDown, ChevronLeft, ChevronRight, Copy, Eye, EyeOff, FileSearch, GitBranch, ImagePlus, Languages, Pencil, RefreshCw, Square, Trash2, Volume2, Sparkles, PenLine, ChevronsDownUp, ChevronsUpDown, Ellipsis } from "@lucide/svelte";
+	import { Bookmark, BookmarkX, ChevronDown, ChevronLeft, ChevronRight, Copy, Eye, EyeOff, FileSearch, GitBranch, ImagePlus, Languages, Pencil, RefreshCw, Square, Trash2, Volume2, Sparkles, PenLine, ChevronsDownUp, ChevronsUpDown, Ellipsis, IdCard } from "@lucide/svelte";
 	import { plugins } from "$shared/stores/plugins.svelte";
 	import { drawMessage, generatedImagesOf, speak, speech, translateMessage, translationOf } from "$shared/stores/aiTools.svelte";
 	import { Badge, Button, ContextMenu, IconButton, ProviderIcon, Textarea, type MenuItem } from "$shared/ui";
@@ -34,10 +34,12 @@
 		onselect?: (m: Message, on: boolean) => void;
 		/** 이 메시지의 북마크 (본문에 형광펜으로 칠함) */
 		marks?: ChatBookmark[];
+		/** 북마크한 글을 이미지 카드로 */
+		oncard?: (mark: ChatBookmark) => void;
 		/** 형광펜 칠한 글을 눌러 지움 */
 		onmarkremove?: (b: ChatBookmark) => void;
 	}
-	let { msg, no, session, images, isLast, onbranch, onprompt, selecting = false, selected = false, onselect, marks = [], onmarkremove }: Props = $props();
+	let { msg, no, session, images, isLast, onbranch, onprompt, selecting = false, selected = false, onselect, marks = [], oncard, onmarkremove }: Props = $props();
 
 	const meta = $derived(metaOf(msg));
 	const isAi = $derived(msg.role === "assistant");
@@ -173,6 +175,16 @@
 	const markMenuItems = $derived<MenuItem[]>(
 		markMenuAt
 			? [
+					{
+						label: "복사",
+						icon: Copy,
+						onselect: () =>
+							navigator.clipboard.writeText(markMenuAt!.b.text ?? "").then(
+								() => toasts.success("복사함"),
+								() => toasts.error("복사 못 함"),
+							),
+					},
+					{ label: "이미지 카드로 만들기", icon: IdCard, onselect: () => oncard?.(markMenuAt!.b) },
 					{ label: "북마크 삭제", icon: BookmarkX, danger: true, onselect: () => onmarkremove?.(markMenuAt!.b) },
 				]
 			: [],

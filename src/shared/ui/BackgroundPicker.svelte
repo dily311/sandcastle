@@ -54,7 +54,7 @@
 		{#if allowNone}
 			<button type="button" class="tile none" class:on={!value} role="radio" aria-checked={!value} title="없음" aria-label="배경 없음" onclick={() => onpick(null)}><Ban /></button>
 		{/if}
-		{#each images as p (p)}
+		{#each images.toReversed() as p (p)}
 			<span class="wrap">
 				<button type="button" class="tile" class:on={value === p} role="radio" aria-checked={value === p} title="올린 이미지" aria-label="올린 이미지" onclick={() => onpick(p)}>
 					<img src={fileSrc(p)} alt="" loading="lazy" />
@@ -92,11 +92,13 @@
 		min-width: 0;
 		flex: 1;
 		overflow: hidden;
-		padding: 4px;
+		padding: 8px 4px;
 	}
 	.expanded .tiles {
 		display: grid;
 		grid-template-columns: repeat(auto-fill, minmax(48px, 1fr));
+		grid-auto-rows: minmax(0, auto);
+		gap: var(--space-2);
 		overflow: visible;
 		max-height: 260px;
 		overflow-y: auto;

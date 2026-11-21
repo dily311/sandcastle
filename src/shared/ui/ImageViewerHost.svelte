@@ -4,7 +4,7 @@
 	 * 그림 아래에 파일 이름, 그림이나 이름에서 오른쪽 클릭(Android는 꾹 누르기)하면 메뉴.
 	 * <dialog>로 열어서 다른 대화상자 위에서 눌러도 맨 위에 뜬다.
 	 */
-	import { Copy, Ellipsis, ExternalLink, FileText, Info, Pencil, Trash2, X } from "@lucide/svelte";
+	import { Copy, Ellipsis, EllipsisVertical, ExternalLink, FileText, Info, Pencil, Trash2, X } from "@lucide/svelte";
 	import { revealItemInDir } from "@tauri-apps/plugin-opener";
 	import { layout } from "$app/layout.svelte";
 	import { describeSrc, imageViewer } from "$shared/stores/imageViewer.svelte";
@@ -113,12 +113,16 @@
 <dialog bind:this={dialog} class="image-viewer" aria-label="그림 크게 보기" onclose={() => imageViewer.close()} onclick={(e) => e.target === dialog && imageViewer.close()}>
 	{#if img}
 		<figure>
-			<div class="top"><IconButton label="닫기" size="sm" onclick={() => imageViewer.close()}><X /></IconButton></div>
-			<img bind:this={imgEl} src={img.src} alt={title} {oncontextmenu} />
-			<div class="cap" role="group" aria-label="파일 이름" {oncontextmenu}>
-				<span class="name">{title || "그림"}</span>
-				<IconButton label="그림 메뉴" size="sm" onclick={openMenu}><Ellipsis /></IconButton>
+			<div class="top">
+				<div class="cap" role="group" aria-label="파일 이름">
+					<span class="name">{title || "그림"}</span>
+				</div>
+				<div class="actionBtn">
+					<IconButton label="그림 메뉴" size="sm" variant="static-white" onclick={openMenu}><EllipsisVertical /></IconButton>
+					<IconButton label="닫기" size="sm" variant="static-white" onclick={() => imageViewer.close()}><X /></IconButton>	
+				</div>
 			</div>
+			<img bind:this={imgEl} src={img.src} alt={title} {oncontextmenu} />
 		</figure>
 	{/if}
 	<ContextMenu at={menu} {items} label="그림 메뉴" onclose={() => (menu = null)} />
@@ -163,8 +167,24 @@
 		margin: 0;
 	}
 	.top {
-		align-self: flex-end;
+		width: 100%;
+		display: flex;
+		justify-content: space-between;
 	}
+	/* 파일 이름 */
+	.cap {
+		display: flex;
+		align-items: center;
+		gap: var(--space-1);
+		max-width: min(100%, 640px);
+		font-size: var(--text-sm);
+		color: var(--static-white);
+	}
+	.name {
+		min-width: 0;
+		overflow-wrap: anywhere;
+	}
+	
 	img {
 		display: block;
 		min-height: 0;
@@ -175,22 +195,6 @@
 		border-radius: var(--radius-md);
 		/* 눌러서 닫히는 배경과 달리 그림은 길게 눌러 메뉴를 열 수 있게 */
 		-webkit-touch-callout: none;
-	}
-	/* 파일 이름 + … 메뉴 버튼 */
-	.cap {
-		display: flex;
-		align-items: center;
-		gap: var(--space-1);
-		max-width: min(100%, 640px);
-		padding: 2px 2px 2px var(--space-3);
-		border-radius: var(--radius-sm);
-		background: var(--surface);
-		font-size: var(--text-sm);
-		color: var(--text-muted);
-	}
-	.name {
-		min-width: 0;
-		overflow-wrap: anywhere;
 	}
 	.details {
 		display: grid;
