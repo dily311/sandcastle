@@ -322,6 +322,8 @@ pub struct ConversationRow {
     pub prompt_preset_id: Option<String>,
     pub api_profile_id: Option<String>,
     pub model: Option<String>,
+    #[sqlx(default)]
+    pub read_mode: i64,
     /// 뷰에서만 옴 (메시지의 가장 늦은 작성 시각)
     #[sqlx(default)]
     pub last_message_at: Option<i64>,
@@ -353,6 +355,8 @@ pub struct Conversation {
     /// 마지막 메시지의 작성 시각 (메시지가 없으면 None). 목록의 시각·정렬은 이것을 먼저 본다 —
     /// updated_at은 이 기기에서 바뀐 시각이라 가져온 대화는 가져온 때가 된다
     pub last_message_at: Option<i64>,
+    /// 읽기 모드: 보내는 줄을 숨김 (5-E-6)
+    pub read_mode: bool,
 }
 
 impl From<ConversationRow> for Conversation {
@@ -375,6 +379,7 @@ impl From<ConversationRow> for Conversation {
             api_profile_id: r.api_profile_id,
             model: r.model,
             last_message_at: r.last_message_at,
+            read_mode: r.read_mode != 0,
         }
     }
 }

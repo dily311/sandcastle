@@ -64,6 +64,8 @@ export const commands = {
 	deleteConversationFolder: (id: string, options?: InvokeOptions) => __TAURI_INVOKE<null>("delete_conversation_folder", { id }, options),
 	renameConversation: (id: string, title: string, options?: InvokeOptions) => __TAURI_INVOKE<null>("rename_conversation", { id, title }, options),
 	setConversationPinned: (id: string, pinned: boolean, options?: InvokeOptions) => __TAURI_INVOKE<null>("set_conversation_pinned", { id, pinned }, options),
+	/**  읽기 모드 켜기/끄기 (켜면 보내는 줄을 숨김) */
+	setConversationReadMode: (id: string, on: boolean, options?: InvokeOptions) => __TAURI_INVOKE<null>("set_conversation_read_mode", { id, on }, options),
 	/**  폴더로 옮기기. `folder_id`가 null이면 폴더 밖으로 */
 	moveConversation: (id: string, folderId: string | null, options?: InvokeOptions) => __TAURI_INVOKE<null>("move_conversation", { id, folderId }, options),
 	/**  대화별 페르소나·프리셋·API (프리셋/API가 null이면 앱 설정의 선택값을 씀) */
@@ -1492,6 +1494,8 @@ export type Conversation_Deserialize = {
 	 *  updated_at은 이 기기에서 바뀐 시각이라 가져온 대화는 가져온 때가 된다
 	 */
 	lastMessageAt?: number | null,
+	/**  읽기 모드: 보내는 줄을 숨김 (5-E-6) */
+	readMode: boolean,
 };
 
 export type Conversation_Serialize = {
@@ -1520,6 +1524,8 @@ export type Conversation_Serialize = {
 	 *  updated_at은 이 기기에서 바뀐 시각이라 가져온 대화는 가져온 때가 된다
 	 */
 	lastMessageAt: number | null,
+	/**  읽기 모드: 보내는 줄을 숨김 (5-E-6) */
+	readMode: boolean,
 };
 
 export type CorePlugin = {

@@ -444,9 +444,9 @@
 	const roleName = { system: "시스템", user: "사용자", assistant: "AI" } as const;
 
 	// ---- 읽기 모드 ----
-	let readMode = $state(false);
+	const readMode = $derived(!!conv?.readMode);
 	function toggleReadMode() {
-		readMode = !readMode;
+		if (conv) void library.setReadMode(conv.id, !conv.readMode);
 	}
 	
 	// ---- 채팅 파일 관리 ----

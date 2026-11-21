@@ -69,6 +69,7 @@ where
         api_profile_id: None,
         model: None,
         last_message_at: None,
+        read_mode: false,
     })
 }
 

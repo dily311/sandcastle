@@ -91,6 +91,19 @@ where
     Ok(r.rows_affected() != 0)
 }
 
+/// 읽기 모드 (5-E-6)
+pub async fn set_read_mode<'e, E>(executor: E, id: &str, on: bool) -> Result<bool, Error>
+where
+    E: Executor<'e, Database = Sqlite>,
+{
+    let r = sqlx::query("UPDATE conversations SET read_mode = ? WHERE id = ?")
+        .bind(on)
+        .bind(id)
+        .execute(executor)
+        .await?;
+    Ok(r.rows_affected() != 0)
+}
+
 pub async fn move_to_folder<'e, E>(executor: E, id: &str, folder_id: Option<&str>) -> Result<bool, Error>
 where
     E: Executor<'e, Database = Sqlite>,

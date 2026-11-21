@@ -130,6 +130,13 @@ pub async fn set_conversation_pinned(state: State<'_, AppState>, id: String, pin
     found(chat_ui::set_pinned(&state.db, &id, pinned).await?, "대화")
 }
 
+/// 읽기 모드 켜기/끄기 (켜면 보내는 줄을 숨김)
+#[tauri::command]
+#[specta::specta]
+pub async fn set_conversation_read_mode(state: State<'_, AppState>, id: String, on: bool) -> Result<()> {
+    found(chat_ui::set_read_mode(&state.db, &id, on).await?, "대화")
+}
+
 /// 폴더로 옮기기. `folder_id`가 null이면 폴더 밖으로
 #[tauri::command]
 #[specta::specta]

@@ -298,7 +298,7 @@
 - [x] 5-E-3 SillyTavern 채팅 가져오기 보강 — 목록의 대화 시각을 마지막 메시지 시각으로(뷰 `last_message_at`, 마이그레이션 003, 프런트 `lastAt`). 대화의 `updated_at`은 동기화의 변경 표시라 그대로 두고, 가져온 메시지의 `updated_at`도 가져온 시각으로 고침(옛 시각이면 증분 동기화에서 빠짐 — ADR-021). 헤더의 작가 노트(`note_prompt`·`note_depth`)를 대화 작가 노트로, 빈도·위치는 경고. 어디: 마이그레이션 003, `models/conversation.rs`, `db/conversation.rs`, `import/sillytavern/`, 목록 화면 6곳. 완료: 단위·가져오기 테스트(`author_note_from_header`, `st_chat_attaches_to_character_by_name`), `pnpm check`. 바뀐 점: "최신순"은 마지막으로 대화한 순서(이름 바꾸기로는 안 바뀜).
 - 5-E-4 여러 채팅 파일 올리기 — 진행 막대·멈추기, 한 파일일 때만 그 대화로 이동. 어디: `ConvSidebar.svelte`·`library.svelte.ts`. 완료: 미리보기.
 - 5-E-5 앱을 열면 마지막 페이지 — 홈을 시작 화면으로 고른 사용자는 홈. 어디: 앱 설정(기기 전용 칸), 탐색 store. 완료: 미리보기에서 다시 열기.
-- 5-E-6 읽기 모드 — `conversations.read_mode INTEGER NOT NULL DEFAULT 0`(새 마이그레이션). 켜면 입력 줄을 숨긴다(지금은 화면 상태라 다시 열면 풀림). 어디: 마이그레이션, `ChatView.svelte`, 대화 메뉴. 완료: 다시 열어도 유지.
+- [x] 5-E-6 읽기 모드 — `conversations.read_mode INTEGER NOT NULL DEFAULT 0`(마이그레이션 004), 커맨드 `set_conversation_read_mode`, 대화 화면의 읽기/채팅 모드 버튼이 대화에 저장(켜면 보내는 줄을 숨김). 어디: 마이그레이션 004, `db/chat_ui.rs`, `commands/chat.rs`, `library.svelte.ts`, `ChatView.svelte`, dev-mock. 완료: 미리보기에서 켜고 다른 화면에 갔다 와도 유지, cargo test 통과. 폰 대화 화면에는 아직 없음.
 - 5-E-7 추론 강도 — 모델 선택 옆에 auto(기본)·낮음·중간·높음. 대화에 저장, auto는 보내지 않음. 어디: `ChatPanel.svelte`, `chat_options.reasoning_effort`. 완료: 보낸 컨텍스트·요청에 반영(가짜 서버).
 - 5-E-8 대화 목록 — 검색창 `mes:글`은 그 글이 든 메시지가 있는 대화, 정렬에 "최근 본"(대화를 연 시각, 기기 전용), 처음 열 때 지난 목록을 먼저 보여 주고 뒤에서 새로 읽기. 어디: `ConvSidebar.svelte`, `db/conversation.rs`.
 - 5-E-9 메시지 버블 — 대화 설정에서 프로필 그림 보이기(기본 지금처럼 숨김), 코드 블록 밖 HTML을 스크립트 없이 그리기(**결정 필요**: ADR-004는 AI 답의 HTML을 ```html 블록만 그림 — 바꾸면 ADR 갱신).

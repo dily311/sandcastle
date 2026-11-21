@@ -168,6 +168,10 @@ class Library {
 		await call(commands.setConversationPinned(id, !c.pinned), src);
 		this.patch(id, { pinned: !c.pinned });
 	}
+	async setReadMode(id: string, on: boolean) {
+		await call(commands.setConversationReadMode(id, on), src);
+		this.patch(id, { readMode: on });
+	}
 	async move(id: string, folderId: string | null) {
 		await call(commands.moveConversation(id, folderId), src);
 		this.patch(id, { folderId });
