@@ -1,6 +1,6 @@
 <script lang="ts">
 	import { _ } from "svelte-i18n";
-	import Icon from "$/components/ui/Icon.svelte";
+	import Icon from "$shared/ui/Icon.svelte";
 	import { contextActionRegistry } from "$/lib/contextmenu/actions";
 	import { contextMenu } from "$/lib/contextmenu/contextMenu.svelte";
 	import { ArrowRight, Check, ChevronRight } from "@lucide/svelte";
