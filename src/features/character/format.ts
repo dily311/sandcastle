@@ -1,7 +1,8 @@
 // 메시지 본문 → 표시용 조각. HTML 문자열을 만들지 않는다 (모두 컴포넌트로 그림).
 // - 줄마다 문단, 빈 줄은 버림
 // - *지문* → 기울임, "대사" → 대사 강조, **굵게**, `코드`
-// - 마크다운 줄: # 제목, - 목록, > 인용, --- 가로줄
+// - 마크다운 줄: # 제목(######까지), - / * 목록, > 인용, --- 가로줄, | 표 |
+// - ``` 코드 블록 (```html은 HTML 블록)
 // - <cg>키</cg> → 캐릭터 에셋 (문단 사이 블록)
 // - ```html … ``` → HTML 블록 (iframe으로 그림, shared/html/blocks.ts)
 import { splitHtmlBlocks } from "$shared/html/blocks";
@@ -13,6 +14,8 @@ export type Block =
 	| { kind: "li"; parts: Inline[] }
 	| { kind: "quote"; parts: Inline[] }
 	| { kind: "hr" }
+	| { kind: "code"; lang: string; text: string }
+	| { kind: "table"; head: Inline[][]; rows: Inline[][][] }
 	| { kind: "cg"; key: string }
 	| { kind: "html"; code: string };
 
@@ -54,14 +57,45 @@ export function toBlocks(content: string, opts: { rawHtml?: boolean } = {}): Blo
 
 function lineBlock(t: string): Block {
 	if (/^(-{3,}|\*{3,}|_{3,})$/.test(t)) return { kind: "hr" };
-	const h = /^(#{1,3})\s+(.+)$/.exec(t);
-	if (h) return { kind: "h", level: h[1].length as 1 | 2 | 3, parts: inline(h[2]) };
-	const li = /^[-+•]\s+(.+)$/.exec(t) ?? /^\d+[.)]\s+(.+)$/.exec(t);
+	const h = /^(#{1,6})\s+(.+)$/.exec(t);
+	if (h) return { kind: "h", level: Math.min(h[1].length, 3) as 1 | 2 | 3, parts: inline(h[2].replace(/\s+#+\s*$/, "")) };
+	// "* 항목"도 목록 ("*지문*"은 * 바로 뒤에 글자가 붙어서 해당 없음)
+	const li = /^[-+*•]\s+(.+)$/.exec(t) ?? /^\d+[.)]\s+(.+)$/.exec(t);
 	if (li) return { kind: "li", parts: inline(li[1]) };
 	const q = /^>\s?(.*)$/.exec(t);
 	if (q) return { kind: "quote", parts: inline(q[1]) };
 	return { kind: "p", parts: inline(t) };
 }
+
+/** 표의 한 줄 → 칸들 (앞뒤 | 는 떼고, \| 는 글자) */
+function cells(line: string): Inline[][] {
+	const body = line.trim().replace(/^\|/, "").replace(/(?<!\\)\|$/, "");
+	return body.split(/(?<!\\)\|/).map((c) => inline(c.trim().replace(/\\\|/g, "|")));
+}
+const TABLE_RULE = /^\|?\s*:?-+:?\s*(\|\s*:?-+:?\s*)*\|?$/;
+
+/** 줄 단위 블록 (표는 여러 줄을 묶음) */
+function lineBlocks(text: string): Block[] {
+	const out: Block[] = [];
+	const lines = text.split(/\n/);
+	for (let i = 0; i < lines.length; i++) {
+		const t = lines[i].trim();
+		if (!t) continue;
+		if (t.startsWith("|") && TABLE_RULE.test(lines[i + 1]?.trim() ?? "")) {
+			const head = cells(t);
+			const rows: Inline[][][] = [];
+			i += 1;
+			while (i + 1 < lines.length && lines[i + 1].trim().startsWith("|")) rows.push(cells(lines[++i]));
+			out.push({ kind: "table", head, rows });
+			continue;
+		}
+		out.push(lineBlock(t));
+	}
+	return out;
+}
+
+/** ``` 코드 블록 (닫히지 않았으면 끝까지 — 받는 중인 응답) */
+const FENCE = /```([\w+-]*)[^\n]*\n([\s\S]*?)(?:\n?```|$)/g;
 
 function textBlocks(content: string): Block[] {
 	const blocks: Block[] = [];
@@ -72,10 +106,13 @@ function textBlocks(content: string): Block[] {
 			blocks.push({ kind: "cg", key: chunk.trim() });
 			return;
 		}
-		for (const para of chunk.split(/\n/)) {
-			const t = para.trim();
-			if (t) blocks.push(lineBlock(t));
+		let last = 0;
+		for (const m of chunk.matchAll(FENCE)) {
+			blocks.push(...lineBlocks(chunk.slice(last, m.index)));
+			blocks.push({ kind: "code", lang: m[1], text: m[2] });
+			last = m.index! + m[0].length;
 		}
+		blocks.push(...lineBlocks(chunk.slice(last)));
 	});
 	return blocks;
 }

@@ -30,6 +30,45 @@ describe("toBlocks", () => {
 	});
 });
 
+describe("마크다운 (5-E-1)", () => {
+	it("####부터 ######까지 제목", () => {
+		expect(toBlocks("#### 넷\n###### 여섯")).toEqual([
+			{ kind: "h", level: 3, parts: [{ kind: "text", text: "넷" }] },
+			{ kind: "h", level: 3, parts: [{ kind: "text", text: "여섯" }] },
+		]);
+	});
+
+	it("* **굵게** 는 목록 + 굵게, *지문*은 그대로", () => {
+		expect(toBlocks("* **내용**")).toEqual([{ kind: "li", parts: [{ kind: "strong", text: "내용" }] }]);
+		expect(toBlocks("*웃는다*")[0]).toEqual({ kind: "p", parts: [{ kind: "action", text: "웃는다" }] });
+	});
+
+	it("코드 블록은 줄을 나누지 않고, 닫히지 않아도 끝까지", () => {
+		expect(toBlocks("앞\n```js\nconst a = 1;\n\nb()\n```\n뒤")).toEqual([
+			{ kind: "p", parts: [{ kind: "text", text: "앞" }] },
+			{ kind: "code", lang: "js", text: "const a = 1;\n\nb()" },
+			{ kind: "p", parts: [{ kind: "text", text: "뒤" }] },
+		]);
+		expect(toBlocks("```\n받는 중")).toEqual([{ kind: "code", lang: "", text: "받는 중" }]);
+	});
+
+	it("표", () => {
+		const [t] = toBlocks("| 이름 | 나이 |\n|---|:--:|\n| 아리아 | **17** |\n| a\\|b | 2 |");
+		expect(t).toEqual({
+			kind: "table",
+			head: [[{ kind: "text", text: "이름" }], [{ kind: "text", text: "나이" }]],
+			rows: [
+				[[{ kind: "text", text: "아리아" }], [{ kind: "strong", text: "17" }]],
+				[[{ kind: "text", text: "a|b" }], [{ kind: "text", text: "2" }]],
+			],
+		});
+	});
+
+	it("구분줄이 없으면 표가 아님", () => {
+		expect(toBlocks("| 그냥 | 글 |")[0].kind).toBe("p");
+	});
+});
+
 describe("preview", () => {
 	it("태그·기호를 지우고 공백을 합친다", () => {
 		expect(preview('*웃음*  "안녕"\n<cg>x</cg>')).toBe("웃음 안녕");

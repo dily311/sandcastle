@@ -19,6 +19,15 @@
 		<blockquote>{@render parts(b.parts)}</blockquote>
 	{:else if b.kind === "hr"}
 		<hr />
+	{:else if b.kind === "code"}
+		<pre class="codeblock" data-lang={b.lang || undefined}><code>{b.text}</code></pre>
+	{:else if b.kind === "table"}
+		<div class="table-wrap">
+			<table>
+				<thead><tr>{#each b.head as c, k (k)}<th>{@render parts(c)}</th>{/each}</tr></thead>
+				<tbody>{#each b.rows as r, k (k)}<tr>{#each r as c, l (l)}<td>{@render parts(c)}</td>{/each}</tr>{/each}</tbody>
+			</table>
+		</div>
 	{:else if b.kind === "html"}
 		<HtmlView code={b.code} />
 	{:else if images[b.key]}
@@ -49,6 +58,41 @@
 		background: var(--surface-2);
 		font-family: var(--font-mono, monospace);
 		font-size: 0.9em;
+	}
+	.codeblock {
+		margin: 0.6em 0;
+		padding: var(--space-3);
+		border: 1px solid var(--border);
+		border-radius: var(--radius-md);
+		background: var(--bg-sunken);
+		overflow-x: auto;
+		white-space: pre;
+		font-family: var(--font-mono, monospace);
+		font-size: var(--text-sm);
+	}
+	.codeblock code {
+		padding: 0;
+		background: none;
+		font-size: inherit;
+	}
+	.table-wrap {
+		margin: 0.6em 0;
+		overflow-x: auto;
+	}
+	table {
+		border-collapse: collapse;
+		font-size: var(--text-sm);
+	}
+	th,
+	td {
+		padding: var(--space-1) var(--space-3);
+		border: 1px solid var(--border);
+		text-align: left;
+		vertical-align: top;
+	}
+	th {
+		background: var(--surface-2);
+		font-weight: 600;
 	}
 	.rh {
 		margin: 0.9em 0 0.4em;

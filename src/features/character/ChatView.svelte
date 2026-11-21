@@ -8,7 +8,7 @@
 	import { layout } from "$app/layout.svelte";
 	import { fade, fly } from "svelte/transition";
 	import { drops, extOf, isImage, storeFile } from "$app/drop.svelte";
-	import { Button, HtmlView, type MenuItem } from "$shared/ui";
+	import { Button, type MenuItem } from "$shared/ui";
 	import { confirmAction, promptText } from "$shared/stores/confirm.svelte";
 	import { toasts } from "$shared/stores/toast.svelte";
 	import { ContextMenu, Dialog, EmptyState, IconButton, Spinner, Textarea } from "$shared/ui";
@@ -27,6 +27,7 @@
 	import { plugins } from "$shared/stores/plugins.svelte";
 	import { translateInput } from "$shared/stores/aiTools.svelte";
 	import { toBlocks } from "./format";
+	import RichText from "./RichText.svelte";
 	import { library } from "./library.svelte";
 	import { ChatSession, metaOf, type Message } from "./session.svelte";
 	import { call, commands } from "$/shared/ipc/client";
@@ -117,6 +118,8 @@
 	}
 
 	/** <cg>키</cg> → 이미지 주소 (켜진 것만이 아니라 전부: 예전 응답도 그대로 보이게) */
+	/** 받는 중인 새 응답 (끝의 <image> 그림 프롬프트는 저장할 때 빠지므로 숨김) */
+	const liveBlocks = $derived(session?.live?.kind === "send" ? toBlocks(session.live.text.replace(/<image>[\s\S]*?(<\/image>|$)/i, "")) : []);
 	const images = $derived(Object.fromEntries((library.images[charId] ?? []).map((i) => [i.key, imageSrc(i) ?? ""])));
 
 	// 챕터 번호
@@ -605,15 +608,11 @@
 						{/if}
 						<div class="block ai">
 							<div class="who"><b>{character?.name ?? "AI"}</b><span class="stamp">생성 중…</span></div>
-							{#each toBlocks(session.live.text) as b, j (j)}
-								{#if b.kind === "p"}
-									<p>{#each b.parts as part, k (k)}{#if part.kind === "action"}<em>{part.text}</em>{:else}{part.text}{/if}{/each}</p>
-								{:else if b.kind === "html"}
-									<HtmlView code={b.code} />
-								{/if}
+							{#if liveBlocks.length}
+								<RichText blocks={liveBlocks} {images} />
 							{:else}
 								<p class="typing" aria-label="응답 기다리는 중"><span></span><span></span><span></span></p>
-							{/each}
+							{/if}
 						</div>
 					{/if}
 				</article>
@@ -1015,12 +1014,6 @@
 	}
 	.block p {
 		white-space: pre-wrap;
-	}
-	.block p + p {
-		margin-top: 0.6em;
-	}
-	.block em {
-		color: var(--text-muted);
 	}
 	.block.user {
 		border-left: 3px solid var(--accent);
