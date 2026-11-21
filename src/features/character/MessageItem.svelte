@@ -2,7 +2,7 @@
 	import { Bookmark, BookmarkX, ChevronDown, ChevronLeft, ChevronRight, Copy, Eye, EyeOff, FileSearch, GitBranch, ImagePlus, Languages, Pencil, RefreshCw, Square, Trash2, Volume2, Sparkles, PenLine, ChevronsDownUp, ChevronsUpDown, Ellipsis, IdCard } from "@lucide/svelte";
 	import { plugins } from "$shared/stores/plugins.svelte";
 	import { drawMessage, generatedImagesOf, speak, speech, translateMessage, translationOf } from "$shared/stores/aiTools.svelte";
-	import { Badge, Button, ContextMenu, IconButton, ProviderIcon, Textarea, type MenuItem } from "$shared/ui";
+	import { Badge, Button, ContextMenu, IconButton, ProviderIcon, Textarea, type MenuItem, Avatar } from "$shared/ui";
 	import { onCurrentSwipe, type ChatBookmark } from "./bookmarks";
 	import { findTextRange, paintBookmarks } from "./highlight";
 	import { absolute, relative } from "$shared/time";
@@ -20,6 +20,8 @@
 	import { pluginProcessOf } from "$features/community/postprocess";
 
 	interface Props {
+		/** 프로필 그림 (대화 설정에서 켰을 때만 넘어옴, null이면 이름 첫 글자) — 5-E-9 */
+		avatar?: string | null;
 		msg: Message;
 		no: number;
 		session: ChatSession;
@@ -39,7 +41,7 @@
 		/** 형광펜 칠한 글을 눌러 지움 */
 		onmarkremove?: (b: ChatBookmark) => void;
 	}
-	let { msg, no, session, images, isLast, onbranch, onprompt, selecting = false, selected = false, onselect, marks = [], oncard, onmarkremove }: Props = $props();
+	let { msg, no, avatar, session, images, isLast, onbranch, onprompt, selecting = false, selected = false, onselect, marks = [], oncard, onmarkremove }: Props = $props();
 
 	const meta = $derived(metaOf(msg));
 	const isAi = $derived(msg.role === "assistant");
@@ -231,6 +233,7 @@
 <div bind:this={el} class="block" class:ai={isAi} class:user={!isAi} class:hidden={meta.hidden} class:selecting class:picked={selected} id="msg-{msg.id}" data-no={no} class:tapped onclick={tap} oncontextmenu={openMenu}>
 	<div class="who">
 		{#if selecting}<input class="pick" type="checkbox" checked={selected} aria-label="#{no} 메시지 선택" onclick={(e) => e.stopPropagation()} onchange={(e) => onselect?.(msg, e.currentTarget.checked)} />{/if}
+		{#if avatar !== undefined}<Avatar name={msg.name ?? (isAi ? "AI" : "나")} src={avatar} size={22} />{/if}
 		<span class="no">#{no}</span><b>{msg.name ?? (isAi ? "AI" : "나")}</b>
 		{#if meta.hidden}<Badge><EyeOff /> AI에게 숨김</Badge>{/if}
 		{#if (msg.meta as { ghost?: boolean } | null)?.ghost}<span class="ghost" role="img" aria-label="대필" title="대필"><PenLine size={12} /></span>{/if}

@@ -486,6 +486,7 @@
 						<ProfilePicker label="페르소나 바꾸기" options={personaOptions} value={persona?.id} onchange={(id) => setOption({ personaId: id })} />
 					{/if}
 				</div>
+				<Switch checked={!!(conv.meta as { showAvatars?: boolean } | null)?.showAvatars} label="메시지에 프로필 그림" onchange={(v) => library.patchMeta(conv.id, { showAvatars: v || null })} />
 			</section>
 			{#if plugins.on("lint")}
 				<hr />
