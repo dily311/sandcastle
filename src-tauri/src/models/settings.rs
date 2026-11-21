@@ -469,7 +469,7 @@ pub struct AppPrompts {
     pub image_prompt: PromptSlot,
     /// 장면 → NovelAI 태그 쓰기
     pub image_prompt_nai: PromptSlot,
-    /// 대화의 캐릭터 이미지(<cg>) 규칙 ({{keys}} = 키 목록, {{char}} = 캐릭터)
+    /// 대화의 캐릭터 이미지(<cg>) 규칙 ({{img_keys}} = 키 목록 — 예전 {{keys}}도 됨, {{char}} = 캐릭터)
     pub chat_images: PromptSlot,
     /// 이미지 자동 생성: 글쓰기 AI에게 응답 끝 <image> 그림 프롬프트를 쓰게 하는 지시
     pub auto_image: PromptSlot,

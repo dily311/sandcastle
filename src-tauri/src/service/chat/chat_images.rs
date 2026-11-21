@@ -234,12 +234,14 @@ pub fn remove_character_dir(app_data_dir: &Path, character_id: &str) {
 
 /// 모델에게 보낼 이미지 규칙 + 키 목록 ({{char}}는 PromptManager가 치환)
 pub fn image_rules(images: &[CharacterImage]) -> Option<String> {
-    let keys: Vec<&str> = images.iter().filter(|i| i.enabled).take(MAX_PROMPT_KEYS).map(|i| i.key.as_str()).collect();
-    if keys.is_empty() {
-        return None;
-    }
     // 사용자가 설정 > 앱 프롬프트에서 고칠 수 있다
-    Some(crate::service::app_prompts::chat_images(&keys.join(", ")))
+    image_keys(images).map(|k| crate::service::app_prompts::chat_images(&k))
+}
+
+/// 켜진 이미지 키 목록 ("a, b, c"). 없으면 None ({{img_keys}})
+pub fn image_keys(images: &[CharacterImage]) -> Option<String> {
+    let keys: Vec<&str> = images.iter().filter(|i| i.enabled).take(MAX_PROMPT_KEYS).map(|i| i.key.as_str()).collect();
+    (!keys.is_empty()).then(|| keys.join(", "))
 }
 
 // =======================================

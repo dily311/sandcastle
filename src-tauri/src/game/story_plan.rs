@@ -471,6 +471,8 @@ pub fn build_context(def: &GameDefinition, st: &GameState, previous: Option<&Sto
         extra_data: Value::Null,
         main_prompt: None,
         user_images: vec![],
+        image_prompt: None,
+        image_keys: None,
     };
     let message = format!("체크포인트: {}. 위 정보를 바탕으로 계획 JSON을 새로 써라.", reason_label(reason));
     (context, message)

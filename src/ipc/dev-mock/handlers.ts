@@ -151,7 +151,7 @@ const base: Record<string, Handler> = {
 	save_png_file: () => null,
 	default_app_prompts: () => {
 		const d = (text: string) => ({ selected: "", items: [{ id: "", name: "기본값", text }] });
-		return { translate: d("You are a translator. Translate into {{lang}}."), imagePrompt: d("Describe ONE scene as an English prompt."), imagePromptNai: d("Danbooru tags."), chatImages: d("[이미지]\n사용 가능한 키: {{keys}}"), autoImage: d("[그림]\n응답 끝에 <image>태그</image>"), gameRules: d("규칙 1\n규칙 2"), sceneRules: d("씬 규칙"), summary: d("대화를 요약하는 지시. {max}토큰 안에") };
+		return { translate: d("You are a translator. Translate into {{lang}}."), imagePrompt: d("Describe ONE scene as an English prompt."), imagePromptNai: d("Danbooru tags."), chatImages: d("[이미지]\n사용 가능한 키: {{img_keys}}"), autoImage: d("[그림]\n응답 끝에 <image>태그</image>"), gameRules: d("규칙 1\n규칙 2"), sceneRules: d("씬 규칙"), summary: d("대화를 요약하는 지시. {max}토큰 안에") };
 	},
 	cancel_task: () => null,
 	...chatHandlers,

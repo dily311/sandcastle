@@ -32,6 +32,8 @@ impl ContextManager {
         // 현재 대화 중인 캐릭터의 데이터 불러오기
         Ok(ChatContext {
             user_images: vec![],
+            image_prompt: None,
+            image_keys: None,
             system_rules: vec![],
             char_name: Some(character.name.clone()),
             user_name: Some(persona.name.clone()),

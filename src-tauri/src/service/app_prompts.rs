@@ -20,7 +20,7 @@ pub const DEFAULT_CHAT_IMAGES: &str = "[이미지]
 장면이나 {{char}}의 감정·상태에 잘 어울리는 이미지가 있으면 응답 안의 알맞은 자리에 <cg>키</cg>를 적어 보여줄 수 있다.
 - 아래 목록의 키를 그대로만 쓴다. 목록에 없는 키는 절대 쓰지 않는다.
 - 꼭 어울릴 때만, 한 응답에 한 번 정도 쓴다. 태그를 설명하거나 읽지 않는다.
-사용 가능한 키: {{keys}}";
+사용 가능한 키: {{img_keys}}";
 
 pub const DEFAULT_AUTO_IMAGE: &str = "[그림]
 응답을 다 쓴 뒤 맨 끝에, 이번 장면을 그림으로 그릴 영어 프롬프트를 <image>프롬프트</image>로 딱 한 번 적는다.
@@ -103,7 +103,10 @@ pub fn image_prompt(novelai: bool) -> String {
 }
 /// {{char}}는 그대로 둔다 (PromptManager가 치환)
 pub fn chat_images(keys: &str) -> String {
-    pick(|p| &p.chat_images, DEFAULT_CHAT_IMAGES).replace("{{keys}}", keys)
+    // {{keys}}는 예전 이름 (사용자가 고친 슬롯에 남아 있을 수 있음)
+    pick(|p| &p.chat_images, DEFAULT_CHAT_IMAGES)
+        .replace("{{img_keys}}", keys)
+        .replace("{{keys}}", keys)
 }
 /// {max}는 쓰는 쪽이 채운다
 pub fn summary() -> String {

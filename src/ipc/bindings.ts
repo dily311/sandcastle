@@ -703,7 +703,7 @@ export type AppPrompts_Deserialize = {
 	imagePrompt?: PromptSlot,
 	/**  장면 → NovelAI 태그 쓰기 */
 	imagePromptNai?: PromptSlot,
-	/**  대화의 캐릭터 이미지(<cg>) 규칙 ({{keys}} = 키 목록, {{char}} = 캐릭터) */
+	/**  대화의 캐릭터 이미지(<cg>) 규칙 ({{img_keys}} = 키 목록 — 예전 {{keys}}도 됨, {{char}} = 캐릭터) */
 	chatImages?: PromptSlot,
 	/**  이미지 자동 생성: 글쓰기 AI에게 응답 끝 <image> 그림 프롬프트를 쓰게 하는 지시 */
 	autoImage?: PromptSlot,
@@ -723,7 +723,7 @@ export type AppPrompts_Serialize = {
 	imagePrompt: PromptSlot,
 	/**  장면 → NovelAI 태그 쓰기 */
 	imagePromptNai: PromptSlot,
-	/**  대화의 캐릭터 이미지(<cg>) 규칙 ({{keys}} = 키 목록, {{char}} = 캐릭터) */
+	/**  대화의 캐릭터 이미지(<cg>) 규칙 ({{img_keys}} = 키 목록 — 예전 {{keys}}도 됨, {{char}} = 캐릭터) */
 	chatImages: PromptSlot,
 	/**  이미지 자동 생성: 글쓰기 AI에게 응답 끝 <image> 그림 프롬프트를 쓰게 하는 지시 */
 	autoImage: PromptSlot,

@@ -7,6 +7,6 @@
 
 <Section title="캐릭터 에셋" lead="캐릭터에 넣어 둔 이미지를 AI가 어울리는 순간에 <cg>키</cg>로 보여줌">
 	<Group title="CG 프롬프트">
-		<PromptSlotEditor key="chatImages" desc="이미지 키가 있는 캐릭터와 대화할 때만 붙음" vars={"{{keys}} 이미지 키 목록 · {{char}} 캐릭터"} />
+		<PromptSlotEditor key="chatImages" desc="이미지 키가 있는 캐릭터와 대화할 때만 붙음" vars={"{{img_keys}} 이미지 키 목록 · {{char}} 캐릭터 · 프리셋 블록에 {{img_inprompt}}를 넣으면 이 글이 그 자리에 들어감"} />
 	</Group>
 </Section>

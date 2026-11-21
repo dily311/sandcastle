@@ -6,6 +6,8 @@ use crate::models::ai_service::HistoryItem;
 fn ctx() -> ChatContext {
     ChatContext {
         user_images: vec![],
+        image_prompt: None,
+        image_keys: None,
         system_rules: vec!["Stay in character as {{char}}.".into()],
         char_name: Some("Aria".into()),
         user_name: Some("Min".into()),
@@ -369,4 +371,34 @@ fn reasoning_effort_comes_from_the_preset_and_auto_means_unset() {
     assert_eq!(with(json!({ "reasoning_effort": "High" })).as_deref(), Some("high"));
     assert_eq!(with(json!({ "reasoning_effort": "auto" })), None);
     assert_eq!(with(json!({ "temperature": 1 })), None);
+}
+
+#[test]
+fn image_rules_go_where_the_preset_puts_img_inprompt() {
+    let mut c = ctx();
+    c.image_prompt = Some("[이미지] {{char}}: 키 {{img_keys}}".into());
+    c.image_keys = Some("smile, cry".into());
+    // 자리를 정하지 않으면 시스템 규칙 끝에
+    let plain = preset(
+        vec![block("main", "system", "You are {{char}}.", 0), block("chatHistory", "user", "", 1)],
+        json!({}),
+    );
+    let p = PromptManager.build(request(c.clone(), "hi"), Some(&plain)).unwrap();
+    assert!(shape(&p)[0].1.ends_with("[이미지] Aria: 키 smile, cry"), "{:?}", shape(&p));
+    // {{img_inprompt}}가 있으면 그 블록 안에서만 (사용자가 앞뒤에 덧붙인 말과 함께), {{img_keys}}도 프리셋에서 쓸 수 있다
+    let placed = preset(
+        vec![
+            block("main", "system", "You are {{char}}.", 0),
+            block("imgs", "system", "그림 규칙:\n{{img_inprompt}}\n키만 {{IMG_KEYS}} 중에서", 1),
+            block("chatHistory", "user", "", 2),
+        ],
+        json!({}),
+    );
+    let p = PromptManager.build(request(c, "hi"), Some(&placed)).unwrap();
+    let s: Vec<_> = shape(&p).into_iter().map(|(_, c)| c).collect();
+    assert_eq!(s.iter().filter(|x| x.contains("[이미지]")).count(), 1);
+    assert!(
+        s.contains(&"그림 규칙:\n[이미지] Aria: 키 smile, cry\n키만 smile, cry 중에서".to_string()),
+        "{s:?}"
+    );
 }

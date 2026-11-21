@@ -99,7 +99,17 @@ impl PromptManager {
         }
 
         // ---- 고정 내용
-        let rules = macros.apply(ctx.system_rules.join("\n").trim());
+        // 이미지 규칙: 프리셋이 {{img_inprompt}}로 자리를 정했으면 거기서 풀리고, 아니면 시스템 규칙 끝에 (5-E-15)
+        let inline_img = preset.is_some_and(|p| {
+            p.blocks
+                .iter()
+                .any(|b| b.enabled && b.content.to_ascii_lowercase().contains("{{img_inprompt}}"))
+        });
+        let mut sys = ctx.system_rules.clone();
+        if let (false, Some(r)) = (inline_img, &ctx.image_prompt) {
+            sys.push(r.clone());
+        }
+        let rules = macros.apply(sys.join("\n").trim());
         let sections = SectionValues {
             char_description: ctx.character_info.as_deref().map(|s| macros.apply(s)),
             persona_description: Some(macros.apply(&ctx.persona_info)),
@@ -536,10 +546,18 @@ impl Macros {
         let description = base.apply(ctx.character_info.as_deref().unwrap_or_default());
         let persona = base.apply(&ctx.persona_info);
         let examples = base.apply(ctx.example_dialogue.as_deref().unwrap_or_default());
+        let img_keys = ctx.image_keys.clone().unwrap_or_default();
+        let img_inprompt = ctx
+            .image_prompt
+            .as_deref()
+            .map(|p| base.apply(p).replace("{{img_keys}}", &img_keys))
+            .unwrap_or_default();
         let mut values = base.values;
         values.push(("description", description));
         values.push(("persona", persona));
         values.push(("mesexamples", examples));
+        values.push(("img_keys", img_keys));
+        values.push(("img_inprompt", img_inprompt));
         Self { values }
     }
 

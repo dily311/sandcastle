@@ -633,7 +633,10 @@ impl ChatManager {
             _ => vec![],
         };
         match image_rules(&images) {
-            Some(rules) => context.system_rules.push(rules),
+            Some(rules) => {
+                context.image_prompt = Some(rules);
+                context.image_keys = super::chat_images::image_keys(&images);
+            }
             None => {
                 for item in context.history.iter_mut() {
                     item.content = strip_cg_tags(&item.content);

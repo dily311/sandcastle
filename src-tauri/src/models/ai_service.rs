@@ -229,6 +229,10 @@ pub struct ChatContext {
     pub extra_data: serde_json::Value,
     /// 이번 사용자 입력에 붙인 이미지 (파일 경로)
     pub user_images: Vec<String>,
+    /// 캐릭터 이미지(<cg>) 규칙 (앱 프롬프트 슬롯). 프리셋 블록에 {{img_inprompt}}가 있으면 그 자리에, 없으면 시스템 규칙 끝에 (5-E-15)
+    pub image_prompt: Option<String>,
+    /// 매크로 {{img_keys}}: 이 대화에서 쓸 수 있는 이미지 키 목록
+    pub image_keys: Option<String>,
 }
 
 #[derive(Serialize, Clone, specta::Type)]
