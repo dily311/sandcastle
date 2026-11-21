@@ -130,6 +130,13 @@ pub async fn set_conversation_pinned(state: State<'_, AppState>, id: String, pin
     found(chat_ui::set_pinned(&state.db, &id, pinned).await?, "대화")
 }
 
+/// 캐릭터 통계 (캐릭터 페이지 통계 탭, 5-E-12). 누르기 전에는 읽지 않는다
+#[tauri::command]
+#[specta::specta]
+pub async fn get_character_stats(state: State<'_, AppState>, character_id: String, tz_offset_min: i64) -> Result<chat_ui::CharacterStats> {
+    Ok(chat_ui::character_stats(&state.db, &character_id, tz_offset_min).await?)
+}
+
 /// 대화 목록 검색 `mes:글` — 그 글이 든 메시지가 있는 대화 id와 맞은 메시지 수 (빈 글이면 없음)
 #[tauri::command]
 #[specta::specta]

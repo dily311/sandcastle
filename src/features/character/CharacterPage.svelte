@@ -8,6 +8,8 @@
 	import { Avatar, Badge, Button, ContextMenu, ItemCard, ListToolbar, SelectBar, SplitButton, Dialog, EmptyState, IconButton, Input, Segmented, Spinner, type MenuItem } from "$shared/ui";
 	import { nav } from "$app/nav.svelte";
 	import { call, commands } from "$shared/ipc/client";
+	import type { CharacterStats } from "$ipc/bindings";
+	import { bookmarksOf } from "./bookmarks";
 	import { IMAGE_FILES, PACK_FILES, ST_FILES, pickFiles, pickSavePath } from "$shared/ipc/dialog";
 	import { fileSrc, imageSrc } from "$shared/ipc/file";
 	import { confirmAction, promptText } from "$shared/stores/confirm.svelte";
@@ -200,7 +202,29 @@
 		if (charId && !edit && !convId && !library.images[charId]) void library.loadImages(charId);
 	});
 	const recent = $derived(charId ? library.convsOf(charId) : []);
-	let tab: "overview" | "recent" = $state("overview");
+	let tab: "overview" | "recent" | "bookmarks" | "stats" = $state("overview");
+	// 북마크 탭: 이 캐릭터의 대화마다 남긴 북마크 (대화 meta, 새로 읽지 않음)
+	const marks = $derived(recent.flatMap((c) => bookmarksOf(c).map((b) => ({ ...b, conv: c }))).sort((a, b) => b.createdAt - a.createdAt));
+	// 통계 탭: 누를 때만 읽는다 (5-E-12)
+	let stats = $state<CharacterStats | null>(null);
+	let statsFor = "";
+	$effect(() => {
+		const id = charId;
+		if (tab !== "stats" || !id || statsFor === id) return;
+		statsFor = id;
+		stats = null;
+		void call(commands.getCharacterStats(id, -new Date().getTimezoneOffset()), { source: "character" })
+			.then((s) => {
+				if (charId === id) stats = s;
+			})
+			.catch(() => (statsFor = ""));
+	});
+	const DAYS = ["일", "월", "화", "수", "목", "금", "토"];
+	function duration(sec: number) {
+		const h = Math.floor(sec / 3600);
+		const m = Math.round((sec % 3600) / 60);
+		return h ? `${h}시간 ${m}분` : `${m}분`;
+	}
 	let starting = $state(false);
 	async function newConversation(cid: string) {
 		starting = true;
@@ -351,7 +375,16 @@
 		</Dialog>
 
 		<div class="tabs">
-			<Segmented label="캐릭터 탭" bind:value={tab} options={[{ value: "overview", label: "개요" }, { value: "recent", label: `최근 대화 ${recent.length}` }]} />
+			<Segmented
+				label="캐릭터 탭"
+				bind:value={tab}
+				options={[
+					{ value: "overview", label: "개요" },
+					{ value: "recent", label: `채팅 목록 ${recent.length}` },
+					{ value: "bookmarks", label: `북마크 ${marks.length}` },
+					{ value: "stats", label: "통계" },
+				]}
+			/>
 		</div>
 
 		<div class="body">
@@ -360,6 +393,37 @@
 					<div class="intro"><RichText blocks={overviewBlocks(character)} images={overviewImages} /></div>
 				{:else}
 					<p class="none">소개 없음 · <button class="link" onclick={() => nav.go({ page: "character", charId: character.id, edit: true })}>편집에서 쓰기</button></p>
+				{/if}
+			{:else if tab === "bookmarks"}
+				<ul class="recent marks">
+					{#each marks as b (b.conv.id + b.id)}
+						<li>
+							<button onclick={() => open(character.id, b.conv.id)}>
+								<span><b class="mark-text">{b.text}</b><small>{b.conv.title} · {relative(b.createdAt)}</small></span>
+								<ChevronRight />
+							</button>
+						</li>
+					{:else}
+						<li class="none">북마크 없음 · 대화에서 글을 끌어 고른 뒤 "북마크"</li>
+					{/each}
+				</ul>
+			{:else if tab === "stats"}
+				{#if !stats}
+					<p class="none"><Spinner /></p>
+				{:else}
+					{@const max = Math.max(1, ...stats.weekdays)}
+					<dl class="stats">
+						<div><dt>누적 대화 시간</dt><dd>{duration(stats.chatSeconds)}</dd></div>
+						<div><dt>대화방</dt><dd>{stats.conversations}개</dd></div>
+						<div><dt>메시지</dt><dd>{stats.messages.toLocaleString()}개</dd></div>
+						{#if stats.firstAt}<div><dt>처음 대화</dt><dd title={absolute(stats.firstAt)}>{relative(stats.firstAt)}</dd></div>{/if}
+					</dl>
+					<div class="week" role="img" aria-label="요일별 메시지 수: {DAYS.map((d, i) => `${d} ${stats?.weekdays[i] ?? 0}`).join(', ')}">
+						{#each stats.weekdays as n, i (i)}
+							<div class="day"><span class="bar" style:height="{(n / max) * 100}%" title="{DAYS[i]}요일 {n}개"></span><small>{DAYS[i]}</small></div>
+						{/each}
+					</div>
+					<p class="faint-note">같은 대화에서 30분 안에 이어진 메시지 사이를 대화 시간으로 셈</p>
 				{/if}
 			{:else}
 				<ul class="recent">
@@ -589,6 +653,60 @@
 	.sub {
 		display: flex;
 		align-items: center;
+	}
+	.stats {
+		display: grid;
+		grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
+		gap: var(--space-3);
+		margin: var(--space-5) 0 0;
+	}
+	.stats div {
+		padding: var(--space-3) var(--space-4);
+		border: 1px solid var(--border);
+		border-radius: var(--radius-md);
+	}
+	.stats dt {
+		color: var(--text-muted);
+		font-size: var(--text-xs);
+	}
+	.stats dd {
+		margin: var(--space-1) 0 0;
+		font-size: var(--text-lg);
+		font-weight: 600;
+	}
+	.week {
+		display: grid;
+		grid-template-columns: repeat(7, 1fr);
+		gap: var(--space-2);
+		height: 140px;
+		margin-top: var(--space-5);
+	}
+	.day {
+		display: flex;
+		flex-direction: column;
+		justify-content: flex-end;
+		align-items: center;
+		gap: var(--space-1);
+		min-height: 0;
+	}
+	.bar {
+		width: 60%;
+		min-height: 2px;
+		border-radius: var(--radius-sm) var(--radius-sm) 0 0;
+		background: var(--accent);
+	}
+	.day small,
+	.faint-note {
+		color: var(--text-muted);
+		font-size: var(--text-xs);
+	}
+	.mark-text {
+		display: -webkit-box;
+		-webkit-line-clamp: 2;
+		line-clamp: 2;
+		-webkit-box-orient: vertical;
+		overflow: hidden;
+		font-weight: 500;
 	}
 	.tabs {
 		max-width: var(--page-medium);

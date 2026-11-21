@@ -419,6 +419,13 @@ AI: 그때 이야기를 다시 해 볼까요?`, stale: false },
 	},
 	rename_conversation: ({ id, title }) => ((conv(id).title = title), null),
 	set_conversation_pinned: ({ id, pinned }) => ((conv(id).pinned = pinned), null),
+	get_character_stats: ({ characterId }) => {
+		const ids = new Set(convs.filter((c) => c.characterId === characterId).map((c) => c.id));
+		const mine = messages.filter((m) => ids.has(m.conversationId));
+		const weekdays = [0, 0, 0, 0, 0, 0, 0];
+		for (const m of mine) weekdays[new Date(m.createdAt).getDay()]++;
+		return { conversations: ids.size, messages: mine.length, chatSeconds: mine.length * 95, weekdays, firstAt: mine.length ? Math.min(...mine.map((m) => m.createdAt)) : null, lastAt: mine.length ? Math.max(...mine.map((m) => m.createdAt)) : null };
+	},
 	find_conversations_by_message: ({ characterId, text }) => {
 		const t = String(text).toLowerCase();
 		const hits = new Map<string, number>();

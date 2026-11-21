@@ -68,6 +68,8 @@ export const commands = {
 	setConversationReadMode: (id: string, on: boolean, options?: InvokeOptions) => __TAURI_INVOKE<null>("set_conversation_read_mode", { id, on }, options),
 	/**  대화 목록 검색 `mes:글` — 그 글이 든 메시지가 있는 대화 id와 맞은 메시지 수 (빈 글이면 없음) */
 	findConversationsByMessage: (characterId: string | null, text: string, options?: InvokeOptions) => __TAURI_INVOKE<([string, number])[]>("find_conversations_by_message", { characterId, text }, options),
+	/**  캐릭터 통계 (캐릭터 페이지 통계 탭, 5-E-12). 누르기 전에는 읽지 않는다 */
+	getCharacterStats: (characterId: string, tzOffsetMin: number, options?: InvokeOptions) => __TAURI_INVOKE<CharacterStats_Serialize>("get_character_stats", { characterId, tzOffsetMin }, options),
 	/**  폴더로 옮기기. `folder_id`가 null이면 폴더 밖으로 */
 	moveConversation: (id: string, folderId: string | null, options?: InvokeOptions) => __TAURI_INVOKE<null>("move_conversation", { id, folderId }, options),
 	/**  대화별 페르소나·프리셋·API (프리셋/API가 null이면 앱 설정의 선택값을 씀) */
@@ -1190,6 +1192,35 @@ export type CharacterInput_Serialize = {
 export type CharacterOption = {
 	id: string,
 	name: string,
+};
+
+/**  캐릭터 통계 (5-E-12) */
+export type CharacterStats = CharacterStats_Serialize | CharacterStats_Deserialize;
+
+/**  캐릭터 통계 (5-E-12) */
+export type CharacterStats_Deserialize = {
+	/**  대화방 수 (폰 대화 포함) */
+	conversations: number,
+	messages: number,
+	/**  누적 대화 시간(초): 같은 대화의 이어진 메시지 사이가 30분 이하면 그 사이를 대화한 시간으로 센다 */
+	chatSeconds: number,
+	/**  요일별 메시지 수 (0 = 일요일 … 6 = 토요일, 사용자 시간대) */
+	weekdays: number[],
+	firstAt?: number | null,
+	lastAt?: number | null,
+};
+
+/**  캐릭터 통계 (5-E-12) */
+export type CharacterStats_Serialize = {
+	/**  대화방 수 (폰 대화 포함) */
+	conversations: number,
+	messages: number,
+	/**  누적 대화 시간(초): 같은 대화의 이어진 메시지 사이가 30분 이하면 그 사이를 대화한 시간으로 센다 */
+	chatSeconds: number,
+	/**  요일별 메시지 수 (0 = 일요일 … 6 = 토요일, 사용자 시간대) */
+	weekdays: number[],
+	firstAt: number | null,
+	lastAt: number | null,
 };
 
 export type Character_Deserialize = {

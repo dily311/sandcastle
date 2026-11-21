@@ -91,6 +91,64 @@ where
     Ok(r.rows_affected() != 0)
 }
 
+/// 캐릭터 통계 (5-E-12)
+#[derive(Debug, Clone, Default, PartialEq, serde::Serialize, specta::Type)]
+#[serde(rename_all = "camelCase")]
+pub struct CharacterStats {
+    /// 대화방 수 (폰 대화 포함)
+    pub conversations: i64,
+    pub messages: i64,
+    /// 누적 대화 시간(초): 같은 대화의 이어진 메시지 사이가 30분 이하면 그 사이를 대화한 시간으로 센다
+    pub chat_seconds: i64,
+    /// 요일별 메시지 수 (0 = 일요일 … 6 = 토요일, 사용자 시간대)
+    pub weekdays: Vec<i64>,
+    pub first_at: Option<i64>,
+    pub last_at: Option<i64>,
+}
+
+/// 대화가 끊겼다고 보는 간격
+pub const CHAT_GAP_MS: i64 = 30 * 60 * 1000;
+
+/// `tz_offset_min`: 사용자 시간대의 UTC와의 차이(분, 한국 +540) — 요일을 그 시간대로 센다
+pub async fn character_stats(db: &crate::db::conn::DbPool, character_id: &str, tz_offset_min: i64) -> Result<CharacterStats, Error> {
+    let conversations: i64 = sqlx::query_scalar("SELECT COUNT(*) FROM conversations WHERE character_id = ?")
+        .bind(character_id)
+        .fetch_one(db)
+        .await?;
+    let rows: Vec<(String, i64)> = sqlx::query_as(
+        "SELECT m.conversation_id, m.created_at FROM messages m JOIN conversations c ON c.id = m.conversation_id
+         WHERE c.character_id = ? ORDER BY m.conversation_id, m.created_at",
+    )
+    .bind(character_id)
+    .fetch_all(db)
+    .await?;
+    Ok(stats_from(conversations, &rows, tz_offset_min))
+}
+
+fn stats_from(conversations: i64, rows: &[(String, i64)], tz_offset_min: i64) -> CharacterStats {
+    let mut s = CharacterStats {
+        conversations,
+        messages: rows.len() as i64,
+        weekdays: vec![0; 7],
+        ..Default::default()
+    };
+    let mut prev: Option<(&str, i64)> = None;
+    for (conv, at) in rows {
+        let local_days = (at + tz_offset_min * 60_000).div_euclid(86_400_000);
+        // 1970-01-01은 목요일(4)
+        s.weekdays[((local_days + 4).rem_euclid(7)) as usize] += 1;
+        if let Some((pc, pa)) = prev {
+            if pc == conv && (0..=CHAT_GAP_MS).contains(&(at - pa)) {
+                s.chat_seconds += (at - pa) / 1000;
+            }
+        }
+        prev = Some((conv, *at));
+        s.first_at = Some(s.first_at.map_or(*at, |f| f.min(*at)));
+        s.last_at = Some(s.last_at.map_or(*at, |l| l.max(*at)));
+    }
+    s
+}
+
 /// 글이 든 메시지가 있는 대화 (대화 목록 검색 `mes:`, 5-E-8). 대소문자 무시, 대화마다 맞은 메시지 수. 캐릭터를 주면 그 캐릭터의 대화만
 pub async fn conversations_with_text<'e, E>(executor: E, character_id: Option<&str>, text: &str) -> Result<Vec<(String, i64)>, Error>
 where
@@ -288,6 +346,25 @@ pub async fn patch_conversation_meta(pool: &SqlitePool, id: &str, patch: &serde_
 
 #[cfg(test)]
 mod search_tests {
+    #[test]
+    fn stats_count_weekdays_and_close_gaps_only() {
+        let min = 60_000;
+        // 2026-11-22 (일요일) 00:30 한국 시각 = 2026-11-21 15:30 UTC
+        let sun_kst = 1_795_282_200_000_i64;
+        let rows = vec![
+            ("a".to_string(), sun_kst),
+            ("a".to_string(), sun_kst + 10 * min),
+            ("a".to_string(), sun_kst + 2 * 60 * min),       // 1시간 50분 뒤 → 끊김
+            ("b".to_string(), sun_kst + 2 * 60 * min + min), // 다른 대화 → 이어지지 않음
+        ];
+        let s = super::stats_from(2, &rows, 540);
+        assert_eq!(s.messages, 4);
+        assert_eq!(s.chat_seconds, 600);
+        assert_eq!(s.weekdays[0], 4, "한국 시각으로는 모두 일요일: {:?}", s.weekdays);
+        assert_eq!(super::stats_from(2, &rows, 0).weekdays[6], 4, "UTC로는 토요일");
+        assert_eq!(s.first_at, Some(sun_kst));
+    }
+
     #[tokio::test]
     async fn finds_conversations_whose_messages_contain_the_text() {
         let dir = tempfile::tempdir().unwrap();
