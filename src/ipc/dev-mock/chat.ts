@@ -419,6 +419,17 @@ AI: 그때 이야기를 다시 해 볼까요?`, stale: false },
 	},
 	rename_conversation: ({ id, title }) => ((conv(id).title = title), null),
 	set_conversation_pinned: ({ id, pinned }) => ((conv(id).pinned = pinned), null),
+	find_conversations_by_message: ({ characterId, text }) => {
+		const t = String(text).toLowerCase();
+		const hits = new Map<string, number>();
+		for (const m of messages) {
+			if (!m.content.toLowerCase().includes(t)) continue;
+			const c = convs.find((x) => x.id === m.conversationId);
+			if (!c || (characterId && c.characterId !== characterId)) continue;
+			hits.set(c.id, (hits.get(c.id) ?? 0) + 1);
+		}
+		return [...hits];
+	},
 	set_conversation_read_mode: ({ id, on }) => ((conv(id).readMode = on), null),
 	move_conversation: ({ id, folderId }) => ((conv(id).folderId = folderId), null),
 	set_conversation_options: ({ id, options }) => (Object.assign(conv(id), options), view(conv(id))),

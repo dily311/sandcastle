@@ -1,6 +1,6 @@
 <script lang="ts">
 	import { regexVersion } from "$shared/stores/regexVersion.svelte";
-	import { tick } from "svelte";
+	import { tick, untrack } from "svelte";
 	import { Bookmark, ChevronRight, Gauge, Copy, CornerUpLeft, FastForward, GitBranch, ImagePlus, Images, IdCard, Languages, ListChecks, ListTree, PanelLeft, Plus, RefreshCw, Send, SlidersHorizontal, Square, Trash2, X, EllipsisVertical, BookOpen, Pen, Database, Scroll, Pencil, UserRound, PinOff, Pin, FolderMinus, Download, Folder } from "@lucide/svelte";
 	import { bookmarks, bookmarksOf, type ChatBookmark } from "./bookmarks";
 	import { findTextRange } from "./highlight";
@@ -30,6 +30,7 @@
 	import { toBlocks } from "./format";
 	import RichText from "./RichText.svelte";
 	import { chatImport } from "./chatImport.svelte";
+	import { viewed } from "./viewed.svelte";
 	import { library } from "./library.svelte";
 	import { ChatSession, metaOf, type Message } from "./session.svelte";
 	import { call, commands } from "$/shared/ipc/client";
@@ -39,6 +40,11 @@
 	let { charId, convId, onopen }: { charId: string; convId: string; onopen: (id: string) => void } = $props();
 
 	const conv = $derived(library.conversation(convId));
+	// "최근 본" 정렬용: 대화를 열 때마다 (이 기기에만)
+	$effect(() => {
+		const id = convId;
+		untrack(() => viewed.mark(id));
+	});
 	const character = $derived(library.character(charId));
 
 	// 대화가 바뀌면 새 세션

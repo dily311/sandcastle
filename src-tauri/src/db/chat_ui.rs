@@ -91,6 +91,22 @@ where
     Ok(r.rows_affected() != 0)
 }
 
+/// 글이 든 메시지가 있는 대화 (대화 목록 검색 `mes:`, 5-E-8). 대소문자 무시, 대화마다 맞은 메시지 수. 캐릭터를 주면 그 캐릭터의 대화만
+pub async fn conversations_with_text<'e, E>(executor: E, character_id: Option<&str>, text: &str) -> Result<Vec<(String, i64)>, Error>
+where
+    E: Executor<'e, Database = Sqlite>,
+{
+    sqlx::query_as(
+        "SELECT m.conversation_id, COUNT(*) FROM messages m JOIN conversations c ON c.id = m.conversation_id
+         WHERE instr(lower(m.content), lower(?1)) > 0 AND (?2 IS NULL OR c.character_id = ?2)
+         GROUP BY m.conversation_id",
+    )
+    .bind(text)
+    .bind(character_id)
+    .fetch_all(executor)
+    .await
+}
+
 /// 읽기 모드 (5-E-6)
 pub async fn set_read_mode<'e, E>(executor: E, id: &str, on: bool) -> Result<bool, Error>
 where
@@ -268,4 +284,27 @@ pub async fn patch_conversation_meta(pool: &SqlitePool, id: &str, patch: &serde_
         .execute(pool)
         .await?;
     Ok(())
+}
+
+#[cfg(test)]
+mod search_tests {
+    #[tokio::test]
+    async fn finds_conversations_whose_messages_contain_the_text() {
+        let dir = tempfile::tempdir().unwrap();
+        let db = crate::db::conn::init_pool(dir.path().to_path_buf()).await.unwrap();
+        for sql in [
+            "INSERT INTO characters (id, name, created_at, updated_at) VALUES ('a', 'A', 1, 1), ('b', 'B', 1, 1)",
+            "INSERT INTO conversations (id, title, character_id, created_at, updated_at) VALUES ('c1', 't', 'a', 1, 1), ('c2', 't', 'a', 1, 1), ('c3', 't', 'b', 1, 1)",
+            "INSERT INTO messages (id, conversation_id, seq, role, content, created_at, updated_at) VALUES
+             ('m1', 'c1', 1, 'user', '숲에서 Wolf를 봤다', 1, 1), ('m2', 'c1', 2, 'assistant', '늑대(wolf)다', 2, 2),
+             ('m3', 'c2', 1, 'user', '안녕', 1, 1), ('m4', 'c3', 1, 'user', 'wolf', 1, 1)",
+        ] {
+            sqlx::query(sqlx::AssertSqlSafe(sql)).execute(&db).await.unwrap();
+        }
+        let mut hits = super::conversations_with_text(&db, Some("a"), "WOLF").await.unwrap();
+        hits.sort();
+        assert_eq!(hits, vec![("c1".to_string(), 2)]);
+        assert_eq!(super::conversations_with_text(&db, None, "wolf").await.unwrap().len(), 2);
+        assert!(super::conversations_with_text(&db, Some("a"), "없는 말").await.unwrap().is_empty());
+    }
 }

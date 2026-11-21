@@ -66,6 +66,8 @@ export const commands = {
 	setConversationPinned: (id: string, pinned: boolean, options?: InvokeOptions) => __TAURI_INVOKE<null>("set_conversation_pinned", { id, pinned }, options),
 	/**  읽기 모드 켜기/끄기 (켜면 보내는 줄을 숨김) */
 	setConversationReadMode: (id: string, on: boolean, options?: InvokeOptions) => __TAURI_INVOKE<null>("set_conversation_read_mode", { id, on }, options),
+	/**  대화 목록 검색 `mes:글` — 그 글이 든 메시지가 있는 대화 id와 맞은 메시지 수 (빈 글이면 없음) */
+	findConversationsByMessage: (characterId: string | null, text: string, options?: InvokeOptions) => __TAURI_INVOKE<([string, number])[]>("find_conversations_by_message", { characterId, text }, options),
 	/**  폴더로 옮기기. `folder_id`가 null이면 폴더 밖으로 */
 	moveConversation: (id: string, folderId: string | null, options?: InvokeOptions) => __TAURI_INVOKE<null>("move_conversation", { id, folderId }, options),
 	/**  대화별 페르소나·프리셋·API (프리셋/API가 null이면 앱 설정의 선택값을 씀) */

@@ -6,6 +6,8 @@
 	import { CHAT_FILES, pickFiles } from "$shared/ipc/dialog";
 	import { confirmAction } from "$shared/stores/confirm.svelte";
 	import ConvCard from "./ConvCard.svelte";
+	import { viewed } from "./viewed.svelte";
+	import { call, commands } from "$shared/ipc/client";
 	import { library, type Conversation } from "./library.svelte";
 
 	let { charId, convId, onopen, oncreate, onclose }: { charId: string; convId: string; onopen: (id: string) => void; oncreate: () => void, onclose: () => void } = $props();
@@ -15,7 +17,7 @@
 	});
 
 	let query = $state("");
-	type Sort = "newest" | "oldest" | "name" | "name-desc" | "most" | "least";
+	type Sort = "newest" | "viewed" | "oldest" | "name" | "name-desc" | "most" | "least";
 	const SORT_KEY = "sc.convs.sort";
 	let sort: Sort = $state((() => {
 		try {
@@ -33,6 +35,7 @@
 	});
 	const sorts: { id: Sort; label: string }[] = [
 		{ id: "newest", label: "최신순" },
+		{ id: "viewed", label: "최근 본 순" },
 		{ id: "oldest", label: "오래된순" },
 		{ id: "name", label: "이름순 (가→하)" },
 		{ id: "name-desc", label: "이름 역순 (하→가)" },
@@ -41,16 +44,31 @@
 	];
 	const compare: Record<Sort, (a: Conversation, b: Conversation) => number> = {
 		newest: (a, b) => lastAt(b) - lastAt(a),
+		viewed: (a, b) => (viewed.at[b.id] ?? 0) - (viewed.at[a.id] ?? 0) || lastAt(b) - lastAt(a),
 		oldest: (a, b) => lastAt(a) - lastAt(b),
 		name: (a, b) => a.title.localeCompare(b.title, "ko"),
 		"name-desc": (a, b) => b.title.localeCompare(a.title, "ko"),
 		most: (a, b) => b.messageCount - a.messageCount,
 		least: (a, b) => a.messageCount - b.messageCount,
 	};
+	// "mes:글"이면 제목이 아니라 메시지 내용으로 (백엔드에서 찾음, 입력이 멈춘 뒤)
+	const mesQuery = $derived(/^mes:/i.test(query.trim()) ? query.trim().slice(4).trim() : null);
+	let mesHits = $state<Map<string, number> | null>(null);
+	$effect(() => {
+		const t = mesQuery;
+		const cid = charId;
+		if (!t) return void (mesHits = null);
+		const timer = setTimeout(async () => {
+			const r = await call(commands.findConversationsByMessage(cid, t), { source: "chat", silent: true }).catch(() => []);
+			if (mesQuery === t) mesHits = new Map(r);
+		}, 250);
+		return () => clearTimeout(timer);
+	});
 	const convs = $derived.by(() => {
 		const q = query.trim().toLowerCase();
+		const match = (c: Conversation) => (mesQuery !== null ? !mesQuery || !!mesHits?.has(c.id) : !q || c.title.toLowerCase().includes(q));
 		return library.conversations
-			.filter((c) => c.characterId === charId && c.mode !== "phone" && (!q || c.title.toLowerCase().includes(q)))
+			.filter((c) => c.characterId === charId && c.mode !== "phone" && match(c))
 			.sort((a, b) => Number(b.pinned) - Number(a.pinned) || compare[sort](a, b));
 	});
 	let sortMenu = $state<{ x: number; y: number } | null>(null);
@@ -140,7 +158,7 @@
 		<IconButton label="새 폴더" size="sm" onclick={() => startFolderEdit("new")}><FolderPlus /></IconButton>
 	</div>
 	<div class="convs-tools">
-		<Input bind:value={query} placeholder="대화 검색" aria-label="대화 검색">
+		<Input bind:value={query} placeholder="대화 검색 · mes:메시지 내용" aria-label="대화 검색">
 			{#snippet leading()}<Search />{/snippet}
 		</Input>
 		<IconButton label="정렬: {sorts.find((s) => s.id === sort)?.label}" size="md" active={!!sortMenu} aria-haspopup="menu" onclick={openSortMenu}><ArrowDownUp /></IconButton>

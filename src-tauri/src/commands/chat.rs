@@ -130,6 +130,17 @@ pub async fn set_conversation_pinned(state: State<'_, AppState>, id: String, pin
     found(chat_ui::set_pinned(&state.db, &id, pinned).await?, "대화")
 }
 
+/// 대화 목록 검색 `mes:글` — 그 글이 든 메시지가 있는 대화 id와 맞은 메시지 수 (빈 글이면 없음)
+#[tauri::command]
+#[specta::specta]
+pub async fn find_conversations_by_message(state: State<'_, AppState>, character_id: Option<String>, text: String) -> Result<Vec<(String, i64)>> {
+    let t = text.trim();
+    if t.is_empty() {
+        return Ok(vec![]);
+    }
+    Ok(chat_ui::conversations_with_text(&state.db, character_id.as_deref(), t).await?)
+}
+
 /// 읽기 모드 켜기/끄기 (켜면 보내는 줄을 숨김)
 #[tauri::command]
 #[specta::specta]

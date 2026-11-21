@@ -16,6 +16,32 @@ import { logs } from "$shared/stores/log.svelte";
 export type { Character, CharacterImage, Conversation, ConversationFolder, Persona, Preset, ApiProfiles };
 
 /** 목록에 보일 대화 시각: 마지막 메시지 시각 (가져온 대화도 원래 대화 시각으로). 메시지가 없으면 수정 시각 */
+// ---- 목록 캐시 (이 기기 브라우저 저장소, 보여 주기만 — 곧 새로 읽은 값으로 바뀐다) ----
+const LIST_CACHE = "sc.library.list";
+const LIST_CACHE_MAX = 2_000_000;
+function readListCache(): { characters: Character[]; conversations: Conversation[] } | null {
+	try {
+		const v = JSON.parse(localStorage.getItem(LIST_CACHE) ?? "null");
+		return v && Array.isArray(v.characters) && Array.isArray(v.conversations) ? v : null;
+	} catch {
+		return null;
+	}
+}
+function writeListCache(characters: Character[], conversations: Conversation[]) {
+	try {
+		// 목록에 필요 없는 큰 칸(대화 meta·캐릭터 설명)은 빼고, 그래도 크면 남기지 않는다
+		const slim = {
+			characters: characters.map((c) => ({ ...c, description: "", exampleDialogue: null, firstMessage: null, alternateDescriptions: [], alternateFirstMessage: [] })),
+			conversations: conversations.map((c) => ({ ...c, meta: null })),
+		};
+		const text = JSON.stringify(slim);
+		if (text.length > LIST_CACHE_MAX) localStorage.removeItem(LIST_CACHE);
+		else localStorage.setItem(LIST_CACHE, text);
+	} catch {
+		/* 저장소를 못 쓰면 캐시 없이 */
+	}
+}
+
 export const lastAt = (c: Pick<Conversation, "lastMessageAt" | "updatedAt">) => c.lastMessageAt ?? c.updatedAt;
 
 const src = { source: "character" };
@@ -33,6 +59,14 @@ class Library {
 	private foldersLoaded = new Set<string>();
 
 	async load() {
+		// 처음 열 때: 지난번 목록을 먼저 보여 주고 뒤에서 새로 읽는다 (대화가 많으면 읽는 데 시간이 걸림, 5-E-8)
+		if (!this.loaded) {
+			const cached = readListCache();
+			if (cached) {
+				Object.assign(this, cached);
+				this.loaded = true;
+			}
+		}
 		const [characters, conversations, personas, presets, apis] = await Promise.all([
 			call(commands.getAllCharacters(), src),
 			call(commands.getAllConversations(), src),
@@ -42,6 +76,7 @@ class Library {
 		]);
 		Object.assign(this, { characters, conversations, personas, presets, apis });
 		this.loaded = true;
+		writeListCache(characters, conversations);
 	}
 
 	character(id: string | null | undefined) {
