@@ -1,7 +1,7 @@
 <script lang="ts">
 	import { regexVersion } from "$shared/stores/regexVersion.svelte";
 	import { tick, untrack } from "svelte";
-	import { Bookmark, ChevronRight, Gauge, Copy, CornerUpLeft, FastForward, GitBranch, ImagePlus, Images, IdCard, Languages, ListChecks, ListTree, PanelLeft, Plus, RefreshCw, Send, SlidersHorizontal, Square, Trash2, X, EllipsisVertical, BookOpen, Pen, Database, Scroll, Pencil, UserRound, PinOff, Pin, FolderMinus, Download, Folder } from "@lucide/svelte";
+	import { Bookmark, ChevronRight, Gauge, Copy, CornerUpLeft, FastForward, GitBranch, ImagePlus, Images, IdCard, Languages, ListChecks, ListTree, PanelLeft, Plus, RefreshCw, Send, SlidersHorizontal, Square, Trash2, X, EllipsisVertical, BookOpen, Pen, Database, Scroll, SpellCheck, Pencil, UserRound, PinOff, Pin, FolderMinus, Download, Folder } from "@lucide/svelte";
 	import { bookmarks, bookmarksOf, type ChatBookmark } from "./bookmarks";
 	import { findTextRange } from "./highlight";
 	import { childrenOf, pathOf } from "./branches";
@@ -99,7 +99,8 @@
 			{ id: "context", label: "컨텍스트·프리셋", icon: Gauge },
 			{ id: "toc", label: "목차", icon: ListTree },
 			{ id: "bookmarks", label: "북마크", icon: Bookmark },
-			{ id: "memory", label: "메모리", icon: Database },
+			...(plugins.on("summary") || plugins.on("memory") ? [{ id: "memory", label: "메모리", icon: Database }] : []),
+			...(plugins.on("lint") ? [{ id: "lint", label: "linter", icon: SpellCheck }] : []),
 			{ id: "branches", label: "분기", icon: GitBranch },
 			{ id: "assets", label: "에셋", icon: Images },
 		]),
