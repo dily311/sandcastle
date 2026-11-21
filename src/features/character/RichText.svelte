@@ -29,7 +29,7 @@
 			</table>
 		</div>
 	{:else if b.kind === "html"}
-		<HtmlView code={b.code} />
+		<HtmlView code={b.code} scripts={b.scripts !== false} />
 	{:else if images[b.key]}
 		<figure class="cg"><img src={images[b.key]} alt={b.key} loading="lazy" /><figcaption>{b.key}</figcaption></figure>
 	{/if}

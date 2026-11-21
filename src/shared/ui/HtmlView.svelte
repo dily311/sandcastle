@@ -11,7 +11,8 @@
 	import { dispatchAction, parseAction } from "$shared/html/bridge";
 	import { toasts } from "$shared/stores/toast.svelte";
 
-	let { code }: { code: string } = $props();
+	/** scripts: false면 글쓴이의 JS를 막고 그림만 (코드 블록 밖 HTML, ADR-004 추가) */
+	let { code, scripts = true }: { code: string; scripts?: boolean } = $props();
 
 	const MAX_HEIGHT = 900;
 	let src = $state<string | null>(null);
@@ -33,7 +34,7 @@
 		void theme.dark;
 		void JSON.stringify(theme.setting);
 		const css = currentThemeCss(theme.dark);
-		void call(commands.registerHtmlView(c, css), { source: "html", silent: true })
+		void call(commands.registerHtmlView(c, css, scripts), { source: "html", silent: true })
 			.then((url) => (src = url))
 			.catch(() => (failed = true));
 	});
@@ -58,7 +59,7 @@
 	<div class="bar" class:folded>
 		<button type="button" class="fold" title={folded ? "펼치기" : "접기"} aria-label={folded ? "HTML 펼치기" : "HTML 접기"} aria-expanded={!folded} onclick={(e) => { e.stopPropagation(); folded = !folded; }}>
 			<ChevronDown class={folded ? "rot" : ""} />
-			<span>HTML{#if !enabled} · 실행 꺼짐 (코어 플러그인){/if}</span>
+			<span>HTML{#if !enabled} · 실행 꺼짐 (코어 플러그인){:else if !scripts} · 스크립트 없이{/if}</span>
 		</button>
 		<button type="button" title="다시 실행" aria-label="다시 실행" onclick={() => reloadKey++}><RotateCw /></button>
 		<button type="button" title={showCode ? "결과 보기" : "코드 보기"} aria-label={showCode ? "결과 보기" : "코드 보기"} aria-pressed={showCode} onclick={() => (showCode = !showCode)}>

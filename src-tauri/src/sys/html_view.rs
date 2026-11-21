@@ -31,11 +31,19 @@ const CSP: &str = "default-src 'none'; script-src 'unsafe-inline' https:; style-
 img-src data: blob: https:; font-src data: https:; media-src data: blob: https:; connect-src 'none'; \
 form-action 'none'; frame-src 'none'; base-uri 'none'";
 
+/// 스크립트 없이 그리는 HTML(5-E-9, 코드 블록 밖 HTML): 앱이 붙인 스크립트(높이·편의 함수)만 이 nonce로 돌고,
+/// 글쓴이의 `<script>`·`onclick`·`javascript:`는 CSP가 막는다
+fn csp_no_scripts(nonce: &str) -> String {
+    format!(
+        "default-src 'none'; script-src 'nonce-{nonce}'; style-src 'unsafe-inline' https:; img-src data: blob: https:; font-src data: https:; media-src data: blob: https:; connect-src 'none'; form-action 'none'; frame-src 'none'; base-uri 'none'"
+    )
+}
+
 const HEIGHT_SCRIPT: &str = r#"<script>(()=>{const s=()=>parent.postMessage({type:"sc-html-height",h:Math.ceil(document.body?document.body.getBoundingClientRect().bottom+parseFloat(getComputedStyle(document.body).marginBottom||"0"):document.documentElement.scrollHeight)},"*");try{new ResizeObserver(s).observe(document.documentElement)}catch(e){}addEventListener("load",s);s();setTimeout(s,300);setTimeout(s,1000);})();</script>"#;
 
 struct Store {
-    /// id → (HTML, 테마 CSS)
-    map: HashMap<String, (String, String)>,
+    /// id → (HTML, 테마 CSS, 글쓴이 스크립트 허용)
+    map: HashMap<String, (String, String, bool)>,
     order: VecDeque<String>,
 }
 
@@ -55,9 +63,9 @@ static STORE: LazyLock<Mutex<Store>> = LazyLock::new(|| {
 /// 허용된 요청은 이 둘뿐이고, 화면(HtmlView)이 type·action을 확인한다.
 const HELPER_SCRIPT: &str = r#"<script>(()=>{const post=(a,t)=>parent.postMessage({type:"sc-action",action:a,text:String(t??"").slice(0,4000)},"*");window.sandcastle=Object.freeze({fill:t=>post("fill",t),send:t=>post("send",t),choose:t=>post("send",t)});addEventListener("click",e=>{const el=e.target&&e.target.closest?e.target.closest("[data-sc-send],[data-sc-choice],[data-sc-fill]"):null;if(!el)return;e.preventDefault();const s=el.getAttribute("data-sc-send")??el.getAttribute("data-sc-choice");if(s!==null)post("send",s||el.textContent.trim());else post("fill",el.getAttribute("data-sc-fill")||el.textContent.trim())},true)})();</script>"#;
 
-fn id_of(html: &str, theme: &str) -> String {
+fn id_of(html: &str, theme: &str, scripts: bool) -> String {
     let mut h = std::collections::hash_map::DefaultHasher::new();
-    (html, theme).hash(&mut h);
+    (html, theme, scripts).hash(&mut h);
     format!("{:016x}{:x}", h.finish(), html.len())
 }
 
@@ -68,14 +76,19 @@ fn clean_theme(theme: &str) -> String {
 
 /// 이 HTML을 보여줄 주소. 같은 HTML·테마면 같은 주소다.
 pub fn register(html: &str, theme: Option<&str>) -> Result<String> {
+    register_with(html, theme, true)
+}
+
+/// `scripts = false`: 글쓴이의 스크립트는 돌지 않는다 (앱의 높이·편의 스크립트만)
+pub fn register_with(html: &str, theme: Option<&str>, scripts: bool) -> Result<String> {
     if html.len() > MAX_BYTES {
         return Err(AppError::validation("HTML이 너무 큽니다 (1MB까지)", None));
     }
     let theme = clean_theme(theme.unwrap_or(""));
-    let id = id_of(html, &theme);
+    let id = id_of(html, &theme, scripts);
     let mut s = STORE.lock().unwrap_or_else(|e| e.into_inner());
     if !s.map.contains_key(&id) {
-        s.map.insert(id.clone(), (html.to_string(), theme));
+        s.map.insert(id.clone(), (html.to_string(), theme, scripts));
         s.order.push_back(id.clone());
         while s.order.len() > MAX_ENTRIES {
             if let Some(old) = s.order.pop_front() {
@@ -96,13 +109,23 @@ pub fn url_of(id: &str) -> String {
 
 /// 조각이면 문서로 감싸고, 테마 CSS를 맨 앞에 넣고, 높이를 알려주는 스크립트를 붙인다.
 pub fn document(html: &str, theme: &str) -> String {
+    document_with(html, theme, None)
+}
+
+/// `nonce`가 있으면 앱이 붙이는 스크립트에 nonce를 단다 (스크립트를 막은 문서에서도 그것만 돌게)
+fn document_with(html: &str, theme: &str, nonce: Option<&str>) -> String {
+    let tag = |s: &str| match nonce {
+        Some(n) => s.replacen("<script>", &format!("<script nonce=\"{n}\">"), 1),
+        None => s.to_string(),
+    };
+    let (helper, height) = (tag(HELPER_SCRIPT), tag(HEIGHT_SCRIPT));
     let lower = html.to_ascii_lowercase();
     let theme_style = if theme.trim().is_empty() {
         String::new()
     } else {
         format!("<style id=\"sc-theme\">{theme}</style>")
     };
-    let theme_style = format!("{theme_style}{HELPER_SCRIPT}");
+    let theme_style = format!("{theme_style}{helper}");
     let mut doc = if lower.contains("<html") || lower.contains("<!doctype") {
         // 완성된 문서: <head> 바로 뒤(없으면 맨 앞)에 테마를 넣어 문서의 스타일이 이길 수 있게
         let mut d = html.to_string();
@@ -118,8 +141,8 @@ pub fn document(html: &str, theme: &str) -> String {
         )
     };
     match doc.to_ascii_lowercase().rfind("</body>") {
-        Some(i) => doc.insert_str(i, HEIGHT_SCRIPT),
-        None => doc.push_str(HEIGHT_SCRIPT),
+        Some(i) => doc.insert_str(i, &height),
+        None => doc.push_str(&height),
     }
     doc
 }
@@ -127,8 +150,14 @@ pub fn document(html: &str, theme: &str) -> String {
 pub fn handle(req: Request<Vec<u8>>) -> Response<Vec<u8>> {
     let id = req.uri().path().trim_start_matches('/').to_string();
     let html = STORE.lock().unwrap_or_else(|e| e.into_inner()).map.get(&id).cloned();
+    let mut csp = CSP.to_string();
     let (status, body) = match html {
-        Some((h, theme)) => (StatusCode::OK, document(&h, &theme)),
+        Some((h, theme, true)) => (StatusCode::OK, document(&h, &theme)),
+        Some((h, theme, false)) => {
+            let nonce = uuid::Uuid::new_v4().simple().to_string();
+            csp = csp_no_scripts(&nonce);
+            (StatusCode::OK, document_with(&h, &theme, Some(&nonce)))
+        }
         None => (
             StatusCode::NOT_FOUND,
             "<p>이 HTML은 더 이상 없습니다. 메시지를 다시 열어 주세요.</p>".to_string(),
@@ -137,7 +166,7 @@ pub fn handle(req: Request<Vec<u8>>) -> Response<Vec<u8>> {
     Response::builder()
         .status(status)
         .header("Content-Type", "text/html; charset=utf-8")
-        .header("Content-Security-Policy", CSP)
+        .header("Content-Security-Policy", csp)
         .header("X-Content-Type-Options", "nosniff")
         .header("Cache-Control", "no-store")
         .body(body.into_bytes())
@@ -148,9 +177,10 @@ pub fn handle(req: Request<Vec<u8>>) -> Response<Vec<u8>> {
 /// theme: 지금 테마의 CSS 변수 (화면이 만든 `:root{…}` 등). 문서 맨 앞에 들어간다.
 #[tauri::command]
 #[specta::specta]
-pub fn register_html_view(app: tauri::AppHandle, html: String, theme: Option<String>) -> Result<String> {
+/// scripts: false면 글쓴이의 JS를 막는다 (코드 블록 밖 HTML — ADR-004 추가). 없으면 지금처럼 허용
+pub fn register_html_view(app: tauri::AppHandle, html: String, theme: Option<String>, scripts: Option<bool>) -> Result<String> {
     crate::sys::plugins::require(&app, crate::sys::plugins::id::HTML)?;
-    register(&html, theme.as_deref())
+    register_with(&html, theme.as_deref(), scripts.unwrap_or(true))
 }
 
 #[cfg(test)]
@@ -169,6 +199,23 @@ mod tests {
         // 편의 함수는 본문보다 앞에
         assert!(doc.find("window.sandcastle").unwrap() < doc.find("<body>").unwrap());
         assert!(doc.find("sc-html-height").unwrap() < doc.find("</body>").unwrap());
+    }
+
+    #[test]
+    fn no_script_documents_run_only_app_scripts() {
+        let url = register_with("<b onclick=\"x()\">hi</b><script>alert(1)</script>", None, false).unwrap();
+        assert_ne!(url, register("<b onclick=\"x()\">hi</b><script>alert(1)</script>", None).unwrap());
+        let id = url.rsplit('/').next().unwrap().to_string();
+        let req = Request::builder().uri(format!("http://htmlview.localhost/{id}")).body(Vec::new()).unwrap();
+        let res = handle(req);
+        let csp = res.headers().get("Content-Security-Policy").unwrap().to_str().unwrap().to_string();
+        let body = String::from_utf8(res.into_body()).unwrap();
+        let nonce = csp.split("'nonce-").nth(1).unwrap().split('\'').next().unwrap();
+        assert!(!csp.contains("script-src 'unsafe-inline'"), "글쓴이의 인라인 스크립트를 허용하지 않음: {csp}");
+        assert!(csp.contains(&format!("script-src 'nonce-{nonce}';")));
+        // 앱의 높이·편의 스크립트에만 nonce, 글쓴이의 <script>에는 없다
+        assert_eq!(body.matches(&format!("<script nonce=\"{nonce}\">")).count(), 2);
+        assert!(body.contains("<script>alert(1)</script>"));
     }
 
     #[test]

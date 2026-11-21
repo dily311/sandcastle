@@ -495,8 +495,9 @@ export const commands = {
 	/**
 	 *  화면이 HTML 코드 블록을 보여주기 전에 부른다. iframe의 src로 쓸 주소를 돌려준다.
 	 *  theme: 지금 테마의 CSS 변수 (화면이 만든 `:root{…}` 등). 문서 맨 앞에 들어간다.
+	 *  scripts: false면 글쓴이의 JS를 막는다 (코드 블록 밖 HTML — ADR-004 추가). 없으면 지금처럼 허용
 	 */
-	registerHtmlView: (html: string, theme: string | null, options?: InvokeOptions) => __TAURI_INVOKE<string>("register_html_view", { html, theme }, options),
+	registerHtmlView: (html: string, theme: string | null, scripts: boolean | null, options?: InvokeOptions) => __TAURI_INVOKE<string>("register_html_view", { html, theme, scripts }, options),
 	/**  코어 플러그인 목록과 켜짐 상태. 켜고 끄기는 update_feature_setting(id, enabled). */
 	listCorePlugins: (options?: InvokeOptions) => __TAURI_INVOKE<CorePlugin[]>("list_core_plugins", undefined, options),
 	getPluginSetting: (options?: InvokeOptions) => __TAURI_INVOKE<PluginSetting_Serialize>("get_plugin_setting", undefined, options),

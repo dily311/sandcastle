@@ -84,7 +84,7 @@
 			toolBusy = "";
 		}
 	}
-	const blocks = $derived(toBlocks(text));
+	const blocks = $derived(toBlocks(text, { safeHtml: plugins.on("html") }));
 	const swipes = $derived(meta.swipes?.length ?? 0);
 	const swipeId = $derived(meta.swipeId ?? 0);
 	const model = $derived(meta.info?.model || undefined);

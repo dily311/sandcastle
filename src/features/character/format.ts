@@ -17,7 +17,7 @@ export type Block =
 	| { kind: "code"; lang: string; text: string }
 	| { kind: "table"; head: Inline[][]; rows: Inline[][][] }
 	| { kind: "cg"; key: string }
-	| { kind: "html"; code: string };
+	| { kind: "html"; code: string; /** false: 코드 블록 밖 HTML — 글쓴이의 JS 없이 그림 */ scripts?: false };
 
 const CG = /<cg>\s*([^<]+?)\s*<\/cg>/gi;
 
@@ -45,14 +45,55 @@ export function hasRawHtml(content: string): boolean {
 
 /**
  * rawHtml: 코드 블록 밖의 HTML도 HTML 블록으로 그린다 (캐릭터 개요).
- * 메시지는 기본값(false) — AI 답변에서는 ```html 블록만 실행한다 (ADR-004)
+ * safeHtml: 메시지에서 태그로 시작하는 줄(태그가 닫힐 때까지)을 **스크립트 없는** HTML 블록으로 (5-E-9, ADR-004 추가).
+ * 둘 다 없으면 AI 답변의 HTML은 ```html 블록만 그린다
  */
-export function toBlocks(content: string, opts: { rawHtml?: boolean } = {}): Block[] {
+export function toBlocks(content: string, opts: { rawHtml?: boolean; safeHtml?: boolean } = {}): Block[] {
 	if (opts.rawHtml && hasRawHtml(content)) {
 		// 글 전체를 한 문서로 (마크다운 줄은 HTML 안에서 의미가 없어 그대로 둠)
 		return [{ kind: "html", code: content.replace(/```html\s*\n?|```/gi, "").replace(/\n/g, "<br>\n").replace(/(<br>\n)+(?=<\/?(div|p|ul|ol|li|table|tr|h\d)\b)/gi, "\n") }];
 	}
-	return splitHtmlBlocks(content).flatMap((part) => (part.kind === "html" ? [{ kind: "html" as const, code: part.code }] : textBlocks(part.text)));
+	return splitHtmlBlocks(content).flatMap((part) =>
+		part.kind === "html" ? [{ kind: "html" as const, code: part.code }] : opts.safeHtml ? safeHtmlBlocks(part.text) : textBlocks(part.text),
+	);
+}
+
+/** HTML로 여는 태그 (줄 맨 앞에 오면 그 줄부터 HTML 덩어리) */
+const HTML_START = /^<(div|p|table|ul|ol|details|section|article|aside|center|span|img|style|h[1-6]|font|figure|blockquote|pre|hr|br|b|i|a|small|strong|em|u|s|sup|sub)\b/i;
+const VOID = new Set(["br", "hr", "img", "input", "meta", "link", "source", "wbr", "col", "area"]);
+/** 줄의 여닫는 태그 차이 (빈 요소·스스로 닫는 태그는 세지 않음) */
+function depthOf(line: string): number {
+	let d = 0;
+	for (const m of line.matchAll(/<(\/?)([a-z][\w-]*)\b[^>]*?(\/?)>/gi)) {
+		if (VOID.has(m[2].toLowerCase()) || m[3]) continue;
+		d += m[1] ? -1 : 1;
+	}
+	return d;
+}
+
+/** 글과 HTML 덩어리를 나눈다: 태그로 시작하는 줄부터 태그가 모두 닫히는 줄까지가 HTML */
+function safeHtmlBlocks(text: string): Block[] {
+	const out: Block[] = [];
+	const lines = text.split("\n");
+	let plain: string[] = [];
+	for (let i = 0; i < lines.length; i++) {
+		if (!HTML_START.test(lines[i].trim())) {
+			plain.push(lines[i]);
+			continue;
+		}
+		let depth = 0;
+		const html: string[] = [];
+		for (; i < lines.length; i++) {
+			html.push(lines[i]);
+			depth += depthOf(lines[i]);
+			if (depth <= 0) break;
+		}
+		if (plain.length) out.push(...textBlocks(plain.join("\n")));
+		plain = [];
+		out.push({ kind: "html", code: html.join("\n"), scripts: false });
+	}
+	if (plain.length) out.push(...textBlocks(plain.join("\n")));
+	return out;
 }
 
 function lineBlock(t: string): Block {

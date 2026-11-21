@@ -69,6 +69,25 @@ describe("마크다운 (5-E-1)", () => {
 	});
 });
 
+describe("코드 블록 밖 HTML (5-E-9)", () => {
+	it("태그로 시작하는 줄부터 닫힐 때까지 스크립트 없는 HTML 블록", () => {
+		const b = toBlocks('*걷는다*\n<div class="st">\n<b>HP</b> 80\n</div>\n"좋아"', { safeHtml: true });
+		expect(b.map((x) => x.kind)).toEqual(["p", "html", "p"]);
+		expect(b[1]).toEqual({ kind: "html", code: '<div class="st">\n<b>HP</b> 80\n</div>', scripts: false });
+	});
+
+	it("```html 블록은 지금처럼 스크립트 허용, safeHtml이 없으면 글자로", () => {
+		const b = toBlocks("```html\n<script>x()</script>\n```", { safeHtml: true });
+		expect(b).toEqual([{ kind: "html", code: "<script>x()</script>" }]);
+		expect(toBlocks("<div>안녕</div>").every((x) => x.kind !== "html")).toBe(true);
+	});
+
+	it("한 줄 안의 태그(<br>·<img>)도 그 줄만 블록", () => {
+		const b = toBlocks("앞\n<img src=\"a.png\">\n뒤", { safeHtml: true });
+		expect(b.map((x) => x.kind)).toEqual(["p", "html", "p"]);
+	});
+});
+
 describe("preview", () => {
 	it("태그·기호를 지우고 공백을 합친다", () => {
 		expect(preview('*웃음*  "안녕"\n<cg>x</cg>')).toBe("웃음 안녕");
