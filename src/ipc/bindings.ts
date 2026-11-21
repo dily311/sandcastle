@@ -270,6 +270,8 @@ export const commands = {
 	getSyncStatus: (options?: InvokeOptions) => __TAURI_INVOKE<SyncStatus_Serialize>("get_sync_status", undefined, options),
 	/**  오래 못 본 기기를 제외하거나(지운 기록 정리가 기다리지 않음) 다시 포함한다. 제외한 기기가 돌아와 합치면 저절로 풀리고, 그때는 전체를 다시 합친다 */
 	setSyncPeerExcluded: (deviceId: string, excluded: boolean, options?: InvokeOptions) => __TAURI_INVOKE<null>("set_sync_peer_excluded", { deviceId, excluded }, options),
+	/**  이 기기 이름 바꾸기 (다음 동기화부터 다른 기기 목록에 보임). 빈 글이면 지움 */
+	setDeviceName: (name: string, options?: InvokeOptions) => __TAURI_INVOKE<string | null>("set_device_name", { name }, options),
 	/**  동기화 파일 만들기. `path`는 저장 대화상자에서 고른 경로 (.scsync) */
 	exportSyncBundle: (path: string, includeFiles: boolean, options?: InvokeOptions) => __TAURI_INVOKE<SyncBundleInfo>("export_sync_bundle", { path, includeFiles }, options),
 	/**  합치기 전에 숫자만 (DB·파일·설정을 바꾸지 않음) */
@@ -4688,6 +4690,8 @@ export type SyncPeer = SyncPeer_Serialize | SyncPeer_Deserialize;
 
 export type SyncPeer_Deserialize = {
 	deviceId: string,
+	/**  그 기기가 붙인 이름 (없으면 None — 화면은 id 앞자리) */
+	name?: string | null,
 	/**  이 기기 시각 */
 	lastMergeAt: number,
 	merges: number,
@@ -4701,6 +4705,8 @@ export type SyncPeer_Deserialize = {
 
 export type SyncPeer_Serialize = {
 	deviceId: string,
+	/**  그 기기가 붙인 이름 (없으면 None — 화면은 id 앞자리) */
+	name: string | null,
 	/**  이 기기 시각 */
 	lastMergeAt: number,
 	merges: number,
@@ -4816,6 +4822,8 @@ export type SyncStatus = SyncStatus_Serialize | SyncStatus_Deserialize;
 
 export type SyncStatus_Deserialize = {
 	deviceId: string,
+	/**  이 기기 이름 (5-E-16) */
+	deviceName?: string | null,
 	peers: SyncPeer_Deserialize[],
 	/**  아직 고르지 않은 충돌 (2-E에서 고른다) */
 	openConflicts: number,
@@ -4825,6 +4833,8 @@ export type SyncStatus_Deserialize = {
 
 export type SyncStatus_Serialize = {
 	deviceId: string,
+	/**  이 기기 이름 (5-E-16) */
+	deviceName: string | null,
 	peers: SyncPeer_Serialize[],
 	/**  아직 고르지 않은 충돌 (2-E에서 고른다) */
 	openConflicts: number,

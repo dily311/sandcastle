@@ -19,6 +19,34 @@ pub const DEVICE_FILE: &str = "device.json";
 pub struct DeviceInfo {
     pub id: String,
     pub created_at: i64,
+    /// 사용자가 붙인 이름 (5-E-16). 동기화 묶음에 실려 다른 기기 목록에 보인다
+    #[serde(default)]
+    pub name: Option<String>,
+}
+
+/// 이 기기 이름 (파일이 없으면 None — 만들지 않는다)
+pub fn name(app_data_dir: &Path) -> Option<String> {
+    let text = std::fs::read_to_string(app_data_dir.join(DEVICE_FILE)).ok()?;
+    serde_json::from_str::<DeviceInfo>(&text).ok()?.name
+}
+
+/// 이름 바꾸기 (빈 글이면 지움, 40자까지)
+pub fn set_name(app_data_dir: &Path, name: &str) -> Result<DeviceInfo> {
+    let mut info = get_or_create(app_data_dir)?;
+    let n: String = name.trim().chars().take(40).collect();
+    info.name = (!n.is_empty()).then_some(n);
+    write(app_data_dir, &info)?;
+    Ok(info)
+}
+
+fn write(app_data_dir: &Path, info: &DeviceInfo) -> Result<()> {
+    std::fs::create_dir_all(app_data_dir)?;
+    let path = app_data_dir.join(DEVICE_FILE);
+    // 다른 이름으로 쓰고 바꿔 넣어, 쓰다 꺼져도 반쪽짜리 파일이 남지 않게
+    let tmp = app_data_dir.join(format!("{DEVICE_FILE}.tmp"));
+    std::fs::write(&tmp, serde_json::to_vec_pretty(info).map_err(|e| AppError::internal(e.to_string()))?)?;
+    std::fs::rename(&tmp, &path)?;
+    Ok(())
 }
 
 /// 있으면 읽고, 없거나 깨졌으면 새로 만든다
@@ -33,12 +61,9 @@ pub fn get_or_create(app_data_dir: &Path) -> Result<DeviceInfo> {
     let info = DeviceInfo {
         id: uuid::Uuid::new_v4().to_string(),
         created_at: chrono::Utc::now().timestamp_millis(),
+        name: None,
     };
-    std::fs::create_dir_all(app_data_dir)?;
-    // 다른 이름으로 쓰고 바꿔 넣어, 쓰다 꺼져도 반쪽짜리 파일이 남지 않게
-    let tmp = app_data_dir.join(format!("{DEVICE_FILE}.tmp"));
-    std::fs::write(&tmp, serde_json::to_vec_pretty(&info).map_err(|e| AppError::internal(e.to_string()))?)?;
-    std::fs::rename(&tmp, &path)?;
+    write(app_data_dir, &info)?;
     Ok(info)
 }
 

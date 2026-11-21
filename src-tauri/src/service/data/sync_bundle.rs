@@ -65,6 +65,9 @@ pub struct SyncManifest {
     /// 암호화 방식 (아직 없음 — 2-C 뒤, ADR-011 ⑤)
     #[serde(default)]
     pub encryption: Option<String>,
+    /// 보낸 기기의 이름 (5-E-16, 없으면 None)
+    #[serde(default)]
+    pub device_name: Option<String>,
     /// 보낸 기기가 지금까지 합친 다른 기기의 묶음: {기기 id: 그 기기 묶음의 createdAt (그 기기 시계)}.
     /// 받는 쪽은 자기 id의 값보다 오래된 자기 행을 "보낸 쪽이 이미 본 것"으로 여긴다 (sync_merge)
     #[serde(default)]
@@ -338,6 +341,7 @@ pub async fn write_bundle(
         files: 0,
         blobs: 0,
         encryption: None,
+        device_name: crate::service::device::name(base),
         acks,
         held,
     };

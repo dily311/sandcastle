@@ -5,7 +5,7 @@
 	import type { DriveStatus, SyncBackup, SyncPreview, SyncStatus } from "$ipc/bindings";
 	import { confirmAction } from "$shared/stores/confirm.svelte";
 	import SyncConflicts from "./SyncConflicts.svelte";
-	import { Badge, Button, Segmented, Select, Spinner, Switch } from "$shared/ui";
+	import { Badge, Button, Input, Segmented, Select, Spinner, Switch } from "$shared/ui";
 	import { call, commands } from "$shared/ipc/client";
 	import { pickFiles, pickFolder, saveTo, SYNC_FILES } from "$shared/ipc/dialog";
 	import { dropPaths, extOf } from "$app/drop.svelte";
@@ -176,6 +176,12 @@
 		}
 	}
 	const short = (id: string) => id.slice(0, 8);
+	/** 이 기기 이름 (5-E-16). 다른 기기에는 다음 동기화부터 보인다 */
+	async function renameDevice(name: string) {
+		if (!status || name.trim() === (status.deviceName ?? "")) return;
+		const saved = await call(commands.setDeviceName(name), src).catch(() => undefined);
+		if (saved !== undefined && status) status = { ...status, deviceName: saved };
+	}
 	const n = (v: number) => v.toLocaleString();
 	function size(b: number) {
 		return b < 1024 * 1024 ? `${Math.max(1, Math.round(b / 1024))}KB` : `${(b / 1024 / 1024).toFixed(1)}MB`;
@@ -371,14 +377,20 @@
 		</Group>
 
 		<Group title="기기">
-			<Row label="이 기기" desc="동기화 파일에 적히는 이 설치의 표시. 백업을 다른 기기에 복원해도 바뀌지 않음">
-				<code>{short(status.deviceId)}</code>
+			<Row label="이 기기">
+				<Input
+					value={status.deviceName ?? ""}
+					placeholder={short(status.deviceId)}
+					maxlength={40}
+					aria-label="이 기기 이름"
+					onchange={(e) => void renameDevice(e.currentTarget.value)}
+				/>
 			</Row>
 			{#if status.peers.length}
 				<ul class="peers">
 					{#each status.peers as p (p.deviceId)}
 						<li>
-							<code>{short(p.deviceId)}</code>
+							{#if p.name}<b title={p.deviceId}>{p.name}</b>{:else}<code>{short(p.deviceId)}</code>{/if}
 							{#if p.excluded}<Badge>제외됨</Badge>{:else if p.stale}<Badge tone="warning">오래 못 봄</Badge>{/if}
 							<span title={absolute(p.lastMergeAt)}>그 기기 것을 받음 {relative(p.lastMergeAt)}</span>
 							<span class="meta" title={p.theirAck ? absolute(p.theirAck) : undefined}>{p.theirAck ? `이 기기 것을 받아 감 ${relative(p.theirAck)}` : "이 기기 것은 아직 안 받아 감"} · {n(p.merges)}번</span>

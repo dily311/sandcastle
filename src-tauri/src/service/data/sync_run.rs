@@ -659,4 +659,21 @@ mod tests {
         assert_eq!(std::fs::read(b.base.join("characters/avatars/y.png")).unwrap(), b"png-y");
         assert_eq!(names(&b).await.len(), 2);
     }
+
+    #[tokio::test]
+    async fn a_device_name_travels_with_the_bundle() {
+        let root = tempfile::tempdir().unwrap();
+        let shared = root.path().join("Drive");
+        std::fs::create_dir_all(&shared).unwrap();
+        let folder = FolderTarget::new(&shared).unwrap();
+        let (a, b) = (dev(root.path(), "a").await, dev(root.path(), "b").await);
+        crate::service::device::set_name(&a.base, "  내 PC  ").unwrap();
+        add_char(&a, "c1", "Aria").await;
+        sync(&a, &folder).await;
+        tokio::time::sleep(std::time::Duration::from_millis(4)).await;
+        sync(&b, &folder).await;
+        let name: Option<String> = sqlx::query_scalar("SELECT name FROM sync_peers").fetch_one(&b.db).await.unwrap();
+        assert_eq!(name.as_deref(), Some("내 PC"));
+        assert_eq!(crate::service::device::set_name(&a.base, "").unwrap().name, None, "빈 글이면 지움");
+    }
 }
