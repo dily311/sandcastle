@@ -525,8 +525,7 @@
 		transition: opacity var(--duration-fast) var(--ease);
 	}
 	.grp:hover .tools,
-	.grp:focus-within .tools,
-	.grp.first .tools {
+	.grp:focus-within .tools {
 		opacity: 1;
 	}
 	@media (hover: none) {

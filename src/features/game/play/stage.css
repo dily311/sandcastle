@@ -16,7 +16,6 @@
 	--game-text-secondary: color-mix(in oklab, var(--text) 80%, var(--text-muted));
 	--game-text-muted: var(--text-muted);
 	--game-text-dim: var(--text-faint);
-	--game-icon-color: #fbfbfb;
 	--game-accent: var(--accent);
 	--game-accent-strong: var(--accent-text);
 	--game-accent-soft: var(--accent-soft);

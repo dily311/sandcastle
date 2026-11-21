@@ -418,8 +418,10 @@
 				<li class={t.kind}>
 					{#if t.kind === "chapter"}
 						<button class="fold" aria-label={folded.has(t.id) ? "챕터 펼치기" : "챕터 접기"} aria-expanded={!folded.has(t.id)} onclick={() => toggleChapter(t.id)}><ChevronDown class={folded.has(t.id) ? "rot" : ""} /></button>
+						<button onclick={() => onjump(t.id)} oncontextmenu={(e) => tocContext(e, t.id)}>{t.label}</button>
+					{:else}
+						<button onclick={() => onjump(t.id)} oncontextmenu={(e) => tocContext(e, t.id)}><span class="no">#{t.n}</span>{t.label}</button>
 					{/if}
-					<button onclick={() => onjump(t.id)} oncontextmenu={(e) => tocContext(e, t.id)}><span class="no">{t.kind === "msg" ? `#${t.n}` : ""}</span>{t.label}</button>
 					{#if t.marks?.length}
 						<ul class="tbm">
 							{#each t.marks as b (b.id)}

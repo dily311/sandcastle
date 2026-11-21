@@ -1,6 +1,6 @@
 <script lang="ts">
 	// 고른 글 → 이미지 카드. 왼쪽 미리보기, 오른쪽 옵션. 복사(클립보드) 또는 png로 저장
-	import { Copy, Download } from "@lucide/svelte";
+	import { Copy, Download, TextAlignCenter, TextAlignEnd, TextAlignJustify, TextAlignStart } from "@lucide/svelte";
 	import { Button, Dialog, Select, Switch } from "$shared/ui";
 	import BackgroundPicker from "$shared/ui/BackgroundPicker.svelte";
 	import { call, commands } from "$shared/ipc/client";
@@ -8,7 +8,9 @@
 	import { toasts } from "$shared/stores/toast.svelte";
 	import { theme } from "$app/theme.svelte";
 	import { dropPaths, isImageAvif } from "$app/drop.svelte";
-	import { CARD_ALIGNS, CARD_DESIGNS, CARD_FONTS, CARD_SIZES, CARD_STYLES, blobBase64, cardBlob, palette, renderCard, type CardAlign, type CardDesign, type CardFont, type CardStyle } from "./textCard";
+	import { CARD_DESIGNS, CARD_FONTS, CARD_IMG_RATIO, CARD_SIZES, CARD_STYLES, blobBase64, cardBlob, palette, renderCard, type CardAlign, type CardDesign, type CardFont, type CardImgRatio, type CardStyle } from "./textCard";
+	import IconButton from "$/shared/ui/IconButton.svelte";
+	import Slider from "$/shared/ui/Slider.svelte";
 
 	interface Props {
 		card: { text: string; speaker?: string; time?: number } | null;
@@ -17,7 +19,7 @@
 	let { card, onclose }: Props = $props();
 
 	// 고른 옵션은 이번 실행 동안 기억 (다음 카드도 같은 모양으로)
-	const opts = $state({ design: "footnote" as CardDesign, style: "theme" as CardStyle, font: "app" as CardFont, align: "auto" as CardAlign, size: "0", background: null as string | null, speaker: true, time: false });
+	const opts = $state({ imgRatio: "1:1" as CardImgRatio, design: "none" as CardDesign, style: "theme" as CardStyle, txtShadow: false, font: "app" as CardFont, bold: 500, align: "start" as CardAlign, size: "0", background: null as string | null, speaker: true, time: false });
 	// 사용자가 고친 색 (빈 값 = 색 묶음 그대로)
 	const colors = $state({ bg: "", text: "", accent: "" });
 	const base = $derived(palette(opts.style));
@@ -40,10 +42,13 @@
 			text: card.text,
 			speaker: opts.speaker ? card.speaker : undefined,
 			caption: opts.time && card.time ? stamp(card.time) : undefined,
+			imgRatio: opts.imgRatio,
 			design: opts.design,
 			style: opts.style,
 			colors: { bg: colors.bg, text: colors.text, accent: colors.accent },
+			txtShadow: opts.txtShadow,
 			font: opts.font,
+			bold: opts.bold,
 			align: opts.align,
 			size: Number(opts.size),
 			background: opts.background,
@@ -90,10 +95,24 @@
 	}
 </script>
 
-<Dialog open={!!card} title="이미지 카드" size="lg" {onclose}>
+<Dialog open={!!card} title="이미지 카드" size="xl" {onclose}>
 	<div class="layout">
 		<div class="preview">{#if url}<img src={url} alt="카드 미리보기" />{/if}</div>
 		<div class="opts">
+			<div class="field">
+				<span>배경</span>
+				<BackgroundPicker label="카드 배경" value={opts.background} images={theme.setting.backgrounds ?? []} onpick={(v) => (opts.background = v)} onupload={upload} />
+			</div>
+			<div class="field">
+				<span>비율</span>
+				<div class="group">
+					{#each CARD_IMG_RATIO as r}
+						<Button variant="ghost" active={opts.imgRatio === r.value} onclick={() => opts.imgRatio = r.value}>
+							<span>{r.label}</span>
+						</Button>
+					{/each}
+				</div>
+			</div>
 			<label class="field"><span>디자인</span><Select bind:value={opts.design} options={CARD_DESIGNS} aria-label="카드 디자인" /></label>
 			<label class="field"><span>색 조합</span><Select bind:value={opts.style} options={CARD_STYLES} aria-label="카드 색 조합" /></label>
 			<div class="field">
@@ -108,13 +127,20 @@
 					{/each}
 				</div>
 			</div>
-			<label class="field"><span>글꼴</span><Select bind:value={opts.font} options={CARD_FONTS} aria-label="글꼴" /></label>
-			<label class="field"><span>글 정렬</span><Select bind:value={opts.align} options={CARD_ALIGNS} aria-label="글 정렬" /></label>
-			<label class="field"><span>글자 크기</span><Select bind:value={opts.size} options={CARD_SIZES} aria-label="글자 크기" /></label>
+			<div class="toggle"><span>텍스트 그림자 효과</span><Switch checked={opts.txtShadow} label="텍스트 그림자 효과" hideLabel onchange={(v) => (opts.txtShadow = v)} /></div>
 			<div class="field">
-				<span>배경</span>
-				<BackgroundPicker label="카드 배경" value={opts.background} images={theme.setting.backgrounds ?? []} onpick={(v) => (opts.background = v)} onupload={upload} />
+				<span>글 정렬</span>
+				<div class="group">
+					<IconButton label="start" active={opts.align === "start"} onclick={()=> opts.align = "start"}><TextAlignJustify /></IconButton>
+					<IconButton label="left" active={opts.align === "left"} onclick={()=> opts.align = "left"}><TextAlignStart /></IconButton>
+					<IconButton label="center" active={opts.align === "center"} onclick={()=> opts.align = "center"}><TextAlignCenter /></IconButton>
+					<IconButton label="right" active={opts.align === "right"} onclick={()=> opts.align = "right"}><TextAlignEnd /></IconButton>
+				</div>
 			</div>
+			<label class="field"><span>글꼴</span><Select bind:value={opts.font} options={CARD_FONTS} aria-label="글꼴" /></label>
+			<label class="field">
+				<Slider label="글자 크기" bind:value={opts.size} min={32} max={64} step={2} fallback={32} unsetLabel="32" />
+			</label>
 			{#if card?.speaker}
 				<div class="toggle"><span>이름 넣기</span><Switch checked={opts.speaker} label="이름 넣기" hideLabel onchange={(v) => (opts.speaker = v)} /></div>
 			{/if}
@@ -134,14 +160,19 @@
 	.layout {
 		display: grid;
 		grid-template-columns: minmax(0, 1.4fr) minmax(0, 1fr);
+		/* grid-template-columns: 1fr; */
 		gap: var(--space-4);
 		align-items: start;
+		overflow: hidden;
+		height: 55vh;
 	}
 	/* 미리보기는 스스로 스크롤하지 않는다 (창 하나만 스크롤) */
 	.preview {
 		display: grid;
 		place-items: center;
+		grid-template-rows: minmax(0, 1fr);
 		min-height: 160px;
+		height: 100%;
 		border-radius: var(--radius-md);
 		background: var(--bg-sunken);
 		overflow: hidden;
@@ -151,8 +182,7 @@
 		width: auto;
 		max-width: 100%;
 		height: auto;
-		max-height: 60vh;
-		aspect-ratio: 3 / 4;
+		max-height: 100%;
 		object-fit: contain;
 	}
 	.opts {
@@ -160,11 +190,13 @@
 		flex-direction: column;
 		gap: var(--space-3);
 		min-width: 0;
+		height: 100%;
+		overflow-y: auto;
 	}
 	.field {
 		display: flex;
 		flex-direction: column;
-		gap: 6px;
+		gap: var(--space-2);
 		font-size: var(--text-sm);
 		color: var(--text-muted);
 		min-width: 0;
@@ -177,7 +209,7 @@
 	.swatch {
 		display: inline-flex;
 		align-items: center;
-		gap: 4px;
+		gap: var(--space-1);
 		color: var(--text);
 		font-size: var(--text-xs);
 	}
@@ -203,9 +235,21 @@
 		justify-content: space-between;
 		font-size: var(--text-sm);
 	}
+
+	.toggle span {
+		font-size: var(--text-sm);
+		color: var(--text-muted);
+	}
+
+	.group {
+		display: flex;
+		align-items: center;
+		gap: var(--space-1);
+	}
 	@media (max-width: 720px) {
 		.layout {
 			grid-template-columns: 1fr;
 		}
+
 	}
 </style>

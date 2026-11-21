@@ -12,6 +12,8 @@
 :root {
 	color-scheme: light;
 
+	--static-white: #ffffff;
+	
 	/* ---- 회색 12단계 (Radix 회색 계열, 기본 slate). theme.svelte.ts가 고른 톤으로 덮어씀 ---- */
 	--gray-1: #fcfcfd;
 	--gray-2: #f9f9fb;
@@ -43,6 +45,9 @@
 	--text-muted: var(--gray-11);
 	--text-faint: var(--gray-9);
 	--text-on-accent: #ffffff;
+
+	/* ---- 아이콘 색상 ---- */
+	--icon-static-white: #fbfbfb;
 
 	/* ---- 강조색 (바다 유리) ---- */
 	--accent: #2f8f8a;

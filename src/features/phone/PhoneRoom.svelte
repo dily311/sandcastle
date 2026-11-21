@@ -221,7 +221,7 @@
 		{#if session.loading}
 			<p class="hint">불러오는 중…</p>
 		{:else if !rows.length}
-			<p class="hint">{ch?.name ?? "상대"}에게 첫 메시지를 보내 봄{#if phone.isCharacterPhone}<br />또는 눈 버튼으로 두 사람 대화를 엿봄{/if}</p>
+			<p class="hint">{ch?.name ?? "상대"}에게 첫 메시지를 보내보세요.{#if phone.isCharacterPhone}<br />또는 눈 버튼으로 두 사람 대화를 엿보세요.{/if}</p>
 		{/if}
 		{#each rows as r (r.key)}
 			{#if r.kind === "date"}

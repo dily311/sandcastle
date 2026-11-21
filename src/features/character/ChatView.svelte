@@ -1,6 +1,6 @@
 <script lang="ts">
 	import { tick } from "svelte";
-	import { Bookmark, ChevronRight, Gauge, Copy, CornerUpLeft, FastForward, GitBranch, ImagePlus, Images, IdCard, Languages, ListChecks, ListTree, PanelLeft, Plus, RefreshCw, Send, SlidersHorizontal, Square, Trash2, X } from "@lucide/svelte";
+	import { Bookmark, ChevronRight, Gauge, Copy, CornerUpLeft, FastForward, GitBranch, ImagePlus, Images, IdCard, Languages, ListChecks, ListTree, PanelLeft, Plus, RefreshCw, Send, SlidersHorizontal, Square, Trash2, X, EllipsisVertical, BookOpen, Pen, Database, Scroll, Pencil, UserRound, PinOff, Pin, FolderMinus, Download, Folder } from "@lucide/svelte";
 	import { bookmarks, bookmarksOf, type ChatBookmark } from "./bookmarks";
 	import { findTextRange } from "./highlight";
 	import { childrenOf, pathOf } from "./branches";
@@ -8,7 +8,7 @@
 	import { layout } from "$app/layout.svelte";
 	import { fade, fly } from "svelte/transition";
 	import { drops, extOf, isImage, storeFile } from "$app/drop.svelte";
-	import { Button, HtmlView } from "$shared/ui";
+	import { Button, HtmlView, type MenuItem } from "$shared/ui";
 	import { confirmAction, promptText } from "$shared/stores/confirm.svelte";
 	import { toasts } from "$shared/stores/toast.svelte";
 	import { ContextMenu, Dialog, EmptyState, IconButton, Spinner, Textarea } from "$shared/ui";
@@ -29,6 +29,9 @@
 	import { toBlocks } from "./format";
 	import { library } from "./library.svelte";
 	import { ChatSession, metaOf, type Message } from "./session.svelte";
+	import { call, commands } from "$/shared/ipc/client";
+	import { convActions } from "./actions";
+	import { nav } from "$/app/nav.svelte";
 
 	let { charId, convId, onopen }: { charId: string; convId: string; onopen: (id: string) => void } = $props();
 
@@ -86,6 +89,7 @@
 			{ id: "context", label: "컨텍스트·프리셋", icon: Gauge },
 			{ id: "toc", label: "목차", icon: ListTree },
 			{ id: "bookmarks", label: "북마크", icon: Bookmark },
+			{ id: "memory", label: "메모리", icon: Database },
 			{ id: "branches", label: "분기", icon: GitBranch },
 			{ id: "assets", label: "에셋", icon: Images },
 		]),
@@ -358,6 +362,10 @@
 		selecting = false;
 		picked = new Set();
 	}
+	function cancelPicked() {
+		selecting = false;
+		picked = new Set();
+	}
 	$effect(() => {
 		void convId;
 		selecting = false;
@@ -374,6 +382,74 @@
 		prompt = { msg: m, data: data ?? null };
 	}
 	const roleName = { system: "시스템", user: "사용자", assistant: "AI" } as const;
+
+	// ---- 읽기 모드 ----
+	let readMode = $state(false);
+	function toggleReadMode() {
+		readMode = !readMode;
+	}
+	
+	// ---- 채팅 파일 관리 ----
+	let menu = $state<{ x: number; y: number; align?: "start" | "end" } | null>(null);
+	const menuItems = $derived.by((): MenuItem[] => {
+		const c = conv;
+		if (!c) return [];
+		const parent = (c.meta as { branch?: { parentId: string } } | null)?.branch?.parentId;
+		const folders = library.foldersOf(charId ?? "");
+		return [
+			...(charId ? [{ label: "캐릭터 페이지로", icon: UserRound, onselect: () => nav.go({ page: "character", charId: charId ?? undefined }) }] : []),
+			{ label: "이름 바꾸기", icon: Pencil, separator: !!charId, onselect: startRename },
+			{ label: c.pinned ? "고정 풀기" : "고정", icon: c.pinned ? PinOff : Pin, onselect: () => library.togglePin(convId) },
+			{
+				label: "복제 (포크)",
+				icon: Copy,
+				separator: true,
+				onselect: async () => {
+					const d = await library.duplicate(convId);
+					if (d) nav.go({ page: "character", charId: d.characterId ?? undefined, convId: d.id });
+				},
+			},
+			{
+				label: "마지막 메시지에서 분기",
+				icon: GitBranch,
+				disabled: !c.messageCount,
+				onselect: async () => {
+					const [last] = await call(commands.getMessages(convId, 1, null), { source: "chat" });
+					if (!last) return;
+					const b = await library.branch(convId, last.id);
+					nav.go({ page: "character", charId, convId: b.id });
+					toasts.success("분기를 만듦");
+				},
+			},
+			...(parent && library.conversation(parent)
+				? [{ label: "갈라져 나온 대화로", icon: CornerUpLeft, onselect: () => nav.go({ page: "character", charId, convId: parent }) }]
+				: []),
+			...folders.map((f, i) => ({
+				label: `폴더로 이동: ${f.name}`,
+				icon: Folder,
+				separator: i === 0,
+				checked: c.folderId === f.id,
+				onselect: () => library.move(c.id, f.id),
+			})),
+			...(c.folderId ? [{ label: "폴더에서 빼기", icon: FolderMinus, onselect: () => library.move(convId, null) }] : []),
+			{ label: "내보내기…", icon: Download, separator: true, onselect: () => convActions.exportMenu(c) },
+			{ label: "삭제", icon: Trash2, danger: true, onselect: () => convActions.remove(c) },
+
+		]
+	})
+
+	function openMenu(e: MouseEvent) {
+		const r = (e.currentTarget as HTMLElement).getBoundingClientRect();
+		menu = { x: r.right, y: r.bottom + 4, align: "end" };
+	}
+
+	async function startRename() {
+		if (!conv) return;
+		const cur = conv.title ?? "";
+		const t = await promptText({ title: "대화방 이름 변경", input: { value: cur, placeholder: "대화방 이름" }, confirmLabel: "바꾸기" });
+		if (t === null || t === undefined) return;
+		if (draft.trim() && draft.trim() !== conv.title) await library.rename(conv.id, draft);
+	}
 </script>
 
 <div class="chat" class:no-list={!listShown || layout.narrow} class:no-panel={!panel.open || layout.narrow}>
@@ -389,27 +465,46 @@
 
 	<section class="reader" bind:this={readerEl}>
 		<header class="bar" class:listing={listShown}>
-			{#if path.length > 1}
-				<nav class="bpath" aria-label="분기 경로">
-					<GitBranch />
-					{#each path.slice(0, -1) as step, i (step.conv?.id ?? `gone-${i}`)}
-						{#if step.conv}
-							<button onclick={() => openAt(step.conv!.id, step.branchAt?.messageId)} title="'{step.conv.title}'로 (#{step.branchAt?.seq}에서 갈라짐)">
-								{step.conv.title}<span>#{step.branchAt?.seq}</span>
-							</button>
-						{:else}
-							<span class="gone" title="원래 대화는 지워졌음">지운 대화<span>#{step.branchAt?.seq}</span></span>
-						{/if}
-						<ChevronRight />
-					{/each}
-					<b>지금</b>
-				</nav>
-			{/if}
-			{#if kids}
-				<button class="branch" onclick={() => { panel.tab = "branches"; if (!panel.open) panel.toggle(); }} title="이 대화에서 갈라진 대화 보기">
-					<GitBranch />갈래 {kids}개
-				</button>
-			{/if}
+			<div class="left">
+				<IconButton label={listShown ? "대화 목록 닫기" : "대화 목록 열기"} size="sm" active={listShown} onclick={toggleList}><Scroll /></IconButton>
+				<!-- <div class="branch-nav">
+					{#if path.length > 1}
+						<nav class="bpath" aria-label="분기 경로">
+							<GitBranch />
+							{#each path.slice(0, -1) as step, i (step.conv?.id ?? `gone-${i}`)}
+								{#if step.conv}
+									<button onclick={() => openAt(step.conv!.id, step.branchAt?.messageId)} title="'{step.conv.title}'로 (#{step.branchAt?.seq}에서 갈라짐)">
+										{step.conv.title}<span>#{step.branchAt?.seq}</span>
+									</button>
+								{:else}
+									<span class="gone" title="원래 대화는 지워졌음">지운 대화<span>#{step.branchAt?.seq}</span></span>
+								{/if}
+								<ChevronRight />
+							{/each}
+							<b>지금</b>
+						</nav>
+					{/if}
+					{#if kids}
+						<button class="branch" onclick={() => { panel.tab = "branches"; if (!panel.open) panel.toggle(); }} title="이 대화에서 갈라진 대화 보기">
+							<GitBranch />갈래 {kids}개
+						</button>
+					{/if}
+				</div> -->
+			</div>
+			<div>
+				{#if readMode}
+					<IconButton label={"채팅 모드"} size="sm" onclick={toggleReadMode}><Pen /></IconButton>
+				{:else}
+					<IconButton label={"읽기 모드"} size="sm" onclick={toggleReadMode}><BookOpen /></IconButton>
+				{/if}
+				<IconButton label={"세부 정보"} size="sm" onclick={openMenu}><EllipsisVertical /></IconButton>
+				<ContextMenu
+					at={menu}
+					label="파일 관리"
+					items={menuItems}
+					onclose={() => (menu = null)}
+				/>
+			</div>
 		</header>
 		{#if selecting}
 			<div class="selbar" role="toolbar" aria-label="메시지 선택">
@@ -417,7 +512,7 @@
 				<Button size="sm" variant="ghost" onclick={pickAll}>{picked.size === (session?.messages.length ?? 0) && picked.size ? "모두 해제" : "모두 선택"}</Button>
 				<span class="sp"></span>
 				<Button size="sm" variant="danger" disabled={!picked.size} onclick={removePicked}>{#snippet icon()}<Trash2 />{/snippet}삭제</Button>
-				<IconButton label="선택 끝내기" size="sm" onclick={() => (selecting = false)}><X /></IconButton>
+				<IconButton label="선택 끝내기" size="sm" onclick={cancelPicked}><X /></IconButton>
 			</div>
 		{/if}
 
@@ -442,7 +537,7 @@
 							<!-- svelte-ignore a11y_no_noninteractive_element_interactions (오른쪽 클릭·꾹 누르기로 이름 바꾸기, 키보드는 메시지 동작의 챕터 버튼) -->
 							<h2 class="chapter" id="chapter-{m.id}" title="오른쪽 클릭하거나 꾹 눌러 이름 바꾸기" oncontextmenu={(e) => { e.preventDefault(); void renameChapter(m); }} onpointerdown={(e) => pressStart(e, m)} onpointerup={pressEnd} onpointerleave={pressEnd}><span>{chapters[m.id]}장</span>{ch}</h2>
 						{/if}
-						<MessageItem msg={m} no={i + 1} {session} {images} isLast={i === session.messages.length - 1} onbranch={branch} onprompt={showPrompt} {selecting} selected={picked.has(m.id)} onselect={pick} marks={marksByMsg.get(m.id)} onmarkremove={removeMark} />
+						<MessageItem msg={m} no={i + 1} {session} {images} isLast={i === session.messages.length - 1} onbranch={branch} onprompt={showPrompt} {selecting} selected={picked.has(m.id)} onselect={pick} marks={marksByMsg.get(m.id)} oncard={cardFromMark} onmarkremove={removeMark} />
 					{/each}
 
 					{#if session.live?.kind === "send"}
@@ -454,7 +549,7 @@
 							</div>
 						{/if}
 						<div class="block ai">
-							<div class="who"><b>{character?.name ?? "AI"}</b><span class="stamp">만드는 중…</span></div>
+							<div class="who"><b>{character?.name ?? "AI"}</b><span class="stamp">생성 중…</span></div>
 							{#each toBlocks(session.live.text) as b, j (j)}
 								{#if b.kind === "p"}
 									<p>{#each b.parts as part, k (k)}{#if part.kind === "action"}<em>{part.text}</em>{:else}{part.text}{/if}{/each}</p>
@@ -470,34 +565,39 @@
 			{/if}
 		</div>
 
-		{#if pending.length}
-			<div class="attach-strip pending-strip" aria-label="붙일 이미지">
-				{#each pending as p, i (p.url)}
-					<span class="thumb">
-						<img src={p.url} alt={p.file.name} title={p.file.name} />
-						<button type="button" aria-label="{p.file.name} 빼기" onclick={() => unattach(i)}><X /></button>
-					</span>
-				{/each}
+		{#if !readMode}
+			<div class="composer">
+				{#if pending.length}
+					<div class="attach-strip pending-strip" aria-label="붙일 이미지">
+						{#each pending as p, i (p.url)}
+							<span class="thumb">
+								<img src={p.url} alt={p.file.name} title={p.file.name} />
+								<button type="button" aria-label="{p.file.name} 빼기" onclick={() => unattach(i)}><X /></button>
+							</span>
+						{/each}
+					</div>
+				{/if}
+			
+				<form
+					class="write"
+					onsubmit={(e) => {
+						e.preventDefault();
+						void send();
+					}}
+				>
+					<IconButton label="추가 기능" onclick={openPlus} disabled={!session || session.busy}><Plus /></IconButton>
+					{#if session && plugins.on("ghostwrite")}
+						<Ghostwrite convId={session.convId} getDraft={() => draft} setDraft={(v) => (draft = v)} disabled={session.busy} />
+					{/if}
+					<Textarea bind:value={draft} rows={1} autosize maxRows={8} placeholder={!layout.desktop ? "메시지 입력" : appSetting.sendOnEnter ? "메시지 입력 (Shift+Enter 줄바꿈)" : "메시지 입력 (Ctrl+Enter 보내기)"} aria-label="메시지" readonly={!!session && ghost.isRunning(session.convId)} {onkeydown} {onpaste} />
+					{#if session?.busy}
+						<IconButton label="멈추기 (받은 데까지 저장)" variant="solid" onclick={() => session?.cancel()}><Square /></IconButton>
+					{:else}
+						<IconButton label="보내기" variant="solid" type="submit" disabled={sending}><Send /></IconButton>
+					{/if}
+				</form>
 			</div>
 		{/if}
-		<form
-			class="composer"
-			onsubmit={(e) => {
-				e.preventDefault();
-				void send();
-			}}
-		>
-			<IconButton label="추가 기능" onclick={openPlus} disabled={!session || session.busy}><Plus /></IconButton>
-			{#if session && plugins.on("ghostwrite")}
-				<Ghostwrite convId={session.convId} getDraft={() => draft} setDraft={(v) => (draft = v)} disabled={session.busy} />
-			{/if}
-			<Textarea bind:value={draft} rows={1} autosize maxRows={8} placeholder={!layout.desktop ? "메시지 입력" : appSetting.sendOnEnter ? "메시지 입력 (Shift+Enter 줄바꿈)" : "메시지 입력 (Ctrl+Enter 보내기)"} aria-label="메시지" readonly={!!session && ghost.isRunning(session.convId)} {onkeydown} {onpaste} />
-			{#if session?.busy}
-				<IconButton label="멈추기 (받은 데까지 저장)" variant="solid" onclick={() => session?.cancel()}><Square /></IconButton>
-			{:else}
-				<IconButton label="보내기" variant="solid" type="submit" disabled={sending}><Send /></IconButton>
-			{/if}
-		</form>
 		<input
 			bind:this={fileInput}
 			type="file"
@@ -516,11 +616,11 @@
 			items={[
 				{ label: "이미지 첨부", icon: ImagePlus, disabled: pending.length >= MAX_ATTACH, onselect: () => fileInput?.click() },
 				...(plugins.on("translate")
-					? [{ label: "입력을 번역해서 바꾸기", icon: Languages, disabled: !draft.trim(), onselect: async () => (draft = await translateInput(draft).catch(() => draft)) }]
+					? [{ label: "입력 번역", icon: Languages, disabled: !draft.trim(), onselect: async () => (draft = await translateInput(draft).catch(() => draft)) }]
 					: []),
 				{ label: "이어서 응답 받기", icon: FastForward, separator: true, onselect: () => session?.send("") },
 				{
-					label: "마지막 응답 다시 만들기",
+					label: "마지막 응답 재생성",
 					icon: RefreshCw,
 					disabled: session?.last?.role !== "assistant",
 					onselect: () => session?.regenerate(true),
@@ -542,8 +642,6 @@
 		at={selMenu}
 		label="고른 글"
 		items={[
-			{ label: "북마크", icon: Bookmark, onselect: bookmarkSelection },
-			{ label: "이미지 카드로 만들기", icon: IdCard, onselect: cardSelection },
 			{
 				label: "복사",
 				icon: Copy,
@@ -553,6 +651,8 @@
 						() => toasts.error("복사 못 함"),
 					),
 			},
+			{ label: "북마크", icon: Bookmark, onselect: bookmarkSelection },
+			{ label: "이미지 카드로 만들기", icon: IdCard, onselect: cardSelection },
 		]}
 		onclose={() => (selMenu = null)}
 	/>
@@ -614,15 +714,21 @@
 		min-width: 0;
 		min-height: 0;
 		background: var(--surface);
+		position: relative;
 	}
 	.bar {
+		position: absolute;
+		z-index: var(--z-sticky);
 		display: flex;
+		justify-content: space-between;
 		padding: var(--space-2) var(--space-3) 0;
+		width: 100%;
 	}
 	/* 대화 목록 버튼은 마우스를 올리거나 키보드로 갔을 때만 보임 */
 	.bar :global(.icon-btn) {
 		opacity: 0;
 		transition: opacity var(--duration-fast) var(--ease);
+		background: var(--surface);
 	}
 	.bar:hover :global(.icon-btn),
 	.bar :global(.icon-btn:focus-visible),
@@ -633,6 +739,15 @@
 		align-items: center;
 		gap: var(--space-2);
 	}
+	.bar .left {
+		display: flex;
+	}
+
+	/* .branch-nav {
+		display: flex;
+		align-items: center;
+		background: var(--surface);
+	}
 	.bpath {
 		display: flex;
 		align-items: center;
@@ -641,6 +756,7 @@
 		overflow: hidden;
 		font-size: var(--text-xs);
 		color: var(--text-muted);
+		background: var(--surface);
 	}
 	.bpath > :global(svg) {
 		flex: none;
@@ -717,7 +833,7 @@
 		width: 13px;
 		height: 13px;
 		flex-shrink: 0;
-	}
+	} */
 	.attach-strip {
 		display: flex;
 		flex-wrap: wrap;
@@ -897,18 +1013,24 @@
 	}
 	.composer {
 		display: flex;
-		align-items: flex-end;
-		gap: var(--space-2);
+		flex-direction: column;
 		max-width: var(--page-narrow);
 		width: 100%;
 		margin: 0 auto;
+	}
+
+	.write {
+		display: flex;
+		align-items: flex-end;
+		gap: var(--space-2);
+		width: 100%;
 		padding: var(--space-3) var(--space-4) var(--space-4);
 	}
-	.composer :global(.textarea),
-	.composer :global(textarea) {
+	.write :global(.textarea),
+	.write :global(textarea) {
 		flex: 1;
 	}
-	.composer :global(textarea) {
+	.write :global(textarea) {
 		resize: none;
 		border-radius: var(--radius-lg);
 	}
