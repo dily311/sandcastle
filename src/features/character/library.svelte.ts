@@ -11,6 +11,7 @@ import type {
 } from "$ipc/bindings";
 import { call, commands } from "$shared/ipc/client";
 import { toasts } from "$shared/stores/toast.svelte";
+import { logs } from "$shared/stores/log.svelte";
 
 export type { Character, CharacterImage, Conversation, ConversationFolder, Persona, Preset, ApiProfiles };
 
@@ -256,8 +257,13 @@ class Library {
 
 	// ---- 가져오기 ----
 	/** SillyTavern 파일(카드·채팅 등). 채팅이면 `characterId`에 붙인다 */
-	async importSillyTavern(path: string, characterId: string | null = null) {
+	/** `quiet`: 여러 파일을 차례로 가져올 때 — 파일마다 목록을 다시 읽거나 알리지 않는다 (경고는 로그에만) */
+	async importSillyTavern(path: string, characterId: string | null = null, opts: { quiet?: boolean } = {}) {
 		const r = await call(commands.importSillytavern(path, null, characterId, null), src);
+		if (opts.quiet) {
+			for (const w of r.warnings) logs.add("warn", "가져오기", w);
+			return r;
+		}
 		await this.load();
 		if (r.kind === "character") toasts.success(`'${r.character.name}' 가져옴`);
 		else if (r.kind === "chat") toasts.success(`대화 가져옴 · 메시지 ${r.messageCount}개`);

@@ -29,6 +29,7 @@
 	import { translateInput } from "$shared/stores/aiTools.svelte";
 	import { toBlocks } from "./format";
 	import RichText from "./RichText.svelte";
+	import { chatImport } from "./chatImport.svelte";
 	import { library } from "./library.svelte";
 	import { ChatSession, metaOf, type Message } from "./session.svelte";
 	import { call, commands } from "$/shared/ipc/client";
@@ -229,10 +230,7 @@
 			accept: (f) => isImage(f) || extOf(f) === "jsonl",
 			ondrop: async (files) => {
 				attach(files.filter(isImage));
-				for (const f of files.filter((x) => extOf(x) === "jsonl")) {
-					const r = await library.importSillyTavern(await storeFile(f), charId).catch(() => null);
-					if (r?.kind === "chat") onopen(r.conversation.id);
-				}
+				await chatImport.run(files.filter((x) => extOf(x) === "jsonl"), charId, onopen);
 			},
 		}),
 	);

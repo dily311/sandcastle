@@ -1,4 +1,5 @@
 <script lang="ts">
+	import { chatImport } from "./chatImport.svelte";
 	import { lastAt } from "$features/character/library.svelte";
 	import { ArrowDownUp, ChevronDown, Folder, FolderOpen, FolderPlus, PanelLeft, Pencil, Plus, Search, Trash2, Upload } from "@lucide/svelte";
 	import { ContextMenu, IconButton, Input, type MenuItem } from "$shared/ui";
@@ -110,10 +111,7 @@
 	});
 
 	async function importChat() {
-		const [path] = await pickFiles([CHAT_FILES], false);
-		if (!path) return;
-		const r = await library.importSillyTavern(path, charId).catch(() => null);
-		if (r?.kind === "chat") onopen(r.conversation.id);
+		await chatImport.run(await pickFiles([CHAT_FILES], true), charId, onopen);
 	}
 </script>
 

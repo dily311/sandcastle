@@ -4,6 +4,7 @@
 	import { onMount } from "svelte";
 	import { ConfirmHost, ImageViewerHost, installImageZoom, Toasts } from "$shared/ui";
 	import CharacterPage from "$features/character/CharacterPage.svelte";
+	import ImportProgress from "$features/character/ImportProgress.svelte";
 	import { captureGlobalErrors, logs } from "$shared/stores/log.svelte";
 	import { nav } from "./nav.svelte";
 	import { theme } from "./theme.svelte";
@@ -132,6 +133,7 @@
 <DropLayer />
 <ExportPicker />
 <Toasts />
+<ImportProgress />
 <ConfirmHost />
 <ImageViewerHost />
 <PluginHost enabled={plugins.on("community")} />

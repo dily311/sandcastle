@@ -1,4 +1,5 @@
 <script lang="ts">
+	import { chatImport } from "./chatImport.svelte";
 	import { lastAt } from "$features/character/library.svelte";
 	import { TRASH_HINT, trashedToast } from "$shared/trash";
 	import { Camera, ImagePlus, Move, X as XIcon } from "@lucide/svelte";
@@ -158,6 +159,12 @@
 	}
 	/** 카드(PNG·JSON)·대화(.jsonl)·묶음(ZIP). 캐릭터 상세에서는 대화를 그 캐릭터에 붙임 */
 	async function importPaths(paths: string[]) {
+		// 채팅(.jsonl) 여럿은 진행 막대와 함께 한꺼번에 (한 개면 지금처럼)
+		const chats = paths.filter((p) => p.toLowerCase().endsWith(".jsonl"));
+		if (chats.length > 1) {
+			await chatImport.run(chats, charId ?? null);
+			paths = paths.filter((p) => !chats.includes(p));
+		}
 		for (const p of paths) {
 			if (p.toLowerCase().endsWith(".zip")) {
 				const r = await call(commands.importCharacterPack(p), { source: "character" }).catch(() => null);
