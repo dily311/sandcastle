@@ -155,18 +155,34 @@ async fn run_in<T: SyncTarget>(
                         let _ = std::fs::remove_file(&part);
                         Err(AppError::validation(format!("동기화 저장소의 파일 내용이 해시와 다름: {}", f.path), None))
                     }
-                    Err(_) => Ok(false),
+                    // 저장소에 없는 파일만 "없음"으로 센다. 끊김·시간 초과 같은 다른 오류는 합치기 전에 멈춘다 —
+                    // 합치면 이 묶음을 본 것으로 적어 다음 동기화가 남은 파일을 다시 받지 않는다 (1-I-9)
+                    Err(AppError::NotFound { .. }) => {
+                        let _ = std::fs::remove_file(&part);
+                        Ok(false)
+                    }
+                    Err(e) => {
+                        let _ = std::fs::remove_file(&part);
+                        Err(AppError::io(format!(
+                            "파일을 받다가 멈춤 — 다시 동기화하면 받은 파일은 건너뛰고 이어서 받음 ({e})"
+                        )))
+                    }
                 }
             })
             .buffer_unordered(PARALLEL)
             .collect()
             .await;
+        // 받은 것은 이미 제자리에 있으니(다음엔 건너뜀) 셈을 먼저 하고, 하나라도 끊겼으면 합치지 않고 멈춘다
+        let mut stopped = None;
         for r in results {
-            if r? {
-                rep.files_down += 1;
-            } else {
-                rep.files_missing += 1;
+            match r {
+                Ok(true) => rep.files_down += 1,
+                Ok(false) => rep.files_missing += 1,
+                Err(e) => stopped = stopped.or(Some(e)),
             }
+        }
+        if let Some(e) = stopped {
+            return Err(e);
         }
         let was_excluded: bool = sqlx::query_scalar("SELECT COALESCE((SELECT excluded FROM sync_peers WHERE device_id = ?), 0)")
             .bind(&id)
@@ -568,5 +584,79 @@ mod tests {
         let r = sync(&b, &folder).await;
         assert_eq!((r.merged.len(), r.files_down), (1, 1), "{r:?}");
         assert_eq!(names(&b).await, vec!["Aria"]);
+    }
+
+    /// 파일을 받다가 한 번 끊기는 저장소 (모바일에서 와이파이가 끊기거나 앱이 꺼진 것처럼)
+    struct Flaky<'a> {
+        inner: &'a FolderTarget,
+        drop_once: std::sync::atomic::AtomicBool,
+    }
+    impl SyncTarget for Flaky<'_> {
+        fn kind(&self) -> &'static str {
+            "flaky"
+        }
+        async fn list(&self, prefix: &str) -> Result<Vec<super::super::sync_target::RemoteEntry>> {
+            self.inner.list(prefix).await
+        }
+        async fn get(&self, name: &str, dest: &Path) -> Result<()> {
+            if name.starts_with("blobs/") && self.drop_once.swap(false, std::sync::atomic::Ordering::SeqCst) {
+                std::fs::create_dir_all(dest.parent().unwrap()).unwrap();
+                std::fs::write(dest, b"half").unwrap();
+                return Err(AppError::io("연결 끊김"));
+            }
+            self.inner.get(name, dest).await
+        }
+        async fn put(&self, name: &str, src: &Path) -> Result<()> {
+            self.inner.put(name, src).await
+        }
+        async fn delete(&self, name: &str) -> Result<()> {
+            self.inner.delete(name).await
+        }
+    }
+
+    #[tokio::test]
+    async fn a_download_cut_off_midway_resumes_on_the_next_sync() {
+        let root = tempfile::tempdir().unwrap();
+        let shared = root.path().join("Drive");
+        std::fs::create_dir_all(&shared).unwrap();
+        let folder = FolderTarget::new(&shared).unwrap();
+        let (a, b) = (dev(root.path(), "a").await, dev(root.path(), "b").await);
+        for (i, name) in ["x", "y"].iter().enumerate() {
+            let avatar = a.base.join(format!("characters/avatars/{name}.png"));
+            std::fs::create_dir_all(avatar.parent().unwrap()).unwrap();
+            std::fs::write(&avatar, format!("png-{name}")).unwrap();
+            sqlx::query("INSERT INTO characters (id, name, avatar, created_at, updated_at) VALUES (?, ?, ?, 1, 0)")
+                .bind(format!("c{i}"))
+                .bind(format!("Aria{i}"))
+                .bind(avatar.to_string_lossy().to_string())
+                .execute(&a.db)
+                .await
+                .unwrap();
+        }
+        sync(&a, &folder).await;
+        tokio::time::sleep(std::time::Duration::from_millis(4)).await;
+
+        // 1) 받다가 끊김: 오류로 멈추고 아무것도 합치지 않음 (이 묶음을 본 것으로 적지 않음)
+        let flaky = Flaky {
+            inner: &folder,
+            drop_once: true.into(),
+        };
+        let err = run(&b.db, &b.base, &mut Map::new(), &b.id, &flaky, &|_| {}).await.err().expect("멈춰야 함");
+        assert!(err.to_string().contains("이어서"), "{err}");
+        assert!(names(&b).await.is_empty());
+        let seen: Option<i64> = sqlx::query_scalar("SELECT last_bundle_created_at FROM sync_peers")
+            .fetch_optional(&b.db)
+            .await
+            .unwrap();
+        assert_eq!(seen, None);
+
+        // 2) 다시 동기화: 남은 파일을 받고 합친다
+        let r = sync(&b, &folder).await;
+        assert_eq!(r.merged.len(), 1, "{r:?}");
+        assert_eq!(r.files_missing, 0);
+        assert!(r.files_down >= 1);
+        assert_eq!(std::fs::read(b.base.join("characters/avatars/x.png")).unwrap(), b"png-x");
+        assert_eq!(std::fs::read(b.base.join("characters/avatars/y.png")).unwrap(), b"png-y");
+        assert_eq!(names(&b).await.len(), 2);
     }
 }
