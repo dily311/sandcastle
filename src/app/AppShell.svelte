@@ -6,7 +6,7 @@
 	import CharacterPage from "$features/character/CharacterPage.svelte";
 	import ImportProgress from "$features/character/ImportProgress.svelte";
 	import { captureGlobalErrors, logs } from "$shared/stores/log.svelte";
-	import { nav } from "./nav.svelte";
+	import { lastRoute, nav, saveLastRoute } from "./nav.svelte";
 	import { theme } from "./theme.svelte";
 	import Titlebar from "./Titlebar.svelte";
 	import Sidebar from "./Sidebar.svelte";
@@ -56,6 +56,11 @@
 	// 모든 그림은 눌러서 크게 보기 (링크·버튼 안의 그림은 제외, 이유는 imageZoom.ts)
 	onMount(() => installImageZoom());
 
+	$effect(() => {
+		const r = nav.current;
+		if (ready) saveLastRoute(r);
+	});
+
 	onMount(async () => {
 		captureGlobalErrors();
 		await theme.init();
@@ -64,7 +69,11 @@
 		await appSetting.load();
 		// 새 버전 확인: 설정을 켰을 때만 (기본 꺼짐, 1-E-2)
 		checkOnStart(appSetting.value?.checkUpdatesOnStart ?? false);
-		if (appSetting.value?.home?.startOnHome && nav.current.page === "character" && !nav.canBack) void nav.replace({ page: "home" });
+		// 첫 화면: 홈부터 보기를 켰으면 홈, 아니면 마지막으로 보던 화면 (5-E-5)
+		if (nav.current.page === "character" && !nav.canBack) {
+			const last = appSetting.value?.home?.startOnHome ? { page: "home" as const } : lastRoute();
+			if (last) void nav.replace(last);
+		}
 		ready = true;
 		void recoverInterruptedChats();
 		void plugins.load();

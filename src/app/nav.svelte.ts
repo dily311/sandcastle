@@ -70,3 +70,31 @@ class Nav {
 }
 
 export const nav = new Nav();
+
+// ---- 마지막으로 본 화면 (5-E-5) — 이 기기의 화면 상태라 브라우저 저장소에 ----
+const LAST_KEY = "sandcastle.lastRoute";
+const PAGES: Page[] = ["home", "phone", "character", "game", "persona", "lorebook", "images", "settings"];
+
+/** 다시 열 때 쓸 모양: 편집 화면·게임 플레이는 열지 않는다 (편집기는 저장하지 않은 것처럼 보이고, 플레이는 소리·작업을 시작함) */
+export function restorable(r: Route): Route {
+	const { edit: _e, ...rest } = r as Route & { edit?: unknown };
+	if (rest.page === "game") return { page: "game", gameId: rest.gameId };
+	return rest as Route;
+}
+
+export function saveLastRoute(r: Route) {
+	try {
+		localStorage.setItem(LAST_KEY, JSON.stringify(restorable(r)));
+	} catch {
+		/* 저장소를 못 쓰면 다음엔 기본 화면 */
+	}
+}
+
+export function lastRoute(): Route | null {
+	try {
+		const r = JSON.parse(localStorage.getItem(LAST_KEY) ?? "null") as Route | null;
+		return r && PAGES.includes(r.page) ? restorable(r) : null;
+	} catch {
+		return null;
+	}
+}
