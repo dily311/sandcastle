@@ -1,4 +1,5 @@
 <script lang="ts">
+	import { regexVersion } from "$shared/stores/regexVersion.svelte";
 	import { onMount, tick } from "svelte";
 	import { BookOpen, ChevronLeft, Copy, Eye, ImagePlus, Languages, Menu, MessageCirclePlus, RefreshCw, Send, Square, Trash2, Volume2 } from "@lucide/svelte";
 	import { plugins } from "$shared/stores/plugins.svelte";
@@ -43,7 +44,8 @@
 	// 화면용 글 (표시용 정규식·이름)
 	$effect(() => {
 		void session.messages.map((m) => m.content);
-		if (!session.busy) void session.refreshDisplay();
+		const key = `${regexVersion.n}`;
+		if (!session.busy) void session.refreshDisplay(key);
 	});
 
 	// 답장이 들어오는 동안 아래로 따라감

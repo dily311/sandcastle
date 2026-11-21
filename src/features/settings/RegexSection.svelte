@@ -1,4 +1,5 @@
 <script lang="ts">
+	import { regexVersion } from "$shared/stores/regexVersion.svelte";
 	import { drops, extOf, storeFile } from "$app/drop.svelte";
 	import { onMount } from "svelte";
 	import { ChevronRight, Download, Plus } from "@lucide/svelte";
@@ -53,6 +54,7 @@
 	async function toggle(s: RegexScript, on: boolean) {
 		s.enabled = on;
 		await call(commands.upsertRegexScript({ ...s, enabled: on }), src).catch(() => (s.enabled = !on));
+		regexVersion.bump();
 	}
 
 	// ---- 편집 (대화상자: RegexEditDialog) ----
@@ -67,6 +69,7 @@
 	async function remove(s: RegexScript) {
 		if (!(await confirmAction({ title: "정규식 삭제", message: `'${s.name}' 정규식을 지움`, confirmLabel: "삭제", danger: true }))) return;
 		await call(commands.deleteRegexScript(s.id), src);
+		regexVersion.bump();
 		scripts = scripts.filter((x) => x.id !== s.id);
 	}
 	async function importFile() {
@@ -85,6 +88,7 @@
 	);
 	async function importPath(path: string) {
 		const r = await call(commands.importSillytavern(path, null, null, null), src);
+		regexVersion.bump();
 		if (r.kind === "regex") toasts.success(`정규식 ${r.scripts.length}개 가져옴`);
 		else if (r.kind === "preset") toasts.success(`프리셋 '${r.name}' 가져옴 · 정규식 ${r.regexCount}개`);
 		else toasts.info("정규식 파일이 아님");

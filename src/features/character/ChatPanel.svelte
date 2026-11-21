@@ -1,4 +1,5 @@
 <script lang="ts">
+	import { regexVersion } from "$shared/stores/regexVersion.svelte";
 	import { ArrowUpDown, GripVertical, Bookmark, Check, ChevronDown, Eye, EyeOff, FileArchive, IdCard, ImagePlus, Pencil, Plus, Search, Trash2, X } from "@lucide/svelte";
 	import { Avatar, Button, ContextMenu, IconButton, Input, ProfilePicker, Select, Spinner, Switch, type MenuItem, type ProfileOption } from "$shared/ui";
 	import { bookmarks, bookmarksOf, onCurrentSwipe, type ChatBookmark } from "./bookmarks";
@@ -131,6 +132,7 @@
 			const saved = await call(commands.upsertRegexScript({ ...s, sortOrder: i * 10 }), { source: "regex" });
 			scripts = scripts.map((x) => (x.id === s.id ? saved : x));
 		}
+		regexVersion.bump();
 	}
 	const sorters = Object.fromEntries(SCOPES.map((scope) => [scope, new Sortable((from, to) => void reorder(scope, from, to))])) as Record<(typeof SCOPES)[number], Sortable>;
 	// 정규식 바로 편집 (설정 화면과 같은 대화상자)
@@ -140,6 +142,7 @@
 	}
 	async function toggleScript(s: RegexScript, enabled: boolean) {
 		const saved = await call(commands.upsertRegexScript({ ...s, enabled }), { source: "regex" });
+		regexVersion.bump();
 		scripts = scripts.map((x) => (x.id === s.id ? saved : x));
 	}
 

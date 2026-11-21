@@ -1,4 +1,5 @@
 <script lang="ts">
+	import { regexVersion } from "$shared/stores/regexVersion.svelte";
 	import { tick } from "svelte";
 	import { Bookmark, ChevronRight, Gauge, Copy, CornerUpLeft, FastForward, GitBranch, ImagePlus, Images, IdCard, Languages, ListChecks, ListTree, PanelLeft, Plus, RefreshCw, Send, SlidersHorizontal, Square, Trash2, X, EllipsisVertical, BookOpen, Pen, Database, Scroll, Pencil, UserRound, PinOff, Pin, FolderMinus, Download, Folder } from "@lucide/svelte";
 	import { bookmarks, bookmarksOf, type ChatBookmark } from "./bookmarks";
@@ -79,7 +80,8 @@
 		const s = session;
 		if (!s) return;
 		void s.messages.map((m) => m.content);
-		const key = `${conv?.personaId}:${conv?.promptPresetId}`;
+		// 정규식은 대화 → 캐릭터 기본 → 앱 설정 프리셋에 딸리기도 해서, 셋 중 무엇이 바뀌어도 다시 만든다
+		const key = `${conv?.personaId}:${conv?.promptPresetId}:${character?.defaultPromptPresetId}:${appSetting.value?.selectedPreset}:${regexVersion.n}`;
 		if (!s.busy) void s.refreshDisplay(key);
 	});
 

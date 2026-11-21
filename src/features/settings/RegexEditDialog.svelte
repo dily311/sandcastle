@@ -1,5 +1,6 @@
 <script lang="ts">
 	// 정규식 편집 대화상자 (설정 > 정규식, 대화 오른쪽 패널이 같이 씀). 부모가 bind:this로 startNew/startEdit를 부른다
+	import { regexVersion } from "$shared/stores/regexVersion.svelte";
 	import type {
 		RegexPlacement,
 		RegexScope,
@@ -91,6 +92,7 @@
 	async function save() {
 		if (!draft || !draft.name.trim() || !draft.findRegex.trim() || !draft.placement.length) return;
 		const saved = await call(commands.upsertRegexScript({ ...plain(draft), name: draft.name.trim() }), src);
+		regexVersion.bump();
 		open = false;
 		toasts.success("저장함");
 		onsaved?.(saved);
