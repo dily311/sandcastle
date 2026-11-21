@@ -14,6 +14,9 @@ import { toasts } from "$shared/stores/toast.svelte";
 
 export type { Character, CharacterImage, Conversation, ConversationFolder, Persona, Preset, ApiProfiles };
 
+/** 목록에 보일 대화 시각: 마지막 메시지 시각 (가져온 대화도 원래 대화 시각으로). 메시지가 없으면 수정 시각 */
+export const lastAt = (c: Pick<Conversation, "lastMessageAt" | "updatedAt">) => c.lastMessageAt ?? c.updatedAt;
+
 const src = { source: "character" };
 
 class Library {
@@ -51,7 +54,7 @@ class Library {
 	}
 	/** 최근 활동 순 (폰 대화는 폰 화면에서만 보임) */
 	convsOf(charId: string) {
-		return this.conversations.filter((c) => c.characterId === charId && c.mode !== "phone").sort((a, b) => b.updatedAt - a.updatedAt);
+		return this.conversations.filter((c) => c.characterId === charId && c.mode !== "phone").sort((a, b) => lastAt(b) - lastAt(a));
 	}
 	foldersOf(charId: string) {
 		return this.folders.filter((f) => f.characterId === charId);

@@ -225,9 +225,8 @@ async fn import_chat(db: &DbPool, bytes: &[u8], title: &str, character_id: Optio
         db::conversation::get_system_default_persona(db).await.unwrap_or_else(|_| "default".into())
     };
 
-    if as_str(&header["chat_metadata"], "note_prompt").is_some_and(|s| !s.trim().is_empty()) {
-        warnings.push("작가 노트(Author's Note)는 지원하지 않아 원본에만 보존함".into());
-    }
+    // 작가 노트 (Author's Note): 글·깊이는 대화의 작가 노트로. 빈도·위치(대화 밖)는 없어서 "대화 안 깊이"로 가져온다
+    let author_note = chat::author_note(&header["chat_metadata"], &mut warnings);
 
     let start = chrono::Utc::now().timestamp_millis() - messages.len() as i64;
     let times = chat::monotonic_times(&messages, start);
@@ -243,14 +242,20 @@ async fn import_chat(db: &DbPool, bytes: &[u8], title: &str, character_id: Optio
             persona_id: persona_id.clone(),
             world_info_ids: vec![],
             mode: "chat".into(),
-            meta: Some(serde_json::json!({
+            meta: Some({
+                let mut meta = serde_json::json!({
                 "importedFrom": "sillytavern",
                 "sillytavern": {
                     "chatMetadata": header["chat_metadata"],
                     "userName": header["user_name"],
                     "characterName": header["character_name"],
                 }
-            })),
+                });
+                if let Some(n) = author_note {
+                    meta["authorNote"] = n;
+                }
+                meta
+            }),
             images_enabled: None,
         },
     )

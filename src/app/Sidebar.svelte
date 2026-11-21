@@ -1,4 +1,5 @@
 <script lang="ts">
+	import { lastAt } from "$features/character/library.svelte";
 	import { onMount } from "svelte";
 	import { BookOpen, Check, ChevronsUpDown, Copy, Download, ArrowUpDown, ChevronDown, Ellipsis, Gamepad2, GitBranch, House, Pencil, Pin, PinOff, Plus, Settings, Smartphone, Trash2, UserCog, Users, Images, ListFilter } from "@lucide/svelte";
 	import { Avatar, ContextMenu, IconButton, type MenuItem } from "$shared/ui";
@@ -98,7 +99,7 @@
 	let shown = $state(PAGE);
 	const base = $derived(library.conversations.filter((c) => c.mode !== "phone" && library.character(c.characterId) && (!charFilter || c.characterId === charFilter)));
 	const cmp = (a: Conversation, b: Conversation) => {
-		const v = sortBy === "name" ? a.title.localeCompare(b.title, "ko") : sortBy === "created" ? a.createdAt - b.createdAt : a.updatedAt - b.updatedAt;
+		const v = sortBy === "name" ? a.title.localeCompare(b.title, "ko") : sortBy === "created" ? a.createdAt - b.createdAt : lastAt(a) - lastAt(b);
 		// 이름은 오름차순이 "작은 것부터"라 날짜와 방향이 같게(내림차순 = 큰 쪽부터) 뒤집는다
 		return desc ? -v : v;
 	};
@@ -329,7 +330,7 @@
 	{@const sub = kids.get(c.id) ?? []}
 	{@const forks = forkCount.get(c.id) ?? 0}
 	<li class="row" class:on={openConv === c.id} style:--depth={depth}>
-		<button class="open" title="{ch?.name} · {c.title} · {relative(c.updatedAt)}" onclick={() => nav.go({ page: "character", charId: c.characterId ?? undefined, convId: c.id })} oncontextmenu={(e) => rightClick(e, c)}>
+		<button class="open" title="{ch?.name} · {c.title} · {relative(lastAt(c))}" onclick={() => nav.go({ page: "character", charId: c.characterId ?? undefined, convId: c.id })} oncontextmenu={(e) => rightClick(e, c)}>
 			{#if showAvatar}<Avatar name={ch?.name ?? "?"} src={fileSrc(ch?.avatar)} color={ch?.color} size={18} />{/if}
 			<span class="t">{c.title}</span>
 		</button>

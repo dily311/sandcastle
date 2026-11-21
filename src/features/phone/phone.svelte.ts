@@ -2,6 +2,7 @@
 // - 페르소나 폰: 내가 페르소나, AI가 연락처 캐릭터 (일반 대화와 같은 구조)
 // - 캐릭터 폰: 내가 주인 캐릭터, AI가 연락처(다른 캐릭터나 페르소나). 엿보기로 AI가 두 사람 몫을 다 쓸 수도 있음
 //   대화 meta.phone = { owner: {kind, id}, contact: {kind, id} }
+import { lastAt } from "$features/character/library.svelte";
 import { gradientCss, gradientOf } from "$shared/ui/backgrounds";
 import { fileSrc } from "$shared/ipc/file";
 import { splitHtmlBlocks } from "$shared/html/blocks";
@@ -187,7 +188,7 @@ class PhoneState {
 				const mine = o.kind === "character" ? m?.owner.kind === "character" && m.owner.id === o.id : !m && c.personaId === o.id;
 				return mine && !!lookup(this.contactOf(c));
 			})
-			.sort((a, b) => (this.previews[b.id]?.at ?? b.updatedAt) - (this.previews[a.id]?.at ?? a.updatedAt));
+			.sort((a, b) => (this.previews[b.id]?.at ?? lastAt(b)) - (this.previews[a.id]?.at ?? lastAt(a)));
 	}
 	get unread() {
 		return this.chats.reduce((n, c) => n + (this.previews[c.id]?.unread ?? 0), 0);

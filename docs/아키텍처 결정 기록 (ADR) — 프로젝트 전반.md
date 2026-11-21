@@ -842,3 +842,16 @@ Complete Submission + Task
 - **기능 판단**: 목록에 `tools`·`structuredOutput`이 적힌 모델은 이름 규칙이 "알 수 없음"이어도 "지원함". 적히지 않은 것은 그대로(없다고 단정하지 않음). OpenAI 호환 서버는 같은 id여도 서버마다 달라 건드리지 않는다.
 - **추론 강도(Reasoning Effort)**: 프리셋 설정 `reasoning_effort`(비우면 공급자 기본, "auto"도 비움). `ChatOptions.reasoning_effort`로 실려 가고, **`AiService`가 요청 모델의 `reasoning.levels`에 있는 값만 남긴다** — 프리셋은 모델과 무관하게 값을 가질 수 있어서, 못 받는 모델에는 보내지 않는다(요청이 거절되지 않게). 공급자 형식별 필드: OpenAI `reasoning_effort`, Claude `output_config.effort`, Gemini `generationConfig.thinkingConfig.thinkingLevel`. 화면은 그 모델이 `reasoning`을 가졌을 때만 고르는 칸을 보인다(설정 > 프리셋은 앱 기본 API의 모델, 대화·게임 패널은 그 대화·플레이의 모델).
 - **채운 값의 한계**: 내가 확실히 아는 Claude 4종(1M 입력·128K 출력·effort low~max)과 사용자가 준 단가표만 채웠다. OpenAI·Gemini·DeepSeek의 컨텍스트·강도 값은 모르면 비워 뒀으니 JSON에 적어야 한다. Gemini의 `thinkingLevel`·OpenAI `reasoning_effort` 값이 모델별로 실제 받는 값인지는 실호출로 확인하지 못했다.
+
+### ADR-021 대화 목록의 시각과 동기화의 updated_at
+
+**상태** Accepted (2026-11-22) — plans/roadmap.md 5-E-3. 사용자 요청("실리태번에서 옮긴 채팅은 마지막 채팅 시간으로 보여야 함")을 구현하며 정함.
+
+**왜**: 목록은 `conversations.updated_at`으로 시각을 보이고 정렬했다. 그런데 동기화(ADR-011)는 `updated_at > since`로 보낼 행을 고르므로 `updated_at`에 옛 시각을 넣으면 그 행이 다른 기기로 가지 않는다. 실제로 SillyTavern·팩 가져오기는 메시지의 `updated_at`을 원래 작성 시각으로 넣고 있어, 가져온 메시지가 증분 동기화에서 빠질 수 있었다.
+
+**결정**
+- `updated_at`은 **"이 기기에서 이 행이 바뀐 시각"** 으로만 쓴다. 가져오기(`insert_message_at`)도 `created_at`은 원래 시각, `updated_at`은 가져온 시각.
+- 목록이 보이는 **대화 시각은 마지막 메시지의 작성 시각**(`v_conversations_with_count.last_message_at = MAX(messages.created_at)`, 마이그레이션 003). 메시지가 없으면 `updated_at`. 프런트는 `library.svelte.ts`의 `lastAt`으로 읽는다(채팅 목록·홈·사이드바·캐릭터 페이지·폰).
+- 그 결과 "최신순"은 **마지막으로 대화한 순서**가 된다(이름 바꾸기·폴더 옮기기로는 순서가 바뀌지 않음).
+
+**선택하지 않은 안**: 가져올 때 대화의 `updated_at`을 마지막 메시지 시각으로 넣기 — 동기화가 그 대화를 놓친다. 대화 표에 칸을 새로 두기 — 메시지에서 계산되는 값이라 뷰로 충분.

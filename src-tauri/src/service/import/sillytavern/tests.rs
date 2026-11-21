@@ -383,6 +383,12 @@ async fn st_chat_attaches_to_character_by_name() {
     assert_eq!(msgs[5].character_id, None);
     assert_eq!(msgs[2].meta.as_ref().unwrap()["info"]["model"], "gemini-3.7-flash");
 
+    // 5-E-3: 목록 시각은 마지막 메시지 시각, 메시지의 updated_at은 가져온 때 (동기화가 바뀐 행으로 고르게)
+    let last = msgs.iter().map(|m| m.created_at).max().unwrap();
+    assert_eq!(conversation.last_message_at, Some(last));
+    assert!(last < conversation.created_at, "샘플은 예전 대화");
+    assert!(msgs.iter().all(|m| m.updated_at >= conversation.created_at));
+
     // 프롬프트용 기록에서는 숨긴 메시지(3개)가 빠진다
     let ctx = crate::service::chat::context_manager::ContextManager
         .build_context(

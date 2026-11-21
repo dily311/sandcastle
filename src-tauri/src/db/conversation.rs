@@ -68,6 +68,7 @@ where
         prompt_preset_id: None,
         api_profile_id: None,
         model: None,
+        last_message_at: None,
     })
 }
 
@@ -985,7 +986,8 @@ where
     })
 }
 
-/// 가져오기용: 작성 시각을 지정해서 메시지 저장 (대화 기록 정렬이 created_at 기준이라 원래 시각이 필요)
+/// 가져오기용: 작성 시각을 지정해서 메시지 저장 (대화 기록 정렬이 created_at 기준이라 원래 시각이 필요).
+/// updated_at은 지금 — 동기화는 updated_at으로 바뀐 행을 고르므로 옛 시각을 넣으면 다른 기기로 가지 않는다
 pub async fn insert_message_at<'e, E>(executor: E, input: MessageInput, created_at: i64) -> Result<(), Error>
 where
     E: Executor<'e, Database = Sqlite>,
@@ -1005,7 +1007,7 @@ where
     .bind(&input.character_id)
     .bind(meta)
     .bind(created_at)
-    .bind(created_at)
+    .bind(chrono::Utc::now().timestamp_millis().max(created_at))
     .execute(executor)
     .await?;
     Ok(())

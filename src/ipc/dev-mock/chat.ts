@@ -117,7 +117,7 @@ const regex: RegexScript_Serialize[] = [
 	})),
 ];
 
-type Conv = Omit<Conversation_Serialize, "messageCount">;
+type Conv = Omit<Conversation_Serialize, "messageCount" | "lastMessageAt">;
 const convs: Conv[] = [];
 const messages: Message_Serialize[] = [];
 let pluginSetting = {
@@ -249,7 +249,10 @@ function addMsg(conv: Conv, role: "user" | "assistant", content: string, ago: nu
 	addMsg(p, "assistant", "제 오두막이에요\n조금 더 쉬어요", 8);
 }
 
-const view = (c: Conv): Conversation_Serialize => ({ ...c, messageCount: messages.filter((m) => m.conversationId === c.id).length });
+const view = (c: Conv): Conversation_Serialize => {
+	const mine = messages.filter((m) => m.conversationId === c.id);
+	return { ...c, messageCount: mine.length, lastMessageAt: mine.length ? Math.max(...mine.map((m) => m.createdAt)) : null };
+};
 const conv = (id: string) => {
 	const c = convs.find((c) => c.id === id);
 	if (!c) throw { code: "RESOURCE_NOT_FOUND", category: "NOT_FOUND", message: "대화를 찾을 수 없음", retryable: false };

@@ -1,4 +1,5 @@
 <script lang="ts">
+	import { lastAt } from "$features/character/library.svelte";
 	import { onMount } from "svelte";
 	import { Camera, Image as ImageIcon } from "@lucide/svelte";
 	import { BatteryFull, ChevronLeft, ChevronRight, Contact, MessageCircle, Pencil, Plus, Search, Settings, Signal, Trash2, Wifi } from "@lucide/svelte";
@@ -214,7 +215,7 @@
 						<button onclick={() => w && openChat(w)}>
 							<Avatar name={w?.name ?? "?"} src={fileSrc(w?.avatar)} color={w?.color} size={46} />
 							<span class="main">
-								<span class="row"><strong>{w?.name ?? c.title}</strong><span class="time">{when(p?.at ?? c.updatedAt)}</span></span>
+								<span class="row"><strong>{w?.name ?? c.title}</strong><span class="time">{when(p?.at ?? lastAt(c))}</span></span>
 								<span class="row"><span class="last">{p?.text || "대화를 시작해 봄"}</span>{#if p?.unread}<span class="badge">{p.unread}</span>{/if}</span>
 							</span>
 						</button>

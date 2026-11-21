@@ -295,7 +295,7 @@
 **5-E 사용자 목록 (2026-11-22)** — `plans/current-milestone.md`의 사용자 목록을 커밋 크기로 나눈 것. 순서: 렌더링·버그 → 작은 편의 → 화면 정리 → 큰 기능(결정 필요).
 - [x] 5-E-1 마크다운 — `####`~`######` 제목, 표, ``` 코드 블록(```html은 지금처럼 HTML 블록), `* **굵게**`가 `<i>`로 깨지는 것(줄 머리 `* `·`- `를 목록으로 먼저). 어디: `format.ts`, `RichText.svelte`. 완료: `format` 단위 테스트 5개, 미리보기에서 제목·목록·표·코드 블록 확인. 받는 중인 새 응답도 같은 RichText로 그림(전에는 문단·HTML만).
 - [x] 5-E-2 정규식·프리셋을 바꾸면 메시지 다시 그리기 — 화면용 글 키에 정규식 판(`shared/stores/regexVersion.svelte.ts`, 저장·삭제·켜고 끄기·순서·가져오기 때 올림)과 쓰이는 프리셋(대화·캐릭터 기본·앱 설정)을 넣음. 어디: `ChatView.svelte`·`PhoneRoom.svelte`, 정규식 화면 셋. 완료: 미리보기에서 판을 올리면 화면용 글을 한 번 다시 받음. 한계: 정규식 화면 밖(캐릭터 카드 가져오기 등)에서 생긴 정규식은 대화를 다시 열어야 반영.
-- 5-E-3 SillyTavern 채팅 가져오기 보강 — 대화 생성·수정 시각을 마지막 메시지 시각으로, 헤더의 작가 노트(`note_prompt`·깊이·빈도)를 대화 작가 노트로. 어디: `import/sillytavern/mod.rs`, `chat.rs`. 완료: 가져오기 테스트.
+- [x] 5-E-3 SillyTavern 채팅 가져오기 보강 — 목록의 대화 시각을 마지막 메시지 시각으로(뷰 `last_message_at`, 마이그레이션 003, 프런트 `lastAt`). 대화의 `updated_at`은 동기화의 변경 표시라 그대로 두고, 가져온 메시지의 `updated_at`도 가져온 시각으로 고침(옛 시각이면 증분 동기화에서 빠짐 — ADR-021). 헤더의 작가 노트(`note_prompt`·`note_depth`)를 대화 작가 노트로, 빈도·위치는 경고. 어디: 마이그레이션 003, `models/conversation.rs`, `db/conversation.rs`, `import/sillytavern/`, 목록 화면 6곳. 완료: 단위·가져오기 테스트(`author_note_from_header`, `st_chat_attaches_to_character_by_name`), `pnpm check`. 바뀐 점: "최신순"은 마지막으로 대화한 순서(이름 바꾸기로는 안 바뀜).
 - 5-E-4 여러 채팅 파일 올리기 — 진행 막대·멈추기, 한 파일일 때만 그 대화로 이동. 어디: `ConvSidebar.svelte`·`library.svelte.ts`. 완료: 미리보기.
 - 5-E-5 앱을 열면 마지막 페이지 — 홈을 시작 화면으로 고른 사용자는 홈. 어디: 앱 설정(기기 전용 칸), 탐색 store. 완료: 미리보기에서 다시 열기.
 - 5-E-6 읽기 모드 — `conversations.read_mode INTEGER NOT NULL DEFAULT 0`(새 마이그레이션). 켜면 입력 줄을 숨긴다(지금은 화면 상태라 다시 열면 풀림). 어디: 마이그레이션, `ChatView.svelte`, 대화 메뉴. 완료: 다시 열어도 유지.

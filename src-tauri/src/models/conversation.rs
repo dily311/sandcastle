@@ -322,6 +322,9 @@ pub struct ConversationRow {
     pub prompt_preset_id: Option<String>,
     pub api_profile_id: Option<String>,
     pub model: Option<String>,
+    /// 뷰에서만 옴 (메시지의 가장 늦은 작성 시각)
+    #[sqlx(default)]
+    pub last_message_at: Option<i64>,
 }
 
 #[derive(Serialize, specta::Type)]
@@ -347,6 +350,9 @@ pub struct Conversation {
     pub api_profile_id: Option<String>,
     /// 이 대화에서 고른 모델. 없으면 API 프로필의 기본 모델 (ADR-020)
     pub model: Option<String>,
+    /// 마지막 메시지의 작성 시각 (메시지가 없으면 None). 목록의 시각·정렬은 이것을 먼저 본다 —
+    /// updated_at은 이 기기에서 바뀐 시각이라 가져온 대화는 가져온 때가 된다
+    pub last_message_at: Option<i64>,
 }
 
 impl From<ConversationRow> for Conversation {
@@ -368,6 +374,7 @@ impl From<ConversationRow> for Conversation {
             prompt_preset_id: r.prompt_preset_id,
             api_profile_id: r.api_profile_id,
             model: r.model,
+            last_message_at: r.last_message_at,
         }
     }
 }

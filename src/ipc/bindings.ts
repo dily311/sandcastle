@@ -1487,6 +1487,11 @@ export type Conversation_Deserialize = {
 	apiProfileId?: string | null,
 	/**  이 대화에서 고른 모델. 없으면 API 프로필의 기본 모델 (ADR-020) */
 	model?: string | null,
+	/**
+	 *  마지막 메시지의 작성 시각 (메시지가 없으면 None). 목록의 시각·정렬은 이것을 먼저 본다 —
+	 *  updated_at은 이 기기에서 바뀐 시각이라 가져온 대화는 가져온 때가 된다
+	 */
+	lastMessageAt?: number | null,
 };
 
 export type Conversation_Serialize = {
@@ -1510,6 +1515,11 @@ export type Conversation_Serialize = {
 	apiProfileId: string | null,
 	/**  이 대화에서 고른 모델. 없으면 API 프로필의 기본 모델 (ADR-020) */
 	model: string | null,
+	/**
+	 *  마지막 메시지의 작성 시각 (메시지가 없으면 None). 목록의 시각·정렬은 이것을 먼저 본다 —
+	 *  updated_at은 이 기기에서 바뀐 시각이라 가져온 대화는 가져온 때가 된다
+	 */
+	lastMessageAt: number | null,
 };
 
 export type CorePlugin = {

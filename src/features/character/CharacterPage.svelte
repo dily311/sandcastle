@@ -1,4 +1,5 @@
 <script lang="ts">
+	import { lastAt } from "$features/character/library.svelte";
 	import { TRASH_HINT, trashedToast } from "$shared/trash";
 	import { Camera, ImagePlus, Move, X as XIcon } from "@lucide/svelte";
 	import { ChevronRight, Download, Ellipsis, Gamepad2, MessageSquarePlus, Pencil, Plus, Search, Star, StarOff, Trash2, Upload, UserRound, Users } from "@lucide/svelte";
@@ -40,7 +41,7 @@
 	$effect(() => {
 		if (!selecting) picked = new Set();
 	});
-	const lastActive = (id: string) => library.convsOf(id)[0]?.updatedAt ?? 0;
+	const lastActive = (id: string) => (library.convsOf(id)[0] ? lastAt(library.convsOf(id)[0]) : 0);
 	const allTags = $derived([...new Set(library.characters.flatMap((c) => c.tags))].sort((a, b) => a.localeCompare(b, "ko")));
 	const FILTERS = $derived([
 		{ value: "all", label: `전부 ${library.characters.length}` },
@@ -358,7 +359,7 @@
 					{#each recent as c (c.id)}
 						<li>
 							<button onclick={() => open(character.id, c.id)}>
-								<span><b>{c.title}</b><small title={absolute(c.updatedAt)}>마지막 활동 · {relative(c.updatedAt)} · {c.messageCount}개</small></span>
+								<span><b>{c.title}</b><small title={absolute(lastAt(c))}>마지막 활동 · {relative(lastAt(c))} · {c.messageCount}개</small></span>
 								<ChevronRight />
 							</button>
 						</li>
@@ -393,7 +394,7 @@
 					<ItemCard
 						title={ch.name}
 						desc={firstLine(ch.description) || "소개 없음"}
-						meta="대화 {convs.length}개{convs.length ? ` · ${relative(convs[0].updatedAt)}` : ''}"
+						meta="대화 {convs.length}개{convs.length ? ` · ${relative(lastAt(convs[0]))}` : ''}"
 						image={fileSrc(ch.cover) ?? fileSrc(ch.avatar)}
 						imagePosition={ch.cover ? `center ${ch.coverY ?? 50}%` : undefined}
 						{selecting}

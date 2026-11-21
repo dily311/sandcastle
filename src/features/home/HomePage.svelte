@@ -1,6 +1,7 @@
 <script lang="ts">
 	// 홈: 사용자가 꾸미는 첫 화면. 블록(이어하기·빠른 실행·즐겨찾기·게임·내 글)을 켜고 끄고 순서를 바꾼다.
 	// AI를 부르지 않는다 (보여주기만). 설정은 앱 설정의 home에 저장
+	import { lastAt } from "$features/character/library.svelte";
 	import { ArrowDown, ArrowUp, Check, Gamepad2, GripVertical, Images, MessageSquarePlus, Pencil, Smartphone, Star, Users } from "@lucide/svelte";
 	import { Sortable, moveItem } from "$shared/dnd/sortable.svelte";
 	import type { HomeSetting_Serialize as HomeSetting } from "$ipc/bindings";
@@ -38,7 +39,7 @@
 	const recent = $derived(
 		library.conversations
 			.filter((c) => c.mode !== "phone" && library.character(c.characterId))
-			.sort((a, b) => b.updatedAt - a.updatedAt)
+			.sort((a, b) => lastAt(b) - lastAt(a))
 			.slice(0, 4),
 	);
 	const favorites = $derived(library.characters.filter((c) => c.favorite).slice(0, 12));
@@ -141,7 +142,7 @@
 							{@const ch = library.character(c.characterId)}
 							<button class="card conv" onclick={() => nav.go({ page: "character", charId: c.characterId ?? undefined, convId: c.id })}>
 								<Avatar name={ch?.name ?? "?"} src={fileSrc(ch?.avatar)} color={ch?.color} size={36} />
-								<span class="txt"><b>{c.title}</b><small>{ch?.name} · {relative(c.updatedAt)}</small></span>
+								<span class="txt"><b>{c.title}</b><small>{ch?.name} · {relative(lastAt(c))}</small></span>
 							</button>
 						{/each}
 					</div>

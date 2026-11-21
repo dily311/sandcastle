@@ -1,4 +1,5 @@
 <script lang="ts">
+	import { lastAt } from "$features/character/library.svelte";
 	import { ArrowDownUp, ChevronDown, Folder, FolderOpen, FolderPlus, PanelLeft, Pencil, Plus, Search, Trash2, Upload } from "@lucide/svelte";
 	import { ContextMenu, IconButton, Input, type MenuItem } from "$shared/ui";
 	import { CHAT_FILES, pickFiles } from "$shared/ipc/dialog";
@@ -38,8 +39,8 @@
 		{ id: "least", label: "메시지 적은 순" },
 	];
 	const compare: Record<Sort, (a: Conversation, b: Conversation) => number> = {
-		newest: (a, b) => b.updatedAt - a.updatedAt,
-		oldest: (a, b) => a.updatedAt - b.updatedAt,
+		newest: (a, b) => lastAt(b) - lastAt(a),
+		oldest: (a, b) => lastAt(a) - lastAt(b),
 		name: (a, b) => a.title.localeCompare(b.title, "ko"),
 		"name-desc": (a, b) => b.title.localeCompare(a.title, "ko"),
 		most: (a, b) => b.messageCount - a.messageCount,
