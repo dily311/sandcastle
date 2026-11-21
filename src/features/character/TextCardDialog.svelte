@@ -1,14 +1,14 @@
 <script lang="ts">
 	// 고른 글 → 이미지 카드. 왼쪽 미리보기, 오른쪽 옵션. 복사(클립보드) 또는 png로 저장
 	import { Copy, Download, TextAlignCenter, TextAlignEnd, TextAlignJustify, TextAlignStart } from "@lucide/svelte";
-	import { Button, Dialog, Select, Switch } from "$shared/ui";
+	import { Button, Dialog, Select, Switch, Textarea } from "$shared/ui";
 	import BackgroundPicker from "$shared/ui/BackgroundPicker.svelte";
 	import { call, commands } from "$shared/ipc/client";
 	import { pickFiles, saveTo } from "$shared/ipc/dialog";
 	import { toasts } from "$shared/stores/toast.svelte";
 	import { theme } from "$app/theme.svelte";
 	import { dropPaths, isImageAvif } from "$app/drop.svelte";
-	import { CARD_DESIGNS, CARD_FONTS, CARD_IMG_RATIO, CARD_SIZES, CARD_STYLES, blobBase64, cardBlob, palette, renderCard, type CardAlign, type CardDesign, type CardFont, type CardImgRatio, type CardStyle } from "./textCard";
+	import { CARD_DESIGNS, CARD_FONTS, CARD_IMG_RATIO, CARD_SIZES, CARD_STYLES, blobBase64, cardBlob, palette, renderCard, maskText, type CardMask, type CardAlign, type CardDesign, type CardFont, type CardImgRatio, type CardStyle } from "./textCard";
 	import IconButton from "$/shared/ui/IconButton.svelte";
 	import Slider from "$/shared/ui/Slider.svelte";
 
@@ -20,6 +20,25 @@
 
 	// 고른 옵션은 이번 실행 동안 기억 (다음 카드도 같은 모양으로)
 	const opts = $state({ imgRatio: "1:1" as CardImgRatio, design: "none" as CardDesign, style: "theme" as CardStyle, txtShadow: false, font: "app" as CardFont, bold: 500, align: "start" as CardAlign, size: "0", background: null as string | null, speaker: true, time: false });
+	// 숨길 말·대체어 (5-E-11): 카드 글에만 적용, 이 기기에 기억 (욕설·금지어 목록은 매번 다시 쓰기 번거로움)
+	const MASK_KEY = "sc.card.mask";
+	const mask = $state<CardMask>(
+		(() => {
+			try {
+				return { hide: "", replace: "", ...JSON.parse(localStorage.getItem(MASK_KEY) ?? "{}") };
+			} catch {
+				return { hide: "", replace: "" };
+			}
+		})(),
+	);
+	$effect(() => {
+		const v = JSON.stringify({ hide: mask.hide, replace: mask.replace });
+		try {
+			localStorage.setItem(MASK_KEY, v);
+		} catch {
+			/* 못 쓰면 이번 실행 동안만 */
+		}
+	});
 	// 사용자가 고친 색 (빈 값 = 색 묶음 그대로)
 	const colors = $state({ bg: "", text: "", accent: "" });
 	const base = $derived(palette(opts.style));
@@ -39,7 +58,7 @@
 	$effect(() => {
 		if (!card) return;
 		const input = {
-			text: card.text,
+			text: maskText(card.text, { hide: mask.hide, replace: mask.replace }),
 			speaker: opts.speaker ? card.speaker : undefined,
 			caption: opts.time && card.time ? stamp(card.time) : undefined,
 			imgRatio: opts.imgRatio,
@@ -141,6 +160,8 @@
 			<label class="field">
 				<Slider label="글자 크기" bind:value={opts.size} min={32} max={64} step={2} fallback={32} unsetLabel="32" />
 			</label>
+			<label class="field"><span>숨길 말</span><Textarea bind:value={mask.hide} rows={1} autosize maxRows={4} placeholder="쉼표로 나눠서 · ●로 가림" aria-label="숨길 말" /></label>
+			<label class="field"><span>대체어</span><Textarea bind:value={mask.replace} rows={1} autosize maxRows={4} placeholder="원래=바꿀 말 (한 줄에 하나)" aria-label="대체어" /></label>
 			{#if card?.speaker}
 				<div class="toggle"><span>이름 넣기</span><Switch checked={opts.speaker} label="이름 넣기" hideLabel onchange={(v) => (opts.speaker = v)} /></div>
 			{/if}

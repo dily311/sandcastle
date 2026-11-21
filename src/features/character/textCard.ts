@@ -426,3 +426,30 @@ export async function blobBase64(blob: Blob): Promise<string> {
 	for (let i = 0; i < buf.length; i += 0x8000) s += String.fromCharCode(...buf.subarray(i, i + 0x8000));
 	return btoa(s);
 }
+
+// ---- 숨길 말·대체어 (5-E-11) — 카드에 들어갈 글에만, 원본 메시지는 그대로 ----
+export interface CardMask {
+	/** 쉼표·줄바꿈으로 나눈 말. 같은 길이의 ●로 가린다 */
+	hide: string;
+	/** "원래=바꿀말" 한 줄에 하나 (쉼표로 이어도 됨) */
+	replace: string;
+}
+
+const split = (s: string) =>
+	s
+		.split(/[\n,]/)
+		.map((x) => x.trim())
+		.filter(Boolean);
+
+/** 긴 말부터 바꾼다 (짧은 말이 긴 말의 일부를 먼저 먹지 않게). 대소문자는 구분하지 않는다 */
+export function maskText(text: string, mask: CardMask): string {
+	const esc = (s: string) => s.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+	const pairs: [string, string][] = split(mask.replace)
+		.map((l) => l.split("="))
+		.filter((p) => p.length >= 2 && p[0].trim())
+		.map((p) => [p[0].trim(), p.slice(1).join("=").trim()]);
+	let out = text;
+	for (const [from, to] of pairs.sort((a, b) => b[0].length - a[0].length)) out = out.replace(new RegExp(esc(from), "gi"), to);
+	for (const w of split(mask.hide).sort((a, b) => b.length - a.length)) out = out.replace(new RegExp(esc(w), "gi"), (m) => "●".repeat([...m].length));
+	return out;
+}
