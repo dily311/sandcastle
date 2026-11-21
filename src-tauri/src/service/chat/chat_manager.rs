@@ -69,6 +69,15 @@ fn phone_defaults(app: &AppHandle, mode: &str, req: &mut ChatRequest) {
 }
 
 /// 대화에서 고른 모델 (ADR-020). 대화에 API 프로필이 정해져 있을 때만 쓴다 — 앱 기본 API를 따라가는 대화에는 모델 이름이 딸려 있지 않다
+/// 대화에서 고른 추론 강도 (meta.reasoningEffort). 없거나 "auto"면 프리셋·공급자 기본
+fn conv_effort(meta: Option<&Value>) -> Option<String> {
+    meta.and_then(|m| m.get("reasoningEffort"))
+        .and_then(Value::as_str)
+        .map(str::trim)
+        .filter(|s| !s.is_empty() && *s != "auto")
+        .map(str::to_string)
+}
+
 fn conv_model(conv: &crate::models::conversation::Conversation) -> Option<String> {
     conv.api_profile_id.as_deref().filter(|s| !s.is_empty())?;
     conv.model.clone().filter(|m| !m.trim().is_empty())
@@ -179,6 +188,7 @@ impl ChatManager {
                     &state.db,
                     profile,
                     game_model,
+                    None,
                     Some(preset),
                     context,
                     message,
@@ -205,6 +215,7 @@ impl ChatManager {
         db: &crate::db::conn::DbPool,
         profile_id: String,
         model: Option<String>,
+        effort: Option<String>,
         preset_id: Option<String>,
         context: ChatContext,
         message: String,
@@ -227,6 +238,10 @@ impl ChatManager {
             )
             .await?;
         prompt.chat_options.stream = stream;
+        // 대화에서 고른 추론 강도가 프리셋 값보다 앞선다 (5-E-7). 모델이 받지 않는 값이면 AiService가 거른다
+        if let Some(e) = effort {
+            prompt.chat_options.reasoning_effort = Some(e);
+        }
 
         let ai = app
             .try_state::<Arc<AiService>>()
@@ -761,6 +776,7 @@ impl ChatManager {
                 db,
                 api_profile_id.clone(),
                 conv_model(&conv).or_else(|| fallback_model(&conv, &fallback.model)),
+                conv_effort(conv.meta.as_ref()),
                 Some(preset_id.clone()),
                 context,
                 prompt_input,
@@ -1106,6 +1122,7 @@ impl ChatManager {
                 db,
                 api_profile_id.clone(),
                 conv_model(&conv).or_else(|| fallback_model(&conv, &fallback.model)),
+                conv_effort(conv.meta.as_ref()),
                 Some(preset_id.clone()),
                 context,
                 format!("({}와 {}의 메신저 대화를 이어서 써)", me.name, other.name),
@@ -1281,6 +1298,14 @@ mod continue_tests {
         assert_eq!(join_continue("세라피", "나가"), "세라피나가");
         assert_eq!(join_continue("\"좋아\"", "그녀가"), "\"좋아\" 그녀가");
         assert_eq!(join_continue("", "처음"), "처음");
+    }
+
+    #[test]
+    fn conversation_effort_overrides_only_when_set() {
+        assert_eq!(conv_effort(Some(&json!({ "reasoningEffort": "high" }))).as_deref(), Some("high"));
+        assert_eq!(conv_effort(Some(&json!({ "reasoningEffort": "auto" }))), None);
+        assert_eq!(conv_effort(Some(&json!({ "reasoningEffort": null }))), None);
+        assert_eq!(conv_effort(None), None);
     }
 
     #[test]

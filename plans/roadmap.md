@@ -299,7 +299,7 @@
 - 5-E-4 여러 채팅 파일 올리기 — 진행 막대·멈추기, 한 파일일 때만 그 대화로 이동. 어디: `ConvSidebar.svelte`·`library.svelte.ts`. 완료: 미리보기.
 - 5-E-5 앱을 열면 마지막 페이지 — 홈을 시작 화면으로 고른 사용자는 홈. 어디: 앱 설정(기기 전용 칸), 탐색 store. 완료: 미리보기에서 다시 열기.
 - [x] 5-E-6 읽기 모드 — `conversations.read_mode INTEGER NOT NULL DEFAULT 0`(마이그레이션 004), 커맨드 `set_conversation_read_mode`, 대화 화면의 읽기/채팅 모드 버튼이 대화에 저장(켜면 보내는 줄을 숨김). 어디: 마이그레이션 004, `db/chat_ui.rs`, `commands/chat.rs`, `library.svelte.ts`, `ChatView.svelte`, dev-mock. 완료: 미리보기에서 켜고 다른 화면에 갔다 와도 유지, cargo test 통과. 폰 대화 화면에는 아직 없음.
-- 5-E-7 추론 강도 — 모델 선택 옆에 auto(기본)·낮음·중간·높음. 대화에 저장, auto는 보내지 않음. 어디: `ChatPanel.svelte`, `chat_options.reasoning_effort`. 완료: 보낸 컨텍스트·요청에 반영(가짜 서버).
+- [x] 5-E-7 추론 강도 — 대화 설정 탭의 모델 아래에 "추론 강도"(auto = 프리셋·공급자 기본, 모델 목록의 `reasoning.levels`). 대화 meta `reasoningEffort`에 저장하고 `generate_with`가 프리셋 값보다 앞서 넣음(받지 않는 모델이면 AiService가 거름, ADR-020 추가). 모델이 강도를 받지 않으면 칸을 숨김. 어디: `ChatPanel.svelte`, `chat_manager.rs`(`conv_effort`). 완료: 단위 테스트, 미리보기에서 고른 값이 대화에 남음. 게임 플레이는 아직 프리셋 값만. **확인 못 함**: 실제 공급자 요청.
 - 5-E-8 대화 목록 — 검색창 `mes:글`은 그 글이 든 메시지가 있는 대화, 정렬에 "최근 본"(대화를 연 시각, 기기 전용), 처음 열 때 지난 목록을 먼저 보여 주고 뒤에서 새로 읽기. 어디: `ConvSidebar.svelte`, `db/conversation.rs`.
 - 5-E-9 메시지 버블 — 대화 설정에서 프로필 그림 보이기(기본 지금처럼 숨김), 코드 블록 밖 HTML을 스크립트 없이 그리기(**결정 필요**: ADR-004는 AI 답의 HTML을 ```html 블록만 그림 — 바꾸면 ADR 갱신).
 - 5-E-10 오른쪽 패널 정리 — 개요 탭에는 사용자가 쓰는 것만. 요약·메모리 검색은 "메모리" 탭, linter는 따로 탭. 어디: `ChatPanel.svelte`.

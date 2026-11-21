@@ -10,6 +10,7 @@
 	import BookPicker from "$features/lorebook/BookPicker.svelte";
 	import ContextMeter from "./ContextMeter.svelte";
 	import ModelPicker from "$features/settings/ModelPicker.svelte";
+	import { reasoningOf } from "$features/settings/providers";
 	import { appSetting } from "$shared/stores/appSetting.svelte";
 	import ExportButton from "./ExportButton.svelte";
 	import PresetInline from "$features/settings/PresetInline.svelte";
@@ -80,6 +81,9 @@
 	}
 	// 이 대화가 쓰는 API 프로필 (대화에 정한 것, 없으면 앱 기본값) — 모델 고르기가 그 프로필의 목록을 보여준다
 	const effectiveApi = $derived(library.apis.find((a) => a.id === (conv.apiProfileId || appSetting.value?.selectedApiProfile || "")));
+	/** 이 대화의 추론 강도 (5-E-7). auto = 프리셋·공급자 기본. 모델이 강도를 받을 때만 보인다 */
+	const reasoning = $derived(reasoningOf(conv.model || effectiveApi?.model || null));
+	const effort = $derived(((conv.meta as { reasoningEffort?: string } | null)?.reasoningEffort ?? "auto") as string);
 	/** 모델을 고르면 그 API도 이 대화에 못 박는다 (앱 기본 API가 나중에 바뀌어도 이 모델이 엉뚱한 공급자로 가지 않게) */
 	function pickModel(model: string | null) {
 		if (!conv.apiProfileId && effectiveApi) return setOption({ apiProfileId: effectiveApi.id, model });
@@ -456,6 +460,16 @@
 				<h4>이 대화</h4>
 				<label class="row"><span>API</span><Select value={conv.apiProfileId ?? DEFAULT} options={apiOptions} onchange={(e) => setOption({ apiProfileId: e.currentTarget.value })} /></label>
 					<div class="row"><span>모델</span><ModelPicker profile={effectiveApi} value={conv.model} onchange={pickModel} label="이 대화의 모델" /></div>
+				{#if reasoning}
+					<label class="row"
+						><span>추론 강도</span><Select
+							value={effort}
+							options={[{ value: "auto", label: reasoning.default ? `auto (${reasoning.default})` : "auto" }, ...reasoning.levels.map((l) => ({ value: l, label: l }))]}
+							aria-label="이 대화의 추론 강도"
+							onchange={(e) => library.patchMeta(conv.id, { reasoningEffort: e.currentTarget.value === "auto" ? null : e.currentTarget.value })}
+						/></label
+					>
+				{/if}
 				<div class="row">
 					<span>프리셋</span>
 					<div class="with-btn">
