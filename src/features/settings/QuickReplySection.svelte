@@ -66,12 +66,16 @@
 		await quickReplies.remove(s.id);
 	}
 	async function importSt() {
-		const [path] = await pickFiles([JSON_FILES], false);
-		if (!path) return;
-		const [input, warnings] = await call(commands.readQuickReplySet(path), { source: "slash" });
-		const s = await quickReplies.save({ ...input, sortOrder: quickReplies.sets.length });
-		open[s.id] = true;
-		toasts.success(`'${s.name}' 세트를 가져옴 · 버튼 ${s.items.length}개`);
+		// 세트(.json)·버튼 하나(.qr.json) 여러 개. 버튼 파일들은 세트 하나로 묶여 온다
+		const paths = await pickFiles([JSON_FILES], true);
+		if (!paths.length) return;
+		const [inputs, warnings] = await call(commands.readQuickReplyFiles(paths), { source: "slash" });
+		for (const input of inputs) {
+			const s = await quickReplies.save({ ...input, sortOrder: quickReplies.sets.length });
+			open[s.id] = true;
+		}
+		const buttons = inputs.reduce((n, s) => n + s.items.length, 0);
+		toasts.success(`세트 ${inputs.length}개를 가져옴 · 버튼 ${buttons}개`);
 		if (warnings.length) toasts.info(warnings.join(" · "));
 	}
 </script>

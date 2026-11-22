@@ -68,19 +68,57 @@ pub async fn export_preset_sillytavern(state: State<'_, AppState>, id: String, p
     std::fs::write(PathBuf::from(path), text).map_err(|e| crate::error::AppError::io(format!("파일을 쓸 수 없습니다: {e}")))
 }
 
-/// SillyTavern 빠른 답장 세트(.json) 읽기. 저장은 화면이 범위를 고른 뒤 upsert_quick_reply_set으로 한다
+/// SillyTavern 빠른 답장 파일 읽기 (세트 .json 또는 버튼 하나 .qr.json, 여러 개).
+/// 세트 파일은 각각 세트로, 버튼 파일들은 모아서 세트 하나("가져온 빠른 답장")로. 저장은 화면이 upsert_quick_reply_set으로 한다
 #[tauri::command]
 #[specta::specta]
-pub fn read_quick_reply_set(path: String) -> Result<(crate::models::quick_reply::QuickReplySetInput, Vec<String>)> {
-    let path = PathBuf::from(path);
-    let meta = std::fs::metadata(&path).map_err(|e| crate::error::AppError::io(format!("파일을 열 수 없습니다: {e}")))?;
-    if meta.len() > 10 * 1024 * 1024 {
-        return Err(crate::error::AppError::validation("파일이 너무 큽니다 (10MB 이하)", None));
-    }
-    let json: serde_json::Value =
-        serde_json::from_slice(&std::fs::read(&path)?).map_err(|e| crate::error::AppError::validation(format!("JSON 파일을 읽을 수 없습니다: {e}"), None))?;
-    let name = path.file_stem().map(|s| s.to_string_lossy().to_string()).unwrap_or_else(|| "빠른 답장".into());
+pub fn read_quick_reply_files(paths: Vec<String>) -> Result<(Vec<crate::models::quick_reply::QuickReplySetInput>, Vec<String>)> {
+    use crate::service::import::sillytavern::quick_reply as qr;
+    let mut sets = vec![];
+    let mut singles = vec![];
     let mut warnings = vec![];
-    let set = crate::service::import::sillytavern::quick_reply::map_qr_set(&json, &name, &mut warnings)?;
-    Ok((set, warnings))
+    for path in paths.iter().map(PathBuf::from) {
+        let name = path.file_name().map(|s| s.to_string_lossy().to_string()).unwrap_or_default();
+        let read = || -> Result<serde_json::Value> {
+            let meta = std::fs::metadata(&path).map_err(|e| crate::error::AppError::io(format!("파일을 열 수 없습니다: {e}")))?;
+            if meta.len() > 10 * 1024 * 1024 {
+                return Err(crate::error::AppError::validation("파일이 너무 큽니다 (10MB 이하)", None));
+            }
+            serde_json::from_slice(&std::fs::read(&path)?).map_err(|e| crate::error::AppError::validation(format!("JSON 파일을 읽을 수 없습니다: {e}"), None))
+        };
+        let json = match read() {
+            Ok(v) => v,
+            Err(e) => {
+                warnings.push(format!("{name}: {e}"));
+                continue;
+            }
+        };
+        if qr::is_single_qr(&json) {
+            if let Some(q) = qr::map_qr_item(&json, &mut warnings) {
+                singles.push(q);
+            }
+            continue;
+        }
+        let stem = path.file_stem().map(|s| s.to_string_lossy().to_string()).unwrap_or_else(|| "빠른 답장".into());
+        match qr::map_qr_set(&json, &stem, &mut warnings) {
+            Ok(set) => sets.push(set),
+            Err(e) => warnings.push(format!("{name}: {e}")),
+        }
+    }
+    if !singles.is_empty() {
+        sets.push(crate::models::quick_reply::QuickReplySetInput {
+            id: None,
+            name: "가져온 빠른 답장".into(),
+            scope: "global".into(),
+            scope_id: None,
+            enabled: true,
+            auto_send: false,
+            items: singles,
+            sort_order: 0,
+        });
+    }
+    if sets.is_empty() && !warnings.is_empty() {
+        return Err(crate::error::AppError::validation(warnings.join(" · "), None));
+    }
+    Ok((sets, warnings))
 }

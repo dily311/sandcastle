@@ -195,8 +195,11 @@ export const commands = {
 	exportSillytavernData: (path: string, options?: InvokeOptions) => __TAURI_INVOKE<SillyTavernDataExport>("export_sillytavern_data", { path }, options),
 	/**  프리셋 하나를 SillyTavern Chat Completion 프리셋(.json)으로 (프리셋에 묶인 정규식 포함) */
 	exportPresetSillytavern: (id: string, path: string, options?: InvokeOptions) => __TAURI_INVOKE<null>("export_preset_sillytavern", { id, path }, options),
-	/**  SillyTavern 빠른 답장 세트(.json) 읽기. 저장은 화면이 범위를 고른 뒤 upsert_quick_reply_set으로 한다 */
-	readQuickReplySet: (path: string, options?: InvokeOptions) => __TAURI_INVOKE<[QuickReplySetInput_Serialize, string[]]>("read_quick_reply_set", { path }, options),
+	/**
+	 *  SillyTavern 빠른 답장 파일 읽기 (세트 .json 또는 버튼 하나 .qr.json, 여러 개).
+	 *  세트 파일은 각각 세트로, 버튼 파일들은 모아서 세트 하나("가져온 빠른 답장")로. 저장은 화면이 upsert_quick_reply_set으로 한다
+	 */
+	readQuickReplyFiles: (paths: string[], options?: InvokeOptions) => __TAURI_INVOKE<[QuickReplySetInput_Serialize[], string[]]>("read_quick_reply_files", { paths }, options),
 	/**  목록. 처음 한 번, 예전처럼 설정에 둔 세트(5-E-20-5-3)가 있으면 전역 세트로 옮기고 설정에서 비운다 */
 	listQuickReplySets: (options?: InvokeOptions) => __TAURI_INVOKE<QuickReplySet_Serialize[]>("list_quick_reply_sets", undefined, options),
 	upsertQuickReplySet: (input: QuickReplySetInput_Deserialize, options?: InvokeOptions) => __TAURI_INVOKE<QuickReplySet_Serialize>("upsert_quick_reply_set", { input }, options),
