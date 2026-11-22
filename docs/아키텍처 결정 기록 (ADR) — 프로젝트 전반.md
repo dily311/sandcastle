@@ -164,6 +164,8 @@ Conversation
 
 **추가 (2026-11-22, 5-E-9, 사용자 결정)**: 코드 블록 밖의 HTML도 그린다 — 단 **JS 없이**. 메시지에서 태그로 시작하는 줄부터 태그가 모두 닫히는 줄까지를 HTML 블록으로 떼어(`format.ts`의 `safeHtml`, HTML 렌더링 코어 플러그인이 켜졌을 때만) 같은 `htmlview` iframe으로 그리되, 그 문서의 CSP를 `script-src 'nonce-…'`로 바꿔 앱이 붙이는 높이·편의 스크립트만 돌게 한다(글쓴이의 `<script>`·`onclick`·`javascript:`는 막힘, `data-sc-send` 같은 스크립트 없는 버튼은 동작). ```html 블록은 지금처럼 JS 허용. 한 줄 안에 섞인 태그(`그녀는 <b>웃었다</b>`)는 블록으로 떼지 않고 글자로 남는다.
 
+**추가 (2026-11-22, 5-E-9-2, 사용자 결정)**: 위 "스크립트 막은 iframe"을 바꾼다. 사용자의 뜻은 "```html 블록 = JS까지 도는 작은 페이지, 코드 블록 밖 `<details>` 같은 태그 = 메시지 안의 UI 표시"였다. 그래서 코드 블록 밖 HTML은 iframe 없이 **메시지 안에 바로** 그린다 — 앱 글꼴·색을 그대로 받고, 접기·표가 글과 한 흐름으로 보인다. 대신 허용 목록으로 거른다(`src/shared/html/sanitize.ts`, DOMParser로 읽기만 함): 서식·표·목록·`details/summary`·그림 같은 태그와 `class`·`style`·`open` 같은 속성만 남기고, `script`·`style` 시트·`iframe`·폼·`svg`는 내용째 버리며, `on*` 속성은 모두 뺀다. 링크(`<a>`)는 앱 창이 그 주소로 넘어가지 않게 글자(주소는 툴팁)로 바꾸고, 그림은 `https:`·`data:image/`만, 인라인 CSS에서는 `url()`·`position: fixed/sticky`를 뺀다. 감싸는 칸은 `contain: layout paint; overflow: hidden`이라 메시지 밖으로 넘쳐 앱 화면을 덮지 못한다. 줄바꿈은 블록 태그 사이가 아닌 곳만 `<br>`로. HTML 렌더링 코어 플러그인이 꺼져 있으면 지금처럼 글자로 보인다. ```html 블록은 바뀌지 않는다(iframe, JS 허용). 고르지 않은 안: DOMPurify 같은 라이브러리 — 허용할 태그가 적고 링크·CSS를 앱 사정에 맞게 바꿔야 해서 직접 쓴 짧은 허용 목록으로 충분했다. 백엔드의 스크립트 없는 iframe(`register_with(scripts=false)`)은 지금 쓰는 곳이 없지만 지우지 않고 둔다.
+
 ### ADR-005 코어 플러그인 (기능 토글)과 AI 도구
 
 **상태** Accepted (2026-11-16)

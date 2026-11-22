@@ -1,6 +1,7 @@
 <script lang="ts">
 	// 메시지·캐릭터 개요 공통 본문 (format.ts의 블록을 그린다)
 	import { Avatar, HtmlView } from "$shared/ui";
+	import { htmlWithBreaks, sanitizeHtml } from "$shared/html/sanitize";
 	import type { Block, Inline } from "./format";
 
 	/** avatars: 말한 사람 이름 → 그림 주소 (다인봇, 없으면 이름 첫 글자) */
@@ -31,8 +32,11 @@
 				<tbody>{#each b.rows as r, k (k)}<tr>{#each r as c, l (l)}<td>{@render parts(c)}</td>{/each}</tr>{/each}</tbody>
 			</table>
 		</div>
+	{:else if b.kind === "html" && b.scripts === false}
+		<!-- 코드 블록 밖 HTML: 허용 목록으로 거른 뒤 UI로 바로 그린다 (JS 없음) -->
+		<div class="ui-html">{@html sanitizeHtml(htmlWithBreaks(b.code))}</div>
 	{:else if b.kind === "html"}
-		<HtmlView code={b.code} scripts={b.scripts !== false} />
+		<HtmlView code={b.code} />
 	{:else if images[b.key]}
 		<figure class="cg"><img src={images[b.key]} alt={b.key} loading="lazy" /><figcaption>{b.key}</figcaption></figure>
 	{/if}
@@ -149,6 +153,28 @@
 		color: var(--text-faint);
 		opacity: 0;
 		height: 0;
+	}
+	.ui-html {
+		position: relative;
+		max-width: 100%;
+		overflow: hidden;
+		contain: layout paint;
+		overflow-wrap: anywhere;
+	}
+	.ui-html :global(details) {
+		margin: 0.4em 0;
+	}
+	.ui-html :global(summary) {
+		cursor: pointer;
+	}
+	.ui-html :global(img) {
+		max-width: 100%;
+	}
+	.ui-html :global(table) {
+		max-width: 100%;
+	}
+	.ui-html :global(.html-link) {
+		text-decoration: underline;
 	}
 	.say .who {
 		display: inline-flex;
