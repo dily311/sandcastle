@@ -371,6 +371,11 @@ export const commands = {
 	/**  캐릭터를 게임에 넣음 (게임 캐릭터는 원본 캐릭터를 기억함). 아바타는 게임 에셋으로 따로 넣어야 함 */
 	copyCharacterToGame: (characterId: string, gameId: string, options?: InvokeOptions) => __TAURI_INVOKE<GameCharacters_Serialize>("copy_character_to_game", { characterId, gameId }, options),
 	copyGameCharacterToCharacter: (gameCharacterId: string, options?: InvokeOptions) => __TAURI_INVOKE<Character_Serialize>("copy_game_character_to_character", { gameCharacterId }, options),
+	/**
+	 *  게임을 일반 대화용 "세계" 캐릭터로 복사한다. NPC·아이템·장소·이벤트는 분류를 붙인 새 로어북에, 게임에 연결된 로어북은 그대로 연결.
+	 *  session_id를 주면 그 플레이 기록을 "여러 캐릭터"를 켠 대화로 옮긴다 (연출 태그는 걷음). 변수·관계 값은 옮기지 않는다 (ADR-023)
+	 */
+	copyGameToCharacter: (gameId: string, sessionId: string | null, options?: InvokeOptions) => __TAURI_INVOKE<GameCopy_Serialize>("copy_game_to_character", { gameId, sessionId }, options),
 	toggleFavoriteCharacter: (id: string, isFavorite: boolean, options?: InvokeOptions) => __TAURI_INVOKE<null>("toggle_favorite_character", { id, isFavorite }, options),
 	deleteCharacter: (id: string, options?: InvokeOptions) => __TAURI_INVOKE<TrashItem>("delete_character", { id }, options),
 	getListCharacters: (options?: InvokeOptions) => __TAURI_INVOKE<CharacterOption[]>("get_list_characters", undefined, options),
@@ -2066,6 +2071,27 @@ export type GameConversations_Serialize = {
 	title: string | null,
 	createdAt: number,
 	updatedAt: number,
+};
+
+/**  복사 결과 */
+export type GameCopy = GameCopy_Serialize | GameCopy_Deserialize;
+
+/**  복사 결과 */
+export type GameCopy_Deserialize = {
+	character: Character_Deserialize,
+	/**  새로 만든 로어북 (NPC·아이템·장소·이벤트) */
+	bookId: string,
+	/**  플레이 기록을 옮겼으면 그 대화 */
+	conversation?: Conversation_Deserialize | null,
+};
+
+/**  복사 결과 */
+export type GameCopy_Serialize = {
+	character: Character_Serialize,
+	/**  새로 만든 로어북 (NPC·아이템·장소·이벤트) */
+	bookId: string,
+	/**  플레이 기록을 옮겼으면 그 대화 */
+	conversation: Conversation_Serialize | null,
 };
 
 export type GameEncounterEntriesInput = GameEncounterEntriesInput_Serialize | GameEncounterEntriesInput_Deserialize;

@@ -1,6 +1,6 @@
 <script lang="ts">
 	import { onMount } from "svelte";
-	import { AlertTriangle, ImagePlus, X, ChevronRight, Download, Ellipsis, Gamepad2, Pencil, Play, Plus, Trash2, Users } from "@lucide/svelte";
+	import { AlertTriangle, ImagePlus, X, ChevronRight, Download, Ellipsis, Gamepad2, MessageSquare, Pencil, Play, Plus, Trash2, Users } from "@lucide/svelte";
 	import { Avatar, Badge, Button, ContextMenu, EmptyState, IconButton, Segmented, Spinner, type MenuItem } from "$shared/ui";
 	import { call, commands } from "$shared/ipc/client";
 	import { GAME_FILES, IMAGE_FILES, pickFiles, saveIntoPicked, saveTo } from "$shared/ipc/dialog";
@@ -100,6 +100,25 @@
 		return `${Math.floor(m / 60) % 24}:${String(m % 60).padStart(2, "0")}`;
 	};
 
+	/** 게임 → "세계" 캐릭터 + 분류된 로어북 (+ 플레이 기록을 "여러 캐릭터" 대화로) (5-F-3). 원본 게임은 그대로 */
+	let copying = $state(false);
+	async function copyToChat(s: Session | null) {
+		if (copying) return;
+		copying = true;
+		try {
+			const r = await call(commands.copyGameToCharacter(gameId, s?.id ?? null), { source: "game" });
+			await library.load();
+			const convId = r.conversation?.id;
+			toasts.show({
+				tone: "success",
+				message: convId ? `캐릭터 '${r.character.name}'와 대화를 만듦 (변수·관계 값은 옮기지 않음)` : `캐릭터 '${r.character.name}'와 로어북을 만듦`,
+				action: { label: "열기", run: () => nav.go({ page: "character", charId: r.character.id, convId }) },
+			});
+		} finally {
+			copying = false;
+		}
+	}
+
 	/** 플레이 기록 → SillyTavern 채팅 (5-E-20-3). 연출 태그는 걷고 선택지는 줄로 */
 	async function exportSession(s: Session) {
 		const title = `${game?.project.title ?? "game"} - ${sceneName(s.currentSceneId)}`;
@@ -116,6 +135,7 @@
 	let more = $state<{ x: number; y: number; align?: "start" | "end" } | null>(null);
 	const moreItems: MenuItem[] = [
 		{ label: layout.desktop ? "내보내기 (다운로드 폴더)" : "내보내기", icon: Download, onselect: exportGame },
+		{ label: "캐릭터·로어북으로 복사", icon: Users, onselect: () => void copyToChat(null) },
 		{ label: "삭제", icon: Trash2, danger: true, separator: true, onselect: removeGame },
 	];
 	async function exportGame() {
@@ -199,6 +219,7 @@
 								<span class="t"><b>{sceneName(s.currentSceneId)}</b><small title={absolute(s.updatedAt)}>게임 시각 {clock(s.gameTime)} · {s.headSeq}턴 · {relative(s.updatedAt)}{s.parentSessionId ? " · 갈래" : ""}</small></span>
 								<ChevronRight />
 							</button>
+							<IconButton label="일반 대화로 복사 (캐릭터·로어북과 함께)" size="sm" disabled={copying} onclick={() => void copyToChat(s)}><MessageSquare /></IconButton>
 							<IconButton label="SillyTavern 채팅(.jsonl)으로 내보내기" size="sm" onclick={() => exportSession(s)}><Download /></IconButton>
 							<IconButton label="세션 삭제" size="sm" onclick={() => removeSession(s)}><Trash2 /></IconButton>
 						</li>

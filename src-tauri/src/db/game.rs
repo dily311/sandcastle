@@ -3297,7 +3297,6 @@ pub async fn forked_game_conversations(tx: &mut Transaction<'_, Sqlite>, session
             "
             INSERT INTO game_conversations (
                 id, game_id, session_id, branch_key, participants_key, title, created_at, updated_at 
-                FROM game_conversations 
             )
             SELECT 
                 ?,game_id, ?, branch_key, participants_key, title, created_at, updated_at 

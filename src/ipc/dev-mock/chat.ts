@@ -461,6 +461,7 @@ AI: 그때 이야기를 다시 해 볼까요?`, stale: false },
 		return view(c);
 	},
 	export_game_session: () => 0,
+	copy_game_to_character: () => ({ character: characters[0], bookId: "b", conversation: null }),
 	branch_conversation: ({ id, messageId }) => {
 		const src = conv(id);
 		const list = msgsOf(id);
