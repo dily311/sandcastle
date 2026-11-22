@@ -227,6 +227,11 @@ pub async fn copy_game_to_character(app: AppHandle, state: State<'_, AppState>, 
         .map_err(|_| AppError::not_found(format!("게임을 찾을 수 없습니다: {game_id}")))?;
     let avatar = copy_avatar_file(&app, project.cover_image.as_deref(), "character");
     let (char_id, book_id, conv_id) = copy_game_core(&state.db, &game_id, session_id.as_deref(), avatar).await?;
+    // NPC 스탠딩 → 캐릭터 에셋 (파일 복사, 실패해도 복사 자체는 끝난 것으로)
+    let base = app_data_dir(&app)?;
+    if let Err(e) = copy_npc_standings(&state.db, &base.join("games").join(&game_id), &base, &game_id, &char_id).await {
+        eprintln!("[convert] NPC 스탠딩 복사 실패: {e}");
+    }
     let conversation = match conv_id {
         Some(id) => Some(conversation::get_conversation(&state.db, &id).await?),
         None => None,
@@ -252,6 +257,15 @@ pub(crate) async fn copy_game_core(
     let items = game::get_all_game_items(db, game_id).await?;
     let locations = game::get_all_game_locations(db, game_id).await?;
     let events = game::get_all_game_events(db, game_id).await?;
+    // 시작 씬의 설명 → 첫 메시지
+    let first_message = match &project.start_scene_key {
+        Some(k) => game::get_all_game_scenes(db, game_id)
+            .await?
+            .into_iter()
+            .find(|s| &s.scene_key == k)
+            .and_then(|s| none_if_blank(s.description)),
+        None => None,
+    };
     let messages = match session_id {
         Some(sid) => Some(game::get_session_game_messages(db, sid).await?),
         None => None,
@@ -281,7 +295,7 @@ pub(crate) async fn copy_game_core(
         avatar,
         description: project.description.clone().unwrap_or_default(),
         alternate_descriptions: vec![],
-        first_message: None,
+        first_message,
         alternate_first_message: vec![],
         example_dialogue: None,
         system_prompt_override: None,
@@ -352,6 +366,28 @@ pub(crate) async fn copy_game_core(
     Ok((c.id, book.id, conv_id))
 }
 
+/// 게임 NPC의 스탠딩 그림을 캐릭터 에셋으로 (공통 폴더, 키 `NPC이름_감정`). 원본 게임 파일은 그대로. 넣은 수
+pub(crate) async fn copy_npc_standings(db: &crate::db::conn::DbPool, game_dir: &Path, app_data_dir: &Path, game_id: &str, character_id: &str) -> Result<usize> {
+    let npcs = game::get_all_game_characters(db, game_id).await?;
+    let items: Vec<(std::path::PathBuf, String, Option<String>)> = game::get_all_character_assets(db, game_id)
+        .await?
+        .into_iter()
+        .filter(|a| a.usage == "standing")
+        .filter_map(|a| {
+            let npc = npcs.iter().find(|n| Some(&n.id) == a.game_character_id.as_ref())?;
+            let emotion = a.emotion.as_deref().map(str::trim).filter(|e| !e.is_empty()).unwrap_or("default");
+            let path = game_dir.join(&a.base.file_path);
+            path.is_file().then(|| (path, String::new(), Some(format!("{}_{}", npc.name.trim(), emotion))))
+        })
+        .collect();
+    if items.is_empty() {
+        return Ok(0);
+    }
+    Ok(crate::service::chat::chat_images::add_images_keyed(db, app_data_dir, character_id, &items)
+        .await?
+        .len())
+}
+
 #[cfg(test)]
 mod game_copy_tests {
     #[tokio::test]
@@ -359,7 +395,8 @@ mod game_copy_tests {
         let dir = tempfile::tempdir().unwrap();
         let db = crate::db::conn::init_pool(dir.path().to_path_buf()).await.unwrap();
         for sql in [
-            "INSERT INTO game_projects (id, title, description, template_id, created_at, updated_at) VALUES ('g', '숲의 수수께끼', '엘도리아 숲 이야기', 'vn', 1, 1)",
+            "INSERT INTO game_projects (id, title, description, template_id, start_scene_key, created_at, updated_at) VALUES ('g', '숲의 수수께끼', '엘도리아 숲 이야기', 'vn', 'intro', 1, 1)",
+            "INSERT INTO game_scenes (id, game_id, scene_name, description, scene_key, created_at, updated_at) VALUES ('sc', 'g', '시작', '숲 입구에서 눈을 뜬다.', 'intro', 1, 1)",
             "INSERT INTO game_characters (id, game_id, name, description, example_dialogue, created_at, updated_at) VALUES ('n1', 'g', '유나', '밝은 견습 기사', '유나: 안녕!', 1, 1)",
             "INSERT INTO game_characters (id, game_id, name, created_at, updated_at) VALUES ('n2', 'g', '빈 사람', 1, 1)",
             "INSERT INTO game_items (id, game_id, name, description, created_at, updated_at) VALUES ('i1', 'g', '은열쇠', '오래된 문을 연다', 1, 1)",
@@ -373,6 +410,7 @@ mod game_copy_tests {
         let (cid, book, conv) = super::copy_game_core(&db, "g", Some("s"), None).await.unwrap();
         let c = crate::db::conversation::get_character(&db, &cid).await.unwrap();
         assert_eq!(c.name, "숲의 수수께끼");
+        assert_eq!(c.first_message.as_deref(), Some("숲 입구에서 눈을 뜬다."), "시작 씬 설명이 첫 메시지");
         assert!(c.world_info_ids.contains(&book));
         let mut entries: Vec<(String, String)> = crate::db::conversation::get_all_worldinfo_entries(&db, &book)
             .await
@@ -398,5 +436,23 @@ mod game_copy_tests {
         );
         let meta = crate::db::conversation::get_conversation(&db, &conv).await.unwrap().meta.unwrap();
         assert_eq!(meta["multiChar"], true);
+
+        // NPC 스탠딩 → 캐릭터 에셋 (키 `이름_감정`, 공통 폴더)
+        let game_dir = dir.path().join("games").join("g");
+        std::fs::create_dir_all(game_dir.join("assets/character")).unwrap();
+        image::RgbImage::new(4, 4).save(game_dir.join("assets/character/a.webp")).unwrap();
+        for sql in [
+            "INSERT INTO game_assets (id, game_id, key, name, category, kind, file_path, created_at, updated_at) VALUES ('a1', 'g', 'yuna_happy', '유나 웃음', 'character', 'image', 'assets/character/a.webp', 1, 1), ('a2', 'g', 'yuna_map', '유나 지도', 'character', 'image', 'assets/character/a.webp', 1, 1), ('a3', 'g', 'gone', '없는 파일', 'character', 'image', 'assets/character/none.webp', 1, 1)",
+            "INSERT INTO character_assets (assets_id, game_character_id, usage, emotion) VALUES ('a1', 'n1', 'standing', 'happy'), ('a2', 'n1', 'map', NULL), ('a3', 'n1', 'standing', 'sad')",
+        ] {
+            sqlx::query(sqlx::AssertSqlSafe(sql)).execute(&db).await.unwrap_or_else(|e| panic!("{sql}: {e}"));
+        }
+        let n = super::copy_npc_standings(&db, &game_dir, dir.path(), "g", &cid).await.unwrap();
+        assert_eq!(n, 1, "지도 그림·파일이 없는 것은 빠짐");
+        let imgs = crate::db::character_image::get_character_images(&db, &cid, false).await.unwrap();
+        assert_eq!(
+            imgs.iter().map(|i| (i.key.as_str(), i.folder.as_str())).collect::<Vec<_>>(),
+            vec![("유나_happy", "")]
+        );
     }
 }

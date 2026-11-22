@@ -110,13 +110,24 @@ pub async fn add_images(db: &DbPool, app_data_dir: &Path, character_id: &str, pa
 
 /// 판 폴더와 함께 넣기 (ZIP의 하위 폴더 `v1/smile.png` → 판 `v1`, 5-E-21)
 pub async fn add_images_in(db: &DbPool, app_data_dir: &Path, character_id: &str, paths: &[(PathBuf, String)]) -> Result<Vec<CharacterImage>> {
+    let items: Vec<(PathBuf, String, Option<String>)> = paths.iter().map(|(p, f)| (p.clone(), f.clone(), None)).collect();
+    add_images_keyed(db, app_data_dir, character_id, &items).await
+}
+
+/// 키를 직접 정해 넣기 (None이면 파일 이름). 게임 → 캐릭터 복사에서 NPC 스탠딩을 `이름_감정` 키로 (5-F-3)
+pub async fn add_images_keyed(
+    db: &DbPool,
+    app_data_dir: &Path,
+    character_id: &str,
+    items: &[(PathBuf, String, Option<String>)],
+) -> Result<Vec<CharacterImage>> {
     if !db::conversation::char_exists(db, character_id).await? {
         return Err(AppError::not_found("존재하지 않는 캐릭터입니다"));
     }
     let mut added = vec![];
-    for (source, folder) in paths {
+    for (source, folder, given) in items {
         // 같은 키(파일 이름)가 이미 있으면 그 이미지를 새 파일로 덮어쓴다 (id·키·순서 유지)
-        let key = normalize_key(&key_from_path(source)).unwrap_or_else(|_| "image".to_string());
+        let key = normalize_key(&given.clone().unwrap_or_else(|| key_from_path(source))).unwrap_or_else(|_| "image".to_string());
         let existing: Option<(String, i64, bool, i64)> =
             sqlx::query_as("SELECT id, sort_order, enabled, created_at FROM character_images WHERE character_id = ? AND folder = ? AND key = ?")
                 .bind(character_id)
