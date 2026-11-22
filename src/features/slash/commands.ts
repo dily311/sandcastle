@@ -173,7 +173,7 @@ export function slashEnv(session: ChatSession, opts: SlashOpts = {}): ScriptEnv 
 		},
 		continue: async () => {
 			ai("continue");
-			await session.send("");
+			await session.continueLast();
 		},
 		regen: async () => {
 			ai("regen");

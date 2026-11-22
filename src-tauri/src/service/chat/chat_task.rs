@@ -56,6 +56,8 @@ pub enum ChatJob {
         auto: Option<AutoCtx>,
     },
     Peek,
+    /// 마지막 AI 메시지에 이어 쓰기 (5-E-26)
+    Continue,
 }
 
 /// 대화 id → 지금 기다리는 커맨드의 스트리밍 Channel
@@ -132,6 +134,7 @@ impl TaskExecutor for ChatTaskExecutor {
                 });
             }
             ChatJob::Regenerate { swipe, extra, auto } => TurnKind::Regenerate { swipe, extra, auto },
+            ChatJob::Continue => TurnKind::Continue,
             ChatJob::Send { text, attachments, ghost } => {
                 if input_already_saved(db, &conversation_id, &task.id).await? {
                     TurnKind::Reply
@@ -239,6 +242,7 @@ pub async fn run(app: &AppHandle, conversation_id: &str, job: ChatJob, channel: 
     let feature = if is_phone { crate::sys::plugins::id::PHONE } else { "chat" };
     let label = match &job {
         ChatJob::Send { .. } => "응답 생성",
+        ChatJob::Continue => "이어 쓰기",
         ChatJob::Regenerate { extra: Some(_), .. } => "지시와 함께 다시 생성",
         ChatJob::Regenerate { swipe: true, .. } => "다른 응답",
         ChatJob::Regenerate { swipe: false, .. } => "다시 생성",
@@ -305,6 +309,7 @@ mod tests {
                 attachments: vec![],
                 ghost: true,
             },
+            ChatJob::Continue,
             ChatJob::Regenerate {
                 swipe: true,
                 extra: None,

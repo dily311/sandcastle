@@ -42,7 +42,9 @@ const msgs = [
 	{ id: "m2", seq: 2, role: "assistant", name: null, content: "반가워요" },
 	{ id: "m3", seq: 3, role: "assistant", name: "카이", content: "나도 있어" },
 ];
-const session = { convId: "c", busy: false, messages: msgs, send: vi.fn(), regenerate: vi.fn(), removeMany } as never;
+const sendFn = vi.fn();
+const continueLast = vi.fn();
+const session = { convId: "c", busy: false, messages: msgs, send: sendFn, continueLast, regenerate: vi.fn(), removeMany } as never;
 
 beforeEach(() => {
 	call.mockClear();
@@ -126,5 +128,16 @@ describe("잘린 응답 (5-E-20-6-6)", () => {
 		const env = slashEnv(session);
 		expect((await runScript("/gen 잘림 시험", env)).pipe).toBe("AI:잘림 시험");
 		expect(show).toHaveBeenCalledWith(expect.objectContaining({ tone: "warning", message: expect.stringContaining("응답 길이 한도에서 잘림") }));
+	});
+});
+
+describe("/trigger와 /continue (5-E-26)", () => {
+	it("/trigger는 빈 보내기(새 AI 메시지), /continue는 이어 쓰기", async () => {
+		const env = slashEnv(session);
+		await runScript("/trigger", env);
+		expect(sendFn).toHaveBeenCalledWith("");
+		expect(continueLast).not.toHaveBeenCalled();
+		await runScript("/continue", env);
+		expect(continueLast).toHaveBeenCalledTimes(1);
 	});
 });

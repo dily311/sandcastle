@@ -225,7 +225,7 @@
 	let fileInput: HTMLInputElement | undefined = $state();
 	async function send() {
 		if (!session || session.busy || sending) return;
-		// 빈 입력도 보낼 수 있다: 사용자 메시지 없이 AI가 이어서 답함 (답이 오류로 안 왔을 때 다시 시도)
+		// 빈 입력도 보낼 수 있다: 사용자 메시지 없이 AI가 새 메시지로 답함 (이어 쓰기는 + 메뉴의 "이어서 응답 받기", 5-E-26)
 		const text = draft;
 		const items = pending;
 		// 슬래시 커맨드 (코어 플러그인 slash, 5-E-20-5): 메시지로 보내지 않고 스크립트로 실행
@@ -709,7 +709,7 @@
 				...(plugins.on("translate")
 					? [{ label: "입력 번역", icon: Languages, disabled: !draft.trim(), onselect: async () => (draft = await translateInput(draft).catch(() => draft)) }]
 					: []),
-				{ label: "이어서 응답 받기", icon: FastForward, separator: true, onselect: () => session?.send("") },
+				{ label: "이어서 응답 받기", icon: FastForward, separator: true, onselect: () => session?.continueLast() },
 				{
 					label: "마지막 응답 재생성",
 					icon: RefreshCw,

@@ -608,9 +608,18 @@ AI: 그때 이야기를 다시 해 볼까요?`, stale: false },
 		let user: Message_Serialize | null = null;
 		const files = (attachments as string[] | undefined) ?? [];
 		if (text.trim() || files.length) user = addMsg(c, "user", text.trim(), 0, files.length ? { attachments: files } : {});
-		// 이어쓰기: 일반 대화에서 빈 입력이고 마지막이 AI 메시지면 그 뒤에 붙인다 (백엔드와 같은 규칙)
+		// 빈 보내기는 사용자 메시지 없이 새 AI 메시지 (5-E-26 — 이어 쓰기는 chat_continue)
+		const r = await generate(conversationId, onEvent);
+		const assistant = addMsg(c, "assistant", r.content, 0, { info: r.info });
+		c.updatedAt = now();
+		return { user, assistant };
+	},
+	// 이어서 응답 받기: 마지막 AI 메시지 뒤에 이어 붙인다 (없으면 새 메시지)
+	chat_continue: async ({ conversationId, onEvent }): Promise<ChatTurn_Serialize> => {
+		const c = conv(conversationId);
+		const user: Message_Serialize | null = null;
 		const last = msgsOf(conversationId).at(-1);
-		if (!user && c.mode !== "phone" && last?.role === "assistant" && !(last.meta as { hidden?: boolean } | null)?.hidden) {
+		if (last?.role === "assistant" && !(last.meta as { hidden?: boolean } | null)?.hidden) {
 			const r = await generate(conversationId, onEvent);
 			const meta = { ...((last.meta as Record<string, unknown>) ?? {}), info: r.info } as Record<string, any>; // eslint-disable-line @typescript-eslint/no-explicit-any
 			const content = last.content + r.content;

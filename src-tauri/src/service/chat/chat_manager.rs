@@ -334,6 +334,8 @@ pub enum TurnKind {
     },
     /// 이미 저장된 마지막 사용자 메시지에 응답한다 (보내기 작업을 다시 시도할 때: 입력은 첫 시도에 저장됨)
     Reply,
+    /// 마지막 AI 메시지에 이어 쓴다 ("이어서 응답 받기", 5-E-26). 빈 보내기(`Send("")`)는 이어 쓰지 않고 새 AI 메시지를 만든다
+    Continue,
 }
 
 fn now_ms() -> i64 {
@@ -521,6 +523,11 @@ impl ChatManager {
         cancel: &CancellationToken,
         task_id: Option<&str>,
     ) -> Result<ChatTurn> {
+        // 이어 쓰기는 빈 보내기 + "이어 쓰기" 표시로 다룬다 (아래에서 이어 붙일 메시지를 찾는다)
+        let (kind, continue_last) = match kind {
+            TurnKind::Continue => (TurnKind::Send(String::new(), vec![], false), true),
+            k => (k, false),
+        };
         let conv = match get_conversation(db, conversation_id).await {
             Ok(c) => c,
             Err(sqlx::Error::RowNotFound) => return Err(AppError::not_found("대화를 찾을 수 없음").into()),
@@ -570,21 +577,17 @@ impl ChatManager {
                     _ => return Err(AppError::validation("다시 만들 AI 메시지가 없음", None).into()),
                 }
             }
-            TurnKind::Send(..) | TurnKind::Reply => None,
+            TurnKind::Send(..) | TurnKind::Reply | TurnKind::Continue => None,
         };
-        // 이어쓰기: 빈 입력(첨부도 없음)이고 마지막이 숨기지 않은 AI 메시지면 새 메시지를 만들지 않고 그 뒤에 이어 붙인다.
-        // 마지막이 사용자 메시지면(응답이 오류로 안 왔을 때) 지금처럼 새 응답을 만든다
-        // 폰 대화는 말풍선마다 한 메시지라 빈 보내기는 지금처럼 새 말풍선을 만든다
-        let continue_of = match &kind {
-            TurnKind::Send(t, imgs, _)
-                if t.trim().is_empty() && imgs.is_empty() && matches!(ConversationMode::parse_or_default(&conv.mode), ConversationMode::Chat) =>
-            {
-                chat_ui::last_message(db, conversation_id)
-                    .await
-                    .map_err(AppError::from)?
-                    .filter(|m| m.role == "assistant" && !is_hidden(m.meta.as_ref()))
-            }
-            _ => None,
+        // 이어 쓰기 (5-E-26): "이어서 응답 받기"일 때만 마지막(숨기지 않은) AI 메시지 뒤에 이어 붙인다.
+        // 빈 보내기는 이어 붙이지 않고 사용자 메시지 없이 새 AI 메시지를 만든다. 이어 붙일 AI 메시지가 없으면 새로 만든다
+        let continue_of = if continue_last {
+            chat_ui::last_message(db, conversation_id)
+                .await
+                .map_err(AppError::from)?
+                .filter(|m| m.role == "assistant" && !is_hidden(m.meta.as_ref()))
+        } else {
+            None
         };
 
         let mut context = ContextManager
@@ -607,7 +610,7 @@ impl ChatManager {
             (TurnKind::Send(text, images, _), _) => {
                 let t = text.trim().to_string();
                 context.user_images = images.clone();
-                let gt = if t.is_empty() && images.is_empty() {
+                let gt = if continue_of.is_some() {
                     GenerationType::Continue
                 } else {
                     GenerationType::Normal

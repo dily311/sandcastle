@@ -201,15 +201,11 @@ export class ChatSession {
 		else this.messages.push(m);
 	}
 
-	/** 보내기. 빈 입력(첨부도 없음)이면 저장 없이 이어서 응답 — 일반 대화에서 마지막이 AI 메시지면 그 메시지 뒤에 이어 쓴다(백엔드와 같은 규칙).
+	/** 보내기. 빈 입력(첨부도 없음)이면 사용자 메시지 없이 새 AI 메시지 (이어 쓰기는 continueLast, 5-E-26).
 	 * attachments: 디스크에 저장된 이미지 경로 */
-	async send(text: string, attachments: string[] = [], previews: string[] = [], ghost = false, mode: "chat" | "phone" = "chat") {
+	async send(text: string, attachments: string[] = [], previews: string[] = [], ghost = false, _mode: "chat" | "phone" = "chat") {
 		if (this.busy) return;
-		const last = this.last;
-		const cont = mode === "chat" && !text.trim() && !attachments.length && last?.role === "assistant" && !metaOf(last).hidden ? last : null;
-		this.live = cont
-			? { kind: "continue", text: "", targetId: cont.id, base: cont.content }
-			: { kind: "send", text: "", userText: text.trim() || undefined, userImages: previews.length ? previews : undefined };
+		this.live = { kind: "send", text: "", userText: text.trim() || undefined, userImages: previews.length ? previews : undefined };
 		try {
 			const turn = await call(commands.chatSend(this.convId, text, attachments, ghost, this.channel()), src);
 			await this.drain();
@@ -218,6 +214,26 @@ export class ChatSession {
 			this.runAfterReply(turn.assistant);
 		} catch {
 			// 입력은 응답 실패와 상관없이 저장돼 있을 수 있다
+			await this.load().catch(() => {});
+		} finally {
+			this.stopReveal();
+			this.live = null;
+			void library.refresh(this.convId);
+		}
+	}
+
+	/** 이어서 응답 받기: 마지막(숨기지 않은) AI 메시지 뒤에 이어 쓴다. 그런 메시지가 없으면 새 AI 메시지 (5-E-26) */
+	async continueLast() {
+		if (this.busy) return;
+		const last = this.last;
+		const cont = last?.role === "assistant" && !metaOf(last).hidden ? last : null;
+		this.live = cont ? { kind: "continue", text: "", targetId: cont.id, base: cont.content } : { kind: "send", text: "" };
+		try {
+			const turn = await call(commands.chatContinue(this.convId, this.channel()), src);
+			await this.drain();
+			this.replace(turn.assistant);
+			this.runAfterReply(turn.assistant);
+		} catch {
 			await this.load().catch(() => {});
 		} finally {
 			this.stopReveal();

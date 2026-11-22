@@ -55,6 +55,14 @@ pub async fn chat_send(
     chat_task::into_turn(saved)
 }
 
+/// 마지막 AI 메시지에 이어 쓰기 ("이어서 응답 받기", 5-E-26). 빈 보내기(chat_send "")는 새 AI 메시지를 만든다
+#[tauri::command]
+#[specta::specta]
+pub async fn chat_continue(app: AppHandle, conversation_id: String, on_event: Channel<StreamPayload>) -> Result<ChatTurn> {
+    let saved = chat_task::run(&app, &conversation_id, ChatJob::Continue, on_event).await?;
+    chat_task::into_turn(saved)
+}
+
 /// 마지막 AI 메시지 다시 만들기. `swipe`면 스와이프로 쌓고, 아니면 스와이프를 버리고 바꾼다. `extra`는 이번 생성에만 붙이는 지시.
 #[tauri::command]
 #[specta::specta]
