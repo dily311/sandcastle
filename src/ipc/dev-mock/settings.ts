@@ -413,6 +413,7 @@ export const settingsHandlers: Record<string, (a: Args) => unknown> = {
 	},
 
 	// ---- 가져오기 ----
+	export_sillytavern_data: () => ({ characters: 3, chats: 5, books: 2, personas: 2, regex: 1, warnings: [] }),
 	import_sillytavern_data: () => ({ characters: 2, chats: 3, books: 1, presets: 1, regex: 2, personas: 1, warnings: ["TextGen Settings: 4개 건너뜀 (Chat Completion 프리셋만 가져옴)", "단체 채팅 1개 건너뜀 (지원하지 않음)"] }),
 	import_sillytavern: ({ path }) => {
 		const p = { id: uid("p"), name: String(path).split(/[\\/]/).pop()!.replace(/\.json$/, ""), description: null, presetType: "chat_completion", sourceFormat: "sillytavern", configJson: {}, settingsJson: { temperature: 1 }, compatibilityJson: null, createdAt: now(), updatedAt: now() };

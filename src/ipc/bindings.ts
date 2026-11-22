@@ -191,6 +191,8 @@ export const commands = {
 	 *  캐릭터·채팅·로어북·프리셋·정규식·페르소나를 새로 만들기만 한다 (지금 데이터는 그대로).
 	 */
 	importSillytavernData: (path: string, options?: InvokeOptions) => __TAURI_INVOKE<SillyTavernDataImport>("import_sillytavern_data", { path }, options),
+	/**  샌드캐슬 데이터를 SillyTavern 사용자 폴더 모양 zip으로 (캐릭터 카드·채팅·로어북·페르소나·전역 정규식) */
+	exportSillytavernData: (path: string, options?: InvokeOptions) => __TAURI_INVOKE<SillyTavernDataExport>("export_sillytavern_data", { path }, options),
 	/**  캐릭터 → 채팅 트리, 개수, 저장 공간 */
 	getDataOverview: (options?: InvokeOptions) => __TAURI_INVOKE<DataOverview_Serialize>("get_data_overview", undefined, options),
 	/**  DB 점검: 무결성(PRAGMA integrity_check)과 아무 데도 쓰이지 않는 파일 목록. 지우지 않는다 */
@@ -4610,6 +4612,16 @@ export type SearchResult = {
 };
 
 export type Severity = "error" | "warning";
+
+export type SillyTavernDataExport = {
+	characters: number,
+	chats: number,
+	books: number,
+	personas: number,
+	regex: number,
+	/**  넣지 못한 것 (이름: 이유) */
+	warnings: string[],
+};
 
 export type SillyTavernDataImport = {
 	characters: number,

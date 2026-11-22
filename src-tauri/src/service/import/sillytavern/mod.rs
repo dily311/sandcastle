@@ -14,6 +14,7 @@
 pub mod card;
 pub mod chat;
 pub mod data;
+pub mod data_export;
 pub mod export;
 pub mod preset;
 pub mod regex;

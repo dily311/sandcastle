@@ -19,9 +19,21 @@
 	const src = { source: "data" };
 	let data = $state<Overview | null>(null);
 	let pending = $state<BackupManifest | null>(null);
-	let busy = $state<"backup" | "restore" | "st" | null>(null);
+	let busy = $state<"backup" | "restore" | "st" | "st-out" | null>(null);
 	/** SillyTavern 데이터 가져오기 결과 (5-E-20-4-1) */
 	let stResult = $state<SillyTavernDataImport | null>(null);
+	async function exportSt() {
+		try {
+			const r = await saveTo("sillytavern-default-user.zip", [ST_DATA_FILES], (path) => {
+				busy = "st-out";
+				return call(commands.exportSillytavernData(path), src);
+			});
+			if (r) toasts.success(`내보냄 · 캐릭터 ${r.characters}, 채팅 ${r.chats}, 로어북 ${r.books}, 페르소나 ${r.personas}, 정규식 ${r.regex}`);
+			if (r?.warnings.length) toasts.error(`넣지 못한 것 ${r.warnings.length}개`, r.warnings.join("\n"));
+		} finally {
+			busy = null;
+		}
+	}
 	async function importSt() {
 		const [path] = await pickFiles([ST_DATA_FILES], false);
 		if (!path) return;
@@ -218,6 +230,9 @@
 		<Group title="SillyTavern">
 			<Row label="SillyTavern 데이터 가져오기" desc="data/default-user 폴더를 압축한 zip(10GB까지). 새로 만들기만 하므로 다시 가져오면 한 벌 더 생김">
 				<Button size="sm" loading={busy === "st"} disabled={busy !== null} onclick={importSt}>{#snippet icon()}<Upload />{/snippet}가져오기</Button>
+			</Row>
+			<Row label="SillyTavern 모양으로 내보내기" desc="캐릭터 카드·채팅·로어북·페르소나·정규식. 프리셋·게임·폰 기능은 빠짐">
+				<Button size="sm" loading={busy === "st-out"} disabled={busy !== null} onclick={exportSt}>{#snippet icon()}<Save />{/snippet}내보내기</Button>
 			</Row>
 			{#if stResult?.warnings.length}
 				<details class="st-warn">

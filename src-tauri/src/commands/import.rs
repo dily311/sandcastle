@@ -48,3 +48,13 @@ pub async fn import_sillytavern_data(
     let base = app_data_dir(&app)?;
     crate::service::import::sillytavern::data::import_data_zip(&state.db, &base, &PathBuf::from(path)).await
 }
+
+/// 샌드캐슬 데이터를 SillyTavern 사용자 폴더 모양 zip으로 (캐릭터 카드·채팅·로어북·페르소나·전역 정규식)
+#[tauri::command]
+#[specta::specta]
+pub async fn export_sillytavern_data(
+    state: State<'_, AppState>,
+    path: String,
+) -> Result<crate::service::import::sillytavern::data_export::SillyTavernDataExport> {
+    crate::service::import::sillytavern::data_export::export_data_zip(&state.db, &PathBuf::from(path)).await
+}

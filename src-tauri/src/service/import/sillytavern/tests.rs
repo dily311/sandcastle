@@ -588,3 +588,58 @@ fn st_zip_unpacks_only_what_it_imports_and_skips_oversized() {
     };
     assert!(data::extract_zip(&zip_path, &dir.path().join("o2"), too_big).is_err());
 }
+
+// =======================================
+// 샌드캐슬 → SillyTavern 폴더 모양 zip (5-E-20-4-2)
+// =======================================
+
+#[tokio::test]
+async fn st_data_export_round_trips_through_our_own_import() {
+    let db = pool().await;
+    let dir = tempfile::tempdir().unwrap();
+    let (sera, _) = import_seraphina(&db, dir.path()).await;
+    let opts = ImportOptions {
+        character_id: Some(sera.id.clone()),
+        ..Default::default()
+    };
+    import_file_with(&db, dir.path(), &st_chat_sample(), opts).await.unwrap();
+    let regex = write(
+        dir.path(),
+        "r.json",
+        json!([{ "scriptName": "Asterisks", "findRegex": "/\\*/g", "replaceString": "", "placement": [2], "markdownOnly": true }])
+            .to_string()
+            .as_bytes(),
+    );
+    import_file(&db, dir.path(), &regex, None).await.unwrap();
+    let before_personas = crate::db::conversation::get_all_personas(&db).await.unwrap().len();
+
+    let zip_path = dir.path().join("out.zip");
+    let r = data_export::export_data_zip(&db, &zip_path).await.unwrap();
+    assert_eq!((r.characters, r.chats, r.books, r.regex), (1, 1, 1, 1), "{:?}", r.warnings);
+    assert_eq!(r.personas, before_personas);
+
+    // zip 안 모양
+    let mut z = zip::ZipArchive::new(std::fs::File::open(&zip_path).unwrap()).unwrap();
+    let names: Vec<String> = (0..z.len()).map(|i| z.by_index(i).unwrap().name().to_string()).collect();
+    assert!(names.contains(&"default-user/characters/Seraphina.png".to_string()), "{names:?}");
+    assert!(
+        names.iter().any(|n| n.starts_with("default-user/chats/Seraphina/") && n.ends_with(".jsonl")),
+        "{names:?}"
+    );
+    assert!(!names.iter().any(|n| n.ends_with("settings.json")), "SillyTavern 설정은 만들지 않음");
+    let mut rx = String::new();
+    std::io::Read::read_to_string(&mut z.by_name("default-user/regex/sandcastle-regex.json").unwrap(), &mut rx).unwrap();
+    let rx: serde_json::Value = serde_json::from_str(&rx).unwrap();
+    assert_eq!(rx[0]["scriptName"], "Asterisks");
+    assert_eq!(rx[0]["placement"], json!([2]));
+    assert_eq!(rx[0]["markdownOnly"], true);
+
+    // 우리 가져오기로 되읽기: 카드·채팅이 다시 이어진다
+    let db2 = pool().await;
+    let app2 = tempfile::tempdir().unwrap();
+    let back = data::import_data_zip(&db2, app2.path(), &zip_path).await.unwrap();
+    assert_eq!((back.characters, back.chats, back.books), (1, 1, 1), "{:?}", back.warnings);
+    let c2 = crate::db::conversation::get_all_characters(&db2).await.unwrap();
+    let convs = crate::db::conversation::get_all_conversations(&db2).await.unwrap();
+    assert!(convs.iter().any(|v| v.character_id == c2[0].id), "chats/<카드 파일 이름> → 그 캐릭터");
+}
