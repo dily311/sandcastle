@@ -254,7 +254,8 @@
 		setBgm(bgm?.asset ?? null, bgm?.mood ?? "");
 	}
 
-	function applyLineCues(line: StageLine | undefined): CurrentBgm | null | undefined {
+	/** withEmotion: 이 줄의 표정(standing)을 쓸지. 표정은 그 줄에서만 — 다음 줄에 그 캐릭터 표정이 없으면 기본 표정으로 (5-E-24) */
+	function applyLineCues(line: StageLine | undefined, withEmotion = true): CurrentBgm | null | undefined {
 		if (!line) return undefined;
 		let nextBgm: { asset: AssetRef | null; mood: string } | undefined;
 		for (const rawCue of line.cues ?? []) {
@@ -267,7 +268,7 @@
 			};
 			switch (normalizeCueType(cue.type)) {
 				case "standing":
-					if (cue.characterId && cue.asset) {
+					if (withEmotion && cue.characterId && cue.asset) {
 						standingOverrides = {
 							...standingOverrides,
 							[cue.characterId]: { emotion: cue.emotion ?? "normal", asset: cue.asset },
@@ -289,7 +290,7 @@
 		standingOverrides = { ...standingBaseline };
 		let targetBgm = scriptStartBgm;
 		for (let line = 0; line <= index; line += 1) {
-			const cueBgm = applyLineCues(scriptLines[line]);
+			const cueBgm = applyLineCues(scriptLines[line], line === index);
 			if (cueBgm !== undefined) targetBgm = cueBgm;
 		}
 		setBgm(targetBgm?.asset ?? null, targetBgm?.mood ?? "");
@@ -307,14 +308,23 @@
 			}
 		}
 		const baseline: Record<string, DisplayStanding | null> = { ...(runtimeStore.stage?.standings ?? {}) };
-		for (const characterId of affectedCharacters) {
-			const normal = gameStore.view?.assets.characters.find(
-				(asset) =>
-					asset.characterId === characterId &&
-					asset.usage === "standing" &&
-					asset.emotion.toLowerCase() === "normal",
+		const normalOf = (characterId: string) =>
+			gameStore.view?.assets.characters.find(
+				(asset) => asset.characterId === characterId && asset.usage === "standing" && asset.emotion.toLowerCase() === "normal",
 			);
-			baseline[characterId] = normal ? { emotion: normal.emotion, asset: normal } : null;
+		for (const characterId of affectedCharacters) {
+			// 기본 표정 그림이 없으면 지금 그림, 그것도 없으면 그 캐릭터의 아무 스탠딩 (표정이 돌아갈 때 사라지지 않게)
+			const normal =
+				normalOf(characterId) ??
+				(baseline[characterId] ? null : gameStore.view?.assets.characters.find((asset) => asset.characterId === characterId && asset.usage === "standing"));
+			if (normal) baseline[characterId] = { emotion: normal.emotion, asset: normal };
+			else if (!(characterId in baseline)) baseline[characterId] = null;
+		}
+		// 지난 응답에서 바뀐 채 남은 표정도 기본 표정에서 시작 (기본 표정 그림이 없으면 그대로)
+		for (const [characterId, standing] of Object.entries(baseline)) {
+			if (!standing || standing.emotion.toLowerCase() === "normal") continue;
+			const normal = normalOf(characterId);
+			if (normal) baseline[characterId] = { emotion: normal.emotion, asset: normal };
 		}
 		if (!hasBgmCue) syncBgmFromStage();
 		standingBaseline = baseline;

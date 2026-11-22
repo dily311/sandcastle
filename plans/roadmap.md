@@ -317,7 +317,7 @@
 - 5-E-21 이미지 에셋 폴더별 판 고르기, 위젯별 설정 표시, 한국어 앱 프롬프트를 영어로 — ~~결정 필요~~: 무엇을 뜻하는지·범위 확인. **합의**: ① 이미지 에셋을 판(버전) 폴더별로 관리하고 고름 ② 위젯별 설정 = 지금 완성된 음악 플레이어 설정을 설정 페이지에 표시 ③ 하드코딩된 한국어 시스템 기본 프롬프트를 영어로 번역.
 - [x] 5-E-22 게임 화면 효과 (2026-11-22 사용자, 백엔드는 있음) — `<effects>이름[:값]</effects>` 큐: shake(무대 흔들기, Web Animations)·flash·blackout·fade_in·fireworks는 한 번, petals·snow·rain·fog는 `clear`나 다른 계속 효과까지(이 플레이 화면 동안만). 값은 시간(`2s`·`500ms`, 0.1~10초). 움직임 줄이기 설정이면 입자·흔들기는 하지 않음. 어디: `play/vn/stageFx.svelte.ts`(테스트 2개), `StageEffects.svelte`, `StageView.svelte`, `VisualNovelTemplatePlay.svelte`(줄이 보일 때 `stageFx.run`). 완료: 미리보기 게임 화면에서 암전이 무대만 덮음·입자 층이 그려짐 확인(미리보기 브라우저가 움직임 줄이기라 입자는 숨겨진 상태로만 확인).
 - [x] 5-E-23 캐릭터 모션 — `<motion::이름>jump</motion>` 큐: jump·bounce·shake·nod·sway·shrink·slide_in·slide_out을 그 캐릭터 스프라이트의 CSS 애니메이션으로(같은 모션도 다시 오면 다시 함, slide_out은 사라진 채로 다음 모션까지). 어디: `StageView.svelte`. 완료: `pnpm check`, 테스트. **확인 못 함**: 스탠딩이 있는 게임에서 눈으로 확인(미리보기 게임에 스탠딩 없음).
-- 5-E-24 감정 표정 되돌리기 — `<emotion::이름>`으로 바뀐 표정이 그 뒤에도 계속 남아 어색함(사용자 실험). **결정 필요**: 언제 기본 표정으로 돌아갈지.
+- [x] 5-E-24 감정 표정 되돌리기 — **합의(2026-11-22)**: 다음 줄에 그 캐릭터 감정이 없으면 기본 표정으로. 표정 큐는 그 줄에서만 쓰고, 퇴장·음악은 이어짐, 지난 응답에 남은 표정도 기본에서 시작, 기본 그림이 없으면 지금 그림 유지. 어디: `VisualNovelTemplatePlay.svelte`, 게임 ADR 추가. 완료: `pnpm check`, 게임 테스트 76개. **확인 못 함**: 스탠딩이 있는 게임에서 눈으로.
 - [x] 5-E-25 일반 채팅 CG 같은 키 묶기 — 설정 > 캐릭터 에셋 "같은 키 묶기"(`AppSetting.cgGroupVariants`, 기본 꺼짐, 같이 쓰는 설정). 켜면 백엔드가 `이름-숫자` 키를 `이름`으로 묶어 프롬프트 키 목록에는 한 번만, 응답의 `<cg>이름</cg>`는 그대로 남기고(`chat_images::group_variants`·`base_key`), 화면은 그 묶음에서 메시지 id로 하나를 골라 보인다(다시 그려도 같음, `cgVariants.ts`). 완료: Rust 시험 `variants_share_a_base_key`, 프런트 테스트 2개, 미리보기에서 설정 줄 확인. **확인 못 함**: 실제 캐릭터 에셋으로 대화.
 - 챕터 자동 나누기는 `plans/idea.md`로 (아직 아이디어).
 
