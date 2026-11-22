@@ -139,6 +139,7 @@ async fn conversation_world_info_comes_from_conversation_character_and_persona()
             &pool,
             WorldInfoEntryInput {
                 comment: String::new(),
+                category: String::new(),
                 id: None,
                 book_id: b.id.clone(),
                 keys: vec![],

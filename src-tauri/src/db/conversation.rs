@@ -765,14 +765,14 @@ where
     let skeys_json = serde_json::to_string(&input.secondary_keys).unwrap_or_default();
 
     sqlx::query(
-        "INSERT INTO worldinfo_entries (id, book_id, keys, secondary_keys, content, enabled, priority, constant, comment)
-         VALUES (?,?,?,?,?,?,?,?,?)
+        "INSERT INTO worldinfo_entries (id, book_id, keys, secondary_keys, content, enabled, priority, constant, comment, category)
+         VALUES (?,?,?,?,?,?,?,?,?,?)
          ON CONFLICT(id) DO UPDATE SET
            keys=excluded.keys, 
            secondary_keys=excluded.secondary_keys, 
            content=excluded.content,
            enabled=excluded.enabled, priority=excluded.priority, 
-           constant=excluded.constant, comment=excluded.comment",
+           constant=excluded.constant, comment=excluded.comment, category=excluded.category",
     )
     .bind(&id)
     .bind(&input.book_id)
@@ -783,11 +783,13 @@ where
     .bind(input.priority)
     .bind(input.constant as i64)
     .bind(&input.comment)
+    .bind(input.category.trim())
     .execute(executor)
     .await?;
 
     Ok(WorldInfoEntry {
         comment: input.comment,
+        category: input.category.trim().to_string(),
         id,
         book_id: input.book_id,
         keys: input.keys,

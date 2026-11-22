@@ -53,6 +53,8 @@ pub fn map_entries(book: &Value, warnings: &mut Vec<String>) -> Vec<WorldInfoEnt
 
         out.push(WorldInfoEntryInput {
             comment: as_str(e, "comment").or(as_str(e, "name")).unwrap_or_default().trim().to_string(),
+            // 샌드캐슬에서 내보낸 것이면 분류가 extensions에 있다 (5-F-1)
+            category: e["extensions"]["sandcastle_category"].as_str().unwrap_or_default().trim().to_string(),
             id: None,
             book_id: String::new(),
             keys,

@@ -15,7 +15,7 @@ describe("moveItem", () => {
 });
 
 describe("로어북 끌어서 순서 = 우선순위", () => {
-	const mk = (id: string, priority: number) => ({ id, bookId: "b", keys: ["k"], secondaryKeys: [], content: "", enabled: true, priority, constant: false, comment: id });
+	const mk = (id: string, priority: number) => ({ id, bookId: "b", keys: ["k"], secondaryKeys: [], content: "", enabled: true, priority, constant: false, comment: id, category: "" });
 	it("이웃 사이에 자리가 있으면 옮긴 것만 바꾼다", async () => {
 		const { reprioritize } = await import("$features/lorebook/lorebook.svelte");
 		const list = [mk("a", 100), mk("c", 50), mk("b", 80)];

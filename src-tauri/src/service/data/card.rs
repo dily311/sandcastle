@@ -45,7 +45,7 @@ pub fn card_json(c: &Character, book_name: Option<&str>, entries: &[WorldInfoEnt
                 "constant": e.constant,
                 "enabled": e.enabled,
                 "insertion_order": e.priority,
-                "extensions": {},
+                "extensions": { "sandcastle_category": e.category },
             })).collect::<Vec<_>>(),
         });
     }

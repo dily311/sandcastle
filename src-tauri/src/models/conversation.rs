@@ -237,6 +237,9 @@ pub struct WorldInfoEntryRow {
     /// 제목 (예전 쿼리처럼 열을 고르지 않은 곳에서는 빈 값)
     #[sqlx(default)]
     pub comment: Option<String>,
+    /// 분류 (5-F-1)
+    #[sqlx(default)]
+    pub category: String,
 }
 
 #[derive(Serialize, Clone, specta::Type)]
@@ -252,6 +255,8 @@ pub struct WorldInfoEntry {
     pub constant: bool, // 항상 프롬프트에 삽입
     /// 제목 (SillyTavern의 comment). 프롬프트에는 들어가지 않음
     pub comment: String,
+    /// 분류: 캐릭터·장소·아이템·이벤트·세계 또는 사용자가 만든 것. 빈 글 = 분류 없음 (5-F-1)
+    pub category: String,
 }
 
 impl From<WorldInfoEntryRow> for WorldInfoEntry {
@@ -266,6 +271,7 @@ impl From<WorldInfoEntryRow> for WorldInfoEntry {
             priority: r.priority,
             constant: r.constant != 0,
             comment: r.comment.unwrap_or_default(),
+            category: r.category,
         }
     }
 }
@@ -284,6 +290,9 @@ pub struct WorldInfoEntryInput {
     /// 제목 (없으면 빈 값)
     #[serde(default)]
     pub comment: String,
+    /// 분류 (없으면 빈 값, 5-F-1)
+    #[serde(default)]
+    pub category: String,
 }
 
 impl From<WorldInfoEntry> for WorldInfoEntryInput {
@@ -298,6 +307,7 @@ impl From<WorldInfoEntry> for WorldInfoEntryInput {
             priority: v.priority,
             constant: v.constant,
             comment: v.comment,
+            category: v.category,
         }
     }
 }

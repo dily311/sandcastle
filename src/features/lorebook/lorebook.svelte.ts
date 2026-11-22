@@ -103,7 +103,7 @@ class Lorebook {
 	// ---- 항목 ----
 	/** 아직 저장하지 않은 새 항목 (키워드를 넣으면 저장됨) */
 	addDraft(bookId: string): Entry {
-		const e: Entry = { id: `${DRAFT}${Date.now().toString(36)}`, bookId, keys: [], secondaryKeys: [], content: "", enabled: true, priority: 100, constant: false, comment: "" };
+		const e: Entry = { id: `${DRAFT}${Date.now().toString(36)}`, bookId, keys: [], secondaryKeys: [], content: "", enabled: true, priority: 100, constant: false, comment: "", category: "" };
 		this.entries[bookId] = [e, ...(this.entries[bookId] ?? [])];
 		return e;
 	}
@@ -190,3 +190,11 @@ export function sortEntries(list: Entry[]) {
 }
 
 export const lorebook = new Lorebook();
+
+/** 기본 분류 (5-F-1, ADR-023). 사용자가 더 만든 분류는 항목들에서 모은다 */
+export const DEFAULT_CATEGORIES = ["캐릭터", "장소", "아이템", "이벤트", "세계"];
+/** 기본 분류 + 이 항목들에서 쓰는 분류 (기본이 앞, 나머지는 가나다순) */
+export function categoriesOf(entries: { category: string }[]): string[] {
+	const extra = [...new Set(entries.map((e) => (e.category ?? "").trim()).filter((c) => c && !DEFAULT_CATEGORIES.includes(c)))].sort((a, b) => a.localeCompare(b, "ko"));
+	return [...DEFAULT_CATEGORIES, ...extra];
+}

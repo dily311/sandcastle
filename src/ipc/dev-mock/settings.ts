@@ -288,10 +288,10 @@ export const settingsHandlers: Record<string, (a: Args) => unknown> = {
 		books.splice(books.findIndex((b) => b.id === id), 1);
 		return null;
 	},
-	get_worldinfo_entries: ({ bookId }) => wiEntries.filter((e) => e.bookId === bookId).map((e) => ({ ...e })),
+	get_worldinfo_entries: ({ bookId }) => wiEntries.filter((e) => e.bookId === bookId).map((e) => ({ category: "", ...e })),
 	upsert_worldinfo_entry: ({ input }) => {
 		if (!input.keys.length && !input.constant) throw { code: "INVALID_INPUT", category: "VALIDATION", message: "키워드 필요", retryable: false };
-		const e = { ...input, id: input.id ?? `we${Date.now().toString(36)}`, comment: input.comment ?? "" };
+		const e = { ...input, id: input.id ?? `we${Date.now().toString(36)}`, comment: input.comment ?? "", category: input.category ?? "" };
 		const i = wiEntries.findIndex((x) => x.id === e.id);
 		if (i >= 0) wiEntries[i] = e;
 		else wiEntries.push(e);

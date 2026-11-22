@@ -94,6 +94,11 @@ struct PackEntry {
     enabled: bool,
     priority: i64,
     constant: bool,
+    /// 제목·분류 (예전 팩에는 없음)
+    #[serde(default)]
+    comment: String,
+    #[serde(default)]
+    category: String,
 }
 
 #[derive(Serialize, Deserialize, specta::Type)]
@@ -214,6 +219,8 @@ pub async fn export_pack(
             .await?
             .into_iter()
             .map(|e| PackEntry {
+                comment: e.comment,
+                category: e.category,
                 keys: e.keys,
                 secondary_keys: e.secondary_keys,
                 content: e.content,
@@ -377,7 +384,8 @@ async fn import_pack_inner(
             db::conversation::upsert_worldinfo_entry(
                 &mut *tx,
                 WorldInfoEntryInput {
-                    comment: String::new(),
+                    comment: e.comment,
+                    category: e.category,
                     id: None,
                     book_id: book.id.clone(),
                     keys: e.keys,

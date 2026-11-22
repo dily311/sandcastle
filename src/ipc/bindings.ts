@@ -5615,6 +5615,8 @@ export type WorldInfoEntry = {
 	constant: boolean,
 	/**  제목 (SillyTavern의 comment). 프롬프트에는 들어가지 않음 */
 	comment: string,
+	/**  분류: 캐릭터·장소·아이템·이벤트·세계 또는 사용자가 만든 것. 빈 글 = 분류 없음 (5-F-1) */
+	category: string,
 };
 
 export type WorldInfoEntryInput = WorldInfoEntryInput_Serialize | WorldInfoEntryInput_Deserialize;
@@ -5630,6 +5632,8 @@ export type WorldInfoEntryInput_Deserialize = {
 	constant: boolean,
 	/**  제목 (없으면 빈 값) */
 	comment?: string,
+	/**  분류 (없으면 빈 값, 5-F-1) */
+	category?: string,
 };
 
 export type WorldInfoEntryInput_Serialize = {
@@ -5643,4 +5647,6 @@ export type WorldInfoEntryInput_Serialize = {
 	constant: boolean,
 	/**  제목 (없으면 빈 값) */
 	comment: string,
+	/**  분류 (없으면 빈 값, 5-F-1) */
+	category: string,
 };

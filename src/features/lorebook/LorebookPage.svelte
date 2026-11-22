@@ -147,12 +147,15 @@
 	const entries = $derived(bookId ? (lorebook.entries[bookId] ?? null) : null);
 
 	let filter = $state<"all" | "on" | "off" | "constant">("all");
+	/** 분류로 거르기 (5-F-1). null = 전부 */
+	let categoryFilter = $state<string | null>(null);
 	let entryQuery = $state("");
 	const shownEntries = $derived(
 		(entries ?? []).filter((e) => {
 			if (filter === "on" && !e.enabled) return false;
 			if (filter === "off" && e.enabled) return false;
 			if (filter === "constant" && !e.constant) return false;
+			if (categoryFilter !== null && e.category !== categoryFilter) return false;
 			const q = entryQuery.trim().toLowerCase();
 			return !q || entryTitle(e).toLowerCase().includes(q) || e.keys.some((k) => k.toLowerCase().includes(q)) || e.content.toLowerCase().includes(q);
 		}),
@@ -164,7 +167,11 @@
 		{ id: "constant", label: "항상 넣는 것만" },
 	] as const;
 	let filterMenu = $state<{ x: number; y: number } | null>(null);
-	const filterItems = $derived<MenuItem[]>(FILTERS.map((f) => ({ label: f.label, icon: filter === f.id ? Check : undefined, onselect: () => (filter = f.id) })));
+	const usedCategories = $derived([...new Set((entries ?? []).map((e) => e.category).filter(Boolean))].sort((a, b) => a.localeCompare(b, "ko")));
+	const filterItems = $derived<MenuItem[]>([
+		...FILTERS.map((f) => ({ label: f.label, icon: filter === f.id && categoryFilter === null ? Check : undefined, onselect: () => ((filter = f.id), (categoryFilter = null)) })),
+		...usedCategories.map((c, i) => ({ label: `분류: ${c}`, separator: i === 0, icon: categoryFilter === c ? Check : undefined, onselect: () => (categoryFilter = c) })),
+	]);
 	function openFilter(e: MouseEvent) {
 		const r = (e.currentTarget as HTMLElement).getBoundingClientRect();
 		filterMenu = { x: r.left, y: r.bottom + 4 };
@@ -173,13 +180,14 @@
 	// 끌어서 순서 바꾸기 (검색·필터가 없을 때만: 보이는 순서 = 전체 순서)
 	const sort = new Sortable((from, to) => bookId && lorebook.reorder(bookId, from, to));
 	$effect(() => {
-		sort.enabled = filter === "all" && !entryQuery.trim() && openId === null;
+		sort.enabled = filter === "all" && categoryFilter === null && !entryQuery.trim() && openId === null;
 	});
 
 	let openId = $state<string | null>(null);
 	function addEntry() {
 		if (!bookId) return;
 		filter = "all";
+		categoryFilter = null;
 		entryQuery = "";
 		openId = lorebook.addDraft(bookId).id;
 	}
@@ -212,6 +220,7 @@
 			<span class="filter" class:on={filter !== "all"}>
 				<IconButton label="필터: {FILTERS.find((f) => f.id === filter)?.label}" active={filter !== "all"} aria-haspopup="menu" onclick={openFilter}><Funnel /></IconButton>
 				{#if filter !== "all"}<button class="filter-chip" title="필터 풀기" onclick={() => (filter = "all")}>{FILTERS.find((f) => f.id === filter)?.label} ×</button>{/if}
+				{#if categoryFilter !== null}<button class="filter-chip" title="분류 거르기 풀기" onclick={() => (categoryFilter = null)}>{categoryFilter} ×</button>{/if}
 			</span>
 			<ContextMenu at={filterMenu} label="항목 필터링" items={filterItems} onclose={() => (filterMenu = null)} />
 			<Button variant="primary" onclick={addEntry}>{#snippet icon()}<Plus />{/snippet}항목 추가</Button>

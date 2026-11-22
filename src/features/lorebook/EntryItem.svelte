@@ -2,7 +2,7 @@
 	// 로어북 항목 하나: 접힌 줄(켜기·제목·키워드) + 펼치면 편집. 고치면 잠시 뒤 저절로 저장
 	import { GripVertical, ChevronDown, ChevronRight, Copy, Trash2 } from "@lucide/svelte";
 	import { Badge, Field, IconButton, Input, Switch, TagInput, Textarea } from "$shared/ui";
-	import { entryTitle, isDraft, isValid, lorebook, type Entry } from "./lorebook.svelte";
+	import { categoriesOf, entryTitle, isDraft, isValid, lorebook, type Entry } from "./lorebook.svelte";
 	import { confirmAction } from "$shared/stores/confirm.svelte";
 
 	interface Props {
@@ -86,6 +86,7 @@
 				{/if}
 			</span>
 		</button>
+		{#if draft.category}<Badge>{draft.category}</Badge>{/if}
 		{#if draft.constant}<Badge tone="accent">상시</Badge>{/if}
 		<span class="prio" title="우선순위">{draft.priority}</span>
 		{#if !open}<IconButton label="{entryTitle(draft)} 삭제" size="sm" onclick={remove}><Trash2 /></IconButton>{/if}
@@ -94,6 +95,12 @@
 		<div class="body">
 			<Field label="제목" hint="목록에서 알아보는 이름. AI에게는 보내지 않음">
 				<Input bind:value={draft.comment} placeholder={draft.keys.join(", ") || "예: 엘다리아 왕국"} />
+			</Field>
+			<Field label="분류">
+				<Input bind:value={draft.category} placeholder="없음 · 예: 캐릭터" list="wi-categories-{draft.id}" maxlength={30} />
+				<datalist id="wi-categories-{draft.id}">
+					{#each categoriesOf(lorebook.entries[draft.bookId] ?? []) as c (c)}<option value={c}></option>{/each}
+				</datalist>
 			</Field>
 			<Field label="키워드" hint="대화에 이 낱말이 나오면 내용을 넣음. Enter로 하나씩">
 				<TagInput bind:value={draft.keys} placeholder="키워드 입력" label="키워드 추가" />

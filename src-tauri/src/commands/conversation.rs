@@ -566,6 +566,8 @@ pub(crate) fn sillytavern_book_json(entries: &[WorldInfoEntry]) -> serde_json::V
                     "disable": !e.enabled,
                     "order": e.priority,
                     "position": 0,
+                    // 샌드캐슬 분류 (SillyTavern은 모르는 칸을 그대로 둔다 — 다시 가져오면 되살아남, 5-F-1)
+                    "extensions": { "sandcastle_category": e.category },
                 }),
             )
         })
@@ -589,9 +591,13 @@ mod lore_tests {
             priority: 42,
             constant: false,
             comment: "용".into(),
+            category: "캐릭터".into(),
         };
         let v = sillytavern_book_json(&[entry]);
         assert_eq!(v["entries"]["0"]["comment"], "용");
+        let mut w = vec![];
+        let back = crate::service::import::sillytavern::worldinfo::map_entries(&v, &mut w);
+        assert_eq!(back[0].category, "캐릭터", "SillyTavern 왕복에도 분류가 남음");
         assert_eq!(v["entries"]["0"]["disable"], true);
         assert_eq!(v["entries"]["0"]["selective"], true);
         assert_eq!(v["entries"]["0"]["order"], 42);
