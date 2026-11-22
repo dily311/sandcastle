@@ -1105,7 +1105,7 @@ impl ChatManager {
         instruction: &str,
         raw: Option<Option<String>>,
         cancel: &CancellationToken,
-    ) -> Result<(String, bool)> {
+    ) -> Result<(String, bool, Value)> {
         let conv = match get_conversation(db, conversation_id).await {
             Ok(c) => c,
             Err(sqlx::Error::RowNotFound) => return Err(AppError::not_found("대화를 찾을 수 없음").into()),
@@ -1118,6 +1118,8 @@ impl ChatManager {
             Some(system) => raw_prompt(&conv, fallback, instruction, system.as_deref())?,
             None => quiet_prompt(db, &conv, fallback, instruction).await?,
         };
+        // 보낸 프롬프트 (QR로 만든 메시지에도 '보낸 프롬프트'를 남기게, 5-E-20-6-10)
+        let sent = serde_json::to_value(&prompt).unwrap_or(Value::Null);
         let ai = app
             .try_state::<Arc<AiService>>()
             .ok_or_else(|| AppError::internal("AiService가 초기화되지 않았습니다"))?
@@ -1135,7 +1137,7 @@ impl ChatManager {
             )
             .await?;
         // 응답 길이 한도에서 잘렸는가 (5-E-20-6-6)
-        Ok((response.content.trim().to_string(), is_truncated(response.finish_reason.as_deref())))
+        Ok((response.content.trim().to_string(), is_truncated(response.finish_reason.as_deref()), sent))
     }
 
     /// 폰 엿보기: 두 사람 몫을 AI가 모두 이어서 쓰고, 말풍선 메시지로 나눠 저장한다.

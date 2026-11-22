@@ -279,6 +279,9 @@ let quickReplySets = [
 	{ id: "qr2", name: "세라피나 전용", scope: "character", scopeId: "sera" as string | null, enabled: true, autoSend: true, sortOrder: 1, createdAt: 0, updatedAt: 0, items: [qrItem("s1", "치유 마법", "*세라피나가 손을 뻗어 치유 마법을 건다*")] },
 ];
 
+/** 슬래시 스크립트가 남긴 보낸 프롬프트 (5-E-20-6-10) */
+const mockPrompts: Record<string, unknown> = {};
+
 const PHONE_GROUP_REPLIES = ["Seraphina: 눈 떴어요?\n어제 숲에서 쓰러져 있길래 데려왔어요\n카이: 나도 같이 옮겼거든?\nSeraphina: 네, 카이도요 ㅎㅎ"];
 const PHONE_REPLIES = ["눈 떴어요?\n어제 숲에서 쓰러져 있길래 데려왔어요", "괜찮아요 ㅎㅎ\n천천히 쉬어요", "지금 오두막이에요\n올 때 빵 좀 사다 줄래요?"];
 
@@ -555,8 +558,13 @@ AI: 그때 이야기를 다시 해 볼까요?`, stale: false },
 	// /gen (5-E-20-5): 지시를 받아 짧은 글을 돌려줌
 	slash_generate: async ({ prompt }) => {
 		if (String(prompt).includes("천천히")) await sleep(3000);
-		return { text: `(가짜 AI) ${String(prompt).slice(0, 40)}에 대한 글`, truncated: String(prompt).includes("잘림") };
+		return {
+			text: `(가짜 AI) ${String(prompt).slice(0, 40)}에 대한 글`,
+			truncated: String(prompt).includes("잘림"),
+			prompt: { chatOptions: { temperature: 1, stream: false }, messages: [{ role: "system", content: "[가짜 맥락] 세라피나 설정·대화 기록", token: 0, images: [] }, { role: "user", content: String(prompt), token: 0, images: [] }] },
+		};
 	},
+	save_message_prompt: ({ messageId, prompt }) => ((mockPrompts[String(messageId)] = prompt), null),
 	slash_cancel: () => true,
 	append_message: ({ input }) => {
 		const c = conv(input.conversationId);
@@ -577,6 +585,7 @@ AI: 그때 이야기를 다시 해 볼까요?`, stale: false },
 		return null;
 	},
 	get_message_prompt: ({ messageId }) => {
+		if (mockPrompts[String(messageId)]) return mockPrompts[String(messageId)];
 		const m = messages.find((m) => m.id === messageId);
 		if (!m || !(m.meta as { info?: { genStarted?: number } })?.info?.genStarted) return null;
 		return {

@@ -20,6 +20,8 @@ use crate::{
 pub struct SlashGenResult {
     pub text: String,
     pub truncated: bool,
+    /// 보낸 프롬프트 (PromptMessage). 이 글이 들어간 메시지에 save_message_prompt로 남긴다 (5-E-20-6-10)
+    pub prompt: serde_json::Value,
 }
 
 /// /gen: 이 대화의 맥락 끝에 지시를 붙여 AI 글을 받는다 (저장하지 않음).
@@ -50,7 +52,7 @@ pub async fn slash_generate(
             ChatManager
                 .quiet_gen(&app, &state.db, &settings, &conversation_id, &prompt, raw, &cancel)
                 .await
-                .map(|(text, truncated)| SlashGenResult { text, truncated })
+                .map(|(text, truncated, prompt)| SlashGenResult { text, truncated, prompt })
                 .map_err(into_app_error)
         })
         .await
@@ -70,4 +72,16 @@ pub async fn slash_cancel(tasks: State<'_, Arc<TaskManager>>, conversation_id: S
         tasks.cancel(&t.id).await?;
     }
     Ok(!running.is_empty())
+}
+
+/// 메시지에 '보낸 프롬프트'를 남긴다 — 슬래시 스크립트가 /gen 결과로 만든 메시지용 (5-E-20-6-10).
+/// 형식이 PromptMessage가 아니면 거절 (보기 화면이 읽을 수 있는 것만)
+#[tauri::command]
+#[specta::specta]
+pub async fn save_message_prompt(state: State<'_, AppState>, message_id: String, prompt: serde_json::Value) -> Result<()> {
+    if serde_json::from_value::<crate::models::ai_service::PromptMessage>(prompt.clone()).is_err() {
+        return Err(AppError::validation("보낸 프롬프트 형식이 아님", None));
+    }
+    crate::db::chat_ui::save_prompt(&state.db, &message_id, &prompt).await?;
+    Ok(())
 }

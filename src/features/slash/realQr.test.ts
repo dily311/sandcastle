@@ -4,6 +4,7 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 const gens: string[] = [];
 const appended: { role: string; name: string | null; content: string; meta: unknown }[] = [];
 const echoed: string[] = [];
+const saved: { id: string; prompt: unknown }[] = [];
 let answer: string | null = "숲의 축제";
 
 vi.mock("$shared/ipc/client", () => ({
@@ -11,7 +12,11 @@ vi.mock("$shared/ipc/client", () => ({
 	commands: {
 		slashGenerate: (_c: string, prompt: string) => {
 			gens.push(prompt);
-			return { text: `AI가 쓴 글 ${gens.length}`, truncated: false };
+			return { text: `AI가 쓴 글 ${gens.length}`, truncated: false, prompt: { messages: [{ role: "user", content: prompt }], chatOptions: {} } };
+		},
+		saveMessagePrompt: (id: string, prompt: unknown) => {
+			saved.push({ id, prompt });
+			return null;
 		},
 		appendMessage: (m: { role: string; name: string | null; content: string; meta: unknown }) => {
 			appended.push(m);
@@ -55,6 +60,7 @@ beforeEach(() => {
 	gens.length = 0;
 	appended.length = 0;
 	echoed.length = 0;
+	saved.length = 0;
 	answer = "숲의 축제";
 });
 
@@ -84,6 +90,8 @@ describe("실제 QR 실행 (5-E-20-6-5)", () => {
 		expect(gens[0]).toContain('User Input: "숲의 축제"');
 		expect(gens[0].trimEnd().endsWith("</System>")).toBe(true);
 		expect(appended).toEqual([expect.objectContaining({ role: "assistant", name: null, content: "AI가 쓴 글 1" })]);
+		// 그 메시지에 /gen이 보낸 프롬프트를 남김 (5-E-20-6-10)
+		expect(saved).toEqual([{ id: "m1", prompt: expect.objectContaining({ messages: [expect.objectContaining({ content: gens[0] })] }) }]);
 	});
 	it("무물: 질문 창에서 취소하면 멈춤 — AI를 부르지 않음 (5-E-20-6-9)", async () => {
 		answer = null;

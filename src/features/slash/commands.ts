@@ -128,13 +128,18 @@ export function slashEnv(session: ChatSession, opts: SlashOpts = {}): ScriptEnv 
 		const character = role === "assistant" ? (conv()?.characterId ?? null) : null;
 		const m = await call(commands.appendMessage({ conversationId: convId, seq: nextSeq(), role, name, content, characterId: character, meta: meta as never }), src);
 		session.messages.push(m);
+		// /gen 결과가 들어간 메시지면 그때 보낸 프롬프트를 남김 (메시지의 '보낸 프롬프트' 보기)
+		if (lastGen && content.includes(lastGen.text)) await call(commands.saveMessagePrompt(m.id, lastGen.prompt as never), { ...src, silent: true }).catch(() => {});
 		void library.refresh(convId);
 		return content;
 	};
 	const bySeq = (seqs: number[]) => session.messages.filter((m) => seqs.includes(m.seq));
+	/** 마지막 /gen 결과와 보낸 프롬프트 — 이 글이 들어간 메시지에 '보낸 프롬프트'로 남김 (5-E-20-6-10) */
+	let lastGen: { text: string; prompt: unknown } | null = null;
 	/** /gen 결과: 잘렸으면 알림 (5-E-20-6-6) */
-	const generated = (name: string, r: { text: string; truncated: boolean }) => {
+	const generated = (name: string, r: { text: string; truncated: boolean; prompt?: unknown }) => {
 		if (r.truncated) toasts.show({ tone: "warning", message: `/${name} 결과가 응답 길이 한도에서 잘림 — 프리셋의 '응답 길이'를 늘리면 됨`, source: "슬래시 커맨드" });
+		if (r.text.trim() && r.prompt) lastGen = { text: r.text.trim(), prompt: r.prompt };
 		return r.text;
 	};
 	const setOf = (name: string) => {
