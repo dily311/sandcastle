@@ -38,6 +38,7 @@ pub const SETTINGS_SCOPE: &[(&str, Scope)] = &[
     ("app-setting/usageRetentionDays", Scope::Device),
     ("app-setting/trashRetentionDays", Scope::Device),
     ("app-setting/cgGroupVariants", Scope::Shared),
+    ("app-setting/doneNotify", Scope::Device), // 알림은 기기마다 (아이콘 경로도 그 기기 것)
     // ---- theme-setting ----
     ("theme-setting/mode", Scope::Shared),
     ("theme-setting/selectTheme", Scope::Shared),

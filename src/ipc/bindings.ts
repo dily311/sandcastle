@@ -504,6 +504,8 @@ export const commands = {
 	 *  scripts: false면 글쓴이의 JS를 막는다 (코드 블록 밖 HTML — ADR-004 추가). 없으면 지금처럼 허용
 	 */
 	registerHtmlView: (html: string, theme: string | null, scripts: boolean | null, options?: InvokeOptions) => __TAURI_INVOKE<string>("register_html_view", { html, theme, scripts }, options),
+	/**  알림을 켤 때 (Android는 사용자에게 권한을 묻는다). 허락됐으면 true */
+	requestNotifyPermission: (options?: InvokeOptions) => __TAURI_INVOKE<boolean>("request_notify_permission", undefined, options),
 	/**  코어 플러그인 목록과 켜짐 상태. 켜고 끄기는 update_feature_setting(id, enabled). */
 	listCorePlugins: (options?: InvokeOptions) => __TAURI_INVOKE<CorePlugin[]>("list_core_plugins", undefined, options),
 	getPluginSetting: (options?: InvokeOptions) => __TAURI_INVOKE<PluginSetting_Serialize>("get_plugin_setting", undefined, options),
@@ -765,6 +767,8 @@ export type AppSetting_Deserialize = {
 	trashRetentionDays?: number | null,
 	/**  대화 CG: `이름.png`·`이름-1.png`…을 키 `이름` 하나로 묶고 보일 때 그중 하나를 무작위로 (5-E-25, 기본 꺼짐) */
 	cgGroupVariants?: boolean,
+	/**  응답이 끝났는데 앱이 가려져 있으면 알림 (5-E-17·18, 기본 꺼짐, 기기 전용) */
+	doneNotify?: DoneNotify_Deserialize,
 };
 
 export type AppSetting_Serialize = {
@@ -793,6 +797,8 @@ export type AppSetting_Serialize = {
 	trashRetentionDays: number | null,
 	/**  대화 CG: `이름.png`·`이름-1.png`…을 키 `이름` 하나로 묶고 보일 때 그중 하나를 무작위로 (5-E-25, 기본 꺼짐) */
 	cgGroupVariants: boolean,
+	/**  응답이 끝났는데 앱이 가려져 있으면 알림 (5-E-17·18, 기본 꺼짐, 기기 전용) */
+	doneNotify: DoneNotify_Serialize,
 };
 
 export type AssetRef = {
@@ -1708,6 +1714,27 @@ export type DialogueDoneEvent = {
 export type DisplayItem = {
 	role: string,
 	content: string,
+};
+
+/**  끝나면 알림 (5-E-17·18) */
+export type DoneNotify = DoneNotify_Serialize | DoneNotify_Deserialize;
+
+/**  끝나면 알림 (5-E-17·18) */
+export type DoneNotify_Deserialize = {
+	enabled?: boolean,
+	/**  알림 제목 (비면 앱 이름, `{{char}}` = 캐릭터 이름) */
+	title?: string,
+	/**  알림 아이콘 그림 경로 (없으면 앱 아이콘) */
+	icon?: string | null,
+};
+
+/**  끝나면 알림 (5-E-17·18) */
+export type DoneNotify_Serialize = {
+	enabled: boolean,
+	/**  알림 제목 (비면 앱 이름, `{{char}}` = 캐릭터 이름) */
+	title: string,
+	/**  알림 아이콘 그림 경로 (없으면 앱 아이콘) */
+	icon: string | null,
 };
 
 export type DriveStatus = DriveStatus_Serialize | DriveStatus_Deserialize;

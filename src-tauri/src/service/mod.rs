@@ -14,6 +14,7 @@ pub mod drive;
 pub mod image_meta;
 pub mod import;
 pub mod memory;
+pub mod notify;
 pub mod picked_file;
 pub mod plugins;
 pub mod prices;

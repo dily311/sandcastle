@@ -35,6 +35,9 @@ pub struct AppSetting {
     /// 대화 CG: `이름.png`·`이름-1.png`…을 키 `이름` 하나로 묶고 보일 때 그중 하나를 무작위로 (5-E-25, 기본 꺼짐)
     #[serde(default)]
     pub cg_group_variants: bool,
+    /// 응답이 끝났는데 앱이 가려져 있으면 알림 (5-E-17·18, 기본 꺼짐, 기기 전용)
+    #[serde(default)]
+    pub done_notify: DoneNotify,
 }
 
 fn default_trash_retention_days() -> Option<u32> {
@@ -76,6 +79,17 @@ fn default_phone_mode_prompt() -> String {
     DEFAULT_PHONE_MODE_PROMPT.to_string()
 }
 
+/// 끝나면 알림 (5-E-17·18)
+#[derive(Debug, Clone, Default, Serialize, Deserialize, specta::Type)]
+#[serde(rename_all = "camelCase", default)]
+pub struct DoneNotify {
+    pub enabled: bool,
+    /// 알림 제목 (비면 앱 이름, `{{char}}` = 캐릭터 이름)
+    pub title: String,
+    /// 알림 아이콘 그림 경로 (없으면 앱 아이콘)
+    pub icon: Option<String>,
+}
+
 impl Default for AppSetting {
     fn default() -> Self {
         Self {
@@ -94,6 +108,7 @@ impl Default for AppSetting {
             trash_retention_days: default_trash_retention_days(),
             check_updates_on_start: false,
             cg_group_variants: false,
+            done_notify: DoneNotify::default(),
         }
     }
 }

@@ -263,6 +263,10 @@ pub async fn run(app: &AppHandle, conversation_id: &str, job: ChatJob, channel: 
     for id in ids {
         out.push(chat_ui::get_message(db, &id).await.map_err(AppError::from)?);
     }
+    // 앱이 가려져 있으면 알림 (켰을 때만, 5-E-17·18)
+    if let Some(m) = out.iter().rev().find(|m| m.role == "assistant") {
+        crate::service::notify::reply_done(app, m.name.as_deref().unwrap_or("AI"));
+    }
     Ok(out)
 }
 
