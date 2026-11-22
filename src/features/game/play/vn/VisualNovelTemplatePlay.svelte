@@ -4,7 +4,7 @@
 	import type { StreamPayload } from "$ipc/bindings";
 	import type { AssetRef, GameCommand, GameJournal, NpcReply, StageLine } from "$features/game/types";
 	import { LineKind } from "$features/game/types";
-	import { call, commands } from "$shared/ipc/client";
+	import { call, commands, toAppError } from "$shared/ipc/client";
 	import { layout } from "$app/layout.svelte";
 	import "../stage.css";
 	import StageView from "./StageView.svelte";
@@ -218,6 +218,25 @@
 			.catch(() => (bgmBlocked = true));
 	}
 
+	// 휴대폰: 앱이 가려지면(홈 버튼·다른 앱) 음악·목소리를 멈추고, 돌아오면 멈추기 전에 돌던 음악만 다시 (5-E-13)
+	$effect(() => {
+		if (!layout.mobile) return;
+		let resume = false;
+		const onVisibility = () => {
+			if (document.hidden) {
+				resume = !!bgmAudio && !bgmAudio.paused;
+				bgmAudio?.pause();
+				voiceAudio?.pause();
+				stopSpeaking();
+			} else if (resume) {
+				resume = false;
+				resumeBgm();
+			}
+		};
+		document.addEventListener("visibilitychange", onVisibility);
+		return () => document.removeEventListener("visibilitychange", onVisibility);
+	});
+
 	function toggleBgmMute() {
 		isBgmMuted = !isBgmMuted;
 		if (bgmAudio) bgmAudio.muted = isBgmMuted;
@@ -423,10 +442,22 @@
 	 * keepLines: 지금 무대의 대사(선택지 결과 등) 뒤에 응답을 붙인다
 	 * fromChoice: 선택지에서 온 문구라 실패해도 입력창에 되돌리지 않는다
 	 */
+	/** 마지막 보내기 실패 (다시 보내기용으로 글을 같이 둔다) */
+	let sendError = $state<{ message: string; text: string; fromChoice: boolean } | null>(null);
+	let cancelled = false;
+	/** 받는 중인 응답 멈추기: 이 플레이의 게임 대사 작업을 취소한다 (보낸 글은 입력칸으로 돌아옴) */
+	async function cancelSay() {
+		cancelled = true;
+		const tasks = await call(commands.listActiveTasks(), { source: "game", silent: true }).catch(() => []);
+		for (const t of tasks.filter((t) => t.feature === "game" && t.ownerRef === sessionId)) void call(commands.cancelTask(t.id), { source: "game", silent: true }).catch(() => {});
+	}
+
 	async function say(text = freeTextInput, opts: { keepLines?: boolean; fromChoice?: boolean } = {}) {
 		const input = text.trim();
 		const target = sayTarget;
 		if (!input || !target || isLoading) return;
+		sendError = null;
+		cancelled = false;
 		const prefix = opts.keepLines ? scriptLines : [];
 		const startAt = opts.keepLines ? lineIndex : 0;
 		try {
@@ -439,7 +470,11 @@
 			channel.onmessage = (p) => (streamingText += p.chunk);
 			const request = target.kind === "scene" ? commands.sceneSay(input, channel) : commands.npcSay(target.characterId, input, channel);
 			const reply = (await call(request, { source: "game", silent: true }).catch((e) => {
-				reportGameError(e, gameStore.project?.id);
+				// 멈춘 것은 오류가 아님. 그 밖에는 알림과 함께 대사창에도 남긴다
+				if (!cancelled) {
+					reportGameError(e, gameStore.project?.id);
+					sendError = { message: toAppError(e).message, text: input, fromChoice: !!opts.fromChoice };
+				}
 				throw e;
 			})) as unknown as NpcReply;
 			applyReply(reply, prefix, startAt);
@@ -680,6 +715,10 @@
 			onNpcChoice={(text) => say(text, { fromChoice: true })}
 			onInputChange={(value) => (freeTextInput = value)}
 			onSubmitInput={() => say()}
+			onCancel={() => void cancelSay()}
+			sendError={sendError?.message ?? null}
+			onRetry={() => sendError && void say(sendError.text, { fromChoice: sendError.fromChoice })}
+			onDismissError={() => (sendError = null)}
 			onStopTalk={() => dispatch({ type: "stopTalk" })}
 			onEndScene={() => dispatch({ type: "endScene" })}
 			{autoAdvance}

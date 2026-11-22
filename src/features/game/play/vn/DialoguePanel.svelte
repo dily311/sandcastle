@@ -38,6 +38,12 @@
 		onNpcChoice: (text: string) => void;
 		onInputChange: (value: string) => void;
 		onSubmitInput: () => void;
+		/** 받는 중에 멈추기 (보내기 버튼 자리에) — 5-E-13 */
+		onCancel?: () => void;
+		/** 보내기 실패: 닫을 때까지 대사창에 남긴다 (알림은 금방 사라져 놓치기 쉬움) */
+		sendError?: string | null;
+		onRetry?: () => void;
+		onDismissError?: () => void;
 		onStopTalk: () => void;
 		onEndScene?: () => void;
 		// ---- 대사창 아래 동작 줄 ----
@@ -142,6 +148,13 @@
 					{/each}
 				</ol>
 			{/if}
+			{#if p.sendError}
+				<p class="send-err" role="alert">
+					<span>보내지 못함 · {p.sendError}</span>
+					{#if p.onRetry}<button class="g-btn" type="button" disabled={p.isLoading} onclick={p.onRetry}><RefreshCw />다시 보내기</button>{/if}
+					<button class="g-icon" type="button" aria-label="오류 닫기" onclick={p.onDismissError}>×</button>
+				</p>
+			{/if}
 			{#if p.canSendInput}
 				<form class="say" onsubmit={submit}>
 					<input
@@ -151,7 +164,11 @@
 						aria-label={p.inputPlaceholder ?? "대화 입력"}
 						disabled={p.isLoading}
 					/>
-					<button class="g-btn primary" type="submit" disabled={p.isLoading || !p.inputValue.trim()}><Send />보내기</button>
+					{#if p.isLoading && p.onCancel}
+						<button class="g-btn primary" type="button" onclick={p.onCancel}><Square />멈추기</button>
+					{:else}
+						<button class="g-btn primary" type="submit" disabled={p.isLoading || !p.inputValue.trim()}><Send />보내기</button>
+					{/if}
 				</form>
 			{:else if !p.choices.length && !p.npcChoices.length}
 				{#if p.actions?.length}
@@ -382,6 +399,22 @@
 		gap: 6px;
 	}
 	.choices + .choices,
+	.send-err {
+		display: flex;
+		align-items: center;
+		gap: 8px;
+		margin: 0 0 10px;
+		padding: 8px 10px;
+		border-radius: 8px;
+		background: color-mix(in srgb, var(--danger, #e5484d) 18%, transparent);
+		color: inherit;
+		font-size: 0.9em;
+	}
+	.send-err span {
+		flex: 1;
+		min-width: 0;
+		overflow-wrap: anywhere;
+	}
 	.choices + .say {
 		margin-top: 10px;
 	}
