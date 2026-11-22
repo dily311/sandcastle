@@ -318,7 +318,7 @@
 - [x] 5-E-22 게임 화면 효과 (2026-11-22 사용자, 백엔드는 있음) — `<effects>이름[:값]</effects>` 큐: shake(무대 흔들기, Web Animations)·flash·blackout·fade_in·fireworks는 한 번, petals·snow·rain·fog는 `clear`나 다른 계속 효과까지(이 플레이 화면 동안만). 값은 시간(`2s`·`500ms`, 0.1~10초). 움직임 줄이기 설정이면 입자·흔들기는 하지 않음. 어디: `play/vn/stageFx.svelte.ts`(테스트 2개), `StageEffects.svelte`, `StageView.svelte`, `VisualNovelTemplatePlay.svelte`(줄이 보일 때 `stageFx.run`). 완료: 미리보기 게임 화면에서 암전이 무대만 덮음·입자 층이 그려짐 확인(미리보기 브라우저가 움직임 줄이기라 입자는 숨겨진 상태로만 확인).
 - [x] 5-E-23 캐릭터 모션 — `<motion::이름>jump</motion>` 큐: jump·bounce·shake·nod·sway·shrink·slide_in·slide_out을 그 캐릭터 스프라이트의 CSS 애니메이션으로(같은 모션도 다시 오면 다시 함, slide_out은 사라진 채로 다음 모션까지). 어디: `StageView.svelte`. 완료: `pnpm check`, 테스트. **확인 못 함**: 스탠딩이 있는 게임에서 눈으로 확인(미리보기 게임에 스탠딩 없음).
 - 5-E-24 감정 표정 되돌리기 — `<emotion::이름>`으로 바뀐 표정이 그 뒤에도 계속 남아 어색함(사용자 실험). **결정 필요**: 언제 기본 표정으로 돌아갈지.
-- 5-E-25 일반 채팅 CG 같은 키 묶기 — 옵션(기본 꺼짐)을 켜면 `이름.png`·`이름-1.png`… 를 키 `이름` 하나로 묶어 프롬프트에는 한 번만, 보일 때는 그중 하나를 무작위(메시지마다 고정).
+- [x] 5-E-25 일반 채팅 CG 같은 키 묶기 — 설정 > 캐릭터 에셋 "같은 키 묶기"(`AppSetting.cgGroupVariants`, 기본 꺼짐, 같이 쓰는 설정). 켜면 백엔드가 `이름-숫자` 키를 `이름`으로 묶어 프롬프트 키 목록에는 한 번만, 응답의 `<cg>이름</cg>`는 그대로 남기고(`chat_images::group_variants`·`base_key`), 화면은 그 묶음에서 메시지 id로 하나를 골라 보인다(다시 그려도 같음, `cgVariants.ts`). 완료: Rust 시험 `variants_share_a_base_key`, 프런트 테스트 2개, 미리보기에서 설정 줄 확인. **확인 못 함**: 실제 캐릭터 에셋으로 대화.
 - 챕터 자동 나누기는 `plans/idea.md`로 (아직 아이디어).
 
 ### 6단계 — 생태계 및 확장성

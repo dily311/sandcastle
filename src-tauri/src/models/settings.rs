@@ -32,6 +32,9 @@ pub struct AppSetting {
     /// 휴지통 보존 기간(일). None = 계속 보관. 지난 것은 휴지통을 열거나 새로 지울 때 정리 (2-A-3)
     #[serde(default = "default_trash_retention_days")]
     pub trash_retention_days: Option<u32>,
+    /// 대화 CG: `이름.png`·`이름-1.png`…을 키 `이름` 하나로 묶고 보일 때 그중 하나를 무작위로 (5-E-25, 기본 꺼짐)
+    #[serde(default)]
+    pub cg_group_variants: bool,
 }
 
 fn default_trash_retention_days() -> Option<u32> {
@@ -90,6 +93,7 @@ impl Default for AppSetting {
             usage_retention_days: None,
             trash_retention_days: default_trash_retention_days(),
             check_updates_on_start: false,
+            cg_group_variants: false,
         }
     }
 }

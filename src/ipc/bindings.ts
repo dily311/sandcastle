@@ -763,6 +763,8 @@ export type AppSetting_Deserialize = {
 	usageRetentionDays?: number | null,
 	/**  휴지통 보존 기간(일). None = 계속 보관. 지난 것은 휴지통을 열거나 새로 지울 때 정리 (2-A-3) */
 	trashRetentionDays?: number | null,
+	/**  대화 CG: `이름.png`·`이름-1.png`…을 키 `이름` 하나로 묶고 보일 때 그중 하나를 무작위로 (5-E-25, 기본 꺼짐) */
+	cgGroupVariants?: boolean,
 };
 
 export type AppSetting_Serialize = {
@@ -789,6 +791,8 @@ export type AppSetting_Serialize = {
 	usageRetentionDays: number | null,
 	/**  휴지통 보존 기간(일). None = 계속 보관. 지난 것은 휴지통을 열거나 새로 지울 때 정리 (2-A-3) */
 	trashRetentionDays: number | null,
+	/**  대화 CG: `이름.png`·`이름-1.png`…을 키 `이름` 하나로 묶고 보일 때 그중 하나를 무작위로 (5-E-25, 기본 꺼짐) */
+	cgGroupVariants: boolean,
 };
 
 export type AssetRef = {

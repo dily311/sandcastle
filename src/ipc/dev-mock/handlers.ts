@@ -26,6 +26,7 @@ const db = {
 		usageRetentionDays: null,
 		trashRetentionDays: 30,
 		checkUpdatesOnStart: false,
+		cgGroupVariants: false,
 		home: { startOnHome: false, greeting: "", blocks: ["continue", "quick", "favorites", "games"], css: "" },
 	} satisfies AppSetting_Serialize as AppSetting_Serialize,
 	themeSetting: {

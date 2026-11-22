@@ -632,6 +632,8 @@ impl ChatManager {
             Some(cid) if images_on => load_enabled_images(app, db, cid).await?,
             _ => vec![],
         };
+        let group_cg = settings.0.lock().map(|s| s.cg_group_variants).unwrap_or(false);
+        let images = if group_cg { super::chat_images::group_variants(images) } else { images };
         match image_rules(&images) {
             Some(rules) => {
                 context.image_prompt = Some(rules);

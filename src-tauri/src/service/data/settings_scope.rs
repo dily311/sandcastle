@@ -37,6 +37,7 @@ pub const SETTINGS_SCOPE: &[(&str, Scope)] = &[
     ("app-setting/checkUpdatesOnStart", Scope::Device),
     ("app-setting/usageRetentionDays", Scope::Device),
     ("app-setting/trashRetentionDays", Scope::Device),
+    ("app-setting/cgGroupVariants", Scope::Shared),
     // ---- theme-setting ----
     ("theme-setting/mode", Scope::Shared),
     ("theme-setting/selectTheme", Scope::Shared),

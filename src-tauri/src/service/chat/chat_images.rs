@@ -238,10 +238,38 @@ pub fn image_rules(images: &[CharacterImage]) -> Option<String> {
     image_keys(images).map(|k| crate::service::app_prompts::chat_images(&k))
 }
 
-/// 켜진 이미지 키 목록 ("a, b, c"). 없으면 None ({{img_keys}})
+/// 켜진 이미지 키 목록 ("a, b, c", 같은 키는 한 번). 없으면 None ({{img_keys}})
 pub fn image_keys(images: &[CharacterImage]) -> Option<String> {
-    let keys: Vec<&str> = images.iter().filter(|i| i.enabled).take(MAX_PROMPT_KEYS).map(|i| i.key.as_str()).collect();
+    let mut keys: Vec<&str> = vec![];
+    for i in images.iter().filter(|i| i.enabled) {
+        if keys.len() >= MAX_PROMPT_KEYS {
+            break;
+        }
+        if !keys.iter().any(|k| k.eq_ignore_ascii_case(&i.key)) {
+            keys.push(i.key.as_str());
+        }
+    }
     (!keys.is_empty()).then(|| keys.join(", "))
+}
+
+/// 같은 키 묶기의 키: 끝의 `-숫자`를 뗀다 (`smile-2` → `smile`, `-1`처럼 앞이 비면 그대로)
+pub fn base_key(key: &str) -> &str {
+    match key.rsplit_once('-') {
+        Some((head, tail)) if !head.is_empty() && !tail.is_empty() && tail.bytes().all(|b| b.is_ascii_digit()) => head,
+        _ => key,
+    }
+}
+
+/// 같은 키 묶기 (5-E-25): 키를 묶음 키로 바꾼다. 프롬프트에는 묶음 키가 한 번만, 응답의 `<cg>묶음 키</cg>`는 그대로 남고
+/// 어느 그림을 보일지는 화면이 그 묶음에서 메시지마다 고른다
+pub fn group_variants(images: Vec<CharacterImage>) -> Vec<CharacterImage> {
+    images
+        .into_iter()
+        .map(|mut i| {
+            i.key = base_key(&i.key).to_string();
+            i
+        })
+        .collect()
 }
 
 // =======================================
@@ -410,5 +438,20 @@ mod tests {
         assert!(normalize_key(&"가".repeat(41)).is_err());
         assert_eq!(key_from_path(Path::new("C:/x/Smile, big.PNG")), "Smile_ big");
         assert_eq!(key_from_path(Path::new("/x/.png")), ".png");
+    }
+}
+
+#[cfg(test)]
+mod group_tests {
+    use super::*;
+
+    #[test]
+    fn variants_share_a_base_key() {
+        assert_eq!(base_key("smile-1"), "smile");
+        assert_eq!(base_key("smile-12"), "smile");
+        assert_eq!(base_key("smile"), "smile");
+        assert_eq!(base_key("blue-eyes"), "blue-eyes");
+        assert_eq!(base_key("-1"), "-1");
+        assert_eq!(base_key("cg-"), "cg-");
     }
 }
