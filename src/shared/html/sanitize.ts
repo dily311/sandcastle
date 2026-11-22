@@ -5,7 +5,7 @@
 // - ```html 코드 블록은 여기를 거치지 않는다 (iframe에서 JS까지 허용, HtmlView)
 
 const ALLOWED = new Set([
-	"details", "summary", "div", "span", "p", "br", "hr", "b", "i", "u", "s", "strong", "em", "small", "big", "mark", "sup", "sub",
+	"details", "summary", "div", "span", "p", "br", "hr", "b", "i", "u", "s", "del", "ins", "kbd", "strong", "em", "small", "big", "mark", "sup", "sub",
 	"h1", "h2", "h3", "h4", "h5", "h6", "blockquote", "pre", "code", "center", "font", "ul", "ol", "li", "dl", "dt", "dd",
 	"table", "thead", "tbody", "tfoot", "tr", "th", "td", "caption", "colgroup", "col", "img", "figure", "figcaption", "ruby", "rt", "rp", "abbr", "q", "cite",
 ]);
@@ -34,7 +34,7 @@ function cleanNode(node: Element, doc: Document) {
 			// 링크는 글자로 (앱 창이 그 주소로 넘어가지 않게). 주소는 툴팁으로
 			const span = doc.createElement("span");
 			const href = child.getAttribute("href");
-			if (href) span.setAttribute("title", href);
+			if (href && /^https?:/i.test(href.trim())) span.setAttribute("title", href);
 			span.className = "html-link";
 			span.append(...child.childNodes);
 			child.replaceWith(span);

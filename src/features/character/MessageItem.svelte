@@ -91,12 +91,12 @@
 	// 다인봇 (5-F-2): 대화에서 켰으면 `이름: 대사` 줄을 말한 사람별로 보인다
 	const conv = $derived(library.conversation(session.convId));
 	const multi = $derived(!!(conv?.meta as { multiChar?: boolean } | null)?.multiChar);
-	const blocks = $derived(toBlocks(text, { safeHtml: plugins.on("html"), speakers: multi }));
 	const speakerAvatars = $derived.by(() => {
 		if (!multi || !conv) return {};
 		const ch = library.character(conv.characterId);
 		return ch ? { [ch.name]: fileSrc(ch.avatar) ?? null } : {};
 	});
+	const blocks = $derived(toBlocks(text, { safeHtml: plugins.on("html"), speakers: multi, avatars: speakerAvatars }));
 	const swipes = $derived(meta.swipes?.length ?? 0);
 	const swipeId = $derived(meta.swipeId ?? 0);
 	const model = $derived(meta.info?.model || undefined);
@@ -323,7 +323,7 @@
 		{#if !live}<PluginProcessNote {msg} bind:showOriginal={pluginOriginal} onupdate={(m) => session.update(m)} />{/if}
 		{#if translation && !live}<p class="tr-note">{showOriginal ? "원문" : `${translation.lang} 번역`} · <button class="link" onclick={() => (showOriginal = !showOriginal)}>{showOriginal ? "번역 보기" : "원문 보기"}</button></p>{/if}
 		{#if blocks.length}
-			<RichText {blocks} {images} avatars={speakerAvatars} />
+			<RichText {blocks} {images} />
 		{:else if live}
 			<p class="typing" aria-label="응답 기다리는 중"><span></span><span></span><span></span></p>
 		{/if}
