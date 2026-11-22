@@ -391,15 +391,24 @@ export async function runSlash(source: string, session: ChatSession, opts: Slash
 	const convId = session.convId;
 	if (slashRuns.isRunning(convId)) return void toasts.error("이 대화에서 스크립트가 도는 중 — 멈춘 뒤 다시");
 	if (!quickReplies.loaded) await quickReplies.load().catch(() => {});
-	const env = { ...slashEnv(session, opts), stopped: () => slashRuns.stopped(convId) };
+	let at = "";
+	const env = { ...slashEnv(session, opts), stopped: () => slashRuns.stopped(convId), trace: (name: string) => (at = name) };
 	slashRuns.start(convId);
 	try {
 		const r = await runScript(source, env);
 		if (r.stopped) toasts.info("스크립트를 멈춤");
 	} catch (e) {
 		if (slashRuns.stopped(convId)) toasts.info("스크립트를 멈춤");
-		else if (e instanceof ScriptError) toasts.error(e.message);
-		// 다른 오류는 call이 이미 알림을 띄움
+		else {
+			// 실패: 어디서였는지와 '다시 실행' (앞 실행의 /input 답은 다시 묻지 않음, 5-E-20-6-11).
+			// AI·저장 오류 자체는 call이 이미 알림을 띄웠으므로 여기서는 멈춘 자리와 다시 실행만
+			const why = e instanceof ScriptError ? e.message : `/${at || "?"}에서 실패해 멈춤`;
+			const answers = { ...(opts.answers ?? {}), ...env.answers };
+			toasts.show(
+				{ tone: "error", message: why, source: "슬래시 커맨드", action: { label: "다시 실행", run: () => void runSlash(source, session, { ...opts, answers }) } },
+				20_000,
+			);
+		}
 	} finally {
 		// 멈추거나 실패해도 그때까지 바꾼 변수는 남긴다
 		await env.flush().catch(() => {});

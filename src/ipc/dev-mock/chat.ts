@@ -281,6 +281,7 @@ let quickReplySets = [
 
 /** 슬래시 스크립트가 남긴 보낸 프롬프트 (5-E-20-6-10) */
 const mockPrompts: Record<string, unknown> = {};
+const failedOnce = new Set<string>();
 
 const PHONE_GROUP_REPLIES = ["Seraphina: 눈 떴어요?\n어제 숲에서 쓰러져 있길래 데려왔어요\n카이: 나도 같이 옮겼거든?\nSeraphina: 네, 카이도요 ㅎㅎ"];
 const PHONE_REPLIES = ["눈 떴어요?\n어제 숲에서 쓰러져 있길래 데려왔어요", "괜찮아요 ㅎㅎ\n천천히 쉬어요", "지금 오두막이에요\n올 때 빵 좀 사다 줄래요?"];
@@ -558,6 +559,11 @@ AI: 그때 이야기를 다시 해 볼까요?`, stale: false },
 	// /gen (5-E-20-5): 지시를 받아 짧은 글을 돌려줌
 	slash_generate: async ({ prompt }) => {
 		if (String(prompt).includes("천천히")) await sleep(3000);
+		// "한번실패"가 든 지시는 처음 한 번 실패 (5-E-20-6-11 다시 실행 확인용)
+		if (String(prompt).includes("한번실패") && !failedOnce.has(String(prompt))) {
+			failedOnce.add(String(prompt));
+			throw { code: "AI_PROVIDER_ERROR", category: "AI_PROVIDER", message: "가짜 공급자 오류 (한 번만)", retryable: true };
+		}
 		return {
 			text: `(가짜 AI) ${String(prompt).slice(0, 40)}에 대한 글`,
 			truncated: String(prompt).includes("잘림"),

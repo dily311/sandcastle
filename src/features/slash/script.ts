@@ -57,6 +57,8 @@ export interface ScriptEnv {
 	maxLoop?: number;
 	/** 사용자가 멈췄는가 (5-E-20-6-8) — 커맨드마다·반복 바퀴마다 본다 */
 	stopped?: () => boolean;
+	/** 커맨드를 실행하기 직전 (실패하면 어디서였는지 알리려고, 5-E-20-6-11) */
+	trace?: (name: string) => void;
 	/** /run 세트.버튼 · /:세트.버튼 → 그 빠른 답장의 스크립트 (없으면 undefined) */
 	quickReply?: (name: string) => string | undefined;
 	/** /if·/while의 left·right가 변수 이름일 때 대화·전역 변수 값 (범위 변수는 엔진이 먼저 본다) */
@@ -581,6 +583,7 @@ export async function runScript(src: string, env: ScriptEnv, pipe = ""): Promise
 		let cur = input;
 		for (const cmd of parseScript(source)) {
 			if (env.stopped?.()) throw new Stopped();
+			env.trace?.(cmd.name);
 			if (++steps > limit) throw new ScriptError(`실행 단계가 ${limit}번을 넘어 멈춤 (/${cmd.name})`);
 			if (cmd.breakPipe) cur = "";
 			const pipeNow = cur;
