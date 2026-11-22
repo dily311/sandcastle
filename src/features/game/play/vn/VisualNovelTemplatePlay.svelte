@@ -8,6 +8,7 @@
 	import { layout } from "$app/layout.svelte";
 	import "../stage.css";
 	import StageView from "./StageView.svelte";
+	import { stageFx } from "./stageFx.svelte";
 	import PlayInfo from "./PlayInfo.svelte";
 	import { playBridge } from "../../runtime/playBridge.svelte";
 	import { panel } from "$app/panel.svelte";
@@ -208,6 +209,7 @@
 		if (!line || scriptFinished || playedLines.has(line)) return;
 		playedLines.add(line);
 		playLineAudio(line);
+		stageFx.run(line.cues as unknown[]);
 	});
 
 	function resumeBgm() {
