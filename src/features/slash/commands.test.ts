@@ -8,7 +8,7 @@ const setOptions = vi.fn(async () => {});
 const conv = { id: "c", characterId: "ch", personaId: "p", meta: { variables: { hp: "10", list: '["a"]' } } };
 const setting = { value: { quickReply: { aiLimit: 2, globals: { g: "1" } } } as Record<string, unknown>, save: saveSetting };
 
-vi.mock("$shared/ipc/client", () => ({ call: (p: unknown) => call(p), commands: { slashGenerate: (_c: string, t: string) => `AI:${t}`, appendMessage: (m: unknown) => m } }));
+vi.mock("$shared/ipc/client", () => ({ call: (p: unknown) => call(p), commands: { slashGenerate: (_c: string, t: string) => ({ text: `AI:${t}`, truncated: t.includes("잘림") }), appendMessage: (m: unknown) => m } }));
 const chooseFrom = vi.fn(async (_r: unknown) => "나");
 const confirmAction = vi.fn(async (_r: unknown) => true);
 vi.mock("$shared/stores/confirm.svelte", () => ({ promptText: vi.fn(), chooseFrom: (r: unknown) => chooseFrom(r), confirmAction: (r: unknown) => confirmAction(r) }));
@@ -117,5 +117,14 @@ describe("슬래시 커맨드 앱 연결", () => {
 		await runScript("/qr-chat-set-off 지.시", env);
 		expect(patchMeta).toHaveBeenLastCalledWith("c", { quickReplyOff: ["s1"] });
 		await expect(runScript("/impersonate", env)).rejects.toThrow("대필 플러그인");
+	});
+});
+
+describe("잘린 응답 (5-E-20-6-6)", () => {
+	it("/gen 결과가 응답 길이에서 잘리면 경고 알림 (글은 그대로 돌려줌)", async () => {
+		show.mockClear();
+		const env = slashEnv(session);
+		expect((await runScript("/gen 잘림 시험", env)).pipe).toBe("AI:잘림 시험");
+		expect(show).toHaveBeenCalledWith(expect.objectContaining({ tone: "warning", message: expect.stringContaining("응답 길이 한도에서 잘림") }));
 	});
 });

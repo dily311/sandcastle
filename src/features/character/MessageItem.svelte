@@ -1,4 +1,5 @@
 <script lang="ts">
+	import { nav } from "$app/nav.svelte";
 	import { library } from "./library.svelte";
 	import { Bookmark, BookmarkX, ChevronDown, ChevronLeft, ChevronRight, Copy, Eye, EyeOff, FileSearch, GitBranch, ImagePlus, Languages, Pencil, RefreshCw, Square, Trash2, Volume2, Sparkles, PenLine, ChevronsDownUp, ChevronsUpDown, Ellipsis, IdCard } from "@lucide/svelte";
 	import { plugins } from "$shared/stores/plugins.svelte";
@@ -99,6 +100,8 @@
 	const swipes = $derived(meta.swipes?.length ?? 0);
 	const swipeId = $derived(meta.swipeId ?? 0);
 	const model = $derived(meta.info?.model || undefined);
+	/** 응답 길이 한도에서 끊긴 답 (5-E-20-6-6) */
+	const truncated = $derived(["length", "max_tokens", "MAX_TOKENS"].includes(String((meta.info as { finishReason?: string } | undefined)?.finishReason ?? "")));
 
 	// 접기: 화면에 보이는 것만 바꿈 (저장하지 않고 AI에게 보내는 글도 그대로).
 	// 직접 접거나 펼치기 전에는 AI에게 숨긴 메시지만 접혀 있다
@@ -255,6 +258,7 @@
 				{#if appSetting.showTimestamps}<time datetime={new Date(msg.createdAt).toISOString()} title={absolute(msg.createdAt)}>{relative(msg.createdAt)}</time>{/if}
 				{#if isAi}<ProviderIcon {model} size={12} />{/if}
 				{#if meta.info?.cancelled}<span class="model">· 멈춤</span>{/if}
+				{#if isAi && truncated}<button type="button" class="cut" title="프리셋의 '응답 길이'(토큰)에서 끊김 — 생각하는 모델은 생각도 이 한도 안에서 씀. 눌러서 프리셋 열기" onclick={() => nav.go({ page: "settings", tab: "preset" })}>· 응답 길이에서 잘림</button>{/if}
 			</span>
 		{/if}
 		{#if !editing && !live && !selecting}
@@ -563,5 +567,16 @@
 		50% {
 			opacity: 0.2;
 		}
+	}
+	.cut {
+		padding: 0;
+		border: none;
+		background: none;
+		color: var(--warning, var(--text-muted));
+		font: inherit;
+		cursor: pointer;
+	}
+	.cut:hover {
+		text-decoration: underline;
 	}
 </style>

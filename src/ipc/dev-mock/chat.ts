@@ -227,7 +227,8 @@ function addMsg(conv: Conv, role: "user" | "assistant", content: string, ago: nu
 	const a = addConv({ title: "숲에서 깨어남", characterId: "sera", pinned: true, folderId: "f1" }, 2);
 	addMsg(a, "assistant", '*당신이 눈을 뜨자, 부드러운 빛 속에서 한 여인이 고개를 숙인다.*\n\n"눈을 떴군요. 다행이에요… 숲의 짐승들에게 쫓기다 쓰러졌었어요."', 42, { chapter: "숲에서 깨어남" });
 	addMsg(a, "user", "여기가 어디죠? 숲인가요?", 41);
-	addMsg(a, "assistant", '"제 오두막이에요. 이 숲, 엘도리아는 제가 지키는 곳이에요. 여기선 아무도 당신을 해치지 못해요."\n*그녀가 따뜻한 차를 건넨다.*', 40);
+	// 응답 길이 한도에서 잘린 답 (5-E-20-6-6 표시 확인용)
+	addMsg(a, "assistant", '"제 오두막이에요. 이 숲, 엘도리아는 제가 지키는 곳이에요. 여기선 아무도 당신을 해치지 못해요."\n*그녀가 따뜻한 차를 건넨', 40, { info: { model: "gemini-3.7-flash", finishReason: "MAX_TOKENS" } });
 	// HTML 코드 블록 미리보기 확인용 (iframe으로 그려지고 JS가 돈다)
 	addMsg(a, "assistant", ["그녀가 낡은 지도를 펼친다.", "```html", `<div style="padding:12px;border-radius:12px;background:#1f3b2d;color:#e8f5e9;font-family:system-ui"><b>엘도리아 숲 지도</b><p id="t">불러오는 중…</p><button onclick="document.getElementById('t').textContent='오두막 → 샘터 15분'">길 찾기</button></div>`, `<script>document.getElementById("t").textContent = "JS 실행됨";</script>`, "```", '"여기가 우리가 있는 곳이에요."'].join("\n"), 35);
 	addMsg(a, "assistant", "(작가 메모: 다음 장면에서 늑대 무리 등장)", 30, { hidden: true, chapter: "그림자 송곳니" });
@@ -552,7 +553,7 @@ AI: 그때 이야기를 다시 해 볼까요?`, stale: false },
 	},
 	delete_quick_reply_set: ({ id }) => ((quickReplySets = quickReplySets.filter((s) => s.id !== id)), null),
 	// /gen (5-E-20-5): 지시를 받아 짧은 글을 돌려줌
-	slash_generate: ({ prompt }) => `(가짜 AI) ${String(prompt).slice(0, 40)}에 대한 글`,
+	slash_generate: ({ prompt }) => ({ text: `(가짜 AI) ${String(prompt).slice(0, 40)}에 대한 글`, truncated: String(prompt).includes("잘림") }),
 	append_message: ({ input }) => {
 		const c = conv(input.conversationId);
 		const m = addMsg(c, input.role, input.content, 0, input.meta ?? {});

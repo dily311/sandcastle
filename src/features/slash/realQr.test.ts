@@ -11,7 +11,7 @@ vi.mock("$shared/ipc/client", () => ({
 	commands: {
 		slashGenerate: (_c: string, prompt: string) => {
 			gens.push(prompt);
-			return `AI가 쓴 글 ${gens.length}`;
+			return { text: `AI가 쓴 글 ${gens.length}`, truncated: false };
 		},
 		appendMessage: (m: { role: string; name: string | null; content: string; meta: unknown }) => {
 			appended.push(m);

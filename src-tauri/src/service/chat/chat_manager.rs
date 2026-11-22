@@ -858,13 +858,7 @@ impl ChatManager {
         let auto_image_prompt = auto_image_prompt.filter(|_| auto_image);
         let (content, used_images) = sanitize_cg_tags(&result, &images);
         // 메시지 linter (3-B, ADR-014): 정규식·태그 정리 뒤, 저장 직전. 플러그인 후처리(화면)보다 먼저라 플러그인은 늘 검사된 글을 받는다
-        let (content, lint_meta) = super::lint::apply_to_response(
-            app,
-            &content,
-            &me.name,
-            conv.meta.as_ref(),
-            matches!(finish_reason.as_deref(), Some("length" | "max_tokens" | "MAX_TOKENS")),
-        );
+        let (content, lint_meta) = super::lint::apply_to_response(app, &content, &me.name, conv.meta.as_ref(), is_truncated(finish_reason.as_deref()));
         // 자동 재생성 (3-B-4): linter가 걸었고 켜져 있으면 다음 시도가 필요하다 — 응답이 취소된 것에는 이어가지 않는다
         let (attempts_done, auto_info) = match &kind {
             TurnKind::Regenerate { auto: Some(a), .. } => (a.attempt, Some(json!({ "attempt": a.attempt, "max": a.max, "rules": a.rules }))),
@@ -1111,7 +1105,7 @@ impl ChatManager {
         instruction: &str,
         raw: Option<Option<String>>,
         cancel: &CancellationToken,
-    ) -> Result<String> {
+    ) -> Result<(String, bool)> {
         let conv = match get_conversation(db, conversation_id).await {
             Ok(c) => c,
             Err(sqlx::Error::RowNotFound) => return Err(AppError::not_found("대화를 찾을 수 없음").into()),
@@ -1140,7 +1134,8 @@ impl ChatManager {
                 |_| {},
             )
             .await?;
-        Ok(response.content.trim().to_string())
+        // 응답 길이 한도에서 잘렸는가 (5-E-20-6-6)
+        Ok((response.content.trim().to_string(), is_truncated(response.finish_reason.as_deref())))
     }
 
     /// 폰 엿보기: 두 사람 몫을 AI가 모두 이어서 쓰고, 말풍선 메시지로 나눠 저장한다.
@@ -1302,6 +1297,11 @@ pub(crate) fn take_image_tag(text: &str) -> (String, Option<String>) {
     }
     out.push_str(&text[i.min(text.len())..]);
     (out.trim_end().to_string(), prompt)
+}
+
+/// 응답 길이(max_tokens) 한도에서 끊겼는가 — 공급자마다 이름이 다르다 (OpenAI length, Claude max_tokens, Gemini MAX_TOKENS)
+pub fn is_truncated(finish_reason: Option<&str>) -> bool {
+    matches!(finish_reason, Some("length" | "max_tokens" | "MAX_TOKENS"))
 }
 
 /// /genraw 프롬프트: 맥락 없이 지시만 (system=이 있으면 그 앞에 시스템 글). (API 프로필 id, 프롬프트)

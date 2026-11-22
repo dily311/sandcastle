@@ -127,6 +127,11 @@ export function slashEnv(session: ChatSession, opts: SlashOpts = {}): ScriptEnv 
 		return content;
 	};
 	const bySeq = (seqs: number[]) => session.messages.filter((m) => seqs.includes(m.seq));
+	/** /gen 결과: 잘렸으면 알림 (5-E-20-6-6) */
+	const generated = (name: string, r: { text: string; truncated: boolean }) => {
+		if (r.truncated) toasts.show({ tone: "warning", message: `/${name} 결과가 응답 길이 한도에서 잘림 — 프리셋의 '응답 길이'를 늘리면 됨`, source: "슬래시 커맨드" });
+		return r.text;
+	};
 	const setOf = (name: string) => {
 		const s = quickReplies.sets.find((x) => x.name === name.trim());
 		if (!s) throw new ScriptError(`빠른 답장 세트를 찾지 못함 (${name})`);
@@ -170,12 +175,12 @@ export function slashEnv(session: ChatSession, opts: SlashOpts = {}): ScriptEnv 
 		},
 		gen: async ({ unnamed }) => {
 			ai("gen");
-			return call(commands.slashGenerate(convId, text(unnamed), false, null), src);
+			return generated("gen", await call(commands.slashGenerate(convId, text(unnamed), false, null), src));
 		},
 		// /genraw system=… 지시: 대화 맥락 없이 지시만
 		genraw: async ({ named, unnamed }) => {
 			ai("genraw");
-			return call(commands.slashGenerate(convId, text(unnamed), true, text(named.system) || null), src);
+			return generated("genraw", await call(commands.slashGenerate(convId, text(unnamed), true, text(named.system) || null), src));
 		},
 		// /impersonate 초안: 대필로 내 다음 대사를 입력칸에 (대필 플러그인이 켜져 있어야 함)
 		impersonate: async ({ unnamed }, ) => {

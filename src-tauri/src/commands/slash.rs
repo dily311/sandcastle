@@ -14,6 +14,14 @@ use crate::{
     task::{CreateTaskRequest, TaskManager, TaskOwner, TaskType},
 };
 
+/// /gen·/genraw 결과. truncated: 응답 길이 한도에서 잘림 (화면이 경고를 띄움)
+#[derive(serde::Serialize, specta::Type)]
+#[serde(rename_all = "camelCase")]
+pub struct SlashGenResult {
+    pub text: String,
+    pub truncated: bool,
+}
+
 /// /gen: 이 대화의 맥락 끝에 지시를 붙여 AI 글을 받는다 (저장하지 않음).
 /// raw면 /genraw: 맥락 없이 지시만 (system이 있으면 그 앞에 시스템 글)
 #[allow(clippy::too_many_arguments)]
@@ -28,7 +36,7 @@ pub async fn slash_generate(
     prompt: String,
     raw: bool,
     system: Option<String>,
-) -> Result<String> {
+) -> Result<SlashGenResult> {
     plugins::require(&app, plugins::id::SLASH)?;
     let prompt = prompt.trim().to_string();
     if prompt.is_empty() {
@@ -42,6 +50,7 @@ pub async fn slash_generate(
             ChatManager
                 .quiet_gen(&app, &state.db, &settings, &conversation_id, &prompt, raw, &cancel)
                 .await
+                .map(|(text, truncated)| SlashGenResult { text, truncated })
                 .map_err(into_app_error)
         })
         .await
