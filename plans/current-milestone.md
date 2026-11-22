@@ -72,7 +72,7 @@ M17(3-A)·M19(3-C)·M20(3-D) 완료(후속만 남음), M18(3-B)은 M21(3-B-4, �
 5-F-1~3 끝(로어북 분류·다인봇·게임 기록 전환). 5-E-19 끝(폰 단체 대화·카메라), 5-F-3-2 끝(NPC 스탠딩·시작 씬). 5-E-20-4-1·2 끝(SillyTavern 데이터 가져오기 10GB·내보내기). 5-E-20-4-3·4 끝(프리셋 내보내기, 분기·카드 없는 채팅·카드 정규식). 5-E-20-5 범위 합의(ADR-025), 5-E-20-5-1 스크립트 엔진 끝. 5-E-20-5 끝(스크립트 엔진·커맨드·/gen·빠른 답장, 범위 나누기·모두 보기·패널 검색). 다음: 5-E-20-6 STscript 호환(범위 합의, 5-E-20-6-0 반복·상한 결정부터). 남은 것: 폰 입력칸에 슬래시·빠른 답장 연결, 5-E-17 남은 것, 5-E-21 남은 것, 5-F-4(결정 필요).
 
 발견한 것:
-- 시험 `a_corrupted_file_in_the_folder_stops_before_the_database_changes_and_resumes_after_repair`가 전체 시험 중 한 번 실패(혼자 3번·전체 2번은 통과). 4ms 쉬기로 밀리초 시각을 벌리는 동기화 시험들이라 부하가 크면 흔들리는 것으로 보임 — 시계 주입으로 바꿀 것. 2026-11-22에 `first_reply_applies_edits_and_deletes_thanks_to_acks`도 같은 식으로 전체 실행 중 한 번 실패(혼자 3번 통과).
+- 시험 `a_corrupted_file_in_the_folder_stops_before_the_database_changes_and_resumes_after_repair`가 전체 시험 중 한 번 실패(혼자 3번·전체 2번은 통과). 4ms 쉬기로 밀리초 시각을 벌리는 동기화 시험들이라 부하가 크면 흔들리는 것으로 보임 — 시계 주입으로 바꿀 것. 2026-11-22에 `first_reply_applies_edits_and_deletes_thanks_to_acks`, 2026-11-23에 `same_row_edited_on_both_keeps_both`도 같은 식으로 전체 실행 중 한 번 실패(혼자 3번 통과).
 
 ## 현재 단계의 개선점
 

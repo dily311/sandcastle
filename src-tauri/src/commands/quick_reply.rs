@@ -35,7 +35,14 @@ pub async fn list_quick_reply_sets(app: AppHandle, state: State<'_, AppState>, p
             };
             quick_reply::upsert_quick_reply_set(&state.db, &input).await?;
         }
-        crate::sys::settings::apply_patch(&app, &plugin.0, serde_json::json!({ "quickReply": { "sets": [] } }))?;
+        // 설정 묶음은 맨 위 칸 단위로 덮으므로 quickReply의 다른 칸(상한·전역 변수)은 그대로 넣는다
+        let mut rest = plugin
+            .0
+            .lock()
+            .map(|s| s.quick_reply.clone())
+            .map_err(|_| AppError::internal("settings lock poisoned"))?;
+        rest.sets.clear();
+        crate::sys::settings::apply_patch(&app, &plugin.0, serde_json::json!({ "quickReply": rest }))?;
     }
     Ok(quick_reply::get_all_quick_reply_sets(&state.db).await?)
 }

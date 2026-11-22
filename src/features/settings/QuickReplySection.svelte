@@ -9,11 +9,14 @@
 	import { toasts } from "$shared/stores/toast.svelte";
 	import { library } from "$features/character/library.svelte";
 	import { newId, quickReplies, toInput, type QuickReplySet, type Scope } from "$features/slash/quickReply.svelte";
+	import { aiLimit, MAX_AI_LIMIT } from "$features/slash/commands";
+	import { pluginSetting } from "$shared/stores/aiTools.svelte";
 	import Section from "./Section.svelte";
 	import Group from "./Group.svelte";
 	import Row from "./Row.svelte";
 
 	onMount(() => {
+		if (!pluginSetting.value) void pluginSetting.load();
 		void quickReplies.load(true);
 		if (!library.loaded) void library.load();
 	});
@@ -57,6 +60,13 @@
 		changed(s);
 	}
 
+	/** 스크립트 한 번 실행의 AI 호출 상한 (ADR-025 5-E-20-6-0) */
+	function setAiLimit(v: string) {
+		const cur = pluginSetting.value;
+		const n = Math.min(MAX_AI_LIMIT, Math.max(1, Math.round(Number(v)) || 1));
+		if (!cur) return;
+		void pluginSetting.save({ ...cur, quickReply: { ...(cur.quickReply ?? {}), aiLimit: n } } as typeof cur);
+	}
 	async function addSet() {
 		const s = await quickReplies.save({ id: null, name: "새 세트", scope: "global", scopeId: null, enabled: true, autoSend: false, items: [{ id: newId(), label: "", message: "", hidden: false }], sortOrder: quickReplies.sets.length });
 		open[s.id] = true;
@@ -128,6 +138,11 @@
 		<Button size="sm" onclick={importSt}>{#snippet icon()}<Download />{/snippet}SillyTavern에서 가져오기</Button>
 		<Button size="sm" variant="primary" onclick={addSet}>{#snippet icon()}<Plus />{/snippet}새 세트</Button>
 	{/snippet}
+	<Group>
+		<Row label="AI 호출 상한" desc="스크립트 한 번 실행에서 /gen 등으로 AI를 부를 수 있는 횟수 (1~{MAX_AI_LIMIT}) · 늘리면 그만큼 요금이 들 수 있음">
+			<Input type="number" min={1} max={MAX_AI_LIMIT} value={String(aiLimit())} onchange={(e) => setAiLimit(e.currentTarget.value)} aria-label="AI 호출 상한" />
+		</Row>
+	</Group>
 	{#if quickReplies.loaded && !quickReplies.sets.length}
 		<Group flush>
 			<EmptyState title="세트 없음" description="새로 만들거나 SillyTavern 빠른 답장 세트(.json)를 가져옴"></EmptyState>

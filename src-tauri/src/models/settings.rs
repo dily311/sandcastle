@@ -303,11 +303,25 @@ pub struct PluginSetting {
 }
 
 /// 빠른 답장: 입력칸 위 버튼. 누르면 `/`로 시작하는 글은 스크립트로 실행, 아니면 보내거나 입력칸에 넣음
-#[derive(Debug, Serialize, Deserialize, Clone, Default, specta::Type)]
+#[derive(Debug, Serialize, Deserialize, Clone, specta::Type)]
 #[serde(rename_all = "camelCase", default)]
 pub struct QuickReplySetting {
     /// 예전(5-E-20-5-3) 자리. 지금은 DB(quick_reply_sets)에 두고, 처음 목록을 읽을 때 옮긴 뒤 비운다
     pub sets: Vec<LegacyQuickReplySet>,
+    /// 슬래시 스크립트 한 번 실행에서 AI를 부를 수 있는 횟수 (1~50, ADR-025 5-E-20-6-0)
+    pub ai_limit: u32,
+    /// 전역 변수 (/setglobalvar, 기기 사이에 같이 씀)
+    pub globals: std::collections::BTreeMap<String, String>,
+}
+
+impl Default for QuickReplySetting {
+    fn default() -> Self {
+        Self {
+            sets: vec![],
+            ai_limit: 5,
+            globals: Default::default(),
+        }
+    }
 }
 
 #[derive(Debug, Serialize, Deserialize, Clone, Default, specta::Type)]

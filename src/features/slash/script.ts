@@ -18,6 +18,8 @@ export interface Closure {
 	kind: "closure";
 	source: string;
 	immediate?: boolean;
+	/** 만들어진 자리의 변수 범위 (실행할 때 붙임 — 묶음은 만든 자리의 변수를 본다) */
+	scope?: Scope;
 }
 export type ArgValue = string | Closure;
 
@@ -49,9 +51,18 @@ export interface ScriptEnv {
 	macro?: (name: string, arg: string | undefined) => string | undefined;
 	/** 아는 커맨드지만 지원하지 않는 것 (SillyTavern에서 온 스크립트에 친절한 오류) */
 	unsupported?: string[];
-	/** 실행 단계 상한 (기본 500) */
+	/** 실행 단계 상한 (기본 1만, ADR-025 5-E-20-6-0) */
 	maxSteps?: number;
+	/** 반복 하나의 바퀴 상한 (기본 1000) */
+	maxLoop?: number;
+	/** /run 세트.버튼 · /:세트.버튼 → 그 빠른 답장의 스크립트 (없으면 undefined) */
+	quickReply?: (name: string) => string | undefined;
+	/** /if·/while의 left·right가 변수 이름일 때 대화·전역 변수 값 (범위 변수는 엔진이 먼저 본다) */
+	variable?: (name: string) => string | undefined;
 }
+
+export const DEFAULT_MAX_STEPS = 10_000;
+export const DEFAULT_MAX_LOOP = 1000;
 
 export interface ScriptResult {
 	pipe: string;
@@ -160,8 +171,19 @@ function readCommand(s: string, i: number): [Command, number] {
 	let unnamed: ArgValue | null = null;
 	// /:세트.버튼 → /run 세트.버튼
 	if (s.startsWith("/:", i)) {
-		const [v, next] = s[i + 2] === '"' ? readQuoted(s, i + 2) : readValue(s, i + 2);
-		return [{ name: "run", named, unnamed: v }, next];
+		const [v, after] = s[i + 2] === '"' ? readQuoted(s, i + 2) : readValue(s, i + 2);
+		// 뒤의 key=값은 묶음 인자 (/:f a=7)
+		let j = after;
+		for (;;) {
+			let k = j;
+			while (k < s.length && isSpace(s[k])) k++;
+			const nm = /^([A-Za-z_][\w-]*)=/.exec(s.slice(k));
+			if (!nm) break;
+			const [val, next] = readValue(s, k + nm[0].length);
+			named[nm[1]] = val;
+			j = next;
+		}
+		return [{ name: "run", named, unnamed: v }, j];
 	}
 	const m = /^\/([^\s|]+)/.exec(s.slice(i));
 	if (!m) throw new ScriptError("커맨드 이름이 없음");
@@ -258,9 +280,155 @@ export function parseCommand(raw: string): Command | null {
 // ---------------------------------------------------------------------------
 
 class Abort {}
+/** /break: 가장 가까운 반복(또는 /run 묶음)을 끝냄 */
+class Break {
+	constructor(readonly value: string) {}
+}
+/** /return: /run으로 부른 묶음(또는 스크립트)을 끝내고 값을 돌려줌 */
+class Return {
+	constructor(readonly value: string) {}
+}
 
-/** {{이름}}·{{이름::인자}} 바꾸기 */
+/** 범위 변수 (/let·/var, 묶음마다 하나. 바깥 범위를 본다) */
+export class Scope {
+	private vars = new Map<string, ArgValue>();
+	constructor(readonly parent?: Scope) {}
+	private owner(name: string): Scope | undefined {
+		return this.vars.has(name) ? this : this.parent?.owner(name);
+	}
+	has(name: string): boolean {
+		return !!this.owner(name);
+	}
+	get(name: string): ArgValue | undefined {
+		return this.owner(name)?.vars.get(name);
+	}
+	/** /let: 이 범위에 새로 */
+	let(name: string, v: ArgValue) {
+		this.vars.set(name, v);
+	}
+	/** /var: 있는 범위에 바꾸고, 없으면 이 범위에 */
+	set(name: string, v: ArgValue) {
+		(this.owner(name) ?? this).vars.set(name, v);
+	}
+}
+
+/** 목록·객체 값에서 index로 꺼내기 (JSON이 아니면 undefined) */
+export function getIndexed(value: string, index: string): string | undefined {
+	try {
+		const v = JSON.parse(value) as unknown;
+		const got = Array.isArray(v) ? v[Number(index)] : v && typeof v === "object" ? (v as Record<string, unknown>)[index] : undefined;
+		return got === undefined ? undefined : typeof got === "string" ? got : JSON.stringify(got);
+	} catch {
+		return undefined;
+	}
+}
+
+/** 목록·객체 값의 index 자리를 바꾼 새 JSON (원래 값이 비었으면 index가 숫자면 목록, 아니면 객체) */
+export function setIndexed(value: string, index: string, item: string): string {
+	let v: unknown;
+	try {
+		v = value.trim() ? JSON.parse(value) : null;
+	} catch {
+		v = null;
+	}
+	const parsed = (() => {
+		try {
+			return JSON.parse(item) as unknown;
+		} catch {
+			return item;
+		}
+	})();
+	if (Array.isArray(v) && /^\d+$/.test(index)) {
+		v[Number(index)] = parsed;
+		return JSON.stringify(v);
+	}
+	const obj = v && typeof v === "object" && !Array.isArray(v) ? (v as Record<string, unknown>) : /^\d+$/.test(index) && v === null ? null : {};
+	if (obj === null) {
+		const list: unknown[] = [];
+		list[Number(index)] = parsed;
+		return JSON.stringify(list);
+	}
+	obj[index] = parsed;
+	return JSON.stringify(obj);
+}
+
+/** /addvar: 목록이면 덧붙이고, 둘 다 숫자면 더하고, 아니면 글자를 잇는다 */
+export function addTo(value: string, add: string): string {
+	try {
+		const v = JSON.parse(value) as unknown;
+		if (Array.isArray(v)) {
+			let item: unknown = add;
+			try {
+				item = JSON.parse(add);
+			} catch {
+				/* 글자 그대로 */
+			}
+			return JSON.stringify([...v, item]);
+		}
+	} catch {
+		/* 목록 아님 */
+	}
+	const [a, b] = [num(value), num(add)];
+	return a !== null && b !== null ? String(a + b) : value + add;
+}
+
+/** 묶음 앞머리의 인자 선언 (`{: a=1 b="x" /echo … :}`) → [선언, 본문] */
+export function closureParams(source: string): [Record<string, ArgValue>, string] {
+	const params: Record<string, ArgValue> = {};
+	let i = 0;
+	for (;;) {
+		while (i < source.length && isSpace(source[i])) i++;
+		const m = /^([A-Za-z_][\w-]*)=/.exec(source.slice(i));
+		if (!m) break;
+		const [v, next] = readValue(source, i + m[0].length);
+		params[m[1]] = v;
+		i = next;
+	}
+	return [params, source.slice(i)];
+}
+
+/** "이름 값" → [이름, 값] (값이 묶음이면 묶음으로) */
+function nameAndValue(text: string): [string, ArgValue | undefined] {
+	const m = /^\s*(\S+)\s*/.exec(text);
+	if (!m) return ["", undefined];
+	const rest = text.slice(m[0].length);
+	if (!rest) return [m[1], undefined];
+	if (rest.startsWith("{:")) return [m[1], readValue(rest, 0)[0]];
+	if (rest.startsWith('"')) {
+		try {
+			const [v, next] = readQuoted(rest, 0);
+			if (!rest.slice(next).trim()) return [m[1], v];
+		} catch {
+			/* 글 그대로 */
+		}
+	}
+	return [m[1], rest];
+}
+
+/** {{이름}}·{{이름::인자}} 바꾸기. 글 안의 묶음 `{: … :}`은 그대로 둔다 (그 묶음이 실행될 때 바꾼다 — /times 3 {: … {{timesIndex}} … :}) */
 export function expandMacros(text: string, pipe: string, macro?: ScriptEnv["macro"]): string {
+	if (text.includes("{:")) {
+		let out = "";
+		let i = 0;
+		for (let j = 0; j < text.length; j++) {
+			if (text.startsWith("{:", j) && !escaped(text, j)) {
+				let end: number;
+				try {
+					end = closureEnd(text, j);
+				} catch {
+					break; // 닫히지 않은 묶음: 남은 글은 보통 글처럼
+				}
+				out += expandPlain(text.slice(i, j), pipe, macro) + text.slice(j, end);
+				i = end;
+				j = end - 1;
+			}
+		}
+		return out + expandPlain(text.slice(i), pipe, macro);
+	}
+	return expandPlain(text, pipe, macro);
+}
+
+function expandPlain(text: string, pipe: string, macro?: ScriptEnv["macro"]): string {
 	return text.replace(/\{\{([^{}]+?)\}\}/g, (all, inner: string) => {
 		const [name, ...rest] = inner.split("::");
 		const key = name.trim().toLowerCase();
@@ -299,28 +467,60 @@ export function compare(left: string, right: string, rule: string): boolean {
 	}
 }
 
-export async function runScript(src: string, env: ScriptEnv, pipe = ""): Promise<ScriptResult> {
-	const limit = env.maxSteps ?? 500;
-	let steps = 0;
+const asText = (v: ArgValue | undefined) => (typeof v === "string" ? v : "");
 
-	const run = async (source: string, input: string): Promise<string> => {
+export async function runScript(src: string, env: ScriptEnv, pipe = ""): Promise<ScriptResult> {
+	const limit = env.maxSteps ?? DEFAULT_MAX_STEPS;
+	const loopLimit = env.maxLoop ?? DEFAULT_MAX_LOOP;
+	let steps = 0;
+	const root = new Scope();
+
+	/** 엔진이 먼저 보는 매크로: 범위 변수·묶음 인자·반복 번호 */
+	const macroIn = (scope: Scope) => (name: string, arg: string | undefined) => {
+		if ((name === "var" || name === "arg") && arg !== undefined) {
+			const [n, index] = arg.split("::");
+			const v = asText(scope.get(n.trim()));
+			return index !== undefined ? (getIndexed(v, index.trim()) ?? "") : v;
+		}
+		if (name === "timesindex") return asText(scope.get("timesIndex"));
+		return env.macro?.(name, arg);
+	};
+
+	/** 스크립트 본문 실행 */
+	const run = async (source: string, input: string, scope: Scope): Promise<string> => {
 		let cur = input;
 		for (const cmd of parseScript(source)) {
 			if (++steps > limit) throw new ScriptError(`실행 단계가 ${limit}번을 넘어 멈춤 (/${cmd.name})`);
 			if (cmd.breakPipe) cur = "";
-			const expand = async (v: ArgValue): Promise<ArgValue> => (typeof v === "string" ? expandMacros(v, cur, env.macro) : v.immediate ? run(v.source, cur) : v);
+			const pipeNow = cur;
+			const expand = async (v: ArgValue): Promise<ArgValue> =>
+				typeof v === "string" ? expandMacros(v, pipeNow, macroIn(scope)) : v.immediate ? exec({ ...v, immediate: false }, pipeNow, scope, {}, true) : { ...v, scope: v.scope ?? scope };
+			const builtin = builtins[cmd.name];
 			const named: Record<string, ArgValue> = {};
 			for (const [k, v] of Object.entries(cmd.named)) named[k] = await expand(v);
 			const call: CommandCall = {
 				named,
 				unnamed: cmd.unnamed === null ? cur : await expand(cmd.unnamed),
 				pipe: cur,
-				run: (c) => (typeof c === "string" ? Promise.resolve(c) : run(c.source, cur)),
+				run: (c) => (typeof c === "string" ? Promise.resolve(c) : exec(c, pipeNow, scope, {}, false)),
 			};
-			const out = await (builtins[cmd.name] ?? env.commands[cmd.name] ?? missing(cmd.name))(call);
+			const out = builtin ? await builtin(call, { cmd, scope, expand }) : await (env.commands[cmd.name] ?? missing(cmd.name))(call);
 			if (out !== undefined) cur = out;
 		}
 		return cur;
+	};
+
+	/** 묶음 실행: 새 범위(만든 자리의 범위를 바깥으로), 선언된 인자 + 넘긴 인자. catchReturn: /run·바로 실행이면 /return을 여기서 받는다 */
+	const exec = async (c: Closure, input: string, from: Scope, args: Record<string, ArgValue>, catchReturn: boolean): Promise<string> => {
+		const scope = new Scope(c.scope ?? from);
+		const [params, body] = closureParams(c.source);
+		for (const [k, v] of Object.entries({ ...params, ...args })) scope.let(k, typeof v === "string" ? expandMacros(v, input, macroIn(scope)) : v);
+		try {
+			return await run(body, input, scope);
+		} catch (e) {
+			if (catchReturn && e instanceof Return) return e.value;
+			throw e;
+		}
 	};
 
 	const missing = (name: string): Handler => {
@@ -328,22 +528,131 @@ export async function runScript(src: string, env: ScriptEnv, pipe = ""): Promise
 		throw new ScriptError(`모르는 커맨드: /${name}`);
 	};
 
-	const builtins: Record<string, Handler> = {
+	/** /if·/while의 left·right: 변수 이름이면 그 값 (범위 → 대화·전역), 아니면 글 그대로 */
+	const operand = (v: ArgValue | undefined, scope: Scope): string => {
+		const t = asText(v);
+		if (t && /^[\p{L}\w-]+$/u.test(t)) {
+			if (scope.has(t)) return asText(scope.get(t));
+			const chat = env.variable?.(t);
+			if (chat !== undefined) return chat;
+		}
+		return t;
+	};
+
+	/** 반복 본문 실행: /break면 그 값으로 끝 */
+	const loop = async (body: ArgValue, input: string, scope: Scope, name: string, each: (i: number) => Promise<boolean>, setIndex?: (s: Scope, i: number) => void): Promise<string> => {
+		if (typeof body === "string") throw new ScriptError(`/${name}: 반복할 묶음 {: … :}이 필요함`);
+		let cur = input;
+		for (let i = 0; await each(i); i++) {
+			if (i >= loopLimit) throw new ScriptError(`/${name} 반복이 ${loopLimit}바퀴를 넘어 멈춤`);
+			const inner = new Scope(body.scope ?? scope);
+			setIndex?.(inner, i);
+			try {
+				cur = await exec({ ...body, scope: inner }, cur, inner, {}, false);
+			} catch (e) {
+				if (e instanceof Break) return e.value;
+				throw e;
+			}
+		}
+		return cur;
+	};
+
+	type Builtin = (call: CommandCall, ctx: { cmd: Command; scope: Scope; expand: (v: ArgValue) => Promise<ArgValue> }) => Promise<string | void> | string | void;
+	const builtins: Record<string, Builtin> = {
 		abort: () => {
 			throw new Abort();
 		},
-		if: async ({ named, unnamed, run: exec }) => {
-			const text = (v: ArgValue | undefined) => (typeof v === "string" ? v : "");
-			const ok = compare(text(named.left), text(named.right), text(named.rule) || "eq");
+		break: ({ named, unnamed, pipe }, { cmd }) => {
+			throw new Break(cmd.unnamed === null && !named.value ? pipe : asText(named.value ?? unnamed));
+		},
+		return: ({ unnamed, pipe }, { cmd }) => {
+			throw new Return(cmd.unnamed === null ? pipe : asText(unnamed));
+		},
+		if: async ({ named, unnamed, pipe }, { scope }) => {
+			const ok = compare(operand(named.left, scope), operand(named.right, scope), asText(named.rule) || "eq");
 			const branch = ok ? unnamed : named.else;
-			return branch === undefined ? undefined : exec(branch);
+			if (branch === undefined) return undefined;
+			return typeof branch === "string" ? branch : exec(branch, pipe, scope, {}, false);
+		},
+		// /while left=… right=… rule=… {: … :} — 조건은 바퀴마다 다시 본다 (변수 이름이면 그 값, 매크로도 다시 바꿈)
+		while: async ({ unnamed, pipe }, { cmd, scope, expand }) => {
+			const again = async () => {
+				const l = await expand(cmd.named.left ?? "");
+				const r = await expand(cmd.named.right ?? "");
+				const rule = asText(await expand(cmd.named.rule ?? "eq")) || "eq";
+				return compare(operand(l, scope), operand(r, scope), rule);
+			};
+			return loop(unnamed, pipe, scope, "while", () => again());
+		},
+		// /times 5 {: … {{timesIndex}} … :}
+		times: async ({ unnamed, pipe }, { scope }) => {
+			let count: string;
+			let body: ArgValue | undefined;
+			if (typeof unnamed === "string") {
+				const [n, v] = nameAndValue(unnamed);
+				count = n;
+				body = v && typeof v !== "string" ? { ...v, scope } : undefined;
+			} else throw new ScriptError("/times: 횟수가 필요함 (/times 5 {: … :})");
+			const n = num(count);
+			if (n === null || n < 0) throw new ScriptError(`/times: 횟수가 숫자가 아님 (${count})`);
+			if (!body) throw new ScriptError("/times: 반복할 묶음 {: … :}이 필요함");
+			return loop(body, pipe, scope, "times", async (i) => i < n, (s, i) => s.let("timesIndex", String(i)));
+		},
+		// /run 묶음 | /run 변수이름 | /run 세트.버튼  (이름 있는 인자는 묶음 인자로)
+		run: async ({ named: given, unnamed, pipe }, { scope }) => {
+			let target: ArgValue | undefined = unnamed;
+			const named = { ...given };
+			if (typeof unnamed === "string") {
+				// "이름 a=1 b=2" → 이름 + 묶음 인자 (SillyTavern: /run f a=7)
+				const m = /^\s*("[^"]*"|\S+)/.exec(unnamed);
+				const head = m ? m[1].replace(/^"|"$/g, "") : "";
+				const [extra] = closureParams(m ? unnamed.slice(m[0].length) : "");
+				Object.assign(named, extra);
+				const name = head.trim();
+				const v = scope.get(name);
+				if (v !== undefined) target = v;
+				else {
+					const source = env.quickReply?.(name);
+					if (source === undefined) throw new ScriptError(`/run: 실행할 것을 찾지 못함 (${name})`);
+					target = { kind: "closure", source, scope: root };
+				}
+			}
+			if (typeof target === "string") target = { kind: "closure", source: target, scope };
+			try {
+				return await exec(target, pipe, scope, named, true);
+			} catch (e) {
+				if (e instanceof Break) return e.value;
+				throw e;
+			}
+		},
+		// /let key=이름 값  ·  /let 이름 값  (이 범위에 새로)
+		let: ({ named, unnamed }, { cmd, scope }) => {
+			const [name, value] = named.key !== undefined ? [asText(named.key), cmd.unnamed === null ? "" : unnamed] : nameAndValue(asText(unnamed));
+			if (!name) throw new ScriptError("/let: 변수 이름이 필요함");
+			scope.let(name, value === undefined ? "" : typeof value === "string" || !value ? value : { ...value, scope: value.scope ?? scope });
+		},
+		// /var key=이름 값 (있는 범위에 바꿈) · /var 이름 (값 읽기) · index=로 목록·객체 자리
+		var: ({ named, unnamed }, { cmd, scope }) => {
+			let name: string;
+			let value: ArgValue | undefined;
+			if (named.key !== undefined) [name, value] = [asText(named.key), cmd.unnamed === null ? undefined : unnamed];
+			else [name, value] = nameAndValue(asText(unnamed));
+			if (!name) throw new ScriptError("/var: 변수 이름이 필요함");
+			const index = named.index === undefined ? undefined : asText(named.index);
+			if (value === undefined) {
+				const cur = asText(scope.get(name));
+				return index !== undefined ? (getIndexed(cur, index) ?? "") : cur;
+			}
+			scope.set(name, index !== undefined ? setIndexed(asText(scope.get(name)), index, asText(value)) : typeof value === "string" ? value : { ...value, scope: value.scope ?? scope });
 		},
 	};
 
 	try {
-		return { pipe: await run(src, pipe), aborted: false };
+		return { pipe: await run(src, pipe, root), aborted: false };
 	} catch (e) {
 		if (e instanceof Abort) return { pipe: "", aborted: true };
+		if (e instanceof Return) return { pipe: e.value, aborted: false };
+		if (e instanceof Break) return { pipe: e.value, aborted: false };
 		throw e;
 	}
 }

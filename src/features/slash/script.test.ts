@@ -29,7 +29,7 @@ function fakeApp(input: string) {
 	const env: ScriptEnv = {
 		commands,
 		macro: (name, arg) => (name === "char" ? "세라피나" : name === "getvar" ? (vars[arg ?? ""] ?? "") : undefined),
-		unsupported: ["while"],
+		unsupported: ["fetch"],
 	};
 	return { env, vars, log };
 }
@@ -140,7 +140,51 @@ describe("슬래시 스크립트: 실행", () => {
 	it("모르는 커맨드·지원하지 않는 커맨드·단계 상한", async () => {
 		const app = fakeApp("");
 		await expect(runScript("/nope", app.env)).rejects.toThrow("모르는 커맨드: /nope");
-		await expect(runScript("/while left=1 {: /echo x :}", app.env)).rejects.toThrow("지원하지 않음");
+		await expect(runScript("/fetch https://example.com", app.env)).rejects.toThrow("지원하지 않음");
 		await expect(runScript("/echo a | /echo b | /echo c", { ...app.env, maxSteps: 2 })).rejects.toThrow("단계");
+	});
+});
+
+describe("흐름·변수 (5-E-20-6-2)", () => {
+	/** 가짜 앱 + 숫자 더하기 (/add 1 2 → 3) */
+	const env = (extra: Partial<ScriptEnv> = {}) => {
+		const app = fakeApp("");
+		app.env.commands.add = ({ unnamed }) => String(String(unnamed).split(/\s+/).filter(Boolean).reduce((a, b) => a + Number(b), 0));
+		return { app, env: { ...app.env, ...extra } };
+	};
+	it("/times와 {{timesIndex}}", async () => {
+		const { app, env: e } = env();
+		await runScript("/times 3 {: /echo 바퀴 {{timesIndex}} :}", e);
+		expect(app.log).toEqual(["echo(): 바퀴 0", "echo(): 바퀴 1", "echo(): 바퀴 2"]);
+	});
+	it("/while은 조건을 바퀴마다 다시 본다 (left=변수 이름)", async () => {
+		const { env: e } = env();
+		const r = await runScript("/let i 0 | /while left=i right=3 rule=lt {: /add {{var::i}} 1 | /var key=i {{pipe}} :} | /var i", e);
+		expect(r.pipe).toBe("3");
+	});
+	it("범위: 안쪽 /var는 바깥 변수를 바꾸고, 안쪽 /let은 밖에서 안 보인다", async () => {
+		const { env: e } = env();
+		expect((await runScript("/let x 1 | /run {: /var x 2 | /let y 5 :} | /var x", e)).pipe).toBe("2");
+		expect((await runScript("/run {: /let y 5 :} | /var y", e)).pipe).toBe("");
+	});
+	it("/break는 반복을 그 값으로 끝내고, /return은 /run 묶음의 값", async () => {
+		const { env: e } = env();
+		expect((await runScript("/times 10 {: /if left={{timesIndex}} right=2 rule=eq {: /break 멈춤 :} :}", e)).pipe).toBe("멈춤");
+		expect((await runScript("/let f {: a=1 /return {{var::a}}번 :} | /run f a=7", e)).pipe).toBe("7번");
+		expect((await runScript("/let f {: a=1 /return {{arg::a}}번 :} | /:f", e)).pipe).toBe("1번");
+	});
+	it("{: :}() 바로 실행, 빠른 답장 부르기, 목록 index", async () => {
+		const { app, env: e } = env({ quickReply: (n) => (n === "세트.버튼" ? "/echo 버튼이 불림" : undefined) });
+		await runScript("/echo {: /return 안쪽 :}()", e);
+		await runScript('/:"세트.버튼"', e);
+		expect(app.log).toEqual(["echo(): 안쪽", "echo(): 버튼이 불림"]);
+		expect((await runScript('/let list ["a","b"] | /var key=list index=1', e)).pipe).toBe("b");
+		expect((await runScript('/let list ["a","b"] | /var key=list index=0 z | /var list', e)).pipe).toBe('["z","b"]');
+		await expect(runScript("/run 없는것", e)).rejects.toThrow("찾지 못함");
+	});
+	it("반복 상한에 걸리면 오류로 멈춘다", async () => {
+		const { env: e } = env({ maxLoop: 5 });
+		await expect(runScript("/while left=1 right=1 {: /echo 또 :}", e)).rejects.toThrow("5바퀴");
+		await expect(runScript("/times 6 {: /echo 또 :}", e)).rejects.toThrow("5바퀴");
 	});
 });
