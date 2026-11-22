@@ -920,3 +920,21 @@ Complete Submission + Task
 
 **선택하지 않은 안**: 이름이 같은 캐릭터·로어북을 찾아 덮어쓰기(합치기) — 어느 쪽이 맞는지 앱이 알 수 없고 되돌리기 어렵다. 폴더를 직접 고르게 하기 — Android에서는 폴더 접근이 어려워 zip 하나로 통일했다(데스크톱에서도 같은 길).
 
+### ADR-025 슬래시 커맨드와 빠른 답장
+
+**상태** Accepted (2026-11-23, 범위는 사용자 결정) — plans/roadmap.md 5-E-20-5.
+
+**왜**: SillyTavern 사용자는 자주 쓰는 지시를 빠른 답장(QR)에 넣어 두고, 실행할 때 내용만 입력받아 AI에게 글을 받는다. 예: `/input 지시할 내용은? | /setvar key=user_topic {{pipe}} || /if left={{getvar::user_topic}} right="" rule=eq {: /echo "취소함" | /abort :} || /gen 프롬프트 : {{getvar::user_topic}} | /sendas name="{{char}}"`.
+
+**결정 (사용자)**
+- 1차 목록: `/send`·`/sys`·`/narrator`·`/sendas`·`/trigger`·`/continue`·`/regen`·`/swipe`·`/del`·`/hide`·`/unhide`·`/echo`·`/setvar`·`/getvar` + `/if`·`/gen`·`/input`·`/abort`, 파이프(`|`, `{{pipe}}`), 묶음(`{: :}`).
+- 문법은 SillyTavern과 달라도 되지만 위 흐름은 그대로 되어야 한다. 그래서 SillyTavern 문법을 따르되 반복(`/while`·`/times`)·함수·외부 호출 같은 나머지 STscript는 넣지 않고 "지원하지 않음"으로 알린다.
+
+**설계**
+- 엔진(파싱·실행)은 앱을 모르는 순수 모듈이고, 커맨드는 표로 주입한다 — 시험하기 쉽고, 나중에 커맨드를 더해도 엔진은 그대로.
+- 매크로(`{{char}}`·`{{user}}`·`{{getvar::x}}`·`{{pipe}}`)는 글을 읽을 때가 아니라 **그 커맨드를 실행하기 직전**에 바꾼다. 그래야 앞에서 `/setvar`한 값을 뒤의 `/if`가 본다.
+- 이름 없는 인자가 없는 커맨드에는 앞 커맨드의 결과를 넘긴다(`/gen … | /sendas name=…`).
+- 비용(Explicit Execution): 스크립트는 사용자가 입력칸에서 보내거나 빠른 답장을 눌렀을 때만 돈다(자동 실행 없음). AI를 부르는 커맨드(`/gen`·`/trigger`·`/regen`·`/continue`·`/swipe`)는 TaskManager 작업(`run_by = user`)이고, 반복이 없어 한 번 실행의 호출 수가 글에 보이지만 한 번 실행당 AI 호출 상한을 둔다(5-E-20-5-2). 실행 단계 수에도 상한을 둔다.
+- 기능 존재와 실행 분리: 코어 플러그인(기본 꺼짐). 꺼져 있으면 `/`로 시작하는 글은 그냥 메시지로 보낸다.
+- 변수는 대화 meta `variables`(SillyTavern의 chat_metadata.variables와 같은 범위 — 대화마다). 게임 변수·상태창과의 연동은 5-F-4.
+
