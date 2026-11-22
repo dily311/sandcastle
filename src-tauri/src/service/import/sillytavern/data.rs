@@ -246,21 +246,81 @@ pub async fn import_data_dir(db: &DbPool, app_data_dir: &Path, dir: &Path) -> Re
         }
     }
 
-    // 3. 채팅: chats/<캐릭터 파일 이름>/*.jsonl
+    // 3. 채팅: chats/<캐릭터 파일 이름>/*.jsonl. 카드가 없는 폴더는 이름만 있는 캐릭터를 만들어 붙인다.
+    //    분기(헤더 chat_metadata.main_chat = 부모 채팅 파일 이름)는 다 가져온 뒤 부모 대화에 잇는다
     let mut chat_dirs: Vec<PathBuf> = std::fs::read_dir(root.join("chats"))
         .map(|r| r.flatten().map(|e| e.path()).filter(|p| p.is_dir()).collect())
         .unwrap_or_default();
     chat_dirs.sort();
     for d in chat_dirs {
-        let character_id = d.file_name().and_then(|n| chars.get(&n.to_string_lossy().to_string()).cloned());
+        let folder = d.file_name().map(|n| n.to_string_lossy().to_string()).unwrap_or_default();
+        let mut character_id = chars.get(&folder).cloned();
+        // 파일 이름 → (대화 id, 부모 채팅 파일 이름)
+        let mut imported: Vec<(String, String, Option<String>)> = vec![];
         for p in files_in(&d, &["jsonl"]) {
-            let opts = ImportOptions {
-                character_id: character_id.clone(),
-                ..Default::default()
-            };
-            match import_file_with(db, app_data_dir, &p, opts).await {
+            let mut result = import_file_with(
+                db,
+                app_data_dir,
+                &p,
+                ImportOptions {
+                    character_id: character_id.clone(),
+                    ..Default::default()
+                },
+            )
+            .await;
+            // "어떤 캐릭터의 채팅인지 못 찾음"(details.speakers)일 때만 — 빈 채팅 같은 다른 실패에는 만들지 않음
+            let no_character = matches!(&result, Err(e) if e.to_response().details.as_ref().is_some_and(|d| d.get("speakers").is_some()));
+            if no_character && character_id.is_none() {
+                // 카드가 없고 이름으로도 못 찾음 → 채팅의 캐릭터 이름(없으면 폴더 이름)으로 캐릭터를 만든다
+                let name = chat_character_name(&p).unwrap_or_else(|| folder.clone());
+                match placeholder_character(db, &name).await {
+                    Ok(id) => {
+                        out.characters += 1;
+                        out.warnings
+                            .push(format!("chats/{folder}: 카드가 없어 이름만 있는 캐릭터 '{name}'를 만들어 붙임"));
+                        chars.insert(folder.clone(), id.clone());
+                        character_id = Some(id);
+                        result = import_file_with(
+                            db,
+                            app_data_dir,
+                            &p,
+                            ImportOptions {
+                                character_id: character_id.clone(),
+                                ..Default::default()
+                            },
+                        )
+                        .await;
+                    }
+                    Err(e) => out.warnings.push(format!("chats/{folder}: 캐릭터를 만들지 못함 ({e})")),
+                }
+            }
+            match result {
+                Ok(SillyTavernImport::Chat { conversation, .. }) => {
+                    out.chats += 1;
+                    let parent = conversation
+                        .meta
+                        .as_ref()
+                        .and_then(|m| m.pointer("/sillytavern/chatMetadata/main_chat"))
+                        .and_then(Value::as_str)
+                        .map(|s| s.trim().trim_end_matches(".jsonl").to_string())
+                        .filter(|s| !s.is_empty());
+                    imported.push((stem(&p), conversation.id, parent));
+                }
                 Ok(_) => out.chats += 1,
                 Err(e) => out.warnings.push(format!("{}: {}", label(&p, &root), e)),
+            }
+        }
+        for (name, id, parent) in &imported {
+            let Some(parent) = parent else { continue };
+            match imported.iter().find(|(n, _, _)| n == parent) {
+                Some((_, parent_id, _)) if parent_id != id => {
+                    if let Err(e) = link_branch(db, id, parent_id).await {
+                        out.warnings.push(format!("chats/{folder}/{name}: 분기 연결 못 함 ({e})"));
+                    }
+                }
+                _ => out
+                    .warnings
+                    .push(format!("chats/{folder}/{name}: 부모 채팅 '{parent}'이 없어 분기로 잇지 못함")),
             }
         }
     }
@@ -359,5 +419,59 @@ async fn link_book(db: &DbPool, character_id: &str, book_id: &str) -> Result<()>
     let mut tx = db.begin().await?;
     db::conversation::replace_character_worldinfo(&mut tx, character_id, &ids).await?;
     tx.commit().await?;
+    Ok(())
+}
+
+/// 채팅 헤더(첫 줄)의 캐릭터 이름
+fn chat_character_name(path: &Path) -> Option<String> {
+    let file = std::fs::File::open(path).ok()?;
+    let mut first = String::new();
+    std::io::BufRead::read_line(&mut std::io::BufReader::new(file), &mut first).ok()?;
+    let v: Value = serde_json::from_str(&first).ok()?;
+    v.get("character_name")
+        .and_then(Value::as_str)
+        .map(str::trim)
+        .filter(|n| !n.is_empty())
+        .map(str::to_string)
+}
+
+/// 카드 없이 이름만 있는 캐릭터
+async fn placeholder_character(db: &DbPool, name: &str) -> Result<String> {
+    let input = crate::models::conversation::CharacterInput {
+        name: name.to_string(),
+        avatar: None,
+        description: String::new(),
+        alternate_descriptions: vec![],
+        first_message: None,
+        alternate_first_message: vec![],
+        example_dialogue: None,
+        system_prompt_override: None,
+        creator_notes: Some("SillyTavern 채팅만 있고 캐릭터 카드가 없어 이름만 만든 캐릭터".into()),
+        world_info_ids: vec![],
+        tags: vec![],
+        color: None,
+        category: None,
+        default_persona_id: None,
+        default_prompt_preset_id: None,
+        favorite: false,
+    };
+    Ok(db::conversation::create_character(db, input).await?.id)
+}
+
+/// SillyTavern 분기를 우리 분기로: 부모와 앞에서부터 같은 메시지가 끝나는 곳이 갈라진 자리
+/// (메시지 하나도 같지 않으면 잇지 않음). meta.branch = { parentId, messageId, seq } (branch_conversation과 같은 모양)
+async fn link_branch(db: &DbPool, id: &str, parent_id: &str) -> Result<()> {
+    let mine = db::conversation::get_messages(db, id, i64::MAX, None).await?;
+    let theirs = db::conversation::get_messages(db, parent_id, i64::MAX, None).await?;
+    let same = mine
+        .iter()
+        .zip(theirs.iter())
+        .take_while(|(a, b)| a.role == b.role && a.content == b.content)
+        .count();
+    let Some(at) = theirs.get(same.checked_sub(1).ok_or_else(|| AppError::validation("부모와 같은 메시지가 없음", None))?) else {
+        return Ok(());
+    };
+    let branch = serde_json::json!({ "branch": { "parentId": parent_id, "messageId": at.id, "seq": at.seq } });
+    db::chat_ui::patch_conversation_meta(db, id, &branch).await?;
     Ok(())
 }

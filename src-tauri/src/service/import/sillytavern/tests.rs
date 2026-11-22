@@ -643,3 +643,89 @@ async fn st_data_export_round_trips_through_our_own_import() {
     let convs = crate::db::conversation::get_all_conversations(&db2).await.unwrap();
     assert!(convs.iter().any(|v| v.character_id == c2[0].id), "chats/<카드 파일 이름> → 그 캐릭터");
 }
+
+/// 샘플 채팅으로 분기 파일 만들기: 헤더에 main_chat, 앞 메시지 n개는 같고 마지막 하나만 다름
+fn branch_of_sample(parent: &str, n: usize) -> Vec<u8> {
+    let text = std::fs::read_to_string(st_chat_sample()).unwrap();
+    let mut lines = text.lines().filter(|l| !l.trim().is_empty());
+    let mut header: serde_json::Value = serde_json::from_str(lines.next().unwrap()).unwrap();
+    header["chat_metadata"]["main_chat"] = json!(parent);
+    let msgs: Vec<serde_json::Value> = lines.map(|l| serde_json::from_str(l).unwrap()).collect();
+    let mut out = vec![header.to_string()];
+    out.extend(msgs.iter().take(n).map(|m| m.to_string()));
+    let mut other = msgs[n].clone();
+    other["mes"] = json!("분기에서 다르게 한 말");
+    out.push(other.to_string());
+    out.join("\n").into_bytes()
+}
+
+#[tokio::test]
+async fn st_data_links_branches_and_keeps_chats_without_a_card() {
+    let db = pool().await;
+    let app = tempfile::tempdir().unwrap();
+    let src = tempfile::tempdir().unwrap();
+    let u = src.path();
+    for d in ["characters", "chats/default_Seraphina", "chats/Ghost"] {
+        std::fs::create_dir_all(u.join(d)).unwrap();
+    }
+    std::fs::copy(st_sample("character/default_Seraphina.png"), u.join("characters/default_Seraphina.png")).unwrap();
+    std::fs::copy(st_chat_sample(), u.join("chats/default_Seraphina/main.jsonl")).unwrap();
+    write(&u.join("chats/default_Seraphina"), "Branch #2.jsonl", &branch_of_sample("main", 2));
+    write(&u.join("chats/default_Seraphina"), "Branch #9.jsonl", &branch_of_sample("없는 채팅", 2));
+
+    let r = data::import_data_dir(&db, app.path(), u).await.unwrap();
+    assert_eq!(r.chats, 3, "{:?}", r.warnings);
+    assert!(r.warnings.iter().any(|w| w.contains("없는 채팅")), "{:?}", r.warnings);
+    let convs = crate::db::conversation::get_all_conversations(&db).await.unwrap();
+    let main = convs.iter().find(|c| c.title == "main").unwrap();
+    let branch = convs.iter().find(|c| c.title == "Branch #2").unwrap();
+    let b = &branch.meta.as_ref().unwrap()["branch"];
+    assert_eq!(b["parentId"], json!(main.id));
+    let parent_msgs = crate::db::conversation::get_messages(&db, &main.id, 100, None).await.unwrap();
+    assert_eq!(b["messageId"], json!(parent_msgs[1].id), "같은 메시지 두 개 뒤에서 갈라짐");
+    assert!(convs
+        .iter()
+        .find(|c| c.title == "Branch #9")
+        .unwrap()
+        .meta
+        .as_ref()
+        .unwrap()
+        .get("branch")
+        .is_none());
+
+    // 카드 없는 채팅 → 이름만 있는 캐릭터를 만들어 붙임 (다른 DB: 이름으로 찾을 캐릭터가 없게)
+    let db2 = pool().await;
+    let src2 = tempfile::tempdir().unwrap();
+    std::fs::create_dir_all(src2.path().join("chats/Ghost")).unwrap();
+    std::fs::copy(st_chat_sample(), src2.path().join("chats/Ghost/old.jsonl")).unwrap();
+    let r2 = data::import_data_dir(&db2, app.path(), src2.path()).await.unwrap();
+    assert_eq!((r2.characters, r2.chats), (1, 1), "{:?}", r2.warnings);
+    let made = crate::db::conversation::get_all_characters(&db2).await.unwrap();
+    assert_eq!(made.len(), 1);
+    assert!(r2.warnings.iter().any(|w| w.contains("이름만 있는 캐릭터")), "{:?}", r2.warnings);
+}
+
+#[tokio::test]
+async fn exported_card_carries_its_character_regex() {
+    let db = pool().await;
+    let dir = tempfile::tempdir().unwrap();
+    let card = write(
+        dir.path(),
+        "c.json",
+        json!({ "spec": "chara_card_v2", "data": { "name": "카이", "first_mes": "안녕", "extensions": {
+            "regex_scripts": [{ "scriptName": "숨김", "findRegex": "/<x>/g", "replaceString": "", "placement": [2], "promptOnly": true }]
+        } } })
+        .to_string()
+        .as_bytes(),
+    );
+    let SillyTavernImport::Character { character, regex_count, .. } = import_file(&db, dir.path(), &card, None).await.unwrap() else {
+        panic!("캐릭터여야 함")
+    };
+    assert_eq!(regex_count, 1);
+    let bytes = crate::service::data::card::card_bytes(&db, &character.id, "json").await.unwrap();
+    let v: serde_json::Value = serde_json::from_slice(&bytes).unwrap();
+    let rx = &v["data"]["extensions"]["regex_scripts"];
+    assert_eq!(rx[0]["scriptName"], "숨김");
+    assert_eq!(rx[0]["promptOnly"], true);
+    assert_eq!(rx[0]["placement"], json!([2]));
+}

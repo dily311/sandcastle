@@ -73,7 +73,19 @@ pub async fn card_bytes(db: &DbPool, character_id: &str, format: &str) -> Result
                 .map(|b| b.name);
         }
     }
-    let card = card_json(&c, book_name.as_deref(), &entries);
+    let mut card = card_json(&c, book_name.as_deref(), &entries);
+    // 이 캐릭터에 묶인 정규식 → data.extensions.regex_scripts (SillyTavern이 카드와 같이 읽는 자리)
+    let scripts: Vec<Value> = crate::db::regex::get_regex_scripts_for(db, Some(character_id), None)
+        .await?
+        .iter()
+        .filter(|r| r.scope == crate::models::regex::RegexScope::Character && r.scope_id.as_deref() == Some(character_id))
+        .map(crate::service::import::sillytavern::regex::regex_to_st)
+        .collect();
+    if !scripts.is_empty() {
+        if let Some(ext) = card.pointer_mut("/data/extensions").and_then(Value::as_object_mut) {
+            ext.insert("regex_scripts".into(), Value::Array(scripts));
+        }
+    }
     let bytes = match format {
         "json" => serde_json::to_vec_pretty(&card).map_err(|e| AppError::internal(e.to_string()))?,
         "png" => {
