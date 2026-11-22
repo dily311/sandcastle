@@ -16,7 +16,7 @@
 	import PhoneRoom from "./PhoneRoom.svelte";
 	import PhonePanel from "./PhonePanel.svelte";
 	import PhoneAlbum from "./PhoneAlbum.svelte";
-	import ImageCreate from "$features/images/ImageCreate.svelte";
+	import PhoneCamera from "./PhoneCamera.svelte";
 	import { plugins } from "$shared/stores/plugins.svelte";
 	import SidePanel from "$app/SidePanel.svelte";
 	import { panel } from "$app/panel.svelte";
@@ -195,12 +195,7 @@
 		{:else if screen === "photos"}
 			<PhoneAlbum album={albumKey} chatIds={phone.chats.map((c) => c.id)} onback={() => go("home")} oncamera={plugins.on("imagegen") ? () => go("camera") : undefined} />
 		{:else if screen === "camera"}
-			<div class="app-bar">
-				<button class="plain" aria-label="뒤로" onclick={() => go("home")}><ChevronLeft /></button>
-				<h2 class="grow">카메라</h2>
-				<button class="plain small" onclick={() => go("photos")}>사진</button>
-			</div>
-			<div class="cam-wrap"><ImageCreate source="phone" album={albumKey} compact /></div>
+			<PhoneCamera album={albumKey} onback={() => go("home")} onalbum={() => go("photos")} />
 		{:else if screen === "room" && room}
 			{#key room.id}
 				<PhoneRoom conv={room} onback={closeRoom} session={roomSession ?? undefined} />
@@ -504,17 +499,6 @@
 	}
 	.camera {
 		background: #2c2c2e;
-	}
-	.cam-wrap {
-		background: none;
-		flex: 1;
-		min-height: 0;
-		overflow: auto;
-		padding: 0 14px 16px;
-	}
-	.small {
-		font-size: 14px;
-		color: var(--accent);
 	}
 	.dock {
 		margin-top: auto;
