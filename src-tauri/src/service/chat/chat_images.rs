@@ -404,7 +404,7 @@ mod tests {
     fn rules_list_enabled_keys_only() {
         assert!(image_rules(&[img("1", "a", false)]).is_none());
         let rules = image_rules(&[img("1", "smile", true), img("2", "off", false), img("3", "cry", true)]).unwrap();
-        assert!(rules.ends_with("사용 가능한 키: smile, cry"));
+        assert!(rules.ends_with("Available keys: smile, cry"), "{rules}");
         assert!(rules.contains("{{char}}"));
     }
 

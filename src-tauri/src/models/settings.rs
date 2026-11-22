@@ -69,11 +69,11 @@ impl Default for HomeSetting {
     }
 }
 
-pub const DEFAULT_PHONE_MODE_PROMPT: &str = "[폰 메신저 대화]
-{{char}}와(과) {{user}}는 지금 서로 떨어진 곳에서 스마트폰 메신저로 대화하고 있다.
-- {{char}}는 실제 메신저 메시지처럼 짧고 자연스럽게 답한다.
-- 행동·표정 묘사나 나레이션 없이, 실제로 보낼 메시지 내용만 쓴다.
-- 여러 메시지로 나눠 보내고 싶으면 줄바꿈으로 구분한다.";
+pub const DEFAULT_PHONE_MODE_PROMPT: &str = "[Phone messenger chat]
+{{char}} and {{user}} are apart right now, chatting through a smartphone messenger.
+- {{char}} replies briefly and naturally, like real messenger messages, in the language of the conversation.
+- No descriptions of actions or expressions and no narration, only the message text that would actually be sent.
+- To send several messages, separate them with line breaks.";
 
 fn default_phone_mode_prompt() -> String {
     DEFAULT_PHONE_MODE_PROMPT.to_string()
