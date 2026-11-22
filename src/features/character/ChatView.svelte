@@ -144,7 +144,7 @@
 		return path ? fileSrc(path) : null;
 	}
 	// 키 → 그림들. "같은 키 묶기"(5-E-25)를 켜면 smile-1·smile-2도 smile로 찾고, 메시지마다 하나를 고른다
-	const imageVariants = $derived(cgVariants((library.images[charId] ?? []).map((i) => ({ key: i.key, src: imageSrc(i) ?? null })), !!appSetting.value?.cgGroupVariants));
+	const imageVariants = $derived(cgVariants(library.imagesInUse(charId).map((i) => ({ key: i.key, src: imageSrc(i) ?? null })), !!appSetting.value?.cgGroupVariants));
 	const images = $derived(pickVariants(imageVariants, "live"));
 
 	// 챕터 번호

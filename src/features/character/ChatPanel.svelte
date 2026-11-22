@@ -1,6 +1,6 @@
 <script lang="ts">
 	import { regexVersion } from "$shared/stores/regexVersion.svelte";
-	import { ArrowUpDown, GripVertical, Bookmark, Check, ChevronDown, Eye, EyeOff, FileArchive, IdCard, ImagePlus, Pencil, Plus, Search, Trash2, X } from "@lucide/svelte";
+	import { ArrowUpDown, GripVertical, Bookmark, Check, ChevronDown, Eye, EyeOff, FileArchive, Folder, IdCard, ImagePlus, Pencil, Plus, Search, Trash2, X } from "@lucide/svelte";
 	import { Avatar, Button, ContextMenu, IconButton, Input, ProfilePicker, Select, Spinner, Switch, type MenuItem, type ProfileOption } from "$shared/ui";
 	import { bookmarks, bookmarksOf, onCurrentSwipe, type ChatBookmark } from "./bookmarks";
 	import { assetImport } from "./assetImport.svelte";
@@ -152,6 +152,15 @@
 
 	// ---- 에셋 ----
 	const assets = $derived(library.images[conv.characterId] ?? []);
+	// 판 폴더 (5-E-21): ZIP의 하위 폴더(v1/·v2/)가 판이 된다. 캐릭터마다 쓸 판을 고르면 그 판과 공통 그림만 대화에 쓴다
+	const folders = $derived([...new Set(assets.map((a) => a.folder).filter(Boolean))].sort((a, b) => a.localeCompare(b, "ko")));
+	const version = $derived(library.assetVersion[conv.characterId] ?? null);
+	const inUse = (a: CharacterImage) => !version || !a.folder || a.folder.toLowerCase() === version.toLowerCase();
+	async function moveAsset(a: CharacterImage) {
+		const f = await promptText({ title: "판 폴더", message: "이 그림의 판 (비우면 공통 — 어느 판에서나 씀)", input: { value: a.folder, placeholder: "예: v1" }, confirmLabel: "옮기기" });
+		if (f === null || f === undefined || f.trim() === a.folder) return;
+		await library.updateImage(a, { folder: f.trim() });
+	}
 	let menu = $state<{ x: number; y: number; align?: "start" | "end" } | null>(null);
 	let menuItems: MenuItem[] = $state([]);
 	async function renameAsset(a: CharacterImage) {
@@ -169,6 +178,7 @@
 	const assetInfo = (a: CharacterImage) => [
 		{ label: "이미지 키", value: `<cg>${a.key}</cg>` },
 		{ label: "AI에게", value: a.enabled ? "보냄" : "안 보냄" },
+		{ label: "판", value: a.folder || "공통" },
 	];
 	/** 에셋 크게 보기: 앱 공통 그림 뷰어에 이름 바꾸기·삭제를 이어 줌 */
 	function openAsset(a: CharacterImage) {
@@ -180,6 +190,7 @@
 		menuItems = [
 			{ label: a.enabled ? "AI에게 보내지 않기" : "AI에게 보내기", icon: a.enabled ? EyeOff : Eye, onselect: () => library.updateImage(a, { enabled: !a.enabled }) },
 			{ label: "키 이름 바꾸기", icon: Pencil, onselect: () => renameAsset(a) },
+			{ label: a.folder ? `판 옮기기 (지금 ${a.folder})` : "판 폴더 정하기", icon: Folder, onselect: () => moveAsset(a) },
 			{ label: "삭제", icon: Trash2, danger: true, separator: true, onselect: () => deleteAsset(a) },
 		];
 		menu = { x: e.clientX, y: e.clientY };
@@ -363,6 +374,16 @@
 				<p class="faint">캐릭터 에셋 기능이 꺼져 있음 (설정 > 코어 플러그인)</p>
 			{/if}
 			{#if assetImport.busy}<p class="abusy" role="status"><Spinner />{assetImport.busy}</p>{/if}
+			{#if folders.length}
+				<label class="row"
+					><span>쓸 판</span><Select
+						value={version ?? ""}
+						options={[{ value: "", label: "전체" }, ...folders.map((f) => ({ value: f, label: f }))]}
+						aria-label="이 캐릭터가 쓸 에셋 판"
+						onchange={(e) => void library.setAssetVersion(conv.characterId, e.currentTarget.value || null)}
+					/></label
+				>
+			{/if}
 			<div class="atools">
 				<span class="faint">{assets.length}개 · 오른쪽 클릭으로 관리</span>
 				<IconButton label="정렬" size="sm" onclick={assetSortMenu}><ArrowUpDown /></IconButton>
@@ -380,12 +401,12 @@
 			{#if assets.length}
 				<div class="agrid">
 					{#each sortedAssets as a (a.id)}
-						<button class="tile" class:off={!a.enabled} class:picked={assetPicked.has(a.id)} title={a.enabled ? a.key : `${a.key} (AI에게 안 보냄)`} onclick={() => (assetPicking ? pickAsset(a) : openAsset(a))} oncontextmenu={(e) => assetMenu(e, a)}>
+						<button class="tile" class:off={!a.enabled || !inUse(a)} class:picked={assetPicked.has(a.id)} title={a.enabled ? a.key : `${a.key} (AI에게 안 보냄)`} onclick={() => (assetPicking ? pickAsset(a) : openAsset(a))} oncontextmenu={(e) => assetMenu(e, a)}>
 							<span class="thumb">
 								<img src={imageSrc(a, true)} alt="" loading="lazy" />
 								{#if !a.enabled}<EyeOff />{/if}
 							</span>
-							<span class="key">{a.key}</span>
+							<span class="key">{#if a.folder}<small class="ver">{a.folder}</small> {/if}{a.key}</span>
 						</button>
 					{/each}
 				</div>
@@ -955,5 +976,12 @@
 	.none.small {
 		padding: 0;
 		text-align: left;
+	}
+	.ver {
+		padding: 0 4px;
+		border-radius: var(--radius-sm);
+		background: var(--surface-2);
+		color: var(--text-muted);
+		font-size: 0.85em;
 	}
 </style>

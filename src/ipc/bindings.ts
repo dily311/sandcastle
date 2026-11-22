@@ -165,10 +165,13 @@ export const commands = {
 	addCharacterImages: (characterId: string, paths: string[], options?: InvokeOptions) => __TAURI_INVOKE<CharacterImage_Serialize[]>("add_character_images", { characterId, paths }, options),
 	/**  ZIP으로 에셋 한꺼번에 넣기 (파일 이름이 키, 같은 키는 덮어씀) */
 	addCharacterImagesZip: (characterId: string, zipPath: string, options?: InvokeOptions) => __TAURI_INVOKE<CharacterImage_Serialize[]>("add_character_images_zip", { characterId, zipPath }, options),
-	updateCharacterImage: (id: string, input: CharacterImageUpdate, options?: InvokeOptions) => __TAURI_INVOKE<CharacterImage_Serialize>("update_character_image", { id, input }, options),
+	updateCharacterImage: (id: string, input: CharacterImageUpdate_Deserialize, options?: InvokeOptions) => __TAURI_INVOKE<CharacterImage_Serialize>("update_character_image", { id, input }, options),
 	deleteCharacterImage: (id: string, options?: InvokeOptions) => __TAURI_INVOKE<null>("delete_character_image", { id }, options),
 	/**  대화별 이미지 기능 켜기/끄기 */
 	setConversationImagesEnabled: (conversationId: string, enabled: boolean, options?: InvokeOptions) => __TAURI_INVOKE<null>("set_conversation_images_enabled", { conversationId, enabled }, options),
+	/**  캐릭터가 쓸 에셋 판 (None = 전체). 대화에는 그 판 폴더와 공통(폴더 없음) 그림만 쓴다 (5-E-21) */
+	getCharacterAssetVersion: (characterId: string, options?: InvokeOptions) => __TAURI_INVOKE<string | null>("get_character_asset_version", { characterId }, options),
+	setCharacterAssetVersion: (characterId: string, version: string | null, options?: InvokeOptions) => __TAURI_INVOKE<null>("set_character_asset_version", { characterId, version }, options),
 	/**
 	 *  SillyTavern 파일 가져오기 (캐릭터 카드 PNG/JSON, 프리셋, 정규식, 월드인포, 채팅 .jsonl 자동 판별).
 	 *  - `name`: 프리셋/로어북/대화 이름. 비우면 파일 이름을 쓴다.
@@ -1125,10 +1128,22 @@ export type CharacterData_Serialize = {
 /**  프론트 전달용. 경로는 절대 경로 (프론트에서 convertFileSrc로 표시) */
 export type CharacterImage = CharacterImage_Serialize | CharacterImage_Deserialize;
 
-export type CharacterImageUpdate = {
+export type CharacterImageUpdate = CharacterImageUpdate_Serialize | CharacterImageUpdate_Deserialize;
+
+export type CharacterImageUpdate_Deserialize = {
 	key: string,
 	enabled: boolean,
 	sortOrder: number,
+	/**  판 폴더를 옮길 때 (없으면 그대로) */
+	folder?: string | null,
+};
+
+export type CharacterImageUpdate_Serialize = {
+	key: string,
+	enabled: boolean,
+	sortOrder: number,
+	/**  판 폴더를 옮길 때 (없으면 그대로) */
+	folder: string | null,
 };
 
 /**  프론트 전달용. 경로는 절대 경로 (프론트에서 convertFileSrc로 표시) */
@@ -1142,6 +1157,8 @@ export type CharacterImage_Deserialize = {
 	sortOrder: number,
 	createdAt: number,
 	updatedAt: number,
+	/**  판 폴더 (빈 글 = 공통, 5-E-21) */
+	folder: string,
 };
 
 /**  프론트 전달용. 경로는 절대 경로 (프론트에서 convertFileSrc로 표시) */
@@ -1155,6 +1172,8 @@ export type CharacterImage_Serialize = {
 	sortOrder: number,
 	createdAt: number,
 	updatedAt: number,
+	/**  판 폴더 (빈 글 = 공통, 5-E-21) */
+	folder: string,
 };
 
 export type CharacterInput = CharacterInput_Serialize | CharacterInput_Deserialize;

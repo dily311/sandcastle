@@ -47,7 +47,7 @@ pub async fn add_character_images_zip(app: AppHandle, state: State<'_, AppState>
     let paths = tokio::task::spawn_blocking(move || crate::service::chat::chat_images::extract_zip_images(&zip, &tmp2))
         .await
         .map_err(|e| AppError::internal(e.to_string()))??;
-    let result = add_images(&state.db, &base, &character_id, &paths).await;
+    let result = crate::service::chat::chat_images::add_images_in(&state.db, &base, &character_id, &paths).await;
     let _ = std::fs::remove_dir_all(&tmp);
     result
 }
@@ -57,10 +57,15 @@ pub async fn add_character_images_zip(app: AppHandle, state: State<'_, AppState>
 pub async fn update_character_image(app: AppHandle, state: State<'_, AppState>, id: String, input: CharacterImageUpdate) -> Result<CharacterImage> {
     let current = db::character_image::get_character_image(&state.db, &id).await?;
     let key = normalize_key(&input.key)?;
-    if db::character_image::image_key_exists(&state.db, &current.character_id, &key, Some(&id)).await? {
-        return Err(AppError::validation(format!("이미 같은 키가 있습니다: {key}"), None));
+    let folder = input
+        .folder
+        .as_deref()
+        .map(|f| f.trim().chars().take(40).collect::<String>())
+        .unwrap_or(current.folder.clone());
+    if db::character_image::image_key_exists(&state.db, &current.character_id, &folder, &key, Some(&id)).await? {
+        return Err(AppError::validation(format!("이 판에 이미 같은 키가 있습니다: {key}"), None));
     }
-    db::character_image::update_character_image(&state.db, &id, &key, input.enabled, input.sort_order).await?;
+    db::character_image::update_character_image(&state.db, &id, &key, input.enabled, input.sort_order, &folder).await?;
     let row = db::character_image::get_character_image(&state.db, &id).await?;
     Ok(CharacterImage::from_row(row, &app_data_dir(&app)?))
 }
@@ -71,6 +76,22 @@ pub async fn delete_character_image(app: AppHandle, state: State<'_, AppState>, 
     let row = db::character_image::get_character_image(&state.db, &id).await?;
     db::character_image::delete_character_image(&state.db, &id).await?;
     remove_image_files(&app_data_dir(&app)?, &[&row.file_path, row.thumb_path.as_deref().unwrap_or_default()]);
+    Ok(())
+}
+
+/// 캐릭터가 쓸 에셋 판 (None = 전체). 대화에는 그 판 폴더와 공통(폴더 없음) 그림만 쓴다 (5-E-21)
+#[tauri::command]
+#[specta::specta]
+pub async fn get_character_asset_version(state: State<'_, AppState>, character_id: String) -> Result<Option<String>> {
+    Ok(db::character_image::get_asset_version(&state.db, &character_id).await?)
+}
+
+#[tauri::command]
+#[specta::specta]
+pub async fn set_character_asset_version(state: State<'_, AppState>, character_id: String, version: Option<String>) -> Result<()> {
+    if !db::character_image::set_asset_version(&state.db, &character_id, version.as_deref().map(str::trim)).await? {
+        return Err(AppError::not_found("캐릭터를 찾을 수 없습니다"));
+    }
     Ok(())
 }
 

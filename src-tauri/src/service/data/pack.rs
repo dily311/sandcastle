@@ -71,6 +71,9 @@ struct PackImage {
     enabled: bool,
     sort_order: i64,
     file: String,
+    /// 판 폴더 (예전 팩에는 없음 = 공통)
+    #[serde(default)]
+    folder: String,
 }
 
 #[derive(Serialize, Deserialize, specta::Type)]
@@ -184,6 +187,7 @@ pub async fn export_pack(
                         enabled: r.enabled,
                         sort_order: r.sort_order,
                         file: name,
+                        folder: r.folder.clone(),
                     }
                 })
             })
@@ -449,6 +453,7 @@ async fn import_pack_inner(
                     sort_order: img.sort_order,
                     created_at: now,
                     updated_at: now,
+                    folder: img.folder,
                 },
             )
             .await?;

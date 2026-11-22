@@ -324,6 +324,8 @@ pub fn specta_builder() -> tauri_specta::Builder<tauri::Wry> {
         update_character_image,
         delete_character_image,
         set_conversation_images_enabled,
+        get_character_asset_version,
+        set_character_asset_version,
         // import
         import_sillytavern,
         detect_sillytavern,
@@ -644,6 +646,8 @@ pub fn specta_builder() -> tauri_specta::Builder<tauri::Wry> {
         update_character_image,
         delete_character_image,
         set_conversation_images_enabled,
+        get_character_asset_version,
+        set_character_asset_version,
         // import
         import_sillytavern,
         detect_sillytavern,

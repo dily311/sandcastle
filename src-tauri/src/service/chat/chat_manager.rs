@@ -133,7 +133,21 @@ async fn load_enabled_images(app: &AppHandle, db: &crate::db::conn::DbPool, char
     }
     let base = crate::commands::character_image::app_data_dir(app)?;
     let rows = crate::db::character_image::get_character_images(db, character_id, true).await?;
-    Ok(rows.into_iter().map(|r| CharacterImage::from_row(r, &base)).collect())
+    // 캐릭터가 판을 골랐으면 그 판과 공통 그림만 (5-E-21)
+    let version = crate::db::character_image::get_asset_version(db, character_id).await?;
+    Ok(rows
+        .into_iter()
+        .filter(|r| in_version(&r.folder, version.as_deref()))
+        .map(|r| CharacterImage::from_row(r, &base))
+        .collect())
+}
+
+/// 고른 판(None = 전체)에서 이 그림을 쓰는가: 공통(폴더 없음)은 늘 쓴다
+fn in_version(folder: &str, version: Option<&str>) -> bool {
+    match version {
+        None => true,
+        Some(v) => folder.is_empty() || folder.eq_ignore_ascii_case(v),
+    }
 }
 
 pub struct ChatManager;

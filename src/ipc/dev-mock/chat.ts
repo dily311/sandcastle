@@ -402,6 +402,8 @@ AI: 그때 이야기를 다시 해 볼까요?`, stale: false },
 		return regex[i];
 	},
 	list_character_images: () => [],
+	get_character_asset_version: () => null,
+	set_character_asset_version: () => null,
 	create_character: ({ input }) => {
 		const c = character(uid("ch"), input.name, input.description ?? "");
 		characters.push(c);

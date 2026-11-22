@@ -264,16 +264,32 @@ class Library {
 	}
 
 	// ---- 캐릭터 에셋 에셋 ----
+	/** 캐릭터가 쓸 에셋 판 (null = 전체, 5-E-21) */
+	assetVersion = $state<Record<string, string | null>>({});
 	async loadImages(charId: string) {
-		this.images[charId] = await call(commands.listCharacterImages(charId), { ...src, silent: true }).catch(() => []);
+		const [imgs, version] = await Promise.all([
+			call(commands.listCharacterImages(charId), { ...src, silent: true }).catch(() => []),
+			call(commands.getCharacterAssetVersion(charId), { ...src, silent: true }).catch(() => null),
+		]);
+		this.images[charId] = imgs;
+		this.assetVersion[charId] = version;
+	}
+	async setAssetVersion(charId: string, version: string | null) {
+		await call(commands.setCharacterAssetVersion(charId, version), src);
+		this.assetVersion[charId] = version;
+	}
+	/** 대화에 쓰는 그림: 고른 판과 공통(폴더 없음). 판을 고르지 않으면 전체 */
+	imagesInUse(charId: string) {
+		const v = this.assetVersion[charId];
+		return (this.images[charId] ?? []).filter((i) => !v || !i.folder || i.folder.toLowerCase() === v.toLowerCase());
 	}
 	async addImages(charId: string, paths: string[]) {
 		if (!paths.length) return;
 		await call(commands.addCharacterImages(charId, paths), src);
 		await this.loadImages(charId);
 	}
-	async updateImage(img: CharacterImage, p: Partial<Pick<CharacterImage, "key" | "enabled" | "sortOrder">>) {
-		const next = { key: img.key, enabled: img.enabled, sortOrder: img.sortOrder, ...p };
+	async updateImage(img: CharacterImage, p: Partial<Pick<CharacterImage, "key" | "enabled" | "sortOrder" | "folder">>) {
+		const next = { key: img.key, enabled: img.enabled, sortOrder: img.sortOrder, folder: img.folder, ...p };
 		const saved = await call(commands.updateCharacterImage(img.id, next), src);
 		const list = this.images[img.characterId] ?? [];
 		const i = list.findIndex((x) => x.id === img.id);
