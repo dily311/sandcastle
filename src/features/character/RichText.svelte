@@ -51,6 +51,10 @@
 	p + p {
 		margin-top: 0.6em;
 	}
+	.say {
+		display: flex;
+		align-items: center;
+	}
 	em {
 		color: var(--text-muted);
 	}
