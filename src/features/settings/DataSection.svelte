@@ -216,7 +216,7 @@
 		</Group>
 
 		<Group title="SillyTavern">
-			<Row label="SillyTavern 데이터 가져오기" desc="data/default-user 폴더를 압축한 zip. 새로 만들기만 하므로 다시 가져오면 한 벌 더 생김">
+			<Row label="SillyTavern 데이터 가져오기" desc="data/default-user 폴더를 압축한 zip(10GB까지). 새로 만들기만 하므로 다시 가져오면 한 벌 더 생김">
 				<Button size="sm" loading={busy === "st"} disabled={busy !== null} onclick={importSt}>{#snippet icon()}<Upload />{/snippet}가져오기</Button>
 			</Row>
 			{#if stResult?.warnings.length}

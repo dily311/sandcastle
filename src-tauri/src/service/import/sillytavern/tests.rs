@@ -547,3 +547,44 @@ fn st_user_root_is_found_under_wrapping_folders() {
     assert_eq!(data::find_user_root(dir.path()).unwrap(), dir.path().join("a/data/default-user"));
     assert!(data::find_user_root(&dir.path().join("a/other")).is_none());
 }
+
+#[test]
+fn st_zip_unpacks_only_what_it_imports_and_skips_oversized() {
+    use std::io::Write;
+    let dir = tempfile::tempdir().unwrap();
+    let zip_path = dir.path().join("st.zip");
+    let mut zip = zip::ZipWriter::new(std::fs::File::create(&zip_path).unwrap());
+    let opt = zip::write::SimpleFileOptions::default();
+    for (name, bytes) in [
+        ("u/characters/a.png", vec![1u8; 10]),
+        ("u/characters/a/joy.png", vec![1; 10]),
+        ("u/chats/a/c.jsonl", vec![1; 10]),
+        ("u/backgrounds/bg.png", vec![1; 10]),
+        ("u/settings.json", b"{}".to_vec()),
+        ("u/worlds/big.json", vec![b' '; 5000]),
+    ] {
+        zip.start_file(name, opt).unwrap();
+        zip.write_all(&bytes).unwrap();
+    }
+    zip.finish().unwrap();
+    let out = dir.path().join("out");
+    let limits = data::ZipLimits {
+        file_bytes: 1000,
+        ..data::ZIP_LIMITS
+    };
+    let skipped = data::extract_zip(&zip_path, &out, limits).unwrap();
+    assert!(out.join("u/characters/a.png").is_file());
+    assert!(out.join("u/chats/a/c.jsonl").is_file());
+    assert!(out.join("u/settings.json").is_file());
+    assert!(!out.join("u/characters/a/joy.png").exists(), "표정 그림은 풀지 않음");
+    assert!(!out.join("u/backgrounds").exists(), "배경은 풀지 않음");
+    assert!(!out.join("u/worlds/big.json").exists());
+    assert_eq!(skipped.len(), 1, "{skipped:?}");
+    assert!(skipped[0].starts_with("u/worlds/big.json"));
+
+    let too_big = data::ZipLimits {
+        zip_bytes: 10,
+        ..data::ZIP_LIMITS
+    };
+    assert!(data::extract_zip(&zip_path, &dir.path().join("o2"), too_big).is_err());
+}

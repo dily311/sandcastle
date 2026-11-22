@@ -8,7 +8,7 @@
 use std::{
     collections::HashMap,
     io::Read,
-    path::{Path, PathBuf},
+    path::{Component, Path, PathBuf},
 };
 
 use serde::Serialize;
@@ -20,9 +20,59 @@ use crate::{
     error::{AppError, Result},
 };
 
-/// zip 안 파일 수·풀었을 때 전체 크기 상한 (지나치게 큰 압축 폭탄 막기)
-const MAX_ZIP_FILES: usize = 50_000;
-const MAX_ZIP_BYTES: u64 = 4 * 1024 * 1024 * 1024;
+/// zip 상한. zip 전체는 10GB까지 받되, 실제로 푸는 것은 가져올 파일뿐이다
+/// (배경·사용자 그림·확장 프로그램처럼 큰 것은 풀지 않음)
+#[derive(Debug, Clone, Copy)]
+pub struct ZipLimits {
+    /// zip 파일 크기
+    pub zip_bytes: u64,
+    /// zip 안 항목 수
+    pub entries: usize,
+    /// 푼 파일 하나 (가져오기 한 파일 상한과 같음 — 넘는 것은 풀어도 못 가져옴)
+    pub file_bytes: u64,
+    /// 푼 파일 전체
+    pub total_bytes: u64,
+    /// 압축 비율 (이보다 크게 부풀면 압축 폭탄으로 보고 건너뜀)
+    pub ratio: u64,
+}
+
+const GB: u64 = 1024 * 1024 * 1024;
+pub const ZIP_LIMITS: ZipLimits = ZipLimits {
+    zip_bytes: 10 * GB,
+    entries: 500_000,
+    file_bytes: super::MAX_FILE_BYTES,
+    total_bytes: 10 * GB,
+    ratio: 200,
+};
+
+/// 가져올 파일만: 바로 위 폴더가 아래 중 하나이거나, `chats/<캐릭터>/` 안이거나, `settings.json`.
+/// `characters/<이름>/`(표정 그림)·배경·사용자 그림·확장 프로그램은 쓰지 않으므로 풀지 않는다
+fn wanted(rel: &Path) -> bool {
+    const DIRS: [&str; 10] = [
+        "characters",
+        "worlds",
+        "OpenAI Settings",
+        "TextGen Settings",
+        "KoboldAI Settings",
+        "NovelAI Settings",
+        "instruct",
+        "context",
+        "User Avatars",
+        "groups",
+    ];
+    let parts: Vec<String> = rel
+        .components()
+        .filter_map(|c| match c {
+            Component::Normal(s) => Some(s.to_string_lossy().to_string()),
+            _ => None,
+        })
+        .collect();
+    let n = parts.len();
+    if n == 0 || parts.iter().any(|p| p == "__MACOSX" || p.starts_with('.')) {
+        return false;
+    }
+    parts[n - 1] == "settings.json" || (n >= 2 && DIRS.contains(&parts[n - 2].as_str())) || (n >= 3 && parts[n - 3] == "chats")
+}
 
 #[derive(Debug, Default, Serialize, specta::Type)]
 #[serde(rename_all = "camelCase")]
@@ -41,44 +91,81 @@ pub struct SillyTavernDataImport {
 pub async fn import_data_zip(db: &DbPool, app_data_dir: &Path, zip_path: &Path) -> Result<SillyTavernDataImport> {
     let tmp = std::env::temp_dir().join(format!("sandcastle-st-{}", uuid::Uuid::new_v4()));
     let (zip, out) = (zip_path.to_path_buf(), tmp.clone());
-    let unzipped = tokio::task::spawn_blocking(move || extract_zip(&zip, &out))
+    let unzipped = tokio::task::spawn_blocking(move || extract_zip(&zip, &out, ZIP_LIMITS))
         .await
         .map_err(|e| AppError::internal(e.to_string()))?;
     let result = match unzipped {
-        Ok(()) => import_data_dir(db, app_data_dir, &tmp).await,
+        Ok(skipped) => import_data_dir(db, app_data_dir, &tmp).await.map(|mut r| {
+            r.warnings.splice(0..0, skipped);
+            r
+        }),
         Err(e) => Err(e),
     };
     let _ = std::fs::remove_dir_all(&tmp);
     result
 }
 
-/// zip을 푼다. 폴더 밖으로 나가는 경로(`../`, 절대 경로)는 건너뛴다
-fn extract_zip(zip_path: &Path, out: &Path) -> Result<()> {
-    let file = std::fs::File::open(zip_path).map_err(|e| AppError::io(format!("ZIP을 열 수 없습니다: {e}")))?;
-    let mut zip = zip::ZipArchive::new(file).map_err(|e| AppError::validation(format!("ZIP 파일이 아닙니다: {e}"), None))?;
-    if zip.len() > MAX_ZIP_FILES {
-        return Err(AppError::validation(format!("ZIP에 파일이 너무 많습니다 ({MAX_ZIP_FILES}개까지)"), None));
+/// 가져올 파일만 푼다 (조금씩 옮겨 써서 메모리를 거의 쓰지 않음). 폴더 밖으로 나가는 경로(`../`, 절대 경로)는 풀지 않는다.
+/// 건너뛴 큰 파일·압축 폭탄은 경고로 돌려준다
+pub fn extract_zip(zip_path: &Path, out: &Path, limits: ZipLimits) -> Result<Vec<String>> {
+    let size = std::fs::metadata(zip_path)
+        .map_err(|e| AppError::io(format!("ZIP을 열 수 없습니다: {e}")))?
+        .len();
+    if size > limits.zip_bytes {
+        return Err(AppError::validation(
+            format!("ZIP이 {}GB보다 커서 가져올 수 없습니다", limits.zip_bytes / GB),
+            None,
+        ));
     }
+    let file = std::fs::File::open(zip_path).map_err(|e| AppError::io(format!("ZIP을 열 수 없습니다: {e}")))?;
+    let mut zip = zip::ZipArchive::new(std::io::BufReader::new(file)).map_err(|e| AppError::validation(format!("ZIP 파일이 아닙니다: {e}"), None))?;
+    if zip.len() > limits.entries {
+        return Err(AppError::validation(format!("ZIP에 항목이 너무 많습니다 ({}개까지)", limits.entries), None));
+    }
+    let mut skipped = vec![];
     let mut total = 0u64;
     for i in 0..zip.len() {
-        let mut f = zip.by_index(i).map_err(|e| AppError::io(e.to_string()))?;
+        let f = zip.by_index(i).map_err(|e| AppError::io(e.to_string()))?;
         let Some(rel) = f.enclosed_name() else { continue };
-        if f.is_dir() || rel.components().any(|c| c.as_os_str() == "__MACOSX") {
+        if f.is_dir() || !wanted(&rel) {
             continue;
         }
-        total += f.size();
-        if total > MAX_ZIP_BYTES {
-            return Err(AppError::validation("ZIP을 풀면 4GB가 넘어 가져올 수 없습니다", None));
+        let name = rel.to_string_lossy().replace('\\', "/");
+        if f.size() > limits.file_bytes {
+            skipped.push(format!("{name}: {}MB가 넘어 건너뜀", limits.file_bytes / 1024 / 1024));
+            continue;
         }
-        let dest = out.join(rel);
+        if f.size() > 1024 * 1024 && f.size() / f.compressed_size().max(1) > limits.ratio {
+            skipped.push(format!("{name}: 압축 비율이 비정상이라 건너뜀"));
+            continue;
+        }
+        if total + f.size() > limits.total_bytes {
+            return Err(AppError::validation(
+                format!("가져올 파일만 풀어도 {}GB가 넘습니다", limits.total_bytes / GB),
+                None,
+            ));
+        }
+        let dest = out.join(&rel);
         if let Some(parent) = dest.parent() {
-            std::fs::create_dir_all(parent)?;
+            std::fs::create_dir_all(parent).map_err(disk_error)?;
         }
-        let mut buf = Vec::with_capacity(f.size() as usize);
-        f.read_to_end(&mut buf).map_err(|e| AppError::io(e.to_string()))?;
-        std::fs::write(&dest, buf)?;
+        // 적힌 크기를 믿지 않고 상한 + 1바이트까지만 읽는다
+        let mut w = std::io::BufWriter::new(std::fs::File::create(&dest).map_err(disk_error)?);
+        let written = std::io::copy(&mut f.take(limits.file_bytes + 1), &mut w).map_err(disk_error)?;
+        drop(w);
+        if written > limits.file_bytes {
+            let _ = std::fs::remove_file(&dest);
+            skipped.push(format!("{name}: {}MB가 넘어 건너뜀", limits.file_bytes / 1024 / 1024));
+            continue;
+        }
+        total += written;
     }
-    Ok(())
+    Ok(skipped)
+}
+
+/// 풀다가 쓰기 실패 → 대개 디스크 공간 부족
+fn disk_error(e: std::io::Error) -> AppError {
+    AppError::io(format!("임시 폴더에 풀지 못했습니다 (디스크 공간이 모자랄 수 있음): {e}"))
 }
 
 /// SillyTavern 사용자 폴더 찾기: `characters`·`worlds`·`chats` 폴더나 `settings.json`이 있는 가장 얕은 폴더
