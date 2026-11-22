@@ -67,3 +67,20 @@ pub async fn export_preset_sillytavern(state: State<'_, AppState>, id: String, p
     let text = serde_json::to_string_pretty(&json).map_err(|e| crate::error::AppError::internal(e.to_string()))?;
     std::fs::write(PathBuf::from(path), text).map_err(|e| crate::error::AppError::io(format!("파일을 쓸 수 없습니다: {e}")))
 }
+
+/// SillyTavern 빠른 답장 세트(.json) 읽기. 저장은 화면이 설정에 한다 (돌려준 세트를 목록에 더함)
+#[tauri::command]
+#[specta::specta]
+pub fn read_quick_reply_set(path: String) -> Result<(crate::models::settings::QuickReplySet, Vec<String>)> {
+    let path = PathBuf::from(path);
+    let meta = std::fs::metadata(&path).map_err(|e| crate::error::AppError::io(format!("파일을 열 수 없습니다: {e}")))?;
+    if meta.len() > 10 * 1024 * 1024 {
+        return Err(crate::error::AppError::validation("파일이 너무 큽니다 (10MB 이하)", None));
+    }
+    let json: serde_json::Value =
+        serde_json::from_slice(&std::fs::read(&path)?).map_err(|e| crate::error::AppError::validation(format!("JSON 파일을 읽을 수 없습니다: {e}"), None))?;
+    let name = path.file_stem().map(|s| s.to_string_lossy().to_string()).unwrap_or_else(|| "빠른 답장".into());
+    let mut warnings = vec![];
+    let set = crate::service::import::sillytavern::quick_reply::map_qr_set(&json, &name, &mut warnings)?;
+    Ok((set, warnings))
+}

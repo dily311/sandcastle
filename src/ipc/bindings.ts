@@ -195,6 +195,8 @@ export const commands = {
 	exportSillytavernData: (path: string, options?: InvokeOptions) => __TAURI_INVOKE<SillyTavernDataExport>("export_sillytavern_data", { path }, options),
 	/**  프리셋 하나를 SillyTavern Chat Completion 프리셋(.json)으로 (프리셋에 묶인 정규식 포함) */
 	exportPresetSillytavern: (id: string, path: string, options?: InvokeOptions) => __TAURI_INVOKE<null>("export_preset_sillytavern", { id, path }, options),
+	/**  SillyTavern 빠른 답장 세트(.json) 읽기. 저장은 화면이 설정에 한다 (돌려준 세트를 목록에 더함) */
+	readQuickReplySet: (path: string, options?: InvokeOptions) => __TAURI_INVOKE<[QuickReplySet_Serialize, string[]]>("read_quick_reply_set", { path }, options),
 	/**  캐릭터 → 채팅 트리, 개수, 저장 공간 */
 	getDataOverview: (options?: InvokeOptions) => __TAURI_INVOKE<DataOverview_Serialize>("get_data_overview", undefined, options),
 	/**  DB 점검: 무결성(PRAGMA integrity_check)과 아무 데도 쓰이지 않는 파일 목록. 지우지 않는다 */
@@ -3978,6 +3980,8 @@ export type PluginSetting_Deserialize = {
 	rewrite?: RewriteSetting_Deserialize,
 	/**  대필 (5-D, ADR-018) — 기기 전용 */
 	ghost?: GhostSetting_Deserialize,
+	/**  빠른 답장 세트 (5-E-20-5-3, ADR-025) — 같이 씀. 켜짐/꺼짐은 코어 플러그인 `slash` */
+	quickReply?: QuickReplySetting_Deserialize,
 };
 
 export type PluginSetting_Serialize = {
@@ -3999,6 +4003,8 @@ export type PluginSetting_Serialize = {
 	rewrite: RewriteSetting_Serialize,
 	/**  대필 (5-D, ADR-018) — 기기 전용 */
 	ghost: GhostSetting_Serialize,
+	/**  빠른 답장 세트 (5-E-20-5-3, ADR-025) — 같이 씀. 켜짐/꺼짐은 코어 플러그인 `slash` */
+	quickReply: QuickReplySetting_Serialize,
 };
 
 export type PluginVersion = PluginVersion_Serialize | PluginVersion_Deserialize;
@@ -4283,6 +4289,61 @@ export type ProposalKind = "character" | "persona" |
 "lorebook" | "lorebook_entry" | 
 /**  대화의 메시지 글 */
 "message";
+
+export type QuickReply = QuickReply_Serialize | QuickReply_Deserialize;
+
+export type QuickReplySet = QuickReplySet_Serialize | QuickReplySet_Deserialize;
+
+export type QuickReplySet_Deserialize = {
+	id?: string,
+	name?: string,
+	/**  대화에서 고르지 않았을 때 모든 대화에 보임 */
+	enabled?: boolean,
+	/**  스크립트가 아닌 글: true면 바로 보냄(AI 답장 요금), false면 입력칸에 넣기만 */
+	autoSend?: boolean,
+	items?: QuickReply_Deserialize[],
+};
+
+export type QuickReplySet_Serialize = {
+	id: string,
+	name: string,
+	/**  대화에서 고르지 않았을 때 모든 대화에 보임 */
+	enabled: boolean,
+	/**  스크립트가 아닌 글: true면 바로 보냄(AI 답장 요금), false면 입력칸에 넣기만 */
+	autoSend: boolean,
+	items: QuickReply_Serialize[],
+};
+
+/**  빠른 답장: 입력칸 위 버튼. 누르면 `/`로 시작하는 글은 스크립트로 실행, 아니면 보내거나 입력칸에 넣음 */
+export type QuickReplySetting = QuickReplySetting_Serialize | QuickReplySetting_Deserialize;
+
+/**  빠른 답장: 입력칸 위 버튼. 누르면 `/`로 시작하는 글은 스크립트로 실행, 아니면 보내거나 입력칸에 넣음 */
+export type QuickReplySetting_Deserialize = {
+	sets?: QuickReplySet_Deserialize[],
+};
+
+/**  빠른 답장: 입력칸 위 버튼. 누르면 `/`로 시작하는 글은 스크립트로 실행, 아니면 보내거나 입력칸에 넣음 */
+export type QuickReplySetting_Serialize = {
+	sets: QuickReplySet_Serialize[],
+};
+
+export type QuickReply_Deserialize = {
+	id?: string,
+	label?: string,
+	/**  보낼 글 또는 슬래시 스크립트 */
+	message?: string,
+	/**  버튼 줄에 보이지 않음 (스크립트에서만 쓰는 것) */
+	hidden?: boolean,
+};
+
+export type QuickReply_Serialize = {
+	id: string,
+	label: string,
+	/**  보낼 글 또는 슬래시 스크립트 */
+	message: string,
+	/**  버튼 줄에 보이지 않음 (스크립트에서만 쓰는 것) */
+	hidden: boolean,
+};
 
 /**  공급자 계정의 잔여 (구독형은 우리 앱이 막지 않고 보여주기만 한다. 요금 없음, 누를 때만 읽음) */
 export type QuotaLine = {

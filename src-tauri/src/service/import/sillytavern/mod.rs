@@ -17,6 +17,7 @@ pub mod data;
 pub mod data_export;
 pub mod export;
 pub mod preset;
+pub mod quick_reply;
 pub mod regex;
 pub mod worldinfo;
 

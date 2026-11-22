@@ -21,7 +21,7 @@
 		{ title: "확장", ids: ["community"] },
 	];
 	/** 세부 설정 탭이 있는 플러그인 */
-	const TAB: Partial<Record<PluginId, SettingsTab>> = { phone: "phone", widget: "widget", regex: "regex", translate: "translate", tts: "tts", imagegen: "imagegen", sync: "sync", community: "community", lint: "lint", memory: "memory", summary: "summary", rewrite: "rewrite", ghostwrite: "ghostwrite" };
+	const TAB: Partial<Record<PluginId, SettingsTab>> = { phone: "phone", widget: "widget", regex: "regex", translate: "translate", tts: "tts", imagegen: "imagegen", sync: "sync", community: "community", lint: "lint", memory: "memory", summary: "summary", rewrite: "rewrite", ghostwrite: "ghostwrite", slash: "quickreply" };
 	const byId = (id: string) => plugins.list.find((p) => p.id === id);
 </script>
 

@@ -297,6 +297,39 @@ pub struct PluginSetting {
     /// 대필 (5-D, ADR-018) — 기기 전용
     #[serde(default)]
     pub ghost: GhostSetting,
+    /// 빠른 답장 세트 (5-E-20-5-3, ADR-025) — 같이 씀. 켜짐/꺼짐은 코어 플러그인 `slash`
+    #[serde(default)]
+    pub quick_reply: QuickReplySetting,
+}
+
+/// 빠른 답장: 입력칸 위 버튼. 누르면 `/`로 시작하는 글은 스크립트로 실행, 아니면 보내거나 입력칸에 넣음
+#[derive(Debug, Serialize, Deserialize, Clone, Default, specta::Type)]
+#[serde(rename_all = "camelCase", default)]
+pub struct QuickReplySetting {
+    pub sets: Vec<QuickReplySet>,
+}
+
+#[derive(Debug, Serialize, Deserialize, Clone, Default, specta::Type)]
+#[serde(rename_all = "camelCase", default)]
+pub struct QuickReplySet {
+    pub id: String,
+    pub name: String,
+    /// 대화에서 고르지 않았을 때 모든 대화에 보임
+    pub enabled: bool,
+    /// 스크립트가 아닌 글: true면 바로 보냄(AI 답장 요금), false면 입력칸에 넣기만
+    pub auto_send: bool,
+    pub items: Vec<QuickReply>,
+}
+
+#[derive(Debug, Serialize, Deserialize, Clone, Default, specta::Type)]
+#[serde(rename_all = "camelCase", default)]
+pub struct QuickReply {
+    pub id: String,
+    pub label: String,
+    /// 보낼 글 또는 슬래시 스크립트
+    pub message: String,
+    /// 버튼 줄에 보이지 않음 (스크립트에서만 쓰는 것)
+    pub hidden: bool,
 }
 
 /// 대필 설정. 켜짐/꺼짐은 코어 플러그인 `ghostwrite`(기본 꺼짐)

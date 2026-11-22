@@ -1,7 +1,7 @@
 <script lang="ts">
 	import { layout } from "$app/layout.svelte";
 	import type { Component } from "svelte";
-	import { Activity, ArrowLeftRight, Gamepad2, Images, AudioLines, Blocks, Database, ImagePlus, Keyboard, KeyRound, Languages, ListChecks, MemoryStick, NotebookText, PenLine, RefreshCw, MessagesSquare, Music, Palette, Puzzle, Regex, ScrollText, Search, Settings2, SlidersHorizontal, Smartphone } from "@lucide/svelte";
+	import { Activity, ArrowLeftRight, Gamepad2, Images, AudioLines, Blocks, Database, ImagePlus, Keyboard, KeyRound, Languages, ListChecks, MemoryStick, NotebookText, PenLine, RefreshCw, Zap, MessagesSquare, Music, Palette, Puzzle, Regex, ScrollText, Search, Settings2, SlidersHorizontal, Smartphone } from "@lucide/svelte";
 	import { Badge, Input } from "$shared/ui";
 	import { nav, type SettingsTab } from "$app/nav.svelte";
 	import { logs } from "$shared/stores/log.svelte";
@@ -32,6 +32,7 @@
 	import SummarySection from "./SummarySection.svelte";
 	import RewriteSection from "./RewriteSection.svelte";
 	import GhostSection from "./GhostSection.svelte";
+	import QuickReplySection from "./QuickReplySection.svelte";
 	import TtsSection from "./TtsSection.svelte";
 	import ImageGenSection from "./ImageGenSection.svelte";
 	import { plugins, type PluginId } from "$shared/stores/plugins.svelte";
@@ -100,6 +101,7 @@
 				{ id: "lint", label: "메시지 linter", icon: ListChecks, keywords: "linter 검사 후처리 태그 따옴표 반복 금지어 길이 고침", view: LintSection, plugin: "lint" },
 				{ id: "memory", label: "메모리 검색", icon: MemoryStick, keywords: "메모리 임베딩 검색 뜻으로 찾기 색인 벡터 기억", view: MemorySection, plugin: "memory" },
 				{ id: "ghostwrite", label: "대필", icon: PenLine, keywords: "대필 초안 대신 쓰기 내 말투 펜 입력", view: GhostSection, plugin: "ghostwrite" },
+				{ id: "quickreply", label: "빠른 답장", icon: Zap, keywords: "빠른 답장 qr 슬래시 커맨드 스크립트 gen input 버튼", view: QuickReplySection, plugin: "slash" },
 				{ id: "rewrite", label: "자동 재생성", icon: RefreshCw, keywords: "재생성 다시 쓰기 금지어 반복 linter 스와이프", view: RewriteSection, plugin: "rewrite" },
 				{ id: "summary", label: "대화 요약", icon: NotebookText, keywords: "요약 줄거리 메모리 확장 기억 긴 대화", view: SummarySection, plugin: "summary" },
 				{ id: "tts", label: "음성 읽기", icon: AudioLines, keywords: "음성 tts 읽기 목소리 elevenlabs", view: TtsSection, plugin: "tts" },

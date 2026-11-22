@@ -24,7 +24,7 @@ function range(arg: string, last: number): number[] {
 }
 
 /** 이 대화에서 스크립트 실행 환경 */
-export function slashEnv(session: ChatSession): ScriptEnv {
+export function slashEnv(session: ChatSession, opts: { input?: string } = {}): ScriptEnv {
 	const convId = session.convId;
 	const conv = () => library.conversation(convId);
 	const charName = () => library.character(conv()?.characterId)?.name ?? "";
@@ -119,6 +119,8 @@ export function slashEnv(session: ChatSession): ScriptEnv {
 					return session.messages.at(-1)?.content ?? "";
 				case "newline":
 					return "\n";
+				case "input":
+					return opts.input ?? "";
 				default:
 					return undefined;
 			}
@@ -127,10 +129,10 @@ export function slashEnv(session: ChatSession): ScriptEnv {
 }
 
 /** 입력칸·빠른 답장에서 실행. 오류는 알림으로 (멈춘 것은 조용히) */
-export async function runSlash(source: string, session: ChatSession): Promise<void> {
+export async function runSlash(source: string, session: ChatSession, opts: { input?: string } = {}): Promise<void> {
 	if (session.busy) return void toasts.error("응답을 받는 중이라 실행하지 않음");
 	try {
-		await runScript(source, slashEnv(session));
+		await runScript(source, slashEnv(session, opts));
 	} catch (e) {
 		if (e instanceof ScriptError) toasts.error(e.message);
 		// 다른 오류는 call이 이미 알림을 띄움

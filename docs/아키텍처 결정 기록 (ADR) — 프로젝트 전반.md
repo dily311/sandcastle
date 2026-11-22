@@ -937,4 +937,5 @@ Complete Submission + Task
 - 비용(Explicit Execution): 스크립트는 사용자가 입력칸에서 보내거나 빠른 답장을 눌렀을 때만 돈다(자동 실행 없음). AI를 부르는 커맨드(`/gen`·`/trigger`·`/regen`·`/continue`·`/swipe`)는 TaskManager 작업(`run_by = user`)이고, 반복이 없어 한 번 실행의 호출 수가 글에 보이지만 한 번 실행당 AI 호출 상한을 둔다(5-E-20-5-2). 실행 단계 수에도 상한을 둔다.
 - 기능 존재와 실행 분리: 코어 플러그인(기본 꺼짐). 꺼져 있으면 `/`로 시작하는 글은 그냥 메시지로 보낸다.
 - 변수는 대화 meta `variables`(SillyTavern의 chat_metadata.variables와 같은 범위 — 대화마다). 게임 변수·상태창과의 연동은 5-F-4.
+- 빠른 답장(5-E-20-5-3): 세트는 플러그인 설정(기기 간 같이 씀 — 내가 쓴 글이라), 대화마다 쓸 세트는 대화 meta. 스크립트가 아닌 글은 세트마다 '바로 보내기'(요금) / '입력칸에 넣기'(기본)를 고른다. SillyTavern 세트의 자동 실행(시작할 때·AI 답장 뒤 등)은 가져오지 않는다 — 사용자가 누를 때만 돈다(Explicit Execution).
 

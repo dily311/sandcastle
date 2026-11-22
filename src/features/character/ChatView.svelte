@@ -1,5 +1,6 @@
 <script lang="ts">
 	import { isSlash, runSlash } from "$features/slash/commands";
+	import QuickReplyBar from "$features/slash/QuickReplyBar.svelte";
 	import { regexVersion } from "$shared/stores/regexVersion.svelte";
 	import { tick, untrack } from "svelte";
 	import { Bookmark, ChevronRight, Gauge, Copy, CornerUpLeft, FastForward, GitBranch, ImagePlus, Images, IdCard, Languages, ListChecks, ListTree, PanelLeft, Plus, RefreshCw, Send, SlidersHorizontal, Square, Trash2, X, EllipsisVertical, BookOpen, Pen, Database, Scroll, SpellCheck, Pencil, UserRound, PinOff, Pin, FolderMinus, Download, Folder } from "@lucide/svelte";
@@ -662,6 +663,9 @@
 					</div>
 				{/if}
 			
+				{#if session && plugins.on("slash")}
+					<QuickReplyBar {session} {conv} getDraft={() => draft} setDraft={(v) => (draft = v)} />
+				{/if}
 				<form
 					class="write"
 					onsubmit={(e) => {

@@ -135,6 +135,20 @@ let pluginSetting = {
 		scale: 5,
 		sampler: "k_euler_ancestral",
 	},
+	quickReply: {
+		sets: [
+			{
+				id: "qr1",
+				name: "지시",
+				enabled: true,
+				autoSend: false,
+				items: [
+					{ id: "q1", label: "빠른 지시", message: '/input 빠르게 지시할 내용은? | /setvar key=user_topic {{pipe}} ||\n/if left={{getvar::user_topic}} right="" rule=eq {: /echo "생성을 취소하였습니다." | /abort :} ||\n/gen 프롬프트 내용 : {{getvar::user_topic}} | /sendas name="{{char}}"', hidden: false },
+					{ id: "q2", label: "인사", message: "안녕, 오늘은 어때?", hidden: false },
+				],
+			},
+		],
+	},
 	phone: { apiProfileId: null as string | null, presetId: null as string | null },
 	memory: { apiProfileId: null as string | null, model: "", dimensions: null as number | null, tokenCap: 200000, docPrefix: "", queryPrefix: "", autoRecall: false, recallTokens: 1500, recallTopK: 4, recallScope: "character" },
 	summary: { apiProfileId: null as string | null },
