@@ -729,3 +729,95 @@ async fn exported_card_carries_its_character_regex() {
     assert_eq!(rx[0]["promptOnly"], true);
     assert_eq!(rx[0]["placement"], json!([2]));
 }
+
+// =======================================
+// 프리셋 → SillyTavern (5-E-20-4-3)
+// =======================================
+
+#[tokio::test]
+async fn st_preset_round_trips_blocks_settings_and_regex() {
+    let db = pool().await;
+    let dir = tempfile::tempdir().unwrap();
+    let mut original: serde_json::Value = serde_json::from_slice(&std::fs::read(st_sample("presets/Default.json")).unwrap()).unwrap();
+    original["extensions"]["regex_scripts"] = json!([{ "scriptName": "프리셋 정규식", "findRegex": "/a/g", "replaceString": "b", "placement": [1] }]);
+    let path = write(dir.path(), "Default.json", original.to_string().as_bytes());
+    let SillyTavernImport::Preset { preset_id, .. } = import_file(&db, dir.path(), &path, None).await.unwrap() else {
+        panic!("프리셋이어야 함")
+    };
+    let before = crate::db::ai_service::get_prompt_blocks_by_preset(&db, &preset_id).await.unwrap();
+
+    let (name, st) = preset::preset_st_json(&db, &preset_id).await.unwrap();
+    assert_eq!(name, "Default");
+    assert_eq!(st["prompt_order"][0]["character_id"], 100001);
+    assert_eq!(st["extensions"]["regex_scripts"][0]["scriptName"], "프리셋 정규식");
+    assert_eq!(st["temperature"], original["temperature"]);
+    assert_eq!(st["openai_max_tokens"], original["openai_max_tokens"]);
+    let history = st["prompts"].as_array().unwrap().iter().find(|p| p["identifier"] == "chatHistory").unwrap();
+    assert_eq!(history["marker"], true);
+    assert!(history.get("content").is_none(), "자리 표시 블록은 내용 없음");
+
+    // 내보낸 것을 다시 가져오면 같은 블록 (식별자·켜짐·역할·내용·위치·깊이, 순서)
+    let again = write(dir.path(), "again.json", st.to_string().as_bytes());
+    let SillyTavernImport::Preset {
+        preset_id: id2, regex_count, ..
+    } = import_file(&db, dir.path(), &again, None).await.unwrap()
+    else {
+        panic!("프리셋이어야 함")
+    };
+    assert_eq!(regex_count, 1);
+    let after = crate::db::ai_service::get_prompt_blocks_by_preset(&db, &id2).await.unwrap();
+    let key = |b: &crate::models::ai_service::PromptBlocks| (b.identifier.clone(), b.enabled, b.role.clone(), b.content.clone(), b.position.clone(), b.depth);
+    assert_eq!(after.iter().map(key).collect::<Vec<_>>(), before.iter().map(key).collect::<Vec<_>>());
+}
+
+#[test]
+fn native_preset_becomes_an_st_preset() {
+    use crate::models::ai_service::{PromptBlocks, PromptPresets};
+    let preset = PromptPresets {
+        id: "p".into(),
+        name: "내 프리셋".into(),
+        description: None,
+        preset_type: "chat_completion".into(),
+        source_format: "native".into(),
+        config_json: json!({}),
+        settings_json: Some(json!({ "temperature": 0.7, "max_tokens": 900 })),
+        compatibility_json: None,
+        created_at: 0,
+        updated_at: 0,
+    };
+    let block = |id: &str, ident: &str, content: &str, order: i64, position: &str, depth: i64| PromptBlocks {
+        id: id.into(),
+        preset_id: "p".into(),
+        name: ident.into(),
+        identifier: ident.into(),
+        block_type: "text".into(),
+        role: "system".into(),
+        content: content.into(),
+        enabled: true,
+        position: position.into(),
+        depth,
+        sort_order: order,
+        triggers_json: json!([]),
+        extra_json: None,
+        created_at: 0,
+        updated_at: 0,
+    };
+    let blocks = vec![
+        block("2", "chat_history", "", 2, "relative", 0),
+        block("1", "main", "너는 이야기꾼이다", 1, "relative", 0),
+        block("3", "note", "짧게", 3, "in_chat", 2),
+    ];
+    let st = preset::preset_to_st(&preset, &blocks, &[]);
+    let ids: Vec<&str> = st["prompt_order"][0]["order"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .map(|o| o["identifier"].as_str().unwrap())
+        .collect();
+    assert_eq!(ids, vec!["main", "chatHistory", "note"], "순서대로, 자리 표시는 ST 이름으로");
+    let note = &st["prompts"][2];
+    assert_eq!((note["injection_position"].clone(), note["injection_depth"].clone()), (json!(1), json!(2)));
+    assert_eq!(st["prompts"][0]["system_prompt"], true);
+    assert_eq!(st["openai_max_tokens"], 900);
+    assert!(st["extensions"].get("regex_scripts").is_none());
+}

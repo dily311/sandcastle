@@ -916,5 +916,7 @@ Complete Submission + Task
 - 카드 내보내기에 캐릭터 정규식을 `data.extensions.regex_scripts`로 넣는다(가져오기가 읽는 자리와 같음).
 - 페르소나 이름·설정은 SillyTavern에서 settings.json에 있으므로, 폴더 복사만으로는 그림만 보인다. `personas.json`을 "복원"으로 넣는 것을 그대로 둔다(settings.json을 만들지 않는 결정 유지).
 
+**프리셋 내보내기 (5-E-20-4-3)**: 블록 순서대로 `prompts`와 전역 배치(`prompt_order`의 character_id 100001 — 가져오기가 먼저 고르는 것과 같음)를 만든다. 자리 표시 블록(캐릭터 설명·페르소나·예시 대화·월드인포·대화 기록)은 ST 식별자와 `marker: true`로, 내용은 넣지 않는다. 같은 식별자는 한 번만(ST에서 겹치면 안 됨). SillyTavern에서 가져온 프리셋은 보존한 원본 위에 덮어 우리에게 없는 설정을 잃지 않게 하고, 프리셋 정규식은 `extensions.regex_scripts`로 넣는다.
+
 **선택하지 않은 안**: 이름이 같은 캐릭터·로어북을 찾아 덮어쓰기(합치기) — 어느 쪽이 맞는지 앱이 알 수 없고 되돌리기 어렵다. 폴더를 직접 고르게 하기 — Android에서는 폴더 접근이 어려워 zip 하나로 통일했다(데스크톱에서도 같은 길).
 

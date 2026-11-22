@@ -58,3 +58,12 @@ pub async fn export_sillytavern_data(
 ) -> Result<crate::service::import::sillytavern::data_export::SillyTavernDataExport> {
     crate::service::import::sillytavern::data_export::export_data_zip(&state.db, &PathBuf::from(path)).await
 }
+
+/// 프리셋 하나를 SillyTavern Chat Completion 프리셋(.json)으로 (프리셋에 묶인 정규식 포함)
+#[tauri::command]
+#[specta::specta]
+pub async fn export_preset_sillytavern(state: State<'_, AppState>, id: String, path: String) -> Result<()> {
+    let (_, json) = crate::service::import::sillytavern::preset::preset_st_json(&state.db, &id).await?;
+    let text = serde_json::to_string_pretty(&json).map_err(|e| crate::error::AppError::internal(e.to_string()))?;
+    std::fs::write(PathBuf::from(path), text).map_err(|e| crate::error::AppError::io(format!("파일을 쓸 수 없습니다: {e}")))
+}

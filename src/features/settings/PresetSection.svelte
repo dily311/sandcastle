@@ -2,11 +2,11 @@
 	import { trashedToast } from "$shared/trash";
 	import { drops, extOf, storeFile } from "$app/drop.svelte";
 	import { onMount } from "svelte";
-	import { ChevronLeft, Copy, Download, Pencil, Plus, Trash } from "@lucide/svelte";
+	import { ChevronLeft, Copy, Download, Pencil, Plus, Trash, Upload } from "@lucide/svelte";
 	import type { PromptBlocksInput_Deserialize as BlockInput, PromptPresetDetail_Serialize as Detail } from "$ipc/bindings";
 	import { Badge, Button, EmptyState, IconButton } from "$shared/ui";
 	import { call, commands } from "$shared/ipc/client";
-	import { pickFiles, JSON_FILES } from "$shared/ipc/dialog";
+	import { pickFiles, saveTo, JSON_FILES } from "$shared/ipc/dialog";
 	import { appSetting } from "$shared/stores/appSetting.svelte";
 	import { confirmAction, promptText } from "$shared/stores/confirm.svelte";
 	import { toasts } from "$shared/stores/toast.svelte";
@@ -25,6 +25,11 @@
 		await Promise.all([appSetting.load(), library.loaded ? null : library.load()]);
 	});
 
+	/** SillyTavern Chat Completion 프리셋(.json)으로 (5-E-20-4-3) */
+	async function exportSt(p: Preset) {
+		const done = await saveTo(`${p.name}.json`, [JSON_FILES], (path) => call(commands.exportPresetSillytavern(p.id, path), src).then(() => true));
+		if (done) toasts.success("SillyTavern 프리셋으로 내보냄");
+	}
 	async function reload() {
 		library.presets = await call(commands.listPromptPresets(), src);
 	}
@@ -133,6 +138,7 @@
 						{/if}
 						<IconButton label="편집" size="sm" variant="ghost" onclick={() => edit(p)}><Pencil /></IconButton>
 						<IconButton label="복제" size="sm" variant="ghost" onclick={() => duplicate(p)}><Copy /></IconButton>
+						<IconButton label="SillyTavern 프리셋으로 내보내기" size="sm" variant="ghost" onclick={() => exportSt(p)}><Upload /></IconButton>
 						<IconButton label="삭제" size="sm" variant="ghost" onclick={() => remove(p)}><Trash /></IconButton>
 					</Row>
 				{/each}

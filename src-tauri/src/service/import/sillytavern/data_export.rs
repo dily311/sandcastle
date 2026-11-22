@@ -5,10 +5,11 @@
 //! - chats/<이름>/<대화 제목>.jsonl — 그 캐릭터의 대화(폰 대화 포함)
 //! - worlds/<로어북 이름>.json
 //! - User Avatars/<파일>.png + personas.json — 페르소나 그림과 "페르소나 관리 > 복원"용 백업
+//! - OpenAI Settings/<프리셋 이름>.json — Chat Completion 프리셋(프리셋에 묶인 정규식 포함, 5-E-20-4-3)
 //! - regex/sandcastle-regex.json — 전역 정규식 ("정규식 > 가져오기"로 넣음)
 //!
 //! `settings.json`은 만들지 않는다 (사용자의 SillyTavern 설정을 덮어쓰지 않게).
-//! 프리셋(5-E-20-4-3)·게임·위젯·상태 같은 샌드캐슬 전용 기능은 넣지 않는다.
+//! 게임·위젯·상태 같은 샌드캐슬 전용 기능은 넣지 않는다.
 use std::{collections::HashSet, io::Write, path::Path};
 
 use serde::Serialize;
@@ -29,6 +30,7 @@ pub struct SillyTavernDataExport {
     pub characters: usize,
     pub chats: usize,
     pub books: usize,
+    pub presets: usize,
     pub personas: usize,
     pub regex: usize,
     /// 넣지 못한 것 (이름: 이유)
@@ -135,6 +137,22 @@ pub async fn export_data_zip(db: &DbPool, path: &Path) -> Result<SillyTavernData
         out.books += 1;
     }
 
+    // 프리셋 (Chat Completion, 프리셋에 묶인 정규식 포함)
+    let mut preset_names = HashSet::new();
+    for p in db::ai_service::get_all_prompt_presets(db).await? {
+        match super::preset::preset_st_json(db, &p.id).await {
+            Ok((name, json)) => {
+                let file = unique_name(&name, &mut preset_names);
+                zip.add(
+                    &format!("OpenAI Settings/{file}.json"),
+                    serde_json::to_string_pretty(&json).unwrap_or_default().as_bytes(),
+                )?;
+                out.presets += 1;
+            }
+            Err(e) => out.warnings.push(format!("프리셋 {}: {e}", p.name)),
+        }
+    }
+
     // 페르소나: 그림 + SillyTavern 페르소나 백업 모양
     let mut files = HashSet::new();
     let (mut names, mut descriptions) = (Map::new(), Map::new());
@@ -153,7 +171,7 @@ pub async fn export_data_zip(db: &DbPool, path: &Path) -> Result<SillyTavernData
         zip.add("personas.json", serde_json::to_string_pretty(&backup).unwrap_or_default().as_bytes())?;
     }
 
-    // 전역 정규식 (캐릭터 것은 카드 안에 들어감, 프리셋 것은 프리셋과 함께 — 5-E-20-4-3)
+    // 전역 정규식 (캐릭터 것은 카드 안에, 프리셋 것은 프리셋 파일 안에 들어감)
     let scripts: Vec<Value> = db::regex::get_all_regex_scripts(db)
         .await?
         .iter()
@@ -171,7 +189,7 @@ pub async fn export_data_zip(db: &DbPool, path: &Path) -> Result<SillyTavernData
     zip.add(
         "README.txt",
         "샌드캐슬에서 SillyTavern 모양으로 내보낸 파일\n\n\
-         1. SillyTavern을 끄고, 이 default-user 폴더 안의 characters·chats·worlds·User Avatars를 SillyTavern의 data/default-user에 같은 이름 폴더로 복사합니다 (같은 이름 파일은 덮어씁니다).\n\
+         1. SillyTavern을 끄고, 이 default-user 폴더 안의 characters·chats·worlds·OpenAI Settings·User Avatars를 SillyTavern의 data/default-user에 같은 이름 폴더로 복사합니다 (같은 이름 파일은 덮어씁니다).\n\
          2. SillyTavern을 켜고 페르소나 관리 > 복원(Restore)에서 personas.json을 고릅니다.\n\
          3. 확장 > 정규식 > 가져오기(Import)에서 regex/sandcastle-regex.json을 고릅니다.\n"
             .as_bytes(),
