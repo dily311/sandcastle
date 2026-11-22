@@ -3,7 +3,7 @@
 	import QuickReplyBar from "$features/slash/QuickReplyBar.svelte";
 	import { regexVersion } from "$shared/stores/regexVersion.svelte";
 	import { tick, untrack } from "svelte";
-	import { Bookmark, ChevronRight, Gauge, Copy, CornerUpLeft, FastForward, GitBranch, ImagePlus, Images, IdCard, Languages, ListChecks, ListTree, PanelLeft, Plus, RefreshCw, Send, SlidersHorizontal, Square, Trash2, X, EllipsisVertical, BookOpen, Pen, Database, Scroll, SpellCheck, Pencil, UserRound, PinOff, Pin, FolderMinus, Download, Folder } from "@lucide/svelte";
+	import { Bookmark, ChevronRight, Gauge, Copy, CornerUpLeft, FastForward, GitBranch, ImagePlus, Images, IdCard, Languages, ListChecks, ListTree, PanelLeft, Plus, RefreshCw, Send, SlidersHorizontal, Square, Trash2, X, EllipsisVertical, BookOpen, Pen, Database, Scroll, SpellCheck, Pencil, UserRound, PinOff, Pin, FolderMinus, Download, Folder, Zap } from "@lucide/svelte";
 	import { bookmarks, bookmarksOf, type ChatBookmark } from "./bookmarks";
 	import { findTextRange } from "./highlight";
 	import { childrenOf, pathOf } from "./branches";
@@ -106,6 +106,7 @@
 			...(plugins.on("lint") ? [{ id: "lint", label: "linter", icon: SpellCheck }] : []),
 			{ id: "branches", label: "분기", icon: GitBranch },
 			{ id: "assets", label: "에셋", icon: Images },
+			...(plugins.on("slash") ? [{ id: "quickreply", label: "빠른 답장", icon: Zap }] : []),
 		]),
 	);
 
@@ -723,7 +724,7 @@
 
 	{#if panel.open && conv && session}
 		<SidePanel label="대화 패널">
-			<ChatPanel {conv} {session} {chapters} onjump={jumpFromPanel} oncard={cardFromMark} onopen={openAt} />
+			<ChatPanel {conv} {session} {chapters} onjump={jumpFromPanel} oncard={cardFromMark} onopen={openAt} draft={{ get: () => draft, set: (v) => (draft = v) }} />
 		</SidePanel>
 	{/if}
 	<ContextMenu

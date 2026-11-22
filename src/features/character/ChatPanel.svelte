@@ -35,6 +35,7 @@
 	import MemoryIndex from "$features/memory/MemoryIndex.svelte";
 	import SummaryPanel from "$features/memory/SummaryPanel.svelte";
 	import MemorySearch from "$features/memory/MemorySearch.svelte";
+	import QuickReplyList from "$features/slash/QuickReplyList.svelte";
 
 	interface Props {
 		conv: Conversation;
@@ -48,8 +49,10 @@
 		onopen: (id: string, messageId?: string) => void;
 		/** "나" 고르기를 바꿔 끼움 (폰: 폰 주인). 없으면 이 대화의 페르소나 */
 		me?: { label: string; options: ProfileOption[]; value: string | null; hint?: string; onchange: (id: string) => void };
+		/** 입력칸 글 (빠른 답장 탭이 넣거나 {{input}}으로 읽음) */
+		draft?: { get: () => string; set: (v: string) => void };
 	}
-	let { conv, session, chapters, onjump, oncard, onopen, me }: Props = $props();
+	let { conv, session, chapters, onjump, oncard, onopen, me, draft }: Props = $props();
 
 	// ---- 메시지 linter: 이 대화의 덮어쓰기와 마지막 응답에서 걸린 규칙 (3-B-5) ----
 	// 스위치는 `memoryOff`. 예전 버전은 메모(`memory`) 칸에 "off"를 썼다 — 그 값도 꺼짐으로 읽고 새로 바꿀 때 지운다
@@ -366,7 +369,11 @@
 </script>
 
 
-	{#if panel.tab === "assets"}
+	{#if panel.tab === "quickreply" && draft}
+		<div class="panel-body">
+			<QuickReplyList {session} {conv} getDraft={draft.get} setDraft={draft.set} />
+		</div>
+	{:else if panel.tab === "assets"}
 		<div class="panel-body">
 			{#if plugins.on("chat.images")}
 				<Switch checked={conv.imagesEnabled} label="이 대화에서 캐릭터 에셋 사용" onchange={(v) => library.setImagesEnabled(conv.id, v)} />

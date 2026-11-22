@@ -1,5 +1,6 @@
 <script lang="ts">
-	// 빠른 답장 버튼 줄 (5-E-20-5-3·4): 입력칸 위. 오른쪽 끝 버튼으로 이 대화에서 세트를 끄고 켠다
+	// 빠른 답장 버튼 줄 (5-E-20-5-3·4·5): 입력칸 위. 오른쪽 끝 버튼으로 이 대화에서 세트를 끄고 켠다.
+	// 버튼이 많으면 앞의 MAX_CHIPS개만 두고 "모두 보기"로 검색 목록을 펼친다 (오른쪽 패널 "빠른 답장" 탭과 같은 목록)
 	import { onMount } from "svelte";
 	import { Zap } from "@lucide/svelte";
 	import { ContextMenu, type MenuItem } from "$shared/ui";
@@ -7,12 +8,17 @@
 	import type { ChatSession } from "$features/character/session.svelte";
 	import { nav } from "$app/nav.svelte";
 	import { buttonsOf, offIds, quickReplies, runQuickReply, setsFor, setsInScope, toggleForConv, type QuickButton } from "./quickReply.svelte";
+	import QuickReplyList from "./QuickReplyList.svelte";
+
+	const MAX_CHIPS = 6;
 
 	let { session, conv, getDraft, setDraft }: { session: ChatSession; conv: Conversation | undefined; getDraft: () => string; setDraft: (v: string) => void } = $props();
 
 	onMount(() => void quickReplies.load());
 	const inScope = $derived(setsInScope(conv).filter((s) => s.enabled));
 	const buttons = $derived(buttonsOf(setsFor(conv)));
+	const shown = $derived(buttons.length > MAX_CHIPS ? buttons.slice(0, MAX_CHIPS) : buttons);
+	let showAll = $state(false);
 	let running = $state(false);
 	let menu = $state<{ x: number; y: number } | null>(null);
 
@@ -35,12 +41,20 @@
 	]);
 </script>
 
+{#if showAll}
+	<div class="all" role="dialog" aria-label="빠른 답장 모두 보기" tabindex="-1" onkeydown={(e) => e.key === "Escape" && (showAll = false)}>
+		<QuickReplyList {session} {conv} {getDraft} {setDraft} autofocus onran={() => (showAll = false)} />
+	</div>
+{/if}
 {#if inScope.length}
 	<div class="qr" role="toolbar" aria-label="빠른 답장">
 		<div class="list">
-			{#each buttons as b (b.q.id)}
+			{#each shown as b (b.q.id)}
 				<button type="button" class="chip" disabled={running || session.busy} title={b.q.message} onclick={() => press(b)}>{b.q.label.trim() || b.q.message.slice(0, 16)}</button>
 			{/each}
+			{#if buttons.length > MAX_CHIPS || showAll}
+				<button type="button" class="chip more" aria-expanded={showAll} onclick={() => (showAll = !showAll)}>{showAll ? "닫기" : `모두 보기 ${buttons.length}`}</button>
+			{/if}
 		</div>
 		<button type="button" class="pick" aria-label="이 대화의 빠른 답장 세트" title="이 대화의 빠른 답장 세트" onclick={openMenu}><Zap /></button>
 	</div>
@@ -76,6 +90,20 @@
 		overflow: hidden;
 		text-overflow: ellipsis;
 		cursor: pointer;
+	}
+	.chip.more {
+		border-style: dashed;
+		color: var(--text-muted);
+	}
+	.all {
+		max-height: min(50vh, 420px);
+		overflow-y: auto;
+		margin: 0 var(--space-1) var(--space-2);
+		padding: var(--space-3);
+		border: 1px solid var(--border);
+		border-radius: var(--radius-lg);
+		background: var(--surface);
+		box-shadow: var(--shadow-md, none);
 	}
 	.chip:hover:not(:disabled) {
 		border-color: var(--accent);
