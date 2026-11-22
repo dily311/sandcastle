@@ -287,6 +287,10 @@ export function parseCommand(raw: string): Command | null {
 // ---------------------------------------------------------------------------
 
 class Abort {}
+/** 커맨드가 스크립트를 조용히 멈추게 함 (/abort와 같음 — 예: /input에서 취소) */
+export function abortScript(): never {
+	throw new Abort();
+}
 /** /break: 가장 가까운 반복(또는 /run 묶음)을 끝냄 */
 class Break {
 	constructor(readonly value: string) {}

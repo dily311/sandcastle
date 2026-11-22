@@ -12,7 +12,7 @@ import { quickReplies, toInput } from "./quickReply.svelte";
 import { slashRuns } from "./running.svelte";
 import { ghost } from "$features/ghost/ghost.svelte";
 import { plugins } from "$shared/stores/plugins.svelte";
-import { addTo, getIndexed, runScript, ScriptError, setIndexed, type ArgValue, type Handler, type ScriptEnv } from "./script";
+import { abortScript, addTo, getIndexed, runScript, ScriptError, setIndexed, type ArgValue, type Handler, type ScriptEnv } from "./script";
 
 const src = { source: "slash" };
 /** 한 번 실행 AI 호출 상한 (설정이 없을 때, ADR-025 5-E-20-6-0) */
@@ -50,6 +50,8 @@ function range(arg: string, last: number): number[] {
 export interface SlashOpts {
 	input?: string;
 	setInput?: (v: string) => void;
+	/** 다시 실행할 때 앞 실행의 /input 답 (질문 → 답) */
+	answers?: Record<string, string>;
 }
 
 /** "3" · "2-5" · "" (마지막) → 메시지 자리(0부터) 목록. SillyTavern의 메시지 번호와 같은 0부터 */
@@ -66,7 +68,7 @@ function indexRange(arg: string, count: number): number[] {
 }
 
 /** 이 대화에서 스크립트 실행 환경. flush: 바뀐 변수 저장 (실행이 끝나면 부름) */
-export function slashEnv(session: ChatSession, opts: SlashOpts = {}): ScriptEnv & { flush: () => Promise<void> } {
+export function slashEnv(session: ChatSession, opts: SlashOpts = {}): ScriptEnv & { flush: () => Promise<void>; answers: Record<string, string> } {
 	const convId = session.convId;
 	const conv = () => library.conversation(convId);
 	const charName = () => library.character(conv()?.characterId)?.name ?? "";
@@ -76,6 +78,8 @@ export function slashEnv(session: ChatSession, opts: SlashOpts = {}): ScriptEnv 
 		Object.entries((conv()?.meta as { variables?: Record<string, unknown> } | null)?.variables ?? {}).map(([k, v]) => [k, typeof v === "string" ? v : JSON.stringify(v)]),
 	);
 	const globals: Record<string, string> = { ...((pluginSetting.value?.quickReply as { globals?: Record<string, string> } | undefined)?.globals ?? {}) };
+	/** 이번 실행의 /input 답 (다시 실행에 씀) */
+	const answers: Record<string, string> = {};
 	let varsDirty = false;
 	let globalsDirty = false;
 	const limit = aiLimit();
@@ -290,9 +294,14 @@ export function slashEnv(session: ChatSession, opts: SlashOpts = {}): ScriptEnv 
 			toasts.show({ tone, message: title ? `${title} · ${text(unnamed)}` : text(unnamed), source: "슬래시 커맨드" }, Number.isFinite(ms) && ms > 0 ? ms : undefined);
 		},
 		// /input default=… placeholder=… 질문 → 입력한 글 (취소하면 빈 글)
+		// 취소하면 스크립트를 멈춤 (5-E-20-6-9). 다시 실행(6-11)할 때는 앞 실행의 답을 다시 묻지 않고 씀
 		input: async ({ named, unnamed }) => {
-			const v = await promptText({ title: text(unnamed) || "입력", input: { value: text(named.default), placeholder: text(named.placeholder) }, confirmLabel: text(named.okButton) || undefined });
-			return v ?? "";
+			const title = text(unnamed) || "입력";
+			const again = opts.answers?.[title];
+			const v = again ?? (await promptText({ title, input: { value: text(named.default), placeholder: text(named.placeholder) }, confirmLabel: text(named.okButton) || undefined }));
+			if (v === null) abortScript();
+			answers[title] = v;
+			return v;
 		},
 		// /popup okButton=… cancelButton=… 글 → 확인 1 / 취소 0 (취소 버튼은 cancelButton을 줄 때만)
 		popup: async ({ named, unnamed }) => {
@@ -321,6 +330,7 @@ export function slashEnv(session: ChatSession, opts: SlashOpts = {}): ScriptEnv 
 		commands: commandsTable,
 		unsupported: UNSUPPORTED,
 		quickReply: quickReplySource,
+		answers,
 		variable: (name) => vars[name] ?? globals[name],
 		flush: async () => {
 			if (varsDirty) await library.patchMeta(convId, { variables: { ...vars } });

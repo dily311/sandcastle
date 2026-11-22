@@ -72,7 +72,7 @@ describe("실제 QR 실행 (5-E-20-6-5)", () => {
 		expect(appended[0].content).toContain("AI가 쓴 글 1");
 	});
 	it("분석: 입력을 비우면 알리고 멈춤 (AI를 부르지 않음)", async () => {
-		answer = null;
+		answer = "";
 		const r = await run("(분석)텍스트만.qr.json");
 		expect(r.aborted).toBe(true);
 		expect(gens).toHaveLength(0);
@@ -84,6 +84,13 @@ describe("실제 QR 실행 (5-E-20-6-5)", () => {
 		expect(gens[0]).toContain('User Input: "숲의 축제"');
 		expect(gens[0].trimEnd().endsWith("</System>")).toBe(true);
 		expect(appended).toEqual([expect.objectContaining({ role: "assistant", name: null, content: "AI가 쓴 글 1" })]);
+	});
+	it("무물: 질문 창에서 취소하면 멈춤 — AI를 부르지 않음 (5-E-20-6-9)", async () => {
+		answer = null;
+		const r = await run("무물🎤.qr.json");
+		expect(r.aborted).toBe(true);
+		expect(gens).toHaveLength(0);
+		expect(appended).toHaveLength(0);
 	});
 	it("무물: 질문이 {{pipe}}로 지시 안에 두 번 들어가고 캐릭터 말로", async () => {
 		await run("무물🎤.qr.json");
