@@ -5,10 +5,10 @@ use serde_json::Value;
 
 use crate::{
     error::{AppError, Result},
-    models::settings::{QuickReply, QuickReplySet},
+    models::{quick_reply::QuickReplySetInput, settings::QuickReply},
 };
 
-pub fn map_qr_set(json: &Value, fallback_name: &str, warnings: &mut Vec<String>) -> Result<QuickReplySet> {
+pub fn map_qr_set(json: &Value, fallback_name: &str, warnings: &mut Vec<String>) -> Result<QuickReplySetInput> {
     let list = json
         .get("qrList")
         .and_then(Value::as_array)
@@ -58,9 +58,12 @@ pub fn map_qr_set(json: &Value, fallback_name: &str, warnings: &mut Vec<String>)
         .filter(|s| !s.is_empty())
         .unwrap_or(fallback_name)
         .to_string();
-    Ok(QuickReplySet {
-        id: uuid::Uuid::new_v4().to_string(),
+    Ok(QuickReplySetInput {
+        id: None,
         name,
+        scope: "global".into(),
+        scope_id: None,
+        sort_order: 0,
         enabled: true,
         auto_send: !json.get("disableSend").and_then(Value::as_bool).unwrap_or(false),
         items,

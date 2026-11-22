@@ -7,6 +7,7 @@ pub mod import;
 pub mod memory;
 pub mod preset;
 pub mod proposals;
+pub mod quick_reply;
 pub mod regex;
 pub mod settings;
 pub mod slash;

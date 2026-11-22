@@ -135,20 +135,7 @@ let pluginSetting = {
 		scale: 5,
 		sampler: "k_euler_ancestral",
 	},
-	quickReply: {
-		sets: [
-			{
-				id: "qr1",
-				name: "지시",
-				enabled: true,
-				autoSend: false,
-				items: [
-					{ id: "q1", label: "빠른 지시", message: '/input 빠르게 지시할 내용은? | /setvar key=user_topic {{pipe}} ||\n/if left={{getvar::user_topic}} right="" rule=eq {: /echo "생성을 취소하였습니다." | /abort :} ||\n/gen 프롬프트 내용 : {{getvar::user_topic}} | /sendas name="{{char}}"', hidden: false },
-					{ id: "q2", label: "인사", message: "안녕, 오늘은 어때?", hidden: false },
-				],
-			},
-		],
-	},
+	quickReply: { sets: [] as unknown[] },
 	phone: { apiProfileId: null as string | null, presetId: null as string | null },
 	memory: { apiProfileId: null as string | null, model: "", dimensions: null as number | null, tokenCap: 200000, docPrefix: "", queryPrefix: "", autoRecall: false, recallTokens: 1500, recallTopK: 4, recallScope: "character" },
 	summary: { apiProfileId: null as string | null },
@@ -281,6 +268,14 @@ const REPLIES = [
 	'*세라피나가 창밖을 살피며 낮게 속삭인다.* "조용히 해요. 저 소리… 그림자 송곳니예요."',
 	'"걱정 말아요." *그녀가 지팡이를 쥔다.* "이 오두막엔 결계가 있어요. 하지만 오래 버티진 못해요."',
 	'*희미한 빛이 그녀의 손끝에 모인다.* "같이 가요. 혼자 두지 않을게요."',
+];
+
+// 빠른 답장 세트 (5-E-20-5-4, DB quick_reply_sets 흉내): 전역 하나(버튼 여럿), Seraphina 전용 하나
+const QUICK = '/input 빠르게 지시할 내용은? | /setvar key=user_topic {{pipe}} ||\n/if left={{getvar::user_topic}} right="" rule=eq {: /echo "생성을 취소하였습니다." | /abort :} ||\n/gen 프롬프트 내용 : {{getvar::user_topic}} | /sendas name="{{char}}"';
+const qrItem = (id: string, label: string, message: string) => ({ id, label, message, hidden: false });
+let quickReplySets = [
+	{ id: "qr1", name: "지시", scope: "global", scopeId: null as string | null, enabled: true, autoSend: false, sortOrder: 0, createdAt: 0, updatedAt: 0, items: [qrItem("q1", "빠른 지시", QUICK), qrItem("q2", "인사", "안녕, 오늘은 어때?"), ...["주변 묘사", "시간 넘기기", "속마음", "회상", "요약", "날씨", "다음 장면", "분위기 바꾸기"].map((l, i) => qrItem(`q${i + 3}`, l, `/gen ${l}를 한 문단으로 | /sendas name="{{char}}"`))] },
+	{ id: "qr2", name: "세라피나 전용", scope: "character", scopeId: "sera" as string | null, enabled: true, autoSend: true, sortOrder: 1, createdAt: 0, updatedAt: 0, items: [qrItem("s1", "치유 마법", "*세라피나가 손을 뻗어 치유 마법을 건다*")] },
 ];
 
 const PHONE_GROUP_REPLIES = ["Seraphina: 눈 떴어요?\n어제 숲에서 쓰러져 있길래 데려왔어요\n카이: 나도 같이 옮겼거든?\nSeraphina: 네, 카이도요 ㅎㅎ"];
@@ -548,6 +543,14 @@ AI: 그때 이야기를 다시 해 볼까요?`, stale: false },
 		return null;
 	},
 	get_messages: ({ conversationId }) => msgsOf(conversationId),
+	list_quick_reply_sets: () => quickReplySets,
+	upsert_quick_reply_set: ({ input }) => {
+		const id = (input.id as string | null) || uid("qr");
+		const saved = { ...input, id, scopeId: input.scope === "global" ? null : input.scopeId, createdAt: now(), updatedAt: now() };
+		quickReplySets = quickReplySets.some((s) => s.id === id) ? quickReplySets.map((s) => (s.id === id ? saved : s)) : [...quickReplySets, saved];
+		return saved;
+	},
+	delete_quick_reply_set: ({ id }) => ((quickReplySets = quickReplySets.filter((s) => s.id !== id)), null),
 	// /gen (5-E-20-5): 지시를 받아 짧은 글을 돌려줌
 	slash_generate: ({ prompt }) => `(가짜 AI) ${String(prompt).slice(0, 40)}에 대한 글`,
 	append_message: ({ input }) => {

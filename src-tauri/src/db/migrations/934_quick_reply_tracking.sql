@@ -1,0 +1,5 @@
+-- 빠른 답장 세트(140)의 변경 추적·지운 기록 트리거 (920·921과 같은 모양)
+CREATE TRIGGER quick_reply_sets_touch_insert AFTER INSERT ON quick_reply_sets FOR EACH ROW WHEN NEW.updated_at IS NULL OR NEW.updated_at = 0 BEGIN UPDATE quick_reply_sets SET updated_at = CAST((julianday('now') - 2440587.5) * 86400000 AS INTEGER) WHERE rowid = NEW.rowid; END;
+CREATE TRIGGER quick_reply_sets_touch_update AFTER UPDATE ON quick_reply_sets FOR EACH ROW WHEN NEW.updated_at IS OLD.updated_at BEGIN UPDATE quick_reply_sets SET updated_at = CAST((julianday('now') - 2440587.5) * 86400000 AS INTEGER) WHERE rowid = NEW.rowid; END;
+CREATE TRIGGER quick_reply_sets_tombstone AFTER DELETE ON quick_reply_sets FOR EACH ROW BEGIN INSERT OR REPLACE INTO sync_tombstones (tbl, key, deleted_at) VALUES ('quick_reply_sets', json_array(OLD.id), CAST((julianday('now') - 2440587.5) * 86400000 AS INTEGER)); END;
+CREATE TRIGGER quick_reply_sets_untombstone AFTER INSERT ON quick_reply_sets FOR EACH ROW BEGIN DELETE FROM sync_tombstones WHERE tbl = 'quick_reply_sets' AND key = json_array(NEW.id); END;

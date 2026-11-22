@@ -306,12 +306,13 @@ pub struct PluginSetting {
 #[derive(Debug, Serialize, Deserialize, Clone, Default, specta::Type)]
 #[serde(rename_all = "camelCase", default)]
 pub struct QuickReplySetting {
-    pub sets: Vec<QuickReplySet>,
+    /// 예전(5-E-20-5-3) 자리. 지금은 DB(quick_reply_sets)에 두고, 처음 목록을 읽을 때 옮긴 뒤 비운다
+    pub sets: Vec<LegacyQuickReplySet>,
 }
 
 #[derive(Debug, Serialize, Deserialize, Clone, Default, specta::Type)]
 #[serde(rename_all = "camelCase", default)]
-pub struct QuickReplySet {
+pub struct LegacyQuickReplySet {
     pub id: String,
     pub name: String,
     /// 대화에서 고르지 않았을 때 모든 대화에 보임

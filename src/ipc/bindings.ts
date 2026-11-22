@@ -195,8 +195,12 @@ export const commands = {
 	exportSillytavernData: (path: string, options?: InvokeOptions) => __TAURI_INVOKE<SillyTavernDataExport>("export_sillytavern_data", { path }, options),
 	/**  프리셋 하나를 SillyTavern Chat Completion 프리셋(.json)으로 (프리셋에 묶인 정규식 포함) */
 	exportPresetSillytavern: (id: string, path: string, options?: InvokeOptions) => __TAURI_INVOKE<null>("export_preset_sillytavern", { id, path }, options),
-	/**  SillyTavern 빠른 답장 세트(.json) 읽기. 저장은 화면이 설정에 한다 (돌려준 세트를 목록에 더함) */
-	readQuickReplySet: (path: string, options?: InvokeOptions) => __TAURI_INVOKE<[QuickReplySet_Serialize, string[]]>("read_quick_reply_set", { path }, options),
+	/**  SillyTavern 빠른 답장 세트(.json) 읽기. 저장은 화면이 범위를 고른 뒤 upsert_quick_reply_set으로 한다 */
+	readQuickReplySet: (path: string, options?: InvokeOptions) => __TAURI_INVOKE<[QuickReplySetInput_Serialize, string[]]>("read_quick_reply_set", { path }, options),
+	/**  목록. 처음 한 번, 예전처럼 설정에 둔 세트(5-E-20-5-3)가 있으면 전역 세트로 옮기고 설정에서 비운다 */
+	listQuickReplySets: (options?: InvokeOptions) => __TAURI_INVOKE<QuickReplySet_Serialize[]>("list_quick_reply_sets", undefined, options),
+	upsertQuickReplySet: (input: QuickReplySetInput_Deserialize, options?: InvokeOptions) => __TAURI_INVOKE<QuickReplySet_Serialize>("upsert_quick_reply_set", { input }, options),
+	deleteQuickReplySet: (id: string, options?: InvokeOptions) => __TAURI_INVOKE<null>("delete_quick_reply_set", { id }, options),
 	/**  캐릭터 → 채팅 트리, 개수, 저장 공간 */
 	getDataOverview: (options?: InvokeOptions) => __TAURI_INVOKE<DataOverview_Serialize>("get_data_overview", undefined, options),
 	/**  DB 점검: 무결성(PRAGMA integrity_check)과 아무 데도 쓰이지 않는 파일 목록. 지우지 않는다 */
@@ -3052,6 +3056,28 @@ export type Issue = {
 	text: string,
 };
 
+export type LegacyQuickReplySet = LegacyQuickReplySet_Serialize | LegacyQuickReplySet_Deserialize;
+
+export type LegacyQuickReplySet_Deserialize = {
+	id?: string,
+	name?: string,
+	/**  대화에서 고르지 않았을 때 모든 대화에 보임 */
+	enabled?: boolean,
+	/**  스크립트가 아닌 글: true면 바로 보냄(AI 답장 요금), false면 입력칸에 넣기만 */
+	autoSend?: boolean,
+	items?: QuickReply_Deserialize[],
+};
+
+export type LegacyQuickReplySet_Serialize = {
+	id: string,
+	name: string,
+	/**  대화에서 고르지 않았을 때 모든 대화에 보임 */
+	enabled: boolean,
+	/**  스크립트가 아닌 글: true면 바로 보냄(AI 답장 요금), false면 입력칸에 넣기만 */
+	autoSend: boolean,
+	items: QuickReply_Serialize[],
+};
+
 export type LibraryRoot = {
 	folders: { [key in string]: FolderNode },
 	rootFiles: Value[],
@@ -4294,24 +4320,62 @@ export type QuickReply = QuickReply_Serialize | QuickReply_Deserialize;
 
 export type QuickReplySet = QuickReplySet_Serialize | QuickReplySet_Deserialize;
 
+export type QuickReplySetInput = QuickReplySetInput_Serialize | QuickReplySetInput_Deserialize;
+
+export type QuickReplySetInput_Deserialize = {
+	/**  없으면 새로 만든다 */
+	id?: string | null,
+	name: string,
+	scope: string,
+	scopeId?: string | null,
+	enabled: boolean,
+	autoSend: boolean,
+	items: QuickReply_Deserialize[],
+	sortOrder: number,
+};
+
+export type QuickReplySetInput_Serialize = {
+	/**  없으면 새로 만든다 */
+	id: string | null,
+	name: string,
+	scope: string,
+	scopeId: string | null,
+	enabled: boolean,
+	autoSend: boolean,
+	items: QuickReply_Serialize[],
+	sortOrder: number,
+};
+
 export type QuickReplySet_Deserialize = {
-	id?: string,
-	name?: string,
-	/**  대화에서 고르지 않았을 때 모든 대화에 보임 */
-	enabled?: boolean,
+	id: string,
+	name: string,
+	/**  global / character / preset */
+	scope: string,
+	/**  character_id / preset_id (전역이면 없음) */
+	scopeId?: string | null,
+	enabled: boolean,
 	/**  스크립트가 아닌 글: true면 바로 보냄(AI 답장 요금), false면 입력칸에 넣기만 */
-	autoSend?: boolean,
-	items?: QuickReply_Deserialize[],
+	autoSend: boolean,
+	items: QuickReply_Deserialize[],
+	sortOrder: number,
+	createdAt: number,
+	updatedAt: number,
 };
 
 export type QuickReplySet_Serialize = {
 	id: string,
 	name: string,
-	/**  대화에서 고르지 않았을 때 모든 대화에 보임 */
+	/**  global / character / preset */
+	scope: string,
+	/**  character_id / preset_id (전역이면 없음) */
+	scopeId: string | null,
 	enabled: boolean,
 	/**  스크립트가 아닌 글: true면 바로 보냄(AI 답장 요금), false면 입력칸에 넣기만 */
 	autoSend: boolean,
 	items: QuickReply_Serialize[],
+	sortOrder: number,
+	createdAt: number,
+	updatedAt: number,
 };
 
 /**  빠른 답장: 입력칸 위 버튼. 누르면 `/`로 시작하는 글은 스크립트로 실행, 아니면 보내거나 입력칸에 넣음 */
@@ -4319,12 +4383,14 @@ export type QuickReplySetting = QuickReplySetting_Serialize | QuickReplySetting_
 
 /**  빠른 답장: 입력칸 위 버튼. 누르면 `/`로 시작하는 글은 스크립트로 실행, 아니면 보내거나 입력칸에 넣음 */
 export type QuickReplySetting_Deserialize = {
-	sets?: QuickReplySet_Deserialize[],
+	/**  예전(5-E-20-5-3) 자리. 지금은 DB(quick_reply_sets)에 두고, 처음 목록을 읽을 때 옮긴 뒤 비운다 */
+	sets?: LegacyQuickReplySet_Deserialize[],
 };
 
 /**  빠른 답장: 입력칸 위 버튼. 누르면 `/`로 시작하는 글은 스크립트로 실행, 아니면 보내거나 입력칸에 넣음 */
 export type QuickReplySetting_Serialize = {
-	sets: QuickReplySet_Serialize[],
+	/**  예전(5-E-20-5-3) 자리. 지금은 DB(quick_reply_sets)에 두고, 처음 목록을 읽을 때 옮긴 뒤 비운다 */
+	sets: LegacyQuickReplySet_Serialize[],
 };
 
 export type QuickReply_Deserialize = {

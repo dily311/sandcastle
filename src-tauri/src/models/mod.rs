@@ -7,6 +7,7 @@ pub mod game;
 pub mod ai_service;
 pub mod character_image;
 pub mod prompt;
+pub mod quick_reply;
 pub mod regex;
 
 pub mod widget;

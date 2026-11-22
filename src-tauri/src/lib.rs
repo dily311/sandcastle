@@ -24,7 +24,7 @@ use crate::{
 };
 use commands::{
     ai_service::*, character_image::*, chat::*, community::*, conversation::*, convert::*, data::*, game_engine::*, game_manager::*, ghost::*, import::*,
-    memory::*, phone::*, preset::*, proposals::*, regex::*, settings::*, slash::*, summary::*, sync::*, task::*,
+    memory::*, phone::*, preset::*, proposals::*, quick_reply::*, regex::*, settings::*, slash::*, summary::*, sync::*, task::*,
 };
 use task::{TaskEventEmitter, TaskManager};
 
@@ -335,6 +335,9 @@ pub fn specta_builder() -> tauri_specta::Builder<tauri::Wry> {
         export_sillytavern_data,
         export_preset_sillytavern,
         read_quick_reply_set,
+        list_quick_reply_sets,
+        upsert_quick_reply_set,
+        delete_quick_reply_set,
         // data manager
         get_data_overview,
         check_data,
@@ -665,6 +668,9 @@ pub fn specta_builder() -> tauri_specta::Builder<tauri::Wry> {
         export_sillytavern_data,
         export_preset_sillytavern,
         read_quick_reply_set,
+        list_quick_reply_sets,
+        upsert_quick_reply_set,
+        delete_quick_reply_set,
         // data manager
         get_data_overview,
         check_data,

@@ -1,20 +1,22 @@
 <script lang="ts">
-	// 빠른 답장 버튼 줄 (5-E-20-5-3): 입력칸 위. 오른쪽 끝 버튼으로 이 대화에 쓸 세트를 고른다
+	// 빠른 답장 버튼 줄 (5-E-20-5-3·4): 입력칸 위. 오른쪽 끝 버튼으로 이 대화에서 세트를 끄고 켠다
+	import { onMount } from "svelte";
 	import { Zap } from "@lucide/svelte";
 	import { ContextMenu, type MenuItem } from "$shared/ui";
 	import type { Conversation } from "$features/character/library.svelte";
 	import type { ChatSession } from "$features/character/session.svelte";
 	import { nav } from "$app/nav.svelte";
-	import { qrSets, runQuickReply, setsFor, toggleForConv } from "./quickReply";
+	import { buttonsOf, offIds, quickReplies, runQuickReply, setsFor, setsInScope, toggleForConv, type QuickButton } from "./quickReply.svelte";
 
 	let { session, conv, getDraft, setDraft }: { session: ChatSession; conv: Conversation | undefined; getDraft: () => string; setDraft: (v: string) => void } = $props();
 
-	const sets = $derived(setsFor(conv));
-	const buttons = $derived(sets.flatMap((set) => set.items.filter((q) => !q.hidden && (q.label.trim() || q.message.trim())).map((q) => ({ set, q }))));
+	onMount(() => void quickReplies.load());
+	const inScope = $derived(setsInScope(conv).filter((s) => s.enabled));
+	const buttons = $derived(buttonsOf(setsFor(conv)));
 	let running = $state(false);
 	let menu = $state<{ x: number; y: number } | null>(null);
 
-	async function press(b: (typeof buttons)[number]) {
+	async function press(b: QuickButton) {
 		if (running || session.busy) return;
 		running = true;
 		try {
@@ -28,12 +30,12 @@
 		menu = { x: r.right, y: r.top - 4 };
 	}
 	const menuItems = $derived<MenuItem[]>([
-		...qrSets().map((s) => ({ id: s.id, label: s.name || "이름 없는 세트", checked: sets.some((x) => x.id === s.id), onselect: () => conv && void toggleForConv(conv, s.id) })),
-		{ label: "빠른 답장 설정", separator: qrSets().length > 0, onselect: () => nav.go({ page: "settings", tab: "quickreply" }) },
+		...inScope.map((s) => ({ id: s.id, label: s.name || "이름 없는 세트", checked: !offIds(conv).includes(s.id), onselect: () => conv && void toggleForConv(conv, s.id) })),
+		{ label: "빠른 답장 설정", separator: inScope.length > 0, onselect: () => nav.go({ page: "settings", tab: "quickreply" }) },
 	]);
 </script>
 
-{#if buttons.length || qrSets().length}
+{#if inScope.length}
 	<div class="qr" role="toolbar" aria-label="빠른 답장">
 		<div class="list">
 			{#each buttons as b (b.q.id)}
