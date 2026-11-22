@@ -3,7 +3,7 @@
 	import { AlertTriangle, ImagePlus, X, ChevronRight, Download, Ellipsis, Gamepad2, Pencil, Play, Plus, Trash2, Users } from "@lucide/svelte";
 	import { Avatar, Badge, Button, ContextMenu, EmptyState, IconButton, Segmented, Spinner, type MenuItem } from "$shared/ui";
 	import { call, commands } from "$shared/ipc/client";
-	import { GAME_FILES, IMAGE_FILES, pickFiles, saveIntoPicked } from "$shared/ipc/dialog";
+	import { GAME_FILES, IMAGE_FILES, pickFiles, saveIntoPicked, saveTo } from "$shared/ipc/dialog";
 	import { layout } from "$app/layout.svelte";
 	import { dropPaths } from "$app/drop.svelte";
 	import { confirmAction } from "$shared/stores/confirm.svelte";
@@ -100,6 +100,13 @@
 		return `${Math.floor(m / 60) % 24}:${String(m % 60).padStart(2, "0")}`;
 	};
 
+	/** 플레이 기록 → SillyTavern 채팅 (5-E-20-3). 연출 태그는 걷고 선택지는 줄로 */
+	async function exportSession(s: Session) {
+		const title = `${game?.project.title ?? "game"} - ${sceneName(s.currentSceneId)}`;
+		const n = await saveTo(`${title}.jsonl`, [{ name: "SillyTavern 채팅", extensions: ["jsonl"] }], (path) => call(commands.exportGameSession(s.id, path), { source: "game" }));
+		if (n != null) toasts.success(`메시지 ${n}개 내보냄`);
+	}
+
 	async function copyToCharacter(id: string, name: string) {
 		const c = await call(commands.copyGameCharacterToCharacter(id), { source: "game" });
 		library.characters = [...library.characters, c];
@@ -192,6 +199,7 @@
 								<span class="t"><b>{sceneName(s.currentSceneId)}</b><small title={absolute(s.updatedAt)}>게임 시각 {clock(s.gameTime)} · {s.headSeq}턴 · {relative(s.updatedAt)}{s.parentSessionId ? " · 갈래" : ""}</small></span>
 								<ChevronRight />
 							</button>
+							<IconButton label="SillyTavern 채팅(.jsonl)으로 내보내기" size="sm" onclick={() => exportSession(s)}><Download /></IconButton>
 							<IconButton label="세션 삭제" size="sm" onclick={() => removeSession(s)}><Trash2 /></IconButton>
 						</li>
 					{:else}

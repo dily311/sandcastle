@@ -51,6 +51,18 @@ pub fn cg_to_img(text: &str) -> String {
     out
 }
 
+/// 게임 대사 → 읽을 글: 연출·상태 태그(<bgm>·<emotion::이름>·<updateVar> 등)는 지우고, 선택지는 "- 선택지" 줄로 (5-E-20-3)
+pub fn strip_game_tags(text: &str) -> String {
+    use std::sync::LazyLock;
+    static HIDDEN: LazyLock<fancy_regex::Regex> = LazyLock::new(|| {
+        fancy_regex::Regex::new(r"(?is)<(bgm|sfx|cg|voice|effects|emotion|motion|updatevar|updaterel|scene)(::[^>]*)?>.*?</(bgm|sfx|cg|voice|effects|emotion|motion|updatevar|updaterel|scene)(::[^>]*)?>").unwrap()
+    });
+    static CHOICE: LazyLock<fancy_regex::Regex> = LazyLock::new(|| fancy_regex::Regex::new(r"(?is)<choice>(.*?)</choice>").unwrap());
+    let s = HIDDEN.replace_all(text, "");
+    let s = CHOICE.replace_all(&s, "\n- $1");
+    s.lines().map(str::trim_end).filter(|l| !l.trim().is_empty()).collect::<Vec<_>>().join("\n")
+}
+
 pub fn to_jsonl(chat: &JsonlChat, opts: &JsonlOptions) -> String {
     let body = |s: &str| if opts.cg_as_img { cg_to_img(s) } else { s.to_string() };
     let note = chat.conv_meta.and_then(|m| m.get("authorNote"));
@@ -129,6 +141,12 @@ mod tests {
             created_at: 1_700_000_000_000,
             updated_at: 1_700_000_000_000,
         }
+    }
+
+    #[test]
+    fn game_tags_are_removed_and_choices_become_lines() {
+        let raw = "유나: 어서 와! <emotion::유나>happy</emotion><sfx>문</sfx>\n<effects>snow</effects>\n<choice>인사한다</choice><choice>지나간다</choice>\n<updateVar>{\"set\":{\"x\":1}}</updateVar>";
+        assert_eq!(strip_game_tags(raw), "유나: 어서 와!\n- 인사한다\n- 지나간다");
     }
 
     #[test]

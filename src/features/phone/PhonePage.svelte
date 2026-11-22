@@ -5,6 +5,10 @@
 	import { BatteryFull, ChevronLeft, ChevronRight, Contact, MessageCircle, Pencil, Plus, Search, Settings, Signal, Trash2, Wifi } from "@lucide/svelte";
 	import { Avatar, ContextMenu, Spinner, type MenuItem } from "$shared/ui";
 	import { fileSrc } from "$shared/ipc/file";
+	import { call, commands } from "$shared/ipc/client";
+	import { toasts } from "$shared/stores/toast.svelte";
+	import { convActions } from "$features/character/actions";
+	import { Download } from "@lucide/svelte";
 	import { promptText } from "$shared/stores/confirm.svelte";
 	import { nav } from "$app/nav.svelte";
 	import { library, type Conversation } from "$features/character/library.svelte";
@@ -134,6 +138,25 @@
 			],
 		};
 	}
+	/** 채팅방 메뉴 (오른쪽 클릭·꾹 누르기): 일반 대화로 복사, SillyTavern 채팅으로 내보내기 (5-E-20-3) */
+	function roomMenu(e: MouseEvent, c: Conversation) {
+		e.preventDefault();
+		menu = {
+			at: { x: e.clientX, y: e.clientY },
+			items: [
+				{
+					label: "일반 대화로 복사",
+					icon: MessageCircle,
+					onselect: async () => {
+						const copy = await call(commands.copyConversationAsChat(c.id), { source: "phone" });
+						await library.load();
+						toasts.show({ tone: "success", message: `'${copy.title}' 만듦 (원본 채팅은 그대로)`, action: { label: "열기", run: () => nav.go({ page: "character", charId: copy.characterId, convId: copy.id }) } });
+					},
+				},
+				{ label: "SillyTavern 채팅으로 내보내기", icon: Download, onselect: () => void convActions.exportAs(c, "jsonl") },
+			],
+		};
+	}
 	const kindLabel = (k: string) => (k === "persona" ? "내 페르소나" : "캐릭터");
 </script>
 
@@ -212,7 +235,7 @@
 					{@const w = lookup(phone.contactOf(c))}
 					{@const p = phone.previews[c.id]}
 					<li>
-						<button onclick={() => w && openChat(w)}>
+						<button onclick={() => w && openChat(w)} oncontextmenu={(e) => roomMenu(e, c)}>
 							<Avatar name={w?.name ?? "?"} src={fileSrc(w?.avatar)} color={w?.color} size={46} />
 							<span class="main">
 								<span class="row"><strong>{w?.name ?? c.title}</strong><span class="time">{when(p?.at ?? lastAt(c))}</span></span>

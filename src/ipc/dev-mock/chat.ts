@@ -452,6 +452,15 @@ AI: 그때 이야기를 다시 해 볼까요?`, stale: false },
 		for (const m of msgsOf(id)) messages.push({ ...m, id: uid("m"), conversationId: c.id });
 		return view(c);
 	},
+	copy_conversation_as_chat: ({ id }) => {
+		const src = conv(id);
+		const { id: _omit, ...rest } = src;
+		void _omit;
+		const c = addConv({ ...rest, title: `${src.title} (대화)`, mode: "chat", pinned: false } as never, 0);
+		for (const m of msgsOf(id)) messages.push({ ...m, id: uid("m"), conversationId: c.id });
+		return view(c);
+	},
+	export_game_session: () => 0,
 	branch_conversation: ({ id, messageId }) => {
 		const src = conv(id);
 		const list = msgsOf(id);

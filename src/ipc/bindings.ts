@@ -76,6 +76,10 @@ export const commands = {
 	setConversationOptions: (id: string, options: ConversationOptions_Deserialize, _options?: InvokeOptions) => __TAURI_INVOKE<Conversation_Serialize>("set_conversation_options", { id, options }, _options),
 	/**  대화 통째로 복제 */
 	duplicateConversation: (id: string, options?: InvokeOptions) => __TAURI_INVOKE<Conversation_Serialize>("duplicate_conversation", { id }, options),
+	/**  폰 대화를 일반 대화로 (5-E-20-3): 원본은 그대로 두고 일반 대화 모드로 복사한다 */
+	copyConversationAsChat: (id: string, options?: InvokeOptions) => __TAURI_INVOKE<Conversation_Serialize>("copy_conversation_as_chat", { id }, options),
+	/**  게임 플레이 기록을 SillyTavern 채팅(.jsonl)으로 (5-E-20-3). 연출 태그는 걷고 선택지는 줄로. 메시지 수를 돌려준다 */
+	exportGameSession: (sessionId: string, path: string, options?: InvokeOptions) => __TAURI_INVOKE<number>("export_game_session", { sessionId, path }, options),
 	/**  분기 나누기: 이 메시지까지 복사한 새 대화 */
 	branchConversation: (id: string, messageId: string, options?: InvokeOptions) => __TAURI_INVOKE<Conversation_Serialize>("branch_conversation", { id, messageId }, options),
 	/**  대화 meta에 키를 합친다 (작가 노트, 메모 등). 값이 null이면 그 키를 지움 */
@@ -106,7 +110,7 @@ export const commands = {
 	editGameMessage: (messageId: string, content: string, options?: InvokeOptions) => __TAURI_INVOKE<EditedGameMessage_Serialize>("edit_game_message", { messageId, content }, options),
 	/**  마지막 AI 응답 다시 만들기 (그 응답이 바꾼 변수·관계는 되돌림) */
 	regenerateGameReply: (messageId: string, options?: InvokeOptions) => __TAURI_INVOKE<NpcReply_Serialize>("regenerate_game_reply", { messageId }, options),
-	/**  대화 하나를 파일로 내보내기. format: "jsonl"(SillyTavern 채팅) | "txt"(읽기용 글) */
+	/**  대화 하나를 파일로 내보내기. format: "jsonl"(SillyTavern 채팅) | "jsonl-img"(같은데 `<cg>키</cg>` → `{{img::키}}`) | "txt"(읽기용 글) */
 	exportConversation: (id: string, format: string, path: string, options?: InvokeOptions) => __TAURI_INVOKE<number>("export_conversation", { id, format, path }, options),
 	getTask: (taskId: string, options?: InvokeOptions) => __TAURI_INVOKE<TaskInfo_Serialize>("get_task", { taskId }, options),
 	listActiveTasks: (options?: InvokeOptions) => __TAURI_INVOKE<TaskInfo_Serialize[]>("list_active_tasks", undefined, options),

@@ -179,6 +179,57 @@ pub async fn duplicate_conversation(state: State<'_, AppState>, id: String) -> R
     Ok(conversation::get_conversation(&state.db, &new_id).await?)
 }
 
+/// 폰 대화를 일반 대화로 (5-E-20-3): 원본은 그대로 두고 일반 대화 모드로 복사한다
+#[tauri::command]
+#[specta::specta]
+pub async fn copy_conversation_as_chat(state: State<'_, AppState>, id: String) -> Result<Conversation> {
+    let src = conversation::get_conversation(&state.db, &id).await?;
+    let new_id = chat_ui::copy_conversation(&state.db, &id, &format!("{} (대화)", src.title), None).await?;
+    sqlx::query("UPDATE conversations SET mode = 'chat' WHERE id = ?")
+        .bind(&new_id)
+        .execute(&state.db)
+        .await?;
+    Ok(conversation::get_conversation(&state.db, &new_id).await?)
+}
+
+/// 게임 플레이 기록을 SillyTavern 채팅(.jsonl)으로 (5-E-20-3). 연출 태그는 걷고 선택지는 줄로. 메시지 수를 돌려준다
+#[tauri::command]
+#[specta::specta]
+pub async fn export_game_session(state: State<'_, AppState>, session_id: String, path: String) -> Result<u32> {
+    use crate::service::import::sillytavern::export::{strip_game_tags, to_jsonl, JsonlChat, JsonlOptions};
+    let session = crate::db::game::get_game_player_sessions(&state.db, &session_id).await?;
+    let game = crate::db::game::get_game_project(&state.db, &session.game_id).await?;
+    let rows = crate::db::game::get_session_game_messages(&state.db, &session_id).await?;
+    let messages: Vec<crate::models::conversation::Message> = rows
+        .into_iter()
+        .map(|m| crate::models::conversation::Message {
+            id: m.id,
+            conversation_id: m.conversation_id,
+            seq: m.seq as i64,
+            role: m.role,
+            name: m.name,
+            content: strip_game_tags(&m.content),
+            character_id: None,
+            meta: None,
+            created_at: m.created_at,
+            updated_at: m.updated_at,
+        })
+        .filter(|m| !m.content.trim().is_empty())
+        .collect();
+    let out = to_jsonl(
+        &JsonlChat {
+            user_name: "나",
+            char_name: &game.title,
+            created_at: messages.first().map_or(0, |m| m.created_at),
+            conv_meta: None,
+            messages: &messages,
+        },
+        &JsonlOptions::default(),
+    );
+    std::fs::write(&path, out).map_err(|e| AppError::io(format!("파일을 쓸 수 없습니다: {e}")))?;
+    Ok(messages.len() as u32)
+}
+
 /// 분기 나누기: 이 메시지까지 복사한 새 대화
 #[tauri::command]
 #[specta::specta]
