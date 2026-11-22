@@ -61,7 +61,7 @@ export function toBlocks(content: string, opts: { rawHtml?: boolean; safeHtml?: 
 }
 
 /** 다인봇 (5-F-2): 문단이 `이름: 대사`면 말한 사람 블록으로 (이름은 24자 안, 지문·대사 기호로 시작하지 않음) */
-const SAY = /^([^:：*"“\s][^:：*"“\n]{0,23})(?::\s+|：\s*)/;
+export const SAY = /^([^:：*"“\s][^:：*"“\n]{0,23})(?::\s+|：\s*)/;
 function asSay(b: Block): Block {
 	if (b.kind !== "p" || b.parts[0]?.kind !== "text") return b;
 	const m = SAY.exec(b.parts[0].text);

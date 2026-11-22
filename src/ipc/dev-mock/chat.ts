@@ -269,13 +269,17 @@ const REPLIES = [
 	'*희미한 빛이 그녀의 손끝에 모인다.* "같이 가요. 혼자 두지 않을게요."',
 ];
 
+const PHONE_GROUP_REPLIES = ["Seraphina: 눈 떴어요?\n어제 숲에서 쓰러져 있길래 데려왔어요\n카이: 나도 같이 옮겼거든?\nSeraphina: 네, 카이도요 ㅎㅎ"];
 const PHONE_REPLIES = ["눈 떴어요?\n어제 숲에서 쓰러져 있길래 데려왔어요", "괜찮아요 ㅎㅎ\n천천히 쉬어요", "지금 오두막이에요\n올 때 빵 좀 사다 줄래요?"];
 
 async function generate(convId: string, onEvent: { onmessage: (m: { chunk: string }) => void }) {
 	if (running.has(convId)) throw { code: "INVALID_INPUT", category: "VALIDATION", message: "이미 응답을 만드는 중", retryable: false };
 	const state = { cancelled: false };
 	running.set(convId, state);
-	const pool = convs.find((c) => c.id === convId)?.mode === "phone" ? PHONE_REPLIES : REPLIES;
+	const c = convs.find((c) => c.id === convId);
+	// 다인봇을 켠 폰 대화는 `이름: 대사` 줄로 (5-E-19-1 단체 대화 확인용)
+	const multi = !!(c?.meta as { multiChar?: boolean } | null)?.multiChar;
+	const pool = c?.mode === "phone" ? (multi ? PHONE_GROUP_REPLIES : PHONE_REPLIES) : REPLIES;
 	const text = pool[Math.floor(Math.random() * pool.length)];
 	let out = "";
 	try {

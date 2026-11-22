@@ -1,7 +1,7 @@
 <script lang="ts">
 	import { regexVersion } from "$shared/stores/regexVersion.svelte";
 	import { onMount, tick } from "svelte";
-	import { BookOpen, ChevronLeft, Copy, Eye, ImagePlus, Languages, Menu, MessageCirclePlus, RefreshCw, Send, Square, Trash2, Volume2 } from "@lucide/svelte";
+	import { BookOpen, ChevronLeft, Copy, Eye, ImagePlus, Languages, Menu, MessageCirclePlus, RefreshCw, Send, Square, Trash2, Users, Volume2 } from "@lucide/svelte";
 	import { plugins } from "$shared/stores/plugins.svelte";
 	import Ghostwrite from "$features/ghost/Ghostwrite.svelte";
 	import { ghost } from "$features/ghost/ghost.svelte";
@@ -15,6 +15,7 @@
 	import { library, type Conversation } from "$features/character/library.svelte";
 	import { ChatSession, type Message } from "$features/character/session.svelte";
 	import { bubbles, lookup, parsePeek, phone, type BubbleLine } from "./phone.svelte";
+	import { splitSpeakers } from "./speakers";
 
 	let { conv, onback, session: given }: { conv: Conversation; onback: () => void; session?: ChatSession } = $props();
 
@@ -24,6 +25,19 @@
 	// 상대(연락처)와 나(폰 주인)
 	const ch = $derived(lookup(phone.contactOf(conv)));
 	const me = $derived(phone.owner);
+	// 단체 대화 (5-E-19-1): 다인봇(대화 meta.multiChar)을 켜면 답장의 `이름: 대사` 줄을 사람별 말풍선으로
+	const cur = $derived(library.conversation(conv.id) ?? conv);
+	const multi = $derived(!!(cur.meta as { multiChar?: boolean } | null)?.multiChar);
+	/** 말한 사람의 그림: 대화 상대 → 같은 이름의 캐릭터 카드 → 이름 첫 글자 */
+	function speakerLook(name: string | undefined) {
+		if (!name || name === ch?.name) return { name: ch?.name ?? "?", avatar: ch?.avatar ?? null, color: ch?.color };
+		const c = library.characters.find((x) => x.name === name);
+		return { name, avatar: c?.avatar ?? null, color: undefined };
+	}
+	/** 답장 한 개 → 말한 사람별 묶음 (단체 대화가 아니면 대화 상대 하나) */
+	function speakers(text: string): { speaker?: string; text: string }[] {
+		return multi ? splitSpeakers(text, ch?.name ?? "") : [{ text }];
+	}
 	const imgChar = $derived(ch?.kind === "character" ? ch.id : null);
 	const images = $derived(Object.fromEntries((library.images[imgChar ?? ""] ?? []).map((i) => [i.key, imageSrc(i) ?? ""])));
 	let draft = $state("");
@@ -101,6 +115,8 @@
 		time?: string;
 		/** 같은 사람이 이어서 보내면 이름·아바타 생략 */
 		cont?: boolean;
+		/** 단체 대화에서 말한 사람 (없으면 대화 상대) */
+		speaker?: string;
 		pending?: boolean;
 	}
 	const day = (t: number) => new Date(t).toLocaleDateString("ko-KR", { year: "numeric", month: "long", day: "numeric", weekday: "long" });
@@ -110,6 +126,7 @@
 		const out: Row[] = [];
 		let lastDay = "";
 		let lastSide: boolean | null = null;
+		let lastSpeaker: string | undefined;
 		const live = session.live;
 		const push = (r: Omit<Row, "kind" | "key"> & { key: string; at: number }) => {
 			const d = day(r.at);
@@ -118,17 +135,28 @@
 				lastDay = d;
 				lastSide = null;
 			}
-			out.push({ ...r, kind: "msg", cont: lastSide === r.mine, time: hm(r.at) });
+			out.push({ ...r, kind: "msg", cont: lastSide === r.mine && lastSpeaker === r.speaker, time: hm(r.at) });
 			lastSide = r.mine ?? null;
+			lastSpeaker = r.speaker;
 		};
 		for (const m of session.messages) {
 			const tr = plugins.on("translate") ? translationOf(m) : null;
 			const content = live?.kind === "regenerate" && live.targetId === m.id ? live.text : tr && !originals[m.id] ? tr.text : (session.display[m.id] ?? m.content);
 			// 이미지 생성 플러그인으로 그린 사진은 말풍선 뒤에 사진으로
 			const photos = plugins.on("imagegen") ? generatedImagesOf(m).map((g) => ({ kind: "photo" as const, text: g.path })) : [];
+			const pending = live?.targetId === m.id;
+			if (m.role === "assistant" && multi) {
+				const parts = speakers(content);
+				parts.forEach((p, i) => {
+					const lines = [...bubbles(p.text), ...(i === parts.length - 1 ? photos : [])];
+					if (lines.length) push({ key: `${m.id}:${i}`, at: m.createdAt, mine: false, msg: m, lines, speaker: p.speaker, pending });
+				});
+				if (!parts.length && (photos.length || pending)) push({ key: m.id, at: m.createdAt, mine: false, msg: m, lines: photos, pending });
+				continue;
+			}
 			const lines = [...bubbles(content), ...photos];
-			if (!lines.length && !(live?.targetId === m.id)) continue;
-			push({ key: m.id, at: m.createdAt, mine: m.role === "user", msg: m, lines, pending: live?.targetId === m.id });
+			if (!lines.length && !pending) continue;
+			push({ key: m.id, at: m.createdAt, mine: m.role === "user", msg: m, lines, pending });
 		}
 		if (live?.kind === "peek") {
 			const now = Date.now();
@@ -139,7 +167,9 @@
 		if (live?.kind === "send") {
 			const now = Date.now();
 			if (live.userText) push({ key: "live-user", at: now, mine: true, lines: bubbles(live.userText) });
-			push({ key: "live-ai", at: now, mine: false, lines: bubbles(live.text), pending: true });
+			const parts = speakers(live.text).filter((p) => p.text);
+			if (!parts.length) push({ key: "live-ai", at: now, mine: false, lines: [], pending: true });
+			parts.forEach((p, i) => push({ key: `live-ai-${i}`, at: now, mine: false, lines: bubbles(p.text), speaker: p.speaker, pending: true }));
 		}
 		return out;
 	});
@@ -205,6 +235,7 @@
 			items: [
 				{ label: "답장 더 받기", icon: MessageCirclePlus, disabled: session.busy, onselect: nudge },
 				{ label: "엿보기: 두 사람 대화를 AI가 이어 씀", icon: Eye, disabled: session.busy, onselect: peek },
+				{ label: "여러 캐릭터 (로어북 '캐릭터' 항목도 말함)", icon: Users, checked: multi, onselect: () => void library.patchMeta(conv.id, { multiChar: multi ? null : true }) },
 				{ label: "마지막 답장 다시 받기", icon: RefreshCw, disabled: session.busy || !lastAi || session.last?.id !== lastAi.id, onselect: again },
 				{ label: "소설 화면으로 보기", icon: BookOpen, separator: true, onselect: () => nav.go({ page: "character", charId: conv.characterId ?? undefined, convId: conv.id }) },
 			],
@@ -215,7 +246,7 @@
 <div class="room">
 	<div class="room-bar">
 		<button class="plain" aria-label="뒤로" onclick={onback}><ChevronLeft /></button>
-		<strong>{ch?.name ?? conv.title}</strong>
+		<strong>{ch?.name ?? conv.title}{#if multi}<Users class="group" aria-label="여러 캐릭터" />{/if}</strong>
 		<button class="plain" aria-label="대화방 메뉴" onclick={roomMenu}><Menu /></button>
 	</div>
 
@@ -241,9 +272,9 @@
 				</div>
 			{:else}
 				<div class="them" class:cont={r.cont} role="group" oncontextmenu={(e) => bubbleMenu(e, r)}>
-					{#if !r.cont}<Avatar name={ch?.name ?? "?"} src={fileSrc(ch?.avatar)} color={ch?.color} size={36} />{:else}<span class="pad"></span>{/if}
+					{#if !r.cont}{@const who = speakerLook(r.speaker)}<Avatar name={who.name} src={fileSrc(who.avatar)} color={who.color} size={36} />{:else}<span class="pad"></span>{/if}
 					<div class="stack">
-						{#if !r.cont}<span class="name">{ch?.name}</span>{/if}
+						{#if !r.cont}<span class="name">{speakerLook(r.speaker).name}</span>{/if}
 						{#each r.lines ?? [] as l, i (i)}
 							<div class="line">
 								{#if l.kind === "image" && images[l.text]}
@@ -313,6 +344,13 @@
 		overflow: hidden;
 		text-overflow: ellipsis;
 		white-space: nowrap;
+	}
+	.room-bar :global(svg.group) {
+		width: 15px;
+		height: 15px;
+		margin-left: 6px;
+		vertical-align: -2px;
+		color: var(--text-faint);
 	}
 	.room-bar :global(svg) {
 		width: 22px;
