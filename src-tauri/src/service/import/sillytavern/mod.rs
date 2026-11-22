@@ -13,6 +13,7 @@
 //! 지원하지 않는 필드는 버리지 않고 원본(compatibility_json / extra_json)에 남기거나 경고로 알린다.
 pub mod card;
 pub mod chat;
+pub mod export;
 pub mod preset;
 pub mod regex;
 pub mod worldinfo;

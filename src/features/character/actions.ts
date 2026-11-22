@@ -8,9 +8,10 @@ import { confirmAction } from "$shared/stores/confirm.svelte";
 import { toasts } from "$shared/stores/toast.svelte";
 import { library, type Character, type Conversation } from "./library.svelte";
 
-export type ChatFormat = "jsonl" | "txt" | "zip";
+export type ChatFormat = "jsonl" | "jsonl-img" | "txt" | "zip";
 export const CHAT_FORMATS: ExportFormat<ChatFormat>[] = [
 	{ id: "jsonl", label: "SillyTavern 채팅 (.jsonl)", desc: "SillyTavern에서 바로 불러올 수 있음" },
+	{ id: "jsonl-img", label: "SillyTavern 채팅 · 이미지 매크로 (.jsonl)", desc: "그림 태그를 {{img::키}}로 (SillyTavern 이미지 확장용)" },
 	{ id: "txt", label: "텍스트 (.txt)", desc: "읽기용. 이름과 대사만" },
 	{ id: "zip", label: "캐릭터 묶음 (.zip)", desc: "캐릭터·이미지와 함께, 샌드캐슬끼리 옮길 때" },
 ];
@@ -37,10 +38,11 @@ export const convActions = {
 	},
 
 	/** 대화 하나를 SillyTavern 채팅(jsonl) 또는 읽기용 글(txt)로 */
-	async exportAs(conv: Conversation, format: "jsonl" | "txt") {
+	async exportAs(conv: Conversation, format: "jsonl" | "jsonl-img" | "txt") {
 		const ch = library.character(conv.characterId);
-		const filter = format === "jsonl" ? { name: "SillyTavern 채팅", extensions: ["jsonl"] } : { name: "텍스트", extensions: ["txt"] };
-		const n = await saveTo(`${ch?.name ?? "chat"} - ${conv.title}.${format}`, [filter], (path) => call(commands.exportConversation(conv.id, format, path), { source: "character" }));
+		const ext = format === "txt" ? "txt" : "jsonl";
+		const filter = ext === "jsonl" ? { name: "SillyTavern 채팅", extensions: ["jsonl"] } : { name: "텍스트", extensions: ["txt"] };
+		const n = await saveTo(`${ch?.name ?? "chat"} - ${conv.title}.${ext}`, [filter], (path) => call(commands.exportConversation(conv.id, format, path), { source: "character" }));
 		if (n == null) return;
 		toasts.success(`메시지 ${n}개 내보냄`);
 	},

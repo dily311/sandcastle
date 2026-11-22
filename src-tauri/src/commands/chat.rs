@@ -340,10 +340,11 @@ pub async fn context_usage(state: State<'_, AppState>, settings: State<'_, Setti
     })
 }
 
-/// 대화 하나를 파일로 내보내기. format: "jsonl"(SillyTavern 채팅) | "txt"(읽기용 글)
+/// 대화 하나를 파일로 내보내기. format: "jsonl"(SillyTavern 채팅) | "jsonl-img"(같은데 `<cg>키</cg>` → `{{img::키}}`) | "txt"(읽기용 글)
 #[tauri::command]
 #[specta::specta]
 pub async fn export_conversation(state: State<'_, AppState>, id: String, format: String, path: String) -> Result<u32> {
+    use crate::service::import::sillytavern::export::{to_jsonl, JsonlChat, JsonlOptions};
     let conv = conversation::get_conversation(&state.db, &id).await?;
     let messages = conversation::get_messages(&state.db, &id, i64::MAX, None).await?;
     let char_name = conversation::get_character(&state.db, &conv.character_id)
@@ -361,33 +362,18 @@ pub async fn export_conversation(state: State<'_, AppState>, id: String, format:
     };
 
     let out = match format.as_str() {
-        "jsonl" => {
-            let mut lines = vec![serde_json::json!({
-                "user_name": user_name,
-                "character_name": char_name,
-                "create_date": iso(conv.created_at),
-                "chat_metadata": { "note_prompt": conv.meta.as_ref().and_then(|m| m.pointer("/authorNote/text")).cloned().unwrap_or_default() },
-            })
-            .to_string()];
-            for m in &messages {
-                let meta = m.meta.clone().unwrap_or_default();
-                let is_user = m.role == "user";
-                let mut row = serde_json::json!({
-                    "name": m.name.clone().unwrap_or_else(|| if is_user { user_name.clone() } else { char_name.clone() }),
-                    "is_user": is_user,
-                    "is_system": meta.get("hidden").and_then(|v| v.as_bool()).unwrap_or(false),
-                    "send_date": iso(m.created_at),
-                    "mes": m.content,
-                    "extra": {},
-                });
-                if let Some(sw) = meta.get("swipes").and_then(|v| v.as_array()).filter(|a| !a.is_empty()) {
-                    row["swipes"] = serde_json::Value::Array(sw.iter().map(|s| s.get("content").cloned().unwrap_or_default()).collect());
-                    row["swipe_id"] = meta.get("swipeId").cloned().unwrap_or(serde_json::json!(0));
-                }
-                lines.push(row.to_string());
-            }
-            lines.join("\n") + "\n"
-        }
+        "jsonl" | "jsonl-img" => to_jsonl(
+            &JsonlChat {
+                user_name: &user_name,
+                char_name: &char_name,
+                created_at: conv.created_at,
+                conv_meta: conv.meta.as_ref(),
+                messages: &messages,
+            },
+            &JsonlOptions {
+                cg_as_img: format == "jsonl-img",
+            },
+        ),
         "txt" => {
             let mut s = format!("{}\n{} · {}\n\n", conv.title, char_name, iso(conv.created_at));
             for m in &messages {
