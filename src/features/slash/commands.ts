@@ -3,7 +3,7 @@
 // AI를 부르는 커맨드는 한 번 실행에 설정의 상한(기본 5, 최대 50)번까지 — 넘으면 오류로 멈춘다.
 // 변수는 실행 중에 들고 있다가 끝날 때 한 번 저장한다 (반복 안에서 여러 번 바꿔도 저장은 한 번).
 import { call, commands } from "$shared/ipc/client";
-import { promptText } from "$shared/stores/confirm.svelte";
+import { chooseFrom, confirmAction, promptText } from "$shared/stores/confirm.svelte";
 import { toasts } from "$shared/stores/toast.svelte";
 import { pluginSetting } from "$shared/stores/aiTools.svelte";
 import { library } from "$features/character/library.svelte";
@@ -149,12 +149,37 @@ export function slashEnv(session: ChatSession, opts: { input?: string } = {}): S
 			for (const m of bySeq(range(text(unnamed), session.messages.at(-1)?.seq ?? 0))) await session.setHidden(m, false);
 		},
 		// 알림·입력·변수
-		echo: ({ unnamed }) => {
-			toasts.info(text(unnamed));
+		// /echo severity=info|success|warning|error title=… timeout=ms 글 (SillyTavern 알림과 같은 옵션)
+		echo: ({ named, unnamed }) => {
+			const sev = text(named.severity).toLowerCase();
+			const tone = sev === "success" || sev === "warning" || sev === "error" ? sev : "info";
+			const title = text(named.title).trim();
+			const ms = Number(text(named.timeout));
+			toasts.show({ tone, message: title ? `${title} · ${text(unnamed)}` : text(unnamed), source: "슬래시 커맨드" }, Number.isFinite(ms) && ms > 0 ? ms : undefined);
 		},
+		// /input default=… placeholder=… 질문 → 입력한 글 (취소하면 빈 글)
 		input: async ({ named, unnamed }) => {
-			const v = await promptText({ title: text(unnamed) || "입력", input: { value: text(named.default), placeholder: text(named.placeholder) } });
+			const v = await promptText({ title: text(unnamed) || "입력", input: { value: text(named.default), placeholder: text(named.placeholder) }, confirmLabel: text(named.okButton) || undefined });
 			return v ?? "";
+		},
+		// /popup okButton=… cancelButton=… 글 → 확인 1 / 취소 0 (취소 버튼은 cancelButton을 줄 때만)
+		popup: async ({ named, unnamed }) => {
+			const cancel = text(named.cancelButton).trim();
+			const ok = await confirmAction({ title: text(named.title) || "알림", message: text(unnamed), confirmLabel: text(named.okButton) || "확인", cancelLabel: cancel || undefined, hideCancel: !cancel });
+			return ok ? "1" : "0";
+		},
+		// /buttons labels=["가","나"] multiple=true 질문 → 고른 이름 (multiple이면 JSON 목록, 취소하면 빈 글)
+		buttons: async ({ named, unnamed }) => {
+			let labels: string[] = [];
+			try {
+				const v = JSON.parse(text(named.labels)) as unknown;
+				labels = Array.isArray(v) ? v.map(String) : [];
+			} catch {
+				labels = text(named.labels).split(",").map((x) => x.trim()).filter(Boolean);
+			}
+			if (!labels.length) throw new ScriptError('/buttons: labels=["가","나"] 가 필요함');
+			const multiple = ["true", "on", "1"].includes(text(named.multiple).toLowerCase());
+			return (await chooseFrom({ title: text(unnamed) || "고르기", choices: labels, multiple })) ?? "";
 		},
 		...varCommands(vars, () => (varsDirty = true), ""),
 		...varCommands(globals, () => (globalsDirty = true), "global"),
@@ -189,6 +214,23 @@ export function slashEnv(session: ChatSession, opts: { input?: string } = {}): S
 					return "\n";
 				case "input":
 					return opts.input ?? "";
+				// 1:1 대화에서는 캐릭터 이름 (단체 대화가 없음)
+				case "groupnotmuted":
+				case "charifnotgroup":
+				case "group":
+					return charName();
+				case "lastmessageid":
+					return String(Math.max(0, session.messages.length - 1));
+				case "lastcharmessage":
+					return [...session.messages].reverse().find((m) => m.role === "assistant")?.content ?? "";
+				case "lastusermessage":
+					return [...session.messages].reverse().find((m) => m.role === "user")?.content ?? "";
+				case "idle_duration": {
+					const last = session.messages.at(-1)?.createdAt;
+					if (!last) return "처음";
+					const min = Math.floor((Date.now() - last) / 60000);
+					return min < 1 ? "방금" : min < 60 ? `${min}분` : min < 1440 ? `${Math.floor(min / 60)}시간` : `${Math.floor(min / 1440)}일`;
+				}
 				default:
 					return undefined;
 			}

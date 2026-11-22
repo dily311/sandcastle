@@ -8,8 +8,11 @@ const conv = { id: "c", characterId: "ch", personaId: "p", meta: { variables: { 
 const setting = { value: { quickReply: { aiLimit: 2, globals: { g: "1" } } } as Record<string, unknown>, save: saveSetting };
 
 vi.mock("$shared/ipc/client", () => ({ call: (p: unknown) => call(p), commands: { slashGenerate: (_c: string, t: string) => `AI:${t}`, appendMessage: (m: unknown) => m } }));
-vi.mock("$shared/stores/confirm.svelte", () => ({ promptText: vi.fn() }));
-vi.mock("$shared/stores/toast.svelte", () => ({ toasts: { info: vi.fn(), error: vi.fn(), success: vi.fn() } }));
+const chooseFrom = vi.fn(async (_r: unknown) => "나");
+const confirmAction = vi.fn(async (_r: unknown) => true);
+vi.mock("$shared/stores/confirm.svelte", () => ({ promptText: vi.fn(), chooseFrom: (r: unknown) => chooseFrom(r), confirmAction: (r: unknown) => confirmAction(r) }));
+const show = vi.fn();
+vi.mock("$shared/stores/toast.svelte", () => ({ toasts: { info: vi.fn(), error: vi.fn(), success: vi.fn(), show: (...a: unknown[]) => show(...a) } }));
 vi.mock("$shared/stores/aiTools.svelte", () => ({ pluginSetting: setting }));
 vi.mock("$features/character/library.svelte", () => ({
 	library: { conversation: () => conv, character: () => ({ name: "세라" }), persona: () => ({ name: "민" }), patchMeta, refresh: vi.fn() },
@@ -55,5 +58,15 @@ describe("슬래시 커맨드 앱 연결", () => {
 	it("세트.버튼 이름으로 빠른 답장을 찾는다 (세트 이름에 점이 있어도)", () => {
 		expect(quickReplySource("지.시.인사")).toBe("/echo 안녕");
 		expect(quickReplySource("없는.것")).toBeUndefined();
+	});
+	it("/buttons는 고른 이름, /popup은 확인 1, /echo는 severity·title·timeout을 쓴다", async () => {
+		const env = slashEnv(session);
+		expect((await runScript('/buttons labels=["가","나"] 어느 쪽?', env)).pipe).toBe("나");
+		expect(chooseFrom).toHaveBeenCalledWith({ title: "어느 쪽?", choices: ["가", "나"], multiple: false });
+		expect((await runScript("/popup okButton=좋아 알려줄게", env)).pipe).toBe("1");
+		expect(confirmAction).toHaveBeenCalledWith(expect.objectContaining({ message: "알려줄게", confirmLabel: "좋아", hideCancel: true }));
+		await runScript("/echo severity=warning title=조심 timeout=1000 미끄러움", env);
+		expect(show).toHaveBeenCalledWith({ tone: "warning", message: "조심 · 미끄러움", source: "슬래시 커맨드" }, 1000);
+		await expect(runScript("/buttons 라벨 없음", env)).rejects.toThrow("labels");
 	});
 });

@@ -429,9 +429,13 @@ export function expandMacros(text: string, pipe: string, macro?: ScriptEnv["macr
 }
 
 function expandPlain(text: string, pipe: string, macro?: ScriptEnv["macro"]): string {
+	text = text.replace(/\s*\{\{trim\}\}\s*/gi, "");
 	return text.replace(/\{\{([^{}]+?)\}\}/g, (all, inner: string) => {
 		const [name, ...rest] = inner.split("::");
-		const key = name.trim().toLowerCase();
+		// 이름만 소문자로 ({{random:가,나}}처럼 이름 뒤에 붙은 값은 그대로)
+		const raw = name.trim();
+		const colon = raw.indexOf(":");
+		const key = colon < 0 ? raw.toLowerCase() : raw.slice(0, colon).toLowerCase() + raw.slice(colon);
 		if (key === "pipe") return pipe;
 		return macro?.(key, rest.length ? rest.join("::") : undefined) ?? all;
 	});
@@ -469,6 +473,72 @@ export function compare(left: string, right: string, rule: string): boolean {
 
 const asText = (v: ArgValue | undefined) => (typeof v === "string" ? v : "");
 
+/** 주사위: "d6", "2d6", "1d20+3" → 합 (모양이 아니면 null) */
+export function roll(spec: string, rnd: () => number = Math.random): number | null {
+	const m = /^\s*(\d*)\s*d\s*(\d+)\s*([+-]\s*\d+)?\s*$/i.exec(spec);
+	if (!m) return /^\s*\d+\s*$/.test(spec) ? Math.floor(rnd() * Number(spec)) + 1 : null;
+	const [n, sides] = [Math.min(100, Number(m[1] || 1)), Number(m[2])];
+	if (!sides) return null;
+	let sum = Number((m[3] ?? "0").replace(/\s/g, ""));
+	for (let i = 0; i < n; i++) sum += Math.floor(rnd() * sides) + 1;
+	return sum;
+}
+
+/** {{random::a::b}} · {{random:a,b}} 고를 것들 */
+function choices(arg: string | undefined, raw: string): string[] {
+	if (arg !== undefined) return arg.split("::");
+	const legacy = /^\w+:(.*)$/s.exec(raw);
+	return legacy ? legacy[1].split(",") : [];
+}
+
+const pad = (n: number) => String(n).padStart(2, "0");
+/** 시간 매크로 (기기 시각) */
+function timeMacro(name: string, now = new Date()): string | undefined {
+	switch (name) {
+		case "time":
+			return now.toLocaleTimeString(undefined, { hour: "numeric", minute: "2-digit" });
+		case "date":
+			return now.toLocaleDateString(undefined, { year: "numeric", month: "long", day: "numeric" });
+		case "weekday":
+			return now.toLocaleDateString(undefined, { weekday: "long" });
+		case "isotime":
+			return `${pad(now.getHours())}:${pad(now.getMinutes())}`;
+		case "isodate":
+			return `${now.getFullYear()}-${pad(now.getMonth() + 1)}-${pad(now.getDate())}`;
+		default:
+			return undefined;
+	}
+}
+
+/** 문장 끝 (. ! ? … 。 와 그 뒤 따옴표·괄호) */
+const SENTENCE_END = /[.!?…。！？]["'”’」』)\]]*/g;
+/** /trimend: 마지막 온전한 문장까지 */
+export function trimEnd(text: string): string {
+	let last = -1;
+	for (const m of text.matchAll(SENTENCE_END)) last = (m.index ?? 0) + m[0].length;
+	return last > 0 ? text.slice(0, last).trimEnd() : text.trimEnd();
+}
+/** /trimstart: 첫 온전한 문장부터 (앞의 잘린 문장 조각을 뺌) */
+export function trimStart(text: string): string {
+	const first = SENTENCE_END.exec(text);
+	SENTENCE_END.lastIndex = 0;
+	if (!first || first.index === undefined) return text.trimStart();
+	const rest = text.slice(first.index + first[0].length).trimStart();
+	return rest || text.trimStart();
+}
+
+/** 글·목록·객체의 길이 (/len) */
+export function lengthOf(value: string): number {
+	try {
+		const v = JSON.parse(value) as unknown;
+		if (Array.isArray(v)) return v.length;
+		if (v && typeof v === "object") return Object.keys(v).length;
+	} catch {
+		/* 글 */
+	}
+	return [...value].length;
+}
+
 export async function runScript(src: string, env: ScriptEnv, pipe = ""): Promise<ScriptResult> {
 	const limit = env.maxSteps ?? DEFAULT_MAX_STEPS;
 	const loopLimit = env.maxLoop ?? DEFAULT_MAX_LOOP;
@@ -483,7 +553,16 @@ export async function runScript(src: string, env: ScriptEnv, pipe = ""): Promise
 			return index !== undefined ? (getIndexed(v, index.trim()) ?? "") : v;
 		}
 		if (name === "timesindex") return asText(scope.get("timesIndex"));
-		return env.macro?.(name, arg);
+		if (name === "random" || name === "pick" || name.startsWith("random:") || name.startsWith("pick:")) {
+			const list = choices(arg, name);
+			return list.length ? list[Math.floor(Math.random() * list.length)] : "";
+		}
+		if (name === "roll" || name.startsWith("roll:")) {
+			const r = roll(arg ?? name.slice(5));
+			return r === null ? "" : String(r);
+		}
+		if (name === "noop") return "";
+		return timeMacro(name) ?? env.macro?.(name, arg);
 	};
 
 	/** 스크립트 본문 실행 */
@@ -558,7 +637,65 @@ export async function runScript(src: string, env: ScriptEnv, pipe = ""): Promise
 	};
 
 	type Builtin = (call: CommandCall, ctx: { cmd: Command; scope: Scope; expand: (v: ArgValue) => Promise<ArgValue> }) => Promise<string | void> | string | void;
+
+	/** 수학 커맨드의 수들: 공백으로 나눈 값 또는 JSON 목록, 변수 이름이면 그 값 */
+	const numbers = (unnamed: ArgValue, scope: Scope, name: string): number[] => {
+		const t = asText(unnamed).trim();
+		let parts: string[];
+		try {
+			const v = JSON.parse(t) as unknown;
+			parts = Array.isArray(v) ? v.map(String) : t.split(/\s+/);
+		} catch {
+			parts = t ? t.split(/\s+/) : [];
+		}
+		return parts.map((p) => {
+			const n = num(operand(p, scope));
+			if (n === null) throw new ScriptError(`/${name}: 숫자가 아님 (${p})`);
+			return n;
+		});
+	};
+	const math = (name: string, min: number, f: (xs: number[]) => number): Builtin => ({ unnamed }, { scope }) => {
+		const xs = numbers(unnamed, scope, name);
+		if (xs.length < min) throw new ScriptError(`/${name}: 수가 ${min}개 이상 필요함`);
+		const r = f(xs);
+		if (!Number.isFinite(r)) throw new ScriptError(`/${name}: 결과가 수가 아님`);
+		return String(r);
+	};
+
 	const builtins: Record<string, Builtin> = {
+		// 수학 (SillyTavern과 같은 이름)
+		add: math("add", 1, (xs) => xs.reduce((a, b) => a + b, 0)),
+		sub: math("sub", 1, (xs) => xs.slice(1).reduce((a, b) => a - b, xs[0])),
+		mul: math("mul", 1, (xs) => xs.reduce((a, b) => a * b, 1)),
+		div: math("div", 2, ([a, b]) => {
+			if (b === 0) throw new ScriptError("/div: 0으로 나눌 수 없음");
+			return a / b;
+		}),
+		mod: math("mod", 2, ([a, b]) => {
+			if (b === 0) throw new ScriptError("/mod: 0으로 나눌 수 없음");
+			return a % b;
+		}),
+		pow: math("pow", 2, ([a, b]) => a ** b),
+		max: math("max", 1, (xs) => Math.max(...xs)),
+		min: math("min", 1, (xs) => Math.min(...xs)),
+		abs: math("abs", 1, ([a]) => Math.abs(a)),
+		sqrt: math("sqrt", 1, ([a]) => Math.sqrt(a)),
+		round: math("round", 1, ([a]) => Math.round(a)),
+		sin: math("sin", 1, ([a]) => Math.sin(a)),
+		cos: math("cos", 1, ([a]) => Math.cos(a)),
+		log: math("log", 1, ([a]) => Math.log(a)),
+		// /rand · /rand 10 · /rand from=1 to=6 round=floor
+		rand: ({ named, unnamed }, { cmd }) => {
+			const to = num(asText(named.to ?? (cmd.unnamed === null ? "" : unnamed)) || "1") ?? 1;
+			const from = num(asText(named.from ?? "0")) ?? 0;
+			const r = from + Math.random() * (to - from);
+			const how = asText(named.round);
+			return String(how === "round" ? Math.round(r) : how === "ceil" ? Math.ceil(r) : how === "floor" ? Math.floor(r) : r);
+		},
+		// 글자
+		len: ({ unnamed }) => String(lengthOf(asText(unnamed))),
+		trimstart: ({ unnamed }) => trimStart(asText(unnamed)),
+		trimend: ({ unnamed }) => trimEnd(asText(unnamed)),
 		abort: () => {
 			throw new Abort();
 		},

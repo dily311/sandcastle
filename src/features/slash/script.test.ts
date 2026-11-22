@@ -188,3 +188,41 @@ describe("흐름·변수 (5-E-20-6-2)", () => {
 		await expect(runScript("/times 6 {: /echo 또 :}", e)).rejects.toThrow("5바퀴");
 	});
 });
+
+describe("도구: 수학·글자·매크로 (5-E-20-6-3)", () => {
+	const env = () => fakeApp("").env;
+	const pipe = async (src: string) => (await runScript(src, env())).pipe;
+	it("수학: 여러 수·변수 이름·JSON 목록, 0으로 나누기는 오류", async () => {
+		expect(await pipe("/add 1 2 3")).toBe("6");
+		expect(await pipe("/let a 10 | /sub a 3 2")).toBe("5");
+		expect(await pipe("/mul [2,3,4]")).toBe("24");
+		expect(await pipe("/div 7 2 | /round")).toBe("4");
+		expect(await pipe("/max 3 9 1")).toBe("9");
+		expect(await pipe("/pow 2 10")).toBe("1024");
+		expect(await pipe("/abs -5 | /sqrt")).toBe(String(Math.sqrt(5)));
+		await expect(pipe("/div 1 0")).rejects.toThrow("0으로");
+		await expect(pipe("/add 1 사과")).rejects.toThrow("숫자가 아님");
+	});
+	it("/rand는 범위 안, round=floor면 정수", async () => {
+		for (let i = 0; i < 20; i++) {
+			const v = Number(await pipe("/rand from=1 to=6 round=floor"));
+			expect(v >= 1 && v <= 6 && Number.isInteger(v)).toBe(true);
+		}
+	});
+	it("글자: /len(글·목록), /trimend·/trimstart(온전한 문장까지)", async () => {
+		expect(await pipe("/len 안녕하세요")).toBe("5");
+		expect(await pipe('/len ["a","b","c"]')).toBe("3");
+		expect(await pipe("/trimend 첫 문장이다. 두 번째 문장도 끝났다! 잘린 문")).toBe("첫 문장이다. 두 번째 문장도 끝났다!");
+		expect(await pipe("/trimstart 잘린 앞. 온전한 문장이다.")).toBe("온전한 문장이다.");
+	});
+	it("매크로: random·pick·roll·noop·trim·날짜", async () => {
+		expect(["가", "나", "다"]).toContain(await pipe("/return {{random::가::나::다}}"));
+		expect(["가", "나"]).toContain(await pipe("/return {{pick::가::나}}"));
+		expect(["사과", "배"]).toContain(await pipe("/return {{random:사과,배}}"));
+		const d = Number(await pipe("/return {{roll::2d6}}"));
+		expect(d >= 2 && d <= 12).toBe(true);
+		expect(await pipe("/return 앞{{noop}}뒤")).toBe("앞뒤");
+		expect(await pipe("/return 앞\n{{trim}}\n뒤")).toBe("앞뒤");
+		expect(await pipe("/return {{isodate}}")).toMatch(/^\d{4}-\d{2}-\d{2}$/);
+	});
+});
