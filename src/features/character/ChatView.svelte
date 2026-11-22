@@ -231,7 +231,7 @@
 		if (plugins.on("slash") && !items.length && isSlash(text)) {
 			draft = "";
 			stick = true;
-			await runSlash(text, session);
+			await runSlash(text, session, { input: "", setInput: (v) => (draft = v) });
 			return;
 		}
 		sending = true;

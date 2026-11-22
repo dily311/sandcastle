@@ -14,7 +14,9 @@ use crate::{
     task::{CreateTaskRequest, TaskManager, TaskOwner, TaskType},
 };
 
-/// /gen: 이 대화의 맥락 끝에 지시를 붙여 AI 글을 받는다 (저장하지 않음)
+/// /gen: 이 대화의 맥락 끝에 지시를 붙여 AI 글을 받는다 (저장하지 않음).
+/// raw면 /genraw: 맥락 없이 지시만 (system이 있으면 그 앞에 시스템 글)
+#[allow(clippy::too_many_arguments)]
 #[tauri::command]
 #[specta::specta]
 pub async fn slash_generate(
@@ -24,17 +26,21 @@ pub async fn slash_generate(
     settings: State<'_, SettingsState<AppSetting>>,
     conversation_id: String,
     prompt: String,
+    raw: bool,
+    system: Option<String>,
 ) -> Result<String> {
     plugins::require(&app, plugins::id::SLASH)?;
     let prompt = prompt.trim().to_string();
     if prompt.is_empty() {
         return Err(AppError::validation("/gen: 지시가 비어 있음", None));
     }
-    let job = CreateTaskRequest::inline(TaskType::SlashGen, TaskOwner::Chat, plugins::id::SLASH, "/gen", false).owner_ref(&conversation_id);
+    let label = if raw { "/genraw" } else { "/gen" };
+    let job = CreateTaskRequest::inline(TaskType::SlashGen, TaskOwner::Chat, plugins::id::SLASH, label, false).owner_ref(&conversation_id);
+    let raw = raw.then_some(system);
     tasks
         .run_inline(job, |cancel| async move {
             ChatManager
-                .quiet_gen(&app, &state.db, &settings, &conversation_id, &prompt, &cancel)
+                .quiet_gen(&app, &state.db, &settings, &conversation_id, &prompt, raw, &cancel)
                 .await
                 .map_err(into_app_error)
         })

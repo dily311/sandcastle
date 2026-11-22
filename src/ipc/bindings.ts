@@ -270,8 +270,11 @@ export const commands = {
 	ghostwrite: (conversationId: string, brief: string | null, onEvent: Channel<StreamPayload>, options?: InvokeOptions) => __TAURI_INVOKE<string>("ghostwrite", { conversationId, brief, onEvent }, options),
 	/**  진행 중인 대필 멈추기 (받은 데까지는 화면이 이미 입력칸에 가지고 있다). 멈출 게 있었으면 true */
 	ghostwriteCancel: (conversationId: string, options?: InvokeOptions) => __TAURI_INVOKE<boolean>("ghostwrite_cancel", { conversationId }, options),
-	/**  /gen: 이 대화의 맥락 끝에 지시를 붙여 AI 글을 받는다 (저장하지 않음) */
-	slashGenerate: (conversationId: string, prompt: string, options?: InvokeOptions) => __TAURI_INVOKE<string>("slash_generate", { conversationId, prompt }, options),
+	/**
+	 *  /gen: 이 대화의 맥락 끝에 지시를 붙여 AI 글을 받는다 (저장하지 않음).
+	 *  raw면 /genraw: 맥락 없이 지시만 (system이 있으면 그 앞에 시스템 글)
+	 */
+	slashGenerate: (conversationId: string, prompt: string, raw: boolean, system: string | null, options?: InvokeOptions) => __TAURI_INVOKE<string>("slash_generate", { conversationId, prompt, raw, system }, options),
 	/**  화면의 호스트가 프롬프트 요청(user-plugin-prompt)에 답한다. 늦게 와서 기다리는 요청이 없으면 false */
 	answerPluginPrompt: (requestId: string, answers: PluginPromptAnswer_Deserialize[], options?: InvokeOptions) => __TAURI_INVOKE<boolean>("answer_plugin_prompt", { requestId, answers }, options),
 	/**  누른 명령 밖에서도 플러그인이 AI를 부르게 할지 (기본 꺼짐, 요금이 들 수 있음) */

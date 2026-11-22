@@ -1101,6 +1101,7 @@ impl ChatManager {
 
     /// 슬래시 커맨드 /gen (5-E-20-5): 이 대화의 맥락(프리셋·캐릭터·기록·메모) 끝에 지시를 붙여 글만 받는다.
     /// 메시지로 저장하지 않는다 (스크립트가 결과를 어떻게 쓸지 정함).
+    #[allow(clippy::too_many_arguments)]
     pub async fn quiet_gen(
         &self,
         app: &AppHandle,
@@ -1108,6 +1109,7 @@ impl ChatManager {
         settings: &SettingsState<AppSetting>,
         conversation_id: &str,
         instruction: &str,
+        raw: Option<Option<String>>,
         cancel: &CancellationToken,
     ) -> Result<String> {
         let conv = match get_conversation(db, conversation_id).await {
@@ -1117,7 +1119,11 @@ impl ChatManager {
         };
         let mut fallback = current_conv_request(settings)?;
         phone_defaults(app, &conv.mode, &mut fallback);
-        let (profile_id, prompt) = quiet_prompt(db, &conv, fallback, instruction).await?;
+        let (profile_id, prompt) = match raw {
+            // /genraw: 대화 맥락 없이 (system=이 있으면 시스템 글 + 지시만)
+            Some(system) => raw_prompt(&conv, fallback, instruction, system.as_deref())?,
+            None => quiet_prompt(db, &conv, fallback, instruction).await?,
+        };
         let ai = app
             .try_state::<Arc<AiService>>()
             .ok_or_else(|| AppError::internal("AiService가 초기화되지 않았습니다"))?
@@ -1298,6 +1304,43 @@ pub(crate) fn take_image_tag(text: &str) -> (String, Option<String>) {
     (out.trim_end().to_string(), prompt)
 }
 
+/// /genraw 프롬프트: 맥락 없이 지시만 (system=이 있으면 그 앞에 시스템 글). (API 프로필 id, 프롬프트)
+fn raw_prompt(
+    conv: &crate::models::conversation::Conversation,
+    fallback: ChatRequest,
+    instruction: &str,
+    system: Option<&str>,
+) -> Result<(String, crate::models::ai_service::PromptMessage)> {
+    use crate::models::ai_service::{ChatOptions, PromptMessage, PromptMessageItem, PromptRole};
+    let api_profile_id = conv
+        .api_profile_id
+        .clone()
+        .filter(|s| !s.is_empty())
+        .or(Some(fallback.api_profile_id.clone()).filter(|s| !s.is_empty()))
+        .ok_or_else(|| AppError::validation("API를 먼저 고르세요 (대화 설정 또는 설정 > API 키)", None))?;
+    let item = |role, content: &str| PromptMessageItem {
+        role,
+        content: content.to_string(),
+        token: 0,
+        images: vec![],
+    };
+    let mut messages = vec![];
+    if let Some(s) = system.map(str::trim).filter(|s| !s.is_empty()) {
+        messages.push(item(PromptRole::System, s));
+    }
+    messages.push(item(PromptRole::User, instruction));
+    Ok((
+        api_profile_id,
+        PromptMessage {
+            chat_options: ChatOptions {
+                stream: false,
+                ..Default::default()
+            },
+            messages,
+        },
+    ))
+}
+
 /// /gen 프롬프트: 대화 맥락(Quiet 생성 유형) + 맨 끝 사용자 차례에 지시. (API 프로필 id, 프롬프트)
 async fn quiet_prompt(
     db: &crate::db::conn::DbPool,
@@ -1397,6 +1440,19 @@ mod quiet_gen_tests {
             "대화 기록·캐릭터가 맥락에 들어감: {all}"
         );
         assert!(!prompt.chat_options.stream);
+
+        // /genraw: 맥락 없이 시스템 글 + 지시만
+        let fb = || ChatRequest {
+            api_profile_id: "p".into(),
+            model: None,
+            preset_id: String::new(),
+            phone_mode_prompt: String::new(),
+        };
+        let (_, raw) = raw_prompt(&conv, fb(), "한 줄 요약", Some("너는 요약가")).unwrap();
+        assert_eq!(
+            raw.messages.iter().map(|m| m.content.as_str()).collect::<Vec<_>>(),
+            vec!["너는 요약가", "한 줄 요약"]
+        );
 
         // API가 없으면 부르지 않고 알린다
         let none = ChatRequest {

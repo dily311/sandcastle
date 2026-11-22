@@ -85,7 +85,7 @@ export function buttonsOf(sets: QuickReplySet[], query = ""): QuickButton[] {
 
 /** 버튼을 눌렀을 때 */
 export async function runQuickReply(q: QuickReply, set: QuickReplySet, session: ChatSession, draft: { get: () => string; set: (v: string) => void }) {
-	if (isSlash(q.message)) return runSlash(q.message, session, { input: draft.get() });
+	if (isSlash(q.message)) return runSlash(q.message, session, { input: draft.get(), setInput: draft.set });
 	if (!set.autoSend) {
 		const cur = draft.get();
 		return draft.set(cur ? `${cur}\n${q.message}` : q.message);

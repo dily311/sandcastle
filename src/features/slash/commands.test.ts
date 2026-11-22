@@ -4,6 +4,7 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 const call = vi.fn(async (v: unknown) => v);
 const patchMeta = vi.fn(async () => {});
 const saveSetting = vi.fn(async () => {});
+const setOptions = vi.fn(async () => {});
 const conv = { id: "c", characterId: "ch", personaId: "p", meta: { variables: { hp: "10", list: '["a"]' } } };
 const setting = { value: { quickReply: { aiLimit: 2, globals: { g: "1" } } } as Record<string, unknown>, save: saveSetting };
 
@@ -15,15 +16,33 @@ const show = vi.fn();
 vi.mock("$shared/stores/toast.svelte", () => ({ toasts: { info: vi.fn(), error: vi.fn(), success: vi.fn(), show: (...a: unknown[]) => show(...a) } }));
 vi.mock("$shared/stores/aiTools.svelte", () => ({ pluginSetting: setting }));
 vi.mock("$features/character/library.svelte", () => ({
-	library: { conversation: () => conv, character: () => ({ name: "세라" }), persona: () => ({ name: "민" }), patchMeta, refresh: vi.fn() },
+	library: {
+		conversation: () => conv,
+		character: () => ({ name: "세라" }),
+		persona: () => ({ name: "민" }),
+		personas: [{ id: "p2", name: "여행자" }],
+		presets: [{ id: "pr", name: "기본 배치" }],
+		setOptions,
+		patchMeta,
+		refresh: vi.fn(),
+	},
 }));
+const saveSet = vi.fn(async (_i: unknown) => {});
 vi.mock("./quickReply.svelte", () => ({
-	quickReplies: { loaded: true, load: vi.fn(), sets: [{ name: "지.시", items: [{ label: "인사", message: "/echo 안녕" }] }] },
+	quickReplies: { loaded: true, load: vi.fn(), save: (i: unknown) => saveSet(i), sets: [{ id: "s1", name: "지.시", enabled: true, items: [{ label: "인사", message: "/echo 안녕" }] }] },
+	toInput: (s: unknown) => s,
 }));
+vi.mock("$shared/stores/plugins.svelte", () => ({ plugins: { on: () => false } }));
 
 const { quickReplySource, slashEnv } = await import("./commands");
 const { runScript } = await import("./script");
-const session = { convId: "c", busy: false, messages: [], send: vi.fn(), regenerate: vi.fn() } as never;
+const removeMany = vi.fn(async () => 0);
+const msgs = [
+	{ id: "m1", seq: 1, role: "user", name: null, content: "안녕" },
+	{ id: "m2", seq: 2, role: "assistant", name: null, content: "반가워요" },
+	{ id: "m3", seq: 3, role: "assistant", name: "카이", content: "나도 있어" },
+];
+const session = { convId: "c", busy: false, messages: msgs, send: vi.fn(), regenerate: vi.fn(), removeMany } as never;
 
 beforeEach(() => {
 	call.mockClear();
@@ -68,5 +87,35 @@ describe("슬래시 커맨드 앱 연결", () => {
 		await runScript("/echo severity=warning title=조심 timeout=1000 미끄러움", env);
 		expect(show).toHaveBeenCalledWith({ tone: "warning", message: "조심 · 미끄러움", source: "슬래시 커맨드" }, 1000);
 		await expect(runScript("/buttons 라벨 없음", env)).rejects.toThrow("labels");
+	});
+	it("/messages·/cut (0부터, 이름 붙이기), /comment는 AI에게 안 보내는 메시지", async () => {
+		const env = slashEnv(session);
+		expect((await runScript("/messages 1-2", env)).pipe).toBe("세라: 반가워요\n\n카이: 나도 있어");
+		expect((await runScript("/messages names=off", env)).pipe).toBe("나도 있어");
+		expect((await runScript("/cut 0", env)).pipe).toBe("안녕");
+		expect(removeMany).toHaveBeenCalledWith(["m1"]);
+		await runScript("/comment 메모", env);
+		expect(call).toHaveBeenLastCalledWith(expect.objectContaining({ role: "system", content: "메모", meta: { hidden: true, comment: true } }));
+	});
+	it("/inject는 대화 meta.injects에, /flushinject는 비움, /genraw는 맥락 없이", async () => {
+		const env = slashEnv(session);
+		await runScript("/inject id=날씨 position=chat depth=2 비가 온다", env);
+		expect(patchMeta).toHaveBeenLastCalledWith("c", { injects: { 날씨: { value: "비가 온다", position: "chat", depth: 2, role: "system" } } });
+		await expect(runScript("/inject position=어딘가 x", env)).rejects.toThrow("position");
+		await runScript("/flushinject", env);
+		expect(patchMeta).toHaveBeenLastCalledWith("c", { injects: {} });
+		expect((await runScript("/genraw system=요약가 한 줄로", env)).pipe).toBe("AI:한 줄로");
+	});
+	it("/persona·/preset은 이름으로 바꾸고, 없는 이름은 오류, /qr-set-off·/qr-chat-set-off", async () => {
+		const env = slashEnv(session);
+		expect((await runScript("/persona 여행자", env)).pipe).toBe("여행자");
+		expect(setOptions).toHaveBeenLastCalledWith("c", expect.objectContaining({ personaId: "p2" }));
+		expect((await runScript("/preset 기본 배치", env)).pipe).toBe("기본 배치");
+		await expect(runScript("/persona 없는사람", env)).rejects.toThrow("찾지 못함");
+		await runScript("/qr-set-off 지.시", env);
+		expect(saveSet).toHaveBeenLastCalledWith(expect.objectContaining({ id: "s1", enabled: false }));
+		await runScript("/qr-chat-set-off 지.시", env);
+		expect(patchMeta).toHaveBeenLastCalledWith("c", { quickReplyOff: ["s1"] });
+		await expect(runScript("/impersonate", env)).rejects.toThrow("대필 플러그인");
 	});
 });

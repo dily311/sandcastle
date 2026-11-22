@@ -8,7 +8,9 @@ import { toasts } from "$shared/stores/toast.svelte";
 import { pluginSetting } from "$shared/stores/aiTools.svelte";
 import { library } from "$features/character/library.svelte";
 import type { ChatSession } from "$features/character/session.svelte";
-import { quickReplies } from "./quickReply.svelte";
+import { quickReplies, toInput } from "./quickReply.svelte";
+import { ghost } from "$features/ghost/ghost.svelte";
+import { plugins } from "$shared/stores/plugins.svelte";
 import { addTo, getIndexed, runScript, ScriptError, setIndexed, type ArgValue, type Handler, type ScriptEnv } from "./script";
 
 const src = { source: "slash" };
@@ -20,7 +22,7 @@ export function aiLimit(): number {
 	return Math.min(MAX_AI_LIMIT, Math.max(1, Number.isFinite(v) ? Math.round(v) : DEFAULT_AI_LIMIT));
 }
 /** SillyTavern에 있지만 지원하지 않는 커맨드 (ADR-025) */
-const UNSUPPORTED = ["import", "fetch", "js", "api", "qr-set", "bg", "theme", "css", "member-add", "member-remove", "member-get", "member-count", "group"];
+const UNSUPPORTED = ["import", "fetch", "js", "api", "bg", "theme", "css", "member-add", "member-remove", "member-get", "member-count", "group", "sd", "imagine"];
 
 /** "세트.버튼" → 그 빠른 답장의 스크립트 (세트 이름에 점이 있어도 되게 점마다 나눠 본다) */
 export function quickReplySource(name: string): string | undefined {
@@ -43,8 +45,27 @@ function range(arg: string, last: number): number[] {
 	return Array.from({ length: Math.max(0, b - a + 1) }, (_, i) => a + i);
 }
 
+/** 실행할 때 화면에서 넘기는 것: 입력칸 글 ({{input}}·/setinput·/impersonate) */
+export interface SlashOpts {
+	input?: string;
+	setInput?: (v: string) => void;
+}
+
+/** "3" · "2-5" · "" (마지막) → 메시지 자리(0부터) 목록. SillyTavern의 메시지 번호와 같은 0부터 */
+function indexRange(arg: string, count: number): number[] {
+	const t = arg.trim();
+	if (!t) return count ? [count - 1] : [];
+	const m = /^(-?\d+)(?:\s*-\s*(\d+))?$/.exec(t);
+	if (!m) return [];
+	const fix = (n: number) => (n < 0 ? count + n : n);
+	const [a, b] = [fix(Number(m[1])), fix(Number(m[2] ?? m[1]))];
+	const out: number[] = [];
+	for (let i = Math.max(0, a); i <= Math.min(count - 1, b); i++) out.push(i);
+	return out;
+}
+
 /** 이 대화에서 스크립트 실행 환경. flush: 바뀐 변수 저장 (실행이 끝나면 부름) */
-export function slashEnv(session: ChatSession, opts: { input?: string } = {}): ScriptEnv & { flush: () => Promise<void> } {
+export function slashEnv(session: ChatSession, opts: SlashOpts = {}): ScriptEnv & { flush: () => Promise<void> } {
 	const convId = session.convId;
 	const conv = () => library.conversation(convId);
 	const charName = () => library.character(conv()?.characterId)?.name ?? "";
@@ -97,15 +118,29 @@ export function slashEnv(session: ChatSession, opts: { input?: string } = {}): S
 		};
 	};
 	const nextSeq = () => (session.messages.at(-1)?.seq ?? 0) + 1;
-	const append = async (role: "user" | "assistant" | "system", content: string, name: string | null = null) => {
+	const append = async (role: "user" | "assistant" | "system", content: string, name: string | null = null, meta: Record<string, unknown> | null = null) => {
 		if (!content.trim()) throw new ScriptError("보낼 글이 비어 있음");
 		const character = role === "assistant" ? (conv()?.characterId ?? null) : null;
-		const m = await call(commands.appendMessage({ conversationId: convId, seq: nextSeq(), role, name, content, characterId: character, meta: null }), src);
+		const m = await call(commands.appendMessage({ conversationId: convId, seq: nextSeq(), role, name, content, characterId: character, meta: meta as never }), src);
 		session.messages.push(m);
 		void library.refresh(convId);
 		return content;
 	};
 	const bySeq = (seqs: number[]) => session.messages.filter((m) => seqs.includes(m.seq));
+	const setOf = (name: string) => {
+		const s = quickReplies.sets.find((x) => x.name === name.trim());
+		if (!s) throw new ScriptError(`빠른 답장 세트를 찾지 못함 (${name})`);
+		return s;
+	};
+	const setEnabled = async (name: string, on: boolean) => {
+		const s = setOf(name);
+		await quickReplies.save(toInput({ ...s, enabled: on }));
+	};
+	const setInChat = async (name: string, on: boolean) => {
+		const s = setOf(name);
+		const off = ((conv()?.meta as { quickReplyOff?: string[] } | null)?.quickReplyOff ?? []).filter((x) => x !== s.id);
+		await library.patchMeta(convId, { quickReplyOff: on ? off : [...off, s.id] });
+	};
 
 	const commandsTable: Record<string, Handler> = {
 		// 보내기 (AI를 부르지 않음)
@@ -135,8 +170,99 @@ export function slashEnv(session: ChatSession, opts: { input?: string } = {}): S
 		},
 		gen: async ({ unnamed }) => {
 			ai("gen");
-			return call(commands.slashGenerate(convId, text(unnamed)), src);
+			return call(commands.slashGenerate(convId, text(unnamed), false, null), src);
 		},
+		// /genraw system=… 지시: 대화 맥락 없이 지시만
+		genraw: async ({ named, unnamed }) => {
+			ai("genraw");
+			return call(commands.slashGenerate(convId, text(unnamed), true, text(named.system) || null), src);
+		},
+		// /impersonate 초안: 대필로 내 다음 대사를 입력칸에 (대필 플러그인이 켜져 있어야 함)
+		impersonate: async ({ unnamed }, ) => {
+			if (!plugins.on("ghostwrite")) throw new ScriptError("/impersonate: 대필 플러그인을 켜야 함 (설정 > 코어 플러그인)");
+			ai("impersonate");
+			let draft = opts.input ?? "";
+			const out = await ghost.run(convId, text(unnamed) || null, () => draft, (v) => {
+				draft = v;
+				opts.setInput?.(v);
+			});
+			return out ?? "";
+		},
+		// AI에게 보내지 않는 메모 메시지 (SillyTavern /comment)
+		comment: ({ unnamed }) => append("system", text(unnamed), null, { hidden: true, comment: true }),
+		// /messages names=off 2-5 → 그 메시지들의 글 (0부터, 비우면 마지막 하나)
+		messages: ({ named, unnamed }) => {
+			const names = !["off", "false", "0"].includes(text(named.names).toLowerCase());
+			const nameOf = (m: (typeof session.messages)[number]) => m.name || (m.role === "user" ? userName() : m.role === "assistant" ? charName() : "");
+			return indexRange(text(unnamed), session.messages.length)
+				.map((i) => session.messages[i])
+				.map((m) => (names && nameOf(m) ? `${nameOf(m)}: ${m.content}` : m.content))
+				.join("\n\n");
+		},
+		// /cut 2-5 → 지우고 그 글을 돌려줌
+		cut: async ({ unnamed }) => {
+			const picked = indexRange(text(unnamed), session.messages.length).map((i) => session.messages[i]);
+			const out = picked.map((m) => m.content).join("\n\n");
+			await session.removeMany(picked.map((m) => m.id));
+			return out;
+		},
+		// 입력칸
+		setinput: ({ unnamed }) => {
+			opts.setInput?.(text(unnamed));
+		},
+		// 대화 설정: 이름을 주면 바꾸고, 안 주면 지금 것의 이름
+		persona: async ({ unnamed }, ) => {
+			const name = text(unnamed).trim();
+			const c = conv();
+			if (!name || !c) return userName();
+			const p = library.personas.find((x) => x.name === name) ?? library.personas.find((x) => x.name.toLowerCase() === name.toLowerCase());
+			if (!p) throw new ScriptError(`/persona: 페르소나를 찾지 못함 (${name})`);
+			await library.setOptions(c.id, { personaId: p.id, promptPresetId: c.promptPresetId, apiProfileId: c.apiProfileId, model: c.model });
+			return p.name;
+		},
+		preset: async ({ unnamed }) => {
+			const name = text(unnamed).trim();
+			const c = conv();
+			if (!c) return "";
+			if (!name) return library.presets.find((x) => x.id === c.promptPresetId)?.name ?? "";
+			const p = library.presets.find((x) => x.name === name);
+			if (!p) throw new ScriptError(`/preset: 프리셋을 찾지 못함 (${name})`);
+			await library.setOptions(c.id, { personaId: c.personaId, promptPresetId: p.id, apiProfileId: c.apiProfileId, model: c.model });
+			return p.name;
+		},
+		model: async ({ unnamed }) => {
+			const name = text(unnamed).trim();
+			const c = conv();
+			if (!c) return "";
+			if (!name) return c.model ?? "";
+			await library.setOptions(c.id, { personaId: c.personaId, promptPresetId: c.promptPresetId, apiProfileId: c.apiProfileId, model: name });
+			return name;
+		},
+		// /inject id=… position=before|after|chat|none depth=4 role=system 글 → 대화 meta.injects (프롬프트에 들어감)
+		inject: async ({ named, unnamed }) => {
+			const id = text(named.id).trim() || `inject-${Date.now()}`;
+			const injects = { ...(((conv()?.meta as { injects?: Record<string, unknown> } | null)?.injects ?? {}) as Record<string, unknown>) };
+			if (!text(unnamed).trim()) delete injects[id];
+			else {
+				const position = text(named.position) || "after";
+				if (!["before", "after", "chat", "none"].includes(position)) throw new ScriptError(`/inject: position은 before·after·chat·none (${position})`);
+				injects[id] = { value: text(unnamed), position, depth: Number(text(named.depth)) || 4, role: text(named.role) || "system" };
+			}
+			await library.patchMeta(convId, { injects });
+			return id;
+		},
+		listinjects: () => JSON.stringify((conv()?.meta as { injects?: unknown } | null)?.injects ?? {}),
+		flushinject: async ({ unnamed }) => {
+			const id = text(unnamed).trim();
+			const injects = { ...(((conv()?.meta as { injects?: Record<string, unknown> } | null)?.injects ?? {}) as Record<string, unknown>) };
+			if (id) delete injects[id];
+			await library.patchMeta(convId, { injects: id ? injects : {} });
+		},
+		// 빠른 답장 세트 켜고 끄기: /qr-set-on 이름 (전체), /qr-chat-set-on 이름 (이 대화)
+		"qr-set-on": ({ unnamed }) => setEnabled(text(unnamed), true),
+		"qr-set-off": ({ unnamed }) => setEnabled(text(unnamed), false),
+		"qr-chat-set-on": ({ unnamed }) => setInChat(text(unnamed), true),
+		"qr-chat-set-off": ({ unnamed }) => setInChat(text(unnamed), false),
 		// 메시지 정리
 		del: async ({ unnamed }) => {
 			const n = Math.max(1, Number(text(unnamed)) || 1);
@@ -239,7 +365,7 @@ export function slashEnv(session: ChatSession, opts: { input?: string } = {}): S
 }
 
 /** 입력칸·빠른 답장에서 실행. 오류는 알림으로 (멈춘 것은 조용히) */
-export async function runSlash(source: string, session: ChatSession, opts: { input?: string } = {}): Promise<void> {
+export async function runSlash(source: string, session: ChatSession, opts: SlashOpts = {}): Promise<void> {
 	if (session.busy) return void toasts.error("응답을 받는 중이라 실행하지 않음");
 	if (!quickReplies.loaded) await quickReplies.load().catch(() => {});
 	const env = slashEnv(session, opts);
