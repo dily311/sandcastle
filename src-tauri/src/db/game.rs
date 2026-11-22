@@ -3465,7 +3465,7 @@ pub async fn forked_game_messages(
         let _result = sqlx::query(
             "
         INSERT INTO game_messages (
-            id, seq, conversation_id, role, name, content, character_id, meta, created_at, updated_at  FROM game_messages 
+            id, seq, conversation_id, role, name, content, character_id, meta, created_at, updated_at
         )
         SELECT 
             ?, seq, ?, role, name, content, character_id, meta, created_at, updated_at  FROM game_messages 
