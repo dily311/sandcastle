@@ -38,6 +38,9 @@ pub struct AppSetting {
     /// 응답이 끝났는데 앱이 가려져 있으면 알림 (5-E-17·18, 기본 꺼짐, 기기 전용)
     #[serde(default)]
     pub done_notify: DoneNotify,
+    /// AI 호출마다 보낸 프롬프트·받은 글을 이 기기에 남김 (5-E-20-6-7, 기본 꺼짐 — 프롬프트 전체가 디스크에 남음)
+    #[serde(default)]
+    pub ai_call_log: bool,
 }
 
 fn default_trash_retention_days() -> Option<u32> {
@@ -109,6 +112,7 @@ impl Default for AppSetting {
             check_updates_on_start: false,
             cg_group_variants: false,
             done_notify: DoneNotify::default(),
+            ai_call_log: false,
         }
     }
 }

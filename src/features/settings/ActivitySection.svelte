@@ -3,8 +3,8 @@
 	// 화면이 열려 있는 동안만 불러오고 작업 이벤트로 새로 고친다 (Lazy Initialization)
 	import { onDestroy, onMount } from "svelte";
 	import { RefreshCw, Square, Trash2 } from "@lucide/svelte";
-	import type { ApiProfiles, BudgetOverview_Serialize as BudgetOverview, TaskHistoryItem_Serialize as HistoryItem, TaskInfo_Serialize as TaskInfo, UsageSummary_Serialize as Usage } from "$ipc/bindings";
-	import { Badge, Button, EmptyState, Segmented, Select } from "$shared/ui";
+	import type { AiCallLog_Serialize as CallLog, ApiProfiles, BudgetOverview_Serialize as BudgetOverview, TaskHistoryItem_Serialize as HistoryItem, TaskInfo_Serialize as TaskInfo, UsageSummary_Serialize as Usage } from "$ipc/bindings";
+	import { Badge, Button, EmptyState, Segmented, Select, Switch } from "$shared/ui";
 	import { appSetting } from "$shared/stores/appSetting.svelte";
 	import { call, commands } from "$shared/ipc/client";
 	import { onEvent } from "$shared/ipc/events";
@@ -43,6 +43,33 @@
 	let period = $state<"day" | "week" | "month" | "all">("week");
 	let who = $state<"all" | "auto">("all");
 	let open = $state<string | null>(null);
+	// 보낸 글·받은 글 (5-E-20-6-7): 기록이 있는 작업, 펼친 작업의 기록
+	let logged = $state<Set<string>>(new Set());
+	let calls = $state<Record<string, CallLog[]>>({});
+	const logOn = $derived(!!(appSetting.value as { aiCallLog?: boolean } | null)?.aiCallLog);
+	async function toggleLog(v: boolean) {
+		await appSetting.update({ aiCallLog: v } as never);
+		toasts.success(v ? "이제부터 AI 호출의 보낸 글·받은 글을 이 기기에 남김" : "보낸 글·받은 글을 그만 남김");
+	}
+	async function clearLogs() {
+		if (!(await confirmAction({ title: "보낸 글·받은 글 지우기", message: "남겨 둔 AI 호출 기록을 모두 지움 (작업·사용량 기록은 그대로)", confirmLabel: "지우기", danger: true }))) return;
+		await call(commands.clearAiCallLogs(), src);
+		logged = new Set();
+		calls = {};
+	}
+	async function expand(id: string) {
+		open = open === id ? null : id;
+		if (open && logged.has(id) && !calls[id]) calls[id] = await call(commands.getAiCallLogs(id), { ...src, silent: true }).catch(() => []);
+	}
+	/** 보낸 것 (JSON) → 역할·글 목록 */
+	function sent(c: CallLog): { role: string; content: string }[] {
+		try {
+			return (JSON.parse(c.requestJson) as { messages?: { role: string; content: string }[] }).messages ?? [];
+		} catch {
+			return [];
+		}
+	}
+	const ROLE: Record<string, string> = { system: "시스템", user: "사용자", assistant: "AI" };
 	let loading = $state(false);
 	let showPrices = $state(false);
 
@@ -71,6 +98,8 @@
 				call(commands.getAllApiProfile(), { ...src, silent: true }),
 				call(commands.listBudgetStatus(), { ...src, silent: true }),
 			]);
+			logged = new Set(await call(commands.listAiCallLogTasks(), { ...src, silent: true }).catch(() => []));
+			calls = {};
 		} catch {
 			toasts.error("실행 기록을 불러오지 못함");
 		} finally {
@@ -246,6 +275,11 @@
 	<Group title="최근 실행" flush>
 		{#snippet aside()}
 			<div class="aside">
+			<label class="keep" title="켜면 AI 호출마다 보낸 프롬프트와 받은 글을 이 기기에 남김 (최근 200개). 프롬프트 전체가 디스크에 남음">
+				<span class="muted">보낸 글·받은 글</span>
+				<Switch checked={logOn} label="보낸 글·받은 글 남기기" hideLabel onchange={toggleLog} />
+			</label>
+			{#if logged.size}<Button size="sm" variant="ghost" onclick={clearLogs}>{#snippet icon()}<Trash2 />{/snippet}기록 지우기</Button>{/if}
 			<label class="keep"
 				><span class="muted">보관</span>
 				<Select value={retention == null ? "" : String(retention)} options={RETENTION} aria-label="작업·사용량 상세 기록 보관 기간" onchange={(e) => setRetention(e.currentTarget.value)} />
@@ -263,12 +297,13 @@
 		{#each shown as h (h.id)}
 			{@const s = status(h)}
 			<div class="row">
-				<button class="line" aria-expanded={open === h.id} onclick={() => (open = open === h.id ? null : h.id)}>
+				<button class="line" aria-expanded={open === h.id} onclick={() => expand(h.id)}>
 					<span class="t">{when(h.createdAt)}</span>
 					<Badge tone={s.tone}>{s.label}</Badge>
 					<span class="feat">{featureName(h.feature)}</span>
 					<span class="label">{h.label ?? h.taskType}</span>
 					{#if h.runBy === "auto"}<Badge tone="info">자동</Badge>{/if}
+					{#if logged.has(h.id)}<Badge>보낸 글</Badge>{/if}
 					<span class="muted end">{amount(h)}</span>
 				</button>
 				{#if open === h.id}
@@ -281,6 +316,26 @@
 						{#if amount(h)}<dt>사용량</dt><dd>{amount(h)}{h.estimated ? " (추정 포함)" : ""}</dd>{/if}
 						{#if h.errorMessage}<dt>오류</dt><dd class="err">{h.errorCode ? `[${h.errorCode}] ` : ""}{h.errorMessage}</dd>{/if}
 					</dl>
+					{#each calls[h.id] ?? [] as c, i (c.id)}
+						<div class="call">
+							<div class="call-head">
+								<b>호출 {i + 1}</b>
+								<span class="muted">{c.model}</span>
+								{#if c.finishReason}<Badge tone={["length", "max_tokens", "MAX_TOKENS"].includes(c.finishReason) ? "warning" : "neutral"}>끝난 이유 {c.finishReason}</Badge>{/if}
+								{#if c.error}<span class="err">{c.error}</span>{/if}
+							</div>
+							<details>
+								<summary>보낸 글 {sent(c).length}개</summary>
+								{#each sent(c) as m, j (j)}
+									<div class="msg"><span class="role">{ROLE[m.role] ?? m.role}</span><pre>{m.content}</pre></div>
+								{/each}
+							</details>
+							<details open>
+								<summary>받은 글</summary>
+								<pre>{c.responseText || "(없음)"}</pre>
+							</details>
+						</div>
+					{/each}
 				{/if}
 			</div>
 		{:else}
@@ -406,5 +461,43 @@
 			margin-left: 0;
 			width: 100%;
 		}
+	}
+	.call {
+		margin: 0 var(--space-4) var(--space-3);
+		padding: var(--space-3);
+		border: 1px solid var(--border);
+		border-radius: var(--radius-md);
+		font-size: var(--text-sm);
+	}
+	.call-head {
+		display: flex;
+		align-items: center;
+		gap: var(--space-2);
+		flex-wrap: wrap;
+		margin-bottom: var(--space-2);
+	}
+	.call summary {
+		cursor: pointer;
+		color: var(--text-muted);
+		margin: var(--space-1) 0;
+	}
+	.call pre {
+		margin: 0;
+		max-height: 320px;
+		overflow: auto;
+		white-space: pre-wrap;
+		overflow-wrap: anywhere;
+		font-family: var(--font-mono, monospace);
+		font-size: var(--text-xs);
+		background: var(--bg-sunken);
+		padding: var(--space-2);
+		border-radius: var(--radius-sm);
+	}
+	.msg {
+		margin: var(--space-2) 0;
+	}
+	.role {
+		font-size: var(--text-xs);
+		color: var(--text-faint);
 	}
 </style>

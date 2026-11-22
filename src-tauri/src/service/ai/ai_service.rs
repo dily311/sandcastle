@@ -389,6 +389,26 @@ impl AiService {
             entry.error = Some(e.to_response().message);
         }
         self.record_usage(entry).await;
+        // 보낸 글·받은 글 기록 (5-E-20-6-7, 켰을 때만)
+        if super::call_log::enabled() {
+            let (finish, error) = match &result {
+                Ok(g) => (g.finish_reason.clone(), None),
+                Err(e) => (None, Some(e.to_response().message)),
+            };
+            super::call_log::record(
+                &self.db,
+                super::call_log::CallRecord {
+                    task_id: crate::task::current_task().map(|t| t.task_id),
+                    profile_id: &profile.id,
+                    model: &profile.model,
+                    prompt: &request.prompt,
+                    response: output_text,
+                    finish_reason: finish.as_deref(),
+                    error: error.as_deref(),
+                },
+            )
+            .await;
+        }
         let mut generation = result?;
         // 출력 한도에서 잘려 인자가 끊긴 도구 호출은 실행하지 않는다 (이미 쓴 토큰은 위에서 기록됨)
         if generation.stop == StopKind::MaxTokens && generation.tool_calls.iter().any(|c| c.parse_error.is_some()) {

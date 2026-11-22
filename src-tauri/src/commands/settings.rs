@@ -26,6 +26,7 @@ pub async fn get_app_setting(state: State<'_, SettingsState<AppSetting>>) -> Res
 #[specta::specta]
 pub async fn update_app_setting(app: AppHandle, state: State<'_, SettingsState<AppSetting>>, patch: serde_json::Value) -> Result<AppSetting> {
     let settings = apply_patch(&app, &state.0, patch)?;
+    crate::service::ai::call_log::set_enabled(settings.ai_call_log);
     // 이벤트 호출
     app.emit(AppSetting::EVENT_NAME, &settings).map_err(|e| AppError::io(e.to_string()))?;
     Ok(settings)

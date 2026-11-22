@@ -160,3 +160,24 @@ pub async fn upsert_budget_limit(state: State<'_, crate::state::AppState>, limit
 pub async fn take_budget_warnings(state: State<'_, crate::state::AppState>) -> Result<Vec<crate::service::budget::BudgetWarning>> {
     Ok(crate::service::budget::take_warnings(&state.db).await?)
 }
+
+/// 작업 하나의 AI 호출 기록 (보낸 프롬프트·받은 글, 5-E-20-6-7)
+#[tauri::command]
+#[specta::specta]
+pub async fn get_ai_call_logs(state: State<'_, crate::state::AppState>, task_id: String) -> Result<Vec<crate::service::ai::call_log::AiCallLog>> {
+    Ok(crate::service::ai::call_log::for_task(&state.db, &task_id).await?)
+}
+
+/// 호출 기록이 있는 작업 id들
+#[tauri::command]
+#[specta::specta]
+pub async fn list_ai_call_log_tasks(state: State<'_, crate::state::AppState>) -> Result<Vec<String>> {
+    Ok(crate::service::ai::call_log::task_ids(&state.db).await?)
+}
+
+/// 호출 기록 모두 지우기
+#[tauri::command]
+#[specta::specta]
+pub async fn clear_ai_call_logs(state: State<'_, crate::state::AppState>) -> Result<u64> {
+    Ok(crate::service::ai::call_log::clear(&state.db).await?)
+}

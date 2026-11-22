@@ -114,6 +114,12 @@ export const commands = {
 	exportConversation: (id: string, format: string, path: string, options?: InvokeOptions) => __TAURI_INVOKE<number>("export_conversation", { id, format, path }, options),
 	getTask: (taskId: string, options?: InvokeOptions) => __TAURI_INVOKE<TaskInfo_Serialize>("get_task", { taskId }, options),
 	listActiveTasks: (options?: InvokeOptions) => __TAURI_INVOKE<TaskInfo_Serialize[]>("list_active_tasks", undefined, options),
+	/**  작업 하나의 AI 호출 기록 (보낸 프롬프트·받은 글, 5-E-20-6-7) */
+	getAiCallLogs: (taskId: string, options?: InvokeOptions) => __TAURI_INVOKE<AiCallLog_Serialize[]>("get_ai_call_logs", { taskId }, options),
+	/**  호출 기록이 있는 작업 id들 */
+	listAiCallLogTasks: (options?: InvokeOptions) => __TAURI_INVOKE<string[]>("list_ai_call_log_tasks", undefined, options),
+	/**  호출 기록 모두 지우기 */
+	clearAiCallLogs: (options?: InvokeOptions) => __TAURI_INVOKE<number>("clear_ai_call_logs", undefined, options),
 	/**  앱 시작 후 프론트가 호출: 재개/포기를 물어볼 중단된 작업 목록 */
 	getRecoverableTasks: (options?: InvokeOptions) => __TAURI_INVOKE<TaskInfo_Serialize[]>("get_recoverable_tasks", undefined, options),
 	cancelTask: (taskId: string, options?: InvokeOptions) => __TAURI_INVOKE<null>("cancel_task", { taskId }, options),
@@ -669,6 +675,35 @@ export type AddAssetReport_Serialize = {
 	diagnostics: Issue[],
 };
 
+/**  한 번의 호출 (보낸 것·받은 것) */
+export type AiCallLog = AiCallLog_Serialize | AiCallLog_Deserialize;
+
+/**  한 번의 호출 (보낸 것·받은 것) */
+export type AiCallLog_Deserialize = {
+	id: number,
+	taskId?: string | null,
+	profileId: string,
+	model: string,
+	requestJson: string,
+	responseText: string,
+	finishReason?: string | null,
+	error?: string | null,
+	createdAt: number,
+};
+
+/**  한 번의 호출 (보낸 것·받은 것) */
+export type AiCallLog_Serialize = {
+	id: number,
+	taskId: string | null,
+	profileId: string,
+	model: string,
+	requestJson: string,
+	responseText: string,
+	finishReason: string | null,
+	error: string | null,
+	createdAt: number,
+};
+
 export type AiCapabilities = {
 	embeddings: Support,
 	tools: Support,
@@ -804,6 +839,8 @@ export type AppSetting_Deserialize = {
 	cgGroupVariants?: boolean,
 	/**  응답이 끝났는데 앱이 가려져 있으면 알림 (5-E-17·18, 기본 꺼짐, 기기 전용) */
 	doneNotify?: DoneNotify_Deserialize,
+	/**  AI 호출마다 보낸 프롬프트·받은 글을 이 기기에 남김 (5-E-20-6-7, 기본 꺼짐 — 프롬프트 전체가 디스크에 남음) */
+	aiCallLog?: boolean,
 };
 
 export type AppSetting_Serialize = {
@@ -834,6 +871,8 @@ export type AppSetting_Serialize = {
 	cgGroupVariants: boolean,
 	/**  응답이 끝났는데 앱이 가려져 있으면 알림 (5-E-17·18, 기본 꺼짐, 기기 전용) */
 	doneNotify: DoneNotify_Serialize,
+	/**  AI 호출마다 보낸 프롬프트·받은 글을 이 기기에 남김 (5-E-20-6-7, 기본 꺼짐 — 프롬프트 전체가 디스크에 남음) */
+	aiCallLog: boolean,
 };
 
 export type AssetRef = {

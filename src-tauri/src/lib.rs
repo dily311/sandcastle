@@ -136,7 +136,10 @@ pub fn run() {
 
         // 3. 앱 설정 로드
         let settings_handle = app.handle().clone();
-        app.manage(SettingsState(Mutex::new(sys::settings::load::<AppSetting>(&settings_handle))));
+        let app_setting = sys::settings::load::<AppSetting>(&settings_handle);
+        // AI 호출 기록 스위치 (5-E-20-6-7)
+        service::ai::call_log::set_enabled(app_setting.ai_call_log);
+        app.manage(SettingsState(Mutex::new(app_setting)));
         app.manage(SettingsState(Mutex::new(sys::settings::load::<ThemeSetting>(&settings_handle))));
         let features = sys::settings::load::<FeatureSetting>(&settings_handle);
         service::chat::regex_processor::set_enabled(sys::plugins::enabled_in(&features, sys::plugins::id::REGEX));
@@ -296,6 +299,9 @@ pub fn specta_builder() -> tauri_specta::Builder<tauri::Wry> {
         // task
         get_task,
         list_active_tasks,
+        get_ai_call_logs,
+        list_ai_call_log_tasks,
+        clear_ai_call_logs,
         get_recoverable_tasks,
         cancel_task,
         resume_task,
@@ -629,6 +635,9 @@ pub fn specta_builder() -> tauri_specta::Builder<tauri::Wry> {
         // task
         get_task,
         list_active_tasks,
+        get_ai_call_logs,
+        list_ai_call_log_tasks,
+        clear_ai_call_logs,
         get_recoverable_tasks,
         cancel_task,
         resume_task,

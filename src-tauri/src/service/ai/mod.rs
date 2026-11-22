@@ -14,6 +14,7 @@
 //! TaskExecutor 안에서 AiService를 부르고, `ctx.cancel_token()`과 `ctx.reporter().text_delta`를
 //! 그대로 넘기면 된다.
 mod ai_service;
+pub mod call_log;
 pub mod structured;
 
 #[cfg(test)]

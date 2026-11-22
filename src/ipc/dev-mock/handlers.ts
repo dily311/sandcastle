@@ -28,6 +28,7 @@ const db = {
 		checkUpdatesOnStart: false,
 		cgGroupVariants: false,
 		doneNotify: { enabled: false, title: "", icon: null },
+		aiCallLog: false,
 		home: { startOnHome: false, greeting: "", blocks: ["continue", "quick", "favorites", "games"], css: "" },
 	} satisfies AppSetting_Serialize as AppSetting_Serialize,
 	themeSetting: {
@@ -107,6 +108,19 @@ const base: Record<string, Handler> = {
 	list_active_tasks: () => [
 		{ id: "t-run", taskType: "translate", feature: "translate", runBy: "auto", label: "번역 → ko", owner: "system", ownerRef: null, status: "running", payload: null, result: null, error: null, attemptCount: 1, maxAttempts: 1, createdAt: Date.now() - 2000, startedAt: Date.now() - 2000, updatedAt: Date.now(), finishedAt: null },
 	],
+	// 보낸 글·받은 글 (5-E-20-6-7): t1(응답 생성)에 잘린 호출 하나
+	list_ai_call_log_tasks: () => ["t1"],
+	get_ai_call_logs: ({ taskId }) =>
+		taskId === "t1"
+			? [
+					{
+						id: 1, taskId: "t1", profileId: "p1", model: "claude-sonnet-5-5", createdAt: Date.now() - 60_000, error: null, finishReason: "max_tokens",
+						requestJson: JSON.stringify({ messages: [{ role: "system", content: "너는 세라피나다. 엘도리아 숲의 수호자." }, { role: "user", content: "여기가 어디죠?" }], options: { max_tokens: 300 } }),
+						responseText: "\"제 오두막이에요. 이 숲, 엘도리아는 제가 지키는 곳이에요.\" *그녀가 따뜻한 차를 건넨",
+					},
+				]
+			: [],
+	clear_ai_call_logs: () => 1,
 	list_task_history: () => {
 		const now = Date.now();
 		const row = (id: string, feature: string, label: string, status: string, runBy: string, ago: number, u: Partial<Record<string, unknown>> = {}) => ({
