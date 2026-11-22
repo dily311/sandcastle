@@ -1,9 +1,10 @@
 <script lang="ts">
 	// 메시지·캐릭터 개요 공통 본문 (format.ts의 블록을 그린다)
-	import { HtmlView } from "$shared/ui";
+	import { Avatar, HtmlView } from "$shared/ui";
 	import type { Block, Inline } from "./format";
 
-	let { blocks, images = {} }: { blocks: Block[]; images?: Record<string, string> } = $props();
+	/** avatars: 말한 사람 이름 → 그림 주소 (다인봇, 없으면 이름 첫 글자) */
+	let { blocks, images = {}, avatars = {} }: { blocks: Block[]; images?: Record<string, string>; avatars?: Record<string, string | null> } = $props();
 </script>
 
 {#snippet parts(list: Inline[])}{#each list as part, j (j)}{#if part.kind === "action"}<em>{part.text}</em>{:else if part.kind === "speech"}<q>{part.text}</q>{:else if part.kind === "strong"}<strong>{part.text}</strong>{:else if part.kind === "code"}<code>{part.text}</code>{:else}{part.text}{/if}{/each}{/snippet}
@@ -11,6 +12,8 @@
 {#each blocks as b, i (i)}
 	{#if b.kind === "p"}
 		<p>{@render parts(b.parts)}</p>
+	{:else if b.kind === "say"}
+		<p class="say"><span class="who"><Avatar name={b.speaker} src={avatars[b.speaker] ?? null} size={20} /><b>{b.speaker}</b></span>{@render parts(b.parts)}</p>
 	{:else if b.kind === "h"}
 		{#if b.level === 1}<h2 class="rh">{@render parts(b.parts)}</h2>{:else if b.level === 2}<h3 class="rh">{@render parts(b.parts)}</h3>{:else}<h4 class="rh">{@render parts(b.parts)}</h4>{/if}
 	{:else if b.kind === "li"}
@@ -146,5 +149,15 @@
 		color: var(--text-faint);
 		opacity: 0;
 		height: 0;
+	}
+	.say .who {
+		display: inline-flex;
+		align-items: center;
+		gap: 4px;
+		margin-right: 6px;
+		vertical-align: -4px;
+	}
+	.say .who b {
+		font-weight: 600;
 	}
 </style>

@@ -720,7 +720,7 @@ where
 {
     let rows = sqlx::query_as::<_, WorldInfoEntryRow>(
         r#"
-        SELECT id, book_id, keys, secondary_keys, content, enabled, priority, constant
+        SELECT id, book_id, keys, secondary_keys, content, enabled, priority, constant, comment, category
         FROM worldinfo_entries
         WHERE enabled = 1
         AND book_id IN (

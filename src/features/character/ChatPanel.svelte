@@ -552,6 +552,12 @@
 					{/if}
 				</div>
 				<Switch checked={!!(conv.meta as { showAvatars?: boolean } | null)?.showAvatars} label="메시지에 프로필 그림" onchange={(v) => library.patchMeta(conv.id, { showAvatars: v || null })} />
+				<Switch
+					checked={!!(conv.meta as { multiChar?: boolean } | null)?.multiChar}
+					label="여러 캐릭터"
+					description="연결된 로어북의 '캐릭터' 분류 항목이 함께 말함 (설정은 이름이 나올 때만 보냄)"
+					onchange={(v) => library.patchMeta(conv.id, { multiChar: v || null })}
+				/>
 			</section>
 			<hr />
 			<section>

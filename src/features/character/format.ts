@@ -15,6 +15,7 @@ export type Block =
 	| { kind: "quote"; parts: Inline[] }
 	| { kind: "hr" }
 	| { kind: "code"; lang: string; text: string }
+	| { kind: "say"; speaker: string; parts: Inline[] }
 	| { kind: "table"; head: Inline[][]; rows: Inline[][][] }
 	| { kind: "cg"; key: string }
 	| { kind: "html"; code: string; /** false: 코드 블록 밖 HTML — 글쓴이의 JS 없이 그림 */ scripts?: false };
@@ -48,14 +49,26 @@ export function hasRawHtml(content: string): boolean {
  * safeHtml: 메시지에서 태그로 시작하는 줄(태그가 닫힐 때까지)을 **스크립트 없는** HTML 블록으로 (5-E-9, ADR-004 추가).
  * 둘 다 없으면 AI 답변의 HTML은 ```html 블록만 그린다
  */
-export function toBlocks(content: string, opts: { rawHtml?: boolean; safeHtml?: boolean } = {}): Block[] {
+export function toBlocks(content: string, opts: { rawHtml?: boolean; safeHtml?: boolean; speakers?: boolean } = {}): Block[] {
 	if (opts.rawHtml && hasRawHtml(content)) {
 		// 글 전체를 한 문서로 (마크다운 줄은 HTML 안에서 의미가 없어 그대로 둠)
 		return [{ kind: "html", code: content.replace(/```html\s*\n?|```/gi, "").replace(/\n/g, "<br>\n").replace(/(<br>\n)+(?=<\/?(div|p|ul|ol|li|table|tr|h\d)\b)/gi, "\n") }];
 	}
-	return splitHtmlBlocks(content).flatMap((part) =>
+	const blocks = splitHtmlBlocks(content).flatMap((part) =>
 		part.kind === "html" ? [{ kind: "html" as const, code: part.code }] : opts.safeHtml ? safeHtmlBlocks(part.text) : textBlocks(part.text),
 	);
+	return opts.speakers ? blocks.map(asSay) : blocks;
+}
+
+/** 다인봇 (5-F-2): 문단이 `이름: 대사`면 말한 사람 블록으로 (이름은 24자 안, 지문·대사 기호로 시작하지 않음) */
+const SAY = /^([^:：*"“\s][^:：*"“\n]{0,23})(?::\s+|：\s*)/;
+function asSay(b: Block): Block {
+	if (b.kind !== "p" || b.parts[0]?.kind !== "text") return b;
+	const m = SAY.exec(b.parts[0].text);
+	if (!m) return b;
+	const rest = b.parts[0].text.slice(m[0].length);
+	const parts = rest ? [{ ...b.parts[0], text: rest }, ...b.parts.slice(1)] : b.parts.slice(1);
+	return parts.length ? { kind: "say", speaker: m[1].trim(), parts } : b;
 }
 
 /** HTML로 여는 태그 (줄 맨 앞에 오면 그 줄부터 HTML 덩어리) */

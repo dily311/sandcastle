@@ -69,6 +69,30 @@ fn phone_defaults(app: &AppHandle, mode: &str, req: &mut ChatRequest) {
 }
 
 /// 대화에서 고른 모델 (ADR-020). 대화에 API 프로필이 정해져 있을 때만 쓴다 — 앱 기본 API를 따라가는 대화에는 모델 이름이 딸려 있지 않다
+/// 다인봇 스위치 (대화 meta.multiChar)
+fn multi_char_on(meta: Option<&Value>) -> bool {
+    meta.and_then(|m| m.get("multiChar")).and_then(Value::as_bool).unwrap_or(false)
+}
+
+/// 등장인물 이름: 로어북 '캐릭터' 분류 항목의 제목, 없으면 첫 키워드 (겹치면 한 번)
+fn cast_names(entries: &[crate::models::conversation::WorldInfoEntry]) -> Vec<String> {
+    let mut out: Vec<String> = vec![];
+    for e in entries.iter().filter(|e| e.enabled && e.category.trim() == CAST_CATEGORY) {
+        let name = if e.comment.trim().is_empty() {
+            e.keys.first().cloned().unwrap_or_default()
+        } else {
+            e.comment.trim().to_string()
+        };
+        if !name.trim().is_empty() && !out.iter().any(|n| n == &name) {
+            out.push(name);
+        }
+    }
+    out
+}
+
+/// 등장인물로 보는 로어북 분류 (ADR-023)
+pub const CAST_CATEGORY: &str = "캐릭터";
+
 /// 대화에서 고른 추론 강도 (meta.reasoningEffort). 없거나 "auto"면 프리셋·공급자 기본
 fn conv_effort(meta: Option<&Value>) -> Option<String> {
     meta.and_then(|m| m.get("reasoningEffort"))
@@ -622,6 +646,14 @@ impl ChatManager {
 
         // 대화별 메모·작가 노트 (오른쪽 패널)
         crate::service::chat::notes::apply(&mut context, conv.meta.as_ref());
+
+        // 다인봇 (5-F-2, 대화마다 켬): 로어북 '캐릭터' 분류 항목의 이름만 알리고, 설정은 키워드가 나올 때 월드인포로 들어간다
+        if multi_char_on(conv.meta.as_ref()) {
+            let names = cast_names(&context.world_info);
+            if !names.is_empty() {
+                context.system_rules.push(crate::service::app_prompts::multi_char(&names));
+            }
+        }
 
         // 대화 요약 (3-D, ADR-016): 켜져 있고 이 대화에서 끄지 않았으면 시스템 규칙 끝에 (history에 넣으면 토큰 한도에서 가장 먼저 잘림)
         let summary_use =
@@ -1317,6 +1349,33 @@ mod continue_tests {
         assert_eq!(join_continue("세라피", "나가"), "세라피나가");
         assert_eq!(join_continue("\"좋아\"", "그녀가"), "\"좋아\" 그녀가");
         assert_eq!(join_continue("", "처음"), "처음");
+    }
+
+    #[test]
+    fn cast_comes_from_character_category_entries() {
+        let e = |comment: &str, keys: &[&str], category: &str, enabled: bool| crate::models::conversation::WorldInfoEntry {
+            id: "x".into(),
+            book_id: "b".into(),
+            keys: keys.iter().map(|k| k.to_string()).collect(),
+            secondary_keys: vec![],
+            content: String::new(),
+            enabled,
+            priority: 0,
+            constant: false,
+            comment: comment.into(),
+            category: category.into(),
+        };
+        let list = vec![
+            e("유나", &["유나"], "캐릭터", true),
+            e("", &["미나", "민아"], "캐릭터", true),
+            e("숲", &["숲"], "장소", true),
+            e("꺼진 사람", &["x"], "캐릭터", false),
+            e("유나", &["유나"], "캐릭터", true),
+        ];
+        assert_eq!(cast_names(&list), vec!["유나", "미나"]);
+        assert!(multi_char_on(Some(&json!({ "multiChar": true }))));
+        assert!(!multi_char_on(Some(&json!({}))));
+        assert!(crate::service::app_prompts::multi_char(&cast_names(&list)).contains("유나, 미나"));
     }
 
     #[test]

@@ -88,6 +88,20 @@ describe("코드 블록 밖 HTML (5-E-9)", () => {
 	});
 });
 
+describe("다인봇 말한 사람 (5-F-2)", () => {
+	it("`이름: 대사` 문단은 말한 사람 블록, 켜지 않으면 그대로", () => {
+		const b = toBlocks('유나: "안녕" *웃는다*\n미나：응\n그냥 지문', { speakers: true });
+		expect(b[0]).toEqual({ kind: "say", speaker: "유나", parts: [{ kind: "speech", text: '"안녕"' }, { kind: "text", text: " " }, { kind: "action", text: "웃는다" }] });
+		expect(b[1]).toEqual({ kind: "say", speaker: "미나", parts: [{ kind: "text", text: "응" }] });
+		expect(b[2].kind).toBe("p");
+		expect(toBlocks("유나: 안녕")[0].kind).toBe("p");
+	});
+	it("지문·대사로 시작하거나 이름이 길면 말한 사람이 아님", () => {
+		expect(toBlocks('*그녀가 말했다: 좋아*', { speakers: true })[0].kind).toBe("p");
+		expect(toBlocks("이것은 아주 아주 아주 아주 긴 문장의 앞부분: 뒤", { speakers: true })[0].kind).toBe("p");
+	});
+});
+
 describe("preview", () => {
 	it("태그·기호를 지우고 공백을 합친다", () => {
 		expect(preview('*웃음*  "안녕"\n<cg>x</cg>')).toBe("웃음 안녕");
