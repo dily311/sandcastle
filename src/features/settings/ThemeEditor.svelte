@@ -4,6 +4,8 @@
 	import { Button, Field, IconButton, Input, Segmented, Spinner, Textarea } from "$shared/ui";
 	import { BUILTIN_THEMES, COLOR_VARS, builtinId, defaultColors, type ColorMap, type Mode, type ThemeColors, withLegacy } from "$shared/ui/themes";
 	import { theme } from "$app/theme.svelte";
+	import { ACCENTS, accentValue, isHexColor } from "$shared/ui/accents";
+	import { GRAYS } from "$shared/ui/grays";
 	import { nav } from "$app/nav.svelte";
 	import { call, commands } from "$shared/ipc/client";
 	import { confirmAction } from "$shared/stores/confirm.svelte";
@@ -18,13 +20,16 @@
 	let version = $state("1.0.0");
 	let colors = $state<ThemeColors>({ light: {}, dark: {} });
 	let css = $state("");
+	/** 이 테마가 정할 강조색·회색 톤 (처음엔 지금 설정, 5-E-14) */
+	let accent = $state<string>(theme.accentId);
+	let gray = $state<string>(theme.setting.grayTone ?? "slate");
 	let loaded = $state(false);
 	let original = "";
 	let saving = $state(false);
 	let mode = $state<Mode>(theme.dark ? "dark" : "light");
 	let cssOpen = $state(false);
 
-	const snapshot = () => JSON.stringify({ name, author, version, colors: clean(colors), css });
+	const snapshot = () => JSON.stringify({ name, author, version, colors: clean(colors), css, accent, gray });
 	function clean(c: ThemeColors): ThemeColors {
 		const f = (m: ColorMap) => Object.fromEntries(Object.entries(m).filter(([, v]) => v?.trim()));
 		return { light: f(c.light), dark: f(c.dark) };
@@ -50,17 +55,15 @@
 			colors = withLegacy({ light: { ...(t.colors.light ?? {}) }, dark: { ...(t.colors.dark ?? {}) } }, t.cssContent ?? "");
 			css = t.cssContent ?? "";
 			cssOpen = !!css.trim();
+			if (t.accentColor) accent = t.accentColor;
+			if (t.grayTone) gray = t.grayTone;
 		}
 		original = key === "new" || bid ? "" : snapshot();
 		loaded = true;
 	});
 
 	const dirty = $derived(loaded && snapshot() !== original);
-	// 고치는 동안 앱 전체에 바로 보여줌
-	$effect(() => {
-		if (!loaded) return;
-		theme.preview({ colors: clean(colors), css });
-	});
+	// 색은 아래 예시 화면에만 보인다 (앱 전체를 바꾸면 고르는 동안 설정 화면까지 바뀌어 헷갈림, 5-E-14). 직접 쓴 CSS는 저장한 뒤에 적용
 	onDestroy(() => theme.preview(null));
 	$effect(() => {
 		if (!dirty) return;
@@ -76,7 +79,7 @@
 		saving = true;
 		try {
 			const file = filename ?? `theme-${Date.now().toString(36)}.json`;
-			await call(commands.saveTheme(file, { name: name.trim(), author: author.trim(), version: version.trim() || "1.0.0", cssContent: css, colors: clean(colors) }), src);
+			await call(commands.saveTheme(file, { name: name.trim(), author: author.trim(), version: version.trim() || "1.0.0", cssContent: css, colors: clean(colors), accentColor: accent, grayTone: gray }), src);
 			theme.preview(null);
 			// 새로 만든 테마는 바로 적용, 쓰는 중인 테마는 다시 읽음
 			if (!filename || theme.setting.selectTheme === file) await theme.update({ selectTheme: file });
@@ -87,7 +90,7 @@
 		}
 	}
 
-	const base = $derived(defaultColors(mode, theme.setting.grayTone ?? "slate", theme.accentId));
+	const base = $derived(defaultColors(mode, gray, accent));
 	const value = (k: string) => colors[mode][k]?.trim() || "";
 	const shown = (k: string) => value(k) || base[k] || "";
 	const isHex = (v: string) => /^#[0-9a-f]{6}$/i.test(v);
@@ -124,12 +127,31 @@
 			<Button variant="primary" loading={saving} disabled={!name.trim() || (!!filename && !dirty)} onclick={save}>저장</Button>
 		</div>
 	</header>
-	<p class="lead">고치는 동안 앱 전체에 바로 보임. 저장하지 않고 나가면 원래대로</p>
+	<p class="lead">색은 아래 예시 화면에서 확인. 저장하면 앱에 적용</p>
 
 	<div class="card info">
 		<Field label="이름" required><Input bind:value={name} /></Field>
 		<Field label="만든 사람"><Input bind:value={author} /></Field>
 		<Field label="버전"><Input bind:value={version} /></Field>
+	</div>
+
+	<div class="card info">
+		<Field label="강조색">
+			<div class="accents" role="radiogroup" aria-label="이 테마의 강조색">
+				{#each ACCENTS as a (a.id)}
+					<button type="button" role="radio" aria-checked={accent === a.id} aria-label={a.label} title={a.label} class:on={accent === a.id} style:background={mode === "dark" ? a.dark : a.light} onclick={() => (accent = a.id)}></button>
+				{/each}
+				<input type="color" class:on={isHexColor(accent)} value={accentValue(accent, mode === "dark")} aria-label="이 테마의 강조색 직접 고르기" oninput={(e) => (accent = e.currentTarget.value)} />
+			</div>
+		</Field>
+		<Field label="회색 톤">
+			<div class="accents" role="radiogroup" aria-label="이 테마의 회색 톤">
+				{#each GRAYS as g (g.id)}
+					{@const sc = mode === "dark" ? g.dark : g.light}
+					<button type="button" role="radio" aria-checked={gray === g.id} aria-label={g.label} title={g.label} class:on={gray === g.id} style:background="linear-gradient(135deg, {sc[2]} 0 50%, {sc[10]} 50% 100%)" onclick={() => (gray = g.id)}></button>
+				{/each}
+			</div>
+		</Field>
 	</div>
 
 	<div class="colors-head">
@@ -424,5 +446,25 @@
 		width: 16px;
 		height: 16px;
 		color: var(--text-faint);
+	}
+	.accents {
+		display: flex;
+		flex-wrap: wrap;
+		gap: var(--space-2);
+	}
+	.accents button,
+	.accents input {
+		width: 28px;
+		height: 28px;
+		padding: 0;
+		border: 2px solid transparent;
+		border-radius: var(--radius-full, 999px);
+		cursor: pointer;
+	}
+	.accents input {
+		background: none;
+	}
+	.accents .on {
+		border-color: var(--text);
 	}
 </style>

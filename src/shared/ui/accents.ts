@@ -1,4 +1,4 @@
-// 사용자가 고를 수 있는 강조색 (자유 입력 없음).
+// 사용자가 고를 수 있는 강조색. 팔레트 밖의 색은 #rrggbb로 직접 고른다 (5-E-14).
 // 밝은/어두운 테마에서 대비가 맞게 각각 값을 둔다.
 export interface Accent {
 	id: string;
@@ -20,7 +20,11 @@ export const ACCENTS: Accent[] = [
 
 export const DEFAULT_ACCENT = ACCENTS[0].id;
 
+export const isHexColor = (v: string | null | undefined): v is string => !!v && /^#[0-9a-f]{6}$/i.test(v);
+
+/** 팔레트 id면 화면 모드에 맞는 색, #rrggbb면 그대로 */
 export function accentValue(id: string, dark: boolean): string {
+	if (isHexColor(id)) return id;
 	const a = ACCENTS.find((x) => x.id === id) ?? ACCENTS[0];
 	return dark ? a.dark : a.light;
 }

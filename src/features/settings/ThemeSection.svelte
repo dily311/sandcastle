@@ -7,7 +7,7 @@
 	import BackgroundPicker from "$shared/ui/BackgroundPicker.svelte";
 	import type { CssThemeMeta_Serialize as ThemeMeta } from "$ipc/bindings";
 	import { Button, ContextMenu, Input, Segmented, Select, Switch, Textarea, type MenuItem } from "$shared/ui";
-	import { ACCENTS } from "$shared/ui/accents";
+	import { ACCENTS, accentValue, isHexColor } from "$shared/ui/accents";
 	import { GRAYS } from "$shared/ui/grays";
 	import { BUILTIN_THEMES, defaultColors, withLegacy, type ColorMap } from "$shared/ui/themes";
 	import { theme, type CssSnippet } from "$app/theme.svelte";
@@ -163,6 +163,16 @@
 						onclick={() => theme.update({ accentColor: a.id })}
 					></button>
 				{/each}
+				<!-- 팔레트 밖의 색 (5-E-14) -->
+				<input
+					type="color"
+					class="custom"
+					class:on={isHexColor(theme.setting.accentColor)}
+					value={accentValue(theme.accentId, theme.dark)}
+					aria-label="강조색 직접 고르기"
+					title="직접 고르기"
+					onchange={(e) => theme.update({ accentColor: e.currentTarget.value })}
+				/>
 			</div>
 		</Row>
 		<Row label="회색 톤" desc="바탕·테두리·글자의 기본 색감">
@@ -362,6 +372,20 @@
 	.accents button.on,
 	.grays button.on {
 		box-shadow: 0 0 0 2px var(--text);
+	}
+	.accents input.custom {
+		width: 24px;
+		height: 24px;
+		padding: 0;
+		border: 2px solid var(--bg-sunken);
+		border-radius: 50%;
+		box-shadow: 0 0 0 1px var(--border-strong);
+		background: conic-gradient(red, yellow, lime, cyan, blue, magenta, red);
+		cursor: pointer;
+	}
+	.accents input.custom.on {
+		box-shadow: 0 0 0 2px var(--text);
+		background: none;
 	}
 	.gallery {
 		display: grid;

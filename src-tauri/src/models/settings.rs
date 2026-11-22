@@ -216,6 +216,12 @@ pub struct CssTheme {
     pub css_content: String,
     #[serde(default)]
     pub colors: ThemeColors,
+    /// 이 테마를 고르면 쓸 강조색 (팔레트 id 또는 #rrggbb). 없으면 설정을 따름 (5-E-14)
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub accent_color: Option<String>,
+    /// 이 테마를 고르면 쓸 회색 톤. 없으면 설정을 따름
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub gray_tone: Option<String>,
 }
 
 #[derive(Debug, Serialize, Deserialize, Clone, specta::Type)]

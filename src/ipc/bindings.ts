@@ -1610,6 +1610,10 @@ export type CssTheme_Deserialize = {
 	/**  직접 쓰는 CSS (색 편집으로 부족할 때) */
 	cssContent?: string,
 	colors?: ThemeColors_Deserialize,
+	/**  이 테마를 고르면 쓸 강조색 (팔레트 id 또는 #rrggbb). 없으면 설정을 따름 (5-E-14) */
+	accentColor?: string | null,
+	/**  이 테마를 고르면 쓸 회색 톤. 없으면 설정을 따름 */
+	grayTone?: string | null,
 };
 
 export type CssTheme_Serialize = {
@@ -1620,6 +1624,10 @@ export type CssTheme_Serialize = {
 	/**  직접 쓰는 CSS (색 편집으로 부족할 때) */
 	cssContent: string,
 	colors: ThemeColors_Serialize,
+	/**  이 테마를 고르면 쓸 강조색 (팔레트 id 또는 #rrggbb). 없으면 설정을 따름 (5-E-14) */
+	accentColor?: string,
+	/**  이 테마를 고르면 쓸 회색 톤. 없으면 설정을 따름 */
+	grayTone?: string,
 };
 
 export type Cue = Cue_Serialize | Cue_Deserialize;

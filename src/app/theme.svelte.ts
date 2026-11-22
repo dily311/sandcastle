@@ -2,7 +2,7 @@
 import type { CssSnippet, ThemeSetting } from "$ipc/bindings";
 import { call, commands } from "$shared/ipc/client";
 import { getCurrentWindow } from "@tauri-apps/api/window";
-import { ACCENTS, DEFAULT_ACCENT, accentValue } from "$shared/ui/accents";
+import { ACCENTS, DEFAULT_ACCENT, accentValue, isHexColor } from "$shared/ui/accents";
 import { DEFAULT_GRAY, grayScale } from "$shared/ui/grays";
 import { BUILTIN_THEMES, builtinId, colorsToCss, withLegacy, type ThemeColors } from "$shared/ui/themes";
 import { fileSrc } from "$shared/ipc/file";
@@ -31,6 +31,9 @@ const FALLBACK: ThemeSetting = {
 interface Active {
 	colors: ThemeColors;
 	css: string;
+	/** 테마가 정한 강조색·회색 톤 (없으면 설정) */
+	accent?: string | null;
+	gray?: string | null;
 }
 const NONE: Active = { colors: { light: {}, dark: {} }, css: "" };
 
@@ -45,9 +48,18 @@ class Theme {
 	get dark() {
 		return this.setting.mode === "dark" || (this.setting.mode === "system" && this.systemDark);
 	}
-	/** 예전 버전은 accentColor에 "#rrggbb"를 저장했다 → 고정 팔레트에 없으면 기본색 */
+	/** 강조색: 팔레트 id 또는 직접 고른 #rrggbb. 모르는 값이면 기본색 */
 	get accentId() {
-		return ACCENTS.some((a) => a.id === this.setting.accentColor) ? this.setting.accentColor : DEFAULT_ACCENT;
+		const a = this.setting.accentColor;
+		return ACCENTS.some((x) => x.id === a) || isHexColor(a) ? a : DEFAULT_ACCENT;
+	}
+	/** 테마가 정했으면 그것, 아니면 설정 */
+	private get effAccent() {
+		const a = this.active.accent;
+		return a && (ACCENTS.some((x) => x.id === a) || isHexColor(a)) ? a : this.accentId;
+	}
+	private get effGray() {
+		return this.active.gray || this.setting.grayTone || DEFAULT_GRAY;
 	}
 	get snippets(): CssSnippet[] {
 		return this.setting.snippets ?? [];
@@ -95,7 +107,9 @@ class Theme {
 		else {
 			const t = await call(commands.loadTheme(key), { source: "theme", silent: true }).catch(() => null);
 			// 예전 테마 JSON(옵시디언식 변수)도 새 변수로 이어서 보이게
-			this.active = t ? { colors: withLegacy({ light: t.colors.light ?? {}, dark: t.colors.dark ?? {} }, t.cssContent ?? ""), css: t.cssContent ?? "" } : NONE;
+			this.active = t
+				? { colors: withLegacy({ light: t.colors.light ?? {}, dark: t.colors.dark ?? {} }, t.cssContent ?? ""), css: t.cssContent ?? "", accent: t.accentColor ?? null, gray: t.grayTone ?? null }
+				: NONE;
 		}
 	}
 
@@ -111,8 +125,8 @@ class Theme {
 		const cur = this.previewing ?? this.active;
 		root.dataset.theme = mode;
 		// 테마가 강조색을 정했으면 그것, 아니면 설정의 강조색
-		root.style.setProperty("--accent", cur.colors[mode]["--accent"]?.trim() || accentValue(this.accentId, this.dark));
-		grayScale(this.setting.grayTone ?? DEFAULT_GRAY, this.dark).forEach((c, i) => root.style.setProperty(`--gray-${i + 1}`, c));
+		root.style.setProperty("--accent", cur.colors[mode]["--accent"]?.trim() || accentValue(this.effAccent, this.dark));
+		grayScale(this.effGray, this.dark).forEach((c, i) => root.style.setProperty(`--gray-${i + 1}`, c));
 		root.style.fontSize = `${this.setting.fontSize}px`;
 		applyUserFont(root, this.setting);
 		this.style("user-theme").textContent = [colorsToCss(cur.colors), cur.css].filter((s) => s.trim()).join("\n\n");
