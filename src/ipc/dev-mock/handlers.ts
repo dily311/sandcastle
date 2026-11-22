@@ -91,6 +91,7 @@ const base: Record<string, Handler> = {
 				["sync", "동기화", "다른 기기와 파일로 주고받아 합치기. API 키는 넘어가지 않음", false, false],
 				["lint", "메시지 linter", "AI 응답이 저장될 때 닫히지 않은 태그·따옴표 등을 검사", false, false],
 				["ghostwrite", "대필", "내가 적은 초안을 AI가 내 말투의 다음 대사로 써서 입력칸에 채움", false, false],
+				["slash", "슬래시 커맨드·빠른 답장", "입력칸에서 /로 시작하는 커맨드와 스크립트 실행 (SillyTavern 방식). /gen 같은 AI 커맨드는 실행할 때마다 응답 하나의 요금이 듦", false, false],
 				["rewrite", "자동 재생성", "linter가 금지어·단어 반복 오류를 찾으면 응답을 새 스와이프로 다시 만듦", false, false],
 				["summary", "메모리 확장 · 대화 요약", "프롬프트 창 밖으로 밀려난 오래된 대화를 줄거리로 요약해 AI에게 전달", false, false],
 				["memory", "메모리 검색", "지난 대화를 뜻으로 찾기. 색인하면 대화 글이 임베딩 공급자에게 전송됨", false, false],

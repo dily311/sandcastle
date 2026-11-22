@@ -1,4 +1,5 @@
 <script lang="ts">
+	import { isSlash, runSlash } from "$features/slash/commands";
 	import { regexVersion } from "$shared/stores/regexVersion.svelte";
 	import { tick, untrack } from "svelte";
 	import { Bookmark, ChevronRight, Gauge, Copy, CornerUpLeft, FastForward, GitBranch, ImagePlus, Images, IdCard, Languages, ListChecks, ListTree, PanelLeft, Plus, RefreshCw, Send, SlidersHorizontal, Square, Trash2, X, EllipsisVertical, BookOpen, Pen, Database, Scroll, SpellCheck, Pencil, UserRound, PinOff, Pin, FolderMinus, Download, Folder } from "@lucide/svelte";
@@ -224,6 +225,13 @@
 		// 빈 입력도 보낼 수 있다: 사용자 메시지 없이 AI가 이어서 답함 (답이 오류로 안 왔을 때 다시 시도)
 		const text = draft;
 		const items = pending;
+		// 슬래시 커맨드 (코어 플러그인 slash, 5-E-20-5): 메시지로 보내지 않고 스크립트로 실행
+		if (plugins.on("slash") && !items.length && isSlash(text)) {
+			draft = "";
+			stick = true;
+			await runSlash(text, session);
+			return;
+		}
 		sending = true;
 		let paths: string[];
 		try {

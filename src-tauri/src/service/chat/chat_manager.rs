@@ -1099,6 +1099,44 @@ impl ChatManager {
             .ok_or_else(|| AppError::validation("대필 결과가 비어 있음 — 다시 눌러 보세요", None).into())
     }
 
+    /// 슬래시 커맨드 /gen (5-E-20-5): 이 대화의 맥락(프리셋·캐릭터·기록·메모) 끝에 지시를 붙여 글만 받는다.
+    /// 메시지로 저장하지 않는다 (스크립트가 결과를 어떻게 쓸지 정함).
+    pub async fn quiet_gen(
+        &self,
+        app: &AppHandle,
+        db: &crate::db::conn::DbPool,
+        settings: &SettingsState<AppSetting>,
+        conversation_id: &str,
+        instruction: &str,
+        cancel: &CancellationToken,
+    ) -> Result<String> {
+        let conv = match get_conversation(db, conversation_id).await {
+            Ok(c) => c,
+            Err(sqlx::Error::RowNotFound) => return Err(AppError::not_found("대화를 찾을 수 없음").into()),
+            Err(e) => return Err(AppError::from(e).into()),
+        };
+        let mut fallback = current_conv_request(settings)?;
+        phone_defaults(app, &conv.mode, &mut fallback);
+        let (profile_id, prompt) = quiet_prompt(db, &conv, fallback, instruction).await?;
+        let ai = app
+            .try_state::<Arc<AiService>>()
+            .ok_or_else(|| AppError::internal("AiService가 초기화되지 않았습니다"))?
+            .inner()
+            .clone();
+        let response = ai
+            .generate(
+                AiRequest {
+                    profile_id,
+                    model: conv_model(&conv),
+                    prompt,
+                },
+                cancel,
+                |_| {},
+            )
+            .await?;
+        Ok(response.content.trim().to_string())
+    }
+
     /// 폰 엿보기: 두 사람 몫을 AI가 모두 이어서 쓰고, 말풍선 메시지로 나눠 저장한다.
     /// 취소되면 받은 데까지 나눠 저장한다.
     pub async fn peek(
@@ -1258,6 +1296,117 @@ pub(crate) fn take_image_tag(text: &str) -> (String, Option<String>) {
     }
     out.push_str(&text[i.min(text.len())..]);
     (out.trim_end().to_string(), prompt)
+}
+
+/// /gen 프롬프트: 대화 맥락(Quiet 생성 유형) + 맨 끝 사용자 차례에 지시. (API 프로필 id, 프롬프트)
+async fn quiet_prompt(
+    db: &crate::db::conn::DbPool,
+    conv: &crate::models::conversation::Conversation,
+    fallback: ChatRequest,
+    instruction: &str,
+) -> Result<(String, crate::models::ai_service::PromptMessage)> {
+    let api_profile_id = conv
+        .api_profile_id
+        .clone()
+        .filter(|s| !s.is_empty())
+        .or(Some(fallback.api_profile_id.clone()).filter(|s| !s.is_empty()))
+        .ok_or_else(|| AppError::validation("API를 먼저 고르세요 (대화 설정 또는 설정 > API 키)", None))?;
+    let persona_id = match conv.persona_id.as_str() {
+        "" => get_system_default_persona(db).await.unwrap_or_else(|_| "default".into()),
+        id => id.to_string(),
+    };
+    if conv.character_id.is_empty() {
+        return Err(AppError::validation("캐릭터가 지워진 대화", None).into());
+    }
+    let character = get_character(db, &conv.character_id).await.map_err(AppError::from)?;
+    let preset_id = conv
+        .prompt_preset_id
+        .clone()
+        .filter(|s| !s.is_empty())
+        .or(character.default_prompt_preset_id.clone().filter(|s| !s.is_empty()))
+        .unwrap_or(fallback.preset_id);
+    let mut context = ContextManager
+        .build_context(
+            db,
+            ContextRequest {
+                conversation_id: conv.id.clone(),
+                character_id: conv.character_id.clone(),
+                persona_id,
+                history_limit: HISTORY_FETCH_LIMIT,
+            },
+        )
+        .await?;
+    crate::service::chat::notes::apply(&mut context, conv.meta.as_ref());
+    let mut prompt = PromptManager
+        .build_with_db(
+            db,
+            PromptRequest {
+                context,
+                user_message: String::new(),
+                preset_id: Some(preset_id),
+                context_limit: DEFAULT_CONTEXT_LIMIT,
+                world_info_ratio: DEFAULT_WORLD_INFO_RATIO,
+                generation_type: GenerationType::Quiet,
+            },
+        )
+        .await?;
+    // 마지막 AI 답장도 맥락이라 지우지 않는다 (대필과 달리 이어 쓸 자리가 아님)
+    prompt.messages.push(crate::models::ai_service::PromptMessageItem {
+        role: crate::models::ai_service::PromptRole::User,
+        content: instruction.to_string(),
+        token: 0,
+        images: vec![],
+    });
+    prompt.chat_options.stream = false;
+    Ok((api_profile_id, prompt))
+}
+
+#[cfg(test)]
+mod quiet_gen_tests {
+    use super::*;
+
+    #[tokio::test]
+    async fn gen_prompt_is_the_chat_context_with_the_instruction_last() {
+        let dir = tempfile::tempdir().unwrap();
+        let db = crate::db::conn::init_pool(dir.path().to_path_buf()).await.unwrap();
+        for sql in [
+            "INSERT INTO characters (id, name, description, created_at, updated_at) VALUES ('ch', '세라피나', '숲의 수호자', 1, 1)",
+            "INSERT INTO conversations (id, title, character_id) VALUES ('c', '대화', 'ch')",
+            "INSERT INTO messages (id, conversation_id, seq, role, content) VALUES ('m1', 'c', 1, 'user', '안녕'), ('m2', 'c', 2, 'assistant', '반가워요')",
+        ] {
+            sqlx::query(sqlx::AssertSqlSafe(sql))
+                .execute(&db)
+                .await
+                .unwrap_or_else(|e| panic!("{sql}: {e}"));
+        }
+        let conv = get_conversation(&db, "c").await.unwrap();
+        let fallback = ChatRequest {
+            api_profile_id: "p".into(),
+            model: None,
+            preset_id: String::new(),
+            phone_mode_prompt: String::new(),
+        };
+        let (profile, prompt) = quiet_prompt(&db, &conv, fallback, "다음 장면을 한 줄로 요약해").await.unwrap();
+        assert_eq!(profile, "p");
+        let last = prompt.messages.last().unwrap();
+        assert_eq!(last.role, crate::models::ai_service::PromptRole::User);
+        assert_eq!(last.content, "다음 장면을 한 줄로 요약해");
+        let all: String = prompt.messages.iter().map(|m| m.content.as_str()).collect::<Vec<_>>().join("\n");
+        assert!(
+            all.contains("반가워요") && all.contains("숲의 수호자"),
+            "대화 기록·캐릭터가 맥락에 들어감: {all}"
+        );
+        assert!(!prompt.chat_options.stream);
+
+        // API가 없으면 부르지 않고 알린다
+        let none = ChatRequest {
+            api_profile_id: String::new(),
+            model: None,
+            preset_id: String::new(),
+            phone_mode_prompt: String::new(),
+        };
+        assert!(quiet_prompt(&db, &conv, none, "x").await.is_err());
+    }
 }
 
 #[cfg(test)]

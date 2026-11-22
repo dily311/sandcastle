@@ -43,6 +43,8 @@ pub mod id {
     pub const REWRITE: &str = "rewrite";
     /// 대필 (5-D, ADR-018): 초안을 AI가 내 말투의 대사로 써 입력칸에 채움
     pub const GHOSTWRITE: &str = "ghostwrite";
+    /// 슬래시 커맨드·빠른 답장 (5-E-20-5, ADR-025)
+    pub const SLASH: &str = "slash";
 }
 
 #[derive(Debug, Clone, Serialize, specta::Type)]
@@ -180,6 +182,13 @@ const CATALOG: &[Def] = &[
         id: id::GHOSTWRITE,
         name: "대필",
         description: "내가 적은 초안을 AI가 내 말투의 다음 대사로 써서 입력칸에 채움 (보내지는 않음). 누를 때마다 응답 하나의 요금이 듦",
+        default_enabled: false,
+        desktop_only: false,
+    },
+    Def {
+        id: id::SLASH,
+        name: "슬래시 커맨드·빠른 답장",
+        description: "입력칸에서 /로 시작하는 커맨드와 스크립트 실행 (SillyTavern 방식). /gen 같은 AI 커맨드는 실행할 때마다 응답 하나의 요금이 듦",
         default_enabled: false,
         desktop_only: false,
     },

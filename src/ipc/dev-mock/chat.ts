@@ -534,6 +534,8 @@ AI: 그때 이야기를 다시 해 볼까요?`, stale: false },
 		return null;
 	},
 	get_messages: ({ conversationId }) => msgsOf(conversationId),
+	// /gen (5-E-20-5): 지시를 받아 짧은 글을 돌려줌
+	slash_generate: ({ prompt }) => `(가짜 AI) ${String(prompt).slice(0, 40)}에 대한 글`,
 	append_message: ({ input }) => {
 		const c = conv(input.conversationId);
 		const m = addMsg(c, input.role, input.content, 0, input.meta ?? {});

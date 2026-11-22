@@ -80,6 +80,8 @@ pub enum TaskType {
     PluginAi,
     /// 대필 (코어 플러그인 ghostwrite, 5-D) — 입력칸에 채울 글 한 번
     Ghostwrite,
+    /// 슬래시 커맨드 /gen (코어 플러그인 slash, 5-E-20-5) — 대화 맥락 + 지시로 글만 받음 (저장하지 않음)
+    SlashGen,
 }
 
 /// 작업을 누가 시작했나. 비용이 드는 작업은 항상 실행 주체가 분명해야 한다 (CLAUDE.md 원칙)
