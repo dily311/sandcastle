@@ -1,3 +1,4 @@
+import { onEvent } from "$shared/ipc/events";
 import { convertFileSrc } from "@tauri-apps/api/core";
 import { commands } from "$ipc/bindings";
 import { open } from "@tauri-apps/plugin-dialog";
@@ -55,6 +56,12 @@ class WidgetMusicSettingStore {
 			this.#setting.currentSongIndex,
 		);
 		await audioStore.init();
+		// 설정 화면에서 바꾼 것 따라가기 (5-E-21). 저장은 이미 됐으므로 다시 저장하지 않는다
+		void onEvent<WidgetMusicSetting>("widget_music::changed", (next) => {
+			const folderChanged = next.selectedFolder !== this.#setting.selectedFolder;
+			this.#setting = { ...this.#setting, ...next };
+			if (folderChanged) void playlistStore.init(next.selectedFolder ?? null, next.currentPlaylistId ?? null, next.currentSongIndex ?? 0);
+		});
 	}
 
 	update(patch: Partial<WidgetMusicSetting>) {

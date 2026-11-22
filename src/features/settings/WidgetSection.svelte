@@ -1,6 +1,8 @@
 <script lang="ts">
 	import { onMount } from "svelte";
-	import { Switch } from "$shared/ui";
+	import { Button, Switch } from "$shared/ui";
+	import { pickFolder } from "$shared/ipc/dialog";
+	import type { WidgetMusicSetting_Serialize } from "$ipc/bindings";
 	import { call, commands } from "$shared/ipc/client";
 	import { WIDGET_FEATURES } from "$lib/features/setFeautres";
 	import { widgetFeatureConfig } from "$lib/features/widgetFeatures.svelte";
@@ -12,6 +14,17 @@
 	let features = $state<Record<string, boolean>>({});
 	let autostart = $state(false);
 	let ready = $state(false);
+	// 음악 플레이어 설정 (5-E-21): 위젯 창과 같은 저장소 (바꾸면 위젯 창이 이벤트로 따라감)
+	let music = $state<WidgetMusicSetting_Serialize | null>(null);
+	async function setMusic(patch: Partial<WidgetMusicSetting_Serialize>) {
+		if (!music) return;
+		music = { ...music, ...patch };
+		await call(commands.saveWidgetMusicSettings(patch as never), src);
+	}
+	async function chooseMusicFolder() {
+		const dir = await pickFolder();
+		if (dir) await setMusic({ selectedFolder: dir });
+	}
 
 	onMount(async () => {
 		const [f, a] = await Promise.all([
@@ -19,6 +32,7 @@
 			call(commands.isAutostartEnabled(), { ...src, silent: true }).catch(() => false),
 		]);
 		features = { ...f.feature };
+		music = await call(commands.getWidgetMusicSettings(), { ...src, silent: true }).catch(() => null);
 		autostart = a;
 		ready = true;
 	});
@@ -49,5 +63,18 @@
 				</Row>
 			{/each}
 		</Group>
+		{#if music && features["widget"] && features["widget.music"]}
+			<Group title="음악 플레이어">
+				<Row label="작게 보기">
+					<Switch checked={music.isMiniPlayer} label="작게 보기" hideLabel onchange={(v) => void setMusic({ isMiniPlayer: v })} />
+				</Row>
+				<Row label="음악 폴더" desc={music.selectedFolder ?? "고르지 않음"}>
+					<Button size="sm" onclick={chooseMusicFolder}>바꾸기</Button>
+				</Row>
+				<Row label="위치">
+					<Button size="sm" variant="ghost" disabled={!music.pos} onclick={() => void setMusic({ pos: null })}>처음 자리로</Button>
+				</Row>
+			</Group>
+		{/if}
 	{/if}
 </Section>

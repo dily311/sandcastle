@@ -135,6 +135,8 @@ pub fn save_widget_music_settings(app: AppHandle, patch: serde_json::Value) -> R
     merge_json(&mut data, &patch);
 
     store.set("music", serde_json::to_value(&data).unwrap());
+    // 설정 화면과 위젯 창이 서로의 변경을 따라가게 (5-E-21)
+    let _ = tauri::Emitter::emit(&app, "widget_music::changed", &data);
     Ok(())
 }
 
