@@ -226,3 +226,23 @@ describe("도구: 수학·글자·매크로 (5-E-20-6-3)", () => {
 		expect(await pipe("/return {{isodate}}")).toMatch(/^\d{4}-\d{2}-\d{2}$/);
 	});
 });
+
+describe("멈추기 (5-E-20-6-8)", () => {
+	it("멈추면 다음 커맨드부터 돌지 않고, 반복 안에서도 다음 바퀴 전에 멈춘다", async () => {
+		const app = fakeApp("");
+		let stop = false;
+		app.env.commands.mark = ({ unnamed }) => {
+			app.log.push(`mark ${String(unnamed)}`);
+			if (unnamed === "2") stop = true;
+		};
+		const r = await runScript("/mark 1 | /mark 2 | /mark 3", { ...app.env, stopped: () => stop });
+		expect(r).toMatchObject({ aborted: true, stopped: true });
+		expect(app.log).toEqual(["mark 1", "mark 2"]);
+
+		app.log.length = 0;
+		stop = false;
+		const r2 = await runScript("/times 100 {: /mark {{timesIndex}} :}", { ...app.env, stopped: () => stop });
+		expect(r2.stopped).toBe(true);
+		expect(app.log).toEqual(["mark 0", "mark 1", "mark 2"]);
+	});
+});

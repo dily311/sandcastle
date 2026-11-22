@@ -9,6 +9,7 @@ import { pluginSetting } from "$shared/stores/aiTools.svelte";
 import { library } from "$features/character/library.svelte";
 import type { ChatSession } from "$features/character/session.svelte";
 import { quickReplies, toInput } from "./quickReply.svelte";
+import { slashRuns } from "./running.svelte";
 import { ghost } from "$features/ghost/ghost.svelte";
 import { plugins } from "$shared/stores/plugins.svelte";
 import { addTo, getIndexed, runScript, ScriptError, setIndexed, type ArgValue, type Handler, type ScriptEnv } from "./script";
@@ -372,16 +373,22 @@ export function slashEnv(session: ChatSession, opts: SlashOpts = {}): ScriptEnv 
 /** 입력칸·빠른 답장에서 실행. 오류는 알림으로 (멈춘 것은 조용히) */
 export async function runSlash(source: string, session: ChatSession, opts: SlashOpts = {}): Promise<void> {
 	if (session.busy) return void toasts.error("응답을 받는 중이라 실행하지 않음");
+	const convId = session.convId;
+	if (slashRuns.isRunning(convId)) return void toasts.error("이 대화에서 스크립트가 도는 중 — 멈춘 뒤 다시");
 	if (!quickReplies.loaded) await quickReplies.load().catch(() => {});
-	const env = slashEnv(session, opts);
+	const env = { ...slashEnv(session, opts), stopped: () => slashRuns.stopped(convId) };
+	slashRuns.start(convId);
 	try {
-		await runScript(source, env);
+		const r = await runScript(source, env);
+		if (r.stopped) toasts.info("스크립트를 멈춤");
 	} catch (e) {
-		if (e instanceof ScriptError) toasts.error(e.message);
+		if (slashRuns.stopped(convId)) toasts.info("스크립트를 멈춤");
+		else if (e instanceof ScriptError) toasts.error(e.message);
 		// 다른 오류는 call이 이미 알림을 띄움
 	} finally {
 		// 멈추거나 실패해도 그때까지 바꾼 변수는 남긴다
 		await env.flush().catch(() => {});
+		slashRuns.end(convId);
 	}
 }
 

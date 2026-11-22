@@ -7,6 +7,7 @@
 	import type { Conversation } from "$features/character/library.svelte";
 	import type { ChatSession } from "$features/character/session.svelte";
 	import { buttonsOf, offIds, quickReplies, runQuickReply, setsInScope, toggleForConv, type QuickButton } from "./quickReply.svelte";
+	import { slashRuns } from "./running.svelte";
 
 	interface Props {
 		session: ChatSession;
@@ -73,7 +74,7 @@
 			</header>
 			{#if g.on}
 				{#each g.buttons as b (b.q.id)}
-					<button type="button" class="item" disabled={running || session.busy} onclick={() => press(b)}>
+					<button type="button" class="item" disabled={running || session.busy || (!!conv && slashRuns.isRunning(conv.id))} onclick={() => press(b)}>
 						<span class="label">{b.q.label.trim() || b.q.message.slice(0, 16)}</span>
 						<span class="msg">{b.q.message}</span>
 					</button>

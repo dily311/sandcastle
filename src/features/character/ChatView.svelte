@@ -1,6 +1,7 @@
 <script lang="ts">
 	import { isSlash, runSlash } from "$features/slash/commands";
 	import QuickReplyBar from "$features/slash/QuickReplyBar.svelte";
+	import { slashRuns } from "$features/slash/running.svelte";
 	import { regexVersion } from "$shared/stores/regexVersion.svelte";
 	import { tick, untrack } from "svelte";
 	import { Bookmark, ChevronRight, Gauge, Copy, CornerUpLeft, FastForward, GitBranch, ImagePlus, Images, IdCard, Languages, ListChecks, ListTree, PanelLeft, Plus, RefreshCw, Send, SlidersHorizontal, Square, Trash2, X, EllipsisVertical, BookOpen, Pen, Database, Scroll, SpellCheck, Pencil, UserRound, PinOff, Pin, FolderMinus, Download, Folder, Zap } from "@lucide/svelte";
@@ -679,8 +680,9 @@
 						<Ghostwrite convId={session.convId} getDraft={() => draft} setDraft={(v) => (draft = v)} disabled={session.busy} />
 					{/if}
 					<Textarea bind:value={draft} rows={1} autosize maxRows={8} placeholder={!layout.desktop ? "메시지 입력" : appSetting.sendOnEnter ? "메시지 입력 (Shift+Enter 줄바꿈)" : "메시지 입력 (Ctrl+Enter 보내기)"} aria-label="메시지" readonly={!!session && ghost.isRunning(session.convId)} {onkeydown} {onpaste} />
-					{#if session?.busy}
-						<IconButton label="멈추기 (받은 데까지 저장)" variant="solid" onclick={() => session?.cancel()}><Square /></IconButton>
+					{#if session && (session.busy || slashRuns.isRunning(session.convId))}
+						<!-- 스크립트가 돌면 스크립트째 멈춤 (5-E-20-6-8), 아니면 응답만 -->
+						<IconButton label={slashRuns.isRunning(session.convId) ? "스크립트 멈추기" : "멈추기 (받은 데까지 저장)"} variant="solid" onclick={() => (session && slashRuns.isRunning(session.convId) ? slashRuns.stop(session.convId, session) : session?.cancel())}><Square /></IconButton>
 					{:else}
 						<IconButton label="보내기" variant="solid" type="submit" disabled={sending}><Send /></IconButton>
 					{/if}

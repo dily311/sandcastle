@@ -553,7 +553,11 @@ AI: 그때 이야기를 다시 해 볼까요?`, stale: false },
 	},
 	delete_quick_reply_set: ({ id }) => ((quickReplySets = quickReplySets.filter((s) => s.id !== id)), null),
 	// /gen (5-E-20-5): 지시를 받아 짧은 글을 돌려줌
-	slash_generate: ({ prompt }) => ({ text: `(가짜 AI) ${String(prompt).slice(0, 40)}에 대한 글`, truncated: String(prompt).includes("잘림") }),
+	slash_generate: async ({ prompt }) => {
+		if (String(prompt).includes("천천히")) await sleep(3000);
+		return { text: `(가짜 AI) ${String(prompt).slice(0, 40)}에 대한 글`, truncated: String(prompt).includes("잘림") };
+	},
+	slash_cancel: () => true,
 	append_message: ({ input }) => {
 		const c = conv(input.conversationId);
 		const m = addMsg(c, input.role, input.content, 0, input.meta ?? {});

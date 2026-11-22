@@ -281,6 +281,8 @@ export const commands = {
 	 *  raw면 /genraw: 맥락 없이 지시만 (system이 있으면 그 앞에 시스템 글)
 	 */
 	slashGenerate: (conversationId: string, prompt: string, raw: boolean, system: string | null, options?: InvokeOptions) => __TAURI_INVOKE<SlashGenResult>("slash_generate", { conversationId, prompt, raw, system }, options),
+	/**  생성 중인 /gen·/genraw 멈추기 (5-E-20-6-8, 대필 멈추기와 같은 모양). 멈출 게 있었으면 true */
+	slashCancel: (conversationId: string, options?: InvokeOptions) => __TAURI_INVOKE<boolean>("slash_cancel", { conversationId }, options),
 	/**  화면의 호스트가 프롬프트 요청(user-plugin-prompt)에 답한다. 늦게 와서 기다리는 요청이 없으면 false */
 	answerPluginPrompt: (requestId: string, answers: PluginPromptAnswer_Deserialize[], options?: InvokeOptions) => __TAURI_INVOKE<boolean>("answer_plugin_prompt", { requestId, answers }, options),
 	/**  누른 명령 밖에서도 플러그인이 AI를 부르게 할지 (기본 꺼짐, 요금이 들 수 있음) */

@@ -55,3 +55,19 @@ pub async fn slash_generate(
         })
         .await
 }
+
+/// 생성 중인 /gen·/genraw 멈추기 (5-E-20-6-8, 대필 멈추기와 같은 모양). 멈출 게 있었으면 true
+#[tauri::command]
+#[specta::specta]
+pub async fn slash_cancel(tasks: State<'_, Arc<TaskManager>>, conversation_id: String) -> Result<bool> {
+    let running: Vec<_> = tasks
+        .list_by_owner_ref(&conversation_id)
+        .await?
+        .into_iter()
+        .filter(|t| t.task_type == TaskType::SlashGen && matches!(t.status, crate::task::TaskStatus::Pending | crate::task::TaskStatus::Running))
+        .collect();
+    for t in &running {
+        tasks.cancel(&t.id).await?;
+    }
+    Ok(!running.is_empty())
+}

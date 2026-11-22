@@ -9,6 +9,8 @@
 	import { nav } from "$app/nav.svelte";
 	import { buttonsOf, offIds, quickReplies, runQuickReply, setsFor, setsInScope, toggleForConv, type QuickButton } from "./quickReply.svelte";
 	import QuickReplyList from "./QuickReplyList.svelte";
+	import { slashRuns } from "./running.svelte";
+	import { Square } from "@lucide/svelte";
 
 	const MAX_CHIPS = 6;
 
@@ -18,6 +20,8 @@
 	const inScope = $derived(setsInScope(conv).filter((s) => s.enabled));
 	const buttons = $derived(buttonsOf(setsFor(conv)));
 	const shown = $derived(buttons.length > MAX_CHIPS ? buttons.slice(0, MAX_CHIPS) : buttons);
+	/** 이 대화에서 스크립트가 도는 중 (5-E-20-6-8) */
+	const scriptRunning = $derived(!!conv && slashRuns.isRunning(conv.id));
 	let showAll = $state(false);
 	let running = $state(false);
 	let menu = $state<{ x: number; y: number } | null>(null);
@@ -49,8 +53,11 @@
 {#if inScope.length}
 	<div class="qr" role="toolbar" aria-label="빠른 답장">
 		<div class="list">
+			{#if scriptRunning}
+				<button type="button" class="chip stop" title="다음 커맨드부터 멈추고, 생성 중인 글은 취소" onclick={() => conv && slashRuns.stop(conv.id, session)}><Square />실행 중 · 멈추기</button>
+			{/if}
 			{#each shown as b (b.q.id)}
-				<button type="button" class="chip" disabled={running || session.busy} title={b.q.message} onclick={() => press(b)}>{b.q.label.trim() || b.q.message.slice(0, 16)}</button>
+				<button type="button" class="chip" disabled={running || session.busy || scriptRunning} title={b.q.message} onclick={() => press(b)}>{b.q.label.trim() || b.q.message.slice(0, 16)}</button>
 			{/each}
 			{#if buttons.length > MAX_CHIPS || showAll}
 				<button type="button" class="chip more" aria-expanded={showAll} onclick={() => (showAll = !showAll)}>{showAll ? "닫기" : `모두 보기 ${buttons.length}`}</button>
@@ -90,6 +97,17 @@
 		overflow: hidden;
 		text-overflow: ellipsis;
 		cursor: pointer;
+	}
+	.chip.stop {
+		display: inline-flex;
+		align-items: center;
+		gap: 4px;
+		border-color: var(--accent);
+		color: var(--accent-text, var(--accent));
+	}
+	.chip.stop :global(svg) {
+		width: 12px;
+		height: 12px;
 	}
 	.chip.more {
 		border-style: dashed;

@@ -55,6 +55,8 @@ export interface ScriptEnv {
 	maxSteps?: number;
 	/** 반복 하나의 바퀴 상한 (기본 1000) */
 	maxLoop?: number;
+	/** 사용자가 멈췄는가 (5-E-20-6-8) — 커맨드마다·반복 바퀴마다 본다 */
+	stopped?: () => boolean;
 	/** /run 세트.버튼 · /:세트.버튼 → 그 빠른 답장의 스크립트 (없으면 undefined) */
 	quickReply?: (name: string) => string | undefined;
 	/** /if·/while의 left·right가 변수 이름일 때 대화·전역 변수 값 (범위 변수는 엔진이 먼저 본다) */
@@ -67,7 +69,12 @@ export const DEFAULT_MAX_LOOP = 1000;
 export interface ScriptResult {
 	pipe: string;
 	aborted: boolean;
+	/** 사용자가 멈춰서 끝남 */
+	stopped?: boolean;
 }
+
+/** 사용자가 멈춤 */
+class Stopped {}
 
 // ---------------------------------------------------------------------------
 // 읽기
@@ -569,6 +576,7 @@ export async function runScript(src: string, env: ScriptEnv, pipe = ""): Promise
 	const run = async (source: string, input: string, scope: Scope): Promise<string> => {
 		let cur = input;
 		for (const cmd of parseScript(source)) {
+			if (env.stopped?.()) throw new Stopped();
 			if (++steps > limit) throw new ScriptError(`실행 단계가 ${limit}번을 넘어 멈춤 (/${cmd.name})`);
 			if (cmd.breakPipe) cur = "";
 			const pipeNow = cur;
@@ -788,6 +796,7 @@ export async function runScript(src: string, env: ScriptEnv, pipe = ""): Promise
 		return { pipe: await run(src, pipe, root), aborted: false };
 	} catch (e) {
 		if (e instanceof Abort) return { pipe: "", aborted: true };
+		if (e instanceof Stopped) return { pipe: "", aborted: true, stopped: true };
 		if (e instanceof Return) return { pipe: e.value, aborted: false };
 		if (e instanceof Break) return { pipe: e.value, aborted: false };
 		throw e;
