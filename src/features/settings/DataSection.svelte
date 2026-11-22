@@ -1,10 +1,10 @@
 <script lang="ts">
 	import { onMount } from "svelte";
 	import { ChevronDown, ChevronRight, RotateCcw, Save, ShieldCheck, Trash2, Upload } from "@lucide/svelte";
-	import type { BackupManifest, DataCheck, DataOverview_Serialize as Overview, DataTotals } from "$ipc/bindings";
+	import type { BackupManifest, DataCheck, DataOverview_Serialize as Overview, DataTotals, SillyTavernDataImport } from "$ipc/bindings";
 	import { Badge, Button, Spinner } from "$shared/ui";
 	import { call, commands } from "$shared/ipc/client";
-	import { pickFiles, saveTo, BACKUP_FILES } from "$shared/ipc/dialog";
+	import { pickFiles, saveTo, BACKUP_FILES, ST_DATA_FILES } from "$shared/ipc/dialog";
 	import { dropPaths, extOf } from "$app/drop.svelte";
 	import { confirmAction } from "$shared/stores/confirm.svelte";
 	import { toasts } from "$shared/stores/toast.svelte";
@@ -19,7 +19,22 @@
 	const src = { source: "data" };
 	let data = $state<Overview | null>(null);
 	let pending = $state<BackupManifest | null>(null);
-	let busy = $state<"backup" | "restore" | null>(null);
+	let busy = $state<"backup" | "restore" | "st" | null>(null);
+	/** SillyTavern 데이터 가져오기 결과 (5-E-20-4-1) */
+	let stResult = $state<SillyTavernDataImport | null>(null);
+	async function importSt() {
+		const [path] = await pickFiles([ST_DATA_FILES], false);
+		if (!path) return;
+		busy = "st";
+		try {
+			const r = await call(commands.importSillytavernData(path), src);
+			stResult = r;
+			toasts.success(`가져옴 · 캐릭터 ${r.characters}, 채팅 ${r.chats}, 로어북 ${r.books}, 프리셋 ${r.presets}, 정규식 ${r.regex}, 페르소나 ${r.personas}`);
+			await Promise.all([load(), library.load()]);
+		} finally {
+			busy = null;
+		}
+	}
 	let openChar = $state<string | null>(null);
 	let picked = $state<Set<string>>(new Set());
 	let trashKey = $state(0);
@@ -200,6 +215,18 @@
 			</Row>
 		</Group>
 
+		<Group title="SillyTavern">
+			<Row label="SillyTavern 데이터 가져오기" desc="data/default-user 폴더를 압축한 zip. 새로 만들기만 하므로 다시 가져오면 한 벌 더 생김">
+				<Button size="sm" loading={busy === "st"} disabled={busy !== null} onclick={importSt}>{#snippet icon()}<Upload />{/snippet}가져오기</Button>
+			</Row>
+			{#if stResult?.warnings.length}
+				<details class="st-warn">
+					<summary>가져오지 못한 것 {stResult.warnings.length}개</summary>
+					<ul>{#each stResult.warnings as w, i (i)}<li>{w}</li>{/each}</ul>
+				</details>
+			{/if}
+		</Group>
+
 		<Group title="점검">
 			<Row label="DB 점검" desc="DB가 손상되지 않았는지, 캐릭터 폴더에 아무 데도 쓰이지 않는 파일이 있는지 봄. 아무것도 지우지 않음">
 				<Button size="sm" loading={checking} disabled={checking} onclick={runCheck}>{#snippet icon()}<ShieldCheck />{/snippet}점검</Button>
@@ -295,6 +322,18 @@
 </Section>
 
 <style>
+	.st-warn {
+		padding: var(--space-2) var(--space-4) var(--space-3);
+		font-size: var(--text-sm);
+		color: var(--text-muted);
+	}
+	.st-warn summary {
+		cursor: pointer;
+	}
+	.st-warn ul {
+		margin: var(--space-2) 0 0;
+		padding-left: var(--space-5);
+	}
 	.check {
 		display: flex;
 		flex-direction: column;

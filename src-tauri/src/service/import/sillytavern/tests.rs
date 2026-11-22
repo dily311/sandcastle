@@ -438,3 +438,112 @@ async fn st_chat_needs_a_character() {
     let msgs = db::conversation::get_messages(&db, &conversation.id, 100, None).await.unwrap();
     assert_eq!(msgs[0].character_id.as_deref(), Some("other"));
 }
+
+// =======================================
+// SillyTavern 전체 데이터 zip (5-E-20-4-1)
+// =======================================
+
+#[tokio::test]
+async fn st_data_zip_imports_everything_and_links_by_file_name() {
+    use std::io::Write;
+    let db = pool().await;
+    let app = tempfile::tempdir().unwrap();
+    let src = tempfile::tempdir().unwrap();
+    let u = src.path();
+    for d in [
+        "characters",
+        "chats/default_Seraphina",
+        "worlds",
+        "OpenAI Settings",
+        "TextGen Settings",
+        "User Avatars",
+        "groups",
+    ] {
+        std::fs::create_dir_all(u.join(d)).unwrap();
+    }
+    std::fs::copy(st_sample("character/default_Seraphina.png"), u.join("characters/default_Seraphina.png")).unwrap();
+    write(
+        &u.join("characters"),
+        "kai.json",
+        json!({ "spec": "chara_card_v2", "data": { "name": "카이", "first_mes": "안녕", "extensions": { "world": "Moon" } } })
+            .to_string()
+            .as_bytes(),
+    );
+    std::fs::copy(st_chat_sample(), u.join("chats/default_Seraphina/chat 1.jsonl")).unwrap();
+    write(
+        &u.join("worlds"),
+        "Moon.json",
+        json!({ "entries": { "0": { "key": ["달"], "content": "달이 붉다" } } }).to_string().as_bytes(),
+    );
+    std::fs::copy(st_sample("presets/Default.json"), u.join("OpenAI Settings/Default.json")).unwrap();
+    write(&u.join("TextGen Settings"), "Sampler.json", b"{}");
+    std::fs::copy(st_sample("persona/user-default.png"), u.join("User Avatars/user-default.png")).unwrap();
+    write(&u.join("groups"), "g.json", b"{}");
+    write(
+        u,
+        "settings.json",
+        json!({
+            "extension_settings": { "regex": [{ "scriptName": "Asterisks", "findRegex": "/\\*/g", "replaceString": "", "placement": [2] }] },
+            "power_user": {
+                "personas": { "user-default.png": "Min" },
+                "persona_descriptions": { "user-default.png": { "description": "숲을 헤매는 여행자" } }
+            }
+        })
+        .to_string()
+        .as_bytes(),
+    );
+
+    // 폴더째 압축한 모양: backup/data/default-user/...
+    let zip_path = app.path().join("st.zip");
+    let mut zip = zip::ZipWriter::new(std::fs::File::create(&zip_path).unwrap());
+    let mut stack = vec![u.to_path_buf()];
+    while let Some(d) = stack.pop() {
+        for e in std::fs::read_dir(&d).unwrap().flatten() {
+            let path = e.path();
+            if path.is_dir() {
+                stack.push(path);
+                continue;
+            }
+            let rel = path.strip_prefix(u).unwrap().to_string_lossy().replace('\\', "/");
+            zip.start_file(format!("backup/data/default-user/{rel}"), zip::write::SimpleFileOptions::default())
+                .unwrap();
+            zip.write_all(&std::fs::read(&path).unwrap()).unwrap();
+        }
+    }
+    zip.start_file("../evil.txt", zip::write::SimpleFileOptions::default()).unwrap();
+    zip.write_all(b"x").unwrap();
+    zip.finish().unwrap();
+
+    let r = data::import_data_zip(&db, app.path(), &zip_path).await.unwrap();
+    assert_eq!(
+        (r.characters, r.chats, r.books, r.presets, r.regex, r.personas),
+        (2, 1, 1, 1, 1, 1),
+        "{:?}",
+        r.warnings
+    );
+    assert!(r.warnings.iter().any(|w| w.starts_with("TextGen Settings")), "{:?}", r.warnings);
+    assert!(r.warnings.iter().any(|w| w.contains("단체 채팅")), "{:?}", r.warnings);
+    assert!(!app.path().parent().unwrap().join("evil.txt").exists(), "zip 밖으로 풀지 않음");
+
+    let chars = crate::db::conversation::get_all_characters(&db).await.unwrap();
+    let kai = chars.iter().find(|c| c.name == "카이").unwrap();
+    let books = crate::db::conversation::get_all_worldinfo_books(&db).await.unwrap();
+    let moon = books.iter().find(|b| b.name == "Moon").unwrap();
+    assert_eq!(kai.world_info_ids, vec![moon.id.clone()], "카드의 extensions.world → 로어북 연결");
+    let sera = chars.iter().find(|c| c.name == "Seraphina").unwrap();
+    let convs = crate::db::conversation::get_all_conversations(&db).await.unwrap();
+    assert!(convs.iter().any(|c| c.character_id == sera.id), "chats/<카드 파일 이름> → 그 캐릭터");
+    let personas = crate::db::conversation::get_all_personas(&db).await.unwrap();
+    let min = personas.iter().find(|p| p.name == "Min").unwrap();
+    assert_eq!(min.description, "숲을 헤매는 여행자");
+    assert!(min.avatar.as_deref().is_some_and(|a| std::path::Path::new(a).is_file()));
+}
+
+#[test]
+fn st_user_root_is_found_under_wrapping_folders() {
+    let dir = tempfile::tempdir().unwrap();
+    std::fs::create_dir_all(dir.path().join("a/data/default-user/characters")).unwrap();
+    std::fs::create_dir_all(dir.path().join("a/other")).unwrap();
+    assert_eq!(data::find_user_root(dir.path()).unwrap(), dir.path().join("a/data/default-user"));
+    assert!(data::find_user_root(&dir.path().join("a/other")).is_none());
+}

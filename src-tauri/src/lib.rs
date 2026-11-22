@@ -331,6 +331,7 @@ pub fn specta_builder() -> tauri_specta::Builder<tauri::Wry> {
         // import
         import_sillytavern,
         detect_sillytavern,
+        import_sillytavern_data,
         // data manager
         get_data_overview,
         check_data,
@@ -656,6 +657,7 @@ pub fn specta_builder() -> tauri_specta::Builder<tauri::Wry> {
         // import
         import_sillytavern,
         detect_sillytavern,
+        import_sillytavern_data,
         // data manager
         get_data_overview,
         check_data,

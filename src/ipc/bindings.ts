@@ -186,6 +186,11 @@ export const commands = {
 	importSillytavern: (path: string, name: string | null, characterId: string | null, presetId: string | null, options?: InvokeOptions) => __TAURI_INVOKE<SillyTavernImport_Serialize>("import_sillytavern", { path, name, characterId, presetId }, options),
 	/**  SillyTavern 파일의 종류만 본다 (가져오지 않음) */
 	detectSillytavern: (path: string, options?: InvokeOptions) => __TAURI_INVOKE<SillyTavernKind>("detect_sillytavern", { path }, options),
+	/**
+	 *  SillyTavern 전체 데이터 가져오기 (사용자 폴더 `data/default-user`를 압축한 zip).
+	 *  캐릭터·채팅·로어북·프리셋·정규식·페르소나를 새로 만들기만 한다 (지금 데이터는 그대로).
+	 */
+	importSillytavernData: (path: string, options?: InvokeOptions) => __TAURI_INVOKE<SillyTavernDataImport>("import_sillytavern_data", { path }, options),
 	/**  캐릭터 → 채팅 트리, 개수, 저장 공간 */
 	getDataOverview: (options?: InvokeOptions) => __TAURI_INVOKE<DataOverview_Serialize>("get_data_overview", undefined, options),
 	/**  DB 점검: 무결성(PRAGMA integrity_check)과 아무 데도 쓰이지 않는 파일 목록. 지우지 않는다 */
@@ -4605,6 +4610,17 @@ export type SearchResult = {
 };
 
 export type Severity = "error" | "warning";
+
+export type SillyTavernDataImport = {
+	characters: number,
+	chats: number,
+	books: number,
+	presets: number,
+	regex: number,
+	personas: number,
+	/**  가져오지 못했거나 건너뛴 것 (파일 이름: 이유) */
+	warnings: string[],
+};
 
 export type SillyTavernImport = SillyTavernImport_Serialize | SillyTavernImport_Deserialize;
 

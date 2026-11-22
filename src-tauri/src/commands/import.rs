@@ -35,3 +35,16 @@ pub async fn import_sillytavern(
 pub fn detect_sillytavern(path: String) -> Result<SillyTavernKind> {
     detect_file(&PathBuf::from(path))
 }
+
+/// SillyTavern 전체 데이터 가져오기 (사용자 폴더 `data/default-user`를 압축한 zip).
+/// 캐릭터·채팅·로어북·프리셋·정규식·페르소나를 새로 만들기만 한다 (지금 데이터는 그대로).
+#[tauri::command]
+#[specta::specta]
+pub async fn import_sillytavern_data(
+    app: AppHandle,
+    state: State<'_, AppState>,
+    path: String,
+) -> Result<crate::service::import::sillytavern::data::SillyTavernDataImport> {
+    let base = app_data_dir(&app)?;
+    crate::service::import::sillytavern::data::import_data_zip(&state.db, &base, &PathBuf::from(path)).await
+}
