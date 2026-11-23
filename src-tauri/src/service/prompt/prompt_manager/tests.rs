@@ -271,6 +271,21 @@ fn macros_leave_unknown_and_unclosed_tags() {
     assert_eq!(m.apply("a{{newline}}b{{trim}}"), "a\nb");
 }
 
+/// {{getvar::x}}·{{getglobalvar::x}} (ADR-029, 5-F-4-1): 이름은 대소문자 그대로, 매크로 이름은 대소문자 무시, 없는 변수는 빈 글
+#[test]
+fn variable_macros_read_conversation_and_global_variables() {
+    let mut c = ctx();
+    c.extra_data = json!({ "variables": { "hp": "7", "Bag": ["a", "b"] }, "globalVariables": { "mood": "good" } });
+    c.character_info = Some("HP {{getvar::hp}}, bag {{GETVAR:: Bag }}, mood {{getglobalvar::mood}}, none[{{getvar::nope}}]".into());
+    let m = Macros::from_context(&c);
+    assert_eq!(m.apply("{{getvar::hp}}/{{getvar::HP}}"), "7/", "변수 이름은 대소문자를 가림");
+    let built = PromptManager.build(request(c, "hi"), None).unwrap();
+    let all: String = built.messages.iter().map(|m| m.content.as_str()).collect::<Vec<_>>().join("\n");
+    assert!(all.contains(r#"HP 7, bag ["a","b"], mood good, none[]"#), "{all}");
+    // 변수가 없는 컨텍스트(게임·옛 경로)에서도 빈 글
+    assert_eq!(Macros::from_context(&ctx()).apply("[{{getvar::hp}}]"), "[]");
+}
+
 #[test]
 fn preset_context_size_overrides_request_limit() {
     let mut req = request(ctx(), "hi");

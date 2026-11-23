@@ -16,8 +16,30 @@ fn text(v: Option<&Value>) -> Option<String> {
     v.and_then(Value::as_str).map(str::trim).filter(|s| !s.is_empty()).map(str::to_string)
 }
 
-fn macros(s: &str, char_name: &str, user_name: &str) -> String {
-    s.replace("{{char}}", char_name).replace("{{user}}", user_name)
+fn macros(s: &str, char_name: &str, user_name: &str, extra: &Value) -> String {
+    let s = s.replace("{{char}}", char_name).replace("{{user}}", user_name);
+    // {{getvar::x}}·{{getglobalvar::x}} (ADR-029)
+    let mut out = String::with_capacity(s.len());
+    let mut rest = s.as_str();
+    while let Some(start) = rest.find("{{") {
+        out.push_str(&rest[..start]);
+        let after = &rest[start + 2..];
+        match after.find("}}") {
+            Some(end) => {
+                match crate::service::prompt::prompt_manager::var_macro(after[..end].trim(), extra) {
+                    Some(v) => out.push_str(&v),
+                    None => out.push_str(&rest[start..start + 2 + end + 2]),
+                }
+                rest = &after[end + 2..];
+            }
+            None => {
+                out.push_str(&rest[start..]);
+                rest = "";
+            }
+        }
+    }
+    out.push_str(rest);
+    out
 }
 
 /// 대화 meta의 메모·작가 노트를 컨텍스트에 넣는다
@@ -25,6 +47,7 @@ pub fn apply(ctx: &mut ChatContext, meta: Option<&Value>) {
     let Some(meta) = meta else { return };
     let char_name = ctx.char_name.clone().unwrap_or_default();
     let user_name = ctx.user_name.clone().unwrap_or_default();
+    let extra = ctx.extra_data.clone();
 
     let note = meta.get("authorNote");
     if let Some(t) = text(note.and_then(|n| n.get("text"))) {
@@ -39,7 +62,7 @@ pub fn apply(ctx: &mut ChatContext, meta: Option<&Value>) {
             HistoryItem {
                 images: vec![],
                 role: "system".into(),
-                content: format!("[Author's note]\n{}", macros(&t, &char_name, &user_name)),
+                content: format!("[Author's note]\n{}", macros(&t, &char_name, &user_name, &extra)),
             },
         );
     }
@@ -50,7 +73,7 @@ pub fn apply(ctx: &mut ChatContext, meta: Option<&Value>) {
         list.sort_by(|a, b| a.0.cmp(b.0));
         for (_, inj) in list {
             let Some(value) = text(inj.get("value")) else { continue };
-            let value = macros(&value, &char_name, &user_name);
+            let value = macros(&value, &char_name, &user_name, &extra);
             match inj.get("position").and_then(Value::as_str).unwrap_or("after") {
                 "before" => ctx.system_rules.insert(0, value),
                 "chat" => {

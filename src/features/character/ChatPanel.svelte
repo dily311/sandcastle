@@ -11,6 +11,7 @@
 	import ContextMeter from "./ContextMeter.svelte";
 	import ModelPicker from "$features/settings/ModelPicker.svelte";
 	import OptionLock from "./OptionLock.svelte";
+	import VariablesPanel from "./VariablesPanel.svelte";
 	import { reasoningOf } from "$features/settings/providers";
 	import { appSetting } from "$shared/stores/appSetting.svelte";
 	import ExportButton from "./ExportButton.svelte";
@@ -406,6 +407,8 @@
 		<div class="panel-body">
 			<QuickReplyList {session} {conv} getDraft={draft.get} setDraft={draft.set} />
 		</div>
+	{:else if panel.tab === "status" && plugins.on("status")}
+		<div class="panel-body"><VariablesPanel {conv} /></div>
 	{:else if panel.tab === "assets"}
 		<div class="panel-body">
 			{#if plugins.on("chat.images")}

@@ -15,7 +15,7 @@
 
 	const GROUPS: { title: string; ids: PluginId[] }[] = [
 		{ title: "화면", ids: ["phone", "game", "widget"] },
-		{ title: "대화 표시", ids: ["chat.images", "html", "regex", "lint", "rewrite"] },
+		{ title: "대화 표시", ids: ["chat.images", "html", "regex", "lint", "rewrite", "status"] },
 		{ title: "AI 도구", ids: ["translate", "tts", "imagegen", "memory", "summary", "ghostwrite", "slash"] },
 		{ title: "데이터", ids: ["sync"] },
 		{ title: "확장", ids: ["community"] },

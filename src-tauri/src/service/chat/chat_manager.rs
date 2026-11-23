@@ -50,6 +50,17 @@ pub struct ChatRequest {
     phone_mode_prompt: String,
 }
 
+/// 전역 변수 ({{getglobalvar::x}}, ADR-029): 슬래시 `/setglobalvar`가 쓰는 플러그인 설정 `quickReply.globals`
+fn with_global_vars(app: &AppHandle, ctx: &mut crate::models::ai_service::ChatContext) {
+    let globals = app
+        .try_state::<SettingsState<crate::models::settings::PluginSetting>>()
+        .and_then(|s| s.0.lock().ok().map(|g| g.quick_reply.globals.clone()))
+        .unwrap_or_default();
+    if let serde_json::Value::Object(m) = &mut ctx.extra_data {
+        m.insert("globalVariables".into(), serde_json::json!(globals));
+    }
+}
+
 /// 폰 대화면 폰 플러그인의 기본 API·프리셋을 앱 기본값보다 앞에 둔다 (대화에 고른 값이 가장 먼저)
 fn phone_defaults(app: &AppHandle, mode: &str, req: &mut ChatRequest) {
     if mode != "phone" {
@@ -598,6 +609,7 @@ impl ChatManager {
                 },
             )
             .await?;
+        with_global_vars(app, &mut context);
         if char_phone {
             phone_sides::apply_sides(&mut context, &me, &other);
         }
@@ -1032,6 +1044,7 @@ impl ChatManager {
                 },
             )
             .await?;
+        with_global_vars(app, &mut context);
         if char_phone {
             phone_sides::apply_sides(&mut context, &me, &other);
         }
@@ -1113,7 +1126,7 @@ impl ChatManager {
         let (profile_id, prompt) = match raw {
             // /genraw: 대화 맥락 없이 (system=이 있으면 시스템 글 + 지시만)
             Some(system) => raw_prompt(&conv, fallback, instruction, system.as_deref())?,
-            None => quiet_prompt(db, &conv, fallback, instruction).await?,
+            None => quiet_prompt(db, Some(app), &conv, fallback, instruction).await?,
         };
         // 보낸 프롬프트 (QR로 만든 메시지에도 '보낸 프롬프트'를 남기게, 5-E-20-6-10)
         let sent = serde_json::to_value(&prompt).unwrap_or(Value::Null);
@@ -1186,6 +1199,7 @@ impl ChatManager {
                 },
             )
             .await?;
+        with_global_vars(app, &mut context);
         phone_sides::apply_sides(&mut context, &me, &other);
         phone_sides::peek_history(&mut context.history, &me, &other);
         for item in context.history.iter_mut() {
@@ -1340,6 +1354,7 @@ fn raw_prompt(
 /// /gen 프롬프트: 대화 맥락(Quiet 생성 유형) + 맨 끝 사용자 차례에 지시. (API 프로필 id, 프롬프트)
 async fn quiet_prompt(
     db: &crate::db::conn::DbPool,
+    app: Option<&AppHandle>,
     conv: &crate::models::conversation::Conversation,
     fallback: ChatRequest,
     instruction: &str,
@@ -1372,6 +1387,9 @@ async fn quiet_prompt(
             },
         )
         .await?;
+    if let Some(app) = app {
+        with_global_vars(app, &mut context);
+    }
     crate::service::chat::notes::apply(&mut context, conv.meta.as_ref());
     let mut prompt = PromptManager
         .build_with_db(
@@ -1422,7 +1440,7 @@ mod quiet_gen_tests {
             preset_id: String::new(),
             phone_mode_prompt: String::new(),
         };
-        let (profile, prompt) = quiet_prompt(&db, &conv, fallback, "다음 장면을 한 줄로 요약해").await.unwrap();
+        let (profile, prompt) = quiet_prompt(&db, None, &conv, fallback, "다음 장면을 한 줄로 요약해").await.unwrap();
         assert_eq!(profile, "p");
         let last = prompt.messages.last().unwrap();
         assert_eq!(last.role, crate::models::ai_service::PromptRole::User);
@@ -1454,7 +1472,7 @@ mod quiet_gen_tests {
             preset_id: String::new(),
             phone_mode_prompt: String::new(),
         };
-        assert!(quiet_prompt(&db, &conv, none, "x").await.is_err());
+        assert!(quiet_prompt(&db, None, &conv, none, "x").await.is_err());
     }
 }
 

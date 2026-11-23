@@ -4,7 +4,7 @@
 	import { slashRuns } from "$features/slash/running.svelte";
 	import { regexVersion } from "$shared/stores/regexVersion.svelte";
 	import { tick, untrack } from "svelte";
-	import { Bookmark, ChevronRight, Gauge, Copy, CornerUpLeft, FastForward, GitBranch, ImagePlus, Images, IdCard, Languages, ListChecks, ListTree, PanelLeft, Plus, RefreshCw, Send, SlidersHorizontal, Square, Trash2, X, EllipsisVertical, BookOpen, Pen, Database, Scroll, SpellCheck, Pencil, UserRound, PinOff, Pin, FolderMinus, Download, Folder, Zap } from "@lucide/svelte";
+	import { Bookmark, ChevronRight, Gauge, Copy, CornerUpLeft, FastForward, GitBranch, ImagePlus, Images, IdCard, Languages, ListChecks, ListTree, PanelLeft, Plus, RefreshCw, Send, SlidersHorizontal, Square, Trash2, X, EllipsisVertical, BookOpen, Pen, Database, Scroll, SpellCheck, Pencil, UserRound, PinOff, Pin, FolderMinus, Download, Folder, Zap, Variable } from "@lucide/svelte";
 	import { bookmarks, bookmarksOf, type ChatBookmark } from "./bookmarks";
 	import { findTextRange } from "./highlight";
 	import { childrenOf, pathOf } from "./branches";
@@ -109,6 +109,7 @@
 			{ id: "branches", label: "분기", icon: GitBranch },
 			{ id: "assets", label: "에셋", icon: Images },
 			...(plugins.on("slash") ? [{ id: "quickreply", label: "빠른 답장", icon: Zap }] : []),
+			...(plugins.on("status") ? [{ id: "status", label: "상태", icon: Variable }] : []),
 		]),
 	);
 

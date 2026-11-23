@@ -526,14 +526,38 @@ fn num(v: &Value, keys: &[&str]) -> Option<f64> {
 // 매크로
 // =======================================
 
-/// `{{char}}`, `{{user}}` 등 치환. 모르는 매크로는 그대로 둔다.
+/// `{{getvar::이름}}`·`{{getglobalvar::이름}}` (SillyTavern과 같음, ADR-029). `raw`는 `{{ }}` 안의 글.
+/// 변수 매크로가 아니면 None, 맞으면 값(없는 변수는 빈 글). 값은 컨텍스트 `extra_data`의
+/// `variables`(이 대화)·`globalVariables`(전역)에서 — 글자가 아닌 값은 JSON 글로
+pub fn var_macro(raw: &str, extra: &serde_json::Value) -> Option<String> {
+    let (bucket, name) = if let Some(n) = strip_prefix_ci(raw, "getvar::") {
+        ("variables", n)
+    } else {
+        ("globalVariables", strip_prefix_ci(raw, "getglobalvar::")?)
+    };
+    let v = extra.get(bucket).and_then(|b| b.get(name.trim()));
+    Some(match v {
+        None | Some(serde_json::Value::Null) => String::new(),
+        Some(serde_json::Value::String(s)) => s.clone(),
+        Some(other) => other.to_string(),
+    })
+}
+
+fn strip_prefix_ci<'a>(s: &'a str, prefix: &str) -> Option<&'a str> {
+    (s.len() >= prefix.len() && s.is_char_boundary(prefix.len()) && s[..prefix.len()].eq_ignore_ascii_case(prefix)).then(|| &s[prefix.len()..])
+}
+
+/// `{{char}}`, `{{user}}`, `{{getvar::x}}` 등 치환. 모르는 매크로는 그대로 둔다.
 struct Macros {
     values: Vec<(&'static str, String)>,
+    /// 변수 매크로용 (ChatContext.extra_data)
+    extra: serde_json::Value,
 }
 
 impl Macros {
     fn from_context(ctx: &ChatContext) -> Self {
         let base = Self {
+            extra: ctx.extra_data.clone(),
             values: vec![
                 ("char", ctx.char_name.clone().unwrap_or_else(|| "Assistant".into())),
                 ("user", ctx.user_name.clone().unwrap_or_else(|| "User".into())),
@@ -552,13 +576,14 @@ impl Macros {
             .as_deref()
             .map(|p| base.apply(p).replace("{{img_keys}}", &img_keys))
             .unwrap_or_default();
+        let extra = base.extra;
         let mut values = base.values;
         values.push(("description", description));
         values.push(("persona", persona));
         values.push(("mesexamples", examples));
         values.push(("img_keys", img_keys));
         values.push(("img_inprompt", img_inprompt));
-        Self { values }
+        Self { values, extra }
     }
 
     fn apply(&self, text: &str) -> String {
@@ -569,6 +594,11 @@ impl Macros {
             let after = &rest[start + 2..];
             match after.find("}}") {
                 Some(end) => {
+                    if let Some(v) = var_macro(after[..end].trim(), &self.extra) {
+                        out.push_str(&v);
+                        rest = &after[end + 2..];
+                        continue;
+                    }
                     let key = after[..end].trim().to_ascii_lowercase();
                     match self.values.iter().find(|(k, _)| *k == key) {
                         Some((_, v)) => out.push_str(v),

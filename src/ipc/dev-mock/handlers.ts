@@ -95,6 +95,7 @@ const base: Record<string, Handler> = {
 				["tts", "음성 읽기", "AI 답변을 음성으로", false, false],
 				["imagegen", "이미지 생성", "직접 그림 만들기", false, false],
 				["imageauto", "이미지 자동 생성", "글쓰기 AI가 그림 프롬프트도 쓰고 응답 뒤 자동으로 그림", false, false],
+				["status", "상태창·변수", "대화의 변수를 보고 고치고, 메시지마다 뜨는 상태창을 한 곳에 모아 보여줌", false, false],
 				["sync", "동기화", "다른 기기와 파일로 주고받아 합치기. API 키는 넘어가지 않음", false, false],
 				["lint", "메시지 linter", "AI 응답이 저장될 때 닫히지 않은 태그·따옴표 등을 검사", false, false],
 				["ghostwrite", "대필", "내가 적은 초안을 AI가 내 말투의 다음 대사로 써서 입력칸에 채움", false, false],
