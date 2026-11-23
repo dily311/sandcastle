@@ -9,6 +9,11 @@ import type { InvokeOptions } from "@tauri-apps/api/core";
 export const commands = {
 	getAppSetting: (options?: InvokeOptions) => __TAURI_INVOKE<AppSetting_Serialize>("get_app_setting", undefined, options),
 	updateAppSetting: (patch: Value, options?: InvokeOptions) => __TAURI_INVOKE<AppSetting_Serialize>("update_app_setting", { patch }, options),
+	/**
+	 *  타이핑 표시 그림 (5-E-17-4): 고른 그림·GIF를 앱 데이터 `themes/typing/`에 복사해 쓰고, 전에 쓰던 복사본은 지운다.
+	 *  `None`이면 그림을 뺀다 (원본 파일은 건드리지 않음). 테마 폴더라 백업·동기화에 같이 간다
+	 */
+	setTypingImage: (path: string | null, options?: InvokeOptions) => __TAURI_INVOKE<AppSetting_Serialize>("set_typing_image", { path }, options),
 	getFeatureSetting: (options?: InvokeOptions) => __TAURI_INVOKE<FeatureSetting>("get_feature_setting", undefined, options),
 	updateFeatureSetting: (id: string, enabled: boolean, options?: InvokeOptions) => __TAURI_INVOKE<null>("update_feature_setting", { id, enabled }, options),
 	getThemeSetting: (options?: InvokeOptions) => __TAURI_INVOKE<ThemeSetting_Serialize>("get_theme_setting", undefined, options),
@@ -5671,6 +5676,8 @@ export type TypingIndicator_Deserialize = {
 	style?: TypingStyle,
 	/**  점 옆의 글 (`{{char}}` = 캐릭터 이름, 비면 글 없음) */
 	text?: string,
+	/**  모양이 `Image`일 때 보일 그림 (앱 데이터 `themes/typing/`에 복사한 것, 5-E-17-4) */
+	image?: string | null,
 };
 
 /**  타이핑 표시 (5-E-17-1): 모양과 옆에 붙는 글 */
@@ -5678,6 +5685,8 @@ export type TypingIndicator_Serialize = {
 	style: TypingStyle,
 	/**  점 옆의 글 (`{{char}}` = 캐릭터 이름, 비면 글 없음) */
 	text: string,
+	/**  모양이 `Image`일 때 보일 그림 (앱 데이터 `themes/typing/`에 복사한 것, 5-E-17-4) */
+	image: string | null,
 };
 
 /**  타이핑 표시 모양 (5-E-17-1) */
@@ -5687,7 +5696,9 @@ export type TypingStyle =
 /**  튀어 오르는 점 세 개 */
 "bounce" | 
 /**  점 없이 (글만, 글도 없으면 아무것도 안 보임) */
-"none";
+"none" | 
+/**  사용자가 고른 그림·GIF (`image`, 없으면 깜빡이는 점) — 5-E-17-4 */
+"image";
 
 export type UpdateInfo = UpdateInfo_Serialize | UpdateInfo_Deserialize;
 

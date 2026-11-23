@@ -57,6 +57,8 @@ pub enum TypingStyle {
     Bounce,
     /// 점 없이 (글만, 글도 없으면 아무것도 안 보임)
     None,
+    /// 사용자가 고른 그림·GIF (`image`, 없으면 깜빡이는 점) — 5-E-17-4
+    Image,
 }
 
 /// 타이핑 표시 (5-E-17-1): 모양과 옆에 붙는 글
@@ -66,6 +68,8 @@ pub struct TypingIndicator {
     pub style: TypingStyle,
     /// 점 옆의 글 (`{{char}}` = 캐릭터 이름, 비면 글 없음)
     pub text: String,
+    /// 모양이 `Image`일 때 보일 그림 (앱 데이터 `themes/typing/`에 복사한 것, 5-E-17-4)
+    pub image: Option<String>,
 }
 
 fn default_trash_retention_days() -> Option<u32> {

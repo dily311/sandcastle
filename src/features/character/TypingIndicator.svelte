@@ -3,12 +3,14 @@
 	// 모양·글은 설정 > 대화 > 타이핑 표시 (AppSetting.typing). 테마 CSS는 `.sc-typing`으로 고칠 수 있다.
 	import type { TypingStyle } from "$ipc/bindings";
 	import { appSetting } from "$shared/stores/appSetting.svelte";
+	import { fileSrc } from "$shared/ipc/file";
 	import { fillNames } from "./format";
 
 	let {
 		name = "",
 		style,
 		text,
+		image,
 		class: cls = "",
 	}: {
 		/** `{{char}}`에 넣을 이름 */
@@ -16,16 +18,29 @@
 		/** 주지 않으면 설정 값 (설정 화면 미리보기는 직접 줌) */
 		style?: TypingStyle;
 		text?: string;
+		image?: string | null;
 		class?: string;
 	} = $props();
 
-	const shape = $derived(style ?? appSetting.value?.typing?.style ?? "blink");
+	const picked = $derived(image !== undefined ? image : (appSetting.value?.typing?.image ?? null));
+	const chosen = $derived(style ?? appSetting.value?.typing?.style ?? "blink");
+	// 그림을 골랐는데 파일이 없으면 깜빡이는 점 (5-E-17-4)
+	const shape = $derived(chosen === "image" && !picked ? "blink" : chosen);
+	let broken = $state(false);
+	$effect(() => {
+		void picked;
+		broken = false;
+	});
 	const label = $derived(fillNames(text ?? appSetting.value?.typing?.text ?? "", { char: name }).trim());
 </script>
 
 {#if shape !== "none" || label}
 	<div class="sc-typing {cls}" data-style={shape} role="status" aria-label={label || "응답 기다리는 중"}>
-		{#if shape !== "none"}<span class="dots" aria-hidden="true"><span></span><span></span><span></span></span>{/if}
+		{#if shape === "image" && !broken}
+			<img class="sc-typing-image" src={fileSrc(picked)} alt="" aria-hidden="true" onerror={() => (broken = true)} />
+		{:else if shape !== "none"}
+			<span class="dots" aria-hidden="true"><span></span><span></span><span></span></span>
+		{/if}
 		{#if label}<span class="sc-typing-text">{label}</span>{/if}
 	</div>
 {/if}
@@ -37,6 +52,12 @@
 		gap: var(--space-2);
 		color: var(--typing-color, var(--text-faint));
 		font-size: var(--text-sm);
+	}
+	.sc-typing-image {
+		display: block;
+		height: var(--typing-image-size, 32px);
+		max-width: 160px;
+		object-fit: contain;
 	}
 	.dots {
 		display: inline-flex;

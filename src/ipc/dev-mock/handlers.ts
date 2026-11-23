@@ -29,7 +29,7 @@ const db = {
 		cgGroupVariants: false,
 		doneNotify: { enabled: false, title: "", icon: null },
 		aiCallLog: false,
-		typing: { style: "blink", text: "" },
+		typing: { style: "blink", text: "", image: null },
 		home: { startOnHome: false, greeting: "", blocks: ["continue", "quick", "favorites", "games"], css: "" },
 	} satisfies AppSetting_Serialize as AppSetting_Serialize,
 	themeSetting: {
@@ -58,6 +58,11 @@ const base: Record<string, Handler> = {
 	get_theme_setting: () => db.themeSetting,
 	update_theme_setting: ({ patch }) => (db.themeSetting = { ...db.themeSetting, ...(patch as object) }),
 	request_notify_permission: () => true,
+	// 미리보기: 복사하지 않고 받은 주소를 그대로 (data:·https: 그림으로 확인)
+	set_typing_image: ({ path }) => {
+		const cur = db.appSetting as { typing: { style: "blink" | "bounce" | "none" | "image"; text: string } };
+		return (db.appSetting = { ...db.appSetting, typing: { ...cur.typing, image: (path as string | null) ?? null } });
+	},
 	add_backgrounds: ({ paths, select }) => {
 		const list = [...((db.themeSetting as { backgrounds?: string[] }).backgrounds ?? []), ...(paths as string[])];
 		return (db.themeSetting = { ...db.themeSetting, backgrounds: list, ...(select ? { backgroundImage: list.at(-1) ?? null } : {}) });

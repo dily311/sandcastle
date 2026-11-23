@@ -32,6 +32,72 @@ pub async fn update_app_setting(app: AppHandle, state: State<'_, SettingsState<A
     Ok(settings)
 }
 
+/// 타이핑 표시 그림 (5-E-17-4): 고른 그림·GIF를 앱 데이터 `themes/typing/`에 복사해 쓰고, 전에 쓰던 복사본은 지운다.
+/// `None`이면 그림을 뺀다 (원본 파일은 건드리지 않음). 테마 폴더라 백업·동기화에 같이 간다
+#[tauri::command]
+#[specta::specta]
+pub async fn set_typing_image(app: AppHandle, state: State<'_, SettingsState<AppSetting>>, path: Option<String>) -> Result<AppSetting> {
+    let dir = crate::commands::character_image::app_data_dir(&app)?.join("themes").join("typing");
+    let cur = state.0.lock().map_err(|_| AppError::internal("settings lock poisoned"))?.typing.clone();
+    let image = match path {
+        Some(src) => Some(copy_typing_image(&dir, std::path::Path::new(&src))?),
+        None => None,
+    };
+    let mut typing = serde_json::to_value(&cur)?;
+    typing["image"] = json!(image);
+    let settings = apply_patch(&app, &state.0, json!({ "typing": typing }))?;
+    // 새 설정을 저장한 뒤에 옛 복사본을 지운다 (우리 폴더 안의 것만)
+    if let Some(old) = cur.image.filter(|o| Some(o) != image.as_ref()) {
+        let old = std::path::PathBuf::from(old);
+        if old.parent() == Some(dir.as_path()) {
+            let _ = std::fs::remove_file(old);
+        }
+    }
+    app.emit(AppSetting::EVENT_NAME, &settings).map_err(|e| AppError::io(e.to_string()))?;
+    Ok(settings)
+}
+
+/// 타이핑 표시 그림 최대 크기 (GIF 움직임을 담을 만큼)
+const TYPING_IMAGE_MAX: u64 = 8 * 1024 * 1024;
+
+fn copy_typing_image(dir: &std::path::Path, src: &std::path::Path) -> Result<String> {
+    let ext = src.extension().and_then(|e| e.to_str()).map(str::to_ascii_lowercase).unwrap_or_default();
+    if !["png", "jpg", "jpeg", "webp", "gif", "avif"].contains(&ext.as_str()) {
+        return Err(AppError::validation("그림 파일(png·jpg·webp·gif)만 쓸 수 있습니다", None));
+    }
+    if std::fs::metadata(src)?.len() > TYPING_IMAGE_MAX {
+        return Err(AppError::validation("그림이 너무 큽니다 (8MB까지)", None));
+    }
+    std::fs::create_dir_all(dir)?;
+    let dest = dir.join(format!("{}.{ext}", uuid::Uuid::new_v4()));
+    std::fs::copy(src, &dest)?;
+    Ok(dest.to_string_lossy().into_owned())
+}
+
+#[cfg(test)]
+mod typing_image_tests {
+    use super::copy_typing_image;
+
+    #[test]
+    fn copies_only_images_under_the_limit() {
+        let tmp = tempfile::tempdir().unwrap();
+        let dir = tmp.path().join("themes").join("typing");
+        let gif = tmp.path().join("a.GIF");
+        std::fs::write(&gif, b"GIF89a").unwrap();
+        let out = copy_typing_image(&dir, &gif).unwrap();
+        assert!(out.ends_with(".gif") && std::path::Path::new(&out).parent() == Some(dir.as_path()));
+        assert_eq!(std::fs::read(&out).unwrap(), b"GIF89a");
+
+        let txt = tmp.path().join("a.txt");
+        std::fs::write(&txt, b"x").unwrap();
+        assert!(copy_typing_image(&dir, &txt).is_err());
+
+        let big = tmp.path().join("big.png");
+        std::fs::File::create(&big).unwrap().set_len(super::TYPING_IMAGE_MAX + 1).unwrap();
+        assert!(copy_typing_image(&dir, &big).is_err());
+    }
+}
+
 // =======================================
 // ---- ThemeSetting ----
 // =======================================

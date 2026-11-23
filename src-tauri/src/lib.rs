@@ -241,6 +241,7 @@ pub fn specta_builder() -> tauri_specta::Builder<tauri::Wry> {
         // settings
         get_app_setting,
         update_app_setting,
+        set_typing_image,
         get_feature_setting,
         update_feature_setting,
         get_theme_setting,
@@ -580,6 +581,7 @@ pub fn specta_builder() -> tauri_specta::Builder<tauri::Wry> {
         // settings
         get_app_setting,
         update_app_setting,
+        set_typing_image,
         get_feature_setting,
         update_feature_setting,
         get_theme_setting,

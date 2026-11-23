@@ -16,8 +16,8 @@
 .sc-app .sc-md q { color: var(--accent); }
 /* 폰: 내 말풍선 색 */
 .sc-app .sc-bubble-me .sc-bubble { background: #ffd84d; }
-/* 타이핑 표시를 그림으로 (점 숨기고 배경 그림) */
-.sc-app .sc-typing .dots { display: none; }
+/* 타이핑 표시 그림을 크게 (그림은 설정 > 대화 > 타이핑 표시 > 그림·GIF) */
+.sc-app .sc-typing { --typing-image-size: 48px; }
 ```
 
 ## 앱 틀
@@ -51,7 +51,7 @@
 | `sc-ui-html` | 본문 안 HTML UI(`<details>` 상태창 등) |
 | `sc-speaker` | 다인봇 `이름: 대사` 줄의 말한 사람 |
 | `sc-cg` | 본문 안 캐릭터 에셋 그림 |
-| `sc-typing` · `sc-typing-text` | 응답 기다리는 표시 · 그 글 (`data-style`: `blink`·`bounce`·`none`, 점은 `.dots span`) |
+| `sc-typing` · `sc-typing-text` · `sc-typing-image` | 응답 기다리는 표시 · 그 글 · 고른 그림 (`data-style`: `blink`·`bounce`·`none`·`image`, 점은 `.dots span`, 그림 높이는 `--typing-image-size`, 기본 32px) |
 | `sc-composer` | 아래 입력 영역 |
 | `sc-input` | 메시지 입력칸 |
 | `sc-send-button` | 보내기 버튼 |

@@ -41,12 +41,20 @@
 	}
 
 	// 타이핑 표시 (5-E-17-1)
-	const typing = $derived<TypingSetting>({ style: s?.typing?.style ?? "blink", text: s?.typing?.text ?? "" });
+	const typing = $derived<TypingSetting>({ style: s?.typing?.style ?? "blink", text: s?.typing?.text ?? "", image: s?.typing?.image ?? null });
 	const typingStyles: { value: TypingStyle; label: string }[] = [
 		{ value: "blink", label: "깜빡이는 점" },
 		{ value: "bounce", label: "튀는 점" },
 		{ value: "none", label: "점 없음" },
+		{ value: "image", label: "그림·GIF" },
 	];
+	async function pickTypingImage() {
+		const [p] = await pickFiles([{ name: "그림", extensions: ["png", "jpg", "jpeg", "webp", "gif", "avif"] }], false);
+		if (p) appSetting.value = await call(commands.setTypingImage(p), { source: "settings" });
+	}
+	async function clearTypingImage() {
+		appSetting.value = await call(commands.setTypingImage(null), { source: "settings" });
+	}
 	const setTyping = (patch: Partial<TypingSetting>) => appSetting.update({ typing: { ...typing, ...patch } });
 
 	async function setPersona(id: string) {
@@ -69,10 +77,16 @@
 		<Group title="타이핑 표시">
 			<Row label="모양">
 				<div class="typing-row">
-					<span class="typing-preview"><TypingIndicator style={typing.style} text={typing.text} name="엘리안" /></span>
+					<span class="typing-preview"><TypingIndicator style={typing.style} text={typing.text} image={typing.image} name="엘리안" /></span>
 					<Select value={typing.style} options={typingStyles} aria-label="타이핑 표시 모양" onchange={(e) => setTyping({ style: e.currentTarget.value as TypingStyle })} />
 				</div>
 			</Row>
+			{#if typing.style === "image"}
+				<Row label="그림">
+					<Button size="sm" variant="secondary" onclick={pickTypingImage}>{typing.image ? "바꾸기" : "고르기"}</Button>
+					{#if typing.image}<Button size="sm" variant="ghost" onclick={clearTypingImage}>빼기</Button>{/if}
+				</Row>
+			{/if}
 			<Row label="글">
 				<Input value={typing.text} placeholder={"{{char}} 입력 중…"} maxlength={60} aria-label="타이핑 표시 글" onchange={(e) => setTyping({ text: e.currentTarget.value })} />
 			</Row>
