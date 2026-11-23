@@ -1,5 +1,5 @@
 <script lang="ts">
-	import { isSlash, runSlash } from "$features/slash/commands";
+	import { isSlash, runSlash, slashQueue } from "$features/slash/commands";
 	import QuickReplyBar from "$features/slash/QuickReplyBar.svelte";
 	import { slashRuns } from "$features/slash/running.svelte";
 	import { regexVersion } from "$shared/stores/regexVersion.svelte";
@@ -285,9 +285,14 @@
 		plusMenu = { x: r.left, y: r.top - 8 - 200 };
 	}
 
-	// ---- HTML 블록의 선택지 → 입력칸 / 보내기 ----
+	// ---- HTML 블록의 선택지 → 입력칸 / 보내기 / 슬래시(triggerSlash) ----
+	const queueSlash = slashQueue();
 	$effect(() =>
 		registerComposer(({ action, text }) => {
+			if (action === "slash") {
+				if (session) queueSlash(text, session, () => ({ input: draft, setInput: (v) => (draft = v) }));
+				return;
+			}
 			if (action === "send" && session && !session.busy) {
 				draft = text;
 				void send();

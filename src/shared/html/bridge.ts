@@ -1,7 +1,7 @@
-// HTML 블록(iframe) → 채팅 입력칸. 허용된 요청은 fill(입력칸에 넣기)·send(보내기) 둘뿐.
+// HTML 블록(iframe) → 채팅 입력칸. 허용된 요청은 fill(입력칸에 넣기)·send(보내기)·slash(슬래시 커맨드 실행, triggerSlash) 셋뿐.
 // 입력칸을 가진 화면(대화·폰)이 열려 있을 때 register로 받는 쪽을 정한다. 마지막에 연 화면이 받는다.
 
-export type HtmlAction = { action: "fill" | "send"; text: string };
+export type HtmlAction = { action: "fill" | "send" | "slash"; text: string };
 type Composer = (req: HtmlAction) => void;
 
 let composer: Composer | null = null;
@@ -18,8 +18,10 @@ export function registerComposer(fn: Composer): () => void {
 export function parseAction(data: unknown): HtmlAction | null {
 	const d = data as { type?: unknown; action?: unknown; text?: unknown } | null;
 	if (!d || d.type !== "sc-action") return null;
-	if (d.action !== "fill" && d.action !== "send") return null;
-	const text = typeof d.text === "string" ? d.text.slice(0, 4000).trim() : "";
+	if (d.action !== "fill" && d.action !== "send" && d.action !== "slash") return null;
+	const text = typeof d.text === "string" ? d.text.slice(0, d.action === "slash" ? 20000 : 4000).trim() : "";
+	// slash는 커맨드로 시작해야 한다 (아니면 메시지로 보내질 수 있어 거른다)
+	if (d.action === "slash" && !/^\/[A-Za-z:#*]/.test(text)) return null;
 	return text ? { action: d.action, text } : null;
 }
 

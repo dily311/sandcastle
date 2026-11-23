@@ -47,6 +47,13 @@
 		if (!req) return;
 		// 보내기는 요금이 나간다: 사용자가 이 블록 안을 막 눌렀을 때만 (iframe에 포커스). 아니면 입력칸에 넣기만
 		const clicked = document.activeElement === frame;
+		// 슬래시(triggerSlash, 5-E-20-6-12): /gen·/run으로 요금이 날 수 있어 누른 뒤에만, 슬래시 코어 플러그인이 켜졌을 때만
+		if (req.action === "slash") {
+			if (!plugins.on("slash")) return void toasts.info("슬래시 커맨드가 꺼져 있음 (코어 플러그인)");
+			if (!clicked) return void toasts.info("HTML 블록을 눌러야 슬래시 커맨드를 실행함");
+			if (!dispatchAction(req)) toasts.info("대화 화면에서만 쓸 수 있음");
+			return;
+		}
 		const action = req.action === "send" && !clicked ? "fill" : req.action;
 		if (!dispatchAction({ action, text: req.text })) return void toasts.info("대화 화면에서만 쓸 수 있음");
 		if (req.action === "send" && action === "fill") toasts.info("입력칸에 넣음 · 직접 보내기");

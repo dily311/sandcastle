@@ -60,8 +60,12 @@ static STORE: LazyLock<Mutex<Store>> = LazyLock::new(|| {
 ///   아니면 입력칸에 넣기만 한다 (사용자 동의 없는 요금 방지)
 /// - 스크립트 없이: `data-sc-send="글"` / `data-sc-choice` / `data-sc-fill`을 단 요소를 누르면 같은 동작 (값이 비면 그 요소의 글자)
 ///
-/// 허용된 요청은 이 둘뿐이고, 화면(HtmlView)이 type·action을 확인한다.
-const HELPER_SCRIPT: &str = r#"<script>(()=>{const post=(a,t)=>parent.postMessage({type:"sc-action",action:a,text:String(t??"").slice(0,4000)},"*");window.sandcastle=Object.freeze({fill:t=>post("fill",t),send:t=>post("send",t),choose:t=>post("send",t)});addEventListener("click",e=>{const el=e.target&&e.target.closest?e.target.closest("[data-sc-send],[data-sc-choice],[data-sc-fill]"):null;if(!el)return;e.preventDefault();const s=el.getAttribute("data-sc-send")??el.getAttribute("data-sc-choice");if(s!==null)post("send",s||el.textContent.trim());else post("fill",el.getAttribute("data-sc-fill")||el.textContent.trim())},true)})();</script>"#;
+/// - `triggerSlash(스크립트)` / `sandcastle.slash(스크립트)`: 슬래시 커맨드 실행 (SillyTavern의 iframe 스크립트와 같은 이름, 5-E-20-6-12).
+///   화면은 슬래시 코어 플러그인이 켜졌고 사용자가 이 블록을 막 눌렀을 때만 실행하고, 차례대로 하나씩 돌린다.
+///   결과는 돌려주지 않는다 (Promise는 바로 빈 글로 끝남)
+///
+/// 허용된 요청은 이 셋뿐이고, 화면(HtmlView)이 type·action을 확인한다.
+const HELPER_SCRIPT: &str = r#"<script>(()=>{const post=(a,t)=>parent.postMessage({type:"sc-action",action:a,text:String(t??"").slice(0,a==="slash"?20000:4000)},"*");const slash=t=>(post("slash",t),Promise.resolve(""));window.sandcastle=Object.freeze({fill:t=>post("fill",t),send:t=>post("send",t),choose:t=>post("send",t),slash});window.triggerSlash=slash;addEventListener("click",e=>{const el=e.target&&e.target.closest?e.target.closest("[data-sc-send],[data-sc-choice],[data-sc-fill]"):null;if(!el)return;e.preventDefault();const s=el.getAttribute("data-sc-send")??el.getAttribute("data-sc-choice");if(s!==null)post("send",s||el.textContent.trim());else post("fill",el.getAttribute("data-sc-fill")||el.textContent.trim())},true)})();</script>"#;
 
 fn id_of(html: &str, theme: &str, scripts: bool) -> String {
     let mut h = std::collections::hash_map::DefaultHasher::new();
@@ -198,6 +202,8 @@ mod tests {
         assert!(doc.contains("sc-html-height"));
         // 편의 함수는 본문보다 앞에
         assert!(doc.find("window.sandcastle").unwrap() < doc.find("<body>").unwrap());
+        // SillyTavern iframe 스크립트가 부르는 이름
+        assert!(doc.find("window.triggerSlash").unwrap() < doc.find("<body>").unwrap());
         assert!(doc.find("sc-html-height").unwrap() < doc.find("</body>").unwrap());
     }
 

@@ -416,6 +416,21 @@ export async function runSlash(source: string, session: ChatSession, opts: Slash
 	}
 }
 
+/** HTML 블록의 triggerSlash 받기 (5-E-20-6-12): await 없이 연달아 부르는 일이 많아 하나씩 차례로 돌린다
+ *  (runSlash는 같은 대화에서 겹쳐 돌지 않음). 대기가 max개를 넘으면 버린다. opts는 돌 차례에 읽는다 ({{input}}이 앞 실행의 /setinput을 보게) */
+export function slashQueue(max = 20): (text: string, session: ChatSession, opts: () => SlashOpts) => void {
+	let chain: Promise<void> = Promise.resolve();
+	let queued = 0;
+	return (text, session, opts) => {
+		if (queued >= max) return void toasts.error("슬래시 커맨드 요청이 너무 많아 건너뜀");
+		queued++;
+		chain = chain
+			.then(() => runSlash(text, session, opts()))
+			.catch(() => {})
+			.finally(() => queued--);
+	};
+}
+
 /** 입력이 슬래시 커맨드인가 (`/`로 시작, `//`·`/ ` 같은 글은 아님) */
 export function isSlash(text: string): boolean {
 	return /^\/[A-Za-z]/.test(text.trimStart());
