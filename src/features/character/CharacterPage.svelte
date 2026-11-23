@@ -17,6 +17,7 @@
 	import { toasts } from "$shared/stores/toast.svelte";
 	import { absolute, relative } from "$shared/time";
 	import ChatView from "./ChatView.svelte";
+	import ReadView from "./ReadView.svelte";
 	import CharacterEditor from "./CharacterEditor.svelte";
 	import { library, type Character } from "./library.svelte";
 	import { charActions } from "./actions";
@@ -319,7 +320,12 @@
 {#if !library.loaded}
 	<div class="center"><Spinner /></div>
 {:else if charId && convId}
-	<ChatView {charId} {convId} onopen={(id) => open(charId, id)} />
+	<!-- 읽기 모드로 둔 대화는 읽기 화면 (5-E-6-2, ADR-031) -->
+	{#if library.conversation(convId)?.readMode}
+		<ReadView {charId} {convId} onopen={(id) => open(charId, id)} />
+	{:else}
+		<ChatView {charId} {convId} onopen={(id) => open(charId, id)} />
+	{/if}
 {:else if charId && character && edit}
 	{#key character.id}
 		<CharacterEditor {character} />

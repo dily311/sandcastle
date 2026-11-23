@@ -503,4 +503,7 @@ async fn read_mode_conversation_refuses_generation() {
     assert!(ui::set_read_mode(&pool, &id, true).await.unwrap());
     let c = conv::get_conversation(&pool, &id).await.unwrap();
     assert!(crate::service::chat::chat_manager::reject_read_mode(&c).is_err());
+    // 읽기 화면의 "여기서 분기해 채팅하기": 새 대화는 채팅 모드로 (read_mode를 옮기지 않음)
+    let b = ui::copy_conversation(&pool, &id, "분기", None).await.unwrap();
+    assert!(!conv::get_conversation(&pool, &b).await.unwrap().read_mode);
 }

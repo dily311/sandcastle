@@ -517,7 +517,7 @@ AI: 그때 이야기를 다시 해 볼까요?`, stale: false },
 		const { id: _omit, ...rest } = src;
 		void _omit;
 		const branchMeta = { ...((src.meta as object) ?? {}), branch: { parentId: id, messageId, seq: list[upto].seq } };
-		const c = addConv({ ...rest, title: `${src.title} · #${list[upto].seq} 분기`, pinned: false, meta: branchMeta } as never, 0);
+		const c = addConv({ ...rest, title: `${src.title} · #${list[upto].seq} 분기`, pinned: false, readMode: false, meta: branchMeta } as never, 0);
 		for (const m of list.slice(0, upto + 1)) messages.push({ ...m, id: uid("m"), conversationId: c.id });
 		return view(c);
 	},

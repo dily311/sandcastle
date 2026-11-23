@@ -46,8 +46,12 @@
 		oncard?: (mark: ChatBookmark) => void;
 		/** 형광펜 칠한 글을 눌러 지움 */
 		onmarkremove?: (b: ChatBookmark) => void;
+		/** 읽기 화면 (5-E-6-2, ADR-031): 복사·접기·여기서 분기·있는 번역 보기·이미 만든 음성만 — 고치기·생성·새 번역·그리기 없음 */
+		readonly?: boolean;
 	}
-	let { msg, no, avatar, avatarFit = null, session, images, isLast, onbranch, onprompt, selecting = false, selected = false, onselect, marks = [], oncard, onmarkremove }: Props = $props();
+	let { msg, no, avatar, avatarFit = null, session, images, isLast, onbranch, onprompt, selecting = false, selected = false, onselect, marks = [], oncard, onmarkremove, readonly = false }: Props = $props();
+	/** 소리 내어 읽기: 읽기 화면은 이미 만든 음성만 (새로 만들지 않음) */
+	const say = () => speak(msg, translation && !showOriginal ? translation.text : msg.content, false, readonly);
 
 	const meta = $derived(metaOf(msg));
 	const isAi = $derived(msg.role === "assistant");
@@ -221,6 +225,17 @@
 		menuAt = { x: e.clientX, y: e.clientY };
 	}
 	const menuItems = $derived.by<MenuItem[]>(() => {
+		const sayItem: MenuItem = { label: speech.messageId === msg.id ? "읽기 멈추기" : readonly ? "만든 음성 듣기" : "소리 내어 읽기", icon: speech.messageId === msg.id ? Square : Volume2, onselect: say };
+		if (readonly) {
+			const ro: MenuItem[] = [
+				{ label: "복사", icon: Copy, onselect: copy },
+				{ label: folded ? "펼치기" : "접기", icon: folded ? ChevronsUpDown : ChevronsDownUp, onselect: toggleFold },
+				{ label: "여기서 분기해 채팅하기", icon: GitBranch, separator: true, onselect: () => onbranch(msg) },
+			];
+			if (translation) ro.push({ label: showOriginal ? "번역 보기" : "원문 보기", icon: Languages, onselect: () => (showOriginal = !showOriginal) });
+			if (plugins.on("tts")) ro.push(sayItem);
+			return ro;
+		}
 		const out: MenuItem[] = [
 			{ label: "복사", icon: Copy, onselect: copy },
 			{ label: "수정", icon: Pencil, onselect: startEdit },
@@ -237,7 +252,7 @@
 		}
 		if (isAi) out.push({ label: "보낸 컨텍스트 보기", icon: FileSearch, separator: !(isAi && isLast), onselect: () => onprompt(msg) });
 		if (plugins.on("translate")) out.push({ label: translation ? (showOriginal ? "번역 보기" : "원문 보기") : "번역", icon: Languages, disabled: toolBusy === "translate", onselect: translate });
-		if (plugins.on("tts")) out.push({ label: speech.messageId === msg.id ? "읽기 멈추기" : "소리 내어 읽기", icon: speech.messageId === msg.id ? Square : Volume2, onselect: () => speak(msg, translation && !showOriginal ? translation.text : msg.content) });
+		if (plugins.on("tts")) out.push(sayItem);
 		if (plugins.on("imagegen") && isAi) out.push({ label: "이 장면 그리기", icon: ImagePlus, disabled: toolBusy === "draw", onselect: draw });
 		out.push({ label: "삭제", icon: Trash2, danger: true, separator: true, onselect: remove });
 		return out;
@@ -269,6 +284,20 @@
 		{/if}
 		{#if !editing && !live && !selecting}
 			<div class="actions sc-msg-actions" role="toolbar" aria-label="메시지 {no} 동작">
+				{#if readonly}
+					{#if !layout.narrow}<IconButton label="여기서 분기해 채팅하기" size="sm" onclick={() => onbranch(msg)}><GitBranch /></IconButton>{/if}
+					<IconButton label="복사" size="sm" onclick={copy}><Copy /></IconButton>
+					<IconButton label={folded ? "펼치기" : "접기 (화면에서만)"} size="sm" onclick={toggleFold}>
+						{#if folded}<ChevronsUpDown />{:else}<ChevronsDownUp />{/if}
+					</IconButton>
+					{#if layout.narrow}
+						<IconButton label="더 보기" size="sm" onclick={(e) => { const r = e.currentTarget.getBoundingClientRect(); menuAt = { x: r.right, y: r.bottom + 4, align: "end" }; }}><Ellipsis /></IconButton>
+					{:else if plugins.on("tts")}
+						<IconButton label={speech.messageId === msg.id ? "읽기 멈추기" : "만든 음성 듣기"} size="sm" disabled={speech.loading && speech.messageId === msg.id} onclick={say}>
+							{#if speech.messageId === msg.id}<Square />{:else}<Volume2 />{/if}
+						</IconButton>
+					{/if}
+				{:else}
 				{#if !layout.narrow}<IconButton label="여기서 분기 나누기" size="sm" onclick={() => onbranch(msg)}><GitBranch /></IconButton>{/if}
 				<IconButton label="복사" size="sm" onclick={copy}><Copy /></IconButton>
 				<IconButton label="수정" size="sm" onclick={startEdit}><Pencil /></IconButton>
@@ -296,7 +325,7 @@
 					<IconButton label={translation ? (showOriginal ? "번역 보기" : "원문 보기") : "번역"} size="sm" disabled={toolBusy === "translate"} onclick={translate}><Languages /></IconButton>
 				{/if}
 				{#if plugins.on("tts")}
-					<IconButton label={speech.messageId === msg.id ? "읽기 멈추기" : "소리 내어 읽기"} size="sm" disabled={speech.loading && speech.messageId === msg.id} onclick={() => speak(msg, translation && !showOriginal ? translation.text : msg.content)}>
+					<IconButton label={speech.messageId === msg.id ? "읽기 멈추기" : "소리 내어 읽기"} size="sm" disabled={speech.loading && speech.messageId === msg.id} onclick={say}>
 						{#if speech.messageId === msg.id}<Square />{:else}<Volume2 />{/if}
 					</IconButton>
 				{/if}
@@ -304,6 +333,7 @@
 					<IconButton label="이 장면 그리기" size="sm" disabled={toolBusy === "draw"} onclick={draw}><ImagePlus /></IconButton>
 				{/if}
 				<IconButton label="삭제" size="sm" onclick={remove}><Trash2 /></IconButton>
+				{/if}
 				{/if}
 			</div>
 		{/if}
@@ -325,8 +355,8 @@
 				{#each meta.attachments as a (a)}<img src={fileSrc(a)} alt="첨부 이미지" loading="lazy" />{/each}
 			</div>
 		{/if}
-		{#if !live}<LintNote {msg} bind:showOriginal={lintOriginal} onupdate={(m) => session.update(m)} />{/if}
-		{#if !live}<PluginProcessNote {msg} bind:showOriginal={pluginOriginal} onupdate={(m) => session.update(m)} />{/if}
+		{#if !live && !readonly}<LintNote {msg} bind:showOriginal={lintOriginal} onupdate={(m) => session.update(m)} />{/if}
+		{#if !live && !readonly}<PluginProcessNote {msg} bind:showOriginal={pluginOriginal} onupdate={(m) => session.update(m)} />{/if}
 		{#if translation && !live}<p class="tr-note">{showOriginal ? "원문" : `${translation.lang} 번역`} · <button class="link" onclick={() => (showOriginal = !showOriginal)}>{showOriginal ? "번역 보기" : "원문 보기"}</button></p>{/if}
 		{#if blocks.length}
 			<!-- 상태창 고정은 AI 메시지만 (고정 자리도 AI 메시지에서 찾음, 5-F-4-2) -->
@@ -358,7 +388,7 @@
 	{#if toolBusy === "draw"}<p class="tr-note">장면을 그리는 중…</p>{/if}
 
 	<!-- 스와이프는 마지막 AI 메시지에서만: < 번호 > 한 세트 (끝에서 > 를 누르면 새 응답) -->
-	{#if isAi && isLast && !editing && !live}
+	{#if isAi && isLast && !editing && !live && !readonly}
 		<div class="swipe">
 			<IconButton label="이전 응답" size="sm" disabled={swipeId === 0 || session.busy} onclick={() => session.swipe(msg, -1)}><ChevronLeft /></IconButton>
 			<span>{swipeId + 1} / {Math.max(swipes, 1)}</span>
