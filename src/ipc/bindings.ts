@@ -426,7 +426,8 @@ export const commands = {
 	copyGameCharacterToCharacter: (gameCharacterId: string, options?: InvokeOptions) => __TAURI_INVOKE<Character_Serialize>("copy_game_character_to_character", { gameCharacterId }, options),
 	/**
 	 *  게임을 일반 대화용 "세계" 캐릭터로 복사한다. NPC·아이템·장소·이벤트는 분류를 붙인 새 로어북에, 게임에 연결된 로어북은 그대로 연결.
-	 *  session_id를 주면 그 플레이 기록을 "여러 캐릭터"를 켠 대화로 옮긴다 (연출 태그는 걷음). 변수·관계 값은 옮기지 않는다 (ADR-023)
+	 *  session_id를 주면 그 플레이 기록을 "여러 캐릭터"를 켠 대화로 옮긴다 (연출 태그는 걷음).
+	 *  변수 정의는 세계 캐릭터에, 그 기록의 변수 값·관계는 대화 변수로 한 번 옮긴다 (5-F-4-6, ADR-029 ⑥ — 계속 나누지는 않음)
 	 */
 	copyGameToCharacter: (gameId: string, sessionId: string | null, options?: InvokeOptions) => __TAURI_INVOKE<GameCopy_Serialize>("copy_game_to_character", { gameId, sessionId }, options),
 	toggleFavoriteCharacter: (id: string, isFavorite: boolean, options?: InvokeOptions) => __TAURI_INVOKE<null>("toggle_favorite_character", { id, isFavorite }, options),

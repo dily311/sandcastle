@@ -41,4 +41,12 @@ describe("상태창 고정 (5-F-4-2)", () => {
 		expect(rest).toContain("그리고 멈춘다.");
 		expect(latestStatusBlock([msg("a", "assistant", text)], {}, true)?.code).toContain("HP 7");
 	});
+
+	it("HTML 렌더링이 꺼져 있어도 상태창 요소는 거른 HTML 블록 (그 플러그인에 매이지 않게, 5-F-5-1)", () => {
+		const text = '걷는다.\n\n<div data-sc-pin="status:r1"><b>HP</b> 7</div>\n\n<b>굵게</b> 그대로';
+		const blocks = toBlocks(text, { safeHtml: false });
+		const pinned = blocks.filter(isStatusPin);
+		expect(pinned).toEqual([{ kind: "html", code: '<div data-sc-pin="status:r1"><b>HP</b> 7</div>', scripts: false }]);
+		expect(latestStatusBlock([msg("a", "assistant", text)], {}, false)?.code).toContain("HP");
+	});
 });

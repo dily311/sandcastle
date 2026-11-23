@@ -54,6 +54,9 @@ struct Compiled {
     target: RegexTarget,
     min_depth: Option<i64>,
     max_depth: Option<i64>,
+    /// 상태창 정규식 (5-F-5-1): 바꾼 결과를 `data-sc-pin="status:<id>"`로 감싸 화면이 고정 자리로 보낸다.
+    /// 화면에만 쓰는 정규식(target = display)만 — 저장·프롬프트 글에 표시가 들어가지 않게
+    pin: bool,
 }
 
 /// 한 문맥(캐릭터·프리셋·이름)에 대해 컴파일된 스크립트 묶음
@@ -231,6 +234,13 @@ fn compile(script: &RegexScript, macros: &RegexMacros) -> Result<Compiled> {
             .collect(),
         placement: script.placement.clone(),
         target: script.target,
+        pin: script.target == RegexTarget::Display
+            && script
+                .extra_json
+                .as_ref()
+                .and_then(|e| e.get("statusWindow"))
+                .and_then(serde_json::Value::as_bool)
+                .unwrap_or(false),
         min_depth: script.min_depth,
         max_depth: script.max_depth,
     })
@@ -252,7 +262,13 @@ fn apply_one(c: &Compiled, text: &str, macros: &RegexMacros) -> String {
     let limit = if c.global { 0 } else { 1 };
     let replacer = |caps: &Captures<'_, str>| {
         let expanded = expand_groups(&c.replace, caps, &c.trim_strings);
-        substitute_macros(&expanded, macros, |v| v.to_string())
+        let out = substitute_macros(&expanded, macros, |v| v.to_string());
+        if c.pin {
+            // 상태창 정규식 (5-F-5-1): 제 줄로 떼어 상태창 블록이 되게
+            format!("\n\n<div data-sc-pin=\"status:{}\">{out}</div>\n\n", c.id)
+        } else {
+            out
+        }
     };
     match c.regex.try_replacen(text, limit, replacer) {
         Ok(result) => result.into_owned(),
@@ -392,6 +408,21 @@ mod tests {
         s.trim_strings = vec!["!".into()];
         // trim_strings는 {{match}}($0)에도 적용됨 (ST와 같음), 없는 그룹($9)은 빈 문자열
         assert_eq!(run(vec![s], "*wow!* ok"), "<i>wow</i> [*wow*]  ok");
+    }
+
+    /// 상태창 정규식 (5-F-5-1): 화면에만 쓰는 정규식이 "상태창으로"면 결과를 출처 id로 감싼다. 저장·프롬프트 정규식은 감싸지 않는다
+    #[test]
+    fn status_window_regex_wraps_display_output_only() {
+        let mut shown = script(r"/<hp>(\d+)<\/hp>/", "<b>HP $1</b>");
+        shown.target = RegexTarget::Display;
+        shown.extra_json = Some(serde_json::json!({ "statusWindow": true }));
+        let mut stored = shown.clone();
+        stored.id = "s-stored".into();
+        stored.target = RegexTarget::Stored;
+        let display = RegexProcessor::new(vec![shown.clone()], macros()).apply("걷는다.<hp>7</hp>", RegexPlacement::AiOutput, &[RegexTarget::Display], Some(0));
+        assert_eq!(display, format!("걷는다.\n\n<div data-sc-pin=\"status:{}\"><b>HP 7</b></div>\n\n", shown.id));
+        let kept = RegexProcessor::new(vec![stored], macros()).apply("걷는다.<hp>7</hp>", RegexPlacement::AiOutput, &[RegexTarget::Stored], Some(0));
+        assert_eq!(kept, "걷는다.<b>HP 7</b>", "저장 정규식에는 표시를 넣지 않음");
     }
 
     #[test]

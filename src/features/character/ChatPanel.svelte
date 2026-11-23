@@ -24,7 +24,7 @@
 	import { toasts } from "$shared/stores/toast.svelte";
 	import type { ContextUsage } from "$ipc/bindings";
 	import { panel } from "$app/panel.svelte";
-	import type { RegexScript_Serialize as RegexScript } from "$ipc/bindings";
+	import type { RegexScript_Serialize as RegexScript, Value } from "$ipc/bindings";
 	import { call, commands } from "$shared/ipc/client";
 	import { IMAGE_FILES, pickFiles } from "$shared/ipc/dialog";
 	import { drops, extOf, isImage, storeFile } from "$app/drop.svelte";
@@ -211,6 +211,17 @@
 	let regexEditor: RegexEditDialog | undefined = $state();
 	function onRegexSaved(saved: RegexScript) {
 		scripts = scripts.some((x) => x.id === saved.id) ? scripts.map((x) => (x.id === saved.id ? saved : x)) : [...scripts, saved];
+	}
+	// 상태창 정규식 (5-F-5-1): 화면에만 쓰는 정규식 중 "상태창으로" 고른 것의 결과는 고정 자리로
+	const statusRegexes = $derived(applied.filter((s) => s.target === "display" && s.enabled));
+	const isStatusRegex = (s: RegexScript) => !!(s.extraJson as { statusWindow?: boolean } | null)?.statusWindow;
+	async function toggleStatusRegex(s: RegexScript, on: boolean) {
+		const extraJson: Record<string, Value> = { ...((s.extraJson as Record<string, Value> | null) ?? {}) };
+		if (on) extraJson.statusWindow = true;
+		else delete extraJson.statusWindow;
+		const saved = await call(commands.upsertRegexScript({ ...s, extraJson }), { source: "regex" });
+		regexVersion.bump();
+		scripts = scripts.map((x) => (x.id === s.id ? saved : x));
 	}
 	async function toggleScript(s: RegexScript, enabled: boolean) {
 		const saved = await call(commands.upsertRegexScript({ ...s, enabled }), { source: "regex" });
@@ -458,6 +469,14 @@
 					<StatusWindow block={statusBlock} />
 				{/if}
 			</section>
+			{#if statusRegexes.length}
+				<section class="status-regex">
+					<h4>상태창 정규식</h4>
+					{#each statusRegexes as s (s.id)}
+						<Switch checked={isStatusRegex(s)} label={s.name} onchange={(v) => void toggleStatusRegex(s, v)} />
+					{/each}
+				</section>
+			{/if}
 			<VariablesPanel {conv} />
 		</div>
 	{:else if panel.tab === "assets"}

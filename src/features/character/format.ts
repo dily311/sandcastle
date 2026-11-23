@@ -35,9 +35,19 @@ export function hasRawHtml(content: string): boolean {
  * (문단 안 HTML은 허용 목록에서 data- 속성이 빠져 고정 자리로 보낼 수 없다.) 같은 이름의 태그를 세어 닫는 태그까지
  */
 export function isolatePins(text: string): string {
-	if (!/data-sc-pin/i.test(text)) return text;
+	return splitPins(text)
+		.map((p) => (p.pin ? `\n\n${p.text}\n\n` : p.text))
+		.join("")
+		.replace(/[ \t]+\n\n/g, "\n\n")
+		.replace(/\n\n[ \t]+/g, "\n\n")
+		.replace(/\n{3,}/g, "\n\n");
+}
+
+/** 글을 상태창 요소(pin)와 나머지로 나눈다 (순서대로) */
+function splitPins(text: string): { pin: boolean; text: string }[] {
+	if (!/data-sc-pin/i.test(text)) return [{ pin: false, text }];
 	const open = /<([a-z][\w-]*)\b[^>]*\bdata-sc-pin\s*=\s*["']?status\b[^>]*>/gi;
-	let out = "";
+	const out: { pin: boolean; text: string }[] = [];
 	let at = 0;
 	for (let m = open.exec(text); m; m = open.exec(text)) {
 		if (m.index < at) continue;
@@ -54,11 +64,18 @@ export function isolatePins(text: string): string {
 				break;
 			}
 		}
-		out += text.slice(at, m.index).replace(/[ \t]+$/, "") + "\n\n" + text.slice(m.index, end) + "\n\n";
+		if (m.index > at) out.push({ pin: false, text: text.slice(at, m.index) });
+		out.push({ pin: true, text: text.slice(m.index, end) });
 		at = end;
 		open.lastIndex = end;
 	}
-	return (out + text.slice(at).replace(/^[ \t]+/, "")).replace(/\n{3,}/g, "\n\n");
+	if (at < text.length) out.push({ pin: false, text: text.slice(at) });
+	return out;
+}
+
+/** HTML 렌더링이 꺼져 있어도 상태창 요소는 거른 HTML 블록으로 (상태창이 그 플러그인에 매이지 않게, 5-F-5-1) */
+function pinOrTextBlocks(text: string, opts: Opts): Block[] {
+	return splitPins(text).flatMap((p) => (p.pin ? [{ kind: "html" as const, code: p.text, scripts: false as const }] : p.text.trim() ? textBlocks(p.text, opts) : []));
 }
 
 /**
@@ -72,7 +89,7 @@ export function toBlocks(content: string, opts: Opts = {}): Block[] {
 		return [{ kind: "html", code: content.replace(/```html\s*\n?|```/gi, "").replace(/\n/g, "<br>\n").replace(/(<br>\n)+(?=<\/?(div|p|ul|ol|li|table|tr|h\d)\b)/gi, "\n") }];
 	}
 	return splitHtmlBlocks(content).flatMap((part) =>
-		part.kind === "html" ? [{ kind: "html" as const, code: part.code }] : opts.safeHtml ? safeHtmlBlocks(isolatePins(part.text), opts) : textBlocks(part.text, opts),
+		part.kind === "html" ? [{ kind: "html" as const, code: part.code }] : opts.safeHtml ? safeHtmlBlocks(isolatePins(part.text), opts) : pinOrTextBlocks(part.text, opts),
 	);
 }
 
