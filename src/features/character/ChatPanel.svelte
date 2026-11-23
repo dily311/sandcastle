@@ -10,6 +10,7 @@
 	import BookPicker from "$features/lorebook/BookPicker.svelte";
 	import ContextMeter from "./ContextMeter.svelte";
 	import ModelPicker from "$features/settings/ModelPicker.svelte";
+	import OptionLock from "./OptionLock.svelte";
 	import { reasoningOf } from "$features/settings/providers";
 	import { appSetting } from "$shared/stores/appSetting.svelte";
 	import ExportButton from "./ExportButton.svelte";
@@ -110,6 +111,38 @@
 
 	const character = $derived(library.character(conv.characterId));
 	const persona = $derived(library.persona(library.convPersonaId(conv)) ?? library.personas[0]);
+
+	// ---- 자물쇠 (5-E-29, ADR-028): 이 대화 > 캐릭터 기본 > 전역. 잠김 = 이 대화에 값이 있음 ----
+	// 폰 대화는 폰 주인·폰 설정을 따르므로 지금처럼 (자물쇠 없음)
+	const lockable = $derived(conv.mode !== "phone");
+	const lockedApi = $derived(!!conv.apiProfileId);
+	const lockedPreset = $derived(!!conv.promptPresetId);
+	const lockedPersona = $derived(!!conv.personaId);
+	const lockedEffort = $derived((conv.meta as { reasoningEffort?: string | null } | null)?.reasoningEffort != null);
+	const charPreset = $derived(character?.defaultPromptPresetId || null);
+	/** 풀렸을 때 쓰는 프리셋: 캐릭터 기본 → 전역 (백엔드와 같은 순서) */
+	const shownPreset = $derived(conv.promptPresetId || charPreset || appSetting.value?.selectedPreset || null);
+	const presetFrom = $derived(charPreset ? "캐릭터 기본" : "전역");
+	const personaFrom = $derived(character?.defaultPersonaId ? "캐릭터 기본" : "전역");
+	/** 잠그면 지금 보이는 값을 이 대화에 넣고, 풀면 비운다 */
+	function toggleApi() {
+		if (lockedApi) setOption({ apiProfileId: "", model: null });
+		else if (effectiveApi) setOption({ apiProfileId: effectiveApi.id, model: null });
+	}
+	function togglePreset() {
+		if (lockedPreset) setOption({ promptPresetId: "" });
+		else if (shownPreset) setOption({ promptPresetId: shownPreset });
+	}
+	function togglePersona() {
+		setOption({ personaId: lockedPersona ? "" : library.convPersonaId(conv) });
+	}
+	function toggleEffort() {
+		void library.patchMeta(conv.id, { reasoningEffort: lockedEffort ? null : effort });
+	}
+	/** 풀린 줄에서 값을 바꾸면 그 대화에 고정 (auto도 "auto"로 넣어 잠김) */
+	function pickEffort(v: string) {
+		void library.patchMeta(conv.id, { reasoningEffort: lockable ? v : v === "auto" ? null : v });
+	}
 	const personaOptions = $derived<ProfileOption[]>(library.personas.map((p) => ({ id: p.id, name: p.name, avatar: p.avatar, avatarFit: p.avatarFit, color: p.color, description: p.description })));
 
 	// ---- 정규식: 이 대화에 걸리는 것 (전역 + 이 캐릭터 + 이 프리셋) ----
@@ -530,22 +563,39 @@
 		<div class="panel-body">
 			<section>
 				<h4>이 대화</h4>
-				<label class="row"><span>API</span><Select value={conv.apiProfileId ?? DEFAULT} options={apiOptions} onchange={(e) => setOption({ apiProfileId: e.currentTarget.value })} /></label>
+				{#if lockable}
+					<div class="row">
+						<span>API</span>
+						<div class="with-btn">
+							<Select value={effectiveApi?.id ?? DEFAULT} options={effectiveApi ? apiOptions.slice(1) : apiOptions} aria-label="이 대화의 API" onchange={(e) => setOption({ apiProfileId: e.currentTarget.value })} />
+							<OptionLock locked={lockedApi} from="전역" disabled={!lockedApi && !effectiveApi} onclick={toggleApi} />
+						</div>
+					</div>
+				{:else}
+					<label class="row"><span>API</span><Select value={conv.apiProfileId ?? DEFAULT} options={apiOptions} onchange={(e) => setOption({ apiProfileId: e.currentTarget.value })} /></label>
+				{/if}
 					<div class="row"><span>모델</span><ModelPicker profile={effectiveApi} value={conv.model} onchange={pickModel} label="이 대화의 모델" /></div>
 				{#if reasoning}
 					<label class="row"
-						><span>추론 강도</span><Select
-							value={effort}
-							options={[{ value: "auto", label: reasoning.default ? `auto (${reasoning.default})` : "auto" }, ...reasoning.levels.map((l) => ({ value: l, label: l }))]}
-							aria-label="이 대화의 추론 강도"
-							onchange={(e) => library.patchMeta(conv.id, { reasoningEffort: e.currentTarget.value === "auto" ? null : e.currentTarget.value })}
-						/></label
+						><span>추론 강도</span><span class="with-btn"
+							><Select
+								value={effort}
+								options={[{ value: "auto", label: reasoning.default ? `auto (${reasoning.default})` : "auto" }, ...reasoning.levels.map((l) => ({ value: l, label: l }))]}
+								aria-label="이 대화의 추론 강도"
+								onchange={(e) => pickEffort(e.currentTarget.value)}
+							/>{#if lockable}<OptionLock locked={lockedEffort} from="전역(auto)" onclick={toggleEffort} />{/if}</span
+						></label
 					>
 				{/if}
 				<div class="row">
 					<span>프리셋</span>
 					<div class="with-btn">
-						<Select value={conv.promptPresetId ?? DEFAULT} options={presetOptions} aria-label="프리셋" onchange={(e) => setOption({ promptPresetId: e.currentTarget.value })} />
+						{#if lockable}
+							<Select value={shownPreset ?? DEFAULT} options={shownPreset ? presetOptions.slice(1) : presetOptions} aria-label="프리셋" onchange={(e) => setOption({ promptPresetId: e.currentTarget.value })} />
+							<OptionLock locked={lockedPreset} from={presetFrom} disabled={!lockedPreset && !shownPreset} onclick={togglePreset} />
+						{:else}
+							<Select value={conv.promptPresetId ?? DEFAULT} options={presetOptions} aria-label="프리셋" onchange={(e) => setOption({ promptPresetId: e.currentTarget.value })} />
+						{/if}
 						<IconButton label="이 프리셋 빠르게 편집{usage?.presetName ? ` (${usage.presetName})` : ''}" size="sm" onclick={() => (panel.tab = "context")}><Pencil /></IconButton>
 					</div>
 				</div>
@@ -555,7 +605,10 @@
 						<ProfilePicker label="{me.label} 바꾸기" options={me.options} value={me.value} hint={me.hint} onchange={me.onchange} />
 					{:else}
 						<span>페르소나</span>
-						<ProfilePicker label="페르소나 바꾸기" options={personaOptions} value={persona?.id} onchange={(id) => setOption({ personaId: id })} />
+						<div class="with-btn">
+							<ProfilePicker label="페르소나 바꾸기" options={personaOptions} value={persona?.id} onchange={(id) => setOption({ personaId: id })} />
+							{#if lockable}<OptionLock locked={lockedPersona} from={personaFrom} onclick={togglePersona} />{/if}
+						</div>
 					{/if}
 				</div>
 				<Switch checked={!!(conv.meta as { showAvatars?: boolean } | null)?.showAvatars} label="메시지에 프로필 그림" onchange={(v) => library.patchMeta(conv.id, { showAvatars: v || null })} />

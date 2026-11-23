@@ -1,6 +1,5 @@
 <script lang="ts">
 	import { lastAt } from "$features/character/library.svelte";
-	import { onMount } from "svelte";
 	import { BookOpen, Check, ChevronsUpDown, Copy, Download, ArrowUpDown, ChevronDown, Ellipsis, Gamepad2, GitBranch, House, Pencil, Pin, PinOff, Plus, Settings, Smartphone, Trash2, UserCog, Users, Images, ListFilter } from "@lucide/svelte";
 	import { Avatar, ContextMenu, IconButton, type MenuItem } from "$shared/ui";
 	import { fileSrc } from "$shared/ipc/file";
@@ -277,15 +276,9 @@
 		convMenu(c, { x: e.clientX, y: e.clientY });
 	}
 
-	// ---- 사용자 프로필: 대화를 보는 중이면 그 대화의 페르소나, 아니면 앱 기본 페르소나 ----
-	let defaultPersonaId = $state<string | null>(null);
-	onMount(async () => {
-		const s = await call(commands.getConvSettings(), { source: "persona", silent: true }).catch(() => null);
-		defaultPersonaId = s?.defaultPersonaId ?? null;
-	});
+	// ---- 사용자 프로필: 언제나 전역 기본 페르소나 (ADR-028). 자물쇠를 건 대화는 그 대화의 것을 쓴다 ----
 	const openConvObj = $derived(library.conversation(openConv));
-	const me = $derived(library.persona(openConvObj ? openConvObj.personaId : defaultPersonaId) ?? library.personas[0]);
-	const scope = $derived(openConvObj ? "이 대화" : "기본");
+	const me = $derived(library.persona(library.defaultPersonaId) ?? library.personas[0]);
 
 	let profileOpen = $state(false);
 	// 사이드바가 overflow:hidden이라 팝업은 화면 기준(fixed)으로 띄움
@@ -299,14 +292,11 @@
 	}
 	async function choose(id: string) {
 		profileOpen = false;
+		await library.setDefaultPersona(id);
+		// 열린 대화가 다른 프로필로 잠겨 있으면 그 대화는 그대로임을 알린다
 		const c = openConvObj;
-		if (c) {
-			await library.setOptions(c.id, { personaId: id, promptPresetId: c.promptPresetId, apiProfileId: c.apiProfileId });
-		} else {
-			await call(commands.setSystemDefaultPersona(id), { source: "persona" });
-			defaultPersonaId = id;
-		}
-		toasts.success(`${library.persona(id)?.name ?? "페르소나"}(으)로 바꿈`);
+		const locked = c && c.mode !== "phone" && c.personaId && c.personaId !== id ? library.persona(c.personaId)?.name : null;
+		toasts.success(`${library.persona(id)?.name ?? "페르소나"}(으)로 바꿈${locked ? ` · 이 대화는 '${locked}'(으)로 고정됨` : ""}`);
 	}
 	async function addPersona() {
 		profileOpen = false;
@@ -422,12 +412,12 @@
 		<div class="profile">
 			<button bind:this={meBtn} class="me" class:on={cur.page === "persona"} aria-haspopup="listbox" aria-expanded={profileOpen} title="사용자 프로필 바꾸기" onclick={toggleProfile}>
 				{#if me}<Avatar name={me.name} src={fileSrc(me.avatar)} fit={me.avatarFit} color={me.color || null} size={26} />{/if}
-				<span class="who"><b>{me?.name ?? "페르소나 없음"}</b><small>{scope} 프로필</small></span>
+				<span class="who"><b>{me?.name ?? "페르소나 없음"}</b><small>기본 프로필</small></span>
 				<ChevronsUpDown />
 			</button>
 			{#if profileOpen}
 				<div class="pop" role="listbox" aria-label="사용자 프로필" style={popStyle}>
-					<p class="pop-head">{scope === "이 대화" ? "이 대화에서 쓸 프로필" : "새 대화에 쓸 기본 프로필"}</p>
+					<p class="pop-head">대화의 기본 프로필 (자물쇠를 건 대화는 그대로)</p>
 					<ul>
 						{#each library.personas as p (p.id)}
 							<li>
