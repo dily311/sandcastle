@@ -83,8 +83,8 @@ describe("HTML (5-E-9·5-E-27)", () => {
 describe("다인봇 말한 사람 (5-F-2)", () => {
 	it("`이름: 대사` 줄은 말한 사람(그림·이름), 켜지 않으면 그대로", () => {
 		const h = md(toBlocks('유나: "안녕" *웃는다*\n미나：응\n그냥 지문', { speakers: true, avatars: { 유나: "asset://yuna.png" } }));
-		expect(h).toContain('<p class="say"><span class="who"><img class="av" src="asset://yuna.png"><b>유나</b></span><q>"안녕"</q> <em>웃는다</em></p>');
-		expect(h).toContain('<span class="who"><span class="av">미</span><b>미나</b></span>응');
+		expect(h).toContain('<p class="say"><span class="who sc-speaker"><img class="av" src="asset://yuna.png"><b>유나</b></span><q>"안녕"</q> <em>웃는다</em></p>');
+		expect(h).toContain('<span class="who sc-speaker"><span class="av">미</span><b>미나</b></span>응');
 		expect(md(toBlocks("유나: 안녕"))).not.toContain("say");
 	});
 	it("지문·대사로 시작하거나 이름이 길면 말한 사람이 아님", () => {

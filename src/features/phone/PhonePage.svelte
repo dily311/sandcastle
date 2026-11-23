@@ -160,7 +160,7 @@
 	const kindLabel = (k: string) => (k === "persona" ? "내 페르소나" : "캐릭터");
 </script>
 
-<div class="phone-page">
+<div class="phone-page sc-phone">
 <div class="stage" class:full={phone.prefs.display === "full"}>
 	<div class="device" class:framed={phone.prefs.display === "mockup"} style:--wall={wallpaperCss(phone.wallpaper)}>
 		<div class="status" class:on-wall={screen === "home"}>

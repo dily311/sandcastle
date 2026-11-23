@@ -91,7 +91,7 @@
 	{#if customCss.trim()}{@html `<style id="home-css">${customCss}</style>`}{/if}
 </svelte:head>
 
-<div class="home">
+<div class="home sc-home">
 	<header class="hero">
 		<div>
 			<p class="date">{today}</p>

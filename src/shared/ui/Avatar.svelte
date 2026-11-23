@@ -19,7 +19,7 @@
 </script>
 
 <span
-	class="avatar"
+	class="avatar sc-avatar"
 	style:width="{size}px"
 	style:height="{size}px"
 	style:font-size="{Math.round(size * 0.42)}px"

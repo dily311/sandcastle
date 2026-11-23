@@ -243,11 +243,11 @@
 </script>
 
 <!-- svelte-ignore a11y_click_events_have_key_events, a11y_no_static_element_interactions -->
-<div bind:this={el} class="block" class:ai={isAi} class:user={!isAi} class:hidden={meta.hidden} class:selecting class:picked={selected} id="msg-{msg.id}" data-no={no} class:tapped onclick={tap} oncontextmenu={openMenu}>
-	<div class="who">
+<div bind:this={el} class="block sc-msg" class:ai={isAi} class:user={!isAi} class:sc-msg-ai={isAi} class:sc-msg-user={!isAi} class:sc-msg-hidden={meta.hidden} class:hidden={meta.hidden} class:selecting class:picked={selected} id="msg-{msg.id}" data-no={no} class:tapped onclick={tap} oncontextmenu={openMenu}>
+	<div class="who sc-msg-head">
 		{#if selecting}<input class="pick" type="checkbox" checked={selected} aria-label="#{no} 메시지 선택" onclick={(e) => e.stopPropagation()} onchange={(e) => onselect?.(msg, e.currentTarget.checked)} />{/if}
 		{#if avatar !== undefined}<Avatar name={msg.name ?? (isAi ? "AI" : "나")} src={avatar} size={22} />{/if}
-		<span class="no">#{no}</span><b>{msg.name ?? (isAi ? "AI" : "나")}</b>
+		<span class="no sc-msg-no">#{no}</span><b class="sc-msg-name">{msg.name ?? (isAi ? "AI" : "나")}</b>
 		{#if meta.hidden}<Badge><EyeOff /> AI에게 숨김</Badge>{/if}
 		{#if (msg.meta as { ghost?: boolean } | null)?.ghost}<span class="ghost" role="img" aria-label="대필" title="대필"><PenLine size={12} /></span>{/if}
 		{#if live}
@@ -263,7 +263,7 @@
 			</span>
 		{/if}
 		{#if !editing && !live && !selecting}
-			<div class="actions" role="toolbar" aria-label="메시지 {no} 동작">
+			<div class="actions sc-msg-actions" role="toolbar" aria-label="메시지 {no} 동작">
 				{#if !layout.narrow}<IconButton label="여기서 분기 나누기" size="sm" onclick={() => onbranch(msg)}><GitBranch /></IconButton>{/if}
 				<IconButton label="복사" size="sm" onclick={copy}><Copy /></IconButton>
 				<IconButton label="수정" size="sm" onclick={startEdit}><Pencil /></IconButton>

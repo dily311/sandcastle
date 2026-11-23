@@ -10,14 +10,14 @@
 {#each blocks as b, i (i)}
 	{#if b.kind === "md"}
 		<!-- 마크다운을 그려 허용 목록으로 거른 HTML (shared/html/markdown.ts) -->
-		<div class="md">{@html b.html}</div>
+		<div class="md sc-md">{@html b.html}</div>
 	{:else if b.kind === "html" && b.scripts === false}
 		<!-- 코드 블록 밖 HTML: 안의 글도 마크다운으로, 허용 목록으로 거른 뒤 UI로 바로 그린다 (JS 없음) -->
-		<div class="ui-html md">{@html renderUiHtml(b.code)}</div>
+		<div class="ui-html md sc-md sc-ui-html">{@html renderUiHtml(b.code)}</div>
 	{:else if b.kind === "html"}
 		<HtmlView code={b.code} />
 	{:else if b.kind === "cg" && images[b.key]}
-		<figure class="cg"><img src={images[b.key]} alt={b.key} loading="lazy" /><figcaption>{b.key}</figcaption></figure>
+		<figure class="cg sc-cg"><img src={images[b.key]} alt={b.key} loading="lazy" /><figcaption>{b.key}</figcaption></figure>
 	{/if}
 {/each}
 

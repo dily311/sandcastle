@@ -347,7 +347,7 @@
 	{/if}
 {/snippet}
 
-<aside class="sidebar" aria-label="앱 메뉴" style:--sidebar-width="{layout.sidebarWidth}px">
+<aside class="sidebar sc-sidebar" aria-label="앱 메뉴" style:--sidebar-width="{layout.sidebarWidth}px">
 	<nav aria-label="화면">
 		{#each items as it (it.page)}
 			<button class="item" class:on={cur.page === it.page} aria-current={cur.page === it.page ? "page" : undefined} onclick={() => nav.go({ page: it.page } as never)}>

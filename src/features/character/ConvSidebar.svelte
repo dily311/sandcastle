@@ -149,7 +149,7 @@
 	/>
 {/snippet}
 
-<aside class="convs" aria-label="대화 목록">
+<aside class="convs sc-conv-list" aria-label="대화 목록">
 	<div class="convs-head">
 		<IconButton label="닫기" size="sm" variant="soft" onclick={onclose}><PanelLeft /></IconButton>
 		<span class="spacer"></span>

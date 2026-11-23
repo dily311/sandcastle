@@ -544,7 +544,7 @@
 	}
 </script>
 
-<div class="chat" class:no-list={!listShown || layout.narrow} class:no-panel={!panel.open || layout.narrow}>
+<div class="chat sc-chat" class:no-list={!listShown || layout.narrow} class:no-panel={!panel.open || layout.narrow}>
 	{#if listShown && layout.narrow}
 		<!-- svelte-ignore a11y_click_events_have_key_events, a11y_no_static_element_interactions (목록 버튼으로도 닫힘) -->
 		<div class="list-scrim" transition:fade={{ duration: 150 }} onclick={() => (mobileList = false)}></div>
@@ -609,13 +609,13 @@
 		{/if}
 
 		<!-- svelte-ignore a11y_no_static_element_interactions (글 고르기 끝 감지) -->
-		<div class="scroll" bind:this={scroller} {onscroll} oncontextmenu={onSelectMenu}>
+		<div class="scroll sc-chat-scroll" bind:this={scroller} {onscroll} oncontextmenu={onSelectMenu}>
 			{#if !session || session.loading}
 				<div class="center"><Spinner /></div>
 			{:else if !conv}
 				<EmptyState title="대화를 찾을 수 없음" description="지워졌거나 아직 불러오지 못함" />
 			{:else}
-				<article class="text">
+				<article class="text sc-chat-log">
 					{#if !session.messages.length && !session.live}
 						<p class="empty">첫 메시지를 보내 보세요</p>
 					{/if}
@@ -627,21 +627,21 @@
 						{@const ch = metaOf(m).chapter}
 						{#if ch}
 							<!-- svelte-ignore a11y_no_noninteractive_element_interactions (오른쪽 클릭·꾹 누르기로 이름 바꾸기, 키보드는 메시지 동작의 챕터 버튼) -->
-							<h2 class="chapter" id="chapter-{m.id}" title="오른쪽 클릭하거나 꾹 눌러 이름 바꾸기" oncontextmenu={(e) => { e.preventDefault(); void renameChapter(m); }} onpointerdown={(e) => pressStart(e, m)} onpointerup={pressEnd} onpointerleave={pressEnd}><span>{chapters[m.id]}장</span>{ch}</h2>
+							<h2 class="chapter sc-chapter" id="chapter-{m.id}" title="오른쪽 클릭하거나 꾹 눌러 이름 바꾸기" oncontextmenu={(e) => { e.preventDefault(); void renameChapter(m); }} onpointerdown={(e) => pressStart(e, m)} onpointerup={pressEnd} onpointerleave={pressEnd}><span>{chapters[m.id]}장</span>{ch}</h2>
 						{/if}
 						<MessageItem msg={m} no={i + 1} avatar={avatarOf(m)} {session} images={pickVariants(imageVariants, m.id)} isLast={i === session.messages.length - 1} onbranch={branch} onprompt={showPrompt} {selecting} selected={picked.has(m.id)} onselect={pick} marks={marksByMsg.get(m.id)} oncard={cardFromMark} onmarkremove={removeMark} />
 					{/each}
 
 					{#if session.live?.kind === "send"}
 						{#if session.live.userText || session.live.userImages}
-							<div class="block user pending">
-								<div class="who"><span class="no">#{session.messages.length + 1}</span><b>{library.persona(conv.personaId)?.name ?? "나"}</b><span class="stamp">보내는 중…</span></div>
+							<div class="block user pending sc-msg sc-msg-user sc-msg-live">
+								<div class="who sc-msg-head"><span class="no sc-msg-no">#{session.messages.length + 1}</span><b class="sc-msg-name">{library.persona(conv.personaId)?.name ?? "나"}</b><span class="stamp">보내는 중…</span></div>
 								{#if session.live.userImages}<div class="attach-strip">{#each session.live.userImages as u (u)}<img src={u} alt="첨부 이미지" />{/each}</div>{/if}
 								{#if session.live.userText}<p>{session.live.userText}</p>{/if}
 							</div>
 						{/if}
-						<div class="block ai">
-							<div class="who"><b>{character?.name ?? "AI"}</b><span class="stamp">생성 중…</span></div>
+						<div class="block ai sc-msg sc-msg-ai sc-msg-live">
+							<div class="who sc-msg-head"><b class="sc-msg-name">{character?.name ?? "AI"}</b><span class="stamp">생성 중…</span></div>
 							{#if liveBlocks.length}
 								<RichText blocks={liveBlocks} {images} />
 							{:else}
@@ -654,7 +654,7 @@
 		</div>
 
 		{#if !readMode}
-			<div class="composer">
+			<div class="composer sc-composer">
 				{#if pending.length}
 					<div class="attach-strip pending-strip" aria-label="붙일 이미지">
 						{#each pending as p, i (p.url)}
@@ -680,12 +680,12 @@
 					{#if session && plugins.on("ghostwrite")}
 						<Ghostwrite convId={session.convId} getDraft={() => draft} setDraft={(v) => (draft = v)} disabled={session.busy} />
 					{/if}
-					<Textarea bind:value={draft} rows={1} autosize maxRows={8} placeholder={!layout.desktop ? "메시지 입력" : appSetting.sendOnEnter ? "메시지 입력 (Shift+Enter 줄바꿈)" : "메시지 입력 (Ctrl+Enter 보내기)"} aria-label="메시지" readonly={!!session && ghost.isRunning(session.convId)} {onkeydown} {onpaste} />
+					<Textarea class="sc-input" bind:value={draft} rows={1} autosize maxRows={8} placeholder={!layout.desktop ? "메시지 입력" : appSetting.sendOnEnter ? "메시지 입력 (Shift+Enter 줄바꿈)" : "메시지 입력 (Ctrl+Enter 보내기)"} aria-label="메시지" readonly={!!session && ghost.isRunning(session.convId)} {onkeydown} {onpaste} />
 					{#if session && (session.busy || slashRuns.isRunning(session.convId))}
 						<!-- 스크립트가 돌면 스크립트째 멈춤 (5-E-20-6-8), 아니면 응답만 -->
 						<IconButton label={slashRuns.isRunning(session.convId) ? "스크립트 멈추기" : "멈추기 (받은 데까지 저장)"} variant="solid" onclick={() => (session && slashRuns.isRunning(session.convId) ? slashRuns.stop(session.convId, session) : session?.cancel())}><Square /></IconButton>
 					{:else}
-						<IconButton label="보내기" variant="solid" type="submit" disabled={sending}><Send /></IconButton>
+						<IconButton class="sc-send-button" label="보내기" variant="solid" type="submit" disabled={sending}><Send /></IconButton>
 					{/if}
 				</form>
 			</div>

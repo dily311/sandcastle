@@ -52,7 +52,7 @@
 			</div>
 			<IconButton label="패널 닫기" onclick={() => panel.toggle()}><X /></IconButton>
 		</header>
-		<aside class="panel" aria-label={label}>
+		<aside class="panel sc-side-panel" aria-label={label}>
 			{#if isPluginTab(panel.tab)}<PluginPanelView tab={panel.tab} />{/if}
 			<div class="screen-panel" class:hidden={isPluginTab(panel.tab)}>{@render children()}</div>
 		</aside>
@@ -74,7 +74,7 @@
 		}}
 		ondblclick={() => panel.setWidth(300, true)}
 	></div>
-	<aside class="panel" aria-label={label}>
+	<aside class="panel sc-side-panel" aria-label={label}>
 		{#if isPluginTab(panel.tab)}<PluginPanelView tab={panel.tab} />{/if}
 			<div class="screen-panel" class:hidden={isPluginTab(panel.tab)}>{@render children()}</div>
 	</aside>

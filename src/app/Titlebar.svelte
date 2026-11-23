@@ -170,7 +170,7 @@
 </script>
 
 <!-- 프로그램 헤더: 사이드바 · 뒤로/앞으로 · 화면 제목 · (빈 곳은 창 끌기) · 오른쪽 패널 · 창 버튼 -->
-<header class="titlebar" class:frameless={theme.setting.isFrameless} class:desktop={!layout.mobile} class:mobile={layout.mobile} class:narrow={layout.narrow} data-tauri-drag-region>
+<header class="titlebar sc-titlebar" class:frameless={theme.setting.isFrameless} class:desktop={!layout.mobile} class:mobile={layout.mobile} class:narrow={layout.narrow} data-tauri-drag-region>
 	{#if layout.narrow}
 		<!-- 휴대폰: 메뉴 · 뒤로 · 지금 화면 이름 · 패널 -->
 		<IconButton label="메뉴" onclick={() => layout.toggleSidebar()}><Menu /></IconButton>

@@ -103,7 +103,7 @@
 	}}
 />
 
-<div class="app" class:desktop={!layout.mobile} class:mobile={layout.mobile}>
+<div class="app sc-app" data-page={nav.current.page} class:desktop={!layout.mobile} class:mobile={layout.mobile}>
 	<Titlebar />
 	<div class="body">
 		{#if layout.narrow}
@@ -115,7 +115,7 @@
 		{:else if layout.sidebar}
 			<Sidebar />
 		{/if}
-		<main class="content">
+		<main class="content sc-main">
 		{#if ready}
 			{@const r = nav.current}
 			{#if r.page === "home"}

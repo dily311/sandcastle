@@ -244,14 +244,14 @@
 	}
 </script>
 
-<div class="room">
-	<div class="room-bar">
+<div class="room sc-phone-room">
+	<div class="room-bar sc-phone-room-bar">
 		<button class="plain" aria-label="뒤로" onclick={onback}><ChevronLeft /></button>
 		<strong>{ch?.name ?? conv.title}{#if multi}<Users class="group" aria-label="여러 캐릭터" />{/if}</strong>
 		<button class="plain" aria-label="대화방 메뉴" onclick={roomMenu}><Menu /></button>
 	</div>
 
-	<div class="msgs" bind:this={scroller}>
+	<div class="msgs sc-phone-msgs" bind:this={scroller}>
 		{#if session.loading}
 			<p class="hint">불러오는 중…</p>
 		{:else if !rows.length}
@@ -261,21 +261,21 @@
 			{#if r.kind === "date"}
 				<div class="date">{r.date}</div>
 			{:else if r.mine}
-				<div class="me" class:cont={r.cont} role="group" oncontextmenu={(e) => bubbleMenu(e, r)}>
+				<div class="me sc-bubble-group sc-bubble-me" class:cont={r.cont} role="group" oncontextmenu={(e) => bubbleMenu(e, r)}>
 					{#each r.lines ?? [] as l, i (i)}
 						<div class="line">
 							{#if i === (r.lines?.length ?? 0) - 1}
 								<span class="t">{#if unreadMine === r.key}<span class="read">1</span>{/if}{r.pending ? "" : r.time}</span>
 							{/if}
-							<div class="b">{l.text}</div>
+							<div class="b sc-bubble">{l.text}</div>
 						</div>
 					{/each}
 				</div>
 			{:else}
-				<div class="them" class:cont={r.cont} role="group" oncontextmenu={(e) => bubbleMenu(e, r)}>
+				<div class="them sc-bubble-group sc-bubble-them" class:cont={r.cont} role="group" oncontextmenu={(e) => bubbleMenu(e, r)}>
 					{#if !r.cont}{@const who = speakerLook(r.speaker)}<Avatar name={who.name} src={fileSrc(who.avatar)} color={who.color} size={36} />{:else}<span class="pad"></span>{/if}
 					<div class="stack">
-						{#if !r.cont}<span class="name">{speakerLook(r.speaker).name}</span>{/if}
+						{#if !r.cont}<span class="name sc-bubble-name">{speakerLook(r.speaker).name}</span>{/if}
 						{#each r.lines ?? [] as l, i (i)}
 							<div class="line">
 								{#if l.kind === "image" && images[l.text]}
@@ -285,7 +285,7 @@
 								{:else if l.kind === "html"}
 									<div class="html-card"><HtmlView code={l.text} /></div>
 								{:else}
-									<div class="b">{l.kind === "image" ? `(사진: ${l.text})` : l.text}</div>
+									<div class="b sc-bubble">{l.kind === "image" ? `(사진: ${l.text})` : l.text}</div>
 								{/if}
 								{#if i === (r.lines?.length ?? 0) - 1 && !r.pending}<span class="t">{r.time}</span>{/if}
 							</div>
@@ -300,7 +300,7 @@
 	</div>
 
 	<form
-		class="input"
+		class="input sc-phone-input"
 		onsubmit={(e) => {
 			e.preventDefault();
 			void send();

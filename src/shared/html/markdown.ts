@@ -118,7 +118,7 @@ function decorate(html: string, opts: MarkdownOpts): string {
 			const name = m[1].trim();
 			first.textContent = rest;
 			const who = doc.createElement("span");
-			who.className = "who";
+			who.className = "who sc-speaker";
 			const src = opts.avatars?.[name];
 			const av = doc.createElement(src ? "img" : "span");
 			av.className = "av";
