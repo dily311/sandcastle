@@ -70,6 +70,9 @@ async fn app_dir() -> (tempfile::TempDir, PathBuf, DbPool) {
 
 #[tokio::test]
 async fn overview_groups_chats_by_character() {
+    if !crate::test_fixtures::present() {
+        return;
+    }
     let (_d, base, db) = app_dir().await;
     let cid = populate(&db, &base).await;
 
@@ -104,6 +107,9 @@ async fn overview_groups_chats_by_character() {
 
 #[tokio::test]
 async fn character_pack_round_trip_merges_with_new_ids() {
+    if !crate::test_fixtures::present() {
+        return;
+    }
     let (_a, base_a, db_a) = app_dir().await;
     let old_id = populate(&db_a, &base_a).await;
     let fit = crate::models::conversation::AvatarFit { x: 30.0, y: 20.0, zoom: 1.5 };
@@ -154,6 +160,9 @@ async fn character_pack_round_trip_merges_with_new_ids() {
 
 #[tokio::test]
 async fn pack_rejects_conversations_of_other_characters() {
+    if !crate::test_fixtures::present() {
+        return;
+    }
     let (_a, base, db) = app_dir().await;
     let cid = populate(&db, &base).await;
     let err = pack::export_pack(&db, &base, &[cid], Some(&["nope".to_string()]), &base.join("x.scpack"))
@@ -165,6 +174,9 @@ async fn pack_rejects_conversations_of_other_characters() {
 
 #[tokio::test]
 async fn full_backup_restores_into_another_app_dir() {
+    if !crate::test_fixtures::present() {
+        return;
+    }
     let (_a, base_a, db_a) = app_dir().await;
     let cid = populate(&db_a, &base_a).await;
     // 갤러리 그림(+정보), 올린 배경, 테마 배경을 가리키는 설정, 커버 경로 (1-B-1)
@@ -257,6 +269,9 @@ async fn full_backup_restores_into_another_app_dir() {
 
 #[tokio::test]
 async fn check_reports_integrity_and_only_unreferenced_files() {
+    if !crate::test_fixtures::present() {
+        return;
+    }
     let (_d, base, db) = app_dir().await;
     populate(&db, &base).await;
     let clean = super::check::check_data(&db, &base).await.unwrap();
@@ -361,6 +376,9 @@ async fn restore_rejects_path_traversal_and_cleans_staging() {
 /// 다른 기기의 앱 데이터 폴더 어디에도 키 값이 없어야 한다 (가짜 키를 넣고 산출물 전체 — zip은 각 항목을 풀어서 — 에서 찾는다)
 #[tokio::test]
 async fn keys_never_leak_into_backup_pack_sync_or_app_data() {
+    if !crate::test_fixtures::present() {
+        return;
+    }
     use crate::{
         models::ai_service::ApiProfilesInput,
         service::secret_store::{api_key_name, SecretStore},
@@ -479,6 +497,9 @@ async fn count(db: &DbPool, sql: &str) -> i64 {
 
 #[tokio::test]
 async fn trash_character_round_trip() {
+    if !crate::test_fixtures::present() {
+        return;
+    }
     use super::trash::{self, TrashKind};
     let (_d, base, db) = app_dir().await;
     let cid = populate(&db, &base).await;
@@ -539,6 +560,9 @@ async fn trash_character_round_trip() {
 
 #[tokio::test]
 async fn trash_conversation_keeps_messages_and_purge_is_final() {
+    if !crate::test_fixtures::present() {
+        return;
+    }
     use super::trash::{self, TrashKind};
     let (_d, base, db) = app_dir().await;
     populate(&db, &base).await;
@@ -599,6 +623,9 @@ async fn trash_restore_refuses_when_parent_is_gone_and_expires() {
 /// 지연 트랜잭션은 SQLite가 기다리지 않고 BUSY로 거절한다. BEGIN IMMEDIATE면 앞 것이 끝날 때까지 기다린다
 #[tokio::test]
 async fn overlapping_trash_moves_wait_instead_of_failing_busy() {
+    if !crate::test_fixtures::present() {
+        return;
+    }
     use super::trash::{self, TrashKind};
     let (_d, base, db) = app_dir().await;
     let mut ids = vec![];

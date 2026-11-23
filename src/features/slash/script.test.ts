@@ -83,7 +83,8 @@ describe("슬래시 스크립트: 읽기", () => {
 const QR_FILES = import.meta.glob("../../../src-tauri/tests/sillyTavern/qr/*.json", { eager: true, import: "default" }) as Record<string, { message: string }>;
 const qr = (name: string) => QR_FILES[`../../../src-tauri/tests/sillyTavern/qr/${name}`].message;
 
-describe("실제 QR 파일 읽기 (5-E-20-6-1)", () => {
+// 실제 파일은 git에 넣지 않는다 (사용자 데이터) — 없으면(CI·새로 받은 저장소) 건너뜀
+describe.skipIf(!Object.keys(QR_FILES).length)("실제 QR 파일 읽기 (5-E-20-6-1)", () => {
 	it("분석: input → setvar → if(echo·abort) → gen → comment, gen 본문은 </System>까지", () => {
 		const cmds = parseScript(qr("(분석)텍스트만.qr.json"));
 		expect(cmds.map((c) => c.name)).toEqual(["input", "setvar", "if", "gen", "comment"]);

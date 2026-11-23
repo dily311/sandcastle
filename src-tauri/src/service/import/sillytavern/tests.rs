@@ -203,6 +203,9 @@ async fn import_seraphina(db: &DbPool, dir: &Path) -> (Character, String) {
 
 #[tokio::test]
 async fn st_seraphina_card() {
+    if !crate::test_fixtures::present() {
+        return;
+    }
     let db = pool().await;
     let dir = tempfile::tempdir().unwrap();
     let (character, book_id) = import_seraphina(&db, dir.path()).await;
@@ -220,6 +223,9 @@ async fn st_seraphina_card() {
 
 #[tokio::test]
 async fn st_default_preset() {
+    if !crate::test_fixtures::present() {
+        return;
+    }
     let db = pool().await;
     let dir = tempfile::tempdir().unwrap();
     let SillyTavernImport::Preset {
@@ -248,6 +254,9 @@ async fn st_default_preset() {
 /// Seraphina + Default 프리셋으로 조립한 프롬프트가 ST와 같은 순서인지
 #[tokio::test]
 async fn st_seraphina_prompt_matches_sillytavern_order() {
+    if !crate::test_fixtures::present() {
+        return;
+    }
     let db = pool().await;
     let dir = tempfile::tempdir().unwrap();
     let (character, book_id) = import_seraphina(&db, dir.path()).await;
@@ -301,6 +310,9 @@ async fn st_seraphina_prompt_matches_sillytavern_order() {
 /// ST 표정 스프라이트 폴더 → 채팅 이미지 (파일 이름 = 키)
 #[tokio::test]
 async fn st_expression_sprites_become_chat_images() {
+    if !crate::test_fixtures::present() {
+        return;
+    }
     use crate::service::chat::chat_images::{add_images, image_rules, sanitize_cg_tags};
 
     let db = pool().await;
@@ -327,6 +339,9 @@ async fn st_expression_sprites_become_chat_images() {
 
 #[tokio::test]
 async fn st_persona_avatar_is_not_a_card() {
+    if !crate::test_fixtures::present() {
+        return;
+    }
     let db = pool().await;
     let dir = tempfile::tempdir().unwrap();
     let err = import_file(&db, dir.path(), &st_sample("persona/user-default.png"), None)
@@ -347,6 +362,9 @@ fn st_chat_sample() -> std::path::PathBuf {
 
 #[tokio::test]
 async fn st_chat_attaches_to_character_by_name() {
+    if !crate::test_fixtures::present() {
+        return;
+    }
     let db = pool().await;
     let dir = tempfile::tempdir().unwrap();
     let (character, _) = import_seraphina(&db, dir.path()).await;
@@ -409,6 +427,9 @@ async fn st_chat_attaches_to_character_by_name() {
 
 #[tokio::test]
 async fn st_chat_needs_a_character() {
+    if !crate::test_fixtures::present() {
+        return;
+    }
     let db = pool().await;
     let dir = tempfile::tempdir().unwrap();
     // 캐릭터가 없으면 화자 목록과 함께 거부
@@ -445,6 +466,9 @@ async fn st_chat_needs_a_character() {
 
 #[tokio::test]
 async fn st_data_zip_imports_everything_and_links_by_file_name() {
+    if !crate::test_fixtures::present() {
+        return;
+    }
     use std::io::Write;
     let db = pool().await;
     let app = tempfile::tempdir().unwrap();
@@ -595,6 +619,9 @@ fn st_zip_unpacks_only_what_it_imports_and_skips_oversized() {
 
 #[tokio::test]
 async fn st_data_export_round_trips_through_our_own_import() {
+    if !crate::test_fixtures::present() {
+        return;
+    }
     let db = pool().await;
     let dir = tempfile::tempdir().unwrap();
     let (sera, _) = import_seraphina(&db, dir.path()).await;
@@ -661,6 +688,9 @@ fn branch_of_sample(parent: &str, n: usize) -> Vec<u8> {
 
 #[tokio::test]
 async fn st_data_links_branches_and_keeps_chats_without_a_card() {
+    if !crate::test_fixtures::present() {
+        return;
+    }
     let db = pool().await;
     let app = tempfile::tempdir().unwrap();
     let src = tempfile::tempdir().unwrap();
@@ -736,6 +766,9 @@ async fn exported_card_carries_its_character_regex() {
 
 #[tokio::test]
 async fn st_preset_round_trips_blocks_settings_and_regex() {
+    if !crate::test_fixtures::present() {
+        return;
+    }
     let db = pool().await;
     let dir = tempfile::tempdir().unwrap();
     let mut original: serde_json::Value = serde_json::from_slice(&std::fs::read(st_sample("presets/Default.json")).unwrap()).unwrap();

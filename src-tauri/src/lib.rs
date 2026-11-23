@@ -5,6 +5,18 @@ use std::{
 use tauri::Manager;
 #[cfg(test)]
 mod perf_tests;
+/// SillyTavern 실제 파일(`tests/sillyTavern` — 사용자 데이터라 git에 넣지 않음)을 쓰는 시험의 확인.
+/// 폴더가 없으면(CI·새로 받은 저장소) 그 시험은 건너뛴다
+#[cfg(test)]
+pub(crate) mod test_fixtures {
+    pub fn present() -> bool {
+        let ok = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("tests/sillyTavern").is_dir();
+        if !ok {
+            eprintln!("[test] tests/sillyTavern 없음 — SillyTavern 실제 파일 시험을 건너뜀");
+        }
+        ok
+    }
+}
 pub mod state;
 use state::LaunchMode;
 mod adapter;

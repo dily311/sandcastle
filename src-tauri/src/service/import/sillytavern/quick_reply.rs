@@ -133,6 +133,9 @@ mod tests {
 
     #[test]
     fn real_single_qr_files_become_buttons() {
+        if !crate::test_fixtures::present() {
+            return;
+        }
         let dir = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("tests/sillyTavern/qr");
         let mut labels = vec![];
         for e in std::fs::read_dir(dir).unwrap().flatten() {

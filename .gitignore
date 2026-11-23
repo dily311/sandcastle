@@ -36,3 +36,6 @@ src/data
 # tsc -p tsconfig.node.json 산출물 (Vite가 .ts보다 .js를 먼저 읽는다)
 /vite.config.js
 /vite.config.d.ts
+
+# 실리 테스트 데이터는 포함되지 않게 (사용자 데이터 — 없으면 그 시험은 건너뜀)
+/src-tauri/tests/sillyTavern/

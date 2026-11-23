@@ -64,7 +64,8 @@ beforeEach(() => {
 	answer = "숲의 축제";
 });
 
-describe("실제 QR 실행 (5-E-20-6-5)", () => {
+// 실제 파일은 git에 넣지 않는다 (사용자 데이터) — 없으면(CI·새로 받은 저장소) 건너뜀
+describe.skipIf(!Object.keys(QR).length)("실제 QR 실행 (5-E-20-6-5)", () => {
 	it("분석: 입력 → AI 분석 → AI에게 숨긴 접기 메시지로", async () => {
 		const r = await run("(분석)텍스트만.qr.json");
 		expect(r.aborted).toBe(false);
