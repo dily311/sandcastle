@@ -106,9 +106,11 @@ pub async fn export_data_zip(db: &DbPool, path: &Path) -> Result<SillyTavernData
             if messages.is_empty() {
                 continue;
             }
+            // 페르소나가 빈 대화는 캐릭터 기본 → 전역 (ADR-028)
+            let persona_id = db::conversation::resolve_conv_persona(db, &conv.persona_id, &conv.character_id).await;
             let user_name = personas
                 .iter()
-                .find(|p| p.id == conv.persona_id)
+                .find(|p| p.id == persona_id)
                 .map(|p| p.name.clone())
                 .unwrap_or_else(|| "User".into());
             let text = to_jsonl(

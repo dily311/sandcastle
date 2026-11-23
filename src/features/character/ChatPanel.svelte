@@ -109,7 +109,7 @@
 	const activePresetId = $derived(conv.promptPresetId || usage?.presetId || null);
 
 	const character = $derived(library.character(conv.characterId));
-	const persona = $derived(library.persona(conv.personaId) ?? library.personas[0]);
+	const persona = $derived(library.persona(library.convPersonaId(conv)) ?? library.personas[0]);
 	const personaOptions = $derived<ProfileOption[]>(library.personas.map((p) => ({ id: p.id, name: p.name, avatar: p.avatar, avatarFit: p.avatarFit, color: p.color, description: p.description })));
 
 	// ---- 정규식: 이 대화에 걸리는 것 (전역 + 이 캐릭터 + 이 프리셋) ----

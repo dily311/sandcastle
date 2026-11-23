@@ -35,6 +35,7 @@ vi.mock("$features/character/library.svelte", () => ({
 		conversation: () => ({ id: "c", characterId: "ch", personaId: "p", meta: {} }),
 		character: () => ({ name: "세라피나" }),
 		persona: () => ({ name: "민" }),
+		convPersonaId: (c: { personaId?: string } | null) => c?.personaId || "p",
 		personas: [],
 		presets: [],
 		patchMeta: vi.fn(),

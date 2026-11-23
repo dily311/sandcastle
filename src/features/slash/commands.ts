@@ -72,7 +72,7 @@ export function slashEnv(session: ChatSession, opts: SlashOpts = {}): ScriptEnv 
 	const convId = session.convId;
 	const conv = () => library.conversation(convId);
 	const charName = () => library.character(conv()?.characterId)?.name ?? "";
-	const userName = () => library.persona(conv()?.personaId)?.name ?? "";
+	const userName = () => library.persona(library.convPersonaId(conv()))?.name ?? "";
 	// 변수: 대화 meta.variables (SillyTavern chat_metadata.variables와 같은 범위). 실행 중엔 여기 들고 있다가 바뀔 때 저장
 	const vars: Record<string, string> = Object.fromEntries(
 		Object.entries((conv()?.meta as { variables?: Record<string, unknown> } | null)?.variables ?? {}).map(([k, v]) => [k, typeof v === "string" ? v : JSON.stringify(v)]),

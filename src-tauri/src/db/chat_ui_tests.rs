@@ -317,3 +317,106 @@ async fn conversation_meta_patch_merges_and_removes() {
     assert_eq!(meta["memory"], "열쇠를 잃어버림");
     assert!(meta.get("authorNote").is_none());
 }
+
+/// 대화 옵션 고르는 순서 (ADR-028, 5-E-29-1): 대화(자물쇠) > 캐릭터 기본 > 시스템 기본(사이드바 전역)
+#[tokio::test]
+async fn conversation_persona_falls_back_to_character_then_global() {
+    let pool = pool().await;
+    for id in ["p-char", "p-mine", "p-global"] {
+        sqlx::query("INSERT INTO personas (id, name, created_at, updated_at) VALUES (?, ?, 0, 0)")
+            .bind(id)
+            .bind(id)
+            .execute(&pool)
+            .await
+            .unwrap();
+    }
+    sqlx::query("UPDATE conv_settings SET default_persona_id = 'p-global' WHERE id = 1")
+        .execute(&pool)
+        .await
+        .unwrap();
+    let id = new_conv(&pool).await;
+    // 빈 페르소나로 저장 = 풀림 (FK라 NULL로 들어간다)
+    let opts = |p: &str| ConversationOptions {
+        persona_id: p.into(),
+        prompt_preset_id: None,
+        api_profile_id: None,
+        model: None,
+    };
+    ui::set_options(&pool, &id, &opts("")).await.unwrap();
+    let c = conv::get_conversation(&pool, &id).await.unwrap();
+    assert_eq!(c.persona_id, "");
+    assert_eq!(
+        conv::resolve_conv_persona(&pool, &c.persona_id, &c.character_id).await,
+        "p-global",
+        "캐릭터 기본이 없으면 전역"
+    );
+    sqlx::query("UPDATE characters SET default_persona_id = 'p-char' WHERE id = 'c1'")
+        .execute(&pool)
+        .await
+        .unwrap();
+    assert_eq!(
+        conv::resolve_conv_persona(&pool, &c.persona_id, &c.character_id).await,
+        "p-char",
+        "캐릭터 기본이 전역보다 앞"
+    );
+    ui::set_options(&pool, &id, &opts("p-mine")).await.unwrap();
+    let c = conv::get_conversation(&pool, &id).await.unwrap();
+    assert_eq!(
+        conv::resolve_conv_persona(&pool, &c.persona_id, &c.character_id).await,
+        "p-mine",
+        "잠근 대화의 값이 맨 앞"
+    );
+    // 캐릭터가 지워진 대화는 전역
+    assert_eq!(conv::resolve_conv_persona(&pool, "", "").await, "p-global");
+}
+
+/// 마이그레이션 008: 일반 대화의 페르소나가 지금의 기본과 같으면 비우고(풀림), 다르면 남긴다(잠김). 폰 대화는 그대로
+#[tokio::test]
+async fn migration_008_unlocks_only_personas_equal_to_the_default() {
+    let pool = pool().await;
+    for id in ["p-char", "p-other"] {
+        sqlx::query("INSERT INTO personas (id, name, created_at, updated_at) VALUES (?, ?, 0, 0)")
+            .bind(id)
+            .bind(id)
+            .execute(&pool)
+            .await
+            .unwrap();
+    }
+    sqlx::query("INSERT INTO characters (id, name, default_persona_id, created_at, updated_at) VALUES ('c2', 'Bea', 'p-char', 0, 0)")
+        .execute(&pool)
+        .await
+        .unwrap();
+    // (id, 캐릭터, 페르소나, 모드)
+    let rows = [
+        ("a", "c1", "default", "chat"),  // 캐릭터 기본 없음 → 전역(default)과 같음 → 비움
+        ("b", "c2", "p-char", "chat"),   // 캐릭터 기본과 같음 → 비움
+        ("c", "c2", "p-other", "chat"),  // 일부러 고름 → 남김
+        ("d", "c1", "default", "phone"), // 폰 주인 → 그대로
+    ];
+    for (id, ch, p, mode) in rows {
+        sqlx::query("INSERT INTO conversations (id, title, character_id, persona_id, mode, created_at, updated_at) VALUES (?, 't', ?, ?, ?, 0, 100)")
+            .bind(id)
+            .bind(ch)
+            .bind(p)
+            .bind(mode)
+            .execute(&pool)
+            .await
+            .unwrap();
+    }
+    sqlx::raw_sql(include_str!("migrations/008_conversation_persona_follows_default.sql"))
+        .execute(&pool)
+        .await
+        .unwrap();
+    let got: Vec<(String, Option<String>, i64)> =
+        sqlx::query_as("SELECT id, persona_id, updated_at FROM conversations WHERE id IN ('a','b','c','d') ORDER BY id")
+            .fetch_all(&pool)
+            .await
+            .unwrap();
+    assert_eq!(
+        got.iter().map(|(i, p, _)| (i.as_str(), p.as_deref())).collect::<Vec<_>>(),
+        vec![("a", None), ("b", None), ("c", Some("p-other")), ("d", Some("default"))]
+    );
+    // 최근 대화 순서가 바뀌지 않게 updated_at은 1만 올린다 (touch 트리거가 지금 시각으로 올리지 않음)
+    assert_eq!(got[0].2, 101);
+    assert_eq!(got[2].2, 100);
+}

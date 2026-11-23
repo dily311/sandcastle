@@ -14,7 +14,7 @@ use serde_json::{json, Map, Value};
 use crate::{
     db::{
         chat_ui,
-        conversation::{get_character, get_conversation, get_persona, get_system_default_persona},
+        conversation::{get_character, get_conversation, get_persona, resolve_conv_persona},
     },
     error::AppError,
     models::{
@@ -541,10 +541,7 @@ impl ChatManager {
             .filter(|s| !s.is_empty())
             .or(Some(fallback.api_profile_id.clone()).filter(|s| !s.is_empty()))
             .ok_or_else(|| AppError::validation("API를 먼저 고르세요 (대화 설정 또는 설정 > API 키)", None))?;
-        let persona_id = match conv.persona_id.as_str() {
-            "" => get_system_default_persona(db).await.unwrap_or_else(|_| "default".into()),
-            id => id.to_string(),
-        };
+        let persona_id = resolve_conv_persona(db, &conv.persona_id, &conv.character_id).await;
         if conv.character_id.is_empty() {
             return Err(AppError::validation("캐릭터가 지워진 대화", None).into());
         }
@@ -1009,10 +1006,7 @@ impl ChatManager {
             .or(conv.api_profile_id.clone().filter(|s| !s.is_empty()))
             .or(Some(fallback.api_profile_id.clone()).filter(|s| !s.is_empty()))
             .ok_or_else(|| AppError::validation("API를 먼저 고르세요 (대화 설정 또는 설정 > API 키)", None))?;
-        let persona_id = match conv.persona_id.as_str() {
-            "" => get_system_default_persona(db).await.unwrap_or_else(|_| "default".into()),
-            id => id.to_string(),
-        };
+        let persona_id = resolve_conv_persona(db, &conv.persona_id, &conv.character_id).await;
         if conv.character_id.is_empty() {
             return Err(AppError::validation("캐릭터가 지워진 대화", None).into());
         }
@@ -1170,10 +1164,7 @@ impl ChatManager {
             .filter(|s| !s.is_empty())
             .or(Some(fallback.api_profile_id.clone()).filter(|s| !s.is_empty()))
             .ok_or_else(|| AppError::validation("API를 먼저 고르세요 (대화 설정 또는 설정 > API 키)", None))?;
-        let persona_id = match conv.persona_id.as_str() {
-            "" => get_system_default_persona(db).await.unwrap_or_else(|_| "default".into()),
-            id => id.to_string(),
-        };
+        let persona_id = resolve_conv_persona(db, &conv.persona_id, &conv.character_id).await;
         let character = get_character(db, &conv.character_id).await.map_err(AppError::from)?;
         let persona = get_persona(db, &persona_id).await.map_err(AppError::from)?;
         let preset_id = conv
@@ -1359,10 +1350,7 @@ async fn quiet_prompt(
         .filter(|s| !s.is_empty())
         .or(Some(fallback.api_profile_id.clone()).filter(|s| !s.is_empty()))
         .ok_or_else(|| AppError::validation("API를 먼저 고르세요 (대화 설정 또는 설정 > API 키)", None))?;
-    let persona_id = match conv.persona_id.as_str() {
-        "" => get_system_default_persona(db).await.unwrap_or_else(|_| "default".into()),
-        id => id.to_string(),
-    };
+    let persona_id = resolve_conv_persona(db, &conv.persona_id, &conv.character_id).await;
     if conv.character_id.is_empty() {
         return Err(AppError::validation("캐릭터가 지워진 대화", None).into());
     }

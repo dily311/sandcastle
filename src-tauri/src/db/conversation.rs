@@ -41,7 +41,8 @@ where
     .bind(&id)
     .bind(&input.title)
     .bind(&input.character_id)
-    .bind(&input.persona_id)
+    // 빈 페르소나 = 캐릭터 기본 → 전역을 따름 (ADR-028). FK라 빈 글이 아니라 NULL로
+    .bind(Some(input.persona_id.as_str()).filter(|s| !s.is_empty()))
     .bind(&wi_json)
     .bind(&input.mode)
     .bind(meta)
@@ -377,6 +378,27 @@ where
     let json = fit.and_then(|f| f.normalized()).map(|f| serde_json::to_string(&f).unwrap_or_default());
     sqlx::query(sql).bind(json).bind(id).execute(executor).await?;
     Ok(())
+}
+
+/// 대화가 쓸 페르소나 (ADR-028, 5-E-29): 대화에 값이 있으면 그것(자물쇠), 없으면 캐릭터 기본, 그것도 없으면
+/// 시스템 기본 페르소나(사이드바에서 고르는 전역). 보내기·다시 생성·대필·엿보기·정규식·이름 찾기가 모두 이것을 쓴다
+pub async fn resolve_conv_persona(db: &sqlx::SqlitePool, conv_persona_id: &str, character_id: &str) -> String {
+    if !conv_persona_id.is_empty() {
+        return conv_persona_id.to_string();
+    }
+    if !character_id.is_empty() {
+        let char_default: Option<String> = sqlx::query_scalar("SELECT default_persona_id FROM characters WHERE id = ?")
+            .bind(character_id)
+            .fetch_optional(db)
+            .await
+            .ok()
+            .flatten()
+            .flatten();
+        if let Some(id) = char_default.filter(|s| !s.is_empty()) {
+            return id;
+        }
+    }
+    get_system_default_persona(db).await.unwrap_or_else(|_| "default".into())
 }
 
 pub async fn get_system_default_persona<'e, E>(executor: E) -> Result<String, Error>

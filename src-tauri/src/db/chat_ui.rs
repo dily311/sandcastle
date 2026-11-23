@@ -202,7 +202,8 @@ where
              api_profile_id = ?
          WHERE id = ?",
     )
-    .bind(&o.persona_id)
+    // 빈 페르소나 = 자물쇠 풂 → 캐릭터 기본 → 전역 (ADR-028). FK라 빈 글이 아니라 NULL로
+    .bind(Some(o.persona_id.as_str()).filter(|s| !s.is_empty()))
     .bind(&o.prompt_preset_id)
     .bind(&o.api_profile_id)
     .bind(o.model.as_deref().map(str::trim).filter(|m| !m.is_empty()))

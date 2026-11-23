@@ -271,10 +271,7 @@ pub async fn display_messages(state: State<'_, AppState>, conversation_id: Strin
         .await
         .map(|c| c.name)
         .unwrap_or_default();
-    let persona_id = match conv.persona_id.as_str() {
-        "" => conversation::get_system_default_persona(&state.db).await.unwrap_or_else(|_| "default".into()),
-        id => id.to_string(),
-    };
+    let persona_id = conversation::resolve_conv_persona(&state.db, &conv.persona_id, &conv.character_id).await;
     let user_name = conversation::get_persona(&state.db, &persona_id).await.map(|p| p.name).unwrap_or_default();
     let regex = RegexProcessor::load(
         &state.db,
@@ -410,10 +407,13 @@ pub async fn export_conversation(state: State<'_, AppState>, id: String, format:
         .await
         .map(|c| c.name)
         .unwrap_or_else(|_| "Character".into());
-    let user_name = conversation::get_persona(&state.db, &conv.persona_id)
-        .await
-        .map(|p| p.name)
-        .unwrap_or_else(|_| "User".into());
+    let user_name = conversation::get_persona(
+        &state.db,
+        &conversation::resolve_conv_persona(&state.db, &conv.persona_id, &conv.character_id).await,
+    )
+    .await
+    .map(|p| p.name)
+    .unwrap_or_else(|_| "User".into());
     let iso = |ms: i64| {
         chrono::DateTime::from_timestamp_millis(ms)
             .map(|d| d.to_rfc3339_opts(chrono::SecondsFormat::Millis, true))

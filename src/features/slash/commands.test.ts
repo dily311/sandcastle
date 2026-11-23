@@ -20,6 +20,7 @@ vi.mock("$features/character/library.svelte", () => ({
 		conversation: () => conv,
 		character: () => ({ name: "세라" }),
 		persona: () => ({ name: "민" }),
+		convPersonaId: (c: { personaId?: string } | null) => c?.personaId || "p",
 		personas: [{ id: "p2", name: "여행자" }],
 		presets: [{ id: "pr", name: "기본 배치" }],
 		setOptions,

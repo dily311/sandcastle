@@ -68,14 +68,16 @@ class Library {
 				this.loaded = true;
 			}
 		}
-		const [characters, conversations, personas, presets, apis] = await Promise.all([
+		const [characters, conversations, personas, presets, apis, conv] = await Promise.all([
 			call(commands.getAllCharacters(), src),
 			call(commands.getAllConversations(), src),
 			call(commands.getAllPersonas(), { ...src, silent: true }).catch(() => []),
 			call(commands.listPromptPresets(), { ...src, silent: true }).catch(() => []),
 			call(commands.getAllApiProfile(), { ...src, silent: true }).catch(() => []),
+			call(commands.getConvSettings(), { ...src, silent: true }).catch(() => null),
 		]);
 		Object.assign(this, { characters, conversations, personas, presets, apis });
+		this.defaultPersonaId = conv?.defaultPersonaId ?? null;
 		this.loaded = true;
 		writeListCache(characters, conversations);
 	}
@@ -88,6 +90,17 @@ class Library {
 	}
 	persona(id: string | null | undefined) {
 		return this.personas.find((p) => p.id === id);
+	}
+	/** 전역 기본 페르소나 (사이드바에서 고름, ADR-028) */
+	defaultPersonaId = $state<string | null>(null);
+	/** 대화가 쓰는 페르소나: 대화에 있으면 그것(자물쇠) → 캐릭터 기본 → 전역. 백엔드 resolve_conv_persona와 같은 순서 */
+	convPersonaId(c: Pick<Conversation, "personaId" | "characterId"> | null | undefined): string {
+		return c?.personaId || this.character(c?.characterId)?.defaultPersonaId || this.defaultPersonaId || "default";
+	}
+	/** 사이드바에서 유저 프로필 고르기 = 언제나 전역 (자물쇠를 건 대화는 그대로) */
+	async setDefaultPersona(id: string) {
+		await call(commands.setSystemDefaultPersona(id), src);
+		this.defaultPersonaId = id;
 	}
 	/** 최근 활동 순 (폰 대화는 폰 화면에서만 보임) */
 	convsOf(charId: string) {
@@ -117,10 +130,10 @@ class Library {
 	async createConversation(charId: string): Promise<Conversation> {
 		const ch = this.character(charId);
 		if (!ch) throw new Error("캐릭터 없음");
-		const def = ch.defaultPersonaId ?? (await call(commands.getConvSettings(), { ...src, silent: true }).catch(() => null))?.defaultPersonaId ?? "default";
 		const n = this.convsOf(charId).length + 1;
+		// 페르소나를 복사하지 않는다: 비워 두면 캐릭터 기본 → 전역을 따른다 (ADR-028). 개요 탭 자물쇠로 이 대화에 고정
 		const conv = await call(
-			commands.createConversation({ title: `${ch.name} 대화 ${n}`, characterId: charId, personaId: def, worldInfoIds: [], mode: "chat" }),
+			commands.createConversation({ title: `${ch.name} 대화 ${n}`, characterId: charId, personaId: "", worldInfoIds: [], mode: "chat" }),
 			src,
 		);
 		const greetings = [ch.firstMessage, ...ch.alternateFirstMessage].filter((g): g is string => !!g?.trim());

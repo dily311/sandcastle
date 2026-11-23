@@ -143,7 +143,7 @@
 		return m.role === "assistant"
 			? library.character(m.characterId ?? charId)
 			: m.role === "user"
-				? library.persona((m.meta as { sender?: { id?: string } } | null)?.sender?.id ?? conv?.personaId)
+				? library.persona((m.meta as { sender?: { id?: string } } | null)?.sender?.id ?? library.convPersonaId(conv))
 				: undefined;
 	}
 	function avatarOf(m: Message): string | null | undefined {

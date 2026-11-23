@@ -91,15 +91,20 @@ impl RegexProcessor {
             Err(sqlx::Error::RowNotFound) => None,
             Err(e) => return Err(e.into()),
         };
+        let conversation_found = conv.is_some();
         let (character_id, persona_id) = conv.map(|c| (c.character_id, c.persona_id)).unwrap_or_default();
 
         let char_name = match character_id.as_str() {
             "" => None,
             id => get_character(db, id).await.ok().map(|c| c.name),
         };
-        let user_name = match persona_id.as_str() {
-            "" => None,
-            id => get_persona(db, id).await.ok().map(|p| p.name),
+        // 대화가 없으면(id 없음) 이름도 없음. 있으면 대화 → 캐릭터 기본 → 전역 (ADR-028)
+        let user_name = match conversation_found {
+            false => None,
+            true => get_persona(db, &crate::db::conversation::resolve_conv_persona(db, &persona_id, &character_id).await)
+                .await
+                .ok()
+                .map(|p| p.name),
         };
         let macros = RegexMacros {
             char_name: char_name.unwrap_or_default(),
