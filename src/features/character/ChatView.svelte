@@ -15,7 +15,7 @@
 	import { childrenOf, pathOf } from "./branches";
 	import SidePanel from "$app/SidePanel.svelte";
 	import { layout } from "$app/layout.svelte";
-	import { latestStatusBlock } from "$features/status/pin";
+	import { currentStatusBlock } from "$features/status/current";
 	import { statusView } from "$features/status/statusView.svelte";
 	import StatusFloat from "$features/status/StatusFloat.svelte";
 	import StatusTop from "$features/status/StatusTop.svelte";
@@ -163,7 +163,16 @@
 	/** 받는 중인 새 응답 (끝의 <image> 그림 프롬프트는 저장할 때 빠지므로 숨김) */
 	// ---- 상태창 (5-F-4-2): 가장 최근 메시지의 상태창 하나 ----
 	const statusBlockOn = $derived(!!session && plugins.on("status"));
-	const statusBlock = $derived(statusBlockOn && session ? latestStatusBlock(session.messages, session.display, plugins.on("html")) : null);
+	const statusBlock = $derived(statusBlockOn && session ? currentStatusBlock(conv, session.messages, session.display, plugins.on("html")) : null);
+	// 상태창 틀·변수 정의는 이 캐릭터로 들어올 때 한 번 읽는다 (플러그인이 켜졌을 때만)
+	$effect(() => {
+		const id = character?.id;
+		if (!id || !plugins.on("status")) return;
+		untrack(() => {
+			void library.loadStatusTemplate(id);
+			void library.loadVarDefs(id);
+		});
+	});
 	const liveBlocks = $derived(session?.live?.kind === "send" ? toBlocks(session.live.text.replace(/<image>[\s\S]*?(<\/image>|$)/i, ""), { safeHtml: plugins.on("html") }) : []);
 	/** 메시지 프로필 그림 (5-E-9): 대화 설정에서 켰을 때만. AI는 그 캐릭터, 내 글은 보낸 페르소나(없으면 대화의 페르소나) */
 	const showAvatars = $derived(!!(conv?.meta as { showAvatars?: boolean } | null)?.showAvatars);

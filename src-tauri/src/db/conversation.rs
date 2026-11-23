@@ -428,6 +428,32 @@ where
     Ok(r.rows_affected() != 0)
 }
 
+/// 캐릭터의 상태창 틀 (5-F-4-5). 없으면 None
+pub async fn get_character_status_template<'e, E>(executor: E, character_id: &str) -> Result<Option<String>, Error>
+where
+    E: Executor<'e, Database = Sqlite>,
+{
+    let raw: Option<Option<String>> = sqlx::query_scalar("SELECT status_template FROM characters WHERE id = ?")
+        .bind(character_id)
+        .fetch_optional(executor)
+        .await?;
+    raw.ok_or(Error::RowNotFound)
+}
+
+/// 캐릭터의 상태창 틀 저장 (빈 글 = NULL)
+pub async fn upsert_character_status_template<'e, E>(executor: E, character_id: &str, template: Option<&str>) -> Result<bool, Error>
+where
+    E: Executor<'e, Database = Sqlite>,
+{
+    let t = template.filter(|t| !t.trim().is_empty());
+    let r = sqlx::query("UPDATE characters SET status_template = ? WHERE id = ?")
+        .bind(t)
+        .bind(character_id)
+        .execute(executor)
+        .await?;
+    Ok(r.rows_affected() != 0)
+}
+
 pub async fn get_system_default_persona<'e, E>(executor: E) -> Result<String, Error>
 where
     E: Executor<'e, Database = Sqlite>,

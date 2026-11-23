@@ -206,6 +206,28 @@ pub async fn set_character_var_defs(
     Ok(defs)
 }
 
+/// 캐릭터의 상태창 틀 (5-F-4-5, 코어 플러그인 status)
+#[tauri::command]
+#[specta::specta]
+pub async fn get_character_status_template(app: tauri::AppHandle, state: State<'_, AppState>, character_id: String) -> Result<Option<String>> {
+    crate::sys::plugins::require(&app, crate::sys::plugins::id::STATUS)?;
+    Ok(conversation::get_character_status_template(&state.db, &character_id).await?)
+}
+
+/// 상태창 틀 저장 (빈 글이면 지움, 100KB까지)
+#[tauri::command]
+#[specta::specta]
+pub async fn set_character_status_template(app: tauri::AppHandle, state: State<'_, AppState>, character_id: String, template: Option<String>) -> Result<()> {
+    crate::sys::plugins::require(&app, crate::sys::plugins::id::STATUS)?;
+    if template.as_ref().is_some_and(|t| t.len() > 100 * 1024) {
+        return Err(AppError::validation("상태창 틀은 100KB까지", None));
+    }
+    if !conversation::upsert_character_status_template(&state.db, &character_id, template.as_deref()).await? {
+        return Err(AppError::not_found("캐릭터를 찾을 수 없습니다"));
+    }
+    Ok(())
+}
+
 /// 프로필 그림 확대·위치 (5-E-17-3). owner: "character" | "persona", fit이 없으면 가운데·확대 없음으로
 #[tauri::command]
 #[specta::specta]

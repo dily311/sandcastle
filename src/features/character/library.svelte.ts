@@ -291,6 +291,17 @@ class Library {
 		return this.varDefs[charId];
 	}
 
+	/** 캐릭터의 상태창 틀 (5-F-4-5). 없으면 null */
+	statusTemplates = $state<Record<string, string | null>>({});
+	async loadStatusTemplate(charId: string) {
+		this.statusTemplates[charId] = await call(commands.getCharacterStatusTemplate(charId), { ...src, silent: true }).catch(() => null);
+		return this.statusTemplates[charId];
+	}
+	async setStatusTemplate(charId: string, template: string | null) {
+		await call(commands.setCharacterStatusTemplate(charId, template?.trim() ? template : null), src);
+		this.statusTemplates[charId] = template?.trim() ? template : null;
+	}
+
 	// ---- 캐릭터 에셋 에셋 ----
 	/** 캐릭터가 쓸 에셋 판 (null = 전체, 5-E-21) */
 	assetVersion = $state<Record<string, string | null>>({});

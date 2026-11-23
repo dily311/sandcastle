@@ -208,6 +208,9 @@ pub async fn export_pack(
         if !var_defs.is_empty() {
             character_json["varDefs"] = serde_json::to_value(&var_defs)?;
         }
+        if let Some(t) = db::conversation::get_character_status_template(db, cid).await.ok().flatten() {
+            character_json["statusTemplate"] = serde_json::Value::String(t);
+        }
         characters.push(PackCharacter {
             character: character_json,
             avatar_file,
@@ -416,6 +419,7 @@ async fn import_pack_inner(
         // 프로필 그림 확대·위치 (5-E-17-3, 예전 팩에는 없음)
         let avatar_fit = serde_json::from_value::<crate::models::conversation::AvatarFit>(pc.character["avatarFit"].clone()).ok();
         // 변수 정의 (5-F-4-3, 예전 팩에는 없음). 확인을 거쳐 넣고, 읽을 수 없으면 경고만
+        let status_template = pc.character.get("statusTemplate").and_then(|v| v.as_str()).map(str::to_string);
         let var_defs = match pc.character.get("varDefs") {
             Some(v) => serde_json::from_value::<Vec<crate::models::conversation::VarDef>>(v.clone())
                 .map_err(|e| e.to_string())
@@ -446,6 +450,9 @@ async fn import_pack_inner(
         }
         if character.avatar.is_some() && avatar_fit.is_some() {
             db::conversation::set_avatar_fit(&mut *tx, "characters", &new_id, avatar_fit).await?;
+        }
+        if let Some(t) = status_template.as_deref() {
+            db::conversation::upsert_character_status_template(&mut *tx, &new_id, Some(t)).await?;
         }
         match var_defs {
             Ok(defs) if !defs.is_empty() => {

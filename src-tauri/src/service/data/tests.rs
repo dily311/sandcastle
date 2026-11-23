@@ -129,6 +129,9 @@ async fn character_pack_round_trip_merges_with_new_ids() {
     db::conversation::upsert_character_var_defs(&db_a, &old_id, std::slice::from_ref(&hp))
         .await
         .unwrap();
+    db::conversation::upsert_character_status_template(&db_a, &old_id, Some("<b>HP {{getvar::hp}}</b>"))
+        .await
+        .unwrap();
     let out = base_a.join("exports/seraphina.scpack");
     let summary = pack::export_pack(&db_a, &base_a, &[old_id.clone()], None, &out).await.unwrap();
     assert_eq!((summary.character_count, summary.conversation_count, summary.message_count), (1, 1, 12));
@@ -160,6 +163,11 @@ async fn character_pack_round_trip_merges_with_new_ids() {
         db::conversation::get_character_var_defs(&db_b, &new_id).await.unwrap(),
         vec![hp],
         "변수 정의도 그대로 (5-F-4-3)"
+    );
+    assert_eq!(
+        db::conversation::get_character_status_template(&db_b, &new_id).await.unwrap().as_deref(),
+        Some("<b>HP {{getvar::hp}}</b>"),
+        "상태창 틀도 그대로 (5-F-4-5)"
     );
     let avatar = PathBuf::from(character.avatar.unwrap());
     assert!(avatar.starts_with(&base_b) && avatar.is_file());

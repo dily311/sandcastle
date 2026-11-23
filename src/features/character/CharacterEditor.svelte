@@ -41,11 +41,15 @@
 	const varsOn = plugins.on("status");
 	let varDefs = $state<VarDef[]>([]);
 	let varDefsOriginal = $state("[]");
+	// 상태창 틀 (5-F-4-5): 변수로 채워 고정 자리에 그리는 HTML
+	let statusTemplate = $state("");
+	let statusTemplateOriginal = $state("");
 	onMount(async () => {
 		books = await call(commands.getAllWorldinfoBooks(), { ...src, silent: true }).catch(() => []);
 		if (varsOn) {
 			varDefs = (await library.loadVarDefs(c0.id)).map((d) => ({ ...d }));
 			varDefsOriginal = JSON.stringify(varDefs);
+			statusTemplate = statusTemplateOriginal = (await library.loadStatusTemplate(c0.id)) ?? "";
 		}
 	});
 
@@ -92,7 +96,7 @@
 		const { avatar: _a, favorite: _f, ...rest } = i;
 		return { ...rest, worldInfoIds: [...rest.worldInfoIds].sort() };
 	}
-	const varDefsDirty = $derived(varsOn && JSON.stringify(varDefs) !== varDefsOriginal);
+	const varDefsDirty = $derived(varsOn && (JSON.stringify(varDefs) !== varDefsOriginal || statusTemplate !== statusTemplateOriginal));
 	const dirty = $derived(JSON.stringify(stripAvatar(input)) !== original || varDefsDirty);
 
 	// 저장하지 않고 나가려 하면 물어봄
@@ -113,6 +117,8 @@
 			if (varDefsDirty) {
 				varDefs = await library.setVarDefs(character.id, varDefs);
 				varDefsOriginal = JSON.stringify(varDefs);
+				await library.setStatusTemplate(character.id, statusTemplate);
+				statusTemplateOriginal = statusTemplate;
 			}
 			const saved = await call(commands.updateCharacter(character.id, input), src);
 			const i = library.characters.findIndex((c) => c.id === saved.id);
@@ -298,6 +304,9 @@
 					<h2>변수</h2>
 					<div class="card">
 						<VarDefsEditor bind:defs={varDefs} />
+						<Field label="상태창 틀" hint={"HTML. {{getvar::이름}}·{{getglobalvar::이름}}·{{char}}·{{user}}가 값으로 바뀜. 있으면 메시지의 상태창 대신 이것을 그림"}>
+							<Textarea bind:value={statusTemplate} rows={6} placeholder={'<div>HP {{getvar::hp}} / 100</div>'} />
+						</Field>
 					</div>
 				</section>
 			{/if}
