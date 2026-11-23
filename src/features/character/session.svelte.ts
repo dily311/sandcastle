@@ -300,7 +300,12 @@ export class ChatSession {
 			return;
 		}
 		const s = swipes[next];
-		await this.save(m, s.content, { ...meta, ...(s.meta ?? {}), swipes, swipeId: next });
+		const merged: MessageMeta = { ...meta, ...(s.meta ?? {}), swipes, swipeId: next };
+		// AI가 바꾼 변수 몫은 스와이프마다 (5-F-4-4-2): 고른 스와이프에 없으면 지운다 — 백엔드가 앞 몫을 되돌리고 새 몫을 적용
+		if (!(s.meta as { varChanges?: unknown } | undefined)?.varChanges) delete (merged as { varChanges?: unknown }).varChanges;
+		await this.save(m, s.content, merged);
+		const varsOf = (x: MessageMeta) => JSON.stringify((x as { varChanges?: unknown }).varChanges ?? null);
+		if (varsOf(meta) !== varsOf(merged)) void library.refresh(this.convId); // 대화 변수가 바뀌었으니 상태 탭도
 	}
 
 	async edit(m: Message, content: string) {

@@ -387,9 +387,18 @@ async fn memory_changed(app: &tauri::AppHandle, state: &AppState, message_ids: &
 #[tauri::command]
 #[specta::specta]
 pub async fn update_message(app: tauri::AppHandle, state: State<'_, AppState>, id: String, content: String, meta: Option<serde_json::Value>) -> Result<()> {
+    // AI 변수 (5-F-4-4-2): 스와이프를 넘겨 이 메시지의 바뀐 몫이 달라지면 앞 몫을 되돌리고 새 몫을 적용
+    let old = crate::db::chat_ui::get_message(&state.db, &id).await.ok();
     let result = conversation::update_message(&state.db, &id, &content, &meta).await?;
     if !result {
         return Err(AppError::not_found(format!("메시지를 찾을 수 없습니다: {id}")));
+    }
+    if let Some(old) = old {
+        use crate::service::chat::vars::{changes_of, swap_changes};
+        let (before, after) = (changes_of(old.meta.as_ref()), changes_of(meta.as_ref()));
+        if before != after {
+            swap_changes(&state.db, &old.conversation_id, &before, &after).await?;
+        }
     }
     memory_changed(&app, &state, &[id]).await;
     Ok(())
@@ -436,9 +445,14 @@ pub async fn update_message_meta(app: tauri::AppHandle, state: State<'_, AppStat
 pub async fn delete_message(app: tauri::AppHandle, state: State<'_, AppState>, id: String) -> Result<()> {
     // 지우기 전에 어느 대화인지 알아 둔다
     let convs = crate::service::memory::maintain::conversations_of(&state.db, std::slice::from_ref(&id)).await;
+    let old = crate::db::chat_ui::get_message(&state.db, &id).await.ok();
     let result = conversation::delete_message(&state.db, &id).await?;
     if !result {
         return Err(AppError::not_found(format!("메시지를 찾을 수 없습니다: {id}")));
+    }
+    // AI 변수 (5-F-4-4-2): 지운 메시지가 바꾼 몫을 되돌린다
+    if let Some(m) = old {
+        crate::service::chat::vars::revert_messages(&state.db, &m.conversation_id.clone(), &[m]).await?;
     }
     crate::service::memory::maintain::after_message_change(&app, &state.db, convs);
     Ok(())

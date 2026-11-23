@@ -251,6 +251,8 @@ pub async fn branch_conversation(state: State<'_, AppState>, id: String, message
     chat_ui::patch_conversation_meta(&state.db, &new_id, &branch).await?;
     // 요약은 메시지 id가 아니라 개수(위치)로 옮긴다 — 분기 대화는 id가 새로 붙으므로
     crate::service::summary::copy_for_branch(&state.db, &id, &new_id).await?;
+    // AI 변수 (5-F-4-4-2): 분기 지점 뒤 메시지들이 바꾼 몫을 되돌린 값으로
+    crate::service::chat::vars::branch_vars(&state.db, &id, &new_id, msg.seq).await?;
     Ok(conversation::get_conversation(&state.db, &new_id).await?)
 }
 
@@ -466,6 +468,13 @@ pub async fn patch_conversation_meta(state: State<'_, AppState>, id: String, pat
 #[specta::specta]
 pub async fn delete_messages(app: AppHandle, state: State<'_, AppState>, ids: Vec<String>) -> Result<u32> {
     let convs = crate::service::memory::maintain::conversations_of(&state.db, &ids).await;
+    // AI 변수 (5-F-4-4-2): 지울 메시지들이 바꾼 몫을 지운 뒤 되돌린다 (대화마다, 뒤 메시지부터)
+    let mut doomed = vec![];
+    for id in &ids {
+        if let Ok(m) = chat_ui::get_message(&state.db, id).await {
+            doomed.push(m);
+        }
+    }
     let mut tx = state.db.begin().await?;
     let mut n = 0;
     for id in &ids {
@@ -476,6 +485,12 @@ pub async fn delete_messages(app: AppHandle, state: State<'_, AppState>, ids: Ve
             .rows_affected() as u32;
     }
     tx.commit().await?;
+    let mut conv_ids: Vec<String> = doomed.iter().map(|m| m.conversation_id.clone()).collect();
+    conv_ids.sort();
+    conv_ids.dedup();
+    for c in conv_ids {
+        crate::service::chat::vars::revert_messages(&state.db, &c, &doomed).await?;
+    }
     crate::service::memory::maintain::after_message_change(&app, &state.db, convs);
     Ok(n)
 }

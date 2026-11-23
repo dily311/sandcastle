@@ -274,6 +274,51 @@ pub fn meta_patch(before: &Map<String, Value>, after: &Map<String, Value>) -> Op
     (!vars.is_empty()).then(|| serde_json::json!({ "variables": vars }))
 }
 
+// ---- 되돌리기 (5-F-4-4-2): 스와이프 넘기기·메시지 지우기·분기 ----
+
+/// 대화 변수에 몫을 바꿔 넣는다: `undo`를 되돌리고(뒤에서부터) `redo`를 적용. 바뀐 게 없으면 쓰지 않는다
+pub async fn swap_changes(db: &sqlx::SqlitePool, conversation_id: &str, undo: &[VarChange], redo: &[VarChange]) -> crate::error::Result<()> {
+    if undo.is_empty() && redo.is_empty() {
+        return Ok(());
+    }
+    let conv = crate::db::conversation::get_conversation(db, conversation_id).await?;
+    let before = current_vars(conv.meta.as_ref());
+    let mut after = before.clone();
+    revert(&mut after, undo);
+    apply(&mut after, redo);
+    if let Some(patch) = meta_patch(&before, &after) {
+        crate::db::chat_ui::patch_conversation_meta(db, conversation_id, &patch).await?;
+    }
+    Ok(())
+}
+
+/// 지운(지울) 메시지들이 바꾼 몫을 되돌린다 — 뒤 메시지부터
+pub async fn revert_messages(db: &sqlx::SqlitePool, conversation_id: &str, messages: &[crate::models::conversation::Message]) -> crate::error::Result<()> {
+    let mut sorted: Vec<&crate::models::conversation::Message> = messages.iter().filter(|m| m.conversation_id == conversation_id).collect();
+    sorted.sort_by_key(|a| std::cmp::Reverse(a.seq));
+    // 뒤에서부터 차례로 되돌린 것을 한 번에 쓰려고 몫을 이어 붙인다 (revert가 거꾸로 돈다 → 앞 메시지 몫이 뒤에 오게)
+    let undo: Vec<VarChange> = sorted.iter().rev().flat_map(|m| changes_of(m.meta.as_ref())).collect();
+    swap_changes(db, conversation_id, &undo, &[]).await
+}
+
+/// 분기: 분기 지점(seq) 뒤 메시지들이 바꾼 몫을 되돌린 값을 새 대화 변수로
+pub async fn branch_vars(db: &sqlx::SqlitePool, source_id: &str, new_id: &str, after_seq: i64) -> crate::error::Result<()> {
+    let messages = crate::db::conversation::get_messages(db, source_id, i64::MAX, None).await?;
+    let later: Vec<crate::models::conversation::Message> = messages.into_iter().filter(|m| m.seq > after_seq).collect();
+    revert_messages(
+        db,
+        new_id,
+        &later
+            .into_iter()
+            .map(|mut m| {
+                m.conversation_id = new_id.to_string();
+                m
+            })
+            .collect::<Vec<_>>(),
+    )
+    .await
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

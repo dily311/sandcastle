@@ -449,3 +449,46 @@ async fn character_var_defs_round_trip() {
     assert!(!conv::upsert_character_var_defs(&pool, "nope", &defs).await.unwrap());
     assert!(conv::get_character_var_defs(&pool, "nope").await.is_err());
 }
+
+/// AI 변수 되돌리기 (5-F-4-4-2): 스와이프 넘기기 = 앞 몫 되돌리고 새 몫, 지우기 = 그 몫 되돌림, 분기 = 분기 뒤 몫을 되돌린 값
+#[tokio::test]
+async fn ai_var_changes_follow_swipes_deletes_and_branches() {
+    use crate::service::chat::vars::{branch_vars, revert_messages, swap_changes, VarChange};
+    let pool = pool().await;
+    let id = new_conv(&pool).await;
+    let vars = |c: &crate::models::conversation::Conversation| crate::service::chat::vars::current_vars(c.meta.as_ref());
+    let ch = |k: &str, from: Option<&str>, to: &str| VarChange {
+        key: k.into(),
+        from: from.map(str::to_string),
+        to: to.into(),
+    };
+    ui::patch_conversation_meta(&pool, &id, &serde_json::json!({ "variables": { "hp": "80" } }))
+        .await
+        .unwrap();
+    // 두 응답: 100→90 (첫째), 90→80 (둘째)
+    let first = vec![ch("hp", Some("100"), "90")];
+    let second = vec![ch("hp", Some("90"), "80")];
+    let mut a = msg(&id, "assistant", "첫째");
+    a.meta = Some(serde_json::json!({ "varChanges": first }));
+    let m1 = ui::push_message(&pool, a).await.unwrap();
+    let mut b = msg(&id, "assistant", "둘째");
+    b.meta = Some(serde_json::json!({ "varChanges": second }));
+    let m2 = ui::push_message(&pool, b).await.unwrap();
+
+    // 분기를 첫째에서 나누면 둘째의 몫이 되돌려진 90
+    let branch = ui::copy_conversation(&pool, &id, "분기", Some(&m1.id)).await.unwrap();
+    branch_vars(&pool, &id, &branch, m1.seq).await.unwrap();
+    assert_eq!(vars(&conv::get_conversation(&pool, &branch).await.unwrap())["hp"], "90");
+    assert_eq!(vars(&conv::get_conversation(&pool, &id).await.unwrap())["hp"], "80", "원래 대화는 그대로");
+
+    // 둘째의 다른 스와이프(90→70)로 넘김
+    let other = vec![ch("hp", Some("90"), "70")];
+    swap_changes(&pool, &id, &second, &other).await.unwrap();
+    assert_eq!(vars(&conv::get_conversation(&pool, &id).await.unwrap())["hp"], "70");
+    swap_changes(&pool, &id, &other, &second).await.unwrap();
+    assert_eq!(vars(&conv::get_conversation(&pool, &id).await.unwrap())["hp"], "80");
+
+    // 두 메시지를 지우면 뒤에서부터 되돌려 처음 값(100)
+    revert_messages(&pool, &id, &[m1, m2]).await.unwrap();
+    assert_eq!(vars(&conv::get_conversation(&pool, &id).await.unwrap())["hp"], "100");
+}
