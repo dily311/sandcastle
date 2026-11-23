@@ -29,6 +29,7 @@ const db = {
 		cgGroupVariants: false,
 		doneNotify: { enabled: false, title: "", icon: null },
 		aiCallLog: false,
+		typing: { style: "blink", text: "" },
 		home: { startOnHome: false, greeting: "", blocks: ["continue", "quick", "favorites", "games"], css: "" },
 	} satisfies AppSetting_Serialize as AppSetting_Serialize,
 	themeSetting: {

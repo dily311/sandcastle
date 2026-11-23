@@ -16,6 +16,7 @@
 	import { ChatSession, type Message } from "$features/character/session.svelte";
 	import { bubbles, lookup, parsePeek, phone, type BubbleLine } from "./phone.svelte";
 	import { splitSpeakers } from "./speakers";
+	import TypingIndicator from "$features/character/TypingIndicator.svelte";
 
 	let { conv, onback, session: given }: { conv: Conversation; onback: () => void; session?: ChatSession } = $props();
 
@@ -290,7 +291,7 @@
 							</div>
 						{/each}
 						{#if r.pending && !(r.lines?.length)}
-							<div class="line"><div class="b typing" aria-label="입력 중"><span></span><span></span><span></span></div></div>
+							<div class="line"><div class="b typing"><TypingIndicator name={ch?.name ?? ""} /></div></div>
 						{/if}
 					</div>
 				</div>
@@ -462,27 +463,8 @@
 		font-weight: 700;
 	}
 	.typing {
-		display: flex;
-		gap: 4px;
 		padding: 11px 12px;
-	}
-	.typing span {
-		width: 6px;
-		height: 6px;
-		border-radius: 50%;
-		background: #9a9a9a;
-		animation: blink 1.2s infinite;
-	}
-	.typing span:nth-child(2) {
-		animation-delay: 0.2s;
-	}
-	.typing span:nth-child(3) {
-		animation-delay: 0.4s;
-	}
-	@keyframes blink {
-		50% {
-			opacity: 0.25;
-		}
+		--typing-color: #9a9a9a;
 	}
 	.input {
 		display: flex;

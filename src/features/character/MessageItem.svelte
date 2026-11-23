@@ -13,6 +13,7 @@
 	import { appSetting } from "$shared/stores/appSetting.svelte";
 	import { toBlocks } from "./format";
 	import RichText from "./RichText.svelte";
+	import TypingIndicator from "./TypingIndicator.svelte";
 	import { metaOf, type ChatSession, type Message } from "./session.svelte";
 	import { fileSrc } from "$shared/ipc/file";
 	import { layout } from "$app/layout.svelte";
@@ -325,7 +326,7 @@
 		{#if blocks.length}
 			<RichText {blocks} {images} />
 		{:else if live}
-			<p class="typing" aria-label="응답 기다리는 중"><span></span><span></span><span></span></p>
+			<div class="typing"><TypingIndicator name={msg.name ?? ""} /></div>
 		{/if}
 	{/if}
 	<!-- AI에게 숨긴 메시지: 접기·펼치기는 본문(한 줄 미리보기) 아래 -->
@@ -540,33 +541,13 @@
 		gap: var(--space-2);
 		margin-top: var(--space-1);
 	}
+	.typing {
+		padding: var(--space-2) 0;
+	}
 	.edit-btns {
 		display: flex;
 		justify-content: flex-end;
 		gap: var(--space-1);
-	}
-	.typing {
-		display: flex;
-		gap: 4px;
-		padding: var(--space-2) 0;
-	}
-	.typing span {
-		width: 6px;
-		height: 6px;
-		border-radius: 50%;
-		background: var(--text-faint);
-		animation: blink 1.2s infinite;
-	}
-	.typing span:nth-child(2) {
-		animation-delay: 0.2s;
-	}
-	.typing span:nth-child(3) {
-		animation-delay: 0.4s;
-	}
-	@keyframes blink {
-		50% {
-			opacity: 0.2;
-		}
 	}
 	.cut {
 		padding: 0;

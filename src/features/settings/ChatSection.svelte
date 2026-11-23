@@ -10,6 +10,8 @@
 	import Section from "./Section.svelte";
 	import Group from "./Group.svelte";
 	import Row from "./Row.svelte";
+	import TypingIndicator from "$features/character/TypingIndicator.svelte";
+	import type { TypingIndicator_Serialize as TypingSetting, TypingStyle } from "$ipc/bindings";
 
 	let defaultPersona = $state<string>("");
 
@@ -38,6 +40,15 @@
 		if (p) await setNotify({ icon: p });
 	}
 
+	// 타이핑 표시 (5-E-17-1)
+	const typing = $derived<TypingSetting>({ style: s?.typing?.style ?? "blink", text: s?.typing?.text ?? "" });
+	const typingStyles: { value: TypingStyle; label: string }[] = [
+		{ value: "blink", label: "깜빡이는 점" },
+		{ value: "bounce", label: "튀는 점" },
+		{ value: "none", label: "점 없음" },
+	];
+	const setTyping = (patch: Partial<TypingSetting>) => appSetting.update({ typing: { ...typing, ...patch } });
+
 	async function setPersona(id: string) {
 		defaultPersona = id;
 		await call(commands.setSystemDefaultPersona(id), { source: "settings" });
@@ -52,6 +63,18 @@
 			</Row>
 			<Row label="메시지 시각 표시" desc="대화에서 메시지마다 보낸 시각 보이기" nowrap>
 				<Switch checked={s.showTimestamps} label="메시지 시각 표시" hideLabel onchange={(v) => appSetting.update({ showTimestamps: v })} />
+			</Row>
+		</Group>
+
+		<Group title="타이핑 표시">
+			<Row label="모양">
+				<div class="typing-row">
+					<span class="typing-preview"><TypingIndicator style={typing.style} text={typing.text} name="엘리안" /></span>
+					<Select value={typing.style} options={typingStyles} aria-label="타이핑 표시 모양" onchange={(e) => setTyping({ style: e.currentTarget.value as TypingStyle })} />
+				</div>
+			</Row>
+			<Row label="글">
+				<Input value={typing.text} placeholder={"{{char}} 입력 중…"} maxlength={60} aria-label="타이핑 표시 글" onchange={(e) => setTyping({ text: e.currentTarget.value })} />
 			</Row>
 		</Group>
 
@@ -101,6 +124,15 @@
 </Section>
 
 <style>
+	.typing-row {
+		display: flex;
+		align-items: center;
+		gap: var(--space-3);
+	}
+	.typing-preview {
+		flex-shrink: 0;
+		white-space: nowrap;
+	}
 	.icon-row {
 		display: flex;
 		align-items: center;

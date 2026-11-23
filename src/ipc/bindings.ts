@@ -850,6 +850,8 @@ export type AppSetting_Deserialize = {
 	doneNotify?: DoneNotify_Deserialize,
 	/**  AI 호출마다 보낸 프롬프트·받은 글을 이 기기에 남김 (5-E-20-6-7, 기본 꺼짐 — 프롬프트 전체가 디스크에 남음) */
 	aiCallLog?: boolean,
+	/**  응답을 기다릴 때 보이는 타이핑 표시 (5-E-17-1) */
+	typing?: TypingIndicator_Deserialize,
 };
 
 export type AppSetting_Serialize = {
@@ -882,6 +884,8 @@ export type AppSetting_Serialize = {
 	doneNotify: DoneNotify_Serialize,
 	/**  AI 호출마다 보낸 프롬프트·받은 글을 이 기기에 남김 (5-E-20-6-7, 기본 꺼짐 — 프롬프트 전체가 디스크에 남음) */
 	aiCallLog: boolean,
+	/**  응답을 기다릴 때 보이는 타이핑 표시 (5-E-17-1) */
+	typing: TypingIndicator_Serialize,
 };
 
 export type AssetRef = {
@@ -5658,6 +5662,32 @@ export type TurnPoint_Serialize = {
 	sceneId: string | null,
 	locationId: string | null,
 };
+
+/**  타이핑 표시 (5-E-17-1): 모양과 옆에 붙는 글 */
+export type TypingIndicator = TypingIndicator_Serialize | TypingIndicator_Deserialize;
+
+/**  타이핑 표시 (5-E-17-1): 모양과 옆에 붙는 글 */
+export type TypingIndicator_Deserialize = {
+	style?: TypingStyle,
+	/**  점 옆의 글 (`{{char}}` = 캐릭터 이름, 비면 글 없음) */
+	text?: string,
+};
+
+/**  타이핑 표시 (5-E-17-1): 모양과 옆에 붙는 글 */
+export type TypingIndicator_Serialize = {
+	style: TypingStyle,
+	/**  점 옆의 글 (`{{char}}` = 캐릭터 이름, 비면 글 없음) */
+	text: string,
+};
+
+/**  타이핑 표시 모양 (5-E-17-1) */
+export type TypingStyle = 
+/**  깜빡이는 점 세 개 (예전 모양) */
+"blink" | 
+/**  튀어 오르는 점 세 개 */
+"bounce" | 
+/**  점 없이 (글만, 글도 없으면 아무것도 안 보임) */
+"none";
 
 export type UpdateInfo = UpdateInfo_Serialize | UpdateInfo_Deserialize;
 

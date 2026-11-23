@@ -32,6 +32,7 @@
 	import { translateInput } from "$shared/stores/aiTools.svelte";
 	import { toBlocks } from "./format";
 	import RichText from "./RichText.svelte";
+	import TypingIndicator from "./TypingIndicator.svelte";
 	import { chatImport } from "./chatImport.svelte";
 	import { cgVariants, pickVariants } from "./cgVariants";
 	import { viewed } from "./viewed.svelte";
@@ -644,7 +645,7 @@
 							{#if liveBlocks.length}
 								<RichText blocks={liveBlocks} {images} />
 							{:else}
-								<p class="typing" aria-label="응답 기다리는 중"><span></span><span></span><span></span></p>
+								<div class="typing"><TypingIndicator name={character?.name ?? ""} /></div>
 							{/if}
 						</div>
 					{/if}
@@ -1074,27 +1075,7 @@
 		color: var(--text-faint);
 	}
 	.typing {
-		display: flex;
-		gap: 4px;
 		padding: var(--space-2) 0;
-	}
-	.typing span {
-		width: 6px;
-		height: 6px;
-		border-radius: 50%;
-		background: var(--text-faint);
-		animation: blink 1.2s infinite;
-	}
-	.typing span:nth-child(2) {
-		animation-delay: 0.2s;
-	}
-	.typing span:nth-child(3) {
-		animation-delay: 0.4s;
-	}
-	@keyframes blink {
-		50% {
-			opacity: 0.2;
-		}
 	}
 	.composer {
 		display: flex;

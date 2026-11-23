@@ -41,6 +41,31 @@ pub struct AppSetting {
     /// AI 호출마다 보낸 프롬프트·받은 글을 이 기기에 남김 (5-E-20-6-7, 기본 꺼짐 — 프롬프트 전체가 디스크에 남음)
     #[serde(default)]
     pub ai_call_log: bool,
+    /// 응답을 기다릴 때 보이는 타이핑 표시 (5-E-17-1)
+    #[serde(default)]
+    pub typing: TypingIndicator,
+}
+
+/// 타이핑 표시 모양 (5-E-17-1)
+#[derive(Serialize, Deserialize, Debug, Clone, Copy, PartialEq, Eq, Default, specta::Type)]
+#[serde(rename_all = "lowercase")]
+pub enum TypingStyle {
+    /// 깜빡이는 점 세 개 (예전 모양)
+    #[default]
+    Blink,
+    /// 튀어 오르는 점 세 개
+    Bounce,
+    /// 점 없이 (글만, 글도 없으면 아무것도 안 보임)
+    None,
+}
+
+/// 타이핑 표시 (5-E-17-1): 모양과 옆에 붙는 글
+#[derive(Serialize, Deserialize, Debug, Clone, Default, specta::Type)]
+#[serde(rename_all = "camelCase", default)]
+pub struct TypingIndicator {
+    pub style: TypingStyle,
+    /// 점 옆의 글 (`{{char}}` = 캐릭터 이름, 비면 글 없음)
+    pub text: String,
 }
 
 fn default_trash_retention_days() -> Option<u32> {
@@ -113,6 +138,7 @@ impl Default for AppSetting {
             cg_group_variants: false,
             done_notify: DoneNotify::default(),
             ai_call_log: false,
+            typing: TypingIndicator::default(),
         }
     }
 }
@@ -781,6 +807,19 @@ mod tests {
         assert_eq!(s.language, "en");
         assert_eq!(s.selected_api_profile.as_deref(), Some("api-1"));
         assert_eq!(s.phone_mode_prompt, DEFAULT_PHONE_MODE_PROMPT);
+        // 타이핑 표시가 없던 설정 → 예전 모양 (5-E-17-1)
+        assert_eq!(s.typing.style, TypingStyle::Blink);
+        assert_eq!(s.typing.text, "");
+    }
+
+    #[test]
+    fn typing_indicator_reads_partial_values() {
+        let t: TypingIndicator = serde_json::from_value(serde_json::json!({ "style": "bounce" })).unwrap();
+        assert_eq!(t.style, TypingStyle::Bounce);
+        assert_eq!(t.text, "");
+        let t: TypingIndicator = serde_json::from_value(serde_json::json!({ "style": "none", "text": "{{char}} 입력 중…" })).unwrap();
+        assert_eq!(t.style, TypingStyle::None);
+        assert_eq!(serde_json::to_value(t).unwrap()["style"], "none");
     }
 }
 
