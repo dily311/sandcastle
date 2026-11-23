@@ -8,6 +8,7 @@
 	import { reasoningOf } from "./providers";
 	import Group from "./Group.svelte";
 	import Row from "./Row.svelte";
+	import PresetUtilPrompts from "./PresetUtilPrompts.svelte";
 
 	interface Props {
 		detail: Detail;
@@ -68,6 +69,11 @@
 	// "auto"는 정하지 않음 (SillyTavern 프리셋)
 	const re0 = pick("reasoning_effort", "reasoningEffort");
 	let effort = $state(typeof re0 === "string" && re0.toLowerCase() !== "auto" ? re0.toLowerCase() : "");
+	// 유틸 프롬프트 (5-F-7-3, ADR-030): 프리셋 > 전역 > 기본. 글만 받는다
+	const ap0 = settings0.appPrompts;
+	let appPrompts = $state<Record<string, string>>(
+		ap0 && typeof ap0 === "object" ? Object.fromEntries(Object.entries(ap0).filter((e): e is [string, string] => typeof e[1] === "string" && !!e[1].trim())) : {},
+	);
 
 	type Block = BlockInput & { key: string };
 	let seq = 0;
@@ -162,7 +168,7 @@
 	}
 
 	// ---- 자동 저장: 값이 바뀌고 잠시 멈추면 ----
-	const snapshot = () => JSON.stringify([name, description, temperature, maxTokens, contextSize, worldInfoPercent, topP, topK, stream, effort, blocks.map(({ key: _k, id: _i, ...b }) => b)]);
+	const snapshot = () => JSON.stringify([name, description, temperature, maxTokens, contextSize, worldInfoPercent, topP, topK, stream, effort, appPrompts, blocks.map(({ key: _k, id: _i, ...b }) => b)]);
 	let lastSaved = snapshot();
 	let autoState = $state<"" | "dirty" | "saving" | "saved" | "failed">("");
 	$effect(() => {
@@ -205,6 +211,7 @@
 		put("stream", stream);
 		// 이 모델이 못 받는 값이어도 지우지 않는다 (모델을 바꾸면 다시 쓰임). 백엔드가 받는 모델에만 보냄
 		put("reasoning_effort", effort || undefined);
+		put("appPrompts", Object.keys(appPrompts).length ? { ...appPrompts } : undefined);
 		const saved = await onsave(
 			{ ...p, name: name.trim(), description: description.trim() || null, settingsJson: settings as Detail["preset"]["settingsJson"] },
 			blocks.map(({ key: _k, ...b }) => ({ ...b, depth: Number(b.depth) || 0 })),
@@ -335,6 +342,11 @@
 			</li>
 		{/each}
 	</ol>
+</Group>
+
+<Group title="유틸 프롬프트">
+	<p class="hint">이 프리셋으로 대화할 때만. 비우면 설정 &gt; 앱 프롬프트의 값</p>
+	<PresetUtilPrompts bind:value={appPrompts} />
 </Group>
 
 <style>
