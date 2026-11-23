@@ -11,12 +11,16 @@
 	import { library } from "$features/character/library.svelte";
 	import Group from "./Group.svelte";
 	import Row from "./Row.svelte";
+	import { deviceLabel } from "./deviceLabel";
+	import type { SyncPeer } from "$ipc/bindings";
 
 	interface Props {
 		/** 고른 뒤 (남은 수를 다시 읽게) */
 		onchange?: () => unknown;
+		/** 이름을 아는 기기들 (기기 id 대신 이름으로, 5-E-16-1) */
+		peers?: readonly SyncPeer[];
 	}
-	let { onchange }: Props = $props();
+	let { onchange, peers = [] }: Props = $props();
 
 	const src = { source: "sync" };
 	let items = $state<SyncConflict[] | null>(null);
@@ -118,7 +122,7 @@
 					<div class="head">
 						<Badge>{TABLE[c.tbl] ?? c.tbl}</Badge>
 						<b>{c.label || "(이름 없음)"}</b>
-						<span class="meta" title={absolute(c.createdAt)}>{KIND[c.kind] ?? c.kind} · 기기 {c.deviceId.slice(0, 8)} · {relative(c.createdAt)}</span>
+						<span class="meta" title={absolute(c.createdAt)}>{KIND[c.kind] ?? c.kind} · 기기 {deviceLabel(c.deviceId, peers)} · {relative(c.createdAt)}</span>
 					</div>
 					{#if c.kind === "edit"}
 						{#if realDiff(c).length}

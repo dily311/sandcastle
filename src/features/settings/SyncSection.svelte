@@ -5,6 +5,7 @@
 	import type { DriveStatus, SyncBackup, SyncPreview, SyncStatus } from "$ipc/bindings";
 	import { confirmAction } from "$shared/stores/confirm.svelte";
 	import SyncConflicts from "./SyncConflicts.svelte";
+	import { deviceLabel, shortId as short } from "./deviceLabel";
 	import { Badge, Button, Input, Segmented, Select, Spinner, Switch } from "$shared/ui";
 	import { call, commands } from "$shared/ipc/client";
 	import { pickFiles, pickFolder, saveTo, SYNC_FILES } from "$shared/ipc/dialog";
@@ -73,7 +74,7 @@
 	async function excludePeer(deviceId: string) {
 		const ok = await confirmAction({
 			title: "오래 못 본 기기 제외",
-			message: `${short(deviceId)} 기기를 기다리지 않고 지운 기록을 정리합니다. 그 기기가 나중에 돌아오면 전체를 다시 합치고, 그동안 지운 항목이 되살아날 수 있습니다.`,
+			message: `${label(deviceId)} 기기를 기다리지 않고 지운 기록을 정리합니다. 그 기기가 나중에 돌아오면 전체를 다시 합치고, 그동안 지운 항목이 되살아날 수 있습니다.`,
 			confirmLabel: "제외",
 			danger: true,
 		});
@@ -163,7 +164,7 @@
 					? `동기화함: 기기 ${r.merged.length}개 · 추가 ${n(m.added)} · 변경 ${n(m.updated)} · 지움 ${n(m.deleted)}${m.both ? ` · 충돌 ${n(m.both)}` : ""}`
 					: "동기화함: 다른 기기에서 새로 바뀐 것 없음",
 			);
-			for (const d of r.skippedDevices ?? []) toasts.error(`기기 ${short(d.deviceId)}의 묶음을 열지 못해 건너뜀: ${d.reason}`);
+			for (const d of r.skippedDevices ?? []) toasts.error(`기기 ${label(d.deviceId)}의 묶음을 열지 못해 건너뜀: ${d.reason}`);
 			if (r.merged.some((d) => d.returnedAfterExclusion)) toasts.info("제외했던 기기가 돌아와 전체를 다시 합쳤습니다. 그동안 지운 항목이 되살아났을 수 있으니 확인하세요");
 			await library.load();
 			conflictsKey++;
@@ -175,7 +176,8 @@
 			await load();
 		}
 	}
-	const short = (id: string) => id.slice(0, 8);
+	/** 기기 이름, 없으면 id 앞자리 (5-E-16-1) */
+	const label = (id: string, name?: string | null) => deviceLabel(id, status?.peers ?? [], name);
 	/** 이 기기 이름 (5-E-16). 다른 기기에는 다음 동기화부터 보인다 */
 	async function renameDevice(name: string) {
 		if (!status || name.trim() === (status.deviceName ?? "")) return;
@@ -281,7 +283,7 @@
 				<Button size="sm" variant="primary" onclick={() => call(commands.restartApp(), src)}>다시 시작</Button>
 			</div>
 		{/if}
-		{#key conflictsKey}<SyncConflicts onchange={load} />{/key}
+		{#key conflictsKey}<SyncConflicts onchange={load} peers={status.peers} />{/key}
 
 		{#if showAuto}
 			<Group title="자동으로 주고받기">
@@ -349,7 +351,7 @@
 				{@const b = pending.preview.bundle}
 				<div class="preview" role="region" aria-label="합치기 미리보기">
 					<p class="from">
-						<Badge>기기 {short(b.deviceId)}</Badge>
+						<Badge>기기 {label(b.deviceId, b.deviceName)}</Badge>
 						<span title={absolute(b.createdAt)}>{relative(b.createdAt)}에 만듦</span>
 						<span class="meta">앱 {b.appVersion} · {size(b.bytes)}</span>
 					</p>

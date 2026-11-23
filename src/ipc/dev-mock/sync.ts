@@ -114,6 +114,7 @@ export const syncHandlers: Record<string, Handler> = {
 	},
 	export_sync_bundle: ({ includeFiles }): SyncBundleInfo => ({
 		deviceId: status.deviceId,
+		deviceName: status.deviceName ?? null,
 		createdAt: Date.now(),
 		appVersion: "0.1.0",
 		rows: 248,
@@ -123,7 +124,7 @@ export const syncHandlers: Record<string, Handler> = {
 		bytes: includeFiles ? 8_400_000 : 120_000,
 	}),
 	preview_sync_bundle: (): SyncPreview => ({
-		bundle: { deviceId: status.peers[0].deviceId, createdAt: Date.now() - 2 * HOUR, appVersion: "0.1.0", rows: 250, tombstones: 2, files: 44, blobs: 3, bytes: 2_100_000 },
+		bundle: { deviceId: status.peers[0].deviceId, deviceName: status.peers[0].name ?? null, createdAt: Date.now() - 2 * HOUR, appVersion: "0.1.0", rows: 250, tombstones: 2, files: 44, blobs: 3, bytes: 2_100_000 },
 		report,
 		files: { added: 3, missing: 1, keptLocal: 0 },
 	}),

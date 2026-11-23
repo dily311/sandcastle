@@ -325,9 +325,9 @@ export const commands = {
 	/**  이 기기 이름 바꾸기 (다음 동기화부터 다른 기기 목록에 보임). 빈 글이면 지움 */
 	setDeviceName: (name: string, options?: InvokeOptions) => __TAURI_INVOKE<string | null>("set_device_name", { name }, options),
 	/**  동기화 파일 만들기. `path`는 저장 대화상자에서 고른 경로 (.scsync) */
-	exportSyncBundle: (path: string, includeFiles: boolean, options?: InvokeOptions) => __TAURI_INVOKE<SyncBundleInfo>("export_sync_bundle", { path, includeFiles }, options),
+	exportSyncBundle: (path: string, includeFiles: boolean, options?: InvokeOptions) => __TAURI_INVOKE<SyncBundleInfo_Serialize>("export_sync_bundle", { path, includeFiles }, options),
 	/**  합치기 전에 숫자만 (DB·파일·설정을 바꾸지 않음) */
-	previewSyncBundle: (path: string, options?: InvokeOptions) => __TAURI_INVOKE<SyncPreview>("preview_sync_bundle", { path }, options),
+	previewSyncBundle: (path: string, options?: InvokeOptions) => __TAURI_INVOKE<SyncPreview_Serialize>("preview_sync_bundle", { path }, options),
 	/**  합치기: 이 기기 DB·설정 사본을 먼저 만들고, 없는 파일을 넣고, DB를 합치고, 같이 쓰는 설정을 바꾼다 */
 	applySyncBundle: (path: string, options?: InvokeOptions) => __TAURI_INVOKE<SyncApplied>("apply_sync_bundle", { path }, options),
 	/**  지금 동기화 (폴더). `auto`는 자동 동기화가 부를 때 (설정 > 동기화의 자동 동기화가 켜져 있어야 함) */
@@ -5016,8 +5016,27 @@ export type SyncBackup = {
 };
 
 /**  묶음 하나의 요약 (화면용) */
-export type SyncBundleInfo = {
+export type SyncBundleInfo = SyncBundleInfo_Serialize | SyncBundleInfo_Deserialize;
+
+/**  묶음 하나의 요약 (화면용) */
+export type SyncBundleInfo_Deserialize = {
 	deviceId: string,
+	/**  보낸 기기의 이름 (5-E-16-1, 없으면 None — 화면은 id 앞자리) */
+	deviceName?: string | null,
+	createdAt: number,
+	appVersion: string,
+	rows: number,
+	tombstones: number,
+	files: number,
+	blobs: number,
+	bytes: number,
+};
+
+/**  묶음 하나의 요약 (화면용) */
+export type SyncBundleInfo_Serialize = {
+	deviceId: string,
+	/**  보낸 기기의 이름 (5-E-16-1, 없으면 None — 화면은 id 앞자리) */
+	deviceName: string | null,
 	createdAt: number,
 	appVersion: string,
 	rows: number,
@@ -5093,8 +5112,16 @@ export type SyncPeer_Serialize = {
 	excluded: boolean,
 };
 
-export type SyncPreview = {
-	bundle: SyncBundleInfo,
+export type SyncPreview = SyncPreview_Serialize | SyncPreview_Deserialize;
+
+export type SyncPreview_Deserialize = {
+	bundle: SyncBundleInfo_Deserialize,
+	report: MergeReport,
+	files: FileCounts,
+};
+
+export type SyncPreview_Serialize = {
+	bundle: SyncBundleInfo_Serialize,
 	report: MergeReport,
 	files: FileCounts,
 };
