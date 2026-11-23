@@ -26,6 +26,7 @@
 	import SelectionMenu, { type CardInput } from "./SelectionMenu.svelte";
 	import { ChatSession, metaOf, type Message } from "./session.svelte";
 	import TextCardDialog from "./TextCardDialog.svelte";
+	import { anchorIn, getReadPos, scrollToPos, setReadPos } from "./readPos";
 
 	let { charId, convId, onopen }: { charId: string; convId: string; onopen: (id: string) => void } = $props();
 
@@ -35,14 +36,22 @@
 	// ---- 메시지: 불러오기만 (보내기·생성은 이 화면에 없음 — 백엔드도 거절) ----
 	let session = $state<ChatSession | null>(null);
 	$effect(() => {
-		const s = new ChatSession(convId);
+		const id = convId;
+		const s = new ChatSession(id);
 		session = s;
 		shownFrom = -1;
+		restoring = true;
 		void s.load().then(async () => {
-			shownFrom = Math.max(0, s.messages.length - PAGE);
+			// 읽던 자리가 있으면 그 메시지까지 그려 그 자리로, 없으면 맨 끝 (5-E-6-2-3)
+			const pos = getReadPos(id);
+			const at = pos ? s.messages.findIndex((m) => m.id === pos.messageId) : -1;
+			shownFrom = Math.max(0, Math.min(at >= 0 ? at - 5 : Infinity, s.messages.length - PAGE));
 			await tick();
-			if (scroller) scroller.scrollTop = scroller.scrollHeight;
+			if (scroller && !(pos && at >= 0 && scrollToPos(scroller, pos))) scroller.scrollTop = scroller.scrollHeight;
+			restoring = false;
 		});
+		// 다른 대화로 가거나 화면을 떠날 때 마지막 자리를 남긴다
+		return () => savePos(id);
 	});
 	// 긴 대화: 최근 PAGE개만 그리고, 위로 올리면 더 (대화 화면과 같음, 1-D-5)
 	const PAGE = 80;
@@ -139,8 +148,20 @@
 
 	// ---- 스크롤·이동 ----
 	let scroller: HTMLDivElement | undefined = $state();
+	// ---- 읽던 자리 기억 (5-E-6-2-3, ADR-031): 스크롤이 멈추면·떠날 때. 되돌리는 동안은 저장하지 않음 ----
+	let restoring = true;
+	let saveTimer: ReturnType<typeof setTimeout> | undefined;
+	function savePos(id = convId) {
+		clearTimeout(saveTimer);
+		if (restoring || !scroller) return;
+		const pos = anchorIn(scroller);
+		if (pos) setReadPos(id, pos);
+	}
 	function onscroll() {
-		if (scroller && scroller.scrollTop < 300 && start > 0) void showEarlier();
+		if (!scroller) return;
+		if (scroller.scrollTop < 300 && start > 0) void showEarlier();
+		clearTimeout(saveTimer);
+		saveTimer = setTimeout(() => savePos(), 400);
 	}
 	async function jumpTo(id: string, mark?: ChatBookmark) {
 		const at = session?.messages.findIndex((m) => m.id === id) ?? -1;
