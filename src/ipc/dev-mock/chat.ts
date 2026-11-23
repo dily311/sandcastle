@@ -438,6 +438,13 @@ AI: 그때 이야기를 다시 해 볼까요?`, stale: false },
 		convs.splice(convs.indexOf(conv(id)), 1);
 		return null;
 	},
+	// 실제로는 휴지통으로 (trash.ts가 감쌈). 대기열 확인용으로 조금 걸린다 (5-E-28)
+	delete_character: async ({ id }) => {
+		await new Promise((r) => setTimeout(r, 700));
+		const i = characters.findIndex((c) => c.id === id);
+		if (i >= 0) characters.splice(i, 1);
+		return null;
+	},
 	rename_conversation: ({ id, title }) => ((conv(id).title = title), null),
 	set_conversation_pinned: ({ id, pinned }) => ((conv(id).pinned = pinned), null),
 	get_character_stats: ({ characterId }) => {

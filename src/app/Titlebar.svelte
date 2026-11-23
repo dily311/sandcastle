@@ -13,6 +13,8 @@
 	import { nav, type Route } from "./nav.svelte";
 	import { panel } from "./panel.svelte";
 	import { theme } from "./theme.svelte";
+	import { jobs } from "$shared/stores/jobs.svelte";
+	import { confirmAction } from "$shared/stores/confirm.svelte";
 
 	let { showWindowControls = true }: { showWindowControls?: boolean } = $props();
 
@@ -167,6 +169,13 @@
 		e.preventDefault();
 		el.scrollLeft += e.deltaY;
 	}
+
+	/** 닫기: 파일 작업이 남았으면 알리고 (대기열은 메모리에만 — 끄면 기다리던 것은 하지 않음, 5-E-28) */
+	async function closeApp() {
+		const n = jobs.pending;
+		if (n && !(await confirmAction({ title: "작업이 남아 있음", message: `파일 작업 ${n}개가 끝나지 않았습니다. 지금 끄면 하던 것은 멈추고 기다리던 것은 하지 않습니다.`, confirmLabel: "그래도 끄기", danger: true }))) return;
+		await appWindow.close();
+	}
 </script>
 
 <!-- 프로그램 헤더: 사이드바 · 뒤로/앞으로 · 화면 제목 · (빈 곳은 창 끌기) · 오른쪽 패널 · 창 버튼 -->
@@ -257,7 +266,7 @@
 		<div class="win">
 			<button aria-label="최소화" title="최소화" onclick={() => appWindow.minimize()}><Minus /></button>
 			<button aria-label="최대화" title="최대화" onclick={() => appWindow.toggleMaximize()}><Square /></button>
-			<button class="close" aria-label="닫기" title="닫기" onclick={() => appWindow.close()}><X /></button>
+			<button class="close" aria-label="닫기" title="닫기" onclick={closeApp}><X /></button>
 		</div>
 	{/if}
 {/snippet}

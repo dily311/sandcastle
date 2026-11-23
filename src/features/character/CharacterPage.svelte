@@ -1,5 +1,6 @@
 <script lang="ts">
 	import { chatImport } from "./chatImport.svelte";
+	import { jobs, SKIPPED } from "$shared/stores/jobs.svelte";
 	import { lastAt } from "$features/character/library.svelte";
 	import { TRASH_HINT, trashedToast } from "$shared/trash";
 	import { Camera, ImagePlus, Move, X as XIcon } from "@lucide/svelte";
@@ -85,10 +86,10 @@
 		if (!ids.length) return;
 		const convs = ids.reduce((n, id) => n + library.convsOf(id).length, 0);
 		if (!(await confirmAction({ title: "캐릭터 삭제", message: `캐릭터 ${ids.length}개를 휴지통으로 옮김 (대화 ${convs}개는 캐릭터 없이 남음). 설정 > 데이터 > 휴지통에서 되살릴 수 있음`, confirmLabel: `${ids.length}개 삭제`, danger: true }))) return;
-		for (const id of ids) await call(commands.deleteCharacter(id), { source: "character" });
-		await library.load();
 		selecting = false;
-		toasts.success(`캐릭터 ${ids.length}개를 휴지통으로 옮김`);
+		// 파일 작업 대기열로 하나씩 (5-E-28). 요약 알림은 대기열이 한 번
+		await Promise.allSettled(ids.map((id) => deleteJob(id, library.character(id)?.name ?? id)));
+		await library.load();
 	}
 	/** 제작자 메모는 HTML이 섞여 올 때가 많음 → 태그를 빼고 글만 (스크립트 실행 없음) */
 	function plain(html: string) {
@@ -294,10 +295,15 @@
 	async function removeCharacter(c: Character, leave = true) {
 		const n = library.convsOf(c.id).length;
 		if (!(await confirmAction({ title: "캐릭터 삭제", message: `'${c.name}'을(를) 휴지통으로 옮김${n ? ` (대화 ${n}개는 캐릭터 없이 남고, 되살리면 다시 이어짐)` : ""}. ${TRASH_HINT}`, confirmLabel: "삭제", danger: true }))) return;
-		const item = await call(commands.deleteCharacter(c.id), { source: "character" });
-		await library.load();
-		trashedToast(item, () => library.load());
 		if (leave) nav.replace({ page: "character" });
+		// 하나씩 빠르게 지워도 앞 것이 끝날 때까지 줄을 서서 기다린다 (5-E-28 — 전에는 "데이터베이스가 사용 중"으로 거절됨)
+		const item = await deleteJob(c.id, c.name).catch(() => null);
+		await library.load();
+		if (item && item !== SKIPPED) trashedToast(item, () => library.load());
+	}
+	/** 캐릭터 하나를 휴지통으로 — 파일 작업 대기열에서 */
+	function deleteJob(id: string, name: string) {
+		return jobs.add(name, () => call(commands.deleteCharacter(id), { source: "character" }), { group: "캐릭터 지우기" });
 	}
 </script>
 
