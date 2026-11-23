@@ -218,7 +218,8 @@ pub(crate) fn game_entries(
 }
 
 /// 게임을 일반 대화용 "세계" 캐릭터로 복사한다. NPC·아이템·장소·이벤트는 분류를 붙인 새 로어북에, 게임에 연결된 로어북은 그대로 연결.
-/// session_id를 주면 그 플레이 기록을 "여러 캐릭터"를 켠 대화로 옮긴다 (연출 태그는 걷음). 변수·관계 값은 옮기지 않는다 (ADR-023)
+/// session_id를 주면 그 플레이 기록을 "여러 캐릭터"를 켠 대화로 옮긴다 (연출 태그는 걷음).
+/// 변수 정의는 세계 캐릭터에, 그 기록의 변수 값·관계는 대화 변수로 한 번 옮긴다 (5-F-4-6, ADR-029 ⑥ — 계속 나누지는 않음)
 #[tauri::command]
 #[specta::specta]
 pub async fn copy_game_to_character(app: AppHandle, state: State<'_, AppState>, game_id: String, session_id: Option<String>) -> Result<GameCopy> {
@@ -270,6 +271,18 @@ pub(crate) async fn copy_game_core(
         Some(sid) => Some(game::get_session_game_messages(db, sid).await?),
         None => None,
     };
+    // 변수 (5-F-4-6): 게임 정의 → 대화 변수 정의, 플레이 기록의 값·관계 → 대화 변수
+    let state_defs = game::get_all_game_state_defs(db, game_id).await?;
+    let session_state: Option<(Option<String>, Option<String>)> = match session_id {
+        Some(sid) => {
+            sqlx::query_as("SELECT flags_json, relationships_json FROM game_player_sessions WHERE id = ?")
+                .bind(sid)
+                .fetch_optional(db)
+                .await?
+        }
+        None => None,
+    };
+    let (var_defs, var_values) = game_vars(&state_defs, &characters, session_state);
 
     let mut tx = db.begin().await?;
     let book = conversation::create_worldinfo_book(
@@ -313,6 +326,9 @@ pub(crate) async fn copy_game_core(
     };
     let c = conversation::create_character(&mut *tx, input).await?;
     conversation::replace_character_worldinfo(&mut tx, &c.id, &books).await?;
+    if !var_defs.is_empty() {
+        conversation::upsert_character_var_defs(&mut *tx, &c.id, &var_defs).await?;
+    }
 
     let mut conv_id = None;
     if let Some(msgs) = messages {
@@ -326,7 +342,7 @@ pub(crate) async fn copy_game_core(
                 persona_id,
                 world_info_ids: vec![],
                 mode: "chat".into(),
-                meta: Some(serde_json::json!({ "multiChar": true, "importedFrom": "game", "game": { "gameId": game_id, "sessionId": session_id } })),
+                meta: Some(serde_json::json!({ "multiChar": true, "importedFrom": "game", "game": { "gameId": game_id, "sessionId": session_id }, "variables": var_values })),
                 images_enabled: None,
             },
         )
@@ -366,6 +382,98 @@ pub(crate) async fn copy_game_core(
     Ok((c.id, book.id, conv_id))
 }
 
+/// 게임 변수 → 대화 변수 (5-F-4-6, ADR-029 ⑥).
+/// 정의: 게임 정의(설명·종류·처음 값·AI 읽기/쓰기·범위·한 번 폭)를 그대로 — 게임의 array는 글자로.
+/// 값: 플레이 기록의 flags를 글자로. 관계: "누가>누구" 축마다 `관계.이름.축`(플레이어를 향한 것) 또는 `관계.이름>이름.축` 수 변수 —
+/// 게임과 같은 범위(-100~100)·AI 한 번 폭으로 정의도 만든다. 정의가 확인에 걸리면(이름 겹침·개수 상한) 정의 없이 값만 옮긴다
+fn game_vars(
+    defs: &[crate::models::game::GameStateDef],
+    characters: &[crate::models::game::GameCharacters],
+    session: Option<(Option<String>, Option<String>)>,
+) -> (Vec<crate::models::conversation::VarDef>, serde_json::Map<String, serde_json::Value>) {
+    use crate::models::conversation::{VarDef, VarKind};
+    use serde_json::Value;
+    let mut out: Vec<VarDef> = defs
+        .iter()
+        .map(|d| {
+            let rule = crate::game::engine::VarRule::from_config(&d.config_json);
+            let kind = match d.def_type.as_str() {
+                "number" => VarKind::Number,
+                "boolean" => VarKind::Boolean,
+                _ => VarKind::String,
+            };
+            VarDef {
+                key: d.key.clone(),
+                description: d.description.clone().unwrap_or_default(),
+                kind,
+                default_value: Some(d.default_value.clone()).filter(|v| !v.trim().is_empty()),
+                min: rule.min,
+                max: rule.max,
+                max_step: rule.max_step,
+                ai_read: rule.readable,
+                ai_write: rule.writable,
+            }
+        })
+        .collect();
+    let mut values = serde_json::Map::new();
+    if let Some((flags, rels)) = session {
+        let text = |v: &Value| match v {
+            Value::String(s) => s.clone(),
+            other => other.to_string(),
+        };
+        if let Some(Value::Object(f)) = flags.as_deref().and_then(|s| serde_json::from_str(s).ok()) {
+            for (k, v) in f {
+                if !v.is_null() {
+                    values.insert(k, Value::String(text(&v)));
+                }
+            }
+        }
+        let name = |id: &str| -> String {
+            if id == "player" {
+                return "플레이어".into();
+            }
+            characters
+                .iter()
+                .find(|c| c.id == id)
+                .map(|c| c.name.trim().to_string())
+                .unwrap_or_else(|| id.to_string())
+        };
+        if let Some(Value::Object(r)) = rels.as_deref().and_then(|s| serde_json::from_str(s).ok()) {
+            for (pair, axes) in r {
+                let Some((from, to)) = pair.split_once('>') else { continue };
+                let who = if to == "player" { name(from) } else { format!("{}>{}", name(from), name(to)) };
+                let Value::Object(axes) = axes else { continue };
+                for (axis, v) in axes {
+                    if v.as_f64().is_none() {
+                        continue;
+                    }
+                    let key = format!("관계.{who}.{axis}");
+                    values.insert(key.clone(), Value::String(text(&v)));
+                    out.push(VarDef {
+                        key,
+                        description: format!("{who}의 {axis} (게임 관계)"),
+                        kind: VarKind::Number,
+                        default_value: Some("0".into()),
+                        min: Some(crate::game::engine::RELATION_MIN as f64),
+                        max: Some(crate::game::engine::RELATION_MAX as f64),
+                        max_step: Some(crate::game::engine::RELATION_AI_MAX_STEP as f64),
+                        ai_read: true,
+                        ai_write: to == "player",
+                    });
+                }
+            }
+        }
+    }
+    let defs = match crate::service::chat::vars::normalize(out) {
+        Ok(d) => d,
+        Err(e) => {
+            eprintln!("[convert] 게임 변수 정의를 옮기지 못함 (값만 옮김): {}", e.to_response().message);
+            vec![]
+        }
+    };
+    (defs, values)
+}
+
 /// 게임 NPC의 스탠딩 그림을 캐릭터 에셋으로 (공통 폴더, 키 `NPC이름_감정`). 원본 게임 파일은 그대로. 넣은 수
 pub(crate) async fn copy_npc_standings(db: &crate::db::conn::DbPool, game_dir: &Path, app_data_dir: &Path, game_id: &str, character_id: &str) -> Result<usize> {
     let npcs = game::get_all_game_characters(db, game_id).await?;
@@ -401,7 +509,9 @@ mod game_copy_tests {
             "INSERT INTO game_characters (id, game_id, name, created_at, updated_at) VALUES ('n2', 'g', '빈 사람', 1, 1)",
             "INSERT INTO game_items (id, game_id, name, description, created_at, updated_at) VALUES ('i1', 'g', '은열쇠', '오래된 문을 연다', 1, 1)",
             "INSERT INTO game_events (id, game_id, event_type, trigger_type, repeat_policy, name, description, created_at, updated_at) VALUES ('e1', 'g', 'story', 'manual', 'once', '늑대 습격', '밤에 늑대가 온다', 1, 1)",
-            "INSERT INTO game_player_sessions (id, game_id, player_id, head_seq) VALUES ('s', 'g', NULL, 0)",
+            // 변수 (5-F-4-6): 정의 하나, 플레이 기록의 값·관계
+            r#"INSERT INTO game_state_defs (id, game_id, description, key, type, default_value, config_json, created_at, updated_at) VALUES ('d1', 'g', '용기', 'courage', 'number', '0', '{"ai_writable": true, "min": 0, "max": 10, "max_step": 2}', 1, 1)"#,
+            r#"INSERT INTO game_player_sessions (id, game_id, player_id, head_seq, flags_json, relationships_json) VALUES ('s', 'g', NULL, 0, '{"courage": 4}', '{"n1>player": {"affection": 12}}')"#,
             "INSERT INTO game_conversations (id, game_id, session_id, participants_key, created_at, updated_at) VALUES ('gc', 'g', 's', 'n1', 1, 1)",
             "INSERT INTO game_messages (id, seq, conversation_id, role, name, content, created_at) VALUES ('m1', 1, 'gc', 'user', '나', '안녕', 10), ('m2', 2, 'gc', 'assistant', '유나', '유나: 반가워! <emotion::유나>happy</emotion>', 20), ('m3', 3, 'gc', 'assistant', NULL, '<bgm>calm</bgm>', 30)",
         ] {
@@ -436,6 +546,14 @@ mod game_copy_tests {
         );
         let meta = crate::db::conversation::get_conversation(&db, &conv).await.unwrap().meta.unwrap();
         assert_eq!(meta["multiChar"], true);
+        // 변수 (5-F-4-6): 값·관계는 대화 변수로, 정의는 세계 캐릭터에 (관계는 게임과 같은 범위·한 번 폭)
+        assert_eq!(meta["variables"], serde_json::json!({ "courage": "4", "관계.유나.affection": "12" }));
+        let defs = crate::db::conversation::get_character_var_defs(&db, &cid).await.unwrap();
+        assert_eq!(
+            defs.iter().map(|d| (d.key.as_str(), d.ai_write, d.max, d.max_step)).collect::<Vec<_>>(),
+            vec![("courage", true, Some(10.0), Some(2.0)), ("관계.유나.affection", true, Some(100.0), Some(5.0))]
+        );
+        assert_eq!(defs[0].description, "용기");
 
         // NPC 스탠딩 → 캐릭터 에셋 (키 `이름_감정`, 공통 폴더)
         let game_dir = dir.path().join("games").join("g");
