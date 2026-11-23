@@ -232,7 +232,9 @@ fn now_ms() -> i64 {
 
 /// 지우기 = 휴지통으로. 항목이 없으면 NotFound
 pub async fn move_to_trash(db: &SqlitePool, base: &Path, kind: TrashKind, id: &str) -> Result<TrashItem> {
-    let mut tx = db.begin().await?;
+    // 읽고 나서 쓰는 트랜잭션이라 처음부터 쓰기 잠금을 잡는다. 지연(BEGIN)이면 겹친 두 트랜잭션이 둘 다 읽은 뒤
+    // 쓰려 할 때 SQLite가 기다리지 않고 BUSY("데이터베이스가 사용 중")로 거절한다 (5-E-28). IMMEDIATE는 busy_timeout 동안 기다린다
+    let mut tx = db.begin_with("BEGIN IMMEDIATE").await?;
     let schema = Schema::load(&mut tx).await?;
     let snap = snapshot(&mut tx, &schema, kind, id).await?;
     let Some(root) = snap.rows.first().filter(|r| r.table == kind.table()).map(|r| r.values.clone()) else {
@@ -370,7 +372,7 @@ pub async fn restore(db: &SqlitePool, base: &Path, trash_id: &str) -> Result<Tra
         }
     }
 
-    let mut tx = db.begin().await?;
+    let mut tx = db.begin_with("BEGIN IMMEDIATE").await?; // move_to_trash와 같은 까닭
     sqlx::query("PRAGMA defer_foreign_keys = ON").execute(&mut *tx).await?;
     let schema = Schema::load(&mut tx).await?;
     let now = now_ms();

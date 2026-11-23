@@ -594,3 +594,23 @@ async fn trash_restore_refuses_when_parent_is_gone_and_expires() {
     assert_eq!(trash::purge_expired(&db, &base, Some(30)).await.unwrap(), 1);
     assert!(trash::list(&db).await.unwrap().is_empty());
 }
+
+/// 하나씩 빠르게 지울 때 "데이터베이스가 사용 중" (5-E-28): 겹친 휴지통 옮기기가 둘 다 읽은 뒤 쓰려 하면
+/// 지연 트랜잭션은 SQLite가 기다리지 않고 BUSY로 거절한다. BEGIN IMMEDIATE면 앞 것이 끝날 때까지 기다린다
+#[tokio::test]
+async fn overlapping_trash_moves_wait_instead_of_failing_busy() {
+    use super::trash::{self, TrashKind};
+    let (_d, base, db) = app_dir().await;
+    let mut ids = vec![];
+    for _ in 0..6 {
+        let SillyTavernImport::Character { character, .. } = import_file(&db, &base, &sample("character/default_Seraphina.png"), None).await.unwrap() else {
+            panic!()
+        };
+        ids.push(character.id);
+    }
+    let results = futures::future::join_all(ids.iter().map(|id| trash::move_to_trash(&db, &base, TrashKind::Character, id))).await;
+    for r in &results {
+        assert!(r.is_ok(), "{r:?}");
+    }
+    assert_eq!(count(&db, "SELECT COUNT(*) FROM characters").await, 0);
+}
