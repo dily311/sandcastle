@@ -8,6 +8,43 @@ pub struct ConvSettings {
     pub default_persona_id: Option<String>,
 }
 
+// ---------- 대화 변수 정의 (5-F-4-3, ADR-029) ----------
+/// 변수 종류 (게임 변수의 number·boolean·string과 같음)
+#[derive(Serialize, Deserialize, specta::Type, Debug, Clone, Copy, PartialEq, Eq, Default)]
+#[serde(rename_all = "snake_case")]
+pub enum VarKind {
+    Number,
+    Boolean,
+    #[default]
+    String,
+}
+
+/// 캐릭터에 두는 변수 정의. 값은 대화 meta.variables (글자). 정의 없는 변수는 지금처럼
+#[derive(Serialize, Deserialize, specta::Type, Debug, Clone, PartialEq)]
+#[serde(rename_all = "camelCase")]
+pub struct VarDef {
+    pub key: String,
+    #[serde(default)]
+    pub description: String,
+    #[serde(default)]
+    pub kind: VarKind,
+    /// 대화에 값이 없을 때 보이는 처음 값
+    #[serde(default)]
+    pub default_value: Option<String>,
+    /// 수일 때만: 최소·최대·AI가 한 번에 바꿀 수 있는 폭
+    #[serde(default)]
+    pub min: Option<f64>,
+    #[serde(default)]
+    pub max: Option<f64>,
+    #[serde(default)]
+    pub max_step: Option<f64>,
+    /// AI가 지금 값을 읽을 수 있나 / 바꿀 수 있나 (5-F-4-4에서 씀)
+    #[serde(default)]
+    pub ai_read: bool,
+    #[serde(default)]
+    pub ai_write: bool,
+}
+
 // ---------- 프로필 그림 맞추기 (5-E-17-3) ----------
 /// 동그란 프로필 칸 안에서 그림의 어느 곳을 보일지: x·y는 그림 안 위치(%), zoom은 확대 배율
 #[derive(Serialize, Deserialize, specta::Type, Debug, Clone, Copy, PartialEq)]

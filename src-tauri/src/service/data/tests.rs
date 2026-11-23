@@ -114,6 +114,21 @@ async fn character_pack_round_trip_merges_with_new_ids() {
     let old_id = populate(&db_a, &base_a).await;
     let fit = crate::models::conversation::AvatarFit { x: 30.0, y: 20.0, zoom: 1.5 };
     db::conversation::set_avatar_fit(&db_a, "characters", &old_id, Some(fit)).await.unwrap();
+    // 변수 정의 (5-F-4-3)도 팩에 실려 간다
+    let hp = crate::models::conversation::VarDef {
+        key: "hp".into(),
+        description: "체력".into(),
+        kind: crate::models::conversation::VarKind::Number,
+        default_value: Some("100".into()),
+        min: Some(0.0),
+        max: Some(100.0),
+        max_step: Some(10.0),
+        ai_read: true,
+        ai_write: true,
+    };
+    db::conversation::upsert_character_var_defs(&db_a, &old_id, std::slice::from_ref(&hp))
+        .await
+        .unwrap();
     let out = base_a.join("exports/seraphina.scpack");
     let summary = pack::export_pack(&db_a, &base_a, &[old_id.clone()], None, &out).await.unwrap();
     assert_eq!((summary.character_count, summary.conversation_count, summary.message_count), (1, 1, 12));
@@ -141,6 +156,11 @@ async fn character_pack_round_trip_merges_with_new_ids() {
     assert_eq!(regex.len(), 1);
     let character = db::conversation::get_character(&db_b, &new_id).await.unwrap();
     assert_eq!(character.avatar_fit, Some(fit), "프로필 그림 확대·위치도 그대로 (5-E-17-3)");
+    assert_eq!(
+        db::conversation::get_character_var_defs(&db_b, &new_id).await.unwrap(),
+        vec![hp],
+        "변수 정의도 그대로 (5-F-4-3)"
+    );
     let avatar = PathBuf::from(character.avatar.unwrap());
     assert!(avatar.starts_with(&base_b) && avatar.is_file());
     let books = db::conversation::get_all_worldinfo_entries(&db_b, &character.world_info_ids[0]).await.unwrap();

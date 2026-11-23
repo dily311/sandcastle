@@ -189,6 +189,10 @@ export const commands = {
 	/**  캐릭터가 쓸 에셋 판 (None = 전체). 대화에는 그 판 폴더와 공통(폴더 없음) 그림만 쓴다 (5-E-21) */
 	getCharacterAssetVersion: (characterId: string, options?: InvokeOptions) => __TAURI_INVOKE<string | null>("get_character_asset_version", { characterId }, options),
 	setCharacterAssetVersion: (characterId: string, version: string | null, options?: InvokeOptions) => __TAURI_INVOKE<null>("set_character_asset_version", { characterId, version }, options),
+	/**  캐릭터의 대화 변수 정의 (5-F-4-3, 코어 플러그인 status) */
+	getCharacterVarDefs: (characterId: string, options?: InvokeOptions) => __TAURI_INVOKE<VarDef_Serialize[]>("get_character_var_defs", { characterId }, options),
+	/**  캐릭터의 대화 변수 정의 저장. 다듬은 목록을 돌려준다 */
+	setCharacterVarDefs: (characterId: string, defs: VarDef_Deserialize[], options?: InvokeOptions) => __TAURI_INVOKE<VarDef_Serialize[]>("set_character_var_defs", { characterId, defs }, options),
 	/**
 	 *  SillyTavern 파일 가져오기 (캐릭터 카드 PNG/JSON, 프리셋, 정규식, 월드인포, 채팅 .jsonl 자동 판별).
 	 *  - `name`: 프리셋/로어북/대화 이름. 비우면 파일 이름을 쓴다.
@@ -5881,6 +5885,44 @@ export type UserPlugin_Serialize = {
 };
 
 export type Value = null | boolean | number | string | Value[] | { [key in string]: Value };
+
+/**  캐릭터에 두는 변수 정의. 값은 대화 meta.variables (글자). 정의 없는 변수는 지금처럼 */
+export type VarDef = VarDef_Serialize | VarDef_Deserialize;
+
+/**  캐릭터에 두는 변수 정의. 값은 대화 meta.variables (글자). 정의 없는 변수는 지금처럼 */
+export type VarDef_Deserialize = {
+	key: string,
+	description?: string,
+	kind?: VarKind,
+	/**  대화에 값이 없을 때 보이는 처음 값 */
+	defaultValue?: string | null,
+	/**  수일 때만: 최소·최대·AI가 한 번에 바꿀 수 있는 폭 */
+	min?: number | null,
+	max?: number | null,
+	maxStep?: number | null,
+	/**  AI가 지금 값을 읽을 수 있나 / 바꿀 수 있나 (5-F-4-4에서 씀) */
+	aiRead?: boolean,
+	aiWrite?: boolean,
+};
+
+/**  캐릭터에 두는 변수 정의. 값은 대화 meta.variables (글자). 정의 없는 변수는 지금처럼 */
+export type VarDef_Serialize = {
+	key: string,
+	description: string,
+	kind: VarKind,
+	/**  대화에 값이 없을 때 보이는 처음 값 */
+	defaultValue: string | null,
+	/**  수일 때만: 최소·최대·AI가 한 번에 바꿀 수 있는 폭 */
+	min: number | null,
+	max: number | null,
+	maxStep: number | null,
+	/**  AI가 지금 값을 읽을 수 있나 / 바꿀 수 있나 (5-F-4-4에서 씀) */
+	aiRead: boolean,
+	aiWrite: boolean,
+};
+
+/**  변수 종류 (게임 변수의 number·boolean·string과 같음) */
+export type VarKind = "number" | "boolean" | "string";
 
 /**  고를 수 있는 목소리 (ElevenLabs는 계정의 목소리 목록, 그 밖은 OpenAI 기본 목소리) */
 export type Voice = Voice_Serialize | Voice_Deserialize;

@@ -11,7 +11,9 @@
 	import { toasts } from "$shared/stores/toast.svelte";
 	import { nav } from "$app/nav.svelte";
 	import { dropPaths } from "$app/drop.svelte";
-	import { library, type Character } from "./library.svelte";
+	import { library, type Character, type VarDef } from "./library.svelte";
+	import VarDefsEditor from "./VarDefsEditor.svelte";
+	import { plugins } from "$shared/stores/plugins.svelte";
 
 	let { character }: { character: Character } = $props();
 	const src = { source: "character" };
@@ -35,8 +37,16 @@
 
 	let books = $state<Book[]>([]);
 	let saving = $state(false);
+	// 변수 정의 (5-F-4-3): 상태창·변수 플러그인이 켜졌을 때만 읽고 보인다. 저장 버튼으로 같이 저장
+	const varsOn = plugins.on("status");
+	let varDefs = $state<VarDef[]>([]);
+	let varDefsOriginal = $state("[]");
 	onMount(async () => {
 		books = await call(commands.getAllWorldinfoBooks(), { ...src, silent: true }).catch(() => []);
+		if (varsOn) {
+			varDefs = (await library.loadVarDefs(c0.id)).map((d) => ({ ...d }));
+			varDefsOriginal = JSON.stringify(varDefs);
+		}
 	});
 
 	const input = $derived<CharacterInput>({
@@ -82,7 +92,8 @@
 		const { avatar: _a, favorite: _f, ...rest } = i;
 		return { ...rest, worldInfoIds: [...rest.worldInfoIds].sort() };
 	}
-	const dirty = $derived(JSON.stringify(stripAvatar(input)) !== original);
+	const varDefsDirty = $derived(varsOn && JSON.stringify(varDefs) !== varDefsOriginal);
+	const dirty = $derived(JSON.stringify(stripAvatar(input)) !== original || varDefsDirty);
 
 	// 저장하지 않고 나가려 하면 물어봄
 	$effect(() => {
@@ -98,6 +109,11 @@
 		if (!input.name) return toasts.error("이름을 입력해야 함");
 		saving = true;
 		try {
+			// 변수 정의를 먼저: 확인에 걸리면(이름 겹침 등) 알림을 보이고 편집에 남는다
+			if (varDefsDirty) {
+				varDefs = await library.setVarDefs(character.id, varDefs);
+				varDefsOriginal = JSON.stringify(varDefs);
+			}
 			const saved = await call(commands.updateCharacter(character.id, input), src);
 			const i = library.characters.findIndex((c) => c.id === saved.id);
 			if (i >= 0) library.characters[i] = saved;
@@ -156,6 +172,7 @@
 		{ id: "prompt", label: "프롬프트" },
 		{ id: "first", label: "첫 메시지" },
 		{ id: "links", label: "연결" },
+		...(varsOn ? [{ id: "vars", label: "변수" }] : []),
 	];
 	let body: HTMLDivElement | undefined = $state();
 	function jump(id: string) {
@@ -276,6 +293,14 @@
 					</Field>
 				</div>
 			</section>
+			{#if varsOn}
+				<section id="ce-vars">
+					<h2>변수</h2>
+					<div class="card">
+						<VarDefsEditor bind:defs={varDefs} />
+					</div>
+				</section>
+			{/if}
 		</div>
 	</div>
 </div>

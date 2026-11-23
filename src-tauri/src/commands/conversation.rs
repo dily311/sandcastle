@@ -177,6 +177,35 @@ pub async fn set_character_cover_position(state: State<'_, AppState>, id: String
     Ok(())
 }
 
+/// 캐릭터의 대화 변수 정의 (5-F-4-3, 코어 플러그인 status)
+#[tauri::command]
+#[specta::specta]
+pub async fn get_character_var_defs(
+    app: tauri::AppHandle,
+    state: State<'_, AppState>,
+    character_id: String,
+) -> Result<Vec<crate::models::conversation::VarDef>> {
+    crate::sys::plugins::require(&app, crate::sys::plugins::id::STATUS)?;
+    Ok(conversation::get_character_var_defs(&state.db, &character_id).await?)
+}
+
+/// 캐릭터의 대화 변수 정의 저장. 다듬은 목록을 돌려준다
+#[tauri::command]
+#[specta::specta]
+pub async fn set_character_var_defs(
+    app: tauri::AppHandle,
+    state: State<'_, AppState>,
+    character_id: String,
+    defs: Vec<crate::models::conversation::VarDef>,
+) -> Result<Vec<crate::models::conversation::VarDef>> {
+    crate::sys::plugins::require(&app, crate::sys::plugins::id::STATUS)?;
+    let defs = crate::service::chat::vars::normalize(defs)?;
+    if !conversation::upsert_character_var_defs(&state.db, &character_id, &defs).await? {
+        return Err(crate::error::AppError::not_found("캐릭터를 찾을 수 없습니다"));
+    }
+    Ok(defs)
+}
+
 /// 프로필 그림 확대·위치 (5-E-17-3). owner: "character" | "persona", fit이 없으면 가운데·확대 없음으로
 #[tauri::command]
 #[specta::specta]

@@ -44,6 +44,9 @@ const character = (id: string, name: string, description: string, extra: Partial
 	...extra,
 });
 
+/** 캐릭터별 변수 정의 (미리보기 전용 메모리) */
+const varDefs = new Map<string, unknown[]>();
+
 const characters: Character_Serialize[] = [
 	character("sera", "Seraphina", "엘도리아 숲의 수호자.\n숲 깊은 곳의 오두막에서 지친 여행자를 돌봄. 그림자 송곳니 무리로부터 숲을 지키는 오래된 마법의 주인.", {
 		worldInfoIds: ["wb1"],
@@ -437,6 +440,15 @@ AI: 그때 이야기를 다시 해 볼까요?`, stale: false },
 	delete_conversation: ({ id }) => {
 		convs.splice(convs.indexOf(conv(id)), 1);
 		return null;
+	},
+	// 변수 정의 (5-F-4-3): 실제로는 백엔드가 이름 겹침·범위를 확인하고 다듬는다
+	get_character_var_defs: ({ characterId }) => varDefs.get(String(characterId)) ?? [],
+	set_character_var_defs: ({ characterId, defs }) => {
+		const list = (defs as { key: string; aiWrite?: boolean; aiRead?: boolean }[]).map((d) => ({ ...d, key: d.key.trim(), aiRead: d.aiRead || !!d.aiWrite }));
+		if (list.some((d) => !d.key)) throw new Error("변수 이름이 비어 있음");
+		if (new Set(list.map((d) => d.key)).size !== list.length) throw new Error("같은 이름의 변수가 둘");
+		varDefs.set(String(characterId), list);
+		return list;
 	},
 	// 실제로는 휴지통으로 (trash.ts가 감쌈). 대기열 확인용으로 조금 걸린다 (5-E-28)
 	delete_character: async ({ id }) => {

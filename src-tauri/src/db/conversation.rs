@@ -401,6 +401,33 @@ pub async fn resolve_conv_persona(db: &sqlx::SqlitePool, conv_persona_id: &str, 
     get_system_default_persona(db).await.unwrap_or_else(|_| "default".into())
 }
 
+/// 캐릭터의 변수 정의 (5-F-4-3). 없거나 읽을 수 없으면 빈 목록
+pub async fn get_character_var_defs<'e, E>(executor: E, character_id: &str) -> Result<Vec<crate::models::conversation::VarDef>, Error>
+where
+    E: Executor<'e, Database = Sqlite>,
+{
+    let raw: Option<Option<String>> = sqlx::query_scalar("SELECT var_defs FROM characters WHERE id = ?")
+        .bind(character_id)
+        .fetch_optional(executor)
+        .await?;
+    let Some(raw) = raw else { return Err(Error::RowNotFound) };
+    Ok(raw.and_then(|s| serde_json::from_str(&s).ok()).unwrap_or_default())
+}
+
+/// 캐릭터의 변수 정의 저장 (빈 목록 = NULL). 확인은 service::chat::vars::normalize가 먼저 한다
+pub async fn upsert_character_var_defs<'e, E>(executor: E, character_id: &str, defs: &[crate::models::conversation::VarDef]) -> Result<bool, Error>
+where
+    E: Executor<'e, Database = Sqlite>,
+{
+    let json = (!defs.is_empty()).then(|| serde_json::to_string(defs).unwrap_or_default());
+    let r = sqlx::query("UPDATE characters SET var_defs = ? WHERE id = ?")
+        .bind(json)
+        .bind(character_id)
+        .execute(executor)
+        .await?;
+    Ok(r.rows_affected() != 0)
+}
+
 pub async fn get_system_default_persona<'e, E>(executor: E) -> Result<String, Error>
 where
     E: Executor<'e, Database = Sqlite>,

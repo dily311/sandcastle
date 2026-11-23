@@ -202,8 +202,14 @@ pub async fn export_pack(
             .into_iter()
             .filter(|s| s.scope == RegexScope::Character)
             .collect();
+        // 변수 정의 (5-F-4-3)는 캐릭터 칸이 아니라 따로 읽어 캐릭터 JSON에 싣는다 (예전 팩에는 없음)
+        let mut character_json = serde_json::to_value(&character)?;
+        let var_defs = db::conversation::get_character_var_defs(db, cid).await.unwrap_or_default();
+        if !var_defs.is_empty() {
+            character_json["varDefs"] = serde_json::to_value(&var_defs)?;
+        }
         characters.push(PackCharacter {
-            character: serde_json::to_value(&character)?,
+            character: character_json,
             avatar_file,
             images,
             regex,
@@ -409,6 +415,13 @@ async fn import_pack_inner(
         let favorite = pc.character["favorite"].as_bool().unwrap_or(false);
         // 프로필 그림 확대·위치 (5-E-17-3, 예전 팩에는 없음)
         let avatar_fit = serde_json::from_value::<crate::models::conversation::AvatarFit>(pc.character["avatarFit"].clone()).ok();
+        // 변수 정의 (5-F-4-3, 예전 팩에는 없음). 확인을 거쳐 넣고, 읽을 수 없으면 경고만
+        let var_defs = match pc.character.get("varDefs") {
+            Some(v) => serde_json::from_value::<Vec<crate::models::conversation::VarDef>>(v.clone())
+                .map_err(|e| e.to_string())
+                .and_then(|d| crate::service::chat::vars::normalize(d).map_err(|e| e.to_response().message)),
+            None => Ok(vec![]),
+        };
         let mut input: CharacterInput =
             serde_json::from_value(pc.character).map_err(|e| AppError::validation(format!("캐릭터 데이터를 읽을 수 없습니다: {e}"), None))?;
 
@@ -433,6 +446,13 @@ async fn import_pack_inner(
         }
         if character.avatar.is_some() && avatar_fit.is_some() {
             db::conversation::set_avatar_fit(&mut *tx, "characters", &new_id, avatar_fit).await?;
+        }
+        match var_defs {
+            Ok(defs) if !defs.is_empty() => {
+                db::conversation::upsert_character_var_defs(&mut *tx, &new_id, &defs).await?;
+            }
+            Ok(_) => {}
+            Err(why) => warnings.push(format!("'{}'의 변수 정의를 읽지 못해 뺌: {why}", character.name)),
         }
         for b in old_books {
             match book_map.get(&b) {

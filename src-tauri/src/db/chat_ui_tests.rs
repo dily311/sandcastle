@@ -420,3 +420,32 @@ async fn migration_008_unlocks_only_personas_equal_to_the_default() {
     assert_eq!(got[0].2, 101);
     assert_eq!(got[2].2, 100);
 }
+
+/// 캐릭터 변수 정의 저장·읽기 (5-F-4-3): 빈 목록은 NULL, 없는 캐릭터는 저장하지 않음
+#[tokio::test]
+async fn character_var_defs_round_trip() {
+    use crate::models::conversation::{VarDef, VarKind};
+    let pool = pool().await;
+    assert!(conv::get_character_var_defs(&pool, "c1").await.unwrap().is_empty());
+    let defs = vec![VarDef {
+        key: "호감".into(),
+        description: "아리아의 호감".into(),
+        kind: VarKind::Number,
+        default_value: Some("0".into()),
+        min: Some(0.0),
+        max: Some(10.0),
+        max_step: Some(1.0),
+        ai_read: true,
+        ai_write: false,
+    }];
+    assert!(conv::upsert_character_var_defs(&pool, "c1", &defs).await.unwrap());
+    assert_eq!(conv::get_character_var_defs(&pool, "c1").await.unwrap(), defs);
+    assert!(conv::upsert_character_var_defs(&pool, "c1", &[]).await.unwrap());
+    let raw: Option<String> = sqlx::query_scalar("SELECT var_defs FROM characters WHERE id = 'c1'")
+        .fetch_one(&pool)
+        .await
+        .unwrap();
+    assert_eq!(raw, None, "빈 목록은 NULL");
+    assert!(!conv::upsert_character_var_defs(&pool, "nope", &defs).await.unwrap());
+    assert!(conv::get_character_var_defs(&pool, "nope").await.is_err());
+}

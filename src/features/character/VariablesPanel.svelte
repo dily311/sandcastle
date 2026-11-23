@@ -2,7 +2,8 @@
 	// 변수 보기·고치기 (5-F-4-1, ADR-029): 이 대화 변수(meta.variables — SillyTavern chat 변수와 같은 범위)와
 	// 전역 변수(플러그인 설정 quickReply.globals — /setglobalvar). 프롬프트에서는 {{getvar::이름}}·{{getglobalvar::이름}}
 	import { Plus, Trash2 } from "@lucide/svelte";
-	import { IconButton, Input } from "$shared/ui";
+	import { IconButton, Input, Switch } from "$shared/ui";
+	import { coerceVar, varRows, varTitle, type VarRow } from "$features/status/vars";
 	import type { Conversation } from "./library.svelte";
 	import { library } from "./library.svelte";
 	import { pluginSetting } from "$shared/stores/aiTools.svelte";
@@ -15,6 +16,11 @@
 	onMount(() => {
 		if (!pluginSetting.value) void pluginSetting.load();
 	});
+	// 이 캐릭터의 변수 정의 (5-F-4-3) — 정의된 변수는 값이 없어도 보이고, 종류·범위에 맞춰 고친다
+	$effect(() => {
+		if (conv.characterId) void library.loadVarDefs(conv.characterId);
+	});
+	const defs = $derived(library.varDefs[conv.characterId] ?? []);
 
 	/** 변수 이름·값 상한 (프롬프트가 부풀지 않게) */
 	const MAX_NAME = 64;
@@ -37,16 +43,24 @@
 		await pluginSetting.save({ ...cur, quickReply: { ...cur.quickReply, globals: next } });
 	}
 	const groups = $derived([
-		{ id: "conv", title: "이 대화", macro: "getvar", vars: convVars, save: saveConv },
-		{ id: "global", title: "전역", macro: "getglobalvar", vars: globalVars, save: saveGlobal },
+		{ id: "conv", title: "이 대화", macro: "getvar", vars: convVars, rows: varRows(convVars, defs), save: saveConv },
+		{ id: "global", title: "전역", macro: "getglobalvar", vars: globalVars, rows: varRows(globalVars), save: saveGlobal },
 	]);
 
 	/** 더하기 칸 (화면 상태) */
 	let draft = $state<Record<string, { name: string; value: string }>>({ conv: { name: "", value: "" }, global: { name: "", value: "" } });
 
-	async function setValue(g: (typeof groups)[number], name: string, value: string) {
-		if (g.vars[name] === value) return;
-		await g.save({ ...g.vars, [name]: value.slice(0, MAX_VALUE) });
+	/** 값 고치기. 정의가 있으면 종류·범위에 맞춘다 (맞출 수 없으면 알리고 그대로) */
+	async function setValue(g: (typeof groups)[number], row: VarRow, raw: string, input?: HTMLInputElement) {
+		const r = coerceVar(row.def, raw.slice(0, MAX_VALUE));
+		if ("error" in r) {
+			toasts.error(r.error);
+			if (input) input.value = row.value ?? "";
+			return;
+		}
+		if (input) input.value = r.value;
+		if (g.vars[row.name] === r.value) return;
+		await g.save({ ...g.vars, [row.name]: r.value });
 	}
 	async function add(g: (typeof groups)[number]) {
 		const d = draft[g.id];
@@ -77,14 +91,29 @@
 <div class="vars sc-variables">
 	{#each groups as g (g.id)}
 		<section>
-			<h4>{g.title} <span class="faint">{Object.keys(g.vars).length}</span></h4>
-			{#if Object.keys(g.vars).length}
+			<h4>{g.title} <span class="faint">{g.rows.length}</span></h4>
+			{#if g.rows.length}
 				<ul>
-					{#each Object.entries(g.vars).sort(([a], [b]) => a.localeCompare(b)) as [name, value] (name)}
-						<li>
-							<button type="button" class="name" title={`누르면 {{${g.macro}::${name}}} 복사`} onclick={() => copyMacro(g.macro, name)}>{name}</button>
-							<Input value={value} aria-label="{g.title} 변수 {name}의 값" maxlength={MAX_VALUE} onchange={(e) => setValue(g, name, e.currentTarget.value)} />
-							<IconButton label="{name} 지우기" size="sm" onclick={() => remove(g, name)}><Trash2 /></IconButton>
+					{#each g.rows as row (row.name)}
+						<li class:defined={!!row.def}>
+							<button type="button" class="name" title={[varTitle(row.def), `누르면 {{${g.macro}::${row.name}}} 복사`].filter(Boolean).join("\n")} onclick={() => copyMacro(g.macro, row.name)}>{row.name}</button>
+							{#if row.def?.kind === "boolean"}
+								<Switch checked={(row.value ?? row.def.defaultValue) === "true"} label="{g.title} 변수 {row.name}" hideLabel onchange={(v) => setValue(g, row, String(v))} />
+							{:else}
+								<Input
+									value={row.value ?? ""}
+									placeholder={row.def?.defaultValue ?? ""}
+									inputmode={row.def?.kind === "number" ? "decimal" : undefined}
+									aria-label="{g.title} 변수 {row.name}의 값"
+									maxlength={MAX_VALUE}
+									onchange={(e) => setValue(g, row, e.currentTarget.value, e.currentTarget)}
+								/>
+							{/if}
+							{#if row.value !== undefined}
+								<IconButton label="{row.name} 지우기" size="sm" onclick={() => remove(g, row.name)}><Trash2 /></IconButton>
+							{:else}
+								<span></span>
+							{/if}
 						</li>
 					{/each}
 				</ul>

@@ -9,12 +9,13 @@ import type {
 	Conversation_Serialize as Conversation,
 	Persona_Serialize as Persona,
 	PromptPresets_Serialize as Preset,
+	VarDef_Serialize as VarDef,
 } from "$ipc/bindings";
 import { call, commands } from "$shared/ipc/client";
 import { toasts } from "$shared/stores/toast.svelte";
 import { logs } from "$shared/stores/log.svelte";
 
-export type { Character, CharacterImage, Conversation, ConversationFolder, Persona, Preset, ApiProfiles };
+export type { Character, CharacterImage, Conversation, ConversationFolder, Persona, Preset, ApiProfiles, VarDef };
 
 /** 목록에 보일 대화 시각: 마지막 메시지 시각 (가져온 대화도 원래 대화 시각으로). 메시지가 없으면 수정 시각 */
 // ---- 목록 캐시 (이 기기 브라우저 저장소, 보여 주기만 — 곧 새로 읽은 값으로 바뀐다) ----
@@ -277,6 +278,17 @@ class Library {
 		if ((await jobs.run(name, () => call(commands.deleteConversationFolder(id), src), { group: "폴더 지우기" })) === undefined) return;
 		this.folders = this.folders.filter((f) => f.id !== id);
 		for (const c of this.conversations) if (c.folderId === id) c.folderId = null;
+	}
+
+	// ---- 변수 정의 (5-F-4-3, ADR-029): 캐릭터마다. 상태창·변수 플러그인이 켜졌을 때만 읽는다 ----
+	varDefs = $state<Record<string, VarDef[]>>({});
+	async loadVarDefs(charId: string) {
+		this.varDefs[charId] = await call(commands.getCharacterVarDefs(charId), { ...src, silent: true }).catch(() => []);
+		return this.varDefs[charId];
+	}
+	async setVarDefs(charId: string, defs: VarDef[]) {
+		this.varDefs[charId] = await call(commands.setCharacterVarDefs(charId, defs), src);
+		return this.varDefs[charId];
 	}
 
 	// ---- 캐릭터 에셋 에셋 ----

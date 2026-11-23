@@ -348,6 +348,8 @@ pub fn specta_builder() -> tauri_specta::Builder<tauri::Wry> {
         set_conversation_images_enabled,
         get_character_asset_version,
         set_character_asset_version,
+        get_character_var_defs,
+        set_character_var_defs,
         // import
         import_sillytavern,
         detect_sillytavern,
@@ -689,6 +691,8 @@ pub fn specta_builder() -> tauri_specta::Builder<tauri::Wry> {
         set_conversation_images_enabled,
         get_character_asset_version,
         set_character_asset_version,
+        get_character_var_defs,
+        set_character_var_defs,
         // import
         import_sillytavern,
         detect_sillytavern,
