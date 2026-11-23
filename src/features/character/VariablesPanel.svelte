@@ -2,7 +2,10 @@
 	// 변수 보기·고치기 (5-F-4-1, ADR-029): 이 대화 변수(meta.variables — SillyTavern chat 변수와 같은 범위)와
 	// 전역 변수(플러그인 설정 quickReply.globals — /setglobalvar). 프롬프트에서는 {{getvar::이름}}·{{getglobalvar::이름}}
 	import { Plus, Trash2 } from "@lucide/svelte";
-	import { IconButton, Input, Switch } from "$shared/ui";
+	import { Button, Dialog, IconButton, Input, Switch } from "$shared/ui";
+	import { ListPlus, SlidersHorizontal } from "@lucide/svelte";
+	import VarDefsEditor from "./VarDefsEditor.svelte";
+	import type { VarDef } from "./library.svelte";
 	import { coerceVar, varRows, varTitle, type VarRow } from "$features/status/vars";
 	import type { Conversation } from "./library.svelte";
 	import { library } from "./library.svelte";
@@ -21,6 +24,30 @@
 		if (conv.characterId) void library.loadVarDefs(conv.characterId);
 	});
 	const defs = $derived(library.varDefs[conv.characterId] ?? []);
+
+	// ---- 정의 더하기·지우기 (5-F-6, 사용자 요청): 캐릭터 편집에 가지 않고 여기서. 저장 자리는 캐릭터의 정의와 같다 ----
+	let defsOpen = $state(false);
+	let draftDefs = $state<VarDef[]>([]);
+	let savingDefs = $state(false);
+	/** key를 주면 그 이름의 정의를 새로 붙여 연다 (정의 없는 변수 줄의 "정의로") */
+	function openDefs(key?: string) {
+		draftDefs = defs.map((d) => ({ ...d }));
+		if (key && !draftDefs.some((d) => d.key === key)) {
+			draftDefs.push({ key, description: "", kind: "string", defaultValue: null, min: null, max: null, maxStep: null, aiRead: true, aiWrite: false });
+		}
+		defsOpen = true;
+	}
+	async function saveDefs() {
+		savingDefs = true;
+		try {
+			await library.setVarDefs(conv.characterId, draftDefs);
+			defsOpen = false;
+		} catch {
+			// 이름 겹침 등 이유는 call이 알림으로 — 대화상자는 열어 둔다
+		} finally {
+			savingDefs = false;
+		}
+	}
 
 	/** 변수 이름·값 상한 (프롬프트가 부풀지 않게) */
 	const MAX_NAME = 64;
@@ -101,7 +128,12 @@
 	/>
 	{#each groups as g (g.id)}
 		<section>
-			<h4>{g.title} <span class="faint">{g.rows.length}</span></h4>
+			<h4>
+				{g.title} <span class="faint">{g.rows.length}</span>
+				{#if g.id === "conv" && conv.characterId}
+					<IconButton label="이 캐릭터의 변수 정의" size="sm" onclick={() => openDefs()}><SlidersHorizontal /></IconButton>
+				{/if}
+			</h4>
 			{#if g.rows.length}
 				<ul>
 					{#each g.rows as row (row.name)}
@@ -119,11 +151,14 @@
 									onchange={(e) => setValue(g, row, e.currentTarget.value, e.currentTarget)}
 								/>
 							{/if}
-							{#if row.value !== undefined}
-								<IconButton label="{row.name} 지우기" size="sm" onclick={() => remove(g, row.name)}><Trash2 /></IconButton>
-							{:else}
-								<span></span>
-							{/if}
+							<span class="row-tools">
+								{#if g.id === "conv" && !row.def && conv.characterId}
+									<IconButton label="{row.name}을(를) 정의로 (종류·범위·AI 읽기/쓰기)" size="sm" onclick={() => openDefs(row.name)}><ListPlus /></IconButton>
+								{/if}
+								{#if row.value !== undefined}
+									<IconButton label="{row.name} 지우기" size="sm" onclick={() => remove(g, row.name)}><Trash2 /></IconButton>
+								{/if}
+							</span>
 						</li>
 					{/each}
 				</ul>
@@ -143,6 +178,14 @@
 	{/each}
 </div>
 
+<Dialog bind:open={defsOpen} title="이 캐릭터의 변수 정의" size="lg">
+	<VarDefsEditor bind:defs={draftDefs} />
+	{#snippet footer()}
+		<Button variant="ghost" onclick={() => (defsOpen = false)}>취소</Button>
+		<Button variant="primary" loading={savingDefs} onclick={saveDefs}>저장</Button>
+	{/snippet}
+</Dialog>
+
 <style>
 	.vars {
 		display: flex;
@@ -155,7 +198,13 @@
 		gap: var(--space-2);
 	}
 	h4 {
+		display: flex;
+		align-items: center;
+		gap: var(--space-1);
 		margin: 0;
+	}
+	.row-tools {
+		display: flex;
 	}
 	.faint {
 		color: var(--text-faint);
