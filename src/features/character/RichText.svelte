@@ -3,12 +3,17 @@
 	import { HtmlView } from "$shared/ui";
 	import { renderUiHtml } from "$shared/html/markdown";
 	import type { Block } from "./format";
+	import { isStatusPin } from "$features/status/pin";
+	import { panel } from "$app/panel.svelte";
 
-	let { blocks, images = {} }: { blocks: Block[]; images?: Record<string, string> } = $props();
+	/** collapsePins: 상태창 블록(data-sc-pin="status")은 접고 고정 자리로 보낸다 (5-F-4-2, 상태창·변수 플러그인이 켜졌을 때) */
+	let { blocks, images = {}, collapsePins = false }: { blocks: Block[]; images?: Record<string, string>; collapsePins?: boolean } = $props();
 </script>
 
 {#each blocks as b, i (i)}
-	{#if b.kind === "md"}
+	{#if collapsePins && isStatusPin(b)}
+		<button type="button" class="pin-ref sc-status-pin-ref" title="가장 최근 상태창은 상태 탭(또는 띄운 창·채팅방 위)에" onclick={() => panel.show("status")}>상태창</button>
+	{:else if b.kind === "md"}
 		<!-- 마크다운을 그려 허용 목록으로 거른 HTML (shared/html/markdown.ts) -->
 		<div class="md sc-md">{@html b.html}</div>
 	{:else if b.kind === "html" && b.scripts === false}
@@ -22,6 +27,18 @@
 {/each}
 
 <style>
+	.pin-ref {
+		display: inline-block;
+		margin: 2px 0;
+		padding: 1px var(--space-2);
+		border: 1px dashed var(--border);
+		border-radius: var(--radius-sm);
+		background: none;
+		color: var(--text-muted);
+		font: inherit;
+		font-size: var(--text-xs);
+		cursor: pointer;
+	}
 	.md {
 		overflow-wrap: anywhere;
 	}

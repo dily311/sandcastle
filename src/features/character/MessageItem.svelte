@@ -327,7 +327,8 @@
 		{#if !live}<PluginProcessNote {msg} bind:showOriginal={pluginOriginal} onupdate={(m) => session.update(m)} />{/if}
 		{#if translation && !live}<p class="tr-note">{showOriginal ? "원문" : `${translation.lang} 번역`} · <button class="link" onclick={() => (showOriginal = !showOriginal)}>{showOriginal ? "번역 보기" : "원문 보기"}</button></p>{/if}
 		{#if blocks.length}
-			<RichText {blocks} {images} />
+			<!-- 상태창 고정은 AI 메시지만 (고정 자리도 AI 메시지에서 찾음, 5-F-4-2) -->
+			<RichText {blocks} {images} collapsePins={plugins.on("status") && msg.role === "assistant"} />
 		{:else if live}
 			<div class="typing"><TypingIndicator name={msg.name ?? ""} /></div>
 		{/if}

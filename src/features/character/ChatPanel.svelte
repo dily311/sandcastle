@@ -1,6 +1,6 @@
 <script lang="ts">
 	import { regexVersion } from "$shared/stores/regexVersion.svelte";
-	import { ArrowUpDown, GripVertical, Bookmark, Check, ChevronDown, Eye, EyeOff, FileArchive, Folder, IdCard, ImagePlus, Pencil, Plus, Search, Trash2, X } from "@lucide/svelte";
+	import { PictureInPicture2, ArrowUpDown, GripVertical, Bookmark, Check, ChevronDown, Eye, EyeOff, FileArchive, Folder, IdCard, ImagePlus, Pencil, Plus, Search, Trash2, X } from "@lucide/svelte";
 	import { Avatar, Button, ContextMenu, IconButton, Input, ProfilePicker, Select, Spinner, Switch, type MenuItem, type ProfileOption } from "$shared/ui";
 	import { bookmarks, bookmarksOf, onCurrentSwipe, type ChatBookmark } from "./bookmarks";
 	import { assetImport } from "./assetImport.svelte";
@@ -12,6 +12,10 @@
 	import ModelPicker from "$features/settings/ModelPicker.svelte";
 	import OptionLock from "./OptionLock.svelte";
 	import VariablesPanel from "./VariablesPanel.svelte";
+	import StatusWindow from "$features/status/StatusWindow.svelte";
+	import { latestStatusBlock } from "$features/status/pin";
+	import { statusView } from "$features/status/statusView.svelte";
+	import { layout } from "$app/layout.svelte";
 	import { reasoningOf } from "$features/settings/providers";
 	import { appSetting } from "$shared/stores/appSetting.svelte";
 	import ExportButton from "./ExportButton.svelte";
@@ -112,6 +116,9 @@
 
 	const character = $derived(library.character(conv.characterId));
 	const persona = $derived(library.persona(library.convPersonaId(conv)) ?? library.personas[0]);
+
+	/** 상태 탭의 상태창: 가장 최근 메시지의 것 (5-F-4-2) */
+	const statusBlock = $derived(panel.tab === "status" ? latestStatusBlock(session.messages, session.display, plugins.on("html")) : null);
 
 	// ---- 자물쇠 (5-E-29, ADR-028): 이 대화 > 캐릭터 기본 > 전역. 잠김 = 이 대화에 값이 있음 ----
 	// 폰 대화는 폰 주인·폰 설정을 따르므로 지금처럼 (자물쇠 없음)
@@ -408,7 +415,27 @@
 			<QuickReplyList {session} {conv} getDraft={draft.get} setDraft={draft.set} />
 		</div>
 	{:else if panel.tab === "status" && plugins.on("status")}
-		<div class="panel-body"><VariablesPanel {conv} /></div>
+		<div class="panel-body">
+			<section class="status-pin">
+				{#if !layout.narrow && statusView.floating}
+					<div class="status-head">
+						<span class="faint">띄운 창에 보이는 중</span>
+						<Button size="sm" variant="ghost" onclick={() => statusView.set({ floating: false })}>패널로</Button>
+					</div>
+				{:else}
+					<div class="status-head">
+						{#if layout.narrow}
+							<Switch checked={statusView.aboveChat} label="채팅방 위에 늘 보이기" onchange={(v) => statusView.set({ aboveChat: v })} />
+						{:else}
+							<span></span>
+							<IconButton label="띄우기 (옮길 수 있는 창)" size="sm" onclick={() => statusView.set({ floating: true, collapsed: false })}><PictureInPicture2 /></IconButton>
+						{/if}
+					</div>
+					<StatusWindow block={statusBlock} />
+				{/if}
+			</section>
+			<VariablesPanel {conv} />
+		</div>
 	{:else if panel.tab === "assets"}
 		<div class="panel-body">
 			{#if plugins.on("chat.images")}
@@ -683,6 +710,19 @@
 		margin-left: 4px;
 		font-size: var(--text-xs);
 		color: var(--text-faint);
+	}
+	.status-pin {
+		display: flex;
+		flex-direction: column;
+		gap: var(--space-2);
+		padding-bottom: var(--space-3);
+		border-bottom: 1px solid var(--border);
+	}
+	.status-head {
+		display: flex;
+		align-items: center;
+		justify-content: space-between;
+		gap: var(--space-2);
 	}
 	.with-btn {
 		display: flex;

@@ -21,6 +21,8 @@
 	import QuickReplyBar from "$features/slash/QuickReplyBar.svelte";
 	import { slashRuns } from "$features/slash/running.svelte";
 	import { registerComposer } from "$shared/html/bridge";
+	import { isStatusPin } from "$features/status/pin";
+	import { panel } from "$app/panel.svelte";
 
 	let { conv, onback, session: given }: { conv: Conversation; onback: () => void; session?: ChatSession } = $props();
 
@@ -304,6 +306,9 @@
 									<img class="photo" src={images[l.text]} alt={l.text} loading="lazy" />
 								{:else if l.kind === "photo"}
 									<img class="photo" src={fileSrc(l.text)} alt="그린 사진" loading="lazy" />
+								{:else if l.kind === "html" && plugins.on("status") && isStatusPin({ kind: "html", code: l.text })}
+									<!-- 상태창은 접고 상태 탭에 가장 최근 것 하나만 (5-F-4-2) -->
+									<button type="button" class="b pin-ref sc-status-pin-ref" onclick={() => panel.show("status")}>상태창</button>
 								{:else if l.kind === "html"}
 									<div class="html-card"><HtmlView code={l.text} /></div>
 								{:else}
@@ -495,6 +500,14 @@
 		--typing-color: #9a9a9a;
 	}
 	/* 빠른 답장 줄: 폰의 밝은 입력 줄 색에 맞춤 (공용 컴포넌트는 앱 테마 변수를 쓰므로 여기서 바꿔 줌) */
+	/* 접은 상태창 (5-F-4-2) */
+	.pin-ref {
+		border: 1px dashed #c8c8c8;
+		background: white;
+		color: #666;
+		font-size: 12px;
+		cursor: pointer;
+	}
 	.qr {
 		padding: 6px 12px 0;
 		background: white;

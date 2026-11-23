@@ -31,6 +31,37 @@ export function hasRawHtml(content: string): boolean {
 }
 
 /**
+ * 상태창 표시(`data-sc-pin="status"`, 5-F-4-2)가 붙은 요소를 제 줄로 떼어 둔다 — 문단 가운데 있어도 따로 된 HTML 블록이 되게.
+ * (문단 안 HTML은 허용 목록에서 data- 속성이 빠져 고정 자리로 보낼 수 없다.) 같은 이름의 태그를 세어 닫는 태그까지
+ */
+export function isolatePins(text: string): string {
+	if (!/data-sc-pin/i.test(text)) return text;
+	const open = /<([a-z][\w-]*)\b[^>]*\bdata-sc-pin\s*=\s*["']?status\b[^>]*>/gi;
+	let out = "";
+	let at = 0;
+	for (let m = open.exec(text); m; m = open.exec(text)) {
+		if (m.index < at) continue;
+		const tag = m[1].toLowerCase();
+		const tags = new RegExp(`<(/?)${tag}\\b[^>]*?(/?)>`, "gi");
+		tags.lastIndex = m.index + m[0].length;
+		let depth = 1;
+		let end = text.length;
+		for (let t = tags.exec(text); t; t = tags.exec(text)) {
+			if (t[2]) continue; // <tag/>
+			depth += t[1] ? -1 : 1;
+			if (!depth) {
+				end = t.index + t[0].length;
+				break;
+			}
+		}
+		out += text.slice(at, m.index).replace(/[ \t]+$/, "") + "\n\n" + text.slice(m.index, end) + "\n\n";
+		at = end;
+		open.lastIndex = end;
+	}
+	return (out + text.slice(at).replace(/^[ \t]+/, "")).replace(/\n{3,}/g, "\n\n");
+}
+
+/**
  * rawHtml: 코드 블록 밖의 HTML도 HTML 블록으로 그린다 (캐릭터 개요).
  * safeHtml: 메시지에서 태그로 시작하는 줄(태그가 닫힐 때까지)을 **스크립트 없는** HTML 블록으로 (5-E-9, ADR-004 추가).
  * 둘 다 없으면 AI 답변의 HTML은 ```html 블록만 그린다
@@ -41,7 +72,7 @@ export function toBlocks(content: string, opts: Opts = {}): Block[] {
 		return [{ kind: "html", code: content.replace(/```html\s*\n?|```/gi, "").replace(/\n/g, "<br>\n").replace(/(<br>\n)+(?=<\/?(div|p|ul|ol|li|table|tr|h\d)\b)/gi, "\n") }];
 	}
 	return splitHtmlBlocks(content).flatMap((part) =>
-		part.kind === "html" ? [{ kind: "html" as const, code: part.code }] : opts.safeHtml ? safeHtmlBlocks(part.text, opts) : textBlocks(part.text, opts),
+		part.kind === "html" ? [{ kind: "html" as const, code: part.code }] : opts.safeHtml ? safeHtmlBlocks(isolatePins(part.text), opts) : textBlocks(part.text, opts),
 	);
 }
 

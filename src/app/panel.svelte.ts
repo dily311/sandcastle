@@ -183,6 +183,11 @@ class Panel {
 			/* 저장 실패는 무시 */
 		}
 	}
+	/** 이 탭을 열어 보이기 (닫혀 있으면 연다) */
+	show(tab: string) {
+		this.tab = tab;
+		if (!this.open) this.toggle();
+	}
 	/** 모바일 시트 닫기 (다른 화면으로 갈 때) */
 	closeSheet() {
 		this.sheet = false;

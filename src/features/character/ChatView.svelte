@@ -10,6 +10,10 @@
 	import { childrenOf, pathOf } from "./branches";
 	import SidePanel from "$app/SidePanel.svelte";
 	import { layout } from "$app/layout.svelte";
+	import { latestStatusBlock } from "$features/status/pin";
+	import { statusView } from "$features/status/statusView.svelte";
+	import StatusFloat from "$features/status/StatusFloat.svelte";
+	import StatusTop from "$features/status/StatusTop.svelte";
 	import { fade, fly } from "svelte/transition";
 	import { drops, extOf, isImage, storeFile } from "$app/drop.svelte";
 	import { Button, type MenuItem } from "$shared/ui";
@@ -136,6 +140,9 @@
 
 	/** <cg>키</cg> → 이미지 주소 (켜진 것만이 아니라 전부: 예전 응답도 그대로 보이게) */
 	/** 받는 중인 새 응답 (끝의 <image> 그림 프롬프트는 저장할 때 빠지므로 숨김) */
+	// ---- 상태창 (5-F-4-2): 가장 최근 메시지의 상태창 하나 ----
+	const statusBlockOn = $derived(!!session && plugins.on("status"));
+	const statusBlock = $derived(statusBlockOn && session ? latestStatusBlock(session.messages, session.display, plugins.on("html")) : null);
 	const liveBlocks = $derived(session?.live?.kind === "send" ? toBlocks(session.live.text.replace(/<image>[\s\S]*?(<\/image>|$)/i, ""), { safeHtml: plugins.on("html") }) : []);
 	/** 메시지 프로필 그림 (5-E-9): 대화 설정에서 켰을 때만. AI는 그 캐릭터, 내 글은 보낸 페르소나(없으면 대화의 페르소나) */
 	const showAvatars = $derived(!!(conv?.meta as { showAvatars?: boolean } | null)?.showAvatars);
@@ -617,6 +624,13 @@
 			</div>
 		{/if}
 
+		<!-- 상태창 고정 자리 (5-F-4-2): 좁은 화면은 옵션으로 채팅방 위, 데스크톱은 띄운 창 -->
+		{#if statusBlockOn && layout.narrow && statusView.aboveChat}
+			<StatusTop block={statusBlock} />
+		{/if}
+		{#if statusBlockOn && !layout.narrow && statusView.floating}
+			<StatusFloat block={statusBlock} />
+		{/if}
 		<!-- svelte-ignore a11y_no_static_element_interactions (글 고르기 끝 감지) -->
 		<div class="scroll sc-chat-scroll" bind:this={scroller} {onscroll} oncontextmenu={onSelectMenu}>
 			{#if !session || session.loading}

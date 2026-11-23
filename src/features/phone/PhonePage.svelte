@@ -8,7 +8,7 @@
 	import { call, commands } from "$shared/ipc/client";
 	import { toasts } from "$shared/stores/toast.svelte";
 	import { convActions } from "$features/character/actions";
-	import { Download } from "@lucide/svelte";
+	import { Download, Variable } from "@lucide/svelte";
 	import { promptText } from "$shared/stores/confirm.svelte";
 	import { nav } from "$app/nav.svelte";
 	import { library, type Conversation } from "$features/character/library.svelte";
@@ -42,6 +42,8 @@
 				{ id: "settings", label: "대화 설정", icon: SlidersHorizontal },
 				{ id: "context", label: "컨텍스트·프리셋", icon: Gauge },
 				...(room ? [{ id: "branches", label: "분기", icon: GitBranch }] : []),
+				// 상태창·변수 (5-F-4-2): 폰은 탭만 (폰 화면 위 띄우기·채팅방 위 줄은 대화 화면에서)
+				...(room && plugins.on("status") ? [{ id: "status", label: "상태", icon: Variable }] : []),
 				{ id: "info", label: "정보", icon: Info },
 			],
 		),

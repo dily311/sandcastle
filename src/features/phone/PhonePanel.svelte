@@ -14,7 +14,7 @@
 	import PhoneSettings from "./PhoneSettings.svelte";
 
 	let { room, session, onopen }: { room: Conversation | null; session: ChatSession | null; onopen: (id: string, messageId?: string) => void } = $props();
-	const shared = new Set(["settings", "context", "branches"]);
+	const shared = new Set(["settings", "context", "branches", "status"]);
 
 	// 방은 열 때의 사본일 수 있으니 목록의 최신 대화를 씀 (meta 저장이 바로 보이게)
 	const conv = $derived(room ? (library.conversation(room.id) ?? room) : null);
