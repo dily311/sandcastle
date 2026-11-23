@@ -16,6 +16,7 @@ export { default as Spinner } from "./Spinner.svelte";
 export { default as Switch } from "./Switch.svelte";
 export { default as Textarea } from "./Textarea.svelte";
 export { default as ContextMenu, type MenuItem } from "./ContextMenu.svelte";
+export { default as ChipPicker } from "./ChipPicker.svelte";
 export { default as Toasts } from "./Toasts.svelte";
 export { default as ConfirmHost } from "./ConfirmHost.svelte";
 export { default as ImageViewerHost } from "./ImageViewerHost.svelte";

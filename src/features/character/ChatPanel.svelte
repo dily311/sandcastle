@@ -1,7 +1,7 @@
 <script lang="ts">
 	import { regexVersion } from "$shared/stores/regexVersion.svelte";
 	import { PictureInPicture2, ArrowUpDown, GripVertical, Bookmark, Check, ChevronDown, Eye, EyeOff, FileArchive, Folder, IdCard, ImagePlus, Pencil, Plus, Search, Trash2, X } from "@lucide/svelte";
-	import { Avatar, Button, ContextMenu, IconButton, Input, ProfilePicker, Select, Spinner, Switch, type MenuItem, type ProfileOption } from "$shared/ui";
+	import { Avatar, Button, ChipPicker, ContextMenu, IconButton, Input, ProfilePicker, Select, Spinner, Switch, type MenuItem, type ProfileOption } from "$shared/ui";
 	import { bookmarks, bookmarksOf, onCurrentSwipe, type ChatBookmark } from "./bookmarks";
 	import { assetImport } from "./assetImport.svelte";
 	import { importPresetPaths } from "$features/settings/presetImport";
@@ -222,6 +222,13 @@
 		const saved = await call(commands.upsertRegexScript({ ...s, extraJson }), { source: "regex" });
 		regexVersion.bump();
 		scripts = scripts.map((x) => (x.id === s.id ? saved : x));
+	}
+	/** 고른 목록으로 맞춘다 (달라진 것만 저장) */
+	async function setStatusRegexes(ids: string[]) {
+		for (const s of statusRegexes) {
+			const on = ids.includes(s.id);
+			if (on !== isStatusRegex(s)) await toggleStatusRegex(s, on);
+		}
 	}
 	async function toggleScript(s: RegexScript, enabled: boolean) {
 		const saved = await call(commands.upsertRegexScript({ ...s, enabled }), { source: "regex" });
@@ -470,11 +477,15 @@
 				{/if}
 			</section>
 			{#if statusRegexes.length}
+				<!-- 상태창 정규식 (5-F-5-3, 사용자 요청): 로어북 고르기처럼 고른 것만 칩으로, '+'로 더 넣기 -->
 				<section class="status-regex">
 					<h4>상태창 정규식</h4>
-					{#each statusRegexes as s (s.id)}
-						<Switch checked={isStatusRegex(s)} label={s.name} onchange={(v) => void toggleStatusRegex(s, v)} />
-					{/each}
+					<ChipPicker
+						label="상태창 정규식"
+						options={statusRegexes.map((s) => ({ id: s.id, label: s.name }))}
+						value={statusRegexes.filter(isStatusRegex).map((s) => s.id)}
+						onchange={(ids) => void setStatusRegexes(ids)}
+					/>
 				</section>
 			{/if}
 			<VariablesPanel {conv} />
