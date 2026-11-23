@@ -256,10 +256,10 @@
 				<h2>연결</h2>
 				<div class="card">
 					<div class="two">
-						<Field label="기본 페르소나" hint="이 캐릭터와 새 대화를 열 때">
+						<Field label="기본 페르소나" hint="이 캐릭터 전용 · 자물쇠를 걸지 않은 대화에서 전역보다 앞">
 							<Select bind:value={personaId} options={[{ value: "", label: "앱 기본값" }, ...library.personas.map((p) => ({ value: p.id, label: p.name }))]} />
 						</Field>
-						<Field label="기본 프리셋" hint="대화에서 따로 고르지 않으면">
+						<Field label="기본 프리셋" hint="이 캐릭터 전용 · 자물쇠를 걸지 않은 대화에서 전역보다 앞">
 							<Select bind:value={presetId} options={[{ value: "", label: "앱 기본값" }, ...library.presets.map((p) => ({ value: p.id, label: p.name }))]} />
 						</Field>
 					</div>

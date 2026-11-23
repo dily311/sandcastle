@@ -29,6 +29,8 @@ pub const SETTINGS_SCOPE: &[(&str, Scope)] = &[
     ("app-setting/sendOnEnter", Scope::Device), // 키보드가 있는 PC와 폰이 다름
     ("app-setting/showTimestamps", Scope::Shared),
     ("app-setting/selectedApiProfile", Scope::Device),
+    ("app-setting/selectedModel", Scope::Device),       // 전역 API에 딸린 모델이라 API와 같이 기기 전용
+    ("app-setting/reasoningEffort", Scope::Device),     // 받는 강도가 모델마다 달라 모델과 같이
     ("app-setting/selectedCharacterId", Scope::Device), // 화면 상태
     ("app-setting/selectedPersonaId", Scope::Shared),
     ("app-setting/lastPlayedGameId", Scope::Device), // 화면 상태

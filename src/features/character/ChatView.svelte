@@ -1,3 +1,8 @@
+<script lang="ts" module>
+	/** 마지막으로 전용 값 알림을 띄운 캐릭터 (화면을 다시 열어도 같은 캐릭터면 다시 알리지 않음) */
+	export const lastCharNotice: { id: string | null } = { id: null };
+</script>
+
 <script lang="ts">
 	import { isSlash, runSlash, slashQueue } from "$features/slash/commands";
 	import QuickReplyBar from "$features/slash/QuickReplyBar.svelte";
@@ -55,6 +60,22 @@
 		untrack(() => viewed.mark(id));
 	});
 	const character = $derived(library.character(charId));
+	// ---- 캐릭터 전용 값으로 바뀜 알림 (5-E-29-3, ADR-028 갱신): 전용 프리셋·페르소나가 있는 캐릭터에 들어갈 때만 ----
+	// 자물쇠를 건 옵션은 그 대화의 값이라 알리지 않는다. 같은 캐릭터 안에서 대화를 옮길 때는 다시 알리지 않는다
+	$effect(() => {
+		const id = character?.id;
+		if (!id) return;
+		untrack(() => {
+			if (id === lastCharNotice.id || !conv || conv.mode === "phone") return;
+			lastCharNotice.id = id;
+			const own: string[] = [];
+			const preset = character?.defaultPromptPresetId;
+			if (preset && !conv.promptPresetId && preset !== appSetting.value?.selectedPreset) own.push(`프리셋 '${library.presets.find((p) => p.id === preset)?.name ?? "?"}'`);
+			const persona = character?.defaultPersonaId;
+			if (persona && !conv.personaId && persona !== library.defaultPersonaId) own.push(`페르소나 '${library.persona(persona)?.name ?? "?"}'`);
+			if (own.length) toasts.info(`${character?.name} 전용 ${own.join(" · ")}(으)로 바꿈`);
+		});
+	});
 
 	// 대화가 바뀌면 새 세션
 	let session = $state<ChatSession | null>(null);

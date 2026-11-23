@@ -19,6 +19,8 @@ const db = {
 		sendOnEnter: true,
 		showTimestamps: false,
 		selectedApiProfile: "gemini",
+		selectedModel: null,
+		reasoningEffort: null,
 		selectedCharacterId: null,
 		selectedPersonaId: "default",
 		lastPlayedGameId: null,

@@ -835,6 +835,13 @@ export type AppSetting_Deserialize = {
 	sendOnEnter: boolean,
 	showTimestamps: boolean,
 	selectedApiProfile?: string | null,
+	/**
+	 *  전역 모델 (5-E-29-3, ADR-028 갱신): 자물쇠를 풀어 둔 대화가 전역 API에서 쓸 모델. None = API 프로필의 기본 모델.
+	 *  전역 API를 바꾸면 화면이 비운다 (모델은 API에 딸린 이름)
+	 */
+	selectedModel?: string | null,
+	/**  전역 추론 강도 (5-E-29-3): 자물쇠를 풀어 둔 대화가 쓴다. None·"auto" = 프리셋·공급자 기본 */
+	reasoningEffort?: string | null,
 	selectedCharacterId?: string | null,
 	selectedPersonaId: string,
 	lastPlayedGameId?: string | null,
@@ -869,6 +876,13 @@ export type AppSetting_Serialize = {
 	sendOnEnter: boolean,
 	showTimestamps: boolean,
 	selectedApiProfile: string | null,
+	/**
+	 *  전역 모델 (5-E-29-3, ADR-028 갱신): 자물쇠를 풀어 둔 대화가 전역 API에서 쓸 모델. None = API 프로필의 기본 모델.
+	 *  전역 API를 바꾸면 화면이 비운다 (모델은 API에 딸린 이름)
+	 */
+	selectedModel: string | null,
+	/**  전역 추론 강도 (5-E-29-3): 자물쇠를 풀어 둔 대화가 쓴다. None·"auto" = 프리셋·공급자 기본 */
+	reasoningEffort: string | null,
 	selectedCharacterId: string | null,
 	selectedPersonaId: string,
 	lastPlayedGameId: string | null,

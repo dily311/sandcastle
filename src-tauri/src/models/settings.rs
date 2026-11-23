@@ -12,6 +12,13 @@ pub struct AppSetting {
     pub send_on_enter: bool,
     pub show_timestamps: bool,
     pub selected_api_profile: Option<String>,
+    /// 전역 모델 (5-E-29-3, ADR-028 갱신): 자물쇠를 풀어 둔 대화가 전역 API에서 쓸 모델. None = API 프로필의 기본 모델.
+    /// 전역 API를 바꾸면 화면이 비운다 (모델은 API에 딸린 이름)
+    #[serde(default)]
+    pub selected_model: Option<String>,
+    /// 전역 추론 강도 (5-E-29-3): 자물쇠를 풀어 둔 대화가 쓴다. None·"auto" = 프리셋·공급자 기본
+    #[serde(default)]
+    pub reasoning_effort: Option<String>,
     pub selected_character_id: Option<String>,
     pub selected_persona_id: String,
     // "이어하기" UX용. 실제 게임 실행 컨텍스트는 여전히 AppState.active_archive가 기준.
@@ -131,6 +138,8 @@ impl Default for AppSetting {
             send_on_enter: false,
             show_timestamps: true,
             selected_api_profile: None,
+            selected_model: None,
+            reasoning_effort: None,
             selected_character_id: None,
             selected_persona_id: "default".into(),
             last_played_game_id: None,

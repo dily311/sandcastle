@@ -48,6 +48,8 @@ pub struct ChatRequest {
     model: Option<String>,
     pub(crate) preset_id: String,
     phone_mode_prompt: String,
+    /// 전역 추론 강도 (5-E-29-3): 자물쇠를 풀어 둔 대화가 쓴다
+    reasoning_effort: Option<String>,
 }
 
 /// 전역 변수 ({{getglobalvar::x}}, ADR-029): 슬래시 `/setglobalvar`가 쓰는 플러그인 설정 `quickReply.globals`
@@ -104,13 +106,11 @@ fn cast_names(entries: &[crate::models::conversation::WorldInfoEntry]) -> Vec<St
 /// 등장인물로 보는 로어북 분류 (ADR-023)
 pub const CAST_CATEGORY: &str = "캐릭터";
 
-/// 대화에서 고른 추론 강도 (meta.reasoningEffort). 없거나 "auto"면 프리셋·공급자 기본
-fn conv_effort(meta: Option<&Value>) -> Option<String> {
-    meta.and_then(|m| m.get("reasoningEffort"))
-        .and_then(Value::as_str)
-        .map(str::trim)
-        .filter(|s| !s.is_empty() && *s != "auto")
-        .map(str::to_string)
+/// 추론 강도 (ADR-028): 대화에 값이 있으면(자물쇠) 그것 — "auto"로 잠근 대화도 전역을 따르지 않는다 —, 없으면 전역.
+/// "auto"·빈 값 = 프리셋·공급자 기본 (None)
+fn conv_effort(meta: Option<&Value>, global: Option<&str>) -> Option<String> {
+    let locked = meta.and_then(|m| m.get("reasoningEffort")).and_then(Value::as_str).map(str::trim);
+    locked.or(global.map(str::trim)).filter(|s| !s.is_empty() && *s != "auto").map(str::to_string)
 }
 
 fn conv_model(conv: &crate::models::conversation::Conversation) -> Option<String> {
@@ -130,9 +130,11 @@ pub fn current_conv_request(state: &SettingsState<AppSetting>) -> Result<ChatReq
     let guard = state.0.lock().map_err(|_| AppError::internal("settings lock poisoned"))?;
     Ok(ChatRequest {
         api_profile_id: guard.selected_api_profile.clone().unwrap_or_default(),
-        model: None,
+        // 전역 모델 (5-E-29-3). 폰은 phone_defaults가 폰 설정의 것으로 바꾼다
+        model: guard.selected_model.clone().filter(|m| !m.trim().is_empty()),
         preset_id: guard.selected_preset.clone(),
         phone_mode_prompt: guard.phone_mode_prompt.clone(),
+        reasoning_effort: guard.reasoning_effort.clone(),
     })
 }
 
@@ -839,7 +841,7 @@ impl ChatManager {
                 db,
                 api_profile_id.clone(),
                 conv_model(&conv).or_else(|| fallback_model(&conv, &fallback.model)),
-                conv_effort(conv.meta.as_ref()),
+                conv_effort(conv.meta.as_ref(), fallback.reasoning_effort.as_deref()),
                 Some(preset_id.clone()),
                 context,
                 prompt_input,
@@ -1222,7 +1224,7 @@ impl ChatManager {
                 db,
                 api_profile_id.clone(),
                 conv_model(&conv).or_else(|| fallback_model(&conv, &fallback.model)),
-                conv_effort(conv.meta.as_ref()),
+                conv_effort(conv.meta.as_ref(), fallback.reasoning_effort.as_deref()),
                 Some(preset_id.clone()),
                 context,
                 format!("(Continue the messenger chat between {} and {})", me.name, other.name),
@@ -1439,6 +1441,7 @@ mod quiet_gen_tests {
             model: None,
             preset_id: String::new(),
             phone_mode_prompt: String::new(),
+            reasoning_effort: None,
         };
         let (profile, prompt) = quiet_prompt(&db, None, &conv, fallback, "다음 장면을 한 줄로 요약해").await.unwrap();
         assert_eq!(profile, "p");
@@ -1458,6 +1461,7 @@ mod quiet_gen_tests {
             model: None,
             preset_id: String::new(),
             phone_mode_prompt: String::new(),
+            reasoning_effort: None,
         };
         let (_, raw) = raw_prompt(&conv, fb(), "한 줄 요약", Some("너는 요약가")).unwrap();
         assert_eq!(
@@ -1471,6 +1475,7 @@ mod quiet_gen_tests {
             model: None,
             preset_id: String::new(),
             phone_mode_prompt: String::new(),
+            reasoning_effort: None,
         };
         assert!(quiet_prompt(&db, None, &conv, none, "x").await.is_err());
     }
@@ -1596,10 +1601,15 @@ mod continue_tests {
 
     #[test]
     fn conversation_effort_overrides_only_when_set() {
-        assert_eq!(conv_effort(Some(&json!({ "reasoningEffort": "high" }))).as_deref(), Some("high"));
-        assert_eq!(conv_effort(Some(&json!({ "reasoningEffort": "auto" }))), None);
-        assert_eq!(conv_effort(Some(&json!({ "reasoningEffort": null }))), None);
-        assert_eq!(conv_effort(None), None);
+        assert_eq!(conv_effort(Some(&json!({ "reasoningEffort": "high" })), None).as_deref(), Some("high"));
+        assert_eq!(conv_effort(Some(&json!({ "reasoningEffort": "auto" })), None), None);
+        assert_eq!(conv_effort(Some(&json!({ "reasoningEffort": null })), None), None);
+        assert_eq!(conv_effort(None, None), None);
+        // 자물쇠를 풀어 둔 대화는 전역, 잠근 대화는 auto여도 전역을 따르지 않음 (5-E-29-3)
+        assert_eq!(conv_effort(None, Some("low")).as_deref(), Some("low"));
+        assert_eq!(conv_effort(Some(&json!({ "reasoningEffort": null })), Some("low")).as_deref(), Some("low"));
+        assert_eq!(conv_effort(Some(&json!({ "reasoningEffort": "auto" })), Some("low")), None);
+        assert_eq!(conv_effort(Some(&json!({ "reasoningEffort": "high" })), Some("low")).as_deref(), Some("high"));
     }
 
     #[test]

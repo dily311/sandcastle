@@ -91,10 +91,14 @@
 	// 이 대화가 쓰는 API 프로필 (대화에 정한 것, 없으면 앱 기본값) — 모델 고르기가 그 프로필의 목록을 보여준다
 	const effectiveApi = $derived(library.apis.find((a) => a.id === (conv.apiProfileId || appSetting.value?.selectedApiProfile || "")));
 	/** 이 대화의 추론 강도 (5-E-7). auto = 프리셋·공급자 기본. 모델이 강도를 받을 때만 보인다 */
-	const reasoning = $derived(reasoningOf(conv.model || effectiveApi?.model || null));
-	const effort = $derived(((conv.meta as { reasoningEffort?: string } | null)?.reasoningEffort ?? "auto") as string);
-	/** 모델을 고르면 그 API도 이 대화에 못 박는다 (앱 기본 API가 나중에 바뀌어도 이 모델이 엉뚱한 공급자로 가지 않게) */
+	/** 지금 쓰는 모델: 잠근 대화는 대화의 것, 풀린 대화는 전역 모델(5-E-29-3) — 없으면 API 프로필의 기본 */
+	const shownModel = $derived(conv.apiProfileId ? conv.model : (appSetting.value?.selectedModel ?? null));
+	const reasoning = $derived(reasoningOf(shownModel || effectiveApi?.model || null));
+	/** 지금 쓰는 추론 강도: 잠근 대화는 대화의 것, 풀린 대화는 전역 */
+	const effort = $derived(((conv.meta as { reasoningEffort?: string | null } | null)?.reasoningEffort ?? appSetting.value?.reasoningEffort ?? "auto") as string);
+	/** 모델 고르기: 잠근 대화는 이 대화에, 풀린 대화는 전역 모델 (ADR-028 갱신). 폰 대화는 지금처럼 이 대화에 못 박는다 */
 	function pickModel(model: string | null) {
+		if (lockable && !conv.apiProfileId) return void appSetting.update({ selectedModel: model });
 		if (!conv.apiProfileId && effectiveApi) return setOption({ apiProfileId: effectiveApi.id, model });
 		setOption({ model });
 	}
@@ -147,9 +151,29 @@
 	function toggleEffort() {
 		void library.patchMeta(conv.id, { reasoningEffort: lockedEffort ? null : effort });
 	}
-	/** 풀린 줄에서 값을 바꾸면 그 대화에 고정 (auto도 "auto"로 넣어 잠김) */
+	// ---- 고르기 (5-E-29-3, ADR-028 갱신): 잠근 줄은 이 대화에, 풀린 줄은 언제나 전역에 ----
+	// 캐릭터 전용 값은 캐릭터 편집에서만 바꾼다. 풀린 줄이 캐릭터 전용 값을 쓰고 있으면 전역을 바꿔도 이 대화는 그대로임을 알린다
+	function charStillWins(kind: string, name: string | undefined) {
+		toasts.info(`전역 ${kind}를 바꿈 · 이 캐릭터는 전용 ${kind} '${name ?? "?"}'를 씀 (캐릭터 편집에서 바꿈)`);
+	}
+	function pickApi(id: string) {
+		if (lockable && !lockedApi) return void appSetting.update({ selectedApiProfile: id || null, selectedModel: null });
+		setOption({ apiProfileId: id });
+	}
 	function pickEffort(v: string) {
+		if (lockable && !lockedEffort) return void appSetting.update({ reasoningEffort: v === "auto" ? null : v });
 		void library.patchMeta(conv.id, { reasoningEffort: lockable ? v : v === "auto" ? null : v });
+	}
+	async function pickPreset(id: string) {
+		if (!lockable || lockedPreset) return setOption({ promptPresetId: id });
+		await appSetting.update({ selectedPreset: id || "default" });
+		if (charPreset && charPreset !== id) charStillWins("프리셋", library.presets.find((p) => p.id === charPreset)?.name);
+	}
+	async function pickPersona(id: string) {
+		if (!lockable || lockedPersona) return setOption({ personaId: id });
+		await library.setDefaultPersona(id);
+		const own = character?.defaultPersonaId;
+		if (own && own !== id) charStillWins("페르소나", library.persona(own)?.name);
 	}
 	const personaOptions = $derived<ProfileOption[]>(library.personas.map((p) => ({ id: p.id, name: p.name, avatar: p.avatar, avatarFit: p.avatarFit, color: p.color, description: p.description })));
 
@@ -585,7 +609,7 @@
 			</section>
 			<section>
 				<h4>프리셋 <span class="faint">{conv.promptPresetId ? "이 대화에서 고름" : "앱·캐릭터 기본값"}</span></h4>
-				<Select value={conv.promptPresetId ?? DEFAULT} options={presetOptions} aria-label="이 대화의 프리셋" onchange={(e) => setOption({ promptPresetId: e.currentTarget.value })} />
+				<Select value={lockable ? (shownPreset ?? DEFAULT) : (conv.promptPresetId ?? DEFAULT)} options={presetOptions} aria-label="이 대화의 프리셋" onchange={(e) => void pickPreset(e.currentTarget.value)} />
 			</section>
 			<PresetInline presetId={activePresetId} onsaved={loadUsage} model={conv.model || effectiveApi?.model || null} />
 		</div>
@@ -597,14 +621,14 @@
 					<div class="row">
 						<span>API</span>
 						<div class="with-btn">
-							<Select value={effectiveApi?.id ?? DEFAULT} options={effectiveApi ? apiOptions.slice(1) : apiOptions} aria-label="이 대화의 API" onchange={(e) => setOption({ apiProfileId: e.currentTarget.value })} />
+							<Select value={effectiveApi?.id ?? DEFAULT} options={effectiveApi ? apiOptions.slice(1) : apiOptions} aria-label="이 대화의 API" onchange={(e) => pickApi(e.currentTarget.value)} />
 							<OptionLock locked={lockedApi} from="전역" disabled={!lockedApi && !effectiveApi} onclick={toggleApi} />
 						</div>
 					</div>
 				{:else}
 					<label class="row"><span>API</span><Select value={conv.apiProfileId ?? DEFAULT} options={apiOptions} onchange={(e) => setOption({ apiProfileId: e.currentTarget.value })} /></label>
 				{/if}
-					<div class="row"><span>모델</span><ModelPicker profile={effectiveApi} value={conv.model} onchange={pickModel} label="이 대화의 모델" /></div>
+					<div class="row"><span>모델</span><ModelPicker profile={effectiveApi} value={lockable ? shownModel : conv.model} onchange={pickModel} label="이 대화의 모델" /></div>
 				{#if reasoning}
 					<label class="row"
 						><span>추론 강도</span><span class="with-btn"
@@ -621,7 +645,7 @@
 					<span>프리셋</span>
 					<div class="with-btn">
 						{#if lockable}
-							<Select value={shownPreset ?? DEFAULT} options={shownPreset ? presetOptions.slice(1) : presetOptions} aria-label="프리셋" onchange={(e) => setOption({ promptPresetId: e.currentTarget.value })} />
+							<Select value={shownPreset ?? DEFAULT} options={shownPreset ? presetOptions.slice(1) : presetOptions} aria-label="프리셋" onchange={(e) => void pickPreset(e.currentTarget.value)} />
 							<OptionLock locked={lockedPreset} from={presetFrom} disabled={!lockedPreset && !shownPreset} onclick={togglePreset} />
 						{:else}
 							<Select value={conv.promptPresetId ?? DEFAULT} options={presetOptions} aria-label="프리셋" onchange={(e) => setOption({ promptPresetId: e.currentTarget.value })} />
@@ -636,7 +660,7 @@
 					{:else}
 						<span>페르소나</span>
 						<div class="with-btn">
-							<ProfilePicker label="페르소나 바꾸기" options={personaOptions} value={persona?.id} onchange={(id) => setOption({ personaId: id })} />
+							<ProfilePicker label="페르소나 바꾸기" options={personaOptions} value={persona?.id} onchange={(id) => void pickPersona(id)} />
 							{#if lockable}<OptionLock locked={lockedPersona} from={personaFrom} onclick={togglePersona} />{/if}
 						</div>
 					{/if}
