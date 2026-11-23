@@ -44,27 +44,27 @@ pub fn style_samples(history: &[(String, String)]) -> Vec<String> {
 /// 맨 끝에 붙이는 지시 (프리셋의 뒤쪽 블록이 덮어쓰지 못하게 마지막 user 메시지로)
 pub fn build_instruction(me: &str, other: &str, brief: Option<&str>, samples: &[String], cfg: &GhostSetting) -> String {
     let len = match cfg.length.as_str() {
-        "short" => "한두 문장",
-        "long" => "여러 문장(한 문단 이상)",
-        _ => "서너 문장 안팎",
+        "short" => "one or two sentences",
+        "long" => "several sentences (a paragraph or more)",
+        _ => "about three or four sentences",
     };
     let mut s = format!(
-        "[대필 요청]\n지금까지의 대화에 이어, {me}가 다음에 할 말을 {me}의 입장과 말투로 대신 써 주세요.\n\
-         - {other}의 말·행동·서술은 쓰지 마세요. {me}의 대사(필요하면 {me}의 행동 묘사)만 씁니다.\n\
-         - 길이는 {len}로, 문체와 형식은 {me}가 이전에 쓴 글을 따릅니다.\n\
-         - 설명이나 머리말 없이 {me}가 보낼 글만 출력하세요."
+        "[Ghostwrite request]\nContinuing the conversation so far, write what {me} says next, from {me}'s point of view and in {me}'s voice.\n\
+         - Do not write {other}'s words, actions or narration. Write only {me}'s lines (and {me}'s actions if needed).\n\
+         - Length: {len}. Follow the style and format of {me}'s earlier messages, and write in the language of the conversation.\n\
+         - Output only the text {me} would send, with no explanation or preface."
     );
     if !samples.is_empty() {
-        s.push_str(&format!("\n\n[{me}가 쓴 최근 글 — 문체 예시]\n"));
+        s.push_str(&format!("\n\n[Recent messages by {me} — style examples]\n"));
         s.push_str(&samples.iter().map(|x| format!("- {x}")).collect::<Vec<_>>().join("\n"));
     }
     match brief {
-        Some(b) => s.push_str(&format!("\n\n[{me}가 적어 준 초안 — 요지를 살려 자연스러운 글로 다듬어 쓰세요]\n{b}")),
-        None => s.push_str("\n\n(초안 없음: 대화의 흐름에 맞는 다음 말을 만드세요)"),
+        Some(b) => s.push_str(&format!("\n\n[Draft from {me} — keep its point and rewrite it as natural text]\n{b}")),
+        None => s.push_str("\n\n(No draft: write the next line that fits the flow of the conversation)"),
     }
     let guide: String = cfg.guide.trim().chars().take(MAX_GUIDE_CHARS).collect();
     if !guide.is_empty() {
-        s.push_str(&format!("\n\n[추가 지침]\n{guide}"));
+        s.push_str(&format!("\n\n[Additional guidance]\n{guide}"));
     }
     s
 }
@@ -132,12 +132,12 @@ mod tests {
             ..Default::default()
         };
         let i = build_instruction("민", "아리아", Some("내일 같이 가자고 말하기"), &["안녕, 오늘 어때?".into()], &cfg);
-        assert!(i.starts_with("[대필 요청]") && i.contains("아리아의 말·행동·서술은 쓰지 마세요") && i.contains("서너 문장"));
+        assert!(i.starts_with("[Ghostwrite request]") && i.contains("Do not write 아리아's words") && i.contains("three or four sentences"));
         let (a, b, c, d) = (
-            i.find("문체 예시").unwrap(),
+            i.find("style examples").unwrap(),
             i.find("안녕, 오늘 어때?").unwrap(),
-            i.find("초안").unwrap(),
-            i.find("[추가 지침]").unwrap(),
+            i.find("[Draft from").unwrap(),
+            i.find("[Additional guidance]").unwrap(),
         );
         assert!(a < b && b < c && c < d, "{i}");
         assert!(i.contains("내일 같이 가자고 말하기") && i.contains("1인칭, 대사 위주"));
@@ -152,7 +152,9 @@ mod tests {
                 ..Default::default()
             },
         );
-        assert!(none.contains("초안 없음") && none.contains("한두 문장") && !none.contains("문체 예시") && !none.contains("[추가 지침]"));
+        assert!(
+            none.contains("No draft") && none.contains("one or two sentences") && !none.contains("style examples") && !none.contains("[Additional guidance]")
+        );
         assert_eq!(
             (max_tokens("short"), max_tokens("medium"), max_tokens("long"), max_tokens("?")),
             (512, 768, 1024, 768)

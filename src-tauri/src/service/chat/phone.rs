@@ -116,10 +116,10 @@ pub fn apply_sides(ctx: &mut ChatContext, me: &Side, other: &Side) {
 /// 엿보기용 규칙. 두 사람 모두 AI가 씀
 pub fn peek_rule(me: &Side, other: &Side) -> String {
     format!(
-        "[메신저 엿보기]\n{me}와(과) {other}가 스마트폰 메신저로 주고받는 대화를 이어서 쓴다. 두 사람의 메시지를 모두 네가 쓴다.\n\
-         - 다음 메시지 2~6개를 쓴다. 한 사람이 연달아 보내도 된다.\n\
-         - 한 줄에 메시지 하나. 반드시 `{me}: 내용` 또는 `{other}: 내용` 형식으로 쓴다.\n\
-         - 나레이션, 행동 묘사, 설명은 쓰지 않는다. 실제로 보낸 메시지만 쓴다.\n\n\
+        "[Messenger peek]\nContinue the smartphone messenger chat between {me} and {other}. You write the messages of both people.\n\
+         - Write the next 2 to 6 messages. One person may send several in a row.\n\
+         - One message per line, always in the form `{me}: text` or `{other}: text`.\n\
+         - No narration, action descriptions or explanations — only the messages actually sent. Write in the language of the conversation.\n\n\
          [{me}]\n{me_desc}\n\n[{other}]\n{other_desc}",
         me = me.name,
         other = other.name,

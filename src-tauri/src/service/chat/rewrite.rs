@@ -91,13 +91,13 @@ pub fn build_instruction(findings: &[&Finding]) -> String {
             "rewriteBanned" => {
                 let words: Vec<String> = detail.split('\u{1f}').filter(|w| !w.is_empty()).map(|w| format!("「{w}」")).collect();
                 if !words.is_empty() {
-                    lines.push(format!("다음 표현은 쓰지 말고 다른 말로 바꿔 쓸 것: {}", words.join(", ")));
+                    lines.push(format!("Do not use these expressions; say it differently: {}", words.join(", ")));
                 }
             }
             "stuck" => {
                 let unit: String = detail.chars().take(20).collect();
                 lines.push(format!(
-                    "같은 단어·구절을 연달아 되풀이하지 말 것 (직전 응답이 「{unit}」을(를) 반복하다 망가졌음)"
+                    "Do not repeat the same word or phrase over and over (the previous response broke down repeating 「{unit}」)"
                 ));
             }
             _ => {}

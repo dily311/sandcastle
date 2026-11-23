@@ -39,7 +39,7 @@ pub fn apply(ctx: &mut ChatContext, meta: Option<&Value>) {
             HistoryItem {
                 images: vec![],
                 role: "system".into(),
-                content: format!("[작가 노트]\n{}", macros(&t, &char_name, &user_name)),
+                content: format!("[Author's note]\n{}", macros(&t, &char_name, &user_name)),
             },
         );
     }

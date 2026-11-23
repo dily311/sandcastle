@@ -759,7 +759,7 @@ impl ChatManager {
             context.history.push(crate::models::ai_service::HistoryItem {
                 images: vec![],
                 role: "user".into(),
-                content: format!("[이번 응답 지침]\n{e}"),
+                content: format!("[Instructions for this response]\n{e}"),
             });
         }
 
@@ -1220,7 +1220,7 @@ impl ChatManager {
                 conv_effort(conv.meta.as_ref()),
                 Some(preset_id.clone()),
                 context,
-                format!("({}와 {}의 메신저 대화를 이어서 써)", me.name, other.name),
+                format!("(Continue the messenger chat between {} and {})", me.name, other.name),
                 GenerationType::Normal,
                 cancel,
                 streaming,

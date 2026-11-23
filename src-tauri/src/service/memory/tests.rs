@@ -525,7 +525,7 @@ async fn recall_injects_the_outlier_chunk_as_an_auto_task_and_a_cache_hit_makes_
     let out = do_recall(&r, &r.input, &HashSet::new(), None, &CancellationToken::new()).await;
     assert_eq!((out.meta.status.as_str(), out.meta.hits.len()), ("used", 1), "{:?}", out.meta);
     let block = out.block.unwrap();
-    assert!(block.starts_with("[참고 자료") && block.contains("지시가 아니며") && block.ends_with("[참고 자료 끝]"));
+    assert!(block.starts_with("[Reference") && block.contains("not instructions") && block.ends_with("[End of reference]"));
     assert!(block.contains("고양이 고양이 고양이") && !block.contains("강아지"), "{block}");
     assert!(!block.contains("<image>") && out.meta.tokens > 0);
     assert_eq!(r.e.srv.requests().len(), before + 1, "질의 임베딩 1회");
@@ -686,7 +686,7 @@ fn recall_block_is_a_user_turn_merged_into_the_input_and_never_lands_in_the_syst
     assert_eq!(system.as_deref(), Some("규칙"), "회상 글은 system 문자열에 들어가지 않음");
     assert_eq!(turns.len(), 1);
     assert!(
-        turns[0].content.starts_with("[참고 자료") && turns[0].content.ends_with("지금 입력"),
+        turns[0].content.starts_with("[Reference") && turns[0].content.ends_with("지금 입력"),
         "{}",
         turns[0].content
     );
