@@ -65,7 +65,7 @@ export function lookup(w: Who | null | undefined) {
 	if (!w) return undefined;
 	const x = w.kind === "persona" ? library.persona(w.id) : library.character(w.id);
 	if (!x) return undefined;
-	return { ...w, name: x.name, avatar: x.avatar, color: x.color || null, description: x.description ?? "" };
+	return { ...w, name: x.name, avatar: x.avatar, avatarFit: x.avatarFit ?? null, color: x.color || null, description: x.description ?? "" };
 }
 
 /** 대화의 meta.phone */

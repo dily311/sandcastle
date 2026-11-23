@@ -2,12 +2,15 @@
 	// 프로필 고르기: 지금 고른 프로필(아바타 + 이름)을 누르면 목록이 뜬다.
 	// 대화(페르소나), 게임(플레이어), 폰(주인) 패널이 같은 모양을 쓴다.
 	import Avatar from "./Avatar.svelte";
+	import type { AvatarFit } from "$ipc/bindings";
 	import { fileSrc } from "$shared/ipc/file";
 
 	export interface ProfileOption {
 		id: string;
 		name: string;
 		avatar?: string | null;
+		/** 프로필 그림 확대·위치 (5-E-17-3) */
+		avatarFit?: AvatarFit | null;
 		color?: string | null;
 		description?: string | null;
 		/** 목록을 나눌 제목 (예: "페르소나", "캐릭터") */
@@ -74,7 +77,7 @@
 			{#if g.title}<p class="grp">{g.title}</p>{/if}
 			{#each g.items as o (o.id)}
 				<button role="option" aria-selected={o.id === value} class:on={o.id === value} onclick={() => pick(o.id)}>
-					<Avatar name={o.name} src={fileSrc(o.avatar)} color={o.color || null} size={28} />
+					<Avatar name={o.name} src={fileSrc(o.avatar)} fit={o.avatarFit} color={o.color || null} size={28} />
 					<span class="pt"><b>{o.name}</b>{#if o.description}<small>{o.description}</small>{/if}</span>
 				</button>
 			{/each}
@@ -82,7 +85,7 @@
 	</div>
 {/if}
 <button bind:this={button} class="pcur" aria-haspopup="listbox" aria-expanded={open} aria-label={label} onclick={toggle}>
-	<Avatar name={current?.name ?? "?"} src={fileSrc(current?.avatar)} color={current?.color || null} size={40} />
+	<Avatar name={current?.name ?? "?"} src={fileSrc(current?.avatar)} fit={current?.avatarFit} color={current?.color || null} size={40} />
 	<span class="pt">
 		<b>{current?.name ?? "없음"}</b>
 		{#if hint}<small>{hint}</small>{:else if current?.description}<small>{current.description}</small>{/if}

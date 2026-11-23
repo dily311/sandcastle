@@ -407,6 +407,8 @@ async fn import_pack_inner(
     for pc in data.characters {
         let old_id = pc.character["id"].as_str().unwrap_or_default().to_string();
         let favorite = pc.character["favorite"].as_bool().unwrap_or(false);
+        // 프로필 그림 확대·위치 (5-E-17-3, 예전 팩에는 없음)
+        let avatar_fit = serde_json::from_value::<crate::models::conversation::AvatarFit>(pc.character["avatarFit"].clone()).ok();
         let mut input: CharacterInput =
             serde_json::from_value(pc.character).map_err(|e| AppError::validation(format!("캐릭터 데이터를 읽을 수 없습니다: {e}"), None))?;
 
@@ -428,6 +430,9 @@ async fn import_pack_inner(
         let new_id = character.id.clone();
         if favorite {
             db::conversation::update_character_is_favorite(&mut *tx, &new_id, true).await?;
+        }
+        if character.avatar.is_some() && avatar_fit.is_some() {
+            db::conversation::set_avatar_fit(&mut *tx, "characters", &new_id, avatar_fit).await?;
         }
         for b in old_books {
             match book_map.get(&b) {

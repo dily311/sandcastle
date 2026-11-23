@@ -30,8 +30,8 @@
 
 	// 폰 주인: 페르소나(내 폰)와 캐릭터(그 캐릭터의 폰)를 한 목록에서
 	const ownerOptions = $derived<ProfileOption[]>([
-		...library.personas.map((p) => ({ id: `persona:${p.id}`, name: p.name, avatar: p.avatar, color: p.color, description: p.description, group: "내 페르소나의 폰" })),
-		...library.characters.map((c) => ({ id: `character:${c.id}`, name: c.name, avatar: c.avatar, color: c.color, description: c.description, group: "캐릭터의 폰 (그 캐릭터가 되거나 엿봄)" })),
+		...library.personas.map((p) => ({ id: `persona:${p.id}`, name: p.name, avatar: p.avatar, avatarFit: p.avatarFit, color: p.color, description: p.description, group: "내 페르소나의 폰" })),
+		...library.characters.map((c) => ({ id: `character:${c.id}`, name: c.name, avatar: c.avatar, avatarFit: c.avatarFit, color: c.color, description: c.description, group: "캐릭터의 폰 (그 캐릭터가 되거나 엿봄)" })),
 	]);
 	const ownerValue = $derived(phone.prefs.owner ? `${phone.prefs.owner.kind}:${phone.prefs.owner.id}` : null);
 	function pickOwner(id: string) {

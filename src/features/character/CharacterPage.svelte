@@ -340,7 +340,7 @@
 		</div>
 		<header class="profile">
 			<button class="portrait" title="아바타 바꾸기" aria-label="아바타 바꾸기" onclick={() => changeAvatar(character.id)}>
-				<Avatar name={character.name} src={fileSrc(character.avatar)} color={character.color} size={96} />
+				<Avatar name={character.name} src={fileSrc(character.avatar)} fit={character.avatarFit} color={character.color} size={96} />
 				<span class="cam" aria-hidden="true"><Camera /></span>
 			</button>
 			<div class="ident">

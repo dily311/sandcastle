@@ -276,7 +276,7 @@
 						{#snippet fallback()}<BookOpen />{/snippet}
 						{#snippet menu()}<IconButton label="{b.name} 메뉴" size="sm" variant="ghost" onclick={(e) => bookMenu(e, b)}><Ellipsis /></IconButton>{/snippet}
 						{#snippet badges()}
-							{#each [...u.characters, ...u.personas].slice(0, 4) as w (w.id)}<Badge><Avatar name={w.name} src={fileSrc(w.avatar)} color={w.color || null} size={14} />{w.name}</Badge>{/each}
+							{#each [...u.characters, ...u.personas].slice(0, 4) as w (w.id)}<Badge><Avatar name={w.name} src={fileSrc(w.avatar)} fit={w.avatarFit} color={w.color || null} size={14} />{w.name}</Badge>{/each}
 						{/snippet}
 					</ItemCard>
 				{:else}

@@ -1,4 +1,5 @@
 <script lang="ts">
+	import type { AvatarFit } from "$ipc/bindings";
 	interface Props {
 		name: string;
 		/** 표시할 수 있는 URL (convertFileSrc 결과 등) */
@@ -8,10 +9,14 @@
 		color?: string | null;
 		/** 온라인/새 메시지 표시 */
 		status?: "none" | "online" | "unread";
+		/** 그림의 어느 곳을 보일지 (5-E-17-3): x·y = 그림 안 위치(%), zoom = 확대 */
+		fit?: AvatarFit | null;
 	}
-	let { name, src = null, size = 36, color = null, status = "none" }: Props = $props();
+	let { name, src = null, size = 36, color = null, status = "none", fit = null }: Props = $props();
 
 	let failed = $state(false);
+	const pos = $derived(fit ? `${fit.x ?? 50}% ${fit.y ?? 50}%` : null);
+	const zoom = $derived(fit?.zoom ?? 1);
 	const initial = $derived((name.trim()[0] ?? "?").toUpperCase());
 	// 이름 → 색상 (같은 이름은 항상 같은 색)
 	const hue = $derived([...name].reduce((h, c) => (h * 31 + c.charCodeAt(0)) % 360, 17));
@@ -26,7 +31,14 @@
 	style:--avatar-bg={bg}
 >
 	{#if src && !failed}
-		<img {src} alt="" onerror={() => (failed = true)} />
+		<img
+			{src}
+			alt=""
+			style:object-position={pos}
+			style:transform={zoom !== 1 ? `scale(${zoom})` : null}
+			style:transform-origin={pos}
+			onerror={() => (failed = true)}
+		/>
 	{:else}
 		<span class="initial" aria-hidden="true">{initial}</span>
 	{/if}

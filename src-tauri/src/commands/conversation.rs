@@ -177,6 +177,19 @@ pub async fn set_character_cover_position(state: State<'_, AppState>, id: String
     Ok(())
 }
 
+/// 프로필 그림 확대·위치 (5-E-17-3). owner: "character" | "persona", fit이 없으면 가운데·확대 없음으로
+#[tauri::command]
+#[specta::specta]
+pub async fn set_avatar_fit(state: State<'_, AppState>, owner: String, id: String, fit: Option<crate::models::conversation::AvatarFit>) -> Result<()> {
+    let table = match owner.as_str() {
+        "character" => "characters",
+        "persona" => "personas",
+        _ => return Err(crate::error::AppError::validation("owner는 character 또는 persona", None)),
+    };
+    conversation::set_avatar_fit(&state.db, table, &id, fit).await?;
+    Ok(())
+}
+
 /// 이미지 파일을 아바타 폴더로 복사하고 새 경로를 돌려준다
 pub(crate) fn copy_avatar(dir: &std::path::Path, src: &str, prefix: &str) -> Result<String> {
     let src = std::path::PathBuf::from(src);

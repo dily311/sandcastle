@@ -8,6 +8,33 @@ pub struct ConvSettings {
     pub default_persona_id: Option<String>,
 }
 
+// ---------- 프로필 그림 맞추기 (5-E-17-3) ----------
+/// 동그란 프로필 칸 안에서 그림의 어느 곳을 보일지: x·y는 그림 안 위치(%), zoom은 확대 배율
+#[derive(Serialize, Deserialize, specta::Type, Debug, Clone, Copy, PartialEq)]
+pub struct AvatarFit {
+    pub x: f64,
+    pub y: f64,
+    pub zoom: f64,
+}
+
+impl AvatarFit {
+    /// 범위 밖 값은 자르고, 기본값(가운데·1배)이면 None — 저장하지 않는다
+    pub fn normalized(self) -> Option<Self> {
+        let num = |v: f64, lo: f64, hi: f64, d: f64| if v.is_finite() { v.clamp(lo, hi) } else { d };
+        let f = Self {
+            x: num(self.x, 0.0, 100.0, 50.0),
+            y: num(self.y, 0.0, 100.0, 50.0),
+            zoom: num(self.zoom, 1.0, 4.0, 1.0),
+        };
+        (f != Self { x: 50.0, y: 50.0, zoom: 1.0 }).then_some(f)
+    }
+
+    /// DB 글(JSON) → 값. 읽지 못하면 None
+    pub fn parse(s: Option<&str>) -> Option<Self> {
+        s.and_then(|s| serde_json::from_str::<Self>(s).ok()).and_then(Self::normalized)
+    }
+}
+
 // ---------- Persona ----------
 #[derive(FromRow)]
 pub struct PersonaRow {
@@ -21,6 +48,8 @@ pub struct PersonaRow {
     pub is_system_default: i64,
     pub created_at: i64,
     pub updated_at: i64,
+    #[sqlx(default)]
+    pub avatar_fit: Option<String>,
 }
 
 #[derive(Serialize, specta::Type)]
@@ -36,6 +65,8 @@ pub struct Persona {
     pub is_system_default: bool,
     pub created_at: i64,
     pub updated_at: i64,
+    /// 프로필 그림 확대·위치 (없으면 가운데·확대 없음)
+    pub avatar_fit: Option<AvatarFit>,
 }
 
 impl From<PersonaRow> for Persona {
@@ -51,6 +82,7 @@ impl From<PersonaRow> for Persona {
             is_system_default: r.is_system_default != 0,
             created_at: r.created_at,
             updated_at: r.updated_at,
+            avatar_fit: AvatarFit::parse(r.avatar_fit.as_deref()),
         }
     }
 }
@@ -85,6 +117,8 @@ pub struct CharacterRow {
     pub cover: Option<String>,
     #[sqlx(default)]
     pub cover_y: Option<f64>,
+    #[sqlx(default)]
+    pub avatar_fit: Option<String>,
     pub description: String,
     pub alternate_descriptions: Option<String>,
     pub first_message: Option<String>,
@@ -116,6 +150,8 @@ pub struct Character {
     /// 커버에서 보일 세로 위치 % (0 위 ~ 100 아래)
     #[serde(default = "half")]
     pub cover_y: f64,
+    /// 프로필 그림 확대·위치 (없으면 가운데·확대 없음)
+    pub avatar_fit: Option<AvatarFit>,
     pub description: String,
     pub alternate_descriptions: Vec<String>,
     pub first_message: Option<String>,
@@ -144,6 +180,7 @@ impl From<CharacterRow> for Character {
             avatar: r.avatar,
             cover: r.cover,
             cover_y: r.cover_y.unwrap_or(50.0),
+            avatar_fit: AvatarFit::parse(r.avatar_fit.as_deref()),
             description: r.description,
             alternate_descriptions: r.alternate_descriptions.and_then(|s| serde_json::from_str(&s).ok()).unwrap_or_default(),
             first_message: r.first_message,

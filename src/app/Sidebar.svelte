@@ -331,7 +331,7 @@
 	{@const forks = forkCount.get(c.id) ?? 0}
 	<li class="row" class:on={openConv === c.id} style:--depth={depth}>
 		<button class="open" title="{ch?.name} · {c.title} · {relative(lastAt(c))}" onclick={() => nav.go({ page: "character", charId: c.characterId ?? undefined, convId: c.id })} oncontextmenu={(e) => rightClick(e, c)}>
-			{#if showAvatar}<Avatar name={ch?.name ?? "?"} src={fileSrc(ch?.avatar)} color={ch?.color} size={18} />{/if}
+			{#if showAvatar}<Avatar name={ch?.name ?? "?"} src={fileSrc(ch?.avatar)} fit={ch?.avatarFit} color={ch?.color} size={18} />{/if}
 			<span class="t">{c.title}</span>
 		</button>
 		{#if sub.length}
@@ -421,7 +421,7 @@
 	<div class="bottom">
 		<div class="profile">
 			<button bind:this={meBtn} class="me" class:on={cur.page === "persona"} aria-haspopup="listbox" aria-expanded={profileOpen} title="사용자 프로필 바꾸기" onclick={toggleProfile}>
-				{#if me}<Avatar name={me.name} src={fileSrc(me.avatar)} color={me.color || null} size={26} />{/if}
+				{#if me}<Avatar name={me.name} src={fileSrc(me.avatar)} fit={me.avatarFit} color={me.color || null} size={26} />{/if}
 				<span class="who"><b>{me?.name ?? "페르소나 없음"}</b><small>{scope} 프로필</small></span>
 				<ChevronsUpDown />
 			</button>
@@ -432,7 +432,7 @@
 						{#each library.personas as p (p.id)}
 							<li>
 								<button role="option" aria-selected={p.id === me?.id} onclick={() => choose(p.id)}>
-									<Avatar name={p.name} src={fileSrc(p.avatar)} color={p.color || null} size={24} />
+									<Avatar name={p.name} src={fileSrc(p.avatar)} fit={p.avatarFit} color={p.color || null} size={24} />
 									<span class="t">{p.name}</span>
 									{#if p.id === me?.id}<Check />{/if}
 								</button>

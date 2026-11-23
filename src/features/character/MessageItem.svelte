@@ -13,6 +13,7 @@
 	import { appSetting } from "$shared/stores/appSetting.svelte";
 	import { toBlocks } from "./format";
 	import RichText from "./RichText.svelte";
+	import type { AvatarFit } from "$ipc/bindings";
 	import TypingIndicator from "./TypingIndicator.svelte";
 	import { metaOf, type ChatSession, type Message } from "./session.svelte";
 	import { fileSrc } from "$shared/ipc/file";
@@ -25,6 +26,8 @@
 	interface Props {
 		/** 프로필 그림 (대화 설정에서 켰을 때만 넘어옴, null이면 이름 첫 글자) — 5-E-9 */
 		avatar?: string | null;
+		/** 프로필 그림 확대·위치 (5-E-17-3) */
+		avatarFit?: AvatarFit | null;
 		msg: Message;
 		no: number;
 		session: ChatSession;
@@ -44,7 +47,7 @@
 		/** 형광펜 칠한 글을 눌러 지움 */
 		onmarkremove?: (b: ChatBookmark) => void;
 	}
-	let { msg, no, avatar, session, images, isLast, onbranch, onprompt, selecting = false, selected = false, onselect, marks = [], oncard, onmarkremove }: Props = $props();
+	let { msg, no, avatar, avatarFit = null, session, images, isLast, onbranch, onprompt, selecting = false, selected = false, onselect, marks = [], oncard, onmarkremove }: Props = $props();
 
 	const meta = $derived(metaOf(msg));
 	const isAi = $derived(msg.role === "assistant");
@@ -246,7 +249,7 @@
 <div bind:this={el} class="block sc-msg" class:ai={isAi} class:user={!isAi} class:sc-msg-ai={isAi} class:sc-msg-user={!isAi} class:sc-msg-hidden={meta.hidden} class:hidden={meta.hidden} class:selecting class:picked={selected} id="msg-{msg.id}" data-no={no} class:tapped onclick={tap} oncontextmenu={openMenu}>
 	<div class="who sc-msg-head">
 		{#if selecting}<input class="pick" type="checkbox" checked={selected} aria-label="#{no} 메시지 선택" onclick={(e) => e.stopPropagation()} onchange={(e) => onselect?.(msg, e.currentTarget.checked)} />{/if}
-		{#if avatar !== undefined}<Avatar name={msg.name ?? (isAi ? "AI" : "나")} src={avatar} size={22} />{/if}
+		{#if avatar !== undefined}<Avatar name={msg.name ?? (isAi ? "AI" : "나")} src={avatar} fit={avatarFit} size={22} />{/if}
 		<span class="no sc-msg-no">#{no}</span><b class="sc-msg-name">{msg.name ?? (isAi ? "AI" : "나")}</b>
 		{#if meta.hidden}<Badge><EyeOff /> AI에게 숨김</Badge>{/if}
 		{#if (msg.meta as { ghost?: boolean } | null)?.ghost}<span class="ghost" role="img" aria-label="대필" title="대필"><PenLine size={12} /></span>{/if}

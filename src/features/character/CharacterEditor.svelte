@@ -1,8 +1,9 @@
 <script lang="ts">
 	import { onMount } from "svelte";
-	import { ArrowUp, Camera, Plus, Trash2, X } from "@lucide/svelte";
+	import { ArrowUp, Camera, Crop, Plus, Trash2, X } from "@lucide/svelte";
 	import type { CharacterInput_Deserialize as CharacterInput, WorldInfoBook_Serialize as Book } from "$ipc/bindings";
-	import { Avatar, Button, ColorPicker, Field, IconButton, Input, Select, TagInput, Textarea } from "$shared/ui";
+	import { Avatar, AvatarFitDialog, Button, ColorPicker, Field, IconButton, Input, Select, TagInput, Textarea } from "$shared/ui";
+	import type { AvatarFit } from "$ipc/bindings";
 	import { call, commands } from "$shared/ipc/client";
 	import { fileSrc } from "$shared/ipc/file";
 	import { IMAGE_FILES, pickFiles } from "$shared/ipc/dialog";
@@ -119,7 +120,18 @@
 	async function setAvatar(path: string | null) {
 		const saved = await call(commands.setCharacterAvatar(character.id, path), src);
 		const c = library.character(character.id);
-		if (c) c.avatar = saved.avatar;
+		if (c) {
+			c.avatar = saved.avatar;
+			c.avatarFit = saved.avatarFit;
+		}
+	}
+	// 프로필 그림 확대·위치 (5-E-17-3): 바로 저장 (커버 위치와 같음)
+	let fitOpen = $state(false);
+	const avatarFit = $derived(library.character(character.id)?.avatarFit ?? character.avatarFit ?? null);
+	async function saveFit(fit: AvatarFit | null) {
+		await call(commands.setAvatarFit("character", character.id, fit), src);
+		const c = library.character(character.id);
+		if (c) c.avatarFit = fit;
 	}
 	// 편집 중에 끌어다 놓은 그림은 아바타로 (캐릭터 화면의 "카드 가져오기"보다 우선)
 	$effect(() => dropPaths({ priority: 5, label: "아바타로 쓰기", hint: "PNG·JPG·WEBP·GIF 한 장", multiple: false, onpaths: ([path]) => setAvatar(path) }));
@@ -173,12 +185,18 @@
 				<div class="card">
 					<div class="who">
 						<button class="avatar-btn" title="아바타 바꾸기" aria-label="아바타 바꾸기" onclick={() => avatar(true)}>
-							<Avatar name={name || character.name} src={fileSrc(character.avatar)} color={color || null} size={88} />
+							<Avatar name={name || character.name} src={fileSrc(character.avatar)} color={color || null} size={88} fit={avatarFit} />
 							<span class="cam"><Camera /></span>
 						</button>
 						<div class="who-fields">
 							<Field label="이름" required hint={"대화에서 {{char}} 자리에 들어감"}><Input bind:value={name} /></Field>
-							{#if character.avatar}<Button size="sm" variant="ghost" onclick={() => avatar(false)}>{#snippet icon()}<X />{/snippet}아바타 지우기</Button>{/if}
+							{#if character.avatar}
+								<div class="avatar-acts">
+									<Button size="sm" variant="ghost" onclick={() => (fitOpen = true)}>{#snippet icon()}<Crop />{/snippet}위치·확대</Button>
+									<Button size="sm" variant="ghost" onclick={() => avatar(false)}>{#snippet icon()}<X />{/snippet}아바타 지우기</Button>
+								</div>
+								<AvatarFitDialog open={fitOpen} name={name || character.name} src={fileSrc(character.avatar)} color={color || null} fit={avatarFit} onclose={() => (fitOpen = false)} onsave={saveFit} />
+							{/if}
 						</div>
 					</div>
 					<div class="two">
@@ -363,6 +381,11 @@
 		align-self: stretch;
 	}
 	/* 세로로 긴 그림이어도 둥근 모양 그대로 (flex에 늘어나지 않게) */
+	.avatar-acts {
+		display: flex;
+		flex-wrap: wrap;
+		gap: var(--space-1);
+	}
 	.avatar-btn {
 		position: relative;
 		flex: none;

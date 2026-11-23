@@ -141,7 +141,7 @@
 						{#each recent as c (c.id)}
 							{@const ch = library.character(c.characterId)}
 							<button class="card conv" onclick={() => nav.go({ page: "character", charId: c.characterId ?? undefined, convId: c.id })}>
-								<Avatar name={ch?.name ?? "?"} src={fileSrc(ch?.avatar)} color={ch?.color} size={36} />
+								<Avatar name={ch?.name ?? "?"} src={fileSrc(ch?.avatar)} fit={ch?.avatarFit} color={ch?.color} size={36} />
 								<span class="txt"><b>{c.title}</b><small>{ch?.name} · {relative(lastAt(c))}</small></span>
 							</button>
 						{/each}
@@ -168,7 +168,7 @@
 					<div class="favs">
 						{#each favorites as ch (ch.id)}
 							<button class="fav" onclick={() => nav.go({ page: "character", charId: ch.id })} title={ch.name}>
-								<Avatar name={ch.name} src={fileSrc(ch.avatar)} color={ch.color} size={56} />
+								<Avatar name={ch.name} src={fileSrc(ch.avatar)} fit={ch.avatarFit} color={ch.color} size={56} />
 								<span>{ch.name}</span>
 							</button>
 						{/each}

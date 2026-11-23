@@ -1,7 +1,8 @@
 <script lang="ts">
-	import { Camera, Copy, MoreHorizontal, Star, Trash2, Users, X } from "@lucide/svelte";
+	import { Camera, Copy, Crop, MoreHorizontal, Star, Trash2, Users, X } from "@lucide/svelte";
 	import type { PersonaInput_Deserialize as PersonaInput, WorldInfoBook_Serialize as Book } from "$ipc/bindings";
-	import { Avatar, Badge, Button, ColorPicker, ContextMenu, Field, IconButton, Input, TagInput, Textarea, type MenuItem } from "$shared/ui";
+	import { Avatar, AvatarFitDialog, Badge, Button, ColorPicker, ContextMenu, Field, IconButton, Input, TagInput, Textarea, type MenuItem } from "$shared/ui";
+	import type { AvatarFit } from "$ipc/bindings";
 	import { fileSrc } from "$shared/ipc/file";
 	import { relative } from "$shared/time";
 	import { nav } from "$app/nav.svelte";
@@ -16,12 +17,14 @@
 		dirty?: boolean;
 		onsave: (input: PersonaInput) => void;
 		onavatar: (pick: boolean) => void;
+		/** 프로필 그림 확대·위치 저장 (5-E-17-3) */
+		onavatarfit: (fit: AvatarFit | null) => void | Promise<void>;
 		ondefault: () => void;
 		onduplicate: () => void;
 		ontocharacter: () => void;
 		ondelete: () => void;
 	}
-	let { persona, isDefault, books, saving, dirty = $bindable(false), onsave, onavatar, ondefault, onduplicate, ontocharacter, ondelete }: Props = $props();
+	let { persona, isDefault, books, saving, dirty = $bindable(false), onsave, onavatar, onavatarfit, ondefault, onduplicate, ontocharacter, ondelete }: Props = $props();
 
 	// 편집 사본 (persona가 바뀌면 부모가 {#key}로 새로 만듦)
 	// svelte-ignore state_referenced_locally
@@ -61,11 +64,17 @@
 	const usedBy = $derived(library.characters.filter((c) => c.defaultPersonaId === persona.id));
 	const convs = $derived(library.conversations.filter((c) => c.personaId === persona.id).sort((a, b) => b.updatedAt - a.updatedAt));
 
+	let fitOpen = $state(false);
 	let menu = $state<{ x: number; y: number; align?: "start" | "end" } | null>(null);
 	const menuItems: MenuItem[] = $derived([
 		{ label: "복제", icon: Copy, onselect: onduplicate },
 		{ label: "캐릭터로 복사", icon: Users, onselect: ontocharacter },
-		...(persona.avatar ? [{ label: "아바타 지우기", icon: X, onselect: () => onavatar(false) }] : []),
+		...(persona.avatar
+			? [
+					{ label: "아바타 위치·확대", icon: Crop, onselect: () => (fitOpen = true) },
+					{ label: "아바타 지우기", icon: X, onselect: () => onavatar(false) },
+				]
+			: []),
 		{ label: isDefault ? "삭제 (기본은 못 지움)" : "삭제", icon: Trash2, danger: true, disabled: isDefault, separator: true, onselect: ondelete },
 	]);
 	function openMenu(e: MouseEvent) {
@@ -74,10 +83,12 @@
 	}
 </script>
 
+<AvatarFitDialog open={fitOpen} name={name || persona.name} src={fileSrc(persona.avatar)} color={color || null} fit={persona.avatarFit} onclose={() => (fitOpen = false)} onsave={onavatarfit} />
+
 <div class="editor">
 	<header class="head">
 		<button class="avatar-btn" title="아바타 바꾸기" aria-label="아바타 바꾸기" onclick={() => onavatar(true)}>
-			<Avatar name={name || persona.name} src={fileSrc(persona.avatar)} color={color || null} size={88} />
+			<Avatar name={name || persona.name} src={fileSrc(persona.avatar)} color={color || null} size={88} fit={persona.avatarFit} />
 			<span class="cam"><Camera /></span>
 		</button>
 		<div class="ident">

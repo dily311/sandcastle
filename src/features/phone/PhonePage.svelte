@@ -209,7 +209,7 @@
 				{#each pickList as w (`${w.kind}:${w.id}`)}
 					<li>
 						<button onclick={() => (picker === "contact" ? phone.addContact(w).then(() => (picker = null)) : openChat(w))}>
-							<Avatar name={w.name} src={fileSrc(w.avatar)} color={w.color} size={40} />
+							<Avatar name={w.name} src={fileSrc(w.avatar)} fit={w.avatarFit} color={w.color} size={40} />
 							<span class="main"><strong>{w.name}</strong>{#if phone.isCharacterPhone}<span class="last">{kindLabel(w.kind)}</span>{/if}</span>
 						</button>
 					</li>
@@ -231,7 +231,7 @@
 					{@const p = phone.previews[c.id]}
 					<li>
 						<button onclick={() => w && openChat(w)} oncontextmenu={(e) => roomMenu(e, c)}>
-							<Avatar name={w?.name ?? "?"} src={fileSrc(w?.avatar)} color={w?.color} size={46} />
+							<Avatar name={w?.name ?? "?"} src={fileSrc(w?.avatar)} fit={w?.avatarFit} color={w?.color} size={46} />
 							<span class="main">
 								<span class="row"><strong>{w?.name ?? c.title}</strong><span class="time">{when(p?.at ?? lastAt(c))}</span></span>
 								<span class="row"><span class="last">{p?.text || "대화를 시작해 봄"}</span>{#if p?.unread}<span class="badge">{p.unread}</span>{/if}</span>
@@ -251,7 +251,7 @@
 				<span class="bar-icons"><button class="plain" aria-label="연락처 추가" onclick={() => (picker = "contact")}><Plus /></button></span>
 			</div>
 			<div class="me-card">
-				<Avatar name={owner.name} src={fileSrc(owner.avatar)} color={owner.color} size={52} />
+				<Avatar name={owner.name} src={fileSrc(owner.avatar)} fit={owner.avatarFit} color={owner.color} size={52} />
 				<div><strong>{owner.name}</strong><span>내 프로필{phone.isCharacterPhone ? " (캐릭터)" : ""}</span></div>
 			</div>
 			{#if phone.contacts.length > 6}
@@ -262,7 +262,7 @@
 				{#each contacts as { c, who } (`${c.contactKind}:${c.contactId}`)}
 					<li>
 						<button onclick={() => openChat(who!)} oncontextmenu={(e) => contactMenu(e, who!, c.status)}>
-							<Avatar name={who!.name} src={fileSrc(who!.avatar)} color={who!.color} size={40} />
+							<Avatar name={who!.name} src={fileSrc(who!.avatar)} fit={who!.avatarFit} color={who!.color} size={40} />
 							<span class="main"><strong>{who!.name}</strong>{#if c.status}<span class="last">{c.status}</span>{:else if phone.isCharacterPhone && c.contactKind === "persona"}<span class="last">내 페르소나</span>{/if}</span>
 						</button>
 					</li>
@@ -277,7 +277,7 @@
 			<div class="app-bar"><h2>설정</h2></div>
 			<div class="settings">
 				<button class="profile" onclick={openProfile}>
-					<Avatar name={owner.name} src={fileSrc(owner.avatar)} color={owner.color} size={52} />
+					<Avatar name={owner.name} src={fileSrc(owner.avatar)} fit={owner.avatarFit} color={owner.color} size={52} />
 					<span><strong>{owner.name}</strong><small>이 폰의 주인 ({phone.isCharacterPhone ? "캐릭터" : "페르소나"})</small></span>
 					<ChevronRight />
 				</button>
@@ -286,7 +286,7 @@
 					{#each library.personas as p (p.id)}
 						{@const on = phone.prefs.owner?.kind === "persona" && phone.prefs.owner.id === p.id}
 						<button class="opt" onclick={() => phone.switchOwner({ kind: "persona", id: p.id })}>
-							<Avatar name={p.name} src={fileSrc(p.avatar)} color={p.color || null} size={28} />{p.name}
+							<Avatar name={p.name} src={fileSrc(p.avatar)} fit={p.avatarFit} color={p.color || null} size={28} />{p.name}
 							{#if on}<span class="check">✓</span>{/if}
 						</button>
 					{/each}
@@ -296,7 +296,7 @@
 					{#each library.characters as c (c.id)}
 						{@const on = phone.prefs.owner?.kind === "character" && phone.prefs.owner.id === c.id}
 						<button class="opt" onclick={() => phone.switchOwner({ kind: "character", id: c.id })}>
-							<Avatar name={c.name} src={fileSrc(c.avatar)} color={c.color} size={28} />{c.name}
+							<Avatar name={c.name} src={fileSrc(c.avatar)} fit={c.avatarFit} color={c.color} size={28} />{c.name}
 							{#if on}<span class="check">✓</span>{/if}
 						</button>
 					{/each}

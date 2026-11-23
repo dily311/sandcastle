@@ -409,6 +409,8 @@ export const commands = {
 	setCharacterCover: (id: string, path: string | null, options?: InvokeOptions) => __TAURI_INVOKE<Character_Serialize>("set_character_cover", { id, path }, options),
 	/**  커버에서 보일 세로 위치 (0 위 ~ 100 아래) */
 	setCharacterCoverPosition: (id: string, y: number | null, options?: InvokeOptions) => __TAURI_INVOKE<null>("set_character_cover_position", { id, y }, options),
+	/**  프로필 그림 확대·위치 (5-E-17-3). owner: "character" | "persona", fit이 없으면 가운데·확대 없음으로 */
+	setAvatarFit: (owner: string, id: string, fit: AvatarFit | null, options?: InvokeOptions) => __TAURI_INVOKE<null>("set_avatar_fit", { owner, id, fit }, options),
 	copyCharacterToPersona: (characterId: string, options?: InvokeOptions) => __TAURI_INVOKE<Persona_Serialize>("copy_character_to_persona", { characterId }, options),
 	copyPersonaToCharacter: (personaId: string, options?: InvokeOptions) => __TAURI_INVOKE<Character_Serialize>("copy_persona_to_character", { personaId }, options),
 	/**  캐릭터를 게임에 넣음 (게임 캐릭터는 원본 캐릭터를 기억함). 아바타는 게임 에셋으로 따로 넣어야 함 */
@@ -926,6 +928,13 @@ export type AvailableMove = {
 	available: boolean,
 };
 
+/**  동그란 프로필 칸 안에서 그림의 어느 곳을 보일지: x·y는 그림 안 위치(%), zoom은 확대 배율 */
+export type AvatarFit = {
+	x: number | null,
+	y: number | null,
+	zoom: number | null,
+};
+
 export type BackgroundAssetsInput = BackgroundAssetsInput_Serialize | BackgroundAssetsInput_Deserialize;
 
 export type BackgroundAssetsInput_Deserialize = {
@@ -1349,6 +1358,8 @@ export type Character_Deserialize = {
 	cover?: string | null,
 	/**  커버에서 보일 세로 위치 % (0 위 ~ 100 아래) */
 	coverY?: number | null,
+	/**  프로필 그림 확대·위치 (없으면 가운데·확대 없음) */
+	avatarFit?: AvatarFit | null,
 	description: string,
 	alternateDescriptions: string[],
 	firstMessage?: string | null,
@@ -1377,6 +1388,8 @@ export type Character_Serialize = {
 	cover: string | null,
 	/**  커버에서 보일 세로 위치 % (0 위 ~ 100 아래) */
 	coverY: number | null,
+	/**  프로필 그림 확대·위치 (없으면 가운데·확대 없음) */
+	avatarFit: AvatarFit | null,
 	description: string,
 	alternateDescriptions: string[],
 	firstMessage: string | null,
@@ -3824,6 +3837,8 @@ export type Persona_Deserialize = {
 	isSystemDefault: boolean,
 	createdAt: number,
 	updatedAt: number,
+	/**  프로필 그림 확대·위치 (없으면 가운데·확대 없음) */
+	avatarFit?: AvatarFit | null,
 };
 
 export type Persona_Serialize = {
@@ -3837,6 +3852,8 @@ export type Persona_Serialize = {
 	isSystemDefault: boolean,
 	createdAt: number,
 	updatedAt: number,
+	/**  프로필 그림 확대·위치 (없으면 가운데·확대 없음) */
+	avatarFit: AvatarFit | null,
 };
 
 /**  폰 연락처. 주인(폰 주인)과 연락처가 각각 페르소나 또는 캐릭터 */

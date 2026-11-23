@@ -23,6 +23,7 @@ const character = (id: string, name: string, description: string, extra: Partial
 	avatar: null,
 	cover: null,
 	coverY: 50,
+	avatarFit: null,
 	description,
 	alternateDescriptions: [],
 	firstMessage: null,
@@ -57,9 +58,9 @@ const characters: Character_Serialize[] = [
 ];
 
 const personas: Persona_Serialize[] = [
-	{ id: "default", name: "user", avatar: null, description: "", worldInfoIds: [], tags: [], color: "", isSystemDefault: true, createdAt: 0, updatedAt: 0 },
-	{ id: "min", name: "Min", avatar: null, description: "숲에서 길 잃은 여행자", worldInfoIds: [], tags: [], color: "", isSystemDefault: false, createdAt: 0, updatedAt: 0 },
-	{ id: "haru", name: "하루", avatar: null, description: "대학생", worldInfoIds: [], tags: [], color: "", isSystemDefault: false, createdAt: 0, updatedAt: 0 },
+	{ id: "default", name: "user", avatar: null, description: "", worldInfoIds: [], tags: [], color: "", isSystemDefault: true, createdAt: 0, updatedAt: 0, avatarFit: null },
+	{ id: "min", name: "Min", avatar: null, description: "숲에서 길 잃은 여행자", worldInfoIds: [], tags: [], color: "", isSystemDefault: false, createdAt: 0, updatedAt: 0, avatarFit: null },
+	{ id: "haru", name: "하루", avatar: null, description: "대학생", worldInfoIds: [], tags: [], color: "", isSystemDefault: false, createdAt: 0, updatedAt: 0, avatarFit: null },
 ];
 
 const presets: PromptPresets_Serialize[] = [

@@ -1,6 +1,7 @@
 // 새 디자인 시스템 컴포넌트. 화면은 여기서만 가져다 쓴다.
 // 스타일: import "$shared/ui/base.css" (앱 진입점에서 한 번)
 export { default as Avatar } from "./Avatar.svelte";
+export { default as AvatarFitDialog } from "./AvatarFitDialog.svelte";
 export { default as Badge } from "./Badge.svelte";
 export { default as Button } from "./Button.svelte";
 export { default as Card } from "./Card.svelte";

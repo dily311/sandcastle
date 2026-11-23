@@ -120,6 +120,12 @@ export const settingsHandlers: Record<string, (a: Args) => unknown> = {
 		return c;
 	},
 
+	set_avatar_fit: ({ owner, id, fit }) => {
+		const list: { id: string; avatarFit: unknown }[] = owner === "persona" ? personas : characters;
+		const x = list.find((v) => v.id === id);
+		if (x) x.avatarFit = fit ?? null;
+		return null;
+	},
 	set_character_cover_position: ({ id, y }) => {
 		const c = characters.find((x) => x.id === id)!;
 		c.coverY = y as number;
@@ -129,7 +135,7 @@ export const settingsHandlers: Record<string, (a: Args) => unknown> = {
 	// ---- 복사 ----
 	copy_character_to_persona: ({ characterId }) => {
 		const c = characters.find((x) => x.id === characterId)!;
-		const p = { id: uid("pe"), name: c.name, avatar: c.avatar, description: c.description, worldInfoIds: [...c.worldInfoIds], tags: [...c.tags], color: c.color ?? "", isSystemDefault: false, createdAt: now(), updatedAt: now() };
+		const p = { id: uid("pe"), name: c.name, avatar: c.avatar, description: c.description, worldInfoIds: [...c.worldInfoIds], tags: [...c.tags], color: c.color ?? "", isSystemDefault: false, createdAt: now(), updatedAt: now(), avatarFit: c.avatarFit };
 		personas.push(p);
 		return p;
 	},

@@ -138,6 +138,7 @@ where
             p.id,
             p.name,
             p.avatar,
+            p.avatar_fit,
             p.description,
             (
                 SELECT json_group_array(book_id) 
@@ -165,6 +166,7 @@ where
             p.id,
             p.name,
             p.avatar,
+            p.avatar_fit,
             p.description,
             (
                 SELECT json_group_array(book_id) 
@@ -234,6 +236,7 @@ where
         id: id,
         name: input.name,
         avatar: input.avatar,
+        avatar_fit: None,
         description: input.description,
         world_info_ids: input.world_info_ids,
         tags: input.tags,
@@ -298,7 +301,7 @@ where
     E: Executor<'e, Database = Sqlite>,
 {
     let now = chrono::Utc::now().timestamp_millis();
-    sqlx::query("UPDATE personas SET avatar = ?, updated_at = ? WHERE id = ?")
+    sqlx::query("UPDATE personas SET avatar = ?, avatar_fit = NULL, updated_at = ? WHERE id = ?")
         .bind(avatar)
         .bind(now)
         .bind(id)
@@ -327,7 +330,7 @@ pub async fn set_character_avatar<'e, E>(executor: E, id: &str, avatar: Option<&
 where
     E: Executor<'e, Database = Sqlite>,
 {
-    sqlx::query("UPDATE characters SET avatar = ?, updated_at = ? WHERE id = ?")
+    sqlx::query("UPDATE characters SET avatar = ?, avatar_fit = NULL, updated_at = ? WHERE id = ?")
         .bind(avatar)
         .bind(chrono::Utc::now().timestamp_millis())
         .bind(id)
@@ -358,6 +361,21 @@ where
         .bind(id)
         .execute(executor)
         .await?;
+    Ok(())
+}
+
+/// 프로필 그림 확대·위치 (5-E-17-3). table은 "characters" 또는 "personas"만
+pub async fn set_avatar_fit<'e, E>(executor: E, table: &str, id: &str, fit: Option<crate::models::conversation::AvatarFit>) -> Result<(), Error>
+where
+    E: Executor<'e, Database = Sqlite>,
+{
+    let sql = match table {
+        "characters" => "UPDATE characters SET avatar_fit = ? WHERE id = ?",
+        "personas" => "UPDATE personas SET avatar_fit = ? WHERE id = ?",
+        _ => return Err(Error::Protocol(format!("unknown avatar table {table}"))),
+    };
+    let json = fit.and_then(|f| f.normalized()).map(|f| serde_json::to_string(&f).unwrap_or_default());
+    sqlx::query(sql).bind(json).bind(id).execute(executor).await?;
     Ok(())
 }
 
@@ -425,6 +443,7 @@ where
                 c.avatar,
                 c.cover,
                 c.cover_y,
+                c.avatar_fit,
                 c.description,
                 c.alternate_descriptions,
                 c.first_message,
@@ -470,6 +489,7 @@ where
                 c.avatar,
                 c.cover,
                 c.cover_y,
+                c.avatar_fit,
                 c.description,
                 c.alternate_descriptions,
                 c.first_message,
@@ -555,6 +575,7 @@ where
         avatar: input.avatar,
         cover: None,
         cover_y: 50.0,
+        avatar_fit: None,
         description: input.description,
         alternate_descriptions: input.alternate_descriptions,
         first_message: input.first_message,
@@ -1089,4 +1110,56 @@ where
 {
     let result = sqlx::query("DELETE FROM messages WHERE id = ?").bind(id).execute(executor).await?;
     Ok(result.rows_affected() != 0)
+}
+
+#[cfg(test)]
+mod avatar_fit_tests {
+    use super::*;
+    use crate::models::conversation::AvatarFit;
+    use sqlx::sqlite::SqlitePoolOptions;
+
+    #[tokio::test]
+    async fn avatar_fit_is_saved_read_and_cleared() {
+        let pool = SqlitePoolOptions::new().max_connections(1).connect("sqlite::memory:").await.unwrap();
+        sqlx::migrate!("src/db/migrations").run(&pool).await.unwrap();
+        sqlx::query("INSERT INTO characters (id, name, created_at, updated_at) VALUES ('c1', 'A', 0, 0)")
+            .execute(&pool)
+            .await
+            .unwrap();
+        sqlx::query("INSERT INTO personas (id, name, created_at, updated_at) VALUES ('p1', 'P', 0, 0)")
+            .execute(&pool)
+            .await
+            .unwrap();
+        assert_eq!(get_character(&pool, "c1").await.unwrap().avatar_fit, None);
+
+        // 범위 밖은 잘림
+        let fit = AvatarFit { x: 20.0, y: 130.0, zoom: 9.0 };
+        set_avatar_fit(&pool, "characters", "c1", Some(fit)).await.unwrap();
+        assert_eq!(
+            get_character(&pool, "c1").await.unwrap().avatar_fit,
+            Some(AvatarFit { x: 20.0, y: 100.0, zoom: 4.0 })
+        );
+        assert_eq!(get_all_characters(&pool).await.unwrap()[0].avatar_fit.map(|f| f.zoom), Some(4.0));
+
+        set_avatar_fit(&pool, "personas", "p1", Some(AvatarFit { x: 50.0, y: 30.0, zoom: 1.5 }))
+            .await
+            .unwrap();
+        assert_eq!(get_persona(&pool, "p1").await.unwrap().avatar_fit.map(|f| f.y), Some(30.0));
+
+        // 기본값(가운데·1배)이나 None은 지움
+        set_avatar_fit(&pool, "characters", "c1", Some(AvatarFit { x: 50.0, y: 50.0, zoom: 1.0 }))
+            .await
+            .unwrap();
+        let raw: Option<String> = sqlx::query_scalar("SELECT avatar_fit FROM characters WHERE id = 'c1'")
+            .fetch_one(&pool)
+            .await
+            .unwrap();
+        assert_eq!(raw, None);
+        set_avatar_fit(&pool, "personas", "p1", None).await.unwrap();
+        assert_eq!(get_persona(&pool, "p1").await.unwrap().avatar_fit, None);
+
+        assert!(set_avatar_fit(&pool, "games", "x", None).await.is_err());
+        // 읽지 못하는 글은 없는 것으로
+        assert_eq!(AvatarFit::parse(Some("not json")), None);
+    }
 }

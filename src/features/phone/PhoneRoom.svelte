@@ -31,9 +31,9 @@
 	const multi = $derived(!!(cur.meta as { multiChar?: boolean } | null)?.multiChar);
 	/** 말한 사람의 그림: 대화 상대 → 같은 이름의 캐릭터 카드 → 이름 첫 글자 */
 	function speakerLook(name: string | undefined) {
-		if (!name || name === ch?.name) return { name: ch?.name ?? "?", avatar: ch?.avatar ?? null, color: ch?.color };
+		if (!name || name === ch?.name) return { name: ch?.name ?? "?", avatar: ch?.avatar ?? null, avatarFit: ch?.avatarFit ?? null, color: ch?.color };
 		const c = library.characters.find((x) => x.name === name);
-		return { name, avatar: c?.avatar ?? null, color: undefined };
+		return { name, avatar: c?.avatar ?? null, avatarFit: c?.avatarFit ?? null, color: undefined };
 	}
 	/** 답장 한 개 → 말한 사람별 묶음 (단체 대화가 아니면 대화 상대 하나) */
 	function speakers(text: string): { speaker?: string; text: string }[] {
@@ -273,7 +273,7 @@
 				</div>
 			{:else}
 				<div class="them sc-bubble-group sc-bubble-them" class:cont={r.cont} role="group" oncontextmenu={(e) => bubbleMenu(e, r)}>
-					{#if !r.cont}{@const who = speakerLook(r.speaker)}<Avatar name={who.name} src={fileSrc(who.avatar)} color={who.color} size={36} />{:else}<span class="pad"></span>{/if}
+					{#if !r.cont}{@const who = speakerLook(r.speaker)}<Avatar name={who.name} src={fileSrc(who.avatar)} fit={who.avatarFit} color={who.color} size={36} />{:else}<span class="pad"></span>{/if}
 					<div class="stack">
 						{#if !r.cont}<span class="name sc-bubble-name">{speakerLook(r.speaker).name}</span>{/if}
 						{#each r.lines ?? [] as l, i (i)}

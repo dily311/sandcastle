@@ -3,7 +3,7 @@
 	import { layout } from "$app/layout.svelte";
 	import { onMount } from "svelte";
 	import { Plus, Search, Star, UserCircle } from "@lucide/svelte";
-	import type { PersonaInput_Deserialize as PersonaInput, WorldInfoBook_Serialize as Book } from "$ipc/bindings";
+	import type { AvatarFit, PersonaInput_Deserialize as PersonaInput, WorldInfoBook_Serialize as Book } from "$ipc/bindings";
 	import { Avatar, Button, EmptyState, IconButton, Input, Spinner } from "$shared/ui";
 	import { call, commands } from "$shared/ipc/client";
 	import { fileSrc } from "$shared/ipc/file";
@@ -114,6 +114,11 @@
 		}
 		put(await call(commands.setPersonaAvatar(current.id, path), src));
 	}
+	async function avatarFit(fit: AvatarFit | null) {
+		if (!current) return;
+		await call(commands.setAvatarFit("persona", current.id, fit), src);
+		put({ ...current, avatarFit: fit });
+	}
 	// 끌어다 놓은 그림은 지금 보고 있는 페르소나의 아바타로 (아바타 버튼과 같은 처리)
 	$effect(() => {
 		const p = current;
@@ -179,7 +184,7 @@
 				{#each list as p (p.id)}
 					<li>
 						<button class:on={current?.id === p.id} aria-current={current?.id === p.id ? "page" : undefined} onclick={() => select(p.id)}>
-							<Avatar name={p.name} src={fileSrc(p.avatar)} color={p.color || null} size={36} />
+							<Avatar name={p.name} src={fileSrc(p.avatar)} fit={p.avatarFit} color={p.color || null} size={36} />
 							<span class="t">
 								<b>{p.name}{#if p.id === defaultId}<Star class="star" aria-label="기본" />{/if}</b>
 								<span class="faint">{(p.description ?? "").split("\n")[0] || "설명 없음"}</span>
@@ -203,6 +208,7 @@
 						bind:dirty
 						onsave={save}
 						onavatar={avatar}
+						onavatarfit={avatarFit}
 						ondefault={makeDefault}
 						onduplicate={duplicate}
 						ontocharacter={toCharacter}

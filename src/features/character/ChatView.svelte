@@ -138,14 +138,17 @@
 	const liveBlocks = $derived(session?.live?.kind === "send" ? toBlocks(session.live.text.replace(/<image>[\s\S]*?(<\/image>|$)/i, ""), { safeHtml: plugins.on("html") }) : []);
 	/** 메시지 프로필 그림 (5-E-9): 대화 설정에서 켰을 때만. AI는 그 캐릭터, 내 글은 보낸 페르소나(없으면 대화의 페르소나) */
 	const showAvatars = $derived(!!(conv?.meta as { showAvatars?: boolean } | null)?.showAvatars);
+	/** 메시지를 쓴 캐릭터·페르소나 (그림·확대 위치용) */
+	function ownerOf(m: Message) {
+		return m.role === "assistant"
+			? library.character(m.characterId ?? charId)
+			: m.role === "user"
+				? library.persona((m.meta as { sender?: { id?: string } } | null)?.sender?.id ?? conv?.personaId)
+				: undefined;
+	}
 	function avatarOf(m: Message): string | null | undefined {
 		if (!showAvatars) return undefined;
-		const path =
-			m.role === "assistant"
-				? library.character(m.characterId ?? charId)?.avatar
-				: m.role === "user"
-					? library.persona((m.meta as { sender?: { id?: string } } | null)?.sender?.id ?? conv?.personaId)?.avatar
-					: null;
+		const path = ownerOf(m)?.avatar;
 		return path ? fileSrc(path) : null;
 	}
 	// 키 → 그림들. "같은 키 묶기"(5-E-25)를 켜면 smile-1·smile-2도 smile로 찾고, 메시지마다 하나를 고른다
@@ -629,7 +632,7 @@
 							<!-- svelte-ignore a11y_no_noninteractive_element_interactions (오른쪽 클릭·꾹 누르기로 이름 바꾸기, 키보드는 메시지 동작의 챕터 버튼) -->
 							<h2 class="chapter sc-chapter" id="chapter-{m.id}" title="오른쪽 클릭하거나 꾹 눌러 이름 바꾸기" oncontextmenu={(e) => { e.preventDefault(); void renameChapter(m); }} onpointerdown={(e) => pressStart(e, m)} onpointerup={pressEnd} onpointerleave={pressEnd}><span>{chapters[m.id]}장</span>{ch}</h2>
 						{/if}
-						<MessageItem msg={m} no={i + 1} avatar={avatarOf(m)} {session} images={pickVariants(imageVariants, m.id)} isLast={i === session.messages.length - 1} onbranch={branch} onprompt={showPrompt} {selecting} selected={picked.has(m.id)} onselect={pick} marks={marksByMsg.get(m.id)} oncard={cardFromMark} onmarkremove={removeMark} />
+						<MessageItem msg={m} no={i + 1} avatar={avatarOf(m)} avatarFit={ownerOf(m)?.avatarFit} {session} images={pickVariants(imageVariants, m.id)} isLast={i === session.messages.length - 1} onbranch={branch} onprompt={showPrompt} {selecting} selected={picked.has(m.id)} onselect={pick} marks={marksByMsg.get(m.id)} oncard={cardFromMark} onmarkremove={removeMark} />
 					{/each}
 
 					{#if session.live?.kind === "send"}
