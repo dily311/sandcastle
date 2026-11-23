@@ -1,16 +1,18 @@
 // HTML 블록(iframe) → 채팅 입력칸. 허용된 요청은 fill(입력칸에 넣기)·send(보내기)·slash(슬래시 커맨드 실행, triggerSlash) 셋뿐.
-// 입력칸을 가진 화면(대화·폰)이 열려 있을 때 register로 받는 쪽을 정한다. 마지막에 연 화면이 받는다.
+// 입력칸을 가진 화면(대화·폰)이 열려 있을 때 register로 받는 쪽을 정한다. 마지막에 연 화면이 받고,
+// 그 화면이 닫히면 앞에 열려 있던 화면이 다시 받는다 (예: 대화 화면 위에 폰을 열었다 닫음).
 
 export type HtmlAction = { action: "fill" | "send" | "slash"; text: string };
 type Composer = (req: HtmlAction) => void;
 
-let composer: Composer | null = null;
+const composers: Composer[] = [];
 
 /** 받는 쪽 등록. 돌려준 함수로 해제 ($effect의 정리 함수로 쓰기 좋다) */
 export function registerComposer(fn: Composer): () => void {
-	composer = fn;
+	composers.push(fn);
 	return () => {
-		if (composer === fn) composer = null;
+		const i = composers.lastIndexOf(fn);
+		if (i >= 0) composers.splice(i, 1);
 	};
 }
 
@@ -27,6 +29,7 @@ export function parseAction(data: unknown): HtmlAction | null {
 
 /** 요청 전달. 받는 쪽이 없으면 false */
 export function dispatchAction(req: HtmlAction): boolean {
+	const composer = composers.at(-1);
 	if (!composer) return false;
 	composer(req);
 	return true;

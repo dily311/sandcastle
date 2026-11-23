@@ -21,7 +21,7 @@ describe("HTML 블록 요청", () => {
 		expect(parseAction({ type: "sc-action", action: "slash", text: "/echo " + "a".repeat(30000) })?.text.length).toBe(20000);
 	});
 
-	it("마지막에 등록한 쪽이 받고, 해제하면 아무도 받지 않는다", () => {
+	it("마지막에 등록한 쪽이 받고, 닫으면 앞 쪽이, 모두 닫으면 아무도 받지 않는다", () => {
 		const a = vi.fn();
 		const b = vi.fn();
 		const offA = registerComposer(a);
@@ -29,9 +29,10 @@ describe("HTML 블록 요청", () => {
 		dispatchAction({ action: "fill", text: "x" });
 		expect(b).toHaveBeenCalledOnce();
 		expect(a).not.toHaveBeenCalled();
-		offA(); // 이미 바뀐 등록은 건드리지 않음
+		offB(); // 뒤에 연 화면(폰)을 닫으면 앞 화면(대화)이 다시 받는다
 		expect(dispatchAction({ action: "fill", text: "y" })).toBe(true);
-		offB();
+		expect(a).toHaveBeenCalledWith({ action: "fill", text: "y" });
+		offA();
 		expect(dispatchAction({ action: "fill", text: "z" })).toBe(false);
 	});
 });

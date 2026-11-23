@@ -17,6 +17,10 @@
 	import { bubbles, lookup, parsePeek, phone, type BubbleLine } from "./phone.svelte";
 	import { splitSpeakers } from "./speakers";
 	import TypingIndicator from "$features/character/TypingIndicator.svelte";
+	import { isSlash, runSlash, slashQueue } from "$features/slash/commands";
+	import QuickReplyBar from "$features/slash/QuickReplyBar.svelte";
+	import { slashRuns } from "$features/slash/running.svelte";
+	import { registerComposer } from "$shared/html/bridge";
 
 	let { conv, onback, session: given }: { conv: Conversation; onback: () => void; session?: ChatSession } = $props();
 
@@ -78,9 +82,27 @@
 		const text = draft.trim();
 		if (!text || session.busy) return;
 		draft = "";
+		// 슬래시 커맨드 (코어 플러그인 slash): 대화 화면과 같이 메시지로 보내지 않고 스크립트로 (5-E-20-6-13)
+		if (plugins.on("slash") && isSlash(text)) {
+			await runSlash(text, session, { input: "", setInput: (v) => (draft = v) });
+			await done();
+			return;
+		}
 		await session.send(text, [], [], ghost.takeUsed(session.convId), "phone");
 		await done();
 	}
+
+	// ---- HTML 블록의 선택지 → 입력칸 / 보내기 / 슬래시(triggerSlash) — 대화 화면과 같은 규칙 ----
+	const queueSlash = slashQueue();
+	$effect(() =>
+		registerComposer(({ action, text }) => {
+			if (action === "slash") return queueSlash(text, session, () => ({ input: draft, setInput: (v) => (draft = v) }));
+			draft = text;
+			if (action === "send" && !session.busy) void send();
+		}),
+	);
+	/** 스크립트가 이 대화에서 도는 중 (보내기 자리가 멈추기로) */
+	const scriptRunning = $derived(slashRuns.isRunning(session.convId));
 	/** 내 메시지 없이 답장만 더 받기 */
 	async function nudge() {
 		if (session.busy) return;
@@ -299,6 +321,11 @@
 		{/each}
 	</div>
 
+	{#if plugins.on("slash")}
+		<div class="qr sc-phone-quick-reply">
+			<QuickReplyBar {session} conv={library.conversation(conv.id) ?? conv} getDraft={() => draft} setDraft={(v) => (draft = v)} />
+		</div>
+	{/if}
 	<form
 		class="input sc-phone-input"
 		onsubmit={(e) => {
@@ -313,8 +340,9 @@
 			<Ghostwrite convId={session.convId} getDraft={() => draft} setDraft={(v) => (draft = v)} disabled={session.busy} />
 		{/if}
 		<textarea bind:value={draft} rows="1" readonly={ghost.isRunning(session.convId)} placeholder={phone.isCharacterPhone ? `${me?.name ?? "나"}(으)로 보내기` : "메시지 입력"} aria-label="메시지" {onkeydown}></textarea>
-		{#if session.busy}
-			<button type="button" class="send on" aria-label="멈추기" onclick={() => session.cancel()}><Square /></button>
+		{#if session.busy || scriptRunning}
+			<!-- 스크립트가 돌면 스크립트째 멈춤 (5-E-20-6-8), 아니면 응답만 -->
+			<button type="button" class="send on" aria-label={scriptRunning ? "스크립트 멈추기" : "멈추기"} onclick={() => (scriptRunning ? slashRuns.stop(session.convId, session) : session.cancel())}><Square /></button>
 		{:else}
 			<button class="send" class:on={!!draft.trim()} aria-label="보내기" disabled={!draft.trim()}><Send /></button>
 		{/if}
@@ -465,6 +493,16 @@
 	.typing {
 		padding: 11px 12px;
 		--typing-color: #9a9a9a;
+	}
+	/* 빠른 답장 줄: 폰의 밝은 입력 줄 색에 맞춤 (공용 컴포넌트는 앱 테마 변수를 쓰므로 여기서 바꿔 줌) */
+	.qr {
+		padding: 6px 12px 0;
+		background: white;
+		--surface: #f1f1f1;
+		--text: #191919;
+		--text-muted: #666;
+		--text-faint: #999;
+		--border: transparent;
 	}
 	.input {
 		display: flex;

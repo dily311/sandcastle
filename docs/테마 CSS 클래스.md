@@ -67,6 +67,7 @@
 | `sc-bubble-group` | 같은 사람의 말풍선 묶음 (`sc-bubble-me` · `sc-bubble-them`) |
 | `sc-bubble` | 말풍선 하나 |
 | `sc-bubble-name` | 상대 이름 |
+| `sc-phone-quick-reply` | 입력 줄 위 빠른 답장 버튼 줄 (슬래시 코어 플러그인이 켜졌을 때) |
 | `sc-phone-input` | 입력 줄 |
 
 ## 홈
