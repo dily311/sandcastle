@@ -89,7 +89,7 @@ pub struct NpcReply {
 }
 
 /// "...본문 <tag>A</tag><tag>B</tag>" → (태그 제거된 본문, ["A","B"])
-fn extract_tag(raw: &str, tag: &str) -> (String, Vec<String>) {
+pub(crate) fn extract_tag(raw: &str, tag: &str) -> (String, Vec<String>) {
     let (open, close) = (format!("<{tag}>"), format!("</{tag}>"));
     let mut text = String::new();
     let mut found = Vec::new();

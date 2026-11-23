@@ -100,6 +100,8 @@
 		const ch = library.character(conv.characterId);
 		return ch ? { [ch.name]: fileSrc(ch.avatar) ?? null } : {};
 	});
+	/** AI가 바꾼 변수 (5-F-4-4) — 상태창·변수 플러그인이 켜졌을 때만 보인다 */
+	const varChanges = $derived(plugins.on("status") ? (((msg.meta as { varChanges?: { key: string; from: string | null; to: string }[] } | null)?.varChanges) ?? []) : []);
 	const blocks = $derived(toBlocks(text, { safeHtml: plugins.on("html"), speakers: multi, avatars: speakerAvatars }));
 	const swipes = $derived(meta.swipes?.length ?? 0);
 	const swipeId = $derived(meta.swipeId ?? 0);
@@ -332,6 +334,12 @@
 		{:else if live}
 			<div class="typing"><TypingIndicator name={msg.name ?? ""} /></div>
 		{/if}
+		{#if varChanges.length && !live}
+			<!-- AI가 바꾼 변수 (5-F-4-4): 이 응답(스와이프)이 바꾼 몫. 다시 만들면 되돌린다 -->
+			<p class="var-changes sc-var-changes" title="이 응답이 바꾼 변수">
+				{#each varChanges as c (c.key)}<span><b>{c.key}</b> {c.from ?? ""}→{c.to}</span>{/each}
+			</p>
+		{/if}
 	{/if}
 	<!-- AI에게 숨긴 메시지: 접기·펼치기는 본문(한 줄 미리보기) 아래 -->
 	{#if (meta.hidden || open === false) && !live && !editing}
@@ -362,6 +370,17 @@
 <ContextMenu at={menuAt} items={menuItems} label="메시지 {no} 메뉴" onclose={() => (menuAt = null)} />
 
 <style>
+	.var-changes {
+		display: flex;
+		flex-wrap: wrap;
+		gap: 2px var(--space-3);
+		margin: var(--space-1) 0 0;
+		color: var(--text-muted);
+		font-size: var(--text-xs);
+	}
+	.var-changes b {
+		font-weight: 600;
+	}
 	.ghost {
 		display: inline-flex;
 		color: var(--text-faint);

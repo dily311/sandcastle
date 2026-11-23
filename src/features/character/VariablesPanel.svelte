@@ -89,6 +89,16 @@
 </script>
 
 <div class="vars sc-variables">
+	<!-- AI가 변수를 읽고 바꾸기 (5-F-4-4): 기기마다, 기본 꺼짐. 요금이 늘어 부연 설명을 둔다 -->
+	<Switch
+		checked={!!pluginSetting.value?.status?.aiVars}
+		label="AI가 변수 읽고 바꾸기"
+		description="켜면 응답마다 변수 규칙·지금 값이 프롬프트에 들어가 토큰이 늚. 캐릭터 편집에서 'AI가 읽음·바꿈'을 켠 변수만"
+		onchange={(v) => {
+			const cur = pluginSetting.value;
+			if (cur) void pluginSetting.save({ ...cur, status: { ...cur.status, aiVars: v } });
+		}}
+	/>
 	{#each groups as g (g.id)}
 		<section>
 			<h4>{g.title} <span class="faint">{g.rows.length}</span></h4>

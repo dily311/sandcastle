@@ -52,6 +52,27 @@ pub struct ChatRequest {
     reasoning_effort: Option<String>,
 }
 
+/// AI가 읽고 바꿀 대화 변수 정의 (5-F-4-4, ADR-029): 상태창·변수 플러그인과 그 안의 "AI 변수" 스위치가 켜졌고
+/// 캐릭터에 AI에게 보이는 정의가 있을 때만. 아니면 빈 목록 (프롬프트·태그 읽기 모두 하지 않음)
+async fn ai_var_defs(app: &AppHandle, db: &crate::db::conn::DbPool, character_id: &str) -> Vec<crate::models::conversation::VarDef> {
+    if !crate::sys::plugins::is_enabled(app, crate::sys::plugins::id::STATUS) {
+        return vec![];
+    }
+    let on = app
+        .try_state::<SettingsState<crate::models::settings::PluginSetting>>()
+        .and_then(|s| s.0.lock().ok().map(|g| g.status.ai_vars))
+        .unwrap_or(false);
+    if !on || character_id.is_empty() {
+        return vec![];
+    }
+    let defs = crate::db::conversation::get_character_var_defs(db, character_id).await.unwrap_or_default();
+    if super::vars::any_visible(&defs) {
+        defs
+    } else {
+        vec![]
+    }
+}
+
 /// 전역 변수 ({{getglobalvar::x}}, ADR-029): 슬래시 `/setglobalvar`가 쓰는 플러그인 설정 `quickReply.globals`
 fn with_global_vars(app: &AppHandle, ctx: &mut crate::models::ai_service::ChatContext) {
     let globals = app
@@ -363,6 +384,7 @@ fn meta_obj(meta: &Option<Value>) -> Map<String, Value> {
 fn push_swipe(old: &Message, content: &str, info: &Value, images: &Value) -> Value {
     let mut m = meta_obj(&old.meta);
     let old_lint = m.remove("lint"); // 새 응답의 linter 결과는 저장한 뒤 따로 넣는다 (원본의 것은 스와이프에 보관)
+    let old_vars = m.remove("varChanges"); // AI 변수 몫도 스와이프마다 (5-F-4-4)
     m.remove("rewriteNote");
     let mut swipes = m.get("swipes").and_then(Value::as_array).cloned().unwrap_or_default();
     if swipes.is_empty() {
@@ -375,6 +397,9 @@ fn push_swipe(old: &Message, content: &str, info: &Value, images: &Value) -> Val
         }
         if let Some(l) = old_lint {
             first.insert("lint".into(), l);
+        }
+        if let Some(v) = old_vars {
+            first.insert("varChanges".into(), v);
         }
         swipes.push(json!({ "content": old.content, "meta": first, "createdAt": old.created_at, "updatedAt": old.updated_at }));
     }
@@ -437,6 +462,7 @@ fn replace_meta(old: &Message, info: &Value, images: &Value) -> Value {
     m.remove("reasoning");
     m.remove("lint");
     m.remove("rewriteNote");
+    m.remove("varChanges");
     m.insert("info".into(), info.clone());
     m.insert("images".into(), images.clone());
     Value::Object(m)
@@ -589,6 +615,13 @@ impl ChatManager {
             }
             TurnKind::Send(..) | TurnKind::Reply | TurnKind::Continue => None,
         };
+        // AI 변수 (5-F-4-4): 다시 만들면 그 메시지가 바꾼 몫을 먼저 되돌린 값이 기준 (프롬프트에도 그 값)
+        let var_defs = ai_var_defs(app, db, &conv.character_id).await;
+        let stored_vars = super::vars::current_vars(conv.meta.as_ref());
+        let mut base_vars = stored_vars.clone();
+        if let Some(old) = &target {
+            super::vars::revert(&mut base_vars, &super::vars::changes_of(old.meta.as_ref()));
+        }
         // 이어 쓰기 (5-E-26): "이어서 응답 받기"일 때만 마지막(숨기지 않은) AI 메시지 뒤에 이어 붙인다.
         // 빈 보내기는 이어 붙이지 않고 사용자 메시지 없이 새 AI 메시지를 만든다. 이어 붙일 AI 메시지가 없으면 새로 만든다
         let continue_of = if continue_last {
@@ -710,6 +743,10 @@ impl ChatManager {
         let auto_image = crate::sys::plugins::is_enabled(app, crate::sys::plugins::id::IMAGE_AUTO);
         if auto_image {
             context.system_rules.push(crate::service::app_prompts::auto_image());
+        }
+        // AI 변수 (5-F-4-4): 보이는 변수의 지금 값과 <updateVar> 쓰는 법 (스위치가 켜졌을 때만 — 응답마다 토큰이 늚)
+        if let Some(rule) = super::vars::prompt_rule(&var_defs, &base_vars) {
+            context.system_rules.push(rule);
         }
 
         // 커뮤니티 플러그인의 프롬프트 블록 (6-D-5). prompt.modify 플러그인이 돌고 있을 때만 화면에 묻고, 늦으면 없이 보낸다
@@ -869,6 +906,13 @@ impl ChatManager {
         let result = regex.apply(&raw, RegexPlacement::AiOutput, &[RegexTarget::Stored], Some(0));
         // <image> 그림 프롬프트는 본문에서 빼서 meta에 (자동 생성이 꺼져 있어도 태그는 지운다)
         let (result, auto_image_prompt) = take_image_tag(&result);
+        // AI 변수 태그 (5-F-4-4): 본문에서 떼고 정의로 걸러 바뀔 몫으로
+        let (result, var_tags) = if var_defs.is_empty() {
+            (result, vec![])
+        } else {
+            super::vars::take_tags(&result)
+        };
+        let var_changes = super::vars::plan(&var_defs, &base_vars, &var_tags);
         let auto_image_prompt = auto_image_prompt.filter(|_| auto_image);
         let (content, used_images) = sanitize_cg_tags(&result, &images);
         // 메시지 linter (3-B, ADR-014): 정규식·태그 정리 뒤, 저장 직전. 플러그인 후처리(화면)보다 먼저라 플러그인은 늘 검사된 글을 받는다
@@ -959,8 +1003,35 @@ impl ChatManager {
                 chat_ui::save_prompt(db, &assistant.id, &v).await.map_err(AppError::from)?;
             }
         }
-        if auto_image_prompt.is_some() || lint_meta.is_some() {
+        // AI 변수 (5-F-4-4): 바뀐 몫을 메시지(지금 스와이프)에 남기고 대화 변수에 적용. 다시 만든 경우 앞 몫은 이미 되돌렸다.
+        // 이어 쓰기는 앞 몫 뒤에 더한다
+        let var_meta = if var_defs.is_empty() {
+            None
+        } else {
+            let mut all = match &continue_of {
+                Some(old) if target.is_none() => super::vars::changes_of(old.meta.as_ref()),
+                _ => vec![],
+            };
+            all.extend(var_changes.iter().cloned());
+            let mut after = base_vars.clone();
+            super::vars::apply(&mut after, &var_changes);
+            if let Some(patch) = super::vars::meta_patch(&stored_vars, &after) {
+                chat_ui::patch_conversation_meta(db, conversation_id, &patch).await.map_err(AppError::from)?;
+            }
+            Some(serde_json::to_value(&all).unwrap_or(Value::Array(vec![])))
+        };
+        if auto_image_prompt.is_some() || lint_meta.is_some() || var_meta.is_some() {
             let mut meta = assistant.meta.clone().filter(Value::is_object).unwrap_or_else(|| json!({}));
+            if let Some(v) = var_meta {
+                let sid = meta.get("swipeId").and_then(Value::as_u64);
+                if let Some(e) = sid.and_then(|i| meta.get_mut("swipes").and_then(Value::as_array_mut).and_then(|a| a.get_mut(i as usize))) {
+                    if !e["meta"].is_object() {
+                        e["meta"] = json!({});
+                    }
+                    e["meta"]["varChanges"] = v.clone();
+                }
+                meta["varChanges"] = v;
+            }
             if let Some(p) = auto_image_prompt {
                 meta["autoImagePrompt"] = json!(p);
             }
@@ -1551,6 +1622,19 @@ mod continue_tests {
         assert_eq!(m["swipes"][1]["content"], "앞부분 뒷부분");
         assert_eq!(m["swipes"][1]["meta"]["info"], info);
         assert!(m["swipes"][1]["meta"].get("lint").is_none());
+    }
+
+    /// AI 변수 몫 (5-F-4-4): 새 스와이프는 앞 응답의 몫을 첫 스와이프로 옮기고 위에서 뺀다, 처음부터 다시는 지운다
+    #[test]
+    fn swipes_keep_var_changes_per_swipe() {
+        let changes = json!([{ "key": "hp", "from": "100", "to": "90" }]);
+        let old = msg(json!({ "info": { "model": "m" }, "varChanges": changes }));
+        let m = push_swipe(&old, "새 응답", &json!({}), &json!([]));
+        assert!(m.get("varChanges").is_none(), "새 스와이프의 몫은 저장 뒤 따로 넣는다");
+        assert_eq!(m["swipes"][0]["meta"]["varChanges"], changes);
+        assert_eq!(m["swipeId"], 1);
+        let r = replace_meta(&old, &json!({}), &json!([]));
+        assert!(r.get("varChanges").is_none());
     }
 
     #[test]

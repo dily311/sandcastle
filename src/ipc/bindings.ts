@@ -4106,6 +4106,8 @@ export type PluginSetting_Deserialize = {
 	ghost?: GhostSetting_Deserialize,
 	/**  빠른 답장 세트 (5-E-20-5-3, ADR-025) — 같이 씀. 켜짐/꺼짐은 코어 플러그인 `slash` */
 	quickReply?: QuickReplySetting_Deserialize,
+	/**  상태창·변수 (5-F-4, ADR-029) — 기기 전용 */
+	status?: StatusSetting_Deserialize,
 };
 
 export type PluginSetting_Serialize = {
@@ -4129,6 +4131,8 @@ export type PluginSetting_Serialize = {
 	ghost: GhostSetting_Serialize,
 	/**  빠른 답장 세트 (5-E-20-5-3, ADR-025) — 같이 씀. 켜짐/꺼짐은 코어 플러그인 `slash` */
 	quickReply: QuickReplySetting_Serialize,
+	/**  상태창·변수 (5-F-4, ADR-029) — 기기 전용 */
+	status: StatusSetting_Serialize,
 };
 
 export type PluginVersion = PluginVersion_Serialize | PluginVersion_Deserialize;
@@ -4913,6 +4917,21 @@ export type StageLine_Serialize = {
 	speaker: string | null,
 	text: string,
 	cues: Cue_Serialize[],
+};
+
+/**  상태창·변수 플러그인 설정 */
+export type StatusSetting = StatusSetting_Serialize | StatusSetting_Deserialize;
+
+/**  상태창·변수 플러그인 설정 */
+export type StatusSetting_Deserialize = {
+	/**  AI가 대화 변수를 읽고 바꾸기 (5-F-4-4, 기본 꺼짐). 켜면 변수 규칙과 지금 값이 프롬프트에 들어가 응답마다 토큰이 는다 */
+	aiVars?: boolean,
+};
+
+/**  상태창·변수 플러그인 설정 */
+export type StatusSetting_Serialize = {
+	/**  AI가 대화 변수를 읽고 바꾸기 (5-F-4-4, 기본 꺼짐). 켜면 변수 규칙과 지금 값이 프롬프트에 들어가 응답마다 토큰이 는다 */
+	aiVars: boolean,
 };
 
 export type StorageUsage = {

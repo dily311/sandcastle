@@ -54,6 +54,8 @@
 | `sc-status-float` | 데스크톱에서 띄운 상태창 창 |
 | `sc-status-top` | 좁은 화면에서 채팅방 위에 늘 보이는 상태창 줄 |
 | `sc-variables` | 상태 탭의 변수 목록 |
+| `sc-var-changes` | 메시지 아래 AI가 바꾼 변수 줄 ("hp 100→90") |
+| `sc-var-defs` | 캐릭터 편집의 변수 정의 목록 |
 | `sc-option-lock` | 개요 탭 옵션 줄 옆 자물쇠 |
 | `sc-speaker` | 다인봇 `이름: 대사` 줄의 말한 사람 |
 | `sc-cg` | 본문 안 캐릭터 에셋 그림 |

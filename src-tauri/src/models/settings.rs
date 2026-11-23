@@ -343,6 +343,17 @@ pub struct PluginSetting {
     /// 빠른 답장 세트 (5-E-20-5-3, ADR-025) — 같이 씀. 켜짐/꺼짐은 코어 플러그인 `slash`
     #[serde(default)]
     pub quick_reply: QuickReplySetting,
+    /// 상태창·변수 (5-F-4, ADR-029) — 기기 전용
+    #[serde(default)]
+    pub status: StatusSetting,
+}
+
+/// 상태창·변수 플러그인 설정
+#[derive(Debug, Serialize, Deserialize, Clone, Default, specta::Type)]
+#[serde(rename_all = "camelCase", default)]
+pub struct StatusSetting {
+    /// AI가 대화 변수를 읽고 바꾸기 (5-F-4-4, 기본 꺼짐). 켜면 변수 규칙과 지금 값이 프롬프트에 들어가 응답마다 토큰이 는다
+    pub ai_vars: bool,
 }
 
 /// 빠른 답장: 입력칸 위 버튼. 누르면 `/`로 시작하는 글은 스크립트로 실행, 아니면 보내거나 입력칸에 넣음
