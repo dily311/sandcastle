@@ -492,3 +492,15 @@ async fn ai_var_changes_follow_swipes_deletes_and_branches() {
     revert_messages(&pool, &id, &[m1, m2]).await.unwrap();
     assert_eq!(vars(&conv::get_conversation(&pool, &id).await.unwrap())["hp"], "100");
 }
+
+#[tokio::test]
+async fn read_mode_conversation_refuses_generation() {
+    // 5-E-6-2 (ADR-031): 읽기 모드로 바꾼 대화는 보내기·다시 생성·대필·/gen이 거절된다
+    let pool = pool().await;
+    let id = new_conv(&pool).await;
+    let c = conv::get_conversation(&pool, &id).await.unwrap();
+    assert!(crate::service::chat::chat_manager::reject_read_mode(&c).is_ok());
+    assert!(ui::set_read_mode(&pool, &id, true).await.unwrap());
+    let c = conv::get_conversation(&pool, &id).await.unwrap();
+    assert!(crate::service::chat::chat_manager::reject_read_mode(&c).is_err());
+}

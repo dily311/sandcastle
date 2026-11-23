@@ -89,13 +89,14 @@ export function stopSpeaking() {
 }
 
 /** auto: 자동 읽기 설정으로 부른 것 */
-export async function speak(m: { id: string; content: string }, text = m.content, auto = false) {
+/** cachedOnly: 이미 만든 음성만 (읽기 화면 — 새로 만들지 않음) */
+export async function speak(m: { id: string; content: string }, text = m.content, auto = false, cachedOnly = false) {
 	if (speech.messageId === m.id) return stopSpeaking();
 	stopSpeaking();
 	speech.messageId = m.id;
 	speech.loading = true;
 	try {
-		const path = await call(commands.speakText(text, auto), src);
+		const path = await call(commands.speakText(text, auto, cachedOnly), src);
 		if (speech.messageId !== m.id) return; // 기다리는 동안 다른 걸 눌렀음
 		const audio = new Audio(fileSrc(path) ?? "");
 		playing = audio;

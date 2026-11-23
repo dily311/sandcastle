@@ -103,6 +103,14 @@ fn phone_defaults(app: &AppHandle, mode: &str, req: &mut ChatRequest) {
 }
 
 /// 대화에서 고른 모델 (ADR-020). 대화에 API 프로필이 정해져 있을 때만 쓴다 — 앱 기본 API를 따라가는 대화에는 모델 이름이 딸려 있지 않다
+/// 읽기 모드인 대화는 AI 응답을 만들지 않는다 — 보내기·다시 생성·이어 쓰기·스와이프·대필·/gen (5-E-6-2, ADR-031)
+pub(crate) fn reject_read_mode(conv: &crate::models::conversation::Conversation) -> std::result::Result<(), AppError> {
+    if conv.read_mode {
+        return Err(AppError::validation("읽기 모드인 대화 — 채팅 모드로 바꾼 뒤 생성할 수 있음", None));
+    }
+    Ok(())
+}
+
 /// 다인봇 스위치 (대화 meta.multiChar)
 fn multi_char_on(meta: Option<&Value>) -> bool {
     meta.and_then(|m| m.get("multiChar")).and_then(Value::as_bool).unwrap_or(false)
@@ -572,6 +580,7 @@ impl ChatManager {
             Err(sqlx::Error::RowNotFound) => return Err(AppError::not_found("대화를 찾을 수 없음").into()),
             Err(e) => return Err(AppError::from(e).into()),
         };
+        reject_read_mode(&conv)?;
         let mut fallback = current_conv_request(settings)?;
         phone_defaults(app, &conv.mode, &mut fallback);
         let api_profile_id = conv
@@ -1089,6 +1098,7 @@ impl ChatManager {
             Err(sqlx::Error::RowNotFound) => return Err(AppError::not_found("대화를 찾을 수 없음").into()),
             Err(e) => return Err(AppError::from(e).into()),
         };
+        reject_read_mode(&conv)?;
         let mut fallback = current_conv_request(settings)?;
         phone_defaults(app, &conv.mode, &mut fallback);
         let api_profile_id = cfg
@@ -1201,6 +1211,7 @@ impl ChatManager {
             Err(sqlx::Error::RowNotFound) => return Err(AppError::not_found("대화를 찾을 수 없음").into()),
             Err(e) => return Err(AppError::from(e).into()),
         };
+        reject_read_mode(&conv)?;
         let mut fallback = current_conv_request(settings)?;
         phone_defaults(app, &conv.mode, &mut fallback);
         let (profile_id, prompt) = match raw {

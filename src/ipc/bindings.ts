@@ -585,8 +585,8 @@ export const commands = {
 	 *  texts와 같은 순서로, 캐시에 없으면 null
 	 */
 	getCachedTranslations: (texts: string[], to: string | null, options?: InvokeOptions) => __TAURI_INVOKE<(string | null)[]>("get_cached_translations", { texts, to }, options),
-	/**  글을 음성 파일(mp3)로 만들고 경로를 돌려준다 (같은 글·설정이면 캐시) */
-	speakText: (text: string, auto: boolean | null, options?: InvokeOptions) => __TAURI_INVOKE<string>("speak_text", { text, auto }, options),
+	/**  글을 음성 파일(mp3)로 만들고 경로를 돌려준다 (같은 글·설정이면 캐시). cached_only면 캐시만 (읽기 화면) */
+	speakText: (text: string, auto: boolean | null, cachedOnly: boolean | null, options?: InvokeOptions) => __TAURI_INVOKE<string>("speak_text", { text, auto, cachedOnly }, options),
 	/**  메시지 장면을 그림으로. meta.generatedImages에 {path, prompt}를 쌓는다 */
 	generateMessageImage: (messageId: string, options?: InvokeOptions) => __TAURI_INVOKE<Message_Serialize>("generate_message_image", { messageId }, options),
 	/**

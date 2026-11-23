@@ -185,7 +185,8 @@ pub async fn translate_message(
 // 음성
 // ---------------------------------------------------------
 
-/// 글을 음성 파일(mp3)로 만들고 경로를 돌려준다 (같은 글·설정이면 캐시)
+/// 글을 음성 파일(mp3)로 만들고 경로를 돌려준다 (같은 글·설정이면 캐시). cached_only면 캐시만 (읽기 화면)
+#[allow(clippy::too_many_arguments)]
 #[tauri::command]
 #[specta::specta]
 pub async fn speak_text(
@@ -196,6 +197,7 @@ pub async fn speak_text(
     settings: State<'_, SettingsState<AppSetting>>,
     text: String,
     auto: Option<bool>,
+    cached_only: Option<bool>,
 ) -> Result<String> {
     require(&app, id::TTS)?;
     let p = read(&plugin)?.tts;
@@ -204,6 +206,10 @@ pub async fn speak_text(
     // 이미 만든 음성이면 작업 없이 바로 (요금 없음)
     if let Some(path) = tools::cached_speech(&p, &fallback, &text, &cache) {
         return Ok(path.to_string_lossy().into_owned());
+    }
+    // 읽기 화면: 이미 만든 음성만 (새로 만들지 않음 — 요금 없음, 5-E-6-2)
+    if cached_only.unwrap_or(false) {
+        return Err(AppError::validation("아직 만든 음성이 없음 (채팅 모드에서 읽기를 누르면 만들어짐)", None));
     }
     let job = CreateTaskRequest::inline(TaskType::Tts, TaskOwner::System, id::TTS, "음성 읽기", auto.unwrap_or(false));
     let path = tasks.run_inline(job, |_| tools::speak(&ai, &p, &fallback, &text, &cache)).await?;
