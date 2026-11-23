@@ -8,7 +8,8 @@ import { fillTemplate } from "./template";
 
 type Msg = { id: string; role: string; content: string };
 
-export function currentStatusBlocks(conv: Conversation | undefined, messages: readonly Msg[], display: Record<string, string>, safeHtml: boolean): Block[] {
+/** vars: 틀을 채울 변수 (없으면 대화의 지금 값 — 읽기 화면은 지난 시점의 값을 줌, 5-E-6-1) */
+export function currentStatusBlocks(conv: Conversation | undefined, messages: readonly Msg[], display: Record<string, string>, safeHtml: boolean, vars?: Record<string, unknown>): Block[] {
 	const fromMessages: Block[] = latestStatusBlocks(messages, display, safeHtml);
 	const template = conv ? library.statusTemplates[conv.characterId] : null;
 	if (conv && template) {
@@ -18,7 +19,7 @@ export function currentStatusBlocks(conv: Conversation | undefined, messages: re
 			kind: "html",
 			...(plugins.on("html") ? {} : { scripts: false as const }),
 			code: fillTemplate(template, {
-				vars: (conv.meta as { variables?: Record<string, unknown> } | null)?.variables ?? {},
+				vars: vars ?? (conv.meta as { variables?: Record<string, unknown> } | null)?.variables ?? {},
 				globals: pluginSetting.value?.quickReply?.globals ?? {},
 				defs: library.varDefs[conv.characterId],
 				char: library.character(conv.characterId)?.name,

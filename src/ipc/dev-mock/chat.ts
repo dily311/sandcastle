@@ -553,6 +553,11 @@ AI: 그때 이야기를 다시 해 볼까요?`, stale: false },
 		const presetId = c.promptPresetId || "default";
 		return { used: msgs.length ? 640 + history : null, system: 640, history, historyCount: msgs.length, limit: 8192, reserved: 1024, presetId, presetName: presetId === "default" ? "기본 배치" : presetId, plugins: [], memoryRecall: null, summary: null };
 	},
+	update_message_meta: ({ id, meta }) => {
+		const m = messages.find((x) => x.id === id);
+		if (m) m.meta = meta as never;
+		return null;
+	},
 	patch_conversation_meta: ({ id, patch }) => {
 		const c = conv(id);
 		const meta: Record<string, unknown> = { ...((c.meta as object) ?? {}) };

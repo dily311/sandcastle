@@ -26,7 +26,8 @@
 	import SelectionMenu, { type CardInput } from "./SelectionMenu.svelte";
 	import { ChatSession, metaOf, type Message } from "./session.svelte";
 	import TextCardDialog from "./TextCardDialog.svelte";
-	import { anchorIn, getReadPos, scrollToPos, setReadPos } from "./readPos";
+	import { anchorIn, getReadPos, messageAtMiddle, scrollToPos, setReadPos } from "./readPos";
+	import { varsAt } from "$features/status/history";
 
 	let { charId, convId, onopen }: { charId: string; convId: string; onopen: (id: string) => void } = $props();
 
@@ -49,6 +50,7 @@
 			await tick();
 			if (scroller && !(pos && at >= 0 && scrollToPos(scroller, pos))) scroller.scrollTop = scroller.scrollHeight;
 			restoring = false;
+			trackReading();
 		});
 		// 다른 대화로 가거나 화면을 떠날 때 마지막 자리를 남긴다
 		return () => savePos(id);
@@ -113,9 +115,26 @@
 		}
 	}
 
-	// ---- 상태창 ----
+	// ---- 지금 읽는 메시지 (5-E-6-1): 화면 가운데 줄에 걸린 것. 상태창·목차가 따라감 ----
+	let reading = $state<string | null>(null);
+	/** 스크롤마다 (그린 메시지는 많아야 PAGE개라 가볍다 — 같은 메시지면 상태가 바뀌지 않음) */
+	function trackReading() {
+		if (scroller) reading = messageAtMiddle(scroller);
+	}
+	const readingIndex = $derived.by(() => {
+		const all = session?.messages ?? [];
+		const i = reading ? all.findIndex((m) => m.id === reading) : -1;
+		return i >= 0 ? i : all.length - 1;
+	});
+
+	// ---- 상태창: 그 메시지까지의 것 (변수도 그 시점 값) ----
 	const statusOn = $derived(!!session && plugins.on("status"));
-	const statusBlocks = $derived(statusOn && session ? currentStatusBlocks(conv, session.messages, session.display, plugins.on("html")) : []);
+	const statusBlocks = $derived.by(() => {
+		if (!statusOn || !session) return [];
+		const upto = session.messages.slice(0, readingIndex + 1);
+		const now = (conv?.meta as { variables?: Record<string, unknown> } | null)?.variables ?? {};
+		return currentStatusBlocks(conv, upto, session.display, plugins.on("html"), varsAt(now, session.messages, readingIndex));
+	});
 	$effect(() => {
 		const id = character?.id;
 		if (id && plugins.on("status")) {
@@ -160,6 +179,7 @@
 	function onscroll() {
 		if (!scroller) return;
 		if (scroller.scrollTop < 300 && start > 0) void showEarlier();
+		trackReading();
 		clearTimeout(saveTimer);
 		saveTimer = setTimeout(() => savePos(), 400);
 	}
@@ -255,7 +275,7 @@
 
 	{#if panel.open && conv && session}
 		<SidePanel label="읽기 패널">
-			<ChatPanel {conv} {session} {chapters} onjump={jumpFromPanel} oncard={cardFromMark} onopen={openAt} draft={{ get: () => "", set: noop }} />
+			<ChatPanel {conv} {session} {chapters} {reading} status={statusBlocks} onjump={jumpFromPanel} oncard={cardFromMark} onopen={openAt} draft={{ get: () => "", set: noop }} />
 		</SidePanel>
 	{/if}
 	<SelectionMenu {scroller} {conv} {session} characterName={character?.name} oncard={(c) => (card = c)} />

@@ -60,3 +60,21 @@ export function scrollToPos(scroller: HTMLElement, pos: ReadPos): boolean {
 	scroller.scrollTop += r.top - scroller.getBoundingClientRect().top + pos.ratio * r.height;
 	return true;
 }
+
+/** 스크롤 칸 가운데 줄에 걸린 메시지 (읽기 화면의 "지금 읽는 메시지", 5-E-6-1) */
+export function messageAtMiddle(scroller: HTMLElement): string | null {
+	const all = scroller.querySelectorAll<HTMLElement>("[id^=msg-]");
+	if (!all.length) return null;
+	// 끝까지 내렸으면 마지막, 맨 위면 첫 메시지 (짧은 메시지가 가운데 줄에 닿지 못해도 고를 수 있게)
+	if (scroller.scrollTop + scroller.clientHeight >= scroller.scrollHeight - 2) return all[all.length - 1].id.slice(4);
+	if (scroller.scrollTop <= 0) return all[0].id.slice(4);
+	const r = scroller.getBoundingClientRect();
+	const mid = r.top + r.height / 2;
+	let last: string | null = null;
+	for (const el of all) {
+		const b = el.getBoundingClientRect();
+		if (b.top > mid) break;
+		last = el.id.slice(4);
+	}
+	return last;
+}

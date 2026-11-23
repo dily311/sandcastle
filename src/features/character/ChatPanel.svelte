@@ -14,6 +14,7 @@
 	import OptionLock from "./OptionLock.svelte";
 	import VariablesPanel from "./VariablesPanel.svelte";
 	import StatusWindow from "$features/status/StatusWindow.svelte";
+	import type { Block } from "./format";
 	import { currentStatusBlocks } from "$features/status/current";
 	import { statusView } from "$features/status/statusView.svelte";
 	import { layout } from "$app/layout.svelte";
@@ -58,8 +59,12 @@
 		me?: { label: string; options: ProfileOption[]; value: string | null; hint?: string; onchange: (id: string) => void };
 		/** 입력칸 글 (빠른 답장 탭이 넣거나 {{input}}으로 읽음) */
 		draft?: { get: () => string; set: (v: string) => void };
+		/** 읽기 화면에서 지금 읽는 메시지 (5-E-6-1): 목차가 그 메시지·챕터를 표시 */
+		reading?: string | null;
+		/** 읽기 화면: 그 메시지 시점의 상태창 (없으면 가장 최근) */
+		status?: Block[];
 	}
-	let { conv, session, chapters, onjump, oncard, onopen, me, draft }: Props = $props();
+	let { conv, session, chapters, onjump, oncard, onopen, me, draft, reading = null, status }: Props = $props();
 
 	// ---- 메시지 linter: 이 대화의 덮어쓰기와 마지막 응답에서 걸린 규칙 (3-B-5) ----
 	// 스위치는 `memoryOff`. 예전 버전은 메모(`memory`) 칸에 "off"를 썼다 — 그 값도 꺼짐으로 읽고 새로 바꿀 때 지운다
@@ -123,7 +128,7 @@
 	const persona = $derived(library.persona(library.convPersonaId(conv)) ?? library.personas[0]);
 
 	/** 상태 탭의 상태창: 가장 최근 메시지의 것 (5-F-4-2) */
-	const statusBlocks = $derived(panel.tab === "status" ? currentStatusBlocks(conv, session.messages, session.display, plugins.on("html")) : []);
+	const statusBlocks = $derived(panel.tab !== "status" ? [] : (status ?? currentStatusBlocks(conv, session.messages, session.display, plugins.on("html"))));
 
 	// ---- 자물쇠 (5-E-29, ADR-028): 이 대화 > 캐릭터 기본 > 전역. 잠김 = 이 대화에 값이 있음 ----
 	// 폰 대화는 폰 주인·폰 설정을 따르므로 지금처럼 (자물쇠 없음)
@@ -419,6 +424,15 @@
 		folded = next;
 	}
 	const hasChapters = $derived(toc.some((t) => t.kind === "chapter"));
+	/** 지금 읽는 메시지가 속한 챕터 (5-E-6-1) */
+	const readingChapter = $derived(reading ? toc.find((t) => t.kind === "msg" && t.id === reading)?.under : undefined);
+	let tocList: HTMLOListElement | undefined = $state();
+	// 읽는 자리가 바뀌면 목차에서도 보이게 (목록 안에서만 움직임)
+	$effect(() => {
+		void reading;
+		const el = tocList?.querySelector<HTMLElement>(".current");
+		el?.scrollIntoView({ block: "nearest" });
+	});
 	const tocShown = $derived.by(() => {
 		const q = tocQuery.trim().toLowerCase();
 		if (!q) return toc.filter((t) => !(t.kind === "msg" && t.under && folded.has(t.under)));
@@ -567,9 +581,10 @@
 				<button class="fold-all" onclick={() => (folded = folded.size ? new Set() : new Set(toc.filter((t) => t.kind === "chapter").map((t) => t.id)))}>{folded.size ? "모두 펼치기" : "모두 접기"}</button>
 			{/if}
 		</div>
-		<ol class="toc">
+		<ol class="toc" bind:this={tocList}>
 			{#each tocShown as t (t.kind + t.id)}
-				<li class={t.kind}>
+				{@const cur = t.kind === "msg" ? t.id === reading : t.id === readingChapter}
+				<li class={t.kind} class:current={cur} aria-current={cur ? "location" : undefined}>
 					{#if t.kind === "chapter"}
 						<button class="fold" aria-label={folded.has(t.id) ? "챕터 펼치기" : "챕터 접기"} aria-expanded={!folded.has(t.id)} onclick={() => toggleChapter(t.id)}><ChevronDown class={folded.has(t.id) ? "rot" : ""} /></button>
 						<button onclick={() => onjump(t.id)} oncontextmenu={(e) => tocContext(e, t.id)}>{t.label}</button>
@@ -1046,6 +1061,12 @@
 	.toc button:hover {
 		background: var(--surface-hover);
 		color: var(--text);
+	}
+	/* 읽기 화면에서 지금 읽는 메시지·챕터 (5-E-6-1) */
+	.toc li.current > button,
+	.toc li.current > :global(button:not(.fold)) {
+		color: var(--accent-text);
+		background: var(--accent-soft);
 	}
 	.toc .chapter {
 		display: flex;
