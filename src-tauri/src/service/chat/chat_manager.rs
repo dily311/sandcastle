@@ -698,7 +698,9 @@ impl ChatManager {
         if multi_char_on(conv.meta.as_ref()) {
             let names = cast_names(&context.world_info);
             if !names.is_empty() {
-                context.system_rules.push(crate::service::app_prompts::multi_char(&names));
+                context
+                    .util_prompts
+                    .insert("multi_char".into(), crate::service::app_prompts::multi_char(&names));
             }
         }
 
@@ -739,14 +741,15 @@ impl ChatManager {
             }
         }
 
+        // 유틸 지시문은 프리셋 블록의 매크로 자리에만 들어간다 (ADR-030 추가: {{auto_image}}·{{multi_char}}·{{vars}})
         // 이미지 자동 생성: 글쓰기 AI에게 응답 끝 <image> 그림 프롬프트를 쓰게 한다 (기본 꺼짐)
         let auto_image = crate::sys::plugins::is_enabled(app, crate::sys::plugins::id::IMAGE_AUTO);
         if auto_image {
-            context.system_rules.push(crate::service::app_prompts::auto_image());
+            context.util_prompts.insert("auto_image".into(), crate::service::app_prompts::auto_image());
         }
         // AI 변수 (5-F-4-4): 보이는 변수의 지금 값과 <updateVar> 쓰는 법 (스위치가 켜졌을 때만 — 응답마다 토큰이 늚)
         if let Some(rule) = super::vars::prompt_rule(&var_defs, &base_vars) {
-            context.system_rules.push(rule);
+            context.util_prompts.insert("vars".into(), rule);
         }
 
         // 커뮤니티 플러그인의 프롬프트 블록 (6-D-5). prompt.modify 플러그인이 돌고 있을 때만 화면에 묻고, 늦으면 없이 보낸다

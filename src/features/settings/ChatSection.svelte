@@ -10,6 +10,8 @@
 	import Section from "./Section.svelte";
 	import Group from "./Group.svelte";
 	import Row from "./Row.svelte";
+	import PromptSlotEditor from "./PromptSlotEditor.svelte";
+	import { plugins } from "$shared/stores/plugins.svelte";
 	import TypingIndicator from "$features/character/TypingIndicator.svelte";
 	import type { TypingIndicator_Serialize as TypingSetting, TypingStyle } from "$ipc/bindings";
 
@@ -134,6 +136,16 @@
 				<Select value={defaultPersona} options={personaOptions} aria-label="기본 페르소나" onchange={(e) => setPersona(e.currentTarget.value)} />
 			</Row>
 		</Group>
+
+		<!-- 프리셋 블록의 매크로 자리에만 들어가는 지시문 (5-F-7-1, ADR-030 추가) -->
+		<Group title="여러 캐릭터 프롬프트">
+			<PromptSlotEditor key="multiChar" desc="대화 설정에서 '여러 캐릭터'를 켠 대화에 붙음" vars={"{{names}} 등장인물 이름 · 프리셋 블록에 {{multi_char}}를 넣은 자리에 들어감"} />
+		</Group>
+		{#if plugins.on("status")}
+			<Group title="AI 변수 프롬프트">
+				<PromptSlotEditor key="vars" desc="'AI가 변수 읽고 바꾸기'를 켰을 때 붙음" vars={"{{var_list}} 변수 목록·지금 값 · 프리셋 블록에 {{vars}}를 넣은 자리에 들어감"} />
+			</Group>
+		{/if}
 	{/if}
 </Section>
 

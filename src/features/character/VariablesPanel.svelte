@@ -1,6 +1,8 @@
 <script lang="ts">
 	// 변수 보기·고치기 (5-F-4-1, ADR-029): 이 대화 변수(meta.variables — SillyTavern chat 변수와 같은 범위)와
 	// 전역 변수(플러그인 설정 quickReply.globals — /setglobalvar). 프롬프트에서는 {{getvar::이름}}·{{getglobalvar::이름}}
+	import UtilMacroNote from "./UtilMacroNote.svelte";
+	import { presetOf } from "./presetMacros.svelte";
 	import { Plus, Trash2 } from "@lucide/svelte";
 	import { Button, Dialog, IconButton, Input, Switch } from "$shared/ui";
 	import { ListPlus, SlidersHorizontal } from "@lucide/svelte";
@@ -126,6 +128,7 @@
 			if (cur) void pluginSetting.save({ ...cur, status: { ...cur.status, aiVars: v } });
 		}}
 	/>
+	{#if pluginSetting.value?.status?.aiVars}<UtilMacroNote presetId={presetOf(conv)} macro="vars" />{/if}
 	{#each groups as g (g.id)}
 		<section>
 			<h4>

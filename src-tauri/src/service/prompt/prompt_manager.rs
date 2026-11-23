@@ -99,17 +99,8 @@ impl PromptManager {
         }
 
         // ---- 고정 내용
-        // 이미지 규칙: 프리셋이 {{img_inprompt}}로 자리를 정했으면 거기서 풀리고, 아니면 시스템 규칙 끝에 (5-E-15)
-        let inline_img = preset.is_some_and(|p| {
-            p.blocks
-                .iter()
-                .any(|b| b.enabled && b.content.to_ascii_lowercase().contains("{{img_inprompt}}"))
-        });
-        let mut sys = ctx.system_rules.clone();
-        if let (false, Some(r)) = (inline_img, &ctx.image_prompt) {
-            sys.push(r.clone());
-        }
-        let rules = macros.apply(sys.join("\n").trim());
+        // 유틸 지시문(이미지·자동 그림·다인봇·변수)은 프리셋 블록의 매크로 자리에만 — 앱이 끝에 붙이지 않는다 (ADR-030 추가)
+        let rules = macros.apply(ctx.system_rules.join("\n").trim());
         let sections = SectionValues {
             char_description: ctx.character_info.as_deref().map(|s| macros.apply(s)),
             persona_description: Some(macros.apply(&ctx.persona_info)),
@@ -335,6 +326,11 @@ fn default_layout(macros: &Macros) -> Vec<Slot> {
         section(Section::CharDescription, "[Character: {{char}}]"),
         section(Section::PersonaDescription, "[User: {{user}}]"),
         section(Section::DialogueExamples, "[Example Dialogue]"),
+        // 유틸 지시문 자리 (기본 프리셋의 'utils' 블록과 같게, ADR-030 추가). 꺼진 기능은 빈 글이라 빠짐
+        Slot::Text {
+            role: PromptRole::System,
+            content: macros.apply(DEFAULT_UTILS_BLOCK),
+        },
         Slot::Section {
             section: Section::ChatHistory,
             role: PromptRole::User,
@@ -547,6 +543,11 @@ fn strip_prefix_ci<'a>(s: &'a str, prefix: &str) -> Option<&'a str> {
     (s.len() >= prefix.len() && s.is_char_boundary(prefix.len()) && s[..prefix.len()].eq_ignore_ascii_case(prefix)).then(|| &s[prefix.len()..])
 }
 
+/// 대화 유틸 지시문 매크로 (ChatContext.util_prompts의 키). `{{img_inprompt}}`와 함께 프리셋이 자리를 정한다 (ADR-030 추가)
+pub const UTIL_MACROS: &[&str] = &["auto_image", "multi_char", "vars"];
+/// 프리셋이 없을 때의 유틸 자리 (migration 011의 기본 프리셋 'utils' 블록과 같은 글)
+const DEFAULT_UTILS_BLOCK: &str = "{{img_inprompt}}\n{{multi_char}}\n{{auto_image}}\n{{vars}}";
+
 /// `{{char}}`, `{{user}}`, `{{getvar::x}}` 등 치환. 모르는 매크로는 그대로 둔다.
 struct Macros {
     values: Vec<(&'static str, String)>,
@@ -576,8 +577,13 @@ impl Macros {
             .as_deref()
             .map(|p| base.apply(p).replace("{{img_keys}}", &img_keys))
             .unwrap_or_default();
+        let utils: Vec<(&'static str, String)> = UTIL_MACROS
+            .iter()
+            .map(|k| (*k, ctx.util_prompts.get(*k).map(|t| base.apply(t)).unwrap_or_default()))
+            .collect();
         let extra = base.extra;
         let mut values = base.values;
+        values.extend(utils);
         values.push(("description", description));
         values.push(("persona", persona));
         values.push(("mesexamples", examples));

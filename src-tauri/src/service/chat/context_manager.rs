@@ -42,6 +42,7 @@ impl ContextManager {
             user_images: vec![],
             image_prompt: None,
             image_keys: None,
+            util_prompts: Default::default(),
             system_rules: vec![],
             char_name: Some(character.name.clone()),
             user_name: Some(persona.name.clone()),

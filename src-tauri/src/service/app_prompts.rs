@@ -37,7 +37,17 @@ Besides {{char}}, these characters can appear in this story: {{names}}. A charac
 
 /// 다인봇 지시 (등장인물 이름을 채워서)
 pub fn multi_char(names: &[String]) -> String {
-    DEFAULT_MULTI_CHAR.replace("{{names}}", &names.join(", "))
+    pick(|p| &p.multi_char, DEFAULT_MULTI_CHAR).replace("{{names}}", &names.join(", "))
+}
+
+/// AI 변수 (5-F-4-4, ADR-030): {{var_list}} = 보이는 변수 한 줄씩 (종류·범위·쓰기 가능·지금 값)
+pub const DEFAULT_VARS: &str = "[Variables]
+The story tracks these variables. Current values:
+{{var_list}}
+When the story changes a writable variable, append at the very end of your reply: <updateVar>{\"set\":{\"name\":value}}</updateVar> or, for numbers, <updateVar>{\"add\":{\"name\":-3}}</updateVar>. Change only writable variables, a little at a time, and only when the story calls for it. If nothing changes, do not use the tag. Never mention the tag; it is removed before the user sees the reply.";
+
+pub fn vars(list: &str) -> String {
+    pick(|p| &p.vars, DEFAULT_VARS).replace("{{var_list}}", list)
 }
 
 /// 게임 규칙: 한 줄이 규칙 하나
@@ -100,6 +110,8 @@ pub fn defaults() -> AppPrompts {
         game_rules: default_slot(DEFAULT_GAME_RULES),
         scene_rules: default_slot(DEFAULT_SCENE_RULES),
         summary: default_slot(DEFAULT_SUMMARY),
+        multi_char: default_slot(DEFAULT_MULTI_CHAR),
+        vars: default_slot(DEFAULT_VARS),
     }
 }
 

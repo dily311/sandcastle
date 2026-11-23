@@ -812,6 +812,10 @@ export type AppPrompts_Deserialize = {
 	sceneRules?: PromptSlot,
 	/**  대화 요약 지시 ({max} = 요약 최대 토큰) */
 	summary?: PromptSlot,
+	/**  다인봇 지시 ({{names}} = 등장인물 이름). 프리셋 블록의 {{multi_char}} 자리에 */
+	multiChar?: PromptSlot,
+	/**  AI 변수 규칙 ({{var_list}} = 변수 목록·지금 값). 프리셋 블록의 {{vars}} 자리에 */
+	vars?: PromptSlot,
 };
 
 /**  앱이 AI에 보내는 고정 지시문. 자리마다 사용자가 여러 개 만들어 두고 하나를 고른다 (고르지 않으면 기본값) */
@@ -832,6 +836,10 @@ export type AppPrompts_Serialize = {
 	sceneRules: PromptSlot,
 	/**  대화 요약 지시 ({max} = 요약 최대 토큰) */
 	summary: PromptSlot,
+	/**  다인봇 지시 ({{names}} = 등장인물 이름). 프리셋 블록의 {{multi_char}} 자리에 */
+	multiChar: PromptSlot,
+	/**  AI 변수 규칙 ({{var_list}} = 변수 목록·지금 값). 프리셋 블록의 {{vars}} 자리에 */
+	vars: PromptSlot,
 };
 
 export type AppSetting = AppSetting_Serialize | AppSetting_Deserialize;

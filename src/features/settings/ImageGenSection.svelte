@@ -1,4 +1,6 @@
 <script lang="ts">
+	import UtilMacroNote from "$features/character/UtilMacroNote.svelte";
+	import { appSetting } from "$shared/stores/appSetting.svelte";
 	import { jobs } from "$shared/stores/jobs.svelte";
 	import ModelPicker from "$features/settings/ModelPicker.svelte";
 	import { onMount } from "svelte";
@@ -135,7 +137,8 @@
 
 		{#if plugins.on("imageauto")}
 			<Group title="이미지 자동 생성 프롬프트">
-				<PromptSlotEditor key="autoImage" desc="글을 쓰는 AI에게 응답 끝에 <image>그림 프롬프트</image>를 쓰게 하는 지시. 응답이 오면 이 프롬프트로 바로 그림 (응답마다 이미지 요금)" />
+				<UtilMacroNote presetId={appSetting.value?.selectedPreset ?? null} macro="auto_image" />
+				<PromptSlotEditor key="autoImage" desc="글을 쓰는 AI에게 응답 끝에 <image>그림 프롬프트</image>를 쓰게 하는 지시. 응답이 오면 이 프롬프트로 바로 그림 (응답마다 이미지 요금)" vars={"프리셋 블록에 {{auto_image}}를 넣은 자리에 들어감"} />
 			</Group>
 		{/if}
 		<Group title="그림 프롬프트 쓰기">

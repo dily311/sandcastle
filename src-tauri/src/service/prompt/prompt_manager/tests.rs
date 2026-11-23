@@ -8,6 +8,7 @@ fn ctx() -> ChatContext {
         user_images: vec![],
         image_prompt: None,
         image_keys: None,
+        util_prompts: Default::default(),
         system_rules: vec!["Stay in character as {{char}}.".into()],
         char_name: Some("Aria".into()),
         user_name: Some("Min".into()),
@@ -394,19 +395,23 @@ fn image_rules_go_where_the_preset_puts_img_inprompt() {
     let mut c = ctx();
     c.image_prompt = Some("[이미지] {{char}}: 키 {{img_keys}}".into());
     c.image_keys = Some("smile, cry".into());
-    // 자리를 정하지 않으면 시스템 규칙 끝에
+    c.util_prompts.insert("vars".into(), "[변수] {{char}} hp 3".into());
+    c.util_prompts.insert("multi_char".into(), "[여럿]".into());
+    // 자리를 정하지 않으면 들어가지 않는다 (ADR-030 추가 — 앱이 끝에 붙이지 않음)
     let plain = preset(
         vec![block("main", "system", "You are {{char}}.", 0), block("chatHistory", "user", "", 1)],
         json!({}),
     );
     let p = PromptManager.build(request(c.clone(), "hi"), Some(&plain)).unwrap();
-    assert!(shape(&p)[0].1.ends_with("[이미지] Aria: 키 smile, cry"), "{:?}", shape(&p));
+    let all: String = shape(&p).into_iter().map(|(_, c)| c).collect();
+    assert!(!all.contains("[이미지]") && !all.contains("[변수]") && !all.contains("[여럿]"), "{all}");
     // {{img_inprompt}}가 있으면 그 블록 안에서만 (사용자가 앞뒤에 덧붙인 말과 함께), {{img_keys}}도 프리셋에서 쓸 수 있다
     let placed = preset(
         vec![
             block("main", "system", "You are {{char}}.", 0),
             block("imgs", "system", "그림 규칙:\n{{img_inprompt}}\n키만 {{IMG_KEYS}} 중에서", 1),
-            block("chatHistory", "user", "", 2),
+            block("utils", "system", "{{vars}}|{{auto_image}}", 2),
+            block("chatHistory", "user", "", 3),
         ],
         json!({}),
     );
@@ -417,4 +422,6 @@ fn image_rules_go_where_the_preset_puts_img_inprompt() {
         s.contains(&"그림 규칙:\n[이미지] Aria: 키 smile, cry\n키만 smile, cry 중에서".to_string()),
         "{s:?}"
     );
+    // 다른 유틸 매크로도 그 자리에서 풀리고, 이번 대화에 없는 것(auto_image)은 빈 글
+    assert!(s.iter().any(|x| x.starts_with("[변수] Aria hp 3|")), "{s:?}");
 }

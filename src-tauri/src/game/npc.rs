@@ -423,6 +423,7 @@ async fn converse(
         user_images: vec![],
         image_prompt: None,
         image_keys: None,
+        util_prompts: Default::default(),
         char_name: Some(snap.character_name.clone()),
         user_name: Some(persona.name.clone()),
         system_rules: match &mode {

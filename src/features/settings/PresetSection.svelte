@@ -1,4 +1,5 @@
 <script lang="ts">
+	import { presetMacros } from "$features/character/presetMacros.svelte";
 	import { jobs } from "$shared/stores/jobs.svelte";
 	import { trashedToast } from "$shared/trash";
 	import { drops, extOf, storeFile } from "$app/drop.svelte";
@@ -98,7 +99,7 @@
 	async function save(preset: Detail["preset"], blocks: BlockInput[]) {
 		saving = true;
 		try {
-			const d = await call(commands.savePromptPreset({ ...preset, id: preset.id }, blocks), src);
+			const d = await call(commands.savePromptPreset({ ...preset, id: preset.id }, blocks).finally(() => presetMacros.forget(preset.id)), src);
 			editing = null;
 			await reload();
 			toasts.success(`'${d.preset.name}' 저장함`);

@@ -3,10 +3,10 @@
 // 누르면: `/`로 시작하면 스크립트, 아니면 세트의 autoSend에 따라 보내기(AI 답장 요금) 또는 입력칸에 넣기.
 import type { QuickReplySetInput, QuickReplySet_Serialize as QuickReplySet, QuickReply_Serialize as QuickReply } from "$ipc/bindings";
 import { call, commands } from "$shared/ipc/client";
-import { appSetting } from "$shared/stores/appSetting.svelte";
 import { library, type Conversation } from "$features/character/library.svelte";
 import type { ChatSession } from "$features/character/session.svelte";
 import { isSlash, runSlash } from "./commands";
+import { presetOf } from "$features/character/presetMacros.svelte";
 
 export type { QuickReply, QuickReplySet };
 export type Scope = "global" | "character" | "preset";
@@ -40,11 +40,6 @@ class QuickReplyStore {
 	}
 }
 export const quickReplies = new QuickReplyStore();
-
-/** 이 대화에 쓰이는 프리셋 (대화 → 캐릭터 기본 → 앱 기본) */
-function presetOf(conv: Conversation): string | null {
-	return conv.promptPresetId || library.character(conv.characterId)?.defaultPromptPresetId || appSetting.value?.selectedPreset || null;
-}
 
 /** 범위로 이 대화에 해당하는 세트 (켜짐·대화에서 끈 것과 상관없이) */
 export function setsInScope(conv: Conversation | undefined, sets: QuickReplySet[] = quickReplies.sets): QuickReplySet[] {

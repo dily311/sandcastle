@@ -606,6 +606,10 @@ pub struct AppPrompts {
     pub scene_rules: PromptSlot,
     /// 대화 요약 지시 ({max} = 요약 최대 토큰)
     pub summary: PromptSlot,
+    /// 다인봇 지시 ({{names}} = 등장인물 이름). 프리셋 블록의 {{multi_char}} 자리에
+    pub multi_char: PromptSlot,
+    /// AI 변수 규칙 ({{var_list}} = 변수 목록·지금 값). 프리셋 블록의 {{vars}} 자리에
+    pub vars: PromptSlot,
 }
 
 /// 사용자가 만든 프롬프트 하나

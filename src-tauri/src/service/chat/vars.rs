@@ -134,13 +134,13 @@ pub fn any_visible(defs: &[VarDef]) -> bool {
     defs.iter().any(|d| d.ai_read || d.ai_write)
 }
 
-/// 시스템 규칙 한 덩이: 읽을 수 있는 변수의 지금 값과, 바꿀 수 있는 변수의 범위·태그 쓰는 법 (영어 — 앱 지시문, 5-E-21)
+/// AI 변수 규칙: 보이는 변수의 지금 값·범위를 앱 프롬프트 슬롯(`vars`, {{var_list}})에 채운다 — 프리셋의 {{vars}} 자리에 (영어 — 앱 지시문, 5-E-21, ADR-030)
 pub fn prompt_rule(defs: &[VarDef], vars: &Map<String, Value>) -> Option<String> {
     let visible: Vec<&VarDef> = defs.iter().filter(|d| d.ai_read || d.ai_write).collect();
     if visible.is_empty() {
         return None;
     }
-    let mut lines = vec!["[Variables]\nThe story tracks these variables. Current values:".to_string()];
+    let mut lines = Vec::new();
     for d in &visible {
         let kind = match d.kind {
             VarKind::Number => "number",
@@ -170,14 +170,7 @@ pub fn prompt_rule(defs: &[VarDef], vars: &Map<String, Value>) -> Option<String>
         let value = value_of(vars, d).unwrap_or_else(|| "(unset)".into());
         lines.push(format!("- {} ({}){desc}: {value}", d.key, notes.join(", ")));
     }
-    if visible.iter().any(|d| d.ai_write) {
-        lines.push(
-            "When the story changes a writable variable, append at the very end of your reply: <updateVar>{\"set\":{\"name\":value}}</updateVar> or, for numbers, <updateVar>{\"add\":{\"name\":-3}}</updateVar>. \
-Change only writable variables, a little at a time, and only when the story calls for it. If nothing changes, do not use the tag. Never mention the tag; it is removed before the user sees the reply."
-                .into(),
-        );
-    }
-    Some(lines.join("\n"))
+    Some(crate::service::app_prompts::vars(&lines.join("\n")))
 }
 
 /// 응답에서 <updateVar> 태그를 떼어 낸다 (본문, 태그 안 글들)

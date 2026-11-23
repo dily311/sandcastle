@@ -476,6 +476,7 @@ pub fn build_context(def: &GameDefinition, st: &GameState, previous: Option<&Sto
         user_images: vec![],
         image_prompt: None,
         image_keys: None,
+        util_prompts: Default::default(),
     };
     let message = format!("Checkpoint: {}. Write a new plan JSON based on the information above.", reason_label(reason));
     (context, message)

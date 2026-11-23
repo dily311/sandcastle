@@ -16,6 +16,6 @@
 		</Row>
 	</Group>
 	<Group title="CG 프롬프트">
-		<PromptSlotEditor key="chatImages" desc="이미지 키가 있는 캐릭터와 대화할 때만 붙음" vars={"{{img_keys}} 이미지 키 목록 · {{char}} 캐릭터 · 프리셋 블록에 {{img_inprompt}}를 넣으면 이 글이 그 자리에 들어감"} />
+		<PromptSlotEditor key="chatImages" desc="이미지 키가 있는 캐릭터와 대화할 때만 붙음" vars={"{{img_keys}} 이미지 키 목록 · {{char}} 캐릭터 · 프리셋 블록에 {{img_inprompt}}를 넣은 자리에 들어감 (없으면 안 들어감)"} />
 	</Group>
 </Section>

@@ -1,4 +1,5 @@
 <script lang="ts">
+	import UtilMacroNote from "./UtilMacroNote.svelte";
 	import { regexVersion } from "$shared/stores/regexVersion.svelte";
 	import { PictureInPicture2, ArrowUpDown, GripVertical, Bookmark, Check, ChevronDown, Eye, EyeOff, FileArchive, Folder, IdCard, ImagePlus, Pencil, Plus, Search, Trash2, X } from "@lucide/svelte";
 	import { Avatar, Button, ChipPicker, ContextMenu, IconButton, Input, ProfilePicker, Select, Spinner, Switch, type MenuItem, type ProfileOption } from "$shared/ui";
@@ -494,6 +495,7 @@
 		<div class="panel-body">
 			{#if plugins.on("chat.images")}
 				<Switch checked={conv.imagesEnabled} label="이 대화에서 캐릭터 에셋 사용" onchange={(v) => library.setImagesEnabled(conv.id, v)} />
+				{#if conv.imagesEnabled}<UtilMacroNote presetId={shownPreset} macro="img_inprompt" />{/if}
 			{:else}
 				<p class="faint">캐릭터 에셋 기능이 꺼져 있음 (설정 > 코어 플러그인)</p>
 			{/if}
@@ -702,6 +704,7 @@
 					description="연결된 로어북의 '캐릭터' 분류 항목이 함께 말함 (설정은 이름이 나올 때만 보냄)"
 					onchange={(v) => library.patchMeta(conv.id, { multiChar: v || null })}
 				/>
+				{#if (conv.meta as { multiChar?: boolean } | null)?.multiChar}<UtilMacroNote presetId={shownPreset} macro="multi_char" />{/if}
 			</section>
 			<hr />
 			<section>
