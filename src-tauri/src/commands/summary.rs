@@ -67,7 +67,7 @@ pub async fn summarize_conversation_now(
     }
     let (profile, model) = hooks::route_for(&app, &conv, &conv_profile);
     let preset = conv.prompt_preset_id.clone().filter(|s| !s.is_empty()).unwrap_or(app_preset);
-    let limit = hooks::limit_of(&state.db, &preset).await;
+    let (limit, prompts) = hooks::preset_of(&state.db, &preset).await;
     let ctx = RunCtx {
         db: &state.db,
         ai: &ai,
@@ -77,6 +77,7 @@ pub async fn summarize_conversation_now(
         model: model.as_deref(),
         limit_tokens: limit,
         guards: &summary::GLOBAL,
+        prompts: &prompts,
     };
     match summary::run_once(&ctx, false).await? {
         RunOutcome::Updated(_) => Ok(summary::get(&state.db, &conversation_id)

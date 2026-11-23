@@ -85,6 +85,7 @@ fn ctx<'a>(e: &'a Env, conv: &'a str, limit: usize) -> RunCtx<'a> {
         model: None,
         limit_tokens: limit,
         guards: &e.guards,
+        prompts: &crate::service::app_prompts::NO_PRESET,
     }
 }
 
@@ -145,10 +146,13 @@ fn block_is_sanitized_capped_and_framed() {
     let long = format_block(&"가나다 ".repeat(5000));
     assert!(count_tokens(&long) <= INJECT_CAP + 30);
     assert!(disabled_for(Some(&json!({ "summaryOff": true }))) && !disabled_for(Some(&json!({ "summaryOff": false }))) && !disabled_for(None));
-    let p = build_prompt("", true, "사용자: 안녕");
+    let p = build_prompt("", true, "사용자: 안녕", &Default::default());
     let text = p.messages.iter().map(|m| m.content.clone()).collect::<Vec<_>>().join("\n");
     assert!(text.contains("(없음)") && text.contains("한 글자도 바꾸지 말고") && text.contains("[새 대화]\n사용자: 안녕"));
-    assert!(!build_prompt("앞 요약", false, "x").messages.iter().any(|m| m.content.contains("한 글자도")));
+    assert!(!build_prompt("앞 요약", false, "x", &Default::default())
+        .messages
+        .iter()
+        .any(|m| m.content.contains("한 글자도")));
 }
 
 async fn count_tasks(db: &SqlitePool) -> Vec<(String, String)> {

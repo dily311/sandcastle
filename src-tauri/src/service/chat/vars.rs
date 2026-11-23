@@ -135,7 +135,7 @@ pub fn any_visible(defs: &[VarDef]) -> bool {
 }
 
 /// AI 변수 규칙: 보이는 변수의 지금 값·범위를 앱 프롬프트 슬롯(`vars`, {{var_list}})에 채운다 — 프리셋의 {{vars}} 자리에 (영어 — 앱 지시문, 5-E-21, ADR-030)
-pub fn prompt_rule(defs: &[VarDef], vars: &Map<String, Value>) -> Option<String> {
+pub fn prompt_rule(defs: &[VarDef], vars: &Map<String, Value>, preset: &crate::service::app_prompts::PresetPrompts) -> Option<String> {
     let visible: Vec<&VarDef> = defs.iter().filter(|d| d.ai_read || d.ai_write).collect();
     if visible.is_empty() {
         return None;
@@ -170,7 +170,7 @@ pub fn prompt_rule(defs: &[VarDef], vars: &Map<String, Value>) -> Option<String>
         let value = value_of(vars, d).unwrap_or_else(|| "(unset)".into());
         lines.push(format!("- {} ({}){desc}: {value}", d.key, notes.join(", ")));
     }
-    Some(crate::service::app_prompts::vars(&lines.join("\n")))
+    Some(crate::service::app_prompts::vars(&lines.join("\n"), preset))
 }
 
 /// 응답에서 <updateVar> 태그를 떼어 낸다 (본문, 태그 안 글들)
@@ -490,11 +490,14 @@ mod tests {
             },
         ];
         let vars: Map<String, Value> = serde_json::from_value(serde_json::json!({ "mood": "calm" })).unwrap();
-        let rule = prompt_rule(&defs, &vars).unwrap();
+        let rule = prompt_rule(&defs, &vars, &Default::default()).unwrap();
         assert!(rule.contains("- hp (number, 0..100, at most ±10 per reply, writable): 100"), "{rule}");
         assert!(rule.contains("- mood (text, read-only) — 기분: calm"), "{rule}");
         assert!(!rule.contains("hidden"));
         assert!(rule.contains("<updateVar>"));
-        assert!(prompt_rule(&[def("x")], &vars).is_none(), "보이는 변수가 없으면 규칙도 없음");
+        assert!(
+            prompt_rule(&[def("x")], &vars, &Default::default()).is_none(),
+            "보이는 변수가 없으면 규칙도 없음"
+        );
     }
 }

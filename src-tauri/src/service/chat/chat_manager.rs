@@ -593,6 +593,8 @@ impl ChatManager {
             .filter(|s| !s.is_empty())
             .or(character.default_prompt_preset_id.clone().filter(|s| !s.is_empty()))
             .unwrap_or(fallback.preset_id);
+        // 프리셋이 고친 유틸 프롬프트 (ADR-030: 프리셋 > 전역 > 기본)
+        let preset_prompts = crate::service::app_prompts::PresetPrompts::load(db, &preset_id).await;
 
         // 나/상대: 캐릭터 폰이면 주인 캐릭터와 연락처, 아니면 페르소나와 캐릭터
         let (me, other, char_phone) = phone_sides::sides(db, conv.meta.as_ref(), &character, &persona).await?;
@@ -700,7 +702,7 @@ impl ChatManager {
             if !names.is_empty() {
                 context
                     .util_prompts
-                    .insert("multi_char".into(), crate::service::app_prompts::multi_char(&names));
+                    .insert("multi_char".into(), crate::service::app_prompts::multi_char(&names, &preset_prompts));
             }
         }
 
@@ -729,7 +731,7 @@ impl ChatManager {
         };
         let group_cg = settings.0.lock().map(|s| s.cg_group_variants).unwrap_or(false);
         let images = if group_cg { super::chat_images::group_variants(images) } else { images };
-        match image_rules(&images) {
+        match image_rules(&images, &preset_prompts) {
             Some(rules) => {
                 context.image_prompt = Some(rules);
                 context.image_keys = super::chat_images::image_keys(&images);
@@ -745,10 +747,12 @@ impl ChatManager {
         // 이미지 자동 생성: 글쓰기 AI에게 응답 끝 <image> 그림 프롬프트를 쓰게 한다 (기본 꺼짐)
         let auto_image = crate::sys::plugins::is_enabled(app, crate::sys::plugins::id::IMAGE_AUTO);
         if auto_image {
-            context.util_prompts.insert("auto_image".into(), crate::service::app_prompts::auto_image());
+            context
+                .util_prompts
+                .insert("auto_image".into(), crate::service::app_prompts::auto_image(&preset_prompts));
         }
         // AI 변수 (5-F-4-4): 보이는 변수의 지금 값과 <updateVar> 쓰는 법 (스위치가 켜졌을 때만 — 응답마다 토큰이 늚)
-        if let Some(rule) = super::vars::prompt_rule(&var_defs, &base_vars) {
+        if let Some(rule) = super::vars::prompt_rule(&var_defs, &base_vars, &preset_prompts) {
             context.util_prompts.insert("vars".into(), rule);
         }
 
@@ -1683,7 +1687,7 @@ mod continue_tests {
         assert_eq!(cast_names(&list), vec!["유나", "미나"]);
         assert!(multi_char_on(Some(&json!({ "multiChar": true }))));
         assert!(!multi_char_on(Some(&json!({}))));
-        assert!(crate::service::app_prompts::multi_char(&cast_names(&list)).contains("유나, 미나"));
+        assert!(crate::service::app_prompts::multi_char(&cast_names(&list), &Default::default()).contains("유나, 미나"));
     }
 
     #[test]

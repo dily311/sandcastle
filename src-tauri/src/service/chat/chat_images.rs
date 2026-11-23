@@ -282,9 +282,9 @@ pub fn remove_character_dir(app_data_dir: &Path, character_id: &str) {
 // =======================================
 
 /// 모델에게 보낼 이미지 규칙 + 키 목록 ({{char}}는 PromptManager가 치환)
-pub fn image_rules(images: &[CharacterImage]) -> Option<String> {
+pub fn image_rules(images: &[CharacterImage], preset: &crate::service::app_prompts::PresetPrompts) -> Option<String> {
     // 사용자가 설정 > 앱 프롬프트에서 고칠 수 있다
-    image_keys(images).map(|k| crate::service::app_prompts::chat_images(&k))
+    image_keys(images).map(|k| crate::service::app_prompts::chat_images(&k, preset))
 }
 
 /// 켜진 이미지 키 목록 ("a, b, c", 같은 키는 한 번). 없으면 None ({{img_keys}})
@@ -473,8 +473,8 @@ mod tests {
 
     #[test]
     fn rules_list_enabled_keys_only() {
-        assert!(image_rules(&[img("1", "a", false)]).is_none());
-        let rules = image_rules(&[img("1", "smile", true), img("2", "off", false), img("3", "cry", true)]).unwrap();
+        assert!(image_rules(&[img("1", "a", false)], &Default::default()).is_none());
+        let rules = image_rules(&[img("1", "smile", true), img("2", "off", false), img("3", "cry", true)], &Default::default()).unwrap();
         assert!(rules.ends_with("Available keys: smile, cry"), "{rules}");
         assert!(rules.contains("{{char}}"));
     }

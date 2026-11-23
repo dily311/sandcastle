@@ -36,8 +36,8 @@ Besides {{char}}, these characters can appear in this story: {{names}}. A charac
 - Write in the same language as the conversation.";
 
 /// 다인봇 지시 (등장인물 이름을 채워서)
-pub fn multi_char(names: &[String]) -> String {
-    pick(|p| &p.multi_char, DEFAULT_MULTI_CHAR).replace("{{names}}", &names.join(", "))
+pub fn multi_char(names: &[String], preset: &PresetPrompts) -> String {
+    pick_in(preset, "multiChar", |p| &p.multi_char, DEFAULT_MULTI_CHAR).replace("{{names}}", &names.join(", "))
 }
 
 /// AI 변수 (5-F-4-4, ADR-030): {{var_list}} = 보이는 변수 한 줄씩 (종류·범위·쓰기 가능·지금 값)
@@ -46,8 +46,8 @@ The story tracks these variables. Current values:
 {{var_list}}
 When the story changes a writable variable, append at the very end of your reply: <updateVar>{\"set\":{\"name\":value}}</updateVar> or, for numbers, <updateVar>{\"add\":{\"name\":-3}}</updateVar>. Change only writable variables, a little at a time, and only when the story calls for it. If nothing changes, do not use the tag. Never mention the tag; it is removed before the user sees the reply.";
 
-pub fn vars(list: &str) -> String {
-    pick(|p| &p.vars, DEFAULT_VARS).replace("{{var_list}}", list)
+pub fn vars(list: &str, preset: &PresetPrompts) -> String {
+    pick_in(preset, "vars", |p| &p.vars, DEFAULT_VARS).replace("{{var_list}}", list)
 }
 
 /// 게임 규칙: 한 줄이 규칙 하나
@@ -88,6 +88,53 @@ fn pick(f: impl Fn(&AppPrompts) -> &PromptSlot, default: &str) -> String {
         .unwrap_or_else(|| default.to_string())
 }
 
+/// 프리셋이 고친 앱 프롬프트 (프리셋 settings_json의 `appPrompts`: 슬롯 이름(camelCase) → 글, ADR-030).
+/// 적용 순서 프리셋 > 전역(설정 > 앱 프롬프트) > 기본값. 빈 글은 고치지 않은 것.
+/// 프리셋 아래에서 도는 것(대화 유틸·요약·게임 규칙)만 받는다 — 번역·그림 프롬프트 쓰기는 프리셋 없이 돌아 전역만.
+#[derive(Debug, Clone, Default)]
+pub struct PresetPrompts(std::collections::BTreeMap<String, String>);
+
+/// 프리셋이 고친 것 없음 (전역·기본만)
+pub static NO_PRESET: PresetPrompts = PresetPrompts(std::collections::BTreeMap::new());
+
+impl PresetPrompts {
+    /// settings_json 안의 자리
+    pub const KEY: &'static str = "appPrompts";
+    /// 프리셋이 고칠 수 있는 슬롯 (AppPrompts의 camelCase 이름)
+    pub const SLOTS: &'static [&'static str] = &["chatImages", "autoImage", "multiChar", "vars", "summary", "gameRules", "sceneRules"];
+
+    /// 프리셋을 읽어서 (없거나 못 읽으면 빈 것 — 전역·기본을 따름)
+    pub async fn load(db: &sqlx::SqlitePool, preset_id: &str) -> Self {
+        let loaded = crate::service::prompt::prompt_manager::PromptManager::load_preset(db, Some(preset_id))
+            .await
+            .ok()
+            .flatten();
+        Self::from_settings(loaded.as_ref().and_then(|p| p.preset.settings_json.as_ref()))
+    }
+
+    pub fn from_settings(settings: Option<&serde_json::Value>) -> Self {
+        let map = settings
+            .and_then(|s| s.get(Self::KEY))
+            .and_then(serde_json::Value::as_object)
+            .map(|o| {
+                o.iter()
+                    .filter(|(k, _)| Self::SLOTS.contains(&k.as_str()))
+                    .filter_map(|(k, v)| Some((k.clone(), v.as_str()?.trim().to_string())))
+                    .filter(|(_, v)| !v.is_empty())
+                    .collect()
+            })
+            .unwrap_or_default();
+        Self(map)
+    }
+}
+
+fn pick_in(preset: &PresetPrompts, key: &str, f: impl Fn(&AppPrompts) -> &PromptSlot, default: &str) -> String {
+    match preset.0.get(key) {
+        Some(t) => t.clone(),
+        None => pick(f, default),
+    }
+}
+
 fn default_slot(text: &str) -> PromptSlot {
     PromptSlot {
         selected: String::new(),
@@ -126,27 +173,27 @@ pub fn image_prompt(novelai: bool) -> String {
     }
 }
 /// {{char}}는 그대로 둔다 (PromptManager가 치환)
-pub fn chat_images(keys: &str) -> String {
+pub fn chat_images(keys: &str, preset: &PresetPrompts) -> String {
     // {{keys}}는 예전 이름 (사용자가 고친 슬롯에 남아 있을 수 있음)
-    pick(|p| &p.chat_images, DEFAULT_CHAT_IMAGES)
+    pick_in(preset, "chatImages", |p| &p.chat_images, DEFAULT_CHAT_IMAGES)
         .replace("{{img_keys}}", keys)
         .replace("{{keys}}", keys)
 }
 /// {max}는 쓰는 쪽이 채운다
-pub fn summary() -> String {
-    pick(|p| &p.summary, DEFAULT_SUMMARY)
+pub fn summary(preset: &PresetPrompts) -> String {
+    pick_in(preset, "summary", |p| &p.summary, DEFAULT_SUMMARY)
 }
-pub fn auto_image() -> String {
-    pick(|p| &p.auto_image, DEFAULT_AUTO_IMAGE)
+pub fn auto_image(preset: &PresetPrompts) -> String {
+    pick_in(preset, "autoImage", |p| &p.auto_image, DEFAULT_AUTO_IMAGE)
 }
 fn lines(s: String) -> Vec<String> {
     s.lines().map(str::trim).filter(|l| !l.is_empty()).map(str::to_string).collect()
 }
-pub fn game_rules() -> Vec<String> {
-    lines(pick(|p| &p.game_rules, DEFAULT_GAME_RULES))
+pub fn game_rules(preset: &PresetPrompts) -> Vec<String> {
+    lines(pick_in(preset, "gameRules", |p| &p.game_rules, DEFAULT_GAME_RULES))
 }
-pub fn scene_rules() -> Vec<String> {
-    lines(pick(|p| &p.scene_rules, DEFAULT_SCENE_RULES))
+pub fn scene_rules(preset: &PresetPrompts) -> Vec<String> {
+    lines(pick_in(preset, "sceneRules", |p| &p.scene_rules, DEFAULT_SCENE_RULES))
 }
 
 #[cfg(test)]
@@ -157,9 +204,21 @@ mod tests {
     fn empty_override_uses_default_and_placeholders_fill() {
         // 전역 값을 바꾸면 같이 도는 다른 테스트에 새므로 기본값 경로만 본다
         assert!(translate("ko").contains("into ko."));
-        assert_eq!(game_rules().len(), 7);
-        assert_eq!(scene_rules().len(), 3);
-        assert!(chat_images("smile, cry").ends_with("smile, cry"));
+        let none = PresetPrompts::default();
+        assert_eq!(game_rules(&none).len(), 7);
+        assert_eq!(scene_rules(&none).len(), 3);
+        assert!(chat_images("smile, cry", &none).ends_with("smile, cry"));
+    }
+
+    #[test]
+    fn preset_value_wins_and_blank_or_unknown_falls_through() {
+        let settings = serde_json::json!({ "temperature": 1, "appPrompts": { "vars": " V {{var_list}} ", "multiChar": "  ", "translate": "x", "summary": 3 } });
+        let p = PresetPrompts::from_settings(Some(&settings));
+        assert_eq!(vars("hp: 3", &p), "V hp: 3", "프리셋 값이 먼저 (앞뒤 공백은 뗌)");
+        assert!(multi_char(&["유나".into()], &p).starts_with("[Multiple characters]"), "빈 글이면 전역·기본");
+        assert!(!p.0.contains_key("translate"), "프리셋이 고칠 수 없는 슬롯은 무시");
+        assert!(summary(&p).contains("{max}"), "글이 아니면 무시");
+        assert!(PresetPrompts::from_settings(None).0.is_empty());
     }
 
     #[test]

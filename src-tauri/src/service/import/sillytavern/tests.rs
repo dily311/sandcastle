@@ -330,7 +330,7 @@ async fn st_expression_sprites_become_chat_images() {
     assert!(keys.contains(&"joy") && keys.contains(&"anger") && keys.contains(&"neutral"));
     assert!(added.iter().all(|i| std::path::Path::new(&i.path).is_file()));
 
-    let rules = image_rules(&added).unwrap();
+    let rules = image_rules(&added, &Default::default()).unwrap();
     assert!(rules.contains("admiration, amusement, anger"));
     let (text, refs) = sanitize_cg_tags("*smiles* <cg>Joy</cg> <cg>happy</cg>", &added);
     assert_eq!(text, "*smiles* <cg>joy</cg> ");
