@@ -50,7 +50,8 @@
 | `sc-md` | 메시지 본문(마크다운). 안의 `em` = 지문, `q` = 대사, `strong`, `table`, `blockquote` 등 |
 | `sc-ui-html` | 본문 안 HTML UI(`<details>` 상태창 등) |
 | `sc-status-pin-ref` | 메시지에서 접은 상태창 자리(`data-sc-pin="status"`, 누르면 상태 탭) |
-| `sc-status-window` | 고정 자리에 그린 가장 최근 상태창 |
+| `sc-status-window` | 고정 자리의 상태창 목록 |
+| `sc-status-item` | 그 안의 상태창 하나 (출처마다 가장 최근 것) |
 | `sc-status-float` | 데스크톱에서 띄운 상태창 창 |
 | `sc-status-top` | 좁은 화면에서 채팅방 위에 늘 보이는 상태창 줄 |
 | `sc-variables` | 상태 탭의 변수 목록 |

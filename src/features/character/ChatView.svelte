@@ -15,7 +15,7 @@
 	import { childrenOf, pathOf } from "./branches";
 	import SidePanel from "$app/SidePanel.svelte";
 	import { layout } from "$app/layout.svelte";
-	import { currentStatusBlock } from "$features/status/current";
+	import { currentStatusBlocks } from "$features/status/current";
 	import { statusView } from "$features/status/statusView.svelte";
 	import StatusFloat from "$features/status/StatusFloat.svelte";
 	import StatusTop from "$features/status/StatusTop.svelte";
@@ -163,7 +163,7 @@
 	/** 받는 중인 새 응답 (끝의 <image> 그림 프롬프트는 저장할 때 빠지므로 숨김) */
 	// ---- 상태창 (5-F-4-2): 가장 최근 메시지의 상태창 하나 ----
 	const statusBlockOn = $derived(!!session && plugins.on("status"));
-	const statusBlock = $derived(statusBlockOn && session ? currentStatusBlock(conv, session.messages, session.display, plugins.on("html")) : null);
+	const statusBlocks = $derived(statusBlockOn && session ? currentStatusBlocks(conv, session.messages, session.display, plugins.on("html")) : []);
 	// 상태창 틀·변수 정의는 이 캐릭터로 들어올 때 한 번 읽는다 (플러그인이 켜졌을 때만)
 	$effect(() => {
 		const id = character?.id;
@@ -656,10 +656,10 @@
 
 		<!-- 상태창 고정 자리 (5-F-4-2): 좁은 화면은 옵션으로 채팅방 위, 데스크톱은 띄운 창 -->
 		{#if statusBlockOn && layout.narrow && statusView.aboveChat}
-			<StatusTop block={statusBlock} />
+			<StatusTop blocks={statusBlocks} />
 		{/if}
 		{#if statusBlockOn && !layout.narrow && statusView.floating}
-			<StatusFloat block={statusBlock} />
+			<StatusFloat blocks={statusBlocks} />
 		{/if}
 		<!-- svelte-ignore a11y_no_static_element_interactions (글 고르기 끝 감지) -->
 		<div class="scroll sc-chat-scroll" bind:this={scroller} {onscroll} oncontextmenu={onSelectMenu}>

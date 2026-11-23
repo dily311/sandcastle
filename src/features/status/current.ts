@@ -1,19 +1,20 @@
-// 고정 자리에 그릴 상태창 하나 (5-F-4-2·5): 캐릭터에 상태창 틀이 있으면 변수로 채운 틀, 없으면 가장 최근 메시지의 상태창
+// 고정 자리에 그릴 상태창들 (5-F-4-2·5, 5-F-5-2): 캐릭터의 상태창 틀(변수로 채움)이 맨 위, 그 아래 출처마다 가장 최근 메시지의 상태창
 import type { Block } from "$features/character/format";
 import { library, type Conversation } from "$features/character/library.svelte";
 import { pluginSetting } from "$shared/stores/aiTools.svelte";
 import { plugins } from "$shared/stores/plugins.svelte";
-import { latestStatusBlock } from "./pin";
+import { latestStatusBlocks } from "./pin";
 import { fillTemplate } from "./template";
 
 type Msg = { id: string; role: string; content: string };
 
-export function currentStatusBlock(conv: Conversation | undefined, messages: readonly Msg[], display: Record<string, string>, safeHtml: boolean): Block | null {
+export function currentStatusBlocks(conv: Conversation | undefined, messages: readonly Msg[], display: Record<string, string>, safeHtml: boolean): Block[] {
+	const fromMessages: Block[] = latestStatusBlocks(messages, display, safeHtml);
 	const template = conv ? library.statusTemplates[conv.characterId] : null;
 	if (conv && template) {
 		// 틀은 사용자가 쓴 HTML: HTML 렌더링이 켜졌으면 ```html 블록처럼 격리된 iframe(JS·triggerSlash 됨),
 		// 꺼졌으면 메시지 속 HTML처럼 거른 HTML로 바로 (스크립트 없이) — 틀이 그 플러그인에 매이지 않게
-		return {
+		const filled: Block = {
 			kind: "html",
 			...(plugins.on("html") ? {} : { scripts: false as const }),
 			code: fillTemplate(template, {
@@ -24,6 +25,7 @@ export function currentStatusBlock(conv: Conversation | undefined, messages: rea
 				user: library.persona(library.convPersonaId(conv))?.name,
 			}),
 		};
+		return [filled, ...fromMessages];
 	}
-	return latestStatusBlock(messages, display, safeHtml);
+	return fromMessages;
 }

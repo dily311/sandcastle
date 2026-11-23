@@ -7,7 +7,7 @@
 	import StatusWindow from "./StatusWindow.svelte";
 	import { statusView, type FloatRect } from "./statusView.svelte";
 
-	let { block }: { block: Block | null } = $props();
+	let { blocks }: { blocks: Block[] } = $props();
 
 	const MIN_W = 220;
 	const MIN_H = 80;
@@ -82,7 +82,7 @@
 		<IconButton label="패널로 돌리기" size="sm" onclick={() => statusView.set({ floating: false })}><PanelRightClose /></IconButton>
 	</div>
 	{#if !statusView.collapsed}
-		<div class="body"><StatusWindow {block} /></div>
+		<div class="body"><StatusWindow {blocks} /></div>
 	{/if}
 </div>
 

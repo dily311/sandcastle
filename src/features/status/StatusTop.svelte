@@ -5,7 +5,7 @@
 	import StatusWindow from "./StatusWindow.svelte";
 	import { statusView } from "./statusView.svelte";
 
-	let { block }: { block: Block | null } = $props();
+	let { blocks }: { blocks: Block[] } = $props();
 </script>
 
 <div class="top sc-status-top" class:collapsed={statusView.topCollapsed}>
@@ -13,7 +13,7 @@
 		<ChevronDown class={statusView.topCollapsed ? "rot" : ""} /><b>상태</b>
 	</button>
 	{#if !statusView.topCollapsed}
-		<div class="body"><StatusWindow {block} /></div>
+		<div class="body"><StatusWindow {blocks} /></div>
 	{/if}
 </div>
 

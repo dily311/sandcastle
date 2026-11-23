@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { isStatusPin, latestStatusBlock } from "./pin";
+import { isStatusPin, latestStatusBlock, latestStatusBlocks, pinKey } from "./pin";
 import { toBlocks } from "$features/character/format";
 
 const STATUS = (hp: number) => `<div data-sc-pin="status">HP ${hp}</div>`;
@@ -48,5 +48,16 @@ describe("상태창 고정 (5-F-4-2)", () => {
 		const pinned = blocks.filter(isStatusPin);
 		expect(pinned).toEqual([{ kind: "html", code: '<div data-sc-pin="status:r1"><b>HP</b> 7</div>', scripts: false }]);
 		expect(latestStatusBlock([msg("a", "assistant", text)], {}, false)?.code).toContain("HP");
+	});
+
+	it("출처마다 가장 최근 것 하나씩, 출처 이름순 (5-F-5-2)", () => {
+		const hp = (n: number) => `<div data-sc-pin="status:hp">HP ${n}</div>`;
+		const inv = (s: string) => `<div data-sc-pin="status:bag">가방 ${s}</div>`;
+		const messages = [msg("a", "assistant", `${hp(10)}\n\n${inv("칼")}`), msg("b", "assistant", hp(7))];
+		const blocks = latestStatusBlocks(messages, {}, true);
+		expect(blocks.map((b) => [pinKey(b), b.code])).toEqual([
+			["status:bag", inv("칼")],
+			["status:hp", hp(7)],
+		]);
 	});
 });
