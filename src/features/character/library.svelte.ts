@@ -1,4 +1,5 @@
 // 캐릭터·대화·폴더와 대화 설정에 쓰는 목록(페르소나·프리셋·API). 화면들이 같이 쓴다.
+import { jobs } from "$shared/stores/jobs.svelte";
 import { trashedToast } from "$shared/trash";
 import type {
 	ApiProfiles,
@@ -225,7 +226,8 @@ class Library {
 	}
 	/** 휴지통으로 (2-A-3). "되돌리기" 알림을 띄운다 */
 	async remove(id: string) {
-		const item = await call(commands.deleteConversation(id), src);
+		const item = await jobs.run(this.conversation(id)?.title || "대화", () => call(commands.deleteConversation(id), src), { group: "대화 지우기" });
+		if (!item) return;
 		this.conversations = this.conversations.filter((c) => c.id !== id);
 		trashedToast(item, () => this.load());
 	}
@@ -258,7 +260,8 @@ class Library {
 	}
 	/** 폴더만 지우고 대화는 폴더 밖으로 */
 	async removeFolder(id: string) {
-		await call(commands.deleteConversationFolder(id), src);
+		const name = this.folders.find((f) => f.id === id)?.name ?? "폴더";
+		if ((await jobs.run(name, () => call(commands.deleteConversationFolder(id), src), { group: "폴더 지우기" })) === undefined) return;
 		this.folders = this.folders.filter((f) => f.id !== id);
 		for (const c of this.conversations) if (c.folderId === id) c.folderId = null;
 	}
@@ -285,7 +288,7 @@ class Library {
 	}
 	async addImages(charId: string, paths: string[]) {
 		if (!paths.length) return;
-		await call(commands.addCharacterImages(charId, paths), src);
+		await jobs.run(`그림 ${paths.length}장`, () => call(commands.addCharacterImages(charId, paths), src), { group: "에셋 올리기" });
 		await this.loadImages(charId);
 	}
 	async updateImage(img: CharacterImage, p: Partial<Pick<CharacterImage, "key" | "enabled" | "sortOrder" | "folder">>) {
@@ -297,12 +300,12 @@ class Library {
 	}
 	/** ZIP 안의 그림을 한꺼번에 (파일 이름이 키, 같은 키는 덮어씀) */
 	async addImagesZip(charId: string, zipPath: string) {
-		const added = await call(commands.addCharacterImagesZip(charId, zipPath), src);
+		const added = await jobs.run(zipPath.split(/[\\/]/).pop() ?? "ZIP", () => call(commands.addCharacterImagesZip(charId, zipPath), src), { group: "에셋 올리기" });
 		await this.loadImages(charId);
-		return added.length;
+		return added?.length ?? 0;
 	}
 	async removeImage(img: CharacterImage) {
-		await call(commands.deleteCharacterImage(img.id), src);
+		if ((await jobs.run(img.key || "그림", () => call(commands.deleteCharacterImage(img.id), src), { group: "에셋 지우기" })) === undefined) return;
 		this.images[img.characterId] = (this.images[img.characterId] ?? []).filter((x) => x.id !== img.id);
 	}
 

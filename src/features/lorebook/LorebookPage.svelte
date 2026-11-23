@@ -1,4 +1,5 @@
 <script lang="ts">
+	import { jobs } from "$shared/stores/jobs.svelte";
 	import { onMount } from "svelte";
 	// 로어북 화면: 책 목록 → 책 하나(이름·설명, 쓰는 곳, 항목 편집)
 	import { BookOpen, Check, Download, Ellipsis, Funnel, ListFilter, Pencil, Plus, Search, Trash2, Upload } from "@lucide/svelte";
@@ -73,11 +74,13 @@
 		if (!ids.length) return;
 		const n = ids.reduce((s, id) => s + (lorebook.counts[id]?.entries ?? 0), 0);
 		if (!(await confirmAction({ title: "로어북 삭제", message: `로어북 ${ids.length}개와 항목 ${n}개를 휴지통으로 옮김. 쓰던 캐릭터·페르소나·대화에서도 빠짐. 설정 > 데이터 > 휴지통에서 되살릴 수 있음`, confirmLabel: `${ids.length}개 삭제`, danger: true }))) return;
-		for (const id of ids) await call(commands.deleteWorldinfoBook(id), { source: "lorebook" });
+		selecting = false;
+		// 파일 작업 대기열로 하나씩 (5-E-28). 요약 알림은 대기열이 한 번
+		await Promise.allSettled(
+			ids.map((id) => jobs.run(lorebook.book(id)?.name ?? id, () => call(commands.deleteWorldinfoBook(id), { source: "lorebook" }), { group: "로어북 지우기" })),
+		);
 		await lorebook.load();
 		await library.load();
-		selecting = false;
-		toasts.success(`로어북 ${ids.length}개를 휴지통으로 옮김`);
 	}
 	async function create() {
 		const name = await promptText({ title: "새 로어북", message: "세계관·장소·인물 설정을 모아 두는 책", input: { value: "", placeholder: "예: 엘다리아 대륙" }, confirmLabel: "만들기" });

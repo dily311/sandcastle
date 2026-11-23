@@ -1,4 +1,5 @@
 <script lang="ts">
+	import { jobs } from "$shared/stores/jobs.svelte";
 	import ModelPicker from "$features/settings/ModelPicker.svelte";
 	import { onMount } from "svelte";
 	import { Images } from "@lucide/svelte";
@@ -37,9 +38,17 @@
 	);
 	async function addPresetImages(paths: string[]) {
 		if (!paths.length) return;
-		const added = await call(commands.importGalleryImages(paths), { source: "imagegen" });
-		const tagged: GeneratedImage[] = [];
-		for (const a of added) tagged.push(await call(commands.setImageTags(a.path, [...a.tags, "preset"]), { source: "imagegen" }));
+		const tagged = await jobs.run(
+			`그림 ${paths.length}장`,
+			async () => {
+				const added = await call(commands.importGalleryImages(paths), { source: "imagegen" });
+				const out: GeneratedImage[] = [];
+				for (const a of added) out.push(await call(commands.setImageTags(a.path, [...a.tags, "preset"]), { source: "imagegen" }));
+				return out;
+			},
+			{ group: "그림 올리기" },
+		);
+		if (!tagged) return;
 		presetImages = [...tagged, ...presetImages];
 		const withInfo = tagged.find((t) => Object.keys(presetFromMeta(t.meta)).length);
 		if (withInfo) applyPreset(withInfo);

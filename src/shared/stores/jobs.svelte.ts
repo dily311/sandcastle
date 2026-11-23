@@ -87,6 +87,16 @@ class Jobs {
 		});
 	}
 
+	/**
+	 * add와 같지만 대기 중에 빼면 undefined (결과만 쓰는 화면용).
+	 * 주의: 작업 안에서 다시 run/add를 기다리면 안 된다 — 한 줄이라 서로 기다리며 멈춘다.
+	 * 그래서 화면이 누른 자리(또는 그 자리 하나에서만 부르는 store 메서드)에서만 감싼다
+	 */
+	async run<T>(label: string, run: (ctx: JobContext) => Promise<T>, opts: JobOptions = {}): Promise<T | undefined> {
+		const r = await this.add(label, run, opts);
+		return r === SKIPPED ? undefined : r;
+	}
+
 	/** 기다리는 작업 빼기 (지금 도는 것은 stop으로) */
 	remove(id: number) {
 		const i = this.#queue.findIndex((j) => j.id === id);

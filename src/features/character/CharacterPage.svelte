@@ -168,12 +168,21 @@
 			await chatImport.run(chats, charId ?? null);
 			paths = paths.filter((p) => !chats.includes(p));
 		}
-		for (const p of paths) {
-			if (p.toLowerCase().endsWith(".zip")) {
-				const r = await call(commands.importCharacterPack(p), { source: "character" }).catch(() => null);
-				if (r) toasts.success(`캐릭터 ${r.characters.length}명 · 대화 ${r.conversationCount}개 가져옴`);
-			} else await library.importSillyTavern(p, p.toLowerCase().endsWith(".jsonl") ? (charId ?? null) : null).catch(() => {});
-		}
+		// 파일마다 대기열에 (5-E-28) — 앞 파일을 가져오는 동안 더 골라도 거절하지 않고 차례로
+		const name = (p: string) => p.split(/[\\/]/).pop() ?? p;
+		await Promise.allSettled(
+			paths.map((p) =>
+				jobs.run(
+					name(p),
+					async () => {
+						if (!p.toLowerCase().endsWith(".zip")) return void (await library.importSillyTavern(p, p.toLowerCase().endsWith(".jsonl") ? (charId ?? null) : null));
+						const r = await call(commands.importCharacterPack(p), { source: "character" });
+						toasts.success(`캐릭터 ${r.characters.length}명 · 대화 ${r.conversationCount}개 가져옴`);
+					},
+					{ group: "캐릭터 가져오기" },
+				),
+			),
+		);
 		if (paths.length) await library.load();
 	}
 	const DROP_EXT = ["png", "json", "jsonl", "zip"];

@@ -1,4 +1,5 @@
 <script lang="ts">
+	import { jobs } from "$shared/stores/jobs.svelte";
 	import { trashedToast } from "$shared/trash";
 	import { drops, extOf, storeFile } from "$app/drop.svelte";
 	import { onMount } from "svelte";
@@ -72,9 +73,9 @@
 	}
 	async function remove(p: Preset) {
 		if (!(await confirmAction({ title: "프리셋 삭제", message: `'${p.name}' 프리셋과 블록을 휴지통으로 옮김. 이 프리셋을 쓰던 대화는 앱 기본값으로 바뀌고, 되살리면 다시 이어짐`, confirmLabel: "삭제", danger: true }))) return;
-		const item = await call(commands.deletePromptPreset(p.id), src);
+		const item = await jobs.run(p.name, () => call(commands.deletePromptPreset(p.id), src), { group: "프리셋 지우기" });
 		await reload();
-		trashedToast(item, reload);
+		if (item) trashedToast(item, reload);
 	}
 	async function importFile() {
 		// 프리셋과 그 프리셋용 정규식 JSON을 함께 고를 수 있다

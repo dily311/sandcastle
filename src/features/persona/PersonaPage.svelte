@@ -1,4 +1,5 @@
 <script lang="ts">
+	import { jobs } from "$shared/stores/jobs.svelte";
 	import { trashedToast } from "$shared/trash";
 	import { layout } from "$app/layout.svelte";
 	import { onMount } from "svelte";
@@ -159,7 +160,8 @@
 			convCount ? `대화 ${convCount}개는 페르소나 없이 남음` : "",
 		].filter(Boolean);
 		if (!(await confirmAction({ title: "페르소나 삭제", message: [`'${target.name}'을(를) 휴지통으로 옮김`, ...notes, "되살리면 다시 이어짐"].join(". "), confirmLabel: "삭제", danger: true }))) return;
-		const item = await call(commands.deletePersona(target.id), src);
+		const item = await jobs.run(target.name, () => call(commands.deletePersona(target.id), src), { group: "페르소나 지우기" });
+		if (!item) return;
 		trashedToast(item, () => library.load());
 		library.personas = library.personas.filter((p) => p.id !== target.id);
 		discard();

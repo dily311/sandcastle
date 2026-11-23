@@ -1,5 +1,6 @@
 <script lang="ts">
 	// 동기화 (CLAUDE.md 2-B-3, ADR-011): 파일로 주고받기. 누를 때만 만들고, 합치기 전에 미리보기 → 자동 사본 → 적용
+	import { jobs } from "$shared/stores/jobs.svelte";
 	import { onMount } from "svelte";
 	import { Cloud, Download, FolderOpen, Info, LogOut, RefreshCw, RotateCcw } from "@lucide/svelte";
 	import type { DriveStatus, SyncBackup, SyncPreview, SyncStatus } from "$ipc/bindings";
@@ -157,7 +158,9 @@
 		step = "";
 		try {
 			if (!(await phoneToken())) return;
-			const r = await call(commands.syncNow(false), src);
+			// 파일 작업 대기열에서 (5-E-28): 가져오기·지우기가 도는 동안 눌러도 거절하지 않고 차례로
+			const r = await jobs.run("지금 동기화", () => call(commands.syncNow(false), src), { group: "동기화" });
+			if (!r) return;
 			const m = r.merged.reduce((a, d) => ({ added: a.added + d.report.added, updated: a.updated + d.report.updated, deleted: a.deleted + d.report.deleted, both: a.both + d.report.conflicts + d.report.branches }), { added: 0, updated: 0, deleted: 0, both: 0 });
 			toasts.success(
 				r.merged.length
@@ -195,7 +198,7 @@
 		try {
 			const r = await saveTo(`sandcastle-sync-${stamp}.scsync`, [SYNC_FILES], (path) => {
 				busy = "export";
-				return call(commands.exportSyncBundle(path, includeFiles), src);
+				return jobs.run("동기화 파일", () => call(commands.exportSyncBundle(path, includeFiles), src), { group: "동기화 파일 만들기" });
 			});
 			if (r) toasts.success(`동기화 파일을 만듦 · 항목 ${n(r.rows)}개, 파일 ${n(r.blobs)}/${n(r.files)}개, ${size(r.bytes)}`);
 		} finally {
@@ -233,7 +236,9 @@
 		if (!pending) return;
 		busy = "apply";
 		try {
-			const r = await call(commands.applySyncBundle(pending.path), src);
+			const path = pending.path;
+			const r = await jobs.run(path.split(/[\\/]/).pop() ?? path, () => call(commands.applySyncBundle(path), src), { group: "동기화 파일 합치기" });
+			if (!r) return;
 			const m = r.report;
 			const parts = [
 				m.added && `추가 ${n(m.added)}`,

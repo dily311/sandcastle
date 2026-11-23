@@ -100,7 +100,7 @@
 	}
 	async function importPath(path: string) {
 		const g = await games.import(path);
-		toasts.success(`'${g.title}' 가져옴`);
+		if (g) toasts.success(`'${g.title}' 가져옴`);
 	}
 	$effect(() =>
 		drops.register({

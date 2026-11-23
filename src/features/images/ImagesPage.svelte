@@ -1,6 +1,7 @@
 <script lang="ts">
 	// 이미지 페이지 = 갤러리: 만든 그림과 올린 그림 전부. 위의 "만들기"를 누르면 만들기 칸이 열린다.
 	// 그림은 앱 데이터 generated/ 폴더에 있고, 같은 이름 .json에 프롬프트·출처·생성 정보가 있다 (service/plugins.rs)
+	import { jobs } from "$shared/stores/jobs.svelte";
 	import { onMount } from "svelte";
 	import { ArrowUpDown, Check, Ellipsis, Info, Plus, Copy, ExternalLink, Eye, Filter, FolderOpen, MessageSquare, Pencil, Search, Sparkles, Tag, Trash2, Upload, Wand2, X } from "@lucide/svelte";
 	import type { GeneratedImage_Serialize as GeneratedImage } from "$ipc/bindings";
@@ -171,7 +172,8 @@
 	async function importFiles(files: File[]) {
 		const paths = await Promise.all(files.filter(isImage).map((f) => storeFile(f)));
 		if (!paths.length) return;
-		const added = await call(commands.importGalleryImages(paths), src);
+		const added = await jobs.run(`그림 ${paths.length}장`, () => call(commands.importGalleryImages(paths), src), { group: "그림 올리기" });
+		if (!added) return;
 		images = [...added, ...images];
 		toasts.success(`${added.length}장 업로드 됨`);
 	}
@@ -261,12 +263,19 @@
 		if (!(await confirmAction({ title: "그림 삭제", message: `고른 그림 ${list.length}장을 지움. 대화·배경에 쓰던 그림도 더 이상 보이지 않음. 되돌릴 수 없음`, confirmLabel: `${list.length}장 삭제`, danger: true }))) return;
 		const bgs = list.filter((i) => i.source === "background");
 		const gallery = list.filter((i) => i.source !== "background");
-		let n = gallery.length ? await call(commands.deleteGalleryImages(gallery.map((i) => i.path)), src) : 0;
-		for (const b of bgs) {
-			await theme.removeBackground(b.path);
-			n++;
-		}
-		toasts.success(`${n}장 지움`);
+		const n = await jobs.run(
+			`그림 ${list.length}장`,
+			async () => {
+				let n = gallery.length ? await call(commands.deleteGalleryImages(gallery.map((i) => i.path)), src) : 0;
+				for (const b of bgs) {
+					await theme.removeBackground(b.path);
+					n++;
+				}
+				return n;
+			},
+			{ group: "그림 지우기" },
+		);
+		if (n !== undefined) toasts.success(`${n}장 지움`);
 		stopSelecting();
 		await load();
 	}
@@ -275,7 +284,8 @@
 	async function upload() {
 		const paths = await pickFiles([{ name: "그림", extensions: ["png", "jpg", "jpeg", "webp", "gif"] }], true);
 		if (!paths.length) return;
-		const added = await call(commands.importGalleryImages(paths), src);
+		const added = await jobs.run(`그림 ${paths.length}장`, () => call(commands.importGalleryImages(paths), src), { group: "그림 올리기" });
+		if (!added) return;
 		images = [...added, ...images];
 		const withInfo = added.filter((a) => a.prompt || a.meta.length > 1).length;
 		toasts.success(`${added.length}장 업로드 됨${withInfo ? ` · 생성 정보 ${withInfo}장` : ""}`);
@@ -283,8 +293,9 @@
 
 	async function remove(img: GeneratedImage) {
 		if (!(await confirmAction({ title: "그림 삭제", message: "이 그림 파일을 지움. 대화에 붙어 있던 그림도 더 이상 보이지 않음", confirmLabel: "삭제", danger: true }))) return;
-		if (img.source === "background") await theme.removeBackground(img.path);
-		else await call(commands.deleteGeneratedImage(img.path), src);
+		const name = img.path.split(/[\\/]/).pop() ?? "그림";
+		const ok = await jobs.run(name, async () => (img.source === "background" ? theme.removeBackground(img.path) : call(commands.deleteGeneratedImage(img.path), src)).then(() => true), { group: "그림 지우기" });
+		if (!ok) return;
 		images = images.filter((i) => i.path !== img.path);
 		if (viewing?.path === img.path) viewing = null;
 	}

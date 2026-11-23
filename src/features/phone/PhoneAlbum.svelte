@@ -1,5 +1,6 @@
 <script lang="ts">
 	// 폰 사진 앱: 이 폰에서 만든 그림 — 카메라로 만든 것(앨범 = 폰 주인)과 이 폰 채팅방에서 그린 것
+	import { jobs } from "$shared/stores/jobs.svelte";
 	import { onMount } from "svelte";
 	import { ChevronLeft, Trash2, X } from "@lucide/svelte";
 	import type { GeneratedImage } from "$ipc/bindings";
@@ -29,7 +30,8 @@
 
 	async function remove(img: GeneratedImage) {
 		if (!(await confirmAction({ title: "사진 삭제", message: "이 그림 파일을 지움 (이미지 갤러리에서도 사라짐)", confirmLabel: "삭제", danger: true }))) return;
-		await call(commands.deleteGeneratedImage(img.path), { source: "phone" });
+		const ok = await jobs.run(img.path.split(/[\\/]/).pop() ?? "사진", () => call(commands.deleteGeneratedImage(img.path), { source: "phone" }).then(() => true), { group: "사진 지우기" });
+		if (!ok) return;
 		all = all.filter((i) => i.path !== img.path);
 		viewing = null;
 	}

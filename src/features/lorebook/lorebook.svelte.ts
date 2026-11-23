@@ -1,4 +1,5 @@
 // 로어북(월드인포): 책 목록, 책별 항목, 쓰는 곳. 로어북 화면과 대화 패널이 같이 씀
+import { jobs } from "$shared/stores/jobs.svelte";
 import { trashedToast } from "$shared/trash";
 import { moveItem } from "$shared/dnd/sortable.svelte";
 import type { WorldInfoBook_Serialize as Book, WorldInfoEntry as Entry, WorldInfoEntryInput_Deserialize as EntryInput } from "$ipc/bindings";
@@ -66,7 +67,8 @@ class Lorebook {
 		const n = this.counts[b.id]?.entries ?? 0;
 		const ok = await confirmAction({ title: "로어북 삭제", message: `'${b.name}'와 항목 ${n}개를 휴지통으로 옮김. 이 책을 쓰던 캐릭터·페르소나·대화에서도 빠지고, 되살리면 다시 이어짐`, confirmLabel: "삭제", danger: true });
 		if (!ok) return false;
-		const item = await call(commands.deleteWorldinfoBook(b.id), src);
+		const item = await jobs.run(b.name, () => call(commands.deleteWorldinfoBook(b.id), src), { group: "로어북 지우기" });
+		if (!item) return false;
 		if (toast)
 			trashedToast(item, async () => {
 				await this.load();
@@ -88,7 +90,8 @@ class Lorebook {
 	}
 	/** SillyTavern 월드인포 JSON 가져오기. 가져온 책을 돌려줌 */
 	async importPath(path: string) {
-		const r = await call(commands.importSillytavern(path, null, null, null), src);
+		const r = await jobs.run(path.split(/[\\/]/).pop() ?? path, () => call(commands.importSillytavern(path, null, null, null), src), { group: "로어북 가져오기" });
+		if (!r) return null;
 		await this.load();
 		for (const w of r.warnings) toasts.info(w);
 		if (r.kind !== "worldInfo") {

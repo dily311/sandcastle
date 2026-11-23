@@ -1,4 +1,5 @@
 <script lang="ts">
+	import { jobs } from "$shared/stores/jobs.svelte";
 	import { onMount } from "svelte";
 	import { ChevronDown, ChevronRight, RotateCcw, Save, ShieldCheck, Trash2, Upload } from "@lucide/svelte";
 	import type { BackupManifest, DataCheck, DataOverview_Serialize as Overview, DataTotals, SillyTavernDataImport } from "$ipc/bindings";
@@ -26,7 +27,7 @@
 		try {
 			const r = await saveTo("sillytavern-default-user.zip", [ST_DATA_FILES], (path) => {
 				busy = "st-out";
-				return call(commands.exportSillytavernData(path), src);
+				return jobs.run("SillyTavern 데이터", () => call(commands.exportSillytavernData(path), src), { group: "내보내기" });
 			});
 			if (r) toasts.success(`내보냄 · 캐릭터 ${r.characters}, 채팅 ${r.chats}, 로어북 ${r.books}, 프리셋 ${r.presets}, 페르소나 ${r.personas}, 정규식 ${r.regex}`);
 			if (r?.warnings.length) toasts.error(`넣지 못한 것 ${r.warnings.length}개`, r.warnings.join("\n"));
@@ -39,7 +40,8 @@
 		if (!path) return;
 		busy = "st";
 		try {
-			const r = await call(commands.importSillytavernData(path), src);
+			const r = await jobs.run(path.split(/[\\/]/).pop() ?? path, () => call(commands.importSillytavernData(path), src), { group: "SillyTavern 가져오기" });
+			if (!r) return;
 			stResult = r;
 			toasts.success(`가져옴 · 캐릭터 ${r.characters}, 채팅 ${r.chats}, 로어북 ${r.books}, 프리셋 ${r.presets}, 정규식 ${r.regex}, 페르소나 ${r.personas}`);
 			await Promise.all([load(), library.load()]);
@@ -118,7 +120,7 @@
 		try {
 			const r = await saveTo(`sandcastle-${stamp}.scbackup`, [BACKUP_FILES], (path) => {
 				busy = "backup";
-				return call(commands.exportBackup(path), src);
+				return jobs.run("백업", () => call(commands.exportBackup(path), src), { group: "백업" });
 			});
 			if (r) toasts.success(`백업함 · ${bytes(r.bytes)}, 파일 ${r.fileCount}개`);
 		} finally {
@@ -143,7 +145,8 @@
 	async function restoreFrom(path: string) {
 		busy = "restore";
 		try {
-			const p = await call(commands.prepareRestore(path), src);
+			const p = await jobs.run(path.split(/[\\/]/).pop() ?? path, () => call(commands.prepareRestore(path), src), { group: "복원 준비" });
+			if (!p) return;
 			const t = p.totals;
 			const ok = await confirmAction({
 				title: "백업으로 복원",
@@ -173,8 +176,9 @@
 	async function removePicked() {
 		const n = picked.size;
 		if (!(await confirmAction({ title: "대화 삭제", message: `고른 대화 ${n}개와 메시지를 휴지통으로 옮김. 아래 휴지통에서 되살릴 수 있음`, confirmLabel: `${n}개 삭제`, danger: true }))) return;
-		const removed = await call(commands.deleteConversations([...picked]), src);
-		toasts.success(`대화 ${removed}개를 휴지통으로 옮김`);
+		const ids = [...picked];
+		const removed = await jobs.run(`대화 ${n}개`, () => call(commands.deleteConversations(ids), src), { group: "대화 지우기" });
+		if (removed !== undefined) toasts.success(`대화 ${removed}개를 휴지통으로 옮김`);
 		trashKey++; // 휴지통 목록 다시 읽기
 		await Promise.all([load(), library.load()]);
 	}

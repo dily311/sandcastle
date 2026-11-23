@@ -1,5 +1,6 @@
 <script lang="ts">
 	// 휴지통 (CLAUDE.md 2-A-3): 지운 항목 되살리기 / 완전히 지우기 / 보관 기간
+	import { jobs } from "$shared/stores/jobs.svelte";
 	import { onMount } from "svelte";
 	import { RotateCcw, Trash2 } from "@lucide/svelte";
 	import type { TrashItem } from "$ipc/bindings";
@@ -73,15 +74,15 @@
 			confirmLabel: "완전히 지우기",
 		});
 		if (!ok) return;
-		await call(commands.purgeTrashItem(item.id), src);
+		await jobs.run(item.label, () => call(commands.purgeTrashItem(item.id), src), { group: "완전히 지우기" }).catch(() => {});
 		await load();
 	}
 	async function empty() {
 		const n = items?.length ?? 0;
 		const ok = await confirmAction({ title: "휴지통 비우기", message: `휴지통의 ${n}개 항목을 완전히 지움. 되돌릴 수 없음`, danger: true, confirmLabel: `${n}개 완전히 지우기` });
 		if (!ok) return;
-		const removed = await call(commands.emptyTrash(), src);
-		toasts.success(`${removed}개를 완전히 지움`);
+		const removed = await jobs.run(`${n}개`, () => call(commands.emptyTrash(), src), { group: "휴지통 비우기" });
+		if (removed !== undefined) toasts.success(`${removed}개를 완전히 지움`);
 		await load();
 	}
 	const size = (b: number) => (b < 1024 * 1024 ? `${Math.max(1, Math.round(b / 1024))}KB` : `${(b / 1024 / 1024).toFixed(1)}MB`);
