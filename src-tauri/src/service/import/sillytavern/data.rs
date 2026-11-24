@@ -230,11 +230,17 @@ pub async fn import_data_dir(db: &DbPool, app_data_dir: &Path, dir: &Path) -> Re
     // 2. 캐릭터: 파일 이름(채팅 폴더 이름과 같음) → 새 캐릭터 id
     let mut chars: HashMap<String, String> = HashMap::new();
     for p in files_in(&root.join("characters"), &["png", "json"]) {
-        match import_file_with(db, app_data_dir, &p, ImportOptions::default()).await {
+        // SillyTavern은 카드에 character_book이 있어도 worlds/<extensions.world>.json으로 꺼내 두고 그쪽을 쓴다.
+        // worlds에서 이미 가져온 로어북이 있으면 카드 안의 character_book을 중복 생성하지 않고 worlds 것만 연결한다.
+        let linked = linked_world(&p).and_then(|w| books.get(&w).cloned());
+        let opts = ImportOptions {
+            skip_character_book: linked.is_some(),
+            ..Default::default()
+        };
+        match import_file_with(db, app_data_dir, &p, opts).await {
             Ok(SillyTavernImport::Character { character, .. }) => {
                 out.characters += 1;
-                // 카드가 이름으로 가리키는 로어북 (worlds 폴더의 것)도 연결
-                if let Some(book) = linked_world(&p).and_then(|w| books.get(&w).cloned()) {
+                if let Some(book) = linked {
                     if let Err(e) = link_book(db, &character.id, &book).await {
                         out.warnings.push(format!("{}: 로어북 연결 못 함 ({})", label(&p, &root), e));
                     }
@@ -398,11 +404,12 @@ pub async fn import_data_dir(db: &DbPool, app_data_dir: &Path, dir: &Path) -> Re
     Ok(out)
 }
 
-/// 카드가 이름으로 가리키는 로어북 (`data.extensions.world`)
+/// 카드가 이름으로 가리키는 로어북 (`data.extensions.world`, V1이면 `extensions.world`)
 fn linked_world(card: &Path) -> Option<String> {
     let bytes = std::fs::read(card).ok()?;
     let json = super::detect(&bytes).ok()?.1;
     json.pointer("/data/extensions/world")
+        .or_else(|| json.pointer("/extensions/world"))
         .and_then(Value::as_str)
         .map(str::trim)
         .filter(|w| !w.is_empty())

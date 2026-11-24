@@ -26,7 +26,18 @@ pub async fn import_sillytavern(
     preset_id: Option<String>,
 ) -> Result<SillyTavernImport> {
     let base = app_data_dir(&app)?;
-    import_file_with(&state.db, &base, &PathBuf::from(path), ImportOptions { name, character_id, preset_id }).await
+    import_file_with(
+        &state.db,
+        &base,
+        &PathBuf::from(path),
+        ImportOptions {
+            name,
+            character_id,
+            preset_id,
+            ..Default::default()
+        },
+    )
+    .await
 }
 
 /// SillyTavern 파일의 종류만 본다 (가져오지 않음)

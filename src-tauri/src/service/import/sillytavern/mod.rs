@@ -59,6 +59,8 @@ pub struct ImportOptions {
     pub character_id: Option<String>,
     /// 정규식 파일을 이 프리셋에 묶어서 가져온다 (프리셋과 함께 받은 정규식). 없으면 전역.
     pub preset_id: Option<String>,
+    /// 카드 안의 character_book을 만들지 않는다 (이미 worlds 폴더에서 가져온 로어북을 연결할 때 중복 방지)
+    pub skip_character_book: bool,
 }
 
 #[derive(Serialize, specta::Type)]
@@ -156,7 +158,7 @@ pub async fn import_file_with(db: &DbPool, app_data_dir: &Path, path: &Path, opt
     match kind {
         SillyTavernKind::Character => {
             let avatar_bytes = card::is_png(&bytes).then_some(bytes.as_slice());
-            import_character(db, app_data_dir, &json, avatar_bytes).await
+            import_character(db, app_data_dir, &json, avatar_bytes, options.skip_character_book).await
         }
         SillyTavernKind::Preset => import_preset(db, &json, &file_name).await,
         SillyTavernKind::Regex => import_regex(db, &json, options.preset_id).await,
@@ -301,8 +303,17 @@ async fn import_chat(db: &DbPool, bytes: &[u8], title: &str, character_id: Optio
     })
 }
 
-async fn import_character(db: &DbPool, app_data_dir: &Path, card_json: &Value, avatar_png: Option<&[u8]>) -> Result<SillyTavernImport> {
+async fn import_character(
+    db: &DbPool,
+    app_data_dir: &Path,
+    card_json: &Value,
+    avatar_png: Option<&[u8]>,
+    skip_character_book: bool,
+) -> Result<SillyTavernImport> {
     let mut imported = card::map_card(card_json)?;
+    if skip_character_book {
+        imported.book = None;
+    }
 
     // 아바타는 DB 저장 전에 파일로 (실패하면 경고만)
     let mut avatar_file = None;

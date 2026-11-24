@@ -854,3 +854,78 @@ fn native_preset_becomes_an_st_preset() {
     assert_eq!(st["openai_max_tokens"], 900);
     assert!(st["extensions"].get("regex_scripts").is_none());
 }
+
+#[tokio::test]
+async fn st_data_does_not_duplicate_worldinfo_when_card_has_both_character_book_and_linked_world() {
+    let db = pool().await;
+    let app = tempfile::tempdir().unwrap();
+    let src = tempfile::tempdir().unwrap();
+    let u = src.path();
+    std::fs::create_dir_all(u.join("characters")).unwrap();
+    std::fs::create_dir_all(u.join("worlds")).unwrap();
+
+    // SillyTavern에서 카드를 임포트하면 character_book을 worlds/<world>.json으로 꺼내 두고
+    // 카드에는 character_book과 extensions.world가 둘 다 남아 있다.
+    write(
+        &u.join("worlds"),
+        "Eldoria.json",
+        json!({ "entries": { "0": { "key": ["forest"], "content": "Updated world entry" } } })
+            .to_string()
+            .as_bytes(),
+    );
+    write(
+        &u.join("characters"),
+        "aria.json",
+        json!({
+            "spec": "chara_card_v2",
+            "data": {
+                "name": "Aria",
+                "first_mes": "Hello",
+                "character_book": {
+                    "name": "Eldoria",
+                    "entries": [{ "keys": ["forest"], "content": "Old embedded entry", "enabled": true }]
+                },
+                "extensions": { "world": "Eldoria" }
+            }
+        })
+        .to_string()
+        .as_bytes(),
+    );
+    // worlds에 파일이 없는 경우에는 카드 안의 character_book을 그대로 가져와야 한다.
+    write(
+        &u.join("characters"),
+        "solo.json",
+        json!({
+            "spec": "chara_card_v2",
+            "data": {
+                "name": "Solo",
+                "first_mes": "Hi",
+                "character_book": {
+                    "name": "Solo Lore",
+                    "entries": [{ "keys": ["star"], "content": "Star lore", "enabled": true }]
+                },
+                "extensions": { "world": "MissingWorld" }
+            }
+        })
+        .to_string()
+        .as_bytes(),
+    );
+
+    let r = data::import_data_dir(&db, app.path(), u).await.unwrap();
+    assert_eq!((r.characters, r.books), (2, 1), "{:?}", r.warnings);
+
+    let books = crate::db::conversation::get_all_worldinfo_books(&db).await.unwrap();
+    assert_eq!(books.len(), 2, "Eldoria(worlds) + Solo Lore(embedded)만 있어야 함: {:?}", books.iter().map(|b| &b.name).collect::<Vec<_>>());
+
+    let chars = crate::db::conversation::get_all_characters(&db).await.unwrap();
+    let aria = chars.iter().find(|c| c.name == "Aria").unwrap();
+    assert_eq!(aria.world_info_ids.len(), 1, "월드인포가 중복 연결되지 않아야 함");
+    let aria_entries = crate::db::conversation::get_all_worldinfo_entries(&db, &aria.world_info_ids[0]).await.unwrap();
+    assert_eq!(aria_entries.len(), 1);
+    assert_eq!(aria_entries[0].content, "Updated world entry", "worlds 폴더의 최신 월드인포가 연결되어야 함");
+
+    let solo = chars.iter().find(|c| c.name == "Solo").unwrap();
+    assert_eq!(solo.world_info_ids.len(), 1, "worlds에 없으면 character_book으로 대체");
+    let solo_entries = crate::db::conversation::get_all_worldinfo_entries(&db, &solo.world_info_ids[0]).await.unwrap();
+    assert_eq!(solo_entries[0].content, "Star lore");
+}
