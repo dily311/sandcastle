@@ -118,16 +118,13 @@ fn conv_effort(meta: Option<&Value>, global: Option<&str>) -> Option<String> {
     locked.or(global.map(str::trim)).filter(|s| !s.is_empty() && *s != "auto").map(str::to_string)
 }
 
+/// 대화에 고정된 모델 (API 프로필과 독립적으로 저장됨)
 fn conv_model(conv: &crate::models::conversation::Conversation) -> Option<String> {
-    conv.api_profile_id.as_deref().filter(|s| !s.is_empty())?;
     conv.model.clone().filter(|m| !m.trim().is_empty())
 }
 
-/// 대화에 API가 없어 폰·앱의 기본 API를 따라갈 때, 폰 설정의 모델 (ADR-020)
-fn fallback_model(conv: &crate::models::conversation::Conversation, model: &Option<String>) -> Option<String> {
-    if conv.api_profile_id.as_deref().is_some_and(|s| !s.is_empty()) {
-        return None;
-    }
+/// 대화에 고정된 모델이 없을 때 쓸 전역/폰 기본 모델
+fn fallback_model(_conv: &crate::models::conversation::Conversation, model: &Option<String>) -> Option<String> {
     model.clone()
 }
 
@@ -1478,6 +1475,7 @@ impl ChatManager {
         reject_read_mode(&conv)?;
         let mut fallback = current_conv_request(settings)?;
         phone_defaults(app, &conv.mode, &mut fallback);
+        let fb_model = fallback.model.clone();
         let (profile_id, prompt) = match raw {
             // /genraw: 대화 맥락 없이 (system=이 있으면 시스템 글 + 지시만)
             Some(system) => raw_prompt(&conv, fallback, instruction, system.as_deref())?,
@@ -1494,7 +1492,7 @@ impl ChatManager {
             .generate(
                 AiRequest {
                     profile_id,
-                    model: conv_model(&conv),
+                    model: conv_model(&conv).or(fb_model),
                     prompt,
                 },
                 cancel,

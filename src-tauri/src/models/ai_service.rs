@@ -22,6 +22,9 @@ pub struct ApiProfiles {
     /// 사용자가 직접 입력해 남겨 둔 모델 이름 (목록에 계속 보임, ADR-020)
     #[serde(default)]
     pub custom_models: Vec<String>,
+    /// 연결 확인 여부 (테스트 또는 채팅·게임·폰에서 실제 응답을 받으면 true)
+    #[serde(default)]
+    pub verified: bool,
     pub created_at: i64,
     pub updated_at: i64,
 }
@@ -39,6 +42,7 @@ impl<'r> FromRow<'r, sqlx::sqlite::SqliteRow> for ApiProfiles {
             base_url: row.try_get("base_url")?,
             model: row.try_get("model")?,
             custom_models: serde_json::from_str(&custom).unwrap_or_default(),
+            verified: row.try_get::<bool, _>("verified").unwrap_or(false),
             created_at: row.try_get("created_at")?,
             updated_at: row.try_get("updated_at")?,
         })

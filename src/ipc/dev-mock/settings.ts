@@ -341,16 +341,20 @@ export const settingsHandlers: Record<string, (a: Args) => unknown> = {
 
 	// ---- API ----
 	has_api_key: ({ profileId }) => keys.has(profileId),
+	get_vertex_key_info: () => null,
 	delete_api_key: ({ profileId }) => (keys.delete(profileId), null),
 	create_api_profile: ({ input, apiKey }) => {
-		const a = { ...input, id: uid("api"), createdAt: now(), updatedAt: now() };
+		const a = { ...input, id: uid("api"), customModels: [], verified: false, createdAt: now(), updatedAt: now() };
 		apis.push(a);
 		if (apiKey) keys.add(a.id);
 		return a;
 	},
 	update_api_profile: ({ id, input, apiKey }) => {
 		const a = apis.find((x) => x.id === id);
-		if (a) Object.assign(a, input, { updatedAt: now() });
+		if (a) {
+			const reset = !!apiKey || a.baseUrl !== input.baseUrl || a.formatType !== input.formatType;
+			Object.assign(a, input, { updatedAt: now(), ...(reset ? { verified: false } : {}) });
+		}
 		if (apiKey) keys.add(id);
 		return null;
 	},
@@ -372,10 +376,12 @@ export const settingsHandlers: Record<string, (a: Args) => unknown> = {
 		if (!keys.has(profileId)) throw { code: "AI_PROVIDER_AUTH_FAILED", category: "AI_PROVIDER", message: "API 키가 설정되지 않았습니다", retryable: false };
 		return ["gemini-3.7-flash", "gemini-3.1-pro-preview", "gemini-2.5-pro"];
 	},
-	test_message: async ({ profileId }) => {
+	test_message: async ({ profileId, model }) => {
 		await new Promise((r) => setTimeout(r, 600));
 		if (!keys.has(profileId)) throw { code: "AI_PROVIDER_AUTH_FAILED", category: "AI_PROVIDER", message: "API 키가 설정되지 않았습니다", retryable: false };
-		return "OK";
+		const a = apis.find((x) => x.id === profileId);
+		if (a) a.verified = true;
+		return model ? `Hi! (${model})` : "OK";
 	},
 
 	// ---- 프리셋 ----

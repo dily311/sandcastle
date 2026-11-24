@@ -18,7 +18,6 @@
 	import { currentStatusBlocks } from "$features/status/current";
 	import { statusView } from "$features/status/statusView.svelte";
 	import { layout } from "$app/layout.svelte";
-	import { reasoningOf } from "$features/settings/providers";
 	import { appSetting } from "$shared/stores/appSetting.svelte";
 	import ExportButton from "./ExportButton.svelte";
 	import PresetInline from "$features/settings/PresetInline.svelte";
@@ -83,7 +82,7 @@
 
 	// ---- 대화 설정: API → 프리셋 → 페르소나 ----
 	const DEFAULT = "";
-	const apiOptions = $derived([{ value: DEFAULT, label: "앱 기본값" }, ...library.apis.map((a) => ({ value: a.id, label: `${a.name} · ${a.model}` }))]);
+	const apiOptions = $derived([{ value: DEFAULT, label: "앱 기본값" }, ...library.apis.map((a) => ({ value: a.id, label: a.model ? `${a.name} · ${a.model}` : `${a.name} (${a.provider})` }))]);
 	const presetOptions = $derived([{ value: DEFAULT, label: "앱 기본값" }, ...library.presets.map((p) => ({ value: p.id, label: p.name }))]);
 	function setOption(p: { apiProfileId?: string; promptPresetId?: string; personaId?: string; model?: string | null }) {
 		void library.setOptions(conv.id, {
@@ -96,16 +95,19 @@
 	}
 	// 이 대화가 쓰는 API 프로필 (대화에 정한 것, 없으면 앱 기본값) — 모델 고르기가 그 프로필의 목록을 보여준다
 	const effectiveApi = $derived(library.apis.find((a) => a.id === (conv.apiProfileId || appSetting.value?.selectedApiProfile || "")));
-	/** 이 대화의 추론 강도 (5-E-7). auto = 프리셋·공급자 기본. 모델이 강도를 받을 때만 보인다 */
-	/** 지금 쓰는 모델: 잠근 대화는 대화의 것, 풀린 대화는 전역 모델(5-E-29-3) — 없으면 API 프로필의 기본 */
-	const shownModel = $derived(conv.apiProfileId ? conv.model : (appSetting.value?.selectedModel ?? null));
-	const reasoning = $derived(reasoningOf(shownModel || effectiveApi?.model || null));
-	/** 지금 쓰는 추론 강도: 잠근 대화는 대화의 것, 풀린 대화는 전역 */
-	const effort = $derived(((conv.meta as { reasoningEffort?: string | null } | null)?.reasoningEffort ?? appSetting.value?.reasoningEffort ?? "auto") as string);
-	/** 모델 고르기: 잠근 대화는 이 대화에, 풀린 대화는 전역 모델 (ADR-028 갱신). 폰 대화는 지금처럼 이 대화에 못 박는다 */
+	/** 지금 쓰는 모델: 모델이 잠긴 대화는 대화의 것, 풀린 대화는 전역 모델 (API와 독립 저장) */
+	const shownModel = $derived(conv.model || appSetting.value?.selectedModel || null);
+	/** 지금 쓰는 추론 강도: 모델과 함께 잠근 대화는 대화의 것, 풀린 대화는 전역 */
+	const effort = $derived(
+		(conv.model
+			? ((conv.meta as { reasoningEffort?: string | null } | null)?.reasoningEffort ?? "auto")
+			: conv.mode !== "phone"
+				? (appSetting.value?.reasoningEffort ?? "auto")
+				: ((conv.meta as { reasoningEffort?: string | null } | null)?.reasoningEffort ?? appSetting.value?.reasoningEffort ?? "auto")) as string,
+	);
+	/** 모델 고르기: 모델이 잠긴 대화는 이 대화에, 풀린 대화는 전역 모델. 폰 대화는 이 대화에 저장 */
 	function pickModel(model: string | null) {
-		if (lockable && !conv.apiProfileId) return void appSetting.update({ selectedModel: model });
-		if (!conv.apiProfileId && effectiveApi) return setOption({ apiProfileId: effectiveApi.id, model });
+		if (lockable && !lockedModel) return void appSetting.update({ selectedModel: model });
 		setOption({ model });
 	}
 
@@ -190,18 +192,28 @@
 	// 폰 대화는 폰 주인·폰 설정을 따르므로 지금처럼 (자물쇠 없음)
 	const lockable = $derived(conv.mode !== "phone");
 	const lockedApi = $derived(!!conv.apiProfileId);
+	const lockedModel = $derived(!!conv.model);
 	const lockedPreset = $derived(!!conv.promptPresetId);
 	const lockedPersona = $derived(!!conv.personaId);
-	const lockedEffort = $derived((conv.meta as { reasoningEffort?: string | null } | null)?.reasoningEffort != null);
 	const charPreset = $derived(character?.defaultPromptPresetId || null);
 	/** 풀렸을 때 쓰는 프리셋: 캐릭터 기본 → 전역 (백엔드와 같은 순서) */
 	const shownPreset = $derived(conv.promptPresetId || charPreset || appSetting.value?.selectedPreset || null);
 	const presetFrom = $derived(charPreset ? "캐릭터 기본" : "전역");
 	const personaFrom = $derived(character?.defaultPersonaId ? "캐릭터 기본" : "전역");
-	/** 잠그면 지금 보이는 값을 이 대화에 넣고, 풀면 비운다 */
+	/** API만 단독으로 이 대화에 고정/해제 */
 	function toggleApi() {
-		if (lockedApi) setOption({ apiProfileId: "", model: null });
-		else if (effectiveApi) setOption({ apiProfileId: effectiveApi.id, model: null });
+		if (lockedApi) setOption({ apiProfileId: "" });
+		else if (effectiveApi) setOption({ apiProfileId: effectiveApi.id });
+	}
+	/** 모델과 추론 강도를 함께 이 대화에 고정/해제 */
+	function toggleModel() {
+		if (lockedModel) {
+			setOption({ model: null });
+			void library.patchMeta(conv.id, { reasoningEffort: null });
+		} else if (shownModel) {
+			setOption({ model: shownModel });
+			void library.patchMeta(conv.id, { reasoningEffort: effort });
+		}
 	}
 	function togglePreset() {
 		if (lockedPreset) setOption({ promptPresetId: "" });
@@ -210,21 +222,18 @@
 	function togglePersona() {
 		setOption({ personaId: lockedPersona ? "" : library.convPersonaId(conv) });
 	}
-	function toggleEffort() {
-		void library.patchMeta(conv.id, { reasoningEffort: lockedEffort ? null : effort });
-	}
 	// ---- 고르기 (5-E-29-3, ADR-028 갱신): 잠근 줄은 이 대화에, 풀린 줄은 언제나 전역에 ----
 	// 캐릭터 전용 값은 캐릭터 편집에서만 바꾼다. 풀린 줄이 캐릭터 전용 값을 쓰고 있으면 전역을 바꿔도 이 대화는 그대로임을 알린다
 	function charStillWins(kind: string, name: string | undefined) {
 		toasts.info(`전역 ${kind}를 바꿈 · 이 캐릭터는 전용 ${kind} '${name ?? "?"}'를 씀 (캐릭터 편집에서 바꿈)`);
 	}
 	function pickApi(id: string) {
-		if (lockable && !lockedApi) return void appSetting.update({ selectedApiProfile: id || null, selectedModel: null });
+		if (lockable && !lockedApi) return void appSetting.update({ selectedApiProfile: id || null });
 		setOption({ apiProfileId: id });
 	}
 	function pickEffort(v: string) {
-		if (lockable && !lockedEffort) return void appSetting.update({ reasoningEffort: v === "auto" ? null : v });
-		void library.patchMeta(conv.id, { reasoningEffort: lockable ? v : v === "auto" ? null : v });
+		if (lockable && !lockedModel) return void appSetting.update({ reasoningEffort: v === "auto" ? null : v });
+		void library.patchMeta(conv.id, { reasoningEffort: v });
 	}
 	async function pickPreset(id: string) {
 		if (!lockable || lockedPreset) return setOption({ promptPresetId: id });
@@ -742,29 +751,24 @@
 				{:else}
 					<label class="row"><span>API</span><Select value={conv.apiProfileId ?? DEFAULT} options={apiOptions} onchange={(e) => setOption({ apiProfileId: e.currentTarget.value })} /></label>
 				{/if}
-					<div class="row"><span>모델</span><ModelPicker profile={effectiveApi} value={lockable ? shownModel : conv.model} onchange={pickModel} label="이 대화의 모델" /></div>
-				{#if reasoning}
-					<label class="row"
-						><span>추론 강도</span><span class="with-btn"
-							><Select
-								value={effort}
-								options={[{ value: "auto", label: reasoning.default ? `auto (${reasoning.default})` : "auto" }, ...reasoning.levels.map((l) => ({ value: l, label: l }))]}
-								aria-label="이 대화의 추론 강도"
-								onchange={(e) => pickEffort(e.currentTarget.value)}
-							/>{#if lockable}<OptionLock locked={lockedEffort} from="전역(auto)" onclick={toggleEffort} />{/if}</span
-						></label
-					>
-				{/if}
+				<div class="row">
+					<span>모델</span>
+					<div class="with-btn">
+						<ModelPicker profile={effectiveApi} value={lockable ? shownModel : conv.model} onchange={pickModel} {effort} oneffort={pickEffort} label="이 대화의 모델" />
+						{#if lockable}<OptionLock locked={lockedModel} from="전역" disabled={!lockedModel && !shownModel} onclick={toggleModel} />{/if}
+					</div>
+				</div>
 				<div class="row">
 					<span>프리셋</span>
 					<div class="with-btn">
 						{#if lockable}
 							<Select value={shownPreset ?? DEFAULT} options={shownPreset ? presetOptions.slice(1) : presetOptions} aria-label="프리셋" onchange={(e) => void pickPreset(e.currentTarget.value)} />
+							<IconButton label="이 프리셋 빠르게 편집{usage?.presetName ? ` (${usage.presetName})` : ''}" size="sm" onclick={() => (panel.tab = "context")}><Pencil /></IconButton>
 							<OptionLock locked={lockedPreset} from={presetFrom} disabled={!lockedPreset && !shownPreset} onclick={togglePreset} />
 						{:else}
 							<Select value={conv.promptPresetId ?? DEFAULT} options={presetOptions} aria-label="프리셋" onchange={(e) => setOption({ promptPresetId: e.currentTarget.value })} />
+							<IconButton label="이 프리셋 빠르게 편집{usage?.presetName ? ` (${usage.presetName})` : ''}" size="sm" onclick={() => (panel.tab = "context")}><Pencil /></IconButton>
 						{/if}
-						<IconButton label="이 프리셋 빠르게 편집{usage?.presetName ? ` (${usage.presetName})` : ''}" size="sm" onclick={() => (panel.tab = "context")}><Pencil /></IconButton>
 					</div>
 				</div>
 				<div class="row">

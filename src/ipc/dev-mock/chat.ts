@@ -73,7 +73,7 @@ const presets: PromptPresets_Serialize[] = [
 	{ id: "st", name: "Default (ST)", description: null, presetType: "chat_completion", sourceFormat: "sillytavern", configJson: {}, settingsJson: null, compatibilityJson: null, createdAt: 0, updatedAt: 0 },
 ];
 
-const apis: ApiProfiles[] = [{ id: "gemini", name: "Gemini", provider: "google", formatType: "google", baseUrl: "", model: "gemini-3.7-flash", createdAt: 0, updatedAt: 0 }];
+const apis: ApiProfiles[] = [{ id: "gemini", name: "Gemini", provider: "google", formatType: "google", baseUrl: "", model: "gemini-3.7-flash", customModels: [], verified: true, createdAt: 0, updatedAt: 0 }];
 
 const folders: ConversationFolder[] = [{ id: "f1", characterId: "sera", name: "본편", sortOrder: 0, createdAt: 0, updatedAt: 0 }];
 

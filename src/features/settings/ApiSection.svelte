@@ -14,15 +14,25 @@
 
 	const src = { source: "api" };
 	let keys = $state<Record<string, boolean>>({});
+	let vertexProjects = $state<Record<string, string>>({});
 	let testing = $state<string | null>(null);
 
 	onMount(async () => {
-		await Promise.all([appSetting.load(), library.loaded ? null : library.load()]);
+		await Promise.all([appSetting.load(), library.loaded ? library.refreshApis() : library.load()]);
 		await loadKeys();
 	});
 	async function loadKeys() {
 		const pairs = await Promise.all(library.apis.map(async (a) => [a.id, await call(commands.hasApiKey(a.id), { ...src, silent: true }).catch(() => false)] as const));
 		keys = Object.fromEntries(pairs);
+		const vPairs = await Promise.all(
+			library.apis
+				.filter((a) => a.formatType === "vertexai")
+				.map(async (a) => {
+					const info = await call(commands.getVertexKeyInfo(a.id), { ...src, silent: true }).catch(() => null);
+					return [a.id, info?.projectId ?? ""] as const;
+				}),
+		);
+		vertexProjects = Object.fromEntries(vPairs.filter(([, pid]) => !!pid));
 	}
 
 	// 편집은 설정 안 페이지로 (ApiEditor)
@@ -31,7 +41,8 @@
 	async function test(a: ApiProfiles) {
 		testing = a.id;
 		try {
-			const reply = await call(commands.testMessage(a.id), src);
+			const reply = await call(commands.testMessage(a.id, null), src);
+			a.verified = true;
 			toasts.success(`연결됨 · ${reply.trim().slice(0, 40) || "(빈 응답)"}`);
 		} catch {
 			/* 토스트는 call이 띄움 */
@@ -52,9 +63,17 @@
 	{#if library.apis.length}
 		<Group>
 			{#each library.apis as a (a.id)}
-				<Row label={a.name} desc="{a.provider} · {a.model}">
+				<Row
+					class={a.verified ? undefined : "unverified"}
+					label={a.name}
+					desc={vertexProjects[a.id] ? `${a.provider} · ${vertexProjects[a.id]}` : a.provider}
+				>
 					{#if appSetting.value?.selectedApiProfile === a.id}<Badge tone="accent">기본</Badge>{/if}
-					{#if keys[a.id] === false}<Badge tone="warning"><KeyRound /> 키 없음</Badge>{/if}
+					{#if keys[a.id] === false}
+						<Badge tone="warning"><KeyRound /> 키 없음</Badge>
+					{:else if !a.verified}
+						<Badge tone="neutral">미확인</Badge>
+					{/if}
 					<Button size="sm" variant="ghost" onclick={() => remove(a)}>삭제</Button>
 					<Button size="sm" onclick={() => open(a.id)}>편집</Button>
 					<Button size="sm" variant="soft" loading={testing === a.id} disabled={testing !== null} onclick={() => test(a)}>{#snippet icon()}<Zap />{/snippet}테스트</Button>
@@ -67,3 +86,13 @@
 		</Group>
 	{/if}
 </Section>
+
+<style>
+	:global(.row.unverified .txt) {
+		opacity: 0.5;
+		transition: opacity 0.15s ease;
+	}
+	:global(.row.unverified:hover .txt) {
+		opacity: 0.78;
+	}
+</style>

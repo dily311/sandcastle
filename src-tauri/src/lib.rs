@@ -458,6 +458,7 @@ pub fn specta_builder() -> tauri_specta::Builder<tauri::Wry> {
         set_api_key,
         delete_api_key,
         has_api_key,
+        get_vertex_key_info,
         // data
         get_all_characters,
         create_character,
@@ -803,6 +804,7 @@ pub fn specta_builder() -> tauri_specta::Builder<tauri::Wry> {
         set_api_key,
         delete_api_key,
         has_api_key,
+        get_vertex_key_info,
         // data
         get_all_characters,
         create_character,

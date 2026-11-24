@@ -42,8 +42,11 @@ export const commands = {
 	getModels: (profileId: string, options?: InvokeOptions) => __TAURI_INVOKE<string[]>("get_models", { profileId }, options),
 	/**  연결(형식·주소·모델)로 되는 것: 임베딩·도구 호출·구조화 출력. 요청을 보내지 않는 순수 계산이라 저장 전에도 부를 수 있다 (3-A-4) */
 	getAiCapabilities: (formatType: string, baseUrl: string, model: string, options?: InvokeOptions) => __TAURI_INVOKE<AiCapabilities>("get_ai_capabilities", { formatType, baseUrl, model }, options),
-	/**  연결 확인: 짧은 메시지 하나를 보내고 받은 답을 돌려준다 (저장하지 않음) */
-	testMessage: (profileId: string, options?: InvokeOptions) => __TAURI_INVOKE<string>("test_message", { profileId }, options),
+	/**
+	 *  연결 확인: 짧은 메시지("Hi") 하나를 보내고 받은 답을 돌려준다 (저장하지 않음).
+	 *  `model`을 주면 그 모델로 일시 테스트하고, 없으면 프로필 기본 모델 → 모델 목록 조회 순으로 확인한다.
+	 */
+	testMessage: (profileId: string, model: string | null, options?: InvokeOptions) => __TAURI_INVOKE<string>("test_message", { profileId, model }, options),
 	/**
 	 *  입력을 저장하고 응답을 만든다. `text`가 비었으면 이어서 응답만 (이어쓰기).
 	 *  생성은 작업(ChatStream)으로 돌아서 다른 대화로 옮겨 가도 계속되고, 앱이 꺼지면 다시 시도할 수 있다.
@@ -407,6 +410,8 @@ export const commands = {
 	setApiKey: (profileId: string, apiKey: string, options?: InvokeOptions) => __TAURI_INVOKE<null>("set_api_key", { profileId, apiKey }, options),
 	deleteApiKey: (profileId: string, options?: InvokeOptions) => __TAURI_INVOKE<null>("delete_api_key", { profileId }, options),
 	hasApiKey: (profileId: string, options?: InvokeOptions) => __TAURI_INVOKE<boolean>("has_api_key", { profileId }, options),
+	/**  Vertex AI 키의 공개 메타정보(프로젝트 ID·지역·서비스 계정 이메일)만 돌려준다 (비밀키는 절대 노출하지 않음) */
+	getVertexKeyInfo: (profileId: string, options?: InvokeOptions) => __TAURI_INVOKE<VertexKeyInfo_Serialize | null>("get_vertex_key_info", { profileId }, options),
 	getAllCharacters: (options?: InvokeOptions) => __TAURI_INVOKE<Character_Serialize[]>("get_all_characters", undefined, options),
 	createCharacter: (input: CharacterInput_Deserialize, options?: InvokeOptions) => __TAURI_INVOKE<Character_Serialize>("create_character", { input }, options),
 	/**  캐릭터 저장. 월드인포 연결도 `world_info_ids`로 통째로 바꾼다 */
@@ -755,6 +760,8 @@ export type ApiProfiles_Deserialize = {
 	model: string,
 	/**  사용자가 직접 입력해 남겨 둔 모델 이름 (목록에 계속 보임, ADR-020) */
 	customModels?: string[],
+	/**  연결 확인 여부 (테스트 또는 채팅·게임·폰에서 실제 응답을 받으면 true) */
+	verified?: boolean,
 	createdAt: number,
 	updatedAt: number,
 };
@@ -769,6 +776,8 @@ export type ApiProfiles_Serialize = {
 	model: string,
 	/**  사용자가 직접 입력해 남겨 둔 모델 이름 (목록에 계속 보임, ADR-020) */
 	customModels: string[],
+	/**  연결 확인 여부 (테스트 또는 채팅·게임·폰에서 실제 응답을 받으면 true) */
+	verified: boolean,
 	createdAt: number,
 	updatedAt: number,
 };
@@ -6001,6 +6010,20 @@ export type VarDef_Serialize = {
 
 /**  변수 종류 (게임 변수의 number·boolean·string과 같음) */
 export type VarKind = "number" | "boolean" | "string";
+
+export type VertexKeyInfo = VertexKeyInfo_Serialize | VertexKeyInfo_Deserialize;
+
+export type VertexKeyInfo_Deserialize = {
+	projectId: string,
+	location: string,
+	clientEmail?: string | null,
+};
+
+export type VertexKeyInfo_Serialize = {
+	projectId: string,
+	location: string,
+	clientEmail: string | null,
+};
 
 /**  고를 수 있는 목소리 (ElevenLabs는 계정의 목소리 목록, 그 밖은 OpenAI 기본 목소리) */
 export type Voice = Voice_Serialize | Voice_Deserialize;

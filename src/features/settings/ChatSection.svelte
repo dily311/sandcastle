@@ -10,6 +10,7 @@
 	import Section from "./Section.svelte";
 	import Group from "./Group.svelte";
 	import Row from "./Row.svelte";
+	import ModelPicker from "./ModelPicker.svelte";
 	import PromptSlotEditor from "./PromptSlotEditor.svelte";
 	import { plugins } from "$shared/stores/plugins.svelte";
 	import TypingIndicator from "$features/character/TypingIndicator.svelte";
@@ -25,7 +26,8 @@
 	});
 
 	const s = $derived(appSetting.value);
-	const apiOptions = $derived([{ value: "", label: "고르지 않음" }, ...library.apis.map((a) => ({ value: a.id, label: `${a.name} · ${a.model}` }))]);
+	const apiOptions = $derived([{ value: "", label: "고르지 않음" }, ...library.apis.map((a) => ({ value: a.id, label: a.model ? `${a.name} · ${a.model}` : `${a.name} (${a.provider})` }))]);
+	const selectedApi = $derived(library.apis.find((a) => a.id === (s?.selectedApiProfile ?? "")));
 	const presetOptions = $derived(library.presets.map((p) => ({ value: p.id, label: p.name })));
 	const personaOptions = $derived<ProfileOption[]>(library.personas.map((p) => ({ id: p.id, name: p.name, avatar: p.avatar, avatarFit: p.avatarFit, color: p.color, description: p.description })));
 
@@ -121,6 +123,18 @@
 					onchange={(e) => appSetting.update({ selectedApiProfile: e.currentTarget.value || null })}
 				/>
 			</Row>
+			{#if selectedApi}
+				<Row label="모델" desc="대화 설정에서 따로 고르지 않으면 이걸 씀">
+					<ModelPicker
+						profile={selectedApi}
+						value={s.selectedModel ?? null}
+						onchange={(m) => appSetting.update({ selectedModel: m })}
+						effort={s.reasoningEffort ?? "auto"}
+						oneffort={(e) => appSetting.update({ reasoningEffort: e === "auto" ? null : e })}
+						label="기본 모델"
+					/>
+				</Row>
+			{/if}
 			<Row label="프리셋" desc="대화 설정에서 '앱 기본값'일 때 씀">
 				<Select
 					value={s.selectedPreset}

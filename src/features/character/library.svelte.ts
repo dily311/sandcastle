@@ -83,6 +83,12 @@ class Library {
 		writeListCache(characters, conversations);
 	}
 
+	/** API 프로필 목록만 최신 상태(연결 확인 여부 등)로 다시 읽는다 */
+	async refreshApis() {
+		const apis = await call(commands.getAllApiProfile(), { ...src, silent: true }).catch(() => null);
+		if (apis) this.apis = apis;
+	}
+
 	character(id: string | null | undefined) {
 		return this.characters.find((c) => c.id === id);
 	}

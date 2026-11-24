@@ -143,9 +143,9 @@ async fn conversation_model_follows_its_api_and_is_copied_on_branch() {
     // 분기·복제는 모델도 가져감
     let b = ui::copy_conversation(&pool, &c, "복제", None).await.unwrap();
     assert_eq!(model_of(b).await.as_deref(), Some("my-model"));
-    // API를 바꾸면 초기화 (보낸 모델이 있어도 다른 공급자의 이름일 수 있으므로)
+    // API를 바꿔도 모델은 독립적으로 유지된다
     ui::set_options(&pool, &c, &opts(Some("a2"), Some("my-model"))).await.unwrap();
-    assert_eq!(model_of(c.clone()).await, None);
+    assert_eq!(model_of(c.clone()).await.as_deref(), Some("my-model"));
     // 빈 이름은 NULL
     ui::set_options(&pool, &c, &opts(Some("a2"), Some("  "))).await.unwrap();
     assert_eq!(model_of(c).await, None);

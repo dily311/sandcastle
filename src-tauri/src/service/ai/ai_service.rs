@@ -411,6 +411,10 @@ impl AiService {
             .await;
         }
         let mut generation = result?;
+        // 실제 AI 응답을 한 번이라도 받으면 이 API 키는 연결 확인된 것으로 표시한다
+        if !profile.verified {
+            let _ = db::ai_service::set_verified(&self.db, &profile.id, true).await;
+        }
         // 출력 한도에서 잘려 인자가 끊긴 도구 호출은 실행하지 않는다 (이미 쓴 토큰은 위에서 기록됨)
         if generation.stop == StopKind::MaxTokens && generation.tool_calls.iter().any(|c| c.parse_error.is_some()) {
             return Err(super::structured::truncated("도구 호출"));

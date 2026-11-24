@@ -65,9 +65,25 @@ where
         base_url: input.base_url,
         model: input.model,
         custom_models: vec![],
+        verified: false,
         created_at: now,
         updated_at: now,
     })
+}
+
+/// API 키 연결 확인 여부를 갱신한다 (이미 같은 값이면 건드리지 않아 updated_at을 불필요하게 올리지 않음)
+pub async fn set_verified<'e, E>(executor: E, id: &str, verified: bool) -> Result<(), Error>
+where
+    E: Executor<'e, Database = Sqlite>,
+{
+    let flag: i64 = if verified { 1 } else { 0 };
+    sqlx::query("UPDATE api_profiles SET verified = ? WHERE id = ? AND verified != ?")
+        .bind(flag)
+        .bind(id)
+        .bind(flag)
+        .execute(executor)
+        .await?;
+    Ok(())
 }
 
 pub async fn update_api_profile<'e, E>(executor: E, id: &str, input: ApiProfilesInput) -> Result<(), Error>
