@@ -130,15 +130,15 @@ function filterMenuItems(items: ContextMenuItem[], context?: ContextMenuContext)
 			if (!item.children) {
 				return item;
 			}
-
+			const rawChildren = typeof item.children === "function" ? item.children(context) : item.children;
 			return {
 				...item,
-				children: filterMenuItems(item.children, context),
+				children: filterMenuItems(rawChildren, context),
 			};
 		})
 		.filter((item) => {
 			// children이 있었는데 전부 숨겨졌다면 부모도 숨길지 결정
-			if (item.children) {
+			if (Array.isArray(item.children)) {
 				return item.children.length > 0;
 			}
 

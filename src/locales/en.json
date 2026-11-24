@@ -27,6 +27,7 @@
     "playlist:include": "현재 플레이리스트에 있음",
     "playlist:goChosesMusicPage": "음악 선택 페이지 이동",
     "playlist:goCurrentPlaylistPage": "현재 플레이리스트 페이지 이동",
+    "context:playlists": "Playlists",
     "context:changeLayout": "레이아웃 변경",
     "context:miniPlayer": "미니 플레이어",
     "context:open": "폴더에서 보기",

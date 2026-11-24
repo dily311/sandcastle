@@ -126,16 +126,72 @@ class PlaylistStore {
 
 	async init(selectedFolder: string | null, currentPlaylistId: string | null, currentSongIndex: number) {
 		this.#store = (await commands.getAllPlaylist()) as unknown as Playlist[];
-		if (currentPlaylistId) {
-			this.#currentPlaylistId = currentPlaylistId;
-			this.#currentPlaylist = (await commands.getPlaylistEntry(currentPlaylistId)) as unknown as PlaylistItem[];
+		const targetId =
+			currentPlaylistId && this.#store.some((p) => p.id === currentPlaylistId)
+				? currentPlaylistId
+				: (this.#store[0]?.id ?? currentPlaylistId ?? "default");
+		if (targetId) {
+			this.#currentPlaylistId = targetId;
+			this.#currentPlaylist = (await commands.getPlaylistEntry(targetId)) as unknown as PlaylistItem[];
 		}
-		if (this.#currentPlaylist.length > currentSongIndex) {
-			this.#currentSongIndex = currentSongIndex;
-		}
+		this.#currentSongIndex = this.#currentPlaylist.length > currentSongIndex && currentSongIndex >= 0 ? currentSongIndex : 0;
 		if (selectedFolder) {
 			const raw = (await commands.getSelectFolderMusicData(selectedFolder)) as unknown as LibraryRootRaw;
 			this.#selectedFolderMusics = convertLibraryRoot(raw);
+		}
+	}
+
+	async selectPlaylist(id: string) {
+		if (!id || id === this.#currentPlaylistId) return;
+		const wasPlaying = !audioStore.paused;
+		const entries = (await commands.getPlaylistEntry(id)) as unknown as PlaylistItem[];
+		this.#currentPlaylistId = id;
+		this.#currentPlaylist = entries;
+		this.#currentSongIndex = 0;
+		widgetMusicSetting.update({ currentPlaylistId: id, currentSongIndex: 0 });
+		if (entries.length > 0) {
+			audioStore.setMusic(entries[0].meta);
+			if (wasPlaying) audioStore.play();
+		} else {
+			audioStore.stop();
+		}
+	}
+
+	async createPlaylist(title: string): Promise<Playlist | null> {
+		const trimmed = title.trim();
+		if (!trimmed) return null;
+		const created = (await commands.createPlaylist({
+			title: trimmed,
+			description: "",
+			coverImage: null,
+			sortOrder: this.#store.length,
+		})) as unknown as Playlist;
+		this.#store = [...this.#store, created];
+		await this.selectPlaylist(created.id);
+		return created;
+	}
+
+	async renamePlaylist(id: string, title: string) {
+		const trimmed = title.trim();
+		if (!trimmed) return;
+		const existing = this.#store.find((p) => p.id === id);
+		if (!existing) return;
+		await commands.updatePlaylist(id, {
+			title: trimmed,
+			description: existing.description ?? "",
+			coverImage: existing.coverImage ?? null,
+			sortOrder: existing.sortOrder ?? 0,
+		});
+		this.#store = this.#store.map((p) => (p.id === id ? { ...p, title: trimmed } : p));
+	}
+
+	async deletePlaylist(id: string) {
+		if (id === "default" || this.#store.length <= 1) return;
+		await commands.deletePlaylist(id);
+		this.#store = this.#store.filter((p) => p.id !== id);
+		if (this.#currentPlaylistId === id) {
+			const fallback = this.#store[0]?.id ?? "default";
+			await this.selectPlaylist(fallback);
 		}
 	}
 
@@ -267,6 +323,12 @@ class PlaylistStore {
 	changeOrder = (item: PlaylistItem, index: number) => {};
 
 	// getter
+	get list() {
+		return this.#store;
+	}
+	get currentPlaylist(): Playlist | undefined {
+		return this.#store.find((p) => p.id === this.#currentPlaylistId);
+	}
 	get current() {
 		return this.#currentPlaylist;
 	}
@@ -475,6 +537,7 @@ export const audioStore = new AudioStateStore();
 // -----------------------------------
 
 export function handlePrevSong() {
+	if (!playlistStore.current.length) return;
 	// 현재 재생되고 있다면 처음으로 돌아가도록
 	if (Math.round(audioStore.currentTime) > 10) {
 		audioStore.seek(0);
@@ -493,6 +556,7 @@ export function handlePrevSong() {
 
 	// 음악 세팅
 	const currentMusic = playlistStore.current[changePlayIndex];
+	if (!currentMusic) return;
 	audioStore.setMusic(currentMusic.meta);
 	// 멈춰 있지 않았으면 플레이
 	if (!audioStore.paused) {
@@ -502,6 +566,7 @@ export function handlePrevSong() {
 }
 
 export function handleNextSong(autoPlay?: boolean) {
+	if (!playlistStore.current.length) return;
 	let playIndex = playlistStore.currentSongIndex;
 
 	// 플레이리스트 길이에 도달했으면 루프가 아닌 이상 다음 곡 재생되지 않게 함

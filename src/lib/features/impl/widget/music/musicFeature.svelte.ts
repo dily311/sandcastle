@@ -1,6 +1,6 @@
 import { contextMenuRegistry } from "$/lib/contextmenu/registry";
 import { contextActionRegistry } from "$/lib/contextmenu/actions";
-import { audioStore, handleChangeAlbumCover, widgetMusicSetting, playlistStore } from "./musicPlyerStore.svelte";
+import { audioStore, handleChangeAlbumCover, handleNextSong, handlePrevSong, widgetMusicSetting, playlistStore } from "./musicPlyerStore.svelte";
 import type { FeatureRuntime } from "$/lib/features/types";
 import MusicPlayer from "./ui/MusicPlayer.svelte";
 import { revealItemInDir } from "@tauri-apps/plugin-opener";
@@ -54,6 +54,54 @@ function registerMusicMenuFeature() {
 		interactive: true,
 
 		items: [
+			{
+				id: "music.controls",
+				label: "",
+				controls: [
+					{
+						id: "music.prev",
+						icon: "SkipBack",
+						label: "music.prevSong",
+						action: "music.prev",
+						disabled: () => playlistStore.current.length === 0 || (audioStore.isDisabledPrev && Math.round(audioStore.currentTime) <= 10),
+						keepOpen: true,
+					},
+					{
+						id: "music.togglePlay",
+						icon: () => (audioStore.paused ? "Play" : "Pause"),
+						label: "music.play",
+						action: "music.togglePlay",
+						disabled: () => playlistStore.current.length === 0,
+						keepOpen: true,
+					},
+					{
+						id: "music.next",
+						icon: "SkipForward",
+						label: "music.nextSong",
+						action: "music.next",
+						disabled: () => playlistStore.current.length === 0 || audioStore.isDisabledNext,
+						keepOpen: true,
+					},
+				],
+			},
+			{
+				id: "music.controlsSeparator",
+				label: "",
+				separator: true,
+			},
+			{
+				id: "music.playlists",
+				label: "music.context:playlists",
+				icon: "ListMusic",
+				children: () =>
+					playlistStore.list.map((pl) => ({
+						id: `music.playlist.${pl.id}`,
+						label: pl.title || "기본 플레이리스트",
+						rawLabel: true,
+						isChecked: () => playlistStore.currentPlaylistKey === pl.id,
+						onselect: () => playlistStore.selectPlaylist(pl.id),
+					})),
+			},
 			{
 				id: "music.changeLayout",
 				label: "music.context:changeLayout",
@@ -114,6 +162,15 @@ function registerMusicMenuFeature() {
 		],
 	});
 
+	const unregisterPrev = contextActionRegistry.register("music.prev", () => {
+		handlePrevSong();
+	});
+	const unregisterTogglePlay = contextActionRegistry.register("music.togglePlay", () => {
+		audioStore.togglePlay();
+	});
+	const unregisterNext = contextActionRegistry.register("music.next", () => {
+		handleNextSong();
+	});
 	const unregisterChangeLayout = contextActionRegistry.register("music.changeLayout", () => {
 		widgetMusicSetting.toggleResize();
 	});
@@ -137,6 +194,9 @@ function registerMusicMenuFeature() {
 
 	return () => {
 		unregisterMenu();
+		unregisterPrev();
+		unregisterTogglePlay();
+		unregisterNext();
 		unregisterChangeLayout();
 		unregisterMiniPlayer();
 		unregisterOpen();

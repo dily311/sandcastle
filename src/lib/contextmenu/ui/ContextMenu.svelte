@@ -4,13 +4,18 @@
 	import { contextActionRegistry } from "$/lib/contextmenu/actions";
 	import { contextMenu } from "$/lib/contextmenu/contextMenu.svelte";
 	import { ArrowRight, Check, ChevronRight } from "@lucide/svelte";
-	import type { ContextMenuContext, ContextMenuItem } from "../types";
+	import type { ContextMenuContext, ContextMenuControl, ContextMenuItem } from "../types";
 
-	async function execute(action?: string, context?: ContextMenuContext) {
-		if (!action) return;
-		contextMenu.close();
+	async function execute(item: Pick<ContextMenuItem, "action" | "onselect">, context?: ContextMenuContext, keepOpen = false) {
+		if (!item.action && !item.onselect) return;
+		if (!keepOpen) contextMenu.close();
 
-		await contextActionRegistry.execute(action, context);
+		if (item.onselect) await item.onselect(context);
+		if (item.action) await contextActionRegistry.execute(item.action, context);
+	}
+
+	function resolveIcon(icon: ContextMenuControl["icon"]): string {
+		return typeof icon === "function" ? icon() : icon;
 	}
 
 	function handleWindowClick() {
@@ -26,12 +31,14 @@
 		item: ContextMenuItem,
 		context?: ContextMenuContext,
 	) {
-		if (item.children && item.children?.length != 0) {
+		const children = Array.isArray(item.children) ? item.children : undefined;
+		if (children && children.length != 0) {
 			const rect = e.currentTarget.getBoundingClientRect();
-			contextMenu.openSubmenu(rect.right, rect.top, item.children, context);
+			contextMenu.openSubmenu(rect.right, rect.top, children, context);
 
 			return;
 		}
+		contextMenu.closeSubmenu();
 	}
 </script>
 
@@ -49,13 +56,32 @@
 			{#each contextMenu.items as item}
 				{#if item.separator}
 					<hr />
+				{:else if item.controls?.length}
+					<li class="contextmenu-controls" onmouseenter={() => contextMenu.closeSubmenu()}>
+						{#each item.controls as ctrl (ctrl.id)}
+							<button
+								type="button"
+								class="control-btn"
+								aria-label={$_(ctrl.label)}
+								title={$_(ctrl.label)}
+								disabled={ctrl.disabled?.(contextMenu.context) ?? false}
+								onclick={(e) => {
+									e.stopPropagation();
+									void execute(ctrl, contextMenu.context, ctrl.keepOpen ?? false);
+								}}
+							>
+								<Icon name={resolveIcon(ctrl.icon)} size={14} />
+							</button>
+						{/each}
+					</li>
 				{:else}
+					{@const children = Array.isArray(item.children) ? item.children : undefined}
 					<li class="contextmenu-item">
 						<button
 							type="button"
 							class:danger={item.danger}
-							disabled={item.disabled?.() ?? false}
-							onclick={() => execute(item.action, contextMenu.context)}
+							disabled={item.disabled?.(contextMenu.context) ?? false}
+							onclick={() => execute(item, contextMenu.context)}
 							onmouseenter={(e) => handleMouseOn(e, item, contextMenu.context)}
 						>
 							<div class="menu-item-icon">
@@ -64,9 +90,9 @@
 								{/if}
 							</div>
 							<div class="menu-item-title">
-								{$_(item.label)}
+								{item.rawLabel ? item.label : $_(item.label)}
 							</div>
-							{#if item.children?.length}
+							{#if children?.length}
 								<div class="menu-item-icon mod-children">
 									<span class="arrow">
 										<ChevronRight />
@@ -95,8 +121,8 @@
 							type="button"
 							class="menu-item"
 							class:danger={item.danger}
-							disabled={item.disabled?.() ?? false}
-							onclick={() => execute(item.action, contextMenu.context)}
+							disabled={item.disabled?.(contextMenu.context) ?? false}
+							onclick={() => execute(item, contextMenu.context)}
 						>
 							<div class="menu-item-icon">
 								{#if item.icon}
@@ -104,8 +130,13 @@
 								{/if}
 							</div>
 							<div class="menu-item-title">
-								{$_(item.label)}
+								{item.rawLabel ? item.label : $_(item.label)}
 							</div>
+							{#if item.isChecked?.(contextMenu.context) ?? false}
+								<div class="menu-item-icon mod-checked">
+									<Check />
+								</div>
+							{/if}
 						</button>
 					</li>
 				{/each}
@@ -147,6 +178,30 @@
 		z-index: 901;
 	}
 
+	.contextmenu-controls {
+		display: flex;
+		align-items: center;
+		justify-content: space-around;
+		gap: 0.2rem;
+		padding: 0.15rem 0.2rem;
+	}
+	.control-btn {
+		flex: 1 1 0;
+		display: flex;
+		align-items: center;
+		justify-content: center;
+		padding: 0.35rem 0.4rem;
+		border-radius: 0.3rem;
+		color: var(--text);
+		cursor: pointer;
+	}
+	.control-btn:hover:not(:disabled) {
+		background-color: var(--surface-hover);
+	}
+	.control-btn:disabled {
+		opacity: 0.4;
+		cursor: default;
+	}
 	.contextmenu-item button {
 		display: flex;
 		align-items: center;
