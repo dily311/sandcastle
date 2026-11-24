@@ -528,9 +528,17 @@ AI: 그때 이야기를 다시 해 볼까요?`, stale: false },
 		const c = conv(conversationId as string);
 		const ch = characters.find((x) => x.id === c.characterId)?.name ?? "";
 		// 화면에만 쓰는 정규식(전역·이 캐릭터)을 흉내 낸다. "상태창으로" 고른 것은 백엔드처럼 status:<id>로 감싼다 (5-F-5-1)
-		const scripts = regex.filter((r) => r.enabled && r.target === "display" && (r.scope === "global" || (r.scope === "character" && r.scopeId === c.characterId)));
-		const run = (text: string) =>
-			scripts.reduce((t, r) => {
+		const scripts = regex.filter(
+			(r) =>
+				r.enabled &&
+				r.target === "display" &&
+				(r.scope === "global" ||
+					(r.scope === "character" && r.scopeId === c.characterId) ||
+					(r.scope === "preset" && !!c.promptPresetId && r.scopeId === c.promptPresetId)),
+		);
+		const run = (text: string) => {
+			const pins: { id: string; out: string }[] = [];
+			let cur = scripts.reduce((t, r) => {
 				const m = /^\/(.*)\/([a-z]*)$/s.exec(r.findRegex);
 				let re: RegExp;
 				try {
@@ -541,9 +549,17 @@ AI: 그때 이야기를 다시 해 볼까요?`, stale: false },
 				const pin = !!(r.extraJson as { statusWindow?: boolean } | null)?.statusWindow;
 				return t.replace(re, (...g) => {
 					const out = r.replaceString.replace(/\{\{match\}\}/gi, g[0]).replace(/\$(\d+)/g, (_, n) => g[Number(n)] ?? "");
-					return pin ? `\n\n<div data-sc-pin="status:${r.id}">${out}</div>\n\n` : out;
+					if (!pin) return out;
+					const idx = pins.length;
+					pins.push({ id: r.id, out });
+					return `\x00SCPIN_${idx}\x00`;
 				});
 			}, text);
+			for (const [idx, p] of pins.entries()) {
+				cur = cur.replace(`\x00SCPIN_${idx}\x00`, `\n\n<div data-sc-pin="status:${p.id}">${p.out}</div><!--/sc-pin-->\n\n`);
+			}
+			return cur;
+		};
 		return (items as { content: string }[]).map((i) => run(i.content.replace(/\{\{char\}\}|<bot>/gi, ch).replace(/\{\{user\}\}|<user>/gi, "Min")));
 	},
 	context_usage: ({ conversationId }) => {

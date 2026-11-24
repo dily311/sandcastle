@@ -10,7 +10,7 @@
 
 <div class="top sc-status-top" class:collapsed={statusView.topCollapsed}>
 	<button type="button" class="head" aria-expanded={!statusView.topCollapsed} onclick={() => statusView.set({ topCollapsed: !statusView.topCollapsed })}>
-		<ChevronDown class={statusView.topCollapsed ? "rot" : ""} /><b>상태</b>
+		<ChevronDown class={statusView.topCollapsed ? "rot" : ""} /><b>상태창</b>
 	</button>
 	{#if !statusView.topCollapsed}
 		<div class="body"><StatusWindow {blocks} /></div>
@@ -19,6 +19,7 @@
 
 <style>
 	.top {
+		padding-top: 36px;
 		flex: none;
 		border-bottom: 1px solid var(--border);
 		background: var(--surface);
@@ -45,7 +46,7 @@
 		transform: rotate(-90deg);
 	}
 	.body {
-		max-height: 40vh;
+		max-height: 30vh;
 		overflow: auto;
 		padding: 0 var(--space-3) var(--space-2);
 	}

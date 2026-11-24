@@ -48,8 +48,10 @@
 		onmarkremove?: (b: ChatBookmark) => void;
 		/** 읽기 화면 (5-E-6-2, ADR-031): 복사·접기·여기서 분기·있는 번역 보기·이미 만든 음성만 — 고치기·생성·새 번역·그리기 없음 */
 		readonly?: boolean;
+		/** 본문에서 숨길 상태창 정규식 출처 키 집합 (없으면 모든 상태창 표시를 숨김) */
+		pinnedKeys?: ReadonlySet<string>;
 	}
-	let { msg, no, avatar, avatarFit = null, session, images, isLast, onbranch, onprompt, selecting = false, selected = false, onselect, marks = [], oncard, onmarkremove, readonly = false }: Props = $props();
+	let { msg, no, avatar, avatarFit = null, session, images, isLast, onbranch, onprompt, selecting = false, selected = false, onselect, marks = [], oncard, onmarkremove, readonly = false, pinnedKeys }: Props = $props();
 	/** 소리 내어 읽기: 읽기 화면은 이미 만든 음성만 (새로 만들지 않음) */
 	const say = () => speak(msg, translation && !showOriginal ? translation.text : msg.content, false, readonly);
 
@@ -360,7 +362,7 @@
 		{#if translation && !live}<p class="tr-note">{showOriginal ? "원문" : `${translation.lang} 번역`} · <button class="link" onclick={() => (showOriginal = !showOriginal)}>{showOriginal ? "번역 보기" : "원문 보기"}</button></p>{/if}
 		{#if blocks.length}
 			<!-- 상태창 고정은 AI 메시지만 (고정 자리도 AI 메시지에서 찾음, 5-F-4-2) -->
-			<RichText {blocks} {images} collapsePins={plugins.on("status") && msg.role === "assistant"} />
+			<RichText {blocks} {images} collapsePins={plugins.on("status") && msg.role === "assistant" ? (pinnedKeys ?? true) : false} />
 		{:else if live}
 			<div class="typing"><TypingIndicator name={msg.name ?? ""} /></div>
 		{/if}

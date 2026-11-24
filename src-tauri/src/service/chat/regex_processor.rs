@@ -149,8 +149,11 @@ impl RegexProcessor {
 
     /// `placement`에 해당하고 `targets` 중 하나에 속하는 스크립트를 차례로 적용.
     /// `depth`: 0 = 가장 최근 메시지. None이면 깊이 제한을 보지 않는다.
+    /// 상태창 정규식(`pin = true`)의 치환 결과는 자리표시자로 보호해 뒤따르는 대사·꾸밈 정규식이
+    /// `data-sc-pin="status:..."` 속성을 망가뜨리지 못하게 한 뒤 마지막에 펼친다.
     pub fn apply(&self, text: &str, placement: RegexPlacement, targets: &[RegexTarget], depth: Option<usize>) -> String {
         let mut out = text.to_string();
+        let mut pins: Vec<(String, String)> = Vec::new();
         for c in &self.scripts {
             if !c.placement.contains(&placement) || !targets.contains(&c.target) {
                 continue;
@@ -160,7 +163,12 @@ impl RegexProcessor {
                     continue;
                 }
             }
-            out = apply_one(c, &out, &self.macros);
+            out = apply_one(c, &out, &self.macros, &mut pins);
+        }
+        for (idx, (id, html)) in pins.into_iter().enumerate() {
+            let token = pin_token(idx);
+            let wrapped = format!("\n\n<div data-sc-pin=\"status:{id}\">{html}</div><!--/sc-pin-->\n\n");
+            out = out.replace(&token, &wrapped);
         }
         out
     }
@@ -173,8 +181,10 @@ pub fn validate_script(script: &RegexScript) -> Result<()> {
 
 /// 저장하지 않고 스크립트 하나를 텍스트에 적용해 본다 (편집 화면 미리보기)
 pub fn preview_script(script: &RegexScript, text: &str, macros: &RegexMacros) -> Result<String> {
-    let c = compile(script, macros)?;
-    Ok(apply_one(&c, text, macros))
+    let mut c = compile(script, macros)?;
+    c.pin = false;
+    let mut pins = Vec::new();
+    Ok(apply_one(&c, text, macros, &mut pins))
 }
 
 fn scope_rank(scope: RegexScope) -> u8 {
@@ -258,14 +268,20 @@ fn invalid(name: &str, reason: &str) -> AppError {
 // 적용
 // =======================================
 
-fn apply_one(c: &Compiled, text: &str, macros: &RegexMacros) -> String {
+fn pin_token(idx: usize) -> String {
+    format!("\x00SCPIN_{idx}\x00")
+}
+
+fn apply_one(c: &Compiled, text: &str, macros: &RegexMacros, pins: &mut Vec<(String, String)>) -> String {
     let limit = if c.global { 0 } else { 1 };
     let replacer = |caps: &Captures<'_, str>| {
         let expanded = expand_groups(&c.replace, caps, &c.trim_strings);
         let out = substitute_macros(&expanded, macros, |v| v.to_string());
         if c.pin {
-            // 상태창 정규식 (5-F-5-1): 제 줄로 떼어 상태창 블록이 되게
-            format!("\n\n<div data-sc-pin=\"status:{}\">{out}</div>\n\n", c.id)
+            // 상태창 정규식 (5-F-5-1): 뒤따르는 정규식이 속성을 건드리지 못하게 자리표시자로 먼저 치환
+            let idx = pins.len();
+            pins.push((c.id.clone(), out));
+            pin_token(idx)
         } else {
             out
         }
@@ -413,16 +429,28 @@ mod tests {
     /// 상태창 정규식 (5-F-5-1): 화면에만 쓰는 정규식이 "상태창으로"면 결과를 출처 id로 감싼다. 저장·프롬프트 정규식은 감싸지 않는다
     #[test]
     fn status_window_regex_wraps_display_output_only() {
-        let mut shown = script(r"/<hp>(\d+)<\/hp>/", "<b>HP $1</b>");
+        let mut shown = script(r"/<hp>(\d+)<\/hp>/", "<div class='hp'>HP $1</div>");
         shown.target = RegexTarget::Display;
         shown.extra_json = Some(serde_json::json!({ "statusWindow": true }));
+        let mut quote = script(r#"/"([^"]+)"/g"#, "<q>$1</q>");
+        quote.id = "s-quote".into();
+        quote.sort_order = 10;
+        quote.target = RegexTarget::Display;
         let mut stored = shown.clone();
         stored.id = "s-stored".into();
         stored.target = RegexTarget::Stored;
-        let display = RegexProcessor::new(vec![shown.clone()], macros()).apply("걷는다.<hp>7</hp>", RegexPlacement::AiOutput, &[RegexTarget::Display], Some(0));
-        assert_eq!(display, format!("걷는다.\n\n<div data-sc-pin=\"status:{}\"><b>HP 7</b></div>\n\n", shown.id));
+        let display = RegexProcessor::new(vec![shown.clone(), quote], macros()).apply(
+            "\"안녕\" 걷는다.<hp>7</hp>",
+            RegexPlacement::AiOutput,
+            &[RegexTarget::Display],
+            Some(0),
+        );
+        assert_eq!(
+            display,
+            format!("<q>안녕</q> 걷는다.\n\n<div data-sc-pin=\"status:{}\"><div class='hp'>HP 7</div></div><!--/sc-pin-->\n\n", shown.id)
+        );
         let kept = RegexProcessor::new(vec![stored], macros()).apply("걷는다.<hp>7</hp>", RegexPlacement::AiOutput, &[RegexTarget::Stored], Some(0));
-        assert_eq!(kept, "걷는다.<b>HP 7</b>", "저장 정규식에는 표시를 넣지 않음");
+        assert_eq!(kept, "걷는다.<div class='hp'>HP 7</div>", "저장 정규식에는 표시를 넣지 않음");
     }
 
     #[test]

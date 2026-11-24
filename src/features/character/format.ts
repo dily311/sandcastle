@@ -4,7 +4,7 @@
 // - <cg>키</cg> → 캐릭터 에셋 (문단 사이 블록)
 // - ```html … ``` → HTML 블록 (iframe으로 그림, JS 허용, shared/html/blocks.ts)
 // - 코드 블록 밖 HTML 줄(HTML 렌더링 플러그인이 켜졌을 때) → 메시지 안 UI, 안의 글도 마크다운 (renderUiHtml)
-import { splitHtmlBlocks } from "$shared/html/blocks";
+import { splitHtmlBlocks, wholeHtmlBlock } from "$shared/html/blocks";
 import { renderMarkdown, SAY } from "$shared/html/markdown";
 
 export { SAY };
@@ -13,7 +13,14 @@ export type Block =
 	/** 마크다운을 그린 HTML (이미 거름) */
 	| { kind: "md"; html: string }
 	| { kind: "cg"; key: string }
-	| { kind: "html"; code: string; /** false: 코드 블록 밖 HTML — 글쓴이의 JS 없이 메시지 안에 그림 */ scripts?: false };
+	| {
+			kind: "html";
+			code: string;
+			/** false: 코드 블록 밖 HTML — 글쓴이의 JS 없이 메시지 안에 그림 */
+			scripts?: false;
+			/** 상태창 출처 키 (코드 블록 감싸기가 벗겨진 경우에도 출처 유지) */
+			pin?: string;
+	  };
 
 const CG = /<cg>\s*([^<]+?)\s*<\/cg>/gi;
 
@@ -30,9 +37,51 @@ export function hasRawHtml(content: string): boolean {
 	return splitHtmlBlocks(content).some((p) => p.kind === "text" && /<(div|p|br|span|img|table|style|h\d|ul|ol|center|font|a|b|i|details)\b[^>]*>/i.test(p.text.replace(CG, "")));
 }
 
+const PIN_END_MARKER = "<!--/sc-pin-->";
+const PIN_OPEN_RE =
+	/<([a-z][\w-]*)\b(?:[^>"']|"[^"]*"|'[^']*')*?\bdata-sc-pin\s*=\s*(?:"(status(?::[^"]*)?)"|'(status(?::[^']*)?)'|(status(?::[^"'\s>]*)?))(?:[^>"']|"[^"]*"|'[^']*')*?>/gi;
+const ANY_FENCE_RE = /```[ \t]*([\w-]*)[ \t]*\r?\n([\s\S]*?)\r?\n?```/g;
+
+/** 열린 상태창 태그 이후에서 닫는 위치를 찾는다 (주석·코드블록 안 태그는 건너뛰고, 닫히지 않은 태그가 있어도 다음 상태창을 삼키지 않음) */
+function findPinEnd(text: string, openEnd: number, tag: string): { innerEnd: number; fullEnd: number; afterEnd: number } {
+	const markerIdx = text.indexOf(PIN_END_MARKER, openEnd);
+	if (markerIdx !== -1 && !/\bdata-sc-pin\s*=\s*["']?status\b/i.test(text.slice(openEnd, markerIdx))) {
+		const sub = text.slice(openEnd, markerIdx);
+		const closeRe = new RegExp(`<\\/${tag}\\s*>\\s*$`, "i");
+		const cm = closeRe.exec(sub);
+		if (cm) {
+			return {
+				innerEnd: openEnd + cm.index,
+				fullEnd: openEnd + cm.index + cm[0].trimEnd().length,
+				afterEnd: markerIdx + PIN_END_MARKER.length,
+			};
+		}
+	}
+	const scan = /<!--[\s\S]*?-->|```[\s\S]*?```|<(\/?)([a-z][\w-]*)\b((?:[^>"']|"[^"]*"|'[^']*')*?)(\/?)>/gi;
+	scan.lastIndex = openEnd;
+	let depth = 1;
+	for (let t = scan.exec(text); t; t = scan.exec(text)) {
+		if (t[0].startsWith("<!--") || t[0].startsWith("```")) continue;
+		const isClose = t[1] === "/";
+		const tName = t[2].toLowerCase();
+		const attrs = t[3];
+		const selfClose = t[4] === "/";
+		if (!isClose && /\bdata-sc-pin\s*=\s*["']?status\b/i.test(attrs)) {
+			return { innerEnd: t.index, fullEnd: t.index, afterEnd: t.index };
+		}
+		if (tName !== tag || VOID.has(tName) || selfClose) continue;
+		depth += isClose ? -1 : 1;
+		if (!depth) {
+			const fullEnd = t.index + t[0].length;
+			const afterEnd = text.slice(fullEnd).startsWith(PIN_END_MARKER) ? fullEnd + PIN_END_MARKER.length : fullEnd;
+			return { innerEnd: t.index, fullEnd, afterEnd };
+		}
+	}
+	return { innerEnd: text.length, fullEnd: text.length, afterEnd: text.length };
+}
+
 /**
  * 상태창 표시(`data-sc-pin="status"`, 5-F-4-2)가 붙은 요소를 제 줄로 떼어 둔다 — 문단 가운데 있어도 따로 된 HTML 블록이 되게.
- * (문단 안 HTML은 허용 목록에서 data- 속성이 빠져 고정 자리로 보낼 수 없다.) 같은 이름의 태그를 세어 닫는 태그까지
  */
 export function isolatePins(text: string): string {
 	return splitPins(text)
@@ -44,53 +93,98 @@ export function isolatePins(text: string): string {
 }
 
 /** 글을 상태창 요소(pin)와 나머지로 나눈다 (순서대로) */
-function splitPins(text: string): { pin: boolean; text: string }[] {
+function splitPins(text: string): { pin: boolean; text: string; inner?: string; key?: string }[] {
 	if (!/data-sc-pin/i.test(text)) return [{ pin: false, text }];
-	const open = /<([a-z][\w-]*)\b[^>]*\bdata-sc-pin\s*=\s*["']?status\b[^>]*>/gi;
-	const out: { pin: boolean; text: string }[] = [];
+	const open = new RegExp(PIN_OPEN_RE.source, "gi");
+	const out: { pin: boolean; text: string; inner?: string; key?: string }[] = [];
 	let at = 0;
 	for (let m = open.exec(text); m; m = open.exec(text)) {
 		if (m.index < at) continue;
 		const tag = m[1].toLowerCase();
-		const tags = new RegExp(`<(/?)${tag}\\b[^>]*?(/?)>`, "gi");
-		tags.lastIndex = m.index + m[0].length;
-		let depth = 1;
-		let end = text.length;
-		for (let t = tags.exec(text); t; t = tags.exec(text)) {
-			if (t[2]) continue; // <tag/>
-			depth += t[1] ? -1 : 1;
-			if (!depth) {
-				end = t.index + t[0].length;
-				break;
-			}
-		}
+		const key = m[2] ?? m[3] ?? m[4] ?? "status";
+		const openEnd = m.index + m[0].length;
+		const { innerEnd, fullEnd, afterEnd } = findPinEnd(text, openEnd, tag);
 		if (m.index > at) out.push({ pin: false, text: text.slice(at, m.index) });
-		out.push({ pin: true, text: text.slice(m.index, end) });
-		at = end;
-		open.lastIndex = end;
+		out.push({ pin: true, text: text.slice(m.index, fullEnd), inner: text.slice(openEnd, innerEnd), key });
+		at = afterEnd;
+		open.lastIndex = afterEnd;
 	}
 	if (at < text.length) out.push({ pin: false, text: text.slice(at) });
 	return out;
 }
 
-/** HTML 렌더링이 꺼져 있어도 상태창 요소는 거른 HTML 블록으로 (상태창이 그 플러그인에 매이지 않게, 5-F-5-1) */
-function pinOrTextBlocks(text: string, opts: Opts): Block[] {
-	return splitPins(text).flatMap((p) => (p.pin ? [{ kind: "html" as const, code: p.text, scripts: false as const }] : p.text.trim() ? textBlocks(p.text, opts) : []));
+/** 상태창 요소 하나를 블록으로 변환 (안쪽이 ```html 코드 블록이면 iframe 블록으로 풀고 출처 키를 보존) */
+function pinToBlocks(full: string, inner: string, key: string): Block[] {
+	if (!inner.trim()) return [];
+	const fenced = wholeHtmlBlock(inner);
+	if (fenced !== null) return [{ kind: "html", code: fenced, pin: key }];
+	const parts = splitHtmlBlocks(inner);
+	if (parts.some((p) => p.kind === "html")) {
+		return parts.flatMap((p): Block[] =>
+			p.kind === "html"
+				? [{ kind: "html", code: p.code, pin: key }]
+				: p.text.trim()
+					? [{ kind: "html", code: p.text, scripts: false, pin: key }]
+					: [],
+		);
+	}
+	return [{ kind: "html", code: full, scripts: false }];
+}
+
+function plainToBlocks(text: string, opts: Opts): Block[] {
+	if (!text.trim()) return [];
+	return opts.safeHtml ? safeHtmlBlocks(text, opts) : textBlocks(text, opts);
 }
 
 /**
  * rawHtml: 코드 블록 밖의 HTML도 HTML 블록으로 그린다 (캐릭터 개요).
  * safeHtml: 메시지에서 태그로 시작하는 줄(태그가 닫힐 때까지)을 **스크립트 없는** HTML 블록으로 (5-E-9, ADR-004 추가).
- * 둘 다 없으면 AI 답변의 HTML은 ```html 블록만 그린다
+ * 둘 다 없으면 AI 답변의 HTML은 ```html 블록만 그린다.
+ * 상태창 요소(data-sc-pin="status...")는 safeHtml 여부·안쪽 코드블록 여부와 무관하게 온전히 상태창 블록으로 분리한다.
  */
 export function toBlocks(content: string, opts: Opts = {}): Block[] {
 	if (opts.rawHtml && hasRawHtml(content)) {
 		// 글 전체를 한 문서로 (마크다운 줄은 HTML 안에서 의미가 없어 그대로 둠)
 		return [{ kind: "html", code: content.replace(/```html\s*\n?|```/gi, "").replace(/\n/g, "<br>\n").replace(/(<br>\n)+(?=<\/?(div|p|ul|ol|li|table|tr|h\d)\b)/gi, "\n") }];
 	}
-	return splitHtmlBlocks(content).flatMap((part) =>
-		part.kind === "html" ? [{ kind: "html" as const, code: part.code }] : opts.safeHtml ? safeHtmlBlocks(isolatePins(part.text), opts) : pinOrTextBlocks(part.text, opts),
-	);
+	if (!content.includes("```") && !/data-sc-pin/i.test(content)) {
+		return plainToBlocks(content, opts);
+	}
+	const out: Block[] = [];
+	const fenceRe = new RegExp(ANY_FENCE_RE.source, "g");
+	const pinRe = new RegExp(PIN_OPEN_RE.source, "gi");
+	let plainFrom = 0;
+	let scanPos = 0;
+	while (scanPos < content.length) {
+		fenceRe.lastIndex = scanPos;
+		pinRe.lastIndex = scanPos;
+		const fm = fenceRe.exec(content);
+		const pm = pinRe.exec(content);
+		if (!fm && !pm) break;
+		if (fm && (!pm || fm.index <= pm.index)) {
+			const html = wholeHtmlBlock(fm[0]);
+			const fenceEnd = fm.index + fm[0].length;
+			if (html !== null) {
+				out.push(...plainToBlocks(content.slice(plainFrom, fm.index), opts));
+				out.push({ kind: "html", code: html });
+				plainFrom = fenceEnd;
+			}
+			scanPos = fenceEnd;
+		} else if (pm) {
+			out.push(...plainToBlocks(content.slice(plainFrom, pm.index), opts));
+			const tag = pm[1].toLowerCase();
+			const key = pm[2] ?? pm[3] ?? pm[4] ?? "status";
+			const openEnd = pm.index + pm[0].length;
+			const { innerEnd, fullEnd, afterEnd } = findPinEnd(content, openEnd, tag);
+			out.push(...pinToBlocks(content.slice(pm.index, fullEnd), content.slice(openEnd, innerEnd), key));
+			plainFrom = afterEnd;
+			scanPos = afterEnd;
+		}
+	}
+	if (plainFrom < content.length) {
+		out.push(...plainToBlocks(content.slice(plainFrom), opts));
+	}
+	return out;
 }
 
 /** HTML로 여는 태그 (줄 맨 앞에 오면 그 줄부터 HTML 덩어리) */

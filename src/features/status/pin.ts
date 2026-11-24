@@ -9,7 +9,7 @@ const PIN_RE = /\bdata-sc-pin\s*=\s*["']?status\b/i;
 
 /** 이 HTML 블록이 상태창인가 */
 export function isStatusPin(b: Block): b is Extract<Block, { kind: "html" }> {
-	return b.kind === "html" && PIN_RE.test(b.code);
+	return b.kind === "html" && (!!b.pin || PIN_RE.test(b.code));
 }
 
 /** 뒤에서부터 이만큼만 본다 (긴 대화에서 매번 다 읽지 않게) */
@@ -19,15 +19,22 @@ type Msg = { id: string; role: string; content: string };
 
 /** 블록의 출처 (표시 값). 예: `status`, `status:r12` */
 export function pinKey(b: Extract<Block, { kind: "html" }>): string {
-	return /\bdata-sc-pin\s*=\s*["']?(status(?::[^"'\s>]*)?)/i.exec(b.code)?.[1] ?? "status";
+	return b.pin ?? /\bdata-sc-pin\s*=\s*["']?(status(?::[^"'\s>]*)?)/i.exec(b.code)?.[1] ?? "status";
 }
 
 /**
  * 출처마다 가장 최근 상태창 블록 (출처 이름순 — 순서가 메시지마다 바뀌지 않게). AI 메시지에서만 찾고,
- * 보이는 글(정규식을 거친 display)을 메시지와 같은 방식으로 블록으로 나눈다. 한 메시지에 같은 출처가 여럿이면 마지막 것
+ * 보이는 글(정규식을 거친 display)을 메시지와 같은 방식으로 블록으로 나눈다.
+ * 한 메시지에 같은 출처가 여럿이면 (g 플래그 정규식 등) 모두 반환한다.
+ * allowedKeys: 허용할 출처 집합. 없으면 모두 허용.
  */
-export function latestStatusBlocks(messages: readonly Msg[], display: Record<string, string>, safeHtml: boolean): Extract<Block, { kind: "html" }>[] {
-	const found = new Map<string, Extract<Block, { kind: "html" }>>();
+export function latestStatusBlocks(
+	messages: readonly Msg[],
+	display: Record<string, string>,
+	safeHtml: boolean,
+	allowedKeys?: ReadonlySet<string>,
+): Extract<Block, { kind: "html" }>[] {
+	const found = new Map<string, Extract<Block, { kind: "html" }>[]>();
 	for (let i = messages.length - 1, n = 0; i >= 0 && n < LOOKBACK; i--) {
 		const m = messages[i];
 		if (m.role !== "assistant") continue;
@@ -35,12 +42,22 @@ export function latestStatusBlocks(messages: readonly Msg[], display: Record<str
 		const text = display[m.id] ?? m.content;
 		if (!PIN_RE.test(text)) continue;
 		const pinned = toBlocks(text, { safeHtml }).filter(isStatusPin);
-		for (const b of pinned.reverse()) {
+		// 이 메시지의 블록을 출처별로 묶는다 (한 메시지 안에 같은 출처가 여럿이면 모두)
+		const byKey = new Map<string, Extract<Block, { kind: "html" }>[]>();
+		for (const b of pinned) {
 			const k = pinKey(b);
-			if (!found.has(k)) found.set(k, b);
+			if (allowedKeys && !allowedKeys.has(k)) continue;
+			if (!byKey.has(k)) byKey.set(k, []);
+			byKey.get(k)!.push(b);
+		}
+		// 출처마다 가장 최근 메시지 우선
+		for (const [k, blocks] of byKey) {
+			if (!found.has(k)) found.set(k, blocks);
 		}
 	}
-	return [...found.entries()].sort(([a], [b]) => a.localeCompare(b)).map(([, b]) => b);
+	return [...found.entries()]
+		.sort(([a], [b]) => a.localeCompare(b))
+		.flatMap(([, blocks]) => blocks);
 }
 
 /** 가장 최근 하나 (출처와 상관없이) */

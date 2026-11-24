@@ -3,7 +3,6 @@
 	// (```html이면 격리된 iframe — triggerSlash로 변수를 바꿀 수 있음, 코드 블록 밖 HTML이면 거른 HTML)
 	import RichText from "$features/character/RichText.svelte";
 	import type { Block } from "$features/character/format";
-	import { PIN_ATTR } from "./pin";
 
 	let { blocks }: { blocks: Block[] } = $props();
 </script>
@@ -14,7 +13,7 @@
 			<div class="one sc-status-item"><RichText blocks={[b]} /></div>
 		{/each}
 	{:else}
-		<p class="empty">상태창 HTML에 <code>{PIN_ATTR}</code>를 붙이면 가장 최근 것이 여기 모임</p>
+		<p class="empty">상태창 정규식을 선택하면 가장 최근 결과가 여기에 표시됩니다</p>
 	{/if}
 </div>
 
@@ -29,8 +28,5 @@
 		margin: 0;
 		color: var(--text-faint);
 		font-size: var(--text-xs);
-	}
-	code {
-		font-size: inherit;
 	}
 </style>

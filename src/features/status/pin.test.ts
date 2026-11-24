@@ -60,4 +60,54 @@ describe("상태창 고정 (5-F-4-2)", () => {
 			["status:hp", hp(7)],
 		]);
 	});
+
+	it("같은 출처가 한 메시지에 여럿이면 모두 반환 (g 플래그 정규식)", () => {
+		const r1 = (n: number) => `<div data-sc-pin="status:r1">HP ${n}</div>`;
+		const messages = [msg("a", "assistant", `${r1(10)}\n\n${r1(20)}`)];
+		const blocks = latestStatusBlocks(messages, {}, true);
+		expect(blocks).toHaveLength(2);
+		expect(blocks[0].code).toContain("HP 10");
+		expect(blocks[1].code).toContain("HP 20");
+	});
+
+	it("allowedKeys 필터: 선택된 정규식 출처만 반환", () => {
+		const hp = (n: number) => `<div data-sc-pin="status:r-hp">HP ${n}</div>`;
+		const mp = (n: number) => `<div data-sc-pin="status:r-mp">MP ${n}</div>`;
+		const messages = [msg("a", "assistant", `${hp(10)}\n\n${mp(20)}`)];
+		const allowed = new Set(["status:r-hp"]);
+		const blocks = latestStatusBlocks(messages, {}, true, allowed);
+		expect(blocks).toHaveLength(1);
+		expect(blocks[0].code).toContain("HP 10");
+	});
+
+	it("상태창 정규식이 ```html 코드 블록이나 여러 줄 순수 HTML을 반환해도 본문에서 숨기고 상태창으로 보낸다", () => {
+		const fencedPin = `<div data-sc-pin="status:r-iframe">\`\`\`html\n<style>.box{color:red}</style><div class="box">HP 100</div>\n\`\`\`</div><!--/sc-pin-->`;
+		const multilineHtmlPin = `<div data-sc-pin="status:r-pure"><div\n  style="padding: 8px;"\n>\n  <div>MP 50</div>\n\n  <div>SP 30</div>\n</div></div><!--/sc-pin-->`;
+		const text = `대사 시작\n\n${fencedPin}\n\n중간 지문\n\n${multilineHtmlPin}\n\n대사 끝`;
+
+		const msgBlocks = toBlocks(text, { safeHtml: true });
+		const visible = msgBlocks.filter((b) => !isStatusPin(b));
+		expect(visible).toHaveLength(3);
+
+		const allowed = new Set(["status:r-iframe", "status:r-pure"]);
+		const status = latestStatusBlocks([msg("a", "assistant", text)], {}, true, allowed);
+		expect(status).toHaveLength(2);
+		expect(status[0]).toEqual({ kind: "html", code: '<style>.box{color:red}</style><div class="box">HP 100</div>', pin: "status:r-iframe" });
+		expect(status[1].scripts).toBe(false);
+		expect(status[1].code).toContain("MP 50");
+		expect(status[1].code).toContain("SP 30");
+	});
+
+	it("앞 상태창 HTML에 닫히지 않은 div가 있어도 뒤 상태창과 본문을 삼키지 않는다", () => {
+		const broken1 = `<div data-sc-pin="status:r1"><div class="unclosed">첫째 상태창</div><!--/sc-pin-->`;
+		const broken2 = `<div data-sc-pin="status:r2"><div>둘째 상태창</div></div><!--/sc-pin-->`;
+		const text = `${broken1}\n\n본문 유지\n\n${broken2}`;
+		const allowed = new Set(["status:r1", "status:r2"]);
+		const status = latestStatusBlocks([msg("a", "assistant", text)], {}, true, allowed);
+		expect(status).toHaveLength(2);
+		expect(status[0].code).toContain("첫째 상태창");
+		expect(status[1].code).toContain("둘째 상태창");
+		const visible = toBlocks(text, { safeHtml: true }).filter((b) => !isStatusPin(b));
+		expect(visible.map((b) => (b.kind === "md" ? b.html : "")).join("")).toContain("본문 유지");
+	});
 });

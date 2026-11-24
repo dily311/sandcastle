@@ -164,7 +164,34 @@
 	/** 받는 중인 새 응답 (끝의 <image> 그림 프롬프트는 저장할 때 빠지므로 숨김) */
 	// ---- 상태창 (5-F-4-2): 가장 최근 메시지의 상태창 하나 ----
 	const statusBlockOn = $derived(!!session && plugins.on("status"));
-	const statusBlocks = $derived(statusBlockOn && session ? currentStatusBlocks(conv, session.messages, session.display, plugins.on("html")) : []);
+	// 상태창 정규식 필터 (5-F-5-1): statusWindow=true 로 설정된 정규식 출처만 보임
+	let _statusScripts = $state<import("$ipc/bindings").RegexScript_Serialize[]>([]);
+	$effect(() => {
+		void regexVersion.n;
+		if (!conv) return;
+		void call(commands.listRegexScripts(), { source: "regex", silent: true })
+			.then((r) => (_statusScripts = r))
+			.catch(() => (_statusScripts = []));
+	});
+	const _isStatusRegex = (s: import("$ipc/bindings").RegexScript_Serialize) =>
+		!!(s.extraJson as { statusWindow?: boolean } | null)?.statusWindow;
+	const activePresetId = $derived(conv?.promptPresetId || character?.defaultPromptPresetId || appSetting.value?.selectedPreset || null);
+	const selectedPinKeys = $derived(
+		new Set(
+			_statusScripts
+				.filter(
+					(s) =>
+						s.enabled &&
+						s.target === "display" &&
+						(s.scope === "global" ||
+							(s.scope === "character" && s.scopeId === conv?.characterId) ||
+							(s.scope === "preset" && !!activePresetId && s.scopeId === activePresetId)),
+				)
+				.filter(_isStatusRegex)
+				.map((s) => `status:${s.id}`),
+		),
+	);
+	const statusBlocks = $derived(statusBlockOn && session ? currentStatusBlocks(conv, session.messages, session.display, plugins.on("html"), undefined, selectedPinKeys) : []);
 	// 상태창 틀·변수 정의는 이 캐릭터로 들어올 때 한 번 읽는다 (플러그인이 켜졌을 때만)
 	$effect(() => {
 		const id = character?.id;
@@ -176,7 +203,7 @@
 	});
 	const liveBlocks = $derived(session?.live?.kind === "send" ? toBlocks(session.live.text.replace(/<image>[\s\S]*?(<\/image>|$)/i, ""), { safeHtml: plugins.on("html") }) : []);
 	/** 메시지 프로필 그림 (5-E-9): 대화 설정에서 켰을 때만. AI는 그 캐릭터, 내 글은 보낸 페르소나(없으면 대화의 페르소나) */
-	const showAvatars = $derived(!!(conv?.meta as { showAvatars?: boolean } | null)?.showAvatars);
+	const showAvatars = $derived(!!appSetting.value?.showAvatars);
 	/** 메시지를 쓴 캐릭터·페르소나 (그림·확대 위치용) */
 	function ownerOf(m: Message) {
 		return m.role === "assistant"
@@ -589,7 +616,7 @@
 							<!-- svelte-ignore a11y_no_noninteractive_element_interactions (오른쪽 클릭·꾹 누르기로 이름 바꾸기, 키보드는 메시지 동작의 챕터 버튼) -->
 							<h2 class="chapter sc-chapter" id="chapter-{m.id}" title="오른쪽 클릭하거나 꾹 눌러 이름 바꾸기" oncontextmenu={(e) => { e.preventDefault(); void renameChapter(m); }} onpointerdown={(e) => pressStart(e, m)} onpointerup={pressEnd} onpointerleave={pressEnd}><span>{chapters[m.id]}장</span>{ch}</h2>
 						{/if}
-						<MessageItem msg={m} no={i + 1} avatar={avatarOf(m)} avatarFit={ownerOf(m)?.avatarFit} {session} images={pickVariants(imageVariants, m.id)} isLast={i === session.messages.length - 1} onbranch={branch} onprompt={showPrompt} {selecting} selected={picked.has(m.id)} onselect={pick} marks={marksByMsg.get(m.id)} oncard={cardFromMark} onmarkremove={removeMark} />
+						<MessageItem msg={m} no={i + 1} avatar={avatarOf(m)} avatarFit={ownerOf(m)?.avatarFit} {session} images={pickVariants(imageVariants, m.id)} isLast={i === session.messages.length - 1} onbranch={branch} onprompt={showPrompt} {selecting} selected={picked.has(m.id)} onselect={pick} marks={marksByMsg.get(m.id)} oncard={cardFromMark} onmarkremove={removeMark} pinnedKeys={selectedPinKeys} />
 					{/each}
 
 					{#if session.live?.kind === "send"}
@@ -700,8 +727,10 @@
 		<ol class="plist">
 			{#each prompt.data.messages as pm, i (i)}
 				<li>
-					<div class="prole"><b>{roleName[pm.role]}</b><span>{pm.token} 토큰</span></div>
-					<pre>{pm.content}</pre>
+					<details class="prole">
+						<summary><b>{roleName[pm.role]}</b><span>{pm.token} 토큰</span></summary>
+						<pre>{pm.content}</pre>
+					</details>
 				</li>
 			{/each}
 		</ol>
@@ -751,7 +780,7 @@
 	}
 	.bar {
 		position: absolute;
-		z-index: var(--z-sticky);
+		z-index: var(--z-above);
 		display: flex;
 		justify-content: space-between;
 		padding: var(--space-2) var(--space-3) 0;
@@ -939,6 +968,8 @@
 		border-radius: var(--radius-md);
 		background: var(--accent-soft);
 		font-size: var(--text-sm);
+		position: relative;
+		z-index: var(--z-sticky);
 	}
 	.selbar .sp {
 		flex: 1;
@@ -1031,7 +1062,7 @@
 		align-items: flex-end;
 		gap: var(--space-2);
 		width: 100%;
-		padding: var(--space-3) var(--space-4) var(--space-4);
+		padding: var(--space-2) var(--space-4) var(--space-4);
 	}
 	.write :global(.textarea),
 	.write :global(textarea) {
@@ -1055,11 +1086,16 @@
 		gap: var(--space-3);
 	}
 	.prole {
-		display: flex;
-		justify-content: space-between;
 		font-size: var(--text-xs);
 		color: var(--text-muted);
-		margin-bottom: 4px;
+	}
+	
+	.prole summary {
+		cursor: pointer;
+	}
+
+	.prole summary span {
+		margin-left: var(--space-2);
 	}
 	.plist pre {
 		margin: 0;

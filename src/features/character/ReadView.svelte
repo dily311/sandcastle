@@ -28,6 +28,7 @@
 	import TextCardDialog from "./TextCardDialog.svelte";
 	import { anchorIn, getReadPos, messageAtMiddle, scrollToPos, setReadPos } from "./readPos";
 	import { varsAt } from "$features/status/history";
+	import { call, commands } from "$shared/ipc/client";
 
 	let { charId, convId, onopen }: { charId: string; convId: string; onopen: (id: string) => void } = $props();
 
@@ -129,11 +130,38 @@
 
 	// ---- 상태창: 그 메시지까지의 것 (변수도 그 시점 값) ----
 	const statusOn = $derived(!!session && plugins.on("status"));
+	// 상태창 정규식 필터 (5-F-5-1): statusWindow=true 로 설정된 정규식 출처만 보임
+	let _statusScripts = $state<import("$ipc/bindings").RegexScript_Serialize[]>([]);
+	$effect(() => {
+		void regexVersion.n;
+		if (!conv) return;
+		void call(commands.listRegexScripts(), { source: "regex", silent: true })
+			.then((r) => (_statusScripts = r))
+			.catch(() => (_statusScripts = []));
+	});
+	const _isStatusRegex = (s: import("$ipc/bindings").RegexScript_Serialize) =>
+		!!(s.extraJson as { statusWindow?: boolean } | null)?.statusWindow;
+	const activePresetId = $derived(conv?.promptPresetId || character?.defaultPromptPresetId || appSetting.value?.selectedPreset || null);
+	const selectedPinKeys = $derived(
+		new Set(
+			_statusScripts
+				.filter(
+					(s) =>
+						s.enabled &&
+						s.target === "display" &&
+						(s.scope === "global" ||
+							(s.scope === "character" && s.scopeId === conv?.characterId) ||
+							(s.scope === "preset" && !!activePresetId && s.scopeId === activePresetId)),
+				)
+				.filter(_isStatusRegex)
+				.map((s) => `status:${s.id}`),
+		),
+	);
 	const statusBlocks = $derived.by(() => {
 		if (!statusOn || !session) return [];
 		const upto = session.messages.slice(0, readingIndex + 1);
 		const now = (conv?.meta as { variables?: Record<string, unknown> } | null)?.variables ?? {};
-		return currentStatusBlocks(conv, upto, session.display, plugins.on("html"), varsAt(now, session.messages, readingIndex));
+		return currentStatusBlocks(conv, upto, session.display, plugins.on("html"), varsAt(now, session.messages, readingIndex), selectedPinKeys);
 	});
 	$effect(() => {
 		const id = character?.id;
@@ -144,7 +172,7 @@
 	});
 
 	// ---- 그림·프로필 ----
-	const showAvatars = $derived(!!(conv?.meta as { showAvatars?: boolean } | null)?.showAvatars);
+	const showAvatars = $derived(!!appSetting.value?.showAvatars);
 	function ownerOf(m: Message) {
 		return m.role === "assistant"
 			? library.character(m.characterId ?? charId)
@@ -266,7 +294,7 @@
 						{@const i = start + j}
 						{@const ch = metaOf(m).chapter}
 						{#if ch}<h2 class="chapter sc-chapter" id="chapter-{m.id}"><span>{chapters[m.id]}장</span>{ch}</h2>{/if}
-						<MessageItem readonly msg={m} no={i + 1} avatar={avatarOf(m)} avatarFit={ownerOf(m)?.avatarFit} {session} images={pickVariants(imageVariants, m.id)} isLast={i === session.messages.length - 1} onbranch={branch} onprompt={noop} marks={marksByMsg.get(m.id)} oncard={cardFromMark} onmarkremove={removeMark} />
+						<MessageItem readonly msg={m} no={i + 1} avatar={avatarOf(m)} avatarFit={ownerOf(m)?.avatarFit} {session} images={pickVariants(imageVariants, m.id)} isLast={i === session.messages.length - 1} onbranch={branch} onprompt={noop} marks={marksByMsg.get(m.id)} oncard={cardFromMark} onmarkremove={removeMark} pinnedKeys={selectedPinKeys} />
 					{/each}
 				</article>
 			{/if}
@@ -310,7 +338,7 @@
 	}
 	.bar {
 		position: absolute;
-		z-index: var(--z-sticky);
+		z-index: var(--z-above);
 		display: flex;
 		align-items: center;
 		justify-content: space-between;

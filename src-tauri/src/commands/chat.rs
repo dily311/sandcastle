@@ -266,19 +266,33 @@ pub struct DisplayItem {
 /// 메시지들을 화면용으로: 표시용 정규식 + {{char}}/{{user}} 이름. 순서대로, 마지막이 가장 최근
 #[tauri::command]
 #[specta::specta]
-pub async fn display_messages(state: State<'_, AppState>, conversation_id: String, items: Vec<DisplayItem>) -> Result<Vec<String>> {
-    use crate::service::chat::regex_processor::{RegexMacros, RegexProcessor};
+pub async fn display_messages(
+    state: State<'_, AppState>,
+    settings: State<'_, SettingsState<AppSetting>>,
+    conversation_id: String,
+    items: Vec<DisplayItem>,
+) -> Result<Vec<String>> {
+    use crate::service::chat::{
+        chat_manager::current_conv_request,
+        regex_processor::{RegexMacros, RegexProcessor},
+    };
     let conv = conversation::get_conversation(&state.db, &conversation_id).await?;
-    let char_name = conversation::get_character(&state.db, &conv.character_id)
-        .await
-        .map(|c| c.name)
-        .unwrap_or_default();
+    let character = conversation::get_character(&state.db, &conv.character_id).await.ok();
+    let char_name = character.as_ref().map(|c| c.name.clone()).unwrap_or_default();
+    let char_default = character.and_then(|c| c.default_prompt_preset_id);
+    let fallback = current_conv_request(&settings).map(|r| r.preset_id).unwrap_or_default();
+    let preset_id = conv
+        .prompt_preset_id
+        .clone()
+        .filter(|s| !s.is_empty())
+        .or(char_default.filter(|s| !s.is_empty()))
+        .or(Some(fallback).filter(|s| !s.is_empty()));
     let persona_id = conversation::resolve_conv_persona(&state.db, &conv.persona_id, &conv.character_id).await;
     let user_name = conversation::get_persona(&state.db, &persona_id).await.map(|p| p.name).unwrap_or_default();
     let regex = RegexProcessor::load(
         &state.db,
         Some(&conv.character_id),
-        conv.prompt_preset_id.as_deref(),
+        preset_id.as_deref(),
         RegexMacros { char_name, user_name },
     )
     .await?;

@@ -8,9 +8,10 @@ import { fillTemplate } from "./template";
 
 type Msg = { id: string; role: string; content: string };
 
-/** vars: 틀을 채울 변수 (없으면 대화의 지금 값 — 읽기 화면은 지난 시점의 값을 줌, 5-E-6-1) */
-export function currentStatusBlocks(conv: Conversation | undefined, messages: readonly Msg[], display: Record<string, string>, safeHtml: boolean, vars?: Record<string, unknown>): Block[] {
-	const fromMessages: Block[] = latestStatusBlocks(messages, display, safeHtml);
+/** vars: 틀을 채울 변수 (없으면 대화의 지금 값 — 읽기 화면은 지난 시점의 값을 줌, 5-E-6-1)
+ *  allowedPinKeys: 표시할 출처 집합. 없으면 모두 (기존 동작). 있으면 그 출처만. */
+export function currentStatusBlocks(conv: Conversation | undefined, messages: readonly Msg[], display: Record<string, string>, safeHtml: boolean, vars?: Record<string, unknown>, allowedPinKeys?: ReadonlySet<string>): Block[] {
+	const fromMessages: Block[] = latestStatusBlocks(messages, display, safeHtml, allowedPinKeys);
 	const template = conv ? library.statusTemplates[conv.characterId] : null;
 	if (conv && template) {
 		// 틀은 사용자가 쓴 HTML: HTML 렌더링이 켜졌으면 ```html 블록처럼 격리된 iframe(JS·triggerSlash 됨),
