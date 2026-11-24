@@ -1,10 +1,31 @@
 <script lang="ts">
-	// 컨텍스트 사용량 막대: 시스템(규칙·캐릭터·월드인포·노트) / 대화 기록 / 응답 몫 / 남은 칸
-	import type { ContextUsage } from "$ipc/bindings";
+	// 컨텍스트 사용량 막대: 시스템(규칙·캐릭터·월드인포·노트) / 대화 기록 / 응답 몫 / 남은 칸 + 예상 비용
+	import type { ContextUsage, ModelPriceInfo } from "$ipc/bindings";
 
-	let { usage, basis = "current" }: { usage: ContextUsage | null; basis?: "current" | "last" } = $props();
+	let {
+		usage,
+		basis = "current",
+		model = null,
+		price = undefined,
+		draftTokens = 0,
+	}: {
+		usage: ContextUsage | null;
+		basis?: "current" | "last";
+		model?: string | null;
+		/** undefined = 조회 전/생략, null = 단가 없음 */
+		price?: ModelPriceInfo | null;
+		/** 입력칸에 작성 중인 글의 추정 토큰 */
+		draftTokens?: number;
+	} = $props();
 
 	const n = (v: number) => v.toLocaleString();
+	function fmtUsd(v: number): string {
+		if (v <= 0) return "$0";
+		if (v < 0.0001) return "< $0.0001";
+		if (v < 0.01) return `$${v.toFixed(4)}`;
+		if (v < 1) return `$${v.toFixed(3)}`;
+		return `$${v.toFixed(2)}`;
+	}
 	/** 메모리 회상을 건너뛴 이유 (백엔드 service/memory/recall.rs의 코드) */
 	const RECALL_REASON: Record<string, string> = {
 		short: "입력이 너무 짧음",
@@ -22,6 +43,14 @@
 	const total = $derived(usage?.used != null ? usage.used + usage.reserved : 0);
 	const ratio = $derived(usage && usage.limit ? total / usage.limit : 0);
 	const tone = $derived(ratio >= 0.95 ? "danger" : ratio >= 0.8 ? "warn" : "ok");
+
+	const inputTokens = $derived(usage?.used != null ? usage.used + Math.max(0, draftTokens) : 0);
+	const outputTokens = $derived(usage?.reserved ?? 0);
+	const inputRate = $derived(price?.input ?? 0);
+	const outputRate = $derived(price?.output ?? 0);
+	const inputCost = $derived(price ? (inputTokens * inputRate) / 1_000_000 : 0);
+	const maxOutputCost = $derived(price ? (outputTokens * outputRate) / 1_000_000 : 0);
+	const maxTotalCost = $derived(inputCost + maxOutputCost);
 </script>
 
 <div class="meter" aria-label="컨텍스트 사용량">
@@ -66,6 +95,30 @@
 		{/if}
 	{/if}
 	<p class="faint small">{basis === "last" ? "마지막으로 보낸 프롬프트 기준" : "지금 상태 기준"}{usage?.presetName ? ` · 프리셋 '${usage.presetName}'` : ""}</p>
+	{#if basis === "current" && usage?.used != null && model}
+		<div class="cost" aria-label="예상 비용">
+			{#if price}
+				<div class="cost-head">
+					<span>예상 비용 <small>(1회)</small></span>
+					<b>
+						{fmtUsd(inputCost)}{#if outputTokens > 0 && outputRate > 0} ~ {fmtUsd(maxTotalCost)}{/if}
+					</b>
+				</div>
+				<p class="faint small">
+					입력 {n(inputTokens)}토큰({fmtUsd(inputCost)}){#if outputTokens > 0 && outputRate > 0} · 응답 최대 {n(outputTokens)}토큰({fmtUsd(maxOutputCost)}){/if}
+				</p>
+				<p class="faint small">
+					{model} · ${inputRate}/${outputRate} / 1M{price.builtin ? " (기본 단가)" : " (사용자 단가)"}
+				</p>
+			{:else if price === null}
+				<div class="cost-head">
+					<span>예상 비용</span>
+					<span class="faint small">단가 정보 없음</span>
+				</div>
+				<p class="faint small">'{model}' 단가가 등록되지 않음 (설정 &gt; 사용량·예산에서 등록)</p>
+			{/if}
+		</div>
+	{/if}
 </div>
 
 <style>
@@ -149,5 +202,28 @@
 	}
 	.small {
 		font-size: var(--text-xs);
+	}
+	.cost {
+		display: flex;
+		flex-direction: column;
+		gap: 2px;
+		margin-top: var(--space-1);
+		padding: var(--space-2) var(--space-3);
+		border: 1px solid var(--border);
+		border-radius: var(--radius-md);
+		background: var(--bg-sunken);
+	}
+	.cost-head {
+		display: flex;
+		align-items: baseline;
+		justify-content: space-between;
+		gap: var(--space-2);
+		font-size: var(--text-xs);
+		color: var(--text-muted);
+	}
+	.cost-head b {
+		font-size: var(--text-sm);
+		color: var(--text);
+		font-variant-numeric: tabular-nums;
 	}
 </style>

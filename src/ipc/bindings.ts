@@ -6023,14 +6023,14 @@ export type WidgetAudioState = WidgetAudioState_Serialize | WidgetAudioState_Des
 
 export type WidgetAudioState_Deserialize = {
 	muted?: boolean,
-	volume?: number,
+	volume?: number | null,
 	loopMode?: number,
 	isShuffle?: boolean,
 };
 
 export type WidgetAudioState_Serialize = {
 	muted: boolean,
-	volume: number,
+	volume: number | null,
 	loopMode: number,
 	isShuffle: boolean,
 };

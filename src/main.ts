@@ -9,8 +9,18 @@ import { watchSystemInsets } from "$app/systemInsets";
 import { watchKeepAlive } from "$app/keepAlive";
 import { watchAndroidBack } from "$app/androidBack.svelte";
 
-// 앱 안에서는 브라우저 기본 우클릭 메뉴를 쓰지 않는다 (필요한 곳은 ContextMenu)
-document.addEventListener("contextmenu", (e) => e.preventDefault(), false);
+// 입력칸이나 텍스트가 선택된 상태에서는 브라우저/OS 기본 컨텍스트 메뉴(복사·잘라내기·붙여넣기·번역 등)를 허용하고,
+// 그 외 빈 화면·UI 크롬에서만 기본 우클릭 메뉴를 막는다 (필요한 곳은 자체 ContextMenu 사용)
+document.addEventListener(
+	"contextmenu",
+	(e) => {
+		const target = e.target as Element | null;
+		if (target?.closest("input, textarea, [contenteditable='true']")) return;
+		if (window.getSelection()?.toString().trim()) return;
+		e.preventDefault();
+	},
+	false,
+);
 
 async function boot() {
 	// 브라우저 개발 모드: 가짜 백엔드 (빌드에서는 이 분기가 통째로 빠짐)

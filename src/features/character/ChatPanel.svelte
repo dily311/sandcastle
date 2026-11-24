@@ -24,7 +24,7 @@
 	import PresetInline from "$features/settings/PresetInline.svelte";
 	import RegexEditDialog from "$features/settings/RegexEditDialog.svelte";
 	import { toasts } from "$shared/stores/toast.svelte";
-	import type { ContextUsage } from "$ipc/bindings";
+	import type { ContextUsage, ModelPriceInfo } from "$ipc/bindings";
 	import { panel } from "$app/panel.svelte";
 	import type { RegexScript_Serialize as RegexScript, Value } from "$ipc/bindings";
 	import { call, commands } from "$shared/ipc/client";
@@ -153,6 +153,38 @@
 
 	// 프리셋: 컨텍스트 탭 아래에 바로 편집기 (PresetInline)
 	const activePresetId = $derived(conv.promptPresetId || usage?.presetId || null);
+	// 예상 비용용 모델 단가 (모델이 바뀔 때마다 조회)
+	const activeModel = $derived((conv.mode !== "phone" ? shownModel : conv.model) || effectiveApi?.model || null);
+	let modelPrice = $state<ModelPriceInfo | null | undefined>(undefined);
+	let priceSeq = 0;
+	$effect(() => {
+		const m = activeModel;
+		const seq = ++priceSeq;
+		if (!m) {
+			modelPrice = undefined;
+			return;
+		}
+		modelPrice = undefined;
+		void call(commands.getModelPrice(m), { source: "chat", silent: true })
+			.then((r) => {
+				if (seq === priceSeq) modelPrice = r;
+			})
+			.catch(() => {
+				if (seq === priceSeq) modelPrice = null;
+			});
+	});
+	// 입력칸에 작성 중인 글의 추정 토큰 (ASCII ~4자/토큰, 한글·CJK ~1.5자/토큰)
+	const draftTokens = $derived.by(() => {
+		const t = draft?.get().trim() ?? "";
+		if (!t) return 0;
+		let ascii = 0;
+		let nonAscii = 0;
+		for (const ch of t) {
+			if (ch.charCodeAt(0) < 128) ascii++;
+			else nonAscii++;
+		}
+		return Math.ceil(ascii / 4 + nonAscii / 1.5);
+	});
 
 	// ---- 자물쇠 (5-E-29, ADR-028): 이 대화 > 캐릭터 기본 > 전역. 잠김 = 이 대화에 값이 있음 ----
 	// 폰 대화는 폰 주인·폰 설정을 따르므로 지금처럼 (자물쇠 없음)
@@ -687,7 +719,7 @@
 		<div class="panel-body preset-edit">
 			<section>
 				<h4>컨텍스트</h4>
-				<ContextMeter {usage} />
+				<ContextMeter {usage} model={activeModel} price={modelPrice} {draftTokens} />
 			</section>
 			<section>
 				<h4>프리셋 <span class="faint">{conv.promptPresetId ? "이 대화에서 고름" : "앱·캐릭터 기본값"}</span></h4>

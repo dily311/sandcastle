@@ -7,11 +7,9 @@
 </script>
 
 <script lang="ts">
-	// 글을 끌어서 고르면: 북마크 / 복사 / 이미지 카드 (대화 화면·읽기 화면이 같이 씀, 5-E-6-2)
-	// 마우스는 고른 뒤 오른쪽 클릭, 손가락은 손을 떼고 고른 범위가 멈춘 뒤 저절로
-	import { Bookmark, Copy, IdCard } from "@lucide/svelte";
-	import { ContextMenu } from "$shared/ui";
-	import { toasts } from "$shared/stores/toast.svelte";
+	// 글을 끌어서 고르면: 북마크 / 이미지 카드 플로팅 버튼 (대화 화면·읽기 화면이 같이 씀, 5-E-6-2)
+	// 우클릭은 가로채지 않고 브라우저/OS 기본 컨텍스트 메뉴(복사·번역 등)가 그대로 열리게 둔다.
+	import { Bookmark, IdCard } from "@lucide/svelte";
 	import { bookmarks } from "./bookmarks";
 	import type { Conversation } from "./library.svelte";
 	import { metaOf, type ChatSession } from "./session.svelte";
@@ -29,7 +27,7 @@
 	}
 	let { scroller, conv, session, characterName, disabled = false, oncard }: Props = $props();
 
-	let selMenu = $state<{ x: number; y: number; text: string; messageId: string } | null>(null);
+	let bar = $state<{ x: number; y: number; text: string; messageId: string } | null>(null);
 	/** 본문이 아닌 곳: 머리줄(번호·이름·시각)·도구 줄·번역 안내·접기·CG 그림 이름 */
 	const inMeta = (n: Element | null) => !!n?.closest(".who, .actions, .swipe, .tr-note, .fold, figcaption");
 	/** 고른 글 중 한 메시지 본문에 든 부분. 끝까지 끌어 도구 줄·다음 칸까지 넘어가도 본문만 잘라 쓴다 */
@@ -57,58 +55,74 @@
 		text = text.trim();
 		return text ? { text, messageId: block.id.slice(4), rect: range.getBoundingClientRect() } : null;
 	}
-	/** 손가락: 꾹 눌러 고르는 동안 메뉴를 띄우면 포커스가 옮겨 가 고르기가 끊긴다 → 손을 떼고 고른 범위가 멈춘 뒤에 띄운다 */
+
 	const coarse = typeof matchMedia !== "undefined" && matchMedia("(pointer: coarse)").matches;
-	let touching = false;
+	let dragging = false;
 	let selTimer: ReturnType<typeof setTimeout> | undefined;
-	function menuAfterSettle() {
-		clearTimeout(selTimer);
-		selTimer = setTimeout(() => {
-			if (touching || disabled || selMenu) return;
-			const p = pickedText();
-			if (p) selMenu = { x: p.rect.left + p.rect.width / 2, y: p.rect.bottom + 8, text: p.text, messageId: p.messageId };
-		}, 450);
-	}
-	$effect(() => {
-		if (!coarse) return;
-		const down = () => {
-			touching = true;
-			clearTimeout(selTimer);
-		};
-		const up = () => {
-			touching = false;
-			menuAfterSettle();
-		};
-		const change = () => {
-			if (!touching) menuAfterSettle();
-		};
-		document.addEventListener("touchstart", down, { passive: true });
-		document.addEventListener("touchend", up, { passive: true });
-		document.addEventListener("touchcancel", up, { passive: true });
-		document.addEventListener("selectionchange", change);
-		return () => {
-			clearTimeout(selTimer);
-			document.removeEventListener("touchstart", down);
-			document.removeEventListener("touchend", up);
-			document.removeEventListener("touchcancel", up);
-			document.removeEventListener("selectionchange", change);
-		};
-	});
-	/** 글을 끌어서 고른 뒤 오른쪽 클릭하면 고른 글 메뉴. 고치는 중(입력칸)이거나 고른 글이 없으면 띄우지 않는다 */
-	function onSelectMenu(e: MouseEvent) {
-		if (disabled) return;
-		if ((e.target as Element | null)?.closest("textarea, input, [contenteditable='true']")) return;
+
+	function showForSelection() {
+		if (dragging || disabled) return;
 		const p = pickedText();
-		if (!p) return;
-		e.preventDefault();
-		if (coarse) return menuAfterSettle();
-		selMenu = { x: e.clientX, y: e.clientY, text: p.text, messageId: p.messageId };
+		if (!p || (p.rect.width === 0 && p.rect.height === 0)) {
+			bar = null;
+			return;
+		}
+		const x = Math.min(Math.max(p.rect.left + p.rect.width / 2, 72), window.innerWidth - 72);
+		const above = p.rect.top > 56;
+		const y = above ? p.rect.top - 8 : p.rect.bottom + 8;
+		bar = { x, y: above ? y : y, text: p.text, messageId: p.messageId };
 	}
+
+	function scheduleShow(delay: number) {
+		clearTimeout(selTimer);
+		selTimer = setTimeout(showForSelection, delay);
+	}
+
 	$effect(() => {
 		const el = scroller;
 		if (!el) return;
-		el.addEventListener("contextmenu", onSelectMenu);
-		return () => el.removeEventListener("contextmenu", onSelectMenu);
+		const down = (e: PointerEvent) => {
+			if ((e.target as Element | null)?.closest(".sel-bar")) return;
+			dragging = true;
+			clearTimeout(selTimer);
+			if (e.button === 0) bar = null;
+		};
+		const up = () => {
+			if (!dragging) return;
+			dragging = false;
+			scheduleShow(coarse ? 450 : 60);
+		};
+		const change = () => {
+			if (dragging) return;
+			const sel = window.getSelection();
+			if (!sel || sel.isCollapsed) {
+				bar = null;
+				return;
+			}
+			if (coarse) scheduleShow(450);
+		};
+		// 우클릭 시 기본 시스템 컨텍스트 메뉴와 겹치지 않게 플로팅 바만 숨김 (preventDefault 하지 않음)
+		const onContext = () => {
+			bar = null;
+		};
+		const onScroll = () => {
+			bar = null;
+		};
+		document.addEventListener("pointerdown", down, { passive: true });
+		document.addEventListener("pointerup", up, { passive: true });
+		document.addEventListener("pointercancel", up, { passive: true });
+		document.addEventListener("selectionchange", change);
+		el.addEventListener("contextmenu", onContext);
+		el.addEventListener("scroll", onScroll, { passive: true });
+		return () => {
+			clearTimeout(selTimer);
+			document.removeEventListener("pointerdown", down);
+			document.removeEventListener("pointerup", up);
+			document.removeEventListener("pointercancel", up);
+			document.removeEventListener("selectionchange", change);
+			el.removeEventListener("contextmenu", onContext);
+			el.removeEventListener("scroll", onScroll);
+		};
 	});
 
 	function speakerOf(messageId: string): CardInput {
@@ -116,11 +130,13 @@
 		return { text: "", speaker: msg?.name ?? (msg?.role === "assistant" ? characterName : undefined), time: msg?.createdAt };
 	}
 	function cardSelection() {
-		const m = selMenu;
+		const m = bar;
+		bar = null;
 		if (m) oncard({ ...speakerOf(m.messageId), text: m.text });
 	}
 	async function bookmarkSelection() {
-		const m = selMenu; // 메뉴가 닫히며 selMenu가 비워지므로 먼저 잡아 둠
+		const m = bar;
+		bar = null;
 		if (!m || !conv) return;
 		const msg = session?.messages.find((x) => x.id === m.messageId);
 		await bookmarks.add(conv, m.messageId, m.text, msg ? (metaOf(msg).swipeId ?? 0) : 0);
@@ -128,21 +144,46 @@
 	}
 </script>
 
-<ContextMenu
-	at={selMenu}
-	label="고른 글"
-	items={[
-		{
-			label: "복사",
-			icon: Copy,
-			onselect: () =>
-				navigator.clipboard.writeText(selMenu?.text ?? "").then(
-					() => toasts.success("복사함"),
-					() => toasts.error("복사 못 함"),
-				),
-		},
-		{ label: "북마크", icon: Bookmark, onselect: bookmarkSelection },
-		{ label: "이미지 카드로 만들기", icon: IdCard, onselect: cardSelection },
-	]}
-	onclose={() => (selMenu = null)}
-/>
+{#if bar && !disabled}
+	<div class="sel-bar" role="toolbar" aria-label="고른 글" style="left: {bar.x}px; top: {bar.y}px;">
+		<button type="button" onmousedown={(e) => e.preventDefault()} onclick={() => void bookmarkSelection()}>
+			<Bookmark size={13} /><span>북마크</span>
+		</button>
+		<button type="button" onmousedown={(e) => e.preventDefault()} onclick={cardSelection}>
+			<IdCard size={13} /><span>카드</span>
+		</button>
+	</div>
+{/if}
+
+<style>
+	.sel-bar {
+		position: fixed;
+		transform: translate(-50%, -100%);
+		z-index: var(--z-popover, 600);
+		display: inline-flex;
+		align-items: center;
+		gap: 2px;
+		padding: 3px;
+		border: 1px solid var(--border-strong);
+		border-radius: var(--radius-md);
+		background: var(--surface);
+		box-shadow: var(--shadow-md, 0 4px 16px rgba(0, 0, 0, 0.2));
+	}
+	.sel-bar button {
+		display: inline-flex;
+		align-items: center;
+		gap: 4px;
+		padding: 4px 8px;
+		border: none;
+		border-radius: var(--radius-sm);
+		background: transparent;
+		color: var(--text);
+		font: inherit;
+		font-size: var(--text-xs);
+		cursor: pointer;
+		white-space: nowrap;
+	}
+	.sel-bar button:hover {
+		background: var(--surface-hover);
+	}
+</style>
