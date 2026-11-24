@@ -7,7 +7,27 @@ use sqlx::prelude::FromRow;
 use crate::sys::music::save_album_art;
 
 #[derive(Debug, Serialize, Deserialize, Clone, specta::Type)]
-#[serde(rename_all = "camelCase")]
+#[serde(rename_all = "camelCase", default)]
+pub struct WidgetAudioState {
+    pub muted: bool,
+    pub volume: f64,
+    pub loop_mode: i64,
+    pub is_shuffle: bool,
+}
+
+impl Default for WidgetAudioState {
+    fn default() -> Self {
+        Self {
+            muted: false,
+            volume: 0.7,
+            loop_mode: 0,
+            is_shuffle: false,
+        }
+    }
+}
+
+#[derive(Debug, Serialize, Deserialize, Clone, specta::Type)]
+#[serde(rename_all = "camelCase", default)]
 pub struct WidgetMusicSetting {
     pub resize: bool,
     pub is_mini_player: bool,
@@ -17,6 +37,7 @@ pub struct WidgetMusicSetting {
     pub selected_folder: Option<String>,
     pub current_playlist_id: Option<String>,
     pub current_song_index: i64,
+    pub audio: WidgetAudioState,
 }
 
 impl Default for WidgetMusicSetting {
@@ -30,6 +51,7 @@ impl Default for WidgetMusicSetting {
             selected_folder: None,
             current_playlist_id: Some("default".into()),
             current_song_index: 0,
+            audio: WidgetAudioState::default(),
         }
     }
 }

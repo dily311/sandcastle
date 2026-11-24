@@ -187,7 +187,7 @@ const base: Record<string, Handler> = {
 	...syncHandlers,
 	...communityHandlers,
 	// ---- 위젯 (브라우저에서 위젯 화면 확인용) ----
-	get_widget_music_settings: () => ({ resize: false, isMiniPlayer: false, isImgEdit: false, isPlayListOpen: false, pos: null, selectedFolder: null, currentPlaylistId: "default", currentSongIndex: 0 }),
+	get_widget_music_settings: () => ({ resize: false, isMiniPlayer: false, isImgEdit: false, isPlayListOpen: false, pos: null, selectedFolder: null, currentPlaylistId: "default", currentSongIndex: 0, audio: { muted: false, volume: 0.7, loopMode: 0, isShuffle: false } }),
 	save_widget_music_settings: () => null,
 	get_all_playlist: () => [{ id: "default", title: "기본 재생 목록", description: null, coverImage: null, createdAt: 0, updatedAt: 0 }],
 	get_playlist_entry: () => [],

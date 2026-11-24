@@ -6019,17 +6019,34 @@ export type Voice_Serialize = {
 	description: string | null,
 };
 
+export type WidgetAudioState = WidgetAudioState_Serialize | WidgetAudioState_Deserialize;
+
+export type WidgetAudioState_Deserialize = {
+	muted?: boolean,
+	volume?: number,
+	loopMode?: number,
+	isShuffle?: boolean,
+};
+
+export type WidgetAudioState_Serialize = {
+	muted: boolean,
+	volume: number,
+	loopMode: number,
+	isShuffle: boolean,
+};
+
 export type WidgetMusicSetting = WidgetMusicSetting_Serialize | WidgetMusicSetting_Deserialize;
 
 export type WidgetMusicSetting_Deserialize = {
-	resize: boolean,
-	isMiniPlayer: boolean,
-	isImgEdit: boolean,
-	isPlayListOpen: boolean,
-	pos: Value,
+	resize?: boolean,
+	isMiniPlayer?: boolean,
+	isImgEdit?: boolean,
+	isPlayListOpen?: boolean,
+	pos?: Value,
 	selectedFolder?: string | null,
 	currentPlaylistId?: string | null,
-	currentSongIndex: number,
+	currentSongIndex?: number,
+	audio?: WidgetAudioState_Deserialize,
 };
 
 export type WidgetMusicSetting_Serialize = {
@@ -6041,6 +6058,7 @@ export type WidgetMusicSetting_Serialize = {
 	selectedFolder: string | null,
 	currentPlaylistId: string | null,
 	currentSongIndex: number,
+	audio: WidgetAudioState_Serialize,
 };
 
 export type WorldInfoBook = WorldInfoBook_Serialize | WorldInfoBook_Deserialize;

@@ -52,7 +52,7 @@
 			{@attach draggable({
 				target: moveEl,
 				pos: localPos,
-				snap: { x: { offset: 230 }, y: { offset: 0 } },
+				snap: { x: { offset: 230, sides: ["right"] }, y: { offset: 0 } },
 				onDragEnd: (pos) => {
 					widgetMusicSetting.update({ pos });
 				},

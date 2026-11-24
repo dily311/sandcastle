@@ -17,6 +17,8 @@
 		x: widgetMusicSetting.pos?.x ?? 10,
 		y: widgetMusicSetting.pos?.y ?? 10,
 	});
+	let snappedX = $state<"left" | "right" | null>(null);
+	const isSnapped = $derived(snappedX !== null || localPos.x < 0);
 	$effect(() => {
 		if (widgetMusicSetting.pos) {
 			localPos.x = widgetMusicSetting.pos.x;
@@ -29,15 +31,17 @@
 <div
 	class="music-player-container"
 	class:resize={widgetMusicSetting.resize}
+	class:snap-docked={isSnapped}
 	oncontextmenu={(e) => handleContextMenuForWidget(e, WIDGET_MUSIC_FEATURE_ID)}
 	{@attach interactive(WIDGET_MUSIC_FEATURE_ID)}
 	{@attach draggable({
 		pos: localPos,
 		snap: {
-			x: { offset: widgetMusicSetting.resize ? 0 : 336 },
+			x: { offset: 0 },
 			y: true,
 			onchange: (state) => {
-				if (state.x === "right" && widgetMusicSetting.isPlayListOpen) {
+				snappedX = state.x;
+				if ((state.x === "right" || state.x === "left") && widgetMusicSetting.isPlayListOpen) {
 					widgetMusicSetting.update({ isPlayListOpen: false });
 				}
 			},
@@ -90,6 +94,7 @@
 				draggable="false"
 			/>
 		</div>
+		{#if !isSnapped}
 		<div class="song-info-wrap">
 			<div class="song-info">
 				<div class="song-title-wrap">
@@ -284,6 +289,7 @@
 				/>
 			</div>
 		</div>
+		{/if}
 	</div>
 	{#if widgetMusicSetting.isPlayListOpen}
 		<Playlist />
@@ -296,7 +302,7 @@
 		top: 0;
 		left: 0;
 		z-index: 10;
-		/* box-shadow: 0 0 0 1px var(--border); */
+		box-shadow: 0 0 0 1px var(--border);
 		background: var(--surface);
 		border-radius: var(--radius-xs);
 		color: var(--text);
@@ -306,6 +312,11 @@
 		max-width: 31rem;
 		width: 100%;
 		/* resize: both; */
+	}
+
+	.music-player-container.snap-docked {
+		max-width: none;
+		width: fit-content;
 	}
 	.music-player-container:global(.snap-left) {
 		border-top-left-radius: 0;
@@ -470,17 +481,16 @@
 		height: 6px;
 		margin: 6px 0;
 		border-radius: 999px;
-		background: linear-gradient(to right, var(--accent) var(--pct), var(--surface-active) var(--pct));
+		background: linear-gradient(to right, var(--text) var(--pct), var(--surface-active) var(--pct));
 		cursor: pointer;
 	}
 	.volume-slider::-webkit-slider-thumb {
 		appearance: none;
-		width: 16px;
-		height: 16px;
+		width: 12px;
+		height: 12px;
 		border-radius: 50%;
 		background: var(--surface);
-		border: 2px solid var(--accent);
-		box-shadow: var(--shadow-sm);
+		border: 1px solid var(--text);
 	}
 
 </style>

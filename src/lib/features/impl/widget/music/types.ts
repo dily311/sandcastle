@@ -39,6 +39,7 @@ export interface WidgetMusicSetting {
 	selectedFolder: string | null;
 	currentPlaylistId: string | null;
 	currentSongIndex: number;
+	audio?: AudioState;
 }
 
 export interface MusicMeta {
