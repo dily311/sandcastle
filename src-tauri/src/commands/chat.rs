@@ -300,7 +300,7 @@ pub async fn display_messages(
     Ok(items
         .iter()
         .enumerate()
-        .map(|(i, m)| regex.for_display(&m.content, &m.role, n - 1 - i))
+        .map(|(i, m)| regex.for_display_in(&m.content, &m.role, n - 1 - i, conv.read_mode))
         .collect())
 }
 

@@ -136,8 +136,13 @@ impl RegexProcessor {
     /// 화면에 보일 글: 표시용(Display) 정규식을 거친 뒤 {{char}}·{{user}} (옛 <BOT>·<USER>)를 이름으로
     /// `depth`: 0 = 가장 최근 메시지
     pub fn for_display(&self, text: &str, role: &str, depth: usize) -> String {
+        self.for_display_in(text, role, depth, false)
+    }
+
+    /// `read_mode`: true이면 상태창 정규식(`statusWindow = true`)은 메시지 수(깊이) 제한 없이 모든 메시지에 적용한다.
+    pub fn for_display_in(&self, text: &str, role: &str, depth: usize, read_mode: bool) -> String {
         let out = match RegexPlacement::for_role(role) {
-            Some(p) => self.apply(text, p, &[RegexTarget::Display], Some(depth)),
+            Some(p) => self.apply_with(text, p, &[RegexTarget::Display], Some(depth), read_mode),
             None => text.to_string(),
         };
         display_macros(&out, &self.macros)
@@ -152,15 +157,21 @@ impl RegexProcessor {
     /// 상태창 정규식(`pin = true`)의 치환 결과는 자리표시자로 보호해 뒤따르는 대사·꾸밈 정규식이
     /// `data-sc-pin="status:..."` 속성을 망가뜨리지 못하게 한 뒤 마지막에 펼친다.
     pub fn apply(&self, text: &str, placement: RegexPlacement, targets: &[RegexTarget], depth: Option<usize>) -> String {
+        self.apply_with(text, placement, targets, depth, false)
+    }
+
+    fn apply_with(&self, text: &str, placement: RegexPlacement, targets: &[RegexTarget], depth: Option<usize>, ignore_pin_depth: bool) -> String {
         let mut out = text.to_string();
         let mut pins: Vec<(String, String)> = Vec::new();
         for c in &self.scripts {
             if !c.placement.contains(&placement) || !targets.contains(&c.target) {
                 continue;
             }
-            if let Some(d) = depth.map(|d| d as i64) {
-                if c.min_depth.is_some_and(|m| d < m) || c.max_depth.is_some_and(|m| d > m) {
-                    continue;
+            if !(ignore_pin_depth && c.pin) {
+                if let Some(d) = depth.map(|d| d as i64) {
+                    if c.min_depth.is_some_and(|m| d < m) || c.max_depth.is_some_and(|m| d > m) {
+                        continue;
+                    }
                 }
             }
             out = apply_one(c, &out, &self.macros, &mut pins);
@@ -573,6 +584,35 @@ mod tests {
         let mut s = script("/hi/g", "hello");
         s.target = RegexTarget::Display;
         assert_eq!(preview_script(&s, "hi hi", &macros()).unwrap(), "hello hello");
+    }
+
+    #[test]
+    fn read_mode_ignores_depth_limits_only_for_status_window_scripts() {
+        let mut status = script("/<hp>(\\d+)<\\/hp>/g", "<div class='hp'>HP $1</div>");
+        status.id = "st1".into();
+        status.target = RegexTarget::Display;
+        status.min_depth = Some(0);
+        status.max_depth = Some(1);
+        status.extra_json = Some(serde_json::json!({ "statusWindow": true }));
+
+        let mut plain = script("/foo/g", "bar");
+        plain.id = "pl1".into();
+        plain.target = RegexTarget::Display;
+        plain.max_depth = Some(1);
+
+        let proc = RegexProcessor::new(vec![status, plain], macros());
+
+        // 일반 모드(depth 5): max_depth=1에 걸려 둘 다 치환되지 않음
+        let normal = proc.for_display_in("foo <hp>7</hp>", "assistant", 5, false);
+        assert_eq!(normal, "foo <hp>7</hp>");
+
+        // 읽기 모드(depth 5): 상태창 정규식은 깊이 제한 없이 치환, 일반 정규식은 그대로 깊이 제한 유지
+        let read = proc.for_display_in("foo <hp>7</hp>", "assistant", 5, true);
+        assert!(read.starts_with("foo "), "일반 정규식은 max_depth 유지: {read}");
+        assert!(
+            read.contains("<div data-sc-pin=\"status:st1\"><div class='hp'>HP 7</div></div><!--/sc-pin-->"),
+            "읽기 모드에서는 상태창 정규식이 깊이 제한 없이 치환됨: {read}"
+        );
     }
 }
 
