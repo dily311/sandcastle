@@ -32,7 +32,7 @@
 </script>
 
 <div class="picker" role="group" aria-label={label}>
-	{#each picked as b (b.id)}
+	{#each picked as b, i (i)}
 		<span class="chip">
 			<button class="name" title="'{b.name}' 로어북 열기" onclick={() => nav.go({ page: "lorebook", bookId: b.id })}>{b.name}</button>
 			<button class="x" aria-label="{b.name} 빼기" onclick={() => onchange(value.filter((id) => id !== b.id))}><X /></button>
