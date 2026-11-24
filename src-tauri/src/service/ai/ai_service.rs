@@ -210,6 +210,7 @@ impl AiService {
                 token: crate::service::prompt::token::count_message_tokens(&text) as i64,
                 content: text,
                 images: vec![],
+                source: Some(crate::models::ai_service::PromptSource::of("system_rules")),
             });
             ChatExtras::default()
         };

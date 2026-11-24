@@ -47,6 +47,7 @@ fn message(role: PromptRole, content: String) -> PromptMessageItem {
         role,
         token: 0,
         content,
+        source: None,
     }
 }
 

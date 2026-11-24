@@ -459,6 +459,23 @@
 		prompt = { msg: m, data: data ?? null };
 	}
 	const roleName = { system: "시스템", user: "사용자", assistant: "AI" } as const;
+	const sourceName: Record<string, string> = {
+		preset: "프리셋",
+		world_info: "월드인포",
+		system_rules: "시스템 규칙",
+		character: "캐릭터",
+		persona: "페르소나",
+		examples: "예시 대화",
+		chat: "대화 기록",
+		user_input: "이번 입력",
+		qr: "QR 지시",
+		author_note: "작가 노트",
+		inject: "/inject",
+		recall: "자동 회상",
+		regen_extra: "재생성 지시",
+		plugin: "플러그인",
+		ghost: "대필",
+	};
 
 	// ---- 읽기 모드: 대화가 읽기 화면(ReadView)으로 바뀐다 (5-E-6-2, ADR-031) ----
 	function toReadMode() {
@@ -728,7 +745,9 @@
 			{#each prompt.data.messages as pm, i (i)}
 				<li>
 					<details class="prole">
-						<summary><b>{roleName[pm.role]}</b><span>{pm.token} 토큰</span></summary>
+						<summary>
+							<b>{roleName[pm.role]}</b>{#if pm.source}<span class="psrc" data-kind={pm.source.kind}>{sourceName[pm.source.kind] ?? pm.source.kind}</span>{#if pm.source.name}<span class="pname">{pm.source.name}</span>{/if}{/if}<span class="ptok">{pm.token} 토큰</span>
+						</summary>
 						<pre>{pm.content}</pre>
 					</details>
 				</li>
@@ -1093,9 +1112,35 @@
 	.prole summary {
 		cursor: pointer;
 	}
-
-	.prole summary span {
+	.prole summary > b {
+		margin-right: var(--space-2);
+	}
+	.psrc {
+		display: inline-block;
+		padding: 1px 6px;
+		border-radius: var(--radius-sm);
+		background: var(--bg-sunken);
+		border: 1px solid var(--border);
+		color: var(--text-muted);
+		font-size: 11px;
+		line-height: 1.4;
+	}
+	.psrc[data-kind="world_info"] {
+		background: var(--accent-soft);
+		border-color: transparent;
+		color: var(--accent);
+	}
+	.psrc[data-kind="preset"] {
+		color: var(--text);
+	}
+	.pname {
+		margin-left: var(--space-1);
+		color: var(--text);
+		font-weight: 500;
+	}
+	.ptok {
 		margin-left: var(--space-2);
+		color: var(--text-faint);
 	}
 	.plist pre {
 		margin: 0;

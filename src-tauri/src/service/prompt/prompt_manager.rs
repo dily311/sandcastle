@@ -25,7 +25,7 @@ use crate::{
     db::{self, conn::DbPool},
     error::{AppError, ErrorCode, Result},
     models::{
-        ai_service::{ChatContext, ChatOptions, GenerationType, PromptBlocks, PromptMessage, PromptMessageItem, PromptPresets, PromptRequest, PromptRole},
+        ai_service::{ChatContext, ChatOptions, GenerationType, PromptBlocks, PromptMessage, PromptMessageItem, PromptPresets, PromptRequest, PromptRole, PromptSource},
         conversation::WorldInfoEntry,
     },
     service::prompt::token::{count_message_tokens, count_tokens},
@@ -171,15 +171,16 @@ impl PromptManager {
                 break;
             }
             used += t;
-            history.push((PromptRole::from_history(&item.role), item.content.clone(), item.images.clone()));
+            let source = item.source.clone().or_else(|| Some(PromptSource::of("chat")));
+            history.push((PromptRole::from_history(&item.role), item.content.clone(), item.images.clone(), source));
         }
         history.reverse();
         // Quiet(/gen) 지시는 월드인포 키워드 스캔·토큰 예산에는 포함하되, postHistory 등 모든 프리셋 블록 뒤 맨 끝에 둔다
         let quiet_tail = if request.generation_type == GenerationType::Quiet {
-            (!user_message.is_empty() || !ctx.user_images.is_empty()).then(|| (PromptRole::User, user_message, ctx.user_images.clone()))
+            (!user_message.is_empty() || !ctx.user_images.is_empty()).then(|| (PromptRole::User, user_message, ctx.user_images.clone(), Some(PromptSource::of("qr"))))
         } else {
             if !user_message.is_empty() || !ctx.user_images.is_empty() {
-                history.push((PromptRole::User, user_message, ctx.user_images.clone()));
+                history.push((PromptRole::User, user_message, ctx.user_images.clone(), Some(PromptSource::of("user_input"))));
             }
             None
         };
@@ -187,7 +188,7 @@ impl PromptManager {
         // ---- 조립
         let mut out: Vec<Line> = vec![];
         if !rules.is_empty() {
-            out.push((PromptRole::System, rules, vec![]));
+            out.push((PromptRole::System, rules, vec![], Some(PromptSource::of("system_rules"))));
         }
         let has_wi_slot = layout.iter().any(|s| {
             matches!(
@@ -200,7 +201,7 @@ impl PromptManager {
         });
         if !has_wi_slot {
             if let Some(wi) = &world_info_text {
-                out.push((PromptRole::System, wi.clone(), vec![]));
+                out.push((PromptRole::System, wi.clone(), vec![], Some(PromptSource::of("world_info"))));
             }
         }
 
@@ -208,9 +209,9 @@ impl PromptManager {
         let mut history_placed = false;
         for slot in layout {
             match slot {
-                Slot::Text { role, content } => {
+                Slot::Text { role, content, name } => {
                     if !content.trim().is_empty() {
-                        out.push((role, content, vec![]));
+                        out.push((role, content, vec![], Some(PromptSource::named("preset", name))));
                     }
                 }
                 Slot::Section {
@@ -220,7 +221,7 @@ impl PromptManager {
                 } => {
                     if !wi_placed {
                         if let Some(wi) = &world_info_text {
-                            out.push((role, wi.clone(), vec![]));
+                            out.push((role, wi.clone(), vec![], Some(PromptSource::of("world_info"))));
                         }
                         wi_placed = true;
                     }
@@ -235,7 +236,7 @@ impl PromptManager {
                 }
                 Slot::Section { section, role, label } => {
                     if let Some(v) = sections.get(section) {
-                        out.push((role, with_label(label.as_deref(), v), vec![]));
+                        out.push((role, with_label(label.as_deref(), v), vec![], Some(section.source())));
                     }
                 }
             }
@@ -248,11 +249,12 @@ impl PromptManager {
             chat_options: options,
             messages: out
                 .into_iter()
-                .map(|(role, content, images)| PromptMessageItem {
+                .map(|(role, content, images, source)| PromptMessageItem {
                     token: count_message_tokens(&content) as i64,
                     role,
                     content,
                     images,
+                    source,
                 })
                 .collect(),
         })
@@ -283,12 +285,23 @@ impl Section {
             _ => None,
         }
     }
+
+    fn source(self) -> PromptSource {
+        PromptSource::of(match self {
+            Self::CharDescription => "character",
+            Self::PersonaDescription => "persona",
+            Self::DialogueExamples => "examples",
+            Self::WorldInfo => "world_info",
+            Self::ChatHistory => "chat",
+        })
+    }
 }
 
 enum Slot {
     Text {
         role: PromptRole,
         content: String,
+        name: String,
     },
     Section {
         section: Section,
@@ -302,6 +315,7 @@ struct InChat {
     depth: usize,
     role: PromptRole,
     content: String,
+    name: String,
 }
 
 struct SectionValues {
@@ -339,6 +353,7 @@ fn default_layout(macros: &Macros) -> Vec<Slot> {
         Slot::Text {
             role: PromptRole::System,
             content: macros.apply(DEFAULT_UTILS_BLOCK),
+            name: "유틸 지시문".into(),
         },
         Slot::Section {
             section: Section::ChatHistory,
@@ -360,6 +375,11 @@ fn layout_from_preset(preset: &LoadedPreset, generation_type: GenerationType, ma
     let mut in_chat = vec![];
     for b in blocks {
         let role = PromptRole::from_history(&b.role);
+        let block_name = if b.name.trim().is_empty() {
+            b.identifier.clone()
+        } else {
+            b.name.clone()
+        };
         if b.position == "in_chat" {
             let content = macros.apply(&b.content);
             if !content.trim().is_empty() {
@@ -367,6 +387,7 @@ fn layout_from_preset(preset: &LoadedPreset, generation_type: GenerationType, ma
                     depth: b.depth.max(0) as usize,
                     role,
                     content,
+                    name: block_name,
                 });
             }
             continue;
@@ -382,6 +403,7 @@ fn layout_from_preset(preset: &LoadedPreset, generation_type: GenerationType, ma
                 layout.push(Slot::Text {
                     role,
                     content: macros.apply(content),
+                    name: block_name,
                 })
             }
         }
@@ -399,8 +421,8 @@ fn trigger_matches(triggers: &Value, generation_type: GenerationType) -> bool {
 
 /// in_chat 블록을 "끝에서 depth번째 메시지 앞"에 끼운다. depth 0 = 맨 끝.
 /// 같은 위치의 블록은 프리셋 순서를 유지한다.
-/// 프롬프트 한 줄: 역할, 내용, 붙인 이미지
-type Line = (PromptRole, String, Vec<String>);
+/// 프롬프트 한 줄: 역할, 내용, 붙인 이미지, 출처
+type Line = (PromptRole, String, Vec<String>, Option<PromptSource>);
 
 fn interleave_in_chat(chat: Vec<Line>, in_chat: &[InChat]) -> Vec<Line> {
     let n = chat.len();
@@ -408,7 +430,7 @@ fn interleave_in_chat(chat: Vec<Line>, in_chat: &[InChat]) -> Vec<Line> {
         in_chat
             .iter()
             .filter(move |b| n - b.depth.min(n) == pos)
-            .map(|b| (b.role, b.content.clone(), vec![]))
+            .map(|b| (b.role, b.content.clone(), vec![], Some(PromptSource::named("preset", &b.name))))
     };
     let mut out = Vec::with_capacity(n + in_chat.len());
     for (i, msg) in chat.into_iter().enumerate() {

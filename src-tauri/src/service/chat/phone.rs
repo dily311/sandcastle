@@ -227,6 +227,7 @@ mod tests {
             images: vec![],
             role: "user".into(),
             content: "안녕\n뭐 해?".into(),
+            source: None,
         }];
         peek_history(&mut h, &me, &other);
         assert_eq!(h[0].content, "Aria: 안녕\nAria: 뭐 해?");

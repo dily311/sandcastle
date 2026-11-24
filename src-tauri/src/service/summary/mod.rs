@@ -341,6 +341,7 @@ pub fn build_prompt(prev: &str, edited: bool, new_lines: &str, preset: &crate::s
         role,
         content,
         token: 0,
+        source: None,
     };
     PromptMessage {
         chat_options: ChatOptions {

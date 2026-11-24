@@ -278,6 +278,7 @@ async fn st_seraphina_prompt_matches_sillytavern_order() {
                         images: vec![],
                         role: "assistant".into(),
                         content: character.first_message.clone().unwrap(),
+                        source: None,
                     }],
                     ..Default::default()
                 },

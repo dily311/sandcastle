@@ -164,6 +164,7 @@ pub async fn generate(
         role,
         token: 0,
         content,
+        source: None,
     };
     let mut messages = vec![];
     if let Some(s) = call.system {

@@ -399,6 +399,7 @@ async fn prompt_hook_adds_blocks_within_limits() {
                 images: vec![],
                 role: "user".into(),
                 content: format!("m{i}"),
+                source: None,
             })
             .collect(),
         ..Default::default()

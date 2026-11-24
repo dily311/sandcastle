@@ -34,6 +34,7 @@ impl ContextManager {
                 images: attachments_of(m.meta.as_ref()),
                 role: m.role,
                 content: m.content,
+                source: None,
             })
             .collect();
 

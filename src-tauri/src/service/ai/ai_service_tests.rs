@@ -67,6 +67,7 @@ fn prompt(max_tokens: u32) -> PromptMessage {
             content: "서울 날씨?".into(),
             token: 0,
             images: vec![],
+            source: None,
         }],
     }
 }

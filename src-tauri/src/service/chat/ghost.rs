@@ -81,6 +81,7 @@ pub fn finish_prompt(prompt: &mut crate::models::ai_service::PromptMessage, inst
         content: instruction,
         token: 0,
         images: vec![],
+        source: Some(crate::models::ai_service::PromptSource::of("ghost")),
     });
     prompt.chat_options.max_tokens = Some(max_tokens(length));
     prompt.chat_options.stream = stream;
@@ -169,6 +170,7 @@ mod tests {
             content: c.into(),
             token: 0,
             images: vec![],
+            source: None,
         };
         let mut p = PromptMessage {
             chat_options: ChatOptions {

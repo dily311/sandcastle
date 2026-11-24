@@ -237,12 +237,44 @@ pub struct ChatContext {
     pub util_prompts: std::collections::BTreeMap<String, String>,
 }
 
+/// 프롬프트 메시지가 어느 시스템에서 주입되었는지 ('보낸 컨텍스트' 표시용, 공급자 요청에는 쓰지 않음)
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, specta::Type)]
+#[serde(rename_all = "camelCase")]
+pub struct PromptSource {
+    /// 주입한 시스템 종류 (preset, world_info, system_rules, character, persona, examples, chat, user_input, qr, author_note, inject, recall, regen_extra, plugin, ghost)
+    pub kind: String,
+    /// 프리셋 블록 이름, 플러그인 이름, /inject id 등 세부 이름
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub name: Option<String>,
+}
+
+impl PromptSource {
+    pub fn of(kind: &str) -> Self {
+        Self {
+            kind: kind.to_string(),
+            name: None,
+        }
+    }
+
+    pub fn named(kind: &str, name: impl Into<String>) -> Self {
+        let name = name.into();
+        let trimmed = name.trim();
+        Self {
+            kind: kind.to_string(),
+            name: (!trimmed.is_empty()).then(|| trimmed.to_string()),
+        }
+    }
+}
+
 #[derive(Serialize, Clone, specta::Type)]
 pub struct HistoryItem {
     pub role: String,
     pub content: String,
     /// 메시지에 붙인 이미지 (파일 경로, meta.attachments)
     pub images: Vec<String>,
+    /// 대화 기록에 끼워 넣은 시스템 출처 (없으면 일반 대화 기록)
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub source: Option<PromptSource>,
 }
 
 #[derive(Serialize, specta::Type)]
@@ -332,6 +364,9 @@ pub struct PromptMessageItem {
     /// 함께 보낼 이미지 (파일 경로). 어댑터가 읽어서 공급자 형식으로 넣는다
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub images: Vec<String>,
+    /// 어느 시스템이 주입한 메시지인지 ('보낸 컨텍스트' 표시용)
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub source: Option<PromptSource>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, specta::Type)]

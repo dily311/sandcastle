@@ -176,6 +176,7 @@ pub fn apply(ctx: &mut ChatContext, answers: Vec<PluginPromptAnswer>) -> Vec<Plu
                             images: vec![],
                             role: "system".into(),
                             content,
+                            source: Some(crate::models::ai_service::PromptSource::named("plugin", &name)),
                         },
                     );
                 }

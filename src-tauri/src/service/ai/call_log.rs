@@ -107,6 +107,7 @@ mod tests {
                 content: "지시".into(),
                 token: 0,
                 images: vec![],
+                source: None,
             }],
         };
         for i in 0..(KEEP + 5) {

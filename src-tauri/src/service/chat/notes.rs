@@ -8,7 +8,7 @@
 //!   position: before(앱 규칙 맨 앞) / after(앱 규칙 끝, 기본) / chat(대화 기록 뒤에서 depth번째 앞) / none(넣지 않음)
 use serde_json::Value;
 
-use crate::models::ai_service::{ChatContext, HistoryItem};
+use crate::models::ai_service::{ChatContext, HistoryItem, PromptSource};
 
 pub const DEFAULT_DEPTH: usize = 4;
 
@@ -63,6 +63,7 @@ pub fn apply(ctx: &mut ChatContext, meta: Option<&Value>) {
                 images: vec![],
                 role: "system".into(),
                 content: format!("[Author's note]\n{}", macros(&t, &char_name, &user_name, &extra)),
+                source: Some(PromptSource::of("author_note")),
             },
         );
     }
@@ -71,7 +72,7 @@ pub fn apply(ctx: &mut ChatContext, meta: Option<&Value>) {
     if let Some(injects) = meta.get("injects").and_then(Value::as_object) {
         let mut list: Vec<(&String, &Value)> = injects.iter().collect();
         list.sort_by(|a, b| a.0.cmp(b.0));
-        for (_, inj) in list {
+        for (id, inj) in list {
             let Some(value) = text(inj.get("value")) else { continue };
             let value = macros(&value, &char_name, &user_name, &extra);
             match inj.get("position").and_then(Value::as_str).unwrap_or("after") {
@@ -90,6 +91,7 @@ pub fn apply(ctx: &mut ChatContext, meta: Option<&Value>) {
                             images: vec![],
                             role: role.into(),
                             content: value,
+                            source: Some(PromptSource::named("inject", id)),
                         },
                     );
                 }
@@ -115,6 +117,7 @@ mod tests {
                     images: vec![],
                     role: "user".into(),
                     content: format!("m{i}"),
+                    source: None,
                 })
                 .collect(),
             ..Default::default()

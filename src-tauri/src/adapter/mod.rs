@@ -335,6 +335,7 @@ mod tests {
             role,
             content: c.into(),
             token: 0,
+            source: None,
         };
         let prompt = PromptMessage {
             chat_options: ChatOptions::default(),
@@ -376,12 +377,14 @@ mod tests {
                     role: PromptRole::System,
                     content: "rules".into(),
                     token: 0,
+                    source: None,
                 },
                 PromptMessageItem {
                     images: vec![png.clone(), "missing.png".into()],
                     role: PromptRole::User,
                     content: "look".into(),
                     token: 0,
+                    source: None,
                 },
             ],
         };

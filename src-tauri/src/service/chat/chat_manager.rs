@@ -807,6 +807,7 @@ impl ChatManager {
                         images: vec![],
                         role: "user".into(),
                         content: block,
+                        source: Some(crate::models::ai_service::PromptSource::of("recall")),
                     });
                 }
                 serde_json::to_value(&out.meta).ok()
@@ -824,6 +825,7 @@ impl ChatManager {
                 images: vec![],
                 role: "user".into(),
                 content: format!("[Instructions for this response]\n{e}"),
+                source: Some(crate::models::ai_service::PromptSource::of("regen_extra")),
             });
         }
 
@@ -1424,6 +1426,7 @@ fn raw_prompt(
         content: content.to_string(),
         token: 0,
         images: vec![],
+        source: Some(crate::models::ai_service::PromptSource::of("qr")),
     };
     let mut messages = vec![];
     if let Some(s) = system.map(str::trim).filter(|s| !s.is_empty()) {

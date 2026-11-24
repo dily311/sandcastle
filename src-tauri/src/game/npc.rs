@@ -384,6 +384,7 @@ async fn converse(
             images: vec![],
             role: m.role,
             content: m.content,
+            source: None,
         })
         .collect();
 
@@ -395,6 +396,7 @@ async fn converse(
                 images: vec![],
                 role: "assistant".to_string(),
                 content: script,
+                source: None,
             },
         );
     }

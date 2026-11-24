@@ -38,6 +38,7 @@ fn hist(role: &str, content: &str) -> HistoryItem {
         images: vec![],
         role: role.into(),
         content: content.into(),
+        source: None,
     }
 }
 
@@ -190,6 +191,25 @@ fn quiet_generation_scans_instruction_for_world_info_and_places_it_last() {
         "Quiet 지시 키워드로 월드인포 발동: {contents:?}"
     );
     assert_eq!(contents.last(), Some(&"Tell me about the phoenix"), "Quiet 지시는 postHistory 뒤 맨 끝");
+
+    // 각 메시지에 주입 출처(source)가 붙는다
+    let sources: Vec<_> = p
+        .messages
+        .iter()
+        .map(|m| m.source.as_ref().map(|s| (s.kind.as_str(), s.name.as_deref())))
+        .collect();
+    assert_eq!(
+        sources,
+        vec![
+            Some(("system_rules", None)),
+            Some(("preset", Some("main"))),
+            Some(("world_info", None)),
+            Some(("chat", None)),
+            Some(("chat", None)),
+            Some(("preset", Some("postHistory"))),
+            Some(("qr", None)),
+        ]
+    );
 }
 
 #[test]
@@ -379,6 +399,7 @@ fn attached_images_ride_along_with_their_messages() {
             images: vec!["a.png".into()],
             role: "user".into(),
             content: "".into(),
+            source: None,
         },
         hist("assistant", "nice picture"),
     ];

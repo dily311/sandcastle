@@ -325,6 +325,7 @@ mod tests {
                 content: "서울 날씨?".into(),
                 token: 0,
                 images: vec![],
+                source: None,
             }],
         }
     }

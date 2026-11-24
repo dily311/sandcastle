@@ -671,6 +671,7 @@ fn recall_block_is_a_user_turn_merged_into_the_input_and_never_lands_in_the_syst
         role,
         content: c.into(),
         token: 0,
+        source: None,
     };
     let block = recall::format_block(&[("대화".into(), "사용자: 지난 이야기".into())]);
     // 첫 메시지(기록이 비어 있음)에서도: 규칙(system) 뒤에 user로 붙는다

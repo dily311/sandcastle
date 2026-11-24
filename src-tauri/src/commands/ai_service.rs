@@ -161,6 +161,7 @@ pub async fn test_message(ai: State<'_, Arc<AiService>>, tasks: State<'_, Arc<cr
             role: PromptRole::User,
             content: "Hi".into(),
             token: 4,
+            source: None,
         }],
     };
     // 음성·이미지 API는 대화 요청을 받지 않으므로 요금이 없는 확인 요청을 쓴다
