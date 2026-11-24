@@ -1,6 +1,6 @@
 // 테마: 화면 모드(시스템/밝게/어둡게), 고정 강조색, 회색 톤, 글자 크기, 테마(색 + CSS), CSS 스니펫
 import { jobs } from "$shared/stores/jobs.svelte";
-import type { CssSnippet, ThemeSetting } from "$ipc/bindings";
+import type { CssSnippet, ThemeChatSetting, ThemeSetting } from "$ipc/bindings";
 import { call, commands } from "$shared/ipc/client";
 import { getCurrentWindow } from "@tauri-apps/api/window";
 import { ACCENTS, DEFAULT_ACCENT, accentValue, isHexColor } from "$shared/ui/accents";
@@ -11,7 +11,13 @@ import { onEvent } from "$shared/ipc/events";
 import { gradientCss, gradientOf } from "$shared/ui/backgrounds";
 import { applyUserFont } from "$shared/ui/userFont";
 
-export type { CssSnippet };
+export type { CssSnippet, ThemeChatSetting };
+
+const DEFAULT_CHAT: ThemeChatSetting = {
+	showTimestamps: true,
+	showAvatars: true,
+	showMultiCharAvatars: false,
+};
 
 const FALLBACK: ThemeSetting = {
 	mode: "system",
@@ -26,23 +32,25 @@ const FALLBACK: ThemeSetting = {
 	backgroundOpacity: 0.82,
 	fonts: [],
 	appFont: null,
+	chat: DEFAULT_CHAT,
 };
 
 /** 지금 적용할 테마 내용 */
 interface Active {
 	colors: ThemeColors;
 	css: string;
-	/** 테마가 정한 강조색·회색 톤 (없으면 설정) */
+	/** 테마가 정한 강조색·회색 톤·대화 표시 설정 (없으면 설정) */
 	accent?: string | null;
 	gray?: string | null;
+	chat?: ThemeChatSetting | null;
 }
 const NONE: Active = { colors: { light: {}, dark: {} }, css: "" };
 
 class Theme {
 	setting = $state<ThemeSetting>(FALLBACK);
 	systemDark = $state(false);
-	/** 고른 테마의 색·CSS (불러온 뒤) */
-	private active: Active = NONE;
+	/** 고른 테마의 색·CSS·대화 표시 설정 (불러온 뒤) */
+	private active = $state<Active>(NONE);
 	/** 테마 편집 중 미리보기 (있으면 고른 테마 대신 씀) */
 	private previewing: Active | null = null;
 
@@ -64,6 +72,19 @@ class Theme {
 	}
 	get snippets(): CssSnippet[] {
 		return this.setting.snippets ?? [];
+	}
+	/** 대화 화면 표시 설정: 고른 커스텀 테마가 정했으면 그것, 아니면 테마 설정 */
+	get chat(): ThemeChatSetting {
+		const c = this.active.chat ?? this.setting.chat;
+		return {
+			showTimestamps: c?.showTimestamps ?? DEFAULT_CHAT.showTimestamps,
+			showAvatars: c?.showAvatars ?? DEFAULT_CHAT.showAvatars,
+			showMultiCharAvatars: c?.showMultiCharAvatars ?? DEFAULT_CHAT.showMultiCharAvatars,
+		};
+	}
+	async updateChat(patch: Partial<ThemeChatSetting>) {
+		const cur = this.setting.chat ?? DEFAULT_CHAT;
+		await this.update({ chat: { ...DEFAULT_CHAT, ...cur, ...patch } });
 	}
 
 	async init() {
@@ -109,7 +130,13 @@ class Theme {
 			const t = await call(commands.loadTheme(key), { source: "theme", silent: true }).catch(() => null);
 			// 예전 테마 JSON(옵시디언식 변수)도 새 변수로 이어서 보이게
 			this.active = t
-				? { colors: withLegacy({ light: t.colors.light ?? {}, dark: t.colors.dark ?? {} }, t.cssContent ?? ""), css: t.cssContent ?? "", accent: t.accentColor ?? null, gray: t.grayTone ?? null }
+				? {
+						colors: withLegacy({ light: t.colors.light ?? {}, dark: t.colors.dark ?? {} }, t.cssContent ?? ""),
+						css: t.cssContent ?? "",
+						accent: t.accentColor ?? null,
+						gray: t.grayTone ?? null,
+						chat: t.chat ?? null,
+					}
 				: NONE;
 		}
 	}

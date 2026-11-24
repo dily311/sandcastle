@@ -61,6 +61,7 @@
 	.bar {
 		display: flex;
 		gap: var(--space-2);
+		padding: var(--space-3) 0;
 	}
 	.bar > :global(:first-child) {
 		flex: 1;

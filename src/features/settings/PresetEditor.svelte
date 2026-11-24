@@ -256,8 +256,9 @@
 
 <Group title="생성 옵션">
 	<div class="sliders">
-		<Slider label="응답 길이 (토큰)" hint="AI가 한 번에 쓰는 최대 길이" bind:value={maxTokens} min={64} max={8192} step={64} fallback={1024} unsetLabel="1,024" format={(n) => n.toLocaleString()} />
-		<Slider label="컨텍스트 크기 (토큰)" hint="넘치면 오래된 대화부터 뺌. 0은 제한 없음" bind:value={contextSize} min={0} max={200000} step={1024} fallback={8192} unsetLabel="기본 (8,192)" format={(n) => (n ? n.toLocaleString() : "제한 없음")} />
+		<Slider label="컨텍스트 크기 (토큰)" hint="넘치면 오래된 대화부터 뺌. 0은 제한 없음" bind:value={contextSize} min={0} max={200000} step={1} fallback={4095} unsetLabel="기본 (4,095)" format={(n) => (n ? n.toLocaleString() : "제한 없음")} />
+		<Slider label="응답 길이 (토큰)" hint="AI가 한 번에 쓰는 최대 길이" bind:value={maxTokens} min={64} max={128000} step={1} fallback={1024} unsetLabel="1,024" format={(n) => n.toLocaleString()} />
+
 	</div>
 	<div class="sliders">
 		<Slider label="온도" hint="높을수록 다양하고 낮을수록 일정함" bind:value={temperature} min={0} max={2} step={0.05} fallback={1} unsetLabel="공급자 기본" format={(n) => n.toFixed(2)} />
@@ -265,18 +266,15 @@
 		<Slider label="Top P" hint="확률이 높은 낱말 몇 %에서만 고름" bind:value={topP} min={0} max={1} step={0.01} fallback={1} unsetLabel="공급자 기본" format={(n) => n.toFixed(2)} />
 		<Slider label="Top K" hint="후보 낱말을 몇 개까지 볼지. 0은 끔" bind:value={topK} min={0} max={200} step={1} fallback={0} unsetLabel="공급자 기본" format={(n) => (n ? String(n) : "끔")} />
 	</div>
-	{#if reasoning}
-		<Row label="추론 강도" desc={reasoning.default ? `기본은 ${reasoning.default}` : undefined}>
-			<Select
-				bind:value={effort}
-				aria-label="추론 강도"
-				options={[{ value: "", label: "공급자 기본" }, ...reasoning.levels.map((l) => ({ value: l, label: l }))]}
-			/>
-		</Row>
-	{/if}
+
 	<Row label="실시간 응답 (스트리밍)" desc="끄면 응답이 다 만들어진 뒤 한 번에 보임">
 		<Switch bind:checked={stream} label="스트리밍" hideLabel />
 	</Row>
+</Group>
+
+<Group title="유틸 프롬프트">
+	<p class="hint">이 프리셋으로 대화할 때만. 비우면 설정 &gt; 앱 프롬프트의 값</p>
+	<PresetUtilPrompts bind:value={appPrompts} />
 </Group>
 
 <Group title="프롬프트 블록">
@@ -342,11 +340,6 @@
 			</li>
 		{/each}
 	</ol>
-</Group>
-
-<Group title="유틸 프롬프트">
-	<p class="hint">이 프리셋으로 대화할 때만. 비우면 설정 &gt; 앱 프롬프트의 값</p>
-	<PresetUtilPrompts bind:value={appPrompts} />
 </Group>
 
 <style>

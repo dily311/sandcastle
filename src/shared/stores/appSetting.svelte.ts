@@ -24,9 +24,6 @@ class AppSettingStore {
 	get sendOnEnter() {
 		return this.value?.sendOnEnter ?? true;
 	}
-	get showTimestamps() {
-		return this.value?.showTimestamps ?? true;
-	}
 }
 
 export const appSetting = new AppSettingStore();

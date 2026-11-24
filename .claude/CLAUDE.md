@@ -53,6 +53,17 @@
 - **마무리 순서**: 구현 → 검증 → ADR(결정이 있었다면) → `plans/roadmap.md` 체크 → 끝난 마일스톤은 `docs/마일스톤 기록.md`에 기록하고 `plans/current-milestone.md`에서 정리 → 커밋.
 - 설계·보안이 어려운 결정은 Opus 하위 에이전트에게 자문을 받고, 무엇을 받아들이고 무엇을 바꿨는지 ADR에 적는다.
 
+## 작업 방식 (actually works)
+
+1. Don't maintain backward compatibility. Delete outdated stuff outright. No compatibility layers, no migration scripts, no backup fallback plans.
+2. Choose the simplest implementation that meets your current needs. No speculative abstractions, and no configuration layers added “just in case we need them later.”
+3. Let the system grow in layers. First get a minimal end-to-end version working, then add things once it runs. Never tear down something that's currently working just because of complexity that might arise in the future.
+4. Keep components modular, with clear separation of concerns.
+5. Prefer mature, maintained third-party libraries. Unless there's a really compelling reason, don't rewrite them yourself.
+6. Before you start, look at what the project's existing dependencies can already do, then decide whether to add a new package or write your own code. Don't assume the library definitely doesn't have it.
+7. Make architectural decisions with the long term in mind. No “we'll make it work for now and deal with it later” stopgaps.
+8. First look at how mature products solve the same problem. Use patterns that have already been proven, rather than inventing something from scratch.
+
 ## 브랜치·커밋
 
 - **작업은 `dev`에서만** 한다. 기능 브랜치(`feature/*`, `fix/*`)는 `dev`에 합친다.

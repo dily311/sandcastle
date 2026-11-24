@@ -1,7 +1,7 @@
 <script lang="ts">
 	import { onDestroy, onMount } from "svelte";
 	import { ChevronDown, ChevronLeft, ChevronRight, RotateCcw } from "@lucide/svelte";
-	import { Button, Field, IconButton, Input, Segmented, Spinner, Textarea } from "$shared/ui";
+	import { Button, Field, IconButton, Input, Segmented, Spinner, Switch, Textarea } from "$shared/ui";
 	import { BUILTIN_THEMES, COLOR_VARS, builtinId, defaultColors, type ColorMap, type Mode, type ThemeColors, withLegacy } from "$shared/ui/themes";
 	import { theme } from "$app/theme.svelte";
 	import { ACCENTS, accentValue, isHexColor } from "$shared/ui/accents";
@@ -20,16 +20,19 @@
 	let version = $state("1.0.0");
 	let colors = $state<ThemeColors>({ light: {}, dark: {} });
 	let css = $state("");
-	/** 이 테마가 정할 강조색·회색 톤 (처음엔 지금 설정, 5-E-14) */
+	/** 이 테마가 정할 강조색·회색 톤·대화 표시 설정 (처음엔 지금 설정, 5-E-14) */
 	let accent = $state<string>(theme.accentId);
 	let gray = $state<string>(theme.setting.grayTone ?? "slate");
+	let showTimestamps = $state<boolean>(theme.setting.chat?.showTimestamps ?? true);
+	let showAvatars = $state<boolean>(theme.setting.chat?.showAvatars ?? true);
+	let showMultiCharAvatars = $state<boolean>(theme.setting.chat?.showMultiCharAvatars ?? false);
 	let loaded = $state(false);
 	let original = "";
 	let saving = $state(false);
 	let mode = $state<Mode>(theme.dark ? "dark" : "light");
 	let cssOpen = $state(false);
 
-	const snapshot = () => JSON.stringify({ name, author, version, colors: clean(colors), css, accent, gray });
+	const snapshot = () => JSON.stringify({ name, author, version, colors: clean(colors), css, accent, gray, showTimestamps, showAvatars, showMultiCharAvatars });
 	function clean(c: ThemeColors): ThemeColors {
 		const f = (m: ColorMap) => Object.fromEntries(Object.entries(m).filter(([, v]) => v?.trim()));
 		return { light: f(c.light), dark: f(c.dark) };
@@ -57,6 +60,11 @@
 			cssOpen = !!css.trim();
 			if (t.accentColor) accent = t.accentColor;
 			if (t.grayTone) gray = t.grayTone;
+			if (t.chat) {
+				showTimestamps = t.chat.showTimestamps;
+				showAvatars = t.chat.showAvatars;
+				showMultiCharAvatars = t.chat.showMultiCharAvatars;
+			}
 		}
 		original = key === "new" || bid ? "" : snapshot();
 		loaded = true;
@@ -79,7 +87,19 @@
 		saving = true;
 		try {
 			const file = filename ?? `theme-${Date.now().toString(36)}.json`;
-			await call(commands.saveTheme(file, { name: name.trim(), author: author.trim(), version: version.trim() || "1.0.0", cssContent: css, colors: clean(colors), accentColor: accent, grayTone: gray }), src);
+			await call(
+				commands.saveTheme(file, {
+					name: name.trim(),
+					author: author.trim(),
+					version: version.trim() || "1.0.0",
+					cssContent: css,
+					colors: clean(colors),
+					accentColor: accent,
+					grayTone: gray,
+					chat: { showTimestamps, showAvatars, showMultiCharAvatars },
+				}),
+				src,
+			);
 			theme.preview(null);
 			// 새로 만든 테마는 바로 적용, 쓰는 중인 테마는 다시 읽음
 			if (!filename || theme.setting.selectTheme === file) await theme.update({ selectTheme: file });
@@ -152,6 +172,21 @@
 				{/each}
 			</div>
 		</Field>
+	</div>
+
+	<div class="card chat-opts">
+		<div class="chat-opt">
+			<div class="txt"><b>메시지 시각 표시</b><span class="faint small">대화에서 메시지마다 보낸 시각 보이기</span></div>
+			<Switch checked={showTimestamps} label="메시지 시각 표시" hideLabel onchange={(v) => (showTimestamps = v)} />
+		</div>
+		<div class="chat-opt">
+			<div class="txt"><b>메시지 프로필 표시</b><span class="faint small">대화에서 메시지에 프로필 그림 보이기</span></div>
+			<Switch checked={showAvatars} label="메시지 프로필 표시" hideLabel onchange={(v) => (showAvatars = v)} />
+		</div>
+		<div class="chat-opt">
+			<div class="txt"><b>메시지에 멀티 프로필 그림 표시</b><span class="faint small">`캐릭터이름: 대사` 형식의 이름 부분을 아바타로 교체해 표시</span></div>
+			<Switch checked={showMultiCharAvatars} label="메시지에 멀티 프로필 그림 표시" hideLabel onchange={(v) => (showMultiCharAvatars = v)} />
+		</div>
 	</div>
 
 	<div class="colors-head">
@@ -262,6 +297,20 @@
 	.info {
 		display: grid;
 		grid-template-columns: 2fr 1fr 1fr;
+		gap: var(--space-3);
+	}
+	.card + .card {
+		margin-top: var(--space-3);
+	}
+	.chat-opts {
+		display: flex;
+		flex-direction: column;
+		gap: var(--space-3);
+	}
+	.chat-opt {
+		display: flex;
+		align-items: center;
+		justify-content: space-between;
 		gap: var(--space-3);
 	}
 	.colors-head {

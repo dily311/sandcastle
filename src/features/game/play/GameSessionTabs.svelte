@@ -175,7 +175,7 @@
 	<div class="panel-body preset-edit">
 		<section>
 			<h4>컨텍스트</h4>
-			<ContextMeter {usage} />
+			<ContextMeter {usage} basis="last" />
 		</section>
 		<section>
 			<h4>프리셋 <span class="faint">{options?.promptPresetId ? "이 플레이에서 고름" : "앱 기본값"}</span></h4>

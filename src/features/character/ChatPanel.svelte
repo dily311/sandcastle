@@ -1,7 +1,7 @@
 <script lang="ts">
 	import UtilMacroNote from "./UtilMacroNote.svelte";
 	import { regexVersion } from "$shared/stores/regexVersion.svelte";
-	import { PictureInPicture2, ArrowUpDown, GripVertical, Bookmark, Check, ChevronDown, Eye, EyeOff, FileArchive, Folder, IdCard, ImagePlus, Pencil, Plus, Search, Trash2, X } from "@lucide/svelte";
+	import { PictureInPicture2, ArrowUpDown, GripVertical, Bookmark, Check, ChevronDown, Eye, EyeOff, FileArchive, Folder, IdCard, ImagePlus, Pencil, Plus, Search, Trash2, X, ChevronsDownUp, ChevronsUpDown } from "@lucide/svelte";
 	import { Avatar, Button, ChipPicker, ContextMenu, IconButton, Input, ProfilePicker, Select, Spinner, Switch, type MenuItem, type ProfileOption } from "$shared/ui";
 	import { bookmarks, bookmarksOf, onCurrentSwipe, type ChatBookmark } from "./bookmarks";
 	import { assetImport } from "./assetImport.svelte";
@@ -109,26 +109,50 @@
 		setOption({ model });
 	}
 
-	// ---- 컨텍스트 사용량: 대화가 바뀌거나 응답이 끝날 때마다 ----
+	const character = $derived(library.character(conv.characterId));
+	const persona = $derived(library.persona(library.convPersonaId(conv)) ?? library.personas[0]);
+
+	// ---- 컨텍스트 사용량: 지금 대화·설정 상태로 계산 ----
 	let usage = $state<ContextUsage | null>(null);
+	let usageSeq = 0;
 	async function loadUsage() {
-		usage = await call(commands.contextUsage(conv.id), { source: "chat", silent: true }).catch(() => null);
+		const seq = ++usageSeq;
+		const next = await call(commands.contextUsage(conv.id), { source: "chat", silent: true }).catch(() => null);
+		if (seq === usageSeq) usage = next;
 	}
+	const msgUsageStamp = $derived(session.messages.map((m) => `${m.id}:${m.updatedAt}:${m.content.length}:${metaOf(m).hidden ? 1 : 0}`).join(","));
+	const assetUsageStamp = $derived((library.images[conv.characterId] ?? []).map((a) => `${a.id}:${a.key}:${a.enabled ? 1 : 0}:${a.folder}`).join(","));
 	$effect(() => {
 		void conv.id;
 		void conv.promptPresetId;
-		void session.messages.length;
+		void conv.personaId;
+		void conv.imagesEnabled;
+		void conv.worldInfoIds;
+		void conv.meta;
+		void character?.defaultPromptPresetId;
+		void character?.defaultPersonaId;
+		void character?.description;
+		void character?.exampleDialogue;
+		void character?.systemPromptOverride;
+		void character?.worldInfoIds;
+		void persona?.id;
+		void persona?.description;
+		void appSetting.value?.selectedPreset;
+		void appSetting.value?.cgGroupVariants;
+		void library.assetVersion[conv.characterId];
+		void assetUsageStamp;
+		void msgUsageStamp;
+		void regexVersion.n;
+		void plugins.on("chat.images");
+		void plugins.on("summary");
+		void plugins.on("imageauto");
+		void plugins.on("status");
+		if (panel.tab === "context") void panel.tab;
 		if (!session.busy) void loadUsage();
 	});
 
 	// 프리셋: 컨텍스트 탭 아래에 바로 편집기 (PresetInline)
 	const activePresetId = $derived(conv.promptPresetId || usage?.presetId || null);
-
-	const character = $derived(library.character(conv.characterId));
-	const persona = $derived(library.persona(library.convPersonaId(conv)) ?? library.personas[0]);
-
-	/** 상태 탭의 상태창: 가장 최근 메시지의 것 (5-F-4-2) */
-	const statusBlocks = $derived(panel.tab !== "status" ? [] : (status ?? currentStatusBlocks(conv, session.messages, session.display, plugins.on("html"))));
 
 	// ---- 자물쇠 (5-E-29, ADR-028): 이 대화 > 캐릭터 기본 > 전역. 잠김 = 이 대화에 값이 있음 ----
 	// 폰 대화는 폰 주인·폰 설정을 따르므로 지금처럼 (자물쇠 없음)
@@ -187,6 +211,7 @@
 	let scripts = $state<RegexScript[]>([]);
 	$effect(() => {
 		void conv.id;
+		void regexVersion.n;
 		void call(commands.listRegexScripts(), { source: "regex", silent: true })
 			.then((r) => (scripts = r))
 			.catch(() => (scripts = []));
@@ -196,7 +221,7 @@
 			(s) =>
 				s.scope === "global" ||
 				(s.scope === "character" && s.scopeId === conv.characterId) ||
-				(s.scope === "preset" && !!conv.promptPresetId && s.scopeId === conv.promptPresetId),
+				(s.scope === "preset" && !!shownPreset && s.scopeId === shownPreset),
 		),
 	);
 	const scopeName = { global: "전역", character: "캐릭터", preset: "프리셋" } as const;
@@ -221,11 +246,17 @@
 	// 상태창 정규식 (5-F-5-1): 화면에만 쓰는 정규식 중 "상태창으로" 고른 것의 결과는 고정 자리로
 	const statusRegexes = $derived(applied.filter((s) => s.target === "display" && s.enabled));
 	const isStatusRegex = (s: RegexScript) => !!(s.extraJson as { statusWindow?: boolean } | null)?.statusWindow;
+	
+	/** 상태 탭의 상태창: 가장 최근 메시지의 것 (5-F-4-2) */
+	const selectedPinKeys = $derived(new Set(statusRegexes.filter(isStatusRegex).map((s) => `status:${s.id}`)));
+	const statusBlocks = $derived(panel.tab !== "status" ? [] : (status ?? currentStatusBlocks(conv, session.messages, session.display, plugins.on("html"), undefined, selectedPinKeys)));
+
 	async function toggleStatusRegex(s: RegexScript, on: boolean) {
-		const extraJson: Record<string, Value> = { ...((s.extraJson as Record<string, Value> | null) ?? {}) };
+		const plain = JSON.parse(JSON.stringify(s)) as RegexScript;
+		const extraJson: Record<string, Value> = { ...((plain.extraJson as Record<string, Value> | null) ?? {}) };
 		if (on) extraJson.statusWindow = true;
 		else delete extraJson.statusWindow;
-		const saved = await call(commands.upsertRegexScript({ ...s, extraJson }), { source: "regex" });
+		const saved = await call(commands.upsertRegexScript({ ...plain, extraJson }), { source: "regex" });
 		regexVersion.bump();
 		scripts = scripts.map((x) => (x.id === s.id ? saved : x));
 	}
@@ -578,7 +609,11 @@
 				{#snippet leading()}<Search />{/snippet}
 			</Input>
 			{#if hasChapters}
-				<button class="fold-all" onclick={() => (folded = folded.size ? new Set() : new Set(toc.filter((t) => t.kind === "chapter").map((t) => t.id)))}>{folded.size ? "모두 펼치기" : "모두 접기"}</button>
+				{#if folded.size}
+					<IconButton label="모두 펼치기" size="sm" onclick={() => (folded = new Set())}><ChevronsUpDown /></IconButton>
+				{:else}
+					<IconButton label="모두 접기" size="sm" onclick={() => (folded = new Set(toc.filter((t) => t.kind === "chapter").map((t) => t.id)))}><ChevronsDownUp /></IconButton>
+				{/if}
 			{/if}
 		</div>
 		<ol class="toc" bind:this={tocList}>
@@ -587,7 +622,7 @@
 				<li class={t.kind} class:current={cur} aria-current={cur ? "location" : undefined}>
 					{#if t.kind === "chapter"}
 						<button class="fold" aria-label={folded.has(t.id) ? "챕터 펼치기" : "챕터 접기"} aria-expanded={!folded.has(t.id)} onclick={() => toggleChapter(t.id)}><ChevronDown class={folded.has(t.id) ? "rot" : ""} /></button>
-						<button onclick={() => onjump(t.id)} oncontextmenu={(e) => tocContext(e, t.id)}>{t.label}</button>
+						<button class="chapter" onclick={() => onjump(t.id)} oncontextmenu={(e) => tocContext(e, t.id)}>{t.label}</button>
 					{:else}
 						<button onclick={() => onjump(t.id)} oncontextmenu={(e) => tocContext(e, t.id)}><span class="no">#{t.n}</span>{t.label}</button>
 					{/if}
@@ -707,19 +742,11 @@
 					{:else}
 						<span>페르소나</span>
 						<div class="with-btn">
-							<ProfilePicker label="페르소나 바꾸기" options={personaOptions} value={persona?.id} onchange={(id) => void pickPersona(id)} />
+							<ProfilePicker label="페르소나 변경" options={personaOptions} value={persona?.id} onchange={(id) => void pickPersona(id)} />
 							{#if lockable}<OptionLock locked={lockedPersona} from={personaFrom} onclick={togglePersona} />{/if}
 						</div>
 					{/if}
 				</div>
-				<Switch checked={!!(conv.meta as { showAvatars?: boolean } | null)?.showAvatars} label="메시지에 프로필 그림" onchange={(v) => library.patchMeta(conv.id, { showAvatars: v || null })} />
-				<Switch
-					checked={!!(conv.meta as { multiChar?: boolean } | null)?.multiChar}
-					label="여러 캐릭터"
-					description="연결된 로어북의 '캐릭터' 분류 항목이 함께 말함 (설정은 이름이 나올 때만 보냄)"
-					onchange={(v) => library.patchMeta(conv.id, { multiChar: v || null })}
-				/>
-				{#if (conv.meta as { multiChar?: boolean } | null)?.multiChar}<UtilMacroNote presetId={shownPreset} macro="multi_char" />{/if}
 			</section>
 			<hr />
 			<section>
@@ -737,7 +764,7 @@
 			<NotesPanel {conv} bare />
 			<hr />
 			<section>
-				<h4>정규식 <span class="faint">적용 중 {applied.filter((s) => s.enabled).length}개 · 위에서부터 적용, 끌어서 순서 바꾸기</span></h4>
+				<h4>정규식 <span class="faint">{applied.filter((s) => s.enabled).length}개 적용 중</span></h4>
 				{#each groups as g (g.scope)}
 					<p class="rx-scope">{scopeName[g.scope]}</p>
 					<ul class="rx">
@@ -801,6 +828,7 @@
 		align-items: center;
 		gap: 2px;
 		min-width: 0;
+		overflow: hidden;
 	}
 	.with-btn > :global(:first-child) {
 		flex: 1;
@@ -1063,8 +1091,12 @@
 		color: var(--text);
 	}
 	/* 읽기 화면에서 지금 읽는 메시지·챕터 (5-E-6-1) */
-	.toc li.current > button,
-	.toc li.current > :global(button:not(.fold)) {
+	.toc li.current > .chapter,
+	.toc li.current > :global(.chapter) {
+		color: var(--accent-text);
+	}
+	.toc li.current > button:not(.fold, .chapter),
+	.toc li.current > :global(button:not(.fold, .chapter)) {
 		color: var(--accent-text);
 		background: var(--accent-soft);
 	}
@@ -1075,6 +1107,7 @@
 	.toc .chapter .fold {
 		flex: 0 0 auto;
 		width: 24px;
+		height: 24px;
 		padding: 0;
 		display: grid;
 		place-items: center;

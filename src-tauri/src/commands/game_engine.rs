@@ -442,9 +442,8 @@ pub async fn game_context_usage(
     settings: State<'_, SettingsState<AppSetting>>,
     session_id: String,
 ) -> Result<crate::commands::chat::ContextUsage, AppError> {
-    use crate::models::ai_service::PromptRole;
     use crate::service::{
-        chat::chat_manager::{current_conv_request, LAST_GAME_PROMPT},
+        chat::chat_manager::{count_prompt_usage, current_conv_request, LAST_GAME_PROMPT},
         prompt::prompt_manager::{chat_options_from, context_limit_from, PromptManager, DEFAULT_CONTEXT_LIMIT as CONTEXT_LIMIT},
     };
     let (_, preset) = crate::db::game::get_game_session_options(&state.db, &session_id).await?;
@@ -456,18 +455,7 @@ pub async fn game_context_usage(
     let limit = loaded.as_ref().and_then(|p| context_limit_from(&p.preset)).unwrap_or(CONTEXT_LIMIT);
     let reserved = loaded.as_ref().and_then(|p| chat_options_from(&p.preset).max_tokens).unwrap_or(0);
     let prompt = LAST_GAME_PROMPT.lock().ok().and_then(|m| m.get(&session_id).cloned());
-    let (mut system, mut history, mut history_count) = (0u32, 0u32, 0u32);
-    if let Some(p) = &prompt {
-        for m in &p.messages {
-            let t = m.token.max(0) as u32;
-            if m.role == PromptRole::System {
-                system += t;
-            } else {
-                history += t;
-                history_count += 1;
-            }
-        }
-    }
+    let (system, history, history_count) = prompt.as_ref().map_or((0, 0, 0), count_prompt_usage);
     Ok(crate::commands::chat::ContextUsage {
         used: prompt.map(|_| system + history),
         system,

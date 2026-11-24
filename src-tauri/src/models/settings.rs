@@ -10,7 +10,6 @@ pub struct AppSetting {
     pub language: String,
     pub selected_preset: String,
     pub send_on_enter: bool,
-    pub show_timestamps: bool,
     pub selected_api_profile: Option<String>,
     /// 전역 모델 (5-E-29-3, ADR-028 갱신): 자물쇠를 풀어 둔 대화가 전역 API에서 쓸 모델. None = API 프로필의 기본 모델.
     /// 전역 API를 바꾸면 화면이 비운다 (모델은 API에 딸린 이름)
@@ -136,7 +135,6 @@ impl Default for AppSetting {
             language: "ko".into(),
             selected_preset: "default".into(),
             send_on_enter: false,
-            show_timestamps: true,
             selected_api_profile: None,
             selected_model: None,
             reasoning_effort: None,
@@ -192,6 +190,28 @@ pub struct ThemeSetting {
     /// 앱 글꼴: `fonts` 중 하나의 파일 경로. 없으면 기본 글꼴
     #[serde(default)]
     pub app_font: Option<String>,
+    /// 대화 화면 표시 설정 (시각·프로필 그림·멀티 프로필 그림)
+    #[serde(default)]
+    pub chat: ThemeChatSetting,
+}
+
+/// 대화 화면 표시 설정 (테마 설정과 사용자 커스텀 테마에서 함께 사용)
+#[derive(Debug, Serialize, Deserialize, Clone, PartialEq, Eq, specta::Type)]
+#[serde(rename_all = "camelCase", default)]
+pub struct ThemeChatSetting {
+    pub show_timestamps: bool,
+    pub show_avatars: bool,
+    pub show_multi_char_avatars: bool,
+}
+
+impl Default for ThemeChatSetting {
+    fn default() -> Self {
+        Self {
+            show_timestamps: true,
+            show_avatars: true,
+            show_multi_char_avatars: false,
+        }
+    }
 }
 
 /// 올린 글꼴 한 개
@@ -236,6 +256,7 @@ impl Default for ThemeSetting {
             background_opacity: default_background_opacity(),
             fonts: vec![],
             app_font: None,
+            chat: ThemeChatSetting::default(),
         }
     }
 }
@@ -284,6 +305,9 @@ pub struct CssTheme {
     /// 이 테마를 고르면 쓸 회색 톤. 없으면 설정을 따름
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub gray_tone: Option<String>,
+    /// 이 테마를 고르면 쓸 대화 화면 표시 설정. 없으면 설정을 따름
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub chat: Option<ThemeChatSetting>,
 }
 
 #[derive(Debug, Serialize, Deserialize, Clone, specta::Type)]
@@ -848,6 +872,35 @@ mod tests {
         let t: TypingIndicator = serde_json::from_value(serde_json::json!({ "style": "none", "text": "{{char}} 입력 중…" })).unwrap();
         assert_eq!(t.style, TypingStyle::None);
         assert_eq!(serde_json::to_value(t).unwrap()["style"], "none");
+    }
+
+    #[test]
+    fn theme_chat_setting_defaults_and_roundtrips_in_theme_and_css_theme() {
+        let old_theme: ThemeSetting = serde_json::from_value(serde_json::json!({
+            "mode": "dark",
+            "selectTheme": "default",
+            "isFrameless": true,
+            "accentColor": "#8b85f9",
+            "fontSize": 16
+        }))
+        .unwrap();
+        assert_eq!(old_theme.chat, ThemeChatSetting::default());
+
+        let css: CssTheme = serde_json::from_value(serde_json::json!({
+            "name": "커스텀",
+            "author": "me",
+            "version": "1.0.0",
+            "chat": { "showTimestamps": false, "showAvatars": false, "showMultiCharAvatars": true }
+        }))
+        .unwrap();
+        assert_eq!(
+            css.chat,
+            Some(ThemeChatSetting {
+                show_timestamps: false,
+                show_avatars: false,
+                show_multi_char_avatars: true,
+            })
+        );
     }
 }
 

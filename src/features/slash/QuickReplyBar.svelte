@@ -75,7 +75,7 @@
 		display: flex;
 		align-items: center;
 		gap: var(--space-2);
-		padding: 0 var(--space-1) var(--space-2);
+		padding: var(--space-1) var(--space-2);
 	}
 	.list {
 		flex: 1;

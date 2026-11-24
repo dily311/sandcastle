@@ -107,7 +107,19 @@
 	const edit = (key: string) => nav.go({ page: "settings", tab: "theme", edit: key });
 	async function duplicate(t: ThemeMeta) {
 		const full = await call(commands.loadTheme(t.filename ?? ""), src);
-		await call(commands.saveTheme(`theme-${Date.now().toString(36)}.json`, { name: `${full.name} 사본`, author: full.author, version: full.version, cssContent: full.cssContent, colors: full.colors }), src);
+		await call(
+			commands.saveTheme(`theme-${Date.now().toString(36)}.json`, {
+				name: `${full.name} 사본`,
+				author: full.author,
+				version: full.version,
+				cssContent: full.cssContent,
+				colors: full.colors,
+				accentColor: full.accentColor,
+				grayTone: full.grayTone,
+				chat: full.chat,
+			}),
+			src,
+		);
 		await loadList();
 	}
 	async function remove(t: ThemeMeta) {
@@ -199,6 +211,18 @@
 		</Row>
 		<Row label="프레임 없는 창" desc="운영체제 제목 표시줄 대신 앱 헤더 사용">
 			<Switch checked={theme.setting.isFrameless} label="프레임 없는 창" hideLabel onchange={(v) => theme.update({ isFrameless: v })} />
+		</Row>
+	</Group>
+
+	<Group title="대화 표시">
+		<Row label="메시지 시각 표시" desc="대화에서 메시지마다 보낸 시각 보이기. 커스텀 테마가 정하면 테마 설정을 따름" nowrap>
+			<Switch checked={theme.setting.chat?.showTimestamps ?? true} label="메시지 시각 표시" hideLabel onchange={(v) => theme.updateChat({ showTimestamps: v })} />
+		</Row>
+		<Row label="메시지 프로필 표시" desc="대화에서 메시지에 프로필 그림 보이기" nowrap>
+			<Switch checked={theme.setting.chat?.showAvatars ?? true} label="메시지에 프로필 그림" hideLabel onchange={(v) => theme.updateChat({ showAvatars: v })} />
+		</Row>
+		<Row label="메시지에 멀티 프로필 그림 표시" desc="`캐릭터이름: 대사` 형식의 이름 부분을 아바타로 교체해 표시" nowrap>
+			<Switch checked={theme.setting.chat?.showMultiCharAvatars ?? false} label="메시지에 멀티 프로필 그림 표시" hideLabel onchange={(v) => theme.updateChat({ showMultiCharAvatars: v })} />
 		</Row>
 	</Group>
 

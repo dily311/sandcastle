@@ -304,13 +304,13 @@ pub async fn display_messages(
         .collect())
 }
 
-/// 컨텍스트 사용량 (오른쪽 패널). 마지막으로 보낸 프롬프트 기준
+/// 컨텍스트 사용량 (오른쪽 패널). 대화 화면은 지금 상태로 계산하고, 게임은 마지막 프롬프트 기준
 #[derive(serde::Serialize, specta::Type)]
 #[serde(rename_all = "camelCase")]
 pub struct ContextUsage {
-    /// 마지막 프롬프트의 토큰 (보낸 적 없으면 None)
+    /// 프롬프트 토큰 합계 (계산할 수 없으면 None)
     pub used: Option<u32>,
-    /// 그중 시스템(규칙·캐릭터·월드인포·노트 등)
+    /// 그중 시스템(규칙·캐릭터·프리셋·월드인포·노트 등)
     pub system: u32,
     /// 그중 대화 기록
     pub history: u32,
@@ -322,94 +322,23 @@ pub struct ContextUsage {
     pub reserved: u32,
     pub preset_id: Option<String>,
     pub preset_name: Option<String>,
-    /// 커뮤니티 플러그인이 더한 프롬프트 블록 (6-D-5, 시스템 토큰에 들어 있음)
+    /// 커뮤니티 플러그인이 마지막 응답에 더한 프롬프트 블록 (6-D-5)
     pub plugins: Vec<crate::service::community::prompt_hook::PluginPromptUse>,
-    /// 마지막 응답에서 지난 대화를 떠올린 기록 (3-C-5, 대화 기록 토큰에 들어 있음). 자동 회상이 꺼져 있었으면 None
+    /// 마지막 응답에서 지난 대화를 떠올린 기록 (3-C-5). 자동 회상이 꺼져 있으면 None
     pub memory_recall: Option<crate::service::memory::recall::RecallMeta>,
-    /// 마지막 응답을 만들 때 쓴 대화 요약 (3-D, 시스템 토큰에 들어 있음)
+    /// 지금 컨텍스트에 들어가는 대화 요약 (3-D, 시스템 토큰에 포함)
     pub summary: Option<crate::service::summary::SummaryUse>,
 }
 
 #[tauri::command]
 #[specta::specta]
-pub async fn context_usage(state: State<'_, AppState>, settings: State<'_, SettingsState<AppSetting>>, conversation_id: String) -> Result<ContextUsage> {
-    use crate::models::ai_service::PromptRole;
-    use crate::service::{
-        chat::chat_manager::current_conv_request,
-        prompt::prompt_manager::{chat_options_from, context_limit_from, PromptManager, DEFAULT_CONTEXT_LIMIT as CONTEXT_LIMIT},
-    };
-
-    let conv = conversation::get_conversation(&state.db, &conversation_id).await?;
-    let char_default = conversation::get_character(&state.db, &conv.character_id)
-        .await
-        .ok()
-        .and_then(|c| c.default_prompt_preset_id);
-    let fallback = current_conv_request(&settings).map(|r| r.preset_id).unwrap_or_default();
-    let preset_id = conv
-        .prompt_preset_id
-        .clone()
-        .filter(|s| !s.is_empty())
-        .or(char_default.filter(|s| !s.is_empty()))
-        .or(Some(fallback).filter(|s| !s.is_empty()));
-    let preset = PromptManager::load_preset(&state.db, preset_id.as_deref()).await?;
-    let limit = preset.as_ref().and_then(|p| context_limit_from(&p.preset)).unwrap_or(CONTEXT_LIMIT);
-    let reserved = preset.as_ref().and_then(|p| chat_options_from(&p.preset).max_tokens).unwrap_or(0);
-
-    // 마지막 AI 메시지에 저장된 프롬프트
-    let recent = conversation::get_messages(&state.db, &conversation_id, 30, None).await?;
-    let mut prompt: Option<PromptMessage> = None;
-    let mut plugins = vec![];
-    let mut memory_recall = None;
-    let mut summary_use = None;
-    for m in recent.iter().rev().filter(|m| m.role == "assistant") {
-        if let Some(v) = chat_ui::get_prompt(&state.db, &m.id).await? {
-            if let Ok(p) = serde_json::from_value::<PromptMessage>(v) {
-                prompt = Some(p);
-                plugins = m
-                    .meta
-                    .as_ref()
-                    .and_then(|meta| meta.pointer("/info/pluginPrompt"))
-                    .and_then(|v| serde_json::from_value(v.clone()).ok())
-                    .unwrap_or_default();
-                memory_recall = m
-                    .meta
-                    .as_ref()
-                    .and_then(|meta| meta.pointer("/info/memoryRecall"))
-                    .and_then(|v| serde_json::from_value(v.clone()).ok());
-                summary_use = m
-                    .meta
-                    .as_ref()
-                    .and_then(|meta| meta.pointer("/info/summary"))
-                    .and_then(|v| serde_json::from_value(v.clone()).ok());
-                break;
-            }
-        }
-    }
-    let (mut system, mut history, mut history_count) = (0u32, 0u32, 0u32);
-    if let Some(p) = &prompt {
-        for m in &p.messages {
-            let t = m.token.max(0) as u32;
-            if m.role == PromptRole::System {
-                system += t;
-            } else {
-                history += t;
-                history_count += 1;
-            }
-        }
-    }
-    Ok(ContextUsage {
-        used: prompt.map(|_| system + history),
-        system,
-        history,
-        history_count,
-        limit,
-        reserved,
-        preset_name: preset.as_ref().map(|p| p.preset.name.clone()),
-        preset_id,
-        plugins,
-        memory_recall,
-        summary: summary_use,
-    })
+pub async fn context_usage(
+    app: AppHandle,
+    state: State<'_, AppState>,
+    settings: State<'_, SettingsState<AppSetting>>,
+    conversation_id: String,
+) -> Result<ContextUsage> {
+    crate::service::chat::chat_manager::compute_context_usage(Some(&app), &state.db, &settings, &conversation_id).await
 }
 
 /// 대화 하나를 파일로 내보내기. format: "jsonl"(SillyTavern 채팅) | "jsonl-img"(같은데 `<cg>키</cg>` → `{{img::키}}`) | "txt"(읽기용 글)

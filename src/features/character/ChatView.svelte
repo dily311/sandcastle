@@ -29,6 +29,7 @@
 	import { ghost } from "$features/ghost/ghost.svelte";
 	import { panel } from "$app/panel.svelte";
 	import { appSetting } from "$shared/stores/appSetting.svelte";
+	import { theme } from "$app/theme.svelte";
 	appSetting.load();
 	import { fileSrc, imageSrc } from "$shared/ipc/file";
 	import type { PromptMessage_Serialize } from "$ipc/bindings";
@@ -202,8 +203,8 @@
 		});
 	});
 	const liveBlocks = $derived(session?.live?.kind === "send" ? toBlocks(session.live.text.replace(/<image>[\s\S]*?(<\/image>|$)/i, ""), { safeHtml: plugins.on("html") }) : []);
-	/** 메시지 프로필 그림 (5-E-9): 대화 설정에서 켰을 때만. AI는 그 캐릭터, 내 글은 보낸 페르소나(없으면 대화의 페르소나) */
-	const showAvatars = $derived(!!appSetting.value?.showAvatars);
+	/** 메시지 프로필 그림 (5-E-9): 테마 설정에서 켰을 때만. AI는 그 캐릭터, 내 글은 보낸 페르소나(없으면 대화의 페르소나) */
+	const showAvatars = $derived(theme.chat.showAvatars);
 	/** 메시지를 쓴 캐릭터·페르소나 (그림·확대 위치용) */
 	function ownerOf(m: Message) {
 		return m.role === "assistant"

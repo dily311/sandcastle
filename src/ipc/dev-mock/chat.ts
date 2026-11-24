@@ -297,9 +297,7 @@ async function generate(convId: string, onEvent: { onmessage: (m: { chunk: strin
 	const state = { cancelled: false };
 	running.set(convId, state);
 	const c = convs.find((c) => c.id === convId);
-	// 다인봇을 켠 폰 대화는 `이름: 대사` 줄로 (5-E-19-1 단체 대화 확인용)
-	const multi = !!(c?.meta as { multiChar?: boolean } | null)?.multiChar;
-	const pool = c?.mode === "phone" ? (multi ? PHONE_GROUP_REPLIES : PHONE_REPLIES) : REPLIES;
+	const pool = c?.mode === "phone" ? PHONE_REPLIES : REPLIES;
 	const text = pool[Math.floor(Math.random() * pool.length)];
 	let out = "";
 	try {
@@ -564,10 +562,10 @@ AI: 그때 이야기를 다시 해 볼까요?`, stale: false },
 	},
 	context_usage: ({ conversationId }) => {
 		const c = conv(conversationId as string);
-		const msgs = msgsOf(conversationId as string);
+		const msgs = msgsOf(conversationId as string).filter((m) => !(m.meta as { hidden?: boolean } | null)?.hidden);
 		const history = msgs.reduce((n, m) => n + Math.ceil(m.content.length / 1.5), 0);
 		const presetId = c.promptPresetId || "default";
-		return { used: msgs.length ? 640 + history : null, system: 640, history, historyCount: msgs.length, limit: 8192, reserved: 1024, presetId, presetName: presetId === "default" ? "기본 배치" : presetId, plugins: [], memoryRecall: null, summary: null };
+		return { used: 640 + history, system: 640, history, historyCount: msgs.length, limit: 8192, reserved: 1024, presetId, presetName: presetId === "default" ? "기본 배치" : presetId, plugins: [], memoryRecall: null, summary: null };
 	},
 	update_message_meta: ({ id, meta }) => {
 		const m = messages.find((x) => x.id === id);
@@ -665,9 +663,10 @@ AI: 그때 이야기를 다시 해 볼까요?`, stale: false },
 		return {
 			chatOptions: {},
 			messages: [
-				{ role: "system", content: "[앱 규칙] 캐릭터를 연기한다.", token: 12 },
-				{ role: "system", content: characters[0].description, token: 48 },
-				{ role: "user", content: "여기가 어디죠?", token: 6 },
+				{ role: "system", content: "[앱 규칙] 캐릭터를 연기한다.", token: 12, source: { kind: "preset", name: "Main Prompt" } },
+				{ role: "system", content: "엘도리아는 고대의 숲이다.", token: 18, source: { kind: "world_info" } },
+				{ role: "system", content: characters[0].description, token: 48, source: { kind: "character" } },
+				{ role: "user", content: "여기가 어디죠?", token: 6, source: { kind: "user_input" } },
 			],
 		};
 	},

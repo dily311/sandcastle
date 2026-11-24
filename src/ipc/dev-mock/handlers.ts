@@ -17,7 +17,6 @@ const db = {
 		language: "ko",
 		selectedPreset: "default",
 		sendOnEnter: true,
-		showTimestamps: false,
 		selectedApiProfile: "gemini",
 		selectedModel: null,
 		reasoningEffort: null,
@@ -41,6 +40,7 @@ const db = {
 		accentColor: "seaglass",
 		fontSize: 16,
 		grayTone: "slate",
+		chat: { showTimestamps: false, showAvatars: true, showMultiCharAvatars: false },
 	} satisfies ThemeSetting as ThemeSetting,
 	feature: { feature: { "chat.images": true, widget: true, "widget.music": true } } as FeatureSetting,
 };

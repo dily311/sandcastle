@@ -14,6 +14,7 @@
 	import { plugins } from "$shared/stores/plugins.svelte";
 	import TypingIndicator from "$features/character/TypingIndicator.svelte";
 	import type { TypingIndicator_Serialize as TypingSetting, TypingStyle } from "$ipc/bindings";
+	import ProfilePicker, { type ProfileOption } from "$/shared/ui/ProfilePicker.svelte";
 
 	let defaultPersona = $state<string>("");
 
@@ -26,7 +27,7 @@
 	const s = $derived(appSetting.value);
 	const apiOptions = $derived([{ value: "", label: "고르지 않음" }, ...library.apis.map((a) => ({ value: a.id, label: `${a.name} · ${a.model}` }))]);
 	const presetOptions = $derived(library.presets.map((p) => ({ value: p.id, label: p.name })));
-	const personaOptions = $derived(library.personas.map((p) => ({ value: p.id, label: p.name })));
+	const personaOptions = $derived<ProfileOption[]>(library.personas.map((p) => ({ id: p.id, name: p.name, avatar: p.avatar, avatarFit: p.avatarFit, color: p.color, description: p.description })));
 
 	// 끝나면 알림 (5-E-17·18): 제목 글과 아이콘만 바꾼다
 	type Notify = { enabled: boolean; title: string; icon: string | null };
@@ -70,9 +71,6 @@
 		<Group>
 			<Row label="Enter로 보내기" desc="끄면 Ctrl+Enter로 보냄. Shift+Enter는 항상 줄바꿈" nowrap>
 				<Switch checked={s.sendOnEnter} label="Enter로 보내기" hideLabel onchange={(v) => appSetting.update({ sendOnEnter: v })} />
-			</Row>
-			<Row label="메시지 시각 표시" desc="대화에서 메시지마다 보낸 시각 보이기" nowrap>
-				<Switch checked={s.showTimestamps} label="메시지 시각 표시" hideLabel onchange={(v) => appSetting.update({ showTimestamps: v })} />
 			</Row>
 		</Group>
 
@@ -133,14 +131,10 @@
 				/>
 			</Row>
 			<Row label="페르소나" desc="캐릭터에 기본 페르소나가 없을 때 씀">
-				<Select value={defaultPersona} options={personaOptions} aria-label="기본 페르소나" onchange={(e) => setPersona(e.currentTarget.value)} />
+				<ProfilePicker label="페르소나 변경" options={personaOptions} value={defaultPersona} onchange={(id) => void setPersona(id)} />
 			</Row>
 		</Group>
 
-		<!-- 프리셋 블록의 매크로 자리에만 들어가는 지시문 (5-F-7-1, ADR-030 추가) -->
-		<Group title="여러 캐릭터 프롬프트">
-			<PromptSlotEditor key="multiChar" desc="대화 설정에서 '여러 캐릭터'를 켠 대화에 붙음" vars={"{{names}} 등장인물 이름 · 프리셋 블록에 {{multi_char}}를 넣은 자리에 들어감"} />
-		</Group>
 		{#if plugins.on("status")}
 			<Group title="AI 변수 프롬프트">
 				<PromptSlotEditor key="vars" desc="'AI가 변수 읽고 바꾸기'를 켰을 때 붙음" vars={"{{var_list}} 변수 목록·지금 값 · 프리셋 블록에 {{vars}}를 넣은 자리에 들어감"} />

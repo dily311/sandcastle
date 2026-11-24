@@ -10,7 +10,7 @@
 	import { absolute, relative } from "$shared/time";
 	import { confirmAction, promptText } from "$shared/stores/confirm.svelte";
 	import { toasts } from "$shared/stores/toast.svelte";
-	import { appSetting } from "$shared/stores/appSetting.svelte";
+	import { theme } from "$app/theme.svelte";
 	import { toBlocks } from "./format";
 	import RichText from "./RichText.svelte";
 	import type { AvatarFit } from "$ipc/bindings";
@@ -98,13 +98,16 @@
 			toolBusy = "";
 		}
 	}
-	// 다인봇 (5-F-2): 대화에서 켰으면 `이름: 대사` 줄을 말한 사람별로 보인다
+	// 멀티 프로필 그림: 테마 설정에서 켰으면 `캐릭터이름: 대사`의 이름 부분을 아바타로 교체해 표시
 	const conv = $derived(library.conversation(session.convId));
-	const multi = $derived(!!(conv?.meta as { multiChar?: boolean } | null)?.multiChar);
+	const multi = $derived(theme.chat.showMultiCharAvatars);
 	const speakerAvatars = $derived.by(() => {
-		if (!multi || !conv) return {};
-		const ch = library.character(conv.characterId);
-		return ch ? { [ch.name]: fileSrc(ch.avatar) ?? null } : {};
+		if (!multi) return {};
+		const map: Record<string, string | null> = {};
+		for (const c of library.characters) map[c.name] = fileSrc(c.avatar) ?? null;
+		const ch = conv ? library.character(conv.characterId) : undefined;
+		if (ch) map[ch.name] = fileSrc(ch.avatar) ?? null;
+		return map;
 	});
 	/** AI가 바꾼 변수 (5-F-4-4) — 상태창·변수 플러그인이 켜졌을 때만 보인다 */
 	const varChanges = $derived(plugins.on("status") ? (((msg.meta as { varChanges?: { key: string; from: string | null; to: string }[] } | null)?.varChanges) ?? []) : []);
@@ -278,7 +281,7 @@
 			<span class="stamp">다시 쓰는 중…</span>
 		{:else}
 			<span class="stamp">
-				{#if appSetting.showTimestamps}<time datetime={new Date(msg.createdAt).toISOString()} title={absolute(msg.createdAt)}>{relative(msg.createdAt)}</time>{/if}
+				{#if theme.chat.showTimestamps}<time datetime={new Date(msg.createdAt).toISOString()} title={absolute(msg.createdAt)}>{relative(msg.createdAt)}</time>{/if}
 				{#if isAi}<ProviderIcon {model} size={12} />{/if}
 				{#if meta.info?.cancelled}<span class="model">· 멈춤</span>{/if}
 				{#if isAi && truncated}<button type="button" class="cut" title="프리셋의 '응답 길이'(토큰)에서 끊김 — 생각하는 모델은 생각도 이 한도 안에서 씀. 눌러서 프리셋 열기" onclick={() => nav.go({ page: "settings", tab: "preset" })}>· 응답 길이에서 잘림</button>{/if}

@@ -111,30 +111,6 @@ pub(crate) fn reject_read_mode(conv: &crate::models::conversation::Conversation)
     Ok(())
 }
 
-/// 다인봇 스위치 (대화 meta.multiChar)
-fn multi_char_on(meta: Option<&Value>) -> bool {
-    meta.and_then(|m| m.get("multiChar")).and_then(Value::as_bool).unwrap_or(false)
-}
-
-/// 등장인물 이름: 로어북 '캐릭터' 분류 항목의 제목, 없으면 첫 키워드 (겹치면 한 번)
-fn cast_names(entries: &[crate::models::conversation::WorldInfoEntry]) -> Vec<String> {
-    let mut out: Vec<String> = vec![];
-    for e in entries.iter().filter(|e| e.enabled && e.category.trim() == CAST_CATEGORY) {
-        let name = if e.comment.trim().is_empty() {
-            e.keys.first().cloned().unwrap_or_default()
-        } else {
-            e.comment.trim().to_string()
-        };
-        if !name.trim().is_empty() && !out.iter().any(|n| n == &name) {
-            out.push(name);
-        }
-    }
-    out
-}
-
-/// 등장인물로 보는 로어북 분류 (ADR-023)
-pub const CAST_CATEGORY: &str = "캐릭터";
-
 /// 추론 강도 (ADR-028): 대화에 값이 있으면(자물쇠) 그것 — "auto"로 잠근 대화도 전역을 따르지 않는다 —, 없으면 전역.
 /// "auto"·빈 값 = 프리셋·공급자 기본 (None)
 fn conv_effort(meta: Option<&Value>, global: Option<&str>) -> Option<String> {
@@ -484,6 +460,335 @@ pub fn clean_extra(e: &str) -> Option<String> {
 
 pub const MAX_EXTRA_CHARS: usize = 1000;
 
+/// 조립된 프롬프트를 시스템(규칙·캐릭터·프리셋·월드인포·노트 등)과 실제 대화 기록으로 나눠 센다.
+pub(crate) fn count_prompt_usage(p: &PromptMessage) -> (u32, u32, u32) {
+    use crate::models::ai_service::PromptRole;
+    let (mut system, mut history, mut history_count) = (0u32, 0u32, 0u32);
+    for m in &p.messages {
+        let t = m.token.max(0) as u32;
+        let is_chat = match m.source.as_ref().map(|s| s.kind.as_str()) {
+            Some("chat" | "user_input" | "recall") => true,
+            Some(_) => false,
+            None => m.role != PromptRole::System,
+        };
+        if is_chat {
+            history += t;
+            history_count += 1;
+        } else {
+            system += t;
+        }
+    }
+    (system, history, history_count)
+}
+
+struct EnrichedContext {
+    images: Vec<CharacterImage>,
+    auto_image: bool,
+    summary_use: Option<crate::service::summary::SummaryUse>,
+}
+
+#[allow(clippy::too_many_arguments)]
+async fn enrich_context(
+    app: Option<&AppHandle>,
+    db: &crate::db::conn::DbPool,
+    settings: &SettingsState<AppSetting>,
+    conv: &crate::models::conversation::Conversation,
+    fallback: &ChatRequest,
+    other: &Side,
+    preset_prompts: &crate::service::app_prompts::PresetPrompts,
+    var_defs: &[crate::models::conversation::VarDef],
+    base_vars: &Map<String, Value>,
+    context: &mut ChatContext,
+) -> Result<EnrichedContext> {
+    // 대화별 메모·작가 노트 (오른쪽 패널)
+    crate::service::chat::notes::apply(context, conv.meta.as_ref());
+
+    // 대화 요약 (3-D, ADR-016): 켜져 있고 이 대화에서 끄지 않았으면 시스템 규칙 끝에 (history에 넣으면 토큰 한도에서 가장 먼저 잘림)
+    let summary_on = app.is_some_and(|a| crate::sys::plugins::is_enabled(a, crate::sys::plugins::id::SUMMARY));
+    let summary_use = if summary_on && !crate::service::summary::disabled_for(conv.meta.as_ref()) {
+        match crate::service::summary::block_for(db, &conv.id).await {
+            Some((block, used)) => {
+                context.system_rules.push(block);
+                Some(used)
+            }
+            None => None,
+        }
+    } else {
+        None
+    };
+
+    if let Some(prompt) = ConversationMode::parse_or_default(&conv.mode).system_prompt(&fallback.phone_mode_prompt) {
+        context.system_rules.push(prompt);
+    }
+
+    let images_on = conv.images_enabled && app.is_some_and(images_feature_on);
+    let images = match (app, other.character_id()) {
+        (Some(a), Some(cid)) if images_on => load_enabled_images(a, db, cid).await?,
+        _ => vec![],
+    };
+    let group_cg = settings.0.lock().map(|s| s.cg_group_variants).unwrap_or(false);
+    let images = if group_cg { super::chat_images::group_variants(images) } else { images };
+    match image_rules(&images, preset_prompts) {
+        Some(rules) => {
+            context.image_prompt = Some(rules);
+            context.image_keys = super::chat_images::image_keys(&images);
+        }
+        None => {
+            for item in context.history.iter_mut() {
+                item.content = strip_cg_tags(&item.content);
+            }
+        }
+    }
+
+    // 유틸 지시문은 프리셋 블록의 매크로 자리에만 들어간다 (ADR-030 추가: {{auto_image}}·{{multi_char}}·{{vars}})
+    // 이미지 자동 생성: 글쓰기 AI에게 응답 끝 <image> 그림 프롬프트를 쓰게 한다 (기본 꺼짐)
+    let auto_image = app.is_some_and(|a| crate::sys::plugins::is_enabled(a, crate::sys::plugins::id::IMAGE_AUTO));
+    if auto_image {
+        context
+            .util_prompts
+            .insert("auto_image".into(), crate::service::app_prompts::auto_image(preset_prompts));
+    }
+    // AI 변수 (5-F-4-4): 보이는 변수의 지금 값과 <updateVar> 쓰는 법 (스위치가 켜졌을 때만 — 응답마다 토큰이 늚)
+    if let Some(rule) = super::vars::prompt_rule(var_defs, base_vars, preset_prompts) {
+        context.util_prompts.insert("vars".into(), rule);
+    }
+
+    Ok(EnrichedContext {
+        images,
+        auto_image,
+        summary_use,
+    })
+}
+
+/// 지금 대화·설정 상태로 컨텍스트 사용량을 계산한다 (외부 호출·저장 부작용 없음).
+pub async fn compute_context_usage(
+    app: Option<&AppHandle>,
+    db: &crate::db::conn::DbPool,
+    settings: &SettingsState<AppSetting>,
+    conversation_id: &str,
+) -> std::result::Result<crate::commands::chat::ContextUsage, AppError> {
+    use crate::error::ErrorCode;
+    use crate::service::prompt::prompt_manager::{chat_options_from, context_limit_from};
+
+    let conv = get_conversation(db, conversation_id).await?;
+    let mut fallback = current_conv_request(settings)
+        .map_err(|e| e.downcast::<AppError>().unwrap_or_else(|e| AppError::internal(e.to_string())))?;
+    if let Some(a) = app {
+        phone_defaults(a, &conv.mode, &mut fallback);
+    }
+    let character = if conv.character_id.is_empty() {
+        None
+    } else {
+        get_character(db, &conv.character_id).await.ok()
+    };
+    let char_default = character.as_ref().and_then(|c| c.default_prompt_preset_id.clone());
+    let preset_id = conv
+        .prompt_preset_id
+        .clone()
+        .filter(|s| !s.is_empty())
+        .or(char_default.filter(|s| !s.is_empty()))
+        .or(Some(fallback.preset_id.clone()).filter(|s| !s.is_empty()));
+    let preset = PromptManager::load_preset(db, preset_id.as_deref()).await?;
+    let limit = preset.as_ref().and_then(|p| context_limit_from(&p.preset)).unwrap_or(DEFAULT_CONTEXT_LIMIT);
+    let reserved = preset.as_ref().and_then(|p| chat_options_from(&p.preset).max_tokens).unwrap_or(0);
+    let preset_name = preset.as_ref().map(|p| p.preset.name.clone());
+
+    let Some(character) = character else {
+        return Ok(crate::commands::chat::ContextUsage {
+            used: None,
+            system: 0,
+            history: 0,
+            history_count: 0,
+            limit,
+            reserved,
+            preset_id,
+            preset_name,
+            plugins: vec![],
+            memory_recall: None,
+            summary: None,
+        });
+    };
+
+    let persona_id = resolve_conv_persona(db, &conv.persona_id, &conv.character_id).await;
+    let persona = get_persona(db, &persona_id).await.unwrap_or_else(|_| crate::models::conversation::Persona {
+        id: persona_id.clone(),
+        name: "User".into(),
+        avatar: None,
+        avatar_fit: None,
+        description: String::new(),
+        world_info_ids: vec![],
+        tags: vec![],
+        color: String::new(),
+        is_system_default: false,
+        created_at: 0,
+        updated_at: 0,
+    });
+    let (me, other, char_phone) = phone_sides::sides(db, conv.meta.as_ref(), &character, &persona).await?;
+
+    let mut context = match ContextManager
+        .build_context(
+            db,
+            ContextRequest {
+                conversation_id: conversation_id.to_string(),
+                character_id: conv.character_id.clone(),
+                persona_id: persona.id.clone(),
+                history_limit: HISTORY_FETCH_LIMIT,
+            },
+        )
+        .await
+    {
+        Ok(ctx) => ctx,
+        Err(_) => {
+            let messages = crate::db::conversation::get_messages(db, conversation_id, HISTORY_FETCH_LIMIT, None)
+                .await
+                .unwrap_or_default();
+            let world_info =
+                crate::db::conversation::get_all_conv_worldinfo_book_with_entries(db, conversation_id, &conv.character_id, &persona.id)
+                    .await
+                    .unwrap_or_default();
+            let variables = conv.meta.as_ref().and_then(|m| m.get("variables")).cloned().unwrap_or_else(|| json!({}));
+            ChatContext {
+                char_name: Some(character.name.clone()),
+                user_name: Some(persona.name.clone()),
+                character_info: Some(character.description.clone()),
+                example_dialogue: character.example_dialogue.clone(),
+                main_prompt: character.system_prompt_override.clone().filter(|s| !s.trim().is_empty()),
+                persona_info: persona.description.clone(),
+                world_info,
+                history: messages
+                    .into_iter()
+                    .filter(|m| !is_hidden(m.meta.as_ref()))
+                    .map(|m| crate::models::ai_service::HistoryItem {
+                        images: super::context_manager::attachments_of(m.meta.as_ref()),
+                        role: m.role,
+                        content: m.content,
+                        source: None,
+                    })
+                    .collect(),
+                extra_data: json!({ "variables": variables }),
+                ..Default::default()
+            }
+        }
+    };
+    if let Some(a) = app {
+        with_global_vars(a, &mut context);
+    }
+    if char_phone {
+        phone_sides::apply_sides(&mut context, &me, &other);
+    }
+
+    let preset_prompts = crate::service::app_prompts::PresetPrompts::load(db, preset_id.as_deref().unwrap_or_default()).await;
+    let var_defs = match app {
+        Some(a) => ai_var_defs(a, db, &conv.character_id).await,
+        None => vec![],
+    };
+    let base_vars = super::vars::current_vars(conv.meta.as_ref());
+    let EnrichedContext { summary_use, .. } = enrich_context(
+        app,
+        db,
+        settings,
+        &conv,
+        &fallback,
+        &other,
+        &preset_prompts,
+        &var_defs,
+        &base_vars,
+        &mut context,
+    )
+    .await
+    .map_err(|e| e.downcast::<AppError>().unwrap_or_else(|e| AppError::internal(e.to_string())))?;
+
+    let regex = RegexProcessor::load(
+        db,
+        Some(&conv.character_id),
+        preset_id.as_deref(),
+        RegexMacros {
+            char_name: other.name.clone(),
+            user_name: me.name.clone(),
+        },
+    )
+    .await?;
+    let _ = apply_prompt_regex(&regex, &mut context, "", &[RegexTarget::Prompt]);
+
+    let (used, system, history, history_count) = match PromptManager.build(
+        PromptRequest {
+            context,
+            user_message: String::new(),
+            preset_id: preset_id.clone(),
+            context_limit: DEFAULT_CONTEXT_LIMIT,
+            world_info_ratio: DEFAULT_WORLD_INFO_RATIO,
+            generation_type: GenerationType::Normal,
+        },
+        preset.as_ref(),
+    ) {
+        Ok(prompt) => {
+            let (s, h, c) = count_prompt_usage(&prompt);
+            (Some(s + h), s, h, c)
+        }
+        Err(AppError::Validation {
+            code: ErrorCode::AiContextOverflow,
+            details,
+            ..
+        }) => {
+            let fixed = details
+                .as_ref()
+                .and_then(|d| d.get("fixedTokens"))
+                .and_then(Value::as_u64)
+                .unwrap_or(0) as u32;
+            (Some(fixed), fixed, 0, 0)
+        }
+        Err(e) => return Err(e),
+    };
+
+    // 보내기 시점에만 도는 플러그인 훅·자동 회상은 현재 켜져 있을 때만 마지막 응답 기록을 참고용으로 붙인다
+    let community_on = app.is_some_and(|a| crate::sys::plugins::is_enabled(a, crate::sys::plugins::id::COMMUNITY));
+    let recall_on = app.is_some_and(|a| {
+        crate::sys::plugins::is_enabled(a, crate::sys::plugins::id::MEMORY)
+            && a.try_state::<SettingsState<crate::models::settings::PluginSetting>>()
+                .and_then(|s| s.0.lock().ok().map(|g| g.memory.auto_recall))
+                .unwrap_or(false)
+            && crate::service::memory::is_eligible(conv.meta.as_ref().map(|m| m.to_string()).as_deref())
+    });
+    let mut plugins = vec![];
+    let mut memory_recall = None;
+    if community_on || recall_on {
+        let recent = crate::db::conversation::get_messages(db, conversation_id, 10, None)
+            .await
+            .unwrap_or_default();
+        if let Some(m) = recent.iter().rev().find(|m| m.role == "assistant" && !is_hidden(m.meta.as_ref())) {
+            if community_on {
+                plugins = m
+                    .meta
+                    .as_ref()
+                    .and_then(|meta| meta.pointer("/info/pluginPrompt"))
+                    .and_then(|v| serde_json::from_value(v.clone()).ok())
+                    .unwrap_or_default();
+            }
+            if recall_on {
+                memory_recall = m
+                    .meta
+                    .as_ref()
+                    .and_then(|meta| meta.pointer("/info/memoryRecall"))
+                    .and_then(|v| serde_json::from_value(v.clone()).ok());
+            }
+        }
+    }
+
+    Ok(crate::commands::chat::ContextUsage {
+        used,
+        system,
+        history,
+        history_count,
+        limit,
+        reserved,
+        preset_id,
+        preset_name,
+        plugins,
+        memory_recall,
+        summary: summary_use,
+    })
+}
+
 /// 자동 회상에 필요한 것 (3-C-5)
 struct RecallPlan {
     cfg: crate::models::settings::MemorySetting,
@@ -601,7 +906,7 @@ impl ChatManager {
             .clone()
             .filter(|s| !s.is_empty())
             .or(character.default_prompt_preset_id.clone().filter(|s| !s.is_empty()))
-            .unwrap_or(fallback.preset_id);
+            .unwrap_or_else(|| fallback.preset_id.clone());
         // 프리셋이 고친 유틸 프롬프트 (ADR-030: 프리셋 > 전역 > 기본)
         let preset_prompts = crate::service::app_prompts::PresetPrompts::load(db, &preset_id).await;
 
@@ -702,68 +1007,24 @@ impl ChatManager {
         // 자동 회상 (3-C-5): 켜져 있을 때만. 프롬프트 창에 든 메시지는 메모·플러그인 블록이 history에 끼기 전에 계산한다
         let recall_plan = recall_setup(app, db, &conv, &kind, &target, &context, &preset_id).await;
 
-        // 대화별 메모·작가 노트 (오른쪽 패널)
-        crate::service::chat::notes::apply(&mut context, conv.meta.as_ref());
-
-        // 다인봇 (5-F-2, 대화마다 켬): 로어북 '캐릭터' 분류 항목의 이름만 알리고, 설정은 키워드가 나올 때 월드인포로 들어간다
-        if multi_char_on(conv.meta.as_ref()) {
-            let names = cast_names(&context.world_info);
-            if !names.is_empty() {
-                context
-                    .util_prompts
-                    .insert("multi_char".into(), crate::service::app_prompts::multi_char(&names, &preset_prompts));
-            }
-        }
-
-        // 대화 요약 (3-D, ADR-016): 켜져 있고 이 대화에서 끄지 않았으면 시스템 규칙 끝에 (history에 넣으면 토큰 한도에서 가장 먼저 잘림)
-        let summary_use =
-            if crate::sys::plugins::is_enabled(app, crate::sys::plugins::id::SUMMARY) && !crate::service::summary::disabled_for(conv.meta.as_ref()) {
-                match crate::service::summary::block_for(db, conversation_id).await {
-                    Some((block, used)) => {
-                        context.system_rules.push(block);
-                        serde_json::to_value(&used).ok()
-                    }
-                    None => None,
-                }
-            } else {
-                None
-            };
-
-        if let Some(prompt) = ConversationMode::parse_or_default(&conv.mode).system_prompt(&fallback.phone_mode_prompt) {
-            context.system_rules.push(prompt);
-        }
-
-        let images_on = conv.images_enabled && images_feature_on(app);
-        let images = match other.character_id() {
-            Some(cid) if images_on => load_enabled_images(app, db, cid).await?,
-            _ => vec![],
-        };
-        let group_cg = settings.0.lock().map(|s| s.cg_group_variants).unwrap_or(false);
-        let images = if group_cg { super::chat_images::group_variants(images) } else { images };
-        match image_rules(&images, &preset_prompts) {
-            Some(rules) => {
-                context.image_prompt = Some(rules);
-                context.image_keys = super::chat_images::image_keys(&images);
-            }
-            None => {
-                for item in context.history.iter_mut() {
-                    item.content = strip_cg_tags(&item.content);
-                }
-            }
-        }
-
-        // 유틸 지시문은 프리셋 블록의 매크로 자리에만 들어간다 (ADR-030 추가: {{auto_image}}·{{multi_char}}·{{vars}})
-        // 이미지 자동 생성: 글쓰기 AI에게 응답 끝 <image> 그림 프롬프트를 쓰게 한다 (기본 꺼짐)
-        let auto_image = crate::sys::plugins::is_enabled(app, crate::sys::plugins::id::IMAGE_AUTO);
-        if auto_image {
-            context
-                .util_prompts
-                .insert("auto_image".into(), crate::service::app_prompts::auto_image(&preset_prompts));
-        }
-        // AI 변수 (5-F-4-4): 보이는 변수의 지금 값과 <updateVar> 쓰는 법 (스위치가 켜졌을 때만 — 응답마다 토큰이 늚)
-        if let Some(rule) = super::vars::prompt_rule(&var_defs, &base_vars, &preset_prompts) {
-            context.util_prompts.insert("vars".into(), rule);
-        }
+        let EnrichedContext {
+            images,
+            auto_image,
+            summary_use,
+        } = enrich_context(
+            Some(app),
+            db,
+            settings,
+            &conv,
+            &fallback,
+            &other,
+            &preset_prompts,
+            &var_defs,
+            &base_vars,
+            &mut context,
+        )
+        .await?;
+        let summary_use = summary_use.and_then(|u| serde_json::to_value(&u).ok());
 
         // 커뮤니티 플러그인의 프롬프트 블록 (6-D-5). prompt.modify 플러그인이 돌고 있을 때만 화면에 묻고, 늦으면 없이 보낸다
         let plugin_prompt = if crate::sys::plugins::is_enabled(app, crate::sys::plugins::id::COMMUNITY) {
@@ -1121,7 +1382,7 @@ impl ChatManager {
             .clone()
             .filter(|s| !s.is_empty())
             .or(character.default_prompt_preset_id.clone().filter(|s| !s.is_empty()))
-            .unwrap_or(fallback.preset_id);
+            .unwrap_or_else(|| fallback.preset_id.clone());
         // 나/상대: 캐릭터 폰이면 주인 캐릭터와 연락처 — "내 대사"는 `me`의 것
         let (me, other, char_phone) = phone_sides::sides(db, conv.meta.as_ref(), &character, &persona).await?;
 
@@ -1278,7 +1539,7 @@ impl ChatManager {
             .clone()
             .filter(|s| !s.is_empty())
             .or(character.default_prompt_preset_id.clone().filter(|s| !s.is_empty()))
-            .unwrap_or(fallback.preset_id);
+            .unwrap_or_else(|| fallback.preset_id.clone());
         let (me, other, _) = phone_sides::sides(db, conv.meta.as_ref(), &character, &persona).await?;
 
         let mut context = ContextManager
@@ -1711,33 +1972,6 @@ mod continue_tests {
     }
 
     #[test]
-    fn cast_comes_from_character_category_entries() {
-        let e = |comment: &str, keys: &[&str], category: &str, enabled: bool| crate::models::conversation::WorldInfoEntry {
-            id: "x".into(),
-            book_id: "b".into(),
-            keys: keys.iter().map(|k| k.to_string()).collect(),
-            secondary_keys: vec![],
-            content: String::new(),
-            enabled,
-            priority: 0,
-            constant: false,
-            comment: comment.into(),
-            category: category.into(),
-        };
-        let list = vec![
-            e("유나", &["유나"], "캐릭터", true),
-            e("", &["미나", "민아"], "캐릭터", true),
-            e("숲", &["숲"], "장소", true),
-            e("꺼진 사람", &["x"], "캐릭터", false),
-            e("유나", &["유나"], "캐릭터", true),
-        ];
-        assert_eq!(cast_names(&list), vec!["유나", "미나"]);
-        assert!(multi_char_on(Some(&json!({ "multiChar": true }))));
-        assert!(!multi_char_on(Some(&json!({}))));
-        assert!(crate::service::app_prompts::multi_char(&cast_names(&list), &Default::default()).contains("유나, 미나"));
-    }
-
-    #[test]
     fn conversation_effort_overrides_only_when_set() {
         assert_eq!(conv_effort(Some(&json!({ "reasoningEffort": "high" })), None).as_deref(), Some("high"));
         assert_eq!(conv_effort(Some(&json!({ "reasoningEffort": "auto" })), None), None);
@@ -1755,5 +1989,137 @@ mod continue_tests {
         let m = continue_meta(&msg(json!({})), "합친 글", &json!({ "model": "m" }), &[]);
         assert!(m.get("swipes").is_none());
         assert_eq!(m["images"], json!([]));
+    }
+}
+
+#[cfg(test)]
+mod context_usage_tests {
+    use super::*;
+    use crate::models::conversation::{ConversationInput, ConversationOptions, MessageInput};
+    use sqlx::sqlite::SqlitePoolOptions;
+
+    async fn test_pool() -> sqlx::SqlitePool {
+        let pool = SqlitePoolOptions::new().max_connections(1).connect("sqlite::memory:").await.unwrap();
+        sqlx::query("PRAGMA foreign_keys = ON").execute(&pool).await.unwrap();
+        sqlx::migrate!("src/db/migrations").run(&pool).await.unwrap();
+        sqlx::query(
+            "INSERT INTO characters (id, name, description, created_at, updated_at) VALUES ('c1', 'Aria', '숲의 마법사 Aria이다.', 0, 0)",
+        )
+        .execute(&pool)
+        .await
+        .unwrap();
+        pool
+    }
+
+    async fn create_conv(pool: &sqlx::SqlitePool) -> String {
+        crate::db::conversation::create_conversation(
+            pool,
+            ConversationInput {
+                title: "시험".into(),
+                character_id: "c1".into(),
+                persona_id: "default".into(),
+                world_info_ids: vec![],
+                mode: "chat".into(),
+                meta: None,
+                images_enabled: None,
+            },
+        )
+        .await
+        .unwrap()
+        .id
+    }
+
+    #[tokio::test]
+    async fn computes_live_usage_without_sent_prompt_and_tracks_changes() {
+        let pool = test_pool().await;
+        let settings = SettingsState(Mutex::new(AppSetting::default()));
+        let conv_id = create_conv(&pool).await;
+
+        // 1. 아직 보낸 적 없는 새 대화도 지금 상태(캐릭터·페르소나·프리셋)로 바로 계산한다
+        let u0 = compute_context_usage(None, &pool, &settings, &conv_id).await.unwrap();
+        assert!(u0.used.is_some() && u0.system > 0);
+        assert_eq!(u0.history, 0);
+        assert_eq!(u0.history_count, 0);
+        assert_eq!(u0.used, Some(u0.system));
+
+        // 2. 메시지를 넣거나 숨기면 보낸 프롬프트 기록 없이도 대화 토큰·개수가 바로 바뀐다
+        let m1 = chat_ui::push_message(
+            &pool,
+            MessageInput {
+                conversation_id: conv_id.clone(),
+                seq: 0,
+                role: "user".into(),
+                name: None,
+                content: "안녕하세요! 오늘 숲의 날씨는 어떤가요?".into(),
+                character_id: None,
+                meta: None,
+            },
+        )
+        .await
+        .unwrap();
+        let u1 = compute_context_usage(None, &pool, &settings, &conv_id).await.unwrap();
+        assert_eq!(u1.history_count, 1);
+        assert!(u1.history > 0);
+        assert_eq!(u1.used, Some(u1.system + u1.history));
+
+        // 숨긴 메시지는 프롬프트에서 빠지므로 계산에서도 빠진다
+        crate::db::conversation::update_message_meta(&pool, &m1.id, json!({ "hidden": true }))
+            .await
+            .unwrap();
+        let u_hidden = compute_context_usage(None, &pool, &settings, &conv_id).await.unwrap();
+        assert_eq!(u_hidden.history_count, 0);
+        assert_eq!(u_hidden.history, 0);
+
+        // 3. 작가 노트를 적으면 설정·캐릭터(system) 토큰이 늘고 메시지 수(history_count)는 늘지 않는다
+        chat_ui::patch_conversation_meta(&pool, &conv_id, &json!({ "authorNote": { "text": "{{char}}는 비밀을 숨기고 있다.", "depth": 2 } }))
+            .await
+            .unwrap();
+        let u_note = compute_context_usage(None, &pool, &settings, &conv_id).await.unwrap();
+        assert!(u_note.system > u0.system);
+        assert_eq!(u_note.history_count, 0);
+
+        // 4. 프리셋에 assistant 역할 prefill 블록이 있어도 대화 메시지 수로 세지 않고, 한도 초과 시에도 오류 대신 사용량을 돌려준다
+        sqlx::query(
+            "INSERT INTO prompt_presets (id, name, config_json, settings_json, created_at, updated_at) VALUES ('p1', '작은창', '{}', ?, 0, 0)",
+        )
+        .bind(json!({ "context_size": 4096, "max_tokens": 512 }).to_string())
+        .execute(&pool)
+        .await
+        .unwrap();
+        sqlx::query(
+            "INSERT INTO prompt_blocks (id, preset_id, identifier, name, role, content, enabled, position, depth, sort_order, triggers_json, extra_json, created_at, updated_at)
+             VALUES ('b1', 'p1', 'charDescription', '캐릭터', 'system', '', 1, 'relative', 0, 0, '[]', '{}', 0, 0),
+                    ('b2', 'p1', 'chatHistory', '기록', 'system', '', 1, 'relative', 0, 10, '[]', '{}', 0, 0),
+                    ('b3', 'p1', 'prefill', '프리필', 'assistant', '물론이죠, ', 1, 'in_chat', 0, 20, '[]', '{}', 0, 0)",
+        )
+        .execute(&pool)
+        .await
+        .unwrap();
+        chat_ui::set_options(
+            &pool,
+            &conv_id,
+            &ConversationOptions {
+                persona_id: "default".into(),
+                prompt_preset_id: Some("p1".into()),
+                api_profile_id: None,
+                model: None,
+            },
+        )
+        .await
+        .unwrap();
+        let u_preset = compute_context_usage(None, &pool, &settings, &conv_id).await.unwrap();
+        assert_eq!((u_preset.limit, u_preset.reserved), (4096, 512));
+        assert_eq!(u_preset.preset_name.as_deref(), Some("작은창"));
+        assert_eq!(u_preset.history_count, 0, "프리셋 prefill 블록은 대화 메시지 수에 들어가지 않음");
+
+        // 고정 프롬프트가 한도를 넘어도 오류 대신 고정 토큰을 돌려준다
+        sqlx::query("UPDATE prompt_presets SET settings_json = ? WHERE id = 'p1'")
+            .bind(json!({ "context_size": 100, "max_tokens": 95 }).to_string())
+            .execute(&pool)
+            .await
+            .unwrap();
+        let u_over = compute_context_usage(None, &pool, &settings, &conv_id).await.unwrap();
+        assert!(u_over.used.unwrap_or(0) > 5);
+        assert_eq!(u_over.history_count, 0);
     }
 }

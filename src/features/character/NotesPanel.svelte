@@ -33,17 +33,17 @@
 
 {#snippet fields()}
 	<section>
-		<h4>메모 <span class="faint">AI에게 보내지 않음</span></h4>
-		<Textarea bind:value={memory} autosize rows={4} maxRows={14} placeholder="내 메모" aria-label="메모" onblur={saveMemory} />
+		<h4>메모</h4>
+		<Textarea bind:value={memory} autosize rows={4} maxRows={14} placeholder="내 메모" aria-label="메모 (AI에게 보내지 않음)" onblur={saveMemory} />
 	</section>
 	<section>
-		<h4>작가 노트 <span class="faint">지금 장면의 방향</span></h4>
+		<h4>작가 노트</h4>
 		<Textarea bind:value={noteText} autosize rows={4} maxRows={14} placeholder={"예) {{char}}는 아직 비밀을 털어놓지 않는다. 묘사는 짧게."} aria-label="작가 노트" onblur={saveNote} />
 		<label class="depth">
 			<span>깊이</span>
 			<Input type="number" min="0" max="50" bind:value={noteDepth} aria-label="작가 노트 깊이" onblur={saveNote} />
 		</label>
-		<p class="hint">최근 메시지 몇 개 앞에 끼울지. 0이면 입력 바로 앞 (가장 세게 반영). <code>{"{{char}}"}</code> <code>{"{{user}}"}</code> 사용 가능</p>
+		<p class="hint">최근 메시지 몇 개 앞에 끼울지. 0이면 입력 바로 앞 (가장 세게 반영).</p>
 	</section>
 {/snippet}
 

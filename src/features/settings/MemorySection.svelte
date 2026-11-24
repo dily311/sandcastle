@@ -15,6 +15,7 @@
 	import { apiOptions, current, ensureLoaded, orNull, save } from "./pluginSettingForm.svelte";
 	import { library } from "$features/character/library.svelte";
 	import { embeddingModelInfo, embeddingModelsFor } from "./providers";
+	import Slider from "$/shared/ui/Slider.svelte";
 
 	onMount(() => {
 		ensureLoaded();
@@ -162,6 +163,7 @@
 		align-items: center;
 		gap: var(--space-3);
 		min-width: min(260px, 100%);
+		width: 100%;
 	}
 	.cap input[type="range"] {
 		flex: 1;

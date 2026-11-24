@@ -850,7 +850,6 @@ export type AppSetting_Deserialize = {
 	language: string,
 	selectedPreset: string,
 	sendOnEnter: boolean,
-	showTimestamps: boolean,
 	selectedApiProfile?: string | null,
 	/**
 	 *  전역 모델 (5-E-29-3, ADR-028 갱신): 자물쇠를 풀어 둔 대화가 전역 API에서 쓸 모델. None = API 프로필의 기본 모델.
@@ -891,7 +890,6 @@ export type AppSetting_Serialize = {
 	language: string,
 	selectedPreset: string,
 	sendOnEnter: boolean,
-	showTimestamps: boolean,
 	selectedApiProfile: string | null,
 	/**
 	 *  전역 모델 (5-E-29-3, ADR-028 갱신): 자물쇠를 풀어 둔 대화가 전역 API에서 쓸 모델. None = API 프로필의 기본 모델.
@@ -1504,14 +1502,14 @@ export type CompactResult = {
 
 export type ConflictChoice = "keep_local" | "use_remote" | "dismiss";
 
-/**  컨텍스트 사용량 (오른쪽 패널). 마지막으로 보낸 프롬프트 기준 */
+/**  컨텍스트 사용량 (오른쪽 패널). 대화 화면은 지금 상태로 계산하고, 게임은 마지막 프롬프트 기준 */
 export type ContextUsage = ContextUsage_Serialize | ContextUsage_Deserialize;
 
-/**  컨텍스트 사용량 (오른쪽 패널). 마지막으로 보낸 프롬프트 기준 */
+/**  컨텍스트 사용량 (오른쪽 패널). 대화 화면은 지금 상태로 계산하고, 게임은 마지막 프롬프트 기준 */
 export type ContextUsage_Deserialize = {
-	/**  마지막 프롬프트의 토큰 (보낸 적 없으면 None) */
+	/**  프롬프트 토큰 합계 (계산할 수 없으면 None) */
 	used?: number | null,
-	/**  그중 시스템(규칙·캐릭터·월드인포·노트 등) */
+	/**  그중 시스템(규칙·캐릭터·프리셋·월드인포·노트 등) */
 	system: number,
 	/**  그중 대화 기록 */
 	history: number,
@@ -1523,19 +1521,19 @@ export type ContextUsage_Deserialize = {
 	reserved: number,
 	presetId?: string | null,
 	presetName?: string | null,
-	/**  커뮤니티 플러그인이 더한 프롬프트 블록 (6-D-5, 시스템 토큰에 들어 있음) */
+	/**  커뮤니티 플러그인이 마지막 응답에 더한 프롬프트 블록 (6-D-5) */
 	plugins: PluginPromptUse[],
-	/**  마지막 응답에서 지난 대화를 떠올린 기록 (3-C-5, 대화 기록 토큰에 들어 있음). 자동 회상이 꺼져 있었으면 None */
+	/**  마지막 응답에서 지난 대화를 떠올린 기록 (3-C-5). 자동 회상이 꺼져 있으면 None */
 	memoryRecall?: RecallMeta_Deserialize | null,
-	/**  마지막 응답을 만들 때 쓴 대화 요약 (3-D, 시스템 토큰에 들어 있음) */
+	/**  지금 컨텍스트에 들어가는 대화 요약 (3-D, 시스템 토큰에 포함) */
 	summary?: SummaryUse | null,
 };
 
-/**  컨텍스트 사용량 (오른쪽 패널). 마지막으로 보낸 프롬프트 기준 */
+/**  컨텍스트 사용량 (오른쪽 패널). 대화 화면은 지금 상태로 계산하고, 게임은 마지막 프롬프트 기준 */
 export type ContextUsage_Serialize = {
-	/**  마지막 프롬프트의 토큰 (보낸 적 없으면 None) */
+	/**  프롬프트 토큰 합계 (계산할 수 없으면 None) */
 	used: number | null,
-	/**  그중 시스템(규칙·캐릭터·월드인포·노트 등) */
+	/**  그중 시스템(규칙·캐릭터·프리셋·월드인포·노트 등) */
 	system: number,
 	/**  그중 대화 기록 */
 	history: number,
@@ -1547,11 +1545,11 @@ export type ContextUsage_Serialize = {
 	reserved: number,
 	presetId: string | null,
 	presetName: string | null,
-	/**  커뮤니티 플러그인이 더한 프롬프트 블록 (6-D-5, 시스템 토큰에 들어 있음) */
+	/**  커뮤니티 플러그인이 마지막 응답에 더한 프롬프트 블록 (6-D-5) */
 	plugins: PluginPromptUse[],
-	/**  마지막 응답에서 지난 대화를 떠올린 기록 (3-C-5, 대화 기록 토큰에 들어 있음). 자동 회상이 꺼져 있었으면 None */
+	/**  마지막 응답에서 지난 대화를 떠올린 기록 (3-C-5). 자동 회상이 꺼져 있으면 None */
 	memoryRecall: RecallMeta_Serialize | null,
-	/**  마지막 응답을 만들 때 쓴 대화 요약 (3-D, 시스템 토큰에 들어 있음) */
+	/**  지금 컨텍스트에 들어가는 대화 요약 (3-D, 시스템 토큰에 포함) */
 	summary: SummaryUse | null,
 };
 
@@ -1776,6 +1774,8 @@ export type CssTheme_Deserialize = {
 	accentColor?: string | null,
 	/**  이 테마를 고르면 쓸 회색 톤. 없으면 설정을 따름 */
 	grayTone?: string | null,
+	/**  이 테마를 고르면 쓸 대화 화면 표시 설정. 없으면 설정을 따름 */
+	chat?: ThemeChatSetting_Deserialize | null,
 };
 
 export type CssTheme_Serialize = {
@@ -1790,6 +1790,8 @@ export type CssTheme_Serialize = {
 	accentColor?: string,
 	/**  이 테마를 고르면 쓸 회색 톤. 없으면 설정을 따름 */
 	grayTone?: string,
+	/**  이 테마를 고르면 쓸 대화 화면 표시 설정. 없으면 설정을 따름 */
+	chat?: ThemeChatSetting_Serialize,
 };
 
 export type Cue = Cue_Serialize | Cue_Deserialize;
@@ -4313,6 +4315,8 @@ export type PromptMessageItem_Deserialize = {
 	token: number,
 	/**  함께 보낼 이미지 (파일 경로). 어댑터가 읽어서 공급자 형식으로 넣는다 */
 	images?: string[],
+	/**  어느 시스템이 주입한 메시지인지 ('보낸 컨텍스트' 표시용) */
+	source?: PromptSource_Deserialize | null,
 };
 
 export type PromptMessageItem_Serialize = {
@@ -4322,6 +4326,8 @@ export type PromptMessageItem_Serialize = {
 	token: number,
 	/**  함께 보낼 이미지 (파일 경로). 어댑터가 읽어서 공급자 형식으로 넣는다 */
 	images?: string[],
+	/**  어느 시스템이 주입한 메시지인지 ('보낸 컨텍스트' 표시용) */
+	source?: PromptSource_Serialize,
 };
 
 /**  PromptManager가 만든 최종 프롬프트. 공급자 형식과 무관하며 어댑터가 각자 형식으로 바꾼다. */
@@ -4409,6 +4415,25 @@ export type PromptRole = "system" | "user" | "assistant";
 export type PromptSlot = {
 	selected: string,
 	items: PromptVariant[],
+};
+
+/**  프롬프트 메시지가 어느 시스템에서 주입되었는지 ('보낸 컨텍스트' 표시용, 공급자 요청에는 쓰지 않음) */
+export type PromptSource = PromptSource_Serialize | PromptSource_Deserialize;
+
+/**  프롬프트 메시지가 어느 시스템에서 주입되었는지 ('보낸 컨텍스트' 표시용, 공급자 요청에는 쓰지 않음) */
+export type PromptSource_Deserialize = {
+	/**  주입한 시스템 종류 (preset, world_info, system_rules, character, persona, examples, chat, user_input, qr, author_note, inject, recall, regen_extra, plugin, ghost) */
+	kind: string,
+	/**  프리셋 블록 이름, 플러그인 이름, /inject id 등 세부 이름 */
+	name?: string | null,
+};
+
+/**  프롬프트 메시지가 어느 시스템에서 주입되었는지 ('보낸 컨텍스트' 표시용, 공급자 요청에는 쓰지 않음) */
+export type PromptSource_Serialize = {
+	/**  주입한 시스템 종류 (preset, world_info, system_rules, character, persona, examples, chat, user_input, qr, author_note, inject, recall, regen_extra, plugin, ghost) */
+	kind: string,
+	/**  프리셋 블록 이름, 플러그인 이름, /inject id 등 세부 이름 */
+	name?: string,
 };
 
 /**  사용자가 만든 프롬프트 하나 */
@@ -5551,6 +5576,23 @@ export type Template_Serialize = {
 	capabilities: Capabilities_Serialize,
 };
 
+/**  대화 화면 표시 설정 (테마 설정과 사용자 커스텀 테마에서 함께 사용) */
+export type ThemeChatSetting = ThemeChatSetting_Serialize | ThemeChatSetting_Deserialize;
+
+/**  대화 화면 표시 설정 (테마 설정과 사용자 커스텀 테마에서 함께 사용) */
+export type ThemeChatSetting_Deserialize = {
+	showTimestamps?: boolean,
+	showAvatars?: boolean,
+	showMultiCharAvatars?: boolean,
+};
+
+/**  대화 화면 표시 설정 (테마 설정과 사용자 커스텀 테마에서 함께 사용) */
+export type ThemeChatSetting_Serialize = {
+	showTimestamps: boolean,
+	showAvatars: boolean,
+	showMultiCharAvatars: boolean,
+};
+
 /**  테마 색: 화면 모드별로 덮어쓸 CSS 변수 ("--bg" → "#ffffff"). 비어 있으면 앱 기본값 */
 export type ThemeColors = ThemeColors_Serialize | ThemeColors_Deserialize;
 
@@ -5588,6 +5630,8 @@ export type ThemeSetting_Deserialize = {
 	fonts?: UserFont[],
 	/**  앱 글꼴: `fonts` 중 하나의 파일 경로. 없으면 기본 글꼴 */
 	appFont?: string | null,
+	/**  대화 화면 표시 설정 (시각·프로필 그림·멀티 프로필 그림) */
+	chat?: ThemeChatSetting_Deserialize,
 };
 
 export type ThemeSetting_Serialize = {
@@ -5610,6 +5654,8 @@ export type ThemeSetting_Serialize = {
 	fonts: UserFont[],
 	/**  앱 글꼴: `fonts` 중 하나의 파일 경로. 없으면 기본 글꼴 */
 	appFont: string | null,
+	/**  대화 화면 표시 설정 (시각·프로필 그림·멀티 프로필 그림) */
+	chat: ThemeChatSetting_Serialize,
 };
 
 export type TranscriptEntry = TranscriptEntry_Serialize | TranscriptEntry_Deserialize;

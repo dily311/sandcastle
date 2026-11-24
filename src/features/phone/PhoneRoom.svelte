@@ -1,7 +1,7 @@
 <script lang="ts">
 	import { regexVersion } from "$shared/stores/regexVersion.svelte";
 	import { onMount, tick } from "svelte";
-	import { BookOpen, ChevronLeft, Copy, Eye, ImagePlus, Languages, Menu, MessageCirclePlus, RefreshCw, Send, Square, Trash2, Users, Volume2 } from "@lucide/svelte";
+	import { BookOpen, ChevronLeft, Copy, Eye, ImagePlus, Languages, Menu, MessageCirclePlus, RefreshCw, Send, Square, Trash2, Volume2 } from "@lucide/svelte";
 	import { plugins } from "$shared/stores/plugins.svelte";
 	import Ghostwrite from "$features/ghost/Ghostwrite.svelte";
 	import { ghost } from "$features/ghost/ghost.svelte";
@@ -11,6 +11,7 @@
 	import { confirmAction } from "$shared/stores/confirm.svelte";
 	import { toasts } from "$shared/stores/toast.svelte";
 	import { appSetting } from "$shared/stores/appSetting.svelte";
+	import { theme } from "$app/theme.svelte";
 	import { nav } from "$app/nav.svelte";
 	import { library, type Conversation } from "$features/character/library.svelte";
 	import { ChatSession, type Message } from "$features/character/session.svelte";
@@ -32,9 +33,8 @@
 	// 상대(연락처)와 나(폰 주인)
 	const ch = $derived(lookup(phone.contactOf(conv)));
 	const me = $derived(phone.owner);
-	// 단체 대화 (5-E-19-1): 다인봇(대화 meta.multiChar)을 켜면 답장의 `이름: 대사` 줄을 사람별 말풍선으로
-	const cur = $derived(library.conversation(conv.id) ?? conv);
-	const multi = $derived(!!(cur.meta as { multiChar?: boolean } | null)?.multiChar);
+	// 멀티 프로필 그림: 테마 설정에서 켰으면 답장의 `이름: 대사` 줄을 사람별 말풍선으로
+	const multi = $derived(theme.chat.showMultiCharAvatars);
 	/** 말한 사람의 그림: 대화 상대 → 같은 이름의 캐릭터 카드 → 이름 첫 글자 */
 	function speakerLook(name: string | undefined) {
 		if (!name || name === ch?.name) return { name: ch?.name ?? "?", avatar: ch?.avatar ?? null, avatarFit: ch?.avatarFit ?? null, color: ch?.color };
@@ -260,7 +260,6 @@
 			items: [
 				{ label: "답장 더 받기", icon: MessageCirclePlus, disabled: session.busy, onselect: nudge },
 				{ label: "엿보기: 두 사람 대화를 AI가 이어 씀", icon: Eye, disabled: session.busy, onselect: peek },
-				{ label: "여러 캐릭터 (로어북 '캐릭터' 항목도 말함)", icon: Users, checked: multi, onselect: () => void library.patchMeta(conv.id, { multiChar: multi ? null : true }) },
 				{ label: "마지막 답장 다시 받기", icon: RefreshCw, disabled: session.busy || !lastAi || session.last?.id !== lastAi.id, onselect: again },
 				{ label: "소설 화면으로 보기", icon: BookOpen, separator: true, onselect: () => nav.go({ page: "character", charId: conv.characterId ?? undefined, convId: conv.id }) },
 			],
@@ -271,7 +270,7 @@
 <div class="room sc-phone-room">
 	<div class="room-bar sc-phone-room-bar">
 		<button class="plain" aria-label="뒤로" onclick={onback}><ChevronLeft /></button>
-		<strong>{ch?.name ?? conv.title}{#if multi}<Users class="group" aria-label="여러 캐릭터" />{/if}</strong>
+		<strong>{ch?.name ?? conv.title}</strong>
 		<button class="plain" aria-label="대화방 메뉴" onclick={roomMenu}><Menu /></button>
 	</div>
 

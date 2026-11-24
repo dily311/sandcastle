@@ -8,6 +8,7 @@
 	import { layout } from "$app/layout.svelte";
 	import { panel } from "$app/panel.svelte";
 	import { appSetting } from "$shared/stores/appSetting.svelte";
+	import { theme } from "$app/theme.svelte";
 	import { plugins } from "$shared/stores/plugins.svelte";
 	import { regexVersion } from "$shared/stores/regexVersion.svelte";
 	import { fileSrc, imageSrc } from "$shared/ipc/file";
@@ -172,7 +173,7 @@
 	});
 
 	// ---- 그림·프로필 ----
-	const showAvatars = $derived(!!appSetting.value?.showAvatars);
+	const showAvatars = $derived(theme.chat.showAvatars);
 	function ownerOf(m: Message) {
 		return m.role === "assistant"
 			? library.character(m.characterId ?? charId)

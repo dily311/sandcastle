@@ -29,24 +29,45 @@
 	$effect(() => {
 		if (!library.loaded) void library.load();
 	});
-
-	// ---- 대화 목록: 고정됨(접기) + 그룹화·필터·정렬·표시 메뉴 + 갈래 트리 ----
+// ---- 대화 목록: 고정됨(접기) + 그룹화·하위 그룹화·필터·정렬·표시 메뉴 + 갈래 트리 ----
 	type SortBy = "recent" | "created" | "name";
 	type GroupBy = "none" | "character";
+	type GroupSortBy = "recent" | "name";
+	const GROUP_SORT_LABEL: Record<GroupSortBy, string> = {
+		recent: "최근 대화순",
+		name: "이름순",
+	};
+	type SubGroupBy = "none" | "forked";
 	const SORT_LABEL: Record<SortBy, string> = { recent: "마지막 업데이트", created: "생성 날짜", name: "이름" };
+	const SUBGROUP_LABEL: Record<SubGroupBy, string> = { none: "없음", forked: "갈래 (forked)" };
 	interface Pref {
 		pinnedOpen: boolean;
 		recentOpen: boolean;
 		sortBy: SortBy;
 		desc: boolean;
 		group: GroupBy;
+		subGroup: SubGroupBy;
+		groupSortBy: GroupSortBy;
+		groupSortDesc: boolean;
 		/** 이 캐릭터의 대화만 (null = 전부) */
 		char: string | null;
 		showAvatar: boolean;
 		showForks: boolean;
 	}
 	const PREF = "sc.sidebar.list";
-	const DEFAULT_PREF: Pref = { pinnedOpen: true, recentOpen: true, sortBy: "recent", desc: true, group: "none", char: null, showAvatar: true, showForks: true };
+	const DEFAULT_PREF: Pref = {
+		pinnedOpen: true,
+		recentOpen: true,
+		sortBy: "recent",
+		desc: true,
+		group: "none",
+		subGroup: "none",
+		groupSortBy: "name",
+		groupSortDesc: true,
+		char: null,
+		showAvatar: true,
+		showForks: true,
+	};
 	function readPref(): Pref {
 		try {
 			const p = JSON.parse(localStorage.getItem(PREF) ?? "{}");
@@ -56,6 +77,9 @@
 				sortBy: p.sortBy in SORT_LABEL ? p.sortBy : "recent",
 				desc: p.desc !== false,
 				group: p.group === "character" ? "character" : "none",
+				subGroup: p.subGroup === "forked" ? "forked" : "none",
+				groupSortBy: p.groupSortBy,
+				groupSortDesc: p.groupSortDesc,
 				char: typeof p.char === "string" ? p.char : null,
 				showAvatar: p.showAvatar !== false,
 				showForks: p.showForks !== false,
@@ -70,12 +94,30 @@
 	let sortBy = $state<SortBy>(pref0.sortBy);
 	let desc = $state(pref0.desc);
 	let group = $state<GroupBy>(pref0.group);
+	let subGroup = $state<SubGroupBy>(pref0.subGroup);
+	let groupSortBy = $state<GroupSortBy>(pref0.groupSortBy);
+	let groupSortDesc = $state(pref0.groupSortDesc);
 	let charFilter = $state<string | null>(pref0.char);
 	let showAvatar = $state(pref0.showAvatar);
 	let showForks = $state(pref0.showForks);
 	$effect(() => {
 		try {
-			localStorage.setItem(PREF, JSON.stringify({ pinnedOpen, recentOpen, sortBy, desc, group, char: charFilter, showAvatar, showForks } satisfies Pref));
+			localStorage.setItem(
+				PREF,
+				JSON.stringify({
+					pinnedOpen,
+					recentOpen,
+					sortBy,
+					desc,
+					group,
+					subGroup,
+					groupSortBy,
+					groupSortDesc,
+					char: charFilter,
+					showAvatar,
+					showForks,
+				} satisfies Pref),
+			);
 		} catch {
 			/* 기억하지 못해도 동작은 같음 */
 		}
@@ -85,9 +127,11 @@
 		if (library.loaded && charFilter && !library.character(charFilter)) charFilter = null;
 	});
 	/** 기본 보기와 다른가 (정렬 단추 강조, 재설정 가능 여부) */
-	const customized = $derived(sortBy !== "recent" || !desc || group !== "none" || charFilter !== null || !showAvatar || !showForks);
+	const customized = $derived(
+		sortBy !== "recent" || !desc || group !== "none" || subGroup !== "none" || charFilter !== null || !showAvatar || !showForks,
+	);
 	function resetView() {
-		({ sortBy, desc, group, showAvatar, showForks } = { ...DEFAULT_PREF });
+		({ sortBy, desc, group, subGroup, showAvatar, showForks } = { ...DEFAULT_PREF });
 		charFilter = null;
 		shown = PAGE;
 		groupShown = {};
@@ -113,10 +157,11 @@
 		}
 		return m;
 	});
-	/** 목록에서 부모 밑에 들어가는 갈래 (부모가 같은 목록에 있을 때만, 갈라진 메시지 순) */
+	/** 하위 그룹화가 'forked'일 때만 부모 밑에 들어가는 갈래 (부모가 같은 목록에 있을 때만, 갈라진 메시지 순) */
 	const kids = $derived.by(() => {
-		const ids = new Set(unpinned.map((c) => c.id));
 		const m = new Map<string, Conversation[]>();
+		if (subGroup !== "forked") return m;
+		const ids = new Set(unpinned.map((c) => c.id));
 		for (const c of unpinned) {
 			const b = branchOf(c);
 			if (b && ids.has(b.parentId)) m.set(b.parentId, [...(m.get(b.parentId) ?? []), c]);
@@ -125,6 +170,7 @@
 		return m;
 	});
 	const roots = $derived.by(() => {
+		if (subGroup !== "forked") return [...unpinned].sort(cmp);
 		const inTree = new Set([...kids.values()].flat().map((c) => c.id));
 		return unpinned.filter((c) => !inTree.has(c.id)).sort(cmp);
 	});
@@ -132,13 +178,18 @@
 	/** 그룹화: 묶음마다 따로 몇 개를 보이는지 (없으면 shown) */
 	let groupShown = $state<Record<string, number>>({});
 	const limitOf = (id: string) => groupShown[id] ?? shown;
-	/** 그룹화(캐릭터): 보이는 대화를 캐릭터별 묶음으로. 묶음은 캐릭터 이름 순 */
+	/** 그룹화(캐릭터): 보이는 대화를 캐릭터별 묶음으로. 묶음은 가장 최신 메시지 순 */
 	const sections = $derived.by(() => {
 		const m = new Map<string, Conversation[]>();
 		for (const c of roots) m.set(c.characterId, [...(m.get(c.characterId) ?? []), c]);
 		return [...m.entries()]
-			.map(([id, list]) => ({ id, name: library.character(id)?.name ?? "캐릭터", list }))
-			.sort((a, b) => a.name.localeCompare(b.name, "ko"));
+			.map(([id, list]) => ({
+				id,
+				name: library.character(id)?.name ?? "캐릭터",
+				list,
+				latestAt: Math.max(...list.map((c) => lastAt(c))),
+			}))
+			.sort((a, b) => groupSortBy === "name" ? a.name.localeCompare(b.name, "ko") : b.latestAt - a.latestAt || a.name.localeCompare(b.name, "ko"));
 	});
 	let folded = $state<Set<string>>(new Set());
 	function toggleFold(id: string) {
@@ -148,7 +199,7 @@
 		folded = next;
 	}
 
-	/** 오른쪽 위 단추의 메뉴: 그룹화 기준 · 필터 · 정렬 기준 · 표시 · 재설정 (한 단계 하위 메뉴) */
+	/** 오른쪽 위 단추의 메뉴: 그룹화 기준 · 하위 그룹화 · 필터 · 정렬 기준 · 표시 · 재설정 (한 단계 하위 메뉴) */
 	/** 정렬·보기 단추가 눌린 상태 (메뉴가 열려 있는 동안만 강조) */
 	let viewOpen = $state(false);
 	function viewMenu(e: MouseEvent) {
@@ -169,6 +220,25 @@
 						{ label: "없음", checked: group === "none", onselect: pick(() => (group = "none")) },
 						{ label: "캐릭터", checked: group === "character", onselect: pick(() => (group = "character")) },
 					],
+				},
+				{
+					label: "하위 그룹화",
+					value: SUBGROUP_LABEL[subGroup],
+					visible: group !== "none",
+					children: [
+						{ id: "none", label: "없음", checked: subGroup === "none", onselect: pick(() => (subGroup = "none")) },
+						{ id: "forked", label: "갈래 (forked)", checked: subGroup === "forked", onselect: pick(() => (subGroup = "forked")) },
+					],
+				},
+				{
+					label: "그룹화 정렬",
+					value: GROUP_SORT_LABEL[groupSortBy],
+					visible: group !== "none",
+					children: [
+						...(Object.keys(GROUP_SORT_LABEL) as GroupSortBy[]).map((k) => ({ id: k, label: GROUP_SORT_LABEL[k], checked: sortBy === k, onselect: () => (sortBy = k) })),
+						{ id: "desc", label: "내림차순", separator: true, checked: groupSortDesc, onselect: () => (groupSortDesc = true) },
+						{ id: "asc", label: "오름차순", checked: !groupSortDesc, onselect: () => (groupSortDesc = false) },
+					]
 				},
 				{
 					label: "필터",

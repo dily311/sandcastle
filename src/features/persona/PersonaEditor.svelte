@@ -7,6 +7,7 @@
 	import { relative } from "$shared/time";
 	import { nav } from "$app/nav.svelte";
 	import { library, type Persona } from "$features/character/library.svelte";
+	import BookPicker from "../lorebook/BookPicker.svelte";
 
 	interface Props {
 		persona: Persona;
@@ -129,11 +130,7 @@
 		</Field>
 		<Field label="월드인포" hint="이 페르소나로 대화할 때 함께 쓰는 월드인포 책">
 			{#if books.length}
-				<div class="books">
-					{#each books as b (b.id)}
-						<button class="chip" class:on={worldInfoIds.includes(b.id)} aria-pressed={worldInfoIds.includes(b.id)} title={b.description ?? undefined} onclick={() => toggleBook(b.id)}>{b.name}</button>
-					{/each}
-				</div>
+				<BookPicker label="캐릭터 월드인포" value={worldInfoIds ?? []} onchange={(ids) => (worldInfoIds = ids)} />
 			{:else}
 				<p class="faint small">월드인포 책 없음</p>
 			{/if}
@@ -228,27 +225,6 @@
 	}
 	.count {
 		font-size: var(--text-xs);
-	}
-	.books {
-		display: flex;
-		flex-wrap: wrap;
-		gap: var(--space-1);
-	}
-	.chip {
-		height: 28px;
-		padding: 0 var(--space-3);
-		border: 1px solid var(--border-strong);
-		border-radius: 999px;
-		background: var(--surface);
-		color: var(--text-muted);
-		font: inherit;
-		font-size: var(--text-sm);
-		cursor: pointer;
-	}
-	.chip.on {
-		border-color: var(--accent);
-		background: var(--accent-soft);
-		color: var(--text);
 	}
 	.small {
 		font-size: var(--text-sm);

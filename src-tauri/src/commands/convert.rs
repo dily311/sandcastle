@@ -342,7 +342,7 @@ pub(crate) async fn copy_game_core(
                 persona_id,
                 world_info_ids: vec![],
                 mode: "chat".into(),
-                meta: Some(serde_json::json!({ "multiChar": true, "importedFrom": "game", "game": { "gameId": game_id, "sessionId": session_id }, "variables": var_values })),
+                meta: Some(serde_json::json!({ "importedFrom": "game", "game": { "gameId": game_id, "sessionId": session_id }, "variables": var_values })),
                 images_enabled: None,
             },
         )
@@ -545,7 +545,6 @@ mod game_copy_tests {
             vec![("user", "안녕"), ("assistant", "유나: 반가워!")]
         );
         let meta = crate::db::conversation::get_conversation(&db, &conv).await.unwrap().meta.unwrap();
-        assert_eq!(meta["multiChar"], true);
         // 변수 (5-F-4-6): 값·관계는 대화 변수로, 정의는 세계 캐릭터에 (관계는 게임과 같은 범위·한 번 폭)
         assert_eq!(meta["variables"], serde_json::json!({ "courage": "4", "관계.유나.affection": "12" }));
         let defs = crate::db::conversation::get_character_var_defs(&db, &cid).await.unwrap();

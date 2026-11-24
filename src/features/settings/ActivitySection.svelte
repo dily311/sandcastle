@@ -383,7 +383,7 @@
 		gap: var(--space-2);
 	}
 	.total {
-		margin: var(--space-3) 0 0;
+		padding: var(--space-3) 0 0;
 		font-size: var(--text-sm);
 	}
 	.cost {

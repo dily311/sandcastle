@@ -27,7 +27,6 @@ pub const SETTINGS_SCOPE: &[(&str, Scope)] = &[
     ("app-setting/language", Scope::Shared),
     ("app-setting/selectedPreset", Scope::Shared),
     ("app-setting/sendOnEnter", Scope::Device), // 키보드가 있는 PC와 폰이 다름
-    ("app-setting/showTimestamps", Scope::Shared),
     ("app-setting/selectedApiProfile", Scope::Device),
     ("app-setting/selectedModel", Scope::Device),       // 전역 API에 딸린 모델이라 API와 같이 기기 전용
     ("app-setting/reasoningEffort", Scope::Device),     // 받는 강도가 모델마다 달라 모델과 같이
@@ -56,6 +55,7 @@ pub const SETTINGS_SCOPE: &[(&str, Scope)] = &[
     ("theme-setting/backgroundOpacity", Scope::Shared),
     ("theme-setting/fonts", Scope::SharedPath),
     ("theme-setting/appFont", Scope::SharedPath),
+    ("theme-setting/chat", Scope::Shared),
     // ---- feature-setting: 기능 켜기는 기기마다 ----
     ("feature-setting", Scope::Device),
     // ---- plugin-setting ----

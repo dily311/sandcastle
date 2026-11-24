@@ -15,7 +15,6 @@
 	const SLOTS: { key: keyof AppPrompts; label: string; vars: string }[] = [
 		{ key: "chatImages", label: "캐릭터 에셋", vars: "{{img_keys}} · 자리 {{img_inprompt}}" },
 		{ key: "autoImage", label: "이미지 자동 생성", vars: "자리 {{auto_image}}" },
-		{ key: "multiChar", label: "여러 캐릭터", vars: "{{names}} · 자리 {{multi_char}}" },
 		{ key: "vars", label: "AI 변수", vars: "{{var_list}} · 자리 {{vars}}" },
 		{ key: "summary", label: "대화 요약", vars: "{max}" },
 		{ key: "gameRules", label: "게임 규칙", vars: "한 줄에 규칙 하나" },
@@ -73,6 +72,7 @@
 		display: flex;
 		flex-direction: column;
 		gap: var(--space-1);
+		padding: var(--space-3) 0;
 	}
 	.slot {
 		border: 1px solid var(--border);
