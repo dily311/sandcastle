@@ -1,6 +1,6 @@
 import { contextMenuRegistry } from "$/lib/contextmenu/registry";
 import { contextActionRegistry } from "$/lib/contextmenu/actions";
-import { handleChangeAlbumCover, widgetMusicSetting, playlistStore } from "./musicPlyerStore.svelte";
+import { audioStore, handleChangeAlbumCover, widgetMusicSetting, playlistStore } from "./musicPlyerStore.svelte";
 import type { FeatureRuntime } from "$/lib/features/types";
 import MusicPlayer from "./ui/MusicPlayer.svelte";
 import { revealItemInDir } from "@tauri-apps/plugin-opener";
@@ -29,11 +29,13 @@ class RegisterMusicFeature implements FeatureRuntime {
 
 	disable() {
 		this.enabled = false;
+		audioStore.stop();
 		interactiveManager.unregisterInteractiveHitbox(this.id);
 	}
 
 	destroy() {
 		this.enabled = false;
+		audioStore.stop();
 		this.unsubscriber?.();
 		this.unsubscriber = undefined;
 

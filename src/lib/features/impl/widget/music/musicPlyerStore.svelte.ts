@@ -304,12 +304,15 @@ class AudioStateStore {
 	#duration = $state(0);
 
 	async init() {
+		// 이전에 재생 중이던 오디오 인스턴스가 남지 않도록 먼저 정리
+		this.stop();
 		const data = localStorage.getItem("WIDGET.AUDIO_STATE");
 		if (data) {
 			this.#audioState = JSON.parse(data);
 		}
 		const audio = new Audio();
 		audio.volume = this.#audioState.volume;
+		audio.muted = this.#audioState.muted;
 		audio.addEventListener("timeupdate", () => (this.#currentTime = audio.currentTime));
 		audio.addEventListener("loadedmetadata", () => (this.#duration = audio.duration));
 		audio.addEventListener("volumechange", () => this.update({ volume: audio.volume }));
@@ -361,6 +364,15 @@ class AudioStateStore {
 	pause = () => {
 		this.#audioElement.pause();
 		this.#paused = true;
+	};
+
+	stop = () => {
+		this.#audioElement.pause();
+		this.#audioElement.currentTime = 0;
+		this.#audioElement.removeAttribute("src");
+		this.#audioElement.load();
+		this.#paused = true;
+		this.#currentTime = 0;
 	};
 
 	togglePlay = () => {

@@ -293,7 +293,8 @@ impl ChatManager {
                 },
             )
             .await?;
-        prompt.chat_options.stream = stream;
+        // 프리셋에서 스트리밍을 꺼 두었으면 채널이 있어도 비스트리밍으로 보낸다
+        prompt.chat_options.stream = stream && prompt.chat_options.stream;
         // 대화에서 고른 추론 강도가 프리셋 값보다 앞선다 (5-E-7). 모델이 받지 않는 값이면 AiService가 거른다
         if let Some(e) = effort {
             prompt.chat_options.reasoning_effort = Some(e);
