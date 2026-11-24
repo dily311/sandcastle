@@ -174,9 +174,15 @@ impl PromptManager {
             history.push((PromptRole::from_history(&item.role), item.content.clone(), item.images.clone()));
         }
         history.reverse();
-        if !user_message.is_empty() || !ctx.user_images.is_empty() {
-            history.push((PromptRole::User, user_message, ctx.user_images.clone()));
-        }
+        // Quiet(/gen) 지시는 월드인포 키워드 스캔·토큰 예산에는 포함하되, postHistory 등 모든 프리셋 블록 뒤 맨 끝에 둔다
+        let quiet_tail = if request.generation_type == GenerationType::Quiet {
+            (!user_message.is_empty() || !ctx.user_images.is_empty()).then(|| (PromptRole::User, user_message, ctx.user_images.clone()))
+        } else {
+            if !user_message.is_empty() || !ctx.user_images.is_empty() {
+                history.push((PromptRole::User, user_message, ctx.user_images.clone()));
+            }
+            None
+        };
 
         // ---- 조립
         let mut out: Vec<Line> = vec![];
@@ -233,6 +239,9 @@ impl PromptManager {
                     }
                 }
             }
+        }
+        if let Some(tail) = quiet_tail {
+            out.push(tail);
         }
 
         Ok(PromptMessage {

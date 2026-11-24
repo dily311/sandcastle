@@ -168,6 +168,31 @@ fn world_info_uses_keywords_constants_and_priority() {
 }
 
 #[test]
+fn quiet_generation_scans_instruction_for_world_info_and_places_it_last() {
+    let mut c = ctx();
+    c.history = vec![hist("user", "hello"), hist("assistant", "hi")];
+    c.world_info = vec![wi("w1", &["phoenix"], "Phoenix rises from ashes.", false, 1)];
+    let pr = preset(
+        vec![
+            block("main", "system", "You are {{char}}.", 0),
+            block("worldInfoBefore", "system", "", 1),
+            block("chatHistory", "user", "", 2),
+            block("postHistory", "system", "Reminder after history.", 3),
+        ],
+        json!({}),
+    );
+    let mut req = request(c, "Tell me about the phoenix");
+    req.generation_type = GenerationType::Quiet;
+    let p = PromptManager.build(req, Some(&pr)).unwrap();
+    let contents: Vec<_> = p.messages.iter().map(|m| m.content.as_str()).collect();
+    assert!(
+        contents.contains(&"Phoenix rises from ashes."),
+        "Quiet 지시 키워드로 월드인포 발동: {contents:?}"
+    );
+    assert_eq!(contents.last(), Some(&"Tell me about the phoenix"), "Quiet 지시는 postHistory 뒤 맨 끝");
+}
+
+#[test]
 fn world_info_respects_budget_ratio() {
     let mut c = ctx();
     c.world_info = vec![wi("big", &[], &"lore ".repeat(400), true, 10), wi("small", &[], "Short fact.", true, 0)];

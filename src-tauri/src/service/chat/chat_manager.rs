@@ -1482,12 +1482,14 @@ async fn quiet_prompt(
         with_global_vars(app, &mut context);
     }
     crate::service::chat::notes::apply(&mut context, conv.meta.as_ref());
+    // 마지막 AI 답장도 맥락이라 지우지 않는다 (대필과 달리 이어 쓸 자리가 아님).
+    // 지시를 user_message로 넘겨 월드인포 키워드 스캔·토큰 예산에 포함시키고, Quiet 생성이므로 프롬프트 맨 끝에 붙인다.
     let mut prompt = PromptManager
         .build_with_db(
             db,
             PromptRequest {
                 context,
-                user_message: String::new(),
+                user_message: instruction.to_string(),
                 preset_id: Some(preset_id),
                 context_limit: DEFAULT_CONTEXT_LIMIT,
                 world_info_ratio: DEFAULT_WORLD_INFO_RATIO,
@@ -1495,13 +1497,6 @@ async fn quiet_prompt(
             },
         )
         .await?;
-    // 마지막 AI 답장도 맥락이라 지우지 않는다 (대필과 달리 이어 쓸 자리가 아님)
-    prompt.messages.push(crate::models::ai_service::PromptMessageItem {
-        role: crate::models::ai_service::PromptRole::User,
-        content: instruction.to_string(),
-        token: 0,
-        images: vec![],
-    });
     prompt.chat_options.stream = false;
     Ok((api_profile_id, prompt))
 }
@@ -1567,6 +1562,44 @@ mod quiet_gen_tests {
             reasoning_effort: None,
         };
         assert!(quiet_prompt(&db, None, &conv, none, "x").await.is_err());
+    }
+
+    #[tokio::test]
+    async fn gen_prompt_includes_world_info_matched_by_instruction_keyword() {
+        let dir = tempfile::tempdir().unwrap();
+        let db = crate::db::conn::init_pool(dir.path().to_path_buf()).await.unwrap();
+        for sql in [
+            "INSERT INTO characters (id, name, description, created_at, updated_at) VALUES ('ch', '세라피나', '숲의 수호자', 1, 1)",
+            "INSERT INTO worldinfo_books (id, name, description) VALUES ('b1', '세계관', '')",
+            "INSERT INTO character_worldinfo (character_id, book_id) VALUES ('ch', 'b1')",
+            r#"INSERT INTO worldinfo_entries (id, book_id, keys, secondary_keys, content, comment, enabled, priority, constant) VALUES ('e1', 'b1', '["엘도리아"]', '[]', '엘도리아는 고대의 숲이다.', '숲', 1, 10, 0)"#,
+            r#"INSERT INTO worldinfo_entries (id, book_id, keys, secondary_keys, content, comment, enabled, priority, constant) VALUES ('e2', 'b1', '["바다"]', '[]', '끝없는 푸른 바다.', '바다', 1, 10, 0)"#,
+            "INSERT INTO conversations (id, title, character_id, prompt_preset_id) VALUES ('c', '대화', 'ch', 'default')",
+            "INSERT INTO messages (id, conversation_id, seq, role, content) VALUES ('m1', 'c', 1, 'user', '안녕'), ('m2', 'c', 2, 'assistant', '반가워요')",
+        ] {
+            sqlx::query(sqlx::AssertSqlSafe(sql))
+                .execute(&db)
+                .await
+                .unwrap_or_else(|e| panic!("{sql}: {e}"));
+        }
+        let conv = get_conversation(&db, "c").await.unwrap();
+        let fallback = ChatRequest {
+            api_profile_id: "p".into(),
+            model: None,
+            preset_id: "default".into(),
+            phone_mode_prompt: String::new(),
+            reasoning_effort: None,
+        };
+        let (_, prompt) = quiet_prompt(&db, None, &conv, fallback, "프롬프트 내용 : 엘도리아에 대해 설명해줘")
+            .await
+            .unwrap();
+        let all: String = prompt.messages.iter().map(|m| m.content.as_str()).collect::<Vec<_>>().join("\n");
+        assert!(all.contains("엘도리아는 고대의 숲이다."), "QR 지시 키워드에 걸린 월드인포가 포함됨: {all}");
+        assert!(!all.contains("끝없는 푸른 바다."), "걸리지 않은 월드인포는 빠짐: {all}");
+        let last = prompt.messages.last().unwrap();
+        assert_eq!(last.role, crate::models::ai_service::PromptRole::User);
+        assert_eq!(last.content, "프롬프트 내용 : 엘도리아에 대해 설명해줘");
+        assert!(last.token > 0);
     }
 }
 
