@@ -1,12 +1,11 @@
 <script lang="ts">
 	import { chatImport } from "./chatImport.svelte";
-	import { lastAt } from "$features/character/library.svelte";
 	import { ArrowDownUp, ChevronDown, Folder, FolderOpen, FolderPlus, PanelLeft, Pencil, Plus, Search, Trash2, Upload } from "@lucide/svelte";
 	import { ContextMenu, IconButton, Input, type MenuItem } from "$shared/ui";
 	import { CHAT_FILES, pickFiles } from "$shared/ipc/dialog";
 	import { confirmAction } from "$shared/stores/confirm.svelte";
 	import ConvCard from "./ConvCard.svelte";
-	import { viewed } from "./viewed.svelte";
+	import { CONV_SORT_KEYS, CONV_SORT_LABEL, compareConversations, isConvSortBy, type ConvSortBy } from "./convSort";
 	import { call, commands } from "$shared/ipc/client";
 	import { library, type Conversation } from "./library.svelte";
 
@@ -17,40 +16,44 @@
 	});
 
 	let query = $state("");
-	type Sort = "newest" | "viewed" | "oldest" | "name" | "name-desc" | "most" | "least";
 	const SORT_KEY = "sc.convs.sort";
-	let sort: Sort = $state((() => {
+	const SORT_DESC_KEY = "sc.convs.sortDesc";
+	function loadConvSort(): { sortBy: ConvSortBy; desc: boolean } {
 		try {
-			return (localStorage.getItem(SORT_KEY) as Sort) || "newest";
+			const raw = localStorage.getItem(SORT_KEY);
+			const rawDesc = localStorage.getItem(SORT_DESC_KEY);
+			if (isConvSortBy(raw)) {
+				return { sortBy: raw, desc: rawDesc !== "0" };
+			}
+			// 이전 버전 정렬 키 호환 마이그레이션
+			switch (raw) {
+				case "oldest":
+					return { sortBy: "recent", desc: false };
+				case "name-desc":
+					return { sortBy: "name", desc: true };
+				case "most":
+					return { sortBy: "messages", desc: true };
+				case "least":
+					return { sortBy: "messages", desc: false };
+				case "newest":
+				default:
+					return { sortBy: "recent", desc: rawDesc !== "0" };
+			}
 		} catch {
-			return "newest";
+			return { sortBy: "recent", desc: true };
 		}
-	})());
+	}
+	const sort0 = loadConvSort();
+	let sortBy = $state<ConvSortBy>(sort0.sortBy);
+	let desc = $state<boolean>(sort0.desc);
 	$effect(() => {
 		try {
-			localStorage.setItem(SORT_KEY, sort);
+			localStorage.setItem(SORT_KEY, sortBy);
+			localStorage.setItem(SORT_DESC_KEY, desc ? "1" : "0");
 		} catch {
 			/* 무시 */
 		}
 	});
-	const sorts: { id: Sort; label: string }[] = [
-		{ id: "newest", label: "최신순" },
-		{ id: "viewed", label: "최근 본 순" },
-		{ id: "oldest", label: "오래된순" },
-		{ id: "name", label: "이름순 (가→하)" },
-		{ id: "name-desc", label: "이름 역순 (하→가)" },
-		{ id: "most", label: "메시지 많은 순" },
-		{ id: "least", label: "메시지 적은 순" },
-	];
-	const compare: Record<Sort, (a: Conversation, b: Conversation) => number> = {
-		newest: (a, b) => lastAt(b) - lastAt(a),
-		viewed: (a, b) => (viewed.at[b.id] ?? 0) - (viewed.at[a.id] ?? 0) || lastAt(b) - lastAt(a),
-		oldest: (a, b) => lastAt(a) - lastAt(b),
-		name: (a, b) => a.title.localeCompare(b.title, "ko"),
-		"name-desc": (a, b) => b.title.localeCompare(a.title, "ko"),
-		most: (a, b) => b.messageCount - a.messageCount,
-		least: (a, b) => a.messageCount - b.messageCount,
-	};
 	// "mes:글"이면 제목이 아니라 메시지 내용으로 (백엔드에서 찾음, 입력이 멈춘 뒤)
 	const mesQuery = $derived(/^mes:/i.test(query.trim()) ? query.trim().slice(4).trim() : null);
 	let mesHits = $state<Map<string, number> | null>(null);
@@ -69,7 +72,7 @@
 		const match = (c: Conversation) => (mesQuery !== null ? !mesQuery || !!mesHits?.has(c.id) : !q || c.title.toLowerCase().includes(q));
 		return library.conversations
 			.filter((c) => c.characterId === charId && c.mode !== "phone" && match(c))
-			.sort((a, b) => Number(b.pinned) - Number(a.pinned) || compare[sort](a, b));
+			.sort((a, b) => Number(b.pinned) - Number(a.pinned) || compareConversations(a, b, sortBy, desc));
 	});
 	let sortMenu = $state<{ x: number; y: number } | null>(null);
 	function openSortMenu(e: MouseEvent) {
@@ -161,12 +164,16 @@
 		<Input bind:value={query} placeholder="대화 검색 · mes:메시지 내용" aria-label="대화 검색">
 			{#snippet leading()}<Search />{/snippet}
 		</Input>
-		<IconButton label="정렬: {sorts.find((s) => s.id === sort)?.label}" size="md" active={!!sortMenu} aria-haspopup="menu" onclick={openSortMenu}><ArrowDownUp /></IconButton>
+		<IconButton label="정렬: {CONV_SORT_LABEL[sortBy]} ({desc ? '내림차순' : '오름차순'})" size="md" active={!!sortMenu} aria-haspopup="menu" onclick={openSortMenu}><ArrowDownUp /></IconButton>
 	</div>
 	<ContextMenu
 		at={sortMenu}
 		label="정렬"
-		items={sorts.map((s, i) => ({ label: s.label, checked: sort === s.id, separator: i === 2 || i === 4, onselect: () => (sort = s.id) }))}
+		items={[
+			...CONV_SORT_KEYS.map((k) => ({ id: k, label: CONV_SORT_LABEL[k], checked: sortBy === k, onselect: () => (sortBy = k) })),
+			{ id: "desc", label: "내림차순", separator: true, checked: desc, onselect: () => (desc = true) },
+			{ id: "asc", label: "오름차순", checked: !desc, onselect: () => (desc = false) },
+		]}
 		onclose={() => (sortMenu = null)}
 	/>
 	<div class="convs-list">

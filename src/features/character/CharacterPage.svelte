@@ -22,6 +22,7 @@
 	import CharacterEditor from "./CharacterEditor.svelte";
 	import CharacterGallery from "./CharacterGallery.svelte";
 	import { library, type Character, type Conversation } from "./library.svelte";
+	import { CONV_SORT_KEYS, CONV_SORT_LABEL, compareConversations, type ConvSortBy } from "./convSort";
 	import { charActions, convActions } from "./actions";
 	import { fillNames, toBlocks } from "./format";
 	import RichText from "./RichText.svelte";
@@ -219,7 +220,7 @@
 	// 채팅 목록 찾기·거르기·정렬
 	let convQuery = $state("");
 	let convFilter = $state("all");
-	let convSort = $state("recent");
+	let convSort = $state<ConvSortBy>("recent");
 	const convFolders = $derived(charId ? library.foldersOf(charId) : []);
 	const CONV_FILTERS = $derived([
 		{ value: "all", label: `전부 ${recent.length}` },
@@ -228,12 +229,7 @@
 		{ value: "chat", label: "대화 모드" },
 		...convFolders.map((f) => ({ value: `folder:${f.id}`, label: f.name })),
 	]);
-	const CONV_SORTS = [
-		{ value: "recent", label: "최근 활동 순" },
-		{ value: "created", label: "최근 만든 순" },
-		{ value: "name", label: "제목 순" },
-		{ value: "messages", label: "메시지 많은 순" },
-	];
+	const CONV_SORTS = CONV_SORT_KEYS.map((k) => ({ value: k, label: CONV_SORT_LABEL[k] }));
 	const filteredRecent = $derived.by(() => {
 		const q = convQuery.trim().toLowerCase();
 		const pass = (c: (typeof recent)[number]) =>
@@ -242,15 +238,9 @@
 			(convFilter === "read" && !!c.readMode) ||
 			(convFilter === "chat" && !c.readMode) ||
 			(convFilter.startsWith("folder:") && c.folderId === convFilter.slice(7));
-		const by =
-			convSort === "created"
-				? (a: (typeof recent)[number], b: (typeof recent)[number]) => b.createdAt - a.createdAt
-				: convSort === "name"
-					? (a: (typeof recent)[number], b: (typeof recent)[number]) => a.title.localeCompare(b.title, "ko")
-					: convSort === "messages"
-						? (a: (typeof recent)[number], b: (typeof recent)[number]) => b.messageCount - a.messageCount
-						: (a: (typeof recent)[number], b: (typeof recent)[number]) => lastAt(b) - lastAt(a);
-		return recent.filter((c) => pass(c) && (!q || c.title.toLowerCase().includes(q))).sort(by);
+		return recent
+			.filter((c) => pass(c) && (!q || c.title.toLowerCase().includes(q)))
+			.sort((a, b) => compareConversations(a, b, convSort, convSort !== "name"));
 	});
 	// 북마크 탭: 이 캐릭터의 대화마다 남긴 북마크 (대화 meta, 새로 읽지 않음)
 	const marks = $derived(recent.flatMap((c) => bookmarksOf(c).map((b) => ({ ...b, conv: c }))).sort((a, b) => b.createdAt - a.createdAt));

@@ -9,6 +9,7 @@
 	import { toasts } from "$shared/stores/toast.svelte";
 	import { relative } from "$shared/time";
 	import { library, type Conversation } from "$features/character/library.svelte";
+	import { CONV_SORT_KEYS, CONV_SORT_LABEL, compareConversations, isConvSortBy, type ConvSortBy } from "$features/character/convSort";
 	import { convActions } from "$features/character/actions";
 	import { branchOf } from "$features/character/branches";
 	import { nav, type Page } from "./nav.svelte";
@@ -31,7 +32,7 @@
 		if (!library.loaded) void library.load();
 	});
 // ---- 대화 목록: 고정됨(접기) + 그룹화·하위 그룹화·필터·정렬·표시 메뉴 + 갈래 트리 ----
-	type SortBy = "recent" | "created" | "name";
+	type SortBy = ConvSortBy;
 	type GroupBy = "none" | "character";
 	type GroupSortBy = "recent" | "name";
 	const GROUP_SORT_LABEL: Record<GroupSortBy, string> = {
@@ -39,7 +40,7 @@
 		name: "이름순",
 	};
 	type SubGroupBy = "none" | "forked";
-	const SORT_LABEL: Record<SortBy, string> = { recent: "마지막 업데이트", created: "생성 날짜", name: "이름" };
+	const SORT_LABEL = CONV_SORT_LABEL;
 	const SUBGROUP_LABEL: Record<SubGroupBy, string> = { none: "없음", forked: "갈래 (forked)" };
 	interface Pref {
 		pinnedOpen: boolean;
@@ -75,7 +76,7 @@
 			return {
 				pinnedOpen: p.pinnedOpen !== false,
 				recentOpen: p.recentOpen !== false,
-				sortBy: p.sortBy in SORT_LABEL ? p.sortBy : "recent",
+				sortBy: isConvSortBy(p.sortBy) ? p.sortBy : "recent",
 				desc: p.desc !== false,
 				group: p.group === "character" ? "character" : "none",
 				subGroup: p.subGroup === "forked" ? "forked" : "none",
@@ -154,11 +155,7 @@
 			return true;
 		}),
 	);
-	const cmp = (a: Conversation, b: Conversation) => {
-		const v = sortBy === "name" ? a.title.localeCompare(b.title, "ko") : sortBy === "created" ? a.createdAt - b.createdAt : lastAt(a) - lastAt(b);
-		// 이름은 오름차순이 "작은 것부터"라 날짜와 방향이 같게(내림차순 = 큰 쪽부터) 뒤집는다
-		return desc ? -v : v;
-	};
+	const cmp = (a: Conversation, b: Conversation) => compareConversations(a, b, sortBy, desc);
 	const pinned = $derived(base.filter((c) => c.pinned).sort(cmp));
 	const unpinned = $derived(base.filter((c) => !c.pinned));
 	/** 이 대화에서 갈라져 나온 대화 수 (고정된 것 포함) */
@@ -269,7 +266,7 @@
 					label: "정렬 기준",
 					value: SORT_LABEL[sortBy],
 					children: [
-						...(Object.keys(SORT_LABEL) as SortBy[]).map((k) => ({ id: k, label: SORT_LABEL[k], checked: sortBy === k, onselect: () => (sortBy = k) })),
+						...CONV_SORT_KEYS.map((k) => ({ id: k, label: SORT_LABEL[k], checked: sortBy === k, onselect: () => (sortBy = k) })),
 						{ id: "desc", label: "내림차순", separator: true, checked: desc, onselect: () => (desc = true) },
 						{ id: "asc", label: "오름차순", checked: !desc, onselect: () => (desc = false) },
 					],
