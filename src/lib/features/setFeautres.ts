@@ -1,15 +1,15 @@
 import type { Feature } from "$/lib/features/types";
 
 export const WIDGET_FEATURES: Feature[] = [
-	// {
-	// 	id: "widget.mascot",
-	// 	name: "캐릭터",
-	// 	description: "위젯에 캐릭터를 표시합니다.",
-	// 	icon: "User",
-	// 	defaultEnabled: false,
-	// 	version: "1.0",
-	// 	minAppVersion: "1.0",
-	// },
+	{
+		id: "widget.mascot",
+		name: "시메지 (마스코트)",
+		description: "바탕화면에 시메지 캐릭터를 띄우고 상호작용합니다.",
+		icon: "User",
+		defaultEnabled: false,
+		version: "1.0",
+		minAppVersion: "1.0",
+	},
 
 	{
 		id: "widget.music",

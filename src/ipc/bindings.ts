@@ -699,6 +699,12 @@ export const commands = {
 	updateMusicAlbumArtPos: (path: string, pos: Value, options?: InvokeOptions) => __TAURI_INVOKE<null>("update_music_album_art_pos", { path, pos }, options),
 	setAlbumArt: (filePath: string, imgPath: string, options?: InvokeOptions) => __TAURI_INVOKE<string>("set_album_art", { filePath, imgPath }, options),
 	filterExistingPaths: (paths: string[], options?: InvokeOptions) => __TAURI_INVOKE<string[]>("filter_existing_paths", { paths }, options),
+	getWidgetMascotSettings: (options?: InvokeOptions) => __TAURI_INVOKE<WidgetMascotSetting_Serialize>("get_widget_mascot_settings", undefined, options),
+	saveWidgetMascotSettings: (setting: WidgetMascotSetting_Deserialize, options?: InvokeOptions) => __TAURI_INVOKE<WidgetMascotSetting_Serialize>("save_widget_mascot_settings", { setting }, options),
+	uploadWidgetMascotImage: (mascotId: string, slot: string, sourcePath: string, options?: InvokeOptions) => __TAURI_INVOKE<string>("upload_widget_mascot_image", { mascotId, slot, sourcePath }, options),
+	deleteWidgetMascotImage: (path: string, options?: InvokeOptions) => __TAURI_INVOKE<null>("delete_widget_mascot_image", { path }, options),
+	mascotGenerateReply: (request: MascotChatRequest_Deserialize, options?: InvokeOptions) => __TAURI_INVOKE<string>("mascot_generate_reply", { request }, options),
+	mascotGeneratePeerChat: (request: MascotPeerChatRequest, options?: InvokeOptions) => __TAURI_INVOKE<MascotPeerChatTurn[]>("mascot_generate_peer_chat", { request }, options),
 };
 
 /* Types */
@@ -6183,6 +6189,161 @@ export type WidgetMusicSetting_Serialize = {
 	currentPlaylistId: string | null,
 	currentSongIndex: number,
 	audio: WidgetAudioState_Serialize,
+};
+
+export type MascotBehaviorWeights = MascotBehaviorWeights_Serialize | MascotBehaviorWeights_Deserialize;
+
+export type MascotBehaviorWeights_Deserialize = {
+	idle?: number,
+	walk?: number,
+	sitting?: number,
+	sleep?: number,
+	working?: number,
+};
+
+export type MascotBehaviorWeights_Serialize = {
+	idle: number,
+	walk: number,
+	sitting: number,
+	sleep: number,
+	working: number,
+};
+
+export type MascotImages = MascotImages_Serialize | MascotImages_Deserialize;
+
+export type MascotImages_Deserialize = {
+	idle?: string[],
+	walk?: string[],
+	sitting?: string[],
+	sleep?: string[],
+	drag?: string[],
+	happy?: string[],
+	annoyed?: string[],
+	working?: string[],
+};
+
+export type MascotImages_Serialize = {
+	idle: string[],
+	walk: string[],
+	sitting: string[],
+	sleep: string[],
+	drag: string[],
+	happy: string[],
+	annoyed: string[],
+	working: string[],
+};
+
+export type MascotDialogues = MascotDialogues_Serialize | MascotDialogues_Deserialize;
+
+export type MascotDialogues_Deserialize = {
+	greeting?: string[],
+	longAbsence?: string[],
+	gift?: string[],
+	notify?: string[],
+	drag?: string[],
+	annoyed?: string[],
+	happy?: string[],
+	idleChatter?: string[],
+	peerChat?: string[],
+};
+
+export type MascotDialogues_Serialize = {
+	greeting: string[],
+	longAbsence: string[],
+	gift: string[],
+	notify: string[],
+	drag: string[],
+	annoyed: string[],
+	happy: string[],
+	idleChatter: string[],
+	peerChat: string[],
+};
+
+export type MascotCharacterConfig = MascotCharacterConfig_Serialize | MascotCharacterConfig_Deserialize;
+
+export type MascotCharacterConfig_Deserialize = {
+	id?: string,
+	name?: string,
+	enabled?: boolean,
+	characterId?: string | null,
+	personaId?: string | null,
+	apiProfileId?: string | null,
+	model?: string | null,
+	presetId?: string | null,
+	useAiDialogue?: boolean,
+	scale?: number,
+	speed?: number,
+	actionIntervalSec?: number,
+	behaviorWeights?: MascotBehaviorWeights_Deserialize,
+	images?: MascotImages_Deserialize,
+	dialogues?: MascotDialogues_Deserialize,
+	lastSeenAt?: number | null,
+};
+
+export type MascotCharacterConfig_Serialize = {
+	id: string,
+	name: string,
+	enabled: boolean,
+	characterId: string | null,
+	personaId: string | null,
+	apiProfileId: string | null,
+	model: string | null,
+	presetId: string | null,
+	useAiDialogue: boolean,
+	scale: number,
+	speed: number,
+	actionIntervalSec: number,
+	behaviorWeights: MascotBehaviorWeights_Serialize,
+	images: MascotImages_Serialize,
+	dialogues: MascotDialogues_Serialize,
+	lastSeenAt: number | null,
+};
+
+export type WidgetMascotSetting = WidgetMascotSetting_Serialize | WidgetMascotSetting_Deserialize;
+
+export type WidgetMascotSetting_Deserialize = {
+	characters?: MascotCharacterConfig_Deserialize[],
+	pairChatEnabled?: boolean,
+	pairChatIntervalSec?: number,
+	pairChatUseAi?: boolean,
+	pairChatDistancePx?: number,
+};
+
+export type WidgetMascotSetting_Serialize = {
+	characters: MascotCharacterConfig_Serialize[],
+	pairChatEnabled: boolean,
+	pairChatIntervalSec: number,
+	pairChatUseAi: boolean,
+	pairChatDistancePx: number,
+};
+
+export type MascotChatHistoryItem = {
+	role: string,
+	content: string,
+};
+
+export type MascotChatRequest_Deserialize = {
+	mascotId: string,
+	userMessage: string,
+	eventKind: string | null,
+	history?: MascotChatHistoryItem[],
+};
+
+export type MascotPeerChatRequest = {
+	mascotAId: string,
+	mascotBId: string,
+	topic: string | null,
+};
+
+export type MascotPeerChatTurn = {
+	mascotId: string,
+	name: string,
+	text: string,
+};
+
+export type WidgetMascotNotifyPayload = {
+	targetName: string,
+	body: string,
 };
 
 export type WorldInfoBook = WorldInfoBook_Serialize | WorldInfoBook_Deserialize;

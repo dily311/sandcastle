@@ -249,6 +249,7 @@ fn with_event_types(b: tauri_specta::Builder<tauri::Wry>) -> tauri_specta::Build
         .typ::<service::community::prompt_hook::PromptHookRequest>()
         // 커스텀 알림음 재생 이벤트 (notify:play-sound)
         .typ::<service::notify::NotifySoundPayload>()
+        .typ::<models::widget::WidgetMascotNotifyPayload>()
         // 타임스탬프(밀리초)·개수는 2^53 안이라 number로 충분
         .dangerously_cast_bigints_to_number()
 }
@@ -603,6 +604,13 @@ pub fn specta_builder() -> tauri_specta::Builder<tauri::Wry> {
         update_music_album_art_pos,
         set_album_art,
         filter_existing_paths,
+        // widget::mascot
+        get_widget_mascot_settings,
+        save_widget_mascot_settings,
+        upload_widget_mascot_image,
+        delete_widget_mascot_image,
+        mascot_generate_reply,
+        mascot_generate_peer_chat,
     ]))
 }
 

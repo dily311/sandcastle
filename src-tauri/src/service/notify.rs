@@ -48,6 +48,14 @@ pub fn reply_done(app: &AppHandle, char_name: &str) {
 
 /// 일반 작업이 끝남 (켜져 있고 앱이 가려져 있을 때만). 실패해도 작업 결과에는 영향 없음
 pub fn task_done(app: &AppHandle, target_name: &str, body: &str) {
+    // 위젯 시메지에도 알림 이벤트를 전달한다 (OS 알림 설정과 무관하게 시메지가 반응할 수 있도록)
+    let _ = app.emit(
+        "widget_mascot::notify",
+        crate::models::widget::WidgetMascotNotifyPayload {
+            target_name: target_name.to_string(),
+            body: body.to_string(),
+        },
+    );
     let Some(cfg) = read_cfg(app).filter(|c| c.enabled) else {
         return;
     };

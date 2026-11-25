@@ -24,6 +24,14 @@ const themes = new Map<string, MockTheme>([
 ]);
 const keys = new Set<string>(["gemini"]);
 let autostart = false;
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+let mockMascotSetting: any = {
+	characters: [],
+	pairChatEnabled: true,
+	pairChatIntervalSec: 90,
+	pairChatUseAi: true,
+	pairChatDistancePx: 260,
+};
 let defaultPersona = "default";
 const contacts: PhoneContact[] = [
 	{ ownerKind: "persona", ownerId: "min", contactKind: "character", contactId: "sera", status: "숲의 오두막", sortOrder: 0, createdAt: 0 },
@@ -93,6 +101,26 @@ export const settingsHandlers: Record<string, (a: Args) => unknown> = {
 	// ---- 위젯 ----
 	is_autostart_enabled: () => autostart,
 	set_autostart: ({ enabled }) => ((autostart = enabled), null),
+	get_widget_mascot_settings: () => mockMascotSetting,
+	save_widget_mascot_settings: ({ setting }) => ((mockMascotSetting = structuredClone(setting)), mockMascotSetting),
+	upload_widget_mascot_image: ({ sourcePath }) =>
+		sourcePath
+			? "data:image/svg+xml," + encodeURIComponent('<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64"><circle cx="32" cy="32" r="24" fill="#e9a87c"/><circle cx="24" cy="28" r="3" fill="#2b2118"/><circle cx="40" cy="28" r="3" fill="#2b2118"/><path d="M24 38 Q32 45 40 38" stroke="#2b2118" stroke-width="2.5" fill="none" stroke-linecap="round"/></svg>')
+			: "",
+	delete_widget_mascot_image: () => null,
+	mascot_generate_reply: async ({ request }) => {
+		const m = mockMascotSetting.characters.find((c: { id: string }) => c.id === request.mascotId);
+		return `${m?.name ?? "시메지"}: "${request.userMessage}"라고 했구나! 헤헤, 반가워!`;
+	},
+	mascot_generate_peer_chat: async ({ request }) => {
+		const a = mockMascotSetting.characters.find((c: { id: string }) => c.id === request.mascotAId);
+		const b = mockMascotSetting.characters.find((c: { id: string }) => c.id === request.mascotBId);
+		return [
+			{ mascotId: request.mascotAId, name: a?.name ?? "A", text: "안녕! 오늘 화면 위가 참 포근하네~" },
+			{ mascotId: request.mascotBId, name: b?.name ?? "B", text: "그러게! 같이 조금만 걸어다닐까?" },
+			{ mascotId: request.mascotAId, name: a?.name ?? "A", text: "좋아, 출발하자!" },
+		];
+	},
 
 	// ---- 페르소나 기본값 ----
 	set_system_default_persona: ({ id }) => ((defaultPersona = id), null),
