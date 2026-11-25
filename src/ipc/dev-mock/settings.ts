@@ -29,7 +29,7 @@ let mockMascotSetting: any = {
 	characters: [],
 	pairChatEnabled: true,
 	pairChatIntervalSec: 90,
-	pairChatUseAi: true,
+	pairChatUseAi: false,
 	pairChatDistancePx: 260,
 };
 let defaultPersona = "default";

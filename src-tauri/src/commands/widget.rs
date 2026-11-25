@@ -18,8 +18,10 @@ use crate::{
     sys::{
         library::LibraryRoot,
         music::{self},
+        plugins,
         settings::{merge_json, SettingsState},
     },
+    task::{CreateTaskRequest, TaskManager, TaskOwner, TaskType},
     widget::{manager::WidgetManager, InteractiveRegion, MouseTrackerState, WidgetInteractionState},
 };
 use std::path::{Path, PathBuf};
@@ -27,7 +29,6 @@ use std::sync::Arc;
 use tauri::{AppHandle, Manager, State, WebviewWindow};
 use tauri_plugin_autostart::AutoLaunchManager;
 use tauri_plugin_store::StoreExt;
-use tokio_util::sync::CancellationToken;
 
 // =======================================
 // 위젯 윈도우 열기
@@ -310,11 +311,7 @@ pub async fn upload_widget_mascot_image(app: AppHandle, mascot_id: String, slot:
         .filter(|c| c.is_ascii_alphanumeric() || *c == '-' || *c == '_')
         .take(64)
         .collect();
-    let safe_slot: String = slot
-        .chars()
-        .filter(|c| c.is_ascii_alphanumeric() || *c == '_')
-        .take(32)
-        .collect();
+    let safe_slot: String = slot.chars().filter(|c| c.is_ascii_alphanumeric() || *c == '_').take(32).collect();
     if safe_id.is_empty() || safe_slot.is_empty() {
         return Err(AppError::validation("잘못된 시메지 ID 또는 슬롯입니다", None));
     }
@@ -329,8 +326,13 @@ pub async fn upload_widget_mascot_image(app: AppHandle, mascot_id: String, slot:
 #[tauri::command]
 #[specta::specta]
 pub async fn delete_widget_mascot_image(app: AppHandle, path: String) -> Result<(), AppError> {
-    let root = mascot_images_root(&app)?;
-    let target = PathBuf::from(&path);
+    // `..`·링크로 폴더 밖을 가리키지 못하게 실제 경로로 바꿔 비교한다
+    let Ok(root) = mascot_images_root(&app)?.canonicalize() else {
+        return Ok(());
+    };
+    let Ok(target) = PathBuf::from(&path).canonicalize() else {
+        return Ok(());
+    };
     if target.starts_with(&root) && target.is_file() {
         let _ = std::fs::remove_file(&target);
     }
@@ -411,8 +413,11 @@ pub async fn mascot_generate_reply(
     state: State<'_, AppState>,
     ai: State<'_, Arc<AiService>>,
     settings: State<'_, SettingsState<AppSetting>>,
+    tasks: State<'_, Arc<TaskManager>>,
     request: MascotChatRequest,
 ) -> Result<String, AppError> {
+    plugins::require(&app, plugins::id::WIDGET)?;
+    plugins::require(&app, plugins::id::WIDGET_MASCOT)?;
     let mascot_setting = load_mascot_setting(&app)?;
     let mascot = mascot_setting
         .characters
@@ -421,11 +426,7 @@ pub async fn mascot_generate_reply(
         .ok_or_else(|| AppError::not_found("시메지를 찾을 수 없습니다"))?
         .clone();
 
-    let app_setting = settings
-        .0
-        .lock()
-        .map_err(|_| AppError::internal("settings lock poisoned"))?
-        .clone();
+    let app_setting = settings.0.lock().map_err(|_| AppError::internal("settings lock poisoned"))?.clone();
 
     let (profile_id, model, preset_id) = resolve_mascot_ai(&mascot, &app_setting)?;
     let (char_name, char_desc, example_dialogue, main_prompt) = load_mascot_char_info(&state.db, &mascot).await;
@@ -488,17 +489,11 @@ pub async fn mascot_generate_reply(
     prompt.chat_options.stream = false;
     prompt.chat_options.max_tokens = Some(prompt.chat_options.max_tokens.unwrap_or(200).min(240));
 
-    let cancel = CancellationToken::new();
-    let resp = ai
-        .generate(
-            AiRequest {
-                profile_id,
-                prompt,
-                model,
-            },
-            &cancel,
-            |_| {},
-        )
+    let job = CreateTaskRequest::inline(TaskType::Mascot, TaskOwner::System, plugins::id::WIDGET, "시메지 대사", false).owner_ref(&mascot.id);
+    let resp = tasks
+        .run_inline(job, |cancel| async move {
+            ai.generate(AiRequest { profile_id, prompt, model }, &cancel, |_| {}).await
+        })
         .await?;
 
     Ok(resp.content.trim().trim_matches(['"', '「', '」']).to_string())
@@ -512,9 +507,16 @@ pub async fn mascot_generate_peer_chat(
     state: State<'_, AppState>,
     ai: State<'_, Arc<AiService>>,
     settings: State<'_, SettingsState<AppSetting>>,
+    tasks: State<'_, Arc<TaskManager>>,
     request: MascotPeerChatRequest,
 ) -> Result<Vec<MascotPeerChatTurn>, AppError> {
+    plugins::require(&app, plugins::id::WIDGET)?;
+    plugins::require(&app, plugins::id::WIDGET_MASCOT)?;
     let mascot_setting = load_mascot_setting(&app)?;
+    // 타이머가 부르는 대화는 사용자가 켠 스위치(기본 꺼짐)가 있어야 한다
+    if request.auto && !mascot_setting.pair_chat_use_ai {
+        return Err(AppError::validation("시메지끼리 AI 대화가 꺼져 있습니다", None));
+    }
     let mascot_a = mascot_setting
         .characters
         .iter()
@@ -528,11 +530,7 @@ pub async fn mascot_generate_peer_chat(
         .ok_or_else(|| AppError::not_found("두 번째 시메지를 찾을 수 없습니다"))?
         .clone();
 
-    let app_setting = settings
-        .0
-        .lock()
-        .map_err(|_| AppError::internal("settings lock poisoned"))?
-        .clone();
+    let app_setting = settings.0.lock().map_err(|_| AppError::internal("settings lock poisoned"))?.clone();
 
     // A의 API 우선, 없으면 B의 API, 없으면 앱 기본 API
     let (profile_id, model, preset_id) = resolve_mascot_ai(&mascot_a, &app_setting).or_else(|_| resolve_mascot_ai(&mascot_b, &app_setting))?;
@@ -586,17 +584,11 @@ pub async fn mascot_generate_peer_chat(
     prompt.chat_options.stream = false;
     prompt.chat_options.max_tokens = Some(prompt.chat_options.max_tokens.unwrap_or(260).min(320));
 
-    let cancel = CancellationToken::new();
-    let resp = ai
-        .generate(
-            AiRequest {
-                profile_id,
-                prompt,
-                model,
-            },
-            &cancel,
-            |_| {},
-        )
+    let job = CreateTaskRequest::inline(TaskType::Mascot, TaskOwner::System, plugins::id::WIDGET, "시메지끼리 대화", request.auto).owner_ref(&mascot_a.id);
+    let resp = tasks
+        .run_inline(job, |cancel| async move {
+            ai.generate(AiRequest { profile_id, prompt, model }, &cancel, |_| {}).await
+        })
         .await?;
 
     let parsed = phone_sides::parse_peek(&resp.content, &display_a, &display_b);

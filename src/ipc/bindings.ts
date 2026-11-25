@@ -703,8 +703,10 @@ export const commands = {
 	saveWidgetMascotSettings: (setting: WidgetMascotSetting_Deserialize, options?: InvokeOptions) => __TAURI_INVOKE<WidgetMascotSetting_Serialize>("save_widget_mascot_settings", { setting }, options),
 	uploadWidgetMascotImage: (mascotId: string, slot: string, sourcePath: string, options?: InvokeOptions) => __TAURI_INVOKE<string>("upload_widget_mascot_image", { mascotId, slot, sourcePath }, options),
 	deleteWidgetMascotImage: (path: string, options?: InvokeOptions) => __TAURI_INVOKE<null>("delete_widget_mascot_image", { path }, options),
+	/**  시메지 AI 대사 생성 (유저와의 짧은 대화, 선물 반응 등) */
 	mascotGenerateReply: (request: MascotChatRequest_Deserialize, options?: InvokeOptions) => __TAURI_INVOKE<string>("mascot_generate_reply", { request }, options),
-	mascotGeneratePeerChat: (request: MascotPeerChatRequest, options?: InvokeOptions) => __TAURI_INVOKE<MascotPeerChatTurn[]>("mascot_generate_peer_chat", { request }, options),
+	/**  두 시메지 간 짧은 대화 생성 (AI) */
+	mascotGeneratePeerChat: (request: MascotPeerChatRequest_Deserialize, options?: InvokeOptions) => __TAURI_INVOKE<MascotPeerChatTurn[]>("mascot_generate_peer_chat", { request }, options),
 };
 
 /* Types */
@@ -844,11 +846,11 @@ export type AppPrompts_Deserialize = {
 	multiChar?: PromptSlot,
 	/**  AI 변수 규칙 ({{var_list}} = 변수 목록·지금 값). 프리셋 블록의 {{vars}} 자리에 */
 	vars?: PromptSlot,
-	/**  대필 기본 지시문 ({{user}}, {{char}}, {{length}}) */
+	/**  대필 기본 지시문 ({{user}} = 내 이름, {{char}} = 상대 이름, {{length}} = 길이) */
 	ghost?: PromptSlot,
-	/**  폰 메신저 프로필 AI 꾸미기 지시문 ({{char}}) */
+	/**  폰 메신저 프로필 AI 꾸미기 지시문 ({{char}} = 캐릭터 이름) */
 	phoneProfile?: PromptSlot,
-	/**  폰 SNS 페이지 AI 생성 지시문 ({{char}}) */
+	/**  폰 SNS 페이지 AI 생성 지시문 ({{char}} = 캐릭터 이름) */
 	phoneSns?: PromptSlot,
 };
 
@@ -874,11 +876,11 @@ export type AppPrompts_Serialize = {
 	multiChar: PromptSlot,
 	/**  AI 변수 규칙 ({{var_list}} = 변수 목록·지금 값). 프리셋 블록의 {{vars}} 자리에 */
 	vars: PromptSlot,
-	/**  대필 기본 지시문 ({{user}}, {{char}}, {{length}}) */
+	/**  대필 기본 지시문 ({{user}} = 내 이름, {{char}} = 상대 이름, {{length}} = 길이) */
 	ghost: PromptSlot,
-	/**  폰 메신저 프로필 AI 꾸미기 지시문 ({{char}}) */
+	/**  폰 메신저 프로필 AI 꾸미기 지시문 ({{char}} = 캐릭터 이름) */
 	phoneProfile: PromptSlot,
-	/**  폰 SNS 페이지 AI 생성 지시문 ({{char}}) */
+	/**  폰 SNS 페이지 AI 생성 지시문 ({{char}} = 캐릭터 이름) */
 	phoneSns: PromptSlot,
 };
 
@@ -3312,6 +3314,200 @@ export type MacroMode = "none" |
 /**  정규식 특수문자를 이스케이프해서 넣음 */
 "escaped";
 
+/**  시메지 행동별 가중치(빈도) */
+export type MascotBehaviorWeights = MascotBehaviorWeights_Serialize | MascotBehaviorWeights_Deserialize;
+
+/**  시메지 행동별 가중치(빈도) */
+export type MascotBehaviorWeights_Deserialize = {
+	idle?: number,
+	walk?: number,
+	sitting?: number,
+	sleep?: number,
+	working?: number,
+};
+
+/**  시메지 행동별 가중치(빈도) */
+export type MascotBehaviorWeights_Serialize = {
+	idle: number,
+	walk: number,
+	sitting: number,
+	sleep: number,
+	working: number,
+};
+
+/**  개별 시메지 캐릭터 설정 */
+export type MascotCharacterConfig = MascotCharacterConfig_Serialize | MascotCharacterConfig_Deserialize;
+
+/**  개별 시메지 캐릭터 설정 */
+export type MascotCharacterConfig_Deserialize = {
+	id?: string,
+	name?: string,
+	enabled?: boolean,
+	characterId?: string | null,
+	personaId?: string | null,
+	apiProfileId?: string | null,
+	model?: string | null,
+	presetId?: string | null,
+	useAiDialogue?: boolean,
+	scale?: number | null,
+	speed?: number | null,
+	actionIntervalSec?: number | null,
+	behaviorWeights?: MascotBehaviorWeights_Deserialize,
+	images?: MascotImages_Deserialize,
+	dialogues?: MascotDialogues_Deserialize,
+	lastSeenAt?: number | null,
+};
+
+/**  개별 시메지 캐릭터 설정 */
+export type MascotCharacterConfig_Serialize = {
+	id: string,
+	name: string,
+	enabled: boolean,
+	characterId: string | null,
+	personaId: string | null,
+	apiProfileId: string | null,
+	model: string | null,
+	presetId: string | null,
+	useAiDialogue: boolean,
+	scale: number | null,
+	speed: number | null,
+	actionIntervalSec: number | null,
+	behaviorWeights: MascotBehaviorWeights_Serialize,
+	images: MascotImages_Serialize,
+	dialogues: MascotDialogues_Serialize,
+	lastSeenAt: number | null,
+};
+
+export type MascotChatHistoryItem = {
+	role: string,
+	content: string,
+};
+
+/**  시메지 AI 응답 요청 (유저와 대화 / 선물 반응 등) */
+export type MascotChatRequest = MascotChatRequest_Serialize | MascotChatRequest_Deserialize;
+
+/**  시메지 AI 응답 요청 (유저와 대화 / 선물 반응 등) */
+export type MascotChatRequest_Deserialize = {
+	mascotId: string,
+	userMessage: string,
+	/**  상황 힌트 (예: "chat", "gift", "greeting", "long_absence", "notify") */
+	eventKind?: string | null,
+	/**  최근 짧은 대화 기록 (role: "user" | "assistant", content) */
+	history?: MascotChatHistoryItem[],
+};
+
+/**  시메지 AI 응답 요청 (유저와 대화 / 선물 반응 등) */
+export type MascotChatRequest_Serialize = {
+	mascotId: string,
+	userMessage: string,
+	/**  상황 힌트 (예: "chat", "gift", "greeting", "long_absence", "notify") */
+	eventKind: string | null,
+	/**  최근 짧은 대화 기록 (role: "user" | "assistant", content) */
+	history: MascotChatHistoryItem[],
+};
+
+/**  시메지 상황별 대사 (각 항목은 여러 줄/후보 중 랜덤 선택, {{user}}/{{char}}/{{notify}} 매크로 지원) */
+export type MascotDialogues = MascotDialogues_Serialize | MascotDialogues_Deserialize;
+
+/**  시메지 상황별 대사 (각 항목은 여러 줄/후보 중 랜덤 선택, {{user}}/{{char}}/{{notify}} 매크로 지원) */
+export type MascotDialogues_Deserialize = {
+	/**  기본 인사 (등장 시) */
+	greeting?: string[],
+	/**  오랜만에 볼 경우 (7일 이상 미접속) */
+	longAbsence?: string[],
+	/**  선물을 준 경우 */
+	gift?: string[],
+	/**  알림이 온 경우 ({{notify}} 치환) */
+	notify?: string[],
+	/**  잡아 끈 경우 */
+	drag?: string[],
+	/**  짜증 난 경우 */
+	annoyed?: string[],
+	/**  행복해한 경우 */
+	happy?: string[],
+	/**  평소 혼잣말 */
+	idleChatter?: string[],
+	/**  다른 시메지와 대화할 때의 기본 대사 (AI 미사용/오프라인 폴백) */
+	peerChat?: string[],
+};
+
+/**  시메지 상황별 대사 (각 항목은 여러 줄/후보 중 랜덤 선택, {{user}}/{{char}}/{{notify}} 매크로 지원) */
+export type MascotDialogues_Serialize = {
+	/**  기본 인사 (등장 시) */
+	greeting: string[],
+	/**  오랜만에 볼 경우 (7일 이상 미접속) */
+	longAbsence: string[],
+	/**  선물을 준 경우 */
+	gift: string[],
+	/**  알림이 온 경우 ({{notify}} 치환) */
+	notify: string[],
+	/**  잡아 끈 경우 */
+	drag: string[],
+	/**  짜증 난 경우 */
+	annoyed: string[],
+	/**  행복해한 경우 */
+	happy: string[],
+	/**  평소 혼잣말 */
+	idleChatter: string[],
+	/**  다른 시메지와 대화할 때의 기본 대사 (AI 미사용/오프라인 폴백) */
+	peerChat: string[],
+};
+
+/**  시메지 포즈/상태별 이미지 경로 목록 (여러 장이면 프레임 애니메이션) */
+export type MascotImages = MascotImages_Serialize | MascotImages_Deserialize;
+
+/**  시메지 포즈/상태별 이미지 경로 목록 (여러 장이면 프레임 애니메이션) */
+export type MascotImages_Deserialize = {
+	idle?: string[],
+	walk?: string[],
+	sitting?: string[],
+	sleep?: string[],
+	drag?: string[],
+	happy?: string[],
+	annoyed?: string[],
+	working?: string[],
+};
+
+/**  시메지 포즈/상태별 이미지 경로 목록 (여러 장이면 프레임 애니메이션) */
+export type MascotImages_Serialize = {
+	idle: string[],
+	walk: string[],
+	sitting: string[],
+	sleep: string[],
+	drag: string[],
+	happy: string[],
+	annoyed: string[],
+	working: string[],
+};
+
+/**  두 시메지 간 대화 생성 요청 */
+export type MascotPeerChatRequest = MascotPeerChatRequest_Serialize | MascotPeerChatRequest_Deserialize;
+
+/**  두 시메지 간 대화 생성 요청 */
+export type MascotPeerChatRequest_Deserialize = {
+	mascotAId: string,
+	mascotBId: string,
+	topic?: string | null,
+	/**  타이머가 시작한 대화면 true (`run_by = auto`, `pair_chat_use_ai`가 켜져 있어야 함). 사용자가 부른 것이면 false */
+	auto?: boolean,
+};
+
+/**  두 시메지 간 대화 생성 요청 */
+export type MascotPeerChatRequest_Serialize = {
+	mascotAId: string,
+	mascotBId: string,
+	topic: string | null,
+	/**  타이머가 시작한 대화면 true (`run_by = auto`, `pair_chat_use_ai`가 켜져 있어야 함). 사용자가 부른 것이면 false */
+	auto: boolean,
+};
+
+/**  두 시메지 간 대화의 한 턴 */
+export type MascotPeerChatTurn = {
+	mascotId: string,
+	name: string,
+	text: string,
+};
+
 export type MemoryRef = {
 	conversationId: string,
 	conversationTitle: string,
@@ -5648,7 +5844,9 @@ export type TaskType =
 /**  대필 (코어 플러그인 ghostwrite, 5-D) — 입력칸에 채울 글 한 번 */
 "ghostwrite" | 
 /**  슬래시 커맨드 /gen (코어 플러그인 slash, 5-E-20-5) — 대화 맥락 + 지시로 글만 받음 (저장하지 않음) */
-"slash_gen";
+"slash_gen" | 
+/**  위젯 시메지 대사·시메지끼리 대화 (위젯 하위 기능 widget.mascot) — 말풍선 한 번 */
+"mascot";
 
 export type Template = Template_Serialize | Template_Deserialize;
 
@@ -6165,6 +6363,33 @@ export type WidgetAudioState_Serialize = {
 	isShuffle: boolean,
 };
 
+/**  알림 도착 시 시메지에게 전달되는 이벤트 페이로드 */
+export type WidgetMascotNotifyPayload = {
+	targetName: string,
+	body: string,
+};
+
+/**  위젯 마스코트(시메지) 전체 설정 (widget.json 의 "mascot" 키) */
+export type WidgetMascotSetting = WidgetMascotSetting_Serialize | WidgetMascotSetting_Deserialize;
+
+/**  위젯 마스코트(시메지) 전체 설정 (widget.json 의 "mascot" 키) */
+export type WidgetMascotSetting_Deserialize = {
+	characters?: MascotCharacterConfig_Deserialize[],
+	pairChatEnabled?: boolean,
+	pairChatIntervalSec?: number,
+	pairChatUseAi?: boolean,
+	pairChatDistancePx?: number,
+};
+
+/**  위젯 마스코트(시메지) 전체 설정 (widget.json 의 "mascot" 키) */
+export type WidgetMascotSetting_Serialize = {
+	characters: MascotCharacterConfig_Serialize[],
+	pairChatEnabled: boolean,
+	pairChatIntervalSec: number,
+	pairChatUseAi: boolean,
+	pairChatDistancePx: number,
+};
+
 export type WidgetMusicSetting = WidgetMusicSetting_Serialize | WidgetMusicSetting_Deserialize;
 
 export type WidgetMusicSetting_Deserialize = {
@@ -6189,161 +6414,6 @@ export type WidgetMusicSetting_Serialize = {
 	currentPlaylistId: string | null,
 	currentSongIndex: number,
 	audio: WidgetAudioState_Serialize,
-};
-
-export type MascotBehaviorWeights = MascotBehaviorWeights_Serialize | MascotBehaviorWeights_Deserialize;
-
-export type MascotBehaviorWeights_Deserialize = {
-	idle?: number,
-	walk?: number,
-	sitting?: number,
-	sleep?: number,
-	working?: number,
-};
-
-export type MascotBehaviorWeights_Serialize = {
-	idle: number,
-	walk: number,
-	sitting: number,
-	sleep: number,
-	working: number,
-};
-
-export type MascotImages = MascotImages_Serialize | MascotImages_Deserialize;
-
-export type MascotImages_Deserialize = {
-	idle?: string[],
-	walk?: string[],
-	sitting?: string[],
-	sleep?: string[],
-	drag?: string[],
-	happy?: string[],
-	annoyed?: string[],
-	working?: string[],
-};
-
-export type MascotImages_Serialize = {
-	idle: string[],
-	walk: string[],
-	sitting: string[],
-	sleep: string[],
-	drag: string[],
-	happy: string[],
-	annoyed: string[],
-	working: string[],
-};
-
-export type MascotDialogues = MascotDialogues_Serialize | MascotDialogues_Deserialize;
-
-export type MascotDialogues_Deserialize = {
-	greeting?: string[],
-	longAbsence?: string[],
-	gift?: string[],
-	notify?: string[],
-	drag?: string[],
-	annoyed?: string[],
-	happy?: string[],
-	idleChatter?: string[],
-	peerChat?: string[],
-};
-
-export type MascotDialogues_Serialize = {
-	greeting: string[],
-	longAbsence: string[],
-	gift: string[],
-	notify: string[],
-	drag: string[],
-	annoyed: string[],
-	happy: string[],
-	idleChatter: string[],
-	peerChat: string[],
-};
-
-export type MascotCharacterConfig = MascotCharacterConfig_Serialize | MascotCharacterConfig_Deserialize;
-
-export type MascotCharacterConfig_Deserialize = {
-	id?: string,
-	name?: string,
-	enabled?: boolean,
-	characterId?: string | null,
-	personaId?: string | null,
-	apiProfileId?: string | null,
-	model?: string | null,
-	presetId?: string | null,
-	useAiDialogue?: boolean,
-	scale?: number,
-	speed?: number,
-	actionIntervalSec?: number,
-	behaviorWeights?: MascotBehaviorWeights_Deserialize,
-	images?: MascotImages_Deserialize,
-	dialogues?: MascotDialogues_Deserialize,
-	lastSeenAt?: number | null,
-};
-
-export type MascotCharacterConfig_Serialize = {
-	id: string,
-	name: string,
-	enabled: boolean,
-	characterId: string | null,
-	personaId: string | null,
-	apiProfileId: string | null,
-	model: string | null,
-	presetId: string | null,
-	useAiDialogue: boolean,
-	scale: number,
-	speed: number,
-	actionIntervalSec: number,
-	behaviorWeights: MascotBehaviorWeights_Serialize,
-	images: MascotImages_Serialize,
-	dialogues: MascotDialogues_Serialize,
-	lastSeenAt: number | null,
-};
-
-export type WidgetMascotSetting = WidgetMascotSetting_Serialize | WidgetMascotSetting_Deserialize;
-
-export type WidgetMascotSetting_Deserialize = {
-	characters?: MascotCharacterConfig_Deserialize[],
-	pairChatEnabled?: boolean,
-	pairChatIntervalSec?: number,
-	pairChatUseAi?: boolean,
-	pairChatDistancePx?: number,
-};
-
-export type WidgetMascotSetting_Serialize = {
-	characters: MascotCharacterConfig_Serialize[],
-	pairChatEnabled: boolean,
-	pairChatIntervalSec: number,
-	pairChatUseAi: boolean,
-	pairChatDistancePx: number,
-};
-
-export type MascotChatHistoryItem = {
-	role: string,
-	content: string,
-};
-
-export type MascotChatRequest_Deserialize = {
-	mascotId: string,
-	userMessage: string,
-	eventKind: string | null,
-	history?: MascotChatHistoryItem[],
-};
-
-export type MascotPeerChatRequest = {
-	mascotAId: string,
-	mascotBId: string,
-	topic: string | null,
-};
-
-export type MascotPeerChatTurn = {
-	mascotId: string,
-	name: string,
-	text: string,
-};
-
-export type WidgetMascotNotifyPayload = {
-	targetName: string,
-	body: string,
 };
 
 export type WorldInfoBook = WorldInfoBook_Serialize | WorldInfoBook_Deserialize;

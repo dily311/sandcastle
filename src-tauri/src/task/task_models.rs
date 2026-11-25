@@ -82,6 +82,8 @@ pub enum TaskType {
     Ghostwrite,
     /// 슬래시 커맨드 /gen (코어 플러그인 slash, 5-E-20-5) — 대화 맥락 + 지시로 글만 받음 (저장하지 않음)
     SlashGen,
+    /// 위젯 시메지 대사·시메지끼리 대화 (위젯 하위 기능 widget.mascot) — 말풍선 한 번
+    Mascot,
 }
 
 /// 작업을 누가 시작했나. 비용이 드는 작업은 항상 실행 주체가 분명해야 한다 (CLAUDE.md 원칙)

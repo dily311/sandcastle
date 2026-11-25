@@ -23,6 +23,8 @@ pub mod id {
     pub const IMAGES: &str = "chat.images";
     pub const HTML: &str = "html";
     pub const WIDGET: &str = "widget";
+    /// 위젯 하위 기능: 바탕화면 시메지 (위젯 설정 화면에서 켬, 목록에는 없음)
+    pub const WIDGET_MASCOT: &str = "widget.mascot";
     pub const REGEX: &str = "regex";
     pub const TRANSLATE: &str = "translate";
     pub const TTS: &str = "tts";

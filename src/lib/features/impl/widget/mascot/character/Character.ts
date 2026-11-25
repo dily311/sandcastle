@@ -45,9 +45,10 @@ export class Character {
 	}
 
 	async init(fallbackAvatarPath?: string | null) {
-		await this.animations.init(this.config.images, this.container, this.config.scale, fallbackAvatarPath);
-		const behaviors = buildBehaviorsFromWeights(this.config.behaviorWeights, this.config.actionIntervalSec);
-		this.behaviorController = new BehaviorController(this, behaviors, this.config.actionIntervalSec);
+		await this.animations.init(this.config.images, this.container, this.config.scale ?? 1, fallbackAvatarPath);
+		const interval = this.config.actionIntervalSec ?? 5;
+		const behaviors = buildBehaviorsFromWeights(this.config.behaviorWeights, interval);
+		this.behaviorController = new BehaviorController(this, behaviors, interval);
 
 		this.hitbox = new Graphics();
 		this.rebuildHitbox();
@@ -63,16 +64,17 @@ export class Character {
 		this.speed = Math.max(20, Math.min(300, next.speed || 80));
 
 		if (imagesChanged) {
-			await this.animations.init(next.images, this.container, next.scale, fallbackAvatarPath);
+			await this.animations.init(next.images, this.container, next.scale ?? 1, fallbackAvatarPath);
 			this.rebuildHitbox();
 			this.animations.play(this.currentAction);
 		} else if (scaleChanged) {
-			this.animations.setScale(next.scale);
+			this.animations.setScale(next.scale ?? 1);
 			this.rebuildHitbox();
 		}
 
-		const behaviors = buildBehaviorsFromWeights(next.behaviorWeights, next.actionIntervalSec);
-		this.behaviorController.updateConfig(behaviors, next.actionIntervalSec);
+		const interval = next.actionIntervalSec ?? 5;
+		const behaviors = buildBehaviorsFromWeights(next.behaviorWeights, interval);
+		this.behaviorController.updateConfig(behaviors, interval);
 	}
 
 	private rebuildHitbox() {

@@ -41,8 +41,8 @@
 	});
 	type SubGroupBy = "none" | "forked";
 	const SORT_LABEL = $derived<Record<SortBy, string>>({
-		recent: $_("settings.chrome.sortRecent"),
-		updated: $_("settings.chrome.sortUpdated"),
+		viewed: $_("settings.chrome.sortRecent"),
+		recent: $_("settings.chrome.sortUpdated"),
 		created: $_("settings.chrome.sortCreated"),
 		name: $_("settings.chrome.sortName"),
 		messages: $_("settings.chrome.sortMessages"),

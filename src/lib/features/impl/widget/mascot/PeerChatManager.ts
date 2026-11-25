@@ -44,7 +44,7 @@ export class PeerChatManager {
 		const others = candidates.filter((c) => c.id !== first.id);
 		others.sort((a, b) => Math.abs(a.container.x - first.container.x) - Math.abs(b.container.x - first.container.x));
 		const second = others[0];
-		void this.startConversation(first, second);
+		void this.startConversation(first, second, true);
 	}
 
 	async triggerManual(mascotAId: string, mascotBId?: string): Promise<boolean> {
@@ -55,11 +55,12 @@ export class PeerChatManager {
 		if (!b || b.id === a.id) return false;
 
 		this.elapsedMs = 0;
-		await this.startConversation(a, b);
+		await this.startConversation(a, b, false);
 		return true;
 	}
 
-	private async startConversation(a: Character, b: Character) {
+	/** auto: 타이머가 시작한 대화 (AI를 부르면 `run_by = auto`로 기록됨) */
+	private async startConversation(a: Character, b: Character, auto: boolean) {
 		if (this.activeConversation || this.disposed) return;
 		this.activeConversation = true;
 		a.setPeerChatting(true);
@@ -76,7 +77,7 @@ export class PeerChatManager {
 
 			// 두 시메지가 서로 가까이 걸어가기 + 동시에 대사 준비
 			const [turns] = await Promise.all([
-				this.fetchTurns(a, b, setting.pairChatUseAi),
+				this.fetchTurns(a, b, setting.pairChatUseAi, auto),
 				Promise.all([this.walkAndWait(leftChar, leftTarget, 5500), this.walkAndWait(rightChar, rightTarget, 5500)]),
 			]);
 
@@ -112,13 +113,14 @@ export class PeerChatManager {
 		}
 	}
 
-	private async fetchTurns(a: Character, b: Character, useAi: boolean): Promise<MascotPeerChatTurn[]> {
+	private async fetchTurns(a: Character, b: Character, useAi: boolean, auto: boolean): Promise<MascotPeerChatTurn[]> {
 		if (useAi) {
 			try {
 				const turns = await commands.mascotGeneratePeerChat({
 					mascotAId: a.id,
 					mascotBId: b.id,
 					topic: null,
+					auto,
 				});
 				if (turns && turns.length > 0) return turns;
 			} catch (e) {

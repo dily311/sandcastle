@@ -357,7 +357,8 @@ impl Default for WidgetMascotSetting {
             characters: vec![],
             pair_chat_enabled: true,
             pair_chat_interval_sec: 90,
-            pair_chat_use_ai: true,
+            // 사용자가 누르지 않아도 정해진 간격마다 API를 부르므로 기본 꺼짐
+            pair_chat_use_ai: false,
             pair_chat_distance_px: 260,
         }
     }
@@ -390,6 +391,9 @@ pub struct MascotPeerChatRequest {
     pub mascot_a_id: String,
     pub mascot_b_id: String,
     pub topic: Option<String>,
+    /// 타이머가 시작한 대화면 true (`run_by = auto`, `pair_chat_use_ai`가 켜져 있어야 함). 사용자가 부른 것이면 false
+    #[serde(default)]
+    pub auto: bool,
 }
 
 /// 두 시메지 간 대화의 한 턴

@@ -335,7 +335,7 @@
 					onchange={(v) => patchCharacter(selected.id, { useAiDialogue: v })}
 				/>
 			</Row>
-			<Row label={$_("settings.mascot.scale")} desc="{Math.round(selected.scale * 100)}%">
+			<Row label={$_("settings.mascot.scale")} desc="{Math.round((selected.scale ?? 1) * 100)}%">
 				<div class="range-inline">
 					<input
 						type="range"
@@ -346,7 +346,7 @@
 						aria-label={$_("settings.mascot.scaleAria")}
 						onchange={(e) => patchCharacter(selected.id, { scale: Number(e.currentTarget.value) })}
 					/>
-					<span class="num">{selected.scale.toFixed(1)}x</span>
+					<span class="num">{(selected.scale ?? 1).toFixed(1)}x</span>
 				</div>
 			</Row>
 			<Row label={$_("settings.mascot.speed")} desc={$_("settings.mascot.speedDesc")}>
@@ -360,7 +360,7 @@
 						aria-label={$_("settings.mascot.speedAria")}
 						onchange={(e) => patchCharacter(selected.id, { speed: Number(e.currentTarget.value) })}
 					/>
-					<span class="num">{Math.round(selected.speed)}</span>
+					<span class="num">{Math.round(selected.speed ?? 80)}</span>
 				</div>
 			</Row>
 		</Group>

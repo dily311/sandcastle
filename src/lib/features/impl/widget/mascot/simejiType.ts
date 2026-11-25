@@ -104,7 +104,7 @@ export function defaultWidgetMascotSetting(): WidgetMascotSetting_Serialize {
 		characters: [],
 		pairChatEnabled: true,
 		pairChatIntervalSec: 90,
-		pairChatUseAi: true,
+		pairChatUseAi: false,
 		pairChatDistancePx: 260,
 	};
 }

@@ -1,7 +1,7 @@
 <script lang="ts">
 	import { onMount } from "svelte";
 	import { _ } from "svelte-i18n";
-	import { ExternalLink, Monitor, Moon, Sun } from "@lucide/svelte";
+	import { ExternalLink } from "@lucide/svelte";
 	import type { CssThemeMeta_Serialize as ThemeMeta } from "$ipc/bindings";
 	import { nav } from "$app/nav.svelte";
 	import { theme } from "$app/theme.svelte";
@@ -62,9 +62,9 @@
 			label={$_("settings.themeSec.mode")}
 			value={theme.setting.mode}
 			options={[
-				{ value: "system", label: $_("settings.themeSec.modeSystem"), icon: Monitor },
-				{ value: "light", label: $_("settings.themeSec.modeLight"), icon: Sun },
-				{ value: "dark", label: $_("settings.themeSec.modeDark"), icon: Moon },
+				{ value: "system", label: $_("settings.themeSec.modeSystem") },
+				{ value: "light", label: $_("settings.themeSec.modeLight") },
+				{ value: "dark", label: $_("settings.themeSec.modeDark") },
 			]}
 			onchange={(v) => theme.update({ mode: v })}
 		/>

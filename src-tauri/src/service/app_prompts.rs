@@ -142,7 +142,18 @@ impl PresetPrompts {
     /// settings_json 안의 자리
     pub const KEY: &'static str = "appPrompts";
     /// 프리셋이 고칠 수 있는 슬롯 (AppPrompts의 camelCase 이름)
-    pub const SLOTS: &'static [&'static str] = &["chatImages", "autoImage", "multiChar", "vars", "summary", "ghost", "phoneProfile", "phoneSns", "gameRules", "sceneRules"];
+    pub const SLOTS: &'static [&'static str] = &[
+        "chatImages",
+        "autoImage",
+        "multiChar",
+        "vars",
+        "summary",
+        "ghost",
+        "phoneProfile",
+        "phoneSns",
+        "gameRules",
+        "sceneRules",
+    ];
 
     /// 프리셋을 읽어서 (없거나 못 읽으면 빈 것 — 전역·기본을 따름)
     pub async fn load(db: &sqlx::SqlitePool, preset_id: &str) -> Self {

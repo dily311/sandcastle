@@ -1,5 +1,3 @@
-import { readdirSync, readFileSync, statSync } from "node:fs";
-import path from "node:path";
 import { describe, expect, it } from "vitest";
 import { get } from "svelte/store";
 import { _ } from "svelte-i18n";
@@ -15,16 +13,8 @@ function flatten(obj: Record<string, unknown>, prefix = ""): string[] {
 	});
 }
 
-function walkFiles(dir: string): string[] {
-	const out: string[] = [];
-	for (const entry of readdirSync(dir)) {
-		const full = path.join(dir, entry);
-		const st = statSync(full);
-		if (st.isDirectory()) out.push(...walkFiles(full));
-		else if (/\.(svelte|ts)$/.test(entry) && !entry.endsWith(".test.ts")) out.push(full);
-	}
-	return out;
-}
+// 소스 파일 원문 (테스트 파일 제외)
+const SOURCES = import.meta.glob(["/src/**/*.svelte", "/src/**/*.ts", "!/src/**/*.test.ts"], { query: "?raw", import: "default", eager: true }) as Record<string, string>;
 
 describe("i18n", () => {
 	const koKeys = flatten(ko as Record<string, unknown>).sort();
@@ -35,19 +25,17 @@ describe("i18n", () => {
 	});
 
 	it("소스 코드에서 $_()로 참조하는 모든 정적 키가 ko/en 사전에 존재한다", () => {
-		const srcDir = path.resolve(import.meta.dirname, "../..");
 		const koSet = new Set(koKeys);
 		const enSet = new Set(enKeys);
 		const missingKo: string[] = [];
 		const missingEn: string[] = [];
 		const re = /\$_\(\s*["']([^"'${}]+)["']/g;
 
-		for (const file of walkFiles(srcDir)) {
-			const content = readFileSync(file, "utf8");
+		for (const [file, content] of Object.entries(SOURCES)) {
 			for (const m of content.matchAll(re)) {
 				const key = m[1];
-				if (!koSet.has(key)) missingKo.push(`${path.relative(srcDir, file)}: ${key}`);
-				if (!enSet.has(key)) missingEn.push(`${path.relative(srcDir, file)}: ${key}`);
+				if (!koSet.has(key)) missingKo.push(`${file}: ${key}`);
+				if (!enSet.has(key)) missingEn.push(`${file}: ${key}`);
 			}
 		}
 
