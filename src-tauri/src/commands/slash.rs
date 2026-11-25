@@ -47,7 +47,8 @@ pub async fn slash_generate(
     let label = if raw { "/genraw" } else { "/gen" };
     let job = CreateTaskRequest::inline(TaskType::SlashGen, TaskOwner::Chat, plugins::id::SLASH, label, false).owner_ref(&conversation_id);
     let raw = raw.then_some(system);
-    tasks
+    let notify_app = app.clone();
+    let out = tasks
         .run_inline(job, |cancel| async move {
             ChatManager
                 .quiet_gen(&app, &state.db, &settings, &conversation_id, &prompt, raw, &cancel)
@@ -55,7 +56,9 @@ pub async fn slash_generate(
                 .map(|(text, truncated, prompt)| SlashGenResult { text, truncated, prompt })
                 .map_err(into_app_error)
         })
-        .await
+        .await?;
+    crate::service::notify::task_done(&notify_app, label, "생성이 끝남");
+    Ok(out)
 }
 
 /// 생성 중인 /gen·/genraw 멈추기 (5-E-20-6-8, 대필 멈추기와 같은 모양). 멈출 게 있었으면 true

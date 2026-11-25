@@ -262,6 +262,7 @@ pub async fn generate_message_image(
     list.push(json!({ "path": image.path, "prompt": image.prompt, "createdAt": image.created_at }));
     meta["generatedImages"] = Value::Array(list);
     conversation::update_message_meta(&state.db, &message_id, meta).await?;
+    crate::service::notify::task_done(&app, "그림 생성", "메시지 그림이 완성됨");
     Ok(chat_ui::get_message(&state.db, &message_id).await?)
 }
 
@@ -303,6 +304,7 @@ pub async fn generate_auto_image(
     list.push(json!({ "path": image.path, "prompt": image.prompt, "createdAt": image.created_at, "auto": true }));
     meta["generatedImages"] = Value::Array(list);
     conversation::update_message_meta(&state.db, &message_id, meta).await?;
+    crate::service::notify::task_done(&app, "자동 그림", "자동 그림이 완성됨");
     Ok(chat_ui::get_message(&state.db, &message_id).await?)
 }
 
@@ -534,7 +536,7 @@ pub async fn generate_image_from_prompt(
         _ => "그림 만들기",
     };
     let job = CreateTaskRequest::inline(TaskType::ImageGen, TaskOwner::Image, id::IMAGE_GEN, label, false);
-    tasks
+    let out = tasks
         .run_inline(job, |_| async {
             let final_prompt = if refine {
                 tools::image_prompt(
@@ -556,5 +558,7 @@ pub async fn generate_image_from_prompt(
             }
             Ok(img)
         })
-        .await
+        .await?;
+    crate::service::notify::task_done(&app, label, "그림이 완성됨");
+    Ok(out)
 }

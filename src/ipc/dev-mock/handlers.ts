@@ -28,7 +28,7 @@ const db = {
 		trashRetentionDays: 30,
 		checkUpdatesOnStart: false,
 		cgGroupVariants: false,
-		doneNotify: { enabled: false, title: "", icon: null },
+		doneNotify: { enabled: false, title: "", icon: null, soundMode: "default", soundPath: null, soundVolume: 0.8 },
 		aiCallLog: false,
 		typing: { style: "blink", text: "", image: null },
 		worldInfo: { scanDepth: 10, maxRecursionDepth: 0 },
@@ -80,6 +80,13 @@ const base: Record<string, Handler> = {
 		return (db.themeSetting = { ...db.themeSetting, chat });
 	},
 	request_notify_permission: () => true,
+	test_notify: () => undefined,
+	set_notify_sound: ({ path }) => {
+		const cur = db.appSetting.doneNotify;
+		const soundPath = (path as string | null) ?? null;
+		const soundMode = soundPath ? "custom" : cur.soundMode === "custom" ? "default" : cur.soundMode;
+		return (db.appSetting = { ...db.appSetting, doneNotify: { ...cur, soundPath, soundMode } });
+	},
 	// 미리보기: 복사하지 않고 받은 주소를 그대로 (data:·https: 그림으로 확인)
 	set_typing_image: ({ path }) => {
 		const cur = db.appSetting as { typing: { style: "blink" | "bounce" | "none" | "image"; text: string } };

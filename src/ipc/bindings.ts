@@ -14,6 +14,11 @@ export const commands = {
 	 *  `None`이면 그림을 뺀다 (원본 파일은 건드리지 않음). 테마 폴더라 백업·동기화에 같이 간다
 	 */
 	setTypingImage: (path: string | null, options?: InvokeOptions) => __TAURI_INVOKE<AppSetting_Serialize>("set_typing_image", { path }, options),
+	/**
+	 *  커스텀 알림음 파일 설정: 고른 오디오 파일을 앱 데이터 `notify/sound/`에 복사하고, 이전 복사본은 지운다.
+	 *  `None`이면 커스텀 알림음을 비우고 소리 방식을 기본으로 돌린다 (원본 파일은 건드리지 않음).
+	 */
+	setNotifySound: (path: string | null, options?: InvokeOptions) => __TAURI_INVOKE<AppSetting_Serialize>("set_notify_sound", { path }, options),
 	getFeatureSetting: (options?: InvokeOptions) => __TAURI_INVOKE<FeatureSetting>("get_feature_setting", undefined, options),
 	updateFeatureSetting: (id: string, enabled: boolean, options?: InvokeOptions) => __TAURI_INVOKE<null>("update_feature_setting", { id, enabled }, options),
 	getThemeSetting: (options?: InvokeOptions) => __TAURI_INVOKE<ThemeSetting_Serialize>("get_theme_setting", undefined, options),
@@ -583,6 +588,8 @@ export const commands = {
 	registerHtmlView: (html: string, theme: string | null, scripts: boolean | null, options?: InvokeOptions) => __TAURI_INVOKE<string>("register_html_view", { html, theme, scripts }, options),
 	/**  알림을 켤 때 (Android는 사용자에게 권한을 묻는다). 허락됐으면 true */
 	requestNotifyPermission: (options?: InvokeOptions) => __TAURI_INVOKE<boolean>("request_notify_permission", undefined, options),
+	/**  설정 화면에서 즉시 테스트 알림을 보낸다 (포커스 여부와 무관하게 표시 + 설정된 소리 재생) */
+	testNotify: (options?: InvokeOptions) => __TAURI_INVOKE<null>("test_notify", undefined, options),
 	/**  코어 플러그인 목록과 켜짐 상태. 켜고 끄기는 update_feature_setting(id, enabled). */
 	listCorePlugins: (options?: InvokeOptions) => __TAURI_INVOKE<CorePlugin[]>("list_core_plugins", undefined, options),
 	getPluginSetting: (options?: InvokeOptions) => __TAURI_INVOKE<PluginSetting_Serialize>("get_plugin_setting", undefined, options),
@@ -1902,6 +1909,12 @@ export type DoneNotify_Deserialize = {
 	title?: string,
 	/**  알림 아이콘 그림 경로 (없으면 앱 아이콘) */
 	icon?: string | null,
+	/**  알림 소리 방식 (default / mute / custom) */
+	soundMode?: NotifySoundMode,
+	/**  커스텀 알림음 파일 경로 (앱 데이터 `notify/sound/`에 복사한 것) */
+	soundPath?: string | null,
+	/**  커스텀 알림음 볼륨 (0.0 ~ 1.0, 기본 0.8) */
+	soundVolume?: number | null,
 };
 
 /**  끝나면 알림 (5-E-17·18) */
@@ -1911,6 +1924,12 @@ export type DoneNotify_Serialize = {
 	title: string,
 	/**  알림 아이콘 그림 경로 (없으면 앱 아이콘) */
 	icon: string | null,
+	/**  알림 소리 방식 (default / mute / custom) */
+	soundMode: NotifySoundMode,
+	/**  커스텀 알림음 파일 경로 (앱 데이터 `notify/sound/`에 복사한 것) */
+	soundPath: string | null,
+	/**  커스텀 알림음 볼륨 (0.0 ~ 1.0, 기본 0.8) */
+	soundVolume: number | null,
 };
 
 export type DriveStatus = DriveStatus_Serialize | DriveStatus_Deserialize;
@@ -3618,6 +3637,21 @@ export type NewGameAsset_Serialize = {
 	locationId: string | null,
 	timeId: string | null,
 	weatherId: string | null,
+};
+
+/**  알림 소리 방식 */
+export type NotifySoundMode = 
+/**  OS 기본 알림음 */
+"default" | 
+/**  무음 */
+"mute" | 
+/**  사용자가 올린 오디오 파일 (없으면 OS 기본 알림음) */
+"custom";
+
+/**  프런트에 커스텀 알림음 재생을 요청하는 이벤트 페이로드 */
+export type NotifySoundPayload = {
+	path: string,
+	volume: number | null,
 };
 
 /**

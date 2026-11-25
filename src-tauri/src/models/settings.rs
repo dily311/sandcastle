@@ -139,8 +139,21 @@ fn default_phone_mode_prompt() -> String {
     DEFAULT_PHONE_MODE_PROMPT.to_string()
 }
 
+/// 알림 소리 방식
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default, Serialize, Deserialize, specta::Type)]
+#[serde(rename_all = "lowercase")]
+pub enum NotifySoundMode {
+    /// OS 기본 알림음
+    #[default]
+    Default,
+    /// 무음
+    Mute,
+    /// 사용자가 올린 오디오 파일 (없으면 OS 기본 알림음)
+    Custom,
+}
+
 /// 끝나면 알림 (5-E-17·18)
-#[derive(Debug, Clone, Default, Serialize, Deserialize, specta::Type)]
+#[derive(Debug, Clone, Serialize, Deserialize, specta::Type)]
 #[serde(rename_all = "camelCase", default)]
 pub struct DoneNotify {
     pub enabled: bool,
@@ -148,6 +161,25 @@ pub struct DoneNotify {
     pub title: String,
     /// 알림 아이콘 그림 경로 (없으면 앱 아이콘)
     pub icon: Option<String>,
+    /// 알림 소리 방식 (default / mute / custom)
+    pub sound_mode: NotifySoundMode,
+    /// 커스텀 알림음 파일 경로 (앱 데이터 `notify/sound/`에 복사한 것)
+    pub sound_path: Option<String>,
+    /// 커스텀 알림음 볼륨 (0.0 ~ 1.0, 기본 0.8)
+    pub sound_volume: f32,
+}
+
+impl Default for DoneNotify {
+    fn default() -> Self {
+        Self {
+            enabled: false,
+            title: String::new(),
+            icon: None,
+            sound_mode: NotifySoundMode::Default,
+            sound_path: None,
+            sound_volume: 0.8,
+        }
+    }
 }
 
 impl Default for AppSetting {

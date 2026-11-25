@@ -247,6 +247,8 @@ fn with_event_types(b: tauri_specta::Builder<tauri::Wry>) -> tauri_specta::Build
         .typ::<commands::sync::SyncProgress>()
         // 커뮤니티 플러그인 프롬프트 요청 (user-plugin-prompt, 6-D-5)
         .typ::<service::community::prompt_hook::PromptHookRequest>()
+        // 커스텀 알림음 재생 이벤트 (notify:play-sound)
+        .typ::<service::notify::NotifySoundPayload>()
         // 타임스탬프(밀리초)·개수는 2^53 안이라 number로 충분
         .dangerously_cast_bigints_to_number()
 }
@@ -260,6 +262,7 @@ pub fn specta_builder() -> tauri_specta::Builder<tauri::Wry> {
         get_app_setting,
         update_app_setting,
         set_typing_image,
+        set_notify_sound,
         get_feature_setting,
         update_feature_setting,
         get_theme_setting,
@@ -543,6 +546,7 @@ pub fn specta_builder() -> tauri_specta::Builder<tauri::Wry> {
         read_journal,
         sys::html_view::register_html_view,
         service::notify::request_notify_permission,
+        service::notify::test_notify,
         sys::plugins::list_core_plugins,
         commands::plugins::get_plugin_setting,
         commands::plugins::update_plugin_setting,
@@ -609,6 +613,7 @@ pub fn specta_builder() -> tauri_specta::Builder<tauri::Wry> {
         get_app_setting,
         update_app_setting,
         set_typing_image,
+        set_notify_sound,
         get_feature_setting,
         update_feature_setting,
         get_theme_setting,
@@ -892,6 +897,7 @@ pub fn specta_builder() -> tauri_specta::Builder<tauri::Wry> {
         read_journal,
         sys::html_view::register_html_view,
         service::notify::request_notify_permission,
+        service::notify::test_notify,
         sys::plugins::list_core_plugins,
         commands::plugins::get_plugin_setting,
         commands::plugins::update_plugin_setting,

@@ -60,6 +60,51 @@ pub async fn set_typing_image(app: AppHandle, state: State<'_, SettingsState<App
 
 /// 타이핑 표시 그림 최대 크기 (GIF 움직임을 담을 만큼)
 const TYPING_IMAGE_MAX: u64 = 8 * 1024 * 1024;
+/// 커스텀 알림음 최대 크기 (5MB)
+const NOTIFY_SOUND_MAX: u64 = 5 * 1024 * 1024;
+
+/// 커스텀 알림음 파일 설정: 고른 오디오 파일을 앱 데이터 `notify/sound/`에 복사하고, 이전 복사본은 지운다.
+/// `None`이면 커스텀 알림음을 비우고 소리 방식을 기본으로 돌린다 (원본 파일은 건드리지 않음).
+#[tauri::command]
+#[specta::specta]
+pub async fn set_notify_sound(app: AppHandle, state: State<'_, SettingsState<AppSetting>>, path: Option<String>) -> Result<AppSetting> {
+    let dir = crate::commands::character_image::app_data_dir(&app)?.join("notify").join("sound");
+    let cur = state.0.lock().map_err(|_| AppError::internal("settings lock poisoned"))?.done_notify.clone();
+    let sound_path = match path {
+        Some(src) => Some(copy_notify_sound(&dir, std::path::Path::new(&src))?),
+        None => None,
+    };
+    let mut done_notify = serde_json::to_value(&cur)?;
+    done_notify["soundPath"] = json!(sound_path);
+    if sound_path.is_some() {
+        done_notify["soundMode"] = json!(crate::models::settings::NotifySoundMode::Custom);
+    } else if cur.sound_mode == crate::models::settings::NotifySoundMode::Custom {
+        done_notify["soundMode"] = json!(crate::models::settings::NotifySoundMode::Default);
+    }
+    let settings = apply_patch(&app, &state.0, json!({ "doneNotify": done_notify }))?;
+    if let Some(old) = cur.sound_path.filter(|o| Some(o) != sound_path.as_ref()) {
+        let old = std::path::PathBuf::from(old);
+        if old.parent() == Some(dir.as_path()) {
+            let _ = std::fs::remove_file(old);
+        }
+    }
+    app.emit(AppSetting::EVENT_NAME, &settings).map_err(|e| AppError::io(e.to_string()))?;
+    Ok(settings)
+}
+
+fn copy_notify_sound(dir: &std::path::Path, src: &std::path::Path) -> Result<String> {
+    let ext = src.extension().and_then(|e| e.to_str()).map(str::to_ascii_lowercase).unwrap_or_default();
+    if !["mp3", "wav", "ogg", "m4a", "flac", "webm", "opus"].contains(&ext.as_str()) {
+        return Err(AppError::validation("오디오 파일(mp3·wav·ogg·m4a·flac)만 쓸 수 있습니다", None));
+    }
+    if std::fs::metadata(src)?.len() > NOTIFY_SOUND_MAX {
+        return Err(AppError::validation("오디오 파일이 너무 큽니다 (5MB까지)", None));
+    }
+    std::fs::create_dir_all(dir)?;
+    let dest = dir.join(format!("{}.{ext}", uuid::Uuid::new_v4()));
+    std::fs::copy(src, &dest)?;
+    Ok(dest.to_string_lossy().into_owned())
+}
 
 fn copy_typing_image(dir: &std::path::Path, src: &std::path::Path) -> Result<String> {
     let ext = src.extension().and_then(|e| e.to_str()).map(str::to_ascii_lowercase).unwrap_or_default();
@@ -96,6 +141,25 @@ mod typing_image_tests {
         let big = tmp.path().join("big.png");
         std::fs::File::create(&big).unwrap().set_len(super::TYPING_IMAGE_MAX + 1).unwrap();
         assert!(copy_typing_image(&dir, &big).is_err());
+    }
+
+    #[test]
+    fn copies_only_audio_under_the_limit() {
+        let tmp = tempfile::tempdir().unwrap();
+        let dir = tmp.path().join("notify").join("sound");
+        let mp3 = tmp.path().join("chime.MP3");
+        std::fs::write(&mp3, b"ID3").unwrap();
+        let out = super::copy_notify_sound(&dir, &mp3).unwrap();
+        assert!(out.ends_with(".mp3") && std::path::Path::new(&out).parent() == Some(dir.as_path()));
+        assert_eq!(std::fs::read(&out).unwrap(), b"ID3");
+
+        let txt = tmp.path().join("note.txt");
+        std::fs::write(&txt, b"x").unwrap();
+        assert!(super::copy_notify_sound(&dir, &txt).is_err());
+
+        let big = tmp.path().join("big.wav");
+        std::fs::File::create(&big).unwrap().set_len(super::NOTIFY_SOUND_MAX + 1).unwrap();
+        assert!(super::copy_notify_sound(&dir, &big).is_err());
     }
 }
 

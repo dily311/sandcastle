@@ -129,6 +129,9 @@ impl TaskExecutor for ChatTaskExecutor {
                     .peek(&self.app, db, &settings, &conversation_id, channel, ctx.cancel_token())
                     .await
                     .map_err(task_err)?;
+                if let Some(m) = saved.iter().rev().find(|m| m.role == "assistant") {
+                    crate::service::notify::reply_done(&self.app, m.name.as_deref().unwrap_or("AI"));
+                }
                 return Ok(TaskOutput::Messages {
                     message_ids: saved.into_iter().map(|m| m.id).collect(),
                 });
@@ -162,8 +165,12 @@ impl TaskExecutor for ChatTaskExecutor {
         // linter가 걸었고 자동 재생성이 켜져 있으면 다음 시도를 예약, 아니면 사슬이 끝난 것이니 마무리
         if let Some(p) = rewrite::pending_of(&turn.assistant) {
             rewrite::schedule(&self.app, &conversation_id, &turn.assistant, p);
-        } else if let Some(a) = &auto {
-            rewrite::finish_chain(&self.app, db, &conversation_id, &turn.assistant, a.attempt).await;
+        } else {
+            if let Some(a) = &auto {
+                rewrite::finish_chain(&self.app, db, &conversation_id, &turn.assistant, a.attempt).await;
+            }
+            // 앱이 가려져 있으면 알림 (재개·자동 재생성 마무리 포함)
+            crate::service::notify::reply_done(&self.app, turn.assistant.name.as_deref().unwrap_or("AI"));
         }
         let mut ids: Vec<String> = turn.user.into_iter().map(|m| m.id).collect();
         ids.push(turn.assistant.id);
@@ -266,10 +273,6 @@ pub async fn run(app: &AppHandle, conversation_id: &str, job: ChatJob, channel: 
     let mut out = Vec::with_capacity(ids.len());
     for id in ids {
         out.push(chat_ui::get_message(db, &id).await.map_err(AppError::from)?);
-    }
-    // 앱이 가려져 있으면 알림 (켰을 때만, 5-E-17·18)
-    if let Some(m) = out.iter().rev().find(|m| m.role == "assistant") {
-        crate::service::notify::reply_done(app, m.name.as_deref().unwrap_or("AI"));
     }
     Ok(out)
 }

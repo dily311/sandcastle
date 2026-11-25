@@ -28,6 +28,7 @@
 	import ImagesPage from "$features/images/ImagesPage.svelte";
 	import HomePage from "$features/home/HomePage.svelte";
 	import { watchTaskErrors } from "$shared/stores/taskLog";
+	import { watchNotifySound } from "./notifySound";
 	import { appSetting } from "$shared/stores/appSetting.svelte";
 
 	let ready = $state(false);
@@ -85,6 +86,7 @@
 		ready = true;
 		void recoverInterruptedChats();
 		watchTaskErrors();
+		watchNotifySound();
 		// 자동 동기화: 동기화 플러그인·자동 동기화·폴더가 모두 있을 때만 타이머 (기본 꺼짐)
 		watchAutoSync();
 	});
