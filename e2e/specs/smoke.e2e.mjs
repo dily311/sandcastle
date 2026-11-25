@@ -8,7 +8,8 @@ import { browser, $, expect } from "@wdio/globals";
 import { startFakeOpenAI, REPLY } from "../fake-openai.mjs";
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..", "..");
-const card = path.join(root, "src-tauri", "tests", "sillyTavern", "character", "default_Seraphina.png");
+// SillyTavern 샘플 카드는 git에서 뺐으므로(사용자 데이터) 이 저장소의 JSON 카드를 쓴다
+const card = path.join(root, "e2e", "fixtures", "e2e-character.json");
 
 /** 앱 안에서 백엔드 커맨드 부르기 (화면이 쓰는 것과 같은 IPC) */
 function invoke(cmd, args = {}) {
@@ -53,7 +54,7 @@ describe("스모크", () => {
 		const r = await must("import_sillytavern", { path: card, name: null, characterId: null, presetId: null });
 		expect(r.kind).toBe("character");
 		await browser.refresh();
-		await expect(byText("b", "Seraphina")).toBeDisplayed({ wait: 20_000 });
+		await expect(byText("b", "Pebble")).toBeDisplayed({ wait: 20_000 });
 	});
 
 	it("가짜 공급자로 메시지를 주고받는다", async () => {
@@ -64,7 +65,7 @@ describe("스모크", () => {
 		profileId = p.id;
 		await must("update_app_setting", { patch: { selectedApiProfile: p.id } });
 
-		await byText("b", "Seraphina").click();
+		await byText("b", "Pebble").click();
 		await byText("button", "대화 시작").click();
 		const box = await $("textarea[aria-label='메시지']");
 		await box.waitForDisplayed({ timeout: 20_000 });
