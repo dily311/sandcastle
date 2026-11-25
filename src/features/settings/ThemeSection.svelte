@@ -5,7 +5,7 @@
 	import { drops, isImageAvif, storeFile } from "$app/drop.svelte";
 	import BackgroundPicker from "$shared/ui/BackgroundPicker.svelte";
 	import type { AvatarFrameShape, CssThemeMeta_Serialize as ThemeMeta } from "$ipc/bindings";
-	import { Avatar, Button, ContextMenu, Input, Segmented, Select, Switch, Textarea, type MenuItem } from "$shared/ui";
+	import { Avatar, Button, ContextMenu, Input, Segmented, Select, Slider, Switch, Textarea, type MenuItem } from "$shared/ui";
 	import { fileSrc } from "$shared/ipc/file";
 	import { ACCENTS, accentValue, isHexColor } from "$shared/ui/accents";
 	import { GRAYS } from "$shared/ui/grays";
@@ -18,6 +18,7 @@
 	import Section from "./Section.svelte";
 	import Group from "./Group.svelte";
 	import Row from "./Row.svelte";
+	import ScrimColorPicker from "./ScrimColorPicker.svelte";
 	import ThemeCard from "./ThemeCard.svelte";
 
 	const src = { source: "theme" };
@@ -80,7 +81,21 @@
 			},
 		}),
 	);
-	const opacities = [0.5, 0.65, 0.75, 0.82, 0.9, 0.95].map((v) => ({ value: String(v), label: `${Math.round(v * 100)}%` }));
+	let bgScrimDraft = $state<string | null>(null);
+	const bgScrimVal = () => bgScrimDraft ?? String(Math.round(Math.min(0.85, Math.max(0, theme.setting.backgroundOpacity ?? 0.35)) * 100));
+	const setBgScrimDraft = (v: string) => {
+		bgScrimDraft = v;
+		const n = Number(v);
+		if (!Number.isNaN(n)) {
+			document.documentElement.style.setProperty("--chat-bg-scrim-alpha", String(Math.min(0.85, Math.max(0, n / 100))));
+		}
+	};
+	async function commitBgScrim(v: string) {
+		bgScrimDraft = null;
+		document.documentElement.style.removeProperty("--chat-bg-scrim-alpha");
+		const n = v.trim() === "" ? 35 : Math.min(85, Math.max(0, Number(v) || 0));
+		await theme.update({ backgroundOpacity: n / 100 });
+	}
 	const selectKey = (key: string) => theme.update({ selectTheme: key });
 
 	// ---- 사용자 테마 메뉴 ----
@@ -266,9 +281,9 @@
 
 	<Group title="배경 이미지">
 		<div class="bg-row">
-			<p class="bg-desc">앱 뒤에 깔 그림. 카메라로 여러 장 올려 두고 골라 씀 (움짤 GIF 가능, 앱 데이터에 복사). 더보기에서 지울 수 있음</p>
+			<p class="bg-desc">대화 화면 배경으로 깔 그림. 여러 장 올려 두고 골라 씀 (움짤 GIF 가능, 앱 데이터에 복사). 더보기에서 지울 수 있음</p>
 			<BackgroundPicker
-				label="앱 배경"
+				label="대화 배경"
 				value={theme.setting.backgroundImage ?? null}
 				images={theme.setting.backgrounds ?? []}
 				onpick={(v) => theme.setBackground(v)}
@@ -277,8 +292,21 @@
 			/>
 		</div>
 		{#if hasBg}
-			<Row label="화면 불투명도" desc="낮을수록 배경이 잘 보이고 글은 덜 또렷함">
-				<Select value={String(theme.setting.backgroundOpacity ?? 0.82)} options={opacities} aria-label="화면 불투명도" onchange={(e) => theme.update({ backgroundOpacity: Number(e.currentTarget.value) })} />
+			<div class="bg-scrim-row">
+				<Slider
+					label="배경 가림막 (%)"
+					hint="높을수록 글자가 또렷하고, 낮을수록 배경 이미지가 선명하게 보임"
+					min={0}
+					max={85}
+					step={5}
+					fallback={35}
+					unsetLabel="35%"
+					bind:value={bgScrimVal, setBgScrimDraft}
+					oncommit={commitBgScrim}
+				/>
+			</div>
+			<Row label="가림막 색상" desc="배경 위에 덮는 가림막 색감 (기본은 현재 테마 바탕색)">
+				<ScrimColorPicker />
 			</Row>
 		{/if}
 	</Group>
@@ -353,6 +381,10 @@
 		margin-bottom: var(--space-3);
 		color: var(--text-muted);
 		font-size: var(--text-sm);
+	}
+	.bg-scrim-row {
+		padding: var(--space-3) 0;
+		border-top: 1px solid var(--border);
 	}
 	.accents,
 	.grays {

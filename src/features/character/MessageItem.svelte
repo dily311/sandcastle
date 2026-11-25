@@ -624,4 +624,40 @@
 	.cut:hover {
 		text-decoration: underline;
 	}
+
+	/* 배경 이미지가 활성화된 대화 화면: AI 메시지는 배경 위에 깔끔히 띄우고, 유저 메시지는 유리 카드 스타일 */
+	:global(:root[data-bg-image]) .block:hover {
+		background: color-mix(in oklab, var(--bg-solid, var(--bg)) 34%, transparent);
+	}
+	:global(:root[data-bg-image]) .user {
+		border: 1px solid color-mix(in oklab, var(--text) 16%, transparent);
+		border-radius: var(--radius-lg);
+		background: color-mix(in oklab, var(--bg-solid, var(--bg)) 54%, transparent);
+		backdrop-filter: blur(12px);
+		-webkit-backdrop-filter: blur(12px);
+		padding: var(--space-3) var(--space-4);
+	}
+	:global(:root[data-bg-image]) .user:hover {
+		background: color-mix(in oklab, var(--bg-solid, var(--bg)) 64%, transparent);
+		border-color: color-mix(in oklab, var(--text) 24%, transparent);
+	}
+	:global(:root[data-theme="dark"][data-bg-image]) .ai {
+		text-shadow: 0 1px 3px rgb(0 0 0 / 0.45);
+	}
+	:global(:root[data-theme="light"][data-bg-image]) .ai {
+		text-shadow: 0 1px 2px rgb(255 255 255 / 0.65);
+	}
+	:global(:root[data-bg-image]) .who {
+		color: color-mix(in oklab, var(--text) 82%, transparent);
+	}
+	:global(:root[data-bg-image]) .no,
+	:global(:root[data-bg-image]) .stamp {
+		color: color-mix(in oklab, var(--text) 72%, transparent);
+	}
+	:global(:root[data-bg-image]) .actions {
+		background: color-mix(in oklab, var(--bg-solid, var(--bg)) 80%, transparent);
+		border-color: color-mix(in oklab, var(--text) 16%, transparent);
+		backdrop-filter: blur(10px);
+		-webkit-backdrop-filter: blur(10px);
+	}
 </style>

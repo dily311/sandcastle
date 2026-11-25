@@ -9,7 +9,7 @@
 	import { slashRuns } from "$features/slash/running.svelte";
 	import { regexVersion } from "$shared/stores/regexVersion.svelte";
 	import { tick, untrack } from "svelte";
-	import { Bookmark, ChevronRight, Gauge, Copy, CornerUpLeft, FastForward, GitBranch, ImagePlus, Images, IdCard, Languages, ListChecks, ListTree, PanelLeft, Plus, RefreshCw, Send, SlidersHorizontal, Square, Trash2, X, EllipsisVertical, BookOpen, Pen, Database, Scroll, SpellCheck, Pencil, UserRound, PinOff, Pin, FolderMinus, Download, Folder, Zap, Variable } from "@lucide/svelte";
+	import { Bookmark, ChevronRight, Gauge, Copy, CornerUpLeft, FastForward, GitBranch, ImagePlus, Images, IdCard, Languages, ListChecks, ListTree, Palette, PanelLeft, Plus, RefreshCw, Send, SlidersHorizontal, Square, Trash2, X, EllipsisVertical, BookOpen, Pen, Database, Scroll, SpellCheck, Pencil, UserRound, PinOff, Pin, FolderMinus, Download, Folder, Zap, Variable } from "@lucide/svelte";
 	import { bookmarks, bookmarksOf, type ChatBookmark } from "./bookmarks";
 	import { findTextRange } from "./highlight";
 	import { childrenOf, pathOf } from "./branches";
@@ -138,6 +138,7 @@
 			{ id: "assets", label: "에셋", icon: Images },
 			...(plugins.on("slash") ? [{ id: "quickreply", label: "빠른 답장", icon: Zap }] : []),
 			...(plugins.on("status") ? [{ id: "status", label: "상태", icon: Variable }] : []),
+			{ id: "theme", label: "테마", icon: Palette },
 		]),
 	);
 
@@ -1083,5 +1084,60 @@
 	.write :global(textarea) {
 		resize: none;
 		border-radius: var(--radius-lg);
+	}
+
+	/* 배경 이미지가 설정된 경우: body의 고정 배경을 그대로 비추고 본문(article.text)에만 가림막을 얹음 */
+	:global(:root[data-bg-image]) .reader {
+		background: transparent;
+		isolation: isolate;
+	}
+	:global(:root[data-bg-image]) .text {
+		min-height: 100%;
+		background: color-mix(
+			in srgb,
+			var(--chat-bg-scrim-color, var(--bg-solid, var(--bg))) calc(var(--chat-bg-scrim-alpha, 0.35) * 100%),
+			transparent
+		);
+	}
+	:global(:root[data-bg-image]) .scroll,
+	:global(:root[data-bg-image]) .composer {
+		position: relative;
+		z-index: 1;
+	}
+	:global(:root[data-bg-image]) .bar :global(.icon-btn) {
+		background: color-mix(in oklab, var(--bg-solid, var(--bg)) 52%, transparent);
+		border: 1px solid color-mix(in oklab, var(--text) 14%, transparent);
+		backdrop-filter: blur(10px);
+		-webkit-backdrop-filter: blur(10px);
+	}
+	:global(:root[data-bg-image]) .earlier {
+		background: color-mix(in oklab, var(--bg-solid, var(--bg)) 62%, transparent);
+		border-color: color-mix(in oklab, var(--text) 16%, transparent);
+		backdrop-filter: blur(10px);
+		-webkit-backdrop-filter: blur(10px);
+	}
+	:global(:root[data-bg-image]) .block.user {
+		border: 1px solid color-mix(in oklab, var(--text) 16%, transparent);
+		border-radius: var(--radius-lg);
+		background: color-mix(in oklab, var(--bg-solid, var(--bg)) 54%, transparent);
+		backdrop-filter: blur(12px);
+		-webkit-backdrop-filter: blur(12px);
+	}
+	:global(:root[data-bg-image]) .write :global(textarea) {
+		background: color-mix(in oklab, var(--bg-solid, var(--bg)) 66%, transparent);
+		border-color: color-mix(in oklab, var(--text) 18%, transparent);
+		backdrop-filter: blur(14px);
+		-webkit-backdrop-filter: blur(14px);
+		box-shadow: 0 4px 24px rgb(0 0 0 / 0.16);
+	}
+	:global(:root[data-bg-image]) .write :global(textarea:focus) {
+		background: color-mix(in oklab, var(--bg-solid, var(--bg)) 78%, transparent);
+		border-color: var(--accent);
+	}
+	:global(:root[data-bg-image]) .write > :global(.icon-btn:not(.solid)) {
+		background: color-mix(in oklab, var(--bg-solid, var(--bg)) 54%, transparent);
+		border: 1px solid color-mix(in oklab, var(--text) 14%, transparent);
+		backdrop-filter: blur(10px);
+		-webkit-backdrop-filter: blur(10px);
 	}
 </style>

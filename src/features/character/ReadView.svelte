@@ -3,7 +3,7 @@
 	// 있는 것: 목차·북마크·분기·상태 패널, 글 골라 북마크·카드, 메시지의 복사·여기서 분기·만든 음성 듣기, 채팅 모드로 돌아가기
 	import { tick } from "svelte";
 	import { fade, fly } from "svelte/transition";
-	import { Bookmark, GitBranch, ListTree, Pen, Scroll, Variable } from "@lucide/svelte";
+	import { Bookmark, GitBranch, ListTree, Palette, Pen, Scroll, Variable } from "@lucide/svelte";
 	import SidePanel from "$app/SidePanel.svelte";
 	import { layout } from "$app/layout.svelte";
 	import { panel } from "$app/panel.svelte";
@@ -91,6 +91,7 @@
 			{ id: "bookmarks", label: "북마크", icon: Bookmark },
 			{ id: "branches", label: "분기", icon: GitBranch },
 			...(plugins.on("status") ? [{ id: "status", label: "상태", icon: Variable }] : []),
+			{ id: "theme", label: "테마", icon: Palette },
 		]),
 	);
 
@@ -443,5 +444,34 @@
 		letter-spacing: 0.2em;
 		font-weight: 700;
 		color: var(--accent-text);
+	}
+
+	:global(:root[data-bg-image]) .reader {
+		background: transparent;
+		isolation: isolate;
+	}
+	:global(:root[data-bg-image]) .text {
+		min-height: 100%;
+		background: color-mix(
+			in srgb,
+			var(--chat-bg-scrim-color, var(--bg-solid, var(--bg))) calc(var(--chat-bg-scrim-alpha, 0.35) * 100%),
+			transparent
+		);
+	}
+	:global(:root[data-bg-image]) .scroll {
+		position: relative;
+		z-index: 1;
+	}
+	:global(:root[data-bg-image]) .bar :global(.icon-btn) {
+		background: color-mix(in oklab, var(--bg-solid, var(--bg)) 52%, transparent);
+		border: 1px solid color-mix(in oklab, var(--text) 14%, transparent);
+		backdrop-filter: blur(10px);
+		-webkit-backdrop-filter: blur(10px);
+	}
+	:global(:root[data-bg-image]) .earlier {
+		background: color-mix(in oklab, var(--bg-solid, var(--bg)) 62%, transparent);
+		border-color: color-mix(in oklab, var(--text) 16%, transparent);
+		backdrop-filter: blur(10px);
+		-webkit-backdrop-filter: blur(10px);
 	}
 </style>

@@ -33,7 +33,7 @@ const FALLBACK: ThemeSetting = {
 	snippets: [],
 	backgroundImage: null,
 	backgrounds: [],
-	backgroundOpacity: 0.82,
+	backgroundOpacity: 0.35,
 	fonts: [],
 	appFont: null,
 	textFont: null,
@@ -52,9 +52,21 @@ interface Active {
 }
 const NONE: Active = { colors: { light: {}, dark: {} }, css: "" };
 
+const SCRIM_COLOR_KEY = "sc.bg.scrimColor";
+function loadScrimColor(): string | null {
+	try {
+		const v = localStorage.getItem(SCRIM_COLOR_KEY);
+		return v && /^#[0-9a-f]{6}$/i.test(v) ? v : null;
+	} catch {
+		return null;
+	}
+}
+
 class Theme {
 	setting = $state<ThemeSetting>(FALLBACK);
 	systemDark = $state(false);
+	/** 배경 가림막 색상 (null이면 현재 테마 바탕색 자동 사용) */
+	scrimColor = $state<string | null>(loadScrimColor());
 	/** 고른 테마의 색·CSS·대화 표시 설정 (불러온 뒤) */
 	private active = $state<Active>(NONE);
 	/** 테마 편집 중 미리보기 (있으면 고른 테마 대신 씀) */
@@ -179,7 +191,7 @@ class Theme {
 			.join("\n\n");
 	}
 
-	/** 배경 이미지: body에 깔고, 바탕 색들을 불투명도만큼 비치게 한다 */
+	/** 배경 이미지: body에 고정 배치하고 주변 UI 배경은 연하게 반투명 유리 처리, 대화 캔버스는 가림막 색상·농도로 제어 */
 	private applyBackground() {
 		const root = document.documentElement;
 		const el = this.style("user-background");
@@ -191,23 +203,65 @@ class Theme {
 			el.textContent = "";
 			return;
 		}
-		// 지금 테마의 바탕 색을 읽어 반투명으로 (배경 규칙을 빼고 계산해야 원래 색이 나온다)
+		// 원래 테마 색을 읽기 위해 이전 배경 규칙을 비운 뒤 계산
 		el.textContent = "";
 		const cs = getComputedStyle(root);
-		const a = Math.round(Math.min(1, Math.max(0.3, this.setting.backgroundOpacity ?? 0.82)) * 100);
-		const see = (name: string) => `${name}: color-mix(in srgb, ${cs.getPropertyValue(name).trim() || "transparent"} ${a}%, transparent);`;
+		const read = (name: string) => cs.getPropertyValue(name).trim() || "transparent";
+		const baseBg = read("--bg");
+		const baseSurface = read("--surface");
+		const baseSurface2 = read("--surface-2");
+		const baseSunken = read("--bg-sunken");
+
+		const scrim = Math.min(0.85, Math.max(0, this.setting.backgroundOpacity ?? 0.35));
+		const scrimColor = this.scrimColor || baseBg;
+		const bgValue = gradient
+			? gradientCss(gradient)
+			: `url("${(url ?? "").replace(/"/g, "%22")}")`;
 		root.dataset.bgImage = "";
 		el.textContent = [
-			`:root[data-bg-image] { ${["--bg", "--surface-2", "--bg-sunken"].map(see).join(" ")} }`,
-			gradient
-				? `:root[data-bg-image] body { background: ${gradientCss(gradient)} fixed; }`
-				: `:root[data-bg-image] body { background: #000 url("${(url ?? "").replace(/"/g, "%22")}") center / cover no-repeat fixed; }`,
+			`:root[data-bg-image] {`,
+			`  --bg-solid: ${baseBg};`,
+			`  --bg: color-mix(in srgb, ${baseBg} 74%, transparent);`,
+			`  --surface: color-mix(in srgb, ${baseSurface} 80%, transparent);`,
+			`  --surface-2: color-mix(in srgb, ${baseSurface2} 72%, transparent);`,
+			`  --bg-sunken: color-mix(in srgb, ${baseSunken} 68%, transparent);`,
+			`  --chat-bg-image: ${bgValue};`,
+			`  --chat-bg-scrim-color: ${scrimColor};`,
+			`  --chat-bg-scrim-alpha: ${scrim};`,
+			`}`,
+			`:root[data-bg-image] body {`,
+			`  background: ${baseBg} ${bgValue} center / cover no-repeat fixed;`,
+			`}`,
+			`:root[data-bg-image] .titlebar,`,
+			`:root[data-bg-image] .sidebar,`,
+			`:root[data-bg-image] .convs,`,
+			`:root[data-bg-image] .sc-side-panel {`,
+			`  backdrop-filter: blur(18px);`,
+			`  -webkit-backdrop-filter: blur(18px);`,
+			`}`,
 		].join("\n");
+	}
+
+	/** 배경 가림막 색상 변경 (null이면 테마 기본 바탕색) */
+	setScrimColor(color: string | null) {
+		this.scrimColor = color && /^#[0-9a-f]{6}$/i.test(color) ? color : null;
+		try {
+			if (this.scrimColor) localStorage.setItem(SCRIM_COLOR_KEY, this.scrimColor);
+			else localStorage.removeItem(SCRIM_COLOR_KEY);
+		} catch {
+			/* 무시 */
+		}
+		this.applyBackground();
 	}
 
 	/** 앱 배경 고르기: 배경 목록의 경로 / "preset:<id>" / null(없음) */
 	async setBackground(value: string | null) {
-		await this.update({ backgroundImage: value });
+		const patch: Partial<ThemeSetting> = { backgroundImage: value };
+		// 처음 배경을 켤 때 예전 기본값(0.82)이 남아 있으면 가독성 균형값(0.35)으로 맞춘다
+		if (value && !this.setting.backgroundImage && Math.abs((this.setting.backgroundOpacity ?? 0.82) - 0.82) < 0.001) {
+			patch.backgroundOpacity = 0.35;
+		}
+		await this.update(patch);
 	}
 	/** 배경 목록에 이미지 올리기 (select면 마지막 것을 앱 배경으로) */
 	async addBackgrounds(paths: string[], select = false) {

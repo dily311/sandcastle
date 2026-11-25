@@ -43,6 +43,7 @@
 	import SummaryPanel from "$features/memory/SummaryPanel.svelte";
 	import MemorySearch from "$features/memory/MemorySearch.svelte";
 	import QuickReplyList from "$features/slash/QuickReplyList.svelte";
+	import ThemePanel from "./ThemePanel.svelte";
 
 	interface Props {
 		conv: Conversation;
@@ -537,7 +538,9 @@
 </script>
 
 
-	{#if panel.tab === "quickreply" && draft}
+	{#if panel.tab === "theme"}
+		<ThemePanel />
+	{:else if panel.tab === "quickreply" && draft}
 		<div class="panel-body">
 			<QuickReplyList {session} {conv} getDraft={draft.get} setDraft={draft.set} />
 		</div>
