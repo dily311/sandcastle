@@ -39,7 +39,19 @@ describe("스모크", () => {
 	before(async () => {
 		fake = await startFakeOpenAI();
 		// 화면 언어는 시스템 언어를 따르는데 CI 러너는 영어라, 이 시험이 찾는 한국어 글자에 맞춰 고정한다
-		await browser.execute(() => localStorage.setItem("sc.locale", "ko"));
+		// 앱 문서가 뜨기 전(빈 문서)에는 localStorage를 쓸 수 없어, 쓸 수 있을 때까지 기다린다
+		await browser.waitUntil(
+			() =>
+				browser.execute(() => {
+					try {
+						localStorage.setItem("sc.locale", "ko");
+						return true;
+					} catch {
+						return false;
+					}
+				}),
+			{ timeout: 30_000, interval: 500, timeoutMsg: "앱 화면이 뜨지 않아 언어를 고정하지 못함" },
+		);
 		await browser.refresh();
 	});
 	after(async () => {
