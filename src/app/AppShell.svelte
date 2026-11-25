@@ -115,7 +115,6 @@
 	{#if !ready}
 		<div class="boot-screen" role="status" aria-live="polite" out:fade={{ duration: 180 }}>
 			<div class="boot-card">
-				<span class="boot-brand">sandcastle</span>
 				<Spinner size={28} />
 				<p class="boot-msg">{bootStatus}</p>
 			</div>

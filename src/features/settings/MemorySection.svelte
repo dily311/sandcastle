@@ -131,7 +131,7 @@
 				<Switch checked={cur.memory.autoRecall} label="자동 회상" hideLabel onchange={(v) => save("memory", { autoRecall: v })} />
 			</Row>
 			{#if cur.memory.autoRecall}
-				<Row label="어디서 찾을까" desc="'전체'는 다른 캐릭터·페르소나와 나눈 대화도 이 대화의 프롬프트에 들어갈 수 있음. 메모리에서 뺀 대화는 어느 쪽이든 제외">
+				<Row label="어디서 찾을까" desc="'전체'는 다른 캐릭터·페르소나와 나눈 대화도 이 대화의 프롬프트에 들어갈 수 있음">
 					<Select value={cur.memory.recallScope} options={SCOPES} onchange={(e) => save("memory", { recallScope: e.currentTarget.value })} />
 				</Row>
 				<Row label="넣는 글 상한 (토큰)" desc="한 번에 프롬프트에 넣는 최대 분량. chunk 하나가 약 1000자라 너무 작으면 앞부분만 들어감">

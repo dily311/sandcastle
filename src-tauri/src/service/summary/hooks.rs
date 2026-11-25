@@ -51,7 +51,7 @@ pub fn route_for(app: &AppHandle, conv: &Conversation, fallback: &str) -> (Strin
 /// 응답이 저장된 뒤 부른다 (스트리밍이 끝나고 화면에 돌려준 다음이라 보내기를 늦추지 않음). 쌓인 만큼이 안 되었으면 아무 일도 없다.
 /// 실패는 다시 시도하지 않고 기록만 남긴다 (메시지가 더 쌓인 뒤에만 다시).
 pub fn after_response(app: &AppHandle, conv: &Conversation, api_profile_id: &str, preset_id: &str) {
-    if !plugins::is_enabled(app, plugins::id::SUMMARY) || disabled_for(conv.meta.as_ref()) || api_profile_id.is_empty() {
+    if !plugins::is_enabled(app, plugins::id::SUMMARY) || api_profile_id.is_empty() {
         return;
     }
     let (profile, model) = route_for(app, conv, api_profile_id);

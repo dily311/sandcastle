@@ -65,16 +65,11 @@
 	}
 	let { conv, session, chapters, onjump, oncard, onopen, me, draft, reading = null, status }: Props = $props();
 
-	// ---- 메시지 linter: 이 대화의 덮어쓰기와 마지막 응답에서 걸린 규칙 (3-B-5) ----
-	// 스위치는 `memoryOff`. 예전 버전은 메모(`memory`) 칸에 "off"를 썼다 — 그 값도 꺼짐으로 읽고 새로 바꿀 때 지운다
-	const legacyMemoryOff = $derived((conv.meta as { memory?: string } | null)?.memory === "off");
-	const memoryOff = $derived((conv.meta as { memoryOff?: boolean } | null)?.memoryOff === true || legacyMemoryOff);
+	// ---- 메시지 linter: 마지막 응답에서 걸린 규칙 (3-B-5) ----
 	const memoText = $derived.by(() => {
 		const m = (conv.meta as { memory?: string } | null)?.memory ?? "";
 		return m === "off" ? "" : m;
 	});
-	const rewriteOff = $derived((conv.meta as { rewriteOff?: boolean } | null)?.rewriteOff === true);
-	const lintOff = $derived((conv.meta as { lint?: string } | null)?.lint === "off");
 	const lastLint = $derived.by(() => {
 		const last = [...session.messages].reverse().find((m) => m.role === "assistant");
 		return last ? lintOf(last) : null;
@@ -126,7 +121,6 @@
 		void conv.id;
 		void conv.promptPresetId;
 		void conv.personaId;
-		void conv.imagesEnabled;
 		void conv.worldInfoIds;
 		void conv.meta;
 		void character?.defaultPromptPresetId;
@@ -578,8 +572,7 @@
 	{:else if panel.tab === "assets"}
 		<div class="panel-body">
 			{#if plugins.on("chat.images")}
-				<Switch checked={conv.imagesEnabled} label="이 대화에서 캐릭터 에셋 사용" onchange={(v) => library.setImagesEnabled(conv.id, v)} />
-				{#if conv.imagesEnabled}<UtilMacroNote presetId={shownPreset} macro="img_inprompt" />{/if}
+				<UtilMacroNote presetId={shownPreset} macro="img_inprompt" />
 			{:else}
 				<p class="faint">캐릭터 에셋 기능이 꺼져 있음 (설정 > 코어 플러그인)</p>
 			{/if}
@@ -683,21 +676,15 @@
 			{#if plugins.on("lint")}
 				<section>
 					<h4>메시지 linter <span class="faint">응답이 저장될 때 검사</span></h4>
-					<Switch checked={!lintOff} label="이 대화에서 linter 쓰기" description="끄면 이 대화의 새 응답은 검사하지 않음 (규칙은 설정 > 메시지 linter)" onchange={(v) => library.patchMeta(conv.id, { lint: v ? null : "off" })} />
-					{#if plugins.on("rewrite")}
-						<Switch checked={!rewriteOff} label="이 대화에서 자동 재생성" onchange={(v) => library.patchMeta(conv.id, { rewriteOff: v ? null : true })} />
-					{/if}
-					{#if !lintOff}
-						{#if lastLint}
-							<p class="faint">마지막 응답에서 걸린 것</p>
-							<ul class="lint-hits">
-								{#each lastLint.findings as f, i (i)}
-									<li class:warn={f.level === "warn"}>{f.text}{f.fixed ? " → 고침" : ""}</li>
-								{/each}
-							</ul>
-						{:else}
-							<p class="faint">마지막 응답에서 걸린 것 없음</p>
-						{/if}
+					{#if lastLint}
+						<p class="faint">마지막 응답에서 걸린 것</p>
+						<ul class="lint-hits">
+							{#each lastLint.findings as f, i (i)}
+								<li class:warn={f.level === "warn"}>{f.text}{f.fixed ? " → 고침" : ""}</li>
+							{/each}
+						</ul>
+					{:else}
+						<p class="faint">마지막 응답에서 걸린 것 없음</p>
 					{/if}
 				</section>
 			{/if}
@@ -711,11 +698,8 @@
 				<hr />
 				<section>
 					<h4>메모리 검색</h4>
-					<Switch checked={!memoryOff} label="이 대화를 메모리에 포함" description="끄면 색인과 전체 검색에서 이 대화를 뺌" onchange={(v) => library.patchMeta(conv.id, { memoryOff: v ? null : true, ...(legacyMemoryOff ? { memory: null } : {}) })} />
-					{#if !memoryOff}
-						<div class="mem-actions"><MemoryIndex conversationId={conv.id} /></div>
-						<MemorySearch conversationId={conv.id} onopen={(h) => onopen(conv.id, h.firstMessageId)} />
-					{/if}
+					<div class="mem-actions"><MemoryIndex conversationId={conv.id} /></div>
+					<MemorySearch conversationId={conv.id} onopen={(h) => onopen(conv.id, h.firstMessageId)} />
 				</section>
 			{/if}
 			{#if !plugins.on("summary") && !plugins.on("memory")}

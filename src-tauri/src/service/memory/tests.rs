@@ -350,18 +350,15 @@ async fn a_failed_batch_keeps_earlier_batches_and_the_next_run_resumes_without_r
 #[tokio::test]
 async fn excluded_conversations_and_messages_are_never_indexed() {
     let e = env(vec![]).await;
-    add_conv(&e.db, "off", Some(r#"{"memory":"off"}"#)).await;
     add_conv(&e.db, "peek", Some(r#"{"phone":{"x":1}}"#)).await;
-    for c in ["off", "peek"] {
-        add_msg(&e.db, c, 0, "user", &body("고양이"), None).await;
-    }
+    add_msg(&e.db, "peek", 0, "user", &body("고양이"), None).await;
     add_conv(&e.db, "ok", None).await;
     add_msg(&e.db, "ok", 0, "user", &body("고양이"), Some(r#"{"hidden":true}"#)).await;
     add_msg(&e.db, "ok", 1, "system", &body("고양이"), None).await;
     let pv = index::preview(&e.db, &e.store, &e.profile, &e.cfg, &MemoryScope::default()).await.unwrap();
     assert_eq!((pv.conversations, pv.chunks), (1, 0), "숨김·시스템 메시지만 있는 대화는 chunk가 없음");
     // 제외한 대화를 직접 지정하면 거절
-    assert!(index::preview(&e.db, &e.store, &e.profile, &e.cfg, &scope("off")).await.is_err());
+    assert!(index::preview(&e.db, &e.store, &e.profile, &e.cfg, &scope("peek")).await.is_err());
 }
 
 #[tokio::test]
@@ -799,9 +796,7 @@ async fn recall_does_not_inject_a_chunk_edited_after_indexing() {
 }
 
 #[test]
-fn memory_switch_has_its_own_key_and_the_legacy_value_still_reads_as_off() {
-    assert!(is_eligible(None) && is_eligible(Some(r#"{"memory":"내 메모"}"#)), "메모 글은 스위치가 아님");
-    assert!(!is_eligible(Some(r#"{"memoryOff":true}"#)));
-    assert!(!is_eligible(Some(r#"{"memory":"off"}"#)), "예전 버전이 메모 칸에 쓴 값");
-    assert!(is_eligible(Some(r#"{"memoryOff":null,"memory":"열쇠를 잃음"}"#)));
+fn phone_peek_conversations_are_excluded_from_memory() {
+    assert!(is_eligible(None) && is_eligible(Some(r#"{"memory":"내 메모"}"#)));
+    assert!(!is_eligible(Some(r#"{"phone":{"x":1}}"#)));
 }

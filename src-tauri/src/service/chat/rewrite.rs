@@ -131,12 +131,9 @@ pub fn decide(cfg: &RewriteSetting, lint: Option<&Value>, attempts_done: u32) ->
     })
 }
 
-/// 켜져 있고 이 대화에서 쓸 수 있을 때만 설정을 돌려준다 (폰 대화는 제외, 대화별 끄기 `rewriteOff`)
+/// 켜져 있고 이 대화에서 쓸 수 있을 때만 설정을 돌려준다 (폰 대화는 제외)
 pub fn enabled_for(app: &AppHandle, conv: &Conversation) -> Option<RewriteSetting> {
     if !plugins::is_enabled(app, plugins::id::REWRITE) || conv.mode == "phone" {
-        return None;
-    }
-    if conv.meta.as_ref().and_then(|m| m.get("rewriteOff")).and_then(Value::as_bool) == Some(true) {
         return None;
     }
     app.try_state::<SettingsState<PluginSetting>>()?.0.lock().ok().map(|s| s.rewrite.clone())

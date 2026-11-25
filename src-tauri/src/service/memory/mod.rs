@@ -63,14 +63,13 @@ pub fn check_config(cfg: &MemorySetting) -> Result<String> {
     }
 }
 
-/// 메모리에서 뺀(`meta.memory = "off"`) 대화와 캐릭터 폰 엿보기(`meta.phone`)는 색인·검색·회상하지 않는다
+/// 캐릭터 폰 엿보기(`meta.phone`)는 색인·검색·회상하지 않는다
 pub fn is_eligible(meta: Option<&str>) -> bool {
     let m: Value = meta.and_then(|r| serde_json::from_str(r).ok()).unwrap_or(Value::Null);
-    // `memoryOff`가 스위치. 예전 버전은 메모(`memory`) 칸에 "off"를 썼으므로 그 값도 꺼짐으로 읽는다
-    m.get("memoryOff").and_then(Value::as_bool) != Some(true) && m.get("memory").and_then(Value::as_str) != Some("off") && m.get("phone").is_none()
+    m.get("phone").is_none()
 }
 
-/// 색인할 수 있는 대화: 메모리에서 뺀(`meta.memory = "off"`) 대화와 캐릭터 폰 엿보기(`meta.phone`)는 제외
+/// 색인할 수 있는 대화: 캐릭터 폰 엿보기(`meta.phone`)는 제외
 pub async fn eligible_conversations(db: &SqlitePool, scope: &MemoryScope) -> Result<Vec<(String, String)>> {
     let rows: Vec<(String, Option<String>, Option<String>)> = match &scope.conversation_id {
         Some(id) => {

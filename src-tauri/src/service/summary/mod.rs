@@ -568,11 +568,3 @@ pub async fn block_for(db: &SqlitePool, conversation_id: &str) -> Option<(String
         },
     ))
 }
-
-/// 대화 meta에서 이 대화의 요약을 껐는지 (`summaryOff`)
-pub fn disabled_for(conv_meta: Option<&serde_json::Value>) -> bool {
-    conv_meta
-        .and_then(|m| m.get("summaryOff"))
-        .and_then(serde_json::Value::as_bool)
-        .unwrap_or(false)
-}

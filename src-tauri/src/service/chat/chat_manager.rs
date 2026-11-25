@@ -501,9 +501,9 @@ async fn enrich_context(
     // 대화별 메모·작가 노트 (오른쪽 패널)
     crate::service::chat::notes::apply(context, conv.meta.as_ref());
 
-    // 대화 요약 (3-D, ADR-016): 켜져 있고 이 대화에서 끄지 않았으면 시스템 규칙 끝에 (history에 넣으면 토큰 한도에서 가장 먼저 잘림)
+    // 대화 요약 (3-D, ADR-016): 켜져 있으면 시스템 규칙 끝에 (history에 넣으면 토큰 한도에서 가장 먼저 잘림)
     let summary_on = app.is_some_and(|a| crate::sys::plugins::is_enabled(a, crate::sys::plugins::id::SUMMARY));
-    let summary_use = if summary_on && !crate::service::summary::disabled_for(conv.meta.as_ref()) {
+    let summary_use = if summary_on {
         match crate::service::summary::block_for(db, &conv.id).await {
             Some((block, used)) => {
                 context.system_rules.push(block);
@@ -519,7 +519,7 @@ async fn enrich_context(
         context.system_rules.push(prompt);
     }
 
-    let images_on = conv.images_enabled && app.is_some_and(images_feature_on);
+    let images_on = app.is_some_and(images_feature_on);
     let images = match (app, other.character_id()) {
         (Some(a), Some(cid)) if images_on => load_enabled_images(a, db, cid).await?,
         _ => vec![],
@@ -1186,7 +1186,7 @@ impl ChatManager {
         let auto_image_prompt = auto_image_prompt.filter(|_| auto_image);
         let (content, used_images) = sanitize_cg_tags(&result, &images);
         // 메시지 linter (3-B, ADR-014): 정규식·태그 정리 뒤, 저장 직전. 플러그인 후처리(화면)보다 먼저라 플러그인은 늘 검사된 글을 받는다
-        let (content, lint_meta) = super::lint::apply_to_response(app, &content, &me.name, conv.meta.as_ref(), is_truncated(finish_reason.as_deref()));
+        let (content, lint_meta) = super::lint::apply_to_response(app, &content, &me.name, is_truncated(finish_reason.as_deref()));
         // 자동 재생성 (3-B-4): linter가 걸었고 켜져 있으면 다음 시도가 필요하다 — 응답이 취소된 것에는 이어가지 않는다
         let (attempts_done, auto_info) = match &kind {
             TurnKind::Regenerate { auto: Some(a), .. } => (a.attempt, Some(json!({ "attempt": a.attempt, "max": a.max, "rules": a.rules }))),
@@ -1393,7 +1393,7 @@ impl ChatManager {
             phone_sides::apply_sides(&mut context, &me, &other);
         }
         crate::service::chat::notes::apply(&mut context, conv.meta.as_ref());
-        if crate::sys::plugins::is_enabled(app, crate::sys::plugins::id::SUMMARY) && !crate::service::summary::disabled_for(conv.meta.as_ref()) {
+        if crate::sys::plugins::is_enabled(app, crate::sys::plugins::id::SUMMARY) {
             if let Some((block, _)) = crate::service::summary::block_for(db, conversation_id).await {
                 context.system_rules.push(block);
             }
