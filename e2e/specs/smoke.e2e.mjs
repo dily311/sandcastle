@@ -38,6 +38,9 @@ describe("스모크", () => {
 
 	before(async () => {
 		fake = await startFakeOpenAI();
+		// 화면 언어는 시스템 언어를 따르는데 CI 러너는 영어라, 이 시험이 찾는 한국어 글자에 맞춰 고정한다
+		await browser.execute(() => localStorage.setItem("sc.locale", "ko"));
+		await browser.refresh();
 	});
 	after(async () => {
 		// API 키는 OS 자격 증명 관리자에 들어가므로 프로필을 지워 키도 지운다
