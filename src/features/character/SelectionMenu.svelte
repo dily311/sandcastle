@@ -10,6 +10,7 @@
 	// 글을 끌어서 고르면: 북마크 / 이미지 카드 플로팅 버튼 (대화 화면·읽기 화면이 같이 씀, 5-E-6-2)
 	// 우클릭은 가로채지 않고 브라우저/OS 기본 컨텍스트 메뉴(복사·번역 등)가 그대로 열리게 둔다.
 	import { Bookmark, IdCard } from "@lucide/svelte";
+	import { _ } from "svelte-i18n";
 	import { bookmarks } from "./bookmarks";
 	import type { Conversation } from "./library.svelte";
 	import { metaOf, type ChatSession } from "./session.svelte";
@@ -145,12 +146,12 @@
 </script>
 
 {#if bar && !disabled}
-	<div class="sel-bar" role="toolbar" aria-label="고른 글" style="left: {bar.x}px; top: {bar.y}px;">
+	<div class="sel-bar" role="toolbar" aria-label={$_("textCard.selToolbarAria")} style="left: {bar.x}px; top: {bar.y}px;">
 		<button type="button" onmousedown={(e) => e.preventDefault()} onclick={() => void bookmarkSelection()}>
-			<Bookmark size={13} /><span>북마크</span>
+			<Bookmark size={13} /><span>{$_("textCard.selBookmark")}</span>
 		</button>
 		<button type="button" onmousedown={(e) => e.preventDefault()} onclick={cardSelection}>
-			<IdCard size={13} /><span>카드</span>
+			<IdCard size={13} /><span>{$_("textCard.selCard")}</span>
 		</button>
 	</div>
 {/if}

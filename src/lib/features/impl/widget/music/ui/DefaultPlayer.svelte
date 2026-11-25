@@ -129,7 +129,7 @@
 						<input
 							type="range"
 							class="volume-slider base-slider"
-							aria-label="볼륨"
+							aria-label={$_("music.volume")}
 							min="0"
 							max="100"
 							value={audioStore.volumeSliderValue}

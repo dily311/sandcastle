@@ -16,7 +16,7 @@
 	let editingId = $state<string | null>(null);
 	let editingTitle = $state("");
 
-	const currentTitle = $derived(playlistStore.currentPlaylist?.title || "기본 플레이리스트");
+	const currentTitle = $derived(playlistStore.currentPlaylist?.title || $_("widgetExtra.defaultPlaylist"));
 	const canDelete = (id: string) => id !== "default" && playlistStore.list.length > 1;
 
 	function startCreate() {
@@ -63,8 +63,8 @@
 			{#if mode === "songs"}
 				<button
 					type="button"
-					aria-label="플레이리스트 목록"
-					title="플레이리스트 목록"
+					aria-label={$_("widgetExtra.playlistList")}
+					title={$_("widgetExtra.playlistList")}
 					class="playlist header-btn"
 					onclick={() => {
 						showActionMenu = false;
@@ -78,7 +78,7 @@
 						<input
 							class="inline-input"
 							bind:value={editingTitle}
-							aria-label="플레이리스트 이름"
+							aria-label={$_("widgetExtra.playlistNameAria")}
 							onkeydown={(e) => {
 								if (e.key === "Enter") void submitRename();
 								if (e.key === "Escape") editingId = null;
@@ -89,7 +89,7 @@
 						<button
 							type="button"
 							class="title-btn"
-							title="플레이리스트 전환"
+							title={$_("widgetExtra.switchPlaylistTitle")}
 							onclick={() => {
 								showActionMenu = false;
 								mode = "playlists";
@@ -113,13 +113,13 @@
 					<ChevronLeft />
 				</button>
 				<div class="playlist-title">
-					<h2>{mode === "playlists" ? "플레이리스트" : "곡 추가"}</h2>
+					<h2>{mode === "playlists" ? $_("widgetExtra.playlistsTitle") : $_("widgetExtra.addTrackTitle")}</h2>
 				</div>
 			{/if}
 		</div>
 		{#if mode === "songs"}
 			<div class="playlist-action">
-				<button type="button" class="header-btn" aria-label="플레이리스트 메뉴" onclick={() => (showActionMenu = !showActionMenu)}>
+				<button type="button" class="header-btn" aria-label={$_("widgetExtra.playlistMenuAria")} onclick={() => (showActionMenu = !showActionMenu)}>
 					<EllipsisVertical />
 				</button>
 				<div class:showActionMenu class="playlist-action-menu-wrap">
@@ -130,13 +130,13 @@
 								onclick={() => {
 									showActionMenu = false;
 									mode = "playlists";
-								}}>목록 보기</button
+								}}>{$_("widgetExtra.viewList")}</button
 							>
 						</li>
 						<li class="menu-item">
 							<button
 								type="button"
-								onclick={() => startRename(playlistStore.currentPlaylistKey, currentTitle)}>이름 변경</button
+								onclick={() => startRename(playlistStore.currentPlaylistKey, currentTitle)}>{$_("widgetExtra.rename")}</button
 							>
 						</li>
 						{#if canDelete(playlistStore.currentPlaylistKey)}
@@ -144,7 +144,7 @@
 								<button
 									type="button"
 									class="danger"
-									onclick={() => void removePlaylist(playlistStore.currentPlaylistKey)}>삭제</button
+									onclick={() => void removePlaylist(playlistStore.currentPlaylistKey)}>{$_("common.delete")}</button
 								>
 							</li>
 						{/if}
@@ -211,7 +211,7 @@
 				}}
 			>
 				<Plus />
-				<span>곡 추가</span>
+				<span>{$_("widgetExtra.addTrackTitle")}</span>
 			</button>
 		{:else if mode === "playlists"}
 			<div class="playlists-list">
@@ -222,7 +222,7 @@
 							<input
 								class="inline-input"
 								bind:value={editingTitle}
-								aria-label="플레이리스트 이름"
+								aria-label={$_("widgetExtra.playlistNameAria")}
 								onkeydown={(e) => {
 									if (e.key === "Enter") void submitRename();
 									if (e.key === "Escape") editingId = null;
@@ -234,14 +234,14 @@
 								<span class="playlist-row-check">
 									{#if active}<Check />{/if}
 								</span>
-								<span class="playlist-row-title">{pl.title || "기본 플레이리스트"}</span>
+								<span class="playlist-row-title">{pl.title || $_("widgetExtra.defaultPlaylist")}</span>
 							</button>
 						{/if}
 						<div class="playlist-action-btns">
 							<button
 								type="button"
-								aria-label="이름 변경"
-								title="이름 변경"
+								aria-label={$_("widgetExtra.rename")}
+								title={$_("widgetExtra.rename")}
 								onclick={() => startRename(pl.id, pl.title || "")}
 							>
 								<Pencil />
@@ -249,8 +249,8 @@
 							{#if canDelete(pl.id)}
 								<button
 									type="button"
-									aria-label="플레이리스트 삭제"
-									title="플레이리스트 삭제"
+									aria-label={$_("widgetExtra.deletePlaylistAria")}
+									title={$_("widgetExtra.deletePlaylistAria")}
 									class="danger"
 									onclick={() => void removePlaylist(pl.id)}
 								>
@@ -272,24 +272,24 @@
 					<input
 						class="inline-input"
 						bind:value={newTitle}
-						placeholder="새 플레이리스트 이름"
-						aria-label="새 플레이리스트 이름"
+						placeholder={$_("widgetExtra.newPlaylistPlaceholder")}
+						aria-label={$_("widgetExtra.newPlaylistPlaceholder")}
 						onkeydown={(e) => {
 							if (e.key === "Escape") creating = false;
 						}}
 					/>
-					<button type="submit" class="confirm-btn" aria-label="만들기"><Check /></button>
-					<button type="button" class="confirm-btn" aria-label="취소" onclick={() => (creating = false)}><X /></button>
+					<button type="submit" class="confirm-btn" aria-label={$_("common.create")}><Check /></button>
+					<button type="button" class="confirm-btn" aria-label={$_("common.cancel")} onclick={() => (creating = false)}><X /></button>
 				</form>
 			{:else}
 				<button type="button" class="playlistAddBtn" onclick={startCreate}>
 					<Plus />
-					<span>새 플레이리스트</span>
+					<span>{$_("widgetExtra.newPlaylistBtn")}</span>
 				</button>
 			{/if}
 		{:else}
 			<div class="folder-bar">
-				<button type="button" class="selected-folder-btn" onclick={handleSelectMusicFolder}>폴더 선택</button>
+				<button type="button" class="selected-folder-btn" onclick={handleSelectMusicFolder}>{$_("widgetExtra.selectFolder")}</button>
 			</div>
 			<div class="playlist-item-list">
 				<PlaylistFolderTree

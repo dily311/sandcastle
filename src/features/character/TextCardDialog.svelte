@@ -1,6 +1,8 @@
 <script lang="ts">
 	// 고른 글 → 이미지 카드. 왼쪽 미리보기, 오른쪽 옵션. 복사(클립보드) 또는 png로 저장
 	import { Copy, Download, TextAlignCenter, TextAlignEnd, TextAlignJustify, TextAlignStart } from "@lucide/svelte";
+	import { _ } from "svelte-i18n";
+	import { getAppLocale } from "$lib/utils/i18n";
 	import { Button, Dialog, Select, Switch, Textarea } from "$shared/ui";
 	import BackgroundPicker, { type PickerImageTab } from "$shared/ui/BackgroundPicker.svelte";
 	import { declarePreviewFonts } from "$shared/ui/userFont";
@@ -29,8 +31,10 @@
 		if (!card || !uploadedFonts.length) return;
 		return declarePreviewFonts(uploadedFonts);
 	});
+	const designOptions = $derived(CARD_DESIGNS.map((d) => ({ value: d.value, label: $_(`textCard.design_${d.value}`, { default: d.label }) })));
+	const styleOptions = $derived(CARD_STYLES.map((s) => ({ value: s.value, label: $_(`textCard.style_${s.value}`, { default: s.label }) })));
 	const fontOptions = $derived([
-		...CARD_FONTS,
+		...CARD_FONTS.map((f) => ({ value: f.value, label: $_(`textCard.font_${f.value}`, { default: f.label }) })),
 		...uploadedFonts.map((f) => ({ value: `user:${f.path}` as CardFont, label: f.name })),
 	]);
 
@@ -51,10 +55,10 @@
 		const tabs: PickerImageTab[] = [];
 		const assets = charId ? (library.images[charId] ?? []) : [];
 		if (assets.length) {
-			tabs.push({ id: "assets", label: "캐릭터 에셋", images: assets.map((a) => ({ path: a.path, label: a.key })) });
+			tabs.push({ id: "assets", label: $_("textCard.tabCharAssets"), images: assets.map((a) => ({ path: a.path, label: a.key })) });
 		}
 		if (convGenImages.length) {
-			tabs.push({ id: "conv-gen", label: "대화 생성 이미지", images: convGenImages.map((g) => ({ path: g.path, label: g.name || g.prompt || "생성된 이미지" })) });
+			tabs.push({ id: "conv-gen", label: $_("textCard.tabConvGen"), images: convGenImages.map((g) => ({ path: g.path, label: g.name || g.prompt || $_("textCard.genImgFallback") })) });
 		}
 		return tabs;
 	});
@@ -83,18 +87,18 @@
 	// 사용자가 고친 색 (빈 값 = 색 묶음 그대로)
 	const colors = $state({ bg: "", text: "", accent: "" });
 	const base = $derived(palette(opts.style));
-	const COLOR_FIELDS = [
-		{ key: "bg", label: "카드" },
-		{ key: "text", label: "글자" },
-		{ key: "accent", label: "강조" },
-	] as const;
+	const COLOR_FIELDS = $derived([
+		{ key: "bg", label: $_("textCard.colorCard") },
+		{ key: "text", label: $_("textCard.colorText") },
+		{ key: "accent", label: $_("textCard.colorAccent") },
+	] as const);
 	/** input[type=color]는 #rrggbb만 받는다 */
 	const hex = (v: string) => (/^#[0-9a-f]{6}$/i.test(v.trim()) ? v.trim() : "#888888");
 	let url = $state("");
 	let canvas: HTMLCanvasElement | null = null;
 	let seq = 0;
 
-	const stamp = (t: number) => new Date(t).toLocaleString("ko-KR", { year: "numeric", month: "long", day: "numeric", hour: "2-digit", minute: "2-digit" });
+	const stamp = (t: number) => new Date(t).toLocaleString(getAppLocale() === "en" ? "en-US" : "ko-KR", { year: "numeric", month: "long", day: "numeric", hour: "2-digit", minute: "2-digit" });
 
 	$effect(() => {
 		if (!card) return;
@@ -127,44 +131,44 @@
 		opts.background = theme.setting.backgrounds?.at(-1) ?? opts.background;
 	}
 	async function upload() {
-		await addBackgrounds(await pickFiles([{ name: "이미지", extensions: ["png", "jpg", "jpeg", "webp", "gif", "avif"] }], true));
+		await addBackgrounds(await pickFiles([{ name: $_("textCard.imageFilterName"), extensions: ["png", "jpg", "jpeg", "webp", "gif", "avif"] }], true));
 	}
 	// 카드 창이 열려 있는 동안에는 이 창의 배경으로 (뒤 화면의 끌어다 놓기보다 우선)
 	$effect(() => {
 		if (!card) return;
-		return dropPaths({ priority: 10, label: "카드 배경으로 올리기", hint: "PNG·JPG·WEBP·GIF·AVIF", accept: isImageAvif, onpaths: addBackgrounds });
+		return dropPaths({ priority: 10, label: $_("textCard.dropLabel"), hint: "PNG·JPG·WEBP·GIF·AVIF", accept: isImageAvif, onpaths: addBackgrounds });
 	});
 	async function copy() {
 		if (!canvas) return;
 		try {
 			await navigator.clipboard.write([new ClipboardItem({ "image/png": await cardBlob(canvas) })]);
-			toasts.success("이미지를 복사함");
+			toasts.success($_("textCard.copiedToast"));
 		} catch (e) {
-			toasts.error("복사 못 함", String(e));
+			toasts.error($_("textCard.copyFailedToast"), String(e));
 		}
 	}
 	async function save() {
 		if (!canvas) return;
 		const data = await blobBase64(await cardBlob(canvas));
-		const r = await saveTo("card.png", [{ name: "PNG 이미지", extensions: ["png"] }], async (path) => {
+		const r = await saveTo("card.png", [{ name: $_("textCard.pngFilterName"), extensions: ["png"] }], async (path) => {
 			await call(commands.savePngFile(path, data), { source: "card" });
 			return true;
 		});
 		if (!r) return;
-		toasts.success("저장함");
+		toasts.success($_("textCard.savedToast"));
 	}
 </script>
 
-<Dialog open={!!card} title="이미지 카드" size="xl" {onclose}>
+<Dialog open={!!card} title={$_("textCard.dialogTitle")} size="xl" {onclose}>
 	<div class="layout">
-		<div class="preview">{#if url}<img src={url} alt="카드 미리보기" />{/if}</div>
+		<div class="preview">{#if url}<img src={url} alt={$_("textCard.previewAlt")} />{/if}</div>
 		<div class="opts">
 			<div class="field">
-				<span>배경</span>
-				<BackgroundPicker label="카드 배경" value={opts.background} images={theme.setting.backgrounds ?? []} extraTabs={bgExtraTabs} onpick={(v) => (opts.background = v)} onupload={upload} />
+				<span>{$_("textCard.backgroundLabel")}</span>
+				<BackgroundPicker label={$_("textCard.backgroundAria")} value={opts.background} images={theme.setting.backgrounds ?? []} extraTabs={bgExtraTabs} onpick={(v) => (opts.background = v)} onupload={upload} />
 			</div>
 			<div class="field">
-				<span>비율</span>
+				<span>{$_("textCard.ratioLabel")}</span>
 				<div class="group">
 					{#each CARD_IMG_RATIO as r}
 						<Button variant="ghost" active={opts.imgRatio === r.value} onclick={() => opts.imgRatio = r.value}>
@@ -173,48 +177,48 @@
 					{/each}
 				</div>
 			</div>
-			<label class="field"><span>디자인</span><Select bind:value={opts.design} options={CARD_DESIGNS} aria-label="카드 디자인" /></label>
-			<label class="field"><span>색 조합</span><Select bind:value={opts.style} options={CARD_STYLES} aria-label="카드 색 조합" /></label>
+			<label class="field"><span>{$_("textCard.designLabel")}</span><Select bind:value={opts.design} options={designOptions} aria-label={$_("textCard.designAria")} /></label>
+			<label class="field"><span>{$_("textCard.styleLabel")}</span><Select bind:value={opts.style} options={styleOptions} aria-label={$_("textCard.styleAria")} /></label>
 			<div class="field">
-				<span>색 고치기</span>
+				<span>{$_("textCard.customColorsLabel")}</span>
 				<div class="colors">
 					{#each COLOR_FIELDS as f (f.key)}
-						<label class="swatch" title="{f.label} 색">
-							<input type="color" value={hex(colors[f.key] || base[f.key])} oninput={(e) => (colors[f.key] = e.currentTarget.value)} aria-label="{f.label} 색" />
+						<label class="swatch" title={$_("textCard.colorFieldAria", { values: { label: f.label } })}>
+							<input type="color" value={hex(colors[f.key] || base[f.key])} oninput={(e) => (colors[f.key] = e.currentTarget.value)} aria-label={$_("textCard.colorFieldAria", { values: { label: f.label } })} />
 							<span>{f.label}</span>
-							{#if colors[f.key]}<button type="button" class="reset" aria-label="{f.label} 색 되돌리기" onclick={() => (colors[f.key] = "")}>×</button>{/if}
+							{#if colors[f.key]}<button type="button" class="reset" aria-label={$_("textCard.colorResetAria", { values: { label: f.label } })} onclick={() => (colors[f.key] = "")}>×</button>{/if}
 						</label>
 					{/each}
 				</div>
 			</div>
-			<div class="toggle"><span>텍스트 그림자 효과</span><Switch checked={opts.txtShadow} label="텍스트 그림자 효과" hideLabel onchange={(v) => (opts.txtShadow = v)} /></div>
+			<div class="toggle"><span>{$_("textCard.textShadowLabel")}</span><Switch checked={opts.txtShadow} label={$_("textCard.textShadowLabel")} hideLabel onchange={(v) => (opts.txtShadow = v)} /></div>
 			<div class="field">
-				<span>글 정렬</span>
+				<span>{$_("textCard.alignLabel")}</span>
 				<div class="group">
-					<IconButton label="start" active={opts.align === "start"} onclick={()=> opts.align = "start"}><TextAlignJustify /></IconButton>
-					<IconButton label="left" active={opts.align === "left"} onclick={()=> opts.align = "left"}><TextAlignStart /></IconButton>
-					<IconButton label="center" active={opts.align === "center"} onclick={()=> opts.align = "center"}><TextAlignCenter /></IconButton>
-					<IconButton label="right" active={opts.align === "right"} onclick={()=> opts.align = "right"}><TextAlignEnd /></IconButton>
+					<IconButton label={$_("textCard.alignStart")} active={opts.align === "start"} onclick={()=> opts.align = "start"}><TextAlignJustify /></IconButton>
+					<IconButton label={$_("textCard.alignLeft")} active={opts.align === "left"} onclick={()=> opts.align = "left"}><TextAlignStart /></IconButton>
+					<IconButton label={$_("textCard.alignCenter")} active={opts.align === "center"} onclick={()=> opts.align = "center"}><TextAlignCenter /></IconButton>
+					<IconButton label={$_("textCard.alignRight")} active={opts.align === "right"} onclick={()=> opts.align = "right"}><TextAlignEnd /></IconButton>
 				</div>
 			</div>
-			<label class="field"><span>글꼴</span><Select bind:value={opts.font} options={fontOptions} aria-label="글꼴" /></label>
+			<label class="field"><span>{$_("textCard.fontLabel")}</span><Select bind:value={opts.font} options={fontOptions} aria-label={$_("textCard.fontLabel")} /></label>
 			<label class="field">
-				<Slider label="글자 크기" bind:value={opts.size} min={32} max={64} step={2} fallback={32} unsetLabel="32" />
+				<Slider label={$_("textCard.fontSizeLabel")} bind:value={opts.size} min={32} max={64} step={2} fallback={32} unsetLabel="32" />
 			</label>
-			<label class="field"><span>숨길 말</span><Textarea bind:value={mask.hide} rows={1} autosize maxRows={4} placeholder="쉼표로 나눠서 · ●로 가림" aria-label="숨길 말" /></label>
-			<label class="field"><span>대체어</span><Textarea bind:value={mask.replace} rows={1} autosize maxRows={4} placeholder="원래=바꿀 말 (한 줄에 하나)" aria-label="대체어" /></label>
+			<label class="field"><span>{$_("textCard.hideWordsLabel")}</span><Textarea bind:value={mask.hide} rows={1} autosize maxRows={4} placeholder={$_("textCard.hideWordsPlaceholder")} aria-label={$_("textCard.hideWordsLabel")} /></label>
+			<label class="field"><span>{$_("textCard.replaceWordsLabel")}</span><Textarea bind:value={mask.replace} rows={1} autosize maxRows={4} placeholder={$_("textCard.replaceWordsPlaceholder")} aria-label={$_("textCard.replaceWordsLabel")} /></label>
 			{#if card?.speaker}
-				<div class="toggle"><span>이름 넣기</span><Switch checked={opts.speaker} label="이름 넣기" hideLabel onchange={(v) => (opts.speaker = v)} /></div>
+				<div class="toggle"><span>{$_("textCard.showSpeakerLabel")}</span><Switch checked={opts.speaker} label={$_("textCard.showSpeakerLabel")} hideLabel onchange={(v) => (opts.speaker = v)} /></div>
 			{/if}
 			{#if card?.time}
-				<div class="toggle"><span>답변 시간 표시</span><Switch checked={opts.time} label="답변 시간 표시" hideLabel onchange={(v) => (opts.time = v)} /></div>
+				<div class="toggle"><span>{$_("textCard.showTimeLabel")}</span><Switch checked={opts.time} label={$_("textCard.showTimeLabel")} hideLabel onchange={(v) => (opts.time = v)} /></div>
 			{/if}
 		</div>
 	</div>
 	{#snippet footer()}
-		<Button variant="ghost" onclick={onclose}>닫기</Button>
-		<Button onclick={copy}>{#snippet icon()}<Copy />{/snippet}복사</Button>
-		<Button variant="primary" onclick={save}>{#snippet icon()}<Download />{/snippet}저장</Button>
+		<Button variant="ghost" onclick={onclose}>{$_("common.close")}</Button>
+		<Button onclick={copy}>{#snippet icon()}<Copy />{/snippet}{$_("common.copy")}</Button>
+		<Button variant="primary" onclick={save}>{#snippet icon()}<Download />{/snippet}{$_("common.save")}</Button>
 	{/snippet}
 </Dialog>
 

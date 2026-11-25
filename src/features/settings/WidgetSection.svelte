@@ -74,10 +74,13 @@
 			</Group>
 			<Group title={$_("settings.widgetSec.featuresGroup")}>
 				{#each WIDGET_FEATURES as f (f.id)}
-					<Row label={f.name} desc={f.description.replace(/합니다\.$/, "함")}>
+					{@const fid = f.id.replaceAll(".", "_")}
+					{@const fname = $_(`widgetExtra.features.${fid}.name`, { default: f.name })}
+					{@const fdesc = $_(`widgetExtra.features.${fid}.desc`, { default: f.description.replace(/합니다\.$/, "함") })}
+					<Row label={fname} desc={fdesc}>
 						<Switch
 							checked={features[f.id] ?? f.defaultEnabled}
-							label={f.name}
+							label={fname}
 							hideLabel
 							disabled={!features["widget"]}
 							onchange={(v) => toggle(f.id, v)}

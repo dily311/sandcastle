@@ -1,8 +1,9 @@
 <script lang="ts">
+	import { _ } from "svelte-i18n";
 	import { confirmAction } from "$shared/stores/confirm.svelte";
 	import { toasts } from "$shared/stores/toast.svelte";
 	/** 지우기 전에 앱 확인 창으로 물어봄 */
-	const ask = (message: string) => confirmAction({ title: "삭제", message, confirmLabel: "삭제", danger: true });
+	const ask = (message: string) => confirmAction({ title: $_("common.delete"), message, confirmLabel: $_("common.delete"), danger: true });
 	import type { PackageData } from "$features/game/types";
 	import { call, commands, toAppError } from "$shared/ipc/client";
 	import { reportGameError } from "$features/game/errors";
@@ -61,7 +62,7 @@
 			id: crypto.randomUUID(),
 			gameId,
 			key: `asset_${Date.now()}`,
-			name: "새 에셋",
+			name: $_("gameEditor.newAssetName"),
 			category: "other",
 			kind: "other",
 			filePath: "",
@@ -142,7 +143,12 @@
 		const have = new Set(entries.map((e) => e.asset.id).filter(Boolean));
 		const pick = category === "cg" ? fresh.cgAssets : fresh.backgroundAssets;
 		for (const a of pick) if (a.id && added.includes(a.id) && !have.has(a.id)) (category === "cg" ? cgAssets : backgroundAssets).push(a as never);
-		toasts.success(`에셋 ${added.length}개를 게임 폴더에 넣음${problems ? ` (확인할 점 ${problems}개 — 저장하면 진단에 보임)` : ""}`);
+		toasts.success($_("gameEditor.addedToFolderToast", {
+			values: {
+				count: added.length,
+				extra: problems ? $_("gameEditor.addedProblemsPart", { values: { count: problems } }) : "",
+			},
+		}));
 	}
 	function addDropped(all: string[]) {
 		let paths = all;
@@ -164,18 +170,24 @@
 			created.key = uniqueKey(stemOf(path));
 			if (type === "asset") created.kind = font ? "font" : audio ? "audio" : "image";
 		}
-		if (paths.length) toasts.success(`에셋 ${paths.length}개 추가함. 저장하면 게임에 들어감`);
+		if (paths.length) toasts.success($_("gameEditor.addedDroppedToast", { values: { count: paths.length } }));
 	}
 	$effect(() =>
 		dropPaths({
-			label: "게임 에셋으로 추가",
-			hint: `그림·소리·글꼴. ${IMAGE_TYPES.includes(filter) ? `그림은 '${filter}' 종류로` : "그림은 기타 종류로"} 들어감`,
+			label: $_("gameEditor.dropAssetsLabel"),
+			hint: $_("gameEditor.dropAssetsHint", {
+				values: {
+					dest: IMAGE_TYPES.includes(filter)
+						? $_("gameEditor.dropAssetsDestTyped", { values: { type: typeName(filter) } })
+						: $_("gameEditor.dropAssetsDestOther"),
+				},
+			}),
 			accept: (f) => isImage(f) || isAudio(f) || isFont(f),
 			onpaths: addDropped,
 		}),
 	);
 	async function remove(type: string, index: number) {
-		if (!await ask("이 에셋을 삭제할까요?")) return;
+		if (!await ask($_("gameEditor.deleteAssetConfirm"))) return;
 		const list = type === "audio" ? audioAssets : type === "character" ? characterAssets : type === "cg" ? cgAssets : type === "background" ? backgroundAssets : assets;
 		const target = list[index];
 		// 이미 게임 폴더에 있는 에셋은 백엔드가 지운다: 대본·표지·아이콘이 쓰고 있으면 거절하고, 그래도 지울지 다시 묻는다
@@ -184,14 +196,14 @@
 			for (;;) {
 				try {
 					const r = await call(commands.removeGameAsset(gameId, target.id ?? "", force), { source: "game", silent: true });
-					if (r.diagnostics.length) toasts.info(`지운 뒤 확인할 점 ${r.diagnostics.length}개`);
+					if (r.diagnostics.length) toasts.info($_("gameEditor.removedProblemsToast", { values: { count: r.diagnostics.length } }));
 					break;
 				} catch (e) {
 					const err = toAppError(e);
 					const d = err.details as { reason?: string; references?: string[] } | undefined;
 					if (d?.reason !== "assetInUse" || force) return void reportGameError(e, gameId);
 					const refs = (d.references ?? []).join(", ");
-					if (!(await confirmAction({ title: "쓰고 있는 에셋", message: `${refs}에서 쓰고 있습니다. 그래도 지우면 그 자리가 비어 오류로 표시됩니다.`, confirmLabel: "그래도 삭제", danger: true }))) return;
+					if (!(await confirmAction({ title: $_("gameEditor.assetInUseTitle"), message: $_("gameEditor.assetInUseMsg", { values: { refs } }), confirmLabel: $_("gameEditor.forceDeleteBtn"), danger: true }))) return;
 					force = true;
 				}
 			}
@@ -221,10 +233,13 @@
 	function typeName(type: string) {
 		return (
 			(
-				{ asset: "기타", audio: "오디오", character: "캐릭터", cg: "일러스트", background: "배경" } as Record<
-					string,
-					string
-				>
+				{
+					asset: $_("gameEditor.assetTypeOther"),
+					audio: $_("gameEditor.assetTypeAudio"),
+					character: $_("gameEditor.assetTypeCharacter"),
+					cg: $_("gameEditor.assetTypeCg"),
+					background: $_("gameEditor.assetTypeBackground"),
+				} as Record<string, string>
 			)[type] || type
 		);
 	}
@@ -233,19 +248,19 @@
 <section class="asset-manager">
 	<header class="asset-toolbar">
 		<div>
-			<h3>전체 에셋</h3>
-			<p>이미지, 오디오, 폰트 등 게임에서 사용하는 파일을 한곳에서 관리합니다.</p>
+			<h3>{$_("gameEditor.allAssetsHeading")}</h3>
+			<p>{$_("gameEditor.allAssetsDesc")}</p>
 		</div>
 		<div class="action-btn">
-			<select aria-label="추가할 에셋 종류" bind:value={filter}>
-				<option value="all">전체 보기</option>
-				<option value="audio">오디오</option>
-				<option value="character">캐릭터</option>
-				<option value="cg">일러스트</option>
-				<option value="background">배경</option>
-				<option value="asset">기타</option>
+			<select aria-label={$_("gameEditor.assetKindFilterAria")} bind:value={filter}>
+				<option value="all">{$_("gameEditor.viewAll")}</option>
+				<option value="audio">{$_("gameEditor.assetTypeAudio")}</option>
+				<option value="character">{$_("gameEditor.assetTypeCharacter")}</option>
+				<option value="cg">{$_("gameEditor.assetTypeCg")}</option>
+				<option value="background">{$_("gameEditor.assetTypeBackground")}</option>
+				<option value="asset">{$_("gameEditor.assetTypeOther")}</option>
 			</select>
-			<button class="add-btn" onclick={() => add(filter === "all" ? "asset" : filter)}>+ 에셋 추가</button>
+			<button class="add-btn" onclick={() => add(filter === "all" ? "asset" : filter)}>{$_("gameEditor.addAssetBtn")}</button>
 		</div>
 	</header>
 	<div class="asset-grid">
@@ -256,7 +271,7 @@
 						<button
 							class="preview-select"
 							type="button"
-							aria-label="이미지 선택"
+							aria-label={$_("gameEditor.pickImageShort")}
 							onclick={() => chooseFile(entry)}
 						>
 							{#if entry.asset.filePath}
@@ -265,7 +280,7 @@
 									alt={entry.asset.name}
 								/>
 							{:else}
-								<span>＋<small>이미지 선택</small> </span>
+								<span>＋<small>{$_("gameEditor.pickImageShort")}</small> </span>
 							{/if}
 						</button>
 					{:else}
@@ -283,60 +298,60 @@
 						controls
 						preload="none"
 						src={editorAssetPreviewUrl(assetRoot, entry.asset.filePath)}
-						aria-label={`${entry.asset.name} 미리 듣기`}
+						aria-label={$_("gameEditor.audioPreviewAria", { values: { name: entry.asset.name } })}
 					>
 					</audio>
 				{/if}
 				<div class="asset-fields">
 					{#if entry.type !== "character"}
 						<div class="field">
-							<label>이름</label>
+							<label>{$_("gameEditor.nameLabel")}</label>
 							<input bind:value={entry.asset.name} />
 						</div>
 					{/if}
 					<div class="field">
-						<label>키</label>
+						<label>{$_("gameEditor.keyLabel")}</label>
 						<input bind:value={entry.asset.key} />
 					</div>
 					<Button variant="secondary" size="sm" onclick={() => chooseFile(entry)}>
-						{entry.asset.filePath ? "파일 변경" : "파일 선택"}
+						{entry.asset.filePath ? $_("gameEditor.changeFileBtn") : $_("gameEditor.chooseFileBtn")}
 					</Button>
 					{#if entry.type === "asset"}
 						<div class="field-row">
 							<div class="field">
-								<label>종류</label>
+								<label>{$_("gameEditor.kindLabel")}</label>
 								<select bind:value={entry.asset.kind}>
-									<option value="image">이미지</option>
-									<option value="audio">오디오</option>
-									<option value="font">폰트</option>
-									<option value="other">기타</option>
+									<option value="image">{$_("gameEditor.kindImage")}</option>
+									<option value="audio">{$_("gameEditor.kindAudio")}</option>
+									<option value="font">{$_("gameEditor.kindFont")}</option>
+									<option value="other">{$_("gameEditor.kindOther")}</option>
 								</select>
 							</div>
 							<div class="field">
-								<label>분류</label>
+								<label>{$_("gameEditor.categoryLabel")}</label>
 								<input bind:value={entry.asset.category} />
 							</div>
 						</div>
 					{:else if entry.type === "audio"}{@const audio = entry.asset as GameAudioAssetsInput}
 						<div class="field-row">
 							<div class="field">
-								<label>용도</label>
+								<label>{$_("gameEditor.audioPurposeLabel")}</label>
 								<select bind:value={audio.category}>
-									<option value="voice">음성</option>
-									<option value="sfx">효과음</option>
-									<option value="bgm">배경 음악</option>
+									<option value="voice">{$_("gameEditor.audioVoice")}</option>
+									<option value="sfx">{$_("gameEditor.audioSfx")}</option>
+									<option value="bgm">{$_("gameEditor.audioBgm")}</option>
 								</select>
 							</div>
 							<div class="field">
-								<label>태그</label>
+								<label>{$_("gameEditor.tagLabel")}</label>
 								<input bind:value={audio.tag} />
 							</div>
 						</div>
 						{#if audio.category === "voice"}
 							<div class="field">
-								<label>캐릭터</label>
+								<label>{$_("gameEditor.characterLabel")}</label>
 								<select bind:value={audio.gameCharacterId}>
-									<option value={null}>선택 안 함</option>
+									<option value={null}>{$_("gameEditor.notSelected")}</option>
 									{#each characters as character}
 										<option value={character.id}>
 											{character.name}
@@ -345,7 +360,7 @@
 								</select>
 							</div>
 							<div class="field">
-								<label>대사 기록</label>
+								<label>{$_("gameEditor.transcriptLabel")}</label>
 								<textarea bind:value={audio.transcript} rows="2"></textarea>
 							</div>
 						{/if}
@@ -353,9 +368,9 @@
 							entry.asset as GameCharacterAssetsInput}
 						<div class="field-row">
 							<div class="field">
-								<label>캐릭터</label>
+								<label>{$_("gameEditor.characterLabel")}</label>
 								<select bind:value={characterAsset.gameCharacterId}>
-									<option value={null}>선택 안 함</option>
+									<option value={null}>{$_("gameEditor.notSelected")}</option>
 									{#each characters as character}
 										<option value={character.id}>
 											{character.name}
@@ -364,22 +379,22 @@
 								</select>
 							</div>
 							<div class="field">
-								<label>표정</label>
+								<label>{$_("gameEditor.emotionLabel")}</label>
 								<input bind:value={characterAsset.emotion} />
 							</div>
 						</div>
 						<div class="field">
-							<label>사용처</label>
+							<label>{$_("gameEditor.usagePlaceLabel")}</label>
 							<select bind:value={characterAsset.usage}>
-								<option value="standing">스탠딩</option>
-								<option value="map">맵</option>
+								<option value="standing">{$_("gameEditor.usageStanding")}</option>
+								<option value="map">{$_("gameEditor.usageMapShort")}</option>
 							</select>
 						</div>
 					{:else if entry.type === "cg"}{@const cg = entry.asset as GameCgAssetsInput}
 						<div class="field">
-							<label>캐릭터</label>
+							<label>{$_("gameEditor.characterLabel")}</label>
 							<select bind:value={cg.gameCharacterId}>
-								<option value={null}>선택 안 함</option>
+								<option value={null}>{$_("gameEditor.notSelected")}</option>
 								{#each characters as character}
 									<option value={character.id}>
 										{character.name}
@@ -388,15 +403,15 @@
 							</select>
 						</div>
 						<div class="field">
-							<label>설명</label>
+							<label>{$_("gameEditor.descLabel")}</label>
 							<textarea bind:value={cg.description} rows="2"></textarea>
 						</div>
-						<label class="check"> <input type="checkbox" bind:checked={cg.aiUsable} /> AI 사용 가능</label>
+						<label class="check"> <input type="checkbox" bind:checked={cg.aiUsable} /> {$_("gameEditor.aiUsableLabel")}</label>
 					{:else if entry.type === "background"}{@const background = entry.asset as GameBackgroundAssetsInput}
 						<div class="field">
-							<label>장소</label>
+							<label>{$_("gameEditor.locationLabel")}</label>
 							<select bind:value={background.locationId}>
-								<option value={null}>선택 안 함</option>
+								<option value={null}>{$_("gameEditor.notSelected")}</option>
 								{#each locations as location (location.id)}
 									<option value={location.id}>
 										{location.name}
@@ -406,9 +421,9 @@
 						</div>
 						<div class="field-row">
 							<div class="field">
-								<label>시간대</label>
+								<label>{$_("gameEditor.tabTime")}</label>
 								<select bind:value={background.timeId}>
-									<option value={null}>모든 시간대</option>
+									<option value={null}>{$_("gameEditor.allTimePeriods")}</option>
 									{#each timePeriods as period (period.id)}
 										<option value={period.id}>
 											{period.name}
@@ -417,9 +432,9 @@
 								</select>
 							</div>
 							<div class="field">
-								<label>날씨</label>
+								<label>{$_("gameEditor.tabWeather")}</label>
 								<select bind:value={background.weatherId}>
-									<option value={null}>모든 날씨</option>
+									<option value={null}>{$_("gameEditor.allWeathers")}</option>
 									{#each weatherTypes as weather (weather.id)}
 										<option value={weather.id}>
 											{weather.name}
@@ -431,12 +446,12 @@
 					{/if}
 				</div>
 				<div class="delete-action">
-					<Button variant="danger" size="sm" onclick={() => remove(entry.type, entry.index)}>에셋 삭제</Button
+					<Button variant="danger" size="sm" onclick={() => remove(entry.type, entry.index)}>{$_("gameEditor.deleteAssetBtn")}</Button
 					>
 				</div>
 			</article>
 		{:else}
-			<div class="empty">등록된 에셋이 없습니다. 위의 에셋 추가 버튼으로 시작하세요.</div>
+			<div class="empty">{$_("gameEditor.noAssets")}</div>
 		{/each}
 	</div>
 </section>

@@ -1,8 +1,9 @@
 <script lang="ts">
+	import { _ } from "svelte-i18n";
 	import { confirmAction } from "$shared/stores/confirm.svelte";
 	import { toasts } from "$shared/stores/toast.svelte";
 	/** 지우기 전에 앱 확인 창으로 물어봄 */
-	const ask = (message: string) => confirmAction({ title: "삭제", message, confirmLabel: "삭제", danger: true });
+	const ask = (message: string) => confirmAction({ title: $_("common.delete"), message, confirmLabel: $_("common.delete"), danger: true });
 	import type {
 		GameCharactersInput,
 		GameEventsInput,
@@ -49,7 +50,7 @@
 			eventType: "custom",
 			triggerType: "auto",
 			repeatPolicy: "once",
-			name: "새로운 이벤트",
+			name: $_("gameEditor.newEventName"),
 			description: "",
 			requiresNpc: false,
 			configJson: {},
@@ -61,7 +62,7 @@
 	}
 
 	async function handleDeleteEvent(index: number) {
-		if (!(await ask(`"${events[index].name}" 이벤트를 삭제하시겠습니까?`))) return;
+		if (!(await ask($_("gameEditor.deleteEventConfirm", { values: { name: events[index].name } })))) return;
 		events.splice(index, 1);
 		selectedIndex = events.length > 0 ? Math.max(0, index - 1) : null;
 	}
@@ -169,10 +170,10 @@
 	<!-- 좌측: 이벤트 목록 -->
 	<div class="item-list-pane">
 		<div class="pane-header">
-			<Input bind:value={searchQuery} placeholder="이벤트 검색" aria-label="이벤트 검색">
+			<Input bind:value={searchQuery} placeholder={$_("gameEditor.searchEvents")} aria-label={$_("gameEditor.searchEvents")}>
 				{#snippet leading()}<Search />{/snippet}
 			</Input>
-			<IconButton label="이벤트 추가" size="md" onclick={handleAddEvent}><Plus /></IconButton>
+			<IconButton label={$_("gameEditor.addEventAria")} size="md" onclick={handleAddEvent}><Plus /></IconButton>
 		</div>
 		<div class="scroll-list">
 			{#each filteredEvents as row (row.ev.id)}
@@ -186,14 +187,14 @@
 				>
 					<div class="item-info">
 						<span class="title">{ev.name}</span>
-						<span class="meta">유형: {ev.eventType}</span>
+						<span class="meta">{$_("gameEditor.eventTypeMeta", { values: { type: ev.eventType } })}</span>
 					</div>
-					<IconButton class="icon-del" size="sm" label="날씨 삭제" onclick={() => handleDeleteEvent(idx)}
+					<IconButton class="icon-del" size="sm" label={$_("gameEditor.deleteEventAria")} onclick={() => handleDeleteEvent(idx)}
 						><X />
 					</IconButton>
 				</div>
 			{:else}
-				<div class="empty-text">등록된 이벤트가 없습니다.</div>
+				<div class="empty-text">{$_("gameEditor.noEvents")}</div>
 			{/each}
 		</div>
 	</div>
@@ -202,40 +203,40 @@
 	<div class="item-detail-pane">
 		{#if activeEvent && selectedIndex !== null}
 			<div class="detail-header">
-				<h3>이벤트 상세 편집</h3>
+				<h3>{$_("gameEditor.eventDetailHeading")}</h3>
 			</div>
 			<div class="form-grid">
 				<div class="field-row-split">
 					<div class="field">
-						<label for="event_name">이벤트 이름 (Name)</label>
+						<label for="event_name">{$_("gameEditor.eventNameLabel")}</label>
 						<input id="event_name" type="text" bind:value={activeEvent.name} />
 					</div>
 					<div class="field">
-						<label for="event_type">이벤트 유형 (Event Type)</label>
+						<label for="event_type">{$_("gameEditor.eventTypeLabel")}</label>
 						<input
 							id="event_type"
 							type="text"
 							bind:value={activeEvent.eventType}
-							placeholder="예: combat, dialog, script"
+							placeholder={$_("gameEditor.eventTypePlaceholder")}
 						/>
 					</div>
 				</div>
 
 				<div class="field">
-					<label for="event_des">설명 (Description)</label>
-					<textarea id="event_des" bind:value={activeEvent.description} rows="2" placeholder="이벤트 설명..."
+					<label for="event_des">{$_("gameEditor.sceneDescLabel")}</label>
+					<textarea id="event_des" bind:value={activeEvent.description} rows="2" placeholder={$_("gameEditor.eventDescPlaceholder")}
 					></textarea>
 				</div>
 
 				<div class="field-row-split">
 					<div class="field">
-						<label for="event_seconds">쿨다운 시간 (Seconds)</label>
+						<label for="event_seconds">{$_("gameEditor.cooldownLabel")}</label>
 						<input id="event_seconds" type="number" bind:value={activeEvent.cooldownSeconds} min="0" />
 					</div>
 					<div class="field checkbox-field">
 						<label class="checkbox-label">
 							<input type="checkbox" bind:checked={activeEvent.requiresNpc} />
-							<span>NPC 필요 여부 (Requires NPC)</span>
+							<span>{$_("gameEditor.requiresNpcLabel")}</span>
 						</label>
 					</div>
 				</div>
@@ -247,13 +248,13 @@
 								type="checkbox"
 								checked={(activeEvent.configJson as Record<string, unknown>)?.planUsable === true}
 								onchange={(e) => (activeEvent!.configJson = { ...(activeEvent!.configJson as Record<string, unknown>), planUsable: e.currentTarget.checked })} />
-							<span>각본가가 무대에 올려도 됨</span>
+							<span>{$_("gameEditor.planUsableLabel")}</span>
 						</label>
 					</div>
 				{/if}
 
 				<div class="field">
-					<label for="event_setting">고급 설정 JSON</label>
+					<label for="event_setting">{$_("gameEditor.advancedConfigLabel")}</label>
 					<textarea
 						id="event_setting"
 						class="code-font"
@@ -262,25 +263,25 @@
 						oninput={(e) => fromJsonString(e.currentTarget.value, "configJson")}></textarea>
 				</div>
 				<details class="editor-accordion effect-editor" open>
-					<summary>이벤트 효과</summary>
+					<summary>{$_("gameEditor.eventEffectsAccordion")}</summary>
 					<div class="editor-accordion-content">
 						<div class="effect-heading">
-							<div><p>정해진 항목을 입력하면 저장 시 엔진 효과 형식으로 구성됩니다.</p></div>
+							<div><p>{$_("gameEditor.eventEffectsDesc")}</p></div>
 						</div>
 						<div class="effect-section">
 							<div class="effect-section-title">
-								<strong>변수 변경</strong>
+								<strong>{$_("gameEditor.varChangeHeading")}</strong>
 								<div>
 									<button class="small-action" onclick={() => addVariableEffect("set")}
-										>값 지정</button
+										>{$_("gameEditor.setValueBtn")}</button
 									><button class="small-action" onclick={() => addVariableEffect("add")}
-										>숫자 더하기</button
+										>{$_("gameEditor.addNumberBtn")}</button
 									>
 								</div>
 							</div>
 							{#each Object.entries(effectSection("set")) as [key, value] (`set:${key}`)}
 								<div class="effect-row">
-									<span class="effect-kind">지정</span><select
+									<span class="effect-kind">{$_("gameEditor.kindSet")}</span><select
 										value={key}
 										onchange={(e) => {
 											const next = e.currentTarget.value;
@@ -296,9 +297,9 @@
 											value={String(value)}
 											onchange={(e) =>
 												updateEffectValue("set", key, e.currentTarget.value === "true")}
-											><option value="true">참</option><option value="false">거짓</option></select
+											><option value="true">{$_("gameEditor.boolTrue")}</option><option value="false">{$_("gameEditor.boolFalse")}</option></select
 										>{:else}<input
-											aria-label="지정할 값"
+											aria-label={$_("gameEditor.setValueAria")}
 											type={stateDefs.find((variable) => variable.key === key)?.type === "number"
 												? "number"
 												: "text"}
@@ -314,14 +315,14 @@
 												)}
 										/>{/if}<button
 										class="row-remove"
-										aria-label="변수 효과 삭제"
+										aria-label={$_("gameEditor.deleteVarEffectAria")}
 										onclick={() => removeEffectValue("set", key)}>×</button
 									>
 								</div>
 							{/each}
 							{#each Object.entries(effectSection("add")) as [key, value] (`add:${key}`)}
 								<div class="effect-row">
-									<span class="effect-kind">더하기</span><select
+									<span class="effect-kind">{$_("gameEditor.kindAdd")}</span><select
 										value={key}
 										onchange={(e) => {
 											const next = e.currentTarget.value;
@@ -334,13 +335,13 @@
 												value={variable.key}>{variable.key}</option
 											>{/each}</select
 									><input
-										aria-label="더할 값"
+										aria-label={$_("gameEditor.addValueAria")}
 										type="number"
 										value={Number(value)}
 										oninput={(e) => updateEffectValue("add", key, Number(e.currentTarget.value))}
 									/><button
 										class="row-remove"
-										aria-label="변수 효과 삭제"
+										aria-label={$_("gameEditor.deleteVarEffectAria")}
 										onclick={() => removeEffectValue("add", key)}>×</button
 									>
 								</div>
@@ -348,24 +349,24 @@
 							{#if !Object.keys(effectSection("set")).length && !Object.keys(effectSection("add")).length}<p
 									class="effect-empty"
 								>
-									아직 변수 효과가 없습니다.
+									{$_("gameEditor.noVarEffects")}
 								</p>{/if}
 						</div>
 						<div class="effect-section">
 							<div class="effect-section-title">
-								<strong>아이템 지급 / 회수</strong>
+								<strong>{$_("gameEditor.itemEffectHeading")}</strong>
 								<div>
 									<button class="small-action" onclick={() => addItemEffect("give_item")}
-										>아이템 지급</button
+										>{$_("gameEditor.giveItemBtn")}</button
 									><button class="small-action" onclick={() => addItemEffect("take_item")}
-										>아이템 회수</button
+										>{$_("gameEditor.takeItemBtn")}</button
 									>
 								</div>
 							</div>
 							{#each ["give_item", "take_item"] as section}
 								{#each Object.entries(effectSection(section)) as [itemId, quantity] (`${section}:${itemId}`)}
 									<div class="effect-row">
-										<span class="effect-kind">{section === "give_item" ? "지급" : "회수"}</span
+										<span class="effect-kind">{section === "give_item" ? $_("gameEditor.kindGive") : $_("gameEditor.kindTake")}</span
 										><select
 											value={itemId}
 											onchange={(e) => {
@@ -380,7 +381,7 @@
 													>{item.name}</option
 												>{/each}</select
 										><input
-											aria-label="수량"
+											aria-label={$_("gameEditor.quantityAria")}
 											type="number"
 											min="1"
 											value={Number(quantity)}
@@ -392,7 +393,7 @@
 												)}
 										/><button
 											class="row-remove"
-											aria-label="아이템 효과 삭제"
+											aria-label={$_("gameEditor.deleteItemEffectAria")}
 											onclick={() => removeEffectValue(section, itemId)}>×</button
 										>
 									</div>
@@ -401,19 +402,19 @@
 						</div>
 						<div class="effect-section">
 							<div class="effect-section-title">
-								<strong>캐릭터 관계 변화</strong>
+								<strong>{$_("gameEditor.relationHeading")}</strong>
 								<div class="relation-add">
 									<select
-										aria-label="관계를 변경할 캐릭터 선택"
+										aria-label={$_("gameEditor.selectRelationCharAria")}
 										bind:value={pendingRelationCharacterId}
-										><option value="">캐릭터 선택</option
+										><option value="">{$_("gameEditor.selectCharOption")}</option
 										>{#each availableRelationCharacters as character (character.id)}<option
 												value={character.id ?? ""}>{character.name}</option
 											>{/each}</select
 									><button
 										class="small-action"
 										onclick={addRelationEffect}
-										disabled={!pendingRelationCharacterId}>추가</button
+										disabled={!pendingRelationCharacterId}>{$_("common.add")}</button
 									>
 								</div>
 							</div>
@@ -422,7 +423,7 @@
 								{@const characterId = key.split(">").at(-1) ?? ""}
 								<div class="relation-row">
 									<select
-										aria-label="관계 변경 캐릭터"
+										aria-label={$_("gameEditor.relationCharAria")}
 										value={characterId}
 										onchange={(e) => changeRelationCharacter(key, e.currentTarget.value)}
 										>{#each relationCharacterOptions(key) as character (character.id)}<option
@@ -437,30 +438,30 @@
 											/></label
 										>{/each}<button
 										class="row-remove"
-										aria-label="관계 효과 삭제"
+										aria-label={$_("gameEditor.deleteRelationAria")}
 										onclick={() => removeRelationEffect(key)}>×</button
 									>
 								</div>
 							{/each}
 							{#if !Object.keys(effectSection("relation")).length}<p class="effect-empty">
-									관계 변화가 필요하면 캐릭터를 추가하세요.
+									{$_("gameEditor.noRelationEffects")}
 								</p>{/if}
 						</div>
 						<div class="effect-section effect-routing">
 							<label
-								>이동할 씬<select
+								>{$_("gameEditor.nextSceneLabel")}<select
 									value={String(activeEvent.effectJson.enter_scene ?? "")}
 									onchange={(e) => updateEffectRoot("enter_scene", e.currentTarget.value)}
-									><option value="">이동 없음</option>{#each scenes as scene (scene.id)}<option
+									><option value="">{$_("gameEditor.noMoveOption")}</option>{#each scenes as scene (scene.id)}<option
 											value={scene.id}>{scene.sceneName}</option
 										>{/each}</select
 								></label
 							>
 							<label
-								>실행할 이벤트<select
+								>{$_("gameEditor.fireEventLabel")}<select
 									value={String(activeEvent.effectJson.fire_event ?? "")}
 									onchange={(e) => updateEffectRoot("fire_event", e.currentTarget.value)}
-									><option value="">연결 없음</option
+									><option value="">{$_("gameEditor.noLinkOption")}</option
 									>{#each events.filter((event) => event.id !== activeEvent.id) as event (event.id)}<option
 											value={event.id}>{event.name}</option
 										>{/each}</select
@@ -471,7 +472,7 @@
 				</details>
 			</div>
 		{:else}
-			<div class="no-selection">왼쪽에서 이벤트를 선택하거나 새로 추가하세요.</div>
+			<div class="no-selection">{$_("gameEditor.selectOrAddEvent")}</div>
 		{/if}
 	</div>
 </div>

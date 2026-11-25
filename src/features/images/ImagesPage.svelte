@@ -3,6 +3,7 @@
 	// 그림은 앱 데이터 generated/ 폴더에 있고, 같은 이름 .json에 프롬프트·출처·생성 정보가 있다 (service/plugins.rs)
 	import { jobs } from "$shared/stores/jobs.svelte";
 	import { _ } from "svelte-i18n";
+	import { getAppLocale } from "$lib/utils/i18n";
 	import { onMount } from "svelte";
 	import { ArrowUpDown, Check, Ellipsis, Info, Plus, Copy, ExternalLink, Eye, Filter, FolderOpen, MessageSquare, Pencil, Search, Sparkles, Tag, Trash2, Upload, Wand2, X } from "@lucide/svelte";
 	import type { GeneratedImage_Serialize as GeneratedImage } from "$ipc/bindings";
@@ -151,6 +152,18 @@
 			],
 		};
 	}
+	function metaKeyLabel(key: string): string {
+		const map: Record<string, string> = {
+			크기: $_("finalPolish.imgMetaSize"),
+			단계: $_("finalPolish.imgMetaSteps"),
+			"프롬프트 반영": $_("finalPolish.imgMetaCfg"),
+			샘플러: $_("finalPolish.imgMetaSampler"),
+			시드: $_("finalPolish.imgMetaSeed"),
+			"노이즈 스케줄": $_("finalPolish.imgMetaNoise"),
+			SMEA: $_("finalPolish.imgMetaSmea"),
+		};
+		return map[key] ?? key;
+	}
 	function imageInfoRows(img: GeneratedImage) {
 		const neg = negativeOf(img);
 		const rest = img.meta.filter((m) => m.key !== "네거티브");
@@ -161,7 +174,7 @@
 			...(img.tags.length ? [{ label: $_("imagesPage.infoTags"), value: img.tags.map((t) => `#${tagLabel(t)}`).join(" ") }] : []),
 			...(img.prompt ? [{ label: $_("imagesPage.infoPrompt"), value: img.prompt }] : []),
 			...(neg ? [{ label: $_("imagesPage.infoNegative"), value: neg }] : []),
-			...rest.map((m) => ({ label: m.key, value: m.value })),
+			...rest.map((m) => ({ label: metaKeyLabel(m.key), value: m.value })),
 		];
 	}
 	function openViewer(img: GeneratedImage) {
@@ -357,7 +370,7 @@
 		if (conv.mode === "phone") return nav.go({ page: "phone" });
 		nav.go({ page: "character", charId: conv.characterId ?? undefined, convId: conv.id });
 	}
-	const when = (t: number) => new Date(t).toLocaleString();
+	const when = (t: number) => new Date(t).toLocaleString(getAppLocale() === "en" ? "en-US" : "ko-KR");
 
 	// ---- 만들기 (위에 열리는 칸) ----
 	let creating = $state(false);

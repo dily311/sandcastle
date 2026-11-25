@@ -1,8 +1,9 @@
 <script lang="ts">
+	import { _ } from "svelte-i18n";
 	import { confirmAction } from "$shared/stores/confirm.svelte";
 	import { toasts } from "$shared/stores/toast.svelte";
 	/** 지우기 전에 앱 확인 창으로 물어봄 */
-	const ask = (message: string) => confirmAction({ title: "삭제", message, confirmLabel: "삭제", danger: true });
+	const ask = (message: string) => confirmAction({ title: $_("common.delete"), message, confirmLabel: $_("common.delete"), danger: true });
 	import type {
 		GameBackgroundAssetsInput,
 		GameInteractablesInput,
@@ -91,7 +92,7 @@
 		const newMap: GameMapsInput = {
 			id: crypto.randomUUID(),
 			gameId: gameId,
-			name: "새로운 맵 영역",
+			name: $_("gameEditor.newMapName"),
 			dangerLevel: 1,
 			defaultWeatherPoolId: null,
 			settingsJson: null,
@@ -108,7 +109,7 @@
 		const newZone: GameMapsZoneInput = {
 			id: crypto.randomUUID(),
 			mapId: activeMap.id,
-			name: "새로운 존(Zone)",
+			name: $_("gameEditor.newZoneName"),
 			tags: [],
 			settingsJson: null,
 		};
@@ -123,7 +124,7 @@
 		const newLoc: GameLocationsInput = {
 			id: crypto.randomUUID(),
 			zoneId: activeZone.id,
-			name: "새로운 로케이션",
+			name: $_("gameEditor.newLocationName"),
 			description: "",
 			settingsJson: null,
 		};
@@ -134,7 +135,7 @@
 	// 삭제 핸들러들
 	async function handleDeleteMap(index: number) {
 		const targetMap = maps[index];
-		if (!await ask(`"${targetMap.name}" 맵을 삭제하시겠습니까? 하위 존과 로케이션도 함께 관리해야 합니다.`)) return;
+		if (!await ask($_("gameEditor.deleteMapConfirm", { values: { name: targetMap.name } }))) return;
 
 		// 연관된 존과 로케이션도 정리
 		if (targetMap.id) {
@@ -161,7 +162,7 @@
 	}
 
 	async function handleDeleteZone(zoneId: string | null) {
-		if (!zoneId || !await ask("이 존(Zone)을 삭제하시겠습니까? 하위 로케이션도 함께 삭제됩니다.")) return;
+		if (!zoneId || !await ask($_("gameEditor.deleteZoneConfirm"))) return;
 
 		const locationIdsToRemove = locations
 			.filter((location) => location.zoneId === zoneId)
@@ -181,7 +182,7 @@
 	}
 
 	async function handleDeleteLocation(locId: string | null) {
-		if (!locId || !await ask("이 로케이션을 삭제하시겠습니까?")) return;
+		if (!locId || !await ask($_("gameEditor.deleteLocationConfirm"))) return;
 
 		locations = locations.filter((l) => l.id !== locId);
 		backgroundAssets = backgroundAssets.filter((asset) => asset.locationId !== locId);
@@ -232,7 +233,7 @@
 		interactables.push({
 			id: crypto.randomUUID(),
 			locationId: activeLocation.id,
-			name: "새 오브젝트",
+			name: $_("gameEditor.newInteractableName"),
 			eventId: null,
 		});
 	}
@@ -247,7 +248,7 @@
 			id: crypto.randomUUID(),
 			gameId,
 			key: `background_${Date.now()}`,
-			name: `${activeLocation.name} 배경`,
+			name: $_("gameEditor.bgDefaultName", { values: { name: activeLocation.name } }),
 			category: "background",
 			kind: "image",
 			filePath: "",
@@ -265,12 +266,12 @@
 
 <div class="map-hierarchy-layout">
 	<section class="item-list-pane">
-		<label class="list-search"><span aria-hidden="true">⌕</span><input aria-label="맵, 존, 로케이션 검색" placeholder="맵 · 존 · 로케이션 검색" bind:value={hierarchySearch} /></label>
+		<label class="list-search"><span aria-hidden="true">⌕</span><input aria-label={$_("gameEditor.searchHierarchyAria")} placeholder={$_("gameEditor.searchHierarchyPlaceholder")} bind:value={hierarchySearch} /></label>
 		<!-- 1단: 맵(Map) 선택/목록 영역 -->
 		<div class="hierarchy-level">
 			<div class="pane-header">
-				<h4>맵 (Maps)</h4>
-				<button class="add-btn" onclick={handleAddMap}>+ 맵 추가</button>
+				<h4>{$_("gameEditor.mapsHeading")}</h4>
+				<button class="add-btn" onclick={handleAddMap}>{$_("gameEditor.addMapBtn")}</button>
 			</div>
 			<div class="scroll-list">
 				{#each filteredMaps as row (row.map.id || row.index)}
@@ -290,7 +291,7 @@
 						<button class="icon-del" onclick={() => handleDeleteMap(idx)}>×</button>
 					</div>
 				{:else}
-					<div class="empty-text">맵이 없습니다.</div>
+					<div class="empty-text">{$_("gameEditor.noMaps")}</div>
 				{/each}
 			</div>
 		</div>
@@ -298,8 +299,8 @@
 		<!-- 2단: 존(Zone) 선택/목록 영역 (선택된 맵이 있을 때만 활성) -->
 		<div class="hierarchy-level">
 			<div class="pane-header">
-				<h4>존 (Zones)</h4>
-				<button class="add-btn" onclick={handleAddZone} disabled={!activeMap}>+ 존 추가</button>
+				<h4>{$_("gameEditor.zonesHeading")}</h4>
+				<button class="add-btn" onclick={handleAddZone} disabled={!activeMap}>{$_("gameEditor.addZoneBtn")}</button>
 			</div>
 			<div class="scroll-list">
 				{#if activeMap}
@@ -319,10 +320,10 @@
 							<button class="icon-del" onclick={() => handleDeleteZone(zone.id)}>×</button>
 						</div>
 					{:else}
-						<div class="empty-text">등록된 존이 없습니다.</div>
+						<div class="empty-text">{$_("gameEditor.noZones")}</div>
 					{/each}
 				{:else}
-					<div class="empty-text">맵을 먼저 선택해주세요.</div>
+					<div class="empty-text">{$_("gameEditor.selectMapFirst")}</div>
 				{/if}
 			</div>
 		</div>
@@ -330,8 +331,8 @@
 		<!-- 3단: 로케이션(Location) 선택/목록 영역 (선택된 존이 있을 때만 활성) -->
 		<div class="hierarchy-level">
 			<div class="pane-header">
-				<h4>로케이션 (Locations)</h4>
-				<button class="add-btn" onclick={handleAddLocation} disabled={!activeZone}>+ 장소 추가</button>
+				<h4>{$_("gameEditor.locationsHeading")}</h4>
+				<button class="add-btn" onclick={handleAddLocation} disabled={!activeZone}>{$_("gameEditor.addLocationBtn")}</button>
 			</div>
 			<div class="scroll-list">
 				{#if activeZone}
@@ -349,16 +350,16 @@
 									>{interactables
 										.filter((item) => item.locationId === loc.id)
 										.map((item) => item.name)
-										.join(" · ") || "오브젝트 없음"}</span
+										.join(" · ") || $_("gameEditor.noInteractablesShort")}</span
 								></span
 							>
 							<button class="icon-del" onclick={() => handleDeleteLocation(loc.id)}>×</button>
 						</div>
 					{:else}
-						<div class="empty-text">등록된 로케이션이 없습니다.</div>
+						<div class="empty-text">{$_("gameEditor.noLocations")}</div>
 					{/each}
 				{:else}
-					<div class="empty-text">존(Zone)을 먼저 선택해주세요.</div>
+					<div class="empty-text">{$_("gameEditor.selectZoneFirst")}</div>
 				{/if}
 			</div>
 		</div>
@@ -368,33 +369,33 @@
 	<div class="item-detail-pane">
 		{#if activeLocation}
 			<div class="detail-header">
-				<h3>로케이션 편집: <strong>{activeLocation.name}</strong></h3>
+				<h3>{$_("gameEditor.editLocationHeading")} <strong>{activeLocation.name}</strong></h3>
 			</div>
 			<div class="form-grid">
 				<div class="field">
-					<label for="location_name">장소 이름</label>
+					<label for="location_name">{$_("gameEditor.locationNameLabel")}</label>
 					<input id="location_name" type="text" bind:value={activeLocation.name} />
 				</div>
 				<details class="editor-accordion" open>
-					<summary>장소 설명</summary>
+					<summary>{$_("gameEditor.locationDescAccordion")}</summary>
 					<div class="editor-accordion-content">
 						<div class="field">
-							<label for="location_des">설명</label>
+							<label for="location_des">{$_("gameEditor.descLabel")}</label>
 							<textarea
 								id="location_des"
 								bind:value={activeLocation.description}
 								rows="4"
-								placeholder="장소 설명 입력..."></textarea>
+								placeholder={$_("gameEditor.locationDescPlaceholder")}></textarea>
 						</div>
 					</div>
 				</details>
 
 				<details class="editor-accordion location-assets" open>
-					<summary>장소 배경</summary>
+					<summary>{$_("gameEditor.locationBgAccordion")}</summary>
 					<div class="editor-accordion-content">
 						<div class="section-heading">
-							<div><p>시간대와 날씨에 따라 장소에 표시할 배경을 연결합니다.</p></div>
-							<button class="add-btn" onclick={handleAddBackground}>+ 배경 추가</button>
+							<div><p>{$_("gameEditor.locationBgDesc")}</p></div>
+							<button class="add-btn" onclick={handleAddBackground}>{$_("gameEditor.addBgBtn")}</button>
 						</div>
 						{#if backgroundAssets.filter((asset) => asset.locationId === activeLocation.id).length}
 							<div class="background-asset-list">
@@ -407,25 +408,25 @@
 												/>{:else}<span>▧</span>{/if}
 										</div>
 										<div class="background-fields">
-											<label>배경 이름<input bind:value={asset.name} /></label><label
-												>키<input bind:value={asset.key} /></label
+											<label>{$_("gameEditor.bgNameLabel")}<input bind:value={asset.name} /></label><label
+												>{$_("gameEditor.keyLabel")}<input bind:value={asset.key} /></label
 											><label
-												>파일 경로<input
+												>{$_("gameEditor.filePathLabel")}<input
 													bind:value={asset.filePath}
 													placeholder="backgrounds/..."
 												/></label
 											>
 											<div class="asset-field-row">
 												<label
-													>시간대<select bind:value={asset.timeId}
-														><option value={null}>모든 시간</option
+													>{$_("gameEditor.tabTime")}<select bind:value={asset.timeId}
+														><option value={null}>{$_("gameEditor.allTimes")}</option
 														>{#each timePeriods as period (period.id)}<option
 																value={period.id}>{period.name}</option
 															>{/each}</select
 													></label
 												><label
-													>날씨<select bind:value={asset.weatherId}
-														><option value={null}>모든 날씨</option
+													>{$_("gameEditor.tabWeather")}<select bind:value={asset.weatherId}
+														><option value={null}>{$_("gameEditor.allWeathers")}</option
 														>{#each weatherTypes as weather (weather.id)}<option
 																value={weather.id}>{weather.name}</option
 															>{/each}</select
@@ -435,37 +436,37 @@
 										</div>
 										<button
 											class="asset-remove"
-											aria-label="배경 삭제"
+											aria-label={$_("gameEditor.deleteBgAria")}
 											onclick={() => removeBackground(asset.id)}>×</button
 										>
 									</article>
 								{/each}
 							</div>
 						{:else}<div class="asset-empty">
-								아직 배경이 연결되지 않았습니다. 이 장소의 배경을 추가하세요.
+								{$_("gameEditor.noLocationBgs")}
 							</div>{/if}
 					</div>
 				</details>
 				<details class="editor-accordion location-links" open>
-					<summary>이동 경로</summary>
+					<summary>{$_("gameEditor.routesAccordion")}</summary>
 					<div class="editor-accordion-content">
 						<div class="section-heading">
-							<div><p>이 장소에서 오가는 이동 경로를 확인하고 수정합니다.</p></div>
+							<div><p>{$_("gameEditor.routesDesc")}</p></div>
 							<button class="add-btn" onclick={handleAddRoute} disabled={!canAddRoute()}
-								>+ 경로 추가</button
+								>{$_("gameEditor.addRouteBtn")}</button
 							>
 						</div>
 						{#if activeLocationRoutes.length}<div class="location-link-list">
 								{#each activeLocationRoutes as route (route.index)}<article class="location-link-card">
 										<div class="link-route">
 											<label
-												>출발 장소<select bind:value={route.connection.fromId}
+												>{$_("gameEditor.fromLocationLabel")}<select bind:value={route.connection.fromId}
 													>{#each locations as location (location.id)}<option
 															value={location.id ?? ""}>{location.name}</option
 														>{/each}</select
 												></label
 											><span>→</span><label
-												>도착 장소<select bind:value={route.connection.toId}
+												>{$_("gameEditor.toLocationLabel")}<select bind:value={route.connection.toId}
 													>{#each locations as location (location.id)}<option
 															value={location.id ?? ""}>{location.name}</option
 														>{/each}</select
@@ -474,92 +475,92 @@
 										</div>
 										<div class="link-settings">
 											<label
-												>이동 시간 (초)<input
+												>{$_("gameEditor.travelSecondsLabel")}<input
 													type="number"
 													min="0"
 													step="10"
 													bind:value={route.connection.travelSeconds}
 												/></label
 											><label
-												>이동 조건<input
+												>{$_("gameEditor.travelConditionLabel")}<input
 													bind:value={route.connection.condition}
-													placeholder="선택 사항"
+													placeholder={$_("gameEditor.optionalPlaceholder")}
 												/></label
 											><button
 												class="asset-remove"
-												aria-label="이동 경로 삭제"
+												aria-label={$_("gameEditor.deleteRouteAria")}
 												onclick={() => handleDeleteRoute(route.index)}>×</button
 											>
 										</div>
 									</article>{/each}
-							</div>{:else}<div class="asset-empty">이 장소와 연결된 이동 경로가 없습니다.</div>{/if}
+							</div>{:else}<div class="asset-empty">{$_("gameEditor.noRoutes")}</div>{/if}
 					</div>
 				</details>
 				<details class="editor-accordion location-links" open>
-					<summary>상호작용 오브젝트</summary>
+					<summary>{$_("gameEditor.interactablesAccordion")}</summary>
 					<div class="editor-accordion-content">
 						<div class="section-heading">
-							<div><p>이 장소에서 조사하거나 실행할 수 있는 대상입니다.</p></div>
-							<button class="add-btn" onclick={handleAddInteractable}>+ 오브젝트 추가</button>
+							<div><p>{$_("gameEditor.interactablesDesc")}</p></div>
+							<button class="add-btn" onclick={handleAddInteractable}>{$_("gameEditor.addInteractableBtn")}</button>
 						</div>
 						{#if activeLocationInteractables.length}<div class="location-interactable-list">
 								{#each activeLocationInteractables as entry (entry.index)}<article
 										class="location-interactable-card"
 									>
 										<span class="record-icon">✦</span><label
-											>오브젝트 이름<input bind:value={entry.item.name} /></label
+											>{$_("gameEditor.interactableNameLabel")}<input bind:value={entry.item.name} /></label
 										><label
-											>연결 이벤트<select bind:value={entry.item.eventId}
-												><option value={null}>연결 없음</option
+											>{$_("gameEditor.linkedEventLabel")}<select bind:value={entry.item.eventId}
+												><option value={null}>{$_("gameEditor.noLinkOption")}</option
 												>{#each events as event (event.id)}<option value={event.id}
 														>{event.name}</option
 													>{/each}</select
 											></label
 										><button
 											class="asset-remove"
-											aria-label="오브젝트 삭제"
+											aria-label={$_("gameEditor.deleteInteractableAria")}
 											onclick={() => handleDeleteInteractable(entry.index)}>×</button
 										>
 									</article>{/each}
 							</div>{:else}<div class="asset-empty">
-								이 장소에는 아직 상호작용 오브젝트가 없습니다.
+								{$_("gameEditor.noInteractables")}
 							</div>{/if}
 					</div>
 				</details>
 			</div>
 		{:else if activeZone}
 			<div class="detail-header">
-				<h3>존(Zone) 편집: <strong>{activeZone.name}</strong></h3>
+				<h3>{$_("gameEditor.editZoneHeading")} <strong>{activeZone.name}</strong></h3>
 			</div>
 			<div class="form-grid">
 				<div class="field">
-					<label for="zone_name">존 이름</label>
+					<label for="zone_name">{$_("gameEditor.zoneNameLabel")}</label>
 					<input id="zone_name" type="text" bind:value={activeZone.name} />
 				</div>
 			</div>
 		{:else if activeMap}
 			<div class="detail-header">
-				<h3>맵 편집: <strong>{activeMap.name}</strong></h3>
+				<h3>{$_("gameEditor.editMapHeading")} <strong>{activeMap.name}</strong></h3>
 			</div>
 			<div class="form-grid">
 				<div class="field">
-					<label for="map_name">맵 이름</label>
+					<label for="map_name">{$_("gameEditor.mapNameLabel")}</label>
 					<input id="map_name" type="text" bind:value={activeMap.name} />
 				</div>
 				<div class="field">
-					<label for="map_danger">위험도 (Danger Level)</label>
+					<label for="map_danger">{$_("gameEditor.dangerLevelLabel")}</label>
 					<input id="map_danger" type="number" bind:value={activeMap.dangerLevel} min="0" max="10" />
 				</div>
 				<div class="field">
-					<label for="map_default_weather_pool">기본 날씨 풀</label>
+					<label for="map_default_weather_pool">{$_("gameEditor.defaultWeatherPoolLabel")}</label>
 					<select id="map_default_weather_pool" bind:value={activeMap.defaultWeatherPoolId}>
-						<option value={null}>기본 날씨 풀 사용 안 함</option>
-						{#if activeMap.defaultWeatherPoolId}<option value={activeMap.defaultWeatherPoolId}>현재 연결된 날씨 풀</option>{/if}
+						<option value={null}>{$_("gameEditor.noWeatherPool")}</option>
+						{#if activeMap.defaultWeatherPoolId}<option value={activeMap.defaultWeatherPoolId}>{$_("gameEditor.currentWeatherPool")}</option>{/if}
 					</select>
 				</div>
 			</div>
 		{:else}
-			<div class="no-selection">왼쪽에서 맵, 존, 혹은 로케이션을 선택하여 편집하세요.</div>
+			<div class="no-selection">{$_("gameEditor.selectMapHierarchy")}</div>
 		{/if}
 	</div>
 </div>

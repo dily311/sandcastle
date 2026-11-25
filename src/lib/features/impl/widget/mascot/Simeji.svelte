@@ -1,5 +1,6 @@
 <script lang="ts">
 	import { onMount, tick } from "svelte";
+	import { _ } from "svelte-i18n";
 	import { interactiveManager } from "$/lib/interaction/interactive-registry";
 	import { WidgetGame } from "./pixi/WidgetGame";
 	import { mascotUi } from "./mascotFeature.svelte";
@@ -106,15 +107,15 @@
 					bind:this={inputEl}
 					bind:value={promptText}
 					type="text"
-					placeholder={mascotUi.activePrompt.mode === "chat" ? `${activeOverlay.name}에게 말 걸기...` : "줄 선물 입력 (예: 딸기 케이크)"}
+					placeholder={mascotUi.activePrompt.mode === "chat" ? $_("widgetExtra.mascotPromptChat", { values: { name: activeOverlay.name } }) : $_("widgetExtra.mascotPromptGift")}
 					onkeydown={(e) => {
 						if (e.key === "Escape") mascotUi.close();
 					}}
 				/>
 				<button type="submit" disabled={!promptText.trim() || sending}>
-					{mascotUi.activePrompt.mode === "chat" ? "전송" : "주기"}
+					{mascotUi.activePrompt.mode === "chat" ? $_("widgetExtra.mascotSend") : $_("widgetExtra.mascotGive")}
 				</button>
-				<button type="button" class="close-btn" onclick={() => mascotUi.close()} aria-label="닫기">×</button>
+				<button type="button" class="close-btn" onclick={() => mascotUi.close()} aria-label={$_("common.close")}>×</button>
 			</form>
 		</div>
 	{/if}

@@ -14,6 +14,7 @@
 		VolumeX,
 		X,
 	} from "@lucide/svelte";
+	import { _ } from "svelte-i18n";
 	import { Avatar, Button, Input, Spinner, Textarea } from "$shared/ui";
 	import { call, commands } from "$shared/ipc/client";
 	import { IMAGE_FILES, pickFiles } from "$shared/ipc/dialog";
@@ -123,10 +124,10 @@
 			updatedAt: Date.now(),
 		});
 		editing = false;
-		toasts.success("프로필을 저장함");
+		toasts.success($_("phoneProfileUi.savedToast"));
 	}
 	async function uploadBackgrounds() {
-		const paths = await pickFiles([{ name: "이미지", extensions: ["png", "jpg", "jpeg", "webp", "gif", "avif"] }], true);
+		const paths = await pickFiles([{ name: $_("phoneProfileUi.imageFilterName"), extensions: ["png", "jpg", "jpeg", "webp", "gif", "avif"] }], true);
 		if (!paths.length) return;
 		await theme.addBackgrounds(paths, false);
 		const last = theme.setting.backgrounds?.at(-1) ?? null;
@@ -147,7 +148,7 @@
 			editCover = path;
 		} else {
 			persist({ ...profile, coverImage: path, updatedAt: Date.now() });
-			toasts.success(path ? "배경 이미지를 바꿈" : "기본 배경으로 되돌림");
+			toasts.success(path ? $_("phoneProfileUi.bgChangedToast") : $_("phoneProfileUi.bgResetToast"));
 		}
 	}
 
@@ -208,13 +209,13 @@
 				if (chatWho) cid = (await phone.open(chatWho))?.id;
 			}
 			if (!cid) {
-				toasts.error("대화를 먼저 연 뒤 다시 시도해 주세요");
+				toasts.error($_("phoneProfileUi.openChatFirstErr"));
 				return;
 			}
 			const raw = await call(commands.phoneGenerateProfile(cid, prompt), { source: "phone" });
 			const parsed = parseAiJson(raw);
 			if (!parsed) {
-				toasts.error("AI 응답을 프로필 형식으로 읽지 못함");
+				toasts.error($_("phoneProfileUi.aiParseErr"));
 				return;
 			}
 			const next: PhoneProfileData = {
@@ -226,7 +227,7 @@
 				updatedAt: Date.now(),
 			};
 			persist(next);
-			toasts.success("AI로 프로필을 꾸밈");
+			toasts.success($_("phoneProfileUi.aiDecoratedToast"));
 		} finally {
 			generating = false;
 		}
@@ -239,12 +240,12 @@
 	<!-- 상단 바 -->
 	<header class="kk-top">
 		<div class="kk-top-left">
-			<button type="button" class="kk-plain" aria-label="닫기" onclick={onback}><X /></button>
+			<button type="button" class="kk-plain" aria-label={$_("common.close")} onclick={onback}><X /></button>
 			{#if profile.bgmTitle}
 				<button
 					type="button"
 					class="kk-mute"
-					aria-label={muted ? "음소거 해제" : "음소거"}
+					aria-label={muted ? $_("phoneProfileUi.unmuteAria") : $_("phoneProfileUi.muteAria")}
 					onclick={() => (muted = !muted)}
 				>
 					{#if muted}<VolumeX />{:else}<Volume2 />{/if}
@@ -252,13 +253,13 @@
 			{/if}
 		</div>
 		<div class="kk-top-right">
-			<button type="button" class="kk-circle" title="AI로 프로필 꾸미기" disabled={generating} onclick={generateWithAi}>
+			<button type="button" class="kk-circle" title={$_("phoneProfileUi.aiDecorateTitle")} disabled={generating} onclick={generateWithAi}>
 				{#if generating}<Spinner size={15} />{:else}<Sparkles />{/if}
 			</button>
-			<button type="button" class="kk-circle" title="배경 이미지 변경" onclick={pickCoverImage}>
+			<button type="button" class="kk-circle" title={$_("phoneProfileUi.changeBgTitle")} onclick={pickCoverImage}>
 				<ImageIcon />
 			</button>
-			<button type="button" class="kk-circle" title="프로필 편집" onclick={openEdit}>
+			<button type="button" class="kk-circle" title={$_("phoneProfileUi.editProfileTitle")} onclick={openEdit}>
 				<Settings2 />
 			</button>
 		</div>
@@ -270,7 +271,7 @@
 			<div class="kk-bgm">
 				<div class="kk-bgm-thumb">
 					{#if target.avatar}
-						<img src={fileSrc(target.avatar)} alt="앨범 커버" />
+						<img src={fileSrc(target.avatar)} alt={$_("phoneProfileUi.albumCoverAlt")} />
 					{:else}
 						<Music />
 					{/if}
@@ -279,13 +280,13 @@
 					<b>{profile.bgmTitle}</b>
 					<span>{profile.bgmArtist || target.name}</span>
 				</div>
-				<button type="button" class="kk-bgm-btn" class:liked={profile.bgmLiked} aria-label="좋아요" onclick={toggleBgmLike}>
+				<button type="button" class="kk-bgm-btn" class:liked={profile.bgmLiked} aria-label={$_("phoneProfileUi.likeAria")} onclick={toggleBgmLike}>
 					<Heart />
 				</button>
 				<button
 					type="button"
 					class="kk-bgm-btn"
-					aria-label={playing ? "일시정지" : "재생"}
+					aria-label={playing ? $_("phoneProfileUi.pauseAria") : $_("phoneProfileUi.playAria")}
 					onclick={() => {
 						playing = !playing;
 						if (playing) muted = false;
@@ -297,7 +298,7 @@
 		{/if}
 
 		{#if profile.note}
-			<button type="button" class="kk-note" title="눌러서 메모 편집" onclick={openEdit}>
+			<button type="button" class="kk-note" title={$_("phoneProfileUi.editNoteTitle")} onclick={openEdit}>
 				<span class="kk-note-hearts" aria-hidden="true"><Heart /><Heart /></span>
 				<span class="kk-note-text">{profile.note}</span>
 				<span class="kk-note-arrow" aria-hidden="true"><ArrowDown /></span>
@@ -311,8 +312,8 @@
 			<Avatar name={target.name} src={fileSrc(target.avatar)} fit={target.avatarFit} color={target.color} size={86} />
 		</div>
 		<h2 class="kk-name">{target.name}</h2>
-		<button type="button" class="kk-status" title="눌러서 상태 메시지 편집" onclick={openEdit}>
-			{displayStatus || "상태 메시지를 입력하거나 AI로 꾸며보세요"}
+		<button type="button" class="kk-status" title={$_("phoneProfileUi.editStatusTitle")} onclick={openEdit}>
+			{displayStatus || $_("phoneProfileUi.emptyStatusPrompt")}
 		</button>
 	</section>
 
@@ -320,15 +321,15 @@
 	<footer class="kk-actions">
 		<button type="button" class="kk-act" onclick={() => (onchat ? onchat() : onback())}>
 			<MessageCircle />
-			<span>1:1 채팅</span>
+			<span>{$_("phoneProfileUi.oneOnOneChat")}</span>
 		</button>
 		<button type="button" class="kk-act" onclick={openEdit}>
 			<Pencil />
-			<span>프로필 편집</span>
+			<span>{$_("phoneProfileUi.editProfileTitle")}</span>
 		</button>
 		<button type="button" class="kk-act" disabled={generating} onclick={generateWithAi}>
 			{#if generating}<Spinner size={18} />{:else}<Sparkles />{/if}
-			<span>{generating ? "꾸미는 중…" : "AI 꾸미기"}</span>
+			<span>{generating ? $_("phoneProfileUi.decorating") : $_("phoneProfileUi.aiDecorateBtn")}</span>
 		</button>
 	</footer>
 
@@ -336,45 +337,45 @@
 	{#if editing}
 		<!-- svelte-ignore a11y_click_events_have_key_events, a11y_no_static_element_interactions -->
 		<div class="kk-sheet-backdrop" onclick={() => (editing = false)}></div>
-		<div class="kk-sheet" role="dialog" aria-label="프로필 편집">
+		<div class="kk-sheet" role="dialog" aria-label={$_("phoneProfileUi.editProfileTitle")}>
 			<div class="kk-sheet-head">
-				<strong>프로필 편집</strong>
-				<button type="button" class="kk-sheet-close" aria-label="닫기" onclick={() => (editing = false)}><X /></button>
+				<strong>{$_("phoneProfileUi.editProfileTitle")}</strong>
+				<button type="button" class="kk-sheet-close" aria-label={$_("common.close")} onclick={() => (editing = false)}><X /></button>
 			</div>
 			<div class="kk-sheet-body">
 				<label class="kk-field">
-					<span>상태 메시지</span>
-					<Input bind:value={editStatus} placeholder="예: 우리의 일상이 여행처럼" />
+					<span>{$_("phoneProfileUi.statusLabel")}</span>
+					<Input bind:value={editStatus} placeholder={$_("phoneProfileUi.statusPlaceholder")} />
 				</label>
 				<label class="kk-field">
-					<span>배경 위 메모 문구</span>
-					<Textarea bind:value={editNote} rows={2} autosize placeholder="예: 공원 산책 중에&#10;브런치 넘 맛있다!" />
+					<span>{$_("phoneProfileUi.noteLabel")}</span>
+					<Textarea bind:value={editNote} rows={2} autosize placeholder={$_("phoneProfileUi.notePlaceholder")} />
 				</label>
 				<div class="kk-grid-2">
 					<label class="kk-field">
-						<span>프로필 뮤직 제목</span>
-						<Input bind:value={editBgmTitle} placeholder="곡 제목 (선택)" />
+						<span>{$_("phoneProfileUi.bgmTitleLabel")}</span>
+						<Input bind:value={editBgmTitle} placeholder={$_("phoneProfileUi.bgmTitlePlaceholder")} />
 					</label>
 					<label class="kk-field">
-						<span>아티스트</span>
-						<Input bind:value={editBgmArtist} placeholder="아티스트 (선택)" />
+						<span>{$_("phoneProfileUi.bgmArtistLabel")}</span>
+						<Input bind:value={editBgmArtist} placeholder={$_("phoneProfileUi.bgmArtistPlaceholder")} />
 					</label>
 				</div>
 				<div class="kk-cover-row">
-					<span>배경 이미지</span>
+					<span>{$_("phoneProfileUi.bgImageLabel")}</span>
 					<div class="kk-cover-btns">
-						<BackgroundPicker label="배경 이미지" value={editCover} images={theme.setting.backgrounds ?? []} onpick={(v) => setPickCoverImage(v)} onupload={uploadBackgrounds} />
+						<BackgroundPicker label={$_("phoneProfileUi.bgImageLabel")} value={editCover} images={theme.setting.backgrounds ?? []} onpick={(v) => setPickCoverImage(v)} onupload={uploadBackgrounds} />
 
-						<Button size="sm" variant="ghost" onclick={pickCoverImage}>{#snippet icon()}<ImageIcon />{/snippet}사진 선택</Button>
+						<Button size="sm" variant="ghost" onclick={pickCoverImage}>{#snippet icon()}<ImageIcon />{/snippet}{$_("phoneProfileUi.pickPhotoBtn")}</Button>
 						{#if editCover}
-							<Button size="sm" variant="ghost" onclick={() => (editCover = null)}>기본 배경</Button>
+							<Button size="sm" variant="ghost" onclick={() => (editCover = null)}>{$_("phoneProfileUi.defaultBgBtn")}</Button>
 						{/if}
 					</div>
 				</div>
 			</div>
 			<div class="kk-sheet-foot">
-				<Button size="sm" variant="ghost" onclick={() => (editing = false)}>취소</Button>
-				<Button size="sm" variant="primary" onclick={saveEdit}>저장</Button>
+				<Button size="sm" variant="ghost" onclick={() => (editing = false)}>{$_("common.cancel")}</Button>
+				<Button size="sm" variant="primary" onclick={saveEdit}>{$_("common.save")}</Button>
 			</div>
 		</div>
 	{/if}

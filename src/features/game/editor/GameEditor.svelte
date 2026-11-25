@@ -1,5 +1,6 @@
 <script lang="ts">
 	import { onMount, tick } from "svelte";
+	import { _ } from "svelte-i18n";
 	import {
 		AlertTriangle,
 		ChevronLeft,
@@ -57,15 +58,15 @@
 		o.storyPlan = { ...(o.storyPlan ?? {}), ...patch, ...(n !== undefined ? { everyNTurns: Math.min(100, Math.max(3, Math.round(n) || 10)) } : {}) };
 		data.project.settingsJson = JSON.stringify(o);
 	}
-	const CAPS = [
-		["choices", "선택지"],
-		["freeText", "자유 입력"],
-		["inventory", "소지품"],
-		["map", "지도"],
-		["aiNarration", "AI 서술"],
-		["location", "위치"],
-		["time", "시간"],
-	] as const;
+	const CAPS = $derived([
+		["choices", $_("gameEditor.capChoices")],
+		["freeText", $_("gameEditor.capFreeText")],
+		["inventory", $_("gameEditor.capInventory")],
+		["map", $_("gameEditor.capMap")],
+		["aiNarration", $_("gameEditor.capAiNarration")],
+		["location", $_("gameEditor.capLocation")],
+		["time", $_("gameEditor.capTime")],
+	] as const);
 	const capOn = (key: string) => (settingObj().capabilities ?? {})[key] !== false;
 	function setCap(key: string, on: boolean) {
 		if (!data) return;
@@ -119,7 +120,7 @@
 	});
 	$effect(() => {
 		if (!dirty) return;
-		return nav.setGuard(() => confirmAction({ title: "저장하지 않음", message: "바뀐 게임 데이터를 버리고 나감", confirmLabel: "버리기" }));
+		return nav.setGuard(() => confirmAction({ title: $_("gameEditor.unsavedTitle"), message: $_("gameEditor.unsavedMsg"), confirmLabel: $_("gameEditor.discardBtn") }));
 	});
 
 	async function save() {
@@ -136,8 +137,15 @@
 			const errors = issues.filter((i) => i.severity === "error").length;
 			if (errors) {
 				issuesOpen = true;
-				toasts.error(`저장함 · 오류 ${errors}개가 있어 새 게임을 시작할 수 없음`);
-			} else toasts.success(`저장함${removed ? ` · ${removed}개 지움` : ""}${issues.length ? ` · 경고 ${issues.length}개` : ""}`);
+				toasts.error($_("gameEditor.savedWithErrors", { values: { count: errors } }));
+			} else {
+				toasts.success($_("gameEditor.savedOk", {
+					values: {
+						removed: removed ? $_("gameEditor.savedRemovedPart", { values: { count: removed } }) : "",
+						warnings: issues.length ? $_("gameEditor.savedWarningsPart", { values: { count: issues.length } }) : "",
+					},
+				}));
+			}
 		} finally {
 			saving = false;
 		}
@@ -158,15 +166,15 @@
 	const tabs = $derived<{ id: Tab; label: string; icon: typeof Users; count?: number; hint: string }[]>(
 		data
 			? [
-					{ id: "project", label: "기본 정보", icon: Settings2, hint: "제목·설명·사용자 CSS" },
-					{ id: "scenes", label: "씬", icon: Clapperboard, count: data.scenes.length, hint: "대본과 선택지" },
-					{ id: "characters", label: "등장인물", icon: Users, count: data.characters.length, hint: "인물·표정 이미지" },
-					{ id: "maps", label: "지도", icon: MapIcon, count: data.locations.length, hint: "지도·지역·장소·이동 경로" },
-					{ id: "event", label: "이벤트", icon: Sparkles, count: data.events.length, hint: "조건이 맞으면 일어나는 일" },
-					{ id: "stateDefs", label: "변수", icon: Variable, count: data.stateDefs.length, hint: "게임 상태 값" },
-					{ id: "time", label: "시간대", icon: Clock3, count: data.timePeriods.length, hint: "아침·낮·밤" },
-					{ id: "weather", label: "날씨", icon: CloudSun, count: data.weatherTypes.length, hint: "날씨와 바뀌는 규칙" },
-					{ id: "assets", label: "에셋", icon: Image, count: assetCount, hint: "이미지·소리·배경" },
+					{ id: "project", label: $_("gameEditor.tabProject"), icon: Settings2, hint: $_("gameEditor.tabProjectHint") },
+					{ id: "scenes", label: $_("gameEditor.tabScenes"), icon: Clapperboard, count: data.scenes.length, hint: $_("gameEditor.tabScenesHint") },
+					{ id: "characters", label: $_("gameEditor.tabCharacters"), icon: Users, count: data.characters.length, hint: $_("gameEditor.tabCharactersHint") },
+					{ id: "maps", label: $_("gameEditor.tabMaps"), icon: MapIcon, count: data.locations.length, hint: $_("gameEditor.tabMapsHint") },
+					{ id: "event", label: $_("gameEditor.tabEvent"), icon: Sparkles, count: data.events.length, hint: $_("gameEditor.tabEventHint") },
+					{ id: "stateDefs", label: $_("gameEditor.tabStateDefs"), icon: Variable, count: data.stateDefs.length, hint: $_("gameEditor.tabStateDefsHint") },
+					{ id: "time", label: $_("gameEditor.tabTime"), icon: Clock3, count: data.timePeriods.length, hint: $_("gameEditor.tabTimeHint") },
+					{ id: "weather", label: $_("gameEditor.tabWeather"), icon: CloudSun, count: data.weatherTypes.length, hint: $_("gameEditor.tabWeatherHint") },
+					{ id: "assets", label: $_("gameEditor.tabAssets"), icon: Image, count: assetCount, hint: $_("gameEditor.tabAssetsHint") },
 				]
 			: [],
 	);
@@ -178,25 +186,25 @@
 {#if loading}
 	<div class="center"><Spinner /></div>
 {:else if !data}
-	<EmptyState title="게임 데이터를 불러올 수 없음" description="파일이 깨졌거나 지워졌을 수 있음">
-		{#snippet action()}<Button onclick={back}>게임으로</Button>{/snippet}
+	<EmptyState title={$_("gameEditor.loadFailTitle")} description={$_("gameEditor.loadFailDesc")}>
+		{#snippet action()}<Button onclick={back}>{$_("gameEditor.backToGame")}</Button>{/snippet}
 	</EmptyState>
 {:else}
 	<div class="ge">
 
 		{#if issuesOpen && issues.length}
 			<div class="issues">
-				<div class="issues-head"><b>저장 후 검사 결과</b><IconButton label="닫기" size="sm" onclick={() => (issuesOpen = false)}><X /></IconButton></div>
+				<div class="issues-head"><b>{$_("gameEditor.issuesHeading")}</b><IconButton label={$_("common.close")} size="sm" onclick={() => (issuesOpen = false)}><X /></IconButton></div>
 				<ul>
 					{#each issues as d, i (i)}
-						<li><Badge tone={d.severity === "error" ? "danger" : "warning"}>{d.severity === "error" ? "오류" : "경고"}</Badge>{d.text}</li>
+						<li><Badge tone={d.severity === "error" ? "danger" : "warning"}>{d.severity === "error" ? $_("gameEditor.severityError") : $_("gameEditor.severityWarning")}</Badge>{d.text}</li>
 					{/each}
 				</ul>
 			</div>
 		{/if}
 
 		<div class="layout">
-			<nav class="side" aria-label="편집 항목">
+			<nav class="side" aria-label={$_("gameEditor.editItemsAria")}>
 				{#each tabs as t (t.id)}
 					<button class:on={tab === t.id} aria-current={tab === t.id ? "page" : undefined} onclick={() => (tab = t.id)}>
 						<t.icon /><span>{t.label}</span>{#if t.count !== undefined}<small>{t.count}</small>{/if}
@@ -205,42 +213,42 @@
 				<div class="bottom">
 					{#if issues.length}
 						<button class="issues-btn" class:err={errors.length} aria-expanded={issuesOpen} onclick={() => (issuesOpen = !issuesOpen)}>
-							<AlertTriangle />{errors.length ? `오류 ${errors.length}` : `경고 ${issues.length}`}
+							<AlertTriangle />{errors.length ? $_("gameEditor.errorCountBtn", { values: { count: errors.length } }) : $_("gameEditor.warningCountBtn", { values: { count: issues.length } })}
 						</button>
 					{/if}
-					{#if dirty}<span class="dirty">바뀐 내용 있음</span>{/if}
-					<Button variant="primary" loading={saving} disabled={!dirty} onclick={save}>저장 <kbd>Ctrl S</kbd></Button>
+					{#if dirty}<span class="dirty">{$_("gameEditor.dirtyBadge")}</span>{/if}
+					<Button variant="primary" loading={saving} disabled={!dirty} onclick={save}>{$_("common.save")} <kbd>Ctrl S</kbd></Button>
 				</div>
 			</nav>
 
 			<main class="body game-editor" class:wide={tab !== "project"}>
 				{#if tab === "project"}
 					<div class="project">
-						<h2>기본 정보</h2>
+						<h2>{$_("gameEditor.projectHeading")}</h2>
 						<div class="card">
-							<Field label="제목" required><Input bind:value={data.project.title} /></Field>
-							<Field label="설명" hint="게임 목록과 상세에 보임"><Textarea bind:value={data.project.description} rows={3} autosize maxRows={10} /></Field>
+							<Field label={$_("gameEditor.titleLabel")} required><Input bind:value={data.project.title} /></Field>
+							<Field label={$_("gameEditor.descLabel")} hint={$_("gameEditor.descHint")}><Textarea bind:value={data.project.description} rows={3} autosize maxRows={10} /></Field>
 						</div>
-						<h2>각본가</h2>
+						<h2>{$_("gameEditor.plannerHeading")}</h2>
 						<div class="card">
 							<Switch
 								checked={plan.enabled}
-								label="각본가 쓰기"
-								description="켜면 플레이 중 체크포인트마다 AI가 줄거리 계획을 세웁니다 (플레이하는 사람이 누르거나 자동 갱신을 켤 때만 요금이 듭니다)"
+								label={$_("gameEditor.plannerUse")}
+								description={$_("gameEditor.plannerDesc")}
 								onchange={(v) => setPlan({ enabled: v })} />
 							{#if plan.enabled}
-								<Field label="몇 턴마다" hint="3~100"><Input type="number" value={String(plan.everyNTurns)} onchange={(e) => setPlan({ everyNTurns: Number(e.currentTarget.value) })} /></Field>
+								<Field label={$_("gameEditor.everyNTurns")} hint="3~100"><Input type="number" value={String(plan.everyNTurns)} onchange={(e) => setPlan({ everyNTurns: Number(e.currentTarget.value) })} /></Field>
 							{/if}
 						</div>
-						<h2>쓸 기능</h2>
+						<h2>{$_("gameEditor.capsHeading")}</h2>
 						<div class="card">
 							{#each CAPS as [key, label] (key)}
 								{#key data.project.settingsJson}<Switch checked={capOn(key)} label={label} onchange={(v) => setCap(key, v)} />{/key}
 							{/each}
 						</div>
-						<h2>사용자 CSS</h2>
+						<h2>{$_("gameEditor.customCssHeading")}</h2>
 						<div class="card">
-							<Field label="게임 화면에만 적용되는 CSS" hint="고급 · 비워 두면 기본 모양">
+							<Field label={$_("gameEditor.customCssLabel")} hint={$_("gameEditor.customCssHint")}>
 								<Textarea bind:value={data.project.customCss} mono rows={8} spellcheck={false} />
 							</Field>
 						</div>

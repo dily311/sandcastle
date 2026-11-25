@@ -1,8 +1,9 @@
 <script lang="ts">
+	import { _ } from "svelte-i18n";
 	import { confirmAction } from "$shared/stores/confirm.svelte";
 	import { toasts } from "$shared/stores/toast.svelte";
 	/** 지우기 전에 앱 확인 창으로 물어봄 */
-	const ask = (message: string) => confirmAction({ title: "삭제", message, confirmLabel: "삭제", danger: true });
+	const ask = (message: string) => confirmAction({ title: $_("common.delete"), message, confirmLabel: $_("common.delete"), danger: true });
 	import type { GameStateDefInput } from "$features/game/types";
 	import IconButton from "$/shared/ui/IconButton.svelte";
 	import { Plus, Search, X } from "@lucide/svelte";
@@ -36,7 +37,7 @@
 	}
 
 	async function handleDeleteStateDef(index: number) {
-		if (!await ask(`"${stateDefs[index].key}" 상태 정의를 삭제하시겠습니까?`)) return;
+		if (!await ask($_("gameEditor.deleteStateConfirm", { values: { key: stateDefs[index].key } }))) return;
 		stateDefs.splice(index, 1);
 		selectedIndex = stateDefs.length > 0 ? Math.max(0, index - 1) : null;
 	}
@@ -46,10 +47,10 @@
 	<!-- 좌측: 상태 목록 -->
 	<div class="item-list-pane">
 		<div class="pane-header">
-			<Input bind:value={searchQuery} placeholder="변수 검색" aria-label="변수 검색">
+			<Input bind:value={searchQuery} placeholder={$_("gameEditor.searchVars")} aria-label={$_("gameEditor.searchVars")}>
 				{#snippet leading()}<Search />{/snippet}
 			</Input>
-			<IconButton label="변수 추가" size="md" onclick={handleAddStateDef}><Plus /></IconButton>
+			<IconButton label={$_("gameEditor.addVarAria")} size="md" onclick={handleAddStateDef}><Plus /></IconButton>
 		</div>
 		<div class="scroll-list">
 			{#each filteredStateDefs as row (row.stateDef.id)}
@@ -60,12 +61,12 @@
 				<div class="list-item" class:active={selectedIndex === idx} onclick={() => (selectedIndex = idx)}>
 					<div class="item-info">
 						<span class="title"><code>{ev.key}</code></span>
-						<span class="type">타입: {ev.type}</span>
+						<span class="type">{$_("gameEditor.typeMeta", { values: { type: ev.type } })}</span>
 					</div>
-					<IconButton class="icon-del" size="sm" label="변수" onclick={() => handleDeleteStateDef(idx)}><X /></IconButton>
+					<IconButton class="icon-del" size="sm" label={$_("gameEditor.varAria")} onclick={() => handleDeleteStateDef(idx)}><X /></IconButton>
 				</div>
 			{:else}
-				<div class="empty-text">등록된 상태 정의가 없습니다.</div>
+				<div class="empty-text">{$_("gameEditor.noStateDefs")}</div>
 			{/each}
 		</div>
 	</div>
@@ -74,32 +75,32 @@
 	<div class="item-detail-pane">
 		{#if activeState && selectedIndex !== null}
 			<div class="detail-header">
-				<h3>상태 정의 상세 편집</h3>
+				<h3>{$_("gameEditor.stateDetailHeading")}</h3>
 			</div>
-			<details class="editor-accordion" open><summary>변수 설정</summary><div class="editor-accordion-content"><div class="form-grid">
+			<details class="editor-accordion" open><summary>{$_("gameEditor.varSettingsAccordion")}</summary><div class="editor-accordion-content"><div class="form-grid">
 				<div class="field">
-					<label for="var_key">변수 키 (Key)</label>
+					<label for="var_key">{$_("gameEditor.varKeyLabel")}</label>
 					<input id="var_key" type="text" bind:value={activeState.key} />
 				</div>
 				<div class="field">
-					<label for="var_type">데이터 타입 (Type)</label>
+					<label for="var_type">{$_("gameEditor.varTypeLabel")}</label>
 					<select id="var_type" bind:value={activeState.type}>
-						<option value="string">string (문자열)</option>
-						<option value="number">number (숫자)</option>
-						<option value="boolean">boolean (참/거짓)</option>
+						<option value="string">{$_("gameEditor.typeString")}</option>
+						<option value="number">{$_("gameEditor.typeNumber")}</option>
+						<option value="boolean">{$_("gameEditor.typeBoolean")}</option>
 					</select>
 				</div>
 				<div class="field">
-					<label for="var_default">초기값 (Default Value)</label>
+					<label for="var_default">{$_("gameEditor.varDefaultLabel")}</label>
 					<input id="var_default" type="text" bind:value={activeState.defaultValue} />
 				</div>
 				<div class="field">
-					<label for="var_des">설명 (Description)</label>
+					<label for="var_des">{$_("gameEditor.sceneDescLabel")}</label>
 					<textarea id="var_des" bind:value={activeState.description} rows="3"></textarea>
 				</div>
 			</div></div></details>
 		{:else}
-			<div class="no-selection">편집할 상태 정의를 선택하거나 새로 추가해주세요.</div>
+			<div class="no-selection">{$_("gameEditor.selectOrAddState")}</div>
 		{/if}
 	</div>
 </div>

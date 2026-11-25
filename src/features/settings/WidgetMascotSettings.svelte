@@ -370,11 +370,13 @@
 			<div class="slot-grid">
 				{#each MASCOT_IMAGE_SLOTS as slot (slot.key)}
 					{@const imgs = selected.images[slot.key] ?? []}
+					{@const slabel = $_(`widgetExtra.imageSlots.${slot.key}.label`, { default: slot.label })}
+					{@const shint = $_(`widgetExtra.imageSlots.${slot.key}.hint`, { default: slot.hint })}
 					<div class="slot-card">
 						<div class="slot-head">
 							<div>
-								<div class="slot-title">{slot.label}</div>
-								<div class="slot-hint">{slot.hint}</div>
+								<div class="slot-title">{slabel}</div>
+								<div class="slot-hint">{shint}</div>
 							</div>
 							<Button
 								size="sm"
@@ -389,7 +391,7 @@
 							<div class="thumb-list">
 								{#each imgs as imgPath, idx (imgPath + idx)}
 									<div class="thumb-item">
-										<img src={fileSrc(imgPath) ?? ""} alt="{slot.label} {idx + 1}" />
+										<img src={fileSrc(imgPath) ?? ""} alt="{slabel} {idx + 1}" />
 										<button
 											type="button"
 											class="thumb-del"
@@ -449,10 +451,12 @@
 			<p class="group-desc">{$_("settings.mascot.dialogueGroupDesc")}</p>
 			<div class="dialogue-list">
 				{#each MASCOT_DIALOGUE_FIELDS as field (field.key)}
+					{@const flabel = $_(`widgetExtra.dialogueFields.${field.key}.label`, { default: field.label })}
+					{@const fhint = $_(`widgetExtra.dialogueFields.${field.key}.hint`, { default: field.hint })}
 					<label class="dialogue-field">
 						<div class="dialogue-head">
-							<span class="dialogue-label">{field.label}</span>
-							<span class="dialogue-hint">{field.hint}</span>
+							<span class="dialogue-label">{flabel}</span>
+							<span class="dialogue-hint">{fhint}</span>
 						</div>
 						<Textarea
 							value={(selected.dialogues[field.key] ?? []).join("\n")}
@@ -460,7 +464,7 @@
 							autosize
 							maxRows={6}
 							placeholder={$_("settings.mascot.dialoguePlaceholder")}
-							aria-label={field.label}
+							aria-label={flabel}
 							onchange={(e) => updateDialogue(selected.id, field.key, e.currentTarget.value)}
 						/>
 					</label>

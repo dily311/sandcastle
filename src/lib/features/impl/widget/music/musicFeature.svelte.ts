@@ -1,3 +1,5 @@
+import { get } from "svelte/store";
+import { _ } from "svelte-i18n";
 import { contextMenuRegistry } from "$/lib/contextmenu/registry";
 import { contextActionRegistry } from "$/lib/contextmenu/actions";
 import { audioStore, handleChangeAlbumCover, handleNextSong, handlePrevSong, widgetMusicSetting, playlistStore } from "./musicPlyerStore.svelte";
@@ -96,7 +98,7 @@ function registerMusicMenuFeature() {
 				children: () =>
 					playlistStore.list.map((pl) => ({
 						id: `music.playlist.${pl.id}`,
-						label: pl.title || "기본 플레이리스트",
+						label: pl.title || get(_)("widgetExtra.defaultPlaylist"),
 						rawLabel: true,
 						isChecked: () => playlistStore.currentPlaylistKey === pl.id,
 						onselect: () => playlistStore.selectPlaylist(pl.id),

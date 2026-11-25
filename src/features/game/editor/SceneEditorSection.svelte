@@ -1,8 +1,9 @@
 <script lang="ts">
+	import { _ } from "svelte-i18n";
 	import { confirmAction } from "$shared/stores/confirm.svelte";
 	import { toasts } from "$shared/stores/toast.svelte";
 	/** 지우기 전에 앱 확인 창으로 물어봄 */
-	const ask = (message: string) => confirmAction({ title: "삭제", message, confirmLabel: "삭제", danger: true });
+	const ask = (message: string) => confirmAction({ title: $_("common.delete"), message, confirmLabel: $_("common.delete"), danger: true });
 	import type { GameSceneInput } from "$features/game/types";
 	import { Plus, Search, X } from "@lucide/svelte";
 	import { IconButton } from "$/shared/ui";
@@ -39,7 +40,7 @@
 		const newScene: GameSceneInput = {
 			id: crypto.randomUUID(), // 고유 ID 생성 (UUID v4)
 			gameId: gameId,
-			sceneName: "새로운 씬",
+			sceneName: $_("gameEditor.newSceneName"),
 			description: "",
 			sceneKey: `scene_${Date.now()}`,
 			settingsJson: null,
@@ -55,7 +56,7 @@
 	}
 
 	async function handleDeleteScene(index: number) {
-		if (!(await ask(`"${scenes[index].sceneName}" 씬을 삭제하시겠습니까?`))) return;
+		if (!(await ask($_("gameEditor.deleteSceneConfirm", { values: { name: scenes[index].sceneName } })))) return;
 		scenes.splice(index, 1);
 		selectedIndex = scenes.length > 0 ? Math.max(0, index - 1) : null;
 	}
@@ -66,7 +67,7 @@
 		activeScene.choices.push({
 			id: crypto.randomUUID(),
 			sceneId: activeScene.id,
-			text: "새 선택지",
+			text: $_("gameEditor.newChoiceText"),
 			nextSceneId: null,
 			condition: null,
 			effect: null,
@@ -99,10 +100,10 @@
 	<!-- 좌측: 씬 목록 -->
 	<div class="item-list-pane">
 		<div class="pane-header">
-			<Input bind:value={searchQuery} placeholder="씬 검색" aria-label="씬 검색">
+			<Input bind:value={searchQuery} placeholder={$_("gameEditor.searchScenes")} aria-label={$_("gameEditor.searchScenes")}>
 				{#snippet leading()}<Search />{/snippet}
 			</Input>
-			<IconButton label="씬 추가" size="md" onclick={handleAddScene}><Plus /></IconButton>
+			<IconButton label={$_("gameEditor.addSceneAria")} size="md" onclick={handleAddScene}><Plus /></IconButton>
 		</div>
 		<div class="scroll-list">
 			{#each filteredScenes as row (row.scene.id)}
@@ -115,17 +116,17 @@
 						<span class="title">
 							{ev.sceneName}
 							{#if ev.isEnding}
-								<span class="badge ending">엔딩</span>
+								<span class="badge ending">{$_("gameEditor.endingBadge")}</span>
 							{/if}
 						</span>
 						<span class="key"><code>{ev.sceneKey}</code></span>
 					</div>
-					<IconButton class="icon-del" size="sm" label="씬 삭제" onclick={() => handleDeleteScene(idx)}
+					<IconButton class="icon-del" size="sm" label={$_("gameEditor.deleteSceneAria")} onclick={() => handleDeleteScene(idx)}
 						><X /></IconButton
 					>
 				</div>
 			{:else}
-				<div class="empty-text">{searchQuery ? "검색 결과가 없습니다." : "등록된 씬이 없습니다."}</div>
+				<div class="empty-text">{searchQuery ? $_("gameEditor.noSearchResults") : $_("gameEditor.noScenes")}</div>
 			{/each}
 		</div>
 	</div>
@@ -134,33 +135,33 @@
 	<div class="item-detail-pane">
 		{#if activeScene && selectedIndex !== null}
 			<div class="detail-header">
-				<h3>씬 상세 편집</h3>
+				<h3>{$_("gameEditor.sceneDetailHeading")}</h3>
 			</div>
 			<div class="form-grid">
 				<details class="editor-accordion" open>
-					<summary>씬 정보</summary>
+					<summary>{$_("gameEditor.sceneInfoAccordion")}</summary>
 					<div class="editor-accordion-content">
 						<div class="field">
-							<label for="scene_name">씬 이름 (Scene Name)</label>
+							<label for="scene_name">{$_("gameEditor.sceneNameLabel")}</label>
 							<input id="scene_name" type="text" bind:value={activeScene.sceneName} />
 						</div>
 						<div class="field">
-							<label for="scene_key">씬 고유 키 (Scene Key)</label>
+							<label for="scene_key">{$_("gameEditor.sceneKeyLabel")}</label>
 							<input id="scene_key" type="text" bind:value={activeScene.sceneKey} />
 						</div>
 						<div class="field">
-							<label for="scene_des">설명 (Description)</label>
+							<label for="scene_des">{$_("gameEditor.sceneDescLabel")}</label>
 							<textarea id="scene_des" bind:value={activeScene.description} rows="4"></textarea>
 						</div>
 					</div>
 				</details>
 				<details class="editor-accordion scene-script-field" open>
-					<summary>씬 텍스트 / 대본</summary>
+					<summary>{$_("gameEditor.sceneScriptAccordion")}</summary>
 					<div class="editor-accordion-content">
 						<div class="field">
 							<div class="script-label">
-								<label for="scene_script">대사 입력</label><span
-									>한 줄마다 내레이션 또는 대사를 입력합니다</span
+								<label for="scene_script">{$_("gameEditor.scriptInputLabel")}</label><span
+									>{$_("gameEditor.scriptInputHint")}</span
 								>
 							</div>
 							<textarea
@@ -168,23 +169,19 @@
 								class="scene-script"
 								bind:value={activeScene.script}
 								rows="12"
-								placeholder={`골목은 비에 젖어 조용했다.
-유나: 여기서 기다리고 있었어.
-<emotion::유나>happy</emotion>`}></textarea>
+								placeholder={$_("gameEditor.scriptPlaceholder")}></textarea>
 							<p class="script-help">
-								<code>캐릭터 이름: 대사</code> 형식으로 대사를 구분하고, 연출 태그도 함께 작성할 수
-								있습니다. AI 캐릭터 응답의 선택지는 <code>&lt;choice&gt;문구&lt;/choice&gt;</code>로
-								표현하며, 제작자 씬 선택지는 아래에서 별도로 편집합니다.
+								<code>{$_("gameEditor.scriptHelp1")}</code>{$_("gameEditor.scriptHelp2")}<code>{$_("gameEditor.scriptHelp3")}</code>{$_("gameEditor.scriptHelp4")}
 							</p>
 						</div>
 					</div>
 				</details>
 				<details class="editor-accordion scene-choices" open>
-					<summary>씬 선택지 ({activeScene.choices?.length ?? 0})</summary>
+					<summary>{$_("gameEditor.sceneChoicesAccordion", { values: { count: activeScene.choices?.length ?? 0 } })}</summary>
 					<div class="editor-accordion-content">
 						<div class="choices-heading">
-							<div><p>게임 화면에 버튼으로 표시되며, 대본과 별도로 저장됩니다.</p></div>
-							<button class="add-btn" onclick={handleAddChoice}>+ 선택지 추가</button>
+							<div><p>{$_("gameEditor.sceneChoicesDesc")}</p></div>
+							<button class="add-btn" onclick={handleAddChoice}>{$_("gameEditor.addChoiceBtn")}</button>
 						</div>
 						{#if activeScene.choices?.length}
 							<div class="choice-list">
@@ -193,13 +190,13 @@
 										<span class="choice-number">{String(choiceIndex + 1).padStart(2, "0")}</span>
 										<div class="choice-fields">
 											<label
-												>선택지 텍스트<input
+												>{$_("gameEditor.choiceTextLabel")}<input
 													bind:value={choice.text}
-													placeholder="플레이어에게 보여줄 선택지"
+													placeholder={$_("gameEditor.choiceTextPlaceholder")}
 												/></label
 											><label
-												>이동할 씬<select bind:value={choice.nextSceneId}
-													><option value={null}>다음 씬 없음</option
+												>{$_("gameEditor.nextSceneLabel")}<select bind:value={choice.nextSceneId}
+													><option value={null}>{$_("gameEditor.noNextScene")}</option
 													>{#each scenes as targetScene (targetScene.id)}<option
 															value={targetScene.id}>{targetScene.sceneName}</option
 														>{/each}</select
@@ -208,24 +205,24 @@
 										</div>
 										<button
 											class="choice-remove"
-											aria-label="선택지 삭제"
+											aria-label={$_("gameEditor.deleteChoiceAria")}
 											onclick={() => handleDeleteChoice(choiceIndex)}>×</button
 										>
 									</article>
 								{/each}
 							</div>
 						{:else}<div class="choice-empty">
-								선택지가 없습니다. 선택지를 추가하면 플레이어에게 버튼으로 표시됩니다.
+								{$_("gameEditor.noChoices")}
 							</div>{/if}
 					</div>
 				</details>
 				<details class="editor-accordion" open>
-					<summary>씬 설정</summary>
+					<summary>{$_("gameEditor.sceneSettingsAccordion")}</summary>
 					<div class="editor-accordion-content">
 						<div class="field-row">
 							<label class="checkbox-label">
 								<input type="checkbox" bind:checked={activeScene.isEnding} />
-								<span>엔딩 씬으로 표시</span>
+								<span>{$_("gameEditor.markEndingLabel")}</span>
 							</label>
 						</div>
 						<div class="field-row">
@@ -234,18 +231,18 @@
 									type="checkbox"
 									checked={sceneSetting(activeScene.settingsJson).planUsable === true}
 									onchange={(e) => (activeScene!.settingsJson = JSON.stringify({ ...sceneSetting(activeScene!.settingsJson), planUsable: e.currentTarget.checked }))} />
-								<span>각본가가 무대에 올려도 됨</span>
+								<span>{$_("gameEditor.planUsableLabel")}</span>
 							</label>
 						</div>
 						<div class="field">
-							<label for="scene_sort">정렬 순서 (Sort Order)</label>
+							<label for="scene_sort">{$_("gameEditor.sortOrderLabel")}</label>
 							<input id="scene_sort" type="number" bind:value={activeScene.sortOrder} />
 						</div>
 					</div>
 				</details>
 			</div>
 		{:else}
-			<div class="no-selection">편집할 씬을 선택하거나 새로 추가해주세요.</div>
+			<div class="no-selection">{$_("gameEditor.selectOrAddScene")}</div>
 		{/if}
 	</div>
 </div>

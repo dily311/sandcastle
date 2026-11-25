@@ -1,8 +1,9 @@
 <script lang="ts">
+	import { _ } from "svelte-i18n";
 	import { confirmAction } from "$shared/stores/confirm.svelte";
 	import { toasts } from "$shared/stores/toast.svelte";
 	/** 지우기 전에 앱 확인 창으로 물어봄 */
-	const ask = (message: string) => confirmAction({ title: "삭제", message, confirmLabel: "삭제", danger: true });
+	const ask = (message: string) => confirmAction({ title: $_("common.delete"), message, confirmLabel: $_("common.delete"), danger: true });
 	import type { GameMapsInput, GameWeatherTransitionsInput, GameWeatherTypesInput } from "$features/game/types";
 	import IconButton from "$/shared/ui/IconButton.svelte";
 	import Input from "$/shared/ui/Input.svelte";
@@ -33,14 +34,14 @@
 		weatherTypes.push({
 			id: crypto.randomUUID(),
 			gameId,
-			name: "새로운 날씨",
+			name: $_("gameEditor.newWeatherName"),
 			encounterRateModifier: 1,
 			visibilityModifier: 1,
 		});
 		selectedIndex = weatherTypes.length - 1;
 	}
 	async function removeWeather(i: number) {
-		if (!(await ask(`"${weatherTypes[i].name}" 날씨를 삭제하시겠습니까?`))) return;
+		if (!(await ask($_("gameEditor.deleteWeatherConfirm", { values: { name: weatherTypes[i].name } })))) return;
 		const removedId = weatherTypes[i].id;
 		weatherTypes.splice(i, 1);
 		for (let ruleIndex = weatherTransitions.length - 1; ruleIndex >= 0; ruleIndex--)
@@ -53,7 +54,7 @@
 	}
 	function addTransition() {
 		if (!selected || !maps.length) {
-			toasts.info("전환 규칙을 추가하려면 맵을 먼저 등록해주세요.");
+			toasts.info($_("gameEditor.needMapForTransition"));
 			return;
 		}
 		weatherTransitions.push({
@@ -64,19 +65,19 @@
 		});
 	}
 	async function removeTransition(i: number) {
-		if (await ask("이 날씨 전환 규칙을 삭제하시겠습니까?")) weatherTransitions.splice(i, 1);
+		if (await ask($_("gameEditor.deleteTransitionConfirm"))) weatherTransitions.splice(i, 1);
 	}
 </script>
 
 <div class="sub-editor-layout">
 	<aside class="item-list-pane">
 		<div class="pane-header">
-			<Input bind:value={searchQuery} placeholder="날씨 검색" aria-label="시간대 검색">
+			<Input bind:value={searchQuery} placeholder={$_("gameEditor.searchWeather")} aria-label={$_("gameEditor.searchWeather")}>
 				{#snippet leading()}
 					<Search />
 				{/snippet}
 			</Input>
-			<IconButton label="날씨 추가" size="md" onclick={addWeather}>
+			<IconButton label={$_("gameEditor.addWeatherAria")} size="md" onclick={addWeather}>
 				<Plus />
 			</IconButton>
 		</div>
@@ -92,35 +93,35 @@
 				>
 					<div class="item-info">
 						<span class="title">{ev.name}</span>
-						<span class="meta">조우보정: {ev.encounterRateModifier}</span>
+						<span class="meta">{$_("gameEditor.encounterMeta", { values: { val: ev.encounterRateModifier } })}</span>
 					</div>
-					<IconButton class="icon-del" size="sm" label="날씨 삭제" onclick={() => removeWeather(idx)}><X /></IconButton>
+					<IconButton class="icon-del" size="sm" label={$_("gameEditor.deleteWeatherAria")} onclick={() => removeWeather(idx)}><X /></IconButton>
 				</div>
 			{:else}
-				<p class="empty">등록된 날씨가 없습니다.</p>
+				<p class="empty">{$_("gameEditor.noWeather")}</p>
 			{/each}
 		</div>
 	</aside>
 	<section class="item-detail-pane">
 		{#if selected}
 			<details class="editor-accordion" open>
-				<summary> {selected.name} 설정</summary>
+				<summary> {$_("gameEditor.weatherSettingsAccordion", { values: { name: selected.name } })}</summary>
 				<div class="editor-accordion-content">
 					<div class="fields">
-						<label>날씨 이름<input bind:value={selected.name} /> </label>
+						<label>{$_("gameEditor.weatherNameLabel")}<input bind:value={selected.name} /> </label>
 						<label
-							>조우율 보정<input type="number" step="0.1" bind:value={selected.encounterRateModifier} />
+							>{$_("gameEditor.encounterModLabel")}<input type="number" step="0.1" bind:value={selected.encounterRateModifier} />
 						</label>
 						<label
-							>시야 보정<input type="number" step="0.1" bind:value={selected.visibilityModifier} />
+							>{$_("gameEditor.visibilityModLabel")}<input type="number" step="0.1" bind:value={selected.visibilityModifier} />
 						</label>
 					</div>
 				</div>
 			</details>
 			<details class="editor-accordion" open>
-				<summary> {selected.name}에서의 전환 규칙 ({selectedTransitions.length})</summary>
+				<summary> {$_("gameEditor.transitionsAccordion", { values: { name: selected.name, count: selectedTransitions.length } })}</summary>
 				<div class="editor-accordion-content transition-content">
-					<button class="add" onclick={addTransition}>+ 전환 규칙 추가</button>
+					<button class="add" onclick={addTransition}>{$_("gameEditor.addTransitionBtn")}</button>
 					{#each selectedTransitions as row (`${row.transition.fromWeatherId}-${row.index}`)}{@const transition =
 							row.transition}
 						<div class="transition-card">
@@ -129,7 +130,7 @@
 							</span>
 							<span class="arrow">→</span>
 							<label
-								>전환 날씨<select bind:value={transition.toWeatherId}>
+								>{$_("gameEditor.toWeatherLabel")}<select bind:value={transition.toWeatherId}>
 									{#each weatherTypes as weather (weather.id)}
 										<option value={weather.id}>
 											{weather.name}
@@ -138,7 +139,7 @@
 								</select>
 							</label>
 							<label
-								>적용 맵<select bind:value={transition.mapId}>
+								>{$_("gameEditor.targetMapLabel")}<select bind:value={transition.mapId}>
 									{#each maps as map (map.id)}
 										<option value={map.id}>
 											{map.name}
@@ -147,7 +148,7 @@
 								</select>
 							</label>
 							<label
-								>확률<input
+								>{$_("gameEditor.probabilityLabel")}<input
 									type="number"
 									min="0"
 									max="1"
@@ -157,17 +158,17 @@
 							</label>
 							<button
 								class="remove"
-								aria-label="전환 규칙 삭제"
+								aria-label={$_("gameEditor.deleteTransitionAria")}
 								onclick={() => removeTransition(row.index)}>×</button
 							>
 						</div>
 					{:else}
-						<p class="empty">이 날씨에서 시작하는 전환 규칙이 없습니다.</p>
+						<p class="empty">{$_("gameEditor.noTransitions")}</p>
 					{/each}
 				</div>
 			</details>
 		{:else}
-			<div class="empty">날씨를 선택하거나 추가하세요.</div>
+			<div class="empty">{$_("gameEditor.selectOrAddWeather")}</div>
 		{/if}
 	</section>
 </div>

@@ -13,6 +13,16 @@
 		{ value: "#f43f5e", label: $_("settings.panels.vnCherryRed") },
 	]);
 
+	const aspectOptions = $derived(
+		VN_ASPECTS.map((a) => ({ value: a.value, label: a.value === "full" ? $_("finalPolish.vnAspectFull") : a.label })),
+	);
+	const boxStyleOptions = $derived(
+		VN_BOX_STYLES.map((b) => ({
+			value: b.value,
+			label: b.value === "card" ? $_("finalPolish.vnBoxCard") : b.value === "bar" ? $_("finalPolish.vnBoxBar") : $_("finalPolish.vnBoxClassic"),
+		})),
+	);
+
 	const cfg = $derived(vnTheme.config);
 	const isCustomAccent = $derived(!!cfg.accentColor && !ACCENT_PRESETS.some((p) => p.value.toLowerCase() === cfg.accentColor?.toLowerCase()));
 
@@ -62,7 +72,7 @@
 		<Segmented
 			label={$_("settings.panels.vnAspectAria")}
 			value={cfg.aspect}
-			options={VN_ASPECTS}
+			options={aspectOptions}
 			onchange={(v) => vnTheme.update({ aspect: v })}
 		/>
 	</section>
@@ -84,7 +94,7 @@
 							<span class="tag" style:background={p.accent}></span>
 						</span>
 					</span>
-					<span class="pname">{p.name}</span>
+					<span class="pname">{$_(`finalPolish.vnPreset_${p.id}`, { default: p.name })}</span>
 				</button>
 			{/each}
 		</div>
@@ -95,7 +105,7 @@
 		<Segmented
 			label={$_("settings.panels.vnBoxStyle")}
 			value={cfg.boxStyle}
-			options={VN_BOX_STYLES}
+			options={boxStyleOptions}
 			onchange={(v) => vnTheme.update({ boxStyle: v })}
 		/>
 	</section>

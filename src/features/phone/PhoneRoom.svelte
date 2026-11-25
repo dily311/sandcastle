@@ -651,23 +651,23 @@
 		{/if}
 	</form>
 	{#if plusOpen}
-		<div class="plus-tray" role="menu" aria-label="추가 메뉴">
+		<div class="plus-tray" role="menu" aria-label={$_("finalPolish.phoneTrayAria")}>
 			<button type="button" class="tray-btn" onclick={pickImages}>
 				<span class="tray-ic img"><ImagePlus /></span>
-				<span>이미지 전송</span>
+				<span>{$_("finalPolish.phoneSendImage")}</span>
 			</button>
 			<button type="button" class="tray-btn" class:active={impersonating} onclick={() => ((impersonating = !impersonating), (plusOpen = false))}>
 				<span class="tray-ic imp"><UserRoundPen /></span>
-				<span>{impersonating ? "사칭 끄기" : "사칭"}</span>
+				<span>{impersonating ? $_("finalPolish.phoneImpersonateOn") : $_("finalPolish.phoneImpersonate")}</span>
 			</button>
 			<button type="button" class="tray-btn" disabled={session.busy} onclick={() => ((plusOpen = false), void nudge())}>
 				<span class="tray-ic nudge"><MessageCirclePlus /></span>
-				<span>답장 더 받기</span>
+				<span>{$_("finalPolish.phoneNudge")}</span>
 			</button>
 			{#if phone.isCharacterPhone}
 				<button type="button" class="tray-btn" disabled={session.busy} onclick={() => ((plusOpen = false), void peek())}>
 					<span class="tray-ic peek-ic"><Eye /></span>
-					<span>엿보기</span>
+					<span>{$_("finalPolish.phonePeek")}</span>
 				</button>
 			{/if}
 		</div>
@@ -676,7 +676,7 @@
 {/if}
 
 {#if menu}
-	<ContextMenu at={menu.at} items={menu.items} label="메시지 메뉴" onclose={() => (menu = null)} />
+	<ContextMenu at={menu.at} items={menu.items} label={$_("finalPolish.phoneMsgMenuAria")} onclose={() => (menu = null)} />
 {/if}
 
 <SelectionMenu {scroller} conv={library.conversation(conv.id) ?? conv} {session} characterName={ch?.name} disabled={!!editingId} oncard={(c) => (card = c)} />

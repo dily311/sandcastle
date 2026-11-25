@@ -2,6 +2,7 @@
 	// 각본가(StoryPlan): 지금까지의 줄거리 계획을 보고, 각본가가 제안한 이벤트·씬을 무대에 올린다. 플랜은 조언일 뿐 상태를 바꾸지 않는다.
 	// 켜진 게임에서만 보인다. 새 플랜은 누르거나(사용자) 자동 갱신 스위치를 켠 때(자동)만 AI를 부른다.
 	import { Sparkles } from "@lucide/svelte";
+	import { _ } from "svelte-i18n";
 	import { Badge, Button, Switch } from "$shared/ui";
 	import { gameStore } from "../runtime/gameStore.svelte";
 	import { playBridge } from "../runtime/playBridge.svelte";
@@ -11,7 +12,12 @@
 	const plan = $derived(storyPlan.record?.plan);
 	const sceneName = (id: string) => gameStore.scenes?.find((s) => s.id === id)?.name ?? null;
 	const busy = $derived(storyPlan.busy || playBridge.loading);
-	const BEAT: Record<string, string> = { pending: "예정", active: "진행 중", done: "끝남", dropped: "접음" };
+	const BEAT = $derived<Record<string, string>>({
+		pending: $_("finalPolish.planBeatPending"),
+		active: $_("finalPolish.planBeatActive"),
+		done: $_("finalPolish.planBeatDone"),
+		dropped: $_("finalPolish.planBeatDropped"),
+	});
 	let staging = $state<string | null>(null);
 
 	// 이 세션의 마지막 플랜을 읽는다 (이어하기 때)
@@ -43,8 +49,8 @@
 {#if storyPlan.enabled}
 	<section class="plan">
 		<h4>
-			각본가
-			{#if storyPlan.due}<Badge tone="accent">갱신할 때</Badge>{/if}
+			{$_("finalPolish.planHeading")}
+			{#if storyPlan.due}<Badge tone="accent">{$_("finalPolish.planDueBadge")}</Badge>{/if}
 		</h4>
 		{#if plan}
 			<p class="premise">{plan.premise}</p>
@@ -56,27 +62,27 @@
 				</ol>
 			{/if}
 			{#if plan.openThreads.length}
-				<h5>열린 복선</h5>
+				<h5>{$_("finalPolish.planOpenThreads")}</h5>
 				<ul>{#each plan.openThreads as t (t)}<li>{t}</li>{/each}</ul>
 			{/if}
 			{#if plan.suggestions.length}
-				<h5>제안</h5>
+				<h5>{$_("finalPolish.planSuggestions")}</h5>
 				<div class="sugs">
 					{#each plan.suggestions as s (`${s.kind}:${s.id}`)}
 						<div class="sug">
-							<span class="t"><b>{s.kind === "scene" ? (sceneName(s.id) ?? "씬") : "이벤트"}</b><small>{s.reason}</small></span>
-							<Button size="sm" variant="ghost" loading={staging === `${s.kind}:${s.id}`} disabled={busy || staging !== null} onclick={() => stage(s.kind, s.id)}>올리기</Button>
+							<span class="t"><b>{s.kind === "scene" ? (sceneName(s.id) ?? $_("finalPolish.planSceneFallback")) : $_("finalPolish.planEventFallback")}</b><small>{s.reason}</small></span>
+							<Button size="sm" variant="ghost" loading={staging === `${s.kind}:${s.id}`} disabled={busy || staging !== null} onclick={() => stage(s.kind, s.id)}>{$_("finalPolish.planStageBtn")}</Button>
 						</div>
 					{/each}
 				</div>
 			{/if}
 		{:else}
-			<p class="note">아직 세운 플랜이 없음</p>
+			<p class="note">{$_("finalPolish.planEmpty")}</p>
 		{/if}
 		<div class="acts">
-			<Button size="sm" loading={storyPlan.busy} disabled={busy} onclick={() => storyPlan.refresh(false)}>{#snippet icon()}<Sparkles />{/snippet}플랜 새로 세우기</Button>
+			<Button size="sm" loading={storyPlan.busy} disabled={busy} onclick={() => storyPlan.refresh(false)}>{#snippet icon()}<Sparkles />{/snippet}{$_("finalPolish.planRefreshBtn")}</Button>
 		</div>
-		<Switch bind:checked={storyPlan.autoRefresh} label="체크포인트마다 자동 갱신" description="켜면 씬이 끝나거나 하루가 지나는 때마다 AI를 불러 요금이 듭니다" />
+		<Switch bind:checked={storyPlan.autoRefresh} label={$_("finalPolish.planAutoRefresh")} description={$_("finalPolish.planAutoRefreshDesc")} />
 	</section>
 {/if}
 

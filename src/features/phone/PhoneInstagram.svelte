@@ -15,6 +15,7 @@
 		Trash2,
 		X,
 	} from "@lucide/svelte";
+	import { _ } from "svelte-i18n";
 	import { Avatar, Button, Input, Spinner, Textarea } from "$shared/ui";
 	import { call, commands } from "$shared/ipc/client";
 	import { IMAGE_FILES, pickFiles } from "$shared/ipc/dialog";
@@ -134,7 +135,7 @@
 		};
 		persist(next);
 		editingProfile = false;
-		toasts.success("개인 페이지를 저장함");
+		toasts.success($_("phoneProfileUi.snsSavedToast"));
 	}
 
 	function parseAiJson(raw: string): (Omit<Partial<PhoneProfileData>, "posts"> & { posts?: Array<Record<string, unknown>> }) | null {
@@ -199,7 +200,7 @@
 			const raw = await call(commands.phoneGenerateProfile(convId, prompt), { source: "phone" });
 			const parsed = parseAiJson(raw);
 			if (!parsed) {
-				toasts.error("AI 응답을 개인 페이지 형식으로 읽지 못함");
+				toasts.error($_("phoneProfileUi.snsAiParseErr"));
 				return;
 			}
 			const existingImages = profile.posts.map((p) => p.image).filter(Boolean);
@@ -208,7 +209,7 @@
 				id: uid(),
 				caption: typeof p.caption === "string" ? p.caption : "",
 				location: typeof p.location === "string" ? p.location : "",
-				date: typeof p.date === "string" && p.date.trim() ? p.date : "방금 전",
+				date: typeof p.date === "string" && p.date.trim() ? p.date : $_("phoneProfileUi.snsJustNow"),
 				likes: typeof p.likes === "number" && Number.isFinite(p.likes) ? Math.max(0, Math.round(p.likes)) : 12 + i * 7,
 				liked: false,
 				image: existingImages[i] ?? null,
@@ -218,7 +219,7 @@
 							.filter((c): c is { author?: unknown; text?: unknown } => !!c && typeof c === "object")
 							.map((c) => ({
 								id: uid(),
-								author: typeof c.author === "string" && c.author.trim() ? c.author : "친구",
+								author: typeof c.author === "string" && c.author.trim() ? c.author : $_("phoneProfileUi.snsFriendFallback"),
 								text: typeof c.text === "string" ? c.text : "",
 							}))
 							.filter((c) => c.text.trim())
@@ -235,7 +236,7 @@
 				updatedAt: Date.now(),
 			};
 			persist(next);
-			toasts.success("개인 페이지를 AI로 생성함");
+			toasts.success($_("phoneProfileUi.snsAiGeneratedToast"));
 		} finally {
 			generating = false;
 		}
@@ -253,7 +254,7 @@
 		editingPostId = null;
 		postCaption = "";
 		postLocation = "";
-		postDate = "방금 전";
+		postDate = $_("phoneProfileUi.snsJustNow");
 		postLikes = "0";
 		postImage = null;
 	}
@@ -283,7 +284,7 @@
 				id: uid(),
 				caption: postCaption.trim(),
 				location: postLocation.trim(),
-				date: postDate.trim() || "방금 전",
+				date: postDate.trim() || $_("phoneProfileUi.snsJustNow"),
 				likes: likesNum,
 				liked: false,
 				image: postImage,
@@ -292,7 +293,7 @@
 			};
 			persist({ ...profile, posts: [created, ...profile.posts] });
 			creatingPost = false;
-			toasts.success("게시물을 추가함");
+			toasts.success($_("phoneProfileUi.snsPostAddedToast"));
 		} else if (editingPostId) {
 			const nextPosts = profile.posts.map((p) =>
 				p.id === editingPostId
@@ -308,7 +309,7 @@
 			);
 			persist({ ...profile, posts: nextPosts });
 			editingPostId = null;
-			toasts.success("게시물을 수정함");
+			toasts.success($_("phoneProfileUi.snsPostUpdatedToast"));
 		}
 	}
 
@@ -317,13 +318,13 @@
 		persist({ ...profile, posts: nextPosts });
 		if (selectedPostId === postId) selectedPostId = null;
 		if (editingPostId === postId) editingPostId = null;
-		toasts.info("게시물을 삭제함");
+		toasts.info($_("phoneProfileUi.snsPostDeletedToast"));
 	}
 
 	function addComment(postId: string) {
 		const text = (commentDraft[postId] ?? "").trim();
 		if (!text) return;
-		const author = phone.owner?.name ?? "나";
+		const author = phone.owner?.name ?? $_("phoneProfileUi.snsMeFallback");
 		const nextPosts = profile.posts.map((p) =>
 			p.id === postId ? { ...p, comments: [...p.comments, { id: uid(), author, text }] } : p,
 		);
@@ -344,7 +345,7 @@
 		<button
 			type="button"
 			class="plain"
-			aria-label="뒤로"
+			aria-label={$_("phoneProfileUi.snsBackAria")}
 			onclick={() => {
 				if (selectedPostId) selectedPostId = null;
 				else onback();
@@ -352,17 +353,17 @@
 		>
 			<ChevronLeft />
 		</button>
-		<strong class="ig-handle">{selectedPost ? "게시물" : `@${profile.handle}`}</strong>
+		<strong class="ig-handle">{selectedPost ? $_("phoneProfileUi.snsPostHeading") : `@${profile.handle}`}</strong>
 		<div class="ig-bar-actions">
 			{#if !selectedPost}
-				<button type="button" class="plain" title="AI로 개인 페이지 채우기" disabled={generating} onclick={generateWithAi}>
+				<button type="button" class="plain" title={$_("phoneProfileUi.snsAiFillTitle")} disabled={generating} onclick={generateWithAi}>
 					{#if generating}<Spinner size={16} />{:else}<Sparkles />{/if}
 				</button>
 				<button
 					type="button"
 					class="plain"
 					class:active={editingProfile}
-					title="개인 페이지 편집"
+					title={$_("phoneProfileUi.snsEditPageTitle")}
 					onclick={() => (editingProfile ? (editingProfile = false) : startEditProfile())}
 				>
 					<Pencil />
@@ -382,8 +383,8 @@
 						{#if p.location}<span><MapPin /> {p.location}</span>{/if}
 					</div>
 					<div class="post-tools">
-						<button type="button" class="plain sm" title="게시물 편집" onclick={() => startEditPost(p)}><Pencil /></button>
-						<button type="button" class="plain sm danger" title="게시물 삭제" onclick={() => deletePost(p.id)}><Trash2 /></button>
+						<button type="button" class="plain sm" title={$_("phoneProfileUi.snsEditPostTitle")} onclick={() => startEditPost(p)}><Pencil /></button>
+						<button type="button" class="plain sm danger" title={$_("phoneProfileUi.snsDeletePostTitle")} onclick={() => deletePost(p.id)}><Trash2 /></button>
 					</div>
 				</div>
 
@@ -391,25 +392,25 @@
 					<div class="edit-box">
 						<div class="edit-photo-row">
 							{#if postImage}
-								<img class="edit-thumb" src={fileSrc(postImage)} alt="게시물 이미지" />
-								<Button size="sm" variant="ghost" onclick={() => (postImage = null)}>사진 제거</Button>
+								<img class="edit-thumb" src={fileSrc(postImage)} alt={$_("phoneProfileUi.snsPostImgAlt")} />
+								<Button size="sm" variant="ghost" onclick={() => (postImage = null)}>{$_("phoneProfileUi.snsRemovePhotoBtn")}</Button>
 							{/if}
-							<Button size="sm" variant="ghost" onclick={pickPostPhoto}>{#snippet icon()}<ImagePlus />{/snippet}사진 선택</Button>
+							<Button size="sm" variant="ghost" onclick={pickPostPhoto}>{#snippet icon()}<ImagePlus />{/snippet}{$_("phoneProfileUi.pickPhotoBtn")}</Button>
 						</div>
-						<Textarea bind:value={postCaption} rows={3} autosize placeholder="게시물 내용" />
+						<Textarea bind:value={postCaption} rows={3} autosize placeholder={$_("phoneProfileUi.snsPostCaptionPlaceholder")} />
 						<div class="edit-grid-2">
-							<Input bind:value={postLocation} placeholder="위치 (선택)" />
-							<Input bind:value={postDate} placeholder="시간 (예: 2시간 전)" />
+							<Input bind:value={postLocation} placeholder={$_("phoneProfileUi.snsLocationPlaceholder")} />
+							<Input bind:value={postDate} placeholder={$_("phoneProfileUi.snsDatePlaceholder")} />
 						</div>
-						<Input bind:value={postLikes} type="number" placeholder="좋아요 수" />
+						<Input bind:value={postLikes} type="number" placeholder={$_("phoneProfileUi.snsLikesPlaceholder")} />
 						<div class="edit-actions">
-							<Button size="sm" variant="ghost" onclick={() => (editingPostId = null)}>취소</Button>
-							<Button size="sm" variant="primary" onclick={savePost}>저장</Button>
+							<Button size="sm" variant="ghost" onclick={() => (editingPostId = null)}>{$_("common.cancel")}</Button>
+							<Button size="sm" variant="primary" onclick={savePost}>{$_("common.save")}</Button>
 						</div>
 					</div>
 				{:else}
 					{#if p.image}
-						<img class="post-img" src={fileSrc(p.image)} alt={p.caption || "게시물 사진"} />
+						<img class="post-img" src={fileSrc(p.image)} alt={p.caption || $_("phoneProfileUi.snsPostPhotoAlt")} />
 					{:else}
 						<div class="post-card-media" style:background={p.mood || CARD_MOODS[0]}>
 							<p>{p.caption}</p>
@@ -432,7 +433,7 @@
 								{#each p.comments as c (c.id)}
 									<li>
 										<span><b>{c.author}</b> {c.text}</span>
-										<button type="button" class="cmt-del" aria-label="댓글 삭제" onclick={() => deleteComment(p.id, c.id)}><X /></button>
+										<button type="button" class="cmt-del" aria-label={$_("phoneProfileUi.snsDeleteCommentAria")} onclick={() => deleteComment(p.id, c.id)}><X /></button>
 									</li>
 								{/each}
 							</ul>
@@ -444,8 +445,8 @@
 								addComment(p.id);
 							}}
 						>
-							<input bind:value={commentDraft[p.id]} placeholder="댓글 달기…" aria-label="댓글 입력" />
-							<button type="submit" disabled={!(commentDraft[p.id] ?? "").trim()} aria-label="댓글 등록"><Send /></button>
+							<input bind:value={commentDraft[p.id]} placeholder={$_("phoneProfileUi.snsCommentPlaceholder")} aria-label={$_("phoneProfileUi.snsCommentInputAria")} />
+							<button type="submit" disabled={!(commentDraft[p.id] ?? "").trim()} aria-label={$_("phoneProfileUi.snsCommentSubmitAria")}><Send /></button>
 						</form>
 					</div>
 				{/if}
@@ -456,7 +457,7 @@
 				<div class="ig-top-row">
 					<div class="ig-av-wrap">
 						{#if profile.status || contactStatus}
-							<button type="button" class="ig-note" title="눌러서 상태 메시지 편집" onclick={startEditProfile}>
+							<button type="button" class="ig-note" title={$_("phoneProfileUi.editStatusTitle")} onclick={startEditProfile}>
 								{profile.status || contactStatus}
 							</button>
 						{/if}
@@ -465,9 +466,9 @@
 						</div>
 					</div>
 					<div class="ig-stats">
-						<div><b>{profile.posts.length}</b><span>게시물</span></div>
-						<div><b>{profile.followers}</b><span>팔로워</span></div>
-						<div><b>{profile.following}</b><span>팔로잉</span></div>
+						<div><b>{profile.posts.length}</b><span>{$_("phoneProfileUi.snsStatPosts")}</span></div>
+						<div><b>{profile.followers}</b><span>{$_("phoneProfileUi.snsStatFollowers")}</span></div>
+						<div><b>{profile.following}</b><span>{$_("phoneProfileUi.snsStatFollowing")}</span></div>
 					</div>
 				</div>
 
@@ -476,7 +477,7 @@
 					{#if profile.bio}
 						<p class="ig-bio-text">{profile.bio}</p>
 					{:else if !editingProfile}
-						<p class="ig-bio-empty">아직 작성된 소개글이 없습니다. AI로 채우거나 직접 편집해 보세요.</p>
+						<p class="ig-bio-empty">{$_("phoneProfileUi.snsBioEmpty")}</p>
 					{/if}
 					{#if profile.link}
 						<p class="ig-link"><Link2 /> {profile.link}</p>
@@ -484,31 +485,31 @@
 				</div>
 
 				<div class="ig-btns">
-					<button type="button" class="ig-btn primary" onclick={onback}>메시지</button>
+					<button type="button" class="ig-btn primary" onclick={onback}>{$_("phoneProfileUi.snsMessageBtn")}</button>
 					<button type="button" class="ig-btn" onclick={() => (editingProfile ? (editingProfile = false) : startEditProfile())}>
-						{editingProfile ? "편집 닫기" : "페이지 편집"}
+						{editingProfile ? $_("phoneProfileUi.snsCloseEditBtn") : $_("phoneProfileUi.snsEditPageBtn")}
 					</button>
 					<button type="button" class="ig-btn ai" disabled={generating} onclick={generateWithAi}>
 						<Sparkles />
-						<span>{generating ? "생성 중…" : profile.updatedAt ? "AI 새로고침" : "AI로 채우기"}</span>
+						<span>{generating ? $_("phoneProfileUi.snsGenerating") : profile.updatedAt ? $_("phoneProfileUi.snsAiRefreshBtn") : $_("phoneProfileUi.snsAiFillBtn")}</span>
 					</button>
 				</div>
 
 				{#if editingProfile}
 					<div class="edit-box">
 						<div class="edit-grid-2">
-							<label class="ef"><span>아이디</span><Input bind:value={editHandle} placeholder="handle" /></label>
-							<label class="ef"><span>상태 메시지 (노트)</span><Input bind:value={editStatus} placeholder="지금 상태 한 줄" /></label>
+							<label class="ef"><span>{$_("phoneProfileUi.snsHandleLabel")}</span><Input bind:value={editHandle} placeholder="handle" /></label>
+							<label class="ef"><span>{$_("phoneProfileUi.snsStatusNoteLabel")}</span><Input bind:value={editStatus} placeholder={$_("phoneProfileUi.snsStatusNotePlaceholder")} /></label>
 						</div>
-						<label class="ef"><span>소개글</span><Textarea bind:value={editBio} rows={3} autosize placeholder="프로필 소개글" /></label>
-						<label class="ef"><span>위치 · 링크</span><Input bind:value={editLink} placeholder="예: 숲의 오두막" /></label>
+						<label class="ef"><span>{$_("phoneProfileUi.snsBioLabel")}</span><Textarea bind:value={editBio} rows={3} autosize placeholder={$_("phoneProfileUi.snsBioPlaceholder")} /></label>
+						<label class="ef"><span>{$_("phoneProfileUi.snsLinkLabel")}</span><Input bind:value={editLink} placeholder={$_("phoneProfileUi.snsLinkPlaceholder")} /></label>
 						<div class="edit-grid-2">
-							<label class="ef"><span>팔로워</span><Input bind:value={editFollowers} placeholder="128" /></label>
-							<label class="ef"><span>팔로잉</span><Input bind:value={editFollowing} placeholder="42" /></label>
+							<label class="ef"><span>{$_("phoneProfileUi.snsStatFollowers")}</span><Input bind:value={editFollowers} placeholder="128" /></label>
+							<label class="ef"><span>{$_("phoneProfileUi.snsStatFollowing")}</span><Input bind:value={editFollowing} placeholder="42" /></label>
 						</div>
 						<div class="edit-actions">
-							<Button size="sm" variant="ghost" onclick={() => (editingProfile = false)}>취소</Button>
-							<Button size="sm" variant="primary" onclick={saveProfileEdit}>저장</Button>
+							<Button size="sm" variant="ghost" onclick={() => (editingProfile = false)}>{$_("common.cancel")}</Button>
+							<Button size="sm" variant="primary" onclick={saveProfileEdit}>{$_("common.save")}</Button>
 						</div>
 					</div>
 				{/if}
@@ -516,13 +517,13 @@
 
 			<!-- Tabs -->
 			<div class="ig-tabs">
-				<button type="button" class:on={viewMode === "grid"} aria-label="그리드 보기" onclick={() => (viewMode = "grid")}>
+				<button type="button" class:on={viewMode === "grid"} aria-label={$_("phoneProfileUi.snsGridViewAria")} onclick={() => (viewMode = "grid")}>
 					<Grid3x3 />
 				</button>
-				<button type="button" class:on={viewMode === "feed"} aria-label="피드 보기" onclick={() => (viewMode = "feed")}>
+				<button type="button" class:on={viewMode === "feed"} aria-label={$_("phoneProfileUi.snsFeedViewAria")} onclick={() => (viewMode = "feed")}>
 					<Rows3 />
 				</button>
-				<button type="button" class:on={creatingPost} aria-label="새 게시물 추가" title="새 게시물 추가" onclick={startNewPost}>
+				<button type="button" class:on={creatingPost} aria-label={$_("phoneProfileUi.snsNewPostAria")} title={$_("phoneProfileUi.snsNewPostAria")} onclick={startNewPost}>
 					<Plus />
 				</button>
 			</div>
@@ -531,29 +532,29 @@
 				<div class="edit-box new-post">
 					<div class="edit-photo-row">
 						{#if postImage}
-							<img class="edit-thumb" src={fileSrc(postImage)} alt="새 게시물 이미지" />
-							<Button size="sm" variant="ghost" onclick={() => (postImage = null)}>제거</Button>
+							<img class="edit-thumb" src={fileSrc(postImage)} alt={$_("phoneProfileUi.snsNewPostImgAlt")} />
+							<Button size="sm" variant="ghost" onclick={() => (postImage = null)}>{$_("phoneProfileUi.snsRemoveBtn")}</Button>
 						{/if}
-						<Button size="sm" variant="ghost" onclick={pickPostPhoto}>{#snippet icon()}<ImagePlus />{/snippet}사진 첨부</Button>
+						<Button size="sm" variant="ghost" onclick={pickPostPhoto}>{#snippet icon()}<ImagePlus />{/snippet}{$_("phoneProfileUi.snsAttachPhotoBtn")}</Button>
 					</div>
-					<Textarea bind:value={postCaption} rows={3} autosize placeholder="새 게시물 내용을 입력하세요" />
+					<Textarea bind:value={postCaption} rows={3} autosize placeholder={$_("phoneProfileUi.snsNewPostPlaceholder")} />
 					<div class="edit-grid-2">
-						<Input bind:value={postLocation} placeholder="위치 (선택)" />
-						<Input bind:value={postDate} placeholder="시간 (예: 방금 전)" />
+						<Input bind:value={postLocation} placeholder={$_("phoneProfileUi.snsLocationPlaceholder")} />
+						<Input bind:value={postDate} placeholder={$_("phoneProfileUi.snsNewPostDatePlaceholder")} />
 					</div>
 					<div class="edit-actions">
-						<Button size="sm" variant="ghost" onclick={() => (creatingPost = false)}>취소</Button>
-						<Button size="sm" variant="primary" disabled={!postCaption.trim() && !postImage} onclick={savePost}>올리기</Button>
+						<Button size="sm" variant="ghost" onclick={() => (creatingPost = false)}>{$_("common.cancel")}</Button>
+						<Button size="sm" variant="primary" disabled={!postCaption.trim() && !postImage} onclick={savePost}>{$_("phoneProfileUi.snsPublishBtn")}</Button>
 					</div>
 				</div>
 			{/if}
 
 			{#if !profile.posts.length}
 				<div class="ig-empty">
-					<p>게시물이 아직 없습니다</p>
+					<p>{$_("phoneProfileUi.snsEmptyPosts")}</p>
 					<button type="button" class="ig-btn ai" disabled={generating} onclick={generateWithAi}>
 						<Sparkles />
-						<span>{generating ? "생성 중…" : "AI로 게시물·프로필 생성하기"}</span>
+						<span>{generating ? $_("phoneProfileUi.snsGenerating") : $_("phoneProfileUi.snsGenerateEmptyBtn")}</span>
 					</button>
 				</div>
 			{:else if viewMode === "grid"}
@@ -561,7 +562,7 @@
 					{#each profile.posts as p, i (p.id)}
 						<button type="button" class="ig-tile" onclick={() => (selectedPostId = p.id)}>
 							{#if p.image}
-								<img src={fileSrc(p.image)} alt={p.caption || "게시물"} loading="lazy" />
+								<img src={fileSrc(p.image)} alt={p.caption || $_("phoneProfileUi.snsPostHeading")} loading="lazy" />
 							{:else}
 								<div class="ig-tile-text" style:background={p.mood || CARD_MOODS[i % CARD_MOODS.length]}>
 									<span>{p.caption}</span>
@@ -582,12 +583,12 @@
 									{#if p.location}<span><MapPin /> {p.location}</span>{/if}
 								</div>
 								<div class="post-tools">
-									<button type="button" class="plain sm" title="게시물 편집" onclick={() => ((selectedPostId = p.id), startEditPost(p))}><Pencil /></button>
-									<button type="button" class="plain sm danger" title="게시물 삭제" onclick={() => deletePost(p.id)}><Trash2 /></button>
+									<button type="button" class="plain sm" title={$_("phoneProfileUi.snsEditPostTitle")} onclick={() => ((selectedPostId = p.id), startEditPost(p))}><Pencil /></button>
+									<button type="button" class="plain sm danger" title={$_("phoneProfileUi.snsDeletePostTitle")} onclick={() => deletePost(p.id)}><Trash2 /></button>
 								</div>
 							</div>
 							{#if p.image}
-								<img class="post-img" src={fileSrc(p.image)} alt={p.caption || "게시물 사진"} />
+								<img class="post-img" src={fileSrc(p.image)} alt={p.caption || $_("phoneProfileUi.snsPostPhotoAlt")} />
 							{:else}
 								<div class="post-card-media" style:background={p.mood || CARD_MOODS[i % CARD_MOODS.length]}>
 									<p>{p.caption}</p>
