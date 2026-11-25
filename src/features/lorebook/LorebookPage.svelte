@@ -1,5 +1,6 @@
 <script lang="ts">
 	import { jobs } from "$shared/stores/jobs.svelte";
+	import { _ } from "svelte-i18n";
 	import { onMount } from "svelte";
 	// 로어북 화면: 책 목록 → 책 하나(이름·설명, 쓰는 곳, 항목 편집)
 	import { BookOpen, Check, ChevronRight, Download, Ellipsis, Funnel, Pencil, Plus, Search, Trash2, Upload } from "@lucide/svelte";
@@ -258,11 +259,11 @@
 	<div class="page">
 		<header class="head">
 			<div class="title-wrap">
-				<h1>로어북</h1>
-				<span class="head-count">{lorebook.books.length}개</span>
+				<h1>{$_("nav.lorebook")}</h1>
+				<span class="head-count">{lorebook.books.length}{$_("common.unitItem")}</span>
 			</div>
 			<ListToolbar bind:query bind:filter={bookFilter} bind:sort={bookSort} bind:selecting placeholder="이름·설명" filters={BOOK_FILTERS} sorts={BOOK_SORTS} canSelect={!!lorebook.books.length}>
-				<SplitButton label="새로 만들기" onclick={create} menuLabel="로어북 가져오기" items={[{ label: "파일에서 가져오기 (JSON)", icon: Upload, onselect: importFiles }]} />
+				<SplitButton label={$_("common.create")} onclick={create} menuLabel={$_("common.import")} items={[{ label: "파일에서 가져오기 (JSON)", icon: Upload, onselect: importFiles }]} />
 			</ListToolbar>
 		</header>
 		{#if selecting}<SelectBar count={picked.size} onall={() => (picked = new Set(shown.map((b) => b.id)))} ondelete={removePicked} />{/if}

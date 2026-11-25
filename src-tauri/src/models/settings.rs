@@ -68,7 +68,7 @@ pub struct WorldInfoSetting {
 impl Default for WorldInfoSetting {
     fn default() -> Self {
         Self {
-            scan_depth: 10,
+            scan_depth: 2,
             max_recursion_depth: 0,
         }
     }
@@ -721,6 +721,12 @@ pub struct AppPrompts {
     pub multi_char: PromptSlot,
     /// AI 변수 규칙 ({{var_list}} = 변수 목록·지금 값). 프리셋 블록의 {{vars}} 자리에
     pub vars: PromptSlot,
+    /// 대필 기본 지시문 ({{user}} = 내 이름, {{char}} = 상대 이름, {{length}} = 길이)
+    pub ghost: PromptSlot,
+    /// 폰 메신저 프로필 AI 꾸미기 지시문 ({{char}} = 캐릭터 이름)
+    pub phone_profile: PromptSlot,
+    /// 폰 SNS 페이지 AI 생성 지시문 ({{char}} = 캐릭터 이름)
+    pub phone_sns: PromptSlot,
 }
 
 /// 사용자가 만든 프롬프트 하나

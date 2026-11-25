@@ -1,5 +1,6 @@
 <script lang="ts">
 	import { ChevronDown, ChevronLeft, ChevronRight, Copy, CornerUpLeft, Download, Folder, FolderMinus, GitBranch, Menu, Minus, PanelLeft, PanelRight, Pencil, Pin, PinOff, Square, Trash2, UserRound, X } from "@lucide/svelte";
+	import { _ } from "svelte-i18n";
 	import { getCurrentWindow } from "@tauri-apps/api/window";
 	import { ContextMenu, IconButton, type MenuItem } from "$shared/ui";
 	import PluginCommands from "$features/community/PluginCommands.svelte";
@@ -21,36 +22,36 @@
 	const appWindow = getCurrentWindow();
 	const panelShown = $derived(panel.available && panel.open);
 
-	const SETTINGS: Record<string, string> = {
-		general: "기본 설정",
-		chat: "대화",
-		phone: "폰",
-		theme: "테마",
-		shortcut: "단축키",
-		widget: "위젯",
-		api: "API 키",
-		preset: "프리셋",
-		regex: "정규식",
-		lorebook: "로어북",
-		data: "데이터",
-		log: "로그",
-		plugins: "코어 플러그인",
-		translate: "번역",
-		tts: "음성 읽기",
-		imagegen: "이미지 생성",
-		activity: "최근 실행",
-		budget: "예산 관리",
-		game: "게임 모드",
-		cg: "캐릭터 에셋",
-		sync: "동기화",
-		community: "커뮤니티 플러그인",
-		lint: "메시지 linter",
-		memory: "메모리 검색",
-		summary: "대화 요약",
-		rewrite: "자동 재생성",
-		ghostwrite: "대필",
-		quickreply: "빠른 답장",
-	};
+	const SETTINGS = $derived<Record<string, string>>({
+		general: $_("settings.tabs.general"),
+		chat: $_("settings.tabs.chat"),
+		phone: $_("settings.tabs.phone"),
+		theme: $_("settings.tabs.theme"),
+		shortcut: $_("settings.tabs.shortcut"),
+		widget: $_("settings.tabs.widget"),
+		api: $_("settings.tabs.api"),
+		preset: $_("settings.tabs.preset"),
+		regex: $_("settings.tabs.regex"),
+		lorebook: $_("settings.tabs.lorebook"),
+		data: $_("settings.tabs.data"),
+		log: $_("settings.tabs.log"),
+		plugins: $_("settings.tabs.plugins"),
+		translate: $_("settings.tabs.translate"),
+		tts: $_("settings.tabs.tts"),
+		imagegen: $_("settings.tabs.imagegen"),
+		activity: $_("settings.tabs.activity"),
+		budget: $_("settings.tabs.budget"),
+		game: $_("settings.tabs.game"),
+		cg: $_("settings.tabs.cg"),
+		sync: $_("settings.tabs.sync"),
+		community: $_("settings.tabs.community"),
+		lint: $_("settings.tabs.lint"),
+		memory: $_("settings.tabs.memory"),
+		summary: $_("settings.tabs.summary"),
+		rewrite: $_("settings.tabs.rewrite"),
+		ghostwrite: $_("settings.tabs.ghostwrite"),
+		quickreply: $_("settings.tabs.quickreply"),
+	});
 	// 대화 화면이면 그 대화 (제목 고치기·동작 메뉴)
 	const conv = $derived(nav.current.page === "character" && !nav.current.edit ? library.conversation(nav.current.convId) : undefined);
 	let renaming = $state(false);
@@ -137,60 +138,60 @@
 		switch (r.page) {
 			case "character": {
 				const ch = library.character(r.charId);
-				if (!ch) return [{ label: "캐릭터" }];
-				const top: Crumb[] = [{ label: "캐릭터", to: { page: "character" } }, { label: ch.name, to: { page: "character", charId: ch.id } }];
-				if (r.edit) return [...top, { label: "편집" }];
+				if (!ch) return [{ label: $_("nav.character") }];
+				const top: Crumb[] = [{ label: $_("nav.character"), to: { page: "character" } }, { label: ch.name, to: { page: "character", charId: ch.id } }];
+				if (r.edit) return [...top, { label: $_("common.edit") }];
 				const conv = library.conversation(r.convId);
 				return conv ? [...top, { label: conv.title }] : top;
 			}
 			case "persona": {
 				const p = r.personaId ? library.persona(r.personaId) : undefined;
-				return p ? [{ label: "페르소나", to: { page: "persona" } }, { label: p.alias?.trim() || p.name }] : [{ label: "페르소나" }];
+				return p ? [{ label: $_("nav.persona"), to: { page: "persona" } }, { label: p.alias?.trim() || p.name }] : [{ label: $_("nav.persona") }];
 			}
 			case "settings": {
-				if (layout.narrow && !r.tab) return [{ label: "설정" }];
+				if (layout.narrow && !r.tab) return [{ label: $_("nav.settings") }];
 				const tabId = r.tab ?? "general";
 				const tabLabel = SETTINGS[tabId] ?? (tabId.startsWith("community:") ? tabId.slice(10) : tabId);
 				const tab: Crumb = { label: tabLabel, to: { page: "settings", tab: tabId } };
-				if (r.tab === "theme" && r.edit === "fonts") return [{ label: "설정", to: { page: "settings" } }, tab, { label: "글꼴 관리" }];
-				return r.edit ? [{ label: "설정", to: { page: "settings" } }, tab, { label: "편집" }] : [{ label: "설정", to: { page: "settings" } }, tab];
+				if (r.tab === "theme" && r.edit === "fonts") return [{ label: $_("nav.settings"), to: { page: "settings" } }, tab, { label: "Fonts" }];
+				return r.edit ? [{ label: $_("nav.settings"), to: { page: "settings" } }, tab, { label: $_("common.edit") }] : [{ label: $_("nav.settings"), to: { page: "settings" } }, tab];
 			}
 			case "home":
-				return [{ label: "홈" }];
+				return [{ label: $_("nav.home") }];
 			case "phone": {
 				const PHONE_APPS: Record<string, string> = {
-					home: "홈",
+					home: $_("nav.home"),
 					messages: "메시지",
 					contacts: "연락처",
 					photos: "사진",
 					camera: "카메라",
-					settings: "설정",
+					settings: $_("nav.settings"),
 				};
 				if (r.convId) {
 					const c = library.conversation(r.convId);
 					const ch = c?.characterId ? library.character(c.characterId) : undefined;
 					return [
-						{ label: "폰", to: { page: "phone" } },
+						{ label: $_("nav.phone"), to: { page: "phone" } },
 						{ label: "메시지", to: { page: "phone", app: "messages" } },
 						{ label: ch?.name ?? c?.title ?? "채팅" },
 					];
 				}
 				if (r.app && r.app !== "home") {
-					return [{ label: "폰", to: { page: "phone" } }, { label: PHONE_APPS[r.app] ?? r.app }];
+					return [{ label: $_("nav.phone"), to: { page: "phone" } }, { label: PHONE_APPS[r.app] ?? r.app }];
 				}
-				return [{ label: "폰" }];
+				return [{ label: $_("nav.phone") }];
 			}
 			case "images":
-				return [{ label: "이미지" }];
+				return [{ label: $_("nav.images") }];
 			case "lorebook": {
 				const b = lorebook.book(r.bookId);
-				return b ? [{ label: "로어북", to: { page: "lorebook" } }, { label: b.name }] : [{ label: "로어북" }];
+				return b ? [{ label: $_("nav.lorebook"), to: { page: "lorebook" } }, { label: b.name }] : [{ label: $_("nav.lorebook") }];
 			}
 			case "game": {
 				const g = games.game(r.gameId);
-				if (!g) return [{ label: "게임" }];
-				const top: Crumb[] = [{ label: "게임", to: { page: "game" } }, { label: g.title, to: { page: "game", gameId: g.id } }];
-				return r.sessionId ? [...top, { label: "플레이" }] : r.edit ? [...top, { label: "편집" }] : top;
+				if (!g) return [{ label: $_("nav.game") }];
+				const top: Crumb[] = [{ label: $_("nav.game"), to: { page: "game" } }, { label: g.title, to: { page: "game", gameId: g.id } }];
+				return r.sessionId ? [...top, { label: "Play" }] : r.edit ? [...top, { label: $_("common.edit") }] : top;
 			}
 		}
 	});

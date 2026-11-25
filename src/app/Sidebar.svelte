@@ -1,5 +1,6 @@
 <script lang="ts">
 	import { lastAt } from "$features/character/library.svelte";
+	import { _ } from "svelte-i18n";
 	import { BookOpen, Check, ChevronsUpDown, Copy, Download, ArrowUpDown, ChevronDown, Ellipsis, Gamepad2, GitBranch, House, Pencil, Pin, PinOff, Plus, Search, Settings, Smartphone, Trash2, UserCog, Users, Images, ListFilter, X } from "@lucide/svelte";
 	import { Avatar, ContextMenu, IconButton, type MenuItem } from "$shared/ui";
 	import { fileSrc } from "$shared/ipc/file";
@@ -16,14 +17,14 @@
 
 	// 화면이 늘어나면 여기에 추가 (페르소나는 아래 사용자 프로필에서)
 	// 폰·게임은 코어 플러그인이 꺼져 있으면 숨김
-	const allItems: { page: Page; label: string; icon: typeof Users; plugin?: PluginId }[] = [
-		{ page: "home", label: "홈", icon: House },
-		{ page: "character", label: "캐릭터", icon: Users },
-		{ page: "phone", label: "폰", icon: Smartphone, plugin: "phone" },
-		{ page: "game", label: "게임", icon: Gamepad2, plugin: "game" },
-		{ page: "lorebook", label: "로어북", icon: BookOpen },
-		{ page: "images", label: "이미지", icon: Images },
-	];
+	const allItems = $derived<{ page: Page; label: string; icon: typeof Users; plugin?: PluginId }[]>([
+		{ page: "home", label: $_("nav.home"), icon: House },
+		{ page: "character", label: $_("nav.character"), icon: Users },
+		{ page: "phone", label: $_("nav.phone"), icon: Smartphone, plugin: "phone" },
+		{ page: "game", label: $_("nav.game"), icon: Gamepad2, plugin: "game" },
+		{ page: "lorebook", label: $_("nav.lorebook"), icon: BookOpen },
+		{ page: "images", label: $_("nav.images"), icon: Images },
+	]);
 	const items = $derived(allItems.filter((i) => !i.plugin || plugins.on(i.plugin)));
 
 	$effect(() => {
@@ -434,7 +435,7 @@
 	<div class="lists">
 		{#if pinned.length}
 			<div class="pinnedList">
-				<button class="group head" aria-expanded={pinnedOpen} onclick={() => (pinnedOpen = !pinnedOpen)}>고정됨<ChevronDown class={pinnedOpen ? "" : "rot"} /></button>
+				<button class="group head" aria-expanded={pinnedOpen} onclick={() => (pinnedOpen = !pinnedOpen)}>{$_("sidebar.pinned")}<ChevronDown class={pinnedOpen ? "" : "rot"} /></button>
 				{#if pinnedOpen}
 					<ul class="pinned">
 						{#each pinned as c (c.id)}{@render row(c, 0)}{/each}
@@ -444,21 +445,21 @@
 		{/if}
 		<!-- 필터·새 대화 단추: 묶음 없이 보면 "최근 대화" 머리글 옆, 그룹화하면 첫 묶음 머리글 옆 -->
 		{#snippet tools()}
-			<IconButton label="대화 검색" size="sm" active={searchOpen || !!convQuery} onclick={() => ((searchOpen = !searchOpen), !searchOpen && (convQuery = ""))}><Search /></IconButton>
-			<IconButton label="그룹화·필터·정렬·표시" size="sm" active={viewOpen || customized} onclick={viewMenu}><ListFilter /></IconButton>
-			<IconButton label="새 대화" size="sm" onclick={newConversation}><Plus /></IconButton>
+			<IconButton label={$_("sidebar.searchChats")} size="sm" active={searchOpen || !!convQuery} onclick={() => ((searchOpen = !searchOpen), !searchOpen && (convQuery = ""))}><Search /></IconButton>
+			<IconButton label={$_("sidebar.viewOptions")} size="sm" active={viewOpen || customized} onclick={viewMenu}><ListFilter /></IconButton>
+			<IconButton label={$_("sidebar.newChat")} size="sm" onclick={newConversation}><Plus /></IconButton>
 		{/snippet}
 		{#if searchOpen || convQuery}
 			<div class="sb-search">
 				<Search />
-				<input bind:value={convQuery} placeholder="대화·캐릭터 검색" aria-label="사이드바 대화 검색" />
-				{#if convQuery}<button type="button" class="sb-clear" aria-label="검색어 지우기" onclick={() => (convQuery = "")}><X /></button>{/if}
+				<input bind:value={convQuery} placeholder={$_("sidebar.searchPlaceholder")} aria-label={$_("sidebar.searchChats")} />
+				{#if convQuery}<button type="button" class="sb-clear" aria-label={$_("common.reset")} onclick={() => (convQuery = "")}><X /></button>{/if}
 			</div>
 		{/if}
 		{#if group !== "character" || !sections.length}
 			<div class="listbar">
-				<button class="group head" aria-expanded={recentOpen} title={charFilter ? `${charName}의 대화만 보는 중` : ""} onclick={() => (recentOpen = !recentOpen)}>
-					<span class="gn">{charFilter ? charName : "최근 대화"}</span><ChevronDown class={recentOpen ? "" : "rot"} />
+				<button class="group head" aria-expanded={recentOpen} title={charFilter ? `${charName}` : ""} onclick={() => (recentOpen = !recentOpen)}>
+					<span class="gn">{charFilter ? charName : $_("sidebar.recentChats")}</span><ChevronDown class={recentOpen ? "" : "rot"} />
 				</button>
 				<span class="sp"></span>
 				{@render tools()}
@@ -503,14 +504,14 @@
 
 	<div class="bottom">
 		<div class="profile">
-			<button bind:this={meBtn} class="me" class:on={cur.page === "persona"} aria-haspopup="listbox" aria-expanded={profileOpen} title="사용자 프로필 바꾸기" onclick={toggleProfile}>
+			<button bind:this={meBtn} class="me" class:on={cur.page === "persona"} aria-haspopup="listbox" aria-expanded={profileOpen} title={$_("sidebar.defaultProfile")} onclick={toggleProfile}>
 				{#if me}<Avatar name={me.name} src={fileSrc(me.avatar)} fit={me.avatarFit} color={me.color || null} size={26} />{/if}
-				<span class="who"><b>{me?.alias?.trim() || me?.name || "페르소나 없음"}</b><small>기본 프로필</small></span>
+				<span class="who"><b>{me?.alias?.trim() || me?.name || $_("sidebar.noPersona")}</b><small>{$_("sidebar.defaultProfile")}</small></span>
 				<ChevronsUpDown />
 			</button>
 			{#if profileOpen}
-				<div class="pop" role="listbox" aria-label="사용자 프로필" style={popStyle}>
-					<p class="pop-head">대화의 기본 프로필 (자물쇠를 건 대화는 그대로)</p>
+				<div class="pop" role="listbox" aria-label={$_("sidebar.defaultProfile")} style={popStyle}>
+					<p class="pop-head">{$_("sidebar.profileHint")}</p>
 					<ul>
 						{#each library.personas as p (p.id)}
 							<li>
@@ -523,19 +524,19 @@
 						{/each}
 					</ul>
 					<div class="pop-foot">
-						<button onclick={addPersona}><Plus />추가</button>
+						<button onclick={addPersona}><Plus />{$_("sidebar.add")}</button>
 						<button
 							onclick={() => {
 								profileOpen = false;
 								// 좁은 화면은 목록과 편집을 한 번에 하나만 보여서, 특정 프로필을 주면 목록을 건너뛰고 편집만 뜸
 								nav.go({ page: "persona", personaId: layout.narrow ? undefined : me?.id });
-							}}><UserCog />관리</button
+							}}><UserCog />{$_("sidebar.manage")}</button
 						>
 					</div>
 				</div>
 			{/if}
 		</div>
-		<IconButton label="설정" active={cur.page === "settings"} aria-current={cur.page === "settings" ? "page" : undefined} onclick={() => nav.go({ page: "settings" })}>
+		<IconButton label={$_("nav.settings")} active={cur.page === "settings"} aria-current={cur.page === "settings" ? "page" : undefined} onclick={() => nav.go({ page: "settings" })}>
 			<Settings />
 		</IconButton>
 	</div>

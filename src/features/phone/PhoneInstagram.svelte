@@ -153,11 +153,9 @@
 		}
 	}
 
-	async function generateWithAi() {
-		if (generating) return;
-		generating = true;
-		const prompt = [
-			`지금까지의 대화와 캐릭터 설정을 바탕으로 '${target.name}'의 인스타그램 스타일 개인 SNS 페이지를 JSON으로만 생성해줘.`,
+	async function resolveSnsPrompt(charName: string): Promise<string> {
+		const fallback = [
+			`지금까지의 대화와 캐릭터 설정을 바탕으로 '{{char}}'의 인스타그램 스타일 개인 SNS 페이지를 JSON으로만 생성해줘.`,
 			`설명이나 코드블록 없이 순수 JSON 객체 하나만 출력해.`,
 			`형식:`,
 			`{`,
@@ -180,6 +178,24 @@
 			`posts는 3~4개 작성해줘.`,
 		].join("\n");
 		try {
+			const [ps, defs] = await Promise.all([
+				call(commands.getPluginSetting(), { source: "phone", silent: true }).catch(() => null),
+				call(commands.defaultAppPrompts(), { source: "phone", silent: true }).catch(() => null),
+			]);
+			const slot = ps?.prompts?.phoneSns;
+			const chosen = slot?.items.find((v) => v.id === slot.selected)?.text.trim();
+			const tpl = chosen || defs?.phoneSns?.items[0]?.text || fallback;
+			return tpl.replaceAll("{{char}}", charName);
+		} catch {
+			return fallback.replaceAll("{{char}}", charName);
+		}
+	}
+
+	async function generateWithAi() {
+		if (generating) return;
+		generating = true;
+		try {
+			const prompt = await resolveSnsPrompt(target.name);
 			const raw = await call(commands.phoneGenerateProfile(convId, prompt), { source: "phone" });
 			const parsed = parseAiJson(raw);
 			if (!parsed) {

@@ -1,5 +1,6 @@
 <script lang="ts">
 	import { drops, extOf, storeFile } from "$app/drop.svelte";
+	import { _ } from "svelte-i18n";
 	import { Download, Ellipsis, Gamepad2, Pencil, Play, Plus, Search, Trash2, Upload } from "@lucide/svelte";
 	import { Button, ContextMenu, Dialog, EmptyState, Field, IconButton, Input, ItemCard, ListToolbar, Select, SelectBar, SplitButton, type MenuItem } from "$shared/ui";
 	import { confirmAction } from "$shared/stores/confirm.svelte";
@@ -118,11 +119,11 @@
 <div class="page">
 	<header class="head">
 		<div class="title-wrap">
-			<h1>게임</h1>
-			<span class="count">{games.list.length}개</span>
+			<h1>{$_("nav.game")}</h1>
+			<span class="count">{games.list.length}{$_("common.unitItem")}</span>
 		</div>
 		<ListToolbar bind:query bind:filter bind:sort bind:selecting placeholder="제목·설명" filters={FILTERS} sorts={SORTS} canSelect={!!games.list.length}>
-			<SplitButton label="새로 만들기" onclick={startCreate} disabled={!games.templates.length} menuLabel="게임 가져오기" items={[{ label: "파일에서 가져오기", icon: Upload, onselect: importGame }]} />
+			<SplitButton label={$_("common.create")} onclick={startCreate} disabled={!games.templates.length} menuLabel={$_("common.import")} items={[{ label: "파일에서 가져오기", icon: Upload, onselect: importGame }]} />
 		</ListToolbar>
 	</header>
 	{#if selecting}<SelectBar count={picked.size} onall={() => (picked = new Set(list.map((g) => g.id)))} ondelete={removePicked} />{/if}

@@ -71,6 +71,47 @@ pub const DEFAULT_SUMMARY: &str = "You keep a running record of a long conversat
 - Keep the important parts of the existing summary; shorten only what has become old and less important.
 - Write a short list of items (one per line), within {max} tokens in total, in the same language as the conversation. Output only the summary.";
 
+/// 대필 기본 지시문 ({{user}} = 내 이름, {{char}} = 상대 이름, {{length}} = 길이 설명)
+pub const DEFAULT_GHOST: &str = "[Ghostwrite request]
+Continuing the conversation so far, write what {{user}} says next, from {{user}}'s point of view and in {{user}}'s voice.
+- Do not write {{char}}'s words, actions or narration. Write only {{user}}'s lines (and {{user}}'s actions if needed).
+- Length: {{length}}. Follow the style and format of {{user}}'s earlier messages, and write in the language of the conversation.
+- Output only the text {{user}} would send, with no explanation or preface.";
+
+/// 폰 메신저 프로필 AI 꾸미기 지시문 ({{char}} = 캐릭터 이름)
+pub const DEFAULT_PHONE_PROFILE: &str = "지금까지의 대화와 캐릭터 설정을 바탕으로 '{{char}}'의 카카오톡 스타일 메신저 프로필 꾸미기 정보를 JSON으로만 생성해줘.
+설명이나 코드블록 없이 순수 JSON 객체 하나만 출력해.
+형식:
+{
+  \"status\": \"이름 아래에 표시될 짧은 상태 메시지 (15자 내외)\",
+  \"note\": \"배경 화면 위에 띄울 짧은 감성 메모 문구 (1~2줄, \\n으로 줄바꿈 가능)\",
+  \"bgmTitle\": \"캐릭터 분위기나 현재 기분에 어울리는 프로필 뮤직 제목\",
+  \"bgmArtist\": \"프로필 뮤직 아티스트명\"
+}";
+
+/// 폰 SNS 페이지 AI 생성 지시문 ({{char}} = 캐릭터 이름)
+pub const DEFAULT_PHONE_SNS: &str = "지금까지의 대화와 캐릭터 설정을 바탕으로 '{{char}}'의 인스타그램 스타일 개인 SNS 페이지를 JSON으로만 생성해줘.
+설명이나 코드블록 없이 순수 JSON 객체 하나만 출력해.
+형식:
+{
+  \"handle\": \"영문소문자_아이디\",
+  \"status\": \"인스타 노트용 짧은 상태 메시지 (20자 이내)\",
+  \"bio\": \"캐릭터 성격이 드러나는 자기소개 (1~3줄, \\n으로 줄바꿈)\",
+  \"link\": \"위치 또는 짧은 링크 문구 (선택, 없으면 빈 문자열)\",
+  \"followers\": \"팔로워 수 문자열 (예: 128 또는 1.2만)\",
+  \"following\": \"팔로잉 수 문자열 (예: 42)\",
+  \"posts\": [
+    {
+      \"caption\": \"캐릭터 말투의 최근 SNS 게시물 글 (해시태그 포함 가능)\",
+      \"location\": \"장소 (선택)\",
+      \"date\": \"상대 시간 (예: 2시간 전, 어제, 3일 전)\",
+      \"likes\": 24,
+      \"comments\": [{ \"author\": \"댓글 작성자 이름\", \"text\": \"짧은 댓글\" }]
+    }
+  ]
+}
+posts는 3~4개 작성해줘.";
+
 static OVERRIDES: LazyLock<RwLock<AppPrompts>> = LazyLock::new(Default::default);
 
 /// 설정을 불러오거나 저장할 때 넣는다
@@ -101,7 +142,7 @@ impl PresetPrompts {
     /// settings_json 안의 자리
     pub const KEY: &'static str = "appPrompts";
     /// 프리셋이 고칠 수 있는 슬롯 (AppPrompts의 camelCase 이름)
-    pub const SLOTS: &'static [&'static str] = &["chatImages", "autoImage", "multiChar", "vars", "summary", "gameRules", "sceneRules"];
+    pub const SLOTS: &'static [&'static str] = &["chatImages", "autoImage", "multiChar", "vars", "summary", "ghost", "phoneProfile", "phoneSns", "gameRules", "sceneRules"];
 
     /// 프리셋을 읽어서 (없거나 못 읽으면 빈 것 — 전역·기본을 따름)
     pub async fn load(db: &sqlx::SqlitePool, preset_id: &str) -> Self {
@@ -159,7 +200,17 @@ pub fn defaults() -> AppPrompts {
         summary: default_slot(DEFAULT_SUMMARY),
         multi_char: default_slot(DEFAULT_MULTI_CHAR),
         vars: default_slot(DEFAULT_VARS),
+        ghost: default_slot(DEFAULT_GHOST),
+        phone_profile: default_slot(DEFAULT_PHONE_PROFILE),
+        phone_sns: default_slot(DEFAULT_PHONE_SNS),
     }
+}
+
+pub fn ghost(me: &str, other: &str, len: &str) -> String {
+    pick(|p| &p.ghost, DEFAULT_GHOST)
+        .replace("{{user}}", me)
+        .replace("{{char}}", other)
+        .replace("{{length}}", len)
 }
 
 pub fn translate(lang: &str) -> String {

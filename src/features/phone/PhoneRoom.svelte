@@ -691,13 +691,15 @@
 		display: flex;
 		flex-direction: column;
 		min-height: 0;
-		background: color-mix(in oklab, var(--accent) 12%, #eef1f4);
+		background: color-mix(in oklab, var(--accent) 8%, var(--bg));
+		color: var(--text);
 	}
 	.room-bar {
 		display: flex;
 		align-items: center;
 		gap: 10px;
 		padding: 6px 14px 10px;
+		border-bottom: 1px solid color-mix(in oklab, var(--border) 60%, transparent);
 	}
 	.room-bar strong {
 		flex: 1;
@@ -737,15 +739,15 @@
 	.hint {
 		align-self: center;
 		margin-top: 40%;
-		color: #6b6b6b;
+		color: var(--text-muted);
 		font-size: 13px;
 	}
 	.date {
 		align-self: center;
 		padding: 3px 12px;
 		border-radius: 12px;
-		background: rgb(0 0 0 / 0.12);
-		color: white;
+		background: color-mix(in oklab, var(--text) 14%, transparent);
+		color: var(--text-muted);
 		font-size: 11px;
 	}
 	.them {
@@ -777,7 +779,7 @@
 	}
 	.name {
 		font-size: 12px;
-		color: #333;
+		color: var(--text-muted);
 	}
 	.line {
 		display: flex;
@@ -795,16 +797,18 @@
 	.b {
 		padding: 7px 10px;
 		border-radius: 14px;
-		background: white;
-		color: #191919;
+		background: var(--bubble-ai);
+		color: var(--bubble-ai-text);
+		border: 1px solid color-mix(in oklab, var(--border) 65%, transparent);
 		font-size: 14px;
 		line-height: 1.4;
 		white-space: pre-wrap;
 		overflow-wrap: anywhere;
 	}
 	.me .b {
-		background: var(--accent);
-		color: white;
+		background: var(--bubble-user);
+		color: var(--bubble-user-text);
+		border-color: transparent;
 	}
 	.photo {
 		display: block;
@@ -814,7 +818,7 @@
 	.t {
 		flex: none;
 		font-size: 10px;
-		color: #555;
+		color: var(--text-faint);
 		display: flex;
 		flex-direction: column;
 		align-items: flex-end;
@@ -825,47 +829,45 @@
 	}
 	.typing {
 		padding: 11px 12px;
-		--typing-color: #9a9a9a;
+		--typing-color: var(--text-faint);
 	}
-	/* 빠른 답장 줄: 폰의 밝은 입력 줄 색에 맞춤 (공용 컴포넌트는 앱 테마 변수를 쓰므로 여기서 바꿔 줌) */
 	/* 접은 상태창 (5-F-4-2) */
 	.pin-ref {
-		border: 1px dashed #c8c8c8;
-		background: white;
-		color: #666;
+		border: 1px dashed var(--border-strong);
+		background: var(--surface);
+		color: var(--text-muted);
 		font-size: 12px;
 		cursor: pointer;
 	}
 	.qr {
 		padding: 6px 12px 0;
-		background: white;
-		--surface: #f1f1f1;
-		--text: #191919;
-		--text-muted: #666;
-		--text-faint: #999;
-		--border: transparent;
+		background: var(--surface);
+		border-top: 1px solid var(--border);
 	}
 	.input {
 		display: flex;
 		align-items: flex-end;
 		gap: 8px;
 		padding: 8px 12px 26px;
-		background: white;
+		background: var(--surface);
 	}
 	.input textarea {
 		flex: 1;
 		min-height: 36px;
 		max-height: 96px;
 		padding: 8px 14px;
-		border: none;
+		border: 1px solid var(--border);
 		border-radius: 18px;
-		background: #f1f1f1;
+		background: var(--bg-sunken);
 		outline: none;
-		color: #191919;
+		color: var(--text);
 		font: inherit;
 		font-size: 14px;
 		resize: none;
 		field-sizing: content;
+	}
+	.input textarea:focus {
+		border-color: var(--accent);
 	}
 	.send {
 		display: grid;
@@ -876,7 +878,7 @@
 		border: none;
 		border-radius: 50%;
 		background: transparent;
-		color: #666;
+		color: var(--text-muted);
 		cursor: pointer;
 	}
 	.send :global(svg) {
@@ -885,31 +887,11 @@
 	}
 	.send.on {
 		background: var(--accent);
-		color: white;
+		color: var(--text-on-accent);
 	}
 	.send.on :global(svg) {
 		width: 17px;
 		height: 17px;
-	}
-	.peek {
-		display: grid;
-		place-items: center;
-		flex: none;
-		width: 36px;
-		height: 36px;
-		border: none;
-		border-radius: 50%;
-		background: #f1f1f1;
-		color: #555;
-		cursor: pointer;
-	}
-	.peek:hover:not(:disabled) {
-		background: color-mix(in oklab, var(--accent) 18%, #f1f1f1);
-		color: var(--accent);
-	}
-	.peek :global(svg) {
-		width: 18px;
-		height: 18px;
 	}
 	.hint {
 		text-align: center;
@@ -922,9 +904,9 @@
 		width: min(100%, 360px);
 	}
 	.folded-b {
-		border: 1px dashed rgb(0 0 0 / 0.2);
-		background: rgb(255 255 255 / 0.7) !important;
-		color: #666 !important;
+		border: 1px dashed var(--border-strong);
+		background: var(--surface-2) !important;
+		color: var(--text-muted) !important;
 		font-size: 12px;
 		cursor: pointer;
 	}
@@ -932,8 +914,8 @@
 		display: flex;
 		gap: 8px;
 		padding: 6px 12px;
-		background: #f7f7f7;
-		border-top: 1px solid #e5e5ea;
+		background: var(--surface-2);
+		border-top: 1px solid var(--border);
 		overflow-x: auto;
 	}
 	.attach-item {
@@ -943,7 +925,7 @@
 		flex: none;
 		border-radius: 10px;
 		overflow: hidden;
-		border: 1px solid #ddd;
+		border: 1px solid var(--border);
 	}
 	.attach-item img {
 		width: 100%;
@@ -974,8 +956,8 @@
 		align-items: center;
 		justify-content: space-between;
 		padding: 6px 14px;
-		background: #fef3c7;
-		color: #92400e;
+		background: var(--warning-soft);
+		color: var(--warning);
 		font-size: 12px;
 	}
 	.imp-banner span {
@@ -1002,10 +984,10 @@
 		flex: none;
 		border: none;
 		border-radius: 50%;
-		background: #f0f0f3;
-		color: #555;
+		background: var(--bg-sunken);
+		color: var(--text-muted);
 		cursor: pointer;
-		transition: transform 150ms ease;
+		transition: transform 150ms ease, background var(--duration-fast) var(--ease);
 	}
 	.plus-btn.on {
 		transform: rotate(45deg);
@@ -1021,8 +1003,8 @@
 		grid-template-columns: repeat(4, 1fr);
 		gap: 12px 8px;
 		padding: 14px 16px 26px;
-		background: #f9f9fb;
-		border-top: 1px solid #e5e5ea;
+		background: var(--surface-2);
+		border-top: 1px solid var(--border);
 	}
 	.tray-btn {
 		display: flex;
@@ -1031,7 +1013,7 @@
 		gap: 6px;
 		border: none;
 		background: none;
-		color: #333;
+		color: var(--text-muted);
 		font: inherit;
 		font-size: 11.5px;
 		cursor: pointer;

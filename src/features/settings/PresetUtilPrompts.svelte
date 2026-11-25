@@ -15,8 +15,12 @@
 	const SLOTS: { key: keyof AppPrompts; label: string; vars: string }[] = [
 		{ key: "chatImages", label: "캐릭터 에셋", vars: "{{img_keys}} · 자리 {{img_inprompt}}" },
 		{ key: "autoImage", label: "이미지 자동 생성", vars: "자리 {{auto_image}}" },
+		{ key: "multiChar", label: "다인봇", vars: "{{names}} · 자리 {{multi_char}}" },
 		{ key: "vars", label: "AI 변수", vars: "{{var_list}} · 자리 {{vars}}" },
 		{ key: "summary", label: "대화 요약", vars: "{max}" },
+		{ key: "ghost", label: "대필", vars: "{{user}} · {{char}} · {{length}}" },
+		{ key: "phoneProfile", label: "폰 프로필 꾸미기", vars: "{{char}}" },
+		{ key: "phoneSns", label: "폰 SNS 페이지 생성", vars: "{{char}}" },
 		{ key: "gameRules", label: "게임 규칙", vars: "한 줄에 규칙 하나" },
 		{ key: "sceneRules", label: "씬 규칙", vars: "한 줄에 규칙 하나" },
 	];

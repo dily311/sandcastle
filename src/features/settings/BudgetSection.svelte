@@ -2,6 +2,7 @@
 	// 예산 관리 · API별 사용량 · 단가표 (ActivitySection에서 분리)
 	import { onDestroy, onMount } from "svelte";
 	import { RefreshCw, Trash2 } from "@lucide/svelte";
+	import { _ } from "svelte-i18n";
 	import type { ApiProfiles, BudgetOverview_Serialize as BudgetOverview, UsageSummary_Serialize as Usage } from "$ipc/bindings";
 	import { Badge, Button, Segmented } from "$shared/ui";
 	import { call, commands } from "$shared/ipc/client";
@@ -98,29 +99,29 @@
 	}
 </script>
 
-<Section title="예산 관리" lead="API 프로필별 예산 한도, 사용량 합계, 모델별 단가표. 토큰은 공급자가 알려주면 그 값, 아니면 앱이 추정함">
+<Section title={$_("settings.budget.title")} lead={$_("settings.budget.lead")}>
 	{#snippet actions()}
-		<Button size="sm" disabled={loading} onclick={load}>{#snippet icon()}<RefreshCw />{/snippet}새로 고침</Button>
+		<Button size="sm" disabled={loading} onclick={load}>{#snippet icon()}<RefreshCw />{/snippet}{$_("common.refresh")}</Button>
 	{/snippet}
 
-	<Group title="예산 한도">
+	<Group title={$_("settings.budget.limits")}>
 		<BudgetLimits {profiles} items={budgets} onchanged={load} />
 	</Group>
 
-	<Group title="API별 사용량">
+	<Group title={$_("settings.budget.usage")}>
 		{#snippet aside()}
 			<div class="aside">
 				<Segmented
 					label="기간"
 					bind:value={period}
 					options={[
-						{ value: "day", label: "오늘" },
-						{ value: "week", label: "7일" },
-						{ value: "month", label: "30일" },
-						{ value: "all", label: "전체" },
+						{ value: "day", label: $_("settings.budget.today") },
+						{ value: "week", label: $_("settings.budget.days7") },
+						{ value: "month", label: $_("settings.budget.days30") },
+						{ value: "all", label: $_("settings.budget.all") },
 					]}
 				/>
-				<Button size="sm" variant="ghost" disabled={!usage.length} onclick={clearUsage}>{#snippet icon()}<Trash2 />{/snippet}비우기</Button>
+				<Button size="sm" variant="ghost" disabled={!usage.length} onclick={clearUsage}>{#snippet icon()}<Trash2 />{/snippet}{$_("settings.budget.clear")}</Button>
 			</div>
 		{/snippet}
 		{#if costTotals.length}<p class="total">추정 금액 {costTotals.map(([c, v]) => money(v, c)).join(" · ")} <span class="muted">(단가표 기준, 실제 청구와 다를 수 있음)</span></p>{/if}
@@ -139,18 +140,18 @@
 				</div>
 			</div>
 		{:else}
-			<p class="empty">이 기간에 쓴 API 없음</p>
+			<p class="empty">{$_("settings.budget.noUsage")}</p>
 		{/each}
 	</Group>
 
-	<Group title="단가표">
+	<Group title={$_("settings.budget.priceTable")}>
 		{#snippet aside()}
-			<Button size="sm" variant="ghost" aria-expanded={showPrices} onclick={() => (showPrices = !showPrices)}>{showPrices ? "접기" : "펼치기"}</Button>
+			<Button size="sm" variant="ghost" aria-expanded={showPrices} onclick={() => (showPrices = !showPrices)}>{showPrices ? $_("settings.budget.collapse") : $_("settings.budget.expand")}</Button>
 		{/snippet}
 		{#if showPrices}
 			<div class="prices"><PriceTable models={usedModels} onchanged={load} /></div>
 		{:else}
-			<p class="empty">모델별 단가를 적으면 사용량 옆에 추정 금액이 나옴</p>
+			<p class="empty">{$_("settings.budget.priceHint")}</p>
 		{/if}
 	</Group>
 </Section>

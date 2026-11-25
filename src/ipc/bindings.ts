@@ -838,6 +838,12 @@ export type AppPrompts_Deserialize = {
 	multiChar?: PromptSlot,
 	/**  AI 변수 규칙 ({{var_list}} = 변수 목록·지금 값). 프리셋 블록의 {{vars}} 자리에 */
 	vars?: PromptSlot,
+	/**  대필 기본 지시문 ({{user}}, {{char}}, {{length}}) */
+	ghost?: PromptSlot,
+	/**  폰 메신저 프로필 AI 꾸미기 지시문 ({{char}}) */
+	phoneProfile?: PromptSlot,
+	/**  폰 SNS 페이지 AI 생성 지시문 ({{char}}) */
+	phoneSns?: PromptSlot,
 };
 
 /**  앱이 AI에 보내는 고정 지시문. 자리마다 사용자가 여러 개 만들어 두고 하나를 고른다 (고르지 않으면 기본값) */
@@ -862,6 +868,12 @@ export type AppPrompts_Serialize = {
 	multiChar: PromptSlot,
 	/**  AI 변수 규칙 ({{var_list}} = 변수 목록·지금 값). 프리셋 블록의 {{vars}} 자리에 */
 	vars: PromptSlot,
+	/**  대필 기본 지시문 ({{user}}, {{char}}, {{length}}) */
+	ghost: PromptSlot,
+	/**  폰 메신저 프로필 AI 꾸미기 지시문 ({{char}}) */
+	phoneProfile: PromptSlot,
+	/**  폰 SNS 페이지 AI 생성 지시문 ({{char}}) */
+	phoneSns: PromptSlot,
 };
 
 export type AppSetting = AppSetting_Serialize | AppSetting_Deserialize;

@@ -2,6 +2,7 @@
 	// 이미지 페이지 = 갤러리: 만든 그림과 올린 그림 전부. 위의 "만들기"를 누르면 만들기 칸이 열린다.
 	// 그림은 앱 데이터 generated/ 폴더에 있고, 같은 이름 .json에 프롬프트·출처·생성 정보가 있다 (service/plugins.rs)
 	import { jobs } from "$shared/stores/jobs.svelte";
+	import { _ } from "svelte-i18n";
 	import { onMount } from "svelte";
 	import { ArrowUpDown, Check, Ellipsis, Info, Plus, Copy, ExternalLink, Eye, Filter, FolderOpen, MessageSquare, Pencil, Search, Sparkles, Tag, Trash2, Upload, Wand2, X } from "@lucide/svelte";
 	import type { GeneratedImage_Serialize as GeneratedImage } from "$ipc/bindings";
@@ -374,14 +375,14 @@
 	<div class="inner">
 		<header class="head">
 			<div class="title-wrap">
-				<h1>이미지</h1>
-				<span class="count">{images.length}장</span>
+				<h1>{$_("nav.images")}</h1>
+				<span class="count">{images.length}{$_("common.unitImage")}</span>
 			</div>
 			<ListToolbar bind:query bind:filter bind:sort bind:selecting placeholder="이름·프롬프트·태그" filters={FILTERS} sorts={SORTS} canSelect={images.some(owned)}>
 				{#if plugins.on("imagegen")}
-					<SplitButton label={creating ? "생성 닫기" : "새로 만들기"} onclick={() => (creating = !creating)} menuLabel="그림 올리기" items={[{ label: "파일 업로드", icon: Upload, onselect: upload }]} />
+					<SplitButton label={creating ? $_("common.close") : $_("common.create")} onclick={() => (creating = !creating)} menuLabel={$_("common.import")} items={[{ label: "파일 업로드", icon: Upload, onselect: upload }]} />
 				{:else}
-					<Button variant="primary" onclick={upload}>{#snippet icon()}<Upload />{/snippet}업로드</Button>
+					<Button variant="primary" onclick={upload}>{#snippet icon()}<Upload />{/snippet}{$_("common.import")}</Button>
 				{/if}
 			</ListToolbar>
 		</header>

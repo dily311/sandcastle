@@ -171,11 +171,9 @@
 		}
 	}
 
-	async function generateWithAi() {
-		if (generating) return;
-		generating = true;
-		const prompt = [
-			`지금까지의 대화와 캐릭터 설정을 바탕으로 '${target.name}'의 카카오톡 스타일 메신저 프로필 꾸미기 정보를 JSON으로만 생성해줘.`,
+	async function resolveProfilePrompt(charName: string): Promise<string> {
+		const fallback = [
+			`지금까지의 대화와 캐릭터 설정을 바탕으로 '{{char}}'의 카카오톡 스타일 메신저 프로필 꾸미기 정보를 JSON으로만 생성해줘.`,
 			`설명이나 코드블록 없이 순수 JSON 객체 하나만 출력해.`,
 			`형식:`,
 			`{`,
@@ -186,6 +184,24 @@
 			`}`,
 		].join("\n");
 		try {
+			const [ps, defs] = await Promise.all([
+				call(commands.getPluginSetting(), { source: "phone", silent: true }).catch(() => null),
+				call(commands.defaultAppPrompts(), { source: "phone", silent: true }).catch(() => null),
+			]);
+			const slot = ps?.prompts?.phoneProfile;
+			const chosen = slot?.items.find((v) => v.id === slot.selected)?.text.trim();
+			const tpl = chosen || defs?.phoneProfile?.items[0]?.text || fallback;
+			return tpl.replaceAll("{{char}}", charName);
+		} catch {
+			return fallback.replaceAll("{{char}}", charName);
+		}
+	}
+
+	async function generateWithAi() {
+		if (generating) return;
+		generating = true;
+		try {
+			const prompt = await resolveProfilePrompt(target.name);
 			let cid = convId;
 			if (!cid) {
 				const chatWho = target.chatWho ?? target.who;
@@ -661,20 +677,17 @@
 		flex-direction: column;
 		max-height: 82%;
 		border-radius: 18px 18px 0 0;
-		background: #fff;
-		color: #191919;
-		box-shadow: 0 -8px 28px rgb(0 0 0 / 0.3);
-		--surface: #f7f7fa;
-		--text: #191919;
-		--text-muted: #666;
-		--border: #dcdce2;
+		background: var(--surface);
+		color: var(--text);
+		border-top: 1px solid var(--border);
+		box-shadow: 0 -8px 28px rgb(0 0 0 / 0.35);
 	}
 	.kk-sheet-head {
 		display: flex;
 		align-items: center;
 		justify-content: space-between;
 		padding: 14px 16px 10px;
-		border-bottom: 1px solid #ececef;
+		border-bottom: 1px solid var(--border);
 	}
 	.kk-sheet-head strong {
 		font-size: 15px;
@@ -684,7 +697,7 @@
 		place-items: center;
 		border: none;
 		background: none;
-		color: #555;
+		color: var(--text-muted);
 		cursor: pointer;
 		padding: 0;
 	}
@@ -708,7 +721,7 @@
 	.kk-cover-row > span {
 		font-size: 11.5px;
 		font-weight: 600;
-		color: #555;
+		color: var(--text-muted);
 	}
 	.kk-grid-2 {
 		display: grid;
@@ -731,6 +744,6 @@
 		justify-content: flex-end;
 		gap: 8px;
 		padding: 10px 16px 18px;
-		border-top: 1px solid #ececef;
+		border-top: 1px solid var(--border);
 	}
 </style>

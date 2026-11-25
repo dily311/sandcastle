@@ -3,8 +3,9 @@
 	// 글 호출(채팅·임베딩)의 추정 금액을 이번 달 1일부터 더해 넘으면 자동 실행은 막히고, 사용자가 누른 실행은 "이번만 계속"을 물음.
 	// 음성·그림은 한도가 없다. NovelAI·ElevenLabs는 구독형이라 한도 대신 계정 잔여만 보여준다.
 	import { RefreshCw } from "@lucide/svelte";
+	import { _ } from "svelte-i18n";
 	import type { ApiProfiles, BudgetOverview_Serialize as Overview, ModelPriceInfo, QuotaLine } from "$ipc/bindings";
-	import { Button, Spinner } from "$shared/ui";
+	import { Button, Slider, Spinner } from "$shared/ui";
 	import { call, commands } from "$shared/ipc/client";
 	import { toasts } from "$shared/stores/toast.svelte";
 
@@ -16,9 +17,7 @@
 	let { profiles, items, onchanged }: Props = $props();
 	const src = { source: "budget" };
 
-	/** 슬라이더 눈금(달러/월). 맨 끝은 "한도 없음" */
-	const STEPS = [1, 2, 3, 5, 7, 10, 15, 20, 30, 50, 75, 100, 150, 200];
-	const NONE = STEPS.length;
+	const MAX_USD = 1000;
 	/** 한도를 두지 않고 계정 잔여를 보여주는 공급자 */
 	const QUOTA_FORMATS = new Set(["novelai", "elevenlabs"]);
 
@@ -26,30 +25,27 @@
 	const usd = (v: number) => `$${v < 0.01 && v > 0 ? v.toFixed(4) : v.toFixed(2)}`;
 	const pct = (used: number, limit: number) => Math.min(100, Math.round((used / limit) * 100));
 	const tone = (used: number, limit: number) => (used >= limit ? "over" : used * 100 >= limit * 80 ? "near" : "");
-	/** 저장된 한도에 가장 가까운 눈금 */
-	function indexOf(v: number | null | undefined): number {
-		if (!v || v <= 0) return NONE;
-		let best = 0;
-		for (let i = 1; i < STEPS.length; i++) if (Math.abs(STEPS[i] - v) < Math.abs(STEPS[best] - v)) best = i;
-		return best;
+
+	// 슬라이더 값 (프로필별 문자열: 비어 있으면 한도 없음)
+	let drafts = $state<Record<string, string>>({});
+	function savedVal(p: ApiProfiles): string {
+		const v = byId.get(p.id)?.limit.monthlyUsd;
+		return v && v > 0 ? String(v) : "";
+	}
+	function valOf(p: ApiProfiles): string {
+		return p.id in drafts ? drafts[p.id] : savedVal(p);
 	}
 
-	// 슬라이더 위치 (끌고 있는 동안만. 놓으면 저장하고 저장된 값을 따라감)
-	let dragging = $state<Record<string, number>>({});
-	const posOf = (p: ApiProfiles) => dragging[p.id] ?? indexOf(byId.get(p.id)?.limit.monthlyUsd);
-	const labelOf = (i: number) => (i >= NONE ? "한도 없음" : `$${STEPS[i]} / 월`);
-
-	async function commit(p: ApiProfiles) {
-		const i = dragging[p.id];
-		if (i == null) return;
-		const limit = { apiProfileId: p.id, monthlyUsd: i >= NONE ? null : STEPS[i], legacyMonthlyTokens: null };
-		try {
-			await call(commands.upsertBudgetLimit(limit), src);
-			onchanged?.();
-		} finally {
-			delete dragging[p.id];
-			dragging = { ...dragging };
-		}
+	async function commitValue(p: ApiProfiles, raw: string) {
+		const trimmed = raw.trim();
+		const parsed = trimmed === "" ? null : Math.min(MAX_USD, Math.max(1, Number(trimmed)));
+		const monthlyUsd = parsed != null && Number.isFinite(parsed) ? parsed : null;
+		drafts[p.id] = monthlyUsd != null ? String(monthlyUsd) : "";
+		const limit = { apiProfileId: p.id, monthlyUsd, legacyMonthlyTokens: null };
+		await call(commands.upsertBudgetLimit(limit), src);
+		delete drafts[p.id];
+		drafts = { ...drafts };
+		onchanged?.();
 	}
 
 	// ---- 모델 단가 (슬라이더 아래 환산과 "단가 없음" 안내) ----
@@ -88,7 +84,9 @@
 
 {#each profiles as p (p.id)}
 	{@const o = byId.get(p.id)}
-	{@const i = posOf(p)}
+	{@const curStr = valOf(p)}
+	{@const curVal = Number(curStr)}
+	{@const hasLimit = curStr.trim() !== "" && Number.isFinite(curVal) && curVal > 0}
 	<div class="prof">
 		<div class="head">
 			<span class="name">{p.name}</span>
@@ -108,26 +106,22 @@
 				</Button>
 			</div>
 		{:else}
-			<div class="limit">
-				<label for="bl-{p.id}">한 달 예산 (이 기기)</label>
-				<b class:off={i >= NONE}>{labelOf(i)}</b>
+			<div class="slider-wrap">
+				<Slider
+					label={$_("settings.budget.monthlyBudget")}
+					bind:value={() => valOf(p), (v) => (drafts[p.id] = v)}
+					min={1}
+					max={MAX_USD}
+					step={1}
+					fallback={100}
+					unsetLabel={$_("settings.budget.noLimit")}
+					format={(n) => `$${n} / mo`}
+					oncommit={(v) => void commitValue(p, v)}
+				/>
 			</div>
-			<input
-				id="bl-{p.id}"
-				class="range"
-				type="range"
-				min="0"
-				max={NONE}
-				step="1"
-				value={i}
-				style:--pct="{(i / NONE) * 100}%"
-				aria-valuetext={labelOf(i)}
-				oninput={(e) => (dragging[p.id] = Number(e.currentTarget.value))}
-				onchange={() => commit(p)}
-			/>
-			{#if i < NONE}
+			{#if hasLimit}
 				{#if prices[p.model]}
-					<p class="hint">{tokensHint(prices[p.model], STEPS[i])}{prices[p.model]?.builtin ? " · 앱의 기본 단가 기준(추정)" : " · 내가 적은 단가 기준"}</p>
+					<p class="hint">{tokensHint(prices[p.model], curVal)}{prices[p.model]?.builtin ? " · 앱의 기본 단가 기준(추정)" : " · 내가 적은 단가 기준"}</p>
 				{:else if p.model in prices}
 					<p class="warn">이 모델은 단가를 몰라 금액을 셀 수 없음. 아래 "단가표"에 적어야 한도가 걸림</p>
 				{/if}
@@ -173,28 +167,8 @@
 		color: var(--text-faint);
 		font-size: var(--text-xs);
 	}
-	.limit {
-		display: flex;
-		align-items: baseline;
-		justify-content: space-between;
+	.slider-wrap {
 		margin-top: var(--space-2);
-		font-size: var(--text-sm);
-		color: var(--text-muted);
-	}
-	.limit b {
-		color: var(--text);
-		font-variant-numeric: tabular-nums;
-	}
-	.limit b.off {
-		color: var(--text-faint);
-		font-weight: 500;
-	}
-	.range {
-		width: 100%;
-		margin: var(--space-2) 0 0;
-		height: 20px;
-		accent-color: var(--accent);
-		cursor: pointer;
 	}
 	.hint,
 	.warn {

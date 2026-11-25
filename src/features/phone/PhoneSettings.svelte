@@ -6,6 +6,7 @@
 	import BackgroundPicker from "$shared/ui/BackgroundPicker.svelte";
 	import { library } from "$features/character/library.svelte";
 	import ModelPicker from "$features/settings/ModelPicker.svelte";
+	import PromptSlotEditor from "$features/settings/PromptSlotEditor.svelte";
 	import { chatApiOptions, current, ensureLoaded, orNull, save } from "$features/settings/pluginSettingForm.svelte";
 	import { appSetting } from "$shared/stores/appSetting.svelte";
 	import { toasts } from "$shared/stores/toast.svelte";
@@ -148,6 +149,16 @@
 			</div>
 		</section>
 	{/if}
+
+	<section>
+		<h4>폰 프로필 AI 꾸미기 프롬프트</h4>
+		<PromptSlotEditor key="phoneProfile" desc="폰 친구 프로필에서 'AI 꾸미기'를 눌렀을 때 보내는 지시문" vars={"{{char}} 캐릭터 이름"} />
+	</section>
+
+	<section>
+		<h4>폰 SNS 페이지 AI 생성 프롬프트</h4>
+		<PromptSlotEditor key="phoneSns" desc="폰 개인 SNS 페이지에서 AI 생성을 눌렀을 때 보내는 지시문" vars={"{{char}} 캐릭터 이름"} />
+	</section>
 </div>
 
 <style>

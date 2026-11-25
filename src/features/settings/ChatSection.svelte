@@ -209,6 +209,10 @@
 			</Row>
 		</Group>
 
+		<Group title="다인봇 프롬프트">
+			<PromptSlotEditor key="multiChar" desc="로어북 '캐릭터' 분류 등장인물이 있을 때 붙음" vars={"{{names}} 등장인물 이름 · 프리셋 블록에 {{multi_char}}를 넣은 자리에 들어감"} />
+		</Group>
+
 		{#if plugins.on("status")}
 			<Group title="AI 변수 프롬프트">
 				<PromptSlotEditor key="vars" desc="'AI가 변수 읽고 바꾸기'를 켰을 때 붙음" vars={"{{var_list}} 변수 목록·지금 값 · 프리셋 블록에 {{vars}}를 넣은 자리에 들어감"} />

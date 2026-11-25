@@ -7,6 +7,7 @@
 	import Section from "./Section.svelte";
 	import Group from "./Group.svelte";
 	import Row from "./Row.svelte";
+	import PromptSlotEditor from "./PromptSlotEditor.svelte";
 	import { apiOptions, current, ensureLoaded, orNull, save } from "./pluginSettingForm.svelte";
 
 	onMount(ensureLoaded);
@@ -38,6 +39,9 @@
 			<Row label="초안 없이 바로 요청">
 				<Switch checked={cur.ghost.sendWithoutDraft} label="초안 없이 바로 요청" hideLabel onchange={(v) => save("ghost", { sendWithoutDraft: v })} />
 			</Row>
+		</Group>
+		<Group title="대필 프롬프트">
+			<PromptSlotEditor key="ghost" desc="대필 요청 시 마지막에 붙는 기본 지시문" vars={"{{user}} 내 이름 · {{char}} 상대 이름 · {{length}} 길이 설명"} />
 		</Group>
 	{/if}
 </Section>

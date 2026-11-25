@@ -1,5 +1,6 @@
 <script lang="ts">
 	import { chatImport } from "./chatImport.svelte";
+	import { _ } from "svelte-i18n";
 	import { jobs, SKIPPED } from "$shared/stores/jobs.svelte";
 	import { lastAt } from "$features/character/library.svelte";
 	import { TRASH_HINT, trashedToast } from "$shared/trash";
@@ -601,11 +602,11 @@
 	<div class="page">
 		<header class="head">
 			<div class="title-wrap">
-				<h1>캐릭터</h1>
-				<span class="head-count">{library.characters.length}명</span>
+				<h1>{$_("nav.character")}</h1>
+				<span class="head-count">{library.characters.length}{$_("common.unitPerson")}</span>
 			</div>
 			<ListToolbar bind:query bind:filter bind:sort bind:selecting placeholder="이름·태그" filters={FILTERS} sorts={SORTS} canSelect={!!library.characters.length}>
-				<SplitButton label="새로 만들기" onclick={createCharacter} menuLabel="캐릭터 가져오기" items={[{ label: "파일에서 가져오기 (PNG·JSON·ZIP)", icon: Upload, onselect: importFiles }]} />
+				<SplitButton label={$_("common.create")} onclick={createCharacter} menuLabel={$_("common.import")} items={[{ label: "파일에서 가져오기 (PNG·JSON·ZIP)", icon: Upload, onselect: importFiles }]} />
 			</ListToolbar>
 		</header>
 		{#if selecting}<SelectBar count={picked.size} onall={() => (picked = new Set(list.map((c) => c.id)))} ondelete={removePicked} />{/if}

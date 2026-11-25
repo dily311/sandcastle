@@ -1,6 +1,7 @@
 <script lang="ts">
 	// 목록 화면(캐릭터·게임·로어북·이미지) 공통 도구 줄: 찾기 · 거르기 · 정렬 · 여러 개 삭제 + 주 동작(children)
 	import type { Snippet } from "svelte";
+	import { _ } from "svelte-i18n";
 	import { ArrowUpDown, Check, Filter, ListChecks, Search } from "@lucide/svelte";
 	import IconButton from "./IconButton.svelte";
 	import Input from "./Input.svelte";
@@ -52,20 +53,20 @@
 		</div>
 	{/if}
 	{#if activeFilterLabel}
-		<button type="button" class="filter-chip" title="필터 초기화" onclick={() => (filter = "all")}>
+		<button type="button" class="filter-chip" title={$_("common.clearFilter")} onclick={() => (filter = "all")}>
 			<span>{activeFilterLabel}</span>
 			<span class="x" aria-hidden="true">×</span>
 		</button>
 	{/if}
-	<IconButton size="sm" label="찾기" active={searchOpen || !!query} onclick={() => ((searchOpen = !searchOpen), !searchOpen && (query = ""))}><Search /></IconButton>
+	<IconButton size="sm" label={$_("common.search")} active={searchOpen || !!query} onclick={() => ((searchOpen = !searchOpen), !searchOpen && (query = ""))}><Search /></IconButton>
 	{#if filters.length > 1}
-		<IconButton size="sm" label="거르기 (지금: {filters.find((f) => f.value === filter)?.label ?? ""})" active={filter !== "all"} onclick={(e) => open(e, "거르기", filters, filter, (v) => (filter = v))}><Filter /></IconButton>
+		<IconButton size="sm" label="{$_('common.filter')} ({filters.find((f) => f.value === filter)?.label ?? ''})" active={filter !== "all"} onclick={(e) => open(e, $_("common.filter"), filters, filter, (v) => (filter = v))}><Filter /></IconButton>
 	{/if}
 	{#if sorts.length > 1}
-		<IconButton size="sm" label="정렬 (지금: {sorts.find((s) => s.value === sort)?.label ?? ""})" active={sortActive} onclick={(e) => open(e, "정렬", sorts, sort, (v) => (sort = v))}><ArrowUpDown /></IconButton>
+		<IconButton size="sm" label="{$_('common.sort')} ({sorts.find((s) => s.value === sort)?.label ?? ''})" active={sortActive} onclick={(e) => open(e, $_("common.sort"), sorts, sort, (v) => (sort = v))}><ArrowUpDown /></IconButton>
 	{/if}
 	{#if canSelect}
-		<IconButton size="sm" label={selecting ? "선택 끝내기" : "여러 개 선택"} active={selecting} onclick={() => (selecting = !selecting)}><ListChecks /></IconButton>
+		<IconButton size="sm" label={selecting ? $_("common.stopSelect") : $_("common.multiSelect")} active={selecting} onclick={() => (selecting = !selecting)}><ListChecks /></IconButton>
 	{/if}
 	{#if children}{@render children()}{/if}
 </div>

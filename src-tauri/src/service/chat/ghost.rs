@@ -48,12 +48,7 @@ pub fn build_instruction(me: &str, other: &str, brief: Option<&str>, samples: &[
         "long" => "several sentences (a paragraph or more)",
         _ => "about three or four sentences",
     };
-    let mut s = format!(
-        "[Ghostwrite request]\nContinuing the conversation so far, write what {me} says next, from {me}'s point of view and in {me}'s voice.\n\
-         - Do not write {other}'s words, actions or narration. Write only {me}'s lines (and {me}'s actions if needed).\n\
-         - Length: {len}. Follow the style and format of {me}'s earlier messages, and write in the language of the conversation.\n\
-         - Output only the text {me} would send, with no explanation or preface."
-    );
+    let mut s = crate::service::app_prompts::ghost(me, other, len);
     if !samples.is_empty() {
         s.push_str(&format!("\n\n[Recent messages by {me} — style examples]\n"));
         s.push_str(&samples.iter().map(|x| format!("- {x}")).collect::<Vec<_>>().join("\n"));

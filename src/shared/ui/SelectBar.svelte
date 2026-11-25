@@ -1,6 +1,7 @@
 <script lang="ts">
 	// 여러 개 고르기 줄: 모두 선택 · (추가 동작) · N개 삭제
 	import type { Snippet } from "svelte";
+	import { _ } from "svelte-i18n";
 	import { Trash2 } from "@lucide/svelte";
 	import Button from "./Button.svelte";
 
@@ -17,11 +18,11 @@
 </script>
 
 <div class="selbar" role="toolbar" aria-label="선택">
-	<Button size="sm" variant="ghost" onclick={onall}>모두 선택</Button>
-	<span class="picked-count">{count}{unit} 선택됨</span>
+	<Button size="sm" variant="ghost" onclick={onall}>{$_("common.selectAll")}</Button>
+	<span class="picked-count">{$_("common.selectedCount", { values: { count, unit } })}</span>
 	<span class="sp"></span>
 	{#if children}{@render children()}{/if}
-	<Button size="sm" variant="danger" disabled={!count} onclick={ondelete}>{#snippet icon()}<Trash2 />{/snippet}{count}{unit} 삭제</Button>
+	<Button size="sm" variant="danger" disabled={!count} onclick={ondelete}>{#snippet icon()}<Trash2 />{/snippet}{$_("common.deleteCount", { values: { count, unit } })}</Button>
 </div>
 
 <style>

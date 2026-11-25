@@ -1,5 +1,6 @@
 <script lang="ts">
 	import { layout } from "$app/layout.svelte";
+	import { _ } from "svelte-i18n";
 	import type { Component } from "svelte";
 	import { Activity, ArrowLeftRight, BookOpen, Gamepad2, Images, AudioLines, Blocks, Database, ImagePlus, Keyboard, KeyRound, Languages, ListChecks, MemoryStick, NotebookText, PenLine, RefreshCw, Wallet, Zap, MessagesSquare, Music, Palette, Puzzle, Regex, ScrollText, Search, Settings2, SlidersHorizontal, Smartphone } from "@lucide/svelte";
 	import { Badge, Input } from "$shared/ui";
@@ -81,62 +82,65 @@
 					}))
 			: [],
 	);
-	const allGroups = $derived<{ title: string; items: Item[] }[]>([
+	const allGroups = $derived<{ id: string; title: string; items: Item[] }[]>([
 		{
-			title: "앱",
+			id: "app",
+			title: $_("settings.groups.app"),
 			items: [
-				{ id: "general", label: "기본 설정", icon: Settings2, keywords: "언어 업데이트", view: GeneralSection },
-				{ id: "chat", label: "대화", icon: MessagesSquare, keywords: "enter 보내기 메시지 시각 시간 새 대화 기본값 api 프리셋 페르소나", view: ChatSection },
-				{ id: "theme", label: "테마", icon: Palette, keywords: "화면 모드 다크 어둡게 밝게 강조색 글자 크기 프레임 창 css", view: ThemeSection },
-				{ id: "shortcut", label: "단축키", icon: Keyboard, keywords: "키 단축 뒤로 앞으로", view: ShortcutSection },
-				// 코어·커뮤니티 플러그인은 앱 그룹의 맨 아래 (앱 설정이 늘어도 늘 마지막, last: true). 꺼져 있어도 항상 보임
-				{ id: "plugins", label: "코어 플러그인", icon: Blocks, keywords: "기능 켜기 끄기 토글 플러그인 폰 게임 위젯 정규식 이미지 html 번역 음성 tts 이미지 생성 동기화", view: PluginsSection, last: true },
-				{ id: "community", label: "커뮤니티 플러그인", icon: Puzzle, keywords: "플러그인 확장 설치 권한 zip 폴더 후처리 프롬프트 패널 명령 ai 제안", view: CommunitySection, last: true },
+				{ id: "general", label: $_("settings.tabs.general"), icon: Settings2, keywords: "언어 업데이트 language update", view: GeneralSection },
+				{ id: "chat", label: $_("settings.tabs.chat"), icon: MessagesSquare, keywords: "enter 보내기 메시지 시각 시간 새 대화 기본값 api 프리셋 페르소나 chat", view: ChatSection },
+				{ id: "theme", label: $_("settings.tabs.theme"), icon: Palette, keywords: "화면 모드 다크 어둡게 밝게 강조색 글자 크기 프레임 창 css theme dark light", view: ThemeSection },
+				{ id: "shortcut", label: $_("settings.tabs.shortcut"), icon: Keyboard, keywords: "키 단축 뒤로 앞으로 shortcut", view: ShortcutSection },
+				{ id: "plugins", label: $_("settings.tabs.plugins"), icon: Blocks, keywords: "기능 켜기 끄기 토글 플러그인 plugins", view: PluginsSection, last: true },
+				{ id: "community", label: $_("settings.tabs.community"), icon: Puzzle, keywords: "플러그인 확장 설치 권한 community", view: CommunitySection, last: true },
 			],
 		},
 		{
-			title: "플러그인",
+			id: "plugins",
+			title: $_("settings.groups.plugins"),
 			items: [
-				{ id: "game", label: "게임 모드", icon: Gamepad2, keywords: "게임 규칙 씬 서술자 npc 프롬프트", view: GameSection, plugin: "game" },
-				{ id: "cg", label: "캐릭터 에셋", icon: Images, keywords: "cg 이미지 키 프롬프트 에셋", view: CgSection, plugin: "chat.images" },
-				{ id: "phone", label: "폰", icon: Smartphone, keywords: "폰 모드 메신저 프롬프트", view: PhoneSection, plugin: "phone" },
-				{ id: "translate", label: "번역", icon: Languages, keywords: "번역 언어 자동 번역 입력", view: TranslateSection, plugin: "translate" },
-				{ id: "lint", label: "메시지 linter", icon: ListChecks, keywords: "linter 검사 후처리 태그 따옴표 반복 금지어 길이 고침", view: LintSection, plugin: "lint" },
-				{ id: "memory", label: "메모리 검색", icon: MemoryStick, keywords: "메모리 임베딩 검색 뜻으로 찾기 색인 벡터 기억", view: MemorySection, plugin: "memory" },
-				{ id: "ghostwrite", label: "대필", icon: PenLine, keywords: "대필 초안 대신 쓰기 내 말투 펜 입력", view: GhostSection, plugin: "ghostwrite" },
-				{ id: "quickreply", label: "빠른 답장", icon: Zap, keywords: "빠른 답장 qr 슬래시 커맨드 스크립트 gen input 버튼", view: QuickReplySection, plugin: "slash" },
-				{ id: "rewrite", label: "자동 재생성", icon: RefreshCw, keywords: "재생성 다시 쓰기 금지어 반복 linter 스와이프", view: RewriteSection, plugin: "rewrite" },
-				{ id: "summary", label: "대화 요약", icon: NotebookText, keywords: "요약 줄거리 메모리 확장 기억 긴 대화", view: SummarySection, plugin: "summary" },
-				{ id: "tts", label: "음성 읽기", icon: AudioLines, keywords: "음성 tts 읽기 목소리 elevenlabs", view: TtsSection, plugin: "tts" },
-				{ id: "imagegen", label: "이미지 생성", icon: ImagePlus, keywords: "이미지 그림 생성 novelai 프롬프트 네거티브 샘플러", view: ImageGenSection, plugin: ["imagegen", "imageauto"] },
-				{ id: "widget", label: "위젯", icon: Music, keywords: "음악 플레이어 자동 실행 바탕화면", view: WidgetSection, plugin: "widget" },
+				{ id: "game", label: $_("settings.tabs.game"), icon: Gamepad2, keywords: "게임 규칙 씬 서술자 npc 프롬프트 game", view: GameSection, plugin: "game" },
+				{ id: "cg", label: $_("settings.tabs.cg"), icon: Images, keywords: "cg 이미지 키 프롬프트 에셋 asset", view: CgSection, plugin: "chat.images" },
+				{ id: "phone", label: $_("settings.tabs.phone"), icon: Smartphone, keywords: "폰 모드 메신저 프롬프트 phone", view: PhoneSection, plugin: "phone" },
+				{ id: "translate", label: $_("settings.tabs.translate"), icon: Languages, keywords: "번역 언어 자동 번역 입력 translate", view: TranslateSection, plugin: "translate" },
+				{ id: "lint", label: $_("settings.tabs.lint"), icon: ListChecks, keywords: "linter 검사 후처리", view: LintSection, plugin: "lint" },
+				{ id: "memory", label: $_("settings.tabs.memory"), icon: MemoryStick, keywords: "메모리 임베딩 검색 memory", view: MemorySection, plugin: "memory" },
+				{ id: "ghostwrite", label: $_("settings.tabs.ghostwrite"), icon: PenLine, keywords: "대필 초안 ghostwrite", view: GhostSection, plugin: "ghostwrite" },
+				{ id: "quickreply", label: $_("settings.tabs.quickreply"), icon: Zap, keywords: "빠른 답장 qr 슬래시 quick reply", view: QuickReplySection, plugin: "slash" },
+				{ id: "rewrite", label: $_("settings.tabs.rewrite"), icon: RefreshCw, keywords: "재생성 다시 쓰기 rewrite", view: RewriteSection, plugin: "rewrite" },
+				{ id: "summary", label: $_("settings.tabs.summary"), icon: NotebookText, keywords: "요약 줄거리 summary", view: SummarySection, plugin: "summary" },
+				{ id: "tts", label: $_("settings.tabs.tts"), icon: AudioLines, keywords: "음성 tts 읽기 elevenlabs", view: TtsSection, plugin: "tts" },
+				{ id: "imagegen", label: $_("settings.tabs.imagegen"), icon: ImagePlus, keywords: "이미지 그림 생성 novelai image", view: ImageGenSection, plugin: ["imagegen", "imageauto"] },
+				{ id: "widget", label: $_("settings.tabs.widget"), icon: Music, keywords: "음악 플레이어 위젯 widget", view: WidgetSection, plugin: "widget" },
 			],
 		},
 		{
-			title: "AI",
+			id: "ai",
+			title: $_("settings.groups.ai"),
 			items: [
-				{ id: "api", label: "API 키", icon: KeyRound, keywords: "연결 공급자 모델 openai claude gemini vertex 서비스 계정 json 키 테스트", view: ApiSection },
-				{ id: "preset", label: "프리셋", icon: SlidersHorizontal, keywords: "프롬프트 블록 온도 토큰 컨텍스트 sillytavern", view: PresetSection },
-				{ id: "lorebook", label: "로어북", icon: BookOpen, keywords: "로어북 월드인포 스캔 깊이 최대 깊이 재귀 worldinfo scan depth", view: LorebookSection },
-				{ id: "regex", label: "정규식", icon: Regex, keywords: "찾아 바꾸기 치환 regex", view: RegexSection, plugin: "regex" },
+				{ id: "api", label: $_("settings.tabs.api"), icon: KeyRound, keywords: "연결 공급자 모델 openai claude gemini vertex api", view: ApiSection },
+				{ id: "preset", label: $_("settings.tabs.preset"), icon: SlidersHorizontal, keywords: "프롬프트 블록 온도 토큰 컨텍스트 preset", view: PresetSection },
+				{ id: "lorebook", label: $_("settings.tabs.lorebook"), icon: BookOpen, keywords: "로어북 월드인포 스캔 깊이 최대 깊이 worldinfo scan depth", view: LorebookSection },
+				{ id: "regex", label: $_("settings.tabs.regex"), icon: Regex, keywords: "찾아 바꾸기 치환 regex", view: RegexSection, plugin: "regex" },
 			],
 		},
 		{
-			title: "관리",
+			id: "manage",
+			title: $_("settings.groups.manage"),
 			items: [
-				{ id: "activity", label: "최근 실행", icon: Activity, keywords: "작업 실행 중 멈추기 취소 자동 기록 보낸 글 받은 글", view: ActivitySection },
-				{ id: "budget", label: "예산 관리", icon: Wallet, keywords: "예산 한도 사용량 토큰 비용 요금 단가표 api", view: BudgetSection },
-				{ id: "data", label: "데이터", icon: Database, keywords: "백업 복원 저장 공간 용량 삭제 정리 휴지통 되살리기 점검 고아 채팅", view: DataSection },
-				{ id: "sync", label: "동기화", icon: ArrowLeftRight, keywords: "기기 폰 pc 옮기기 합치기 동기화 내보내기 가져오기 충돌", view: SyncSection, plugin: "sync" },
-				{ id: "log", label: "로그", icon: ScrollText, keywords: "오류 경고 기록", view: LogSection },
+				{ id: "activity", label: $_("settings.tabs.activity"), icon: Activity, keywords: "작업 실행 activity", view: ActivitySection },
+				{ id: "budget", label: $_("settings.tabs.budget"), icon: Wallet, keywords: "예산 한도 사용량 토큰 비용 budget", view: BudgetSection },
+				{ id: "data", label: $_("settings.tabs.data"), icon: Database, keywords: "백업 복원 저장 공간 휴지통 고아 채팅 data", view: DataSection },
+				{ id: "sync", label: $_("settings.tabs.sync"), icon: ArrowLeftRight, keywords: "기기 동기화 sync", view: SyncSection, plugin: "sync" },
+				{ id: "log", label: $_("settings.tabs.log"), icon: ScrollText, keywords: "오류 경고 기록 log", view: LogSection },
 			],
 		},
-		{ title: "커뮤니티 플러그인", items: communityItems },
+		{ id: "community", title: $_("settings.groups.community"), items: communityItems },
 	]);
 	/** 그룹 순서 */
-	const ORDER = ["앱", "AI", "플러그인", "관리", "커뮤니티 플러그인"];
+	const ORDER = ["app", "ai", "plugins", "manage", "community"];
 	/** 꺼진 코어 플러그인의 설정 탭은 숨긴다 */
-	const groups = $derived([...allGroups].sort((a, b) => ORDER.indexOf(a.title) - ORDER.indexOf(b.title)).map((g) => ({ ...g, items: [...g.items.filter((i) => !i.last), ...g.items.filter((i) => i.last)].filter((i) => !i.plugin || (Array.isArray(i.plugin) ? i.plugin.some((p) => plugins.on(p)) : plugins.on(i.plugin))) })).filter((g) => g.items.length));
+	const groups = $derived([...allGroups].sort((a, b) => ORDER.indexOf(a.id) - ORDER.indexOf(b.id)).map((g) => ({ ...g, items: [...g.items.filter((i) => !i.last), ...g.items.filter((i) => i.last)].filter((i) => !i.plugin || (Array.isArray(i.plugin) ? i.plugin.some((p) => plugins.on(p)) : plugins.on(i.plugin))) })).filter((g) => g.items.length));
 	const all = $derived(groups.flatMap((g) => g.items));
 
 	let query = $state("");
@@ -162,11 +166,11 @@
 <div class="settings" class:desktop={!layout.mobile} class:mobile={layout.mobile} class:narrow={layout.narrow} class:listing={mobileList}>
 	<nav class="side" aria-label="설정 메뉴">
 		<div class="search">
-			<Input bind:value={query} placeholder="설정 검색" aria-label="설정 검색" type="search">
+			<Input bind:value={query} placeholder={$_("settings.searchPlaceholder")} aria-label={$_("settings.searchPlaceholder")} type="search">
 				{#snippet leading()}<Search />{/snippet}
 			</Input>
 		</div>
-		{#each shown as g (g.title)}
+		{#each shown as g (g.id)}
 			<p class="group">{g.title}</p>
 			<ul>
 				{#each g.items as it (it.id)}
@@ -179,7 +183,7 @@
 				{/each}
 			</ul>
 		{:else}
-			<p class="none">맞는 설정 없음</p>
+			<p class="none">{$_("settings.noMatch")}</p>
 		{/each}
 	</nav>
 

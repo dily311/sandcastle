@@ -34,7 +34,7 @@ use crate::{
 };
 
 /// 월드인포 키워드를 찾을 최근 대화 수 (기본값)
-const WORLD_INFO_SCAN_DEPTH: usize = 10;
+const WORLD_INFO_SCAN_DEPTH: usize = 2;
 
 static WI_SCAN_DEPTH: std::sync::atomic::AtomicUsize = std::sync::atomic::AtomicUsize::new(WORLD_INFO_SCAN_DEPTH);
 static WI_MAX_DEPTH: std::sync::atomic::AtomicUsize = std::sync::atomic::AtomicUsize::new(0);

@@ -1,5 +1,6 @@
 import "$/styles/font.css";
 import "$shared/ui/base.css";
+import "$lib/utils/i18n";
 import { mount } from "svelte";
 import AppShell from "$app/AppShell.svelte";
 import { bootstrapWidgetFeatures } from "$lib/features/widgetFeatures.svelte";

@@ -2,6 +2,7 @@
 	// 홈: 사용자가 꾸미는 첫 화면. 블록(이어하기·빠른 실행·즐겨찾기·게임·내 글)을 켜고 끄고 순서를 바꾼다.
 	// AI를 부르지 않는다 (보여주기만). 설정은 앱 설정의 home에 저장
 	import { lastAt } from "$features/character/library.svelte";
+	import { _ } from "svelte-i18n";
 	import { ArrowDown, ArrowUp, BookOpen, Check, Gamepad2, GripVertical, Images, MessageSquarePlus, Pencil, Smartphone, Star, UserRound, Users } from "@lucide/svelte";
 	import { Sortable, moveItem } from "$shared/dnd/sortable.svelte";
 	import type { HomeSetting_Serialize as HomeSetting } from "$ipc/bindings";
@@ -33,7 +34,7 @@
 
 	const home = $derived<HomeSetting>({ ...FALLBACK, ...((appSetting.value?.home as HomeSetting | undefined) ?? {}) });
 	const me = $derived(library.persona(appSetting.value?.selectedPersonaId) ?? library.persona("default") ?? library.personas[0]);
-	const greeting = $derived(fillNames(home.greeting.trim() || "안녕하세요, {{user}}", { user: me?.name ?? "사용자" }));
+	const greeting = $derived(fillNames(home.greeting.trim() || $_("home.greetingDefault"), { user: me?.name ?? "User" }));
 	const today = new Date().toLocaleDateString("ko-KR", { month: "long", day: "numeric", weekday: "long" });
 
 	const recent = $derived(
@@ -98,13 +99,13 @@
 			<h1>{greeting}</h1>
 		</div>
 		{#if !editing}
-			<Button size="sm" variant="secondary" onclick={startEdit}>{#snippet icon()}<Pencil />{/snippet}꾸미기</Button>
+			<Button size="sm" variant="secondary" onclick={startEdit}>{#snippet icon()}<Pencil />{/snippet}{$_("home.customize")}</Button>
 		{/if}
 	</header>
 
 	{#if editing}
 		<section class="card edit">
-			<h2>홈 꾸미기</h2>
+			<h2>{$_("home.customizeTitle")}</h2>
 			<label class="field"><span>인사말 <small>{"{{user}}"} = 내 이름</small></span><Input bind:value={draft.greeting} placeholder={"안녕하세요, {{user}}"} /></label>
 			<div class="field">
 				<span>블록</span>
@@ -135,7 +136,7 @@
 	{#each shown as id (id)}
 		{#if id === "continue"}
 			<section>
-				<h2>이어하기</h2>
+				<h2>{$_("home.continue")}</h2>
 				{#if recent.length}
 					<div class="grid">
 						{#each recent as c (c.id)}
@@ -147,25 +148,25 @@
 						{/each}
 					</div>
 				{:else}
-					<p class="muted">아직 대화 없음</p>
+					<p class="muted">{$_("home.noChats")}</p>
 				{/if}
 			</section>
 		{:else if id === "quick"}
 			<section>
-				<h2>빠른 실행</h2>
+				<h2>{$_("home.quick")}</h2>
 				<div class="quick">
-					<button class="card q" onclick={newChat}><MessageSquarePlus /><span>새 대화</span></button>
-					<button class="card q" onclick={() => nav.go({ page: "character" })}><Users /><span>캐릭터</span></button>
-					{#if plugins.on("phone")}<button class="card q" onclick={() => nav.go({ page: "phone" })}><Smartphone /><span>폰</span></button>{/if}
-					{#if plugins.on("game")}<button class="card q" onclick={() => nav.go({ page: "game" })}><Gamepad2 /><span>게임</span></button>{/if}
-					<button class="card q" onclick={() => nav.go({ page: "lorebook" })}><BookOpen /><span>로어북</span></button>
-					<button class="card q" onclick={() => nav.go({ page: "images" })}><Images /><span>이미지</span></button>
-					<button class="card q" onclick={() => nav.go({ page: "persona" })}><UserRound /><span>페르소나</span></button>
+					<button class="card q" onclick={newChat}><MessageSquarePlus /><span>{$_("home.newChat")}</span></button>
+					<button class="card q" onclick={() => nav.go({ page: "character" })}><Users /><span>{$_("nav.character")}</span></button>
+					{#if plugins.on("phone")}<button class="card q" onclick={() => nav.go({ page: "phone" })}><Smartphone /><span>{$_("nav.phone")}</span></button>{/if}
+					{#if plugins.on("game")}<button class="card q" onclick={() => nav.go({ page: "game" })}><Gamepad2 /><span>{$_("nav.game")}</span></button>{/if}
+					<button class="card q" onclick={() => nav.go({ page: "lorebook" })}><BookOpen /><span>{$_("nav.lorebook")}</span></button>
+					<button class="card q" onclick={() => nav.go({ page: "images" })}><Images /><span>{$_("nav.images")}</span></button>
+					<button class="card q" onclick={() => nav.go({ page: "persona" })}><UserRound /><span>{$_("nav.persona")}</span></button>
 				</div>
 			</section>
 		{:else if id === "favorites"}
 			<section>
-				<h2>즐겨찾기</h2>
+				<h2>{$_("home.favorites")}</h2>
 				{#if favorites.length}
 					<div class="favs">
 						{#each favorites as ch (ch.id)}
@@ -176,12 +177,12 @@
 						{/each}
 					</div>
 				{:else}
-					<p class="muted"><Star size={14} /> 캐릭터 화면에서 별을 누르면 여기 모임</p>
+					<p class="muted"><Star size={14} /> {$_("home.favHint")}</p>
 				{/if}
 			</section>
 		{:else if id === "games"}
 			<section>
-				<h2>게임</h2>
+				<h2>{$_("home.games")}</h2>
 				{#if recentGames.length}
 					<div class="grid">
 						{#each recentGames as g (g.id)}
@@ -192,7 +193,7 @@
 						{/each}
 					</div>
 				{:else}
-					<p class="muted">아직 게임 없음</p>
+					<p class="muted">{$_("home.noGames")}</p>
 				{/if}
 			</section>
 		{/if}

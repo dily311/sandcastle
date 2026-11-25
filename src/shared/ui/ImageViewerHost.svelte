@@ -5,6 +5,7 @@
 	 * <dialog>로 열어서 다른 대화상자 위에서 눌러도 맨 위에 뜬다.
 	 */
 	import { Copy, Ellipsis, EllipsisVertical, ExternalLink, FileText, Info, Pencil, Trash2, X } from "@lucide/svelte";
+	import { _ } from "svelte-i18n";
 	import { revealItemInDir } from "@tauri-apps/plugin-opener";
 	import { layout } from "$app/layout.svelte";
 	import { describeSrc, imageViewer } from "$shared/stores/imageViewer.svelte";
@@ -101,14 +102,14 @@
 
 	const extra = $derived<MenuItem[]>(typeof img?.extraItems === "function" ? img.extraItems() : (img?.extraItems ?? []));
 	const items = $derived<MenuItem[]>([
-		{ label: "그림 복사", icon: Copy, onselect: copyImage },
-		{ label: "파일 이름 복사", icon: FileText, disabled: !title, onselect: copyName },
-		{ label: "정보 보기", icon: Info, onselect: showInfo },
+		{ label: $_("viewer.copyImage"), icon: Copy, onselect: copyImage },
+		{ label: $_("viewer.copyName"), icon: FileText, disabled: !title, onselect: copyName },
+		{ label: $_("viewer.showInfo"), icon: Info, onselect: showInfo },
 		...(extra.length ? [{ ...extra[0], separator: true }, ...extra.slice(1)] : []),
-		...(img?.rename ? [{ label: "이름 바꾸기", icon: Pencil, separator: true, onselect: () => void img.rename?.() }] : []),
+		...(img?.rename ? [{ label: $_("common.rename"), icon: Pencil, separator: true, onselect: () => void img.rename?.() }] : []),
 		// 파일 위치 열기는 데스크톱의 내 파일만 (Android에는 탐색기가 없고, 인터넷 그림은 파일이 아님)
-		...(layout.desktop && info?.path ? [{ label: "파일 위치 열기", icon: ExternalLink, separator: true, onselect: reveal }] : []),
-		...(img?.remove ? [{ label: "삭제", icon: Trash2, danger: true, separator: true, onselect: () => void img.remove?.() }] : []),
+		...(layout.desktop && info?.path ? [{ label: $_("viewer.reveal"), icon: ExternalLink, separator: true, onselect: reveal }] : []),
+		...(img?.remove ? [{ label: $_("common.delete"), icon: Trash2, danger: true, separator: true, onselect: () => void img.remove?.() }] : []),
 	]);
 </script>
 

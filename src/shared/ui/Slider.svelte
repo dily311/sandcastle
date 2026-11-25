@@ -16,8 +16,10 @@
 		unsetLabel?: string;
 		/** 값 표시 (예: 1024 → "1,024") */
 		format?: (n: number) => string;
+		/** 놓거나 입력·초기화로 값이 확정될 때 */
+		oncommit?: (v: string) => void;
 	}
-	let { label, hint, value = $bindable(""), min, max, step, fallback, unsetLabel = "기본값", format = (n) => String(n) }: Props = $props();
+	let { label, hint, value = $bindable(""), min, max, step, fallback, unsetLabel = "기본값", format = (n) => String(n), oncommit }: Props = $props();
 
 	const id = `sl-${Math.random().toString(36).slice(2, 8)}`;
 	const unset = $derived(String(value).trim() === "" || Number.isNaN(Number(value)));
@@ -29,10 +31,43 @@
 	<div class="top">
 		<label for={id}>{label}</label>
 		{#if !unset && format(num) !== String(num)}<span class="val">{format(num)}</span>{/if}
-		<input class="exact" type="number" {min} {step} value={unset ? "" : value} placeholder={unsetLabel} aria-label="{label} 직접 입력" onchange={(e) => (value = e.currentTarget.value.trim())} />
-		<button type="button" class="reset" title="기본값으로" aria-label="{label} 기본값으로" disabled={unset} onclick={() => (value = "")}><RotateCcw /></button>
+		<input
+			class="exact"
+			type="number"
+			{min}
+			{max}
+			{step}
+			value={unset ? "" : value}
+			placeholder={unsetLabel}
+			aria-label="{label} 직접 입력"
+			onchange={(e) => {
+				value = e.currentTarget.value.trim();
+				oncommit?.(value);
+			}}
+		/>
+		<button
+			type="button"
+			class="reset"
+			title="{unsetLabel}(으)로"
+			aria-label="{label} {unsetLabel}(으)로"
+			disabled={unset}
+			onclick={() => {
+				value = "";
+				oncommit?.("");
+			}}><RotateCcw /></button
+		>
 	</div>
-	<input {id} type="range" {min} {max} {step} value={num} style:--pct="{pct}%" oninput={(e) => (value = e.currentTarget.value)} />
+	<input
+		{id}
+		type="range"
+		{min}
+		{max}
+		{step}
+		value={num}
+		style:--pct="{pct}%"
+		oninput={(e) => (value = e.currentTarget.value)}
+		onchange={(e) => oncommit?.(e.currentTarget.value)}
+	/>
 	{#if hint}<p class="hint">{hint}</p>{/if}
 </div>
 

@@ -31,7 +31,7 @@ const db = {
 		doneNotify: { enabled: false, title: "", icon: null, soundMode: "default", soundPath: null, soundVolume: 0.8 },
 		aiCallLog: false,
 		typing: { style: "blink", text: "", image: null },
-		worldInfo: { scanDepth: 10, maxRecursionDepth: 0 },
+		worldInfo: { scanDepth: 2, maxRecursionDepth: 0 },
 		home: { startOnHome: false, greeting: "", blocks: ["continue", "quick", "favorites", "games"], css: "" },
 	} satisfies AppSetting_Serialize as AppSetting_Serialize,
 	themeSetting: {
@@ -205,7 +205,21 @@ const base: Record<string, Handler> = {
 	save_png_file: () => null,
 	default_app_prompts: () => {
 		const d = (text: string) => ({ selected: "", items: [{ id: "", name: "기본값", text }] });
-		return { translate: d("You are a translator. Translate into {{lang}}."), imagePrompt: d("Describe ONE scene as an English prompt."), imagePromptNai: d("Danbooru tags."), chatImages: d("[이미지]\n사용 가능한 키: {{img_keys}}"), autoImage: d("[그림]\n응답 끝에 <image>태그</image>"), gameRules: d("규칙 1\n규칙 2"), sceneRules: d("씬 규칙"), summary: d("대화를 요약하는 지시. {max}토큰 안에"), multiChar: d("[여러 캐릭터]\n등장인물: {{names}}"), vars: d("[변수]\n{{var_list}}") };
+		return {
+			translate: d("You are a translator. Translate into {{lang}}."),
+			imagePrompt: d("Describe ONE scene as an English prompt."),
+			imagePromptNai: d("Danbooru tags."),
+			chatImages: d("[이미지]\n사용 가능한 키: {{img_keys}}"),
+			autoImage: d("[그림]\n응답 끝에 <image>태그</image>"),
+			gameRules: d("규칙 1\n규칙 2"),
+			sceneRules: d("씬 규칙"),
+			summary: d("대화를 요약하는 지시. {max}토큰 안에"),
+			multiChar: d("[여러 캐릭터]\n등장인물: {{names}}"),
+			vars: d("[변수]\n{{var_list}}"),
+			ghost: d("[Ghostwrite request]\nWrite what {{user}} says next in {{user}}'s voice (do not write {{char}}). Length: {{length}}."),
+			phoneProfile: d("지금까지의 대화와 캐릭터 설정을 바탕으로 '{{char}}'의 카카오톡 스타일 메신저 프로필 꾸미기 정보를 JSON으로만 생성해줘."),
+			phoneSns: d("지금까지의 대화와 캐릭터 설정을 바탕으로 '{{char}}'의 인스타그램 스타일 개인 SNS 페이지를 JSON으로만 생성해줘."),
+		};
 	},
 	cancel_task: () => null,
 	...chatHandlers,
