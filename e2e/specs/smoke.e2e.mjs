@@ -65,7 +65,8 @@ describe("스모크", () => {
 		profileId = p.id;
 		await must("update_app_setting", { patch: { selectedApiProfile: p.id } });
 
-		await byText("b", "Pebble").click();
+		// 카드 이름 글자는 pointer-events: none이라 카드(role=button) 자체를 누른다
+		await $("div[role='button'][aria-label='Pebble']").click();
 		await byText("button", "대화 시작").click();
 		const box = await $("textarea[aria-label='메시지']");
 		await box.waitForDisplayed({ timeout: 20_000 });
