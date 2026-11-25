@@ -1,4 +1,5 @@
 <script lang="ts">
+	import { _ } from "svelte-i18n";
 	import UtilMacroNote from "./UtilMacroNote.svelte";
 	import { regexVersion } from "$shared/stores/regexVersion.svelte";
 	import { PictureInPicture2, ArrowUpDown, ChevronRight, GripVertical, Bookmark, Check, ChevronDown, Eye, EyeOff, FileArchive, Folder, IdCard, ImagePlus, Pencil, Plus, Search, Trash2, UserCog, X, ChevronsDownUp, ChevronsUpDown } from "@lucide/svelte";
@@ -79,8 +80,8 @@
 
 	// ---- 대화 설정: API → 프리셋 → 페르소나 ----
 	const DEFAULT = "";
-	const apiOptions = $derived([{ value: DEFAULT, label: "앱 기본값" }, ...library.apis.map((a) => ({ value: a.id, label: a.model ? `${a.name} · ${a.model}` : `${a.name} (${a.provider})` }))]);
-	const presetOptions = $derived([{ value: DEFAULT, label: "앱 기본값" }, ...library.presets.map((p) => ({ value: p.id, label: p.name }))]);
+	const apiOptions = $derived([{ value: DEFAULT, label: $_("chatPanel.appDefault") }, ...library.apis.map((a) => ({ value: a.id, label: a.model ? `${a.name} · ${a.model}` : `${a.name} (${a.provider})` }))]);
+	const presetOptions = $derived([{ value: DEFAULT, label: $_("chatPanel.appDefault") }, ...library.presets.map((p) => ({ value: p.id, label: p.name }))]);
 	function setOption(p: { apiProfileId?: string; promptPresetId?: string; personaId?: string; model?: string | null }) {
 		void library.setOptions(conv.id, {
 			personaId: p.personaId ?? conv.personaId,
@@ -192,8 +193,8 @@
 	const charPreset = $derived(character?.defaultPromptPresetId || null);
 	/** 풀렸을 때 쓰는 프리셋: 캐릭터 기본 → 전역 (백엔드와 같은 순서) */
 	const shownPreset = $derived(conv.promptPresetId || charPreset || appSetting.value?.selectedPreset || null);
-	const presetFrom = $derived(charPreset ? "캐릭터 기본" : "전역");
-	const personaFrom = $derived(character?.defaultPersonaId ? "캐릭터 기본" : "전역");
+	const presetFrom = $derived(charPreset ? $_("chatPanel.fromCharDefault") : $_("chatPanel.fromGlobal"));
+	const personaFrom = $derived(character?.defaultPersonaId ? $_("chatPanel.fromCharDefault") : $_("chatPanel.fromGlobal"));
 	/** API만 단독으로 이 대화에 고정/해제 */
 	function toggleApi() {
 		if (lockedApi) setOption({ apiProfileId: "" });
@@ -219,7 +220,7 @@
 	// ---- 고르기 (5-E-29-3, ADR-028 갱신): 잠근 줄은 이 대화에, 풀린 줄은 언제나 전역에 ----
 	// 캐릭터 전용 값은 캐릭터 편집에서만 바꾼다. 풀린 줄이 캐릭터 전용 값을 쓰고 있으면 전역을 바꿔도 이 대화는 그대로임을 알린다
 	function charStillWins(kind: string, name: string | undefined) {
-		toasts.info(`전역 ${kind}를 바꿈 · 이 캐릭터는 전용 ${kind} '${name ?? "?"}'를 씀 (캐릭터 편집에서 바꿈)`);
+		toasts.info($_("chatPanel.charStillWins", { values: { kind, name: name ?? "?" } }));
 	}
 	function pickApi(id: string) {
 		if (lockable && !lockedApi) return void appSetting.update({ selectedApiProfile: id || null });
@@ -232,13 +233,13 @@
 	async function pickPreset(id: string) {
 		if (!lockable || lockedPreset) return setOption({ promptPresetId: id });
 		await appSetting.update({ selectedPreset: id || "default" });
-		if (charPreset && charPreset !== id) charStillWins("프리셋", library.presets.find((p) => p.id === charPreset)?.name);
+		if (charPreset && charPreset !== id) charStillWins($_("chatPanel.kindPreset"), library.presets.find((p) => p.id === charPreset)?.name);
 	}
 	async function pickPersona(id: string) {
 		if (!lockable || lockedPersona) return setOption({ personaId: id });
 		await library.setDefaultPersona(id);
 		const own = character?.defaultPersonaId;
-		if (own && own !== id) charStillWins("페르소나", library.persona(own)?.name);
+		if (own && own !== id) charStillWins($_("chatPanel.kindPersona"), library.persona(own)?.name);
 	}
 	const personaOptions = $derived<ProfileOption[]>(library.personas.map((p) => ({ id: p.id, name: p.name, avatar: p.avatar, avatarFit: p.avatarFit, color: p.color, description: p.description })));
 
@@ -259,7 +260,7 @@
 				(s.scope === "preset" && !!shownPreset && s.scopeId === shownPreset),
 		),
 	);
-	const scopeName = { global: "전역", character: "캐릭터", preset: "프리셋" } as const;
+	const scopeName = $derived({ global: $_("chatPanel.scopeGlobal"), character: $_("chatPanel.scopeChar"), preset: $_("chatPanel.scopePreset") } as const);
 	// 적용 순서: 전역 → 프리셋 → 캐릭터, 같은 범위 안에서는 sortOrder (regex_processor.rs와 같음)
 	const SCOPES = ["global", "preset", "character"] as const;
 	const groups = $derived(SCOPES.map((scope) => ({ scope, list: applied.filter((s) => s.scope === scope).sort((a, b) => a.sortOrder - b.sortOrder) })).filter((g) => g.list.length));
@@ -308,7 +309,7 @@
 		scripts = scripts.map((x) => (x.id === s.id ? saved : x));
 	}
 	async function removeScript(s: RegexScript) {
-		if (!(await confirmAction({ title: "정규식 삭제", message: `'${s.name}' 정규식을 삭제함`, confirmLabel: "삭제", danger: true }))) return;
+		if (!(await confirmAction({ title: $_("chatPanel.deleteRegexTitle"), message: $_("chatPanel.deleteRegexMsg", { values: { name: s.name } }), confirmLabel: $_("common.delete"), danger: true }))) return;
 		await call(commands.deleteRegexScript(s.id), { source: "regex" });
 		regexVersion.bump();
 		scripts = scripts.filter((x) => x.id !== s.id);
@@ -321,28 +322,28 @@
 	const version = $derived(library.assetVersion[conv.characterId] ?? null);
 	const inUse = (a: CharacterImage) => !version || !a.folder || a.folder.toLowerCase() === version.toLowerCase();
 	async function moveAsset(a: CharacterImage) {
-		const f = await promptText({ title: "판 폴더", message: "이 그림의 판 (비우면 공통 — 어느 판에서나 씀)", input: { value: a.folder, placeholder: "예: v1" }, confirmLabel: "옮기기" });
+		const f = await promptText({ title: $_("chatPanel.folderPromptTitle"), message: $_("chatPanel.folderPromptMsg"), input: { value: a.folder, placeholder: $_("chatPanel.folderPlaceholder") }, confirmLabel: $_("chatPanel.moveConfirm") });
 		if (f === null || f === undefined || f.trim() === a.folder) return;
 		await library.updateImage(a, { folder: f.trim() });
 	}
 	let menu = $state<{ x: number; y: number; align?: "start" | "end" } | null>(null);
 	let menuItems: MenuItem[] = $state([]);
 	async function renameAsset(a: CharacterImage) {
-		const key = await promptText({ title: "키 이름 바꾸기", message: "AI가 <cg>키</cg>로 부르는 이름", input: { value: a.key }, confirmLabel: "바꾸기" });
+		const key = await promptText({ title: $_("chatPanel.renameKeyTitle"), message: $_("chatPanel.renameKeyMsg"), input: { value: a.key }, confirmLabel: $_("chatPanel.renameConfirm") });
 		if (!key || key === a.key) return;
 		await library.updateImage(a, { key });
 		const now = assets.find((x) => x.id === a.id);
 		if (now && imageViewer.current?.src === imageSrc(a)) imageViewer.patch({ name: now.key, info: assetInfo(now) });
 	}
 	async function deleteAsset(a: CharacterImage) {
-		if (!(await confirmAction({ title: "에셋 삭제", message: `'${a.key}' 이미지를 지움`, confirmLabel: "삭제", danger: true }))) return;
+		if (!(await confirmAction({ title: $_("chatPanel.deleteAssetTitle"), message: $_("chatPanel.deleteAssetMsg", { values: { key: a.key } }), confirmLabel: $_("common.delete"), danger: true }))) return;
 		await library.removeImage(a);
 		imageViewer.close();
 	}
 	const assetInfo = (a: CharacterImage) => [
-		{ label: "이미지 키", value: `<cg>${a.key}</cg>` },
-		{ label: "AI에게", value: a.enabled ? "보냄" : "안 보냄" },
-		{ label: "판", value: a.folder || "공통" },
+		{ label: $_("chatPanel.infoKey"), value: `<cg>${a.key}</cg>` },
+		{ label: $_("chatPanel.infoToAi"), value: a.enabled ? $_("chatPanel.infoSend") : $_("chatPanel.infoNoSend") },
+		{ label: $_("chatPanel.infoVersion"), value: a.folder || $_("chatPanel.infoCommon") },
 	];
 	/** 에셋 크게 보기: 앱 공통 그림 뷰어에 이름 바꾸기·삭제를 이어 줌 */
 	function openAsset(a: CharacterImage) {
@@ -352,23 +353,23 @@
 	function assetMenu(e: MouseEvent, a: CharacterImage) {
 		e.preventDefault();
 		menuItems = [
-			{ label: a.enabled ? "AI에게 보내지 않기" : "AI에게 보내기", icon: a.enabled ? EyeOff : Eye, onselect: () => library.updateImage(a, { enabled: !a.enabled }) },
-			{ label: "키 이름 바꾸기", icon: Pencil, onselect: () => renameAsset(a) },
-			{ label: a.folder ? `판 옮기기 (지금 ${a.folder})` : "판 폴더 정하기", icon: Folder, onselect: () => moveAsset(a) },
-			{ label: "삭제", icon: Trash2, danger: true, separator: true, onselect: () => deleteAsset(a) },
+			{ label: a.enabled ? $_("chatPanel.hideFromAi") : $_("chatPanel.sendToAi"), icon: a.enabled ? EyeOff : Eye, onselect: () => library.updateImage(a, { enabled: !a.enabled }) },
+			{ label: $_("chatPanel.renameKeyTitle"), icon: Pencil, onselect: () => renameAsset(a) },
+			{ label: a.folder ? $_("chatPanel.moveVersion", { values: { folder: a.folder } }) : $_("chatPanel.setVersion"), icon: Folder, onselect: () => moveAsset(a) },
+			{ label: $_("common.delete"), icon: Trash2, danger: true, separator: true, onselect: () => deleteAsset(a) },
 		];
 		menu = { x: e.clientX, y: e.clientY };
 	}
 	/** 에셋을 넣는 작업은 앱에 두어 이 화면을 나가도 이어진다 (패널엔 로딩으로, 나가면 토스트로 보임). 변환은 한 장씩이라 ZIP이 크면 오래 걸림 */
 	const withBusy = assetImport.run.bind(assetImport);
-	const zipDone = (n: number) => toasts.success(n ? `에셋 ${n}개 넣음 (같은 이름은 덮어씀)` : "ZIP에 그림이 없음");
+	const zipDone = (n: number) => toasts.success(n ? $_("chatPanel.zipDone", { values: { count: n } }) : $_("chatPanel.zipEmpty"));
 	async function addImages() {
 		const paths = await pickFiles([IMAGE_FILES]);
-		if (paths.length) await withBusy(`이미지 ${paths.length}장 넣는 중…`, () => library.addImages(conv.characterId, paths));
+		if (paths.length) await withBusy($_("chatPanel.addingImages", { values: { count: paths.length } }), () => library.addImages(conv.characterId, paths));
 	}
 	async function addZip() {
 		const [zip] = await pickFiles([{ name: "ZIP", extensions: ["zip"] }], false);
-		if (zip) await withBusy("ZIP 속 이미지를 변환하는 중… (많으면 몇 분 걸림)", async () => zipDone(await library.addImagesZip(conv.characterId, zip)));
+		if (zip) await withBusy($_("chatPanel.convertingZip"), async () => zipDone(await library.addImagesZip(conv.characterId, zip)));
 	}
 	// 정렬 · 여러 개 고르기 · 크게 보기
 	let assetSort = $state<"order" | "name" | "new">("order");
@@ -386,7 +387,7 @@
 	async function removePickedAssets() {
 		const list = assets.filter((a) => assetPicked.has(a.id));
 		if (!list.length) return;
-		if (!(await confirmAction({ title: "에셋 삭제", message: `고른 이미지 ${list.length}개를 지움. 되돌릴 수 없음`, confirmLabel: `${list.length}개 삭제`, danger: true }))) return;
+		if (!(await confirmAction({ title: $_("chatPanel.deleteAssetTitle"), message: $_("chatPanel.deleteAssetsMsg", { values: { count: list.length } }), confirmLabel: $_("chatPanel.deleteCountBtn", { values: { count: list.length } }), danger: true }))) return;
 		for (const a of list) await library.removeImage(a);
 		assetPicked = new Set();
 		assetPicking = false;
@@ -394,9 +395,9 @@
 	function assetSortMenu(e: MouseEvent) {
 		const r = (e.currentTarget as HTMLElement).getBoundingClientRect();
 		const opts = [
-			{ v: "order", l: "넣은 순서" },
-			{ v: "new", l: "최근 추가" },
-			{ v: "name", l: "키 이름 순" },
+			{ v: "order", l: $_("chatPanel.sortOrder") },
+			{ v: "new", l: $_("chatPanel.sortNew") },
+			{ v: "name", l: $_("chatPanel.sortName") },
 		] as const;
 		menuItems = opts.map((o) => ({ label: o.l, icon: assetSort === o.v ? Check : undefined, onselect: () => (assetSort = o.v) }));
 		menu = { x: r.right, y: r.bottom + 4, align: "end" };
@@ -410,21 +411,21 @@
 		return drops.register({
 			priority: 2,
 			zone: panelZone,
-			label: "캐릭터 에셋에 넣기",
-			hint: "파일 이름이 이미지 키가 됨 (<cg>키</cg>). 그림이 든 ZIP도 가능",
+			label: $_("chatPanel.dropAssetLabel"),
+			hint: $_("chatPanel.dropAssetHint"),
 			accept: (f) => isImage(f) || extOf(f) === "zip",
 			ondrop: (files) =>
-				withBusy("파일을 옮기는 중…", async (set) => {
+				withBusy($_("chatPanel.movingFiles"), async (set) => {
 					const paths = await Promise.all(files.filter(isImage).map((f) => storeFile(f)));
 					if (paths.length) {
-						set(`이미지 ${paths.length}장 넣는 중…`);
+						set($_("chatPanel.addingImages", { values: { count: paths.length } }));
 						await library.addImages(charId, paths);
 					}
 					// ZIP은 에셋 추가 메뉴의 "ZIP"과 같은 처리
 					for (const z of files.filter((f) => extOf(f) === "zip")) {
-						set(`ZIP 옮기는 중… (${z.name})`);
+						set($_("chatPanel.movingZip", { values: { name: z.name } }));
 						const path = await storeFile(z);
-						set("ZIP 속 이미지를 변환하는 중… (많으면 몇 분 걸림)");
+						set($_("chatPanel.convertingZip"));
 						zipDone(await library.addImagesZip(charId, path));
 					}
 				}),
@@ -437,15 +438,15 @@
 		return drops.register({
 			priority: 2,
 			zone: panelZone,
-			label: "프리셋 가져오기",
-			hint: "SillyTavern 프리셋 JSON. 하나만 놓으면 이 대화의 프리셋이 됨 (정규식 JSON을 같이 놓으면 그 프리셋에 묶임)",
+			label: $_("chatPanel.dropPresetLabel"),
+			hint: $_("chatPanel.dropPresetHint"),
 			accept: (f) => extOf(f) === "json",
 			ondrop: async (files) => {
 				const paths = await Promise.all(files.map((f) => storeFile(f)));
 				const id = await importPresetPaths(paths).catch(() => null);
 				if (id) {
 					setOption({ promptPresetId: id });
-					toasts.info("이 대화의 프리셋으로 골랐음");
+					toasts.info($_("chatPanel.presetAppliedToast"));
 				}
 			},
 		});
@@ -459,7 +460,7 @@
 	function swipeLabel(b: ChatBookmark): string {
 		const m = msgById.get(b.messageId);
 		const total = m ? (metaOf(m).swipes?.length ?? 0) : 0;
-		return b.swipeId !== undefined && total > 1 ? `스와이프 ${b.swipeId + 1}/${total}` : "";
+		return b.swipeId !== undefined && total > 1 ? $_("chatPanel.swipeLabel", { values: { cur: b.swipeId + 1, total } }) : "";
 	}
 	const onShownSwipe = (b: ChatBookmark) => {
 		const m = msgById.get(b.messageId);
@@ -481,9 +482,9 @@
 			const meta = metaOf(m);
 			if (meta.chapter) {
 				cur = m.id;
-				out.push({ kind: "chapter", id: m.id, n: chapters[m.id], label: `${chapters[m.id]}장 · ${meta.chapter}` });
+				out.push({ kind: "chapter", id: m.id, n: chapters[m.id], label: $_("chatPanel.chapterLabel", { values: { num: chapters[m.id], title: meta.chapter } }) });
 			}
-			out.push({ kind: "msg", id: m.id, n: i + 1, label: meta.hidden ? "(숨긴 메시지)" : preview(m.content) || "(빈 메시지)", under: cur, marks: marksOfMsg.get(m.id) });
+			out.push({ kind: "msg", id: m.id, n: i + 1, label: meta.hidden ? $_("chatPanel.hiddenMsg") : preview(m.content) || $_("chatPanel.emptyMsg"), under: cur, marks: marksOfMsg.get(m.id) });
 		});
 		return out;
 	});
@@ -521,18 +522,18 @@
 		if (!m) return;
 		const cur = metaOf(m).chapter;
 		const rename = async () => {
-			const t = await promptText({ title: cur ? "챕터 이름 바꾸기" : "챕터로 등록", message: cur ? "비우면 챕터 표시를 지움" : `#${msgNo.get(id)} 메시지부터 새 챕터`, input: { value: cur ?? "", placeholder: "챕터 제목" }, confirmLabel: cur ? "바꾸기" : "만들기" });
+			const t = await promptText({ title: cur ? $_("chatPanel.chapterRenameTitle") : $_("chatPanel.chapterAddTitle"), message: cur ? $_("chatPanel.chapterRenameMsg") : $_("chatPanel.chapterAddMsg", { values: { num: msgNo.get(id) ?? 0 } }), input: { value: cur ?? "", placeholder: $_("chatPanel.chapterPlaceholder") }, confirmLabel: cur ? $_("chatPanel.renameConfirm") : $_("chatPanel.createBtn") });
 			if (t !== null && t !== undefined) await session.setChapter(m, t.trim() || null);
 		};
 		tocMenuItems = cur
 			? [
-					{ label: "챕터 이름 바꾸기", icon: Pencil, onselect: rename },
-					{ label: "챕터 표시 지우기", icon: X, danger: true, separator: true, onselect: () => session.setChapter(m, null) },
+					{ label: $_("chatPanel.chapterRenameTitle"), icon: Pencil, onselect: rename },
+					{ label: $_("chatPanel.removeChapterMenu"), icon: X, danger: true, separator: true, onselect: () => session.setChapter(m, null) },
 				]
 			: [
 					// 제목은 메시지 앞부분으로 바로 등록 (나중에 이름 바꾸기)
-					{ label: "여기서 챕터 시작", icon: Bookmark, onselect: () => session.setChapter(m, preview(m.content).slice(0, 20).trim() || `#${msgNo.get(id)}`) },
-					{ label: "이름 정해서 챕터 시작", icon: Pencil, onselect: rename },
+					{ label: $_("chatPanel.startChapterHere"), icon: Bookmark, onselect: () => session.setChapter(m, preview(m.content).slice(0, 20).trim() || `#${msgNo.get(id)}`) },
+					{ label: $_("chatPanel.startChapterNamed"), icon: Pencil, onselect: rename },
 				];
 		tocMenuAt = { x: e.clientX, y: e.clientY };
 	}
@@ -550,17 +551,17 @@
 			<section class="status-pin">
 				{#if !layout.narrow && statusView.floating}
 					<div class="status-head">
-						<span class="faint">띄운 창에 보이는 중</span>
-						<Button size="sm" variant="ghost" onclick={() => statusView.set({ floating: false })}>패널로</Button>
+						<span class="faint">{$_("chatPanel.statusFloatingHint")}</span>
+						<Button size="sm" variant="ghost" onclick={() => statusView.set({ floating: false })}>{$_("chatPanel.statusToPanel")}</Button>
 					</div>
-					<Switch checked={statusView.separateWindows} label="여러 상태창을 별도 팝업으로 띄우기" onchange={(v) => statusView.set({ separateWindows: v })} />
+					<Switch checked={statusView.separateWindows} label={$_("chatPanel.statusSeparateMulti")} onchange={(v) => statusView.set({ separateWindows: v })} />
 				{:else}
 					<div class="status-head">
 						{#if layout.narrow}
-							<Switch checked={statusView.aboveChat} label="채팅방 위에 늘 보이기" onchange={(v) => statusView.set({ aboveChat: v })} />
+							<Switch checked={statusView.aboveChat} label={$_("chatPanel.statusAboveChat")} onchange={(v) => statusView.set({ aboveChat: v })} />
 						{:else}
-							<Switch checked={statusView.separateWindows} label="별도 팝업으로 띄우기" onchange={(v) => statusView.set({ separateWindows: v })} />
-							<IconButton label="띄우기 (옮길 수 있는 창)" size="sm" onclick={() => statusView.set({ floating: true, collapsed: false })}><PictureInPicture2 /></IconButton>
+							<Switch checked={statusView.separateWindows} label={$_("chatPanel.statusSeparate")} onchange={(v) => statusView.set({ separateWindows: v })} />
+							<IconButton label={$_("chatPanel.statusFloatAria")} size="sm" onclick={() => statusView.set({ floating: true, collapsed: false })}><PictureInPicture2 /></IconButton>
 						{/if}
 					</div>
 					<StatusWindow blocks={statusBlocks} />
@@ -569,9 +570,9 @@
 			{#if statusRegexes.length}
 				<!-- 상태창 정규식 (5-F-5-3, 사용자 요청): 로어북 고르기처럼 고른 것만 칩으로, '+'로 더 넣기 -->
 				<section class="status-regex">
-					<h4>상태창 정규식</h4>
+					<h4>{$_("chatPanel.statusRegexHeading")}</h4>
 					<ChipPicker
-						label="상태창 정규식"
+						label={$_("chatPanel.statusRegexHeading")}
 						options={statusRegexes.map((s) => ({ id: s.id, label: s.name }))}
 						value={statusRegexes.filter(isStatusRegex).map((s) => s.id)}
 						onchange={(ids) => void setStatusRegexes(ids)}
@@ -585,37 +586,37 @@
 			{#if plugins.on("chat.images")}
 				<UtilMacroNote presetId={shownPreset} macro="img_inprompt" />
 			{:else}
-				<p class="faint">캐릭터 에셋 기능이 꺼져 있음 (설정 > 코어 플러그인)</p>
+				<p class="faint">{$_("chatPanel.assetsDisabledHint")}</p>
 			{/if}
 			{#if assetImport.busy}<p class="abusy" role="status"><Spinner />{assetImport.busy}</p>{/if}
 			{#if folders.length}
 				<label class="row"
-					><span>쓸 판</span><Select
+					><span>{$_("chatPanel.assetVersionLabel")}</span><Select
 						value={version ?? ""}
-						options={[{ value: "", label: "전체" }, ...folders.map((f) => ({ value: f, label: f }))]}
-						aria-label="이 캐릭터가 쓸 에셋 판"
+						options={[{ value: "", label: $_("chatPanel.allOption") }, ...folders.map((f) => ({ value: f, label: f }))]}
+						aria-label={$_("chatPanel.assetVersionAria")}
 						onchange={(e) => void library.setAssetVersion(conv.characterId, e.currentTarget.value || null)}
 					/></label
 				>
 			{/if}
 			<div class="atools">
-				<span class="faint">{assets.length}개 · 오른쪽 클릭으로 관리</span>
-				<IconButton label="정렬" size="sm" onclick={assetSortMenu}><ArrowUpDown /></IconButton>
-				<IconButton label="여러 개 삭제" size="sm" active={assetPicking} disabled={!assets.length} onclick={() => ((assetPicking = !assetPicking), (assetPicked = new Set()))}><Trash2 /></IconButton>
-				<IconButton label="이미지 가져오기 (여러 장 선택)" size="sm" onclick={addImages}><ImagePlus /></IconButton>
-				<IconButton label="ZIP으로 가져오기 (같은 이름은 덮어씀)" size="sm" onclick={addZip}><FileArchive /></IconButton>
+				<span class="faint">{$_("chatPanel.assetsCountHint", { values: { count: assets.length } })}</span>
+				<IconButton label={$_("chatPanel.sortAria")} size="sm" onclick={assetSortMenu}><ArrowUpDown /></IconButton>
+				<IconButton label={$_("chatPanel.multiDeleteAria")} size="sm" active={assetPicking} disabled={!assets.length} onclick={() => ((assetPicking = !assetPicking), (assetPicked = new Set()))}><Trash2 /></IconButton>
+				<IconButton label={$_("chatPanel.importImagesAria")} size="sm" onclick={addImages}><ImagePlus /></IconButton>
+				<IconButton label={$_("chatPanel.importZipAria")} size="sm" onclick={addZip}><FileArchive /></IconButton>
 			</div>
 			{#if assetPicking}
 				<div class="apick">
-					<button class="link" onclick={() => (assetPicked = new Set(assets.map((a) => a.id)))}>모두 선택</button>
+					<button class="link" onclick={() => (assetPicked = new Set(assets.map((a) => a.id)))}>{$_("chatPanel.selectAll")}</button>
 					<span class="sp"></span>
-					<Button size="sm" variant="danger" disabled={!assetPicked.size} onclick={removePickedAssets}>{#snippet icon()}<Trash2 />{/snippet}{assetPicked.size}개 삭제</Button>
+					<Button size="sm" variant="danger" disabled={!assetPicked.size} onclick={removePickedAssets}>{#snippet icon()}<Trash2 />{/snippet}{$_("chatPanel.deleteCountBtn", { values: { count: assetPicked.size } })}</Button>
 				</div>
 			{/if}
 			{#if assets.length}
 				<div class="agrid">
 					{#each sortedAssets as a (a.id)}
-						<button class="tile" class:off={!a.enabled || !inUse(a)} class:picked={assetPicked.has(a.id)} title={a.enabled ? a.key : `${a.key} (AI에게 안 보냄)`} onclick={() => (assetPicking ? pickAsset(a) : openAsset(a))} oncontextmenu={(e) => assetMenu(e, a)}>
+						<button class="tile" class:off={!a.enabled || !inUse(a)} class:picked={assetPicked.has(a.id)} title={a.enabled ? a.key : $_("chatPanel.assetHiddenTitle", { values: { key: a.key } })} onclick={() => (assetPicking ? pickAsset(a) : openAsset(a))} oncontextmenu={(e) => assetMenu(e, a)}>
 							<span class="thumb">
 								<img src={imageSrc(a, true)} alt="" loading="lazy" />
 								{#if !a.enabled}<EyeOff />{/if}
@@ -625,9 +626,9 @@
 					{/each}
 				</div>
 			{:else}
-				<p class="none">이미지 없음. 표정 이미지를 넣으면 AI가 장면에 맞게 골라 보여줌</p>
+				<p class="none">{$_("chatPanel.noAssetsHint")}</p>
 			{/if}
-			<ContextMenu at={menu} items={menuItems} label="에셋 메뉴" onclose={() => (menu = null)} />
+			<ContextMenu at={menu} items={menuItems} label={$_("chatPanel.assetMenuAria")} onclose={() => (menu = null)} />
 		</div>
 	{:else if panel.tab === "branches"}
 		<BranchTree {conv} {onopen} />
@@ -635,27 +636,27 @@
 			<ol class="marks">
 				{#each [...marks].reverse() as b (b.id)}
 					<li class:dim={!onShownSwipe(b)}>
-						<button class="mark" onclick={() => onjump(b.messageId, b)} title={onShownSwipe(b) ? "이 글로 이동" : "지금 보는 스와이프가 아님 (메시지로 이동)"} disabled={!msgNo.has(b.messageId)}>
+						<button class="mark" onclick={() => onjump(b.messageId, b)} title={onShownSwipe(b) ? $_("chatPanel.jumpToTextTitle") : $_("chatPanel.jumpOtherSwipeTitle")} disabled={!msgNo.has(b.messageId)}>
 							<span class="mtext">{b.text}</span>
-							<span class="mmeta">{msgNo.has(b.messageId) ? `#${msgNo.get(b.messageId)}` : "지운 메시지"}{swipeLabel(b) ? ` · ${swipeLabel(b)}` : ""} · {new Date(b.createdAt).toLocaleDateString()}</span>
+							<span class="mmeta">{msgNo.has(b.messageId) ? `#${msgNo.get(b.messageId)}` : $_("chatPanel.deletedMsg")}{swipeLabel(b) ? ` · ${swipeLabel(b)}` : ""} · {new Date(b.createdAt).toLocaleDateString()}</span>
 						</button>
-						{#if oncard}<IconButton label="이미지 카드로 만들기" size="sm" onclick={() => oncard(b)}><IdCard /></IconButton>{/if}
-						<IconButton label="북마크 지우기" size="sm" onclick={() => bookmarks.remove(conv, b.id)}><X /></IconButton>
+						{#if oncard}<IconButton label={$_("chatPanel.makeCardAria")} size="sm" onclick={() => oncard(b)}><IdCard /></IconButton>{/if}
+						<IconButton label={$_("chatPanel.removeMarkAria")} size="sm" onclick={() => bookmarks.remove(conv, b.id)}><X /></IconButton>
 					</li>
 				{:else}
-					<li class="none"><Bookmark /><br />메시지 글을 끌어서 고른 뒤 '북마크'를 누르면 여기 모임</li>
+					<li class="none"><Bookmark /><br />{$_("chatPanel.noMarksHint")}</li>
 				{/each}
 			</ol>
 	{:else if panel.tab === "toc"}
 		<div class="toc-search">
-			<Input bind:value={tocQuery} placeholder="챕터·메시지·번호 검색" aria-label="목차 검색">
+			<Input bind:value={tocQuery} placeholder={$_("chatPanel.tocSearchPlaceholder")} aria-label={$_("chatPanel.tocSearchAria")}>
 				{#snippet leading()}<Search />{/snippet}
 			</Input>
 			{#if hasChapters}
 				{#if folded.size}
-					<IconButton label="모두 펼치기" size="sm" onclick={() => (folded = new Set())}><ChevronsUpDown /></IconButton>
+					<IconButton label={$_("chatPanel.expandAllAria")} size="sm" onclick={() => (folded = new Set())}><ChevronsUpDown /></IconButton>
 				{:else}
-					<IconButton label="모두 접기" size="sm" onclick={() => (folded = new Set(toc.filter((t) => t.kind === "chapter").map((t) => t.id)))}><ChevronsDownUp /></IconButton>
+					<IconButton label={$_("chatPanel.collapseAllAria")} size="sm" onclick={() => (folded = new Set(toc.filter((t) => t.kind === "chapter").map((t) => t.id)))}><ChevronsDownUp /></IconButton>
 				{/if}
 			{/if}
 		</div>
@@ -664,7 +665,7 @@
 				{@const cur = t.kind === "msg" ? t.id === reading : t.id === readingChapter}
 				<li class={t.kind} class:current={cur} aria-current={cur ? "location" : undefined}>
 					{#if t.kind === "chapter"}
-						<button class="fold" aria-label={folded.has(t.id) ? "챕터 펼치기" : "챕터 접기"} aria-expanded={!folded.has(t.id)} onclick={() => toggleChapter(t.id)}><ChevronDown class={folded.has(t.id) ? "rot" : ""} /></button>
+						<button class="fold" aria-label={folded.has(t.id) ? $_("chatPanel.expandChapterAria") : $_("chatPanel.collapseChapterAria")} aria-expanded={!folded.has(t.id)} onclick={() => toggleChapter(t.id)}><ChevronDown class={folded.has(t.id) ? "rot" : ""} /></button>
 						<button class="chapter" onclick={() => onjump(t.id)} oncontextmenu={(e) => tocContext(e, t.id)}>{t.label}</button>
 					{:else}
 						<button onclick={() => onjump(t.id)} oncontextmenu={(e) => tocContext(e, t.id)}><span class="no">#{t.n}</span>{t.label}</button>
@@ -672,30 +673,30 @@
 					{#if t.marks?.length}
 						<ul class="tbm">
 							{#each t.marks as b (b.id)}
-								<li class:dim={!onShownSwipe(b)}><button onclick={() => onjump(t.id, b)} title="이 글로 이동"><Bookmark />{b.text}</button></li>
+								<li class:dim={!onShownSwipe(b)}><button onclick={() => onjump(t.id, b)} title={$_("chatPanel.jumpToTextTitle")}><Bookmark />{b.text}</button></li>
 							{/each}
 						</ul>
 					{/if}
 				</li>
 			{:else}
-				<li class="none">{tocQuery ? "찾는 항목 없음" : "메시지 없음"}</li>
+				<li class="none">{tocQuery ? $_("chatPanel.tocNoMatch") : $_("chatPanel.tocEmpty")}</li>
 			{/each}
 		</ol>
-		<ContextMenu at={tocMenuAt} items={tocMenuItems} label="목차 메뉴" onclose={() => (tocMenuAt = null)} />
+		<ContextMenu at={tocMenuAt} items={tocMenuItems} label={$_("chatPanel.tocMenuAria")} onclose={() => (tocMenuAt = null)} />
 	{:else if panel.tab === "lint"}
 		<div class="panel-body">
 			{#if plugins.on("lint")}
 				<section>
-					<h4>메시지 linter <span class="faint">응답이 저장될 때 검사</span></h4>
+					<h4>{$_("chatPanel.lintHeading")} <span class="faint">{$_("chatPanel.lintSub")}</span></h4>
 					{#if lastLint}
-						<p class="faint">마지막 응답에서 걸린 것</p>
+						<p class="faint">{$_("chatPanel.lintLastHits")}</p>
 						<ul class="lint-hits">
 							{#each lastLint.findings as f, i (i)}
-								<li class:warn={f.level === "warn"}>{f.text}{f.fixed ? " → 고침" : ""}</li>
+								<li class:warn={f.level === "warn"}>{f.text}{f.fixed ? $_("chatPanel.lintFixed") : ""}</li>
 							{/each}
 						</ul>
 					{:else}
-						<p class="faint">마지막 응답에서 걸린 것 없음</p>
+						<p class="faint">{$_("chatPanel.lintNoHits")}</p>
 					{/if}
 				</section>
 			{/if}
@@ -708,38 +709,38 @@
 			{#if plugins.on("memory")}
 				<hr />
 				<section>
-					<h4>메모리 검색</h4>
+					<h4>{$_("chatPanel.memorySearchHeading")}</h4>
 					<div class="mem-actions"><MemoryIndex conversationId={conv.id} /></div>
 					<MemorySearch conversationId={conv.id} onopen={(h) => onopen(conv.id, h.firstMessageId)} />
 				</section>
 			{/if}
 			{#if !plugins.on("summary") && !plugins.on("memory")}
-				<p class="faint">대화 요약·메모리 검색이 꺼져 있음 (설정 > 코어 플러그인)</p>
+				<p class="faint">{$_("chatPanel.memoryDisabledHint")}</p>
 			{/if}
 		</div>
 	{:else if panel.tab === "context"}
 		<div class="panel-body preset-edit">
 			<section>
-				<h4>컨텍스트</h4>
+				<h4>{$_("chatPanel.contextHeading")}</h4>
 				<ContextMeter {usage} model={activeModel} price={modelPrice} {draftTokens} />
 			</section>
 			<section>
-				<h4>프리셋 <span class="faint">{conv.promptPresetId ? "이 대화에서 고름" : "앱·캐릭터 기본값"}</span></h4>
-				<Select value={lockable ? (shownPreset ?? DEFAULT) : (conv.promptPresetId ?? DEFAULT)} options={presetOptions} aria-label="이 대화의 프리셋" onchange={(e) => void pickPreset(e.currentTarget.value)} />
+				<h4>{$_("chatPanel.presetHeading")} <span class="faint">{conv.promptPresetId ? $_("chatPanel.presetConvPicked") : $_("chatPanel.presetDefaultPicked")}</span></h4>
+				<Select value={lockable ? (shownPreset ?? DEFAULT) : (conv.promptPresetId ?? DEFAULT)} options={presetOptions} aria-label={$_("chatPanel.presetConvAria")} onchange={(e) => void pickPreset(e.currentTarget.value)} />
 			</section>
 			<PresetInline presetId={activePresetId} onsaved={loadUsage} model={conv.model || effectiveApi?.model || null} />
 		</div>
 	{:else}
 		<div class="panel-body">
 			<section>
-				<h4>이 대화</h4>
+				<h4>{$_("chatPanel.thisConvHeading")}</h4>
 				{#if lockable}
 					<div class="row">
 						<span>API</span>
 						<div class="with-btn">
-							<Select value={effectiveApi?.id ?? DEFAULT} options={effectiveApi ? apiOptions.slice(1) : apiOptions} aria-label="이 대화의 API" onchange={(e) => pickApi(e.currentTarget.value)} />
-							<IconButton label="API 설정 열기" size="sm" onclick={() => nav.go({ page: "settings", tab: "api" })}><Plus /></IconButton>
-							<OptionLock locked={lockedApi} from="전역" disabled={!lockedApi && !effectiveApi} onclick={toggleApi} />
+							<Select value={effectiveApi?.id ?? DEFAULT} options={effectiveApi ? apiOptions.slice(1) : apiOptions} aria-label={$_("chatPanel.apiConvAria")} onchange={(e) => pickApi(e.currentTarget.value)} />
+							<IconButton label={$_("chatPanel.openApiSettingsAria")} size="sm" onclick={() => nav.go({ page: "settings", tab: "api" })}><Plus /></IconButton>
+							<OptionLock locked={lockedApi} from={$_("chatPanel.fromGlobal")} disabled={!lockedApi && !effectiveApi} onclick={toggleApi} />
 						</div>
 					</div>
 				{:else}
@@ -747,39 +748,39 @@
 						<span>API</span>
 						<div class="with-btn">
 							<Select value={conv.apiProfileId ?? DEFAULT} options={apiOptions} onchange={(e) => setOption({ apiProfileId: e.currentTarget.value })} />
-							<IconButton label="API 설정 열기" size="sm" onclick={() => nav.go({ page: "settings", tab: "api" })}><Plus /></IconButton>
+							<IconButton label={$_("chatPanel.openApiSettingsAria")} size="sm" onclick={() => nav.go({ page: "settings", tab: "api" })}><Plus /></IconButton>
 						</div>
 					</div>
 				{/if}
 				<div class="row">
-					<span>모델</span>
+					<span>{$_("chatPanel.modelLabel")}</span>
 					<div class="with-btn">
-						<ModelPicker profile={effectiveApi} value={lockable ? shownModel : conv.model} onchange={pickModel} {effort} oneffort={pickEffort} label="이 대화의 모델" />
-						{#if lockable}<OptionLock locked={lockedModel} from="전역" disabled={!lockedModel && !shownModel} onclick={toggleModel} />{/if}
+						<ModelPicker profile={effectiveApi} value={lockable ? shownModel : conv.model} onchange={pickModel} {effort} oneffort={pickEffort} label={$_("chatPanel.modelConvAria")} />
+						{#if lockable}<OptionLock locked={lockedModel} from={$_("chatPanel.fromGlobal")} disabled={!lockedModel && !shownModel} onclick={toggleModel} />{/if}
 					</div>
 				</div>
 				<div class="row">
-					<span>프리셋</span>
+					<span>{$_("chatPanel.presetHeading")}</span>
 					<div class="with-btn">
 						{#if lockable}
-							<Select value={shownPreset ?? DEFAULT} options={shownPreset ? presetOptions.slice(1) : presetOptions} aria-label="프리셋" onchange={(e) => void pickPreset(e.currentTarget.value)} />
-							<IconButton label="이 프리셋 빠르게 편집{usage?.presetName ? ` (${usage.presetName})` : ''}" size="sm" onclick={() => (panel.tab = "context")}><Pencil /></IconButton>
+							<Select value={shownPreset ?? DEFAULT} options={shownPreset ? presetOptions.slice(1) : presetOptions} aria-label={$_("chatPanel.presetHeading")} onchange={(e) => void pickPreset(e.currentTarget.value)} />
+							<IconButton label={`${$_("chatPanel.quickEditPresetAria")}${usage?.presetName ? ` (${usage.presetName})` : ""}`} size="sm" onclick={() => (panel.tab = "context")}><Pencil /></IconButton>
 							<OptionLock locked={lockedPreset} from={presetFrom} disabled={!lockedPreset && !shownPreset} onclick={togglePreset} />
 						{:else}
-							<Select value={conv.promptPresetId ?? DEFAULT} options={presetOptions} aria-label="프리셋" onchange={(e) => setOption({ promptPresetId: e.currentTarget.value })} />
-							<IconButton label="이 프리셋 빠르게 편집{usage?.presetName ? ` (${usage.presetName})` : ''}" size="sm" onclick={() => (panel.tab = "context")}><Pencil /></IconButton>
+							<Select value={conv.promptPresetId ?? DEFAULT} options={presetOptions} aria-label={$_("chatPanel.presetHeading")} onchange={(e) => setOption({ promptPresetId: e.currentTarget.value })} />
+							<IconButton label={`${$_("chatPanel.quickEditPresetAria")}${usage?.presetName ? ` (${usage.presetName})` : ""}`} size="sm" onclick={() => (panel.tab = "context")}><Pencil /></IconButton>
 						{/if}
 					</div>
 				</div>
 				<div class="row">
 					{#if me}
 						<span>{me.label}</span>
-						<ProfilePicker label="{me.label} 바꾸기" options={me.options} value={me.value} hint={me.hint} onchange={me.onchange} />
+						<ProfilePicker label={$_("chatPanel.changeMeAria", { values: { label: me.label } })} options={me.options} value={me.value} hint={me.hint} onchange={me.onchange} />
 					{:else}
-						<span>페르소나</span>
+						<span>{$_("chatPanel.personaLabel")}</span>
 						<div class="with-btn">
-							<ProfilePicker label="페르소나 변경" options={personaOptions} value={persona?.id} onchange={(id) => void pickPersona(id)} onmanage={() => nav.go({ page: "persona" })} manageLabel="페르소나 추가 · 관리" />
-							<IconButton label="페르소나 추가 · 관리" size="sm" onclick={() => nav.go({ page: "persona" })}><UserCog /></IconButton>
+							<ProfilePicker label={$_("chatPanel.changePersonaAria")} options={personaOptions} value={persona?.id} onchange={(id) => void pickPersona(id)} onmanage={() => nav.go({ page: "persona" })} manageLabel={$_("chatPanel.managePersonaLabel")} />
+							<IconButton label={$_("chatPanel.managePersonaLabel")} size="sm" onclick={() => nav.go({ page: "persona" })}><UserCog /></IconButton>
 							{#if lockable}<OptionLock locked={lockedPersona} from={personaFrom} onclick={togglePersona} />{/if}
 						</div>
 					{/if}
@@ -787,21 +788,21 @@
 			</section>
 			<hr />
 			<section>
-				<h4>월드인포</h4>
+				<h4>{$_("chatPanel.wiHeading")}</h4>
 				<div class="wi">
-					<span>{character?.name ?? "캐릭터"} <small>캐릭터에 붙음 · 이 캐릭터의 모든 대화</small></span>
-					<BookPicker label="캐릭터 월드인포" value={character?.worldInfoIds ?? []} onchange={(ids) => library.setCharacterWorldInfo(conv.characterId, ids)} />
+					<span>{character?.name ?? $_("chatPanel.charFallback")} <small>{$_("chatPanel.wiCharHint")}</small></span>
+					<BookPicker label={$_("chatPanel.wiCharAria")} value={character?.worldInfoIds ?? []} onchange={(ids) => library.setCharacterWorldInfo(conv.characterId, ids)} />
 				</div>
 				<div class="wi">
-					<span>이 대화 전용 <small>이 대화에만</small></span>
-					<BookPicker label="이 대화 전용 월드인포" value={conv.worldInfoIds} onchange={(ids) => library.setWorldInfo(conv.id, ids)} />
+					<span>{$_("chatPanel.wiConvLabel")} <small>{$_("chatPanel.wiConvHint")}</small></span>
+					<BookPicker label={$_("chatPanel.wiConvAria")} value={conv.worldInfoIds} onchange={(ids) => library.setWorldInfo(conv.id, ids)} />
 				</div>
 			</section>
 			<hr />
 			<NotesPanel {conv} bare />
 			<hr />
 			<section>
-				<h4>정규식 <span class="faint">{applied.filter((s) => s.enabled).length}개 적용 중</span></h4>
+				<h4>{$_("chatPanel.regexHeading")} <span class="faint">{$_("chatPanel.regexAppliedCount", { values: { count: applied.filter((s) => s.enabled).length } })}</span></h4>
 				{#each groups as g (g.scope)}
 					<details class="rx-group" open>
 						<summary class="rx-scope">
@@ -816,29 +817,29 @@
 									<span class="grip" aria-hidden="true" {...sort.handle(i)}><GripVertical /></span>
 									<Switch checked={s.enabled} label={s.name} onchange={(v) => toggleScript(s, v)} />
 									<div class="rx-acts">
-										<IconButton label="{s.name} 편집" size="sm" onclick={() => regexEditor?.startEdit(s)}><Pencil /></IconButton>
-										<IconButton label="{s.name} 삭제" size="sm" variant="danger" onclick={() => removeScript(s)}><Trash2 /></IconButton>
+										<IconButton label={$_("chatPanel.editItemAria", { values: { name: s.name } })} size="sm" onclick={() => regexEditor?.startEdit(s)}><Pencil /></IconButton>
+										<IconButton label={$_("chatPanel.deleteItemAria", { values: { name: s.name } })} size="sm" variant="danger" onclick={() => removeScript(s)}><Trash2 /></IconButton>
 									</div>
 								</li>
 							{/each}
 						</ul>
 					</details>
 				{:else}
-					<p class="none small">이 대화에 걸리는 정규식 없음</p>
+					<p class="none small">{$_("chatPanel.noRegexHint")}</p>
 				{/each}
-				<Button size="sm" variant="ghost" onclick={() => regexEditor?.startNew({ scope: "character", scopeId: conv.characterId })}>{#snippet icon()}<Plus />{/snippet}이 캐릭터 정규식 추가</Button>
+				<Button size="sm" variant="ghost" onclick={() => regexEditor?.startNew({ scope: "character", scopeId: conv.characterId })}>{#snippet icon()}<Plus />{/snippet}{$_("chatPanel.addCharRegexBtn")}</Button>
 				<RegexEditDialog bind:this={regexEditor} sortOrder={applied.length * 10} onsaved={onRegexSaved} />
 			</section>
 			<hr />
 			<section>
-				<h4>내보내기</h4>
+				<h4>{$_("chatPanel.exportHeading")}</h4>
 				<ExportButton {conv} />
 			</section>
 			<hr />
 			<section>
 				<Button block variant="danger" onclick={() => convActions.remove(conv)}>
 					{#snippet icon()}<Trash2 />{/snippet}
-					이 대화 삭제
+					{$_("chatPanel.deleteConvBtn")}
 				</Button>
 			</section>
 		</div>

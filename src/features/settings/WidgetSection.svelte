@@ -1,5 +1,6 @@
 <script lang="ts">
 	import { onMount } from "svelte";
+	import { _ } from "svelte-i18n";
 	import { Button, Segmented, Switch } from "$shared/ui";
 	import { pickFolder } from "$shared/ipc/dialog";
 	import type { WidgetMusicSetting_Serialize } from "$ipc/bindings";
@@ -52,26 +53,26 @@
 	}
 </script>
 
-<Section title="위젯" lead="바탕화면에 떠 있는 작은 창">
+<Section title={$_("settings.widgetSec.title")} lead={$_("settings.widgetSec.lead")}>
 	{#if ready}
 		<div class="tabs">
 			<Segmented
-				label="위젯 설정 탭"
+				label={$_("settings.widgetSec.title")}
 				bind:value={tab}
 				options={[
-					{ value: "general", label: "일반" },
-					{ value: "shimeji", label: "시메지" },
+					{ value: "general", label: $_("settings.widgetSec.tabGeneral") },
+					{ value: "shimeji", label: $_("settings.widgetSec.tabShimeji") },
 				]}
 			/>
 		</div>
 
 		{#if tab === "general"}
 			<Group>
-				<Row label="컴퓨터 켤 때 위젯 실행" desc="로그인하면 위젯만 먼저 띄움">
-					<Switch checked={autostart} label="컴퓨터 켤 때 위젯 실행" hideLabel onchange={setAutostart} />
+				<Row label={$_("settings.widgetSec.autostart")} desc={$_("settings.widgetSec.autostartDesc")}>
+					<Switch checked={autostart} label={$_("settings.widgetSec.autostart")} hideLabel onchange={setAutostart} />
 				</Row>
 			</Group>
-			<Group title="위젯 기능">
+			<Group title={$_("settings.widgetSec.featuresGroup")}>
 				{#each WIDGET_FEATURES as f (f.id)}
 					<Row label={f.name} desc={f.description.replace(/합니다\.$/, "함")}>
 						<Switch
@@ -85,15 +86,15 @@
 				{/each}
 			</Group>
 			{#if music && features["widget"] && features["widget.music"]}
-				<Group title="음악 플레이어">
-					<Row label="작게 보기">
-						<Switch checked={music.isMiniPlayer} label="작게 보기" hideLabel onchange={(v) => void setMusic({ isMiniPlayer: v })} />
+				<Group title={$_("settings.widgetSec.musicGroup")}>
+					<Row label={$_("settings.widgetSec.miniPlayer")}>
+						<Switch checked={music.isMiniPlayer} label={$_("settings.widgetSec.miniPlayer")} hideLabel onchange={(v) => void setMusic({ isMiniPlayer: v })} />
 					</Row>
-					<Row label="음악 폴더" desc={music.selectedFolder ?? "고르지 않음"}>
-						<Button size="sm" onclick={chooseMusicFolder}>바꾸기</Button>
+					<Row label={$_("settings.widgetSec.musicFolder")} desc={music.selectedFolder ?? $_("settings.chatSec.notSelected")}>
+						<Button size="sm" onclick={chooseMusicFolder}>{$_("settings.chatSec.change")}</Button>
 					</Row>
-					<Row label="위치">
-						<Button size="sm" variant="ghost" disabled={!music.pos} onclick={() => void setMusic({ pos: null })}>처음 자리로</Button>
+					<Row label={$_("settings.widgetSec.position")}>
+						<Button size="sm" variant="ghost" disabled={!music.pos} onclick={() => void setMusic({ pos: null })}>{$_("settings.widgetSec.resetPos")}</Button>
 					</Row>
 				</Group>
 			{/if}

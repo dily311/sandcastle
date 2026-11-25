@@ -1,4 +1,5 @@
 <script lang="ts">
+	import { _ } from "svelte-i18n";
 	import { chatImport } from "./chatImport.svelte";
 	import { ArrowDownUp, ChevronDown, Folder, FolderOpen, FolderPlus, PanelLeft, Pencil, Plus, Search, Trash2, Upload } from "@lucide/svelte";
 	import { ContextMenu, IconButton, Input, type MenuItem } from "$shared/ui";
@@ -100,14 +101,14 @@
 	function folderMenu(e: MouseEvent, id: string, name: string) {
 		e.preventDefault();
 		folderMenuItems = [
-			{ label: "이름 바꾸기", icon: Pencil, onselect: () => startFolderEdit(id, name) },
+			{ label: $_("settings.chrome.rename"), icon: Pencil, onselect: () => startFolderEdit(id, name) },
 			{
-				label: "폴더 삭제 (대화는 남김)",
+				label: $_("settings.panels.deleteFolderKeepChats"),
 				icon: Trash2,
 				danger: true,
 				separator: true,
 				onselect: async () => {
-					if (await confirmAction({ title: "폴더 삭제", message: `'${name}' 폴더만 지움. 안의 대화는 폴더 밖으로 나옴`, confirmLabel: "삭제", danger: true }))
+					if (await confirmAction({ title: $_("settings.panels.deleteFolderTitle"), message: $_("settings.panels.deleteFolderMsg", { values: { name } }), confirmLabel: $_("common.delete"), danger: true }))
 						await library.removeFolder(id);
 				},
 			},
@@ -141,8 +142,8 @@
 	<input
 		class="folder-input"
 		bind:value={folderName}
-		placeholder="폴더 이름"
-		aria-label="폴더 이름"
+		placeholder={$_("settings.panels.folderName")}
+		aria-label={$_("settings.panels.folderName")}
 		autofocus
 		onkeydown={(e) => {
 			if (e.key === "Enter") commitFolder();
@@ -152,27 +153,27 @@
 	/>
 {/snippet}
 
-<aside class="convs sc-conv-list" aria-label="대화 목록">
+<aside class="convs sc-conv-list" aria-label={$_("settings.panels.convListAria")}>
 	<div class="convs-head">
-		<IconButton label="닫기" size="sm" variant="soft" onclick={onclose}><PanelLeft /></IconButton>
+		<IconButton label={$_("common.close")} size="sm" variant="soft" onclick={onclose}><PanelLeft /></IconButton>
 		<span class="spacer"></span>
-		<IconButton label="새 대화" size="sm" variant="soft" onclick={oncreate}><Plus /></IconButton>
-		<IconButton label="대화 가져오기 (SillyTavern .jsonl)" size="sm" onclick={importChat}><Upload /></IconButton>
-		<IconButton label="새 폴더" size="sm" onclick={() => startFolderEdit("new")}><FolderPlus /></IconButton>
+		<IconButton label={$_("sidebar.newChat")} size="sm" variant="soft" onclick={oncreate}><Plus /></IconButton>
+		<IconButton label={$_("settings.panels.importChatSt")} size="sm" onclick={importChat}><Upload /></IconButton>
+		<IconButton label={$_("settings.panels.newFolder")} size="sm" onclick={() => startFolderEdit("new")}><FolderPlus /></IconButton>
 	</div>
 	<div class="convs-tools">
-		<Input bind:value={query} placeholder="대화 검색 · mes:메시지 내용" aria-label="대화 검색">
+		<Input bind:value={query} placeholder={$_("settings.panels.searchChatsPlaceholder")} aria-label={$_("sidebar.searchChats")}>
 			{#snippet leading()}<Search />{/snippet}
 		</Input>
-		<IconButton label="정렬: {CONV_SORT_LABEL[sortBy]} ({desc ? '내림차순' : '오름차순'})" size="md" active={!!sortMenu} aria-haspopup="menu" onclick={openSortMenu}><ArrowDownUp /></IconButton>
+		<IconButton label={$_("settings.panels.sortStatus", { values: { by: CONV_SORT_LABEL[sortBy], dir: desc ? $_("settings.chrome.desc") : $_("settings.chrome.asc") } })} size="md" active={!!sortMenu} aria-haspopup="menu" onclick={openSortMenu}><ArrowDownUp /></IconButton>
 	</div>
 	<ContextMenu
 		at={sortMenu}
-		label="정렬"
+		label={$_("settings.panels.sortAria")}
 		items={[
 			...CONV_SORT_KEYS.map((k) => ({ id: k, label: CONV_SORT_LABEL[k], checked: sortBy === k, onselect: () => (sortBy = k) })),
-			{ id: "desc", label: "내림차순", separator: true, checked: desc, onselect: () => (desc = true) },
-			{ id: "asc", label: "오름차순", checked: !desc, onselect: () => (desc = false) },
+			{ id: "desc", label: $_("settings.chrome.desc"), separator: true, checked: desc, onselect: () => (desc = true) },
+			{ id: "asc", label: $_("settings.chrome.asc"), checked: !desc, onselect: () => (desc = false) },
 		]}
 		onclose={() => (sortMenu = null)}
 	/>
@@ -202,7 +203,7 @@
 					{#each items as c (c.id)}
 						<ConvCard conv={c} compact selected={c.id === convId} onopen={() => onopen(c.id)} />
 					{:else}
-						<p class="empty-folder">비어 있음</p>
+						<p class="empty-folder">{$_("settings.panels.emptyFolder")}</p>
 					{/each}
 				</div>
 			{/if}
@@ -212,9 +213,9 @@
 				<ConvCard conv={c} compact selected={c.id === convId} onopen={() => onopen(c.id)} />
 			{/each}
 		</div>
-		{#if !convs.length}<p class="none">{query ? "검색 결과 없음" : "대화 없음"}</p>{/if}
+		{#if !convs.length}<p class="none">{query ? $_("settings.panels.noSearchResults") : $_("settings.panels.noConvs")}</p>{/if}
 	</div>
-	<ContextMenu at={folderMenuAt} items={folderMenuItems} label="폴더 메뉴" onclose={() => (folderMenuAt = null)} />
+	<ContextMenu at={folderMenuAt} items={folderMenuItems} label={$_("settings.panels.folderMenuAria")} onclose={() => (folderMenuAt = null)} />
 </aside>
 
 <style>

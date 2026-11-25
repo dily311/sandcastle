@@ -1,5 +1,6 @@
 <script lang="ts">
 	import { onMount } from "svelte";
+	import { _ } from "svelte-i18n";
 	import { ChevronRight, Copy, Pencil, Plus, Trash2, Upload } from "@lucide/svelte";
 	import { pickFiles } from "$shared/ipc/dialog";
 	import { drops, isImageAvif, storeFile } from "$app/drop.svelte";
@@ -47,34 +48,40 @@
 	// ---- 배경 이미지 (GIF 가능) ----
 	const hasBg = $derived(!!theme.setting.backgroundImage);
 	async function uploadBackgrounds() {
-		const paths = await pickFiles([{ name: "이미지", extensions: ["png", "jpg", "jpeg", "webp", "gif", "avif"] }], true);
+		const paths = await pickFiles([{ name: $_("settings.more.imgFilter"), extensions: ["png", "jpg", "jpeg", "webp", "gif", "avif"] }], true);
 		await theme.addBackgrounds(paths, true);
 	}
 	// ---- 글꼴 요약 (상세 추가·지정은 별도 글꼴 관리 페이지에서) ----
 	const fonts = $derived(theme.setting.fonts ?? []);
 	const fontName = (path: string | null | undefined, fallback: string) => (path ? fonts.find((f) => f.path === path)?.name ?? fallback : fallback);
 	const fontSummary = $derived(
-		`UI: ${fontName(theme.setting.appFont, "기본")} · 텍스트: ${fontName(theme.setting.textFont, "UI 따름")} · 모노: ${fontName(theme.setting.monoFont, "기본")}`,
+		$_("settings.more.fontSummary", {
+			values: {
+				ui: fontName(theme.setting.appFont, $_("settings.more.default")),
+				text: fontName(theme.setting.textFont, $_("settings.more.followUi")),
+				mono: fontName(theme.setting.monoFont, $_("settings.more.default")),
+			},
+		}),
 	);
 	// ---- 아바타 프레임 (캐릭터 / 유저 페르소나 별도 설정) ----
-	const FRAME_OPTIONS: { value: AvatarFrameShape; label: string }[] = [
-		{ value: "none", label: "표시 안 함 (none)" },
-		{ value: "rect", label: "사각형" },
-		{ value: "square", label: "정사각형" },
-		{ value: "circle", label: "원" },
-		{ value: "custom", label: "커스텀" },
-	];
+	const FRAME_OPTIONS = $derived<{ value: AvatarFrameShape; label: string }[]>([
+		{ value: "none", label: $_("settings.themeSec.frameNone") },
+		{ value: "rect", label: $_("settings.themeSec.frameRect") },
+		{ value: "square", label: $_("settings.themeSec.frameSquare") },
+		{ value: "circle", label: $_("settings.themeSec.frameCircle") },
+		{ value: "custom", label: $_("settings.themeSec.frameCustom") },
+	]);
 	async function uploadFrame(target: "char" | "user") {
-		const [path] = await pickFiles([{ name: "프레임 이미지", extensions: ["png", "webp", "gif", "avif", "svg", "jpg", "jpeg"] }], false);
+		const [path] = await pickFiles([{ name: $_("settings.more.frameImgFilter"), extensions: ["png", "webp", "gif", "avif", "svg", "jpg", "jpeg"] }], false);
 		if (!path) return;
 		await theme.uploadAvatarFrame(target, path);
-		toasts.success(target === "char" ? "캐릭터 커스텀 프레임을 적용함" : "유저 페르소나 커스텀 프레임을 적용함");
+		toasts.success(target === "char" ? $_("settings.more.charFrameApplied") : $_("settings.more.userFrameApplied"));
 	}
 	// 이 화면에 놓은 그림은 배경으로
 	$effect(() =>
 		drops.register({
-			label: "배경 이미지 올리기",
-			hint: "그림(PNG·JPG·WEBP·GIF·AVIF)을 놓으면 배경 목록에 추가됨",
+			label: $_("settings.more.dropBgLabel"),
+			hint: $_("settings.more.dropBgHint"),
 			accept: isImageAvif,
 			ondrop: async (files) => {
 				await theme.addBackgrounds(await Promise.all(files.map((f) => storeFile(f))), true);
@@ -105,9 +112,9 @@
 		menu = {
 			at: { x: e.clientX, y: e.clientY },
 			items: [
-				{ label: "편집", icon: Pencil, onselect: () => edit(t.filename ?? "") },
-				{ label: "복제", icon: Copy, onselect: () => duplicate(t) },
-				{ label: "삭제", icon: Trash2, danger: true, separator: true, onselect: () => remove(t) },
+				{ label: $_("common.edit"), icon: Pencil, onselect: () => edit(t.filename ?? "") },
+				{ label: $_("common.duplicate"), icon: Copy, onselect: () => duplicate(t) },
+				{ label: $_("common.delete"), icon: Trash2, danger: true, separator: true, onselect: () => remove(t) },
 			],
 		};
 	}
@@ -120,7 +127,7 @@
 		const full = await call(commands.loadTheme(t.filename ?? ""), src);
 		await call(
 			commands.saveTheme(`theme-${Date.now().toString(36)}.json`, {
-				name: `${full.name} 사본`,
+				name: $_("settings.more.copySuffix", { values: { name: full.name } }),
 				author: full.author,
 				version: full.version,
 				cssContent: full.cssContent,
@@ -134,7 +141,7 @@
 		await loadList();
 	}
 	async function remove(t: ThemeMeta) {
-		if (!(await confirmAction({ title: "테마 삭제", message: `'${t.name}' 테마를 지움`, confirmLabel: "삭제", danger: true }))) return;
+		if (!(await confirmAction({ title: $_("settings.more.deleteThemeTitle"), message: $_("settings.more.deleteThemeMsg", { values: { name: t.name } }), confirmLabel: $_("common.delete"), danger: true }))) return;
 		await call(commands.deleteTheme(t.filename ?? ""), src);
 		if (selected === t.filename) await theme.update({ selectTheme: "default" });
 		await loadList();
@@ -143,7 +150,7 @@
 	// ---- 스니펫 ----
 	let openSnippet = $state<string | null>(null);
 	async function addSnippet() {
-		const s: CssSnippet = { id: `s-${Date.now().toString(36)}`, name: "새 스니펫", css: "/* 예: 대화 글자를 조금 크게 */\n.block p {\n\tfont-size: 1.05em;\n}", enabled: false };
+		const s: CssSnippet = { id: `s-${Date.now().toString(36)}`, name: $_("settings.more.newSnippetName"), css: "/* e.g. slightly larger chat text */\n.block p {\n\tfont-size: 1.05em;\n}", enabled: false };
 		await theme.saveSnippets([...theme.snippets, s]);
 		openSnippet = s.id;
 	}
@@ -151,36 +158,37 @@
 		await theme.saveSnippets(theme.snippets.map((s) => (s.id === id ? { ...s, ...p } : s)));
 	}
 	async function removeSnippet(s: CssSnippet) {
-		if (!(await confirmAction({ title: "스니펫 삭제", message: `'${s.name}' 스니펫을 지움`, confirmLabel: "삭제", danger: true }))) return;
+		if (!(await confirmAction({ title: $_("settings.more.deleteSnippetTitle"), message: $_("settings.more.deleteSnippetMsg", { values: { name: s.name } }), confirmLabel: $_("common.delete"), danger: true }))) return;
 		await theme.saveSnippets(theme.snippets.filter((x) => x.id !== s.id));
-		toasts.success("지움");
+		toasts.success($_("settings.more.deletedToast"));
 	}
 
 	const fontSizes = ["13", "14", "15", "16", "17", "18", "20"].map((v) => ({ value: v, label: `${v}px` }));
 </script>
 
-<Section title="테마">
+<Section title={$_("settings.themeSec.title")}>
 	<Group>
-		<Row label="화면 모드" desc="시스템 설정을 따르거나 직접 고름">
+		<Row label={$_("settings.themeSec.mode")} desc={$_("settings.themeSec.modeDesc")}>
 			<Segmented
-				label="화면 모드"
+				label={$_("settings.themeSec.mode")}
 				value={theme.setting.mode}
 				options={[
-					{ value: "system", label: "시스템" },
-					{ value: "light", label: "밝게" },
-					{ value: "dark", label: "어둡게" },
+					{ value: "system", label: $_("settings.themeSec.modeSystem") },
+					{ value: "light", label: $_("settings.themeSec.modeLight") },
+					{ value: "dark", label: $_("settings.themeSec.modeDark") },
 				]}
 				onchange={(mode) => theme.update({ mode })}
 			/>
 		</Row>
-		<Row label="강조색" desc="버튼·선택 표시·내 메시지 색. 테마가 정하면 테마 색">
-			<div class="accents" role="radiogroup" aria-label="강조색">
+		<Row label={$_("settings.themeSec.accent")} desc={$_("settings.themeSec.accentDesc")}>
+			<div class="accents" role="radiogroup" aria-label={$_("settings.themeSec.accent")}>
 				{#each ACCENTS as a (a.id)}
+					{@const alabel = $_(`uiPolish.accents.${a.id}`, { default: a.label })}
 					<button
 						role="radio"
 						aria-checked={theme.accentId === a.id}
-						aria-label={a.label}
-						title={a.label}
+						aria-label={alabel}
+						title={alabel}
 						class:on={theme.accentId === a.id}
 						style:background={theme.dark ? a.dark : a.light}
 						onclick={() => theme.update({ accentColor: a.id })}
@@ -192,21 +200,22 @@
 					class="custom"
 					class:on={isHexColor(theme.setting.accentColor)}
 					value={accentValue(theme.accentId, theme.dark)}
-					aria-label="강조색 직접 고르기"
-					title="직접 고르기"
+					aria-label={$_("settings.more.accentCustomAria")}
+					title={$_("settings.more.accentCustomTitle")}
 					onchange={(e) => theme.update({ accentColor: e.currentTarget.value })}
 				/>
 			</div>
 		</Row>
-		<Row label="회색 톤" desc="바탕·테두리·글자의 기본 색감">
-			<div class="grays" role="radiogroup" aria-label="회색 톤">
+		<Row label={$_("settings.themeSec.grayTone")} desc={$_("settings.themeSec.grayToneDesc")}>
+			<div class="grays" role="radiogroup" aria-label={$_("settings.themeSec.grayTone")}>
 				{#each GRAYS as g (g.id)}
 					{@const s = theme.dark ? g.dark : g.light}
+					{@const glabel = $_(`uiPolish.grays.${g.id}`, { default: g.label })}
 					<button
 						role="radio"
 						aria-checked={theme.setting.grayTone === g.id}
-						aria-label={g.label}
-						title={g.label}
+						aria-label={glabel}
+						title={glabel}
 						class:on={theme.setting.grayTone === g.id}
 						style:background="linear-gradient(135deg, {s[2]} 0 50%, {s[10]} 50% 100%)"
 						onclick={() => theme.update({ grayTone: g.id })}
@@ -214,25 +223,25 @@
 				{/each}
 			</div>
 		</Row>
-		<Row label="글자 크기" desc="앱 전체 기본 글자 크기">
-			<Select value={String(theme.setting.fontSize)} options={fontSizes} aria-label="글자 크기" onchange={(e) => theme.update({ fontSize: Number(e.currentTarget.value) })} />
+		<Row label={$_("settings.themeSec.fontSize")} desc={$_("settings.themeSec.fontSizeDesc")}>
+			<Select value={String(theme.setting.fontSize)} options={fontSizes} aria-label={$_("settings.themeSec.fontSize")} onchange={(e) => theme.update({ fontSize: Number(e.currentTarget.value) })} />
 		</Row>
-		<Row label="글꼴" desc={fontSummary}>
-			<Button size="sm" variant="secondary" onclick={() => nav.go({ page: "settings", tab: "theme", edit: "fonts" })}>글꼴 관리 ({fonts.length}){#snippet icon()}<ChevronRight />{/snippet}</Button>
+		<Row label={$_("settings.themeSec.font")} desc={fontSummary}>
+			<Button size="sm" variant="secondary" onclick={() => nav.go({ page: "settings", tab: "theme", edit: "fonts" })}>{$_("settings.themeSec.manageFonts", { values: { count: fonts.length } })}{#snippet icon()}<ChevronRight />{/snippet}</Button>
 		</Row>
-		<Row label="프레임 없는 창" desc="운영체제 제목 표시줄 대신 앱 헤더 사용">
-			<Switch checked={theme.setting.isFrameless} label="프레임 없는 창" hideLabel onchange={(v) => theme.update({ isFrameless: v })} />
+		<Row label={$_("settings.themeSec.frameless")} desc={$_("settings.themeSec.framelessDesc")}>
+			<Switch checked={theme.setting.isFrameless} label={$_("settings.themeSec.frameless")} hideLabel onchange={(v) => theme.update({ isFrameless: v })} />
 		</Row>
 	</Group>
 
-	<Group title="대화 표시">
-		<Row label="메시지 시각 표시" desc="대화에서 메시지마다 보낸 시각 보이기. 커스텀 테마가 정하면 테마 설정을 따름" nowrap>
-			<Switch checked={theme.setting.chat?.showTimestamps ?? true} label="메시지 시각 표시" hideLabel onchange={(v) => theme.updateChat({ showTimestamps: v })} />
+	<Group title={$_("settings.themeSec.chatDisplayGroup")}>
+		<Row label={$_("settings.themeSec.showTimestamps")} desc={$_("settings.themeSec.showTimestampsDesc")} nowrap>
+			<Switch checked={theme.setting.chat?.showTimestamps ?? true} label={$_("settings.themeSec.showTimestamps")} hideLabel onchange={(v) => theme.updateChat({ showTimestamps: v })} />
 		</Row>
-		<Row label="메시지 프로필 표시" desc="대화에서 메시지에 프로필 그림 보이기" nowrap>
-			<Switch checked={theme.setting.chat?.showAvatars ?? true} label="메시지에 프로필 그림" hideLabel onchange={(v) => theme.updateChat({ showAvatars: v })} />
+		<Row label={$_("settings.themeSec.showAvatars")} desc={$_("settings.themeSec.showAvatarsDesc")} nowrap>
+			<Switch checked={theme.setting.chat?.showAvatars ?? true} label={$_("settings.themeSec.showAvatars")} hideLabel onchange={(v) => theme.updateChat({ showAvatars: v })} />
 		</Row>
-		<Row label="캐릭터 프로필 프레임" desc="대화에서 캐릭터 프로필 이미지의 표시 형식">
+		<Row label={$_("settings.themeSec.charFrame")} desc={$_("settings.themeSec.charFrameDesc")}>
 			<div class="frame-ctrl">
 				{#if (theme.setting.chat?.charAvatarFrame ?? "circle") !== "none"}
 					<Avatar
@@ -245,15 +254,15 @@
 				<Select
 					value={theme.setting.chat?.charAvatarFrame ?? "circle"}
 					options={FRAME_OPTIONS}
-					aria-label="캐릭터 프로필 프레임"
+					aria-label={$_("settings.themeSec.charFrame")}
 					onchange={(e) => theme.updateChat({ charAvatarFrame: e.currentTarget.value as AvatarFrameShape })}
 				/>
 				{#if theme.setting.chat?.charAvatarFrame === "custom"}
-					<Button size="sm" variant="secondary" onclick={() => uploadFrame("char")}>{#snippet icon()}<Upload />{/snippet}{theme.setting.chat?.charAvatarFrameImage ? "프레임 변경" : "프레임 업로드"}</Button>
+					<Button size="sm" variant="secondary" onclick={() => uploadFrame("char")}>{#snippet icon()}<Upload />{/snippet}{theme.setting.chat?.charAvatarFrameImage ? $_("settings.themeSec.changeFrame") : $_("settings.themeSec.uploadFrame")}</Button>
 				{/if}
 			</div>
 		</Row>
-		<Row label="유저 페르소나 프로필 프레임" desc="대화에서 내 페르소나 프로필 이미지의 표시 형식">
+		<Row label={$_("settings.themeSec.userFrame")} desc={$_("settings.themeSec.userFrameDesc")}>
 			<div class="frame-ctrl">
 				{#if (theme.setting.chat?.userAvatarFrame ?? "circle") !== "none"}
 					<Avatar
@@ -266,24 +275,24 @@
 				<Select
 					value={theme.setting.chat?.userAvatarFrame ?? "circle"}
 					options={FRAME_OPTIONS}
-					aria-label="유저 페르소나 프로필 프레임"
+					aria-label={$_("settings.themeSec.userFrame")}
 					onchange={(e) => theme.updateChat({ userAvatarFrame: e.currentTarget.value as AvatarFrameShape })}
 				/>
 				{#if theme.setting.chat?.userAvatarFrame === "custom"}
-					<Button size="sm" variant="secondary" onclick={() => uploadFrame("user")}>{#snippet icon()}<Upload />{/snippet}{theme.setting.chat?.userAvatarFrameImage ? "프레임 변경" : "프레임 업로드"}</Button>
+					<Button size="sm" variant="secondary" onclick={() => uploadFrame("user")}>{#snippet icon()}<Upload />{/snippet}{theme.setting.chat?.userAvatarFrameImage ? $_("settings.themeSec.changeFrame") : $_("settings.themeSec.uploadFrame")}</Button>
 				{/if}
 			</div>
 		</Row>
-		<Row label="메시지에 멀티 프로필 그림 표시" desc="`캐릭터이름: 대사` 형식의 이름 부분을 아바타로 교체해 표시" nowrap>
-			<Switch checked={theme.setting.chat?.showMultiCharAvatars ?? false} label="메시지에 멀티 프로필 그림 표시" hideLabel onchange={(v) => theme.updateChat({ showMultiCharAvatars: v })} />
+		<Row label={$_("settings.themeSec.multiCharAvatars")} desc={$_("settings.themeSec.multiCharAvatarsDesc")} nowrap>
+			<Switch checked={theme.setting.chat?.showMultiCharAvatars ?? false} label={$_("settings.themeSec.multiCharAvatars")} hideLabel onchange={(v) => theme.updateChat({ showMultiCharAvatars: v })} />
 		</Row>
 	</Group>
 
-	<Group title="배경 이미지">
+	<Group title={$_("settings.themeSec.bgGroup")}>
 		<div class="bg-row">
-			<p class="bg-desc">대화 화면 배경으로 깔 그림. 여러 장 올려 두고 골라 씀 (움짤 GIF 가능, 앱 데이터에 복사). 더보기에서 지울 수 있음</p>
+			<p class="bg-desc">{$_("settings.themeSec.bgDesc")}</p>
 			<BackgroundPicker
-				label="대화 배경"
+				label={$_("settings.themeSec.bgGroup")}
 				value={theme.setting.backgroundImage ?? null}
 				images={theme.setting.backgrounds ?? []}
 				onpick={(v) => theme.setBackground(v)}
@@ -294,8 +303,8 @@
 		{#if hasBg}
 			<div class="bg-scrim-row">
 				<Slider
-					label="배경 가림막 (%)"
-					hint="높을수록 글자가 또렷하고, 낮을수록 배경 이미지가 선명하게 보임"
+					label={$_("settings.themeSec.bgScrim")}
+					hint={$_("settings.themeSec.bgScrimHint")}
 					min={0}
 					max={85}
 					step={5}
@@ -305,66 +314,66 @@
 					oncommit={commitBgScrim}
 				/>
 			</div>
-			<Row label="가림막 색상" desc="배경 위에 덮는 가림막 색감 (기본은 현재 테마 바탕색)">
+			<Row label={$_("settings.themeSec.bgScrimColor")} desc={$_("settings.themeSec.bgScrimColorDesc")}>
 				<ScrimColorPicker />
 			</Row>
 		{/if}
 	</Group>
 
-	<Group title="기본 테마">
-		<div class="gallery" role="radiogroup" aria-label="기본 테마">
+	<Group title={$_("settings.themeSec.builtinGroup")}>
+		<div class="gallery" role="radiogroup" aria-label={$_("settings.themeSec.builtinGroup")}>
 			{#each BUILTIN_THEMES as t (t.id)}
 				{@const key = t.id === "default" ? "default" : `builtin:${t.id}`}
-				<ThemeCard name={t.name} colors={cardColors(t.colors)} selected={selected === key} onselect={() => selectKey(key)}>
+				<ThemeCard name={$_(`uiPolish.builtins.${t.id}`, { default: t.name })} colors={cardColors(t.colors)} selected={selected === key} onselect={() => selectKey(key)}>
 					{#snippet actions()}
-						<Button size="sm" variant="secondary" onclick={() => edit(`builtin:${t.id}`)}>{#snippet icon()}<Copy />{/snippet}복제해서 편집</Button>
+						<Button size="sm" variant="secondary" onclick={() => edit(`builtin:${t.id}`)}>{#snippet icon()}<Copy />{/snippet}{$_("settings.themeSec.cloneEdit")}</Button>
 					{/snippet}
 				</ThemeCard>
 			{/each}
 		</div>
 	</Group>
 
-	<Group title="내 테마">
-		{#snippet aside()}<Button size="sm" onclick={() => edit("new")}>{#snippet icon()}<Plus />{/snippet}새 테마</Button>{/snippet}
+	<Group title={$_("settings.themeSec.myThemesGroup")}>
+		{#snippet aside()}<Button size="sm" onclick={() => edit("new")}>{#snippet icon()}<Plus />{/snippet}{$_("settings.themeSec.newTheme")}</Button>{/snippet}
 		<div class="gallery">
 			{#each list as t (t.filename ?? t.name)}
 				<ThemeCard name={t.name} colors={cardColors(t.colors)} selected={selected === t.filename} onselect={() => selectKey(t.filename ?? "default")} oncontextmenu={(e) => themeMenu(e, t)}>
 					{#snippet actions()}
-						<Button size="sm" variant="secondary" onclick={() => edit(t.filename ?? "")}>{#snippet icon()}<Pencil />{/snippet}편집</Button>
-						<Button size="sm" variant="secondary" aria-label="{t.name} 더 보기" onclick={(e) => openMenu(e, t)}>⋯</Button>
+						<Button size="sm" variant="secondary" onclick={() => edit(t.filename ?? "")}>{#snippet icon()}<Pencil />{/snippet}{$_("common.edit")}</Button>
+						<Button size="sm" variant="secondary" aria-label="{t.name} {$_('common.more')}" onclick={(e) => openMenu(e, t)}>⋯</Button>
 					{/snippet}
 				</ThemeCard>
 			{/each}
-			<button class="new-card" onclick={() => edit("new")}><Plus />새 테마 만들기</button>
+			<button class="new-card" onclick={() => edit("new")}><Plus />{$_("settings.themeSec.createTheme")}</button>
 		</div>
 	</Group>
 
-	<Group title="CSS 스니펫" flush>
-		{#snippet aside()}<Button size="sm" onclick={addSnippet}>{#snippet icon()}<Plus />{/snippet}새 스니펫</Button>{/snippet}
+	<Group title={$_("settings.themeSec.snippetsGroup")} flush>
+		{#snippet aside()}<Button size="sm" onclick={addSnippet}>{#snippet icon()}<Plus />{/snippet}{$_("settings.themeSec.newSnippet")}</Button>{/snippet}
 		{#each theme.snippets as s (s.id)}
 			<div class="snip" class:open={openSnippet === s.id}>
 				<div class="snip-head">
 					<button class="snip-name" aria-expanded={openSnippet === s.id} onclick={() => (openSnippet = openSnippet === s.id ? null : s.id)}>{s.name}</button>
-					<Switch checked={s.enabled} label="{s.name} 사용" hideLabel onchange={(v) => patchSnippet(s.id, { enabled: v })} />
+					<Switch checked={s.enabled} label={s.name} hideLabel onchange={(v) => patchSnippet(s.id, { enabled: v })} />
 				</div>
 				{#if openSnippet === s.id}
 					<div class="snip-body">
-						<Input value={s.name} aria-label="스니펫 이름" onchange={(e) => patchSnippet(s.id, { name: e.currentTarget.value.trim() || "이름 없음" })} />
-						<Textarea value={s.css} mono rows={8} spellcheck={false} aria-label="스니펫 CSS" onchange={(e) => patchSnippet(s.id, { css: e.currentTarget.value })} />
+						<Input value={s.name} aria-label="Snippet name" onchange={(e) => patchSnippet(s.id, { name: e.currentTarget.value.trim() || "Untitled" })} />
+						<Textarea value={s.css} mono rows={8} spellcheck={false} aria-label="Snippet CSS" onchange={(e) => patchSnippet(s.id, { css: e.currentTarget.value })} />
 						<div class="snip-foot">
-							<span class="faint small">입력칸에서 나가면 저장·적용됨</span>
-							<Button size="sm" variant="ghost" onclick={() => removeSnippet(s)}>{#snippet icon()}<Trash2 />{/snippet}삭제</Button>
+							<span class="faint small">{$_("settings.themeSec.snippetHint")}</span>
+							<Button size="sm" variant="ghost" onclick={() => removeSnippet(s)}>{#snippet icon()}<Trash2 />{/snippet}{$_("common.delete")}</Button>
 						</div>
 					</div>
 				{/if}
 			</div>
 		{:else}
-			<p class="faint small pad">스니펫 없음</p>
+			<p class="faint small pad">{$_("settings.themeSec.noSnippets")}</p>
 		{/each}
 	</Group>
 </Section>
 
-{#if menu}<ContextMenu at={menu.at} items={menu.items} label="테마 메뉴" onclose={() => (menu = null)} />{/if}
+{#if menu}<ContextMenu at={menu.at} items={menu.items} label={$_("settings.more.themeMenuAria")} onclose={() => (menu = null)} />{/if}
 
 <style>
 	.frame-ctrl {

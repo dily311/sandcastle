@@ -1,4 +1,5 @@
 <script lang="ts">
+	import { _ } from "svelte-i18n";
 	import { AudioLines, ChevronLeft, ChevronRight, ChevronsRight, Clock, Copy, DoorOpen, EyeOff, ImagePlus, Languages, LogOut, MapPin, Maximize2, MessageCircle, Minimize2, Pencil, Play, RefreshCw, ScrollText, Search, Send, Square, Volume2, VolumeX } from "@lucide/svelte";
 	import type { PlayAction } from "./playUtils";
 	import { HtmlView } from "$shared/ui";
@@ -84,7 +85,7 @@
 	const narration = $derived(isNarration(p.line));
 	/** 이 줄이 통째로 HTML 코드 블록이면 그 코드 (백엔드 대본 파서가 코드 블록을 한 줄로 둔다) */
 	const htmlCode = $derived(p.line ? wholeHtmlBlock(p.line.text) : null);
-	const text = $derived(p.line ? p.line.text || "…" : (p.sceneDescription ?? "장면이 시작됨"));
+	const text = $derived(p.line ? p.line.text || "…" : (p.sceneDescription ?? $_("gameUi.sceneStarted")));
 	const showLine = $derived(!p.scriptFinished && (p.line || p.sceneDescription));
 
 	function submit(e: SubmitEvent) {
@@ -107,12 +108,12 @@
 						if (e.key === "Enter" && (e.ctrlKey || e.metaKey)) p.onEditSave();
 					}}
 					rows="5"
-					aria-label="메시지 고치기"
+					aria-label={$_("gameUi.editMsgAria")}
 				></textarea>
 				<div class="edit-foot">
-					<span>한 줄에 하나씩 · 대사는 <code>이름: 내용</code> · Ctrl+Enter 저장</span>
-					<button class="g-btn" type="button" onclick={p.onEditCancel}>취소</button>
-					<button class="g-btn primary" type="button" disabled={p.isLoading || !p.editDraft.trim()} onclick={p.onEditSave}>저장</button>
+					<span>{$_("gameUi.editHint")} <code>{$_("gameUi.editFormat")}</code> {$_("gameUi.editSaveHint")}</span>
+					<button class="g-btn" type="button" onclick={p.onEditCancel}>{$_("common.cancel")}</button>
+					<button class="g-btn primary" type="button" disabled={p.isLoading || !p.editDraft.trim()} onclick={p.onEditSave}>{$_("common.save")}</button>
 				</div>
 			</div>
 		{:else if p.isLoading && p.streamingText?.trim()}
@@ -121,13 +122,13 @@
 		{:else if showLine}
 			{#if !narration && p.speakerName}<span class="speaker">{p.speakerName}</span>{/if}
 			{#if htmlCode}<div class="html-line"><HtmlView code={htmlCode} /></div>{/if}
-			<button class="line" type="button" onclick={p.onStageClick} disabled={!p.isReadingScript} title="다음 (Space)">
+			<button class="line" type="button" onclick={p.onStageClick} disabled={!p.isReadingScript} title={$_("gameUi.nextSpaceTitle")}>
 				<span class:narration>{htmlCode ? "" : text}</span>
 				{#if p.isReadingScript}<span class="next-mark" aria-hidden="true">▼</span>{/if}
 			</button>
 		{:else if p.scriptFinished}
 			{#if p.choices.length}
-				<ol class="choices" aria-label="선택지">
+				<ol class="choices" aria-label={$_("gameUi.choicesAria")}>
 					{#each p.choices as choice, i (choice.id)}
 						<li>
 							<button class="choice" disabled={p.isLoading} onclick={() => p.onChoose(choice.id)}>
@@ -138,7 +139,7 @@
 				</ol>
 			{/if}
 			{#if p.npcChoices.length}
-				<ol class="choices suggest" aria-label="이렇게 말해 보기">
+				<ol class="choices suggest" aria-label={$_("gameUi.suggestAria")}>
 					{#each p.npcChoices as choice, i (`${i}:${choice}`)}
 						<li>
 							<button class="choice" disabled={p.isLoading} onclick={() => p.onNpcChoice(choice)}>
@@ -150,9 +151,9 @@
 			{/if}
 			{#if p.sendError}
 				<p class="send-err" role="alert">
-					<span>보내지 못함 · {p.sendError}</span>
-					{#if p.onRetry}<button class="g-btn" type="button" disabled={p.isLoading} onclick={p.onRetry}><RefreshCw />다시 보내기</button>{/if}
-					<button class="g-icon" type="button" aria-label="오류 닫기" onclick={p.onDismissError}>×</button>
+					<span>{$_("gameUi.sendErrPrefix", { values: { msg: p.sendError } })}</span>
+					{#if p.onRetry}<button class="g-btn" type="button" disabled={p.isLoading} onclick={p.onRetry}><RefreshCw />{$_("gameUi.retryBtn")}</button>{/if}
+					<button class="g-icon" type="button" aria-label={$_("gameUi.dismissErrAria")} onclick={p.onDismissError}>×</button>
 				</p>
 			{/if}
 			{#if p.canSendInput}
@@ -160,19 +161,19 @@
 					<input
 						value={p.inputValue}
 						oninput={(e) => p.onInputChange(e.currentTarget.value)}
-						placeholder={p.inputPlaceholder ?? "하고 싶은 말 입력"}
-						aria-label={p.inputPlaceholder ?? "대화 입력"}
+						placeholder={p.inputPlaceholder ?? $_("gameUi.inputPlaceholder")}
+						aria-label={p.inputPlaceholder ?? $_("gameUi.inputAria")}
 						disabled={p.isLoading}
 					/>
 					{#if p.isLoading && p.onCancel}
-						<button class="g-btn primary" type="button" onclick={p.onCancel}><Square />멈추기</button>
+						<button class="g-btn primary" type="button" onclick={p.onCancel}><Square />{$_("gameUi.stopBtn")}</button>
 					{:else}
-						<button class="g-btn primary" type="submit" disabled={p.isLoading || !p.inputValue.trim()}><Send />보내기</button>
+						<button class="g-btn primary" type="submit" disabled={p.isLoading || !p.inputValue.trim()}><Send />{$_("gameUi.sendBtn")}</button>
 					{/if}
 				</form>
 			{:else if !p.choices.length && !p.npcChoices.length}
 				{#if p.actions?.length}
-					<ul class="acts" aria-label="다음에 할 일">
+					<ul class="acts" aria-label={$_("gameUi.nextActionsAria")}>
 						{#each p.actions as action (action.id)}
 							{@const Icon = actionIcon[action.kind]}
 							<li>
@@ -183,54 +184,54 @@
 						{/each}
 					</ul>
 				{:else}
-					<p class="idle">지금 할 수 있는 것이 없음</p>
+					<p class="idle">{$_("gameUi.nothingToDo")}</p>
 				{/if}
 			{/if}
 		{:else if p.isLoading}
-			<p class="idle">장면을 불러오는 중…</p>
+			<p class="idle">{$_("gameUi.loadingScene")}</p>
 		{/if}
 
 		{#if p.lineCount > 0 || p.canStopTalk || p.canEndScene}
 			<div class="foot">
 				{#if p.lineCount > 0}
-					<button class="g-icon" aria-label="이전 대사 (←)" title="이전 대사 (←)" onclick={p.onPrevious} disabled={p.isLoading || (p.lineIndex === 0 && !p.scriptFinished)}><ChevronLeft /></button>
-					<span class="progress" aria-label="대사 진행">
+					<button class="g-icon" aria-label={$_("gameUi.prevLineAria")} title={$_("gameUi.prevLineAria")} onclick={p.onPrevious} disabled={p.isLoading || (p.lineIndex === 0 && !p.scriptFinished)}><ChevronLeft /></button>
+					<span class="progress" aria-label={$_("gameUi.progressAria")}>
 						<span class="bar"><i style:width="{(Math.min(p.lineIndex + 1, p.lineCount) / p.lineCount) * 100}%"></i></span>
 						{Math.min(p.lineIndex + 1, p.lineCount)} / {p.lineCount}
 					</span>
-					<button class="g-icon" aria-label="다음 대사 (Space)" title="다음 대사 (Space)" onclick={p.onAdvance} disabled={p.isLoading || !p.isReadingScript}><ChevronRight /></button>
+					<button class="g-icon" aria-label={$_("gameUi.nextLineAria")} title={$_("gameUi.nextLineAria")} onclick={p.onAdvance} disabled={p.isLoading || !p.isReadingScript}><ChevronRight /></button>
 				{/if}
 				<span class="sp"></span>
-				{#if p.canStopTalk}<button class="g-btn stop" type="button" disabled={p.isLoading} onclick={p.onStopTalk}><LogOut />대화 끝내기</button>{/if}
-				{#if p.canEndScene && p.onEndScene}<button class="g-btn stop" type="button" disabled={p.isLoading} onclick={p.onEndScene} title="AI 서술을 멈추고 이 장면을 마침"><DoorOpen />장면 끝내기</button>{/if}
+				{#if p.canStopTalk}<button class="g-btn stop" type="button" disabled={p.isLoading} onclick={p.onStopTalk}><LogOut />{$_("gameUi.stopTalkBtn")}</button>{/if}
+				{#if p.canEndScene && p.onEndScene}<button class="g-btn stop" type="button" disabled={p.isLoading} onclick={p.onEndScene} title={$_("gameUi.endSceneTitle")}><DoorOpen />{$_("gameUi.endSceneBtn")}</button>{/if}
 			</div>
 		{/if}
 	</section>
 	<!-- 대사창 아래 동작 줄 (메시지 도구처럼) -->
-	<div class="actions" role="toolbar" aria-label="대사 동작">
-		<button class="act" title="이 대사 복사" aria-label="이 대사 복사" disabled={!showLine} onclick={p.onCopy}><Copy /></button>
-		<button class="act" title="이 응답 메시지 고치기" aria-label="메시지 고치기" disabled={!p.canEditMessage || p.editing} onclick={p.onEdit}><Pencil /></button>
-		<button class="act" title="이 응답 다시 만들기" aria-label="다시 만들기" disabled={!p.canEditMessage} onclick={p.onRegenerate}><RefreshCw /></button>
+	<div class="actions" role="toolbar" aria-label={$_("gameUi.dialogueActionsAria")}>
+		<button class="act" title={$_("gameUi.copyLineAria")} aria-label={$_("gameUi.copyLineAria")} disabled={!showLine} onclick={p.onCopy}><Copy /></button>
+		<button class="act" title={$_("gameUi.editReplyTitle")} aria-label={$_("gameUi.editMsgAria")} disabled={!p.canEditMessage || p.editing} onclick={p.onEdit}><Pencil /></button>
+		<button class="act" title={$_("gameUi.regenReplyTitle")} aria-label={$_("gameUi.regenAria")} disabled={!p.canEditMessage} onclick={p.onRegenerate}><RefreshCw /></button>
 		{#if p.onTranslate}
-			<button class="act" class:on={p.translated} title={p.translated ? "원문 보기" : "이 대사 번역"} aria-label="대사 번역" aria-pressed={p.translated} disabled={!showLine || p.translating} onclick={p.onTranslate}><Languages /></button>
+			<button class="act" class:on={p.translated} title={p.translated ? $_("gameUi.showOrigTitle") : $_("gameUi.translateLineTitle")} aria-label={$_("gameUi.translateLineAria")} aria-pressed={p.translated} disabled={!showLine || p.translating} onclick={p.onTranslate}><Languages /></button>
 		{/if}
 		{#if p.onSpeak}
-			<button class="act" class:on={p.speaking} title={p.speaking ? "읽기 멈추기" : "이 대사 소리 내어 읽기"} aria-label="대사 읽기" aria-pressed={p.speaking} disabled={!showLine} onclick={p.onSpeak}><AudioLines /></button>
+			<button class="act" class:on={p.speaking} title={p.speaking ? $_("gameUi.stopSpeakTitle") : $_("gameUi.speakLineTitle")} aria-label={$_("gameUi.speakLineAria")} aria-pressed={p.speaking} disabled={!showLine} onclick={p.onSpeak}><AudioLines /></button>
 		{/if}
 		{#if p.onDraw}
-			<button class="act" title="이 장면 그리기" aria-label="장면 그리기" disabled={!showLine || p.drawing} onclick={p.onDraw}><ImagePlus /></button>
+			<button class="act" title={$_("gameUi.drawSceneTitle")} aria-label={$_("gameUi.drawSceneAria")} disabled={!showLine || p.drawing} onclick={p.onDraw}><ImagePlus /></button>
 		{/if}
-		<button class="act" class:on={p.autoAdvance} title={p.autoAdvance ? "자동 넘김 멈추기" : "자동 넘김"} aria-label="자동 넘김" aria-pressed={p.autoAdvance} onclick={p.onToggleAuto}>
+		<button class="act" class:on={p.autoAdvance} title={p.autoAdvance ? $_("gameUi.stopAutoTitle") : $_("gameUi.autoTitle")} aria-label={$_("gameUi.autoTitle")} aria-pressed={p.autoAdvance} onclick={p.onToggleAuto}>
 			{#if p.autoAdvance}<Square />{:else}<Play />{/if}
 		</button>
-		<button class="act" title="이 장면 대사 끝까지 넘기기" aria-label="끝까지 넘기기" disabled={!p.isReadingScript} onclick={p.onSkip}><ChevronsRight /></button>
+		<button class="act" title={$_("gameUi.skipTitle")} aria-label={$_("gameUi.skipAria")} disabled={!p.isReadingScript} onclick={p.onSkip}><ChevronsRight /></button>
 		<span class="gap"></span>
-		<button class="act" title="지난 대사 (L)" aria-label="지난 대사" onclick={p.onLog}><ScrollText /></button>
-		<button class="act" title="대사창 숨기기 (H) · 무대를 누르면 다시 보임" aria-label="대사창 숨기기" onclick={p.onHide}><EyeOff /></button>
-		<button class="act" class:on={p.bgmMuted} title={p.bgmMuted ? "소리 켜기 (배경음·효과음)" : "소리 끄기 (배경음·효과음)"} aria-label="소리" aria-pressed={p.bgmMuted} onclick={p.onToggleMute}>
+		<button class="act" title={$_("gameUi.logTitle")} aria-label={$_("gameUi.logAria")} onclick={p.onLog}><ScrollText /></button>
+		<button class="act" title={$_("gameUi.hideUiTitle")} aria-label={$_("gameUi.hideUiAria")} onclick={p.onHide}><EyeOff /></button>
+		<button class="act" class:on={p.bgmMuted} title={p.bgmMuted ? $_("gameUi.unmuteTitle") : $_("gameUi.muteTitle")} aria-label={$_("gameUi.soundAria")} aria-pressed={p.bgmMuted} onclick={p.onToggleMute}>
 			{#if p.bgmMuted}<VolumeX />{:else}<Volume2 />{/if}
 		</button>
-		<button class="act" class:on={p.focusMode} title={p.focusMode ? "집중 모드 끄기" : "집중 모드 (사이드바 숨김)"} aria-label="집중 모드" aria-pressed={p.focusMode} onclick={p.onToggleFocus}>
+		<button class="act" class:on={p.focusMode} title={p.focusMode ? $_("gameUi.focusOffTitle") : $_("gameUi.focusOnTitle")} aria-label={$_("gameUi.focusAria")} aria-pressed={p.focusMode} onclick={p.onToggleFocus}>
 			{#if p.focusMode}<Minimize2 />{:else}<Maximize2 />{/if}
 		</button>
 	</div>

@@ -4,6 +4,7 @@
 </script>
 
 <script lang="ts">
+	import { _ } from "svelte-i18n";
 	import { isSlash, runSlash, slashQueue } from "$features/slash/commands";
 	import QuickReplyBar from "$features/slash/QuickReplyBar.svelte";
 	import { slashRuns } from "$features/slash/running.svelte";
@@ -73,10 +74,10 @@
 			lastCharNotice.id = id;
 			const own: string[] = [];
 			const preset = character?.defaultPromptPresetId;
-			if (preset && !conv.promptPresetId && preset !== appSetting.value?.selectedPreset) own.push(`프리셋 '${library.presets.find((p) => p.id === preset)?.name ?? "?"}'`);
+			if (preset && !conv.promptPresetId && preset !== appSetting.value?.selectedPreset) own.push($_("chatView.ownPreset", { values: { name: library.presets.find((p) => p.id === preset)?.name ?? "?" } }));
 			const persona = character?.defaultPersonaId;
-			if (persona && !conv.personaId && persona !== library.defaultPersonaId) own.push(`페르소나 '${library.persona(persona)?.name ?? "?"}'`);
-			if (own.length) toasts.info(`${character?.name} 전용 ${own.join(" · ")}(으)로 바꿈`);
+			if (persona && !conv.personaId && persona !== library.defaultPersonaId) own.push($_("chatView.ownPersona", { values: { name: library.persona(persona)?.name ?? "?" } }));
+			if (own.length) toasts.info($_("chatView.ownSwitchedToast", { values: { char: character?.name ?? "", items: own.join(" · ") } }));
 		});
 	});
 
@@ -128,17 +129,17 @@
 	// 오른쪽 패널 탭은 타이틀바에 그려진다
 	$effect(() =>
 		panel.register([
-			{ id: "settings", label: "대화 설정", icon: SlidersHorizontal },
-			{ id: "context", label: "컨텍스트·프리셋", icon: Gauge },
-			{ id: "toc", label: "목차", icon: ListTree },
-			{ id: "bookmarks", label: "북마크", icon: Bookmark },
-			...(plugins.on("summary") || plugins.on("memory") ? [{ id: "memory", label: "메모리", icon: Database }] : []),
-			...(plugins.on("lint") ? [{ id: "lint", label: "linter", icon: SpellCheck }] : []),
-			{ id: "branches", label: "분기", icon: GitBranch },
-			{ id: "assets", label: "에셋", icon: Images },
-			...(plugins.on("slash") ? [{ id: "quickreply", label: "빠른 답장", icon: Zap }] : []),
-			...(plugins.on("status") ? [{ id: "status", label: "상태", icon: Variable }] : []),
-			{ id: "theme", label: "테마", icon: Palette },
+			{ id: "settings", label: $_("chatView.tabSettings"), icon: SlidersHorizontal },
+			{ id: "context", label: $_("chatView.tabContext"), icon: Gauge },
+			{ id: "toc", label: $_("chatView.tabToc"), icon: ListTree },
+			{ id: "bookmarks", label: $_("chatView.tabBookmarks"), icon: Bookmark },
+			...(plugins.on("summary") || plugins.on("memory") ? [{ id: "memory", label: $_("chatView.tabMemory"), icon: Database }] : []),
+			...(plugins.on("lint") ? [{ id: "lint", label: $_("chatView.tabLint"), icon: SpellCheck }] : []),
+			{ id: "branches", label: $_("chatView.tabBranches"), icon: GitBranch },
+			{ id: "assets", label: $_("chatView.tabAssets"), icon: Images },
+			...(plugins.on("slash") ? [{ id: "quickreply", label: $_("chatView.tabQuickReply"), icon: Zap }] : []),
+			...(plugins.on("status") ? [{ id: "status", label: $_("chatView.tabStatus"), icon: Variable }] : []),
+			{ id: "theme", label: $_("chatView.tabTheme"), icon: Palette },
 		]),
 	);
 
@@ -288,7 +289,7 @@
 	const MAX_ATTACH = 6;
 	function attach(files: File[]) {
 		const imgs = files.filter(isImage).slice(0, Math.max(0, MAX_ATTACH - pending.length));
-		if (imgs.length < files.filter(isImage).length) toasts.info(`이미지는 한 번에 ${MAX_ATTACH}장까지`);
+		if (imgs.length < files.filter(isImage).length) toasts.info($_("chatView.maxAttachToast", { values: { max: MAX_ATTACH } }));
 		pending = [...pending, ...imgs.map((file) => ({ file, url: URL.createObjectURL(file) }))];
 	}
 	function unattach(i: number) {
@@ -338,8 +339,8 @@
 			priority: 1,
 			// 읽는 영역에 놓은 것만 (오른쪽 패널은 에셋·프리셋이 받음)
 			zone: () => readerEl,
-			label: "이미지 첨부 · 대화 가져오기",
-			hint: "이미지는 다음 메시지에 붙고, SillyTavern 채팅(.jsonl)은 이 캐릭터의 대화로 들어옴",
+			label: $_("chatView.dropLabel"),
+			hint: $_("chatView.dropHint"),
 			accept: (f) => isImage(f) || extOf(f) === "jsonl",
 			ondrop: async (files) => {
 				attach(files.filter(isImage));
@@ -394,7 +395,7 @@
 	// ---- 챕터 이름 바꾸기 (오른쪽 클릭 / 꾹 누르기) ----
 	async function renameChapter(m: Message) {
 		const cur = metaOf(m).chapter ?? "";
-		const t = await promptText({ title: "챕터 이름 바꾸기", message: "비우면 챕터 표시를 지움", input: { value: cur, placeholder: "챕터 제목" }, confirmLabel: "바꾸기" });
+		const t = await promptText({ title: $_("chatView.renameChapterTitle"), message: $_("chatView.renameChapterMsg"), input: { value: cur, placeholder: $_("chatView.chapterPlaceholder") }, confirmLabel: $_("chatView.renameConfirm") });
 		if (t === null || t === undefined) return;
 		await session?.setChapter(m, t.trim() || null);
 	}
@@ -443,9 +444,9 @@
 	}
 	async function removePicked() {
 		if (!session || !picked.size) return;
-		if (!(await confirmAction({ title: "메시지 삭제", message: `고른 메시지 ${picked.size}개를 지움. 되돌릴 수 없음`, confirmLabel: `${picked.size}개 삭제`, danger: true }))) return;
+		if (!(await confirmAction({ title: $_("chatView.deleteMsgsTitle"), message: $_("chatView.deleteMsgsMsg", { values: { count: picked.size } }), confirmLabel: $_("chatView.deleteCountBtn", { values: { count: picked.size } }), danger: true }))) return;
 		const n = await session.removeMany([...picked]);
-		toasts.success(`${n}개 지움`);
+		toasts.success($_("chatView.deletedCountToast", { values: { count: n } }));
 		selecting = false;
 		picked = new Set();
 	}
@@ -500,11 +501,11 @@
 		const parent = (c.meta as { branch?: { parentId: string } } | null)?.branch?.parentId;
 		const folders = library.foldersOf(charId ?? "");
 		return [
-			...(charId ? [{ label: "캐릭터 페이지로", icon: UserRound, onselect: () => nav.go({ page: "character", charId: charId ?? undefined }) }] : []),
-			{ label: "이름 바꾸기", icon: Pencil, separator: !!charId, onselect: startRename },
-			{ label: c.pinned ? "고정 풀기" : "고정", icon: c.pinned ? PinOff : Pin, onselect: () => library.togglePin(convId) },
+			...(charId ? [{ label: $_("chatView.goCharPage"), icon: UserRound, onselect: () => nav.go({ page: "character", charId: charId ?? undefined }) }] : []),
+			{ label: $_("chatView.renameMenu"), icon: Pencil, separator: !!charId, onselect: startRename },
+			{ label: c.pinned ? $_("chatView.unpinMenu") : $_("chatView.pinMenu"), icon: c.pinned ? PinOff : Pin, onselect: () => library.togglePin(convId) },
 			{
-				label: "복제 (포크)",
+				label: $_("chatView.forkMenu"),
 				icon: Copy,
 				separator: true,
 				onselect: async () => {
@@ -513,7 +514,7 @@
 				},
 			},
 			{
-				label: "마지막 메시지에서 분기",
+				label: $_("chatView.branchLastMenu"),
 				icon: GitBranch,
 				disabled: !c.messageCount,
 				onselect: async () => {
@@ -521,22 +522,22 @@
 					if (!last) return;
 					const b = await library.branch(convId, last.id);
 					nav.go({ page: "character", charId, convId: b.id });
-					toasts.success("분기를 만듦");
+					toasts.success($_("chatView.branchCreatedToast"));
 				},
 			},
 			...(parent && library.conversation(parent)
-				? [{ label: "갈라져 나온 대화로", icon: CornerUpLeft, onselect: () => nav.go({ page: "character", charId, convId: parent }) }]
+				? [{ label: $_("chatView.goParentMenu"), icon: CornerUpLeft, onselect: () => nav.go({ page: "character", charId, convId: parent }) }]
 				: []),
 			...folders.map((f, i) => ({
-				label: `폴더로 이동: ${f.name}`,
+				label: $_("chatView.moveFolderMenu", { values: { name: f.name } }),
 				icon: Folder,
 				separator: i === 0,
 				checked: c.folderId === f.id,
 				onselect: () => library.move(c.id, f.id),
 			})),
-			...(c.folderId ? [{ label: "폴더에서 빼기", icon: FolderMinus, onselect: () => library.move(convId, null) }] : []),
-			{ label: "내보내기…", icon: Download, separator: true, onselect: () => convActions.exportMenu(c) },
-			{ label: "삭제", icon: Trash2, danger: true, onselect: () => convActions.remove(c) },
+			...(c.folderId ? [{ label: $_("chatView.removeFolderMenu"), icon: FolderMinus, onselect: () => library.move(convId, null) }] : []),
+			{ label: $_("chatView.exportMenu"), icon: Download, separator: true, onselect: () => convActions.exportMenu(c) },
+			{ label: $_("common.delete"), icon: Trash2, danger: true, onselect: () => convActions.remove(c) },
 
 		]
 	})
@@ -549,7 +550,7 @@
 	async function startRename() {
 		if (!conv) return;
 		const cur = conv.title ?? "";
-		const t = await promptText({ title: "대화방 이름 변경", input: { value: cur, placeholder: "대화방 이름" }, confirmLabel: "바꾸기" });
+		const t = await promptText({ title: $_("chatView.renameConvTitle"), input: { value: cur, placeholder: $_("chatView.renameConvPlaceholder") }, confirmLabel: $_("chatView.renameConfirm") });
 		if (t === null || t === undefined) return;
 		if (draft.trim() && draft.trim() !== conv.title) await library.rename(conv.id, draft);
 	}
@@ -569,10 +570,10 @@
 	<section class="reader" bind:this={readerEl}>
 		<header class="bar" class:listing={listShown}>
 			<div class="left">
-				<IconButton label={listShown ? "대화 목록 닫기" : "대화 목록 열기"} size="sm" active={listShown} onclick={toggleList}><Scroll /></IconButton>
+				<IconButton label={listShown ? $_("chatView.closeListAria") : $_("chatView.openListAria")} size="sm" active={listShown} onclick={toggleList}><Scroll /></IconButton>
 				<!-- <div class="branch-nav">
 					{#if path.length > 1}
-						<nav class="bpath" aria-label="분기 경로">
+						<nav class="bpath" aria-label={$_("uiPolish.branchPathAria")}>
 							<GitBranch />
 							{#each path.slice(0, -1) as step, i (step.conv?.id ?? `gone-${i}`)}
 								{#if step.conv}
@@ -595,23 +596,23 @@
 				</div> -->
 			</div>
 			<div>
-				<IconButton label="읽기 모드" size="sm" onclick={toReadMode}><BookOpen /></IconButton>
-				<IconButton label={"세부 정보"} size="sm" onclick={openMenu}><EllipsisVertical /></IconButton>
+				<IconButton label={$_("chatView.readModeAria")} size="sm" onclick={toReadMode}><BookOpen /></IconButton>
+				<IconButton label={$_("chatView.detailsAria")} size="sm" onclick={openMenu}><EllipsisVertical /></IconButton>
 				<ContextMenu
 					at={menu}
-					label="파일 관리"
+					label={$_("chatView.fileMenuAria")}
 					items={menuItems}
 					onclose={() => (menu = null)}
 				/>
 			</div>
 		</header>
 		{#if selecting}
-			<div class="selbar" role="toolbar" aria-label="메시지 선택">
-				<b>{picked.size}개 선택</b>
-				<Button size="sm" variant="ghost" onclick={pickAll}>{picked.size === (session?.messages.length ?? 0) && picked.size ? "모두 해제" : "모두 선택"}</Button>
+			<div class="selbar" role="toolbar" aria-label={$_("chatView.selectToolbarAria")}>
+				<b>{$_("chatView.selectedCount", { values: { count: picked.size } })}</b>
+				<Button size="sm" variant="ghost" onclick={pickAll}>{picked.size === (session?.messages.length ?? 0) && picked.size ? $_("chatView.deselectAll") : $_("chatView.selectAll")}</Button>
 				<span class="sp"></span>
-				<Button size="sm" variant="danger" disabled={!picked.size} onclick={removePicked}>{#snippet icon()}<Trash2 />{/snippet}삭제</Button>
-				<IconButton label="선택 끝내기" size="sm" onclick={cancelPicked}><X /></IconButton>
+				<Button size="sm" variant="danger" disabled={!picked.size} onclick={removePicked}>{#snippet icon()}<Trash2 />{/snippet}{$_("common.delete")}</Button>
+				<IconButton label={$_("chatView.endSelectAria")} size="sm" onclick={cancelPicked}><X /></IconButton>
 			</div>
 		{/if}
 
@@ -627,21 +628,21 @@
 			{#if !session || session.loading}
 				<div class="center"><Spinner /></div>
 			{:else if !conv}
-				<EmptyState title="대화를 찾을 수 없음" description="지워졌거나 아직 불러오지 못함" />
+				<EmptyState title={$_("chatView.notFoundTitle")} description={$_("chatView.notFoundDesc")} />
 			{:else}
 				<article class="text sc-chat-log">
 					{#if !session.messages.length && !session.live}
-						<p class="empty">첫 메시지를 보내 보세요</p>
+						<p class="empty">{$_("chatView.emptyChatHint")}</p>
 					{/if}
 					{#if start > 0}
-						<button class="earlier" onclick={() => showEarlier()}>이전 메시지 {Math.min(PAGE, start)}개 더 보기 <small>(앞에 {start}개)</small></button>
+						<button class="earlier" onclick={() => showEarlier()}>{$_("chatView.showEarlier", { values: { count: Math.min(PAGE, start) } })} <small>{$_("chatView.earlierRemaining", { values: { count: start } })}</small></button>
 					{/if}
 					{#each visible as m, j (m.id)}
 						{@const i = start + j}
 						{@const ch = metaOf(m).chapter}
 						{#if ch}
 							<!-- svelte-ignore a11y_no_noninteractive_element_interactions (오른쪽 클릭·꾹 누르기로 이름 바꾸기, 키보드는 메시지 동작의 챕터 버튼) -->
-							<h2 class="chapter sc-chapter" id="chapter-{m.id}" title="오른쪽 클릭하거나 꾹 눌러 이름 바꾸기" oncontextmenu={(e) => { e.preventDefault(); void renameChapter(m); }} onpointerdown={(e) => pressStart(e, m)} onpointerup={pressEnd} onpointerleave={pressEnd}><span>{chapters[m.id]}장</span>{ch}</h2>
+							<h2 class="chapter sc-chapter" id="chapter-{m.id}" title={$_("chatView.chapterTitle")} oncontextmenu={(e) => { e.preventDefault(); void renameChapter(m); }} onpointerdown={(e) => pressStart(e, m)} onpointerup={pressEnd} onpointerleave={pressEnd}><span>{$_("chatView.chapterNum", { values: { num: chapters[m.id] } })}</span>{ch}</h2>
 						{/if}
 						<MessageItem msg={m} no={i + 1} avatar={avatarOf(m)} avatarFit={ownerOf(m)?.avatarFit} {session} images={pickVariants(imageVariants, m.id)} isLast={i === session.messages.length - 1} onbranch={branch} onprompt={showPrompt} {selecting} selected={picked.has(m.id)} onselect={pick} marks={marksByMsg.get(m.id)} oncard={cardFromMark} onmarkremove={removeMark} pinnedKeys={selectedPinKeys} />
 					{/each}
@@ -649,13 +650,13 @@
 					{#if session.live?.kind === "send"}
 						{#if session.live.userText || session.live.userImages}
 							<div class="block user pending sc-msg sc-msg-user sc-msg-live">
-								<div class="who sc-msg-head"><span class="no sc-msg-no">#{session.messages.length + 1}</span><b class="sc-msg-name">{library.persona(library.convPersonaId(conv))?.name ?? "나"}</b><span class="stamp">보내는 중…</span></div>
-								{#if session.live.userImages}<div class="attach-strip">{#each session.live.userImages as u (u)}<img src={u} alt="첨부 이미지" />{/each}</div>{/if}
+								<div class="who sc-msg-head"><span class="no sc-msg-no">#{session.messages.length + 1}</span><b class="sc-msg-name">{library.persona(library.convPersonaId(conv))?.name ?? $_("chatView.meFallback")}</b><span class="stamp">{$_("chatView.sendingStamp")}</span></div>
+								{#if session.live.userImages}<div class="attach-strip">{#each session.live.userImages as u (u)}<img src={u} alt={$_("chatView.attachedImgAlt")} />{/each}</div>{/if}
 								{#if session.live.userText}<p>{session.live.userText}</p>{/if}
 							</div>
 						{/if}
 						<div class="block ai sc-msg sc-msg-ai sc-msg-live">
-							<div class="who sc-msg-head"><b class="sc-msg-name">{character?.name ?? "AI"}</b><span class="stamp">생성 중…</span></div>
+							<div class="who sc-msg-head"><b class="sc-msg-name">{character?.name ?? "AI"}</b><span class="stamp">{$_("chatView.generatingStamp")}</span></div>
 							{#if liveBlocks.length}
 								<RichText blocks={liveBlocks} {images} />
 							{:else}
@@ -669,11 +670,11 @@
 
 		<div class="composer sc-composer">
 			{#if pending.length}
-				<div class="attach-strip pending-strip" aria-label="붙일 이미지">
+				<div class="attach-strip pending-strip" aria-label={$_("chatView.attachStripAria")}>
 					{#each pending as p, i (p.url)}
 						<span class="thumb">
 							<img src={p.url} alt={p.file.name} title={p.file.name} />
-							<button type="button" aria-label="{p.file.name} 빼기" onclick={() => unattach(i)}><X /></button>
+							<button type="button" aria-label={$_("chatView.removeAttachAria", { values: { name: p.file.name } })} onclick={() => unattach(i)}><X /></button>
 						</span>
 					{/each}
 				</div>
@@ -689,16 +690,16 @@
 					void send();
 				}}
 			>
-				<IconButton label="추가 기능" onclick={openPlus} disabled={!session || session.busy}><Plus /></IconButton>
+				<IconButton label={$_("chatView.plusMenuAria")} onclick={openPlus} disabled={!session || session.busy}><Plus /></IconButton>
 				{#if session && plugins.on("ghostwrite")}
 					<Ghostwrite convId={session.convId} getDraft={() => draft} setDraft={(v) => (draft = v)} disabled={session.busy} />
 				{/if}
-				<Textarea class="sc-input" bind:value={draft} rows={1} autosize maxRows={8} placeholder={!layout.desktop ? "메시지 입력" : appSetting.sendOnEnter ? "메시지 입력 (Shift+Enter 줄바꿈)" : "메시지 입력 (Ctrl+Enter 보내기)"} aria-label="메시지" readonly={!!session && ghost.isRunning(session.convId)} {onkeydown} {onpaste} />
+				<Textarea class="sc-input" bind:value={draft} rows={1} autosize maxRows={8} placeholder={!layout.desktop ? $_("chatView.inputPlaceholderMobile") : appSetting.sendOnEnter ? $_("chatView.inputPlaceholderEnter") : $_("chatView.inputPlaceholderCtrlEnter")} aria-label={$_("chatView.inputAria")} readonly={!!session && ghost.isRunning(session.convId)} {onkeydown} {onpaste} />
 				{#if session && (session.busy || slashRuns.isRunning(session.convId))}
 					<!-- 스크립트가 돌면 스크립트째 멈춤 (5-E-20-6-8), 아니면 응답만 -->
-					<IconButton label={slashRuns.isRunning(session.convId) ? "스크립트 멈추기" : "멈추기 (받은 데까지 저장)"} variant="solid" onclick={() => (session && slashRuns.isRunning(session.convId) ? slashRuns.stop(session.convId, session) : session?.cancel())}><Square /></IconButton>
+					<IconButton label={slashRuns.isRunning(session.convId) ? $_("chatView.stopScriptAria") : $_("chatView.stopGenAria")} variant="solid" onclick={() => (session && slashRuns.isRunning(session.convId) ? slashRuns.stop(session.convId, session) : session?.cancel())}><Square /></IconButton>
 				{:else}
-					<IconButton class="sc-send-button" label="보내기" variant="solid" type="submit" disabled={sending}><Send /></IconButton>
+					<IconButton class="sc-send-button" label={$_("chatView.sendAria")} variant="solid" type="submit" disabled={sending}><Send /></IconButton>
 				{/if}
 			</form>
 		</div>
@@ -716,29 +717,29 @@
 		/>
 		<ContextMenu
 			at={plusMenu}
-			label="추가 기능"
+			label={$_("chatView.plusMenuAria")}
 			items={[
-				{ label: "이미지 첨부", icon: ImagePlus, disabled: pending.length >= MAX_ATTACH, onselect: () => fileInput?.click() },
+				{ label: $_("chatView.attachImgMenu"), icon: ImagePlus, disabled: pending.length >= MAX_ATTACH, onselect: () => fileInput?.click() },
 				...(plugins.on("translate")
-					? [{ label: "입력 번역", icon: Languages, disabled: !draft.trim(), onselect: async () => (draft = await translateInput(draft).catch(() => draft)) }]
+					? [{ label: $_("chatView.translateInputMenu"), icon: Languages, disabled: !draft.trim(), onselect: async () => (draft = await translateInput(draft).catch(() => draft)) }]
 					: []),
-				{ label: "이어서 응답 받기", icon: FastForward, separator: true, onselect: () => session?.continueLast() },
+				{ label: $_("chatView.continueMenu"), icon: FastForward, separator: true, onselect: () => session?.continueLast() },
 				{
-					label: "마지막 응답 재생성",
+					label: $_("chatView.regenLastMenu"),
 					icon: RefreshCw,
 					disabled: session?.last?.role !== "assistant",
 					onselect: () => session?.regenerate(true),
 				},
-				{ label: listShown ? "대화 목록 닫기" : "대화 목록 열기", icon: PanelLeft, separator: true, onselect: toggleList },
-				{ label: "메시지 여러 개 지우기", icon: ListChecks, disabled: !session?.messages.length, onselect: startSelect },
-				...(parentConv ? [{ label: "갈라져 나온 대화로", icon: CornerUpLeft, onselect: goParent }] : []),
+				{ label: listShown ? $_("chatView.closeListAria") : $_("chatView.openListAria"), icon: PanelLeft, separator: true, onselect: toggleList },
+				{ label: $_("chatView.multiDeleteMenu"), icon: ListChecks, disabled: !session?.messages.length, onselect: startSelect },
+				...(parentConv ? [{ label: $_("chatView.goParentMenu"), icon: CornerUpLeft, onselect: goParent }] : []),
 			]}
 			onclose={() => (plusMenu = null)}
 		/>
 	</section>
 
 	{#if panel.open && conv && session}
-		<SidePanel label="대화 패널">
+		<SidePanel label={$_("chatView.sidePanelAria")}>
 			<ChatPanel {conv} {session} {chapters} onjump={jumpFromPanel} oncard={cardFromMark} onopen={openAt} draft={{ get: () => draft, set: (v) => (draft = v) }} />
 		</SidePanel>
 	{/if}

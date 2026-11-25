@@ -1,4 +1,5 @@
 <script lang="ts">
+	import { _ } from "svelte-i18n";
 	// 게임 플레이 화면의 오른쪽 패널
 	// - 공통 탭(대화 설정 · 컨텍스트·프리셋 · 분기)은 GameSessionTabs
 	// - 게임 탭: 이동·행동 / 지도 (GameWorldTabs), 상태(지금 장면·주변·변수) / 관계 / 소지품
@@ -17,7 +18,7 @@
 	const shared = new Set(["settings", "context", "branches"]);
 
 	const view = $derived(gameStore.view);
-	const charName = (id: string) => (id === "player" ? "나" : (view?.characters.find((c) => c.id === id)?.name ?? id));
+	const charName = (id: string) => (id === "player" ? $_("gameUi.meFallback") : (view?.characters.find((c) => c.id === id)?.name ?? id));
 
 	// ---- 변수: 지금 세워진 값 ----
 	const vars = $derived(
@@ -29,11 +30,11 @@
 	);
 
 	// ---- 관계: "from>to" → 나와 관련된 것 먼저 ----
-	const AXES = [
-		["affection", "호감"],
-		["trust", "신뢰"],
-		["tension", "긴장"],
-	] as const;
+	const AXES = $derived([
+		["affection", $_("gameUi.axisAffection")],
+		["trust", $_("gameUi.axisTrust")],
+		["tension", $_("gameUi.axisTension")],
+	] as const);
 	const relations = $derived(
 		Object.entries((runtimeStore.relationships ?? {}) as Record<string, RelationshipDetail>)
 			.map(([k, r]) => {
@@ -68,7 +69,7 @@
 				{#if rel.r.tags?.length}<div class="tags">{#each rel.r.tags as t (t)}<span>{t}</span>{/each}</div>{/if}
 			</section>
 		{:else}
-			<p class="panel-none">아직 관계 기록 없음</p>
+			<p class="panel-none">{$_("gameUi.noRelations")}</p>
 		{/each}
 	</div>
 {:else if panel.tab === "items"}
@@ -76,43 +77,43 @@
 		{#each runtimeStore.inventoryEntries as entry (entry.itemId)}
 			<div class="item">
 				<div class="t">
-					<b>{entry.item?.name ?? "알 수 없는 아이템"}</b>
+					<b>{entry.item?.name ?? $_("gameUi.unknownItem")}</b>
 					{#if entry.item?.description}<small>{entry.item.description}</small>{/if}
 				</div>
 				<span class="qty">× {entry.quantity}</span>
 			</div>
 		{:else}
-			<p class="panel-none">가진 것 없음</p>
+			<p class="panel-none">{$_("gameUi.noItems")}</p>
 		{/each}
 	</div>
 {:else}
 	<div class="panel-body">
 		<section>
-			<h4>지금</h4>
+			<h4>{$_("gameUi.nowHeading")}</h4>
 			<ul class="facts">
-				<li><MapPin /><span>{runtimeStore.currentLocation?.name ?? "위치 없음"}</span>{#if runtimeStore.currentMap}<small>{runtimeStore.currentMap.name}</small>{/if}</li>
+				<li><MapPin /><span>{runtimeStore.currentLocation?.name ?? $_("gameUi.noLocation")}</span>{#if runtimeStore.currentMap}<small>{runtimeStore.currentMap.name}</small>{/if}</li>
 				<li><Clock3 /><span>{formatGameTime(runtimeStore.gameTime)}</span></li>
 				{#if runtimeStore.currentWeather}<li><CloudSun /><span>{runtimeStore.currentWeather.name}</span></li>{/if}
-				<li><Film /><span>{runtimeStore.currentScene?.name ?? "자유 행동"}</span>{#if runtimeStore.currentScene}<small>씬 진행 중</small>{/if}</li>
+				<li><Film /><span>{runtimeStore.currentScene?.name ?? $_("gameUi.freeRoam")}</span>{#if runtimeStore.currentScene}<small>{$_("gameUi.inScene")}</small>{/if}</li>
 			</ul>
 		</section>
 		<section>
-			<h4>여기 있는 사람 <span class="faint">{runtimeStore.nearbyCharacters.length}</span></h4>
+			<h4>{$_("gameUi.nearbyHeading")} <span class="faint">{runtimeStore.nearbyCharacters.length}</span></h4>
 			{#each runtimeStore.nearbyCharacters as c (c.id)}
-				<div class="person"><User /><span>{c.name}</span>{#if c.id === runtimeStore.activeNpcId}<small>대화 중</small>{/if}</div>
+				<div class="person"><User /><span>{c.name}</span>{#if c.id === runtimeStore.activeNpcId}<small>{$_("gameUi.talkingBadge")}</small>{/if}</div>
 			{:else}
-				<p class="empty">아무도 없음</p>
+				<p class="empty">{$_("gameUi.noOneHere")}</p>
 			{/each}
 		</section>
 		{#if runtimeStore.localInteractables.length}
 			<section>
-				<h4>살펴볼 것</h4>
+				<h4>{$_("gameUi.interactHeading")}</h4>
 				<div class="tags">{#each runtimeStore.localInteractables as it (it.id)}<span>{it.name}</span>{/each}</div>
 			</section>
 		{/if}
 		{#if vars.length}
 			<section>
-				<h4>변수</h4>
+				<h4>{$_("gameUi.varsHeading")}</h4>
 				<dl class="vars">
 					{#each vars as v (v.key)}
 						<dt title={v.desc ?? ""}>{v.key}</dt>

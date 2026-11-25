@@ -2,6 +2,7 @@
 	// 단가표 (CLAUDE.md 1-A-3, ADR-007): 모델별 단가를 사용자가 적는다. 앱은 가격을 넣어 두지 않는다(가격은 바뀐다).
 	// 사용량 × 단가 = "추정" 금액. 실행 기록 화면이 열려 있을 때만 불러온다
 	import { onMount } from "svelte";
+	import { _ } from "svelte-i18n";
 	import { Plus, Trash2 } from "@lucide/svelte";
 	import type { ModelPrice } from "$ipc/bindings";
 	import { Button, IconButton, Input } from "$shared/ui";
@@ -51,7 +52,7 @@
 	}
 	async function save(r: Row) {
 		await call(commands.upsertModelPrice({ model: r.model, currency: r.currency, inputPerMtok: num(r.input), outputPerMtok: num(r.output), per1kChars: num(r.chars), perImage: num(r.image) }), src);
-		toasts.success("단가를 저장함");
+		toasts.success($_("settings.priceTable.savedToast"));
 		await load();
 		onchanged?.();
 	}
@@ -68,28 +69,28 @@
 	}
 </script>
 
-<p class="lead">공급자 요금표를 보고 직접 적는다. 앱은 가격을 넣어 두지 않으며 금액은 모두 <b>추정</b>임. 비운 칸은 0으로 계산.</p>
-<div class="table" role="table" aria-label="모델별 단가">
+<p class="lead">{$_("settings.priceTable.leadPrefix")}<b>{$_("settings.priceTable.leadBold")}</b>{$_("settings.priceTable.leadSuffix")}</p>
+<div class="table" role="table" aria-label={$_("settings.priceTable.tableAria")}>
 	<div class="head" role="row">
-		<span role="columnheader">모델</span>
-		<span role="columnheader">통화</span>
-		<span role="columnheader">입력 /100만 토큰</span>
-		<span role="columnheader">출력 /100만 토큰</span>
+		<span role="columnheader">{$_("settings.priceTable.colModel")}</span>
+		<span role="columnheader">{$_("settings.priceTable.colCurrency")}</span>
+		<span role="columnheader">{$_("settings.priceTable.colInput")}</span>
+		<span role="columnheader">{$_("settings.priceTable.colOutput")}</span>
 		<span></span>
 	</div>
 	{#each rows as r (r.model)}
 		<div class="row" role="row">
 			<code class="model" title={r.model}>{r.model}</code>
-			<Input class="cur" value={r.currency} maxlength={4} aria-label="통화 기호" oninput={(e) => field(r, "currency", e.currentTarget.value)} />
-			<Input type="number" min="0" step="any" value={r.input} aria-label="입력 100만 토큰당" oninput={(e) => field(r, "input", e.currentTarget.value)} />
-			<Input type="number" min="0" step="any" value={r.output} aria-label="출력 100만 토큰당" oninput={(e) => field(r, "output", e.currentTarget.value)} />
+			<Input class="cur" value={r.currency} maxlength={4} aria-label={$_("settings.priceTable.currencyAria")} oninput={(e) => field(r, "currency", e.currentTarget.value)} />
+			<Input type="number" min="0" step="any" value={r.input} aria-label={$_("settings.priceTable.inputAria")} oninput={(e) => field(r, "input", e.currentTarget.value)} />
+			<Input type="number" min="0" step="any" value={r.output} aria-label={$_("settings.priceTable.outputAria")} oninput={(e) => field(r, "output", e.currentTarget.value)} />
 			<span class="acts">
-				<Button size="sm" variant="primary" disabled={!dirty(r)} onclick={() => save(r)}>저장</Button>
-				{#if r.saved || drafts[r.model]}<IconButton label="단가 지우기" size="sm" onclick={() => remove(r)}><Trash2 /></IconButton>{/if}
+				<Button size="sm" variant="primary" disabled={!dirty(r)} onclick={() => save(r)}>{$_("common.save")}</Button>
+				{#if r.saved || drafts[r.model]}<IconButton label={$_("settings.priceTable.deleteAria")} size="sm" onclick={() => remove(r)}><Trash2 /></IconButton>{/if}
 			</span>
 		</div>
 	{:else}
-		<p class="empty">아직 쓴 모델이 없음. 아래에서 모델 이름으로 추가할 수 있음</p>
+		<p class="empty">{$_("settings.priceTable.empty")}</p>
 	{/each}
 </div>
 <form
@@ -99,8 +100,8 @@
 		add();
 	}}
 >
-	<Input bind:value={newModel} placeholder="모델 이름 (사용 기록의 모델명과 같게)" aria-label="추가할 모델 이름" />
-	<Button size="sm" type="submit" disabled={!newModel.trim()}>{#snippet icon()}<Plus />{/snippet}모델 추가</Button>
+	<Input bind:value={newModel} placeholder={$_("settings.priceTable.addPlaceholder")} aria-label={$_("settings.priceTable.addAria")} />
+	<Button size="sm" type="submit" disabled={!newModel.trim()}>{#snippet icon()}<Plus />{/snippet}{$_("settings.priceTable.addBtn")}</Button>
 </form>
 
 <style>

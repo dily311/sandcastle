@@ -1,4 +1,6 @@
 <script lang="ts">
+	import { _ } from "svelte-i18n";
+	import { getAppLocale } from "$lib/utils/i18n";
 	import { regexVersion } from "$shared/stores/regexVersion.svelte";
 	import { onMount, tick } from "svelte";
 	import { BookOpen, ChevronLeft, ChevronsDownUp, ChevronsUpDown, Copy, ExternalLink, Eye, FileSearch, ImagePlus, Languages, Menu, MessageCircle, MessageCirclePlus, Pencil, Plus, RefreshCw, Send, Square, Trash2, UserRoundPen, Volume2, X } from "@lucide/svelte";
@@ -261,8 +263,9 @@
 		speaker?: string;
 		pending?: boolean;
 	}
-	const day = (t: number) => new Date(t).toLocaleDateString("ko-KR", { year: "numeric", month: "long", day: "numeric", weekday: "long" });
-	const hm = (t: number) => new Date(t).toLocaleTimeString("ko-KR", { hour: "numeric", minute: "2-digit" });
+	const dateLoc = $derived(getAppLocale() === "en" ? "en-US" : "ko-KR");
+	const day = (t: number) => new Date(t).toLocaleDateString(dateLoc, { year: "numeric", month: "long", day: "numeric", weekday: "long" });
+	const hm = (t: number) => new Date(t).toLocaleTimeString(dateLoc, { hour: "numeric", minute: "2-digit" });
 
 	const rows = $derived.by(() => {
 		const out: Row[] = [];
@@ -364,36 +367,36 @@
 			at: { x: e.clientX, y: e.clientY },
 			items: [
 				{
-					label: "복사",
+					label: $_("phoneUi.copyMenu"),
 					icon: Copy,
 					onselect: () =>
 						navigator.clipboard.writeText(m.content).then(
-							() => toasts.success("복사함"),
-							() => toasts.error("복사 못 함"),
+							() => toasts.success($_("phoneUi.copiedToast")),
+							() => toasts.error($_("phoneUi.copyFailedToast")),
 						),
 				},
-				{ label: "편집", icon: Pencil, onselect: () => startEdit(m) },
-				{ label: isFolded ? "펼치기" : "접기", icon: isFolded ? ChevronsUpDown : ChevronsDownUp, onselect: () => (folded[m.id] = !isFolded) },
-				{ label: "보낸 메시지 컨텍스트 확인", icon: FileSearch, separator: true, onselect: () => void showPrompt(m) },
-				...(m.id === session.last?.id && m.role === "assistant" ? [{ label: "답장 다시 받기", icon: RefreshCw, onselect: again }] : []),
+				{ label: $_("phoneUi.editMenu"), icon: Pencil, onselect: () => startEdit(m) },
+				{ label: isFolded ? $_("phoneUi.expand") : $_("phoneUi.collapse"), icon: isFolded ? ChevronsUpDown : ChevronsDownUp, onselect: () => (folded[m.id] = !isFolded) },
+				{ label: $_("phoneUi.viewPromptMenu"), icon: FileSearch, separator: true, onselect: () => void showPrompt(m) },
+				...(m.id === session.last?.id && m.role === "assistant" ? [{ label: $_("phoneUi.regenReplyMenu"), icon: RefreshCw, onselect: again }] : []),
 				...(plugins.on("translate")
 					? [
 							translationOf(m)
-								? { label: originals[m.id] ? "번역 보기" : "원문 보기", icon: Languages, onselect: () => (originals[m.id] = !originals[m.id]) }
-								: { label: "번역", icon: Languages, onselect: async () => session.update(await translateMessage(m)) },
+								? { label: originals[m.id] ? $_("phoneUi.showTrans") : $_("phoneUi.showOrig"), icon: Languages, onselect: () => (originals[m.id] = !originals[m.id]) }
+								: { label: $_("phoneUi.translateMenu"), icon: Languages, onselect: async () => session.update(await translateMessage(m)) },
 						]
 					: []),
-				...(plugins.on("tts") ? [{ label: speech.messageId === m.id ? "읽기 멈추기" : "소리 내어 읽기", icon: Volume2, onselect: () => speak(m, translationOf(m)?.text ?? m.content) }] : []),
+				...(plugins.on("tts") ? [{ label: speech.messageId === m.id ? $_("phoneUi.stopSpeak") : $_("phoneUi.readAloud"), icon: Volume2, onselect: () => speak(m, translationOf(m)?.text ?? m.content) }] : []),
 				...(plugins.on("imagegen") && m.role === "assistant"
-					? [{ label: "사진으로 그리기", icon: ImagePlus, onselect: async () => (toasts.info("그리는 중… (잠시 걸림)"), session.update(await drawMessage(m))) }]
+					? [{ label: $_("phoneUi.drawPhotoMenu"), icon: ImagePlus, onselect: async () => (toasts.info($_("phoneUi.drawingToast")), session.update(await drawMessage(m))) }]
 					: []),
 				{
-					label: "삭제",
+					label: $_("common.delete"),
 					icon: Trash2,
 					danger: true,
 					separator: true,
 					onselect: async () => {
-						if (await confirmAction({ title: "메시지 삭제", message: "이 메시지를 지움", confirmLabel: "삭제", danger: true })) {
+						if (await confirmAction({ title: $_("phoneUi.deleteMsgTitle"), message: $_("phoneUi.deleteMsgBody"), confirmLabel: $_("common.delete"), danger: true })) {
 							await session.remove(m);
 							phone.setPreview(conv.id, session.messages);
 						}
@@ -407,11 +410,11 @@
 		menu = {
 			at: { x: r.right, y: r.bottom + 4, align: "end" },
 			items: [
-				{ label: "답장 더 받기", icon: MessageCirclePlus, disabled: session.busy, onselect: nudge },
-				{ label: "엿보기: 두 사람 대화를 AI가 이어 씀", icon: Eye, disabled: session.busy, onselect: peek },
-				{ label: "마지막 답장 다시 받기", icon: RefreshCw, disabled: session.busy || !lastAi || session.last?.id !== lastAi.id, onselect: again },
-				{ label: novelView ? "메신저 화면으로 보기" : "소설 화면으로 보기", icon: novelView ? MessageCircle : BookOpen, separator: true, onselect: () => (novelView = !novelView) },
-				{ label: "대화 탭으로 옮기기", icon: ExternalLink, onselect: () => nav.go({ page: "character", charId: conv.characterId ?? undefined, convId: conv.id }) },
+				{ label: $_("phoneUi.nudgeMenu"), icon: MessageCirclePlus, disabled: session.busy, onselect: nudge },
+				{ label: $_("phoneUi.peekMenu"), icon: Eye, disabled: session.busy, onselect: peek },
+				{ label: $_("phoneUi.regenLastMenu"), icon: RefreshCw, disabled: session.busy || !lastAi || session.last?.id !== lastAi.id, onselect: again },
+				{ label: novelView ? $_("phoneUi.toMessengerView") : $_("phoneUi.toNovelView"), icon: novelView ? MessageCircle : BookOpen, separator: true, onselect: () => (novelView = !novelView) },
+				{ label: $_("phoneUi.moveToChatTab"), icon: ExternalLink, onselect: () => nav.go({ page: "character", charId: conv.characterId ?? undefined, convId: conv.id }) },
 			],
 		};
 	}
@@ -422,23 +425,23 @@
 {:else}
 <div class="room sc-phone-room">
 	<div class="room-bar sc-phone-room-bar">
-		<button class="plain" aria-label="뒤로" onclick={onback}><ChevronLeft /></button>
+		<button class="plain" aria-label={$_("phoneUi.backAria")} onclick={onback}><ChevronLeft /></button>
 		<strong>{ch?.name ?? conv.title}</strong>
-		<button class="plain" aria-label="대화방 메뉴" onclick={roomMenu}><Menu /></button>
+		<button class="plain" aria-label={$_("phoneUi.roomMenuAria")} onclick={roomMenu}><Menu /></button>
 	</div>
 
 	<div class="msgs sc-phone-msgs" class:novel={novelView} bind:this={scroller}>
 		{#if session.loading}
-			<p class="hint">불러오는 중…</p>
+			<p class="hint">{$_("phoneUi.loading")}</p>
 		{:else if !rows.length}
-			<p class="hint">{ch?.name ?? "상대"}에게 첫 메시지를 보내보세요.{#if phone.isCharacterPhone}<br />또는 눈 버튼으로 두 사람 대화를 엿보세요.{/if}</p>
+			<p class="hint">{$_("phoneUi.emptyRoomHint", { values: { name: ch?.name ?? $_("phoneUi.partnerFallback") } })}{#if phone.isCharacterPhone}<br />{$_("phoneUi.emptyRoomPeekHint")}{/if}</p>
 		{/if}
 		{#if novelView}
 			{#each session.messages as m, idx (m.id)}
 				{@const mine = m.role === "user"}
 				{@const tr = plugins.on("translate") ? translationOf(m) : null}
 				{@const rawText = session.live?.kind === "regenerate" && session.live.targetId === m.id ? session.live.text : tr && !originals[m.id] ? tr.text : (session.display[m.id] ?? m.content)}
-				{@const who = mine ? { name: me?.name ?? "나", avatar: me?.avatar ?? null, avatarFit: me?.avatarFit ?? null, color: me?.color } : speakerLook(m.name ?? undefined)}
+				{@const who = mine ? { name: me?.name ?? $_("phoneUi.meFallback"), avatar: me?.avatar ?? null, avatarFit: me?.avatarFit ?? null, color: me?.color } : speakerLook(m.name ?? undefined)}
 				{@const attachments = Array.isArray((m.meta as { attachments?: unknown } | null)?.attachments) ? (m.meta as { attachments: string[] }).attachments : []}
 				{@const genPhotos = plugins.on("imagegen") ? generatedImagesOf(m) : []}
 				<!-- svelte-ignore a11y_no_static_element_interactions -->
@@ -450,7 +453,7 @@
 				>
 					<div class="who">
 						{#if !mine}
-							<button type="button" class="av-btn" title="{who.name} 개인 페이지 보기" onclick={() => openProfilePage(m.name ?? undefined)}>
+							<button type="button" class="av-btn" title={$_("phoneUi.viewProfileTitle", { values: { name: who.name } })} onclick={() => openProfilePage(m.name ?? undefined)}>
 								<Avatar name={who.name} src={fileSrc(who.avatar)} fit={who.avatarFit} color={who.color} size={24} />
 							</button>
 						{:else}
@@ -466,28 +469,28 @@
 								bind:value={editDraft}
 								autosize
 								maxRows={12}
-								aria-label="메시지 편집"
+								aria-label={$_("phoneUi.editMsgAria")}
 								onkeydown={(e) => {
 									if (e.key === "Escape") cancelEdit();
 									if ((e.ctrlKey || e.metaKey) && e.key === "Enter") void saveEdit(m);
 								}}
 							/>
 							<div class="inline-edit-btns">
-								<Button size="sm" variant="ghost" onclick={cancelEdit}>취소</Button>
-								<Button size="sm" variant="primary" onclick={() => saveEdit(m)}>저장</Button>
+								<Button size="sm" variant="ghost" onclick={cancelEdit}>{$_("common.cancel")}</Button>
+								<Button size="sm" variant="primary" onclick={() => saveEdit(m)}>{$_("common.save")}</Button>
 							</div>
 						</div>
 					{:else if folded[m.id]}
-						<button type="button" class="b folded-b" onclick={() => (folded[m.id] = false)}>접힌 메시지 · 눌러서 펼치기</button>
+						<button type="button" class="b folded-b" onclick={() => (folded[m.id] = false)}>{$_("phoneUi.foldedMsg")}</button>
 					{:else}
 						{#if attachments.length}
-							<div class="novel-photos">{#each attachments as p, k (p + k)}<img class="photo" src={fileSrc(p)} alt="첨부 사진" loading="lazy" />{/each}</div>
+							<div class="novel-photos">{#each attachments as p, k (p + k)}<img class="photo" src={fileSrc(p)} alt={$_("phoneUi.attachedPhotoAlt")} loading="lazy" />{/each}</div>
 						{/if}
 						<div class="novel-body">
 							<RichText blocks={toBlocks(rawText, { safeHtml: plugins.on("html") })} {images} />
 						</div>
 						{#if genPhotos.length}
-							<div class="novel-photos">{#each genPhotos as g (g.path)}<img class="photo" src={fileSrc(g.path)} alt="그린 사진" loading="lazy" />{/each}</div>
+							<div class="novel-photos">{#each genPhotos as g (g.path)}<img class="photo" src={fileSrc(g.path)} alt={$_("phoneUi.drawnPhotoAlt")} loading="lazy" />{/each}</div>
 						{/if}
 					{/if}
 				</div>
@@ -495,12 +498,12 @@
 			{#if session.live?.kind === "send"}
 				{#if session.live.userText}
 					<div class="novel-block novel-user">
-						<div class="who"><b>{me?.name ?? "나"}</b><span class="novel-time">보내는 중…</span></div>
+						<div class="who"><b>{me?.name ?? $_("phoneUi.meFallback")}</b><span class="novel-time">{$_("phoneUi.sendingStamp")}</span></div>
 						<div class="novel-body"><p>{session.live.userText}</p></div>
 					</div>
 				{/if}
 				<div class="novel-block">
-					<div class="who"><b>{ch?.name ?? "AI"}</b><span class="novel-time">생성 중…</span></div>
+					<div class="who"><b>{ch?.name ?? "AI"}</b><span class="novel-time">{$_("phoneUi.generatingStamp")}</span></div>
 					{#if session.live.text}
 						<div class="novel-body"><RichText blocks={toBlocks(session.live.text, { safeHtml: plugins.on("html") })} {images} /></div>
 					{:else}
@@ -520,21 +523,21 @@
 								bind:value={editDraft}
 								autosize
 								maxRows={10}
-								aria-label="메시지 편집"
+								aria-label={$_("phoneUi.editMsgAria")}
 								onkeydown={(e) => {
 									if (e.key === "Escape") cancelEdit();
 									if ((e.ctrlKey || e.metaKey) && e.key === "Enter" && r.msg) void saveEdit(r.msg);
 								}}
 							/>
 							<div class="inline-edit-btns">
-								<Button size="sm" variant="ghost" onclick={cancelEdit}>취소</Button>
-								<Button size="sm" variant="primary" onclick={() => r.msg && saveEdit(r.msg)}>저장</Button>
+								<Button size="sm" variant="ghost" onclick={cancelEdit}>{$_("common.cancel")}</Button>
+								<Button size="sm" variant="primary" onclick={() => r.msg && saveEdit(r.msg)}>{$_("common.save")}</Button>
 							</div>
 						</div>
 					{:else if r.msg && folded[r.msg.id]}
 						<div class="line">
 							<span class="t">{r.pending ? "" : r.time}</span>
-							<button type="button" class="b folded-b" onclick={() => r.msg && (folded[r.msg.id] = false)}>접힌 메시지 · 눌러서 펼치기</button>
+							<button type="button" class="b folded-b" onclick={() => r.msg && (folded[r.msg.id] = false)}>{$_("phoneUi.foldedMsg")}</button>
 						</div>
 					{:else}
 						{#each r.lines ?? [] as l, i (i)}
@@ -543,7 +546,7 @@
 									<span class="t">{#if unreadMine === r.key}<span class="read">1</span>{/if}{r.pending ? "" : r.time}</span>
 								{/if}
 								{#if l.kind === "photo"}
-									<img class="photo" src={fileSrc(l.text)} alt="첨부 사진" loading="lazy" />
+									<img class="photo" src={fileSrc(l.text)} alt={$_("phoneUi.attachedPhotoAlt")} loading="lazy" />
 								{:else}
 									<div class="b sc-bubble">{l.text}</div>
 								{/if}
@@ -553,7 +556,7 @@
 				</div>
 			{:else}
 				<div id={r.msg ? `msg-${r.msg.id}` : undefined} class="them sc-bubble-group sc-bubble-them" class:cont={r.cont} role="group" oncontextmenu={(e) => bubbleMenu(e, r)}>
-					{#if !r.cont}{@const who = speakerLook(r.speaker)}<button type="button" class="av-btn" title="{who.name} 개인 페이지 보기" onclick={() => openProfilePage(r.speaker)}><Avatar name={who.name} src={fileSrc(who.avatar)} fit={who.avatarFit} color={who.color} size={36} /></button>{:else}<span class="pad"></span>{/if}
+					{#if !r.cont}{@const who = speakerLook(r.speaker)}<button type="button" class="av-btn" title={$_("phoneUi.viewProfileTitle", { values: { name: who.name } })} onclick={() => openProfilePage(r.speaker)}><Avatar name={who.name} src={fileSrc(who.avatar)} fit={who.avatarFit} color={who.color} size={36} /></button>{:else}<span class="pad"></span>{/if}
 					<div class="stack">
 						{#if !r.cont}<span class="name sc-bubble-name">{speakerLook(r.speaker).name}</span>{/if}
 						{#if r.msg && editingId === r.msg.id}
@@ -562,20 +565,20 @@
 									bind:value={editDraft}
 									autosize
 									maxRows={10}
-									aria-label="메시지 편집"
+									aria-label={$_("phoneUi.editMsgAria")}
 									onkeydown={(e) => {
 										if (e.key === "Escape") cancelEdit();
 										if ((e.ctrlKey || e.metaKey) && e.key === "Enter" && r.msg) void saveEdit(r.msg);
 									}}
 								/>
 								<div class="inline-edit-btns">
-									<Button size="sm" variant="ghost" onclick={cancelEdit}>취소</Button>
-									<Button size="sm" variant="primary" onclick={() => r.msg && saveEdit(r.msg)}>저장</Button>
+									<Button size="sm" variant="ghost" onclick={cancelEdit}>{$_("common.cancel")}</Button>
+									<Button size="sm" variant="primary" onclick={() => r.msg && saveEdit(r.msg)}>{$_("common.save")}</Button>
 								</div>
 							</div>
 						{:else if r.msg && folded[r.msg.id]}
 							<div class="line">
-								<button type="button" class="b folded-b" onclick={() => r.msg && (folded[r.msg.id] = false)}>접힌 메시지 · 눌러서 펼치기</button>
+								<button type="button" class="b folded-b" onclick={() => r.msg && (folded[r.msg.id] = false)}>{$_("phoneUi.foldedMsg")}</button>
 								{#if !r.pending}<span class="t">{r.time}</span>{/if}
 							</div>
 						{:else}
@@ -584,14 +587,14 @@
 									{#if l.kind === "image" && images[l.text]}
 										<img class="photo" src={images[l.text]} alt={l.text} loading="lazy" />
 									{:else if l.kind === "photo"}
-										<img class="photo" src={fileSrc(l.text)} alt="그린 사진" loading="lazy" />
+										<img class="photo" src={fileSrc(l.text)} alt={$_("phoneUi.drawnPhotoAlt")} loading="lazy" />
 									{:else if l.kind === "html" && plugins.on("status") && isStatusPin({ kind: "html", code: l.text })}
 										<!-- 상태창은 접고 상태 탭에 가장 최근 것 하나만 (5-F-4-2) -->
-										<button type="button" class="b pin-ref sc-status-pin-ref" onclick={() => panel.show("status")}>상태창</button>
+										<button type="button" class="b pin-ref sc-status-pin-ref" onclick={() => panel.show("status")}>{$_("phoneUi.statusWindowBtn")}</button>
 									{:else if l.kind === "html"}
 										<div class="html-card"><HtmlView code={l.text} /></div>
 									{:else}
-										<div class="b sc-bubble">{l.kind === "image" ? `(사진: ${l.text})` : l.text}</div>
+										<div class="b sc-bubble">{l.kind === "image" ? $_("phoneUi.photoFallback", { values: { key: l.text } }) : l.text}</div>
 									{/if}
 									{#if i === (r.lines?.length ?? 0) - 1 && !r.pending}<span class="t">{r.time}</span>{/if}
 								</div>
@@ -616,16 +619,16 @@
 		<div class="attach-strip">
 			{#each pendingImages as p, i (p + i)}
 				<span class="attach-item">
-					<img src={fileSrc(p)} alt="첨부 이미지" />
-					<button type="button" aria-label="첨부 제거" onclick={() => removePendingImage(i)}><X /></button>
+					<img src={fileSrc(p)} alt={$_("phoneUi.attachedImgAlt")} />
+					<button type="button" aria-label={$_("phoneUi.removeAttachAria")} onclick={() => removePendingImage(i)}><X /></button>
 				</span>
 			{/each}
 		</div>
 	{/if}
 	{#if impersonating}
 		<div class="imp-banner">
-			<span><UserRoundPen /> <b>{ch?.name ?? "상대"}</b> 사칭 모드</span>
-			<button type="button" onclick={() => (impersonating = false)}>취소</button>
+			<span><UserRoundPen /> <b>{ch?.name ?? $_("phoneUi.partnerFallback")}</b> {$_("phoneUi.impersonateBanner")}</span>
+			<button type="button" onclick={() => (impersonating = false)}>{$_("common.cancel")}</button>
 		</div>
 	{/if}
 	<form
@@ -635,16 +638,16 @@
 			void send();
 		}}
 	>
-		<button type="button" class="plus-btn" class:on={plusOpen} aria-label="추가 기능 메뉴" aria-expanded={plusOpen} onclick={() => (plusOpen = !plusOpen)}><Plus /></button>
+		<button type="button" class="plus-btn" class:on={plusOpen} aria-label={$_("phoneUi.plusMenuAria")} aria-expanded={plusOpen} onclick={() => (plusOpen = !plusOpen)}><Plus /></button>
 		{#if plugins.on("ghostwrite")}
 			<Ghostwrite convId={session.convId} getDraft={() => draft} setDraft={(v) => (draft = v)} disabled={session.busy} />
 		{/if}
-		<textarea bind:value={draft} rows="1" readonly={ghost.isRunning(session.convId)} placeholder={impersonating ? `${ch?.name ?? "상대"}(으)로 사칭 입력` : phone.isCharacterPhone ? `${me?.name ?? "나"}(으)로 보내기` : "메시지 입력"} aria-label="메시지" {onkeydown}></textarea>
+		<textarea bind:value={draft} rows="1" readonly={ghost.isRunning(session.convId)} placeholder={impersonating ? $_("phoneUi.impersonatePlaceholder", { values: { name: ch?.name ?? $_("phoneUi.partnerFallback") } }) : phone.isCharacterPhone ? $_("phoneUi.sendAsPlaceholder", { values: { name: me?.name ?? $_("phoneUi.meFallback") } }) : $_("phoneUi.inputPlaceholder")} aria-label={$_("phoneUi.inputAria")} {onkeydown}></textarea>
 		{#if session.busy || scriptRunning}
 			<!-- 스크립트가 돌면 스크립트째 멈춤 (5-E-20-6-8), 아니면 응답만 -->
-			<button type="button" class="send on" aria-label={scriptRunning ? "스크립트 멈추기" : "멈추기"} onclick={() => (scriptRunning ? slashRuns.stop(session.convId, session) : session.cancel())}><Square /></button>
+			<button type="button" class="send on" aria-label={scriptRunning ? $_("phoneUi.stopScriptAria") : $_("phoneUi.stopAria")} onclick={() => (scriptRunning ? slashRuns.stop(session.convId, session) : session.cancel())}><Square /></button>
 		{:else}
-			<button class="send" class:on={!!draft.trim() || pendingImages.length > 0} aria-label="보내기" disabled={!draft.trim() && !pendingImages.length}><Send /></button>
+			<button class="send" class:on={!!draft.trim() || pendingImages.length > 0} aria-label={$_("phoneUi.sendAria")} disabled={!draft.trim() && !pendingImages.length}><Send /></button>
 		{/if}
 	</form>
 	{#if plusOpen}

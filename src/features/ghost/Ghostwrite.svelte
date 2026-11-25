@@ -1,4 +1,5 @@
 <script lang="ts">
+	import { _ } from "svelte-i18n";
 	// 펜 버튼: 초안을 적어 AI에게 보내면 내 말투의 대사가 입력칸에 채워진다 (보내지는 않음). 설정에서 "초안 없이 바로 요청"을 켜면 누르는 즉시 요청.
 	import { onMount } from "svelte";
 	import { PenLine, Square, Undo2 } from "@lucide/svelte";
@@ -36,18 +37,18 @@
 </script>
 
 {#if running}
-	<IconButton label="대필 멈추기" onclick={() => ghost.cancel(convId)}><Square /></IconButton>
+	<IconButton label={$_("extraTools.ghostStopAria")} onclick={() => ghost.cancel(convId)}><Square /></IconButton>
 {:else}
-	<IconButton label="대필 (AI 호출)" onclick={press} {disabled}><PenLine /></IconButton>
+	<IconButton label={$_("extraTools.ghostRunAria")} onclick={press} {disabled}><PenLine /></IconButton>
 	{#if ghost.canUndo(convId, draft)}
-		<IconButton label="원래대로" onclick={() => ghost.undo(convId, setDraft)}><Undo2 /></IconButton>
+		<IconButton label={$_("extraTools.ghostUndoAria")} onclick={() => ghost.undo(convId, setDraft)}><Undo2 /></IconButton>
 	{/if}
 {/if}
 
-<Dialog bind:open title="대필">
-	<Textarea bind:value={brief} rows={4} autosize maxRows={10} placeholder="대필시킬 내용 (초안)" aria-label="초안" />
+<Dialog bind:open title={$_("extraTools.ghostTitle")}>
+	<Textarea bind:value={brief} rows={4} autosize maxRows={10} placeholder={$_("extraTools.ghostPlaceholder")} aria-label={$_("extraTools.ghostAria")} />
 	{#snippet footer()}
-		<Button variant="ghost" onclick={() => (open = false)}>취소</Button>
-		<Button variant="primary" onclick={submit}>AI에게 보내기</Button>
+		<Button variant="ghost" onclick={() => (open = false)}>{$_("common.cancel")}</Button>
+		<Button variant="primary" onclick={submit}>{$_("extraTools.ghostSendBtn")}</Button>
 	{/snippet}
 </Dialog>

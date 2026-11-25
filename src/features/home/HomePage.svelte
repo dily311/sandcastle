@@ -2,7 +2,7 @@
 	// 홈: 사용자가 꾸미는 첫 화면. 블록(이어하기·빠른 실행·즐겨찾기·게임·내 글)을 켜고 끄고 순서를 바꾼다.
 	// AI를 부르지 않는다 (보여주기만). 설정은 앱 설정의 home에 저장
 	import { lastAt } from "$features/character/library.svelte";
-	import { _ } from "svelte-i18n";
+	import { _, locale } from "svelte-i18n";
 	import { ArrowDown, ArrowUp, BookOpen, Check, Gamepad2, GripVertical, Images, MessageSquarePlus, Pencil, Smartphone, Star, UserRound, Users } from "@lucide/svelte";
 	import { Sortable, moveItem } from "$shared/dnd/sortable.svelte";
 	import type { HomeSetting_Serialize as HomeSetting } from "$ipc/bindings";
@@ -16,13 +16,13 @@
 	import { games } from "$features/game/game.svelte";
 	import { fillNames } from "$features/character/format";
 
-	const BLOCKS: { id: string; label: string; desc: string; plugin?: "game" }[] = [
-		{ id: "continue", label: "이어하기", desc: "최근 대화" },
-		{ id: "quick", label: "빠른 실행", desc: "새 대화·폰·게임·이미지" },
-		{ id: "favorites", label: "즐겨찾기", desc: "별표한 캐릭터" },
-		{ id: "games", label: "게임", desc: "최근 게임", plugin: "game" },
-	];
-	const FALLBACK: HomeSetting = { startOnHome: false, greeting: "", blocks: BLOCKS.map((b) => b.id), css: "" };
+	const BLOCKS = $derived<{ id: string; label: string; desc: string; plugin?: "game" }[]>([
+		{ id: "continue", label: $_("home.continue"), desc: $_("settings.chrome.homeBlockContinueDesc") },
+		{ id: "quick", label: $_("home.quick"), desc: $_("settings.chrome.homeBlockQuickDesc") },
+		{ id: "favorites", label: $_("home.favorites"), desc: $_("settings.chrome.homeBlockFavDesc") },
+		{ id: "games", label: $_("home.games"), desc: $_("settings.chrome.homeBlockGamesDesc"), plugin: "game" },
+	]);
+	const FALLBACK: HomeSetting = { startOnHome: false, greeting: "", blocks: ["continue", "quick", "favorites", "games"], css: "" };
 
 	$effect(() => {
 		if (!library.loaded) void library.load();
@@ -35,7 +35,7 @@
 	const home = $derived<HomeSetting>({ ...FALLBACK, ...((appSetting.value?.home as HomeSetting | undefined) ?? {}) });
 	const me = $derived(library.persona(appSetting.value?.selectedPersonaId) ?? library.persona("default") ?? library.personas[0]);
 	const greeting = $derived(fillNames(home.greeting.trim() || $_("home.greetingDefault"), { user: me?.name ?? "User" }));
-	const today = new Date().toLocaleDateString("ko-KR", { month: "long", day: "numeric", weekday: "long" });
+	const today = $derived(new Date().toLocaleDateString(($locale ?? "ko").startsWith("en") ? "en-US" : "ko-KR", { month: "long", day: "numeric", weekday: "long" }));
 
 	const recent = $derived(
 		library.conversations
@@ -106,9 +106,9 @@
 	{#if editing}
 		<section class="card edit">
 			<h2>{$_("home.customizeTitle")}</h2>
-			<label class="field"><span>인사말 <small>{"{{user}}"} = 내 이름</small></span><Input bind:value={draft.greeting} placeholder={"안녕하세요, {{user}}"} /></label>
+			<label class="field"><span>{$_("settings.chrome.homeGreetingLabel")} <small>{$_("settings.chrome.homeGreetingHint")}</small></span><Input bind:value={draft.greeting} placeholder={$_("home.greetingDefault")} /></label>
 			<div class="field">
-				<span>블록</span>
+				<span>{$_("settings.chrome.homeBlocksLabel")}</span>
 				<ul class="blocks">
 					{#each order as id, i (id)}
 						{@const b = BLOCKS.find((x) => x.id === id)!}
@@ -116,19 +116,19 @@
 						<li {...sort.item(i)} class:dragging={sort.from === i} class:over={sort.over === i && sort.from !== i}>
 							<span class="grip" aria-hidden="true" {...sort.handle(i)}><GripVertical /></span>
 							<Switch checked={on} label={b.label} hideLabel onchange={(v) => toggle(id, v)} />
-							<span class="bl"><b>{b.label}</b><small>{b.desc}{b.plugin && !plugins.on(b.plugin) ? " · 플러그인 꺼짐" : ""}</small></span>
+							<span class="bl"><b>{b.label}</b><small>{b.desc}{b.plugin && !plugins.on(b.plugin) ? $_("settings.chrome.homePluginOff") : ""}</small></span>
 						</li>
 					{/each}
 				</ul>
 			</div>
 			<label class="field">
-				<span>홈 CSS <small>이 화면에만 적용 · 예) .home h1 {"{"} font-size: 2.4rem; {"}"}</small></span>
+				<span>{$_("settings.chrome.homeCssLabel")} <small>{$_("settings.chrome.homeCssHint")}</small></span>
 				<Textarea bind:value={draft.css} autosize rows={4} maxRows={16} mono placeholder={".home { background: linear-gradient(#0000, var(--accent-soft)); }\n.home .card { border-radius: 24px; }"} />
 			</label>
-			<label class="row"><Switch checked={draft.startOnHome} label="앱을 열면 홈부터" hideLabel onchange={(v) => (draft.startOnHome = v)} /><span>앱을 열면 홈부터 보기</span></label>
+			<label class="row"><Switch checked={draft.startOnHome} label={$_("settings.chrome.homeStartOnHome")} hideLabel onchange={(v) => (draft.startOnHome = v)} /><span>{$_("settings.chrome.homeStartOnHome")}</span></label>
 			<div class="btns">
-				<Button variant="ghost" onclick={() => (editing = false)}>취소</Button>
-				<Button variant="primary" onclick={saveEdit}>{#snippet icon()}<Check />{/snippet}저장</Button>
+				<Button variant="ghost" onclick={() => (editing = false)}>{$_("common.cancel")}</Button>
+				<Button variant="primary" onclick={saveEdit}>{#snippet icon()}<Check />{/snippet}{$_("common.save")}</Button>
 			</div>
 		</section>
 	{/if}

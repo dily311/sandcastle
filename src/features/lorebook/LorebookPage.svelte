@@ -43,15 +43,15 @@
 		return u.characters.length + u.personas.length + u.conversations.length > 0;
 	};
 	const BOOK_FILTERS = $derived([
-		{ value: "all", label: `전부 ${lorebook.books.length}` },
-		{ value: "used", label: "쓰이는 것" },
-		{ value: "unused", label: "안 쓰이는 것" },
+		{ value: "all", label: $_("lorebook.filterAll", { values: { count: lorebook.books.length } }) },
+		{ value: "used", label: $_("lorebook.filterUsed") },
+		{ value: "unused", label: $_("lorebook.filterUnused") },
 	]);
-	const BOOK_SORTS = [
-		{ value: "name", label: "이름 순" },
-		{ value: "recent", label: "최근 바뀐 순" },
-		{ value: "size", label: "항목 많은 순" },
-	];
+	const BOOK_SORTS = $derived([
+		{ value: "name", label: $_("lorebook.sortName") },
+		{ value: "recent", label: $_("lorebook.sortRecent") },
+		{ value: "size", label: $_("lorebook.sortSize") },
+	]);
 	const shown = $derived.by(() => {
 		const q = query.trim().toLowerCase();
 		const by =
@@ -74,17 +74,17 @@
 		const ids = [...picked];
 		if (!ids.length) return;
 		const n = ids.reduce((s, id) => s + (lorebook.counts[id]?.entries ?? 0), 0);
-		if (!(await confirmAction({ title: "로어북 삭제", message: `로어북 ${ids.length}개와 항목 ${n}개를 휴지통으로 옮김. 쓰던 캐릭터·페르소나·대화에서도 빠짐. 설정 > 데이터 > 휴지통에서 되살릴 수 있음`, confirmLabel: `${ids.length}개 삭제`, danger: true }))) return;
+		if (!(await confirmAction({ title: $_("lorebook.deleteTitle"), message: $_("lorebook.deleteManyMsg", { values: { books: ids.length, entries: n } }), confirmLabel: $_("lorebook.deleteCountBtn", { values: { count: ids.length } }), danger: true }))) return;
 		selecting = false;
 		// 파일 작업 대기열로 하나씩 (5-E-28). 요약 알림은 대기열이 한 번
 		await Promise.allSettled(
-			ids.map((id) => jobs.run(lorebook.book(id)?.name ?? id, () => call(commands.deleteWorldinfoBook(id), { source: "lorebook" }), { group: "로어북 지우기" })),
+			ids.map((id) => jobs.run(lorebook.book(id)?.name ?? id, () => call(commands.deleteWorldinfoBook(id), { source: "lorebook" }), { group: $_("lorebook.deleteJobGroup") })),
 		);
 		await lorebook.load();
 		await library.load();
 	}
 	async function create() {
-		const name = await promptText({ title: "새 로어북", message: "세계관·장소·인물 설정을 모아 두는 책", input: { value: "", placeholder: "예: 엘다리아 대륙" }, confirmLabel: "만들기" });
+		const name = await promptText({ title: $_("lorebook.newTitle"), message: $_("lorebook.newMsg"), input: { value: "", placeholder: $_("lorebook.newPlaceholder") }, confirmLabel: $_("lorebook.createBtn") });
 		if (!name?.trim()) return;
 		const b = await lorebook.create(name.trim());
 		open(b.id);
@@ -94,8 +94,8 @@
 	}
 	$effect(() =>
 		drops.register({
-			label: "로어북 가져오기",
-			hint: "SillyTavern 월드인포 JSON",
+			label: $_("lorebook.dropLabel"),
+			hint: $_("lorebook.dropHint"),
 			accept: (f) => extOf(f) === "json",
 			ondrop: async (files) => {
 				let last: Book | null = null;
@@ -113,10 +113,10 @@
 		menu = {
 			at: e.type === "contextmenu" ? { x: e.clientX, y: e.clientY } : { x: r.right, y: r.bottom + 4, align: "end" },
 			items: [
-				{ label: "이름 바꾸기", icon: Pencil, onselect: () => rename(b) },
-				{ label: "내보내기…", icon: Download, onselect: () => lorebook.exportMenu(b) },
+				{ label: $_("lorebook.renameMenu"), icon: Pencil, onselect: () => rename(b) },
+				{ label: $_("lorebook.exportMenu"), icon: Download, onselect: () => lorebook.exportMenu(b) },
 				{
-					label: "삭제",
+					label: $_("common.delete"),
 					icon: Trash2,
 					danger: true,
 					separator: true,
@@ -128,7 +128,7 @@
 		};
 	}
 	async function rename(b: Book) {
-		const name = await promptText({ title: "이름 바꾸기", input: { value: b.name }, confirmLabel: "바꾸기" });
+		const name = await promptText({ title: $_("lorebook.renameMenu"), input: { value: b.name }, confirmLabel: $_("lorebook.renameConfirm") });
 		if (name?.trim() && name.trim() !== b.name) await lorebook.update(b.id, { name: name.trim(), description: b.description });
 	}
 
@@ -164,17 +164,17 @@
 			return !q || entryTitle(e).toLowerCase().includes(q) || e.keys.some((k) => k.toLowerCase().includes(q)) || e.content.toLowerCase().includes(q);
 		}),
 	);
-	const FILTERS = [
-		{ id: "all", label: "전체" },
-		{ id: "on", label: "켜진 것만" },
-		{ id: "off", label: "꺼진 것만" },
-		{ id: "constant", label: "항상 넣는 것만" },
-	] as const;
+	const FILTERS = $derived([
+		{ id: "all", label: $_("lorebook.entryFilterAll") },
+		{ id: "on", label: $_("lorebook.entryFilterOn") },
+		{ id: "off", label: $_("lorebook.entryFilterOff") },
+		{ id: "constant", label: $_("lorebook.entryFilterConstant") },
+	] as const);
 	let filterMenu = $state<{ x: number; y: number } | null>(null);
 	const usedCategories = $derived([...new Set((entries ?? []).map((e) => e.category).filter(Boolean))].sort((a, b) => a.localeCompare(b, "ko")));
 	const filterItems = $derived<MenuItem[]>([
 		...FILTERS.map((f) => ({ label: f.label, icon: filter === f.id && categoryFilter === null ? Check : undefined, onselect: () => ((filter = f.id), (categoryFilter = null)) })),
-		...usedCategories.map((c, i) => ({ label: `분류: ${c}`, separator: i === 0, icon: categoryFilter === c ? Check : undefined, onselect: () => (categoryFilter = c) })),
+		...usedCategories.map((c, i) => ({ label: $_("lorebook.categoryFilter", { values: { cat: c } }), separator: i === 0, icon: categoryFilter === c ? Check : undefined, onselect: () => (categoryFilter = c) })),
 	]);
 	function openFilter(e: MouseEvent) {
 		const r = (e.currentTarget as HTMLElement).getBoundingClientRect();
@@ -201,37 +201,37 @@
 	<div class="center"><Spinner /></div>
 {:else if bookId && !book}
 	<div class="center">
-		<EmptyState title="로어북을 찾을 수 없음" description="지워졌을 수 있음">
-			{#snippet action()}<Button onclick={() => open()}>목록으로</Button>{/snippet}
+		<EmptyState title={$_("lorebook.notFoundTitle")} description={$_("lorebook.notFoundDesc")}>
+			{#snippet action()}<Button onclick={() => open()}>{$_("lorebook.toList")}</Button>{/snippet}
 		</EmptyState>
 	</div>
 {:else if book}
 	<div class="page">
 		<header class="book-head">
 			<div class="info">
-				<input class="name" bind:value={name} onblur={saveInfo} onkeydown={(e) => e.key === "Enter" && (e.currentTarget as HTMLInputElement).blur()} aria-label="로어북 이름" />
-				<input class="desc-input" bind:value={description} onblur={saveInfo} onkeydown={(e) => e.key === "Enter" && (e.currentTarget as HTMLInputElement).blur()} placeholder="로어북 설명을 입력하세요 (선택)" aria-label="로어북 설명" />
+				<input class="name" bind:value={name} onblur={saveInfo} onkeydown={(e) => e.key === "Enter" && (e.currentTarget as HTMLInputElement).blur()} aria-label={$_("lorebook.bookNameAria")} />
+				<input class="desc-input" bind:value={description} onblur={saveInfo} onkeydown={(e) => e.key === "Enter" && (e.currentTarget as HTMLInputElement).blur()} placeholder={$_("lorebook.bookDescPlaceholder")} aria-label={$_("lorebook.bookDescAria")} />
 			</div>
 			<div class="acts">
-				<ExportSplit formats={BOOK_FORMATS} storageKey="sc.export.lorebook" size="sm" variant="secondary" label="내보내기" onexport={(f) => lorebook.export(book, f as BookFormat)} />
-				<IconButton label="로어북 메뉴" size="sm" onclick={(e) => bookMenu(e, book)}><Ellipsis /></IconButton>
+				<ExportSplit formats={BOOK_FORMATS} storageKey="sc.export.lorebook" size="sm" variant="secondary" label={$_("lorebook.exportBtn")} onexport={(f) => lorebook.export(book, f as BookFormat)} />
+				<IconButton label={$_("lorebook.bookMenuAria")} size="sm" onclick={(e) => bookMenu(e, book)}><Ellipsis /></IconButton>
 			</div>
 		</header>
 
 		<div class="tools">
-			<Input bind:value={entryQuery} placeholder="제목·키워드·내용 검색" aria-label="항목 검색" type="search">
+			<Input bind:value={entryQuery} placeholder={$_("lorebook.entrySearchPlaceholder")} aria-label={$_("lorebook.entrySearchAria")} type="search">
 				{#snippet leading()}<Search />{/snippet}
 			</Input>
 			<span class="filter" class:on={filter !== "all"}>
-				<IconButton label="필터: {FILTERS.find((f) => f.id === filter)?.label}" active={filter !== "all"} aria-haspopup="menu" onclick={openFilter}><Funnel /></IconButton>
-				{#if filter !== "all"}<button class="filter-chip" title="필터 풀기" onclick={() => (filter = "all")}>{FILTERS.find((f) => f.id === filter)?.label} ×</button>{/if}
-				{#if categoryFilter !== null}<button class="filter-chip" title="분류 거르기 풀기" onclick={() => (categoryFilter = null)}>{categoryFilter} ×</button>{/if}
+				<IconButton label={$_("lorebook.filterAria", { values: { label: FILTERS.find((f) => f.id === filter)?.label ?? "" } })} active={filter !== "all"} aria-haspopup="menu" onclick={openFilter}><Funnel /></IconButton>
+				{#if filter !== "all"}<button class="filter-chip" title={$_("lorebook.clearFilterTitle")} onclick={() => (filter = "all")}>{FILTERS.find((f) => f.id === filter)?.label} ×</button>{/if}
+				{#if categoryFilter !== null}<button class="filter-chip" title={$_("lorebook.clearCatFilterTitle")} onclick={() => (categoryFilter = null)}>{categoryFilter} ×</button>{/if}
 			</span>
-			<ContextMenu at={filterMenu} label="항목 필터링" items={filterItems} onclose={() => (filterMenu = null)} />
-			<Button variant="primary" onclick={addEntry}>{#snippet icon()}<Plus />{/snippet}항목 추가</Button>
+			<ContextMenu at={filterMenu} label={$_("lorebook.entryFilterMenuAria")} items={filterItems} onclose={() => (filterMenu = null)} />
+			<Button variant="primary" onclick={addEntry}>{#snippet icon()}<Plus />{/snippet}{$_("lorebook.addEntryBtn")}</Button>
 		</div>
 		<p class="count faint small">
-			항목 {lorebook.counts[book.id]?.entries ?? 0}개 · 켜짐 {lorebook.counts[book.id]?.enabled ?? 0}개 · 우선순위 높은 것부터 (넣을 자리가 모자라면 높은 것부터 들어감){sort.enabled ? " · 끌어서 순서(우선순위) 바꾸기" : ""}
+			{$_("lorebook.entryStats", { values: { entries: lorebook.counts[book.id]?.entries ?? 0, enabled: lorebook.counts[book.id]?.enabled ?? 0 } })}{sort.enabled ? $_("lorebook.entryDragHint") : ""}
 		</p>
 
 		{#if !entries}
@@ -252,7 +252,7 @@
 				{/each}
 			</ul>
 		{:else}
-			<EmptyState title={entries.length ? "맞는 항목 없음" : "항목 없음"} description={entries.length ? "검색어나 필터를 변경하세요." : "'항목 추가'로 장소·인물·규칙을 하나씩 적음"} />
+			<EmptyState title={entries.length ? $_("lorebook.noMatchEntryTitle") : $_("lorebook.noEntryTitle")} description={entries.length ? $_("lorebook.noMatchEntryDesc") : $_("lorebook.noEntryDesc")} />
 		{/if}
 	</div>
 {:else}
@@ -262,8 +262,8 @@
 				<h1>{$_("nav.lorebook")}</h1>
 				<span class="head-count">{lorebook.books.length}{$_("common.unitItem")}</span>
 			</div>
-			<ListToolbar bind:query bind:filter={bookFilter} bind:sort={bookSort} bind:selecting placeholder="이름·설명" filters={BOOK_FILTERS} sorts={BOOK_SORTS} canSelect={!!lorebook.books.length}>
-				<SplitButton label={$_("common.create")} onclick={create} menuLabel={$_("common.import")} items={[{ label: "파일에서 가져오기 (JSON)", icon: Upload, onselect: importFiles }]} />
+			<ListToolbar bind:query bind:filter={bookFilter} bind:sort={bookSort} bind:selecting placeholder={$_("lorebook.searchPlaceholder")} filters={BOOK_FILTERS} sorts={BOOK_SORTS} canSelect={!!lorebook.books.length}>
+				<SplitButton label={$_("common.create")} onclick={create} menuLabel={$_("common.import")} items={[{ label: $_("lorebook.importJson"), icon: Upload, onselect: importFiles }]} />
 			</ListToolbar>
 		</header>
 		{#if selecting}<SelectBar count={picked.size} onall={() => (picked = new Set(shown.map((b) => b.id)))} ondelete={removePicked} />{/if}
@@ -310,22 +310,22 @@
 									</div>
 								{/if}
 							</div>
-							<span class="book-meta">항목 {n?.entries ?? 0}개{n && n.enabled !== n.entries ? ` (켜짐 ${n.enabled})` : ""} · {relative(b.updatedAt)}</span>
+							<span class="book-meta">{$_("lorebook.bookMeta", { values: { entries: n?.entries ?? 0 } })}{n && n.enabled !== n.entries ? $_("lorebook.bookMetaEnabled", { values: { enabled: n.enabled } }) : ""} · {relative(b.updatedAt)}</span>
 							{#if !selecting}
 								<!-- svelte-ignore a11y_click_events_have_key_events, a11y_no_static_element_interactions -->
 								<span class="book-actions" onclick={(e) => e.stopPropagation()}>
-									<IconButton label="{b.name} 메뉴" size="sm" variant="ghost" onclick={(e) => bookMenu(e, b)}><Ellipsis /></IconButton>
+									<IconButton label={$_("lorebook.itemMenuAria", { values: { name: b.name } })} size="sm" variant="ghost" onclick={(e) => bookMenu(e, b)}><Ellipsis /></IconButton>
 									<span class="book-chev" aria-hidden="true"><ChevronRight /></span>
 								</span>
 							{/if}
 						</div>
 					</li>
 				{:else}
-					<li class="faint empty-row">맞는 로어북 없음</li>
+					<li class="faint empty-row">{$_("lorebook.noMatchBook")}</li>
 				{/each}
 			</ul>
 		{:else}
-			<EmptyState title="로어북 없음" description="새로 만들거나 SillyTavern 월드인포(.json)를 가져옴. 파일을 끌어다 놓아도 됨">
+			<EmptyState title={$_("lorebook.emptyTitle")} description={$_("lorebook.emptyDesc")}>
 				{#snippet icon()}<BookOpen />{/snippet}
 			</EmptyState>
 		{/if}
@@ -333,7 +333,7 @@
 {/if}
 
 {#if menu}
-	<ContextMenu at={menu.at} items={menu.items} label="로어북 메뉴" onclose={() => (menu = null)} />
+	<ContextMenu at={menu.at} items={menu.items} label={$_("lorebook.bookMenuAria")} onclose={() => (menu = null)} />
 {/if}
 
 <style>

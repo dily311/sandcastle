@@ -1,4 +1,5 @@
 <script lang="ts">
+	import { _ } from "svelte-i18n";
 	// 뜻으로 찾기: 엔터를 눌렀을 때만 질의를 임베딩한다 (작업 하나, 요금이 작게 듦). 타이핑마다 부르지 않음
 	import { Search } from "@lucide/svelte";
 	import type { SearchHit, SearchResult } from "$ipc/bindings";
@@ -26,28 +27,28 @@
 </script>
 
 <form class="bar" onsubmit={(e) => (e.preventDefault(), search())}>
-	<Input bind:value={query} placeholder={conversationId ? "이 대화에서 뜻으로 찾기" : "모든 대화에서 뜻으로 찾기"} aria-label="뜻으로 찾기">
+	<Input bind:value={query} placeholder={conversationId ? $_("extraTools.memSearchConvPlaceholder") : $_("extraTools.memSearchAllPlaceholder")} aria-label={$_("extraTools.memSearchAria")}>
 		{#snippet leading()}<Search />{/snippet}
 	</Input>
-	<Button type="submit" loading={busy} disabled={!query.trim()}>찾기</Button>
+	<Button type="submit" loading={busy} disabled={!query.trim()}>{$_("extraTools.memSearchBtn")}</Button>
 </form>
 
 {#if result}
 	{#if result.otherModelChunks > 0}
-		<p class="faint">다른 모델로 색인된 {result.otherModelChunks}개는 찾지 못함 — 다시 색인하거나 정리하세요</p>
+		<p class="faint">{$_("extraTools.memOtherModel", { values: { count: result.otherModelChunks } })}</p>
 	{/if}
-	{#if result.truncated}<p class="faint">훑는 상한에 걸려 일부만 검색함</p>{/if}
+	{#if result.truncated}<p class="faint">{$_("extraTools.memTruncated")}</p>{/if}
 	{#if result.hits.length === 0}
-		<p class="faint">찾은 것 없음 (색인한 대화가 있어야 찾을 수 있음)</p>
+		<p class="faint">{$_("extraTools.memNoHits")}</p>
 	{:else}
 		<ol class="hits">
 			{#each result.hits as h (h.conversationId + h.firstMessageId)}
 				<li>
 					<button class="hit" onclick={() => onopen(h)}>
 						<span class="meta">
-							<b>{h.conversationTitle || "(제목 없음)"}</b>
+							<b>{h.conversationTitle || $_("extraTools.memUntitled")}</b>
 							<span class="score">{(h.score ?? 0).toFixed(2)}</span>
-							{#if h.stale}<Badge tone="warning">오래됨</Badge>{/if}
+							{#if h.stale}<Badge tone="warning">{$_("extraTools.memStale")}</Badge>{/if}
 						</span>
 						<span class="snip">{h.snippet}</span>
 					</button>

@@ -1,4 +1,5 @@
 <script lang="ts">
+	import { _ } from "svelte-i18n";
 	import { onMount } from "svelte";
 	import { ArrowUp, Camera, Crop, Plus, Trash2, X } from "@lucide/svelte";
 	import type { CharacterInput_Deserialize as CharacterInput, WorldInfoBook_Serialize as Book } from "$ipc/bindings";
@@ -102,7 +103,7 @@
 	// 저장하지 않고 나가려 하면 물어봄
 	$effect(() => {
 		if (!dirty) return;
-		return nav.setGuard(() => confirmAction({ title: "저장하지 않음", message: "바뀐 내용을 버리고 나감", confirmLabel: "버리기" }));
+		return nav.setGuard(() => confirmAction({ title: $_("charEditor.unsavedTitle"), message: $_("charEditor.unsavedMsg"), confirmLabel: $_("charEditor.discardBtn") }));
 	});
 
 	function close() {
@@ -110,7 +111,7 @@
 	}
 	async function save() {
 		tagInput?.commit();
-		if (!input.name) return toasts.error("이름을 입력해야 함");
+		if (!input.name) return toasts.error($_("charEditor.nameRequired"));
 		saving = true;
 		try {
 			// 변수 정의를 먼저: 확인에 걸리면(이름 겹침 등) 알림을 보이고 편집에 남는다
@@ -123,7 +124,7 @@
 			const saved = await call(commands.updateCharacter(character.id, input), src);
 			const i = library.characters.findIndex((c) => c.id === saved.id);
 			if (i >= 0) library.characters[i] = saved;
-			toasts.success("저장함");
+			toasts.success($_("charEditor.savedToast"));
 			// 저장했으니 물어보지 않고 상세로
 			nav.clearGuard();
 			close();
@@ -156,7 +157,7 @@
 		if (c) c.avatarFit = fit;
 	}
 	// 편집 중에 끌어다 놓은 그림은 아바타로 (캐릭터 화면의 "카드 가져오기"보다 우선)
-	$effect(() => dropPaths({ priority: 5, label: "아바타로 쓰기", hint: "PNG·JPG·WEBP·GIF 한 장", multiple: false, onpaths: ([path]) => setAvatar(path) }));
+	$effect(() => dropPaths({ priority: 5, label: $_("charEditor.dropAvatarLabel"), hint: $_("charEditor.dropAvatarHint"), multiple: false, onpaths: ([path]) => setAvatar(path) }));
 
 	// ---- 첫 메시지 ----
 	function addFirst() {
@@ -172,121 +173,121 @@
 		worldInfoIds = worldInfoIds.includes(id) ? worldInfoIds.filter((b) => b !== id) : [...worldInfoIds, id];
 	}
 
-	const SECTIONS = [
-		{ id: "basic", label: "기본 정보" },
-		{ id: "notes", label: "소개" },
-		{ id: "prompt", label: "프롬프트" },
-		{ id: "first", label: "첫 메시지" },
-		{ id: "links", label: "연결" },
-		...(varsOn ? [{ id: "vars", label: "변수" }] : []),
-	];
+	const SECTIONS = $derived([
+		{ id: "basic", label: $_("charEditor.secBasic") },
+		{ id: "notes", label: $_("charEditor.secNotes") },
+		{ id: "prompt", label: $_("charEditor.secPrompt") },
+		{ id: "first", label: $_("charEditor.secFirst") },
+		{ id: "links", label: $_("charEditor.secLinks") },
+		...(varsOn ? [{ id: "vars", label: $_("charEditor.secVars") }] : []),
+	]);
 	let body: HTMLDivElement | undefined = $state();
 	function jump(id: string) {
 		body?.querySelector(`#ce-${id}`)?.scrollIntoView({ behavior: "smooth", block: "start" });
 	}
-	const count = (s: string) => `${s.length.toLocaleString()}자`;
+	const count = (s: string) => $_("charEditor.charCount", { values: { count: s.length.toLocaleString() } });
 </script>
 
 <div class="editor">
 	<div class="layout">
-		<nav class="toc" aria-label="편집 항목">
+		<nav class="toc" aria-label={$_("charEditor.tocAria")}>
 			{#each SECTIONS as s (s.id)}
 				<button class="link" onclick={() => jump(s.id)}>{s.label}</button>
 			{/each}
 			<div class="actions">
-				{#if dirty}<span class="dirty">바뀐 내용 있음</span>{/if}
+				{#if dirty}<span class="dirty">{$_("charEditor.dirtyLabel")}</span>{/if}
 				<div class="btns">
-					<Button variant="ghost" onclick={close}>취소</Button>
-					<Button variant="primary" loading={saving} disabled={!dirty || !name.trim()} onclick={save}>저장</Button>
+					<Button variant="ghost" onclick={close}>{$_("common.cancel")}</Button>
+					<Button variant="primary" loading={saving} disabled={!dirty || !name.trim()} onclick={save}>{$_("common.save")}</Button>
 				</div>
 			</div>
 		</nav>
 
 		<div class="body" bind:this={body}>
 			<section id="ce-basic">
-				<h2>기본 정보</h2>
+				<h2>{$_("charEditor.secBasic")}</h2>
 				<div class="card">
 					<div class="who">
-						<button class="avatar-btn" title="아바타 바꾸기" aria-label="아바타 바꾸기" onclick={() => avatar(true)}>
+						<button class="avatar-btn" title={$_("charEditor.changeAvatarAria")} aria-label={$_("charEditor.changeAvatarAria")} onclick={() => avatar(true)}>
 							<Avatar name={name || character.name} src={fileSrc(character.avatar)} color={color || null} size={88} fit={avatarFit} />
 							<span class="cam"><Camera /></span>
 						</button>
 						<div class="who-fields">
-							<Field label="이름" required hint={"대화에서 {{char}} 자리에 들어감"}><Input bind:value={name} /></Field>
+							<Field label={$_("charEditor.nameField")} required hint={$_("charEditor.nameHint")}><Input bind:value={name} /></Field>
 							{#if character.avatar}
 								<div class="avatar-acts">
-									<Button size="sm" variant="ghost" onclick={() => (fitOpen = true)}>{#snippet icon()}<Crop />{/snippet}위치·확대</Button>
-									<Button size="sm" variant="ghost" onclick={() => avatar(false)}>{#snippet icon()}<X />{/snippet}아바타 지우기</Button>
+									<Button size="sm" variant="ghost" onclick={() => (fitOpen = true)}>{#snippet icon()}<Crop />{/snippet}{$_("charEditor.avatarFitBtn")}</Button>
+									<Button size="sm" variant="ghost" onclick={() => avatar(false)}>{#snippet icon()}<X />{/snippet}{$_("charEditor.avatarRemoveBtn")}</Button>
 								</div>
 								<AvatarFitDialog open={fitOpen} name={name || character.name} src={fileSrc(character.avatar)} color={color || null} fit={avatarFit} onclose={() => (fitOpen = false)} onsave={saveFit} />
 							{/if}
 						</div>
 					</div>
 					<div class="two">
-						<Field label="분류" hint="목록에 이름 아래 보임"><Input bind:value={category} placeholder="예: 판타지" /></Field>
-						<Field label="태그" hint="Enter나 쉼표로 추가"><TagInput bind:this={tagInput} bind:value={tags} /></Field>
+						<Field label={$_("charEditor.catField")} hint={$_("charEditor.catHint")}><Input bind:value={category} placeholder={$_("charEditor.catPlaceholder")} /></Field>
+						<Field label={$_("charEditor.tagsField")} hint={$_("charEditor.tagsHint")}><TagInput bind:this={tagInput} bind:value={tags} /></Field>
 					</div>
-					<Field label="색" hint="아바타가 없을 때 바탕색"><ColorPicker bind:value={color} /></Field>
+					<Field label={$_("charEditor.colorField")} hint={$_("charEditor.colorHint")}><ColorPicker bind:value={color} /></Field>
 				</div>
 			</section>
 
 			<section id="ce-notes">
-				<h2>소개</h2>
+				<h2>{$_("charEditor.secNotes")}</h2>
 				<div class="card">
-					<Field label="제작자 메모" hint="캐릭터 화면 개요에 보임. AI에게는 보내지 않음">
+					<Field label={$_("charEditor.creatorNotesField")} hint={$_("charEditor.creatorNotesHint")}>
 						{#snippet aside()}<span class="faint small">{count(creatorNotes)}</span>{/snippet}
-						<Textarea bind:value={creatorNotes} rows={4} autosize maxRows={16} placeholder="캐릭터 소개, 버전 기록, 쓰는 법 등" />
+						<Textarea bind:value={creatorNotes} rows={4} autosize maxRows={16} placeholder={$_("charEditor.creatorNotesPlaceholder")} />
 					</Field>
 				</div>
 			</section>
 
 			<section id="ce-prompt">
-				<h2>프롬프트</h2>
+				<h2>{$_("charEditor.secPrompt")}</h2>
 				<div class="card">
-					<Field label="설명" hint="AI에게 보내는 캐릭터 설정. 외모·성격·말투·배경">
+					<Field label={$_("charEditor.descField")} hint={$_("charEditor.descHint")}>
 						{#snippet aside()}<span class="faint small">{count(description)}</span>{/snippet}
 						<Textarea bind:value={description} rows={10} autosize maxRows={30} />
 					</Field>
-					<Field label="대화 예시" hint={"말투를 보여주는 예시. <START>로 구분, {{char}}·{{user}} 사용 가능"}>
-						<Textarea bind:value={example} rows={5} autosize maxRows={20} mono placeholder={"<START>\n{{user}}: 안녕\n{{char}}: ..."} />
+					<Field label={$_("charEditor.exampleField")} hint={$_("charEditor.exampleHint")}>
+						<Textarea bind:value={example} rows={5} autosize maxRows={20} mono placeholder={$_("charEditor.examplePlaceholder")} />
 					</Field>
-					<Field label="시스템 프롬프트 덮어쓰기" hint="채우면 프리셋의 기본 지시(main) 블록 대신 씀. 비우면 프리셋 그대로">
+					<Field label={$_("charEditor.sysOverrideField")} hint={$_("charEditor.sysOverrideHint")}>
 						<Textarea bind:value={systemPrompt} rows={3} autosize maxRows={16} mono />
 					</Field>
 				</div>
 			</section>
 
 			<section id="ce-first">
-				<h2>첫 메시지</h2>
-				<p class="lead">새 대화를 열면 AI가 먼저 보내는 메시지. 여러 개면 다른 것은 스와이프로 고를 수 있음</p>
+				<h2>{$_("charEditor.secFirst")}</h2>
+				<p class="lead">{$_("charEditor.firstLead")}</p>
 				<ol class="firsts">
-					{#each firsts as _, i (i)}
+					{#each firsts as _f, i (i)}
 						<li class="card">
 							<div class="first-head">
-								<b>{i === 0 ? "기본" : `다른 첫 메시지 ${i}`}</b>
+								<b>{i === 0 ? $_("charEditor.firstDefault") : $_("charEditor.firstAlt", { values: { num: i } })}</b>
 								<span class="sp"></span>
-								{#if i > 0}<Button size="sm" variant="ghost" onclick={() => makePrimary(i)}>{#snippet icon()}<ArrowUp />{/snippet}기본으로</Button>{/if}
-								<IconButton label="이 첫 메시지 지우기" size="sm" onclick={() => removeFirst(i)}><Trash2 /></IconButton>
+								{#if i > 0}<Button size="sm" variant="ghost" onclick={() => makePrimary(i)}>{#snippet icon()}<ArrowUp />{/snippet}{$_("charEditor.makeDefaultBtn")}</Button>{/if}
+								<IconButton label={$_("charEditor.deleteFirstAria")} size="sm" onclick={() => removeFirst(i)}><Trash2 /></IconButton>
 							</div>
-							<Textarea bind:value={firsts[i]} rows={4} autosize maxRows={20} aria-label={i === 0 ? "기본 첫 메시지" : `다른 첫 메시지 ${i}`} />
+							<Textarea bind:value={firsts[i]} rows={4} autosize maxRows={20} aria-label={i === 0 ? $_("charEditor.defaultFirstAria") : $_("charEditor.firstAlt", { values: { num: i } })} />
 						</li>
 					{/each}
 				</ol>
-				<Button size="sm" onclick={addFirst}>{#snippet icon()}<Plus />{/snippet}다른 첫 메시지 추가</Button>
+				<Button size="sm" onclick={addFirst}>{#snippet icon()}<Plus />{/snippet}{$_("charEditor.addAltFirstBtn")}</Button>
 			</section>
 
 			<section id="ce-links">
-				<h2>연결</h2>
+				<h2>{$_("charEditor.secLinks")}</h2>
 				<div class="card">
 					<div class="two">
-						<Field label="기본 페르소나" hint="이 캐릭터 전용 · 자물쇠를 걸지 않은 대화에서 전역보다 앞">
-							<Select bind:value={personaId} options={[{ value: "", label: "앱 기본값" }, ...library.personas.map((p) => ({ value: p.id, label: p.name }))]} />
+						<Field label={$_("charEditor.defaultPersonaField")} hint={$_("charEditor.defaultPersonaHint")}>
+							<Select bind:value={personaId} options={[{ value: "", label: $_("charEditor.appDefault") }, ...library.personas.map((p) => ({ value: p.id, label: p.name }))]} />
 						</Field>
-						<Field label="기본 프리셋" hint="이 캐릭터 전용 · 자물쇠를 걸지 않은 대화에서 전역보다 앞">
-							<Select bind:value={presetId} options={[{ value: "", label: "앱 기본값" }, ...library.presets.map((p) => ({ value: p.id, label: p.name }))]} />
+						<Field label={$_("charEditor.defaultPresetField")} hint={$_("charEditor.defaultPersonaHint")}>
+							<Select bind:value={presetId} options={[{ value: "", label: $_("charEditor.appDefault") }, ...library.presets.map((p) => ({ value: p.id, label: p.name }))]} />
 						</Field>
 					</div>
-					<Field label="월드인포" hint="이 캐릭터와 대화할 때 함께 쓰는 책">
+					<Field label={$_("charEditor.wiField")} hint={$_("charEditor.wiHint")}>
 						{#if books.length}
 							<div class="chips">
 								{#each books as b (b.id)}
@@ -294,17 +295,17 @@
 								{/each}
 							</div>
 						{:else}
-							<p class="faint small">월드인포 책 없음</p>
+							<p class="faint small">{$_("charEditor.noWiBooks")}</p>
 						{/if}
 					</Field>
 				</div>
 			</section>
 			{#if varsOn}
 				<section id="ce-vars">
-					<h2>변수</h2>
+					<h2>{$_("charEditor.secVars")}</h2>
 					<div class="card">
 						<VarDefsEditor bind:defs={varDefs} />
-						<Field label="상태창 틀" hint={"HTML. {{getvar::이름}}·{{getglobalvar::이름}}·{{char}}·{{user}}가 값으로 바뀜. 있으면 메시지의 상태창 대신 이것을 그림"}>
+						<Field label={$_("charEditor.statusTplField")} hint={$_("charEditor.statusTplHint")}>
 							<Textarea bind:value={statusTemplate} rows={6} placeholder={'<div>HP {{getvar::hp}} / 100</div>'} />
 						</Field>
 					</div>

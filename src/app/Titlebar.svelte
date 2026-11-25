@@ -78,11 +78,11 @@
 		const parent = (c.meta as { branch?: { parentId: string } } | null)?.branch?.parentId;
 		const folders = library.foldersOf(c.characterId ?? "");
 		return [
-			...(c.characterId ? [{ label: "캐릭터 페이지로", icon: UserRound, onselect: () => nav.go({ page: "character", charId: c.characterId ?? undefined }) }] : []),
-			{ label: "이름 바꾸기", icon: Pencil, separator: !!c.characterId, onselect: startRename },
-			{ label: c.pinned ? "고정 풀기" : "고정", icon: c.pinned ? PinOff : Pin, onselect: () => library.togglePin(c.id) },
+			...(c.characterId ? [{ label: $_("settings.chrome.goToCharPage"), icon: UserRound, onselect: () => nav.go({ page: "character", charId: c.characterId ?? undefined }) }] : []),
+			{ label: $_("settings.chrome.rename"), icon: Pencil, separator: !!c.characterId, onselect: startRename },
+			{ label: c.pinned ? $_("settings.chrome.unpin") : $_("settings.chrome.pin"), icon: c.pinned ? PinOff : Pin, onselect: () => library.togglePin(c.id) },
 			{
-				label: "복제 (포크)",
+				label: $_("settings.chrome.duplicateFork"),
 				icon: Copy,
 				separator: true,
 				onselect: async () => {
@@ -91,7 +91,7 @@
 				},
 			},
 			{
-				label: "마지막 메시지에서 분기",
+				label: $_("settings.chrome.branchFromLast"),
 				icon: GitBranch,
 				disabled: !c.messageCount,
 				onselect: async () => {
@@ -99,22 +99,22 @@
 					if (!last) return;
 					const b = await library.branch(c.id, last.id);
 					nav.go({ page: "character", charId: b.characterId ?? undefined, convId: b.id });
-					toasts.success("분기를 만듦");
+					toasts.success($_("settings.chrome.branchedToast"));
 				},
 			},
 			...(parent && library.conversation(parent)
-				? [{ label: "갈라져 나온 대화로", icon: CornerUpLeft, onselect: () => nav.go({ page: "character", charId: c.characterId ?? undefined, convId: parent }) }]
+				? [{ label: $_("settings.chrome.goToParentConv"), icon: CornerUpLeft, onselect: () => nav.go({ page: "character", charId: c.characterId ?? undefined, convId: parent }) }]
 				: []),
 			...folders.map((f, i) => ({
-				label: `폴더로 이동: ${f.name}`,
+				label: $_("settings.chrome.moveToFolder", { values: { name: f.name } }),
 				icon: Folder,
 				separator: i === 0,
 				checked: c.folderId === f.id,
 				onselect: () => library.move(c.id, f.id),
 			})),
-			...(c.folderId ? [{ label: "폴더에서 빼기", icon: FolderMinus, onselect: () => library.move(c.id, null) }] : []),
-			{ label: "내보내기…", icon: Download, separator: true, onselect: () => convActions.exportMenu(c) },
-			{ label: "삭제", icon: Trash2, danger: true, onselect: () => convActions.remove(c) },
+			...(c.folderId ? [{ label: $_("settings.chrome.removeFromFolder"), icon: FolderMinus, onselect: () => library.move(c.id, null) }] : []),
+			{ label: $_("settings.chrome.exportEllipsis"), icon: Download, separator: true, onselect: () => convActions.exportMenu(c) },
+			{ label: $_("common.delete"), icon: Trash2, danger: true, onselect: () => convActions.remove(c) },
 		];
 	});
 	function openMenu(e: MouseEvent) {
@@ -161,10 +161,10 @@
 			case "phone": {
 				const PHONE_APPS: Record<string, string> = {
 					home: $_("nav.home"),
-					messages: "메시지",
-					contacts: "연락처",
-					photos: "사진",
-					camera: "카메라",
+					messages: $_("settings.chrome.phoneMessages"),
+					contacts: $_("settings.chrome.phoneContacts"),
+					photos: $_("settings.chrome.phonePhotos"),
+					camera: $_("settings.chrome.phoneCamera"),
 					settings: $_("nav.settings"),
 				};
 				if (r.convId) {
@@ -172,8 +172,8 @@
 					const ch = c?.characterId ? library.character(c.characterId) : undefined;
 					return [
 						{ label: $_("nav.phone"), to: { page: "phone" } },
-						{ label: "메시지", to: { page: "phone", app: "messages" } },
-						{ label: ch?.name ?? c?.title ?? "채팅" },
+						{ label: $_("settings.chrome.phoneMessages"), to: { page: "phone", app: "messages" } },
+						{ label: ch?.name ?? c?.title ?? $_("settings.chrome.phoneChatFallback") },
 					];
 				}
 				if (r.app && r.app !== "home") {
@@ -206,7 +206,7 @@
 	/** 닫기: 파일 작업이 남았으면 알리고 (대기열은 메모리에만 — 끄면 기다리던 것은 하지 않음, 5-E-28) */
 	async function closeApp() {
 		const n = jobs.pending;
-		if (n && !(await confirmAction({ title: "작업이 남아 있음", message: `파일 작업 ${n}개가 끝나지 않았습니다. 지금 끄면 하던 것은 멈추고 기다리던 것은 하지 않습니다.`, confirmLabel: "그래도 끄기", danger: true }))) return;
+		if (n && !(await confirmAction({ title: $_("settings.chrome.pendingJobsTitle"), message: $_("settings.chrome.pendingJobsMsg", { values: { count: n } }), confirmLabel: $_("settings.chrome.forceQuitBtn"), danger: true }))) return;
 		await appWindow.close();
 	}
 </script>
@@ -215,15 +215,15 @@
 <header class="titlebar sc-titlebar" class:frameless={theme.setting.isFrameless} class:desktop={!layout.mobile} class:mobile={layout.mobile} class:narrow={layout.narrow} data-tauri-drag-region>
 	{#if layout.narrow}
 		<!-- 휴대폰: 메뉴 · 뒤로 · 지금 화면 이름 · 패널 -->
-		<IconButton label="메뉴" onclick={() => layout.toggleSidebar()}><Menu /></IconButton>
-		{#if nav.canBack}<IconButton label="뒤로" onclick={() => nav.back()}><ChevronLeft /></IconButton>{/if}
+		<IconButton label={$_("settings.chrome.menuTitle")} onclick={() => layout.toggleSidebar()}><Menu /></IconButton>
+		{#if nav.canBack}<IconButton label={$_("settings.chrome.backAria")} onclick={() => nav.back()}><ChevronLeft /></IconButton>{/if}
 	{:else}
-		<IconButton label={layout.sidebar ? "사이드바 닫기 (Ctrl+B)" : "사이드바 열기 (Ctrl+B)"} size="sm" active={layout.sidebar} onclick={() => layout.toggleSidebar()}>
+		<IconButton label={layout.sidebar ? $_("settings.chrome.closeSidebar") : $_("settings.chrome.openSidebar")} size="sm" active={layout.sidebar} onclick={() => layout.toggleSidebar()}>
 			<PanelLeft />
 		</IconButton>
 		<div class="history">
-			<IconButton label="뒤로 (Alt+←)" size="sm" disabled={!nav.canBack} onclick={() => nav.back()}><ChevronLeft /></IconButton>
-			<IconButton label="앞으로 (Alt+→)" size="sm" disabled={!nav.canForward} onclick={() => nav.forward()}><ChevronRight /></IconButton>
+			<IconButton label={$_("settings.chrome.backShortcut")} size="sm" disabled={!nav.canBack} onclick={() => nav.back()}><ChevronLeft /></IconButton>
+			<IconButton label={$_("settings.chrome.forwardShortcut")} size="sm" disabled={!nav.canForward} onclick={() => nav.forward()}><ChevronRight /></IconButton>
 		</div>
 	{/if}
 	<h1 class="title" data-tauri-drag-region>
@@ -236,7 +236,7 @@
 						class="rename"
 						bind:value={draft}
 						use:focusSelect
-						aria-label="대화 이름"
+						aria-label={$_("settings.chrome.convTitle")}
 						onblur={commitRename}
 						onkeydown={(e) => {
 							if (e.key === "Enter") commitRename();
@@ -244,32 +244,32 @@
 						}}
 					/>
 				{:else}
-					<button class="crumb last" title="눌러서 이름 바꾸기" onclick={startRename}>{t.label}</button>
+					<button class="crumb last" title={$_("settings.chrome.clickToRename")} onclick={startRename}>{t.label}</button>
 				{/if}
-				<IconButton label={layout.narrow ? "상위 화면·대화 동작" : "대화 동작"} size="sm" onclick={openMenu}><ChevronDown /></IconButton>
+				<IconButton label={layout.narrow ? $_("settings.chrome.parentAndConvActions") : $_("settings.chrome.convActions")} size="sm" onclick={openMenu}><ChevronDown /></IconButton>
 			{:else if t.to && i < title.length - 1}
-				<button class="crumb" title="{t.label}(으)로" onclick={() => nav.go(t.to!)}>{t.label}</button>
+				<button class="crumb" title={$_("settings.chrome.goToNamed", { values: { label: t.label } })} onclick={() => nav.go(t.to!)}>{t.label}</button>
 			{:else}
 				<span class:last={i === title.length - 1}>{t.label}</span>
 			{/if}
 		{/each}
 		{#if layout.narrow && !conv && crumbMenu.length}
-			<IconButton label="상위 화면" size="sm" onclick={openMenu}><ChevronDown /></IconButton>
+			<IconButton label={$_("settings.chrome.parentScreen")} size="sm" onclick={openMenu}><ChevronDown /></IconButton>
 		{/if}
 	</h1>
-	<ContextMenu at={menu} items={fullMenu} label="화면 이동" onclose={() => (menu = null)} />
+	<ContextMenu at={menu} items={fullMenu} label={$_("settings.chrome.navMenuAria")} onclose={() => (menu = null)} />
 	<div class="drag" data-tauri-drag-region></div>
 
 	<PluginCommands />
 	{#if panel.available}
-		<IconButton label={panel.open ? "오른쪽 패널 닫기" : "오른쪽 패널 열기"} size={layout.narrow ? "md" : "sm"} active={panel.open} onclick={() => panel.toggle()}>
+		<IconButton label={panel.open ? $_("settings.chrome.closeRightPanel") : $_("settings.chrome.openRightPanel")} size={layout.narrow ? "md" : "sm"} active={panel.open} onclick={() => panel.toggle()}>
 			<PanelRight />
 		</IconButton>
 	{/if}
 	{#if !layout.narrow}
 	<div class="right-zone" class:panel={panelShown}>
 		{#if panelShown}
-			<div class="ptabs" role="tablist" aria-label="오른쪽 패널" onwheel={wheelTabs}>
+			<div class="ptabs" role="tablist" aria-label={$_("settings.chrome.rightPanelAria")} onwheel={wheelTabs}>
 				{#each panel.allTabs as t (t.id)}
 					<button
 						role="tab"
@@ -277,7 +277,7 @@
 						class:on={panel.tab === t.id}
 						aria-selected={panel.tab === t.id}
 						aria-label={t.label}
-						title="{t.label} · 끌어서 순서 바꾸기"
+						title={$_("settings.chrome.dragTabTitle", { values: { label: t.label } })}
 						onclick={() => (panel.tab = t.id)}
 						{...panel.tabDrag(t.id)}
 					>
@@ -297,9 +297,9 @@
 {#snippet winButtons()}
 	{#if showWindowControls && theme.setting.isFrameless && layout.desktop}
 		<div class="win">
-			<button aria-label="최소화" title="최소화" onclick={() => appWindow.minimize()}><Minus /></button>
-			<button aria-label="최대화" title="최대화" onclick={() => appWindow.toggleMaximize()}><Square /></button>
-			<button class="close" aria-label="닫기" title="닫기" onclick={closeApp}><X /></button>
+			<button aria-label={$_("settings.chrome.minimize")} title={$_("settings.chrome.minimize")} onclick={() => appWindow.minimize()}><Minus /></button>
+			<button aria-label={$_("settings.chrome.maximize")} title={$_("settings.chrome.maximize")} onclick={() => appWindow.toggleMaximize()}><Square /></button>
+			<button class="close" aria-label={$_("common.close")} title={$_("common.close")} onclick={closeApp}><X /></button>
 		</div>
 	{/if}
 {/snippet}

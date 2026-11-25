@@ -1,4 +1,5 @@
 <script lang="ts">
+	import { _ } from "svelte-i18n";
 	import { ChevronDown, Clock3, CloudSun, Film, MapPin, Music } from "@lucide/svelte";
 	import { formatGameTime } from "./playUtils";
 
@@ -21,12 +22,12 @@
 	const waitDurations = [1, 3, 6, 12, 24];
 </script>
 
-<div class="info" role="status" aria-label="지금 상태">
+<div class="info" role="status" aria-label={$_("gamePlayExtra.statusAria")}>
 	<div class="status">
 		<div class="state-box">
-			{#if p.sceneName}<span class="item scene" title="지금 씬"><Film /><b>{p.sceneName}</b></span><span class="sep" aria-hidden="true"></span>{/if}
-			<span class="item" title="지금 장소"><MapPin /><b>{p.locationName}</b></span>
-			{#if p.weatherName}<span class="sep" aria-hidden="true"></span><span class="item" title="날씨"><CloudSun />{p.weatherName}</span>{/if}
+			{#if p.sceneName}<span class="item scene" title={$_("gamePlayExtra.currentSceneTitle")}><Film /><b>{p.sceneName}</b></span><span class="sep" aria-hidden="true"></span>{/if}
+			<span class="item" title={$_("gamePlayExtra.currentPlaceTitle")}><MapPin /><b>{p.locationName}</b></span>
+			{#if p.weatherName}<span class="sep" aria-hidden="true"></span><span class="item" title={$_("gamePlayExtra.weatherTitle")}><CloudSun />{p.weatherName}</span>{/if}
 			<span class="sep" aria-hidden="true"></span>
 			<div class="wait">
 				<button
@@ -34,21 +35,21 @@
 					onclick={p.onToggleWaitMenu}
 					disabled={!p.canWait || p.isLoading}
 					aria-expanded={p.showWaitMenu}
-					title={p.canWait ? "시간 보내기" : "씬이 진행 중이면 시간을 보낼 수 없음"}
+					title={p.canWait ? $_("gamePlayExtra.waitTitle") : $_("gamePlayExtra.cantWaitInScene")}
 				>
 					<Clock3 />{formatGameTime(p.gameTime)}{#if p.canWait}<ChevronDown class="more" />{/if}
 				</button>
 				{#if p.showWaitMenu}
-					<div class="wait-menu" role="menu" aria-label="얼마나 기다릴지">
-						<span>얼마나 기다릴까</span>
+					<div class="wait-menu" role="menu" aria-label={$_("gamePlayExtra.waitMenuAria")}>
+						<span>{$_("gamePlayExtra.waitMenuHeading")}</span>
 						{#each waitDurations as hours (hours)}
-							<button role="menuitem" disabled={p.isLoading} onclick={() => p.onWait(hours)}>{hours}시간</button>
+							<button role="menuitem" disabled={p.isLoading} onclick={() => p.onWait(hours)}>{$_("gamePlayExtra.hoursUnit", { values: { h: hours } })}</button>
 						{/each}
 					</div>
 				{/if}
 			</div>
 		</div>
-		{#if p.bgmBlocked}<button class="g-chip unlock" onclick={p.onResumeBgm}><Music />배경음 재생</button>{/if}
+		{#if p.bgmBlocked}<button class="g-chip unlock" onclick={p.onResumeBgm}><Music />{$_("gamePlayExtra.playBgmBtn")}</button>{/if}
 	</div>
 
 </div>

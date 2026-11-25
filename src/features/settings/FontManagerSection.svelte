@@ -1,5 +1,6 @@
 <script lang="ts">
 	// 글꼴 관리 페이지: UI / 텍스트 / 모노스페이스 글꼴 지정 + 글꼴 파일 올리기·미리보기·삭제
+	import { _ } from "svelte-i18n";
 	import { ArrowLeft, Trash2, Upload } from "@lucide/svelte";
 	import { pickFiles } from "$shared/ipc/dialog";
 	import { drops, isFont, storeFile } from "$app/drop.svelte";
@@ -14,32 +15,32 @@
 	import Row from "./Row.svelte";
 
 	const fonts = $derived(theme.setting.fonts ?? []);
-	const uiOptions = $derived([{ value: "", label: "기본 (Pretendard)" }, ...fonts.map((f) => ({ value: f.path, label: f.name }))]);
-	const textOptions = $derived([{ value: "", label: "UI 글꼴 따름" }, ...fonts.map((f) => ({ value: f.path, label: f.name }))]);
-	const monoOptions = $derived([{ value: "", label: "기본 (JetBrains Mono)" }, ...fonts.map((f) => ({ value: f.path, label: f.name }))]);
+	const uiOptions = $derived([{ value: "", label: $_("settings.more2.fontUiDefault") }, ...fonts.map((f) => ({ value: f.path, label: f.name }))]);
+	const textOptions = $derived([{ value: "", label: $_("settings.more2.fontTextDefault") }, ...fonts.map((f) => ({ value: f.path, label: f.name }))]);
+	const monoOptions = $derived([{ value: "", label: $_("settings.more2.fontMonoDefault") }, ...fonts.map((f) => ({ value: f.path, label: f.name }))]);
 
 	$effect(() => declarePreviewFonts(fonts));
 
 	async function uploadFonts() {
-		await addFonts(await pickFiles([{ name: "글꼴", extensions: ["ttf", "otf", "woff", "woff2"] }], true));
+		await addFonts(await pickFiles([{ name: $_("settings.more2.fontFilter"), extensions: ["ttf", "otf", "woff", "woff2"] }], true));
 	}
 	async function addFonts(paths: string[]) {
 		if (!paths.length) return;
 		const before = new Set(fonts.map((f) => f.path));
 		await theme.addFonts(paths, false);
 		const added = (theme.setting.fonts ?? []).filter((f) => !before.has(f.path));
-		if (added.length === 1) toasts.success(`글꼴 '${added[0].name}'을(를) 올림`);
-		else if (added.length > 1) toasts.success(`글꼴 ${added.length}개를 올림`);
+		if (added.length === 1) toasts.success($_("settings.more2.fontUploadedOne", { values: { name: added[0].name } }));
+		else if (added.length > 1) toasts.success($_("settings.more2.fontUploadedMany", { values: { count: added.length } }));
 	}
 	async function removeFont(path: string, name: string) {
-		if (!(await confirmAction({ title: "글꼴 삭제", message: `'${name}' 글꼴을 목록에서 지우고 복사해 둔 파일도 지움 (올릴 때 고른 원본 파일은 그대로)`, confirmLabel: "삭제", danger: true }))) return;
+		if (!(await confirmAction({ title: $_("settings.more2.deleteFontTitle"), message: $_("settings.more2.deleteFontMsg", { values: { name } }), confirmLabel: $_("common.delete"), danger: true }))) return;
 		await theme.removeFont(path);
 	}
 
 	$effect(() =>
 		drops.register({
-			label: "글꼴 올리기",
-			hint: "TTF·OTF·WOFF·WOFF2 파일을 놓으면 글꼴 목록에 추가됨",
+			label: $_("settings.more2.dropFontLabel"),
+			hint: $_("settings.more2.dropFontHint"),
 			accept: isFont,
 			ondrop: async (files) => addFonts(await Promise.all(files.map((f) => storeFile(f)))),
 		}),
@@ -50,40 +51,40 @@
 	}
 </script>
 
-<Section title="글꼴 관리" lead="UI·텍스트·모노스페이스 글꼴을 따로 고르고, 올린 글꼴 파일을 관리함">
+<Section title={$_("settings.more2.fontMgrTitle")} lead={$_("settings.more2.fontMgrLead")}>
 	{#snippet actions()}
-		<Button size="sm" variant="ghost" onclick={back}>{#snippet icon()}<ArrowLeft />{/snippet}테마로</Button>
-		<Button size="sm" variant="primary" onclick={uploadFonts}>{#snippet icon()}<Upload />{/snippet}글꼴 올리기</Button>
+		<Button size="sm" variant="ghost" onclick={back}>{#snippet icon()}<ArrowLeft />{/snippet}{$_("settings.more2.backToTheme")}</Button>
+		<Button size="sm" variant="primary" onclick={uploadFonts}>{#snippet icon()}<Upload />{/snippet}{$_("settings.more2.uploadFontBtn")}</Button>
 	{/snippet}
 
-	<Group title="글꼴 지정">
-		<Row label="UI 글꼴" desc="메뉴·버튼·제목 등 앱 인터페이스 전반에 쓰이는 글꼴">
-			<Select value={theme.setting.appFont ?? ""} options={uiOptions} aria-label="UI 글꼴" onchange={(e) => theme.update({ appFont: e.currentTarget.value || null })} />
+	<Group title={$_("settings.more2.fontAssignGroup")}>
+		<Row label={$_("settings.more2.uiFont")} desc={$_("settings.more2.uiFontDesc")}>
+			<Select value={theme.setting.appFont ?? ""} options={uiOptions} aria-label={$_("settings.more2.uiFont")} onchange={(e) => theme.update({ appFont: e.currentTarget.value || null })} />
 		</Row>
-		<Row label="텍스트 글꼴" desc="대화 본문·읽기 화면·캐릭터 소개에 쓰이는 글꼴">
-			<Select value={theme.setting.textFont ?? ""} options={textOptions} aria-label="텍스트 글꼴" onchange={(e) => theme.update({ textFont: e.currentTarget.value || null })} />
+		<Row label={$_("settings.more2.textFont")} desc={$_("settings.more2.textFontDesc")}>
+			<Select value={theme.setting.textFont ?? ""} options={textOptions} aria-label={$_("settings.more2.textFont")} onchange={(e) => theme.update({ textFont: e.currentTarget.value || null })} />
 		</Row>
-		<Row label="모노스페이스 글꼴" desc="코드 블록·로그·정규식·고정폭 편집기에 쓰이는 글꼴">
-			<Select value={theme.setting.monoFont ?? ""} options={monoOptions} aria-label="모노스페이스 글꼴" onchange={(e) => theme.update({ monoFont: e.currentTarget.value || null })} />
+		<Row label={$_("settings.more2.monoFont")} desc={$_("settings.more2.monoFontDesc")}>
+			<Select value={theme.setting.monoFont ?? ""} options={monoOptions} aria-label={$_("settings.more2.monoFont")} onchange={(e) => theme.update({ monoFont: e.currentTarget.value || null })} />
 		</Row>
 		<div class="preview">
 			<div class="pv-row">
 				<span class="pv-label">UI</span>
-				<span class="pv-ui">버튼과 사이드바 메뉴 미리보기 · Sandcastle 0.3</span>
+				<span class="pv-ui">{$_("settings.more2.pvUiSample")}</span>
 			</div>
 			<div class="pv-row">
-				<span class="pv-label">텍스트</span>
-				<span class="pv-text">“바람이 숲 사이로 스며들며 조용한 밤이 찾아왔다.” The quick brown fox 123.</span>
+				<span class="pv-label">{$_("settings.more2.pvTextLabel")}</span>
+				<span class="pv-text">{$_("settings.more2.pvTextSample")}</span>
 			</div>
 			<div class="pv-row">
-				<span class="pv-label">모노</span>
+				<span class="pv-label">{$_("settings.more2.pvMonoLabel")}</span>
 				<code class="pv-mono">const font = "monospace"; // 0O 1lI 1234567890</code>
 			</div>
 		</div>
 	</Group>
 
-	<Group title="올린 글꼴 파일 ({fonts.length})">
-		{#snippet aside()}<Button size="sm" onclick={uploadFonts}>{#snippet icon()}<Upload />{/snippet}글꼴 올리기</Button>{/snippet}
+	<Group title={$_("settings.more2.uploadedFontsGroup", { values: { count: fonts.length } })}>
+		{#snippet aside()}<Button size="sm" onclick={uploadFonts}>{#snippet icon()}<Upload />{/snippet}{$_("settings.more2.uploadFontBtn")}</Button>{/snippet}
 		<div class="list-wrap">
 			{#if fonts.length}
 				<ul class="fonts">
@@ -98,15 +99,15 @@
 							</div>
 							<div class="font-btns">
 								<Button size="sm" variant={isUi ? "primary" : "secondary"} onclick={() => theme.update({ appFont: isUi ? null : f.path })}>UI</Button>
-								<Button size="sm" variant={isText ? "primary" : "secondary"} onclick={() => theme.update({ textFont: isText ? null : f.path })}>텍스트</Button>
-								<Button size="sm" variant={isMono ? "primary" : "secondary"} onclick={() => theme.update({ monoFont: isMono ? null : f.path })}>모노</Button>
-								<Button size="sm" variant="ghost" aria-label="{f.name} 삭제" onclick={() => removeFont(f.path, f.name)}>{#snippet icon()}<Trash2 />{/snippet}</Button>
+								<Button size="sm" variant={isText ? "primary" : "secondary"} onclick={() => theme.update({ textFont: isText ? null : f.path })}>{$_("settings.more2.pvTextLabel")}</Button>
+								<Button size="sm" variant={isMono ? "primary" : "secondary"} onclick={() => theme.update({ monoFont: isMono ? null : f.path })}>{$_("settings.more2.pvMonoLabel")}</Button>
+								<Button size="sm" variant="ghost" aria-label={$_("settings.more.deleteNamed", { values: { name: f.name } })} onclick={() => removeFont(f.path, f.name)}>{#snippet icon()}<Trash2 />{/snippet}</Button>
 							</div>
 						</li>
 					{/each}
 				</ul>
 			{:else}
-				<p class="font-empty">올린 글꼴이 없음. TTF·OTF·WOFF·WOFF2 파일을 올리거나 이 화면에 끌어다 놓으세요</p>
+				<p class="font-empty">{$_("settings.more2.noUploadedFonts")}</p>
 			{/if}
 		</div>
 	</Group>

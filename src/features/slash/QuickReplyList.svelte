@@ -1,4 +1,5 @@
 <script lang="ts">
+	import { _ } from "svelte-i18n";
 	// 빠른 답장 검색 목록 (5-E-20-5-5): 버튼 줄의 "모두 보기"와 오른쪽 패널 "빠른 답장" 탭이 같이 쓴다.
 	// 정규식 리스트와 통일된 디자인: <details> 그룹 접기, 실행(Play) 버튼 분리, 편집·삭제·순서 이동 지원
 	import { onMount } from "svelte";
@@ -109,8 +110,8 @@
 
 	// ---- 삭제 ----
 	async function removeItem(set: QuickReplySet, q: QuickReply) {
-		const name = q.label.trim() || q.message.slice(0, 16) || "빠른 답장";
-		if (!(await confirmAction({ title: "빠른 답장 삭제", message: `'${name}' 항목을 '${set.name}' 세트에서 삭제함`, confirmLabel: "삭제", danger: true }))) return;
+		const name = q.label.trim() || q.message.slice(0, 16) || $_("extraTools.qrToolbarAria");
+		if (!(await confirmAction({ title: $_("extraTools.qrDeleteTitle"), message: $_("extraTools.qrDeleteMsg", { values: { name, set: set.name } }), confirmLabel: $_("common.delete"), danger: true }))) return;
 		const snap = structuredClone($state.snapshot(set)) as QuickReplySet;
 		snap.items = snap.items.filter((x) => x.id !== q.id);
 		await quickReplies.save(toInput(snap));
@@ -120,24 +121,24 @@
 <div class="qr-list">
 	<label class="search">
 		<Search />
-		<input bind:this={input} bind:value={query} type="search" placeholder="빠른 답장 검색" aria-label="빠른 답장 검색" />
-		{#if query.trim()}<small>{found}개</small>{/if}
+		<input bind:this={input} bind:value={query} type="search" placeholder={$_("extraTools.qrSearchPlaceholder")} aria-label={$_("extraTools.qrSearchPlaceholder")} />
+		{#if query.trim()}<small>{$_("extraTools.qrFoundCount", { values: { count: found } })}</small>{/if}
 	</label>
 	{#if !sets.length}
-		<p class="none">이 대화에 쓸 수 있는 세트가 없음</p>
+		<p class="none">{$_("extraTools.qrNoSets")}</p>
 	{:else if !groups.length}
-		<p class="none">찾는 빠른 답장이 없음</p>
+		<p class="none">{$_("extraTools.qrNoMatches")}</p>
 	{/if}
 	{#each groups as g (g.set.id)}
 		{@const sort = sorterFor(g.set, g.buttons)}
 		<details class="qr-group" class:off={!g.on} open>
 			<summary class="qr-head">
 				<ChevronRight class="caret" />
-				<b>{g.set.name || "이름 없는 세트"}</b>
-				<small>{g.set.scope === "global" ? "전체" : g.set.scope === "character" ? "캐릭터" : "프리셋"} · {g.buttons.length}</small>
+				<b>{g.set.name || $_("extraTools.qrUnnamedSet")}</b>
+				<small>{g.set.scope === "global" ? $_("extraTools.qrScopeGlobal") : g.set.scope === "character" ? $_("extraTools.qrScopeChar") : $_("extraTools.qrScopePreset")} · {g.buttons.length}</small>
 				<!-- svelte-ignore a11y_click_events_have_key_events, a11y_no_static_element_interactions -->
 				<span class="head-sw" onclick={(e) => e.stopPropagation()}>
-					<Switch checked={g.on} label="이 대화에서 {g.set.name} 쓰기" hideLabel onchange={() => conv && void toggleForConv(conv, g.set.id)} />
+					<Switch checked={g.on} label={$_("extraTools.qrToggleSetAria", { values: { name: g.set.name } })} hideLabel onchange={() => conv && void toggleForConv(conv, g.set.id)} />
 				</span>
 			</summary>
 			{#if g.on}
@@ -146,7 +147,7 @@
 						{@const busy = running || session.busy || (!!conv && slashRuns.isRunning(conv.id))}
 						<li {...sort.item(i)} class:dragging={sort.from === i} class:over={sort.over === i && sort.from !== i}>
 							{#if canReorder}
-								<span class="grip" aria-hidden="true" title="끌어서 순서 바꾸기" {...sort.handle(i)}><GripVertical /></span>
+								<span class="grip" aria-hidden="true" title={$_("extraTools.qrDragHint")} {...sort.handle(i)}><GripVertical /></span>
 							{/if}
 							<div class="info" title={b.q.message}>
 								<span class="label">{b.q.label.trim() || b.q.message.slice(0, 16)}</span>
@@ -154,12 +155,12 @@
 							</div>
 							<div class="acts">
 								{#if canReorder && g.buttons.length > 1}
-									<IconButton size="sm" label="위로 이동" disabled={i === 0} onclick={() => stepItem(g.set, b.q.id, -1)}><ArrowUp /></IconButton>
-									<IconButton size="sm" label="아래로 이동" disabled={i === g.buttons.length - 1} onclick={() => stepItem(g.set, b.q.id, 1)}><ArrowDown /></IconButton>
+									<IconButton size="sm" label={$_("extraTools.qrMoveUpAria")} disabled={i === 0} onclick={() => stepItem(g.set, b.q.id, -1)}><ArrowUp /></IconButton>
+									<IconButton size="sm" label={$_("extraTools.qrMoveDownAria")} disabled={i === g.buttons.length - 1} onclick={() => stepItem(g.set, b.q.id, 1)}><ArrowDown /></IconButton>
 								{/if}
-								<IconButton size="sm" label="{b.q.label || '빠른 답장'} 편집" onclick={() => startEdit(g.set, b.q)}><Pencil /></IconButton>
-								<IconButton size="sm" variant="danger" label="{b.q.label || '빠른 답장'} 삭제" onclick={() => removeItem(g.set, b.q)}><Trash2 /></IconButton>
-								<IconButton size="sm" variant="soft" label="{b.q.label || '빠른 답장'} 실행" disabled={busy} onclick={() => press(b)}><Play /></IconButton>
+								<IconButton size="sm" label={$_("extraTools.qrEditItemAria", { values: { name: b.q.label || $_("extraTools.qrToolbarAria") } })} onclick={() => startEdit(g.set, b.q)}><Pencil /></IconButton>
+								<IconButton size="sm" variant="danger" label={$_("extraTools.qrDeleteItemAria", { values: { name: b.q.label || $_("extraTools.qrToolbarAria") } })} onclick={() => removeItem(g.set, b.q)}><Trash2 /></IconButton>
+								<IconButton size="sm" variant="soft" label={$_("extraTools.qrRunItemAria", { values: { name: b.q.label || $_("extraTools.qrToolbarAria") } })} disabled={busy} onclick={() => press(b)}><Play /></IconButton>
 							</div>
 						</li>
 					{/each}
@@ -169,19 +170,19 @@
 	{/each}
 </div>
 
-<Dialog bind:open={editOpen} title="빠른 답장 편집" size="sm">
+<Dialog bind:open={editOpen} title={$_("extraTools.qrEditTitle")} size="sm">
 	{#if editing}
 		<div class="edit-form">
-			<Field label="이름"><Input bind:value={editing.label} placeholder="버튼 이름" /></Field>
-			<Field label="내용" hint="보낼 글 또는 /로 시작하는 슬래시 커맨드">
-				<Textarea bind:value={editing.message} rows={4} autosize maxRows={14} mono placeholder="/gen … 또는 보낼 글" />
+			<Field label={$_("extraTools.qrNameField")}><Input bind:value={editing.label} placeholder={$_("extraTools.qrNamePlaceholder")} /></Field>
+			<Field label={$_("extraTools.qrContentField")} hint={$_("extraTools.qrContentHint")}>
+				<Textarea bind:value={editing.message} rows={4} autosize maxRows={14} mono placeholder={$_("extraTools.qrContentPlaceholder")} />
 			</Field>
-			<Switch checked={!editing.hidden} label="빠른 답장 줄에 보이기" onchange={(v) => editing && (editing.hidden = !v)} />
+			<Switch checked={!editing.hidden} label={$_("extraTools.qrShowInBar")} onchange={(v) => editing && (editing.hidden = !v)} />
 		</div>
 	{/if}
 	{#snippet footer()}
-		<Button variant="ghost" onclick={() => (editOpen = false)}>취소</Button>
-		<Button variant="primary" onclick={saveEdit}>저장</Button>
+		<Button variant="ghost" onclick={() => (editOpen = false)}>{$_("common.cancel")}</Button>
+		<Button variant="primary" onclick={saveEdit}>{$_("common.save")}</Button>
 	{/snippet}
 </Dialog>
 

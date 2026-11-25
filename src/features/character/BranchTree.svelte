@@ -1,4 +1,5 @@
 <script lang="ts">
+	import { _ } from "svelte-i18n";
 	// 오른쪽 패널 '분기' 탭: 갈래를 타임라인으로 (git 그래프처럼)
 	// 세로축 = 메시지 번호, 대화마다 한 줄(레인). 갈라진 메시지에서 옆 레인으로 휘어져 나감.
 	// 아무 일도 없는 메시지 구간은 접어서, 갈라진 지점과 끝만 줄로 보여줌.
@@ -100,7 +101,7 @@
 			id: `end:${l.node.conv.id}`,
 			x: 40 + x(l.lane),
 			y: endY(l),
-			heading: `메시지 #${l.end}`,
+			heading: $_("branchTree.msgHeading", { values: { num: l.end } }),
 			items: [{ conv: l.node.conv, current: l.node.conv.id === conv.id }],
 		};
 	}
@@ -117,7 +118,7 @@
 			id: `fork:${parentLaneIdx}:${startRow}`,
 			x: 40 + x(parentLaneIdx),
 			y: y(startRow),
-			heading: `#${startRow} 분기 (${children.length}개 갈래)`,
+			heading: $_("branchTree.forkHeading", { values: { row: startRow, count: children.length } }),
 			items,
 		};
 	}
@@ -125,10 +126,10 @@
 
 <div class="panel-body">
 	<section>
-		<h4>분기 <span class="faint">대화 {lanes.length}개</span></h4>
-		{#if orphan}<p class="note">갈라져 나온 원래 대화는 지워졌음</p>{/if}
+		<h4>{$_("branchTree.title")} <span class="faint">{$_("branchTree.convCount", { values: { count: lanes.length } })}</span></h4>
+		{#if orphan}<p class="note">{$_("branchTree.orphanNote")}</p>{/if}
 		{#if lanes.length > 1}
-			<p class="hint">원 아이콘에 마우스를 올리거나 눌러 대화로 바로 이동</p>
+			<p class="hint">{$_("branchTree.hoverHint")}</p>
 			<div class="graph-scroll">
 				<div class="graph" style:--lanes-w="{width}px">
 					<svg class="lines" {width} {height} viewBox="0 0 {width} {height}">
@@ -166,7 +167,7 @@
 					</svg>
 					<ol class="rows">
 						{#each rowInfo as r (r.n)}
-							<li style:height="{ROW}px" title={Number.isInteger(r.n) ? undefined : "새 메시지 없이 갈라지기만 한 대화"}>
+							<li style:height="{ROW}px" title={Number.isInteger(r.n) ? undefined : $_("branchTree.emptyForkTitle")}>
 								<span class="no" class:fork={r.forks.length > 0}>{Number.isInteger(r.n) ? `#${r.n}` : ""}</span>
 								<span class="lanes-gap"></span>
 								<span class="what">
@@ -178,15 +179,15 @@
 											onmouseenter={() => (hoverLaneId = l.node.conv.id)}
 											onmouseleave={() => (hoverLaneId = null)}
 											onclick={() => onopen(l.node.conv.id)}
-											title="{l.node.conv.title} · 메시지 {l.node.conv.messageCount}개 · {relative(l.node.conv.updatedAt)}"
+											title={$_("branchTree.convTitle", { values: { title: l.node.conv.title, count: l.node.conv.messageCount, when: relative(l.node.conv.updatedAt) } })}
 										>
-											<b>{l.node.conv.title}</b>{#if l.node.conv.id === conv.id}<em>지금</em>{/if}
+											<b>{l.node.conv.title}</b>{#if l.node.conv.id === conv.id}<em>{$_("branchTree.currentBadge")}</em>{/if}
 										</button>
 									{/each}
 									{#if r.forks.length && !r.ends.length}
 										{@const p = parentOf(r.forks[0])}
-										<button class="fork-btn" onclick={() => p && onopen(p.node.conv.id, r.forks[0].node.at?.messageId)} title="갈라진 메시지로 가기">
-											<GitBranch />갈래 {r.forks.length}개
+										<button class="fork-btn" onclick={() => p && onopen(p.node.conv.id, r.forks[0].node.at?.messageId)} title={$_("branchTree.jumpForkTitle")}>
+											<GitBranch />{$_("branchTree.forkCount", { values: { count: r.forks.length } })}
 										</button>
 									{/if}
 								</span>
@@ -210,9 +211,9 @@
 										<button type="button" class:cur={it.current} onclick={() => ((hovered = null), onopen(it.conv.id, it.jumpTo))}>
 											<span class="pt">
 												<b>{it.conv.title}</b>
-												<small>메시지 {it.conv.messageCount}개 · {relative(it.conv.updatedAt)}</small>
+												<small>{$_("branchTree.msgMeta", { values: { count: it.conv.messageCount, when: relative(it.conv.updatedAt) } })}</small>
 											</span>
-											{#if it.current}<em>지금</em>{:else}<ArrowUpRight />{/if}
+											{#if it.current}<em>{$_("branchTree.currentBadge")}</em>{:else}<ArrowUpRight />{/if}
 										</button>
 									</li>
 								{/each}
@@ -224,7 +225,7 @@
 		{:else}
 			<div class="panel-none">
 				<GitBranch />
-				<p>아직 갈래 없음. 메시지 위 도구의 '여기서 분기 나누기'로 다른 전개를 따로 이어 갈 수 있음</p>
+				<p>{$_("branchTree.emptyState")}</p>
 			</div>
 		{/if}
 	</section>

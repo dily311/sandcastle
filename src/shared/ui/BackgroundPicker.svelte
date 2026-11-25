@@ -1,6 +1,7 @@
 <script lang="ts">
 	// 배경 고르기: 없음 · 사용자 이미지(모달에서 저장된 이미지/에셋/생성 이미지 선택) · 이미지 올리기 · 기본 그라데이션
 	// 값: null(없음) / "preset:<id>" / 이미지 경로
+	import { _ } from "svelte-i18n";
 	import { Ban, Camera, ChevronDown, Images, Search, Upload, X } from "@lucide/svelte";
 	import type { GeneratedImage_Serialize as GeneratedImage } from "$ipc/bindings";
 	import { call, commands } from "$shared/ipc/client";
@@ -33,7 +34,8 @@
 		allowNone?: boolean;
 		label?: string;
 	}
-	let { value, images, extraTabs = [], onpick, onupload, onremove, allowNone = true, label = "배경" }: Props = $props();
+	let { value, images, extraTabs = [], onpick, onupload, onremove, allowNone = true, label }: Props = $props();
+	const effectiveLabel = $derived(label ?? $_("settings.sharedUi.bgLabel"));
 
 	let expanded = $state(false);
 	let row: HTMLDivElement | undefined = $state();
@@ -52,7 +54,7 @@
 	const allTags = $derived(
 		[...new Set(savedImages.flatMap((i) => i.tags))].sort((a, b) => a.localeCompare(b, "ko")),
 	);
-	const TAG_LABELS: Record<string, string> = { preset: "프리셋", upload: "업로드" };
+	const TAG_LABELS = $derived<Record<string, string>>({ preset: $_("settings.dataSec.counts.promptPresets"), upload: $_("settings.sharedUi.tagUpload") });
 	const tagLabel = (t: string) => TAG_LABELS[t] ?? t;
 
 	async function openLibrary() {
@@ -78,7 +80,7 @@
 		})),
 		{
 			id: "saved",
-			label: `저장된 이미지`,
+			label: $_("settings.sharedUi.savedImagesTab"),
 			items: (() => {
 				const seen = new Set<string>();
 				const out: { path: string; label: string; tags: string[]; removable: boolean }[] = [];
@@ -90,7 +92,7 @@
 				for (const p of [...images].reverse()) {
 					if (seen.has(p)) continue;
 					seen.add(p);
-					out.push({ path: p, label: p.split(/[\\/]/).pop() ?? "배경", tags: [], removable: true });
+					out.push({ path: p, label: p.split(/[\\/]/).pop() ?? $_("settings.sharedUi.bgLabel"), tags: [], removable: true });
 				}
 				return out;
 			})(),
@@ -131,12 +133,12 @@
 	});
 </script>
 
-<div class="picker" class:expanded role="radiogroup" aria-label={label}>
+<div class="picker" class:expanded role="radiogroup" aria-label={effectiveLabel}>
 	<div class="tiles" bind:this={row}>
 		{#if onupload}
-			<button type="button" class="tile upload" title="새 이미지 올리기" aria-label="새 이미지 올리기" onclick={onupload}><Camera /></button>
+			<button type="button" class="tile upload" title={$_("settings.sharedUi.uploadNewImg")} aria-label={$_("settings.sharedUi.uploadNewImg")} onclick={onupload}><Camera /></button>
 		{/if}
-		<button type="button" class="tile library" class:on={isCustomPath} title="사용자 이미지에서 선택" aria-label="사용자 이미지에서 선택" onclick={openLibrary}>
+		<button type="button" class="tile library" class:on={isCustomPath} title={$_("settings.sharedUi.pickFromUserImages")} aria-label={$_("settings.sharedUi.pickFromUserImages")} onclick={openLibrary}>
 			{#if isCustomPath && value}
 				<img src={fileSrc(value)} alt="" loading="lazy" />
 				<span class="lib-badge" aria-hidden="true"><Images /></span>
@@ -145,40 +147,41 @@
 			{/if}
 		</button>
 		{#if allowNone}
-			<button type="button" class="tile none" class:on={!value} role="radio" aria-checked={!value} title="없음" aria-label="배경 없음" onclick={() => onpick(null)}><Ban /></button>
+			<button type="button" class="tile none" class:on={!value} role="radio" aria-checked={!value} title={$_("common.none")} aria-label={$_("settings.sharedUi.noBgAria")} onclick={() => onpick(null)}><Ban /></button>
 		{/if}
 		{#each GRADIENTS as g (g.id)}
 			{@const v = `preset:${g.id}`}
-			<button type="button" class="tile" class:on={value === v} role="radio" aria-checked={value === v} title={g.name} aria-label={g.name} style:background={gradientCss(g)} onclick={() => onpick(v)}></button>
+			{@const gname = $_(`uiPolish.gradients.${g.id}`, { default: g.name })}
+			<button type="button" class="tile" class:on={value === v} role="radio" aria-checked={value === v} title={gname} aria-label={gname} style:background={gradientCss(g)} onclick={() => onpick(v)}></button>
 		{/each}
 	</div>
 	{#if overflowing || expanded}
 		<button type="button" class="more" aria-expanded={expanded} onclick={() => (expanded = !expanded)}>
-			{expanded ? "접기" : "더보기"}<ChevronDown class={expanded ? "up" : ""} />
+			{expanded ? $_("settings.sharedUi.collapse") : $_("settings.sharedUi.expand")}<ChevronDown class={expanded ? "up" : ""} />
 		</button>
 	{/if}
 </div>
 
-<Dialog open={modalOpen} title="사용자 이미지 선택" size="lg" onclose={() => (modalOpen = false)}>
+<Dialog open={modalOpen} title={$_("settings.sharedUi.pickUserImgTitle")} size="lg" onclose={() => (modalOpen = false)}>
 	<div class="modal-head">
 		{#if allTabs.length > 1}
-			<Segmented label="이미지 출처" bind:value={activeTab} options={allTabs.map((t) => ({ value: t.id, label: t.label }))} />
+			<Segmented label={$_("settings.sharedUi.imgSourceAria")} bind:value={activeTab} options={allTabs.map((t) => ({ value: t.id, label: t.label }))} />
 		{/if}
 		<div class="modal-tools">
 			<div class="modal-search">
-				<Input bind:value={query} placeholder="이름·프롬프트 검색" aria-label="이미지 검색" type="search">
+				<Input bind:value={query} placeholder={$_("settings.sharedUi.searchImgPlaceholder")} aria-label={$_("settings.sharedUi.searchImgAria")} type="search">
 					{#snippet leading()}<Search />{/snippet}
 				</Input>
 			</div>
 			{#if onupload}
-				<Button size="sm" variant="secondary" onclick={onupload}>{#snippet icon()}<Upload />{/snippet}새 이미지 올리기</Button>
+				<Button size="sm" variant="secondary" onclick={onupload}>{#snippet icon()}<Upload />{/snippet}{$_("settings.sharedUi.uploadNewImg")}</Button>
 			{/if}
 		</div>
 	</div>
 
 	{#if currentTab?.id === "saved" && allTags.length}
-		<div class="tag-chips" role="tablist" aria-label="태그 필터">
-			<button type="button" class="tag-chip" class:on={tagFilter === "all"} onclick={() => (tagFilter = "all")}>전체</button>
+		<div class="tag-chips" role="tablist" aria-label={$_("settings.sharedUi.tagFilterAria")}>
+			<button type="button" class="tag-chip" class:on={tagFilter === "all"} onclick={() => (tagFilter = "all")}>{$_("common.all")}</button>
 			{#each allTags as t (t)}
 				<button type="button" class="tag-chip" class:on={tagFilter === t} onclick={() => (tagFilter = tagFilter === t ? "all" : t)}>#{tagLabel(t)}</button>
 			{/each}
@@ -196,20 +199,20 @@
 						{#if item.label}<span class="modal-cap">{item.label}</span>{/if}
 					</button>
 					{#if onremove && item.removable}
-						<button type="button" class="del" aria-label="이 배경 지우기" title="지우기" onclick={() => onremove(item.path)}><X /></button>
+						<button type="button" class="del" aria-label={$_("settings.sharedUi.deleteBgAria")} title={$_("common.delete")} onclick={() => onremove(item.path)}><X /></button>
 					{/if}
 				</div>
 			{/each}
 		</div>
 	{:else}
-		<p class="modal-empty">선택할 수 있는 이미지가 없음</p>
+		<p class="modal-empty">{$_("settings.sharedUi.noSelectableImg")}</p>
 	{/if}
 
 	{#snippet footer()}
 		{#if allowNone && value}
-			<Button variant="ghost" onclick={() => ((onpick(null)), (modalOpen = false))}>배경 없음</Button>
+			<Button variant="ghost" onclick={() => ((onpick(null)), (modalOpen = false))}>{$_("settings.sharedUi.noBgAria")}</Button>
 		{/if}
-		<Button variant="secondary" onclick={() => (modalOpen = false)}>닫기</Button>
+		<Button variant="secondary" onclick={() => (modalOpen = false)}>{$_("common.close")}</Button>
 	{/snippet}
 </Dialog>
 

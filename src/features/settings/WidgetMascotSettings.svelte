@@ -1,5 +1,6 @@
 <script lang="ts">
 	import { onMount } from "svelte";
+	import { _ } from "svelte-i18n";
 	import { Plus, Trash2, Upload, X } from "@lucide/svelte";
 	import { Button, Input, Select, Switch, Textarea } from "$shared/ui";
 	import { IMAGE_FILES, pickFiles } from "$shared/ipc/dialog";
@@ -35,25 +36,25 @@
 
 	const selected = $derived(setting.characters.find((c) => c.id === selectedId) ?? null);
 	const characterOptions = $derived([
-		{ value: "", label: "연결 안 함 (직접 설정)" },
+		{ value: "", label: $_("settings.mascot.unlinked") },
 		...library.characters.map((c) => ({ value: c.id, label: c.name })),
 	]);
 	const personaOptions = $derived([
-		{ value: "", label: "앱 기본 페르소나" },
+		{ value: "", label: $_("settings.mascot.appDefaultPersona") },
 		...library.personas.map((p) => ({ value: p.id, label: p.name })),
 	]);
 	const presetOptions = $derived([
-		{ value: "", label: "앱 기본 프리셋" },
+		{ value: "", label: $_("settings.mascot.appDefaultPreset") },
 		...library.presets.map((p) => ({ value: p.id, label: p.name })),
 	]);
 
-	const WEIGHT_ITEMS: { key: keyof MascotBehaviorWeights_Serialize; label: string }[] = [
-		{ key: "idle", label: "가만히 있기" },
-		{ key: "walk", label: "걸어다니기" },
-		{ key: "sitting", label: "앉아있기" },
-		{ key: "sleep", label: "잠자기" },
-		{ key: "working", label: "활동 / 혼잣말" },
-	];
+	const WEIGHT_ITEMS = $derived<{ key: keyof MascotBehaviorWeights_Serialize; label: string }[]>([
+		{ key: "idle", label: $_("settings.mascot.wIdle") },
+		{ key: "walk", label: $_("settings.mascot.wWalk") },
+		{ key: "sitting", label: $_("settings.mascot.wSitting") },
+		{ key: "sleep", label: $_("settings.mascot.wSleep") },
+		{ key: "working", label: $_("settings.mascot.wWorking") },
+	]);
 
 	const totalWeight = $derived.by(() => {
 		if (!selected) return 1;
@@ -100,7 +101,7 @@
 
 	function addMascot() {
 		const idx = setting.characters.length + 1;
-		const created = createMascotConfig({ name: `시메지 ${idx}` });
+		const created = createMascotConfig({ name: $_("settings.mascot.defaultName", { values: { idx } }) });
 		const next: WidgetMascotSetting_Serialize = {
 			...setting,
 			characters: [...setting.characters, created],
@@ -122,7 +123,7 @@
 		for (const p of allPaths) {
 			void commands.deleteWidgetMascotImage(p).catch(() => {});
 		}
-		toasts.info(`'${target.name}' 시메지를 삭제함`);
+		toasts.info($_("settings.mascot.deletedToast", { values: { name: target.name } }));
 	}
 
 	function onLinkCharacter(id: string, charIdRaw: string) {
@@ -202,26 +203,26 @@
 </script>
 
 {#if ready}
-	<Group title="시메지 간 대화">
-		<p class="group-desc">여러 시메지를 동시에 띄워두면 서로 다가가서 대화를 나눕니다</p>
-		<Row label="시메지끼리 서로 대화하기" desc="2명 이상의 시메지가 활성화되어 있을 때 동작">
+	<Group title={$_("settings.mascot.pairChatGroup")}>
+		<p class="group-desc">{$_("settings.mascot.pairChatGroupDesc")}</p>
+		<Row label={$_("settings.mascot.pairChatEnable")} desc={$_("settings.mascot.pairChatEnableDesc")}>
 			<Switch
 				checked={setting.pairChatEnabled}
-				label="시메지끼리 서로 대화하기"
+				label={$_("settings.mascot.pairChatEnable")}
 				hideLabel
 				onchange={(v) => patchGlobal({ pairChatEnabled: v })}
 			/>
 		</Row>
 		{#if setting.pairChatEnabled}
-			<Row label="AI로 대화 생성" desc="연결된 API·캐릭터 정보로 대화를 만듦 (실패 시 기본 대사 사용)">
+			<Row label={$_("settings.mascot.pairChatAi")} desc={$_("settings.mascot.pairChatAiDesc")}>
 				<Switch
 					checked={setting.pairChatUseAi}
-					label="AI로 대화 생성"
+					label={$_("settings.mascot.pairChatAi")}
 					hideLabel
 					onchange={(v) => patchGlobal({ pairChatUseAi: v })}
 				/>
 			</Row>
-			<Row label="대화 주기" desc="{setting.pairChatIntervalSec}초마다 시메지들이 만나 대화">
+			<Row label={$_("settings.mascot.pairChatInterval")} desc={$_("settings.mascot.pairChatIntervalDesc", { values: { sec: setting.pairChatIntervalSec } })}>
 				<div class="range-inline">
 					<input
 						type="range"
@@ -229,17 +230,17 @@
 						max="600"
 						step="10"
 						value={setting.pairChatIntervalSec}
-						aria-label="시메지 간 대화 주기"
+						aria-label={$_("settings.mascot.pairChatIntervalAria")}
 						onchange={(e) => patchGlobal({ pairChatIntervalSec: Number(e.currentTarget.value) })}
 					/>
-					<span class="num">{setting.pairChatIntervalSec}초</span>
+					<span class="num">{$_("settings.mascot.secUnit", { values: { sec: setting.pairChatIntervalSec } })}</span>
 				</div>
 			</Row>
 		{/if}
 	</Group>
 
-	<Group title="시메지 목록">
-		<p class="group-desc">여러 시메지를 추가하고 켤 수 있습니다</p>
+	<Group title={$_("settings.mascot.listGroup")}>
+		<p class="group-desc">{$_("settings.mascot.listGroupDesc")}</p>
 		<div class="mascot-bar">
 			{#each setting.characters as c (c.id)}
 				{@const thumb = previewOf(c)}
@@ -254,87 +255,87 @@
 					</button>
 					<Switch
 						checked={c.enabled}
-						label="{c.name} 표시"
+						label={$_("settings.mascot.showAria", { values: { name: c.name } })}
 						hideLabel
 						onchange={(v) => patchCharacter(c.id, { enabled: v })}
 					/>
 				</div>
 			{/each}
 			<Button size="sm" variant="primary" onclick={addMascot}>
-				<Plus size={14} /> 시메지 추가
+				<Plus size={14} /> {$_("settings.mascot.addBtn")}
 			</Button>
 		</div>
 	</Group>
 
 	{#if selected}
-		<Group title="연결 및 기본 설정">
-			<Row label="표시 이름">
+		<Group title={$_("settings.mascot.basicGroup")}>
+			<Row label={$_("settings.mascot.displayName")}>
 				<Input
 					value={selected.name}
 					maxlength={40}
-					aria-label="시메지 이름"
-					onchange={(e) => patchCharacter(selected.id, { name: e.currentTarget.value.trim() || "시메지" })}
+					aria-label={$_("settings.mascot.nameAria")}
+					onchange={(e) => patchCharacter(selected.id, { name: e.currentTarget.value.trim() || $_("settings.mascot.fallbackName") })}
 				/>
 			</Row>
-			<Row label="화면에 띄우기">
+			<Row label={$_("settings.mascot.showOnScreen")}>
 				<Switch
 					checked={selected.enabled}
-					label="화면에 띄우기"
+					label={$_("settings.mascot.showOnScreen")}
 					hideLabel
 					onchange={(v) => patchCharacter(selected.id, { enabled: v })}
 				/>
 			</Row>
-			<Row label="연결 캐릭터" desc="시메지의 성격·말투·기본 아바타에 사용">
+			<Row label={$_("settings.mascot.linkedChar")} desc={$_("settings.mascot.linkedCharDesc")}>
 				<Select
 					value={selected.characterId ?? ""}
 					options={characterOptions}
-					aria-label="연결 캐릭터"
+					aria-label={$_("settings.mascot.linkedChar")}
 					onchange={(e) => onLinkCharacter(selected.id, e.currentTarget.value)}
 				/>
 			</Row>
-			<Row label="연결 페르소나" desc={"대사의 {{user}} 이름과 대화 맥락에 사용"}>
+			<Row label={$_("settings.mascot.linkedPersona")} desc={$_("settings.mascot.linkedPersonaDesc")}>
 				<Select
 					value={selected.personaId ?? ""}
 					options={personaOptions}
-					aria-label="연결 페르소나"
+					aria-label={$_("settings.mascot.linkedPersona")}
 					onchange={(e) => patchCharacter(selected.id, { personaId: orNull(e.currentTarget.value) })}
 				/>
 			</Row>
-			<Row label="연결 API" desc="대화하기·선물·시메지 간 대화 생성에 사용">
+			<Row label={$_("settings.mascot.linkedApi")} desc={$_("settings.mascot.linkedApiDesc")}>
 				<Select
 					value={selected.apiProfileId ?? ""}
-					options={chatApiOptions("앱 기본 API")}
-					aria-label="연결 API"
+					options={chatApiOptions($_("settings.mascot.appDefaultApi"))}
+					aria-label={$_("settings.mascot.linkedApi")}
 					onchange={(e) => patchCharacter(selected.id, { apiProfileId: orNull(e.currentTarget.value), model: null })}
 				/>
 			</Row>
 			{#if selected.apiProfileId}
-				<Row label="연결 모델" desc="비우면 해당 API의 기본 모델 사용">
+				<Row label={$_("settings.mascot.linkedModel")} desc={$_("settings.mascot.linkedModelDesc")}>
 					<ModelPicker
 						profile={library.apis.find((a) => a.id === selected.apiProfileId)}
 						value={selected.model || null}
 						onchange={(m) => patchCharacter(selected.id, { model: m ?? null })}
-						label="시메지 모델"
+						label={$_("settings.mascot.modelAria")}
 					/>
 				</Row>
 			{/if}
-			<Row label="연결 프리셋" desc="프롬프트 구성 및 생성 옵션에 사용">
+			<Row label={$_("settings.mascot.linkedPreset")} desc={$_("settings.mascot.linkedPresetDesc")}>
 				<Select
 					value={selected.presetId ?? ""}
 					options={presetOptions}
-					aria-label="연결 프리셋"
+					aria-label={$_("settings.mascot.linkedPreset")}
 					onchange={(e) => patchCharacter(selected.id, { presetId: orNull(e.currentTarget.value) })}
 				/>
 			</Row>
-			<Row label="AI 대사 생성 사용" desc="대화하기·선물 반응 시 연결된 API로 응답 생성">
+			<Row label={$_("settings.mascot.useAiDialogue")} desc={$_("settings.mascot.useAiDialogueDesc")}>
 				<Switch
 					checked={selected.useAiDialogue}
-					label="AI 대사 생성 사용"
+					label={$_("settings.mascot.useAiDialogue")}
 					hideLabel
 					onchange={(v) => patchCharacter(selected.id, { useAiDialogue: v })}
 				/>
 			</Row>
-			<Row label="크기 배율" desc="{Math.round(selected.scale * 100)}%">
+			<Row label={$_("settings.mascot.scale")} desc="{Math.round(selected.scale * 100)}%">
 				<div class="range-inline">
 					<input
 						type="range"
@@ -342,13 +343,13 @@
 						max="2.0"
 						step="0.1"
 						value={selected.scale}
-						aria-label="시메지 크기 배율"
+						aria-label={$_("settings.mascot.scaleAria")}
 						onchange={(e) => patchCharacter(selected.id, { scale: Number(e.currentTarget.value) })}
 					/>
 					<span class="num">{selected.scale.toFixed(1)}x</span>
 				</div>
 			</Row>
-			<Row label="이동 속도" desc="화면에서 걸어다니는 속도">
+			<Row label={$_("settings.mascot.speed")} desc={$_("settings.mascot.speedDesc")}>
 				<div class="range-inline">
 					<input
 						type="range"
@@ -356,7 +357,7 @@
 						max="200"
 						step="10"
 						value={selected.speed}
-						aria-label="시메지 이동 속도"
+						aria-label={$_("settings.mascot.speedAria")}
 						onchange={(e) => patchCharacter(selected.id, { speed: Number(e.currentTarget.value) })}
 					/>
 					<span class="num">{Math.round(selected.speed)}</span>
@@ -364,8 +365,8 @@
 			</Row>
 		</Group>
 
-		<Group title="캐릭터 이미지 업로드">
-			<p class="group-desc">상태별로 이미지를 여러 장 올리면 프레임 애니메이션으로 재생됩니다. 비어 있으면 기본(대기) 이미지를 사용합니다.</p>
+		<Group title={$_("settings.mascot.imagesGroup")}>
+			<p class="group-desc">{$_("settings.mascot.imagesGroupDesc")}</p>
 			<div class="slot-grid">
 				{#each MASCOT_IMAGE_SLOTS as slot (slot.key)}
 					{@const imgs = selected.images[slot.key] ?? []}
@@ -381,7 +382,7 @@
 								disabled={uploadingSlot === slot.key}
 								onclick={() => void uploadImages(selected.id, slot.key)}
 							>
-								<Upload size={13} /> 올리기
+								<Upload size={13} /> {$_("settings.mascot.uploadBtn")}
 							</Button>
 						</div>
 						{#if imgs.length > 0}
@@ -392,7 +393,7 @@
 										<button
 											type="button"
 											class="thumb-del"
-											aria-label="이미지 삭제"
+											aria-label={$_("settings.mascot.deleteImgAria")}
 											onclick={() => void removeImage(selected.id, slot.key, idx)}
 										>
 											<X size={11} />
@@ -401,16 +402,16 @@
 								{/each}
 							</div>
 						{:else}
-							<div class="slot-empty">이미지 없음</div>
+							<div class="slot-empty">{$_("settings.mascot.noImages")}</div>
 						{/if}
 					</div>
 				{/each}
 			</div>
 		</Group>
 
-		<Group title="행동 빈도">
-			<p class="group-desc">시메지가 얼마나 자주, 어떤 행동을 할지 비중을 조절합니다</p>
-			<Row label="행동 전환 주기" desc="평균 {selected.actionIntervalSec}초마다 다음 행동을 결정">
+		<Group title={$_("settings.mascot.behaviorGroup")}>
+			<p class="group-desc">{$_("settings.mascot.behaviorGroupDesc")}</p>
+			<Row label={$_("settings.mascot.actionInterval")} desc={$_("settings.mascot.actionIntervalDesc", { values: { sec: selected.actionIntervalSec } })}>
 				<div class="range-inline">
 					<input
 						type="range"
@@ -418,16 +419,16 @@
 						max="30"
 						step="1"
 						value={selected.actionIntervalSec}
-						aria-label="행동 전환 주기"
+						aria-label={$_("settings.mascot.actionInterval")}
 						onchange={(e) => patchCharacter(selected.id, { actionIntervalSec: Number(e.currentTarget.value) })}
 					/>
-					<span class="num">{selected.actionIntervalSec}초</span>
+					<span class="num">{$_("settings.mascot.secUnit", { values: { sec: selected.actionIntervalSec } })}</span>
 				</div>
 			</Row>
 			{#each WEIGHT_ITEMS as item (item.key)}
 				{@const val = selected.behaviorWeights[item.key]}
 				{@const pct = Math.round((val / totalWeight) * 100)}
-				<Row label={item.label} desc="비중 {pct}%">
+				<Row label={item.label} desc={$_("settings.mascot.weightPct", { values: { pct } })}>
 					<div class="range-inline">
 						<input
 							type="range"
@@ -435,7 +436,7 @@
 							max="100"
 							step="5"
 							value={val}
-							aria-label="{item.label} 빈도"
+							aria-label={$_("settings.mascot.weightAria", { values: { label: item.label } })}
 							onchange={(e) => updateWeight(selected.id, item.key, Number(e.currentTarget.value))}
 						/>
 						<span class="num">{val}</span>
@@ -444,8 +445,8 @@
 			{/each}
 		</Group>
 
-		<Group title="상황별 대사">
-			<p class="group-desc">{"한 줄에 대사 하나씩 입력하면 무작위로 출력됩니다. {{user}}, {{char}}, {{notify}} 치환을 지원합니다."}</p>
+		<Group title={$_("settings.mascot.dialogueGroup")}>
+			<p class="group-desc">{$_("settings.mascot.dialogueGroupDesc")}</p>
 			<div class="dialogue-list">
 				{#each MASCOT_DIALOGUE_FIELDS as field (field.key)}
 					<label class="dialogue-field">
@@ -458,7 +459,7 @@
 							rows={2}
 							autosize
 							maxRows={6}
-							placeholder="대사를 한 줄씩 입력..."
+							placeholder={$_("settings.mascot.dialoguePlaceholder")}
 							aria-label={field.label}
 							onchange={(e) => updateDialogue(selected.id, field.key, e.currentTarget.value)}
 						/>
@@ -469,14 +470,14 @@
 
 		<div class="danger-row">
 			<Button size="sm" variant="danger" onclick={() => void removeMascot(selected.id)}>
-				<Trash2 size={14} /> '{selected.name}' 시메지 삭제
+				<Trash2 size={14} /> {$_("settings.mascot.deleteNamedBtn", { values: { name: selected.name } })}
 			</Button>
 		</div>
 	{:else}
 		<div class="empty-mascot">
-			<p>등록된 시메지가 없습니다. 시메지를 추가해 바탕화면에 띄워보세요!</p>
+			<p>{$_("settings.mascot.emptyDesc")}</p>
 			<Button size="sm" variant="primary" onclick={addMascot}>
-				<Plus size={14} /> 첫 시메지 만들기
+				<Plus size={14} /> {$_("settings.mascot.createFirstBtn")}
 			</Button>
 		</div>
 	{/if}

@@ -26,7 +26,7 @@
 	}
 	let {
 		query = $bindable(""),
-		placeholder = "찾기",
+		placeholder,
 		filters = [],
 		filter = $bindable("all"),
 		sorts = [],
@@ -35,6 +35,7 @@
 		canSelect = false,
 		children,
 	}: Props = $props();
+	const effectivePlaceholder = $derived(placeholder ?? $_("common.search"));
 
 	let searchOpen = $state(false);
 	let menu = $state<{ at: { x: number; y: number; align: "end" }; items: MenuItem[]; label: string } | null>(null);
@@ -49,7 +50,7 @@
 <div class="toolbar">
 	{#if searchOpen || query}
 		<div class="search">
-			<Input bind:value={query} {placeholder} aria-label={placeholder} autofocus>{#snippet leading()}<Search />{/snippet}</Input>
+			<Input bind:value={query} placeholder={effectivePlaceholder} aria-label={effectivePlaceholder} autofocus>{#snippet leading()}<Search />{/snippet}</Input>
 		</div>
 	{/if}
 	{#if activeFilterLabel}

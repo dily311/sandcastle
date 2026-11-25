@@ -1,4 +1,5 @@
 <script lang="ts">
+	import { _ } from "svelte-i18n";
 	import { X } from "@lucide/svelte";
 	import type { Snippet } from "svelte";
 	import IconButton from "./IconButton.svelte";
@@ -43,7 +44,7 @@
 				<h2 id={titleId}>{title}</h2>
 				{#if description}<p class="desc">{description}</p>{/if}
 			</div>
-			<IconButton label="닫기" size="sm" onclick={close}><X /></IconButton>
+			<IconButton label={$_("common.close")} size="sm" onclick={close}><X /></IconButton>
 		</header>
 		<div class="body">{@render children()}</div>
 		{#if footer}<footer>{@render footer()}</footer>{/if}

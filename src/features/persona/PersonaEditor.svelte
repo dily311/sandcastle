@@ -1,4 +1,5 @@
 <script lang="ts">
+	import { _ } from "svelte-i18n";
 	import { Camera, Copy, Crop, MoreHorizontal, Star, Trash2, Users, X } from "@lucide/svelte";
 	import type { PersonaInput_Deserialize as PersonaInput, WorldInfoBook_Serialize as Book } from "$ipc/bindings";
 	import { Avatar, AvatarFitDialog, Badge, Button, ColorPicker, ContextMenu, Field, IconButton, Input, TagInput, Textarea, type MenuItem } from "$shared/ui";
@@ -71,15 +72,15 @@
 	let fitOpen = $state(false);
 	let menu = $state<{ x: number; y: number; align?: "start" | "end" } | null>(null);
 	const menuItems: MenuItem[] = $derived([
-		{ label: "복제", icon: Copy, onselect: onduplicate },
-		{ label: "캐릭터로 복사", icon: Users, onselect: ontocharacter },
+		{ label: $_("persona.duplicateMenu"), icon: Copy, onselect: onduplicate },
+		{ label: $_("persona.copyToCharMenu"), icon: Users, onselect: ontocharacter },
 		...(persona.avatar
 			? [
-					{ label: "아바타 위치·확대", icon: Crop, onselect: () => (fitOpen = true) },
-					{ label: "아바타 지우기", icon: X, onselect: () => onavatar(false) },
+					{ label: $_("persona.avatarFitMenu"), icon: Crop, onselect: () => (fitOpen = true) },
+					{ label: $_("persona.avatarClearMenu"), icon: X, onselect: () => onavatar(false) },
 				]
 			: []),
-		{ label: isDefault ? "삭제 (기본은 못 지움)" : "삭제", icon: Trash2, danger: true, disabled: isDefault, separator: true, onselect: ondelete },
+		{ label: isDefault ? $_("persona.deleteDefaultDisabled") : $_("common.delete"), icon: Trash2, danger: true, disabled: isDefault, separator: true, onselect: ondelete },
 	]);
 	function openMenu(e: MouseEvent) {
 		const r = (e.currentTarget as HTMLElement).getBoundingClientRect();
@@ -91,64 +92,64 @@
 
 <div class="editor">
 	<header class="head">
-		<button class="avatar-btn" title="아바타 바꾸기" aria-label="아바타 바꾸기" onclick={() => onavatar(true)}>
+		<button class="avatar-btn" title={$_("persona.changeAvatarAria")} aria-label={$_("persona.changeAvatarAria")} onclick={() => onavatar(true)}>
 			<Avatar name={name || persona.name} src={fileSrc(persona.avatar)} color={color || null} size={88} fit={persona.avatarFit} />
 			<span class="cam"><Camera /></span>
 		</button>
 		<div class="ident">
-			<h1>{alias.trim() || name || "이름 없음"}</h1>
+			<h1>{alias.trim() || name || $_("persona.unnamed")}</h1>
 			<p class="faint">
-				페르소나{#if alias.trim() && name} · {name}{/if}{#if tags.length} · {tags.slice(0, 4).join(" · ")}{/if}
+				{$_("persona.roleLabel")}{#if alias.trim() && name} · {name}{/if}{#if tags.length} · {tags.slice(0, 4).join(" · ")}{/if}
 			</p>
 		</div>
 		<div class="cta">
 			{#if isDefault}
-				<Badge tone="accent"><Star /> 기본 페르소나</Badge>
+				<Badge tone="accent"><Star /> {$_("persona.defaultBadge")}</Badge>
 			{:else}
-				<Button size="sm" onclick={ondefault}>{#snippet icon()}<Star />{/snippet}기본으로</Button>
+				<Button size="sm" onclick={ondefault}>{#snippet icon()}<Star />{/snippet}{$_("persona.makeDefaultBtn")}</Button>
 			{/if}
-			<IconButton label="더 보기" onclick={openMenu}><MoreHorizontal /></IconButton>
+			<IconButton label={$_("persona.moreAria")} onclick={openMenu}><MoreHorizontal /></IconButton>
 		</div>
 	</header>
 
 	<div class="bar" class:show={dirty}>
-		<span>바뀐 내용 있음</span>
-		<Button size="sm" variant="ghost" onclick={reset}>되돌리기</Button>
-		<Button size="sm" variant="primary" loading={saving} disabled={!name.trim()} onclick={save}>저장</Button>
+		<span>{$_("persona.dirtyBanner")}</span>
+		<Button size="sm" variant="ghost" onclick={reset}>{$_("persona.revertBtn")}</Button>
+		<Button size="sm" variant="primary" loading={saving} disabled={!name.trim()} onclick={save}>{$_("common.save")}</Button>
 	</div>
 
 	<div class="form">
-		<Field label="이름" required hint={"대화에서 {{user}} 자리에 들어감"}>
-			<Input bind:value={name} placeholder="이름" />
+		<Field label={$_("persona.nameField")} required hint={$_("persona.nameHint")}>
+			<Input bind:value={name} placeholder={$_("persona.namePlaceholder")} />
 		</Field>
-		<Field label="표시용 별칭" hint="목록·사이드바에 표시할 별칭 (비우면 위 이름이 표시됨. 대화에는 영향 없음)">
-			<Input bind:value={alias} placeholder="예: 판타지용 민수 (선택)" />
+		<Field label={$_("persona.aliasField")} hint={$_("persona.aliasHint")}>
+			<Input bind:value={alias} placeholder={$_("persona.aliasPlaceholder")} />
 		</Field>
-		<Field label="설명" hint="AI에게 보내는 내 캐릭터 소개. 외모·성격·말투·처지 등">
-			{#snippet aside()}<span class="faint count">{description.length.toLocaleString()}자</span>{/snippet}
-			<Textarea bind:value={description} rows={8} autosize maxRows={24} placeholder="예: 스무 살 대학생. 말수가 적지만 호기심이 많음" />
+		<Field label={$_("persona.descField")} hint={$_("persona.descHint")}>
+			{#snippet aside()}<span class="faint count">{$_("persona.charCount", { values: { count: description.length.toLocaleString() } })}</span>{/snippet}
+			<Textarea bind:value={description} rows={8} autosize maxRows={24} placeholder={$_("persona.descPlaceholder")} />
 		</Field>
-		<Field label="태그" hint="Enter나 쉼표로 추가. 목록 검색에 씀">
+		<Field label={$_("persona.tagsField")} hint={$_("persona.tagsHint")}>
 			<TagInput bind:this={tagInput} bind:value={tags} />
 		</Field>
-		<Field label="색" hint="아바타가 없을 때 바탕색">
+		<Field label={$_("persona.colorField")} hint={$_("persona.colorHint")}>
 			<ColorPicker bind:value={color} />
 		</Field>
-		<Field label="월드인포" hint="이 페르소나로 대화할 때 함께 쓰는 월드인포 책">
+		<Field label={$_("persona.wiField")} hint={$_("persona.wiHint")}>
 			{#if books.length}
-				<BookPicker label="캐릭터 월드인포" value={worldInfoIds ?? []} onchange={(ids) => (worldInfoIds = ids)} />
+				<BookPicker label={$_("persona.wiPickerAria")} value={worldInfoIds ?? []} onchange={(ids) => (worldInfoIds = ids)} />
 			{:else}
-				<p class="faint small">월드인포 책 없음</p>
+				<p class="faint small">{$_("persona.noWiBooks")}</p>
 			{/if}
 		</Field>
 	</div>
 
 	{#if usedBy.length || convs.length}
 		<section class="usage">
-			<h2>사용 중인 곳</h2>
+			<h2>{$_("persona.usageTitle")}</h2>
 			{#if usedBy.length}
 				<div class="usage-group">
-					<p class="usage-label">기본 페르소나로 쓰는 캐릭터 ({usedBy.length})</p>
+					<p class="usage-label">{$_("persona.usedByChars", { values: { count: usedBy.length } })}</p>
 					<div class="usage-chips">
 						{#each usedBy as c (c.id)}
 							<button type="button" class="usage-chip" onclick={() => nav.go({ page: "character", charId: c.id })}>
@@ -161,14 +162,14 @@
 			{/if}
 			{#if convs.length}
 				<div class="usage-group">
-					<p class="usage-label">고정된 대화 ({convs.length})</p>
+					<p class="usage-label">{$_("persona.pinnedConvs", { values: { count: convs.length } })}</p>
 					<ul class="usage-list">
 						{#each convs.slice(0, 8) as c (c.id)}
 							{@const ch = library.character(c.characterId)}
 							<li>
 								<button type="button" onclick={() => nav.go({ page: "character", charId: c.characterId ?? undefined, convId: c.id })}>
 									<b>{c.title}</b>
-									<small>{ch?.name ?? "캐릭터"} · {relative(c.updatedAt)}</small>
+									<small>{ch?.name ?? $_("persona.charFallback")} · {relative(c.updatedAt)}</small>
 								</button>
 							</li>
 						{/each}
@@ -179,7 +180,7 @@
 	{/if}
 </div>
 
-<ContextMenu at={menu} items={menuItems} label="페르소나 메뉴" onclose={() => (menu = null)} />
+<ContextMenu at={menu} items={menuItems} label={$_("persona.menuAria")} onclose={() => (menu = null)} />
 
 <style>
 	.editor {

@@ -1,5 +1,6 @@
 <script lang="ts">
 	import { onMount } from "svelte";
+	import { _ } from "svelte-i18n";
 	import { KeyRound, Plus, Zap } from "@lucide/svelte";
 	import { Badge, Button, EmptyState } from "$shared/ui";
 	import { nav } from "$app/nav.svelte";
@@ -43,7 +44,7 @@
 		try {
 			const reply = await call(commands.testMessage(a.id, null), src);
 			a.verified = true;
-			toasts.success(`연결됨 · ${reply.trim().slice(0, 40) || "(빈 응답)"}`);
+			toasts.success($_("settings.more.apiConnected", { values: { reply: reply.trim().slice(0, 40) || $_("settings.more.emptyReply") } }));
 		} catch {
 			/* 토스트는 call이 띄움 */
 		} finally {
@@ -51,15 +52,15 @@
 		}
 	}
 	async function remove(a: ApiProfiles) {
-		if (!(await confirmAction({ title: "연결 삭제", message: `'${a.name}' 연결과 저장된 키를 지움`, confirmLabel: "삭제", danger: true }))) return;
+		if (!(await confirmAction({ title: $_("settings.more.deleteApiTitle"), message: $_("settings.more.deleteApiMsg", { values: { name: a.name } }), confirmLabel: $_("common.delete"), danger: true }))) return;
 		await call(commands.deleteApiProfile(a.id), src);
 		library.apis = library.apis.filter((x) => x.id !== a.id);
 		if (appSetting.value?.selectedApiProfile === a.id) await appSetting.update({ selectedApiProfile: library.apis[0]?.id ?? null });
 	}
 </script>
 
-<Section title="API 키" lead="AI 공급자 연결. 키는 운영체제 보안 저장소에 따로 보관함">
-	{#snippet actions()}<Button size="sm" variant="primary" onclick={() => open("new")}>{#snippet icon()}<Plus />{/snippet}연결 추가</Button>{/snippet}
+<Section title={$_("settings.apiSec.title")} lead={$_("settings.apiSec.lead")}>
+	{#snippet actions()}<Button size="sm" variant="primary" onclick={() => open("new")}>{#snippet icon()}<Plus />{/snippet}{$_("settings.apiSec.add")}</Button>{/snippet}
 	{#if library.apis.length}
 		<Group>
 			{#each library.apis as a (a.id)}
@@ -68,21 +69,21 @@
 					label={a.name}
 					desc={vertexProjects[a.id] ? `${a.provider} · ${vertexProjects[a.id]}` : a.provider}
 				>
-					{#if appSetting.value?.selectedApiProfile === a.id}<Badge tone="accent">기본</Badge>{/if}
+					{#if appSetting.value?.selectedApiProfile === a.id}<Badge tone="accent">{$_("common.default")}</Badge>{/if}
 					{#if keys[a.id] === false}
-						<Badge tone="warning"><KeyRound /> 키 없음</Badge>
+						<Badge tone="warning"><KeyRound /> {$_("settings.apiSec.noKey")}</Badge>
 					{:else if !a.verified}
-						<Badge tone="neutral">미확인</Badge>
+						<Badge tone="neutral">{$_("settings.apiSec.unverified")}</Badge>
 					{/if}
-					<Button size="sm" variant="ghost" onclick={() => remove(a)}>삭제</Button>
-					<Button size="sm" onclick={() => open(a.id)}>편집</Button>
-					<Button size="sm" variant="soft" loading={testing === a.id} disabled={testing !== null} onclick={() => test(a)}>{#snippet icon()}<Zap />{/snippet}테스트</Button>
+					<Button size="sm" variant="ghost" onclick={() => remove(a)}>{$_("common.delete")}</Button>
+					<Button size="sm" onclick={() => open(a.id)}>{$_("common.edit")}</Button>
+					<Button size="sm" variant="soft" loading={testing === a.id} disabled={testing !== null} onclick={() => test(a)}>{#snippet icon()}<Zap />{/snippet}{$_("settings.apiSec.test")}</Button>
 				</Row>
 			{/each}
 		</Group>
 	{:else}
 		<Group flush>
-			<EmptyState title="연결 없음" description="AI와 대화하려면 연결을 하나 추가해야 함"></EmptyState>
+			<EmptyState title={$_("settings.apiSec.emptyTitle")} description={$_("settings.apiSec.emptyDesc")}></EmptyState>
 		</Group>
 	{/if}
 </Section>

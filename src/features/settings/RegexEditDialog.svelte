@@ -1,5 +1,6 @@
 <script lang="ts">
 	// 정규식 편집 대화상자 (설정 > 정규식, 대화 오른쪽 패널이 같이 씀). 부모가 bind:this로 startNew/startEdit를 부른다
+	import { _ } from "svelte-i18n";
 	import { regexVersion } from "$shared/stores/regexVersion.svelte";
 	import type {
 		RegexPlacement,
@@ -20,8 +21,16 @@
 	}
 	let { sortOrder = 0, onsaved }: Props = $props();
 	const src = { source: "regex" };
-	const PLACE: Record<RegexPlacement, string> = { user_input: "내 메시지", ai_output: "AI 응답", world_info: "월드인포" };
-	const TARGET: Record<RegexTarget, string> = { stored: "저장 내용", prompt: "AI에게만", display: "화면에만" };
+	const PLACE = $derived<Record<RegexPlacement, string>>({
+		user_input: $_("settings.regexSec.placeUser"),
+		ai_output: $_("settings.regexSec.placeAi"),
+		world_info: $_("settings.regexSec.placeWi"),
+	});
+	const TARGET = $derived<Record<RegexTarget, string>>({
+		stored: $_("settings.regexSec.targetStored"),
+		prompt: $_("settings.regexSec.targetPrompt"),
+		display: $_("settings.regexSec.targetDisplay"),
+	});
 	let open = $state(false);
 
 	// ---- 편집 ----
@@ -94,7 +103,7 @@
 		const saved = await call(commands.upsertRegexScript({ ...plain(draft), name: draft.name.trim() }), src);
 		regexVersion.bump();
 		open = false;
-		toasts.success("저장함");
+		toasts.success($_("settings.more3.savedToast"));
 		onsaved?.(saved);
 	}
 
@@ -114,77 +123,77 @@
 	}
 </script>
 
-<Dialog bind:open title={draft?.id ? "정규식 편집" : "새 정규식"} size="lg">
+<Dialog bind:open title={draft?.id ? $_("settings.more3.regexEditTitle") : $_("settings.more3.regexNewTitle")} size="lg">
 	{#if draft}
 		<div class="form">
-			<Field label="이름" required><Input bind:value={draft.name} placeholder="예: 생각 태그 숨기기" /></Field>
-			<Field label="찾을 패턴" hint="/패턴/플래그 형식. g가 없으면 첫 번째만 바꿈" required>
+			<Field label={$_("settings.more3.name")} required><Input bind:value={draft.name} placeholder={$_("settings.more3.regexNamePlaceholder")} /></Field>
+			<Field label={$_("settings.more3.findPattern")} hint={$_("settings.more3.findPatternHint")} required>
 				<Input bind:value={draft.findRegex} placeholder="/<think>[\s\S]*?<\/think>/g" spellcheck={false} class="mono" />
 			</Field>
-			<Field label="바꿀 내용" hint={"$1 같은 그룹, {{match}} 사용 가능. 비우면 지움"}>
+			<Field label={$_("settings.more3.replaceWith")} hint={$_("settings.more3.replaceWithHint")}>
 				<Textarea bind:value={draft.replaceString} mono rows={2} autosize maxRows={8} spellcheck={false} />
 			</Field>
 			<div class="two">
-				<Field label="적용할 글">
+				<Field label={$_("settings.more3.applyTo")}>
 					<div class="chips">
 						{#each Object.entries(PLACE) as [id, label] (id)}
 							<button class="chip" class:on={draft.placement.includes(id as RegexPlacement)} aria-pressed={draft.placement.includes(id as RegexPlacement)} onclick={() => togglePlace(id as RegexPlacement)}>{label}</button>
 						{/each}
 					</div>
 				</Field>
-				<Field label="바꾸는 곳">
-					<Segmented label="바꾸는 곳" bind:value={draft.target} options={(Object.entries(TARGET) as [RegexTarget, string][]).map(([value, label]) => ({ value, label }))} />
+				<Field label={$_("settings.more3.replaceTarget")}>
+					<Segmented label={$_("settings.more3.replaceTarget")} bind:value={draft.target} options={(Object.entries(TARGET) as [RegexTarget, string][]).map(([value, label]) => ({ value, label }))} />
 				</Field>
 			</div>
 			<div class="two">
-				<Field label="범위">
+				<Field label={$_("settings.more3.scopeLabel")}>
 					<Segmented
-						label="범위"
+						label={$_("settings.more3.scopeLabel")}
 						value={draft.scope ?? "global"}
 						options={[
-							{ value: "global", label: "전체" },
-							{ value: "character", label: "캐릭터" },
-							{ value: "preset", label: "프리셋" },
+							{ value: "global", label: $_("common.all") },
+							{ value: "character", label: $_("settings.dataSec.counts.characters") },
+							{ value: "preset", label: $_("settings.dataSec.counts.promptPresets") },
 						]}
 						onchange={setScope}
 					/>
 				</Field>
 				{#if draft.scope !== "global"}
-					<Field label={draft.scope === "character" ? "캐릭터" : "프리셋"}>
-						<Select value={draft.scopeId ?? ""} options={scopeOptions} placeholder="미선택" onchange={(e) => draft && (draft.scopeId = e.currentTarget.value)} />
+					<Field label={draft.scope === "character" ? $_("settings.dataSec.counts.characters") : $_("settings.dataSec.counts.promptPresets")}>
+						<Select value={draft.scopeId ?? ""} options={scopeOptions} placeholder={$_("settings.chatSec.notSelected")} onchange={(e) => draft && (draft.scopeId = e.currentTarget.value)} />
 					</Field>
 				{/if}
 			</div>
 			<div class="two">
-				<Field label="매크로 치환" hint={"패턴 안의 {{char}}, {{user}}"}>
+				<Field label={$_("settings.more3.macroSub")} hint={$_("settings.more3.macroSubHint")}>
 					<Select
 						bind:value={draft.substituteMacros}
 						options={[
-							{ value: "none", label: "안 함" },
-							{ value: "raw", label: "그대로" },
-							{ value: "escaped", label: "특수문자 이스케이프" },
+							{ value: "none", label: $_("settings.more3.macroNone") },
+							{ value: "raw", label: $_("settings.more3.macroRaw") },
+							{ value: "escaped", label: $_("settings.more3.macroEscaped") },
 						]}
 					/>
 				</Field>
-				<Field label="적용 깊이" hint="최근 메시지에서 몇 번째까지 (비우면 전부)">
+				<Field label={$_("settings.more3.depthLabel")} hint={$_("settings.more3.depthHint")}>
 					<div class="depth">
-						<Input type="number" min="0" placeholder="최소" bind:value={draft.minDepth} />
+						<Input type="number" min="0" placeholder={$_("settings.more3.depthMin")} bind:value={draft.minDepth} />
 						<span>~</span>
-						<Input type="number" min="0" placeholder="최대" bind:value={draft.maxDepth} />
+						<Input type="number" min="0" placeholder={$_("settings.more3.depthMax")} bind:value={draft.maxDepth} />
 					</div>
 				</Field>
 			</div>
-			<Switch bind:checked={draft.runOnEdit} label="메시지를 고칠 때도 적용" />
+			<Switch bind:checked={draft.runOnEdit} label={$_("settings.more3.runOnEdit")} />
 
 			<div class="preview">
-				<Field label="미리보기" hint={"예시 글을 넣으면 바뀐 결과를 보여줌. {{char}}=캐릭터, {{user}}=나"}>
-					<Textarea bind:value={sample} rows={3} autosize maxRows={8} placeholder="예시 글" />
+				<Field label={$_("settings.more3.regexPreview")} hint={$_("settings.more3.regexPreviewHint")}>
+					<Textarea bind:value={sample} rows={3} autosize maxRows={8} placeholder={$_("settings.more3.regexSamplePlaceholder")} />
 				</Field>
 				{#if previewError}
 					<p class="err">{previewError}</p>
 				{:else if preview !== null}
 					<div class="out">
-						<Badge tone={preview === sample ? "neutral" : "success"}>{preview === sample ? "바뀐 곳 없음" : "결과"}</Badge>
+						<Badge tone={preview === sample ? "neutral" : "success"}>{preview === sample ? $_("settings.more3.noDiff") : $_("settings.more3.resultBadge")}</Badge>
 						<pre>{preview}</pre>
 					</div>
 				{/if}
@@ -192,8 +201,8 @@
 		</div>
 	{/if}
 	{#snippet footer()}
-		<Button variant="ghost" onclick={() => (open = false)}>취소</Button>
-		<Button variant="primary" disabled={!draft?.name.trim() || !draft?.findRegex.trim() || !draft?.placement.length} onclick={save}>저장</Button>
+		<Button variant="ghost" onclick={() => (open = false)}>{$_("common.cancel")}</Button>
+		<Button variant="primary" disabled={!draft?.name.trim() || !draft?.findRegex.trim() || !draft?.placement.length} onclick={save}>{$_("common.save")}</Button>
 	{/snippet}
 </Dialog>
 

@@ -1,4 +1,5 @@
 <script lang="ts">
+	import { _ } from "svelte-i18n";
 	import { onMount, tick } from "svelte";
 	import { Channel } from "@tauri-apps/api/core";
 	import type { StreamPayload } from "$ipc/bindings";
@@ -104,7 +105,7 @@
 		const text = lastReply?.text ?? scriptLines.map((l) => l.text).filter(Boolean).join("\n");
 		if (!text.trim()) return;
 		drawing = true;
-		toasts.info("장면을 그리는 중… (잠시 걸림)");
+		toasts.info($_("gameUi.drawingToast"));
 		try {
 			const img = await drawText(text, "game");
 			drawnScene = { path: img.path, prompt: img.prompt };
@@ -117,7 +118,7 @@
 			? gameStore.view?.characters.find((character) => character.id === currentLine.speaker)
 			: null,
 	);
-	const speakerName = $derived(currentLine?.speaker === "player" ? "나" : (currentCharacter?.name ?? null));
+	const speakerName = $derived(currentLine?.speaker === "player" ? $_("gameUi.meFallback") : (currentCharacter?.name ?? null));
 	const focusedCharacterId = $derived(currentCharacter?.id ?? null);
 	const activeNpcId = $derived(runtimeStore.state?.activeNpcId ?? null);
 	/** 열린 씬이 있는가. 씬 동안은 1:1 대화(talk)가 막히고 입력은 씬 입력(sceneSay)으로 간다 */
@@ -129,16 +130,17 @@
 	const playActions = $derived.by<PlayAction[]>(() => {
 		if (sceneOpen || activeNpcId) return [];
 		const out: PlayAction[] = [];
-		for (const c of runtimeStore.nearbyCharacters) out.push({ id: `talk:${c.id}`, kind: "talk", label: `${c.name}에게 말 걸기`, run: () => dispatch({ type: "talk", gameCharacterId: c.id }) });
-		for (const i of runtimeStore.localInteractables) out.push({ id: `look:${i.id}`, kind: "look", label: `${i.name} 살펴보기`, run: () => dispatch({ type: "interact", entityId: i.id }) });
+		for (const c of runtimeStore.nearbyCharacters) out.push({ id: `talk:${c.id}`, kind: "talk", label: $_("gameUi.talkToAction", { values: { name: c.name } }), run: () => dispatch({ type: "talk", gameCharacterId: c.id }) });
+		for (const i of runtimeStore.localInteractables) out.push({ id: `look:${i.id}`, kind: "look", label: $_("gameUi.lookAtAction", { values: { name: i.name } }), run: () => dispatch({ type: "interact", entityId: i.id }) });
 		for (const d of runtimeStore.destinations) {
 			const block = runtimeStore.moveBlock(d.toId);
 			const locked = Boolean(block);
+			const locName = d.location?.name ?? $_("gameUi.somewhere");
 			out.push({
 				id: `move:${d.toId}`,
 				kind: "move",
-				label: `${d.location?.name ?? "어딘가"}${directionParticle(d.location?.name ?? "어딘가")} 가기`,
-				hint: block ?? `${Math.max(1, Math.ceil(d.travelSeconds / 60))}분`,
+				label: $_("gameUi.moveToAction", { values: { name: locName, particle: directionParticle(locName) } }),
+				hint: block ?? $_("gameUi.minutesUnit", { values: { m: Math.max(1, Math.ceil(d.travelSeconds / 60)) } }),
 				disabled: locked,
 				run: () => dispatch({ type: "moveTo", locationId: d.toId }),
 			});
@@ -150,7 +152,7 @@
 		if (sceneOpen) return sceneChat ? { kind: "scene" } : null;
 		return activeNpcId ? { kind: "npc", characterId: activeNpcId } : null;
 	});
-	const title = $derived(gameStore.view?.game?.title ?? "게임");
+	const title = $derived(gameStore.view?.game?.title ?? $_("gameUi.gameFallback"));
 
 	function setBgm(asset: AssetRef | null, mood = "") {
 		if (!asset) {
@@ -698,7 +700,7 @@
 		{#if !uiHidden}
 			<PlayInfo
 				sceneName={runtimeStore.currentScene?.name ?? title}
-				locationName={runtimeStore.currentLocation?.name ?? "장소 불러오는 중"}
+				locationName={runtimeStore.currentLocation?.name ?? $_("gameUi.loadingLocation")}
 				weatherName={runtimeStore.currentWeather?.name ?? ""}
 				gameTime={runtimeStore.gameTime}
 				canWait={runtimeStore.canWait}
@@ -719,7 +721,7 @@
 			{choices}
 			npcChoices={npcResponseChoices}
 			canSendInput={Boolean(sayTarget)}
-			inputPlaceholder={sayTarget?.kind === "scene" ? "이 장면에서 할 말이나 행동 입력" : "하고 싶은 말 입력"}
+			inputPlaceholder={sayTarget?.kind === "scene" ? $_("gameUi.sceneInputPlaceholder") : $_("gameUi.inputPlaceholder")}
 			canStopTalk={!sceneOpen && Boolean(activeNpcId)}
 			actions={playActions}
 			canEndScene={sceneOpen && sceneChat}
@@ -771,12 +773,12 @@
 		/>
 		{#if backlogOpen}<Backlog onclose={() => (backlogOpen = false)} />{/if}
 		{#if drawnScene}
-			<button class="drawn-scene" type="button" title="닫기 · {drawnScene.prompt}" onclick={() => (drawnScene = null)}>
+			<button class="drawn-scene" type="button" title={$_("gameUi.closeDrawnTitle", { values: { prompt: drawnScene.prompt } })} onclick={() => (drawnScene = null)}>
 				<img src={fileSrc(drawnScene.path)} alt={drawnScene.prompt} />
 			</button>
 		{/if}
-		{#if uiHidden}<p class="hidden-hint">무대를 누르면 대사창이 다시 보임</p>{/if}
-		{#if isLoading}<div class="busy" role="status"><span></span>처리 중</div>{/if}
+		{#if uiHidden}<p class="hidden-hint">{$_("gameUi.hiddenHint")}</p>{/if}
+		{#if isLoading}<div class="busy" role="status"><span></span>{$_("gameUi.busyLabel")}</div>{/if}
 	</section>
 
 	<audio

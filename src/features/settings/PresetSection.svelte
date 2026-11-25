@@ -4,6 +4,7 @@
 	import { trashedToast } from "$shared/trash";
 	import { drops, extOf, storeFile } from "$app/drop.svelte";
 	import { onMount } from "svelte";
+	import { _ } from "svelte-i18n";
 	import { ChevronLeft, Copy, Download, Pencil, Plus, Trash, Upload } from "@lucide/svelte";
 	import type { PromptBlocksInput_Deserialize as BlockInput, PromptPresetDetail_Serialize as Detail } from "$ipc/bindings";
 	import { Badge, Button, EmptyState, IconButton } from "$shared/ui";
@@ -30,7 +31,7 @@
 	/** SillyTavern Chat Completion 프리셋(.json)으로 (5-E-20-4-3) */
 	async function exportSt(p: Preset) {
 		const done = await saveTo(`${p.name}.json`, [JSON_FILES], (path) => call(commands.exportPresetSillytavern(p.id, path), src).then(() => true));
-		if (done) toasts.success("SillyTavern 프리셋으로 내보냄");
+		if (done) toasts.success($_("settings.more.stPresetExported"));
 	}
 	async function reload() {
 		library.presets = await call(commands.listPromptPresets(), src);
@@ -39,16 +40,16 @@
 		editing = await call(commands.getPromptPreset(p.id), src);
 	}
 	async function create() {
-		const name = await promptText({ title: "새 프리셋", input: { value: "", placeholder: "프리셋 이름" }, confirmLabel: "만들기" });
+		const name = await promptText({ title: $_("settings.more.newPresetTitle"), input: { value: "", placeholder: $_("settings.more.presetNamePlaceholder") }, confirmLabel: $_("settings.more.createBtn") });
 		if (!name?.trim()) return;
 		const d = await call(
 			commands.savePromptPreset(
 				{ id: null, name: name.trim(), description: null, presetType: "chat_completion", sourceFormat: "native", configJson: {}, settingsJson: { temperature: 1, max_tokens: 1024, stream: true } },
 				[
-					block("main", "기본 지시", "system", "{{char}}가 되어 {{user}}와 대화를 이어감.", 0),
-					block("charDescription", "캐릭터 설명", "system", "", 1),
-					block("personaDescription", "페르소나 설명", "system", "", 2),
-					block("chatHistory", "대화 기록", "system", "", 3),
+					block("main", $_("settings.more.blockMain"), "system", $_("settings.more.blockMainContent"), 0),
+					block("charDescription", $_("settings.more.blockCharDesc"), "system", "", 1),
+					block("personaDescription", $_("settings.more.blockPersonaDesc"), "system", "", 2),
+					block("chatHistory", $_("settings.more.blockChatHistory"), "system", "", 3),
 				],
 			),
 			src,
@@ -63,18 +64,18 @@
 		const d = await call(commands.getPromptPreset(p.id), src);
 		await call(
 			commands.savePromptPreset(
-				{ ...d.preset, id: null, name: `${d.preset.name} 사본` },
+				{ ...d.preset, id: null, name: $_("settings.more.copySuffix", { values: { name: d.preset.name } }) },
 				// 새 블록으로 만들어야 원본 블록이 옮겨가지 않음
 				d.blocks.map((b) => ({ ...b, id: null })),
 			),
 			src,
 		);
 		await reload();
-		toasts.success("복제함");
+		toasts.success($_("settings.more.duplicatedToast"));
 	}
 	async function remove(p: Preset) {
-		if (!(await confirmAction({ title: "프리셋 삭제", message: `'${p.name}' 프리셋과 블록을 휴지통으로 옮김. 이 프리셋을 쓰던 대화는 앱 기본값으로 바뀌고, 되살리면 다시 이어짐`, confirmLabel: "삭제", danger: true }))) return;
-		const item = await jobs.run(p.name, () => call(commands.deletePromptPreset(p.id), src), { group: "프리셋 지우기" });
+		if (!(await confirmAction({ title: $_("settings.more.deletePresetTitle"), message: $_("settings.more.deletePresetMsg", { values: { name: p.name } }), confirmLabel: $_("common.delete"), danger: true }))) return;
+		const item = await jobs.run(p.name, () => call(commands.deletePromptPreset(p.id), src), { group: $_("settings.more.deletePresetGroup") });
 		await reload();
 		if (item) trashedToast(item, reload);
 	}
@@ -85,8 +86,8 @@
 	}
 	$effect(() =>
 		drops.register({
-			label: "프리셋 가져오기",
-			hint: "SillyTavern 프리셋 JSON (정규식 JSON을 같이 놓으면 그 프리셋에 묶임)",
+			label: $_("settings.more.dropPresetLabel"),
+			hint: $_("settings.more.dropPresetHint"),
 			accept: (f) => extOf(f) === "json",
 			ondrop: async (files) => {
 				const paths: string[] = [];
@@ -102,13 +103,13 @@
 			const d = await call(commands.savePromptPreset({ ...preset, id: preset.id }, blocks).finally(() => presetMacros.forget(preset.id)), src);
 			editing = null;
 			await reload();
-			toasts.success(`'${d.preset.name}' 저장함`);
+			toasts.success($_("settings.more.savedNamed", { values: { name: d.preset.name } }));
 		} finally {
 			saving = false;
 		}
 	}
 	async function cancel() {
-		if (await confirmAction({ title: "편집 그만두기", message: "저장하지 않은 바뀐 내용은 버림", confirmLabel: "그만두기" })) editing = null;
+		if (await confirmAction({ title: $_("settings.more.stopEditTitle"), message: $_("settings.more.stopEditMsg"), confirmLabel: $_("settings.more.stopEditConfirm") })) editing = null;
 	}
 	const isDefault = (p: Preset) => appSetting.value?.selectedPreset === p.id;
 </script>
@@ -116,38 +117,38 @@
 {#if editing}
 	{#key editing.preset.id}
 		<div class="back">
-			<IconButton label="프리셋 목록으로" size="sm" onclick={cancel}><ChevronLeft /></IconButton>
-			<span>프리셋</span>
+			<IconButton label={$_("settings.more.backToPresetsAria")} size="sm" onclick={cancel}><ChevronLeft /></IconButton>
+			<span>{$_("settings.more.presetLabel")}</span>
 		</div>
-		<Section title={editing.preset.name} lead={editing.preset.sourceFormat === "sillytavern" ? "SillyTavern에서 가져온 프리셋" : undefined}>
+		<Section title={editing.preset.name} lead={editing.preset.sourceFormat === "sillytavern" ? $_("settings.presetSec.importedSt") : undefined}>
 			<PresetEditor detail={editing} {saving} onsave={save} oncancel={cancel} />
 		</Section>
 	{/key}
 {:else}
-	<Section title="프리셋" lead="AI에게 보내는 프롬프트 구성과 생성 옵션">
+	<Section title={$_("settings.presetSec.title")} lead={$_("settings.presetSec.lead")}>
 		{#snippet actions()}
-			<Button size="sm" onclick={importFile}>{#snippet icon()}<Download />{/snippet}가져오기</Button>
-			<Button size="sm" variant="primary" onclick={create}>{#snippet icon()}<Plus />{/snippet}새 프리셋</Button>
+			<Button size="sm" onclick={importFile}>{#snippet icon()}<Download />{/snippet}{$_("common.import")}</Button>
+			<Button size="sm" variant="primary" onclick={create}>{#snippet icon()}<Plus />{/snippet}{$_("settings.presetSec.new")}</Button>
 		{/snippet}
 		{#if library.presets.length}
 			<Group>
 				{#each library.presets as p (p.id)}
-					<Row label={p.name} desc={p.description || (p.sourceFormat === "sillytavern" ? "SillyTavern에서 가져옴" : "설명 없음")}>
+					<Row label={p.name} desc={p.description || (p.sourceFormat === "sillytavern" ? $_("settings.presetSec.importedSt") : $_("settings.presetSec.noDesc"))}>
 						{#if isDefault(p)}
-							<Badge tone="accent">기본</Badge>
+							<Badge tone="accent">{$_("common.default")}</Badge>
 						{:else}
-							<Button size="sm" variant="ghost" onclick={() => appSetting.update({ selectedPreset: p.id })}>기본으로</Button>
+							<Button size="sm" variant="ghost" onclick={() => appSetting.update({ selectedPreset: p.id })}>{$_("settings.presetSec.setDefault")}</Button>
 						{/if}
-						<IconButton label="편집" size="sm" variant="ghost" onclick={() => edit(p)}><Pencil /></IconButton>
-						<IconButton label="복제" size="sm" variant="ghost" onclick={() => duplicate(p)}><Copy /></IconButton>
-						<IconButton label="SillyTavern 프리셋으로 내보내기" size="sm" variant="ghost" onclick={() => exportSt(p)}><Upload /></IconButton>
-						<IconButton label="삭제" size="sm" variant="ghost" onclick={() => remove(p)}><Trash /></IconButton>
+						<IconButton label={$_("common.edit")} size="sm" variant="ghost" onclick={() => edit(p)}><Pencil /></IconButton>
+						<IconButton label={$_("common.duplicate")} size="sm" variant="ghost" onclick={() => duplicate(p)}><Copy /></IconButton>
+						<IconButton label={$_("common.export")} size="sm" variant="ghost" onclick={() => exportSt(p)}><Upload /></IconButton>
+						<IconButton label={$_("common.delete")} size="sm" variant="ghost" onclick={() => remove(p)}><Trash /></IconButton>
 					</Row>
 				{/each}
 			</Group>
 		{:else}
 			<Group flush>
-				<EmptyState title="프리셋 없음" description="새로 만들거나 SillyTavern 프리셋(.json)을 가져옴"></EmptyState>
+				<EmptyState title={$_("settings.presetSec.emptyTitle")} description={$_("settings.presetSec.emptyDesc")}></EmptyState>
 			</Group>
 		{/if}
 	</Section>

@@ -36,29 +36,29 @@
 		void load();
 		if (!library.loaded) void library.load();
 	});
-	const SOURCE: Record<string, string> = {
-		message: "대화",
-		manual: "직접",
-		game: "게임",
-		phone: "폰",
-		upload: "업로드",
-		background: "배경",
-		asset: "CG 에셋",
-		avatar: "아바타",
-		cover: "커버",
-		persona: "페르소나",
-		unknown: "기타",
-	};
+	const SOURCE = $derived<Record<string, string>>({
+		message: $_("imagesPage.source.message"),
+		manual: $_("imagesPage.source.manual"),
+		game: $_("imagesPage.source.game"),
+		phone: $_("imagesPage.source.phone"),
+		upload: $_("imagesPage.source.upload"),
+		background: $_("imagesPage.source.background"),
+		asset: $_("imagesPage.source.asset"),
+		avatar: $_("imagesPage.source.avatar"),
+		cover: $_("imagesPage.source.cover"),
+		persona: $_("imagesPage.source.persona"),
+		unknown: $_("imagesPage.source.unknown"),
+	});
 	/** 사용자가 다는 태그: 생성 프리셋으로 쓸지 / 그냥 올린 그림 */
-	const TAGS: { id: string; label: string }[] = [
-		{ id: "preset", label: "프리셋" },
-		{ id: "upload", label: "업로드" },
-	];
+	const TAGS = $derived<{ id: string; label: string }[]>([
+		{ id: "preset", label: $_("imagesPage.tagPreset") },
+		{ id: "upload", label: $_("imagesPage.tagUpload") },
+	]);
 	const tagLabel = (id: string) => TAGS.find((t) => t.id === id)?.label ?? id;
 	/** 쓰이고 있는 모든 태그 (기본 태그 + 사용자가 만든 태그) */
 	const allTags = $derived([...new Set([...TAGS.map((t) => t.id), ...images.flatMap((i) => i.tags)])]);
 	const FILTERS = $derived([
-		{ value: "all", label: `전부 ${images.length}` },
+		{ value: "all", label: $_("imagesPage.filterAll", { values: { count: images.length } }) },
 		...allTags.map((t) => ({ value: `tag:${t}`, label: `#${tagLabel(t)} ${images.filter((i) => i.tags.includes(t)).length}` })).filter((o) => !o.label.endsWith(" 0")),
 		...Object.entries(SOURCE)
 			.map(([value, label]) => ({ value, label: `${label} ${images.filter((i) => i.source === value).length}` }))
@@ -68,11 +68,11 @@
 	let query = $state("");
 	let searchOpen = $state(false);
 	let sort = $state<string>("new");
-	const SORTS = [
-		{ value: "new", label: "최신 순" },
-		{ value: "old", label: "오래된 순" },
-		{ value: "name", label: "이름 순" },
-	];
+	const SORTS = $derived([
+		{ value: "new", label: $_("imagesPage.sortNew") },
+		{ value: "old", label: $_("imagesPage.sortOld") },
+		{ value: "name", label: $_("imagesPage.sortName") },
+	]);
 	const filtered = $derived(
 		filter === "all" ? images : filter.startsWith("tag:") ? images.filter((i) => i.tags.includes(filter.slice(4))) : images.filter((i) => i.source === filter),
 	);
@@ -108,15 +108,15 @@
 		return { x: r.right, y: r.bottom + 4, align: "end" as const };
 	};
 	function filterMenu(e: MouseEvent) {
-		menu = { at: below(e), label: "거르기", items: FILTERS.map((f) => ({ label: f.label, icon: filter === f.value ? Check : undefined, onselect: () => (filter = f.value) })) };
+		menu = { at: below(e), label: $_("common.filter"), items: FILTERS.map((f) => ({ label: f.label, icon: filter === f.value ? Check : undefined, onselect: () => (filter = f.value) })) };
 	}
 	function sortMenu(e: MouseEvent) {
 		const opts = [
-			{ v: "new", l: "최신 순" },
-			{ v: "old", l: "오래된 순" },
-			{ v: "name", l: "이름 순" },
+			{ v: "new", l: $_("imagesPage.sortNew") },
+			{ v: "old", l: $_("imagesPage.sortOld") },
+			{ v: "name", l: $_("imagesPage.sortName") },
 		] as const;
-		menu = { at: below(e), label: "정렬", items: opts.map((o) => ({ label: o.l, icon: sort === o.v ? Check : undefined, onselect: () => (sort = o.v) })) };
+		menu = { at: below(e), label: $_("common.sort"), items: opts.map((o) => ({ label: o.l, icon: sort === o.v ? Check : undefined, onselect: () => (sort = o.v) })) };
 	}
 
 	// ---- 오른쪽 클릭 메뉴 ----
@@ -126,28 +126,28 @@
 		const canTag = taggable(img);
 		menu = {
 			at: { x: e.clientX, y: e.clientY },
-			label: "그림 메뉴",
+			label: $_("imagesPage.imgMenuAria"),
 			items: [
-				{ label: "크게 보기", icon: Eye, onselect: () => openViewer(img) },
-				...(mine ? [{ label: "이름 바꾸기", icon: Pencil, onselect: () => rename(img) }] : []),
-				...(img.prompt && plugins.on("imagegen") ? [{ label: "이 프롬프트로 다시", icon: Sparkles, onselect: () => reuse(img) }] : []),
-				...(img.conversationId ? [{ label: "대화로 이동", icon: MessageSquare, onselect: () => openSource(img) }] : []),
+				{ label: $_("imagesPage.viewLarge"), icon: Eye, onselect: () => openViewer(img) },
+				...(mine ? [{ label: $_("imagesPage.rename"), icon: Pencil, onselect: () => rename(img) }] : []),
+				...(img.prompt && plugins.on("imagegen") ? [{ label: $_("imagesPage.reusePrompt"), icon: Sparkles, onselect: () => reuse(img) }] : []),
+				...(img.conversationId ? [{ label: $_("imagesPage.goConv"), icon: MessageSquare, onselect: () => openSource(img) }] : []),
 				...(canTag
 					? [
 							{
-								label: "태그",
+								label: $_("imagesPage.tagsMenu"),
 								icon: Tag,
 								separator: true,
 								children: [
 									...allTags.map((t) => ({ label: `#${tagLabel(t)}`, checked: img.tags.includes(t), disabled: t === "preset" && !img.tags.includes(t) && !canPreset(img), onselect: () => toggleTag(img, t) })),
-									{ label: "새 태그…", icon: Plus, separator: true, onselect: () => addCustomTag(img) },
+									{ label: $_("imagesPage.newTagMenu"), icon: Plus, separator: true, onselect: () => addCustomTag(img) },
 								],
 							},
 						]
 					: []),
 				// 파일 위치 열기는 데스크톱만 (Android에는 탐색기가 없음)
-				...(layout.desktop ? [{ label: "파일 위치 열기", icon: FolderOpen, separator: true, onselect: () => reveal(img) }] : []),
-				...(mine ? [{ label: "삭제", icon: Trash2, danger: true, onselect: () => remove(img) }] : []),
+				...(layout.desktop ? [{ label: $_("imagesPage.revealFile"), icon: FolderOpen, separator: true, onselect: () => reveal(img) }] : []),
+				...(mine ? [{ label: $_("common.delete"), icon: Trash2, danger: true, onselect: () => remove(img) }] : []),
 			],
 		};
 	}
@@ -155,12 +155,12 @@
 		const neg = negativeOf(img);
 		const rest = img.meta.filter((m) => m.key !== "네거티브");
 		return [
-			{ label: "출처", value: SOURCE[img.source] ?? img.source },
-			...(img.model ? [{ label: "모델", value: img.model }] : []),
-			{ label: "날짜", value: when(img.createdAt) },
-			...(img.tags.length ? [{ label: "태그", value: img.tags.map((t) => `#${tagLabel(t)}`).join(" ") }] : []),
-			...(img.prompt ? [{ label: "프롬프트", value: img.prompt }] : []),
-			...(neg ? [{ label: "네거티브", value: neg }] : []),
+			{ label: $_("imagesPage.infoSource"), value: SOURCE[img.source] ?? img.source },
+			...(img.model ? [{ label: $_("imagesPage.infoModel"), value: img.model }] : []),
+			{ label: $_("imagesPage.infoDate"), value: when(img.createdAt) },
+			...(img.tags.length ? [{ label: $_("imagesPage.infoTags"), value: img.tags.map((t) => `#${tagLabel(t)}`).join(" ") }] : []),
+			...(img.prompt ? [{ label: $_("imagesPage.infoPrompt"), value: img.prompt }] : []),
+			...(neg ? [{ label: $_("imagesPage.infoNegative"), value: neg }] : []),
 			...rest.map((m) => ({ label: m.key, value: m.value })),
 		];
 	}
@@ -178,16 +178,16 @@
 				const cur = latest();
 				const canTag = taggable(cur);
 				return [
-					...(cur.prompt && plugins.on("imagegen") ? [{ label: "이 프롬프트로 다시", icon: Sparkles, onselect: () => reuse(cur) }] : []),
-					...(cur.conversationId ? [{ label: "대화로 이동", icon: MessageSquare, onselect: () => (imageViewer.close(), openSource(cur)) }] : []),
+					...(cur.prompt && plugins.on("imagegen") ? [{ label: $_("imagesPage.reusePrompt"), icon: Sparkles, onselect: () => reuse(cur) }] : []),
+					...(cur.conversationId ? [{ label: $_("imagesPage.goConv"), icon: MessageSquare, onselect: () => (imageViewer.close(), openSource(cur)) }] : []),
 					...(canTag
 						? [
 								{
-									label: "태그",
+									label: $_("imagesPage.tagsMenu"),
 									icon: Tag,
 									children: [
 										...allTags.map((t) => ({ label: `#${tagLabel(t)}`, checked: cur.tags.includes(t), disabled: t === "preset" && !cur.tags.includes(t) && !canPreset(cur), onselect: () => toggleTag(cur, t) })),
-										{ label: "새 태그…", icon: Plus, separator: true, onselect: () => addCustomTag(cur) },
+										{ label: $_("imagesPage.newTagMenu"), icon: Plus, separator: true, onselect: () => addCustomTag(cur) },
 									],
 								},
 							]
@@ -197,7 +197,7 @@
 		});
 	}
 	async function rename(img: GeneratedImage) {
-		const name = await promptText({ title: "이름 바꾸기", message: "갤러리에 보일 이름 (파일은 그대로)", input: { value: title(img), placeholder: "이름" }, confirmLabel: "바꾸기" });
+		const name = await promptText({ title: $_("imagesPage.rename"), message: $_("imagesPage.renameMsg"), input: { value: title(img), placeholder: $_("imagesPage.namePlaceholder") }, confirmLabel: $_("imagesPage.renameConfirm") });
 		if (!name?.trim()) return;
 		const saved = await call(commands.renameGalleryImage(img.path, name), src);
 		images = images.map((i) => (i.path === img.path ? { ...i, name: saved.name } : i));
@@ -209,19 +209,19 @@
 	/** 원본: 앱 안 창으로는 파일을 열 수 없어 파일 탐색기에서 보여준다 */
 	async function reveal(img: GeneratedImage) {
 		if (/^https?:/.test(img.path)) return void window.open(img.path, "_blank");
-		await revealItemInDir(img.path).catch((e) => toasts.error("파일 위치를 열 수 없음", String(e)));
+		await revealItemInDir(img.path).catch((e) => toasts.error($_("imagesPage.revealErr"), String(e)));
 	}
 
 	// ---- 끌어다 놓아 올리기 ----
 	async function importFiles(files: File[]) {
 		const paths = await Promise.all(files.filter(isImage).map((f) => storeFile(f)));
 		if (!paths.length) return;
-		const added = await jobs.run(`그림 ${paths.length}장`, () => call(commands.importGalleryImages(paths), src), { group: "그림 올리기" });
+		const added = await jobs.run($_("imagesPage.imagesCountJob", { values: { count: paths.length } }), () => call(commands.importGalleryImages(paths), src), { group: $_("imagesPage.uploadJobGroup") });
 		if (!added) return;
 		images = [...added, ...images];
-		toasts.success(`${added.length}장 업로드 됨`);
+		toasts.success($_("imagesPage.uploadedToast", { values: { count: added.length } }));
 	}
-	$effect(() => drops.register({ label: "갤러리에 올리기", hint: "PNG·JPG·WEBP·GIF (AI 그림이면 생성 정보도 읽음)", accept: isImage, ondrop: importFiles }));
+	$effect(() => drops.register({ label: $_("imagesPage.dropLabel"), hint: $_("imagesPage.dropHint"), accept: isImage, ondrop: importFiles }));
 
 	/** 그림 아래 이름: 원래 파일 이름 → 프롬프트 → 파일 이름 */
 	const title = (img: GeneratedImage) => img.name || img.prompt || img.path.split(/[\\/]/).pop() || "";
@@ -243,14 +243,14 @@
 		}
 	}
 	async function addCustomTag(img: GeneratedImage) {
-		const t = await promptText({ title: "태그 추가", message: "이 그림에 달 태그 (같은 태그로 거를 수 있음)", input: { value: "", placeholder: "예: 엘리안, 의상" }, confirmLabel: "추가" });
+		const t = await promptText({ title: $_("imagesPage.addTagTitle"), message: $_("imagesPage.addTagMsg"), input: { value: "", placeholder: $_("imagesPage.addTagPlaceholder") }, confirmLabel: $_("imagesPage.addBtn") });
 		const tag = t?.trim().replace(/^#/, "");
 		if (!tag || img.tags.includes(tag)) return;
 		await setTags(img, [...img.tags, tag]);
 	}
 	async function toggleTag(img: GeneratedImage, tag: string) {
 		if (!taggable(img)) return;
-		if (tag === "preset" && !img.tags.includes("preset") && !canPreset(img)) return toasts.info("프롬프트나 네거티브 프롬프트가 있는 그림만 프리셋으로 쓸 수 있음");
+		if (tag === "preset" && !img.tags.includes("preset") && !canPreset(img)) return toasts.info($_("imagesPage.presetNeedPrompt"));
 		const tags = img.tags.includes(tag) ? img.tags.filter((t) => t !== tag) : [...img.tags, tag];
 		await setTags(img, tags);
 	}
@@ -261,19 +261,19 @@
 		const apply = async (tag: string) => {
 			const list = targets().filter((i) => !i.tags.includes(tag) && (tag !== "preset" || canPreset(i)));
 			for (const i of list) await setTags(i, [...i.tags, tag]);
-			toasts.success(list.length ? `${list.length}장에 #${tagLabel(tag)}` : "달 수 있는 그림 없음");
+			toasts.success(list.length ? $_("imagesPage.bulkTaggedToast", { values: { count: list.length, tag: tagLabel(tag) } }) : $_("imagesPage.bulkTagNoneToast"));
 		};
 		menu = {
 			at: below(e),
-			label: "태그 달기",
+			label: $_("imagesPage.bulkTagLabel"),
 			items: [
 				...allTags.map((t) => ({ label: `#${tagLabel(t)}`, icon: Tag, onselect: () => apply(t) })),
 				{
-					label: "새 태그…",
+					label: $_("imagesPage.newTagMenu"),
 					icon: Plus,
 					separator: true,
 					onselect: async () => {
-						const t = await promptText({ title: "새 태그", message: "고른 그림들에 달 태그", input: { value: "", placeholder: "예: 엘리안" }, confirmLabel: "달기" });
+						const t = await promptText({ title: $_("imagesPage.newTagTitle"), message: $_("imagesPage.newTagMsg"), input: { value: "", placeholder: $_("imagesPage.newTagPlaceholder") }, confirmLabel: $_("imagesPage.applyTagBtn") });
 						const tag = t?.trim().replace(/^#/, "");
 						if (tag) await apply(tag);
 					},
@@ -293,7 +293,7 @@
 	});
 	let picked = $state<Set<string>>(new Set());
 	function pick(img: GeneratedImage) {
-		if (!owned(img)) return toasts.info("캐릭터·페르소나의 그림은 그 화면에서 관리함");
+		if (!owned(img)) return toasts.info($_("imagesPage.readonlyToast"));
 		const next = new Set(picked);
 		if (next.has(img.path)) next.delete(img.path);
 		else next.add(img.path);
@@ -306,11 +306,11 @@
 	async function removePicked() {
 		const list = images.filter((i) => picked.has(i.path));
 		if (!list.length) return;
-		if (!(await confirmAction({ title: "그림 삭제", message: `고른 그림 ${list.length}장을 지움. 대화·배경에 쓰던 그림도 더 이상 보이지 않음. 되돌릴 수 없음`, confirmLabel: `${list.length}장 삭제`, danger: true }))) return;
+		if (!(await confirmAction({ title: $_("imagesPage.deleteTitle"), message: $_("imagesPage.deleteManyMsg", { values: { count: list.length } }), confirmLabel: $_("imagesPage.deleteManyBtn", { values: { count: list.length } }), danger: true }))) return;
 		const bgs = list.filter((i) => i.source === "background");
 		const gallery = list.filter((i) => i.source !== "background");
 		const n = await jobs.run(
-			`그림 ${list.length}장`,
+			$_("imagesPage.imagesCountJob", { values: { count: list.length } }),
 			async () => {
 				let n = gallery.length ? await call(commands.deleteGalleryImages(gallery.map((i) => i.path)), src) : 0;
 				for (const b of bgs) {
@@ -319,41 +319,41 @@
 				}
 				return n;
 			},
-			{ group: "그림 지우기" },
+			{ group: $_("imagesPage.deleteJobGroup") },
 		);
-		if (n !== undefined) toasts.success(`${n}장 지움`);
+		if (n !== undefined) toasts.success($_("imagesPage.deletedCountToast", { values: { count: n } }));
 		stopSelecting();
 		await load();
 	}
 
 	// ---- 올리기 ----
 	async function upload() {
-		const paths = await pickFiles([{ name: "그림", extensions: ["png", "jpg", "jpeg", "webp", "gif"] }], true);
+		const paths = await pickFiles([{ name: $_("imagesPage.imageFileLabel"), extensions: ["png", "jpg", "jpeg", "webp", "gif"] }], true);
 		if (!paths.length) return;
-		const added = await jobs.run(`그림 ${paths.length}장`, () => call(commands.importGalleryImages(paths), src), { group: "그림 올리기" });
+		const added = await jobs.run($_("imagesPage.imagesCountJob", { values: { count: paths.length } }), () => call(commands.importGalleryImages(paths), src), { group: $_("imagesPage.uploadJobGroup") });
 		if (!added) return;
 		images = [...added, ...images];
 		const withInfo = added.filter((a) => a.prompt || a.meta.length > 1).length;
-		toasts.success(`${added.length}장 업로드 됨${withInfo ? ` · 생성 정보 ${withInfo}장` : ""}`);
+		toasts.success(withInfo ? $_("imagesPage.uploadedWithInfo", { values: { count: added.length, info: withInfo } }) : $_("imagesPage.uploadedToast", { values: { count: added.length } }));
 	}
 
 	async function remove(img: GeneratedImage) {
-		if (!(await confirmAction({ title: "그림 삭제", message: "이 그림 파일을 지움. 대화에 붙어 있던 그림도 더 이상 보이지 않음", confirmLabel: "삭제", danger: true }))) return;
-		const name = img.path.split(/[\\/]/).pop() ?? "그림";
-		const ok = await jobs.run(name, async () => (img.source === "background" ? theme.removeBackground(img.path) : call(commands.deleteGeneratedImage(img.path), src)).then(() => true), { group: "그림 지우기" });
+		if (!(await confirmAction({ title: $_("imagesPage.deleteTitle"), message: $_("imagesPage.deleteOneMsg"), confirmLabel: $_("common.delete"), danger: true }))) return;
+		const name = img.path.split(/[\\/]/).pop() ?? $_("imagesPage.imageFileLabel");
+		const ok = await jobs.run(name, async () => (img.source === "background" ? theme.removeBackground(img.path) : call(commands.deleteGeneratedImage(img.path), src)).then(() => true), { group: $_("imagesPage.deleteJobGroup") });
 		if (!ok) return;
 		images = images.filter((i) => i.path !== img.path);
 		if (imageViewer.current?.src === fileSrc(img.path)) imageViewer.close();
 	}
 	async function copyText(text: string, what: string) {
 		await navigator.clipboard.writeText(text).then(
-			() => toasts.success(`${what} 복사함`),
-			() => toasts.error("복사 못 함"),
+			() => toasts.success($_("imagesPage.copiedWhatToast", { values: { what } })),
+			() => toasts.error($_("imagesPage.copyFailedToast")),
 		);
 	}
 	function openSource(img: GeneratedImage) {
 		const conv = img.conversationId ? library.conversation(img.conversationId) : undefined;
-		if (!conv) return toasts.info("원래 대화를 찾을 수 없음");
+		if (!conv) return toasts.info($_("imagesPage.sourceConvNotFound"));
 		if (conv.mode === "phone") return nav.go({ page: "phone" });
 		nav.go({ page: "character", charId: conv.characterId ?? undefined, convId: conv.id });
 	}
@@ -378,9 +378,9 @@
 				<h1>{$_("nav.images")}</h1>
 				<span class="count">{images.length}{$_("common.unitImage")}</span>
 			</div>
-			<ListToolbar bind:query bind:filter bind:sort bind:selecting placeholder="이름·프롬프트·태그" filters={FILTERS} sorts={SORTS} canSelect={images.some(owned)}>
+			<ListToolbar bind:query bind:filter bind:sort bind:selecting placeholder={$_("imagesPage.searchPlaceholder")} filters={FILTERS} sorts={SORTS} canSelect={images.some(owned)}>
 				{#if plugins.on("imagegen")}
-					<SplitButton label={creating ? $_("common.close") : $_("common.create")} onclick={() => (creating = !creating)} menuLabel={$_("common.import")} items={[{ label: "파일 업로드", icon: Upload, onselect: upload }]} />
+					<SplitButton label={creating ? $_("common.close") : $_("common.create")} onclick={() => (creating = !creating)} menuLabel={$_("common.import")} items={[{ label: $_("imagesPage.uploadFileMenu"), icon: Upload, onselect: upload }]} />
 				{:else}
 					<Button variant="primary" onclick={upload}>{#snippet icon()}<Upload />{/snippet}{$_("common.import")}</Button>
 				{/if}
@@ -398,13 +398,13 @@
 		{#if loading}
 			<div class="making"><Spinner /></div>
 		{:else if !shown.length}
-			<EmptyState title="그림 없음" description="대화의 '이 장면 그리기', 만들기, 게임 장면 그림, 업로드 한 그림이 여기 모임">
-				{#snippet action()}<Button onclick={upload}>{#snippet icon()}<Upload />{/snippet}그림 올리기</Button>{/snippet}
+			<EmptyState title={$_("imagesPage.emptyTitle")} description={$_("imagesPage.emptyDesc")}>
+				{#snippet action()}<Button onclick={upload}>{#snippet icon()}<Upload />{/snippet}{$_("imagesPage.uploadBtn")}</Button>{/snippet}
 			</EmptyState>
 		{:else}
 			{#if selecting}
-				<SelectBar count={picked.size} unit="장" onall={() => (picked = new Set(shown.filter(owned).map((i) => i.path)))} ondelete={removePicked}>
-					<Button size="sm" variant="ghost" disabled={!picked.size} onclick={bulkTagMenu}>{#snippet icon()}<Tag />{/snippet}태그 달기</Button>
+				<SelectBar count={picked.size} unit={$_("common.unitImage")} onall={() => (picked = new Set(shown.filter(owned).map((i) => i.path)))} ondelete={removePicked}>
+					<Button size="sm" variant="ghost" disabled={!picked.size} onclick={bulkTagMenu}>{#snippet icon()}<Tag />{/snippet}{$_("imagesPage.bulkTagLabel")}</Button>
 				</SelectBar>
 			{/if}
 			<div class="grid">
@@ -428,7 +428,7 @@
 			</div>
 			{#if rendered.length < shown.length}
 				<!-- 끝에 닿으면 저절로, 안 되면 눌러서 -->
-				<button class="more" use:more onclick={() => (limit += BATCH)}>더 보기 <small>({shown.length - rendered.length}장 남음)</small></button>
+				<button class="more" use:more onclick={() => (limit += BATCH)}>{$_("imagesPage.showMore")} <small>{$_("imagesPage.remainingCount", { values: { count: shown.length - rendered.length } })}</small></button>
 			{/if}
 		{/if}
 	</div>

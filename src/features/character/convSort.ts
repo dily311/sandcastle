@@ -1,20 +1,29 @@
+import { get } from "svelte/store";
+import { _ } from "svelte-i18n";
 import { lastAt, type Conversation } from "./library.svelte";
 import { viewed } from "./viewed.svelte";
 
 export type ConvSortBy = "viewed" | "recent" | "created" | "name" | "messages";
 
-export const CONV_SORT_LABEL: Record<ConvSortBy, string> = {
-	viewed: "최근 본 순",
-	recent: "마지막 업데이트",
-	created: "생성 날짜",
-	name: "이름",
-	messages: "메시지 순",
+export const CONV_SORT_KEYS: ConvSortBy[] = ["viewed", "recent", "created", "name", "messages"];
+
+const SORT_KEY_MAP: Record<ConvSortBy, string> = {
+	viewed: "settings.chrome.sortRecent",
+	recent: "settings.chrome.sortUpdated",
+	created: "settings.chrome.sortCreated",
+	name: "settings.chrome.sortName",
+	messages: "settings.chrome.sortMessages",
 };
 
-export const CONV_SORT_KEYS = Object.keys(CONV_SORT_LABEL) as ConvSortBy[];
+export const CONV_SORT_LABEL: Record<ConvSortBy, string> = new Proxy({} as Record<ConvSortBy, string>, {
+	get(_target, prop: string) {
+		const key = SORT_KEY_MAP[prop as ConvSortBy];
+		return key ? get(_)(key) : prop;
+	},
+});
 
 export function isConvSortBy(v: unknown): v is ConvSortBy {
-	return typeof v === "string" && v in CONV_SORT_LABEL;
+	return typeof v === "string" && (CONV_SORT_KEYS as string[]).includes(v);
 }
 
 /**

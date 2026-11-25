@@ -1,4 +1,5 @@
 <script lang="ts">
+	import { _ } from "svelte-i18n";
 	// 빠른 답장 버튼 줄 (5-E-20-5-3·4·5): 입력칸 위. 오른쪽 끝 버튼으로 이 대화에서 세트를 끄고 켠다.
 	// 버튼이 많으면 앞의 MAX_CHIPS개만 두고 "모두 보기"로 검색 목록을 펼친다 (오른쪽 패널 "빠른 답장" 탭과 같은 목록)
 	import { onMount } from "svelte";
@@ -40,9 +41,9 @@
 		menu = { x: r.right, y: r.top - 4 };
 	}
 	const menuItems = $derived<MenuItem[]>([
-		...inScope.map((s) => ({ id: s.id, label: s.name || "이름 없는 세트", checked: !offIds(conv).includes(s.id), onselect: () => conv && void toggleForConv(conv, s.id) })),
+		...inScope.map((s) => ({ id: s.id, label: s.name || $_("extraTools.qrUnnamedSet"), checked: !offIds(conv).includes(s.id), onselect: () => conv && void toggleForConv(conv, s.id) })),
 		{
-			label: "QR 메뉴 숨기기",
+			label: $_("extraTools.qrHideBar"),
 			checked: quickReplies.barHidden,
 			separator: inScope.length > 0,
 			onselect: () => {
@@ -51,35 +52,35 @@
 				if (next) showAll = false;
 			},
 		},
-		{ label: "빠른 답장 설정", onselect: () => nav.go({ page: "settings", tab: "quickreply" }) },
+		{ label: $_("extraTools.qrSettings"), onselect: () => nav.go({ page: "settings", tab: "quickreply" }) },
 	]);
 </script>
 
 {#if showAll && !quickReplies.barHidden}
-	<div class="all" role="dialog" aria-label="빠른 답장 모두 보기" tabindex="-1" onkeydown={(e) => e.key === "Escape" && (showAll = false)}>
+	<div class="all" role="dialog" aria-label={$_("extraTools.qrShowAllAria")} tabindex="-1" onkeydown={(e) => e.key === "Escape" && (showAll = false)}>
 		<QuickReplyList {session} {conv} {getDraft} {setDraft} autofocus onran={() => (showAll = false)} />
 	</div>
 {/if}
 {#if inScope.length}
-	<div class="qr" class:collapsed={quickReplies.barHidden} role="toolbar" aria-label="빠른 답장">
+	<div class="qr" class:collapsed={quickReplies.barHidden} role="toolbar" aria-label={$_("extraTools.qrToolbarAria")}>
 		<div class="list">
 			{#if scriptRunning}
-				<button type="button" class="chip stop" title="다음 커맨드부터 멈추고, 생성 중인 글은 취소" onclick={() => conv && slashRuns.stop(conv.id, session)}><Square />실행 중 · 멈추기</button>
+				<button type="button" class="chip stop" title={$_("extraTools.qrStopTitle")} onclick={() => conv && slashRuns.stop(conv.id, session)}><Square />{$_("extraTools.qrRunningStop")}</button>
 			{/if}
 			{#if !quickReplies.barHidden}
 				{#each shown as b (b.q.id)}
 					<button type="button" class="chip" disabled={running || session.busy || scriptRunning} title={b.q.message} onclick={() => press(b)}>{b.q.label.trim() || b.q.message.slice(0, 16)}</button>
 				{/each}
 				{#if buttons.length > MAX_CHIPS || showAll}
-					<button type="button" class="chip more" aria-expanded={showAll} onclick={() => (showAll = !showAll)}>{showAll ? "닫기" : `모두 보기 ${buttons.length}`}</button>
+					<button type="button" class="chip more" aria-expanded={showAll} onclick={() => (showAll = !showAll)}>{showAll ? $_("common.close") : $_("extraTools.qrShowAllBtn", { values: { count: buttons.length } })}</button>
 				{/if}
 			{/if}
 		</div>
-		<button type="button" class="pick" class:muted={quickReplies.barHidden} aria-label="이 대화의 빠른 답장 세트" title={quickReplies.barHidden ? "빠른 답장 메뉴 (숨겨짐)" : "이 대화의 빠른 답장 세트"} onclick={openMenu}><Zap /></button>
+		<button type="button" class="pick" class:muted={quickReplies.barHidden} aria-label={$_("extraTools.qrSetMenuAria")} title={quickReplies.barHidden ? $_("extraTools.qrSetMenuHidden") : $_("extraTools.qrSetMenuAria")} onclick={openMenu}><Zap /></button>
 	</div>
 {/if}
 {#if menu}
-	<ContextMenu at={{ x: menu.x, y: menu.y, align: "end" }} items={menuItems} label="빠른 답장 세트" onclose={() => (menu = null)} />
+	<ContextMenu at={{ x: menu.x, y: menu.y, align: "end" }} items={menuItems} label={$_("extraTools.qrSetTitle")} onclose={() => (menu = null)} />
 {/if}
 
 <style>

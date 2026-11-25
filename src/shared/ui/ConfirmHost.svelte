@@ -1,4 +1,5 @@
 <script lang="ts">
+	import { _ } from "svelte-i18n";
 	import { confirmStore } from "$shared/stores/confirm.svelte";
 	import Button from "./Button.svelte";
 	import Dialog from "./Dialog.svelte";
@@ -48,8 +49,8 @@
 			</form>
 		{/if}
 		{#snippet footer()}
-			{#if !req.hideCancel}<Button variant="ghost" onclick={() => confirmStore.close(null)}>{req.cancelLabel ?? "취소"}</Button>{/if}
-			{#if !req.choices || req.multiple}<Button variant={req.danger ? "danger" : "primary"} onclick={ok}>{req.confirmLabel ?? "확인"}</Button>{/if}
+			{#if !req.hideCancel}<Button variant="ghost" onclick={() => confirmStore.close(null)}>{req.cancelLabel ?? $_("common.cancel")}</Button>{/if}
+			{#if !req.choices || req.multiple}<Button variant={req.danger ? "danger" : "primary"} onclick={ok}>{req.confirmLabel ?? $_("common.confirm")}</Button>{/if}
 		{/snippet}
 	</Dialog>
 {/if}

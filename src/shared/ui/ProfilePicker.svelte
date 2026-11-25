@@ -1,6 +1,7 @@
 <script lang="ts">
 	// 프로필 고르기: 지금 고른 프로필(아바타 + 이름)을 누르면 목록이 뜬다.
 	// 대화(페르소나), 게임(플레이어), 폰(주인) 패널이 같은 모양을 쓴다.
+	import { _ } from "svelte-i18n";
 	import { UserCog } from "@lucide/svelte";
 	import Avatar from "./Avatar.svelte";
 	import type { AvatarFit } from "$ipc/bindings";
@@ -21,11 +22,11 @@
 	let {
 		options,
 		value,
-		label = "프로필 바꾸기",
+		label,
 		hint,
 		onchange,
 		onmanage,
-		manageLabel = "추가 · 관리",
+		manageLabel,
 	}: {
 		options: ProfileOption[];
 		value: string | null | undefined;
@@ -37,6 +38,9 @@
 		onmanage?: () => void;
 		manageLabel?: string;
 	} = $props();
+
+	const effectiveLabel = $derived(label ?? $_("settings.sharedUi.changeProfile"));
+	const effectiveManageLabel = $derived(manageLabel ?? $_("settings.sharedUi.addManage"));
 
 	const current = $derived(options.find((o) => o.id === value) ?? null);
 	let open = $state(false);
@@ -78,7 +82,7 @@
 />
 
 {#if open}
-	<div class="ppop" role="listbox" aria-label={label} style={popStyle}>
+	<div class="ppop" role="listbox" aria-label={effectiveLabel} style={popStyle}>
 		{#each groups as g, gi (gi)}
 			{#if g.title}<p class="grp">{g.title}</p>{/if}
 			{#each g.items as o (o.id)}
@@ -99,16 +103,16 @@
 					}}
 				>
 					<UserCog />
-					<span>{manageLabel}</span>
+					<span>{effectiveManageLabel}</span>
 				</button>
 			</div>
 		{/if}
 	</div>
 {/if}
-<button bind:this={button} class="pcur" aria-haspopup="listbox" aria-expanded={open} aria-label={label} onclick={toggle}>
+<button bind:this={button} class="pcur" aria-haspopup="listbox" aria-expanded={open} aria-label={effectiveLabel} onclick={toggle}>
 	<Avatar name={current?.name ?? "?"} src={fileSrc(current?.avatar)} fit={current?.avatarFit} color={current?.color || null} size={40} />
 	<span class="pt">
-		<b>{current?.name ?? "없음"}</b>
+		<b>{current?.name ?? $_("common.none")}</b>
 		{#if hint}<small>{hint}</small>{:else if current?.description}<small>{current.description}</small>{/if}
 	</span>
 </button>

@@ -3,6 +3,7 @@
 	// 목록 = 앱에 내장된 이 공급자의 모델 → 내가 추가한 모델 → (요청하면) 공급자에서 불러온 모델.
 	// 목록에 없으면 "직접 입력…" — 입력한 이름은 이 프로필의 "내가 추가한 모델"로 남는다.
 	import { tick } from "svelte";
+	import { _ } from "svelte-i18n";
 	import { Check, ChevronDown, ChevronRight, Ellipsis, Search, TriangleAlert, X } from "@lucide/svelte";
 	import type { ApiProfiles } from "$ipc/bindings";
 	import { ContextMenu, IconButton, type MenuItem } from "$shared/ui";
@@ -23,7 +24,8 @@
 		effort?: string;
 		oneffort?: (effort: string) => void;
 	}
-	let { profile, value, onchange, label = "모델", effort = "auto", oneffort }: Props = $props();
+	let { profile, value, onchange, label, effort = "auto", oneffort }: Props = $props();
+	const effectiveLabel = $derived(label ?? $_("settings.more2.modelDefault"));
 	const src = { source: "model" };
 
 	let fetched = $state<string[]>([]);
@@ -55,28 +57,28 @@
 			}
 			list.push({ id, name: shortNameOf(id) });
 		};
-		if (profile.model) add(profile.model, "기본 모델");
+		if (profile.model) add(profile.model, $_("settings.more2.modelGroupDefault"));
 		for (const g of entry?.modelList ?? []) for (const m of g.model) add(m.modelId, g.label);
-		for (const m of profile.customModels ?? []) add(m, "내가 추가한 모델");
-		for (const m of fetched) add(m, "공급자에서 불러온 모델");
-		add(value, "내가 추가한 모델");
+		for (const m of profile.customModels ?? []) add(m, $_("settings.more2.modelGroupCustom"));
+		for (const m of fetched) add(m, $_("settings.more2.modelGroupFetched"));
+		add(value, $_("settings.more2.modelGroupCustom"));
 		return out;
 	});
 
 	const effectiveModel = $derived(value || profile?.model || null);
 	const reasoning = $derived(oneffort ? reasoningOf(effectiveModel) : null);
 
-	const EFFORT_LABELS: Record<string, string> = {
-		auto: "자동",
-		none: "끔",
-		off: "끔",
-		minimal: "최소",
-		low: "낮음",
-		medium: "중간",
-		high: "높음",
-		xhigh: "엑스트라",
-		max: "최대",
-	};
+	const EFFORT_LABELS = $derived<Record<string, string>>({
+		auto: $_("settings.more2.effortAuto"),
+		none: $_("settings.more2.effortOff"),
+		off: $_("settings.more2.effortOff"),
+		minimal: $_("settings.more2.effortMinimal"),
+		low: $_("settings.more2.effortLow"),
+		medium: $_("settings.more2.effortMedium"),
+		high: $_("settings.more2.effortHigh"),
+		xhigh: $_("settings.more2.effortXhigh"),
+		max: $_("settings.more2.effortMax"),
+	});
 	const effortLabel = (lvl: string) => EFFORT_LABELS[lvl.toLowerCase()] ?? lvl;
 
 	// ---- 팝오버 / 추론 서브메뉴 상태 ----
@@ -208,8 +210,8 @@
 	// ---- 더 보기 메뉴 (직접 입력 · 목록 불러오기) ----
 	let menu = $state<{ x: number; y: number; align?: "start" | "end" } | null>(null);
 	const items = $derived<MenuItem[]>([
-		{ label: "직접 입력…", onselect: typeModel },
-		{ label: "공급자에서 목록 불러오기", disabled: !profile, onselect: fetchModels },
+		{ label: $_("settings.more2.typeModelMenu"), onselect: typeModel },
+		{ label: $_("settings.more2.fetchModelsMenu"), disabled: !profile, onselect: fetchModels },
 	]);
 	function openMenu(e: MouseEvent) {
 		closeAll();
@@ -219,7 +221,12 @@
 
 	async function typeModel() {
 		if (!profile) return;
-		const t = await promptText({ title: "모델 직접 입력", message: "이 API의 \"내가 추가한 모델\"로 남음", input: { value: "", placeholder: "모델 이름" }, confirmLabel: "고르기" });
+		const t = await promptText({
+			title: $_("settings.more2.typeModelTitle"),
+			message: $_("settings.more2.typeModelMsg"),
+			input: { value: "", placeholder: $_("settings.more2.typeModelPlaceholder") },
+			confirmLabel: $_("settings.more2.pickBtn"),
+		});
 		const name = t?.trim();
 		if (!name) return;
 		const list = await call(commands.addApiProfileModel(profile.id, name), src).catch(() => null);
@@ -233,7 +240,7 @@
 		if (!profile) return;
 		try {
 			fetched = await call(commands.getModels(profile.id), src);
-			toasts.success(`모델 ${fetched.length}개 불러옴`);
+			toasts.success($_("settings.more2.fetchedModelsToast", { values: { count: fetched.length } }));
 		} catch {
 			/* 토스트는 call이 띄움 */
 		}
@@ -249,19 +256,19 @@
 		class="trigger"
 		class:open
 		class:placeholder={!effectiveModel}
-		aria-label={label}
+		aria-label={effectiveLabel}
 		aria-haspopup="listbox"
 		aria-expanded={open}
 		disabled={!profile}
 		onclick={toggleOpen}
 	>
-		<span class="trigger-text">{effectiveModel ? shortNameOf(effectiveModel) : "모델 선택…"}</span>
+		<span class="trigger-text">{effectiveModel ? shortNameOf(effectiveModel) : $_("settings.more2.selectModelPlaceholder")}</span>
 		{#if reasoning && oneffort && effort !== "auto"}
 			<span class="trigger-pill">{effortLabel(effort)}</span>
 		{/if}
 		<ChevronDown class="chev" aria-hidden="true" />
 	</button>
-	<IconButton label="{label} 더 보기 (직접 입력·목록 불러오기)" size="sm" disabled={!profile} onclick={openMenu}><Ellipsis /></IconButton>
+	<IconButton label={$_("settings.more2.modelMoreAria", { values: { label: effectiveLabel } })} size="sm" disabled={!profile} onclick={openMenu}><Ellipsis /></IconButton>
 </div>
 
 {#if open}
@@ -269,7 +276,7 @@
 		bind:this={popoverEl}
 		class="popover"
 		role="listbox"
-		aria-label={label}
+		aria-label={effectiveLabel}
 		style:left="{popPos.left}px"
 		style:top="{popPos.top}px"
 		style:width="{popPos.width}px"
@@ -282,14 +289,14 @@
 					bind:this={searchEl}
 					type="text"
 					bind:value={query}
-					placeholder="모델 검색…"
-					aria-label="{label} 검색"
+					placeholder={$_("settings.more2.searchModelPlaceholder")}
+					aria-label={$_("settings.more2.searchModelAria", { values: { label: effectiveLabel } })}
 				/>
 				{#if query}
 					<button
 						type="button"
 						class="search-clear"
-						aria-label="검색어 지우기"
+						aria-label={$_("settings.more2.clearSearchAria")}
 						onclick={() => {
 							query = "";
 							searchEl?.focus();
@@ -302,9 +309,9 @@
 		{/if}
 		<div class="model-list">
 			{#if groups.length === 0}
-				<div class="empty">표시할 모델이 없습니다. 오른쪽 ···에서 직접 입력하거나 목록을 불러오세요.</div>
+				<div class="empty">{$_("settings.more2.noModelsHint")}</div>
 			{:else if filteredGroups.length === 0}
-				<div class="empty">"{query.trim()}"와 일치하는 모델이 없습니다.</div>
+				<div class="empty">{$_("settings.more2.noMatchingModel", { values: { query: query.trim() } })}</div>
 			{:else}
 				{#each filteredGroups as g (g.label)}
 					{#if filteredGroups.length > 1}
@@ -344,7 +351,7 @@
 				onmouseleave={scheduleSubClose}
 				onclick={() => (subOpen ? (subOpen = false) : void openSub())}
 			>
-				<span class="effort-title">추론 강도</span>
+				<span class="effort-title">{$_("settings.more2.reasoningEffort")}</span>
 				<span class="effort-val">
 					<span>{effortLabel(effort)}</span>
 					<ChevronRight class="sub-chev" />
@@ -360,19 +367,19 @@
 		class="submenu"
 		role="menu"
 		tabindex="-1"
-		aria-label="{label} 추론 강도"
+		aria-label={$_("settings.more2.reasoningAria", { values: { label: effectiveLabel } })}
 		style:left="{subPos.left}px"
 		style:top="{subPos.top}px"
 		onmouseenter={cancelSubTimer}
 		onmouseleave={scheduleSubClose}
 	>
-		<p class="sub-desc">추론 강도가 높을수록 더 철저하게 답하지만, 시간이 더 오래 걸리고 토큰을 더 많이 사용합니다.</p>
+		<p class="sub-desc">{$_("settings.more2.reasoningDesc")}</p>
 		<div class="sub-list">
 			<button type="button" role="menuitemradio" aria-checked={effort === "auto"} class="opt" class:active={effort === "auto"} onclick={() => selectEffort("auto")}>
 				<span class="opt-left">
-					<span class="opt-name">자동</span>
+					<span class="opt-name">{$_("settings.more2.effortAuto")}</span>
 					{#if reasoning.default}
-						<span class="pill">기본 · {effortLabel(reasoning.default)}</span>
+						<span class="pill">{$_("settings.more2.reasoningDefaultPill", { values: { level: effortLabel(reasoning.default) } })}</span>
 					{/if}
 				</span>
 				{#if effort === "auto"}<Check class="chk" />{/if}
@@ -385,10 +392,10 @@
 					<span class="opt-left">
 						<span class="opt-name">{effortLabel(lvl)}</span>
 						{#if isRec}
-							<span class="pill">추천</span>
+							<span class="pill">{$_("settings.more2.recommended")}</span>
 						{/if}
 						{#if isHeavy}
-							<span class="pill warn"><TriangleAlert class="warn-ic" />높은 사용량</span>
+							<span class="pill warn"><TriangleAlert class="warn-ic" />{$_("settings.more2.highUsage")}</span>
 						{/if}
 					</span>
 					{#if active}<Check class="chk" />{/if}
@@ -398,7 +405,7 @@
 	</div>
 {/if}
 
-<ContextMenu at={menu} {items} label="모델 메뉴" onclose={() => (menu = null)} />
+<ContextMenu at={menu} {items} label={$_("settings.more2.modelMenuAria")} onclose={() => (menu = null)} />
 
 <style>
 	.picker {

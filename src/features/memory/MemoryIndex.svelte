@@ -1,4 +1,5 @@
 <script lang="ts">
+	import { _ } from "svelte-i18n";
 	// 색인 버튼: 먼저 미리보기(요금 없음)를 보여 주고, 확인했을 때만 색인을 돌린다 (ADR-015). 상한을 넘으면 한 번 더 확인
 	import type { IndexPreview } from "$ipc/bindings";
 	import { Button, Dialog } from "$shared/ui";
@@ -32,7 +33,7 @@
 		running = true;
 		try {
 			const r = await call(commands.runMemoryIndex(scope, overOk), src);
-			toasts.success(`색인함: 새로 ${r.embedded}개, 건너뜀 ${r.cached}개`);
+			toasts.success($_("extraTools.memIndexDone", { values: { embedded: r.embedded, cached: r.cached } }));
 			open = false;
 		} catch {
 			/* 실패해도 쓴 배치는 남음 — 상태에서 확인 */
@@ -44,26 +45,26 @@
 	const nothing = $derived(!!pv && pv.toEmbed === 0);
 </script>
 
-<Button {loading} onclick={showPreview}>{conversationId ? "이 대화 색인" : "전체 색인"}</Button>
+<Button {loading} onclick={showPreview}>{conversationId ? $_("extraTools.memIndexConvBtn") : $_("extraTools.memIndexAllBtn")}</Button>
 
-<Dialog bind:open title="메모리 색인" description="누르기 전에는 아무것도 전송하지 않음">
+<Dialog bind:open title={$_("extraTools.memIndexTitle")} description={$_("extraTools.memIndexDesc")}>
 	{#if pv}
 		<ul class="pv">
-			<li>대화 {pv.conversations}개 · chunk {pv.chunks}개</li>
-			<li>이미 색인되어 건너뜀 {pv.cached}개</li>
-			<li><b>새로 임베딩 {pv.toEmbed}개</b> · 입력 약 {pv.estTokens.toLocaleString()}토큰 <span class="faint">(추정)</span></li>
+			<li>{$_("extraTools.memIndexStat1", { values: { convs: pv.conversations, chunks: pv.chunks } })}</li>
+			<li>{$_("extraTools.memIndexStat2", { values: { cached: pv.cached } })}</li>
+			<li><b>{$_("extraTools.memIndexStat3", { values: { toEmbed: pv.toEmbed } })}</b> {$_("extraTools.memIndexStat3Est", { values: { tokens: pv.estTokens.toLocaleString() } })} <span class="faint">{$_("extraTools.memIndexEst")}</span></li>
 		</ul>
-		<p class="faint">대화 글이 설정한 임베딩 공급자에게 전송되고 요금이 들 수 있음. 숨긴 메시지와 메모리에서 뺀 대화는 제외됨. 중간에 멈춰도 저장한 부분은 남고 다음에 이어짐.</p>
+		<p class="faint">{$_("extraTools.memIndexNotice")}</p>
 		{#if pv.overCap}
 			<label class="over">
 				<input type="checkbox" bind:checked={overOk} />
-				<span>예상 토큰이 실행당 상한({pv.tokenCap.toLocaleString()})을 넘음 — 그래도 진행</span>
+				<span>{$_("extraTools.memIndexOverCap", { values: { cap: pv.tokenCap.toLocaleString() } })}</span>
 			</label>
 		{/if}
 	{/if}
 	{#snippet footer()}
-		<Button variant="ghost" onclick={() => (open = false)}>취소</Button>
-		<Button variant="primary" loading={running} disabled={nothing || (!!pv && pv.overCap && !overOk)} onclick={run}>{nothing ? "새로 할 것 없음" : "색인 시작"}</Button>
+		<Button variant="ghost" onclick={() => (open = false)}>{$_("common.cancel")}</Button>
+		<Button variant="primary" loading={running} disabled={nothing || (!!pv && pv.overCap && !overOk)} onclick={run}>{nothing ? $_("extraTools.memIndexNothing") : $_("extraTools.memIndexStart")}</Button>
 	{/snippet}
 </Dialog>
 

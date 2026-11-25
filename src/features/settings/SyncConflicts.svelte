@@ -2,6 +2,7 @@
 	// 충돌 항목 고르기 (CLAUDE.md 2-E): 양쪽에서 고친 것은 나란히 보고 하나를 고르고,
 	// 넣지 못한 받은 행은 보고 버리고, 분기 대화는 열어 보고 확인함
 	import { onMount } from "svelte";
+	import { _ } from "svelte-i18n";
 	import type { SyncConflict } from "$ipc/bindings";
 	import { Badge, Button, Dialog, Spinner } from "$shared/ui";
 	import { call, commands } from "$shared/ipc/client";
@@ -45,44 +46,28 @@
 		if (items !== null && visible.length === 0) open = false;
 	});
 
-	const TABLE: Record<string, string> = {
-		characters: "캐릭터",
-		personas: "페르소나",
-		conversations: "대화",
-		messages: "메시지",
-		worldinfo_books: "로어북",
-		worldinfo_entries: "로어북 항목",
-		prompt_presets: "프리셋",
-		prompt_blocks: "프리셋 블록",
-		regex_scripts: "정규식",
-		game_projects: "게임",
-		phone_contacts: "연락처",
-		api_profiles: "API 연결",
-	};
-	const COLUMN: Record<string, string> = {
-		name: "이름",
-		title: "제목",
-		description: "설명",
-		content: "내용",
-		first_message: "첫 메시지",
-		system_prompt_override: "시스템 프롬프트",
-		example_dialogue: "대화 예시",
-		tags: "태그",
-		meta: "메타",
-		pinned: "고정",
-		favorite: "즐겨찾기",
-		keys: "키워드",
-		enabled: "켜짐",
-		sort_order: "순서",
-	};
-	const KIND: Record<string, string> = {
-		edit: "양쪽에서 고침",
-		unique: "넣지 못함 (같은 이름·키가 있음)",
-		orphan: "넣지 못함 (가리키는 항목이 없음)",
-		branch: "같은 대화에 양쪽이 이어 씀",
-	};
+	const TABLE = $derived<Record<string, string>>({
+		characters: $_("settings.dataSec.counts.characters"),
+		personas: $_("settings.dataSec.counts.personas"),
+		conversations: $_("settings.dataSec.counts.conversations"),
+		messages: $_("settings.dataSec.counts.messages"),
+		worldinfo_books: $_("settings.dataSec.counts.worldInfoBooks"),
+		worldinfo_entries: $_("settings.dataSec.counts.worldInfoBooks"),
+		prompt_presets: $_("settings.dataSec.counts.promptPresets"),
+		prompt_blocks: $_("settings.dataSec.counts.promptPresets"),
+		regex_scripts: $_("settings.dataSec.counts.regexScripts"),
+		game_projects: $_("settings.dataSec.counts.games"),
+		phone_contacts: $_("settings.dataSec.phoneBadge"),
+		api_profiles: $_("settings.more3.apiKeysLabel"),
+	});
+	const KIND = $derived<Record<string, string>>({
+		edit: $_("settings.more3.conflictKindEdit"),
+		unique: $_("settings.more3.conflictKindUnique"),
+		orphan: $_("settings.more3.conflictKindOrphan"),
+		branch: $_("settings.more3.conflictKindBranch"),
+	});
 	const show = (v: unknown) => {
-		if (emptyish(v)) return "(비어 있음)";
+		if (emptyish(v)) return $_("settings.more3.conflictEmptyVal");
 		const s = typeof v === "string" ? v : JSON.stringify(v);
 		return s.length > 400 ? `${s.slice(0, 400)}…` : s;
 	};
@@ -91,7 +76,7 @@
 		busy = c.id;
 		try {
 			await call(commands.resolveSyncConflict(c.id, choice), src);
-			if (choice !== "dismiss") toasts.success(choice === "keep_local" ? "이 기기 것을 둠 — 다음 동기화 때 다른 기기도 이것으로" : "받은 것으로 바꿈 — 다음 동기화 때 다른 기기도 같아짐");
+			if (choice !== "dismiss") toasts.success(choice === "keep_local" ? $_("settings.more3.conflictKeepLocalToast") : $_("settings.more3.conflictUseRemoteToast"));
 			if (choice === "use_remote") void library.load();
 			await load();
 			await onchange?.();
@@ -102,7 +87,7 @@
 	function openBranch(c: SyncConflict) {
 		const id = (c.remote as { branchId?: string } | null)?.branchId;
 		const conv = library.conversations.find((x) => x.id === id);
-		if (!conv) return toasts.error("분기 대화를 찾을 수 없음 (지웠을 수 있음)");
+		if (!conv) return toasts.error($_("settings.more3.conflictBranchMissing"));
 		nav.go({ page: "character", charId: conv.characterId, convId: conv.id });
 	}
 </script>
@@ -110,50 +95,50 @@
 {#if items === null}
 	<div class="loading"><Spinner /></div>
 {:else if visible.length}
-	<Group title="충돌 항목">
-		<Row label="충돌 {visible.length}건" desc="양쪽에서 고쳤거나 합치지 못한 항목. 확인하고 하나씩 고름" nowrap>
-			<Button size="sm" variant="primary" onclick={() => (open = true)}>확인하기</Button>
+	<Group title={$_("settings.more3.conflictTitle")}>
+		<Row label={$_("settings.more3.conflictRowLabel", { values: { count: visible.length } })} desc={$_("settings.more3.conflictRowDesc")} nowrap>
+			<Button size="sm" variant="primary" onclick={() => (open = true)}>{$_("settings.more3.conflictReviewBtn")}</Button>
 		</Row>
 	</Group>
-	<Dialog bind:open title="충돌 항목" description="이 기기 것을 둘지 받은 것으로 바꿀지 고르세요. 고르면 다음 동기화 때 다른 기기도 같아집니다" size="lg">
+	<Dialog bind:open title={$_("settings.more3.conflictTitle")} description={$_("settings.more3.conflictDialogDesc")} size="lg">
 		<ul class="list">
 			{#each visible as c (c.id)}
 				<li>
 					<div class="head">
 						<Badge>{TABLE[c.tbl] ?? c.tbl}</Badge>
-						<b>{c.label || "(이름 없음)"}</b>
-						<span class="meta" title={absolute(c.createdAt)}>{KIND[c.kind] ?? c.kind} · 기기 {deviceLabel(c.deviceId, peers)} · {relative(c.createdAt)}</span>
+						<b>{c.label || $_("settings.more3.conflictUnnamed")}</b>
+						<span class="meta" title={absolute(c.createdAt)}>{KIND[c.kind] ?? c.kind} · {$_("settings.syncSec.deviceBadge", { values: { name: deviceLabel(c.deviceId, peers) } })} · {relative(c.createdAt)}</span>
 					</div>
 					{#if c.kind === "edit"}
 						{#if realDiff(c).length}
 							<table class="diff">
-								<thead><tr><th scope="col">칸</th><th scope="col">이 기기</th><th scope="col">받은 것</th></tr></thead>
+								<thead><tr><th scope="col">{$_("settings.more3.conflictColField")}</th><th scope="col">{$_("settings.more3.conflictColLocal")}</th><th scope="col">{$_("settings.more3.conflictColRemote")}</th></tr></thead>
 								<tbody>
 									{#each realDiff(c) as d (d.column)}
-										<tr><th scope="row">{COLUMN[d.column] ?? d.column}</th><td>{show(d.local)}</td><td>{show(d.remote)}</td></tr>
+										<tr><th scope="row">{d.column}</th><td>{show(d.local)}</td><td>{show(d.remote)}</td></tr>
 									{/each}
 								</tbody>
 							</table>
 						{:else}
-							<p class="meta">지금은 내용이 같음</p>
+							<p class="meta">{$_("settings.more3.conflictSameNow")}</p>
 						{/if}
 						<div class="acts">
-							<Button size="sm" disabled={busy !== null} onclick={() => choose(c, "use_remote")}>받은 것으로</Button>
-							<Button size="sm" variant="primary" loading={busy === c.id} disabled={busy !== null} onclick={() => choose(c, "keep_local")}>이 기기 것 두기</Button>
+							<Button size="sm" disabled={busy !== null} onclick={() => choose(c, "use_remote")}>{$_("settings.more3.conflictUseRemoteBtn")}</Button>
+							<Button size="sm" variant="primary" loading={busy === c.id} disabled={busy !== null} onclick={() => choose(c, "keep_local")}>{$_("settings.more3.conflictKeepLocalBtn")}</Button>
 						</div>
 					{:else if c.kind === "branch"}
-						<p class="meta">이 기기 대화는 그대로이고, 받은 메시지는 "… · 다른 기기" 분기 대화에 있음. 필요 없으면 그 대화를 지우면 됨</p>
+						<p class="meta">{$_("settings.more3.conflictBranchHint")}</p>
 						<div class="acts">
-							<Button size="sm" disabled={busy !== null} onclick={() => openBranch(c)}>분기 대화 열기</Button>
-							<Button size="sm" variant="primary" loading={busy === c.id} disabled={busy !== null} onclick={() => choose(c, "dismiss")}>확인함</Button>
+							<Button size="sm" disabled={busy !== null} onclick={() => openBranch(c)}>{$_("settings.more3.conflictOpenBranchBtn")}</Button>
+							<Button size="sm" variant="primary" loading={busy === c.id} disabled={busy !== null} onclick={() => choose(c, "dismiss")}>{$_("settings.more3.conflictAckBtn")}</Button>
 						</div>
 					{:else}
 						<details>
-							<summary>받은 내용 보기</summary>
+							<summary>{$_("settings.more3.conflictViewRemote")}</summary>
 							<pre>{JSON.stringify(c.remote, null, 1)}</pre>
 						</details>
 						<div class="acts">
-							<Button size="sm" variant="ghost" loading={busy === c.id} disabled={busy !== null} onclick={() => choose(c, "dismiss")}>버리기</Button>
+							<Button size="sm" variant="ghost" loading={busy === c.id} disabled={busy !== null} onclick={() => choose(c, "dismiss")}>{$_("settings.more3.discardBtn")}</Button>
 						</div>
 					{/if}
 				</li>

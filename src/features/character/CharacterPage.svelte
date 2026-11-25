@@ -52,17 +52,17 @@
 	const lastActive = (id: string) => (library.convsOf(id)[0] ? lastAt(library.convsOf(id)[0]) : 0);
 	const allTags = $derived([...new Set(library.characters.flatMap((c) => c.tags))].sort((a, b) => a.localeCompare(b, "ko")));
 	const FILTERS = $derived([
-		{ value: "all", label: `전부 ${library.characters.length}` },
-		{ value: "fav", label: "즐겨찾기" },
-		{ value: "chat", label: "대화 있음" },
-		{ value: "nochat", label: "대화 없음" },
+		{ value: "all", label: $_("characterPage.filterAll", { values: { count: library.characters.length } }) },
+		{ value: "fav", label: $_("characterPage.filterFav") },
+		{ value: "chat", label: $_("characterPage.filterChat") },
+		{ value: "nochat", label: $_("characterPage.filterNoChat") },
 		...allTags.map((t) => ({ value: `tag:${t}`, label: `#${t}` })),
 	]);
-	const SORTS = [
-		{ value: "recent", label: "최근 대화 순" },
-		{ value: "name", label: "이름 순" },
-		{ value: "new", label: "최근 만든 순" },
-	];
+	const SORTS = $derived([
+		{ value: "recent", label: $_("characterPage.sortRecent") },
+		{ value: "name", label: $_("characterPage.sortName") },
+		{ value: "new", label: $_("characterPage.sortNew") },
+	]);
 	const list = $derived.by(() => {
 		const q = query.trim().toLowerCase();
 		const pass = (c: Character) =>
@@ -89,7 +89,7 @@
 		const ids = [...picked];
 		if (!ids.length) return;
 		const convs = ids.reduce((n, id) => n + library.convsOf(id).length, 0);
-		if (!(await confirmAction({ title: "캐릭터 삭제", message: `캐릭터 ${ids.length}개를 휴지통으로 옮김 (대화 ${convs}개는 캐릭터 없이 남음). 설정 > 데이터 > 휴지통에서 되살릴 수 있음`, confirmLabel: `${ids.length}개 삭제`, danger: true }))) return;
+		if (!(await confirmAction({ title: $_("characterPage.deleteTitle"), message: $_("characterPage.deleteManyMsg", { values: { chars: ids.length, convs } }), confirmLabel: $_("characterPage.deleteCountBtn", { values: { count: ids.length } }), danger: true }))) return;
 		selecting = false;
 		// 파일 작업 대기열로 하나씩 (5-E-28). 요약 알림은 대기열이 한 번
 		await Promise.allSettled(ids.map((id) => deleteJob(id, library.character(id)?.name ?? id)));
@@ -181,9 +181,9 @@
 					async () => {
 						if (!p.toLowerCase().endsWith(".zip")) return void (await library.importSillyTavern(p, p.toLowerCase().endsWith(".jsonl") ? (charId ?? null) : null));
 						const r = await call(commands.importCharacterPack(p), { source: "character" });
-						toasts.success(`캐릭터 ${r.characters.length}명 · 대화 ${r.conversationCount}개 가져옴`);
+						toasts.success($_("characterPage.importedPackToast", { values: { chars: r.characters.length, convs: r.conversationCount } }));
 					},
-					{ group: "캐릭터 가져오기" },
+					{ group: $_("characterPage.importJobGroup") },
 				),
 			),
 		);
@@ -192,14 +192,14 @@
 	const DROP_EXT = ["png", "json", "jsonl", "zip"];
 	$effect(() =>
 		drops.register({
-			label: charId ? `${library.character(charId)?.name ?? "캐릭터"}에 가져오기` : "캐릭터 가져오기",
-			hint: charId ? "SillyTavern 채팅(.jsonl)은 이 캐릭터의 대화로, 카드(PNG·JSON)·묶음(ZIP)은 새 캐릭터로" : "카드(PNG·JSON), 캐릭터 묶음(ZIP), SillyTavern 채팅(.jsonl)",
+			label: charId ? $_("characterPage.dropToChar", { values: { name: library.character(charId)?.name ?? $_("characterPage.dropCharDefault") } }) : $_("characterPage.importJobGroup"),
+			hint: charId ? $_("characterPage.dropToCharHint") : $_("characterPage.dropListHint"),
 			accept: (f) => DROP_EXT.includes(extOf(f)),
 			ondrop: async (files) => importPaths(await Promise.all(files.map((f) => storeFile(f)))),
 		}),
 	);
 	async function createCharacter() {
-		const name = await promptText({ title: "새 캐릭터", message: "자세한 설정은 나중에 편집에서", input: { value: "", placeholder: "이름" }, confirmLabel: "만들기" });
+		const name = await promptText({ title: $_("characterPage.newTitle"), message: $_("characterPage.newMsg"), input: { value: "", placeholder: $_("characterPage.namePlaceholder") }, confirmLabel: $_("characterPage.createBtn") });
 		if (!name) return;
 		const c = await call(
 			commands.createCharacter({ name, description: "", alternateDescriptions: [], alternateFirstMessage: [], worldInfoIds: [], tags: [], favorite: false }),
@@ -223,13 +223,13 @@
 	let convSort = $state<ConvSortBy>("recent");
 	const convFolders = $derived(charId ? library.foldersOf(charId) : []);
 	const CONV_FILTERS = $derived([
-		{ value: "all", label: `전부 ${recent.length}` },
-		{ value: "pinned", label: "고정됨" },
-		{ value: "read", label: "읽기 모드" },
-		{ value: "chat", label: "대화 모드" },
+		{ value: "all", label: $_("characterPage.filterAll", { values: { count: recent.length } }) },
+		{ value: "pinned", label: $_("characterPage.convFilterPinned") },
+		{ value: "read", label: $_("characterPage.convFilterRead") },
+		{ value: "chat", label: $_("characterPage.convFilterChat") },
 		...convFolders.map((f) => ({ value: `folder:${f.id}`, label: f.name })),
 	]);
-	const CONV_SORTS = CONV_SORT_KEYS.map((k) => ({ value: k, label: CONV_SORT_LABEL[k] }));
+	const CONV_SORTS = $derived(CONV_SORT_KEYS.map((k) => ({ value: k, label: CONV_SORT_LABEL[k] })));
 	const filteredRecent = $derived.by(() => {
 		const q = convQuery.trim().toLowerCase();
 		const pass = (c: (typeof recent)[number]) =>
@@ -250,15 +250,15 @@
 	const MARK_FILTERS = $derived.by(() => {
 		const convsWithMarks = [...new Map(marks.map((m) => [m.conv.id, m.conv])).values()];
 		return [
-			{ value: "all", label: `전부 ${marks.length}` },
+			{ value: "all", label: $_("characterPage.filterAll", { values: { count: marks.length } }) },
 			...convsWithMarks.map((c) => ({ value: `conv:${c.id}`, label: c.title })),
 		];
 	});
-	const MARK_SORTS = [
-		{ value: "recent", label: "최근 북마크 순" },
-		{ value: "oldest", label: "오래된 순" },
-		{ value: "conv", label: "대화 제목 순" },
-	];
+	const MARK_SORTS = $derived([
+		{ value: "recent", label: $_("characterPage.markSortRecent") },
+		{ value: "oldest", label: $_("characterPage.markSortOldest") },
+		{ value: "conv", label: $_("characterPage.markSortConv") },
+	]);
 	const filteredMarks = $derived.by(() => {
 		const q = markQuery.trim().toLowerCase();
 		const pass = (m: (typeof marks)[number]) =>
@@ -296,11 +296,11 @@
 			})
 			.catch(() => (statsFor = ""));
 	});
-	const DAYS = ["일", "월", "화", "수", "목", "금", "토"];
+	const DAYS = $derived([$_("characterPage.days.0"), $_("characterPage.days.1"), $_("characterPage.days.2"), $_("characterPage.days.3"), $_("characterPage.days.4"), $_("characterPage.days.5"), $_("characterPage.days.6")]);
 	function duration(sec: number) {
 		const h = Math.floor(sec / 3600);
 		const m = Math.round((sec % 3600) / 60);
-		return h ? `${h}시간 ${m}분` : `${m}분`;
+		return h ? $_("characterPage.durationHm", { values: { h, m } }) : $_("characterPage.durationM", { values: { m } });
 	}
 	let starting = $state(false);
 	async function newConversation(cid: string) {
@@ -317,25 +317,25 @@
 		const c = character;
 		if (!c) return [];
 		return [
-			{ label: "편집", icon: Pencil, onselect: () => nav.go({ page: "character", charId: c.id, edit: true }) },
-			{ label: c.favorite ? "즐겨찾기 해제" : "즐겨찾기", icon: c.favorite ? StarOff : Star, onselect: () => toggleFavorite(c) },
-			{ label: "페르소나로 복사", icon: UserRound, separator: true, onselect: () => toPersona(c) },
-			{ label: "게임에 넣기", icon: Gamepad2, onselect: () => openGamePick(c) },
-			{ label: "내보내기…", icon: Download, separator: true, onselect: () => charActions.exportMenu(c) },
-			{ label: "삭제", icon: Trash2, danger: true, separator: true, onselect: () => removeCharacter(c) },
+			{ label: $_("characterPage.editMenu"), icon: Pencil, onselect: () => nav.go({ page: "character", charId: c.id, edit: true }) },
+			{ label: c.favorite ? $_("characterPage.unfavMenu") : $_("characterPage.favMenu"), icon: c.favorite ? StarOff : Star, onselect: () => toggleFavorite(c) },
+			{ label: $_("characterPage.copyToPersonaMenu"), icon: UserRound, separator: true, onselect: () => toPersona(c) },
+			{ label: $_("characterPage.addToGameMenu"), icon: Gamepad2, onselect: () => openGamePick(c) },
+			{ label: $_("characterPage.exportMenu"), icon: Download, separator: true, onselect: () => charActions.exportMenu(c) },
+			{ label: $_("common.delete"), icon: Trash2, danger: true, separator: true, onselect: () => removeCharacter(c) },
 		];
 	});
 	// ---- 복사: 원본은 그대로, 상대 쪽에 새로 만듦 ----
 	async function toPersona(c: Character) {
 		const p = await call(commands.copyCharacterToPersona(c.id), { source: "character" });
 		library.personas = [...library.personas, p];
-		toasts.show({ tone: "success", message: `페르소나 '${p.name}' 만듦`, action: { label: "열기", run: () => nav.go({ page: "persona", personaId: p.id }) } });
+		toasts.show({ tone: "success", message: $_("characterPage.copiedPersonaToast", { values: { name: p.name } }), action: { label: $_("characterPage.openBtn"), run: () => nav.go({ page: "persona", personaId: p.id }) } });
 	}
 	let gamePick = $state<{ c: Character; games: GameProject[] } | null>(null);
 	let gamePickOpen = $state(false);
 	async function openGamePick(c: Character) {
 		const games = await call(commands.gameList(), { source: "character" }).catch(() => []);
-		if (!games.length) return toasts.info("게임이 없음. 게임을 먼저 만들어야 함");
+		if (!games.length) return toasts.info($_("characterPage.noGamesToast"));
 		gamePick = { c, games };
 		gamePickOpen = true;
 	}
@@ -343,7 +343,7 @@
 		if (!gamePick) return;
 		await call(commands.copyCharacterToGame(gamePick.c.id, g.id), { source: "character" });
 		gamePickOpen = false;
-		toasts.success(`'${g.title}' 게임에 '${gamePick.c.name}' 넣음 · 아바타는 게임 에셋으로 따로 넣어야 함`);
+		toasts.success($_("characterPage.addedToGameToast", { values: { game: g.title, char: gamePick.c.name } }));
 	}
 	async function toggleFavorite(c: Character) {
 		await call(commands.toggleFavoriteCharacter(c.id, !c.favorite), { source: "character" });
@@ -359,12 +359,12 @@
 		cardMenu = {
 			at: e.type === "contextmenu" ? { x: e.clientX, y: e.clientY } : { x: r.right, y: r.bottom + 4, align: "end" },
 			items: [
-				...(convs.length ? [{ label: `이어서: ${convs[0].title}`, icon: MessageSquarePlus, onselect: () => open(c.id, convs[0].id) }] : []),
-				{ label: "새 대화", icon: Plus, onselect: () => newConversation(c.id) },
-				{ label: c.favorite ? "즐겨찾기 빼기" : "즐겨찾기", icon: c.favorite ? StarOff : Star, separator: true, onselect: () => toggleFavorite(c) },
-				{ label: "편집", icon: Pencil, onselect: () => nav.go({ page: "character", charId: c.id, edit: true }) },
-				{ label: "내보내기…", icon: Download, onselect: () => charActions.exportMenu(c) },
-				{ label: "삭제", icon: Trash2, danger: true, separator: true, onselect: () => removeCharacter(c, false) },
+				...(convs.length ? [{ label: $_("characterPage.continueConvMenu", { values: { title: convs[0].title } }), icon: MessageSquarePlus, onselect: () => open(c.id, convs[0].id) }] : []),
+				{ label: $_("characterPage.newConvMenu"), icon: Plus, onselect: () => newConversation(c.id) },
+				{ label: c.favorite ? $_("characterPage.removeFavMenu") : $_("characterPage.favMenu"), icon: c.favorite ? StarOff : Star, separator: true, onselect: () => toggleFavorite(c) },
+				{ label: $_("characterPage.editMenu"), icon: Pencil, onselect: () => nav.go({ page: "character", charId: c.id, edit: true }) },
+				{ label: $_("characterPage.exportMenu"), icon: Download, onselect: () => charActions.exportMenu(c) },
+				{ label: $_("common.delete"), icon: Trash2, danger: true, separator: true, onselect: () => removeCharacter(c, false) },
 			],
 		};
 	}
@@ -376,36 +376,36 @@
 			at: e.type === "contextmenu" ? { x: e.clientX, y: e.clientY } : { x: r.right, y: r.bottom + 4, align: "end" },
 			items: [
 				{
-					label: "이름 바꾸기",
+					label: $_("characterPage.renameMenu"),
 					icon: Pencil,
 					onselect: async () => {
-						const t = await promptText({ title: "대화 이름", input: { value: c.title, placeholder: "대화 이름" }, confirmLabel: "저장" });
+						const t = await promptText({ title: $_("characterPage.convNameTitle"), input: { value: c.title, placeholder: $_("characterPage.convNameTitle") }, confirmLabel: $_("common.save") });
 						if (t?.trim()) await library.rename(c.id, t);
 					},
 				},
-				{ label: c.pinned ? "고정 풀기" : "고정", icon: c.pinned ? PinOff : Pin, onselect: () => library.togglePin(c.id) },
+				{ label: c.pinned ? $_("characterPage.unpinMenu") : $_("characterPage.pinMenu"), icon: c.pinned ? PinOff : Pin, onselect: () => library.togglePin(c.id) },
 				{
-					label: "복제",
+					label: $_("characterPage.duplicateMenu"),
 					icon: Copy,
 					onselect: async () => {
 						const d = await library.duplicate(c.id);
 						if (d) open(c.characterId, d.id);
 					},
 				},
-				{ label: "내보내기…", icon: Download, onselect: () => convActions.exportMenu(c) },
-				{ label: "삭제", icon: Trash2, danger: true, separator: true, onselect: () => convActions.remove(c) },
+				{ label: $_("characterPage.exportMenu"), icon: Download, onselect: () => convActions.exportMenu(c) },
+				{ label: $_("common.delete"), icon: Trash2, danger: true, separator: true, onselect: () => convActions.remove(c) },
 			],
 		};
 	}
 	async function copyMark(text: string) {
 		await navigator.clipboard.writeText(text).then(
-			() => toasts.success("북마크 글 복사함"),
-			() => toasts.error("복사 못 함"),
+			() => toasts.success($_("characterPage.markCopiedToast")),
+			() => toasts.error($_("characterPage.copyFailedToast")),
 		);
 	}
 	async function removeCharacter(c: Character, leave = true) {
 		const n = library.convsOf(c.id).length;
-		if (!(await confirmAction({ title: "캐릭터 삭제", message: `'${c.name}'을(를) 휴지통으로 옮김${n ? ` (대화 ${n}개는 캐릭터 없이 남고, 되살리면 다시 이어짐)` : ""}. ${TRASH_HINT}`, confirmLabel: "삭제", danger: true }))) return;
+		if (!(await confirmAction({ title: $_("characterPage.deleteTitle"), message: $_("characterPage.deleteOneMsg", { values: { name: c.name, extra: n ? $_("characterPage.deleteOneExtra", { values: { count: n } }) : "", hint: TRASH_HINT } }), confirmLabel: $_("common.delete"), danger: true }))) return;
 		if (leave) nav.replace({ page: "character" });
 		// 하나씩 빠르게 지워도 앞 것이 끝날 때까지 줄을 서서 기다린다 (5-E-28 — 전에는 "데이터베이스가 사용 중"으로 거절됨)
 		const item = await deleteJob(c.id, c.name).catch(() => null);
@@ -414,7 +414,7 @@
 	}
 	/** 캐릭터 하나를 휴지통으로 — 파일 작업 대기열에서 */
 	function deleteJob(id: string, name: string) {
-		return jobs.add(name, () => call(commands.deleteCharacter(id), { source: "character" }), { group: "캐릭터 지우기" });
+		return jobs.add(name, () => call(commands.deleteCharacter(id), { source: "character" }), { group: $_("characterPage.deleteJobGroup") });
 	}
 </script>
 
@@ -446,39 +446,39 @@
 			onpointerup={() => (dragFrom = null)}
 		>
 			{#if positioning}
-				<div class="cover-hint">위아래로 끌어서 보일 부분 고르기</div>
+				<div class="cover-hint">{$_("characterPage.coverHint")}</div>
 				<div class="cover-tools on">
-					<Button size="sm" variant="secondary" onclick={() => (positioning = false)}>취소</Button>
-					<Button size="sm" variant="primary" onclick={() => finishPosition(character.id)}>완료</Button>
+					<Button size="sm" variant="secondary" onclick={() => (positioning = false)}>{$_("common.cancel")}</Button>
+					<Button size="sm" variant="primary" onclick={() => finishPosition(character.id)}>{$_("characterPage.doneBtn")}</Button>
 				</div>
 			{:else}
 				<div class="cover-tools" class:on={!character.cover}>
-					<Button size="sm" variant="secondary" onclick={() => changeCover(character.id)}>{#snippet icon()}<ImagePlus />{/snippet}{character.cover ? "커버 바꾸기" : "커버 넣기"}</Button>
+					<Button size="sm" variant="secondary" onclick={() => changeCover(character.id)}>{#snippet icon()}<ImagePlus />{/snippet}{character.cover ? $_("characterPage.changeCover") : $_("characterPage.addCover")}</Button>
 					{#if character.cover}
-						<Button size="sm" variant="secondary" onclick={() => startPosition(character.coverY ?? 50)}>{#snippet icon()}<Move />{/snippet}위치 조절</Button>
-						<Button size="sm" variant="secondary" onclick={() => changeCover(character.id, true)}>{#snippet icon()}<XIcon />{/snippet}커버 지우기</Button>
+						<Button size="sm" variant="secondary" onclick={() => startPosition(character.coverY ?? 50)}>{#snippet icon()}<Move />{/snippet}{$_("characterPage.adjustPosition")}</Button>
+						<Button size="sm" variant="secondary" onclick={() => changeCover(character.id, true)}>{#snippet icon()}<XIcon />{/snippet}{$_("characterPage.removeCover")}</Button>
 					{/if}
 				</div>
 			{/if}
 		</div>
 		<header class="profile" class:no-cover={!character.cover}>
-			<button class="portrait" title="아바타 바꾸기" aria-label="아바타 바꾸기" onclick={() => changeAvatar(character.id)}>
+			<button class="portrait" title={$_("characterPage.changeAvatarAria")} aria-label={$_("characterPage.changeAvatarAria")} onclick={() => changeAvatar(character.id)}>
 				<Avatar name={character.name} src={fileSrc(character.avatar)} fit={character.avatarFit} color={character.color} size={96} />
 				<span class="cam" aria-hidden="true"><Camera /></span>
 			</button>
 			<div class="ident">
 				<h1>{character.name}</h1>
-				<p class="faint">{["캐릭터", character.category, ...character.tags.slice(0, 4)].filter(Boolean).join(" · ")}</p>
+				<p class="faint">{[$_("characterPage.dropCharDefault"), character.category, ...character.tags.slice(0, 4)].filter(Boolean).join(" · ")}</p>
 			</div>
 			<div class="cta">
 				<Button variant="primary" loading={starting} onclick={() => (recent[0] ? open(character.id, recent[0].id) : newConversation(character.id))}>
 					{#snippet icon()}<MessageSquarePlus />{/snippet}
-					{recent.length ? "이어서 대화" : "대화 시작"}
+					{recent.length ? $_("characterPage.continueChat") : $_("characterPage.startChat")}
 				</Button>
 				<div class="sub">
-					{#if recent.length}<Button size="sm" variant="ghost" disabled={starting} onclick={() => newConversation(character.id)}>새 대화</Button>{/if}
+					{#if recent.length}<Button size="sm" variant="ghost" disabled={starting} onclick={() => newConversation(character.id)}>{$_("characterPage.newConvMenu")}</Button>{/if}
 					<IconButton
-						label="더 보기 (편집·내보내기·삭제)"
+						label={$_("characterPage.moreAria")}
 						size="sm"
 						onclick={(e) => {
 							const r = (e.currentTarget as HTMLElement).getBoundingClientRect();
@@ -488,8 +488,8 @@
 				</div>
 			</div>
 		</header>
-		<ContextMenu at={more} items={moreItems} label="캐릭터 메뉴" onclose={() => (more = null)} />
-		<Dialog bind:open={gamePickOpen} title="게임에 넣기" description="복사본이 게임 캐릭터로 들어감. 이 캐릭터는 그대로 남음" size="sm">
+		<ContextMenu at={more} items={moreItems} label={$_("characterPage.charMenuAria")} onclose={() => (more = null)} />
+		<Dialog bind:open={gamePickOpen} title={$_("characterPage.addToGameMenu")} description={$_("characterPage.addToGameDesc")} size="sm">
 			<ul class="games">
 				{#each gamePick?.games ?? [] as g (g.id)}
 					<li><button onclick={() => toGame(g)}><Gamepad2 /><span><b>{g.title}</b>{#if g.description}<small>{g.description}</small>{/if}</span></button></li>
@@ -499,14 +499,14 @@
 
 		<div class="tabs">
 			<Segmented
-				label="캐릭터 탭"
+				label={$_("characterPage.tabsAria")}
 				bind:value={tab}
 				options={[
-					{ value: "overview", label: "개요" },
-					{ value: "recent", label: `채팅 목록 ${recent.length}` },
-					{ value: "bookmarks", label: `북마크 ${marks.length}` },
-					{ value: "gallery", label: "갤러리" },
-					{ value: "stats", label: "통계" },
+					{ value: "overview", label: $_("characterPage.tabOverview") },
+					{ value: "recent", label: $_("characterPage.tabChats", { values: { count: recent.length } }) },
+					{ value: "bookmarks", label: $_("characterPage.tabBookmarks", { values: { count: marks.length } }) },
+					{ value: "gallery", label: $_("characterPage.tabGallery") },
+					{ value: "stats", label: $_("characterPage.tabStats") },
 				]}
 			/>
 		</div>
@@ -516,12 +516,12 @@
 				{#if character.creatorNotes?.trim() || character.description.trim()}
 					<div class="intro"><RichText blocks={overviewBlocks(character)} images={overviewImages} /></div>
 				{:else}
-					<p class="none">소개 없음 · <button class="link" onclick={() => nav.go({ page: "character", charId: character.id, edit: true })}>편집에서 쓰기</button></p>
+					<p class="none">{$_("characterPage.noIntro")} · <button class="link" onclick={() => nav.go({ page: "character", charId: character.id, edit: true })}>{$_("characterPage.writeInEdit")}</button></p>
 				{/if}
 			{:else if tab === "bookmarks"}
 				{#if marks.length}
 					<div class="sub-toolbar">
-						<ListToolbar bind:query={markQuery} bind:filter={markFilter} bind:sort={markSort} placeholder="북마크·대화 제목" filters={MARK_FILTERS} sorts={MARK_SORTS} />
+						<ListToolbar bind:query={markQuery} bind:filter={markFilter} bind:sort={markSort} placeholder={$_("characterPage.markSearchPlaceholder")} filters={MARK_FILTERS} sorts={MARK_SORTS} />
 					</div>
 				{/if}
 				<ul class="recent marks">
@@ -532,12 +532,12 @@
 								<ChevronRight />
 							</button>
 							<div class="row-acts">
-								<IconButton size="sm" label="복사" onclick={() => copyMark(b.text)}><Copy /></IconButton>
-								<IconButton size="sm" variant="danger" label="북마크 지우기" onclick={() => bookmarks.remove(b.conv, b.id)}><Trash2 /></IconButton>
+								<IconButton size="sm" label={$_("characterPage.copyAria")} onclick={() => copyMark(b.text)}><Copy /></IconButton>
+								<IconButton size="sm" variant="danger" label={$_("characterPage.removeMarkAria")} onclick={() => bookmarks.remove(b.conv, b.id)}><Trash2 /></IconButton>
 							</div>
 						</li>
 					{:else}
-						<li class="none">{marks.length ? "검색 결과 없음" : '북마크 없음 · 대화에서 글을 끌어 고른 뒤 "북마크"'}</li>
+						<li class="none">{marks.length ? $_("characterPage.noResults") : $_("characterPage.noMarksHint")}</li>
 					{/each}
 				</ul>
 			{:else if tab === "gallery"}
@@ -548,45 +548,45 @@
 				{:else}
 					{@const max = Math.max(1, ...stats.weekdays)}
 					<dl class="stats">
-						<div><dt>누적 대화 시간</dt><dd>{duration(stats.chatSeconds)}</dd></div>
-						<div><dt>대화방</dt><dd>{stats.conversations}개</dd></div>
-						<div><dt>메시지</dt><dd>{stats.messages.toLocaleString()}개</dd></div>
-						{#if stats.firstAt}<div><dt>처음 대화</dt><dd title={absolute(stats.firstAt)}>{relative(stats.firstAt)}</dd></div>{/if}
+						<div><dt>{$_("characterPage.statTime")}</dt><dd>{duration(stats.chatSeconds)}</dd></div>
+						<div><dt>{$_("characterPage.statConvs")}</dt><dd>{$_("characterPage.statConvsVal", { values: { count: stats.conversations } })}</dd></div>
+						<div><dt>{$_("characterPage.statMsgs")}</dt><dd>{$_("characterPage.statMsgsVal", { values: { count: stats.messages.toLocaleString() } })}</dd></div>
+						{#if stats.firstAt}<div><dt>{$_("characterPage.statFirst")}</dt><dd title={absolute(stats.firstAt)}>{relative(stats.firstAt)}</dd></div>{/if}
 					</dl>
-					<div class="week" role="img" aria-label="요일별 메시지 수: {DAYS.map((d, i) => `${d} ${stats?.weekdays[i] ?? 0}`).join(', ')}">
+					<div class="week" role="img" aria-label={$_("characterPage.weekAria", { values: { summary: DAYS.map((d, i) => `${d} ${stats?.weekdays[i] ?? 0}`).join(", ") } })}>
 						{#each stats.weekdays as n, i (i)}
-							<div class="day"><span class="bar" style:height="{(n / max) * 100}%" title="{DAYS[i]}요일 {n}개"></span><small>{DAYS[i]}</small></div>
+							<div class="day"><span class="bar" style:height="{(n / max) * 100}%" title={$_("characterPage.weekBarTitle", { values: { day: DAYS[i], count: n } })}></span><small>{DAYS[i]}</small></div>
 						{/each}
 					</div>
-					<p class="faint-note">같은 대화에서 30분 안에 이어진 메시지 사이를 대화 시간으로 셈</p>
+					<p class="faint-note">{$_("characterPage.statNote")}</p>
 				{/if}
 			{:else}
 				{#if recent.length}
 					<div class="sub-toolbar">
-						<ListToolbar bind:query={convQuery} bind:filter={convFilter} bind:sort={convSort} placeholder="대화 제목" filters={CONV_FILTERS} sorts={CONV_SORTS} />
+						<ListToolbar bind:query={convQuery} bind:filter={convFilter} bind:sort={convSort} placeholder={$_("characterPage.convSearchPlaceholder")} filters={CONV_FILTERS} sorts={CONV_SORTS} />
 					</div>
 				{/if}
 				<ul class="recent">
 					{#each filteredRecent as c (c.id)}
 						<li class="recent-row" oncontextmenu={(e) => openConvMenu(e, c)}>
 							<button class="row-main" onclick={() => open(character.id, c.id)}>
-								<span><b>{c.title}</b><small title={absolute(lastAt(c))}>마지막 활동 · {relative(lastAt(c))} · {c.messageCount}개</small></span>
+								<span><b>{c.title}</b><small title={absolute(lastAt(c))}>{$_("characterPage.lastActiveMeta", { values: { when: relative(lastAt(c)), count: c.messageCount } })}</small></span>
 								<ChevronRight />
 							</button>
 							<div class="row-acts">
-								<IconButton size="sm" label="{c.title} 메뉴" onclick={(e) => openConvMenu(e, c)}><Ellipsis /></IconButton>
+								<IconButton size="sm" label={$_("characterPage.itemMenuAria", { values: { title: c.title } })} onclick={(e) => openConvMenu(e, c)}><Ellipsis /></IconButton>
 							</div>
 						</li>
 					{:else}
-						<li class="none">{recent.length ? "검색 결과 없음" : "아직 대화 없음"}</li>
+						<li class="none">{recent.length ? $_("characterPage.noResults") : $_("characterPage.noConvsYet")}</li>
 					{/each}
 				</ul>
 			{/if}
 		</div>
 	</div>
 {:else if charId}
-	<EmptyState title="캐릭터를 찾을 수 없음" description="지워졌을 수 있음">
-		{#snippet action()}<Button onclick={() => nav.replace({ page: "character" })}>목록으로</Button>{/snippet}
+	<EmptyState title={$_("characterPage.notFoundTitle")} description={$_("characterPage.notFoundDesc")}>
+		{#snippet action()}<Button onclick={() => nav.replace({ page: "character" })}>{$_("characterPage.toList")}</Button>{/snippet}
 	</EmptyState>
 {:else}
 	<div class="page">
@@ -595,13 +595,13 @@
 				<h1>{$_("nav.character")}</h1>
 				<span class="head-count">{library.characters.length}{$_("common.unitPerson")}</span>
 			</div>
-			<ListToolbar bind:query bind:filter bind:sort bind:selecting placeholder="이름·태그" filters={FILTERS} sorts={SORTS} canSelect={!!library.characters.length}>
-				<SplitButton label={$_("common.create")} onclick={createCharacter} menuLabel={$_("common.import")} items={[{ label: "파일에서 가져오기 (PNG·JSON·ZIP)", icon: Upload, onselect: importFiles }]} />
+			<ListToolbar bind:query bind:filter bind:sort bind:selecting placeholder={$_("characterPage.searchPlaceholder")} filters={FILTERS} sorts={SORTS} canSelect={!!library.characters.length}>
+				<SplitButton label={$_("common.create")} onclick={createCharacter} menuLabel={$_("common.import")} items={[{ label: $_("characterPage.importFiles"), icon: Upload, onselect: importFiles }]} />
 			</ListToolbar>
 		</header>
 		{#if selecting}<SelectBar count={picked.size} onall={() => (picked = new Set(list.map((c) => c.id)))} ondelete={removePicked} />{/if}
 		{#if !library.characters.length}
-			<EmptyState title="캐릭터 없음" description="SillyTavern 카드(PNG·JSON)나 캐릭터 묶음(zip)을 가져오거나 새로 만들기">
+			<EmptyState title={$_("characterPage.emptyTitle")} description={$_("characterPage.emptyDesc")}>
 				{#snippet icon()}<Users />{/snippet}
 			</EmptyState>
 		{:else}
@@ -642,14 +642,14 @@
 							{#if selecting}
 								<span class="char-check" aria-hidden="true">{selected ? "✓" : ""}</span>
 							{:else if ch.favorite}
-								<span class="char-fav" title="즐겨찾기"><Star /></span>
+								<span class="char-fav" title={$_("characterPage.favMenu")}><Star /></span>
 							{:else}
 								<span></span>
 							{/if}
 							{#if !selecting}
 								<!-- svelte-ignore a11y_click_events_have_key_events, a11y_no_static_element_interactions -->
 								<span class="char-menu" onclick={(e) => e.stopPropagation()}>
-									<IconButton label="{ch.name} 메뉴" size="sm" onclick={(e) => openCardMenu(e, ch)}><Ellipsis /></IconButton>
+									<IconButton label={$_("characterPage.itemMenuAria", { values: { title: ch.name } })} size="sm" onclick={(e) => openCardMenu(e, ch)}><Ellipsis /></IconButton>
 								</span>
 							{/if}
 						</div>
@@ -658,18 +658,18 @@
 							{#if summary}<p class="char-desc">{summary}</p>{/if}
 							<div class="char-meta">
 								{#each ch.tags.slice(0, 3) as t (t)}<span class="char-tag">#{t}</span>{/each}
-								{#if convs.length}<span class="char-count">대화 {convs.length}</span>{/if}
+								{#if convs.length}<span class="char-count">{$_("characterPage.convCountBadge", { values: { count: convs.length } })}</span>{/if}
 							</div>
 						</div>
 					</div>
 				{:else}
-					<p class="none">검색 결과 없음</p>
+					<p class="none">{$_("characterPage.noResults")}</p>
 				{/each}
 			</div>
 		{/if}
 	</div>
 {/if}
-{#if cardMenu}<ContextMenu at={cardMenu.at} items={cardMenu.items} label="캐릭터 메뉴" onclose={() => (cardMenu = null)} />{/if}
+{#if cardMenu}<ContextMenu at={cardMenu.at} items={cardMenu.items} label={$_("characterPage.charMenuAria")} onclose={() => (cardMenu = null)} />{/if}
 
 <style>
 	.center {

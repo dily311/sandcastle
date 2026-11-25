@@ -1,4 +1,5 @@
 <script lang="ts">
+	import { _ } from "svelte-i18n";
 	// 게임 패널의 공통 탭 (대화·폰과 같은 자리): 대화 설정 / 컨텍스트·프리셋 / 분기
 	// 게임은 대화방 대신 '세션(플레이 기록)' 단위라서 설정·분기도 세션에 붙는다.
 	import { Bookmark, BookmarkPlus, CornerDownRight, GitBranch, Play } from "@lucide/svelte";
@@ -36,8 +37,8 @@
 		void loadOptions();
 	});
 	const DEFAULT = "";
-	const apiOptions = $derived([{ value: DEFAULT, label: "앱 기본값" }, ...library.apis.map((a) => ({ value: a.id, label: `${a.name} · ${a.model}` }))]);
-	const presetOptions = $derived([{ value: DEFAULT, label: "앱 기본값" }, ...library.presets.map((p) => ({ value: p.id, label: p.name }))]);
+	const apiOptions = $derived([{ value: DEFAULT, label: $_("gamePlayExtra.appDefault") }, ...library.apis.map((a) => ({ value: a.id, label: `${a.name} · ${a.model}` }))]);
+	const presetOptions = $derived([{ value: DEFAULT, label: $_("gamePlayExtra.appDefault") }, ...library.presets.map((p) => ({ value: p.id, label: p.name }))]);
 	const personaOptions = $derived<ProfileOption[]>(library.personas.map((p) => ({ id: p.id, name: p.name, avatar: p.avatar, avatarFit: p.avatarFit, color: p.color, description: p.description })));
 	async function setOption(p: Partial<{ apiProfileId: string; promptPresetId: string; playerId: string }>, model?: string | null) {
 		if (!options) return;
@@ -92,12 +93,12 @@
 	const placeName = (id?: string | null) => (id ? gameStore.view?.locations.find((l) => l.id === id)?.name : null) ?? null;
 	/** 시점에서 갈라지기: 그 턴이 끝난 때로 돌아간 새 플레이를 만든다 (지금 플레이는 그대로) */
 	async function forkAt(p: TurnPoint) {
-		const ok = await confirmAction({ title: "이 시점에서 갈라지기", message: `「${p.summary}」 뒤로 새 갈래를 만들어 이어서 플레이함. 지금 플레이는 그대로 남음`, confirmLabel: "갈라지기" });
+		const ok = await confirmAction({ title: $_("gamePlayExtra.forkTitle"), message: $_("gamePlayExtra.forkMsg", { values: { summary: p.summary } }), confirmLabel: $_("gamePlayExtra.forkBtn") });
 		if (!ok) return;
 		busy = true;
 		try {
 			const r = await call(commands.forkAt(sessionId, p.seq, null), src);
-			toasts.success("새 갈래를 만들었음");
+			toasts.success($_("gamePlayExtra.forkCreatedToast"));
 			void nav.go({ page: "game", gameId, sessionId: r.state.sessionId });
 		} finally {
 			busy = false;
@@ -129,11 +130,11 @@
 	async function bookmark() {
 		const used = new Set(saves.filter((v) => v.sessionId === sessionId).map((v) => v.slotNumber));
 		const slot = Array.from({ length: 20 }, (_, i) => i + 1).find((n) => !used.has(n));
-		if (!slot) return toasts.info("책갈피는 세션마다 20개까지. 지난 책갈피를 덮어쓰려면 게임 메뉴에서");
+		if (!slot) return toasts.info($_("gamePlayExtra.bookmarkLimitToast"));
 		busy = true;
 		try {
 			await call(commands.saveWrite(slot, {}), src);
-			toasts.success(`책갈피 ${slot} 남김`);
+			toasts.success($_("gamePlayExtra.bookmarkSavedToast", { values: { slot } }));
 			await loadBranches();
 		} finally {
 			busy = false;
@@ -145,7 +146,7 @@
 		try {
 			const r = await call(commands.loadSave(v.sessionId, v.slotNumber, null), src);
 			const id = r.state.sessionId;
-			if (id !== v.sessionId) toasts.success("책갈피에서 새 갈래를 만들었음");
+			if (id !== v.sessionId) toasts.success($_("gamePlayExtra.bookmarkForkToast"));
 			void nav.go({ page: "game", gameId, sessionId: id });
 		} finally {
 			busy = false;
@@ -156,39 +157,39 @@
 {#if panel.tab === "settings"}
 	<div class="panel-body">
 		<section>
-			<h4>이 플레이 <span class="faint">NPC 대화와 씬 서술에 씀</span></h4>
+			<h4>{$_("gamePlayExtra.thisPlayHeading")} <span class="faint">{$_("gamePlayExtra.thisPlaySub")}</span></h4>
 			{#if options}
 				<label class="row"><span>API</span><Select value={options.apiProfileId ?? DEFAULT} options={apiOptions} onchange={(e) => setOption({ apiProfileId: e.currentTarget.value })} /></label>
-				<div class="row"><span>모델</span><ModelPicker profile={effectiveApi} value={options.model} onchange={pickModel} label="이 플레이의 모델" /></div>
-				<label class="row"><span>프리셋</span><Select value={options.promptPresetId ?? DEFAULT} options={presetOptions} onchange={(e) => setOption({ promptPresetId: e.currentTarget.value })} /></label>
+				<div class="row"><span>{$_("gamePlayExtra.modelLabel")}</span><ModelPicker profile={effectiveApi} value={options.model} onchange={pickModel} label={$_("gamePlayExtra.modelAria")} /></div>
+				<label class="row"><span>{$_("gamePlayExtra.presetLabel")}</span><Select value={options.promptPresetId ?? DEFAULT} options={presetOptions} onchange={(e) => setOption({ promptPresetId: e.currentTarget.value })} /></label>
 				<div class="row">
-					<span>플레이어</span>
-					<ProfilePicker label="플레이어 바꾸기" options={personaOptions} value={options.playerId} onchange={(id) => setOption({ playerId: id })} />
+					<span>{$_("gamePlayExtra.playerLabel")}</span>
+					<ProfilePicker label={$_("gamePlayExtra.changePlayerAria")} options={personaOptions} value={options.playerId} onchange={(id) => setOption({ playerId: id })} />
 				</div>
-				<p class="hint">플레이어는 이 플레이에서 내가 맡는 페르소나. 바꾸면 다음 대사부터 반영</p>
+				<p class="hint">{$_("gamePlayExtra.playerHint")}</p>
 			{:else}
-				<p class="hint">불러오는 중…</p>
+				<p class="hint">{$_("gamePlayExtra.loading")}</p>
 			{/if}
 		</section>
 	</div>
 {:else if panel.tab === "context"}
 	<div class="panel-body preset-edit">
 		<section>
-			<h4>컨텍스트</h4>
+			<h4>{$_("gamePlayExtra.contextHeading")}</h4>
 			<ContextMeter {usage} basis="last" />
 		</section>
 		<section>
-			<h4>프리셋 <span class="faint">{options?.promptPresetId ? "이 플레이에서 고름" : "앱 기본값"}</span></h4>
-			<Select value={options?.promptPresetId ?? DEFAULT} options={presetOptions} aria-label="이 플레이의 프리셋" onchange={(e) => setOption({ promptPresetId: e.currentTarget.value })} />
+			<h4>{$_("gamePlayExtra.presetLabel")} <span class="faint">{options?.promptPresetId ? $_("gamePlayExtra.presetPickedHere") : $_("gamePlayExtra.appDefault")}</span></h4>
+			<Select value={options?.promptPresetId ?? DEFAULT} options={presetOptions} aria-label={$_("gamePlayExtra.presetAria")} onchange={(e) => setOption({ promptPresetId: e.currentTarget.value })} />
 		</section>
 		<PresetInline presetId={activePresetId} onsaved={loadUsage} model={options?.model || effectiveApi?.model || null} />
 	</div>
 {:else}
 	<div class="panel-body">
 		<section>
-			<h4>분기 <span class="faint">플레이 {tree.length}개</span></h4>
-			<Button size="sm" loading={busy} onclick={bookmark}>{#snippet icon()}<BookmarkPlus />{/snippet}지금 책갈피 남기기</Button>
-			<p class="hint">책갈피에서 이어하면, 그 뒤로 기록이 있을 때 원래 플레이는 두고 새 갈래가 생김</p>
+			<h4>{$_("gamePlayExtra.branchesHeading")} <span class="faint">{$_("gamePlayExtra.playsCount", { values: { count: tree.length } })}</span></h4>
+			<Button size="sm" loading={busy} onclick={bookmark}>{#snippet icon()}<BookmarkPlus />{/snippet}{$_("gamePlayExtra.addBookmarkBtn")}</Button>
+			<p class="hint">{$_("gamePlayExtra.bookmarkHint")}</p>
 			<ul class="tree">
 				{#each tree as n (n.s.id)}
 					{@const here = n.s.id === sessionId}
@@ -196,39 +197,39 @@
 						<div class="sess" class:here>
 							<GitBranch />
 							<span class="t">
-								<b>{n.depth === 0 ? "처음 플레이" : `#${n.s.forkedFromSeq}에서 갈라짐`}{#if here}<em>지금</em>{/if}</b>
-								<small>{formatGameTime(n.s.gameTime)} · 기록 {n.s.headSeq} · {relative(n.s.updatedAt)}</small>
+								<b>{n.depth === 0 ? $_("gamePlayExtra.initialPlay") : $_("gamePlayExtra.forkedFrom", { values: { seq: n.s.forkedFromSeq ?? 0 } })}{#if here}<em>{$_("gamePlayExtra.currentBadge")}</em>{/if}</b>
+								<small>{$_("gamePlayExtra.sessionMeta", { values: { time: formatGameTime(n.s.gameTime), seq: n.s.headSeq, when: relative(n.s.updatedAt) } })}</small>
 							</span>
-							{#if !here}<IconButton label="이 플레이로" size="sm" onclick={() => nav.go({ page: "game", gameId, sessionId: n.s.id })}><Play /></IconButton>{/if}
+							{#if !here}<IconButton label={$_("gamePlayExtra.switchPlayAria")} size="sm" onclick={() => nav.go({ page: "game", gameId, sessionId: n.s.id })}><Play /></IconButton>{/if}
 						</div>
 						{#each savesOf(n.s.id) as v (v.slotNumber)}
 							<div class="save">
 								<Bookmark />
-								<span class="t"><b>책갈피 {v.slotNumber}{v.name ? ` · ${v.name}` : ""}</b><small>#{v.seq} · {formatGameTime(v.gameTime)} · {relative(v.updatedAt)}</small></span>
-								<Button size="sm" variant="ghost" disabled={busy} onclick={() => resume(v)}>{v.seq < n.s.headSeq ? "여기서 갈라지기" : "이어하기"}</Button>
+								<span class="t"><b>{$_("gamePlayExtra.bookmarkSlot", { values: { slot: v.slotNumber } })}{v.name ? ` · ${v.name}` : ""}</b><small>#{v.seq} · {formatGameTime(v.gameTime)} · {relative(v.updatedAt)}</small></span>
+								<Button size="sm" variant="ghost" disabled={busy} onclick={() => resume(v)}>{v.seq < n.s.headSeq ? $_("gamePlayExtra.forkHereBtn") : $_("gamePlayExtra.resumeBtn")}</Button>
 							</div>
 						{/each}
 					</li>
 				{:else}
-					<li class="hint">불러오는 중…</li>
+					<li class="hint">{$_("gamePlayExtra.loading")}</li>
 				{/each}
 			</ul>
 		</section>
 		<section>
-			<h4>시점 <span class="faint">이 플레이의 턴 {points.length}개</span></h4>
-			<p class="hint">턴이 끝날 때마다 시점이 남음. 고른 시점으로 돌아가 새 갈래를 만들 수 있음</p>
+			<h4>{$_("gamePlayExtra.pointsHeading")} <span class="faint">{$_("gamePlayExtra.turnsCount", { values: { count: points.length } })}</span></h4>
+			<p class="hint">{$_("gamePlayExtra.pointsHint")}</p>
 			<ol class="points">
 				{#each points as p, i (p.seq)}
 					<li class="point" class:now={i === 0}>
 						<CornerDownRight />
 						<span class="t">
-							<b>{p.summary}{#if i === 0}<em>지금</em>{/if}</b>
+							<b>{p.summary}{#if i === 0}<em>{$_("gamePlayExtra.currentBadge")}</em>{/if}</b>
 							<small>#{p.seq} · {formatGameTime(p.gameTime)}{placeName(p.locationId) ? ` · ${placeName(p.locationId)}` : ""}{sceneName(p.sceneId) ? ` · ${sceneName(p.sceneId)}` : ""}</small>
 						</span>
-						{#if i > 0}<Button size="sm" variant="ghost" disabled={busy} onclick={() => forkAt(p)}>여기서 갈라지기</Button>{/if}
+						{#if i > 0}<Button size="sm" variant="ghost" disabled={busy} onclick={() => forkAt(p)}>{$_("gamePlayExtra.forkHereBtn")}</Button>{/if}
 					</li>
 				{:else}
-					<li class="hint">아직 시점 없음 (이 기능 전에 진행한 턴은 목록에 없음)</li>
+					<li class="hint">{$_("gamePlayExtra.noPointsHint")}</li>
 				{/each}
 			</ol>
 		</section>

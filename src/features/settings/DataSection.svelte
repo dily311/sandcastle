@@ -1,6 +1,7 @@
 <script lang="ts">
 	import { jobs } from "$shared/stores/jobs.svelte";
 	import { onMount } from "svelte";
+	import { _ } from "svelte-i18n";
 	import { ChevronDown, ChevronRight, Link2, RotateCcw, Save, ShieldCheck, Trash2, Upload } from "@lucide/svelte";
 	import type { BackupManifest, DataCheck, DataOverview_Serialize as Overview, DataTotals, SillyTavernDataImport } from "$ipc/bindings";
 	import { Badge, Button, Select, Spinner } from "$shared/ui";
@@ -27,10 +28,10 @@
 		try {
 			const r = await saveTo("sillytavern-default-user.zip", [ST_DATA_FILES], (path) => {
 				busy = "st-out";
-				return jobs.run("SillyTavern 데이터", () => call(commands.exportSillytavernData(path), src), { group: "내보내기" });
+				return jobs.run($_("settings.dataSec.stExportJob"), () => call(commands.exportSillytavernData(path), src), { group: $_("settings.dataSec.stExportGroup") });
 			});
-			if (r) toasts.success(`내보냄 · 캐릭터 ${r.characters}, 채팅 ${r.chats}, 로어북 ${r.books}, 프리셋 ${r.presets}, 페르소나 ${r.personas}, 정규식 ${r.regex}`);
-			if (r?.warnings.length) toasts.error(`넣지 못한 것 ${r.warnings.length}개`, r.warnings.join("\n"));
+			if (r) toasts.success($_("settings.dataSec.stExported", { values: { characters: r.characters, chats: r.chats, books: r.books, presets: r.presets, personas: r.personas, regex: r.regex } }));
+			if (r?.warnings.length) toasts.error($_("settings.dataSec.stExportWarnings", { values: { count: r.warnings.length } }), r.warnings.join("\n"));
 		} finally {
 			busy = null;
 		}
@@ -40,10 +41,10 @@
 		if (!path) return;
 		busy = "st";
 		try {
-			const r = await jobs.run(path.split(/[\\/]/).pop() ?? path, () => call(commands.importSillytavernData(path), src), { group: "SillyTavern 가져오기" });
+			const r = await jobs.run(path.split(/[\\/]/).pop() ?? path, () => call(commands.importSillytavernData(path), src), { group: $_("settings.dataSec.stImportGroup") });
 			if (!r) return;
 			stResult = r;
-			toasts.success(`가져옴 · 캐릭터 ${r.characters}, 채팅 ${r.chats}, 로어북 ${r.books}, 프리셋 ${r.presets}, 정규식 ${r.regex}, 페르소나 ${r.personas}`);
+			toasts.success($_("settings.dataSec.stImported", { values: { characters: r.characters, chats: r.chats, books: r.books, presets: r.presets, regex: r.regex, personas: r.personas } }));
 			await Promise.all([load(), library.load()]);
 		} finally {
 			busy = null;
@@ -95,24 +96,24 @@
 		}
 		return `${v.toFixed(v < 10 ? 1 : 0)} ${u[i]}`;
 	}
-	const COUNTS: [keyof DataTotals, string][] = [
-		["characters", "캐릭터"],
-		["conversations", "대화"],
-		["messages", "메시지"],
-		["personas", "페르소나"],
-		["characterImages", "이미지"],
-		["worldInfoBooks", "월드인포"],
-		["promptPresets", "프리셋"],
-		["regexScripts", "정규식"],
-		["games", "게임"],
-	];
+	const COUNTS = $derived<[keyof DataTotals, string][]>([
+		["characters", $_("settings.dataSec.counts.characters")],
+		["conversations", $_("settings.dataSec.counts.conversations")],
+		["messages", $_("settings.dataSec.counts.messages")],
+		["personas", $_("settings.dataSec.counts.personas")],
+		["characterImages", $_("settings.dataSec.counts.characterImages")],
+		["worldInfoBooks", $_("settings.dataSec.counts.worldInfoBooks")],
+		["promptPresets", $_("settings.dataSec.counts.promptPresets")],
+		["regexScripts", $_("settings.dataSec.counts.regexScripts")],
+		["games", $_("settings.dataSec.counts.games")],
+	]);
 	const parts = $derived(
 		data
 			? [
-					{ label: "DB", value: data.storage.databaseBytes, color: "var(--accent)" },
-					{ label: "캐릭터 파일", value: data.storage.charactersBytes, color: "var(--info, #3f74c9)" },
-					{ label: "게임", value: data.storage.gamesBytes, color: "var(--warning, #a87a2f)" },
-					{ label: "테마", value: data.storage.themesBytes, color: "var(--text-faint)" },
+					{ key: "db", label: $_("settings.dataSec.storage.db"), value: data.storage.databaseBytes, color: "var(--accent)" },
+					{ key: "characters", label: $_("settings.dataSec.storage.characters"), value: data.storage.charactersBytes, color: "var(--info, #3f74c9)" },
+					{ key: "games", label: $_("settings.dataSec.storage.games"), value: data.storage.gamesBytes, color: "var(--warning, #a87a2f)" },
+					{ key: "themes", label: $_("settings.dataSec.storage.themes"), value: data.storage.themesBytes, color: "var(--text-faint)" },
 				]
 			: [],
 	);
@@ -124,9 +125,9 @@
 		try {
 			const r = await saveTo(`sandcastle-${stamp}.scbackup`, [BACKUP_FILES], (path) => {
 				busy = "backup";
-				return jobs.run("백업", () => call(commands.exportBackup(path), src), { group: "백업" });
+				return jobs.run($_("settings.dataSec.backupBtn"), () => call(commands.exportBackup(path), src), { group: $_("settings.dataSec.backupGroup") });
 			});
-			if (r) toasts.success(`백업함 · ${bytes(r.bytes)}, 파일 ${r.fileCount}개`);
+			if (r) toasts.success($_("settings.dataSec.backupDone", { values: { size: bytes(r.bytes), count: r.fileCount } }));
 		} finally {
 			busy = null;
 		}
@@ -138,8 +139,8 @@
 	// 끌어다 놓아도 같은 확인을 거침 (놓은 파일은 통째로 읽혀 옮겨지므로 아주 큰 백업은 버튼으로)
 	$effect(() =>
 		dropPaths({
-			label: "백업에서 복원",
-			hint: "샌드캐슬 백업(.scbackup), 300MB까지. 더 큰 백업은 복원 버튼으로",
+			label: $_("settings.dataSec.dropRestoreLabel"),
+			hint: $_("settings.dataSec.dropRestoreHint"),
 			accept: (f) => extOf(f) === "scbackup",
 			multiple: false,
 			maxBytes: 300 * 1024 * 1024,
@@ -149,13 +150,22 @@
 	async function restoreFrom(path: string) {
 		busy = "restore";
 		try {
-			const p = await jobs.run(path.split(/[\\/]/).pop() ?? path, () => call(commands.prepareRestore(path), src), { group: "복원 준비" });
+			const p = await jobs.run(path.split(/[\\/]/).pop() ?? path, () => call(commands.prepareRestore(path), src), { group: $_("settings.dataSec.prepareRestoreGroup") });
 			if (!p) return;
 			const t = p.totals;
 			const ok = await confirmAction({
-				title: "백업으로 복원",
-				message: `${absolute(p.createdAt)}에 만든 백업 (v${p.appVersion}) · 캐릭터 ${t.characters}, 대화 ${t.conversations}, 메시지 ${t.messages}. 지금 데이터는 지우지 않고 따로 옮겨 둠. 앱을 다시 시작하면 바뀜${p.willMigrate ? ". 예전 버전 백업이라 시작할 때 변환함" : ""}`,
-				confirmLabel: "다시 시작해서 복원",
+				title: $_("settings.dataSec.restoreConfirmTitle"),
+				message: $_("settings.dataSec.restoreConfirmMsg", {
+					values: {
+						date: absolute(p.createdAt),
+						version: p.appVersion,
+						characters: t.characters,
+						conversations: t.conversations,
+						messages: t.messages,
+						migrate: p.willMigrate ? $_("settings.dataSec.restoreWillMigrate") : "",
+					},
+				}),
+				confirmLabel: $_("settings.dataSec.restoreConfirmBtn"),
 			});
 			if (ok) await call(commands.restartApp(), src);
 			else await call(commands.cancelRestore(), src);
@@ -167,7 +177,7 @@
 	async function cancelPending() {
 		await call(commands.cancelRestore(), src);
 		pending = null;
-		toasts.success("복원 취소함");
+		toasts.success($_("settings.dataSec.restoreCancelled"));
 	}
 
 	// ---- 대화 정리 ----
@@ -179,14 +189,14 @@
 	}
 	async function removePicked() {
 		const n = picked.size;
-		if (!(await confirmAction({ title: "대화 삭제", message: `고른 대화 ${n}개와 메시지를 휴지통으로 옮김. 아래 휴지통에서 되살릴 수 있음`, confirmLabel: `${n}개 삭제`, danger: true }))) return;
+		if (!(await confirmAction({ title: $_("settings.dataSec.deleteConvTitle"), message: $_("settings.dataSec.deleteConvMsg", { values: { count: n } }), confirmLabel: $_("settings.dataSec.deleteCountBtn", { values: { count: n } }), danger: true }))) return;
 		const ids = [...picked];
-		const removed = await jobs.run(`대화 ${n}개`, () => call(commands.deleteConversations(ids), src), { group: "대화 지우기" });
-		if (removed !== undefined) toasts.success(`대화 ${removed}개를 휴지통으로 옮김`);
+		const removed = await jobs.run($_("settings.dataSec.deleteConvJob", { values: { count: n } }), () => call(commands.deleteConversations(ids), src), { group: $_("settings.dataSec.deleteConvGroup") });
+		if (removed !== undefined) toasts.success($_("settings.dataSec.deleteConvDone", { values: { count: removed } }));
 		trashKey++; // 휴지통 목록 다시 읽기
 		await Promise.all([load(), library.load()]);
 	}
-	const convTitle = (c: { title: string | null; mode: string | null }) => c.title || (c.mode === "phone" ? "폰 대화" : "제목 없음");
+	const convTitle = (c: { title: string | null; mode: string | null }) => c.title || (c.mode === "phone" ? $_("settings.dataSec.phoneChat") : $_("settings.dataSec.untitled"));
 
 	// ---- 고아 채팅 관리 ----
 	const charOptions = $derived(
@@ -205,22 +215,22 @@
 	}
 	async function reassignOrphans(ids: string[]) {
 		if (!ids.length || !orphanTargetChar) return;
-		const charName = data?.characters.find((c) => c.id === orphanTargetChar)?.name ?? "캐릭터";
+		const charName = data?.characters.find((c) => c.id === orphanTargetChar)?.name ?? $_("settings.dataSec.counts.characters");
 		const n = await call(commands.reassignConversationsCharacter(ids, orphanTargetChar), src);
-		toasts.success(`고아 채팅 ${n}개를 '${charName}'에 연결함`);
+		toasts.success($_("settings.dataSec.orphanReassigned", { values: { count: n, name: charName } }));
 		await Promise.all([load(), library.load()]);
 	}
 	async function removeOrphans(ids: string[]) {
 		if (!ids.length) return;
-		if (!(await confirmAction({ title: "고아 채팅 삭제", message: `캐릭터 없는 대화 ${ids.length}개를 휴지통으로 옮김. 아래 휴지통에서 되살릴 수 있음`, confirmLabel: `${ids.length}개 삭제`, danger: true }))) return;
-		const removed = await jobs.run(`고아 채팅 ${ids.length}개`, () => call(commands.deleteConversations(ids), src), { group: "대화 지우기" });
-		if (removed !== undefined) toasts.success(`고아 채팅 ${removed}개를 휴지통으로 옮김`);
+		if (!(await confirmAction({ title: $_("settings.dataSec.orphanDeleteTitle"), message: $_("settings.dataSec.orphanDeleteMsg", { values: { count: ids.length } }), confirmLabel: $_("settings.dataSec.deleteCountBtn", { values: { count: ids.length } }), danger: true }))) return;
+		const removed = await jobs.run($_("settings.dataSec.orphanDeleteJob", { values: { count: ids.length } }), () => call(commands.deleteConversations(ids), src), { group: $_("settings.dataSec.deleteConvGroup") });
+		if (removed !== undefined) toasts.success($_("settings.dataSec.orphanDeleteDone", { values: { count: removed } }));
 		trashKey++;
 		await Promise.all([load(), library.load()]);
 	}
 </script>
 
-<Section title="데이터" lead="저장 공간, 백업과 복원, 휴지통, 대화 정리">
+<Section title={$_("settings.dataSec.title")} lead={$_("settings.dataSec.lead")}>
 	{#if !data}
 		<div class="loading"><Spinner /></div>
 	{:else}
@@ -228,24 +238,24 @@
 			<div class="banner">
 				<RotateCcw />
 				<div>
-					<b>복원 준비됨</b>
-					<span>{absolute(pending.createdAt)} 백업. 앱을 다시 시작하면 복원함</span>
+					<b>{$_("settings.dataSec.restoreBtn")}</b>
+					<span>{absolute(pending.createdAt)}</span>
 				</div>
-				<Button size="sm" variant="ghost" onclick={cancelPending}>취소</Button>
-				<Button size="sm" variant="primary" onclick={() => call(commands.restartApp(), src)}>다시 시작</Button>
+				<Button size="sm" variant="ghost" onclick={cancelPending}>{$_("common.cancel")}</Button>
+				<Button size="sm" variant="primary" onclick={() => call(commands.restartApp(), src)}>{$_("settings.dataSec.restoreBtn")}</Button>
 			</div>
 		{/if}
 
 		<Group>
 			<div class="usage">
-				<div class="total"><b>{bytes(data.storage.totalBytes)}</b><span>사용 중</span></div>
-				<div class="bar" role="img" aria-label="저장 공간 나눔">
-					{#each parts as p (p.label)}
+				<div class="total"><b>{bytes(data.storage.totalBytes)}</b><span>{$_("settings.dataSec.inUse")}</span></div>
+				<div class="bar" role="img" aria-label={$_("settings.dataSec.title")}>
+					{#each parts as p (p.key)}
 						{#if p.value > 0}<span style:flex-grow={p.value} style:background={p.color} title="{p.label} {bytes(p.value)}"></span>{/if}
 					{/each}
 				</div>
 				<ul class="legend">
-					{#each parts as p (p.label)}
+					{#each parts as p (p.key)}
 						<li><i style:background={p.color}></i>{p.label} <span>{bytes(p.value)}</span></li>
 					{/each}
 				</ul>
@@ -257,58 +267,58 @@
 			</dl>
 		</Group>
 
-		<Group title="백업">
-			<Row label="백업 파일 만들기" desc="캐릭터·대화·설정·이미지·갤러리·배경·게임을 파일 하나로. API 키는 빠짐">
-				<Button size="sm" loading={busy === "backup"} disabled={busy !== null} onclick={backup}>{#snippet icon()}<Save />{/snippet}백업</Button>
+		<Group title={$_("settings.dataSec.backupGroup")}>
+			<Row label={$_("settings.dataSec.createBackup")} desc={$_("settings.dataSec.createBackupDesc")}>
+				<Button size="sm" loading={busy === "backup"} disabled={busy !== null} onclick={backup}>{#snippet icon()}<Save />{/snippet}{$_("settings.dataSec.backupBtn")}</Button>
 			</Row>
-			<Row label="백업에서 복원" desc="지금 데이터는 지우지 않고 따로 옮겨 둔 뒤 바꿈. 앱이 다시 시작됨">
-				<Button size="sm" loading={busy === "restore"} disabled={busy !== null} onclick={restore}>{#snippet icon()}<Upload />{/snippet}복원</Button>
+			<Row label={$_("settings.dataSec.restoreBackup")} desc={$_("settings.dataSec.restoreBackupDesc")}>
+				<Button size="sm" loading={busy === "restore"} disabled={busy !== null} onclick={restore}>{#snippet icon()}<Upload />{/snippet}{$_("settings.dataSec.restoreBtn")}</Button>
 			</Row>
 		</Group>
 
 		<Group title="SillyTavern">
-			<Row label="SillyTavern 데이터 가져오기" desc="data/default-user 폴더를 압축한 zip(10GB까지). 새로 만들기만 하므로 다시 가져오면 한 벌 더 생김">
-				<Button size="sm" loading={busy === "st"} disabled={busy !== null} onclick={importSt}>{#snippet icon()}<Upload />{/snippet}가져오기</Button>
+			<Row label={$_("settings.dataSec.importSt")} desc={$_("settings.dataSec.importStDesc")}>
+				<Button size="sm" loading={busy === "st"} disabled={busy !== null} onclick={importSt}>{#snippet icon()}<Upload />{/snippet}{$_("common.import")}</Button>
 			</Row>
-			<Row label="SillyTavern 모양으로 내보내기" desc="캐릭터 카드·채팅·로어북·프리셋·페르소나·정규식. 게임·폰 기능은 빠짐">
-				<Button size="sm" loading={busy === "st-out"} disabled={busy !== null} onclick={exportSt}>{#snippet icon()}<Save />{/snippet}내보내기</Button>
+			<Row label={$_("settings.dataSec.exportSt")} desc={$_("settings.dataSec.exportStDesc")}>
+				<Button size="sm" loading={busy === "st-out"} disabled={busy !== null} onclick={exportSt}>{#snippet icon()}<Save />{/snippet}{$_("common.export")}</Button>
 			</Row>
 			{#if stResult?.warnings.length}
 				<details class="st-warn">
-					<summary>가져오지 못한 것 {stResult.warnings.length}개</summary>
+					<summary>({stResult.warnings.length})</summary>
 					<ul>{#each stResult.warnings as w, i (i)}<li>{w}</li>{/each}</ul>
 				</details>
 			{/if}
 		</Group>
 
-		<Group title="점검">
-			<Row label="DB 점검" desc="DB가 손상되지 않았는지, 캐릭터 폴더에 아무 데도 쓰이지 않는 파일이 있는지 봄. 아무것도 지우지 않음">
-				<Button size="sm" loading={checking} disabled={checking} onclick={runCheck}>{#snippet icon()}<ShieldCheck />{/snippet}점검</Button>
+		<Group title={$_("settings.dataSec.checkGroup")}>
+			<Row label={$_("settings.dataSec.dbCheck")} desc={$_("settings.dataSec.dbCheckDesc")}>
+				<Button size="sm" loading={checking} disabled={checking} onclick={runCheck}>{#snippet icon()}<ShieldCheck />{/snippet}{$_("settings.dataSec.checkBtn")}</Button>
 			</Row>
 			{#if check}
 				<div class="check" role="status">
 					{#if check.ok}
-						<p><Badge tone="success">DB 이상 없음</Badge></p>
+						<p><Badge tone="success">{$_("settings.dataSec.dbOk")}</Badge></p>
 					{:else}
-						<p><Badge tone="danger">DB 문제 발견</Badge> 먼저 백업 파일을 만들어 두고, 문제가 계속되면 백업에서 복원해 볼 것</p>
+						<p><Badge tone="danger">{$_("settings.dataSec.dbProblem")}</Badge> {$_("settings.dataSec.dbProblemHint")}</p>
 						<ul class="problems">
 							{#each check.problems as p, i (i)}<li><code>{p}</code></li>{/each}
 						</ul>
 					{/if}
 					<p>
-						파일 {check.checkedFiles.toLocaleString()}개를 살펴봄 ·
+						{$_("settings.dataSec.checkedFiles", { values: { count: check.checkedFiles.toLocaleString() } })}
 						{#if check.orphanCount}
-							쓰이지 않는 파일 {check.orphanCount.toLocaleString()}개 ({kb(check.orphanBytes)})
-							<Button size="sm" variant="ghost" aria-expanded={showOrphans} onclick={() => (showOrphans = !showOrphans)}>{showOrphans ? "목록 접기" : "목록 보기"}</Button>
+							{$_("settings.dataSec.orphanFiles", { values: { count: check.orphanCount.toLocaleString(), size: kb(check.orphanBytes) } })}
+							<Button size="sm" variant="ghost" aria-expanded={showOrphans} onclick={() => (showOrphans = !showOrphans)}>{showOrphans ? $_("settings.dataSec.hideList") : $_("settings.dataSec.showList")}</Button>
 						{:else}
-							쓰이지 않는 파일 없음
+							{$_("settings.dataSec.noOrphanFiles")}
 						{/if}
 					</p>
 					{#if showOrphans && check.orphans.length}
 						<ul class="orphans">
 							{#each check.orphans as o (o.path)}<li><code>{o.path}</code><span class="meta">{kb(o.bytes)}</span></li>{/each}
 						</ul>
-						{#if check.orphanCount > check.orphans.length}<p class="meta">큰 것부터 {check.orphans.length}개만 보임</p>{/if}
+						{#if check.orphanCount > check.orphans.length}<p class="meta">{$_("settings.dataSec.showingLargest", { values: { count: check.orphans.length } })}</p>{/if}
 					{/if}
 				</div>
 			{/if}
@@ -318,52 +328,52 @@
 
 		{#key trashKey}<TrashGroup onrestored={() => Promise.all([load(), library.load()])} />{/key}
 
-		<Group title="고아 채팅 ({data.orphanConversations.length})">
+		<Group title={$_("settings.dataSec.orphanGroup", { values: { count: data.orphanConversations.length } })}>
 			{#snippet aside()}
 				{#if data?.orphanConversations.length}
 					<div class="orphan-bar">
 						<Button size="sm" variant="ghost" onclick={toggleAllOrphans}>
-							{orphanPicked.size === (data?.orphanConversations.length ?? 0) ? "전체 해제" : "전체 선택"}
+							{orphanPicked.size === (data?.orphanConversations.length ?? 0) ? $_("settings.dataSec.deselectAll") : $_("settings.dataSec.selectAll")}
 						</Button>
 						{#if orphanPicked.size && charOptions.length}
-							<Select bind:value={orphanTargetChar} options={charOptions} aria-label="연결할 캐릭터" />
-							<Button size="sm" variant="secondary" onclick={() => reassignOrphans([...orphanPicked])}>{#snippet icon()}<Link2 />{/snippet}연결 ({orphanPicked.size})</Button>
+							<Select bind:value={orphanTargetChar} options={charOptions} aria-label={$_("settings.dataSec.targetChar")} />
+							<Button size="sm" variant="secondary" onclick={() => reassignOrphans([...orphanPicked])}>{#snippet icon()}<Link2 />{/snippet}{$_("settings.dataSec.linkCount", { values: { count: orphanPicked.size } })}</Button>
 						{/if}
 						{#if orphanPicked.size}
-							<Button size="sm" variant="danger" onclick={() => removeOrphans([...orphanPicked])}>{#snippet icon()}<Trash2 />{/snippet}삭제 ({orphanPicked.size})</Button>
+							<Button size="sm" variant="danger" onclick={() => removeOrphans([...orphanPicked])}>{#snippet icon()}<Trash2 />{/snippet}{$_("settings.dataSec.deleteCount", { values: { count: orphanPicked.size } })}</Button>
 						{/if}
 					</div>
 				{/if}
 			{/snippet}
 			{#if data.orphanConversations.length}
-				<p class="orphan-desc">캐릭터가 삭제되어 연결이 끊어진 대화. 다른 캐릭터에 다시 연결하거나 휴지통으로 옮길 수 있음</p>
+				<p class="orphan-desc">{$_("settings.dataSec.orphanDesc")}</p>
 				<ul class="convs orphan-list">
 					{#each data.orphanConversations as v (v.id)}
 						<li class="orphan-row">
 							<label>
 								<input type="checkbox" checked={orphanPicked.has(v.id)} onchange={(e) => pickOrphan(v.id, e.currentTarget.checked)} />
 								<span class="t">{convTitle(v)}</span>
-								{#if v.mode === "phone"}<Badge>폰</Badge>{/if}
-								<span class="meta">메시지 {v.messageCount}</span>
+								{#if v.mode === "phone"}<Badge>{$_("settings.dataSec.phoneBadge")}</Badge>{/if}
+								<span class="meta">{$_("settings.dataSec.msgCount", { values: { count: v.messageCount } })}</span>
 								<span class="when">{v.lastMessageAt ? relative(v.lastMessageAt) : ""}</span>
 							</label>
 							<div class="orphan-acts">
 								{#if charOptions.length}
-									<Button size="sm" variant="ghost" title="고른 캐릭터에 연결" onclick={() => reassignOrphans([v.id])}>{#snippet icon()}<Link2 />{/snippet}연결</Button>
+									<Button size="sm" variant="ghost" title={$_("settings.dataSec.linkToCharTitle")} onclick={() => reassignOrphans([v.id])}>{#snippet icon()}<Link2 />{/snippet}{$_("settings.dataSec.linkBtn")}</Button>
 								{/if}
-								<Button size="sm" variant="ghost" aria-label="삭제" onclick={() => removeOrphans([v.id])}>{#snippet icon()}<Trash2 />{/snippet}</Button>
+								<Button size="sm" variant="ghost" aria-label={$_("common.delete")} onclick={() => removeOrphans([v.id])}>{#snippet icon()}<Trash2 />{/snippet}</Button>
 							</div>
 						</li>
 					{/each}
 				</ul>
 			{:else}
-				<p class="orphan-empty">캐릭터가 없는 고아 채팅이 없음</p>
+				<p class="orphan-empty">{$_("settings.dataSec.orphanEmpty")}</p>
 			{/if}
 		</Group>
 
-		<Group title="대화 정리">
+		<Group title={$_("settings.dataSec.cleanupGroup")}>
 			{#snippet aside()}
-				{#if picked.size}<Button size="sm" variant="danger" onclick={removePicked}>{#snippet icon()}<Trash2 />{/snippet}고른 대화 {picked.size}개 삭제</Button>{/if}
+				{#if picked.size}<Button size="sm" variant="danger" onclick={removePicked}>{#snippet icon()}<Trash2 />{/snippet}{$_("settings.dataSec.deleteSelectedConvs", { values: { count: picked.size } })}</Button>{/if}
 			{/snippet}
 			<ul class="chars">
 				{#each data.characters as c (c.id)}
@@ -371,7 +381,7 @@
 						<button class="char" aria-expanded={openChar === c.id} disabled={!c.conversations.length} onclick={() => (openChar = openChar === c.id ? null : c.id)}>
 							{#if openChar === c.id}<ChevronDown />{:else}<ChevronRight />{/if}
 							<b>{c.name}</b>
-							<span class="meta">대화 {c.conversationCount} · 메시지 {c.messageCount.toLocaleString()}{c.imageCount ? ` · 이미지 ${c.imageCount}` : ""}</span>
+							<span class="meta">{c.imageCount ? $_("settings.dataSec.charSummaryWithImg", { values: { convs: c.conversationCount, msgs: c.messageCount.toLocaleString(), imgs: c.imageCount } }) : $_("settings.dataSec.charSummary", { values: { convs: c.conversationCount, msgs: c.messageCount.toLocaleString() } })}</span>
 							<span class="when">{c.lastActivity ? relative(c.lastActivity) : ""}</span>
 						</button>
 						{#if openChar === c.id}
@@ -381,8 +391,8 @@
 										<label>
 											<input type="checkbox" checked={picked.has(v.id)} onchange={(e) => pick(v.id, e.currentTarget.checked)} />
 											<span class="t">{convTitle(v)}</span>
-											{#if v.mode === "phone"}<Badge>폰</Badge>{/if}
-											<span class="meta">메시지 {v.messageCount}{v.hiddenCount ? ` · 숨김 ${v.hiddenCount}` : ""}</span>
+											{#if v.mode === "phone"}<Badge>{$_("settings.dataSec.phoneBadge")}</Badge>{/if}
+											<span class="meta">{v.hiddenCount ? $_("settings.dataSec.msgCountHidden", { values: { count: v.messageCount, hidden: v.hiddenCount } }) : $_("settings.dataSec.msgCount", { values: { count: v.messageCount } })}</span>
 											<span class="when">{v.lastMessageAt ? relative(v.lastMessageAt) : ""}</span>
 										</label>
 									</li>

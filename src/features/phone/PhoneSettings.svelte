@@ -1,4 +1,5 @@
 <script lang="ts">
+	import { _ } from "svelte-i18n";
 	// 폰 설정 (설정 > 폰, 폰 화면 오른쪽 패널 정보 탭이 같은 것을 씀)
 	// 폰 주인 · 화면 표시 · 배경화면 · 새 채팅방의 기본 API·프리셋 · 폰 모드 프롬프트
 	import { onMount } from "svelte";
@@ -23,16 +24,16 @@
 	});
 	const s = $derived(appSetting.value);
 	const plug = $derived(current());
-	const presetOptions = $derived([{ value: "", label: "앱 기본 프리셋" }, ...library.presets.map((p) => ({ value: p.id, label: p.name }))]);
+	const presetOptions = $derived([{ value: "", label: $_("phoneExtra.appDefaultPreset") }, ...library.presets.map((p) => ({ value: p.id, label: p.name }))]);
 	async function savePrompt() {
 		await appSetting.update({ phoneModePrompt: phonePrompt });
-		toasts.success("저장함");
+		toasts.success($_("phoneExtra.savedToast"));
 	}
 
 	// 폰 주인: 페르소나(내 폰)와 캐릭터(그 캐릭터의 폰)를 한 목록에서
 	const ownerOptions = $derived<ProfileOption[]>([
-		...library.personas.map((p) => ({ id: `persona:${p.id}`, name: p.name, avatar: p.avatar, avatarFit: p.avatarFit, color: p.color, description: p.description, group: "내 페르소나의 폰" })),
-		...library.characters.map((c) => ({ id: `character:${c.id}`, name: c.name, avatar: c.avatar, avatarFit: c.avatarFit, color: c.color, description: c.description, group: "캐릭터의 폰 (그 캐릭터가 되거나 엿봄)" })),
+		...library.personas.map((p) => ({ id: `persona:${p.id}`, name: p.name, avatar: p.avatar, avatarFit: p.avatarFit, color: p.color, description: p.description, group: $_("phoneExtra.ownerPersonaGroup") })),
+		...library.characters.map((c) => ({ id: `character:${c.id}`, name: c.name, avatar: c.avatar, avatarFit: c.avatarFit, color: c.color, description: c.description, group: $_("phoneExtra.ownerCharGroup") })),
 	]);
 	const ownerValue = $derived(phone.prefs.owner ? `${phone.prefs.owner.kind}:${phone.prefs.owner.id}` : null);
 	function pickOwner(id: string) {
@@ -46,7 +47,7 @@
 		if (last) phone.setWallpaper(last);
 	}
 	async function uploadWallpaper() {
-		await addWallpapers(await pickFiles([{ name: "그림", extensions: ["png", "jpg", "jpeg", "webp", "gif", "avif"] }], true));
+		await addWallpapers(await pickFiles([{ name: $_("phoneExtra.imageFileLabel"), extensions: ["png", "jpg", "jpeg", "webp", "gif", "avif"] }], true));
 	}
 	function nowDateStr() {
 		const d = new Date();
@@ -64,75 +65,75 @@
 	function resetClockToNow() {
 		void save("phone", { customDate: nowDateStr(), customTime: nowTimeStr() });
 	}
-	$effect(() => dropPaths({ label: "폰 배경화면으로 올리기", hint: "PNG·JPG·WEBP·GIF·AVIF", accept: isImageAvif, onpaths: addWallpapers }));
+	$effect(() => dropPaths({ label: $_("phoneExtra.dropWallLabel"), hint: "PNG·JPG·WEBP·GIF·AVIF", accept: isImageAvif, onpaths: addWallpapers }));
 </script>
 
 <div class="phone-settings">
 	<section>
-		<h4>폰</h4>
+		<h4>{$_("phoneExtra.phoneHeading")}</h4>
 		<div class="field">
-			<span>폰 주인</span>
-			<ProfilePicker label="폰 주인 바꾸기" options={ownerOptions} value={ownerValue} hint={phone.isCharacterPhone ? "캐릭터 폰 · 바꾸면 그 폰으로 넘어감" : "바꾸면 그 사람의 폰으로 넘어감"} onchange={pickOwner} />
+			<span>{$_("phoneExtra.phoneOwnerLabel")}</span>
+			<ProfilePicker label={$_("phoneExtra.changeOwnerAria")} options={ownerOptions} value={ownerValue} hint={phone.isCharacterPhone ? $_("phoneExtra.ownerHintChar") : $_("phoneExtra.ownerHintPersona")} onchange={pickOwner} />
 		</div>
 		<div class="field">
-			<span>화면 표시</span>
+			<span>{$_("phoneExtra.displayLabel")}</span>
 			<Segmented
-				label="화면 표시"
+				label={$_("phoneExtra.displayLabel")}
 				value={phone.prefs.display}
 				options={[
-					{ value: "mockup", label: "기기 모양" },
-					{ value: "full", label: "화면 가득" },
+					{ value: "mockup", label: $_("phoneExtra.displayMockup") },
+					{ value: "full", label: $_("phoneExtra.displayFull") },
 				]}
 				onchange={(v) => phone.setDisplay(v)}
 			/>
 		</div>
 		<div class="field">
-			<span>배경화면 <small>이 폰 주인의 폰에만</small></span>
-			<BackgroundPicker label="폰 배경화면" value={phone.wallpaper} images={theme.setting.backgrounds ?? []} allowNone={false} onpick={(v) => v && phone.setWallpaper(v)} onupload={uploadWallpaper} />
+			<span>{$_("phoneExtra.wallLabel")} <small>{$_("phoneExtra.wallOwnerOnly")}</small></span>
+			<BackgroundPicker label={$_("phoneExtra.wallAria")} value={phone.wallpaper} images={theme.setting.backgrounds ?? []} allowNone={false} onpick={(v) => v && phone.setWallpaper(v)} onupload={uploadWallpaper} />
 		</div>
 	</section>
 
 	{#if plug}
 		<section>
-			<h4>폰 날짜 · 시간</h4>
+			<h4>{$_("phoneExtra.clockHeading")}</h4>
 			<div class="row-toggle">
-				<span>날짜·시간 직접 설정</span>
-				<Switch checked={!!plug.phone.customDatetimeEnabled} label="폰 날짜·시간 직접 설정" hideLabel onchange={toggleCustomClock} />
+				<span>{$_("phoneExtra.customClockLabel")}</span>
+				<Switch checked={!!plug.phone.customDatetimeEnabled} label={$_("phoneExtra.customClockAria")} hideLabel onchange={toggleCustomClock} />
 			</div>
 			{#if plug.phone.customDatetimeEnabled}
 				<div class="dt-grid">
 					<label class="field">
-						<span>날짜</span>
-						<Input type="date" value={plug.phone.customDate || nowDateStr()} aria-label="폰 날짜" onchange={(e) => save("phone", { customDate: e.currentTarget.value })} />
+						<span>{$_("phoneExtra.dateLabel")}</span>
+						<Input type="date" value={plug.phone.customDate || nowDateStr()} aria-label={$_("phoneExtra.dateAria")} onchange={(e) => save("phone", { customDate: e.currentTarget.value })} />
 					</label>
 					<label class="field">
-						<span>시간</span>
-						<Input type="time" value={plug.phone.customTime || nowTimeStr()} aria-label="폰 시간" onchange={(e) => save("phone", { customTime: e.currentTarget.value })} />
+						<span>{$_("phoneExtra.timeLabel")}</span>
+						<Input type="time" value={plug.phone.customTime || nowTimeStr()} aria-label={$_("phoneExtra.timeAria")} onchange={(e) => save("phone", { customTime: e.currentTarget.value })} />
 					</label>
 				</div>
 				<div class="end">
-					<Button size="sm" variant="ghost" onclick={resetClockToNow}>현재 시각으로</Button>
+					<Button size="sm" variant="ghost" onclick={resetClockToNow}>{$_("phoneExtra.resetNowBtn")}</Button>
 				</div>
 			{/if}
 			<p class="hint">
-				{"프롬프트에서 {{phone_date}}(날짜), {{phone_time}}(시간), {{phone_datetime}}(날짜+시간) 매크로로 주입됨"}
+				{$_("phoneExtra.clockMacroHint")}
 			</p>
 		</section>
 
 		<section>
-			<h4>새 채팅방 기본값</h4>
+			<h4>{$_("phoneExtra.newRoomDefaultsHeading")}</h4>
 			<label class="field"
-				><span>API <small>채팅방 설정에서 고른 것이 먼저</small></span>
-				<Select value={plug.phone.apiProfileId ?? ""} options={chatApiOptions("앱 기본 API")} onchange={(e) => save("phone", { apiProfileId: orNull(e.currentTarget.value) })} />
+				><span>API <small>{$_("phoneExtra.apiRoomPriority")}</small></span>
+				<Select value={plug.phone.apiProfileId ?? ""} options={chatApiOptions($_("phoneExtra.appDefaultApi"))} onchange={(e) => save("phone", { apiProfileId: orNull(e.currentTarget.value) })} />
 			</label>
 			{#if plug.phone.apiProfileId}
 				<label class="field"
-					><span>모델 <small>비우면 그 API의 기본 모델</small></span>
-					<ModelPicker profile={library.apis.find((a) => a.id === plug?.phone.apiProfileId)} value={plug.phone.model || null} onchange={(m) => save("phone", { model: m ?? "" })} label="폰 기본 모델" />
+					><span>{$_("phoneExtra.modelLabel")} <small>{$_("phoneExtra.modelDefaultHint")}</small></span>
+					<ModelPicker profile={library.apis.find((a) => a.id === plug?.phone.apiProfileId)} value={plug.phone.model || null} onchange={(m) => save("phone", { model: m ?? "" })} label={$_("phoneExtra.modelAria")} />
 				</label>
 			{/if}
 			<label class="field"
-				><span>프리셋 <small>짧은 메신저 답장용 프리셋을 따로 두면 좋음</small></span>
+				><span>{$_("phoneExtra.presetLabel")} <small>{$_("phoneExtra.presetHint")}</small></span>
 				<Select value={plug.phone.presetId ?? ""} options={presetOptions} onchange={(e) => save("phone", { presetId: orNull(e.currentTarget.value) })} />
 			</label>
 		</section>
@@ -140,24 +141,24 @@
 
 	{#if s}
 		<section>
-			<h4>폰 모드 프롬프트</h4>
-			<p class="hint">{"폰 대화에만 붙는 시스템 프롬프트. {{char}}, {{user}}, {{phone_date}}, {{phone_time}}, {{phone_datetime}} 사용 가능. 비우면 붙이지 않음"}</p>
-			<Textarea bind:value={phonePrompt} autosize maxRows={14} rows={5} mono aria-label="폰 모드 프롬프트" />
+			<h4>{$_("phoneExtra.modePromptHeading")}</h4>
+			<p class="hint">{$_("phoneExtra.modePromptHint")}</p>
+			<Textarea bind:value={phonePrompt} autosize maxRows={14} rows={5} mono aria-label={$_("phoneExtra.modePromptHeading")} />
 			<div class="end">
-				<Button size="sm" variant="ghost" disabled={phonePrompt === s.phoneModePrompt} onclick={() => (phonePrompt = s.phoneModePrompt)}>되돌리기</Button>
-				<Button size="sm" variant="primary" disabled={phonePrompt === s.phoneModePrompt} onclick={savePrompt}>저장</Button>
+				<Button size="sm" variant="ghost" disabled={phonePrompt === s.phoneModePrompt} onclick={() => (phonePrompt = s.phoneModePrompt)}>{$_("phoneExtra.revertBtn")}</Button>
+				<Button size="sm" variant="primary" disabled={phonePrompt === s.phoneModePrompt} onclick={savePrompt}>{$_("common.save")}</Button>
 			</div>
 		</section>
 	{/if}
 
 	<section>
-		<h4>폰 프로필 AI 꾸미기 프롬프트</h4>
-		<PromptSlotEditor key="phoneProfile" desc="폰 친구 프로필에서 'AI 꾸미기'를 눌렀을 때 보내는 지시문" vars={"{{char}} 캐릭터 이름"} />
+		<h4>{$_("phoneExtra.profilePromptHeading")}</h4>
+		<PromptSlotEditor key="phoneProfile" desc={$_("phoneExtra.profilePromptDesc")} vars={$_("phoneExtra.charNameVar")} />
 	</section>
 
 	<section>
-		<h4>폰 SNS 페이지 AI 생성 프롬프트</h4>
-		<PromptSlotEditor key="phoneSns" desc="폰 개인 SNS 페이지에서 AI 생성을 눌렀을 때 보내는 지시문" vars={"{{char}} 캐릭터 이름"} />
+		<h4>{$_("phoneExtra.snsPromptHeading")}</h4>
+		<PromptSlotEditor key="phoneSns" desc={$_("phoneExtra.snsPromptDesc")} vars={$_("phoneExtra.charNameVar")} />
 	</section>
 </div>
 

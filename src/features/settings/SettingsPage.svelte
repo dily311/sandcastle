@@ -164,7 +164,7 @@
 </script>
 
 <div class="settings" class:desktop={!layout.mobile} class:mobile={layout.mobile} class:narrow={layout.narrow} class:listing={mobileList}>
-	<nav class="side" aria-label="설정 메뉴">
+	<nav class="side" aria-label={$_("uiPolish.settingsNavAria")}>
 		<div class="search">
 			<Input bind:value={query} placeholder={$_("settings.searchPlaceholder")} aria-label={$_("settings.searchPlaceholder")} type="search">
 				{#snippet leading()}<Search />{/snippet}

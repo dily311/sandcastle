@@ -1,12 +1,15 @@
 <script lang="ts">
 	import { X } from "@lucide/svelte";
+	import { _ } from "svelte-i18n";
 
 	interface Props {
 		value: string[];
 		placeholder?: string;
 		label?: string;
 	}
-	let { value = $bindable([]), placeholder = "태그 입력", label = "태그 추가" }: Props = $props();
+	let { value = $bindable([]), placeholder, label }: Props = $props();
+	const effectivePlaceholder = $derived(placeholder ?? $_("uiPolish.tagPlaceholder"));
+	const effectiveLabel = $derived(label ?? $_("uiPolish.tagAddAria"));
 	let draft = $state("");
 
 	/** 입력 중인 글자를 태그로 (저장 직전에도 부름) */
@@ -25,9 +28,9 @@
 
 <div class="tags">
 	{#each value as t}
-		<span class="tag">{t}<button type="button" aria-label="{t} 태그 지우기" onclick={() => (value = value.filter((x) => x !== t))}><X /></button></span>
+		<span class="tag">{t}<button type="button" aria-label={$_("uiPolish.tagRemoveAria", { values: { tag: t } })} onclick={() => (value = value.filter((x) => x !== t))}><X /></button></span>
 	{/each}
-	<input bind:value={draft} {onkeydown} onblur={commit} placeholder={value.length ? "" : placeholder} aria-label={label} />
+	<input bind:value={draft} {onkeydown} onblur={commit} placeholder={value.length ? "" : effectivePlaceholder} aria-label={effectiveLabel} />
 </div>
 
 <style>

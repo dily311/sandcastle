@@ -2,6 +2,7 @@
 	// 휴지통 (CLAUDE.md 2-A-3): 지운 항목 되살리기 / 완전히 지우기 / 보관 기간
 	import { jobs } from "$shared/stores/jobs.svelte";
 	import { onMount } from "svelte";
+	import { _ } from "svelte-i18n";
 	import { RotateCcw, Trash2 } from "@lucide/svelte";
 	import type { TrashItem } from "$ipc/bindings";
 	import { Badge, Button, Select, Spinner } from "$shared/ui";
@@ -29,12 +30,12 @@
 		items = await call(commands.listTrash(), src).catch(() => []);
 	}
 
-	const RETENTION = [
-		{ value: "7", label: "7일" },
-		{ value: "30", label: "30일" },
-		{ value: "90", label: "90일" },
-		{ value: "", label: "계속 보관" },
-	];
+	const RETENTION = $derived([
+		{ value: "7", label: $_("settings.trash.days7") },
+		{ value: "30", label: $_("settings.trash.days30") },
+		{ value: "90", label: $_("settings.trash.days90") },
+		{ value: "", label: $_("settings.trash.keepForever") },
+	]);
 	const retention = $derived(appSetting.value ? appSetting.value.trashRetentionDays : 30);
 	async function setRetention(v: string) {
 		const days = v ? Number(v) : null;
@@ -42,10 +43,10 @@
 			const old = items?.filter((i) => Date.now() - i.deletedAt > days * 86_400_000).length ?? 0;
 			if (old) {
 				const ok = await confirmAction({
-					title: "휴지통 보관 기간",
-					message: `${days}일보다 오래된 항목 ${old}개를 지금 완전히 지움. 되돌릴 수 없음`,
+					title: $_("settings.trash.retentionAria"),
+					message: $_("settings.trash.retentionConfirmMsg", { values: { days, count: old } }),
 					danger: true,
-					confirmLabel: "바꾸고 정리",
+					confirmLabel: $_("settings.trash.retentionConfirmBtn"),
 				});
 				if (!ok) return;
 			}
@@ -59,7 +60,7 @@
 		try {
 			const r = await restoreFromTrash(item.id);
 			if (!r) return;
-			toasts.success(`"${item.label}" 되살림`);
+			toasts.success($_("settings.trash.restoredToast", { values: { label: item.label } }));
 			await load();
 			await onrestored?.(r);
 		} finally {
@@ -68,51 +69,63 @@
 	}
 	async function purge(item: TrashItem) {
 		const ok = await confirmAction({
-			title: "완전히 지우기",
-			message: `${TRASH_KIND_LABEL[item.kind]} "${item.label}"${item.rows > 1 ? `과 같이 지운 ${item.rows - 1}개 항목` : ""}${item.files ? "·파일" : ""}을 완전히 지움. 되돌릴 수 없음`,
+			title: $_("settings.trash.purgeTitle"),
+			message: $_("settings.trash.purgeMsg", {
+				values: {
+					kind: $_(`settings.trash.kind.${item.kind}`),
+					label: item.label,
+					extra: item.rows > 1 ? $_("settings.trash.purgeExtra", { values: { count: item.rows - 1 } }) : "",
+					files: item.files ? $_("settings.trash.purgeFiles") : "",
+				},
+			}),
 			danger: true,
-			confirmLabel: "완전히 지우기",
+			confirmLabel: $_("settings.trash.purgeTitle"),
 		});
 		if (!ok) return;
-		await jobs.run(item.label, () => call(commands.purgeTrashItem(item.id), src), { group: "완전히 지우기" }).catch(() => {});
+		await jobs.run(item.label, () => call(commands.purgeTrashItem(item.id), src), { group: $_("settings.trash.purgeTitle") }).catch(() => {});
 		await load();
 	}
 	async function empty() {
 		const n = items?.length ?? 0;
-		const ok = await confirmAction({ title: "휴지통 비우기", message: `휴지통의 ${n}개 항목을 완전히 지움. 되돌릴 수 없음`, danger: true, confirmLabel: `${n}개 완전히 지우기` });
+		const ok = await confirmAction({
+			title: $_("settings.trash.emptyTitle"),
+			message: $_("settings.trash.emptyMsg", { values: { count: n } }),
+			danger: true,
+			confirmLabel: $_("settings.trash.emptyConfirmBtn", { values: { count: n } }),
+		});
 		if (!ok) return;
-		const removed = await jobs.run(`${n}개`, () => call(commands.emptyTrash(), src), { group: "휴지통 비우기" });
-		if (removed !== undefined) toasts.success(`${removed}개를 완전히 지움`);
+		const removed = await jobs.run($_("settings.trash.emptyJob", { values: { count: n } }), () => call(commands.emptyTrash(), src), { group: $_("settings.trash.emptyTitle") });
+		if (removed !== undefined) toasts.success($_("settings.trash.emptyDone", { values: { count: removed } }));
 		await load();
 	}
 	const size = (b: number) => (b < 1024 * 1024 ? `${Math.max(1, Math.round(b / 1024))}KB` : `${(b / 1024 / 1024).toFixed(1)}MB`);
 </script>
 
-<Group title="휴지통">
+<Group title={$_("settings.trash.title")}>
 	{#snippet aside()}
-		{#if items?.length}<Button size="sm" variant="danger" onclick={empty}>{#snippet icon()}<Trash2 />{/snippet}비우기</Button>{/if}
+		{#if items?.length}<Button size="sm" variant="danger" onclick={empty}>{#snippet icon()}<Trash2 />{/snippet}{$_("settings.trash.emptyBtn")}</Button>{/if}
 	{/snippet}
-	<Row label="보관 기간" desc="지난 항목은 휴지통을 열거나 새로 지울 때 완전히 지움">
-		<Select value={retention == null ? "" : String(retention)} options={RETENTION} aria-label="휴지통 보관 기간" onchange={(e) => setRetention(e.currentTarget.value)} />
+	<Row label={$_("settings.trash.retention")} desc={$_("settings.trash.retentionDesc")}>
+		<Select value={retention == null ? "" : String(retention)} options={RETENTION} aria-label={$_("settings.trash.retentionAria")} onchange={(e) => setRetention(e.currentTarget.value)} />
 	</Row>
 	{#if items === null}
 		<div class="loading"><Spinner /></div>
 	{:else if !items.length}
-		<p class="empty">휴지통이 비었음. 캐릭터·대화·페르소나·월드인포·프리셋·게임·플레이 기록을 지우면 여기로 옴</p>
+		<p class="empty">{$_("settings.trash.emptyState")}</p>
 	{:else}
 		<ul class="items">
 			{#each items as it (it.id)}
 				<li>
-					<Badge>{TRASH_KIND_LABEL[it.kind]}</Badge>
+					<Badge>{$_(`settings.trash.kind.${it.kind}`)}</Badge>
 					<div class="txt">
 						<b>{it.label}</b>
 						<span class="meta" title={absolute(it.deletedAt)}>
-							{relative(it.deletedAt)} 지움{it.rows > 1 ? ` · 함께 지운 항목 ${it.rows - 1}개` : ""}{it.files ? ` · 파일 ${it.files}` : ""} · {size(it.size)}
+							{$_("settings.trash.deletedMeta", { values: { when: relative(it.deletedAt) } })}{it.rows > 1 ? $_("settings.trash.deletedExtra", { values: { count: it.rows - 1 } }) : ""}{it.files ? $_("settings.trash.deletedFiles", { values: { count: it.files } }) : ""} · {size(it.size)}
 						</span>
 					</div>
 					<div class="acts">
-						<Button size="sm" loading={busy === it.id} disabled={busy !== null} onclick={() => restore(it)}>{#snippet icon()}<RotateCcw />{/snippet}되살리기</Button>
-						<Button size="sm" variant="ghost" disabled={busy !== null} onclick={() => purge(it)}>완전히 지우기</Button>
+						<Button size="sm" loading={busy === it.id} disabled={busy !== null} onclick={() => restore(it)}>{#snippet icon()}<RotateCcw />{/snippet}{$_("settings.trash.restoreBtn")}</Button>
+						<Button size="sm" variant="ghost" disabled={busy !== null} onclick={() => purge(it)}>{$_("settings.trash.purgeBtn")}</Button>
 					</div>
 				</li>
 			{/each}

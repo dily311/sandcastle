@@ -1,4 +1,5 @@
 <script lang="ts">
+	import { _ } from "svelte-i18n";
 	import { RotateCcw } from "@lucide/svelte";
 
 	// 숫자 설정용 슬라이더 + 정확한 값 입력칸.
@@ -19,7 +20,8 @@
 		/** 놓거나 입력·초기화로 값이 확정될 때 */
 		oncommit?: (v: string) => void;
 	}
-	let { label, hint, value = $bindable(""), min, max, step, fallback, unsetLabel = "기본값", format = (n) => String(n), oncommit }: Props = $props();
+	let { label, hint, value = $bindable(""), min, max, step, fallback, unsetLabel, format = (n) => String(n), oncommit }: Props = $props();
+	const effectiveUnsetLabel = $derived(unsetLabel ?? $_("settings.promptSlot.default"));
 
 	const id = `sl-${Math.random().toString(36).slice(2, 8)}`;
 	const unset = $derived(String(value).trim() === "" || Number.isNaN(Number(value)));
@@ -38,8 +40,8 @@
 			{max}
 			{step}
 			value={unset ? "" : value}
-			placeholder={unsetLabel}
-			aria-label="{label} 직접 입력"
+			placeholder={effectiveUnsetLabel}
+			aria-label={$_("settings.sharedUi.directInputAria", { values: { label } })}
 			onchange={(e) => {
 				value = e.currentTarget.value.trim();
 				oncommit?.(value);
@@ -48,8 +50,8 @@
 		<button
 			type="button"
 			class="reset"
-			title="{unsetLabel}(으)로"
-			aria-label="{label} {unsetLabel}(으)로"
+			title={$_("settings.sharedUi.resetToTitle", { values: { target: effectiveUnsetLabel } })}
+			aria-label={$_("settings.sharedUi.resetToAria", { values: { label, target: effectiveUnsetLabel } })}
 			disabled={unset}
 			onclick={() => {
 				value = "";

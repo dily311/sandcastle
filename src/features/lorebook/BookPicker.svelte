@@ -1,11 +1,13 @@
 <script lang="ts">
+	import { _ } from "svelte-i18n";
 	// 로어북 여러 권 고르기: 고른 책은 칩(× 로 빼기), '+'로 더 넣기
 	import { BookOpen, Plus, X } from "@lucide/svelte";
 	import { ContextMenu, type MenuItem } from "$shared/ui";
 	import { nav } from "$app/nav.svelte";
 	import { lorebook } from "./lorebook.svelte";
 
-	let { value, onchange, label, empty = "없음" }: { value: string[]; onchange: (ids: string[]) => void; label: string; empty?: string } = $props();
+	let { value, onchange, label, empty }: { value: string[]; onchange: (ids: string[]) => void; label: string; empty?: string } = $props();
+	const effectiveEmpty = $derived(empty ?? $_("extraTools.bookEmpty"));
 
 	// 모르는 책이 붙어 있으면(다른 곳에서 새로 생김, 예: 캐릭터 카드 가져오기) 목록을 다시 받음
 	let reloaded = false;
@@ -22,7 +24,7 @@
 	const items = $derived.by((): MenuItem[] => {
 		const rest = lorebook.books.filter((b) => !value.includes(b.id));
 		const list: MenuItem[] = rest.map((b) => ({ label: b.name, icon: BookOpen, onselect: () => onchange([...value, b.id]) }));
-		list.push({ label: "로어북 화면에서 새로 만들기", icon: Plus, separator: list.length > 0, onselect: () => nav.go({ page: "lorebook" }) });
+		list.push({ label: $_("extraTools.bookNewMenu"), icon: Plus, separator: list.length > 0, onselect: () => nav.go({ page: "lorebook" }) });
 		return list;
 	});
 	function openMenu(e: MouseEvent) {
@@ -34,15 +36,15 @@
 <div class="picker" role="group" aria-label={label}>
 	{#each picked as b, i (i)}
 		<span class="chip">
-			<button class="name" title="'{b.name}' 로어북 열기" onclick={() => nav.go({ page: "lorebook", bookId: b.id })}>{b.name}</button>
-			<button class="x" aria-label="{b.name} 빼기" onclick={() => onchange(value.filter((id) => id !== b.id))}><X /></button>
+			<button class="name" title={$_("extraTools.bookOpenTitle", { values: { name: b.name } })} onclick={() => nav.go({ page: "lorebook", bookId: b.id })}>{b.name}</button>
+			<button class="x" aria-label={$_("extraTools.bookRemoveAria", { values: { name: b.name } })} onclick={() => onchange(value.filter((id) => id !== b.id))}><X /></button>
 		</span>
 	{:else}
-		<span class="empty">{empty}</span>
+		<span class="empty">{effectiveEmpty}</span>
 	{/each}
-	<button class="add" aria-label="{label}에 로어북 넣기" aria-haspopup="menu" onclick={openMenu}><Plus /></button>
+	<button class="add" aria-label={$_("extraTools.bookAddAria", { values: { label } })} aria-haspopup="menu" onclick={openMenu}><Plus /></button>
 </div>
-<ContextMenu at={menu} label="로어북 넣기" {items} onclose={() => (menu = null)} />
+<ContextMenu at={menu} label={$_("extraTools.bookAddMenuAria")} {items} onclose={() => (menu = null)} />
 
 <style>
 	.picker {

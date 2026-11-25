@@ -1,8 +1,11 @@
 <script lang="ts">
-	let { size = 16, label = "불러오는 중" }: { size?: number; label?: string } = $props();
+	import { _ } from "svelte-i18n";
+
+	let { size = 16, label }: { size?: number; label?: string } = $props();
+	const effectiveLabel = $derived(label ?? $_("uiPolish.loadingAria"));
 </script>
 
-<span class="spinner" style:width="{size}px" style:height="{size}px" role="status" aria-label={label}></span>
+<span class="spinner" style:width="{size}px" style:height="{size}px" role="status" aria-label={effectiveLabel}></span>
 
 <style>
 	.spinner {

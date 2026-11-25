@@ -1,14 +1,17 @@
 <script lang="ts">
+	import { _ } from "svelte-i18n";
 	import { ACCENTS } from "./accents";
 
 	/** 빈 문자열 = 자동 (이름에서 색을 정함) */
-	let { value = $bindable(""), label = "색" }: { value?: string; label?: string } = $props();
+	let { value = $bindable(""), label }: { value?: string; label?: string } = $props();
+	const effectiveLabel = $derived(label ?? $_("uiPolish.colorAria"));
 </script>
 
-<div class="colors" role="radiogroup" aria-label={label}>
-	<button type="button" role="radio" aria-checked={!value} class="auto" class:on={!value} title="이름에서 자동" onclick={() => (value = "")}>자동</button>
+<div class="colors" role="radiogroup" aria-label={effectiveLabel}>
+	<button type="button" role="radio" aria-checked={!value} class="auto" class:on={!value} title={$_("uiPolish.colorAutoTitle")} onclick={() => (value = "")}>{$_("uiPolish.colorAuto")}</button>
 	{#each ACCENTS as a (a.id)}
-		<button type="button" role="radio" aria-checked={value === a.light} aria-label={a.label} title={a.label} class:on={value === a.light} style:background={a.light} onclick={() => (value = a.light)}></button>
+		{@const alabel = $_(`uiPolish.accents.${a.id}`, { default: a.label })}
+		<button type="button" role="radio" aria-checked={value === a.light} aria-label={alabel} title={alabel} class:on={value === a.light} style:background={a.light} onclick={() => (value = a.light)}></button>
 	{/each}
 </div>
 

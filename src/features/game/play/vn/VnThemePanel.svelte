@@ -1,16 +1,17 @@
 <script lang="ts">
+	import { _ } from "svelte-i18n";
 	import { RotateCcw } from "@lucide/svelte";
 	import { Button, Segmented, Slider } from "$shared/ui";
 	import { VN_ASPECTS, VN_BOX_STYLES, VN_PRESETS, vnTheme } from "./vnTheme.svelte";
 
-	const ACCENT_PRESETS: { value: string; label: string }[] = [
-		{ value: "#ec4899", label: "로즈 핑크" },
-		{ value: "#818cf8", label: "라벤더" },
-		{ value: "#38bdf8", label: "스카이 블루" },
-		{ value: "#f59e0b", label: "웜 골드" },
-		{ value: "#10b981", label: "에메랄드" },
-		{ value: "#f43f5e", label: "체리 레드" },
-	];
+	const ACCENT_PRESETS = $derived<{ value: string; label: string }[]>([
+		{ value: "#ec4899", label: $_("settings.panels.vnRosePink") },
+		{ value: "#818cf8", label: $_("settings.panels.vnLavender") },
+		{ value: "#38bdf8", label: $_("settings.panels.vnSkyBlue") },
+		{ value: "#f59e0b", label: $_("settings.panels.vnWarmGold") },
+		{ value: "#10b981", label: $_("settings.panels.vnEmerald") },
+		{ value: "#f43f5e", label: $_("settings.panels.vnCherryRed") },
+	]);
 
 	const cfg = $derived(vnTheme.config);
 	const isCustomAccent = $derived(!!cfg.accentColor && !ACCENT_PRESETS.some((p) => p.value.toLowerCase() === cfg.accentColor?.toLowerCase()));
@@ -57,9 +58,9 @@
 
 <div class="panel-body vn-theme-panel">
 	<section>
-		<h4>화면 비율</h4>
+		<h4>{$_("settings.panels.vnAspect")}</h4>
 		<Segmented
-			label="게임 화면 비율"
+			label={$_("settings.panels.vnAspectAria")}
 			value={cfg.aspect}
 			options={VN_ASPECTS}
 			onchange={(v) => vnTheme.update({ aspect: v })}
@@ -67,8 +68,8 @@
 	</section>
 
 	<section>
-		<h4>연애시뮬 테마 프리셋</h4>
-		<div class="preset-grid" role="radiogroup" aria-label="게임 UI 테마 프리셋">
+		<h4>{$_("settings.panels.vnPresets")}</h4>
+		<div class="preset-grid" role="radiogroup" aria-label={$_("settings.panels.vnPresetsAria")}>
 			{#each VN_PRESETS as p (p.id)}
 				<button
 					type="button"
@@ -90,9 +91,9 @@
 	</section>
 
 	<section>
-		<h4>대사창 스타일</h4>
+		<h4>{$_("settings.panels.vnBoxStyle")}</h4>
 		<Segmented
-			label="대사창 스타일"
+			label={$_("settings.panels.vnBoxStyle")}
 			value={cfg.boxStyle}
 			options={VN_BOX_STYLES}
 			onchange={(v) => vnTheme.update({ boxStyle: v })}
@@ -100,9 +101,9 @@
 	</section>
 
 	<section>
-		<h4>세부 커스텀</h4>
+		<h4>{$_("settings.panels.vnCustom")}</h4>
 		<Slider
-			label="대사창 불투명도 (%)"
+			label={$_("settings.panels.vnBoxOpacity")}
 			min={30}
 			max={100}
 			step={5}
@@ -112,7 +113,7 @@
 			oncommit={commitOpacity}
 		/>
 		<Slider
-			label="대사 글자 크기 (px)"
+			label={$_("settings.panels.vnFontSize")}
 			min={13}
 			max={24}
 			step={1}
@@ -122,7 +123,7 @@
 			oncommit={commitFont}
 		/>
 		<Slider
-			label="캐릭터 크기 (%)"
+			label={$_("settings.panels.vnSpriteScale")}
 			min={70}
 			max={120}
 			step={5}
@@ -132,8 +133,8 @@
 			oncommit={commitScale}
 		/>
 		<div class="accent-row">
-			<span class="sub-label">강조 색상</span>
-			<div class="colors" role="radiogroup" aria-label="게임 강조 색상">
+			<span class="sub-label">{$_("settings.panels.vnAccent")}</span>
+			<div class="colors" role="radiogroup" aria-label={$_("settings.panels.vnAccentAria")}>
 				<button
 					type="button"
 					role="radio"
@@ -142,7 +143,7 @@
 					aria-checked={cfg.accentColor === null}
 					onclick={() => vnTheme.update({ accentColor: null })}
 				>
-					기본
+					{$_("settings.more.default")}
 				</button>
 				{#each ACCENT_PRESETS as c (c.value)}
 					<button
@@ -162,8 +163,8 @@
 					class="custom"
 					class:on={isCustomAccent}
 					value={cfg.accentColor ?? "#ec4899"}
-					aria-label="강조 색상 직접 고르기"
-					title="직접 고르기"
+					aria-label={$_("settings.panels.vnAccentCustomAria")}
+					title={$_("settings.more.accentCustomTitle")}
 					oninput={(e) => vnTheme.update({ accentColor: e.currentTarget.value })}
 				/>
 			</div>
@@ -172,7 +173,7 @@
 
 	<div class="foot">
 		<Button size="sm" variant="secondary" onclick={() => vnTheme.reset()}>
-			{#snippet icon()}<RotateCcw />{/snippet}기본값으로 초기화
+			{#snippet icon()}<RotateCcw />{/snippet}{$_("settings.panels.vnResetBtn")}
 		</Button>
 	</div>
 </div>

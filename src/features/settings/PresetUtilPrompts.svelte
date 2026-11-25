@@ -2,6 +2,7 @@
 	// 프리셋의 유틸 프롬프트 (5-F-7-3, ADR-030): 프리셋 > 전역(설정 > 앱 프롬프트) > 기본값.
 	// 슬롯마다 접힌 칸. 비워 두면 전역을 따르고, 지금 쓰이는 글은 자리표시로 보인다
 	import { onMount } from "svelte";
+	import { _ } from "svelte-i18n";
 	import { Copy, X } from "@lucide/svelte";
 	import type { AppPrompts_Serialize as AppPrompts, PromptSlot } from "$ipc/bindings";
 	import { Badge, IconButton, Textarea } from "$shared/ui";
@@ -12,18 +13,18 @@
 	let { value = $bindable() }: { value: Record<string, string> } = $props();
 
 	// 백엔드 PresetPrompts::SLOTS와 같은 것만 (번역·그림 프롬프트 쓰기는 프리셋 없이 돌아 전역만)
-	const SLOTS: { key: keyof AppPrompts; label: string; vars: string }[] = [
-		{ key: "chatImages", label: "캐릭터 에셋", vars: "{{img_keys}} · 자리 {{img_inprompt}}" },
-		{ key: "autoImage", label: "이미지 자동 생성", vars: "자리 {{auto_image}}" },
-		{ key: "multiChar", label: "다인봇", vars: "{{names}} · 자리 {{multi_char}}" },
-		{ key: "vars", label: "AI 변수", vars: "{{var_list}} · 자리 {{vars}}" },
-		{ key: "summary", label: "대화 요약", vars: "{max}" },
-		{ key: "ghost", label: "대필", vars: "{{user}} · {{char}} · {{length}}" },
-		{ key: "phoneProfile", label: "폰 프로필 꾸미기", vars: "{{char}}" },
-		{ key: "phoneSns", label: "폰 SNS 페이지 생성", vars: "{{char}}" },
-		{ key: "gameRules", label: "게임 규칙", vars: "한 줄에 규칙 하나" },
-		{ key: "sceneRules", label: "씬 규칙", vars: "한 줄에 규칙 하나" },
-	];
+	const SLOTS = $derived<{ key: keyof AppPrompts; label: string; vars: string }[]>([
+		{ key: "chatImages", label: $_("settings.more3.utilSlotChatImages"), vars: "{{img_keys}} · {{img_inprompt}}" },
+		{ key: "autoImage", label: $_("settings.more3.utilSlotAutoImage"), vars: "{{auto_image}}" },
+		{ key: "multiChar", label: $_("settings.more3.utilSlotMultiChar"), vars: "{{names}} · {{multi_char}}" },
+		{ key: "vars", label: $_("settings.more3.utilSlotVars"), vars: "{{var_list}} · {{vars}}" },
+		{ key: "summary", label: $_("settings.more3.utilSlotSummary"), vars: "{max}" },
+		{ key: "ghost", label: $_("settings.more3.utilSlotGhost"), vars: "{{user}} · {{char}} · {{length}}" },
+		{ key: "phoneProfile", label: $_("settings.more3.utilSlotPhoneProfile"), vars: "{{char}}" },
+		{ key: "phoneSns", label: $_("settings.more3.utilSlotPhoneSns"), vars: "{{char}}" },
+		{ key: "gameRules", label: $_("settings.more3.utilSlotGameRules"), vars: $_("settings.more3.utilVarsOnePerLine") },
+		{ key: "sceneRules", label: $_("settings.more3.utilSlotSceneRules"), vars: $_("settings.more3.utilVarsOnePerLine") },
+	]);
 
 	let defaults = $state<AppPrompts | null>(null);
 	onMount(async () => {
@@ -32,11 +33,11 @@
 	});
 
 	/** 프리셋이 비었을 때 쓰이는 글과 출처 */
-	function fallback(key: keyof AppPrompts): { text: string; from: "전역" | "기본" } {
+	function fallback(key: keyof AppPrompts): { text: string; from: string } {
 		const slot = (current()?.prompts as AppPrompts | undefined)?.[key] as PromptSlot | undefined;
 		const chosen = slot?.items.find((v) => v.id === slot.selected)?.text.trim();
-		if (chosen) return { text: chosen, from: "전역" };
-		return { text: defaults?.[key]?.items[0]?.text ?? "", from: "기본" };
+		if (chosen) return { text: chosen, from: $_("settings.more3.utilFromGlobal") };
+		return { text: defaults?.[key]?.items[0]?.text ?? "", from: $_("settings.more3.utilFromDefault") };
 	}
 	function set(key: string, text: string) {
 		const next = { ...value };
@@ -53,17 +54,17 @@
 		<details class="slot sc-preset-util">
 			<summary>
 				<span class="nm">{s.label}</span>
-				<Badge tone={own ? "accent" : "neutral"}>{own ? "프리셋" : fb.from}</Badge>
+				<Badge tone={own ? "accent" : "neutral"}>{own ? $_("settings.more3.utilBadgePreset") : fb.from}</Badge>
 			</summary>
 			<div class="body">
-				<Textarea value={value[s.key] ?? ""} placeholder={fb.text} mono rows={4} autosize maxRows={16} aria-label="{s.label} 프롬프트" oninput={(e) => set(s.key, e.currentTarget.value)} />
+				<Textarea value={value[s.key] ?? ""} placeholder={fb.text} mono rows={4} autosize maxRows={16} aria-label={$_("settings.more3.utilPromptAria", { values: { label: s.label } })} oninput={(e) => set(s.key, e.currentTarget.value)} />
 				<div class="tools">
 					<code>{s.vars}</code>
 					<span class="sp"></span>
 					{#if own}
-						<IconButton label="비우기 ({fb.from} 값을 따름)" size="sm" onclick={() => set(s.key, "")}><X /></IconButton>
+						<IconButton label={$_("settings.more3.utilClearAria", { values: { from: fb.from } })} size="sm" onclick={() => set(s.key, "")}><X /></IconButton>
 					{:else}
-						<IconButton label="{fb.from} 값을 복사해 고치기" size="sm" disabled={!fb.text} onclick={() => set(s.key, fb.text)}><Copy /></IconButton>
+						<IconButton label={$_("settings.more3.utilCopyAria", { values: { from: fb.from } })} size="sm" disabled={!fb.text} onclick={() => set(s.key, fb.text)}><Copy /></IconButton>
 					{/if}
 				</div>
 			</div>

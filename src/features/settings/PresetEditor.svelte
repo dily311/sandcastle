@@ -1,4 +1,5 @@
 <script lang="ts">
+	import { _ } from "svelte-i18n";
 	import { ChevronDown, ChevronRight, GripVertical, Plus, Trash2 } from "@lucide/svelte";
 	import { flip } from "svelte/animate";
 	import type { PromptBlocksInput_Deserialize as BlockInput, PromptPresetDetail_Serialize as Detail } from "$ipc/bindings";
@@ -30,23 +31,23 @@
 	const reasoning = $derived(reasoningOf(effModel));
 
 	// 마커 블록: 내용 대신 앱이 채움
-	const MARKERS: Record<string, string> = {
-		chardescription: "캐릭터 설명",
-		personadescription: "페르소나 설명",
-		dialogueexamples: "대화 예시",
-		mesexamples: "대화 예시",
-		worldinfo: "월드인포",
-		worldinfobefore: "월드인포",
-		worldinfoafter: "월드인포",
-		chathistory: "대화 기록",
-		charpersonality: "비워 둠 (설명에 합쳐짐)",
-		scenario: "비워 둠 (설명에 합쳐짐)",
-	};
+	const MARKERS = $derived<Record<string, string>>({
+		chardescription: $_("settings.presetEditor.markerCharDesc"),
+		personadescription: $_("settings.presetEditor.markerPersonaDesc"),
+		dialogueexamples: $_("settings.presetEditor.markerExamples"),
+		mesexamples: $_("settings.presetEditor.markerExamples"),
+		worldinfo: $_("settings.presetEditor.markerWorldInfo"),
+		worldinfobefore: $_("settings.presetEditor.markerWorldInfo"),
+		worldinfoafter: $_("settings.presetEditor.markerWorldInfo"),
+		chathistory: $_("settings.presetEditor.markerChatHistory"),
+		charpersonality: $_("settings.presetEditor.markerMerged"),
+		scenario: $_("settings.presetEditor.markerMerged"),
+	});
 	function markerOf(b: { identifier: string; extraJson?: unknown }) {
 		const key = b.identifier.toLowerCase().replace(/_/g, "");
 		if (MARKERS[key]) return MARKERS[key];
 		const extra = b.extraJson as { marker?: boolean } | null | undefined;
-		return extra?.marker ? "앱이 채움" : null;
+		return extra?.marker ? $_("settings.presetEditor.markerAppFilled") : null;
 	}
 
 	// ---- 편집 사본 (처음 받은 detail 기준) ----
@@ -148,7 +149,7 @@
 			key: `b${seq++}`,
 			id: null,
 			presetId: p.id,
-			name: "새 블록",
+			name: $_("settings.presetEditor.newBlockName"),
 			identifier: `custom-${Date.now().toString(36)}`,
 			blockType: "text",
 			role: "system",
@@ -220,13 +221,17 @@
 		if (saved) for (const b of blocks) if (!b.id) b.id = saved.blocks.find((x) => x.identifier === b.identifier)?.id ?? null;
 	}
 
-	const roleLabel: Record<string, string> = { system: "시스템", user: "사용자", assistant: "AI" };
-	const TRIGGERS = [
-		{ id: "normal", label: "보내기" },
-		{ id: "continue", label: "이어쓰기" },
-		{ id: "regenerate", label: "다시 생성" },
-		{ id: "swipe", label: "스와이프" },
-	];
+	const roleLabel = $derived<Record<string, string>>({
+		system: $_("settings.activityDetail.roleSystem"),
+		user: $_("settings.activityDetail.roleUser"),
+		assistant: $_("settings.activityDetail.roleAssistant"),
+	});
+	const TRIGGERS = $derived([
+		{ id: "normal", label: $_("settings.presetEditor.triggerNormal") },
+		{ id: "continue", label: $_("settings.presetEditor.triggerContinue") },
+		{ id: "regenerate", label: $_("settings.presetEditor.triggerRegenerate") },
+		{ id: "swipe", label: $_("settings.presetEditor.triggerSwipe") },
+	]);
 	function triggers(b: Block): string[] {
 		return Array.isArray(b.triggersJson) ? (b.triggersJson as string[]) : [];
 	}
@@ -237,49 +242,49 @@
 </script>
 
 {#if autosave && autoState === "failed"}
-	<p class="auto" class:warn={autoState === "failed"}>{autoState === "failed" ? "저장 못 함 · 다시 고치면 또 시도" : autoState === "dirty" ? "고치는 중" : "고치면 저절로 저장됨"}</p>
+	<p class="auto" class:warn={autoState === "failed"}>{autoState === "failed" ? $_("settings.presetEditor.autoFailed") : autoState === "dirty" ? $_("settings.presetEditor.autoDirty") : $_("settings.presetEditor.autoSaved")}</p>
 {/if}
 
 {#if !autosave}
 	<div class="bar">
-		<Button variant="ghost" onclick={oncancel}>취소</Button>
-		<Button variant="primary" loading={saving} disabled={!name.trim()} onclick={save}>저장</Button>
+		<Button variant="ghost" onclick={oncancel}>{$_("common.cancel")}</Button>
+		<Button variant="primary" loading={saving} disabled={!name.trim()} onclick={save}>{$_("common.save")}</Button>
 	</div>
 {/if}
 
 {#if !quick}
 	<Group>
-		<Row label="이름" stacked><Input bind:value={name} aria-label="프리셋 이름" /></Row>
-		<Row label="설명" stacked><Textarea bind:value={description} rows={2} autosize maxRows={6} aria-label="프리셋 설명" /></Row>
+		<Row label={$_("settings.more3.name")} stacked><Input bind:value={name} aria-label={$_("settings.more.presetNamePlaceholder")} /></Row>
+		<Row label={$_("settings.presetEditor.descLabel")} stacked><Textarea bind:value={description} rows={2} autosize maxRows={6} aria-label={$_("settings.presetEditor.descAria")} /></Row>
 	</Group>
 {/if}
 
-<Group title="생성 옵션">
+<Group title={$_("settings.presetEditor.genOptionsGroup")}>
 	<div class="sliders">
-		<Slider label="컨텍스트 크기 (토큰)" hint="넘치면 오래된 대화부터 뺌. 0은 제한 없음" bind:value={contextSize} min={0} max={200000} step={1} fallback={4095} unsetLabel="기본 (4,095)" format={(n) => (n ? n.toLocaleString() : "제한 없음")} />
-		<Slider label="응답 길이 (토큰)" hint="AI가 한 번에 쓰는 최대 길이" bind:value={maxTokens} min={64} max={128000} step={1} fallback={1024} unsetLabel="1,024" format={(n) => n.toLocaleString()} />
+		<Slider label={$_("settings.presetEditor.contextSize")} hint={$_("settings.presetEditor.contextSizeHint")} bind:value={contextSize} min={0} max={200000} step={1} fallback={4095} unsetLabel={$_("settings.presetEditor.default4095")} format={(n) => (n ? n.toLocaleString() : $_("settings.presetEditor.unlimited"))} />
+		<Slider label={$_("settings.presetEditor.maxTokens")} hint={$_("settings.presetEditor.maxTokensHint")} bind:value={maxTokens} min={64} max={128000} step={1} fallback={1024} unsetLabel="1,024" format={(n) => n.toLocaleString()} />
 
 	</div>
 	<div class="sliders">
-		<Slider label="온도" hint="높을수록 다양하고 낮을수록 일정함" bind:value={temperature} min={0} max={2} step={0.05} fallback={1} unsetLabel="공급자 기본" format={(n) => n.toFixed(2)} />
-		<Slider label="월드인포 비율 (%)" hint="고정 프롬프트를 뺀 나머지 중 월드인포에 줄 몫. 남는 만큼 대화 기록이 들어감" bind:value={worldInfoPercent} min={0} max={100} step={5} fallback={50} unsetLabel="기본 (50%)" format={(n) => `${n}%`} />
-		<Slider label="Top P" hint="확률이 높은 낱말 몇 %에서만 고름" bind:value={topP} min={0} max={1} step={0.01} fallback={1} unsetLabel="공급자 기본" format={(n) => n.toFixed(2)} />
-		<Slider label="Top K" hint="후보 낱말을 몇 개까지 볼지. 0은 끔" bind:value={topK} min={0} max={200} step={1} fallback={0} unsetLabel="공급자 기본" format={(n) => (n ? String(n) : "끔")} />
+		<Slider label={$_("settings.presetEditor.temperature")} hint={$_("settings.presetEditor.temperatureHint")} bind:value={temperature} min={0} max={2} step={0.05} fallback={1} unsetLabel={$_("settings.presetEditor.providerDefault")} format={(n) => n.toFixed(2)} />
+		<Slider label={$_("settings.presetEditor.wiRatio")} hint={$_("settings.presetEditor.wiRatioHint")} bind:value={worldInfoPercent} min={0} max={100} step={5} fallback={50} unsetLabel={$_("settings.presetEditor.default50Pct")} format={(n) => `${n}%`} />
+		<Slider label="Top P" hint={$_("settings.presetEditor.topPHint")} bind:value={topP} min={0} max={1} step={0.01} fallback={1} unsetLabel={$_("settings.presetEditor.providerDefault")} format={(n) => n.toFixed(2)} />
+		<Slider label="Top K" hint={$_("settings.presetEditor.topKHint")} bind:value={topK} min={0} max={200} step={1} fallback={0} unsetLabel={$_("settings.presetEditor.providerDefault")} format={(n) => (n ? String(n) : $_("settings.more2.effortOff"))} />
 	</div>
 
-	<Row label="실시간 응답 (스트리밍)" desc="끄면 응답이 다 만들어진 뒤 한 번에 보임">
-		<Switch bind:checked={stream} label="스트리밍" hideLabel />
+	<Row label={$_("settings.presetEditor.streaming")} desc={$_("settings.presetEditor.streamingDesc")}>
+		<Switch bind:checked={stream} label={$_("settings.presetEditor.streamingAria")} hideLabel />
 	</Row>
 </Group>
 
-<Group title="유틸 프롬프트">
-	<p class="hint">이 프리셋으로 대화할 때만. 비우면 설정 &gt; 앱 프롬프트의 값</p>
+<Group title={$_("settings.presetEditor.utilPromptsGroup")}>
+	<p class="hint">{$_("settings.presetEditor.utilPromptsHint")}</p>
 	<PresetUtilPrompts bind:value={appPrompts} />
 </Group>
 
-<Group title="프롬프트 블록">
-	{#snippet aside()}<Button size="sm" onclick={add}>{#snippet icon()}<Plus />{/snippet}블록 추가</Button>{/snippet}
-	<p class="hint">위에서부터 순서대로 보냄. 앱 고정 규칙은 항상 맨 앞</p>
+<Group title={$_("settings.presetEditor.blocksGroup")}>
+	{#snippet aside()}<Button size="sm" onclick={add}>{#snippet icon()}<Plus />{/snippet}{$_("settings.presetEditor.addBlock")}</Button>{/snippet}
+	<p class="hint">{$_("settings.presetEditor.blocksHint")}</p>
 	<ol class="blocks" bind:this={list} class:sorting={!!dragging}>
 		{#each blocks as b, i (b.key)}
 			{@const marker = markerOf(b)}
@@ -287,8 +292,8 @@
 				<div class="head">
 					<button
 						class="grip"
-						aria-label="{b.name} 끌어서 순서 바꾸기 (↑/↓ 키도 됨)"
-						title="끌어서 순서 바꾸기"
+						aria-label={$_("settings.presetEditor.dragReorderAria", { values: { name: b.name } })}
+						title={$_("settings.presetEditor.dragReorderTitle")}
 						onpointerdown={(e) => grab(e, b.key)}
 						onpointermove={drag}
 						onpointerup={drop}
@@ -301,39 +306,39 @@
 					<span class="badges">
 						<Badge>{roleLabel[b.role] ?? b.role}</Badge>
 						{#if marker}<Badge tone="info">{marker}</Badge>{/if}
-						{#if b.position === "in_chat"}<Badge tone="accent">대화 안 · 깊이 {b.depth}</Badge>{/if}
+						{#if b.position === "in_chat"}<Badge tone="accent">{$_("settings.presetEditor.inChatDepth", { values: { depth: b.depth } })}</Badge>{/if}
 					</span>
-					<span class="sw"><Switch bind:checked={b.enabled} label="{b.name} 사용" hideLabel /></span>
+					<span class="sw"><Switch bind:checked={b.enabled} label={$_("settings.more.useNamed", { values: { name: b.name } })} hideLabel /></span>
 				</div>
 				{#if open === b.key}
 					<div class="body">
 						<div class="grid">
-							<Field label="이름"><Input bind:value={b.name} /></Field>
-							<Field label="역할">
-								<Select bind:value={b.role} options={[{ value: "system", label: "시스템" }, { value: "user", label: "사용자" }, { value: "assistant", label: "AI" }]} />
+							<Field label={$_("settings.more3.name")}><Input bind:value={b.name} /></Field>
+							<Field label={$_("settings.presetEditor.roleLabel")}>
+								<Select bind:value={b.role} options={[{ value: "system", label: $_("settings.activityDetail.roleSystem") }, { value: "user", label: $_("settings.activityDetail.roleUser") }, { value: "assistant", label: $_("settings.activityDetail.roleAssistant") }]} />
 							</Field>
-							<Field label="위치">
-								<Select bind:value={b.position} options={[{ value: "relative", label: "순서대로" }, { value: "in_chat", label: "대화 기록 안" }]} />
+							<Field label={$_("settings.presetEditor.positionLabel")}>
+								<Select bind:value={b.position} options={[{ value: "relative", label: $_("settings.presetEditor.posRelative") }, { value: "in_chat", label: $_("settings.presetEditor.posInChat") }]} />
 							</Field>
 							{#if b.position === "in_chat"}
-								<Field label="깊이" hint="최근 메시지에서 몇 개 앞"><Input type="number" min="0" bind:value={b.depth} /></Field>
+								<Field label={$_("settings.presetEditor.depthLabel")} hint={$_("settings.presetEditor.depthHint")}><Input type="number" min="0" bind:value={b.depth} /></Field>
 							{/if}
 						</div>
 						{#if marker}
-							<p class="hint">이 블록은 내용 대신 {marker} 자리를 표시함</p>
+							<p class="hint">{$_("settings.presetEditor.markerPlaceHint", { values: { marker } })}</p>
 						{:else}
-							<Field label="내용" hint={"{{char}}, {{user}} 같은 매크로 사용 가능"}>
+							<Field label={$_("settings.presetEditor.contentLabel")} hint={$_("settings.presetEditor.contentHint")}>
 								<Textarea bind:value={b.content} mono rows={4} autosize maxRows={20} />
 							</Field>
 						{/if}
 						<div class="trig">
-							<span>쓸 때</span>
+							<span>{$_("settings.presetEditor.whenToUse")}</span>
 							{#each TRIGGERS as t (t.id)}
 								<button class="chip" class:on={triggers(b).includes(t.id)} aria-pressed={triggers(b).includes(t.id)} onclick={() => toggleTrigger(b, t.id)}>{t.label}</button>
 							{/each}
-							<span class="faint">{triggers(b).length ? "" : "고르지 않으면 항상"}</span>
+							<span class="faint">{triggers(b).length ? "" : $_("settings.presetEditor.alwaysIfEmpty")}</span>
 							<span class="sp"></span>
-							<Button size="sm" variant="ghost" onclick={() => remove(i)}>{#snippet icon()}<Trash2 />{/snippet}블록 삭제</Button>
+							<Button size="sm" variant="ghost" onclick={() => remove(i)}>{#snippet icon()}<Trash2 />{/snippet}{$_("settings.presetEditor.deleteBlock")}</Button>
 						</div>
 					</div>
 				{/if}

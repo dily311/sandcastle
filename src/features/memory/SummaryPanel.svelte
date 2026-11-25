@@ -1,4 +1,5 @@
 <script lang="ts">
+	import { _ } from "svelte-i18n";
 	// 대화 요약 (3-D, ADR-016): 오른쪽 패널 "이 대화"의 한 구역. 요약 글은 AI에게 가고(고쳐도 그대로), 메모는 가지 않는다
 	import { onMount } from "svelte";
 	import type { SummaryInfo } from "$ipc/bindings";
@@ -36,7 +37,7 @@
 		busy = true;
 		try {
 			apply(await call(commands.summarizeConversationNow(conv.id), src));
-			toasts.success("요약함");
+			toasts.success($_("extraTools.summaryDone"));
 		} catch {
 			/* 토스트는 call이 띄움 */
 		} finally {
@@ -48,27 +49,33 @@
 		if (r) apply(r);
 	}
 	async function clear() {
-		if (!(await confirmAction({ title: "요약 지우기", message: "요약을 지우면 다음 자동 요약이 처음부터 다시 이어 씀 (요금이 듦)", confirmLabel: "지우기" }))) return;
+		if (!(await confirmAction({ title: $_("extraTools.summaryClearTitle"), message: $_("extraTools.summaryClearMsg"), confirmLabel: $_("extraTools.summaryClearBtn") }))) return;
 		await call(commands.clearConversationSummary(conv.id), src);
 		apply(null);
 	}
 	async function addMemo() {
 		apply(await call(commands.setConversationSummary(conv.id, `${memo.trim()}\n${text}`.trim()), src));
 	}
-	const reason: Record<string, string> = { budget: "예산 한도", timeout: "시간 초과", cancelled: "취소됨", error: "실패", empty: "빈 응답" };
+	const reason = $derived<Record<string, string>>({
+		budget: $_("extraTools.summaryReason.budget"),
+		timeout: $_("extraTools.summaryReason.timeout"),
+		cancelled: $_("extraTools.summaryReason.cancelled"),
+		error: $_("extraTools.summaryReason.error"),
+		empty: $_("extraTools.summaryReason.empty"),
+	});
 </script>
 
 <section>
-	<h4>요약</h4>
-	<Textarea bind:value={text} autosize rows={4} maxRows={14} placeholder="아직 요약 없음" aria-label="요약" onblur={save} />
+	<h4>{$_("extraTools.summaryHeading")}</h4>
+	<Textarea bind:value={text} autosize rows={4} maxRows={14} placeholder={$_("extraTools.summaryPlaceholder")} aria-label={$_("extraTools.summaryHeading")} onblur={save} />
 	<div class="bar">
-		{#if info?.text}<span class="stat">{info.coveredCount}개 반영 · {info.tokens}토큰</span>{/if}
-		{#if info?.failure}<span class="stat warn">자동 요약 {reason[info.failure.reason] ?? "실패"}</span>{/if}
+		{#if info?.text}<span class="stat">{$_("extraTools.summaryStat", { values: { count: info.coveredCount, tokens: info.tokens } })}</span>{/if}
+		{#if info?.failure}<span class="stat warn">{$_("extraTools.summaryAutoFail", { values: { reason: reason[info.failure.reason] ?? $_("extraTools.summaryReason.error") } })}</span>{/if}
 		<span class="grow"></span>
-		{#if memo.trim()}<Button size="sm" variant="ghost" onclick={addMemo}>메모 붙이기</Button>{/if}
-		{#if info?.hasPrev}<Button size="sm" variant="ghost" onclick={undo}>되돌리기</Button>{/if}
-		{#if info}<Button size="sm" variant="ghost" onclick={clear}>지우기</Button>{/if}
-		<Button size="sm" loading={busy} onclick={now}>지금 요약</Button>
+		{#if memo.trim()}<Button size="sm" variant="ghost" onclick={addMemo}>{$_("extraTools.summaryAppendMemo")}</Button>{/if}
+		{#if info?.hasPrev}<Button size="sm" variant="ghost" onclick={undo}>{$_("extraTools.revertBtn")}</Button>{/if}
+		{#if info}<Button size="sm" variant="ghost" onclick={clear}>{$_("extraTools.summaryClearBtn")}</Button>{/if}
+		<Button size="sm" loading={busy} onclick={now}>{$_("extraTools.summaryNowBtn")}</Button>
 	</div>
 </section>
 

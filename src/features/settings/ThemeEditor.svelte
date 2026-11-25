@@ -1,5 +1,6 @@
 <script lang="ts">
 	import { onDestroy, onMount } from "svelte";
+	import { _ } from "svelte-i18n";
 	import { ChevronDown, ChevronLeft, ChevronRight, RotateCcw } from "@lucide/svelte";
 	import { Button, Field, IconButton, Input, Segmented, Spinner, Switch, Textarea } from "$shared/ui";
 	import { BUILTIN_THEMES, COLOR_VARS, builtinId, defaultColors, type ColorMap, type Mode, type ThemeColors, withLegacy } from "$shared/ui/themes";
@@ -43,10 +44,10 @@
 		const key = editKey;
 		const bid = builtinId(key);
 		if (key === "new") {
-			name = "새 테마";
+			name = $_("settings.more3.newTheme");
 		} else if (bid) {
 			const b = BUILTIN_THEMES.find((t) => t.id === bid);
-			name = `${b?.name ?? "테마"} 사본`;
+			name = $_("settings.more.copySuffix", { values: { name: b?.name ?? $_("settings.more3.themeLabel") } });
 			colors = structuredClone(b?.colors ?? { light: {}, dark: {} });
 		} else {
 			const t = await call(commands.loadTheme(key), src).catch(() => null);
@@ -75,7 +76,7 @@
 	onDestroy(() => theme.preview(null));
 	$effect(() => {
 		if (!dirty) return;
-		return nav.setGuard(() => confirmAction({ title: "저장하지 않음", message: "바뀐 테마를 버리고 나감", confirmLabel: "버리기" }));
+		return nav.setGuard(() => confirmAction({ title: $_("settings.more3.unsavedTitle"), message: $_("settings.more3.discardThemeMsg"), confirmLabel: $_("settings.more3.discardBtn") }));
 	});
 
 	function back(force = false) {
@@ -83,7 +84,7 @@
 		void nav.replace({ page: "settings", tab: "theme" });
 	}
 	async function save() {
-		if (!name.trim()) return toasts.error("이름을 입력해야 함");
+		if (!name.trim()) return toasts.error($_("settings.more3.enterNameErr"));
 		saving = true;
 		try {
 			const file = filename ?? `theme-${Date.now().toString(36)}.json`;
@@ -103,7 +104,7 @@
 			theme.preview(null);
 			// 새로 만든 테마는 바로 적용, 쓰는 중인 테마는 다시 읽음
 			if (!filename || theme.setting.selectTheme === file) await theme.update({ selectTheme: file });
-			toasts.success("테마 저장함");
+			toasts.success($_("settings.more3.themeSavedToast"));
 			back(true);
 		} finally {
 			saving = false;
@@ -136,39 +137,41 @@
 	<div class="center"><Spinner /></div>
 {:else}
 	<div class="crumb">
-		<IconButton label="테마 목록으로" size="sm" onclick={() => back()}><ChevronLeft /></IconButton>
-		<span>테마</span>
+		<IconButton label={$_("settings.more3.backToThemeAria")} size="sm" onclick={() => back()}><ChevronLeft /></IconButton>
+		<span>{$_("settings.more3.themeLabel")}</span>
 	</div>
 	<header class="head">
-		<h1>{filename ? "테마 편집" : "새 테마"}</h1>
+		<h1>{filename ? $_("settings.more3.editTheme") : $_("settings.more3.newTheme")}</h1>
 		<div class="btns">
-			{#if dirty}<span class="dirty">바뀐 내용 있음</span>{/if}
-			<Button variant="ghost" onclick={() => back()}>취소</Button>
-			<Button variant="primary" loading={saving} disabled={!name.trim() || (!!filename && !dirty)} onclick={save}>저장</Button>
+			{#if dirty}<span class="dirty">{$_("settings.more3.dirty")}</span>{/if}
+			<Button variant="ghost" onclick={() => back()}>{$_("common.cancel")}</Button>
+			<Button variant="primary" loading={saving} disabled={!name.trim() || (!!filename && !dirty)} onclick={save}>{$_("common.save")}</Button>
 		</div>
 	</header>
-	<p class="lead">색은 아래 예시 화면에서 확인. 저장하면 앱에 적용</p>
+	<p class="lead">{$_("settings.more3.themeEditorLead")}</p>
 
 	<div class="card info">
-		<Field label="이름" required><Input bind:value={name} /></Field>
-		<Field label="만든 사람"><Input bind:value={author} /></Field>
-		<Field label="버전"><Input bind:value={version} /></Field>
+		<Field label={$_("settings.more3.name")} required><Input bind:value={name} /></Field>
+		<Field label={$_("settings.more3.author")}><Input bind:value={author} /></Field>
+		<Field label={$_("settings.more3.version")}><Input bind:value={version} /></Field>
 	</div>
 
 	<div class="card info">
-		<Field label="강조색">
-			<div class="accents" role="radiogroup" aria-label="이 테마의 강조색">
+		<Field label={$_("settings.themeSec.accent")}>
+			<div class="accents" role="radiogroup" aria-label={$_("settings.more3.themeAccentAria")}>
 				{#each ACCENTS as a (a.id)}
-					<button type="button" role="radio" aria-checked={accent === a.id} aria-label={a.label} title={a.label} class:on={accent === a.id} style:background={mode === "dark" ? a.dark : a.light} onclick={() => (accent = a.id)}></button>
+					{@const alabel = $_(`uiPolish.accents.${a.id}`, { default: a.label })}
+					<button type="button" role="radio" aria-checked={accent === a.id} aria-label={alabel} title={alabel} class:on={accent === a.id} style:background={mode === "dark" ? a.dark : a.light} onclick={() => (accent = a.id)}></button>
 				{/each}
-				<input type="color" class:on={isHexColor(accent)} value={accentValue(accent, mode === "dark")} aria-label="이 테마의 강조색 직접 고르기" oninput={(e) => (accent = e.currentTarget.value)} />
+				<input type="color" class:on={isHexColor(accent)} value={accentValue(accent, mode === "dark")} aria-label={$_("settings.more3.themeAccentCustomAria")} oninput={(e) => (accent = e.currentTarget.value)} />
 			</div>
 		</Field>
-		<Field label="회색 톤">
-			<div class="accents" role="radiogroup" aria-label="이 테마의 회색 톤">
+		<Field label={$_("settings.themeSec.grayTone")}>
+			<div class="accents" role="radiogroup" aria-label={$_("settings.more3.themeGrayAria")}>
 				{#each GRAYS as g (g.id)}
 					{@const sc = mode === "dark" ? g.dark : g.light}
-					<button type="button" role="radio" aria-checked={gray === g.id} aria-label={g.label} title={g.label} class:on={gray === g.id} style:background="linear-gradient(135deg, {sc[2]} 0 50%, {sc[10]} 50% 100%)" onclick={() => (gray = g.id)}></button>
+					{@const glabel = $_(`uiPolish.grays.${g.id}`, { default: g.label })}
+					<button type="button" role="radio" aria-checked={gray === g.id} aria-label={glabel} title={glabel} class:on={gray === g.id} style:background="linear-gradient(135deg, {sc[2]} 0 50%, {sc[10]} 50% 100%)" onclick={() => (gray = g.id)}></button>
 				{/each}
 			</div>
 		</Field>
@@ -176,43 +179,43 @@
 
 	<div class="card chat-opts">
 		<div class="chat-opt">
-			<div class="txt"><b>메시지 시각 표시</b><span class="faint small">대화에서 메시지마다 보낸 시각 보이기</span></div>
-			<Switch checked={showTimestamps} label="메시지 시각 표시" hideLabel onchange={(v) => (showTimestamps = v)} />
+			<div class="txt"><b>{$_("settings.themeSec.showTimestamps")}</b><span class="faint small">{$_("settings.themeSec.showTimestampsDesc")}</span></div>
+			<Switch checked={showTimestamps} label={$_("settings.themeSec.showTimestamps")} hideLabel onchange={(v) => (showTimestamps = v)} />
 		</div>
 		<div class="chat-opt">
-			<div class="txt"><b>메시지 프로필 표시</b><span class="faint small">대화에서 메시지에 프로필 그림 보이기</span></div>
-			<Switch checked={showAvatars} label="메시지 프로필 표시" hideLabel onchange={(v) => (showAvatars = v)} />
+			<div class="txt"><b>{$_("settings.themeSec.showAvatars")}</b><span class="faint small">{$_("settings.themeSec.showAvatarsDesc")}</span></div>
+			<Switch checked={showAvatars} label={$_("settings.themeSec.showAvatars")} hideLabel onchange={(v) => (showAvatars = v)} />
 		</div>
 		<div class="chat-opt">
-			<div class="txt"><b>메시지에 멀티 프로필 그림 표시</b><span class="faint small">`캐릭터이름: 대사` 형식의 이름 부분을 아바타로 교체해 표시</span></div>
-			<Switch checked={showMultiCharAvatars} label="메시지에 멀티 프로필 그림 표시" hideLabel onchange={(v) => (showMultiCharAvatars = v)} />
+			<div class="txt"><b>{$_("settings.themeSec.multiCharAvatars")}</b><span class="faint small">{$_("settings.themeSec.multiCharAvatarsDesc")}</span></div>
+			<Switch checked={showMultiCharAvatars} label={$_("settings.themeSec.multiCharAvatars")} hideLabel onchange={(v) => (showMultiCharAvatars = v)} />
 		</div>
 	</div>
 
 	<div class="colors-head">
-		<h3>색</h3>
-		<Segmented label="고칠 화면 모드" bind:value={mode} options={[{ value: "light", label: "밝은 화면" }, { value: "dark", label: "어두운 화면" }]} />
+		<h3>{$_("settings.more3.colorsHeading")}</h3>
+		<Segmented label={$_("settings.more3.editModeAria")} bind:value={mode} options={[{ value: "light", label: $_("settings.more3.lightScreen") }, { value: "dark", label: $_("settings.more3.darkScreen") }]} />
 	</div>
-	<p class="lead">비워 둔 색은 회색 톤·강조색 설정을 따라감{#if mode !== (theme.dark ? "dark" : "light")}. 앱은 지금 {theme.dark ? "어두운" : "밝은"} 화면이라 아래 미리보기로 확인{/if}</p>
+	<p class="lead">{$_("settings.more3.colorsLead")}{#if mode !== (theme.dark ? "dark" : "light")}{$_("settings.more3.colorsLeadOtherMode", { values: { mode: theme.dark ? $_("settings.more3.modeDarkWord") : $_("settings.more3.modeLightWord") } })}{/if}</p>
 
-	<div class="mock" style={preview} aria-label="미리보기">
+	<div class="mock" style={preview} aria-label={$_("settings.more3.previewAria")}>
 		<div class="m-side">
 			<span class="m-logo"></span>
-			<span class="m-item on">캐릭터</span>
-			<span class="m-item">페르소나</span>
-			<span class="m-item">설정</span>
+			<span class="m-item on">{$_("nav.character")}</span>
+			<span class="m-item">{$_("nav.persona")}</span>
+			<span class="m-item">{$_("nav.settings")}</span>
 		</div>
 		<div class="m-main">
 			<div class="m-group">
 				<div class="m-card">
 					<b>Seraphina</b>
-					<span class="m-muted">엘도리아 숲의 수호자</span>
-					<span class="m-faint">2분 전</span>
+					<span class="m-muted">{$_("settings.more3.mockCharDesc")}</span>
+					<span class="m-faint">{$_("settings.more3.mockTime")}</span>
 				</div>
-				<div class="m-input">메시지 입력</div>
+				<div class="m-input">{$_("settings.more3.mockInput")}</div>
 				<div class="m-row">
-					<span class="m-btn">보내기</span>
-					<span class="m-ghost">취소</span>
+					<span class="m-btn">{$_("settings.more3.mockSend")}</span>
+					<span class="m-ghost">{$_("common.cancel")}</span>
 				</div>
 			</div>
 		</div>
@@ -220,20 +223,22 @@
 
 	<div class="card vars">
 		<div class="vars-tools">
-			<span class="faint small">{changed ? `${changed}개 바꿈` : "바꾼 색 없음"}</span>
-			<Button size="sm" variant="ghost" onclick={copyFromOther}>{mode === "light" ? "어두운" : "밝은"} 화면 색 가져오기</Button>
-			<Button size="sm" variant="ghost" disabled={!changed} onclick={resetAll}>{#snippet icon()}<RotateCcw />{/snippet}모두 기본값</Button>
+			<span class="faint small">{changed ? $_("settings.more3.changedCount", { values: { count: changed } }) : $_("settings.more3.noChangedColors")}</span>
+			<Button size="sm" variant="ghost" onclick={copyFromOther}>{$_("settings.more3.copyOtherModeColors", { values: { mode: mode === "light" ? $_("settings.more3.modeDarkWord") : $_("settings.more3.modeLightWord") } })}</Button>
+			<Button size="sm" variant="ghost" disabled={!changed} onclick={resetAll}>{#snippet icon()}<RotateCcw />{/snippet}{$_("settings.more3.resetAllDefault")}</Button>
 		</div>
-		{#each COLOR_VARS as g (g.group)}
-			<p class="group">{g.group}</p>
+		{#each COLOR_VARS as g (g.id)}
+			<p class="group">{$_(`uiPolish.colorGroups.${g.id}`, { default: g.group })}</p>
 			{#each g.items as v (v.name)}
+				{@const vlabel = $_(`uiPolish.colorVars.${v.name}`, { default: v.label })}
+				{@const vhint = v.hint ? $_(`uiPolish.colorVars.${v.name}__hint`, { default: v.hint }) : ""}
 				<div class="var" class:set={!!value(v.name)}>
-					<div class="txt"><b>{v.label}</b><span class="faint small">{v.hint ?? ""} <code>{v.name}</code></span></div>
-					<label class="swatch" style:background={shown(v.name)} title="색 고르기">
-						<input type="color" value={isHex(shown(v.name)) ? shown(v.name) : "#000000"} oninput={(e) => set(v.name, e.currentTarget.value)} aria-label="{v.label} 색 고르기" />
+					<div class="txt"><b>{vlabel}</b><span class="faint small">{vhint} <code>{v.name}</code></span></div>
+					<label class="swatch" style:background={shown(v.name)} title={$_("settings.more3.pickColorTitle")}>
+						<input type="color" value={isHex(shown(v.name)) ? shown(v.name) : "#000000"} oninput={(e) => set(v.name, e.currentTarget.value)} aria-label={$_("settings.more3.pickColorNamedAria", { values: { label: vlabel } })} />
 					</label>
-					<input class="hex" value={value(v.name)} placeholder={base[v.name]} spellcheck="false" aria-label="{v.label} 색 값" onchange={(e) => (e.currentTarget.value.trim() ? set(v.name, e.currentTarget.value.trim()) : reset(v.name))} />
-					<IconButton label="{v.label} 기본값으로" size="sm" disabled={!value(v.name)} onclick={() => reset(v.name)}><RotateCcw /></IconButton>
+					<input class="hex" value={value(v.name)} placeholder={base[v.name]} spellcheck="false" aria-label={$_("settings.more3.colorValueNamedAria", { values: { label: vlabel } })} onchange={(e) => (e.currentTarget.value.trim() ? set(v.name, e.currentTarget.value.trim()) : reset(v.name))} />
+					<IconButton label={$_("settings.more3.resetColorNamedAria", { values: { label: vlabel } })} size="sm" disabled={!value(v.name)} onclick={() => reset(v.name)}><RotateCcw /></IconButton>
 				</div>
 			{/each}
 		{/each}
@@ -242,7 +247,7 @@
 	<section class="advanced">
 		<button class="adv-toggle" aria-expanded={cssOpen} onclick={() => (cssOpen = !cssOpen)}>
 			{#if cssOpen}<ChevronDown />{:else}<ChevronRight />{/if}
-			직접 쓰는 CSS <span class="faint small">고급 · 색 편집으로 부족할 때만</span>
+			{$_("settings.more3.customCssHeading")} <span class="faint small">{$_("settings.more3.customCssHint")}</span>
 		</button>
 		{#if cssOpen}
 			<div class="card">

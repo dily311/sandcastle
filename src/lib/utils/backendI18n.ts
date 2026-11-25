@@ -48,14 +48,16 @@ export function localizeBackendError(err: { code?: ErrorCode | "UNKNOWN" | strin
 	return raw;
 }
 
+const pluginKey = (id: string) => id.replace(/\./g, "_");
+
 export function localizeCorePluginName(id: string, fallback: string): string {
-	const key = `corePlugins.items.${id}.name`;
+	const key = `corePlugins.items.${pluginKey(id)}.name`;
 	const translated = t(key);
 	return translated === key ? fallback : translated;
 }
 
 export function localizeCorePluginDesc(id: string, fallback: string): string {
-	const key = `corePlugins.items.${id}.desc`;
+	const key = `corePlugins.items.${pluginKey(id)}.desc`;
 	const translated = t(key);
 	return translated === key ? fallback : translated;
 }

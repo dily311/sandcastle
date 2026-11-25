@@ -1,4 +1,5 @@
 <script lang="ts">
+	import { _ } from "svelte-i18n";
 	// 그림 만들기 (이미지 페이지의 "만들기"·폰 카메라 앱이 같이 씀). 왼쪽: 프롬프트·생성 프리셋, 오른쪽: 만든 그림.
 	// 프리셋은 설정 값에서 시작하고, 여기서 고치면 이번 그리기에만 쓴다 ("설정에 저장"을 눌러야 저장)
 	import { onMount } from "svelte";
@@ -41,8 +42,8 @@
 			.catch(() => {});
 	});
 	const presetOptions = $derived<ProfileOption[]>([
-		{ id: "", name: "설정의 프리셋", description: "설정 > 이미지 생성 값 그대로" },
-		...presetImages.map((i) => ({ id: i.path, name: i.name || i.prompt.slice(0, 30) || "그림", avatar: i.path, description: presetSummary(presetFromMeta(i.meta)) || "생성 정보 없음" })),
+		{ id: "", name: $_("extraTools.imgPresetSetting"), description: $_("extraTools.imgPresetSettingDesc") },
+		...presetImages.map((i) => ({ id: i.path, name: i.name || i.prompt.slice(0, 30) || $_("extraTools.imgFallback"), avatar: i.path, description: presetSummary(presetFromMeta(i.meta)) || $_("extraTools.imgNoGenInfo") })),
 	]);
 	function pickPresetImage(id: string) {
 		presetPick = id || null;
@@ -73,18 +74,18 @@
 		if (!draft || !pluginSetting.value) return;
 		await pluginSetting.save({ ...pluginSetting.value, imageGen: draft });
 		draft = null;
-		toasts.success("설정에 저장함");
+		toasts.success($_("extraTools.savedToSettings"));
 	}
 
 	const profile = $derived(library.apis.find((a) => a.id === preset?.apiProfileId));
 	const nai = $derived(profile?.formatType === "novelai");
 	// 주로 4.5·5를 쓴다 (5도 4 이후 형식으로 보냄, service/plugins.rs)
 	const MODELS = $derived(nai ? ["nai-diffusion-4-5-full", "nai-diffusion-4-5-curated", "nai-diffusion-5-full", "nai-diffusion-5-curated", "nai-diffusion-4-full", "nai-diffusion-3"] : ["gpt-image-1", "dall-e-3", "dall-e-2"]);
-	const QUALITY = [
-		{ value: "standard", label: "기본 (very aesthetic, masterpiece, no text)" },
-		{ value: "light", label: "가볍게 (very aesthetic, masterpiece)" },
-		{ value: "none", label: "없음" },
-	];
+	const QUALITY = $derived([
+		{ value: "standard", label: $_("extraTools.qualStd") },
+		{ value: "light", label: $_("extraTools.qualLight") },
+		{ value: "none", label: $_("extraTools.qualNone") },
+	]);
 	const SIZES = $derived(nai ? ["832x1216", "1216x832", "1024x1024", "640x640", "512x768", "768x512"] : ["1024x1024", "1024x1536", "1536x1024", "512x512", "auto"]);
 	const SAMPLERS = ["k_euler_ancestral", "k_euler", "k_dpmpp_2s_ancestral", "k_dpmpp_2m_sde", "k_dpmpp_2m", "k_dpmpp_sde"];
 	const opts = (list: string[], cur?: string) => (cur && !list.includes(cur) ? [cur, ...list] : list).map((v) => ({ value: v, label: v }));
@@ -106,65 +107,65 @@
 <div class="create" class:compact>
 	<section class="left">
 		<p class="api">
-			{#if profile}{profile.name}{:else}이미지 API가 없음 — <button class="link" onclick={() => nav.go({ page: "settings", tab: "imagegen" })}>설정에서 고르기</button>{/if}
+			{#if profile}{profile.name}{:else}{$_("extraTools.noImageApi")} <button class="link" onclick={() => nav.go({ page: "settings", tab: "imagegen" })}>{$_("extraTools.pickInSettings")}</button>{/if}
 		</p>
 		{#if !preset}
-			<label class="field"><span>프롬프트</span><Textarea bind:value={prompt} rows={5} autosize maxRows={14} placeholder="그릴 장면" aria-label="그릴 프롬프트" /></label>
+			<label class="field"><span>{$_("extraTools.promptLabel")}</span><Textarea bind:value={prompt} rows={5} autosize maxRows={14} placeholder={$_("extraTools.promptPlaceholderShort")} aria-label={$_("extraTools.promptAria")} /></label>
 		{/if}
 		{#if preset}
 			<div class="preset">
 				<div class="ph">
-					<b>생성 프리셋</b>
+					<b>{$_("extraTools.genPresetHeading")}</b>
 					{#if edited}
-						<span class="dirty">이번만 바꿈</span>
-						<Button size="sm" variant="ghost" onclick={() => ((draft = null), (presetPick = null))}>{#snippet icon()}<RotateCcw />{/snippet}되돌리기</Button>
-						<Button size="sm" onclick={savePreset}>{#snippet icon()}<Save />{/snippet}설정에 저장</Button>
+						<span class="dirty">{$_("extraTools.dirtyOnce")}</span>
+						<Button size="sm" variant="ghost" onclick={() => ((draft = null), (presetPick = null))}>{#snippet icon()}<RotateCcw />{/snippet}{$_("extraTools.revertBtn")}</Button>
+						<Button size="sm" onclick={savePreset}>{#snippet icon()}<Save />{/snippet}{$_("extraTools.saveToSettingsBtn")}</Button>
 					{/if}
 				</div>
 				<div class="two">
-					<label class="field"><span>모델</span>
+					<label class="field"><span>{$_("extraTools.modelLabel")}</span>
 						{#if MODELS.includes(preset.model)}
 							<Select value={preset.model} options={opts(MODELS)} onchange={(e) => edit("model", e.currentTarget.value)} />
 						{:else}
 							<Input value={preset.model} onchange={(e) => edit("model", e.currentTarget.value.trim())} />
 						{/if}
 					</label>
-					<label class="field"><span>크기</span><Select value={preset.size} options={opts(SIZES, preset.size)} onchange={(e) => edit("size", e.currentTarget.value)} /></label>
+					<label class="field"><span>{$_("extraTools.sizeLabel")}</span><Select value={preset.size} options={opts(SIZES, preset.size)} onchange={(e) => edit("size", e.currentTarget.value)} /></label>
 				</div>
 				{#if presetImages.length}
 					<div class="field">
-						<span>프리셋 그림 <small>#프리셋 태그를 단 그림의 생성 정보</small></span>
-						<ProfilePicker options={presetOptions} value={presetPick ?? ""} label="프리셋 그림 선택" onchange={pickPresetImage} />
+						<span>{$_("extraTools.presetImgLabel")} <small>{$_("extraTools.presetImgHint")}</small></span>
+						<ProfilePicker options={presetOptions} value={presetPick ?? ""} label={$_("extraTools.pickPresetImgAria")} onchange={pickPresetImage} />
 					</div>
 				{/if}
-				<label class="field"><span>프롬프트</span>
-					<Textarea bind:value={prompt} rows={4} autosize maxRows={14} placeholder="그릴 장면. NovelAI는 태그(1girl, silver hair, forest, night…)가 잘 먹힘" aria-label="그릴 프롬프트" />
+				<label class="field"><span>{$_("extraTools.promptLabel")}</span>
+					<Textarea bind:value={prompt} rows={4} autosize maxRows={14} placeholder={$_("extraTools.promptPlaceholderFull")} aria-label={$_("extraTools.promptAria")} />
 				</label>
 				{#if nai || !profile}
-					<label class="field"><span>네거티브 프롬프트</span>
+					<label class="field"><span>{$_("extraTools.negPromptLabel")}</span>
 						<Textarea value={preset.negativePrompt} rows={2} autosize maxRows={6} oninput={(e) => edit("negativePrompt", e.currentTarget.value)} />
 					</label>
 				{/if}
 				{#if nai || !profile}
-					<label class="field"><span>품질 태그 <small>프롬프트 끝에 붙음</small></span><Select value={preset.quality ?? "standard"} options={QUALITY} onchange={(e) => edit("quality", e.currentTarget.value)} /></label>
-					<Slider label="단계 (steps)" hint="많을수록 정교하지만 느리고 비쌈 (Opus 무료는 28까지)" bind:value={() => String(preset.steps), (v) => edit("steps", Math.round(Number(v)) || 28)} min={1} max={50} step={1} fallback={28} format={(n) => String(n)} />
-					<Slider label="프롬프트 반영 (scale)" bind:value={() => String(preset.scale), (v) => edit("scale", Number(v) || 5)} min={1} max={10} step={0.1} fallback={5} format={(n) => n.toFixed(1)} />
-					<label class="field"><span>샘플러</span><Select value={preset.sampler} options={opts(SAMPLERS, preset.sampler)} onchange={(e) => edit("sampler", e.currentTarget.value)} /></label>
+					<label class="field"><span>{$_("extraTools.qualTagLabel")} <small>{$_("extraTools.qualTagHint")}</small></span><Select value={preset.quality ?? "standard"} options={QUALITY} onchange={(e) => edit("quality", e.currentTarget.value)} /></label>
+					<Slider label={$_("extraTools.stepsLabel")} hint={$_("extraTools.stepsHint")} bind:value={() => String(preset.steps), (v) => edit("steps", Math.round(Number(v)) || 28)} min={1} max={50} step={1} fallback={28} format={(n) => String(n)} />
+					<Slider label={$_("extraTools.scaleLabel")} bind:value={() => String(preset.scale), (v) => edit("scale", Number(v) || 5)} min={1} max={10} step={0.1} fallback={5} format={(n) => n.toFixed(1)} />
+					<label class="field"><span>{$_("extraTools.samplerLabel")}</span><Select value={preset.sampler} options={opts(SAMPLERS, preset.sampler)} onchange={(e) => edit("sampler", e.currentTarget.value)} /></label>
 				{/if}
 			</div>
 		{/if}
 		<div class="go">
-			<Button variant="primary" loading={making} disabled={!prompt.trim() || !profile} onclick={make}>{#snippet icon()}<Wand2 />{/snippet}그리기</Button>
+			<Button variant="primary" loading={making} disabled={!prompt.trim() || !profile} onclick={make}>{#snippet icon()}<Wand2 />{/snippet}{$_("extraTools.drawBtn")}</Button>
 		</div>
 	</section>
 
-	<section class="right" aria-label="만든 그림">
+	<section class="right" aria-label={$_("extraTools.createdImgAria")}>
 		{#if making}
-			<div class="stage"><Spinner /><span>그리는 중… (수십 초 걸릴 수 있음)</span></div>
+			<div class="stage"><Spinner /><span>{$_("extraTools.drawingWait")}</span></div>
 		{:else if current}
 			<button class="stage pic" onclick={() => current && onview?.(current)} title={current.prompt}><img src={fileSrc(current.path)} alt={current.prompt} /></button>
 		{:else}
-			<div class="stage empty">만든 그림이 여기 뜸</div>
+			<div class="stage empty">{$_("extraTools.createdStageEmpty")}</div>
 		{/if}
 		{#if made.length > 1}
 			<div class="thumbs">

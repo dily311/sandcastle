@@ -4,6 +4,7 @@
 	import { jobs } from "$shared/stores/jobs.svelte";
 	import ModelPicker from "$features/settings/ModelPicker.svelte";
 	import { onMount } from "svelte";
+	import { _ } from "svelte-i18n";
 	import { Images } from "@lucide/svelte";
 	import { Button, Input, Select, Switch, Textarea } from "$shared/ui";
 	import { nav } from "$app/nav.svelte";
@@ -33,34 +34,34 @@
 	});
 	/** AI 그림을 올려 #프리셋 태그로 갤러리에 넣고, 생성 정보가 있으면 바로 설정에 */
 	async function uploadPreset() {
-		await addPresetImages(await pickFiles([{ name: "그림", extensions: ["png", "jpg", "jpeg", "webp"] }], true));
+		await addPresetImages(await pickFiles([{ name: $_("settings.more.picFilter"), extensions: ["png", "jpg", "jpeg", "webp"] }], true));
 	}
 	$effect(() =>
-		dropPaths({ label: "프리셋 그림으로 올리기", hint: "PNG·JPG·WEBP (AI 그림이면 생성 정보를 설정에 넣음)", accept: (f) => isImage(f) && extOf(f) !== "gif", onpaths: addPresetImages }),
+		dropPaths({ label: $_("settings.more2.dropPresetImgLabel"), hint: $_("settings.more2.dropPresetImgHint"), accept: (f) => isImage(f) && extOf(f) !== "gif", onpaths: addPresetImages }),
 	);
 	async function addPresetImages(paths: string[]) {
 		if (!paths.length) return;
 		const tagged = await jobs.run(
-			`그림 ${paths.length}장`,
+			$_("settings.more2.uploadImgJob", { values: { count: paths.length } }),
 			async () => {
 				const added = await call(commands.importGalleryImages(paths), { source: "imagegen" });
 				const out: GeneratedImage[] = [];
 				for (const a of added) out.push(await call(commands.setImageTags(a.path, [...a.tags, "preset"]), { source: "imagegen" }));
 				return out;
 			},
-			{ group: "그림 올리기" },
+			{ group: $_("settings.more2.uploadImgGroup") },
 		);
 		if (!tagged) return;
 		presetImages = [...tagged, ...presetImages];
 		const withInfo = tagged.find((t) => Object.keys(presetFromMeta(t.meta)).length);
 		if (withInfo) applyPreset(withInfo);
-		else toasts.info("생성 정보가 없는 그림이라 프리셋 목록에만 넣음");
+		else toasts.info($_("settings.more2.noGenMetaToast"));
 	}
 	function applyPreset(img: GeneratedImage) {
 		const p = presetFromMeta(img.meta);
 		if (!Object.keys(p).length) return;
 		save("imageGen", p);
-		toasts.success(`'${img.name || "그림"}'의 생성 정보를 넣음`);
+		toasts.success($_("settings.more2.appliedGenMetaToast", { values: { name: img.name || $_("settings.more.picFilter") } }));
 	}
 	const cur = $derived(current());
 	const profile = $derived(library.apis.find((a) => a.id === cur?.imageGen.apiProfileId));
@@ -73,48 +74,48 @@
 	const opts = (list: string[]) => list.map((v) => ({ value: v, label: v }));
 </script>
 
-<Section title="이미지 생성" lead="대화 장면이나 직접 쓴 프롬프트로 그림을 만듦. NovelAI 또는 OpenAI 호환 이미지 API">
+<Section title={$_("settings.imageGenSec.title")} lead={$_("settings.imageGenSec.lead")}>
 	{#if cur}
-		<Group title="기본 API">
-			<Row label="이미지 API" desc="API 키 화면에서 'NovelAI (이미지)' 연결을 만들어 고름">
-				<Select value={cur.imageGen.apiProfileId ?? ""} options={apiOptions("미선택", ["novelai", "openai"])} onchange={(e) => save("imageGen", { apiProfileId: orNull(e.currentTarget.value) })} />
+		<Group title={$_("settings.imageGenSec.apiGroup")}>
+			<Row label={$_("settings.imageGenSec.api")} desc={$_("settings.imageGenSec.apiDesc")}>
+				<Select value={cur.imageGen.apiProfileId ?? ""} options={apiOptions($_("settings.chatSec.notSelected"), ["novelai", "openai"])} onchange={(e) => save("imageGen", { apiProfileId: orNull(e.currentTarget.value) })} />
 			</Row>
-			<Row label="모델">
+			<Row label={$_("settings.imageGenSec.model")}>
 				{#if MODELS.includes(cur.imageGen.model)}
 					<Select value={cur.imageGen.model} options={opts(MODELS)} onchange={(e) => save("imageGen", { model: e.currentTarget.value })} />
 				{:else}
 					<div class="pair">
 						<Input value={cur.imageGen.model} onchange={(e) => save("imageGen", { model: e.currentTarget.value.trim() })} />
-						<Button size="sm" variant="ghost" onclick={() => save("imageGen", { model: MODELS[0] })}>기본값</Button>
+						<Button size="sm" variant="ghost" onclick={() => save("imageGen", { model: MODELS[0] })}>{$_("common.default")}</Button>
 					</div>
 				{/if}
 			</Row>
-			<Row label="크기">
+			<Row label={$_("settings.imageGenSec.size")}>
 				<Select value={cur.imageGen.size} options={opts(SIZES.includes(cur.imageGen.size) ? SIZES : [cur.imageGen.size, ...SIZES])} onchange={(e) => save("imageGen", { size: e.currentTarget.value })} />
 			</Row>
-			<Row label="그림 프롬프트를 쓸 API" desc="메시지로 그릴 때 장면을 프롬프트로 정리하는 채팅 AI (NovelAI면 태그로 씀)">
-				<Select value={cur.imageGen.promptApiProfileId ?? ""} options={chatApiOptions("대화에 고른 API")} onchange={(e) => save("imageGen", { promptApiProfileId: orNull(e.currentTarget.value) })} />
+			<Row label={$_("settings.imageGenSec.promptApi")} desc={$_("settings.imageGenSec.promptApiDesc")}>
+				<Select value={cur.imageGen.promptApiProfileId ?? ""} options={chatApiOptions($_("settings.summarySec.chatApi"))} onchange={(e) => save("imageGen", { promptApiProfileId: orNull(e.currentTarget.value) })} />
 			</Row>
 			{#if cur.imageGen.promptApiProfileId}
-				<Row label="그림 프롬프트 모델" desc="비우면 그 API의 기본 모델">
-					<ModelPicker profile={library.apis.find((a) => a.id === cur.imageGen.promptApiProfileId)} value={cur.imageGen.promptModel || null} onchange={(m) => save("imageGen", { promptModel: m ?? "" })} label="그림 프롬프트 모델" />
+				<Row label={$_("settings.imageGenSec.promptModel")} desc={$_("settings.summarySec.modelDesc")}>
+					<ModelPicker profile={library.apis.find((a) => a.id === cur.imageGen.promptApiProfileId)} value={cur.imageGen.promptModel || null} onchange={(m) => save("imageGen", { promptModel: m ?? "" })} label={$_("settings.imageGenSec.promptModel")} />
 				</Row>
 			{/if}
-			<Row label="AI가 그림 프롬프트 쓰기" desc="끄면 메시지 글을 그대로 프롬프트로 보냄" nowrap>
-				<Switch checked={cur.imageGen.aiPrompt} label="AI 프롬프트" hideLabel onchange={(v) => save("imageGen", { aiPrompt: v })} />
+			<Row label={$_("settings.imageGenSec.aiPrompt")} desc={$_("settings.imageGenSec.aiPromptDesc")} nowrap>
+				<Switch checked={cur.imageGen.aiPrompt} label={$_("settings.imageGenSec.aiPrompt")} hideLabel onchange={(v) => save("imageGen", { aiPrompt: v })} />
 			</Row>
 		</Group>
 
-		<Group title="생성 프리셋">
-			<Row label="네거티브·단계·샘플러 등" desc="AI 그림을 올리면 그 생성 정보로 프리셋을 만듦 (#프리셋 태그로 갤러리에 들어감). 그림을 보며 고치려면 이미지 페이지의 새로 만들기">
+		<Group title={$_("settings.imageGenSec.presetGroup")}>
+			<Row label={$_("settings.imageGenSec.presetRow")} desc={$_("settings.imageGenSec.presetRowDesc")}>
 				<div class="pair">
-					<Button size="sm" onclick={uploadPreset}>{#snippet icon()}<Upload />{/snippet}그림 올리기</Button>
-					<Button size="sm" variant="ghost" onclick={() => nav.go({ page: "images" })}>{#snippet icon()}<Images />{/snippet}새로 만들기</Button>
+					<Button size="sm" onclick={uploadPreset}>{#snippet icon()}<Upload />{/snippet}{$_("settings.imageGenSec.uploadImage")}</Button>
+					<Button size="sm" variant="ghost" onclick={() => nav.go({ page: "images" })}>{#snippet icon()}<Images />{/snippet}{$_("common.create")}</Button>
 				</div>
 			</Row>
 			{#if nai}
-				<Row label="품질 태그" desc="프롬프트 끝에 붙는 NovelAI 품질 태그">
-					<Select value={cur.imageGen.quality ?? "standard"} options={[{ value: "standard", label: "기본" }, { value: "light", label: "가볍게" }, { value: "none", label: "없음" }]} onchange={(e) => save("imageGen", { quality: e.currentTarget.value })} />
+				<Row label={$_("settings.imageGenSec.quality")} desc={$_("settings.imageGenSec.qualityDesc")}>
+					<Select value={cur.imageGen.quality ?? "standard"} options={[{ value: "standard", label: $_("common.default") }, { value: "light", label: $_("settings.imageGenSec.qualityLight") }, { value: "none", label: $_("common.none") }]} onchange={(e) => save("imageGen", { quality: e.currentTarget.value })} />
 				</Row>
 			{/if}
 			<div class="presets">
@@ -124,25 +125,25 @@
 							{@const p = presetFromMeta(img.meta)}
 							<button class="pcard" title={img.prompt} disabled={!Object.keys(p).length} onclick={() => applyPreset(img)}>
 								<img src={fileSrc(img.path)} alt={img.name ?? img.prompt} loading="lazy" />
-								<span class="pname">{img.name || img.prompt || "그림"}</span>
-								<span class="psum">{presetSummary(p) || "생성 정보 없음"}</span>
+								<span class="pname">{img.name || img.prompt || $_("settings.more.picFilter")}</span>
+								<span class="psum">{presetSummary(p) || $_("settings.more2.noGenMeta")}</span>
 							</button>
 						{/each}
 					</div>
 				{:else}
-					<p class="pdesc">아직 없음 — 이미지 페이지에서 그림을 열고 #프리셋을 누름</p>
+					<p class="pdesc">{$_("settings.more2.noPresetsHint")}</p>
 				{/if}
 			</div>
 		</Group>
 
 		{#if plugins.on("imageauto")}
-			<Group title="이미지 자동 생성 프롬프트">
+			<Group title={$_("settings.more2.autoImageGroup")}>
 				<UtilMacroNote presetId={appSetting.value?.selectedPreset ?? null} macro="auto_image" />
-				<PromptSlotEditor key="autoImage" desc="글을 쓰는 AI에게 응답 끝에 <image>그림 프롬프트</image>를 쓰게 하는 지시. 응답이 오면 이 프롬프트로 바로 그림 (응답마다 이미지 요금)" vars={"프리셋 블록에 {{auto_image}}를 넣은 자리에 들어감"} />
+				<PromptSlotEditor key="autoImage" desc={$_("settings.more2.autoImageDesc")} vars={$_("settings.more2.autoImageVars")} />
 			</Group>
 		{/if}
-		<Group title="그림 프롬프트 쓰기">
-			<PromptSlotEditor key={nai ? "imagePromptNai" : "imagePrompt"} desc={nai ? "NovelAI: 장면을 Danbooru 태그로 정리하는 지시" : "장면을 영어 그림 프롬프트로 정리하는 지시"} />
+		<Group title={$_("settings.more2.imagePromptGroup")}>
+			<PromptSlotEditor key={nai ? "imagePromptNai" : "imagePrompt"} desc={nai ? $_("settings.more2.imagePromptNaiDesc") : $_("settings.more2.imagePromptDesc")} />
 		</Group>
 	{/if}
 </Section>

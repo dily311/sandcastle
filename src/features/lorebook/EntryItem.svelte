@@ -1,4 +1,5 @@
 <script lang="ts">
+	import { _ } from "svelte-i18n";
 	// 로어북 항목 하나: 접힌 줄(켜기·제목·키워드) + 펼치면 편집. 고치면 잠시 뒤 저절로 저장
 	import { GripVertical, ChevronDown, ChevronRight, Copy, Trash2 } from "@lucide/svelte";
 	import { Badge, Field, IconButton, Input, Switch, TagInput, Textarea } from "$shared/ui";
@@ -65,63 +66,63 @@
 	async function remove() {
 		// 쓴 내용이 있는 항목은 한 번 묻기
 		if (!isDraft(draft) || draft.content.trim()) {
-			const ok = await confirmAction({ title: "항목 삭제", message: `'${entryTitle(draft)}' 항목을 지움`, confirmLabel: "삭제", danger: true });
+			const ok = await confirmAction({ title: $_("lorebook.entryDeleteTitle"), message: $_("lorebook.entryDeleteMsg", { values: { title: entryTitle(draft) } }), confirmLabel: $_("common.delete"), danger: true });
 			if (!ok) return;
 		}
 		await lorebook.removeEntry(draft);
 	}
-	const status = $derived(saving ? "저장 중…" : failed ? "저장 못 함" : !valid ? "키워드를 넣거나 '항상 넣기'를 켜야 저장됨" : dirty ? "고치는 중" : isDraft(draft) ? "" : "저장됨");
+	const status = $derived(saving ? $_("lorebook.statusSaving") : failed ? $_("lorebook.statusFailed") : !valid ? $_("lorebook.statusInvalid") : dirty ? $_("lorebook.statusEditing") : isDraft(draft) ? "" : $_("lorebook.statusSaved"));
 </script>
 
 <li class="entry" class:open class:off={!draft.enabled} class:draft={isDraft(draft)} class:dragging class:drag-over={dragOver} {...drag}>
 	<div class="head">
 		{#if grip && !open}<span class="grip" aria-hidden="true" {...grip}><GripVertical /></span>{/if}
-		<Switch bind:checked={draft.enabled} label="{entryTitle(draft)} 사용" hideLabel />
+		<Switch bind:checked={draft.enabled} label={$_("lorebook.entryEnableAria", { values: { title: entryTitle(draft) } })} hideLabel />
 		<button class="toggle" aria-expanded={open} onclick={ontoggle}>
 			{#if open}<ChevronDown />{:else}<ChevronRight />{/if}
 			<span class="t">
 				<b>{entryTitle(draft)}</b>
 				{#if !open}
-					<small>{draft.constant ? "항상 넣음" : draft.keys.length ? draft.keys.join(" · ") : "키워드 없음"}{bookName ? ` — ${bookName}` : ""}</small>
+					<small>{draft.constant ? $_("lorebook.alwaysInsert") : draft.keys.length ? draft.keys.join(" · ") : $_("lorebook.noKeywords")}{bookName ? ` — ${bookName}` : ""}</small>
 				{/if}
 			</span>
 		</button>
 		{#if draft.category}<Badge>{draft.category}</Badge>{/if}
-		{#if draft.constant}<Badge tone="accent">상시</Badge>{/if}
-		<span class="prio" title="우선순위">{draft.priority}</span>
-		{#if !open}<IconButton label="{entryTitle(draft)} 삭제" size="sm" onclick={remove}><Trash2 /></IconButton>{/if}
+		{#if draft.constant}<Badge tone="accent">{$_("lorebook.constantBadge")}</Badge>{/if}
+		<span class="prio" title={$_("lorebook.priorityTitle")}>{draft.priority}</span>
+		{#if !open}<IconButton label={$_("lorebook.entryDeleteAria", { values: { title: entryTitle(draft) } })} size="sm" onclick={remove}><Trash2 /></IconButton>{/if}
 	</div>
 	{#if open}
 		<div class="body">
-			<Field label="제목" hint="목록에서 알아보는 이름. AI에게는 보내지 않음">
-				<Input bind:value={draft.comment} placeholder={draft.keys.join(", ") || "예: 엘다리아 왕국"} />
+			<Field label={$_("lorebook.titleField")} hint={$_("lorebook.titleHint")}>
+				<Input bind:value={draft.comment} placeholder={draft.keys.join(", ") || $_("lorebook.titlePlaceholder")} />
 			</Field>
-			<Field label="분류">
-				<Input bind:value={draft.category} placeholder="없음 · 예: 캐릭터" list="wi-categories-{draft.id}" maxlength={30} />
+			<Field label={$_("lorebook.catField")}>
+				<Input bind:value={draft.category} placeholder={$_("lorebook.catPlaceholder")} list="wi-categories-{draft.id}" maxlength={30} />
 				<datalist id="wi-categories-{draft.id}">
 					{#each categoriesOf(lorebook.entries[draft.bookId] ?? []) as c (c)}<option value={c}></option>{/each}
 				</datalist>
 			</Field>
-			<Field label="키워드" hint="대화에 이 낱말이 나오면 내용을 넣음. Enter로 하나씩">
-				<TagInput bind:value={draft.keys} placeholder="키워드 입력" label="키워드 추가" />
+			<Field label={$_("lorebook.keysField")} hint={$_("lorebook.keysHint")}>
+				<TagInput bind:value={draft.keys} placeholder={$_("lorebook.keysPlaceholder")} label={$_("lorebook.keysAddAria")} />
 			</Field>
-			<Field label="보조 키워드" hint="있으면 키워드와 함께 이 중 하나도 나와야 넣음">
-				<TagInput bind:value={draft.secondaryKeys} placeholder="(선택)" label="보조 키워드 추가" />
+			<Field label={$_("lorebook.secKeysField")} hint={$_("lorebook.secKeysHint")}>
+				<TagInput bind:value={draft.secondaryKeys} placeholder={$_("lorebook.secKeysPlaceholder")} label={$_("lorebook.secKeysAddAria")} />
 			</Field>
-			<Field label="내용" hint={"AI에게 보낼 설정. {{char}}, {{user}} 사용 가능"}>
+			<Field label={$_("lorebook.contentField")} hint={$_("lorebook.contentHint")}>
 				<Textarea bind:value={draft.content} rows={4} autosize maxRows={18} />
 			</Field>
 			<div class="opts">
-				<Switch bind:checked={draft.constant} label="항상 넣기" description="키워드와 상관없이 늘 보냄" />
+				<Switch bind:checked={draft.constant} label={$_("lorebook.constantLabel")} description={$_("lorebook.constantDesc")} />
 				<label class="prio-in">
-					<span>우선순위</span>
-					<Input type="number" bind:value={draft.priority} aria-label="우선순위" />
+					<span>{$_("lorebook.priorityTitle")}</span>
+					<Input type="number" bind:value={draft.priority} aria-label={$_("lorebook.priorityTitle")} />
 				</label>
 			</div>
 			<div class="foot">
 				<span class="status" class:warn={!valid || failed}>{status}</span>
-				<IconButton label="복제" size="sm" disabled={isDraft(draft)} onclick={() => lorebook.duplicate(draft)}><Copy /></IconButton>
-				<IconButton label="삭제" size="sm" onclick={remove}><Trash2 /></IconButton>
+				<IconButton label={$_("lorebook.duplicateAria")} size="sm" disabled={isDraft(draft)} onclick={() => lorebook.duplicate(draft)}><Copy /></IconButton>
+				<IconButton label={$_("common.delete")} size="sm" onclick={remove}><Trash2 /></IconButton>
 			</div>
 		</div>
 	{/if}

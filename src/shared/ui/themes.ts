@@ -12,8 +12,9 @@ export interface ThemeColors {
 }
 
 /** 색 편집 화면에 보이는 변수 */
-export const COLOR_VARS: { group: string; items: { name: string; label: string; hint?: string }[] }[] = [
+export const COLOR_VARS: { id: string; group: string; items: { name: string; label: string; hint?: string }[] }[] = [
 	{
+		id: "bg",
 		group: "바탕",
 		items: [
 			{ name: "--bg", label: "앱 바탕", hint: "사이드바·헤더·목록" },
@@ -25,6 +26,7 @@ export const COLOR_VARS: { group: string; items: { name: string; label: string; 
 		],
 	},
 	{
+		id: "border",
 		group: "선",
 		items: [
 			{ name: "--border", label: "테두리" },
@@ -32,6 +34,7 @@ export const COLOR_VARS: { group: string; items: { name: string; label: string; 
 		],
 	},
 	{
+		id: "text",
 		group: "글자",
 		items: [
 			{ name: "--text", label: "본문 글자" },
@@ -40,6 +43,7 @@ export const COLOR_VARS: { group: string; items: { name: string; label: string; 
 		],
 	},
 	{
+		id: "accent",
 		group: "강조",
 		items: [
 			{ name: "--accent", label: "강조색", hint: "비우면 설정에서 고른 강조색" },

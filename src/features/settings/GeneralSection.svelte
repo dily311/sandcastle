@@ -24,9 +24,9 @@
 	}
 	const status = $derived.by(() => {
 		if (!update) return null;
-		if (update.newer) return `새 버전 ${update.latest} 있음 (지금 ${update.current})`;
-		if (!update.latest) return `아직 공개된 릴리스 없음 (지금 ${update.current})`;
-		return `최신 버전 사용 중 (${update.current})`;
+		if (update.newer) return $_("settings.more.updateNewer", { values: { latest: update.latest ?? "", current: update.current } });
+		if (!update.latest) return $_("settings.more.updateNoRelease", { values: { current: update.current } });
+		return $_("settings.more.updateLatest", { values: { current: update.current } });
 	});
 </script>
 

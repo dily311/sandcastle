@@ -19,7 +19,7 @@
 		await appSetting.update({
 			worldInfo: { scanDepth: n, maxRecursionDepth },
 		});
-		toasts.success(`월드인포 스캔 깊이를 ${n}개로 저장함`);
+		toasts.success($_("settings.more2.wiScanSaved", { values: { n } }));
 	}
 
 	async function saveMaxDepth(raw: string) {
@@ -27,7 +27,7 @@
 		await appSetting.update({
 			worldInfo: { scanDepth, maxRecursionDepth: n },
 		});
-		toasts.success(n === 0 ? "월드인포 재귀 스캔을 끔 (최대 깊이 0)" : `월드인포 최대 재귀 깊이를 ${n}로 저장함`);
+		toasts.success(n === 0 ? $_("settings.more2.wiRecursionOff") : $_("settings.more2.wiRecursionSaved", { values: { n } }));
 	}
 </script>
 

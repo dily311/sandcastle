@@ -1,4 +1,5 @@
 <script lang="ts">
+	import { _ } from "svelte-i18n";
 	import { Copy, Download, FolderInput, FolderOutput, MessageSquare, Pencil, Pin, PinOff, Trash2, Upload } from "@lucide/svelte";
 	import { ContextMenu, IconButton, type MenuItem } from "$shared/ui";
 	import { absolute, relative } from "$shared/time";
@@ -32,13 +33,13 @@
 	const items = $derived.by((): MenuItem[] => {
 		const folders = library.foldersOf(conv.characterId).filter((f) => f.id !== conv.folderId);
 		return [
-			{ label: "이름 바꾸기", icon: Pencil, onselect: startEdit },
-			{ label: conv.pinned ? "고정 해제" : "맨 위에 고정", icon: conv.pinned ? PinOff : Pin, onselect: () => library.togglePin(conv.id) },
-			...folders.map((f, i) => ({ label: `'${f.name}'(으)로 이동`, icon: FolderInput, separator: i === 0, onselect: () => library.move(conv.id, f.id) })),
-			...(conv.folderId ? [{ label: "폴더에서 빼기", icon: FolderOutput, separator: folders.length === 0, onselect: () => library.move(conv.id, null) }] : []),
-			{ label: "복제", icon: Copy, separator: true, onselect: () => library.duplicate(conv.id) },
-			{ label: "내보내기…", icon: Download, onselect: () => convActions.exportMenu(conv) },
-			{ label: "삭제", icon: Trash2, danger: true, onselect: () => convActions.remove(conv) },
+			{ label: $_("convCard.rename"), icon: Pencil, onselect: startEdit },
+			{ label: conv.pinned ? $_("convCard.unpin") : $_("convCard.pinTop"), icon: conv.pinned ? PinOff : Pin, onselect: () => library.togglePin(conv.id) },
+			...folders.map((f, i) => ({ label: $_("convCard.moveToFolder", { values: { name: f.name } }), icon: FolderInput, separator: i === 0, onselect: () => library.move(conv.id, f.id) })),
+			...(conv.folderId ? [{ label: $_("convCard.removeFolder"), icon: FolderOutput, separator: folders.length === 0, onselect: () => library.move(conv.id, null) }] : []),
+			{ label: $_("convCard.duplicate"), icon: Copy, separator: true, onselect: () => library.duplicate(conv.id) },
+			{ label: $_("convCard.exportMenu"), icon: Download, onselect: () => convActions.exportMenu(conv) },
+			{ label: $_("common.delete"), icon: Trash2, danger: true, onselect: () => convActions.remove(conv) },
 		];
 	});
 </script>
@@ -60,7 +61,7 @@
 			<input
 				class="rename"
 				bind:value={draft}
-				aria-label="대화 이름"
+				aria-label={$_("convCard.nameAria")}
 				autofocus
 				onkeydown={(e) => {
 					if (e.key === "Enter") commit();
@@ -69,11 +70,11 @@
 				onblur={commit}
 			/>
 		{:else}
-			<button class="title" onclick={onopen} title={conv.title}>{conv.title || "제목 없음"}</button>
+			<button class="title" onclick={onopen} title={conv.title}>{conv.title || $_("convCard.untitled")}</button>
 		{/if}
 		<div class="quick">
-			<IconButton label="이름 바꾸기" size="sm" onclick={startEdit}><Pencil /></IconButton>
-			<IconButton label={conv.pinned ? "고정 해제" : "맨 위에 고정"} size="sm" active={conv.pinned} onclick={() => library.togglePin(conv.id)}>
+			<IconButton label={$_("convCard.rename")} size="sm" onclick={startEdit}><Pencil /></IconButton>
+			<IconButton label={conv.pinned ? $_("convCard.unpin") : $_("convCard.pinTop")} size="sm" active={conv.pinned} onclick={() => library.togglePin(conv.id)}>
 				<Pin class={conv.pinned ? "pinned" : ""} />
 			</IconButton>
 		</div>
@@ -82,16 +83,16 @@
 		<span class="meta">
 			<time title={absolute(conv.updatedAt)}>{relative(conv.updatedAt)}</time>
 			<span class="count"><MessageSquare />{conv.messageCount}</span>
-			{#if imported}<span class="count" title="SillyTavern에서 가져옴"><Upload /></span>{/if}
+			{#if imported}<span class="count" title={$_("convCard.importedStTitle")}><Upload /></span>{/if}
 		</span>
 		<div class="tools">
-			<IconButton label="복제" size="sm" onclick={() => library.duplicate(conv.id)}><Copy /></IconButton>
-			<IconButton label="내보내기 (형식 고르기)" size="sm" onclick={() => convActions.exportMenu(conv)}><Download /></IconButton>
-			<IconButton label="삭제" size="sm" onclick={() => convActions.remove(conv)}><Trash2 /></IconButton>
+			<IconButton label={$_("convCard.duplicate")} size="sm" onclick={() => library.duplicate(conv.id)}><Copy /></IconButton>
+			<IconButton label={$_("convCard.exportTooltip")} size="sm" onclick={() => convActions.exportMenu(conv)}><Download /></IconButton>
+			<IconButton label={$_("common.delete")} size="sm" onclick={() => convActions.remove(conv)}><Trash2 /></IconButton>
 		</div>
 	</div>
 </article>
-<ContextMenu at={menu} {items} label="대화 메뉴" onclose={() => (menu = null)} />
+<ContextMenu at={menu} {items} label={$_("convCard.menuAria")} onclose={() => (menu = null)} />
 
 <style>
 	.card {

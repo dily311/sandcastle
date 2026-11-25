@@ -64,7 +64,8 @@
 		const out = price?.output ?? 0;
 		if (!price || out <= 0) return "";
 		const n = (limit / out) * 1_000_000;
-		return `출력만 쓰면 약 ${n >= 1_000_000 ? `${(n / 1_000_000).toFixed(1)}M` : `${Math.round(n / 10_000) / 100}M`} 토큰`;
+		const m = n >= 1_000_000 ? (n / 1_000_000).toFixed(1) : String(Math.round(n / 10_000) / 100);
+		return $_("settings.budgetDetail.tokensHint", { values: { m } });
 	}
 
 	// ---- 구독형 공급자의 잔여 (누를 때만 읽음) ----
@@ -75,7 +76,7 @@
 		try {
 			quotas[p.id] = await call(commands.getProviderQuota(p.id), src);
 		} catch {
-			toasts.error("잔여를 읽지 못함");
+			toasts.error($_("settings.budgetDetail.quotaLoadError"));
 		} finally {
 			loadingQuota = null;
 		}
@@ -99,10 +100,10 @@
 						{#each quotas[p.id] as l (l.label)}<dt>{l.label}</dt><dd>{l.value}</dd>{/each}
 					</dl>
 				{:else}
-					<p class="none">구독형이라 한도 대신 계정에 남은 양을 보여줌</p>
+					<p class="none">{$_("settings.budgetDetail.subscriptionHint")}</p>
 				{/if}
 				<Button size="sm" variant="ghost" disabled={loadingQuota === p.id} onclick={() => loadQuota(p)}>
-					{#snippet icon()}{#if loadingQuota === p.id}<Spinner />{:else}<RefreshCw />{/if}{/snippet}잔여 확인
+					{#snippet icon()}{#if loadingQuota === p.id}<Spinner />{:else}<RefreshCw />{/if}{/snippet}{$_("settings.budgetDetail.checkQuota")}
 				</Button>
 			</div>
 		{:else}
@@ -121,26 +122,26 @@
 			</div>
 			{#if hasLimit}
 				{#if prices[p.model]}
-					<p class="hint">{tokensHint(prices[p.model], curVal)}{prices[p.model]?.builtin ? " · 앱의 기본 단가 기준(추정)" : " · 내가 적은 단가 기준"}</p>
+					<p class="hint">{tokensHint(prices[p.model], curVal)}{prices[p.model]?.builtin ? $_("settings.budgetDetail.builtinPrice") : $_("settings.budgetDetail.customPrice")}</p>
 				{:else if p.model in prices}
-					<p class="warn">이 모델은 단가를 몰라 금액을 셀 수 없음. 아래 "단가표"에 적어야 한도가 걸림</p>
+					<p class="warn">{$_("settings.budgetDetail.noPriceWarn")}</p>
 				{/if}
 			{/if}
 			{#if o?.limit.legacyMonthlyTokens}
-				<p class="warn">예전 한 달 토큰 한도({o.limit.legacyMonthlyTokens.toLocaleString()})는 더 이상 쓰지 않음. 위에서 금액 한도를 정하면 지워짐</p>
+				<p class="warn">{$_("settings.budgetDetail.legacyLimitWarn", { values: { tokens: o.limit.legacyMonthlyTokens.toLocaleString() } })}</p>
 			{/if}
 			{#if o?.meter}
 				{@const m = { usedUsd: o.meter.usedUsd ?? 0, limitUsd: o.meter.limitUsd ?? 0, remainingUsd: o.meter.remainingUsd ?? 0, unpricedCalls: o.meter.unpricedCalls }}
 				<div class="meter">
-					<span class="bar {tone(m.usedUsd, m.limitUsd)}" role="meter" aria-label="이번 달 사용 금액" aria-valuemin={0} aria-valuemax={m.limitUsd} aria-valuenow={Math.min(m.usedUsd, m.limitUsd)}><i style:width="{pct(m.usedUsd, m.limitUsd)}%"></i></span>
-					<span class="num">{usd(m.usedUsd)} / {usd(m.limitUsd)}{m.usedUsd >= m.limitUsd ? " · 넘음" : ` · 남은 ${usd(m.remainingUsd)}`}</span>
+					<span class="bar {tone(m.usedUsd, m.limitUsd)}" role="meter" aria-label={$_("settings.budgetDetail.meterAria")} aria-valuemin={0} aria-valuemax={m.limitUsd} aria-valuenow={Math.min(m.usedUsd, m.limitUsd)}><i style:width="{pct(m.usedUsd, m.limitUsd)}%"></i></span>
+					<span class="num">{usd(m.usedUsd)} / {usd(m.limitUsd)}{m.usedUsd >= m.limitUsd ? $_("settings.budgetDetail.meterOver") : $_("settings.budgetDetail.meterRemaining", { values: { amount: usd(m.remainingUsd) } })}</span>
 				</div>
-				{#if m.unpricedCalls}<p class="warn">단가를 몰라 금액에 못 넣은 호출 {m.unpricedCalls}건이 있음</p>{/if}
+				{#if m.unpricedCalls}<p class="warn">{$_("settings.budgetDetail.unpricedWarn", { values: { count: m.unpricedCalls } })}</p>{/if}
 			{/if}
 		{/if}
 	</div>
 {:else}
-	<p class="none">API 프로필이 없음</p>
+	<p class="none">{$_("settings.budgetDetail.noProfiles")}</p>
 {/each}
 
 <style>

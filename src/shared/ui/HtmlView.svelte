@@ -4,6 +4,7 @@
 	// - sandbox="allow-scripts"만: 불투명 origin이라 앱 화면·저장소·Tauri에 닿지 못한다
 	// - 높이는 iframe이 postMessage로 알려준다 (최대 MAX_HEIGHT, 넘치면 iframe 안에서 스크롤)
 	import { ChevronDown, Code, Eye, RotateCw } from "@lucide/svelte";
+	import { _ } from "svelte-i18n";
 	import { call, commands } from "$shared/ipc/client";
 	import { plugins } from "$shared/stores/plugins.svelte";
 	import { theme } from "$app/theme.svelte";
@@ -49,14 +50,14 @@
 		const clicked = document.activeElement === frame;
 		// 슬래시(triggerSlash, 5-E-20-6-12): /gen·/run으로 요금이 날 수 있어 누른 뒤에만, 슬래시 코어 플러그인이 켜졌을 때만
 		if (req.action === "slash") {
-			if (!plugins.on("slash")) return void toasts.info("슬래시 커맨드가 꺼져 있음 (코어 플러그인)");
-			if (!clicked) return void toasts.info("HTML 블록을 눌러야 슬래시 커맨드를 실행함");
-			if (!dispatchAction(req)) toasts.info("대화 화면에서만 쓸 수 있음");
+			if (!plugins.on("slash")) return void toasts.info($_("uiPolish.htmlSlashDisabled"));
+			if (!clicked) return void toasts.info($_("uiPolish.htmlSlashNeedClick"));
+			if (!dispatchAction(req)) toasts.info($_("uiPolish.htmlOnlyInChat"));
 			return;
 		}
 		const action = req.action === "send" && !clicked ? "fill" : req.action;
-		if (!dispatchAction({ action, text: req.text })) return void toasts.info("대화 화면에서만 쓸 수 있음");
-		if (req.action === "send" && action === "fill") toasts.info("입력칸에 넣음 · 직접 보내기");
+		if (!dispatchAction({ action, text: req.text })) return void toasts.info($_("uiPolish.htmlOnlyInChat"));
+		if (req.action === "send" && action === "fill") toasts.info($_("uiPolish.htmlFilled"));
 	}
 </script>
 
@@ -64,12 +65,12 @@
 
 <figure class="html">
 	<div class="bar" class:folded>
-		<button type="button" class="fold" title={folded ? "펼치기" : "접기"} aria-label={folded ? "HTML 펼치기" : "HTML 접기"} aria-expanded={!folded} onclick={(e) => { e.stopPropagation(); folded = !folded; }}>
+		<button type="button" class="fold" title={folded ? $_("uiPolish.htmlExpand") : $_("uiPolish.htmlCollapse")} aria-label={folded ? $_("uiPolish.htmlExpandAria") : $_("uiPolish.htmlCollapseAria")} aria-expanded={!folded} onclick={(e) => { e.stopPropagation(); folded = !folded; }}>
 			<ChevronDown class={folded ? "rot" : ""} />
-			<span>HTML{#if !enabled} · 실행 꺼짐 (코어 플러그인){:else if !scripts} · 스크립트 없이{/if}</span>
+			<span>HTML{#if !enabled}{$_("uiPolish.htmlDisabled")}{:else if !scripts}{$_("uiPolish.htmlNoScripts")}{/if}</span>
 		</button>
-		<button type="button" title="다시 실행" aria-label="다시 실행" onclick={() => reloadKey++}><RotateCw /></button>
-		<button type="button" title={showCode ? "결과 보기" : "코드 보기"} aria-label={showCode ? "결과 보기" : "코드 보기"} aria-pressed={showCode} onclick={() => (showCode = !showCode)}>
+		<button type="button" title={$_("uiPolish.htmlRerun")} aria-label={$_("uiPolish.htmlRerun")} onclick={() => reloadKey++}><RotateCw /></button>
+		<button type="button" title={showCode ? $_("uiPolish.htmlShowResult") : $_("uiPolish.htmlShowCode")} aria-label={showCode ? $_("uiPolish.htmlShowResult") : $_("uiPolish.htmlShowCode")} aria-pressed={showCode} onclick={() => (showCode = !showCode)}>
 			{#if showCode}<Eye />{:else}<Code />{/if}
 		</button>
 	</div>
@@ -79,7 +80,7 @@
 		<pre><code>{code}</code></pre>
 	{:else if src}
 		{#key reloadKey}
-			<iframe bind:this={frame} {src} title="HTML 미리보기" sandbox="allow-scripts" style:height="{height}px" loading="lazy" referrerpolicy="no-referrer"></iframe>
+			<iframe bind:this={frame} {src} title={$_("uiPolish.htmlPreviewTitle")} sandbox="allow-scripts" style:height="{height}px" loading="lazy" referrerpolicy="no-referrer"></iframe>
 		{/key}
 	{/if}
 </figure>

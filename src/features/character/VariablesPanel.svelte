@@ -1,4 +1,5 @@
 <script lang="ts">
+	import { _ } from "svelte-i18n";
 	// 변수 보기·고치기 (5-F-4-1, ADR-029): 이 대화 변수(meta.variables — SillyTavern chat 변수와 같은 범위)와
 	// 전역 변수(플러그인 설정 quickReply.globals — /setglobalvar). 프롬프트에서는 {{getvar::이름}}·{{getglobalvar::이름}}
 	import UtilMacroNote from "./UtilMacroNote.svelte";
@@ -68,12 +69,12 @@
 	}
 	async function saveGlobal(next: Vars) {
 		const cur = pluginSetting.value ?? (await pluginSetting.load(), pluginSetting.value);
-		if (!cur) throw new Error("설정을 읽지 못해 전역 변수를 저장하지 않음");
+		if (!cur) throw new Error($_("varsPanel.saveGlobalErr"));
 		await pluginSetting.save({ ...cur, quickReply: { ...cur.quickReply, globals: next } });
 	}
 	const groups = $derived([
-		{ id: "conv", title: "이 대화", macro: "getvar", vars: convVars, rows: varRows(convVars, defs), save: saveConv },
-		{ id: "global", title: "전역", macro: "getglobalvar", vars: globalVars, rows: varRows(globalVars), save: saveGlobal },
+		{ id: "conv", title: $_("varsPanel.thisConv"), macro: "getvar", vars: convVars, rows: varRows(convVars, defs), save: saveConv },
+		{ id: "global", title: $_("varsPanel.global"), macro: "getglobalvar", vars: globalVars, rows: varRows(globalVars), save: saveGlobal },
 	]);
 
 	/** 더하기 칸 (화면 상태) */
@@ -95,7 +96,7 @@
 		const d = draft[g.id];
 		const name = d.name.trim().slice(0, MAX_NAME);
 		if (!name) return;
-		if (name in g.vars && !(await confirmAction({ title: "변수 덮어쓰기", message: `'${name}'이(가) 이미 있음. 값을 바꿈`, confirmLabel: "바꾸기" }))) return;
+		if (name in g.vars && !(await confirmAction({ title: $_("varsPanel.overwriteTitle"), message: $_("varsPanel.overwriteMsg", { values: { name } }), confirmLabel: $_("varsPanel.overwriteBtn") }))) return;
 		try {
 			await g.save({ ...g.vars, [name]: d.value.slice(0, MAX_VALUE) });
 			draft[g.id] = { name: "", value: "" };
@@ -104,14 +105,15 @@
 		}
 	}
 	async function remove(g: (typeof groups)[number], name: string) {
-		if (!(await confirmAction({ title: "변수 지우기", message: `${g.title} 변수 '${name}'을(를) 지움. 되돌릴 수 없음`, confirmLabel: "지우기", danger: true }))) return;
+		if (!(await confirmAction({ title: $_("varsPanel.deleteTitle"), message: $_("varsPanel.deleteMsg", { values: { group: g.title, name } }), confirmLabel: $_("varsPanel.deleteBtn"), danger: true }))) return;
 		const { [name]: _gone, ...rest } = g.vars;
 		void _gone;
 		await g.save(rest);
 	}
 	async function copyMacro(macro: string, name: string) {
-		await navigator.clipboard.writeText(`{{${macro}::${name}}}`).then(
-			() => toasts.info(`{{${macro}::${name}}} 복사함`),
+		const text = `{{${macro}::${name}}}`;
+		await navigator.clipboard.writeText(text).then(
+			() => toasts.info($_("varsPanel.copiedMacro", { values: { macro: text } })),
 			() => {},
 		);
 	}
@@ -121,8 +123,8 @@
 	<!-- AI가 변수를 읽고 바꾸기 (5-F-4-4): 기기마다, 기본 꺼짐. 요금이 늘어 부연 설명을 둔다 -->
 	<Switch
 		checked={!!pluginSetting.value?.status?.aiVars}
-		label="AI가 변수 읽고 바꾸기"
-		description="켜면 응답마다 변수 규칙·지금 값이 프롬프트에 들어가 토큰이 늚. 캐릭터 편집에서 'AI가 읽음·바꿈'을 켠 변수만"
+		label={$_("varsPanel.aiVarsLabel")}
+		description={$_("varsPanel.aiVarsDesc")}
 		onchange={(v) => {
 			const cur = pluginSetting.value;
 			if (cur) void pluginSetting.save({ ...cur, status: { ...cur.status, aiVars: v } });
@@ -134,32 +136,32 @@
 			<h4>
 				{g.title} <span class="faint">{g.rows.length}</span>
 				{#if g.id === "conv" && conv.characterId}
-					<IconButton label="이 캐릭터의 변수 정의" size="sm" onclick={() => openDefs()}><SlidersHorizontal /></IconButton>
+					<IconButton label={$_("varsPanel.charDefsAria")} size="sm" onclick={() => openDefs()}><SlidersHorizontal /></IconButton>
 				{/if}
 			</h4>
 			{#if g.rows.length}
 				<ul>
 					{#each g.rows as row (row.name)}
 						<li class:defined={!!row.def}>
-							<button type="button" class="name" title={[varTitle(row.def), `누르면 {{${g.macro}::${row.name}}} 복사`].filter(Boolean).join("\n")} onclick={() => copyMacro(g.macro, row.name)}>{row.name}</button>
+							<button type="button" class="name" title={[varTitle(row.def), $_("varsPanel.clickToCopy", { values: { macro: `{{${g.macro}::${row.name}}}` } })].filter(Boolean).join("\n")} onclick={() => copyMacro(g.macro, row.name)}>{row.name}</button>
 							{#if row.def?.kind === "boolean"}
-								<Switch checked={(row.value ?? row.def.defaultValue) === "true"} label="{g.title} 변수 {row.name}" hideLabel onchange={(v) => setValue(g, row, String(v))} />
+								<Switch checked={(row.value ?? row.def.defaultValue) === "true"} label={$_("varsPanel.varAria", { values: { group: g.title, name: row.name } })} hideLabel onchange={(v) => setValue(g, row, String(v))} />
 							{:else}
 								<Input
 									value={row.value ?? ""}
 									placeholder={row.def?.defaultValue ?? ""}
 									inputmode={row.def?.kind === "number" ? "decimal" : undefined}
-									aria-label="{g.title} 변수 {row.name}의 값"
+									aria-label={$_("varsPanel.varValAria", { values: { group: g.title, name: row.name } })}
 									maxlength={MAX_VALUE}
 									onchange={(e) => setValue(g, row, e.currentTarget.value, e.currentTarget)}
 								/>
 							{/if}
 							<span class="row-tools">
 								{#if g.id === "conv" && !row.def && conv.characterId}
-									<IconButton label="{row.name}을(를) 정의로 (종류·범위·AI 읽기/쓰기)" size="sm" onclick={() => openDefs(row.name)}><ListPlus /></IconButton>
+									<IconButton label={$_("varsPanel.promoteDefAria", { values: { name: row.name } })} size="sm" onclick={() => openDefs(row.name)}><ListPlus /></IconButton>
 								{/if}
 								{#if row.value !== undefined}
-									<IconButton label="{row.name} 지우기" size="sm" onclick={() => remove(g, row.name)}><Trash2 /></IconButton>
+									<IconButton label={$_("varsPanel.removeVarAria", { values: { name: row.name } })} size="sm" onclick={() => remove(g, row.name)}><Trash2 /></IconButton>
 								{/if}
 							</span>
 						</li>
@@ -173,19 +175,19 @@
 					void add(g);
 				}}
 			>
-				<Input bind:value={draft[g.id].name} placeholder="이름" aria-label="{g.title} 새 변수 이름" maxlength={MAX_NAME} />
-				<Input bind:value={draft[g.id].value} placeholder="값" aria-label="{g.title} 새 변수 값" maxlength={MAX_VALUE} />
-				<IconButton label="{g.title} 변수 더하기" size="sm" type="submit" disabled={!draft[g.id].name.trim()}><Plus /></IconButton>
+				<Input bind:value={draft[g.id].name} placeholder={$_("varsPanel.namePlaceholder")} aria-label={$_("varsPanel.newNameAria", { values: { group: g.title } })} maxlength={MAX_NAME} />
+				<Input bind:value={draft[g.id].value} placeholder={$_("varsPanel.valPlaceholder")} aria-label={$_("varsPanel.newValAria", { values: { group: g.title } })} maxlength={MAX_VALUE} />
+				<IconButton label={$_("varsPanel.addVarAria", { values: { group: g.title } })} size="sm" type="submit" disabled={!draft[g.id].name.trim()}><Plus /></IconButton>
 			</form>
 		</section>
 	{/each}
 </div>
 
-<Dialog bind:open={defsOpen} title="이 캐릭터의 변수 정의" size="lg">
+<Dialog bind:open={defsOpen} title={$_("varsPanel.charDefsAria")} size="lg">
 	<VarDefsEditor bind:defs={draftDefs} />
 	{#snippet footer()}
-		<Button variant="ghost" onclick={() => (defsOpen = false)}>취소</Button>
-		<Button variant="primary" loading={savingDefs} onclick={saveDefs}>저장</Button>
+		<Button variant="ghost" onclick={() => (defsOpen = false)}>{$_("common.cancel")}</Button>
+		<Button variant="primary" loading={savingDefs} onclick={saveDefs}>{$_("common.save")}</Button>
 	{/snippet}
 </Dialog>
 

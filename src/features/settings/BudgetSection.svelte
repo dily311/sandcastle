@@ -15,7 +15,16 @@
 	import BudgetLimits from "./BudgetLimits.svelte";
 
 	const src = { source: "budget" };
-	const KIND: Record<string, string> = { chat: "텍스트", tts: "음성", image: "이미지", embedding: "임베딩" };
+	const kindLabel = (k: string) =>
+		k === "chat"
+			? $_("settings.budgetDetail.kindChat")
+			: k === "tts"
+				? $_("settings.budgetDetail.kindTts")
+				: k === "image"
+					? $_("settings.budgetDetail.kindImage")
+					: k === "embedding"
+						? $_("settings.budgetDetail.kindEmbedding")
+						: k;
 
 	let usage = $state<Usage[]>([]);
 	let profiles = $state<ApiProfiles[]>([]);
@@ -39,9 +48,9 @@
 
 	function amount(u: { inputTokens: number; outputTokens: number; characters: number; images: number }) {
 		const parts: string[] = [];
-		if (u.inputTokens || u.outputTokens) parts.push(`입력 ${n(u.inputTokens)} · 출력 ${n(u.outputTokens)} 토큰`);
-		if (u.characters) parts.push(`${n(u.characters)}자`);
-		if (u.images) parts.push(`그림 ${n(u.images)}장`);
+		if (u.inputTokens || u.outputTokens) parts.push($_("settings.activityDetail.tokensSummary", { values: { input: n(u.inputTokens), output: n(u.outputTokens) } }));
+		if (u.characters) parts.push($_("settings.activityDetail.charsUnit", { values: { count: n(u.characters) } }));
+		if (u.images) parts.push($_("settings.activityDetail.imagesUnit", { values: { count: n(u.images) } }));
 		return parts.join(" · ");
 	}
 
@@ -54,7 +63,7 @@
 				call(commands.listBudgetStatus(), { ...src, silent: true }),
 			]);
 		} catch {
-			toasts.error("예산·사용량을 불러오지 못함");
+			toasts.error($_("settings.budgetDetail.loadError"));
 		} finally {
 			loading = false;
 		}
@@ -87,14 +96,14 @@
 
 	async function clearUsage() {
 		const ok = await confirmAction({
-			title: "사용량 기록 비우기",
-			message: "API별 사용량 합계를 지움. 실행 내역은 남지만 작업별 토큰 수는 사라짐. 금액 한도를 건 프로필의 이번 달 글 호출 기록은 한도 계산 때문에 남김",
+			title: $_("settings.budgetDetail.clearTitle"),
+			message: $_("settings.budgetDetail.clearMsg"),
 			danger: true,
-			confirmLabel: "비우기",
+			confirmLabel: $_("settings.budgetDetail.clearBtn"),
 		});
 		if (!ok) return;
 		await call(commands.clearUsage(), src);
-		toasts.success("사용량 기록을 비움");
+		toasts.success($_("settings.budgetDetail.clearedToast"));
 		void load();
 	}
 </script>
@@ -112,7 +121,7 @@
 		{#snippet aside()}
 			<div class="aside">
 				<Segmented
-					label="기간"
+					label={$_("settings.budgetDetail.periodAria")}
 					bind:value={period}
 					options={[
 						{ value: "day", label: $_("settings.budget.today") },
@@ -124,19 +133,19 @@
 				<Button size="sm" variant="ghost" disabled={!usage.length} onclick={clearUsage}>{#snippet icon()}<Trash2 />{/snippet}{$_("settings.budget.clear")}</Button>
 			</div>
 		{/snippet}
-		{#if costTotals.length}<p class="total">추정 금액 {costTotals.map(([c, v]) => money(v, c)).join(" · ")} <span class="muted">(단가표 기준, 실제 청구와 다를 수 있음)</span></p>{/if}
+		{#if costTotals.length}<p class="total">{$_("settings.budgetDetail.estimatedTotal", { values: { total: costTotals.map(([c, v]) => money(v, c)).join(" · ") } })} <span class="muted">{$_("settings.budgetDetail.estimatedTotalHint")}</span></p>{/if}
 		{#each usage as u (`${u.apiProfileId}:${u.kind}:${u.model}`)}
 			<div class="item">
 				<div class="main">
-					<span class="label">{u.profileName ?? (u.apiProfileId ? "지운 프로필" : "알 수 없음")}</span>
-					<Badge>{KIND[u.kind] ?? u.kind}</Badge>
+					<span class="label">{u.profileName ?? (u.apiProfileId ? $_("settings.budgetDetail.deletedProfile") : $_("settings.budgetDetail.unknownProfile"))}</span>
+					<Badge>{kindLabel(u.kind)}</Badge>
 					{#if u.model}<code class="muted">{u.model}</code>{/if}
-					<span class="muted">{n(u.calls)}회{u.failed ? ` (실패 ${n(u.failed)})` : ""}</span>
+					<span class="muted">{$_("settings.budgetDetail.callsCount", { values: { count: n(u.calls) } })}{u.failed ? $_("settings.budgetDetail.callsFailed", { values: { count: n(u.failed) } }) : ""}</span>
 				</div>
 				<div class="amount">
 					{amount(u) || "—"}
-					{#if u.kind === "chat" && u.estimatedCalls}<span class="muted" title="공급자가 사용량을 알려주지 않은 호출은 앱이 글자 수로 추정함">· 추정 {n(u.estimatedCalls)}회</span>{/if}
-					{#if u.estimatedCost != null}<b class="cost" title="단가표로 계산한 추정 금액">≈ {money(u.estimatedCost, u.currency ?? "$")}</b>{/if}
+					{#if u.kind === "chat" && u.estimatedCalls}<span class="muted" title={$_("settings.budgetDetail.estimatedCallsTitle")}>{$_("settings.budgetDetail.estimatedCalls", { values: { count: n(u.estimatedCalls) } })}</span>{/if}
+					{#if u.estimatedCost != null}<b class="cost" title={$_("settings.budgetDetail.estimatedCostTitle")}>≈ {money(u.estimatedCost, u.currency ?? "$")}</b>{/if}
 				</div>
 			</div>
 		{:else}

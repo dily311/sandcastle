@@ -1,4 +1,5 @@
 <script lang="ts">
+	import { _ } from "svelte-i18n";
 	// 폰 카메라 (5-E-19-2): 실제 카메라처럼 — 위에 프리셋 이름 줄, 가운데 그림, 아래 장면 글과 촬영 버튼.
 	// 프리셋의 세부 값(모델·크기·프롬프트)은 설정 > 이미지 생성에서. 찍을 때만 그림 API를 부른다(유료).
 	import { onMount } from "svelte";
@@ -36,7 +37,7 @@
 
 	const saved = $derived((pluginSetting.value?.imageGen ?? null) as ImageGenSetting | null);
 	const profile = $derived(library.apis.find((a) => a.id === saved?.apiProfileId));
-	const modes = $derived([{ id: "", name: "기본" }, ...presetImages.map((i) => ({ id: i.path, name: i.name || i.prompt.slice(0, 12) || "프리셋" }))]);
+	const modes = $derived([{ id: "", name: $_("phoneExtra.camDefault") }, ...presetImages.map((i) => ({ id: i.path, name: i.name || i.prompt.slice(0, 12) || $_("phoneExtra.camPreset") }))]);
 	/** 고른 모드의 프리셋 (기본이면 null → 설정 값 그대로) */
 	const preset = $derived.by(() => {
 		const img = mode ? presetImages.find((i) => i.path === mode) : null;
@@ -59,39 +60,39 @@
 
 <div class="cam">
 	<div class="top">
-		<button class="icon" aria-label="뒤로" onclick={onback}><ChevronLeft /></button>
-		<div class="modes" role="radiogroup" aria-label="프리셋">
+		<button class="icon" aria-label={$_("phoneExtra.backAria")} onclick={onback}><ChevronLeft /></button>
+		<div class="modes" role="radiogroup" aria-label={$_("phoneExtra.camPreset")}>
 			{#each modes as m (m.id)}
 				<button role="radio" aria-checked={mode === m.id} class:on={mode === m.id} onclick={() => (mode = m.id)}>{m.name}</button>
 			{/each}
 		</div>
-		<button class="icon" aria-label="프리셋 설정" onclick={() => nav.go({ page: "settings", tab: "imagegen" })}><Settings /></button>
+		<button class="icon" aria-label={$_("phoneExtra.camPresetSettingsAria")} onclick={() => nav.go({ page: "settings", tab: "imagegen" })}><Settings /></button>
 	</div>
 
 	<div class="finder">
 		{#if shooting}
-			<div class="msg"><Spinner /><span>찍는 중…</span></div>
+			<div class="msg"><Spinner /><span>{$_("phoneExtra.camShooting")}</span></div>
 		{:else if current}
 			<img src={fileSrc(current.path)} alt={current.prompt} />
 		{:else if !profile}
-			<div class="msg">이미지 API 없음<button class="link" onclick={() => nav.go({ page: "settings", tab: "imagegen" })}>설정에서 고르기</button></div>
+			<div class="msg">{$_("phoneExtra.camNoApi")}<button class="link" onclick={() => nav.go({ page: "settings", tab: "imagegen" })}>{$_("phoneExtra.camPickApi")}</button></div>
 		{/if}
 	</div>
 
 	<div class="scene">
-		<div class="how" role="radiogroup" aria-label="장면 글">
-			<button role="radio" aria-checked={!ghost} class:on={!ghost} onclick={() => (ghost = false)}>직접</button>
-			<button role="radio" aria-checked={ghost} class:on={ghost} onclick={() => (ghost = true)}>대필</button>
+		<div class="how" role="radiogroup" aria-label={$_("phoneExtra.camSceneModeAria")}>
+			<button role="radio" aria-checked={!ghost} class:on={!ghost} onclick={() => (ghost = false)}>{$_("phoneExtra.camDirect")}</button>
+			<button role="radio" aria-checked={ghost} class:on={ghost} onclick={() => (ghost = true)}>{$_("phoneExtra.camGhost")}</button>
 		</div>
-		<textarea bind:value={prompt} rows="2" aria-label="장면" placeholder={ghost ? "찍을 장면을 글로 (AI가 그림 프롬프트로 바꿈)" : "그림 프롬프트 (1girl, forest, night…)"}></textarea>
-		{#if ghost}<small>대필은 AI 호출이 한 번 더 듦</small>{/if}
+		<textarea bind:value={prompt} rows="2" aria-label={$_("phoneExtra.camSceneAria")} placeholder={ghost ? $_("phoneExtra.camGhostPlaceholder") : $_("phoneExtra.camDirectPlaceholder")}></textarea>
+		{#if ghost}<small>{$_("phoneExtra.camGhostNote")}</small>{/if}
 	</div>
 
 	<div class="controls">
-		<button class="last" aria-label="사진 보기" onclick={onalbum}>
+		<button class="last" aria-label={$_("phoneExtra.camViewPhotosAria")} onclick={onalbum}>
 			{#if shots[0]}<img src={fileSrc(shots[0].path)} alt="" />{/if}
 		</button>
-		<button class="shutter" aria-label="찍기" disabled={!ready} onclick={shoot}><span></span></button>
+		<button class="shutter" aria-label={$_("phoneExtra.camShootAria")} disabled={!ready} onclick={shoot}><span></span></button>
 		<span class="last ghost-slot" aria-hidden="true"></span>
 	</div>
 </div>

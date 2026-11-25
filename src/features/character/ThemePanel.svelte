@@ -1,5 +1,6 @@
 <script lang="ts">
 	import { onMount } from "svelte";
+	import { _ } from "svelte-i18n";
 	import { ExternalLink, Monitor, Moon, Sun } from "@lucide/svelte";
 	import type { CssThemeMeta_Serialize as ThemeMeta } from "$ipc/bindings";
 	import { nav } from "$app/nav.svelte";
@@ -49,21 +50,21 @@
 	}
 
 	async function uploadBackgrounds() {
-		const paths = await pickFiles([{ name: "이미지", extensions: ["png", "jpg", "jpeg", "webp", "gif", "avif"] }], true);
+		const paths = await pickFiles([{ name: $_("settings.more.imgFilter"), extensions: ["png", "jpg", "jpeg", "webp", "gif", "avif"] }], true);
 		await theme.addBackgrounds(paths, true);
 	}
 </script>
 
 <div class="panel-body theme-panel">
 	<section>
-		<h4>화면 모드</h4>
+		<h4>{$_("settings.themeSec.mode")}</h4>
 		<Segmented
-			label="화면 모드"
+			label={$_("settings.themeSec.mode")}
 			value={theme.setting.mode}
 			options={[
-				{ value: "system", label: "시스템", icon: Monitor },
-				{ value: "light", label: "밝게", icon: Sun },
-				{ value: "dark", label: "어둡게", icon: Moon },
+				{ value: "system", label: $_("settings.themeSec.modeSystem"), icon: Monitor },
+				{ value: "light", label: $_("settings.themeSec.modeLight"), icon: Sun },
+				{ value: "dark", label: $_("settings.themeSec.modeDark"), icon: Moon },
 			]}
 			onchange={(v) => theme.update({ mode: v })}
 		/>
@@ -71,10 +72,10 @@
 
 	<section>
 		<h4>
-			<span>배경 이미지</span>
+			<span>{$_("settings.themeSec.bgGroup")}</span>
 		</h4>
 		<BackgroundPicker
-			label="대화 배경"
+			label={$_("settings.panels.chatBg")}
 			value={theme.setting.backgroundImage ?? null}
 			images={theme.setting.backgrounds ?? []}
 			onpick={(v) => theme.setBackground(v)}
@@ -84,7 +85,7 @@
 		{#if hasBg}
 			<div class="sub-ctrl">
 				<Slider
-					label="배경 가림막 (%)"
+					label={$_("settings.panels.bgScrimPct")}
 					min={0}
 					max={85}
 					step={5}
@@ -95,7 +96,7 @@
 				/>
 			</div>
 			<div class="sub-ctrl">
-				<span class="sub-label">가림막 색상</span>
+				<span class="sub-label">{$_("settings.themeSec.bgScrimColor")}</span>
 				<ScrimColorPicker />
 			</div>
 		{/if}
@@ -103,12 +104,12 @@
 
 	<section>
 		<h4>
-			<span>테마</span>
+			<span>{$_("settings.tabs.theme")}</span>
 			<button type="button" class="open-settings" onclick={() => nav.go({ page: "settings", tab: "theme" })}>
-				상세 설정 <ExternalLink />
+				{$_("settings.panels.detailSettings")} <ExternalLink />
 			</button>
 		</h4>
-		<div class="theme-grid" role="radiogroup" aria-label="테마 선택">
+		<div class="theme-grid" role="radiogroup" aria-label={$_("settings.panels.selectThemeAria")}>
 			{#each BUILTIN_THEMES as t (t.id)}
 				{@const key = t.id === "default" ? "default" : `builtin:${t.id}`}
 				{@const c = swatchColors(t.colors)}
@@ -124,7 +125,7 @@
 						<span class="bar" style:background={c["--surface"]}></span>
 						<span class="pill" style:background={c["--accent"]}></span>
 					</span>
-					<span class="tname">{t.name}</span>
+					<span class="tname">{$_(`uiPolish.builtins.${t.id}`, { default: t.name })}</span>
 				</button>
 			{/each}
 			{#each customThemes as t (t.filename ?? t.name)}
@@ -150,7 +151,7 @@
 
 	<div class="foot">
 		<Button size="sm" variant="secondary" onclick={() => nav.go({ page: "settings", tab: "theme" })}>
-			{#snippet icon()}<ExternalLink />{/snippet}테마 설정 전체 보기
+			{#snippet icon()}<ExternalLink />{/snippet}{$_("settings.panels.openAllThemeSettings")}
 		</Button>
 	</div>
 </div>

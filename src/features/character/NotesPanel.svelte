@@ -1,4 +1,5 @@
 <script lang="ts">
+	import { _ } from "svelte-i18n";
 	// 메모(내 것, AI에게 보내지 않음)와 작가 노트(보낼 때 프롬프트에 들어감) — 대화 meta에 저장. 대화·폰 패널이 같이 씀
 	import { Input, Textarea } from "$shared/ui";
 	import { library, type Conversation } from "./library.svelte";
@@ -33,17 +34,17 @@
 
 {#snippet fields()}
 	<section>
-		<h4>메모</h4>
-		<Textarea bind:value={memory} autosize rows={4} maxRows={14} placeholder="내 메모" aria-label="메모 (AI에게 보내지 않음)" onblur={saveMemory} />
+		<h4>{$_("notesPanel.memoHeading")}</h4>
+		<Textarea bind:value={memory} autosize rows={4} maxRows={14} placeholder={$_("notesPanel.memoPlaceholder")} aria-label={$_("notesPanel.memoAria")} onblur={saveMemory} />
 	</section>
 	<section>
-		<h4>작가 노트</h4>
-		<Textarea bind:value={noteText} autosize rows={4} maxRows={14} placeholder={"예) {{char}}는 아직 비밀을 털어놓지 않는다. 묘사는 짧게."} aria-label="작가 노트" onblur={saveNote} />
+		<h4>{$_("notesPanel.anHeading")}</h4>
+		<Textarea bind:value={noteText} autosize rows={4} maxRows={14} placeholder={$_("notesPanel.anPlaceholder")} aria-label={$_("notesPanel.anHeading")} onblur={saveNote} />
 		<label class="depth">
-			<span>깊이</span>
-			<Input type="number" min="0" max="50" bind:value={noteDepth} aria-label="작가 노트 깊이" onblur={saveNote} />
+			<span>{$_("notesPanel.depthLabel")}</span>
+			<Input type="number" min="0" max="50" bind:value={noteDepth} aria-label={$_("notesPanel.depthAria")} onblur={saveNote} />
 		</label>
-		<p class="hint">최근 메시지 몇 개 앞에 끼울지. 0이면 입력 바로 앞 (가장 세게 반영).</p>
+		<p class="hint">{$_("notesPanel.depthHint")}</p>
 	</section>
 {/snippet}
 

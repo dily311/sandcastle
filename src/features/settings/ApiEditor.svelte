@@ -1,6 +1,7 @@
 <script lang="ts">
 	// API 연결 추가·편집 (모달 대신 설정 안 페이지, 테마 편집과 같은 방식)
 	import { onMount } from "svelte";
+	import { _ } from "svelte-i18n";
 	import { CircleAlert, CircleCheck, ChevronLeft, FileJson, KeyRound, Zap } from "@lucide/svelte";
 	import { apiLists, firstModel, modelLabel } from "./providers";
 	import { Badge, Button, Field, IconButton, Input, Select, Spinner } from "$shared/ui";
@@ -77,7 +78,7 @@
 	});
 	$effect(() => {
 		if (!dirty) return;
-		return nav.setGuard(() => confirmAction({ title: "저장하지 않음", message: "바꾼 연결 설정을 버리고 나감", confirmLabel: "버리기" }));
+		return nav.setGuard(() => confirmAction({ title: $_("settings.more3.unsavedTitle"), message: $_("settings.more3.discardApiMsg"), confirmLabel: $_("settings.more3.discardBtn") }));
 	});
 
 	function back(force = false) {
@@ -106,8 +107,8 @@
 	$effect(() => {
 		if (!vertex) return;
 		return drops.register({
-			label: "서비스 계정 키 불러오기",
-			hint: "Google Cloud 서비스 계정 JSON 한 개",
+			label: $_("settings.more3.dropSaLabel"),
+			hint: $_("settings.more3.dropSaHint"),
 			accept: (f) => extOf(f) === "json",
 			ondrop: ([file]) => importServiceAccount(file),
 		});
@@ -116,12 +117,12 @@
 		try {
 			const text = await file.text();
 			const j = JSON.parse(text);
-			if (j.type !== "service_account" || !j.client_email || !j.private_key) throw new Error("서비스 계정 키 파일이 아님 (type: service_account 필요)");
+			if (j.type !== "service_account" || !j.client_email || !j.private_key) throw new Error($_("settings.more3.invalidSaFile"));
 			saFile = { name: file.name, text, email: j.client_email };
 			if (j.project_id) projectId = j.project_id;
-			toasts.success("서비스 계정 불러옴");
+			toasts.success($_("settings.more3.saLoadedToast"));
 		} catch (err) {
-			toasts.error(err instanceof SyntaxError ? "JSON을 읽을 수 없음" : String((err as Error).message ?? err));
+			toasts.error(err instanceof SyntaxError ? $_("settings.more3.invalidJson") : String((err as Error).message ?? err));
 		}
 	}
 
@@ -140,7 +141,7 @@
 		const isChat = !isPluginProvider && !!chosen;
 		const modelDisplay = chosen ? modelLabel(provider, chosen) : "";
 		testing = true;
-		check = { state: "checking", message: "확인하는 중…", model: modelDisplay, isChat };
+		check = { state: "checking", message: $_("settings.more3.checkingMsg"), model: modelDisplay, isChat };
 		try {
 			const reply = await call(commands.testMessage(id, chosen), { ...src, silent: true });
 			verified = true;
@@ -148,7 +149,7 @@
 			if (a) a.verified = true;
 			check = {
 				state: "ok",
-				message: `연결됨 · ${reply.trim().slice(0, 60) || "(빈 응답)"}`,
+				message: $_("settings.more.apiConnected", { values: { reply: reply.trim().slice(0, 60) || $_("settings.more.emptyReply") } }),
 				model: modelDisplay,
 				reply: reply.trim(),
 				isChat,
@@ -194,7 +195,7 @@
 			// 저장했으니 나가기 확인은 필요 없음 (가드 효과가 다시 돌기 전에 이동하므로 직접 지움)
 			nav.clearGuard();
 			if (isNew && id) void nav.replace({ page: "settings", tab: "api", edit: id });
-			toasts.success("저장함");
+			toasts.success($_("settings.more3.savedToast"));
 		} finally {
 			saving = false;
 		}
@@ -205,7 +206,7 @@
 		hasKey = false;
 		savedEmail = null;
 		projectId = "";
-		toasts.success("키 지움");
+		toasts.success($_("settings.more3.keyDeletedToast"));
 	}
 </script>
 
@@ -213,30 +214,30 @@
 	<div class="center"><Spinner /></div>
 {:else}
 	<div class="crumb">
-		<IconButton label="API 목록으로" size="sm" onclick={() => back()}><ChevronLeft /></IconButton>
-		<span>API 키</span>
+		<IconButton label={$_("settings.more3.backToApiAria")} size="sm" onclick={() => back()}><ChevronLeft /></IconButton>
+		<span>{$_("settings.more3.apiKeysLabel")}</span>
 	</div>
 	<header class="head">
-		<h1>{isNew ? "연결 추가" : name || "연결 편집"}</h1>
+		<h1>{isNew ? $_("settings.more3.addConn") : name || $_("settings.more3.editConn")}</h1>
 		<div class="btns">
-			{#if dirty}<span class="dirty">바뀐 내용 있음</span>{/if}
-			<Button variant="ghost" onclick={() => back()}>{dirty ? "취소" : "닫기"}</Button>
-			<Button variant="primary" loading={saving} disabled={!canSave || (!!id && !dirty)} onclick={save}>저장</Button>
+			{#if dirty}<span class="dirty">{$_("settings.more3.dirty")}</span>{/if}
+			<Button variant="ghost" onclick={() => back()}>{dirty ? $_("common.cancel") : $_("common.close")}</Button>
+			<Button variant="primary" loading={saving} disabled={!canSave || (!!id && !dirty)} onclick={save}>{$_("common.save")}</Button>
 		</div>
 	</header>
-	<p class="lead">키는 운영체제 보안 저장소에 따로 보관함</p>
+	<p class="lead">{$_("settings.more3.apiKeyLead")}</p>
 
 	<div class="card form">
 		<div class="two">
-			<Field label="공급자">
+			<Field label={$_("settings.more3.provider")}>
 				<Select value={providerId} options={apiLists.map((p) => ({ value: p.provider, label: p.label }))} disabled={!!id} onchange={(e) => changeProvider(e.currentTarget.value)} />
 			</Field>
-			<Field label="이름"><Input bind:value={name} placeholder={provider?.label} /></Field>
+			<Field label={$_("settings.more3.name")}><Input bind:value={name} placeholder={provider?.label} /></Field>
 		</div>
 	</div>
 
 	{#if vertex}
-		<h2>서비스 계정</h2>
+		<h2>{$_("settings.more3.serviceAccount")}</h2>
 		<div class="card form">
 			<div class="sa">
 				<span class="sa-icon"><FileJson /></span>
@@ -244,78 +245,78 @@
 					{#if saFile}
 						<b>{saFile.name}</b><small>{saFile.email}</small>
 					{:else if hasKey}
-						<b>{projectId || "저장된 서비스 계정 있음"}</b>
-						<small>{[location, savedEmail].filter(Boolean).join(" · ") || "지역·프로젝트를 바꾸려면 키 파일을 다시 불러와야 함"}</small>
+						<b>{projectId || $_("settings.more3.savedSaExists")}</b>
+						<small>{[location, savedEmail].filter(Boolean).join(" · ") || $_("settings.more3.saReloadHint")}</small>
 					{:else}
-						<b>키 파일 없음</b><small>Google Cloud 콘솔 → IAM → 서비스 계정 → 키 추가(JSON)로 받은 파일</small>
+						<b>{$_("settings.more3.noKeyFile")}</b><small>{$_("settings.more3.saConsoleHint")}</small>
 					{/if}
 				</div>
-				{#if hasKey && !saFile}<Button variant="ghost" onclick={removeKey}>지우기</Button>{/if}
-				<Button variant={saFile || hasKey ? "secondary" : "primary"} onclick={() => fileInput?.click()}>JSON 불러오기</Button>
+				{#if hasKey && !saFile}<Button variant="ghost" onclick={removeKey}>{$_("common.delete")}</Button>{/if}
+				<Button variant={saFile || hasKey ? "secondary" : "primary"} onclick={() => fileInput?.click()}>{$_("settings.more3.loadJsonBtn")}</Button>
 				<input bind:this={fileInput} type="file" accept=".json,application/json" hidden onchange={pickServiceAccount} />
 			</div>
 			<div class="two">
-				<Field label="지역 (location)" hint={hasKey && !saFile ? "바꾸려면 키 파일을 다시 불러와야 함" : "global이면 가장 넓게 쓸 수 있음"}>
+				<Field label={$_("settings.more3.locationLabel")} hint={hasKey && !saFile ? $_("settings.more3.saReloadHint") : $_("settings.more3.locationGlobalHint")}>
 					<Select value={location} options={LOCATIONS.map((l) => ({ value: l, label: l }))} disabled={hasKey && !saFile} onchange={(e) => (location = e.currentTarget.value)} />
 				</Field>
-				<Field label="프로젝트 ID" hint={hasKey && !saFile ? "저장된 서비스 계정의 프로젝트 ID" : "키 파일에서 자동으로 채움"}>
+				<Field label={$_("settings.more3.projectIdLabel")} hint={hasKey && !saFile ? $_("settings.more3.projectIdSavedHint") : $_("settings.more3.projectIdAutoHint")}>
 					<Input bind:value={projectId} placeholder="my-project-123" readonly={hasKey && !saFile} />
 				</Field>
 			</div>
 		</div>
 	{:else}
-		<h2>인증</h2>
+		<h2>{$_("settings.more3.authHeading")}</h2>
 		<div class="card form">
-			<Field label="API 키" hint={id ? (hasKey ? "저장된 키 있음. 비워 두면 그대로 둠" : "저장된 키 없음") : undefined}>
+			<Field label={$_("settings.more3.apiKeysLabel")} hint={id ? (hasKey ? $_("settings.more3.keySavedHint") : $_("settings.more3.keyMissingHint")) : undefined}>
 				<div class="inline">
-					<Input type="password" bind:value={key} placeholder={hasKey ? "••••••••" : "키 붙여넣기"} autocomplete="off">
+					<Input type="password" bind:value={key} placeholder={hasKey ? "••••••••" : $_("settings.more3.pasteKeyPlaceholder")} autocomplete="off">
 						{#snippet leading()}<KeyRound />{/snippet}
 					</Input>
-					{#if hasKey}<Button variant="ghost" onclick={removeKey}>키 지우기</Button>{/if}
+					{#if hasKey}<Button variant="ghost" onclick={removeKey}>{$_("settings.more3.deleteKeyBtn")}</Button>{/if}
 				</div>
 			</Field>
-			<Field label="주소 (Base URL)" hint="프록시나 호환 서버를 쓸 때만 바꿈">
+			<Field label={$_("settings.more3.baseUrlLabel")} hint={$_("settings.more3.baseUrlHint")}>
 				<Input bind:value={baseUrl} placeholder="https://" />
 			</Field>
 		</div>
 	{/if}
-	{#if id && !hasKey}<p class="warn"><Badge tone="warning"><KeyRound /> 키 없음</Badge> 키를 넣어야 대화할 수 있음</p>{/if}
+	{#if id && !hasKey}<p class="warn"><Badge tone="warning"><KeyRound /> {$_("settings.apiSec.noKey")}</Badge> {$_("settings.more3.needKeyWarn")}</p>{/if}
 
 	{#if id}
 		<h2 class="test-head">
-			연결 테스트
+			{$_("settings.more3.connTestHeading")}
 			{#if verified}
-				<Badge tone="success">확인됨</Badge>
+				<Badge tone="success">{$_("settings.more3.verified")}</Badge>
 			{:else}
-				<Badge tone="neutral">미확인</Badge>
+				<Badge tone="neutral">{$_("settings.more3.unverified")}</Badge>
 			{/if}
 		</h2>
 		<div class="card form">
 			<div class="test-bar">
 				{#if !isPluginProvider}
-					<Field label="테스트 모델" hint="연결 확인에만 임시로 사용하며 프로필에 저장되지 않음">
+					<Field label={$_("settings.more3.testModelLabel")} hint={$_("settings.more3.testModelHint")}>
 						<div class="test-action">
-							<ModelPicker profile={currentProfile} value={testModel} onchange={(m) => (testModel = m)} label="테스트 모델" />
+							<ModelPicker profile={currentProfile} value={testModel} onchange={(m) => (testModel = m)} label={$_("settings.more3.testModelLabel")} />
 							<Button
 								loading={testing}
 								disabled={dirty || !hasKey || (!isPluginProvider && !testModel)}
-								title={dirty ? "저장한 뒤 테스트할 수 있음" : !isPluginProvider && !testModel ? "테스트할 모델을 먼저 골라주세요" : undefined}
+								title={dirty ? $_("settings.more3.saveBeforeTestTitle") : !isPluginProvider && !testModel ? $_("settings.more3.pickTestModelTitle") : undefined}
 								onclick={test}
 							>
-								{#snippet icon()}<Zap />{/snippet}연결 테스트
+								{#snippet icon()}<Zap />{/snippet}{$_("settings.more3.connTestHeading")}
 							</Button>
 						</div>
 					</Field>
 				{:else}
 					<div class="test-action">
-						<ModelPicker profile={currentProfile} value={testModel} onchange={(m) => (testModel = m)} label="테스트 모델" />
+						<ModelPicker profile={currentProfile} value={testModel} onchange={(m) => (testModel = m)} label={$_("settings.more3.testModelLabel")} />
 						<Button
 							loading={testing}
 							disabled={dirty || !hasKey || (!isPluginProvider && !testModel)}
-							title={dirty ? "저장한 뒤 테스트할 수 있음" : !isPluginProvider && !testModel ? "테스트할 모델을 먼저 골라주세요" : undefined}
+							title={dirty ? $_("settings.more3.saveBeforeTestTitle") : !isPluginProvider && !testModel ? $_("settings.more3.pickTestModelTitle") : undefined}
 							onclick={test}
 						>
-							{#snippet icon()}<Zap />{/snippet}연결 테스트
+							{#snippet icon()}<Zap />{/snippet}{$_("settings.more3.connTestHeading")}
 						</Button>
 					</div>
 				{/if}
@@ -324,19 +325,19 @@
 				{#if check.isChat}
 					<div class="test-chat" role="status">
 						<div class="chat-line user">
-							<span class="chat-role">보낸 메시지</span>
+							<span class="chat-role">{$_("settings.more3.sentMsgRole")}</span>
 							<div class="chat-bubble">Hi</div>
 						</div>
 						<div class="chat-line assistant {check.state}">
 							<span class="chat-role">
 								{#if check.state === "checking"}<Spinner size={12} />{:else if check.state === "ok"}<CircleCheck />{:else}<CircleAlert />{/if}
-								{check.model || "모델"}
+								{check.model || $_("settings.more2.modelDefault")}
 							</span>
 							<div class="chat-bubble">
 								{#if check.state === "checking"}
-									응답 기다리는 중…
+									{$_("settings.more3.waitingReply")}
 								{:else if check.state === "ok"}
-									{check.reply || "(빈 응답)"}
+									{check.reply || $_("settings.more.emptyReply")}
 								{:else}
 									{check.message}
 								{/if}

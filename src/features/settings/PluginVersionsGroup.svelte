@@ -1,6 +1,7 @@
 <script lang="ts">
 	// 플러그인 판 폴더 (CLAUDE.md 1-F-1, ADR-012 갱신): 쓰지 않는 판의 폴더를 지운다. 쓰는 판은 지울 수 없다
 	import { onMount } from "svelte";
+	import { _ } from "svelte-i18n";
 	import { Trash2 } from "@lucide/svelte";
 	import type { UserPlugin_Serialize as UserPlugin } from "$ipc/bindings";
 	import { Badge, Button } from "$shared/ui";
@@ -20,10 +21,10 @@
 
 	async function remove(p: UserPlugin, dir: string, version: string) {
 		const ok = await confirmAction({
-			title: `'${p.manifest?.name ?? p.id}' v${version} 폴더 지우기`,
-			message: "이 판의 코드와 보관해 둔 저장 값을 완전히 지웁니다. 되돌릴 수 없음",
+			title: $_("settings.pluginVersions.deleteTitle", { values: { name: p.manifest?.name ?? p.id, version } }),
+			message: $_("settings.pluginVersions.deleteMsg"),
 			danger: true,
-			confirmLabel: "지우기",
+			confirmLabel: $_("settings.pluginVersions.deleteBtn"),
 		});
 		if (!ok) return;
 		busy = `${p.id}/${dir}`;
@@ -37,7 +38,7 @@
 </script>
 
 {#if plugins.length}
-	<Group title="플러그인 판 폴더">
+	<Group title={$_("settings.pluginVersions.title")}>
 		<ul class="items">
 			{#each plugins as p (p.id)}
 				{#each p.versions as v (v.dir)}
@@ -47,9 +48,9 @@
 							<span class="meta">{size(v.size)} · {relative(v.modifiedAt)}{v.error ? ` · ${v.error}` : ""}</span>
 						</div>
 						{#if v.active}
-							<Badge tone="accent">사용 중</Badge>
+							<Badge tone="accent">{$_("settings.pluginVersions.active")}</Badge>
 						{:else}
-							<Button size="sm" variant="ghost" loading={busy === `${p.id}/${v.dir}`} disabled={busy !== null} onclick={() => remove(p, v.dir, v.version)}>{#snippet icon()}<Trash2 />{/snippet}지우기</Button>
+							<Button size="sm" variant="ghost" loading={busy === `${p.id}/${v.dir}`} disabled={busy !== null} onclick={() => remove(p, v.dir, v.version)}>{#snippet icon()}<Trash2 />{/snippet}{$_("settings.pluginVersions.deleteBtn")}</Button>
 						{/if}
 					</li>
 				{/each}

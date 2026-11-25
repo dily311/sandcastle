@@ -1,5 +1,6 @@
 <script lang="ts">
 	import type { Snippet } from "svelte";
+	import { _ } from "svelte-i18n";
 	import type { ColorMap } from "$shared/ui/themes";
 
 	// NAI 테마 목록처럼 바탕색·글자색을 미리 보여주는 카드
@@ -17,8 +18,8 @@
 	const c = (k: string) => colors[k];
 </script>
 
-<div class="card" class:selected {oncontextmenu} role="group" aria-label="{name} 테마">
-	<button class="pick" role="radio" aria-checked={selected} aria-label="{name} 테마 적용" onclick={onselect}>
+<div class="card" class:selected {oncontextmenu} role="group" aria-label={$_("settings.more2.themeCardAria", { values: { name } })}>
+	<button class="pick" role="radio" aria-checked={selected} aria-label={$_("settings.more2.themeCardApplyAria", { values: { name } })} onclick={onselect}>
 		<span class="stripes" aria-hidden="true">
 			<i style:background={c("--bg-sunken")}></i>
 			<i style:background={c("--bg")}></i>

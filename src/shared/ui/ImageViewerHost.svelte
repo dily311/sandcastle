@@ -47,16 +47,16 @@
 	async function showInfo() {
 		if (!img) return;
 		const rows: { label: string; value: string }[] = [];
-		if (title) rows.push({ label: "이름", value: title });
-		if (info?.path) rows.push({ label: "위치", value: info.path });
-		if (imgEl?.naturalWidth) rows.push({ label: "크기", value: `${imgEl.naturalWidth} × ${imgEl.naturalHeight}px` });
+		if (title) rows.push({ label: $_("sharedControls.viewerName"), value: title });
+		if (info?.path) rows.push({ label: $_("sharedControls.viewerPath"), value: info.path });
+		if (imgEl?.naturalWidth) rows.push({ label: $_("sharedControls.viewerSize"), value: `${imgEl.naturalWidth} × ${imgEl.naturalHeight}px` });
 		const ext = /\.([a-z0-9]+)$/i.exec(title)?.[1];
-		if (ext) rows.push({ label: "형식", value: ext.toUpperCase() });
+		if (ext) rows.push({ label: $_("sharedControls.viewerFormat"), value: ext.toUpperCase() });
 		details = [...rows, ...(img.info ?? [])];
 		// 용량은 읽어 봐야 알 수 있어 뒤늦게 덧붙임
 		try {
 			const blob = await (await fetch(img.src)).blob();
-			if (details && imageViewer.current === img) details = [...details, { label: "용량", value: sizeText(blob.size) }];
+			if (details && imageViewer.current === img) details = [...details, { label: $_("sharedControls.viewerFileSize"), value: sizeText(blob.size) }];
 		} catch {
 			/* 못 읽으면 생략 */
 		}
@@ -74,9 +74,9 @@
 			// 클립보드는 PNG만 받는 곳이 많아 그림 형식이 다르면 PNG로 바꿔 넣음
 			const png = blob.type === "image/png" ? blob : await toPng(blob);
 			await navigator.clipboard.write([new ClipboardItem({ "image/png": png })]);
-			toasts.success("그림을 복사함");
+			toasts.success($_("sharedControls.viewerCopiedImg"));
 		} catch (e) {
-			toasts.error("그림을 복사할 수 없음", String(e));
+			toasts.error($_("sharedControls.viewerCopyImgErr"), String(e));
 		}
 	}
 	async function toPng(blob: Blob): Promise<Blob> {
@@ -85,19 +85,19 @@
 		canvas.width = bmp.width;
 		canvas.height = bmp.height;
 		canvas.getContext("2d")?.drawImage(bmp, 0, 0);
-		return new Promise((resolve, reject) => canvas.toBlob((b) => (b ? resolve(b) : reject(new Error("변환 실패"))), "image/png"));
+		return new Promise((resolve, reject) => canvas.toBlob((b) => (b ? resolve(b) : reject(new Error($_("sharedControls.viewerConvertErr")))), "image/png"));
 	}
 	async function copyName() {
 		try {
 			await navigator.clipboard.writeText(title);
-			toasts.success("파일 이름을 복사함");
+			toasts.success($_("sharedControls.viewerCopiedName"));
 		} catch (e) {
-			toasts.error("복사할 수 없음", String(e));
+			toasts.error($_("sharedControls.viewerCopyErr"), String(e));
 		}
 	}
 	async function reveal() {
 		if (!info?.path) return;
-		await revealItemInDir(info.path).catch((e) => toasts.error("파일 위치를 열 수 없음", String(e)));
+		await revealItemInDir(info.path).catch((e) => toasts.error($_("sharedControls.viewerRevealErr"), String(e)));
 	}
 
 	const extra = $derived<MenuItem[]>(typeof img?.extraItems === "function" ? img.extraItems() : (img?.extraItems ?? []));
@@ -113,26 +113,26 @@
 	]);
 </script>
 
-<dialog bind:this={dialog} class="image-viewer" aria-label="그림 크게 보기" onclose={() => imageViewer.close()} onclick={(e) => e.target === dialog && imageViewer.close()}>
+<dialog bind:this={dialog} class="image-viewer" aria-label={$_("sharedControls.viewerAria")} onclose={() => imageViewer.close()} onclick={(e) => e.target === dialog && imageViewer.close()}>
 	{#if img}
 		<figure>
 			<div class="top">
-				<div class="cap" role="group" aria-label="파일 이름">
-					<span class="name">{title || "그림"}</span>
+				<div class="cap" role="group" aria-label={$_("sharedControls.viewerFilenameAria")}>
+					<span class="name">{title || $_("sharedControls.viewerImgFallback")}</span>
 				</div>
 				<div class="actionBtn">
-					<IconButton label="그림 메뉴" size="sm" variant="static-white" onclick={openMenu}><EllipsisVertical /></IconButton>
-					<IconButton label="닫기" size="sm" variant="static-white" onclick={() => imageViewer.close()}><X /></IconButton>	
+					<IconButton label={$_("sharedControls.viewerMenuAria")} size="sm" variant="static-white" onclick={openMenu}><EllipsisVertical /></IconButton>
+					<IconButton label={$_("common.close")} size="sm" variant="static-white" onclick={() => imageViewer.close()}><X /></IconButton>	
 				</div>
 			</div>
 			<img bind:this={imgEl} src={img.src} alt={title} {oncontextmenu} />
 		</figure>
 	{/if}
-	<ContextMenu at={menu} {items} label="그림 메뉴" onclose={() => (menu = null)} />
+	<ContextMenu at={menu} {items} label={$_("sharedControls.viewerMenuAria")} onclose={() => (menu = null)} />
 </dialog>
 
 <!-- 정보는 그림 위에 따로 뜨는 창 (그림이 크면 아래에 붙여서는 화면 밖으로 나감) -->
-<Dialog open={!!details} title="정보" size="md" onclose={() => (details = null)}>
+<Dialog open={!!details} title={$_("sharedControls.viewerInfoTitle")} size="md" onclose={() => (details = null)}>
 	<dl class="details">
 		{#each details ?? [] as d, i (`${d.label}-${i}`)}
 			<dt>{d.label}</dt>
@@ -142,9 +142,9 @@
 					<button
 						type="button"
 						class="copy-val"
-						aria-label="{d.label} 복사"
-						title="{d.label} 복사"
-						onclick={() => navigator.clipboard.writeText(d.value).then(() => toasts.success(`${d.label} 복사함`), () => toasts.error("복사 못 함"))}
+						aria-label={$_("sharedControls.viewerCopyFieldAria", { values: { label: d.label } })}
+						title={$_("sharedControls.viewerCopyFieldAria", { values: { label: d.label } })}
+						onclick={() => navigator.clipboard.writeText(d.value).then(() => toasts.success($_("sharedControls.viewerCopiedField", { values: { label: d.label } })), () => toasts.error($_("sharedControls.viewerCopyFailed")))}
 					><Copy /></button>
 				{/if}
 			</dd>

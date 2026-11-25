@@ -1,31 +1,32 @@
 <script lang="ts">
+	import { _ } from "svelte-i18n";
 	import { theme } from "$app/theme.svelte";
 
-	const PRESETS: { value: string; label: string }[] = [
-		{ value: "#000000", label: "검정" },
-		{ value: "#ffffff", label: "흰색" },
-		{ value: "#0f172a", label: "네이비" },
-		{ value: "#1c102b", label: "딥 퍼플" },
-		{ value: "#221611", label: "웜 브라운" },
-		{ value: "#0f2318", label: "딥 그린" },
-	];
+	const PRESETS = $derived<{ value: string; label: string }[]>([
+		{ value: "#000000", label: $_("settings.scrim.black") },
+		{ value: "#ffffff", label: $_("settings.scrim.white") },
+		{ value: "#0f172a", label: $_("settings.scrim.navy") },
+		{ value: "#1c102b", label: $_("settings.scrim.deepPurple") },
+		{ value: "#221611", label: $_("settings.scrim.warmBrown") },
+		{ value: "#0f2318", label: $_("settings.scrim.deepGreen") },
+	]);
 
 	const cur = $derived(theme.scrimColor);
 	const isCustom = $derived(!!cur && !PRESETS.some((p) => p.value.toLowerCase() === cur.toLowerCase()));
 	const pickerValue = $derived(cur ?? (theme.dark ? "#000000" : "#ffffff"));
 </script>
 
-<div class="scrim-colors" role="radiogroup" aria-label="가림막 색상">
+<div class="scrim-colors" role="radiogroup" aria-label={$_("settings.scrim.ariaGroup")}>
 	<button
 		type="button"
 		role="radio"
 		class="auto"
 		class:on={cur === null}
 		aria-checked={cur === null}
-		title="현재 테마 바탕색 자동 적용"
+		title={$_("settings.scrim.autoTitle")}
 		onclick={() => theme.setScrimColor(null)}
 	>
-		테마 기본
+		{$_("settings.scrim.auto")}
 	</button>
 	{#each PRESETS as p (p.value)}
 		<button
@@ -45,8 +46,8 @@
 		class="custom"
 		class:on={isCustom}
 		value={pickerValue}
-		aria-label="가림막 색상 직접 고르기"
-		title="직접 고르기"
+		aria-label={$_("settings.scrim.customAria")}
+		title={$_("settings.scrim.customTitle")}
 		oninput={(e) => {
 			document.documentElement.style.setProperty("--chat-bg-scrim-color", e.currentTarget.value);
 		}}

@@ -1,5 +1,6 @@
 <script lang="ts">
 	// 꺼진 코어 플러그인의 화면에 들어왔을 때 (주소로 바로 오거나 이전 화면 기록으로)
+	import { _ } from "svelte-i18n";
 	import { Blocks } from "@lucide/svelte";
 	import { Button, EmptyState } from "$shared/ui";
 	import { nav } from "./nav.svelte";
@@ -9,11 +10,11 @@
 </script>
 
 <div class="off">
-	<EmptyState title="{name} 기능이 꺼져 있음" description="설정 > 코어 플러그인에서 켤 수 있음">
+	<EmptyState title={$_("settings.mascot.pluginOffTitle", { values: { name } })} description={$_("settings.mascot.pluginOffDesc")}>
 		{#snippet action()}
 		<div class="acts">
-			<Button variant="primary" onclick={() => plugins.set(id, true)}>{#snippet icon()}<Blocks />{/snippet}지금 켜기</Button>
-			<Button variant="ghost" onclick={() => nav.go({ page: "settings", tab: "plugins" })}>코어 플러그인 설정</Button>
+			<Button variant="primary" onclick={() => plugins.set(id, true)}>{#snippet icon()}<Blocks />{/snippet}{$_("settings.mascot.enableNow")}</Button>
+			<Button variant="ghost" onclick={() => nav.go({ page: "settings", tab: "plugins" })}>{$_("settings.mascot.corePluginSettings")}</Button>
 		</div>
 		{/snippet}
 	</EmptyState>

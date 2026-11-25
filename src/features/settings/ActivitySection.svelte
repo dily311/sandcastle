@@ -2,8 +2,10 @@
 	// 실행 기록 (CLAUDE.md M2): 지금 실행 중인 작업(멈추기) · 최근 실행 내역(자동 실행 표시)
 	// 예산 한도·API별 사용량·단가표는 BudgetSection으로 분리
 	import { onDestroy, onMount } from "svelte";
+	import { _ } from "svelte-i18n";
 	import { RefreshCw, Square, Trash2 } from "@lucide/svelte";
 	import type { AiCallLog_Serialize as CallLog, TaskHistoryItem_Serialize as HistoryItem, TaskInfo_Serialize as TaskInfo } from "$ipc/bindings";
+	import { localizeTaskFeature, localizeTaskStatus } from "$lib/utils/backendI18n";
 	import { Badge, Button, EmptyState, Segmented, Select, Switch } from "$shared/ui";
 	import { appSetting } from "$shared/stores/appSetting.svelte";
 	import { call, commands } from "$shared/ipc/client";
@@ -14,22 +16,13 @@
 	import Group from "./Group.svelte";
 
 	const src = { source: "activity" };
-	const FEATURE: Record<string, string> = {
-		chat: "대화",
-		phone: "폰",
-		game: "게임",
-		translate: "번역",
-		tts: "음성",
-		imagegen: "이미지", memory: "메모리", summary: "대화 요약", rewrite: "자동 재생성", ghostwrite: "대필",
-		settings: "설정",
-	};
-	const STATUS: Record<string, { label: string; tone: "neutral" | "accent" | "success" | "warning" | "danger" | "info" }> = {
-		pending: { label: "대기", tone: "neutral" },
-		running: { label: "실행 중", tone: "accent" },
-		completed: { label: "완료", tone: "success" },
-		failed: { label: "실패", tone: "danger" },
-		cancelled: { label: "멈춤", tone: "neutral" },
-		interrupted: { label: "끊김", tone: "warning" },
+	const STATUS_TONE: Record<string, "neutral" | "accent" | "success" | "warning" | "danger" | "info"> = {
+		pending: "neutral",
+		running: "accent",
+		completed: "success",
+		failed: "danger",
+		cancelled: "neutral",
+		interrupted: "warning",
 	};
 	let active = $state<TaskInfo[]>([]);
 	let history = $state<HistoryItem[]>([]);
@@ -41,10 +34,10 @@
 	const logOn = $derived(!!(appSetting.value as { aiCallLog?: boolean } | null)?.aiCallLog);
 	async function toggleLog(v: boolean) {
 		await appSetting.update({ aiCallLog: v } as never);
-		toasts.success(v ? "이제부터 AI 호출의 보낸 글·받은 글을 이 기기에 남김" : "보낸 글·받은 글을 그만 남김");
+		toasts.success(v ? $_("settings.activityDetail.logEnabled") : $_("settings.activityDetail.logDisabled"));
 	}
 	async function clearLogs() {
-		if (!(await confirmAction({ title: "보낸 글·받은 글 지우기", message: "남겨 둔 AI 호출 기록을 모두 지움 (작업·사용량 기록은 그대로)", confirmLabel: "지우기", danger: true }))) return;
+		if (!(await confirmAction({ title: $_("settings.activityDetail.clearLogsTitle"), message: $_("settings.activityDetail.clearLogsMsg"), confirmLabel: $_("settings.activityDetail.clearLogsBtn"), danger: true }))) return;
 		await call(commands.clearAiCallLogs(), src);
 		logged = new Set();
 		calls = {};
@@ -61,7 +54,7 @@
 			return [];
 		}
 	}
-	const ROLE: Record<string, string> = { system: "시스템", user: "사용자", assistant: "AI" };
+	const roleLabel = (r: string) => (r === "system" ? $_("settings.activityDetail.roleSystem") : r === "user" ? $_("settings.activityDetail.roleUser") : r === "assistant" ? $_("settings.activityDetail.roleAssistant") : r);
 	let loading = $state(false);
 
 	const shown = $derived(who === "auto" ? history.filter((h) => h.runBy === "auto") : history);
@@ -77,7 +70,7 @@
 			logged = new Set(await call(commands.listAiCallLogTasks(), { ...src, silent: true }).catch(() => []));
 			calls = {};
 		} catch {
-			toasts.error("실행 기록을 불러오지 못함");
+			toasts.error($_("settings.activityDetail.loadError"));
 		} finally {
 			loading = false;
 		}
@@ -106,29 +99,29 @@
 	}
 
 	// 기록 보관 (1-A-4): 지난 상세는 일별 합계로 남기고 지운다. 사용량 숫자는 그대로
-	const RETENTION = [
-		{ value: "", label: "계속 보관" },
-		{ value: "30", label: "30일" },
-		{ value: "90", label: "90일" },
-		{ value: "180", label: "180일" },
-		{ value: "365", label: "1년" },
-	];
+	const RETENTION = $derived([
+		{ value: "", label: $_("settings.activitySec.keepForever") },
+		{ value: "30", label: $_("settings.activitySec.days30") },
+		{ value: "90", label: $_("settings.activitySec.days90") },
+		{ value: "180", label: $_("settings.activitySec.days180") },
+		{ value: "365", label: $_("settings.activitySec.year1") },
+	]);
 	const retention = $derived(appSetting.value?.usageRetentionDays ?? null);
 	async function setRetention(v: string) {
 		const days = v ? Number(v) : null;
 		if (days != null && (retention == null || days < retention)) {
 			const ok = await confirmAction({
-				title: "기록 보관 기간",
-				message: `${days}일보다 오래된 작업 기록과 사용량 상세를 지움 (앱을 켤 때마다 정리). API별 사용량 합계와 예산 한도 계산은 그대로 남음. 지운 상세는 되돌릴 수 없음`,
+				title: $_("settings.activityDetail.retentionTitle"),
+				message: $_("settings.activityDetail.retentionMsg", { values: { days } }),
 				danger: true,
-				confirmLabel: "정리하기",
+				confirmLabel: $_("settings.activityDetail.retentionConfirm"),
 			});
 			if (!ok) return;
 		}
 		await appSetting.update({ usageRetentionDays: days });
-		if (days == null) return toasts.success("기록을 계속 보관함");
+		if (days == null) return toasts.success($_("settings.activityDetail.keepForeverToast"));
 		const r = await call(commands.compactUsage(), src);
-		toasts.success(r.usageRows || r.tasks ? `정리함: 작업 ${n(r.tasks)}개 · 사용량 상세 ${n(r.usageRows)}줄` : "정리할 오래된 기록 없음");
+		toasts.success(r.usageRows || r.tasks ? $_("settings.activityDetail.compactedToast", { values: { tasks: n(r.tasks), rows: n(r.usageRows) } }) : $_("settings.activityDetail.nothingToCompact"));
 		void load();
 	}
 
@@ -143,59 +136,62 @@
 	function took(h: { startedAt: number | null; finishedAt: number | null }) {
 		if (!h.startedAt || !h.finishedAt) return "";
 		const ms = h.finishedAt - h.startedAt;
-		return ms < 1000 ? `${ms}ms` : `${(ms / 1000).toFixed(1)}초`;
+		return ms < 1000 ? `${ms}ms` : $_("settings.activityDetail.secUnit", { values: { sec: (ms / 1000).toFixed(1) } });
 	}
 	/** 작업이 쓴 양 한 줄 */
 	function amount(u: { inputTokens: number; outputTokens: number; characters: number; images: number }) {
 		const parts: string[] = [];
-		if (u.inputTokens || u.outputTokens) parts.push(`입력 ${n(u.inputTokens)} · 출력 ${n(u.outputTokens)} 토큰`);
-		if (u.characters) parts.push(`${n(u.characters)}자`);
-		if (u.images) parts.push(`그림 ${n(u.images)}장`);
+		if (u.inputTokens || u.outputTokens) parts.push($_("settings.activityDetail.tokensSummary", { values: { input: n(u.inputTokens), output: n(u.outputTokens) } }));
+		if (u.characters) parts.push($_("settings.activityDetail.charsUnit", { values: { count: n(u.characters) } }));
+		if (u.images) parts.push($_("settings.activityDetail.imagesUnit", { values: { count: n(u.images) } }));
 		return parts.join(" · ");
 	}
-	const featureName = (f: string | null) => (f ? (FEATURE[f] ?? (f.startsWith("plugin:") ? `플러그인 ${f.slice(7)}` : f)) : "기타");
-	const status = (h: HistoryItem) => (h.status === "failed" && h.errorCode === "BUDGET_EXCEEDED" ? { label: "한도로 막힘", tone: "warning" as const } : (STATUS[h.status] ?? { label: h.status, tone: "neutral" as const }));
+	const featureName = (f: string | null) => localizeTaskFeature(f);
+	const status = (h: HistoryItem) => {
+		if (h.status === "failed" && h.errorCode === "BUDGET_EXCEEDED") return { label: $_("settings.activitySec.budgetBlocked"), tone: "warning" as const };
+		return { label: localizeTaskStatus(h.status), tone: STATUS_TONE[h.status] ?? ("neutral" as const) };
+	};
 </script>
 
-<Section title="실행 기록" lead="AI·음성·이미지 API를 부른 작업과 사용량. 토큰은 공급자가 알려주면 그 값, 아니면 앱이 추정함">
+<Section title={$_("settings.activitySec.title")} lead={$_("settings.activitySec.lead")}>
 	{#snippet actions()}
-		<Button size="sm" disabled={loading} onclick={load}>{#snippet icon()}<RefreshCw />{/snippet}새로 고침</Button>
+		<Button size="sm" disabled={loading} onclick={load}>{#snippet icon()}<RefreshCw />{/snippet}{$_("common.refresh")}</Button>
 	{/snippet}
 
-	<Group title="실행 중">
+	<Group title={$_("settings.activitySec.running")}>
 		{#each active as t (t.id)}
 			<div class="item">
 				<div class="main">
 					<Badge tone="accent">{featureName(t.feature)}</Badge>
 					<span class="label">{t.label ?? t.taskType}</span>
-					{#if t.runBy === "auto"}<Badge tone="info">자동</Badge>{/if}
+					{#if t.runBy === "auto"}<Badge tone="info">{$_("settings.activitySec.auto")}</Badge>{/if}
 					<span class="muted">{when(t.createdAt)}</span>
 				</div>
-				<Button size="sm" variant="ghost" onclick={() => cancel(t.id)}>{#snippet icon()}<Square />{/snippet}멈추기</Button>
+				<Button size="sm" variant="ghost" onclick={() => cancel(t.id)}>{#snippet icon()}<Square />{/snippet}{$_("settings.activitySec.stop")}</Button>
 			</div>
 		{:else}
-			<p class="empty">실행 중인 작업 없음</p>
+			<p class="empty">{$_("settings.activitySec.noRunning")}</p>
 		{/each}
 	</Group>
 
-	<Group title="최근 실행" flush>
+	<Group title={$_("settings.activitySec.recent")} flush>
 		{#snippet aside()}
 			<div class="aside">
-			<label class="keep" title="켜면 AI 호출마다 보낸 프롬프트와 받은 글을 이 기기에 남김 (최근 200개). 프롬프트 전체가 디스크에 남음">
-				<span class="muted">보낸 글·받은 글</span>
-				<Switch checked={logOn} label="보낸 글·받은 글 남기기" hideLabel onchange={toggleLog} />
+			<label class="keep">
+				<span class="muted">{$_("settings.activitySec.keepLogs")}</span>
+				<Switch checked={logOn} label={$_("settings.activitySec.keepLogs")} hideLabel onchange={toggleLog} />
 			</label>
-			{#if logged.size}<Button size="sm" variant="ghost" onclick={clearLogs}>{#snippet icon()}<Trash2 />{/snippet}기록 지우기</Button>{/if}
+			{#if logged.size}<Button size="sm" variant="ghost" onclick={clearLogs}>{#snippet icon()}<Trash2 />{/snippet}{$_("settings.activitySec.clearLogs")}</Button>{/if}
 			<label class="keep"
-				><span class="muted">보관</span>
-				<Select value={retention == null ? "" : String(retention)} options={RETENTION} aria-label="작업·사용량 상세 기록 보관 기간" onchange={(e) => setRetention(e.currentTarget.value)} />
+				><span class="muted">{$_("settings.activitySec.retention")}</span>
+				<Select value={retention == null ? "" : String(retention)} options={RETENTION} aria-label={$_("settings.activitySec.retention")} onchange={(e) => setRetention(e.currentTarget.value)} />
 			</label>
 			<Segmented
-				label="실행 주체"
+				label={$_("settings.activitySec.recent")}
 				bind:value={who}
 				options={[
-					{ value: "all", label: `전체 ${history.length}` },
-					{ value: "auto", label: `자동 ${autoCount}` },
+					{ value: "all", label: `${$_("common.all")} ${history.length}` },
+					{ value: "auto", label: `${$_("settings.activitySec.auto")} ${autoCount}` },
 				]}
 			/>
 			</div>
@@ -208,44 +204,44 @@
 					<Badge tone={s.tone}>{s.label}</Badge>
 					<span class="feat">{featureName(h.feature)}</span>
 					<span class="label">{h.label ?? h.taskType}</span>
-					{#if h.runBy === "auto"}<Badge tone="info">자동</Badge>{/if}
-					{#if logged.has(h.id)}<Badge>보낸 글</Badge>{/if}
+					{#if h.runBy === "auto"}<Badge tone="info">{$_("settings.activitySec.auto")}</Badge>{/if}
+					{#if logged.has(h.id)}<Badge>{$_("settings.activitySec.sentTag")}</Badge>{/if}
 					<span class="muted end">{amount(h)}</span>
 				</button>
 				{#if open === h.id}
 					<dl class="detail">
-						<dt>작업 id</dt><dd><code>{h.id}</code></dd>
-						<dt>실행 주체</dt><dd>{h.runBy === "auto" ? "자동 설정 (자동 번역·자동 읽기 등)" : "사용자"}</dd>
-						{#if h.profileName || h.model}<dt>API · 모델</dt><dd>{h.profileName ?? "—"} · {h.model ?? "—"}</dd>{/if}
-						{#if took(h)}<dt>걸린 시간</dt><dd>{took(h)}</dd>{/if}
-						<dt>시도</dt><dd>{h.attemptCount}회{h.calls > 1 ? ` · API 호출 ${h.calls}번` : ""}</dd>
-						{#if amount(h)}<dt>사용량</dt><dd>{amount(h)}{h.estimated ? " (추정 포함)" : ""}</dd>{/if}
-						{#if h.errorMessage}<dt>오류</dt><dd class="err">{h.errorCode ? `[${h.errorCode}] ` : ""}{h.errorMessage}</dd>{/if}
+						<dt>{$_("settings.activityDetail.taskId")}</dt><dd><code>{h.id}</code></dd>
+						<dt>{$_("settings.activityDetail.runBy")}</dt><dd>{h.runBy === "auto" ? $_("settings.activityDetail.runByAuto") : $_("settings.activityDetail.runByUser")}</dd>
+						{#if h.profileName || h.model}<dt>{$_("settings.activityDetail.apiModel")}</dt><dd>{h.profileName ?? "—"} · {h.model ?? "—"}</dd>{/if}
+						{#if took(h)}<dt>{$_("settings.activityDetail.duration")}</dt><dd>{took(h)}</dd>{/if}
+						<dt>{$_("settings.activityDetail.attempts")}</dt><dd>{h.calls > 1 ? $_("settings.activityDetail.attemptsWithCalls", { values: { attempts: h.attemptCount, calls: h.calls } }) : $_("settings.activityDetail.attemptsVal", { values: { attempts: h.attemptCount } })}</dd>
+						{#if amount(h)}<dt>{$_("settings.activityDetail.usage")}</dt><dd>{amount(h)}{h.estimated ? $_("settings.activityDetail.estimatedSuffix") : ""}</dd>{/if}
+						{#if h.errorMessage}<dt>{$_("settings.activityDetail.error")}</dt><dd class="err">{h.errorCode ? `[${h.errorCode}] ` : ""}{h.errorMessage}</dd>{/if}
 					</dl>
 					{#each calls[h.id] ?? [] as c, i (c.id)}
 						<div class="call">
 							<div class="call-head">
-								<b>호출 {i + 1}</b>
+								<b>{$_("settings.activityDetail.callIndex", { values: { n: i + 1 } })}</b>
 								<span class="muted">{c.model}</span>
-								{#if c.finishReason}<Badge tone={["length", "max_tokens", "MAX_TOKENS"].includes(c.finishReason) ? "warning" : "neutral"}>끝난 이유 {c.finishReason}</Badge>{/if}
+								{#if c.finishReason}<Badge tone={["length", "max_tokens", "MAX_TOKENS"].includes(c.finishReason) ? "warning" : "neutral"}>{$_("settings.activityDetail.finishReason", { values: { reason: c.finishReason } })}</Badge>{/if}
 								{#if c.error}<span class="err">{c.error}</span>{/if}
 							</div>
 							<details>
-								<summary>보낸 글 {sent(c).length}개</summary>
+								<summary>{$_("settings.activityDetail.sentMessages", { values: { count: sent(c).length } })}</summary>
 								{#each sent(c) as m, j (j)}
-									<div class="msg"><span class="role">{ROLE[m.role] ?? m.role}</span><pre>{m.content}</pre></div>
+									<div class="msg"><span class="role">{roleLabel(m.role)}</span><pre>{m.content}</pre></div>
 								{/each}
 							</details>
 							<details open>
-								<summary>받은 글</summary>
-								<pre>{c.responseText || "(없음)"}</pre>
+								<summary>{$_("settings.activityDetail.receivedText")}</summary>
+								<pre>{c.responseText || $_("settings.activityDetail.emptyResponse")}</pre>
 							</details>
 						</div>
 					{/each}
 				{/if}
 			</div>
 		{:else}
-			<EmptyState title="실행 기록 없음" description="메시지를 보내거나 번역·음성·이미지를 쓰면 여기 남음" />
+			<EmptyState title={$_("settings.activityDetail.emptyTitle")} description={$_("settings.activityDetail.emptyDesc")} />
 		{/each}
 	</Group>
 </Section>
