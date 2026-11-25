@@ -1,6 +1,6 @@
 <script lang="ts">
 	import { lastAt } from "$features/character/library.svelte";
-	import { BookOpen, Check, ChevronsUpDown, Copy, Download, ArrowUpDown, ChevronDown, Ellipsis, Gamepad2, GitBranch, House, Pencil, Pin, PinOff, Plus, Settings, Smartphone, Trash2, UserCog, Users, Images, ListFilter } from "@lucide/svelte";
+	import { BookOpen, Check, ChevronsUpDown, Copy, Download, ArrowUpDown, ChevronDown, Ellipsis, Gamepad2, GitBranch, House, Pencil, Pin, PinOff, Plus, Search, Settings, Smartphone, Trash2, UserCog, Users, Images, ListFilter, X } from "@lucide/svelte";
 	import { Avatar, ContextMenu, IconButton, type MenuItem } from "$shared/ui";
 	import { fileSrc } from "$shared/ipc/file";
 	import { call, commands } from "$shared/ipc/client";
@@ -78,8 +78,8 @@
 				desc: p.desc !== false,
 				group: p.group === "character" ? "character" : "none",
 				subGroup: p.subGroup === "forked" ? "forked" : "none",
-				groupSortBy: p.groupSortBy,
-				groupSortDesc: p.groupSortDesc,
+				groupSortBy: p.groupSortBy === "recent" ? "recent" : "name",
+				groupSortDesc: p.groupSortDesc !== false,
 				char: typeof p.char === "string" ? p.char : null,
 				showAvatar: p.showAvatar !== false,
 				showForks: p.showForks !== false,
@@ -140,7 +140,19 @@
 	// 폰 대화는 폰 화면에서. 20개씩 더 보기
 	const PAGE = 20;
 	let shown = $state(PAGE);
-	const base = $derived(library.conversations.filter((c) => c.mode !== "phone" && library.character(c.characterId) && (!charFilter || c.characterId === charFilter)));
+	let searchOpen = $state(false);
+	let convQuery = $state("");
+	const convQ = $derived(convQuery.trim().toLowerCase());
+	const base = $derived(
+		library.conversations.filter((c) => {
+			if (c.mode === "phone") return false;
+			const ch = library.character(c.characterId);
+			if (!ch) return false;
+			if (charFilter && c.characterId !== charFilter) return false;
+			if (convQ && !c.title.toLowerCase().includes(convQ) && !ch.name.toLowerCase().includes(convQ)) return false;
+			return true;
+		}),
+	);
 	const cmp = (a: Conversation, b: Conversation) => {
 		const v = sortBy === "name" ? a.title.localeCompare(b.title, "ko") : sortBy === "created" ? a.createdAt - b.createdAt : lastAt(a) - lastAt(b);
 		// 이름은 오름차순이 "작은 것부터"라 날짜와 방향이 같게(내림차순 = 큰 쪽부터) 뒤집는다
@@ -189,7 +201,10 @@
 				list,
 				latestAt: Math.max(...list.map((c) => lastAt(c))),
 			}))
-			.sort((a, b) => groupSortBy === "name" ? a.name.localeCompare(b.name, "ko") : b.latestAt - a.latestAt || a.name.localeCompare(b.name, "ko"));
+			.sort((a, b) => {
+				const v = groupSortBy === "name" ? a.name.localeCompare(b.name, "ko") : a.latestAt - b.latestAt || a.name.localeCompare(b.name, "ko");
+				return groupSortDesc ? -v : v;
+			});
 	});
 	let folded = $state<Set<string>>(new Set());
 	function toggleFold(id: string) {
@@ -235,7 +250,7 @@
 					value: GROUP_SORT_LABEL[groupSortBy],
 					visible: group !== "none",
 					children: [
-						...(Object.keys(GROUP_SORT_LABEL) as GroupSortBy[]).map((k) => ({ id: k, label: GROUP_SORT_LABEL[k], checked: sortBy === k, onselect: () => (sortBy = k) })),
+						...(Object.keys(GROUP_SORT_LABEL) as GroupSortBy[]).map((k) => ({ id: k, label: GROUP_SORT_LABEL[k], checked: groupSortBy === k, onselect: () => (groupSortBy = k) })),
 						{ id: "desc", label: "내림차순", separator: true, checked: groupSortDesc, onselect: () => (groupSortDesc = true) },
 						{ id: "asc", label: "오름차순", checked: !groupSortDesc, onselect: () => (groupSortDesc = false) },
 					]
@@ -429,9 +444,17 @@
 		{/if}
 		<!-- 필터·새 대화 단추: 묶음 없이 보면 "최근 대화" 머리글 옆, 그룹화하면 첫 묶음 머리글 옆 -->
 		{#snippet tools()}
-			<IconButton label="그룹화·필터·정렬·표시" size="sm" active={viewOpen} onclick={viewMenu}><ListFilter /></IconButton>
+			<IconButton label="대화 검색" size="sm" active={searchOpen || !!convQuery} onclick={() => ((searchOpen = !searchOpen), !searchOpen && (convQuery = ""))}><Search /></IconButton>
+			<IconButton label="그룹화·필터·정렬·표시" size="sm" active={viewOpen || customized} onclick={viewMenu}><ListFilter /></IconButton>
 			<IconButton label="새 대화" size="sm" onclick={newConversation}><Plus /></IconButton>
 		{/snippet}
+		{#if searchOpen || convQuery}
+			<div class="sb-search">
+				<Search />
+				<input bind:value={convQuery} placeholder="대화·캐릭터 검색" aria-label="사이드바 대화 검색" />
+				{#if convQuery}<button type="button" class="sb-clear" aria-label="검색어 지우기" onclick={() => (convQuery = "")}><X /></button>{/if}
+			</div>
+		{/if}
 		{#if group !== "character" || !sections.length}
 			<div class="listbar">
 				<button class="group head" aria-expanded={recentOpen} title={charFilter ? `${charName}의 대화만 보는 중` : ""} onclick={() => (recentOpen = !recentOpen)}>
@@ -663,12 +686,56 @@
 		color: var(--text);
 	}
 	.item.on {
-		background: var(--surface-active);
+		background: var(--accent-soft);
 		color: var(--text);
 		font-weight: 600;
 	}
 	.item.on :global(svg) {
 		color: var(--accent);
+	}
+	.sb-search {
+		display: flex;
+		align-items: center;
+		gap: 6px;
+		margin: var(--space-2) var(--space-2) 0;
+		padding: 0 var(--space-2);
+		height: var(--control-sm);
+		border: 1px solid var(--border);
+		border-radius: var(--radius-sm);
+		background: var(--surface);
+		color: var(--text-faint);
+	}
+	.sb-search:focus-within {
+		border-color: var(--accent);
+	}
+	.sb-search :global(svg) {
+		width: 13px;
+		height: 13px;
+		flex: none;
+	}
+	.sb-search input {
+		flex: 1;
+		min-width: 0;
+		border: none;
+		outline: none;
+		background: transparent;
+		color: var(--text);
+		font: inherit;
+		font-size: var(--text-xs);
+	}
+	.sb-clear {
+		display: grid;
+		place-items: center;
+		padding: 2px;
+		border: none;
+		border-radius: var(--radius-xs);
+		background: transparent;
+		color: var(--text-faint);
+		cursor: pointer;
+	}
+	.sb-clear:hover {
+		color: var(--text);
+		background: var(--surface-hover);
 	}
 	.lists {
 		display: flex;

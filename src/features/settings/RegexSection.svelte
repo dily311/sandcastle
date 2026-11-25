@@ -2,9 +2,9 @@
 	import { regexVersion } from "$shared/stores/regexVersion.svelte";
 	import { drops, extOf, storeFile } from "$app/drop.svelte";
 	import { onMount } from "svelte";
-	import { ChevronRight, Download, Plus } from "@lucide/svelte";
+	import { ChevronRight, Download, Pencil, Plus, Trash2 } from "@lucide/svelte";
 	import type { RegexPlacement, RegexScope, RegexScript_Serialize as RegexScript, RegexTarget } from "$ipc/bindings";
-	import { Button, EmptyState, Switch } from "$shared/ui";
+	import { Button, EmptyState, IconButton, Switch } from "$shared/ui";
 	import RegexEditDialog from "./RegexEditDialog.svelte";
 	import { call, commands } from "$shared/ipc/client";
 	import { pickFiles, JSON_FILES } from "$shared/ipc/dialog";
@@ -100,8 +100,8 @@
 
 {#snippet scriptRow(s: RegexScript)}
 	<Row label={s.name} desc="{s.placement.map((p) => PLACE[p]).join(' · ')} → {TARGET[s.target]}">
-		<Button size="sm" variant="ghost" onclick={() => remove(s)}>삭제</Button>
-		<Button size="sm" onclick={() => startEdit(s)}>편집</Button>
+		<IconButton size="sm" label="{s.name} 편집" onclick={() => startEdit(s)}><Pencil /></IconButton>
+		<IconButton size="sm" variant="danger" label="{s.name} 삭제" onclick={() => remove(s)}><Trash2 /></IconButton>
 		<Switch checked={s.enabled} label="{s.name} 사용" hideLabel onchange={(v) => toggle(s, v)} />
 	</Row>
 {/snippet}
@@ -122,19 +122,16 @@
 				{#each g.items as s (s.id)}{@render scriptRow(s)}{/each}
 			{:else}
 				{#each owners(g.items) as o (o.id)}
-					{@const key = `${g.scope}:${o.id}`}
-					<div class="owner">
-						<button class="owner-head" aria-expanded={!!expanded[key]} onclick={() => (expanded[key] = !expanded[key])}>
+					<details class="owner">
+						<summary class="owner-head">
 							<ChevronRight class="caret" />
 							<b>{o.name}</b>
 							<small>정규식 {o.items.length}개 · 켜짐 {o.on}개</small>
-						</button>
-						{#if expanded[key]}
-							<div class="owner-body">
-								{#each o.items as s (s.id)}{@render scriptRow(s)}{/each}
-							</div>
-						{/if}
-					</div>
+						</summary>
+						<div class="owner-body">
+							{#each o.items as s (s.id)}{@render scriptRow(s)}{/each}
+						</div>
+					</details>
 				{/each}
 			{/if}
 		</Group>
@@ -159,6 +156,11 @@
 		font: inherit;
 		text-align: left;
 		cursor: pointer;
+		list-style: none;
+		user-select: none;
+	}
+	.owner-head::-webkit-details-marker {
+		display: none;
 	}
 	.owner-head:hover {
 		background: var(--surface-hover);
@@ -174,7 +176,7 @@
 		color: var(--text-muted);
 		transition: transform var(--duration-fast) var(--ease);
 	}
-	.owner-head[aria-expanded="true"] :global(.caret) {
+	.owner[open] > .owner-head :global(.caret) {
 		transform: rotate(90deg);
 	}
 	.owner-body {

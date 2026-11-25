@@ -1,6 +1,6 @@
 <script lang="ts">
 	// 데스크톱에서 띄운 상태창 (5-F-4-2, ADR-029 ⑤): 머리줄을 끌어 옮기고, 오른쪽 아래 모서리로 크기를 바꾼다.
-	// 위치·크기·접힘은 이 기기에만 (statusView)
+	// separateWindows 옵션이 켜져 있고 상태창이 여러 개면 각각 독립된 팝업창으로 띄운다.
 	import { ChevronDown, PanelRightClose } from "@lucide/svelte";
 	import { IconButton } from "$shared/ui";
 	import type { Block } from "$features/character/format";
@@ -11,80 +11,151 @@
 
 	const MIN_W = 220;
 	const MIN_H = 80;
-	const DEFAULT: FloatRect = { x: 0, y: 72, w: 320, h: 260 };
+
+	interface WinSpec {
+		key: string;
+		title: string;
+		blocks: Block[];
+		index: number;
+	}
+	const windows = $derived<WinSpec[]>(
+		statusView.separateWindows && blocks.length > 1
+			? blocks.map((b, i) => ({ key: `win:${i}`, title: `상태 ${i + 1}`, blocks: [b], index: i }))
+			: [{ key: "single", title: "상태", blocks, index: 0 }],
+	);
+
+	function defaultRect(index: number): FloatRect {
+		const w = 320;
+		const h = 260;
+		const vw = typeof window !== "undefined" ? window.innerWidth : 1280;
+		return {
+			x: Math.max(8, vw - w - 24 - index * 28),
+			y: 72 + index * 38,
+			w,
+			h,
+		};
+	}
 
 	/** 창 안에 들어오게 (창 크기가 바뀌었거나 저장한 자리가 밖이면) */
-	function clamp(r: FloatRect): FloatRect {
+	function clamp(r: FloatRect, index = 0): FloatRect {
 		const vw = window.innerWidth;
 		const vh = window.innerHeight;
 		const w = Math.min(Math.max(MIN_W, r.w), vw - 16);
 		const h = Math.min(Math.max(MIN_H, r.h), vh - 16);
-		return { w, h, x: Math.min(Math.max(8, r.x || vw - w - 24), vw - w - 8), y: Math.min(Math.max(8, r.y), vh - 40) };
+		const def = defaultRect(index);
+		return {
+			w,
+			h,
+			x: Math.min(Math.max(8, r.x || def.x), vw - w - 8),
+			y: Math.min(Math.max(8, r.y), vh - 40),
+		};
 	}
-	let rect = $state(clamp(statusView.rect ?? DEFAULT));
-	let box: HTMLDivElement | undefined = $state();
+
+	let rects = $state<Record<string, FloatRect>>({});
+	function rectOf(win: WinSpec): FloatRect {
+		if (rects[win.key]) return rects[win.key];
+		const saved = win.key === "single" ? statusView.rect : statusView.getRect(win.key);
+		return clamp(saved ?? defaultRect(win.index), win.index);
+	}
+	function saveRect(win: WinSpec, r: FloatRect) {
+		rects[win.key] = r;
+		if (win.key === "single") statusView.set({ rect: r });
+		else statusView.setRect(win.key, r);
+	}
+	function isCollapsed(win: WinSpec): boolean {
+		return win.key === "single" ? statusView.collapsed : statusView.isCollapsed(win.key);
+	}
+	function toggleCollapsed(win: WinSpec) {
+		const next = !isCollapsed(win);
+		if (win.key === "single") statusView.set({ collapsed: next });
+		else statusView.setCollapsed(win.key, next);
+	}
 
 	// ---- 옮기기 ----
-	let drag: { dx: number; dy: number } | null = null;
-	function down(e: PointerEvent) {
+	let drag: { key: string; index: number; dx: number; dy: number } | null = null;
+	let topKey = $state<string>("single");
+	function down(e: PointerEvent, win: WinSpec) {
+		topKey = win.key;
 		if ((e.target as HTMLElement).closest("button")) return;
-		drag = { dx: e.clientX - rect.x, dy: e.clientY - rect.y };
+		const r = rectOf(win);
+		drag = { key: win.key, index: win.index, dx: e.clientX - r.x, dy: e.clientY - r.y };
 		(e.currentTarget as HTMLElement).setPointerCapture(e.pointerId);
 	}
-	function move(e: PointerEvent) {
-		if (!drag) return;
-		rect = clamp({ ...rect, x: e.clientX - drag.dx, y: e.clientY - drag.dy });
+	function move(e: PointerEvent, win: WinSpec) {
+		if (!drag || drag.key !== win.key) return;
+		const r = rectOf(win);
+		rects[win.key] = clamp({ ...r, x: e.clientX - drag.dx, y: e.clientY - drag.dy }, win.index);
 	}
-	function up() {
-		if (!drag) return;
+	function up(win: WinSpec) {
+		if (!drag || drag.key !== win.key) return;
 		drag = null;
-		statusView.set({ rect });
+		saveRect(win, rectOf(win));
 	}
 
 	// ---- 크기 (CSS resize) ----
-	$effect(() => {
-		if (!box) return;
+	function trackResize(node: HTMLDivElement, win: WinSpec) {
+		let cur = win;
 		let t: ReturnType<typeof setTimeout> | undefined;
 		const ro = new ResizeObserver(() => {
-			if (!box || statusView.collapsed) return;
-			const w = Math.round(box.offsetWidth);
-			const h = Math.round(box.offsetHeight);
-			if (w === rect.w && h === rect.h) return;
-			rect = { ...rect, w, h };
+			if (isCollapsed(cur)) return;
+			const r = rectOf(cur);
+			const w = Math.round(node.offsetWidth);
+			const h = Math.round(node.offsetHeight);
+			if (w === r.w && h === r.h) return;
+			const next = { ...r, w, h };
+			rects[cur.key] = next;
 			clearTimeout(t);
-			t = setTimeout(() => statusView.set({ rect }), 300);
+			t = setTimeout(() => saveRect(cur, next), 300);
 		});
-		ro.observe(box);
-		return () => (ro.disconnect(), clearTimeout(t));
-	});
-	const onresize = () => (rect = clamp(rect));
+		ro.observe(node);
+		return {
+			update(nextWin: WinSpec) {
+				cur = nextWin;
+			},
+			destroy() {
+				ro.disconnect();
+				clearTimeout(t);
+			},
+		};
+	}
+
+	function onresize() {
+		const next: Record<string, FloatRect> = {};
+		for (const w of windows) next[w.key] = clamp(rectOf(w), w.index);
+		rects = next;
+	}
 </script>
 
 <svelte:window {onresize} />
 
-<div
-	bind:this={box}
-	class="float sc-status-float"
-	class:collapsed={statusView.collapsed}
-	role="dialog"
-	aria-label="상태창"
-	style:left="{rect.x}px"
-	style:top="{rect.y}px"
-	style:width="{rect.w}px"
-	style:height={statusView.collapsed ? "auto" : `${rect.h}px`}
->
-	<!-- svelte-ignore a11y_no_static_element_interactions -->
-	<div class="head" onpointerdown={down} onpointermove={move} onpointerup={up} onpointercancel={up}>
-		<b>상태</b>
-		<IconButton label={statusView.collapsed ? "펼치기" : "접기"} size="sm" aria-expanded={!statusView.collapsed} onclick={() => statusView.set({ collapsed: !statusView.collapsed })}
-			><ChevronDown class={statusView.collapsed ? "rot" : ""} /></IconButton
-		>
-		<IconButton label="패널로 돌리기" size="sm" onclick={() => statusView.set({ floating: false })}><PanelRightClose /></IconButton>
+{#each windows as win (win.key)}
+	{@const r = rectOf(win)}
+	{@const col = isCollapsed(win)}
+	<div
+		use:trackResize={win}
+		class="float sc-status-float"
+		class:collapsed={col}
+		class:front={topKey === win.key}
+		role="dialog"
+		tabindex="-1"
+		aria-label={win.title}
+		style:left="{r.x}px"
+		style:top="{r.y}px"
+		style:width="{r.w}px"
+		style:height={col ? "auto" : `${r.h}px`}
+		onpointerdown={() => (topKey = win.key)}
+	>
+		<!-- svelte-ignore a11y_no_static_element_interactions -->
+		<div class="head" onpointerdown={(e) => down(e, win)} onpointermove={(e) => move(e, win)} onpointerup={() => up(win)} onpointercancel={() => up(win)}>
+			<b>{win.title}</b>
+			<IconButton label={col ? "펼치기" : "접기"} size="sm" aria-expanded={!col} onclick={() => toggleCollapsed(win)}><ChevronDown class={col ? "rot" : ""} /></IconButton>
+			<IconButton label="패널로 돌리기" size="sm" onclick={() => statusView.set({ floating: false })}><PanelRightClose /></IconButton>
+		</div>
+		{#if !col}
+			<div class="body"><StatusWindow blocks={win.blocks} /></div>
+		{/if}
 	</div>
-	{#if !statusView.collapsed}
-		<div class="body"><StatusWindow {blocks} /></div>
-	{/if}
-</div>
+{/each}
 
 <style>
 	.float {
@@ -99,7 +170,10 @@
 		border: 1px solid var(--border);
 		border-radius: var(--radius-md);
 		background: var(--surface);
-		box-shadow: var(--shadow-md);
+		box-shadow: var(--shadow-lg);
+	}
+	.float.front {
+		z-index: calc(var(--z-popover) + 1);
 	}
 	.float.collapsed {
 		resize: none;
@@ -110,6 +184,7 @@
 		gap: 2px;
 		padding: 2px 4px 2px var(--space-3);
 		border-bottom: 1px solid var(--border);
+		background: var(--surface-2);
 		font-size: var(--text-sm);
 		cursor: move;
 		user-select: none;

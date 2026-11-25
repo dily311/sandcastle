@@ -142,6 +142,41 @@
 			{/if}
 		</Field>
 	</div>
+
+	{#if usedBy.length || convs.length}
+		<section class="usage">
+			<h2>사용 중인 곳</h2>
+			{#if usedBy.length}
+				<div class="usage-group">
+					<p class="usage-label">기본 페르소나로 쓰는 캐릭터 ({usedBy.length})</p>
+					<div class="usage-chips">
+						{#each usedBy as c (c.id)}
+							<button type="button" class="usage-chip" onclick={() => nav.go({ page: "character", charId: c.id })}>
+								<Avatar name={c.name} src={fileSrc(c.avatar)} fit={c.avatarFit} color={c.color} size={20} />
+								<span>{c.name}</span>
+							</button>
+						{/each}
+					</div>
+				</div>
+			{/if}
+			{#if convs.length}
+				<div class="usage-group">
+					<p class="usage-label">고정된 대화 ({convs.length})</p>
+					<ul class="usage-list">
+						{#each convs.slice(0, 8) as c (c.id)}
+							{@const ch = library.character(c.characterId)}
+							<li>
+								<button type="button" onclick={() => nav.go({ page: "character", charId: c.characterId ?? undefined, convId: c.id })}>
+									<b>{c.title}</b>
+									<small>{ch?.name ?? "캐릭터"} · {relative(c.updatedAt)}</small>
+								</button>
+							</li>
+						{/each}
+					</ul>
+				</div>
+			{/if}
+		</section>
+	{/if}
 </div>
 
 <ContextMenu at={menu} items={menuItems} label="페르소나 메뉴" onclose={() => (menu = null)} />
@@ -226,8 +261,97 @@
 		flex-direction: column;
 		gap: var(--space-5);
 		padding: var(--space-5);
+		border: 1px solid var(--border);
 		border-radius: var(--radius-lg);
-		background: var(--bg-sunken);
+		background: var(--surface);
+		box-shadow: var(--shadow-sm);
+	}
+	.usage {
+		margin-top: var(--space-5);
+		display: flex;
+		flex-direction: column;
+		gap: var(--space-4);
+		padding: var(--space-5);
+		border: 1px solid var(--border);
+		border-radius: var(--radius-lg);
+		background: var(--surface);
+		box-shadow: var(--shadow-sm);
+	}
+	.usage h2 {
+		font-size: var(--text-md);
+		font-weight: 700;
+	}
+	.usage-group {
+		display: flex;
+		flex-direction: column;
+		gap: var(--space-2);
+	}
+	.usage-label {
+		font-size: var(--text-xs);
+		font-weight: 600;
+		color: var(--text-muted);
+	}
+	.usage-chips {
+		display: flex;
+		flex-wrap: wrap;
+		gap: var(--space-2);
+	}
+	.usage-chip {
+		display: inline-flex;
+		align-items: center;
+		gap: 6px;
+		padding: 4px 10px 4px 6px;
+		border: 1px solid var(--border);
+		border-radius: var(--radius-full);
+		background: var(--surface-2);
+		color: var(--text);
+		font: inherit;
+		font-size: var(--text-xs);
+		cursor: pointer;
+	}
+	.usage-chip:hover {
+		background: var(--surface-hover);
+		border-color: var(--border-strong);
+	}
+	.usage-list {
+		list-style: none;
+		margin: 0;
+		padding: 0;
+		border: 1px solid var(--border);
+		border-radius: var(--radius-md);
+		overflow: hidden;
+	}
+	.usage-list li + li {
+		border-top: 1px solid var(--border);
+	}
+	.usage-list button {
+		display: flex;
+		align-items: center;
+		justify-content: space-between;
+		gap: var(--space-3);
+		width: 100%;
+		padding: var(--space-2) var(--space-3);
+		border: none;
+		background: transparent;
+		color: var(--text);
+		font: inherit;
+		font-size: var(--text-sm);
+		text-align: left;
+		cursor: pointer;
+	}
+	.usage-list button:hover {
+		background: var(--surface-hover);
+	}
+	.usage-list b {
+		font-weight: 500;
+		overflow: hidden;
+		text-overflow: ellipsis;
+		white-space: nowrap;
+	}
+	.usage-list small {
+		flex: none;
+		color: var(--text-faint);
+		font-size: var(--text-xs);
 	}
 	.count {
 		font-size: var(--text-xs);

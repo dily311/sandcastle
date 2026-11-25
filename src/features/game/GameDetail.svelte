@@ -1,7 +1,7 @@
 <script lang="ts">
 	import { onMount } from "svelte";
 	import { AlertTriangle, ImagePlus, X, ChevronRight, Download, Ellipsis, Gamepad2, MessageSquare, Pencil, Play, Plus, Trash2, Users } from "@lucide/svelte";
-	import { Avatar, Badge, Button, ContextMenu, EmptyState, IconButton, Segmented, Spinner, type MenuItem } from "$shared/ui";
+	import { Avatar, Badge, Button, ContextMenu, EmptyState, IconButton, ListToolbar, Segmented, Spinner, type MenuItem } from "$shared/ui";
 	import { call, commands } from "$shared/ipc/client";
 	import { GAME_FILES, IMAGE_FILES, pickFiles, saveIntoPicked, saveTo } from "$shared/ipc/dialog";
 	import { layout } from "$app/layout.svelte";
@@ -59,6 +59,32 @@
 
 	let tab = $state<"sessions" | "characters" | "check">("sessions");
 	let starting = $state(false);
+	let sessionQuery = $state("");
+	let sessionSort = $state("recent");
+	let charQuery = $state("");
+	let charSort = $state("name");
+	const SESSION_SORTS = [
+		{ value: "recent", label: "최근 플레이 순" },
+		{ value: "turns", label: "턴 많은 순" },
+		{ value: "oldest", label: "오래된 순" },
+	];
+	const CHAR_SORTS = [
+		{ value: "name", label: "이름 순" },
+		{ value: "order", label: "등록 순" },
+	];
+	const filteredSessions = $derived.by(() => {
+		const q = sessionQuery.trim().toLowerCase();
+		const list = games.sessions.filter((s) => !q || sceneName(s.currentSceneId).toLowerCase().includes(q));
+		if (sessionSort === "turns") return [...list].sort((a, b) => b.headSeq - a.headSeq);
+		if (sessionSort === "oldest") return [...list].sort((a, b) => a.updatedAt - b.updatedAt);
+		return [...list].sort((a, b) => b.updatedAt - a.updatedAt);
+	});
+	const filteredCharacters = $derived.by(() => {
+		const q = charQuery.trim().toLowerCase();
+		const list = (view.characters ?? []).filter((c) => !q || c.name.toLowerCase().includes(q) || (c.description ?? "").toLowerCase().includes(q));
+		if (charSort === "name") return [...list].sort((a, b) => a.name.localeCompare(b.name, "ko"));
+		return list;
+	});
 
 	async function startNew() {
 		if (errors.length) {
@@ -164,13 +190,13 @@
 	</EmptyState>
 {:else}
 	<div class="detail">
-		<div class="banner" style:background-image={cover ? `url("${cover}")` : undefined}>
-			<div class="cover-tools">
+		<div class="banner" class:has-cover={!!cover} class:no-cover={!cover} style:background-image={cover ? `url("${cover}")` : undefined}>
+			<div class="cover-tools" class:on={!cover}>
 				<Button size="sm" variant="secondary" onclick={() => changeCover()}>{#snippet icon()}<ImagePlus />{/snippet}{cover ? "커버 바꾸기" : "커버 넣기"}</Button>
 				{#if game.project.coverImage}<Button size="sm" variant="secondary" onclick={() => changeCover(true)}>{#snippet icon()}<X />{/snippet}커버 지우기</Button>{/if}
 			</div>
 		</div>
-		<header class="profile">
+		<header class="profile" class:no-cover={!cover}>
 			<div class="ident">
 				<h1>{game.project.title}</h1>
 				<p class="faint">{template?.name ?? game.project.templateId} · v{game.project.version}</p>
@@ -211,25 +237,35 @@
 			</div>
 
 			{#if tab === "sessions"}
+				{#if games.sessions.length}
+					<div class="sub-toolbar">
+						<ListToolbar bind:query={sessionQuery} bind:sort={sessionSort} placeholder="장면 이름 검색" sorts={SESSION_SORTS} />
+					</div>
+				{/if}
 				<ul class="list">
-					{#each games.sessions as s, i (s.id)}
+					{#each filteredSessions as s, i (s.id)}
 						<li>
 							<button class="row" onclick={() => resume(s)} disabled={starting}>
-								<span class="num">{games.sessions.length - i}</span>
+								<span class="num">{filteredSessions.length - i}</span>
 								<span class="t"><b>{sceneName(s.currentSceneId)}</b><small title={absolute(s.updatedAt)}>게임 시각 {clock(s.gameTime)} · {s.headSeq}턴 · {relative(s.updatedAt)}{s.parentSessionId ? " · 갈래" : ""}</small></span>
 								<ChevronRight />
 							</button>
 							<IconButton label="일반 대화로 복사 (캐릭터·로어북과 함께)" size="sm" disabled={copying} onclick={() => void copyToChat(s)}><MessageSquare /></IconButton>
 							<IconButton label="SillyTavern 채팅(.jsonl)으로 내보내기" size="sm" onclick={() => exportSession(s)}><Download /></IconButton>
-							<IconButton label="세션 삭제" size="sm" onclick={() => removeSession(s)}><Trash2 /></IconButton>
+							<IconButton label="세션 삭제" size="sm" variant="danger" onclick={() => removeSession(s)}><Trash2 /></IconButton>
 						</li>
 					{:else}
-						<li class="none">아직 플레이 기록 없음 · <button class="link" onclick={startNew}>시작</button></li>
+						<li class="none">{games.sessions.length ? "검색 결과 없음" : "아직 플레이 기록 없음"} {#if !games.sessions.length}· <button class="link" onclick={startNew}>시작</button>{/if}</li>
 					{/each}
 				</ul>
 			{:else if tab === "characters"}
+				{#if (view.characters?.length ?? 0) > 0}
+					<div class="sub-toolbar">
+						<ListToolbar bind:query={charQuery} bind:sort={charSort} placeholder="등장인물 이름·설명" sorts={CHAR_SORTS} />
+					</div>
+				{/if}
 				<ul class="list">
-					{#each view.characters ?? [] as c (c.id)}
+					{#each filteredCharacters as c (c.id)}
 						<li>
 							<div class="row static">
 								<Avatar name={c.name} src={gameAssetUrl(gameId, c.avatar)} size={36} />
@@ -238,7 +274,7 @@
 							<Button size="sm" variant="ghost" onclick={() => copyToCharacter(c.id, c.name)}>{#snippet icon()}<Users />{/snippet}캐릭터로 복사</Button>
 						</li>
 					{:else}
-						<li class="none">등장인물 없음</li>
+						<li class="none">{(view.characters?.length ?? 0) ? "검색 결과 없음" : "등장인물 없음"}</li>
 					{/each}
 				</ul>
 			{:else}
@@ -269,7 +305,8 @@
 		transition: opacity var(--duration-fast) var(--ease);
 	}
 	.banner:hover .cover-tools,
-	.cover-tools:focus-within {
+	.cover-tools:focus-within,
+	.cover-tools.on {
 		opacity: 1;
 	}
 	@media (hover: none) {
@@ -289,14 +326,25 @@
 	.banner {
 		position: relative;
 		height: 200px;
-		background:
-			radial-gradient(ellipse at 70% 0%, color-mix(in oklab, var(--accent) 45%, transparent), transparent 55%),
-			linear-gradient(180deg, var(--gray-4), var(--gray-2));
+	}
+	.banner.has-cover {
 		background-size: cover;
 		background-position: center;
-		z-index: -1;
+		background-repeat: no-repeat;
+	}
+	.banner.no-cover {
+		height: auto;
+		max-width: var(--page-medium);
+		margin: 0 auto;
+		padding: var(--space-4) var(--space-6) 0;
+		display: flex;
+		justify-content: flex-end;
+	}
+	.banner.no-cover .cover-tools {
+		position: static;
 	}
 	.profile {
+		position: relative;
 		display: flex;
 		align-items: flex-end;
 		justify-content: space-between;
@@ -304,6 +352,20 @@
 		max-width: var(--page-medium);
 		margin: -40px auto 0;
 		padding: 0 var(--space-6);
+	}
+	.profile.no-cover {
+		margin-top: var(--space-2);
+		align-items: center;
+	}
+	.profile.no-cover .ident {
+		padding: 0;
+		background: transparent;
+		box-shadow: none;
+	}
+	.sub-toolbar {
+		display: flex;
+		justify-content: flex-end;
+		margin-bottom: var(--space-3);
 	}
 	.ident {
 		padding: var(--space-3) var(--space-4);
@@ -360,9 +422,11 @@
 	.issues {
 		list-style: none;
 		margin: 0;
-		padding: var(--space-1);
+		padding: 0;
+		border: 1px solid var(--border);
 		border-radius: var(--radius-lg);
-		background: var(--bg-sunken);
+		background: var(--surface);
+		overflow: hidden;
 	}
 	.list li {
 		display: flex;

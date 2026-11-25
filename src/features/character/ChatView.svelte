@@ -794,12 +794,15 @@
 		justify-content: space-between;
 		padding: var(--space-2) var(--space-3) 0;
 		width: 100%;
+		pointer-events: none;
 	}
 	/* 대화 목록 버튼은 마우스를 올리거나 키보드로 갔을 때만 보임 */
 	.bar :global(.icon-btn) {
+		pointer-events: auto;
 		opacity: 0;
 		transition: opacity var(--duration-fast) var(--ease);
-		background: var(--surface);
+		background: color-mix(in oklab, var(--surface) 88%, transparent);
+		backdrop-filter: blur(6px);
 	}
 	.bar:hover :global(.icon-btn),
 	.bar :global(.icon-btn:focus-visible),
@@ -995,7 +998,7 @@
 	.text {
 		max-width: var(--page-reading);
 		margin: 0 auto;
-		padding: var(--space-6) var(--space-6) var(--space-10);
+		padding: var(--space-10) var(--space-6) var(--space-10);
 		font-size: 15.5px;
 		line-height: 1.85;
 		display: flex;

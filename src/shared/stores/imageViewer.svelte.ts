@@ -1,3 +1,5 @@
+import type { MenuItem } from "$shared/ui/ContextMenu.svelte";
+
 // 그림 크게 보기: 어느 화면에서든 그림을 누르면 앱 전체 뷰어(ImageViewerHost)가 띄운다.
 // 데이터(무엇을 보나)만 여기 두고, 그리는 일은 shared/ui/ImageViewerHost.svelte가 한다.
 export interface ViewedImage {
@@ -10,6 +12,8 @@ export interface ViewedImage {
 	remove?: () => void | Promise<void>;
 	/** 정보 보기에 더할 줄 (프롬프트 등) */
 	info?: { label: string; value: string }[];
+	/** 컨텍스트 메뉴에 추가할 동작 (예: 이 프롬프트로 다시, 태그 추가, 대화로 이동) */
+	extraItems?: MenuItem[] | (() => MenuItem[]);
 }
 
 /** 그림 요소에 붙여 두는 동작: 눌러서 크게 볼 때(imageZoom) 뷰어가 가져다 쓴다. `use:viewerActions={{ rename, remove }}` */

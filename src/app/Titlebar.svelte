@@ -418,12 +418,15 @@
 	/* 탭이 많으면 줄어들고 옆으로 넘김 (창 버튼은 밀려나지 않게) */
 	.ptabs {
 		display: flex;
-		gap: 2px;
+		gap: 1px;
 		flex: 1;
 		min-width: 0;
 		margin-right: auto;
 		overflow-x: auto;
 		scrollbar-width: none;
+		mask-image: linear-gradient(to right, transparent 0, #000 6px, #000 calc(100% - 10px), transparent 100%);
+		-webkit-mask-image: linear-gradient(to right, transparent 0, #000 6px, #000 calc(100% - 10px), transparent 100%);
+		padding: 0 4px;
 	}
 	.ptabs::-webkit-scrollbar {
 		display: none;
@@ -432,25 +435,31 @@
 		flex: none;
 		display: grid;
 		place-items: center;
-		width: 30px;
+		width: 26px;
 		height: 26px;
 		border: none;
 		border-radius: var(--radius-xs);
 		background: transparent;
 		color: var(--text-muted);
 		cursor: pointer;
+		transition:
+			background var(--duration-fast) var(--ease),
+			color var(--duration-fast) var(--ease);
 	}
 	.ptab :global(svg) {
-		width: 16px;
-		height: 16px;
+		width: 15px;
+		height: 15px;
 	}
 	.ptab:hover {
 		background: var(--surface-hover);
 		color: var(--text);
 	}
 	.ptab.on {
-		background: var(--surface-active);
-		color: var(--text);
+		background: var(--accent-soft);
+		color: var(--accent-text);
+	}
+	.ptab.on :global(svg) {
+		color: var(--accent);
 	}
 	.win {
 		display: flex;

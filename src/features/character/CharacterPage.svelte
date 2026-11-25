@@ -3,14 +3,14 @@
 	import { jobs, SKIPPED } from "$shared/stores/jobs.svelte";
 	import { lastAt } from "$features/character/library.svelte";
 	import { TRASH_HINT, trashedToast } from "$shared/trash";
-	import { Camera, ImagePlus, Move, X as XIcon } from "@lucide/svelte";
+	import { Camera, Copy, ImagePlus, Move, Pin, PinOff, X as XIcon } from "@lucide/svelte";
 	import { ChevronRight, Download, Ellipsis, Gamepad2, MessageSquarePlus, Pencil, Plus, Star, StarOff, Trash2, Upload, UserRound, Users } from "@lucide/svelte";
 	import type { GameProject_Serialize as GameProject } from "$ipc/bindings";
 	import { Avatar, Button, ContextMenu, ListToolbar, SelectBar, SplitButton, Dialog, EmptyState, IconButton, Segmented, Spinner, type MenuItem } from "$shared/ui";
 	import { nav } from "$app/nav.svelte";
 	import { call, commands } from "$shared/ipc/client";
 	import type { CharacterStats } from "$ipc/bindings";
-	import { bookmarksOf } from "./bookmarks";
+	import { bookmarks, bookmarksOf } from "./bookmarks";
 	import { IMAGE_FILES, PACK_FILES, ST_FILES, pickFiles, pickSavePath } from "$shared/ipc/dialog";
 	import { fileSrc, imageSrc } from "$shared/ipc/file";
 	import { confirmAction, promptText } from "$shared/stores/confirm.svelte";
@@ -20,8 +20,8 @@
 	import ReadView from "./ReadView.svelte";
 	import CharacterEditor from "./CharacterEditor.svelte";
 	import CharacterGallery from "./CharacterGallery.svelte";
-	import { library, type Character } from "./library.svelte";
-	import { charActions } from "./actions";
+	import { library, type Character, type Conversation } from "./library.svelte";
+	import { charActions, convActions } from "./actions";
 	import { fillNames, toBlocks } from "./format";
 	import RichText from "./RichText.svelte";
 	import { plugins } from "$shared/stores/plugins.svelte";
@@ -377,6 +377,41 @@
 			],
 		};
 	}
+	function openConvMenu(e: MouseEvent, c: Conversation) {
+		e.preventDefault();
+		e.stopPropagation();
+		const r = (e.currentTarget as HTMLElement).getBoundingClientRect();
+		cardMenu = {
+			at: e.type === "contextmenu" ? { x: e.clientX, y: e.clientY } : { x: r.right, y: r.bottom + 4, align: "end" },
+			items: [
+				{
+					label: "이름 바꾸기",
+					icon: Pencil,
+					onselect: async () => {
+						const t = await promptText({ title: "대화 이름", input: { value: c.title, placeholder: "대화 이름" }, confirmLabel: "저장" });
+						if (t?.trim()) await library.rename(c.id, t);
+					},
+				},
+				{ label: c.pinned ? "고정 풀기" : "고정", icon: c.pinned ? PinOff : Pin, onselect: () => library.togglePin(c.id) },
+				{
+					label: "복제",
+					icon: Copy,
+					onselect: async () => {
+						const d = await library.duplicate(c.id);
+						if (d) open(c.characterId, d.id);
+					},
+				},
+				{ label: "내보내기…", icon: Download, onselect: () => convActions.exportMenu(c) },
+				{ label: "삭제", icon: Trash2, danger: true, separator: true, onselect: () => convActions.remove(c) },
+			],
+		};
+	}
+	async function copyMark(text: string) {
+		await navigator.clipboard.writeText(text).then(
+			() => toasts.success("북마크 글 복사함"),
+			() => toasts.error("복사 못 함"),
+		);
+	}
 	async function removeCharacter(c: Character, leave = true) {
 		const n = library.convsOf(c.id).length;
 		if (!(await confirmAction({ title: "캐릭터 삭제", message: `'${c.name}'을(를) 휴지통으로 옮김${n ? ` (대화 ${n}개는 캐릭터 없이 남고, 되살리면 다시 이어짐)` : ""}. ${TRASH_HINT}`, confirmLabel: "삭제", danger: true }))) return;
@@ -500,11 +535,15 @@
 				{/if}
 				<ul class="recent marks">
 					{#each filteredMarks as b (b.conv.id + b.id)}
-						<li>
-							<button onclick={() => open(character.id, b.conv.id)}>
+						<li class="recent-row">
+							<button class="row-main" onclick={() => open(character.id, b.conv.id)}>
 								<span><b class="mark-text">{b.text}</b><small>{b.conv.title} · {relative(b.createdAt)}</small></span>
 								<ChevronRight />
 							</button>
+							<div class="row-acts">
+								<IconButton size="sm" label="복사" onclick={() => copyMark(b.text)}><Copy /></IconButton>
+								<IconButton size="sm" variant="danger" label="북마크 지우기" onclick={() => bookmarks.remove(b.conv, b.id)}><Trash2 /></IconButton>
+							</div>
 						</li>
 					{:else}
 						<li class="none">{marks.length ? "검색 결과 없음" : '북마크 없음 · 대화에서 글을 끌어 고른 뒤 "북마크"'}</li>
@@ -538,11 +577,14 @@
 				{/if}
 				<ul class="recent">
 					{#each filteredRecent as c (c.id)}
-						<li>
-							<button onclick={() => open(character.id, c.id)}>
+						<li class="recent-row" oncontextmenu={(e) => openConvMenu(e, c)}>
+							<button class="row-main" onclick={() => open(character.id, c.id)}>
 								<span><b>{c.title}</b><small title={absolute(lastAt(c))}>마지막 활동 · {relative(lastAt(c))} · {c.messageCount}개</small></span>
 								<ChevronRight />
 							</button>
+							<div class="row-acts">
+								<IconButton size="sm" label="{c.title} 메뉴" onclick={(e) => openConvMenu(e, c)}><Ellipsis /></IconButton>
+							</div>
 						</li>
 					{:else}
 						<li class="none">{recent.length ? "검색 결과 없음" : "아직 대화 없음"}</li>
@@ -558,7 +600,10 @@
 {:else}
 	<div class="page">
 		<header class="head">
-			<h1>캐릭터</h1>
+			<div class="title-wrap">
+				<h1>캐릭터</h1>
+				<span class="head-count">{library.characters.length}명</span>
+			</div>
 			<ListToolbar bind:query bind:filter bind:sort bind:selecting placeholder="이름·태그" filters={FILTERS} sorts={SORTS} canSelect={!!library.characters.length}>
 				<SplitButton label="새로 만들기" onclick={createCharacter} menuLabel="캐릭터 가져오기" items={[{ label: "파일에서 가져오기 (PNG·JSON·ZIP)", icon: Upload, onselect: importFiles }]} />
 			</ListToolbar>
@@ -658,8 +703,18 @@
 		max-width: var(--page-wide);
 		margin: 0 auto var(--space-5);
 	}
+	.title-wrap {
+		display: flex;
+		align-items: baseline;
+		gap: var(--space-2);
+	}
 	.head h1 {
 		white-space: nowrap;
+	}
+	.head-count {
+		color: var(--text-faint);
+		font-size: var(--text-sm);
+		font-variant-numeric: tabular-nums;
 	}
 	.grid {
 		display: grid;
@@ -824,6 +879,7 @@
 		align-items: center;
 		gap: 4px;
 		margin-top: 2px;
+		min-height: 20px;
 	}
 	.char-tag,
 	.char-count {
@@ -1046,35 +1102,61 @@
 		list-style: none;
 		margin: var(--space-3) 0 0;
 		padding: 0;
+		border: 1px solid var(--border);
+		border-radius: var(--radius-lg);
+		background: var(--surface);
+		overflow: hidden;
 	}
-	.recent button {
+	.recent-row {
 		display: flex;
 		align-items: center;
-		width: 100%;
-		padding: var(--space-3) 0;
+		gap: var(--space-1);
+		padding-right: var(--space-2);
+		transition: background var(--duration-fast) var(--ease);
+	}
+	.recent-row:hover {
+		background: var(--surface-hover);
+	}
+	.recent li + li {
+		border-top: 1px solid var(--border);
+	}
+	.row-main {
+		flex: 1;
+		min-width: 0;
+		display: flex;
+		align-items: center;
+		gap: var(--space-3);
+		padding: var(--space-3) var(--space-4);
 		border: none;
-		border-bottom: 1px solid var(--border);
 		background: none;
 		text-align: left;
 		cursor: pointer;
 	}
-	.recent li:last-child button {
-		border-bottom: none;
-	}
-	.recent button span {
+	.row-main span {
 		flex: 1;
+		min-width: 0;
 		display: flex;
 		flex-direction: column;
+		gap: 2px;
 	}
 	.recent small {
 		color: var(--text-faint);
 		font-size: var(--text-xs);
 	}
-	.recent button :global(svg) {
+	.row-main :global(svg) {
+		width: 16px;
+		height: 16px;
+		flex: none;
 		color: var(--text-faint);
 	}
-	.recent button:hover b {
+	.row-main:hover b {
 		color: var(--accent-text);
+	}
+	.row-acts {
+		display: flex;
+		align-items: center;
+		gap: 2px;
+		flex: none;
 	}
 	.none {
 		padding: var(--space-6);

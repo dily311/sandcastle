@@ -2,7 +2,7 @@
 	// 홈: 사용자가 꾸미는 첫 화면. 블록(이어하기·빠른 실행·즐겨찾기·게임·내 글)을 켜고 끄고 순서를 바꾼다.
 	// AI를 부르지 않는다 (보여주기만). 설정은 앱 설정의 home에 저장
 	import { lastAt } from "$features/character/library.svelte";
-	import { ArrowDown, ArrowUp, Check, Gamepad2, GripVertical, Images, MessageSquarePlus, Pencil, Smartphone, Star, Users } from "@lucide/svelte";
+	import { ArrowDown, ArrowUp, BookOpen, Check, Gamepad2, GripVertical, Images, MessageSquarePlus, Pencil, Smartphone, Star, UserRound, Users } from "@lucide/svelte";
 	import { Sortable, moveItem } from "$shared/dnd/sortable.svelte";
 	import type { HomeSetting_Serialize as HomeSetting } from "$ipc/bindings";
 	import { Avatar, Button, EmptyState, Input, Switch, Textarea } from "$shared/ui";
@@ -98,7 +98,7 @@
 			<h1>{greeting}</h1>
 		</div>
 		{#if !editing}
-			<Button size="sm" variant="ghost" onclick={startEdit}>{#snippet icon()}<Pencil />{/snippet}꾸미기</Button>
+			<Button size="sm" variant="secondary" onclick={startEdit}>{#snippet icon()}<Pencil />{/snippet}꾸미기</Button>
 		{/if}
 	</header>
 
@@ -158,7 +158,9 @@
 					<button class="card q" onclick={() => nav.go({ page: "character" })}><Users /><span>캐릭터</span></button>
 					{#if plugins.on("phone")}<button class="card q" onclick={() => nav.go({ page: "phone" })}><Smartphone /><span>폰</span></button>{/if}
 					{#if plugins.on("game")}<button class="card q" onclick={() => nav.go({ page: "game" })}><Gamepad2 /><span>게임</span></button>{/if}
-					{#if plugins.on("imagegen")}<button class="card q" onclick={() => nav.go({ page: "images" })}><Images /><span>이미지</span></button>{/if}
+					<button class="card q" onclick={() => nav.go({ page: "lorebook" })}><BookOpen /><span>로어북</span></button>
+					<button class="card q" onclick={() => nav.go({ page: "images" })}><Images /><span>이미지</span></button>
+					<button class="card q" onclick={() => nav.go({ page: "persona" })}><UserRound /><span>페르소나</span></button>
 				</div>
 			</section>
 		{:else if id === "favorites"}
@@ -167,8 +169,8 @@
 				{#if favorites.length}
 					<div class="favs">
 						{#each favorites as ch (ch.id)}
-							<button class="fav" onclick={() => nav.go({ page: "character", charId: ch.id })} title={ch.name}>
-								<Avatar name={ch.name} src={fileSrc(ch.avatar)} fit={ch.avatarFit} color={ch.color} size={56} />
+							<button class="card fav" onclick={() => nav.go({ page: "character", charId: ch.id })} title={ch.name}>
+								<Avatar name={ch.name} src={fileSrc(ch.avatar)} fit={ch.avatarFit} color={ch.color} size={44} />
 								<span>{ch.name}</span>
 							</button>
 						{/each}
@@ -201,7 +203,7 @@
 	.home {
 		max-width: var(--page-wide);
 		margin: 0 auto;
-		padding: var(--space-6) var(--space-5) var(--space-8, 48px);
+		padding: var(--space-6) var(--space-8) var(--space-10);
 		display: flex;
 		flex-direction: column;
 		gap: var(--space-6);
@@ -236,9 +238,17 @@
 		color: var(--text);
 		cursor: pointer;
 		text-align: left;
+		transition:
+			background var(--duration-fast) var(--ease),
+			border-color var(--duration-fast) var(--ease),
+			box-shadow var(--duration-fast) var(--ease),
+			transform var(--duration-fast) var(--ease);
 	}
 	button.card:hover {
 		background: var(--surface-hover);
+		border-color: var(--border-strong);
+		box-shadow: var(--shadow-sm);
+		transform: translateY(-1px);
 	}
 	.grid {
 		display: grid;
@@ -297,19 +307,12 @@
 		display: flex;
 		flex-direction: column;
 		align-items: center;
-		gap: var(--space-1);
-		width: 76px;
-		padding: var(--space-1);
-		border: none;
-		border-radius: var(--radius-md);
-		background: none;
-		color: var(--text);
-		font: inherit;
+		gap: var(--space-2);
+		width: 88px;
+		padding: var(--space-3) var(--space-2);
+		text-align: center;
 		font-size: var(--text-xs);
-		cursor: pointer;
-	}
-	.fav:hover {
-		background: var(--surface-hover);
+		font-weight: 500;
 	}
 	.fav span {
 		max-width: 100%;

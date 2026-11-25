@@ -441,7 +441,21 @@
 			<ul class="list">
 				{#each contacts as { c, who } (`${c.contactKind}:${c.contactId}`)}
 					<li>
-						<button onclick={() => openChat(who!)} oncontextmenu={(e) => contactMenu(e, who!, c.status)}>
+						<button
+							onclick={() =>
+								(viewingProfile = {
+									target: {
+										key: `${who!.kind}:${who!.id}`,
+										name: who!.name,
+										avatar: who!.avatar,
+										avatarFit: who!.avatarFit,
+										color: who!.color,
+										who: who!,
+									},
+									chatWho: who!,
+								})}
+							oncontextmenu={(e) => contactMenu(e, who!, c.status)}
+						>
 							<Avatar name={who!.name} src={fileSrc(who!.avatar)} fit={who!.avatarFit} color={who!.color} size={40} />
 							<span class="main"><strong>{who!.name}</strong>{#if c.status}<span class="last">{c.status}</span>{:else if phone.isCharacterPhone && c.contactKind === "persona"}<span class="last">내 페르소나</span>{/if}</span>
 						</button>
@@ -537,8 +551,8 @@
 		flex-direction: column;
 		width: 100%;
 		height: 100%;
-		background: #ffffff;
-		color: #191919;
+		background: var(--surface);
+		color: var(--text);
 		overflow: hidden;
 	}
 	.device.framed {
@@ -547,6 +561,7 @@
 		flex: none;
 		border-radius: 46px;
 		border: 10px solid #1b1a18;
+		box-shadow: var(--shadow-lg);
 	}
 	.status {
 		display: flex;
@@ -594,7 +609,7 @@
 		display: flex;
 		flex-direction: column;
 		padding: 64px 22px 30px;
-		background: var(--wall);
+		background: linear-gradient(180deg, rgb(0 0 0 / 0.28) 0%, transparent 38%), var(--wall);
 		color: white;
 	}
 	.clock {
@@ -729,8 +744,8 @@
 		padding: 0 10px;
 		height: 34px;
 		border-radius: 10px;
-		background: #f1f1f1;
-		color: #8a8a8a;
+		background: var(--bg-sunken);
+		color: var(--text-faint);
 	}
 	.search :global(svg) {
 		width: 16px;
@@ -741,7 +756,7 @@
 		border: none;
 		outline: none;
 		background: none;
-		color: #191919;
+		color: var(--text);
 		font: inherit;
 		font-size: 14px;
 	}
@@ -765,14 +780,25 @@
 		cursor: pointer;
 	}
 	.list button:hover {
-		background: #f4f4f4;
+		background: var(--surface-hover);
 	}
 	.none {
 		padding: 40px 18px;
-		color: #8a8a8a;
+		color: var(--text-faint);
 		font-size: 14px;
 		text-align: center;
 		line-height: 2;
+	}
+	.list .none .link {
+		display: inline;
+		width: auto;
+		padding: 0;
+		text-align: center;
+		color: var(--accent);
+	}
+	.list .none .link:hover {
+		background: none;
+		text-decoration: underline;
 	}
 	.list :global(.avatar),
 	.me-card :global(.avatar),
@@ -795,11 +821,11 @@
 	.time {
 		flex: none;
 		font-size: 11px;
-		color: #8a8a8a;
+		color: var(--text-faint);
 	}
 	.last {
 		font-size: 13px;
-		color: #777;
+		color: var(--text-muted);
 		white-space: nowrap;
 		overflow: hidden;
 		text-overflow: ellipsis;
@@ -820,7 +846,7 @@
 	.section {
 		padding: 14px 18px 6px;
 		font-size: 12px;
-		color: #8a8a8a;
+		color: var(--text-faint);
 	}
 	.me-card {
 		display: flex;
@@ -834,14 +860,14 @@
 	}
 	.me-card span {
 		font-size: 12px;
-		color: #8a8a8a;
+		color: var(--text-faint);
 	}
 
 	/* ---- 설정 앱 ---- */
 	.settings {
 		flex: 1;
 		overflow: auto;
-		background: #f2f2f7;
+		background: var(--bg);
 		padding-bottom: 30px;
 	}
 	.settings .section {
@@ -854,9 +880,9 @@
 		width: calc(100% - 32px);
 		margin: 8px 16px 0;
 		padding: 12px;
-		border: none;
+		border: 1px solid var(--border);
 		border-radius: 14px;
-		background: white;
+		background: var(--surface);
 		text-align: left;
 		color: inherit;
 		cursor: pointer;
@@ -867,15 +893,16 @@
 		flex-direction: column;
 	}
 	.profile small {
-		color: #8a8a8a;
+		color: var(--text-faint);
 	}
 	.profile :global(svg) {
-		color: #c4c4c6;
+		color: var(--text-faint);
 	}
 	.group {
 		margin: 0 16px;
+		border: 1px solid var(--border);
 		border-radius: 14px;
-		background: white;
+		background: var(--surface);
 		overflow: hidden;
 	}
 	.opt {
@@ -892,8 +919,11 @@
 		font-size: 15px;
 		cursor: pointer;
 	}
+	.opt:hover {
+		background: var(--surface-hover);
+	}
 	.opt + .opt {
-		border-top: 1px solid #e5e5ea;
+		border-top: 1px solid var(--border);
 	}
 	.opt :global(.avatar) {
 		border-radius: 38% !important;
@@ -930,8 +960,8 @@
 		padding: 0;
 		border: none;
 		border-radius: 3px;
-		background: #111;
-		opacity: 0.8;
+		background: var(--text-muted);
+		opacity: 0.65;
 		cursor: pointer;
 	}
 	.kakao-scroll {
@@ -947,8 +977,8 @@
 	}
 	.kakao-tabs {
 		display: flex;
-		border-top: 1px solid #e5e5ea;
-		background: #f9f9fb;
+		border-top: 1px solid var(--border);
+		background: var(--surface-2);
 		padding: 6px 0 22px;
 		flex: none;
 	}
@@ -960,13 +990,13 @@
 		gap: 2px;
 		border: none;
 		background: none;
-		color: #8a8a8a;
+		color: var(--text-faint);
 		font: inherit;
 		font-size: 11px;
 		cursor: pointer;
 	}
 	.kakao-tabs button.on {
-		color: #191919;
+		color: var(--text);
 		font-weight: 600;
 	}
 	.kakao-tabs :global(svg) {

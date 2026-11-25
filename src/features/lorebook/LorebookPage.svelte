@@ -209,6 +209,7 @@
 		<header class="book-head">
 			<div class="info">
 				<input class="name" bind:value={name} onblur={saveInfo} onkeydown={(e) => e.key === "Enter" && (e.currentTarget as HTMLInputElement).blur()} aria-label="로어북 이름" />
+				<input class="desc-input" bind:value={description} onblur={saveInfo} onkeydown={(e) => e.key === "Enter" && (e.currentTarget as HTMLInputElement).blur()} placeholder="로어북 설명을 입력하세요 (선택)" aria-label="로어북 설명" />
 			</div>
 			<div class="acts">
 				<ExportSplit formats={BOOK_FORMATS} storageKey="sc.export.lorebook" size="sm" variant="secondary" label="내보내기" onexport={(f) => lorebook.export(book, f as BookFormat)} />
@@ -256,7 +257,10 @@
 {:else}
 	<div class="page">
 		<header class="head">
-			<h1>로어북</h1>
+			<div class="title-wrap">
+				<h1>로어북</h1>
+				<span class="head-count">{lorebook.books.length}개</span>
+			</div>
 			<ListToolbar bind:query bind:filter={bookFilter} bind:sort={bookSort} bind:selecting placeholder="이름·설명" filters={BOOK_FILTERS} sorts={BOOK_SORTS} canSelect={!!lorebook.books.length}>
 				<SplitButton label="새로 만들기" onclick={create} menuLabel="로어북 가져오기" items={[{ label: "파일에서 가져오기 (JSON)", icon: Upload, onselect: importFiles }]} />
 			</ListToolbar>
@@ -294,10 +298,7 @@
 								<span class="book-icon" aria-hidden="true"><BookOpen /></span>
 							{/if}
 							<div class="book-main">
-								<div class="book-title-row">
-									<b class="book-title">{b.name}</b>
-									<span class="book-meta">항목 {n?.entries ?? 0}개{n && n.enabled !== n.entries ? ` (켜짐 ${n.enabled})` : ""} · {relative(b.updatedAt)}</span>
-								</div>
+								<b class="book-title">{b.name}</b>
 								{#if b.description}<p class="book-desc">{b.description}</p>{/if}
 								{#if users.length}
 									<div class="book-badges">
@@ -308,6 +309,7 @@
 									</div>
 								{/if}
 							</div>
+							<span class="book-meta">항목 {n?.entries ?? 0}개{n && n.enabled !== n.entries ? ` (켜짐 ${n.enabled})` : ""} · {relative(b.updatedAt)}</span>
 							{#if !selecting}
 								<!-- svelte-ignore a11y_click_events_have_key_events, a11y_no_static_element_interactions -->
 								<span class="book-actions" onclick={(e) => e.stopPropagation()}>
@@ -362,21 +364,50 @@
 		max-width: var(--page-wide);
 		height: 100%;
 		margin: 0 auto;
-		padding: var(--space-6) var(--space-6) var(--space-8);
+		padding: var(--space-6) var(--space-8) var(--space-8);
 		overflow: auto;
 	}
 	.head,
 	.book-head {
 		display: flex;
-		align-items: flex-start;
+		align-items: center;
 		justify-content: space-between;
 		gap: var(--space-4);
 		/* 좁은 화면: 도구 줄이 제목 아래로 내려감 */
 		flex-wrap: wrap;
 	}
-	h1 {
-		font-size: var(--text-xl);
+	.title-wrap {
+		display: flex;
+		align-items: baseline;
+		gap: var(--space-2);
+	}
+	.head h1 {
 		white-space: nowrap;
+	}
+	.head-count {
+		color: var(--text-faint);
+		font-size: var(--text-sm);
+		font-variant-numeric: tabular-nums;
+	}
+	.desc-input {
+		width: 100%;
+		padding: 2px 6px;
+		margin-left: -6px;
+		border: 1px solid transparent;
+		border-radius: var(--radius-xs);
+		background: transparent;
+		color: var(--text-muted);
+		font: inherit;
+		font-size: var(--text-sm);
+	}
+	.desc-input:hover {
+		border-color: var(--border);
+	}
+	.desc-input:focus {
+		outline: none;
+		border-color: var(--accent);
+		background: var(--surface);
+		color: var(--text);
 	}
 	.acts {
 		display: flex;

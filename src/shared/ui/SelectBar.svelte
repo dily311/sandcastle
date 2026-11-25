@@ -18,6 +18,7 @@
 
 <div class="selbar" role="toolbar" aria-label="선택">
 	<Button size="sm" variant="ghost" onclick={onall}>모두 선택</Button>
+	<span class="picked-count">{count}{unit} 선택됨</span>
 	<span class="sp"></span>
 	{#if children}{@render children()}{/if}
 	<Button size="sm" variant="danger" disabled={!count} onclick={ondelete}>{#snippet icon()}<Trash2 />{/snippet}{count}{unit} 삭제</Button>
@@ -34,9 +35,16 @@
 		align-items: center;
 		gap: var(--space-2);
 		padding: var(--space-2) var(--space-3);
+		border: 1px solid color-mix(in oklab, var(--accent) 32%, var(--border));
 		border-radius: var(--radius-md);
 		background: var(--accent-soft);
 		font-size: var(--text-sm);
+	}
+	.picked-count {
+		font-size: var(--text-xs);
+		font-weight: 600;
+		color: var(--accent-text);
+		font-variant-numeric: tabular-nums;
 	}
 	.sp {
 		flex: 1;

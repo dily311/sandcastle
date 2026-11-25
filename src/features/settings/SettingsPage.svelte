@@ -203,7 +203,7 @@
 <style>
 	.settings {
 		display: grid;
-		grid-template-columns: 240px minmax(0, 1fr);
+		grid-template-columns: 260px minmax(0, 1fr);
 		grid-template-rows: minmax(0, 1fr);
 		height: 100%;
 	}
@@ -255,9 +255,12 @@
 		color: var(--text);
 	}
 	.side button.on {
-		background: var(--surface-active);
+		background: var(--accent-soft);
 		color: var(--text);
 		font-weight: 600;
+	}
+	.side button.on > :global(svg) {
+		color: var(--accent);
 	}
 	.count {
 		margin-left: auto;

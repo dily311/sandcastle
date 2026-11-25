@@ -6,7 +6,7 @@
 	interface Props extends HTMLButtonAttributes {
 		/** 화면 낭독기와 툴팁에 쓰는 이름 (필수) */
 		label: string;
-		variant?: "ghost" | "soft" | "solid" | "static-white";
+		variant?: "ghost" | "soft" | "solid" | "danger" | "static-white";
 		size?: "sm" | "md" | "lg";
 		active?: boolean;
 		children: Snippet;
@@ -90,6 +90,19 @@
 
 	.static-white {
 		color: var(--icon-static-white);
+	}
+	.static-white:hover:not(:disabled) {
+		background: rgb(255 255 255 / 0.16);
+		color: #ffffff;
+	}
+	.danger {
+		background: transparent;
+		color: var(--text-muted);
+	}
+	.danger:hover:not(:disabled),
+	.danger.active {
+		background: var(--danger-soft);
+		color: var(--danger);
 	}
 	
 	.soft {

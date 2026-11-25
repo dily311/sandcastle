@@ -3,7 +3,7 @@
 	import { onMount } from "svelte";
 	import { FolderArchive, ImagePlus, MessageSquare, Pencil, Trash2 } from "@lucide/svelte";
 	import type { GeneratedImage_Serialize as GeneratedImage } from "$ipc/bindings";
-	import { Badge, Button, EmptyState, IconButton, Input, Segmented, Spinner, Switch } from "$shared/ui";
+	import { Badge, Button, EmptyState, IconButton, ListToolbar, Segmented, Spinner, Switch } from "$shared/ui";
 	import { call, commands } from "$shared/ipc/client";
 	import { IMAGE_FILES, pickFiles } from "$shared/ipc/dialog";
 	import { fileSrc, imageSrc } from "$shared/ipc/file";
@@ -17,25 +17,54 @@
 
 	let sub = $state<"assets" | "generated">("assets");
 	let query = $state("");
+	let assetFilter = $state("all");
+	let assetSort = $state("order");
+	let genSort = $state("new");
 	let genImages = $state<GeneratedImage[]>([]);
 	let genLoading = $state(false);
 	let genLoadedFor = "";
 
 	const assets = $derived(library.images[charId] ?? []);
 	const convIds = $derived(new Set(library.conversations.filter((c) => c.characterId === charId).map((c) => c.id)));
+	const folders = $derived([...new Set(assets.map((a) => a.folder).filter(Boolean))].sort((a, b) => a.localeCompare(b, "ko")));
+	const ASSET_FILTERS = $derived([
+		{ value: "all", label: `전부 ${assets.length}` },
+		{ value: "on", label: "켜짐" },
+		{ value: "off", label: "꺼짐" },
+		...(folders.length ? [{ value: "folder:", label: "공통" }, ...folders.map((f) => ({ value: `folder:${f}`, label: f }))] : []),
+	]);
+	const ASSET_SORTS = [
+		{ value: "order", label: "넣은 순서" },
+		{ value: "name", label: "키 이름 순" },
+		{ value: "new", label: "최근 추가 순" },
+	];
+	const GEN_SORTS = [
+		{ value: "new", label: "최신 순" },
+		{ value: "old", label: "오래된 순" },
+		{ value: "name", label: "이름 순" },
+	];
 
 	const filteredAssets = $derived.by(() => {
 		const q = query.trim().toLowerCase();
-		if (!q) return assets;
-		return assets.filter((a) => a.key.toLowerCase().includes(q) || (a.folder ?? "").toLowerCase().includes(q));
+		const list = assets.filter((a) => {
+			if (assetFilter === "on" && !a.enabled) return false;
+			if (assetFilter === "off" && a.enabled) return false;
+			if (assetFilter.startsWith("folder:") && (a.folder ?? "") !== assetFilter.slice(7)) return false;
+			return !q || a.key.toLowerCase().includes(q) || (a.folder ?? "").toLowerCase().includes(q);
+		});
+		if (assetSort === "name") return [...list].sort((a, b) => a.key.localeCompare(b.key, "ko"));
+		if (assetSort === "new") return [...list].sort((a, b) => b.createdAt - a.createdAt);
+		return list;
 	});
 
 	const charGenImages = $derived.by(() => {
 		const q = query.trim().toLowerCase();
-		return genImages
+		const list = genImages
 			.filter((i) => !i.readonly && ((i.conversationId && convIds.has(i.conversationId)) || i.album === `character:${charId}`))
-			.filter((i) => !q || (i.name ?? "").toLowerCase().includes(q) || i.prompt.toLowerCase().includes(q))
-			.sort((a, b) => b.createdAt - a.createdAt);
+			.filter((i) => !q || (i.name ?? "").toLowerCase().includes(q) || i.prompt.toLowerCase().includes(q));
+		if (genSort === "old") return [...list].sort((a, b) => a.createdAt - b.createdAt);
+		if (genSort === "name") return [...list].sort((a, b) => (a.name || a.prompt || "").localeCompare(b.name || b.prompt || "", "ko"));
+		return [...list].sort((a, b) => b.createdAt - a.createdAt);
 	});
 
 	async function loadGenerated() {
@@ -101,12 +130,13 @@
 			]}
 		/>
 		<div class="right">
-			<div class="search">
-				<Input bind:value={query} placeholder={sub === "assets" ? "키·폴더 검색" : "이름·프롬프트 검색"} aria-label="갤러리 검색" type="search" />
-			</div>
 			{#if sub === "assets"}
-				<Button size="sm" variant="secondary" onclick={uploadZip}>{#snippet icon()}<FolderArchive />{/snippet}ZIP</Button>
-				<Button size="sm" variant="primary" onclick={uploadAssets}>{#snippet icon()}<ImagePlus />{/snippet}에셋 추가</Button>
+				<ListToolbar bind:query bind:filter={assetFilter} bind:sort={assetSort} placeholder="키·폴더 검색" filters={ASSET_FILTERS} sorts={ASSET_SORTS}>
+					<Button size="sm" variant="secondary" onclick={uploadZip}>{#snippet icon()}<FolderArchive />{/snippet}ZIP</Button>
+					<Button size="sm" variant="primary" onclick={uploadAssets}>{#snippet icon()}<ImagePlus />{/snippet}에셋 추가</Button>
+				</ListToolbar>
+			{:else}
+				<ListToolbar bind:query bind:sort={genSort} placeholder="이름·프롬프트 검색" sorts={GEN_SORTS} />
 			{/if}
 		</div>
 	</div>
@@ -130,7 +160,7 @@
 								{#if img.folder}<Badge>{img.folder}</Badge>{:else}<span></span>{/if}
 								<div class="acts">
 									<IconButton size="sm" label="키 바꾸기" onclick={() => renameAsset(img)}><Pencil /></IconButton>
-									<IconButton size="sm" label="삭제" onclick={() => removeAsset(img)}><Trash2 /></IconButton>
+									<IconButton size="sm" variant="danger" label="삭제" onclick={() => removeAsset(img)}><Trash2 /></IconButton>
 								</div>
 							</div>
 						</div>
@@ -157,7 +187,7 @@
 								{#if img.conversationId}
 									<IconButton size="sm" label="대화로 이동" onclick={() => nav.go({ page: "character", charId, convId: img.conversationId ?? undefined })}><MessageSquare /></IconButton>
 								{/if}
-								<IconButton size="sm" label="삭제" onclick={() => removeGenerated(img)}><Trash2 /></IconButton>
+								<IconButton size="sm" variant="danger" label="삭제" onclick={() => removeGenerated(img)}><Trash2 /></IconButton>
 							</div>
 						</div>
 					</div>
@@ -188,9 +218,6 @@
 		align-items: center;
 		gap: var(--space-2);
 		flex-wrap: wrap;
-	}
-	.search {
-		width: min(220px, 45vw);
 	}
 	.center {
 		display: grid;

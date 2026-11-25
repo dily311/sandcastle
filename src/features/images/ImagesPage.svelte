@@ -5,7 +5,8 @@
 	import { onMount } from "svelte";
 	import { ArrowUpDown, Check, Ellipsis, Info, Plus, Copy, ExternalLink, Eye, Filter, FolderOpen, MessageSquare, Pencil, Search, Sparkles, Tag, Trash2, Upload, Wand2, X } from "@lucide/svelte";
 	import type { GeneratedImage_Serialize as GeneratedImage } from "$ipc/bindings";
-	import { Badge, Button, ContextMenu, Dialog, EmptyState, IconButton, Input, ItemCard, ListToolbar, SelectBar, SplitButton, Spinner, type MenuItem } from "$shared/ui";
+	import { Badge, Button, ContextMenu, EmptyState, IconButton, ItemCard, ListToolbar, SelectBar, SplitButton, Spinner, type MenuItem } from "$shared/ui";
+	import { imageViewer } from "$shared/stores/imageViewer.svelte";
 	import { call, commands } from "$shared/ipc/client";
 	import { fileSrc } from "$shared/ipc/file";
 	import { pickFiles } from "$shared/ipc/dialog";
@@ -126,12 +127,21 @@
 			at: { x: e.clientX, y: e.clientY },
 			label: "그림 메뉴",
 			items: [
-				{ label: "크게 보기", icon: Eye, onselect: () => (viewing = img) },
+				{ label: "크게 보기", icon: Eye, onselect: () => openViewer(img) },
 				...(mine ? [{ label: "이름 바꾸기", icon: Pencil, onselect: () => rename(img) }] : []),
+				...(img.prompt && plugins.on("imagegen") ? [{ label: "이 프롬프트로 다시", icon: Sparkles, onselect: () => reuse(img) }] : []),
+				...(img.conversationId ? [{ label: "대화로 이동", icon: MessageSquare, onselect: () => openSource(img) }] : []),
 				...(canTag
 					? [
-							...allTags.map((t, i) => ({ label: `#${tagLabel(t)}`, icon: img.tags.includes(t) ? Check : Tag, separator: i === 0, disabled: t === "preset" && !img.tags.includes(t) && !canPreset(img), onselect: () => toggleTag(img, t) })),
-							{ label: "새 태그…", icon: Plus, onselect: () => addCustomTag(img) },
+							{
+								label: "태그",
+								icon: Tag,
+								separator: true,
+								children: [
+									...allTags.map((t) => ({ label: `#${tagLabel(t)}`, checked: img.tags.includes(t), disabled: t === "preset" && !img.tags.includes(t) && !canPreset(img), onselect: () => toggleTag(img, t) })),
+									{ label: "새 태그…", icon: Plus, separator: true, onselect: () => addCustomTag(img) },
+								],
+							},
 						]
 					: []),
 				// 파일 위치 열기는 데스크톱만 (Android에는 탐색기가 없음)
@@ -140,26 +150,60 @@
 			],
 		};
 	}
-	/** 크게 보기 창의 … 메뉴: 다른 그림 뷰어와 같은 작업 (파일 위치·이름·삭제·정보) */
-	function viewMenu(e: MouseEvent, img: GeneratedImage) {
-		const r = (e.currentTarget as HTMLElement).getBoundingClientRect();
-		menu = {
-			at: { x: r.right, y: r.bottom + 4, align: "end" },
-			label: "그림 메뉴",
-			items: [
-				{ label: "정보 보기", icon: Info, onselect: () => (showInfo = true) },
-				...(layout.desktop ? [{ label: "파일 위치 열기", icon: ExternalLink, onselect: () => reveal(img) }] : []),
-				...(owned(img) ? [{ label: "이름 바꾸기", icon: Pencil, separator: true, onselect: () => rename(img) }] : []),
-				...(owned(img) ? [{ label: "삭제", icon: Trash2, danger: true, separator: true, onselect: () => remove(img) }] : []),
-			],
-		};
+	function imageInfoRows(img: GeneratedImage) {
+		const neg = negativeOf(img);
+		const rest = img.meta.filter((m) => m.key !== "네거티브");
+		return [
+			{ label: "출처", value: SOURCE[img.source] ?? img.source },
+			...(img.model ? [{ label: "모델", value: img.model }] : []),
+			{ label: "날짜", value: when(img.createdAt) },
+			...(img.tags.length ? [{ label: "태그", value: img.tags.map((t) => `#${tagLabel(t)}`).join(" ") }] : []),
+			...(img.prompt ? [{ label: "프롬프트", value: img.prompt }] : []),
+			...(neg ? [{ label: "네거티브", value: neg }] : []),
+			...rest.map((m) => ({ label: m.key, value: m.value })),
+		];
+	}
+	function openViewer(img: GeneratedImage) {
+		const srcUrl = fileSrc(img.path);
+		if (!srcUrl) return;
+		const latest = () => images.find((x) => x.path === img.path) ?? img;
+		imageViewer.open({
+			src: srcUrl,
+			name: title(img),
+			info: imageInfoRows(img),
+			rename: owned(img) ? () => rename(latest()) : undefined,
+			remove: owned(img) ? () => remove(latest()) : undefined,
+			extraItems: () => {
+				const cur = latest();
+				const canTag = taggable(cur);
+				return [
+					...(cur.prompt && plugins.on("imagegen") ? [{ label: "이 프롬프트로 다시", icon: Sparkles, onselect: () => reuse(cur) }] : []),
+					...(cur.conversationId ? [{ label: "대화로 이동", icon: MessageSquare, onselect: () => (imageViewer.close(), openSource(cur)) }] : []),
+					...(canTag
+						? [
+								{
+									label: "태그",
+									icon: Tag,
+									children: [
+										...allTags.map((t) => ({ label: `#${tagLabel(t)}`, checked: cur.tags.includes(t), disabled: t === "preset" && !cur.tags.includes(t) && !canPreset(cur), onselect: () => toggleTag(cur, t) })),
+										{ label: "새 태그…", icon: Plus, separator: true, onselect: () => addCustomTag(cur) },
+									],
+								},
+							]
+						: []),
+				];
+			},
+		});
 	}
 	async function rename(img: GeneratedImage) {
 		const name = await promptText({ title: "이름 바꾸기", message: "갤러리에 보일 이름 (파일은 그대로)", input: { value: title(img), placeholder: "이름" }, confirmLabel: "바꾸기" });
 		if (!name?.trim()) return;
 		const saved = await call(commands.renameGalleryImage(img.path, name), src);
 		images = images.map((i) => (i.path === img.path ? { ...i, name: saved.name } : i));
-		if (viewing?.path === img.path) viewing = { ...viewing, name: saved.name };
+		const updated = images.find((i) => i.path === img.path);
+		if (updated && imageViewer.current?.src === fileSrc(img.path)) {
+			imageViewer.patch({ name: title(updated), info: imageInfoRows(updated) });
+		}
 	}
 	/** 원본: 앱 안 창으로는 파일을 열 수 없어 파일 탐색기에서 보여준다 */
 	async function reveal(img: GeneratedImage) {
@@ -177,7 +221,6 @@
 		toasts.success(`${added.length}장 업로드 됨`);
 	}
 	$effect(() => drops.register({ label: "갤러리에 올리기", hint: "PNG·JPG·WEBP·GIF (AI 그림이면 생성 정보도 읽음)", accept: isImage, ondrop: importFiles }));
-	let viewing = $state<GeneratedImage | null>(null);
 
 	/** 그림 아래 이름: 원래 파일 이름 → 프롬프트 → 파일 이름 */
 	const title = (img: GeneratedImage) => img.name || img.prompt || img.path.split(/[\\/]/).pop() || "";
@@ -193,7 +236,10 @@
 	async function setTags(img: GeneratedImage, tags: string[]) {
 		const saved = await call(commands.setImageTags(img.path, tags), src);
 		images = images.map((i) => (i.path === img.path ? { ...i, tags: saved.tags } : i));
-		if (viewing?.path === img.path) viewing = { ...viewing, tags: saved.tags };
+		const updated = images.find((i) => i.path === img.path);
+		if (updated && imageViewer.current?.src === fileSrc(img.path)) {
+			imageViewer.patch({ info: imageInfoRows(updated) });
+		}
 	}
 	async function addCustomTag(img: GeneratedImage) {
 		const t = await promptText({ title: "태그 추가", message: "이 그림에 달 태그 (같은 태그로 거를 수 있음)", input: { value: "", placeholder: "예: 엘리안, 의상" }, confirmLabel: "추가" });
@@ -296,7 +342,7 @@
 		const ok = await jobs.run(name, async () => (img.source === "background" ? theme.removeBackground(img.path) : call(commands.deleteGeneratedImage(img.path), src)).then(() => true), { group: "그림 지우기" });
 		if (!ok) return;
 		images = images.filter((i) => i.path !== img.path);
-		if (viewing?.path === img.path) viewing = null;
+		if (imageViewer.current?.src === fileSrc(img.path)) imageViewer.close();
 	}
 	async function copyText(text: string, what: string) {
 		await navigator.clipboard.writeText(text).then(
@@ -320,127 +366,73 @@
 		reusePrompt = img.prompt;
 		createKey++;
 		creating = true;
-		viewing = null;
+		imageViewer.close();
 	}
 </script>
 
 <div class="page">
-	<header>
-		<h1>이미지</h1>
-		<span class="count">{images.length}장</span>
-		<span class="sp"></span>
-		<ListToolbar bind:query bind:filter bind:sort bind:selecting placeholder="이름·프롬프트·태그" filters={FILTERS} sorts={SORTS} canSelect={images.some(owned)}>
-			{#if plugins.on("imagegen")}
-				<SplitButton label={creating ? "생성 닫기" : "새로 만들기"} onclick={() => (creating = !creating)} menuLabel="그림 올리기" items={[{ label: "파일 업로드", icon: Upload, onselect: upload }]} />
-			{:else}
-				<Button variant="primary" onclick={upload}>{#snippet icon()}<Upload />{/snippet}업로드</Button>
+	<div class="inner">
+		<header class="head">
+			<div class="title-wrap">
+				<h1>이미지</h1>
+				<span class="count">{images.length}장</span>
+			</div>
+			<ListToolbar bind:query bind:filter bind:sort bind:selecting placeholder="이름·프롬프트·태그" filters={FILTERS} sorts={SORTS} canSelect={images.some(owned)}>
+				{#if plugins.on("imagegen")}
+					<SplitButton label={creating ? "생성 닫기" : "새로 만들기"} onclick={() => (creating = !creating)} menuLabel="그림 올리기" items={[{ label: "파일 업로드", icon: Upload, onselect: upload }]} />
+				{:else}
+					<Button variant="primary" onclick={upload}>{#snippet icon()}<Upload />{/snippet}업로드</Button>
+				{/if}
+			</ListToolbar>
+		</header>
+
+		{#if creating && plugins.on("imagegen")}
+			<section class="create-box">
+				{#key createKey}
+					<ImageCreate initialPrompt={reusePrompt} onmade={(img) => (images = [img, ...images])} onview={(img) => openViewer(img)} />
+				{/key}
+			</section>
+		{/if}
+
+		{#if loading}
+			<div class="making"><Spinner /></div>
+		{:else if !shown.length}
+			<EmptyState title="그림 없음" description="대화의 '이 장면 그리기', 만들기, 게임 장면 그림, 업로드 한 그림이 여기 모임">
+				{#snippet action()}<Button onclick={upload}>{#snippet icon()}<Upload />{/snippet}그림 올리기</Button>{/snippet}
+			</EmptyState>
+		{:else}
+			{#if selecting}
+				<SelectBar count={picked.size} unit="장" onall={() => (picked = new Set(shown.filter(owned).map((i) => i.path)))} ondelete={removePicked}>
+					<Button size="sm" variant="ghost" disabled={!picked.size} onclick={bulkTagMenu}>{#snippet icon()}<Tag />{/snippet}태그 달기</Button>
+				</SelectBar>
 			{/if}
-		</ListToolbar>
-	</header>
-
-	{#if creating && plugins.on("imagegen")}
-		<section class="create-box">
-			{#key createKey}
-				<ImageCreate initialPrompt={reusePrompt} onmade={(img) => (images = [img, ...images])} onview={(img) => (viewing = img)} />
-			{/key}
-		</section>
-	{/if}
-
-	{#if loading}
-		<div class="making"><Spinner /></div>
-	{:else if !shown.length}
-		<EmptyState title="그림 없음" description="대화의 '이 장면 그리기', 만들기, 게임 장면 그림, 업로드 한 그림이 여기 모임">
-			{#snippet action()}<Button onclick={upload}>{#snippet icon()}<Upload />{/snippet}그림 올리기</Button>{/snippet}
-		</EmptyState>
-	{:else}
-		{#if selecting}
-			<SelectBar count={picked.size} unit="장" onall={() => (picked = new Set(shown.filter(owned).map((i) => i.path)))} ondelete={removePicked}>
-				<Button size="sm" variant="ghost" disabled={!picked.size} onclick={bulkTagMenu}>{#snippet icon()}<Tag />{/snippet}태그 달기</Button>
-			</SelectBar>
+			<div class="grid">
+				{#each rendered as img (img.path)}
+					<ItemCard
+						title={title(img)}
+						image={fileSrc(img.path)}
+						ratio="3 / 4"
+						{selecting}
+						selected={picked.has(img.path)}
+						locked={!owned(img)}
+						onclick={() => (selecting ? pick(img) : openViewer(img))}
+						oncontextmenu={(e) => imageMenu(e, img)}
+					>
+						{#snippet badges()}
+							<Badge>{SOURCE[img.source] ?? img.source}</Badge>
+							{#each img.tags.filter((t) => t !== "upload" || img.source !== "upload") as t (t)}<Badge tone="accent">#{tagLabel(t)}</Badge>{/each}
+						{/snippet}
+					</ItemCard>
+				{/each}
+			</div>
+			{#if rendered.length < shown.length}
+				<!-- 끝에 닿으면 저절로, 안 되면 눌러서 -->
+				<button class="more" use:more onclick={() => (limit += BATCH)}>더 보기 <small>({shown.length - rendered.length}장 남음)</small></button>
+			{/if}
 		{/if}
-		<div class="grid">
-			{#each rendered as img (img.path)}
-				<ItemCard
-					title={title(img)}
-					image={fileSrc(img.path)}
-					ratio="3 / 4"
-					{selecting}
-					selected={picked.has(img.path)}
-					locked={!owned(img)}
-					onclick={() => (selecting ? pick(img) : (viewing = img))}
-					oncontextmenu={(e) => imageMenu(e, img)}
-				>
-					{#snippet badges()}
-						<Badge>{SOURCE[img.source] ?? img.source}</Badge>
-						{#each img.tags.filter((t) => t !== "upload" || img.source !== "upload") as t (t)}<Badge tone="accent">#{tagLabel(t)}</Badge>{/each}
-					{/snippet}
-				</ItemCard>
-			{/each}
-		</div>
-		{#if rendered.length < shown.length}
-			<!-- 끝에 닿으면 저절로, 안 되면 눌러서 -->
-			<button class="more" use:more onclick={() => (limit += BATCH)}>더 보기 <small>({shown.length - rendered.length}장 남음)</small></button>
-		{/if}
-	{/if}
+	</div>
 </div>
 
-{#if viewing}
-	{@const v = viewing}
-	{@const neg = negativeOf(v)}
-	{@const rest = v.meta.filter((m) => m.key !== "네거티브")}
-	<div class="viewer" role="dialog" aria-modal="true" aria-label="그림 크게 보기">
-		<button class="scrim" aria-label="닫기" onclick={() => (viewing = null)}></button>
-		<div class="box">
-			<img src={fileSrc(v.path)} alt={v.prompt} data-no-zoom />
-			<div class="info">
-				<div class="vhead">
-					<p class="vname">{title(v)}</p>
-					<IconButton label="그림 메뉴" size="sm" onclick={(e) => viewMenu(e, v)}><Ellipsis /></IconButton>
-				</div>
-				<div class="acts">
-					{#if v.prompt && plugins.on("imagegen")}<Button size="sm" onclick={() => reuse(v)}>{#snippet icon()}<Sparkles />{/snippet}이 프롬프트로 다시</Button>{/if}
-					{#if v.conversationId}<Button size="sm" onclick={() => openSource(v)}>{#snippet icon()}<MessageSquare />{/snippet}대화로</Button>{/if}
-				</div>
-				{#if taggable(v)}
-					<div class="tags" role="group" aria-label="태그">
-						{#each allTags as t (t)}
-							<button class="tag" class:on={v.tags.includes(t)} aria-pressed={v.tags.includes(t)} disabled={t === "preset" && !v.tags.includes(t) && !canPreset(v)} title={t === "preset" && !canPreset(v) ? "프롬프트가 없는 그림은 프리셋으로 못 씀" : undefined} onclick={() => toggleTag(v, t)}>#{tagLabel(t)}</button>
-						{/each}
-						<button class="tag add" onclick={() => addCustomTag(v)}>+ 태그</button>
-					</div>
-				{/if}
-				<!-- 정보는 그림 위에 따로 뜨는 창 (… 메뉴의 "정보 보기") -->
-				<Dialog open={showInfo} title="정보" size="md" onclose={() => (showInfo = false)}>
-					<div class="img_meta_wrap">
-						<p class="meta"><Badge>{SOURCE[v.source] ?? v.source}</Badge> {v.model ? `${v.model} · ` : ""}{when(v.createdAt)}</p>
-						{#if v.prompt}
-							<div class="block">
-								<div class="bh"><b>프롬프트</b><button class="mini" aria-label="프롬프트 복사" onclick={() => copyText(v.prompt, "프롬프트")}><Copy /></button></div>
-								<p class="prompt">{v.prompt}</p>
-							</div>
-						{/if}
-						{#if neg}
-							<div class="block">
-								<div class="bh"><b>네거티브 프롬프트</b><button class="mini" aria-label="네거티브 프롬프트 복사" onclick={() => copyText(neg, "네거티브 프롬프트")}><Copy /></button></div>
-								<p class="prompt">{neg}</p>
-							</div>
-						{/if}
-						{#if rest.length}
-							<dl class="kv">
-								{#each rest as m, i (`${m.key}-${i}`)}
-									<dt>{m.key}</dt>
-									<dd title={m.value}>{m.value}</dd>
-								{/each}
-							</dl>
-						{:else if !v.prompt && !neg}
-							<p class="meta">생성 정보 없음</p>
-						{/if}
-					</div>
-				</Dialog>
-			</div>
-		</div>
-	</div>
-{/if}
 {#if menu}<ContextMenu at={menu.at} label={menu.label} items={menu.items} onclose={() => (menu = null)} />{/if}
 
 <style>
@@ -460,29 +452,37 @@
 		color: var(--text-faint);
 	}
 	.page {
+		--selectbar-max: var(--page-wide);
+		height: 100%;
+		overflow: auto;
+		padding: var(--space-6) var(--space-8);
+	}
+	.inner {
 		display: flex;
 		flex-direction: column;
 		gap: var(--space-4);
-		height: 100%;
-		overflow: auto;
-		padding: var(--space-5) var(--space-6);
+		max-width: var(--page-wide);
+		margin: 0 auto;
 	}
-	header {
+	.head {
 		display: flex;
 		align-items: center;
-		gap: var(--space-2);
+		justify-content: space-between;
+		gap: var(--space-4);
 		flex-wrap: wrap;
 	}
-	h1 {
-		margin: 0;
-		font-size: var(--text-xl);
+	.title-wrap {
+		display: flex;
+		align-items: baseline;
+		gap: var(--space-2);
+	}
+	.head h1 {
+		white-space: nowrap;
 	}
 	.count {
 		color: var(--text-faint);
 		font-size: var(--text-sm);
-	}
-	.sp {
-		flex: 1;
+		font-variant-numeric: tabular-nums;
 	}
 	.create-box {
 		padding: var(--space-5);

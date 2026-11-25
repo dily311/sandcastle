@@ -1,7 +1,7 @@
 <script lang="ts">
 	import UtilMacroNote from "./UtilMacroNote.svelte";
 	import { regexVersion } from "$shared/stores/regexVersion.svelte";
-	import { PictureInPicture2, ArrowUpDown, GripVertical, Bookmark, Check, ChevronDown, Eye, EyeOff, FileArchive, Folder, IdCard, ImagePlus, Pencil, Plus, Search, Trash2, X, ChevronsDownUp, ChevronsUpDown } from "@lucide/svelte";
+	import { PictureInPicture2, ArrowUpDown, ChevronRight, GripVertical, Bookmark, Check, ChevronDown, Eye, EyeOff, FileArchive, Folder, IdCard, ImagePlus, Pencil, Plus, Search, Trash2, X, ChevronsDownUp, ChevronsUpDown } from "@lucide/svelte";
 	import { Avatar, Button, ChipPicker, ContextMenu, IconButton, Input, ProfilePicker, Select, Spinner, Switch, type MenuItem, type ProfileOption } from "$shared/ui";
 	import { bookmarks, bookmarksOf, onCurrentSwipe, type ChatBookmark } from "./bookmarks";
 	import { assetImport } from "./assetImport.svelte";
@@ -305,6 +305,12 @@
 		regexVersion.bump();
 		scripts = scripts.map((x) => (x.id === s.id ? saved : x));
 	}
+	async function removeScript(s: RegexScript) {
+		if (!(await confirmAction({ title: "정규식 삭제", message: `'${s.name}' 정규식을 삭제함`, confirmLabel: "삭제", danger: true }))) return;
+		await call(commands.deleteRegexScript(s.id), { source: "regex" });
+		regexVersion.bump();
+		scripts = scripts.filter((x) => x.id !== s.id);
+	}
 
 	// ---- 에셋 ----
 	const assets = $derived(library.images[conv.characterId] ?? []);
@@ -543,12 +549,13 @@
 						<span class="faint">띄운 창에 보이는 중</span>
 						<Button size="sm" variant="ghost" onclick={() => statusView.set({ floating: false })}>패널로</Button>
 					</div>
+					<Switch checked={statusView.separateWindows} label="여러 상태창을 별도 팝업으로 띄우기" onchange={(v) => statusView.set({ separateWindows: v })} />
 				{:else}
 					<div class="status-head">
 						{#if layout.narrow}
 							<Switch checked={statusView.aboveChat} label="채팅방 위에 늘 보이기" onchange={(v) => statusView.set({ aboveChat: v })} />
 						{:else}
-							<span></span>
+							<Switch checked={statusView.separateWindows} label="별도 팝업으로 띄우기" onchange={(v) => statusView.set({ separateWindows: v })} />
 							<IconButton label="띄우기 (옮길 수 있는 창)" size="sm" onclick={() => statusView.set({ floating: true, collapsed: false })}><PictureInPicture2 /></IconButton>
 						{/if}
 					</div>
@@ -784,17 +791,26 @@
 			<section>
 				<h4>정규식 <span class="faint">{applied.filter((s) => s.enabled).length}개 적용 중</span></h4>
 				{#each groups as g (g.scope)}
-					<p class="rx-scope">{scopeName[g.scope]}</p>
-					<ul class="rx">
-						{#each g.list as s, i (s.id)}
-							{@const sort = sorters[g.scope]}
-							<li {...sort.item(i)} class:dragging={sort.from === i} class:over={sort.over === i && sort.from !== i}>
-								<span class="grip" aria-hidden="true" {...sort.handle(i)}><GripVertical /></span>
-								<IconButton label="{s.name} 편집" size="sm" onclick={() => regexEditor?.startEdit(s)}><Pencil /></IconButton>
-								<Switch checked={s.enabled} label={s.name} onchange={(v) => toggleScript(s, v)} />
-							</li>
-						{/each}
-					</ul>
+					<details class="rx-group" open>
+						<summary class="rx-scope">
+							<ChevronRight class="caret" />
+							<b>{scopeName[g.scope]}</b>
+							<small>{g.list.filter((s) => s.enabled).length}/{g.list.length}</small>
+						</summary>
+						<ul class="rx">
+							{#each g.list as s, i (s.id)}
+								{@const sort = sorters[g.scope]}
+								<li {...sort.item(i)} class:dragging={sort.from === i} class:over={sort.over === i && sort.from !== i}>
+									<span class="grip" aria-hidden="true" {...sort.handle(i)}><GripVertical /></span>
+									<Switch checked={s.enabled} label={s.name} onchange={(v) => toggleScript(s, v)} />
+									<div class="rx-acts">
+										<IconButton label="{s.name} 편집" size="sm" onclick={() => regexEditor?.startEdit(s)}><Pencil /></IconButton>
+										<IconButton label="{s.name} 삭제" size="sm" variant="danger" onclick={() => removeScript(s)}><Trash2 /></IconButton>
+									</div>
+								</li>
+							{/each}
+						</ul>
+					</details>
 				{:else}
 					<p class="none small">이 대화에 걸리는 정규식 없음</p>
 				{/each}
@@ -931,31 +947,84 @@
 		margin-right: auto;
 		font-size: var(--text-xs);
 	}
+	.rx-group {
+		border: 1px solid var(--border);
+		border-radius: var(--radius-md);
+		background: var(--surface);
+		overflow: hidden;
+	}
 	.rx-scope {
-		margin: var(--space-2) 0 2px;
+		display: flex;
+		align-items: center;
+		gap: 6px;
+		padding: 6px 8px;
 		font-size: var(--text-xs);
+		color: var(--text);
+		background: var(--surface-2);
+		cursor: pointer;
+		list-style: none;
+		user-select: none;
+	}
+	.rx-scope::-webkit-details-marker {
+		display: none;
+	}
+	.rx-scope:hover {
+		background: var(--surface-hover);
+	}
+	.rx-scope :global(.caret) {
+		flex: none;
+		width: 14px;
+		height: 14px;
+		color: var(--text-muted);
+		transition: transform var(--duration-fast) var(--ease);
+	}
+	.rx-group[open] > .rx-scope :global(.caret) {
+		transform: rotate(90deg);
+	}
+	.rx-scope b {
+		flex: 1;
+		font-size: var(--text-xs);
+	}
+	.rx-scope small {
 		color: var(--text-faint);
+		font-size: var(--text-xs);
+		font-variant-numeric: tabular-nums;
 	}
 	.rx {
 		list-style: none;
 		margin: 0;
-		padding: 0;
+		padding: 4px;
+		border-top: 1px solid var(--border);
 	}
 	.rx li {
 		display: flex;
 		align-items: center;
 		gap: 4px;
-		margin-bottom: 4px;
+		padding: 2px 4px 2px 2px;
 		border-radius: var(--radius-sm);
 		cursor: grab;
 	}
-	.rx li:last-child {
-		margin-bottom: 0;
+	.rx li:hover {
+		background: var(--surface-hover);
 	}
 	.rx li :global(.switch-row),
-	.rx li > :global(:last-child) {
+	.rx li > :global(.switch) {
 		flex: 1;
 		min-width: 0;
+	}
+	.rx-acts {
+		flex: none;
+		display: inline-flex;
+		align-items: center;
+		gap: 1px;
+	}
+	.rx-acts :global(.icon-btn) {
+		width: 24px;
+		height: 24px;
+	}
+	.rx-acts :global(.icon-btn svg) {
+		width: 13px;
+		height: 13px;
 	}
 	.rx li.dragging {
 		opacity: 0.4;

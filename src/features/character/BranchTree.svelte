@@ -2,7 +2,7 @@
 	// 오른쪽 패널 '분기' 탭: 갈래를 타임라인으로 (git 그래프처럼)
 	// 세로축 = 메시지 번호, 대화마다 한 줄(레인). 갈라진 메시지에서 옆 레인으로 휘어져 나감.
 	// 아무 일도 없는 메시지 구간은 접어서, 갈라진 지점과 끝만 줄로 보여줌.
-	import { GitBranch } from "@lucide/svelte";
+	import { ArrowUpRight, GitBranch } from "@lucide/svelte";
 	import { relative } from "$shared/time";
 	import { familyOf, pathOf, type BranchNode } from "./branches";
 	import type { Conversation } from "./library.svelte";
@@ -26,9 +26,6 @@
 	const onPath = $derived(new Set(pathOf(conv).flatMap((s) => (s.conv ? [s.conv.id] : []))));
 	const orphan = $derived(!pathOf(conv)[0].conv);
 
-	// 레인 배치: 깊이 우선 순서대로 왼쪽부터.
-	// 갈래의 갈래가 부모가 갈라지기 전 메시지에서 나왔으면 그 메시지는 위쪽 대화와 같은 내용이므로,
-	// 그 메시지를 실제로 가진 가장 가까운 조상 레인에서 갈라져 나오게 그린다.
 	const lanes = $derived.by(() => {
 		const out: Lane[] = [];
 		const walk = (n: BranchNode, chain: number[]) => {
@@ -46,7 +43,6 @@
 		walk(tree, []);
 		return out;
 	});
-	// 보여줄 줄: 1번, 갈라진 메시지, 각 대화의 끝
 	const rows = $derived([...new Set([1, ...lanes.flatMap((l) => [l.start, l.endRow])])].sort((a, b) => a - b));
 	const rowOf = $derived(new Map(rows.map((n, i) => [n, i])));
 	const y = (n: number) => (rowOf.get(n) ?? 0) * ROW + ROW / 2;
@@ -54,7 +50,6 @@
 	const width = $derived(lanes.length * LANE);
 	const height = $derived(rows.length * ROW);
 
-	/** 갈래 선: 부모 레인의 갈라진 지점에서 휘어져 자기 레인으로, 끝까지 */
 	function lanePath(l: Lane) {
 		const ys = y(l.start);
 		const ye = y(l.endRow);
@@ -67,7 +62,6 @@
 	const endY = (l: Lane) => y(l.endRow);
 	const tone = (l: Lane) => (l.node.conv.id === conv.id ? "current" : onPath.has(l.node.conv.id) ? "path" : "other");
 
-	/** 줄마다: 여기서 끝나는 대화, 여기서 갈라진 갈래 */
 	const rowInfo = $derived(
 		rows.map((n) => ({
 			n,
@@ -76,6 +70,57 @@
 		})),
 	);
 	const parentOf = (l: Lane) => (l.parentLane === null ? null : lanes[l.parentLane]);
+
+	// ---- 원 아이콘 호버 시 파일(대화)별 이동 팝오버 ----
+	interface HoverCard {
+		id: string;
+		x: number;
+		y: number;
+		heading: string;
+		items: { conv: Conversation; jumpTo?: string; current: boolean }[];
+	}
+	let hovered = $state<HoverCard | null>(null);
+	let hoverLaneId = $state<string | null>(null);
+	let hideTimer: ReturnType<typeof setTimeout> | undefined;
+
+	function keepHover() {
+		clearTimeout(hideTimer);
+	}
+	function scheduleHide() {
+		clearTimeout(hideTimer);
+		hideTimer = setTimeout(() => {
+			hovered = null;
+			hoverLaneId = null;
+		}, 180);
+	}
+	function showEndHover(l: Lane) {
+		clearTimeout(hideTimer);
+		hoverLaneId = l.node.conv.id;
+		hovered = {
+			id: `end:${l.node.conv.id}`,
+			x: 40 + x(l.lane),
+			y: endY(l),
+			heading: `메시지 #${l.end}`,
+			items: [{ conv: l.node.conv, current: l.node.conv.id === conv.id }],
+		};
+	}
+	function showForkHover(parentLaneIdx: number, startRow: number) {
+		clearTimeout(hideTimer);
+		const parent = lanes[parentLaneIdx];
+		const children = lanes.filter((l) => l.parentLane === parentLaneIdx && l.start === startRow);
+		hoverLaneId = parent?.node.conv.id ?? null;
+		const items: HoverCard["items"] = [
+			...(parent ? [{ conv: parent.node.conv, jumpTo: children[0]?.node.at?.messageId, current: parent.node.conv.id === conv.id }] : []),
+			...children.map((c) => ({ conv: c.node.conv, current: c.node.conv.id === conv.id })),
+		];
+		hovered = {
+			id: `fork:${parentLaneIdx}:${startRow}`,
+			x: 40 + x(parentLaneIdx),
+			y: y(startRow),
+			heading: `#${startRow} 분기 (${children.length}개 갈래)`,
+			items,
+		};
+	}
 </script>
 
 <div class="panel-body">
@@ -83,44 +128,98 @@
 		<h4>분기 <span class="faint">대화 {lanes.length}개</span></h4>
 		{#if orphan}<p class="note">갈라져 나온 원래 대화는 지워졌음</p>{/if}
 		{#if lanes.length > 1}
-			<div class="graph" style:--lanes-w="{width}px">
-				<svg class="lines" {width} {height} viewBox="0 0 {width} {height}" aria-hidden="true">
-					{#each lanes as l (l.node.conv.id)}
-						<path d={lanePath(l)} class="lane {tone(l)}" />
-					{/each}
-					{#each lanes as l (l.node.conv.id)}
-						{#if l.parentLane !== null}
-							<circle cx={x(l.parentLane)} cy={y(l.start)} r="3.5" class="fork {tone(lanes[l.parentLane])}" />
-						{/if}
-						<circle cx={x(l.lane)} cy={endY(l)} r={l.node.conv.id === conv.id ? 5.5 : 4.5} class="end {tone(l)}" />
-					{/each}
-				</svg>
-				<ol class="rows">
-					{#each rowInfo as r (r.n)}
-						<li style:height="{ROW}px" title={Number.isInteger(r.n) ? undefined : "새 메시지 없이 갈라지기만 한 대화"}>
-							<span class="no" class:fork={r.forks.length > 0}>{Number.isInteger(r.n) ? `#${r.n}` : ""}</span>
-							<span class="lanes-gap"></span>
-							<span class="what">
-								{#each r.ends as l (l.node.conv.id)}
-									<button
-										class="end-btn {tone(l)}"
-										aria-current={l.node.conv.id === conv.id ? "page" : undefined}
-										onclick={() => onopen(l.node.conv.id)}
-										title="{l.node.conv.title} · 메시지 {l.node.conv.messageCount}개 · {relative(l.node.conv.updatedAt)}"
-									>
-										<b>{l.node.conv.title}</b>{#if l.node.conv.id === conv.id}<em>지금</em>{/if}
-									</button>
+			<p class="hint">원 아이콘에 마우스를 올리거나 눌러 대화로 바로 이동</p>
+			<div class="graph-scroll">
+				<div class="graph" style:--lanes-w="{width}px">
+					<svg class="lines" {width} {height} viewBox="0 0 {width} {height}">
+						{#each lanes as l (l.node.conv.id)}
+							<path d={lanePath(l)} class="lane {tone(l)}" class:hi={hoverLaneId === l.node.conv.id} />
+						{/each}
+						{#each lanes as l (l.node.conv.id)}
+							{#if l.parentLane !== null}
+								<!-- svelte-ignore a11y_click_events_have_key_events, a11y_no_static_element_interactions -->
+								<circle
+									cx={x(l.parentLane)}
+									cy={y(l.start)}
+									r="4"
+									class="fork {tone(lanes[l.parentLane])} dot-hit"
+									onmouseenter={() => showForkHover(l.parentLane!, l.start)}
+									onmouseleave={scheduleHide}
+									onclick={() => {
+										const p = parentOf(l);
+										if (p) onopen(p.node.conv.id, l.node.at?.messageId);
+									}}
+								/>
+							{/if}
+							<!-- svelte-ignore a11y_click_events_have_key_events, a11y_no_static_element_interactions -->
+							<circle
+								cx={x(l.lane)}
+								cy={endY(l)}
+								r={l.node.conv.id === conv.id ? 5.5 : 4.5}
+								class="end {tone(l)} dot-hit"
+								class:hi={hoverLaneId === l.node.conv.id}
+								onmouseenter={() => showEndHover(l)}
+								onmouseleave={scheduleHide}
+								onclick={() => onopen(l.node.conv.id)}
+							/>
+						{/each}
+					</svg>
+					<ol class="rows">
+						{#each rowInfo as r (r.n)}
+							<li style:height="{ROW}px" title={Number.isInteger(r.n) ? undefined : "새 메시지 없이 갈라지기만 한 대화"}>
+								<span class="no" class:fork={r.forks.length > 0}>{Number.isInteger(r.n) ? `#${r.n}` : ""}</span>
+								<span class="lanes-gap"></span>
+								<span class="what">
+									{#each r.ends as l (l.node.conv.id)}
+										<button
+											class="end-btn {tone(l)}"
+											class:hi={hoverLaneId === l.node.conv.id}
+											aria-current={l.node.conv.id === conv.id ? "page" : undefined}
+											onmouseenter={() => (hoverLaneId = l.node.conv.id)}
+											onmouseleave={() => (hoverLaneId = null)}
+											onclick={() => onopen(l.node.conv.id)}
+											title="{l.node.conv.title} · 메시지 {l.node.conv.messageCount}개 · {relative(l.node.conv.updatedAt)}"
+										>
+											<b>{l.node.conv.title}</b>{#if l.node.conv.id === conv.id}<em>지금</em>{/if}
+										</button>
+									{/each}
+									{#if r.forks.length && !r.ends.length}
+										{@const p = parentOf(r.forks[0])}
+										<button class="fork-btn" onclick={() => p && onopen(p.node.conv.id, r.forks[0].node.at?.messageId)} title="갈라진 메시지로 가기">
+											<GitBranch />갈래 {r.forks.length}개
+										</button>
+									{/if}
+								</span>
+							</li>
+						{/each}
+					</ol>
+
+					{#if hovered}
+						<!-- svelte-ignore a11y_no_static_element_interactions -->
+						<div
+							class="dot-pop"
+							style:left="{Math.max(8, hovered.x)}px"
+							style:top="{hovered.y + 12}px"
+							onmouseenter={keepHover}
+							onmouseleave={scheduleHide}
+						>
+							<p class="pop-head">{hovered.heading}</p>
+							<ul>
+								{#each hovered.items as it (it.conv.id + (it.jumpTo ?? ""))}
+									<li>
+										<button type="button" class:cur={it.current} onclick={() => ((hovered = null), onopen(it.conv.id, it.jumpTo))}>
+											<span class="pt">
+												<b>{it.conv.title}</b>
+												<small>메시지 {it.conv.messageCount}개 · {relative(it.conv.updatedAt)}</small>
+											</span>
+											{#if it.current}<em>지금</em>{:else}<ArrowUpRight />{/if}
+										</button>
+									</li>
 								{/each}
-								{#if r.forks.length && !r.ends.length}
-									{@const p = parentOf(r.forks[0])}
-									<button class="fork-btn" onclick={() => p && onopen(p.node.conv.id, r.forks[0].node.at?.messageId)} title="갈라진 메시지로 가기">
-										<GitBranch />갈래 {r.forks.length}개
-									</button>
-								{/if}
-							</span>
-						</li>
-					{/each}
-				</ol>
+							</ul>
+						</div>
+					{/if}
+				</div>
 			</div>
 		{:else}
 			<div class="panel-none">
@@ -132,8 +231,14 @@
 </div>
 
 <style>
+	.graph-scroll {
+		overflow-x: auto;
+		padding-bottom: var(--space-3);
+	}
 	.graph {
 		position: relative;
+		width: max-content;
+		min-width: 100%;
 	}
 	.lines {
 		position: absolute;
@@ -141,16 +246,29 @@
 		left: 40px;
 		overflow: visible;
 		pointer-events: none;
+		z-index: 2;
+	}
+	.dot-hit {
+		pointer-events: all;
+		cursor: pointer;
+		transition: r 120ms var(--ease), stroke-width 120ms var(--ease);
+	}
+	.dot-hit:hover,
+	.dot-hit.hi {
+		stroke: var(--accent);
+		stroke-width: 3;
 	}
 	.lane {
 		fill: none;
 		stroke-width: 2;
 		stroke: var(--border-strong);
+		transition: stroke 120ms var(--ease), stroke-width 120ms var(--ease);
 	}
 	.lane.path {
 		stroke: color-mix(in oklab, var(--accent) 60%, var(--border-strong));
 	}
-	.lane.current {
+	.lane.current,
+	.lane.hi {
 		stroke: var(--accent);
 		stroke-width: 2.5;
 	}
@@ -201,7 +319,8 @@
 		flex-direction: column;
 		gap: 2px;
 		flex: 1;
-		min-width: 0;
+		min-width: 148px;
+		max-width: 240px;
 	}
 	.end-btn,
 	.fork-btn {
@@ -226,6 +345,7 @@
 		text-overflow: ellipsis;
 	}
 	.end-btn:hover,
+	.end-btn.hi,
 	.fork-btn:hover {
 		background: var(--surface-hover);
 		color: var(--text);
@@ -250,10 +370,87 @@
 	.fork-btn {
 		font-size: var(--text-xs);
 		color: var(--text-faint);
+		white-space: nowrap;
 	}
 	.fork-btn :global(svg) {
 		width: 12px;
 		height: 12px;
+		flex: none;
+	}
+	.dot-pop {
+		position: absolute;
+		z-index: 10;
+		min-width: 180px;
+		max-width: 240px;
+		padding: 6px;
+		border: 1px solid var(--border-strong);
+		border-radius: var(--radius-md);
+		background: var(--surface);
+		box-shadow: var(--shadow-lg);
+	}
+	.pop-head {
+		margin: 0 0 4px;
+		padding: 0 6px;
+		font-size: var(--text-xs);
+		font-weight: 600;
+		color: var(--text-faint);
+	}
+	.dot-pop ul {
+		list-style: none;
+		margin: 0;
+		padding: 0;
+		display: flex;
+		flex-direction: column;
+		gap: 2px;
+	}
+	.dot-pop button {
+		display: flex;
+		align-items: center;
+		gap: 6px;
+		width: 100%;
+		padding: 5px 6px;
+		border: none;
+		border-radius: var(--radius-xs);
+		background: transparent;
+		color: var(--text);
+		font: inherit;
+		font-size: var(--text-xs);
+		text-align: left;
+		cursor: pointer;
+	}
+	.dot-pop button:hover {
+		background: var(--surface-hover);
+	}
+	.dot-pop button.cur {
+		background: var(--accent-soft);
+	}
+	.dot-pop .pt {
+		flex: 1;
+		min-width: 0;
+		display: flex;
+		flex-direction: column;
+	}
+	.dot-pop b {
+		font-weight: 600;
+		white-space: nowrap;
+		overflow: hidden;
+		text-overflow: ellipsis;
+	}
+	.dot-pop small {
+		color: var(--text-faint);
+		font-size: 11px;
+	}
+	.dot-pop em {
+		flex: none;
+		font-style: normal;
+		font-weight: 600;
+		color: var(--accent-text);
+	}
+	.dot-pop :global(svg) {
+		flex: none;
+		width: 13px;
+		height: 13px;
+		color: var(--text-muted);
 	}
 	.note,
 	.hint {

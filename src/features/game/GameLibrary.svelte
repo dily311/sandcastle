@@ -117,7 +117,10 @@
 
 <div class="page">
 	<header class="head">
-		<h1>게임</h1>
+		<div class="title-wrap">
+			<h1>게임</h1>
+			<span class="count">{games.list.length}개</span>
+		</div>
 		<ListToolbar bind:query bind:filter bind:sort bind:selecting placeholder="제목·설명" filters={FILTERS} sorts={SORTS} canSelect={!!games.list.length}>
 			<SplitButton label="새로 만들기" onclick={startCreate} disabled={!games.templates.length} menuLabel="게임 가져오기" items={[{ label: "파일에서 가져오기", icon: Upload, onselect: importGame }]} />
 		</ListToolbar>
@@ -188,8 +191,18 @@
 		max-width: var(--page-wide);
 		margin: 0 auto var(--space-5);
 	}
+	.title-wrap {
+		display: flex;
+		align-items: baseline;
+		gap: var(--space-2);
+	}
 	.head h1 {
 		white-space: nowrap;
+	}
+	.count {
+		color: var(--text-faint);
+		font-size: var(--text-sm);
+		font-variant-numeric: tabular-nums;
 	}
 	.grid {
 		display: grid;

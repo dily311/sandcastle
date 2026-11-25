@@ -3,9 +3,9 @@
 	import { trashedToast } from "$shared/trash";
 	import { layout } from "$app/layout.svelte";
 	import { onMount } from "svelte";
-	import { Plus, Search, Star, UserCircle } from "@lucide/svelte";
+	import { Copy, Plus, Search, Star, Trash2, UserCircle, Users } from "@lucide/svelte";
 	import type { AvatarFit, PersonaInput_Deserialize as PersonaInput, WorldInfoBook_Serialize as Book } from "$ipc/bindings";
-	import { Avatar, Button, EmptyState, IconButton, Input, Spinner } from "$shared/ui";
+	import { Avatar, Button, ContextMenu, EmptyState, IconButton, Input, Spinner, type MenuItem } from "$shared/ui";
 	import { call, commands } from "$shared/ipc/client";
 	import { fileSrc } from "$shared/ipc/file";
 	import { pickFiles, IMAGE_FILES } from "$shared/ipc/dialog";
@@ -169,6 +169,51 @@
 		// 기본 페르소나·대화의 페르소나가 비워졌을 수 있음
 		void library.load();
 	}
+	let rowMenu = $state<{ at: { x: number; y: number }; items: MenuItem[] } | null>(null);
+	function openRowMenu(e: MouseEvent, p: Persona) {
+		e.preventDefault();
+		const isDef = p.id === defaultId;
+		rowMenu = {
+			at: { x: e.clientX, y: e.clientY },
+			items: [
+				...(!isDef ? [{ label: "기본 페르소나로 정하기", icon: Star, onselect: async () => { await call(commands.setSystemDefaultPersona(p.id), src); defaultId = p.id; toasts.success(`'${p.name}'을(를) 기본으로 정함`); } }] : []),
+				{
+					label: "복제",
+					icon: Copy,
+					onselect: async () => {
+						const copy = await call(commands.createPersona({ ...p, name: `${p.name} 사본`, isSystemDefault: false }), src);
+						put(copy);
+						nav.replace({ page: "persona", personaId: copy.id });
+					},
+				},
+				{
+					label: "캐릭터로 복사",
+					icon: Users,
+					onselect: async () => {
+						const c = await call(commands.copyPersonaToCharacter(p.id), src);
+						library.characters = [...library.characters, c];
+						toasts.show({ tone: "success", message: `캐릭터 '${c.name}' 만듦`, action: { label: "열기", run: () => nav.go({ page: "character", charId: c.id }) } });
+					},
+				},
+				{
+					label: isDef ? "삭제 (기본은 못 지움)" : "삭제",
+					icon: Trash2,
+					danger: true,
+					disabled: isDef,
+					separator: true,
+					onselect: async () => {
+						if (current?.id === p.id) return void remove();
+						if (!(await confirmAction({ title: "페르소나 삭제", message: `'${p.name}'을(를) 휴지통으로 옮김`, confirmLabel: "삭제", danger: true }))) return;
+						const item = await jobs.run(p.name, () => call(commands.deletePersona(p.id), src), { group: "페르소나 지우기" });
+						if (!item) return;
+						trashedToast(item, () => library.load());
+						library.personas = library.personas.filter((x) => x.id !== p.id);
+						void library.load();
+					},
+				},
+			],
+		};
+	}
 </script>
 
 {#if !library.loaded || !ready}
@@ -182,10 +227,11 @@
 				</Input>
 				<IconButton label="페르소나 추가" size="md" onclick={create}><Plus /></IconButton>
 			</div>
+			<p class="side-count">페르소나 {library.personas.length}개</p>
 			<ul>
 				{#each list as p (p.id)}
 					<li>
-						<button class:on={current?.id === p.id} aria-current={current?.id === p.id ? "page" : undefined} onclick={() => select(p.id)}>
+						<button class:on={current?.id === p.id} aria-current={current?.id === p.id ? "page" : undefined} onclick={() => select(p.id)} oncontextmenu={(e) => openRowMenu(e, p)}>
 							<Avatar name={p.name} src={fileSrc(p.avatar)} fit={p.avatarFit} color={p.color || null} size={36} />
 							<span class="t">
 								<b>{p.alias?.trim() || p.name}{#if p.id === defaultId}<Star class="star" aria-label="기본" />{/if}</b>
@@ -230,6 +276,7 @@
 		</main>
 	</div>
 {/if}
+{#if rowMenu}<ContextMenu at={rowMenu.at} items={rowMenu.items} label="페르소나 메뉴" onclose={() => (rowMenu = null)} />{/if}
 
 <style>
 	.center {
@@ -239,9 +286,16 @@
 	}
 	.page {
 		display: grid;
-		grid-template-columns: 280px minmax(0, 1fr);
+		grid-template-columns: 260px minmax(0, 1fr);
 		grid-template-rows: minmax(0, 1fr);
 		height: 100%;
+	}
+	.side-count {
+		margin: 0;
+		padding: 0 var(--space-2);
+		font-size: var(--text-xs);
+		font-weight: 600;
+		color: var(--text-faint);
 	}
 	.side {
 		display: flex;
@@ -284,7 +338,7 @@
 		background: var(--surface-hover);
 	}
 	li button.on {
-		background: var(--surface-active);
+		background: var(--accent-soft);
 	}
 	.t {
 		flex: 1;

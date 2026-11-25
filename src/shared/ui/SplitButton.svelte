@@ -45,7 +45,7 @@
 		display: inline-flex;
 		align-items: center;
 		gap: 6px;
-		height: 36px;
+		height: var(--control-md);
 		border: none;
 		background: transparent;
 		color: inherit;
@@ -55,9 +55,10 @@
 		/* 좁은 화면에서도 아이콘·글자를 한 줄로 (body의 overflow-wrap: anywhere 때문에 "새로/만들기"로 꺾이던 것). Button과 같게 */
 		white-space: nowrap;
 		cursor: pointer;
+		transition: background var(--duration-fast) var(--ease);
 	}
 	.sm button {
-		height: 30px;
+		height: var(--control-sm);
 	}
 	button:hover:not(:disabled) {
 		background: var(--accent-hover);

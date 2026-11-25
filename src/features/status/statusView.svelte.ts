@@ -12,21 +12,42 @@ export interface FloatRect {
 interface Saved {
 	/** 데스크톱: 패널 대신 떠 있는 창에 */
 	floating: boolean;
+	/** 여러 상태창을 별개의 팝업창으로 각각 띄울지 */
+	separateWindows: boolean;
 	rect: FloatRect | null;
+	/** 별도 창 모드에서 창별 위치·크기 (인덱스 키) */
+	rects: Record<string, FloatRect>;
 	/** 떠 있는 창을 접었나 */
 	collapsed: boolean;
+	/** 별도 창 모드에서 창별 접힘 상태 */
+	collapsedMap: Record<string, boolean>;
 	/** 채팅방 위 줄을 접었나 (떠 있는 창과 따로) */
 	topCollapsed: boolean;
 	/** 좁은 화면·Android: 채팅방 위에 늘 보이기 (사용자 요청, ADR-029 ⑤) */
 	aboveChat: boolean;
 }
 
-const DEFAULTS: Saved = { floating: false, rect: null, collapsed: false, topCollapsed: false, aboveChat: false };
+const DEFAULTS: Saved = {
+	floating: false,
+	separateWindows: false,
+	rect: null,
+	rects: {},
+	collapsed: false,
+	collapsedMap: {},
+	topCollapsed: false,
+	aboveChat: false,
+};
 
 function load(): Saved {
 	try {
 		const raw = localStorage.getItem(KEY);
-		return raw ? { ...DEFAULTS, ...(JSON.parse(raw) as Partial<Saved>) } : { ...DEFAULTS };
+		const parsed = raw ? (JSON.parse(raw) as Partial<Saved>) : {};
+		return {
+			...DEFAULTS,
+			...parsed,
+			rects: parsed.rects ?? {},
+			collapsedMap: parsed.collapsedMap ?? {},
+		};
 	} catch {
 		return { ...DEFAULTS };
 	}
@@ -37,6 +58,9 @@ class StatusView {
 
 	get floating() {
 		return this.#s.floating;
+	}
+	get separateWindows() {
+		return this.#s.separateWindows;
 	}
 	get rect() {
 		return this.#s.rect;
@@ -49,6 +73,18 @@ class StatusView {
 	}
 	get aboveChat() {
 		return this.#s.aboveChat;
+	}
+	getRect(key: string): FloatRect | null {
+		return this.#s.rects[key] ?? null;
+	}
+	setRect(key: string, rect: FloatRect) {
+		this.set({ rects: { ...this.#s.rects, [key]: rect } });
+	}
+	isCollapsed(key: string): boolean {
+		return !!this.#s.collapsedMap[key];
+	}
+	setCollapsed(key: string, collapsed: boolean) {
+		this.set({ collapsedMap: { ...this.#s.collapsedMap, [key]: collapsed } });
 	}
 	set(patch: Partial<Saved>) {
 		this.#s = { ...this.#s, ...patch };

@@ -99,10 +99,12 @@
 		await revealItemInDir(info.path).catch((e) => toasts.error("파일 위치를 열 수 없음", String(e)));
 	}
 
+	const extra = $derived<MenuItem[]>(typeof img?.extraItems === "function" ? img.extraItems() : (img?.extraItems ?? []));
 	const items = $derived<MenuItem[]>([
 		{ label: "그림 복사", icon: Copy, onselect: copyImage },
 		{ label: "파일 이름 복사", icon: FileText, disabled: !title, onselect: copyName },
 		{ label: "정보 보기", icon: Info, onselect: showInfo },
+		...(extra.length ? [{ ...extra[0], separator: true }, ...extra.slice(1)] : []),
 		...(img?.rename ? [{ label: "이름 바꾸기", icon: Pencil, separator: true, onselect: () => void img.rename?.() }] : []),
 		// 파일 위치 열기는 데스크톱의 내 파일만 (Android에는 탐색기가 없고, 인터넷 그림은 파일이 아님)
 		...(layout.desktop && info?.path ? [{ label: "파일 위치 열기", icon: ExternalLink, separator: true, onselect: reveal }] : []),
@@ -129,9 +131,23 @@
 </dialog>
 
 <!-- 정보는 그림 위에 따로 뜨는 창 (그림이 크면 아래에 붙여서는 화면 밖으로 나감) -->
-<Dialog open={!!details} title="정보" size="sm" onclose={() => (details = null)}>
+<Dialog open={!!details} title="정보" size="md" onclose={() => (details = null)}>
 	<dl class="details">
-		{#each details ?? [] as d (d.label)}<dt>{d.label}</dt><dd>{d.value}</dd>{/each}
+		{#each details ?? [] as d, i (`${d.label}-${i}`)}
+			<dt>{d.label}</dt>
+			<dd>
+				<span>{d.value}</span>
+				{#if d.value.length > 24}
+					<button
+						type="button"
+						class="copy-val"
+						aria-label="{d.label} 복사"
+						title="{d.label} 복사"
+						onclick={() => navigator.clipboard.writeText(d.value).then(() => toasts.success(`${d.label} 복사함`), () => toasts.error("복사 못 함"))}
+					><Copy /></button>
+				{/if}
+			</dd>
+		{/each}
 	</dl>
 </Dialog>
 
@@ -199,17 +215,47 @@
 	.details {
 		display: grid;
 		grid-template-columns: auto minmax(0, 1fr);
-		gap: 2px var(--space-3);
+		gap: 8px var(--space-3);
 		margin: 0;
 		font-size: var(--text-sm);
 	}
 	.details dt {
 		color: var(--text-faint);
+		white-space: nowrap;
 	}
 	.details dd {
 		margin: 0;
+		display: flex;
+		align-items: flex-start;
+		gap: var(--space-2);
 		color: var(--text);
 		overflow-wrap: anywhere;
+		white-space: pre-wrap;
 		user-select: text;
+	}
+	.details dd span {
+		flex: 1;
+		min-width: 0;
+	}
+	.copy-val {
+		flex: none;
+		display: grid;
+		place-items: center;
+		width: 24px;
+		height: 24px;
+		padding: 0;
+		border: none;
+		border-radius: var(--radius-xs);
+		background: transparent;
+		color: var(--text-muted);
+		cursor: pointer;
+	}
+	.copy-val:hover {
+		background: var(--surface-hover);
+		color: var(--text);
+	}
+	.copy-val :global(svg) {
+		width: 14px;
+		height: 14px;
 	}
 </style>
