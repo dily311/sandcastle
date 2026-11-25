@@ -1,6 +1,7 @@
 <script lang="ts">
 	// 프로필 고르기: 지금 고른 프로필(아바타 + 이름)을 누르면 목록이 뜬다.
 	// 대화(페르소나), 게임(플레이어), 폰(주인) 패널이 같은 모양을 쓴다.
+	import { UserCog } from "@lucide/svelte";
 	import Avatar from "./Avatar.svelte";
 	import type { AvatarFit } from "$ipc/bindings";
 	import { fileSrc } from "$shared/ipc/file";
@@ -23,6 +24,8 @@
 		label = "프로필 바꾸기",
 		hint,
 		onchange,
+		onmanage,
+		manageLabel = "추가 · 관리",
 	}: {
 		options: ProfileOption[];
 		value: string | null | undefined;
@@ -30,6 +33,9 @@
 		/** 고른 프로필 이름 아래에 설명 대신 보여줄 글 */
 		hint?: string;
 		onchange: (id: string) => void;
+		/** 하단 추가·관리 동작 (주면 팝오버 맨 아래에 버튼 표시) */
+		onmanage?: () => void;
+		manageLabel?: string;
 	} = $props();
 
 	const current = $derived(options.find((o) => o.id === value) ?? null);
@@ -82,6 +88,21 @@
 				</button>
 			{/each}
 		{/each}
+		{#if onmanage}
+			<div class="pfoot">
+				<button
+					type="button"
+					class="manage"
+					onclick={() => {
+						open = false;
+						onmanage();
+					}}
+				>
+					<UserCog />
+					<span>{manageLabel}</span>
+				</button>
+			</div>
+		{/if}
 	</div>
 {/if}
 <button bind:this={button} class="pcur" aria-haspopup="listbox" aria-expanded={open} aria-label={label} onclick={toggle}>
@@ -140,6 +161,8 @@
 		border: 1px solid var(--border);
 		border-radius: var(--radius-md);
 		background: var(--surface);
+		backdrop-filter: blur(14px);
+		-webkit-backdrop-filter: blur(14px);
 		box-shadow: var(--shadow-lg);
 		animation: up var(--duration-fast) var(--ease);
 	}
@@ -151,6 +174,26 @@
 	}
 	.ppop button.on {
 		background: var(--accent-soft);
+	}
+	.pfoot {
+		margin-top: 4px;
+		padding-top: 4px;
+		border-top: 1px solid var(--border);
+	}
+	.ppop button.manage {
+		gap: var(--space-2);
+		padding: 7px var(--space-2);
+		color: var(--text-muted);
+		font-size: var(--text-xs);
+		font-weight: 500;
+	}
+	.ppop button.manage:hover {
+		color: var(--text);
+	}
+	.ppop button.manage :global(svg) {
+		width: 14px;
+		height: 14px;
+		flex: none;
 	}
 	.grp {
 		margin: 6px 8px 2px;

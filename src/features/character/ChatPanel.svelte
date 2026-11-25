@@ -1,7 +1,7 @@
 <script lang="ts">
 	import UtilMacroNote from "./UtilMacroNote.svelte";
 	import { regexVersion } from "$shared/stores/regexVersion.svelte";
-	import { PictureInPicture2, ArrowUpDown, ChevronRight, GripVertical, Bookmark, Check, ChevronDown, Eye, EyeOff, FileArchive, Folder, IdCard, ImagePlus, Pencil, Plus, Search, Trash2, X, ChevronsDownUp, ChevronsUpDown } from "@lucide/svelte";
+	import { PictureInPicture2, ArrowUpDown, ChevronRight, GripVertical, Bookmark, Check, ChevronDown, Eye, EyeOff, FileArchive, Folder, IdCard, ImagePlus, Pencil, Plus, Search, Trash2, UserCog, X, ChevronsDownUp, ChevronsUpDown } from "@lucide/svelte";
 	import { Avatar, Button, ChipPicker, ContextMenu, IconButton, Input, ProfilePicker, Select, Spinner, Switch, type MenuItem, type ProfileOption } from "$shared/ui";
 	import { bookmarks, bookmarksOf, onCurrentSwipe, type ChatBookmark } from "./bookmarks";
 	import { assetImport } from "./assetImport.svelte";
@@ -25,6 +25,7 @@
 	import { toasts } from "$shared/stores/toast.svelte";
 	import type { ContextUsage, ModelPriceInfo } from "$ipc/bindings";
 	import { panel } from "$app/panel.svelte";
+	import { nav } from "$app/nav.svelte";
 	import type { RegexScript_Serialize as RegexScript, Value } from "$ipc/bindings";
 	import { call, commands } from "$shared/ipc/client";
 	import { IMAGE_FILES, pickFiles } from "$shared/ipc/dialog";
@@ -737,11 +738,18 @@
 						<span>API</span>
 						<div class="with-btn">
 							<Select value={effectiveApi?.id ?? DEFAULT} options={effectiveApi ? apiOptions.slice(1) : apiOptions} aria-label="이 대화의 API" onchange={(e) => pickApi(e.currentTarget.value)} />
+							<IconButton label="API 설정 열기" size="sm" onclick={() => nav.go({ page: "settings", tab: "api" })}><Plus /></IconButton>
 							<OptionLock locked={lockedApi} from="전역" disabled={!lockedApi && !effectiveApi} onclick={toggleApi} />
 						</div>
 					</div>
 				{:else}
-					<label class="row"><span>API</span><Select value={conv.apiProfileId ?? DEFAULT} options={apiOptions} onchange={(e) => setOption({ apiProfileId: e.currentTarget.value })} /></label>
+					<div class="row">
+						<span>API</span>
+						<div class="with-btn">
+							<Select value={conv.apiProfileId ?? DEFAULT} options={apiOptions} onchange={(e) => setOption({ apiProfileId: e.currentTarget.value })} />
+							<IconButton label="API 설정 열기" size="sm" onclick={() => nav.go({ page: "settings", tab: "api" })}><Plus /></IconButton>
+						</div>
+					</div>
 				{/if}
 				<div class="row">
 					<span>모델</span>
@@ -770,7 +778,8 @@
 					{:else}
 						<span>페르소나</span>
 						<div class="with-btn">
-							<ProfilePicker label="페르소나 변경" options={personaOptions} value={persona?.id} onchange={(id) => void pickPersona(id)} />
+							<ProfilePicker label="페르소나 변경" options={personaOptions} value={persona?.id} onchange={(id) => void pickPersona(id)} onmanage={() => nav.go({ page: "persona" })} manageLabel="페르소나 추가 · 관리" />
+							<IconButton label="페르소나 추가 · 관리" size="sm" onclick={() => nav.go({ page: "persona" })}><UserCog /></IconButton>
 							{#if lockable}<OptionLock locked={lockedPersona} from={personaFrom} onclick={togglePersona} />{/if}
 						</div>
 					{/if}
