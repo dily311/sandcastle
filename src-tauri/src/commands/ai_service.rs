@@ -58,6 +58,40 @@ pub fn has_api_key(profile_id: String) -> Result<bool> {
     Ok(SecretStore::exists(&api_key_name(&profile_id)))
 }
 
+#[derive(Debug, Clone, serde::Serialize, specta::Type)]
+#[serde(rename_all = "camelCase")]
+pub struct VertexKeyInfo {
+    pub project_id: String,
+    pub location: String,
+    pub client_email: Option<String>,
+}
+
+/// Vertex AI 키의 공개 메타정보(프로젝트 ID·지역·서비스 계정 이메일)만 돌려준다 (비밀키는 절대 노출하지 않음)
+#[tauri::command]
+#[specta::specta]
+pub fn get_vertex_key_info(profile_id: String) -> Result<Option<VertexKeyInfo>> {
+    let Ok(raw) = SecretStore::get(&api_key_name(&profile_id)) else {
+        return Ok(None);
+    };
+    let Ok(v) = serde_json::from_str::<serde_json::Value>(&raw) else {
+        return Ok(None);
+    };
+    let Some(project_id) = v.get("project_id").and_then(|x| x.as_str()).map(str::to_string) else {
+        return Ok(None);
+    };
+    let location = v.get("location").and_then(|x| x.as_str()).unwrap_or("global").to_string();
+    let client_email = v
+        .get("service_account")
+        .and_then(|x| x.as_str())
+        .and_then(|sa| serde_json::from_str::<serde_json::Value>(sa).ok())
+        .and_then(|sa| sa.get("client_email").and_then(|x| x.as_str()).map(str::to_string));
+    Ok(Some(VertexKeyInfo {
+        project_id,
+        location,
+        client_email,
+    }))
+}
+
 // =======================================
 // API Profile
 // =======================================
@@ -94,9 +128,14 @@ pub async fn create_api_profile(state: State<'_, AppState>, ai: State<'_, Arc<Ai
 #[tauri::command]
 #[specta::specta]
 pub async fn update_api_profile(state: State<'_, AppState>, ai: State<'_, Arc<AiService>>, id: String, input: ApiProfilesInput, api_key: String) -> Result<()> {
+    let prev = ai_service::get_api_profile(&state.db, &id).await?;
+    let endpoint_changed = prev.base_url.trim() != input.base_url.trim() || prev.format_type != input.format_type;
     ai_service::update_api_profile(&state.db, &id, input).await?;
     if !api_key.is_empty() {
         store_verified_key(&ai, &id, api_key).await?;
+        let _ = ai_service::set_verified(&state.db, &id, false).await;
+    } else if endpoint_changed {
+        let _ = ai_service::set_verified(&state.db, &id, false).await;
     }
     Ok(())
 }
@@ -146,10 +185,17 @@ pub async fn get_provider_quota(ai: State<'_, Arc<AiService>>, profile_id: Strin
     crate::service::plugins::provider_quota(&ai, &profile).await
 }
 
-/// 연결 확인: 짧은 메시지 하나를 보내고 받은 답을 돌려준다 (저장하지 않음)
+/// 연결 확인: 짧은 메시지("Hi") 하나를 보내고 받은 답을 돌려준다 (저장하지 않음).
+/// `model`을 주면 그 모델로 일시 테스트하고, 없으면 프로필 기본 모델 → 모델 목록 조회 순으로 확인한다.
 #[tauri::command]
 #[specta::specta]
-pub async fn test_message(ai: State<'_, Arc<AiService>>, tasks: State<'_, Arc<crate::task::TaskManager>>, profile_id: String) -> Result<String> {
+pub async fn test_message(
+    state: State<'_, AppState>,
+    ai: State<'_, Arc<AiService>>,
+    tasks: State<'_, Arc<crate::task::TaskManager>>,
+    profile_id: String,
+    model: Option<String>,
+) -> Result<String> {
     let prompt = PromptMessage {
         chat_options: ChatOptions {
             max_tokens: Some(32),
@@ -161,6 +207,7 @@ pub async fn test_message(ai: State<'_, Arc<AiService>>, tasks: State<'_, Arc<cr
             role: PromptRole::User,
             content: "Hi".into(),
             token: 4,
+            source: None,
         }],
     };
     // 음성·이미지 API는 대화 요청을 받지 않으므로 요금이 없는 확인 요청을 쓴다
@@ -168,10 +215,22 @@ pub async fn test_message(ai: State<'_, Arc<AiService>>, tasks: State<'_, Arc<cr
     match profile.format_type.as_str() {
         "elevenlabs" => {
             let n = crate::service::plugins::voices(&ai, &profile_id).await?.len();
+            let _ = ai_service::set_verified(&state.db, &profile_id, true).await;
             return Ok(format!("목소리 {n}개"));
         }
-        "novelai" => return crate::service::plugins::novelai_check(&ai, &profile).await,
+        "novelai" => {
+            let out = crate::service::plugins::novelai_check(&ai, &profile).await?;
+            let _ = ai_service::set_verified(&state.db, &profile_id, true).await;
+            return Ok(out);
+        }
         _ => {}
+    }
+    let chosen = model.as_deref().map(str::trim).filter(|m| !m.is_empty()).map(str::to_string);
+    // 테스트 모델도 없고 기본 모델도 없으면 모델 목록 조회로 연결을 확인한다 (토큰 비용 없음)
+    if chosen.is_none() && profile.model.trim().is_empty() {
+        let models = ai.list_models(&profile_id).await?;
+        let _ = ai_service::set_verified(&state.db, &profile_id, true).await;
+        return Ok(format!("모델 {}개 확인됨", models.len()));
     }
     use crate::task::{CreateTaskRequest, TaskOwner, TaskType};
     let job = CreateTaskRequest::inline(TaskType::ApiCall, TaskOwner::System, "settings", "API 연결 확인", false);
@@ -180,7 +239,7 @@ pub async fn test_message(ai: State<'_, Arc<AiService>>, tasks: State<'_, Arc<cr
             ai.generate_once(AiRequest {
                 profile_id,
                 prompt,
-                model: None,
+                model: chosen,
             })
         })
         .await?;

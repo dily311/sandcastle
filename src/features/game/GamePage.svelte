@@ -1,4 +1,5 @@
 <script lang="ts">
+	import { _ } from "svelte-i18n";
 	import { Spinner } from "$shared/ui";
 	import GameLibrary from "./GameLibrary.svelte";
 	import GameDetail from "./GameDetail.svelte";
@@ -9,7 +10,7 @@
 	import GamePanel from "./play/GamePanel.svelte";
 	import SidePanel from "$app/SidePanel.svelte";
 	import { panel } from "$app/panel.svelte";
-	import { Activity, Compass, Gauge, GitBranch, HeartHandshake, Map as MapIcon, Package, SlidersHorizontal } from "@lucide/svelte";
+	import { Activity, Compass, Gauge, GitBranch, HeartHandshake, Map as MapIcon, Package, Palette, SlidersHorizontal } from "@lucide/svelte";
 
 	// 게임 목록 → 게임 상세(플레이 기록) → 플레이 / 편집
 	let { gameId, sessionId, edit = false }: { gameId?: string; sessionId?: string; edit?: boolean } = $props();
@@ -23,14 +24,15 @@
 	$effect(() => {
 		if (!playing) return;
 		return panel.register([
-			{ id: "settings", label: "대화 설정", icon: SlidersHorizontal },
-			{ id: "context", label: "컨텍스트·프리셋", icon: Gauge },
-			{ id: "branches", label: "분기", icon: GitBranch },
-			{ id: "actions", label: "이동·행동 (A)", icon: Compass },
-			{ id: "map", label: "지도 (M)", icon: MapIcon },
-			{ id: "status", label: "상태", icon: Activity },
-			{ id: "relations", label: "관계", icon: HeartHandshake },
-			{ id: "items", label: "소지품 (I)", icon: Package },
+			{ id: "settings", label: $_("gameUi.panelSettings"), icon: SlidersHorizontal },
+			{ id: "context", label: $_("gameUi.panelContext"), icon: Gauge },
+			{ id: "branches", label: $_("gameUi.panelBranches"), icon: GitBranch },
+			{ id: "actions", label: $_("gameUi.panelActions"), icon: Compass },
+			{ id: "map", label: $_("gameUi.panelMap"), icon: MapIcon },
+			{ id: "status", label: $_("gameUi.panelStatus"), icon: Activity },
+			{ id: "relations", label: $_("gameUi.panelRelations"), icon: HeartHandshake },
+			{ id: "items", label: $_("gameUi.panelItems"), icon: Package },
+			{ id: "theme", label: $_("gameUi.panelTheme"), icon: Palette },
 		], "actions");
 	});
 
@@ -41,7 +43,7 @@
 {:else if gameId && sessionId}
 	<div class="play">
 		<div class="stage">{#key sessionId}<PlayView {gameId} {sessionId} />{/key}</div>
-		{#if panel.open}<SidePanel label="게임 패널"><GamePanel gameId={gameId!} sessionId={sessionId!} /></SidePanel>{/if}
+		{#if panel.open}<SidePanel label={$_("gameUi.gamePanelAria")}><GamePanel gameId={gameId!} sessionId={sessionId!} /></SidePanel>{/if}
 	</div>
 {:else if gameId && edit}
 	{#key gameId}<GameEditor {gameId} />{/key}

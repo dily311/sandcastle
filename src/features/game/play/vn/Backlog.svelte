@@ -1,4 +1,5 @@
 <script lang="ts">
+	import { _ } from "svelte-i18n";
 	// 지난 대사 창 (무대 위에 뜸). 지금 씬이 열려 있으면 그 씬의 대사만, NPC와 대화 중이면 그 대화의 대사만 보여준다.
 	// 둘 다 아니면 최근 기록. 백엔드: read_current_transcript
 	import { X } from "@lucide/svelte";
@@ -23,9 +24,9 @@
 	const sceneId = $derived(runtimeStore.currentSceneId ?? null);
 	const npcId = $derived(runtimeStore.activeNpcId ?? null);
 	const title = $derived.by(() => {
-		if (sceneId) return `이 장면의 대사 · ${gameStore.scenes?.find((s) => s.id === sceneId)?.name ?? "지금 장면"}`;
-		if (npcId) return `${speaker(npcId) ?? "상대"}와의 대화`;
-		return "최근 대사";
+		if (sceneId) return $_("gamePlayExtra.backlogSceneTitle", { values: { name: gameStore.scenes?.find((s) => s.id === sceneId)?.name ?? $_("gamePlayExtra.currentSceneFallback") } });
+		if (npcId) return $_("gamePlayExtra.backlogTalkTitle", { values: { name: speaker(npcId) ?? $_("gamePlayExtra.partnerFallback") } });
+		return $_("gamePlayExtra.backlogRecentTitle");
 	});
 
 	$effect(() => {
@@ -47,7 +48,7 @@
 
 	function speaker(id: string | null | undefined) {
 		if (!id) return null;
-		if (id === "player") return "나";
+		if (id === "player") return $_("gamePlayExtra.meFallback");
 		return gameStore.view?.characters.find((c) => c.id === id)?.name ?? id;
 	}
 </script>
@@ -59,12 +60,12 @@
 	<header>
 		<h3>{title}</h3>
 		{#if hasTranslation}
-			<button class="toggle" type="button" aria-pressed={showOriginal} onclick={() => (showOriginal = !showOriginal)}>{showOriginal ? "번역 보기" : "원문 보기"}</button>
+			<button class="toggle" type="button" aria-pressed={showOriginal} onclick={() => (showOriginal = !showOriginal)}>{showOriginal ? $_("gamePlayExtra.showTrans") : $_("gamePlayExtra.showOrig")}</button>
 		{/if}
-		<button class="close" type="button" aria-label="닫기 (Esc)" title="닫기 (Esc)" onclick={onclose}><X /></button>
+		<button class="close" type="button" aria-label={$_("gamePlayExtra.closeEsc")} title={$_("gamePlayExtra.closeEsc")} onclick={onclose}><X /></button>
 	</header>
 	<div class="body" bind:this={box}>
-		{#if hasMore}<p class="more">이보다 앞의 대사는 생략됨</p>{/if}
+		{#if hasMore}<p class="more">{$_("gamePlayExtra.earlierOmitted")}</p>{/if}
 		{#each entries as e (e.seq)}
 			<section class="entry">
 				<p class="meta">{formatGameTime(e.gameTime)}</p>
@@ -78,7 +79,7 @@
 				{/each}
 			</section>
 		{:else}
-			<p class="none">{loading ? "불러오는 중…" : "아직 대사가 없음"}</p>
+			<p class="none">{loading ? $_("gamePlayExtra.loading") : $_("gamePlayExtra.noLinesYet")}</p>
 		{/each}
 	</div>
 </div>

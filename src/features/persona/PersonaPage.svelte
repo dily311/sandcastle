@@ -1,10 +1,12 @@
 <script lang="ts">
+	import { _ } from "svelte-i18n";
+	import { jobs } from "$shared/stores/jobs.svelte";
 	import { trashedToast } from "$shared/trash";
 	import { layout } from "$app/layout.svelte";
 	import { onMount } from "svelte";
-	import { Plus, Search, Star, UserCircle } from "@lucide/svelte";
-	import type { PersonaInput_Deserialize as PersonaInput, WorldInfoBook_Serialize as Book } from "$ipc/bindings";
-	import { Avatar, Button, EmptyState, IconButton, Input, Spinner } from "$shared/ui";
+	import { Copy, Plus, Search, Star, Trash2, UserCircle, Users } from "@lucide/svelte";
+	import type { AvatarFit, PersonaInput_Deserialize as PersonaInput, WorldInfoBook_Serialize as Book } from "$ipc/bindings";
+	import { Avatar, Button, ContextMenu, EmptyState, IconButton, Input, Spinner, type MenuItem } from "$shared/ui";
 	import { call, commands } from "$shared/ipc/client";
 	import { fileSrc } from "$shared/ipc/file";
 	import { pickFiles, IMAGE_FILES } from "$shared/ipc/dialog";
@@ -45,7 +47,7 @@
 		[...library.personas].sort((a, b) => Number(b.id === defaultId) - Number(a.id === defaultId) || a.name.localeCompare(b.name, "ko")),
 	);
 	const q = $derived(query.trim().toLowerCase());
-	const list = $derived(q ? sorted.filter((p) => `${p.name} ${p.tags.join(" ")} ${p.description ?? ""}`.toLowerCase().includes(q)) : sorted);
+	const list = $derived(q ? sorted.filter((p) => `${p.alias ?? ""} ${p.name} ${p.tags.join(" ")} ${p.description ?? ""}`.toLowerCase().includes(q)) : sorted);
 	const current = $derived(library.persona(personaId) ?? (personaId ? undefined : sorted[0]));
 
 	// 첫 진입이면 첫 페르소나를 주소에 고정 (뒤로 가기 기록은 남기지 않음)
@@ -57,7 +59,7 @@
 	let releaseGuard: (() => void) | null = null;
 	$effect(() => {
 		if (!dirty) return;
-		const release = nav.setGuard(() => confirmAction({ title: "저장하지 않음", message: "바뀐 내용을 버리고 나감", confirmLabel: "버리기" }));
+		const release = nav.setGuard(() => confirmAction({ title: $_("persona.unsavedTitle"), message: $_("persona.unsavedLeaveMsg"), confirmLabel: $_("persona.discardBtn") }));
 		releaseGuard = release;
 		return () => {
 			release();
@@ -83,9 +85,9 @@
 	const blank = (name: string): PersonaInput => ({ name, avatar: null, description: "", worldInfoIds: [], tags: [], color: "", isSystemDefault: false });
 
 	async function create() {
-		if (dirty && !(await confirmAction({ title: "저장하지 않음", message: "바뀐 내용을 버리고 새 페르소나를 만듦", confirmLabel: "버리기" }))) return;
+		if (dirty && !(await confirmAction({ title: $_("persona.unsavedTitle"), message: $_("persona.unsavedNewMsg"), confirmLabel: $_("persona.discardBtn") }))) return;
 		discard();
-		const name = await promptText({ title: "새 페르소나", message: "대화에서 내가 될 인물", input: { value: "", placeholder: "이름" }, confirmLabel: "만들기" });
+		const name = await promptText({ title: $_("persona.newTitle"), message: $_("persona.newMsg"), input: { value: "", placeholder: $_("persona.namePlaceholder") }, confirmLabel: $_("persona.createBtn") });
 		if (!name?.trim()) return;
 		const p = await call(commands.createPersona(blank(name.trim())), src);
 		put(p);
@@ -100,7 +102,7 @@
 			put({ ...current, ...input, avatar: current.avatar, description: input.description, updatedAt: Date.now() });
 			dirty = false;
 			version++;
-			toasts.success("저장함");
+			toasts.success($_("persona.savedToast"));
 		} finally {
 			saving = false;
 		}
@@ -114,13 +116,18 @@
 		}
 		put(await call(commands.setPersonaAvatar(current.id, path), src));
 	}
+	async function avatarFit(fit: AvatarFit | null) {
+		if (!current) return;
+		await call(commands.setAvatarFit("persona", current.id, fit), src);
+		put({ ...current, avatarFit: fit });
+	}
 	// 끌어다 놓은 그림은 지금 보고 있는 페르소나의 아바타로 (아바타 버튼과 같은 처리)
 	$effect(() => {
 		const p = current;
 		if (!p) return;
 		return dropPaths({
-			label: `${p.name}의 아바타로 쓰기`,
-			hint: "PNG·JPG·WEBP·GIF 한 장",
+			label: $_("persona.dropAvatarLabel", { values: { name: p.name } }),
+			hint: $_("persona.dropAvatarHint"),
 			multiple: false,
 			onpaths: async ([path]) => put(await call(commands.setPersonaAvatar(p.id, path), src)),
 		});
@@ -129,11 +136,11 @@
 		if (!current) return;
 		await call(commands.setSystemDefaultPersona(current.id), src);
 		defaultId = current.id;
-		toasts.success(`'${current.name}'을(를) 기본으로 정함`);
+		toasts.success($_("persona.setDefaultToast", { values: { name: current.name } }));
 	}
 	async function duplicate() {
 		if (!current) return;
-		const p = await call(commands.createPersona({ ...current, name: `${current.name} 사본`, isSystemDefault: false }), src);
+		const p = await call(commands.createPersona({ ...current, name: $_("persona.copySuffix", { values: { name: current.name } }), isSystemDefault: false }), src);
 		put(p);
 		discard();
 		nav.replace({ page: "persona", personaId: p.id });
@@ -142,7 +149,7 @@
 		if (!current) return;
 		const c = await call(commands.copyPersonaToCharacter(current.id), src);
 		library.characters = [...library.characters, c];
-		toasts.show({ tone: "success", message: `캐릭터 '${c.name}' 만듦`, action: { label: "열기", run: () => nav.go({ page: "character", charId: c.id }) } });
+		toasts.show({ tone: "success", message: $_("persona.copiedToCharToast", { values: { name: c.name } }), action: { label: $_("persona.openBtn"), run: () => nav.go({ page: "character", charId: c.id }) } });
 	}
 	async function remove() {
 		if (!current) return;
@@ -150,11 +157,12 @@
 		const usage = await call(commands.getPersonaUsage(target.id), { ...src, silent: true }).catch(() => null);
 		const convCount = library.conversations.filter((c) => c.personaId === target.id).length;
 		const notes = [
-			usage?.characterCount ? `캐릭터 ${usage.characterCount}개의 기본 페르소나가 비워짐` : "",
-			convCount ? `대화 ${convCount}개는 페르소나 없이 남음` : "",
+			usage?.characterCount ? $_("persona.deleteCharUsage", { values: { count: usage.characterCount } }) : "",
+			convCount ? $_("persona.deleteConvUsage", { values: { count: convCount } }) : "",
 		].filter(Boolean);
-		if (!(await confirmAction({ title: "페르소나 삭제", message: [`'${target.name}'을(를) 휴지통으로 옮김`, ...notes, "되살리면 다시 이어짐"].join(". "), confirmLabel: "삭제", danger: true }))) return;
-		const item = await call(commands.deletePersona(target.id), src);
+		if (!(await confirmAction({ title: $_("persona.deleteTitle"), message: [$_("persona.deleteTrashMsg", { values: { name: target.name } }), ...notes, $_("persona.deleteRestoreNote")].join(". "), confirmLabel: $_("common.delete"), danger: true }))) return;
+		const item = await jobs.run(target.name, () => call(commands.deletePersona(target.id), src), { group: $_("persona.deleteJobGroup") });
+		if (!item) return;
 		trashedToast(item, () => library.load());
 		library.personas = library.personas.filter((p) => p.id !== target.id);
 		discard();
@@ -162,32 +170,78 @@
 		// 기본 페르소나·대화의 페르소나가 비워졌을 수 있음
 		void library.load();
 	}
+	let rowMenu = $state<{ at: { x: number; y: number }; items: MenuItem[] } | null>(null);
+	function openRowMenu(e: MouseEvent, p: Persona) {
+		e.preventDefault();
+		const isDef = p.id === defaultId;
+		rowMenu = {
+			at: { x: e.clientX, y: e.clientY },
+			items: [
+				...(!isDef ? [{ label: $_("persona.setDefaultMenu"), icon: Star, onselect: async () => { await call(commands.setSystemDefaultPersona(p.id), src); defaultId = p.id; toasts.success($_("persona.setDefaultToast", { values: { name: p.name } })); } }] : []),
+				{
+					label: $_("persona.duplicateMenu"),
+					icon: Copy,
+					onselect: async () => {
+						const copy = await call(commands.createPersona({ ...p, name: $_("persona.copySuffix", { values: { name: p.name } }), isSystemDefault: false }), src);
+						put(copy);
+						nav.replace({ page: "persona", personaId: copy.id });
+					},
+				},
+				{
+					label: $_("persona.copyToCharMenu"),
+					icon: Users,
+					onselect: async () => {
+						const c = await call(commands.copyPersonaToCharacter(p.id), src);
+						library.characters = [...library.characters, c];
+						toasts.show({ tone: "success", message: $_("persona.copiedToCharToast", { values: { name: c.name } }), action: { label: $_("persona.openBtn"), run: () => nav.go({ page: "character", charId: c.id }) } });
+					},
+				},
+				{
+					label: isDef ? $_("persona.deleteDefaultDisabled") : $_("common.delete"),
+					icon: Trash2,
+					danger: true,
+					disabled: isDef,
+					separator: true,
+					onselect: async () => {
+						if (current?.id === p.id) return void remove();
+						if (!(await confirmAction({ title: $_("persona.deleteTitle"), message: $_("persona.deleteTrashMsg", { values: { name: p.name } }), confirmLabel: $_("common.delete"), danger: true }))) return;
+						const item = await jobs.run(p.name, () => call(commands.deletePersona(p.id), src), { group: $_("persona.deleteJobGroup") });
+						if (!item) return;
+						trashedToast(item, () => library.load());
+						library.personas = library.personas.filter((x) => x.id !== p.id);
+						void library.load();
+					},
+				},
+			],
+		};
+	}
 </script>
 
 {#if !library.loaded || !ready}
 	<div class="center"><Spinner /></div>
 {:else}
 	<div class="page" class:desktop={!layout.mobile} class:mobile={layout.mobile} class:narrow={layout.narrow} class:listing={mobileList}>
-		<aside class="side" aria-label="페르소나 목록">
+		<aside class="side" aria-label={$_("persona.listAria")}>
 			<div class="top">
-				<Input bind:value={query} placeholder="이름·태그 검색" aria-label="페르소나 검색" type="search">
+				<Input bind:value={query} placeholder={$_("persona.searchPlaceholder")} aria-label={$_("persona.searchAria")} type="search">
 					{#snippet leading()}<Search />{/snippet}
 				</Input>
-				<IconButton label="페르소나 추가" size="md" onclick={create}><Plus /></IconButton>
+				<IconButton label={$_("persona.addAria")} size="md" onclick={create}><Plus /></IconButton>
 			</div>
+			<p class="side-count">{$_("persona.count", { values: { count: library.personas.length } })}</p>
 			<ul>
 				{#each list as p (p.id)}
 					<li>
-						<button class:on={current?.id === p.id} aria-current={current?.id === p.id ? "page" : undefined} onclick={() => select(p.id)}>
-							<Avatar name={p.name} src={fileSrc(p.avatar)} color={p.color || null} size={36} />
+						<button class:on={current?.id === p.id} aria-current={current?.id === p.id ? "page" : undefined} onclick={() => select(p.id)} oncontextmenu={(e) => openRowMenu(e, p)}>
+							<Avatar name={p.name} src={fileSrc(p.avatar)} fit={p.avatarFit} color={p.color || null} size={36} />
 							<span class="t">
-								<b>{p.name}{#if p.id === defaultId}<Star class="star" aria-label="기본" />{/if}</b>
-								<span class="faint">{(p.description ?? "").split("\n")[0] || "설명 없음"}</span>
+								<b>{p.alias?.trim() || p.name}{#if p.id === defaultId}<Star class="star" aria-label={$_("persona.defaultAria")} />{/if}</b>
+								<span class="faint">{p.alias?.trim() ? `${p.name} · ` : ""}{(p.description ?? "").split("\n")[0] || $_("persona.noDesc")}</span>
 							</span>
 						</button>
 					</li>
 				{:else}
-					<li class="none faint">{q ? "검색 결과 없음" : "페르소나 없음"}</li>
+					<li class="none faint">{q ? $_("persona.noResults") : $_("persona.emptyList")}</li>
 				{/each}
 			</ul>
 		</aside>
@@ -203,6 +257,7 @@
 						bind:dirty
 						onsave={save}
 						onavatar={avatar}
+						onavatarfit={avatarFit}
 						ondefault={makeDefault}
 						onduplicate={duplicate}
 						ontocharacter={toCharacter}
@@ -210,18 +265,19 @@
 					/>
 				{/key}
 			{:else if personaId}
-				<EmptyState title="페르소나를 찾을 수 없음" description="지워졌을 수 있음">
-					{#snippet action()}<Button onclick={() => nav.replace({ page: "persona" })}>목록으로</Button>{/snippet}
+				<EmptyState title={$_("persona.notFoundTitle")} description={$_("persona.notFoundDesc")}>
+					{#snippet action()}<Button onclick={() => nav.replace({ page: "persona" })}>{$_("persona.toList")}</Button>{/snippet}
 				</EmptyState>
 			{:else}
-				<EmptyState title="페르소나 없음" description="대화에서 내가 될 인물을 만들어 둠">
+				<EmptyState title={$_("persona.emptyList")} description={$_("persona.emptyDesc")}>
 					{#snippet icon()}<UserCircle />{/snippet}
-					{#snippet action()}<Button variant="primary" onclick={create}>새 페르소나</Button>{/snippet}
+					{#snippet action()}<Button variant="primary" onclick={create}>{$_("persona.newTitle")}</Button>{/snippet}
 				</EmptyState>
 			{/if}
 		</main>
 	</div>
 {/if}
+{#if rowMenu}<ContextMenu at={rowMenu.at} items={rowMenu.items} label={$_("persona.menuAria")} onclose={() => (rowMenu = null)} />{/if}
 
 <style>
 	.center {
@@ -231,9 +287,16 @@
 	}
 	.page {
 		display: grid;
-		grid-template-columns: 280px minmax(0, 1fr);
+		grid-template-columns: 260px minmax(0, 1fr);
 		grid-template-rows: minmax(0, 1fr);
 		height: 100%;
+	}
+	.side-count {
+		margin: 0;
+		padding: 0 var(--space-2);
+		font-size: var(--text-xs);
+		font-weight: 600;
+		color: var(--text-faint);
 	}
 	.side {
 		display: flex;
@@ -276,7 +339,7 @@
 		background: var(--surface-hover);
 	}
 	li button.on {
-		background: var(--surface-active);
+		background: var(--accent-soft);
 	}
 	.t {
 		flex: 1;

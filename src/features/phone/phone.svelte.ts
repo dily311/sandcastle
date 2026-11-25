@@ -2,6 +2,7 @@
 // - 페르소나 폰: 내가 페르소나, AI가 연락처 캐릭터 (일반 대화와 같은 구조)
 // - 캐릭터 폰: 내가 주인 캐릭터, AI가 연락처(다른 캐릭터나 페르소나). 엿보기로 AI가 두 사람 몫을 다 쓸 수도 있음
 //   대화 meta.phone = { owner: {kind, id}, contact: {kind, id} }
+import { lastAt } from "$features/character/library.svelte";
 import { gradientCss, gradientOf } from "$shared/ui/backgrounds";
 import { fileSrc } from "$shared/ipc/file";
 import { splitHtmlBlocks } from "$shared/html/blocks";
@@ -34,6 +35,43 @@ export function wallpaperCss(value: string | null | undefined): string {
 	return url ? `center / cover no-repeat url("${url.replace(/"/g, "%22")}")` : WALLPAPERS.sea;
 }
 
+export interface PhonePostComment {
+	id: string;
+	author: string;
+	text: string;
+}
+
+export interface PhonePost {
+	id: string;
+	caption: string;
+	image?: string | null;
+	location?: string;
+	date: string;
+	likes: number;
+	liked?: boolean;
+	comments: PhonePostComment[];
+	mood?: string;
+}
+
+export interface PhoneProfileData {
+	handle: string;
+	status: string;
+	bio: string;
+	link: string;
+	followers: string;
+	following: string;
+	posts: PhonePost[];
+	/** 카카오톡 스타일 프로필 배경 이미지 경로 (없으면 기본 그라데이션) */
+	coverImage?: string | null;
+	/** 카카오톡 스타일 프로필 상단 플로팅 메모 문구 */
+	note?: string;
+	/** 프로필 뮤직 제목·아티스트 */
+	bgmTitle?: string;
+	bgmArtist?: string;
+	bgmLiked?: boolean;
+	updatedAt: number;
+}
+
 interface Prefs {
 	owner: Who | null;
 	display: "mockup" | "full";
@@ -41,13 +79,15 @@ interface Prefs {
 	wallpapers: Record<string, string>;
 	/** 대화별 마지막으로 읽은 시각 */
 	lastRead: Record<string, number>;
+	/** 캐릭터/상대별 SNS 개인 페이지 데이터 ("character:id" 등) */
+	profiles: Record<string, PhoneProfileData>;
 }
 const KEY = "sc.phone";
 const src = { source: "phone" };
 const ownerKey = (w: Who | null) => (w ? `${w.kind}:${w.id}` : "");
 
 function loadPrefs(): Prefs {
-	const base: Prefs = { owner: null, display: "mockup", wallpapers: {}, lastRead: {} };
+	const base: Prefs = { owner: null, display: "mockup", wallpapers: {}, lastRead: {}, profiles: {} };
 	try {
 		const raw = JSON.parse(localStorage.getItem(KEY) ?? "{}");
 		// 예전 저장값: personaId, 페르소나 id로만 된 배경
@@ -64,7 +104,7 @@ export function lookup(w: Who | null | undefined) {
 	if (!w) return undefined;
 	const x = w.kind === "persona" ? library.persona(w.id) : library.character(w.id);
 	if (!x) return undefined;
-	return { ...w, name: x.name, avatar: x.avatar, color: x.color || null, description: x.description ?? "" };
+	return { ...w, name: x.name, avatar: x.avatar, avatarFit: x.avatarFit ?? null, color: x.color || null, description: x.description ?? "" };
 }
 
 /** 대화의 meta.phone */
@@ -184,10 +224,13 @@ class PhoneState {
 			.filter((c) => {
 				if (c.mode !== "phone") return false;
 				const m = phoneMeta(c);
-				const mine = o.kind === "character" ? m?.owner.kind === "character" && m.owner.id === o.id : !m && c.personaId === o.id;
+				const mine =
+					o.kind === "character"
+						? m?.owner.kind === "character" && m.owner.id === o.id
+						: !m && (c.personaId === o.id || (!c.personaId && library.convPersonaId(c) === o.id));
 				return mine && !!lookup(this.contactOf(c));
 			})
-			.sort((a, b) => (this.previews[b.id]?.at ?? b.updatedAt) - (this.previews[a.id]?.at ?? a.updatedAt));
+			.sort((a, b) => (this.previews[b.id]?.at ?? lastAt(b)) - (this.previews[a.id]?.at ?? lastAt(a)));
 	}
 	get unread() {
 		return this.chats.reduce((n, c) => n + (this.previews[c.id]?.unread ?? 0), 0);
@@ -223,6 +266,21 @@ class PhoneState {
 		await call(commands.setPhoneContactStatus(o.kind, o.id, w.kind, w.id, status), src);
 		const c = this.contacts.find((x) => x.contactKind === w.kind && x.contactId === w.id);
 		if (c) c.status = status.trim();
+		const k = ownerKey(w);
+		if (this.prefs.profiles[k]) {
+			this.prefs.profiles[k] = { ...this.prefs.profiles[k], status: status.trim(), updatedAt: Date.now() };
+			this.save();
+		}
+	}
+
+	/** 캐릭터 개인 페이지(SNS 프로필) 조회 */
+	getProfile(key: string): PhoneProfileData | null {
+		return this.prefs.profiles[key] ?? null;
+	}
+	/** 캐릭터 개인 페이지(SNS 프로필) 저장 */
+	saveProfile(key: string, data: PhoneProfileData) {
+		this.prefs.profiles = { ...this.prefs.profiles, [key]: { ...data, updatedAt: Date.now() } };
+		this.save();
 	}
 
 	// ---- 대화 ----

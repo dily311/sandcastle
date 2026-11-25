@@ -11,6 +11,7 @@
 		size?: Size;
 		loading?: boolean;
 		block?: boolean;
+		active?: boolean;
 		/** 글자 앞 아이콘 */
 		icon?: Snippet;
 		children?: Snippet;
@@ -21,6 +22,7 @@
 		size = "md",
 		loading = false,
 		block = false,
+		active = false,
 		icon,
 		children,
 		disabled,
@@ -34,6 +36,7 @@
 	{type}
 	class="btn {variant} {size} {className}"
 	class:block
+	class:active
 	disabled={disabled || loading}
 	aria-busy={loading || undefined}
 	{...rest}
@@ -110,7 +113,8 @@
 		background: var(--accent);
 		color: var(--text-on-accent);
 	}
-	.primary:hover:not(:disabled) {
+	.primary:hover:not(:disabled),
+	.primary.active {
 		background: var(--accent-hover);
 	}
 	.secondary {
@@ -119,21 +123,24 @@
 		color: var(--text);
 		box-shadow: var(--shadow-sm);
 	}
-	.secondary:hover:not(:disabled) {
+	.secondary:hover:not(:disabled),
+	.secondary.active {
 		background: var(--surface-hover);
 	}
 	.soft {
 		background: var(--accent-soft);
 		color: var(--accent-text);
 	}
-	.soft:hover:not(:disabled) {
+	.soft:hover:not(:disabled),
+	.soft.active {
 		background: var(--accent-soft-hover);
 	}
 	.ghost {
 		background: transparent;
 		color: var(--text-muted);
 	}
-	.ghost:hover:not(:disabled) {
+	.ghost:hover:not(:disabled),
+	.ghost.active {
 		background: var(--surface-hover);
 		color: var(--text);
 	}
@@ -141,7 +148,8 @@
 		background: var(--danger-soft);
 		color: var(--danger);
 	}
-	.danger:hover:not(:disabled) {
+	.danger:hover:not(:disabled),
+	.danger.active {
 		background: var(--danger);
 		color: white;
 	}

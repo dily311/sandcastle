@@ -1,5 +1,6 @@
 <script lang="ts">
 	import { ChevronDown, ChevronLeft, ChevronRight, Copy, CornerUpLeft, Download, Folder, FolderMinus, GitBranch, Menu, Minus, PanelLeft, PanelRight, Pencil, Pin, PinOff, Square, Trash2, UserRound, X } from "@lucide/svelte";
+	import { _ } from "svelte-i18n";
 	import { getCurrentWindow } from "@tauri-apps/api/window";
 	import { ContextMenu, IconButton, type MenuItem } from "$shared/ui";
 	import PluginCommands from "$features/community/PluginCommands.svelte";
@@ -13,34 +14,44 @@
 	import { nav, type Route } from "./nav.svelte";
 	import { panel } from "./panel.svelte";
 	import { theme } from "./theme.svelte";
+	import { jobs } from "$shared/stores/jobs.svelte";
+	import { confirmAction } from "$shared/stores/confirm.svelte";
 
 	let { showWindowControls = true }: { showWindowControls?: boolean } = $props();
 
 	const appWindow = getCurrentWindow();
 	const panelShown = $derived(panel.available && panel.open);
 
-	const SETTINGS: Record<string, string> = {
-		general: "기본 설정",
-		chat: "대화",
-		phone: "폰",
-		theme: "테마",
-		shortcut: "단축키",
-		widget: "위젯",
-		api: "API 키",
-		preset: "프리셋",
-		regex: "정규식",
-		data: "데이터",
-		log: "로그",
-		plugins: "코어 플러그인",
-		translate: "번역",
-		tts: "음성 읽기",
-		imagegen: "이미지 생성",
-		activity: "실행 기록",
-		game: "게임 모드",
-		cg: "캐릭터 에셋",
-		sync: "동기화",
-		community: "커뮤니티 플러그인",
-	};
+	const SETTINGS = $derived<Record<string, string>>({
+		general: $_("settings.tabs.general"),
+		chat: $_("settings.tabs.chat"),
+		phone: $_("settings.tabs.phone"),
+		theme: $_("settings.tabs.theme"),
+		shortcut: $_("settings.tabs.shortcut"),
+		widget: $_("settings.tabs.widget"),
+		api: $_("settings.tabs.api"),
+		preset: $_("settings.tabs.preset"),
+		regex: $_("settings.tabs.regex"),
+		lorebook: $_("settings.tabs.lorebook"),
+		data: $_("settings.tabs.data"),
+		log: $_("settings.tabs.log"),
+		plugins: $_("settings.tabs.plugins"),
+		translate: $_("settings.tabs.translate"),
+		tts: $_("settings.tabs.tts"),
+		imagegen: $_("settings.tabs.imagegen"),
+		activity: $_("settings.tabs.activity"),
+		budget: $_("settings.tabs.budget"),
+		game: $_("settings.tabs.game"),
+		cg: $_("settings.tabs.cg"),
+		sync: $_("settings.tabs.sync"),
+		community: $_("settings.tabs.community"),
+		lint: $_("settings.tabs.lint"),
+		memory: $_("settings.tabs.memory"),
+		summary: $_("settings.tabs.summary"),
+		rewrite: $_("settings.tabs.rewrite"),
+		ghostwrite: $_("settings.tabs.ghostwrite"),
+		quickreply: $_("settings.tabs.quickreply"),
+	});
 	// 대화 화면이면 그 대화 (제목 고치기·동작 메뉴)
 	const conv = $derived(nav.current.page === "character" && !nav.current.edit ? library.conversation(nav.current.convId) : undefined);
 	let renaming = $state(false);
@@ -67,11 +78,11 @@
 		const parent = (c.meta as { branch?: { parentId: string } } | null)?.branch?.parentId;
 		const folders = library.foldersOf(c.characterId ?? "");
 		return [
-			...(c.characterId ? [{ label: "캐릭터 페이지로", icon: UserRound, onselect: () => nav.go({ page: "character", charId: c.characterId ?? undefined }) }] : []),
-			{ label: "이름 바꾸기", icon: Pencil, separator: !!c.characterId, onselect: startRename },
-			{ label: c.pinned ? "고정 풀기" : "고정", icon: c.pinned ? PinOff : Pin, onselect: () => library.togglePin(c.id) },
+			...(c.characterId ? [{ label: $_("settings.chrome.goToCharPage"), icon: UserRound, onselect: () => nav.go({ page: "character", charId: c.characterId ?? undefined }) }] : []),
+			{ label: $_("settings.chrome.rename"), icon: Pencil, separator: !!c.characterId, onselect: startRename },
+			{ label: c.pinned ? $_("settings.chrome.unpin") : $_("settings.chrome.pin"), icon: c.pinned ? PinOff : Pin, onselect: () => library.togglePin(c.id) },
 			{
-				label: "복제 (포크)",
+				label: $_("settings.chrome.duplicateFork"),
 				icon: Copy,
 				separator: true,
 				onselect: async () => {
@@ -80,7 +91,7 @@
 				},
 			},
 			{
-				label: "마지막 메시지에서 분기",
+				label: $_("settings.chrome.branchFromLast"),
 				icon: GitBranch,
 				disabled: !c.messageCount,
 				onselect: async () => {
@@ -88,22 +99,22 @@
 					if (!last) return;
 					const b = await library.branch(c.id, last.id);
 					nav.go({ page: "character", charId: b.characterId ?? undefined, convId: b.id });
-					toasts.success("분기를 만듦");
+					toasts.success($_("settings.chrome.branchedToast"));
 				},
 			},
 			...(parent && library.conversation(parent)
-				? [{ label: "갈라져 나온 대화로", icon: CornerUpLeft, onselect: () => nav.go({ page: "character", charId: c.characterId ?? undefined, convId: parent }) }]
+				? [{ label: $_("settings.chrome.goToParentConv"), icon: CornerUpLeft, onselect: () => nav.go({ page: "character", charId: c.characterId ?? undefined, convId: parent }) }]
 				: []),
 			...folders.map((f, i) => ({
-				label: `폴더로 이동: ${f.name}`,
+				label: $_("settings.chrome.moveToFolder", { values: { name: f.name } }),
 				icon: Folder,
 				separator: i === 0,
 				checked: c.folderId === f.id,
 				onselect: () => library.move(c.id, f.id),
 			})),
-			...(c.folderId ? [{ label: "폴더에서 빼기", icon: FolderMinus, onselect: () => library.move(c.id, null) }] : []),
-			{ label: "내보내기…", icon: Download, separator: true, onselect: () => convActions.exportMenu(c) },
-			{ label: "삭제", icon: Trash2, danger: true, onselect: () => convActions.remove(c) },
+			...(c.folderId ? [{ label: $_("settings.chrome.removeFromFolder"), icon: FolderMinus, onselect: () => library.move(c.id, null) }] : []),
+			{ label: $_("settings.chrome.exportEllipsis"), icon: Download, separator: true, onselect: () => convActions.exportMenu(c) },
+			{ label: $_("common.delete"), icon: Trash2, danger: true, onselect: () => convActions.remove(c) },
 		];
 	});
 	function openMenu(e: MouseEvent) {
@@ -127,36 +138,60 @@
 		switch (r.page) {
 			case "character": {
 				const ch = library.character(r.charId);
-				if (!ch) return [{ label: "캐릭터" }];
-				const top: Crumb[] = [{ label: "캐릭터", to: { page: "character" } }, { label: ch.name, to: { page: "character", charId: ch.id } }];
-				if (r.edit) return [...top, { label: "편집" }];
+				if (!ch) return [{ label: $_("nav.character") }];
+				const top: Crumb[] = [{ label: $_("nav.character"), to: { page: "character" } }, { label: ch.name, to: { page: "character", charId: ch.id } }];
+				if (r.edit) return [...top, { label: $_("common.edit") }];
 				const conv = library.conversation(r.convId);
 				return conv ? [...top, { label: conv.title }] : top;
 			}
 			case "persona": {
 				const p = r.personaId ? library.persona(r.personaId) : undefined;
-				return p ? [{ label: "페르소나", to: { page: "persona" } }, { label: p.name }] : [{ label: "페르소나" }];
+				return p ? [{ label: $_("nav.persona"), to: { page: "persona" } }, { label: p.alias?.trim() || p.name }] : [{ label: $_("nav.persona") }];
 			}
 			case "settings": {
-				if (layout.narrow && !r.tab) return [{ label: "설정" }];
-				const tab: Crumb = { label: SETTINGS[r.tab ?? "general"], to: { page: "settings", tab: r.tab ?? "general" } };
-				return r.edit ? [{ label: "설정", to: { page: "settings" } }, tab, { label: "편집" }] : [{ label: "설정", to: { page: "settings" } }, tab];
+				if (layout.narrow && !r.tab) return [{ label: $_("nav.settings") }];
+				const tabId = r.tab ?? "general";
+				const tabLabel = SETTINGS[tabId] ?? (tabId.startsWith("community:") ? tabId.slice(10) : tabId);
+				const tab: Crumb = { label: tabLabel, to: { page: "settings", tab: tabId } };
+				if (r.tab === "theme" && r.edit === "fonts") return [{ label: $_("nav.settings"), to: { page: "settings" } }, tab, { label: "Fonts" }];
+				return r.edit ? [{ label: $_("nav.settings"), to: { page: "settings" } }, tab, { label: $_("common.edit") }] : [{ label: $_("nav.settings"), to: { page: "settings" } }, tab];
 			}
 			case "home":
-				return [{ label: "홈" }];
-			case "phone":
-				return [{ label: "폰" }];
+				return [{ label: $_("nav.home") }];
+			case "phone": {
+				const PHONE_APPS: Record<string, string> = {
+					home: $_("nav.home"),
+					messages: $_("settings.chrome.phoneMessages"),
+					contacts: $_("settings.chrome.phoneContacts"),
+					photos: $_("settings.chrome.phonePhotos"),
+					camera: $_("settings.chrome.phoneCamera"),
+					settings: $_("nav.settings"),
+				};
+				if (r.convId) {
+					const c = library.conversation(r.convId);
+					const ch = c?.characterId ? library.character(c.characterId) : undefined;
+					return [
+						{ label: $_("nav.phone"), to: { page: "phone" } },
+						{ label: $_("settings.chrome.phoneMessages"), to: { page: "phone", app: "messages" } },
+						{ label: ch?.name ?? c?.title ?? $_("settings.chrome.phoneChatFallback") },
+					];
+				}
+				if (r.app && r.app !== "home") {
+					return [{ label: $_("nav.phone"), to: { page: "phone" } }, { label: PHONE_APPS[r.app] ?? r.app }];
+				}
+				return [{ label: $_("nav.phone") }];
+			}
 			case "images":
-				return [{ label: "이미지" }];
+				return [{ label: $_("nav.images") }];
 			case "lorebook": {
 				const b = lorebook.book(r.bookId);
-				return b ? [{ label: "로어북", to: { page: "lorebook" } }, { label: b.name }] : [{ label: "로어북" }];
+				return b ? [{ label: $_("nav.lorebook"), to: { page: "lorebook" } }, { label: b.name }] : [{ label: $_("nav.lorebook") }];
 			}
 			case "game": {
 				const g = games.game(r.gameId);
-				if (!g) return [{ label: "게임" }];
-				const top: Crumb[] = [{ label: "게임", to: { page: "game" } }, { label: g.title, to: { page: "game", gameId: g.id } }];
-				return r.sessionId ? [...top, { label: "플레이" }] : r.edit ? [...top, { label: "편집" }] : top;
+				if (!g) return [{ label: $_("nav.game") }];
+				const top: Crumb[] = [{ label: $_("nav.game"), to: { page: "game" } }, { label: g.title, to: { page: "game", gameId: g.id } }];
+				return r.sessionId ? [...top, { label: "Play" }] : r.edit ? [...top, { label: $_("common.edit") }] : top;
 			}
 		}
 	});
@@ -167,21 +202,28 @@
 		e.preventDefault();
 		el.scrollLeft += e.deltaY;
 	}
+
+	/** 닫기: 파일 작업이 남았으면 알리고 (대기열은 메모리에만 — 끄면 기다리던 것은 하지 않음, 5-E-28) */
+	async function closeApp() {
+		const n = jobs.pending;
+		if (n && !(await confirmAction({ title: $_("settings.chrome.pendingJobsTitle"), message: $_("settings.chrome.pendingJobsMsg", { values: { count: n } }), confirmLabel: $_("settings.chrome.forceQuitBtn"), danger: true }))) return;
+		await appWindow.close();
+	}
 </script>
 
 <!-- 프로그램 헤더: 사이드바 · 뒤로/앞으로 · 화면 제목 · (빈 곳은 창 끌기) · 오른쪽 패널 · 창 버튼 -->
-<header class="titlebar" class:frameless={theme.setting.isFrameless} class:desktop={!layout.mobile} class:mobile={layout.mobile} class:narrow={layout.narrow} data-tauri-drag-region>
+<header class="titlebar sc-titlebar" class:frameless={theme.setting.isFrameless} class:desktop={!layout.mobile} class:mobile={layout.mobile} class:narrow={layout.narrow} data-tauri-drag-region>
 	{#if layout.narrow}
 		<!-- 휴대폰: 메뉴 · 뒤로 · 지금 화면 이름 · 패널 -->
-		<IconButton label="메뉴" onclick={() => layout.toggleSidebar()}><Menu /></IconButton>
-		{#if nav.canBack}<IconButton label="뒤로" onclick={() => nav.back()}><ChevronLeft /></IconButton>{/if}
+		<IconButton label={$_("settings.chrome.menuTitle")} onclick={() => layout.toggleSidebar()}><Menu /></IconButton>
+		{#if nav.canBack}<IconButton label={$_("settings.chrome.backAria")} onclick={() => nav.back()}><ChevronLeft /></IconButton>{/if}
 	{:else}
-		<IconButton label={layout.sidebar ? "사이드바 닫기 (Ctrl+B)" : "사이드바 열기 (Ctrl+B)"} size="sm" active={layout.sidebar} onclick={() => layout.toggleSidebar()}>
+		<IconButton label={layout.sidebar ? $_("settings.chrome.closeSidebar") : $_("settings.chrome.openSidebar")} size="sm" active={layout.sidebar} onclick={() => layout.toggleSidebar()}>
 			<PanelLeft />
 		</IconButton>
 		<div class="history">
-			<IconButton label="뒤로 (Alt+←)" size="sm" disabled={!nav.canBack} onclick={() => nav.back()}><ChevronLeft /></IconButton>
-			<IconButton label="앞으로 (Alt+→)" size="sm" disabled={!nav.canForward} onclick={() => nav.forward()}><ChevronRight /></IconButton>
+			<IconButton label={$_("settings.chrome.backShortcut")} size="sm" disabled={!nav.canBack} onclick={() => nav.back()}><ChevronLeft /></IconButton>
+			<IconButton label={$_("settings.chrome.forwardShortcut")} size="sm" disabled={!nav.canForward} onclick={() => nav.forward()}><ChevronRight /></IconButton>
 		</div>
 	{/if}
 	<h1 class="title" data-tauri-drag-region>
@@ -194,7 +236,7 @@
 						class="rename"
 						bind:value={draft}
 						use:focusSelect
-						aria-label="대화 이름"
+						aria-label={$_("settings.chrome.convTitle")}
 						onblur={commitRename}
 						onkeydown={(e) => {
 							if (e.key === "Enter") commitRename();
@@ -202,32 +244,32 @@
 						}}
 					/>
 				{:else}
-					<button class="crumb last" title="눌러서 이름 바꾸기" onclick={startRename}>{t.label}</button>
+					<button class="crumb last" title={$_("settings.chrome.clickToRename")} onclick={startRename}>{t.label}</button>
 				{/if}
-				<IconButton label={layout.narrow ? "상위 화면·대화 동작" : "대화 동작"} size="sm" onclick={openMenu}><ChevronDown /></IconButton>
+				<IconButton label={layout.narrow ? $_("settings.chrome.parentAndConvActions") : $_("settings.chrome.convActions")} size="sm" onclick={openMenu}><ChevronDown /></IconButton>
 			{:else if t.to && i < title.length - 1}
-				<button class="crumb" title="{t.label}(으)로" onclick={() => nav.go(t.to!)}>{t.label}</button>
+				<button class="crumb" title={$_("settings.chrome.goToNamed", { values: { label: t.label } })} onclick={() => nav.go(t.to!)}>{t.label}</button>
 			{:else}
 				<span class:last={i === title.length - 1}>{t.label}</span>
 			{/if}
 		{/each}
 		{#if layout.narrow && !conv && crumbMenu.length}
-			<IconButton label="상위 화면" size="sm" onclick={openMenu}><ChevronDown /></IconButton>
+			<IconButton label={$_("settings.chrome.parentScreen")} size="sm" onclick={openMenu}><ChevronDown /></IconButton>
 		{/if}
 	</h1>
-	<ContextMenu at={menu} items={fullMenu} label="화면 이동" onclose={() => (menu = null)} />
+	<ContextMenu at={menu} items={fullMenu} label={$_("settings.chrome.navMenuAria")} onclose={() => (menu = null)} />
 	<div class="drag" data-tauri-drag-region></div>
 
 	<PluginCommands />
 	{#if panel.available}
-		<IconButton label={panel.open ? "오른쪽 패널 닫기" : "오른쪽 패널 열기"} size={layout.narrow ? "md" : "sm"} active={panel.open} onclick={() => panel.toggle()}>
+		<IconButton label={panel.open ? $_("settings.chrome.closeRightPanel") : $_("settings.chrome.openRightPanel")} size={layout.narrow ? "md" : "sm"} active={panel.open} onclick={() => panel.toggle()}>
 			<PanelRight />
 		</IconButton>
 	{/if}
 	{#if !layout.narrow}
 	<div class="right-zone" class:panel={panelShown}>
 		{#if panelShown}
-			<div class="ptabs" role="tablist" aria-label="오른쪽 패널" onwheel={wheelTabs}>
+			<div class="ptabs" role="tablist" aria-label={$_("settings.chrome.rightPanelAria")} onwheel={wheelTabs}>
 				{#each panel.allTabs as t (t.id)}
 					<button
 						role="tab"
@@ -235,7 +277,7 @@
 						class:on={panel.tab === t.id}
 						aria-selected={panel.tab === t.id}
 						aria-label={t.label}
-						title="{t.label} · 끌어서 순서 바꾸기"
+						title={$_("settings.chrome.dragTabTitle", { values: { label: t.label } })}
 						onclick={() => (panel.tab = t.id)}
 						{...panel.tabDrag(t.id)}
 					>
@@ -255,9 +297,9 @@
 {#snippet winButtons()}
 	{#if showWindowControls && theme.setting.isFrameless && layout.desktop}
 		<div class="win">
-			<button aria-label="최소화" title="최소화" onclick={() => appWindow.minimize()}><Minus /></button>
-			<button aria-label="최대화" title="최대화" onclick={() => appWindow.toggleMaximize()}><Square /></button>
-			<button class="close" aria-label="닫기" title="닫기" onclick={() => appWindow.close()}><X /></button>
+			<button aria-label={$_("settings.chrome.minimize")} title={$_("settings.chrome.minimize")} onclick={() => appWindow.minimize()}><Minus /></button>
+			<button aria-label={$_("settings.chrome.maximize")} title={$_("settings.chrome.maximize")} onclick={() => appWindow.toggleMaximize()}><Square /></button>
+			<button class="close" aria-label={$_("common.close")} title={$_("common.close")} onclick={closeApp}><X /></button>
 		</div>
 	{/if}
 {/snippet}
@@ -377,12 +419,15 @@
 	/* 탭이 많으면 줄어들고 옆으로 넘김 (창 버튼은 밀려나지 않게) */
 	.ptabs {
 		display: flex;
-		gap: 2px;
+		gap: 1px;
 		flex: 1;
 		min-width: 0;
 		margin-right: auto;
 		overflow-x: auto;
 		scrollbar-width: none;
+		mask-image: linear-gradient(to right, transparent 0, #000 6px, #000 calc(100% - 10px), transparent 100%);
+		-webkit-mask-image: linear-gradient(to right, transparent 0, #000 6px, #000 calc(100% - 10px), transparent 100%);
+		padding: 0 4px;
 	}
 	.ptabs::-webkit-scrollbar {
 		display: none;
@@ -391,25 +436,31 @@
 		flex: none;
 		display: grid;
 		place-items: center;
-		width: 30px;
+		width: 26px;
 		height: 26px;
 		border: none;
 		border-radius: var(--radius-xs);
 		background: transparent;
 		color: var(--text-muted);
 		cursor: pointer;
+		transition:
+			background var(--duration-fast) var(--ease),
+			color var(--duration-fast) var(--ease);
 	}
 	.ptab :global(svg) {
-		width: 16px;
-		height: 16px;
+		width: 15px;
+		height: 15px;
 	}
 	.ptab:hover {
 		background: var(--surface-hover);
 		color: var(--text);
 	}
 	.ptab.on {
-		background: var(--surface-active);
-		color: var(--text);
+		background: var(--accent-soft);
+		color: var(--accent-text);
+	}
+	.ptab.on :global(svg) {
+		color: var(--accent);
 	}
 	.win {
 		display: flex;

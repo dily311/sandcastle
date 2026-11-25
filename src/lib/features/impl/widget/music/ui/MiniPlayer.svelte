@@ -14,8 +14,8 @@
 	import DefaultAlbumArt from "$/asset/widget/album_art_default.png";
 	import { WIDGET_MUSIC_FEATURE_ID } from "../musicFeature.svelte";
 	import { LoopMode } from "../types";
-	import IconButton from "$/components/ui/button/IconButton.svelte";
-	import Icon from "$/components/ui/Icon.svelte";
+	import IconButton from "$shared/ui/IconButton.svelte";
+	import Icon from "$shared/ui/Icon.svelte";
 
 	let moveEl = $state<HTMLElement>();
 	let localPos = $state({
@@ -52,7 +52,7 @@
 			{@attach draggable({
 				target: moveEl,
 				pos: localPos,
-				snap: { x: { offset: 230 }, y: { offset: 0 } },
+				snap: { x: { offset: 230, sides: ["right"] }, y: { offset: 0 } },
 				onDragEnd: (pos) => {
 					widgetMusicSetting.update({ pos });
 				},
@@ -86,7 +86,7 @@
 	</div>
 	<div class="controls">
 		<IconButton
-			aria-label={audioStore.paused ? $_("music.play") : $_("music.pause")}
+			label={audioStore.paused ? $_("music.play") : $_("music.pause")}
 			class="control-btn play-btn"
 			onclick={() => audioStore.togglePlay()}
 			disabled={!playlistStore.currentSong}
@@ -94,7 +94,7 @@
 			<Icon name={audioStore.paused ? "play" : "pause"} size={20} />
 		</IconButton>
 		<IconButton
-			aria-label={$_("music.nextSong")}
+			label={$_("music.nextSong")}
 			class="control-btn next-btn"
 			onclick={() => handleNextSong()}
 			disabled={audioStore.isDisabledNext}

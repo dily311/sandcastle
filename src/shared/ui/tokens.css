@@ -12,6 +12,8 @@
 :root {
 	color-scheme: light;
 
+	--static-white: #ffffff;
+	
 	/* ---- 회색 12단계 (Radix 회색 계열, 기본 slate). theme.svelte.ts가 고른 톤으로 덮어씀 ---- */
 	--gray-1: #fcfcfd;
 	--gray-2: #f9f9fb;
@@ -43,6 +45,9 @@
 	--text-muted: var(--gray-11);
 	--text-faint: var(--gray-9);
 	--text-on-accent: #ffffff;
+
+	/* ---- 아이콘 색상 ---- */
+	--icon-static-white: #fbfbfb;
 
 	/* ---- 강조색 (바다 유리) ---- */
 	--accent: #2f8f8a;
@@ -118,10 +123,11 @@
 	--space-10: 40px;
 
 	/* ---- 글꼴 ---- */
-	/* --font-user: 사용자가 올린 글꼴 (shared/ui/userFont.ts가 고른 글꼴이 있을 때만 넣음) */
+	/* --font-user / --font-user-text / --font-user-mono: 사용자가 올린 글꼴 (shared/ui/userFont.ts가 고른 글꼴이 있을 때만 넣음) */
 	--font-sans: var(--font-user, "Pretendard"), "Pretendard", "Pretendard Variable", -apple-system, BlinkMacSystemFont, "Apple SD Gothic Neo",
 		"Malgun Gothic", "Segoe UI", system-ui, sans-serif;
-	--font-mono: "JetBrains Mono", "D2Coding", ui-monospace, "Cascadia Code", Consolas, monospace;
+	--font-text: var(--font-user-text, var(--font-sans));
+	--font-mono: var(--font-user-mono, "JetBrains Mono"), "JetBrains Mono", "D2Coding", ui-monospace, "Cascadia Code", Consolas, monospace;
 
 	--text-xs: 0.75rem;
 	--text-sm: 0.8125rem;
@@ -171,17 +177,17 @@
 	--bg: var(--gray-1);
 	--bg-sunken: color-mix(in oklab, var(--gray-1) 70%, black);
 	--surface: var(--gray-2);
-	--surface-2: var(--gray-2);
+	--surface-2: color-mix(in oklab, var(--gray-1) 50%, var(--gray-2));
 	--surface-hover: var(--gray-3);
 	--surface-active: var(--gray-4);
-	--overlay: rgb(0 0 0 / 0.6);
+	--overlay: rgb(0 0 0 / 0.65);
 
 	--border: var(--gray-5);
 	--border-strong: var(--gray-7);
 
 	--text: var(--gray-12);
 	--text-muted: var(--gray-11);
-	--text-faint: var(--gray-9);
+	--text-faint: var(--gray-10);
 
 	--accent: #4fb3ac;
 	--accent-hover: color-mix(in oklab, var(--accent) 85%, white);

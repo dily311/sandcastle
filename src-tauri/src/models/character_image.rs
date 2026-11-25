@@ -15,6 +15,9 @@ pub struct CharacterImageRow {
     pub sort_order: i64,
     pub created_at: i64,
     pub updated_at: i64,
+    /// 판 폴더 (빈 글 = 공통)
+    #[sqlx(default)]
+    pub folder: String,
 }
 
 /// 프론트 전달용. 경로는 절대 경로 (프론트에서 convertFileSrc로 표시)
@@ -30,6 +33,8 @@ pub struct CharacterImage {
     pub sort_order: i64,
     pub created_at: i64,
     pub updated_at: i64,
+    /// 판 폴더 (빈 글 = 공통, 5-E-21)
+    pub folder: String,
 }
 
 impl CharacterImage {
@@ -46,6 +51,7 @@ impl CharacterImage {
             sort_order: r.sort_order,
             created_at: r.created_at,
             updated_at: r.updated_at,
+            folder: r.folder,
         }
     }
 }
@@ -56,6 +62,9 @@ pub struct CharacterImageUpdate {
     pub key: String,
     pub enabled: bool,
     pub sort_order: i64,
+    /// 판 폴더를 옮길 때 (없으면 그대로)
+    #[serde(default)]
+    pub folder: Option<String>,
 }
 
 /// AI 응답에서 실제로 쓰인 이미지 (응답 본문의 `<cg>키</cg>` 순서대로)

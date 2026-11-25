@@ -1,4 +1,5 @@
 // 캐릭터·대화·폴더와 대화 설정에 쓰는 목록(페르소나·프리셋·API). 화면들이 같이 쓴다.
+import { jobs } from "$shared/stores/jobs.svelte";
 import { trashedToast } from "$shared/trash";
 import type {
 	ApiProfiles,
@@ -8,11 +9,42 @@ import type {
 	Conversation_Serialize as Conversation,
 	Persona_Serialize as Persona,
 	PromptPresets_Serialize as Preset,
+	VarDef_Serialize as VarDef,
 } from "$ipc/bindings";
 import { call, commands } from "$shared/ipc/client";
 import { toasts } from "$shared/stores/toast.svelte";
+import { logs } from "$shared/stores/log.svelte";
 
-export type { Character, CharacterImage, Conversation, ConversationFolder, Persona, Preset, ApiProfiles };
+export type { Character, CharacterImage, Conversation, ConversationFolder, Persona, Preset, ApiProfiles, VarDef };
+
+/** 목록에 보일 대화 시각: 마지막 메시지 시각 (가져온 대화도 원래 대화 시각으로). 메시지가 없으면 수정 시각 */
+// ---- 목록 캐시 (이 기기 브라우저 저장소, 보여 주기만 — 곧 새로 읽은 값으로 바뀐다) ----
+const LIST_CACHE = "sc.library.list";
+const LIST_CACHE_MAX = 2_000_000;
+function readListCache(): { characters: Character[]; conversations: Conversation[] } | null {
+	try {
+		const v = JSON.parse(localStorage.getItem(LIST_CACHE) ?? "null");
+		return v && Array.isArray(v.characters) && Array.isArray(v.conversations) ? v : null;
+	} catch {
+		return null;
+	}
+}
+function writeListCache(characters: Character[], conversations: Conversation[]) {
+	try {
+		// 목록에 필요 없는 큰 칸(대화 meta·캐릭터 설명)은 빼고, 그래도 크면 남기지 않는다
+		const slim = {
+			characters: characters.map((c) => ({ ...c, description: "", exampleDialogue: null, firstMessage: null, alternateDescriptions: [], alternateFirstMessage: [] })),
+			conversations: conversations.map((c) => ({ ...c, meta: null })),
+		};
+		const text = JSON.stringify(slim);
+		if (text.length > LIST_CACHE_MAX) localStorage.removeItem(LIST_CACHE);
+		else localStorage.setItem(LIST_CACHE, text);
+	} catch {
+		/* 저장소를 못 쓰면 캐시 없이 */
+	}
+}
+
+export const lastAt = (c: Pick<Conversation, "lastMessageAt" | "updatedAt">) => c.lastMessageAt ?? c.updatedAt;
 
 const src = { source: "character" };
 
@@ -29,15 +61,32 @@ class Library {
 	private foldersLoaded = new Set<string>();
 
 	async load() {
-		const [characters, conversations, personas, presets, apis] = await Promise.all([
+		// 처음 열 때: 지난번 목록을 먼저 보여 주고 뒤에서 새로 읽는다 (대화가 많으면 읽는 데 시간이 걸림, 5-E-8)
+		if (!this.loaded) {
+			const cached = readListCache();
+			if (cached) {
+				Object.assign(this, cached);
+				this.loaded = true;
+			}
+		}
+		const [characters, conversations, personas, presets, apis, conv] = await Promise.all([
 			call(commands.getAllCharacters(), src),
 			call(commands.getAllConversations(), src),
 			call(commands.getAllPersonas(), { ...src, silent: true }).catch(() => []),
 			call(commands.listPromptPresets(), { ...src, silent: true }).catch(() => []),
 			call(commands.getAllApiProfile(), { ...src, silent: true }).catch(() => []),
+			call(commands.getConvSettings(), { ...src, silent: true }).catch(() => null),
 		]);
 		Object.assign(this, { characters, conversations, personas, presets, apis });
+		this.defaultPersonaId = conv?.defaultPersonaId ?? null;
 		this.loaded = true;
+		writeListCache(characters, conversations);
+	}
+
+	/** API 프로필 목록만 최신 상태(연결 확인 여부 등)로 다시 읽는다 */
+	async refreshApis() {
+		const apis = await call(commands.getAllApiProfile(), { ...src, silent: true }).catch(() => null);
+		if (apis) this.apis = apis;
 	}
 
 	character(id: string | null | undefined) {
@@ -49,9 +98,20 @@ class Library {
 	persona(id: string | null | undefined) {
 		return this.personas.find((p) => p.id === id);
 	}
+	/** 전역 기본 페르소나 (사이드바에서 고름, ADR-028) */
+	defaultPersonaId = $state<string | null>(null);
+	/** 대화가 쓰는 페르소나: 대화에 있으면 그것(자물쇠) → 캐릭터 기본 → 전역. 백엔드 resolve_conv_persona와 같은 순서 */
+	convPersonaId(c: Pick<Conversation, "personaId" | "characterId"> | null | undefined): string {
+		return c?.personaId || this.character(c?.characterId)?.defaultPersonaId || this.defaultPersonaId || "default";
+	}
+	/** 사이드바에서 유저 프로필 고르기 = 언제나 전역 (자물쇠를 건 대화는 그대로) */
+	async setDefaultPersona(id: string) {
+		await call(commands.setSystemDefaultPersona(id), src);
+		this.defaultPersonaId = id;
+	}
 	/** 최근 활동 순 (폰 대화는 폰 화면에서만 보임) */
 	convsOf(charId: string) {
-		return this.conversations.filter((c) => c.characterId === charId && c.mode !== "phone").sort((a, b) => b.updatedAt - a.updatedAt);
+		return this.conversations.filter((c) => c.characterId === charId && c.mode !== "phone").sort((a, b) => lastAt(b) - lastAt(a));
 	}
 	foldersOf(charId: string) {
 		return this.folders.filter((f) => f.characterId === charId);
@@ -77,10 +137,10 @@ class Library {
 	async createConversation(charId: string): Promise<Conversation> {
 		const ch = this.character(charId);
 		if (!ch) throw new Error("캐릭터 없음");
-		const def = ch.defaultPersonaId ?? (await call(commands.getConvSettings(), { ...src, silent: true }).catch(() => null))?.defaultPersonaId ?? "default";
 		const n = this.convsOf(charId).length + 1;
+		// 페르소나를 복사하지 않는다: 비워 두면 캐릭터 기본 → 전역을 따른다 (ADR-028). 개요 탭 자물쇠로 이 대화에 고정
 		const conv = await call(
-			commands.createConversation({ title: `${ch.name} 대화 ${n}`, characterId: charId, personaId: def, worldInfoIds: [], mode: "chat" }),
+			commands.createConversation({ title: `${ch.name} 대화 ${n}`, characterId: charId, personaId: "", worldInfoIds: [], mode: "chat" }),
 			src,
 		);
 		const greetings = [ch.firstMessage, ...ch.alternateFirstMessage].filter((g): g is string => !!g?.trim());
@@ -165,6 +225,10 @@ class Library {
 		await call(commands.setConversationPinned(id, !c.pinned), src);
 		this.patch(id, { pinned: !c.pinned });
 	}
+	async setReadMode(id: string, on: boolean) {
+		await call(commands.setConversationReadMode(id, on), src);
+		this.patch(id, { readMode: on });
+	}
 	async move(id: string, folderId: string | null) {
 		await call(commands.moveConversation(id, folderId), src);
 		this.patch(id, { folderId });
@@ -182,7 +246,8 @@ class Library {
 	}
 	/** 휴지통으로 (2-A-3). "되돌리기" 알림을 띄운다 */
 	async remove(id: string) {
-		const item = await call(commands.deleteConversation(id), src);
+		const item = await jobs.run(this.conversation(id)?.title || "대화", () => call(commands.deleteConversation(id), src), { group: "대화 지우기" });
+		if (!item) return;
 		this.conversations = this.conversations.filter((c) => c.id !== id);
 		trashedToast(item, () => this.load());
 	}
@@ -215,22 +280,61 @@ class Library {
 	}
 	/** 폴더만 지우고 대화는 폴더 밖으로 */
 	async removeFolder(id: string) {
-		await call(commands.deleteConversationFolder(id), src);
+		const name = this.folders.find((f) => f.id === id)?.name ?? "폴더";
+		if ((await jobs.run(name, () => call(commands.deleteConversationFolder(id), src), { group: "폴더 지우기" })) === undefined) return;
 		this.folders = this.folders.filter((f) => f.id !== id);
 		for (const c of this.conversations) if (c.folderId === id) c.folderId = null;
 	}
 
+	// ---- 변수 정의 (5-F-4-3, ADR-029): 캐릭터마다. 상태창·변수 플러그인이 켜졌을 때만 읽는다 ----
+	varDefs = $state<Record<string, VarDef[]>>({});
+	async loadVarDefs(charId: string) {
+		this.varDefs[charId] = await call(commands.getCharacterVarDefs(charId), { ...src, silent: true }).catch(() => []);
+		return this.varDefs[charId];
+	}
+	async setVarDefs(charId: string, defs: VarDef[]) {
+		this.varDefs[charId] = await call(commands.setCharacterVarDefs(charId, defs), src);
+		return this.varDefs[charId];
+	}
+
+	/** 캐릭터의 상태창 틀 (5-F-4-5). 없으면 null */
+	statusTemplates = $state<Record<string, string | null>>({});
+	async loadStatusTemplate(charId: string) {
+		this.statusTemplates[charId] = await call(commands.getCharacterStatusTemplate(charId), { ...src, silent: true }).catch(() => null);
+		return this.statusTemplates[charId];
+	}
+	async setStatusTemplate(charId: string, template: string | null) {
+		await call(commands.setCharacterStatusTemplate(charId, template?.trim() ? template : null), src);
+		this.statusTemplates[charId] = template?.trim() ? template : null;
+	}
+
 	// ---- 캐릭터 에셋 에셋 ----
+	/** 캐릭터가 쓸 에셋 판 (null = 전체, 5-E-21) */
+	assetVersion = $state<Record<string, string | null>>({});
 	async loadImages(charId: string) {
-		this.images[charId] = await call(commands.listCharacterImages(charId), { ...src, silent: true }).catch(() => []);
+		const [imgs, version] = await Promise.all([
+			call(commands.listCharacterImages(charId), { ...src, silent: true }).catch(() => []),
+			call(commands.getCharacterAssetVersion(charId), { ...src, silent: true }).catch(() => null),
+		]);
+		this.images[charId] = imgs;
+		this.assetVersion[charId] = version;
+	}
+	async setAssetVersion(charId: string, version: string | null) {
+		await call(commands.setCharacterAssetVersion(charId, version), src);
+		this.assetVersion[charId] = version;
+	}
+	/** 대화에 쓰는 그림: 고른 판과 공통(폴더 없음). 판을 고르지 않으면 전체 */
+	imagesInUse(charId: string) {
+		const v = this.assetVersion[charId];
+		return (this.images[charId] ?? []).filter((i) => !v || !i.folder || i.folder.toLowerCase() === v.toLowerCase());
 	}
 	async addImages(charId: string, paths: string[]) {
 		if (!paths.length) return;
-		await call(commands.addCharacterImages(charId, paths), src);
+		await jobs.run(`그림 ${paths.length}장`, () => call(commands.addCharacterImages(charId, paths), src), { group: "에셋 올리기" });
 		await this.loadImages(charId);
 	}
-	async updateImage(img: CharacterImage, p: Partial<Pick<CharacterImage, "key" | "enabled" | "sortOrder">>) {
-		const next = { key: img.key, enabled: img.enabled, sortOrder: img.sortOrder, ...p };
+	async updateImage(img: CharacterImage, p: Partial<Pick<CharacterImage, "key" | "enabled" | "sortOrder" | "folder">>) {
+		const next = { key: img.key, enabled: img.enabled, sortOrder: img.sortOrder, folder: img.folder, ...p };
 		const saved = await call(commands.updateCharacterImage(img.id, next), src);
 		const list = this.images[img.characterId] ?? [];
 		const i = list.findIndex((x) => x.id === img.id);
@@ -238,19 +342,24 @@ class Library {
 	}
 	/** ZIP 안의 그림을 한꺼번에 (파일 이름이 키, 같은 키는 덮어씀) */
 	async addImagesZip(charId: string, zipPath: string) {
-		const added = await call(commands.addCharacterImagesZip(charId, zipPath), src);
+		const added = await jobs.run(zipPath.split(/[\\/]/).pop() ?? "ZIP", () => call(commands.addCharacterImagesZip(charId, zipPath), src), { group: "에셋 올리기" });
 		await this.loadImages(charId);
-		return added.length;
+		return added?.length ?? 0;
 	}
 	async removeImage(img: CharacterImage) {
-		await call(commands.deleteCharacterImage(img.id), src);
+		if ((await jobs.run(img.key || "그림", () => call(commands.deleteCharacterImage(img.id), src), { group: "에셋 지우기" })) === undefined) return;
 		this.images[img.characterId] = (this.images[img.characterId] ?? []).filter((x) => x.id !== img.id);
 	}
 
 	// ---- 가져오기 ----
 	/** SillyTavern 파일(카드·채팅 등). 채팅이면 `characterId`에 붙인다 */
-	async importSillyTavern(path: string, characterId: string | null = null) {
+	/** `quiet`: 여러 파일을 차례로 가져올 때 — 파일마다 목록을 다시 읽거나 알리지 않는다 (경고는 로그에만) */
+	async importSillyTavern(path: string, characterId: string | null = null, opts: { quiet?: boolean } = {}) {
 		const r = await call(commands.importSillytavern(path, null, characterId, null), src);
+		if (opts.quiet) {
+			for (const w of r.warnings) logs.add("warn", "가져오기", w);
+			return r;
+		}
 		await this.load();
 		if (r.kind === "character") toasts.success(`'${r.character.name}' 가져옴`);
 		else if (r.kind === "chat") toasts.success(`대화 가져옴 · 메시지 ${r.messageCount}개`);

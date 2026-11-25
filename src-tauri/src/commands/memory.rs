@@ -91,11 +91,13 @@ pub async fn run_memory_index(
         "메모리 색인 · 전체"
     };
     let job = CreateTaskRequest::inline(TaskType::Embedding, TaskOwner::System, memory::FEATURE, label, false);
-    tasks
+    let out = tasks
         .run_inline(job, |cancel| async move {
             index::run(&state.db, &store, &ai, &profile, &cfg, &scope, allow_over_cap, &cancel).await
         })
-        .await
+        .await?;
+    crate::service::notify::task_done(&app, "메모리 색인", "메모리 색인이 끝남");
+    Ok(out)
 }
 
 /// 뜻으로 찾기: 질의 임베딩 한 번(작업 하나)

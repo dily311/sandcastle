@@ -1,3 +1,4 @@
+import { onEvent } from "$shared/ipc/events";
 import { convertFileSrc } from "@tauri-apps/api/core";
 import { commands } from "$ipc/bindings";
 import { open } from "@tauri-apps/plugin-dialog";
@@ -18,6 +19,13 @@ import {
 } from "./types";
 
 // 상수 & 기본 설정
+const defaultState: AudioState = {
+	muted: false,
+	volume: 0.7,
+	loopMode: LoopMode.NONE,
+	isShuffle: false,
+};
+
 const defaultMusicWidgetSetting: WidgetMusicSetting = {
 	resize: false,
 	isMiniPlayer: false,
@@ -27,13 +35,7 @@ const defaultMusicWidgetSetting: WidgetMusicSetting = {
 	selectedFolder: null,
 	currentPlaylistId: "default",
 	currentSongIndex: 0,
-};
-
-const defaultState = {
-	muted: false,
-	volume: 0.7,
-	loopMode: LoopMode.NONE,
-	isShuffle: false,
+	audio: defaultState,
 };
 // ===================================
 // 음악 플레이어
@@ -54,7 +56,14 @@ class WidgetMusicSettingStore {
 			this.#setting.currentPlaylistId,
 			this.#setting.currentSongIndex,
 		);
-		await audioStore.init();
+		await audioStore.init(this.#setting.audio);
+		// 설정 화면에서 바꾼 것 따라가기 (5-E-21). 저장은 이미 됐으므로 다시 저장하지 않는다
+		void onEvent<WidgetMusicSetting>("widget_music::changed", (next) => {
+			const folderChanged = next.selectedFolder !== this.#setting.selectedFolder;
+			this.#setting = { ...this.#setting, ...next };
+			if (next.audio) audioStore.syncFromSetting(next.audio);
+			if (folderChanged) void playlistStore.init(next.selectedFolder ?? null, next.currentPlaylistId ?? null, next.currentSongIndex ?? 0);
+		});
 	}
 
 	update(patch: Partial<WidgetMusicSetting>) {
@@ -119,16 +128,72 @@ class PlaylistStore {
 
 	async init(selectedFolder: string | null, currentPlaylistId: string | null, currentSongIndex: number) {
 		this.#store = (await commands.getAllPlaylist()) as unknown as Playlist[];
-		if (currentPlaylistId) {
-			this.#currentPlaylistId = currentPlaylistId;
-			this.#currentPlaylist = (await commands.getPlaylistEntry(currentPlaylistId)) as unknown as PlaylistItem[];
+		const targetId =
+			currentPlaylistId && this.#store.some((p) => p.id === currentPlaylistId)
+				? currentPlaylistId
+				: (this.#store[0]?.id ?? currentPlaylistId ?? "default");
+		if (targetId) {
+			this.#currentPlaylistId = targetId;
+			this.#currentPlaylist = (await commands.getPlaylistEntry(targetId)) as unknown as PlaylistItem[];
 		}
-		if (this.#currentPlaylist.length > currentSongIndex) {
-			this.#currentSongIndex = currentSongIndex;
-		}
+		this.#currentSongIndex = this.#currentPlaylist.length > currentSongIndex && currentSongIndex >= 0 ? currentSongIndex : 0;
 		if (selectedFolder) {
 			const raw = (await commands.getSelectFolderMusicData(selectedFolder)) as unknown as LibraryRootRaw;
 			this.#selectedFolderMusics = convertLibraryRoot(raw);
+		}
+	}
+
+	async selectPlaylist(id: string) {
+		if (!id || id === this.#currentPlaylistId) return;
+		const wasPlaying = !audioStore.paused;
+		const entries = (await commands.getPlaylistEntry(id)) as unknown as PlaylistItem[];
+		this.#currentPlaylistId = id;
+		this.#currentPlaylist = entries;
+		this.#currentSongIndex = 0;
+		widgetMusicSetting.update({ currentPlaylistId: id, currentSongIndex: 0 });
+		if (entries.length > 0) {
+			audioStore.setMusic(entries[0].meta);
+			if (wasPlaying) audioStore.play();
+		} else {
+			audioStore.stop();
+		}
+	}
+
+	async createPlaylist(title: string): Promise<Playlist | null> {
+		const trimmed = title.trim();
+		if (!trimmed) return null;
+		const created = (await commands.createPlaylist({
+			title: trimmed,
+			description: "",
+			coverImage: null,
+			sortOrder: this.#store.length,
+		})) as unknown as Playlist;
+		this.#store = [...this.#store, created];
+		await this.selectPlaylist(created.id);
+		return created;
+	}
+
+	async renamePlaylist(id: string, title: string) {
+		const trimmed = title.trim();
+		if (!trimmed) return;
+		const existing = this.#store.find((p) => p.id === id);
+		if (!existing) return;
+		await commands.updatePlaylist(id, {
+			title: trimmed,
+			description: existing.description ?? "",
+			coverImage: existing.coverImage ?? null,
+			sortOrder: existing.sortOrder ?? 0,
+		});
+		this.#store = this.#store.map((p) => (p.id === id ? { ...p, title: trimmed } : p));
+	}
+
+	async deletePlaylist(id: string) {
+		if (id === "default" || this.#store.length <= 1) return;
+		await commands.deletePlaylist(id);
+		this.#store = this.#store.filter((p) => p.id !== id);
+		if (this.#currentPlaylistId === id) {
+			const fallback = this.#store[0]?.id ?? "default";
+			await this.selectPlaylist(fallback);
 		}
 	}
 
@@ -197,25 +262,34 @@ class PlaylistStore {
 	};
 
 	deleted = async (path: string) => {
-		const current = this.currentSong;
-		// 현재 플레이 중인 음악과 같을 경우 멈추기
-		if (current.path === path) {
+		const deletedIndex = this.#currentPlaylist.findIndex((v) => v.meta.path === path);
+		if (deletedIndex === -1) return;
+
+		const isCurrent = deletedIndex === this.#currentSongIndex;
+		if (isCurrent) {
 			audioStore.pause();
 		}
 
-		// 인덱스 갱신
-		let changeIndex = this.#currentSongIndex;
-		// 현재 인덱스보다 바뀌는 배열이 더 작다면 -1 처리
-		// 만약 삭제하려는 인덱스가 현재 인덱스보다 작은 경우 -1 처리
-		if (changeIndex > this.current.length) {
-			changeIndex -= 1;
-		}
-		// 바뀔 인덱스가 음수인 경우 음악을 세팅하지 않고 그대로 리턴
-		if (changeIndex < 0) changeIndex = 0;
-		this.#currentSongIndex = changeIndex;
-
-		// 업데이트
 		await this.removeCurrentPlaylist(path);
+
+		const newLen = this.#currentPlaylist.length;
+		let nextIndex = this.#currentSongIndex;
+		if (deletedIndex < this.#currentSongIndex) {
+			// 현재 재생 곡보다 앞의 곡을 지웠으면, 같은 곡을 계속 가리키도록 인덱스만 보정
+			nextIndex = Math.max(0, this.#currentSongIndex - 1);
+		} else if (nextIndex >= newLen) {
+			// 마지막 곡을 지워 인덱스가 범위를 벗어나면 마지막 유효 인덱스로
+			nextIndex = Math.max(0, newLen - 1);
+		}
+
+		this.#currentSongIndex = nextIndex;
+		await commands.saveWidgetMusicSettings({ currentSongIndex: nextIndex });
+
+		if (isCurrent) {
+			const nextSong = this.#currentPlaylist[nextIndex]?.meta;
+			if (nextSong) audioStore.setMusic(nextSong);
+			else audioStore.stop();
+		}
 	};
 
 	shuffle = (isStartIndex: boolean = false) => {
@@ -260,6 +334,12 @@ class PlaylistStore {
 	changeOrder = (item: PlaylistItem, index: number) => {};
 
 	// getter
+	get list() {
+		return this.#store;
+	}
+	get currentPlaylist(): Playlist | undefined {
+		return this.#store.find((p) => p.id === this.#currentPlaylistId);
+	}
 	get current() {
 		return this.#currentPlaylist;
 	}
@@ -296,16 +376,30 @@ class AudioStateStore {
 	#currentTime = $state(0);
 	#duration = $state(0);
 
-	async init() {
-		const data = localStorage.getItem("WIDGET.AUDIO_STATE");
-		if (data) {
-			this.#audioState = JSON.parse(data);
+	async init(saved?: Partial<AudioState>) {
+		// 이전에 재생 중이던 오디오 인스턴스가 남지 않도록 먼저 정리
+		this.stop();
+		// 예전 localStorage 값이 남아 있으면 한 번 옮겨 담고 제거
+		let legacy: Partial<AudioState> | null = null;
+		try {
+			const raw = localStorage.getItem("WIDGET.AUDIO_STATE");
+			if (raw) {
+				legacy = JSON.parse(raw) as Partial<AudioState>;
+				localStorage.removeItem("WIDGET.AUDIO_STATE");
+			}
+		} catch {
+			/* ignore */
+		}
+		this.#audioState = { ...defaultState, ...(saved ?? {}), ...(legacy ?? {}) };
+		if (legacy) {
+			widgetMusicSetting.update({ audio: { ...this.#audioState } });
 		}
 		const audio = new Audio();
 		audio.volume = this.#audioState.volume;
+		audio.muted = this.#audioState.muted;
 		audio.addEventListener("timeupdate", () => (this.#currentTime = audio.currentTime));
 		audio.addEventListener("loadedmetadata", () => (this.#duration = audio.duration));
-		audio.addEventListener("volumechange", () => this.update({ volume: audio.volume }));
+		audio.addEventListener("volumechange", () => this.update({ volume: audio.volume, muted: audio.muted }));
 		audio.addEventListener("play", () => (this.#paused = false));
 		audio.addEventListener("pause", () => (this.#paused = true));
 		audio.addEventListener("ended", () => handleAudioEnded());
@@ -313,14 +407,27 @@ class AudioStateStore {
 		this.setMusic(playlistStore.currentSong);
 	}
 
+	syncFromSetting(next: Partial<AudioState>) {
+		const merged = { ...this.#audioState, ...next };
+		this.#audioState = merged;
+		if (this.#audioElement) {
+			if (this.#audioElement.volume !== merged.volume) this.#audioElement.volume = merged.volume;
+			if (this.#audioElement.muted !== merged.muted) this.#audioElement.muted = merged.muted;
+		}
+	}
+
 	set(newValue: AudioState) {
 		this.#audioState = newValue;
 	}
 
-	// 저장은 여기서만
+	// 저장은 위젯 설정(widget.json)으로
 	update(state: Partial<AudioState>) {
+		const isIdentical = Object.entries(state).every(
+			([key, value]) => this.#audioState[key as keyof AudioState] === value,
+		);
+		if (isIdentical) return;
 		this.#audioState = { ...this.#audioState, ...state };
-		localStorage.setItem("WIDGET.AUDIO_STATE", JSON.stringify(this.#audioState));
+		widgetMusicSetting.update({ audio: { ...this.#audioState } });
 	}
 
 	setMusic = (playMusic: MusicMeta) => {
@@ -354,6 +461,15 @@ class AudioStateStore {
 	pause = () => {
 		this.#audioElement.pause();
 		this.#paused = true;
+	};
+
+	stop = () => {
+		this.#audioElement.pause();
+		this.#audioElement.currentTime = 0;
+		this.#audioElement.removeAttribute("src");
+		this.#audioElement.load();
+		this.#paused = true;
+		this.#currentTime = 0;
 	};
 
 	togglePlay = () => {
@@ -456,6 +572,7 @@ export const audioStore = new AudioStateStore();
 // -----------------------------------
 
 export function handlePrevSong() {
+	if (!playlistStore.current.length) return;
 	// 현재 재생되고 있다면 처음으로 돌아가도록
 	if (Math.round(audioStore.currentTime) > 10) {
 		audioStore.seek(0);
@@ -474,6 +591,7 @@ export function handlePrevSong() {
 
 	// 음악 세팅
 	const currentMusic = playlistStore.current[changePlayIndex];
+	if (!currentMusic) return;
 	audioStore.setMusic(currentMusic.meta);
 	// 멈춰 있지 않았으면 플레이
 	if (!audioStore.paused) {
@@ -483,6 +601,7 @@ export function handlePrevSong() {
 }
 
 export function handleNextSong(autoPlay?: boolean) {
+	if (!playlistStore.current.length) return;
 	let playIndex = playlistStore.currentSongIndex;
 
 	// 플레이리스트 길이에 도달했으면 루프가 아닌 이상 다음 곡 재생되지 않게 함

@@ -29,6 +29,8 @@ use crate::{
 #[serde(rename_all = "camelCase")]
 pub struct SyncPeer {
     pub device_id: String,
+    /// 그 기기가 붙인 이름 (없으면 None — 화면은 id 앞자리)
+    pub name: Option<String>,
     /// 이 기기 시각
     pub last_merge_at: i64,
     pub merges: i64,
@@ -44,6 +46,8 @@ pub struct SyncPeer {
 #[serde(rename_all = "camelCase")]
 pub struct SyncStatus {
     pub device_id: String,
+    /// 이 기기 이름 (5-E-16)
+    pub device_name: Option<String>,
     pub peers: Vec<SyncPeer>,
     /// 아직 고르지 않은 충돌 (2-E에서 고른다)
     pub open_conflicts: i64,
@@ -98,14 +102,15 @@ pub async fn get_sync_status(app: AppHandle, state: State<'_, AppState>) -> Resu
     require(&app, id::SYNC)?;
     let me = device::get_or_create(&app_data_dir(&app)?)?;
     let now = chrono::Utc::now().timestamp_millis();
-    let peers = sqlx::query_as::<_, (String, i64, i64, Option<i64>, bool)>(
-        "SELECT device_id, last_merge_at, merges, their_ack, excluded FROM sync_peers ORDER BY last_merge_at DESC",
+    let peers = sqlx::query_as::<_, (String, i64, i64, Option<i64>, bool, Option<String>)>(
+        "SELECT device_id, last_merge_at, merges, their_ack, excluded, name FROM sync_peers ORDER BY last_merge_at DESC",
     )
     .fetch_all(&state.db)
     .await?
     .into_iter()
-    .map(|(device_id, last_merge_at, merges, their_ack, excluded)| SyncPeer {
+    .map(|(device_id, last_merge_at, merges, their_ack, excluded, name)| SyncPeer {
         device_id,
+        name,
         last_merge_at,
         merges,
         their_ack,
@@ -116,10 +121,19 @@ pub async fn get_sync_status(app: AppHandle, state: State<'_, AppState>) -> Resu
     let open_conflicts = crate::service::data::sync_conflicts::open_count(&state.db).await?;
     Ok(SyncStatus {
         device_id: me.id,
+        device_name: me.name,
         peers,
         open_conflicts,
         pending_rollback: crate::service::data::sync_conflicts::pending_rollback(&app_data_dir(&app)?),
     })
+}
+
+/// 이 기기 이름 바꾸기 (다음 동기화부터 다른 기기 목록에 보임). 빈 글이면 지움
+#[tauri::command]
+#[specta::specta]
+pub fn set_device_name(app: AppHandle, name: String) -> Result<Option<String>> {
+    require(&app, id::SYNC)?;
+    Ok(device::set_name(&app_data_dir(&app)?, &name)?.name)
 }
 
 /// 오래 못 본 기기를 제외하거나(지운 기록 정리가 기다리지 않음) 다시 포함한다. 제외한 기기가 돌아와 합치면 저절로 풀리고, 그때는 전체를 다시 합친다

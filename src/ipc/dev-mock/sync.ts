@@ -7,8 +7,9 @@ type Handler = (args: Args) => unknown;
 const HOUR = 3600_000;
 const status: SyncStatus = {
 	deviceId: "3f9a1c2e-7b44-4d1a-9c0e-5a6b7c8d9e0f",
-	peers: [{ deviceId: "a81d00c4-1e2f-4a3b-8c9d-0e1f2a3b4c5d", lastMergeAt: Date.now() - 26 * HOUR, merges: 3, theirAck: Date.now() - 30 * HOUR, stale: false, excluded: false },
-		{ deviceId: "c2b4d6f8-0a1b-4c3d-8e5f-6a7b8c9d0e1f", lastMergeAt: Date.now() - 120 * 24 * HOUR, merges: 2, theirAck: null, stale: true, excluded: false },
+	deviceName: null,
+	peers: [{ deviceId: "a81d00c4-1e2f-4a3b-8c9d-0e1f2a3b4c5d", name: "거실 PC", lastMergeAt: Date.now() - 26 * HOUR, merges: 3, theirAck: Date.now() - 30 * HOUR, stale: false, excluded: false },
+		{ deviceId: "c2b4d6f8-0a1b-4c3d-8e5f-6a7b8c9d0e1f", name: null, lastMergeAt: Date.now() - 120 * 24 * HOUR, merges: 2, theirAck: null, stale: true, excluded: false },
 	],
 	openConflicts: 3,
 	pendingRollback: null,
@@ -105,6 +106,7 @@ export const syncHandlers: Record<string, Handler> = {
 	"plugin:dialog|open": (args) => (JSON.stringify(args).includes("플러그인 묶음") ? "C:/Users/me/Downloads/word-count-1.0.0.zip" : dialog(args, JSON.stringify(args).includes('"directory":true') ? "C:/Users/me/OneDrive/Sandcastle" : "C:/Users/me/Downloads/sandcastle-sync-20261117-1200.scsync")),
 	"plugin:dialog|save": (args) => dialog(args, "C:/Users/me/Downloads/sandcastle-sync.scsync"),
 	get_sync_status: () => status,
+	set_device_name: ({ name }) => (status.deviceName = String(name).trim().slice(0, 40) || null),
 	set_sync_peer_excluded: ({ deviceId, excluded }) => {
 		const p = status.peers.find((x) => x.deviceId === deviceId);
 		if (p) p.excluded = Boolean(excluded);
@@ -112,6 +114,7 @@ export const syncHandlers: Record<string, Handler> = {
 	},
 	export_sync_bundle: ({ includeFiles }): SyncBundleInfo => ({
 		deviceId: status.deviceId,
+		deviceName: status.deviceName ?? null,
 		createdAt: Date.now(),
 		appVersion: "0.1.0",
 		rows: 248,
@@ -121,7 +124,7 @@ export const syncHandlers: Record<string, Handler> = {
 		bytes: includeFiles ? 8_400_000 : 120_000,
 	}),
 	preview_sync_bundle: (): SyncPreview => ({
-		bundle: { deviceId: status.peers[0].deviceId, createdAt: Date.now() - 2 * HOUR, appVersion: "0.1.0", rows: 250, tombstones: 2, files: 44, blobs: 3, bytes: 2_100_000 },
+		bundle: { deviceId: status.peers[0].deviceId, deviceName: status.peers[0].name ?? null, createdAt: Date.now() - 2 * HOUR, appVersion: "0.1.0", rows: 250, tombstones: 2, files: 44, blobs: 3, bytes: 2_100_000 },
 		report,
 		files: { added: 3, missing: 1, keptLocal: 0 },
 	}),

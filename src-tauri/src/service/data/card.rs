@@ -45,7 +45,7 @@ pub fn card_json(c: &Character, book_name: Option<&str>, entries: &[WorldInfoEnt
                 "constant": e.constant,
                 "enabled": e.enabled,
                 "insertion_order": e.priority,
-                "extensions": {},
+                "extensions": { "sandcastle_category": e.category },
             })).collect::<Vec<_>>(),
         });
     }
@@ -54,6 +54,12 @@ pub fn card_json(c: &Character, book_name: Option<&str>, entries: &[WorldInfoEnt
 
 /// 캐릭터 하나를 카드 파일로. format: "json" | "png"
 pub async fn export_card(db: &DbPool, character_id: &str, format: &str, path: &Path) -> Result<()> {
+    let bytes = card_bytes(db, character_id, format).await?;
+    std::fs::write(path, bytes).map_err(|e| AppError::io(format!("파일을 쓸 수 없습니다: {e}")))
+}
+
+/// 카드 파일 내용. format: "json" | "png"
+pub async fn card_bytes(db: &DbPool, character_id: &str, format: &str) -> Result<Vec<u8>> {
     let c = conversation::get_character(db, character_id).await?;
     let mut entries = vec![];
     let mut book_name = None;
@@ -67,7 +73,19 @@ pub async fn export_card(db: &DbPool, character_id: &str, format: &str, path: &P
                 .map(|b| b.name);
         }
     }
-    let card = card_json(&c, book_name.as_deref(), &entries);
+    let mut card = card_json(&c, book_name.as_deref(), &entries);
+    // 이 캐릭터에 묶인 정규식 → data.extensions.regex_scripts (SillyTavern이 카드와 같이 읽는 자리)
+    let scripts: Vec<Value> = crate::db::regex::get_regex_scripts_for(db, Some(character_id), None)
+        .await?
+        .iter()
+        .filter(|r| r.scope == crate::models::regex::RegexScope::Character && r.scope_id.as_deref() == Some(character_id))
+        .map(crate::service::import::sillytavern::regex::regex_to_st)
+        .collect();
+    if !scripts.is_empty() {
+        if let Some(ext) = card.pointer_mut("/data/extensions").and_then(Value::as_object_mut) {
+            ext.insert("regex_scripts".into(), Value::Array(scripts));
+        }
+    }
     let bytes = match format {
         "json" => serde_json::to_vec_pretty(&card).map_err(|e| AppError::internal(e.to_string()))?,
         "png" => {
@@ -77,11 +95,11 @@ pub async fn export_card(db: &DbPool, character_id: &str, format: &str, path: &P
         }
         _ => return Err(AppError::validation(format!("모르는 형식: {format}"), None)),
     };
-    std::fs::write(path, bytes).map_err(|e| AppError::io(format!("파일을 쓸 수 없습니다: {e}")))
+    Ok(bytes)
 }
 
 /// 아바타를 PNG로 (없거나 못 읽으면 400x600 단색)
-fn avatar_png(avatar: Option<&str>) -> Result<Vec<u8>> {
+pub(crate) fn avatar_png(avatar: Option<&str>) -> Result<Vec<u8>> {
     let img = avatar
         .filter(|p| Path::new(p).is_file())
         .and_then(|p| image::open(p).ok())

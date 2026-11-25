@@ -22,6 +22,8 @@ pub const UNSYNCED_TABLES: &[&str] = &[
     "usage_daily",
     "agent_states",
     "agent_tool_calls",
+    // AI 호출 기록 (5-E-20-6-7) — 기기에서 켠 진단용
+    "ai_call_logs",
     // 캐시 — 다시 만들 수 있다
     "translation_cache",
     "memory_embeddings",

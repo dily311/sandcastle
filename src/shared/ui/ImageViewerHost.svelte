@@ -4,7 +4,8 @@
 	 * 그림 아래에 파일 이름, 그림이나 이름에서 오른쪽 클릭(Android는 꾹 누르기)하면 메뉴.
 	 * <dialog>로 열어서 다른 대화상자 위에서 눌러도 맨 위에 뜬다.
 	 */
-	import { Copy, Ellipsis, ExternalLink, FileText, Info, Pencil, Trash2, X } from "@lucide/svelte";
+	import { Copy, Ellipsis, EllipsisVertical, ExternalLink, FileText, Info, Pencil, Trash2, X } from "@lucide/svelte";
+	import { _ } from "svelte-i18n";
 	import { revealItemInDir } from "@tauri-apps/plugin-opener";
 	import { layout } from "$app/layout.svelte";
 	import { describeSrc, imageViewer } from "$shared/stores/imageViewer.svelte";
@@ -46,16 +47,16 @@
 	async function showInfo() {
 		if (!img) return;
 		const rows: { label: string; value: string }[] = [];
-		if (title) rows.push({ label: "이름", value: title });
-		if (info?.path) rows.push({ label: "위치", value: info.path });
-		if (imgEl?.naturalWidth) rows.push({ label: "크기", value: `${imgEl.naturalWidth} × ${imgEl.naturalHeight}px` });
+		if (title) rows.push({ label: $_("sharedControls.viewerName"), value: title });
+		if (info?.path) rows.push({ label: $_("sharedControls.viewerPath"), value: info.path });
+		if (imgEl?.naturalWidth) rows.push({ label: $_("sharedControls.viewerSize"), value: `${imgEl.naturalWidth} × ${imgEl.naturalHeight}px` });
 		const ext = /\.([a-z0-9]+)$/i.exec(title)?.[1];
-		if (ext) rows.push({ label: "형식", value: ext.toUpperCase() });
+		if (ext) rows.push({ label: $_("sharedControls.viewerFormat"), value: ext.toUpperCase() });
 		details = [...rows, ...(img.info ?? [])];
 		// 용량은 읽어 봐야 알 수 있어 뒤늦게 덧붙임
 		try {
 			const blob = await (await fetch(img.src)).blob();
-			if (details && imageViewer.current === img) details = [...details, { label: "용량", value: sizeText(blob.size) }];
+			if (details && imageViewer.current === img) details = [...details, { label: $_("sharedControls.viewerFileSize"), value: sizeText(blob.size) }];
 		} catch {
 			/* 못 읽으면 생략 */
 		}
@@ -73,9 +74,9 @@
 			// 클립보드는 PNG만 받는 곳이 많아 그림 형식이 다르면 PNG로 바꿔 넣음
 			const png = blob.type === "image/png" ? blob : await toPng(blob);
 			await navigator.clipboard.write([new ClipboardItem({ "image/png": png })]);
-			toasts.success("그림을 복사함");
+			toasts.success($_("sharedControls.viewerCopiedImg"));
 		} catch (e) {
-			toasts.error("그림을 복사할 수 없음", String(e));
+			toasts.error($_("sharedControls.viewerCopyImgErr"), String(e));
 		}
 	}
 	async function toPng(blob: Blob): Promise<Blob> {
@@ -84,50 +85,70 @@
 		canvas.width = bmp.width;
 		canvas.height = bmp.height;
 		canvas.getContext("2d")?.drawImage(bmp, 0, 0);
-		return new Promise((resolve, reject) => canvas.toBlob((b) => (b ? resolve(b) : reject(new Error("변환 실패"))), "image/png"));
+		return new Promise((resolve, reject) => canvas.toBlob((b) => (b ? resolve(b) : reject(new Error($_("sharedControls.viewerConvertErr")))), "image/png"));
 	}
 	async function copyName() {
 		try {
 			await navigator.clipboard.writeText(title);
-			toasts.success("파일 이름을 복사함");
+			toasts.success($_("sharedControls.viewerCopiedName"));
 		} catch (e) {
-			toasts.error("복사할 수 없음", String(e));
+			toasts.error($_("sharedControls.viewerCopyErr"), String(e));
 		}
 	}
 	async function reveal() {
 		if (!info?.path) return;
-		await revealItemInDir(info.path).catch((e) => toasts.error("파일 위치를 열 수 없음", String(e)));
+		await revealItemInDir(info.path).catch((e) => toasts.error($_("sharedControls.viewerRevealErr"), String(e)));
 	}
 
+	const extra = $derived<MenuItem[]>(typeof img?.extraItems === "function" ? img.extraItems() : (img?.extraItems ?? []));
 	const items = $derived<MenuItem[]>([
-		{ label: "그림 복사", icon: Copy, onselect: copyImage },
-		{ label: "파일 이름 복사", icon: FileText, disabled: !title, onselect: copyName },
-		{ label: "정보 보기", icon: Info, onselect: showInfo },
-		...(img?.rename ? [{ label: "이름 바꾸기", icon: Pencil, separator: true, onselect: () => void img.rename?.() }] : []),
+		{ label: $_("viewer.copyImage"), icon: Copy, onselect: copyImage },
+		{ label: $_("viewer.copyName"), icon: FileText, disabled: !title, onselect: copyName },
+		{ label: $_("viewer.showInfo"), icon: Info, onselect: showInfo },
+		...(extra.length ? [{ ...extra[0], separator: true }, ...extra.slice(1)] : []),
+		...(img?.rename ? [{ label: $_("common.rename"), icon: Pencil, separator: true, onselect: () => void img.rename?.() }] : []),
 		// 파일 위치 열기는 데스크톱의 내 파일만 (Android에는 탐색기가 없고, 인터넷 그림은 파일이 아님)
-		...(layout.desktop && info?.path ? [{ label: "파일 위치 열기", icon: ExternalLink, separator: true, onselect: reveal }] : []),
-		...(img?.remove ? [{ label: "삭제", icon: Trash2, danger: true, separator: true, onselect: () => void img.remove?.() }] : []),
+		...(layout.desktop && info?.path ? [{ label: $_("viewer.reveal"), icon: ExternalLink, separator: true, onselect: reveal }] : []),
+		...(img?.remove ? [{ label: $_("common.delete"), icon: Trash2, danger: true, separator: true, onselect: () => void img.remove?.() }] : []),
 	]);
 </script>
 
-<dialog bind:this={dialog} class="image-viewer" aria-label="그림 크게 보기" onclose={() => imageViewer.close()} onclick={(e) => e.target === dialog && imageViewer.close()}>
+<dialog bind:this={dialog} class="image-viewer" aria-label={$_("sharedControls.viewerAria")} onclose={() => imageViewer.close()} onclick={(e) => e.target === dialog && imageViewer.close()}>
 	{#if img}
 		<figure>
-			<div class="top"><IconButton label="닫기" size="sm" onclick={() => imageViewer.close()}><X /></IconButton></div>
-			<img bind:this={imgEl} src={img.src} alt={title} {oncontextmenu} />
-			<div class="cap" role="group" aria-label="파일 이름" {oncontextmenu}>
-				<span class="name">{title || "그림"}</span>
-				<IconButton label="그림 메뉴" size="sm" onclick={openMenu}><Ellipsis /></IconButton>
+			<div class="top">
+				<div class="cap" role="group" aria-label={$_("sharedControls.viewerFilenameAria")}>
+					<span class="name">{title || $_("sharedControls.viewerImgFallback")}</span>
+				</div>
+				<div class="actionBtn">
+					<IconButton label={$_("sharedControls.viewerMenuAria")} size="sm" variant="static-white" onclick={openMenu}><EllipsisVertical /></IconButton>
+					<IconButton label={$_("common.close")} size="sm" variant="static-white" onclick={() => imageViewer.close()}><X /></IconButton>	
+				</div>
 			</div>
+			<img bind:this={imgEl} src={img.src} alt={title} {oncontextmenu} />
 		</figure>
 	{/if}
-	<ContextMenu at={menu} {items} label="그림 메뉴" onclose={() => (menu = null)} />
+	<ContextMenu at={menu} {items} label={$_("sharedControls.viewerMenuAria")} onclose={() => (menu = null)} />
 </dialog>
 
 <!-- 정보는 그림 위에 따로 뜨는 창 (그림이 크면 아래에 붙여서는 화면 밖으로 나감) -->
-<Dialog open={!!details} title="정보" size="sm" onclose={() => (details = null)}>
+<Dialog open={!!details} title={$_("sharedControls.viewerInfoTitle")} size="md" onclose={() => (details = null)}>
 	<dl class="details">
-		{#each details ?? [] as d (d.label)}<dt>{d.label}</dt><dd>{d.value}</dd>{/each}
+		{#each details ?? [] as d, i (`${d.label}-${i}`)}
+			<dt>{d.label}</dt>
+			<dd>
+				<span>{d.value}</span>
+				{#if d.value.length > 24}
+					<button
+						type="button"
+						class="copy-val"
+						aria-label={$_("sharedControls.viewerCopyFieldAria", { values: { label: d.label } })}
+						title={$_("sharedControls.viewerCopyFieldAria", { values: { label: d.label } })}
+						onclick={() => navigator.clipboard.writeText(d.value).then(() => toasts.success($_("sharedControls.viewerCopiedField", { values: { label: d.label } })), () => toasts.error($_("sharedControls.viewerCopyFailed")))}
+					><Copy /></button>
+				{/if}
+			</dd>
+		{/each}
 	</dl>
 </Dialog>
 
@@ -163,8 +184,24 @@
 		margin: 0;
 	}
 	.top {
-		align-self: flex-end;
+		width: 100%;
+		display: flex;
+		justify-content: space-between;
 	}
+	/* 파일 이름 */
+	.cap {
+		display: flex;
+		align-items: center;
+		gap: var(--space-1);
+		max-width: min(100%, 640px);
+		font-size: var(--text-sm);
+		color: var(--static-white);
+	}
+	.name {
+		min-width: 0;
+		overflow-wrap: anywhere;
+	}
+	
 	img {
 		display: block;
 		min-height: 0;
@@ -176,36 +213,50 @@
 		/* 눌러서 닫히는 배경과 달리 그림은 길게 눌러 메뉴를 열 수 있게 */
 		-webkit-touch-callout: none;
 	}
-	/* 파일 이름 + … 메뉴 버튼 */
-	.cap {
-		display: flex;
-		align-items: center;
-		gap: var(--space-1);
-		max-width: min(100%, 640px);
-		padding: 2px 2px 2px var(--space-3);
-		border-radius: var(--radius-sm);
-		background: var(--surface);
-		font-size: var(--text-sm);
-		color: var(--text-muted);
-	}
-	.name {
-		min-width: 0;
-		overflow-wrap: anywhere;
-	}
 	.details {
 		display: grid;
 		grid-template-columns: auto minmax(0, 1fr);
-		gap: 2px var(--space-3);
+		gap: 8px var(--space-3);
 		margin: 0;
 		font-size: var(--text-sm);
 	}
 	.details dt {
 		color: var(--text-faint);
+		white-space: nowrap;
 	}
 	.details dd {
 		margin: 0;
+		display: flex;
+		align-items: flex-start;
+		gap: var(--space-2);
 		color: var(--text);
 		overflow-wrap: anywhere;
+		white-space: pre-wrap;
 		user-select: text;
+	}
+	.details dd span {
+		flex: 1;
+		min-width: 0;
+	}
+	.copy-val {
+		flex: none;
+		display: grid;
+		place-items: center;
+		width: 24px;
+		height: 24px;
+		padding: 0;
+		border: none;
+		border-radius: var(--radius-xs);
+		background: transparent;
+		color: var(--text-muted);
+		cursor: pointer;
+	}
+	.copy-val:hover {
+		background: var(--surface-hover);
+		color: var(--text);
+	}
+	.copy-val :global(svg) {
+		width: 14px;
+		height: 14px;
 	}
 </style>

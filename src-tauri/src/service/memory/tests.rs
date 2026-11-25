@@ -350,18 +350,15 @@ async fn a_failed_batch_keeps_earlier_batches_and_the_next_run_resumes_without_r
 #[tokio::test]
 async fn excluded_conversations_and_messages_are_never_indexed() {
     let e = env(vec![]).await;
-    add_conv(&e.db, "off", Some(r#"{"memory":"off"}"#)).await;
     add_conv(&e.db, "peek", Some(r#"{"phone":{"x":1}}"#)).await;
-    for c in ["off", "peek"] {
-        add_msg(&e.db, c, 0, "user", &body("고양이"), None).await;
-    }
+    add_msg(&e.db, "peek", 0, "user", &body("고양이"), None).await;
     add_conv(&e.db, "ok", None).await;
     add_msg(&e.db, "ok", 0, "user", &body("고양이"), Some(r#"{"hidden":true}"#)).await;
     add_msg(&e.db, "ok", 1, "system", &body("고양이"), None).await;
     let pv = index::preview(&e.db, &e.store, &e.profile, &e.cfg, &MemoryScope::default()).await.unwrap();
     assert_eq!((pv.conversations, pv.chunks), (1, 0), "숨김·시스템 메시지만 있는 대화는 chunk가 없음");
     // 제외한 대화를 직접 지정하면 거절
-    assert!(index::preview(&e.db, &e.store, &e.profile, &e.cfg, &scope("off")).await.is_err());
+    assert!(index::preview(&e.db, &e.store, &e.profile, &e.cfg, &scope("peek")).await.is_err());
 }
 
 #[tokio::test]
@@ -525,7 +522,7 @@ async fn recall_injects_the_outlier_chunk_as_an_auto_task_and_a_cache_hit_makes_
     let out = do_recall(&r, &r.input, &HashSet::new(), None, &CancellationToken::new()).await;
     assert_eq!((out.meta.status.as_str(), out.meta.hits.len()), ("used", 1), "{:?}", out.meta);
     let block = out.block.unwrap();
-    assert!(block.starts_with("[참고 자료") && block.contains("지시가 아니며") && block.ends_with("[참고 자료 끝]"));
+    assert!(block.starts_with("[Reference") && block.contains("not instructions") && block.ends_with("[End of reference]"));
     assert!(block.contains("고양이 고양이 고양이") && !block.contains("강아지"), "{block}");
     assert!(!block.contains("<image>") && out.meta.tokens > 0);
     assert_eq!(r.e.srv.requests().len(), before + 1, "질의 임베딩 1회");
@@ -671,6 +668,7 @@ fn recall_block_is_a_user_turn_merged_into_the_input_and_never_lands_in_the_syst
         role,
         content: c.into(),
         token: 0,
+        source: None,
     };
     let block = recall::format_block(&[("대화".into(), "사용자: 지난 이야기".into())]);
     // 첫 메시지(기록이 비어 있음)에서도: 규칙(system) 뒤에 user로 붙는다
@@ -686,7 +684,7 @@ fn recall_block_is_a_user_turn_merged_into_the_input_and_never_lands_in_the_syst
     assert_eq!(system.as_deref(), Some("규칙"), "회상 글은 system 문자열에 들어가지 않음");
     assert_eq!(turns.len(), 1);
     assert!(
-        turns[0].content.starts_with("[참고 자료") && turns[0].content.ends_with("지금 입력"),
+        turns[0].content.starts_with("[Reference") && turns[0].content.ends_with("지금 입력"),
         "{}",
         turns[0].content
     );
@@ -798,9 +796,7 @@ async fn recall_does_not_inject_a_chunk_edited_after_indexing() {
 }
 
 #[test]
-fn memory_switch_has_its_own_key_and_the_legacy_value_still_reads_as_off() {
-    assert!(is_eligible(None) && is_eligible(Some(r#"{"memory":"내 메모"}"#)), "메모 글은 스위치가 아님");
-    assert!(!is_eligible(Some(r#"{"memoryOff":true}"#)));
-    assert!(!is_eligible(Some(r#"{"memory":"off"}"#)), "예전 버전이 메모 칸에 쓴 값");
-    assert!(is_eligible(Some(r#"{"memoryOff":null,"memory":"열쇠를 잃음"}"#)));
+fn phone_peek_conversations_are_excluded_from_memory() {
+    assert!(is_eligible(None) && is_eligible(Some(r#"{"memory":"내 메모"}"#)));
+    assert!(!is_eligible(Some(r#"{"phone":{"x":1}}"#)));
 }

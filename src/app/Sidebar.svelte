@@ -1,6 +1,7 @@
 <script lang="ts">
-	import { onMount } from "svelte";
-	import { BookOpen, Check, ChevronsUpDown, Copy, Download, ArrowUpDown, ChevronDown, Ellipsis, Gamepad2, GitBranch, House, Pencil, Pin, PinOff, Plus, Settings, Smartphone, Trash2, UserCog, Users, Images, ListFilter } from "@lucide/svelte";
+	import { lastAt } from "$features/character/library.svelte";
+	import { _ } from "svelte-i18n";
+	import { BookOpen, Check, ChevronsUpDown, Copy, Download, ArrowUpDown, ChevronDown, Ellipsis, Gamepad2, GitBranch, House, Pencil, Pin, PinOff, Plus, Search, Settings, Smartphone, Trash2, UserCog, Users, Images, ListFilter, X } from "@lucide/svelte";
 	import { Avatar, ContextMenu, IconButton, type MenuItem } from "$shared/ui";
 	import { fileSrc } from "$shared/ipc/file";
 	import { call, commands } from "$shared/ipc/client";
@@ -8,6 +9,7 @@
 	import { toasts } from "$shared/stores/toast.svelte";
 	import { relative } from "$shared/time";
 	import { library, type Conversation } from "$features/character/library.svelte";
+	import { CONV_SORT_KEYS, CONV_SORT_LABEL, compareConversations, isConvSortBy, type ConvSortBy } from "$features/character/convSort";
 	import { convActions } from "$features/character/actions";
 	import { branchOf } from "$features/character/branches";
 	import { nav, type Page } from "./nav.svelte";
@@ -16,46 +18,79 @@
 
 	// 화면이 늘어나면 여기에 추가 (페르소나는 아래 사용자 프로필에서)
 	// 폰·게임은 코어 플러그인이 꺼져 있으면 숨김
-	const allItems: { page: Page; label: string; icon: typeof Users; plugin?: PluginId }[] = [
-		{ page: "home", label: "홈", icon: House },
-		{ page: "character", label: "캐릭터", icon: Users },
-		{ page: "phone", label: "폰", icon: Smartphone, plugin: "phone" },
-		{ page: "game", label: "게임", icon: Gamepad2, plugin: "game" },
-		{ page: "lorebook", label: "로어북", icon: BookOpen },
-		{ page: "images", label: "이미지", icon: Images },
-	];
+	const allItems = $derived<{ page: Page; label: string; icon: typeof Users; plugin?: PluginId }[]>([
+		{ page: "home", label: $_("nav.home"), icon: House },
+		{ page: "character", label: $_("nav.character"), icon: Users },
+		{ page: "phone", label: $_("nav.phone"), icon: Smartphone, plugin: "phone" },
+		{ page: "game", label: $_("nav.game"), icon: Gamepad2, plugin: "game" },
+		{ page: "lorebook", label: $_("nav.lorebook"), icon: BookOpen },
+		{ page: "images", label: $_("nav.images"), icon: Images },
+	]);
 	const items = $derived(allItems.filter((i) => !i.plugin || plugins.on(i.plugin)));
 
 	$effect(() => {
 		if (!library.loaded) void library.load();
 	});
-
-	// ---- 대화 목록: 고정됨(접기) + 그룹화·필터·정렬·표시 메뉴 + 갈래 트리 ----
-	type SortBy = "recent" | "created" | "name";
+// ---- 대화 목록: 고정됨(접기) + 그룹화·하위 그룹화·필터·정렬·표시 메뉴 + 갈래 트리 ----
+	type SortBy = ConvSortBy;
 	type GroupBy = "none" | "character";
-	const SORT_LABEL: Record<SortBy, string> = { recent: "마지막 업데이트", created: "생성 날짜", name: "이름" };
+	type GroupSortBy = "recent" | "name";
+	const GROUP_SORT_LABEL = $derived<Record<GroupSortBy, string>>({
+		recent: $_("settings.chrome.groupSortRecent"),
+		name: $_("settings.chrome.groupSortName"),
+	});
+	type SubGroupBy = "none" | "forked";
+	const SORT_LABEL = $derived<Record<SortBy, string>>({
+		viewed: $_("settings.chrome.sortRecent"),
+		recent: $_("settings.chrome.sortUpdated"),
+		created: $_("settings.chrome.sortCreated"),
+		name: $_("settings.chrome.sortName"),
+		messages: $_("settings.chrome.sortMessages"),
+	});
+	const SUBGROUP_LABEL = $derived<Record<SubGroupBy, string>>({
+		none: $_("settings.chrome.subGroupNone"),
+		forked: $_("settings.chrome.subGroupForked"),
+	});
 	interface Pref {
 		pinnedOpen: boolean;
 		recentOpen: boolean;
 		sortBy: SortBy;
 		desc: boolean;
 		group: GroupBy;
+		subGroup: SubGroupBy;
+		groupSortBy: GroupSortBy;
+		groupSortDesc: boolean;
 		/** 이 캐릭터의 대화만 (null = 전부) */
 		char: string | null;
 		showAvatar: boolean;
 		showForks: boolean;
 	}
 	const PREF = "sc.sidebar.list";
-	const DEFAULT_PREF: Pref = { pinnedOpen: true, recentOpen: true, sortBy: "recent", desc: true, group: "none", char: null, showAvatar: true, showForks: true };
+	const DEFAULT_PREF: Pref = {
+		pinnedOpen: true,
+		recentOpen: true,
+		sortBy: "recent",
+		desc: true,
+		group: "none",
+		subGroup: "none",
+		groupSortBy: "name",
+		groupSortDesc: true,
+		char: null,
+		showAvatar: true,
+		showForks: true,
+	};
 	function readPref(): Pref {
 		try {
 			const p = JSON.parse(localStorage.getItem(PREF) ?? "{}");
 			return {
 				pinnedOpen: p.pinnedOpen !== false,
 				recentOpen: p.recentOpen !== false,
-				sortBy: p.sortBy in SORT_LABEL ? p.sortBy : "recent",
+				sortBy: isConvSortBy(p.sortBy) ? p.sortBy : "recent",
 				desc: p.desc !== false,
 				group: p.group === "character" ? "character" : "none",
+				subGroup: p.subGroup === "forked" ? "forked" : "none",
+				groupSortBy: p.groupSortBy === "recent" ? "recent" : "name",
+				groupSortDesc: p.groupSortDesc !== false,
 				char: typeof p.char === "string" ? p.char : null,
 				showAvatar: p.showAvatar !== false,
 				showForks: p.showForks !== false,
@@ -70,12 +105,30 @@
 	let sortBy = $state<SortBy>(pref0.sortBy);
 	let desc = $state(pref0.desc);
 	let group = $state<GroupBy>(pref0.group);
+	let subGroup = $state<SubGroupBy>(pref0.subGroup);
+	let groupSortBy = $state<GroupSortBy>(pref0.groupSortBy);
+	let groupSortDesc = $state(pref0.groupSortDesc);
 	let charFilter = $state<string | null>(pref0.char);
 	let showAvatar = $state(pref0.showAvatar);
 	let showForks = $state(pref0.showForks);
 	$effect(() => {
 		try {
-			localStorage.setItem(PREF, JSON.stringify({ pinnedOpen, recentOpen, sortBy, desc, group, char: charFilter, showAvatar, showForks } satisfies Pref));
+			localStorage.setItem(
+				PREF,
+				JSON.stringify({
+					pinnedOpen,
+					recentOpen,
+					sortBy,
+					desc,
+					group,
+					subGroup,
+					groupSortBy,
+					groupSortDesc,
+					char: charFilter,
+					showAvatar,
+					showForks,
+				} satisfies Pref),
+			);
 		} catch {
 			/* 기억하지 못해도 동작은 같음 */
 		}
@@ -85,9 +138,11 @@
 		if (library.loaded && charFilter && !library.character(charFilter)) charFilter = null;
 	});
 	/** 기본 보기와 다른가 (정렬 단추 강조, 재설정 가능 여부) */
-	const customized = $derived(sortBy !== "recent" || !desc || group !== "none" || charFilter !== null || !showAvatar || !showForks);
+	const customized = $derived(
+		sortBy !== "recent" || !desc || group !== "none" || subGroup !== "none" || charFilter !== null || !showAvatar || !showForks,
+	);
 	function resetView() {
-		({ sortBy, desc, group, showAvatar, showForks } = { ...DEFAULT_PREF });
+		({ sortBy, desc, group, subGroup, showAvatar, showForks } = { ...DEFAULT_PREF });
 		charFilter = null;
 		shown = PAGE;
 		groupShown = {};
@@ -96,12 +151,20 @@
 	// 폰 대화는 폰 화면에서. 20개씩 더 보기
 	const PAGE = 20;
 	let shown = $state(PAGE);
-	const base = $derived(library.conversations.filter((c) => c.mode !== "phone" && library.character(c.characterId) && (!charFilter || c.characterId === charFilter)));
-	const cmp = (a: Conversation, b: Conversation) => {
-		const v = sortBy === "name" ? a.title.localeCompare(b.title, "ko") : sortBy === "created" ? a.createdAt - b.createdAt : a.updatedAt - b.updatedAt;
-		// 이름은 오름차순이 "작은 것부터"라 날짜와 방향이 같게(내림차순 = 큰 쪽부터) 뒤집는다
-		return desc ? -v : v;
-	};
+	let searchOpen = $state(false);
+	let convQuery = $state("");
+	const convQ = $derived(convQuery.trim().toLowerCase());
+	const base = $derived(
+		library.conversations.filter((c) => {
+			if (c.mode === "phone") return false;
+			const ch = library.character(c.characterId);
+			if (!ch) return false;
+			if (charFilter && c.characterId !== charFilter) return false;
+			if (convQ && !c.title.toLowerCase().includes(convQ) && !ch.name.toLowerCase().includes(convQ)) return false;
+			return true;
+		}),
+	);
+	const cmp = (a: Conversation, b: Conversation) => compareConversations(a, b, sortBy, desc);
 	const pinned = $derived(base.filter((c) => c.pinned).sort(cmp));
 	const unpinned = $derived(base.filter((c) => !c.pinned));
 	/** 이 대화에서 갈라져 나온 대화 수 (고정된 것 포함) */
@@ -113,10 +176,11 @@
 		}
 		return m;
 	});
-	/** 목록에서 부모 밑에 들어가는 갈래 (부모가 같은 목록에 있을 때만, 갈라진 메시지 순) */
+	/** 하위 그룹화가 'forked'일 때만 부모 밑에 들어가는 갈래 (부모가 같은 목록에 있을 때만, 갈라진 메시지 순) */
 	const kids = $derived.by(() => {
-		const ids = new Set(unpinned.map((c) => c.id));
 		const m = new Map<string, Conversation[]>();
+		if (subGroup !== "forked") return m;
+		const ids = new Set(unpinned.map((c) => c.id));
 		for (const c of unpinned) {
 			const b = branchOf(c);
 			if (b && ids.has(b.parentId)) m.set(b.parentId, [...(m.get(b.parentId) ?? []), c]);
@@ -125,6 +189,7 @@
 		return m;
 	});
 	const roots = $derived.by(() => {
+		if (subGroup !== "forked") return [...unpinned].sort(cmp);
 		const inTree = new Set([...kids.values()].flat().map((c) => c.id));
 		return unpinned.filter((c) => !inTree.has(c.id)).sort(cmp);
 	});
@@ -132,13 +197,21 @@
 	/** 그룹화: 묶음마다 따로 몇 개를 보이는지 (없으면 shown) */
 	let groupShown = $state<Record<string, number>>({});
 	const limitOf = (id: string) => groupShown[id] ?? shown;
-	/** 그룹화(캐릭터): 보이는 대화를 캐릭터별 묶음으로. 묶음은 캐릭터 이름 순 */
+	/** 그룹화(캐릭터): 보이는 대화를 캐릭터별 묶음으로. 묶음은 가장 최신 메시지 순 */
 	const sections = $derived.by(() => {
 		const m = new Map<string, Conversation[]>();
 		for (const c of roots) m.set(c.characterId, [...(m.get(c.characterId) ?? []), c]);
 		return [...m.entries()]
-			.map(([id, list]) => ({ id, name: library.character(id)?.name ?? "캐릭터", list }))
-			.sort((a, b) => a.name.localeCompare(b.name, "ko"));
+			.map(([id, list]) => ({
+				id,
+				name: library.character(id)?.name ?? $_("settings.dataSec.counts.characters"),
+				list,
+				latestAt: Math.max(...list.map((c) => lastAt(c))),
+			}))
+			.sort((a, b) => {
+				const v = groupSortBy === "name" ? a.name.localeCompare(b.name, "ko") : a.latestAt - b.latestAt || a.name.localeCompare(b.name, "ko");
+				return groupSortDesc ? -v : v;
+			});
 	});
 	let folded = $state<Set<string>>(new Set());
 	function toggleFold(id: string) {
@@ -148,7 +221,7 @@
 		folded = next;
 	}
 
-	/** 오른쪽 위 단추의 메뉴: 그룹화 기준 · 필터 · 정렬 기준 · 표시 · 재설정 (한 단계 하위 메뉴) */
+	/** 오른쪽 위 단추의 메뉴: 그룹화 기준 · 하위 그룹화 · 필터 · 정렬 기준 · 표시 · 재설정 (한 단계 하위 메뉴) */
 	/** 정렬·보기 단추가 눌린 상태 (메뉴가 열려 있는 동안만 강조) */
 	let viewOpen = $state(false);
 	function viewMenu(e: MouseEvent) {
@@ -163,46 +236,65 @@
 			at: { x: r.right, y: r.bottom + 4, align: "end" },
 			items: [
 				{
-					label: "그룹화 기준",
-					value: group === "character" ? "캐릭터" : "없음",
+					label: $_("settings.chrome.groupBy"),
+					value: group === "character" ? $_("settings.dataSec.counts.characters") : $_("settings.chrome.subGroupNone"),
 					children: [
-						{ label: "없음", checked: group === "none", onselect: pick(() => (group = "none")) },
-						{ label: "캐릭터", checked: group === "character", onselect: pick(() => (group = "character")) },
+						{ label: $_("settings.chrome.subGroupNone"), checked: group === "none", onselect: pick(() => (group = "none")) },
+						{ label: $_("settings.dataSec.counts.characters"), checked: group === "character", onselect: pick(() => (group = "character")) },
 					],
 				},
 				{
-					label: "필터",
-					value: charFilter ? (library.character(charFilter)?.name ?? "캐릭터") : "전체 캐릭터",
+					label: $_("settings.chrome.subGroupBy"),
+					value: SUBGROUP_LABEL[subGroup],
+					visible: group !== "none",
 					children: [
-						{ id: "all", label: "전체 캐릭터", checked: !charFilter, onselect: pick(() => (charFilter = null)) },
+						{ id: "none", label: $_("settings.chrome.subGroupNone"), checked: subGroup === "none", onselect: pick(() => (subGroup = "none")) },
+						{ id: "forked", label: $_("settings.chrome.subGroupForked"), checked: subGroup === "forked", onselect: pick(() => (subGroup = "forked")) },
+					],
+				},
+				{
+					label: $_("settings.chrome.groupSort"),
+					value: GROUP_SORT_LABEL[groupSortBy],
+					visible: group !== "none",
+					children: [
+						...(Object.keys(GROUP_SORT_LABEL) as GroupSortBy[]).map((k) => ({ id: k, label: GROUP_SORT_LABEL[k], checked: groupSortBy === k, onselect: () => (groupSortBy = k) })),
+						{ id: "desc", label: $_("settings.chrome.desc"), separator: true, checked: groupSortDesc, onselect: () => (groupSortDesc = true) },
+						{ id: "asc", label: $_("settings.chrome.asc"), checked: !groupSortDesc, onselect: () => (groupSortDesc = false) },
+					]
+				},
+				{
+					label: $_("settings.chrome.filter"),
+					value: charFilter ? (library.character(charFilter)?.name ?? $_("settings.dataSec.counts.characters")) : $_("settings.chrome.allChars"),
+					children: [
+						{ id: "all", label: $_("settings.chrome.allChars"), checked: !charFilter, onselect: pick(() => (charFilter = null)) },
 						// 이름이 같은 캐릭터가 있어도 구분되도록 id로 키를 잡는다
 						...[...library.characters].sort((a, b) => a.name.localeCompare(b.name, "ko")).map((c) => ({ id: c.id, label: c.name, checked: charFilter === c.id, onselect: pick(() => (charFilter = c.id)) })),
 					],
 				},
 				{
-					label: "정렬 기준",
+					label: $_("settings.chrome.sortBy"),
 					value: SORT_LABEL[sortBy],
 					children: [
-						...(Object.keys(SORT_LABEL) as SortBy[]).map((k) => ({ id: k, label: SORT_LABEL[k], checked: sortBy === k, onselect: () => (sortBy = k) })),
-						{ id: "desc", label: "내림차순", separator: true, checked: desc, onselect: () => (desc = true) },
-						{ id: "asc", label: "오름차순", checked: !desc, onselect: () => (desc = false) },
+						...CONV_SORT_KEYS.map((k) => ({ id: k, label: SORT_LABEL[k], checked: sortBy === k, onselect: () => (sortBy = k) })),
+						{ id: "desc", label: $_("settings.chrome.desc"), separator: true, checked: desc, onselect: () => (desc = true) },
+						{ id: "asc", label: $_("settings.chrome.asc"), checked: !desc, onselect: () => (desc = false) },
 					],
 				},
 				{
-					label: "표시",
+					label: $_("settings.chrome.display"),
 					children: [
-						{ id: "avatar", label: "캐릭터 이미지", checked: showAvatar, onselect: () => (showAvatar = !showAvatar) },
-						{ id: "forks", label: "갈래 수", checked: showForks, onselect: () => (showForks = !showForks) },
+						{ id: "avatar", label: $_("settings.chrome.charImage"), checked: showAvatar, onselect: () => (showAvatar = !showAvatar) },
+						{ id: "forks", label: $_("settings.chrome.forkCount"), checked: showForks, onselect: () => (showForks = !showForks) },
 					],
 				},
-				{ label: "기본값으로 재설정", separator: true, disabled: !customized, onselect: resetView },
-				{ label: "모두 보기", disabled: !charFilter && shown >= roots.length, onselect: () => ((charFilter = null), (groupShown = {}), (shown = Number.MAX_SAFE_INTEGER)) },
+				{ label: $_("settings.chrome.resetDefault"), separator: true, disabled: !customized, onselect: resetView },
+				{ label: $_("settings.chrome.showAll"), disabled: !charFilter && shown >= roots.length, onselect: () => ((charFilter = null), (groupShown = {}), (shown = Number.MAX_SAFE_INTEGER)) },
 			],
 		};
 	}
 	const cur = $derived(nav.current);
 	const openConv = $derived(cur.page === "character" ? cur.convId : undefined);
-	const charName = $derived(charFilter ? (library.character(charFilter)?.name ?? "캐릭터") : "전체 캐릭터");
+	const charName = $derived(charFilter ? (library.character(charFilter)?.name ?? $_("settings.dataSec.counts.characters")) : $_("settings.chrome.allChars"));
 
 	// ---- 너비 조절: 오른쪽 가장자리를 끌기 (←/→ 키로도) ----
 	let dragging = $state(false);
@@ -245,24 +337,24 @@
 			at,
 			items: [
 				{
-					label: "이름 바꾸기",
+					label: $_("settings.chrome.rename"),
 					icon: Pencil,
 					onselect: async () => {
-						const t = await promptText({ title: "대화 이름", input: { value: c.title, placeholder: "대화 이름" }, confirmLabel: "저장" });
+						const t = await promptText({ title: $_("settings.chrome.convTitle"), input: { value: c.title, placeholder: $_("settings.chrome.convTitle") }, confirmLabel: $_("common.save") });
 						if (t?.trim()) await library.rename(c.id, t);
 					},
 				},
-				{ label: c.pinned ? "고정 풀기" : "고정", icon: c.pinned ? PinOff : Pin, onselect: () => library.togglePin(c.id) },
+				{ label: c.pinned ? $_("settings.chrome.unpin") : $_("settings.chrome.pin"), icon: c.pinned ? PinOff : Pin, onselect: () => library.togglePin(c.id) },
 				{
-					label: "복제",
+					label: $_("common.duplicate"),
 					icon: Copy,
 					onselect: async () => {
 						const d = await library.duplicate(c.id);
 						if (d) nav.go({ page: "character", charId: d.characterId ?? undefined, convId: d.id });
 					},
 				},
-				{ label: "내보내기…", icon: Download, onselect: () => convActions.exportMenu(c) },
-				{ label: "삭제", icon: Trash2, danger: true, separator: true, onselect: () => convActions.remove(c) },
+				{ label: $_("settings.chrome.exportEllipsis"), icon: Download, onselect: () => convActions.exportMenu(c) },
+				{ label: $_("common.delete"), icon: Trash2, danger: true, separator: true, onselect: () => convActions.remove(c) },
 			],
 		};
 	}
@@ -276,15 +368,9 @@
 		convMenu(c, { x: e.clientX, y: e.clientY });
 	}
 
-	// ---- 사용자 프로필: 대화를 보는 중이면 그 대화의 페르소나, 아니면 앱 기본 페르소나 ----
-	let defaultPersonaId = $state<string | null>(null);
-	onMount(async () => {
-		const s = await call(commands.getConvSettings(), { source: "persona", silent: true }).catch(() => null);
-		defaultPersonaId = s?.defaultPersonaId ?? null;
-	});
+	// ---- 사용자 프로필: 언제나 전역 기본 페르소나 (ADR-028). 자물쇠를 건 대화는 그 대화의 것을 쓴다 ----
 	const openConvObj = $derived(library.conversation(openConv));
-	const me = $derived(library.persona(openConvObj ? openConvObj.personaId : defaultPersonaId) ?? library.personas[0]);
-	const scope = $derived(openConvObj ? "이 대화" : "기본");
+	const me = $derived(library.persona(library.defaultPersonaId) ?? library.personas[0]);
 
 	let profileOpen = $state(false);
 	// 사이드바가 overflow:hidden이라 팝업은 화면 기준(fixed)으로 띄움
@@ -298,18 +384,22 @@
 	}
 	async function choose(id: string) {
 		profileOpen = false;
+		await library.setDefaultPersona(id);
+		// 열린 대화가 다른 프로필로 잠겨 있으면 그 대화는 그대로임을 알린다
 		const c = openConvObj;
-		if (c) {
-			await library.setOptions(c.id, { personaId: id, promptPresetId: c.promptPresetId, apiProfileId: c.apiProfileId });
-		} else {
-			await call(commands.setSystemDefaultPersona(id), { source: "persona" });
-			defaultPersonaId = id;
-		}
-		toasts.success(`${library.persona(id)?.name ?? "페르소나"}(으)로 바꿈`);
+		const locked = c && c.mode !== "phone" && c.personaId && c.personaId !== id ? library.persona(c.personaId)?.name : null;
+		toasts.success(
+			$_("settings.chrome.switchedPersona", {
+				values: {
+					name: library.persona(id)?.name ?? $_("settings.dataSec.counts.personas"),
+					locked: locked ? $_("settings.chrome.switchedPersonaLocked", { values: { locked } }) : "",
+				},
+			}),
+		);
 	}
 	async function addPersona() {
 		profileOpen = false;
-		const name = await promptText({ title: "새 페르소나", message: "대화에서 내가 될 인물", input: { value: "", placeholder: "이름" }, confirmLabel: "만들기" });
+		const name = await promptText({ title: $_("settings.chrome.newPersonaTitle"), message: $_("settings.chrome.newPersonaMsg"), input: { value: "", placeholder: $_("settings.more3.name") }, confirmLabel: $_("settings.more.createBtn") });
 		if (!name?.trim()) return;
 		const p = await call(commands.createPersona({ name: name.trim(), avatar: null, description: "", worldInfoIds: [], tags: [], color: "", isSystemDefault: false }), { source: "persona" });
 		library.personas = [...library.personas, p];
@@ -329,25 +419,25 @@
 	{@const sub = kids.get(c.id) ?? []}
 	{@const forks = forkCount.get(c.id) ?? 0}
 	<li class="row" class:on={openConv === c.id} style:--depth={depth}>
-		<button class="open" title="{ch?.name} · {c.title} · {relative(c.updatedAt)}" onclick={() => nav.go({ page: "character", charId: c.characterId ?? undefined, convId: c.id })} oncontextmenu={(e) => rightClick(e, c)}>
-			{#if showAvatar}<Avatar name={ch?.name ?? "?"} src={fileSrc(ch?.avatar)} color={ch?.color} size={18} />{/if}
+		<button class="open" title="{ch?.name} · {c.title} · {relative(lastAt(c))}" onclick={() => nav.go({ page: "character", charId: c.characterId ?? undefined, convId: c.id })} oncontextmenu={(e) => rightClick(e, c)}>
+			{#if showAvatar}<Avatar name={ch?.name ?? "?"} src={fileSrc(ch?.avatar)} fit={ch?.avatarFit} color={ch?.color} size={18} />{/if}
 			<span class="t">{c.title}</span>
 		</button>
 		{#if sub.length}
-			<button class="fold" aria-label={folded.has(c.id) ? "갈래 펼치기" : "갈래 접기"} aria-expanded={!folded.has(c.id)} onclick={() => toggleFold(c.id)}><ChevronDown class={folded.has(c.id) ? "rot" : ""} /></button>
+			<button class="fold" aria-label={folded.has(c.id) ? $_("settings.chrome.expandForks") : $_("settings.chrome.collapseForks")} aria-expanded={!folded.has(c.id)} onclick={() => toggleFold(c.id)}><ChevronDown class={folded.has(c.id) ? "rot" : ""} /></button>
 		{/if}
 		{#if showForks && (forks || branchOf(c))}
-			<span class="fork" title={forks ? `갈래 ${forks}개` : "다른 대화에서 갈라져 나온 대화"}><GitBranch />{#if forks}{forks}{/if}</span>
+			<span class="fork" title={forks ? $_("settings.chrome.forksCountTitle", { values: { count: forks } }) : $_("settings.chrome.forkedFromTitle")}><GitBranch />{#if forks}{forks}{/if}</span>
 		{/if}
-		<button class="more" aria-label="{c.title} 메뉴" title="메뉴" onclick={(e) => openMenu(e, c)}><Ellipsis /></button>
+		<button class="more" aria-label={$_("settings.chrome.convMenuAria", { values: { title: c.title } })} title={$_("settings.chrome.menuTitle")} onclick={(e) => openMenu(e, c)}><Ellipsis /></button>
 	</li>
 	{#if sub.length && !folded.has(c.id)}
 		{#each sub as k (k.id)}{@render row(k, depth + 1)}{/each}
 	{/if}
 {/snippet}
 
-<aside class="sidebar" aria-label="앱 메뉴" style:--sidebar-width="{layout.sidebarWidth}px">
-	<nav aria-label="화면">
+<aside class="sidebar sc-sidebar" aria-label={$_("settings.chrome.appMenuAria")} style:--sidebar-width="{layout.sidebarWidth}px">
+	<nav aria-label={$_("settings.chrome.navAria")}>
 		{#each items as it (it.page)}
 			<button class="item" class:on={cur.page === it.page} aria-current={cur.page === it.page ? "page" : undefined} onclick={() => nav.go({ page: it.page } as never)}>
 				<it.icon />{it.label}
@@ -358,7 +448,7 @@
 	<div class="lists">
 		{#if pinned.length}
 			<div class="pinnedList">
-				<button class="group head" aria-expanded={pinnedOpen} onclick={() => (pinnedOpen = !pinnedOpen)}>고정됨<ChevronDown class={pinnedOpen ? "" : "rot"} /></button>
+				<button class="group head" aria-expanded={pinnedOpen} onclick={() => (pinnedOpen = !pinnedOpen)}>{$_("sidebar.pinned")}<ChevronDown class={pinnedOpen ? "" : "rot"} /></button>
 				{#if pinnedOpen}
 					<ul class="pinned">
 						{#each pinned as c (c.id)}{@render row(c, 0)}{/each}
@@ -368,13 +458,21 @@
 		{/if}
 		<!-- 필터·새 대화 단추: 묶음 없이 보면 "최근 대화" 머리글 옆, 그룹화하면 첫 묶음 머리글 옆 -->
 		{#snippet tools()}
-			<IconButton label="그룹화·필터·정렬·표시" size="sm" active={viewOpen} onclick={viewMenu}><ListFilter /></IconButton>
-			<IconButton label="새 대화" size="sm" onclick={newConversation}><Plus /></IconButton>
+			<IconButton label={$_("sidebar.searchChats")} size="sm" active={searchOpen || !!convQuery} onclick={() => ((searchOpen = !searchOpen), !searchOpen && (convQuery = ""))}><Search /></IconButton>
+			<IconButton label={$_("sidebar.viewOptions")} size="sm" active={viewOpen || customized} onclick={viewMenu}><ListFilter /></IconButton>
+			<IconButton label={$_("sidebar.newChat")} size="sm" onclick={newConversation}><Plus /></IconButton>
 		{/snippet}
+		{#if searchOpen || convQuery}
+			<div class="sb-search">
+				<Search />
+				<input bind:value={convQuery} placeholder={$_("sidebar.searchPlaceholder")} aria-label={$_("sidebar.searchChats")} />
+				{#if convQuery}<button type="button" class="sb-clear" aria-label={$_("common.reset")} onclick={() => (convQuery = "")}><X /></button>{/if}
+			</div>
+		{/if}
 		{#if group !== "character" || !sections.length}
 			<div class="listbar">
-				<button class="group head" aria-expanded={recentOpen} title={charFilter ? `${charName}의 대화만 보는 중` : ""} onclick={() => (recentOpen = !recentOpen)}>
-					<span class="gn">{charFilter ? charName : "최근 대화"}</span><ChevronDown class={recentOpen ? "" : "rot"} />
+				<button class="group head" aria-expanded={recentOpen} title={charFilter ? `${charName}` : ""} onclick={() => (recentOpen = !recentOpen)}>
+					<span class="gn">{charFilter ? charName : $_("sidebar.recentChats")}</span><ChevronDown class={recentOpen ? "" : "rot"} />
 				</button>
 				<span class="sp"></span>
 				{@render tools()}
@@ -388,7 +486,7 @@
 						{@const n = limitOf(sec.id)}
 						<li class="grp" class:first={i === 0}>
 							<div class="gh">
-								<button class="group head" aria-expanded={!folded.has(`g:${sec.id}`)} title="{sec.name} · {sec.list.length}개" onclick={() => toggleFold(`g:${sec.id}`)}>
+								<button class="group head" aria-expanded={!folded.has(`g:${sec.id}`)} title={$_("settings.chrome.sectionCountTitle", { values: { name: sec.name, count: sec.list.length } })} onclick={() => toggleFold(`g:${sec.id}`)}>
 									<span class="gn">{sec.name}</span><ChevronDown class={folded.has(`g:${sec.id}`) ? "rot" : ""} />
 								</button>
 								<span class="sp"></span>
@@ -398,19 +496,19 @@
 								<ul class="gl">
 									{#each sec.list.slice(0, n) as c (c.id)}{@render row(c, 0)}{/each}
 									{#if sec.list.length > n}
-										<li><button class="show-more" onclick={() => (groupShown[sec.id] = (groupShown[sec.id] ?? shown) + PAGE)}>더 보기 <small>({sec.list.length - n}개 남음)</small></button></li>
+										<li><button class="show-more" onclick={() => (groupShown[sec.id] = (groupShown[sec.id] ?? shown) + PAGE)}>{$_("settings.chrome.showMore")} <small>{$_("settings.chrome.remainingCount", { values: { count: sec.list.length - n } })}</small></button></li>
 									{/if}
 								</ul>
 							{/if}
 						</li>
 					{/each}
-					{#if !sections.length}<li class="empty">대화가 없음</li>{/if}
+					{#if !sections.length}<li class="empty">{$_("settings.chrome.noChats")}</li>{/if}
 				{:else}
 					{#each rootsShown as c (c.id)}{@render row(c, 0)}{/each}
 					{#if !rootsShown.length}
-						<li class="empty">대화가 없음</li>
+						<li class="empty">{$_("settings.chrome.noChats")}</li>
 					{:else if roots.length > rootsShown.length}
-						<li><button class="show-more" onclick={() => (shown += PAGE)}>더 보기 <small>({roots.length - rootsShown.length}개 남음)</small></button></li>
+						<li><button class="show-more" onclick={() => (shown += PAGE)}>{$_("settings.chrome.showMore")} <small>{$_("settings.chrome.remainingCount", { values: { count: roots.length - rootsShown.length } })}</small></button></li>
 					{/if}
 				{/if}
 			</ul>
@@ -419,39 +517,39 @@
 
 	<div class="bottom">
 		<div class="profile">
-			<button bind:this={meBtn} class="me" class:on={cur.page === "persona"} aria-haspopup="listbox" aria-expanded={profileOpen} title="사용자 프로필 바꾸기" onclick={toggleProfile}>
-				{#if me}<Avatar name={me.name} src={fileSrc(me.avatar)} color={me.color || null} size={26} />{/if}
-				<span class="who"><b>{me?.name ?? "페르소나 없음"}</b><small>{scope} 프로필</small></span>
+			<button bind:this={meBtn} class="me" class:on={cur.page === "persona"} aria-haspopup="listbox" aria-expanded={profileOpen} title={$_("sidebar.defaultProfile")} onclick={toggleProfile}>
+				{#if me}<Avatar name={me.name} src={fileSrc(me.avatar)} fit={me.avatarFit} color={me.color || null} size={26} />{/if}
+				<span class="who"><b>{me?.alias?.trim() || me?.name || $_("sidebar.noPersona")}</b><small>{$_("sidebar.defaultProfile")}</small></span>
 				<ChevronsUpDown />
 			</button>
 			{#if profileOpen}
-				<div class="pop" role="listbox" aria-label="사용자 프로필" style={popStyle}>
-					<p class="pop-head">{scope === "이 대화" ? "이 대화에서 쓸 프로필" : "새 대화에 쓸 기본 프로필"}</p>
+				<div class="pop" role="listbox" aria-label={$_("sidebar.defaultProfile")} style={popStyle}>
+					<p class="pop-head">{$_("sidebar.profileHint")}</p>
 					<ul>
 						{#each library.personas as p (p.id)}
 							<li>
 								<button role="option" aria-selected={p.id === me?.id} onclick={() => choose(p.id)}>
-									<Avatar name={p.name} src={fileSrc(p.avatar)} color={p.color || null} size={24} />
-									<span class="t">{p.name}</span>
+									<Avatar name={p.name} src={fileSrc(p.avatar)} fit={p.avatarFit} color={p.color || null} size={24} />
+									<span class="t">{p.alias?.trim() || p.name}</span>
 									{#if p.id === me?.id}<Check />{/if}
 								</button>
 							</li>
 						{/each}
 					</ul>
 					<div class="pop-foot">
-						<button onclick={addPersona}><Plus />추가</button>
+						<button onclick={addPersona}><Plus />{$_("sidebar.add")}</button>
 						<button
 							onclick={() => {
 								profileOpen = false;
 								// 좁은 화면은 목록과 편집을 한 번에 하나만 보여서, 특정 프로필을 주면 목록을 건너뛰고 편집만 뜸
 								nav.go({ page: "persona", personaId: layout.narrow ? undefined : me?.id });
-							}}><UserCog />관리</button
+							}}><UserCog />{$_("sidebar.manage")}</button
 						>
 					</div>
 				</div>
 			{/if}
 		</div>
-		<IconButton label="설정" active={cur.page === "settings"} aria-current={cur.page === "settings" ? "page" : undefined} onclick={() => nav.go({ page: "settings" })}>
+		<IconButton label={$_("nav.settings")} active={cur.page === "settings"} aria-current={cur.page === "settings" ? "page" : undefined} onclick={() => nav.go({ page: "settings" })}>
 			<Settings />
 		</IconButton>
 	</div>
@@ -462,7 +560,7 @@
 			class:drag={dragging}
 			role="separator"
 			aria-orientation="vertical"
-			aria-label="사이드바 너비 조절 (←/→)"
+			aria-label={$_("settings.chrome.resizeSidebarAria")}
 			aria-valuemin={SIDEBAR_MIN}
 			aria-valuemax={SIDEBAR_MAX}
 			aria-valuenow={layout.sidebarWidth}
@@ -473,7 +571,7 @@
 	{/if}
 </aside>
 
-{#if menu}<ContextMenu at={menu.at} items={menu.items} label="대화 메뉴" onclose={() => ((menu = null), (viewOpen = false))} />{/if}
+{#if menu}<ContextMenu at={menu.at} items={menu.items} label={$_("settings.chrome.chatMenuAria")} onclose={() => ((menu = null), (viewOpen = false))} />{/if}
 
 <style>
 	.sidebar {
@@ -525,8 +623,7 @@
 		transition: opacity var(--duration-fast) var(--ease);
 	}
 	.grp:hover .tools,
-	.grp:focus-within .tools,
-	.grp.first .tools {
+	.grp:focus-within .tools {
 		opacity: 1;
 	}
 	@media (hover: none) {
@@ -603,12 +700,56 @@
 		color: var(--text);
 	}
 	.item.on {
-		background: var(--surface-active);
+		background: var(--accent-soft);
 		color: var(--text);
 		font-weight: 600;
 	}
 	.item.on :global(svg) {
 		color: var(--accent);
+	}
+	.sb-search {
+		display: flex;
+		align-items: center;
+		gap: 6px;
+		margin: var(--space-2) var(--space-2) 0;
+		padding: 0 var(--space-2);
+		height: var(--control-sm);
+		border: 1px solid var(--border);
+		border-radius: var(--radius-sm);
+		background: var(--surface);
+		color: var(--text-faint);
+	}
+	.sb-search:focus-within {
+		border-color: var(--accent);
+	}
+	.sb-search :global(svg) {
+		width: 13px;
+		height: 13px;
+		flex: none;
+	}
+	.sb-search input {
+		flex: 1;
+		min-width: 0;
+		border: none;
+		outline: none;
+		background: transparent;
+		color: var(--text);
+		font: inherit;
+		font-size: var(--text-xs);
+	}
+	.sb-clear {
+		display: grid;
+		place-items: center;
+		padding: 2px;
+		border: none;
+		border-radius: var(--radius-xs);
+		background: transparent;
+		color: var(--text-faint);
+		cursor: pointer;
+	}
+	.sb-clear:hover {
+		color: var(--text);
+		background: var(--surface-hover);
 	}
 	.lists {
 		display: flex;

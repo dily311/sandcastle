@@ -2,8 +2,11 @@ import { describe, expect, it, vi } from "vitest";
 
 vi.mock("$app/nav.svelte", () => ({ nav: { go: vi.fn() } }));
 
+import { setAppLocale } from "$lib/utils/i18n";
 import { AppError } from "$shared/ipc/client";
 import { blockReason, dataDiagnostics, gameErrorToast } from "./errors";
+
+setAppLocale("ko");
 
 const err = (code: string, details?: unknown) =>
 	new AppError({ code: code as never, category: "GAME", message: "메시지", retryable: false, details });

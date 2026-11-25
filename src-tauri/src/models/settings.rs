@@ -10,8 +10,14 @@ pub struct AppSetting {
     pub language: String,
     pub selected_preset: String,
     pub send_on_enter: bool,
-    pub show_timestamps: bool,
     pub selected_api_profile: Option<String>,
+    /// 전역 모델 (5-E-29-3, ADR-028 갱신): 자물쇠를 풀어 둔 대화가 전역 API에서 쓸 모델. None = API 프로필의 기본 모델.
+    /// 전역 API를 바꾸면 화면이 비운다 (모델은 API에 딸린 이름)
+    #[serde(default)]
+    pub selected_model: Option<String>,
+    /// 전역 추론 강도 (5-E-29-3): 자물쇠를 풀어 둔 대화가 쓴다. None·"auto" = 프리셋·공급자 기본
+    #[serde(default)]
+    pub reasoning_effort: Option<String>,
     pub selected_character_id: Option<String>,
     pub selected_persona_id: String,
     // "이어하기" UX용. 실제 게임 실행 컨텍스트는 여전히 AppState.active_archive가 기준.
@@ -32,6 +38,66 @@ pub struct AppSetting {
     /// 휴지통 보존 기간(일). None = 계속 보관. 지난 것은 휴지통을 열거나 새로 지울 때 정리 (2-A-3)
     #[serde(default = "default_trash_retention_days")]
     pub trash_retention_days: Option<u32>,
+    /// 대화 CG: `이름.png`·`이름-1.png`…을 키 `이름` 하나로 묶고 보일 때 그중 하나를 무작위로 (5-E-25, 기본 꺼짐)
+    #[serde(default)]
+    pub cg_group_variants: bool,
+    /// 응답이 끝났는데 앱이 가려져 있으면 알림 (5-E-17·18, 기본 꺼짐, 기기 전용)
+    #[serde(default)]
+    pub done_notify: DoneNotify,
+    /// AI 호출마다 보낸 프롬프트·받은 글을 이 기기에 남김 (5-E-20-6-7, 기본 꺼짐 — 프롬프트 전체가 디스크에 남음)
+    #[serde(default)]
+    pub ai_call_log: bool,
+    /// 응답을 기다릴 때 보이는 타이핑 표시 (5-E-17-1)
+    #[serde(default)]
+    pub typing: TypingIndicator,
+    /// 로어북(월드인포) 스캔 깊이·재귀 최대 깊이 설정
+    #[serde(default)]
+    pub world_info: WorldInfoSetting,
+}
+
+/// 로어북(월드인포) 스캔 설정
+#[derive(Serialize, Deserialize, Debug, Clone, PartialEq, Eq, specta::Type)]
+#[serde(rename_all = "camelCase", default)]
+pub struct WorldInfoSetting {
+    /// 키워드를 탐색할 최근 메시지 수 (기본 10, 1~100)
+    pub scan_depth: u32,
+    /// 발동된 월드인포 항목의 내용에서 추가 키워드를 재귀 탐색할 최대 깊이 (0 = 재귀 없음, 1~10)
+    pub max_recursion_depth: u32,
+}
+
+impl Default for WorldInfoSetting {
+    fn default() -> Self {
+        Self {
+            scan_depth: 2,
+            max_recursion_depth: 0,
+        }
+    }
+}
+
+/// 타이핑 표시 모양 (5-E-17-1)
+#[derive(Serialize, Deserialize, Debug, Clone, Copy, PartialEq, Eq, Default, specta::Type)]
+#[serde(rename_all = "lowercase")]
+pub enum TypingStyle {
+    /// 깜빡이는 점 세 개 (예전 모양)
+    #[default]
+    Blink,
+    /// 튀어 오르는 점 세 개
+    Bounce,
+    /// 점 없이 (글만, 글도 없으면 아무것도 안 보임)
+    None,
+    /// 사용자가 고른 그림·GIF (`image`, 없으면 깜빡이는 점) — 5-E-17-4
+    Image,
+}
+
+/// 타이핑 표시 (5-E-17-1): 모양과 옆에 붙는 글
+#[derive(Serialize, Deserialize, Debug, Clone, Default, specta::Type)]
+#[serde(rename_all = "camelCase", default)]
+pub struct TypingIndicator {
+    pub style: TypingStyle,
+    /// 점 옆의 글 (`{{char}}` = 캐릭터 이름, 비면 글 없음)
+    pub text: String,
+    /// 모양이 `Image`일 때 보일 그림 (앱 데이터 `themes/typing/`에 복사한 것, 5-E-17-4)
+    pub image: Option<String>,
 }
 
 fn default_trash_retention_days() -> Option<u32> {
@@ -63,14 +129,57 @@ impl Default for HomeSetting {
     }
 }
 
-pub const DEFAULT_PHONE_MODE_PROMPT: &str = "[폰 메신저 대화]
-{{char}}와(과) {{user}}는 지금 서로 떨어진 곳에서 스마트폰 메신저로 대화하고 있다.
-- {{char}}는 실제 메신저 메시지처럼 짧고 자연스럽게 답한다.
-- 행동·표정 묘사나 나레이션 없이, 실제로 보낼 메시지 내용만 쓴다.
-- 여러 메시지로 나눠 보내고 싶으면 줄바꿈으로 구분한다.";
+pub const DEFAULT_PHONE_MODE_PROMPT: &str = "[Phone messenger chat]
+{{char}} and {{user}} are apart right now, chatting through a smartphone messenger.
+- {{char}} replies briefly and naturally, like real messenger messages, in the language of the conversation.
+- No descriptions of actions or expressions and no narration, only the message text that would actually be sent.
+- To send several messages, separate them with line breaks.";
 
 fn default_phone_mode_prompt() -> String {
     DEFAULT_PHONE_MODE_PROMPT.to_string()
+}
+
+/// 알림 소리 방식
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default, Serialize, Deserialize, specta::Type)]
+#[serde(rename_all = "lowercase")]
+pub enum NotifySoundMode {
+    /// OS 기본 알림음
+    #[default]
+    Default,
+    /// 무음
+    Mute,
+    /// 사용자가 올린 오디오 파일 (없으면 OS 기본 알림음)
+    Custom,
+}
+
+/// 끝나면 알림 (5-E-17·18)
+#[derive(Debug, Clone, Serialize, Deserialize, specta::Type)]
+#[serde(rename_all = "camelCase", default)]
+pub struct DoneNotify {
+    pub enabled: bool,
+    /// 알림 제목 (비면 앱 이름, `{{char}}` = 캐릭터 이름)
+    pub title: String,
+    /// 알림 아이콘 그림 경로 (없으면 앱 아이콘)
+    pub icon: Option<String>,
+    /// 알림 소리 방식 (default / mute / custom)
+    pub sound_mode: NotifySoundMode,
+    /// 커스텀 알림음 파일 경로 (앱 데이터 `notify/sound/`에 복사한 것)
+    pub sound_path: Option<String>,
+    /// 커스텀 알림음 볼륨 (0.0 ~ 1.0, 기본 0.8)
+    pub sound_volume: f32,
+}
+
+impl Default for DoneNotify {
+    fn default() -> Self {
+        Self {
+            enabled: false,
+            title: String::new(),
+            icon: None,
+            sound_mode: NotifySoundMode::Default,
+            sound_path: None,
+            sound_volume: 0.8,
+        }
+    }
 }
 
 impl Default for AppSetting {
@@ -80,8 +189,9 @@ impl Default for AppSetting {
             language: "ko".into(),
             selected_preset: "default".into(),
             send_on_enter: false,
-            show_timestamps: true,
             selected_api_profile: None,
+            selected_model: None,
+            reasoning_effort: None,
             selected_character_id: None,
             selected_persona_id: "default".into(),
             last_played_game_id: None,
@@ -90,6 +200,11 @@ impl Default for AppSetting {
             usage_retention_days: None,
             trash_retention_days: default_trash_retention_days(),
             check_updates_on_start: false,
+            cg_group_variants: false,
+            done_notify: DoneNotify::default(),
+            ai_call_log: false,
+            typing: TypingIndicator::default(),
+            world_info: WorldInfoSetting::default(),
         }
     }
 }
@@ -127,9 +242,61 @@ pub struct ThemeSetting {
     /// 올려 둔 글꼴 (앱 데이터 fonts/에 복사한 파일). 앱에 글꼴을 넣어 두지 않으므로 목록은 사용자가 올린 것뿐
     #[serde(default)]
     pub fonts: Vec<UserFont>,
-    /// 앱 글꼴: `fonts` 중 하나의 파일 경로. 없으면 기본 글꼴
+    /// UI 글꼴: `fonts` 중 하나의 파일 경로. 없으면 기본 글꼴
     #[serde(default)]
     pub app_font: Option<String>,
+    /// 텍스트 글꼴 (대화 본문·읽기): `fonts` 중 하나의 파일 경로. 없으면 UI 글꼴을 따름
+    #[serde(default)]
+    pub text_font: Option<String>,
+    /// 모노스페이스 글꼴 (코드·로그): `fonts` 중 하나의 파일 경로. 없으면 기본 모노스페이스
+    #[serde(default)]
+    pub mono_font: Option<String>,
+    /// 대화 화면 표시 설정 (시각·프로필 그림·멀티 프로필 그림·아바타 프레임)
+    #[serde(default)]
+    pub chat: ThemeChatSetting,
+}
+
+/// 프로필 이미지 UI 표시 형식 (none, 사각형, 정사각형, 원, 커스텀)
+#[derive(Debug, Serialize, Deserialize, Clone, Copy, PartialEq, Eq, Default, specta::Type)]
+#[serde(rename_all = "lowercase")]
+pub enum AvatarFrameShape {
+    None,
+    Rect,
+    Square,
+    #[default]
+    Circle,
+    Custom,
+}
+
+/// 대화 화면 표시 설정 (테마 설정과 사용자 커스텀 테마에서 함께 사용)
+#[derive(Debug, Serialize, Deserialize, Clone, PartialEq, Eq, specta::Type)]
+#[serde(rename_all = "camelCase", default)]
+pub struct ThemeChatSetting {
+    pub show_timestamps: bool,
+    pub show_avatars: bool,
+    pub show_multi_char_avatars: bool,
+    /// 캐릭터 프로필 표시 형식 (none/rect/square/circle/custom)
+    pub char_avatar_frame: AvatarFrameShape,
+    /// 캐릭터 커스텀 프레임 이미지 경로
+    pub char_avatar_frame_image: Option<String>,
+    /// 유저 페르소나 프로필 표시 형식 (none/rect/square/circle/custom)
+    pub user_avatar_frame: AvatarFrameShape,
+    /// 유저 페르소나 커스텀 프레임 이미지 경로
+    pub user_avatar_frame_image: Option<String>,
+}
+
+impl Default for ThemeChatSetting {
+    fn default() -> Self {
+        Self {
+            show_timestamps: true,
+            show_avatars: true,
+            show_multi_char_avatars: false,
+            char_avatar_frame: AvatarFrameShape::Circle,
+            char_avatar_frame_image: None,
+            user_avatar_frame: AvatarFrameShape::Circle,
+            user_avatar_frame_image: None,
+        }
+    }
 }
 
 /// 올린 글꼴 한 개
@@ -174,6 +341,9 @@ impl Default for ThemeSetting {
             background_opacity: default_background_opacity(),
             fonts: vec![],
             app_font: None,
+            text_font: None,
+            mono_font: None,
+            chat: ThemeChatSetting::default(),
         }
     }
 }
@@ -216,6 +386,15 @@ pub struct CssTheme {
     pub css_content: String,
     #[serde(default)]
     pub colors: ThemeColors,
+    /// 이 테마를 고르면 쓸 강조색 (팔레트 id 또는 #rrggbb). 없으면 설정을 따름 (5-E-14)
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub accent_color: Option<String>,
+    /// 이 테마를 고르면 쓸 회색 톤. 없으면 설정을 따름
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub gray_tone: Option<String>,
+    /// 이 테마를 고르면 쓸 대화 화면 표시 설정. 없으면 설정을 따름
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub chat: Option<ThemeChatSetting>,
 }
 
 #[derive(Debug, Serialize, Deserialize, Clone, specta::Type)]
@@ -272,6 +451,65 @@ pub struct PluginSetting {
     /// 대필 (5-D, ADR-018) — 기기 전용
     #[serde(default)]
     pub ghost: GhostSetting,
+    /// 빠른 답장 세트 (5-E-20-5-3, ADR-025) — 같이 씀. 켜짐/꺼짐은 코어 플러그인 `slash`
+    #[serde(default)]
+    pub quick_reply: QuickReplySetting,
+    /// 상태창·변수 (5-F-4, ADR-029) — 기기 전용
+    #[serde(default)]
+    pub status: StatusSetting,
+}
+
+/// 상태창·변수 플러그인 설정
+#[derive(Debug, Serialize, Deserialize, Clone, Default, specta::Type)]
+#[serde(rename_all = "camelCase", default)]
+pub struct StatusSetting {
+    /// AI가 대화 변수를 읽고 바꾸기 (5-F-4-4, 기본 꺼짐). 켜면 변수 규칙과 지금 값이 프롬프트에 들어가 응답마다 토큰이 는다
+    pub ai_vars: bool,
+}
+
+/// 빠른 답장: 입력칸 위 버튼. 누르면 `/`로 시작하는 글은 스크립트로 실행, 아니면 보내거나 입력칸에 넣음
+#[derive(Debug, Serialize, Deserialize, Clone, specta::Type)]
+#[serde(rename_all = "camelCase", default)]
+pub struct QuickReplySetting {
+    /// 예전(5-E-20-5-3) 자리. 지금은 DB(quick_reply_sets)에 두고, 처음 목록을 읽을 때 옮긴 뒤 비운다
+    pub sets: Vec<LegacyQuickReplySet>,
+    /// 슬래시 스크립트 한 번 실행에서 AI를 부를 수 있는 횟수 (1~50, ADR-025 5-E-20-6-0)
+    pub ai_limit: u32,
+    /// 전역 변수 (/setglobalvar, 기기 사이에 같이 씀)
+    pub globals: std::collections::BTreeMap<String, String>,
+}
+
+impl Default for QuickReplySetting {
+    fn default() -> Self {
+        Self {
+            sets: vec![],
+            ai_limit: 5,
+            globals: Default::default(),
+        }
+    }
+}
+
+#[derive(Debug, Serialize, Deserialize, Clone, Default, specta::Type)]
+#[serde(rename_all = "camelCase", default)]
+pub struct LegacyQuickReplySet {
+    pub id: String,
+    pub name: String,
+    /// 대화에서 고르지 않았을 때 모든 대화에 보임
+    pub enabled: bool,
+    /// 스크립트가 아닌 글: true면 바로 보냄(AI 답장 요금), false면 입력칸에 넣기만
+    pub auto_send: bool,
+    pub items: Vec<QuickReply>,
+}
+
+#[derive(Debug, Serialize, Deserialize, Clone, Default, specta::Type)]
+#[serde(rename_all = "camelCase", default)]
+pub struct QuickReply {
+    pub id: String,
+    pub label: String,
+    /// 보낼 글 또는 슬래시 스크립트
+    pub message: String,
+    /// 버튼 줄에 보이지 않음 (스크립트에서만 쓰는 것)
+    pub hidden: bool,
 }
 
 /// 대필 설정. 켜짐/꺼짐은 코어 플러그인 `ghostwrite`(기본 꺼짐)
@@ -469,7 +707,7 @@ pub struct AppPrompts {
     pub image_prompt: PromptSlot,
     /// 장면 → NovelAI 태그 쓰기
     pub image_prompt_nai: PromptSlot,
-    /// 대화의 캐릭터 이미지(<cg>) 규칙 ({{keys}} = 키 목록, {{char}} = 캐릭터)
+    /// 대화의 캐릭터 이미지(<cg>) 규칙 ({{img_keys}} = 키 목록 — 예전 {{keys}}도 됨, {{char}} = 캐릭터)
     pub chat_images: PromptSlot,
     /// 이미지 자동 생성: 글쓰기 AI에게 응답 끝 <image> 그림 프롬프트를 쓰게 하는 지시
     pub auto_image: PromptSlot,
@@ -479,6 +717,16 @@ pub struct AppPrompts {
     pub scene_rules: PromptSlot,
     /// 대화 요약 지시 ({max} = 요약 최대 토큰)
     pub summary: PromptSlot,
+    /// 다인봇 지시 ({{names}} = 등장인물 이름). 프리셋 블록의 {{multi_char}} 자리에
+    pub multi_char: PromptSlot,
+    /// AI 변수 규칙 ({{var_list}} = 변수 목록·지금 값). 프리셋 블록의 {{vars}} 자리에
+    pub vars: PromptSlot,
+    /// 대필 기본 지시문 ({{user}} = 내 이름, {{char}} = 상대 이름, {{length}} = 길이)
+    pub ghost: PromptSlot,
+    /// 폰 메신저 프로필 AI 꾸미기 지시문 ({{char}} = 캐릭터 이름)
+    pub phone_profile: PromptSlot,
+    /// 폰 SNS 페이지 AI 생성 지시문 ({{char}} = 캐릭터 이름)
+    pub phone_sns: PromptSlot,
 }
 
 /// 사용자가 만든 프롬프트 하나
@@ -549,6 +797,12 @@ pub struct PhoneSetting {
     /// 폰 대화의 기본 모델 (비우면 그 API의 기본 모델. ADR-020). API를 정했을 때만 쓴다
     pub model: String,
     pub preset_id: Option<String>,
+    /// 폰 날짜·시간 직접 설정 여부 (false면 시스템 현재 시각 사용)
+    pub custom_datetime_enabled: bool,
+    /// 직접 설정한 폰 날짜 (YYYY-MM-DD)
+    pub custom_date: String,
+    /// 직접 설정한 폰 시간 (HH:MM)
+    pub custom_time: String,
 }
 
 #[derive(Debug, Serialize, Deserialize, Clone, specta::Type)]
@@ -704,6 +958,49 @@ mod tests {
         assert_eq!(s.language, "en");
         assert_eq!(s.selected_api_profile.as_deref(), Some("api-1"));
         assert_eq!(s.phone_mode_prompt, DEFAULT_PHONE_MODE_PROMPT);
+        // 타이핑 표시가 없던 설정 → 예전 모양 (5-E-17-1)
+        assert_eq!(s.typing.style, TypingStyle::Blink);
+        assert_eq!(s.typing.text, "");
+    }
+
+    #[test]
+    fn typing_indicator_reads_partial_values() {
+        let t: TypingIndicator = serde_json::from_value(serde_json::json!({ "style": "bounce" })).unwrap();
+        assert_eq!(t.style, TypingStyle::Bounce);
+        assert_eq!(t.text, "");
+        let t: TypingIndicator = serde_json::from_value(serde_json::json!({ "style": "none", "text": "{{char}} 입력 중…" })).unwrap();
+        assert_eq!(t.style, TypingStyle::None);
+        assert_eq!(serde_json::to_value(t).unwrap()["style"], "none");
+    }
+
+    #[test]
+    fn theme_chat_setting_defaults_and_roundtrips_in_theme_and_css_theme() {
+        let old_theme: ThemeSetting = serde_json::from_value(serde_json::json!({
+            "mode": "dark",
+            "selectTheme": "default",
+            "isFrameless": true,
+            "accentColor": "#8b85f9",
+            "fontSize": 16
+        }))
+        .unwrap();
+        assert_eq!(old_theme.chat, ThemeChatSetting::default());
+
+        let css: CssTheme = serde_json::from_value(serde_json::json!({
+            "name": "커스텀",
+            "author": "me",
+            "version": "1.0.0",
+            "chat": { "showTimestamps": false, "showAvatars": false, "showMultiCharAvatars": true }
+        }))
+        .unwrap();
+        assert_eq!(
+            css.chat,
+            Some(ThemeChatSetting {
+                show_timestamps: false,
+                show_avatars: false,
+                show_multi_char_avatars: true,
+                ..ThemeChatSetting::default()
+            })
+        );
     }
 }
 

@@ -1,4 +1,5 @@
 <script lang="ts">
+	import { _ } from "svelte-i18n";
 	import { X } from "@lucide/svelte";
 	import type { Snippet } from "svelte";
 	import IconButton from "./IconButton.svelte";
@@ -7,7 +8,7 @@
 		open?: boolean;
 		title: string;
 		description?: string;
-		size?: "sm" | "md" | "lg";
+		size?: "sm" | "md" | "lg" | "xl";
 		/** 바닥 버튼 영역 */
 		footer?: Snippet;
 		onclose?: () => void;
@@ -43,7 +44,7 @@
 				<h2 id={titleId}>{title}</h2>
 				{#if description}<p class="desc">{description}</p>{/if}
 			</div>
-			<IconButton label="닫기" size="sm" onclick={close}><X /></IconButton>
+			<IconButton label={$_("common.close")} size="sm" onclick={close}><X /></IconButton>
 		</header>
 		<div class="body">{@render children()}</div>
 		{#if footer}<footer>{@render footer()}</footer>{/if}
@@ -68,6 +69,9 @@
 	}
 	.lg {
 		width: min(calc(100vw - 32px), 720px);
+	}
+	.xl {
+		width: min(calc(100vw - 32px), 1020px);
 	}
 	.dialog::backdrop {
 		background: var(--overlay);

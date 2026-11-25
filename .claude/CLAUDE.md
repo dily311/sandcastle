@@ -14,13 +14,13 @@
 
 | 문서 | 내용 |
 | --- | --- |
-| `plans/roadmap.md` | 중장기 계획(1~6단계), 평가, 단계별 세부 계획(번호 = 커밋 단위, 예: `3-B-2`) |
+| `plans/roadmap.md` | 중장기 계획(1~6단계), 평가, **정식 릴리스(1.0) 기준**, 단계별 세부 계획(번호 = 커밋 단위, 예: `3-B-2`) |
 | `plans/current-milestone.md` | 지금 하고 있거나 곧 할 일, 하다 만 것, 확인하지 못한 것 |
 | `plans/idea.md` | 계획 단계가 아닌 아이디어 스케치 (구현 전에 roadmap에 번호를 받아야 함) |
 | `docs/마일스톤 기록.md` | 끝난 마일스톤(M1~)의 결정·체크·계획과 다르게 한 것·하지 못한 것 |
 | `docs/아키텍처 결정 기록 (ADR) — 프로젝트 전반.md` | 앱 전반의 결정과 그 근거 (ADR-001~) |
 | `docs/아키텍처 결정 기록 (ADR) — AI 스토리 엔진 게임 모드.md` | 게임 모드의 결정과 근거 |
-| `docs/` 그 밖 | Tech Spec, Android 점검표, 배포, 성능 측정, 플러그인 만들기 |
+| `docs/` 그 밖 | Tech Spec, Android 점검표, 배포, 성능 측정, 플러그인 만들기, 슬래시 커맨드, 테마 CSS 클래스(`sc-` 이름은 지킴 — 바꾸면 문서와 시험도) |
 
 > 코드 주석·문서의 "CLAUDE.md 3-B" 같은 표기는 계획이 이 파일에 있던 때의 것이다. 번호(3-B 등)는 `plans/roadmap.md`의 번호와 같다.
 
@@ -52,6 +52,17 @@
 - **ADR을 통해 결정의 근거를 보존**한다. 설계·정책 결정(실행 자리, 기본값, 한계, 선택하지 않은 안)은 ADR에 번호를 붙여 적고(`ADR-0xx`), 나중에 바뀌면 지우지 않고 갱신·"추가"로 덧붙인다.
 - **마무리 순서**: 구현 → 검증 → ADR(결정이 있었다면) → `plans/roadmap.md` 체크 → 끝난 마일스톤은 `docs/마일스톤 기록.md`에 기록하고 `plans/current-milestone.md`에서 정리 → 커밋.
 - 설계·보안이 어려운 결정은 Opus 하위 에이전트에게 자문을 받고, 무엇을 받아들이고 무엇을 바꿨는지 ADR에 적는다.
+
+## 작업 방식 (actually works)
+
+1. Don't maintain backward compatibility. Delete outdated stuff outright. No compatibility layers, no migration scripts, no backup fallback plans.
+2. Choose the simplest implementation that meets your current needs. No speculative abstractions, and no configuration layers added “just in case we need them later.”
+3. Let the system grow in layers. First get a minimal end-to-end version working, then add things once it runs. Never tear down something that's currently working just because of complexity that might arise in the future.
+4. Keep components modular, with clear separation of concerns.
+5. Prefer mature, maintained third-party libraries. Unless there's a really compelling reason, don't rewrite them yourself.
+6. Before you start, look at what the project's existing dependencies can already do, then decide whether to add a new package or write your own code. Don't assume the library definitely doesn't have it.
+7. Make architectural decisions with the long term in mind. No “we'll make it work for now and deal with it later” stopgaps.
+8. First look at how mature products solve the same problem. Use patterns that have already been proven, rather than inventing something from scratch.
 
 ## 브랜치·커밋
 

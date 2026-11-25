@@ -6,7 +6,9 @@
 	import { drops } from "./drop.svelte";
 
 	let depth = 0;
-	const hasFiles = (e: DragEvent) => !!e.dataTransfer && Array.from(e.dataTransfer.types).includes("Files");
+	/** 앱 안에서 시작한 끌기 (그림·글). 웹뷰는 앱 안의 <img>를 끌어도 "Files"를 실어 보내서, 카드 미리보기를 끌면 배경으로 들어가 버렸다 (5-E-11) */
+	let internal = false;
+	const hasFiles = (e: DragEvent) => !internal && !!e.dataTransfer && Array.from(e.dataTransfer.types).includes("Files");
 
 	function track(e: DragEvent) {
 		const el = document.elementFromPoint(e.clientX, e.clientY);
@@ -50,7 +52,18 @@
 	}
 </script>
 
-<svelte:window ondragenter={enter} ondragover={over} ondragleave={leave} ondrop={drop} />
+<svelte:window
+	ondragstart={() => (internal = true)}
+	ondragend={() => (internal = false)}
+	ondragenter={enter}
+	ondragover={over}
+	ondragleave={leave}
+	ondrop={(e) => {
+		const was = internal;
+		internal = false;
+		if (!was) void drop(e);
+	}}
+/>
 
 {#if drops.dragging}
 	{@const zone = drops.target?.zone?.()?.getBoundingClientRect()}

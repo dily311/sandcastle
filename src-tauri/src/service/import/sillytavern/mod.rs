@@ -13,7 +13,11 @@
 //! 지원하지 않는 필드는 버리지 않고 원본(compatibility_json / extra_json)에 남기거나 경고로 알린다.
 pub mod card;
 pub mod chat;
+pub mod data;
+pub mod data_export;
+pub mod export;
 pub mod preset;
+pub mod quick_reply;
 pub mod regex;
 pub mod worldinfo;
 
@@ -55,6 +59,8 @@ pub struct ImportOptions {
     pub character_id: Option<String>,
     /// 정규식 파일을 이 프리셋에 묶어서 가져온다 (프리셋과 함께 받은 정규식). 없으면 전역.
     pub preset_id: Option<String>,
+    /// 카드 안의 character_book을 만들지 않는다 (이미 worlds 폴더에서 가져온 로어북을 연결할 때 중복 방지)
+    pub skip_character_book: bool,
 }
 
 #[derive(Serialize, specta::Type)]
@@ -152,7 +158,7 @@ pub async fn import_file_with(db: &DbPool, app_data_dir: &Path, path: &Path, opt
     match kind {
         SillyTavernKind::Character => {
             let avatar_bytes = card::is_png(&bytes).then_some(bytes.as_slice());
-            import_character(db, app_data_dir, &json, avatar_bytes).await
+            import_character(db, app_data_dir, &json, avatar_bytes, options.skip_character_book).await
         }
         SillyTavernKind::Preset => import_preset(db, &json, &file_name).await,
         SillyTavernKind::Regex => import_regex(db, &json, options.preset_id).await,
@@ -225,9 +231,8 @@ async fn import_chat(db: &DbPool, bytes: &[u8], title: &str, character_id: Optio
         db::conversation::get_system_default_persona(db).await.unwrap_or_else(|_| "default".into())
     };
 
-    if as_str(&header["chat_metadata"], "note_prompt").is_some_and(|s| !s.trim().is_empty()) {
-        warnings.push("작가 노트(Author's Note)는 지원하지 않아 원본에만 보존함".into());
-    }
+    // 작가 노트 (Author's Note): 글·깊이는 대화의 작가 노트로. 빈도·위치(대화 밖)는 없어서 "대화 안 깊이"로 가져온다
+    let author_note = chat::author_note(&header["chat_metadata"], &mut warnings);
 
     let start = chrono::Utc::now().timestamp_millis() - messages.len() as i64;
     let times = chat::monotonic_times(&messages, start);
@@ -243,14 +248,20 @@ async fn import_chat(db: &DbPool, bytes: &[u8], title: &str, character_id: Optio
             persona_id: persona_id.clone(),
             world_info_ids: vec![],
             mode: "chat".into(),
-            meta: Some(serde_json::json!({
+            meta: Some({
+                let mut meta = serde_json::json!({
                 "importedFrom": "sillytavern",
                 "sillytavern": {
                     "chatMetadata": header["chat_metadata"],
                     "userName": header["user_name"],
                     "characterName": header["character_name"],
                 }
-            })),
+                });
+                if let Some(n) = author_note {
+                    meta["authorNote"] = n;
+                }
+                meta
+            }),
             images_enabled: None,
         },
     )
@@ -292,8 +303,17 @@ async fn import_chat(db: &DbPool, bytes: &[u8], title: &str, character_id: Optio
     })
 }
 
-async fn import_character(db: &DbPool, app_data_dir: &Path, card_json: &Value, avatar_png: Option<&[u8]>) -> Result<SillyTavernImport> {
+async fn import_character(
+    db: &DbPool,
+    app_data_dir: &Path,
+    card_json: &Value,
+    avatar_png: Option<&[u8]>,
+    skip_character_book: bool,
+) -> Result<SillyTavernImport> {
     let mut imported = card::map_card(card_json)?;
+    if skip_character_book {
+        imported.book = None;
+    }
 
     // 아바타는 DB 저장 전에 파일로 (실패하면 경고만)
     let mut avatar_file = None;

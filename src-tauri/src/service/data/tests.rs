@@ -70,6 +70,9 @@ async fn app_dir() -> (tempfile::TempDir, PathBuf, DbPool) {
 
 #[tokio::test]
 async fn overview_groups_chats_by_character() {
+    if !crate::test_fixtures::present() {
+        return;
+    }
     let (_d, base, db) = app_dir().await;
     let cid = populate(&db, &base).await;
 
@@ -104,8 +107,31 @@ async fn overview_groups_chats_by_character() {
 
 #[tokio::test]
 async fn character_pack_round_trip_merges_with_new_ids() {
+    if !crate::test_fixtures::present() {
+        return;
+    }
     let (_a, base_a, db_a) = app_dir().await;
     let old_id = populate(&db_a, &base_a).await;
+    let fit = crate::models::conversation::AvatarFit { x: 30.0, y: 20.0, zoom: 1.5 };
+    db::conversation::set_avatar_fit(&db_a, "characters", &old_id, Some(fit)).await.unwrap();
+    // 변수 정의 (5-F-4-3)도 팩에 실려 간다
+    let hp = crate::models::conversation::VarDef {
+        key: "hp".into(),
+        description: "체력".into(),
+        kind: crate::models::conversation::VarKind::Number,
+        default_value: Some("100".into()),
+        min: Some(0.0),
+        max: Some(100.0),
+        max_step: Some(10.0),
+        ai_read: true,
+        ai_write: true,
+    };
+    db::conversation::upsert_character_var_defs(&db_a, &old_id, std::slice::from_ref(&hp))
+        .await
+        .unwrap();
+    db::conversation::upsert_character_status_template(&db_a, &old_id, Some("<b>HP {{getvar::hp}}</b>"))
+        .await
+        .unwrap();
     let out = base_a.join("exports/seraphina.scpack");
     let summary = pack::export_pack(&db_a, &base_a, &[old_id.clone()], None, &out).await.unwrap();
     assert_eq!((summary.character_count, summary.conversation_count, summary.message_count), (1, 1, 12));
@@ -132,6 +158,17 @@ async fn character_pack_round_trip_merges_with_new_ids() {
     let regex = db::regex::get_regex_scripts_for(&db_b, Some(&new_id), None).await.unwrap();
     assert_eq!(regex.len(), 1);
     let character = db::conversation::get_character(&db_b, &new_id).await.unwrap();
+    assert_eq!(character.avatar_fit, Some(fit), "프로필 그림 확대·위치도 그대로 (5-E-17-3)");
+    assert_eq!(
+        db::conversation::get_character_var_defs(&db_b, &new_id).await.unwrap(),
+        vec![hp],
+        "변수 정의도 그대로 (5-F-4-3)"
+    );
+    assert_eq!(
+        db::conversation::get_character_status_template(&db_b, &new_id).await.unwrap().as_deref(),
+        Some("<b>HP {{getvar::hp}}</b>"),
+        "상태창 틀도 그대로 (5-F-4-5)"
+    );
     let avatar = PathBuf::from(character.avatar.unwrap());
     assert!(avatar.starts_with(&base_b) && avatar.is_file());
     let books = db::conversation::get_all_worldinfo_entries(&db_b, &character.world_info_ids[0]).await.unwrap();
@@ -151,6 +188,9 @@ async fn character_pack_round_trip_merges_with_new_ids() {
 
 #[tokio::test]
 async fn pack_rejects_conversations_of_other_characters() {
+    if !crate::test_fixtures::present() {
+        return;
+    }
     let (_a, base, db) = app_dir().await;
     let cid = populate(&db, &base).await;
     let err = pack::export_pack(&db, &base, &[cid], Some(&["nope".to_string()]), &base.join("x.scpack"))
@@ -162,6 +202,9 @@ async fn pack_rejects_conversations_of_other_characters() {
 
 #[tokio::test]
 async fn full_backup_restores_into_another_app_dir() {
+    if !crate::test_fixtures::present() {
+        return;
+    }
     let (_a, base_a, db_a) = app_dir().await;
     let cid = populate(&db_a, &base_a).await;
     // 갤러리 그림(+정보), 올린 배경, 테마 배경을 가리키는 설정, 커버 경로 (1-B-1)
@@ -254,6 +297,9 @@ async fn full_backup_restores_into_another_app_dir() {
 
 #[tokio::test]
 async fn check_reports_integrity_and_only_unreferenced_files() {
+    if !crate::test_fixtures::present() {
+        return;
+    }
     let (_d, base, db) = app_dir().await;
     populate(&db, &base).await;
     let clean = super::check::check_data(&db, &base).await.unwrap();
@@ -358,6 +404,9 @@ async fn restore_rejects_path_traversal_and_cleans_staging() {
 /// 다른 기기의 앱 데이터 폴더 어디에도 키 값이 없어야 한다 (가짜 키를 넣고 산출물 전체 — zip은 각 항목을 풀어서 — 에서 찾는다)
 #[tokio::test]
 async fn keys_never_leak_into_backup_pack_sync_or_app_data() {
+    if !crate::test_fixtures::present() {
+        return;
+    }
     use crate::{
         models::ai_service::ApiProfilesInput,
         service::secret_store::{api_key_name, SecretStore},
@@ -476,6 +525,9 @@ async fn count(db: &DbPool, sql: &str) -> i64 {
 
 #[tokio::test]
 async fn trash_character_round_trip() {
+    if !crate::test_fixtures::present() {
+        return;
+    }
     use super::trash::{self, TrashKind};
     let (_d, base, db) = app_dir().await;
     let cid = populate(&db, &base).await;
@@ -536,6 +588,9 @@ async fn trash_character_round_trip() {
 
 #[tokio::test]
 async fn trash_conversation_keeps_messages_and_purge_is_final() {
+    if !crate::test_fixtures::present() {
+        return;
+    }
     use super::trash::{self, TrashKind};
     let (_d, base, db) = app_dir().await;
     populate(&db, &base).await;
@@ -590,4 +645,27 @@ async fn trash_restore_refuses_when_parent_is_gone_and_expires() {
     sqlx::query("UPDATE trash_items SET deleted_at = 0").execute(&db).await.unwrap();
     assert_eq!(trash::purge_expired(&db, &base, Some(30)).await.unwrap(), 1);
     assert!(trash::list(&db).await.unwrap().is_empty());
+}
+
+/// 하나씩 빠르게 지울 때 "데이터베이스가 사용 중" (5-E-28): 겹친 휴지통 옮기기가 둘 다 읽은 뒤 쓰려 하면
+/// 지연 트랜잭션은 SQLite가 기다리지 않고 BUSY로 거절한다. BEGIN IMMEDIATE면 앞 것이 끝날 때까지 기다린다
+#[tokio::test]
+async fn overlapping_trash_moves_wait_instead_of_failing_busy() {
+    if !crate::test_fixtures::present() {
+        return;
+    }
+    use super::trash::{self, TrashKind};
+    let (_d, base, db) = app_dir().await;
+    let mut ids = vec![];
+    for _ in 0..6 {
+        let SillyTavernImport::Character { character, .. } = import_file(&db, &base, &sample("character/default_Seraphina.png"), None).await.unwrap() else {
+            panic!()
+        };
+        ids.push(character.id);
+    }
+    let results = futures::future::join_all(ids.iter().map(|id| trash::move_to_trash(&db, &base, TrashKind::Character, id))).await;
+    for r in &results {
+        assert!(r.is_ok(), "{r:?}");
+    }
+    assert_eq!(count(&db, "SELECT COUNT(*) FROM characters").await, 0);
 }

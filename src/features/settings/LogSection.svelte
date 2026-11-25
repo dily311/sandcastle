@@ -1,5 +1,6 @@
 <script lang="ts">
 	import { onMount } from "svelte";
+	import { _ } from "svelte-i18n";
 	import { Copy, Trash2 } from "@lucide/svelte";
 	import type { PanicEntry } from "$ipc/bindings";
 	import { call, commands } from "$shared/ipc/client";
@@ -35,9 +36,9 @@
 		try {
 			await navigator.clipboard.writeText(`[${new Date(e.time).toISOString()}] ${e.level.toUpperCase()} ${e.source}: ${e.message}${d ? `
 ${d}` : ""}`);
-			toasts.success("복사함");
+			toasts.success($_("settings.more.copiedToast"));
 		} catch {
-			toasts.error("복사 못 함");
+			toasts.error($_("settings.more.copyFailToast"));
 		}
 	}
 	// 지난 실행까지의 백엔드 panic 기록 (앱 데이터 폴더 logs/panic.log). 이 화면을 열 때만 읽는다
@@ -50,7 +51,7 @@ ${d}` : ""}`);
 		return `${d.getMonth() + 1}/${d.getDate()} ${clock(t)}`;
 	};
 	async function clearPanics() {
-		if (!(await confirmAction({ title: "앱 오류 기록 지우기", message: "logs/panic.log 파일을 지움", confirmLabel: "지우기", danger: true }))) return;
+		if (!(await confirmAction({ title: $_("settings.more.clearPanicTitle"), message: $_("settings.more.clearPanicMsg"), confirmLabel: $_("common.delete"), danger: true }))) return;
 		await call(commands.clearPanicLog(), { source: "log" });
 		panics = [];
 	}
@@ -61,27 +62,27 @@ ${d}` : ""}`);
 			.join("\n");
 		try {
 			await navigator.clipboard.writeText(text);
-			toasts.success("복사함");
+			toasts.success($_("settings.more.copiedToast"));
 		} catch {
-			toasts.error("복사 못 함");
+			toasts.error($_("settings.more.copyFailToast"));
 		}
 	}
 </script>
 
-<Section title="로그" lead="이번 실행 동안 생긴 오류·알림 (실패한 AI·음성·이미지 작업 포함). 앱을 끄면 지워짐">
+<Section title={$_("settings.logSec.title")} lead={$_("settings.logSec.lead")}>
 	{#snippet actions()}
-		<Button size="sm" disabled={!shown.length} onclick={copyAll}>{#snippet icon()}<Copy />{/snippet}복사</Button>
-		<Button size="sm" variant="ghost" disabled={!logs.entries.length} onclick={() => logs.clear()}>{#snippet icon()}<Trash2 />{/snippet}비우기</Button>
+		<Button size="sm" disabled={!shown.length} onclick={copyAll}>{#snippet icon()}<Copy />{/snippet}{$_("common.copy")}</Button>
+		<Button size="sm" variant="ghost" disabled={!logs.entries.length} onclick={() => logs.clear()}>{#snippet icon()}<Trash2 />{/snippet}{$_("settings.logSec.clear")}</Button>
 	{/snippet}
 	<div class="filter">
 		<Segmented
-			label="로그 종류"
+			label={$_("settings.logSec.title")}
 			bind:value={level}
 			options={[
-				{ value: "all", label: `전체 ${logs.entries.length}` },
-				{ value: "error", label: `오류 ${logs.errorCount}` },
-				{ value: "warn", label: "경고" },
-				{ value: "info", label: "알림" },
+				{ value: "all", label: `${$_("common.all")} ${logs.entries.length}` },
+				{ value: "error", label: `${$_("settings.logSec.errors")} ${logs.errorCount}` },
+				{ value: "warn", label: $_("settings.logSec.warns") },
+				{ value: "info", label: $_("settings.logSec.infos") },
 			]}
 		/>
 	</div>
@@ -90,30 +91,30 @@ ${d}` : ""}`);
 			{@const d = detail(l)}
 			<div class="row">
 				<div class="line-wrap">
-					<button class="line" title="눌러서 복사" onclick={() => copyOne(l)}>
+					<button class="line" title={$_("common.copy")} onclick={() => copyOne(l)}>
 						<Badge tone={tone(l.level)}>{l.level}</Badge>
 						<span class="t">{clock(l.time)}</span>
 						<span class="src">{l.source}</span>
 						<span class="m">{l.message}</span>
 					</button>
-					{#if d}<button class="more" aria-expanded={open === l.id} onclick={() => (open = open === l.id ? null : l.id)}>{open === l.id ? "접기" : "자세히"}</button>{/if}
+					{#if d}<button class="more" aria-expanded={open === l.id} onclick={() => (open = open === l.id ? null : l.id)}>{open === l.id ? $_("settings.logSec.collapse") : $_("settings.logSec.details")}</button>{/if}
 				</div>
 				{#if d && open === l.id}<pre>{d}</pre>{/if}
 			</div>
 		{:else}
-			<EmptyState title="기록 없음" description="오류나 알림이 생기면 여기 쌓임" />
+			<EmptyState title={$_("settings.logSec.emptyTitle")} description={$_("settings.logSec.emptyDesc")} />
 		{/each}
 	</Group>
 
 	<SyncRunsGroup />
 
-	<Group title="앱 오류 기록 (지난 실행 포함)" flush>
+	<Group title={$_("settings.logSec.panicGroup")} flush>
 		{#snippet aside()}
-			<Button size="sm" variant="ghost" disabled={!panics.length} onclick={clearPanics}>{#snippet icon()}<Trash2 />{/snippet}지우기</Button>
+			<Button size="sm" variant="ghost" disabled={!panics.length} onclick={clearPanics}>{#snippet icon()}<Trash2 />{/snippet}{$_("common.delete")}</Button>
 		{/snippet}
 		{#each panics as p, i (i)}
 			<div class="row">
-				<button class="line" title="눌러서 복사" onclick={() => copyOne({ id: -1, level: "error", time: p.time, source: "panic", message: p.message, details: { location: p.location, thread: p.thread } })}>
+				<button class="line" title={$_("common.copy")} onclick={() => copyOne({ id: -1, level: "error", time: p.time, source: "panic", message: p.message, details: { location: p.location, thread: p.thread } })}>
 					<Badge tone="danger">panic</Badge>
 					<span class="t">{when(p.time)}</span>
 					<span class="src">{p.thread}</span>
@@ -121,7 +122,7 @@ ${d}` : ""}`);
 				</button>
 			</div>
 		{:else}
-			<p class="none">앱이 멈춘 기록 없음. 생기면 이 기기 안에만 남고 밖으로 보내지 않음</p>
+			<p class="none">{$_("settings.logSec.noPanics")}</p>
 		{/each}
 	</Group>
 </Section>

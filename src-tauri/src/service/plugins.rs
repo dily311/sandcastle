@@ -47,6 +47,7 @@ fn message(role: PromptRole, content: String) -> PromptMessageItem {
         role,
         token: 0,
         content,
+        source: None,
     }
 }
 
@@ -651,7 +652,7 @@ pub async fn novelai_check(ai: &AiService, profile: &ApiProfiles) -> Result<Stri
 
 async fn novelai_subscription(ai: &AiService, profile: &ApiProfiles) -> Result<Value> {
     let key = ai.credential(profile)?;
-    let res = ai.http().get("https://api.novelai.net/user/subscription").bearer_auth(key).send().await?;
+    let res = ai.http().get("https://image.novelai.net/user/subscription").bearer_auth(key).send().await?;
     Ok(serde_json::from_slice(&ok_bytes(res).await?).unwrap_or(Value::Null))
 }
 

@@ -2,6 +2,7 @@
 //   const list = await call(commands.listPromptPresets(), { source: "preset" });
 // - 실패하면 AppError로 바꿔서 던지고, 로그에 남기고, 기본으로 토스트를 띄움
 import type { AppErrorResponse_Serialize, ErrorCode } from "$ipc/bindings";
+import { localizeBackendError } from "$lib/utils/backendI18n";
 import { logs } from "$shared/stores/log.svelte";
 import { toasts } from "$shared/stores/toast.svelte";
 
@@ -27,22 +28,22 @@ function isResponse(e: unknown): e is AppErrorResponse_Serialize {
 	return typeof e === "object" && e !== null && "code" in e && "message" in e && "category" in e;
 }
 
-/** Tauri가 돌려준 무엇이든 AppError로 */
+/** Tauri가 돌려준 무엇이든 AppError로 (백엔드 한국어 오류는 현재 언어에 맞게 변환) */
 export function toAppError(e: unknown): AppError {
 	if (e instanceof AppError) return e;
-	if (isResponse(e)) return new AppError(e);
+	if (isResponse(e)) return new AppError({ ...e, message: localizeBackendError(e) });
 	if (typeof e === "string") {
 		// 커맨드 이름이 틀렸거나 인자 타입이 다른 등 Tauri 자체 오류는 문자열로 온다
 		try {
 			const parsed = JSON.parse(e);
-			if (isResponse(parsed)) return new AppError(parsed);
+			if (isResponse(parsed)) return new AppError({ ...parsed, message: localizeBackendError(parsed) });
 		} catch {
 			/* 문자열 그대로 */
 		}
-		return new AppError({ code: "UNKNOWN", category: "INTERNAL", message: e, retryable: false });
+		return new AppError({ code: "UNKNOWN", category: "INTERNAL", message: localizeBackendError({ code: "UNKNOWN", message: e }), retryable: false });
 	}
-	if (e instanceof Error) return new AppError({ code: "UNKNOWN", category: "INTERNAL", message: e.message, retryable: false });
-	return new AppError({ code: "UNKNOWN", category: "INTERNAL", message: "알 수 없는 오류", retryable: false });
+	if (e instanceof Error) return new AppError({ code: "UNKNOWN", category: "INTERNAL", message: localizeBackendError({ code: "UNKNOWN", message: e.message }), retryable: false });
+	return new AppError({ code: "UNKNOWN", category: "INTERNAL", message: localizeBackendError({ code: "UNKNOWN", message: "" }), retryable: false });
 }
 
 export interface CallOptions {

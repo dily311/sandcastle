@@ -3297,7 +3297,6 @@ pub async fn forked_game_conversations(tx: &mut Transaction<'_, Sqlite>, session
             "
             INSERT INTO game_conversations (
                 id, game_id, session_id, branch_key, participants_key, title, created_at, updated_at 
-                FROM game_conversations 
             )
             SELECT 
                 ?,game_id, ?, branch_key, participants_key, title, created_at, updated_at 
@@ -3353,6 +3352,23 @@ where
 }
 
 // ------ messages ---------
+/// 한 플레이(세션)의 모든 대화 메시지, 시간 순 (jsonl 내보내기, 5-E-20-3)
+pub async fn get_session_game_messages<'e, E>(executor: E, session_id: &str) -> Result<Vec<GameMessages>, Error>
+where
+    E: Executor<'e, Database = Sqlite>,
+{
+    let result = sqlx::query_as::<_, GameMessagesRow>(
+        "SELECT m.id, m.seq, m.conversation_id, m.role, m.name, m.content, m.character_id, m.meta, m.created_at, m.updated_at
+    FROM game_messages m
+    INNER JOIN game_conversations c ON m.conversation_id = c.id
+    WHERE c.session_id = ?
+    ORDER BY m.created_at, m.rowid",
+    )
+    .bind(session_id)
+    .fetch_all(executor)
+    .await?;
+    Ok(result.into_iter().map(Into::into).collect())
+}
 pub async fn get_all_game_messages<'e, E>(executor: E, game_id: &str) -> Result<Vec<GameMessages>, Error>
 where
     E: Executor<'e, Database = Sqlite>,
@@ -3449,7 +3465,7 @@ pub async fn forked_game_messages(
         let _result = sqlx::query(
             "
         INSERT INTO game_messages (
-            id, seq, conversation_id, role, name, content, character_id, meta, created_at, updated_at  FROM game_messages 
+            id, seq, conversation_id, role, name, content, character_id, meta, created_at, updated_at
         )
         SELECT 
             ?, seq, ?, role, name, content, character_id, meta, created_at, updated_at  FROM game_messages 

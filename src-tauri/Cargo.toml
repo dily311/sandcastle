@@ -3,7 +3,7 @@
 
 [package]
 name = "sandcastle"
-version = "0.3.4"
+version = "0.4.0"
 description = "A Tauri App"
 authors = ["you"]
 edition = "2021"
@@ -86,7 +86,9 @@ keyring-core = "1"
 windows = { version = "0.58", features = [
     "Win32_UI_WindowsAndMessaging",
     "Win32_Foundation",
+    "Win32_System_Registry",
 ] }
+tauri-winrt-notification = "0.8"
 
 [target.'cfg(any(target_os = "macos", target_os = "windows", target_os = "linux"))'.dependencies]
 tauri-plugin-autostart = "2.7.0"

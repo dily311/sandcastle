@@ -1,9 +1,13 @@
 <script lang="ts">
+	import { _ } from "svelte-i18n";
+	import { chatImport } from "./chatImport.svelte";
 	import { ArrowDownUp, ChevronDown, Folder, FolderOpen, FolderPlus, PanelLeft, Pencil, Plus, Search, Trash2, Upload } from "@lucide/svelte";
 	import { ContextMenu, IconButton, Input, type MenuItem } from "$shared/ui";
 	import { CHAT_FILES, pickFiles } from "$shared/ipc/dialog";
 	import { confirmAction } from "$shared/stores/confirm.svelte";
 	import ConvCard from "./ConvCard.svelte";
+	import { CONV_SORT_KEYS, CONV_SORT_LABEL, compareConversations, isConvSortBy, type ConvSortBy } from "./convSort";
+	import { call, commands } from "$shared/ipc/client";
 	import { library, type Conversation } from "./library.svelte";
 
 	let { charId, convId, onopen, oncreate, onclose }: { charId: string; convId: string; onopen: (id: string) => void; oncreate: () => void, onclose: () => void } = $props();
@@ -13,43 +17,63 @@
 	});
 
 	let query = $state("");
-	type Sort = "newest" | "oldest" | "name" | "name-desc" | "most" | "least";
 	const SORT_KEY = "sc.convs.sort";
-	let sort: Sort = $state((() => {
+	const SORT_DESC_KEY = "sc.convs.sortDesc";
+	function loadConvSort(): { sortBy: ConvSortBy; desc: boolean } {
 		try {
-			return (localStorage.getItem(SORT_KEY) as Sort) || "newest";
+			const raw = localStorage.getItem(SORT_KEY);
+			const rawDesc = localStorage.getItem(SORT_DESC_KEY);
+			if (isConvSortBy(raw)) {
+				return { sortBy: raw, desc: rawDesc !== "0" };
+			}
+			// 이전 버전 정렬 키 호환 마이그레이션
+			switch (raw) {
+				case "oldest":
+					return { sortBy: "recent", desc: false };
+				case "name-desc":
+					return { sortBy: "name", desc: true };
+				case "most":
+					return { sortBy: "messages", desc: true };
+				case "least":
+					return { sortBy: "messages", desc: false };
+				case "newest":
+				default:
+					return { sortBy: "recent", desc: rawDesc !== "0" };
+			}
 		} catch {
-			return "newest";
+			return { sortBy: "recent", desc: true };
 		}
-	})());
+	}
+	const sort0 = loadConvSort();
+	let sortBy = $state<ConvSortBy>(sort0.sortBy);
+	let desc = $state<boolean>(sort0.desc);
 	$effect(() => {
 		try {
-			localStorage.setItem(SORT_KEY, sort);
+			localStorage.setItem(SORT_KEY, sortBy);
+			localStorage.setItem(SORT_DESC_KEY, desc ? "1" : "0");
 		} catch {
 			/* 무시 */
 		}
 	});
-	const sorts: { id: Sort; label: string }[] = [
-		{ id: "newest", label: "최신순" },
-		{ id: "oldest", label: "오래된순" },
-		{ id: "name", label: "이름순 (가→하)" },
-		{ id: "name-desc", label: "이름 역순 (하→가)" },
-		{ id: "most", label: "메시지 많은 순" },
-		{ id: "least", label: "메시지 적은 순" },
-	];
-	const compare: Record<Sort, (a: Conversation, b: Conversation) => number> = {
-		newest: (a, b) => b.updatedAt - a.updatedAt,
-		oldest: (a, b) => a.updatedAt - b.updatedAt,
-		name: (a, b) => a.title.localeCompare(b.title, "ko"),
-		"name-desc": (a, b) => b.title.localeCompare(a.title, "ko"),
-		most: (a, b) => b.messageCount - a.messageCount,
-		least: (a, b) => a.messageCount - b.messageCount,
-	};
+	// "mes:글"이면 제목이 아니라 메시지 내용으로 (백엔드에서 찾음, 입력이 멈춘 뒤)
+	const mesQuery = $derived(/^mes:/i.test(query.trim()) ? query.trim().slice(4).trim() : null);
+	let mesHits = $state<Map<string, number> | null>(null);
+	$effect(() => {
+		const t = mesQuery;
+		const cid = charId;
+		if (!t) return void (mesHits = null);
+		const timer = setTimeout(async () => {
+			const r = await call(commands.findConversationsByMessage(cid, t), { source: "chat", silent: true }).catch(() => []);
+			if (mesQuery === t) mesHits = new Map(r);
+		}, 250);
+		return () => clearTimeout(timer);
+	});
 	const convs = $derived.by(() => {
 		const q = query.trim().toLowerCase();
+		const match = (c: Conversation) => (mesQuery !== null ? !mesQuery || !!mesHits?.has(c.id) : !q || c.title.toLowerCase().includes(q));
 		return library.conversations
-			.filter((c) => c.characterId === charId && c.mode !== "phone" && (!q || c.title.toLowerCase().includes(q)))
-			.sort((a, b) => Number(b.pinned) - Number(a.pinned) || compare[sort](a, b));
+			.filter((c) => c.characterId === charId && c.mode !== "phone" && match(c))
+			.sort((a, b) => Number(b.pinned) - Number(a.pinned) || compareConversations(a, b, sortBy, desc));
 	});
 	let sortMenu = $state<{ x: number; y: number } | null>(null);
 	function openSortMenu(e: MouseEvent) {
@@ -77,14 +101,14 @@
 	function folderMenu(e: MouseEvent, id: string, name: string) {
 		e.preventDefault();
 		folderMenuItems = [
-			{ label: "이름 바꾸기", icon: Pencil, onselect: () => startFolderEdit(id, name) },
+			{ label: $_("settings.chrome.rename"), icon: Pencil, onselect: () => startFolderEdit(id, name) },
 			{
-				label: "폴더 삭제 (대화는 남김)",
+				label: $_("settings.panels.deleteFolderKeepChats"),
 				icon: Trash2,
 				danger: true,
 				separator: true,
 				onselect: async () => {
-					if (await confirmAction({ title: "폴더 삭제", message: `'${name}' 폴더만 지움. 안의 대화는 폴더 밖으로 나옴`, confirmLabel: "삭제", danger: true }))
+					if (await confirmAction({ title: $_("settings.panels.deleteFolderTitle"), message: $_("settings.panels.deleteFolderMsg", { values: { name } }), confirmLabel: $_("common.delete"), danger: true }))
 						await library.removeFolder(id);
 				},
 			},
@@ -109,10 +133,7 @@
 	});
 
 	async function importChat() {
-		const [path] = await pickFiles([CHAT_FILES], false);
-		if (!path) return;
-		const r = await library.importSillyTavern(path, charId).catch(() => null);
-		if (r?.kind === "chat") onopen(r.conversation.id);
+		await chatImport.run(await pickFiles([CHAT_FILES], true), charId, onopen);
 	}
 </script>
 
@@ -121,8 +142,8 @@
 	<input
 		class="folder-input"
 		bind:value={folderName}
-		placeholder="폴더 이름"
-		aria-label="폴더 이름"
+		placeholder={$_("settings.panels.folderName")}
+		aria-label={$_("settings.panels.folderName")}
 		autofocus
 		onkeydown={(e) => {
 			if (e.key === "Enter") commitFolder();
@@ -132,24 +153,28 @@
 	/>
 {/snippet}
 
-<aside class="convs" aria-label="대화 목록">
+<aside class="convs sc-conv-list" aria-label={$_("settings.panels.convListAria")}>
 	<div class="convs-head">
-		<IconButton label="닫기" size="sm" variant="soft" onclick={onclose}><PanelLeft /></IconButton>
+		<IconButton label={$_("common.close")} size="sm" variant="soft" onclick={onclose}><PanelLeft /></IconButton>
 		<span class="spacer"></span>
-		<IconButton label="새 대화" size="sm" variant="soft" onclick={oncreate}><Plus /></IconButton>
-		<IconButton label="대화 가져오기 (SillyTavern .jsonl)" size="sm" onclick={importChat}><Upload /></IconButton>
-		<IconButton label="새 폴더" size="sm" onclick={() => startFolderEdit("new")}><FolderPlus /></IconButton>
+		<IconButton label={$_("sidebar.newChat")} size="sm" variant="soft" onclick={oncreate}><Plus /></IconButton>
+		<IconButton label={$_("settings.panels.importChatSt")} size="sm" onclick={importChat}><Upload /></IconButton>
+		<IconButton label={$_("settings.panels.newFolder")} size="sm" onclick={() => startFolderEdit("new")}><FolderPlus /></IconButton>
 	</div>
 	<div class="convs-tools">
-		<Input bind:value={query} placeholder="대화 검색" aria-label="대화 검색">
+		<Input bind:value={query} placeholder={$_("settings.panels.searchChatsPlaceholder")} aria-label={$_("sidebar.searchChats")}>
 			{#snippet leading()}<Search />{/snippet}
 		</Input>
-		<IconButton label="정렬: {sorts.find((s) => s.id === sort)?.label}" size="md" active={!!sortMenu} aria-haspopup="menu" onclick={openSortMenu}><ArrowDownUp /></IconButton>
+		<IconButton label={$_("settings.panels.sortStatus", { values: { by: CONV_SORT_LABEL[sortBy], dir: desc ? $_("settings.chrome.desc") : $_("settings.chrome.asc") } })} size="md" active={!!sortMenu} aria-haspopup="menu" onclick={openSortMenu}><ArrowDownUp /></IconButton>
 	</div>
 	<ContextMenu
 		at={sortMenu}
-		label="정렬"
-		items={sorts.map((s, i) => ({ label: s.label, checked: sort === s.id, separator: i === 2 || i === 4, onselect: () => (sort = s.id) }))}
+		label={$_("settings.panels.sortAria")}
+		items={[
+			...CONV_SORT_KEYS.map((k) => ({ id: k, label: CONV_SORT_LABEL[k], checked: sortBy === k, onselect: () => (sortBy = k) })),
+			{ id: "desc", label: $_("settings.chrome.desc"), separator: true, checked: desc, onselect: () => (desc = true) },
+			{ id: "asc", label: $_("settings.chrome.asc"), checked: !desc, onselect: () => (desc = false) },
+		]}
 		onclose={() => (sortMenu = null)}
 	/>
 	<div class="convs-list">
@@ -178,7 +203,7 @@
 					{#each items as c (c.id)}
 						<ConvCard conv={c} compact selected={c.id === convId} onopen={() => onopen(c.id)} />
 					{:else}
-						<p class="empty-folder">비어 있음</p>
+						<p class="empty-folder">{$_("settings.panels.emptyFolder")}</p>
 					{/each}
 				</div>
 			{/if}
@@ -188,9 +213,9 @@
 				<ConvCard conv={c} compact selected={c.id === convId} onopen={() => onopen(c.id)} />
 			{/each}
 		</div>
-		{#if !convs.length}<p class="none">{query ? "검색 결과 없음" : "대화 없음"}</p>{/if}
+		{#if !convs.length}<p class="none">{query ? $_("settings.panels.noSearchResults") : $_("settings.panels.noConvs")}</p>{/if}
 	</div>
-	<ContextMenu at={folderMenuAt} items={folderMenuItems} label="폴더 메뉴" onclose={() => (folderMenuAt = null)} />
+	<ContextMenu at={folderMenuAt} items={folderMenuItems} label={$_("settings.panels.folderMenuAria")} onclose={() => (folderMenuAt = null)} />
 </aside>
 
 <style>

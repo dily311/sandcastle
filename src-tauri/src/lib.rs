@@ -5,6 +5,18 @@ use std::{
 use tauri::Manager;
 #[cfg(test)]
 mod perf_tests;
+/// SillyTavern 실제 파일(`tests/sillyTavern` — 사용자 데이터라 git에 넣지 않음)을 쓰는 시험의 확인.
+/// 폴더가 없으면(CI·새로 받은 저장소) 그 시험은 건너뛴다
+#[cfg(test)]
+pub(crate) mod test_fixtures {
+    pub fn present() -> bool {
+        let ok = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("tests/sillyTavern").is_dir();
+        if !ok {
+            eprintln!("[test] tests/sillyTavern 없음 — SillyTavern 실제 파일 시험을 건너뜀");
+        }
+        ok
+    }
+}
 pub mod state;
 use state::LaunchMode;
 mod adapter;
@@ -24,7 +36,7 @@ use crate::{
 };
 use commands::{
     ai_service::*, character_image::*, chat::*, community::*, conversation::*, convert::*, data::*, game_engine::*, game_manager::*, ghost::*, import::*,
-    memory::*, phone::*, preset::*, proposals::*, regex::*, settings::*, summary::*, sync::*, task::*,
+    memory::*, phone::*, preset::*, proposals::*, quick_reply::*, regex::*, settings::*, slash::*, summary::*, sync::*, task::*,
 };
 use task::{TaskEventEmitter, TaskManager};
 
@@ -136,7 +148,11 @@ pub fn run() {
 
         // 3. 앱 설정 로드
         let settings_handle = app.handle().clone();
-        app.manage(SettingsState(Mutex::new(sys::settings::load::<AppSetting>(&settings_handle))));
+        let app_setting = sys::settings::load::<AppSetting>(&settings_handle);
+        // AI 호출 기록 스위치 (5-E-20-6-7)
+        service::ai::call_log::set_enabled(app_setting.ai_call_log);
+        service::prompt::prompt_manager::set_world_info_config(app_setting.world_info.scan_depth, app_setting.world_info.max_recursion_depth);
+        app.manage(SettingsState(Mutex::new(app_setting)));
         app.manage(SettingsState(Mutex::new(sys::settings::load::<ThemeSetting>(&settings_handle))));
         let features = sys::settings::load::<FeatureSetting>(&settings_handle);
         service::chat::regex_processor::set_enabled(sys::plugins::enabled_in(&features, sys::plugins::id::REGEX));
@@ -152,6 +168,11 @@ pub fn run() {
         }
         let plugin_setting = sys::settings::load::<models::settings::PluginSetting>(&settings_handle);
         service::app_prompts::set(&plugin_setting.prompts);
+        service::prompt::prompt_manager::set_phone_clock(
+            plugin_setting.phone.custom_datetime_enabled,
+            plugin_setting.phone.custom_date.clone(),
+            plugin_setting.phone.custom_time.clone(),
+        );
         app.manage(SettingsState(Mutex::new(plugin_setting)));
 
         // 4. 테마 매니저 초기화
@@ -226,6 +247,9 @@ fn with_event_types(b: tauri_specta::Builder<tauri::Wry>) -> tauri_specta::Build
         .typ::<commands::sync::SyncProgress>()
         // 커뮤니티 플러그인 프롬프트 요청 (user-plugin-prompt, 6-D-5)
         .typ::<service::community::prompt_hook::PromptHookRequest>()
+        // 커스텀 알림음 재생 이벤트 (notify:play-sound)
+        .typ::<service::notify::NotifySoundPayload>()
+        .typ::<models::widget::WidgetMascotNotifyPayload>()
         // 타임스탬프(밀리초)·개수는 2^53 안이라 number로 충분
         .dangerously_cast_bigints_to_number()
 }
@@ -238,6 +262,8 @@ pub fn specta_builder() -> tauri_specta::Builder<tauri::Wry> {
         // settings
         get_app_setting,
         update_app_setting,
+        set_typing_image,
+        set_notify_sound,
         get_feature_setting,
         update_feature_setting,
         get_theme_setting,
@@ -246,6 +272,7 @@ pub fn specta_builder() -> tauri_specta::Builder<tauri::Wry> {
         remove_background,
         add_fonts,
         remove_font,
+        upload_avatar_frame,
         get_conv_settings,
         set_system_default_persona,
         // theme
@@ -260,12 +287,14 @@ pub fn specta_builder() -> tauri_specta::Builder<tauri::Wry> {
         test_message,
         chat_send,
         chat_regenerate,
+        chat_continue,
         chat_cancel,
         list_phone_contacts,
         add_phone_contact,
         remove_phone_contact,
         set_phone_contact_status,
         phone_peek,
+        phone_generate_profile,
         get_message_prompt,
         list_conversation_folders,
         create_conversation_folder,
@@ -273,9 +302,14 @@ pub fn specta_builder() -> tauri_specta::Builder<tauri::Wry> {
         delete_conversation_folder,
         rename_conversation,
         set_conversation_pinned,
+        set_conversation_read_mode,
+        find_conversations_by_message,
+        get_character_stats,
         move_conversation,
         set_conversation_options,
         duplicate_conversation,
+        copy_conversation_as_chat,
+        export_game_session,
         branch_conversation,
         patch_conversation_meta,
         delete_messages,
@@ -291,6 +325,9 @@ pub fn specta_builder() -> tauri_specta::Builder<tauri::Wry> {
         // task
         get_task,
         list_active_tasks,
+        get_ai_call_logs,
+        list_ai_call_log_tasks,
+        clear_ai_call_logs,
         get_recoverable_tasks,
         cancel_task,
         resume_task,
@@ -321,9 +358,22 @@ pub fn specta_builder() -> tauri_specta::Builder<tauri::Wry> {
         update_character_image,
         delete_character_image,
         set_conversation_images_enabled,
+        get_character_asset_version,
+        set_character_asset_version,
+        get_character_var_defs,
+        set_character_var_defs,
+        get_character_status_template,
+        set_character_status_template,
         // import
         import_sillytavern,
         detect_sillytavern,
+        import_sillytavern_data,
+        export_sillytavern_data,
+        export_preset_sillytavern,
+        read_quick_reply_files,
+        list_quick_reply_sets,
+        upsert_quick_reply_set,
+        delete_quick_reply_set,
         // data manager
         get_data_overview,
         check_data,
@@ -357,6 +407,9 @@ pub fn specta_builder() -> tauri_specta::Builder<tauri::Wry> {
         summarize_conversation_now,
         ghostwrite,
         ghostwrite_cancel,
+        slash_generate,
+        slash_cancel,
+        save_message_prompt,
         answer_plugin_prompt,
         set_user_plugin_ai_auto,
         get_user_plugin_settings,
@@ -372,6 +425,7 @@ pub fn specta_builder() -> tauri_specta::Builder<tauri::Wry> {
         empty_trash,
         get_sync_status,
         set_sync_peer_excluded,
+        set_device_name,
         export_sync_bundle,
         preview_sync_bundle,
         apply_sync_bundle,
@@ -393,6 +447,7 @@ pub fn specta_builder() -> tauri_specta::Builder<tauri::Wry> {
         prepare_save_target,
         deliver_saved_file,
         delete_conversations,
+        reassign_conversations_character,
         export_character_pack,
         import_character_pack,
         export_backup,
@@ -416,6 +471,7 @@ pub fn specta_builder() -> tauri_specta::Builder<tauri::Wry> {
         set_api_key,
         delete_api_key,
         has_api_key,
+        get_vertex_key_info,
         // data
         get_all_characters,
         create_character,
@@ -423,10 +479,12 @@ pub fn specta_builder() -> tauri_specta::Builder<tauri::Wry> {
         set_character_avatar,
         set_character_cover,
         set_character_cover_position,
+        set_avatar_fit,
         copy_character_to_persona,
         copy_persona_to_character,
         copy_character_to_game,
         copy_game_character_to_character,
+        copy_game_to_character,
         toggle_favorite_character,
         delete_character,
         get_list_characters,
@@ -488,6 +546,8 @@ pub fn specta_builder() -> tauri_specta::Builder<tauri::Wry> {
         load_save,
         read_journal,
         sys::html_view::register_html_view,
+        service::notify::request_notify_permission,
+        service::notify::test_notify,
         sys::plugins::list_core_plugins,
         commands::plugins::get_plugin_setting,
         commands::plugins::update_plugin_setting,
@@ -544,6 +604,13 @@ pub fn specta_builder() -> tauri_specta::Builder<tauri::Wry> {
         update_music_album_art_pos,
         set_album_art,
         filter_existing_paths,
+        // widget::mascot
+        get_widget_mascot_settings,
+        save_widget_mascot_settings,
+        upload_widget_mascot_image,
+        delete_widget_mascot_image,
+        mascot_generate_reply,
+        mascot_generate_peer_chat,
     ]))
 }
 
@@ -553,6 +620,8 @@ pub fn specta_builder() -> tauri_specta::Builder<tauri::Wry> {
         // settings
         get_app_setting,
         update_app_setting,
+        set_typing_image,
+        set_notify_sound,
         get_feature_setting,
         update_feature_setting,
         get_theme_setting,
@@ -561,6 +630,7 @@ pub fn specta_builder() -> tauri_specta::Builder<tauri::Wry> {
         remove_background,
         add_fonts,
         remove_font,
+        upload_avatar_frame,
         get_conv_settings,
         set_system_default_persona,
         // theme
@@ -575,12 +645,14 @@ pub fn specta_builder() -> tauri_specta::Builder<tauri::Wry> {
         test_message,
         chat_send,
         chat_regenerate,
+        chat_continue,
         chat_cancel,
         list_phone_contacts,
         add_phone_contact,
         remove_phone_contact,
         set_phone_contact_status,
         phone_peek,
+        phone_generate_profile,
         get_message_prompt,
         list_conversation_folders,
         create_conversation_folder,
@@ -588,9 +660,14 @@ pub fn specta_builder() -> tauri_specta::Builder<tauri::Wry> {
         delete_conversation_folder,
         rename_conversation,
         set_conversation_pinned,
+        set_conversation_read_mode,
+        find_conversations_by_message,
+        get_character_stats,
         move_conversation,
         set_conversation_options,
         duplicate_conversation,
+        copy_conversation_as_chat,
+        export_game_session,
         branch_conversation,
         patch_conversation_meta,
         delete_messages,
@@ -606,6 +683,9 @@ pub fn specta_builder() -> tauri_specta::Builder<tauri::Wry> {
         // task
         get_task,
         list_active_tasks,
+        get_ai_call_logs,
+        list_ai_call_log_tasks,
+        clear_ai_call_logs,
         get_recoverable_tasks,
         cancel_task,
         resume_task,
@@ -636,9 +716,22 @@ pub fn specta_builder() -> tauri_specta::Builder<tauri::Wry> {
         update_character_image,
         delete_character_image,
         set_conversation_images_enabled,
+        get_character_asset_version,
+        set_character_asset_version,
+        get_character_var_defs,
+        set_character_var_defs,
+        get_character_status_template,
+        set_character_status_template,
         // import
         import_sillytavern,
         detect_sillytavern,
+        import_sillytavern_data,
+        export_sillytavern_data,
+        export_preset_sillytavern,
+        read_quick_reply_files,
+        list_quick_reply_sets,
+        upsert_quick_reply_set,
+        delete_quick_reply_set,
         // data manager
         get_data_overview,
         check_data,
@@ -672,6 +765,9 @@ pub fn specta_builder() -> tauri_specta::Builder<tauri::Wry> {
         summarize_conversation_now,
         ghostwrite,
         ghostwrite_cancel,
+        slash_generate,
+        slash_cancel,
+        save_message_prompt,
         answer_plugin_prompt,
         set_user_plugin_ai_auto,
         get_user_plugin_settings,
@@ -687,6 +783,7 @@ pub fn specta_builder() -> tauri_specta::Builder<tauri::Wry> {
         empty_trash,
         get_sync_status,
         set_sync_peer_excluded,
+        set_device_name,
         export_sync_bundle,
         preview_sync_bundle,
         apply_sync_bundle,
@@ -708,6 +805,7 @@ pub fn specta_builder() -> tauri_specta::Builder<tauri::Wry> {
         prepare_save_target,
         deliver_saved_file,
         delete_conversations,
+        reassign_conversations_character,
         export_character_pack,
         import_character_pack,
         export_backup,
@@ -731,6 +829,7 @@ pub fn specta_builder() -> tauri_specta::Builder<tauri::Wry> {
         set_api_key,
         delete_api_key,
         has_api_key,
+        get_vertex_key_info,
         // data
         get_all_characters,
         create_character,
@@ -738,10 +837,12 @@ pub fn specta_builder() -> tauri_specta::Builder<tauri::Wry> {
         set_character_avatar,
         set_character_cover,
         set_character_cover_position,
+        set_avatar_fit,
         copy_character_to_persona,
         copy_persona_to_character,
         copy_character_to_game,
         copy_game_character_to_character,
+        copy_game_to_character,
         toggle_favorite_character,
         delete_character,
         get_list_characters,
@@ -803,6 +904,8 @@ pub fn specta_builder() -> tauri_specta::Builder<tauri::Wry> {
         load_save,
         read_journal,
         sys::html_view::register_html_view,
+        service::notify::request_notify_permission,
+        service::notify::test_notify,
         sys::plugins::list_core_plugins,
         commands::plugins::get_plugin_setting,
         commands::plugins::update_plugin_setting,

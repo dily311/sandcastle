@@ -91,6 +91,93 @@ where
     Ok(r.rows_affected() != 0)
 }
 
+/// 캐릭터 통계 (5-E-12)
+#[derive(Debug, Clone, Default, PartialEq, serde::Serialize, specta::Type)]
+#[serde(rename_all = "camelCase")]
+pub struct CharacterStats {
+    /// 대화방 수 (폰 대화 포함)
+    pub conversations: i64,
+    pub messages: i64,
+    /// 누적 대화 시간(초): 같은 대화의 이어진 메시지 사이가 30분 이하면 그 사이를 대화한 시간으로 센다
+    pub chat_seconds: i64,
+    /// 요일별 메시지 수 (0 = 일요일 … 6 = 토요일, 사용자 시간대)
+    pub weekdays: Vec<i64>,
+    pub first_at: Option<i64>,
+    pub last_at: Option<i64>,
+}
+
+/// 대화가 끊겼다고 보는 간격
+pub const CHAT_GAP_MS: i64 = 30 * 60 * 1000;
+
+/// `tz_offset_min`: 사용자 시간대의 UTC와의 차이(분, 한국 +540) — 요일을 그 시간대로 센다
+pub async fn character_stats(db: &crate::db::conn::DbPool, character_id: &str, tz_offset_min: i64) -> Result<CharacterStats, Error> {
+    let conversations: i64 = sqlx::query_scalar("SELECT COUNT(*) FROM conversations WHERE character_id = ?")
+        .bind(character_id)
+        .fetch_one(db)
+        .await?;
+    let rows: Vec<(String, i64)> = sqlx::query_as(
+        "SELECT m.conversation_id, m.created_at FROM messages m JOIN conversations c ON c.id = m.conversation_id
+         WHERE c.character_id = ? ORDER BY m.conversation_id, m.created_at",
+    )
+    .bind(character_id)
+    .fetch_all(db)
+    .await?;
+    Ok(stats_from(conversations, &rows, tz_offset_min))
+}
+
+fn stats_from(conversations: i64, rows: &[(String, i64)], tz_offset_min: i64) -> CharacterStats {
+    let mut s = CharacterStats {
+        conversations,
+        messages: rows.len() as i64,
+        weekdays: vec![0; 7],
+        ..Default::default()
+    };
+    let mut prev: Option<(&str, i64)> = None;
+    for (conv, at) in rows {
+        let local_days = (at + tz_offset_min * 60_000).div_euclid(86_400_000);
+        // 1970-01-01은 목요일(4)
+        s.weekdays[((local_days + 4).rem_euclid(7)) as usize] += 1;
+        if let Some((pc, pa)) = prev {
+            if pc == conv && (0..=CHAT_GAP_MS).contains(&(at - pa)) {
+                s.chat_seconds += (at - pa) / 1000;
+            }
+        }
+        prev = Some((conv, *at));
+        s.first_at = Some(s.first_at.map_or(*at, |f| f.min(*at)));
+        s.last_at = Some(s.last_at.map_or(*at, |l| l.max(*at)));
+    }
+    s
+}
+
+/// 글이 든 메시지가 있는 대화 (대화 목록 검색 `mes:`, 5-E-8). 대소문자 무시, 대화마다 맞은 메시지 수. 캐릭터를 주면 그 캐릭터의 대화만
+pub async fn conversations_with_text<'e, E>(executor: E, character_id: Option<&str>, text: &str) -> Result<Vec<(String, i64)>, Error>
+where
+    E: Executor<'e, Database = Sqlite>,
+{
+    sqlx::query_as(
+        "SELECT m.conversation_id, COUNT(*) FROM messages m JOIN conversations c ON c.id = m.conversation_id
+         WHERE instr(lower(m.content), lower(?1)) > 0 AND (?2 IS NULL OR c.character_id = ?2)
+         GROUP BY m.conversation_id",
+    )
+    .bind(text)
+    .bind(character_id)
+    .fetch_all(executor)
+    .await
+}
+
+/// 읽기 모드 (5-E-6)
+pub async fn set_read_mode<'e, E>(executor: E, id: &str, on: bool) -> Result<bool, Error>
+where
+    E: Executor<'e, Database = Sqlite>,
+{
+    let r = sqlx::query("UPDATE conversations SET read_mode = ? WHERE id = ?")
+        .bind(on)
+        .bind(id)
+        .execute(executor)
+        .await?;
+    Ok(r.rows_affected() != 0)
+}
+
 pub async fn move_to_folder<'e, E>(executor: E, id: &str, folder_id: Option<&str>) -> Result<bool, Error>
 where
     E: Executor<'e, Database = Sqlite>,
@@ -107,17 +194,14 @@ pub async fn set_options<'e, E>(executor: E, id: &str, o: &ConversationOptions) 
 where
     E: Executor<'e, Database = Sqlite>,
 {
-    // 모델은 API 프로필에 딸린 이름이라, 대화의 API가 (정해진 것에서) 다른 것으로 바뀌면 NULL로 돌아간다 (다른 공급자의 모델 이름이 남아 요청이 실패하는 일을 막음).
-    // 앱 기본 API를 따라가던 대화(NULL)가 API와 모델을 한꺼번에 정하는 경우는 모델을 둔다
+    // API와 모델은 독립적으로 저장한다 (모델은 추론 강도와 함께 잠금·해제)
     let r = sqlx::query(
-        "UPDATE conversations SET persona_id = ?, prompt_preset_id = ?,
-             model = CASE WHEN api_profile_id IS ? OR api_profile_id IS NULL THEN ? ELSE NULL END,
-             api_profile_id = ?
+        "UPDATE conversations SET persona_id = ?, prompt_preset_id = ?, model = ?, api_profile_id = ?
          WHERE id = ?",
     )
-    .bind(&o.persona_id)
+    // 빈 페르소나 = 자물쇠 풂 → 캐릭터 기본 → 전역 (ADR-028). FK라 빈 글이 아니라 NULL로
+    .bind(Some(o.persona_id.as_str()).filter(|s| !s.is_empty()))
     .bind(&o.prompt_preset_id)
-    .bind(&o.api_profile_id)
     .bind(o.model.as_deref().map(str::trim).filter(|m| !m.is_empty()))
     .bind(&o.api_profile_id)
     .bind(id)
@@ -255,4 +339,46 @@ pub async fn patch_conversation_meta(pool: &SqlitePool, id: &str, patch: &serde_
         .execute(pool)
         .await?;
     Ok(())
+}
+
+#[cfg(test)]
+mod search_tests {
+    #[test]
+    fn stats_count_weekdays_and_close_gaps_only() {
+        let min = 60_000;
+        // 2026-11-22 (일요일) 00:30 한국 시각 = 2026-11-21 15:30 UTC
+        let sun_kst = 1_795_282_200_000_i64;
+        let rows = vec![
+            ("a".to_string(), sun_kst),
+            ("a".to_string(), sun_kst + 10 * min),
+            ("a".to_string(), sun_kst + 2 * 60 * min),       // 1시간 50분 뒤 → 끊김
+            ("b".to_string(), sun_kst + 2 * 60 * min + min), // 다른 대화 → 이어지지 않음
+        ];
+        let s = super::stats_from(2, &rows, 540);
+        assert_eq!(s.messages, 4);
+        assert_eq!(s.chat_seconds, 600);
+        assert_eq!(s.weekdays[0], 4, "한국 시각으로는 모두 일요일: {:?}", s.weekdays);
+        assert_eq!(super::stats_from(2, &rows, 0).weekdays[6], 4, "UTC로는 토요일");
+        assert_eq!(s.first_at, Some(sun_kst));
+    }
+
+    #[tokio::test]
+    async fn finds_conversations_whose_messages_contain_the_text() {
+        let dir = tempfile::tempdir().unwrap();
+        let db = crate::db::conn::init_pool(dir.path().to_path_buf()).await.unwrap();
+        for sql in [
+            "INSERT INTO characters (id, name, created_at, updated_at) VALUES ('a', 'A', 1, 1), ('b', 'B', 1, 1)",
+            "INSERT INTO conversations (id, title, character_id, created_at, updated_at) VALUES ('c1', 't', 'a', 1, 1), ('c2', 't', 'a', 1, 1), ('c3', 't', 'b', 1, 1)",
+            "INSERT INTO messages (id, conversation_id, seq, role, content, created_at, updated_at) VALUES
+             ('m1', 'c1', 1, 'user', '숲에서 Wolf를 봤다', 1, 1), ('m2', 'c1', 2, 'assistant', '늑대(wolf)다', 2, 2),
+             ('m3', 'c2', 1, 'user', '안녕', 1, 1), ('m4', 'c3', 1, 'user', 'wolf', 1, 1)",
+        ] {
+            sqlx::query(sqlx::AssertSqlSafe(sql)).execute(&db).await.unwrap();
+        }
+        let mut hits = super::conversations_with_text(&db, Some("a"), "WOLF").await.unwrap();
+        hits.sort();
+        assert_eq!(hits, vec![("c1".to_string(), 2)]);
+        assert_eq!(super::conversations_with_text(&db, None, "wolf").await.unwrap().len(), 2);
+        assert!(super::conversations_with_text(&db, Some("a"), "없는 말").await.unwrap().is_empty());
+    }
 }

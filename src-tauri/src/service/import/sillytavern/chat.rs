@@ -181,6 +181,24 @@ pub fn map_messages(raw: &[Value], warnings: &mut Vec<String>) -> Vec<ImportedMe
     out
 }
 
+/// SillyTavern 채팅 헤더의 작가 노트 → 대화 meta.authorNote `{ text, depth }` (없으면 None)
+pub fn author_note(meta: &Value, warnings: &mut Vec<String>) -> Option<Value> {
+    let text = as_str(meta, "note_prompt").map(str::trim).filter(|s| !s.is_empty())?;
+    let depth = meta["note_depth"]
+        .as_u64()
+        .or_else(|| meta["note_depth"].as_str().and_then(|s| s.trim().parse().ok()))
+        .unwrap_or(crate::service::chat::notes::DEFAULT_DEPTH as u64);
+    let interval = meta["note_interval"]
+        .as_u64()
+        .or_else(|| meta["note_interval"].as_str().and_then(|s| s.trim().parse().ok()));
+    // ST의 위치: 0 = 시나리오 뒤(대화 밖), 1 = 대화 안 깊이, 2 = 맨 앞
+    let position = meta["note_position"].as_u64();
+    if interval.is_some_and(|i| i > 1) || position.is_some_and(|p| p != 1) {
+        warnings.push("작가 노트의 빈도·위치는 지원하지 않아 '대화 안 깊이'로 가져옴 (원본은 대화 정보에 보존)".into());
+    }
+    Some(json!({ "text": text, "depth": depth }))
+}
+
 /// 시간 순서 보장: 없거나 앞 메시지보다 이르면 앞 메시지 + 1ms
 pub fn monotonic_times(messages: &[ImportedMessage], fallback_start: i64) -> Vec<i64> {
     let mut prev: Option<i64> = None;
@@ -253,6 +271,25 @@ mod tests {
         assert_eq!(times, vec![100, 101, 102, 103]);
         let times = monotonic_times(&[msg(Some(5)), msg(Some(9))], 0);
         assert_eq!(times, vec![5, 9]);
+    }
+
+    #[test]
+    fn author_note_from_header() {
+        let mut w = vec![];
+        assert_eq!(
+            author_note(
+                &json!({ "note_prompt": " 비가 온다 ", "note_depth": 2, "note_interval": 1, "note_position": 1 }),
+                &mut w
+            ),
+            Some(json!({ "text": "비가 온다", "depth": 2 }))
+        );
+        assert!(w.is_empty());
+        assert_eq!(
+            author_note(&json!({ "note_prompt": "x", "note_interval": 3 }), &mut w),
+            Some(json!({ "text": "x", "depth": 4 }))
+        );
+        assert_eq!(w.len(), 1);
+        assert_eq!(author_note(&json!({ "note_prompt": "  " }), &mut w), None);
     }
 
     #[test]

@@ -9,6 +9,16 @@ import type { InvokeOptions } from "@tauri-apps/api/core";
 export const commands = {
 	getAppSetting: (options?: InvokeOptions) => __TAURI_INVOKE<AppSetting_Serialize>("get_app_setting", undefined, options),
 	updateAppSetting: (patch: Value, options?: InvokeOptions) => __TAURI_INVOKE<AppSetting_Serialize>("update_app_setting", { patch }, options),
+	/**
+	 *  타이핑 표시 그림 (5-E-17-4): 고른 그림·GIF를 앱 데이터 `themes/typing/`에 복사해 쓰고, 전에 쓰던 복사본은 지운다.
+	 *  `None`이면 그림을 뺀다 (원본 파일은 건드리지 않음). 테마 폴더라 백업·동기화에 같이 간다
+	 */
+	setTypingImage: (path: string | null, options?: InvokeOptions) => __TAURI_INVOKE<AppSetting_Serialize>("set_typing_image", { path }, options),
+	/**
+	 *  커스텀 알림음 파일 설정: 고른 오디오 파일을 앱 데이터 `notify/sound/`에 복사하고, 이전 복사본은 지운다.
+	 *  `None`이면 커스텀 알림음을 비우고 소리 방식을 기본으로 돌린다 (원본 파일은 건드리지 않음).
+	 */
+	setNotifySound: (path: string | null, options?: InvokeOptions) => __TAURI_INVOKE<AppSetting_Serialize>("set_notify_sound", { path }, options),
 	getFeatureSetting: (options?: InvokeOptions) => __TAURI_INVOKE<FeatureSetting>("get_feature_setting", undefined, options),
 	updateFeatureSetting: (id: string, enabled: boolean, options?: InvokeOptions) => __TAURI_INVOKE<null>("update_feature_setting", { id, enabled }, options),
 	getThemeSetting: (options?: InvokeOptions) => __TAURI_INVOKE<ThemeSetting_Serialize>("get_theme_setting", undefined, options),
@@ -25,8 +35,10 @@ export const commands = {
 	 *  확장자와 파일 머리가 글꼴이 아니면 하나도 복사하지 않고 거절한다. select면 마지막 것을 앱 글꼴로 고른다
 	 */
 	addFonts: (paths: string[], select: boolean, options?: InvokeOptions) => __TAURI_INVOKE<ThemeSetting_Serialize>("add_fonts", { paths, select }, options),
-	/**  글꼴 목록에서 빼고 복사해 둔 파일을 지운다 (앱 글꼴이었으면 기본 글꼴로) */
+	/**  글꼴 목록에서 빼고 복사해 둔 파일을 지운다 (사용 중이던 글꼴은 기본 글꼴로) */
 	removeFont: (path: string, options?: InvokeOptions) => __TAURI_INVOKE<ThemeSetting_Serialize>("remove_font", { path }, options),
+	/**  아바타 커스텀 프레임 이미지 올리기: target("char" | "user")에 맞춰 앱 데이터 avatar_frames/에 복사하고 설정 반영 */
+	uploadAvatarFrame: (target: string, path: string, options?: InvokeOptions) => __TAURI_INVOKE<ThemeSetting_Serialize>("upload_avatar_frame", { target, path }, options),
 	getConvSettings: (options?: InvokeOptions) => __TAURI_INVOKE<ConvSettings_Serialize>("get_conv_settings", undefined, options),
 	setSystemDefaultPersona: (id: string, options?: InvokeOptions) => __TAURI_INVOKE<null>("set_system_default_persona", { id }, options),
 	getThemeList: (options?: InvokeOptions) => __TAURI_INVOKE<CssThemeMeta_Serialize[]>("get_theme_list", undefined, options),
@@ -37,8 +49,11 @@ export const commands = {
 	getModels: (profileId: string, options?: InvokeOptions) => __TAURI_INVOKE<string[]>("get_models", { profileId }, options),
 	/**  연결(형식·주소·모델)로 되는 것: 임베딩·도구 호출·구조화 출력. 요청을 보내지 않는 순수 계산이라 저장 전에도 부를 수 있다 (3-A-4) */
 	getAiCapabilities: (formatType: string, baseUrl: string, model: string, options?: InvokeOptions) => __TAURI_INVOKE<AiCapabilities>("get_ai_capabilities", { formatType, baseUrl, model }, options),
-	/**  연결 확인: 짧은 메시지 하나를 보내고 받은 답을 돌려준다 (저장하지 않음) */
-	testMessage: (profileId: string, options?: InvokeOptions) => __TAURI_INVOKE<string>("test_message", { profileId }, options),
+	/**
+	 *  연결 확인: 짧은 메시지("Hi") 하나를 보내고 받은 답을 돌려준다 (저장하지 않음).
+	 *  `model`을 주면 그 모델로 일시 테스트하고, 없으면 프로필 기본 모델 → 모델 목록 조회 순으로 확인한다.
+	 */
+	testMessage: (profileId: string, model: string | null, options?: InvokeOptions) => __TAURI_INVOKE<string>("test_message", { profileId, model }, options),
 	/**
 	 *  입력을 저장하고 응답을 만든다. `text`가 비었으면 이어서 응답만 (이어쓰기).
 	 *  생성은 작업(ChatStream)으로 돌아서 다른 대화로 옮겨 가도 계속되고, 앱이 꺼지면 다시 시도할 수 있다.
@@ -47,6 +62,8 @@ export const commands = {
 	chatSend: (conversationId: string, text: string, attachments: string[], ghost: boolean, onEvent: Channel<StreamPayload>, options?: InvokeOptions) => __TAURI_INVOKE<ChatTurn_Serialize>("chat_send", { conversationId, text, attachments, ghost, onEvent }, options),
 	/**  마지막 AI 메시지 다시 만들기. `swipe`면 스와이프로 쌓고, 아니면 스와이프를 버리고 바꾼다. `extra`는 이번 생성에만 붙이는 지시. */
 	chatRegenerate: (conversationId: string, swipe: boolean, extra: string | null, onEvent: Channel<StreamPayload>, options?: InvokeOptions) => __TAURI_INVOKE<ChatTurn_Serialize>("chat_regenerate", { conversationId, swipe, extra, onEvent }, options),
+	/**  마지막 AI 메시지에 이어 쓰기 ("이어서 응답 받기", 5-E-26). 빈 보내기(chat_send "")는 새 AI 메시지를 만든다 */
+	chatContinue: (conversationId: string, onEvent: Channel<StreamPayload>, options?: InvokeOptions) => __TAURI_INVOKE<ChatTurn_Serialize>("chat_continue", { conversationId, onEvent }, options),
 	/**  진행 중인 응답 멈추기 (받은 데까지는 저장됨). 멈출 게 있었으면 true */
 	chatCancel: (conversationId: string, options?: InvokeOptions) => __TAURI_INVOKE<boolean>("chat_cancel", { conversationId }, options),
 	listPhoneContacts: (ownerKind: string, ownerId: string, options?: InvokeOptions) => __TAURI_INVOKE<PhoneContact[]>("list_phone_contacts", { ownerKind, ownerId }, options),
@@ -55,6 +72,8 @@ export const commands = {
 	setPhoneContactStatus: (ownerKind: string, ownerId: string, contactKind: string, contactId: string, status: string, options?: InvokeOptions) => __TAURI_INVOKE<null>("set_phone_contact_status", { ownerKind, ownerId, contactKind, contactId, status }, options),
 	/**  엿보기: 캐릭터 폰의 대화를 AI가 두 사람 몫 모두 이어서 씀. 새로 저장된 메시지들을 돌려준다 */
 	phonePeek: (conversationId: string, onEvent: Channel<StreamPayload>, options?: InvokeOptions) => __TAURI_INVOKE<Message_Serialize[]>("phone_peek", { conversationId, onEvent }, options),
+	/**  폰 캐릭터 개인 페이지(SNS 프로필·상태 메시지·게시물)를 대화 맥락을 바탕으로 AI가 생성한다 */
+	phoneGenerateProfile: (conversationId: string, prompt: string, options?: InvokeOptions) => __TAURI_INVOKE<string>("phone_generate_profile", { conversationId, prompt }, options),
 	/**  이 AI 메시지를 만들 때 실제로 보낸 프롬프트 (없으면 null: 가져온 메시지, 취소된 응답 등) */
 	getMessagePrompt: (messageId: string, options?: InvokeOptions) => __TAURI_INVOKE<PromptMessage_Serialize | null>("get_message_prompt", { messageId }, options),
 	listConversationFolders: (characterId: string, options?: InvokeOptions) => __TAURI_INVOKE<ConversationFolder[]>("list_conversation_folders", { characterId }, options),
@@ -64,12 +83,22 @@ export const commands = {
 	deleteConversationFolder: (id: string, options?: InvokeOptions) => __TAURI_INVOKE<null>("delete_conversation_folder", { id }, options),
 	renameConversation: (id: string, title: string, options?: InvokeOptions) => __TAURI_INVOKE<null>("rename_conversation", { id, title }, options),
 	setConversationPinned: (id: string, pinned: boolean, options?: InvokeOptions) => __TAURI_INVOKE<null>("set_conversation_pinned", { id, pinned }, options),
+	/**  읽기 모드 켜기/끄기 (켜면 보내는 줄을 숨김) */
+	setConversationReadMode: (id: string, on: boolean, options?: InvokeOptions) => __TAURI_INVOKE<null>("set_conversation_read_mode", { id, on }, options),
+	/**  대화 목록 검색 `mes:글` — 그 글이 든 메시지가 있는 대화 id와 맞은 메시지 수 (빈 글이면 없음) */
+	findConversationsByMessage: (characterId: string | null, text: string, options?: InvokeOptions) => __TAURI_INVOKE<([string, number])[]>("find_conversations_by_message", { characterId, text }, options),
+	/**  캐릭터 통계 (캐릭터 페이지 통계 탭, 5-E-12). 누르기 전에는 읽지 않는다 */
+	getCharacterStats: (characterId: string, tzOffsetMin: number, options?: InvokeOptions) => __TAURI_INVOKE<CharacterStats_Serialize>("get_character_stats", { characterId, tzOffsetMin }, options),
 	/**  폴더로 옮기기. `folder_id`가 null이면 폴더 밖으로 */
 	moveConversation: (id: string, folderId: string | null, options?: InvokeOptions) => __TAURI_INVOKE<null>("move_conversation", { id, folderId }, options),
 	/**  대화별 페르소나·프리셋·API (프리셋/API가 null이면 앱 설정의 선택값을 씀) */
 	setConversationOptions: (id: string, options: ConversationOptions_Deserialize, _options?: InvokeOptions) => __TAURI_INVOKE<Conversation_Serialize>("set_conversation_options", { id, options }, _options),
 	/**  대화 통째로 복제 */
 	duplicateConversation: (id: string, options?: InvokeOptions) => __TAURI_INVOKE<Conversation_Serialize>("duplicate_conversation", { id }, options),
+	/**  폰 대화를 일반 대화로 (5-E-20-3): 원본은 그대로 두고 일반 대화 모드로 복사한다 */
+	copyConversationAsChat: (id: string, options?: InvokeOptions) => __TAURI_INVOKE<Conversation_Serialize>("copy_conversation_as_chat", { id }, options),
+	/**  게임 플레이 기록을 SillyTavern 채팅(.jsonl)으로 (5-E-20-3). 연출 태그는 걷고 선택지는 줄로. 메시지 수를 돌려준다 */
+	exportGameSession: (sessionId: string, path: string, options?: InvokeOptions) => __TAURI_INVOKE<number>("export_game_session", { sessionId, path }, options),
 	/**  분기 나누기: 이 메시지까지 복사한 새 대화 */
 	branchConversation: (id: string, messageId: string, options?: InvokeOptions) => __TAURI_INVOKE<Conversation_Serialize>("branch_conversation", { id, messageId }, options),
 	/**  대화 meta에 키를 합친다 (작가 노트, 메모 등). 값이 null이면 그 키를 지움 */
@@ -100,10 +129,16 @@ export const commands = {
 	editGameMessage: (messageId: string, content: string, options?: InvokeOptions) => __TAURI_INVOKE<EditedGameMessage_Serialize>("edit_game_message", { messageId, content }, options),
 	/**  마지막 AI 응답 다시 만들기 (그 응답이 바꾼 변수·관계는 되돌림) */
 	regenerateGameReply: (messageId: string, options?: InvokeOptions) => __TAURI_INVOKE<NpcReply_Serialize>("regenerate_game_reply", { messageId }, options),
-	/**  대화 하나를 파일로 내보내기. format: "jsonl"(SillyTavern 채팅) | "txt"(읽기용 글) */
+	/**  대화 하나를 파일로 내보내기. format: "jsonl"(SillyTavern 채팅) | "jsonl-img"(같은데 `<cg>키</cg>` → `{{img::키}}`) | "txt"(읽기용 글) */
 	exportConversation: (id: string, format: string, path: string, options?: InvokeOptions) => __TAURI_INVOKE<number>("export_conversation", { id, format, path }, options),
 	getTask: (taskId: string, options?: InvokeOptions) => __TAURI_INVOKE<TaskInfo_Serialize>("get_task", { taskId }, options),
 	listActiveTasks: (options?: InvokeOptions) => __TAURI_INVOKE<TaskInfo_Serialize[]>("list_active_tasks", undefined, options),
+	/**  작업 하나의 AI 호출 기록 (보낸 프롬프트·받은 글, 5-E-20-6-7) */
+	getAiCallLogs: (taskId: string, options?: InvokeOptions) => __TAURI_INVOKE<AiCallLog_Serialize[]>("get_ai_call_logs", { taskId }, options),
+	/**  호출 기록이 있는 작업 id들 */
+	listAiCallLogTasks: (options?: InvokeOptions) => __TAURI_INVOKE<string[]>("list_ai_call_log_tasks", undefined, options),
+	/**  호출 기록 모두 지우기 */
+	clearAiCallLogs: (options?: InvokeOptions) => __TAURI_INVOKE<number>("clear_ai_call_logs", undefined, options),
 	/**  앱 시작 후 프론트가 호출: 재개/포기를 물어볼 중단된 작업 목록 */
 	getRecoverableTasks: (options?: InvokeOptions) => __TAURI_INVOKE<TaskInfo_Serialize[]>("get_recoverable_tasks", undefined, options),
 	cancelTask: (taskId: string, options?: InvokeOptions) => __TAURI_INVOKE<null>("cancel_task", { taskId }, options),
@@ -159,10 +194,21 @@ export const commands = {
 	addCharacterImages: (characterId: string, paths: string[], options?: InvokeOptions) => __TAURI_INVOKE<CharacterImage_Serialize[]>("add_character_images", { characterId, paths }, options),
 	/**  ZIP으로 에셋 한꺼번에 넣기 (파일 이름이 키, 같은 키는 덮어씀) */
 	addCharacterImagesZip: (characterId: string, zipPath: string, options?: InvokeOptions) => __TAURI_INVOKE<CharacterImage_Serialize[]>("add_character_images_zip", { characterId, zipPath }, options),
-	updateCharacterImage: (id: string, input: CharacterImageUpdate, options?: InvokeOptions) => __TAURI_INVOKE<CharacterImage_Serialize>("update_character_image", { id, input }, options),
+	updateCharacterImage: (id: string, input: CharacterImageUpdate_Deserialize, options?: InvokeOptions) => __TAURI_INVOKE<CharacterImage_Serialize>("update_character_image", { id, input }, options),
 	deleteCharacterImage: (id: string, options?: InvokeOptions) => __TAURI_INVOKE<null>("delete_character_image", { id }, options),
 	/**  대화별 이미지 기능 켜기/끄기 */
 	setConversationImagesEnabled: (conversationId: string, enabled: boolean, options?: InvokeOptions) => __TAURI_INVOKE<null>("set_conversation_images_enabled", { conversationId, enabled }, options),
+	/**  캐릭터가 쓸 에셋 판 (None = 전체). 대화에는 그 판 폴더와 공통(폴더 없음) 그림만 쓴다 (5-E-21) */
+	getCharacterAssetVersion: (characterId: string, options?: InvokeOptions) => __TAURI_INVOKE<string | null>("get_character_asset_version", { characterId }, options),
+	setCharacterAssetVersion: (characterId: string, version: string | null, options?: InvokeOptions) => __TAURI_INVOKE<null>("set_character_asset_version", { characterId, version }, options),
+	/**  캐릭터의 대화 변수 정의 (5-F-4-3, 코어 플러그인 status) */
+	getCharacterVarDefs: (characterId: string, options?: InvokeOptions) => __TAURI_INVOKE<VarDef_Serialize[]>("get_character_var_defs", { characterId }, options),
+	/**  캐릭터의 대화 변수 정의 저장. 다듬은 목록을 돌려준다 */
+	setCharacterVarDefs: (characterId: string, defs: VarDef_Deserialize[], options?: InvokeOptions) => __TAURI_INVOKE<VarDef_Serialize[]>("set_character_var_defs", { characterId, defs }, options),
+	/**  캐릭터의 상태창 틀 (5-F-4-5, 코어 플러그인 status) */
+	getCharacterStatusTemplate: (characterId: string, options?: InvokeOptions) => __TAURI_INVOKE<string | null>("get_character_status_template", { characterId }, options),
+	/**  상태창 틀 저장 (빈 글이면 지움, 100KB까지) */
+	setCharacterStatusTemplate: (characterId: string, template: string | null, options?: InvokeOptions) => __TAURI_INVOKE<null>("set_character_status_template", { characterId, template }, options),
 	/**
 	 *  SillyTavern 파일 가져오기 (캐릭터 카드 PNG/JSON, 프리셋, 정규식, 월드인포, 채팅 .jsonl 자동 판별).
 	 *  - `name`: 프리셋/로어북/대화 이름. 비우면 파일 이름을 쓴다.
@@ -173,6 +219,24 @@ export const commands = {
 	importSillytavern: (path: string, name: string | null, characterId: string | null, presetId: string | null, options?: InvokeOptions) => __TAURI_INVOKE<SillyTavernImport_Serialize>("import_sillytavern", { path, name, characterId, presetId }, options),
 	/**  SillyTavern 파일의 종류만 본다 (가져오지 않음) */
 	detectSillytavern: (path: string, options?: InvokeOptions) => __TAURI_INVOKE<SillyTavernKind>("detect_sillytavern", { path }, options),
+	/**
+	 *  SillyTavern 전체 데이터 가져오기 (사용자 폴더 `data/default-user`를 압축한 zip).
+	 *  캐릭터·채팅·로어북·프리셋·정규식·페르소나를 새로 만들기만 한다 (지금 데이터는 그대로).
+	 */
+	importSillytavernData: (path: string, options?: InvokeOptions) => __TAURI_INVOKE<SillyTavernDataImport>("import_sillytavern_data", { path }, options),
+	/**  샌드캐슬 데이터를 SillyTavern 사용자 폴더 모양 zip으로 (캐릭터 카드·채팅·로어북·페르소나·전역 정규식) */
+	exportSillytavernData: (path: string, options?: InvokeOptions) => __TAURI_INVOKE<SillyTavernDataExport>("export_sillytavern_data", { path }, options),
+	/**  프리셋 하나를 SillyTavern Chat Completion 프리셋(.json)으로 (프리셋에 묶인 정규식 포함) */
+	exportPresetSillytavern: (id: string, path: string, options?: InvokeOptions) => __TAURI_INVOKE<null>("export_preset_sillytavern", { id, path }, options),
+	/**
+	 *  SillyTavern 빠른 답장 파일 읽기 (세트 .json 또는 버튼 하나 .qr.json, 여러 개).
+	 *  세트 파일은 각각 세트로, 버튼 파일들은 모아서 세트 하나("가져온 빠른 답장")로. 저장은 화면이 upsert_quick_reply_set으로 한다
+	 */
+	readQuickReplyFiles: (paths: string[], options?: InvokeOptions) => __TAURI_INVOKE<[QuickReplySetInput_Serialize[], string[]]>("read_quick_reply_files", { paths }, options),
+	/**  목록. 처음 한 번, 예전처럼 설정에 둔 세트(5-E-20-5-3)가 있으면 전역 세트로 옮기고 설정에서 비운다 */
+	listQuickReplySets: (options?: InvokeOptions) => __TAURI_INVOKE<QuickReplySet_Serialize[]>("list_quick_reply_sets", undefined, options),
+	upsertQuickReplySet: (input: QuickReplySetInput_Deserialize, options?: InvokeOptions) => __TAURI_INVOKE<QuickReplySet_Serialize>("upsert_quick_reply_set", { input }, options),
+	deleteQuickReplySet: (id: string, options?: InvokeOptions) => __TAURI_INVOKE<null>("delete_quick_reply_set", { id }, options),
 	/**  캐릭터 → 채팅 트리, 개수, 저장 공간 */
 	getDataOverview: (options?: InvokeOptions) => __TAURI_INVOKE<DataOverview_Serialize>("get_data_overview", undefined, options),
 	/**  DB 점검: 무결성(PRAGMA integrity_check)과 아무 데도 쓰이지 않는 파일 목록. 지우지 않는다 */
@@ -239,6 +303,18 @@ export const commands = {
 	ghostwrite: (conversationId: string, brief: string | null, onEvent: Channel<StreamPayload>, options?: InvokeOptions) => __TAURI_INVOKE<string>("ghostwrite", { conversationId, brief, onEvent }, options),
 	/**  진행 중인 대필 멈추기 (받은 데까지는 화면이 이미 입력칸에 가지고 있다). 멈출 게 있었으면 true */
 	ghostwriteCancel: (conversationId: string, options?: InvokeOptions) => __TAURI_INVOKE<boolean>("ghostwrite_cancel", { conversationId }, options),
+	/**
+	 *  /gen: 이 대화의 맥락 끝에 지시를 붙여 AI 글을 받는다 (저장하지 않음).
+	 *  raw면 /genraw: 맥락 없이 지시만 (system이 있으면 그 앞에 시스템 글)
+	 */
+	slashGenerate: (conversationId: string, prompt: string, raw: boolean, system: string | null, options?: InvokeOptions) => __TAURI_INVOKE<SlashGenResult>("slash_generate", { conversationId, prompt, raw, system }, options),
+	/**  생성 중인 /gen·/genraw 멈추기 (5-E-20-6-8, 대필 멈추기와 같은 모양). 멈출 게 있었으면 true */
+	slashCancel: (conversationId: string, options?: InvokeOptions) => __TAURI_INVOKE<boolean>("slash_cancel", { conversationId }, options),
+	/**
+	 *  메시지에 '보낸 프롬프트'를 남긴다 — 슬래시 스크립트가 /gen 결과로 만든 메시지용 (5-E-20-6-10).
+	 *  형식이 PromptMessage가 아니면 거절 (보기 화면이 읽을 수 있는 것만)
+	 */
+	saveMessagePrompt: (messageId: string, prompt: Value, options?: InvokeOptions) => __TAURI_INVOKE<null>("save_message_prompt", { messageId, prompt }, options),
 	/**  화면의 호스트가 프롬프트 요청(user-plugin-prompt)에 답한다. 늦게 와서 기다리는 요청이 없으면 false */
 	answerPluginPrompt: (requestId: string, answers: PluginPromptAnswer_Deserialize[], options?: InvokeOptions) => __TAURI_INVOKE<boolean>("answer_plugin_prompt", { requestId, answers }, options),
 	/**  누른 명령 밖에서도 플러그인이 AI를 부르게 할지 (기본 꺼짐, 요금이 들 수 있음) */
@@ -266,10 +342,12 @@ export const commands = {
 	getSyncStatus: (options?: InvokeOptions) => __TAURI_INVOKE<SyncStatus_Serialize>("get_sync_status", undefined, options),
 	/**  오래 못 본 기기를 제외하거나(지운 기록 정리가 기다리지 않음) 다시 포함한다. 제외한 기기가 돌아와 합치면 저절로 풀리고, 그때는 전체를 다시 합친다 */
 	setSyncPeerExcluded: (deviceId: string, excluded: boolean, options?: InvokeOptions) => __TAURI_INVOKE<null>("set_sync_peer_excluded", { deviceId, excluded }, options),
+	/**  이 기기 이름 바꾸기 (다음 동기화부터 다른 기기 목록에 보임). 빈 글이면 지움 */
+	setDeviceName: (name: string, options?: InvokeOptions) => __TAURI_INVOKE<string | null>("set_device_name", { name }, options),
 	/**  동기화 파일 만들기. `path`는 저장 대화상자에서 고른 경로 (.scsync) */
-	exportSyncBundle: (path: string, includeFiles: boolean, options?: InvokeOptions) => __TAURI_INVOKE<SyncBundleInfo>("export_sync_bundle", { path, includeFiles }, options),
+	exportSyncBundle: (path: string, includeFiles: boolean, options?: InvokeOptions) => __TAURI_INVOKE<SyncBundleInfo_Serialize>("export_sync_bundle", { path, includeFiles }, options),
 	/**  합치기 전에 숫자만 (DB·파일·설정을 바꾸지 않음) */
-	previewSyncBundle: (path: string, options?: InvokeOptions) => __TAURI_INVOKE<SyncPreview>("preview_sync_bundle", { path }, options),
+	previewSyncBundle: (path: string, options?: InvokeOptions) => __TAURI_INVOKE<SyncPreview_Serialize>("preview_sync_bundle", { path }, options),
 	/**  합치기: 이 기기 DB·설정 사본을 먼저 만들고, 없는 파일을 넣고, DB를 합치고, 같이 쓰는 설정을 바꾼다 */
 	applySyncBundle: (path: string, options?: InvokeOptions) => __TAURI_INVOKE<SyncApplied>("apply_sync_bundle", { path }, options),
 	/**  지금 동기화 (폴더). `auto`는 자동 동기화가 부를 때 (설정 > 동기화의 자동 동기화가 켜져 있어야 함) */
@@ -308,6 +386,8 @@ export const commands = {
 	deliverSavedFile: (tmp: string, uri: string, options?: InvokeOptions) => __TAURI_INVOKE<null>("deliver_saved_file", { tmp, uri }, options),
 	/**  여러 대화를 한 번에 휴지통으로 (대화마다 휴지통 항목 하나). 옮긴 개수를 돌려준다. */
 	deleteConversations: (ids: string[], options?: InvokeOptions) => __TAURI_INVOKE<number>("delete_conversations", { ids }, options),
+	/**  고아 채팅(캐릭터가 지워진 대화)을 다른 캐릭터에 다시 연결한다. 연결한 개수를 돌려준다. */
+	reassignConversationsCharacter: (ids: string[], characterId: string, options?: InvokeOptions) => __TAURI_INVOKE<number>("reassign_conversations_character", { ids, characterId }, options),
 	/**
 	 *  캐릭터 팩 내보내기. `path`는 프론트의 저장 대화상자에서 고른 경로 (.scpack).
 	 *  `conversation_ids`를 주면 그 대화만, 생략하면 고른 캐릭터의 모든 대화.
@@ -341,6 +421,8 @@ export const commands = {
 	setApiKey: (profileId: string, apiKey: string, options?: InvokeOptions) => __TAURI_INVOKE<null>("set_api_key", { profileId, apiKey }, options),
 	deleteApiKey: (profileId: string, options?: InvokeOptions) => __TAURI_INVOKE<null>("delete_api_key", { profileId }, options),
 	hasApiKey: (profileId: string, options?: InvokeOptions) => __TAURI_INVOKE<boolean>("has_api_key", { profileId }, options),
+	/**  Vertex AI 키의 공개 메타정보(프로젝트 ID·지역·서비스 계정 이메일)만 돌려준다 (비밀키는 절대 노출하지 않음) */
+	getVertexKeyInfo: (profileId: string, options?: InvokeOptions) => __TAURI_INVOKE<VertexKeyInfo_Serialize | null>("get_vertex_key_info", { profileId }, options),
 	getAllCharacters: (options?: InvokeOptions) => __TAURI_INVOKE<Character_Serialize[]>("get_all_characters", undefined, options),
 	createCharacter: (input: CharacterInput_Deserialize, options?: InvokeOptions) => __TAURI_INVOKE<Character_Serialize>("create_character", { input }, options),
 	/**  캐릭터 저장. 월드인포 연결도 `world_info_ids`로 통째로 바꾼다 */
@@ -351,11 +433,19 @@ export const commands = {
 	setCharacterCover: (id: string, path: string | null, options?: InvokeOptions) => __TAURI_INVOKE<Character_Serialize>("set_character_cover", { id, path }, options),
 	/**  커버에서 보일 세로 위치 (0 위 ~ 100 아래) */
 	setCharacterCoverPosition: (id: string, y: number | null, options?: InvokeOptions) => __TAURI_INVOKE<null>("set_character_cover_position", { id, y }, options),
+	/**  프로필 그림 확대·위치 (5-E-17-3). owner: "character" | "persona", fit이 없으면 가운데·확대 없음으로 */
+	setAvatarFit: (owner: string, id: string, fit: AvatarFit | null, options?: InvokeOptions) => __TAURI_INVOKE<null>("set_avatar_fit", { owner, id, fit }, options),
 	copyCharacterToPersona: (characterId: string, options?: InvokeOptions) => __TAURI_INVOKE<Persona_Serialize>("copy_character_to_persona", { characterId }, options),
 	copyPersonaToCharacter: (personaId: string, options?: InvokeOptions) => __TAURI_INVOKE<Character_Serialize>("copy_persona_to_character", { personaId }, options),
 	/**  캐릭터를 게임에 넣음 (게임 캐릭터는 원본 캐릭터를 기억함). 아바타는 게임 에셋으로 따로 넣어야 함 */
 	copyCharacterToGame: (characterId: string, gameId: string, options?: InvokeOptions) => __TAURI_INVOKE<GameCharacters_Serialize>("copy_character_to_game", { characterId, gameId }, options),
 	copyGameCharacterToCharacter: (gameCharacterId: string, options?: InvokeOptions) => __TAURI_INVOKE<Character_Serialize>("copy_game_character_to_character", { gameCharacterId }, options),
+	/**
+	 *  게임을 일반 대화용 "세계" 캐릭터로 복사한다. NPC·아이템·장소·이벤트는 분류를 붙인 새 로어북에, 게임에 연결된 로어북은 그대로 연결.
+	 *  session_id를 주면 그 플레이 기록을 "여러 캐릭터"를 켠 대화로 옮긴다 (연출 태그는 걷음).
+	 *  변수 정의는 세계 캐릭터에, 그 기록의 변수 값·관계는 대화 변수로 한 번 옮긴다 (5-F-4-6, ADR-029 ⑥ — 계속 나누지는 않음)
+	 */
+	copyGameToCharacter: (gameId: string, sessionId: string | null, options?: InvokeOptions) => __TAURI_INVOKE<GameCopy_Serialize>("copy_game_to_character", { gameId, sessionId }, options),
 	toggleFavoriteCharacter: (id: string, isFavorite: boolean, options?: InvokeOptions) => __TAURI_INVOKE<null>("toggle_favorite_character", { id, isFavorite }, options),
 	deleteCharacter: (id: string, options?: InvokeOptions) => __TAURI_INVOKE<TrashItem>("delete_character", { id }, options),
 	getListCharacters: (options?: InvokeOptions) => __TAURI_INVOKE<CharacterOption[]>("get_list_characters", undefined, options),
@@ -493,8 +583,13 @@ export const commands = {
 	/**
 	 *  화면이 HTML 코드 블록을 보여주기 전에 부른다. iframe의 src로 쓸 주소를 돌려준다.
 	 *  theme: 지금 테마의 CSS 변수 (화면이 만든 `:root{…}` 등). 문서 맨 앞에 들어간다.
+	 *  scripts: false면 글쓴이의 JS를 막는다 (코드 블록 밖 HTML — ADR-004 추가). 없으면 지금처럼 허용
 	 */
-	registerHtmlView: (html: string, theme: string | null, options?: InvokeOptions) => __TAURI_INVOKE<string>("register_html_view", { html, theme }, options),
+	registerHtmlView: (html: string, theme: string | null, scripts: boolean | null, options?: InvokeOptions) => __TAURI_INVOKE<string>("register_html_view", { html, theme, scripts }, options),
+	/**  알림을 켤 때 (Android는 사용자에게 권한을 묻는다). 허락됐으면 true */
+	requestNotifyPermission: (options?: InvokeOptions) => __TAURI_INVOKE<boolean>("request_notify_permission", undefined, options),
+	/**  설정 화면에서 즉시 테스트 알림을 보낸다 (포커스 여부와 무관하게 표시 + 설정된 소리 재생) */
+	testNotify: (options?: InvokeOptions) => __TAURI_INVOKE<null>("test_notify", undefined, options),
 	/**  코어 플러그인 목록과 켜짐 상태. 켜고 끄기는 update_feature_setting(id, enabled). */
 	listCorePlugins: (options?: InvokeOptions) => __TAURI_INVOKE<CorePlugin[]>("list_core_plugins", undefined, options),
 	getPluginSetting: (options?: InvokeOptions) => __TAURI_INVOKE<PluginSetting_Serialize>("get_plugin_setting", undefined, options),
@@ -508,8 +603,8 @@ export const commands = {
 	 *  texts와 같은 순서로, 캐시에 없으면 null
 	 */
 	getCachedTranslations: (texts: string[], to: string | null, options?: InvokeOptions) => __TAURI_INVOKE<(string | null)[]>("get_cached_translations", { texts, to }, options),
-	/**  글을 음성 파일(mp3)로 만들고 경로를 돌려준다 (같은 글·설정이면 캐시) */
-	speakText: (text: string, auto: boolean | null, options?: InvokeOptions) => __TAURI_INVOKE<string>("speak_text", { text, auto }, options),
+	/**  글을 음성 파일(mp3)로 만들고 경로를 돌려준다 (같은 글·설정이면 캐시). cached_only면 캐시만 (읽기 화면) */
+	speakText: (text: string, auto: boolean | null, cachedOnly: boolean | null, options?: InvokeOptions) => __TAURI_INVOKE<string>("speak_text", { text, auto, cachedOnly }, options),
 	/**  메시지 장면을 그림으로. meta.generatedImages에 {path, prompt}를 쌓는다 */
 	generateMessageImage: (messageId: string, options?: InvokeOptions) => __TAURI_INVOKE<Message_Serialize>("generate_message_image", { messageId }, options),
 	/**
@@ -604,6 +699,14 @@ export const commands = {
 	updateMusicAlbumArtPos: (path: string, pos: Value, options?: InvokeOptions) => __TAURI_INVOKE<null>("update_music_album_art_pos", { path, pos }, options),
 	setAlbumArt: (filePath: string, imgPath: string, options?: InvokeOptions) => __TAURI_INVOKE<string>("set_album_art", { filePath, imgPath }, options),
 	filterExistingPaths: (paths: string[], options?: InvokeOptions) => __TAURI_INVOKE<string[]>("filter_existing_paths", { paths }, options),
+	getWidgetMascotSettings: (options?: InvokeOptions) => __TAURI_INVOKE<WidgetMascotSetting_Serialize>("get_widget_mascot_settings", undefined, options),
+	saveWidgetMascotSettings: (setting: WidgetMascotSetting_Deserialize, options?: InvokeOptions) => __TAURI_INVOKE<WidgetMascotSetting_Serialize>("save_widget_mascot_settings", { setting }, options),
+	uploadWidgetMascotImage: (mascotId: string, slot: string, sourcePath: string, options?: InvokeOptions) => __TAURI_INVOKE<string>("upload_widget_mascot_image", { mascotId, slot, sourcePath }, options),
+	deleteWidgetMascotImage: (path: string, options?: InvokeOptions) => __TAURI_INVOKE<null>("delete_widget_mascot_image", { path }, options),
+	/**  시메지 AI 대사 생성 (유저와의 짧은 대화, 선물 반응 등) */
+	mascotGenerateReply: (request: MascotChatRequest_Deserialize, options?: InvokeOptions) => __TAURI_INVOKE<string>("mascot_generate_reply", { request }, options),
+	/**  두 시메지 간 짧은 대화 생성 (AI) */
+	mascotGeneratePeerChat: (request: MascotPeerChatRequest_Deserialize, options?: InvokeOptions) => __TAURI_INVOKE<MascotPeerChatTurn[]>("mascot_generate_peer_chat", { request }, options),
 };
 
 /* Types */
@@ -621,6 +724,35 @@ export type AddAssetReport_Serialize = {
 	asset: GameAssets_Serialize,
 	/**  추가 후 상태의 진단 결과 (open_game/save_package와 같은 형식) */
 	diagnostics: Issue[],
+};
+
+/**  한 번의 호출 (보낸 것·받은 것) */
+export type AiCallLog = AiCallLog_Serialize | AiCallLog_Deserialize;
+
+/**  한 번의 호출 (보낸 것·받은 것) */
+export type AiCallLog_Deserialize = {
+	id: number,
+	taskId?: string | null,
+	profileId: string,
+	model: string,
+	requestJson: string,
+	responseText: string,
+	finishReason?: string | null,
+	error?: string | null,
+	createdAt: number,
+};
+
+/**  한 번의 호출 (보낸 것·받은 것) */
+export type AiCallLog_Serialize = {
+	id: number,
+	taskId: string | null,
+	profileId: string,
+	model: string,
+	requestJson: string,
+	responseText: string,
+	finishReason: string | null,
+	error: string | null,
+	createdAt: number,
 };
 
 export type AiCapabilities = {
@@ -649,6 +781,8 @@ export type ApiProfiles_Deserialize = {
 	model: string,
 	/**  사용자가 직접 입력해 남겨 둔 모델 이름 (목록에 계속 보임, ADR-020) */
 	customModels?: string[],
+	/**  연결 확인 여부 (테스트 또는 채팅·게임·폰에서 실제 응답을 받으면 true) */
+	verified?: boolean,
 	createdAt: number,
 	updatedAt: number,
 };
@@ -663,6 +797,8 @@ export type ApiProfiles_Serialize = {
 	model: string,
 	/**  사용자가 직접 입력해 남겨 둔 모델 이름 (목록에 계속 보임, ADR-020) */
 	customModels: string[],
+	/**  연결 확인 여부 (테스트 또는 채팅·게임·폰에서 실제 응답을 받으면 true) */
+	verified: boolean,
 	createdAt: number,
 	updatedAt: number,
 };
@@ -696,7 +832,7 @@ export type AppPrompts_Deserialize = {
 	imagePrompt?: PromptSlot,
 	/**  장면 → NovelAI 태그 쓰기 */
 	imagePromptNai?: PromptSlot,
-	/**  대화의 캐릭터 이미지(<cg>) 규칙 ({{keys}} = 키 목록, {{char}} = 캐릭터) */
+	/**  대화의 캐릭터 이미지(<cg>) 규칙 ({{img_keys}} = 키 목록 — 예전 {{keys}}도 됨, {{char}} = 캐릭터) */
 	chatImages?: PromptSlot,
 	/**  이미지 자동 생성: 글쓰기 AI에게 응답 끝 <image> 그림 프롬프트를 쓰게 하는 지시 */
 	autoImage?: PromptSlot,
@@ -706,6 +842,16 @@ export type AppPrompts_Deserialize = {
 	sceneRules?: PromptSlot,
 	/**  대화 요약 지시 ({max} = 요약 최대 토큰) */
 	summary?: PromptSlot,
+	/**  다인봇 지시 ({{names}} = 등장인물 이름). 프리셋 블록의 {{multi_char}} 자리에 */
+	multiChar?: PromptSlot,
+	/**  AI 변수 규칙 ({{var_list}} = 변수 목록·지금 값). 프리셋 블록의 {{vars}} 자리에 */
+	vars?: PromptSlot,
+	/**  대필 기본 지시문 ({{user}} = 내 이름, {{char}} = 상대 이름, {{length}} = 길이) */
+	ghost?: PromptSlot,
+	/**  폰 메신저 프로필 AI 꾸미기 지시문 ({{char}} = 캐릭터 이름) */
+	phoneProfile?: PromptSlot,
+	/**  폰 SNS 페이지 AI 생성 지시문 ({{char}} = 캐릭터 이름) */
+	phoneSns?: PromptSlot,
 };
 
 /**  앱이 AI에 보내는 고정 지시문. 자리마다 사용자가 여러 개 만들어 두고 하나를 고른다 (고르지 않으면 기본값) */
@@ -716,7 +862,7 @@ export type AppPrompts_Serialize = {
 	imagePrompt: PromptSlot,
 	/**  장면 → NovelAI 태그 쓰기 */
 	imagePromptNai: PromptSlot,
-	/**  대화의 캐릭터 이미지(<cg>) 규칙 ({{keys}} = 키 목록, {{char}} = 캐릭터) */
+	/**  대화의 캐릭터 이미지(<cg>) 규칙 ({{img_keys}} = 키 목록 — 예전 {{keys}}도 됨, {{char}} = 캐릭터) */
 	chatImages: PromptSlot,
 	/**  이미지 자동 생성: 글쓰기 AI에게 응답 끝 <image> 그림 프롬프트를 쓰게 하는 지시 */
 	autoImage: PromptSlot,
@@ -726,6 +872,16 @@ export type AppPrompts_Serialize = {
 	sceneRules: PromptSlot,
 	/**  대화 요약 지시 ({max} = 요약 최대 토큰) */
 	summary: PromptSlot,
+	/**  다인봇 지시 ({{names}} = 등장인물 이름). 프리셋 블록의 {{multi_char}} 자리에 */
+	multiChar: PromptSlot,
+	/**  AI 변수 규칙 ({{var_list}} = 변수 목록·지금 값). 프리셋 블록의 {{vars}} 자리에 */
+	vars: PromptSlot,
+	/**  대필 기본 지시문 ({{user}} = 내 이름, {{char}} = 상대 이름, {{length}} = 길이) */
+	ghost: PromptSlot,
+	/**  폰 메신저 프로필 AI 꾸미기 지시문 ({{char}} = 캐릭터 이름) */
+	phoneProfile: PromptSlot,
+	/**  폰 SNS 페이지 AI 생성 지시문 ({{char}} = 캐릭터 이름) */
+	phoneSns: PromptSlot,
 };
 
 export type AppSetting = AppSetting_Serialize | AppSetting_Deserialize;
@@ -736,8 +892,14 @@ export type AppSetting_Deserialize = {
 	language: string,
 	selectedPreset: string,
 	sendOnEnter: boolean,
-	showTimestamps: boolean,
 	selectedApiProfile?: string | null,
+	/**
+	 *  전역 모델 (5-E-29-3, ADR-028 갱신): 자물쇠를 풀어 둔 대화가 전역 API에서 쓸 모델. None = API 프로필의 기본 모델.
+	 *  전역 API를 바꾸면 화면이 비운다 (모델은 API에 딸린 이름)
+	 */
+	selectedModel?: string | null,
+	/**  전역 추론 강도 (5-E-29-3): 자물쇠를 풀어 둔 대화가 쓴다. None·"auto" = 프리셋·공급자 기본 */
+	reasoningEffort?: string | null,
 	selectedCharacterId?: string | null,
 	selectedPersonaId: string,
 	lastPlayedGameId?: string | null,
@@ -754,6 +916,16 @@ export type AppSetting_Deserialize = {
 	usageRetentionDays?: number | null,
 	/**  휴지통 보존 기간(일). None = 계속 보관. 지난 것은 휴지통을 열거나 새로 지울 때 정리 (2-A-3) */
 	trashRetentionDays?: number | null,
+	/**  대화 CG: `이름.png`·`이름-1.png`…을 키 `이름` 하나로 묶고 보일 때 그중 하나를 무작위로 (5-E-25, 기본 꺼짐) */
+	cgGroupVariants?: boolean,
+	/**  응답이 끝났는데 앱이 가려져 있으면 알림 (5-E-17·18, 기본 꺼짐, 기기 전용) */
+	doneNotify?: DoneNotify_Deserialize,
+	/**  AI 호출마다 보낸 프롬프트·받은 글을 이 기기에 남김 (5-E-20-6-7, 기본 꺼짐 — 프롬프트 전체가 디스크에 남음) */
+	aiCallLog?: boolean,
+	/**  응답을 기다릴 때 보이는 타이핑 표시 (5-E-17-1) */
+	typing?: TypingIndicator_Deserialize,
+	/**  로어북(월드인포) 스캔 깊이·재귀 최대 깊이 설정 */
+	worldInfo?: WorldInfoSetting_Deserialize,
 };
 
 export type AppSetting_Serialize = {
@@ -762,8 +934,14 @@ export type AppSetting_Serialize = {
 	language: string,
 	selectedPreset: string,
 	sendOnEnter: boolean,
-	showTimestamps: boolean,
 	selectedApiProfile: string | null,
+	/**
+	 *  전역 모델 (5-E-29-3, ADR-028 갱신): 자물쇠를 풀어 둔 대화가 전역 API에서 쓸 모델. None = API 프로필의 기본 모델.
+	 *  전역 API를 바꾸면 화면이 비운다 (모델은 API에 딸린 이름)
+	 */
+	selectedModel: string | null,
+	/**  전역 추론 강도 (5-E-29-3): 자물쇠를 풀어 둔 대화가 쓴다. None·"auto" = 프리셋·공급자 기본 */
+	reasoningEffort: string | null,
 	selectedCharacterId: string | null,
 	selectedPersonaId: string,
 	lastPlayedGameId: string | null,
@@ -780,6 +958,16 @@ export type AppSetting_Serialize = {
 	usageRetentionDays: number | null,
 	/**  휴지통 보존 기간(일). None = 계속 보관. 지난 것은 휴지통을 열거나 새로 지울 때 정리 (2-A-3) */
 	trashRetentionDays: number | null,
+	/**  대화 CG: `이름.png`·`이름-1.png`…을 키 `이름` 하나로 묶고 보일 때 그중 하나를 무작위로 (5-E-25, 기본 꺼짐) */
+	cgGroupVariants: boolean,
+	/**  응답이 끝났는데 앱이 가려져 있으면 알림 (5-E-17·18, 기본 꺼짐, 기기 전용) */
+	doneNotify: DoneNotify_Serialize,
+	/**  AI 호출마다 보낸 프롬프트·받은 글을 이 기기에 남김 (5-E-20-6-7, 기본 꺼짐 — 프롬프트 전체가 디스크에 남음) */
+	aiCallLog: boolean,
+	/**  응답을 기다릴 때 보이는 타이핑 표시 (5-E-17-1) */
+	typing: TypingIndicator_Serialize,
+	/**  로어북(월드인포) 스캔 깊이·재귀 최대 깊이 설정 */
+	worldInfo: WorldInfoSetting_Serialize,
 };
 
 export type AssetRef = {
@@ -814,6 +1002,16 @@ export type AvailableMove = {
 	travelSeconds: number,
 	available: boolean,
 };
+
+/**  동그란 프로필 칸 안에서 그림의 어느 곳을 보일지: x·y는 그림 안 위치(%), zoom은 확대 배율 */
+export type AvatarFit = {
+	x: number | null,
+	y: number | null,
+	zoom: number | null,
+};
+
+/**  프로필 이미지 UI 표시 형식 (none, 사각형, 정사각형, 원, 커스텀) */
+export type AvatarFrameShape = "none" | "rect" | "square" | "circle" | "custom";
 
 export type BackgroundAssetsInput = BackgroundAssetsInput_Serialize | BackgroundAssetsInput_Deserialize;
 
@@ -1106,10 +1304,22 @@ export type CharacterData_Serialize = {
 /**  프론트 전달용. 경로는 절대 경로 (프론트에서 convertFileSrc로 표시) */
 export type CharacterImage = CharacterImage_Serialize | CharacterImage_Deserialize;
 
-export type CharacterImageUpdate = {
+export type CharacterImageUpdate = CharacterImageUpdate_Serialize | CharacterImageUpdate_Deserialize;
+
+export type CharacterImageUpdate_Deserialize = {
 	key: string,
 	enabled: boolean,
 	sortOrder: number,
+	/**  판 폴더를 옮길 때 (없으면 그대로) */
+	folder?: string | null,
+};
+
+export type CharacterImageUpdate_Serialize = {
+	key: string,
+	enabled: boolean,
+	sortOrder: number,
+	/**  판 폴더를 옮길 때 (없으면 그대로) */
+	folder: string | null,
 };
 
 /**  프론트 전달용. 경로는 절대 경로 (프론트에서 convertFileSrc로 표시) */
@@ -1123,6 +1333,8 @@ export type CharacterImage_Deserialize = {
 	sortOrder: number,
 	createdAt: number,
 	updatedAt: number,
+	/**  판 폴더 (빈 글 = 공통, 5-E-21) */
+	folder: string,
 };
 
 /**  프론트 전달용. 경로는 절대 경로 (프론트에서 convertFileSrc로 표시) */
@@ -1136,6 +1348,8 @@ export type CharacterImage_Serialize = {
 	sortOrder: number,
 	createdAt: number,
 	updatedAt: number,
+	/**  판 폴더 (빈 글 = 공통, 5-E-21) */
+	folder: string,
 };
 
 export type CharacterInput = CharacterInput_Serialize | CharacterInput_Deserialize;
@@ -1185,6 +1399,35 @@ export type CharacterOption = {
 	name: string,
 };
 
+/**  캐릭터 통계 (5-E-12) */
+export type CharacterStats = CharacterStats_Serialize | CharacterStats_Deserialize;
+
+/**  캐릭터 통계 (5-E-12) */
+export type CharacterStats_Deserialize = {
+	/**  대화방 수 (폰 대화 포함) */
+	conversations: number,
+	messages: number,
+	/**  누적 대화 시간(초): 같은 대화의 이어진 메시지 사이가 30분 이하면 그 사이를 대화한 시간으로 센다 */
+	chatSeconds: number,
+	/**  요일별 메시지 수 (0 = 일요일 … 6 = 토요일, 사용자 시간대) */
+	weekdays: number[],
+	firstAt?: number | null,
+	lastAt?: number | null,
+};
+
+/**  캐릭터 통계 (5-E-12) */
+export type CharacterStats_Serialize = {
+	/**  대화방 수 (폰 대화 포함) */
+	conversations: number,
+	messages: number,
+	/**  누적 대화 시간(초): 같은 대화의 이어진 메시지 사이가 30분 이하면 그 사이를 대화한 시간으로 센다 */
+	chatSeconds: number,
+	/**  요일별 메시지 수 (0 = 일요일 … 6 = 토요일, 사용자 시간대) */
+	weekdays: number[],
+	firstAt: number | null,
+	lastAt: number | null,
+};
+
 export type Character_Deserialize = {
 	id: string,
 	name: string,
@@ -1193,6 +1436,8 @@ export type Character_Deserialize = {
 	cover?: string | null,
 	/**  커버에서 보일 세로 위치 % (0 위 ~ 100 아래) */
 	coverY?: number | null,
+	/**  프로필 그림 확대·위치 (없으면 가운데·확대 없음) */
+	avatarFit?: AvatarFit | null,
 	description: string,
 	alternateDescriptions: string[],
 	firstMessage?: string | null,
@@ -1221,6 +1466,8 @@ export type Character_Serialize = {
 	cover: string | null,
 	/**  커버에서 보일 세로 위치 % (0 위 ~ 100 아래) */
 	coverY: number | null,
+	/**  프로필 그림 확대·위치 (없으면 가운데·확대 없음) */
+	avatarFit: AvatarFit | null,
 	description: string,
 	alternateDescriptions: string[],
 	firstMessage: string | null,
@@ -1304,14 +1551,14 @@ export type CompactResult = {
 
 export type ConflictChoice = "keep_local" | "use_remote" | "dismiss";
 
-/**  컨텍스트 사용량 (오른쪽 패널). 마지막으로 보낸 프롬프트 기준 */
+/**  컨텍스트 사용량 (오른쪽 패널). 대화 화면은 지금 상태로 계산하고, 게임은 마지막 프롬프트 기준 */
 export type ContextUsage = ContextUsage_Serialize | ContextUsage_Deserialize;
 
-/**  컨텍스트 사용량 (오른쪽 패널). 마지막으로 보낸 프롬프트 기준 */
+/**  컨텍스트 사용량 (오른쪽 패널). 대화 화면은 지금 상태로 계산하고, 게임은 마지막 프롬프트 기준 */
 export type ContextUsage_Deserialize = {
-	/**  마지막 프롬프트의 토큰 (보낸 적 없으면 None) */
+	/**  프롬프트 토큰 합계 (계산할 수 없으면 None) */
 	used?: number | null,
-	/**  그중 시스템(규칙·캐릭터·월드인포·노트 등) */
+	/**  그중 시스템(규칙·캐릭터·프리셋·월드인포·노트 등) */
 	system: number,
 	/**  그중 대화 기록 */
 	history: number,
@@ -1323,19 +1570,19 @@ export type ContextUsage_Deserialize = {
 	reserved: number,
 	presetId?: string | null,
 	presetName?: string | null,
-	/**  커뮤니티 플러그인이 더한 프롬프트 블록 (6-D-5, 시스템 토큰에 들어 있음) */
+	/**  커뮤니티 플러그인이 마지막 응답에 더한 프롬프트 블록 (6-D-5) */
 	plugins: PluginPromptUse[],
-	/**  마지막 응답에서 지난 대화를 떠올린 기록 (3-C-5, 대화 기록 토큰에 들어 있음). 자동 회상이 꺼져 있었으면 None */
+	/**  마지막 응답에서 지난 대화를 떠올린 기록 (3-C-5). 자동 회상이 꺼져 있으면 None */
 	memoryRecall?: RecallMeta_Deserialize | null,
-	/**  마지막 응답을 만들 때 쓴 대화 요약 (3-D, 시스템 토큰에 들어 있음) */
+	/**  지금 컨텍스트에 들어가는 대화 요약 (3-D, 시스템 토큰에 포함) */
 	summary?: SummaryUse | null,
 };
 
-/**  컨텍스트 사용량 (오른쪽 패널). 마지막으로 보낸 프롬프트 기준 */
+/**  컨텍스트 사용량 (오른쪽 패널). 대화 화면은 지금 상태로 계산하고, 게임은 마지막 프롬프트 기준 */
 export type ContextUsage_Serialize = {
-	/**  마지막 프롬프트의 토큰 (보낸 적 없으면 None) */
+	/**  프롬프트 토큰 합계 (계산할 수 없으면 None) */
 	used: number | null,
-	/**  그중 시스템(규칙·캐릭터·월드인포·노트 등) */
+	/**  그중 시스템(규칙·캐릭터·프리셋·월드인포·노트 등) */
 	system: number,
 	/**  그중 대화 기록 */
 	history: number,
@@ -1347,11 +1594,11 @@ export type ContextUsage_Serialize = {
 	reserved: number,
 	presetId: string | null,
 	presetName: string | null,
-	/**  커뮤니티 플러그인이 더한 프롬프트 블록 (6-D-5, 시스템 토큰에 들어 있음) */
+	/**  커뮤니티 플러그인이 마지막 응답에 더한 프롬프트 블록 (6-D-5) */
 	plugins: PluginPromptUse[],
-	/**  마지막 응답에서 지난 대화를 떠올린 기록 (3-C-5, 대화 기록 토큰에 들어 있음). 자동 회상이 꺼져 있었으면 None */
+	/**  마지막 응답에서 지난 대화를 떠올린 기록 (3-C-5). 자동 회상이 꺼져 있으면 None */
 	memoryRecall: RecallMeta_Serialize | null,
-	/**  마지막 응답을 만들 때 쓴 대화 요약 (3-D, 시스템 토큰에 들어 있음) */
+	/**  지금 컨텍스트에 들어가는 대화 요약 (3-D, 시스템 토큰에 포함) */
 	summary: SummaryUse | null,
 };
 
@@ -1487,6 +1734,13 @@ export type Conversation_Deserialize = {
 	apiProfileId?: string | null,
 	/**  이 대화에서 고른 모델. 없으면 API 프로필의 기본 모델 (ADR-020) */
 	model?: string | null,
+	/**
+	 *  마지막 메시지의 작성 시각 (메시지가 없으면 None). 목록의 시각·정렬은 이것을 먼저 본다 —
+	 *  updated_at은 이 기기에서 바뀐 시각이라 가져온 대화는 가져온 때가 된다
+	 */
+	lastMessageAt?: number | null,
+	/**  읽기 모드: 보내는 줄을 숨김 (5-E-6) */
+	readMode: boolean,
 };
 
 export type Conversation_Serialize = {
@@ -1510,6 +1764,13 @@ export type Conversation_Serialize = {
 	apiProfileId: string | null,
 	/**  이 대화에서 고른 모델. 없으면 API 프로필의 기본 모델 (ADR-020) */
 	model: string | null,
+	/**
+	 *  마지막 메시지의 작성 시각 (메시지가 없으면 None). 목록의 시각·정렬은 이것을 먼저 본다 —
+	 *  updated_at은 이 기기에서 바뀐 시각이라 가져온 대화는 가져온 때가 된다
+	 */
+	lastMessageAt: number | null,
+	/**  읽기 모드: 보내는 줄을 숨김 (5-E-6) */
+	readMode: boolean,
 };
 
 export type CorePlugin = {
@@ -1558,6 +1819,12 @@ export type CssTheme_Deserialize = {
 	/**  직접 쓰는 CSS (색 편집으로 부족할 때) */
 	cssContent?: string,
 	colors?: ThemeColors_Deserialize,
+	/**  이 테마를 고르면 쓸 강조색 (팔레트 id 또는 #rrggbb). 없으면 설정을 따름 (5-E-14) */
+	accentColor?: string | null,
+	/**  이 테마를 고르면 쓸 회색 톤. 없으면 설정을 따름 */
+	grayTone?: string | null,
+	/**  이 테마를 고르면 쓸 대화 화면 표시 설정. 없으면 설정을 따름 */
+	chat?: ThemeChatSetting_Deserialize | null,
 };
 
 export type CssTheme_Serialize = {
@@ -1568,6 +1835,12 @@ export type CssTheme_Serialize = {
 	/**  직접 쓰는 CSS (색 편집으로 부족할 때) */
 	cssContent: string,
 	colors: ThemeColors_Serialize,
+	/**  이 테마를 고르면 쓸 강조색 (팔레트 id 또는 #rrggbb). 없으면 설정을 따름 (5-E-14) */
+	accentColor?: string,
+	/**  이 테마를 고르면 쓸 회색 톤. 없으면 설정을 따름 */
+	grayTone?: string,
+	/**  이 테마를 고르면 쓸 대화 화면 표시 설정. 없으면 설정을 따름 */
+	chat?: ThemeChatSetting_Serialize,
 };
 
 export type Cue = Cue_Serialize | Cue_Deserialize;
@@ -1644,6 +1917,39 @@ export type DialogueDoneEvent = {
 export type DisplayItem = {
 	role: string,
 	content: string,
+};
+
+/**  끝나면 알림 (5-E-17·18) */
+export type DoneNotify = DoneNotify_Serialize | DoneNotify_Deserialize;
+
+/**  끝나면 알림 (5-E-17·18) */
+export type DoneNotify_Deserialize = {
+	enabled?: boolean,
+	/**  알림 제목 (비면 앱 이름, `{{char}}` = 캐릭터 이름) */
+	title?: string,
+	/**  알림 아이콘 그림 경로 (없으면 앱 아이콘) */
+	icon?: string | null,
+	/**  알림 소리 방식 (default / mute / custom) */
+	soundMode?: NotifySoundMode,
+	/**  커스텀 알림음 파일 경로 (앱 데이터 `notify/sound/`에 복사한 것) */
+	soundPath?: string | null,
+	/**  커스텀 알림음 볼륨 (0.0 ~ 1.0, 기본 0.8) */
+	soundVolume?: number | null,
+};
+
+/**  끝나면 알림 (5-E-17·18) */
+export type DoneNotify_Serialize = {
+	enabled: boolean,
+	/**  알림 제목 (비면 앱 이름, `{{char}}` = 캐릭터 이름) */
+	title: string,
+	/**  알림 아이콘 그림 경로 (없으면 앱 아이콘) */
+	icon: string | null,
+	/**  알림 소리 방식 (default / mute / custom) */
+	soundMode: NotifySoundMode,
+	/**  커스텀 알림음 파일 경로 (앱 데이터 `notify/sound/`에 복사한 것) */
+	soundPath: string | null,
+	/**  커스텀 알림음 볼륨 (0.0 ~ 1.0, 기본 0.8) */
+	soundVolume: number | null,
 };
 
 export type DriveStatus = DriveStatus_Serialize | DriveStatus_Deserialize;
@@ -1952,6 +2258,27 @@ export type GameConversations_Serialize = {
 	title: string | null,
 	createdAt: number,
 	updatedAt: number,
+};
+
+/**  복사 결과 */
+export type GameCopy = GameCopy_Serialize | GameCopy_Deserialize;
+
+/**  복사 결과 */
+export type GameCopy_Deserialize = {
+	character: Character_Deserialize,
+	/**  새로 만든 로어북 (NPC·아이템·장소·이벤트) */
+	bookId: string,
+	/**  플레이 기록을 옮겼으면 그 대화 */
+	conversation?: Conversation_Deserialize | null,
+};
+
+/**  복사 결과 */
+export type GameCopy_Serialize = {
+	character: Character_Serialize,
+	/**  새로 만든 로어북 (NPC·아이템·장소·이벤트) */
+	bookId: string,
+	/**  플레이 기록을 옮겼으면 그 대화 */
+	conversation: Conversation_Serialize | null,
 };
 
 export type GameEncounterEntriesInput = GameEncounterEntriesInput_Serialize | GameEncounterEntriesInput_Deserialize;
@@ -2899,6 +3226,28 @@ export type Issue = {
 	text: string,
 };
 
+export type LegacyQuickReplySet = LegacyQuickReplySet_Serialize | LegacyQuickReplySet_Deserialize;
+
+export type LegacyQuickReplySet_Deserialize = {
+	id?: string,
+	name?: string,
+	/**  대화에서 고르지 않았을 때 모든 대화에 보임 */
+	enabled?: boolean,
+	/**  스크립트가 아닌 글: true면 바로 보냄(AI 답장 요금), false면 입력칸에 넣기만 */
+	autoSend?: boolean,
+	items?: QuickReply_Deserialize[],
+};
+
+export type LegacyQuickReplySet_Serialize = {
+	id: string,
+	name: string,
+	/**  대화에서 고르지 않았을 때 모든 대화에 보임 */
+	enabled: boolean,
+	/**  스크립트가 아닌 글: true면 바로 보냄(AI 답장 요금), false면 입력칸에 넣기만 */
+	autoSend: boolean,
+	items: QuickReply_Serialize[],
+};
+
 export type LibraryRoot = {
 	folders: { [key in string]: FolderNode },
 	rootFiles: Value[],
@@ -2964,6 +3313,200 @@ export type MacroMode = "none" |
 "raw" | 
 /**  정규식 특수문자를 이스케이프해서 넣음 */
 "escaped";
+
+/**  시메지 행동별 가중치(빈도) */
+export type MascotBehaviorWeights = MascotBehaviorWeights_Serialize | MascotBehaviorWeights_Deserialize;
+
+/**  시메지 행동별 가중치(빈도) */
+export type MascotBehaviorWeights_Deserialize = {
+	idle?: number,
+	walk?: number,
+	sitting?: number,
+	sleep?: number,
+	working?: number,
+};
+
+/**  시메지 행동별 가중치(빈도) */
+export type MascotBehaviorWeights_Serialize = {
+	idle: number,
+	walk: number,
+	sitting: number,
+	sleep: number,
+	working: number,
+};
+
+/**  개별 시메지 캐릭터 설정 */
+export type MascotCharacterConfig = MascotCharacterConfig_Serialize | MascotCharacterConfig_Deserialize;
+
+/**  개별 시메지 캐릭터 설정 */
+export type MascotCharacterConfig_Deserialize = {
+	id?: string,
+	name?: string,
+	enabled?: boolean,
+	characterId?: string | null,
+	personaId?: string | null,
+	apiProfileId?: string | null,
+	model?: string | null,
+	presetId?: string | null,
+	useAiDialogue?: boolean,
+	scale?: number | null,
+	speed?: number | null,
+	actionIntervalSec?: number | null,
+	behaviorWeights?: MascotBehaviorWeights_Deserialize,
+	images?: MascotImages_Deserialize,
+	dialogues?: MascotDialogues_Deserialize,
+	lastSeenAt?: number | null,
+};
+
+/**  개별 시메지 캐릭터 설정 */
+export type MascotCharacterConfig_Serialize = {
+	id: string,
+	name: string,
+	enabled: boolean,
+	characterId: string | null,
+	personaId: string | null,
+	apiProfileId: string | null,
+	model: string | null,
+	presetId: string | null,
+	useAiDialogue: boolean,
+	scale: number | null,
+	speed: number | null,
+	actionIntervalSec: number | null,
+	behaviorWeights: MascotBehaviorWeights_Serialize,
+	images: MascotImages_Serialize,
+	dialogues: MascotDialogues_Serialize,
+	lastSeenAt: number | null,
+};
+
+export type MascotChatHistoryItem = {
+	role: string,
+	content: string,
+};
+
+/**  시메지 AI 응답 요청 (유저와 대화 / 선물 반응 등) */
+export type MascotChatRequest = MascotChatRequest_Serialize | MascotChatRequest_Deserialize;
+
+/**  시메지 AI 응답 요청 (유저와 대화 / 선물 반응 등) */
+export type MascotChatRequest_Deserialize = {
+	mascotId: string,
+	userMessage: string,
+	/**  상황 힌트 (예: "chat", "gift", "greeting", "long_absence", "notify") */
+	eventKind?: string | null,
+	/**  최근 짧은 대화 기록 (role: "user" | "assistant", content) */
+	history?: MascotChatHistoryItem[],
+};
+
+/**  시메지 AI 응답 요청 (유저와 대화 / 선물 반응 등) */
+export type MascotChatRequest_Serialize = {
+	mascotId: string,
+	userMessage: string,
+	/**  상황 힌트 (예: "chat", "gift", "greeting", "long_absence", "notify") */
+	eventKind: string | null,
+	/**  최근 짧은 대화 기록 (role: "user" | "assistant", content) */
+	history: MascotChatHistoryItem[],
+};
+
+/**  시메지 상황별 대사 (각 항목은 여러 줄/후보 중 랜덤 선택, {{user}}/{{char}}/{{notify}} 매크로 지원) */
+export type MascotDialogues = MascotDialogues_Serialize | MascotDialogues_Deserialize;
+
+/**  시메지 상황별 대사 (각 항목은 여러 줄/후보 중 랜덤 선택, {{user}}/{{char}}/{{notify}} 매크로 지원) */
+export type MascotDialogues_Deserialize = {
+	/**  기본 인사 (등장 시) */
+	greeting?: string[],
+	/**  오랜만에 볼 경우 (7일 이상 미접속) */
+	longAbsence?: string[],
+	/**  선물을 준 경우 */
+	gift?: string[],
+	/**  알림이 온 경우 ({{notify}} 치환) */
+	notify?: string[],
+	/**  잡아 끈 경우 */
+	drag?: string[],
+	/**  짜증 난 경우 */
+	annoyed?: string[],
+	/**  행복해한 경우 */
+	happy?: string[],
+	/**  평소 혼잣말 */
+	idleChatter?: string[],
+	/**  다른 시메지와 대화할 때의 기본 대사 (AI 미사용/오프라인 폴백) */
+	peerChat?: string[],
+};
+
+/**  시메지 상황별 대사 (각 항목은 여러 줄/후보 중 랜덤 선택, {{user}}/{{char}}/{{notify}} 매크로 지원) */
+export type MascotDialogues_Serialize = {
+	/**  기본 인사 (등장 시) */
+	greeting: string[],
+	/**  오랜만에 볼 경우 (7일 이상 미접속) */
+	longAbsence: string[],
+	/**  선물을 준 경우 */
+	gift: string[],
+	/**  알림이 온 경우 ({{notify}} 치환) */
+	notify: string[],
+	/**  잡아 끈 경우 */
+	drag: string[],
+	/**  짜증 난 경우 */
+	annoyed: string[],
+	/**  행복해한 경우 */
+	happy: string[],
+	/**  평소 혼잣말 */
+	idleChatter: string[],
+	/**  다른 시메지와 대화할 때의 기본 대사 (AI 미사용/오프라인 폴백) */
+	peerChat: string[],
+};
+
+/**  시메지 포즈/상태별 이미지 경로 목록 (여러 장이면 프레임 애니메이션) */
+export type MascotImages = MascotImages_Serialize | MascotImages_Deserialize;
+
+/**  시메지 포즈/상태별 이미지 경로 목록 (여러 장이면 프레임 애니메이션) */
+export type MascotImages_Deserialize = {
+	idle?: string[],
+	walk?: string[],
+	sitting?: string[],
+	sleep?: string[],
+	drag?: string[],
+	happy?: string[],
+	annoyed?: string[],
+	working?: string[],
+};
+
+/**  시메지 포즈/상태별 이미지 경로 목록 (여러 장이면 프레임 애니메이션) */
+export type MascotImages_Serialize = {
+	idle: string[],
+	walk: string[],
+	sitting: string[],
+	sleep: string[],
+	drag: string[],
+	happy: string[],
+	annoyed: string[],
+	working: string[],
+};
+
+/**  두 시메지 간 대화 생성 요청 */
+export type MascotPeerChatRequest = MascotPeerChatRequest_Serialize | MascotPeerChatRequest_Deserialize;
+
+/**  두 시메지 간 대화 생성 요청 */
+export type MascotPeerChatRequest_Deserialize = {
+	mascotAId: string,
+	mascotBId: string,
+	topic?: string | null,
+	/**  타이머가 시작한 대화면 true (`run_by = auto`, `pair_chat_use_ai`가 켜져 있어야 함). 사용자가 부른 것이면 false */
+	auto?: boolean,
+};
+
+/**  두 시메지 간 대화 생성 요청 */
+export type MascotPeerChatRequest_Serialize = {
+	mascotAId: string,
+	mascotBId: string,
+	topic: string | null,
+	/**  타이머가 시작한 대화면 true (`run_by = auto`, `pair_chat_use_ai`가 켜져 있어야 함). 사용자가 부른 것이면 false */
+	auto: boolean,
+};
+
+/**  두 시메지 간 대화의 한 턴 */
+export type MascotPeerChatTurn = {
+	mascotId: string,
+	name: string,
+	text: string,
+};
 
 export type MemoryRef = {
 	conversationId: string,
@@ -3310,6 +3853,21 @@ export type NewGameAsset_Serialize = {
 	weatherId: string | null,
 };
 
+/**  알림 소리 방식 */
+export type NotifySoundMode = 
+/**  OS 기본 알림음 */
+"default" | 
+/**  무음 */
+"mute" | 
+/**  사용자가 올린 오디오 파일 (없으면 OS 기본 알림음) */
+"custom";
+
+/**  프런트에 커스텀 알림음 재생을 요청하는 이벤트 페이로드 */
+export type NotifySoundPayload = {
+	path: string,
+	volume: number | null,
+};
+
 /**
  *  dispatch_command의 GameResponse와 같은 취지: 프론트가 "이벤트 배열 받아서 처리"
  *  하나로 엔진 커맨드/AI 대화 두 경로를 똑같이 다루게 한다.
@@ -3548,6 +4106,7 @@ export type PersonaInput = PersonaInput_Serialize | PersonaInput_Deserialize;
 
 export type PersonaInput_Deserialize = {
 	name: string,
+	alias?: string | null,
 	avatar?: string | null,
 	description: string,
 	worldInfoIds: string[],
@@ -3558,6 +4117,7 @@ export type PersonaInput_Deserialize = {
 
 export type PersonaInput_Serialize = {
 	name: string,
+	alias: string | null,
 	avatar: string | null,
 	description: string,
 	worldInfoIds: string[],
@@ -3574,6 +4134,8 @@ export type PersonaUsage = {
 export type Persona_Deserialize = {
 	id: string,
 	name: string,
+	/**  목록·사이드바 표시용 별칭 (비우면 name 표시, 대화 {{user}}는 항상 name 사용) */
+	alias?: string | null,
 	avatar?: string | null,
 	description: string,
 	worldInfoIds: string[],
@@ -3582,11 +4144,15 @@ export type Persona_Deserialize = {
 	isSystemDefault: boolean,
 	createdAt: number,
 	updatedAt: number,
+	/**  프로필 그림 확대·위치 (없으면 가운데·확대 없음) */
+	avatarFit?: AvatarFit | null,
 };
 
 export type Persona_Serialize = {
 	id: string,
 	name: string,
+	/**  목록·사이드바 표시용 별칭 (비우면 name 표시, 대화 {{user}}는 항상 name 사용) */
+	alias: string | null,
 	avatar: string | null,
 	description: string,
 	worldInfoIds: string[],
@@ -3595,6 +4161,8 @@ export type Persona_Serialize = {
 	isSystemDefault: boolean,
 	createdAt: number,
 	updatedAt: number,
+	/**  프로필 그림 확대·위치 (없으면 가운데·확대 없음) */
+	avatarFit: AvatarFit | null,
 };
 
 /**  폰 연락처. 주인(폰 주인)과 연락처가 각각 페르소나 또는 캐릭터 */
@@ -3619,6 +4187,12 @@ export type PhoneSetting_Deserialize = {
 	/**  폰 대화의 기본 모델 (비우면 그 API의 기본 모델. ADR-020). API를 정했을 때만 쓴다 */
 	model?: string,
 	presetId?: string | null,
+	/**  폰 날짜·시간 직접 설정 여부 (false면 시스템 현재 시각 사용) */
+	customDatetimeEnabled?: boolean,
+	/**  직접 설정한 폰 날짜 (YYYY-MM-DD) */
+	customDate?: string,
+	/**  직접 설정한 폰 시간 (HH:MM) */
+	customTime?: string,
 };
 
 /**  폰 대화의 기본 API·프리셋 (대화에 따로 고르지 않았을 때. 비우면 앱 기본값) */
@@ -3627,6 +4201,12 @@ export type PhoneSetting_Serialize = {
 	/**  폰 대화의 기본 모델 (비우면 그 API의 기본 모델. ADR-020). API를 정했을 때만 쓴다 */
 	model: string,
 	presetId: string | null,
+	/**  폰 날짜·시간 직접 설정 여부 (false면 시스템 현재 시각 사용) */
+	customDatetimeEnabled: boolean,
+	/**  직접 설정한 폰 날짜 (YYYY-MM-DD) */
+	customDate: string,
+	/**  직접 설정한 폰 시간 (HH:MM) */
+	customTime: string,
 };
 
 export type Playlist = Playlist_Serialize | Playlist_Deserialize;
@@ -3827,6 +4407,10 @@ export type PluginSetting_Deserialize = {
 	rewrite?: RewriteSetting_Deserialize,
 	/**  대필 (5-D, ADR-018) — 기기 전용 */
 	ghost?: GhostSetting_Deserialize,
+	/**  빠른 답장 세트 (5-E-20-5-3, ADR-025) — 같이 씀. 켜짐/꺼짐은 코어 플러그인 `slash` */
+	quickReply?: QuickReplySetting_Deserialize,
+	/**  상태창·변수 (5-F-4, ADR-029) — 기기 전용 */
+	status?: StatusSetting_Deserialize,
 };
 
 export type PluginSetting_Serialize = {
@@ -3848,6 +4432,10 @@ export type PluginSetting_Serialize = {
 	rewrite: RewriteSetting_Serialize,
 	/**  대필 (5-D, ADR-018) — 기기 전용 */
 	ghost: GhostSetting_Serialize,
+	/**  빠른 답장 세트 (5-E-20-5-3, ADR-025) — 같이 씀. 켜짐/꺼짐은 코어 플러그인 `slash` */
+	quickReply: QuickReplySetting_Serialize,
+	/**  상태창·변수 (5-F-4, ADR-029) — 기기 전용 */
+	status: StatusSetting_Serialize,
 };
 
 export type PluginVersion = PluginVersion_Serialize | PluginVersion_Deserialize;
@@ -4015,6 +4603,8 @@ export type PromptMessageItem_Deserialize = {
 	token: number,
 	/**  함께 보낼 이미지 (파일 경로). 어댑터가 읽어서 공급자 형식으로 넣는다 */
 	images?: string[],
+	/**  어느 시스템이 주입한 메시지인지 ('보낸 컨텍스트' 표시용) */
+	source?: PromptSource_Deserialize | null,
 };
 
 export type PromptMessageItem_Serialize = {
@@ -4024,6 +4614,8 @@ export type PromptMessageItem_Serialize = {
 	token: number,
 	/**  함께 보낼 이미지 (파일 경로). 어댑터가 읽어서 공급자 형식으로 넣는다 */
 	images?: string[],
+	/**  어느 시스템이 주입한 메시지인지 ('보낸 컨텍스트' 표시용) */
+	source?: PromptSource_Serialize,
 };
 
 /**  PromptManager가 만든 최종 프롬프트. 공급자 형식과 무관하며 어댑터가 각자 형식으로 바꾼다. */
@@ -4113,6 +4705,25 @@ export type PromptSlot = {
 	items: PromptVariant[],
 };
 
+/**  프롬프트 메시지가 어느 시스템에서 주입되었는지 ('보낸 컨텍스트' 표시용, 공급자 요청에는 쓰지 않음) */
+export type PromptSource = PromptSource_Serialize | PromptSource_Deserialize;
+
+/**  프롬프트 메시지가 어느 시스템에서 주입되었는지 ('보낸 컨텍스트' 표시용, 공급자 요청에는 쓰지 않음) */
+export type PromptSource_Deserialize = {
+	/**  주입한 시스템 종류 (preset, world_info, system_rules, character, persona, examples, chat, user_input, qr, author_note, inject, recall, regen_extra, plugin, ghost) */
+	kind: string,
+	/**  프리셋 블록 이름, 플러그인 이름, /inject id 등 세부 이름 */
+	name?: string | null,
+};
+
+/**  프롬프트 메시지가 어느 시스템에서 주입되었는지 ('보낸 컨텍스트' 표시용, 공급자 요청에는 쓰지 않음) */
+export type PromptSource_Serialize = {
+	/**  주입한 시스템 종류 (preset, world_info, system_rules, character, persona, examples, chat, user_input, qr, author_note, inject, recall, regen_extra, plugin, ghost) */
+	kind: string,
+	/**  프리셋 블록 이름, 플러그인 이름, /inject id 등 세부 이름 */
+	name?: string,
+};
+
 /**  사용자가 만든 프롬프트 하나 */
 export type PromptVariant = {
 	id: string,
@@ -4132,6 +4743,109 @@ export type ProposalKind = "character" | "persona" |
 "lorebook" | "lorebook_entry" | 
 /**  대화의 메시지 글 */
 "message";
+
+export type QuickReply = QuickReply_Serialize | QuickReply_Deserialize;
+
+export type QuickReplySet = QuickReplySet_Serialize | QuickReplySet_Deserialize;
+
+export type QuickReplySetInput = QuickReplySetInput_Serialize | QuickReplySetInput_Deserialize;
+
+export type QuickReplySetInput_Deserialize = {
+	/**  없으면 새로 만든다 */
+	id?: string | null,
+	name: string,
+	scope: string,
+	scopeId?: string | null,
+	enabled: boolean,
+	autoSend: boolean,
+	items: QuickReply_Deserialize[],
+	sortOrder: number,
+};
+
+export type QuickReplySetInput_Serialize = {
+	/**  없으면 새로 만든다 */
+	id: string | null,
+	name: string,
+	scope: string,
+	scopeId: string | null,
+	enabled: boolean,
+	autoSend: boolean,
+	items: QuickReply_Serialize[],
+	sortOrder: number,
+};
+
+export type QuickReplySet_Deserialize = {
+	id: string,
+	name: string,
+	/**  global / character / preset */
+	scope: string,
+	/**  character_id / preset_id (전역이면 없음) */
+	scopeId?: string | null,
+	enabled: boolean,
+	/**  스크립트가 아닌 글: true면 바로 보냄(AI 답장 요금), false면 입력칸에 넣기만 */
+	autoSend: boolean,
+	items: QuickReply_Deserialize[],
+	sortOrder: number,
+	createdAt: number,
+	updatedAt: number,
+};
+
+export type QuickReplySet_Serialize = {
+	id: string,
+	name: string,
+	/**  global / character / preset */
+	scope: string,
+	/**  character_id / preset_id (전역이면 없음) */
+	scopeId: string | null,
+	enabled: boolean,
+	/**  스크립트가 아닌 글: true면 바로 보냄(AI 답장 요금), false면 입력칸에 넣기만 */
+	autoSend: boolean,
+	items: QuickReply_Serialize[],
+	sortOrder: number,
+	createdAt: number,
+	updatedAt: number,
+};
+
+/**  빠른 답장: 입력칸 위 버튼. 누르면 `/`로 시작하는 글은 스크립트로 실행, 아니면 보내거나 입력칸에 넣음 */
+export type QuickReplySetting = QuickReplySetting_Serialize | QuickReplySetting_Deserialize;
+
+/**  빠른 답장: 입력칸 위 버튼. 누르면 `/`로 시작하는 글은 스크립트로 실행, 아니면 보내거나 입력칸에 넣음 */
+export type QuickReplySetting_Deserialize = {
+	/**  예전(5-E-20-5-3) 자리. 지금은 DB(quick_reply_sets)에 두고, 처음 목록을 읽을 때 옮긴 뒤 비운다 */
+	sets?: LegacyQuickReplySet_Deserialize[],
+	/**  슬래시 스크립트 한 번 실행에서 AI를 부를 수 있는 횟수 (1~50, ADR-025 5-E-20-6-0) */
+	aiLimit?: number,
+	/**  전역 변수 (/setglobalvar, 기기 사이에 같이 씀) */
+	globals?: { [key in string]: string },
+};
+
+/**  빠른 답장: 입력칸 위 버튼. 누르면 `/`로 시작하는 글은 스크립트로 실행, 아니면 보내거나 입력칸에 넣음 */
+export type QuickReplySetting_Serialize = {
+	/**  예전(5-E-20-5-3) 자리. 지금은 DB(quick_reply_sets)에 두고, 처음 목록을 읽을 때 옮긴 뒤 비운다 */
+	sets: LegacyQuickReplySet_Serialize[],
+	/**  슬래시 스크립트 한 번 실행에서 AI를 부를 수 있는 횟수 (1~50, ADR-025 5-E-20-6-0) */
+	aiLimit: number,
+	/**  전역 변수 (/setglobalvar, 기기 사이에 같이 씀) */
+	globals: { [key in string]: string },
+};
+
+export type QuickReply_Deserialize = {
+	id?: string,
+	label?: string,
+	/**  보낼 글 또는 슬래시 스크립트 */
+	message?: string,
+	/**  버튼 줄에 보이지 않음 (스크립트에서만 쓰는 것) */
+	hidden?: boolean,
+};
+
+export type QuickReply_Serialize = {
+	id: string,
+	label: string,
+	/**  보낼 글 또는 슬래시 스크립트 */
+	message: string,
+	/**  버튼 줄에 보이지 않음 (스크립트에서만 쓰는 것) */
+	hidden: boolean,
+};
 
 /**  공급자 계정의 잔여 (구독형은 우리 앱이 막지 않고 보여주기만 한다. 요금 없음, 누를 때만 읽음) */
 export type QuotaLine = {
@@ -4466,6 +5180,28 @@ export type SearchResult = {
 
 export type Severity = "error" | "warning";
 
+export type SillyTavernDataExport = {
+	characters: number,
+	chats: number,
+	books: number,
+	presets: number,
+	personas: number,
+	regex: number,
+	/**  넣지 못한 것 (이름: 이유) */
+	warnings: string[],
+};
+
+export type SillyTavernDataImport = {
+	characters: number,
+	chats: number,
+	books: number,
+	presets: number,
+	regex: number,
+	personas: number,
+	/**  가져오지 못했거나 건너뛴 것 (파일 이름: 이유) */
+	warnings: string[],
+};
+
 export type SillyTavernImport = SillyTavernImport_Serialize | SillyTavernImport_Deserialize;
 
 export type SillyTavernImport_Deserialize = { kind: "character"; character: Character_Deserialize; worldInfoBookId?: string | null; regexCount: number; warnings: string[] } | { kind: "preset"; presetId: string; name: string; blockCount: number; regexCount: number; warnings: string[] } | { kind: "regex"; scripts: RegexScript_Deserialize[]; warnings: string[] } | { kind: "worldInfo"; book: WorldInfoBook_Deserialize; entryCount: number; warnings: string[] } | { kind: "chat"; conversation: Conversation_Deserialize; messageCount: number; hiddenCount: number; warnings: string[] };
@@ -4478,6 +5214,14 @@ export type SillyTavernKind = "character" | "preset" | "regex" | "worldInfo" | "
 export type SkippedDevice = {
 	deviceId: string,
 	reason: string,
+};
+
+/**  /gen·/genraw 결과. truncated: 응답 길이 한도에서 잘림 (화면이 경고를 띄움) */
+export type SlashGenResult = {
+	text: string,
+	truncated: boolean,
+	/**  보낸 프롬프트 (PromptMessage). 이 글이 들어간 메시지에 save_message_prompt로 남긴다 (5-E-20-6-10) */
+	prompt: Value,
 };
 
 /**  프론트로 나가는 한 줄. cues는 이 줄을 보여주기 직전에 순서대로 실행한다. */
@@ -4499,6 +5243,21 @@ export type StageLine_Serialize = {
 	speaker: string | null,
 	text: string,
 	cues: Cue_Serialize[],
+};
+
+/**  상태창·변수 플러그인 설정 */
+export type StatusSetting = StatusSetting_Serialize | StatusSetting_Deserialize;
+
+/**  상태창·변수 플러그인 설정 */
+export type StatusSetting_Deserialize = {
+	/**  AI가 대화 변수를 읽고 바꾸기 (5-F-4-4, 기본 꺼짐). 켜면 변수 규칙과 지금 값이 프롬프트에 들어가 응답마다 토큰이 는다 */
+	aiVars?: boolean,
+};
+
+/**  상태창·변수 플러그인 설정 */
+export type StatusSetting_Serialize = {
+	/**  AI가 대화 변수를 읽고 바꾸기 (5-F-4-4, 기본 꺼짐). 켜면 변수 규칙과 지금 값이 프롬프트에 들어가 응답마다 토큰이 는다 */
+	aiVars: boolean,
 };
 
 export type StorageUsage = {
@@ -4620,8 +5379,27 @@ export type SyncBackup = {
 };
 
 /**  묶음 하나의 요약 (화면용) */
-export type SyncBundleInfo = {
+export type SyncBundleInfo = SyncBundleInfo_Serialize | SyncBundleInfo_Deserialize;
+
+/**  묶음 하나의 요약 (화면용) */
+export type SyncBundleInfo_Deserialize = {
 	deviceId: string,
+	/**  보낸 기기의 이름 (5-E-16-1, 없으면 None — 화면은 id 앞자리) */
+	deviceName?: string | null,
+	createdAt: number,
+	appVersion: string,
+	rows: number,
+	tombstones: number,
+	files: number,
+	blobs: number,
+	bytes: number,
+};
+
+/**  묶음 하나의 요약 (화면용) */
+export type SyncBundleInfo_Serialize = {
+	deviceId: string,
+	/**  보낸 기기의 이름 (5-E-16-1, 없으면 None — 화면은 id 앞자리) */
+	deviceName: string | null,
 	createdAt: number,
 	appVersion: string,
 	rows: number,
@@ -4669,6 +5447,8 @@ export type SyncPeer = SyncPeer_Serialize | SyncPeer_Deserialize;
 
 export type SyncPeer_Deserialize = {
 	deviceId: string,
+	/**  그 기기가 붙인 이름 (없으면 None — 화면은 id 앞자리) */
+	name?: string | null,
 	/**  이 기기 시각 */
 	lastMergeAt: number,
 	merges: number,
@@ -4682,6 +5462,8 @@ export type SyncPeer_Deserialize = {
 
 export type SyncPeer_Serialize = {
 	deviceId: string,
+	/**  그 기기가 붙인 이름 (없으면 None — 화면은 id 앞자리) */
+	name: string | null,
 	/**  이 기기 시각 */
 	lastMergeAt: number,
 	merges: number,
@@ -4693,8 +5475,16 @@ export type SyncPeer_Serialize = {
 	excluded: boolean,
 };
 
-export type SyncPreview = {
-	bundle: SyncBundleInfo,
+export type SyncPreview = SyncPreview_Serialize | SyncPreview_Deserialize;
+
+export type SyncPreview_Deserialize = {
+	bundle: SyncBundleInfo_Deserialize,
+	report: MergeReport,
+	files: FileCounts,
+};
+
+export type SyncPreview_Serialize = {
+	bundle: SyncBundleInfo_Serialize,
 	report: MergeReport,
 	files: FileCounts,
 };
@@ -4797,6 +5587,8 @@ export type SyncStatus = SyncStatus_Serialize | SyncStatus_Deserialize;
 
 export type SyncStatus_Deserialize = {
 	deviceId: string,
+	/**  이 기기 이름 (5-E-16) */
+	deviceName?: string | null,
 	peers: SyncPeer_Deserialize[],
 	/**  아직 고르지 않은 충돌 (2-E에서 고른다) */
 	openConflicts: number,
@@ -4806,6 +5598,8 @@ export type SyncStatus_Deserialize = {
 
 export type SyncStatus_Serialize = {
 	deviceId: string,
+	/**  이 기기 이름 (5-E-16) */
+	deviceName: string | null,
 	peers: SyncPeer_Serialize[],
 	/**  아직 고르지 않은 충돌 (2-E에서 고른다) */
 	openConflicts: number,
@@ -5048,7 +5842,11 @@ export type TaskType =
 /**  커뮤니티 플러그인이 부른 AI 글 생성 (feature `plugin:<id>`, 6-D-7) */
 "plugin_ai" | 
 /**  대필 (코어 플러그인 ghostwrite, 5-D) — 입력칸에 채울 글 한 번 */
-"ghostwrite";
+"ghostwrite" | 
+/**  슬래시 커맨드 /gen (코어 플러그인 slash, 5-E-20-5) — 대화 맥락 + 지시로 글만 받음 (저장하지 않음) */
+"slash_gen" | 
+/**  위젯 시메지 대사·시메지끼리 대화 (위젯 하위 기능 widget.mascot) — 말풍선 한 번 */
+"mascot";
 
 export type Template = Template_Serialize | Template_Deserialize;
 
@@ -5066,6 +5864,39 @@ export type Template_Serialize = {
 	apiVersion: string,
 	templateVersion: string,
 	capabilities: Capabilities_Serialize,
+};
+
+/**  대화 화면 표시 설정 (테마 설정과 사용자 커스텀 테마에서 함께 사용) */
+export type ThemeChatSetting = ThemeChatSetting_Serialize | ThemeChatSetting_Deserialize;
+
+/**  대화 화면 표시 설정 (테마 설정과 사용자 커스텀 테마에서 함께 사용) */
+export type ThemeChatSetting_Deserialize = {
+	showTimestamps?: boolean,
+	showAvatars?: boolean,
+	showMultiCharAvatars?: boolean,
+	/**  캐릭터 프로필 표시 형식 (none/rect/square/circle/custom) */
+	charAvatarFrame?: AvatarFrameShape,
+	/**  캐릭터 커스텀 프레임 이미지 경로 */
+	charAvatarFrameImage?: string | null,
+	/**  유저 페르소나 프로필 표시 형식 (none/rect/square/circle/custom) */
+	userAvatarFrame?: AvatarFrameShape,
+	/**  유저 페르소나 커스텀 프레임 이미지 경로 */
+	userAvatarFrameImage?: string | null,
+};
+
+/**  대화 화면 표시 설정 (테마 설정과 사용자 커스텀 테마에서 함께 사용) */
+export type ThemeChatSetting_Serialize = {
+	showTimestamps: boolean,
+	showAvatars: boolean,
+	showMultiCharAvatars: boolean,
+	/**  캐릭터 프로필 표시 형식 (none/rect/square/circle/custom) */
+	charAvatarFrame: AvatarFrameShape,
+	/**  캐릭터 커스텀 프레임 이미지 경로 */
+	charAvatarFrameImage: string | null,
+	/**  유저 페르소나 프로필 표시 형식 (none/rect/square/circle/custom) */
+	userAvatarFrame: AvatarFrameShape,
+	/**  유저 페르소나 커스텀 프레임 이미지 경로 */
+	userAvatarFrameImage: string | null,
 };
 
 /**  테마 색: 화면 모드별로 덮어쓸 CSS 변수 ("--bg" → "#ffffff"). 비어 있으면 앱 기본값 */
@@ -5103,8 +5934,14 @@ export type ThemeSetting_Deserialize = {
 	backgroundOpacity?: number | null,
 	/**  올려 둔 글꼴 (앱 데이터 fonts/에 복사한 파일). 앱에 글꼴을 넣어 두지 않으므로 목록은 사용자가 올린 것뿐 */
 	fonts?: UserFont[],
-	/**  앱 글꼴: `fonts` 중 하나의 파일 경로. 없으면 기본 글꼴 */
+	/**  UI 글꼴: `fonts` 중 하나의 파일 경로. 없으면 기본 글꼴 */
 	appFont?: string | null,
+	/**  텍스트 글꼴 (대화 본문·읽기): `fonts` 중 하나의 파일 경로. 없으면 UI 글꼴을 따름 */
+	textFont?: string | null,
+	/**  모노스페이스 글꼴 (코드·로그): `fonts` 중 하나의 파일 경로. 없으면 기본 모노스페이스 */
+	monoFont?: string | null,
+	/**  대화 화면 표시 설정 (시각·프로필 그림·멀티 프로필 그림·아바타 프레임) */
+	chat?: ThemeChatSetting_Deserialize,
 };
 
 export type ThemeSetting_Serialize = {
@@ -5125,8 +5962,14 @@ export type ThemeSetting_Serialize = {
 	backgroundOpacity: number | null,
 	/**  올려 둔 글꼴 (앱 데이터 fonts/에 복사한 파일). 앱에 글꼴을 넣어 두지 않으므로 목록은 사용자가 올린 것뿐 */
 	fonts: UserFont[],
-	/**  앱 글꼴: `fonts` 중 하나의 파일 경로. 없으면 기본 글꼴 */
+	/**  UI 글꼴: `fonts` 중 하나의 파일 경로. 없으면 기본 글꼴 */
 	appFont: string | null,
+	/**  텍스트 글꼴 (대화 본문·읽기): `fonts` 중 하나의 파일 경로. 없으면 UI 글꼴을 따름 */
+	textFont: string | null,
+	/**  모노스페이스 글꼴 (코드·로그): `fonts` 중 하나의 파일 경로. 없으면 기본 모노스페이스 */
+	monoFont: string | null,
+	/**  대화 화면 표시 설정 (시각·프로필 그림·멀티 프로필 그림·아바타 프레임) */
+	chat: ThemeChatSetting_Serialize,
 };
 
 export type TranscriptEntry = TranscriptEntry_Serialize | TranscriptEntry_Deserialize;
@@ -5279,6 +6122,38 @@ export type TurnPoint_Serialize = {
 	locationId: string | null,
 };
 
+/**  타이핑 표시 (5-E-17-1): 모양과 옆에 붙는 글 */
+export type TypingIndicator = TypingIndicator_Serialize | TypingIndicator_Deserialize;
+
+/**  타이핑 표시 (5-E-17-1): 모양과 옆에 붙는 글 */
+export type TypingIndicator_Deserialize = {
+	style?: TypingStyle,
+	/**  점 옆의 글 (`{{char}}` = 캐릭터 이름, 비면 글 없음) */
+	text?: string,
+	/**  모양이 `Image`일 때 보일 그림 (앱 데이터 `themes/typing/`에 복사한 것, 5-E-17-4) */
+	image?: string | null,
+};
+
+/**  타이핑 표시 (5-E-17-1): 모양과 옆에 붙는 글 */
+export type TypingIndicator_Serialize = {
+	style: TypingStyle,
+	/**  점 옆의 글 (`{{char}}` = 캐릭터 이름, 비면 글 없음) */
+	text: string,
+	/**  모양이 `Image`일 때 보일 그림 (앱 데이터 `themes/typing/`에 복사한 것, 5-E-17-4) */
+	image: string | null,
+};
+
+/**  타이핑 표시 모양 (5-E-17-1) */
+export type TypingStyle = 
+/**  깜빡이는 점 세 개 (예전 모양) */
+"blink" | 
+/**  튀어 오르는 점 세 개 */
+"bounce" | 
+/**  점 없이 (글만, 글도 없으면 아무것도 안 보임) */
+"none" | 
+/**  사용자가 고른 그림·GIF (`image`, 없으면 깜빡이는 점) — 5-E-17-4 */
+"image";
+
 export type UpdateInfo = UpdateInfo_Serialize | UpdateInfo_Deserialize;
 
 export type UpdateInfo_Deserialize = {
@@ -5403,6 +6278,58 @@ export type UserPlugin_Serialize = {
 
 export type Value = null | boolean | number | string | Value[] | { [key in string]: Value };
 
+/**  캐릭터에 두는 변수 정의. 값은 대화 meta.variables (글자). 정의 없는 변수는 지금처럼 */
+export type VarDef = VarDef_Serialize | VarDef_Deserialize;
+
+/**  캐릭터에 두는 변수 정의. 값은 대화 meta.variables (글자). 정의 없는 변수는 지금처럼 */
+export type VarDef_Deserialize = {
+	key: string,
+	description?: string,
+	kind?: VarKind,
+	/**  대화에 값이 없을 때 보이는 처음 값 */
+	defaultValue?: string | null,
+	/**  수일 때만: 최소·최대·AI가 한 번에 바꿀 수 있는 폭 */
+	min?: number | null,
+	max?: number | null,
+	maxStep?: number | null,
+	/**  AI가 지금 값을 읽을 수 있나 / 바꿀 수 있나 (5-F-4-4에서 씀) */
+	aiRead?: boolean,
+	aiWrite?: boolean,
+};
+
+/**  캐릭터에 두는 변수 정의. 값은 대화 meta.variables (글자). 정의 없는 변수는 지금처럼 */
+export type VarDef_Serialize = {
+	key: string,
+	description: string,
+	kind: VarKind,
+	/**  대화에 값이 없을 때 보이는 처음 값 */
+	defaultValue: string | null,
+	/**  수일 때만: 최소·최대·AI가 한 번에 바꿀 수 있는 폭 */
+	min: number | null,
+	max: number | null,
+	maxStep: number | null,
+	/**  AI가 지금 값을 읽을 수 있나 / 바꿀 수 있나 (5-F-4-4에서 씀) */
+	aiRead: boolean,
+	aiWrite: boolean,
+};
+
+/**  변수 종류 (게임 변수의 number·boolean·string과 같음) */
+export type VarKind = "number" | "boolean" | "string";
+
+export type VertexKeyInfo = VertexKeyInfo_Serialize | VertexKeyInfo_Deserialize;
+
+export type VertexKeyInfo_Deserialize = {
+	projectId: string,
+	location: string,
+	clientEmail?: string | null,
+};
+
+export type VertexKeyInfo_Serialize = {
+	projectId: string,
+	location: string,
+	clientEmail: string | null,
+};
+
 /**  고를 수 있는 목소리 (ElevenLabs는 계정의 목소리 목록, 그 밖은 OpenAI 기본 목소리) */
 export type Voice = Voice_Serialize | Voice_Deserialize;
 
@@ -5420,17 +6347,61 @@ export type Voice_Serialize = {
 	description: string | null,
 };
 
+export type WidgetAudioState = WidgetAudioState_Serialize | WidgetAudioState_Deserialize;
+
+export type WidgetAudioState_Deserialize = {
+	muted?: boolean,
+	volume?: number | null,
+	loopMode?: number,
+	isShuffle?: boolean,
+};
+
+export type WidgetAudioState_Serialize = {
+	muted: boolean,
+	volume: number | null,
+	loopMode: number,
+	isShuffle: boolean,
+};
+
+/**  알림 도착 시 시메지에게 전달되는 이벤트 페이로드 */
+export type WidgetMascotNotifyPayload = {
+	targetName: string,
+	body: string,
+};
+
+/**  위젯 마스코트(시메지) 전체 설정 (widget.json 의 "mascot" 키) */
+export type WidgetMascotSetting = WidgetMascotSetting_Serialize | WidgetMascotSetting_Deserialize;
+
+/**  위젯 마스코트(시메지) 전체 설정 (widget.json 의 "mascot" 키) */
+export type WidgetMascotSetting_Deserialize = {
+	characters?: MascotCharacterConfig_Deserialize[],
+	pairChatEnabled?: boolean,
+	pairChatIntervalSec?: number,
+	pairChatUseAi?: boolean,
+	pairChatDistancePx?: number,
+};
+
+/**  위젯 마스코트(시메지) 전체 설정 (widget.json 의 "mascot" 키) */
+export type WidgetMascotSetting_Serialize = {
+	characters: MascotCharacterConfig_Serialize[],
+	pairChatEnabled: boolean,
+	pairChatIntervalSec: number,
+	pairChatUseAi: boolean,
+	pairChatDistancePx: number,
+};
+
 export type WidgetMusicSetting = WidgetMusicSetting_Serialize | WidgetMusicSetting_Deserialize;
 
 export type WidgetMusicSetting_Deserialize = {
-	resize: boolean,
-	isMiniPlayer: boolean,
-	isImgEdit: boolean,
-	isPlayListOpen: boolean,
-	pos: Value,
+	resize?: boolean,
+	isMiniPlayer?: boolean,
+	isImgEdit?: boolean,
+	isPlayListOpen?: boolean,
+	pos?: Value,
 	selectedFolder?: string | null,
 	currentPlaylistId?: string | null,
-	currentSongIndex: number,
+	currentSongIndex?: number,
+	audio?: WidgetAudioState_Deserialize,
 };
 
 export type WidgetMusicSetting_Serialize = {
@@ -5442,6 +6413,7 @@ export type WidgetMusicSetting_Serialize = {
 	selectedFolder: string | null,
 	currentPlaylistId: string | null,
 	currentSongIndex: number,
+	audio: WidgetAudioState_Serialize,
 };
 
 export type WorldInfoBook = WorldInfoBook_Serialize | WorldInfoBook_Deserialize;
@@ -5493,6 +6465,8 @@ export type WorldInfoEntry = {
 	constant: boolean,
 	/**  제목 (SillyTavern의 comment). 프롬프트에는 들어가지 않음 */
 	comment: string,
+	/**  분류: 캐릭터·장소·아이템·이벤트·세계 또는 사용자가 만든 것. 빈 글 = 분류 없음 (5-F-1) */
+	category: string,
 };
 
 export type WorldInfoEntryInput = WorldInfoEntryInput_Serialize | WorldInfoEntryInput_Deserialize;
@@ -5508,6 +6482,8 @@ export type WorldInfoEntryInput_Deserialize = {
 	constant: boolean,
 	/**  제목 (없으면 빈 값) */
 	comment?: string,
+	/**  분류 (없으면 빈 값, 5-F-1) */
+	category?: string,
 };
 
 export type WorldInfoEntryInput_Serialize = {
@@ -5521,4 +6497,25 @@ export type WorldInfoEntryInput_Serialize = {
 	constant: boolean,
 	/**  제목 (없으면 빈 값) */
 	comment: string,
+	/**  분류 (없으면 빈 값, 5-F-1) */
+	category: string,
+};
+
+/**  로어북(월드인포) 스캔 설정 */
+export type WorldInfoSetting = WorldInfoSetting_Serialize | WorldInfoSetting_Deserialize;
+
+/**  로어북(월드인포) 스캔 설정 */
+export type WorldInfoSetting_Deserialize = {
+	/**  키워드를 탐색할 최근 메시지 수 (기본 10, 1~100) */
+	scanDepth?: number,
+	/**  발동된 월드인포 항목의 내용에서 추가 키워드를 재귀 탐색할 최대 깊이 (0 = 재귀 없음, 1~10) */
+	maxRecursionDepth?: number,
+};
+
+/**  로어북(월드인포) 스캔 설정 */
+export type WorldInfoSetting_Serialize = {
+	/**  키워드를 탐색할 최근 메시지 수 (기본 10, 1~100) */
+	scanDepth: number,
+	/**  발동된 월드인포 항목의 내용에서 추가 키워드를 재귀 탐색할 최대 깊이 (0 = 재귀 없음, 1~10) */
+	maxRecursionDepth: number,
 };

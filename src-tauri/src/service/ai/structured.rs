@@ -18,8 +18,8 @@ const RAW_KEEP: usize = 2000;
 /// 네이티브 구조화 출력이 없는 연결에서 프롬프트 끝에 덧붙이는 system 지시
 pub fn instruction(rs: &ResponseSchema) -> String {
     let schema = serde_json::to_string_pretty(&rs.schema).unwrap_or_default();
-    let what = rs.description.as_deref().map(|d| format!("\n설명: {d}")).unwrap_or_default();
-    format!("[응답 형식]{what}\n반드시 아래 JSON Schema에 맞는 JSON 값 하나만 답한다. 코드 펜스(```)·설명·머리말·맺음말을 붙이지 않는다.\n{schema}")
+    let what = rs.description.as_deref().map(|d| format!("\nDescription: {d}")).unwrap_or_default();
+    format!("[Response format]{what}\nReply with exactly one JSON value that matches the JSON Schema below. No code fences (```), explanations, preface or closing remarks.\n{schema}")
 }
 
 fn truncate(s: &str, max: usize) -> String {
@@ -77,7 +77,7 @@ mod tests {
     #[test]
     fn instruction_carries_the_schema_and_forbids_chatter() {
         let i = instruction(&rs());
-        assert!(i.contains("\"enum\"") && i.contains("기분") && i.contains("코드 펜스"), "{i}");
+        assert!(i.contains("\"enum\"") && i.contains("기분") && i.contains("code fences"), "{i}");
     }
 
     #[test]

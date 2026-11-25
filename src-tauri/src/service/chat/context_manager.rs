@@ -11,12 +11,20 @@ pub struct ContextManager;
 impl ContextManager {
     pub async fn build_context(&self, pool: &DbPool, request: ContextRequest) -> Result<ChatContext> {
         // chat history 불러오기
-        let (character, persona, messages, world_info) = futures::try_join!(
+        let (character, persona, messages, world_info, conv) = futures::try_join!(
             get_character(pool, &request.character_id),
             get_persona(pool, &request.persona_id),
             get_messages(pool, &request.conversation_id, request.history_limit, None),
-            get_all_conv_worldinfo_book_with_entries(pool, &request.conversation_id, &request.character_id, &request.persona_id)
+            get_all_conv_worldinfo_book_with_entries(pool, &request.conversation_id, &request.character_id, &request.persona_id),
+            get_conversation(pool, &request.conversation_id)
         )?;
+        // 이 대화의 변수 ({{getvar::x}}, ADR-029). 전역 변수는 설정에 있어 부르는 쪽이 넣는다 (with_global_vars)
+        let variables = conv
+            .meta
+            .as_ref()
+            .and_then(|m| m.get("variables"))
+            .cloned()
+            .unwrap_or_else(|| serde_json::json!({}));
 
         // 숨긴 메시지(meta.hidden, SillyTavern의 is_system)는 화면에만 남고 AI에게는 보내지 않는다
         let history = messages
@@ -26,12 +34,16 @@ impl ContextManager {
                 images: attachments_of(m.meta.as_ref()),
                 role: m.role,
                 content: m.content,
+                source: None,
             })
             .collect();
 
         // 현재 대화 중인 캐릭터의 데이터 불러오기
         Ok(ChatContext {
             user_images: vec![],
+            image_prompt: None,
+            image_keys: None,
+            util_prompts: Default::default(),
             system_rules: vec![],
             char_name: Some(character.name.clone()),
             user_name: Some(persona.name.clone()),
@@ -41,7 +53,7 @@ impl ContextManager {
             persona_info: persona.description,
             world_info,
             history,
-            extra_data: ().into(),
+            extra_data: serde_json::json!({ "variables": variables }),
         })
     }
 }

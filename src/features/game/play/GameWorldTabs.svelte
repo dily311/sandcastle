@@ -1,4 +1,5 @@
 <script lang="ts">
+	import { _ } from "svelte-i18n";
 	// 게임 패널: 이동·행동 / 지도 (예전에는 무대 위 시트였음)
 	import { ChevronRight, Lock, MapPin, MessageCircle, Search, Sparkles } from "@lucide/svelte";
 	import { panel } from "$app/panel.svelte";
@@ -10,7 +11,7 @@
 	const canMove = $derived(runtimeStore.canWait);
 	const busy = $derived(playBridge.loading || !playBridge.dispatch);
 	const send = (command: GameCommand) => playBridge.dispatch?.(command);
-	const minutes = (sec: number) => `${Math.max(1, Math.ceil(sec / 60))}분`;
+	const minutes = (sec: number) => $_("gamePlayExtra.travelTime", { values: { m: Math.max(1, Math.ceil(sec / 60)) } });
 	const nothingToDo = $derived(
 		!runtimeStore.nearbyCharacters.length && !runtimeStore.localInteractables.length && (!canMove || !runtimeStore.destinations.length) && !runtimeStore.currentChoices.length,
 	);
@@ -19,8 +20,8 @@
 {#if panel.tab === "map"}
 	<div class="panel-body">
 		<section>
-			<h4>{runtimeStore.currentMap?.name ?? "지도"} <span class="faint">지금 {runtimeStore.currentLocation?.name ?? "위치 없음"}</span></h4>
-			{#if !canMove}<p class="note">씬이 진행 중이라 지금은 이동할 수 없음</p>{/if}
+			<h4>{runtimeStore.currentMap?.name ?? $_("gamePlayExtra.mapFallback")} <span class="faint">{$_("gamePlayExtra.nowAt", { values: { place: runtimeStore.currentLocation?.name ?? $_("gamePlayExtra.noLocation") } })}</span></h4>
+			{#if !canMove}<p class="note">{$_("gamePlayExtra.cantMoveInScene")}</p>{/if}
 		</section>
 		{#each runtimeStore.mapZones as zone (zone.id)}
 			<section>
@@ -35,7 +36,7 @@
 							<span class="ic">{#if here}<MapPin />{:else if locked}<Lock />{:else}<span class="dot"></span>{/if}</span>
 							<span class="t">
 								<b>{location.name}</b>
-								<small>{#if here}지금 여기{:else if block}{block}{:else if route}{minutes(route.travelSeconds)} 걸림{:else}가는 길 없음{/if}</small>
+								<small>{#if here}{$_("gamePlayExtra.hereNow")}{:else if block}{block}{:else if route}{minutes(route.travelSeconds)}{:else}{$_("gamePlayExtra.noRoute")}{/if}</small>
 							</span>
 							{#if route && !here && !locked && canMove}<ChevronRight />{/if}
 						</button>
@@ -43,18 +44,18 @@
 				</div>
 			</section>
 		{:else}
-			<p class="note">표시할 장소 없음</p>
+			<p class="note">{$_("gamePlayExtra.noLocations")}</p>
 		{/each}
 	</div>
 {:else}
 	<div class="panel-body">
 		<section>
-			<h4>이동·행동 <span class="faint">{runtimeStore.currentLocation?.name ?? ""}</span></h4>
-			{#if !playBridge.dispatch}<p class="note">플레이 화면이 열려 있어야 함</p>{/if}
+			<h4>{$_("gamePlayExtra.actionsHeading")} <span class="faint">{runtimeStore.currentLocation?.name ?? ""}</span></h4>
+			{#if !playBridge.dispatch}<p class="note">{$_("gamePlayExtra.needPlayScreen")}</p>{/if}
 		</section>
 		{#if runtimeStore.currentChoices.length}
 			<section>
-				<h4>선택지</h4>
+				<h4>{$_("gamePlayExtra.choicesHeading")}</h4>
 				<div class="list">
 					{#each runtimeStore.currentChoices as choice (choice.id)}
 						<button class="row" disabled={busy} onclick={() => send({ type: "choose", choiceId: choice.id })}>
@@ -66,12 +67,12 @@
 		{/if}
 		{#if runtimeStore.nearbyCharacters.length}
 			<section>
-				<h4>대화</h4>
+				<h4>{$_("gamePlayExtra.talkHeading")}</h4>
 				<div class="list">
 					{#each runtimeStore.nearbyCharacters as character (character.id)}
 						<!-- 씬 동안은 1:1 대화가 막힌다 (엔진이 sceneActive로 거절). 대사창의 씬 입력을 쓴다 -->
 						<button class="row" disabled={busy || Boolean(runtimeStore.currentSceneId)} onclick={() => send({ type: "talk", gameCharacterId: character.id })}>
-							<span class="ic"><MessageCircle /></span><span class="t"><b>{character.name}</b><small>{runtimeStore.currentSceneId ? "장면이 끝나면 말 걸 수 있음" : "말 걸기"}</small></span><ChevronRight />
+							<span class="ic"><MessageCircle /></span><span class="t"><b>{character.name}</b><small>{runtimeStore.currentSceneId ? $_("gamePlayExtra.talkAfterScene") : $_("gamePlayExtra.talkAction")}</small></span><ChevronRight />
 						</button>
 					{/each}
 				</div>
@@ -79,11 +80,11 @@
 		{/if}
 		{#if runtimeStore.localInteractables.length}
 			<section>
-				<h4>살펴보기</h4>
+				<h4>{$_("gamePlayExtra.inspectHeading")}</h4>
 				<div class="list">
 					{#each runtimeStore.localInteractables as item (item.id)}
 						<button class="row" disabled={busy} onclick={() => send({ type: "interact", entityId: item.id })}>
-							<span class="ic"><Search /></span><span class="t"><b>{item.name}</b><small>조사</small></span><ChevronRight />
+							<span class="ic"><Search /></span><span class="t"><b>{item.name}</b><small>{$_("gamePlayExtra.inspectAction")}</small></span><ChevronRight />
 						</button>
 					{/each}
 				</div>
@@ -91,21 +92,21 @@
 		{/if}
 		{#if canMove && runtimeStore.destinations.length}
 			<section>
-				<h4>이동</h4>
+				<h4>{$_("gamePlayExtra.moveHeading")}</h4>
 				<div class="list">
 					{#each runtimeStore.destinations as d (d.toId)}
 						{@const block = runtimeStore.moveBlock(d.toId)}
 						{@const locked = Boolean(block)}
 						<button class="row" disabled={busy || locked} onclick={() => send({ type: "moveTo", locationId: d.toId })}>
 							<span class="ic">{#if locked}<Lock />{:else}<MapPin />{/if}</span>
-							<span class="t"><b>{d.location?.name}</b><small>{block ?? `${minutes(d.travelSeconds)} 걸림`}</small></span>
+							<span class="t"><b>{d.location?.name}</b><small>{block ?? minutes(d.travelSeconds)}</small></span>
 							{#if !locked}<ChevronRight />{/if}
 						</button>
 					{/each}
 				</div>
 			</section>
 		{/if}
-		{#if nothingToDo}<p class="note">지금 할 수 있는 것 없음</p>{/if}
+		{#if nothingToDo}<p class="note">{$_("gamePlayExtra.nothingToDo")}</p>{/if}
 		<StoryPlanPanel />
 	</div>
 {/if}

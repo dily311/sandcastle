@@ -8,7 +8,8 @@ import { browser, $, expect } from "@wdio/globals";
 import { startFakeOpenAI, REPLY } from "../fake-openai.mjs";
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..", "..");
-const card = path.join(root, "src-tauri", "tests", "sillyTavern", "character", "default_Seraphina.png");
+// SillyTavern 샘플 카드는 git에서 뺐으므로(사용자 데이터) 이 저장소의 JSON 카드를 쓴다
+const card = path.join(root, "e2e", "fixtures", "e2e-character.json");
 
 /** 앱 안에서 백엔드 커맨드 부르기 (화면이 쓰는 것과 같은 IPC) */
 function invoke(cmd, args = {}) {
@@ -37,6 +38,21 @@ describe("스모크", () => {
 
 	before(async () => {
 		fake = await startFakeOpenAI();
+		// 화면 언어는 시스템 언어를 따르는데 CI 러너는 영어라, 이 시험이 찾는 한국어 글자에 맞춰 고정한다
+		// 앱 문서가 뜨기 전(빈 문서)에는 localStorage를 쓸 수 없어, 쓸 수 있을 때까지 기다린다
+		await browser.waitUntil(
+			() =>
+				browser.execute(() => {
+					try {
+						localStorage.setItem("sc.locale", "ko");
+						return true;
+					} catch {
+						return false;
+					}
+				}),
+			{ timeout: 30_000, interval: 500, timeoutMsg: "앱 화면이 뜨지 않아 언어를 고정하지 못함" },
+		);
+		await browser.refresh();
 	});
 	after(async () => {
 		// API 키는 OS 자격 증명 관리자에 들어가므로 프로필을 지워 키도 지운다
@@ -53,7 +69,7 @@ describe("스모크", () => {
 		const r = await must("import_sillytavern", { path: card, name: null, characterId: null, presetId: null });
 		expect(r.kind).toBe("character");
 		await browser.refresh();
-		await expect(byText("b", "Seraphina")).toBeDisplayed({ wait: 20_000 });
+		await expect(byText("b", "Pebble")).toBeDisplayed({ wait: 20_000 });
 	});
 
 	it("가짜 공급자로 메시지를 주고받는다", async () => {
@@ -64,7 +80,8 @@ describe("스모크", () => {
 		profileId = p.id;
 		await must("update_app_setting", { patch: { selectedApiProfile: p.id } });
 
-		await byText("b", "Seraphina").click();
+		// 카드 이름 글자는 pointer-events: none이라 카드(role=button) 자체를 누른다
+		await $("div[role='button'][aria-label='Pebble']").click();
 		await byText("button", "대화 시작").click();
 		const box = await $("textarea[aria-label='메시지']");
 		await box.waitForDisplayed({ timeout: 20_000 });

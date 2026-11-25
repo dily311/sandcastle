@@ -10,13 +10,15 @@
 	import { WIDGET_MUSIC_FEATURE_ID } from "../musicFeature.svelte";
 	import { LoopMode } from "../types";
 	import { draggablePosition } from "$/lib/action/useImageCrap.svelte";
-	import Icon from "$/components/ui/Icon.svelte";
+	import Icon from "$shared/ui/Icon.svelte";
 	import { cn } from "$/lib/utils/cn";
-	import IconButton from "$/components/ui/button/IconButton.svelte";
+	import IconButton from "$shared/ui/IconButton.svelte";
 	let localPos = $state({
 		x: widgetMusicSetting.pos?.x ?? 10,
 		y: widgetMusicSetting.pos?.y ?? 10,
 	});
+	let snappedX = $state<"left" | "right" | null>(null);
+	const isSnapped = $derived(snappedX !== null || localPos.x < 0);
 	$effect(() => {
 		if (widgetMusicSetting.pos) {
 			localPos.x = widgetMusicSetting.pos.x;
@@ -29,15 +31,17 @@
 <div
 	class="music-player-container"
 	class:resize={widgetMusicSetting.resize}
+	class:snap-docked={isSnapped}
 	oncontextmenu={(e) => handleContextMenuForWidget(e, WIDGET_MUSIC_FEATURE_ID)}
 	{@attach interactive(WIDGET_MUSIC_FEATURE_ID)}
 	{@attach draggable({
 		pos: localPos,
 		snap: {
-			x: { offset: widgetMusicSetting.resize ? 0 : 336 },
+			x: { offset: 0 },
 			y: true,
 			onchange: (state) => {
-				if (state.x === "right" && widgetMusicSetting.isPlayListOpen) {
+				snappedX = state.x;
+				if ((state.x === "right" || state.x === "left") && widgetMusicSetting.isPlayListOpen) {
 					widgetMusicSetting.update({ isPlayListOpen: false });
 				}
 			},
@@ -105,7 +109,7 @@
 			<div class="controls">
 				<div class="volume-control">
 					<IconButton
-						aria-label={$_("music.volume")}
+						label={$_("music.volume")}
 						class="volume-icon"
 						onclick={() => audioStore.toggleMuted()}
 					>
@@ -125,7 +129,7 @@
 						<input
 							type="range"
 							class="volume-slider base-slider"
-							aria-label="볼륨"
+							aria-label={$_("music.volume")}
 							min="0"
 							max="100"
 							value={audioStore.volumeSliderValue}
@@ -138,7 +142,7 @@
 					</div>
 				</div>
 				<IconButton
-					aria-label={audioStore.isShuffle ? $_("music.onShuffle") : $_("music.offShuffle")}
+					label={audioStore.isShuffle ? $_("music.onShuffle") : $_("music.offShuffle")}
 					class={cn("control-btn shuffle-btn", !audioStore.isShuffle && "shuffleOff")}
 					onclick={() => audioStore.toggleShuffle()}
 					disabled={audioStore.isDisabledShuffle}
@@ -146,7 +150,7 @@
 					<Icon name="Shuffle" size={22} />
 				</IconButton>
 				<IconButton
-					aria-label={$_("plyer.prevSong")}
+					label={$_("music.prevSong")}
 					class="control-btn prev-btn"
 					onclick={() => handlePrevSong()}
 					disabled={audioStore.isDisabledPrev}
@@ -154,7 +158,7 @@
 					<Icon name="SkipBack" size={22} />
 				</IconButton>
 				<IconButton
-					aria-label={audioStore.paused ? $_("music.play") : $_("music.pause")}
+					label={audioStore.paused ? $_("music.play") : $_("music.pause")}
 					class="control-btn play-btn"
 					onclick={() => audioStore.togglePlay()}
 					disabled={!playlistStore.currentSong}
@@ -162,7 +166,7 @@
 					<Icon name={audioStore.paused ? "play" : "pause"} size={22} />
 				</IconButton>
 				<IconButton
-					aria-label={$_("music.nextSong")}
+					label={$_("music.nextSong")}
 					class="control-btn next-btn"
 					onclick={() => handleNextSong()}
 					disabled={audioStore.isDisabledNext}
@@ -170,7 +174,7 @@
 					<Icon name="SkipForward" size={22} />
 				</IconButton>
 				<IconButton
-					aria-label={$_("music.loopChange")}
+					label={$_("music.loopChange")}
 					aria-pressed={audioStore.loopMode !== 0}
 					class="control-btn loop-btn"
 					onclick={() => audioStore.toggleLoop()}
@@ -254,7 +258,7 @@
 					{/if}
 				</IconButton>
 				<IconButton
-					aria-label={$_("music.menu")}
+					label={$_("music.menu")}
 					class="playlist"
 					onclick={(e) => widgetMusicSetting.update({ isPlayListOpen: !widgetMusicSetting.isPlayListOpen })}
 				>
@@ -296,7 +300,7 @@
 		top: 0;
 		left: 0;
 		z-index: 10;
-		/* box-shadow: 0 0 0 1px var(--border); */
+		box-shadow: 0 0 0 1px var(--border);
 		background: var(--surface);
 		border-radius: var(--radius-xs);
 		color: var(--text);
@@ -306,6 +310,15 @@
 		max-width: 31rem;
 		width: 100%;
 		/* resize: both; */
+	}
+
+	.music-player-container:not(.resize).snap-docked {
+		max-width: none;
+		width: fit-content;
+
+		.song-info-wrap {
+			display: none;
+		}
 	}
 	.music-player-container:global(.snap-left) {
 		border-top-left-radius: 0;
@@ -470,17 +483,16 @@
 		height: 6px;
 		margin: 6px 0;
 		border-radius: 999px;
-		background: linear-gradient(to right, var(--accent) var(--pct), var(--surface-active) var(--pct));
+		background: linear-gradient(to right, var(--text) var(--pct), var(--surface-active) var(--pct));
 		cursor: pointer;
 	}
 	.volume-slider::-webkit-slider-thumb {
 		appearance: none;
-		width: 16px;
-		height: 16px;
+		width: 12px;
+		height: 12px;
 		border-radius: 50%;
 		background: var(--surface);
-		border: 2px solid var(--accent);
-		box-shadow: var(--shadow-sm);
+		border: 1px solid var(--text);
 	}
 
 </style>

@@ -6,6 +6,9 @@ use crate::models::ai_service::HistoryItem;
 fn ctx() -> ChatContext {
     ChatContext {
         user_images: vec![],
+        image_prompt: None,
+        image_keys: None,
+        util_prompts: Default::default(),
         system_rules: vec!["Stay in character as {{char}}.".into()],
         char_name: Some("Aria".into()),
         user_name: Some("Min".into()),
@@ -35,12 +38,14 @@ fn hist(role: &str, content: &str) -> HistoryItem {
         images: vec![],
         role: role.into(),
         content: content.into(),
+        source: None,
     }
 }
 
 fn wi(id: &str, keys: &[&str], content: &str, constant: bool, priority: i64) -> WorldInfoEntry {
     WorldInfoEntry {
         comment: String::new(),
+        category: String::new(),
         id: id.into(),
         book_id: "b".into(),
         keys: keys.iter().map(|s| s.to_string()).collect(),
@@ -164,6 +169,50 @@ fn world_info_uses_keywords_constants_and_priority() {
 }
 
 #[test]
+fn quiet_generation_scans_instruction_for_world_info_and_places_it_last() {
+    let mut c = ctx();
+    c.history = vec![hist("user", "hello"), hist("assistant", "hi")];
+    c.world_info = vec![wi("w1", &["phoenix"], "Phoenix rises from ashes.", false, 1)];
+    let pr = preset(
+        vec![
+            block("main", "system", "You are {{char}}.", 0),
+            block("worldInfoBefore", "system", "", 1),
+            block("chatHistory", "user", "", 2),
+            block("postHistory", "system", "Reminder after history.", 3),
+        ],
+        json!({}),
+    );
+    let mut req = request(c, "Tell me about the phoenix");
+    req.generation_type = GenerationType::Quiet;
+    let p = PromptManager.build(req, Some(&pr)).unwrap();
+    let contents: Vec<_> = p.messages.iter().map(|m| m.content.as_str()).collect();
+    assert!(
+        contents.contains(&"Phoenix rises from ashes."),
+        "Quiet 지시 키워드로 월드인포 발동: {contents:?}"
+    );
+    assert_eq!(contents.last(), Some(&"Tell me about the phoenix"), "Quiet 지시는 postHistory 뒤 맨 끝");
+
+    // 각 메시지에 주입 출처(source)가 붙는다
+    let sources: Vec<_> = p
+        .messages
+        .iter()
+        .map(|m| m.source.as_ref().map(|s| (s.kind.as_str(), s.name.as_deref())))
+        .collect();
+    assert_eq!(
+        sources,
+        vec![
+            Some(("system_rules", None)),
+            Some(("preset", Some("main"))),
+            Some(("world_info", None)),
+            Some(("chat", None)),
+            Some(("chat", None)),
+            Some(("preset", Some("postHistory"))),
+            Some(("qr", None)),
+        ]
+    );
+}
+
+#[test]
 fn world_info_respects_budget_ratio() {
     let mut c = ctx();
     c.world_info = vec![wi("big", &[], &"lore ".repeat(400), true, 10), wi("small", &[], "Short fact.", true, 0)];
@@ -268,6 +317,21 @@ fn macros_leave_unknown_and_unclosed_tags() {
     assert_eq!(m.apply("a{{newline}}b{{trim}}"), "a\nb");
 }
 
+/// {{getvar::x}}·{{getglobalvar::x}} (ADR-029, 5-F-4-1): 이름은 대소문자 그대로, 매크로 이름은 대소문자 무시, 없는 변수는 빈 글
+#[test]
+fn variable_macros_read_conversation_and_global_variables() {
+    let mut c = ctx();
+    c.extra_data = json!({ "variables": { "hp": "7", "Bag": ["a", "b"] }, "globalVariables": { "mood": "good" } });
+    c.character_info = Some("HP {{getvar::hp}}, bag {{GETVAR:: Bag }}, mood {{getglobalvar::mood}}, none[{{getvar::nope}}]".into());
+    let m = Macros::from_context(&c);
+    assert_eq!(m.apply("{{getvar::hp}}/{{getvar::HP}}"), "7/", "변수 이름은 대소문자를 가림");
+    let built = PromptManager.build(request(c, "hi"), None).unwrap();
+    let all: String = built.messages.iter().map(|m| m.content.as_str()).collect::<Vec<_>>().join("\n");
+    assert!(all.contains(r#"HP 7, bag ["a","b"], mood good, none[]"#), "{all}");
+    // 변수가 없는 컨텍스트(게임·옛 경로)에서도 빈 글
+    assert_eq!(Macros::from_context(&ctx()).apply("[{{getvar::hp}}]"), "[]");
+}
+
 #[test]
 fn preset_context_size_overrides_request_limit() {
     let mut req = request(ctx(), "hi");
@@ -335,6 +399,7 @@ fn attached_images_ride_along_with_their_messages() {
             images: vec!["a.png".into()],
             role: "user".into(),
             content: "".into(),
+            source: None,
         },
         hist("assistant", "nice picture"),
     ];
@@ -369,4 +434,40 @@ fn reasoning_effort_comes_from_the_preset_and_auto_means_unset() {
     assert_eq!(with(json!({ "reasoning_effort": "High" })).as_deref(), Some("high"));
     assert_eq!(with(json!({ "reasoning_effort": "auto" })), None);
     assert_eq!(with(json!({ "temperature": 1 })), None);
+}
+
+#[test]
+fn image_rules_go_where_the_preset_puts_img_inprompt() {
+    let mut c = ctx();
+    c.image_prompt = Some("[이미지] {{char}}: 키 {{img_keys}}".into());
+    c.image_keys = Some("smile, cry".into());
+    c.util_prompts.insert("vars".into(), "[변수] {{char}} hp 3".into());
+    c.util_prompts.insert("multi_char".into(), "[여럿]".into());
+    // 자리를 정하지 않으면 들어가지 않는다 (ADR-030 추가 — 앱이 끝에 붙이지 않음)
+    let plain = preset(
+        vec![block("main", "system", "You are {{char}}.", 0), block("chatHistory", "user", "", 1)],
+        json!({}),
+    );
+    let p = PromptManager.build(request(c.clone(), "hi"), Some(&plain)).unwrap();
+    let all: String = shape(&p).into_iter().map(|(_, c)| c).collect();
+    assert!(!all.contains("[이미지]") && !all.contains("[변수]") && !all.contains("[여럿]"), "{all}");
+    // {{img_inprompt}}가 있으면 그 블록 안에서만 (사용자가 앞뒤에 덧붙인 말과 함께), {{img_keys}}도 프리셋에서 쓸 수 있다
+    let placed = preset(
+        vec![
+            block("main", "system", "You are {{char}}.", 0),
+            block("imgs", "system", "그림 규칙:\n{{img_inprompt}}\n키만 {{IMG_KEYS}} 중에서", 1),
+            block("utils", "system", "{{vars}}|{{auto_image}}", 2),
+            block("chatHistory", "user", "", 3),
+        ],
+        json!({}),
+    );
+    let p = PromptManager.build(request(c, "hi"), Some(&placed)).unwrap();
+    let s: Vec<_> = shape(&p).into_iter().map(|(_, c)| c).collect();
+    assert_eq!(s.iter().filter(|x| x.contains("[이미지]")).count(), 1);
+    assert!(
+        s.contains(&"그림 규칙:\n[이미지] Aria: 키 smile, cry\n키만 smile, cry 중에서".to_string()),
+        "{s:?}"
+    );
+    // 다른 유틸 매크로도 그 자리에서 풀리고, 이번 대화에 없는 것(auto_image)은 빈 글
+    assert!(s.iter().any(|x| x.starts_with("[변수] Aria hp 3|")), "{s:?}");
 }

@@ -25,14 +25,63 @@ use crate::{
     db::{self, conn::DbPool},
     error::{AppError, ErrorCode, Result},
     models::{
-        ai_service::{ChatContext, ChatOptions, GenerationType, PromptBlocks, PromptMessage, PromptMessageItem, PromptPresets, PromptRequest, PromptRole},
+        ai_service::{
+            ChatContext, ChatOptions, GenerationType, PromptBlocks, PromptMessage, PromptMessageItem, PromptPresets, PromptRequest, PromptRole, PromptSource,
+        },
         conversation::WorldInfoEntry,
     },
     service::prompt::token::{count_message_tokens, count_tokens},
 };
 
-/// 월드인포 키워드를 찾을 최근 대화 수
-const WORLD_INFO_SCAN_DEPTH: usize = 10;
+/// 월드인포 키워드를 찾을 최근 대화 수 (기본값)
+const WORLD_INFO_SCAN_DEPTH: usize = 2;
+
+static WI_SCAN_DEPTH: std::sync::atomic::AtomicUsize = std::sync::atomic::AtomicUsize::new(WORLD_INFO_SCAN_DEPTH);
+static WI_MAX_DEPTH: std::sync::atomic::AtomicUsize = std::sync::atomic::AtomicUsize::new(0);
+
+/// 앱 설정에서 월드인포 스캔 깊이·재귀 최대 깊이를 반영한다
+pub fn set_world_info_config(scan_depth: u32, max_recursion_depth: u32) {
+    WI_SCAN_DEPTH.store(scan_depth.clamp(1, 200) as usize, std::sync::atomic::Ordering::Relaxed);
+    WI_MAX_DEPTH.store(max_recursion_depth.clamp(0, 10) as usize, std::sync::atomic::Ordering::Relaxed);
+}
+
+#[derive(Default, Clone)]
+struct PhoneClockConfig {
+    enabled: bool,
+    date: String,
+    time: String,
+}
+
+static PHONE_CLOCK: std::sync::OnceLock<std::sync::RwLock<PhoneClockConfig>> = std::sync::OnceLock::new();
+
+/// 폰 설정에서 사용자 지정 날짜·시간을 반영한다 (프롬프트 {{phone_date}}, {{phone_time}}, {{phone_datetime}} 매크로용)
+pub fn set_phone_clock(enabled: bool, date: String, time: String) {
+    let lock = PHONE_CLOCK.get_or_init(|| std::sync::RwLock::new(PhoneClockConfig::default()));
+    if let Ok(mut g) = lock.write() {
+        g.enabled = enabled;
+        g.date = date;
+        g.time = time;
+    }
+}
+
+fn current_phone_clock() -> (String, String, String) {
+    let now = chrono::Local::now();
+    let sys_date = now.format("%Y-%m-%d").to_string();
+    let sys_time = now.format("%H:%M").to_string();
+    let cfg = PHONE_CLOCK.get().and_then(|l| l.read().ok()).map(|g| g.clone()).unwrap_or_default();
+    let date = if cfg.enabled && !cfg.date.trim().is_empty() {
+        cfg.date.trim().to_string()
+    } else {
+        sys_date
+    };
+    let time = if cfg.enabled && !cfg.time.trim().is_empty() {
+        cfg.time.trim().to_string()
+    } else {
+        sys_time
+    };
+    let datetime = format!("{date} {time}");
+    (date, time, datetime)
+}
 
 /// 프리셋에 컨텍스트 크기가 없을 때
 pub const DEFAULT_CONTEXT_LIMIT: u32 = 8192;
@@ -99,6 +148,7 @@ impl PromptManager {
         }
 
         // ---- 고정 내용
+        // 유틸 지시문(이미지·자동 그림·다인봇·변수)은 프리셋 블록의 매크로 자리에만 — 앱이 끝에 붙이지 않는다 (ADR-030 추가)
         let rules = macros.apply(ctx.system_rules.join("\n").trim());
         let sections = SectionValues {
             char_description: ctx.character_info.as_deref().map(|s| macros.apply(s)),
@@ -170,17 +220,25 @@ impl PromptManager {
                 break;
             }
             used += t;
-            history.push((PromptRole::from_history(&item.role), item.content.clone(), item.images.clone()));
+            let source = item.source.clone().or_else(|| Some(PromptSource::of("chat")));
+            history.push((PromptRole::from_history(&item.role), item.content.clone(), item.images.clone(), source));
         }
         history.reverse();
-        if !user_message.is_empty() || !ctx.user_images.is_empty() {
-            history.push((PromptRole::User, user_message, ctx.user_images.clone()));
-        }
+        // Quiet(/gen) 지시는 월드인포 키워드 스캔·토큰 예산에는 포함하되, postHistory 등 모든 프리셋 블록 뒤 맨 끝에 둔다
+        let quiet_tail = if request.generation_type == GenerationType::Quiet {
+            (!user_message.is_empty() || !ctx.user_images.is_empty())
+                .then(|| (PromptRole::User, user_message, ctx.user_images.clone(), Some(PromptSource::of("qr"))))
+        } else {
+            if !user_message.is_empty() || !ctx.user_images.is_empty() {
+                history.push((PromptRole::User, user_message, ctx.user_images.clone(), Some(PromptSource::of("user_input"))));
+            }
+            None
+        };
 
         // ---- 조립
         let mut out: Vec<Line> = vec![];
         if !rules.is_empty() {
-            out.push((PromptRole::System, rules, vec![]));
+            out.push((PromptRole::System, rules, vec![], Some(PromptSource::of("system_rules"))));
         }
         let has_wi_slot = layout.iter().any(|s| {
             matches!(
@@ -193,7 +251,7 @@ impl PromptManager {
         });
         if !has_wi_slot {
             if let Some(wi) = &world_info_text {
-                out.push((PromptRole::System, wi.clone(), vec![]));
+                out.push((PromptRole::System, wi.clone(), vec![], Some(PromptSource::of("world_info"))));
             }
         }
 
@@ -201,9 +259,9 @@ impl PromptManager {
         let mut history_placed = false;
         for slot in layout {
             match slot {
-                Slot::Text { role, content } => {
+                Slot::Text { role, content, name } => {
                     if !content.trim().is_empty() {
-                        out.push((role, content, vec![]));
+                        out.push((role, content, vec![], Some(PromptSource::named("preset", name))));
                     }
                 }
                 Slot::Section {
@@ -213,7 +271,7 @@ impl PromptManager {
                 } => {
                     if !wi_placed {
                         if let Some(wi) = &world_info_text {
-                            out.push((role, wi.clone(), vec![]));
+                            out.push((role, wi.clone(), vec![], Some(PromptSource::of("world_info"))));
                         }
                         wi_placed = true;
                     }
@@ -228,21 +286,25 @@ impl PromptManager {
                 }
                 Slot::Section { section, role, label } => {
                     if let Some(v) = sections.get(section) {
-                        out.push((role, with_label(label.as_deref(), v), vec![]));
+                        out.push((role, with_label(label.as_deref(), v), vec![], Some(section.source())));
                     }
                 }
             }
+        }
+        if let Some(tail) = quiet_tail {
+            out.push(tail);
         }
 
         Ok(PromptMessage {
             chat_options: options,
             messages: out
                 .into_iter()
-                .map(|(role, content, images)| PromptMessageItem {
+                .map(|(role, content, images, source)| PromptMessageItem {
                     token: count_message_tokens(&content) as i64,
                     role,
                     content,
                     images,
+                    source,
                 })
                 .collect(),
         })
@@ -273,12 +335,23 @@ impl Section {
             _ => None,
         }
     }
+
+    fn source(self) -> PromptSource {
+        PromptSource::of(match self {
+            Self::CharDescription => "character",
+            Self::PersonaDescription => "persona",
+            Self::DialogueExamples => "examples",
+            Self::WorldInfo => "world_info",
+            Self::ChatHistory => "chat",
+        })
+    }
 }
 
 enum Slot {
     Text {
         role: PromptRole,
         content: String,
+        name: String,
     },
     Section {
         section: Section,
@@ -292,6 +365,7 @@ struct InChat {
     depth: usize,
     role: PromptRole,
     content: String,
+    name: String,
 }
 
 struct SectionValues {
@@ -325,6 +399,12 @@ fn default_layout(macros: &Macros) -> Vec<Slot> {
         section(Section::CharDescription, "[Character: {{char}}]"),
         section(Section::PersonaDescription, "[User: {{user}}]"),
         section(Section::DialogueExamples, "[Example Dialogue]"),
+        // 유틸 지시문 자리 (기본 프리셋의 'utils' 블록과 같게, ADR-030 추가). 꺼진 기능은 빈 글이라 빠짐
+        Slot::Text {
+            role: PromptRole::System,
+            content: macros.apply(DEFAULT_UTILS_BLOCK),
+            name: "유틸 지시문".into(),
+        },
         Slot::Section {
             section: Section::ChatHistory,
             role: PromptRole::User,
@@ -345,6 +425,7 @@ fn layout_from_preset(preset: &LoadedPreset, generation_type: GenerationType, ma
     let mut in_chat = vec![];
     for b in blocks {
         let role = PromptRole::from_history(&b.role);
+        let block_name = if b.name.trim().is_empty() { b.identifier.clone() } else { b.name.clone() };
         if b.position == "in_chat" {
             let content = macros.apply(&b.content);
             if !content.trim().is_empty() {
@@ -352,6 +433,7 @@ fn layout_from_preset(preset: &LoadedPreset, generation_type: GenerationType, ma
                     depth: b.depth.max(0) as usize,
                     role,
                     content,
+                    name: block_name,
                 });
             }
             continue;
@@ -367,6 +449,7 @@ fn layout_from_preset(preset: &LoadedPreset, generation_type: GenerationType, ma
                 layout.push(Slot::Text {
                     role,
                     content: macros.apply(content),
+                    name: block_name,
                 })
             }
         }
@@ -384,8 +467,8 @@ fn trigger_matches(triggers: &Value, generation_type: GenerationType) -> bool {
 
 /// in_chat 블록을 "끝에서 depth번째 메시지 앞"에 끼운다. depth 0 = 맨 끝.
 /// 같은 위치의 블록은 프리셋 순서를 유지한다.
-/// 프롬프트 한 줄: 역할, 내용, 붙인 이미지
-type Line = (PromptRole, String, Vec<String>);
+/// 프롬프트 한 줄: 역할, 내용, 붙인 이미지, 출처
+type Line = (PromptRole, String, Vec<String>, Option<PromptSource>);
 
 fn interleave_in_chat(chat: Vec<Line>, in_chat: &[InChat]) -> Vec<Line> {
     let n = chat.len();
@@ -393,7 +476,7 @@ fn interleave_in_chat(chat: Vec<Line>, in_chat: &[InChat]) -> Vec<Line> {
         in_chat
             .iter()
             .filter(move |b| n - b.depth.min(n) == pos)
-            .map(|b| (b.role, b.content.clone(), vec![]))
+            .map(|b| (b.role, b.content.clone(), vec![], Some(PromptSource::named("preset", &b.name))))
     };
     let mut out = Vec::with_capacity(n + in_chat.len());
     for (i, msg) in chat.into_iter().enumerate() {
@@ -409,24 +492,69 @@ fn interleave_in_chat(chat: Vec<Line>, in_chat: &[InChat]) -> Vec<Line> {
 // =======================================
 
 fn select_world_info(ctx: &ChatContext, user_message: &str, budget: usize, macros: &Macros) -> Vec<String> {
+    let scan_depth = WI_SCAN_DEPTH.load(std::sync::atomic::Ordering::Relaxed);
+    let max_depth = WI_MAX_DEPTH.load(std::sync::atomic::Ordering::Relaxed);
+    select_world_info_with(ctx, user_message, budget, macros, scan_depth, max_depth)
+}
+
+fn select_world_info_with(ctx: &ChatContext, user_message: &str, budget: usize, macros: &Macros, scan_depth: usize, max_depth: usize) -> Vec<String> {
     if budget == 0 || ctx.world_info.is_empty() {
         return vec![];
     }
     let mut scan = user_message.to_lowercase();
-    for item in ctx.history.iter().rev().take(WORLD_INFO_SCAN_DEPTH) {
+    for item in ctx.history.iter().rev().take(scan_depth) {
         scan.push('\n');
         scan.push_str(&item.content.to_lowercase());
     }
 
-    let mut seen = std::collections::HashSet::new();
-    let mut active: Vec<(usize, &WorldInfoEntry)> = ctx
+    // 중복 id 제거된 유효 항목 목록
+    let mut seen_ids = std::collections::HashSet::new();
+    let candidates: Vec<(usize, &WorldInfoEntry)> = ctx
         .world_info
         .iter()
         .enumerate()
         .filter(|(_, e)| e.enabled && !e.content.trim().is_empty())
-        .filter(|(_, e)| seen.insert(e.id.clone()))
-        .filter(|(_, e)| e.constant || world_info_matches(e, &scan))
+        .filter(|(_, e)| seen_ids.insert(e.id.clone()))
         .collect();
+
+    let mut active_indices = std::collections::HashSet::new();
+    let mut active: Vec<(usize, &WorldInfoEntry)> = Vec::new();
+    let mut newly_added: Vec<&WorldInfoEntry> = Vec::new();
+
+    // 1차 스캔: 상시 항목 + 대화/사용자 메시지 키워드 매칭
+    for &(idx, e) in &candidates {
+        if e.constant || world_info_matches(e, &scan) {
+            active_indices.insert(idx);
+            active.push((idx, e));
+            if !e.constant {
+                newly_added.push(e);
+            }
+        }
+    }
+
+    // 재귀 스캔 (max_depth > 0): 방금 발동된 항목의 내용에서 다른 항목의 키워드를 연쇄 탐색
+    for _ in 0..max_depth {
+        if newly_added.is_empty() {
+            break;
+        }
+        let mut rec_scan = String::new();
+        for e in &newly_added {
+            rec_scan.push('\n');
+            rec_scan.push_str(&e.content.to_lowercase());
+        }
+        newly_added.clear();
+        for &(idx, e) in &candidates {
+            if active_indices.contains(&idx) {
+                continue;
+            }
+            if world_info_matches(e, &rec_scan) {
+                active_indices.insert(idx);
+                active.push((idx, e));
+                newly_added.push(e);
+            }
+        }
+    }
+
     // 상시 항목 먼저, 그다음 우선순위 높은 순, 같으면 원래 순서
     active.sort_by(|(ia, a), (ib, b)| b.constant.cmp(&a.constant).then(b.priority.cmp(&a.priority)).then(ia.cmp(ib)));
 
@@ -516,17 +644,50 @@ fn num(v: &Value, keys: &[&str]) -> Option<f64> {
 // 매크로
 // =======================================
 
-/// `{{char}}`, `{{user}}` 등 치환. 모르는 매크로는 그대로 둔다.
+/// `{{getvar::이름}}`·`{{getglobalvar::이름}}` (SillyTavern과 같음, ADR-029). `raw`는 `{{ }}` 안의 글.
+/// 변수 매크로가 아니면 None, 맞으면 값(없는 변수는 빈 글). 값은 컨텍스트 `extra_data`의
+/// `variables`(이 대화)·`globalVariables`(전역)에서 — 글자가 아닌 값은 JSON 글로
+pub fn var_macro(raw: &str, extra: &serde_json::Value) -> Option<String> {
+    let (bucket, name) = if let Some(n) = strip_prefix_ci(raw, "getvar::") {
+        ("variables", n)
+    } else {
+        ("globalVariables", strip_prefix_ci(raw, "getglobalvar::")?)
+    };
+    let v = extra.get(bucket).and_then(|b| b.get(name.trim()));
+    Some(match v {
+        None | Some(serde_json::Value::Null) => String::new(),
+        Some(serde_json::Value::String(s)) => s.clone(),
+        Some(other) => other.to_string(),
+    })
+}
+
+fn strip_prefix_ci<'a>(s: &'a str, prefix: &str) -> Option<&'a str> {
+    (s.len() >= prefix.len() && s.is_char_boundary(prefix.len()) && s[..prefix.len()].eq_ignore_ascii_case(prefix)).then(|| &s[prefix.len()..])
+}
+
+/// 대화 유틸 지시문 매크로 (ChatContext.util_prompts의 키). `{{img_inprompt}}`와 함께 프리셋이 자리를 정한다 (ADR-030 추가)
+pub const UTIL_MACROS: &[&str] = &["auto_image", "multi_char", "vars"];
+/// 프리셋이 없을 때의 유틸 자리 (migration 011의 기본 프리셋 'utils' 블록과 같은 글)
+const DEFAULT_UTILS_BLOCK: &str = "{{img_inprompt}}\n{{multi_char}}\n{{auto_image}}\n{{vars}}";
+
+/// `{{char}}`, `{{user}}`, `{{getvar::x}}` 등 치환. 모르는 매크로는 그대로 둔다.
 struct Macros {
     values: Vec<(&'static str, String)>,
+    /// 변수 매크로용 (ChatContext.extra_data)
+    extra: serde_json::Value,
 }
 
 impl Macros {
     fn from_context(ctx: &ChatContext) -> Self {
+        let (phone_date, phone_time, phone_datetime) = current_phone_clock();
         let base = Self {
+            extra: ctx.extra_data.clone(),
             values: vec![
                 ("char", ctx.char_name.clone().unwrap_or_else(|| "Assistant".into())),
                 ("user", ctx.user_name.clone().unwrap_or_else(|| "User".into())),
+                ("phone_date", phone_date),
+                ("phone_time", phone_time),
+                ("phone_datetime", phone_datetime),
                 ("newline", "\n".into()),
                 ("trim", String::new()),
                 ("noop", String::new()),
@@ -536,11 +697,25 @@ impl Macros {
         let description = base.apply(ctx.character_info.as_deref().unwrap_or_default());
         let persona = base.apply(&ctx.persona_info);
         let examples = base.apply(ctx.example_dialogue.as_deref().unwrap_or_default());
+        let img_keys = ctx.image_keys.clone().unwrap_or_default();
+        let img_inprompt = ctx
+            .image_prompt
+            .as_deref()
+            .map(|p| base.apply(p).replace("{{img_keys}}", &img_keys))
+            .unwrap_or_default();
+        let utils: Vec<(&'static str, String)> = UTIL_MACROS
+            .iter()
+            .map(|k| (*k, ctx.util_prompts.get(*k).map(|t| base.apply(t)).unwrap_or_default()))
+            .collect();
+        let extra = base.extra;
         let mut values = base.values;
+        values.extend(utils);
         values.push(("description", description));
         values.push(("persona", persona));
         values.push(("mesexamples", examples));
-        Self { values }
+        values.push(("img_keys", img_keys));
+        values.push(("img_inprompt", img_inprompt));
+        Self { values, extra }
     }
 
     fn apply(&self, text: &str) -> String {
@@ -551,6 +726,11 @@ impl Macros {
             let after = &rest[start + 2..];
             match after.find("}}") {
                 Some(end) => {
+                    if let Some(v) = var_macro(after[..end].trim(), &self.extra) {
+                        out.push_str(&v);
+                        rest = &after[end + 2..];
+                        continue;
+                    }
                     let key = after[..end].trim().to_ascii_lowercase();
                     match self.values.iter().find(|(k, _)| *k == key) {
                         Some((_, v)) => out.push_str(v),

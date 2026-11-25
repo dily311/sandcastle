@@ -1,11 +1,14 @@
 <script lang="ts">
 	// 동기화 (CLAUDE.md 2-B-3, ADR-011): 파일로 주고받기. 누를 때만 만들고, 합치기 전에 미리보기 → 자동 사본 → 적용
+	import { jobs } from "$shared/stores/jobs.svelte";
 	import { onMount } from "svelte";
+	import { _ } from "svelte-i18n";
 	import { Cloud, Download, FolderOpen, Info, LogOut, RefreshCw, RotateCcw } from "@lucide/svelte";
 	import type { DriveStatus, SyncBackup, SyncPreview, SyncStatus } from "$ipc/bindings";
 	import { confirmAction } from "$shared/stores/confirm.svelte";
 	import SyncConflicts from "./SyncConflicts.svelte";
-	import { Badge, Button, Segmented, Select, Spinner, Switch } from "$shared/ui";
+	import { deviceLabel, shortId as short } from "./deviceLabel";
+	import { Badge, Button, Input, Segmented, Select, Spinner, Switch } from "$shared/ui";
 	import { call, commands } from "$shared/ipc/client";
 	import { pickFiles, pickFolder, saveTo, SYNC_FILES } from "$shared/ipc/dialog";
 	import { dropPaths, extOf } from "$app/drop.svelte";
@@ -31,12 +34,12 @@
 	let syncing = $state(false);
 	let step = $state("");
 	const sync = $derived(current()?.sync ?? null);
-	const INTERVALS = [
-		{ value: "15", label: "15분마다" },
-		{ value: "30", label: "30분마다" },
-		{ value: "60", label: "1시간마다" },
-		{ value: "180", label: "3시간마다" },
-	];
+	const INTERVALS = $derived([
+		{ value: "15", label: $_("settings.syncSec.every15m") },
+		{ value: "30", label: $_("settings.syncSec.every30m") },
+		{ value: "60", label: $_("settings.syncSec.every1h") },
+		{ value: "180", label: $_("settings.syncSec.every3h") },
+	]);
 
 	onMount(() => {
 		void load();
@@ -51,9 +54,9 @@
 	let conflictsKey = $state(0);
 	async function rollback(b: SyncBackup) {
 		const ok = await confirmAction({
-			title: "합치기 전으로 되돌리기",
-			message: `${absolute(b.createdAt)}에 만든 사본으로 DB와 설정을 바꿈. 그 뒤에 이 기기에서 한 일도 사라짐 (지금 데이터는 지우지 않고 restore-backups 폴더로 치워 둠). 자동 동기화는 꺼짐 — 켜 둔 채면 다음 동기화가 같은 내용을 다시 합침. 앱이 다시 시작됨`,
-			confirmLabel: "다시 시작해서 되돌리기",
+			title: $_("settings.syncSec.rollbackTitle"),
+			message: $_("settings.syncSec.rollbackMsg", { values: { date: absolute(b.createdAt) } }),
+			confirmLabel: $_("settings.syncSec.rollbackConfirm"),
 			danger: true,
 		});
 		if (!ok) return;
@@ -62,7 +65,7 @@
 	}
 	async function cancelRollback() {
 		await call(commands.cancelSyncRollback(), src);
-		toasts.success("되돌리기 취소함");
+		toasts.success($_("settings.syncSec.rollbackCancelled"));
 		await load();
 	}
 
@@ -72,9 +75,9 @@
 	}
 	async function excludePeer(deviceId: string) {
 		const ok = await confirmAction({
-			title: "오래 못 본 기기 제외",
-			message: `${short(deviceId)} 기기를 기다리지 않고 지운 기록을 정리합니다. 그 기기가 나중에 돌아오면 전체를 다시 합치고, 그동안 지운 항목이 되살아날 수 있습니다.`,
-			confirmLabel: "제외",
+			title: $_("settings.syncSec.excludeTitle"),
+			message: $_("settings.syncSec.excludeMsg", { values: { device: label(deviceId) } }),
+			confirmLabel: $_("settings.syncSec.excludeBtn"),
 			danger: true,
 		});
 		if (ok) await setExcluded(deviceId, true);
@@ -100,7 +103,7 @@
 			await prepareDrive(false);
 			return true;
 		} catch (e) {
-			toasts.error("구글 드라이브 권한을 받지 못함", String((e as Error)?.message ?? e));
+			toasts.error($_("settings.syncSec.drivePermError"), String((e as Error)?.message ?? e));
 			return false;
 		}
 	}
@@ -109,38 +112,38 @@
 		loggingIn = true;
 		try {
 			drive = phone ? await prepareDrive(true) : await call(commands.driveLogin(), src);
-			toasts.success(drive.email ? `구글 드라이브 연결함 · ${drive.email}` : "구글 드라이브 연결함");
+			toasts.success(drive.email ? $_("settings.syncSec.driveConnectedEmail", { values: { email: drive.email } }) : $_("settings.syncSec.driveConnected"));
 		} catch (e) {
 			// 백엔드 오류는 call이 이미 토스트로, 폰(Play 서비스)의 오류는 여기서
-			if (e instanceof Error) toasts.error("구글 드라이브에 연결하지 못함", e.message);
+			if (e instanceof Error) toasts.error($_("settings.syncSec.driveConnectError"), e.message);
 		} finally {
 			loggingIn = false;
 		}
 	}
 	async function logoutDrive() {
 		const keep = await confirmAction({
-			title: "구글 드라이브 연결 끊기",
-			message: "이 기기에서 구글 로그인을 지움 (구글에서도 권한을 거둠). 드라이브의 동기화 데이터는 그대로 둠 — 다른 기기는 계속 쓸 수 있음",
-			confirmLabel: "연결 끊기",
+			title: $_("settings.syncSec.driveLogoutTitle"),
+			message: $_("settings.syncSec.driveLogoutMsg"),
+			confirmLabel: $_("settings.syncSec.driveLogoutBtn"),
 		});
 		if (!keep) return;
 		if (phone) await prepareDrive(false).catch(() => null); // 권한을 거두려면 지금 토큰이 필요
 		await call(commands.driveLogout(false), src);
 		drive = await call(commands.driveStatus(), { ...src, silent: true }).catch(() => null);
-		toasts.success("구글 드라이브 연결을 끊음");
+		toasts.success($_("settings.syncSec.driveLoggedOut"));
 	}
 	async function wipeDrive() {
 		const ok = await confirmAction({
-			title: "드라이브의 동기화 데이터 지우기",
-			message: "구글 드라이브의 샌드캐슬 앱 전용 폴더(모든 기기의 동기화 파일과 그림)를 지우고 이 기기의 연결도 끊음. 각 기기의 데이터는 그대로지만, 드라이브의 것은 되돌릴 수 없음",
-			confirmLabel: "드라이브 데이터 지우기",
+			title: $_("settings.syncSec.driveWipeTitle"),
+			message: $_("settings.syncSec.driveWipeMsg"),
+			confirmLabel: $_("settings.syncSec.driveWipeBtn"),
 			danger: true,
 		});
 		if (!ok) return;
 		if (!(await phoneToken())) return;
 		const n = await call(commands.driveLogout(true), src);
 		drive = await call(commands.driveStatus(), { ...src, silent: true }).catch(() => null);
-		toasts.success(`드라이브의 동기화 파일 ${n}개를 지우고 연결을 끊음`);
+		toasts.success($_("settings.syncSec.driveWiped", { values: { count: n } }));
 	}
 
 	async function chooseFolder() {
@@ -149,22 +152,32 @@
 	}
 	async function syncNow() {
 		if (phone && sync?.wifiOnly && !unmetered()) {
-			const ok = await confirmAction({ title: "모바일 데이터로 동기화", message: "지금은 Wi-Fi가 아님. 모바일 데이터로 동기화할까요? (그림이 많으면 데이터가 많이 듦)", confirmLabel: "동기화" });
+			const ok = await confirmAction({ title: $_("settings.syncSec.cellularTitle"), message: $_("settings.syncSec.cellularMsg"), confirmLabel: $_("settings.syncSec.title") });
 			if (!ok) return;
 		}
 		syncing = true;
 		step = "";
 		try {
 			if (!(await phoneToken())) return;
-			const r = await call(commands.syncNow(false), src);
+			// 파일 작업 대기열에서 (5-E-28): 가져오기·지우기가 도는 동안 눌러도 거절하지 않고 차례로
+			const r = await jobs.run($_("settings.syncSec.syncNowBtn"), () => call(commands.syncNow(false), src), { group: $_("settings.syncSec.title") });
+			if (!r) return;
 			const m = r.merged.reduce((a, d) => ({ added: a.added + d.report.added, updated: a.updated + d.report.updated, deleted: a.deleted + d.report.deleted, both: a.both + d.report.conflicts + d.report.branches }), { added: 0, updated: 0, deleted: 0, both: 0 });
 			toasts.success(
 				r.merged.length
-					? `동기화함: 기기 ${r.merged.length}개 · 추가 ${n(m.added)} · 변경 ${n(m.updated)} · 지움 ${n(m.deleted)}${m.both ? ` · 충돌 ${n(m.both)}` : ""}`
-					: "동기화함: 다른 기기에서 새로 바뀐 것 없음",
+					? $_("settings.syncSec.syncMerged", {
+							values: {
+								devices: r.merged.length,
+								added: n(m.added),
+								updated: n(m.updated),
+								deleted: n(m.deleted),
+								conflicts: m.both ? $_("settings.syncSec.syncConflictsPart", { values: { count: n(m.both) } }) : "",
+							},
+						})
+					: $_("settings.syncSec.syncNoChanges"),
 			);
-			for (const d of r.skippedDevices ?? []) toasts.error(`기기 ${short(d.deviceId)}의 묶음을 열지 못해 건너뜀: ${d.reason}`);
-			if (r.merged.some((d) => d.returnedAfterExclusion)) toasts.info("제외했던 기기가 돌아와 전체를 다시 합쳤습니다. 그동안 지운 항목이 되살아났을 수 있으니 확인하세요");
+			for (const d of r.skippedDevices ?? []) toasts.error($_("settings.syncSec.skippedDevice", { values: { device: label(d.deviceId), reason: d.reason } }));
+			if (r.merged.some((d) => d.returnedAfterExclusion)) toasts.info($_("settings.syncSec.returnedExcluded"));
 			await library.load();
 			conflictsKey++;
 		} catch {
@@ -175,7 +188,14 @@
 			await load();
 		}
 	}
-	const short = (id: string) => id.slice(0, 8);
+	/** 기기 이름, 없으면 id 앞자리 (5-E-16-1) */
+	const label = (id: string, name?: string | null) => deviceLabel(id, status?.peers ?? [], name);
+	/** 이 기기 이름 (5-E-16). 다른 기기에는 다음 동기화부터 보인다 */
+	async function renameDevice(name: string) {
+		if (!status || name.trim() === (status.deviceName ?? "")) return;
+		const saved = await call(commands.setDeviceName(name), src).catch(() => undefined);
+		if (saved !== undefined && status) status = { ...status, deviceName: saved };
+	}
 	const n = (v: number) => v.toLocaleString();
 	function size(b: number) {
 		return b < 1024 * 1024 ? `${Math.max(1, Math.round(b / 1024))}KB` : `${(b / 1024 / 1024).toFixed(1)}MB`;
@@ -187,9 +207,9 @@
 		try {
 			const r = await saveTo(`sandcastle-sync-${stamp}.scsync`, [SYNC_FILES], (path) => {
 				busy = "export";
-				return call(commands.exportSyncBundle(path, includeFiles), src);
+				return jobs.run($_("settings.syncSec.exportFileJob"), () => call(commands.exportSyncBundle(path, includeFiles), src), { group: $_("settings.syncSec.exportFileGroup") });
 			});
-			if (r) toasts.success(`동기화 파일을 만듦 · 항목 ${n(r.rows)}개, 파일 ${n(r.blobs)}/${n(r.files)}개, ${size(r.bytes)}`);
+			if (r) toasts.success($_("settings.syncSec.exportedToast", { values: { rows: n(r.rows), blobs: n(r.blobs), files: n(r.files), size: size(r.bytes) } }));
 		} finally {
 			busy = null;
 		}
@@ -202,8 +222,8 @@
 	// 끌어다 놓아도 미리보기부터 (합치기는 그 뒤 버튼). 큰 묶음은 버튼으로
 	$effect(() =>
 		dropPaths({
-			label: "동기화 파일 열기",
-			hint: "샌드캐슬 동기화(.scsync), 300MB까지. 더 큰 파일은 열기 버튼으로",
+			label: $_("settings.syncSec.dropOpenLabel"),
+			hint: $_("settings.syncSec.dropOpenHint"),
 			accept: (f) => extOf(f) === "scsync",
 			multiple: false,
 			maxBytes: 300 * 1024 * 1024,
@@ -225,17 +245,19 @@
 		if (!pending) return;
 		busy = "apply";
 		try {
-			const r = await call(commands.applySyncBundle(pending.path), src);
+			const path = pending.path;
+			const r = await jobs.run(path.split(/[\\/]/).pop() ?? path, () => call(commands.applySyncBundle(path), src), { group: $_("settings.syncSec.applyGroup") });
+			if (!r) return;
 			const m = r.report;
 			const parts = [
-				m.added && `추가 ${n(m.added)}`,
-				m.updated && `변경 ${n(m.updated)}`,
-				m.deleted && `지움 ${n(m.deleted)}`,
-				m.restored && `되살림 ${n(m.restored)}`,
-				r.files.added && `파일 ${n(r.files.added)}`,
-				m.conflicts + m.branches && `충돌 ${n(m.conflicts + m.branches)}`,
+				m.added && `${$_("settings.syncSec.statAdded")} ${n(m.added)}`,
+				m.updated && `${$_("settings.syncSec.statUpdated")} ${n(m.updated)}`,
+				m.deleted && `${$_("settings.syncSec.statDeleted")} ${n(m.deleted)}`,
+				m.restored && `${$_("settings.syncSec.statRestored")} ${n(m.restored)}`,
+				r.files.added && `${$_("settings.syncSec.statFilesAdded")} ${n(r.files.added)}`,
+				m.conflicts + m.branches && `${$_("settings.syncSec.statConflicts")} ${n(m.conflicts + m.branches)}`,
 			].filter(Boolean);
-			toasts.success(parts.length ? `합침: ${parts.join(" · ")}` : "합침: 바뀐 것 없음");
+			toasts.success(parts.length ? $_("settings.syncSec.mergedToast", { values: { parts: parts.join(" · ") } }) : $_("settings.syncSec.mergedNoChanges"));
 			pending = null;
 			conflictsKey++;
 			await Promise.all([load(), library.load()]);
@@ -249,162 +271,168 @@
 		const m = pending.preview.report;
 		const f = pending.preview.files;
 		return [
-			{ label: "추가", value: m.added, hint: "이 기기에 없던 항목" },
-			{ label: "변경", value: m.updated, hint: "다른 기기에서만 고친 항목" },
-			{ label: "지움", value: m.deleted, hint: "다른 기기에서 지웠고 이 기기는 그 뒤로 안 고친 항목" },
-			{ label: "되살림", value: m.restored, hint: "이 기기에서 지웠지만 다른 기기에서 고친 항목 (고친 쪽을 살림)" },
-			{ label: "이 기기 고침 유지", value: m.keptLocalEdits, hint: "다른 기기에서 지웠지만 이 기기에서 고친 항목" },
-			{ label: "충돌", value: m.conflicts, hint: "양쪽에서 고친 항목. 이 기기 것을 두고 받은 것은 따로 보관" },
-			{ label: "분기 대화", value: m.branches, hint: "같은 대화에 양쪽이 이어 씀. 받은 쪽을 새 분기로" },
-			{ label: "파일 추가", value: f.added, hint: "이 기기에 없는 그림·파일" },
-			{ label: "빠진 파일", value: f.missing, hint: "묶음에 내용이 없음 — 보낸 기기에서 '파일 포함'으로 다시 만들면 들어옴" },
-			{ label: "이 기기 파일 유지", value: f.keptLocal, hint: "같은 자리에 내용이 다른 파일이 있어 이 기기 것을 둠" },
+			{ key: "added", label: $_("settings.syncSec.statAdded"), value: m.added, hint: $_("settings.syncSec.statAddedHint") },
+			{ key: "updated", label: $_("settings.syncSec.statUpdated"), value: m.updated, hint: $_("settings.syncSec.statUpdatedHint") },
+			{ key: "deleted", label: $_("settings.syncSec.statDeleted"), value: m.deleted, hint: $_("settings.syncSec.statDeletedHint") },
+			{ key: "restored", label: $_("settings.syncSec.statRestored"), value: m.restored, hint: $_("settings.syncSec.statRestoredHint") },
+			{ key: "keptLocal", label: $_("settings.syncSec.statKeptLocal"), value: m.keptLocalEdits, hint: $_("settings.syncSec.statKeptLocalHint") },
+			{ key: "conflicts", label: $_("settings.syncSec.statConflicts"), value: m.conflicts, hint: $_("settings.syncSec.statConflictsHint") },
+			{ key: "branches", label: $_("settings.syncSec.statBranches"), value: m.branches, hint: $_("settings.syncSec.statBranchesHint") },
+			{ key: "filesAdded", label: $_("settings.syncSec.statFilesAdded"), value: f.added, hint: $_("settings.syncSec.statFilesAddedHint") },
+			{ key: "filesMissing", label: $_("settings.syncSec.statFilesMissing"), value: f.missing, hint: $_("settings.syncSec.statFilesMissingHint") },
+			{ key: "filesKeptLocal", label: $_("settings.syncSec.statFilesKeptLocal"), value: f.keptLocal, hint: $_("settings.syncSec.statFilesKeptLocalHint") },
 		].filter((r) => r.value > 0);
 	});
 </script>
 
-<Section title="동기화" lead="다른 기기(PC·폰)와 캐릭터·대화·설정을 합침. API 키는 넘어가지 않음 — 받는 기기에서 다시 넣기">
+<Section title={$_("settings.syncSec.title")} lead={$_("settings.syncSec.lead")}>
 	{#if !status}
 		<div class="loading"><Spinner /></div>
 	{:else}
 		{#if status.pendingRollback}
 			<div class="banner" role="status">
 				<RotateCcw />
-				<div><b>되돌리기 준비됨</b><span>앱을 다시 시작하면 합치기 전 사본으로 바꿈</span></div>
-				<Button size="sm" variant="ghost" onclick={cancelRollback}>취소</Button>
-				<Button size="sm" variant="primary" onclick={() => call(commands.restartApp(), src)}>다시 시작</Button>
+				<div><b>{$_("settings.syncSec.pendingRollbackTitle")}</b><span>{$_("settings.syncSec.pendingRollbackDesc")}</span></div>
+				<Button size="sm" variant="ghost" onclick={cancelRollback}>{$_("common.cancel")}</Button>
+				<Button size="sm" variant="primary" onclick={() => call(commands.restartApp(), src)}>{$_("settings.syncSec.restartBtn")}</Button>
 			</div>
 		{/if}
-		{#key conflictsKey}<SyncConflicts onchange={load} />{/key}
+		{#key conflictsKey}<SyncConflicts onchange={load} peers={status.peers} />{/key}
 
 		{#if showAuto}
-			<Group title="자동으로 주고받기">
-				{#if layout.desktop}<Row label="저장소" desc="여러 기기가 같은 곳에 자기 파일을 두고 서로 것을 받아 합침">
+			<Group title={$_("settings.syncSec.autoGroup")}>
+				{#if layout.desktop}<Row label={$_("settings.syncSec.storage")} desc={$_("settings.syncSec.storageDesc")}>
 					<Segmented
-						label="동기화 저장소"
+						label={$_("settings.syncSec.storageAria")}
 						value={targetKind}
 						options={[
-							{ value: "folder", label: "폴더" },
-							{ value: "drive", label: "구글 드라이브" },
+							{ value: "folder", label: $_("settings.syncSec.folder") },
+							{ value: "drive", label: $_("settings.syncSec.googleDrive") },
 						]}
 						onchange={(v) => savePart("sync", { target: v, auto: false })}
 					/>
 				</Row>{/if}
 				{#if targetKind === "folder"}
-					<Row label="동기화 폴더" desc={sync?.folder ?? "OneDrive·Dropbox·구글 드라이브 앱처럼 이미 쓰는 동기화 앱의 폴더를 고르면, 그 안에 sandcastle-sync 폴더를 만들어 기기마다 자기 파일만 씀"}>
-						{#if sync?.folder}<Button size="sm" variant="ghost" onclick={() => savePart("sync", { folder: null, auto: false })}>빼기</Button>{/if}
-						<Button size="sm" onclick={chooseFolder}>{#snippet icon()}<FolderOpen />{/snippet}{sync?.folder ? "바꾸기" : "미선택"}</Button>
+					<Row label={$_("settings.syncSec.syncFolder")} desc={sync?.folder ?? $_("settings.syncSec.syncFolderDesc")}>
+						{#if sync?.folder}<Button size="sm" variant="ghost" onclick={() => savePart("sync", { folder: null, auto: false })}>{$_("settings.syncSec.removeFolder")}</Button>{/if}
+						<Button size="sm" onclick={chooseFolder}>{#snippet icon()}<FolderOpen />{/snippet}{sync?.folder ? $_("settings.syncSec.changeFolder") : $_("settings.syncSec.unsetFolder")}</Button>
 					</Row>
 				{:else if drive && !drive.available}
-					<p class="meta empty">이 빌드에는 구글 드라이브 연결이 들어 있지 않음 (배포 빌드에서 쓸 수 있음). 폴더 동기화나 파일로 주고받기를 쓰세요</p>
+					<p class="meta empty">{$_("settings.syncSec.driveUnavailable")}</p>
 				{:else if drive?.connected}
-					<Row label="구글 드라이브" desc={`${drive.email ?? "연결됨"} · 드라이브의 앱 전용 폴더만 씀 (다른 드라이브 파일은 보지 못함)`}>
-						<Button size="sm" variant="ghost" onclick={wipeDrive}>드라이브 데이터 지우기</Button>
-						<Button size="sm" onclick={logoutDrive}>{#snippet icon()}<LogOut />{/snippet}연결 끊기</Button>
+					<Row label={$_("settings.syncSec.googleDrive")} desc={$_("settings.syncSec.driveConnectedDesc", { values: { who: drive.email ?? $_("settings.syncSec.connectedFallback") } })}>
+						<Button size="sm" variant="ghost" onclick={wipeDrive}>{$_("settings.syncSec.driveWipeBtn")}</Button>
+						<Button size="sm" onclick={logoutDrive}>{#snippet icon()}<LogOut />{/snippet}{$_("settings.syncSec.driveLogoutBtn")}</Button>
 					</Row>
 				{:else}
-					<Row label="구글 드라이브" desc={phone ? "이 폰의 구글 계정으로 권한을 허락하면 연결됨. 권한은 드라이브의 앱 전용 폴더뿐" : "브라우저에서 구글에 로그인하면 연결됨. 권한은 드라이브의 앱 전용 폴더뿐이고, 로그인 정보는 이 기기의 키 저장소에만"}>
-						<Button size="sm" variant="primary" loading={loggingIn} disabled={loggingIn} onclick={loginDrive}>{#snippet icon()}<Cloud />{/snippet}로그인</Button>
+					<Row label={$_("settings.syncSec.googleDrive")} desc={phone ? $_("settings.syncSec.driveLoginDescPhone") : $_("settings.syncSec.driveLoginDescDesktop")}>
+						<Button size="sm" variant="primary" loading={loggingIn} disabled={loggingIn} onclick={loginDrive}>{#snippet icon()}<Cloud />{/snippet}{$_("settings.syncSec.loginBtn")}</Button>
 					</Row>
 				{/if}
 				{#if sync && ready}
-					<Row label="지금 동기화" desc={syncing ? step || "준비 중" : "다른 기기가 올린 것을 받아 합치고, 이 기기 것을 올림. 합치기 전에 이 기기 DB·설정 사본을 만듦"}>
-						<Button size="sm" variant="primary" loading={syncing} disabled={syncing} onclick={syncNow}>{#snippet icon()}<RefreshCw />{/snippet}지금 동기화</Button>
+					<Row label={$_("settings.syncSec.syncNowBtn")} desc={syncing ? step || $_("settings.syncSec.preparing") : $_("settings.syncSec.syncNowDesc")}>
+						<Button size="sm" variant="primary" loading={syncing} disabled={syncing} onclick={syncNow}>{#snippet icon()}<RefreshCw />{/snippet}{$_("settings.syncSec.syncNowBtn")}</Button>
 					</Row>
-					<Row label="자동 동기화" desc="켜면 앱을 켤 때 한 번, 그 뒤 정한 간격마다 (앱이 켜져 있는 동안만). 요금은 들지 않음" nowrap>
+					<Row label={$_("settings.syncSec.autoSync")} desc={$_("settings.syncSec.autoSyncDesc")} nowrap>
 						{#if sync.auto}
-							<Select value={String(sync.intervalMinutes)} options={INTERVALS} aria-label="자동 동기화 간격" onchange={(e) => savePart("sync", { intervalMinutes: Number(e.currentTarget.value) })} />
+							<Select value={String(sync.intervalMinutes)} options={INTERVALS} aria-label={$_("settings.syncSec.autoSyncIntervalAria")} onchange={(e) => savePart("sync", { intervalMinutes: Number(e.currentTarget.value) })} />
 						{/if}
-						<Switch checked={sync.auto} label="자동 동기화" hideLabel onchange={(v) => savePart("sync", { auto: v })} />
+						<Switch checked={sync.auto} label={$_("settings.syncSec.autoSync")} hideLabel onchange={(v) => savePart("sync", { auto: v })} />
 					</Row>
 					{#if phone}
-						<Row label="Wi-Fi에서만" desc="켜면 자동 동기화는 Wi-Fi(요금이 들지 않는 연결)일 때만 하고, 직접 누를 때는 먼저 물어봄" nowrap>
-							<Switch checked={sync.wifiOnly} label="Wi-Fi에서만" hideLabel onchange={(v) => savePart("sync", { wifiOnly: v })} />
+						<Row label={$_("settings.syncSec.wifiOnly")} desc={$_("settings.syncSec.wifiOnlyDesc")} nowrap>
+							<Switch checked={sync.wifiOnly} label={$_("settings.syncSec.wifiOnly")} hideLabel onchange={(v) => savePart("sync", { wifiOnly: v })} />
 						</Row>
 					{/if}
 				{/if}
 			</Group>
 		{/if}
 
-		<Group title="파일로 보내기">
-			<Row label="그림·파일 포함" desc="끄면 항목과 설정만 (파일 목록은 들어가서, 받는 쪽이 빠진 파일 수를 알 수 있음)" nowrap>
-				<Switch checked={includeFiles} label="그림·파일 포함" hideLabel onchange={(v) => (includeFiles = v)} />
+		<Group title={$_("settings.syncSec.exportGroup")}>
+			<Row label={$_("settings.syncSec.includeFiles")} desc={$_("settings.syncSec.includeFilesDesc")} nowrap>
+				<Switch checked={includeFiles} label={$_("settings.syncSec.includeFiles")} hideLabel onchange={(v) => (includeFiles = v)} />
 			</Row>
-			<Row label="동기화 파일 만들기" desc="캐릭터·대화·로어북·프리셋·게임·같이 쓰는 설정. 실행 기록·휴지통·이 기기 전용 설정은 빠짐" nowrap>
-				<Button size="sm" loading={busy === "export"} disabled={busy !== null} onclick={exportBundle}>{#snippet icon()}<Download />{/snippet}만들기</Button>
+			<Row label={$_("settings.syncSec.createBundle")} desc={$_("settings.syncSec.createBundleDesc")} nowrap>
+				<Button size="sm" loading={busy === "export"} disabled={busy !== null} onclick={exportBundle}>{#snippet icon()}<Download />{/snippet}{$_("settings.syncSec.createBtn")}</Button>
 			</Row>
 		</Group>
 
-		<Group title="파일로 받기">
-			<Row label="동기화 파일 열기" desc="합치기 전에 무엇이 바뀌는지 먼저 보여줌. 적용하면 이 기기 DB·설정 사본을 먼저 만듦" nowrap>
-				<Button size="sm" loading={busy === "open"} disabled={busy !== null} onclick={openBundle}>{#snippet icon()}<FolderOpen />{/snippet}열기</Button>
+		<Group title={$_("settings.syncSec.importGroup")}>
+			<Row label={$_("settings.syncSec.openBundle")} desc={$_("settings.syncSec.openBundleDesc")} nowrap>
+				<Button size="sm" loading={busy === "open"} disabled={busy !== null} onclick={openBundle}>{#snippet icon()}<FolderOpen />{/snippet}{$_("settings.syncSec.openBtn")}</Button>
 			</Row>
 			{#if pending}
 				{@const b = pending.preview.bundle}
-				<div class="preview" role="region" aria-label="합치기 미리보기">
+				<div class="preview" role="region" aria-label={$_("settings.syncSec.previewAria")}>
 					<p class="from">
-						<Badge>기기 {short(b.deviceId)}</Badge>
-						<span title={absolute(b.createdAt)}>{relative(b.createdAt)}에 만듦</span>
-						<span class="meta">앱 {b.appVersion} · {size(b.bytes)}</span>
+						<Badge>{$_("settings.syncSec.deviceBadge", { values: { name: label(b.deviceId, b.deviceName) } })}</Badge>
+						<span title={absolute(b.createdAt)}>{$_("settings.syncSec.createdWhen", { values: { when: relative(b.createdAt) } })}</span>
+						<span class="meta">{$_("settings.syncSec.appVersionMeta", { values: { version: b.appVersion, size: size(b.bytes) } })}</span>
 					</p>
 					{#if rows.length}
 						<dl class="counts">
-							{#each rows as r (r.label)}
+							{#each rows as r (r.key)}
 								<div title={r.hint}><dt>{r.label}</dt><dd>{n(r.value)}</dd></div>
 							{/each}
 						</dl>
 					{:else}
-						<p class="meta">바뀔 것이 없음 (이미 합친 내용)</p>
+						<p class="meta">{$_("settings.syncSec.nothingToChange")}</p>
 					{/if}
 					{#if pending.preview.report.settingsApplied}
-						<p class="note"><Info /> 같이 쓰는 설정(테마·언어·프롬프트 등)은 받은 것으로 바뀜. 이 기기 전용(API 선택·기능 켜기·글자 크기 등)은 그대로</p>
+						<p class="note"><Info /> {$_("settings.syncSec.settingsAppliedNote")}</p>
 					{/if}
 					{#if pending.preview.report.conflicts + pending.preview.report.branches > 0}
-						<p class="note"><Info /> 충돌 항목은 지금은 이 기기 것이 보이고, 받은 것은 따로 보관됨 — 합친 뒤 이 화면 위쪽 "충돌 항목"에서 확인하고 고름</p>
+						<p class="note"><Info /> {$_("settings.syncSec.conflictsNote")}</p>
 					{/if}
 					<div class="acts">
-						<Button size="sm" variant="ghost" disabled={busy !== null} onclick={() => (pending = null)}>취소</Button>
-						<Button size="sm" variant="primary" loading={busy === "apply"} disabled={busy !== null} onclick={apply}>합치기</Button>
+						<Button size="sm" variant="ghost" disabled={busy !== null} onclick={() => (pending = null)}>{$_("common.cancel")}</Button>
+						<Button size="sm" variant="primary" loading={busy === "apply"} disabled={busy !== null} onclick={apply}>{$_("settings.syncSec.mergeBtn")}</Button>
 					</div>
 				</div>
 			{/if}
 		</Group>
 
-		<Group title="기기">
-			<Row label="이 기기" desc="동기화 파일에 적히는 이 설치의 표시. 백업을 다른 기기에 복원해도 바뀌지 않음">
-				<code>{short(status.deviceId)}</code>
+		<Group title={$_("settings.syncSec.devicesGroup")}>
+			<Row label={$_("settings.syncSec.thisDevice")}>
+				<Input
+					value={status.deviceName ?? ""}
+					placeholder={short(status.deviceId)}
+					maxlength={40}
+					aria-label={$_("settings.syncSec.thisDeviceAria")}
+					onchange={(e) => void renameDevice(e.currentTarget.value)}
+				/>
 			</Row>
 			{#if status.peers.length}
 				<ul class="peers">
 					{#each status.peers as p (p.deviceId)}
 						<li>
-							<code>{short(p.deviceId)}</code>
-							{#if p.excluded}<Badge>제외됨</Badge>{:else if p.stale}<Badge tone="warning">오래 못 봄</Badge>{/if}
-							<span title={absolute(p.lastMergeAt)}>그 기기 것을 받음 {relative(p.lastMergeAt)}</span>
-							<span class="meta" title={p.theirAck ? absolute(p.theirAck) : undefined}>{p.theirAck ? `이 기기 것을 받아 감 ${relative(p.theirAck)}` : "이 기기 것은 아직 안 받아 감"} · {n(p.merges)}번</span>
+							{#if p.name}<b title={p.deviceId}>{p.name}</b>{:else}<code>{short(p.deviceId)}</code>{/if}
+							{#if p.excluded}<Badge>{$_("settings.syncSec.excludedBadge")}</Badge>{:else if p.stale}<Badge tone="warning">{$_("settings.syncSec.staleBadge")}</Badge>{/if}
+							<span title={absolute(p.lastMergeAt)}>{$_("settings.syncSec.receivedFromPeer", { values: { when: relative(p.lastMergeAt) } })}</span>
+							<span class="meta" title={p.theirAck ? absolute(p.theirAck) : undefined}>{p.theirAck ? $_("settings.syncSec.peerAcked", { values: { when: relative(p.theirAck) } }) : $_("settings.syncSec.peerNotAcked")} · {$_("settings.syncSec.mergeCount", { values: { count: n(p.merges) } })}</span>
 							{#if p.excluded}
-								<Button size="sm" variant="ghost" onclick={() => setExcluded(p.deviceId, false)}>다시 포함</Button>
+								<Button size="sm" variant="ghost" onclick={() => setExcluded(p.deviceId, false)}>{$_("settings.syncSec.reincludeBtn")}</Button>
 							{:else if p.stale}
-								<Button size="sm" variant="ghost" onclick={() => excludePeer(p.deviceId)}>제외</Button>
+								<Button size="sm" variant="ghost" onclick={() => excludePeer(p.deviceId)}>{$_("settings.syncSec.excludeBtn")}</Button>
 							{/if}
 						</li>
 					{/each}
 				</ul>
 			{:else}
-				<p class="meta empty">아직 합친 기기 없음</p>
+				<p class="meta empty">{$_("settings.syncSec.noPeers")}</p>
 			{/if}
 		</Group>
 
 		{#if backups.length}
-			<Group title="합치기 되돌리기">
-				<p class="meta empty">합치기 전에 자동으로 만든 사본 (최근 3개). 고르면 다음 시작 때 그 상태로 돌아감</p>
+			<Group title={$_("settings.syncSec.rollbackGroup")}>
+				<p class="meta empty">{$_("settings.syncSec.rollbackGroupDesc")}</p>
 				<ul class="peers">
 					{#each backups as b (b.name)}
 						<li>
 							<span title={b.name}>{absolute(b.createdAt)}</span>
 							<span class="meta">{relative(b.createdAt)} · {size(b.bytes)}</span>
 							<span class="grow"></span>
-							<Button size="sm" variant="ghost" onclick={() => rollback(b)}>{#snippet icon()}<RotateCcw />{/snippet}이 사본으로</Button>
+							<Button size="sm" variant="ghost" onclick={() => rollback(b)}>{#snippet icon()}<RotateCcw />{/snippet}{$_("settings.syncSec.useBackupBtn")}</Button>
 						</li>
 					{/each}
 				</ul>

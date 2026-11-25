@@ -41,7 +41,8 @@ where
     .bind(&id)
     .bind(&input.title)
     .bind(&input.character_id)
-    .bind(&input.persona_id)
+    // 빈 페르소나 = 캐릭터 기본 → 전역을 따름 (ADR-028). FK라 빈 글이 아니라 NULL로
+    .bind(Some(input.persona_id.as_str()).filter(|s| !s.is_empty()))
     .bind(&wi_json)
     .bind(&input.mode)
     .bind(meta)
@@ -68,6 +69,8 @@ where
         prompt_preset_id: None,
         api_profile_id: None,
         model: None,
+        last_message_at: None,
+        read_mode: false,
     })
 }
 
@@ -135,7 +138,9 @@ where
         "SELECT 
             p.id,
             p.name,
+            p.alias,
             p.avatar,
+            p.avatar_fit,
             p.description,
             (
                 SELECT json_group_array(book_id) 
@@ -162,7 +167,9 @@ where
         "SELECT 
             p.id,
             p.name,
+            p.alias,
             p.avatar,
+            p.avatar_fit,
             p.description,
             (
                 SELECT json_group_array(book_id) 
@@ -212,12 +219,14 @@ where
     let now = chrono::Utc::now().timestamp_millis();
     let tags_json = serde_json::to_string(&input.tags).unwrap_or_default();
 
+    let alias = input.alias.as_deref().map(str::trim).filter(|s| !s.is_empty()).map(str::to_string);
     sqlx::query(
-        "INSERT INTO personas (id,name,avatar,description,tags,color,is_system_default,created_at,updated_at)
-         VALUES (?,?,?,?,?,?,?,?,?)",
+        "INSERT INTO personas (id,name,alias,avatar,description,tags,color,is_system_default,created_at,updated_at)
+         VALUES (?,?,?,?,?,?,?,?,?,?)",
     )
     .bind(&id)
     .bind(&input.name)
+    .bind(&alias)
     .bind(&input.avatar)
     .bind(&input.description)
     .bind(&tags_json)
@@ -231,7 +240,9 @@ where
     Ok(Persona {
         id: id,
         name: input.name,
+        alias,
         avatar: input.avatar,
+        avatar_fit: None,
         description: input.description,
         world_info_ids: input.world_info_ids,
         tags: input.tags,
@@ -249,13 +260,15 @@ where
     let now = chrono::Utc::now().timestamp_millis();
     let tags_json = serde_json::to_string(&input.tags).unwrap_or_default();
 
+    let alias = input.alias.as_deref().map(str::trim).filter(|s| !s.is_empty()).map(str::to_string);
     sqlx::query(
         "
         UPDATE personas SET 
-            name=?, avatar=?, description=?, tags=?, color=?, updated_at=? 
+            name=?, alias=?, avatar=?, description=?, tags=?, color=?, updated_at=? 
         WHERE id=?",
     )
     .bind(&input.name)
+    .bind(&alias)
     .bind(&input.avatar)
     .bind(&input.description)
     .bind(&tags_json)
@@ -296,7 +309,7 @@ where
     E: Executor<'e, Database = Sqlite>,
 {
     let now = chrono::Utc::now().timestamp_millis();
-    sqlx::query("UPDATE personas SET avatar = ?, updated_at = ? WHERE id = ?")
+    sqlx::query("UPDATE personas SET avatar = ?, avatar_fit = NULL, updated_at = ? WHERE id = ?")
         .bind(avatar)
         .bind(now)
         .bind(id)
@@ -325,7 +338,7 @@ pub async fn set_character_avatar<'e, E>(executor: E, id: &str, avatar: Option<&
 where
     E: Executor<'e, Database = Sqlite>,
 {
-    sqlx::query("UPDATE characters SET avatar = ?, updated_at = ? WHERE id = ?")
+    sqlx::query("UPDATE characters SET avatar = ?, avatar_fit = NULL, updated_at = ? WHERE id = ?")
         .bind(avatar)
         .bind(chrono::Utc::now().timestamp_millis())
         .bind(id)
@@ -357,6 +370,95 @@ where
         .execute(executor)
         .await?;
     Ok(())
+}
+
+/// 프로필 그림 확대·위치 (5-E-17-3). table은 "characters" 또는 "personas"만
+pub async fn set_avatar_fit<'e, E>(executor: E, table: &str, id: &str, fit: Option<crate::models::conversation::AvatarFit>) -> Result<(), Error>
+where
+    E: Executor<'e, Database = Sqlite>,
+{
+    let sql = match table {
+        "characters" => "UPDATE characters SET avatar_fit = ? WHERE id = ?",
+        "personas" => "UPDATE personas SET avatar_fit = ? WHERE id = ?",
+        _ => return Err(Error::Protocol(format!("unknown avatar table {table}"))),
+    };
+    let json = fit.and_then(|f| f.normalized()).map(|f| serde_json::to_string(&f).unwrap_or_default());
+    sqlx::query(sql).bind(json).bind(id).execute(executor).await?;
+    Ok(())
+}
+
+/// 대화가 쓸 페르소나 (ADR-028, 5-E-29): 대화에 값이 있으면 그것(자물쇠), 없으면 캐릭터 기본, 그것도 없으면
+/// 시스템 기본 페르소나(사이드바에서 고르는 전역). 보내기·다시 생성·대필·엿보기·정규식·이름 찾기가 모두 이것을 쓴다
+pub async fn resolve_conv_persona(db: &sqlx::SqlitePool, conv_persona_id: &str, character_id: &str) -> String {
+    if !conv_persona_id.is_empty() {
+        return conv_persona_id.to_string();
+    }
+    if !character_id.is_empty() {
+        let char_default: Option<String> = sqlx::query_scalar("SELECT default_persona_id FROM characters WHERE id = ?")
+            .bind(character_id)
+            .fetch_optional(db)
+            .await
+            .ok()
+            .flatten()
+            .flatten();
+        if let Some(id) = char_default.filter(|s| !s.is_empty()) {
+            return id;
+        }
+    }
+    get_system_default_persona(db).await.unwrap_or_else(|_| "default".into())
+}
+
+/// 캐릭터의 변수 정의 (5-F-4-3). 없거나 읽을 수 없으면 빈 목록
+pub async fn get_character_var_defs<'e, E>(executor: E, character_id: &str) -> Result<Vec<crate::models::conversation::VarDef>, Error>
+where
+    E: Executor<'e, Database = Sqlite>,
+{
+    let raw: Option<Option<String>> = sqlx::query_scalar("SELECT var_defs FROM characters WHERE id = ?")
+        .bind(character_id)
+        .fetch_optional(executor)
+        .await?;
+    let Some(raw) = raw else { return Err(Error::RowNotFound) };
+    Ok(raw.and_then(|s| serde_json::from_str(&s).ok()).unwrap_or_default())
+}
+
+/// 캐릭터의 변수 정의 저장 (빈 목록 = NULL). 확인은 service::chat::vars::normalize가 먼저 한다
+pub async fn upsert_character_var_defs<'e, E>(executor: E, character_id: &str, defs: &[crate::models::conversation::VarDef]) -> Result<bool, Error>
+where
+    E: Executor<'e, Database = Sqlite>,
+{
+    let json = (!defs.is_empty()).then(|| serde_json::to_string(defs).unwrap_or_default());
+    let r = sqlx::query("UPDATE characters SET var_defs = ? WHERE id = ?")
+        .bind(json)
+        .bind(character_id)
+        .execute(executor)
+        .await?;
+    Ok(r.rows_affected() != 0)
+}
+
+/// 캐릭터의 상태창 틀 (5-F-4-5). 없으면 None
+pub async fn get_character_status_template<'e, E>(executor: E, character_id: &str) -> Result<Option<String>, Error>
+where
+    E: Executor<'e, Database = Sqlite>,
+{
+    let raw: Option<Option<String>> = sqlx::query_scalar("SELECT status_template FROM characters WHERE id = ?")
+        .bind(character_id)
+        .fetch_optional(executor)
+        .await?;
+    raw.ok_or(Error::RowNotFound)
+}
+
+/// 캐릭터의 상태창 틀 저장 (빈 글 = NULL)
+pub async fn upsert_character_status_template<'e, E>(executor: E, character_id: &str, template: Option<&str>) -> Result<bool, Error>
+where
+    E: Executor<'e, Database = Sqlite>,
+{
+    let t = template.filter(|t| !t.trim().is_empty());
+    let r = sqlx::query("UPDATE characters SET status_template = ? WHERE id = ?")
+        .bind(t)
+        .bind(character_id)
+        .execute(executor)
+        .await?;
+    Ok(r.rows_affected() != 0)
 }
 
 pub async fn get_system_default_persona<'e, E>(executor: E) -> Result<String, Error>
@@ -423,6 +525,7 @@ where
                 c.avatar,
                 c.cover,
                 c.cover_y,
+                c.avatar_fit,
                 c.description,
                 c.alternate_descriptions,
                 c.first_message,
@@ -468,6 +571,7 @@ where
                 c.avatar,
                 c.cover,
                 c.cover_y,
+                c.avatar_fit,
                 c.description,
                 c.alternate_descriptions,
                 c.first_message,
@@ -553,6 +657,7 @@ where
         avatar: input.avatar,
         cover: None,
         cover_y: 50.0,
+        avatar_fit: None,
         description: input.description,
         alternate_descriptions: input.alternate_descriptions,
         first_message: input.first_message,
@@ -718,7 +823,7 @@ where
 {
     let rows = sqlx::query_as::<_, WorldInfoEntryRow>(
         r#"
-        SELECT id, book_id, keys, secondary_keys, content, enabled, priority, constant
+        SELECT id, book_id, keys, secondary_keys, content, enabled, priority, constant, comment, category
         FROM worldinfo_entries
         WHERE enabled = 1
         AND book_id IN (
@@ -763,14 +868,14 @@ where
     let skeys_json = serde_json::to_string(&input.secondary_keys).unwrap_or_default();
 
     sqlx::query(
-        "INSERT INTO worldinfo_entries (id, book_id, keys, secondary_keys, content, enabled, priority, constant, comment)
-         VALUES (?,?,?,?,?,?,?,?,?)
+        "INSERT INTO worldinfo_entries (id, book_id, keys, secondary_keys, content, enabled, priority, constant, comment, category)
+         VALUES (?,?,?,?,?,?,?,?,?,?)
          ON CONFLICT(id) DO UPDATE SET
            keys=excluded.keys, 
            secondary_keys=excluded.secondary_keys, 
            content=excluded.content,
            enabled=excluded.enabled, priority=excluded.priority, 
-           constant=excluded.constant, comment=excluded.comment",
+           constant=excluded.constant, comment=excluded.comment, category=excluded.category",
     )
     .bind(&id)
     .bind(&input.book_id)
@@ -781,11 +886,13 @@ where
     .bind(input.priority)
     .bind(input.constant as i64)
     .bind(&input.comment)
+    .bind(input.category.trim())
     .execute(executor)
     .await?;
 
     Ok(WorldInfoEntry {
         comment: input.comment,
+        category: input.category.trim().to_string(),
         id,
         book_id: input.book_id,
         keys: input.keys,
@@ -985,7 +1092,8 @@ where
     })
 }
 
-/// 가져오기용: 작성 시각을 지정해서 메시지 저장 (대화 기록 정렬이 created_at 기준이라 원래 시각이 필요)
+/// 가져오기용: 작성 시각을 지정해서 메시지 저장 (대화 기록 정렬이 created_at 기준이라 원래 시각이 필요).
+/// updated_at은 지금 — 동기화는 updated_at으로 바뀐 행을 고르므로 옛 시각을 넣으면 다른 기기로 가지 않는다
 pub async fn insert_message_at<'e, E>(executor: E, input: MessageInput, created_at: i64) -> Result<(), Error>
 where
     E: Executor<'e, Database = Sqlite>,
@@ -1005,7 +1113,7 @@ where
     .bind(&input.character_id)
     .bind(meta)
     .bind(created_at)
-    .bind(created_at)
+    .bind(chrono::Utc::now().timestamp_millis().max(created_at))
     .execute(executor)
     .await?;
     Ok(())
@@ -1084,4 +1192,56 @@ where
 {
     let result = sqlx::query("DELETE FROM messages WHERE id = ?").bind(id).execute(executor).await?;
     Ok(result.rows_affected() != 0)
+}
+
+#[cfg(test)]
+mod avatar_fit_tests {
+    use super::*;
+    use crate::models::conversation::AvatarFit;
+    use sqlx::sqlite::SqlitePoolOptions;
+
+    #[tokio::test]
+    async fn avatar_fit_is_saved_read_and_cleared() {
+        let pool = SqlitePoolOptions::new().max_connections(1).connect("sqlite::memory:").await.unwrap();
+        sqlx::migrate!("src/db/migrations").run(&pool).await.unwrap();
+        sqlx::query("INSERT INTO characters (id, name, created_at, updated_at) VALUES ('c1', 'A', 0, 0)")
+            .execute(&pool)
+            .await
+            .unwrap();
+        sqlx::query("INSERT INTO personas (id, name, created_at, updated_at) VALUES ('p1', 'P', 0, 0)")
+            .execute(&pool)
+            .await
+            .unwrap();
+        assert_eq!(get_character(&pool, "c1").await.unwrap().avatar_fit, None);
+
+        // 범위 밖은 잘림
+        let fit = AvatarFit { x: 20.0, y: 130.0, zoom: 9.0 };
+        set_avatar_fit(&pool, "characters", "c1", Some(fit)).await.unwrap();
+        assert_eq!(
+            get_character(&pool, "c1").await.unwrap().avatar_fit,
+            Some(AvatarFit { x: 20.0, y: 100.0, zoom: 4.0 })
+        );
+        assert_eq!(get_all_characters(&pool).await.unwrap()[0].avatar_fit.map(|f| f.zoom), Some(4.0));
+
+        set_avatar_fit(&pool, "personas", "p1", Some(AvatarFit { x: 50.0, y: 30.0, zoom: 1.5 }))
+            .await
+            .unwrap();
+        assert_eq!(get_persona(&pool, "p1").await.unwrap().avatar_fit.map(|f| f.y), Some(30.0));
+
+        // 기본값(가운데·1배)이나 None은 지움
+        set_avatar_fit(&pool, "characters", "c1", Some(AvatarFit { x: 50.0, y: 50.0, zoom: 1.0 }))
+            .await
+            .unwrap();
+        let raw: Option<String> = sqlx::query_scalar("SELECT avatar_fit FROM characters WHERE id = 'c1'")
+            .fetch_one(&pool)
+            .await
+            .unwrap();
+        assert_eq!(raw, None);
+        set_avatar_fit(&pool, "personas", "p1", None).await.unwrap();
+        assert_eq!(get_persona(&pool, "p1").await.unwrap().avatar_fit, None);
+
+        assert!(set_avatar_fit(&pool, "games", "x", None).await.is_err());
+        // 읽지 못하는 글은 없는 것으로
+        assert_eq!(AvatarFit::parse(Some("not json")), None);
+    }
 }

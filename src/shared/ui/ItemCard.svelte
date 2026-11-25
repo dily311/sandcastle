@@ -83,12 +83,14 @@
 		user-select: none;
 		-webkit-touch-callout: none;
 		transition:
+			transform var(--duration-fast) var(--ease),
 			border-color var(--duration-fast) var(--ease),
 			box-shadow var(--duration-fast) var(--ease);
 	}
 	.card:hover {
 		border-color: var(--border-strong);
-		box-shadow: var(--shadow-sm);
+		box-shadow: var(--shadow-md);
+		transform: translateY(-2px);
 	}
 	.card:focus-visible {
 		outline: 2px solid var(--focus-ring);
@@ -115,6 +117,10 @@
 		height: 100%;
 		object-fit: cover;
 		display: block;
+		transition: transform 240ms var(--ease);
+	}
+	.card:hover .media img {
+		transform: scale(1.03);
 	}
 	.fb {
 		display: grid;

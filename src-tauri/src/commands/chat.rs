@@ -55,6 +55,14 @@ pub async fn chat_send(
     chat_task::into_turn(saved)
 }
 
+/// 마지막 AI 메시지에 이어 쓰기 ("이어서 응답 받기", 5-E-26). 빈 보내기(chat_send "")는 새 AI 메시지를 만든다
+#[tauri::command]
+#[specta::specta]
+pub async fn chat_continue(app: AppHandle, conversation_id: String, on_event: Channel<StreamPayload>) -> Result<ChatTurn> {
+    let saved = chat_task::run(&app, &conversation_id, ChatJob::Continue, on_event).await?;
+    chat_task::into_turn(saved)
+}
+
 /// 마지막 AI 메시지 다시 만들기. `swipe`면 스와이프로 쌓고, 아니면 스와이프를 버리고 바꾼다. `extra`는 이번 생성에만 붙이는 지시.
 #[tauri::command]
 #[specta::specta]
@@ -130,6 +138,31 @@ pub async fn set_conversation_pinned(state: State<'_, AppState>, id: String, pin
     found(chat_ui::set_pinned(&state.db, &id, pinned).await?, "대화")
 }
 
+/// 캐릭터 통계 (캐릭터 페이지 통계 탭, 5-E-12). 누르기 전에는 읽지 않는다
+#[tauri::command]
+#[specta::specta]
+pub async fn get_character_stats(state: State<'_, AppState>, character_id: String, tz_offset_min: i64) -> Result<chat_ui::CharacterStats> {
+    Ok(chat_ui::character_stats(&state.db, &character_id, tz_offset_min).await?)
+}
+
+/// 대화 목록 검색 `mes:글` — 그 글이 든 메시지가 있는 대화 id와 맞은 메시지 수 (빈 글이면 없음)
+#[tauri::command]
+#[specta::specta]
+pub async fn find_conversations_by_message(state: State<'_, AppState>, character_id: Option<String>, text: String) -> Result<Vec<(String, i64)>> {
+    let t = text.trim();
+    if t.is_empty() {
+        return Ok(vec![]);
+    }
+    Ok(chat_ui::conversations_with_text(&state.db, character_id.as_deref(), t).await?)
+}
+
+/// 읽기 모드 켜기/끄기 (켜면 보내는 줄을 숨김)
+#[tauri::command]
+#[specta::specta]
+pub async fn set_conversation_read_mode(state: State<'_, AppState>, id: String, on: bool) -> Result<()> {
+    found(chat_ui::set_read_mode(&state.db, &id, on).await?, "대화")
+}
+
 /// 폴더로 옮기기. `folder_id`가 null이면 폴더 밖으로
 #[tauri::command]
 #[specta::specta]
@@ -154,6 +187,57 @@ pub async fn duplicate_conversation(state: State<'_, AppState>, id: String) -> R
     Ok(conversation::get_conversation(&state.db, &new_id).await?)
 }
 
+/// 폰 대화를 일반 대화로 (5-E-20-3): 원본은 그대로 두고 일반 대화 모드로 복사한다
+#[tauri::command]
+#[specta::specta]
+pub async fn copy_conversation_as_chat(state: State<'_, AppState>, id: String) -> Result<Conversation> {
+    let src = conversation::get_conversation(&state.db, &id).await?;
+    let new_id = chat_ui::copy_conversation(&state.db, &id, &format!("{} (대화)", src.title), None).await?;
+    sqlx::query("UPDATE conversations SET mode = 'chat' WHERE id = ?")
+        .bind(&new_id)
+        .execute(&state.db)
+        .await?;
+    Ok(conversation::get_conversation(&state.db, &new_id).await?)
+}
+
+/// 게임 플레이 기록을 SillyTavern 채팅(.jsonl)으로 (5-E-20-3). 연출 태그는 걷고 선택지는 줄로. 메시지 수를 돌려준다
+#[tauri::command]
+#[specta::specta]
+pub async fn export_game_session(state: State<'_, AppState>, session_id: String, path: String) -> Result<u32> {
+    use crate::service::import::sillytavern::export::{strip_game_tags, to_jsonl, JsonlChat, JsonlOptions};
+    let session = crate::db::game::get_game_player_sessions(&state.db, &session_id).await?;
+    let game = crate::db::game::get_game_project(&state.db, &session.game_id).await?;
+    let rows = crate::db::game::get_session_game_messages(&state.db, &session_id).await?;
+    let messages: Vec<crate::models::conversation::Message> = rows
+        .into_iter()
+        .map(|m| crate::models::conversation::Message {
+            id: m.id,
+            conversation_id: m.conversation_id,
+            seq: m.seq as i64,
+            role: m.role,
+            name: m.name,
+            content: strip_game_tags(&m.content),
+            character_id: None,
+            meta: None,
+            created_at: m.created_at,
+            updated_at: m.updated_at,
+        })
+        .filter(|m| !m.content.trim().is_empty())
+        .collect();
+    let out = to_jsonl(
+        &JsonlChat {
+            user_name: "나",
+            char_name: &game.title,
+            created_at: messages.first().map_or(0, |m| m.created_at),
+            conv_meta: None,
+            messages: &messages,
+        },
+        &JsonlOptions::default(),
+    );
+    std::fs::write(&path, out).map_err(|e| AppError::io(format!("파일을 쓸 수 없습니다: {e}")))?;
+    Ok(messages.len() as u32)
+}
+
 /// 분기 나누기: 이 메시지까지 복사한 새 대화
 #[tauri::command]
 #[specta::specta]
@@ -167,6 +251,8 @@ pub async fn branch_conversation(state: State<'_, AppState>, id: String, message
     chat_ui::patch_conversation_meta(&state.db, &new_id, &branch).await?;
     // 요약은 메시지 id가 아니라 개수(위치)로 옮긴다 — 분기 대화는 id가 새로 붙으므로
     crate::service::summary::copy_for_branch(&state.db, &id, &new_id).await?;
+    // AI 변수 (5-F-4-4-2): 분기 지점 뒤 메시지들이 바꾼 몫을 되돌린 값으로
+    crate::service::chat::vars::branch_vars(&state.db, &id, &new_id, msg.seq).await?;
     Ok(conversation::get_conversation(&state.db, &new_id).await?)
 }
 
@@ -180,40 +266,45 @@ pub struct DisplayItem {
 /// 메시지들을 화면용으로: 표시용 정규식 + {{char}}/{{user}} 이름. 순서대로, 마지막이 가장 최근
 #[tauri::command]
 #[specta::specta]
-pub async fn display_messages(state: State<'_, AppState>, conversation_id: String, items: Vec<DisplayItem>) -> Result<Vec<String>> {
-    use crate::service::chat::regex_processor::{RegexMacros, RegexProcessor};
-    let conv = conversation::get_conversation(&state.db, &conversation_id).await?;
-    let char_name = conversation::get_character(&state.db, &conv.character_id)
-        .await
-        .map(|c| c.name)
-        .unwrap_or_default();
-    let persona_id = match conv.persona_id.as_str() {
-        "" => conversation::get_system_default_persona(&state.db).await.unwrap_or_else(|_| "default".into()),
-        id => id.to_string(),
+pub async fn display_messages(
+    state: State<'_, AppState>,
+    settings: State<'_, SettingsState<AppSetting>>,
+    conversation_id: String,
+    items: Vec<DisplayItem>,
+) -> Result<Vec<String>> {
+    use crate::service::chat::{
+        chat_manager::current_conv_request,
+        regex_processor::{RegexMacros, RegexProcessor},
     };
+    let conv = conversation::get_conversation(&state.db, &conversation_id).await?;
+    let character = conversation::get_character(&state.db, &conv.character_id).await.ok();
+    let char_name = character.as_ref().map(|c| c.name.clone()).unwrap_or_default();
+    let char_default = character.and_then(|c| c.default_prompt_preset_id);
+    let fallback = current_conv_request(&settings).map(|r| r.preset_id).unwrap_or_default();
+    let preset_id = conv
+        .prompt_preset_id
+        .clone()
+        .filter(|s| !s.is_empty())
+        .or(char_default.filter(|s| !s.is_empty()))
+        .or(Some(fallback).filter(|s| !s.is_empty()));
+    let persona_id = conversation::resolve_conv_persona(&state.db, &conv.persona_id, &conv.character_id).await;
     let user_name = conversation::get_persona(&state.db, &persona_id).await.map(|p| p.name).unwrap_or_default();
-    let regex = RegexProcessor::load(
-        &state.db,
-        Some(&conv.character_id),
-        conv.prompt_preset_id.as_deref(),
-        RegexMacros { char_name, user_name },
-    )
-    .await?;
+    let regex = RegexProcessor::load(&state.db, Some(&conv.character_id), preset_id.as_deref(), RegexMacros { char_name, user_name }).await?;
     let n = items.len();
     Ok(items
         .iter()
         .enumerate()
-        .map(|(i, m)| regex.for_display(&m.content, &m.role, n - 1 - i))
+        .map(|(i, m)| regex.for_display_in(&m.content, &m.role, n - 1 - i, conv.read_mode))
         .collect())
 }
 
-/// 컨텍스트 사용량 (오른쪽 패널). 마지막으로 보낸 프롬프트 기준
+/// 컨텍스트 사용량 (오른쪽 패널). 대화 화면은 지금 상태로 계산하고, 게임은 마지막 프롬프트 기준
 #[derive(serde::Serialize, specta::Type)]
 #[serde(rename_all = "camelCase")]
 pub struct ContextUsage {
-    /// 마지막 프롬프트의 토큰 (보낸 적 없으면 None)
+    /// 프롬프트 토큰 합계 (계산할 수 없으면 None)
     pub used: Option<u32>,
-    /// 그중 시스템(규칙·캐릭터·월드인포·노트 등)
+    /// 그중 시스템(규칙·캐릭터·프리셋·월드인포·노트 등)
     pub system: u32,
     /// 그중 대화 기록
     pub history: u32,
@@ -225,110 +316,43 @@ pub struct ContextUsage {
     pub reserved: u32,
     pub preset_id: Option<String>,
     pub preset_name: Option<String>,
-    /// 커뮤니티 플러그인이 더한 프롬프트 블록 (6-D-5, 시스템 토큰에 들어 있음)
+    /// 커뮤니티 플러그인이 마지막 응답에 더한 프롬프트 블록 (6-D-5)
     pub plugins: Vec<crate::service::community::prompt_hook::PluginPromptUse>,
-    /// 마지막 응답에서 지난 대화를 떠올린 기록 (3-C-5, 대화 기록 토큰에 들어 있음). 자동 회상이 꺼져 있었으면 None
+    /// 마지막 응답에서 지난 대화를 떠올린 기록 (3-C-5). 자동 회상이 꺼져 있으면 None
     pub memory_recall: Option<crate::service::memory::recall::RecallMeta>,
-    /// 마지막 응답을 만들 때 쓴 대화 요약 (3-D, 시스템 토큰에 들어 있음)
+    /// 지금 컨텍스트에 들어가는 대화 요약 (3-D, 시스템 토큰에 포함)
     pub summary: Option<crate::service::summary::SummaryUse>,
 }
 
 #[tauri::command]
 #[specta::specta]
-pub async fn context_usage(state: State<'_, AppState>, settings: State<'_, SettingsState<AppSetting>>, conversation_id: String) -> Result<ContextUsage> {
-    use crate::models::ai_service::PromptRole;
-    use crate::service::{
-        chat::chat_manager::current_conv_request,
-        prompt::prompt_manager::{chat_options_from, context_limit_from, PromptManager, DEFAULT_CONTEXT_LIMIT as CONTEXT_LIMIT},
-    };
-
-    let conv = conversation::get_conversation(&state.db, &conversation_id).await?;
-    let char_default = conversation::get_character(&state.db, &conv.character_id)
-        .await
-        .ok()
-        .and_then(|c| c.default_prompt_preset_id);
-    let fallback = current_conv_request(&settings).map(|r| r.preset_id).unwrap_or_default();
-    let preset_id = conv
-        .prompt_preset_id
-        .clone()
-        .filter(|s| !s.is_empty())
-        .or(char_default.filter(|s| !s.is_empty()))
-        .or(Some(fallback).filter(|s| !s.is_empty()));
-    let preset = PromptManager::load_preset(&state.db, preset_id.as_deref()).await?;
-    let limit = preset.as_ref().and_then(|p| context_limit_from(&p.preset)).unwrap_or(CONTEXT_LIMIT);
-    let reserved = preset.as_ref().and_then(|p| chat_options_from(&p.preset).max_tokens).unwrap_or(0);
-
-    // 마지막 AI 메시지에 저장된 프롬프트
-    let recent = conversation::get_messages(&state.db, &conversation_id, 30, None).await?;
-    let mut prompt: Option<PromptMessage> = None;
-    let mut plugins = vec![];
-    let mut memory_recall = None;
-    let mut summary_use = None;
-    for m in recent.iter().rev().filter(|m| m.role == "assistant") {
-        if let Some(v) = chat_ui::get_prompt(&state.db, &m.id).await? {
-            if let Ok(p) = serde_json::from_value::<PromptMessage>(v) {
-                prompt = Some(p);
-                plugins = m
-                    .meta
-                    .as_ref()
-                    .and_then(|meta| meta.pointer("/info/pluginPrompt"))
-                    .and_then(|v| serde_json::from_value(v.clone()).ok())
-                    .unwrap_or_default();
-                memory_recall = m
-                    .meta
-                    .as_ref()
-                    .and_then(|meta| meta.pointer("/info/memoryRecall"))
-                    .and_then(|v| serde_json::from_value(v.clone()).ok());
-                summary_use = m
-                    .meta
-                    .as_ref()
-                    .and_then(|meta| meta.pointer("/info/summary"))
-                    .and_then(|v| serde_json::from_value(v.clone()).ok());
-                break;
-            }
-        }
-    }
-    let (mut system, mut history, mut history_count) = (0u32, 0u32, 0u32);
-    if let Some(p) = &prompt {
-        for m in &p.messages {
-            let t = m.token.max(0) as u32;
-            if m.role == PromptRole::System {
-                system += t;
-            } else {
-                history += t;
-                history_count += 1;
-            }
-        }
-    }
-    Ok(ContextUsage {
-        used: prompt.map(|_| system + history),
-        system,
-        history,
-        history_count,
-        limit,
-        reserved,
-        preset_name: preset.as_ref().map(|p| p.preset.name.clone()),
-        preset_id,
-        plugins,
-        memory_recall,
-        summary: summary_use,
-    })
+pub async fn context_usage(
+    app: AppHandle,
+    state: State<'_, AppState>,
+    settings: State<'_, SettingsState<AppSetting>>,
+    conversation_id: String,
+) -> Result<ContextUsage> {
+    crate::service::chat::chat_manager::compute_context_usage(Some(&app), &state.db, &settings, &conversation_id).await
 }
 
-/// 대화 하나를 파일로 내보내기. format: "jsonl"(SillyTavern 채팅) | "txt"(읽기용 글)
+/// 대화 하나를 파일로 내보내기. format: "jsonl"(SillyTavern 채팅) | "jsonl-img"(같은데 `<cg>키</cg>` → `{{img::키}}`) | "txt"(읽기용 글)
 #[tauri::command]
 #[specta::specta]
 pub async fn export_conversation(state: State<'_, AppState>, id: String, format: String, path: String) -> Result<u32> {
+    use crate::service::import::sillytavern::export::{to_jsonl, JsonlChat, JsonlOptions};
     let conv = conversation::get_conversation(&state.db, &id).await?;
     let messages = conversation::get_messages(&state.db, &id, i64::MAX, None).await?;
     let char_name = conversation::get_character(&state.db, &conv.character_id)
         .await
         .map(|c| c.name)
         .unwrap_or_else(|_| "Character".into());
-    let user_name = conversation::get_persona(&state.db, &conv.persona_id)
-        .await
-        .map(|p| p.name)
-        .unwrap_or_else(|_| "User".into());
+    let user_name = conversation::get_persona(
+        &state.db,
+        &conversation::resolve_conv_persona(&state.db, &conv.persona_id, &conv.character_id).await,
+    )
+    .await
+    .map(|p| p.name)
+    .unwrap_or_else(|_| "User".into());
     let iso = |ms: i64| {
         chrono::DateTime::from_timestamp_millis(ms)
             .map(|d| d.to_rfc3339_opts(chrono::SecondsFormat::Millis, true))
@@ -336,33 +360,18 @@ pub async fn export_conversation(state: State<'_, AppState>, id: String, format:
     };
 
     let out = match format.as_str() {
-        "jsonl" => {
-            let mut lines = vec![serde_json::json!({
-                "user_name": user_name,
-                "character_name": char_name,
-                "create_date": iso(conv.created_at),
-                "chat_metadata": { "note_prompt": conv.meta.as_ref().and_then(|m| m.pointer("/authorNote/text")).cloned().unwrap_or_default() },
-            })
-            .to_string()];
-            for m in &messages {
-                let meta = m.meta.clone().unwrap_or_default();
-                let is_user = m.role == "user";
-                let mut row = serde_json::json!({
-                    "name": m.name.clone().unwrap_or_else(|| if is_user { user_name.clone() } else { char_name.clone() }),
-                    "is_user": is_user,
-                    "is_system": meta.get("hidden").and_then(|v| v.as_bool()).unwrap_or(false),
-                    "send_date": iso(m.created_at),
-                    "mes": m.content,
-                    "extra": {},
-                });
-                if let Some(sw) = meta.get("swipes").and_then(|v| v.as_array()).filter(|a| !a.is_empty()) {
-                    row["swipes"] = serde_json::Value::Array(sw.iter().map(|s| s.get("content").cloned().unwrap_or_default()).collect());
-                    row["swipe_id"] = meta.get("swipeId").cloned().unwrap_or(serde_json::json!(0));
-                }
-                lines.push(row.to_string());
-            }
-            lines.join("\n") + "\n"
-        }
+        "jsonl" | "jsonl-img" => to_jsonl(
+            &JsonlChat {
+                user_name: &user_name,
+                char_name: &char_name,
+                created_at: conv.created_at,
+                conv_meta: conv.meta.as_ref(),
+                messages: &messages,
+            },
+            &JsonlOptions {
+                cg_as_img: format == "jsonl-img",
+            },
+        ),
         "txt" => {
             let mut s = format!("{}\n{} · {}\n\n", conv.title, char_name, iso(conv.created_at));
             for m in &messages {
@@ -396,6 +405,13 @@ pub async fn patch_conversation_meta(state: State<'_, AppState>, id: String, pat
 #[specta::specta]
 pub async fn delete_messages(app: AppHandle, state: State<'_, AppState>, ids: Vec<String>) -> Result<u32> {
     let convs = crate::service::memory::maintain::conversations_of(&state.db, &ids).await;
+    // AI 변수 (5-F-4-4-2): 지울 메시지들이 바꾼 몫을 지운 뒤 되돌린다 (대화마다, 뒤 메시지부터)
+    let mut doomed = vec![];
+    for id in &ids {
+        if let Ok(m) = chat_ui::get_message(&state.db, id).await {
+            doomed.push(m);
+        }
+    }
     let mut tx = state.db.begin().await?;
     let mut n = 0;
     for id in &ids {
@@ -406,6 +422,12 @@ pub async fn delete_messages(app: AppHandle, state: State<'_, AppState>, ids: Ve
             .rows_affected() as u32;
     }
     tx.commit().await?;
+    let mut conv_ids: Vec<String> = doomed.iter().map(|m| m.conversation_id.clone()).collect();
+    conv_ids.sort();
+    conv_ids.dedup();
+    for c in conv_ids {
+        crate::service::chat::vars::revert_messages(&state.db, &c, &doomed).await?;
+    }
     crate::service::memory::maintain::after_message_change(&app, &state.db, convs);
     Ok(n)
 }

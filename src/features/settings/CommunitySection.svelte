@@ -1,6 +1,7 @@
 <script lang="ts">
 	// 커뮤니티 플러그인 관리 (CLAUDE.md 6-D-8, ADR-012): 설치(미리보기) · 켜기(권한 동의) · 방식 · 설정 · 기록 · 업데이트 · 삭제
 	import { onMount, untrack } from "svelte";
+	import { _ } from "svelte-i18n";
 	import { ChevronDown, FileArchive, FolderOpen, Puzzle } from "@lucide/svelte";
 	import type { PluginPreview, UserPlugin_Serialize as UserPlugin } from "$ipc/bindings";
 	import { Badge, Button, EmptyState, IconButton, Segmented, Select, Switch } from "$shared/ui";
@@ -20,7 +21,7 @@
 	import Group from "./Group.svelte";
 	import Row from "./Row.svelte";
 
-	const ZIP: Filter = { name: "플러그인 묶음", extensions: ["zip"] };
+	const zipFilter = (): Filter => ({ name: $_("settings.communitySec.zipFilter"), extensions: ["zip"] });
 
 	// 화면 상태 (데이터는 admin 저장소)
 	let expanded = $state<string | null>(null);
@@ -54,12 +55,12 @@
 
 	/** 묶음을 고르고 미리보기. updateId가 있으면 그 플러그인의 업데이트여야 한다 */
 	async function pick(kind: "zip" | "folder", updateId?: string) {
-		const path = kind === "zip" ? ((await pickFiles([ZIP], false))[0] ?? null) : await pickFolder();
+		const path = kind === "zip" ? ((await pickFiles([zipFilter()], false))[0] ?? null) : await pickFolder();
 		if (!path) return;
 		const preview = await admin.preview(path);
 		if (!preview) return;
 		if (updateId && preview.manifest.id !== updateId) {
-			toasts.error(`다른 플러그인입니다 (${preview.manifest.id}) — '${updateId}'의 업데이트가 아닙니다`);
+			toasts.error($_("settings.communitySec.wrongUpdateId", { values: { found: preview.manifest.id, expected: updateId } }));
 			return;
 		}
 		installing = { path, preview };
@@ -76,7 +77,7 @@
 			expanded = p.id;
 			await admin.load();
 			const was = installing.preview.existing;
-			toasts.success(was ? (p.enabled ? "업데이트했습니다" : "업데이트했습니다 (꺼져 있음 — 켜서 권한에 동의하세요)") : "설치했습니다 (꺼져 있음 — 아래 스위치로 켜세요)");
+			toasts.success(was ? (p.enabled ? $_("settings.communitySec.updatedEnabled") : $_("settings.communitySec.updatedDisabled")) : $_("settings.communitySec.installedDisabled"));
 		} finally {
 			busy = false;
 		}
@@ -99,9 +100,9 @@
 
 	async function remove(p: UserPlugin) {
 		const ok = await confirmAction({
-			title: `'${p.manifest?.name ?? p.id}' 삭제`,
-			message: "휴지통으로 옮깁니다. 되살리면 꺼진 채로 돌아옵니다 (저장한 값도 같이).",
-			confirmLabel: "삭제",
+			title: $_("settings.communitySec.deleteTitle", { values: { name: p.manifest?.name ?? p.id } }),
+			message: $_("settings.communitySec.deleteMsg"),
+			confirmLabel: $_("common.delete"),
 			danger: true,
 		});
 		if (ok) await admin.uninstall(p.id);
@@ -111,7 +112,7 @@
 		if (dir === p.activeDir) return;
 		const r = await admin.switchVersion(p.id, dir);
 		rev++;
-		if (r) toasts.success(`${r.versions.find((v) => v.dir === dir)?.version ?? dir} 판으로 바꿨습니다 (꺼져 있음 — 켜서 권한에 동의하세요)`);
+		if (r) toasts.success($_("settings.communitySec.switchedVersion", { values: { version: r.versions.find((v) => v.dir === dir)?.version ?? dir } }));
 	}
 
 	/** 업데이트로 권한이 늘어 꺼진 플러그인: 이전에 허락한 것이 있는데 지금 manifest가 더 요구함 */
@@ -119,43 +120,43 @@
 	const has = (p: UserPlugin, perm: string) => !!p.manifest?.permissions.includes(perm);
 </script>
 
-<Section title="커뮤니티 플러그인" lead="남이 만든 플러그인을 파일로 설치합니다. 격리된 곳에서 허락한 권한만으로 동작하고, 설치해도 꺼진 채로 시작합니다. 믿을 수 있는 곳에서 받은 것만 설치하세요">
+<Section title={$_("settings.communitySec.title")} lead={$_("settings.communitySec.lead")}>
 	<Group>
-		<Row label="커뮤니티 플러그인 사용" desc={on ? "" : "꺼져 있는 동안은 설치된 플러그인을 읽지도 실행하지도 않습니다"}>
-			<Switch checked={on} label="커뮤니티 플러그인 사용" hideLabel onchange={(v) => plugins.set("community", v)} />
+		<Row label={$_("settings.communitySec.title")}>
+			<Switch checked={on} label={$_("settings.communitySec.title")} hideLabel onchange={(v) => plugins.set("community", v)} />
 		</Row>
 	</Group>
 	{#if on}
-	<Group title="설치">
-		<Row label="zip으로 설치" desc="manifest.json이 든 zip 파일. 설치 전에 내용과 권한을 미리 봅니다">
-			<Button size="sm" onclick={() => pick("zip")}>{#snippet icon()}<FileArchive />{/snippet}zip 고르기</Button>
+	<Group title={$_("settings.communitySec.installGroup")}>
+		<Row label={$_("settings.communitySec.installZip")} desc={$_("settings.communitySec.installZipDesc")}>
+			<Button size="sm" onclick={() => pick("zip")}>{#snippet icon()}<FileArchive />{/snippet}{$_("settings.communitySec.pickZip")}</Button>
 		</Row>
 		{#if !layout.mobile}
-			<Row label="폴더에서 설치" desc="만들고 있는 플러그인 폴더를 그대로">
-				<Button size="sm" onclick={() => pick("folder")}>{#snippet icon()}<FolderOpen />{/snippet}폴더 고르기</Button>
+			<Row label={$_("settings.communitySec.installFolder")} desc={$_("settings.communitySec.installFolderDesc")}>
+				<Button size="sm" onclick={() => pick("folder")}>{#snippet icon()}<FolderOpen />{/snippet}{$_("settings.communitySec.pickFolder")}</Button>
 			</Row>
 		{/if}
-		<Row label="플러그인의 고치기 제안" desc="플러그인이 캐릭터·로어북 등을 고치자고 한 것. 바뀌는 곳을 보고 승인해야만 바뀝니다">
-			<Button size="sm" variant="ghost" onclick={() => (proposalsUi.open = true)}>보기{#if proposals.pending.length > 0}&nbsp;<Badge tone="accent">{proposals.pending.length}</Badge>{/if}</Button>
+		<Row label={$_("settings.communitySec.proposals")} desc={$_("settings.communitySec.proposalsDesc")}>
+			<Button size="sm" variant="ghost" onclick={() => (proposalsUi.open = true)}>{$_("settings.communitySec.viewBtn")}{#if proposals.pending.length > 0}&nbsp;<Badge tone="accent">{proposals.pending.length}</Badge>{/if}</Button>
 		</Row>
 	</Group>
 
-	<Group title={`설치된 플러그인${admin.list.length ? ` (${admin.list.length})` : ""}`}>
+	<Group title={admin.list.length ? $_("settings.communitySec.installedGroupCount", { values: { count: admin.list.length } }) : $_("settings.communitySec.installedGroup")}>
 		{#if admin.loaded && admin.list.length === 0}
-			<EmptyState title="설치된 플러그인이 없습니다" description="zip이나 폴더를 골라 설치하세요. 플러그인 만드는 법은 docs의 '플러그인 만들기'에 있습니다" />
+			<EmptyState title={$_("settings.communitySec.emptyTitle")} description={$_("settings.communitySec.emptyDesc")} />
 		{/if}
 		{#each admin.list as p (p.id)}
 			{@const m = p.manifest}
 			<div class="plugin">
-				<Row label={m?.name ?? p.id} desc={m ? `${m.description || "설명 없음"} · v${m.version}${m.author ? ` · ${m.author}` : ""} · ${p.id}` : `읽을 수 없는 플러그인 · ${p.id}`}>
-					{#if p.error}<Badge tone="danger">오류</Badge>{/if}
-					{#if p.codeChanged}<Badge tone="danger">코드가 바뀌어 꺼짐</Badge>{/if}
-					{#if needsConsent(p)}<Badge tone="warning">권한이 늘어 꺼짐</Badge>{/if}
-					{#if p.enabled && p.processMode === "fix"}<Badge tone="accent">자동 고침</Badge>{/if}
-					{#if p.enabled && p.aiAuto}<Badge tone="warning">자동 AI</Badge>{/if}
-					<IconButton label={expanded === p.id ? "접기" : "자세히"} size="sm" onclick={() => (expanded = expanded === p.id ? null : p.id)}><ChevronDown class={expanded === p.id ? "open" : ""} /></IconButton>
+				<Row label={m?.name ?? p.id} desc={m ? `${m.description || $_("settings.communitySec.noDesc")} · v${m.version}${m.author ? ` · ${m.author}` : ""} · ${p.id}` : $_("settings.communitySec.unreadable", { values: { id: p.id } })}>
+					{#if p.error}<Badge tone="danger">{$_("settings.communitySec.errBadge")}</Badge>{/if}
+					{#if p.codeChanged}<Badge tone="danger">{$_("settings.communitySec.codeChangedBadge")}</Badge>{/if}
+					{#if needsConsent(p)}<Badge tone="warning">{$_("settings.communitySec.needsConsentBadge")}</Badge>{/if}
+					{#if p.enabled && p.processMode === "fix"}<Badge tone="accent">{$_("settings.communitySec.autoFixBadge")}</Badge>{/if}
+					{#if p.enabled && p.aiAuto}<Badge tone="warning">{$_("settings.communitySec.autoAiBadge")}</Badge>{/if}
+					<IconButton label={expanded === p.id ? $_("settings.communitySec.collapse") : $_("settings.communitySec.details")} size="sm" onclick={() => (expanded = expanded === p.id ? null : p.id)}><ChevronDown class={expanded === p.id ? "open" : ""} /></IconButton>
 					{#key `${p.id}:${p.enabled}:${rev}`}
-						<Switch checked={p.enabled} label="{m?.name ?? p.id} 켜기" hideLabel disabled={!m} onchange={(v) => toggle(p, v)} />
+						<Switch checked={p.enabled} label={$_("settings.communitySec.enableAria", { values: { name: m?.name ?? p.id } })} hideLabel disabled={!m} onchange={(v) => toggle(p, v)} />
 					{/key}
 				</Row>
 
@@ -165,57 +166,57 @@
 							<p class="err">{p.error}</p>
 						{/if}
 						{#if p.codeChanged}
-							<p class="err">켤 때 본 코드와 폴더의 파일이 달라져서 꺼 두었습니다 (직접 고쳤거나 다른 곳에서 바뀜). 믿을 수 있는 변경인지 확인하고, 괜찮으면 다시 켜세요.</p>
+							<p class="err">{$_("settings.communitySec.codeChangedMsg")}</p>
 						{/if}
 						{#if p.versions.length > 1}
-							<h4>사용할 판</h4>
+							<h4>{$_("settings.communitySec.activeVersion")}</h4>
 							<Select
 								value={p.activeDir}
-								aria-label="사용할 판"
-								options={p.versions.map((v) => ({ value: v.dir, label: `v${v.version}${v.dir === p.activeDir ? " (사용 중)" : ""}${v.error ? " — 읽을 수 없음" : ""}`, disabled: !!v.error }))}
+								aria-label={$_("settings.communitySec.activeVersion")}
+								options={p.versions.map((v) => ({ value: v.dir, label: `v${v.version}${v.dir === p.activeDir ? $_("settings.communitySec.inUseTag") : ""}${v.error ? $_("settings.communitySec.unreadableTag") : ""}`, disabled: !!v.error }))}
 								onchange={(e) => useVersion(p, e.currentTarget.value)}
 							/>
 						{/if}
 						{#if m}
-							<h4>권한</h4>
+							<h4>{$_("settings.communitySec.permissions")}</h4>
 							<PermissionList perms={m.permissions} added={needsConsent(p) ? m.permissions.filter((x) => !p.granted.includes(x)) : []} />
 
 							{#if has(p, "messages.process")}
-								<h4>AI 응답 후처리 방식</h4>
+								<h4>{$_("settings.communitySec.processModeHeading")}</h4>
 								<Segmented
 									value={(p.processMode === "fix" ? "fix" : "notes") as "notes" | "fix"}
-									label="후처리 방식"
+									label={$_("settings.communitySec.processModeAria")}
 									options={[
-										{ value: "notes", label: "표시만 (기본)" },
-										{ value: "fix", label: "자동 고침" },
+										{ value: "notes", label: $_("settings.communitySec.modeNotes") },
+										{ value: "fix", label: $_("settings.communitySec.modeFix") },
 									]}
 									onchange={(v) => admin.setProcessMode(p.id, v)}
 								/>
-								<p class="hint">표시만: 메모만 응답 아래에 붙입니다. 자동 고침: 응답 글을 바꿉니다 (원문은 남고 '원문 보기·되돌리기'가 있음)</p>
+								<p class="hint">{$_("settings.communitySec.processModeHint")}</p>
 							{/if}
 
 							{#if has(p, "ai")}
-								<h4>AI 호출</h4>
+								<h4>{$_("settings.communitySec.aiCallHeading")}</h4>
 								{#key p.aiAuto}
 								<Switch
 									checked={p.aiAuto}
-									label="자동 AI 호출 허용"
-									description="끄면 이 플러그인은 사용자가 누른 명령 안에서만 AI를 부를 수 있고, 패널에서는 부를 때마다 확인을 묻습니다. 켜면 응답 후처리·프롬프트 훅처럼 사용자가 누르지 않은 곳에서도 부르며 요금이 들 수 있습니다 (예산 한도 안에서)"
+									label={$_("settings.communitySec.aiAutoLabel")}
+									description={$_("settings.communitySec.aiAutoDesc")}
 									onchange={(v) => admin.setAiAuto(p.id, v)}
 								/>
 								{/key}
 							{/if}
 
 							{#if m.settings.length}
-								<h4>설정</h4>
+								<h4>{$_("settings.communitySec.settingsHeading")}</h4>
 								<SettingsForm pluginId={p.id} fields={m.settings} />
 							{/if}
 						{/if}
 						<div class="actions">
-							<Button size="sm" variant="ghost" onclick={() => ((logFor = p), (logOpen = true))}>기록 보기</Button>
-							<Button size="sm" variant="ghost" onclick={() => pick("zip", p.id)}>zip으로 업데이트</Button>
-							{#if !layout.mobile}<Button size="sm" variant="ghost" onclick={() => pick("folder", p.id)}>폴더로 업데이트</Button>{/if}
-							<Button size="sm" variant="danger" onclick={() => remove(p)}>삭제</Button>
+							<Button size="sm" variant="ghost" onclick={() => ((logFor = p), (logOpen = true))}>{$_("settings.communitySec.viewLogs")}</Button>
+							<Button size="sm" variant="ghost" onclick={() => pick("zip", p.id)}>{$_("settings.communitySec.updateZip")}</Button>
+							{#if !layout.mobile}<Button size="sm" variant="ghost" onclick={() => pick("folder", p.id)}>{$_("settings.communitySec.updateFolder")}</Button>{/if}
+							<Button size="sm" variant="danger" onclick={() => remove(p)}>{$_("common.delete")}</Button>
 						</div>
 					</div>
 				{/if}

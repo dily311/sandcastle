@@ -17,8 +17,9 @@ const db = {
 		language: "ko",
 		selectedPreset: "default",
 		sendOnEnter: true,
-		showTimestamps: false,
 		selectedApiProfile: "gemini",
+		selectedModel: null,
+		reasoningEffort: null,
 		selectedCharacterId: null,
 		selectedPersonaId: "default",
 		lastPlayedGameId: null,
@@ -26,6 +27,11 @@ const db = {
 		usageRetentionDays: null,
 		trashRetentionDays: 30,
 		checkUpdatesOnStart: false,
+		cgGroupVariants: false,
+		doneNotify: { enabled: false, title: "", icon: null, soundMode: "default", soundPath: null, soundVolume: 0.8 },
+		aiCallLog: false,
+		typing: { style: "blink", text: "", image: null },
+		worldInfo: { scanDepth: 2, maxRecursionDepth: 0 },
 		home: { startOnHome: false, greeting: "", blocks: ["continue", "quick", "favorites", "games"], css: "" },
 	} satisfies AppSetting_Serialize as AppSetting_Serialize,
 	themeSetting: {
@@ -35,6 +41,15 @@ const db = {
 		accentColor: "seaglass",
 		fontSize: 16,
 		grayTone: "slate",
+		chat: {
+			showTimestamps: false,
+			showAvatars: true,
+			showMultiCharAvatars: false,
+			charAvatarFrame: "circle",
+			charAvatarFrameImage: null,
+			userAvatarFrame: "circle",
+			userAvatarFrameImage: null,
+		},
 	} satisfies ThemeSetting as ThemeSetting,
 	feature: { feature: { "chat.images": true, widget: true, "widget.music": true } } as FeatureSetting,
 };
@@ -46,13 +61,37 @@ const base: Record<string, Handler> = {
 		const themeStyle = theme ? `<style id="sc-theme">${String(theme).replace(/</g, "")}</style>` : "";
 		const doc = /<html|<!doctype/i.test(h) ? h : `<!doctype html><meta charset="utf-8">${themeStyle}<body style="margin:0;padding:8px">${h}</body>`;
 		const report = `<script>(()=>{const s=()=>parent.postMessage({type:"sc-html-height",h:Math.ceil(document.body?document.body.getBoundingClientRect().bottom+parseFloat(getComputedStyle(document.body).marginBottom||"0"):document.documentElement.scrollHeight)},"*");new ResizeObserver(s).observe(document.documentElement);addEventListener("load",s);s();setTimeout(s,300);setTimeout(s,1000)})()<\/script>`;
-		const helper = `<script>(()=>{const post=(a,t)=>parent.postMessage({type:"sc-action",action:a,text:String(t??"").slice(0,4000)},"*");window.sandcastle=Object.freeze({fill:t=>post("fill",t),send:t=>post("send",t),choose:t=>post("send",t)});addEventListener("click",e=>{const el=e.target&&e.target.closest?e.target.closest("[data-sc-send],[data-sc-choice],[data-sc-fill]"):null;if(!el)return;e.preventDefault();const s=el.getAttribute("data-sc-send")??el.getAttribute("data-sc-choice");if(s!==null)post("send",s||el.textContent.trim());else post("fill",el.getAttribute("data-sc-fill")||el.textContent.trim())},true)})();<\/script>`;
+		const helper = `<script>(()=>{const post=(a,t)=>parent.postMessage({type:"sc-action",action:a,text:String(t??"").slice(0,a==="slash"?20000:4000)},"*");const slash=t=>(post("slash",t),Promise.resolve(""));window.sandcastle=Object.freeze({fill:t=>post("fill",t),send:t=>post("send",t),choose:t=>post("send",t),slash});window.triggerSlash=slash;addEventListener("click",e=>{const el=e.target&&e.target.closest?e.target.closest("[data-sc-send],[data-sc-choice],[data-sc-fill]"):null;if(!el)return;e.preventDefault();const s=el.getAttribute("data-sc-send")??el.getAttribute("data-sc-choice");if(s!==null)post("send",s||el.textContent.trim());else post("fill",el.getAttribute("data-sc-fill")||el.textContent.trim())},true)})();<\/script>`;
 		return URL.createObjectURL(new Blob([helper + doc + report], { type: "text/html" }));
 	},
 	get_app_setting: () => db.appSetting,
 	update_app_setting: ({ patch }) => (db.appSetting = { ...db.appSetting, ...(patch as object) }),
 	get_theme_setting: () => db.themeSetting,
 	update_theme_setting: ({ patch }) => (db.themeSetting = { ...db.themeSetting, ...(patch as object) }),
+	upload_avatar_frame: ({ target, path }) => {
+		const chat = { ...(db.themeSetting.chat ?? {}) };
+		if (target === "char") {
+			chat.charAvatarFrame = "custom";
+			chat.charAvatarFrameImage = String(path);
+		} else {
+			chat.userAvatarFrame = "custom";
+			chat.userAvatarFrameImage = String(path);
+		}
+		return (db.themeSetting = { ...db.themeSetting, chat });
+	},
+	request_notify_permission: () => true,
+	test_notify: () => undefined,
+	set_notify_sound: ({ path }) => {
+		const cur = db.appSetting.doneNotify;
+		const soundPath = (path as string | null) ?? null;
+		const soundMode = soundPath ? "custom" : cur.soundMode === "custom" ? "default" : cur.soundMode;
+		return (db.appSetting = { ...db.appSetting, doneNotify: { ...cur, soundPath, soundMode } });
+	},
+	// 미리보기: 복사하지 않고 받은 주소를 그대로 (data:·https: 그림으로 확인)
+	set_typing_image: ({ path }) => {
+		const cur = db.appSetting as { typing: { style: "blink" | "bounce" | "none" | "image"; text: string } };
+		return (db.appSetting = { ...db.appSetting, typing: { ...cur.typing, image: (path as string | null) ?? null } });
+	},
 	add_backgrounds: ({ paths, select }) => {
 		const list = [...((db.themeSetting as { backgrounds?: string[] }).backgrounds ?? []), ...(paths as string[])];
 		return (db.themeSetting = { ...db.themeSetting, backgrounds: list, ...(select ? { backgroundImage: list.at(-1) ?? null } : {}) });
@@ -85,9 +124,11 @@ const base: Record<string, Handler> = {
 				["tts", "음성 읽기", "AI 답변을 음성으로", false, false],
 				["imagegen", "이미지 생성", "직접 그림 만들기", false, false],
 				["imageauto", "이미지 자동 생성", "글쓰기 AI가 그림 프롬프트도 쓰고 응답 뒤 자동으로 그림", false, false],
+				["status", "상태창·변수", "대화의 변수를 보고 고치고, 메시지마다 뜨는 상태창을 한 곳에 모아 보여줌", false, false],
 				["sync", "동기화", "다른 기기와 파일로 주고받아 합치기. API 키는 넘어가지 않음", false, false],
 				["lint", "메시지 linter", "AI 응답이 저장될 때 닫히지 않은 태그·따옴표 등을 검사", false, false],
 				["ghostwrite", "대필", "내가 적은 초안을 AI가 내 말투의 다음 대사로 써서 입력칸에 채움", false, false],
+				["slash", "슬래시 커맨드·빠른 답장", "입력칸에서 /로 시작하는 커맨드와 스크립트 실행 (SillyTavern 방식). /gen 같은 AI 커맨드는 실행할 때마다 응답 하나의 요금이 듦", false, false],
 				["rewrite", "자동 재생성", "linter가 금지어·단어 반복 오류를 찾으면 응답을 새 스와이프로 다시 만듦", false, false],
 				["summary", "메모리 확장 · 대화 요약", "프롬프트 창 밖으로 밀려난 오래된 대화를 줄거리로 요약해 AI에게 전달", false, false],
 				["memory", "메모리 검색", "지난 대화를 뜻으로 찾기. 색인하면 대화 글이 임베딩 공급자에게 전송됨", false, false],
@@ -103,6 +144,19 @@ const base: Record<string, Handler> = {
 	list_active_tasks: () => [
 		{ id: "t-run", taskType: "translate", feature: "translate", runBy: "auto", label: "번역 → ko", owner: "system", ownerRef: null, status: "running", payload: null, result: null, error: null, attemptCount: 1, maxAttempts: 1, createdAt: Date.now() - 2000, startedAt: Date.now() - 2000, updatedAt: Date.now(), finishedAt: null },
 	],
+	// 보낸 글·받은 글 (5-E-20-6-7): t1(응답 생성)에 잘린 호출 하나
+	list_ai_call_log_tasks: () => ["t1"],
+	get_ai_call_logs: ({ taskId }) =>
+		taskId === "t1"
+			? [
+					{
+						id: 1, taskId: "t1", profileId: "p1", model: "claude-sonnet-5-5", createdAt: Date.now() - 60_000, error: null, finishReason: "max_tokens",
+						requestJson: JSON.stringify({ messages: [{ role: "system", content: "너는 세라피나다. 엘도리아 숲의 수호자." }, { role: "user", content: "여기가 어디죠?" }], options: { max_tokens: 300 } }),
+						responseText: "\"제 오두막이에요. 이 숲, 엘도리아는 제가 지키는 곳이에요.\" *그녀가 따뜻한 차를 건넨",
+					},
+				]
+			: [],
+	clear_ai_call_logs: () => 1,
 	list_task_history: () => {
 		const now = Date.now();
 		const row = (id: string, feature: string, label: string, status: string, runBy: string, ago: number, u: Partial<Record<string, unknown>> = {}) => ({
@@ -151,7 +205,21 @@ const base: Record<string, Handler> = {
 	save_png_file: () => null,
 	default_app_prompts: () => {
 		const d = (text: string) => ({ selected: "", items: [{ id: "", name: "기본값", text }] });
-		return { translate: d("You are a translator. Translate into {{lang}}."), imagePrompt: d("Describe ONE scene as an English prompt."), imagePromptNai: d("Danbooru tags."), chatImages: d("[이미지]\n사용 가능한 키: {{keys}}"), autoImage: d("[그림]\n응답 끝에 <image>태그</image>"), gameRules: d("규칙 1\n규칙 2"), sceneRules: d("씬 규칙"), summary: d("대화를 요약하는 지시. {max}토큰 안에") };
+		return {
+			translate: d("You are a translator. Translate into {{lang}}."),
+			imagePrompt: d("Describe ONE scene as an English prompt."),
+			imagePromptNai: d("Danbooru tags."),
+			chatImages: d("[이미지]\n사용 가능한 키: {{img_keys}}"),
+			autoImage: d("[그림]\n응답 끝에 <image>태그</image>"),
+			gameRules: d("규칙 1\n규칙 2"),
+			sceneRules: d("씬 규칙"),
+			summary: d("대화를 요약하는 지시. {max}토큰 안에"),
+			multiChar: d("[여러 캐릭터]\n등장인물: {{names}}"),
+			vars: d("[변수]\n{{var_list}}"),
+			ghost: d("[Ghostwrite request]\nWrite what {{user}} says next in {{user}}'s voice (do not write {{char}}). Length: {{length}}."),
+			phoneProfile: d("지금까지의 대화와 캐릭터 설정을 바탕으로 '{{char}}'의 카카오톡 스타일 메신저 프로필 꾸미기 정보를 JSON으로만 생성해줘."),
+			phoneSns: d("지금까지의 대화와 캐릭터 설정을 바탕으로 '{{char}}'의 인스타그램 스타일 개인 SNS 페이지를 JSON으로만 생성해줘."),
+		};
 	},
 	cancel_task: () => null,
 	...chatHandlers,
@@ -160,7 +228,7 @@ const base: Record<string, Handler> = {
 	...syncHandlers,
 	...communityHandlers,
 	// ---- 위젯 (브라우저에서 위젯 화면 확인용) ----
-	get_widget_music_settings: () => ({ resize: false, isMiniPlayer: false, isImgEdit: false, isPlayListOpen: false, pos: null, selectedFolder: null, currentPlaylistId: "default", currentSongIndex: 0 }),
+	get_widget_music_settings: () => ({ resize: false, isMiniPlayer: false, isImgEdit: false, isPlayListOpen: false, pos: null, selectedFolder: null, currentPlaylistId: "default", currentSongIndex: 0, audio: { muted: false, volume: 0.7, loopMode: 0, isShuffle: false } }),
 	save_widget_music_settings: () => null,
 	get_all_playlist: () => [{ id: "default", title: "기본 재생 목록", description: null, coverImage: null, createdAt: 0, updatedAt: 0 }],
 	get_playlist_entry: () => [],

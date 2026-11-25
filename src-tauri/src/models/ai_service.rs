@@ -22,6 +22,9 @@ pub struct ApiProfiles {
     /// 사용자가 직접 입력해 남겨 둔 모델 이름 (목록에 계속 보임, ADR-020)
     #[serde(default)]
     pub custom_models: Vec<String>,
+    /// 연결 확인 여부 (테스트 또는 채팅·게임·폰에서 실제 응답을 받으면 true)
+    #[serde(default)]
+    pub verified: bool,
     pub created_at: i64,
     pub updated_at: i64,
 }
@@ -39,6 +42,7 @@ impl<'r> FromRow<'r, sqlx::sqlite::SqliteRow> for ApiProfiles {
             base_url: row.try_get("base_url")?,
             model: row.try_get("model")?,
             custom_models: serde_json::from_str(&custom).unwrap_or_default(),
+            verified: row.try_get::<bool, _>("verified").unwrap_or(false),
             created_at: row.try_get("created_at")?,
             updated_at: row.try_get("updated_at")?,
         })
@@ -229,6 +233,41 @@ pub struct ChatContext {
     pub extra_data: serde_json::Value,
     /// 이번 사용자 입력에 붙인 이미지 (파일 경로)
     pub user_images: Vec<String>,
+    /// 캐릭터 이미지(<cg>) 규칙 (앱 프롬프트 슬롯). 프리셋 블록의 {{img_inprompt}} 자리에만 들어간다 (ADR-030 추가)
+    pub image_prompt: Option<String>,
+    /// 매크로 {{img_keys}}: 이 대화에서 쓸 수 있는 이미지 키 목록
+    pub image_keys: Option<String>,
+    /// 대화 유틸 지시문 (매크로 이름 → 글): {{auto_image}}·{{multi_char}}·{{vars}}. 프리셋 블록이 매크로를 쓴 자리에만 들어간다 (ADR-030 추가)
+    pub util_prompts: std::collections::BTreeMap<String, String>,
+}
+
+/// 프롬프트 메시지가 어느 시스템에서 주입되었는지 ('보낸 컨텍스트' 표시용, 공급자 요청에는 쓰지 않음)
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, specta::Type)]
+#[serde(rename_all = "camelCase")]
+pub struct PromptSource {
+    /// 주입한 시스템 종류 (preset, world_info, system_rules, character, persona, examples, chat, user_input, qr, author_note, inject, recall, regen_extra, plugin, ghost)
+    pub kind: String,
+    /// 프리셋 블록 이름, 플러그인 이름, /inject id 등 세부 이름
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub name: Option<String>,
+}
+
+impl PromptSource {
+    pub fn of(kind: &str) -> Self {
+        Self {
+            kind: kind.to_string(),
+            name: None,
+        }
+    }
+
+    pub fn named(kind: &str, name: impl Into<String>) -> Self {
+        let name = name.into();
+        let trimmed = name.trim();
+        Self {
+            kind: kind.to_string(),
+            name: (!trimmed.is_empty()).then(|| trimmed.to_string()),
+        }
+    }
 }
 
 #[derive(Serialize, Clone, specta::Type)]
@@ -237,6 +276,9 @@ pub struct HistoryItem {
     pub content: String,
     /// 메시지에 붙인 이미지 (파일 경로, meta.attachments)
     pub images: Vec<String>,
+    /// 대화 기록에 끼워 넣은 시스템 출처 (없으면 일반 대화 기록)
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub source: Option<PromptSource>,
 }
 
 #[derive(Serialize, specta::Type)]
@@ -326,6 +368,9 @@ pub struct PromptMessageItem {
     /// 함께 보낼 이미지 (파일 경로). 어댑터가 읽어서 공급자 형식으로 넣는다
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub images: Vec<String>,
+    /// 어느 시스템이 주입한 메시지인지 ('보낸 컨텍스트' 표시용)
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub source: Option<PromptSource>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, specta::Type)]

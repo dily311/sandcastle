@@ -156,6 +156,7 @@ pub fn profile(base: &str, format_type: &str, model: &str) -> (reqwest::Client, 
             custom_models: vec![],
             created_at: 0,
             updated_at: 0,
+            verified: false,
         },
     )
 }

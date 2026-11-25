@@ -4694,7 +4694,7 @@ dependencies = [
 
 [[package]]
 name = "sandcastle"
-version = "0.3.4"
+version = "0.4.0"
 dependencies = [
  "android-native-keyring-store",
  "anyhow",
@@ -4737,6 +4737,7 @@ dependencies = [
  "tauri-plugin-store",
  "tauri-plugin-window-state",
  "tauri-specta",
+ "tauri-winrt-notification",
  "tempfile",
  "thiserror 2.0.21",
  "tiktoken",

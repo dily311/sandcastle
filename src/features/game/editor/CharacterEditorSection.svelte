@@ -1,8 +1,9 @@
 <script lang="ts">
+	import { _ } from "svelte-i18n";
 	import { confirmAction } from "$shared/stores/confirm.svelte";
 	import { toasts } from "$shared/stores/toast.svelte";
 	/** 지우기 전에 앱 확인 창으로 물어봄 */
-	const ask = (message: string) => confirmAction({ title: "삭제", message, confirmLabel: "삭제", danger: true });
+	const ask = (message: string) => confirmAction({ title: $_("common.delete"), message, confirmLabel: $_("common.delete"), danger: true });
 	import type { GameAssetsInput, GameCharactersInput, GameCharacterAssetsInput } from "$features/game/types";
 	import { editorAssetPreviewUrl } from "./assetPreview";
 	import { open } from "@tauri-apps/plugin-dialog";
@@ -44,7 +45,7 @@
 			id: crypto.randomUUID(),
 			gameId: gameId,
 			characterId: null, // 기본 캐릭터 중에서 게임 캐릭터로 추가하는 경우에만 사용
-			name: "새로운 캐릭터",
+			name: $_("gameEditor.newCharName"),
 			avatar: null,
 			description: "",
 			firstMessage: "",
@@ -60,7 +61,7 @@
 	}
 
 	async function handleDeleteCharacter(index: number) {
-		if (!(await ask(`"${characters[index].name}" 캐릭터를 삭제하시겠습니까?`))) return;
+		if (!(await ask($_("gameEditor.deleteCharConfirm", { values: { name: characters[index].name } })))) return;
 		const targetId = characters[index].id;
 		assets = assets.filter((asset) => asset.gameCharacterId !== targetId);
 		characters.splice(index, 1);
@@ -73,7 +74,7 @@
 			id: crypto.randomUUID(),
 			gameId,
 			key: `standing_${Date.now()}`,
-			name: `${activeChar.name} 스탠딩`,
+			name: $_("gameEditor.standingDefaultName", { values: { name: activeChar.name } }),
 			category: "character",
 			kind: "image",
 			filePath: "",
@@ -102,7 +103,7 @@
 	async function chooseImageFile() {
 		const selected = await open({
 			multiple: false,
-			filters: [{ name: "이미지", extensions: ["png", "jpg", "jpeg", "webp", "gif", "bmp", "avif", "svg"] }],
+			filters: [{ name: $_("gameEditor.imageFilter"), extensions: ["png", "jpg", "jpeg", "webp", "gif", "bmp", "avif", "svg"] }],
 		});
 		return typeof selected === "string" ? selected : null;
 	}
@@ -118,8 +119,8 @@
 		if (!activeChar) return;
 		const name = activeChar.name;
 		return dropPaths({
-			label: `${name}의 아바타로 쓰기`,
-			hint: "PNG·JPG·WEBP·GIF 한 장",
+			label: $_("gameEditor.dropAvatarLabel", { values: { name } }),
+			hint: $_("gameEditor.dropAvatarHint"),
 			multiple: false,
 			onpaths: ([path]) => {
 				if (activeChar) activeChar.avatar = path;
@@ -138,11 +139,11 @@
 	<!-- 좌측: 캐릭터 목록 -->
 	<div class="item-list-pane">
 		<div class="pane-header">
-			<Input bind:value={characterSearch} placeholder="캐릭터 검색" aria-label="캐릭터 검색">
+			<Input bind:value={characterSearch} placeholder={$_("gameEditor.searchChars")} aria-label={$_("gameEditor.searchChars")}>
 				{#snippet leading()}<Search />
 				{/snippet}
 			</Input>
-			<IconButton label="캐릭터 추가" size="md" onclick={handleAddCharacter}><Plus /></IconButton>
+			<IconButton label={$_("gameEditor.addCharAria")} size="md" onclick={handleAddCharacter}><Plus /></IconButton>
 		</div>
 
 		<div class="scroll-list">
@@ -168,10 +169,10 @@
 							<span class="character-role"> {ev.behaviorType || "npc"}</span>
 						</div>
 					</div>
-					<IconButton class="icon-del" size="sm" label="캐릭터 삭제" onclick={() => handleDeleteCharacter(idx)}><X /></IconButton>
+					<IconButton class="icon-del" size="sm" label={$_("gameEditor.deleteCharAria")} onclick={() => handleDeleteCharacter(idx)}><X /></IconButton>
 				</div>
 			{:else}
-				<div class="empty-text">등록된 캐릭터가 없습니다.</div>
+				<div class="empty-text">{$_("gameEditor.noChars")}</div>
 			{/each}
 		</div>
 	</div>
@@ -180,41 +181,41 @@
 	<div class="item-detail-pane">
 		{#if activeChar && selectedIndex !== null}
 			<div class="detail-header">
-				<h3>캐릭터 상세 편집</h3>
+				<h3>{$_("gameEditor.charDetailHeading")}</h3>
 			</div>
 			<div class="form-grid">
 				<details class="accordion" open>
-					<summary><span>기본 정보</span><small>이름, 대표 이미지, 캐릭터 설명</small></summary>
+					<summary><span>{$_("gameEditor.charBasicHeading")}</span><small>{$_("gameEditor.charBasicSub")}</small></summary>
 					<div class="accordion-content">
 						<div class="character-profile">
 							<div class="field avatar-field">
-								<label>아바타</label>
+								<label>{$_("gameEditor.avatarLabel")}</label>
 								<button
 									class="avatar-image-button"
 									type="button"
-									aria-label="아바타 이미지 선택"
+									aria-label={$_("gameEditor.pickAvatarAria")}
 									onclick={() => (avatarPickerOpen = !avatarPickerOpen)}
 								>
 									{#if editorAssetPreviewUrl(assetRoot, activeChar.avatar)}<img
 											src={editorAssetPreviewUrl(assetRoot, activeChar.avatar)}
-											alt="선택된 아바타"
+											alt={$_("gameEditor.selectedAvatarAlt")}
 										/>
-									{:else}<span>＋<small>이미지 선택</small></span>
+									{:else}<span>＋<small>{$_("gameEditor.pickImageShort")}</small></span>
 									{/if}
 								</button>
 								{#if activeChar.avatar}<button
 										class="clear-avatar"
 										type="button"
-										onclick={() => (activeChar.avatar = null)}>아바타 지우기</button
+										onclick={() => (activeChar.avatar = null)}>{$_("gameEditor.clearAvatar")}</button
 									>
 								{/if}
 								{#if avatarPickerOpen}<div class="image-picker">
 										<div class="picker-heading">
-											<strong>이미지 선택</strong>
+											<strong>{$_("gameEditor.pickImageShort")}</strong>
 											<div>
-												<button type="button" onclick={chooseAvatarFile}>파일 선택</button
+												<button type="button" onclick={chooseAvatarFile}>{$_("gameEditor.chooseFileBtn")}</button
 												><button type="button" onclick={() => (avatarPickerOpen = false)}
-													>닫기</button
+													>{$_("common.close")}</button
 												>
 											</div>
 										</div>
@@ -235,7 +236,7 @@
 													><small> {imageAsset.key}</small></button
 												>
 											{:else}<p class="asset-empty">
-													등록된 이미지가 없습니다. 파일 선택으로 추가하세요.
+													{$_("gameEditor.noAvailableImages")}
 												</p>
 											{/each}
 										</div>
@@ -244,43 +245,43 @@
 							</div>
 							<div class="character-profile-fields">
 								<div class="field">
-									<label for="char_name">캐릭터 이름</label>
+									<label for="char_name">{$_("gameEditor.charNameLabel")}</label>
 									<input id="char_name" type="text" bind:value={activeChar.name} />
 								</div>
 								<div class="field">
-									<label for="char_des">캐릭터 정보</label>
+									<label for="char_des">{$_("gameEditor.charInfoLabel")}</label>
 									<textarea
 										id="char_des"
 										bind:value={activeChar.description}
 										rows="5"
-										placeholder="캐릭터의 배경 설정 및 성격"></textarea>
+										placeholder={$_("gameEditor.charInfoPlaceholder")}></textarea>
 								</div>
 							</div>
 						</div>
 					</div>
 				</details>
 				<details class="accordion" open>
-					<summary><span>대화 설정</span><small>첫 대사와 캐릭터 응답 가이드</small></summary>
+					<summary><span>{$_("gameEditor.dialogSettingsHeading")}</span><small>{$_("gameEditor.dialogSettingsSub")}</small></summary>
 					<div class="accordion-content">
 						<div class="field">
-							<label for="char_first">첫 대사 (First Message)</label>
+							<label for="char_first">{$_("gameEditor.firstMessageLabel")}</label>
 							<textarea
 								id="char_first"
 								bind:value={activeChar.firstMessage}
 								rows="2"
-								placeholder="채팅 시작 시 건네는 첫 인사"></textarea>
+								placeholder={$_("gameEditor.firstMessagePlaceholder")}></textarea>
 						</div>
 						<div class="field">
-							<label for="char_behavior">행동 타입 (Behavior Type)</label>
+							<label for="char_behavior">{$_("gameEditor.behaviorTypeLabel")}</label>
 							<input
 								id="char_behavior"
 								type="text"
 								bind:value={activeChar.behaviorType}
-								placeholder="예: npc, companion 등"
+								placeholder={$_("gameEditor.behaviorTypePlaceholder")}
 							/>
 						</div>
 						<div class="field">
-							<label for="char_example">예시 대화 (Example Dialogue)</label>
+							<label for="char_example">{$_("gameEditor.exampleDialogueLabel")}</label>
 							<textarea
 								id="char_example"
 								bind:value={activeChar.exampleDialogue}
@@ -290,11 +291,11 @@
 					</div>
 				</details>
 				<details class="accordion character-assets" open>
-					<summary><span>캐릭터 에셋</span><small>스탠딩과 맵 이미지 관리</small></summary>
+					<summary><span>{$_("gameEditor.charAssetsHeading")}</span><small>{$_("gameEditor.charAssetsSub")}</small></summary>
 					<div class="accordion-content">
 						<div class="section-heading">
 							<button class="add-btn" onclick={handleAddCharacterAsset} disabled={!activeChar.id}
-								>+ 이미지 추가</button
+								>{$_("gameEditor.addImageBtn")}</button
 							>
 						</div>
 						{#if assets.filter((asset) => asset.gameCharacterId === activeChar.id).length}
@@ -304,7 +305,7 @@
 										<button
 											class="asset-preview"
 											type="button"
-											aria-label="이미지 파일 선택"
+											aria-label={$_("gameEditor.pickImageFileAria")}
 											onclick={() =>
 												(assetPickerIndex =
 													assetPickerIndex === assetIndex ? null : assetIndex)}
@@ -320,14 +321,14 @@
 												class="image-picker asset-image-picker"
 											>
 												<div class="picker-heading">
-													<strong>이미지 선택</strong>
+													<strong>{$_("gameEditor.pickImageShort")}</strong>
 													<div>
 														<button
 															type="button"
 															onclick={() => chooseCharacterAssetFile(asset)}
-															>파일 선택</button
+															>{$_("gameEditor.chooseFileBtn")}</button
 														><button type="button" onclick={() => (assetPickerIndex = null)}
-															>닫기</button
+															>{$_("common.close")}</button
 														>
 													</div>
 												</div>
@@ -349,23 +350,23 @@
 															><small> {imageAsset.key}</small></button
 														>
 													{:else}<p class="asset-empty">
-															등록된 이미지가 없습니다. 파일 선택으로 추가하세요.
+															{$_("gameEditor.noAvailableImages")}
 														</p>
 													{/each}
 												</div>
 											</div>
 										{/if}
 										<div class="asset-fields">
-											<label>에셋 키<input bind:value={asset.key} /></label>
+											<label>{$_("gameEditor.assetKeyLabel")}<input bind:value={asset.key} /></label>
 											<div class="asset-field-row">
 												<label
-													>유형<select bind:value={asset.usage}
-														><option value="standing">스탠딩</option><option value="map"
-															>맵 이미지</option
+													>{$_("gameEditor.usageTypeLabel")}<select bind:value={asset.usage}
+														><option value="standing">{$_("gameEditor.usageStanding")}</option><option value="map"
+															>{$_("gameEditor.usageMapImage")}</option
 														></select
 													></label
 												><label
-													>표정<input
+													>{$_("gameEditor.emotionLabel")}<input
 														bind:value={asset.emotion}
 														placeholder="neutral"
 														disabled={asset.usage === "map"}
@@ -375,21 +376,21 @@
 										</div>
 										<button
 											class="asset-remove"
-											aria-label="이미지 삭제"
+											aria-label={$_("gameEditor.deleteImageAria")}
 											onclick={() => removeCharacterAsset(asset.id)}>×</button
 										>
 									</article>
 								{/each}
 							</div>
 						{:else}<div class="asset-empty">
-								아직 등록된 이미지가 없습니다. 이곳에서 캐릭터 에셋을 추가하세요.
+								{$_("gameEditor.noCharAssets")}
 							</div>
 						{/if}
 					</div>
 				</details>
 			</div>
 		{:else}
-			<div class="no-selection">편집할 캐릭터를 선택하거나 새로 추가해주세요.</div>
+			<div class="no-selection">{$_("gameEditor.selectOrAddChar")}</div>
 		{/if}
 	</div>
 </div>

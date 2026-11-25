@@ -177,6 +177,70 @@ pub async fn set_character_cover_position(state: State<'_, AppState>, id: String
     Ok(())
 }
 
+/// 캐릭터의 대화 변수 정의 (5-F-4-3, 코어 플러그인 status)
+#[tauri::command]
+#[specta::specta]
+pub async fn get_character_var_defs(
+    app: tauri::AppHandle,
+    state: State<'_, AppState>,
+    character_id: String,
+) -> Result<Vec<crate::models::conversation::VarDef>> {
+    crate::sys::plugins::require(&app, crate::sys::plugins::id::STATUS)?;
+    Ok(conversation::get_character_var_defs(&state.db, &character_id).await?)
+}
+
+/// 캐릭터의 대화 변수 정의 저장. 다듬은 목록을 돌려준다
+#[tauri::command]
+#[specta::specta]
+pub async fn set_character_var_defs(
+    app: tauri::AppHandle,
+    state: State<'_, AppState>,
+    character_id: String,
+    defs: Vec<crate::models::conversation::VarDef>,
+) -> Result<Vec<crate::models::conversation::VarDef>> {
+    crate::sys::plugins::require(&app, crate::sys::plugins::id::STATUS)?;
+    let defs = crate::service::chat::vars::normalize(defs)?;
+    if !conversation::upsert_character_var_defs(&state.db, &character_id, &defs).await? {
+        return Err(crate::error::AppError::not_found("캐릭터를 찾을 수 없습니다"));
+    }
+    Ok(defs)
+}
+
+/// 캐릭터의 상태창 틀 (5-F-4-5, 코어 플러그인 status)
+#[tauri::command]
+#[specta::specta]
+pub async fn get_character_status_template(app: tauri::AppHandle, state: State<'_, AppState>, character_id: String) -> Result<Option<String>> {
+    crate::sys::plugins::require(&app, crate::sys::plugins::id::STATUS)?;
+    Ok(conversation::get_character_status_template(&state.db, &character_id).await?)
+}
+
+/// 상태창 틀 저장 (빈 글이면 지움, 100KB까지)
+#[tauri::command]
+#[specta::specta]
+pub async fn set_character_status_template(app: tauri::AppHandle, state: State<'_, AppState>, character_id: String, template: Option<String>) -> Result<()> {
+    crate::sys::plugins::require(&app, crate::sys::plugins::id::STATUS)?;
+    if template.as_ref().is_some_and(|t| t.len() > 100 * 1024) {
+        return Err(AppError::validation("상태창 틀은 100KB까지", None));
+    }
+    if !conversation::upsert_character_status_template(&state.db, &character_id, template.as_deref()).await? {
+        return Err(AppError::not_found("캐릭터를 찾을 수 없습니다"));
+    }
+    Ok(())
+}
+
+/// 프로필 그림 확대·위치 (5-E-17-3). owner: "character" | "persona", fit이 없으면 가운데·확대 없음으로
+#[tauri::command]
+#[specta::specta]
+pub async fn set_avatar_fit(state: State<'_, AppState>, owner: String, id: String, fit: Option<crate::models::conversation::AvatarFit>) -> Result<()> {
+    let table = match owner.as_str() {
+        "character" => "characters",
+        "persona" => "personas",
+        _ => return Err(crate::error::AppError::validation("owner는 character 또는 persona", None)),
+    };
+    conversation::set_avatar_fit(&state.db, table, &id, fit).await?;
+    Ok(())
+}
+
 /// 이미지 파일을 아바타 폴더로 복사하고 새 경로를 돌려준다
 pub(crate) fn copy_avatar(dir: &std::path::Path, src: &str, prefix: &str) -> Result<String> {
     let src = std::path::PathBuf::from(src);
@@ -345,9 +409,18 @@ async fn memory_changed(app: &tauri::AppHandle, state: &AppState, message_ids: &
 #[tauri::command]
 #[specta::specta]
 pub async fn update_message(app: tauri::AppHandle, state: State<'_, AppState>, id: String, content: String, meta: Option<serde_json::Value>) -> Result<()> {
+    // AI 변수 (5-F-4-4-2): 스와이프를 넘겨 이 메시지의 바뀐 몫이 달라지면 앞 몫을 되돌리고 새 몫을 적용
+    let old = crate::db::chat_ui::get_message(&state.db, &id).await.ok();
     let result = conversation::update_message(&state.db, &id, &content, &meta).await?;
     if !result {
         return Err(AppError::not_found(format!("메시지를 찾을 수 없습니다: {id}")));
+    }
+    if let Some(old) = old {
+        use crate::service::chat::vars::{changes_of, swap_changes};
+        let (before, after) = (changes_of(old.meta.as_ref()), changes_of(meta.as_ref()));
+        if before != after {
+            swap_changes(&state.db, &old.conversation_id, &before, &after).await?;
+        }
     }
     memory_changed(&app, &state, &[id]).await;
     Ok(())
@@ -394,9 +467,14 @@ pub async fn update_message_meta(app: tauri::AppHandle, state: State<'_, AppStat
 pub async fn delete_message(app: tauri::AppHandle, state: State<'_, AppState>, id: String) -> Result<()> {
     // 지우기 전에 어느 대화인지 알아 둔다
     let convs = crate::service::memory::maintain::conversations_of(&state.db, std::slice::from_ref(&id)).await;
+    let old = crate::db::chat_ui::get_message(&state.db, &id).await.ok();
     let result = conversation::delete_message(&state.db, &id).await?;
     if !result {
         return Err(AppError::not_found(format!("메시지를 찾을 수 없습니다: {id}")));
+    }
+    // AI 변수 (5-F-4-4-2): 지운 메시지가 바꾼 몫을 되돌린다
+    if let Some(m) = old {
+        crate::service::chat::vars::revert_messages(&state.db, &m.conversation_id.clone(), &[m]).await?;
     }
     crate::service::memory::maintain::after_message_change(&app, &state.db, convs);
     Ok(())
@@ -566,6 +644,8 @@ pub(crate) fn sillytavern_book_json(entries: &[WorldInfoEntry]) -> serde_json::V
                     "disable": !e.enabled,
                     "order": e.priority,
                     "position": 0,
+                    // 샌드캐슬 분류 (SillyTavern은 모르는 칸을 그대로 둔다 — 다시 가져오면 되살아남, 5-F-1)
+                    "extensions": { "sandcastle_category": e.category },
                 }),
             )
         })
@@ -589,9 +669,13 @@ mod lore_tests {
             priority: 42,
             constant: false,
             comment: "용".into(),
+            category: "캐릭터".into(),
         };
         let v = sillytavern_book_json(&[entry]);
         assert_eq!(v["entries"]["0"]["comment"], "용");
+        let mut w = vec![];
+        let back = crate::service::import::sillytavern::worldinfo::map_entries(&v, &mut w);
+        assert_eq!(back[0].category, "캐릭터", "SillyTavern 왕복에도 분류가 남음");
         assert_eq!(v["entries"]["0"]["disable"], true);
         assert_eq!(v["entries"]["0"]["selective"], true);
         assert_eq!(v["entries"]["0"]["order"], 42);

@@ -185,6 +185,121 @@ pub fn map_preset(json: &Value, preset_id: &str, name: &str) -> ImportedPreset {
     }
 }
 
+// =======================================
+// 우리 → SillyTavern (내보내기, 5-E-20-4-3)
+// =======================================
+
+/// 우리 블록 식별자 → ST 식별자 (자리 표시 블록은 ST 이름으로, 나머지는 그대로)
+fn st_identifier(id: &str) -> (String, bool) {
+    let key = id.to_ascii_lowercase().replace('_', "");
+    let known = match key.as_str() {
+        "chardescription" => Some("charDescription"),
+        "charpersonality" => Some("charPersonality"),
+        "scenario" => Some("scenario"),
+        "personadescription" => Some("personaDescription"),
+        "dialogueexamples" | "mesexamples" => Some("dialogueExamples"),
+        "worldinfo" | "worldinfobefore" => Some("worldInfoBefore"),
+        "worldinfoafter" => Some("worldInfoAfter"),
+        "chathistory" => Some("chatHistory"),
+        _ => None,
+    };
+    match known {
+        Some(k) => (k.to_string(), true),
+        None => (id.to_string(), false),
+    }
+}
+
+/// ST가 "시스템 프롬프트"로 따로 다루는 기본 블록
+const ST_SYSTEM_PROMPTS: [&str; 4] = ["main", "nsfw", "jailbreak", "enhanceDefinitions"];
+/// ST 전역 배치 번호 (가져올 때도 이것을 먼저 고른다)
+const ST_GLOBAL_ORDER: i64 = 100001;
+
+/// 프리셋 → ST Chat Completion 프리셋 JSON.
+/// ST에서 가져온 프리셋이면 원본(`compatibility_json`)을 바탕으로 블록·배치·생성 설정·정규식만 우리 값으로 덮는다
+/// (모델·연결 같은 다른 설정을 잃지 않게. 비밀 값은 가져올 때 이미 뺐다).
+pub fn preset_to_st(
+    preset: &crate::models::ai_service::PromptPresets,
+    blocks: &[crate::models::ai_service::PromptBlocks],
+    regex: &[crate::models::regex::RegexScript],
+) -> Value {
+    let mut out = preset.compatibility_json.clone().filter(Value::is_object).unwrap_or_else(|| json!({}));
+    let mut sorted: Vec<&crate::models::ai_service::PromptBlocks> = blocks.iter().collect();
+    sorted.sort_by_key(|b| b.sort_order);
+
+    let mut prompts = vec![];
+    let mut order = vec![];
+    let mut seen = std::collections::HashSet::new();
+    for b in sorted {
+        let (identifier, marker) = st_identifier(&b.identifier);
+        if !seen.insert(identifier.clone()) {
+            continue; // ST는 식별자가 겹치면 안 됨
+        }
+        let extra = b.extra_json.clone().unwrap_or(Value::Null);
+        let in_chat = b.position == "in_chat";
+        let mut p = json!({
+            "identifier": identifier,
+            "name": b.name,
+            "role": b.role,
+            "content": if marker { String::new() } else { b.content.clone() },
+            "system_prompt": extra.get("system_prompt").and_then(Value::as_bool).unwrap_or(marker || ST_SYSTEM_PROMPTS.contains(&identifier.as_str())),
+            "marker": marker,
+            "injection_position": if in_chat { 1 } else { 0 },
+            "injection_depth": if in_chat { b.depth } else { 4 },
+            "injection_order": extra.get("injection_order").cloned().unwrap_or(json!(100)),
+            "injection_trigger": b.triggers_json.as_array().cloned().unwrap_or_default(),
+            "forbid_overrides": extra.get("forbid_overrides").and_then(Value::as_bool).unwrap_or(false),
+        });
+        if marker {
+            if let Some(o) = p.as_object_mut() {
+                o.remove("content");
+            }
+        }
+        prompts.push(p);
+        order.push(json!({ "identifier": identifier, "enabled": b.enabled }));
+    }
+
+    let settings = preset.settings_json.clone().unwrap_or(Value::Null);
+    let obj = out.as_object_mut().expect("위에서 객체로 만듦");
+    obj.insert("prompts".into(), Value::Array(prompts));
+    obj.insert("prompt_order".into(), json!([{ "character_id": ST_GLOBAL_ORDER, "order": order }]));
+    for (ours, theirs) in [
+        ("temperature", "temperature"),
+        ("max_tokens", "openai_max_tokens"),
+        ("context_size", "openai_max_context"),
+        ("top_p", "top_p"),
+        ("top_k", "top_k"),
+        ("frequency_penalty", "frequency_penalty"),
+        ("presence_penalty", "presence_penalty"),
+        ("stream", "stream_openai"),
+    ] {
+        if let Some(v) = settings.get(ours).filter(|v| !v.is_null()) {
+            obj.insert(theirs.into(), v.clone());
+        }
+    }
+    let scripts: Vec<Value> = regex.iter().map(super::regex::regex_to_st).collect();
+    let ext = obj.entry("extensions").or_insert_with(|| json!({}));
+    if let Some(ext) = ext.as_object_mut() {
+        if scripts.is_empty() {
+            ext.remove("regex_scripts");
+        } else {
+            ext.insert("regex_scripts".into(), Value::Array(scripts));
+        }
+    }
+    out
+}
+
+/// 프리셋 하나를 ST JSON으로 (DB에서 읽어서)
+pub async fn preset_st_json(db: &crate::db::conn::DbPool, preset_id: &str) -> crate::error::Result<(String, Value)> {
+    let preset = crate::db::ai_service::get_prompt_preset(db, preset_id).await?;
+    let blocks = crate::db::ai_service::get_prompt_blocks_by_preset(db, preset_id).await?;
+    let regex: Vec<crate::models::regex::RegexScript> = crate::db::regex::get_all_regex_scripts(db)
+        .await?
+        .into_iter()
+        .filter(|r| r.scope == RegexScope::Preset && r.scope_id.as_deref() == Some(preset_id))
+        .collect();
+    Ok((preset.name.clone(), preset_to_st(&preset, &blocks, &regex)))
+}
+
 /// ST 프리셋에는 연결 설정이 같이 들어 있다. 비밀번호·인증 헤더는 원본 보존용으로도 저장하지 않는다
 /// (DB에 평문으로 남고, 데이터 내보내기 때 함께 나갈 수 있음).
 const SECRET_KEYS: [&str; 3] = ["proxy_password", "custom_include_headers", "api_key"];

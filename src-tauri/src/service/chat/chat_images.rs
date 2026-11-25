@@ -104,16 +104,34 @@ pub fn store_image_file(app_data_dir: &Path, character_id: &str, image_id: &str,
 /// 여러 이미지를 캐릭터에 추가. 하나가 실패하면 거기서 멈추고, 앞서 추가된 것은 남긴다.
 /// 이미지 변환은 blocking 스레드에서 한다.
 pub async fn add_images(db: &DbPool, app_data_dir: &Path, character_id: &str, paths: &[PathBuf]) -> Result<Vec<CharacterImage>> {
+    let with_folder: Vec<(PathBuf, String)> = paths.iter().map(|p| (p.clone(), String::new())).collect();
+    add_images_in(db, app_data_dir, character_id, &with_folder).await
+}
+
+/// 판 폴더와 함께 넣기 (ZIP의 하위 폴더 `v1/smile.png` → 판 `v1`, 5-E-21)
+pub async fn add_images_in(db: &DbPool, app_data_dir: &Path, character_id: &str, paths: &[(PathBuf, String)]) -> Result<Vec<CharacterImage>> {
+    let items: Vec<(PathBuf, String, Option<String>)> = paths.iter().map(|(p, f)| (p.clone(), f.clone(), None)).collect();
+    add_images_keyed(db, app_data_dir, character_id, &items).await
+}
+
+/// 키를 직접 정해 넣기 (None이면 파일 이름). 게임 → 캐릭터 복사에서 NPC 스탠딩을 `이름_감정` 키로 (5-F-3)
+pub async fn add_images_keyed(
+    db: &DbPool,
+    app_data_dir: &Path,
+    character_id: &str,
+    items: &[(PathBuf, String, Option<String>)],
+) -> Result<Vec<CharacterImage>> {
     if !db::conversation::char_exists(db, character_id).await? {
         return Err(AppError::not_found("존재하지 않는 캐릭터입니다"));
     }
     let mut added = vec![];
-    for source in paths {
+    for (source, folder, given) in items {
         // 같은 키(파일 이름)가 이미 있으면 그 이미지를 새 파일로 덮어쓴다 (id·키·순서 유지)
-        let key = normalize_key(&key_from_path(source)).unwrap_or_else(|_| "image".to_string());
+        let key = normalize_key(&given.clone().unwrap_or_else(|| key_from_path(source))).unwrap_or_else(|_| "image".to_string());
         let existing: Option<(String, i64, bool, i64)> =
-            sqlx::query_as("SELECT id, sort_order, enabled, created_at FROM character_images WHERE character_id = ? AND key = ?")
+            sqlx::query_as("SELECT id, sort_order, enabled, created_at FROM character_images WHERE character_id = ? AND folder = ? AND key = ?")
                 .bind(character_id)
+                .bind(folder)
                 .bind(&key)
                 .fetch_optional(db)
                 .await?;
@@ -144,6 +162,7 @@ pub async fn add_images(db: &DbPool, app_data_dir: &Path, character_id: &str, pa
                 sort_order,
                 created_at,
                 updated_at: now,
+                folder: folder.clone(),
             };
             added.push(CharacterImage::from_row(row, app_data_dir));
             continue;
@@ -158,6 +177,7 @@ pub async fn add_images(db: &DbPool, app_data_dir: &Path, character_id: &str, pa
             sort_order: db::character_image::next_image_sort_order(db, character_id).await?,
             created_at: now,
             updated_at: now,
+            folder: folder.clone(),
         };
         if let Err(e) = db::character_image::insert_character_image(db, &row).await {
             remove_image_files(app_data_dir, &[&row.file_path, row.thumb_path.as_deref().unwrap_or_default()]);
@@ -181,7 +201,8 @@ fn is_zip_image_name(name: &str) -> bool {
 
 /// ZIP 안의 그림들을 임시 폴더에 풀어 경로를 돌려준다 (폴더 구조는 버리고 파일 이름만).
 /// 그림이 MAX_ZIP_IMAGES장을 넘으면 풀기 전에 거절한다 (일부만 넣고 나머지를 조용히 버리지 않게)
-pub fn extract_zip_images(zip_path: &Path, out_dir: &Path) -> Result<Vec<PathBuf>> {
+/// ZIP 안 그림을 풀고 (경로, 판 폴더)를 돌려준다. 판 폴더는 그림 바로 위 폴더 이름 (맨 위에 있으면 빈 글 = 공통)
+pub fn extract_zip_images(zip_path: &Path, out_dir: &Path) -> Result<Vec<(PathBuf, String)>> {
     let file = std::fs::File::open(zip_path).map_err(|e| AppError::io(format!("ZIP을 열 수 없습니다: {e}")))?;
     let mut zip = zip::ZipArchive::new(file).map_err(|e| AppError::validation(format!("ZIP 파일이 아닙니다: {e}"), None))?;
     let total = (0..zip.len()).filter(|&i| zip.name_for_index(i).is_some_and(is_zip_image_name)).count();
@@ -205,12 +226,40 @@ pub fn extract_zip_images(zip_path: &Path, out_dir: &Path) -> Result<Vec<PathBuf
         if name.starts_with('.') || !["png", "jpg", "jpeg", "webp", "gif"].contains(&ext.as_str()) {
             continue;
         }
-        let dest = out_dir.join(&name);
+        let dirs: Vec<String> = std::path::Path::new(f.name())
+            .parent()
+            .map(|p| p.iter().map(|c| c.to_string_lossy().trim().to_string()).filter(|c| !c.is_empty()).collect())
+            .unwrap_or_default();
+        if dirs.iter().any(|d| d.starts_with('.') || d == "__MACOSX") {
+            continue; // macOS가 넣는 숨은 파일
+        }
+        // 판마다 같은 파일 이름이 있을 수 있어 하나씩 따로 푼다
+        let dir = out_dir.join(format!("f-{}", out.len()));
+        std::fs::create_dir_all(&dir)?;
+        let dest = dir.join(&name);
         let mut w = std::fs::File::create(&dest)?;
         std::io::copy(&mut f, &mut w)?;
-        out.push(dest);
+        out.push((dest, dirs));
     }
-    Ok(out)
+    Ok(version_folders(out))
+}
+
+/// ZIP 안 폴더 → 판 폴더: 모든 그림이 같은 겉 폴더 안에 있으면(폴더째 압축) 그 겉 폴더를 벗기고,
+/// 남은 경로의 첫 폴더가 판이다 (`pack/v1/smile.png` → v1, `pack/cry.png` → 공통)
+fn version_folders(items: Vec<(PathBuf, Vec<String>)>) -> Vec<(PathBuf, String)> {
+    let mut items = items;
+    while let Some(first) = items.first().and_then(|(_, d)| d.first().cloned()) {
+        if !items.iter().all(|(_, d)| d.first() == Some(&first)) {
+            break;
+        }
+        for (_, d) in &mut items {
+            d.remove(0);
+        }
+    }
+    items
+        .into_iter()
+        .map(|(p, d)| (p, d.first().map(|f| f.chars().take(40).collect()).unwrap_or_default()))
+        .collect()
 }
 
 /// 이미지 파일 삭제 (없으면 무시)
@@ -233,13 +282,43 @@ pub fn remove_character_dir(app_data_dir: &Path, character_id: &str) {
 // =======================================
 
 /// 모델에게 보낼 이미지 규칙 + 키 목록 ({{char}}는 PromptManager가 치환)
-pub fn image_rules(images: &[CharacterImage]) -> Option<String> {
-    let keys: Vec<&str> = images.iter().filter(|i| i.enabled).take(MAX_PROMPT_KEYS).map(|i| i.key.as_str()).collect();
-    if keys.is_empty() {
-        return None;
-    }
+pub fn image_rules(images: &[CharacterImage], preset: &crate::service::app_prompts::PresetPrompts) -> Option<String> {
     // 사용자가 설정 > 앱 프롬프트에서 고칠 수 있다
-    Some(crate::service::app_prompts::chat_images(&keys.join(", ")))
+    image_keys(images).map(|k| crate::service::app_prompts::chat_images(&k, preset))
+}
+
+/// 켜진 이미지 키 목록 ("a, b, c", 같은 키는 한 번). 없으면 None ({{img_keys}})
+pub fn image_keys(images: &[CharacterImage]) -> Option<String> {
+    let mut keys: Vec<&str> = vec![];
+    for i in images.iter().filter(|i| i.enabled) {
+        if keys.len() >= MAX_PROMPT_KEYS {
+            break;
+        }
+        if !keys.iter().any(|k| k.eq_ignore_ascii_case(&i.key)) {
+            keys.push(i.key.as_str());
+        }
+    }
+    (!keys.is_empty()).then(|| keys.join(", "))
+}
+
+/// 같은 키 묶기의 키: 끝의 `-숫자`를 뗀다 (`smile-2` → `smile`, `-1`처럼 앞이 비면 그대로)
+pub fn base_key(key: &str) -> &str {
+    match key.rsplit_once('-') {
+        Some((head, tail)) if !head.is_empty() && !tail.is_empty() && tail.bytes().all(|b| b.is_ascii_digit()) => head,
+        _ => key,
+    }
+}
+
+/// 같은 키 묶기 (5-E-25): 키를 묶음 키로 바꾼다. 프롬프트에는 묶음 키가 한 번만, 응답의 `<cg>묶음 키</cg>`는 그대로 남고
+/// 어느 그림을 보일지는 화면이 그 묶음에서 메시지마다 고른다
+pub fn group_variants(images: Vec<CharacterImage>) -> Vec<CharacterImage> {
+    images
+        .into_iter()
+        .map(|mut i| {
+            i.key = base_key(&i.key).to_string();
+            i
+        })
+        .collect()
 }
 
 // =======================================
@@ -336,6 +415,27 @@ mod tests {
         std::fs::remove_dir_all(dir).ok();
     }
 
+    #[test]
+    fn zip_subfolders_become_version_folders_but_a_single_wrapper_does_not() {
+        let dir = std::env::temp_dir().join(format!("sc-zip-{}", Uuid::new_v4()));
+        std::fs::create_dir_all(&dir).unwrap();
+        let folders = |names: &[&str]| {
+            let zip = zip_with(&dir, &names.iter().map(|s| s.to_string()).collect::<Vec<_>>());
+            let out = dir.join(format!("out-{}", Uuid::new_v4()));
+            let mut f: Vec<String> = extract_zip_images(&zip, &out).unwrap().into_iter().map(|(_, f)| f).collect();
+            f.sort();
+            f
+        };
+        assert_eq!(folders(&["pack/v1/smile.png", "pack/v2/smile.png", "pack/cry.png"]), vec!["", "v1", "v2"]);
+        assert_eq!(folders(&["smile.png", "v2/smile.png"]), vec!["", "v2"]);
+        assert_eq!(
+            folders(&["내 캐릭터/smile.png", "내 캐릭터/cry.png"]),
+            vec!["", ""],
+            "폴더째 압축한 겉 폴더는 판이 아님"
+        );
+        std::fs::remove_dir_all(dir).ok();
+    }
+
     fn img(id: &str, key: &str, enabled: bool) -> CharacterImage {
         CharacterImage {
             id: id.into(),
@@ -347,6 +447,7 @@ mod tests {
             sort_order: 0,
             created_at: 0,
             updated_at: 0,
+            folder: String::new(),
         }
     }
 
@@ -372,9 +473,9 @@ mod tests {
 
     #[test]
     fn rules_list_enabled_keys_only() {
-        assert!(image_rules(&[img("1", "a", false)]).is_none());
-        let rules = image_rules(&[img("1", "smile", true), img("2", "off", false), img("3", "cry", true)]).unwrap();
-        assert!(rules.ends_with("사용 가능한 키: smile, cry"));
+        assert!(image_rules(&[img("1", "a", false)], &Default::default()).is_none());
+        let rules = image_rules(&[img("1", "smile", true), img("2", "off", false), img("3", "cry", true)], &Default::default()).unwrap();
+        assert!(rules.ends_with("Available keys: smile, cry"), "{rules}");
         assert!(rules.contains("{{char}}"));
     }
 
@@ -408,5 +509,20 @@ mod tests {
         assert!(normalize_key(&"가".repeat(41)).is_err());
         assert_eq!(key_from_path(Path::new("C:/x/Smile, big.PNG")), "Smile_ big");
         assert_eq!(key_from_path(Path::new("/x/.png")), ".png");
+    }
+}
+
+#[cfg(test)]
+mod group_tests {
+    use super::*;
+
+    #[test]
+    fn variants_share_a_base_key() {
+        assert_eq!(base_key("smile-1"), "smile");
+        assert_eq!(base_key("smile-12"), "smile");
+        assert_eq!(base_key("smile"), "smile");
+        assert_eq!(base_key("blue-eyes"), "blue-eyes");
+        assert_eq!(base_key("-1"), "-1");
+        assert_eq!(base_key("cg-"), "cg-");
     }
 }

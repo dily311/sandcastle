@@ -80,6 +80,13 @@ async fn default_preset_is_seeded_and_builds() {
     sqlx::migrate!("src/db/migrations").run(&pool).await.unwrap();
     let p = PromptManager::load_preset(&pool, Some("default")).await.unwrap().expect("기본 프리셋");
     assert_eq!(p.preset.name, "Default");
-    assert_eq!(p.blocks.len(), 7);
+    assert_eq!(p.blocks.len(), 8);
     assert!(p.blocks.iter().any(|b| b.identifier == "main" && b.content.contains("{{char}}'s next reply")));
+    // 유틸 지시문 자리 (5-F-7-1, ADR-030 추가): 대화 기록 바로 앞
+    let order = |id: &str| p.blocks.iter().find(|b| b.identifier == id).map(|b| b.sort_order).unwrap();
+    assert!(p
+        .blocks
+        .iter()
+        .any(|b| b.identifier == "utils" && b.content.contains("{{vars}}") && b.content.contains("{{img_inprompt}}")));
+    assert_eq!((order("utils") + 1, order("chatHistory") + 1), (order("chatHistory"), order("postHistory")));
 }

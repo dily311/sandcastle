@@ -8,11 +8,77 @@ pub struct ConvSettings {
     pub default_persona_id: Option<String>,
 }
 
+// ---------- 대화 변수 정의 (5-F-4-3, ADR-029) ----------
+/// 변수 종류 (게임 변수의 number·boolean·string과 같음)
+#[derive(Serialize, Deserialize, specta::Type, Debug, Clone, Copy, PartialEq, Eq, Default)]
+#[serde(rename_all = "snake_case")]
+pub enum VarKind {
+    Number,
+    Boolean,
+    #[default]
+    String,
+}
+
+/// 캐릭터에 두는 변수 정의. 값은 대화 meta.variables (글자). 정의 없는 변수는 지금처럼
+#[derive(Serialize, Deserialize, specta::Type, Debug, Clone, PartialEq)]
+#[serde(rename_all = "camelCase")]
+pub struct VarDef {
+    pub key: String,
+    #[serde(default)]
+    pub description: String,
+    #[serde(default)]
+    pub kind: VarKind,
+    /// 대화에 값이 없을 때 보이는 처음 값
+    #[serde(default)]
+    pub default_value: Option<String>,
+    /// 수일 때만: 최소·최대·AI가 한 번에 바꿀 수 있는 폭
+    #[serde(default)]
+    pub min: Option<f64>,
+    #[serde(default)]
+    pub max: Option<f64>,
+    #[serde(default)]
+    pub max_step: Option<f64>,
+    /// AI가 지금 값을 읽을 수 있나 / 바꿀 수 있나 (5-F-4-4에서 씀)
+    #[serde(default)]
+    pub ai_read: bool,
+    #[serde(default)]
+    pub ai_write: bool,
+}
+
+// ---------- 프로필 그림 맞추기 (5-E-17-3) ----------
+/// 동그란 프로필 칸 안에서 그림의 어느 곳을 보일지: x·y는 그림 안 위치(%), zoom은 확대 배율
+#[derive(Serialize, Deserialize, specta::Type, Debug, Clone, Copy, PartialEq)]
+pub struct AvatarFit {
+    pub x: f64,
+    pub y: f64,
+    pub zoom: f64,
+}
+
+impl AvatarFit {
+    /// 범위 밖 값은 자르고, 기본값(가운데·1배)이면 None — 저장하지 않는다
+    pub fn normalized(self) -> Option<Self> {
+        let num = |v: f64, lo: f64, hi: f64, d: f64| if v.is_finite() { v.clamp(lo, hi) } else { d };
+        let f = Self {
+            x: num(self.x, 0.0, 100.0, 50.0),
+            y: num(self.y, 0.0, 100.0, 50.0),
+            zoom: num(self.zoom, 1.0, 4.0, 1.0),
+        };
+        (f != Self { x: 50.0, y: 50.0, zoom: 1.0 }).then_some(f)
+    }
+
+    /// DB 글(JSON) → 값. 읽지 못하면 None
+    pub fn parse(s: Option<&str>) -> Option<Self> {
+        s.and_then(|s| serde_json::from_str::<Self>(s).ok()).and_then(Self::normalized)
+    }
+}
+
 // ---------- Persona ----------
 #[derive(FromRow)]
 pub struct PersonaRow {
     pub id: String,
     pub name: String,
+    #[sqlx(default)]
+    pub alias: Option<String>,
     pub avatar: Option<String>,
     pub description: String,
     pub world_info_ids: Option<String>,
@@ -21,6 +87,8 @@ pub struct PersonaRow {
     pub is_system_default: i64,
     pub created_at: i64,
     pub updated_at: i64,
+    #[sqlx(default)]
+    pub avatar_fit: Option<String>,
 }
 
 #[derive(Serialize, specta::Type)]
@@ -28,6 +96,8 @@ pub struct PersonaRow {
 pub struct Persona {
     pub id: String,
     pub name: String,
+    /// 목록·사이드바 표시용 별칭 (비우면 name 표시, 대화 {{user}}는 항상 name 사용)
+    pub alias: Option<String>,
     pub avatar: Option<String>,
     pub description: String,
     pub world_info_ids: Vec<String>,
@@ -36,6 +106,8 @@ pub struct Persona {
     pub is_system_default: bool,
     pub created_at: i64,
     pub updated_at: i64,
+    /// 프로필 그림 확대·위치 (없으면 가운데·확대 없음)
+    pub avatar_fit: Option<AvatarFit>,
 }
 
 impl From<PersonaRow> for Persona {
@@ -43,6 +115,7 @@ impl From<PersonaRow> for Persona {
         Self {
             id: r.id,
             name: r.name,
+            alias: r.alias.filter(|s| !s.trim().is_empty()),
             avatar: r.avatar,
             description: r.description,
             world_info_ids: r.world_info_ids.and_then(|s| serde_json::from_str(&s).ok()).unwrap_or_default(),
@@ -51,6 +124,7 @@ impl From<PersonaRow> for Persona {
             is_system_default: r.is_system_default != 0,
             created_at: r.created_at,
             updated_at: r.updated_at,
+            avatar_fit: AvatarFit::parse(r.avatar_fit.as_deref()),
         }
     }
 }
@@ -59,6 +133,8 @@ impl From<PersonaRow> for Persona {
 #[serde(rename_all = "camelCase")]
 pub struct PersonaInput {
     pub name: String,
+    #[serde(default)]
+    pub alias: Option<String>,
     pub avatar: Option<String>,
     pub description: String,
     pub world_info_ids: Vec<String>,
@@ -85,6 +161,8 @@ pub struct CharacterRow {
     pub cover: Option<String>,
     #[sqlx(default)]
     pub cover_y: Option<f64>,
+    #[sqlx(default)]
+    pub avatar_fit: Option<String>,
     pub description: String,
     pub alternate_descriptions: Option<String>,
     pub first_message: Option<String>,
@@ -116,6 +194,8 @@ pub struct Character {
     /// 커버에서 보일 세로 위치 % (0 위 ~ 100 아래)
     #[serde(default = "half")]
     pub cover_y: f64,
+    /// 프로필 그림 확대·위치 (없으면 가운데·확대 없음)
+    pub avatar_fit: Option<AvatarFit>,
     pub description: String,
     pub alternate_descriptions: Vec<String>,
     pub first_message: Option<String>,
@@ -144,6 +224,7 @@ impl From<CharacterRow> for Character {
             avatar: r.avatar,
             cover: r.cover,
             cover_y: r.cover_y.unwrap_or(50.0),
+            avatar_fit: AvatarFit::parse(r.avatar_fit.as_deref()),
             description: r.description,
             alternate_descriptions: r.alternate_descriptions.and_then(|s| serde_json::from_str(&s).ok()).unwrap_or_default(),
             first_message: r.first_message,
@@ -237,6 +318,9 @@ pub struct WorldInfoEntryRow {
     /// 제목 (예전 쿼리처럼 열을 고르지 않은 곳에서는 빈 값)
     #[sqlx(default)]
     pub comment: Option<String>,
+    /// 분류 (5-F-1)
+    #[sqlx(default)]
+    pub category: String,
 }
 
 #[derive(Serialize, Clone, specta::Type)]
@@ -252,6 +336,8 @@ pub struct WorldInfoEntry {
     pub constant: bool, // 항상 프롬프트에 삽입
     /// 제목 (SillyTavern의 comment). 프롬프트에는 들어가지 않음
     pub comment: String,
+    /// 분류: 캐릭터·장소·아이템·이벤트·세계 또는 사용자가 만든 것. 빈 글 = 분류 없음 (5-F-1)
+    pub category: String,
 }
 
 impl From<WorldInfoEntryRow> for WorldInfoEntry {
@@ -266,6 +352,7 @@ impl From<WorldInfoEntryRow> for WorldInfoEntry {
             priority: r.priority,
             constant: r.constant != 0,
             comment: r.comment.unwrap_or_default(),
+            category: r.category,
         }
     }
 }
@@ -284,6 +371,9 @@ pub struct WorldInfoEntryInput {
     /// 제목 (없으면 빈 값)
     #[serde(default)]
     pub comment: String,
+    /// 분류 (없으면 빈 값, 5-F-1)
+    #[serde(default)]
+    pub category: String,
 }
 
 impl From<WorldInfoEntry> for WorldInfoEntryInput {
@@ -298,6 +388,7 @@ impl From<WorldInfoEntry> for WorldInfoEntryInput {
             priority: v.priority,
             constant: v.constant,
             comment: v.comment,
+            category: v.category,
         }
     }
 }
@@ -322,6 +413,11 @@ pub struct ConversationRow {
     pub prompt_preset_id: Option<String>,
     pub api_profile_id: Option<String>,
     pub model: Option<String>,
+    #[sqlx(default)]
+    pub read_mode: i64,
+    /// 뷰에서만 옴 (메시지의 가장 늦은 작성 시각)
+    #[sqlx(default)]
+    pub last_message_at: Option<i64>,
 }
 
 #[derive(Serialize, specta::Type)]
@@ -347,6 +443,11 @@ pub struct Conversation {
     pub api_profile_id: Option<String>,
     /// 이 대화에서 고른 모델. 없으면 API 프로필의 기본 모델 (ADR-020)
     pub model: Option<String>,
+    /// 마지막 메시지의 작성 시각 (메시지가 없으면 None). 목록의 시각·정렬은 이것을 먼저 본다 —
+    /// updated_at은 이 기기에서 바뀐 시각이라 가져온 대화는 가져온 때가 된다
+    pub last_message_at: Option<i64>,
+    /// 읽기 모드: 보내는 줄을 숨김 (5-E-6)
+    pub read_mode: bool,
 }
 
 impl From<ConversationRow> for Conversation {
@@ -368,6 +469,8 @@ impl From<ConversationRow> for Conversation {
             prompt_preset_id: r.prompt_preset_id,
             api_profile_id: r.api_profile_id,
             model: r.model,
+            last_message_at: r.last_message_at,
+            read_mode: r.read_mode != 0,
         }
     }
 }

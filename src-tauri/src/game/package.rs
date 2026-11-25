@@ -192,6 +192,7 @@ async fn collect_world_info_books(pool: &SqlitePool, def: &GameDefinition) -> Re
                 .into_iter()
                 .map(|e| WorldInfoEntryInput {
                     comment: String::new(),
+                    category: String::new(),
                     id: None, // import 때 새로 발급
                     book_id: id.clone(),
                     keys: e.keys,

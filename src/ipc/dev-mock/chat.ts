@@ -23,6 +23,7 @@ const character = (id: string, name: string, description: string, extra: Partial
 	avatar: null,
 	cover: null,
 	coverY: 50,
+	avatarFit: null,
 	description,
 	alternateDescriptions: [],
 	firstMessage: null,
@@ -43,6 +44,11 @@ const character = (id: string, name: string, description: string, extra: Partial
 	...extra,
 });
 
+/** 캐릭터별 변수 정의 (미리보기 전용 메모리) */
+const varDefs = new Map<string, unknown[]>();
+/** 캐릭터별 상태창 틀 (미리보기 전용 메모리) */
+const statusTemplates = new Map<string, string>();
+
 const characters: Character_Serialize[] = [
 	character("sera", "Seraphina", "엘도리아 숲의 수호자.\n숲 깊은 곳의 오두막에서 지친 여행자를 돌봄. 그림자 송곳니 무리로부터 숲을 지키는 오래된 마법의 주인.", {
 		worldInfoIds: ["wb1"],
@@ -57,9 +63,9 @@ const characters: Character_Serialize[] = [
 ];
 
 const personas: Persona_Serialize[] = [
-	{ id: "default", name: "user", avatar: null, description: "", worldInfoIds: [], tags: [], color: "", isSystemDefault: true, createdAt: 0, updatedAt: 0 },
-	{ id: "min", name: "Min", avatar: null, description: "숲에서 길 잃은 여행자", worldInfoIds: [], tags: [], color: "", isSystemDefault: false, createdAt: 0, updatedAt: 0 },
-	{ id: "haru", name: "하루", avatar: null, description: "대학생", worldInfoIds: [], tags: [], color: "", isSystemDefault: false, createdAt: 0, updatedAt: 0 },
+	{ id: "default", name: "user", alias: null, avatar: null, description: "", worldInfoIds: [], tags: [], color: "", isSystemDefault: true, createdAt: 0, updatedAt: 0, avatarFit: null },
+	{ id: "min", name: "Min", alias: null, avatar: null, description: "숲에서 길 잃은 여행자", worldInfoIds: [], tags: [], color: "", isSystemDefault: false, createdAt: 0, updatedAt: 0, avatarFit: null },
+	{ id: "haru", name: "하루", alias: null, avatar: null, description: "대학생", worldInfoIds: [], tags: [], color: "", isSystemDefault: false, createdAt: 0, updatedAt: 0, avatarFit: null },
 ];
 
 const presets: PromptPresets_Serialize[] = [
@@ -67,7 +73,7 @@ const presets: PromptPresets_Serialize[] = [
 	{ id: "st", name: "Default (ST)", description: null, presetType: "chat_completion", sourceFormat: "sillytavern", configJson: {}, settingsJson: null, compatibilityJson: null, createdAt: 0, updatedAt: 0 },
 ];
 
-const apis: ApiProfiles[] = [{ id: "gemini", name: "Gemini", provider: "google", formatType: "google", baseUrl: "", model: "gemini-3.7-flash", createdAt: 0, updatedAt: 0 }];
+const apis: ApiProfiles[] = [{ id: "gemini", name: "Gemini", provider: "google", formatType: "google", baseUrl: "", model: "gemini-3.7-flash", customModels: [], verified: true, createdAt: 0, updatedAt: 0 }];
 
 const folders: ConversationFolder[] = [{ id: "f1", characterId: "sera", name: "본편", sortOrder: 0, createdAt: 0, updatedAt: 0 }];
 
@@ -117,7 +123,7 @@ const regex: RegexScript_Serialize[] = [
 	})),
 ];
 
-type Conv = Omit<Conversation_Serialize, "messageCount">;
+type Conv = Omit<Conversation_Serialize, "messageCount" | "lastMessageAt">;
 const convs: Conv[] = [];
 const messages: Message_Serialize[] = [];
 let pluginSetting = {
@@ -135,6 +141,7 @@ let pluginSetting = {
 		scale: 5,
 		sampler: "k_euler_ancestral",
 	},
+	quickReply: { sets: [] as unknown[] },
 	phone: { apiProfileId: null as string | null, presetId: null as string | null },
 	memory: { apiProfileId: null as string | null, model: "", dimensions: null as number | null, tokenCap: 200000, docPrefix: "", queryPrefix: "", autoRecall: false, recallTokens: 1500, recallTopK: 4, recallScope: "character" },
 	summary: { apiProfileId: null as string | null },
@@ -190,6 +197,7 @@ function addConv(c: Partial<Conv> & { title: string; characterId: string }, ago:
 		mode: "chat",
 		meta: null,
 		pinned: false,
+		readMode: false,
 		imagesEnabled: true,
 		createdAt: t,
 		updatedAt: t,
@@ -225,7 +233,8 @@ function addMsg(conv: Conv, role: "user" | "assistant", content: string, ago: nu
 	const a = addConv({ title: "숲에서 깨어남", characterId: "sera", pinned: true, folderId: "f1" }, 2);
 	addMsg(a, "assistant", '*당신이 눈을 뜨자, 부드러운 빛 속에서 한 여인이 고개를 숙인다.*\n\n"눈을 떴군요. 다행이에요… 숲의 짐승들에게 쫓기다 쓰러졌었어요."', 42, { chapter: "숲에서 깨어남" });
 	addMsg(a, "user", "여기가 어디죠? 숲인가요?", 41);
-	addMsg(a, "assistant", '"제 오두막이에요. 이 숲, 엘도리아는 제가 지키는 곳이에요. 여기선 아무도 당신을 해치지 못해요."\n*그녀가 따뜻한 차를 건넨다.*', 40);
+	// 응답 길이 한도에서 잘린 답 (5-E-20-6-6 표시 확인용)
+	addMsg(a, "assistant", '"제 오두막이에요. 이 숲, 엘도리아는 제가 지키는 곳이에요. 여기선 아무도 당신을 해치지 못해요."\n*그녀가 따뜻한 차를 건넨', 40, { info: { model: "gemini-3.7-flash", finishReason: "MAX_TOKENS" } });
 	// HTML 코드 블록 미리보기 확인용 (iframe으로 그려지고 JS가 돈다)
 	addMsg(a, "assistant", ["그녀가 낡은 지도를 펼친다.", "```html", `<div style="padding:12px;border-radius:12px;background:#1f3b2d;color:#e8f5e9;font-family:system-ui"><b>엘도리아 숲 지도</b><p id="t">불러오는 중…</p><button onclick="document.getElementById('t').textContent='오두막 → 샘터 15분'">길 찾기</button></div>`, `<script>document.getElementById("t").textContent = "JS 실행됨";</script>`, "```", '"여기가 우리가 있는 곳이에요."'].join("\n"), 35);
 	addMsg(a, "assistant", "(작가 메모: 다음 장면에서 늑대 무리 등장)", 30, { hidden: true, chapter: "그림자 송곳니" });
@@ -249,7 +258,10 @@ function addMsg(conv: Conv, role: "user" | "assistant", content: string, ago: nu
 	addMsg(p, "assistant", "제 오두막이에요\n조금 더 쉬어요", 8);
 }
 
-const view = (c: Conv): Conversation_Serialize => ({ ...c, messageCount: messages.filter((m) => m.conversationId === c.id).length });
+const view = (c: Conv): Conversation_Serialize => {
+	const mine = messages.filter((m) => m.conversationId === c.id);
+	return { ...c, messageCount: mine.length, lastMessageAt: mine.length ? Math.max(...mine.map((m) => m.createdAt)) : null };
+};
 const conv = (id: string) => {
 	const c = convs.find((c) => c.id === id);
 	if (!c) throw { code: "RESOURCE_NOT_FOUND", category: "NOT_FOUND", message: "대화를 찾을 수 없음", retryable: false };
@@ -265,18 +277,40 @@ const REPLIES = [
 	'*희미한 빛이 그녀의 손끝에 모인다.* "같이 가요. 혼자 두지 않을게요."',
 ];
 
+// 빠른 답장 세트 (5-E-20-5-4, DB quick_reply_sets 흉내): 전역 하나(버튼 여럿), Seraphina 전용 하나
+const QUICK = '/input 빠르게 지시할 내용은? | /setvar key=user_topic {{pipe}} ||\n/if left={{getvar::user_topic}} right="" rule=eq {: /echo "생성을 취소하였습니다." | /abort :} ||\n/gen 프롬프트 내용 : {{getvar::user_topic}} | /sendas name="{{char}}"';
+const qrItem = (id: string, label: string, message: string) => ({ id, label, message, hidden: false });
+let quickReplySets = [
+	{ id: "qr1", name: "지시", scope: "global", scopeId: null as string | null, enabled: true, autoSend: false, sortOrder: 0, createdAt: 0, updatedAt: 0, items: [qrItem("q1", "빠른 지시", QUICK), qrItem("q2", "인사", "안녕, 오늘은 어때?"), ...["주변 묘사", "시간 넘기기", "속마음", "회상", "요약", "날씨", "다음 장면", "분위기 바꾸기"].map((l, i) => qrItem(`q${i + 3}`, l, `/gen ${l}를 한 문단으로 | /sendas name="{{char}}"`))] },
+	{ id: "qr2", name: "세라피나 전용", scope: "character", scopeId: "sera" as string | null, enabled: true, autoSend: true, sortOrder: 1, createdAt: 0, updatedAt: 0, items: [qrItem("s1", "치유 마법", "*세라피나가 손을 뻗어 치유 마법을 건다*")] },
+];
+
+/** 슬래시 스크립트가 남긴 보낸 프롬프트 (5-E-20-6-10) */
+const mockPrompts: Record<string, unknown> = {};
+const failedOnce = new Set<string>();
+
+const PHONE_GROUP_REPLIES = ["Seraphina: 눈 떴어요?\n어제 숲에서 쓰러져 있길래 데려왔어요\n카이: 나도 같이 옮겼거든?\nSeraphina: 네, 카이도요 ㅎㅎ"];
 const PHONE_REPLIES = ["눈 떴어요?\n어제 숲에서 쓰러져 있길래 데려왔어요", "괜찮아요 ㅎㅎ\n천천히 쉬어요", "지금 오두막이에요\n올 때 빵 좀 사다 줄래요?"];
 
 async function generate(convId: string, onEvent: { onmessage: (m: { chunk: string }) => void }) {
 	if (running.has(convId)) throw { code: "INVALID_INPUT", category: "VALIDATION", message: "이미 응답을 만드는 중", retryable: false };
 	const state = { cancelled: false };
 	running.set(convId, state);
-	const pool = convs.find((c) => c.id === convId)?.mode === "phone" ? PHONE_REPLIES : REPLIES;
+	const c = convs.find((c) => c.id === convId);
+	const pool = c?.mode === "phone" ? PHONE_REPLIES : REPLIES;
 	const text = pool[Math.floor(Math.random() * pool.length)];
 	let out = "";
 	try {
 		await sleep(400);
-		for (const piece of text.match(/.{1,3}/gsu) ?? []) {
+		// localStorage.mockChunk = "big" 이면 Gemini처럼 큰 덩어리 몇 개로 보낸다 (화면의 나눠 보이기 확인용)
+		const big = (() => {
+			try {
+				return localStorage.getItem("mockChunk") === "big";
+			} catch {
+				return false;
+			}
+		})();
+		for (const piece of big ? (text.repeat(4).match(/.{1,200}/gsu) ?? []) : (text.match(/.{1,3}/gsu) ?? [])) {
 			if (state.cancelled) break;
 			out += piece;
 			onEvent.onmessage({ chunk: piece });
@@ -390,6 +424,8 @@ AI: 그때 이야기를 다시 해 볼까요?`, stale: false },
 		return regex[i];
 	},
 	list_character_images: () => [],
+	get_character_asset_version: () => null,
+	set_character_asset_version: () => null,
 	create_character: ({ input }) => {
 		const c = character(uid("ch"), input.name, input.description ?? "");
 		characters.push(c);
@@ -405,8 +441,51 @@ AI: 그때 이야기를 다시 해 볼까요?`, stale: false },
 		convs.splice(convs.indexOf(conv(id)), 1);
 		return null;
 	},
+	// 변수 정의 (5-F-4-3): 실제로는 백엔드가 이름 겹침·범위를 확인하고 다듬는다
+	get_character_var_defs: ({ characterId }) => varDefs.get(String(characterId)) ?? [],
+	set_character_var_defs: ({ characterId, defs }) => {
+		const list = (defs as { key: string; aiWrite?: boolean; aiRead?: boolean }[]).map((d) => ({ ...d, key: d.key.trim(), aiRead: d.aiRead || !!d.aiWrite }));
+		if (list.some((d) => !d.key)) throw new Error("변수 이름이 비어 있음");
+		if (new Set(list.map((d) => d.key)).size !== list.length) throw new Error("같은 이름의 변수가 둘");
+		varDefs.set(String(characterId), list);
+		return list;
+	},
+	// 상태창 틀 (5-F-4-5)
+	get_character_status_template: ({ characterId }) => statusTemplates.get(String(characterId)) ?? null,
+	set_character_status_template: ({ characterId, template }) => {
+		const t = typeof template === "string" && template.trim() ? template : null;
+		if (t) statusTemplates.set(String(characterId), t);
+		else statusTemplates.delete(String(characterId));
+		return null;
+	},
+	// 실제로는 휴지통으로 (trash.ts가 감쌈). 대기열 확인용으로 조금 걸린다 (5-E-28)
+	delete_character: async ({ id }) => {
+		await new Promise((r) => setTimeout(r, 700));
+		const i = characters.findIndex((c) => c.id === id);
+		if (i >= 0) characters.splice(i, 1);
+		return null;
+	},
 	rename_conversation: ({ id, title }) => ((conv(id).title = title), null),
 	set_conversation_pinned: ({ id, pinned }) => ((conv(id).pinned = pinned), null),
+	get_character_stats: ({ characterId }) => {
+		const ids = new Set(convs.filter((c) => c.characterId === characterId).map((c) => c.id));
+		const mine = messages.filter((m) => ids.has(m.conversationId));
+		const weekdays = [0, 0, 0, 0, 0, 0, 0];
+		for (const m of mine) weekdays[new Date(m.createdAt).getDay()]++;
+		return { conversations: ids.size, messages: mine.length, chatSeconds: mine.length * 95, weekdays, firstAt: mine.length ? Math.min(...mine.map((m) => m.createdAt)) : null, lastAt: mine.length ? Math.max(...mine.map((m) => m.createdAt)) : null };
+	},
+	find_conversations_by_message: ({ characterId, text }) => {
+		const t = String(text).toLowerCase();
+		const hits = new Map<string, number>();
+		for (const m of messages) {
+			if (!m.content.toLowerCase().includes(t)) continue;
+			const c = convs.find((x) => x.id === m.conversationId);
+			if (!c || (characterId && c.characterId !== characterId)) continue;
+			hits.set(c.id, (hits.get(c.id) ?? 0) + 1);
+		}
+		return [...hits];
+	},
+	set_conversation_read_mode: ({ id, on }) => ((conv(id).readMode = on), null),
 	move_conversation: ({ id, folderId }) => ((conv(id).folderId = folderId), null),
 	set_conversation_options: ({ id, options }) => (Object.assign(conv(id), options), view(conv(id))),
 	set_conversation_worldinfo: ({ id, bookIds }) => ((conv(id).worldInfoIds = bookIds as string[]), view(conv(id))),
@@ -419,6 +498,16 @@ AI: 그때 이야기를 다시 해 볼까요?`, stale: false },
 		for (const m of msgsOf(id)) messages.push({ ...m, id: uid("m"), conversationId: c.id });
 		return view(c);
 	},
+	copy_conversation_as_chat: ({ id }) => {
+		const src = conv(id);
+		const { id: _omit, ...rest } = src;
+		void _omit;
+		const c = addConv({ ...rest, title: `${src.title} (대화)`, mode: "chat", pinned: false } as never, 0);
+		for (const m of msgsOf(id)) messages.push({ ...m, id: uid("m"), conversationId: c.id });
+		return view(c);
+	},
+	export_game_session: () => 0,
+	copy_game_to_character: () => ({ character: characters[0], bookId: "b", conversation: null }),
 	branch_conversation: ({ id, messageId }) => {
 		const src = conv(id);
 		const list = msgsOf(id);
@@ -426,7 +515,7 @@ AI: 그때 이야기를 다시 해 볼까요?`, stale: false },
 		const { id: _omit, ...rest } = src;
 		void _omit;
 		const branchMeta = { ...((src.meta as object) ?? {}), branch: { parentId: id, messageId, seq: list[upto].seq } };
-		const c = addConv({ ...rest, title: `${src.title} · #${list[upto].seq} 분기`, pinned: false, meta: branchMeta } as never, 0);
+		const c = addConv({ ...rest, title: `${src.title} · #${list[upto].seq} 분기`, pinned: false, readMode: false, meta: branchMeta } as never, 0);
 		for (const m of list.slice(0, upto + 1)) messages.push({ ...m, id: uid("m"), conversationId: c.id });
 		return view(c);
 	},
@@ -436,14 +525,52 @@ AI: 그때 이야기를 다시 해 볼까요?`, stale: false },
 	display_messages: ({ conversationId, items }) => {
 		const c = conv(conversationId as string);
 		const ch = characters.find((x) => x.id === c.characterId)?.name ?? "";
-		return (items as { content: string }[]).map((i) => i.content.replace(/\{\{char\}\}|<bot>/gi, ch).replace(/\{\{user\}\}|<user>/gi, "Min"));
+		// 화면에만 쓰는 정규식(전역·이 캐릭터)을 흉내 낸다. "상태창으로" 고른 것은 백엔드처럼 status:<id>로 감싼다 (5-F-5-1)
+		const scripts = regex.filter(
+			(r) =>
+				r.enabled &&
+				r.target === "display" &&
+				(r.scope === "global" ||
+					(r.scope === "character" && r.scopeId === c.characterId) ||
+					(r.scope === "preset" && !!c.promptPresetId && r.scopeId === c.promptPresetId)),
+		);
+		const run = (text: string) => {
+			const pins: { id: string; out: string }[] = [];
+			let cur = scripts.reduce((t, r) => {
+				const m = /^\/(.*)\/([a-z]*)$/s.exec(r.findRegex);
+				let re: RegExp;
+				try {
+					re = m ? new RegExp(m[1], m[2]) : new RegExp(r.findRegex);
+				} catch {
+					return t;
+				}
+				const pin = !!(r.extraJson as { statusWindow?: boolean } | null)?.statusWindow;
+				return t.replace(re, (...g) => {
+					const out = r.replaceString.replace(/\{\{match\}\}/gi, g[0]).replace(/\$(\d+)/g, (_, n) => g[Number(n)] ?? "");
+					if (!pin) return out;
+					const idx = pins.length;
+					pins.push({ id: r.id, out });
+					return `\x00SCPIN_${idx}\x00`;
+				});
+			}, text);
+			for (const [idx, p] of pins.entries()) {
+				cur = cur.replace(`\x00SCPIN_${idx}\x00`, `\n\n<div data-sc-pin="status:${p.id}">${p.out}</div><!--/sc-pin-->\n\n`);
+			}
+			return cur;
+		};
+		return (items as { content: string }[]).map((i) => run(i.content.replace(/\{\{char\}\}|<bot>/gi, ch).replace(/\{\{user\}\}|<user>/gi, "Min")));
 	},
 	context_usage: ({ conversationId }) => {
 		const c = conv(conversationId as string);
-		const msgs = msgsOf(conversationId as string);
+		const msgs = msgsOf(conversationId as string).filter((m) => !(m.meta as { hidden?: boolean } | null)?.hidden);
 		const history = msgs.reduce((n, m) => n + Math.ceil(m.content.length / 1.5), 0);
 		const presetId = c.promptPresetId || "default";
-		return { used: msgs.length ? 640 + history : null, system: 640, history, historyCount: msgs.length, limit: 8192, reserved: 1024, presetId, presetName: presetId === "default" ? "기본 배치" : presetId, plugins: [], memoryRecall: null, summary: null };
+		return { used: 640 + history, system: 640, history, historyCount: msgs.length, limit: 8192, reserved: 1024, presetId, presetName: presetId === "default" ? "기본 배치" : presetId, plugins: [], memoryRecall: null, summary: null };
+	},
+	update_message_meta: ({ id, meta }) => {
+		const m = messages.find((x) => x.id === id);
+		if (m) m.meta = meta as never;
+		return null;
 	},
 	patch_conversation_meta: ({ id, patch }) => {
 		const c = conv(id);
@@ -487,6 +614,30 @@ AI: 그때 이야기를 다시 해 볼까요?`, stale: false },
 		return null;
 	},
 	get_messages: ({ conversationId }) => msgsOf(conversationId),
+	list_quick_reply_sets: () => quickReplySets,
+	upsert_quick_reply_set: ({ input }) => {
+		const id = (input.id as string | null) || uid("qr");
+		const saved = { ...input, id, scopeId: input.scope === "global" ? null : input.scopeId, createdAt: now(), updatedAt: now() };
+		quickReplySets = quickReplySets.some((s) => s.id === id) ? quickReplySets.map((s) => (s.id === id ? saved : s)) : [...quickReplySets, saved];
+		return saved;
+	},
+	delete_quick_reply_set: ({ id }) => ((quickReplySets = quickReplySets.filter((s) => s.id !== id)), null),
+	// /gen (5-E-20-5): 지시를 받아 짧은 글을 돌려줌
+	slash_generate: async ({ prompt }) => {
+		if (String(prompt).includes("천천히")) await sleep(3000);
+		// "한번실패"가 든 지시는 처음 한 번 실패 (5-E-20-6-11 다시 실행 확인용)
+		if (String(prompt).includes("한번실패") && !failedOnce.has(String(prompt))) {
+			failedOnce.add(String(prompt));
+			throw { code: "AI_PROVIDER_ERROR", category: "AI_PROVIDER", message: "가짜 공급자 오류 (한 번만)", retryable: true };
+		}
+		return {
+			text: `(가짜 AI) ${String(prompt).slice(0, 40)}에 대한 글`,
+			truncated: String(prompt).includes("잘림"),
+			prompt: { chatOptions: { temperature: 1, stream: false }, messages: [{ role: "system", content: "[가짜 맥락] 세라피나 설정·대화 기록", token: 0, images: [] }, { role: "user", content: String(prompt), token: 0, images: [] }] },
+		};
+	},
+	save_message_prompt: ({ messageId, prompt }) => ((mockPrompts[String(messageId)] = prompt), null),
+	slash_cancel: () => true,
 	append_message: ({ input }) => {
 		const c = conv(input.conversationId);
 		const m = addMsg(c, input.role, input.content, 0, input.meta ?? {});
@@ -506,14 +657,16 @@ AI: 그때 이야기를 다시 해 볼까요?`, stale: false },
 		return null;
 	},
 	get_message_prompt: ({ messageId }) => {
+		if (mockPrompts[String(messageId)]) return mockPrompts[String(messageId)];
 		const m = messages.find((m) => m.id === messageId);
 		if (!m || !(m.meta as { info?: { genStarted?: number } })?.info?.genStarted) return null;
 		return {
 			chatOptions: {},
 			messages: [
-				{ role: "system", content: "[앱 규칙] 캐릭터를 연기한다.", token: 12 },
-				{ role: "system", content: characters[0].description, token: 48 },
-				{ role: "user", content: "여기가 어디죠?", token: 6 },
+				{ role: "system", content: "[앱 규칙] 캐릭터를 연기한다.", token: 12, source: { kind: "preset", name: "Main Prompt" } },
+				{ role: "system", content: "엘도리아는 고대의 숲이다.", token: 18, source: { kind: "world_info" } },
+				{ role: "system", content: characters[0].description, token: 48, source: { kind: "character" } },
+				{ role: "user", content: "여기가 어디죠?", token: 6, source: { kind: "user_input" } },
 			],
 		};
 	},
@@ -522,6 +675,26 @@ AI: 그때 이야기를 다시 해 볼까요?`, stale: false },
 		let user: Message_Serialize | null = null;
 		const files = (attachments as string[] | undefined) ?? [];
 		if (text.trim() || files.length) user = addMsg(c, "user", text.trim(), 0, files.length ? { attachments: files } : {});
+		// 빈 보내기는 사용자 메시지 없이 새 AI 메시지 (5-E-26 — 이어 쓰기는 chat_continue)
+		const r = await generate(conversationId, onEvent);
+		const assistant = addMsg(c, "assistant", r.content, 0, { info: r.info });
+		c.updatedAt = now();
+		return { user, assistant };
+	},
+	// 이어서 응답 받기: 마지막 AI 메시지 뒤에 이어 붙인다 (없으면 새 메시지)
+	chat_continue: async ({ conversationId, onEvent }): Promise<ChatTurn_Serialize> => {
+		const c = conv(conversationId);
+		const user: Message_Serialize | null = null;
+		const last = msgsOf(conversationId).at(-1);
+		if (last?.role === "assistant" && !(last.meta as { hidden?: boolean } | null)?.hidden) {
+			const r = await generate(conversationId, onEvent);
+			const meta = { ...((last.meta as Record<string, unknown>) ?? {}), info: r.info } as Record<string, any>; // eslint-disable-line @typescript-eslint/no-explicit-any
+			const content = last.content + r.content;
+			if (meta.swipes?.length) meta.swipes = meta.swipes.map((s: { content: string }, i: number) => (i === (meta.swipeId ?? 0) ? { ...s, content } : s));
+			Object.assign(last, { content, meta, updatedAt: now() });
+			c.updatedAt = now();
+			return { user: null, assistant: { ...last } };
+		}
 		const r = await generate(conversationId, onEvent);
 		const assistant = addMsg(c, "assistant", r.content, 0, { info: r.info });
 		c.updatedAt = now();

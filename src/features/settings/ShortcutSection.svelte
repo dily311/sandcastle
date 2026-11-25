@@ -1,4 +1,5 @@
 <script lang="ts">
+	import { _ } from "svelte-i18n";
 	import { appSetting } from "$shared/stores/appSetting.svelte";
 	import Section from "./Section.svelte";
 	import Group from "./Group.svelte";
@@ -7,24 +8,24 @@
 	// 지금 앱에서 실제로 동작하는 키만 보여줌
 	const groups = $derived([
 		{
-			title: "이동",
+			title: $_("settings.shortcutSec.navGroup"),
 			items: [
-				{ label: "뒤로 / 앞으로", keys: [["Alt", "←"], ["Alt", "→"]] },
-				{ label: "뒤로 / 앞으로 (마우스)", keys: [["마우스 4"], ["마우스 5"]] },
+				{ label: $_("settings.shortcutSec.backForward"), keys: [["Alt", "←"], ["Alt", "→"]] },
+				{ label: $_("settings.shortcutSec.backForwardMouse"), keys: [["Mouse 4"], ["Mouse 5"]] },
 			],
 		},
 		{
-			title: "대화",
+			title: $_("settings.shortcutSec.chatGroup"),
 			items: [
-				{ label: "보내기", keys: [appSetting.sendOnEnter ? ["Enter"] : ["Ctrl", "Enter"]] },
-				{ label: "줄바꿈", keys: [["Shift", "Enter"]] },
-				{ label: "편집 취소 / 메뉴 닫기", keys: [["Esc"]] },
+				{ label: $_("settings.shortcutSec.send"), keys: [appSetting.sendOnEnter ? ["Enter"] : ["Ctrl", "Enter"]] },
+				{ label: $_("settings.shortcutSec.newline"), keys: [["Shift", "Enter"]] },
+				{ label: $_("settings.shortcutSec.cancelClose"), keys: [["Esc"]] },
 			],
 		},
 	]);
 </script>
 
-<Section title="단축키" lead="지금 쓸 수 있는 키 목록. 키 바꾸기는 준비 중">
+<Section title={$_("settings.shortcutSec.title")} lead={$_("settings.shortcutSec.lead")}>
 	{#each groups as g (g.title)}
 		<Group title={g.title}>
 			{#each g.items as it (it.label)}

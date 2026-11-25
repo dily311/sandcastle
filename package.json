@@ -1,7 +1,7 @@
 {
   "name": "sandcastle",
   "private": true,
-  "version": "0.3.4",
+  "version": "0.4.0",
   "type": "module",
   "scripts": {
     "dev": "vite",
@@ -33,6 +33,7 @@
     "@tauri-apps/plugin-store": "^2.5.0",
     "@tauri-apps/plugin-window-state": "^2.5.0",
     "clsx": "^2.1.1",
+    "marked": "15.0.12",
     "pixi.js": "^8.20.1",
     "simple-icons": "^15.22.0",
     "svelte-i18n": "^4.0.1",

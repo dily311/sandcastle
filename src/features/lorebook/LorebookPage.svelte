@@ -1,8 +1,10 @@
 <script lang="ts">
+	import { jobs } from "$shared/stores/jobs.svelte";
+	import { _ } from "svelte-i18n";
 	import { onMount } from "svelte";
 	// 로어북 화면: 책 목록 → 책 하나(이름·설명, 쓰는 곳, 항목 편집)
-	import { BookOpen, Check, Download, Ellipsis, Funnel, ListFilter, Pencil, Plus, Search, Trash2, Upload } from "@lucide/svelte";
-	import { Avatar, Badge, Button, ContextMenu, EmptyState, ExportSplit, IconButton, Input, ItemCard, ListToolbar, SelectBar, SplitButton, Spinner, type MenuItem } from "$shared/ui";
+	import { BookOpen, Check, ChevronRight, Download, Ellipsis, Funnel, Pencil, Plus, Search, Trash2, Upload } from "@lucide/svelte";
+	import { Avatar, Badge, Button, ContextMenu, EmptyState, ExportSplit, IconButton, Input, ListToolbar, SelectBar, SplitButton, Spinner, type MenuItem } from "$shared/ui";
 	import { nav } from "$app/nav.svelte";
 	import { drops, extOf, storeFile } from "$app/drop.svelte";
 	import { JSON_FILES, pickFiles } from "$shared/ipc/dialog";
@@ -41,15 +43,15 @@
 		return u.characters.length + u.personas.length + u.conversations.length > 0;
 	};
 	const BOOK_FILTERS = $derived([
-		{ value: "all", label: `전부 ${lorebook.books.length}` },
-		{ value: "used", label: "쓰이는 것" },
-		{ value: "unused", label: "안 쓰이는 것" },
+		{ value: "all", label: $_("lorebook.filterAll", { values: { count: lorebook.books.length } }) },
+		{ value: "used", label: $_("lorebook.filterUsed") },
+		{ value: "unused", label: $_("lorebook.filterUnused") },
 	]);
-	const BOOK_SORTS = [
-		{ value: "name", label: "이름 순" },
-		{ value: "recent", label: "최근 바뀐 순" },
-		{ value: "size", label: "항목 많은 순" },
-	];
+	const BOOK_SORTS = $derived([
+		{ value: "name", label: $_("lorebook.sortName") },
+		{ value: "recent", label: $_("lorebook.sortRecent") },
+		{ value: "size", label: $_("lorebook.sortSize") },
+	]);
 	const shown = $derived.by(() => {
 		const q = query.trim().toLowerCase();
 		const by =
@@ -72,15 +74,17 @@
 		const ids = [...picked];
 		if (!ids.length) return;
 		const n = ids.reduce((s, id) => s + (lorebook.counts[id]?.entries ?? 0), 0);
-		if (!(await confirmAction({ title: "로어북 삭제", message: `로어북 ${ids.length}개와 항목 ${n}개를 휴지통으로 옮김. 쓰던 캐릭터·페르소나·대화에서도 빠짐. 설정 > 데이터 > 휴지통에서 되살릴 수 있음`, confirmLabel: `${ids.length}개 삭제`, danger: true }))) return;
-		for (const id of ids) await call(commands.deleteWorldinfoBook(id), { source: "lorebook" });
+		if (!(await confirmAction({ title: $_("lorebook.deleteTitle"), message: $_("lorebook.deleteManyMsg", { values: { books: ids.length, entries: n } }), confirmLabel: $_("lorebook.deleteCountBtn", { values: { count: ids.length } }), danger: true }))) return;
+		selecting = false;
+		// 파일 작업 대기열로 하나씩 (5-E-28). 요약 알림은 대기열이 한 번
+		await Promise.allSettled(
+			ids.map((id) => jobs.run(lorebook.book(id)?.name ?? id, () => call(commands.deleteWorldinfoBook(id), { source: "lorebook" }), { group: $_("lorebook.deleteJobGroup") })),
+		);
 		await lorebook.load();
 		await library.load();
-		selecting = false;
-		toasts.success(`로어북 ${ids.length}개를 휴지통으로 옮김`);
 	}
 	async function create() {
-		const name = await promptText({ title: "새 로어북", message: "세계관·장소·인물 설정을 모아 두는 책", input: { value: "", placeholder: "예: 엘다리아 대륙" }, confirmLabel: "만들기" });
+		const name = await promptText({ title: $_("lorebook.newTitle"), message: $_("lorebook.newMsg"), input: { value: "", placeholder: $_("lorebook.newPlaceholder") }, confirmLabel: $_("lorebook.createBtn") });
 		if (!name?.trim()) return;
 		const b = await lorebook.create(name.trim());
 		open(b.id);
@@ -90,8 +94,8 @@
 	}
 	$effect(() =>
 		drops.register({
-			label: "로어북 가져오기",
-			hint: "SillyTavern 월드인포 JSON",
+			label: $_("lorebook.dropLabel"),
+			hint: $_("lorebook.dropHint"),
 			accept: (f) => extOf(f) === "json",
 			ondrop: async (files) => {
 				let last: Book | null = null;
@@ -109,10 +113,10 @@
 		menu = {
 			at: e.type === "contextmenu" ? { x: e.clientX, y: e.clientY } : { x: r.right, y: r.bottom + 4, align: "end" },
 			items: [
-				{ label: "이름 바꾸기", icon: Pencil, onselect: () => rename(b) },
-				{ label: "내보내기…", icon: Download, onselect: () => lorebook.exportMenu(b) },
+				{ label: $_("lorebook.renameMenu"), icon: Pencil, onselect: () => rename(b) },
+				{ label: $_("lorebook.exportMenu"), icon: Download, onselect: () => lorebook.exportMenu(b) },
 				{
-					label: "삭제",
+					label: $_("common.delete"),
 					icon: Trash2,
 					danger: true,
 					separator: true,
@@ -124,7 +128,7 @@
 		};
 	}
 	async function rename(b: Book) {
-		const name = await promptText({ title: "이름 바꾸기", input: { value: b.name }, confirmLabel: "바꾸기" });
+		const name = await promptText({ title: $_("lorebook.renameMenu"), input: { value: b.name }, confirmLabel: $_("lorebook.renameConfirm") });
 		if (name?.trim() && name.trim() !== b.name) await lorebook.update(b.id, { name: name.trim(), description: b.description });
 	}
 
@@ -147,24 +151,31 @@
 	const entries = $derived(bookId ? (lorebook.entries[bookId] ?? null) : null);
 
 	let filter = $state<"all" | "on" | "off" | "constant">("all");
+	/** 분류로 거르기 (5-F-1). null = 전부 */
+	let categoryFilter = $state<string | null>(null);
 	let entryQuery = $state("");
 	const shownEntries = $derived(
 		(entries ?? []).filter((e) => {
 			if (filter === "on" && !e.enabled) return false;
 			if (filter === "off" && e.enabled) return false;
 			if (filter === "constant" && !e.constant) return false;
+			if (categoryFilter !== null && e.category !== categoryFilter) return false;
 			const q = entryQuery.trim().toLowerCase();
 			return !q || entryTitle(e).toLowerCase().includes(q) || e.keys.some((k) => k.toLowerCase().includes(q)) || e.content.toLowerCase().includes(q);
 		}),
 	);
-	const FILTERS = [
-		{ id: "all", label: "전체" },
-		{ id: "on", label: "켜진 것만" },
-		{ id: "off", label: "꺼진 것만" },
-		{ id: "constant", label: "항상 넣는 것만" },
-	] as const;
+	const FILTERS = $derived([
+		{ id: "all", label: $_("lorebook.entryFilterAll") },
+		{ id: "on", label: $_("lorebook.entryFilterOn") },
+		{ id: "off", label: $_("lorebook.entryFilterOff") },
+		{ id: "constant", label: $_("lorebook.entryFilterConstant") },
+	] as const);
 	let filterMenu = $state<{ x: number; y: number } | null>(null);
-	const filterItems = $derived<MenuItem[]>(FILTERS.map((f) => ({ label: f.label, icon: filter === f.id ? Check : undefined, onselect: () => (filter = f.id) })));
+	const usedCategories = $derived([...new Set((entries ?? []).map((e) => e.category).filter(Boolean))].sort((a, b) => a.localeCompare(b, "ko")));
+	const filterItems = $derived<MenuItem[]>([
+		...FILTERS.map((f) => ({ label: f.label, icon: filter === f.id && categoryFilter === null ? Check : undefined, onselect: () => ((filter = f.id), (categoryFilter = null)) })),
+		...usedCategories.map((c, i) => ({ label: $_("lorebook.categoryFilter", { values: { cat: c } }), separator: i === 0, icon: categoryFilter === c ? Check : undefined, onselect: () => (categoryFilter = c) })),
+	]);
 	function openFilter(e: MouseEvent) {
 		const r = (e.currentTarget as HTMLElement).getBoundingClientRect();
 		filterMenu = { x: r.left, y: r.bottom + 4 };
@@ -173,13 +184,14 @@
 	// 끌어서 순서 바꾸기 (검색·필터가 없을 때만: 보이는 순서 = 전체 순서)
 	const sort = new Sortable((from, to) => bookId && lorebook.reorder(bookId, from, to));
 	$effect(() => {
-		sort.enabled = filter === "all" && !entryQuery.trim() && openId === null;
+		sort.enabled = filter === "all" && categoryFilter === null && !entryQuery.trim() && openId === null;
 	});
 
 	let openId = $state<string | null>(null);
 	function addEntry() {
 		if (!bookId) return;
 		filter = "all";
+		categoryFilter = null;
 		entryQuery = "";
 		openId = lorebook.addDraft(bookId).id;
 	}
@@ -189,35 +201,37 @@
 	<div class="center"><Spinner /></div>
 {:else if bookId && !book}
 	<div class="center">
-		<EmptyState title="로어북을 찾을 수 없음" description="지워졌을 수 있음">
-			{#snippet action()}<Button onclick={() => open()}>목록으로</Button>{/snippet}
+		<EmptyState title={$_("lorebook.notFoundTitle")} description={$_("lorebook.notFoundDesc")}>
+			{#snippet action()}<Button onclick={() => open()}>{$_("lorebook.toList")}</Button>{/snippet}
 		</EmptyState>
 	</div>
 {:else if book}
 	<div class="page">
 		<header class="book-head">
 			<div class="info">
-				<input class="name" bind:value={name} onblur={saveInfo} onkeydown={(e) => e.key === "Enter" && (e.currentTarget as HTMLInputElement).blur()} aria-label="로어북 이름" />
+				<input class="name" bind:value={name} onblur={saveInfo} onkeydown={(e) => e.key === "Enter" && (e.currentTarget as HTMLInputElement).blur()} aria-label={$_("lorebook.bookNameAria")} />
+				<input class="desc-input" bind:value={description} onblur={saveInfo} onkeydown={(e) => e.key === "Enter" && (e.currentTarget as HTMLInputElement).blur()} placeholder={$_("lorebook.bookDescPlaceholder")} aria-label={$_("lorebook.bookDescAria")} />
 			</div>
 			<div class="acts">
-				<ExportSplit formats={BOOK_FORMATS} storageKey="sc.export.lorebook" size="sm" variant="secondary" label="내보내기" onexport={(f) => lorebook.export(book, f as BookFormat)} />
-				<IconButton label="로어북 메뉴" size="sm" onclick={(e) => bookMenu(e, book)}><Ellipsis /></IconButton>
+				<ExportSplit formats={BOOK_FORMATS} storageKey="sc.export.lorebook" size="sm" variant="secondary" label={$_("lorebook.exportBtn")} onexport={(f) => lorebook.export(book, f as BookFormat)} />
+				<IconButton label={$_("lorebook.bookMenuAria")} size="sm" onclick={(e) => bookMenu(e, book)}><Ellipsis /></IconButton>
 			</div>
 		</header>
 
 		<div class="tools">
-			<Input bind:value={entryQuery} placeholder="제목·키워드·내용 검색" aria-label="항목 검색" type="search">
+			<Input bind:value={entryQuery} placeholder={$_("lorebook.entrySearchPlaceholder")} aria-label={$_("lorebook.entrySearchAria")} type="search">
 				{#snippet leading()}<Search />{/snippet}
 			</Input>
 			<span class="filter" class:on={filter !== "all"}>
-				<IconButton label="필터: {FILTERS.find((f) => f.id === filter)?.label}" active={filter !== "all"} aria-haspopup="menu" onclick={openFilter}><Funnel /></IconButton>
-				{#if filter !== "all"}<button class="filter-chip" title="필터 풀기" onclick={() => (filter = "all")}>{FILTERS.find((f) => f.id === filter)?.label} ×</button>{/if}
+				<IconButton label={$_("lorebook.filterAria", { values: { label: FILTERS.find((f) => f.id === filter)?.label ?? "" } })} active={filter !== "all"} aria-haspopup="menu" onclick={openFilter}><Funnel /></IconButton>
+				{#if filter !== "all"}<button class="filter-chip" title={$_("lorebook.clearFilterTitle")} onclick={() => (filter = "all")}>{FILTERS.find((f) => f.id === filter)?.label} ×</button>{/if}
+				{#if categoryFilter !== null}<button class="filter-chip" title={$_("lorebook.clearCatFilterTitle")} onclick={() => (categoryFilter = null)}>{categoryFilter} ×</button>{/if}
 			</span>
-			<ContextMenu at={filterMenu} label="항목 필터링" items={filterItems} onclose={() => (filterMenu = null)} />
-			<Button variant="primary" onclick={addEntry}>{#snippet icon()}<Plus />{/snippet}항목 추가</Button>
+			<ContextMenu at={filterMenu} label={$_("lorebook.entryFilterMenuAria")} items={filterItems} onclose={() => (filterMenu = null)} />
+			<Button variant="primary" onclick={addEntry}>{#snippet icon()}<Plus />{/snippet}{$_("lorebook.addEntryBtn")}</Button>
 		</div>
 		<p class="count faint small">
-			항목 {lorebook.counts[book.id]?.entries ?? 0}개 · 켜짐 {lorebook.counts[book.id]?.enabled ?? 0}개 · 우선순위 높은 것부터 (넣을 자리가 모자라면 높은 것부터 들어감){sort.enabled ? " · 끌어서 순서(우선순위) 바꾸기" : ""}
+			{$_("lorebook.entryStats", { values: { entries: lorebook.counts[book.id]?.entries ?? 0, enabled: lorebook.counts[book.id]?.enabled ?? 0 } })}{sort.enabled ? $_("lorebook.entryDragHint") : ""}
 		</p>
 
 		{#if !entries}
@@ -238,44 +252,80 @@
 				{/each}
 			</ul>
 		{:else}
-			<EmptyState title={entries.length ? "맞는 항목 없음" : "항목 없음"} description={entries.length ? "검색어나 필터를 변경하세요." : "'항목 추가'로 장소·인물·규칙을 하나씩 적음"} />
+			<EmptyState title={entries.length ? $_("lorebook.noMatchEntryTitle") : $_("lorebook.noEntryTitle")} description={entries.length ? $_("lorebook.noMatchEntryDesc") : $_("lorebook.noEntryDesc")} />
 		{/if}
 	</div>
 {:else}
 	<div class="page">
 		<header class="head">
-			<h1>로어북</h1>
-			<ListToolbar bind:query bind:filter={bookFilter} bind:sort={bookSort} bind:selecting placeholder="이름·설명" filters={BOOK_FILTERS} sorts={BOOK_SORTS} canSelect={!!lorebook.books.length}>
-				<SplitButton label="새로 만들기" onclick={create} menuLabel="로어북 가져오기" items={[{ label: "파일에서 가져오기 (JSON)", icon: Upload, onselect: importFiles }]} />
+			<div class="title-wrap">
+				<h1>{$_("nav.lorebook")}</h1>
+				<span class="head-count">{lorebook.books.length}{$_("common.unitItem")}</span>
+			</div>
+			<ListToolbar bind:query bind:filter={bookFilter} bind:sort={bookSort} bind:selecting placeholder={$_("lorebook.searchPlaceholder")} filters={BOOK_FILTERS} sorts={BOOK_SORTS} canSelect={!!lorebook.books.length}>
+				<SplitButton label={$_("common.create")} onclick={create} menuLabel={$_("common.import")} items={[{ label: $_("lorebook.importJson"), icon: Upload, onselect: importFiles }]} />
 			</ListToolbar>
 		</header>
 		{#if selecting}<SelectBar count={picked.size} onall={() => (picked = new Set(shown.map((b) => b.id)))} ondelete={removePicked} />{/if}
 		{#if lorebook.books.length}
-			<div class="grid">
+			<ul class="book-list">
 				{#each shown as b (b.id)}
 					{@const u = lorebook.usage(b.id)}
 					{@const n = lorebook.counts[b.id]}
-					<ItemCard
-						title={b.name}
-						desc={b.description || "설명 없음"}
-						meta="항목 {n?.entries ?? 0}개{n && n.enabled !== n.entries ? ` (켜짐 ${n.enabled})` : ''} · {relative(b.updatedAt)}"
-						{selecting}
-						selected={picked.has(b.id)}
-						onclick={() => (selecting ? pickBook(b.id) : open(b.id))}
-						oncontextmenu={(e) => bookMenu(e, b)}
-					>
-						{#snippet fallback()}<BookOpen />{/snippet}
-						{#snippet menu()}<IconButton label="{b.name} 메뉴" size="sm" variant="ghost" onclick={(e) => bookMenu(e, b)}><Ellipsis /></IconButton>{/snippet}
-						{#snippet badges()}
-							{#each [...u.characters, ...u.personas].slice(0, 4) as w (w.id)}<Badge><Avatar name={w.name} src={fileSrc(w.avatar)} color={w.color || null} size={14} />{w.name}</Badge>{/each}
-						{/snippet}
-					</ItemCard>
+					{@const users = [...u.characters, ...u.personas]}
+					{@const selected = picked.has(b.id)}
+					<li>
+						<div
+							class="book-row"
+							class:selected
+							role="button"
+							tabindex="0"
+							aria-pressed={selecting ? selected : undefined}
+							aria-label={b.name}
+							onclick={() => (selecting ? pickBook(b.id) : open(b.id))}
+							onkeydown={(e) => {
+								if (e.target !== e.currentTarget) return;
+								if (e.key === "Enter" || e.key === " ") {
+									e.preventDefault();
+									if (selecting) pickBook(b.id);
+									else open(b.id);
+								}
+							}}
+							oncontextmenu={(e) => bookMenu(e, b)}
+						>
+							{#if selecting}
+								<span class="book-check" aria-hidden="true">{selected ? "✓" : ""}</span>
+							{:else}
+								<span class="book-icon" aria-hidden="true"><BookOpen /></span>
+							{/if}
+							<div class="book-main">
+								<b class="book-title">{b.name}</b>
+								{#if b.description}<p class="book-desc">{b.description}</p>{/if}
+								{#if users.length}
+									<div class="book-badges">
+										{#each users.slice(0, 5) as w (w.id)}
+											<Badge><Avatar name={w.name} src={fileSrc(w.avatar)} fit={w.avatarFit} color={w.color || null} size={14} />{w.name}</Badge>
+										{/each}
+										{#if users.length > 5}<Badge>+{users.length - 5}</Badge>{/if}
+									</div>
+								{/if}
+							</div>
+							<span class="book-meta">{$_("lorebook.bookMeta", { values: { entries: n?.entries ?? 0 } })}{n && n.enabled !== n.entries ? $_("lorebook.bookMetaEnabled", { values: { enabled: n.enabled } }) : ""} · {relative(b.updatedAt)}</span>
+							{#if !selecting}
+								<!-- svelte-ignore a11y_click_events_have_key_events, a11y_no_static_element_interactions -->
+								<span class="book-actions" onclick={(e) => e.stopPropagation()}>
+									<IconButton label={$_("lorebook.itemMenuAria", { values: { name: b.name } })} size="sm" variant="ghost" onclick={(e) => bookMenu(e, b)}><Ellipsis /></IconButton>
+									<span class="book-chev" aria-hidden="true"><ChevronRight /></span>
+								</span>
+							{/if}
+						</div>
+					</li>
 				{:else}
-					<p class="faint">맞는 로어북 없음</p>
+					<li class="faint empty-row">{$_("lorebook.noMatchBook")}</li>
 				{/each}
-			</div>
+			</ul>
 		{:else}
-			<EmptyState title="로어북 없음" description="새로 만들거나 SillyTavern 월드인포(.json)를 가져옴. 파일을 끌어다 놓아도 됨">
+			<EmptyState title={$_("lorebook.emptyTitle")} description={$_("lorebook.emptyDesc")}>
 				{#snippet icon()}<BookOpen />{/snippet}
 			</EmptyState>
 		{/if}
@@ -283,7 +333,7 @@
 {/if}
 
 {#if menu}
-	<ContextMenu at={menu.at} items={menu.items} label="로어북 메뉴" onclose={() => (menu = null)} />
+	<ContextMenu at={menu.at} items={menu.items} label={$_("lorebook.bookMenuAria")} onclose={() => (menu = null)} />
 {/if}
 
 <style>
@@ -315,21 +365,50 @@
 		max-width: var(--page-wide);
 		height: 100%;
 		margin: 0 auto;
-		padding: var(--space-6) var(--space-6) var(--space-8);
+		padding: var(--space-6) var(--space-8) var(--space-8);
 		overflow: auto;
 	}
 	.head,
 	.book-head {
 		display: flex;
-		align-items: flex-start;
+		align-items: center;
 		justify-content: space-between;
 		gap: var(--space-4);
 		/* 좁은 화면: 도구 줄이 제목 아래로 내려감 */
 		flex-wrap: wrap;
 	}
-	h1 {
-		font-size: var(--text-xl);
+	.title-wrap {
+		display: flex;
+		align-items: baseline;
+		gap: var(--space-2);
+	}
+	.head h1 {
 		white-space: nowrap;
+	}
+	.head-count {
+		color: var(--text-faint);
+		font-size: var(--text-sm);
+		font-variant-numeric: tabular-nums;
+	}
+	.desc-input {
+		width: 100%;
+		padding: 2px 6px;
+		margin-left: -6px;
+		border: 1px solid transparent;
+		border-radius: var(--radius-xs);
+		background: transparent;
+		color: var(--text-muted);
+		font: inherit;
+		font-size: var(--text-sm);
+	}
+	.desc-input:hover {
+		border-color: var(--border);
+	}
+	.desc-input:focus {
+		outline: none;
+		border-color: var(--accent);
+		background: var(--surface);
+		color: var(--text);
 	}
 	.acts {
 		display: flex;
@@ -337,10 +416,128 @@
 		gap: var(--space-2);
 		flex: none;
 	}
-	.grid {
-		display: grid;
-		grid-template-columns: repeat(auto-fill, minmax(min(220px, 45%), 1fr));
+	.book-list {
+		list-style: none;
+		margin: 0;
+		padding: 0;
+		display: flex;
+		flex-direction: column;
+		border: 1px solid var(--border);
+		border-radius: var(--radius-lg);
+		background: var(--surface);
+		overflow: auto;
+	}
+	.book-list li + li {
+		border-top: 1px solid var(--border);
+	}
+	.book-row {
+		display: flex;
+		align-items: center;
 		gap: var(--space-3);
+		padding: var(--space-3) var(--space-4);
+		cursor: pointer;
+		transition: background var(--duration-fast) var(--ease);
+	}
+	.book-row:hover {
+		background: var(--surface-hover);
+	}
+	.book-row:focus-visible {
+		outline: 2px solid var(--focus-ring);
+		outline-offset: -2px;
+	}
+	.book-row.selected {
+		background: var(--accent-soft);
+	}
+	.book-icon {
+		display: grid;
+		place-items: center;
+		width: 36px;
+		height: 36px;
+		flex: none;
+		border-radius: var(--radius-md);
+		background: var(--surface-2);
+		color: var(--text-muted);
+	}
+	.book-icon :global(svg) {
+		width: 18px;
+		height: 18px;
+	}
+	.book-check {
+		display: grid;
+		place-items: center;
+		width: 22px;
+		height: 22px;
+		flex: none;
+		border: 2px solid var(--border-strong);
+		border-radius: 6px;
+		background: var(--surface);
+		color: #fff;
+		font-size: 13px;
+		font-weight: 700;
+	}
+	.book-row.selected .book-check {
+		border-color: var(--accent);
+		background: var(--accent);
+	}
+	.book-main {
+		flex: 1;
+		min-width: 0;
+		display: flex;
+		flex-direction: column;
+		gap: 4px;
+	}
+	.book-title-row {
+		display: flex;
+		align-items: baseline;
+		justify-content: space-between;
+		gap: var(--space-3);
+		flex-wrap: wrap;
+	}
+	.book-title {
+		font-size: var(--text-md);
+		font-weight: 600;
+		color: var(--text);
+		overflow: hidden;
+		text-overflow: ellipsis;
+		white-space: nowrap;
+	}
+	.book-meta {
+		font-size: var(--text-xs);
+		color: var(--text-faint);
+		white-space: nowrap;
+	}
+	.book-desc {
+		margin: 0;
+		font-size: var(--text-sm);
+		color: var(--text-muted);
+		overflow: hidden;
+		text-overflow: ellipsis;
+		white-space: nowrap;
+	}
+	.book-badges {
+		display: flex;
+		flex-wrap: wrap;
+		gap: 4px;
+		margin-top: 2px;
+	}
+	.book-actions {
+		display: flex;
+		align-items: center;
+		gap: var(--space-1);
+		flex: none;
+	}
+	.book-chev {
+		display: grid;
+		place-items: center;
+		color: var(--text-faint);
+	}
+	.book-chev :global(svg) {
+		width: 16px;
+		height: 16px;
+	}
+	.empty-row {
+		padding: var(--space-6);
+		text-align: center;
 	}
 	.info {
 		display: flex;

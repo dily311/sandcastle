@@ -143,9 +143,9 @@ async fn conversation_model_follows_its_api_and_is_copied_on_branch() {
     // 분기·복제는 모델도 가져감
     let b = ui::copy_conversation(&pool, &c, "복제", None).await.unwrap();
     assert_eq!(model_of(b).await.as_deref(), Some("my-model"));
-    // API를 바꾸면 초기화 (보낸 모델이 있어도 다른 공급자의 이름일 수 있으므로)
+    // API를 바꿔도 모델은 독립적으로 유지된다
     ui::set_options(&pool, &c, &opts(Some("a2"), Some("my-model"))).await.unwrap();
-    assert_eq!(model_of(c.clone()).await, None);
+    assert_eq!(model_of(c.clone()).await.as_deref(), Some("my-model"));
     // 빈 이름은 NULL
     ui::set_options(&pool, &c, &opts(Some("a2"), Some("  "))).await.unwrap();
     assert_eq!(model_of(c).await, None);
@@ -188,6 +188,7 @@ async fn persona_world_info_and_avatar_are_saved() {
     }
     let input = |books: Vec<&str>| crate::models::conversation::PersonaInput {
         name: "민".into(),
+        alias: None,
         avatar: None,
         description: "대학생".into(),
         world_info_ids: books.into_iter().map(String::from).collect(),
@@ -316,4 +317,194 @@ async fn conversation_meta_patch_merges_and_removes() {
     assert_eq!(meta["branch"]["parentId"], "p1");
     assert_eq!(meta["memory"], "열쇠를 잃어버림");
     assert!(meta.get("authorNote").is_none());
+}
+
+/// 대화 옵션 고르는 순서 (ADR-028, 5-E-29-1): 대화(자물쇠) > 캐릭터 기본 > 시스템 기본(사이드바 전역)
+#[tokio::test]
+async fn conversation_persona_falls_back_to_character_then_global() {
+    let pool = pool().await;
+    for id in ["p-char", "p-mine", "p-global"] {
+        sqlx::query("INSERT INTO personas (id, name, created_at, updated_at) VALUES (?, ?, 0, 0)")
+            .bind(id)
+            .bind(id)
+            .execute(&pool)
+            .await
+            .unwrap();
+    }
+    sqlx::query("UPDATE conv_settings SET default_persona_id = 'p-global' WHERE id = 1")
+        .execute(&pool)
+        .await
+        .unwrap();
+    let id = new_conv(&pool).await;
+    // 빈 페르소나로 저장 = 풀림 (FK라 NULL로 들어간다)
+    let opts = |p: &str| ConversationOptions {
+        persona_id: p.into(),
+        prompt_preset_id: None,
+        api_profile_id: None,
+        model: None,
+    };
+    ui::set_options(&pool, &id, &opts("")).await.unwrap();
+    let c = conv::get_conversation(&pool, &id).await.unwrap();
+    assert_eq!(c.persona_id, "");
+    assert_eq!(
+        conv::resolve_conv_persona(&pool, &c.persona_id, &c.character_id).await,
+        "p-global",
+        "캐릭터 기본이 없으면 전역"
+    );
+    sqlx::query("UPDATE characters SET default_persona_id = 'p-char' WHERE id = 'c1'")
+        .execute(&pool)
+        .await
+        .unwrap();
+    assert_eq!(
+        conv::resolve_conv_persona(&pool, &c.persona_id, &c.character_id).await,
+        "p-char",
+        "캐릭터 기본이 전역보다 앞"
+    );
+    ui::set_options(&pool, &id, &opts("p-mine")).await.unwrap();
+    let c = conv::get_conversation(&pool, &id).await.unwrap();
+    assert_eq!(
+        conv::resolve_conv_persona(&pool, &c.persona_id, &c.character_id).await,
+        "p-mine",
+        "잠근 대화의 값이 맨 앞"
+    );
+    // 캐릭터가 지워진 대화는 전역
+    assert_eq!(conv::resolve_conv_persona(&pool, "", "").await, "p-global");
+}
+
+/// 마이그레이션 008: 일반 대화의 페르소나가 지금의 기본과 같으면 비우고(풀림), 다르면 남긴다(잠김). 폰 대화는 그대로
+#[tokio::test]
+async fn migration_008_unlocks_only_personas_equal_to_the_default() {
+    let pool = pool().await;
+    for id in ["p-char", "p-other"] {
+        sqlx::query("INSERT INTO personas (id, name, created_at, updated_at) VALUES (?, ?, 0, 0)")
+            .bind(id)
+            .bind(id)
+            .execute(&pool)
+            .await
+            .unwrap();
+    }
+    sqlx::query("INSERT INTO characters (id, name, default_persona_id, created_at, updated_at) VALUES ('c2', 'Bea', 'p-char', 0, 0)")
+        .execute(&pool)
+        .await
+        .unwrap();
+    // (id, 캐릭터, 페르소나, 모드)
+    let rows = [
+        ("a", "c1", "default", "chat"),  // 캐릭터 기본 없음 → 전역(default)과 같음 → 비움
+        ("b", "c2", "p-char", "chat"),   // 캐릭터 기본과 같음 → 비움
+        ("c", "c2", "p-other", "chat"),  // 일부러 고름 → 남김
+        ("d", "c1", "default", "phone"), // 폰 주인 → 그대로
+    ];
+    for (id, ch, p, mode) in rows {
+        sqlx::query("INSERT INTO conversations (id, title, character_id, persona_id, mode, created_at, updated_at) VALUES (?, 't', ?, ?, ?, 0, 100)")
+            .bind(id)
+            .bind(ch)
+            .bind(p)
+            .bind(mode)
+            .execute(&pool)
+            .await
+            .unwrap();
+    }
+    sqlx::raw_sql(include_str!("migrations/008_conversation_persona_follows_default.sql"))
+        .execute(&pool)
+        .await
+        .unwrap();
+    let got: Vec<(String, Option<String>, i64)> =
+        sqlx::query_as("SELECT id, persona_id, updated_at FROM conversations WHERE id IN ('a','b','c','d') ORDER BY id")
+            .fetch_all(&pool)
+            .await
+            .unwrap();
+    assert_eq!(
+        got.iter().map(|(i, p, _)| (i.as_str(), p.as_deref())).collect::<Vec<_>>(),
+        vec![("a", None), ("b", None), ("c", Some("p-other")), ("d", Some("default"))]
+    );
+    // 최근 대화 순서가 바뀌지 않게 updated_at은 1만 올린다 (touch 트리거가 지금 시각으로 올리지 않음)
+    assert_eq!(got[0].2, 101);
+    assert_eq!(got[2].2, 100);
+}
+
+/// 캐릭터 변수 정의 저장·읽기 (5-F-4-3): 빈 목록은 NULL, 없는 캐릭터는 저장하지 않음
+#[tokio::test]
+async fn character_var_defs_round_trip() {
+    use crate::models::conversation::{VarDef, VarKind};
+    let pool = pool().await;
+    assert!(conv::get_character_var_defs(&pool, "c1").await.unwrap().is_empty());
+    let defs = vec![VarDef {
+        key: "호감".into(),
+        description: "아리아의 호감".into(),
+        kind: VarKind::Number,
+        default_value: Some("0".into()),
+        min: Some(0.0),
+        max: Some(10.0),
+        max_step: Some(1.0),
+        ai_read: true,
+        ai_write: false,
+    }];
+    assert!(conv::upsert_character_var_defs(&pool, "c1", &defs).await.unwrap());
+    assert_eq!(conv::get_character_var_defs(&pool, "c1").await.unwrap(), defs);
+    assert!(conv::upsert_character_var_defs(&pool, "c1", &[]).await.unwrap());
+    let raw: Option<String> = sqlx::query_scalar("SELECT var_defs FROM characters WHERE id = 'c1'")
+        .fetch_one(&pool)
+        .await
+        .unwrap();
+    assert_eq!(raw, None, "빈 목록은 NULL");
+    assert!(!conv::upsert_character_var_defs(&pool, "nope", &defs).await.unwrap());
+    assert!(conv::get_character_var_defs(&pool, "nope").await.is_err());
+}
+
+/// AI 변수 되돌리기 (5-F-4-4-2): 스와이프 넘기기 = 앞 몫 되돌리고 새 몫, 지우기 = 그 몫 되돌림, 분기 = 분기 뒤 몫을 되돌린 값
+#[tokio::test]
+async fn ai_var_changes_follow_swipes_deletes_and_branches() {
+    use crate::service::chat::vars::{branch_vars, revert_messages, swap_changes, VarChange};
+    let pool = pool().await;
+    let id = new_conv(&pool).await;
+    let vars = |c: &crate::models::conversation::Conversation| crate::service::chat::vars::current_vars(c.meta.as_ref());
+    let ch = |k: &str, from: Option<&str>, to: &str| VarChange {
+        key: k.into(),
+        from: from.map(str::to_string),
+        to: to.into(),
+    };
+    ui::patch_conversation_meta(&pool, &id, &serde_json::json!({ "variables": { "hp": "80" } }))
+        .await
+        .unwrap();
+    // 두 응답: 100→90 (첫째), 90→80 (둘째)
+    let first = vec![ch("hp", Some("100"), "90")];
+    let second = vec![ch("hp", Some("90"), "80")];
+    let mut a = msg(&id, "assistant", "첫째");
+    a.meta = Some(serde_json::json!({ "varChanges": first }));
+    let m1 = ui::push_message(&pool, a).await.unwrap();
+    let mut b = msg(&id, "assistant", "둘째");
+    b.meta = Some(serde_json::json!({ "varChanges": second }));
+    let m2 = ui::push_message(&pool, b).await.unwrap();
+
+    // 분기를 첫째에서 나누면 둘째의 몫이 되돌려진 90
+    let branch = ui::copy_conversation(&pool, &id, "분기", Some(&m1.id)).await.unwrap();
+    branch_vars(&pool, &id, &branch, m1.seq).await.unwrap();
+    assert_eq!(vars(&conv::get_conversation(&pool, &branch).await.unwrap())["hp"], "90");
+    assert_eq!(vars(&conv::get_conversation(&pool, &id).await.unwrap())["hp"], "80", "원래 대화는 그대로");
+
+    // 둘째의 다른 스와이프(90→70)로 넘김
+    let other = vec![ch("hp", Some("90"), "70")];
+    swap_changes(&pool, &id, &second, &other).await.unwrap();
+    assert_eq!(vars(&conv::get_conversation(&pool, &id).await.unwrap())["hp"], "70");
+    swap_changes(&pool, &id, &other, &second).await.unwrap();
+    assert_eq!(vars(&conv::get_conversation(&pool, &id).await.unwrap())["hp"], "80");
+
+    // 두 메시지를 지우면 뒤에서부터 되돌려 처음 값(100)
+    revert_messages(&pool, &id, &[m1, m2]).await.unwrap();
+    assert_eq!(vars(&conv::get_conversation(&pool, &id).await.unwrap())["hp"], "100");
+}
+
+#[tokio::test]
+async fn read_mode_conversation_refuses_generation() {
+    // 5-E-6-2 (ADR-031): 읽기 모드로 바꾼 대화는 보내기·다시 생성·대필·/gen이 거절된다
+    let pool = pool().await;
+    let id = new_conv(&pool).await;
+    let c = conv::get_conversation(&pool, &id).await.unwrap();
+    assert!(crate::service::chat::chat_manager::reject_read_mode(&c).is_ok());
+    assert!(ui::set_read_mode(&pool, &id, true).await.unwrap());
+    let c = conv::get_conversation(&pool, &id).await.unwrap();
+    assert!(crate::service::chat::chat_manager::reject_read_mode(&c).is_err());
+    // 읽기 화면의 "여기서 분기해 채팅하기": 새 대화는 채팅 모드로 (read_mode를 옮기지 않음)
+    let b = ui::copy_conversation(&pool, &id, "분기", None).await.unwrap();
+    assert!(!conv::get_conversation(&pool, &b).await.unwrap().read_mode);
 }

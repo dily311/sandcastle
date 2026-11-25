@@ -1,8 +1,9 @@
 <script lang="ts">
+	import { _ } from "svelte-i18n";
 	import { confirmAction } from "$shared/stores/confirm.svelte";
 	import { toasts } from "$shared/stores/toast.svelte";
 	/** 지우기 전에 앱 확인 창으로 물어봄 */
-	const ask = (message: string) => confirmAction({ title: "삭제", message, confirmLabel: "삭제", danger: true });
+	const ask = (message: string) => confirmAction({ title: $_("common.delete"), message, confirmLabel: $_("common.delete"), danger: true });
 	import type { GameTimePeriodsInput } from "$features/game/types";
 	import { Plus, Search } from "@lucide/svelte";
 	import { IconButton } from "$/shared/ui";
@@ -25,7 +26,7 @@
 		const newPeriod: GameTimePeriodsInput = {
 			id: crypto.randomUUID(),
 			gameId: gameId,
-			name: "새로운 시간대",
+			name: $_("gameEditor.newTimePeriodName"),
 			sortOrder: timePeriods.length,
 			startMinute: 0,
 			endMinute: 360,
@@ -35,7 +36,7 @@
 	}
 
 	async function handleDeleteTimePeriod(index: number) {
-		if (!await ask(`"${timePeriods[index].name}" 시간대를 삭제하시겠습니까?`)) return;
+		if (!await ask($_("gameEditor.deleteTimeConfirm", { values: { name: timePeriods[index].name } }))) return;
 		timePeriods.splice(index, 1);
 		selectedIndex = timePeriods.length > 0 ? Math.max(0, index - 1) : null;
 	}
@@ -45,10 +46,10 @@
 	<!-- 좌측: 시간대 목록 -->
 	<div class="item-list-pane">
 		<div class="pane-header">
-			<Input bind:value={searchQuery} placeholder="시간대 검색" aria-label="시간대 검색">
+			<Input bind:value={searchQuery} placeholder={$_("gameEditor.searchTime")} aria-label={$_("gameEditor.searchTime")}>
 				{#snippet leading()}<Search />{/snippet}
 			</Input>
-			<IconButton label="시간대 추가" size="md" onclick={handleAddTimePeriod}><Plus /></IconButton>
+			<IconButton label={$_("gameEditor.addTimeAria")} size="md" onclick={handleAddTimePeriod}><Plus /></IconButton>
 		</div>
 		
 		<div class="scroll-list">
@@ -57,12 +58,12 @@
 				<div role="none" class="list-item" class:active={selectedIndex === idx} onclick={() => (selectedIndex = idx)}>
 					<div class="item-info">
 						<span class="title">{tp.name}</span>
-						<span class="meta">{tp.startMinute}분 ~ {tp.endMinute}분</span>
+						<span class="meta">{$_("gameEditor.minuteRange", { values: { start: tp.startMinute, end: tp.endMinute } })}</span>
 					</div>
 					<button class="icon-del" onclick={() => handleDeleteTimePeriod(idx)}>×</button>
 				</div>
 			{:else}
-				<div class="empty-text">등록된 시간대가 없습니다.</div>
+				<div class="empty-text">{$_("gameEditor.noTimePeriods")}</div>
 			{/each}
 		</div>
 	</div>
@@ -71,32 +72,32 @@
 	<div class="item-detail-pane">
 		{#if activePeriod && selectedIndex !== null}
 			<div class="detail-header">
-				<h3>시간대 상세 편집</h3>
+				<h3>{$_("gameEditor.timeDetailHeading")}</h3>
 			</div>
-			<details class="editor-accordion" open><summary>시간대 설정</summary><div class="editor-accordion-content"><div class="form-grid">
+			<details class="editor-accordion" open><summary>{$_("gameEditor.timeSettingsAccordion")}</summary><div class="editor-accordion-content"><div class="form-grid">
 				<div class="field">
-					<label for="time_name">시간대 이름 (Name)</label>
-					<input id="time_name" type="text" bind:value={activePeriod.name} placeholder="예: 새벽, 아침, 낮, 밤" />
+					<label for="time_name">{$_("gameEditor.timeNameLabel")}</label>
+					<input id="time_name" type="text" bind:value={activePeriod.name} placeholder={$_("gameEditor.timeNamePlaceholder")} />
 				</div>
 				<div class="field-row-split">
 					<div class="field">
-						<label for="time_s_minute">시작 분 (Start Minute)</label>
+						<label for="time_s_minute">{$_("gameEditor.startMinuteLabel")}</label>
 						<input id="time_s_minute" type="number" bind:value={activePeriod.startMinute} min="0" max="1440" />
-						<span class="field-hint">하루 1440분 기준 (예: 0 = 00:00)</span>
+						<span class="field-hint">{$_("gameEditor.startMinuteHint")}</span>
 					</div>
 					<div class="field">
-						<label for="time_e_minute">종료 분 (End Minute)</label>
+						<label for="time_e_minute">{$_("gameEditor.endMinuteLabel")}</label>
 						<input id="time_e_minute" type="number" bind:value={activePeriod.endMinute} min="0" max="1440" />
-						<span class="field-hint">예: 360 = 06:00</span>
+						<span class="field-hint">{$_("gameEditor.endMinuteHint")}</span>
 					</div>
 				</div>
 				<div class="field">
-					<label for="time_sort">정렬 순서 (Sort Order)</label>
+					<label for="time_sort">{$_("gameEditor.sortOrderLabel")}</label>
 					<input id="time_sort" type="number" bind:value={activePeriod.sortOrder} />
 				</div>
 			</div></div></details>
 		{:else}
-			<div class="no-selection">왼쪽에서 시간대를 선택하거나 새로 추가하세요.</div>
+			<div class="no-selection">{$_("gameEditor.selectOrAddTime")}</div>
 		{/if}
 	</div>
 </div>

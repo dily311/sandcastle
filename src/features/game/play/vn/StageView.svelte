@@ -3,6 +3,8 @@
 	import { gameStore } from "$features/game/runtime/gameStore.svelte";
 	import { runtimeStore } from "$features/game/runtime/runtimeStore.svelte";
 	import type { AssetRef } from "$features/game/types";
+	import StageEffects from "./StageEffects.svelte";
+	import { stageFx } from "./stageFx.svelte";
 	type DisplayStanding = { emotion: string; asset: AssetRef };
 	type Props = {
 		onAdvance: () => void;
@@ -10,6 +12,14 @@
 		focusedCharacterId: string | null;
 	};
 	let { onAdvance, standingOverrides, focusedCharacterId }: Props = $props();
+	// 화면 떨림 (5-E-22): 효과가 올 때마다(키) 무대를 잠깐 흔든다. 움직임 줄이기 설정이면 하지 않음
+	let stageEl: HTMLDivElement | undefined = $state();
+	$effect(() => {
+		const shot = stageFx.shot.shake;
+		if (!shot || !stageEl || matchMedia("(prefers-reduced-motion: reduce)").matches) return;
+		const steps = [0, -8, 7, -5, 4, 0].map((x, i) => ({ transform: `translate(${x}px, ${[0, 3, -4, 2, -2, 0][i]}px)` }));
+		stageEl.animate(steps, { duration: shot.ms, easing: "ease-in-out" });
+	});
 	const standings = $derived.by(() => {
 		const inScene = Boolean(runtimeStore.currentSceneId);
 		const presentNpcIds = new Set(runtimeStore?.presentNpcs ?? []);
@@ -36,7 +46,7 @@
 	});
 </script>
 
-<div class="game-stage">
+<div class="game-stage" bind:this={stageEl}>
 	{#if runtimeStore.currentBg}
 		<button class="background-hitbox" onclick={onAdvance} aria-label="다음 대사">
 			<img class="background" src={assetUrl(runtimeStore.currentBg.path)} alt="" />
@@ -48,15 +58,19 @@
 	<div class="characters">
 		{#each standings as [characterId, standing] (characterId)}
 			{@const character = gameStore.view?.characters.find((item) => item.id === characterId)}
-			<img
-				class="character-sprite"
-				class:unfocused={focusedCharacterId && focusedCharacterId !== characterId}
-				src={assetUrl(standing.asset.path)}
-				alt={character ? `${character.name} (${standing.emotion})` : standing.emotion}
-				loading="eager"
-			/>
+			{@const motion = stageFx.motions[characterId]}
+			{#key motion?.key ?? 0}
+				<img
+					class="character-sprite {motion ? `m-${motion.name}` : ''}"
+					class:unfocused={focusedCharacterId && focusedCharacterId !== characterId}
+					src={assetUrl(standing.asset.path)}
+					alt={character ? `${character.name} (${standing.emotion})` : standing.emotion}
+					loading="eager"
+				/>
+			{/key}
 		{/each}
 	</div>
+	<StageEffects />
 </div>
 
 <style>
@@ -85,6 +99,112 @@
 		height: 100%;
 		object-fit: cover;
 	}
+	/* 캐릭터 모션 (5-E-23) */
+	.m-jump {
+		animation: m-jump 0.5s ease-out;
+	}
+	.m-bounce {
+		animation: m-jump 0.35s ease-out 2;
+	}
+	.m-shake {
+		animation: m-shake 0.45s ease-in-out;
+	}
+	.m-nod {
+		animation: m-nod 0.6s ease-in-out;
+	}
+	.m-sway {
+		animation: m-sway 1.4s ease-in-out;
+		transform-origin: bottom center;
+	}
+	.m-shrink {
+		animation: m-shrink 0.6s ease-in-out;
+		transform-origin: bottom center;
+	}
+	.m-slide_in {
+		animation: m-slide-in 0.5s ease-out;
+	}
+	.m-slide_out {
+		animation: m-slide-out 0.5s ease-in forwards;
+	}
+	@keyframes m-jump {
+		0%,
+		100% {
+			transform: translateY(0);
+		}
+		40% {
+			transform: translateY(-9%);
+		}
+	}
+	@keyframes m-shake {
+		0%,
+		100% {
+			transform: translateX(0);
+		}
+		25% {
+			transform: translateX(-3%);
+		}
+		50% {
+			transform: translateX(3%);
+		}
+		75% {
+			transform: translateX(-2%);
+		}
+	}
+	@keyframes m-nod {
+		0%,
+		60%,
+		100% {
+			transform: translateY(0);
+		}
+		30% {
+			transform: translateY(2.5%);
+		}
+		80% {
+			transform: translateY(1.5%);
+		}
+	}
+	@keyframes m-sway {
+		0%,
+		100% {
+			transform: rotate(0);
+		}
+		25% {
+			transform: rotate(-2.5deg);
+		}
+		75% {
+			transform: rotate(2.5deg);
+		}
+	}
+	@keyframes m-shrink {
+		0%,
+		100% {
+			transform: scale(1);
+		}
+		40% {
+			transform: scale(0.92);
+		}
+	}
+	@keyframes m-slide-in {
+		from {
+			transform: translateX(40%);
+			opacity: 0;
+		}
+		to {
+			transform: translateX(0);
+			opacity: 1;
+		}
+	}
+	@keyframes m-slide-out {
+		to {
+			transform: translateX(-40%);
+			opacity: 0;
+		}
+	}
+	@media (prefers-reduced-motion: reduce) {
+		.character-sprite {
+			animation: none !important;
+		}
+	}
 	.background-placeholder {
 		background: var(--game-stage-placeholder);
 	}
@@ -107,8 +227,8 @@
 	}
 	.character-sprite {
 		display: block;
-		max-width: min(42%, 440px);
-		max-height: 91%;
+		max-width: min(calc(42% * var(--vn-sprite-scale, 1)), calc(440px * var(--vn-sprite-scale, 1)));
+		max-height: calc(91% * var(--vn-sprite-scale, 1));
 		width: auto;
 		height: auto;
 		object-fit: contain;
@@ -116,7 +236,8 @@
 		filter: var(--game-character-shadow);
 		transition:
 			opacity 0.25s ease,
-			filter 0.25s ease;
+			filter 0.25s ease,
+			max-height 180ms ease;
 	}
 	.character-sprite.unfocused {
 		opacity: 0.36;

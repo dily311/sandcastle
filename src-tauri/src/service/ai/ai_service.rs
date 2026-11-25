@@ -210,6 +210,7 @@ impl AiService {
                 token: crate::service::prompt::token::count_message_tokens(&text) as i64,
                 content: text,
                 images: vec![],
+                source: Some(crate::models::ai_service::PromptSource::of("system_rules")),
             });
             ChatExtras::default()
         };
@@ -389,7 +390,31 @@ impl AiService {
             entry.error = Some(e.to_response().message);
         }
         self.record_usage(entry).await;
+        // 보낸 글·받은 글 기록 (5-E-20-6-7, 켰을 때만)
+        if super::call_log::enabled() {
+            let (finish, error) = match &result {
+                Ok(g) => (g.finish_reason.clone(), None),
+                Err(e) => (None, Some(e.to_response().message)),
+            };
+            super::call_log::record(
+                &self.db,
+                super::call_log::CallRecord {
+                    task_id: crate::task::current_task().map(|t| t.task_id),
+                    profile_id: &profile.id,
+                    model: &profile.model,
+                    prompt: &request.prompt,
+                    response: output_text,
+                    finish_reason: finish.as_deref(),
+                    error: error.as_deref(),
+                },
+            )
+            .await;
+        }
         let mut generation = result?;
+        // 실제 AI 응답을 한 번이라도 받으면 이 API 키는 연결 확인된 것으로 표시한다
+        if !profile.verified {
+            let _ = db::ai_service::set_verified(&self.db, &profile.id, true).await;
+        }
         // 출력 한도에서 잘려 인자가 끊긴 도구 호출은 실행하지 않는다 (이미 쓴 토큰은 위에서 기록됨)
         if generation.stop == StopKind::MaxTokens && generation.tool_calls.iter().any(|c| c.parse_error.is_some()) {
             return Err(super::structured::truncated("도구 호출"));

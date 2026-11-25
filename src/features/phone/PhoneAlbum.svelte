@@ -1,5 +1,7 @@
 <script lang="ts">
+	import { _ } from "svelte-i18n";
 	// 폰 사진 앱: 이 폰에서 만든 그림 — 카메라로 만든 것(앨범 = 폰 주인)과 이 폰 채팅방에서 그린 것
+	import { jobs } from "$shared/stores/jobs.svelte";
 	import { onMount } from "svelte";
 	import { ChevronLeft, Trash2, X } from "@lucide/svelte";
 	import type { GeneratedImage } from "$ipc/bindings";
@@ -28,8 +30,9 @@
 	let viewing = $state<GeneratedImage | null>(null);
 
 	async function remove(img: GeneratedImage) {
-		if (!(await confirmAction({ title: "사진 삭제", message: "이 그림 파일을 지움 (이미지 갤러리에서도 사라짐)", confirmLabel: "삭제", danger: true }))) return;
-		await call(commands.deleteGeneratedImage(img.path), { source: "phone" });
+		if (!(await confirmAction({ title: $_("phoneExtra.deletePhotoTitle"), message: $_("phoneExtra.deletePhotoMsg"), confirmLabel: $_("common.delete"), danger: true }))) return;
+		const ok = await jobs.run(img.path.split(/[\\/]/).pop() ?? $_("phoneExtra.photoFallback"), () => call(commands.deleteGeneratedImage(img.path), { source: "phone" }).then(() => true), { group: $_("phoneExtra.deletePhotoJobGroup") });
+		if (!ok) return;
 		all = all.filter((i) => i.path !== img.path);
 		viewing = null;
 	}
@@ -39,23 +42,23 @@
 	{@const v = viewing}
 	<div class="viewer">
 		<div class="vbar">
-			<button class="plain" aria-label="닫기" onclick={() => (viewing = null)}><X /></button>
+			<button class="plain" aria-label={$_("common.close")} onclick={() => (viewing = null)}><X /></button>
 			<span class="grow"></span>
-			<button class="plain" aria-label="삭제" onclick={() => remove(v)}><Trash2 /></button>
+			<button class="plain" aria-label={$_("common.delete")} onclick={() => remove(v)}><Trash2 /></button>
 		</div>
 		<img src={fileSrc(v.path)} alt={v.prompt} />
 		{#if v.prompt}<p class="cap">{v.prompt}</p>{/if}
 	</div>
 {:else}
 	<div class="app-bar">
-		<button class="plain" aria-label="뒤로" onclick={onback}><ChevronLeft /></button>
-		<h2 class="grow">사진</h2>
-		{#if oncamera}<button class="link" onclick={oncamera}>카메라</button>{/if}
+		<button class="plain" aria-label={$_("phoneExtra.backAria")} onclick={onback}><ChevronLeft /></button>
+		<h2 class="grow">{$_("phoneExtra.photosTitle")}</h2>
+		{#if oncamera}<button class="link" onclick={oncamera}>{$_("phoneExtra.cameraBtn")}</button>{/if}
 	</div>
 	{#if loading}
-		<p class="none">불러오는 중…</p>
+		<p class="none">{$_("phoneExtra.loading")}</p>
 	{:else if !photos.length}
-		<p class="none">아직 사진 없음<br />카메라로 찍거나 채팅방에서 '이 장면 그리기'를 쓰면 여기 모임</p>
+		<p class="none">{$_("phoneExtra.noPhotosLine1")}<br />{$_("phoneExtra.noPhotosLine2")}</p>
 	{:else}
 		<div class="grid">
 			{#each photos as p (p.path)}

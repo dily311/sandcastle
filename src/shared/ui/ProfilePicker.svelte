@@ -1,13 +1,18 @@
 <script lang="ts">
 	// 프로필 고르기: 지금 고른 프로필(아바타 + 이름)을 누르면 목록이 뜬다.
 	// 대화(페르소나), 게임(플레이어), 폰(주인) 패널이 같은 모양을 쓴다.
+	import { _ } from "svelte-i18n";
+	import { UserCog } from "@lucide/svelte";
 	import Avatar from "./Avatar.svelte";
+	import type { AvatarFit } from "$ipc/bindings";
 	import { fileSrc } from "$shared/ipc/file";
 
 	export interface ProfileOption {
 		id: string;
 		name: string;
 		avatar?: string | null;
+		/** 프로필 그림 확대·위치 (5-E-17-3) */
+		avatarFit?: AvatarFit | null;
 		color?: string | null;
 		description?: string | null;
 		/** 목록을 나눌 제목 (예: "페르소나", "캐릭터") */
@@ -17,9 +22,11 @@
 	let {
 		options,
 		value,
-		label = "프로필 바꾸기",
+		label,
 		hint,
 		onchange,
+		onmanage,
+		manageLabel,
 	}: {
 		options: ProfileOption[];
 		value: string | null | undefined;
@@ -27,7 +34,13 @@
 		/** 고른 프로필 이름 아래에 설명 대신 보여줄 글 */
 		hint?: string;
 		onchange: (id: string) => void;
+		/** 하단 추가·관리 동작 (주면 팝오버 맨 아래에 버튼 표시) */
+		onmanage?: () => void;
+		manageLabel?: string;
 	} = $props();
+
+	const effectiveLabel = $derived(label ?? $_("settings.sharedUi.changeProfile"));
+	const effectiveManageLabel = $derived(manageLabel ?? $_("settings.sharedUi.addManage"));
 
 	const current = $derived(options.find((o) => o.id === value) ?? null);
 	let open = $state(false);
@@ -69,22 +82,37 @@
 />
 
 {#if open}
-	<div class="ppop" role="listbox" aria-label={label} style={popStyle}>
+	<div class="ppop" role="listbox" aria-label={effectiveLabel} style={popStyle}>
 		{#each groups as g, gi (gi)}
 			{#if g.title}<p class="grp">{g.title}</p>{/if}
 			{#each g.items as o (o.id)}
 				<button role="option" aria-selected={o.id === value} class:on={o.id === value} onclick={() => pick(o.id)}>
-					<Avatar name={o.name} src={fileSrc(o.avatar)} color={o.color || null} size={32} />
+					<Avatar name={o.name} src={fileSrc(o.avatar)} fit={o.avatarFit} color={o.color || null} size={28} />
 					<span class="pt"><b>{o.name}</b>{#if o.description}<small>{o.description}</small>{/if}</span>
 				</button>
 			{/each}
 		{/each}
+		{#if onmanage}
+			<div class="pfoot">
+				<button
+					type="button"
+					class="manage"
+					onclick={() => {
+						open = false;
+						onmanage();
+					}}
+				>
+					<UserCog />
+					<span>{effectiveManageLabel}</span>
+				</button>
+			</div>
+		{/if}
 	</div>
 {/if}
-<button bind:this={button} class="pcur" aria-haspopup="listbox" aria-expanded={open} aria-label={label} onclick={toggle}>
-	<Avatar name={current?.name ?? "?"} src={fileSrc(current?.avatar)} color={current?.color || null} size={40} />
+<button bind:this={button} class="pcur" aria-haspopup="listbox" aria-expanded={open} aria-label={effectiveLabel} onclick={toggle}>
+	<Avatar name={current?.name ?? "?"} src={fileSrc(current?.avatar)} fit={current?.avatarFit} color={current?.color || null} size={40} />
 	<span class="pt">
-		<b>{current?.name ?? "없음"}</b>
+		<b>{current?.name ?? $_("common.none")}</b>
 		{#if hint}<small>{hint}</small>{:else if current?.description}<small>{current.description}</small>{/if}
 	</span>
 </button>
@@ -137,6 +165,8 @@
 		border: 1px solid var(--border);
 		border-radius: var(--radius-md);
 		background: var(--surface);
+		backdrop-filter: blur(14px);
+		-webkit-backdrop-filter: blur(14px);
 		box-shadow: var(--shadow-lg);
 		animation: up var(--duration-fast) var(--ease);
 	}
@@ -148,6 +178,26 @@
 	}
 	.ppop button.on {
 		background: var(--accent-soft);
+	}
+	.pfoot {
+		margin-top: 4px;
+		padding-top: 4px;
+		border-top: 1px solid var(--border);
+	}
+	.ppop button.manage {
+		gap: var(--space-2);
+		padding: 7px var(--space-2);
+		color: var(--text-muted);
+		font-size: var(--text-xs);
+		font-weight: 500;
+	}
+	.ppop button.manage:hover {
+		color: var(--text);
+	}
+	.ppop button.manage :global(svg) {
+		width: 14px;
+		height: 14px;
+		flex: none;
 	}
 	.grp {
 		margin: 6px 8px 2px;

@@ -304,12 +304,14 @@ mod tests {
                     content: "규칙".into(),
                     token: 0,
                     images: vec![],
+                    source: None,
                 },
                 PromptMessageItem {
                     role: PromptRole::User,
                     content: "서울 날씨?".into(),
                     token: 0,
                     images: vec![],
+                    source: None,
                 },
             ],
         }

@@ -28,6 +28,7 @@ fn image(id: &str, key: &str) -> CharacterImageRow {
         sort_order: 0,
         created_at: 0,
         updated_at: 0,
+        folder: String::new(),
     }
 }
 
@@ -73,15 +74,49 @@ async fn get_conversation_reads_count_flag_and_survives_deleted_character() {
 async fn image_keys_are_unique_per_character_ignoring_case() {
     let pool = pool().await;
     ci::insert_character_image(&pool, &image("i1", "Smile")).await.unwrap();
-    assert!(ci::image_key_exists(&pool, "c1", "smile", None).await.unwrap());
-    assert!(!ci::image_key_exists(&pool, "c1", "smile", Some("i1")).await.unwrap());
+    assert!(ci::image_key_exists(&pool, "c1", "", "smile", None).await.unwrap());
+    assert!(!ci::image_key_exists(&pool, "c1", "", "smile", Some("i1")).await.unwrap());
     assert!(ci::insert_character_image(&pool, &image("i2", "SMILE")).await.is_err());
 
     ci::insert_character_image(&pool, &image("i3", "cry")).await.unwrap();
-    ci::update_character_image(&pool, "i3", "cry", false, 5).await.unwrap();
+    ci::update_character_image(&pool, "i3", "cry", false, 5, "").await.unwrap();
     let enabled = ci::get_character_images(&pool, "c1", true).await.unwrap();
     assert_eq!(enabled.iter().map(|r| r.key.as_str()).collect::<Vec<_>>(), vec!["Smile"]);
     assert_eq!(ci::next_image_sort_order(&pool, "c1").await.unwrap(), 6);
+}
+
+#[tokio::test]
+async fn same_key_is_allowed_in_different_version_folders() {
+    let pool = pool().await;
+    let mut a = image("v1s", "smile");
+    a.folder = "v1".into();
+    let mut b = image("v2s", "smile");
+    b.folder = "v2".into();
+    ci::insert_character_image(&pool, &a).await.unwrap();
+    ci::insert_character_image(&pool, &b).await.unwrap();
+    let mut dup = image("v1x", "SMILE");
+    dup.folder = "v1".into();
+    assert!(ci::insert_character_image(&pool, &dup).await.is_err(), "같은 판 안에서는 겹치면 안 됨");
+    assert!(ci::image_key_exists(&pool, "c1", "v2", "smile", None).await.unwrap());
+    assert!(!ci::image_key_exists(&pool, "c1", "v3", "smile", None).await.unwrap());
+    let folders: Vec<String> = ci::get_character_images(&pool, "c1", false)
+        .await
+        .unwrap()
+        .into_iter()
+        .map(|r| r.folder)
+        .collect();
+    assert_eq!(folders, vec!["v1", "v2"]);
+
+    // 캐릭터가 쓸 판 (characters 행이 있어야 한다)
+    sqlx::query("INSERT INTO characters (id, name, created_at, updated_at) VALUES ('c1', 'A', 1, 1)")
+        .execute(&pool)
+        .await
+        .ok();
+    assert_eq!(ci::get_asset_version(&pool, "c1").await.unwrap(), None);
+    assert!(ci::set_asset_version(&pool, "c1", Some("v2")).await.unwrap());
+    assert_eq!(ci::get_asset_version(&pool, "c1").await.unwrap().as_deref(), Some("v2"));
+    ci::set_asset_version(&pool, "c1", Some("")).await.unwrap();
+    assert_eq!(ci::get_asset_version(&pool, "c1").await.unwrap(), None, "빈 글은 전체");
 }
 
 #[tokio::test]
@@ -104,6 +139,7 @@ async fn conversation_world_info_comes_from_conversation_character_and_persona()
             &pool,
             WorldInfoEntryInput {
                 comment: String::new(),
+                category: String::new(),
                 id: None,
                 book_id: b.id.clone(),
                 keys: vec![],

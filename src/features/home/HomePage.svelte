@@ -1,7 +1,9 @@
 <script lang="ts">
 	// 홈: 사용자가 꾸미는 첫 화면. 블록(이어하기·빠른 실행·즐겨찾기·게임·내 글)을 켜고 끄고 순서를 바꾼다.
 	// AI를 부르지 않는다 (보여주기만). 설정은 앱 설정의 home에 저장
-	import { ArrowDown, ArrowUp, Check, Gamepad2, GripVertical, Images, MessageSquarePlus, Pencil, Smartphone, Star, Users } from "@lucide/svelte";
+	import { lastAt } from "$features/character/library.svelte";
+	import { _, locale } from "svelte-i18n";
+	import { ArrowDown, ArrowUp, BookOpen, Check, Gamepad2, GripVertical, Images, MessageSquarePlus, Pencil, Smartphone, Star, UserRound, Users } from "@lucide/svelte";
 	import { Sortable, moveItem } from "$shared/dnd/sortable.svelte";
 	import type { HomeSetting_Serialize as HomeSetting } from "$ipc/bindings";
 	import { Avatar, Button, EmptyState, Input, Switch, Textarea } from "$shared/ui";
@@ -14,13 +16,13 @@
 	import { games } from "$features/game/game.svelte";
 	import { fillNames } from "$features/character/format";
 
-	const BLOCKS: { id: string; label: string; desc: string; plugin?: "game" }[] = [
-		{ id: "continue", label: "이어하기", desc: "최근 대화" },
-		{ id: "quick", label: "빠른 실행", desc: "새 대화·폰·게임·이미지" },
-		{ id: "favorites", label: "즐겨찾기", desc: "별표한 캐릭터" },
-		{ id: "games", label: "게임", desc: "최근 게임", plugin: "game" },
-	];
-	const FALLBACK: HomeSetting = { startOnHome: false, greeting: "", blocks: BLOCKS.map((b) => b.id), css: "" };
+	const BLOCKS = $derived<{ id: string; label: string; desc: string; plugin?: "game" }[]>([
+		{ id: "continue", label: $_("home.continue"), desc: $_("settings.chrome.homeBlockContinueDesc") },
+		{ id: "quick", label: $_("home.quick"), desc: $_("settings.chrome.homeBlockQuickDesc") },
+		{ id: "favorites", label: $_("home.favorites"), desc: $_("settings.chrome.homeBlockFavDesc") },
+		{ id: "games", label: $_("home.games"), desc: $_("settings.chrome.homeBlockGamesDesc"), plugin: "game" },
+	]);
+	const FALLBACK: HomeSetting = { startOnHome: false, greeting: "", blocks: ["continue", "quick", "favorites", "games"], css: "" };
 
 	$effect(() => {
 		if (!library.loaded) void library.load();
@@ -32,13 +34,13 @@
 
 	const home = $derived<HomeSetting>({ ...FALLBACK, ...((appSetting.value?.home as HomeSetting | undefined) ?? {}) });
 	const me = $derived(library.persona(appSetting.value?.selectedPersonaId) ?? library.persona("default") ?? library.personas[0]);
-	const greeting = $derived(fillNames(home.greeting.trim() || "안녕하세요, {{user}}", { user: me?.name ?? "사용자" }));
-	const today = new Date().toLocaleDateString("ko-KR", { month: "long", day: "numeric", weekday: "long" });
+	const greeting = $derived(fillNames(home.greeting.trim() || $_("home.greetingDefault"), { user: me?.name ?? "User" }));
+	const today = $derived(new Date().toLocaleDateString(($locale ?? "ko").startsWith("en") ? "en-US" : "ko-KR", { month: "long", day: "numeric", weekday: "long" }));
 
 	const recent = $derived(
 		library.conversations
 			.filter((c) => c.mode !== "phone" && library.character(c.characterId))
-			.sort((a, b) => b.updatedAt - a.updatedAt)
+			.sort((a, b) => lastAt(b) - lastAt(a))
 			.slice(0, 4),
 	);
 	const favorites = $derived(library.characters.filter((c) => c.favorite).slice(0, 12));
@@ -90,23 +92,23 @@
 	{#if customCss.trim()}{@html `<style id="home-css">${customCss}</style>`}{/if}
 </svelte:head>
 
-<div class="home">
+<div class="home sc-home">
 	<header class="hero">
 		<div>
 			<p class="date">{today}</p>
 			<h1>{greeting}</h1>
 		</div>
 		{#if !editing}
-			<Button size="sm" variant="ghost" onclick={startEdit}>{#snippet icon()}<Pencil />{/snippet}꾸미기</Button>
+			<Button size="sm" variant="secondary" onclick={startEdit}>{#snippet icon()}<Pencil />{/snippet}{$_("home.customize")}</Button>
 		{/if}
 	</header>
 
 	{#if editing}
 		<section class="card edit">
-			<h2>홈 꾸미기</h2>
-			<label class="field"><span>인사말 <small>{"{{user}}"} = 내 이름</small></span><Input bind:value={draft.greeting} placeholder={"안녕하세요, {{user}}"} /></label>
+			<h2>{$_("home.customizeTitle")}</h2>
+			<label class="field"><span>{$_("settings.chrome.homeGreetingLabel")} <small>{$_("settings.chrome.homeGreetingHint")}</small></span><Input bind:value={draft.greeting} placeholder={$_("home.greetingDefault")} /></label>
 			<div class="field">
-				<span>블록</span>
+				<span>{$_("settings.chrome.homeBlocksLabel")}</span>
 				<ul class="blocks">
 					{#each order as id, i (id)}
 						{@const b = BLOCKS.find((x) => x.id === id)!}
@@ -114,19 +116,19 @@
 						<li {...sort.item(i)} class:dragging={sort.from === i} class:over={sort.over === i && sort.from !== i}>
 							<span class="grip" aria-hidden="true" {...sort.handle(i)}><GripVertical /></span>
 							<Switch checked={on} label={b.label} hideLabel onchange={(v) => toggle(id, v)} />
-							<span class="bl"><b>{b.label}</b><small>{b.desc}{b.plugin && !plugins.on(b.plugin) ? " · 플러그인 꺼짐" : ""}</small></span>
+							<span class="bl"><b>{b.label}</b><small>{b.desc}{b.plugin && !plugins.on(b.plugin) ? $_("settings.chrome.homePluginOff") : ""}</small></span>
 						</li>
 					{/each}
 				</ul>
 			</div>
 			<label class="field">
-				<span>홈 CSS <small>이 화면에만 적용 · 예) .home h1 {"{"} font-size: 2.4rem; {"}"}</small></span>
+				<span>{$_("settings.chrome.homeCssLabel")} <small>{$_("settings.chrome.homeCssHint")}</small></span>
 				<Textarea bind:value={draft.css} autosize rows={4} maxRows={16} mono placeholder={".home { background: linear-gradient(#0000, var(--accent-soft)); }\n.home .card { border-radius: 24px; }"} />
 			</label>
-			<label class="row"><Switch checked={draft.startOnHome} label="앱을 열면 홈부터" hideLabel onchange={(v) => (draft.startOnHome = v)} /><span>앱을 열면 홈부터 보기</span></label>
+			<label class="row"><Switch checked={draft.startOnHome} label={$_("settings.chrome.homeStartOnHome")} hideLabel onchange={(v) => (draft.startOnHome = v)} /><span>{$_("settings.chrome.homeStartOnHome")}</span></label>
 			<div class="btns">
-				<Button variant="ghost" onclick={() => (editing = false)}>취소</Button>
-				<Button variant="primary" onclick={saveEdit}>{#snippet icon()}<Check />{/snippet}저장</Button>
+				<Button variant="ghost" onclick={() => (editing = false)}>{$_("common.cancel")}</Button>
+				<Button variant="primary" onclick={saveEdit}>{#snippet icon()}<Check />{/snippet}{$_("common.save")}</Button>
 			</div>
 		</section>
 	{/if}
@@ -134,51 +136,53 @@
 	{#each shown as id (id)}
 		{#if id === "continue"}
 			<section>
-				<h2>이어하기</h2>
+				<h2>{$_("home.continue")}</h2>
 				{#if recent.length}
 					<div class="grid">
 						{#each recent as c (c.id)}
 							{@const ch = library.character(c.characterId)}
 							<button class="card conv" onclick={() => nav.go({ page: "character", charId: c.characterId ?? undefined, convId: c.id })}>
-								<Avatar name={ch?.name ?? "?"} src={fileSrc(ch?.avatar)} color={ch?.color} size={36} />
-								<span class="txt"><b>{c.title}</b><small>{ch?.name} · {relative(c.updatedAt)}</small></span>
+								<Avatar name={ch?.name ?? "?"} src={fileSrc(ch?.avatar)} fit={ch?.avatarFit} color={ch?.color} size={36} />
+								<span class="txt"><b>{c.title}</b><small>{ch?.name} · {relative(lastAt(c))}</small></span>
 							</button>
 						{/each}
 					</div>
 				{:else}
-					<p class="muted">아직 대화 없음</p>
+					<p class="muted">{$_("home.noChats")}</p>
 				{/if}
 			</section>
 		{:else if id === "quick"}
 			<section>
-				<h2>빠른 실행</h2>
+				<h2>{$_("home.quick")}</h2>
 				<div class="quick">
-					<button class="card q" onclick={newChat}><MessageSquarePlus /><span>새 대화</span></button>
-					<button class="card q" onclick={() => nav.go({ page: "character" })}><Users /><span>캐릭터</span></button>
-					{#if plugins.on("phone")}<button class="card q" onclick={() => nav.go({ page: "phone" })}><Smartphone /><span>폰</span></button>{/if}
-					{#if plugins.on("game")}<button class="card q" onclick={() => nav.go({ page: "game" })}><Gamepad2 /><span>게임</span></button>{/if}
-					{#if plugins.on("imagegen")}<button class="card q" onclick={() => nav.go({ page: "images" })}><Images /><span>이미지</span></button>{/if}
+					<button class="card q" onclick={newChat}><MessageSquarePlus /><span>{$_("home.newChat")}</span></button>
+					<button class="card q" onclick={() => nav.go({ page: "character" })}><Users /><span>{$_("nav.character")}</span></button>
+					{#if plugins.on("phone")}<button class="card q" onclick={() => nav.go({ page: "phone" })}><Smartphone /><span>{$_("nav.phone")}</span></button>{/if}
+					{#if plugins.on("game")}<button class="card q" onclick={() => nav.go({ page: "game" })}><Gamepad2 /><span>{$_("nav.game")}</span></button>{/if}
+					<button class="card q" onclick={() => nav.go({ page: "lorebook" })}><BookOpen /><span>{$_("nav.lorebook")}</span></button>
+					<button class="card q" onclick={() => nav.go({ page: "images" })}><Images /><span>{$_("nav.images")}</span></button>
+					<button class="card q" onclick={() => nav.go({ page: "persona" })}><UserRound /><span>{$_("nav.persona")}</span></button>
 				</div>
 			</section>
 		{:else if id === "favorites"}
 			<section>
-				<h2>즐겨찾기</h2>
+				<h2>{$_("home.favorites")}</h2>
 				{#if favorites.length}
 					<div class="favs">
 						{#each favorites as ch (ch.id)}
-							<button class="fav" onclick={() => nav.go({ page: "character", charId: ch.id })} title={ch.name}>
-								<Avatar name={ch.name} src={fileSrc(ch.avatar)} color={ch.color} size={56} />
+							<button class="card fav" onclick={() => nav.go({ page: "character", charId: ch.id })} title={ch.name}>
+								<Avatar name={ch.name} src={fileSrc(ch.avatar)} fit={ch.avatarFit} color={ch.color} size={44} />
 								<span>{ch.name}</span>
 							</button>
 						{/each}
 					</div>
 				{:else}
-					<p class="muted"><Star size={14} /> 캐릭터 화면에서 별을 누르면 여기 모임</p>
+					<p class="muted"><Star size={14} /> {$_("home.favHint")}</p>
 				{/if}
 			</section>
 		{:else if id === "games"}
 			<section>
-				<h2>게임</h2>
+				<h2>{$_("home.games")}</h2>
 				{#if recentGames.length}
 					<div class="grid">
 						{#each recentGames as g (g.id)}
@@ -189,7 +193,7 @@
 						{/each}
 					</div>
 				{:else}
-					<p class="muted">아직 게임 없음</p>
+					<p class="muted">{$_("home.noGames")}</p>
 				{/if}
 			</section>
 		{/if}
@@ -200,7 +204,7 @@
 	.home {
 		max-width: var(--page-wide);
 		margin: 0 auto;
-		padding: var(--space-6) var(--space-5) var(--space-8, 48px);
+		padding: var(--space-6) var(--space-8) var(--space-10);
 		display: flex;
 		flex-direction: column;
 		gap: var(--space-6);
@@ -235,9 +239,17 @@
 		color: var(--text);
 		cursor: pointer;
 		text-align: left;
+		transition:
+			background var(--duration-fast) var(--ease),
+			border-color var(--duration-fast) var(--ease),
+			box-shadow var(--duration-fast) var(--ease),
+			transform var(--duration-fast) var(--ease);
 	}
 	button.card:hover {
 		background: var(--surface-hover);
+		border-color: var(--border-strong);
+		box-shadow: var(--shadow-sm);
+		transform: translateY(-1px);
 	}
 	.grid {
 		display: grid;
@@ -296,19 +308,12 @@
 		display: flex;
 		flex-direction: column;
 		align-items: center;
-		gap: var(--space-1);
-		width: 76px;
-		padding: var(--space-1);
-		border: none;
-		border-radius: var(--radius-md);
-		background: none;
-		color: var(--text);
-		font: inherit;
+		gap: var(--space-2);
+		width: 88px;
+		padding: var(--space-3) var(--space-2);
+		text-align: center;
 		font-size: var(--text-xs);
-		cursor: pointer;
-	}
-	.fav:hover {
-		background: var(--surface-hover);
+		font-weight: 500;
 	}
 	.fav span {
 		max-width: 100%;

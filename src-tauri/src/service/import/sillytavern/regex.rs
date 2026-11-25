@@ -19,6 +19,44 @@ fn placement(n: i64) -> Option<RegexPlacement> {
     }
 }
 
+/// 우리 스크립트 → ST 스크립트 (내보내기, 5-E-20-4-2). ST에서 온 것이면 원래 필드를 바탕으로 우리 값을 덮는다
+pub fn regex_to_st(r: &crate::models::regex::RegexScript) -> Value {
+    let mut v = r
+        .extra_json
+        .clone()
+        .filter(Value::is_object)
+        .unwrap_or_else(|| serde_json::json!({ "id": r.id }));
+    let places: Vec<i64> = r
+        .placement
+        .iter()
+        .map(|p| match p {
+            RegexPlacement::UserInput => 1,
+            RegexPlacement::AiOutput => 2,
+            RegexPlacement::WorldInfo => 5,
+        })
+        .collect();
+    let fields = serde_json::json!({
+        "scriptName": r.name,
+        "findRegex": r.find_regex,
+        "replaceString": r.replace_string,
+        "trimStrings": r.trim_strings,
+        "placement": places,
+        "disabled": !r.enabled,
+        "markdownOnly": r.target == RegexTarget::Display,
+        "promptOnly": r.target == RegexTarget::Prompt,
+        "runOnEdit": r.run_on_edit,
+        "substituteRegex": match r.substitute_macros { MacroMode::None => 0, MacroMode::Raw => 1, MacroMode::Escaped => 2 },
+        "minDepth": r.min_depth,
+        "maxDepth": r.max_depth,
+    });
+    if let (Some(obj), Some(new)) = (v.as_object_mut(), fields.as_object()) {
+        for (k, val) in new {
+            obj.insert(k.clone(), val.clone());
+        }
+    }
+    v
+}
+
 /// 스크립트 하나 변환. 쓸 수 없는 스크립트면 None과 함께 경고를 남긴다.
 pub fn map_regex_script(v: &Value, scope: RegexScope, scope_id: Option<String>, sort_order: i64, warnings: &mut Vec<String>) -> Option<RegexScriptInput> {
     let name = as_str(v, "scriptName").unwrap_or("이름 없는 정규식").to_string();

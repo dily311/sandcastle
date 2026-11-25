@@ -71,6 +71,9 @@ struct PackImage {
     enabled: bool,
     sort_order: i64,
     file: String,
+    /// 판 폴더 (예전 팩에는 없음 = 공통)
+    #[serde(default)]
+    folder: String,
 }
 
 #[derive(Serialize, Deserialize, specta::Type)]
@@ -91,6 +94,11 @@ struct PackEntry {
     enabled: bool,
     priority: i64,
     constant: bool,
+    /// 제목·분류 (예전 팩에는 없음)
+    #[serde(default)]
+    comment: String,
+    #[serde(default)]
+    category: String,
 }
 
 #[derive(Serialize, Deserialize, specta::Type)]
@@ -184,6 +192,7 @@ pub async fn export_pack(
                         enabled: r.enabled,
                         sort_order: r.sort_order,
                         file: name,
+                        folder: r.folder.clone(),
                     }
                 })
             })
@@ -193,8 +202,17 @@ pub async fn export_pack(
             .into_iter()
             .filter(|s| s.scope == RegexScope::Character)
             .collect();
+        // 변수 정의 (5-F-4-3)는 캐릭터 칸이 아니라 따로 읽어 캐릭터 JSON에 싣는다 (예전 팩에는 없음)
+        let mut character_json = serde_json::to_value(&character)?;
+        let var_defs = db::conversation::get_character_var_defs(db, cid).await.unwrap_or_default();
+        if !var_defs.is_empty() {
+            character_json["varDefs"] = serde_json::to_value(&var_defs)?;
+        }
+        if let Some(t) = db::conversation::get_character_status_template(db, cid).await.ok().flatten() {
+            character_json["statusTemplate"] = serde_json::Value::String(t);
+        }
         characters.push(PackCharacter {
-            character: serde_json::to_value(&character)?,
+            character: character_json,
             avatar_file,
             images,
             regex,
@@ -210,6 +228,8 @@ pub async fn export_pack(
             .await?
             .into_iter()
             .map(|e| PackEntry {
+                comment: e.comment,
+                category: e.category,
                 keys: e.keys,
                 secondary_keys: e.secondary_keys,
                 content: e.content,
@@ -373,7 +393,8 @@ async fn import_pack_inner(
             db::conversation::upsert_worldinfo_entry(
                 &mut *tx,
                 WorldInfoEntryInput {
-                    comment: String::new(),
+                    comment: e.comment,
+                    category: e.category,
                     id: None,
                     book_id: book.id.clone(),
                     keys: e.keys,
@@ -395,6 +416,16 @@ async fn import_pack_inner(
     for pc in data.characters {
         let old_id = pc.character["id"].as_str().unwrap_or_default().to_string();
         let favorite = pc.character["favorite"].as_bool().unwrap_or(false);
+        // 프로필 그림 확대·위치 (5-E-17-3, 예전 팩에는 없음)
+        let avatar_fit = serde_json::from_value::<crate::models::conversation::AvatarFit>(pc.character["avatarFit"].clone()).ok();
+        // 변수 정의 (5-F-4-3, 예전 팩에는 없음). 확인을 거쳐 넣고, 읽을 수 없으면 경고만
+        let status_template = pc.character.get("statusTemplate").and_then(|v| v.as_str()).map(str::to_string);
+        let var_defs = match pc.character.get("varDefs") {
+            Some(v) => serde_json::from_value::<Vec<crate::models::conversation::VarDef>>(v.clone())
+                .map_err(|e| e.to_string())
+                .and_then(|d| crate::service::chat::vars::normalize(d).map_err(|e| e.to_response().message)),
+            None => Ok(vec![]),
+        };
         let mut input: CharacterInput =
             serde_json::from_value(pc.character).map_err(|e| AppError::validation(format!("캐릭터 데이터를 읽을 수 없습니다: {e}"), None))?;
 
@@ -416,6 +447,19 @@ async fn import_pack_inner(
         let new_id = character.id.clone();
         if favorite {
             db::conversation::update_character_is_favorite(&mut *tx, &new_id, true).await?;
+        }
+        if character.avatar.is_some() && avatar_fit.is_some() {
+            db::conversation::set_avatar_fit(&mut *tx, "characters", &new_id, avatar_fit).await?;
+        }
+        if let Some(t) = status_template.as_deref() {
+            db::conversation::upsert_character_status_template(&mut *tx, &new_id, Some(t)).await?;
+        }
+        match var_defs {
+            Ok(defs) if !defs.is_empty() => {
+                db::conversation::upsert_character_var_defs(&mut *tx, &new_id, &defs).await?;
+            }
+            Ok(_) => {}
+            Err(why) => warnings.push(format!("'{}'의 변수 정의를 읽지 못해 뺌: {why}", character.name)),
         }
         for b in old_books {
             match book_map.get(&b) {
@@ -449,6 +493,7 @@ async fn import_pack_inner(
                     sort_order: img.sort_order,
                     created_at: now,
                     updated_at: now,
+                    folder: img.folder,
                 },
             )
             .await?;

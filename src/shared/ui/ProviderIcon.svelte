@@ -25,12 +25,13 @@
 
 <script lang="ts">
 	import { Bot, Sparkles } from "@lucide/svelte";
+	import { _ } from "svelte-i18n";
 
 	let { model, size = 14 }: { model: string | undefined; size?: number } = $props();
 	const brand = $derived(providerOf(model));
 </script>
 
-<span class="provider" title={model ?? "AI"} aria-label={model ? `모델: ${model}` : "AI"} role="img" style:--size="{size}px">
+<span class="provider" title={model ?? "AI"} aria-label={model ? $_("uiPolish.modelAria", { values: { model } }) : "AI"} role="img" style:--size="{size}px">
 	{#if brand === "openai"}
 		<Sparkles size={size} />
 	{:else if brand}

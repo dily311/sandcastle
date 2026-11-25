@@ -357,7 +357,10 @@ pub async fn npc_say(
     on_event: Channel<crate::models::ai_service::StreamPayload>,
 ) -> Result<crate::game::npc::NpcReply, AppError> {
     // on_event: 기다리는 동안 보여줄 미리보기(태그를 걸러낸 글). 최종 대사·연출은 반환값
-    crate::game::npc::say(app, &state, &settings, character_id, input, Some(on_event)).await
+    let notify_app = app.clone();
+    let out = crate::game::npc::say(app, &state, &settings, character_id, input, Some(on_event)).await?;
+    crate::service::notify::task_done(&notify_app, "게임 대화", "캐릭터 응답이 도착함");
+    Ok(out)
 }
 
 /// 씬 입력: 씬이 열려 있는 동안 AI가 서술자로 장면을 이어간다. 선택지의 ChoiceMade 이벤트에 continuesScene=true가
@@ -372,7 +375,10 @@ pub async fn scene_say(
     input: String,
     on_event: Channel<crate::models::ai_service::StreamPayload>,
 ) -> Result<crate::game::npc::NpcReply, AppError> {
-    crate::game::npc::scene_say(app, &state, &settings, input, Some(on_event)).await
+    let notify_app = app.clone();
+    let out = crate::game::npc::scene_say(app, &state, &settings, input, Some(on_event)).await?;
+    crate::service::notify::task_done(&notify_app, "장면 진행", "장면 응답이 도착함");
+    Ok(out)
 }
 
 // =======================================
@@ -442,9 +448,8 @@ pub async fn game_context_usage(
     settings: State<'_, SettingsState<AppSetting>>,
     session_id: String,
 ) -> Result<crate::commands::chat::ContextUsage, AppError> {
-    use crate::models::ai_service::PromptRole;
     use crate::service::{
-        chat::chat_manager::{current_conv_request, LAST_GAME_PROMPT},
+        chat::chat_manager::{count_prompt_usage, current_conv_request, LAST_GAME_PROMPT},
         prompt::prompt_manager::{chat_options_from, context_limit_from, PromptManager, DEFAULT_CONTEXT_LIMIT as CONTEXT_LIMIT},
     };
     let (_, preset) = crate::db::game::get_game_session_options(&state.db, &session_id).await?;
@@ -456,18 +461,7 @@ pub async fn game_context_usage(
     let limit = loaded.as_ref().and_then(|p| context_limit_from(&p.preset)).unwrap_or(CONTEXT_LIMIT);
     let reserved = loaded.as_ref().and_then(|p| chat_options_from(&p.preset).max_tokens).unwrap_or(0);
     let prompt = LAST_GAME_PROMPT.lock().ok().and_then(|m| m.get(&session_id).cloned());
-    let (mut system, mut history, mut history_count) = (0u32, 0u32, 0u32);
-    if let Some(p) = &prompt {
-        for m in &p.messages {
-            let t = m.token.max(0) as u32;
-            if m.role == PromptRole::System {
-                system += t;
-            } else {
-                history += t;
-                history_count += 1;
-            }
-        }
-    }
+    let (system, history, history_count) = prompt.as_ref().map_or((0, 0, 0), count_prompt_usage);
     Ok(crate::commands::chat::ContextUsage {
         used: prompt.map(|_| system + history),
         system,
@@ -501,7 +495,10 @@ pub async fn regenerate_game_reply(
     settings: State<'_, SettingsState<AppSetting>>,
     message_id: String,
 ) -> Result<crate::game::npc::NpcReply, AppError> {
-    crate::game::npc::regenerate_reply(app, &state, &settings, message_id).await
+    let notify_app = app.clone();
+    let out = crate::game::npc::regenerate_reply(app, &state, &settings, message_id).await?;
+    crate::service::notify::task_done(&notify_app, "게임 응답", "다시 생성된 응답이 도착함");
+    Ok(out)
 }
 
 /// StoryPlan(각본가) 갱신. 체크포인트(RenderState.storyPlanDue)일 때 부르면 AI가 새 플랜을 세워 저장한다.
@@ -541,10 +538,14 @@ pub async fn refresh_story_plan(
     )
     .owner_ref(&game_id);
     let tasks = tasks.inner().clone();
-    crate::game::story_plan::refresh(state.inner(), &game_id, profile_id, force.unwrap_or(false), |request| async move {
+    let out = crate::game::story_plan::refresh(state.inner(), &game_id, profile_id, force.unwrap_or(false), |request| async move {
         tasks.run_inline(job, |_| async move { Ok(ai.generate_once(request).await?.content) }).await
     })
-    .await
+    .await?;
+    if out.is_some() && !auto.unwrap_or(false) {
+        crate::service::notify::task_done(&app, "각본가", "스토리 플랜 갱신이 끝남");
+    }
+    Ok(out)
 }
 
 /// 지금 세션의 가장 최근 플랜 (없으면 null). 호스트 UI용 — 게임 iframe에 주면 스포일러가 된다.

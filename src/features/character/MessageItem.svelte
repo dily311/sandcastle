@@ -1,16 +1,21 @@
 <script lang="ts">
-	import { Bookmark, BookmarkX, ChevronDown, ChevronLeft, ChevronRight, Copy, Eye, EyeOff, FileSearch, GitBranch, ImagePlus, Languages, Pencil, RefreshCw, Square, Trash2, Volume2, Sparkles, PenLine, ChevronsDownUp, ChevronsUpDown, Ellipsis } from "@lucide/svelte";
+	import { _ } from "svelte-i18n";
+	import { nav } from "$app/nav.svelte";
+	import { library } from "./library.svelte";
+	import { Bookmark, BookmarkX, ChevronDown, ChevronLeft, ChevronRight, Copy, Eye, EyeOff, FileSearch, GitBranch, ImagePlus, Languages, Pencil, RefreshCw, Square, Trash2, Volume2, Sparkles, PenLine, ChevronsDownUp, ChevronsUpDown, Ellipsis, IdCard } from "@lucide/svelte";
 	import { plugins } from "$shared/stores/plugins.svelte";
 	import { drawMessage, generatedImagesOf, speak, speech, translateMessage, translationOf } from "$shared/stores/aiTools.svelte";
-	import { Badge, Button, ContextMenu, IconButton, ProviderIcon, Textarea, type MenuItem } from "$shared/ui";
+	import { Badge, Button, ContextMenu, IconButton, ProviderIcon, Textarea, type MenuItem, Avatar } from "$shared/ui";
 	import { onCurrentSwipe, type ChatBookmark } from "./bookmarks";
 	import { findTextRange, paintBookmarks } from "./highlight";
 	import { absolute, relative } from "$shared/time";
 	import { confirmAction, promptText } from "$shared/stores/confirm.svelte";
 	import { toasts } from "$shared/stores/toast.svelte";
-	import { appSetting } from "$shared/stores/appSetting.svelte";
+	import { theme } from "$app/theme.svelte";
 	import { toBlocks } from "./format";
 	import RichText from "./RichText.svelte";
+	import type { AvatarFit } from "$ipc/bindings";
+	import TypingIndicator from "./TypingIndicator.svelte";
 	import { metaOf, type ChatSession, type Message } from "./session.svelte";
 	import { fileSrc } from "$shared/ipc/file";
 	import { layout } from "$app/layout.svelte";
@@ -20,6 +25,10 @@
 	import { pluginProcessOf } from "$features/community/postprocess";
 
 	interface Props {
+		/** 프로필 그림 (대화 설정에서 켰을 때만 넘어옴, null이면 이름 첫 글자) — 5-E-9 */
+		avatar?: string | null;
+		/** 프로필 그림 확대·위치 (5-E-17-3) */
+		avatarFit?: AvatarFit | null;
 		msg: Message;
 		no: number;
 		session: ChatSession;
@@ -34,14 +43,28 @@
 		onselect?: (m: Message, on: boolean) => void;
 		/** 이 메시지의 북마크 (본문에 형광펜으로 칠함) */
 		marks?: ChatBookmark[];
+		/** 북마크한 글을 이미지 카드로 */
+		oncard?: (mark: ChatBookmark) => void;
 		/** 형광펜 칠한 글을 눌러 지움 */
 		onmarkremove?: (b: ChatBookmark) => void;
+		/** 읽기 화면 (5-E-6-2, ADR-031): 복사·접기·여기서 분기·있는 번역 보기·이미 만든 음성만 — 고치기·생성·새 번역·그리기 없음 */
+		readonly?: boolean;
+		/** 본문에서 숨길 상태창 정규식 출처 키 집합 (없으면 모든 상태창 표시를 숨김) */
+		pinnedKeys?: ReadonlySet<string>;
 	}
-	let { msg, no, session, images, isLast, onbranch, onprompt, selecting = false, selected = false, onselect, marks = [], onmarkremove }: Props = $props();
+	let { msg, no, avatar, avatarFit = null, session, images, isLast, onbranch, onprompt, selecting = false, selected = false, onselect, marks = [], oncard, onmarkremove, readonly = false, pinnedKeys }: Props = $props();
+	/** 소리 내어 읽기: 읽기 화면은 이미 만든 음성만 (새로 만들지 않음) */
+	const say = () => speak(msg, translation && !showOriginal ? translation.text : msg.content, false, readonly);
 
 	const meta = $derived(metaOf(msg));
 	const isAi = $derived(msg.role === "assistant");
-	const live = $derived(session.live?.kind === "regenerate" && session.live.targetId === msg.id ? session.live : null);
+	const avatarShape = $derived(isAi ? theme.chat.charAvatarFrame : theme.chat.userAvatarFrame);
+	const avatarFrameSrc = $derived(
+		avatarShape === "custom"
+			? fileSrc(isAi ? theme.chat.charAvatarFrameImage : theme.chat.userAvatarFrameImage)
+			: null,
+	);
+	const live = $derived((session.live?.kind === "regenerate" || session.live?.kind === "continue") && session.live.targetId === msg.id ? session.live : null);
 	// 번역이 있으면 번역문을 보여주고 "원문"으로 바꿔 볼 수 있다
 	const translation = $derived(plugins.on("translate") ? translationOf(msg) : null);
 	let showOriginal = $state(false);
@@ -52,7 +75,7 @@
 	let lintOriginal = $state(false);
 	const text = $derived(
 		live
-			? live.text.replace(/<image>[\s\S]*?(<\/image>|$)/i, "")
+			? (live.kind === "continue" ? (session.display[msg.id] ?? live.base ?? "") : "") + live.text.replace(/<image>[\s\S]*?(<\/image>|$)/i, "")
 			: translation && !showOriginal
 				? translation.text
 				: lintOriginal
@@ -75,17 +98,32 @@
 	}
 	async function draw() {
 		toolBusy = "draw";
-		toasts.info("장면을 그리는 중… (잠시 걸림)");
+		toasts.info($_("msgItem.drawingToast"));
 		try {
 			session.update(await drawMessage(msg));
 		} finally {
 			toolBusy = "";
 		}
 	}
-	const blocks = $derived(toBlocks(text));
+	// 멀티 프로필 그림: 테마 설정에서 켰으면 `캐릭터이름: 대사`의 이름 부분을 아바타로 교체해 표시
+	const conv = $derived(library.conversation(session.convId));
+	const multi = $derived(theme.chat.showMultiCharAvatars);
+	const speakerAvatars = $derived.by(() => {
+		if (!multi) return {};
+		const map: Record<string, string | null> = {};
+		for (const c of library.characters) map[c.name] = fileSrc(c.avatar) ?? null;
+		const ch = conv ? library.character(conv.characterId) : undefined;
+		if (ch) map[ch.name] = fileSrc(ch.avatar) ?? null;
+		return map;
+	});
+	/** AI가 바꾼 변수 (5-F-4-4) — 상태창·변수 플러그인이 켜졌을 때만 보인다 */
+	const varChanges = $derived(plugins.on("status") ? (((msg.meta as { varChanges?: { key: string; from: string | null; to: string }[] } | null)?.varChanges) ?? []) : []);
+	const blocks = $derived(toBlocks(text, { safeHtml: plugins.on("html"), speakers: multi, avatars: speakerAvatars }));
 	const swipes = $derived(meta.swipes?.length ?? 0);
 	const swipeId = $derived(meta.swipeId ?? 0);
 	const model = $derived(meta.info?.model || undefined);
+	/** 응답 길이 한도에서 끊긴 답 (5-E-20-6-6) */
+	const truncated = $derived(["length", "max_tokens", "MAX_TOKENS"].includes(String((meta.info as { finishReason?: string } | undefined)?.finishReason ?? "")));
 
 	// 접기: 화면에 보이는 것만 바꿈 (저장하지 않고 AI에게 보내는 글도 그대로).
 	// 직접 접거나 펼치기 전에는 AI에게 숨긴 메시지만 접혀 있다
@@ -126,19 +164,19 @@
 	async function copy() {
 		try {
 			await navigator.clipboard.writeText(msg.content);
-			toasts.success("복사함");
+			toasts.success($_("msgItem.copiedToast"));
 		} catch {
-			toasts.error("복사 못 함");
+			toasts.error($_("msgItem.copyFailedToast"));
 		}
 	}
 	async function chapter() {
 		if (meta.chapter) return session.setChapter(msg, null);
-		const t = await promptText({ title: "여기서 챕터 시작", message: `#${no} 메시지부터 새 챕터`, input: { value: "", placeholder: "챕터 제목" }, confirmLabel: "만들기" });
+		const t = await promptText({ title: $_("msgItem.startChapterTitle"), message: $_("msgItem.startChapterMsg", { values: { no } }), input: { value: "", placeholder: $_("msgItem.chapterPlaceholder") }, confirmLabel: $_("msgItem.createBtn") });
 		if (t) await session.setChapter(msg, t);
 	}
 	/** 이번 생성에만 붙는 지시를 받아 다른 응답(스와이프)으로 다시 생성 */
 	async function regenerateWith() {
-		const t = await promptText({ title: "지시와 함께 다시 생성", message: "이번 응답에만 적용 · 저장되는 글에는 들어가지 않음", input: { value: "", placeholder: "예) 묘사는 짧게, 대사를 더 많이" }, confirmLabel: "다시 생성" });
+		const t = await promptText({ title: $_("msgItem.regenWithTitle"), message: $_("msgItem.regenWithMsg"), input: { value: "", placeholder: $_("msgItem.regenWithPlaceholder") }, confirmLabel: $_("msgItem.regenBtn") });
 		if (t?.trim()) await session.regenerate(true, t.trim());
 	}
 	// 북마크한 글을 본문에 형광펜으로 칠한다 (보고 있는 스와이프의 것만. 접히거나 고치는 중이면 칠하지 않음)
@@ -173,7 +211,17 @@
 	const markMenuItems = $derived<MenuItem[]>(
 		markMenuAt
 			? [
-					{ label: "북마크 삭제", icon: BookmarkX, danger: true, onselect: () => onmarkremove?.(markMenuAt!.b) },
+					{
+						label: $_("msgItem.copyMenu"),
+						icon: Copy,
+						onselect: () =>
+							navigator.clipboard.writeText(markMenuAt!.b.text ?? "").then(
+								() => toasts.success($_("msgItem.copiedToast")),
+								() => toasts.error($_("msgItem.copyFailedToast")),
+							),
+					},
+					{ label: $_("msgItem.makeCardMenu"), icon: IdCard, onselect: () => oncard?.(markMenuAt!.b) },
+					{ label: $_("msgItem.deleteMarkMenu"), icon: BookmarkX, danger: true, onselect: () => onmarkremove?.(markMenuAt!.b) },
 				]
 			: [],
 	);
@@ -189,121 +237,156 @@
 		menuAt = { x: e.clientX, y: e.clientY };
 	}
 	const menuItems = $derived.by<MenuItem[]>(() => {
+		const sayItem: MenuItem = { label: speech.messageId === msg.id ? $_("msgItem.stopSpeak") : readonly ? $_("msgItem.playAudio") : $_("msgItem.readAloud"), icon: speech.messageId === msg.id ? Square : Volume2, onselect: say };
+		if (readonly) {
+			const ro: MenuItem[] = [
+				{ label: $_("msgItem.copyMenu"), icon: Copy, onselect: copy },
+				{ label: folded ? $_("msgItem.expand") : $_("msgItem.collapse"), icon: folded ? ChevronsUpDown : ChevronsDownUp, onselect: toggleFold },
+				{ label: $_("msgItem.branchReadMenu"), icon: GitBranch, separator: true, onselect: () => onbranch(msg) },
+			];
+			if (translation) ro.push({ label: showOriginal ? $_("msgItem.showTrans") : $_("msgItem.showOrig"), icon: Languages, onselect: () => (showOriginal = !showOriginal) });
+			if (plugins.on("tts")) ro.push(sayItem);
+			return ro;
+		}
 		const out: MenuItem[] = [
-			{ label: "복사", icon: Copy, onselect: copy },
-			{ label: "수정", icon: Pencil, onselect: startEdit },
-			{ label: folded ? "펼치기" : "접기", icon: folded ? ChevronsUpDown : ChevronsDownUp, onselect: toggleFold },
-			{ label: "여기서 분기 나누기", icon: GitBranch, separator: true, onselect: () => onbranch(msg) },
-			{ label: meta.chapter ? "챕터 표시 지우기" : "여기서 챕터 시작", icon: meta.chapter ? BookmarkX : Bookmark, onselect: chapter },
-			{ label: meta.hidden ? "AI에게 다시 보이기" : "AI에게 숨기기", icon: meta.hidden ? Eye : EyeOff, onselect: () => session.setHidden(msg, !meta.hidden) },
+			{ label: $_("msgItem.copyMenu"), icon: Copy, onselect: copy },
+			{ label: $_("msgItem.editMenu"), icon: Pencil, onselect: startEdit },
+			{ label: folded ? $_("msgItem.expand") : $_("msgItem.collapse"), icon: folded ? ChevronsUpDown : ChevronsDownUp, onselect: toggleFold },
+			{ label: $_("msgItem.branchHere"), icon: GitBranch, separator: true, onselect: () => onbranch(msg) },
+			{ label: meta.chapter ? $_("msgItem.removeChapter") : $_("msgItem.startChapterTitle"), icon: meta.chapter ? BookmarkX : Bookmark, onselect: chapter },
+			{ label: meta.hidden ? $_("msgItem.showToAi") : $_("msgItem.hideFromAi"), icon: meta.hidden ? Eye : EyeOff, onselect: () => session.setHidden(msg, !meta.hidden) },
 		];
 		if (isAi && isLast) {
 			out.push(
-				{ label: "처음부터 다시 생성 (스와이프 버림)", icon: RefreshCw, separator: true, disabled: session.busy, onselect: () => session.regenerate(false) },
-				{ label: "지시와 함께 다시 생성", icon: Sparkles, disabled: session.busy, onselect: regenerateWith },
+				{ label: $_("msgItem.regenFresh"), icon: RefreshCw, separator: true, disabled: session.busy, onselect: () => session.regenerate(false) },
+				{ label: $_("msgItem.regenWithTitle"), icon: Sparkles, disabled: session.busy, onselect: regenerateWith },
 			);
 		}
-		if (isAi) out.push({ label: "보낸 컨텍스트 보기", icon: FileSearch, separator: !(isAi && isLast), onselect: () => onprompt(msg) });
-		if (plugins.on("translate")) out.push({ label: translation ? (showOriginal ? "번역 보기" : "원문 보기") : "번역", icon: Languages, disabled: toolBusy === "translate", onselect: translate });
-		if (plugins.on("tts")) out.push({ label: speech.messageId === msg.id ? "읽기 멈추기" : "소리 내어 읽기", icon: speech.messageId === msg.id ? Square : Volume2, onselect: () => speak(msg, translation && !showOriginal ? translation.text : msg.content) });
-		if (plugins.on("imagegen") && isAi) out.push({ label: "이 장면 그리기", icon: ImagePlus, disabled: toolBusy === "draw", onselect: draw });
-		out.push({ label: "삭제", icon: Trash2, danger: true, separator: true, onselect: remove });
+		if (isAi) out.push({ label: $_("msgItem.viewPrompt"), icon: FileSearch, separator: !(isAi && isLast), onselect: () => onprompt(msg) });
+		if (plugins.on("translate")) out.push({ label: translation ? (showOriginal ? $_("msgItem.showTrans") : $_("msgItem.showOrig")) : $_("msgItem.translateMenu"), icon: Languages, disabled: toolBusy === "translate", onselect: translate });
+		if (plugins.on("tts")) out.push(sayItem);
+		if (plugins.on("imagegen") && isAi) out.push({ label: $_("msgItem.drawScene"), icon: ImagePlus, disabled: toolBusy === "draw", onselect: draw });
+		out.push({ label: $_("common.delete"), icon: Trash2, danger: true, separator: true, onselect: remove });
 		return out;
 	});
 	async function remove() {
-		if (await confirmAction({ title: "메시지 삭제", message: `#${no} 메시지를 지움. 되돌릴 수 없음`, confirmLabel: "삭제", danger: true })) await session.remove(msg);
+		if (await confirmAction({ title: $_("msgItem.deleteTitle"), message: $_("msgItem.deleteMsg", { values: { no } }), confirmLabel: $_("common.delete"), danger: true })) await session.remove(msg);
 	}
 </script>
 
 <!-- svelte-ignore a11y_click_events_have_key_events, a11y_no_static_element_interactions -->
-<div bind:this={el} class="block" class:ai={isAi} class:user={!isAi} class:hidden={meta.hidden} class:selecting class:picked={selected} id="msg-{msg.id}" data-no={no} class:tapped onclick={tap} oncontextmenu={openMenu}>
-	<div class="who">
-		{#if selecting}<input class="pick" type="checkbox" checked={selected} aria-label="#{no} 메시지 선택" onclick={(e) => e.stopPropagation()} onchange={(e) => onselect?.(msg, e.currentTarget.checked)} />{/if}
-		<span class="no">#{no}</span><b>{msg.name ?? (isAi ? "AI" : "나")}</b>
-		{#if meta.hidden}<Badge><EyeOff /> AI에게 숨김</Badge>{/if}
-		{#if (msg.meta as { ghost?: boolean } | null)?.ghost}<span class="ghost" role="img" aria-label="대필" title="대필"><PenLine size={12} /></span>{/if}
+<div bind:this={el} class="block sc-msg" class:ai={isAi} class:user={!isAi} class:sc-msg-ai={isAi} class:sc-msg-user={!isAi} class:sc-msg-hidden={meta.hidden} class:hidden={meta.hidden} class:selecting class:picked={selected} id="msg-{msg.id}" data-no={no} class:tapped onclick={tap} oncontextmenu={openMenu}>
+	<div class="who sc-msg-head">
+		{#if selecting}<input class="pick" type="checkbox" checked={selected} aria-label={$_("msgItem.selectMsgAria", { values: { no } })} onclick={(e) => e.stopPropagation()} onchange={(e) => onselect?.(msg, e.currentTarget.checked)} />{/if}
+		{#if avatar !== undefined && avatarShape !== "none"}<Avatar name={msg.name ?? (isAi ? "AI" : $_("msgItem.meFallback"))} src={avatar} fit={avatarFit} shape={avatarShape} frameSrc={avatarFrameSrc} size={avatarShape === "rect" || avatarShape === "custom" ? 30 : 24} />{/if}
+		<span class="no sc-msg-no">#{no}</span><b class="sc-msg-name">{msg.name ?? (isAi ? "AI" : $_("msgItem.meFallback"))}</b>
+		{#if meta.hidden}<Badge><EyeOff /> {$_("msgItem.hiddenBadge")}</Badge>{/if}
+		{#if (msg.meta as { ghost?: boolean } | null)?.ghost}<span class="ghost" role="img" aria-label={$_("msgItem.ghostLabel")} title={$_("msgItem.ghostLabel")}><PenLine size={12} /></span>{/if}
 		{#if live}
-			<span class="stamp">만드는 중…</span>
+			<span class="stamp">{$_("msgItem.creatingStamp")}</span>
 		{:else if isAi && isLast && session.rewriting}
-			<span class="stamp">다시 쓰는 중…</span>
+			<span class="stamp">{$_("msgItem.rewritingStamp")}</span>
 		{:else}
 			<span class="stamp">
-				{#if appSetting.showTimestamps}<time datetime={new Date(msg.createdAt).toISOString()} title={absolute(msg.createdAt)}>{relative(msg.createdAt)}</time>{/if}
+				{#if theme.chat.showTimestamps}<time datetime={new Date(msg.createdAt).toISOString()} title={absolute(msg.createdAt)}>{relative(msg.createdAt)}</time>{/if}
 				{#if isAi}<ProviderIcon {model} size={12} />{/if}
-				{#if meta.info?.cancelled}<span class="model">· 멈춤</span>{/if}
+				{#if meta.info?.cancelled}<span class="model">{$_("msgItem.stoppedStamp")}</span>{/if}
+				{#if isAi && truncated}<button type="button" class="cut" title={$_("msgItem.cutTitle")} onclick={() => nav.go({ page: "settings", tab: "preset" })}>{$_("msgItem.cutLabel")}</button>{/if}
 			</span>
 		{/if}
 		{#if !editing && !live && !selecting}
-			<div class="actions" role="toolbar" aria-label="메시지 {no} 동작">
-				{#if !layout.narrow}<IconButton label="여기서 분기 나누기" size="sm" onclick={() => onbranch(msg)}><GitBranch /></IconButton>{/if}
-				<IconButton label="복사" size="sm" onclick={copy}><Copy /></IconButton>
-				<IconButton label="수정" size="sm" onclick={startEdit}><Pencil /></IconButton>
-				<IconButton label={folded ? "펼치기" : "접기 (화면에서만)"} size="sm" onclick={toggleFold}>
+			<div class="actions sc-msg-actions" role="toolbar" aria-label={$_("msgItem.actionsAria", { values: { no } })}>
+				{#if readonly}
+					{#if !layout.narrow}<IconButton label={$_("msgItem.branchReadMenu")} size="sm" onclick={() => onbranch(msg)}><GitBranch /></IconButton>{/if}
+					<IconButton label={$_("msgItem.copyMenu")} size="sm" onclick={copy}><Copy /></IconButton>
+					<IconButton label={folded ? $_("msgItem.expand") : $_("msgItem.collapseVisual")} size="sm" onclick={toggleFold}>
+						{#if folded}<ChevronsUpDown />{:else}<ChevronsDownUp />{/if}
+					</IconButton>
+					{#if layout.narrow}
+						<IconButton label={$_("msgItem.moreAria")} size="sm" onclick={(e) => { const r = e.currentTarget.getBoundingClientRect(); menuAt = { x: r.right, y: r.bottom + 4, align: "end" }; }}><Ellipsis /></IconButton>
+					{:else if plugins.on("tts")}
+						<IconButton label={speech.messageId === msg.id ? $_("msgItem.stopSpeak") : $_("msgItem.playAudio")} size="sm" disabled={speech.loading && speech.messageId === msg.id} onclick={say}>
+							{#if speech.messageId === msg.id}<Square />{:else}<Volume2 />{/if}
+						</IconButton>
+					{/if}
+				{:else}
+				{#if !layout.narrow}<IconButton label={$_("msgItem.branchHere")} size="sm" onclick={() => onbranch(msg)}><GitBranch /></IconButton>{/if}
+				<IconButton label={$_("msgItem.copyMenu")} size="sm" onclick={copy}><Copy /></IconButton>
+				<IconButton label={$_("msgItem.editMenu")} size="sm" onclick={startEdit}><Pencil /></IconButton>
+				<IconButton label={folded ? $_("msgItem.expand") : $_("msgItem.collapseVisual")} size="sm" onclick={toggleFold}>
 					{#if folded}<ChevronsUpDown />{:else}<ChevronsDownUp />{/if}
 				</IconButton>
 				<!-- 좁은 화면: 나머지 동작은 메뉴로 (버튼이 많으면 화면 밖으로 나감) -->
 				{#if layout.narrow}
-					<IconButton label="더 보기" size="sm" onclick={(e) => { const r = e.currentTarget.getBoundingClientRect(); menuAt = { x: r.right, y: r.bottom + 4, align: "end" }; }}><Ellipsis /></IconButton>
+					<IconButton label={$_("msgItem.moreAria")} size="sm" onclick={(e) => { const r = e.currentTarget.getBoundingClientRect(); menuAt = { x: r.right, y: r.bottom + 4, align: "end" }; }}><Ellipsis /></IconButton>
 				{:else}
-				<IconButton label={meta.chapter ? "챕터 표시 지우기" : "여기서 챕터 시작"} size="sm" onclick={chapter}>
+				<IconButton label={meta.chapter ? $_("msgItem.removeChapter") : $_("msgItem.startChapterTitle")} size="sm" onclick={chapter}>
 					{#if meta.chapter}<BookmarkX />{:else}<Bookmark />{/if}
 				</IconButton>
-				<IconButton label={meta.hidden ? "AI에게 다시 보이기" : "AI에게 숨기기"} size="sm" onclick={() => session.setHidden(msg, !meta.hidden)}>
+				<IconButton label={meta.hidden ? $_("msgItem.showToAi") : $_("msgItem.hideFromAi")} size="sm" onclick={() => session.setHidden(msg, !meta.hidden)}>
 					{#if meta.hidden}<Eye />{:else}<EyeOff />{/if}
 				</IconButton>
 				{#if isAi && isLast}
-					<IconButton label="처음부터 다시 생성 (스와이프 버림)" size="sm" disabled={session.busy} onclick={() => session.regenerate(false)}><RefreshCw /></IconButton>
-					<IconButton label="지시와 함께 다시 생성" size="sm" disabled={session.busy} onclick={regenerateWith}><Sparkles /></IconButton>
+					<IconButton label={$_("msgItem.regenFresh")} size="sm" disabled={session.busy} onclick={() => session.regenerate(false)}><RefreshCw /></IconButton>
+					<IconButton label={$_("msgItem.regenWithTitle")} size="sm" disabled={session.busy} onclick={regenerateWith}><Sparkles /></IconButton>
 				{/if}
 				{#if isAi}
-					<IconButton label="보낸 컨텍스트 보기" size="sm" onclick={() => onprompt(msg)}><FileSearch /></IconButton>
+					<IconButton label={$_("msgItem.viewPrompt")} size="sm" onclick={() => onprompt(msg)}><FileSearch /></IconButton>
 				{/if}
 				{#if plugins.on("translate")}
-					<IconButton label={translation ? (showOriginal ? "번역 보기" : "원문 보기") : "번역"} size="sm" disabled={toolBusy === "translate"} onclick={translate}><Languages /></IconButton>
+					<IconButton label={translation ? (showOriginal ? $_("msgItem.showTrans") : $_("msgItem.showOrig")) : $_("msgItem.translateMenu")} size="sm" disabled={toolBusy === "translate"} onclick={translate}><Languages /></IconButton>
 				{/if}
 				{#if plugins.on("tts")}
-					<IconButton label={speech.messageId === msg.id ? "읽기 멈추기" : "소리 내어 읽기"} size="sm" disabled={speech.loading && speech.messageId === msg.id} onclick={() => speak(msg, translation && !showOriginal ? translation.text : msg.content)}>
+					<IconButton label={speech.messageId === msg.id ? $_("msgItem.stopSpeak") : $_("msgItem.readAloud")} size="sm" disabled={speech.loading && speech.messageId === msg.id} onclick={say}>
 						{#if speech.messageId === msg.id}<Square />{:else}<Volume2 />{/if}
 					</IconButton>
 				{/if}
 				{#if plugins.on("imagegen") && isAi}
-					<IconButton label="이 장면 그리기" size="sm" disabled={toolBusy === "draw"} onclick={draw}><ImagePlus /></IconButton>
+					<IconButton label={$_("msgItem.drawScene")} size="sm" disabled={toolBusy === "draw"} onclick={draw}><ImagePlus /></IconButton>
 				{/if}
-				<IconButton label="삭제" size="sm" onclick={remove}><Trash2 /></IconButton>
+				<IconButton label={$_("common.delete")} size="sm" onclick={remove}><Trash2 /></IconButton>
+				{/if}
 				{/if}
 			</div>
 		{/if}
 	</div>
 
 	{#if folded && !editing}
-		<button class="folded-line" onclick={(e) => { e.stopPropagation(); open = true; }} title="눌러서 펼치기">{preview || "(빈 메시지)"}</button>
+		<button class="folded-line" onclick={(e) => { e.stopPropagation(); open = true; }} title={$_("msgItem.expandTitle")}>{preview || $_("msgItem.emptyMsg")}</button>
 	{:else if editing}
 		<div class="edit">
-			<Textarea bind:value={draft} autosize maxRows={20} aria-label="메시지 수정" />
+			<Textarea bind:value={draft} autosize maxRows={20} aria-label={$_("msgItem.editAria")} />
 			<div class="edit-btns">
-				<Button size="sm" variant="ghost" onclick={() => (editing = false)}>취소</Button>
-				<Button size="sm" variant="primary" onclick={saveEdit}>저장</Button>
+				<Button size="sm" variant="ghost" onclick={() => (editing = false)}>{$_("common.cancel")}</Button>
+				<Button size="sm" variant="primary" onclick={saveEdit}>{$_("common.save")}</Button>
 			</div>
 		</div>
 	{:else}
 		{#if meta.attachments?.length}
 			<div class="attach">
-				{#each meta.attachments as a (a)}<img src={fileSrc(a)} alt="첨부 이미지" loading="lazy" />{/each}
+				{#each meta.attachments as a (a)}<img src={fileSrc(a)} alt={$_("msgItem.attachedImgAlt")} loading="lazy" />{/each}
 			</div>
 		{/if}
-		{#if !live}<LintNote {msg} bind:showOriginal={lintOriginal} onupdate={(m) => session.update(m)} />{/if}
-		{#if !live}<PluginProcessNote {msg} bind:showOriginal={pluginOriginal} onupdate={(m) => session.update(m)} />{/if}
-		{#if translation && !live}<p class="tr-note">{showOriginal ? "원문" : `${translation.lang} 번역`} · <button class="link" onclick={() => (showOriginal = !showOriginal)}>{showOriginal ? "번역 보기" : "원문 보기"}</button></p>{/if}
+		{#if !live && !readonly}<LintNote {msg} bind:showOriginal={lintOriginal} onupdate={(m) => session.update(m)} />{/if}
+		{#if !live && !readonly}<PluginProcessNote {msg} bind:showOriginal={pluginOriginal} onupdate={(m) => session.update(m)} />{/if}
+		{#if translation && !live}<p class="tr-note">{showOriginal ? $_("msgItem.origLabel") : $_("msgItem.transLabel", { values: { lang: translation.lang } })} · <button class="link" onclick={() => (showOriginal = !showOriginal)}>{showOriginal ? $_("msgItem.showTrans") : $_("msgItem.showOrig")}</button></p>{/if}
 		{#if blocks.length}
-			<RichText {blocks} {images} />
+			<!-- 상태창 고정은 AI 메시지만 (고정 자리도 AI 메시지에서 찾음, 5-F-4-2) -->
+			<RichText {blocks} {images} collapsePins={plugins.on("status") && msg.role === "assistant" ? (pinnedKeys ?? true) : false} />
 		{:else if live}
-			<p class="typing" aria-label="응답 기다리는 중"><span></span><span></span><span></span></p>
+			<div class="typing"><TypingIndicator name={msg.name ?? ""} /></div>
+		{/if}
+		{#if varChanges.length && !live}
+			<!-- AI가 바꾼 변수 (5-F-4-4): 이 응답(스와이프)이 바꾼 몫. 다시 만들면 되돌린다 -->
+			<p class="var-changes sc-var-changes" title={$_("msgItem.varChangesTitle")}>
+				{#each varChanges as c (c.key)}<span><b>{c.key}</b> {c.from ?? ""}→{c.to}</span>{/each}
+			</p>
 		{/if}
 	{/if}
 	<!-- AI에게 숨긴 메시지: 접기·펼치기는 본문(한 줄 미리보기) 아래 -->
 	{#if (meta.hidden || open === false) && !live && !editing}
 		<button class="fold" aria-expanded={!folded} onclick={(e) => { e.stopPropagation(); toggleFold(); }}>
-			<ChevronDown class={folded ? "rot" : ""} />{folded ? "펼치기" : "접기"}
+			<ChevronDown class={folded ? "rot" : ""} />{folded ? $_("msgItem.expand") : $_("msgItem.collapse")}
 		</button>
 	{/if}
 
@@ -314,21 +397,32 @@
 			{/each}
 		</div>
 	{/if}
-	{#if toolBusy === "draw"}<p class="tr-note">장면을 그리는 중…</p>{/if}
+	{#if toolBusy === "draw"}<p class="tr-note">{$_("msgItem.drawingNote")}</p>{/if}
 
 	<!-- 스와이프는 마지막 AI 메시지에서만: < 번호 > 한 세트 (끝에서 > 를 누르면 새 응답) -->
-	{#if isAi && isLast && !editing && !live}
+	{#if isAi && isLast && !editing && !live && !readonly}
 		<div class="swipe">
-			<IconButton label="이전 응답" size="sm" disabled={swipeId === 0 || session.busy} onclick={() => session.swipe(msg, -1)}><ChevronLeft /></IconButton>
+			<IconButton label={$_("msgItem.prevSwipeAria")} size="sm" disabled={swipeId === 0 || session.busy} onclick={() => session.swipe(msg, -1)}><ChevronLeft /></IconButton>
 			<span>{swipeId + 1} / {Math.max(swipes, 1)}</span>
-			<IconButton label={swipeId >= swipes - 1 ? "새 응답 만들기 (스와이프)" : "다음 응답"} size="sm" disabled={session.busy} onclick={() => session.swipe(msg, 1)}><ChevronRight /></IconButton>
+			<IconButton label={swipeId >= swipes - 1 ? $_("msgItem.newSwipeAria") : $_("msgItem.nextSwipeAria")} size="sm" disabled={session.busy} onclick={() => session.swipe(msg, 1)}><ChevronRight /></IconButton>
 		</div>
 	{/if}
 </div>
-<ContextMenu at={markMenuAt} items={markMenuItems} label="북마크 메뉴" onclose={() => (markMenuAt = null)} />
-<ContextMenu at={menuAt} items={menuItems} label="메시지 {no} 메뉴" onclose={() => (menuAt = null)} />
+<ContextMenu at={markMenuAt} items={markMenuItems} label={$_("msgItem.markMenuAria")} onclose={() => (markMenuAt = null)} />
+<ContextMenu at={menuAt} items={menuItems} label={$_("msgItem.msgMenuAria", { values: { no } })} onclose={() => (menuAt = null)} />
 
 <style>
+	.var-changes {
+		display: flex;
+		flex-wrap: wrap;
+		gap: 2px var(--space-3);
+		margin: var(--space-1) 0 0;
+		color: var(--text-muted);
+		font-size: var(--text-xs);
+	}
+	.var-changes b {
+		font-weight: 600;
+	}
 	.ghost {
 		display: inline-flex;
 		color: var(--text-faint);
@@ -512,32 +606,59 @@
 		gap: var(--space-2);
 		margin-top: var(--space-1);
 	}
+	.typing {
+		padding: var(--space-2) 0;
+	}
 	.edit-btns {
 		display: flex;
 		justify-content: flex-end;
 		gap: var(--space-1);
 	}
-	.typing {
-		display: flex;
-		gap: 4px;
-		padding: var(--space-2) 0;
+	.cut {
+		padding: 0;
+		border: none;
+		background: none;
+		color: var(--warning, var(--text-muted));
+		font: inherit;
+		cursor: pointer;
 	}
-	.typing span {
-		width: 6px;
-		height: 6px;
-		border-radius: 50%;
-		background: var(--text-faint);
-		animation: blink 1.2s infinite;
+	.cut:hover {
+		text-decoration: underline;
 	}
-	.typing span:nth-child(2) {
-		animation-delay: 0.2s;
+
+	/* 배경 이미지가 활성화된 대화 화면: AI 메시지는 배경 위에 깔끔히 띄우고, 유저 메시지는 유리 카드 스타일 */
+	:global(:root[data-bg-image]) .block:hover {
+		background: color-mix(in oklab, var(--bg-solid, var(--bg)) 34%, transparent);
 	}
-	.typing span:nth-child(3) {
-		animation-delay: 0.4s;
+	:global(:root[data-bg-image]) .user {
+		border: 1px solid color-mix(in oklab, var(--text) 16%, transparent);
+		border-radius: var(--radius-lg);
+		background: color-mix(in oklab, var(--bg-solid, var(--bg)) 54%, transparent);
+		backdrop-filter: blur(12px);
+		-webkit-backdrop-filter: blur(12px);
+		padding: var(--space-3) var(--space-4);
 	}
-	@keyframes blink {
-		50% {
-			opacity: 0.2;
-		}
+	:global(:root[data-bg-image]) .user:hover {
+		background: color-mix(in oklab, var(--bg-solid, var(--bg)) 64%, transparent);
+		border-color: color-mix(in oklab, var(--text) 24%, transparent);
+	}
+	:global(:root[data-theme="dark"][data-bg-image]) .ai {
+		text-shadow: 0 1px 3px rgb(0 0 0 / 0.45);
+	}
+	:global(:root[data-theme="light"][data-bg-image]) .ai {
+		text-shadow: 0 1px 2px rgb(255 255 255 / 0.65);
+	}
+	:global(:root[data-bg-image]) .who {
+		color: color-mix(in oklab, var(--text) 82%, transparent);
+	}
+	:global(:root[data-bg-image]) .no,
+	:global(:root[data-bg-image]) .stamp {
+		color: color-mix(in oklab, var(--text) 72%, transparent);
+	}
+	:global(:root[data-bg-image]) .actions {
+		background: color-mix(in oklab, var(--bg-solid, var(--bg)) 80%, transparent);
+		border-color: color-mix(in oklab, var(--text) 16%, transparent);
+		backdrop-filter: blur(10px);
+		-webkit-backdrop-filter: blur(10px);
 	}
 </style>

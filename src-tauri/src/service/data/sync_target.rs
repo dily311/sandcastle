@@ -92,6 +92,9 @@ impl SyncTarget for FolderTarget {
 
     async fn get(&self, name: &str, dest: &Path) -> Result<()> {
         let src = self.root.join(check_name(name)?);
+        if !src.exists() {
+            return Err(AppError::not_found(format!("동기화 폴더에 없음: {name}")));
+        }
         if let Some(p) = dest.parent() {
             std::fs::create_dir_all(p)?;
         }

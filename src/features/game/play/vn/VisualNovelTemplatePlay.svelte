@@ -1,13 +1,16 @@
 <script lang="ts">
+	import { _ } from "svelte-i18n";
 	import { onMount, tick } from "svelte";
 	import { Channel } from "@tauri-apps/api/core";
 	import type { StreamPayload } from "$ipc/bindings";
 	import type { AssetRef, GameCommand, GameJournal, NpcReply, StageLine } from "$features/game/types";
 	import { LineKind } from "$features/game/types";
-	import { call, commands } from "$shared/ipc/client";
+	import { call, commands, toAppError } from "$shared/ipc/client";
 	import { layout } from "$app/layout.svelte";
 	import "../stage.css";
 	import StageView from "./StageView.svelte";
+	import { stageFx } from "./stageFx.svelte";
+	import { vnTheme } from "./vnTheme.svelte";
 	import PlayInfo from "./PlayInfo.svelte";
 	import { playBridge } from "../../runtime/playBridge.svelte";
 	import { panel } from "$app/panel.svelte";
@@ -102,7 +105,7 @@
 		const text = lastReply?.text ?? scriptLines.map((l) => l.text).filter(Boolean).join("\n");
 		if (!text.trim()) return;
 		drawing = true;
-		toasts.info("장면을 그리는 중… (잠시 걸림)");
+		toasts.info($_("gameUi.drawingToast"));
 		try {
 			const img = await drawText(text, "game");
 			drawnScene = { path: img.path, prompt: img.prompt };
@@ -115,7 +118,7 @@
 			? gameStore.view?.characters.find((character) => character.id === currentLine.speaker)
 			: null,
 	);
-	const speakerName = $derived(currentLine?.speaker === "player" ? "나" : (currentCharacter?.name ?? null));
+	const speakerName = $derived(currentLine?.speaker === "player" ? $_("gameUi.meFallback") : (currentCharacter?.name ?? null));
 	const focusedCharacterId = $derived(currentCharacter?.id ?? null);
 	const activeNpcId = $derived(runtimeStore.state?.activeNpcId ?? null);
 	/** 열린 씬이 있는가. 씬 동안은 1:1 대화(talk)가 막히고 입력은 씬 입력(sceneSay)으로 간다 */
@@ -127,16 +130,17 @@
 	const playActions = $derived.by<PlayAction[]>(() => {
 		if (sceneOpen || activeNpcId) return [];
 		const out: PlayAction[] = [];
-		for (const c of runtimeStore.nearbyCharacters) out.push({ id: `talk:${c.id}`, kind: "talk", label: `${c.name}에게 말 걸기`, run: () => dispatch({ type: "talk", gameCharacterId: c.id }) });
-		for (const i of runtimeStore.localInteractables) out.push({ id: `look:${i.id}`, kind: "look", label: `${i.name} 살펴보기`, run: () => dispatch({ type: "interact", entityId: i.id }) });
+		for (const c of runtimeStore.nearbyCharacters) out.push({ id: `talk:${c.id}`, kind: "talk", label: $_("gameUi.talkToAction", { values: { name: c.name } }), run: () => dispatch({ type: "talk", gameCharacterId: c.id }) });
+		for (const i of runtimeStore.localInteractables) out.push({ id: `look:${i.id}`, kind: "look", label: $_("gameUi.lookAtAction", { values: { name: i.name } }), run: () => dispatch({ type: "interact", entityId: i.id }) });
 		for (const d of runtimeStore.destinations) {
 			const block = runtimeStore.moveBlock(d.toId);
 			const locked = Boolean(block);
+			const locName = d.location?.name ?? $_("gameUi.somewhere");
 			out.push({
 				id: `move:${d.toId}`,
 				kind: "move",
-				label: `${d.location?.name ?? "어딘가"}${directionParticle(d.location?.name ?? "어딘가")} 가기`,
-				hint: block ?? `${Math.max(1, Math.ceil(d.travelSeconds / 60))}분`,
+				label: $_("gameUi.moveToAction", { values: { name: locName, particle: directionParticle(locName) } }),
+				hint: block ?? $_("gameUi.minutesUnit", { values: { m: Math.max(1, Math.ceil(d.travelSeconds / 60)) } }),
 				disabled: locked,
 				run: () => dispatch({ type: "moveTo", locationId: d.toId }),
 			});
@@ -148,7 +152,7 @@
 		if (sceneOpen) return sceneChat ? { kind: "scene" } : null;
 		return activeNpcId ? { kind: "npc", characterId: activeNpcId } : null;
 	});
-	const title = $derived(gameStore.view?.game?.title ?? "게임");
+	const title = $derived(gameStore.view?.game?.title ?? $_("gameUi.gameFallback"));
 
 	function setBgm(asset: AssetRef | null, mood = "") {
 		if (!asset) {
@@ -208,6 +212,7 @@
 		if (!line || scriptFinished || playedLines.has(line)) return;
 		playedLines.add(line);
 		playLineAudio(line);
+		stageFx.run(line.cues as unknown[]);
 	});
 
 	function resumeBgm() {
@@ -217,6 +222,25 @@
 			.then(() => (bgmBlocked = false))
 			.catch(() => (bgmBlocked = true));
 	}
+
+	// 휴대폰: 앱이 가려지면(홈 버튼·다른 앱) 음악·목소리를 멈추고, 돌아오면 멈추기 전에 돌던 음악만 다시 (5-E-13)
+	$effect(() => {
+		if (!layout.mobile) return;
+		let resume = false;
+		const onVisibility = () => {
+			if (document.hidden) {
+				resume = !!bgmAudio && !bgmAudio.paused;
+				bgmAudio?.pause();
+				voiceAudio?.pause();
+				stopSpeaking();
+			} else if (resume) {
+				resume = false;
+				resumeBgm();
+			}
+		};
+		document.addEventListener("visibilitychange", onVisibility);
+		return () => document.removeEventListener("visibilitychange", onVisibility);
+	});
 
 	function toggleBgmMute() {
 		isBgmMuted = !isBgmMuted;
@@ -233,7 +257,8 @@
 		setBgm(bgm?.asset ?? null, bgm?.mood ?? "");
 	}
 
-	function applyLineCues(line: StageLine | undefined): CurrentBgm | null | undefined {
+	/** withEmotion: 이 줄의 표정(standing)을 쓸지. 표정은 그 줄에서만 — 다음 줄에 그 캐릭터 표정이 없으면 기본 표정으로 (5-E-24) */
+	function applyLineCues(line: StageLine | undefined, withEmotion = true): CurrentBgm | null | undefined {
 		if (!line) return undefined;
 		let nextBgm: { asset: AssetRef | null; mood: string } | undefined;
 		for (const rawCue of line.cues ?? []) {
@@ -246,7 +271,7 @@
 			};
 			switch (normalizeCueType(cue.type)) {
 				case "standing":
-					if (cue.characterId && cue.asset) {
+					if (withEmotion && cue.characterId && cue.asset) {
 						standingOverrides = {
 							...standingOverrides,
 							[cue.characterId]: { emotion: cue.emotion ?? "normal", asset: cue.asset },
@@ -268,7 +293,7 @@
 		standingOverrides = { ...standingBaseline };
 		let targetBgm = scriptStartBgm;
 		for (let line = 0; line <= index; line += 1) {
-			const cueBgm = applyLineCues(scriptLines[line]);
+			const cueBgm = applyLineCues(scriptLines[line], line === index);
 			if (cueBgm !== undefined) targetBgm = cueBgm;
 		}
 		setBgm(targetBgm?.asset ?? null, targetBgm?.mood ?? "");
@@ -286,14 +311,23 @@
 			}
 		}
 		const baseline: Record<string, DisplayStanding | null> = { ...(runtimeStore.stage?.standings ?? {}) };
-		for (const characterId of affectedCharacters) {
-			const normal = gameStore.view?.assets.characters.find(
-				(asset) =>
-					asset.characterId === characterId &&
-					asset.usage === "standing" &&
-					asset.emotion.toLowerCase() === "normal",
+		const normalOf = (characterId: string) =>
+			gameStore.view?.assets.characters.find(
+				(asset) => asset.characterId === characterId && asset.usage === "standing" && asset.emotion.toLowerCase() === "normal",
 			);
-			baseline[characterId] = normal ? { emotion: normal.emotion, asset: normal } : null;
+		for (const characterId of affectedCharacters) {
+			// 기본 표정 그림이 없으면 지금 그림, 그것도 없으면 그 캐릭터의 아무 스탠딩 (표정이 돌아갈 때 사라지지 않게)
+			const normal =
+				normalOf(characterId) ??
+				(baseline[characterId] ? null : gameStore.view?.assets.characters.find((asset) => asset.characterId === characterId && asset.usage === "standing"));
+			if (normal) baseline[characterId] = { emotion: normal.emotion, asset: normal };
+			else if (!(characterId in baseline)) baseline[characterId] = null;
+		}
+		// 지난 응답에서 바뀐 채 남은 표정도 기본 표정에서 시작 (기본 표정 그림이 없으면 그대로)
+		for (const [characterId, standing] of Object.entries(baseline)) {
+			if (!standing || standing.emotion.toLowerCase() === "normal") continue;
+			const normal = normalOf(characterId);
+			if (normal) baseline[characterId] = { emotion: normal.emotion, asset: normal };
 		}
 		if (!hasBgmCue) syncBgmFromStage();
 		standingBaseline = baseline;
@@ -423,10 +457,22 @@
 	 * keepLines: 지금 무대의 대사(선택지 결과 등) 뒤에 응답을 붙인다
 	 * fromChoice: 선택지에서 온 문구라 실패해도 입력창에 되돌리지 않는다
 	 */
+	/** 마지막 보내기 실패 (다시 보내기용으로 글을 같이 둔다) */
+	let sendError = $state<{ message: string; text: string; fromChoice: boolean } | null>(null);
+	let cancelled = false;
+	/** 받는 중인 응답 멈추기: 이 플레이의 게임 대사 작업을 취소한다 (보낸 글은 입력칸으로 돌아옴) */
+	async function cancelSay() {
+		cancelled = true;
+		const tasks = await call(commands.listActiveTasks(), { source: "game", silent: true }).catch(() => []);
+		for (const t of tasks.filter((t) => t.feature === "game" && t.ownerRef === sessionId)) void call(commands.cancelTask(t.id), { source: "game", silent: true }).catch(() => {});
+	}
+
 	async function say(text = freeTextInput, opts: { keepLines?: boolean; fromChoice?: boolean } = {}) {
 		const input = text.trim();
 		const target = sayTarget;
 		if (!input || !target || isLoading) return;
+		sendError = null;
+		cancelled = false;
 		const prefix = opts.keepLines ? scriptLines : [];
 		const startAt = opts.keepLines ? lineIndex : 0;
 		try {
@@ -439,7 +485,11 @@
 			channel.onmessage = (p) => (streamingText += p.chunk);
 			const request = target.kind === "scene" ? commands.sceneSay(input, channel) : commands.npcSay(target.characterId, input, channel);
 			const reply = (await call(request, { source: "game", silent: true }).catch((e) => {
-				reportGameError(e, gameStore.project?.id);
+				// 멈춘 것은 오류가 아님. 그 밖에는 알림과 함께 대사창에도 남긴다
+				if (!cancelled) {
+					reportGameError(e, gameStore.project?.id);
+					sendError = { message: toAppError(e).message, text: input, fromChoice: !!opts.fromChoice };
+				}
 				throw e;
 			})) as unknown as NpcReply;
 			applyReply(reply, prefix, startAt);
@@ -634,14 +684,23 @@
 
 <svelte:window onkeydown={onKey} />
 
-<main class="vn-player game-theme">
+<main
+	class="vn-player game-theme"
+	data-vn-aspect={vnTheme.config.aspect}
+	data-vn-preset={vnTheme.config.preset}
+	data-vn-box={vnTheme.config.boxStyle}
+	style:--vn-dialogue-alpha={vnTheme.config.dialogueOpacity}
+	style:--vn-font-size="{vnTheme.config.fontSize}px"
+	style:--vn-sprite-scale={vnTheme.config.spriteScale}
+	style:--vn-accent={vnTheme.config.accentColor ?? undefined}
+>
 
 	<section class="stage-area" aria-labelledby="scene-name" style:--dock-h="{dockHeight}px">
 		<StageView onAdvance={handleStageClick} {standingOverrides} {focusedCharacterId} />
 		{#if !uiHidden}
 			<PlayInfo
 				sceneName={runtimeStore.currentScene?.name ?? title}
-				locationName={runtimeStore.currentLocation?.name ?? "장소 불러오는 중"}
+				locationName={runtimeStore.currentLocation?.name ?? $_("gameUi.loadingLocation")}
 				weatherName={runtimeStore.currentWeather?.name ?? ""}
 				gameTime={runtimeStore.gameTime}
 				canWait={runtimeStore.canWait}
@@ -662,7 +721,7 @@
 			{choices}
 			npcChoices={npcResponseChoices}
 			canSendInput={Boolean(sayTarget)}
-			inputPlaceholder={sayTarget?.kind === "scene" ? "이 장면에서 할 말이나 행동 입력" : "하고 싶은 말 입력"}
+			inputPlaceholder={sayTarget?.kind === "scene" ? $_("gameUi.sceneInputPlaceholder") : $_("gameUi.inputPlaceholder")}
 			canStopTalk={!sceneOpen && Boolean(activeNpcId)}
 			actions={playActions}
 			canEndScene={sceneOpen && sceneChat}
@@ -680,6 +739,10 @@
 			onNpcChoice={(text) => say(text, { fromChoice: true })}
 			onInputChange={(value) => (freeTextInput = value)}
 			onSubmitInput={() => say()}
+			onCancel={() => void cancelSay()}
+			sendError={sendError?.message ?? null}
+			onRetry={() => sendError && void say(sendError.text, { fromChoice: sendError.fromChoice })}
+			onDismissError={() => (sendError = null)}
 			onStopTalk={() => dispatch({ type: "stopTalk" })}
 			onEndScene={() => dispatch({ type: "endScene" })}
 			{autoAdvance}
@@ -710,12 +773,12 @@
 		/>
 		{#if backlogOpen}<Backlog onclose={() => (backlogOpen = false)} />{/if}
 		{#if drawnScene}
-			<button class="drawn-scene" type="button" title="닫기 · {drawnScene.prompt}" onclick={() => (drawnScene = null)}>
+			<button class="drawn-scene" type="button" title={$_("gameUi.closeDrawnTitle", { values: { prompt: drawnScene.prompt } })} onclick={() => (drawnScene = null)}>
 				<img src={fileSrc(drawnScene.path)} alt={drawnScene.prompt} />
 			</button>
 		{/if}
-		{#if uiHidden}<p class="hidden-hint">무대를 누르면 대사창이 다시 보임</p>{/if}
-		{#if isLoading}<div class="busy" role="status"><span></span>처리 중</div>{/if}
+		{#if uiHidden}<p class="hidden-hint">{$_("gameUi.hiddenHint")}</p>{/if}
+		{#if isLoading}<div class="busy" role="status"><span></span>{$_("gameUi.busyLabel")}</div>{/if}
 	</section>
 
 	<audio
@@ -731,19 +794,43 @@
 	.vn-player {
 		height: 100%;
 		min-height: 0;
-		display: flex;
-		flex-direction: column;
+		display: grid;
+		place-items: center;
+		container-type: size;
 		overflow: hidden;
 		color: var(--game-text-main);
 		background: var(--game-player-bg);
 	}
 	.stage-area {
 		position: relative;
-		flex: 1;
+		width: 100%;
+		height: 100%;
 		min-height: 0;
 		overflow: hidden;
 		background: var(--game-stage-bg);
 		isolation: isolate;
+		transition:
+			width 180ms var(--ease),
+			height 180ms var(--ease),
+			border-radius 180ms var(--ease);
+	}
+	.vn-player[data-vn-aspect="4:3"] .stage-area {
+		width: min(100cqw, calc(100cqh * 4 / 3));
+		height: min(100cqh, calc(100cqw * 3 / 4));
+		border-radius: var(--radius-md);
+		box-shadow: 0 0 0 1px var(--game-border), 0 18px 48px rgb(0 0 0 / 0.45);
+	}
+	.vn-player[data-vn-aspect="16:9"] .stage-area {
+		width: min(100cqw, calc(100cqh * 16 / 9));
+		height: min(100cqh, calc(100cqw * 9 / 16));
+		border-radius: var(--radius-md);
+		box-shadow: 0 0 0 1px var(--game-border), 0 18px 48px rgb(0 0 0 / 0.45);
+	}
+	.vn-player[data-vn-aspect="21:9"] .stage-area {
+		width: min(100cqw, calc(100cqh * 21 / 9));
+		height: min(100cqh, calc(100cqw * 9 / 21));
+		border-radius: var(--radius-md);
+		box-shadow: 0 0 0 1px var(--game-border), 0 18px 48px rgb(0 0 0 / 0.45);
 	}
 	.hidden-hint {
 		position: absolute;

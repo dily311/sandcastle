@@ -1,7 +1,9 @@
 // 앱 전체 화면 이동 기록 (타이틀바 앞으로/뒤로, Alt+←/→, 마우스 옆 버튼)
+export type PhoneApp = "home" | "messages" | "contacts" | "photos" | "camera" | "settings";
+
 export type Route =
 	| { page: "home" }
-	| { page: "phone" }
+	| { page: "phone"; app?: PhoneApp; convId?: string }
 	| { page: "character"; charId?: string; convId?: string; edit?: boolean }
 	| { page: "game"; gameId?: string; sessionId?: string; edit?: boolean }
 	| { page: "persona"; personaId?: string }
@@ -9,7 +11,7 @@ export type Route =
 	| { page: "images" }
 	| { page: "settings"; tab?: SettingsTab; /** 테마 편집: 파일 이름, 또는 "new" / "builtin:id"(복제해서 새로). API 편집: 연결 id 또는 "new" */ edit?: string };
 
-export type SettingsTab = "general" | "plugins" | "chat" | "phone" | "theme" | "shortcut" | "widget" | "api" | "preset" | "regex" | "data" | "log" | "activity" | "game" | "cg" | "translate" | "tts" | "imagegen" | "sync" | "community" | "lint" | "memory" | "summary" | "rewrite" | "ghostwrite" | `community:${string}`;
+export type SettingsTab = "general" | "plugins" | "chat" | "phone" | "theme" | "shortcut" | "widget" | "api" | "preset" | "regex" | "lorebook" | "data" | "log" | "activity" | "budget" | "game" | "cg" | "translate" | "tts" | "imagegen" | "sync" | "community" | "lint" | "memory" | "summary" | "rewrite" | "ghostwrite" | "quickreply" | `community:${string}`;
 export type Page = Route["page"];
 
 const MAX = 100;
@@ -70,3 +72,31 @@ class Nav {
 }
 
 export const nav = new Nav();
+
+// ---- 마지막으로 본 화면 (5-E-5) — 이 기기의 화면 상태라 브라우저 저장소에 ----
+const LAST_KEY = "sandcastle.lastRoute";
+const PAGES: Page[] = ["home", "phone", "character", "game", "persona", "lorebook", "images", "settings"];
+
+/** 다시 열 때 쓸 모양: 편집 화면·게임 플레이는 열지 않는다 (편집기는 저장하지 않은 것처럼 보이고, 플레이는 소리·작업을 시작함) */
+export function restorable(r: Route): Route {
+	const { edit: _e, ...rest } = r as Route & { edit?: unknown };
+	if (rest.page === "game") return { page: "game", gameId: rest.gameId };
+	return rest as Route;
+}
+
+export function saveLastRoute(r: Route) {
+	try {
+		localStorage.setItem(LAST_KEY, JSON.stringify(restorable(r)));
+	} catch {
+		/* 저장소를 못 쓰면 다음엔 기본 화면 */
+	}
+}
+
+export function lastRoute(): Route | null {
+	try {
+		const r = JSON.parse(localStorage.getItem(LAST_KEY) ?? "null") as Route | null;
+		return r && PAGES.includes(r.page) ? restorable(r) : null;
+	} catch {
+		return null;
+	}
+}

@@ -1,10 +1,12 @@
 <script lang="ts">
-	// 실행 기록 (CLAUDE.md M2): 지금 실행 중인 작업(멈추기) · 최근 실행 내역(자동 실행 표시) · API별 사용량
-	// 화면이 열려 있는 동안만 불러오고 작업 이벤트로 새로 고친다 (Lazy Initialization)
+	// 실행 기록 (CLAUDE.md M2): 지금 실행 중인 작업(멈추기) · 최근 실행 내역(자동 실행 표시)
+	// 예산 한도·API별 사용량·단가표는 BudgetSection으로 분리
 	import { onDestroy, onMount } from "svelte";
+	import { _ } from "svelte-i18n";
 	import { RefreshCw, Square, Trash2 } from "@lucide/svelte";
-	import type { ApiProfiles, BudgetOverview_Serialize as BudgetOverview, TaskHistoryItem_Serialize as HistoryItem, TaskInfo_Serialize as TaskInfo, UsageSummary_Serialize as Usage } from "$ipc/bindings";
-	import { Badge, Button, EmptyState, Segmented, Select } from "$shared/ui";
+	import type { AiCallLog_Serialize as CallLog, TaskHistoryItem_Serialize as HistoryItem, TaskInfo_Serialize as TaskInfo } from "$ipc/bindings";
+	import { localizeTaskFeature, localizeTaskStatus } from "$lib/utils/backendI18n";
+	import { Badge, Button, EmptyState, Segmented, Select, Switch } from "$shared/ui";
 	import { appSetting } from "$shared/stores/appSetting.svelte";
 	import { call, commands } from "$shared/ipc/client";
 	import { onEvent } from "$shared/ipc/events";
@@ -12,82 +14,67 @@
 	import { toasts } from "$shared/stores/toast.svelte";
 	import Section from "./Section.svelte";
 	import Group from "./Group.svelte";
-	import PriceTable from "./PriceTable.svelte";
-	import BudgetLimits from "./BudgetLimits.svelte";
 
 	const src = { source: "activity" };
-	const FEATURE: Record<string, string> = {
-		chat: "대화",
-		phone: "폰",
-		game: "게임",
-		translate: "번역",
-		tts: "음성",
-		imagegen: "이미지", memory: "메모리", summary: "대화 요약", rewrite: "자동 재생성", ghostwrite: "대필",
-		settings: "설정",
+	const STATUS_TONE: Record<string, "neutral" | "accent" | "success" | "warning" | "danger" | "info"> = {
+		pending: "neutral",
+		running: "accent",
+		completed: "success",
+		failed: "danger",
+		cancelled: "neutral",
+		interrupted: "warning",
 	};
-	const STATUS: Record<string, { label: string; tone: "neutral" | "accent" | "success" | "warning" | "danger" | "info" }> = {
-		pending: { label: "대기", tone: "neutral" },
-		running: { label: "실행 중", tone: "accent" },
-		completed: { label: "완료", tone: "success" },
-		failed: { label: "실패", tone: "danger" },
-		cancelled: { label: "멈춤", tone: "neutral" },
-		interrupted: { label: "끊김", tone: "warning" },
-	};
-	const KIND: Record<string, string> = { chat: "텍스트", tts: "음성", image: "이미지", embedding: "임베딩" };
-
 	let active = $state<TaskInfo[]>([]);
 	let history = $state<HistoryItem[]>([]);
-	let usage = $state<Usage[]>([]);
-	let profiles = $state<ApiProfiles[]>([]);
-	let budgets = $state<BudgetOverview[]>([]);
-	let period = $state<"day" | "week" | "month" | "all">("week");
 	let who = $state<"all" | "auto">("all");
 	let open = $state<string | null>(null);
+	// 보낸 글·받은 글 (5-E-20-6-7): 기록이 있는 작업, 펼친 작업의 기록
+	let logged = $state<Set<string>>(new Set());
+	let calls = $state<Record<string, CallLog[]>>({});
+	const logOn = $derived(!!(appSetting.value as { aiCallLog?: boolean } | null)?.aiCallLog);
+	async function toggleLog(v: boolean) {
+		await appSetting.update({ aiCallLog: v } as never);
+		toasts.success(v ? $_("settings.activityDetail.logEnabled") : $_("settings.activityDetail.logDisabled"));
+	}
+	async function clearLogs() {
+		if (!(await confirmAction({ title: $_("settings.activityDetail.clearLogsTitle"), message: $_("settings.activityDetail.clearLogsMsg"), confirmLabel: $_("settings.activityDetail.clearLogsBtn"), danger: true }))) return;
+		await call(commands.clearAiCallLogs(), src);
+		logged = new Set();
+		calls = {};
+	}
+	async function expand(id: string) {
+		open = open === id ? null : id;
+		if (open && logged.has(id) && !calls[id]) calls[id] = await call(commands.getAiCallLogs(id), { ...src, silent: true }).catch(() => []);
+	}
+	/** 보낸 것 (JSON) → 역할·글 목록 */
+	function sent(c: CallLog): { role: string; content: string }[] {
+		try {
+			return (JSON.parse(c.requestJson) as { messages?: { role: string; content: string }[] }).messages ?? [];
+		} catch {
+			return [];
+		}
+	}
+	const roleLabel = (r: string) => (r === "system" ? $_("settings.activityDetail.roleSystem") : r === "user" ? $_("settings.activityDetail.roleUser") : r === "assistant" ? $_("settings.activityDetail.roleAssistant") : r);
 	let loading = $state(false);
-	let showPrices = $state(false);
 
-	const since = (p: typeof period) => {
-		const day = 86_400_000;
-		return p === "all" ? null : Date.now() - (p === "day" ? day : p === "week" ? 7 * day : 30 * day);
-	};
 	const shown = $derived(who === "auto" ? history.filter((h) => h.runBy === "auto") : history);
 	const autoCount = $derived(history.filter((h) => h.runBy === "auto").length);
-	// 단가표에 적은 모델의 추정 금액 합계 (통화별)
-	const costTotals = $derived.by(() => {
-		const t = new Map<string, number>();
-		for (const u of usage) if (u.estimatedCost != null) t.set(u.currency ?? "$", (t.get(u.currency ?? "$") ?? 0) + u.estimatedCost);
-		return [...t.entries()];
-	});
-	const usedModels = $derived([...new Set(usage.map((u) => u.model).filter((m): m is string => !!m))]);
-	const money = (v: number, cur: string) => `${cur}${v < 0.01 && v > 0 ? v.toFixed(4) : v.toFixed(2)}`;
 
 	async function load() {
 		loading = true;
 		try {
-			[active, history, usage, profiles, budgets] = await Promise.all([
+			[active, history] = await Promise.all([
 				call(commands.listActiveTasks(), { ...src, silent: true }),
 				call(commands.listTaskHistory(100), { ...src, silent: true }),
-				call(commands.usageSummary(since(period)), { ...src, silent: true }),
-				call(commands.getAllApiProfile(), { ...src, silent: true }),
-				call(commands.listBudgetStatus(), { ...src, silent: true }),
 			]);
+			logged = new Set(await call(commands.listAiCallLogTasks(), { ...src, silent: true }).catch(() => []));
+			calls = {};
 		} catch {
-			toasts.error("실행 기록을 불러오지 못함");
+			toasts.error($_("settings.activityDetail.loadError"));
 		} finally {
 			loading = false;
 		}
 	}
-
-	// 기간을 바꾸면 사용량만 다시
-	let firstPeriod = true;
-	$effect(() => {
-		const p = period;
-		if (firstPeriod) {
-			firstPeriod = false;
-			return;
-		}
-		void call(commands.usageSummary(since(p)), { ...src, silent: true }).then((u) => (usage = u)).catch(() => {});
-	});
 
 	// 작업이 생기거나 끝나면 새로 고침 (이벤트가 몰려도 한 번만)
 	let timer: ReturnType<typeof setTimeout> | undefined;
@@ -112,37 +99,29 @@
 	}
 
 	// 기록 보관 (1-A-4): 지난 상세는 일별 합계로 남기고 지운다. 사용량 숫자는 그대로
-	const RETENTION = [
-		{ value: "", label: "계속 보관" },
-		{ value: "30", label: "30일" },
-		{ value: "90", label: "90일" },
-		{ value: "180", label: "180일" },
-		{ value: "365", label: "1년" },
-	];
+	const RETENTION = $derived([
+		{ value: "", label: $_("settings.activitySec.keepForever") },
+		{ value: "30", label: $_("settings.activitySec.days30") },
+		{ value: "90", label: $_("settings.activitySec.days90") },
+		{ value: "180", label: $_("settings.activitySec.days180") },
+		{ value: "365", label: $_("settings.activitySec.year1") },
+	]);
 	const retention = $derived(appSetting.value?.usageRetentionDays ?? null);
 	async function setRetention(v: string) {
 		const days = v ? Number(v) : null;
 		if (days != null && (retention == null || days < retention)) {
 			const ok = await confirmAction({
-				title: "기록 보관 기간",
-				message: `${days}일보다 오래된 작업 기록과 사용량 상세를 지움 (앱을 켤 때마다 정리). API별 사용량 합계와 예산 한도 계산은 그대로 남음. 지운 상세는 되돌릴 수 없음`,
+				title: $_("settings.activityDetail.retentionTitle"),
+				message: $_("settings.activityDetail.retentionMsg", { values: { days } }),
 				danger: true,
-				confirmLabel: "정리하기",
+				confirmLabel: $_("settings.activityDetail.retentionConfirm"),
 			});
 			if (!ok) return;
 		}
 		await appSetting.update({ usageRetentionDays: days });
-		if (days == null) return toasts.success("기록을 계속 보관함");
+		if (days == null) return toasts.success($_("settings.activityDetail.keepForeverToast"));
 		const r = await call(commands.compactUsage(), src);
-		toasts.success(r.usageRows || r.tasks ? `정리함: 작업 ${n(r.tasks)}개 · 사용량 상세 ${n(r.usageRows)}줄` : "정리할 오래된 기록 없음");
-		void load();
-	}
-
-	async function clearUsage() {
-		const ok = await confirmAction({ title: "사용량 기록 비우기", message: "API별 사용량 합계를 지움. 실행 내역은 남지만 작업별 토큰 수는 사라짐. 금액 한도를 건 프로필의 이번 달 글 호출 기록은 한도 계산 때문에 남김", danger: true, confirmLabel: "비우기" });
-		if (!ok) return;
-		await call(commands.clearUsage(), src);
-		toasts.success("사용량 기록을 비움");
+		toasts.success(r.usageRows || r.tasks ? $_("settings.activityDetail.compactedToast", { values: { tasks: n(r.tasks), rows: n(r.usageRows) } }) : $_("settings.activityDetail.nothingToCompact"));
 		void load();
 	}
 
@@ -157,105 +136,62 @@
 	function took(h: { startedAt: number | null; finishedAt: number | null }) {
 		if (!h.startedAt || !h.finishedAt) return "";
 		const ms = h.finishedAt - h.startedAt;
-		return ms < 1000 ? `${ms}ms` : `${(ms / 1000).toFixed(1)}초`;
+		return ms < 1000 ? `${ms}ms` : $_("settings.activityDetail.secUnit", { values: { sec: (ms / 1000).toFixed(1) } });
 	}
 	/** 작업이 쓴 양 한 줄 */
 	function amount(u: { inputTokens: number; outputTokens: number; characters: number; images: number }) {
 		const parts: string[] = [];
-		if (u.inputTokens || u.outputTokens) parts.push(`입력 ${n(u.inputTokens)} · 출력 ${n(u.outputTokens)} 토큰`);
-		if (u.characters) parts.push(`${n(u.characters)}자`);
-		if (u.images) parts.push(`그림 ${n(u.images)}장`);
+		if (u.inputTokens || u.outputTokens) parts.push($_("settings.activityDetail.tokensSummary", { values: { input: n(u.inputTokens), output: n(u.outputTokens) } }));
+		if (u.characters) parts.push($_("settings.activityDetail.charsUnit", { values: { count: n(u.characters) } }));
+		if (u.images) parts.push($_("settings.activityDetail.imagesUnit", { values: { count: n(u.images) } }));
 		return parts.join(" · ");
 	}
-	const featureName = (f: string | null) => (f ? (FEATURE[f] ?? (f.startsWith("plugin:") ? `플러그인 ${f.slice(7)}` : f)) : "기타");
-	const status = (h: HistoryItem) => (h.status === "failed" && h.errorCode === "BUDGET_EXCEEDED" ? { label: "한도로 막힘", tone: "warning" as const } : (STATUS[h.status] ?? { label: h.status, tone: "neutral" as const }));
+	const featureName = (f: string | null) => localizeTaskFeature(f);
+	const status = (h: HistoryItem) => {
+		if (h.status === "failed" && h.errorCode === "BUDGET_EXCEEDED") return { label: $_("settings.activitySec.budgetBlocked"), tone: "warning" as const };
+		return { label: localizeTaskStatus(h.status), tone: STATUS_TONE[h.status] ?? ("neutral" as const) };
+	};
 </script>
 
-<Section title="실행 기록" lead="AI·음성·이미지 API를 부른 작업과 사용량. 토큰은 공급자가 알려주면 그 값, 아니면 앱이 추정함">
+<Section title={$_("settings.activitySec.title")} lead={$_("settings.activitySec.lead")}>
 	{#snippet actions()}
-		<Button size="sm" disabled={loading} onclick={load}>{#snippet icon()}<RefreshCw />{/snippet}새로 고침</Button>
+		<Button size="sm" disabled={loading} onclick={load}>{#snippet icon()}<RefreshCw />{/snippet}{$_("common.refresh")}</Button>
 	{/snippet}
 
-	<Group title="실행 중">
+	<Group title={$_("settings.activitySec.running")}>
 		{#each active as t (t.id)}
 			<div class="item">
 				<div class="main">
 					<Badge tone="accent">{featureName(t.feature)}</Badge>
 					<span class="label">{t.label ?? t.taskType}</span>
-					{#if t.runBy === "auto"}<Badge tone="info">자동</Badge>{/if}
+					{#if t.runBy === "auto"}<Badge tone="info">{$_("settings.activitySec.auto")}</Badge>{/if}
 					<span class="muted">{when(t.createdAt)}</span>
 				</div>
-				<Button size="sm" variant="ghost" onclick={() => cancel(t.id)}>{#snippet icon()}<Square />{/snippet}멈추기</Button>
+				<Button size="sm" variant="ghost" onclick={() => cancel(t.id)}>{#snippet icon()}<Square />{/snippet}{$_("settings.activitySec.stop")}</Button>
 			</div>
 		{:else}
-			<p class="empty">실행 중인 작업 없음</p>
+			<p class="empty">{$_("settings.activitySec.noRunning")}</p>
 		{/each}
 	</Group>
 
-	<Group title="예산 한도">
-		<BudgetLimits {profiles} items={budgets} onchanged={load} />
-	</Group>
-
-	<Group title="API별 사용량">
+	<Group title={$_("settings.activitySec.recent")} flush>
 		{#snippet aside()}
 			<div class="aside">
-				<Segmented
-					label="기간"
-					bind:value={period}
-					options={[
-						{ value: "day", label: "오늘" },
-						{ value: "week", label: "7일" },
-						{ value: "month", label: "30일" },
-						{ value: "all", label: "전체" },
-					]}
-				/>
-				<Button size="sm" variant="ghost" disabled={!usage.length} onclick={clearUsage}>{#snippet icon()}<Trash2 />{/snippet}비우기</Button>
-			</div>
-		{/snippet}
-		{#if costTotals.length}<p class="total">추정 금액 {costTotals.map(([c, v]) => money(v, c)).join(" · ")} <span class="muted">(단가표 기준, 실제 청구와 다를 수 있음)</span></p>{/if}
-		{#each usage as u (`${u.apiProfileId}:${u.kind}:${u.model}`)}
-			<div class="item">
-				<div class="main">
-					<span class="label">{u.profileName ?? (u.apiProfileId ? "지운 프로필" : "알 수 없음")}</span>
-					<Badge>{KIND[u.kind] ?? u.kind}</Badge>
-					{#if u.model}<code class="muted">{u.model}</code>{/if}
-					<span class="muted">{n(u.calls)}회{u.failed ? ` (실패 ${n(u.failed)})` : ""}</span>
-				</div>
-				<div class="amount">
-					{amount(u) || "—"}
-					{#if u.kind === "chat" && u.estimatedCalls}<span class="muted" title="공급자가 사용량을 알려주지 않은 호출은 앱이 글자 수로 추정함">· 추정 {n(u.estimatedCalls)}회</span>{/if}
-					{#if u.estimatedCost != null}<b class="cost" title="단가표로 계산한 추정 금액">≈ {money(u.estimatedCost, u.currency ?? "$")}</b>{/if}
-				</div>
-			</div>
-		{:else}
-			<p class="empty">이 기간에 쓴 API 없음</p>
-		{/each}
-	</Group>
-
-	<Group title="단가표">
-		{#snippet aside()}
-			<Button size="sm" variant="ghost" aria-expanded={showPrices} onclick={() => (showPrices = !showPrices)}>{showPrices ? "접기" : "펼치기"}</Button>
-		{/snippet}
-		{#if showPrices}
-			<div class="prices"><PriceTable models={usedModels} onchanged={load} /></div>
-		{:else}
-			<p class="empty">모델별 단가를 적으면 사용량 옆에 추정 금액이 나옴</p>
-		{/if}
-	</Group>
-
-	<Group title="최근 실행" flush>
-		{#snippet aside()}
-			<div class="aside">
+			<label class="keep">
+				<span class="muted">{$_("settings.activitySec.keepLogs")}</span>
+				<Switch checked={logOn} label={$_("settings.activitySec.keepLogs")} hideLabel onchange={toggleLog} />
+			</label>
+			{#if logged.size}<Button size="sm" variant="ghost" onclick={clearLogs}>{#snippet icon()}<Trash2 />{/snippet}{$_("settings.activitySec.clearLogs")}</Button>{/if}
 			<label class="keep"
-				><span class="muted">보관</span>
-				<Select value={retention == null ? "" : String(retention)} options={RETENTION} aria-label="작업·사용량 상세 기록 보관 기간" onchange={(e) => setRetention(e.currentTarget.value)} />
+				><span class="muted">{$_("settings.activitySec.retention")}</span>
+				<Select value={retention == null ? "" : String(retention)} options={RETENTION} aria-label={$_("settings.activitySec.retention")} onchange={(e) => setRetention(e.currentTarget.value)} />
 			</label>
 			<Segmented
-				label="실행 주체"
+				label={$_("settings.activitySec.recent")}
 				bind:value={who}
 				options={[
-					{ value: "all", label: `전체 ${history.length}` },
-					{ value: "auto", label: `자동 ${autoCount}` },
+					{ value: "all", label: `${$_("common.all")} ${history.length}` },
+					{ value: "auto", label: `${$_("settings.activitySec.auto")} ${autoCount}` },
 				]}
 			/>
 			</div>
@@ -263,28 +199,49 @@
 		{#each shown as h (h.id)}
 			{@const s = status(h)}
 			<div class="row">
-				<button class="line" aria-expanded={open === h.id} onclick={() => (open = open === h.id ? null : h.id)}>
+				<button class="line" aria-expanded={open === h.id} onclick={() => expand(h.id)}>
 					<span class="t">{when(h.createdAt)}</span>
 					<Badge tone={s.tone}>{s.label}</Badge>
 					<span class="feat">{featureName(h.feature)}</span>
 					<span class="label">{h.label ?? h.taskType}</span>
-					{#if h.runBy === "auto"}<Badge tone="info">자동</Badge>{/if}
+					{#if h.runBy === "auto"}<Badge tone="info">{$_("settings.activitySec.auto")}</Badge>{/if}
+					{#if logged.has(h.id)}<Badge>{$_("settings.activitySec.sentTag")}</Badge>{/if}
 					<span class="muted end">{amount(h)}</span>
 				</button>
 				{#if open === h.id}
 					<dl class="detail">
-						<dt>작업 id</dt><dd><code>{h.id}</code></dd>
-						<dt>실행 주체</dt><dd>{h.runBy === "auto" ? "자동 설정 (자동 번역·자동 읽기 등)" : "사용자"}</dd>
-						{#if h.profileName || h.model}<dt>API · 모델</dt><dd>{h.profileName ?? "—"} · {h.model ?? "—"}</dd>{/if}
-						{#if took(h)}<dt>걸린 시간</dt><dd>{took(h)}</dd>{/if}
-						<dt>시도</dt><dd>{h.attemptCount}회{h.calls > 1 ? ` · API 호출 ${h.calls}번` : ""}</dd>
-						{#if amount(h)}<dt>사용량</dt><dd>{amount(h)}{h.estimated ? " (추정 포함)" : ""}</dd>{/if}
-						{#if h.errorMessage}<dt>오류</dt><dd class="err">{h.errorCode ? `[${h.errorCode}] ` : ""}{h.errorMessage}</dd>{/if}
+						<dt>{$_("settings.activityDetail.taskId")}</dt><dd><code>{h.id}</code></dd>
+						<dt>{$_("settings.activityDetail.runBy")}</dt><dd>{h.runBy === "auto" ? $_("settings.activityDetail.runByAuto") : $_("settings.activityDetail.runByUser")}</dd>
+						{#if h.profileName || h.model}<dt>{$_("settings.activityDetail.apiModel")}</dt><dd>{h.profileName ?? "—"} · {h.model ?? "—"}</dd>{/if}
+						{#if took(h)}<dt>{$_("settings.activityDetail.duration")}</dt><dd>{took(h)}</dd>{/if}
+						<dt>{$_("settings.activityDetail.attempts")}</dt><dd>{h.calls > 1 ? $_("settings.activityDetail.attemptsWithCalls", { values: { attempts: h.attemptCount, calls: h.calls } }) : $_("settings.activityDetail.attemptsVal", { values: { attempts: h.attemptCount } })}</dd>
+						{#if amount(h)}<dt>{$_("settings.activityDetail.usage")}</dt><dd>{amount(h)}{h.estimated ? $_("settings.activityDetail.estimatedSuffix") : ""}</dd>{/if}
+						{#if h.errorMessage}<dt>{$_("settings.activityDetail.error")}</dt><dd class="err">{h.errorCode ? `[${h.errorCode}] ` : ""}{h.errorMessage}</dd>{/if}
 					</dl>
+					{#each calls[h.id] ?? [] as c, i (c.id)}
+						<div class="call">
+							<div class="call-head">
+								<b>{$_("settings.activityDetail.callIndex", { values: { n: i + 1 } })}</b>
+								<span class="muted">{c.model}</span>
+								{#if c.finishReason}<Badge tone={["length", "max_tokens", "MAX_TOKENS"].includes(c.finishReason) ? "warning" : "neutral"}>{$_("settings.activityDetail.finishReason", { values: { reason: c.finishReason } })}</Badge>{/if}
+								{#if c.error}<span class="err">{c.error}</span>{/if}
+							</div>
+							<details>
+								<summary>{$_("settings.activityDetail.sentMessages", { values: { count: sent(c).length } })}</summary>
+								{#each sent(c) as m, j (j)}
+									<div class="msg"><span class="role">{roleLabel(m.role)}</span><pre>{m.content}</pre></div>
+								{/each}
+							</details>
+							<details open>
+								<summary>{$_("settings.activityDetail.receivedText")}</summary>
+								<pre>{c.responseText || $_("settings.activityDetail.emptyResponse")}</pre>
+							</details>
+						</div>
+					{/each}
 				{/if}
 			</div>
 		{:else}
-			<EmptyState title="실행 기록 없음" description="메시지를 보내거나 번역·음성·이미지를 쓰면 여기 남음" />
+			<EmptyState title={$_("settings.activityDetail.emptyTitle")} description={$_("settings.activityDetail.emptyDesc")} />
 		{/each}
 	</Group>
 </Section>
@@ -318,24 +275,10 @@
 		color: var(--text-muted);
 		font-size: var(--text-sm);
 	}
-	.amount {
-		font-size: var(--text-sm);
-		font-variant-numeric: tabular-nums;
-	}
 	.keep {
 		display: flex;
 		align-items: center;
 		gap: var(--space-2);
-	}
-	.total {
-		margin: var(--space-3) 0 0;
-		font-size: var(--text-sm);
-	}
-	.cost {
-		margin-left: var(--space-2);
-	}
-	.prices {
-		padding: var(--space-4) 0;
 	}
 	.empty {
 		padding: var(--space-4) 0;
@@ -406,5 +349,43 @@
 			margin-left: 0;
 			width: 100%;
 		}
+	}
+	.call {
+		margin: 0 var(--space-4) var(--space-3);
+		padding: var(--space-3);
+		border: 1px solid var(--border);
+		border-radius: var(--radius-md);
+		font-size: var(--text-sm);
+	}
+	.call-head {
+		display: flex;
+		align-items: center;
+		gap: var(--space-2);
+		flex-wrap: wrap;
+		margin-bottom: var(--space-2);
+	}
+	.call summary {
+		cursor: pointer;
+		color: var(--text-muted);
+		margin: var(--space-1) 0;
+	}
+	.call pre {
+		margin: 0;
+		max-height: 320px;
+		overflow: auto;
+		white-space: pre-wrap;
+		overflow-wrap: anywhere;
+		font-family: var(--font-mono, monospace);
+		font-size: var(--text-xs);
+		background: var(--bg-sunken);
+		padding: var(--space-2);
+		border-radius: var(--radius-sm);
+	}
+	.msg {
+		margin: var(--space-2) 0;
+	}
+	.role {
+		font-size: var(--text-xs);
+		color: var(--text-faint);
 	}
 </style>

@@ -64,14 +64,17 @@ pub async fn ghostwrite(
         return Err(AppError::validation("이미 대필 중", None));
     };
     let job = CreateTaskRequest::inline(TaskType::Ghostwrite, TaskOwner::Chat, FEATURE, "대필", false).owner_ref(&conversation_id);
-    tasks
+    let notify_app = app.clone();
+    let out = tasks
         .run_inline(job, |cancel| async move {
             ChatManager
                 .ghost(&app, &state.db, &settings, &conversation_id, brief, &cfg, Some(on_event), &cancel)
                 .await
                 .map_err(into_app_error)
         })
-        .await
+        .await?;
+    crate::service::notify::task_done(&notify_app, "대필", "대필이 끝남");
+    Ok(out)
 }
 
 /// 진행 중인 대필 멈추기 (받은 데까지는 화면이 이미 입력칸에 가지고 있다). 멈출 게 있었으면 true

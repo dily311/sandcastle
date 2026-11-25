@@ -7,6 +7,8 @@
 		disabled?: boolean;
 		/** 앞에 구분선 */
 		separator?: boolean;
+		/** 보일 조건 */
+		visible?: boolean;
 		/** 선택 표시 (정렬 등 하나를 고르는 메뉴) */
 		checked?: boolean;
 		/** 같은 이름이 여럿일 수 있을 때 항목을 구분하는 키 (기본은 이름). 이름이 같은 캐릭터 목록처럼 */
@@ -46,9 +48,11 @@
 		else inline = window.innerWidth < 640;
 	});
 	const keyOf = (it: MenuItem) => it.id ?? it.label;
-	/** 메뉴를 body로 옮겨 그린다: 서랍처럼 transform이 걸린 조상 안에서는 position: fixed가 화면이 아니라 그 조상을 기준으로 잡혀 메뉴가 화면 밖에 뜸 */
+	/** 메뉴를 body로 옮겨 그린다: 서랍처럼 transform이 걸린 조상 안에서는 position: fixed가 화면이 아니라 그 조상을 기준으로 잡혀 메뉴가 화면 밖에 뜸.
+	 * 열린 <dialog>(그림 크게 보기·대화 상자) 안이면 그 dialog로 옮긴다 — 모달 dialog는 맨 위 층이라 body의 메뉴는 z-index와 상관없이 뒤에 묻히고 누를 수도 없다 */
 	function portal(node: HTMLElement) {
-		document.body.appendChild(node);
+		const host = node.parentElement?.closest("dialog[open]") ?? document.body;
+		host.appendChild(node);
 		return { destroy: () => node.remove() };
 	}
 	/** 하위 메뉴가 화면 밖으로 나가면 왼쪽으로 뒤집고, 아래로 넘치면 위로 올린다 */
@@ -86,50 +90,54 @@
 
 {#if at}
 	<div bind:this={el} use:portal class="menu" class:scroll={inline} role="menu" aria-label={label} tabindex="-1" style:left="{pos.x}px" style:top="{pos.y}px" {onkeydown}>
-		{#each items as it (keyOf(it))}
-			{#if it.separator}<div class="sep" role="separator"></div>{/if}
-			{#if it.children}
-				<div class="has-sub" role="none" onmouseenter={() => !inline && !it.disabled && (openSub = keyOf(it))}>
-					<button role="menuitem" aria-haspopup="menu" aria-expanded={openSub === keyOf(it)} disabled={it.disabled} onclick={() => (openSub = openSub === keyOf(it) ? null : keyOf(it))}>
+		{#each items as it}
+			{#if it.visible === undefined || it.visible}
+				{#if it.separator}<div class="sep" role="separator"></div>{/if}
+				{#if it.children}
+					<div class="has-sub" role="none" onmouseenter={() => !inline && !it.disabled && (openSub = keyOf(it))}>
+						<button role="menuitem" aria-haspopup="menu" aria-expanded={openSub === keyOf(it)} disabled={it.disabled} onclick={() => (openSub = openSub === keyOf(it) ? null : keyOf(it))}>
+							{#if it.icon}<it.icon />{/if}<span class="lbl">{it.label}</span>
+							{#if it.value}<span class="val">{it.value}</span>{/if}<span class="arrow" class:open={inline && openSub === keyOf(it)} aria-hidden="true">›</span>
+						</button>
+						{#if openSub === keyOf(it)}
+							<div class={inline ? "inline-sub" : "menu sub"} role="menu" aria-label={it.label} use:placeSub={!inline}>
+								{#each it.children as ch (keyOf(ch))}
+									{#if it.visible === undefined || it.visible}
+										{#if ch.separator}<div class="sep" role="separator"></div>{/if}
+										<button
+											role={ch.checked === undefined ? "menuitem" : "menuitemradio"}
+											aria-checked={ch.checked}
+											class:danger={ch.danger}
+											disabled={ch.disabled}
+											onclick={() => {
+												ch.onselect?.();
+												onclose();
+											}}
+										>
+											{#if ch.icon}<ch.icon />{/if}<span class="lbl">{ch.label}</span>
+											{#if ch.checked}<span class="check" aria-hidden="true">✓</span>{/if}
+										</button>
+									{/if}
+								{/each}
+							</div>
+						{/if}
+					</div>
+				{:else}
+					<button
+						role={it.checked === undefined ? "menuitem" : "menuitemradio"}
+						aria-checked={it.checked}
+						class:danger={it.danger}
+						disabled={it.disabled}
+						onmouseenter={() => (openSub = null)}
+						onclick={() => {
+							it.onselect?.();
+							onclose();
+						}}
+					>
 						{#if it.icon}<it.icon />{/if}<span class="lbl">{it.label}</span>
-						{#if it.value}<span class="val">{it.value}</span>{/if}<span class="arrow" class:open={inline && openSub === keyOf(it)} aria-hidden="true">›</span>
+						{#if it.checked}<span class="check" aria-hidden="true">✓</span>{/if}
 					</button>
-					{#if openSub === keyOf(it)}
-						<div class={inline ? "inline-sub" : "menu sub"} role="menu" aria-label={it.label} use:placeSub={!inline}>
-							{#each it.children as ch (keyOf(ch))}
-								{#if ch.separator}<div class="sep" role="separator"></div>{/if}
-								<button
-									role={ch.checked === undefined ? "menuitem" : "menuitemradio"}
-									aria-checked={ch.checked}
-									class:danger={ch.danger}
-									disabled={ch.disabled}
-									onclick={() => {
-										ch.onselect?.();
-										onclose();
-									}}
-								>
-									{#if ch.icon}<ch.icon />{/if}<span class="lbl">{ch.label}</span>
-									{#if ch.checked}<span class="check" aria-hidden="true">✓</span>{/if}
-								</button>
-							{/each}
-						</div>
-					{/if}
-				</div>
-			{:else}
-				<button
-					role={it.checked === undefined ? "menuitem" : "menuitemradio"}
-					aria-checked={it.checked}
-					class:danger={it.danger}
-					disabled={it.disabled}
-					onmouseenter={() => (openSub = null)}
-					onclick={() => {
-						it.onselect?.();
-						onclose();
-					}}
-				>
-					{#if it.icon}<it.icon />{/if}<span class="lbl">{it.label}</span>
-					{#if it.checked}<span class="check" aria-hidden="true">✓</span>{/if}
-				</button>
+				{/if}
 			{/if}
 		{/each}
 	</div>
@@ -141,6 +149,7 @@
 		z-index: var(--z-menu);
 		min-width: min(168px, calc(100vw - 16px));
 		max-width: min(340px, calc(100vw - 16px));
+		max-height: 100%;
 		padding: 4px;
 		border: 1px solid var(--border);
 		border-radius: var(--radius-md);

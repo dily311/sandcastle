@@ -1,6 +1,7 @@
 //! 코어 플러그인 커맨드: 설정, 번역, 음성 읽기, 이미지 생성. 기능이 꺼져 있으면 모두 거절한다.
 use std::sync::Arc;
 
+use crate::service::data::settings_scope::same_path;
 use serde_json::{json, Value};
 use tauri::{AppHandle, Emitter, Manager, State};
 
@@ -65,6 +66,11 @@ pub fn update_plugin_setting(app: AppHandle, state: State<'_, SettingsState<Plug
         save(&app, &*cur)?;
     }
     crate::service::app_prompts::set(&setting.prompts);
+    crate::service::prompt::prompt_manager::set_phone_clock(
+        setting.phone.custom_datetime_enabled,
+        setting.phone.custom_date.clone(),
+        setting.phone.custom_time.clone(),
+    );
     let _ = app.emit(PluginSetting::EVENT_NAME, &setting);
     Ok(setting)
 }
@@ -184,7 +190,8 @@ pub async fn translate_message(
 // 음성
 // ---------------------------------------------------------
 
-/// 글을 음성 파일(mp3)로 만들고 경로를 돌려준다 (같은 글·설정이면 캐시)
+/// 글을 음성 파일(mp3)로 만들고 경로를 돌려준다 (같은 글·설정이면 캐시). cached_only면 캐시만 (읽기 화면)
+#[allow(clippy::too_many_arguments)]
 #[tauri::command]
 #[specta::specta]
 pub async fn speak_text(
@@ -195,6 +202,7 @@ pub async fn speak_text(
     settings: State<'_, SettingsState<AppSetting>>,
     text: String,
     auto: Option<bool>,
+    cached_only: Option<bool>,
 ) -> Result<String> {
     require(&app, id::TTS)?;
     let p = read(&plugin)?.tts;
@@ -203,6 +211,10 @@ pub async fn speak_text(
     // 이미 만든 음성이면 작업 없이 바로 (요금 없음)
     if let Some(path) = tools::cached_speech(&p, &fallback, &text, &cache) {
         return Ok(path.to_string_lossy().into_owned());
+    }
+    // 읽기 화면: 이미 만든 음성만 (새로 만들지 않음 — 요금 없음, 5-E-6-2)
+    if cached_only.unwrap_or(false) {
+        return Err(AppError::validation("아직 만든 음성이 없음 (채팅 모드에서 읽기를 누르면 만들어짐)", None));
     }
     let job = CreateTaskRequest::inline(TaskType::Tts, TaskOwner::System, id::TTS, "음성 읽기", auto.unwrap_or(false));
     let path = tasks.run_inline(job, |_| tools::speak(&ai, &p, &fallback, &text, &cache)).await?;
@@ -250,6 +262,7 @@ pub async fn generate_message_image(
     list.push(json!({ "path": image.path, "prompt": image.prompt, "createdAt": image.created_at }));
     meta["generatedImages"] = Value::Array(list);
     conversation::update_message_meta(&state.db, &message_id, meta).await?;
+    crate::service::notify::task_done(&app, "그림 생성", "메시지 그림이 완성됨");
     Ok(chat_ui::get_message(&state.db, &message_id).await?)
 }
 
@@ -291,6 +304,7 @@ pub async fn generate_auto_image(
     list.push(json!({ "path": image.path, "prompt": image.prompt, "createdAt": image.created_at, "auto": true }));
     meta["generatedImages"] = Value::Array(list);
     conversation::update_message_meta(&state.db, &message_id, meta).await?;
+    crate::service::notify::task_done(&app, "자동 그림", "자동 그림이 완성됨");
     Ok(chat_ui::get_message(&state.db, &message_id).await?)
 }
 
@@ -326,8 +340,9 @@ pub fn delete_generated_image(app: AppHandle, theme: State<'_, SettingsState<cra
 /// 지운 그림을 테마 배경 목록·앱 배경에서도 뺀다 (배경 태그를 단 갤러리 그림)
 fn forget_backgrounds(app: &AppHandle, theme: &SettingsState<crate::models::settings::ThemeSetting>, paths: &[String]) -> Result<()> {
     let cur = read(theme)?;
-    let list: Vec<String> = cur.backgrounds.iter().filter(|b| !paths.contains(b)).cloned().collect();
-    let selected_gone = cur.background_image.as_ref().is_some_and(|b| paths.contains(b));
+    let gone = |b: &String| paths.iter().any(|p| same_path(p, b));
+    let list: Vec<String> = cur.backgrounds.iter().filter(|b| !gone(b)).cloned().collect();
+    let selected_gone = cur.background_image.as_ref().is_some_and(gone);
     if list.len() == cur.backgrounds.len() && !selected_gone {
         return Ok(());
     }
@@ -352,13 +367,24 @@ pub async fn list_all_images(
     use tools::GeneratedImage as G;
     let gen_dir = generated_dir(&app)?;
     let data_dir = app_data_dir(&app)?;
-    let backgrounds = read(&theme)?.backgrounds;
+    let mut backgrounds = read(&theme)?.backgrounds;
     let mut out = tools::list_images(&gen_dir);
-    // 갤러리 그림 중 배경 목록에 든 것은 배경 태그를 보인다
+    // 갤러리 그림 중 배경 목록에 든 것은 배경 태그를 보인다.
+    // 거꾸로 배경 태그(그림 옆 .json)가 있는데 목록에서 빠졌으면 다시 넣는다 — 예전 동기화가 다른 기기의 목록으로 덮어써서 빠진 것
+    let mut missing = vec![];
     for img in &mut out {
-        if backgrounds.iter().any(|b| b == &img.path) && !img.tags.iter().any(|t| t == "background") {
+        let listed = backgrounds.iter().any(|b| same_path(b, &img.path));
+        let tagged = img.tags.iter().any(|t| t == "background");
+        if listed && !tagged {
             img.tags.push("background".into());
+        } else if tagged && !listed {
+            missing.push(img.path.clone());
         }
+    }
+    if !missing.is_empty() {
+        backgrounds.extend(missing);
+        let settings = crate::sys::settings::apply_patch(&app, &theme.0, json!({ "backgrounds": backgrounds }))?;
+        let _ = app.emit(<crate::models::settings::ThemeSetting as SettingsDomain>::EVENT_NAME, &settings);
     }
     let file_name = |p: &str| {
         std::path::Path::new(p)
@@ -425,12 +451,12 @@ pub fn set_image_tags(
     let info = tools::set_image_tags(&generated_dir(&app)?, &path, tags)?;
     let wants_bg = info.tags.iter().any(|t| t == "background");
     let mut list = read(&theme)?.backgrounds;
-    let has = list.iter().any(|b| b == &path);
+    let has = list.iter().any(|b| same_path(b, &path));
     if wants_bg != has {
         if wants_bg {
             list.push(path.clone());
         } else {
-            list.retain(|b| b != &path);
+            list.retain(|b| !same_path(b, &path));
         }
         let settings = crate::sys::settings::apply_patch(&app, &theme.0, json!({ "backgrounds": list }))?;
         let _ = app.emit(<crate::models::settings::ThemeSetting as SettingsDomain>::EVENT_NAME, &settings);
@@ -510,7 +536,7 @@ pub async fn generate_image_from_prompt(
         _ => "그림 만들기",
     };
     let job = CreateTaskRequest::inline(TaskType::ImageGen, TaskOwner::Image, id::IMAGE_GEN, label, false);
-    tasks
+    let out = tasks
         .run_inline(job, |_| async {
             let final_prompt = if refine {
                 tools::image_prompt(
@@ -532,5 +558,7 @@ pub async fn generate_image_from_prompt(
             }
             Ok(img)
         })
-        .await
+        .await?;
+    crate::service::notify::task_done(&app, label, "그림이 완성됨");
+    Ok(out)
 }

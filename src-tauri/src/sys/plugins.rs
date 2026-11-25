@@ -23,6 +23,8 @@ pub mod id {
     pub const IMAGES: &str = "chat.images";
     pub const HTML: &str = "html";
     pub const WIDGET: &str = "widget";
+    /// 위젯 하위 기능: 바탕화면 시메지 (위젯 설정 화면에서 켬, 목록에는 없음)
+    pub const WIDGET_MASCOT: &str = "widget.mascot";
     pub const REGEX: &str = "regex";
     pub const TRANSLATE: &str = "translate";
     pub const TTS: &str = "tts";
@@ -43,6 +45,10 @@ pub mod id {
     pub const REWRITE: &str = "rewrite";
     /// 대필 (5-D, ADR-018): 초안을 AI가 내 말투의 대사로 써 입력칸에 채움
     pub const GHOSTWRITE: &str = "ghostwrite";
+    /// 슬래시 커맨드·빠른 답장 (5-E-20-5, ADR-025)
+    pub const SLASH: &str = "slash";
+    /// 상태창·변수 (5-F-4, ADR-029): 대화·전역 변수 보기·고치기, 상태창 고정 자리
+    pub const STATUS: &str = "status";
 }
 
 #[derive(Debug, Clone, Serialize, specta::Type)]
@@ -180,6 +186,20 @@ const CATALOG: &[Def] = &[
         id: id::GHOSTWRITE,
         name: "대필",
         description: "내가 적은 초안을 AI가 내 말투의 다음 대사로 써서 입력칸에 채움 (보내지는 않음). 누를 때마다 응답 하나의 요금이 듦",
+        default_enabled: false,
+        desktop_only: false,
+    },
+    Def {
+        id: id::SLASH,
+        name: "슬래시 커맨드·빠른 답장",
+        description: "입력칸에서 /로 시작하는 커맨드와 스크립트 실행 (SillyTavern 방식). /gen 같은 AI 커맨드는 실행할 때마다 응답 하나의 요금이 듦",
+        default_enabled: false,
+        desktop_only: false,
+    },
+    Def {
+        id: id::STATUS,
+        name: "상태창·변수",
+        description: "대화의 변수를 보고 고치고, 메시지마다 뜨는 상태창을 한 곳에 모아 보여줌",
         default_enabled: false,
         desktop_only: false,
     },

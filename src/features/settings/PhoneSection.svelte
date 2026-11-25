@@ -1,6 +1,7 @@
 <script lang="ts">
 	// 설정 > 폰: 폰 화면 오른쪽 패널의 정보 탭과 같은 설정 (PhoneSettings)
 	import { onMount } from "svelte";
+	import { _ } from "svelte-i18n";
 	import { phone } from "$features/phone/phone.svelte";
 	import Section from "./Section.svelte";
 	import Group from "./Group.svelte";
@@ -10,7 +11,7 @@
 	onMount(() => void phone.init());
 </script>
 
-<Section title="폰" lead="폰 화면의 메신저 대화에 쓰는 설정. 폰 화면 오른쪽 패널의 정보 탭과 같음">
+<Section title={$_("settings.phoneSec.title")} lead={$_("settings.phoneSec.lead")}>
 	<Group>
 		<div class="pad"><PhoneSettings /></div>
 	</Group>

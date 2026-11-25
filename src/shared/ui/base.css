@@ -106,3 +106,14 @@ a:hover {
 	background-color: color-mix(in oklab, var(--accent) 38%, transparent);
 	color: inherit;
 }
+
+/* 다크모드에서 이미지 밝기 낮추기 */
+@media (prefers-color-scheme: dark) {
+  .cg img {
+    filter: brightness(0.85);
+    transition: filter 0.2s ease;
+  }
+  .cg img:hover {
+	filter: brightness(1);
+  }
+}

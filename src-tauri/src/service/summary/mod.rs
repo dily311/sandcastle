@@ -331,8 +331,8 @@ pub fn gated(failure: Option<&SummaryFailure>, visible_count: usize) -> bool {
 // 프롬프트
 // ---------------------------------------------------------------------------
 
-pub fn build_prompt(prev: &str, edited: bool, new_lines: &str) -> PromptMessage {
-    let mut system = crate::service::app_prompts::summary().replace("{max}", &MAX_OUTPUT_TOKENS.to_string());
+pub fn build_prompt(prev: &str, edited: bool, new_lines: &str, preset: &crate::service::app_prompts::PresetPrompts) -> PromptMessage {
+    let mut system = crate::service::app_prompts::summary(preset).replace("{max}", &MAX_OUTPUT_TOKENS.to_string());
     if edited {
         system.push_str("\n- 기존 요약에는 사용자가 직접 쓴 줄이 있습니다. 사용자가 쓴 줄은 한 글자도 바꾸지 말고 그대로 남깁니다.");
     }
@@ -341,6 +341,7 @@ pub fn build_prompt(prev: &str, edited: bool, new_lines: &str) -> PromptMessage 
         role,
         content,
         token: 0,
+        source: None,
     };
     PromptMessage {
         chat_options: ChatOptions {
@@ -444,6 +445,8 @@ pub struct RunCtx<'a> {
     pub model: Option<&'a str>,
     pub limit_tokens: usize,
     pub guards: &'a Guards,
+    /// 대화 프리셋이 고친 요약 지시 (ADR-030)
+    pub prompts: &'a crate::service::app_prompts::PresetPrompts,
 }
 
 fn reason_of(e: &AppError) -> String {
@@ -480,7 +483,7 @@ pub async fn run_once(c: &RunCtx<'_>, auto: bool) -> Result<RunOutcome> {
         Some(r) => (r.text.as_str(), r.edited_by_user, Some(r.rev)),
         None => ("", false, None),
     };
-    let prompt = build_prompt(prev, edited, &lines);
+    let prompt = build_prompt(prev, edited, &lines, c.prompts);
     let job = CreateTaskRequest::inline(TaskType::MemorySummary, TaskOwner::System, FEATURE, "대화 요약", auto);
     let res = c
         .tasks
@@ -564,12 +567,4 @@ pub async fn block_for(db: &SqlitePool, conversation_id: &str) -> Option<(String
             covered_count: r.covered_count,
         },
     ))
-}
-
-/// 대화 meta에서 이 대화의 요약을 껐는지 (`summaryOff`)
-pub fn disabled_for(conv_meta: Option<&serde_json::Value>) -> bool {
-    conv_meta
-        .and_then(|m| m.get("summaryOff"))
-        .and_then(serde_json::Value::as_bool)
-        .unwrap_or(false)
 }

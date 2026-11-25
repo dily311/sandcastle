@@ -1,4 +1,5 @@
 <script lang="ts" generics="T extends string">
+	import { _ } from "svelte-i18n";
 	// 내보내기 한 버튼 + 옆 화살표로 형식 고르기 (고른 형식은 storageKey로 이 컴퓨터에 기억)
 	import { Check, ChevronDown, Download } from "@lucide/svelte";
 	import Button from "./Button.svelte";
@@ -10,7 +11,7 @@
 		formats,
 		storageKey,
 		onexport,
-		label = "파일로 내보내기",
+		label,
 		size = "md",
 		variant = "primary",
 		hint = true,
@@ -24,6 +25,7 @@
 		/** 버튼 아래 고른 형식 설명 */
 		hint?: boolean;
 	} = $props();
+	const effectiveLabel = $derived(label ?? $_("sharedControls.exportFileDefault"));
 
 	// svelte-ignore state_referenced_locally
 	let format = $state<T>(rememberedFormat(storageKey, formats));
@@ -48,14 +50,14 @@
 </script>
 
 <div class="export-split" class:sm={size === "sm"} bind:this={box}>
-	<Button {variant} size={size} onclick={() => onexport(format)} title="{label} · {current.label}">
+	<Button {variant} size={size} onclick={() => onexport(format)} title="{effectiveLabel} · {current.label}">
 		{#snippet icon()}<Download />{/snippet}
-		{label}{#if size === "sm"}<span class="fmt-inline">{current.label}</span>{/if}
+		{effectiveLabel}{#if size === "sm"}<span class="fmt-inline">{current.label}</span>{/if}
 	</Button>
-	<IconButton label="내보낼 형식 고르기 (지금: {current.label})" size={size === "sm" ? "sm" : undefined} variant="soft" aria-haspopup="menu" aria-expanded={!!menu} onclick={openMenu}><ChevronDown /></IconButton>
+	<IconButton label={$_("sharedControls.exportFormatAria", { values: { label: current.label } })} size={size === "sm" ? "sm" : undefined} variant="soft" aria-haspopup="menu" aria-expanded={!!menu} onclick={openMenu}><ChevronDown /></IconButton>
 </div>
 {#if hint && size !== "sm"}<p class="fmt">{current.label}{current.desc ? ` · ${current.desc}` : ""}</p>{/if}
-<ContextMenu at={menu} label="내보낼 형식" {items} onclose={() => (menu = null)} />
+<ContextMenu at={menu} label={$_("sharedControls.exportFormatMenuAria")} {items} onclose={() => (menu = null)} />
 
 <style>
 	.export-split {

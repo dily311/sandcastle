@@ -13,6 +13,7 @@ pub mod conn;
 pub mod conversation;
 pub mod game;
 pub mod phone;
+pub mod quick_reply;
 pub mod regex;
 pub mod schema;
 pub mod translation;

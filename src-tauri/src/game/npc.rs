@@ -89,7 +89,7 @@ pub struct NpcReply {
 }
 
 /// "...본문 <tag>A</tag><tag>B</tag>" → (태그 제거된 본문, ["A","B"])
-fn extract_tag(raw: &str, tag: &str) -> (String, Vec<String>) {
+pub(crate) fn extract_tag(raw: &str, tag: &str) -> (String, Vec<String>) {
     let (open, close) = (format!("<{tag}>"), format!("</{tag}>"));
     let mut text = String::new();
     let mut found = Vec::new();
@@ -384,6 +384,7 @@ async fn converse(
             images: vec![],
             role: m.role,
             content: m.content,
+            source: None,
         })
         .collect();
 
@@ -395,6 +396,7 @@ async fn converse(
                 images: vec![],
                 role: "assistant".to_string(),
                 content: script,
+                source: None,
             },
         );
     }
@@ -419,17 +421,28 @@ async fn converse(
         None
     };
 
+    // 게임 규칙도 프리셋이 고칠 수 있다 (ADR-030: 프리셋 > 전역 > 기본). 세션 프리셋이 없으면 앱 기본 프리셋
+    let (api_profile_id, prompt_preset_id) = crate::db::game::get_game_session_options(&state.db, &snap.session_id).await?;
+    let rules_preset = prompt_preset_id
+        .clone()
+        .filter(|s| !s.is_empty())
+        .or_else(|| settings.0.lock().ok().map(|s| s.selected_preset.clone()))
+        .unwrap_or_default();
+    let preset_prompts = crate::service::app_prompts::PresetPrompts::load(&state.db, &rules_preset).await;
     let mut context = ChatContext {
         user_images: vec![],
+        image_prompt: None,
+        image_keys: None,
+        util_prompts: Default::default(),
         char_name: Some(snap.character_name.clone()),
         user_name: Some(persona.name.clone()),
         system_rules: match &mode {
-            Mode::Npc(_) => crate::service::app_prompts::game_rules(),
+            Mode::Npc(_) => crate::service::app_prompts::game_rules(&preset_prompts),
             // 씬 입력: 1:1 대화용 <updateRel> 규칙(대화 상대 한 명 기준)은 빼고 서술자용 규칙을 더한다.
-            Mode::Scene => crate::service::app_prompts::game_rules()
+            Mode::Scene => crate::service::app_prompts::game_rules(&preset_prompts)
                 .into_iter()
                 .filter(|r| !r.contains("<updateRel>"))
-                .chain(crate::service::app_prompts::scene_rules())
+                .chain(crate::service::app_prompts::scene_rules(&preset_prompts))
                 .collect(),
         },
         character_info: snap.character_info,
@@ -448,7 +461,6 @@ async fn converse(
         });
     }
 
-    let (api_profile_id, prompt_preset_id) = crate::db::game::get_game_session_options(&state.db, &snap.session_id).await?;
     let target = crate::service::chat::chat_manager::GameChatTarget {
         session_id: snap.session_id.clone(),
         api_profile_id,

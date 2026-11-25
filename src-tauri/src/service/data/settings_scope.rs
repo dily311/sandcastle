@@ -27,8 +27,9 @@ pub const SETTINGS_SCOPE: &[(&str, Scope)] = &[
     ("app-setting/language", Scope::Shared),
     ("app-setting/selectedPreset", Scope::Shared),
     ("app-setting/sendOnEnter", Scope::Device), // 키보드가 있는 PC와 폰이 다름
-    ("app-setting/showTimestamps", Scope::Shared),
     ("app-setting/selectedApiProfile", Scope::Device),
+    ("app-setting/selectedModel", Scope::Device),       // 전역 API에 딸린 모델이라 API와 같이 기기 전용
+    ("app-setting/reasoningEffort", Scope::Device),     // 받는 강도가 모델마다 달라 모델과 같이
     ("app-setting/selectedCharacterId", Scope::Device), // 화면 상태
     ("app-setting/selectedPersonaId", Scope::Shared),
     ("app-setting/lastPlayedGameId", Scope::Device), // 화면 상태
@@ -37,6 +38,12 @@ pub const SETTINGS_SCOPE: &[(&str, Scope)] = &[
     ("app-setting/checkUpdatesOnStart", Scope::Device),
     ("app-setting/usageRetentionDays", Scope::Device),
     ("app-setting/trashRetentionDays", Scope::Device),
+    ("app-setting/cgGroupVariants", Scope::Shared),
+    ("app-setting/doneNotify", Scope::Device), // 알림은 기기마다 (아이콘 경로도 그 기기 것)
+    ("app-setting/aiCallLog", Scope::Device),  // 보낸 글·받은 글 기록은 기기마다 켠다
+    ("app-setting/typing", Scope::SharedPath), // 타이핑 표시는 취향 (그림은 앱 데이터 themes/typing/)
+    ("app-setting/worldInfo/scanDepth", Scope::Shared),
+    ("app-setting/worldInfo/maxRecursionDepth", Scope::Shared),
     // ---- theme-setting ----
     ("theme-setting/mode", Scope::Shared),
     ("theme-setting/selectTheme", Scope::Shared),
@@ -50,6 +57,9 @@ pub const SETTINGS_SCOPE: &[(&str, Scope)] = &[
     ("theme-setting/backgroundOpacity", Scope::Shared),
     ("theme-setting/fonts", Scope::SharedPath),
     ("theme-setting/appFont", Scope::SharedPath),
+    ("theme-setting/textFont", Scope::SharedPath),
+    ("theme-setting/monoFont", Scope::SharedPath),
+    ("theme-setting/chat", Scope::Shared),
     // ---- feature-setting: 기능 켜기는 기기마다 ----
     ("feature-setting", Scope::Device),
     // ---- plugin-setting ----
@@ -79,13 +89,18 @@ pub const SETTINGS_SCOPE: &[(&str, Scope)] = &[
     ("plugin-setting/phone/apiProfileId", Scope::Device),
     ("plugin-setting/phone/model", Scope::Device),
     ("plugin-setting/phone/presetId", Scope::Shared),
+    ("plugin-setting/phone/customDatetimeEnabled", Scope::Shared), // 폰 날짜·시간은 이야기 설정
+    ("plugin-setting/phone/customDate", Scope::Shared),
+    ("plugin-setting/phone/customTime", Scope::Shared),
     ("plugin-setting/prompts", Scope::Shared),
-    ("plugin-setting/ghost", Scope::Device),   // 대필 API·옵션은 기기마다
-    ("plugin-setting/rewrite", Scope::Device), // 요금이 나가는 자동 동작은 기기마다 켠다
+    ("plugin-setting/ghost", Scope::Device),      // 대필 API·옵션은 기기마다
+    ("plugin-setting/quickReply", Scope::Shared), // 빠른 답장 세트는 내가 쓴 글이라 같이 씀
+    ("plugin-setting/rewrite", Scope::Device),
+    ("plugin-setting/status", Scope::Device), // AI 변수 바꾸기는 토큰이 드는 스위치라 기기마다 켠다    // 요금이 나가는 자동 동작은 기기마다 켠다
     ("plugin-setting/summary", Scope::Device), // 요약 API는 기기마다
-    ("plugin-setting/memory", Scope::Device),  // 임베딩 API·모델은 기기마다 (벡터 파일도 기기 전용)
-    ("plugin-setting/lint", Scope::Shared),    // 규칙은 취향. 켜기(feature-setting)는 기기마다
-    ("plugin-setting/sync", Scope::Device),    // 폴더 경로·자동 동기화는 기기마다
+    ("plugin-setting/memory", Scope::Device), // 임베딩 API·모델은 기기마다 (벡터 파일도 기기 전용)
+    ("plugin-setting/lint", Scope::Shared),   // 규칙은 취향. 켜기(feature-setting)는 기기마다
+    ("plugin-setting/sync", Scope::Device),   // 폴더 경로·자동 동기화는 기기마다
 ];
 
 /// settings.json에 있는 설정 묶음 키 (sys::settings의 STORE_KEY)
@@ -133,7 +148,37 @@ pub fn merge_shared(local: &mut Map<String, Value>, incoming: &Map<String, Value
     }
 }
 
+/// 받은 값으로 덮어쓰지 않고 합치는 목록 칸. 배경 목록은 기기마다 따로 늘어나므로 덮어쓰면
+/// 다른 기기의 (아직 이쪽 것을 받지 못한) 목록이 이 기기에서 방금 넣은 배경을 지운다.
+/// 대신 다른 기기에서 뺀 배경은 이쪽에서 빠지지 않는다 (지우는 것보다 남기는 쪽이 안전)
+const UNION_LISTS: &[&str] = &["theme-setting/backgrounds"];
+
+/// 경로 비교용: Windows의 `\`와 동기화로 받은 `/`를 같은 경로로 본다
+pub fn same_path(a: &str, b: &str) -> bool {
+    a == b || a.replace('\\', "/") == b.replace('\\', "/")
+}
+
+fn union_into(local: &mut Value, incoming: &Value) {
+    let Some(add) = incoming.as_array() else { return };
+    let Some(list) = local.as_array_mut() else {
+        *local = incoming.clone();
+        return;
+    };
+    for v in add {
+        let dup = match v.as_str() {
+            Some(s) => list.iter().any(|x| x.as_str().is_some_and(|x| same_path(x, s))),
+            None => list.contains(v),
+        };
+        if !dup {
+            list.push(v.clone());
+        }
+    }
+}
+
 fn merge_at(path: &str, local: &mut Value, incoming: &Value) {
+    if UNION_LISTS.contains(&path) {
+        return union_into(local, incoming);
+    }
     match scope_of(path) {
         Some(Scope::Shared | Scope::SharedPath) => *local = incoming.clone(),
         Some(Scope::Device) => {}
@@ -257,5 +302,21 @@ mod tests {
         incoming["app-setting"]["futureField"] = 1.into();
         merge_shared(&mut desk, &incoming);
         assert!(desk["app-setting"].get("futureField").is_none());
+    }
+
+    #[test]
+    fn backgrounds_are_merged_not_overwritten() {
+        let mut local = defaults();
+        local["theme-setting"]["backgrounds"] = serde_json::json!([r"C:\data\generated\a.png", "C:/data/backgrounds/b.png"]);
+        let mut other = defaults();
+        // 다른 기기는 a를 아직 모르고 c를 새로 넣었다 (b는 구분자 모양만 다름)
+        other["theme-setting"]["backgrounds"] = serde_json::json!([r"C:\data\backgrounds\b.png", "C:/data/backgrounds/c.png"]);
+        merge_shared(&mut local, &shared_part(&other));
+        assert_eq!(
+            local["theme-setting"]["backgrounds"],
+            serde_json::json!([r"C:\data\generated\a.png", "C:/data/backgrounds/b.png", "C:/data/backgrounds/c.png"])
+        );
+        assert!(same_path(r"C:\x\y.png", "C:/x/y.png"));
+        assert!(!same_path("C:/x/y.png", "C:/x/z.png"));
     }
 }

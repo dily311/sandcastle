@@ -2,6 +2,7 @@
 	// 오른쪽 패널 틀: 왼쪽 가장자리를 끌어서 너비 조절 (대화·폰·게임 화면이 같이 씀)
 	// 내용은 화면마다 다르고, 탭은 panel.register로 타이틀바에 그린다
 	import type { Snippet } from "svelte";
+	import { _ } from "svelte-i18n";
 	import { X } from "@lucide/svelte";
 	import { fade, fly } from "svelte/transition";
 	import IconButton from "$shared/ui/IconButton.svelte";
@@ -50,9 +51,9 @@
 					</button>
 				{/each}
 			</div>
-			<IconButton label="패널 닫기" onclick={() => panel.toggle()}><X /></IconButton>
+			<IconButton label={$_("settings.mascot.closePanelAria")} onclick={() => panel.toggle()}><X /></IconButton>
 		</header>
-		<aside class="panel" aria-label={label}>
+		<aside class="panel sc-side-panel" aria-label={label}>
 			{#if isPluginTab(panel.tab)}<PluginPanelView tab={panel.tab} />{/if}
 			<div class="screen-panel" class:hidden={isPluginTab(panel.tab)}>{@render children()}</div>
 		</aside>
@@ -64,7 +65,7 @@
 		class="resize"
 		role="separator"
 		aria-orientation="vertical"
-		aria-label="패널 너비 조절 (←/→)"
+		aria-label={$_("settings.mascot.resizePanelAria")}
 		aria-valuenow={panel.width}
 		tabindex="0"
 		onpointerdown={startResize}
@@ -74,7 +75,7 @@
 		}}
 		ondblclick={() => panel.setWidth(300, true)}
 	></div>
-	<aside class="panel" aria-label={label}>
+	<aside class="panel sc-side-panel" aria-label={label}>
 		{#if isPluginTab(panel.tab)}<PluginPanelView tab={panel.tab} />{/if}
 			<div class="screen-panel" class:hidden={isPluginTab(panel.tab)}>{@render children()}</div>
 	</aside>

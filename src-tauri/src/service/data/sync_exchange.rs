@@ -24,6 +24,8 @@ const BACKUP_KEEP: usize = 3;
 #[serde(rename_all = "camelCase")]
 pub struct SyncBundleInfo {
     pub device_id: String,
+    /// 보낸 기기의 이름 (5-E-16-1, 없으면 None — 화면은 id 앞자리)
+    pub device_name: Option<String>,
     pub created_at: i64,
     pub app_version: String,
     pub rows: u32,
@@ -64,6 +66,7 @@ pub struct SyncApplied {
 fn info(m: &sync_bundle::SyncManifest, bytes: u64) -> SyncBundleInfo {
     SyncBundleInfo {
         device_id: m.device_id.clone(),
+        device_name: m.device_name.clone(),
         created_at: m.created_at,
         app_version: m.app_version.clone(),
         rows: m.tables.values().sum::<u64>() as u32,

@@ -1,6 +1,7 @@
 <script lang="ts">
 	// 자동 재생성 (3-B-4, ADR-017): linter가 찾은 문제로 응답을 새 스와이프로 다시 만든다. 켜면 걸릴 때마다 응답 하나의 요금이 더 든다
 	import { onMount } from "svelte";
+	import { _ } from "svelte-i18n";
 	import { Input, Switch, TagInput } from "$shared/ui";
 	import Section from "./Section.svelte";
 	import Group from "./Group.svelte";
@@ -21,22 +22,22 @@
 	});
 </script>
 
-<Section title="자동 재생성" lead="응답에서 금지어나 단어 반복 오류가 발견되면 새 스와이프로 다시 만듦 · 응답 하나당 최대 시도 횟수만큼 요금이 더 듦">
+<Section title={$_("settings.rewriteSec.title")} lead={$_("settings.rewriteSec.lead")}>
 	{#if cur}
 		<Group>
-			<Row label="최대 시도">
+			<Row label={$_("settings.rewriteSec.maxAttempts")}>
 				<Input type="number" min="1" max="3" value={String(cur.rewrite.maxAttempts)} onchange={(e) => save("rewrite", { maxAttempts: clamp(e.currentTarget.value) })} />
 			</Row>
-			<Row label="금지어" desc="아래 목록의 말이 응답에 나오면 다시 만듦. 메시지 linter의 금지어 목록과는 따로임">
-				<Switch checked={cur.rewrite.banned} label="금지어" hideLabel onchange={(v) => save("rewrite", { banned: v })} />
+			<Row label={$_("settings.rewriteSec.banned")} desc={$_("settings.rewriteSec.bannedDesc")}>
+				<Switch checked={cur.rewrite.banned} label={$_("settings.rewriteSec.banned")} hideLabel onchange={(v) => save("rewrite", { banned: v })} />
 			</Row>
 			{#if cur.rewrite.banned}
-				<Row label="금지어 목록" desc="Enter나 쉼표로 추가 (100개까지, 대소문자 구분 없음)" stacked>
-					<TagInput bind:value={bannedWords} placeholder="금지어 입력" label="금지어 추가" />
+				<Row label={$_("settings.rewriteSec.bannedList")} desc={$_("settings.rewriteSec.bannedListDesc")} stacked>
+					<TagInput bind:value={bannedWords} placeholder={$_("settings.rewriteSec.bannedPlaceholder")} label={$_("settings.rewriteSec.bannedList")} />
 				</Row>
 			{/if}
-			<Row label="단어 반복 오류">
-				<Switch checked={cur.rewrite.stuck} label="단어 반복 오류" hideLabel onchange={(v) => save("rewrite", { stuck: v })} />
+			<Row label={$_("settings.rewriteSec.stuck")}>
+				<Switch checked={cur.rewrite.stuck} label={$_("settings.rewriteSec.stuck")} hideLabel onchange={(v) => save("rewrite", { stuck: v })} />
 			</Row>
 		</Group>
 	{/if}

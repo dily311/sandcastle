@@ -1,5 +1,6 @@
 <script lang="ts">
 	// 프리셋을 그 자리에서 고치기 (이름·설명 빼고, 자동 저장). 대화·게임 패널의 컨텍스트 탭이 같이 씀
+	import { presetMacros } from "$features/character/presetMacros.svelte";
 	import type { PromptBlocksInput_Deserialize as BlockInput, PromptPresetDetail_Serialize as PresetDetail } from "$ipc/bindings";
 	import { call, commands } from "$shared/ipc/client";
 	import PresetEditor from "./PresetEditor.svelte";
@@ -20,7 +21,7 @@
 	async function save(preset: PresetDetail["preset"], blocks: BlockInput[]) {
 		saving = true;
 		try {
-			const d = await call(commands.savePromptPreset({ ...preset, id: preset.id }, blocks), { source: "preset" });
+			const d = await call(commands.savePromptPreset({ ...preset, id: preset.id }, blocks).finally(() => presetMacros.forget(preset.id)), { source: "preset" });
 			onsaved?.();
 			return d;
 		} finally {

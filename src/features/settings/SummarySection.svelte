@@ -3,6 +3,7 @@
 	import ModelPicker from "$features/settings/ModelPicker.svelte";
 	// 메모리 확장: 대화 요약 (3-D, ADR-016). 켜는 것이 동의 — 오래된 대화가 쌓이면 자동으로 요약하고 요금이 듦
 	import { onMount } from "svelte";
+	import { _ } from "svelte-i18n";
 	import { Select } from "$shared/ui";
 	import Section from "./Section.svelte";
 	import Group from "./Group.svelte";
@@ -14,20 +15,20 @@
 	const cur = $derived(current());
 </script>
 
-<Section title="대화 요약" lead="프롬프트 창 밖으로 밀려난 대화가 쌓이면 자동으로 줄거리를 요약해 AI에게 전달 · 요금이 듦">
+<Section title={$_("settings.summarySec.title")} lead={$_("settings.summarySec.lead")}>
 	{#if cur}
 		<Group>
-			<Row label="요약 API">
-				<Select value={cur.summary.apiProfileId ?? ""} options={apiOptions("대화의 API")} onchange={(e) => save("summary", { apiProfileId: orNull(e.currentTarget.value) })} />
+			<Row label={$_("settings.summarySec.api")}>
+				<Select value={cur.summary.apiProfileId ?? ""} options={apiOptions($_("settings.summarySec.chatApi"))} onchange={(e) => save("summary", { apiProfileId: orNull(e.currentTarget.value) })} />
 			</Row>
 			{#if cur.summary.apiProfileId}
-				<Row label="요약 모델" desc="비우면 그 API의 기본 모델">
-					<ModelPicker profile={library.apis.find((a) => a.id === cur.summary.apiProfileId)} value={cur.summary.model || null} onchange={(m) => save("summary", { model: m ?? "" })} label="요약 모델" />
+				<Row label={$_("settings.summarySec.model")} desc={$_("settings.summarySec.modelDesc")}>
+					<ModelPicker profile={library.apis.find((a) => a.id === cur.summary.apiProfileId)} value={cur.summary.model || null} onchange={(m) => save("summary", { model: m ?? "" })} label={$_("settings.summarySec.model")} />
 				</Row>
 			{/if}
 		</Group>
-		<Group title="요약 프롬프트">
-			<PromptSlotEditor key="summary" desc="오래된 대화를 줄거리로 줄일 때 보내는 지시" vars={"{max} 요약 최대 토큰"} />
+		<Group title={$_("settings.summarySec.promptGroup")}>
+			<PromptSlotEditor key="summary" desc={$_("settings.summarySec.promptDesc")} vars={"{max}"} />
 		</Group>
 	{/if}
 </Section>

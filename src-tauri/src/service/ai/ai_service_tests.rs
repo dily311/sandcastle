@@ -67,6 +67,7 @@ fn prompt(max_tokens: u32) -> PromptMessage {
             content: "서울 날씨?".into(),
             token: 0,
             images: vec![],
+            source: None,
         }],
     }
 }
@@ -532,6 +533,7 @@ fn capabilities_of_a_profile_are_available_without_a_request() {
         custom_models: vec![],
         created_at: 0,
         updated_at: 0,
+        verified: false,
     };
     let c = AiService::capabilities_of(&p);
     assert!(!c.embeddings.is_supported() && c.tools.is_supported() && c.structured.is_supported());

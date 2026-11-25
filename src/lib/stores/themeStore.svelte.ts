@@ -20,6 +20,7 @@ export const defaultThemeSetting: ThemeSetting = {
 	backgroundOpacity: 0.82,
 	fonts: [],
 	appFont: null,
+	chat: { showTimestamps: true, showAvatars: true, showMultiCharAvatars: false },
 };
 
 class ThemeStore {

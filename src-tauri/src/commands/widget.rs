@@ -1,16 +1,31 @@
 use crate::{
     db,
     error::AppError,
-    models::widget::{MusicMetaInput, Playlist, PlaylistInput, PlaylistItem, WidgetMusicSetting},
+    models::{
+        ai_service::{ChatContext, GenerationType, HistoryItem, PromptRequest},
+        settings::AppSetting,
+        widget::{
+            MascotCharacterConfig, MascotChatRequest, MascotPeerChatRequest, MascotPeerChatTurn, MusicMetaInput, Playlist, PlaylistInput, PlaylistItem,
+            WidgetMascotSetting, WidgetMusicSetting,
+        },
+    },
+    service::{
+        ai::{AiRequest, AiService},
+        chat::phone as phone_sides,
+        prompt::PromptManager,
+    },
     state::AppState,
     sys::{
         library::LibraryRoot,
         music::{self},
-        settings::merge_json,
+        plugins,
+        settings::{merge_json, SettingsState},
     },
+    task::{CreateTaskRequest, TaskManager, TaskOwner, TaskType},
     widget::{manager::WidgetManager, InteractiveRegion, MouseTrackerState, WidgetInteractionState},
 };
-use std::path::Path;
+use std::path::{Path, PathBuf};
+use std::sync::Arc;
 use tauri::{AppHandle, Manager, State, WebviewWindow};
 use tauri_plugin_autostart::AutoLaunchManager;
 use tauri_plugin_store::StoreExt;
@@ -135,6 +150,8 @@ pub fn save_widget_music_settings(app: AppHandle, patch: serde_json::Value) -> R
     merge_json(&mut data, &patch);
 
     store.set("music", serde_json::to_value(&data).unwrap());
+    // 설정 화면과 위젯 창이 서로의 변경을 따라가게 (5-E-21)
+    let _ = tauri::Emitter::emit(&app, "widget_music::changed", &data);
     Ok(())
 }
 
@@ -242,4 +259,359 @@ pub async fn filter_existing_paths(paths: Vec<String>) -> Result<Vec<String>, Ap
         .filter(|p| Path::new(p).is_file()) // exists() 대신 is_file()로 폴더는 제외
         .collect();
     Ok(existing)
+}
+
+// =======================================
+// 시메지 (마스코트)
+// =======================================
+
+const MASCOT_IMAGE_MAX: u64 = 8 * 1024 * 1024;
+
+fn mascot_images_root(app: &AppHandle) -> Result<PathBuf, AppError> {
+    Ok(app.path().app_data_dir()?.join("widget").join("mascot"))
+}
+
+fn load_mascot_setting(app: &AppHandle) -> Result<WidgetMascotSetting, AppError> {
+    let store = app.store("widget.json").map_err(|e| AppError::io(e.to_string()))?;
+    let setting: WidgetMascotSetting = store.get("mascot").and_then(|v| serde_json::from_value(v).ok()).unwrap_or_default();
+    Ok(setting)
+}
+
+#[tauri::command]
+#[specta::specta]
+pub fn get_widget_mascot_settings(app: AppHandle) -> Result<WidgetMascotSetting, AppError> {
+    load_mascot_setting(&app)
+}
+
+#[tauri::command]
+#[specta::specta]
+pub fn save_widget_mascot_settings(app: AppHandle, setting: WidgetMascotSetting) -> Result<WidgetMascotSetting, AppError> {
+    let store = app.store("widget.json").map_err(|e| AppError::io(e.to_string()))?;
+    let val = serde_json::to_value(&setting)?;
+    store.set("mascot", val);
+    let _ = tauri::Emitter::emit(&app, "widget_mascot::changed", &setting);
+    Ok(setting)
+}
+
+#[tauri::command]
+#[specta::specta]
+pub async fn upload_widget_mascot_image(app: AppHandle, mascot_id: String, slot: String, source_path: String) -> Result<String, AppError> {
+    let src = Path::new(&source_path);
+    let ext = src.extension().and_then(|e| e.to_str()).map(str::to_ascii_lowercase).unwrap_or_default();
+    if !["png", "jpg", "jpeg", "webp", "gif", "avif"].contains(&ext.as_str()) {
+        return Err(AppError::validation("이미지 파일(png·jpg·webp·gif·avif)만 올릴 수 있습니다", None));
+    }
+    let meta = std::fs::metadata(src)?;
+    if meta.len() > MASCOT_IMAGE_MAX {
+        return Err(AppError::validation("이미지 파일이 너무 큽니다 (8MB까지)", None));
+    }
+
+    let safe_id: String = mascot_id
+        .chars()
+        .filter(|c| c.is_ascii_alphanumeric() || *c == '-' || *c == '_')
+        .take(64)
+        .collect();
+    let safe_slot: String = slot.chars().filter(|c| c.is_ascii_alphanumeric() || *c == '_').take(32).collect();
+    if safe_id.is_empty() || safe_slot.is_empty() {
+        return Err(AppError::validation("잘못된 시메지 ID 또는 슬롯입니다", None));
+    }
+
+    let dir = mascot_images_root(&app)?.join(&safe_id);
+    std::fs::create_dir_all(&dir)?;
+    let dest = dir.join(format!("{safe_slot}_{}.{ext}", uuid::Uuid::new_v4()));
+    std::fs::copy(src, &dest)?;
+    Ok(dest.to_string_lossy().into_owned())
+}
+
+#[tauri::command]
+#[specta::specta]
+pub async fn delete_widget_mascot_image(app: AppHandle, path: String) -> Result<(), AppError> {
+    // `..`·링크로 폴더 밖을 가리키지 못하게 실제 경로로 바꿔 비교한다
+    let Ok(root) = mascot_images_root(&app)?.canonicalize() else {
+        return Ok(());
+    };
+    let Ok(target) = PathBuf::from(&path).canonicalize() else {
+        return Ok(());
+    };
+    if target.starts_with(&root) && target.is_file() {
+        let _ = std::fs::remove_file(&target);
+    }
+    Ok(())
+}
+
+/// 시메지 설정과 앱 기본값에서 API 프로필·모델·프리셋을 결정한다
+fn resolve_mascot_ai(mascot: &MascotCharacterConfig, app_setting: &AppSetting) -> Result<(String, Option<String>, Option<String>), AppError> {
+    let profile_id = mascot
+        .api_profile_id
+        .as_deref()
+        .map(str::trim)
+        .filter(|s| !s.is_empty())
+        .map(str::to_string)
+        .or_else(|| app_setting.selected_api_profile.clone().filter(|s| !s.trim().is_empty()))
+        .ok_or_else(|| AppError::validation("시메지에 연결된 API가 없습니다. 설정에서 API를 선택해 주세요.", None))?;
+
+    let model = if mascot.api_profile_id.as_deref().map(str::trim).is_some_and(|s| !s.is_empty()) {
+        mascot.model.as_deref().map(str::trim).filter(|s| !s.is_empty()).map(str::to_string)
+    } else {
+        mascot
+            .model
+            .as_deref()
+            .map(str::trim)
+            .filter(|s| !s.is_empty())
+            .map(str::to_string)
+            .or_else(|| app_setting.selected_model.clone().filter(|s| !s.trim().is_empty()))
+    };
+
+    let preset_id = mascot
+        .preset_id
+        .as_deref()
+        .map(str::trim)
+        .filter(|s| !s.is_empty())
+        .map(str::to_string)
+        .or_else(|| {
+            let p = app_setting.selected_preset.trim();
+            (!p.is_empty()).then(|| p.to_string())
+        });
+
+    Ok((profile_id, model, preset_id))
+}
+
+async fn load_mascot_char_info(db: &db::conn::DbPool, mascot: &MascotCharacterConfig) -> (String, String, Option<String>, Option<String>) {
+    if let Some(cid) = mascot.character_id.as_deref().map(str::trim).filter(|s| !s.is_empty()) {
+        if let Ok(ch) = db::conversation::get_character(db, cid).await {
+            return (
+                ch.name,
+                ch.description,
+                ch.example_dialogue,
+                ch.system_prompt_override.filter(|s| !s.trim().is_empty()),
+            );
+        }
+    }
+    (mascot.name.clone(), String::new(), None, None)
+}
+
+async fn load_mascot_persona_info(db: &db::conn::DbPool, mascot: &MascotCharacterConfig, app_setting: &AppSetting) -> (String, String) {
+    let pid = mascot
+        .persona_id
+        .as_deref()
+        .map(str::trim)
+        .filter(|s| !s.is_empty())
+        .unwrap_or(app_setting.selected_persona_id.as_str());
+    if !pid.is_empty() {
+        if let Ok(p) = db::conversation::get_persona(db, pid).await {
+            return (p.name, p.description);
+        }
+    }
+    ("User".into(), String::new())
+}
+
+/// 시메지 AI 대사 생성 (유저와의 짧은 대화, 선물 반응 등)
+#[tauri::command]
+#[specta::specta]
+pub async fn mascot_generate_reply(
+    app: AppHandle,
+    state: State<'_, AppState>,
+    ai: State<'_, Arc<AiService>>,
+    settings: State<'_, SettingsState<AppSetting>>,
+    tasks: State<'_, Arc<TaskManager>>,
+    request: MascotChatRequest,
+) -> Result<String, AppError> {
+    plugins::require(&app, plugins::id::WIDGET)?;
+    plugins::require(&app, plugins::id::WIDGET_MASCOT)?;
+    let mascot_setting = load_mascot_setting(&app)?;
+    let mascot = mascot_setting
+        .characters
+        .iter()
+        .find(|c| c.id == request.mascot_id)
+        .ok_or_else(|| AppError::not_found("시메지를 찾을 수 없습니다"))?
+        .clone();
+
+    let app_setting = settings.0.lock().map_err(|_| AppError::internal("settings lock poisoned"))?.clone();
+
+    let (profile_id, model, preset_id) = resolve_mascot_ai(&mascot, &app_setting)?;
+    let (char_name, char_desc, example_dialogue, main_prompt) = load_mascot_char_info(&state.db, &mascot).await;
+    let (user_name, persona_desc) = load_mascot_persona_info(&state.db, &mascot, &app_setting).await;
+
+    let event_hint = match request.event_kind.as_deref() {
+        Some("gift") => "The user just gave you a gift on the desktop.",
+        Some("long_absence") => "The user has not visited for over 7 days and just came back.",
+        Some("greeting") => "You just appeared on the user's desktop to greet them.",
+        Some("notify") => "A desktop notification just arrived for the user.",
+        _ => "You are a cute desktop mascot (shimeji) chatting briefly with the user.",
+    };
+
+    let system_rule = format!(
+        "[Desktop Mascot Mode]\n{event_hint}\n\
+         - Reply as {char_name} in 1 to 2 very short, natural sentences (fits inside a small speech bubble, under 80 characters if possible).\n\
+         - Stay in character. Output ONLY the spoken line without quotation marks, narration, or stage directions.\n\
+         - Respond in the language of the user or character profile."
+    );
+
+    let history = request
+        .history
+        .into_iter()
+        .rev()
+        .take(10)
+        .rev()
+        .map(|h| HistoryItem {
+            role: if h.role == "assistant" { "assistant".into() } else { "user".into() },
+            content: h.content,
+            images: vec![],
+            source: None,
+        })
+        .collect();
+
+    let ctx = ChatContext {
+        system_rules: vec![system_rule],
+        char_name: Some(char_name),
+        user_name: Some(user_name),
+        character_info: (!char_desc.trim().is_empty()).then_some(char_desc),
+        persona_info: persona_desc,
+        example_dialogue,
+        main_prompt,
+        history,
+        ..Default::default()
+    };
+
+    let mut prompt = PromptManager
+        .build_with_db(
+            &state.db,
+            PromptRequest {
+                context: ctx,
+                user_message: request.user_message,
+                preset_id,
+                context_limit: crate::service::prompt::prompt_manager::DEFAULT_CONTEXT_LIMIT,
+                world_info_ratio: 0.2,
+                generation_type: GenerationType::Normal,
+            },
+        )
+        .await?;
+    prompt.chat_options.stream = false;
+    prompt.chat_options.max_tokens = Some(prompt.chat_options.max_tokens.unwrap_or(200).min(240));
+
+    let job = CreateTaskRequest::inline(TaskType::Mascot, TaskOwner::System, plugins::id::WIDGET, "시메지 대사", false).owner_ref(&mascot.id);
+    let resp = tasks
+        .run_inline(job, |cancel| async move {
+            ai.generate(AiRequest { profile_id, prompt, model }, &cancel, |_| {}).await
+        })
+        .await?;
+
+    Ok(resp.content.trim().trim_matches(['"', '「', '」']).to_string())
+}
+
+/// 두 시메지 간 짧은 대화 생성 (AI)
+#[tauri::command]
+#[specta::specta]
+pub async fn mascot_generate_peer_chat(
+    app: AppHandle,
+    state: State<'_, AppState>,
+    ai: State<'_, Arc<AiService>>,
+    settings: State<'_, SettingsState<AppSetting>>,
+    tasks: State<'_, Arc<TaskManager>>,
+    request: MascotPeerChatRequest,
+) -> Result<Vec<MascotPeerChatTurn>, AppError> {
+    plugins::require(&app, plugins::id::WIDGET)?;
+    plugins::require(&app, plugins::id::WIDGET_MASCOT)?;
+    let mascot_setting = load_mascot_setting(&app)?;
+    // 타이머가 부르는 대화는 사용자가 켠 스위치(기본 꺼짐)가 있어야 한다
+    if request.auto && !mascot_setting.pair_chat_use_ai {
+        return Err(AppError::validation("시메지끼리 AI 대화가 꺼져 있습니다", None));
+    }
+    let mascot_a = mascot_setting
+        .characters
+        .iter()
+        .find(|c| c.id == request.mascot_a_id)
+        .ok_or_else(|| AppError::not_found("첫 번째 시메지를 찾을 수 없습니다"))?
+        .clone();
+    let mascot_b = mascot_setting
+        .characters
+        .iter()
+        .find(|c| c.id == request.mascot_b_id)
+        .ok_or_else(|| AppError::not_found("두 번째 시메지를 찾을 수 없습니다"))?
+        .clone();
+
+    let app_setting = settings.0.lock().map_err(|_| AppError::internal("settings lock poisoned"))?.clone();
+
+    // A의 API 우선, 없으면 B의 API, 없으면 앱 기본 API
+    let (profile_id, model, preset_id) = resolve_mascot_ai(&mascot_a, &app_setting).or_else(|_| resolve_mascot_ai(&mascot_b, &app_setting))?;
+
+    let (name_a, desc_a, _, _) = load_mascot_char_info(&state.db, &mascot_a).await;
+    let (name_b, desc_b, _, _) = load_mascot_char_info(&state.db, &mascot_b).await;
+    let (user_name, _) = load_mascot_persona_info(&state.db, &mascot_a, &app_setting).await;
+
+    let display_a = if name_a.trim().is_empty() { mascot_a.name.clone() } else { name_a };
+    let display_b = if name_b.trim().is_empty() { mascot_b.name.clone() } else { name_b };
+    let topic_line = request
+        .topic
+        .as_deref()
+        .map(str::trim)
+        .filter(|s| !s.is_empty())
+        .map(|t| format!("Topic: {t}\n"))
+        .unwrap_or_default();
+
+    let system_rule = format!(
+        "[Desktop Mascots Banter]\n\
+         Two desktop mascots ({display_a} and {display_b}) met on {user_name}'s screen and have a short, cute conversation.\n\
+         {topic_line}\
+         - Write 2 to 4 short lines alternating between {display_a} and {display_b}.\n\
+         - Each line MUST be formatted strictly as `{display_a}: message` or `{display_b}: message`.\n\
+         - Keep each message under 60 characters so it fits a small speech bubble.\n\
+         - No narration, action descriptions, or extra commentary. Write in Korean unless the character profiles are in another language.\n\n\
+         [{display_a}]\n{desc_a}\n\n\
+         [{display_b}]\n{desc_b}"
+    );
+
+    let ctx = ChatContext {
+        system_rules: vec![system_rule],
+        char_name: Some(display_a.clone()),
+        user_name: Some(user_name),
+        ..Default::default()
+    };
+
+    let mut prompt = PromptManager
+        .build_with_db(
+            &state.db,
+            PromptRequest {
+                context: ctx,
+                user_message: format!("{display_a}와 {display_b}가 화면에서 마주쳐 짧은 대화를 나눈다."),
+                preset_id,
+                context_limit: crate::service::prompt::prompt_manager::DEFAULT_CONTEXT_LIMIT,
+                world_info_ratio: 0.1,
+                generation_type: GenerationType::Quiet,
+            },
+        )
+        .await?;
+    prompt.chat_options.stream = false;
+    prompt.chat_options.max_tokens = Some(prompt.chat_options.max_tokens.unwrap_or(260).min(320));
+
+    let job = CreateTaskRequest::inline(TaskType::Mascot, TaskOwner::System, plugins::id::WIDGET, "시메지끼리 대화", request.auto).owner_ref(&mascot_a.id);
+    let resp = tasks
+        .run_inline(job, |cancel| async move {
+            ai.generate(AiRequest { profile_id, prompt, model }, &cancel, |_| {}).await
+        })
+        .await?;
+
+    let parsed = phone_sides::parse_peek(&resp.content, &display_a, &display_b);
+    let turns = parsed
+        .into_iter()
+        .take(4)
+        .map(|(is_a, text)| {
+            if is_a {
+                MascotPeerChatTurn {
+                    mascot_id: mascot_a.id.clone(),
+                    name: mascot_a.name.clone(),
+                    text: text.trim_matches(['"', '「', '」']).to_string(),
+                }
+            } else {
+                MascotPeerChatTurn {
+                    mascot_id: mascot_b.id.clone(),
+                    name: mascot_b.name.clone(),
+                    text: text.trim_matches(['"', '「', '」']).to_string(),
+                }
+            }
+        })
+        .filter(|t| !t.text.trim().is_empty())
+        .collect();
+
+    Ok(turns)
 }

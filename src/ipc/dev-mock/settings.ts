@@ -24,6 +24,14 @@ const themes = new Map<string, MockTheme>([
 ]);
 const keys = new Set<string>(["gemini"]);
 let autostart = false;
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+let mockMascotSetting: any = {
+	characters: [],
+	pairChatEnabled: true,
+	pairChatIntervalSec: 90,
+	pairChatUseAi: false,
+	pairChatDistancePx: 260,
+};
 let defaultPersona = "default";
 const contacts: PhoneContact[] = [
 	{ ownerKind: "persona", ownerId: "min", contactKind: "character", contactId: "sera", status: "숲의 오두막", sortOrder: 0, createdAt: 0 },
@@ -64,8 +72,9 @@ const blocks = new Map<string, PromptBlocks_Serialize[]>([
 			block("default", 1, "charDescription", "캐릭터 설명"),
 			block("default", 2, "personaDescription", "페르소나 설명"),
 			block("default", 3, "worldInfoBefore", "월드인포"),
-			block("default", 4, "chatHistory", "대화 기록"),
-			block("default", 5, "jailbreak", "마무리 지시", "답은 3문단 이내.", { position: "in_chat", depth: 1, role: "system" }),
+			block("default", 4, "utils", "유틸 프롬프트", "{{img_inprompt}}\n{{multi_char}}\n{{auto_image}}\n{{vars}}"),
+			block("default", 5, "chatHistory", "대화 기록"),
+			block("default", 6, "jailbreak", "마무리 지시", "답은 3문단 이내.", { position: "in_chat", depth: 1, role: "system" }),
 		],
 	],
 	["st", [block("st", 0, "main", "Main Prompt", "Write {{char}}'s next reply.")]],
@@ -92,6 +101,26 @@ export const settingsHandlers: Record<string, (a: Args) => unknown> = {
 	// ---- 위젯 ----
 	is_autostart_enabled: () => autostart,
 	set_autostart: ({ enabled }) => ((autostart = enabled), null),
+	get_widget_mascot_settings: () => mockMascotSetting,
+	save_widget_mascot_settings: ({ setting }) => ((mockMascotSetting = structuredClone(setting)), mockMascotSetting),
+	upload_widget_mascot_image: ({ sourcePath }) =>
+		sourcePath
+			? "data:image/svg+xml," + encodeURIComponent('<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64"><circle cx="32" cy="32" r="24" fill="#e9a87c"/><circle cx="24" cy="28" r="3" fill="#2b2118"/><circle cx="40" cy="28" r="3" fill="#2b2118"/><path d="M24 38 Q32 45 40 38" stroke="#2b2118" stroke-width="2.5" fill="none" stroke-linecap="round"/></svg>')
+			: "",
+	delete_widget_mascot_image: () => null,
+	mascot_generate_reply: async ({ request }) => {
+		const m = mockMascotSetting.characters.find((c: { id: string }) => c.id === request.mascotId);
+		return `${m?.name ?? "시메지"}: "${request.userMessage}"라고 했구나! 헤헤, 반가워!`;
+	},
+	mascot_generate_peer_chat: async ({ request }) => {
+		const a = mockMascotSetting.characters.find((c: { id: string }) => c.id === request.mascotAId);
+		const b = mockMascotSetting.characters.find((c: { id: string }) => c.id === request.mascotBId);
+		return [
+			{ mascotId: request.mascotAId, name: a?.name ?? "A", text: "안녕! 오늘 화면 위가 참 포근하네~" },
+			{ mascotId: request.mascotBId, name: b?.name ?? "B", text: "그러게! 같이 조금만 걸어다닐까?" },
+			{ mascotId: request.mascotAId, name: a?.name ?? "A", text: "좋아, 출발하자!" },
+		];
+	},
 
 	// ---- 페르소나 기본값 ----
 	set_system_default_persona: ({ id }) => ((defaultPersona = id), null),
@@ -120,6 +149,12 @@ export const settingsHandlers: Record<string, (a: Args) => unknown> = {
 		return c;
 	},
 
+	set_avatar_fit: ({ owner, id, fit }) => {
+		const list: { id: string; avatarFit: unknown }[] = owner === "persona" ? personas : characters;
+		const x = list.find((v) => v.id === id);
+		if (x) x.avatarFit = fit ?? null;
+		return null;
+	},
 	set_character_cover_position: ({ id, y }) => {
 		const c = characters.find((x) => x.id === id)!;
 		c.coverY = y as number;
@@ -129,7 +164,7 @@ export const settingsHandlers: Record<string, (a: Args) => unknown> = {
 	// ---- 복사 ----
 	copy_character_to_persona: ({ characterId }) => {
 		const c = characters.find((x) => x.id === characterId)!;
-		const p = { id: uid("pe"), name: c.name, avatar: c.avatar, description: c.description, worldInfoIds: [...c.worldInfoIds], tags: [...c.tags], color: c.color ?? "", isSystemDefault: false, createdAt: now(), updatedAt: now() };
+		const p = { id: uid("pe"), name: c.name, alias: null, avatar: c.avatar, description: c.description, worldInfoIds: [...c.worldInfoIds], tags: [...c.tags], color: c.color ?? "", isSystemDefault: false, createdAt: now(), updatedAt: now(), avatarFit: c.avatarFit };
 		personas.push(p);
 		return p;
 	},
@@ -269,6 +304,31 @@ export const settingsHandlers: Record<string, (a: Args) => unknown> = {
 		conv.updatedAt = now();
 		return out;
 	},
+	phone_generate_profile: async () =>
+		JSON.stringify({
+			handle: "daily_log",
+			status: "오늘도 조용히 차 한 잔",
+			bio: "소소한 일상과 기록을 남기는 공간\n가끔 산책 사진 올림",
+			link: "숲의 오두막",
+			followers: "142",
+			following: "38",
+			posts: [
+				{
+					caption: "창밖으로 바람이 꽤 선선하게 분다. 오랜만에 따뜻한 차를 우렸다.",
+					location: "오두막 창가",
+					date: "2시간 전",
+					likes: 24,
+					comments: [{ author: "이웃", text: "분위기 너무 좋네요!" }],
+				},
+				{
+					caption: "어제 걸었던 길. 다음엔 카메라도 챙겨 나가야지.",
+					location: "산책로",
+					date: "어제",
+					likes: 41,
+					comments: [],
+				},
+			],
+		}),
 
 	// ---- 페르소나 ----
 	// ---- 로어북 ----
@@ -288,10 +348,10 @@ export const settingsHandlers: Record<string, (a: Args) => unknown> = {
 		books.splice(books.findIndex((b) => b.id === id), 1);
 		return null;
 	},
-	get_worldinfo_entries: ({ bookId }) => wiEntries.filter((e) => e.bookId === bookId).map((e) => ({ ...e })),
+	get_worldinfo_entries: ({ bookId }) => wiEntries.filter((e) => e.bookId === bookId).map((e) => ({ category: "", ...e })),
 	upsert_worldinfo_entry: ({ input }) => {
 		if (!input.keys.length && !input.constant) throw { code: "INVALID_INPUT", category: "VALIDATION", message: "키워드 필요", retryable: false };
-		const e = { ...input, id: input.id ?? `we${Date.now().toString(36)}`, comment: input.comment ?? "" };
+		const e = { ...input, id: input.id ?? `we${Date.now().toString(36)}`, comment: input.comment ?? "", category: input.category ?? "" };
 		const i = wiEntries.findIndex((x) => x.id === e.id);
 		if (i >= 0) wiEntries[i] = e;
 		else wiEntries.push(e);
@@ -334,16 +394,20 @@ export const settingsHandlers: Record<string, (a: Args) => unknown> = {
 
 	// ---- API ----
 	has_api_key: ({ profileId }) => keys.has(profileId),
+	get_vertex_key_info: () => null,
 	delete_api_key: ({ profileId }) => (keys.delete(profileId), null),
 	create_api_profile: ({ input, apiKey }) => {
-		const a = { ...input, id: uid("api"), createdAt: now(), updatedAt: now() };
+		const a = { ...input, id: uid("api"), customModels: [], verified: false, createdAt: now(), updatedAt: now() };
 		apis.push(a);
 		if (apiKey) keys.add(a.id);
 		return a;
 	},
 	update_api_profile: ({ id, input, apiKey }) => {
 		const a = apis.find((x) => x.id === id);
-		if (a) Object.assign(a, input, { updatedAt: now() });
+		if (a) {
+			const reset = !!apiKey || a.baseUrl !== input.baseUrl || a.formatType !== input.formatType;
+			Object.assign(a, input, { updatedAt: now(), ...(reset ? { verified: false } : {}) });
+		}
 		if (apiKey) keys.add(id);
 		return null;
 	},
@@ -365,10 +429,12 @@ export const settingsHandlers: Record<string, (a: Args) => unknown> = {
 		if (!keys.has(profileId)) throw { code: "AI_PROVIDER_AUTH_FAILED", category: "AI_PROVIDER", message: "API 키가 설정되지 않았습니다", retryable: false };
 		return ["gemini-3.7-flash", "gemini-3.1-pro-preview", "gemini-2.5-pro"];
 	},
-	test_message: async ({ profileId }) => {
+	test_message: async ({ profileId, model }) => {
 		await new Promise((r) => setTimeout(r, 600));
 		if (!keys.has(profileId)) throw { code: "AI_PROVIDER_AUTH_FAILED", category: "AI_PROVIDER", message: "API 키가 설정되지 않았습니다", retryable: false };
-		return "OK";
+		const a = apis.find((x) => x.id === profileId);
+		if (a) a.verified = true;
+		return model ? `Hi! (${model})` : "OK";
 	},
 
 	// ---- 프리셋 ----
@@ -413,6 +479,9 @@ export const settingsHandlers: Record<string, (a: Args) => unknown> = {
 	},
 
 	// ---- 가져오기 ----
+	export_sillytavern_data: () => ({ characters: 3, chats: 5, books: 2, presets: 2, personas: 2, regex: 1, warnings: [] }),
+	export_preset_sillytavern: () => null,
+	import_sillytavern_data: () => ({ characters: 2, chats: 3, books: 1, presets: 1, regex: 2, personas: 1, warnings: ["TextGen Settings: 4개 건너뜀 (Chat Completion 프리셋만 가져옴)", "단체 채팅 1개 건너뜀 (지원하지 않음)"] }),
 	import_sillytavern: ({ path }) => {
 		const p = { id: uid("p"), name: String(path).split(/[\\/]/).pop()!.replace(/\.json$/, ""), description: null, presetType: "chat_completion", sourceFormat: "sillytavern", configJson: {}, settingsJson: { temperature: 1 }, compatibilityJson: null, createdAt: now(), updatedAt: now() };
 		presets.push(p);
@@ -475,6 +544,18 @@ export const settingsHandlers: Record<string, (a: Args) => unknown> = {
 			convs.splice(i, 1);
 			n++;
 			for (let k = messages.length - 1; k >= 0; k--) if (messages[k].conversationId === id) messages.splice(k, 1);
+		}
+		return n;
+	},
+	reassign_conversations_character: ({ ids, characterId }) => {
+		let n = 0;
+		for (const id of ids as string[]) {
+			const c = convs.find((x) => x.id === id);
+			if (!c) continue;
+			c.characterId = characterId as string;
+			c.folderId = null;
+			c.updatedAt = now();
+			n++;
 		}
 		return n;
 	},

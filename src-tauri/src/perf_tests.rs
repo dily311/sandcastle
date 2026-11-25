@@ -103,6 +103,9 @@ async fn long_conversation_load_and_display() {
 #[tokio::test]
 #[ignore = "성능 측정 (수동)"]
 async fn gallery_listing() {
+    if !crate::test_fixtures::present() {
+        return;
+    }
     let (_d, base, _pool) = app().await;
     let dir = base.join("generated");
     std::fs::create_dir_all(&dir).unwrap();

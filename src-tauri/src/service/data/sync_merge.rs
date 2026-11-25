@@ -841,13 +841,14 @@ async fn merge_core(
         }
     }
     sqlx::query(
-        "INSERT INTO sync_peers (device_id, last_bundle_created_at, last_merge_at, merges, acks) VALUES (?, ?, ?, 1, ?)
-         ON CONFLICT(device_id) DO UPDATE SET last_bundle_created_at = excluded.last_bundle_created_at, last_merge_at = excluded.last_merge_at, merges = merges + 1, acks = excluded.acks",
+        "INSERT INTO sync_peers (device_id, last_bundle_created_at, last_merge_at, merges, acks, name) VALUES (?, ?, ?, 1, ?, ?)
+         ON CONFLICT(device_id) DO UPDATE SET last_bundle_created_at = excluded.last_bundle_created_at, last_merge_at = excluded.last_merge_at, merges = merges + 1, acks = excluded.acks, name = excluded.name",
     )
     .bind(&m.device_id)
     .bind(m.created_at)
     .bind(ctx.now)
     .bind(serde_json::to_string(&m.acks).unwrap_or_default())
+    .bind(&m.device_name)
     .execute(&mut *tx)
     .await?;
 

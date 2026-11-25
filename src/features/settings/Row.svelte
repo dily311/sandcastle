@@ -30,6 +30,8 @@ import type { Snippet } from "svelte";
 		flex-wrap: wrap;
 		/* 조작 요소가 행보다 넓어도 잘리지 않게 (예전 overflow: hidden은 좁은 화면에서 오른쪽을 잘라 먹었음) */
 		min-width: 0;
+		container-type: inline-size;
+		container-name: row-container;
 	}
 	.row.nowrap {
 		flex-wrap: nowrap;
@@ -61,7 +63,7 @@ import type { Snippet } from "svelte";
 		gap: var(--space-2);
 		flex-shrink: 0;
 		/* 행보다 넓은 조작 요소(색 목록·버튼 둘 이상)는 행 폭 안에서 줄을 바꿈 */
-		max-width: 100%;
+		max-width: 400px;
 		flex-wrap: wrap;
 	}
 	/* 글이 길어도 단어 중간이 아니라 칸 안에서 줄바꿈 */
@@ -78,4 +80,9 @@ import type { Snippet } from "svelte";
 		min-width: min(160px, 100%);
 	}
 
+	@container row-container (max-width: 400px) {
+		.ctl {
+			max-width: none;
+		}
+	}
 </style>

@@ -4,6 +4,7 @@
 	// - sandbox="allow-scripts"만: 불투명 origin이라 앱 화면·저장소·Tauri에 닿지 못한다
 	// - 높이는 iframe이 postMessage로 알려준다 (최대 MAX_HEIGHT, 넘치면 iframe 안에서 스크롤)
 	import { ChevronDown, Code, Eye, RotateCw } from "@lucide/svelte";
+	import { _ } from "svelte-i18n";
 	import { call, commands } from "$shared/ipc/client";
 	import { plugins } from "$shared/stores/plugins.svelte";
 	import { theme } from "$app/theme.svelte";
@@ -11,7 +12,8 @@
 	import { dispatchAction, parseAction } from "$shared/html/bridge";
 	import { toasts } from "$shared/stores/toast.svelte";
 
-	let { code }: { code: string } = $props();
+	/** scripts: false면 글쓴이의 JS를 막고 그림만 (코드 블록 밖 HTML, ADR-004 추가) */
+	let { code, scripts = true }: { code: string; scripts?: boolean } = $props();
 
 	const MAX_HEIGHT = 900;
 	let src = $state<string | null>(null);
@@ -33,7 +35,7 @@
 		void theme.dark;
 		void JSON.stringify(theme.setting);
 		const css = currentThemeCss(theme.dark);
-		void call(commands.registerHtmlView(c, css), { source: "html", silent: true })
+		void call(commands.registerHtmlView(c, css, scripts), { source: "html", silent: true })
 			.then((url) => (src = url))
 			.catch(() => (failed = true));
 	});
@@ -46,9 +48,16 @@
 		if (!req) return;
 		// 보내기는 요금이 나간다: 사용자가 이 블록 안을 막 눌렀을 때만 (iframe에 포커스). 아니면 입력칸에 넣기만
 		const clicked = document.activeElement === frame;
+		// 슬래시(triggerSlash, 5-E-20-6-12): /gen·/run으로 요금이 날 수 있어 누른 뒤에만, 슬래시 코어 플러그인이 켜졌을 때만
+		if (req.action === "slash") {
+			if (!plugins.on("slash")) return void toasts.info($_("uiPolish.htmlSlashDisabled"));
+			if (!clicked) return void toasts.info($_("uiPolish.htmlSlashNeedClick"));
+			if (!dispatchAction(req)) toasts.info($_("uiPolish.htmlOnlyInChat"));
+			return;
+		}
 		const action = req.action === "send" && !clicked ? "fill" : req.action;
-		if (!dispatchAction({ action, text: req.text })) return void toasts.info("대화 화면에서만 쓸 수 있음");
-		if (req.action === "send" && action === "fill") toasts.info("입력칸에 넣음 · 직접 보내기");
+		if (!dispatchAction({ action, text: req.text })) return void toasts.info($_("uiPolish.htmlOnlyInChat"));
+		if (req.action === "send" && action === "fill") toasts.info($_("uiPolish.htmlFilled"));
 	}
 </script>
 
@@ -56,12 +65,12 @@
 
 <figure class="html">
 	<div class="bar" class:folded>
-		<button type="button" class="fold" title={folded ? "펼치기" : "접기"} aria-label={folded ? "HTML 펼치기" : "HTML 접기"} aria-expanded={!folded} onclick={(e) => { e.stopPropagation(); folded = !folded; }}>
+		<button type="button" class="fold" title={folded ? $_("uiPolish.htmlExpand") : $_("uiPolish.htmlCollapse")} aria-label={folded ? $_("uiPolish.htmlExpandAria") : $_("uiPolish.htmlCollapseAria")} aria-expanded={!folded} onclick={(e) => { e.stopPropagation(); folded = !folded; }}>
 			<ChevronDown class={folded ? "rot" : ""} />
-			<span>HTML{#if !enabled} · 실행 꺼짐 (코어 플러그인){/if}</span>
+			<span>HTML{#if !enabled}{$_("uiPolish.htmlDisabled")}{:else if !scripts}{$_("uiPolish.htmlNoScripts")}{/if}</span>
 		</button>
-		<button type="button" title="다시 실행" aria-label="다시 실행" onclick={() => reloadKey++}><RotateCw /></button>
-		<button type="button" title={showCode ? "결과 보기" : "코드 보기"} aria-label={showCode ? "결과 보기" : "코드 보기"} aria-pressed={showCode} onclick={() => (showCode = !showCode)}>
+		<button type="button" title={$_("uiPolish.htmlRerun")} aria-label={$_("uiPolish.htmlRerun")} onclick={() => reloadKey++}><RotateCw /></button>
+		<button type="button" title={showCode ? $_("uiPolish.htmlShowResult") : $_("uiPolish.htmlShowCode")} aria-label={showCode ? $_("uiPolish.htmlShowResult") : $_("uiPolish.htmlShowCode")} aria-pressed={showCode} onclick={() => (showCode = !showCode)}>
 			{#if showCode}<Eye />{:else}<Code />{/if}
 		</button>
 	</div>
@@ -71,7 +80,7 @@
 		<pre><code>{code}</code></pre>
 	{:else if src}
 		{#key reloadKey}
-			<iframe bind:this={frame} {src} title="HTML 미리보기" sandbox="allow-scripts" style:height="{height}px" loading="lazy" referrerpolicy="no-referrer"></iframe>
+			<iframe bind:this={frame} {src} title={$_("uiPolish.htmlPreviewTitle")} sandbox="allow-scripts" style:height="{height}px" loading="lazy" referrerpolicy="no-referrer"></iframe>
 		{/key}
 	{/if}
 </figure>

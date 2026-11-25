@@ -15,14 +15,30 @@ export type ContextMenuSource = {
 
 export type ContextMenuAction = string;
 
+export type ContextMenuControl = {
+	id: string;
+	icon: string | (() => string);
+	label: string;
+	action?: ContextMenuAction;
+	onselect?: (context?: ContextMenuContext) => void | Promise<void>;
+	disabled?: (context?: ContextMenuContext) => boolean;
+	keepOpen?: boolean;
+};
+
 export type ContextMenuItem = {
 	id: string;
 	label: string;
+	/** true면 번역 키 대신 label 원문 그대로 표시 */
+	rawLabel?: boolean;
 	icon?: string;
 	// 실행할 액션 ID
 	action?: ContextMenuAction;
-	// 하위 메뉴
-	children?: ContextMenuItem[];
+	/** 동적 메뉴 항목용 직접 실행 콜백 */
+	onselect?: (context?: ContextMenuContext) => void | Promise<void>;
+	/** 가로 컨트롤 버튼 묶음 (예: 음악 플레이어 << > >>) */
+	controls?: ContextMenuControl[];
+	// 하위 메뉴 (정적 목록 또는 메뉴 열 때마다 계산하는 함수)
+	children?: ContextMenuItem[] | ((context?: ContextMenuContext) => ContextMenuItem[]);
 	// 구분선
 	separator?: boolean;
 	// 위험한 작업 여부

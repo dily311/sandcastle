@@ -76,6 +76,8 @@ export async function saveIntoPicked(defaultName: string, filters: Filter[], run
 export const GAME_FILES: Filter = { name: "게임", extensions: ["tgame"] };
 export const IMAGE_FILES: Filter = { name: "이미지", extensions: ["png", "jpg", "jpeg", "webp", "gif"] };
 export const ST_FILES: Filter = { name: "SillyTavern", extensions: ["png", "json", "jsonl"] };
+/** SillyTavern 사용자 폴더(data/default-user)를 압축한 것 */
+export const ST_DATA_FILES: Filter = { name: "SillyTavern 데이터", extensions: ["zip"] };
 export const CHAT_FILES: Filter = { name: "대화 기록", extensions: ["jsonl"] };
 export const PACK_FILES: Filter = { name: "캐릭터 묶음", extensions: ["zip"] };
 export const JSON_FILES: Filter = { name: "JSON", extensions: ["json"] };
