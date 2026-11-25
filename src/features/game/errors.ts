@@ -3,10 +3,14 @@
 // - GAME_NO_SESSION / GAME_NOT_OPENED: 플레이가 닫힘 → 게임 화면으로 돌아가는 버튼
 // - GAME_SESSION_CHANGED: 기다리던 응답을 버렸다는 안내
 // - GAME_DATA_INVALID: 시작 불가. details.diagnostics에 진단 목록
+import { get } from "svelte/store";
+import { _ } from "svelte-i18n";
 import type { BlockReason } from "$ipc/bindings";
 import { nav } from "$app/nav.svelte";
 import { toAppError, type AppError } from "$shared/ipc/client";
 import { toasts } from "$shared/stores/toast.svelte";
+
+const t = (key: string) => get(_)(key);
 
 export type { BlockReason };
 
@@ -32,13 +36,13 @@ export function gameErrorToast(err: AppError, gameId?: string) {
 		case "GAME_ACTION_BLOCKED":
 			return { tone: "warning" as const, message: err.message };
 		case "GAME_SESSION_CHANGED":
-			return { tone: "warning" as const, message: "기다리는 동안 다른 플레이로 바뀌어서 이 응답은 버렸습니다" };
+			return { tone: "warning" as const, message: t("errors.GAME_SESSION_CHANGED") };
 		case "GAME_NO_SESSION":
 		case "GAME_NOT_OPENED":
 			return {
 				tone: "warning" as const,
-				message: "플레이가 닫혀 있습니다. 게임 화면에서 다시 이어하기를 눌러 주세요",
-				action: { label: "게임으로", run: () => nav.go(gameId ? { page: "game", gameId } : { page: "game" }) },
+				message: t("errors.gameSessionClosed"),
+				action: { label: t("errors.goToGame"), run: () => nav.go(gameId ? { page: "game", gameId } : { page: "game" }) },
 			};
 		default:
 			return { tone: "error" as const, message: err.message, detail: err.code };

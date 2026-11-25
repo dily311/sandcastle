@@ -4,6 +4,7 @@ import { describe, expect, it } from "vitest";
 import { get } from "svelte/store";
 import { _ } from "svelte-i18n";
 import { getAppLocale, setAppLocale } from "./i18n";
+import { localizeBackendError, localizeCorePlugin, localizeTaskFeature, localizeTaskStatus } from "./backendI18n";
 import ko from "../../locales/ko.json";
 import en from "../../locales/en.json";
 
@@ -78,5 +79,50 @@ describe("i18n", () => {
 		expect(get(_)("common.deleteCount", { values: { count: 2, unit: "" } })).toBe("Delete 2");
 
 		setAppLocale("ko");
+	});
+
+	it("백엔드에서 넘어온 한국어 오류·플러그인·작업 라벨을 현재 언어에 맞게 변환한다", () => {
+		setAppLocale("en");
+		expect(
+			localizeBackendError({
+				code: "AI_PROVIDER_RATE_LIMIT",
+				message: "요청 한도를 초과했습니다",
+			}),
+		).toBe("AI rate limit exceeded. Please try again later.");
+		expect(
+			localizeBackendError({
+				code: "INVALID_INPUT",
+				message: "'번역' 기능이 꺼져 있습니다 (설정 > 코어 플러그인)",
+				details: { plugin: "translate" },
+			}),
+		).toBe("'Translate' is disabled (Settings > Core Plugins)");
+		expect(
+			localizeBackendError({
+				code: "AI_PROVIDER_ERROR",
+				message: "Upstream HTTP 502 Bad Gateway",
+			}),
+		).toBe("Upstream HTTP 502 Bad Gateway");
+
+		const pluginLoc = localizeCorePlugin({
+			id: "phone",
+			name: "폰",
+			description: "캐릭터와 메신저처럼 대화하는 폰 화면",
+			defaultEnabled: true,
+			desktopOnly: false,
+			enabled: true,
+		});
+		expect(pluginLoc.name).toBe("Phone");
+		expect(pluginLoc.description).toContain("Messenger-style phone screen");
+		expect(localizeTaskFeature("chat")).toBe("Chat");
+		expect(localizeTaskStatus("running")).toBe("Running");
+
+		setAppLocale("ko");
+		expect(
+			localizeBackendError({
+				code: "AI_PROVIDER_RATE_LIMIT",
+				message: "요청 한도를 초과했습니다",
+			}),
+		).toBe("요청 한도를 초과했습니다");
+		expect(localizeTaskFeature("chat")).toBe("대화");
 	});
 });
