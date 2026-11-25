@@ -289,13 +289,7 @@ pub async fn display_messages(
         .or(Some(fallback).filter(|s| !s.is_empty()));
     let persona_id = conversation::resolve_conv_persona(&state.db, &conv.persona_id, &conv.character_id).await;
     let user_name = conversation::get_persona(&state.db, &persona_id).await.map(|p| p.name).unwrap_or_default();
-    let regex = RegexProcessor::load(
-        &state.db,
-        Some(&conv.character_id),
-        preset_id.as_deref(),
-        RegexMacros { char_name, user_name },
-    )
-    .await?;
+    let regex = RegexProcessor::load(&state.db, Some(&conv.character_id), preset_id.as_deref(), RegexMacros { char_name, user_name }).await?;
     let n = items.len();
     Ok(items
         .iter()

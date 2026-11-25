@@ -916,7 +916,12 @@ async fn st_data_does_not_duplicate_worldinfo_when_card_has_both_character_book_
     assert_eq!((r.characters, r.books), (2, 1), "{:?}", r.warnings);
 
     let books = crate::db::conversation::get_all_worldinfo_books(&db).await.unwrap();
-    assert_eq!(books.len(), 2, "Eldoria(worlds) + Solo Lore(embedded)만 있어야 함: {:?}", books.iter().map(|b| &b.name).collect::<Vec<_>>());
+    assert_eq!(
+        books.len(),
+        2,
+        "Eldoria(worlds) + Solo Lore(embedded)만 있어야 함: {:?}",
+        books.iter().map(|b| &b.name).collect::<Vec<_>>()
+    );
 
     let chars = crate::db::conversation::get_all_characters(&db).await.unwrap();
     let aria = chars.iter().find(|c| c.name == "Aria").unwrap();

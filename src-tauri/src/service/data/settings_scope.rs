@@ -42,6 +42,8 @@ pub const SETTINGS_SCOPE: &[(&str, Scope)] = &[
     ("app-setting/doneNotify", Scope::Device), // 알림은 기기마다 (아이콘 경로도 그 기기 것)
     ("app-setting/aiCallLog", Scope::Device),  // 보낸 글·받은 글 기록은 기기마다 켠다
     ("app-setting/typing", Scope::SharedPath), // 타이핑 표시는 취향 (그림은 앱 데이터 themes/typing/)
+    ("app-setting/worldInfo/scanDepth", Scope::Shared),
+    ("app-setting/worldInfo/maxRecursionDepth", Scope::Shared),
     // ---- theme-setting ----
     ("theme-setting/mode", Scope::Shared),
     ("theme-setting/selectTheme", Scope::Shared),
@@ -55,6 +57,8 @@ pub const SETTINGS_SCOPE: &[(&str, Scope)] = &[
     ("theme-setting/backgroundOpacity", Scope::Shared),
     ("theme-setting/fonts", Scope::SharedPath),
     ("theme-setting/appFont", Scope::SharedPath),
+    ("theme-setting/textFont", Scope::SharedPath),
+    ("theme-setting/monoFont", Scope::SharedPath),
     ("theme-setting/chat", Scope::Shared),
     // ---- feature-setting: 기능 켜기는 기기마다 ----
     ("feature-setting", Scope::Device),
@@ -85,6 +89,9 @@ pub const SETTINGS_SCOPE: &[(&str, Scope)] = &[
     ("plugin-setting/phone/apiProfileId", Scope::Device),
     ("plugin-setting/phone/model", Scope::Device),
     ("plugin-setting/phone/presetId", Scope::Shared),
+    ("plugin-setting/phone/customDatetimeEnabled", Scope::Shared), // 폰 날짜·시간은 이야기 설정
+    ("plugin-setting/phone/customDate", Scope::Shared),
+    ("plugin-setting/phone/customTime", Scope::Shared),
     ("plugin-setting/prompts", Scope::Shared),
     ("plugin-setting/ghost", Scope::Device),      // 대필 API·옵션은 기기마다
     ("plugin-setting/quickReply", Scope::Shared), // 빠른 답장 세트는 내가 쓴 글이라 같이 씀

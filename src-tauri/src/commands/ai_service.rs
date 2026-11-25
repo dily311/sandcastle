@@ -225,11 +225,7 @@ pub async fn test_message(
         }
         _ => {}
     }
-    let chosen = model
-        .as_deref()
-        .map(str::trim)
-        .filter(|m| !m.is_empty())
-        .map(str::to_string);
+    let chosen = model.as_deref().map(str::trim).filter(|m| !m.is_empty()).map(str::to_string);
     // 테스트 모델도 없고 기본 모델도 없으면 모델 목록 조회로 연결을 확인한다 (토큰 비용 없음)
     if chosen.is_none() && profile.model.trim().is_empty() {
         let models = ai.list_models(&profile_id).await?;

@@ -25,7 +25,9 @@ use crate::{
     db::{self, conn::DbPool},
     error::{AppError, ErrorCode, Result},
     models::{
-        ai_service::{ChatContext, ChatOptions, GenerationType, PromptBlocks, PromptMessage, PromptMessageItem, PromptPresets, PromptRequest, PromptRole, PromptSource},
+        ai_service::{
+            ChatContext, ChatOptions, GenerationType, PromptBlocks, PromptMessage, PromptMessageItem, PromptPresets, PromptRequest, PromptRole, PromptSource,
+        },
         conversation::WorldInfoEntry,
     },
     service::prompt::token::{count_message_tokens, count_tokens},
@@ -66,11 +68,7 @@ fn current_phone_clock() -> (String, String, String) {
     let now = chrono::Local::now();
     let sys_date = now.format("%Y-%m-%d").to_string();
     let sys_time = now.format("%H:%M").to_string();
-    let cfg = PHONE_CLOCK
-        .get()
-        .and_then(|l| l.read().ok())
-        .map(|g| g.clone())
-        .unwrap_or_default();
+    let cfg = PHONE_CLOCK.get().and_then(|l| l.read().ok()).map(|g| g.clone()).unwrap_or_default();
     let date = if cfg.enabled && !cfg.date.trim().is_empty() {
         cfg.date.trim().to_string()
     } else {
@@ -228,7 +226,8 @@ impl PromptManager {
         history.reverse();
         // Quiet(/gen) 지시는 월드인포 키워드 스캔·토큰 예산에는 포함하되, postHistory 등 모든 프리셋 블록 뒤 맨 끝에 둔다
         let quiet_tail = if request.generation_type == GenerationType::Quiet {
-            (!user_message.is_empty() || !ctx.user_images.is_empty()).then(|| (PromptRole::User, user_message, ctx.user_images.clone(), Some(PromptSource::of("qr"))))
+            (!user_message.is_empty() || !ctx.user_images.is_empty())
+                .then(|| (PromptRole::User, user_message, ctx.user_images.clone(), Some(PromptSource::of("qr"))))
         } else {
             if !user_message.is_empty() || !ctx.user_images.is_empty() {
                 history.push((PromptRole::User, user_message, ctx.user_images.clone(), Some(PromptSource::of("user_input"))));
@@ -426,11 +425,7 @@ fn layout_from_preset(preset: &LoadedPreset, generation_type: GenerationType, ma
     let mut in_chat = vec![];
     for b in blocks {
         let role = PromptRole::from_history(&b.role);
-        let block_name = if b.name.trim().is_empty() {
-            b.identifier.clone()
-        } else {
-            b.name.clone()
-        };
+        let block_name = if b.name.trim().is_empty() { b.identifier.clone() } else { b.name.clone() };
         if b.position == "in_chat" {
             let content = macros.apply(&b.content);
             if !content.trim().is_empty() {
@@ -502,14 +497,7 @@ fn select_world_info(ctx: &ChatContext, user_message: &str, budget: usize, macro
     select_world_info_with(ctx, user_message, budget, macros, scan_depth, max_depth)
 }
 
-fn select_world_info_with(
-    ctx: &ChatContext,
-    user_message: &str,
-    budget: usize,
-    macros: &Macros,
-    scan_depth: usize,
-    max_depth: usize,
-) -> Vec<String> {
+fn select_world_info_with(ctx: &ChatContext, user_message: &str, budget: usize, macros: &Macros, scan_depth: usize, max_depth: usize) -> Vec<String> {
     if budget == 0 || ctx.world_info.is_empty() {
         return vec![];
     }

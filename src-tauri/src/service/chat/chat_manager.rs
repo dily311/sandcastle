@@ -569,8 +569,7 @@ pub async fn compute_context_usage(
     use crate::service::prompt::prompt_manager::{chat_options_from, context_limit_from};
 
     let conv = get_conversation(db, conversation_id).await?;
-    let mut fallback = current_conv_request(settings)
-        .map_err(|e| e.downcast::<AppError>().unwrap_or_else(|e| AppError::internal(e.to_string())))?;
+    let mut fallback = current_conv_request(settings).map_err(|e| e.downcast::<AppError>().unwrap_or_else(|e| AppError::internal(e.to_string())))?;
     if let Some(a) = app {
         phone_defaults(a, &conv.mode, &mut fallback);
     }
@@ -641,10 +640,9 @@ pub async fn compute_context_usage(
             let messages = crate::db::conversation::get_messages(db, conversation_id, HISTORY_FETCH_LIMIT, None)
                 .await
                 .unwrap_or_default();
-            let world_info =
-                crate::db::conversation::get_all_conv_worldinfo_book_with_entries(db, conversation_id, &conv.character_id, &persona.id)
-                    .await
-                    .unwrap_or_default();
+            let world_info = crate::db::conversation::get_all_conv_worldinfo_book_with_entries(db, conversation_id, &conv.character_id, &persona.id)
+                .await
+                .unwrap_or_default();
             let variables = conv.meta.as_ref().and_then(|m| m.get("variables")).cloned().unwrap_or_else(|| json!({}));
             ChatContext {
                 char_name: Some(character.name.clone()),
@@ -729,11 +727,7 @@ pub async fn compute_context_usage(
             details,
             ..
         }) => {
-            let fixed = details
-                .as_ref()
-                .and_then(|d| d.get("fixedTokens"))
-                .and_then(Value::as_u64)
-                .unwrap_or(0) as u32;
+            let fixed = details.as_ref().and_then(|d| d.get("fixedTokens")).and_then(Value::as_u64).unwrap_or(0) as u32;
             (Some(fixed), fixed, 0, 0)
         }
         Err(e) => return Err(e),
@@ -751,9 +745,7 @@ pub async fn compute_context_usage(
     let mut plugins = vec![];
     let mut memory_recall = None;
     if community_on || recall_on {
-        let recent = crate::db::conversation::get_messages(db, conversation_id, 10, None)
-            .await
-            .unwrap_or_default();
+        let recent = crate::db::conversation::get_messages(db, conversation_id, 10, None).await.unwrap_or_default();
         if let Some(m) = recent.iter().rev().find(|m| m.role == "assistant" && !is_hidden(m.meta.as_ref())) {
             if community_on {
                 plugins = m
@@ -2002,12 +1994,10 @@ mod context_usage_tests {
         let pool = SqlitePoolOptions::new().max_connections(1).connect("sqlite::memory:").await.unwrap();
         sqlx::query("PRAGMA foreign_keys = ON").execute(&pool).await.unwrap();
         sqlx::migrate!("src/db/migrations").run(&pool).await.unwrap();
-        sqlx::query(
-            "INSERT INTO characters (id, name, description, created_at, updated_at) VALUES ('c1', 'Aria', '숲의 마법사 Aria이다.', 0, 0)",
-        )
-        .execute(&pool)
-        .await
-        .unwrap();
+        sqlx::query("INSERT INTO characters (id, name, description, created_at, updated_at) VALUES ('c1', 'Aria', '숲의 마법사 Aria이다.', 0, 0)")
+            .execute(&pool)
+            .await
+            .unwrap();
         pool
     }
 
@@ -2071,21 +2061,23 @@ mod context_usage_tests {
         assert_eq!(u_hidden.history, 0);
 
         // 3. 작가 노트를 적으면 설정·캐릭터(system) 토큰이 늘고 메시지 수(history_count)는 늘지 않는다
-        chat_ui::patch_conversation_meta(&pool, &conv_id, &json!({ "authorNote": { "text": "{{char}}는 비밀을 숨기고 있다.", "depth": 2 } }))
-            .await
-            .unwrap();
+        chat_ui::patch_conversation_meta(
+            &pool,
+            &conv_id,
+            &json!({ "authorNote": { "text": "{{char}}는 비밀을 숨기고 있다.", "depth": 2 } }),
+        )
+        .await
+        .unwrap();
         let u_note = compute_context_usage(None, &pool, &settings, &conv_id).await.unwrap();
         assert!(u_note.system > u0.system);
         assert_eq!(u_note.history_count, 0);
 
         // 4. 프리셋에 assistant 역할 prefill 블록이 있어도 대화 메시지 수로 세지 않고, 한도 초과 시에도 오류 대신 사용량을 돌려준다
-        sqlx::query(
-            "INSERT INTO prompt_presets (id, name, config_json, settings_json, created_at, updated_at) VALUES ('p1', '작은창', '{}', ?, 0, 0)",
-        )
-        .bind(json!({ "context_size": 4096, "max_tokens": 512 }).to_string())
-        .execute(&pool)
-        .await
-        .unwrap();
+        sqlx::query("INSERT INTO prompt_presets (id, name, config_json, settings_json, created_at, updated_at) VALUES ('p1', '작은창', '{}', ?, 0, 0)")
+            .bind(json!({ "context_size": 4096, "max_tokens": 512 }).to_string())
+            .execute(&pool)
+            .await
+            .unwrap();
         sqlx::query(
             "INSERT INTO prompt_blocks (id, preset_id, identifier, name, role, content, enabled, position, depth, sort_order, triggers_json, extra_json, created_at, updated_at)
              VALUES ('b1', 'p1', 'charDescription', '캐릭터', 'system', '', 1, 'relative', 0, 0, '[]', '{}', 0, 0),

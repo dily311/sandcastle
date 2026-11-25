@@ -458,7 +458,10 @@ mod tests {
         );
         assert_eq!(
             display,
-            format!("<q>안녕</q> 걷는다.\n\n<div data-sc-pin=\"status:{}\"><div class='hp'>HP 7</div></div><!--/sc-pin-->\n\n", shown.id)
+            format!(
+                "<q>안녕</q> 걷는다.\n\n<div data-sc-pin=\"status:{}\"><div class='hp'>HP 7</div></div><!--/sc-pin-->\n\n",
+                shown.id
+            )
         );
         let kept = RegexProcessor::new(vec![stored], macros()).apply("걷는다.<hp>7</hp>", RegexPlacement::AiOutput, &[RegexTarget::Stored], Some(0));
         assert_eq!(kept, "걷는다.<div class='hp'>HP 7</div>", "저장 정규식에는 표시를 넣지 않음");
