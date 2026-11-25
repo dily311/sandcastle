@@ -198,6 +198,7 @@
     "offShuffle": "Shuffle off",
     "prevSong": "Previous track",
     "nextSong": "Next track",
+    "menu": "Menu",
     "defaultTitle": "No track playing",
     "defaultArtist": "Unknown artist",
     "currentTime": "Current time",

@@ -150,7 +150,7 @@
 					<Icon name="Shuffle" size={22} />
 				</IconButton>
 				<IconButton
-					label={$_("plyer.prevSong")}
+					label={$_("music.prevSong")}
 					class="control-btn prev-btn"
 					onclick={() => handlePrevSong()}
 					disabled={audioStore.isDisabledPrev}
