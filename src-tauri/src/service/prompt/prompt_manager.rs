@@ -31,8 +31,59 @@ use crate::{
     service::prompt::token::{count_message_tokens, count_tokens},
 };
 
-/// 월드인포 키워드를 찾을 최근 대화 수
+/// 월드인포 키워드를 찾을 최근 대화 수 (기본값)
 const WORLD_INFO_SCAN_DEPTH: usize = 10;
+
+static WI_SCAN_DEPTH: std::sync::atomic::AtomicUsize = std::sync::atomic::AtomicUsize::new(WORLD_INFO_SCAN_DEPTH);
+static WI_MAX_DEPTH: std::sync::atomic::AtomicUsize = std::sync::atomic::AtomicUsize::new(0);
+
+/// 앱 설정에서 월드인포 스캔 깊이·재귀 최대 깊이를 반영한다
+pub fn set_world_info_config(scan_depth: u32, max_recursion_depth: u32) {
+    WI_SCAN_DEPTH.store(scan_depth.clamp(1, 200) as usize, std::sync::atomic::Ordering::Relaxed);
+    WI_MAX_DEPTH.store(max_recursion_depth.clamp(0, 10) as usize, std::sync::atomic::Ordering::Relaxed);
+}
+
+#[derive(Default, Clone)]
+struct PhoneClockConfig {
+    enabled: bool,
+    date: String,
+    time: String,
+}
+
+static PHONE_CLOCK: std::sync::OnceLock<std::sync::RwLock<PhoneClockConfig>> = std::sync::OnceLock::new();
+
+/// 폰 설정에서 사용자 지정 날짜·시간을 반영한다 (프롬프트 {{phone_date}}, {{phone_time}}, {{phone_datetime}} 매크로용)
+pub fn set_phone_clock(enabled: bool, date: String, time: String) {
+    let lock = PHONE_CLOCK.get_or_init(|| std::sync::RwLock::new(PhoneClockConfig::default()));
+    if let Ok(mut g) = lock.write() {
+        g.enabled = enabled;
+        g.date = date;
+        g.time = time;
+    }
+}
+
+fn current_phone_clock() -> (String, String, String) {
+    let now = chrono::Local::now();
+    let sys_date = now.format("%Y-%m-%d").to_string();
+    let sys_time = now.format("%H:%M").to_string();
+    let cfg = PHONE_CLOCK
+        .get()
+        .and_then(|l| l.read().ok())
+        .map(|g| g.clone())
+        .unwrap_or_default();
+    let date = if cfg.enabled && !cfg.date.trim().is_empty() {
+        cfg.date.trim().to_string()
+    } else {
+        sys_date
+    };
+    let time = if cfg.enabled && !cfg.time.trim().is_empty() {
+        cfg.time.trim().to_string()
+    } else {
+        sys_time
+    };
+    let datetime = format!("{date} {time}");
+    (date, time, datetime)
+}
 
 /// 프리셋에 컨텍스트 크기가 없을 때
 pub const DEFAULT_CONTEXT_LIMIT: u32 = 8192;
@@ -446,24 +497,76 @@ fn interleave_in_chat(chat: Vec<Line>, in_chat: &[InChat]) -> Vec<Line> {
 // =======================================
 
 fn select_world_info(ctx: &ChatContext, user_message: &str, budget: usize, macros: &Macros) -> Vec<String> {
+    let scan_depth = WI_SCAN_DEPTH.load(std::sync::atomic::Ordering::Relaxed);
+    let max_depth = WI_MAX_DEPTH.load(std::sync::atomic::Ordering::Relaxed);
+    select_world_info_with(ctx, user_message, budget, macros, scan_depth, max_depth)
+}
+
+fn select_world_info_with(
+    ctx: &ChatContext,
+    user_message: &str,
+    budget: usize,
+    macros: &Macros,
+    scan_depth: usize,
+    max_depth: usize,
+) -> Vec<String> {
     if budget == 0 || ctx.world_info.is_empty() {
         return vec![];
     }
     let mut scan = user_message.to_lowercase();
-    for item in ctx.history.iter().rev().take(WORLD_INFO_SCAN_DEPTH) {
+    for item in ctx.history.iter().rev().take(scan_depth) {
         scan.push('\n');
         scan.push_str(&item.content.to_lowercase());
     }
 
-    let mut seen = std::collections::HashSet::new();
-    let mut active: Vec<(usize, &WorldInfoEntry)> = ctx
+    // 중복 id 제거된 유효 항목 목록
+    let mut seen_ids = std::collections::HashSet::new();
+    let candidates: Vec<(usize, &WorldInfoEntry)> = ctx
         .world_info
         .iter()
         .enumerate()
         .filter(|(_, e)| e.enabled && !e.content.trim().is_empty())
-        .filter(|(_, e)| seen.insert(e.id.clone()))
-        .filter(|(_, e)| e.constant || world_info_matches(e, &scan))
+        .filter(|(_, e)| seen_ids.insert(e.id.clone()))
         .collect();
+
+    let mut active_indices = std::collections::HashSet::new();
+    let mut active: Vec<(usize, &WorldInfoEntry)> = Vec::new();
+    let mut newly_added: Vec<&WorldInfoEntry> = Vec::new();
+
+    // 1차 스캔: 상시 항목 + 대화/사용자 메시지 키워드 매칭
+    for &(idx, e) in &candidates {
+        if e.constant || world_info_matches(e, &scan) {
+            active_indices.insert(idx);
+            active.push((idx, e));
+            if !e.constant {
+                newly_added.push(e);
+            }
+        }
+    }
+
+    // 재귀 스캔 (max_depth > 0): 방금 발동된 항목의 내용에서 다른 항목의 키워드를 연쇄 탐색
+    for _ in 0..max_depth {
+        if newly_added.is_empty() {
+            break;
+        }
+        let mut rec_scan = String::new();
+        for e in &newly_added {
+            rec_scan.push('\n');
+            rec_scan.push_str(&e.content.to_lowercase());
+        }
+        newly_added.clear();
+        for &(idx, e) in &candidates {
+            if active_indices.contains(&idx) {
+                continue;
+            }
+            if world_info_matches(e, &rec_scan) {
+                active_indices.insert(idx);
+                active.push((idx, e));
+                newly_added.push(e);
+            }
+        }
+    }
+
     // 상시 항목 먼저, 그다음 우선순위 높은 순, 같으면 원래 순서
     active.sort_by(|(ia, a), (ib, b)| b.constant.cmp(&a.constant).then(b.priority.cmp(&a.priority)).then(ia.cmp(ib)));
 
@@ -588,11 +691,15 @@ struct Macros {
 
 impl Macros {
     fn from_context(ctx: &ChatContext) -> Self {
+        let (phone_date, phone_time, phone_datetime) = current_phone_clock();
         let base = Self {
             extra: ctx.extra_data.clone(),
             values: vec![
                 ("char", ctx.char_name.clone().unwrap_or_else(|| "Assistant".into())),
                 ("user", ctx.user_name.clone().unwrap_or_else(|| "User".into())),
+                ("phone_date", phone_date),
+                ("phone_time", phone_time),
+                ("phone_datetime", phone_datetime),
                 ("newline", "\n".into()),
                 ("trim", String::new()),
                 ("noop", String::new()),

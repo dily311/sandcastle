@@ -2,21 +2,62 @@
 	// 고른 글 → 이미지 카드. 왼쪽 미리보기, 오른쪽 옵션. 복사(클립보드) 또는 png로 저장
 	import { Copy, Download, TextAlignCenter, TextAlignEnd, TextAlignJustify, TextAlignStart } from "@lucide/svelte";
 	import { Button, Dialog, Select, Switch, Textarea } from "$shared/ui";
-	import BackgroundPicker from "$shared/ui/BackgroundPicker.svelte";
+	import BackgroundPicker, { type PickerImageTab } from "$shared/ui/BackgroundPicker.svelte";
+	import { declarePreviewFonts } from "$shared/ui/userFont";
+	import type { GeneratedImage_Serialize as GeneratedImage } from "$ipc/bindings";
 	import { call, commands } from "$shared/ipc/client";
 	import { pickFiles, saveTo } from "$shared/ipc/dialog";
 	import { toasts } from "$shared/stores/toast.svelte";
 	import { theme } from "$app/theme.svelte";
 	import { dropPaths, isImageAvif } from "$app/drop.svelte";
+	import { library } from "./library.svelte";
 	import { CARD_DESIGNS, CARD_FONTS, CARD_IMG_RATIO, CARD_SIZES, CARD_STYLES, blobBase64, cardBlob, palette, renderCard, maskText, type CardMask, type CardAlign, type CardDesign, type CardFont, type CardImgRatio, type CardStyle } from "./textCard";
 	import IconButton from "$/shared/ui/IconButton.svelte";
 	import Slider from "$/shared/ui/Slider.svelte";
 
 	interface Props {
 		card: { text: string; speaker?: string; time?: number } | null;
+		charId?: string;
+		convId?: string;
 		onclose: () => void;
 	}
-	let { card, onclose }: Props = $props();
+	let { card, charId, convId, onclose }: Props = $props();
+
+	// 업로드된 폰트도 선택·렌더링 가능하게 미리보기 @font-face 선언
+	const uploadedFonts = $derived(theme.setting.fonts ?? []);
+	$effect(() => {
+		if (!card || !uploadedFonts.length) return;
+		return declarePreviewFonts(uploadedFonts);
+	});
+	const fontOptions = $derived([
+		...CARD_FONTS,
+		...uploadedFonts.map((f) => ({ value: `user:${f.path}` as CardFont, label: f.name })),
+	]);
+
+	// 캐릭터 에셋 + 이 대화방에서 생성된 이미지를 배경 후보 탭으로 제공
+	let convGenImages = $state<GeneratedImage[]>([]);
+	$effect(() => {
+		if (!card) return;
+		if (charId && !library.images[charId]) void library.loadImages(charId);
+		if (convId) {
+			void call(commands.listAllImages(), { source: "card", silent: true })
+				.then((all) => (convGenImages = all.filter((i) => i.conversationId === convId)))
+				.catch(() => (convGenImages = []));
+		} else {
+			convGenImages = [];
+		}
+	});
+	const bgExtraTabs = $derived.by<PickerImageTab[]>(() => {
+		const tabs: PickerImageTab[] = [];
+		const assets = charId ? (library.images[charId] ?? []) : [];
+		if (assets.length) {
+			tabs.push({ id: "assets", label: "캐릭터 에셋", images: assets.map((a) => ({ path: a.path, label: a.key })) });
+		}
+		if (convGenImages.length) {
+			tabs.push({ id: "conv-gen", label: "대화 생성 이미지", images: convGenImages.map((g) => ({ path: g.path, label: g.name || g.prompt || "생성된 이미지" })) });
+		}
+		return tabs;
+	});
 
 	// 고른 옵션은 이번 실행 동안 기억 (다음 카드도 같은 모양으로)
 	const opts = $state({ imgRatio: "1:1" as CardImgRatio, design: "none" as CardDesign, style: "theme" as CardStyle, txtShadow: false, font: "app" as CardFont, bold: 500, align: "start" as CardAlign, size: "0", background: null as string | null, speaker: true, time: false });
@@ -120,7 +161,7 @@
 		<div class="opts">
 			<div class="field">
 				<span>배경</span>
-				<BackgroundPicker label="카드 배경" value={opts.background} images={theme.setting.backgrounds ?? []} onpick={(v) => (opts.background = v)} onupload={upload} />
+				<BackgroundPicker label="카드 배경" value={opts.background} images={theme.setting.backgrounds ?? []} extraTabs={bgExtraTabs} onpick={(v) => (opts.background = v)} onupload={upload} />
 			</div>
 			<div class="field">
 				<span>비율</span>
@@ -156,7 +197,7 @@
 					<IconButton label="right" active={opts.align === "right"} onclick={()=> opts.align = "right"}><TextAlignEnd /></IconButton>
 				</div>
 			</div>
-			<label class="field"><span>글꼴</span><Select bind:value={opts.font} options={CARD_FONTS} aria-label="글꼴" /></label>
+			<label class="field"><span>글꼴</span><Select bind:value={opts.font} options={fontOptions} aria-label="글꼴" /></label>
 			<label class="field">
 				<Slider label="글자 크기" bind:value={opts.size} min={32} max={64} step={2} fallback={32} unsetLabel="32" />
 			</label>

@@ -25,6 +25,8 @@
     { "id": "text-embedding-3-small", "input": 0.02, "output": 0 },
     { "id": "text-embedding-3-large", "input": 0.13, "output": 0 },
 
+    { "id": "gemini-4-carbon", "input": 2, "output": 10 },
+    { "id": "gemini-4-carbon", "input": 4, "output": 20, "from": "2026-12-01" },
     { "id": "gemini-4-argon", "input": 2, "output": 10 },
     { "id": "gemini-4-argon", "input": 4, "output": 20, "from": "2026-12-01" },
     { "id": "gemini-3-8-flash", "input": 0.75, "output": 3.75 },

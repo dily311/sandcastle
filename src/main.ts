@@ -27,7 +27,9 @@ async function boot() {
 	if (import.meta.env.DEV && !("__TAURI_INTERNALS__" in window)) await import("$ipc/dev-mock/install");
 
 	watchSystemInsets();
-	mount(AppShell, { target: document.getElementById("app")! });
+	const target = document.getElementById("app")!;
+	document.getElementById("boot-splash")?.remove();
+	mount(AppShell, { target });
 
 	// Android: AI 작업이 도는 동안 앱이 얼지 않게 (화면 꺼짐·뒤로 가기)
 	if (__IS_TAURI__ && !layout.desktop) {

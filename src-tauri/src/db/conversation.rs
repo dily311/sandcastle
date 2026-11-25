@@ -138,6 +138,7 @@ where
         "SELECT 
             p.id,
             p.name,
+            p.alias,
             p.avatar,
             p.avatar_fit,
             p.description,
@@ -166,6 +167,7 @@ where
         "SELECT 
             p.id,
             p.name,
+            p.alias,
             p.avatar,
             p.avatar_fit,
             p.description,
@@ -217,12 +219,14 @@ where
     let now = chrono::Utc::now().timestamp_millis();
     let tags_json = serde_json::to_string(&input.tags).unwrap_or_default();
 
+    let alias = input.alias.as_deref().map(str::trim).filter(|s| !s.is_empty()).map(str::to_string);
     sqlx::query(
-        "INSERT INTO personas (id,name,avatar,description,tags,color,is_system_default,created_at,updated_at)
-         VALUES (?,?,?,?,?,?,?,?,?)",
+        "INSERT INTO personas (id,name,alias,avatar,description,tags,color,is_system_default,created_at,updated_at)
+         VALUES (?,?,?,?,?,?,?,?,?,?)",
     )
     .bind(&id)
     .bind(&input.name)
+    .bind(&alias)
     .bind(&input.avatar)
     .bind(&input.description)
     .bind(&tags_json)
@@ -236,6 +240,7 @@ where
     Ok(Persona {
         id: id,
         name: input.name,
+        alias,
         avatar: input.avatar,
         avatar_fit: None,
         description: input.description,
@@ -255,13 +260,15 @@ where
     let now = chrono::Utc::now().timestamp_millis();
     let tags_json = serde_json::to_string(&input.tags).unwrap_or_default();
 
+    let alias = input.alias.as_deref().map(str::trim).filter(|s| !s.is_empty()).map(str::to_string);
     sqlx::query(
         "
         UPDATE personas SET 
-            name=?, avatar=?, description=?, tags=?, color=?, updated_at=? 
+            name=?, alias=?, avatar=?, description=?, tags=?, color=?, updated_at=? 
         WHERE id=?",
     )
     .bind(&input.name)
+    .bind(&alias)
     .bind(&input.avatar)
     .bind(&input.description)
     .bind(&tags_json)

@@ -1,11 +1,12 @@
 // 고른 글을 이미지 카드(png)로. 캔버스에 직접 그린다 (외부 라이브러리 없음).
 // 디자인(각주·말풍선·편지·자막·미니멀) × 색 묶음 × 사용자가 고친 색 × 배경(그라데이션·이미지)
 import { drawCover, fillGradient, gradientOf } from "$shared/ui/backgrounds";
+import { fontFamilyOf } from "$shared/ui/userFont";
 import { fileSrc } from "$shared/ipc/file";
 
 export type CardImgRatio = "1:1" | "3:4" | "5:4" | "9:16";
 export type CardStyle = "theme" | "paper" | "night" | "light" | "dark";
-export type CardFont = "app" | "sans" | "serif" | "mono";
+export type CardFont = "app" | "sans" | "serif" | "mono" | `user:${string}`;
 /** 글 정렬. auto = 디자인 기본값 (미니멀·자막은 가운데, 나머지는 왼쪽) */
 export type CardAlign = "start" | "left" | "center" | "right";
 export type CardDesign = "none" | "footnote" | "bubble" | "letter" | "subtitle" | "minimal";
@@ -102,6 +103,9 @@ export function palette(style: CardStyle): CardColors {
 }
 
 function fontFamily(font: CardFont) {
+	if (font.startsWith("user:")) {
+		return `"${fontFamilyOf(font.slice(5))}", "Pretendard", system-ui, sans-serif`;
+	}
 	switch (font) {
 		case "sans":
 			return `"Pretendard", "Noto Sans KR", "Malgun Gothic", system-ui, sans-serif`;
@@ -184,6 +188,9 @@ function withAlpha(hex: string, a: number) {
 export async function renderCard(input: CardInput): Promise<HTMLCanvasElement> {
 	const c: CardColors = { ...palette(input.style), ...Object.fromEntries(Object.entries(input.colors ?? {}).filter(([, v]) => v)) };
 	const family = fontFamily(input.font);
+	if (input.font.startsWith("user:") && typeof document !== "undefined" && document.fonts?.load) {
+		await document.fonts.load(`${input.bold || 500} 48px "${fontFamilyOf(input.font.slice(5))}"`).catch(() => {});
+	}
 	const bold = input.bold;
 	const text = input.text.trim().slice(0, 2000);
 	const design = input.design;

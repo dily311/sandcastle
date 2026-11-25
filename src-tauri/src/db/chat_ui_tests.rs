@@ -188,6 +188,7 @@ async fn persona_world_info_and_avatar_are_saved() {
     }
     let input = |books: Vec<&str>| crate::models::conversation::PersonaInput {
         name: "민".into(),
+        alias: None,
         avatar: None,
         description: "대학생".into(),
         world_info_ids: books.into_iter().map(String::from).collect(),

@@ -66,6 +66,11 @@ pub fn update_plugin_setting(app: AppHandle, state: State<'_, SettingsState<Plug
         save(&app, &*cur)?;
     }
     crate::service::app_prompts::set(&setting.prompts);
+    crate::service::prompt::prompt_manager::set_phone_clock(
+        setting.phone.custom_datetime_enabled,
+        setting.phone.custom_date.clone(),
+        setting.phone.custom_time.clone(),
+    );
     let _ = app.emit(PluginSetting::EVENT_NAME, &setting);
     Ok(setting)
 }

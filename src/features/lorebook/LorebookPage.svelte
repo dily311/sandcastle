@@ -2,8 +2,8 @@
 	import { jobs } from "$shared/stores/jobs.svelte";
 	import { onMount } from "svelte";
 	// 로어북 화면: 책 목록 → 책 하나(이름·설명, 쓰는 곳, 항목 편집)
-	import { BookOpen, Check, Download, Ellipsis, Funnel, ListFilter, Pencil, Plus, Search, Trash2, Upload } from "@lucide/svelte";
-	import { Avatar, Badge, Button, ContextMenu, EmptyState, ExportSplit, IconButton, Input, ItemCard, ListToolbar, SelectBar, SplitButton, Spinner, type MenuItem } from "$shared/ui";
+	import { BookOpen, Check, ChevronRight, Download, Ellipsis, Funnel, Pencil, Plus, Search, Trash2, Upload } from "@lucide/svelte";
+	import { Avatar, Badge, Button, ContextMenu, EmptyState, ExportSplit, IconButton, Input, ListToolbar, SelectBar, SplitButton, Spinner, type MenuItem } from "$shared/ui";
 	import { nav } from "$app/nav.svelte";
 	import { drops, extOf, storeFile } from "$app/drop.svelte";
 	import { JSON_FILES, pickFiles } from "$shared/ipc/dialog";
@@ -263,29 +263,64 @@
 		</header>
 		{#if selecting}<SelectBar count={picked.size} onall={() => (picked = new Set(shown.map((b) => b.id)))} ondelete={removePicked} />{/if}
 		{#if lorebook.books.length}
-			<div class="grid">
+			<ul class="book-list">
 				{#each shown as b (b.id)}
 					{@const u = lorebook.usage(b.id)}
 					{@const n = lorebook.counts[b.id]}
-					<ItemCard
-						title={b.name}
-						desc={b.description || "설명 없음"}
-						meta="항목 {n?.entries ?? 0}개{n && n.enabled !== n.entries ? ` (켜짐 ${n.enabled})` : ''} · {relative(b.updatedAt)}"
-						{selecting}
-						selected={picked.has(b.id)}
-						onclick={() => (selecting ? pickBook(b.id) : open(b.id))}
-						oncontextmenu={(e) => bookMenu(e, b)}
-					>
-						{#snippet fallback()}<BookOpen />{/snippet}
-						{#snippet menu()}<IconButton label="{b.name} 메뉴" size="sm" variant="ghost" onclick={(e) => bookMenu(e, b)}><Ellipsis /></IconButton>{/snippet}
-						{#snippet badges()}
-							{#each [...u.characters, ...u.personas].slice(0, 4) as w (w.id)}<Badge><Avatar name={w.name} src={fileSrc(w.avatar)} fit={w.avatarFit} color={w.color || null} size={14} />{w.name}</Badge>{/each}
-						{/snippet}
-					</ItemCard>
+					{@const users = [...u.characters, ...u.personas]}
+					{@const selected = picked.has(b.id)}
+					<li>
+						<div
+							class="book-row"
+							class:selected
+							role="button"
+							tabindex="0"
+							aria-pressed={selecting ? selected : undefined}
+							aria-label={b.name}
+							onclick={() => (selecting ? pickBook(b.id) : open(b.id))}
+							onkeydown={(e) => {
+								if (e.target !== e.currentTarget) return;
+								if (e.key === "Enter" || e.key === " ") {
+									e.preventDefault();
+									if (selecting) pickBook(b.id);
+									else open(b.id);
+								}
+							}}
+							oncontextmenu={(e) => bookMenu(e, b)}
+						>
+							{#if selecting}
+								<span class="book-check" aria-hidden="true">{selected ? "✓" : ""}</span>
+							{:else}
+								<span class="book-icon" aria-hidden="true"><BookOpen /></span>
+							{/if}
+							<div class="book-main">
+								<div class="book-title-row">
+									<b class="book-title">{b.name}</b>
+									<span class="book-meta">항목 {n?.entries ?? 0}개{n && n.enabled !== n.entries ? ` (켜짐 ${n.enabled})` : ""} · {relative(b.updatedAt)}</span>
+								</div>
+								{#if b.description}<p class="book-desc">{b.description}</p>{/if}
+								{#if users.length}
+									<div class="book-badges">
+										{#each users.slice(0, 5) as w (w.id)}
+											<Badge><Avatar name={w.name} src={fileSrc(w.avatar)} fit={w.avatarFit} color={w.color || null} size={14} />{w.name}</Badge>
+										{/each}
+										{#if users.length > 5}<Badge>+{users.length - 5}</Badge>{/if}
+									</div>
+								{/if}
+							</div>
+							{#if !selecting}
+								<!-- svelte-ignore a11y_click_events_have_key_events, a11y_no_static_element_interactions -->
+								<span class="book-actions" onclick={(e) => e.stopPropagation()}>
+									<IconButton label="{b.name} 메뉴" size="sm" variant="ghost" onclick={(e) => bookMenu(e, b)}><Ellipsis /></IconButton>
+									<span class="book-chev" aria-hidden="true"><ChevronRight /></span>
+								</span>
+							{/if}
+						</div>
+					</li>
 				{:else}
-					<p class="faint">맞는 로어북 없음</p>
+					<li class="faint empty-row">맞는 로어북 없음</li>
 				{/each}
-			</div>
+			</ul>
 		{:else}
 			<EmptyState title="로어북 없음" description="새로 만들거나 SillyTavern 월드인포(.json)를 가져옴. 파일을 끌어다 놓아도 됨">
 				{#snippet icon()}<BookOpen />{/snippet}
@@ -349,10 +384,128 @@
 		gap: var(--space-2);
 		flex: none;
 	}
-	.grid {
-		display: grid;
-		grid-template-columns: repeat(auto-fill, minmax(min(220px, 45%), 1fr));
+	.book-list {
+		list-style: none;
+		margin: 0;
+		padding: 0;
+		display: flex;
+		flex-direction: column;
+		border: 1px solid var(--border);
+		border-radius: var(--radius-lg);
+		background: var(--surface);
+		overflow: auto;
+	}
+	.book-list li + li {
+		border-top: 1px solid var(--border);
+	}
+	.book-row {
+		display: flex;
+		align-items: center;
 		gap: var(--space-3);
+		padding: var(--space-3) var(--space-4);
+		cursor: pointer;
+		transition: background var(--duration-fast) var(--ease);
+	}
+	.book-row:hover {
+		background: var(--surface-hover);
+	}
+	.book-row:focus-visible {
+		outline: 2px solid var(--focus-ring);
+		outline-offset: -2px;
+	}
+	.book-row.selected {
+		background: var(--accent-soft);
+	}
+	.book-icon {
+		display: grid;
+		place-items: center;
+		width: 36px;
+		height: 36px;
+		flex: none;
+		border-radius: var(--radius-md);
+		background: var(--surface-2);
+		color: var(--text-muted);
+	}
+	.book-icon :global(svg) {
+		width: 18px;
+		height: 18px;
+	}
+	.book-check {
+		display: grid;
+		place-items: center;
+		width: 22px;
+		height: 22px;
+		flex: none;
+		border: 2px solid var(--border-strong);
+		border-radius: 6px;
+		background: var(--surface);
+		color: #fff;
+		font-size: 13px;
+		font-weight: 700;
+	}
+	.book-row.selected .book-check {
+		border-color: var(--accent);
+		background: var(--accent);
+	}
+	.book-main {
+		flex: 1;
+		min-width: 0;
+		display: flex;
+		flex-direction: column;
+		gap: 4px;
+	}
+	.book-title-row {
+		display: flex;
+		align-items: baseline;
+		justify-content: space-between;
+		gap: var(--space-3);
+		flex-wrap: wrap;
+	}
+	.book-title {
+		font-size: var(--text-md);
+		font-weight: 600;
+		color: var(--text);
+		overflow: hidden;
+		text-overflow: ellipsis;
+		white-space: nowrap;
+	}
+	.book-meta {
+		font-size: var(--text-xs);
+		color: var(--text-faint);
+		white-space: nowrap;
+	}
+	.book-desc {
+		margin: 0;
+		font-size: var(--text-sm);
+		color: var(--text-muted);
+		overflow: hidden;
+		text-overflow: ellipsis;
+		white-space: nowrap;
+	}
+	.book-badges {
+		display: flex;
+		flex-wrap: wrap;
+		gap: 4px;
+		margin-top: 2px;
+	}
+	.book-actions {
+		display: flex;
+		align-items: center;
+		gap: var(--space-1);
+		flex: none;
+	}
+	.book-chev {
+		display: grid;
+		place-items: center;
+		color: var(--text-faint);
+	}
+	.book-chev :global(svg) {
+		width: 16px;
+		height: 16px;
+	}
+	.empty-row {
+		padding: var(--space-6);
+		text-align: center;
 	}
 	.info {
 		display: flex;

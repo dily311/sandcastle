@@ -47,11 +47,10 @@
 		persona: "페르소나",
 		unknown: "기타",
 	};
-	/** 사용자가 다는 태그: 생성 프리셋으로 쓸지 / 그냥 올린 그림 / 배경 */
+	/** 사용자가 다는 태그: 생성 프리셋으로 쓸지 / 그냥 올린 그림 */
 	const TAGS: { id: string; label: string }[] = [
 		{ id: "preset", label: "프리셋" },
 		{ id: "upload", label: "업로드" },
-		{ id: "background", label: "배경" },
 	];
 	const tagLabel = (id: string) => TAGS.find((t) => t.id === id)?.label ?? id;
 	/** 쓰이고 있는 모든 태그 (기본 태그 + 사용자가 만든 태그) */

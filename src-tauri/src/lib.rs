@@ -151,6 +151,7 @@ pub fn run() {
         let app_setting = sys::settings::load::<AppSetting>(&settings_handle);
         // AI 호출 기록 스위치 (5-E-20-6-7)
         service::ai::call_log::set_enabled(app_setting.ai_call_log);
+        service::prompt::prompt_manager::set_world_info_config(app_setting.world_info.scan_depth, app_setting.world_info.max_recursion_depth);
         app.manage(SettingsState(Mutex::new(app_setting)));
         app.manage(SettingsState(Mutex::new(sys::settings::load::<ThemeSetting>(&settings_handle))));
         let features = sys::settings::load::<FeatureSetting>(&settings_handle);
@@ -167,6 +168,11 @@ pub fn run() {
         }
         let plugin_setting = sys::settings::load::<models::settings::PluginSetting>(&settings_handle);
         service::app_prompts::set(&plugin_setting.prompts);
+        service::prompt::prompt_manager::set_phone_clock(
+            plugin_setting.phone.custom_datetime_enabled,
+            plugin_setting.phone.custom_date.clone(),
+            plugin_setting.phone.custom_time.clone(),
+        );
         app.manage(SettingsState(Mutex::new(plugin_setting)));
 
         // 4. 테마 매니저 초기화
@@ -262,6 +268,7 @@ pub fn specta_builder() -> tauri_specta::Builder<tauri::Wry> {
         remove_background,
         add_fonts,
         remove_font,
+        upload_avatar_frame,
         get_conv_settings,
         set_system_default_persona,
         // theme
@@ -283,6 +290,7 @@ pub fn specta_builder() -> tauri_specta::Builder<tauri::Wry> {
         remove_phone_contact,
         set_phone_contact_status,
         phone_peek,
+        phone_generate_profile,
         get_message_prompt,
         list_conversation_folders,
         create_conversation_folder,
@@ -435,6 +443,7 @@ pub fn specta_builder() -> tauri_specta::Builder<tauri::Wry> {
         prepare_save_target,
         deliver_saved_file,
         delete_conversations,
+        reassign_conversations_character,
         export_character_pack,
         import_character_pack,
         export_backup,
@@ -608,6 +617,7 @@ pub fn specta_builder() -> tauri_specta::Builder<tauri::Wry> {
         remove_background,
         add_fonts,
         remove_font,
+        upload_avatar_frame,
         get_conv_settings,
         set_system_default_persona,
         // theme
@@ -629,6 +639,7 @@ pub fn specta_builder() -> tauri_specta::Builder<tauri::Wry> {
         remove_phone_contact,
         set_phone_contact_status,
         phone_peek,
+        phone_generate_profile,
         get_message_prompt,
         list_conversation_folders,
         create_conversation_folder,
@@ -781,6 +792,7 @@ pub fn specta_builder() -> tauri_specta::Builder<tauri::Wry> {
         prepare_save_target,
         deliver_saved_file,
         delete_conversations,
+        reassign_conversations_character,
         export_character_pack,
         import_character_pack,
         export_backup,

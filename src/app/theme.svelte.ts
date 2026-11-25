@@ -17,6 +17,10 @@ const DEFAULT_CHAT: ThemeChatSetting = {
 	showTimestamps: true,
 	showAvatars: true,
 	showMultiCharAvatars: false,
+	charAvatarFrame: "circle",
+	charAvatarFrameImage: null,
+	userAvatarFrame: "circle",
+	userAvatarFrameImage: null,
 };
 
 const FALLBACK: ThemeSetting = {
@@ -32,6 +36,8 @@ const FALLBACK: ThemeSetting = {
 	backgroundOpacity: 0.82,
 	fonts: [],
 	appFont: null,
+	textFont: null,
+	monoFont: null,
 	chat: DEFAULT_CHAT,
 };
 
@@ -80,11 +86,19 @@ class Theme {
 			showTimestamps: c?.showTimestamps ?? DEFAULT_CHAT.showTimestamps,
 			showAvatars: c?.showAvatars ?? DEFAULT_CHAT.showAvatars,
 			showMultiCharAvatars: c?.showMultiCharAvatars ?? DEFAULT_CHAT.showMultiCharAvatars,
+			charAvatarFrame: c?.charAvatarFrame ?? DEFAULT_CHAT.charAvatarFrame,
+			charAvatarFrameImage: c?.charAvatarFrameImage ?? DEFAULT_CHAT.charAvatarFrameImage,
+			userAvatarFrame: c?.userAvatarFrame ?? DEFAULT_CHAT.userAvatarFrame,
+			userAvatarFrameImage: c?.userAvatarFrameImage ?? DEFAULT_CHAT.userAvatarFrameImage,
 		};
 	}
 	async updateChat(patch: Partial<ThemeChatSetting>) {
 		const cur = this.setting.chat ?? DEFAULT_CHAT;
 		await this.update({ chat: { ...DEFAULT_CHAT, ...cur, ...patch } });
+	}
+	async uploadAvatarFrame(target: "char" | "user", path: string) {
+		this.setting = await call(commands.uploadAvatarFrame(target, path), { source: "theme" });
+		this.apply();
 	}
 
 	async init() {

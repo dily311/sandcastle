@@ -30,8 +30,10 @@ export const commands = {
 	 *  확장자와 파일 머리가 글꼴이 아니면 하나도 복사하지 않고 거절한다. select면 마지막 것을 앱 글꼴로 고른다
 	 */
 	addFonts: (paths: string[], select: boolean, options?: InvokeOptions) => __TAURI_INVOKE<ThemeSetting_Serialize>("add_fonts", { paths, select }, options),
-	/**  글꼴 목록에서 빼고 복사해 둔 파일을 지운다 (앱 글꼴이었으면 기본 글꼴로) */
+	/**  글꼴 목록에서 빼고 복사해 둔 파일을 지운다 (사용 중이던 글꼴은 기본 글꼴로) */
 	removeFont: (path: string, options?: InvokeOptions) => __TAURI_INVOKE<ThemeSetting_Serialize>("remove_font", { path }, options),
+	/**  아바타 커스텀 프레임 이미지 올리기: target("char" | "user")에 맞춰 앱 데이터 avatar_frames/에 복사하고 설정 반영 */
+	uploadAvatarFrame: (target: string, path: string, options?: InvokeOptions) => __TAURI_INVOKE<ThemeSetting_Serialize>("upload_avatar_frame", { target, path }, options),
 	getConvSettings: (options?: InvokeOptions) => __TAURI_INVOKE<ConvSettings_Serialize>("get_conv_settings", undefined, options),
 	setSystemDefaultPersona: (id: string, options?: InvokeOptions) => __TAURI_INVOKE<null>("set_system_default_persona", { id }, options),
 	getThemeList: (options?: InvokeOptions) => __TAURI_INVOKE<CssThemeMeta_Serialize[]>("get_theme_list", undefined, options),
@@ -65,6 +67,8 @@ export const commands = {
 	setPhoneContactStatus: (ownerKind: string, ownerId: string, contactKind: string, contactId: string, status: string, options?: InvokeOptions) => __TAURI_INVOKE<null>("set_phone_contact_status", { ownerKind, ownerId, contactKind, contactId, status }, options),
 	/**  엿보기: 캐릭터 폰의 대화를 AI가 두 사람 몫 모두 이어서 씀. 새로 저장된 메시지들을 돌려준다 */
 	phonePeek: (conversationId: string, onEvent: Channel<StreamPayload>, options?: InvokeOptions) => __TAURI_INVOKE<Message_Serialize[]>("phone_peek", { conversationId, onEvent }, options),
+	/**  폰 캐릭터 개인 페이지(SNS 프로필·상태 메시지·게시물)를 대화 맥락을 바탕으로 AI가 생성한다 */
+	phoneGenerateProfile: (conversationId: string, prompt: string, options?: InvokeOptions) => __TAURI_INVOKE<string>("phone_generate_profile", { conversationId, prompt }, options),
 	/**  이 AI 메시지를 만들 때 실제로 보낸 프롬프트 (없으면 null: 가져온 메시지, 취소된 응답 등) */
 	getMessagePrompt: (messageId: string, options?: InvokeOptions) => __TAURI_INVOKE<PromptMessage_Serialize | null>("get_message_prompt", { messageId }, options),
 	listConversationFolders: (characterId: string, options?: InvokeOptions) => __TAURI_INVOKE<ConversationFolder[]>("list_conversation_folders", { characterId }, options),
@@ -377,6 +381,8 @@ export const commands = {
 	deliverSavedFile: (tmp: string, uri: string, options?: InvokeOptions) => __TAURI_INVOKE<null>("deliver_saved_file", { tmp, uri }, options),
 	/**  여러 대화를 한 번에 휴지통으로 (대화마다 휴지통 항목 하나). 옮긴 개수를 돌려준다. */
 	deleteConversations: (ids: string[], options?: InvokeOptions) => __TAURI_INVOKE<number>("delete_conversations", { ids }, options),
+	/**  고아 채팅(캐릭터가 지워진 대화)을 다른 캐릭터에 다시 연결한다. 연결한 개수를 돌려준다. */
+	reassignConversationsCharacter: (ids: string[], characterId: string, options?: InvokeOptions) => __TAURI_INVOKE<number>("reassign_conversations_character", { ids, characterId }, options),
 	/**
 	 *  캐릭터 팩 내보내기. `path`는 프론트의 저장 대화상자에서 고른 경로 (.scpack).
 	 *  `conversation_ids`를 주면 그 대화만, 생략하면 고른 캐릭터의 모든 대화.
@@ -891,6 +897,8 @@ export type AppSetting_Deserialize = {
 	aiCallLog?: boolean,
 	/**  응답을 기다릴 때 보이는 타이핑 표시 (5-E-17-1) */
 	typing?: TypingIndicator_Deserialize,
+	/**  로어북(월드인포) 스캔 깊이·재귀 최대 깊이 설정 */
+	worldInfo?: WorldInfoSetting_Deserialize,
 };
 
 export type AppSetting_Serialize = {
@@ -931,6 +939,8 @@ export type AppSetting_Serialize = {
 	aiCallLog: boolean,
 	/**  응답을 기다릴 때 보이는 타이핑 표시 (5-E-17-1) */
 	typing: TypingIndicator_Serialize,
+	/**  로어북(월드인포) 스캔 깊이·재귀 최대 깊이 설정 */
+	worldInfo: WorldInfoSetting_Serialize,
 };
 
 export type AssetRef = {
@@ -972,6 +982,9 @@ export type AvatarFit = {
 	y: number | null,
 	zoom: number | null,
 };
+
+/**  프로필 이미지 UI 표시 형식 (none, 사각형, 정사각형, 원, 커스텀) */
+export type AvatarFrameShape = "none" | "rect" | "square" | "circle" | "custom";
 
 export type BackgroundAssetsInput = BackgroundAssetsInput_Serialize | BackgroundAssetsInput_Deserialize;
 
@@ -3845,6 +3858,7 @@ export type PersonaInput = PersonaInput_Serialize | PersonaInput_Deserialize;
 
 export type PersonaInput_Deserialize = {
 	name: string,
+	alias?: string | null,
 	avatar?: string | null,
 	description: string,
 	worldInfoIds: string[],
@@ -3855,6 +3869,7 @@ export type PersonaInput_Deserialize = {
 
 export type PersonaInput_Serialize = {
 	name: string,
+	alias: string | null,
 	avatar: string | null,
 	description: string,
 	worldInfoIds: string[],
@@ -3871,6 +3886,8 @@ export type PersonaUsage = {
 export type Persona_Deserialize = {
 	id: string,
 	name: string,
+	/**  목록·사이드바 표시용 별칭 (비우면 name 표시, 대화 {{user}}는 항상 name 사용) */
+	alias?: string | null,
 	avatar?: string | null,
 	description: string,
 	worldInfoIds: string[],
@@ -3886,6 +3903,8 @@ export type Persona_Deserialize = {
 export type Persona_Serialize = {
 	id: string,
 	name: string,
+	/**  목록·사이드바 표시용 별칭 (비우면 name 표시, 대화 {{user}}는 항상 name 사용) */
+	alias: string | null,
 	avatar: string | null,
 	description: string,
 	worldInfoIds: string[],
@@ -3920,6 +3939,12 @@ export type PhoneSetting_Deserialize = {
 	/**  폰 대화의 기본 모델 (비우면 그 API의 기본 모델. ADR-020). API를 정했을 때만 쓴다 */
 	model?: string,
 	presetId?: string | null,
+	/**  폰 날짜·시간 직접 설정 여부 (false면 시스템 현재 시각 사용) */
+	customDatetimeEnabled?: boolean,
+	/**  직접 설정한 폰 날짜 (YYYY-MM-DD) */
+	customDate?: string,
+	/**  직접 설정한 폰 시간 (HH:MM) */
+	customTime?: string,
 };
 
 /**  폰 대화의 기본 API·프리셋 (대화에 따로 고르지 않았을 때. 비우면 앱 기본값) */
@@ -3928,6 +3953,12 @@ export type PhoneSetting_Serialize = {
 	/**  폰 대화의 기본 모델 (비우면 그 API의 기본 모델. ADR-020). API를 정했을 때만 쓴다 */
 	model: string,
 	presetId: string | null,
+	/**  폰 날짜·시간 직접 설정 여부 (false면 시스템 현재 시각 사용) */
+	customDatetimeEnabled: boolean,
+	/**  직접 설정한 폰 날짜 (YYYY-MM-DD) */
+	customDate: string,
+	/**  직접 설정한 폰 시간 (HH:MM) */
+	customTime: string,
 };
 
 export type Playlist = Playlist_Serialize | Playlist_Deserialize;
@@ -5593,6 +5624,14 @@ export type ThemeChatSetting_Deserialize = {
 	showTimestamps?: boolean,
 	showAvatars?: boolean,
 	showMultiCharAvatars?: boolean,
+	/**  캐릭터 프로필 표시 형식 (none/rect/square/circle/custom) */
+	charAvatarFrame?: AvatarFrameShape,
+	/**  캐릭터 커스텀 프레임 이미지 경로 */
+	charAvatarFrameImage?: string | null,
+	/**  유저 페르소나 프로필 표시 형식 (none/rect/square/circle/custom) */
+	userAvatarFrame?: AvatarFrameShape,
+	/**  유저 페르소나 커스텀 프레임 이미지 경로 */
+	userAvatarFrameImage?: string | null,
 };
 
 /**  대화 화면 표시 설정 (테마 설정과 사용자 커스텀 테마에서 함께 사용) */
@@ -5600,6 +5639,14 @@ export type ThemeChatSetting_Serialize = {
 	showTimestamps: boolean,
 	showAvatars: boolean,
 	showMultiCharAvatars: boolean,
+	/**  캐릭터 프로필 표시 형식 (none/rect/square/circle/custom) */
+	charAvatarFrame: AvatarFrameShape,
+	/**  캐릭터 커스텀 프레임 이미지 경로 */
+	charAvatarFrameImage: string | null,
+	/**  유저 페르소나 프로필 표시 형식 (none/rect/square/circle/custom) */
+	userAvatarFrame: AvatarFrameShape,
+	/**  유저 페르소나 커스텀 프레임 이미지 경로 */
+	userAvatarFrameImage: string | null,
 };
 
 /**  테마 색: 화면 모드별로 덮어쓸 CSS 변수 ("--bg" → "#ffffff"). 비어 있으면 앱 기본값 */
@@ -5637,9 +5684,13 @@ export type ThemeSetting_Deserialize = {
 	backgroundOpacity?: number | null,
 	/**  올려 둔 글꼴 (앱 데이터 fonts/에 복사한 파일). 앱에 글꼴을 넣어 두지 않으므로 목록은 사용자가 올린 것뿐 */
 	fonts?: UserFont[],
-	/**  앱 글꼴: `fonts` 중 하나의 파일 경로. 없으면 기본 글꼴 */
+	/**  UI 글꼴: `fonts` 중 하나의 파일 경로. 없으면 기본 글꼴 */
 	appFont?: string | null,
-	/**  대화 화면 표시 설정 (시각·프로필 그림·멀티 프로필 그림) */
+	/**  텍스트 글꼴 (대화 본문·읽기): `fonts` 중 하나의 파일 경로. 없으면 UI 글꼴을 따름 */
+	textFont?: string | null,
+	/**  모노스페이스 글꼴 (코드·로그): `fonts` 중 하나의 파일 경로. 없으면 기본 모노스페이스 */
+	monoFont?: string | null,
+	/**  대화 화면 표시 설정 (시각·프로필 그림·멀티 프로필 그림·아바타 프레임) */
 	chat?: ThemeChatSetting_Deserialize,
 };
 
@@ -5661,9 +5712,13 @@ export type ThemeSetting_Serialize = {
 	backgroundOpacity: number | null,
 	/**  올려 둔 글꼴 (앱 데이터 fonts/에 복사한 파일). 앱에 글꼴을 넣어 두지 않으므로 목록은 사용자가 올린 것뿐 */
 	fonts: UserFont[],
-	/**  앱 글꼴: `fonts` 중 하나의 파일 경로. 없으면 기본 글꼴 */
+	/**  UI 글꼴: `fonts` 중 하나의 파일 경로. 없으면 기본 글꼴 */
 	appFont: string | null,
-	/**  대화 화면 표시 설정 (시각·프로필 그림·멀티 프로필 그림) */
+	/**  텍스트 글꼴 (대화 본문·읽기): `fonts` 중 하나의 파일 경로. 없으면 UI 글꼴을 따름 */
+	textFont: string | null,
+	/**  모노스페이스 글꼴 (코드·로그): `fonts` 중 하나의 파일 경로. 없으면 기본 모노스페이스 */
+	monoFont: string | null,
+	/**  대화 화면 표시 설정 (시각·프로필 그림·멀티 프로필 그림·아바타 프레임) */
 	chat: ThemeChatSetting_Serialize,
 };
 
@@ -6167,4 +6222,23 @@ export type WorldInfoEntryInput_Serialize = {
 	comment: string,
 	/**  분류 (없으면 빈 값, 5-F-1) */
 	category: string,
+};
+
+/**  로어북(월드인포) 스캔 설정 */
+export type WorldInfoSetting = WorldInfoSetting_Serialize | WorldInfoSetting_Deserialize;
+
+/**  로어북(월드인포) 스캔 설정 */
+export type WorldInfoSetting_Deserialize = {
+	/**  키워드를 탐색할 최근 메시지 수 (기본 10, 1~100) */
+	scanDepth?: number,
+	/**  발동된 월드인포 항목의 내용에서 추가 키워드를 재귀 탐색할 최대 깊이 (0 = 재귀 없음, 1~10) */
+	maxRecursionDepth?: number,
+};
+
+/**  로어북(월드인포) 스캔 설정 */
+export type WorldInfoSetting_Serialize = {
+	/**  키워드를 탐색할 최근 메시지 수 (기본 10, 1~100) */
+	scanDepth: number,
+	/**  발동된 월드인포 항목의 내용에서 추가 키워드를 재귀 탐색할 최대 깊이 (0 = 재귀 없음, 1~10) */
+	maxRecursionDepth: number,
 };

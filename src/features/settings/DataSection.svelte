@@ -1,9 +1,9 @@
 <script lang="ts">
 	import { jobs } from "$shared/stores/jobs.svelte";
 	import { onMount } from "svelte";
-	import { ChevronDown, ChevronRight, RotateCcw, Save, ShieldCheck, Trash2, Upload } from "@lucide/svelte";
+	import { ChevronDown, ChevronRight, Link2, RotateCcw, Save, ShieldCheck, Trash2, Upload } from "@lucide/svelte";
 	import type { BackupManifest, DataCheck, DataOverview_Serialize as Overview, DataTotals, SillyTavernDataImport } from "$ipc/bindings";
-	import { Badge, Button, Spinner } from "$shared/ui";
+	import { Badge, Button, Select, Spinner } from "$shared/ui";
 	import { call, commands } from "$shared/ipc/client";
 	import { pickFiles, saveTo, BACKUP_FILES, ST_DATA_FILES } from "$shared/ipc/dialog";
 	import { dropPaths, extOf } from "$app/drop.svelte";
@@ -51,6 +51,8 @@
 	}
 	let openChar = $state<string | null>(null);
 	let picked = $state<Set<string>>(new Set());
+	let orphanPicked = $state<Set<string>>(new Set());
+	let orphanTargetChar = $state("");
 	let trashKey = $state(0);
 
 	// ---- 점검 (1-B-3): 보여주기만, 지우지 않음 ----
@@ -78,6 +80,8 @@
 		data = o;
 		pending = p;
 		picked = new Set();
+		orphanPicked = new Set();
+		if (!orphanTargetChar && o?.characters.length) orphanTargetChar = o.characters[0].id;
 	}
 
 	function bytes(n: number) {
@@ -183,6 +187,37 @@
 		await Promise.all([load(), library.load()]);
 	}
 	const convTitle = (c: { title: string | null; mode: string | null }) => c.title || (c.mode === "phone" ? "폰 대화" : "제목 없음");
+
+	// ---- 고아 채팅 관리 ----
+	const charOptions = $derived(
+		(data?.characters ?? []).map((c) => ({ value: c.id, label: c.name })),
+	);
+	function pickOrphan(id: string, on: boolean) {
+		const next = new Set(orphanPicked);
+		if (on) next.add(id);
+		else next.delete(id);
+		orphanPicked = next;
+	}
+	function toggleAllOrphans() {
+		if (!data) return;
+		if (orphanPicked.size === data.orphanConversations.length) orphanPicked = new Set();
+		else orphanPicked = new Set(data.orphanConversations.map((c) => c.id));
+	}
+	async function reassignOrphans(ids: string[]) {
+		if (!ids.length || !orphanTargetChar) return;
+		const charName = data?.characters.find((c) => c.id === orphanTargetChar)?.name ?? "캐릭터";
+		const n = await call(commands.reassignConversationsCharacter(ids, orphanTargetChar), src);
+		toasts.success(`고아 채팅 ${n}개를 '${charName}'에 연결함`);
+		await Promise.all([load(), library.load()]);
+	}
+	async function removeOrphans(ids: string[]) {
+		if (!ids.length) return;
+		if (!(await confirmAction({ title: "고아 채팅 삭제", message: `캐릭터 없는 대화 ${ids.length}개를 휴지통으로 옮김. 아래 휴지통에서 되살릴 수 있음`, confirmLabel: `${ids.length}개 삭제`, danger: true }))) return;
+		const removed = await jobs.run(`고아 채팅 ${ids.length}개`, () => call(commands.deleteConversations(ids), src), { group: "대화 지우기" });
+		if (removed !== undefined) toasts.success(`고아 채팅 ${removed}개를 휴지통으로 옮김`);
+		trashKey++;
+		await Promise.all([load(), library.load()]);
+	}
 </script>
 
 <Section title="데이터" lead="저장 공간, 백업과 복원, 휴지통, 대화 정리">
@@ -283,6 +318,49 @@
 
 		{#key trashKey}<TrashGroup onrestored={() => Promise.all([load(), library.load()])} />{/key}
 
+		<Group title="고아 채팅 ({data.orphanConversations.length})">
+			{#snippet aside()}
+				{#if data?.orphanConversations.length}
+					<div class="orphan-bar">
+						<Button size="sm" variant="ghost" onclick={toggleAllOrphans}>
+							{orphanPicked.size === (data?.orphanConversations.length ?? 0) ? "전체 해제" : "전체 선택"}
+						</Button>
+						{#if orphanPicked.size && charOptions.length}
+							<Select bind:value={orphanTargetChar} options={charOptions} aria-label="연결할 캐릭터" />
+							<Button size="sm" variant="secondary" onclick={() => reassignOrphans([...orphanPicked])}>{#snippet icon()}<Link2 />{/snippet}연결 ({orphanPicked.size})</Button>
+						{/if}
+						{#if orphanPicked.size}
+							<Button size="sm" variant="danger" onclick={() => removeOrphans([...orphanPicked])}>{#snippet icon()}<Trash2 />{/snippet}삭제 ({orphanPicked.size})</Button>
+						{/if}
+					</div>
+				{/if}
+			{/snippet}
+			{#if data.orphanConversations.length}
+				<p class="orphan-desc">캐릭터가 삭제되어 연결이 끊어진 대화. 다른 캐릭터에 다시 연결하거나 휴지통으로 옮길 수 있음</p>
+				<ul class="convs orphan-list">
+					{#each data.orphanConversations as v (v.id)}
+						<li class="orphan-row">
+							<label>
+								<input type="checkbox" checked={orphanPicked.has(v.id)} onchange={(e) => pickOrphan(v.id, e.currentTarget.checked)} />
+								<span class="t">{convTitle(v)}</span>
+								{#if v.mode === "phone"}<Badge>폰</Badge>{/if}
+								<span class="meta">메시지 {v.messageCount}</span>
+								<span class="when">{v.lastMessageAt ? relative(v.lastMessageAt) : ""}</span>
+							</label>
+							<div class="orphan-acts">
+								{#if charOptions.length}
+									<Button size="sm" variant="ghost" title="고른 캐릭터에 연결" onclick={() => reassignOrphans([v.id])}>{#snippet icon()}<Link2 />{/snippet}연결</Button>
+								{/if}
+								<Button size="sm" variant="ghost" aria-label="삭제" onclick={() => removeOrphans([v.id])}>{#snippet icon()}<Trash2 />{/snippet}</Button>
+							</div>
+						</li>
+					{/each}
+				</ul>
+			{:else}
+				<p class="orphan-empty">캐릭터가 없는 고아 채팅이 없음</p>
+			{/if}
+		</Group>
+
 		<Group title="대화 정리">
 			{#snippet aside()}
 				{#if picked.size}<Button size="sm" variant="danger" onclick={removePicked}>{#snippet icon()}<Trash2 />{/snippet}고른 대화 {picked.size}개 삭제</Button>{/if}
@@ -313,28 +391,6 @@
 						{/if}
 					</li>
 				{/each}
-				{#if data.orphanConversations.length}
-					<li>
-						<button class="char" aria-expanded={openChar === "__orphan"} onclick={() => (openChar = openChar === "__orphan" ? null : "__orphan")}>
-							{#if openChar === "__orphan"}<ChevronDown />{:else}<ChevronRight />{/if}
-							<b>캐릭터 없는 대화</b>
-							<span class="meta">{data.orphanConversations.length}개 · 캐릭터가 지워짐</span>
-						</button>
-						{#if openChar === "__orphan"}
-							<ul class="convs">
-								{#each data.orphanConversations as v (v.id)}
-									<li>
-										<label>
-											<input type="checkbox" checked={picked.has(v.id)} onchange={(e) => pick(v.id, e.currentTarget.checked)} />
-											<span class="t">{convTitle(v)}</span>
-											<span class="meta">메시지 {v.messageCount}</span>
-										</label>
-									</li>
-								{/each}
-							</ul>
-						{/if}
-					</li>
-				{/if}
 			</ul>
 		</Group>
 	{/if}
@@ -553,5 +609,42 @@
 	}
 	input[type="checkbox"] {
 		accent-color: var(--accent);
+	}
+	.orphan-bar {
+		display: flex;
+		align-items: center;
+		gap: var(--space-2);
+		flex-wrap: wrap;
+	}
+	.orphan-desc {
+		margin: var(--space-3) 0 var(--space-1);
+		color: var(--text-muted);
+		font-size: var(--text-sm);
+	}
+	.orphan-empty {
+		padding: var(--space-4) 0;
+		color: var(--text-faint);
+		font-size: var(--text-sm);
+	}
+	.orphan-list {
+		padding: var(--space-2) 0;
+	}
+	.orphan-row {
+		display: flex;
+		align-items: center;
+		gap: var(--space-2);
+	}
+	.orphan-row + .orphan-row {
+		border-top: 1px solid var(--border);
+	}
+	.orphan-row label {
+		flex: 1;
+		min-width: 0;
+	}
+	.orphan-acts {
+		display: flex;
+		align-items: center;
+		gap: 2px;
+		flex: none;
 	}
 </style>

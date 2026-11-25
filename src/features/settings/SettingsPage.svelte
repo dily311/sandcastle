@@ -1,7 +1,7 @@
 <script lang="ts">
 	import { layout } from "$app/layout.svelte";
 	import type { Component } from "svelte";
-	import { Activity, ArrowLeftRight, Gamepad2, Images, AudioLines, Blocks, Database, ImagePlus, Keyboard, KeyRound, Languages, ListChecks, MemoryStick, NotebookText, PenLine, RefreshCw, Zap, MessagesSquare, Music, Palette, Puzzle, Regex, ScrollText, Search, Settings2, SlidersHorizontal, Smartphone } from "@lucide/svelte";
+	import { Activity, ArrowLeftRight, BookOpen, Gamepad2, Images, AudioLines, Blocks, Database, ImagePlus, Keyboard, KeyRound, Languages, ListChecks, MemoryStick, NotebookText, PenLine, RefreshCw, Wallet, Zap, MessagesSquare, Music, Palette, Puzzle, Regex, ScrollText, Search, Settings2, SlidersHorizontal, Smartphone } from "@lucide/svelte";
 	import { Badge, Input } from "$shared/ui";
 	import { nav, type SettingsTab } from "$app/nav.svelte";
 	import { logs } from "$shared/stores/log.svelte";
@@ -12,6 +12,7 @@
 	import ApiSection from "./ApiSection.svelte";
 	import PresetSection from "./PresetSection.svelte";
 	import RegexSection from "./RegexSection.svelte";
+	import LorebookSection from "./LorebookSection.svelte";
 	import DataSection from "./DataSection.svelte";
 	import SyncSection from "./SyncSection.svelte";
 	import CommunitySection from "./CommunitySection.svelte";
@@ -19,9 +20,11 @@
 	import { admin } from "$features/community/admin.svelte";
 	import LogSection from "./LogSection.svelte";
 	import ActivitySection from "./ActivitySection.svelte";
+	import BudgetSection from "./BudgetSection.svelte";
 	import GameSection from "./GameSection.svelte";
 	import CgSection from "./CgSection.svelte";
 	import ThemeEditor from "./ThemeEditor.svelte";
+	import FontManagerSection from "./FontManagerSection.svelte";
 	import ApiEditor from "./ApiEditor.svelte";
 	import ChatSection from "./ChatSection.svelte";
 	import PhoneSection from "./PhoneSection.svelte";
@@ -114,14 +117,16 @@
 			items: [
 				{ id: "api", label: "API 키", icon: KeyRound, keywords: "연결 공급자 모델 openai claude gemini vertex 서비스 계정 json 키 테스트", view: ApiSection },
 				{ id: "preset", label: "프리셋", icon: SlidersHorizontal, keywords: "프롬프트 블록 온도 토큰 컨텍스트 sillytavern", view: PresetSection },
+				{ id: "lorebook", label: "로어북", icon: BookOpen, keywords: "로어북 월드인포 스캔 깊이 최대 깊이 재귀 worldinfo scan depth", view: LorebookSection },
 				{ id: "regex", label: "정규식", icon: Regex, keywords: "찾아 바꾸기 치환 regex", view: RegexSection, plugin: "regex" },
 			],
 		},
 		{
 			title: "관리",
 			items: [
-				{ id: "activity", label: "실행 기록", icon: Activity, keywords: "작업 사용량 토큰 비용 요금 api 실행 중 멈추기 취소 자동 기록", view: ActivitySection },
-				{ id: "data", label: "데이터", icon: Database, keywords: "백업 복원 저장 공간 용량 삭제 정리 휴지통 되살리기 점검", view: DataSection },
+				{ id: "activity", label: "최근 실행", icon: Activity, keywords: "작업 실행 중 멈추기 취소 자동 기록 보낸 글 받은 글", view: ActivitySection },
+				{ id: "budget", label: "예산 관리", icon: Wallet, keywords: "예산 한도 사용량 토큰 비용 요금 단가표 api", view: BudgetSection },
+				{ id: "data", label: "데이터", icon: Database, keywords: "백업 복원 저장 공간 용량 삭제 정리 휴지통 되살리기 점검 고아 채팅", view: DataSection },
 				{ id: "sync", label: "동기화", icon: ArrowLeftRight, keywords: "기기 폰 pc 옮기기 합치기 동기화 내보내기 가져오기 충돌", view: SyncSection, plugin: "sync" },
 				{ id: "log", label: "로그", icon: ScrollText, keywords: "오류 경고 기록", view: LogSection },
 			],
@@ -141,10 +146,9 @@
 	);
 	const current = $derived(all.find((i) => i.id === tab) ?? all[0]);
 
-	// 탭 전환은 기록에 남기지 않음 (뒤로 가기는 설정 전 화면으로)
+	// 탭 전환도 페이지 이동 기록에 남김 (뒤로·앞으로 가기로 설정 탭 간 이동 가능)
 	function select(id: SettingsTab) {
-		if (layout.narrow) return void nav.go({ page: "settings", tab: id });
-		nav.replace({ page: "settings", tab: id });
+		void nav.go({ page: "settings", tab: id });
 	}
 
 	let body: HTMLDivElement | undefined = $state();
@@ -181,7 +185,9 @@
 
 	<div class="body" bind:this={body}>
 		<div class="inner">
-			{#if current.id === "theme" && edit}
+			{#if current.id === "theme" && edit === "fonts"}
+				<FontManagerSection />
+			{:else if current.id === "theme" && edit}
 				{#key edit}<ThemeEditor editKey={edit} />{/key}
 			{:else if current.id === "api" && edit}
 				{#key edit}<ApiEditor editId={edit} />{/key}

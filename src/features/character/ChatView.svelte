@@ -36,6 +36,7 @@
 	import ChatPanel from "./ChatPanel.svelte";
 	import ConvSidebar from "./ConvSidebar.svelte";
 	import TextCardDialog from "./TextCardDialog.svelte";
+	import SentPromptDialog from "./SentPromptDialog.svelte";
 	import SelectionMenu, { type CardInput } from "./SelectionMenu.svelte";
 	import { registerComposer } from "$shared/html/bridge";
 	import MessageItem from "./MessageItem.svelte";
@@ -205,13 +206,20 @@
 	const liveBlocks = $derived(session?.live?.kind === "send" ? toBlocks(session.live.text.replace(/<image>[\s\S]*?(<\/image>|$)/i, ""), { safeHtml: plugins.on("html") }) : []);
 	/** 메시지 프로필 그림 (5-E-9): 테마 설정에서 켰을 때만. AI는 그 캐릭터, 내 글은 보낸 페르소나(없으면 대화의 페르소나) */
 	const showAvatars = $derived(theme.chat.showAvatars);
-	/** 메시지를 쓴 캐릭터·페르소나 (그림·확대 위치용) */
+	/** 메시지를 쓴 캐릭터·페르소나 (그림·확대 위치용) — 과거 메시지는 보낸 시점의 페르소나를 유지 */
 	function ownerOf(m: Message) {
-		return m.role === "assistant"
-			? library.character(m.characterId ?? charId)
-			: m.role === "user"
-				? library.persona((m.meta as { sender?: { id?: string } } | null)?.sender?.id ?? library.convPersonaId(conv))
-				: undefined;
+		if (m.role === "assistant") return library.character(m.characterId ?? charId);
+		if (m.role !== "user") return undefined;
+		const sender = (m.meta as { sender?: { id?: string; name?: string } } | null)?.sender;
+		if (sender?.id) return library.persona(sender.id);
+		const name = (m.name ?? sender?.name ?? "").trim();
+		if (name) {
+			const byName = library.personas.find((p) => p.name.trim() === name);
+			if (byName) return byName;
+			const cur = library.persona(library.convPersonaId(conv));
+			return cur && cur.name.trim() === name ? cur : undefined;
+		}
+		return library.persona(library.convPersonaId(conv));
 	}
 	function avatarOf(m: Message): string | null | undefined {
 		if (!showAvatars) return undefined;
@@ -640,7 +648,7 @@
 					{#if session.live?.kind === "send"}
 						{#if session.live.userText || session.live.userImages}
 							<div class="block user pending sc-msg sc-msg-user sc-msg-live">
-								<div class="who sc-msg-head"><span class="no sc-msg-no">#{session.messages.length + 1}</span><b class="sc-msg-name">{library.persona(conv.personaId)?.name ?? "나"}</b><span class="stamp">보내는 중…</span></div>
+								<div class="who sc-msg-head"><span class="no sc-msg-no">#{session.messages.length + 1}</span><b class="sc-msg-name">{library.persona(library.convPersonaId(conv))?.name ?? "나"}</b><span class="stamp">보내는 중…</span></div>
 								{#if session.live.userImages}<div class="attach-strip">{#each session.live.userImages as u (u)}<img src={u} alt="첨부 이미지" />{/each}</div>{/if}
 								{#if session.live.userText}<p>{session.live.userText}</p>{/if}
 							</div>
@@ -736,28 +744,9 @@
 	<SelectionMenu scroller={scroller} {conv} {session} characterName={character?.name} disabled={selecting} oncard={(c) => (card = c)} />
 </div>
 
-<TextCardDialog {card} onclose={() => (card = null)} />
+<TextCardDialog {card} {charId} {convId} onclose={() => (card = null)} />
 
-<Dialog open={!!prompt} title="보낸 컨텍스트" description={prompt ? `#${(session?.messages.indexOf(prompt.msg) ?? 0) + 1} 응답을 만들 때 보낸 프롬프트` : ""} size="lg" onclose={() => (prompt = null)}>
-	{#if prompt?.data}
-		{@const total = prompt.data.messages.reduce((s, m) => s + m.token, 0)}
-		<p class="ptotal">메시지 {prompt.data.messages.length}개 · 약 {total.toLocaleString()} 토큰</p>
-		<ol class="plist">
-			{#each prompt.data.messages as pm, i (i)}
-				<li>
-					<details class="prole">
-						<summary>
-							<b>{roleName[pm.role]}</b>{#if pm.source}<span class="psrc" data-kind={pm.source.kind}>{sourceName[pm.source.kind] ?? pm.source.kind}</span>{#if pm.source.name}<span class="pname">{pm.source.name}</span>{/if}{/if}<span class="ptok">{pm.token} 토큰</span>
-						</summary>
-						<pre>{pm.content}</pre>
-					</details>
-				</li>
-			{/each}
-		</ol>
-	{:else if prompt}
-		<p class="ptotal">기록 없음 (가져온 메시지, 멈춘 응답, 이 기능 이전에 만든 응답)</p>
-	{/if}
-</Dialog>
+<SentPromptDialog {prompt} messageIndex={prompt ? (session?.messages.indexOf(prompt.msg) ?? 0) : 0} onclose={() => (prompt = null)} />
 
 <style>
 	.earlier {
@@ -1091,68 +1080,5 @@
 	.write :global(textarea) {
 		resize: none;
 		border-radius: var(--radius-lg);
-	}
-	.ptotal {
-		font-size: var(--text-sm);
-		color: var(--text-muted);
-		margin-bottom: var(--space-3);
-	}
-	.plist {
-		list-style: none;
-		margin: 0;
-		padding: 0;
-		display: flex;
-		flex-direction: column;
-		gap: var(--space-3);
-	}
-	.prole {
-		font-size: var(--text-xs);
-		color: var(--text-muted);
-	}
-	
-	.prole summary {
-		cursor: pointer;
-	}
-	.prole summary > b {
-		margin-right: var(--space-2);
-	}
-	.psrc {
-		display: inline-block;
-		padding: 1px 6px;
-		border-radius: var(--radius-sm);
-		background: var(--bg-sunken);
-		border: 1px solid var(--border);
-		color: var(--text-muted);
-		font-size: 11px;
-		line-height: 1.4;
-	}
-	.psrc[data-kind="world_info"] {
-		background: var(--accent-soft);
-		border-color: transparent;
-		color: var(--accent);
-	}
-	.psrc[data-kind="preset"] {
-		color: var(--text);
-	}
-	.pname {
-		margin-left: var(--space-1);
-		color: var(--text);
-		font-weight: 500;
-	}
-	.ptok {
-		margin-left: var(--space-2);
-		color: var(--text-faint);
-	}
-	.plist pre {
-		margin: 0;
-		padding: var(--space-2) var(--space-3);
-		border-radius: var(--radius-sm);
-		background: var(--bg-sunken);
-		font-family: var(--font-mono);
-		font-size: 12px;
-		white-space: pre-wrap;
-		overflow-wrap: anywhere;
-		max-height: 320px;
-		overflow: auto;
 	}
 </style>

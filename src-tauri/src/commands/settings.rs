@@ -27,6 +27,7 @@ pub async fn get_app_setting(state: State<'_, SettingsState<AppSetting>>) -> Res
 pub async fn update_app_setting(app: AppHandle, state: State<'_, SettingsState<AppSetting>>, patch: serde_json::Value) -> Result<AppSetting> {
     let settings = apply_patch(&app, &state.0, patch)?;
     crate::service::ai::call_log::set_enabled(settings.ai_call_log);
+    crate::service::prompt::prompt_manager::set_world_info_config(settings.world_info.scan_depth, settings.world_info.max_recursion_depth);
     // 이벤트 호출
     app.emit(AppSetting::EVENT_NAME, &settings).map_err(|e| AppError::io(e.to_string()))?;
     Ok(settings)
@@ -280,21 +281,78 @@ pub async fn add_fonts(app: AppHandle, state: State<'_, SettingsState<ThemeSetti
     Ok(settings)
 }
 
-/// 글꼴 목록에서 빼고 복사해 둔 파일을 지운다 (앱 글꼴이었으면 기본 글꼴로)
+/// 글꼴 목록에서 빼고 복사해 둔 파일을 지운다 (사용 중이던 글꼴은 기본 글꼴로)
 #[tauri::command]
 #[specta::specta]
 pub async fn remove_font(app: AppHandle, state: State<'_, SettingsState<ThemeSetting>>, path: String) -> Result<ThemeSetting> {
     let dir = crate::commands::character_image::app_data_dir(&app)?.join(crate::service::data::fonts::FONTS_DIR);
-    let (list, selected) = {
+    let (list, sel_app, sel_text, sel_mono) = {
         let cur = state.0.lock().map_err(|_| AppError::internal("settings lock poisoned"))?;
-        (cur.fonts.iter().filter(|f| f.path != path).cloned().collect::<Vec<_>>(), cur.app_font.clone())
+        (
+            cur.fonts.iter().filter(|f| f.path != path).cloned().collect::<Vec<_>>(),
+            cur.app_font.clone(),
+            cur.text_font.clone(),
+            cur.mono_font.clone(),
+        )
     };
     let mut patch = json!({ "fonts": list });
-    if selected.as_deref() == Some(path.as_str()) {
+    if sel_app.as_deref() == Some(path.as_str()) {
         patch["appFont"] = serde_json::Value::Null;
+    }
+    if sel_text.as_deref() == Some(path.as_str()) {
+        patch["textFont"] = serde_json::Value::Null;
+    }
+    if sel_mono.as_deref() == Some(path.as_str()) {
+        patch["monoFont"] = serde_json::Value::Null;
     }
     let settings = apply_patch(&app, &state.0, patch)?;
     crate::service::data::fonts::remove_font_file(&dir, &path);
+    app.emit(ThemeSetting::EVENT_NAME, &settings).map_err(|e| AppError::io(e.to_string()))?;
+    Ok(settings)
+}
+
+/// 아바타 커스텀 프레임 이미지 올리기: target("char" | "user")에 맞춰 앱 데이터 avatar_frames/에 복사하고 설정 반영
+#[tauri::command]
+#[specta::specta]
+pub async fn upload_avatar_frame(app: AppHandle, state: State<'_, SettingsState<ThemeSetting>>, target: String, path: String) -> Result<ThemeSetting> {
+    if target != "char" && target != "user" {
+        return Err(AppError::validation("대상은 char 또는 user여야 합니다", None));
+    }
+    let src = std::path::PathBuf::from(&path);
+    let ext = src.extension().and_then(|e| e.to_str()).map(str::to_ascii_lowercase).unwrap_or_default();
+    if !["png", "jpg", "jpeg", "webp", "gif", "avif", "svg"].contains(&ext.as_str()) {
+        return Err(AppError::validation("이미지 파일(png·webp·gif·svg 등)만 프레임으로 쓸 수 있습니다", None));
+    }
+    let dir = crate::commands::character_image::app_data_dir(&app)?.join("avatar_frames");
+    std::fs::create_dir_all(&dir)?;
+    let dest = dir.join(format!("{target}-{}.{ext}", uuid::Uuid::new_v4()));
+    std::fs::copy(&src, &dest)?;
+    let dest_str = dest.to_string_lossy().into_owned();
+
+    let (old_path, mut chat) = {
+        let cur = state.0.lock().map_err(|_| AppError::internal("settings lock poisoned"))?;
+        let old = if target == "char" {
+            cur.chat.char_avatar_frame_image.clone()
+        } else {
+            cur.chat.user_avatar_frame_image.clone()
+        };
+        (old, cur.chat.clone())
+    };
+    if target == "char" {
+        chat.char_avatar_frame = crate::models::settings::AvatarFrameShape::Custom;
+        chat.char_avatar_frame_image = Some(dest_str);
+    } else {
+        chat.user_avatar_frame = crate::models::settings::AvatarFrameShape::Custom;
+        chat.user_avatar_frame_image = Some(dest_str);
+    }
+    let patch = json!({ "chat": chat });
+    let settings = apply_patch(&app, &state.0, patch)?;
+    if let Some(old) = old_path {
+        let p = std::path::PathBuf::from(&old);
+        if p.parent() == Some(dir.as_path()) {
+            let _ = std::fs::remove_file(p);
+        }
+    }
     app.emit(ThemeSetting::EVENT_NAME, &settings).map_err(|e| AppError::io(e.to_string()))?;
     Ok(settings)
 }

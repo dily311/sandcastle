@@ -31,6 +31,7 @@
 	// svelte-ignore state_referenced_locally
 	const p0 = persona;
 	let name = $state(p0.name);
+	let alias = $state(p0.alias ?? "");
 	let description = $state(p0.description ?? "");
 	let tags = $state<string[]>([...p0.tags]);
 	let tagInput: ReturnType<typeof TagInput> | undefined = $state();
@@ -40,6 +41,7 @@
 	$effect(() => {
 		dirty =
 			name !== p0.name ||
+			alias !== (p0.alias ?? "") ||
 			description !== (p0.description ?? "") ||
 			color !== (p0.color || "") ||
 			tags.join("\u0000") !== p0.tags.join("\u0000") ||
@@ -51,6 +53,7 @@
 	}
 	function reset() {
 		name = p0.name;
+		alias = p0.alias ?? "";
 		description = p0.description ?? "";
 		tags = [...p0.tags];
 		color = p0.color || "";
@@ -58,7 +61,7 @@
 	}
 	function save() {
 		tagInput?.commit();
-		onsave({ name: name.trim(), avatar: persona.avatar, description, tags, color, worldInfoIds, isSystemDefault: persona.isSystemDefault });
+		onsave({ name: name.trim(), alias: alias.trim() || null, avatar: persona.avatar, description, tags, color, worldInfoIds, isSystemDefault: persona.isSystemDefault });
 	}
 
 	// 어디서 쓰는지
@@ -93,9 +96,9 @@
 			<span class="cam"><Camera /></span>
 		</button>
 		<div class="ident">
-			<h1>{name || "이름 없음"}</h1>
+			<h1>{alias.trim() || name || "이름 없음"}</h1>
 			<p class="faint">
-				페르소나{#if tags.length} · {tags.slice(0, 4).join(" · ")}{/if}
+				페르소나{#if alias.trim() && name} · {name}{/if}{#if tags.length} · {tags.slice(0, 4).join(" · ")}{/if}
 			</p>
 		</div>
 		<div class="cta">
@@ -117,6 +120,9 @@
 	<div class="form">
 		<Field label="이름" required hint={"대화에서 {{user}} 자리에 들어감"}>
 			<Input bind:value={name} placeholder="이름" />
+		</Field>
+		<Field label="표시용 별칭" hint="목록·사이드바에 표시할 별칭 (비우면 위 이름이 표시됨. 대화에는 영향 없음)">
+			<Input bind:value={alias} placeholder="예: 판타지용 민수 (선택)" />
 		</Field>
 		<Field label="설명" hint="AI에게 보내는 내 캐릭터 소개. 외모·성격·말투·처지 등">
 			{#snippet aside()}<span class="faint count">{description.length.toLocaleString()}자</span>{/snippet}

@@ -482,7 +482,7 @@
 		<div class="profile">
 			<button bind:this={meBtn} class="me" class:on={cur.page === "persona"} aria-haspopup="listbox" aria-expanded={profileOpen} title="사용자 프로필 바꾸기" onclick={toggleProfile}>
 				{#if me}<Avatar name={me.name} src={fileSrc(me.avatar)} fit={me.avatarFit} color={me.color || null} size={26} />{/if}
-				<span class="who"><b>{me?.name ?? "페르소나 없음"}</b><small>기본 프로필</small></span>
+				<span class="who"><b>{me?.alias?.trim() || me?.name || "페르소나 없음"}</b><small>기본 프로필</small></span>
 				<ChevronsUpDown />
 			</button>
 			{#if profileOpen}
@@ -493,7 +493,7 @@
 							<li>
 								<button role="option" aria-selected={p.id === me?.id} onclick={() => choose(p.id)}>
 									<Avatar name={p.name} src={fileSrc(p.avatar)} fit={p.avatarFit} color={p.color || null} size={24} />
-									<span class="t">{p.name}</span>
+									<span class="t">{p.alias?.trim() || p.name}</span>
 									{#if p.id === me?.id}<Check />{/if}
 								</button>
 							</li>

@@ -92,6 +92,27 @@ pub async fn delete_conversations(app: AppHandle, state: State<'_, AppState>, id
     Ok(n)
 }
 
+/// 고아 채팅(캐릭터가 지워진 대화)을 다른 캐릭터에 다시 연결한다. 연결한 개수를 돌려준다.
+#[tauri::command]
+#[specta::specta]
+pub async fn reassign_conversations_character(state: State<'_, AppState>, ids: Vec<String>, character_id: String) -> Result<u64> {
+    if !crate::db::conversation::char_exists(&state.db, &character_id).await? {
+        return Err(crate::error::AppError::validation("존재하지 않는 캐릭터입니다", None));
+    }
+    let now = chrono::Utc::now().timestamp_millis();
+    let mut n = 0u64;
+    for id in &ids {
+        let res = sqlx::query("UPDATE conversations SET character_id = ?, folder_id = NULL, updated_at = ? WHERE id = ?")
+            .bind(&character_id)
+            .bind(now)
+            .bind(id)
+            .execute(&state.db)
+            .await?;
+        n += res.rows_affected();
+    }
+    Ok(n)
+}
+
 // ---------------------------------------------------------------------------
 // 휴지통 (2-A-3)
 // ---------------------------------------------------------------------------

@@ -1,7 +1,9 @@
 // 앱 전체 화면 이동 기록 (타이틀바 앞으로/뒤로, Alt+←/→, 마우스 옆 버튼)
+export type PhoneApp = "home" | "messages" | "contacts" | "photos" | "camera" | "settings";
+
 export type Route =
 	| { page: "home" }
-	| { page: "phone" }
+	| { page: "phone"; app?: PhoneApp; convId?: string }
 	| { page: "character"; charId?: string; convId?: string; edit?: boolean }
 	| { page: "game"; gameId?: string; sessionId?: string; edit?: boolean }
 	| { page: "persona"; personaId?: string }
@@ -9,7 +11,7 @@ export type Route =
 	| { page: "images" }
 	| { page: "settings"; tab?: SettingsTab; /** 테마 편집: 파일 이름, 또는 "new" / "builtin:id"(복제해서 새로). API 편집: 연결 id 또는 "new" */ edit?: string };
 
-export type SettingsTab = "general" | "plugins" | "chat" | "phone" | "theme" | "shortcut" | "widget" | "api" | "preset" | "regex" | "data" | "log" | "activity" | "game" | "cg" | "translate" | "tts" | "imagegen" | "sync" | "community" | "lint" | "memory" | "summary" | "rewrite" | "ghostwrite" | "quickreply" | `community:${string}`;
+export type SettingsTab = "general" | "plugins" | "chat" | "phone" | "theme" | "shortcut" | "widget" | "api" | "preset" | "regex" | "lorebook" | "data" | "log" | "activity" | "budget" | "game" | "cg" | "translate" | "tts" | "imagegen" | "sync" | "community" | "lint" | "memory" | "summary" | "rewrite" | "ghostwrite" | "quickreply" | `community:${string}`;
 export type Page = Route["page"];
 
 const MAX = 100;

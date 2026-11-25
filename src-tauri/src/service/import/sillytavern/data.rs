@@ -383,6 +383,7 @@ pub async fn import_data_dir(db: &DbPool, app_data_dir: &Path, dir: &Path) -> Re
                 .flatten();
             let input = crate::models::conversation::PersonaInput {
                 name: name.to_string(),
+                alias: None,
                 avatar,
                 description,
                 world_info_ids: vec![],

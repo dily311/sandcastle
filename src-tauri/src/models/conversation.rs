@@ -77,6 +77,8 @@ impl AvatarFit {
 pub struct PersonaRow {
     pub id: String,
     pub name: String,
+    #[sqlx(default)]
+    pub alias: Option<String>,
     pub avatar: Option<String>,
     pub description: String,
     pub world_info_ids: Option<String>,
@@ -94,6 +96,8 @@ pub struct PersonaRow {
 pub struct Persona {
     pub id: String,
     pub name: String,
+    /// 목록·사이드바 표시용 별칭 (비우면 name 표시, 대화 {{user}}는 항상 name 사용)
+    pub alias: Option<String>,
     pub avatar: Option<String>,
     pub description: String,
     pub world_info_ids: Vec<String>,
@@ -111,6 +115,7 @@ impl From<PersonaRow> for Persona {
         Self {
             id: r.id,
             name: r.name,
+            alias: r.alias.filter(|s| !s.trim().is_empty()),
             avatar: r.avatar,
             description: r.description,
             world_info_ids: r.world_info_ids.and_then(|s| serde_json::from_str(&s).ok()).unwrap_or_default(),
@@ -128,6 +133,8 @@ impl From<PersonaRow> for Persona {
 #[serde(rename_all = "camelCase")]
 pub struct PersonaInput {
     pub name: String,
+    #[serde(default)]
+    pub alias: Option<String>,
     pub avatar: Option<String>,
     pub description: String,
     pub world_info_ids: Vec<String>,

@@ -123,10 +123,11 @@
 	--space-10: 40px;
 
 	/* ---- 글꼴 ---- */
-	/* --font-user: 사용자가 올린 글꼴 (shared/ui/userFont.ts가 고른 글꼴이 있을 때만 넣음) */
+	/* --font-user / --font-user-text / --font-user-mono: 사용자가 올린 글꼴 (shared/ui/userFont.ts가 고른 글꼴이 있을 때만 넣음) */
 	--font-sans: var(--font-user, "Pretendard"), "Pretendard", "Pretendard Variable", -apple-system, BlinkMacSystemFont, "Apple SD Gothic Neo",
 		"Malgun Gothic", "Segoe UI", system-ui, sans-serif;
-	--font-mono: "JetBrains Mono", "D2Coding", ui-monospace, "Cascadia Code", Consolas, monospace;
+	--font-text: var(--font-user-text, var(--font-sans));
+	--font-mono: var(--font-user-mono, "JetBrains Mono"), "JetBrains Mono", "D2Coding", ui-monospace, "Cascadia Code", Consolas, monospace;
 
 	--text-xs: 0.75rem;
 	--text-sm: 0.8125rem;

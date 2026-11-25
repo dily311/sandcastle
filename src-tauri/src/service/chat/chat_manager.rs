@@ -611,6 +611,7 @@ pub async fn compute_context_usage(
     let persona = get_persona(db, &persona_id).await.unwrap_or_else(|_| crate::models::conversation::Persona {
         id: persona_id.clone(),
         name: "User".into(),
+        alias: None,
         avatar: None,
         avatar_fit: None,
         description: String::new(),

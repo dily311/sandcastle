@@ -31,6 +31,7 @@ const db = {
 		doneNotify: { enabled: false, title: "", icon: null },
 		aiCallLog: false,
 		typing: { style: "blink", text: "", image: null },
+		worldInfo: { scanDepth: 10, maxRecursionDepth: 0 },
 		home: { startOnHome: false, greeting: "", blocks: ["continue", "quick", "favorites", "games"], css: "" },
 	} satisfies AppSetting_Serialize as AppSetting_Serialize,
 	themeSetting: {
@@ -40,7 +41,15 @@ const db = {
 		accentColor: "seaglass",
 		fontSize: 16,
 		grayTone: "slate",
-		chat: { showTimestamps: false, showAvatars: true, showMultiCharAvatars: false },
+		chat: {
+			showTimestamps: false,
+			showAvatars: true,
+			showMultiCharAvatars: false,
+			charAvatarFrame: "circle",
+			charAvatarFrameImage: null,
+			userAvatarFrame: "circle",
+			userAvatarFrameImage: null,
+		},
 	} satisfies ThemeSetting as ThemeSetting,
 	feature: { feature: { "chat.images": true, widget: true, "widget.music": true } } as FeatureSetting,
 };
@@ -59,6 +68,17 @@ const base: Record<string, Handler> = {
 	update_app_setting: ({ patch }) => (db.appSetting = { ...db.appSetting, ...(patch as object) }),
 	get_theme_setting: () => db.themeSetting,
 	update_theme_setting: ({ patch }) => (db.themeSetting = { ...db.themeSetting, ...(patch as object) }),
+	upload_avatar_frame: ({ target, path }) => {
+		const chat = { ...(db.themeSetting.chat ?? {}) };
+		if (target === "char") {
+			chat.charAvatarFrame = "custom";
+			chat.charAvatarFrameImage = String(path);
+		} else {
+			chat.userAvatarFrame = "custom";
+			chat.userAvatarFrameImage = String(path);
+		}
+		return (db.themeSetting = { ...db.themeSetting, chat });
+	},
 	request_notify_permission: () => true,
 	// 미리보기: 복사하지 않고 받은 주소를 그대로 (data:·https: 그림으로 확인)
 	set_typing_image: ({ path }) => {

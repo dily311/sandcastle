@@ -15,7 +15,26 @@ const src = { source: "slash" };
 class QuickReplyStore {
 	sets = $state<QuickReplySet[]>([]);
 	loaded = $state(false);
+	/** 빠른 답장 버튼 줄 숨기기 (번개 아이콘 메뉴에서 전환, 기기 저장소에 영구 저장) */
+	barHidden = $state<boolean>(
+		(() => {
+			try {
+				return localStorage.getItem("sc.qr.bar.hidden") === "1";
+			} catch {
+				return false;
+			}
+		})(),
+	);
 	private loading: Promise<void> | null = null;
+
+	setBarHidden(v: boolean) {
+		this.barHidden = v;
+		try {
+			localStorage.setItem("sc.qr.bar.hidden", v ? "1" : "0");
+		} catch {
+			/* 저장소 접근 불가 시 이번 실행 동안만 유지 */
+		}
+	}
 
 	load(force = false) {
 		if (this.loaded && !force) return Promise.resolve();

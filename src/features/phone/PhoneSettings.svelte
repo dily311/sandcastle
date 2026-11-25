@@ -2,7 +2,7 @@
 	// 폰 설정 (설정 > 폰, 폰 화면 오른쪽 패널 정보 탭이 같은 것을 씀)
 	// 폰 주인 · 화면 표시 · 배경화면 · 새 채팅방의 기본 API·프리셋 · 폰 모드 프롬프트
 	import { onMount } from "svelte";
-	import { Button, ProfilePicker, Segmented, Select, Textarea, type ProfileOption } from "$shared/ui";
+	import { Button, Input, ProfilePicker, Segmented, Select, Switch, Textarea, type ProfileOption } from "$shared/ui";
 	import BackgroundPicker from "$shared/ui/BackgroundPicker.svelte";
 	import { library } from "$features/character/library.svelte";
 	import ModelPicker from "$features/settings/ModelPicker.svelte";
@@ -47,6 +47,22 @@
 	async function uploadWallpaper() {
 		await addWallpapers(await pickFiles([{ name: "그림", extensions: ["png", "jpg", "jpeg", "webp", "gif", "avif"] }], true));
 	}
+	function nowDateStr() {
+		const d = new Date();
+		return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+	}
+	function nowTimeStr() {
+		const d = new Date();
+		return `${String(d.getHours()).padStart(2, "0")}:${String(d.getMinutes()).padStart(2, "0")}`;
+	}
+	function toggleCustomClock(v: boolean) {
+		const date = plug?.phone.customDate || nowDateStr();
+		const time = plug?.phone.customTime || nowTimeStr();
+		void save("phone", { customDatetimeEnabled: v, customDate: date, customTime: time });
+	}
+	function resetClockToNow() {
+		void save("phone", { customDate: nowDateStr(), customTime: nowTimeStr() });
+	}
 	$effect(() => dropPaths({ label: "폰 배경화면으로 올리기", hint: "PNG·JPG·WEBP·GIF·AVIF", accept: isImageAvif, onpaths: addWallpapers }));
 </script>
 
@@ -77,6 +93,32 @@
 
 	{#if plug}
 		<section>
+			<h4>폰 날짜 · 시간</h4>
+			<div class="row-toggle">
+				<span>날짜·시간 직접 설정</span>
+				<Switch checked={!!plug.phone.customDatetimeEnabled} label="폰 날짜·시간 직접 설정" hideLabel onchange={toggleCustomClock} />
+			</div>
+			{#if plug.phone.customDatetimeEnabled}
+				<div class="dt-grid">
+					<label class="field">
+						<span>날짜</span>
+						<Input type="date" value={plug.phone.customDate || nowDateStr()} aria-label="폰 날짜" onchange={(e) => save("phone", { customDate: e.currentTarget.value })} />
+					</label>
+					<label class="field">
+						<span>시간</span>
+						<Input type="time" value={plug.phone.customTime || nowTimeStr()} aria-label="폰 시간" onchange={(e) => save("phone", { customTime: e.currentTarget.value })} />
+					</label>
+				</div>
+				<div class="end">
+					<Button size="sm" variant="ghost" onclick={resetClockToNow}>현재 시각으로</Button>
+				</div>
+			{/if}
+			<p class="hint">
+				{"프롬프트에서 {{phone_date}}(날짜), {{phone_time}}(시간), {{phone_datetime}}(날짜+시간) 매크로로 주입됨"}
+			</p>
+		</section>
+
+		<section>
 			<h4>새 채팅방 기본값</h4>
 			<label class="field"
 				><span>API <small>채팅방 설정에서 고른 것이 먼저</small></span>
@@ -98,7 +140,7 @@
 	{#if s}
 		<section>
 			<h4>폰 모드 프롬프트</h4>
-			<p class="hint">{"폰 대화에만 붙는 시스템 프롬프트. {{char}}, {{user}} 사용 가능. 비우면 붙이지 않음"}</p>
+			<p class="hint">{"폰 대화에만 붙는 시스템 프롬프트. {{char}}, {{user}}, {{phone_date}}, {{phone_time}}, {{phone_datetime}} 사용 가능. 비우면 붙이지 않음"}</p>
 			<Textarea bind:value={phonePrompt} autosize maxRows={14} rows={5} mono aria-label="폰 모드 프롬프트" />
 			<div class="end">
 				<Button size="sm" variant="ghost" disabled={phonePrompt === s.phoneModePrompt} onclick={() => (phonePrompt = s.phoneModePrompt)}>되돌리기</Button>
@@ -142,6 +184,19 @@
 	.end {
 		display: flex;
 		justify-content: flex-end;
+		gap: var(--space-2);
+	}
+	.row-toggle {
+		display: flex;
+		align-items: center;
+		justify-content: space-between;
+		gap: var(--space-2);
+		font-size: var(--text-sm);
+		color: var(--text-muted);
+	}
+	.dt-grid {
+		display: grid;
+		grid-template-columns: 1fr 1fr;
 		gap: var(--space-2);
 	}
 </style>

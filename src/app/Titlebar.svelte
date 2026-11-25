@@ -31,17 +31,25 @@
 		api: "API 키",
 		preset: "프리셋",
 		regex: "정규식",
+		lorebook: "로어북",
 		data: "데이터",
 		log: "로그",
 		plugins: "코어 플러그인",
 		translate: "번역",
 		tts: "음성 읽기",
 		imagegen: "이미지 생성",
-		activity: "실행 기록",
+		activity: "최근 실행",
+		budget: "예산 관리",
 		game: "게임 모드",
 		cg: "캐릭터 에셋",
 		sync: "동기화",
 		community: "커뮤니티 플러그인",
+		lint: "메시지 linter",
+		memory: "메모리 검색",
+		summary: "대화 요약",
+		rewrite: "자동 재생성",
+		ghostwrite: "대필",
+		quickreply: "빠른 답장",
 	};
 	// 대화 화면이면 그 대화 (제목 고치기·동작 메뉴)
 	const conv = $derived(nav.current.page === "character" && !nav.current.edit ? library.conversation(nav.current.convId) : undefined);
@@ -137,17 +145,41 @@
 			}
 			case "persona": {
 				const p = r.personaId ? library.persona(r.personaId) : undefined;
-				return p ? [{ label: "페르소나", to: { page: "persona" } }, { label: p.name }] : [{ label: "페르소나" }];
+				return p ? [{ label: "페르소나", to: { page: "persona" } }, { label: p.alias?.trim() || p.name }] : [{ label: "페르소나" }];
 			}
 			case "settings": {
 				if (layout.narrow && !r.tab) return [{ label: "설정" }];
-				const tab: Crumb = { label: SETTINGS[r.tab ?? "general"], to: { page: "settings", tab: r.tab ?? "general" } };
+				const tabId = r.tab ?? "general";
+				const tabLabel = SETTINGS[tabId] ?? (tabId.startsWith("community:") ? tabId.slice(10) : tabId);
+				const tab: Crumb = { label: tabLabel, to: { page: "settings", tab: tabId } };
+				if (r.tab === "theme" && r.edit === "fonts") return [{ label: "설정", to: { page: "settings" } }, tab, { label: "글꼴 관리" }];
 				return r.edit ? [{ label: "설정", to: { page: "settings" } }, tab, { label: "편집" }] : [{ label: "설정", to: { page: "settings" } }, tab];
 			}
 			case "home":
 				return [{ label: "홈" }];
-			case "phone":
+			case "phone": {
+				const PHONE_APPS: Record<string, string> = {
+					home: "홈",
+					messages: "메시지",
+					contacts: "연락처",
+					photos: "사진",
+					camera: "카메라",
+					settings: "설정",
+				};
+				if (r.convId) {
+					const c = library.conversation(r.convId);
+					const ch = c?.characterId ? library.character(c.characterId) : undefined;
+					return [
+						{ label: "폰", to: { page: "phone" } },
+						{ label: "메시지", to: { page: "phone", app: "messages" } },
+						{ label: ch?.name ?? c?.title ?? "채팅" },
+					];
+				}
+				if (r.app && r.app !== "home") {
+					return [{ label: "폰", to: { page: "phone" } }, { label: PHONE_APPS[r.app] ?? r.app }];
+				}
 				return [{ label: "폰" }];
+			}
 			case "images":
 				return [{ label: "이미지" }];
 			case "lorebook": {

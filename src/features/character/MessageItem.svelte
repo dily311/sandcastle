@@ -57,6 +57,12 @@
 
 	const meta = $derived(metaOf(msg));
 	const isAi = $derived(msg.role === "assistant");
+	const avatarShape = $derived(isAi ? theme.chat.charAvatarFrame : theme.chat.userAvatarFrame);
+	const avatarFrameSrc = $derived(
+		avatarShape === "custom"
+			? fileSrc(isAi ? theme.chat.charAvatarFrameImage : theme.chat.userAvatarFrameImage)
+			: null,
+	);
 	const live = $derived((session.live?.kind === "regenerate" || session.live?.kind === "continue") && session.live.targetId === msg.id ? session.live : null);
 	// 번역이 있으면 번역문을 보여주고 "원문"으로 바꿔 볼 수 있다
 	const translation = $derived(plugins.on("translate") ? translationOf(msg) : null);
@@ -271,7 +277,7 @@
 <div bind:this={el} class="block sc-msg" class:ai={isAi} class:user={!isAi} class:sc-msg-ai={isAi} class:sc-msg-user={!isAi} class:sc-msg-hidden={meta.hidden} class:hidden={meta.hidden} class:selecting class:picked={selected} id="msg-{msg.id}" data-no={no} class:tapped onclick={tap} oncontextmenu={openMenu}>
 	<div class="who sc-msg-head">
 		{#if selecting}<input class="pick" type="checkbox" checked={selected} aria-label="#{no} 메시지 선택" onclick={(e) => e.stopPropagation()} onchange={(e) => onselect?.(msg, e.currentTarget.checked)} />{/if}
-		{#if avatar !== undefined}<Avatar name={msg.name ?? (isAi ? "AI" : "나")} src={avatar} fit={avatarFit} size={22} />{/if}
+		{#if avatar !== undefined && avatarShape !== "none"}<Avatar name={msg.name ?? (isAi ? "AI" : "나")} src={avatar} fit={avatarFit} shape={avatarShape} frameSrc={avatarFrameSrc} size={avatarShape === "rect" || avatarShape === "custom" ? 30 : 24} />{/if}
 		<span class="no sc-msg-no">#{no}</span><b class="sc-msg-name">{msg.name ?? (isAi ? "AI" : "나")}</b>
 		{#if meta.hidden}<Badge><EyeOff /> AI에게 숨김</Badge>{/if}
 		{#if (msg.meta as { ghost?: boolean } | null)?.ghost}<span class="ghost" role="img" aria-label="대필" title="대필"><PenLine size={12} /></span>{/if}

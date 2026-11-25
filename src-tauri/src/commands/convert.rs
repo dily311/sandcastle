@@ -37,6 +37,7 @@ pub async fn copy_character_to_persona(app: AppHandle, state: State<'_, AppState
         .map_err(|_| AppError::not_found(format!("캐릭터를 찾을 수 없습니다: {character_id}")))?;
     let input = PersonaInput {
         name: c.name,
+        alias: None,
         avatar: copy_avatar_file(&app, c.avatar.as_deref(), "persona"),
         description: c.description,
         world_info_ids: c.world_info_ids.clone(),

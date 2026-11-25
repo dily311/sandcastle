@@ -136,7 +136,7 @@ export const settingsHandlers: Record<string, (a: Args) => unknown> = {
 	// ---- 복사 ----
 	copy_character_to_persona: ({ characterId }) => {
 		const c = characters.find((x) => x.id === characterId)!;
-		const p = { id: uid("pe"), name: c.name, avatar: c.avatar, description: c.description, worldInfoIds: [...c.worldInfoIds], tags: [...c.tags], color: c.color ?? "", isSystemDefault: false, createdAt: now(), updatedAt: now(), avatarFit: c.avatarFit };
+		const p = { id: uid("pe"), name: c.name, alias: null, avatar: c.avatar, description: c.description, worldInfoIds: [...c.worldInfoIds], tags: [...c.tags], color: c.color ?? "", isSystemDefault: false, createdAt: now(), updatedAt: now(), avatarFit: c.avatarFit };
 		personas.push(p);
 		return p;
 	},
@@ -276,6 +276,31 @@ export const settingsHandlers: Record<string, (a: Args) => unknown> = {
 		conv.updatedAt = now();
 		return out;
 	},
+	phone_generate_profile: async () =>
+		JSON.stringify({
+			handle: "daily_log",
+			status: "오늘도 조용히 차 한 잔",
+			bio: "소소한 일상과 기록을 남기는 공간\n가끔 산책 사진 올림",
+			link: "숲의 오두막",
+			followers: "142",
+			following: "38",
+			posts: [
+				{
+					caption: "창밖으로 바람이 꽤 선선하게 분다. 오랜만에 따뜻한 차를 우렸다.",
+					location: "오두막 창가",
+					date: "2시간 전",
+					likes: 24,
+					comments: [{ author: "이웃", text: "분위기 너무 좋네요!" }],
+				},
+				{
+					caption: "어제 걸었던 길. 다음엔 카메라도 챙겨 나가야지.",
+					location: "산책로",
+					date: "어제",
+					likes: 41,
+					comments: [],
+				},
+			],
+		}),
 
 	// ---- 페르소나 ----
 	// ---- 로어북 ----
@@ -491,6 +516,18 @@ export const settingsHandlers: Record<string, (a: Args) => unknown> = {
 			convs.splice(i, 1);
 			n++;
 			for (let k = messages.length - 1; k >= 0; k--) if (messages[k].conversationId === id) messages.splice(k, 1);
+		}
+		return n;
+	},
+	reassign_conversations_character: ({ ids, characterId }) => {
+		let n = 0;
+		for (const id of ids as string[]) {
+			const c = convs.find((x) => x.id === id);
+			if (!c) continue;
+			c.characterId = characterId as string;
+			c.folderId = null;
+			c.updatedAt = now();
+			n++;
 		}
 		return n;
 	},

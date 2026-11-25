@@ -175,11 +175,18 @@
 	// ---- 그림·프로필 ----
 	const showAvatars = $derived(theme.chat.showAvatars);
 	function ownerOf(m: Message) {
-		return m.role === "assistant"
-			? library.character(m.characterId ?? charId)
-			: m.role === "user"
-				? library.persona((m.meta as { sender?: { id?: string } } | null)?.sender?.id ?? library.convPersonaId(conv))
-				: undefined;
+		if (m.role === "assistant") return library.character(m.characterId ?? charId);
+		if (m.role !== "user") return undefined;
+		const sender = (m.meta as { sender?: { id?: string; name?: string } } | null)?.sender;
+		if (sender?.id) return library.persona(sender.id);
+		const name = (m.name ?? sender?.name ?? "").trim();
+		if (name) {
+			const byName = library.personas.find((p) => p.name.trim() === name);
+			if (byName) return byName;
+			const cur = library.persona(library.convPersonaId(conv));
+			return cur && cur.name.trim() === name ? cur : undefined;
+		}
+		return library.persona(library.convPersonaId(conv));
 	}
 	function avatarOf(m: Message): string | null | undefined {
 		if (!showAvatars) return undefined;
@@ -310,7 +317,7 @@
 	<SelectionMenu {scroller} {conv} {session} characterName={character?.name} oncard={(c) => (card = c)} />
 </div>
 
-<TextCardDialog {card} onclose={() => (card = null)} />
+<TextCardDialog {card} {charId} {convId} onclose={() => (card = null)} />
 
 <style>
 	/* 배치는 대화 화면(ChatView)과 같게 — 목록·본문·패널 */

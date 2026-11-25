@@ -6,15 +6,36 @@
 	import { Avatar, Button, type ProfileOption } from "$shared/ui";
 	import { panel } from "$app/panel.svelte";
 	import ChatPanel from "$features/character/ChatPanel.svelte";
-	import type { ChatSession } from "$features/character/session.svelte";
+	import type { ChatBookmark } from "$features/character/bookmarks";
+	import { metaOf, type ChatSession } from "$features/character/session.svelte";
 	import { fileSrc } from "$shared/ipc/file";
 	import { nav } from "$app/nav.svelte";
 	import { library, type Conversation } from "$features/character/library.svelte";
 	import { lookup, phone, type Who } from "./phone.svelte";
 	import PhoneSettings from "./PhoneSettings.svelte";
 
-	let { room, session, onopen }: { room: Conversation | null; session: ChatSession | null; onopen: (id: string, messageId?: string) => void } = $props();
-	const shared = new Set(["settings", "context", "branches", "status"]);
+	let {
+		room,
+		session,
+		onopen,
+		onjump,
+		oncard,
+		draft,
+	}: {
+		room: Conversation | null;
+		session: ChatSession | null;
+		onopen: (id: string, messageId?: string) => void;
+		onjump?: (messageId: string, mark?: ChatBookmark) => void;
+		oncard?: (mark: ChatBookmark) => void;
+		draft?: { get: () => string; set: (v: string) => void };
+	} = $props();
+	const shared = new Set(["settings", "context", "toc", "bookmarks", "memory", "lint", "branches", "assets", "quickreply", "status"]);
+	const chapters = $derived.by(() => {
+		const out: Record<string, number> = {};
+		let n = 0;
+		for (const m of session?.messages ?? []) if (metaOf(m).chapter) out[m.id] = ++n;
+		return out;
+	});
 
 	// 방은 열 때의 사본일 수 있으니 목록의 최신 대화를 씀 (meta 저장이 바로 보이게)
 	const conv = $derived(room ? (library.conversation(room.id) ?? room) : null);
@@ -48,7 +69,7 @@
 </script>
 
 {#if conv && session && shared.has(panel.tab)}
-	<ChatPanel {conv} {session} chapters={{}} onjump={() => {}} {onopen} {me} />
+	<ChatPanel {conv} {session} {chapters} onjump={onjump ?? (() => {})} {oncard} {onopen} {draft} />
 {:else if shared.has(panel.tab)}
 	<div class="panel-body">
 		<p class="hint">채팅방을 열면 그 대화의 {panel.tab === "context" ? "컨텍스트·프리셋" : "설정"}이 여기 보임</p>

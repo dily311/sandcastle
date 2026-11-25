@@ -42,6 +42,7 @@
 	}
 	.md {
 		overflow-wrap: anywhere;
+		font-family: var(--font-text, var(--font-sans));
 	}
 	.md + .md {
 		margin-top: 0.6em;

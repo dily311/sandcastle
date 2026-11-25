@@ -50,6 +50,28 @@ pub struct AppSetting {
     /// 응답을 기다릴 때 보이는 타이핑 표시 (5-E-17-1)
     #[serde(default)]
     pub typing: TypingIndicator,
+    /// 로어북(월드인포) 스캔 깊이·재귀 최대 깊이 설정
+    #[serde(default)]
+    pub world_info: WorldInfoSetting,
+}
+
+/// 로어북(월드인포) 스캔 설정
+#[derive(Serialize, Deserialize, Debug, Clone, PartialEq, Eq, specta::Type)]
+#[serde(rename_all = "camelCase", default)]
+pub struct WorldInfoSetting {
+    /// 키워드를 탐색할 최근 메시지 수 (기본 10, 1~100)
+    pub scan_depth: u32,
+    /// 발동된 월드인포 항목의 내용에서 추가 키워드를 재귀 탐색할 최대 깊이 (0 = 재귀 없음, 1~10)
+    pub max_recursion_depth: u32,
+}
+
+impl Default for WorldInfoSetting {
+    fn default() -> Self {
+        Self {
+            scan_depth: 10,
+            max_recursion_depth: 0,
+        }
+    }
 }
 
 /// 타이핑 표시 모양 (5-E-17-1)
@@ -150,6 +172,7 @@ impl Default for AppSetting {
             done_notify: DoneNotify::default(),
             ai_call_log: false,
             typing: TypingIndicator::default(),
+            world_info: WorldInfoSetting::default(),
         }
     }
 }
@@ -187,12 +210,30 @@ pub struct ThemeSetting {
     /// 올려 둔 글꼴 (앱 데이터 fonts/에 복사한 파일). 앱에 글꼴을 넣어 두지 않으므로 목록은 사용자가 올린 것뿐
     #[serde(default)]
     pub fonts: Vec<UserFont>,
-    /// 앱 글꼴: `fonts` 중 하나의 파일 경로. 없으면 기본 글꼴
+    /// UI 글꼴: `fonts` 중 하나의 파일 경로. 없으면 기본 글꼴
     #[serde(default)]
     pub app_font: Option<String>,
-    /// 대화 화면 표시 설정 (시각·프로필 그림·멀티 프로필 그림)
+    /// 텍스트 글꼴 (대화 본문·읽기): `fonts` 중 하나의 파일 경로. 없으면 UI 글꼴을 따름
+    #[serde(default)]
+    pub text_font: Option<String>,
+    /// 모노스페이스 글꼴 (코드·로그): `fonts` 중 하나의 파일 경로. 없으면 기본 모노스페이스
+    #[serde(default)]
+    pub mono_font: Option<String>,
+    /// 대화 화면 표시 설정 (시각·프로필 그림·멀티 프로필 그림·아바타 프레임)
     #[serde(default)]
     pub chat: ThemeChatSetting,
+}
+
+/// 프로필 이미지 UI 표시 형식 (none, 사각형, 정사각형, 원, 커스텀)
+#[derive(Debug, Serialize, Deserialize, Clone, Copy, PartialEq, Eq, Default, specta::Type)]
+#[serde(rename_all = "lowercase")]
+pub enum AvatarFrameShape {
+    None,
+    Rect,
+    Square,
+    #[default]
+    Circle,
+    Custom,
 }
 
 /// 대화 화면 표시 설정 (테마 설정과 사용자 커스텀 테마에서 함께 사용)
@@ -202,6 +243,14 @@ pub struct ThemeChatSetting {
     pub show_timestamps: bool,
     pub show_avatars: bool,
     pub show_multi_char_avatars: bool,
+    /// 캐릭터 프로필 표시 형식 (none/rect/square/circle/custom)
+    pub char_avatar_frame: AvatarFrameShape,
+    /// 캐릭터 커스텀 프레임 이미지 경로
+    pub char_avatar_frame_image: Option<String>,
+    /// 유저 페르소나 프로필 표시 형식 (none/rect/square/circle/custom)
+    pub user_avatar_frame: AvatarFrameShape,
+    /// 유저 페르소나 커스텀 프레임 이미지 경로
+    pub user_avatar_frame_image: Option<String>,
 }
 
 impl Default for ThemeChatSetting {
@@ -210,6 +259,10 @@ impl Default for ThemeChatSetting {
             show_timestamps: true,
             show_avatars: true,
             show_multi_char_avatars: false,
+            char_avatar_frame: AvatarFrameShape::Circle,
+            char_avatar_frame_image: None,
+            user_avatar_frame: AvatarFrameShape::Circle,
+            user_avatar_frame_image: None,
         }
     }
 }
@@ -256,6 +309,8 @@ impl Default for ThemeSetting {
             background_opacity: default_background_opacity(),
             fonts: vec![],
             app_font: None,
+            text_font: None,
+            mono_font: None,
             chat: ThemeChatSetting::default(),
         }
     }
@@ -704,6 +759,12 @@ pub struct PhoneSetting {
     /// 폰 대화의 기본 모델 (비우면 그 API의 기본 모델. ADR-020). API를 정했을 때만 쓴다
     pub model: String,
     pub preset_id: Option<String>,
+    /// 폰 날짜·시간 직접 설정 여부 (false면 시스템 현재 시각 사용)
+    pub custom_datetime_enabled: bool,
+    /// 직접 설정한 폰 날짜 (YYYY-MM-DD)
+    pub custom_date: String,
+    /// 직접 설정한 폰 시간 (HH:MM)
+    pub custom_time: String,
 }
 
 #[derive(Debug, Serialize, Deserialize, Clone, specta::Type)]
@@ -899,6 +960,7 @@ mod tests {
                 show_timestamps: false,
                 show_avatars: false,
                 show_multi_char_avatars: true,
+                ..ThemeChatSetting::default()
             })
         );
     }

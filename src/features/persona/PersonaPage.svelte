@@ -46,7 +46,7 @@
 		[...library.personas].sort((a, b) => Number(b.id === defaultId) - Number(a.id === defaultId) || a.name.localeCompare(b.name, "ko")),
 	);
 	const q = $derived(query.trim().toLowerCase());
-	const list = $derived(q ? sorted.filter((p) => `${p.name} ${p.tags.join(" ")} ${p.description ?? ""}`.toLowerCase().includes(q)) : sorted);
+	const list = $derived(q ? sorted.filter((p) => `${p.alias ?? ""} ${p.name} ${p.tags.join(" ")} ${p.description ?? ""}`.toLowerCase().includes(q)) : sorted);
 	const current = $derived(library.persona(personaId) ?? (personaId ? undefined : sorted[0]));
 
 	// 첫 진입이면 첫 페르소나를 주소에 고정 (뒤로 가기 기록은 남기지 않음)
@@ -188,8 +188,8 @@
 						<button class:on={current?.id === p.id} aria-current={current?.id === p.id ? "page" : undefined} onclick={() => select(p.id)}>
 							<Avatar name={p.name} src={fileSrc(p.avatar)} fit={p.avatarFit} color={p.color || null} size={36} />
 							<span class="t">
-								<b>{p.name}{#if p.id === defaultId}<Star class="star" aria-label="기본" />{/if}</b>
-								<span class="faint">{(p.description ?? "").split("\n")[0] || "설명 없음"}</span>
+								<b>{p.alias?.trim() || p.name}{#if p.id === defaultId}<Star class="star" aria-label="기본" />{/if}</b>
+								<span class="faint">{p.alias?.trim() ? `${p.name} · ` : ""}{(p.description ?? "").split("\n")[0] || "설명 없음"}</span>
 							</span>
 						</button>
 					</li>

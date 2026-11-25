@@ -94,7 +94,6 @@
 				draggable="false"
 			/>
 		</div>
-		{#if !isSnapped}
 		<div class="song-info-wrap">
 			<div class="song-info">
 				<div class="song-title-wrap">
@@ -289,7 +288,6 @@
 				/>
 			</div>
 		</div>
-		{/if}
 	</div>
 	{#if widgetMusicSetting.isPlayListOpen}
 		<Playlist />
@@ -314,9 +312,13 @@
 		/* resize: both; */
 	}
 
-	.music-player-container.snap-docked {
+	.music-player-container:not(.resize).snap-docked {
 		max-width: none;
 		width: fit-content;
+
+		.song-info-wrap {
+			display: none;
+		}
 	}
 	.music-player-container:global(.snap-left) {
 		border-top-left-radius: 0;

@@ -4,9 +4,9 @@
 	import { lastAt } from "$features/character/library.svelte";
 	import { TRASH_HINT, trashedToast } from "$shared/trash";
 	import { Camera, ImagePlus, Move, X as XIcon } from "@lucide/svelte";
-	import { ChevronRight, Download, Ellipsis, Gamepad2, MessageSquarePlus, Pencil, Plus, Search, Star, StarOff, Trash2, Upload, UserRound, Users } from "@lucide/svelte";
+	import { ChevronRight, Download, Ellipsis, Gamepad2, MessageSquarePlus, Pencil, Plus, Star, StarOff, Trash2, Upload, UserRound, Users } from "@lucide/svelte";
 	import type { GameProject_Serialize as GameProject } from "$ipc/bindings";
-	import { Avatar, Badge, Button, ContextMenu, ItemCard, ListToolbar, SelectBar, SplitButton, Dialog, EmptyState, IconButton, Input, Segmented, Spinner, type MenuItem } from "$shared/ui";
+	import { Avatar, Button, ContextMenu, ListToolbar, SelectBar, SplitButton, Dialog, EmptyState, IconButton, Segmented, Spinner, type MenuItem } from "$shared/ui";
 	import { nav } from "$app/nav.svelte";
 	import { call, commands } from "$shared/ipc/client";
 	import type { CharacterStats } from "$ipc/bindings";
@@ -19,6 +19,7 @@
 	import ChatView from "./ChatView.svelte";
 	import ReadView from "./ReadView.svelte";
 	import CharacterEditor from "./CharacterEditor.svelte";
+	import CharacterGallery from "./CharacterGallery.svelte";
 	import { library, type Character } from "./library.svelte";
 	import { charActions } from "./actions";
 	import { fillNames, toBlocks } from "./format";
@@ -213,9 +214,83 @@
 		if (charId && !edit && !convId && !library.images[charId]) void library.loadImages(charId);
 	});
 	const recent = $derived(charId ? library.convsOf(charId) : []);
-	let tab: "overview" | "recent" | "bookmarks" | "stats" = $state("overview");
+	let tab: "overview" | "recent" | "bookmarks" | "gallery" | "stats" = $state("overview");
+	// 채팅 목록 찾기·거르기·정렬
+	let convQuery = $state("");
+	let convFilter = $state("all");
+	let convSort = $state("recent");
+	const convFolders = $derived(charId ? library.foldersOf(charId) : []);
+	const CONV_FILTERS = $derived([
+		{ value: "all", label: `전부 ${recent.length}` },
+		{ value: "pinned", label: "고정됨" },
+		{ value: "read", label: "읽기 모드" },
+		{ value: "chat", label: "대화 모드" },
+		...convFolders.map((f) => ({ value: `folder:${f.id}`, label: f.name })),
+	]);
+	const CONV_SORTS = [
+		{ value: "recent", label: "최근 활동 순" },
+		{ value: "created", label: "최근 만든 순" },
+		{ value: "name", label: "제목 순" },
+		{ value: "messages", label: "메시지 많은 순" },
+	];
+	const filteredRecent = $derived.by(() => {
+		const q = convQuery.trim().toLowerCase();
+		const pass = (c: (typeof recent)[number]) =>
+			convFilter === "all" ||
+			(convFilter === "pinned" && !!c.pinned) ||
+			(convFilter === "read" && !!c.readMode) ||
+			(convFilter === "chat" && !c.readMode) ||
+			(convFilter.startsWith("folder:") && c.folderId === convFilter.slice(7));
+		const by =
+			convSort === "created"
+				? (a: (typeof recent)[number], b: (typeof recent)[number]) => b.createdAt - a.createdAt
+				: convSort === "name"
+					? (a: (typeof recent)[number], b: (typeof recent)[number]) => a.title.localeCompare(b.title, "ko")
+					: convSort === "messages"
+						? (a: (typeof recent)[number], b: (typeof recent)[number]) => b.messageCount - a.messageCount
+						: (a: (typeof recent)[number], b: (typeof recent)[number]) => lastAt(b) - lastAt(a);
+		return recent.filter((c) => pass(c) && (!q || c.title.toLowerCase().includes(q))).sort(by);
+	});
 	// 북마크 탭: 이 캐릭터의 대화마다 남긴 북마크 (대화 meta, 새로 읽지 않음)
 	const marks = $derived(recent.flatMap((c) => bookmarksOf(c).map((b) => ({ ...b, conv: c }))).sort((a, b) => b.createdAt - a.createdAt));
+	let markQuery = $state("");
+	let markFilter = $state("all");
+	let markSort = $state("recent");
+	const MARK_FILTERS = $derived.by(() => {
+		const convsWithMarks = [...new Map(marks.map((m) => [m.conv.id, m.conv])).values()];
+		return [
+			{ value: "all", label: `전부 ${marks.length}` },
+			...convsWithMarks.map((c) => ({ value: `conv:${c.id}`, label: c.title })),
+		];
+	});
+	const MARK_SORTS = [
+		{ value: "recent", label: "최근 북마크 순" },
+		{ value: "oldest", label: "오래된 순" },
+		{ value: "conv", label: "대화 제목 순" },
+	];
+	const filteredMarks = $derived.by(() => {
+		const q = markQuery.trim().toLowerCase();
+		const pass = (m: (typeof marks)[number]) =>
+			markFilter === "all" || (markFilter.startsWith("conv:") && m.conv.id === markFilter.slice(5));
+		const by =
+			markSort === "oldest"
+				? (a: (typeof marks)[number], b: (typeof marks)[number]) => a.createdAt - b.createdAt
+				: markSort === "conv"
+					? (a: (typeof marks)[number], b: (typeof marks)[number]) => a.conv.title.localeCompare(b.conv.title, "ko") || b.createdAt - a.createdAt
+					: (a: (typeof marks)[number], b: (typeof marks)[number]) => b.createdAt - a.createdAt;
+		return marks
+			.filter((m) => pass(m) && (!q || m.text.toLowerCase().includes(q) || m.conv.title.toLowerCase().includes(q)))
+			.sort(by);
+	});
+	$effect(() => {
+		if (charId) {
+			void library.loadFolders(charId);
+		}
+		convQuery = "";
+		convFilter = "all";
+		markQuery = "";
+		markFilter = "all";
+	});
 	// 통계 탭: 누를 때만 읽는다 (5-E-12)
 	let stats = $state<CharacterStats | null>(null);
 	let statsFor = "";
@@ -336,6 +411,7 @@
 		<div
 			class="banner"
 			class:has-cover={!!character.cover}
+			class:no-cover={!character.cover}
 			class:positioning
 			style:background-image={character.cover ? `url("${fileSrc(character.cover)}")` : undefined}
 			style:background-position-y={character.cover ? `${positioning ? coverY : (character.coverY ?? 50)}%` : undefined}
@@ -350,7 +426,7 @@
 					<Button size="sm" variant="primary" onclick={() => finishPosition(character.id)}>완료</Button>
 				</div>
 			{:else}
-				<div class="cover-tools">
+				<div class="cover-tools" class:on={!character.cover}>
 					<Button size="sm" variant="secondary" onclick={() => changeCover(character.id)}>{#snippet icon()}<ImagePlus />{/snippet}{character.cover ? "커버 바꾸기" : "커버 넣기"}</Button>
 					{#if character.cover}
 						<Button size="sm" variant="secondary" onclick={() => startPosition(character.coverY ?? 50)}>{#snippet icon()}<Move />{/snippet}위치 조절</Button>
@@ -359,7 +435,7 @@
 				</div>
 			{/if}
 		</div>
-		<header class="profile">
+		<header class="profile" class:no-cover={!character.cover}>
 			<button class="portrait" title="아바타 바꾸기" aria-label="아바타 바꾸기" onclick={() => changeAvatar(character.id)}>
 				<Avatar name={character.name} src={fileSrc(character.avatar)} fit={character.avatarFit} color={character.color} size={96} />
 				<span class="cam" aria-hidden="true"><Camera /></span>
@@ -403,6 +479,7 @@
 					{ value: "overview", label: "개요" },
 					{ value: "recent", label: `채팅 목록 ${recent.length}` },
 					{ value: "bookmarks", label: `북마크 ${marks.length}` },
+					{ value: "gallery", label: "갤러리" },
 					{ value: "stats", label: "통계" },
 				]}
 			/>
@@ -416,8 +493,13 @@
 					<p class="none">소개 없음 · <button class="link" onclick={() => nav.go({ page: "character", charId: character.id, edit: true })}>편집에서 쓰기</button></p>
 				{/if}
 			{:else if tab === "bookmarks"}
+				{#if marks.length}
+					<div class="sub-toolbar">
+						<ListToolbar bind:query={markQuery} bind:filter={markFilter} bind:sort={markSort} placeholder="북마크·대화 제목" filters={MARK_FILTERS} sorts={MARK_SORTS} />
+					</div>
+				{/if}
 				<ul class="recent marks">
-					{#each marks as b (b.conv.id + b.id)}
+					{#each filteredMarks as b (b.conv.id + b.id)}
 						<li>
 							<button onclick={() => open(character.id, b.conv.id)}>
 								<span><b class="mark-text">{b.text}</b><small>{b.conv.title} · {relative(b.createdAt)}</small></span>
@@ -425,9 +507,11 @@
 							</button>
 						</li>
 					{:else}
-						<li class="none">북마크 없음 · 대화에서 글을 끌어 고른 뒤 "북마크"</li>
+						<li class="none">{marks.length ? "검색 결과 없음" : '북마크 없음 · 대화에서 글을 끌어 고른 뒤 "북마크"'}</li>
 					{/each}
 				</ul>
+			{:else if tab === "gallery"}
+				<CharacterGallery charId={character.id} />
 			{:else if tab === "stats"}
 				{#if !stats}
 					<p class="none"><Spinner /></p>
@@ -447,8 +531,13 @@
 					<p class="faint-note">같은 대화에서 30분 안에 이어진 메시지 사이를 대화 시간으로 셈</p>
 				{/if}
 			{:else}
+				{#if recent.length}
+					<div class="sub-toolbar">
+						<ListToolbar bind:query={convQuery} bind:filter={convFilter} bind:sort={convSort} placeholder="대화 제목" filters={CONV_FILTERS} sorts={CONV_SORTS} />
+					</div>
+				{/if}
 				<ul class="recent">
-					{#each recent as c (c.id)}
+					{#each filteredRecent as c (c.id)}
 						<li>
 							<button onclick={() => open(character.id, c.id)}>
 								<span><b>{c.title}</b><small title={absolute(lastAt(c))}>마지막 활동 · {relative(lastAt(c))} · {c.messageCount}개</small></span>
@@ -456,7 +545,7 @@
 							</button>
 						</li>
 					{:else}
-						<li class="none">아직 대화 없음</li>
+						<li class="none">{recent.length ? "검색 결과 없음" : "아직 대화 없음"}</li>
 					{/each}
 				</ul>
 			{/if}
@@ -483,27 +572,60 @@
 			<div class="grid">
 				{#each list as ch (ch.id)}
 					{@const convs = library.convsOf(ch.id)}
-					<ItemCard
-						title={ch.name}
-						desc={firstLine(ch.description) || "소개 없음"}
-						meta="대화 {convs.length}개{convs.length ? ` · ${relative(lastAt(convs[0]))}` : ''}"
-						image={fileSrc(ch.cover) ?? fileSrc(ch.avatar)}
-						imagePosition={ch.cover ? `center ${ch.coverY ?? 50}%` : undefined}
-						{selecting}
-						selected={picked.has(ch.id)}
+					{@const cardImg = fileSrc(ch.avatar) ?? fileSrc(ch.cover)}
+					{@const imgPos = ch.avatar && ch.avatarFit ? `${ch.avatarFit.x ?? 50}% ${ch.avatarFit.y ?? 50}%` : !ch.avatar && ch.cover ? `center ${ch.coverY ?? 50}%` : undefined}
+					{@const summary = firstLine(ch.description)}
+					{@const selected = picked.has(ch.id)}
+					<!-- 카드 전체가 버튼 역할. 안쪽에 메뉴 버튼이 있어 div[role=button] 사용 -->
+					<div
+						class="char-card"
+						class:selected
+						role="button"
+						tabindex="0"
+						aria-pressed={selecting ? selected : undefined}
+						aria-label={ch.name}
 						onclick={() => (selecting ? pickChar(ch.id) : open(ch.id))}
+						onkeydown={(e) => {
+							if (e.target !== e.currentTarget) return;
+							if (e.key === "Enter" || e.key === " ") {
+								e.preventDefault();
+								if (selecting) pickChar(ch.id);
+								else open(ch.id);
+							}
+						}}
 						oncontextmenu={(e) => openCardMenu(e, ch)}
 					>
-						{#snippet menu()}<IconButton label="{ch.name} 메뉴" size="sm" onclick={(e) => openCardMenu(e, ch)}><Ellipsis /></IconButton>{/snippet}
-						{#snippet fallback()}<Avatar name={ch.name} color={ch.color} size={64} />{/snippet}
-						{#snippet badges()}
-							{#if ch.favorite}<Badge tone="warning"><Star /> 즐겨찾기</Badge>{/if}
-							{#each ch.tags.slice(0, 3) as t (t)}<Badge>#{t}</Badge>{/each}
-						{/snippet}
-						{#snippet footer()}
-							{#if convs.length && !selecting}<button class="resume" onclick={() => open(ch.id, convs[0].id)}>이어서: {convs[0].title}</button>{/if}
-						{/snippet}
-					</ItemCard>
+						{#if cardImg}
+							<img class="char-img" src={cardImg} alt="" loading="lazy" style:object-position={imgPos} />
+						{:else}
+							<div class="char-fallback" style:--card-bg={ch.color ?? `oklch(0.45 0.08 ${[...ch.name].reduce((h, c) => (h * 31 + c.charCodeAt(0)) % 360, 17)})`}>
+								<span class="char-initial" aria-hidden="true">{(ch.name.trim()[0] ?? "?").toUpperCase()}</span>
+							</div>
+						{/if}
+						<div class="char-top">
+							{#if selecting}
+								<span class="char-check" aria-hidden="true">{selected ? "✓" : ""}</span>
+							{:else if ch.favorite}
+								<span class="char-fav" title="즐겨찾기"><Star /></span>
+							{:else}
+								<span></span>
+							{/if}
+							{#if !selecting}
+								<!-- svelte-ignore a11y_click_events_have_key_events, a11y_no_static_element_interactions -->
+								<span class="char-menu" onclick={(e) => e.stopPropagation()}>
+									<IconButton label="{ch.name} 메뉴" size="sm" onclick={(e) => openCardMenu(e, ch)}><Ellipsis /></IconButton>
+								</span>
+							{/if}
+						</div>
+						<div class="char-overlay">
+							<b class="char-name" title={ch.name}>{ch.name}</b>
+							{#if summary}<p class="char-desc">{summary}</p>{/if}
+							<div class="char-meta">
+								{#each ch.tags.slice(0, 3) as t (t)}<span class="char-tag">#{t}</span>{/each}
+								{#if convs.length}<span class="char-count">대화 {convs.length}</span>{/if}
+							</div>
+						</div>
+					</div>
 				{:else}
 					<p class="none">검색 결과 없음</p>
 				{/each}
@@ -541,26 +663,181 @@
 	}
 	.grid {
 		display: grid;
-		grid-template-columns: repeat(auto-fill, minmax(min(220px, 45%), 1fr));
-		gap: var(--space-3);
+		grid-template-columns: repeat(auto-fill, minmax(min(200px, 44%), 1fr));
+		gap: var(--space-4);
 		max-width: var(--page-wide);
 		margin: 0 auto;
 	}
-	.resume {
-		padding: var(--space-2) var(--space-3);
-		border: none;
-		border-top: 1px solid var(--border);
-		background: var(--surface-2);
-		color: var(--accent-text);
-		font-size: var(--text-xs);
-		font-weight: 600;
-		white-space: nowrap;
+	.char-card {
+		position: relative;
+		aspect-ratio: 3 / 4;
+		border-radius: var(--radius-lg);
+		border: 1px solid var(--border);
+		background: var(--surface);
+		overflow: hidden;
+		cursor: pointer;
+		-webkit-user-select: none;
+		user-select: none;
+		-webkit-touch-callout: none;
+		transition:
+			transform var(--duration-fast) var(--ease),
+			border-color var(--duration-fast) var(--ease),
+			box-shadow var(--duration-fast) var(--ease);
+	}
+	.char-card:hover {
+		border-color: var(--border-strong);
+		box-shadow: var(--shadow-md);
+		transform: translateY(-2px);
+	}
+	.char-card:focus-visible {
+		outline: 2px solid var(--focus-ring);
+		outline-offset: 2px;
+	}
+	.char-card.selected {
+		border-color: var(--accent);
+		box-shadow: 0 0 0 2px var(--accent);
+	}
+	.char-img {
+		position: absolute;
+		inset: 0;
+		width: 100%;
+		height: 100%;
+		object-fit: cover;
+		display: block;
+		transition: transform 240ms var(--ease);
+	}
+	.char-card:hover .char-img {
+		transform: scale(1.03);
+	}
+	.char-fallback {
+		position: absolute;
+		inset: 0;
+		display: grid;
+		place-items: center;
+		background: linear-gradient(160deg, var(--card-bg), color-mix(in oklab, var(--card-bg) 55%, #000));
+	}
+	.char-initial {
+		font-size: 3rem;
+		font-weight: 700;
+		color: rgb(255 255 255 / 0.85);
+		text-shadow: 0 2px 10px rgb(0 0 0 / 0.25);
+		transform: translateY(-16%);
+	}
+	.char-top {
+		position: absolute;
+		top: var(--space-2);
+		left: var(--space-2);
+		right: var(--space-2);
+		display: flex;
+		align-items: center;
+		justify-content: space-between;
+		z-index: 2;
+		pointer-events: none;
+	}
+	.char-check {
+		display: grid;
+		place-items: center;
+		width: 24px;
+		height: 24px;
+		border: 2px solid #fff;
+		border-radius: 6px;
+		background: rgb(0 0 0 / 0.45);
+		color: #fff;
+		font-size: 13px;
+		font-weight: 700;
+	}
+	.char-card.selected .char-check {
+		background: var(--accent);
+	}
+	.char-fav {
+		display: grid;
+		place-items: center;
+		width: 26px;
+		height: 26px;
+		border-radius: var(--radius-full);
+		background: rgb(0 0 0 / 0.45);
+		color: #facc15;
+		backdrop-filter: blur(4px);
+	}
+	.char-fav :global(svg) {
+		width: 14px;
+		height: 14px;
+		fill: currentColor;
+	}
+	.char-menu {
+		pointer-events: auto;
+		border-radius: var(--radius-full);
+		background: rgb(0 0 0 / 0.42);
+		backdrop-filter: blur(4px);
+		opacity: 0;
+		transition: opacity var(--duration-fast) var(--ease);
+	}
+	.char-menu :global(button) {
+		color: #fff;
+	}
+	.char-card:hover .char-menu,
+	.char-card:focus-within .char-menu {
+		opacity: 1;
+	}
+	@media (hover: none) {
+		.char-menu {
+			opacity: 1;
+		}
+	}
+	.char-overlay {
+		position: absolute;
+		inset: auto 0 0 0;
+		padding: var(--space-10) var(--space-3) var(--space-3);
+		background: linear-gradient(to top, rgb(0 0 0 / 0.88) 0%, rgb(0 0 0 / 0.56) 55%, transparent 100%);
+		color: #fff;
+		display: flex;
+		flex-direction: column;
+		gap: 4px;
+		z-index: 1;
+		pointer-events: none;
+	}
+	.char-name {
+		font-size: var(--text-md);
+		font-weight: 700;
+		line-height: 1.25;
+		color: #fff;
+		text-shadow: 0 1px 3px rgb(0 0 0 / 0.5);
 		overflow: hidden;
 		text-overflow: ellipsis;
-		cursor: pointer;
+		white-space: nowrap;
 	}
-	.resume:hover {
-		background: var(--accent-soft);
+	.char-desc {
+		margin: 0;
+		font-size: var(--text-xs);
+		line-height: 1.4;
+		color: rgb(255 255 255 / 0.88);
+		text-shadow: 0 1px 2px rgb(0 0 0 / 0.45);
+		display: -webkit-box;
+		-webkit-line-clamp: 2;
+		line-clamp: 2;
+		-webkit-box-orient: vertical;
+		overflow: hidden;
+	}
+	.char-meta {
+		display: flex;
+		flex-wrap: wrap;
+		align-items: center;
+		gap: 4px;
+		margin-top: 2px;
+	}
+	.char-tag,
+	.char-count {
+		font-size: 11px;
+		line-height: 1.2;
+		padding: 2px 6px;
+		border-radius: var(--radius-full);
+		background: rgb(255 255 255 / 0.16);
+		color: rgb(255 255 255 / 0.92);
+		backdrop-filter: blur(4px);
+		max-width: 100%;
+		overflow: hidden;
+		text-overflow: ellipsis;
+		white-space: nowrap;
 	}
 	.detail {
 		height: 100%;
@@ -569,14 +846,27 @@
 	.banner {
 		position: relative;
 		height: 200px;
-		background:
-			radial-gradient(ellipse at 70% 0%, color-mix(in oklab, var(--accent) 45%, transparent), transparent 55%),
-			linear-gradient(180deg, #2f3d47 0%, #24343c 55%, #1a2328 100%);
+	}
+	.banner.no-cover {
+		height: auto;
+		max-width: var(--page-medium);
+		margin: 0 auto;
+		padding: var(--space-4) var(--space-6) 0;
+		display: flex;
+		justify-content: flex-end;
+	}
+	.banner.no-cover .cover-tools {
+		position: static;
 	}
 	.banner.has-cover {
 		background-size: cover;
 		background-position: center;
 		background-repeat: no-repeat;
+	}
+	.sub-toolbar {
+		display: flex;
+		justify-content: flex-end;
+		margin-top: var(--space-3);
 	}
 	/* 커버 버튼은 마우스를 올리거나 키보드로 갔을 때 (터치 화면은 늘 보임) */
 	.cover-tools {
@@ -647,6 +937,14 @@
 		max-width: var(--page-medium);
 		margin: -48px auto 0;
 		padding: 0 var(--space-6);
+	}
+	.profile.no-cover {
+		margin-top: var(--space-2);
+		align-items: center;
+	}
+	.profile.no-cover .ident,
+	.profile.no-cover .cta {
+		margin-top: 0;
 	}
 	.portrait :global(.avatar) {
 		border-radius: var(--radius-lg) !important;

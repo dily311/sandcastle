@@ -1,9 +1,9 @@
 <script lang="ts">
-	// 실행 기록 (CLAUDE.md M2): 지금 실행 중인 작업(멈추기) · 최근 실행 내역(자동 실행 표시) · API별 사용량
-	// 화면이 열려 있는 동안만 불러오고 작업 이벤트로 새로 고친다 (Lazy Initialization)
+	// 실행 기록 (CLAUDE.md M2): 지금 실행 중인 작업(멈추기) · 최근 실행 내역(자동 실행 표시)
+	// 예산 한도·API별 사용량·단가표는 BudgetSection으로 분리
 	import { onDestroy, onMount } from "svelte";
 	import { RefreshCw, Square, Trash2 } from "@lucide/svelte";
-	import type { AiCallLog_Serialize as CallLog, ApiProfiles, BudgetOverview_Serialize as BudgetOverview, TaskHistoryItem_Serialize as HistoryItem, TaskInfo_Serialize as TaskInfo, UsageSummary_Serialize as Usage } from "$ipc/bindings";
+	import type { AiCallLog_Serialize as CallLog, TaskHistoryItem_Serialize as HistoryItem, TaskInfo_Serialize as TaskInfo } from "$ipc/bindings";
 	import { Badge, Button, EmptyState, Segmented, Select, Switch } from "$shared/ui";
 	import { appSetting } from "$shared/stores/appSetting.svelte";
 	import { call, commands } from "$shared/ipc/client";
@@ -12,8 +12,6 @@
 	import { toasts } from "$shared/stores/toast.svelte";
 	import Section from "./Section.svelte";
 	import Group from "./Group.svelte";
-	import PriceTable from "./PriceTable.svelte";
-	import BudgetLimits from "./BudgetLimits.svelte";
 
 	const src = { source: "activity" };
 	const FEATURE: Record<string, string> = {
@@ -33,14 +31,8 @@
 		cancelled: { label: "멈춤", tone: "neutral" },
 		interrupted: { label: "끊김", tone: "warning" },
 	};
-	const KIND: Record<string, string> = { chat: "텍스트", tts: "음성", image: "이미지", embedding: "임베딩" };
-
 	let active = $state<TaskInfo[]>([]);
 	let history = $state<HistoryItem[]>([]);
-	let usage = $state<Usage[]>([]);
-	let profiles = $state<ApiProfiles[]>([]);
-	let budgets = $state<BudgetOverview[]>([]);
-	let period = $state<"day" | "week" | "month" | "all">("week");
 	let who = $state<"all" | "auto">("all");
 	let open = $state<string | null>(null);
 	// 보낸 글·받은 글 (5-E-20-6-7): 기록이 있는 작업, 펼친 작업의 기록
@@ -71,32 +63,16 @@
 	}
 	const ROLE: Record<string, string> = { system: "시스템", user: "사용자", assistant: "AI" };
 	let loading = $state(false);
-	let showPrices = $state(false);
 
-	const since = (p: typeof period) => {
-		const day = 86_400_000;
-		return p === "all" ? null : Date.now() - (p === "day" ? day : p === "week" ? 7 * day : 30 * day);
-	};
 	const shown = $derived(who === "auto" ? history.filter((h) => h.runBy === "auto") : history);
 	const autoCount = $derived(history.filter((h) => h.runBy === "auto").length);
-	// 단가표에 적은 모델의 추정 금액 합계 (통화별)
-	const costTotals = $derived.by(() => {
-		const t = new Map<string, number>();
-		for (const u of usage) if (u.estimatedCost != null) t.set(u.currency ?? "$", (t.get(u.currency ?? "$") ?? 0) + u.estimatedCost);
-		return [...t.entries()];
-	});
-	const usedModels = $derived([...new Set(usage.map((u) => u.model).filter((m): m is string => !!m))]);
-	const money = (v: number, cur: string) => `${cur}${v < 0.01 && v > 0 ? v.toFixed(4) : v.toFixed(2)}`;
 
 	async function load() {
 		loading = true;
 		try {
-			[active, history, usage, profiles, budgets] = await Promise.all([
+			[active, history] = await Promise.all([
 				call(commands.listActiveTasks(), { ...src, silent: true }),
 				call(commands.listTaskHistory(100), { ...src, silent: true }),
-				call(commands.usageSummary(since(period)), { ...src, silent: true }),
-				call(commands.getAllApiProfile(), { ...src, silent: true }),
-				call(commands.listBudgetStatus(), { ...src, silent: true }),
 			]);
 			logged = new Set(await call(commands.listAiCallLogTasks(), { ...src, silent: true }).catch(() => []));
 			calls = {};
@@ -106,17 +82,6 @@
 			loading = false;
 		}
 	}
-
-	// 기간을 바꾸면 사용량만 다시
-	let firstPeriod = true;
-	$effect(() => {
-		const p = period;
-		if (firstPeriod) {
-			firstPeriod = false;
-			return;
-		}
-		void call(commands.usageSummary(since(p)), { ...src, silent: true }).then((u) => (usage = u)).catch(() => {});
-	});
 
 	// 작업이 생기거나 끝나면 새로 고침 (이벤트가 몰려도 한 번만)
 	let timer: ReturnType<typeof setTimeout> | undefined;
@@ -167,14 +132,6 @@
 		void load();
 	}
 
-	async function clearUsage() {
-		const ok = await confirmAction({ title: "사용량 기록 비우기", message: "API별 사용량 합계를 지움. 실행 내역은 남지만 작업별 토큰 수는 사라짐. 금액 한도를 건 프로필의 이번 달 글 호출 기록은 한도 계산 때문에 남김", danger: true, confirmLabel: "비우기" });
-		if (!ok) return;
-		await call(commands.clearUsage(), src);
-		toasts.success("사용량 기록을 비움");
-		void load();
-	}
-
 	const n = (v: number) => v.toLocaleString();
 	const pad = (v: number) => String(v).padStart(2, "0");
 	function when(t: number) {
@@ -219,57 +176,6 @@
 		{:else}
 			<p class="empty">실행 중인 작업 없음</p>
 		{/each}
-	</Group>
-
-	<Group title="예산 한도">
-		<BudgetLimits {profiles} items={budgets} onchanged={load} />
-	</Group>
-
-	<Group title="API별 사용량">
-		{#snippet aside()}
-			<div class="aside">
-				<Segmented
-					label="기간"
-					bind:value={period}
-					options={[
-						{ value: "day", label: "오늘" },
-						{ value: "week", label: "7일" },
-						{ value: "month", label: "30일" },
-						{ value: "all", label: "전체" },
-					]}
-				/>
-				<Button size="sm" variant="ghost" disabled={!usage.length} onclick={clearUsage}>{#snippet icon()}<Trash2 />{/snippet}비우기</Button>
-			</div>
-		{/snippet}
-		{#if costTotals.length}<p class="total">추정 금액 {costTotals.map(([c, v]) => money(v, c)).join(" · ")} <span class="muted">(단가표 기준, 실제 청구와 다를 수 있음)</span></p>{/if}
-		{#each usage as u (`${u.apiProfileId}:${u.kind}:${u.model}`)}
-			<div class="item">
-				<div class="main">
-					<span class="label">{u.profileName ?? (u.apiProfileId ? "지운 프로필" : "알 수 없음")}</span>
-					<Badge>{KIND[u.kind] ?? u.kind}</Badge>
-					{#if u.model}<code class="muted">{u.model}</code>{/if}
-					<span class="muted">{n(u.calls)}회{u.failed ? ` (실패 ${n(u.failed)})` : ""}</span>
-				</div>
-				<div class="amount">
-					{amount(u) || "—"}
-					{#if u.kind === "chat" && u.estimatedCalls}<span class="muted" title="공급자가 사용량을 알려주지 않은 호출은 앱이 글자 수로 추정함">· 추정 {n(u.estimatedCalls)}회</span>{/if}
-					{#if u.estimatedCost != null}<b class="cost" title="단가표로 계산한 추정 금액">≈ {money(u.estimatedCost, u.currency ?? "$")}</b>{/if}
-				</div>
-			</div>
-		{:else}
-			<p class="empty">이 기간에 쓴 API 없음</p>
-		{/each}
-	</Group>
-
-	<Group title="단가표">
-		{#snippet aside()}
-			<Button size="sm" variant="ghost" aria-expanded={showPrices} onclick={() => (showPrices = !showPrices)}>{showPrices ? "접기" : "펼치기"}</Button>
-		{/snippet}
-		{#if showPrices}
-			<div class="prices"><PriceTable models={usedModels} onchanged={load} /></div>
-		{:else}
-			<p class="empty">모델별 단가를 적으면 사용량 옆에 추정 금액이 나옴</p>
-		{/if}
 	</Group>
 
 	<Group title="최근 실행" flush>
@@ -373,24 +279,10 @@
 		color: var(--text-muted);
 		font-size: var(--text-sm);
 	}
-	.amount {
-		font-size: var(--text-sm);
-		font-variant-numeric: tabular-nums;
-	}
 	.keep {
 		display: flex;
 		align-items: center;
 		gap: var(--space-2);
-	}
-	.total {
-		padding: var(--space-3) 0 0;
-		font-size: var(--text-sm);
-	}
-	.cost {
-		margin-left: var(--space-2);
-	}
-	.prices {
-		padding: var(--space-4) 0;
 	}
 	.empty {
 		padding: var(--space-4) 0;

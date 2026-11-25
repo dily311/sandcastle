@@ -101,9 +101,7 @@
 	const effort = $derived(
 		(conv.model
 			? ((conv.meta as { reasoningEffort?: string | null } | null)?.reasoningEffort ?? "auto")
-			: conv.mode !== "phone"
-				? (appSetting.value?.reasoningEffort ?? "auto")
-				: ((conv.meta as { reasoningEffort?: string | null } | null)?.reasoningEffort ?? appSetting.value?.reasoningEffort ?? "auto")) as string,
+			: (appSetting.value?.reasoningEffort ?? "auto")) as string,
 	);
 	/** 모델 고르기: 모델이 잠긴 대화는 이 대화에, 풀린 대화는 전역 모델. 폰 대화는 이 대화에 저장 */
 	function pickModel(model: string | null) {
@@ -156,7 +154,7 @@
 	// 프리셋: 컨텍스트 탭 아래에 바로 편집기 (PresetInline)
 	const activePresetId = $derived(conv.promptPresetId || usage?.presetId || null);
 	// 예상 비용용 모델 단가 (모델이 바뀔 때마다 조회)
-	const activeModel = $derived((conv.mode !== "phone" ? shownModel : conv.model) || effectiveApi?.model || null);
+	const activeModel = $derived(shownModel || effectiveApi?.model || null);
 	let modelPrice = $state<ModelPriceInfo | null | undefined>(undefined);
 	let priceSeq = 0;
 	$effect(() => {
@@ -189,8 +187,8 @@
 	});
 
 	// ---- 자물쇠 (5-E-29, ADR-028): 이 대화 > 캐릭터 기본 > 전역. 잠김 = 이 대화에 값이 있음 ----
-	// 폰 대화는 폰 주인·폰 설정을 따르므로 지금처럼 (자물쇠 없음)
-	const lockable = $derived(conv.mode !== "phone");
+	// 폰 대화도 일반 대화와 동일하게 자물쇠로 고정/해제 가능
+	const lockable = true;
 	const lockedApi = $derived(!!conv.apiProfileId);
 	const lockedModel = $derived(!!conv.model);
 	const lockedPreset = $derived(!!conv.promptPresetId);
