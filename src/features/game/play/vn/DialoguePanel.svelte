@@ -338,8 +338,8 @@
 		padding: 4px 14px;
 		border: 1px solid var(--game-accent-border);
 		border-radius: 999px;
-		background: color-mix(in oklab, var(--accent) 35%, #141518);
-		color: var(--game-text-primary);
+		background: var(--game-speaker-bg, color-mix(in oklab, var(--accent) 35%, #141518));
+		color: var(--game-speaker-text, var(--game-text-primary));
 		font-size: 14px;
 		font-weight: 700;
 		letter-spacing: 0.01em;
@@ -354,11 +354,38 @@
 		background: none;
 		color: var(--game-text-primary);
 		font: inherit;
-		font-size: 17px;
+		font-size: var(--vn-font-size, 17px);
 		line-height: 1.75;
 		text-align: left;
 		white-space: pre-wrap;
 		cursor: pointer;
+	}
+	/* 대사창 스타일 변형: 하단 풀바 / 클래식 이중 테두리 */
+	:global(.vn-player[data-vn-box="bar"]) .dock {
+		bottom: 0;
+		width: 100%;
+		gap: 0;
+	}
+	:global(.vn-player[data-vn-box="bar"]) .dialogue {
+		border-left: none;
+		border-right: none;
+		border-bottom: none;
+		border-radius: 0;
+		padding: 18px clamp(18px, 4vw, 48px) 10px;
+	}
+	:global(.vn-player[data-vn-box="bar"]) .actions {
+		padding: 4px clamp(14px, 4vw, 44px) 6px;
+		background: var(--game-dialogue-bg);
+	}
+	:global(.vn-player[data-vn-box="classic"]) .dialogue {
+		border: 2px solid var(--game-border);
+		outline: 1px solid var(--game-border-subtle);
+		outline-offset: -5px;
+		border-radius: 8px;
+	}
+	:global(.vn-player[data-vn-box="classic"]) .speaker {
+		border-radius: 6px;
+		border-width: 2px;
 	}
 	.line:disabled {
 		cursor: default;

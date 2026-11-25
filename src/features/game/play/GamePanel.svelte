@@ -11,6 +11,7 @@
 	import { formatGameTime } from "./vn/playUtils";
 	import GameSessionTabs from "./GameSessionTabs.svelte";
 	import GameWorldTabs from "./GameWorldTabs.svelte";
+	import VnThemePanel from "./vn/VnThemePanel.svelte";
 
 	let { gameId, sessionId }: { gameId: string; sessionId: string } = $props();
 	const shared = new Set(["settings", "context", "branches"]);
@@ -44,7 +45,9 @@
 	const pct = (n: number | undefined) => `${Math.max(0, Math.min(100, Math.abs(n ?? 0)))}%`;
 </script>
 
-{#if shared.has(panel.tab)}
+{#if panel.tab === "theme"}
+	<VnThemePanel />
+{:else if shared.has(panel.tab)}
 	<GameSessionTabs {gameId} {sessionId} />
 {:else if panel.tab === "actions" || panel.tab === "map"}
 	<GameWorldTabs />

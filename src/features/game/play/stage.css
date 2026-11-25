@@ -6,21 +6,25 @@
 	--game-stage-bg: var(--bg-sunken);
 	--game-topbar-bg: color-mix(in oklab, var(--bg) 88%, transparent);
 	--game-panel-bg: color-mix(in oklab, var(--surface) 97%, transparent);
-	--game-dialogue-bg: color-mix(in oklab, var(--surface) 93%, transparent);
+	--game-dialogue-base: var(--surface);
+	--game-dialogue-bg: color-mix(in oklab, var(--game-dialogue-base) calc(var(--vn-dialogue-alpha, 0.92) * 100%), transparent);
 	--game-scene-label-bg: color-mix(in oklab, var(--surface) 75%, transparent);
 	--game-border: var(--border);
 	--game-border-subtle: color-mix(in oklab, var(--border) 60%, transparent);
+	--game-surface-btn: var(--surface-hover);
 	--game-surface-hover: var(--surface-hover);
 	--game-text-primary: var(--text);
 	--game-text-main: var(--text);
 	--game-text-secondary: color-mix(in oklab, var(--text) 80%, var(--text-muted));
 	--game-text-muted: var(--text-muted);
 	--game-text-dim: var(--text-faint);
-	--game-accent: var(--accent);
-	--game-accent-strong: var(--accent-text);
-	--game-accent-soft: var(--accent-soft);
-	--game-accent-hover: var(--accent-soft-hover);
-	--game-accent-border: color-mix(in oklab, var(--accent) 55%, transparent);
+	--game-accent: var(--vn-accent, var(--accent));
+	--game-accent-strong: var(--vn-accent, var(--accent-text));
+	--game-accent-soft: color-mix(in oklab, var(--game-accent) 18%, transparent);
+	--game-accent-hover: color-mix(in oklab, var(--game-accent) 28%, transparent);
+	--game-accent-border: color-mix(in oklab, var(--game-accent) 55%, transparent);
+	--game-speaker-bg: color-mix(in oklab, var(--game-accent) 36%, #141518);
+	--game-speaker-text: #ffffff;
 	--game-danger-text: var(--danger);
 	--game-danger-bg: var(--danger-soft);
 	--game-danger-border: color-mix(in oklab, var(--danger) 40%, transparent);
@@ -31,6 +35,95 @@
 	--game-character-shadow: drop-shadow(0 12px 24px rgb(0 0 0 / 0.2));
 	--game-character-dim-shadow: brightness(0.55) saturate(0.6) drop-shadow(0 8px 18px rgb(0 0 0 / 0.25));
 	--game-footer-bg: var(--game-topbar-bg);
+}
+
+/* ---- 연애시뮬 테마 프리셋 ---- */
+.game-theme[data-vn-preset="sakura"] {
+	--game-player-bg: #1e131b;
+	--game-topbar-bg: rgb(255 246 249 / 0.88);
+	--game-panel-bg: rgb(255 246 249 / 0.95);
+	--game-scene-label-bg: rgb(255 246 249 / 0.88);
+	--game-dialogue-base: #fff6f9;
+	--game-border: rgb(236 72 153 / 0.34);
+	--game-border-subtle: rgb(236 72 153 / 0.2);
+	--game-surface-btn: rgb(236 72 153 / 0.12);
+	--game-surface-hover: rgb(236 72 153 / 0.2);
+	--game-text-primary: #3b1c2d;
+	--game-text-main: #3b1c2d;
+	--game-text-secondary: #6e3b55;
+	--game-text-muted: #8a5671;
+	--game-text-dim: #a87690;
+	--game-accent: var(--vn-accent, #ec4899);
+	--game-accent-strong: var(--vn-accent, #db2777);
+	--game-speaker-bg: linear-gradient(135deg, var(--game-accent), color-mix(in oklab, var(--game-accent) 72%, #f472b6));
+	--game-speaker-text: #ffffff;
+	--game-shadow-dialogue: 0 12px 32px rgb(92 22 58 / 0.22);
+}
+
+.game-theme[data-vn-preset="midnight"] {
+	--game-player-bg: #080a16;
+	--game-topbar-bg: rgb(19 24 48 / 0.88);
+	--game-panel-bg: rgb(19 24 48 / 0.95);
+	--game-scene-label-bg: rgb(19 24 48 / 0.84);
+	--game-dialogue-base: #131830;
+	--game-border: rgb(129 140 248 / 0.32);
+	--game-border-subtle: rgb(129 140 248 / 0.18);
+	--game-surface-btn: rgb(129 140 248 / 0.14);
+	--game-surface-hover: rgb(129 140 248 / 0.22);
+	--game-text-primary: #f1f5ff;
+	--game-text-main: #e6ecff;
+	--game-text-secondary: #b9c4e6;
+	--game-text-muted: #8d9ac4;
+	--game-text-dim: #64719c;
+	--game-accent: var(--vn-accent, #818cf8);
+	--game-accent-strong: var(--vn-accent, #a5b4fc);
+	--game-speaker-bg: color-mix(in oklab, var(--game-accent) 34%, #10142a);
+	--game-speaker-text: #f8faff;
+	--game-shadow-dialogue: 0 14px 36px rgb(4 6 20 / 0.55);
+}
+
+.game-theme[data-vn-preset="retro"] {
+	--game-player-bg: #070a14;
+	--game-topbar-bg: rgb(15 29 66 / 0.9);
+	--game-panel-bg: rgb(15 29 66 / 0.95);
+	--game-scene-label-bg: rgb(15 29 66 / 0.86);
+	--game-dialogue-base: #0f1d42;
+	--game-border: rgb(147 197 253 / 0.65);
+	--game-border-subtle: rgb(147 197 253 / 0.3);
+	--game-surface-btn: rgb(56 189 248 / 0.16);
+	--game-surface-hover: rgb(56 189 248 / 0.25);
+	--game-text-primary: #ffffff;
+	--game-text-main: #f3f7ff;
+	--game-text-secondary: #bfd7f8;
+	--game-text-muted: #93b4e0;
+	--game-text-dim: #6b8fc0;
+	--game-accent: var(--vn-accent, #38bdf8);
+	--game-accent-strong: var(--vn-accent, #7dd3fc);
+	--game-speaker-bg: linear-gradient(180deg, #1d3a7a, #102452);
+	--game-speaker-text: #ffffff;
+	--game-shadow-dialogue: 0 10px 28px rgb(0 0 0 / 0.55);
+}
+
+.game-theme[data-vn-preset="minimal"] {
+	--game-player-bg: #08080a;
+	--game-topbar-bg: rgb(12 12 16 / 0.84);
+	--game-panel-bg: rgb(12 12 16 / 0.94);
+	--game-scene-label-bg: rgb(12 12 16 / 0.78);
+	--game-dialogue-base: #0c0c10;
+	--game-border: rgb(255 255 255 / 0.12);
+	--game-border-subtle: rgb(255 255 255 / 0.08);
+	--game-surface-btn: rgb(255 255 255 / 0.1);
+	--game-surface-hover: rgb(255 255 255 / 0.16);
+	--game-text-primary: #fafafa;
+	--game-text-main: #f0f0f2;
+	--game-text-secondary: #c4c4cc;
+	--game-text-muted: #9a9aa6;
+	--game-text-dim: #6e6e7a;
+	--game-accent: var(--vn-accent, #f59e0b);
+	--game-accent-strong: var(--vn-accent, #fbbf24);
+	--game-speaker-bg: rgb(12 12 16 / 0.85);
+	--game-speaker-text: var(--game-accent-strong);
+	--game-shadow-dialogue: none;
 }
 
 /* 무대 위 공용 버튼 */
@@ -72,7 +165,7 @@
 	padding: 0 12px;
 	border: 1px solid var(--game-border);
 	border-radius: 999px;
-	background: var(--surface-hover);
+	background: var(--game-surface-btn, var(--surface-hover));
 	color: var(--game-text-secondary);
 	font: inherit;
 	font-size: 13px;
@@ -99,7 +192,7 @@
 	padding: 0 14px;
 	border: 1px solid var(--game-border);
 	border-radius: 10px;
-	background: var(--surface-hover);
+	background: var(--game-surface-btn, var(--surface-hover));
 	color: var(--game-text-main);
 	font: inherit;
 	font-size: 14px;

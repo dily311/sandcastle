@@ -9,6 +9,7 @@
 	import "../stage.css";
 	import StageView from "./StageView.svelte";
 	import { stageFx } from "./stageFx.svelte";
+	import { vnTheme } from "./vnTheme.svelte";
 	import PlayInfo from "./PlayInfo.svelte";
 	import { playBridge } from "../../runtime/playBridge.svelte";
 	import { panel } from "$app/panel.svelte";
@@ -681,7 +682,16 @@
 
 <svelte:window onkeydown={onKey} />
 
-<main class="vn-player game-theme">
+<main
+	class="vn-player game-theme"
+	data-vn-aspect={vnTheme.config.aspect}
+	data-vn-preset={vnTheme.config.preset}
+	data-vn-box={vnTheme.config.boxStyle}
+	style:--vn-dialogue-alpha={vnTheme.config.dialogueOpacity}
+	style:--vn-font-size="{vnTheme.config.fontSize}px"
+	style:--vn-sprite-scale={vnTheme.config.spriteScale}
+	style:--vn-accent={vnTheme.config.accentColor ?? undefined}
+>
 
 	<section class="stage-area" aria-labelledby="scene-name" style:--dock-h="{dockHeight}px">
 		<StageView onAdvance={handleStageClick} {standingOverrides} {focusedCharacterId} />
@@ -782,19 +792,43 @@
 	.vn-player {
 		height: 100%;
 		min-height: 0;
-		display: flex;
-		flex-direction: column;
+		display: grid;
+		place-items: center;
+		container-type: size;
 		overflow: hidden;
 		color: var(--game-text-main);
 		background: var(--game-player-bg);
 	}
 	.stage-area {
 		position: relative;
-		flex: 1;
+		width: 100%;
+		height: 100%;
 		min-height: 0;
 		overflow: hidden;
 		background: var(--game-stage-bg);
 		isolation: isolate;
+		transition:
+			width 180ms var(--ease),
+			height 180ms var(--ease),
+			border-radius 180ms var(--ease);
+	}
+	.vn-player[data-vn-aspect="4:3"] .stage-area {
+		width: min(100cqw, calc(100cqh * 4 / 3));
+		height: min(100cqh, calc(100cqw * 3 / 4));
+		border-radius: var(--radius-md);
+		box-shadow: 0 0 0 1px var(--game-border), 0 18px 48px rgb(0 0 0 / 0.45);
+	}
+	.vn-player[data-vn-aspect="16:9"] .stage-area {
+		width: min(100cqw, calc(100cqh * 16 / 9));
+		height: min(100cqh, calc(100cqw * 9 / 16));
+		border-radius: var(--radius-md);
+		box-shadow: 0 0 0 1px var(--game-border), 0 18px 48px rgb(0 0 0 / 0.45);
+	}
+	.vn-player[data-vn-aspect="21:9"] .stage-area {
+		width: min(100cqw, calc(100cqh * 21 / 9));
+		height: min(100cqh, calc(100cqw * 9 / 21));
+		border-radius: var(--radius-md);
+		box-shadow: 0 0 0 1px var(--game-border), 0 18px 48px rgb(0 0 0 / 0.45);
 	}
 	.hidden-hint {
 		position: absolute;

@@ -227,8 +227,8 @@
 	}
 	.character-sprite {
 		display: block;
-		max-width: min(42%, 440px);
-		max-height: 91%;
+		max-width: min(calc(42% * var(--vn-sprite-scale, 1)), calc(440px * var(--vn-sprite-scale, 1)));
+		max-height: calc(91% * var(--vn-sprite-scale, 1));
 		width: auto;
 		height: auto;
 		object-fit: contain;
@@ -236,7 +236,8 @@
 		filter: var(--game-character-shadow);
 		transition:
 			opacity 0.25s ease,
-			filter 0.25s ease;
+			filter 0.25s ease,
+			max-height 180ms ease;
 	}
 	.character-sprite.unfocused {
 		opacity: 0.36;
