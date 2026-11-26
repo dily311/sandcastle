@@ -1,5 +1,6 @@
 <script lang="ts">
 	import { chatImport } from "./chatImport.svelte";
+	import { runWithStProgress } from "$app/syncProgress.svelte";
 	import { _ } from "svelte-i18n";
 	import { jobs, SKIPPED } from "$shared/stores/jobs.svelte";
 	import { lastAt } from "$features/character/library.svelte";
@@ -172,22 +173,41 @@
 			await chatImport.run(chats, charId ?? null);
 			paths = paths.filter((p) => !chats.includes(p));
 		}
-		// 파일마다 대기열에 (5-E-28) — 앞 파일을 가져오는 동안 더 골라도 거절하지 않고 차례로
-		const name = (p: string) => p.split(/[\\/]/).pop() ?? p;
-		await Promise.allSettled(
-			paths.map((p) =>
-				jobs.run(
-					name(p),
-					async () => {
-						if (!p.toLowerCase().endsWith(".zip")) return void (await library.importSillyTavern(p, p.toLowerCase().endsWith(".jsonl") ? (charId ?? null) : null));
-						const r = await call(commands.importCharacterPack(p), { source: "character" });
-						toasts.success($_("characterPage.importedPackToast", { values: { chars: r.characters.length, convs: r.conversationCount } }));
-					},
-					{ group: $_("characterPage.importJobGroup") },
-				),
-			),
+		if (!paths.length) return;
+		const many = paths.length > 1;
+		let ok = 0;
+		let failed = 0;
+		await runWithStProgress(
+			{
+				kind: "import",
+				initialPhase: "files",
+				initialTotal: many ? paths.length : undefined,
+				manualCounter: many,
+				delayToastMs: many ? 0 : 150,
+			},
+			async (step) => {
+				for (let i = 0; i < paths.length; i++) {
+					const p = paths[i];
+					try {
+						if (!p.toLowerCase().endsWith(".zip")) {
+							await library.importSillyTavern(p, p.toLowerCase().endsWith(".jsonl") ? (charId ?? null) : null);
+						} else {
+							const r = await call(commands.importCharacterPack(p), { source: "character" });
+							toasts.success($_("characterPage.importedPackToast", { values: { chars: r.characters.length, convs: r.conversationCount } }));
+						}
+						ok++;
+					} catch {
+						failed++;
+					}
+					if (many) step("files", i + 1, paths.length);
+				}
+			},
 		);
-		if (paths.length) await library.load();
+		await library.load();
+		if (many) {
+			const summary = `${$_("jobs.doneItem", { values: { name: $_("characterPage.importJobGroup"), ok } })}${failed ? $_("jobs.failedPart", { values: { count: failed } }) : ""}`;
+			toasts.show({ tone: failed ? "warning" : "success", message: summary, source: $_("jobs.source") });
+		}
 	}
 	const DROP_EXT = ["png", "json", "jsonl", "zip"];
 	$effect(() =>
@@ -926,8 +946,7 @@
 		transition: opacity var(--duration-fast) var(--ease);
 	}
 	.banner:hover .cover-tools,
-	.cover-tools:focus-within,
-	.cover-tools.on {
+	.cover-tools:focus-within {
 		opacity: 1;
 	}
 	.banner.positioning {

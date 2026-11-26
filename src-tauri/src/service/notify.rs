@@ -56,6 +56,7 @@ pub fn localize_pair(target_name: &str, body: &str, lang: &str) -> (String, Stri
         "대화 요약" => "Summary",
         "구글 드라이브" => "Google Drive",
         "폴더 동기화" => "Folder Sync",
+        "SillyTavern" => "SillyTavern",
         other => other,
     };
     let loc_body = match body {
@@ -71,6 +72,8 @@ pub fn localize_pair(target_name: &str, body: &str, lang: &str) -> (String, Stri
         "생성이 끝남" => "Generation completed".to_string(),
         "대화 요약이 끝남" => "Conversation summary completed".to_string(),
         "동기화가 완료됨" => "Sync completed".to_string(),
+        "SillyTavern 데이터 가져오기가 완료됨" => "SillyTavern data import completed".to_string(),
+        "SillyTavern 데이터 내보내기가 완료됨" => "SillyTavern data export completed".to_string(),
         other => {
             if let Some(who) = other.strip_suffix("의 응답이 도착함") {
                 format!("Reply from {who} arrived")
@@ -80,6 +83,10 @@ pub fn localize_pair(target_name: &str, body: &str, lang: &str) -> (String, Stri
                 format!("Failed to delete Google Drive data: {reason}")
             } else if let Some(reason) = other.strip_prefix("동기화 실패: ") {
                 format!("Sync failed: {reason}")
+            } else if let Some(reason) = other.strip_prefix("SillyTavern 가져오기 실패: ") {
+                format!("SillyTavern import failed: {reason}")
+            } else if let Some(reason) = other.strip_prefix("SillyTavern 내보내기 실패: ") {
+                format!("SillyTavern export failed: {reason}")
             } else {
                 other.to_string()
             }
@@ -362,6 +369,14 @@ mod tests {
         assert_eq!(
             localize_pair("구글 드라이브", "드라이브 동기화 파일 12개를 삭제했습니다", "en"),
             ("Google Drive".into(), "Deleted 12 sync files from Google Drive".into())
+        );
+        assert_eq!(
+            localize_pair("SillyTavern", "SillyTavern 데이터 내보내기가 완료됨", "en"),
+            ("SillyTavern".into(), "SillyTavern data export completed".into())
+        );
+        assert_eq!(
+            localize_pair("SillyTavern", "SillyTavern 가져오기 실패: 디스크 부족", "en"),
+            ("SillyTavern".into(), "SillyTavern import failed: 디스크 부족".into())
         );
     }
 

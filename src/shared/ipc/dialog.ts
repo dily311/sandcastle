@@ -17,11 +17,24 @@ export interface Filter {
 
 const plainFilters = (filters: Filter[]): Filter[] => filters.map((f) => ({ name: f.name, extensions: [...f.extensions] }));
 
-export async function pickFiles(filters: Filter[], multiple = true): Promise<string[]> {
+export interface PickFileHooks {
+	/** Android content:// 파일을 앱 임시 폴더로 복사하기 직전에 호출 */
+	onStageStart?: () => void;
+}
+
+export interface SaveToHooks {
+	/** 사용자가 저장 경로를 확정하고 실제 내보내기를 시작하기 직전에 호출 */
+	onSaveStart?: () => void;
+	/** Android content:// 경로로 최종 복사하기 직전에 호출 */
+	onDeliverStart?: () => void;
+}
+
+export async function pickFiles(filters: Filter[], multiple = true, hooks?: PickFileHooks): Promise<string[]> {
 	try {
 		const r = await open({ multiple, filters: plainFilters(filters), directory: false });
 		if (!r) return [];
 		const picked = Array.isArray(r) ? r : [r];
+		if (picked.some(isContent)) hooks?.onStageStart?.();
 		const exts = filters.flatMap((f) => f.extensions);
 		return await Promise.all(picked.map((p) => (isContent(p) ? call(commands.stagePickedFile(p, exts), { source: "file" }) : p)));
 	} catch (e) {
@@ -54,12 +67,14 @@ export async function pickSavePath(defaultPath: string, filters: Filter[]): Prom
  * 저장 위치를 고르고 run(경로)으로 쓴다. 취소하면 null (run은 null이 아닌 값을 돌려줄 것).
  * Android에서 content:// 주소를 고르면 임시 경로에 쓰게 한 뒤 고른 곳으로 옮긴다
  */
-export async function saveTo<T>(defaultPath: string, filters: Filter[], run: (path: string) => Promise<T>): Promise<T | null> {
+export async function saveTo<T>(defaultPath: string, filters: Filter[], run: (path: string) => Promise<T>, hooks?: SaveToHooks): Promise<T | null> {
 	const picked = await pickSavePath(defaultPath, filters);
 	if (!picked) return null;
+	hooks?.onSaveStart?.();
 	if (!isContent(picked)) return run(picked);
 	const tmp = await call(commands.prepareSaveTarget(defaultPath), { source: "file" });
 	const result = await run(tmp);
+	hooks?.onDeliverStart?.();
 	await call(commands.deliverSavedFile(tmp, picked), { source: "file" });
 	return result;
 }

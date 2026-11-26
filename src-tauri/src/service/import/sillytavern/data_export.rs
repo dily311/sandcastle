@@ -15,7 +15,10 @@ use std::{collections::HashSet, io::Write, path::Path};
 use serde::Serialize;
 use serde_json::{json, Map, Value};
 
-use super::export::{to_jsonl, JsonlChat, JsonlOptions};
+use super::{
+    export::{to_jsonl, JsonlChat, JsonlOptions},
+    StProgress, StProgressThrottle,
+};
 use crate::{
     db::{self, conn::DbPool},
     error::{AppError, Result},
@@ -78,32 +81,69 @@ impl Zip {
 }
 
 pub async fn export_data_zip(db: &DbPool, path: &Path) -> Result<SillyTavernDataExport> {
+    export_data_zip_with_progress(db, path, &|_| {}).await
+}
+
+pub async fn export_data_zip_with_progress(db: &DbPool, path: &Path, progress: &(dyn Fn(StProgress) + Send + Sync)) -> Result<SillyTavernDataExport> {
+    let throttle = StProgressThrottle::new(progress);
+    throttle.emit(StProgress::step("export", "preparing"));
+    tokio::task::yield_now().await;
+
     let file = std::fs::File::create(path).map_err(|e| AppError::io(format!("파일을 만들 수 없습니다: {e}")))?;
     let mut zip = Zip {
         w: zip::ZipWriter::new(std::io::BufWriter::new(file)),
     };
     let mut out = SillyTavernDataExport::default();
     let personas = db::conversation::get_all_personas(db).await?;
+    let convs = db::conversation::get_all_conversations(db).await?;
+    let characters = db::conversation::get_all_characters(db).await?;
+    let books = db::conversation::get_all_worldinfo_books(db).await?;
+    let presets = db::ai_service::get_all_prompt_presets(db).await?;
+    let scripts: Vec<Value> = db::regex::get_all_regex_scripts(db)
+        .await?
+        .iter()
+        .filter(|r| r.scope == RegexScope::Global)
+        .map(super::regex::regex_to_st)
+        .collect();
+
+    let char_ids: HashSet<&str> = characters.iter().map(|c| c.id.as_str()).collect();
+    let conv_count = convs.iter().filter(|v| char_ids.contains(v.character_id.as_str())).count();
+    let total = (characters.len() + conv_count + books.len() + presets.len() + personas.len() + usize::from(!scripts.is_empty()) + 1) as u32;
+    let mut done = 0u32;
+    throttle.emit(StProgress::counted("export", "preparing", 0, total));
+    tokio::task::yield_now().await;
 
     // 캐릭터 + 그 캐릭터의 대화
     let mut char_names = HashSet::new();
-    let convs = db::conversation::get_all_conversations(db).await?;
-    for c in db::conversation::get_all_characters(db).await? {
+    for c in characters {
+        let char_convs: Vec<_> = convs.iter().filter(|v| v.character_id == c.id).collect();
         let png = match crate::service::data::card::card_bytes(db, &c.id, "png").await {
             Ok(b) => b,
             Err(e) => {
                 out.warnings.push(format!("캐릭터 {}: {e}", c.name));
+                done += 1 + char_convs.len() as u32;
+                if throttle.emit(StProgress::counted("export", "characters", done, total)) {
+                    tokio::task::yield_now().await;
+                }
                 continue;
             }
         };
         let stem = unique_name(&c.name, &mut char_names);
         zip.add(&format!("characters/{stem}.png"), &png)?;
         out.characters += 1;
+        done += 1;
+        if throttle.emit(StProgress::counted("export", "characters", done, total)) {
+            tokio::task::yield_now().await;
+        }
 
         let mut chat_names = HashSet::new();
-        for conv in convs.iter().filter(|v| v.character_id == c.id) {
+        for conv in char_convs {
             let messages = db::conversation::get_messages(db, &conv.id, i64::MAX, None).await?;
             if messages.is_empty() {
+                done += 1;
+                if throttle.emit(StProgress::counted("export", "chats", done, total)) {
+                    tokio::task::yield_now().await;
+                }
                 continue;
             }
             // 페르소나가 빈 대화는 캐릭터 기본 → 전역 (ADR-028)
@@ -126,22 +166,30 @@ pub async fn export_data_zip(db: &DbPool, path: &Path) -> Result<SillyTavernData
             let name = unique_name(&conv.title, &mut chat_names);
             zip.add(&format!("chats/{stem}/{name}.jsonl"), text.as_bytes())?;
             out.chats += 1;
+            done += 1;
+            if throttle.emit(StProgress::counted("export", "chats", done, total)) {
+                tokio::task::yield_now().await;
+            }
         }
     }
 
     // 로어북
     let mut book_names = HashSet::new();
-    for b in db::conversation::get_all_worldinfo_books(db).await? {
+    for b in books {
         let entries = db::conversation::get_all_worldinfo_entries(db, &b.id).await?;
         let json = crate::commands::conversation::sillytavern_book_json(&entries);
         let name = unique_name(&b.name, &mut book_names);
         zip.add(&format!("worlds/{name}.json"), json.to_string().as_bytes())?;
         out.books += 1;
+        done += 1;
+        if throttle.emit(StProgress::counted("export", "books", done, total)) {
+            tokio::task::yield_now().await;
+        }
     }
 
     // 프리셋 (Chat Completion, 프리셋에 묶인 정규식 포함)
     let mut preset_names = HashSet::new();
-    for p in db::ai_service::get_all_prompt_presets(db).await? {
+    for p in presets {
         match super::preset::preset_st_json(db, &p.id).await {
             Ok((name, json)) => {
                 let file = unique_name(&name, &mut preset_names);
@@ -152,6 +200,10 @@ pub async fn export_data_zip(db: &DbPool, path: &Path) -> Result<SillyTavernData
                 out.presets += 1;
             }
             Err(e) => out.warnings.push(format!("프리셋 {}: {e}", p.name)),
+        }
+        done += 1;
+        if throttle.emit(StProgress::counted("export", "presets", done, total)) {
+            tokio::task::yield_now().await;
         }
     }
 
@@ -167,6 +219,10 @@ pub async fn export_data_zip(db: &DbPool, path: &Path) -> Result<SillyTavernData
         names.insert(file.clone(), json!(p.name));
         descriptions.insert(file, json!({ "description": p.description, "position": 0 }));
         out.personas += 1;
+        done += 1;
+        if throttle.emit(StProgress::counted("export", "personas", done, total)) {
+            tokio::task::yield_now().await;
+        }
     }
     if out.personas > 0 {
         let backup = json!({ "personas": names, "persona_descriptions": descriptions, "default_persona": Value::Null });
@@ -174,20 +230,20 @@ pub async fn export_data_zip(db: &DbPool, path: &Path) -> Result<SillyTavernData
     }
 
     // 전역 정규식 (캐릭터 것은 카드 안에, 프리셋 것은 프리셋 파일 안에 들어감)
-    let scripts: Vec<Value> = db::regex::get_all_regex_scripts(db)
-        .await?
-        .iter()
-        .filter(|r| r.scope == RegexScope::Global)
-        .map(super::regex::regex_to_st)
-        .collect();
     if !scripts.is_empty() {
         out.regex = scripts.len();
         zip.add(
             "regex/sandcastle-regex.json",
             serde_json::to_string_pretty(&scripts).unwrap_or_default().as_bytes(),
         )?;
+        done += 1;
+        if throttle.emit(StProgress::counted("export", "regex", done, total)) {
+            tokio::task::yield_now().await;
+        }
     }
 
+    throttle.emit(StProgress::counted("export", "finishing", done, total));
+    tokio::task::yield_now().await;
     zip.add(
         "README.txt",
         "샌드캐슬에서 SillyTavern 모양으로 내보낸 파일\n\n\
@@ -197,5 +253,6 @@ pub async fn export_data_zip(db: &DbPool, path: &Path) -> Result<SillyTavernData
             .as_bytes(),
     )?;
     zip.w.finish().map_err(|e| AppError::io(format!("zip을 마무리할 수 없습니다: {e}")))?;
+    throttle.emit(StProgress::counted("export", "finishing", total, total));
     Ok(out)
 }

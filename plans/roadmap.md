@@ -36,7 +36,6 @@
     - [x] (추가) 예산 한도 개편: 한 달 금액 하나 (1-G, M24, ADR-019 — 1-G-4 구독형 잔여는 실계정 확인 남음)
     - [x] (추가) 한 키로 여러 모델 (1-H, M24, ADR-020)
     - [x] (추가) 실기기 버그 0.3.4 (1-I, M25 — 실기기 재확인 남음)
-    - [x] (추가) 구글 드라이브 동기화·알림 모바일 버그 0.4.0 (1-J, M27, ADR-011·027·033 — 실기기 재확인 남음)
 2. [x] 데이터 관리 및 동기화 (M12~M15. 후속: 1-F-3-4, 드라이브 업로드 암호화는 아이디어)
     - [x] (추가) 변경 추적(수정 시각·삭제 표시·기기 id)과 휴지통 (2-A, M12, ADR-011)
     - [x] (추가) 동기화 묶음 형식 + 파일로 주고받는 수동 병합 (2-B, M12, ADR-011)
@@ -60,14 +59,14 @@
     - [x] (추가) 사용자 목록: 렌더링·편의·SillyTavern 호환·슬래시 커맨드·대기열·옵션 자물쇠 (5-E, M25)
     - [x] (추가) 다인봇·게임 기록 전환·상태창·사용자 변수·유틸 프롬프트 (5-F, M25, ADR-023·029·030)
     - [x] (추가) 번호 없이 한 작업의 소급 기록 (5-G, M25·v0.4.0 — 2026-11-24~26 커밋)
-    - [ ] (추가) 폰 ↔ 대화 연동 (5-H, **정식 릴리스 기준 R1**, 결정 필요)
-    - [ ] 접근성 및 사용 편의성 (5-C — 다국어 5-C-2는 M26 완료)
+    - [ ] (추가) 폰 ↔ 대화 연동 (5-H, **정식 릴리스 기준 R1**, 5-H-0 합의 2026-11-27 ADR-034 — 남은 확인 5개 뒤 구현)
+    - [ ] 접근성 및 사용 편의성 (5-C — **다국어 5-C-2가 현재 마일스톤 M26 진행 중**)
         - 키보드 단축키
         - 모바일 터치 인터페이스 최적화
         - 반응형 레이아웃
         - 접근성 설정
-        - [x] 다국어 지원 (5-C-2, M26 완료, ADR-032 — 프런트 하드코딩 0줄·백엔드 오류/알림/경고 번역·CI 검사·번역 안내 완료, 실앱 영어 화면 육안 순회는 Q1·Q2 실환경 점검과 함께)
-        - [~] 사용자가 직접 설정할 수 있는 알림 정책 (응답·작업 완료 알림 기본 켜짐·시작 시 권한 요청과 제목·아이콘·소리 커스텀은 5-E-18·5-G-16·1-J-5 완료, 종류별 스위치·조용한 시간은 5-C-5 남음)
+        - [~] 다국어 지원 (5-C-2, M26 진행 중 — ko·en 3,756키·주요 화면·백엔드 코드 번역 완료, 남은 한글·CI 검사·영어 검수 남음)
+        - [~] 사용자가 직접 설정할 수 있는 알림 정책 (응답·작업 완료 알림과 제목·아이콘·소리 커스텀은 5-E-18·5-G-16 완료, 종류별 스위치·조용한 시간은 5-C-5 남음)
 6. [ ] 생태계 및 확장성
     - [ ] (추가) 파일 형식 명세와 호환 규칙 (6-A)
     - [ ] (추가) 선언형 확장 묶음 주고받기 (6-B)
@@ -121,24 +120,25 @@
 - **함께 완료된 기능(번호 없이 병합 → 5-G-17~23 소급 기록)**: 프런트 디자인 일관성 개편(`a1f32ff`), 유틸 프롬프트에 대필·폰 프로필·폰 SNS 추가 및 로어북 기본 스캔 깊이 `10→2`·폰 다크모드(`126b598`), 채팅 배경 스크림·반투명 UI·대화 테마 탭(`fd36e11`), 대화 정렬 통일(`bcf9289`)·대화 패널 바로가기(`c6ac51e`), 게임 VN 테마 프리셋·화면 비율·테마 탭(`914155f`), 위젯 시메지 개편과 `TaskManager` AI 호출 연결(`aa08ec7`·`2fa17d4`), 버전 `0.4.0`(`568b05f`).
 - **품질 수치 변동**: clippy 경고가 191 → **205**(기준 180)로 늘었다(`2fa17d4` 측정).
 
-## 정식 릴리스(1.0) 기준 (2026-11-25 제안, **합의 전**)
+## 정식 릴리스(1.0) 기준 (2026-11-25 제안, **2026-11-27 합의** — 품질 기준은 제안 그대로, 접근성 최소선 Q6 추가)
 
 > 정식 릴리스 뒤에는 마이그레이션 합치기 예외를 더 쓰지 않는다(`.claude/CLAUDE.md` DB 규칙). 그래서 아래 기준이 "그 뒤로는 데이터 형식을 옛 버전과 맞춰 가야 하는 시점"이기도 하다.
 
 **기능 기준** (사용자 제안을 완료 기준으로 바꾼 것)
-- **R1 폰 ↔ 대화 연동** (5-H) — 같은 캐릭터·같은 페르소나의 폰 대화와 일반 대화가 서로의 내용을 안다. 완료: 폰에서 정한 일(예: "내일 7시 역 앞")이 일반 대화의 다음 요청 프롬프트에 들어가고 반대 방향도 그렇다는 시험(가짜 공급자), 실제 공급자로 한 번 확인, 기능이 꺼져 있으면 아무것도 섞이지 않음.
+- **R1 폰 ↔ 대화 연동** (5-H) — 같은 캐릭터·같은 페르소나의 폰 대화와 일반 대화가 서로의 내용(최근 메시지, 요약이 켜져 있으면 요약도)과 같은 시각을 안다(ADR-034). 완료: 폰에서 정한 일(예: "내일 7시 역 앞")이 일반 대화의 다음 요청 프롬프트에 들어가고 반대 방향도 그렇다는 시험(가짜 공급자), 두 쪽 프롬프트의 시각이 같음, 요약이 켜졌을 때 엿보기 요약이 짝 대화로 감, 실제 공급자로 한 번 확인, 기능이 꺼져 있으면 아무것도 섞이지 않음.
 - **R2 게임 템플릿 전환** (4-B-1·4-B-2·4-B-3·4-C-1) — 대화 전용 템플릿을 추가하고, 같은 세션을 비주얼노벨 화면과 대화 화면으로 번갈아 열어도 진행 상태(변수·관계·위치·대사 기록)가 같다. 완료: 4-B-3의 완료 기준 시험 + 대화 템플릿으로 새 게임 시작 → 몇 턴 → 전환 → 이어 하기 E2E.
 
 **출시 품질 기준** (기능 기준만으로는 출시 판단이 안 되어 더함)
-- **Q1 다국어** (5-C-2, M26 완료) — 화면 글자의 하드코딩 검사 0(`pnpm i18n:check` 0줄), `ko`·`en` 7개 영역 사전 전 키 일치 및 ICU 치환·영문 한글 누출 0 자동 시험 통과, 백엔드 오류(`key`+`args`)·알림·경고 번역 완료. 남은 실환경 확인: 실제 앱에서 영어로 모든 화면을 한 번 돌아보며 긴 라벨 배치 점검.
+- **Q1 다국어** (5-C-2, M26 진행 중) — 화면 글자의 하드코딩 검사 0, `ko`·`en` 키 집합이 같음(현재 3,756키 일치 시험 완료), 영어로 모든 화면을 한 번 돌아봄(남은 한글 정리·영어 검수 남음).
 - **Q2 실환경 확인** — 공급자 4종(Claude·Gemini·OpenAI·NovelAI)으로 채팅·스트리밍·그림, Android 실기기 점검표(`docs/Android 점검표.md`) 다시 돌리기, 드라이브 동기화 두 기기, 백업 → 새 설치에 복원. 결과는 표로.
 - **Q3 품질** — clippy 경고 180 이하(현재 205), 흔들리는 시험 0(시계 주입), CI(E2E 포함) 통과.
 - **Q4 배포** — 서명 키 결정(1-E-3), 태그로 Windows 설치 파일·Android apk가 나옴.
 - **Q5 형식 동결** — 릴리스 직전 마이그레이션 정리 여부를 정하고, `.scbackup`·`.scpack`의 `format_version` 호환 규칙(6-A 최소판)을 적음.
+- **Q6 접근성 최소선** (5-C-3의 일부, 2026-11-27 추천안대로 합의) — ① 키보드만으로 주요 흐름(캐릭터 고르기 → 대화 보내기·다시 생성·스와이프 → 설정 바꾸기 → 폰 대화)을 끝까지 할 수 있음 ② 포커스가 늘 보이고(테마와 상관없이) 대화상자·메뉴는 열린 동안 포커스를 가두고 닫으면 연 자리로 돌려줌 ③ 글자 없는 아이콘 버튼마다 이름(`aria-label`, 다국어 키) ④ 운영체제의 "움직임 줄이기"를 따름(이미 일부) ⑤ 받는 중인 응답이 끝나면 스크린 리더에 한 번 알림(`aria-live`, 조각마다 읽지 않음). 완료: 키보드만으로 위 흐름을 도는 E2E 1개, 아이콘 버튼 이름 누락 자동 검사, 미리보기에서 Tab 순회 확인. 글자 크기·줄 간격 설정, 대비 경고, 화면 낭독 전체 지원은 1.0 밖.
 
 **1.0 밖 (그 뒤)**: 5-A 선톡, 5-B 에이전트, 4-C-2 2D RPG, 4-D 남은 것, 6-B·6-C·6-E·6-F, 5-C-2를 뺀 5-C.
 
-**결정 필요**: 위 기준 목록 확정(빼거나 더할 것), 5-C-3 접근성 최소선(키보드만으로 주요 기능)을 1.0에 넣을지, R1의 "메모리"가 무엇인지(5-H-0).
+**합의 (2026-11-27)**: 기준 목록은 위 R1·R2·Q1~Q6 그대로. R1의 범위는 5-H-0(ADR-034). 남은 확인은 5-H의 "구현 전에 확인할 것" 5개.
 
 ## 단계별 세부 계획
 
@@ -228,12 +228,9 @@
 - [x] 1-I-8 텍스트 카드 배율 — 카드 캔버스는 고정 크기인데 글자 크기·위치에 `devicePixelRatio`를 곱해 배율이 1이 아닌 화면에서 글이 커지고 밖으로 밀렸다. 곱하기를 빼고, 줄 나누기 측정도 고른 굵기로. 어디: `textCard.ts`. 완료: `pnpm check`.
 - [x] 1-I-9 드라이브 동기화가 끊긴 뒤 이어 받지 않음 (2026-11-22 사용자 보고, 모바일) — 원인: 파일 받기가 실패하면(끊김 포함) "저장소에 없음"으로만 세고 그대로 합친 뒤 그 묶음을 본 것으로 적어, 다음 동기화가 "바뀐 것 없음"으로 건너뛰었다. 이제 저장소에 정말 없는 파일(`NotFound`)만 없음으로 세고, 다른 오류는 **합치기 전에** 멈춘다(받은 파일은 제자리에 있어 다음에 건너뜀). 폴더 저장소도 없는 파일을 `NotFound`로. 이미 이 상태가 된 기기는 다른 기기가 한 번 더 동기화하면(묶음을 매번 새로 씀) 다시 합치며 빠진 파일을 받는다. 어디: `sync_run.rs`, `sync_target.rs`. 완료: 시험 `a_download_cut_off_midway_resumes_on_the_next_sync`. **확인 못 함**: 실제 드라이브·Android.
 
-**1-J 구글 드라이브 동기화·알림 모바일 버그 (0.4.0, 2026-11-27 사용자 보고)**
-- [x] 1-J-1 동기화 누락 파일 영구 스킵·업로드 순서 보정 — 보낸 기기가 `blobs/`를 다 올리기 전에 다른 기기가 먼저 묶음을 합치면 `sync_peers.last_bundle_created_at`이 갱신되어 이후 동기화에서 `unchanged`로 건너뛰며 빠진 파일을 영원히 받지 못하던 문제 수정. 이미 합친 묶음이어도 로컬에 없는 파일(`!exists()`)이 남아 있으면 매 동기화마다 받아 채우고, 올릴 때도 `blobs/` 전체 업로드 완료 뒤에 `devices/<id>.scsync`를 올리도록 순서를 바꿈. 어디: `service/data/sync_run.rs`, `SyncSection.svelte`, `SyncRunsGroup.svelte`. 완료: 단위 시험 `missing_blobs_from_already_merged_bundle_are_downloaded_later`.
-- [x] 1-J-2 동기화 하단 팝업 제거·클릭 닫기 토스트·백그라운드 진행률 알림 — `syncNow`에서 하단 고정 `JobProgress`(`jobs.run`)를 빼고, 클릭하면 닫히는 단일 진행률 토스트(`Toast.progress`·`dismissOnClick`)와 Android 포그라운드 알림(`GenerationService.updateSync` 진행 막대·퍼센트) 및 백그라운드 완료/실패 OS 알림으로 전환. 어디: `toast.svelte.ts`, `Toasts.svelte`, `syncProgress.svelte.ts`, `GenerationService.kt`, `MainActivity.kt`, `keepAlive.ts`, `commands/sync.rs`. 완료: 단위 시험 `androidDrive.test.ts`, `pnpm check`.
-- [x] 1-J-3 구글 드라이브 권한 취소·만료 시 자동 재인증 — 권한을 끊었거나 만료된 상태에서 동기화·데이터 삭제를 누르면 에러 토스트를 띄우던 것을, Android `GoogleAuthUtil.clearToken`으로 Play 서비스 캐시 토큰을 비우고 즉시 동의/로그인 화면을 띄워 권한을 다시 받은 뒤 원래 작업을 이어서 실행하도록 변경. 어디: `DriveAuth.kt`, `MainActivity.kt`, `androidDrive.ts`, `service/drive/auth.rs`·`target.rs`, `commands/sync.rs`, `autoSync.svelte.ts`. 완료: 단위 시험 `drive_target_round_trip_with_chunks_and_token_refresh`, `androidDrive.test.ts`.
-- [x] 1-J-4 구글 드라이브 업로드 데이터 완전 삭제 및 완료·실패 알림 — `ensure_index`가 파일 이름으로 중복을 합쳐 같은 이름의 중복 파일 ID가 드라이브에 남고 순차 삭제로 느렸던 문제를 고쳐, `appDataFolder`의 모든 파일 ID를 페이지 끝까지 조회해 병렬(`DELETE_PARALLEL = 8`)로 완전히 비우고 삭제 진행률과 완료·실패 OS 알림(`system_notify`) 및 토스트를 표시. 어디: `service/drive/target.rs`, `commands/sync.rs`, `service/notify.rs`, `SyncSection.svelte`. 완료: 중복 파일 ID 4개 완전 삭제 단위 시험.
-- [x] 1-J-5 알림 기본 활성 및 모바일 시작 시 권한 요청 — `DoneNotify` 기본값을 켜짐(`enabled = true`, 기존 미초기화 기기도 1회 활성)으로 바꾸고, Android 13+ `MainActivity.onCreate` 및 `AppShell` 시작 시점에 알림 권한을 요청하며 Windows AUMID를 시작 시 등록. 어디: `models/settings.rs`, `lib.rs`, `service/notify.rs`, `MainActivity.kt`, `AppShell.svelte`, `ChatSection.svelte`. 완료: 단위 시험 `default_sound_settings_are_sensible`. **확인 못 함**: Android 실기기 구글 드라이브 동기화·삭제·권한 재동의 및 상단 진행률 알림.
+**1-J 구글 드라이브 동기화·알림·SillyTavern 진행률 버그 (2026-11-27 사용자 보고, M27)**
+- [x] 1-J-1~5 드라이브 동기화 누락 파일 재수신·업로드 순서 보정(`c69ed80`), 클릭 닫기 진행률 토스트·Android 상단 진행률 알림(`GenerationService`), 권한 취소 시 자동 재인증(`clearToken`+동의 화면), `appDataFolder` 전체 파일 병렬 삭제 및 알림, 알림 기본 활성·시작 시 권한 요청.
+- [x] 1-J-6 SillyTavern 내보내기·가져오기 진행률 토스트·Android 포그라운드 알림 통일 — 고정 하단 팝업(`<JobProgress />`, `0/1` 멈춤·클릭 해제 불가) 대신 구글 드라이브 동기화(`1-J-2`)와 같은 클릭 해제 토스트(`dismissOnClick`) + Android 포그라운드 서비스(`GenerationService`) 진행률 막대(`current/total`·`%`)로 통일. 백엔드 `data.rs`·`data_export.rs`·단일 채팅/월드인포(`sillytavern/mod.rs`)가 단계·개수 스로틀 이벤트(`st::progress`)와 백그라운드 완료·실패 OS 알림(`system_notify`)을 보내고, Android `content://` 임시 복사(`picked_file.rs`)를 4KB 헤더 판별 후 스트리밍(`std::io::copy`)으로 전환. 완료: `syncProgress.test.ts` + `sillytavern::tests` 진행률 검증. **확인 못 함**: Android 실기기 포그라운드 알림 막대·대용량 zip.
 
 ### 2단계 — 데이터 관리 및 동기화
 
@@ -333,11 +330,18 @@
 
 **5-C 접근성 및 사용 편의성**
 - 5-C-1 단축키 — 동작 목록(이름·실행 함수·기본 키)을 한 곳에 두고 단축키·명령 팔레트·메뉴가 같이 쓴다. 키 바꾸기, 충돌 검사, 기본값으로. 어디: `features/settings/ShortcutSection.svelte`(지금은 목록 보기만).
-- [x] 5-C-2 다국어 — 먼저 하드코딩 한글이 새로 늘지 않게 검사를 CI에 건다. 그다음 공용 UI(`shared/ui`, `app`) → 설정 → 채팅 → 나머지 순서로 옮긴다. 백엔드가 주는 글자(플러그인 이름·오류 메시지)는 키나 코드로 보내고 프런트가 번역한다. (**M26 완료, ADR-032, 정식 릴리스 기준 Q1** — 세부는 아래 5-C-2-0~10)
+- 5-C-2 다국어 — 먼저 하드코딩 한글이 새로 늘지 않게 검사를 CI에 건다. 그다음 공용 UI(`shared/ui`, `app`) → 설정 → 채팅 → 나머지 순서로 옮긴다. 백엔드가 주는 글자(플러그인 이름·오류 메시지)는 키나 코드로 보내고 프런트가 번역한다. (**M26 진행 중, 정식 릴리스 기준 Q1** — 세부는 아래 5-C-2-0~10)
   - **현재 (2026-11-25 → 2026-11-26 v0.4.0 갱신)**: `src/lib/utils/i18n.ts`가 `ko`·`en` 두 언어를 등록하고 `localStorage("sc.locale")` → 브라우저 언어(`en*`이면 `en`, 그 밖은 `ko`)로 시작하며 `<html lang>`을 동기화한다. `src/locales/ko.json`·`en.json`은 약 40개에서 **3,756개 키**로 늘었고 양쪽 키 일치·소스 내 정적 `$_()` 키 존재 시험(`i18n.test.ts`)이 통과한다. Svelte 190개 중 `$_(`를 쓰는 파일이 6개 → **133개**로 늘었으며, 백엔드 오류·코어 플러그인·작업 기능/상태 라벨 변환(`backendI18n.ts`)도 연결되었다. 남은 것: 시안(`design-preview` 6개) 제외 Svelte 41개·TS 48개의 하드코딩 한글, CI 하드코딩 기준표 검사, 백엔드 알림·가져오기 경고 등 원문, 영어 화면 전체 검수, ADR-032 확정.
   - [x] 5-C-2-0 정할 것 (2026-11-26 사용자 합의, ADR-032) — ① `ko`+`en`부터, 언어 폴더 추가만으로 확장 ② 기기 전용 `AppSetting.language`와 `localStorage("sc.locale")` 동기화, 초기 기본값은 OS `ko*`면 `ko`·그 밖은 `en` ③ `src/locales/<언어>/<영역>.json`으로 나누고 현재 언어만 지연 불러오기 ④ 백엔드 `AppError` 전체를 `key`+`args` 구조로 개편하고 OS 알림·작업 라벨·가져오기 경고도 현재 언어로 번역 ⑤ AI 초안 → 검수 ⑥ 번역 기능 기본 `targetLang`은 비어 있으면 화면 언어(`ko`→한국어, `en`→English)를 따라감.
   - [x] 5-C-2-1 기반 — ADR-032대로 `src/locales/<언어>/{common,settings,chat,phone,game,features,backend}.json` 영역별 분할 및 현재 언어만 지연 불러오기(`register` + `waitLocale`), 언어 폴더 자동 인식(`AVAILABLE_LOCALES`), 기기 전용 `AppSetting.language` ↔ `localStorage("sc.locale")` ↔ `<html lang>` ↔ 위젯 창 동기화(초기 기본 OS `ko*`→`ko`·그 밖 `en`), `src/shared/time.ts`(`Intl.DateTimeFormat`·`Intl.NumberFormat`), 번역 기본 `targetLang` 화면 언어 추종, 단위 시험(`i18n.test.ts`: 영역 간 중복 0·언어 간 3,757키 일치·정적 `$_()` 키 존재·지연 전환).
   - [x] 5-C-2-2 하드코딩 검사 — 화면 글자로 쓰인 한글(주석·시험·dev-mock·시안·로그·`i18n-ignore` 제외)을 세는 `scripts/check-i18n.mjs`와 파일별 기준표(`scripts/i18n-baseline.json`), CI `frontend` 잡의 `pnpm i18n:check` 추가. 완료: 기준표 생성·검사 통과 및 일부러 한글을 더한 파일에서 실패하는 것 확인.
+  - [~] 5-C-2-3 공용 UI — **완료**: `Sidebar`·`Titlebar`·`SidePanel`·`JobProgress`·`PluginOff`, `shared/ui` 주요 컴포넌트(`Dialog`·`ConfirmHost`·`ListToolbar`·`SelectBar`·`Slider`·`ColorPicker`·`BackgroundPicker`·`ExportSplit`·`HtmlView`·`ImageViewerHost`·`ProfilePicker`·`Spinner`·`TagInput` 등, `126b598`·`c8c6251`). **남음**: `AppShell`(부팅 문구), `DropLayer`, `AvatarFitDialog`, `ChipPicker`·`ContextMenu`·`SplitButton`·`Toasts` 기본 라벨/aria, 공용 TS(`accents.ts`·`backgrounds.ts`·`grays.ts`·`themes.ts`·`dialog.ts`·`jobs.svelte.ts`·`trash.ts` `TRASH_HINT`·`updateCheck.ts`·`androidDrive.ts`).
+  - [~] 5-C-2-4 설정 — **완료**: 일반·API·모델 고르기·예산·단가표·실행 기록·로그·코어 플러그인·커뮤니티 목록·데이터·휴지통·동기화·충돌·테마·테마 편집기·스크림 색·글꼴 관리·프리셋·유틸 프롬프트·정규식·대화·로어북·메모리·요약·linter·자동 재생성·대필·번역·음성·이미지 생성·빠른 답장·단축키·위젯·시메지 설정(`126b598`·`5a63aa8`·`c8c6251`·`1a053cf`). **남음**: `CommunityPluginSettings.svelte`·`PresetInline.svelte`·`SettingsPage.svelte` 검색 키워드, `pluginSettingForm.svelte.ts`·`presetImport.ts`·`providers.ts`.
+  - [~] 5-C-2-5 채팅 — **완료**: 캐릭터 목록/상세/편집/갤러리·페르소나 목록/편집·로어북 목록/항목/선택·대화 사이드바/카드·대화 화면·메시지·오른쪽 패널·테마 탭·컨텍스트 막대·분기 트리·노트·옵션 자물쇠·변수/정의 편집·선택 메뉴·텍스트 카드 창·메모리/요약 패널(`126b598`·`c8c6251`·`1a053cf`). **남음**: `ReadView.svelte` 탭 라벨·`SentPromptDialog.svelte`·`LintNote.svelte`·`UtilMacroNote.svelte`·`ChatView.svelte` 일부 역할/출처 이름, TS(`library.svelte.ts`·`chatImport.svelte.ts`·`recovery.ts`·`textCard.ts` 일부 옵션·`lorebook.svelte.ts` 내보내기 설명·`bookmarks.ts`·`assetImport.svelte.ts`).
+  - [x] 5-C-2-6 폰 — **완료**: `PhonePage`·`PhoneRoom`·`PhonePanel`·`PhoneSettings`·`PhoneAlbum`·`PhoneCamera`·`PhoneProfile`·`PhoneInstagram` 전 화면 전환(`126b598`·`c8c6251`·`1a053cf`). **남음(사소)**: `phone.svelte.ts` 기본 제목/사진 문구 2줄.
+  - [~] 5-C-2-7 게임 — **완료**: `GamePage`·`GameLibrary`·`GameDetail`·`GamePanel`·`GameSessionTabs`·`GameWorldTabs`·VN 플레이(`VisualNovelTemplatePlay`·`DialoguePanel`·`Backlog`·`PlayInfo`·`VnThemePanel`)·`StoryPlanPanel`·게임 편집기 전 섹션(`GameEditor`·`Asset`·`Character`·`Event`·`Map`·`Scene`·`StateDef`·`TimePeriod`·`Weather`, `c8c6251`·`1a053cf`). **남음**: `StageView.svelte` aria·`VisualNovelTemplatePlay` 토스트 일부, TS(`playUtils.ts` 조사/문구·`vnTheme.svelte.ts` 옵션 라벨·`runtimeStore.svelte.ts` 이동 불가 사유·`game.svelte.ts`).
+  - [~] 5-C-2-8 나머지 — **완료**: `HomePage`·`ImagesPage`·`ImageCreate`·`Ghostwrite`·`QuickReplyBar`·`QuickReplyList`·위젯(`Simeji`·`PlaylistScreen`·`DefaultPlayer`·`mascotFeature`·`musicFeature`, `126b598`·`c8c6251`·`1a053cf`). **남음**: 커뮤니티 플러그인 화면 전체(`src/features/community/*` Svelte 9개·TS 7개), 상태창 고정 표시(`StatusFloat`·`StatusTop`·`StatusWindow`·`status/vars.ts`), 슬래시 오류 문구(`slash/commands.ts`·`script.ts`), 시메지 내부 기본 대사/행동 라벨 일부(`simejiType.ts`·`WidgetGame.ts`·`PeerChatManager.ts`·`setFeautres.ts`), 이미지 메타 파싱(`presetFromImage.ts`).
+  - [~] 5-C-2-9 백엔드 글자 — **완료(1차)**: `src/lib/utils/backendI18n.ts`가 `ErrorCode` 기반 오류 문구·코어 플러그인 이름/설명·작업 기능/상태 라벨을 현재 언어로 변환하고 `client.ts`·`taskLog.ts`·`PluginsSection.svelte`·`game/errors.ts`에 연결(`5a63aa8`, `i18n.test.ts` 검증). **남음**: 구체 인자가 필요한 `INVALID_INPUT` 등의 상세 사유(지금은 영어에서 일반 문구로 치환), 백엔드가 넣은 작업 `label` 원문, OS 알림(`service/notify.rs` 제목·본문), 가져오기 경고.
   - [x] 5-C-2-3 공용 UI — `Sidebar`·`Titlebar`·`SidePanel`·`JobProgress`·`PluginOff`·`AppShell`(부팅 문구)·`DropLayer`·`AvatarFitDialog`, `shared/ui` 전 컴포넌트(`Dialog`·`ConfirmHost`·`ListToolbar`·`SelectBar`·`Slider`·`ColorPicker`·`BackgroundPicker`·`ExportSplit`·`HtmlView`·`ImageViewerHost`·`ProfilePicker`·`Spinner`·`TagInput`·`ChipPicker`·`ContextMenu`·`SplitButton`·`Toasts`), 공용 TS(`accents.ts`·`backgrounds.ts`·`grays.ts`·`themes.ts`·`dialog.ts`·`jobs.svelte.ts`·`toast.svelte.ts`·`trash.ts`·`updateCheck.ts`·`androidDrive.ts`·`autoSync.svelte.ts`·`theme.svelte.ts`). 정적 배열·필터는 지연 로케일 전환에 반응하도록 getter 적용.
   - [x] 5-C-2-4 설정 — 일반·API·모델 고르기(`aiModelList.ts`·`providers.ts`)·예산·단가표·실행 기록·로그·코어 플러그인·커뮤니티 목록/`CommunityPluginSettings`·데이터·휴지통·동기화·충돌·테마·테마 편집기·스크림 색·글꼴 관리·프리셋(`PresetInline`·`presetImport.ts`)·유틸 프롬프트·정규식(`RegexEditDialog`)·대화·로어북·메모리·요약·linter·자동 재생성·대필·번역·음성·이미지 생성·빠른 답장·단축키·위젯·시메지 설정·`SettingsPage` 검색 키워드·`pluginSettingForm.svelte.ts` 전 구간 전환 완료.
   - [x] 5-C-2-5 채팅 — 캐릭터·페르소나·로어북·대화 사이드바/카드·대화 화면(`ChatView`·`ReadView`·`SentPromptDialog`·`LintNote`·`UtilMacroNote`·`TypingIndicator`)·메시지·오른쪽 패널·컨텍스트 막대·분기 트리·노트·변수/정의 편집·텍스트 카드(`textCard.ts`)·메모리/요약 패널 및 TS(`library.svelte.ts`·`chatImport.svelte.ts`·`recovery.ts`·`lorebook.svelte.ts`·`bookmarks.ts`·`assetImport.svelte.ts`) 전 구간 전환 완료 (백엔드 다인봇 호환용 DB 기본 분류명만 `i18n-ignore` 유지).
@@ -345,9 +349,9 @@
   - [x] 5-C-2-7 게임 — `GamePage`·`GameLibrary`·`GameDetail`·`GamePanel`·`GameSessionTabs`·`GameWorldTabs`·VN 플레이(`VisualNovelTemplatePlay`·`StageView`·`DialoguePanel`·`Backlog`·`PlayInfo`·`VnThemePanel`·`playUtils.ts`·`vnTheme.svelte.ts`)·`StoryPlanPanel`·런타임(`runtimeStore.svelte.ts`·`game.svelte.ts`)·게임 편집기 전 섹션 전환 완료 (`playUtils.test.ts` 한/영 검증 포함).
   - [x] 5-C-2-8 나머지 — 홈·이미지(`ImagesPage`·`ImageCreate`·`presetFromImage.ts`)·대필·빠른 답장·슬래시 엔진(`slash/commands.ts`·`script.ts`)·커뮤니티 플러그인 전체(`src/features/community/*`, `permissions.test.ts` 한/영 검증 포함)·고정 상태창(`StatusFloat`·`StatusTop`·`StatusWindow`·`status/vars.ts`)·위젯 및 시메지(`setFeautres.ts`·`simejiType.ts`·`mascotFeature.svelte.ts`·`PeerChatManager.ts`·`WidgetGame.ts`·`BehaviorController.ts`) 전 구간 전환 완료. 프런트엔드 하드코딩 기준표(`scripts/i18n-baseline.json`) **파일 0개 · 0줄** 달성.
   - [x] 5-C-2-9 백엔드 글자 — `AppErrorResponse`·`TaskErrorInfo`에 구조화 `key`+`args`를 추가하고 백엔드 오류 분류기(`src-tauri/src/error/i18n.rs`, 567개 규칙 + `ko`/`en` `backend.json` 동기화·한글 누출 0 단위 시험)로 구체 인자 포함 오류까지 전부 양쪽 언어로 치환. OS 알림(`service/notify.rs` 제목·본문·테스트 알림)·위젯 트레이 메뉴(`widget/manager.rs`)·만료 HTML 안내(`sys/html_view.rs`)·폰 프로필/SNS 기본 프롬프트(`service/app_prompts.rs` 영문화)·작업 `label`·구독형 잔여(`QuotaLine`)/연결 확인 문구·SillyTavern/팩 가져오기 경고를 현재 언어로 변환(`backendI18n.ts` + Specta 바인딩 갱신).
-  - [x] 5-C-2-10 영어 검수와 배치 — 하드코딩 기준표 0줄, 전 키 ICU 변수 치환 및 영문 한글 누출 0 자동 시험(`src/lib/utils/i18n.test.ts`·`error::i18n::tests`), 번역 기여 안내 문서(`docs/번역 안내.md`) 작성 완료. **확인 못 함**: 실제 앱을 띄워 영어 화면 전체를 눈으로 순회하며 긴 라벨 넘침·줄바꿈을 점검하는 육안 검수(정식 릴리스 기준 Q1·Q2 실환경 점검에서 함께 진행).
+  - [ ] 5-C-2-10 영어 검수와 배치 — 영어로 모든 화면을 돌며 넘침·잘림·줄바꿈을 고치고(긴 영어 라벨), 사용자 검수 반영. 완료: 하드코딩 기준표가 0, 영어 화면 스크린샷 순회, `docs/`에 번역 기여 안내(키 추가 규칙).
   - 영역 하나가 커밋 하나보다 크면 시작할 때 이 목록을 먼저 더 나눈다(작업 규칙).
-- 5-C-3 접근성 — 키보드만으로 전 기능(포커스 순서·표시, 대화상자 안에 포커스 가두기), 버튼 이름(aria), 글자 크기·줄 간격 설정, 움직임 줄이기, 테마 편집기의 대비 경고, 스트리밍 응답을 스크린 리더가 읽게.
+- 5-C-3 접근성 — 키보드만으로 전 기능(포커스 순서·표시, 대화상자 안에 포커스 가두기), 버튼 이름(aria), 글자 크기·줄 간격 설정, 움직임 줄이기, 테마 편집기의 대비 경고, 스트리밍 응답을 스크린 리더가 읽게. (1.0에는 최소선만 — 정식 릴리스 기준 Q6. 번호는 그 마일스톤을 시작할 때 나눔)
 - 5-C-4 모바일 최적화 (1-C 뒤) — 스와이프(다른 응답·옆 패널), 하단 탐색, 한 손 조작.
 - 5-C-5 알림 정책 — 종류별(응답 완료·선톡·작업 실패·동기화) 켬/끔, 조용한 시간, 앱이 앞에 있으면 끄기.
 - 5-C-6 처음 실행 안내 — API 연결 → 캐릭터 가져오기 → 첫 대화. 빈 화면마다 다음에 할 일을 보여준다.
@@ -492,10 +496,23 @@
 - [x] 5-G-22 위젯 시메지(바탕화면 마스코트) 개편 및 AI 호출 규칙 연결 (`aa08ec7`·`2fa17d4`, 2026-11-26) — 위젯 하위 기능(`widget.mascot`, 기본 꺼짐), 행동 가중치·이미지 관리(`delete_widget_mascot_image` 경로 `canonicalize` 검증)·상황별 대사·알림 반응(`widget_mascot::notify`), 설정 > 위젯 > 시메지(`WidgetMascotSettings.svelte`, 5-E-21 ② 위젯별 설정 확장). 사용자 대화/선물 AI 응답(`mascot_generate_reply`)과 시메지끼리 AI 대화(`PeerChatManager`, `pairChatUseAi` 기본 꺼짐, 타이머 호출은 `run_by = auto`)를 모두 `TaskManager::run_inline`(`TaskType::Mascot`, `feature = widget`)으로 기록하며 `widget`·`widget.mascot` 꺼짐 시 백엔드에서 거절. 완료: `simejiType.test.ts`, `pnpm check`·`cargo test` 통과(clippy 경고 191→205). **확인 못 함**: 실제 Windows 바탕화면 시메지 동작·실제 공급자 AI 대화.
 - [x] 5-G-23 버전 `0.4.0` 갱신 및 변경 내역 정리 (`568b05f`, 2026-11-26) — `package.json`·`Cargo.toml`·`CHANGELOG.md` 0.4.0 반영.
 
-**5-H 폰 ↔ 대화 연동** (**정식 릴리스 기준 R1**, 플러그인 기본 꺼짐, 새 ADR 필요)
+**5-H 폰 ↔ 대화 연동** (**정식 릴리스 기준 R1**, 대화 옵션 기본 꺼짐 — 코어 플러그인 아님, ADR-034)
 - **현재**: 폰 대화는 대화 meta `phone`이 붙은 따로 된 대화다(`service/chat/phone.rs`). 일반 대화와 폰 대화가 서로의 내용을 프롬프트로 받는 길은 찾지 못했다. 메모리 검색은 캐릭터 폰 엿보기를 색인에서 뺀다(`service/memory/mod.rs`). ADR-001의 "폰 대화 여러 세션·1:n" 미결과 닿아 있다.
-- [ ] 5-H-0 정할 것 (**결정 필요**) — ① 무엇을 건네나: (가) 상대 쪽 최근 메시지 N개 원문(추가 호출 없음) (나) 상대 쪽 요약(3-D, 요약 호출 요금) (다) 메모리 검색(3-C) 범위를 상대 쪽까지 — 추천 (가)를 기본, 요약이 켜져 있으면 (나)로 바꿈 ② 짝짓기: 같은 캐릭터 + 같은 페르소나(추천) / 사용자가 대화를 직접 이음 ③ 방향: 양방향(추천) ④ 시간 순서: 폰 시간(5-G-14의 폰 날짜)과 대화 시간이 다를 때 어느 쪽 기준으로 "최근"인가 ⑤ 엿보기(캐릭터 폰)는 빼나(추천: 뺌).
-- 5-H-1 이후 — 0이 정해지면 번호를 나눈다(예: 프롬프트 블록·컨텍스트 탭 표시·설정·시험).
+- [x] 5-H-0 정할 것 — **합의(2026-11-27, ADR-034)**: ① 상대 쪽 최근 메시지 N개 원문을 기본으로 건네고, 요약 플러그인이 켜져 있으면 상대 쪽 요약도 **덧붙임**(바꾸지 않음) ② 짝 = 같은 캐릭터 + 같은 페르소나 ③ 양방향 ④ 시각은 두 쪽이 같아야 함 — 상태 플러그인의 AI 변수 기능이 켜졌으면 대화와 폰이 시각을 주고받고, 꺼졌으면 폰 시각만 대화에 건넴 ⑤ 엿보기(캐릭터 폰)는 기본 뺌. 요약이 켜져 있으면 엿보기 응답마다 AI가 `<summary>` 태그로 그 턴의 요약을 함께 쓰고, 그 기록을 짝 대화의 컨텍스트로 보냄.
+- **구현 전 확인 — 합의(2026-11-27, ADR-034 추가)**:
+  - ⓐ **짝은 자동으로 찾지 않고 사용자가 연결한다.** 코어 플러그인을 새로 만들지 않고(초기 버전), 대화 옵션 "폰과 연결"(bool, 기본 꺼짐)을 켜고 연결할 폰 대화를 고른다. 예: 폰 주인이 Min(페르소나)일 때, 캐릭터 T와의 일반 대화에서 연결을 켜고 Min의 폰에서 T와 나눈 대화를 고르면 그 내용이 일반 대화의 컨텍스트에 들어간다(반대로 폰 대화에도 일반 대화 내용이 들어감 — ③ 양방향). → ADR-034 결정 2(같은 캐릭터 + 같은 페르소나로 자동 짝)를 대체.
+  - ⓑ 시각: 추천대로 — 상태 플러그인의 예약 변수 `datetime`("YYYY-MM-DD HH:MM", 캐릭터 정의에 있을 때만)을 연결된 두 대화의 시각으로. 일반 대화 AI가 `<updateVar>`로 바꾸면 폰 쪽 `{{phone_datetime}}`도 그 값, 폰에서 시각을 고치면 그 변수에 씀. AI 변수가 꺼졌으면 폰 시각만 일반 대화에. 연결되지 않은 폰 대화는 지금처럼 앱 전체 폰 시각(`prompt_manager::set_phone_clock`).
+  - ⓒ 엿보기 요약도 ⓐ와 같이 **연결된 대화 ↔ 폰 대화끼리만** 간다(캐릭터 폰 대화도 같은 연결 옵션으로 일반 대화와 잇는다).
+  - ⓓ N 기본값 — **아직 답 없음**. 추천: 10개, 프리셋 컨텍스트의 10% 안에서 최근 것부터. 5-H-2를 시작하기 전에 확인.
+  - ⓔ 프롬프트 자리: 추천대로 — ADR-030대로 프리셋 매크로 `{{phone_link}}` 자리에만. 기본 프리셋 `utils` 블록에 자리를 더하는 마이그레이션, 연결을 켰는데 매크로가 없으면 옵션 밑 안내(`UtilMacroNote`).
+- **설계 메모 (구현 세션이 정할 수 있는 것 — 바꾸면 ADR-034에 적기)**: 연결 후보 목록은 같은 캐릭터가 등장하는 폰 대화(페르소나 폰·캐릭터 폰)만 보여 줌. 연결은 한 일반 대화 ↔ 한 폰 대화(1:1), 두 대화 meta에 서로의 id를 둠(동기화 대상, 한쪽이 지워지거나 휴지통이면 연결은 무시하고 화면에 "연결된 대화 없음"). 옵션이 꺼져 있으면 상대 대화를 읽지 않음(Lazy Initialization).
+- [ ] 5-H-1 연결 옵션과 연결 — 대화 옵션 "폰과 연결"(기본 꺼짐)과 폰 대화 고르기·풀기, 양쪽 meta에 연결 저장, 상대 찾기 함수. 어디: 새 `service/chat/link.rs`, `commands/`(연결·풀기), 대화 패널·폰 대화방 설정. 완료: 연결·풀기·한쪽 삭제·옵션 꺼짐 DB 시험, 미리보기에서 연결.
+- [ ] 5-H-2 최근 메시지 양방향 — 연결이 켜졌을 때 상대 쪽 최근 N개 원문을 `{{phone_link}}` 블록(영어 머리말, 상대 쪽 이름·시각 표시)으로, 기본 프리셋 자리 마이그레이션. 어디: `link.rs`, `prompt_manager.rs`(Macros), `chat_manager.rs`(보내기·다시 생성·폰 보내기 길), `app_prompts.rs`. 완료: 가짜 공급자 시험(폰 → 대화, 대화 → 폰, 옵션 꺼지면 블록 없음, 매크로 없으면 없음), 컨텍스트 탭에 출처 "폰"/"대화"(5-G-6 출처 메타데이터). 선행: ⓓ 확인.
+- [ ] 5-H-3 요약 덧붙이기 — 요약 플러그인이 켜져 있으면 상대 쪽의 이미 만든 요약(`summary::block_for`)을 같은 블록에 덧붙임. 새 요약 호출은 만들지 않음. 완료: 요약 켜짐/꺼짐 시험.
+- [ ] 5-H-4 시각 맞추기 — AI 변수 꺼짐: 대화 쪽 블록에 폰 시각 한 줄. 켜짐: ⓑ대로 주고받기. 어디: `link.rs`, `prompt_manager.rs`(`current_phone_clock`), `service/chat/vars.rs`. 완료: 두 경우 모두 두 쪽 프롬프트의 시각이 같다는 시험, 변수가 바뀐 뒤 폰 쪽 시각이 따라감.
+- [ ] 5-H-5 엿보기 요약 태그 — 요약 플러그인이 켜졌을 때만 엿보기 규칙에 `<summary>` 지시(영어)를 더하고, 응답에서 태그를 떼어 말풍선에는 보이지 않게, 엿보기 메시지 meta에 기록. ⓒ의 짝 대화 블록으로 보냄. 꺼져 있으면 엿보기는 어디에도 가지 않음. 어디: `phone.rs`(`peek_rule`·`parse_peek`), `chat_manager.rs`(`peek`), `link.rs`. 완료: 태그 떼기·저장 시험, 요약 꺼짐이면 지시가 없음(토큰 늘지 않음), 짝 대화 프롬프트에 엿보기 요약.
+- [ ] 5-H-6 화면 — 플러그인 설정(N, 안내), 대화 패널·폰 대화방에 "이어진 대화" 표시와 이동, 컨텍스트 탭 출처. 새 글자는 locales 키(ADR-032). 완료: 미리보기, `pnpm i18n:check`.
+- [ ] 5-H-7 R1 확인 — 위 시험 묶음 + 실제 공급자로 폰에서 약속 → 일반 대화에서 AI가 앎(사용자 확인). 결과를 마일스톤 기록에.
 
 ### 6단계 — 생태계 및 확장성
 
