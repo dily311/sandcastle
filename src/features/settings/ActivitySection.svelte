@@ -5,7 +5,7 @@
 	import { _ } from "svelte-i18n";
 	import { RefreshCw, Square, Trash2 } from "@lucide/svelte";
 	import type { AiCallLog_Serialize as CallLog, TaskHistoryItem_Serialize as HistoryItem, TaskInfo_Serialize as TaskInfo } from "$ipc/bindings";
-	import { localizeTaskFeature, localizeTaskStatus } from "$lib/utils/backendI18n";
+	import { localizeBackendError, localizeTaskFeature, localizeTaskLabel, localizeTaskStatus } from "$lib/utils/backendI18n";
 	import { Badge, Button, EmptyState, Segmented, Select, Switch } from "$shared/ui";
 	import { appSetting } from "$shared/stores/appSetting.svelte";
 	import { call, commands } from "$shared/ipc/client";
@@ -163,7 +163,7 @@
 			<div class="item">
 				<div class="main">
 					<Badge tone="accent">{featureName(t.feature)}</Badge>
-					<span class="label">{t.label ?? t.taskType}</span>
+					<span class="label">{localizeTaskLabel(t.label, t.taskType)}</span>
 					{#if t.runBy === "auto"}<Badge tone="info">{$_("settings.activitySec.auto")}</Badge>{/if}
 					<span class="muted">{when(t.createdAt)}</span>
 				</div>
@@ -203,7 +203,7 @@
 					<span class="t">{when(h.createdAt)}</span>
 					<Badge tone={s.tone}>{s.label}</Badge>
 					<span class="feat">{featureName(h.feature)}</span>
-					<span class="label">{h.label ?? h.taskType}</span>
+					<span class="label">{localizeTaskLabel(h.label, h.taskType)}</span>
 					{#if h.runBy === "auto"}<Badge tone="info">{$_("settings.activitySec.auto")}</Badge>{/if}
 					{#if logged.has(h.id)}<Badge>{$_("settings.activitySec.sentTag")}</Badge>{/if}
 					<span class="muted end">{amount(h)}</span>
@@ -216,7 +216,7 @@
 						{#if took(h)}<dt>{$_("settings.activityDetail.duration")}</dt><dd>{took(h)}</dd>{/if}
 						<dt>{$_("settings.activityDetail.attempts")}</dt><dd>{h.calls > 1 ? $_("settings.activityDetail.attemptsWithCalls", { values: { attempts: h.attemptCount, calls: h.calls } }) : $_("settings.activityDetail.attemptsVal", { values: { attempts: h.attemptCount } })}</dd>
 						{#if amount(h)}<dt>{$_("settings.activityDetail.usage")}</dt><dd>{amount(h)}{h.estimated ? $_("settings.activityDetail.estimatedSuffix") : ""}</dd>{/if}
-						{#if h.errorMessage}<dt>{$_("settings.activityDetail.error")}</dt><dd class="err">{h.errorCode ? `[${h.errorCode}] ` : ""}{h.errorMessage}</dd>{/if}
+						{#if h.errorMessage}<dt>{$_("settings.activityDetail.error")}</dt><dd class="err">{h.errorCode ? `[${h.errorCode}] ` : ""}{localizeBackendError({ code: h.errorCode ?? "UNKNOWN", message: h.errorMessage })}</dd>{/if}
 					</dl>
 					{#each calls[h.id] ?? [] as c, i (c.id)}
 						<div class="call">

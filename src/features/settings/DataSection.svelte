@@ -4,6 +4,7 @@
 	import { _ } from "svelte-i18n";
 	import { ChevronDown, ChevronRight, Link2, RotateCcw, Save, ShieldCheck, Trash2, Upload } from "@lucide/svelte";
 	import type { BackupManifest, DataCheck, DataOverview_Serialize as Overview, DataTotals, SillyTavernDataImport } from "$ipc/bindings";
+	import { localizeImportWarning } from "$lib/utils/backendI18n";
 	import { Badge, Button, Select, Spinner } from "$shared/ui";
 	import { call, commands } from "$shared/ipc/client";
 	import { pickFiles, saveTo, BACKUP_FILES, ST_DATA_FILES } from "$shared/ipc/dialog";
@@ -31,7 +32,7 @@
 				return jobs.run($_("settings.dataSec.stExportJob"), () => call(commands.exportSillytavernData(path), src), { group: $_("settings.dataSec.stExportGroup") });
 			});
 			if (r) toasts.success($_("settings.dataSec.stExported", { values: { characters: r.characters, chats: r.chats, books: r.books, presets: r.presets, personas: r.personas, regex: r.regex } }));
-			if (r?.warnings.length) toasts.error($_("settings.dataSec.stExportWarnings", { values: { count: r.warnings.length } }), r.warnings.join("\n"));
+			if (r?.warnings.length) toasts.error($_("settings.dataSec.stExportWarnings", { values: { count: r.warnings.length } }), r.warnings.map(localizeImportWarning).join("\n"));
 		} finally {
 			busy = null;
 		}
@@ -286,7 +287,7 @@
 			{#if stResult?.warnings.length}
 				<details class="st-warn">
 					<summary>({stResult.warnings.length})</summary>
-					<ul>{#each stResult.warnings as w, i (i)}<li>{w}</li>{/each}</ul>
+					<ul>{#each stResult.warnings as w, i (i)}<li>{localizeImportWarning(w)}</li>{/each}</ul>
 				</details>
 			{/if}
 		</Group>

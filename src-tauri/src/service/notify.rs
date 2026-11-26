@@ -8,6 +8,7 @@ use crate::models::settings::{AppSetting, DoneNotify, NotifySoundMode};
 use crate::sys::settings::SettingsState;
 
 pub const DEFAULT_TITLE: &str = "샌드캐슬";
+pub const DEFAULT_TITLE_EN: &str = "Sandcastle";
 pub const PLAY_SOUND_EVENT: &str = "notify:play-sound";
 
 /// 프런트에 커스텀 알림음 재생을 요청하는 이벤트 페이로드
@@ -18,11 +19,64 @@ pub struct NotifySoundPayload {
     pub volume: f32,
 }
 
-/// 알림 제목: 비면 앱 이름, `{{char}}`는 대상 이름
+fn is_english_lang(lang: &str) -> bool {
+    let l = lang.trim().to_ascii_lowercase();
+    !l.is_empty() && !l.starts_with("ko")
+}
+
+/// 알림 제목: 비면 앱 이름(현재 언어 기준), `{{char}}`는 대상 이름
 pub fn title_of(cfg: &DoneNotify, target_name: &str) -> String {
+    title_of_lang(cfg, target_name, "ko")
+}
+
+pub fn title_of_lang(cfg: &DoneNotify, target_name: &str, lang: &str) -> String {
     let t = cfg.title.trim();
-    let t = if t.is_empty() { DEFAULT_TITLE } else { t };
+    let fallback = if is_english_lang(lang) { DEFAULT_TITLE_EN } else { DEFAULT_TITLE };
+    let t = if t.is_empty() { fallback } else { t };
     t.replace("{{char}}", target_name).chars().take(80).collect()
+}
+
+/// 백엔드가 고정 문구로 넣은 알림 대상·본문을 현재 설정 언어(`AppSetting.language`)에 맞게 변환한다.
+pub fn localize_pair(target_name: &str, body: &str, lang: &str) -> (String, String) {
+    if !is_english_lang(lang) {
+        return (target_name.to_string(), body.to_string());
+    }
+    let loc_target = match target_name {
+        "게임 대화" => "Game Dialogue",
+        "장면 진행" => "Scene",
+        "게임 응답" => "Game Reply",
+        "각본가" => "Story Planner",
+        "대필" => "Ghostwrite",
+        "메모리 색인" => "Memory Index",
+        "그림 생성" => "Image Generation",
+        "자동 그림" => "Auto Image",
+        "게임 장면 그림" => "Game Scene Image",
+        "폰 카메라" => "Phone Camera",
+        "그림 만들기" => "Image Generation",
+        "대화 요약" => "Summary",
+        other => other,
+    };
+    let loc_body = match body {
+        "캐릭터 응답이 도착함" => "Character reply arrived".to_string(),
+        "장면 응답이 도착함" => "Scene reply arrived".to_string(),
+        "다시 생성된 응답이 도착함" => "Regenerated reply arrived".to_string(),
+        "스토리 플랜 갱신이 끝남" => "Story plan updated".to_string(),
+        "대필이 끝남" => "Ghostwrite completed".to_string(),
+        "메모리 색인이 끝남" => "Memory indexing completed".to_string(),
+        "메시지 그림이 완성됨" => "Message image generated".to_string(),
+        "자동 그림이 완성됨" => "Auto image generated".to_string(),
+        "그림이 완성됨" => "Image generated".to_string(),
+        "생성이 끝남" => "Generation completed".to_string(),
+        "대화 요약이 끝남" => "Conversation summary completed".to_string(),
+        other => {
+            if let Some(who) = other.strip_suffix("의 응답이 도착함") {
+                format!("Reply from {who} arrived")
+            } else {
+                other.to_string()
+            }
+        }
+    };
+    (loc_target.to_string(), loc_body)
 }
 
 /// 앱 창이 앞에 있고 포커스가 잡혀 있으면 알리지 않는다 (보고 있으니까)
@@ -36,9 +90,14 @@ fn app_in_front(app: &AppHandle) -> bool {
     w.is_focused().unwrap_or(false)
 }
 
-fn read_cfg(app: &AppHandle) -> Option<DoneNotify> {
-    app.try_state::<SettingsState<AppSetting>>()
-        .and_then(|s| s.0.lock().ok().map(|g| g.done_notify.clone()))
+fn read_cfg_and_lang(app: &AppHandle) -> (Option<DoneNotify>, String) {
+    match app.try_state::<SettingsState<AppSetting>>() {
+        Some(s) => match s.0.lock() {
+            Ok(g) => (Some(g.done_notify.clone()), g.language.clone()),
+            Err(_) => (None, String::new()),
+        },
+        None => (None, String::new()),
+    }
 }
 
 /// 응답이 도착함 (켜져 있고 앱이 가려져 있을 때만). 실패해도 대화에는 영향 없음
@@ -48,28 +107,30 @@ pub fn reply_done(app: &AppHandle, char_name: &str) {
 
 /// 일반 작업이 끝남 (켜져 있고 앱이 가려져 있을 때만). 실패해도 작업 결과에는 영향 없음
 pub fn task_done(app: &AppHandle, target_name: &str, body: &str) {
+    let (cfg_opt, lang) = read_cfg_and_lang(app);
+    let (target_loc, body_loc) = localize_pair(target_name, body, &lang);
     // 위젯 시메지에도 알림 이벤트를 전달한다 (OS 알림 설정과 무관하게 시메지가 반응할 수 있도록)
     let _ = app.emit(
         "widget_mascot::notify",
         crate::models::widget::WidgetMascotNotifyPayload {
-            target_name: target_name.to_string(),
-            body: body.to_string(),
+            target_name: target_loc.clone(),
+            body: body_loc.clone(),
         },
     );
-    let Some(cfg) = read_cfg(app).filter(|c| c.enabled) else {
+    let Some(cfg) = cfg_opt.filter(|c| c.enabled) else {
         return;
     };
     if app_in_front(app) {
         return;
     }
-    if let Err(e) = dispatch(app, &cfg, target_name, body) {
+    if let Err(e) = dispatch(app, &cfg, &lang, &target_loc, &body_loc) {
         eprintln!("[notify] 알림을 띄우지 못함: {e}");
     }
 }
 
 /// 실제 알림 표시 + 커스텀 사운드 재생
-fn dispatch(app: &AppHandle, cfg: &DoneNotify, target_name: &str, body: &str) -> Result<(), String> {
-    let title = title_of(cfg, target_name);
+fn dispatch(app: &AppHandle, cfg: &DoneNotify, lang: &str, target_name: &str, body: &str) -> Result<(), String> {
+    let title = title_of_lang(cfg, target_name, lang);
     let icon = cfg
         .icon
         .as_deref()
@@ -224,8 +285,14 @@ pub fn request_notify_permission(app: AppHandle) -> crate::error::Result<bool> {
 #[tauri::command]
 #[specta::specta]
 pub fn test_notify(app: AppHandle) -> crate::error::Result<()> {
-    let cfg = read_cfg(&app).unwrap_or_default();
-    dispatch(&app, &cfg, "엘리안", "테스트 알림입니다").map_err(crate::error::AppError::internal)
+    let (cfg_opt, lang) = read_cfg_and_lang(&app);
+    let cfg = cfg_opt.unwrap_or_default();
+    let (who, body) = if is_english_lang(&lang) {
+        ("Elian", "This is a test notification.")
+    } else {
+        ("엘리안", "테스트 알림입니다")
+    };
+    dispatch(&app, &cfg, &lang, who, body).map_err(crate::error::AppError::internal)
 }
 
 #[cfg(test)]
@@ -236,8 +303,22 @@ mod tests {
     fn title_uses_char_and_falls_back_to_app_name() {
         let mut c = DoneNotify::default();
         assert_eq!(title_of(&c, "아리아"), "샌드캐슬");
+        assert_eq!(title_of_lang(&c, "Aria", "en"), "Sandcastle");
         c.title = "💌 {{char}}에게서 답장".into();
         assert_eq!(title_of(&c, "아리아"), "💌 아리아에게서 답장");
+    }
+
+    #[test]
+    fn localizes_notification_pairs_in_english() {
+        assert_eq!(
+            localize_pair("아리아", "아리아의 응답이 도착함", "en"),
+            ("아리아".into(), "Reply from 아리아 arrived".into())
+        );
+        assert_eq!(
+            localize_pair("게임 대화", "캐릭터 응답이 도착함", "en"),
+            ("Game Dialogue".into(), "Character reply arrived".into())
+        );
+        assert_eq!(localize_pair("대필", "대필이 끝남", "ko"), ("대필".into(), "대필이 끝남".into()));
     }
 
     #[test]

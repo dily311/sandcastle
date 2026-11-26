@@ -3,6 +3,7 @@
 	import { _ } from "svelte-i18n";
 	import { KeyRound, Plus, Zap } from "@lucide/svelte";
 	import { Badge, Button, EmptyState } from "$shared/ui";
+	import { localizeApiTestReply } from "$lib/utils/backendI18n";
 	import { nav } from "$app/nav.svelte";
 	import { call, commands } from "$shared/ipc/client";
 	import { appSetting } from "$shared/stores/appSetting.svelte";
@@ -42,9 +43,9 @@
 	async function test(a: ApiProfiles) {
 		testing = a.id;
 		try {
-			const reply = await call(commands.testMessage(a.id, null), src);
+			const reply = localizeApiTestReply(await call(commands.testMessage(a.id, null), src));
 			a.verified = true;
-			toasts.success($_("settings.more.apiConnected", { values: { reply: reply.trim().slice(0, 40) || $_("settings.more.emptyReply") } }));
+			toasts.success($_("settings.more.apiConnected", { values: { reply: reply.slice(0, 40) || $_("settings.more.emptyReply") } }));
 		} catch {
 			/* 토스트는 call이 띄움 */
 		} finally {

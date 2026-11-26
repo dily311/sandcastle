@@ -1,6 +1,7 @@
 // 프리셋·정규식 JSON 가져오기 (설정 > 프리셋과 대화 패널의 프리셋 탭이 같이 씀)
 import { get } from "svelte/store";
 import { _ } from "svelte-i18n";
+import { localizeImportWarning } from "$lib/utils/backendI18n";
 import { call, commands } from "$shared/ipc/client";
 import { toasts } from "$shared/stores/toast.svelte";
 import { library } from "$features/character/library.svelte";
@@ -31,7 +32,7 @@ export async function importPresetPaths(paths: string[]): Promise<string | null>
 				? t("settings.extra.presetImportedWithRegexToast", { values: { name: r.name, blocks: r.blockCount, regex: r.regexCount } })
 				: t("settings.extra.presetImportedToast", { values: { name: r.name, blocks: r.blockCount } }),
 		);
-		for (const w of r.warnings) toasts.info(w);
+		for (const w of r.warnings) toasts.info(localizeImportWarning(w));
 	}
 	let regexCount = 0;
 	for (const path of regexes) {

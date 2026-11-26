@@ -4,6 +4,7 @@
 	import { _ } from "svelte-i18n";
 	import { ChevronRight, Download, Plus, Trash2 } from "@lucide/svelte";
 	import { Button, EmptyState, IconButton, Input, Select, Switch, Textarea } from "$shared/ui";
+	import { localizeImportWarning } from "$lib/utils/backendI18n";
 	import { call, commands } from "$shared/ipc/client";
 	import { pickFiles, JSON_FILES } from "$shared/ipc/dialog";
 	import { confirmAction } from "$shared/stores/confirm.svelte";
@@ -91,7 +92,7 @@
 		}
 		const buttons = inputs.reduce((n, s) => n + s.items.length, 0);
 		toasts.success($_("settings.quickReplySec.importedToast", { values: { sets: inputs.length, buttons } }));
-		if (warnings.length) toasts.info(warnings.join(" · "));
+		if (warnings.length) toasts.info(warnings.map(localizeImportWarning).join(" · "));
 	}
 </script>
 

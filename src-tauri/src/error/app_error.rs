@@ -71,11 +71,15 @@ impl AppError {
             Self::Internal { message } => (ErrorCode::InternalError, ErrorCategory::Internal, message.clone(), false, None),
         };
 
+        let i18n = crate::error::i18n::classify(code, &message, details.as_ref());
+
         AppErrorResponse {
             code,
             category,
             message,
             retryable,
+            key: i18n.as_ref().map(|x| x.key.clone()),
+            args: i18n.and_then(|x| x.args),
             details,
         }
     }

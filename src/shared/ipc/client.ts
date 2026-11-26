@@ -12,14 +12,26 @@ export class AppError extends Error {
 	readonly code: ErrorCode | "UNKNOWN";
 	readonly category: string;
 	readonly retryable: boolean;
+	readonly key?: string | null;
+	readonly args?: Partial<Record<string, string>> | null;
 	readonly details?: unknown;
 
-	constructor(r: { code: ErrorCode | "UNKNOWN"; category: string; message: string; retryable: boolean; details?: unknown }) {
+	constructor(r: {
+		code: ErrorCode | "UNKNOWN";
+		category: string;
+		message: string;
+		retryable: boolean;
+		key?: string | null;
+		args?: Partial<Record<string, string>> | null;
+		details?: unknown;
+	}) {
 		super(r.message);
 		this.name = "AppError";
 		this.code = r.code;
 		this.category = r.category;
 		this.retryable = r.retryable;
+		this.key = r.key;
+		this.args = r.args;
 		this.details = r.details;
 	}
 }

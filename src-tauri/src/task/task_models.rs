@@ -219,6 +219,23 @@ pub struct TaskErrorInfo {
     pub code: String,
     pub message: String,
     pub retryable: bool,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub key: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub args: Option<std::collections::BTreeMap<String, String>>,
+}
+
+impl TaskErrorInfo {
+    pub fn new(code: String, message: String, retryable: bool) -> Self {
+        let i18n = crate::error::i18n::classify_code_str(&code, &message);
+        Self {
+            code,
+            message,
+            retryable,
+            key: i18n.as_ref().map(|x| x.key.clone()),
+            args: i18n.and_then(|x| x.args),
+        }
+    }
 }
 
 /// Executor 실행 결과의 오류.
@@ -235,15 +252,26 @@ pub enum TaskError {
     Cancelled,
 
     #[error("{message}")]
-    Failed { code: String, message: String, retryable: bool },
+    Failed {
+        code: String,
+        message: String,
+        retryable: bool,
+        key: Option<String>,
+        args: Option<std::collections::BTreeMap<String, String>>,
+    },
 }
 
 impl TaskError {
     pub fn failed(code: ErrorCode, message: impl Into<String>, retryable: bool) -> Self {
+        let code_str = error_code_str(code);
+        let msg = message.into();
+        let i18n = crate::error::i18n::classify(code, &msg, None);
         Self::Failed {
-            code: error_code_str(code),
-            message: message.into(),
+            code: code_str,
+            message: msg,
             retryable,
+            key: i18n.as_ref().map(|x| x.key.clone()),
+            args: i18n.and_then(|x| x.args),
         }
     }
 
@@ -253,26 +281,28 @@ impl TaskError {
 
     pub fn to_info(&self) -> TaskErrorInfo {
         match self {
-            Self::UnsupportedTaskType(_) => TaskErrorInfo {
-                code: error_code_str(ErrorCode::TaskExecutorMissing),
-                message: self.to_string(),
-                retryable: false,
-            },
-            Self::InvalidPayload(_) => TaskErrorInfo {
-                code: error_code_str(ErrorCode::InvalidInput),
-                message: self.to_string(),
-                retryable: false,
-            },
-            Self::Cancelled => TaskErrorInfo {
-                code: error_code_str(ErrorCode::TaskCancelled),
-                message: self.to_string(),
-                retryable: false,
-            },
-            Self::Failed { code, message, retryable } => TaskErrorInfo {
-                code: code.clone(),
-                message: message.clone(),
-                retryable: *retryable,
-            },
+            Self::UnsupportedTaskType(_) => TaskErrorInfo::new(error_code_str(ErrorCode::TaskExecutorMissing), self.to_string(), false),
+            Self::InvalidPayload(_) => TaskErrorInfo::new(error_code_str(ErrorCode::InvalidInput), self.to_string(), false),
+            Self::Cancelled => TaskErrorInfo::new(error_code_str(ErrorCode::TaskCancelled), self.to_string(), false),
+            Self::Failed {
+                code,
+                message,
+                retryable,
+                key,
+                args,
+            } => {
+                if key.is_some() {
+                    TaskErrorInfo {
+                        code: code.clone(),
+                        message: message.clone(),
+                        retryable: *retryable,
+                        key: key.clone(),
+                        args: args.clone(),
+                    }
+                } else {
+                    TaskErrorInfo::new(code.clone(), message.clone(), *retryable)
+                }
+            }
         }
     }
 }
@@ -287,6 +317,8 @@ impl From<AppError> for TaskError {
             code: error_code_str(res.code),
             message: res.message,
             retryable: res.retryable,
+            key: res.key,
+            args: res.args,
         }
     }
 }
@@ -485,11 +517,9 @@ impl TryFrom<TaskInfoRow> for TaskInfo {
         let task_type = TaskType::from_str(&r.task_type).map_err(|_| AppError::database(format!("알 수 없는 task_type: {}", r.task_type)))?;
         let status = TaskStatus::from_str(&r.status).map_err(|_| AppError::database(format!("알 수 없는 task status: {}", r.status)))?;
         let owner = TaskOwner::from_str(&r.owner).unwrap_or(TaskOwner::System);
-        let error = r.error_message.map(|message| TaskErrorInfo {
-            code: r.error_code.unwrap_or_else(|| error_code_str(ErrorCode::InternalError)),
-            message,
-            retryable: false,
-        });
+        let error = r
+            .error_message
+            .map(|message| TaskErrorInfo::new(r.error_code.unwrap_or_else(|| error_code_str(ErrorCode::InternalError)), message, false));
 
         Ok(Self {
             id: r.id,
@@ -535,11 +565,9 @@ impl TryFrom<AttemptRow> for AttemptInfo {
             task_id: r.task_id,
             attempt_no: r.attempt_no.max(0) as u32,
             status,
-            error: r.error_message.map(|message| TaskErrorInfo {
-                code: r.error_code.unwrap_or_else(|| error_code_str(ErrorCode::InternalError)),
-                message,
-                retryable: false,
-            }),
+            error: r
+                .error_message
+                .map(|message| TaskErrorInfo::new(r.error_code.unwrap_or_else(|| error_code_str(ErrorCode::InternalError)), message, false)),
             started_at: r.started_at,
             finished_at: r.finished_at,
         })

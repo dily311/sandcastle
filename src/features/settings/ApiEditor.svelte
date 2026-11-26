@@ -4,6 +4,7 @@
 	import { _ } from "svelte-i18n";
 	import { CircleAlert, CircleCheck, ChevronLeft, FileJson, KeyRound, Zap } from "@lucide/svelte";
 	import { apiLists, firstModel, modelLabel } from "./providers";
+	import { localizeApiTestReply } from "$lib/utils/backendI18n";
 	import { Badge, Button, Field, IconButton, Input, Select, Spinner } from "$shared/ui";
 	import ModelPicker from "./ModelPicker.svelte";
 	import { nav } from "$app/nav.svelte";
@@ -143,15 +144,15 @@
 		testing = true;
 		check = { state: "checking", message: $_("settings.more3.checkingMsg"), model: modelDisplay, isChat };
 		try {
-			const reply = await call(commands.testMessage(id, chosen), { ...src, silent: true });
+			const reply = localizeApiTestReply(await call(commands.testMessage(id, chosen), { ...src, silent: true }));
 			verified = true;
 			const a = library.apis.find((x) => x.id === id);
 			if (a) a.verified = true;
 			check = {
 				state: "ok",
-				message: $_("settings.more.apiConnected", { values: { reply: reply.trim().slice(0, 60) || $_("settings.more.emptyReply") } }),
+				message: $_("settings.more.apiConnected", { values: { reply: reply.slice(0, 60) || $_("settings.more.emptyReply") } }),
 				model: modelDisplay,
-				reply: reply.trim(),
+				reply,
 				isChat,
 			};
 		} catch (e) {

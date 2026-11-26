@@ -1,6 +1,7 @@
 // 캐릭터·대화·폴더와 대화 설정에 쓰는 목록(페르소나·프리셋·API). 화면들이 같이 쓴다.
 import { get } from "svelte/store";
 import { _ } from "svelte-i18n";
+import { localizeImportWarning } from "$lib/utils/backendI18n";
 import { jobs } from "$shared/stores/jobs.svelte";
 import { trashedToast } from "$shared/trash";
 import type {
@@ -360,15 +361,16 @@ class Library {
 	/** `quiet`: 여러 파일을 차례로 가져올 때 — 파일마다 목록을 다시 읽거나 알리지 않는다 (경고는 로그에만) */
 	async importSillyTavern(path: string, characterId: string | null = null, opts: { quiet?: boolean } = {}) {
 		const r = await call(commands.importSillytavern(path, null, characterId, null), src);
+		const warnings = r.warnings.map(localizeImportWarning);
 		if (opts.quiet) {
-			for (const w of r.warnings) logs.add("warn", "import", w);
+			for (const w of warnings) logs.add("warn", "import", w);
 			return r;
 		}
 		await this.load();
 		if (r.kind === "character") toasts.success(tr("chatExtra.charImportedToast", { name: r.character.name }));
 		else if (r.kind === "chat") toasts.success(tr("chatExtra.chatImportedToast", { count: r.messageCount }));
 		else toasts.success(tr("chatExtra.importedToast"));
-		for (const w of r.warnings) toasts.info(w);
+		for (const w of warnings) toasts.info(w);
 		return r;
 	}
 }

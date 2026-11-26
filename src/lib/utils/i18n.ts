@@ -150,7 +150,13 @@ export function getAppLocale(): AppLocale {
 	return currentLocaleCache;
 }
 
-/** 번역 플러그인의 `targetLang`이 비어 있을 때 화면 언어를 따라가는 기본 언어 이름 (ADR-032 ⑤) */
+/** 번역 플러그인의 `targetLang`이 비어 있을 때 화면 언어를 따라가는 기본 언어 이름 (ADR-032 ⑥) */
 export function defaultTargetLang(loc: AppLocale = getAppLocale()): string {
-	return loc.startsWith("ko") ? "한국어" : "English"; // i18n-ignore: AI 번역 지시용 대상 언어명
+	if (loc.startsWith("ko")) return "한국어"; // i18n-ignore: AI 번역 지시용 대상 언어명
+	if (loc.startsWith("en")) return "English";
+	try {
+		return new Intl.DisplayNames(["en"], { type: "language" }).of(loc) ?? "English";
+	} catch {
+		return "English";
+	}
 }

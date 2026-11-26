@@ -5,6 +5,7 @@
 	import { _ } from "svelte-i18n";
 	import { ChevronRight, Download, Pencil, Plus, Trash2 } from "@lucide/svelte";
 	import type { RegexPlacement, RegexScope, RegexScript_Serialize as RegexScript, RegexTarget } from "$ipc/bindings";
+	import { localizeImportWarning } from "$lib/utils/backendI18n";
 	import { Button, EmptyState, IconButton, Switch } from "$shared/ui";
 	import RegexEditDialog from "./RegexEditDialog.svelte";
 	import { call, commands } from "$shared/ipc/client";
@@ -110,7 +111,7 @@
 		if (r.kind === "regex") toasts.success($_("settings.more.regexImported", { values: { count: r.scripts.length } }));
 		else if (r.kind === "preset") toasts.success($_("settings.more.presetRegexImported", { values: { name: r.name, count: r.regexCount } }));
 		else toasts.info($_("settings.more.notRegexFile"));
-		for (const w of r.warnings) toasts.info(w);
+		for (const w of r.warnings) toasts.info(localizeImportWarning(w));
 		await Promise.all([load(), library.load()]);
 	}
 

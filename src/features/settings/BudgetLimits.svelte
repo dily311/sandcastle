@@ -5,6 +5,7 @@
 	import { RefreshCw } from "@lucide/svelte";
 	import { _ } from "svelte-i18n";
 	import type { ApiProfiles, BudgetOverview_Serialize as Overview, ModelPriceInfo, QuotaLine } from "$ipc/bindings";
+	import { localizeQuotaLine } from "$lib/utils/backendI18n";
 	import { Button, Slider, Spinner } from "$shared/ui";
 	import { call, commands } from "$shared/ipc/client";
 	import { toasts } from "$shared/stores/toast.svelte";
@@ -97,7 +98,7 @@
 			<div class="quota">
 				{#if quotas[p.id]?.length}
 					<dl>
-						{#each quotas[p.id] as l (l.label)}<dt>{l.label}</dt><dd>{l.value}</dd>{/each}
+						{#each quotas[p.id] as l (l.label)}{@const loc = localizeQuotaLine(l)}<dt>{loc.label}</dt><dd>{loc.value}</dd>{/each}
 					</dl>
 				{:else}
 					<p class="none">{$_("settings.budgetDetail.subscriptionHint")}</p>

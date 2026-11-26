@@ -1,6 +1,7 @@
 // 로어북(월드인포): 책 목록, 책별 항목, 쓰는 곳. 로어북 화면과 대화 패널이 같이 씀
 import { get } from "svelte/store";
 import { _ } from "svelte-i18n";
+import { localizeImportWarning } from "$lib/utils/backendI18n";
 import { jobs } from "$shared/stores/jobs.svelte";
 import { trashedToast } from "$shared/trash";
 import { moveItem } from "$shared/dnd/sortable.svelte";
@@ -97,7 +98,7 @@ class Lorebook {
 		const r = await jobs.run(path.split(/[\\/]/).pop() ?? path, () => call(commands.importSillytavern(path, null, null, null), src), { group: tr("chatExtra.lorebookExtra.importGroup") });
 		if (!r) return null;
 		await this.load();
-		for (const w of r.warnings) toasts.info(w);
+		for (const w of r.warnings) toasts.info(localizeImportWarning(w));
 		if (r.kind !== "worldInfo") {
 			toasts.info(tr("chatExtra.lorebookExtra.notWorldInfoToast"));
 			await library.load();

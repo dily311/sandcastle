@@ -810,6 +810,8 @@ export type AppErrorResponse_Deserialize = {
 	category: ErrorCategory,
 	message: string,
 	retryable: boolean,
+	key?: string | null,
+	args?: { [key in string]: string } | null,
 	details?: Value | null,
 };
 
@@ -818,6 +820,8 @@ export type AppErrorResponse_Serialize = {
 	category: ErrorCategory,
 	message: string,
 	retryable: boolean,
+	key?: string,
+	args?: { [key in string]: string },
 	details?: Value,
 };
 
@@ -5608,10 +5612,24 @@ export type SyncStatus_Serialize = {
 };
 
 /**  실패 정보. DB와 프론트 이벤트에 같은 형태로 나간다. */
-export type TaskErrorInfo = {
+export type TaskErrorInfo = TaskErrorInfo_Serialize | TaskErrorInfo_Deserialize;
+
+/**  실패 정보. DB와 프론트 이벤트에 같은 형태로 나간다. */
+export type TaskErrorInfo_Deserialize = {
 	code: string,
 	message: string,
 	retryable: boolean,
+	key?: string | null,
+	args?: { [key in string]: string } | null,
+};
+
+/**  실패 정보. DB와 프론트 이벤트에 같은 형태로 나간다. */
+export type TaskErrorInfo_Serialize = {
+	code: string,
+	message: string,
+	retryable: boolean,
+	key?: string,
+	args?: { [key in string]: string },
 };
 
 export type TaskEvent = TaskEvent_Serialize | TaskEvent_Deserialize;
@@ -5644,13 +5662,13 @@ export type TaskEvent_Deserialize = { type: "queued"; data: {
 { type: "retrying"; data: {
 	taskId: string,
 	attemptNo: number,
-	error: TaskErrorInfo,
+	error: TaskErrorInfo_Deserialize,
 } } | { type: "completed"; data: {
 	taskId: string,
 	output: TaskOutput,
 } } | { type: "failed"; data: {
 	taskId: string,
-	error: TaskErrorInfo,
+	error: TaskErrorInfo_Deserialize,
 } } | { type: "cancelled"; data: {
 	taskId: string,
 } } | { type: "interrupted"; data: {
@@ -5685,13 +5703,13 @@ export type TaskEvent_Serialize = { type: "queued"; data: {
 { type: "retrying"; data: {
 	taskId: string,
 	attemptNo: number,
-	error: TaskErrorInfo,
+	error: TaskErrorInfo_Serialize,
 } } | { type: "completed"; data: {
 	taskId: string,
 	output: TaskOutput,
 } } | { type: "failed"; data: {
 	taskId: string,
-	error: TaskErrorInfo,
+	error: TaskErrorInfo_Serialize,
 } } | { type: "cancelled"; data: {
 	taskId: string,
 } } | { type: "interrupted"; data: {
@@ -5768,7 +5786,7 @@ export type TaskInfo_Deserialize = {
 	status: TaskStatus,
 	payload: Value,
 	result?: TaskOutput | null,
-	error?: TaskErrorInfo | null,
+	error?: TaskErrorInfo_Deserialize | null,
 	attemptCount: number,
 	maxAttempts: number,
 	createdAt: number,
@@ -5789,7 +5807,7 @@ export type TaskInfo_Serialize = {
 	status: TaskStatus,
 	payload: Value,
 	result: TaskOutput | null,
-	error: TaskErrorInfo | null,
+	error: TaskErrorInfo_Serialize | null,
 	attemptCount: number,
 	maxAttempts: number,
 	createdAt: number,

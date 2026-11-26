@@ -2,7 +2,16 @@ import { beforeAll, describe, expect, it } from "vitest";
 import { get } from "svelte/store";
 import { _ } from "svelte-i18n";
 import { AVAILABLE_LOCALES, defaultTargetLang, getAppLocale, initI18n, setAppLocale } from "./i18n";
-import { localizeBackendError, localizeCorePlugin, localizeTaskFeature, localizeTaskStatus } from "./backendI18n";
+import {
+	localizeApiTestReply,
+	localizeBackendError,
+	localizeCorePlugin,
+	localizeImportWarning,
+	localizeQuotaLine,
+	localizeTaskFeature,
+	localizeTaskLabel,
+	localizeTaskStatus,
+} from "./backendI18n";
 
 function flatten(obj: Record<string, unknown>, prefix = ""): string[] {
 	return Object.entries(obj).flatMap(([k, v]) => {
@@ -177,6 +186,36 @@ describe("i18n (ADR-032, 5-C-2-1)", () => {
 		expect(pluginLoc.description).toContain("Messenger-style phone screen");
 		expect(localizeTaskFeature("chat")).toBe("Chat");
 		expect(localizeTaskStatus("running")).toBe("Running");
+		expect(
+			localizeBackendError({
+				code: "INVALID_INPUT",
+				message: "캐릭터를 찾을 수 없습니다: char-42",
+				key: "errors.detail.charNotFoundId",
+				args: { id: "char-42" },
+			}),
+		).toBe("Character not found: char-42");
+		expect(
+			localizeBackendError({
+				code: "INVALID_INPUT",
+				message: "플러그인 manifest.json: apiVersion이 없음",
+				key: "errors.detail.pluginManifestPrefix",
+				args: { msg: "apiVersion이 없음", subKey: "errors.detail.manifestMissingApiVersion" },
+			}),
+		).toBe("Plugin manifest.json: Missing apiVersion");
+		expect(
+			localizeBackendError({
+				code: "AI_FEATURE_UNSUPPORTED",
+				message: "'내 Claude' 연결은 임베딩을(를) 지원하지 않음: 이 공급자에는 임베딩 API가 없음",
+				key: "errors.detail.capUnsupportedConn",
+				args: { profile: "내 Claude", feature: "임베딩", reason: "이 공급자에는 임베딩 API가 없음" },
+			}),
+		).toBe("Connection '내 Claude' does not support embeddings: this provider has no embeddings API");
+		expect(localizeTaskLabel("응답 생성")).toBe("Generate reply");
+		expect(localizeTaskLabel("번역 → English")).toBe("Translate → English");
+		expect(localizeTaskLabel("자동 재생성 (1/2)")).toBe("Auto rewrite (1/2)");
+		expect(localizeQuotaLine({ label: "구독", value: "무료" })).toEqual({ label: "Subscription", value: "Free" });
+		expect(localizeApiTestReply("모델 12개 확인됨")).toBe("12 models verified");
+		expect(localizeImportWarning("정규식 '테스트': 찾을 패턴이 비어 있어 건너뜀")).toBe("Regex '테스트': skipped because find pattern is empty");
 
 		await setAppLocale("ko", { persistSetting: false });
 		expect(
