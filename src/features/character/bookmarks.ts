@@ -1,4 +1,6 @@
 // 대화 북마크: 메시지 안의 고른 글을 대화 meta.bookmarks에 저장 (오른쪽 패널 북마크 탭)
+import { get } from "svelte/store";
+import { _ } from "svelte-i18n";
 import { toasts } from "$shared/stores/toast.svelte";
 import { library, type Conversation } from "./library.svelte";
 
@@ -23,7 +25,7 @@ export const bookmarks = {
 	async add(conv: Conversation, messageId: string, text: string, swipeId = 0) {
 		const b: ChatBookmark = { id: `bm-${Date.now().toString(36)}`, messageId, text: text.slice(0, 600), createdAt: Date.now(), swipeId };
 		await library.patchMeta(conv.id, { bookmarks: [...bookmarksOf(conv), b] });
-		toasts.success("북마크함");
+		toasts.success(get(_)("chatExtra.bookmarkedToast"));
 	},
 	async remove(conv: Conversation, id: string) {
 		await library.patchMeta(conv.id, { bookmarks: bookmarksOf(conv).filter((b) => b.id !== id) });

@@ -1,10 +1,12 @@
 // 채팅 파일(.jsonl) 여러 개 가져오기 (5-E-4): 파일마다 파일 작업 대기열(5-E-28)에 하나씩 붙인다.
 // 진행 막대·빼기·요약 알림은 대기열이 맡는다. 한 파일일 때만 그 대화를 연다
+import { get } from "svelte/store";
+import { _ } from "svelte-i18n";
 import { storeFile } from "$app/drop.svelte";
 import { jobs, SKIPPED } from "$shared/stores/jobs.svelte";
 import { library } from "./library.svelte";
 
-const GROUP = "대화 가져오기";
+const t = (key: string) => get(_)(key);
 
 class ChatImport {
 	/**
@@ -22,10 +24,10 @@ class ChatImport {
 					name(s),
 					async () => {
 						const r = await library.importSillyTavern(await path(s), characterId, { quiet: many });
-						if (r?.kind !== "chat") throw new Error("대화 파일이 아님");
+						if (r?.kind !== "chat") throw new Error(t("chatExtra.notAChatFile"));
 						return r;
 					},
-					{ group: GROUP },
+					{ group: t("chatExtra.importChatsGroup") },
 				),
 			),
 		);

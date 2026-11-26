@@ -1,5 +1,6 @@
 <script lang="ts">
 	// 켜기 동의 (CLAUDE.md 6-D-8): 플러그인이 요청한 권한 전부를 보고 한 번에 동의해야 켜진다 (일부만 허락하는 것은 없음)
+	import { _ } from "svelte-i18n";
 	import type { UserPlugin_Serialize as UserPlugin } from "$ipc/bindings";
 	import { Button, Dialog } from "$shared/ui";
 	import PermissionList from "./PermissionList.svelte";
@@ -18,17 +19,17 @@
 	const risk = $derived(highestRisk(perms));
 </script>
 
-<Dialog bind:open title={`'${plugin?.manifest?.name ?? ""}' (${plugin?.id ?? ""}) 켜기`} description="켜면 이 플러그인의 코드가 실행됩니다. 아래 권한을 모두 허락하는 것입니다 — 일부만 허락할 수는 없습니다" size="md">
+<Dialog bind:open title={$_("communityUi.consentTitle", { values: { name: plugin?.manifest?.name ?? "", id: plugin?.id ?? "" } })} description={$_("communityUi.consentDesc")} size="md">
 	{#if plugin?.codeChanged}
-		<p class="note warn">이 플러그인의 파일이 처음 켤 때와 달라졌습니다. 직접 고친 것이 아니라면 켜지 마세요.</p>
+		<p class="note warn">{$_("communityUi.consentCodeChanged")}</p>
 	{/if}
 	<PermissionList {perms} {added} />
 	{#if risk === "high"}
-		<p class="note">'주의' 권한이 있습니다. AI 호출은 요금이 들 수 있고, 대화 읽기는 대화 내용을 플러그인이 본다는 뜻입니다.</p>
+		<p class="note">{$_("communityUi.consentHighRiskNote")}</p>
 	{/if}
 	{#snippet footer()}
-		<Button variant="ghost" onclick={() => (open = false)}>취소</Button>
-		<Button variant="primary" loading={busy} onclick={onconfirm}>허락하고 켜기</Button>
+		<Button variant="ghost" onclick={() => (open = false)}>{$_("common.cancel")}</Button>
+		<Button variant="primary" loading={busy} onclick={onconfirm}>{$_("communityUi.consentConfirm")}</Button>
 	{/snippet}
 </Dialog>
 

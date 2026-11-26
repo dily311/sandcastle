@@ -4,6 +4,8 @@
 // - 메모리에만 둔다: 앱을 끄면 기다리던 것은 버린다 (닫기 버튼이 남은 수를 알림)
 // - AI 작업은 여기가 아니라 백엔드 TaskManager (요금·실행 주체 기록)
 // 화면 상태(목록 펼침 등)는 JobProgress.svelte가 따로 가진다.
+import { get } from "svelte/store";
+import { _ } from "svelte-i18n";
 import { toasts } from "./toast.svelte";
 
 export interface JobContext {
@@ -162,8 +164,8 @@ class Jobs {
 		const ran = groups.reduce((n, [, g]) => n + g.ok + g.failed + g.skipped, 0);
 		const bad = groups.some(([, g]) => g.failed || g.skipped);
 		if (ran > 1) {
-			const parts = groups.map(([name, g]) => `${name} ${g.ok}개${g.failed ? ` · 실패 ${g.failed}개` : ""}${g.skipped ? ` · 뺌 ${g.skipped}개` : ""}`);
-			toasts.show({ tone: bad ? "warning" : "success", message: parts.join(" / "), source: "작업 대기열" });
+			const parts = groups.map(([name, g]) => `${get(_)("jobs.doneItem", { values: { name, ok: g.ok } })}${g.failed ? get(_)("jobs.failedPart", { values: { count: g.failed } }) : ""}${g.skipped ? get(_)("jobs.skippedPart", { values: { count: g.skipped } }) : ""}`);
+			toasts.show({ tone: bad ? "warning" : "success", message: parts.join(" / "), source: get(_)("jobs.source") });
 		}
 		this.#groups.clear();
 		this.done = this.failed = 0;

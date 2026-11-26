@@ -1,4 +1,6 @@
 // 프리셋·정규식 JSON 가져오기 (설정 > 프리셋과 대화 패널의 프리셋 탭이 같이 씀)
+import { get } from "svelte/store";
+import { _ } from "svelte-i18n";
 import { call, commands } from "$shared/ipc/client";
 import { toasts } from "$shared/stores/toast.svelte";
 import { library } from "$features/character/library.svelte";
@@ -23,7 +25,12 @@ export async function importPresetPaths(paths: string[]): Promise<string | null>
 		if (r?.kind !== "preset") continue;
 		added++;
 		bindTo = presets.length === 1 ? r.presetId : null;
-		toasts.success(`'${r.name}' 가져옴 · 블록 ${r.blockCount}개${r.regexCount ? ` · 정규식 ${r.regexCount}개` : ""}`);
+		const t = get(_);
+		toasts.success(
+			r.regexCount
+				? t("settings.extra.presetImportedWithRegexToast", { values: { name: r.name, blocks: r.blockCount, regex: r.regexCount } })
+				: t("settings.extra.presetImportedToast", { values: { name: r.name, blocks: r.blockCount } }),
+		);
 		for (const w of r.warnings) toasts.info(w);
 	}
 	let regexCount = 0;
@@ -31,8 +38,8 @@ export async function importPresetPaths(paths: string[]): Promise<string | null>
 		const r = await call(commands.importSillytavern(path, null, null, bindTo), src).catch(() => null);
 		if (r?.kind === "regex") regexCount += r.scripts.length;
 	}
-	if (regexCount) toasts.success(`정규식 ${regexCount}개 가져옴${bindTo ? " · 이 프리셋에 묶음" : " · 전역"}`);
-	if (others.length) toasts.info("프리셋·정규식이 아닌 파일은 건너뜀. 캐릭터·대화는 캐릭터 화면에서 가져옴");
+	if (regexCount) toasts.success(get(_)(bindTo ? "settings.extra.regexImportedBoundToast" : "settings.extra.regexImportedGlobalToast", { values: { count: regexCount } }));
+	if (others.length) toasts.info(get(_)("settings.extra.presetImportSkippedToast"));
 	library.presets = await call(commands.listPromptPresets(), src);
 	return added === 1 ? bindTo : null;
 }

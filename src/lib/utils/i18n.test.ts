@@ -93,7 +93,45 @@ describe("i18n (ADR-032, 5-C-2-1)", () => {
 		await setAppLocale("ko", { persistSetting: false });
 	});
 
-	it("변수 치환(interpolation)이 ko/en 모두 정상 동작한다", async () => {
+	it("변수 치환(interpolation)이 ko/en 모두 정상 동작하고 모든 키가 ICU 문법 오류·한글 누출 없이 렌더링된다", async () => {
+		for (const lang of ["ko", "en"] as const) {
+			await setAppLocale(lang, { persistSetting: false });
+			const translate = get(_);
+			const badRender: string[] = [];
+			const leakedHangul: string[] = [];
+
+			for (const [path, mod] of Object.entries(LOCALE_MODULES)) {
+				if (!path.includes(`/locales/${lang}/`)) continue;
+				const checkEntries = (obj: Record<string, unknown>, prefix = "") => {
+					for (const [k, raw] of Object.entries(obj)) {
+						const key = prefix ? `${prefix}.${k}` : k;
+						if (typeof raw === "string") {
+							const vars = [...raw.matchAll(/(?<!\{)\{([A-Za-z0-9_]+)\}(?!\})/g)].map((m) => m[1]);
+							const values = Object.fromEntries(vars.map((v) => [v, `__VAL_${v}__`]));
+							const rendered = translate(key, vars.length ? { values } : undefined);
+							for (const varName of vars) {
+								if (!rendered.includes(`__VAL_${varName}__`)) {
+									badRender.push(`${lang}:${key} -> placeholder {${varName}} not interpolated (got: ${rendered})`);
+								}
+							}
+							// settings.tabKeywords.*는 화면에 보이지 않는 한/영 병기 검색 색인(영문 화면에서 '언어' 검색 복귀용)
+							if (lang === "en" && !key.startsWith("settings.tabKeywords.") && /[가-힣]/.test(rendered)) {
+								leakedHangul.push(`${key}: ${rendered}`);
+							}
+						} else if (raw && typeof raw === "object" && !Array.isArray(raw)) {
+							checkEntries(raw as Record<string, unknown>, key);
+						}
+					}
+				};
+				checkEntries(mod);
+			}
+
+			expect(badRender, `${lang} ICU 변수 치환 실패`).toEqual([]);
+			if (lang === "en") {
+				expect(leakedHangul, "en 사전에 한글 잔존").toEqual([]);
+			}
+		}
+
 		await setAppLocale("ko", { persistSetting: false });
 		expect(get(_)("common.selectedCount", { values: { count: 3, unit: "개" } })).toBe("3개 선택됨");
 		expect(get(_)("common.deleteCount", { values: { count: 2, unit: "장" } })).toBe("2장 삭제");

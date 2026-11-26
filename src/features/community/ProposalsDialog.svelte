@@ -1,19 +1,24 @@
 <script lang="ts">
 	// 고치기 제안 고르기 (6-D-3): 바뀌는 칸만 전·후로 보여 주고 적용/거절, 적용한 것은 되돌리기
+	import { _ } from "svelte-i18n";
 	import type { ChangeProposal } from "$ipc/bindings";
 	import { Badge, Button, Dialog, EmptyState } from "$shared/ui";
 	import { diffLines, fold, show } from "./diff";
 	import { pluginHost } from "./host.svelte";
 	import { proposals, proposalsUi } from "./proposals.svelte";
 
-	const KIND: Record<ChangeProposal["kind"], string> = {
-		character: "캐릭터",
-		persona: "페르소나",
-		lorebook: "로어북",
-		lorebook_entry: "로어북 항목",
-		message: "메시지",
-	};
-	const STATUS: Record<string, string> = { applied: "적용함", rejected: "거절함", reverted: "되돌림" };
+	const KIND = $derived<Record<ChangeProposal["kind"], string>>({
+		character: $_("communityUi.proposalsKinds.character"),
+		persona: $_("communityUi.proposalsKinds.persona"),
+		lorebook: $_("communityUi.proposalsKinds.lorebook"),
+		lorebook_entry: $_("communityUi.proposalsKinds.lorebook_entry"),
+		message: $_("communityUi.proposalsKinds.message"),
+	});
+	const STATUS = $derived<Record<string, string>>({
+		applied: $_("communityUi.proposalsStatus.applied"),
+		rejected: $_("communityUi.proposalsStatus.rejected"),
+		reverted: $_("communityUi.proposalsStatus.reverted"),
+	});
 
 	let busy = $state<string | null>(null);
 
@@ -34,15 +39,15 @@
 	const when = (ms: number) => new Date(ms).toLocaleString();
 </script>
 
-<Dialog bind:open={proposalsUi.open} title="플러그인의 고치기 제안" description="적용하기 전에는 원본이 바뀌지 않습니다. 적용한 것은 그 뒤 다시 고치지 않았다면 되돌릴 수 있습니다." size="lg">
+<Dialog bind:open={proposalsUi.open} title={$_("communityUi.proposalsTitle")} description={$_("communityUi.proposalsDesc")} size="lg">
 	{#if proposals.pending.length === 0}
-		<EmptyState title="기다리는 제안이 없습니다" />
+		<EmptyState title={$_("communityUi.proposalsEmpty")} />
 	{/if}
 	{#each proposals.pending as p (p.id)}
 		<section class="card">
 			<header>
-				<Badge tone="info">{KIND[p.kind]}{p.op === "create" ? " 새로 만들기" : ""}</Badge>
-				<strong>{p.targetLabel || "(이름 없음)"}</strong>
+				<Badge tone="info">{KIND[p.kind]}{p.op === "create" ? $_("communityUi.proposalsCreateSuffix") : ""}</Badge>
+				<strong>{p.targetLabel || $_("communityUi.proposalsUntitled")}</strong>
 				<span class="meta">{sourceName(p.source)} · {when(p.createdAt)}</span>
 			</header>
 			{#if p.reason}<p class="reason">{p.reason}</p>{/if}
@@ -50,32 +55,32 @@
 				<div class="field">
 					<div class="label">{f.label}</div>
 					{#if typeof f.after === "string" && (f.after.includes("\n") || String(f.before ?? "").includes("\n"))}
-						<pre class="diff">{#each fold(diffLines(show(f.before), show(f.after))) as l, i (i)}{#if l.kind === "skip"}<span class="skip">  … 같은 줄 {l.count}개
+						<pre class="diff">{#each fold(diffLines(show(f.before), show(f.after))) as l, i (i)}{#if l.kind === "skip"}<span class="skip">{$_("communityUi.proposalsSameLines", { values: { count: l.count } })}
 </span>{:else}<span class={l.kind}>{l.kind === "del" ? "- " : l.kind === "add" ? "+ " : "  "}{l.text}
 </span>{/if}{/each}</pre>
 					{:else}
-						{#if p.op === "update"}<div class="before">{show(f.before) || "(비어 있음)"}</div>{/if}
-						<div class="after">{show(f.after) || "(비어 있음)"}</div>
+						{#if p.op === "update"}<div class="before">{show(f.before) || $_("communityUi.aiPolicyEmpty")}</div>{/if}
+						<div class="after">{show(f.after) || $_("communityUi.aiPolicyEmpty")}</div>
 					{/if}
 				</div>
 			{/each}
-			{#if p.outdated}<p class="warn">제안한 뒤 원본이 바뀌어 적용할 수 없습니다. 거절하세요.</p>{/if}
+			{#if p.outdated}<p class="warn">{$_("communityUi.proposalsOutdated")}</p>{/if}
 			<footer>
-				<Button variant="ghost" size="sm" disabled={busy === p.id} onclick={() => run(p.id, (id) => proposals.reject(id))}>거절</Button>
-				<Button variant="primary" size="sm" disabled={p.outdated} loading={busy === p.id} onclick={() => run(p.id, (id) => proposals.apply(id))}>적용</Button>
+				<Button variant="ghost" size="sm" disabled={busy === p.id} onclick={() => run(p.id, (id) => proposals.reject(id))}>{$_("communityUi.proposalsReject")}</Button>
+				<Button variant="primary" size="sm" disabled={p.outdated} loading={busy === p.id} onclick={() => run(p.id, (id) => proposals.apply(id))}>{$_("communityUi.proposalsApply")}</Button>
 			</footer>
 		</section>
 	{/each}
 
 	{#if proposals.decided.length > 0}
-		<h3 class="sub">최근에 고른 것</h3>
+		<h3 class="sub">{$_("communityUi.proposalsRecentHeading")}</h3>
 		{#each proposals.decided as p (p.id)}
 			<div class="row">
 				<Badge tone={p.status === "applied" ? "success" : "neutral"}>{STATUS[p.status] ?? p.status}</Badge>
-				<span class="grow">{KIND[p.kind]} · {p.targetLabel || "(이름 없음)"} · {p.fields.map((f) => f.label).join(", ")}</span>
+				<span class="grow">{KIND[p.kind]} · {p.targetLabel || $_("communityUi.proposalsUntitled")} · {p.fields.map((f) => f.label).join(", ")}</span>
 				<span class="meta">{sourceName(p.source)}</span>
 				{#if p.status === "applied"}
-					<Button size="sm" variant="ghost" disabled={!p.canRevert || busy === p.id} title={p.canRevert ? "" : "적용한 뒤 다시 고쳐서 되돌릴 수 없음"} onclick={() => run(p.id, (id) => proposals.revert(id))}>되돌리기</Button>
+					<Button size="sm" variant="ghost" disabled={!p.canRevert || busy === p.id} title={p.canRevert ? "" : $_("communityUi.proposalsCannotRevertTitle")} onclick={() => run(p.id, (id) => proposals.revert(id))}>{$_("communityUi.processRevert")}</Button>
 				{/if}
 			</div>
 		{/each}

@@ -56,7 +56,8 @@
 		"preparing": "Preparing app…",
 		"loadingTheme": "Loading theme…",
 		"loadingSettings": "Loading settings & plugins…",
-		"loadingLibrary": "Loading characters & chats…"
+		"loadingLibrary": "Loading characters & chats…",
+		"started": "Started"
 	},
 	"sidebar": {
 		"pinned": "Pinned",
@@ -82,7 +83,7 @@
 		"close": "Close"
 	},
 	"home": {
-		"greetingDefault": "Hello, {{user}}",
+		"greetingDefault": "Hello, '{{user}}'",
 		"customize": "Customize",
 		"customizeTitle": "Customize Home",
 		"continue": "Continue",
@@ -311,5 +312,156 @@
 		"imgMetaSeed": "Seed",
 		"imgMetaNoise": "Noise Schedule",
 		"imgMetaSmea": "SMEA"
+	},
+	"androidDrive": {
+		"unavailable": "Not available on this device",
+		"noResponse": "No response from Google",
+		"cancelled": "Google sign-in was cancelled — if you didn't cancel it, verify the Android client (package name & SHA-1 signing key) and test users in Google Cloud",
+		"needsConsent": "Google Drive permission needs to be granted again (sign in under Settings > Sync)",
+		"unknownApp": "Google did not recognize this app — check that the package name and SHA-1 signing key match the Android client in Google Cloud",
+		"networkError": "Could not connect to the network",
+		"permFailed": "Failed to get Google permission ({code})",
+		"unknownCode": "unknown"
+	},
+	"dialog": {
+		"pickFileErr": "Cannot pick files (available in the app only)",
+		"pickFolderErr": "Cannot pick a folder (available in the app only)",
+		"pickSaveErr": "Cannot choose save location (available in the app only)",
+		"filterGame": "Game",
+		"filterImage": "Images",
+		"filterStData": "SillyTavern Data",
+		"filterChat": "Chat History",
+		"filterPack": "Character Pack",
+		"filterBackup": "Sandcastle Backup",
+		"filterSync": "Sandcastle Sync",
+		"cannotPickFile": "Cannot select files (available in app only)",
+		"cannotPickFolder": "Cannot select folder (available in app only)",
+		"cannotPickSave": "Cannot select save location (available in app only)"
+	},
+	"avatarFit": {
+		"title": "Adjust Avatar",
+		"stageAria": "Drag or use arrow keys to pan, scroll wheel to zoom",
+		"zoomAria": "Zoom",
+		"centerBtn": "Center"
+	},
+	"appMisc": {
+		"autoSyncSkippedWifi": "Auto-sync: skipped (not on Wi-Fi)",
+		"autoSyncMerged": "Auto-sync: merged {count} device(s), downloaded {down} · uploaded {up} files",
+		"autoSyncFailed": "Auto-sync failed: {reason}",
+		"dropSkippedSome": "Skipped {count} unsupported file(s) here",
+		"dropUnsupportedHere": "This file cannot be used here{hint}",
+		"dropUnavailableScreen": "Cannot drop files on this screen",
+		"bgCountJob": "{count} background(s)",
+		"bgUploadGroup": "Upload Backgrounds",
+		"fontCountJob": "{count} font(s)",
+		"fontUploadGroup": "Upload Fonts",
+		"openReleaseErr": "Could not open release page",
+		"updateNewToast": "New version {latest} available (current {current})",
+		"viewReleaseBtn": "View Release",
+		"aiPresetDefaultName": "Default Preset",
+		"aiPresetDefaultDesc": "General AI conversation settings",
+		"aiPresetCreativeName": "Creative Mode",
+		"aiPresetCreativeDesc": "Creative storytelling and roleplay",
+		"aiPresetPreciseName": "Precise Replies",
+		"aiPresetPreciseDesc": "Fact-focused conversation",
+		"jobSummaryOk": "{name}: {count}",
+		"jobSummaryFailed": "{count} failed",
+		"jobSummarySkipped": "{count} skipped",
+		"jobQueueSource": "Job Queue",
+		"toastDefaultSource": "Notice",
+		"chipRemoveAria": "Remove {label}",
+		"chipAddAria": "Add to {label}",
+		"menuAria": "Menu",
+		"moreActionsAria": "More options"
+	},
+	"jobs": {
+		"source": "Job Queue",
+		"doneItem": "{name}: {ok}",
+		"failedPart": " · {count} failed",
+		"skippedPart": " · {count} skipped"
+	},
+	"toast": {
+		"defaultSource": "Notification",
+		"close": "Close"
+	},
+	"ui": {
+		"menu": "Menu",
+		"moreActions": "More options",
+		"chipEmpty": "None",
+		"chipRemove": "Remove {label}",
+		"chipAdd": "Add to {label}",
+		"avatarFitTitle": "Adjust Avatar",
+		"avatarFitStageAria": "Drag or use arrow keys to position, scroll to zoom",
+		"avatarFitZoomAria": "Zoom",
+		"avatarFitCenter": "Center"
+	},
+	"palette": {
+		"accents": {
+			"seaglass": "Sea Glass",
+			"sunset": "Sunset",
+			"lavender": "Lavender",
+			"rose": "Rose",
+			"sky": "Sky",
+			"moss": "Moss",
+			"sand": "Sand",
+			"slate": "Slate"
+		},
+		"gradients": {
+			"dusk": "Dusk",
+			"sky": "Sky",
+			"aurora": "Aurora",
+			"pastel": "Pastel",
+			"peach": "Peach",
+			"mint": "Mint",
+			"ocean": "Ocean",
+			"night": "Night",
+			"rose": "Rose",
+			"forest": "Forest",
+			"sand": "Sand",
+			"mono": "Ink Mono"
+		},
+		"grays": {
+			"slate": "Slate (Cool Gray)",
+			"gray": "Gray (Neutral)",
+			"mauve": "Mauve (Tinted Violet)",
+			"sage": "Sage (Soft Green)",
+			"olive": "Olive",
+			"sand": "Sand (Warm Gray)"
+		},
+		"themeGroups": {
+			"bg": "Surfaces",
+			"border": "Borders",
+			"text": "Text",
+			"accent": "Accent"
+		},
+		"themeVars": {
+			"bgLabel": "App Background",
+			"bgHint": "Sidebar, header, lists",
+			"surface2Label": "Content Background",
+			"surface2Hint": "Settings and chat body",
+			"bgSunkenLabel": "Sunken Surface",
+			"bgSunkenHint": "Inset cards and sections",
+			"surfaceLabel": "Card & Input",
+			"surfaceHoverLabel": "Hover Surface",
+			"surfaceActiveLabel": "Active Surface",
+			"borderLabel": "Border",
+			"borderStrongLabel": "Strong Border",
+			"borderStrongHint": "Input borders",
+			"textLabel": "Primary Text",
+			"textMutedLabel": "Muted Text",
+			"textFaintLabel": "Faint Text",
+			"textFaintHint": "Timestamps and numbers",
+			"accentLabel": "Accent Color",
+			"accentHint": "Uses selected accent when blank",
+			"textOnAccentLabel": "Text on Accent"
+		},
+		"builtinThemes": {
+			"default": "Default",
+			"ink": "Ink",
+			"wine": "Wine",
+			"vibrowave": "Vibrowave",
+			"forest": "Forest",
+			"contrast": "High Contrast"
+		}
 	}
 }

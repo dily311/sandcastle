@@ -3,6 +3,7 @@
 	// 있는 것: 목차·북마크·분기·상태 패널, 글 골라 북마크·카드, 메시지의 복사·여기서 분기·만든 음성 듣기, 채팅 모드로 돌아가기
 	import { tick } from "svelte";
 	import { fade, fly } from "svelte/transition";
+	import { _ } from "svelte-i18n";
 	import { Bookmark, GitBranch, ListTree, Palette, Pen, Scroll, Variable } from "@lucide/svelte";
 	import SidePanel from "$app/SidePanel.svelte";
 	import { layout } from "$app/layout.svelte";
@@ -87,11 +88,11 @@
 	// ---- 오른쪽 패널: 읽기에 쓰는 탭만 ----
 	$effect(() =>
 		panel.register([
-			{ id: "toc", label: "목차", icon: ListTree },
-			{ id: "bookmarks", label: "북마크", icon: Bookmark },
-			{ id: "branches", label: "분기", icon: GitBranch },
-			...(plugins.on("status") ? [{ id: "status", label: "상태", icon: Variable }] : []),
-			{ id: "theme", label: "테마", icon: Palette },
+			{ id: "toc", label: $_("chatExtra.readView.toc"), icon: ListTree },
+			{ id: "bookmarks", label: $_("chatExtra.readView.bookmarks"), icon: Bookmark },
+			{ id: "branches", label: $_("chatExtra.readView.branches"), icon: GitBranch },
+			...(plugins.on("status") ? [{ id: "status", label: $_("chatExtra.readView.status"), icon: Variable }] : []),
+			{ id: "theme", label: $_("chatExtra.readView.theme"), icon: Palette },
 		]),
 	);
 
@@ -278,8 +279,8 @@
 
 	<section class="reader">
 		<header class="bar" class:listing={listShown}>
-			<IconButton label={listShown ? "대화 목록 닫기" : "대화 목록 열기"} size="sm" active={listShown} onclick={toggleList}><Scroll /></IconButton>
-			<IconButton label="채팅 모드" size="sm" onclick={() => conv && library.setReadMode(conv.id, false)}><Pen /></IconButton>
+			<IconButton label={listShown ? $_("chatExtra.readView.closeList") : $_("chatExtra.readView.openList")} size="sm" active={listShown} onclick={toggleList}><Scroll /></IconButton>
+			<IconButton label={$_("chatExtra.readView.toChatMode")} size="sm" onclick={() => conv && library.setReadMode(conv.id, false)}><Pen /></IconButton>
 		</header>
 
 		{#if statusOn && layout.narrow && statusView.aboveChat}
@@ -292,17 +293,17 @@
 			{#if !session || session.loading}
 				<div class="center"><Spinner /></div>
 			{:else if !conv}
-				<EmptyState title="대화를 찾을 수 없음" description="지워졌거나 아직 불러오지 못함" />
+				<EmptyState title={$_("chatExtra.readView.notFoundTitle")} description={$_("chatExtra.readView.notFoundDesc")} />
 			{:else}
 				<article class="text sc-chat-log">
-					{#if !session.messages.length}<p class="empty">메시지 없음</p>{/if}
+					{#if !session.messages.length}<p class="empty">{$_("chatExtra.readView.noMessages")}</p>{/if}
 					{#if start > 0}
-						<button class="earlier" onclick={() => showEarlier()}>이전 메시지 {Math.min(PAGE, start)}개 더 보기 <small>(앞에 {start}개)</small></button>
+						<button class="earlier" onclick={() => showEarlier()}>{$_("chatExtra.readView.showEarlier", { values: { count: Math.min(PAGE, start) } })} <small>{$_("chatExtra.readView.aheadCount", { values: { count: start } })}</small></button>
 					{/if}
 					{#each visible as m, j (m.id)}
 						{@const i = start + j}
 						{@const ch = metaOf(m).chapter}
-						{#if ch}<h2 class="chapter sc-chapter" id="chapter-{m.id}"><span>{chapters[m.id]}장</span>{ch}</h2>{/if}
+						{#if ch}<h2 class="chapter sc-chapter" id="chapter-{m.id}"><span>{$_("chatExtra.readView.chapterNo", { values: { no: chapters[m.id] } })}</span>{ch}</h2>{/if}
 						<MessageItem readonly msg={m} no={i + 1} avatar={avatarOf(m)} avatarFit={ownerOf(m)?.avatarFit} {session} images={pickVariants(imageVariants, m.id)} isLast={i === session.messages.length - 1} onbranch={branch} onprompt={noop} marks={marksByMsg.get(m.id)} oncard={cardFromMark} onmarkremove={removeMark} pinnedKeys={selectedPinKeys} />
 					{/each}
 				</article>
@@ -311,7 +312,7 @@
 	</section>
 
 	{#if panel.open && conv && session}
-		<SidePanel label="읽기 패널">
+		<SidePanel label={$_("chatExtra.readView.panelAria")}>
 			<ChatPanel {conv} {session} {chapters} {reading} status={statusBlocks} onjump={jumpFromPanel} oncard={cardFromMark} onopen={openAt} draft={{ get: () => "", set: noop }} />
 		</SidePanel>
 	{/if}

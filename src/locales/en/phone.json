@@ -181,7 +181,8 @@
 		"profilePromptDesc": "Instruction sent when clicking 'AI Decorate' on a contact's profile.",
 		"snsPromptHeading": "Phone SNS AI Generation Prompt",
 		"snsPromptDesc": "Instruction sent when clicking AI Generate on a character's SNS page.",
-		"charNameVar": "'{{char}}' character name"
+		"charNameVar": "'{{char}}' character name",
+		"phoneChatFallback": "Phone Chat"
 	},
 	"phoneProfileUi": {
 		"savedToast": "Profile saved",
@@ -271,5 +272,9 @@
 		"snsPublishBtn": "Post",
 		"snsEmptyPosts": "No posts yet",
 		"snsGenerateEmptyBtn": "Generate Posts & Profile with AI"
+	},
+	"phoneStore": {
+		"defaultChatTitle": "Phone Chat",
+		"photoPreview": "Photo"
 	}
 }

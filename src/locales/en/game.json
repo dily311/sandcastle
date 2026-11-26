@@ -36,7 +36,9 @@
 		"titlePlaceholder": "Game title",
 		"templateField": "Template",
 		"noCapInfo": "No capability info",
-		"createBtn": "Create"
+		"createBtn": "Create",
+		"importJobGroup": "Import Game",
+		"deleteJobGroup": "Delete Game"
 	},
 	"gameUi": {
 		"dropCoverLabel": "Set as Game Cover",
@@ -186,7 +188,14 @@
 		"loadingLocation": "Loading location",
 		"closeDrawnTitle": "Close · {prompt}",
 		"hiddenHint": "Click anywhere on stage to show dialogue box",
-		"busyLabel": "Working"
+		"busyLabel": "Working",
+		"sessionJobLabel": "Play Session",
+		"deleteSessionJobGroup": "Delete Play Session",
+		"nextLineSimpleAria": "Next line",
+		"nothingHappened": "Nothing happened.",
+		"messageEditedToast": "Message edited",
+		"lineCopiedToast": "Copied line",
+		"copyFailedToast": "Failed to copy"
 	},
 	"gamePlayExtra": {
 		"appDefault": "App Default",
@@ -263,7 +272,46 @@
 		"showOrig": "Show Original",
 		"closeEsc": "Close (Esc)",
 		"earlierOmitted": "Earlier lines omitted",
-		"noLinesYet": "No lines yet"
+		"noLinesYet": "No lines yet",
+		"moveBlockScene": "Finish the scene before moving",
+		"moveBlockCond": "Requirement not met"
+	},
+	"gamePlayUtils": {
+		"itemFallback": "Item",
+		"locationFallback": "Location",
+		"zoneFallback": "Zone",
+		"timePeriodFallback": "Time period",
+		"weatherFallback": "Weather",
+		"itemGainedOne": "Obtained {name}.",
+		"itemGainedCount": "Obtained {name} ×{count}.",
+		"durationHours": "{h}h",
+		"durationMinutes": "{m}m",
+		"condNeedCheck": "Check condition",
+		"condMet": "Condition met",
+		"condFlagGte": "{key} ≥ {required}",
+		"condMinTime": "Total time ≥ {duration}",
+		"condInLocation": "At {place}",
+		"condInZone": "In {place}",
+		"condHasItem": "Has {name} ×{min}",
+		"condTimePeriod": "{period} time",
+		"condWeather": "{weather} weather",
+		"axisAffection": "Affection",
+		"axisTrust": "Trust",
+		"axisTension": "Tension",
+		"condRelation": "{from}'s {axis} toward {to} {op} {required}",
+		"condAtTime": "Reached {time}",
+		"condSpecial": "Special condition met"
+	},
+	"gameVnTheme": {
+		"aspectFull": "Full",
+		"boxCard": "Card",
+		"boxBar": "Bottom Bar",
+		"boxClassic": "Classic",
+		"presetApp": "App Default",
+		"presetSakura": "Sakura Pink",
+		"presetMidnight": "Midnight Novel",
+		"presetRetro": "Retro 90s",
+		"presetMinimal": "Minimal Cinema"
 	},
 	"gameEditor": {
 		"capChoices": "Choices",

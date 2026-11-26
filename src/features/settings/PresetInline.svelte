@@ -1,5 +1,6 @@
 <script lang="ts">
 	// 프리셋을 그 자리에서 고치기 (이름·설명 빼고, 자동 저장). 대화·게임 패널의 컨텍스트 탭이 같이 씀
+	import { _ } from "svelte-i18n";
 	import { presetMacros } from "$features/character/presetMacros.svelte";
 	import type { PromptBlocksInput_Deserialize as BlockInput, PromptPresetDetail_Serialize as PresetDetail } from "$ipc/bindings";
 	import { call, commands } from "$shared/ipc/client";
@@ -35,9 +36,9 @@
 		<PresetEditor {detail} {saving} onsave={save} quick autosave {model} />
 	{/key}
 {:else if presetId}
-	<p class="note">프리셋 불러오는 중…</p>
+	<p class="note">{$_("settings.extra.presetLoading")}</p>
 {:else}
-	<p class="note">쓰는 프리셋 없음. 설정 &gt; 프리셋에서 만들 수 있음</p>
+	<p class="note">{$_("settings.extra.presetNone")}</p>
 {/if}
 
 <style>

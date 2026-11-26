@@ -1,4 +1,8 @@
 // 비주얼 노벨 / 연애시뮬 플레이 화면 커스텀 테마 설정 (화면 비율 · 프리셋 · 대사창 · 글자 크기 · 강조색 · 스탠딩 크기)
+import { get } from "svelte/store";
+import { _ } from "svelte-i18n";
+
+const t = (k: string) => get(_)(k);
 
 export type VnAspect = "full" | "16:9" | "4:3" | "21:9";
 export type VnPreset = "app" | "sakura" | "midnight" | "retro" | "minimal";
@@ -19,16 +23,36 @@ export interface VnThemeConfig {
 }
 
 export const VN_ASPECTS: { value: VnAspect; label: string }[] = [
-	{ value: "full", label: "전체" },
+	{
+		value: "full",
+		get label() {
+			return t("gameVnTheme.aspectFull");
+		},
+	},
 	{ value: "16:9", label: "16:9" },
 	{ value: "4:3", label: "4:3" },
 	{ value: "21:9", label: "21:9" },
 ];
 
 export const VN_BOX_STYLES: { value: VnBoxStyle; label: string }[] = [
-	{ value: "card", label: "카드" },
-	{ value: "bar", label: "하단 바" },
-	{ value: "classic", label: "클래식" },
+	{
+		value: "card",
+		get label() {
+			return t("gameVnTheme.boxCard");
+		},
+	},
+	{
+		value: "bar",
+		get label() {
+			return t("gameVnTheme.boxBar");
+		},
+	},
+	{
+		value: "classic",
+		get label() {
+			return t("gameVnTheme.boxClassic");
+		},
+	},
 ];
 
 export const VN_PRESETS: {
@@ -39,11 +63,56 @@ export const VN_PRESETS: {
 	accent: string;
 	defaultBoxStyle: VnBoxStyle;
 }[] = [
-	{ id: "app", name: "앱 기본", bg: "var(--bg-sunken)", box: "var(--surface)", accent: "var(--accent)", defaultBoxStyle: "card" },
-	{ id: "sakura", name: "사쿠라 핑크", bg: "#2b1926", box: "#fff4f8", accent: "#ec4899", defaultBoxStyle: "card" },
-	{ id: "midnight", name: "미드나잇 노벨", bg: "#0d1024", box: "#171c36", accent: "#818cf8", defaultBoxStyle: "card" },
-	{ id: "retro", name: "레트로 90s", bg: "#0a0e1a", box: "#122147", accent: "#38bdf8", defaultBoxStyle: "classic" },
-	{ id: "minimal", name: "미니멀 시네마", bg: "#0b0b0e", box: "#141419", accent: "#f59e0b", defaultBoxStyle: "bar" },
+	{
+		id: "app",
+		get name() {
+			return t("gameVnTheme.presetApp");
+		},
+		bg: "var(--bg-sunken)",
+		box: "var(--surface)",
+		accent: "var(--accent)",
+		defaultBoxStyle: "card",
+	},
+	{
+		id: "sakura",
+		get name() {
+			return t("gameVnTheme.presetSakura");
+		},
+		bg: "#2b1926",
+		box: "#fff4f8",
+		accent: "#ec4899",
+		defaultBoxStyle: "card",
+	},
+	{
+		id: "midnight",
+		get name() {
+			return t("gameVnTheme.presetMidnight");
+		},
+		bg: "#0d1024",
+		box: "#171c36",
+		accent: "#818cf8",
+		defaultBoxStyle: "card",
+	},
+	{
+		id: "retro",
+		get name() {
+			return t("gameVnTheme.presetRetro");
+		},
+		bg: "#0a0e1a",
+		box: "#122147",
+		accent: "#38bdf8",
+		defaultBoxStyle: "classic",
+	},
+	{
+		id: "minimal",
+		get name() {
+			return t("gameVnTheme.presetMinimal");
+		},
+		bg: "#0b0b0e",
+		box: "#141419",
+		accent: "#f59e0b",
+		defaultBoxStyle: "bar",
+	},
 ];
 
 export const DEFAULT_VN_THEME: VnThemeConfig = {

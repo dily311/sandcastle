@@ -1,5 +1,6 @@
 import { contextMenuRegistry } from "$/lib/contextmenu/registry";
 import { contextActionRegistry } from "$/lib/contextmenu/actions";
+import { tr } from "$lib/utils/i18n";
 import Simeji from "./Simeji.svelte";
 import type { FeatureRuntime } from "$/lib/features/types";
 import { widgetFeatureConfig, widgetFeatures } from "$/lib/features/widgetFeatures.svelte";
@@ -149,19 +150,19 @@ export function registerMascotMenuFeature() {
 		}),
 		contextActionRegistry.register("mascot.gift.cake", (context) => {
 			const { char, game } = getCtx(context);
-			if (char && game) void game.giveGiftToMascot(char.id, "케이크");
+			if (char && game) void game.giveGiftToMascot(char.id, tr("mascotLib.giftCake"));
 		}),
 		contextActionRegistry.register("mascot.gift.coffee", (context) => {
 			const { char, game } = getCtx(context);
-			if (char && game) void game.giveGiftToMascot(char.id, "따뜻한 커피");
+			if (char && game) void game.giveGiftToMascot(char.id, tr("mascotLib.giftCoffee"));
 		}),
 		contextActionRegistry.register("mascot.gift.flower", (context) => {
 			const { char, game } = getCtx(context);
-			if (char && game) void game.giveGiftToMascot(char.id, "꽃다발");
+			if (char && game) void game.giveGiftToMascot(char.id, tr("mascotLib.giftFlower"));
 		}),
 		contextActionRegistry.register("mascot.gift.candy", (context) => {
 			const { char, game } = getCtx(context);
-			if (char && game) void game.giveGiftToMascot(char.id, "별사탕");
+			if (char && game) void game.giveGiftToMascot(char.id, tr("mascotLib.giftCandy"));
 		}),
 		contextActionRegistry.register("mascot.gift.custom", (context) => {
 			const { char } = getCtx(context);

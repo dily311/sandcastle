@@ -3,6 +3,7 @@
 // AI를 부르는 커맨드는 한 번 실행에 설정의 상한(기본 5, 최대 50)번까지 — 넘으면 오류로 멈춘다.
 // 변수는 실행 중에 들고 있다가 끝날 때 한 번 저장한다 (반복 안에서 여러 번 바꿔도 저장은 한 번).
 import { call, commands } from "$shared/ipc/client";
+import { tr } from "$lib/utils/i18n";
 import { chooseFrom, confirmAction, promptText } from "$shared/stores/confirm.svelte";
 import { toasts } from "$shared/stores/toast.svelte";
 import { pluginSetting } from "$shared/stores/aiTools.svelte";
@@ -85,7 +86,7 @@ export function slashEnv(session: ChatSession, opts: SlashOpts = {}): ScriptEnv 
 	const limit = aiLimit();
 	let aiCalls = 0;
 	const ai = (name: string) => {
-		if (++aiCalls > limit) throw new ScriptError(`AI 호출이 한 번 실행 상한(${limit}번)을 넘어 /${name}에서 멈춤 — 설정 > 빠른 답장에서 바꿀 수 있음`);
+		if (++aiCalls > limit) throw new ScriptError(tr("slash.aiLimitExceeded", { limit, name }));
 	};
 	/** 변수 커맨드 묶음 (대화 변수·전역 변수가 같은 모양) */
 	const varCommands = (store: Record<string, string>, dirty: () => void, prefix: "" | "global"): Record<string, Handler> => {
@@ -102,7 +103,7 @@ export function slashEnv(session: ChatSession, opts: SlashOpts = {}): ScriptEnv 
 		return {
 			[`set${prefix}var`]: ({ named, unnamed }) => {
 				const key = text(named.key).trim();
-				if (!key) throw new ScriptError(`/set${prefix}var: key=이름 이 필요함`);
+				if (!key) throw new ScriptError(tr("slash.setVarKeyRequired", { prefix }));
 				set(key, text(unnamed), named.index === undefined ? undefined : text(named.index));
 			},
 			[`get${prefix}var`]: ({ named, unnamed }) => {
@@ -111,7 +112,7 @@ export function slashEnv(session: ChatSession, opts: SlashOpts = {}): ScriptEnv 
 			},
 			[`add${prefix}var`]: ({ named, unnamed }) => {
 				const key = text(named.key).trim();
-				if (!key) throw new ScriptError(`/add${prefix}var: key=이름 이 필요함`);
+				if (!key) throw new ScriptError(tr("slash.addVarKeyRequired", { prefix }));
 				return set(key, addTo(store[key] ?? "", text(unnamed)));
 			},
 			[`inc${prefix}var`]: ({ named, unnamed }) => step(keyOf(named, unnamed), 1),
@@ -124,7 +125,7 @@ export function slashEnv(session: ChatSession, opts: SlashOpts = {}): ScriptEnv 
 	};
 	const nextSeq = () => (session.messages.at(-1)?.seq ?? 0) + 1;
 	const append = async (role: "user" | "assistant" | "system", content: string, name: string | null = null, meta: Record<string, unknown> | null = null) => {
-		if (!content.trim()) throw new ScriptError("보낼 글이 비어 있음");
+		if (!content.trim()) throw new ScriptError(tr("slash.emptyContent"));
 		const character = role === "assistant" ? (conv()?.characterId ?? null) : null;
 		const m = await call(commands.appendMessage({ conversationId: convId, seq: nextSeq(), role, name, content, characterId: character, meta: meta as never }), src);
 		session.messages.push(m);
@@ -138,13 +139,13 @@ export function slashEnv(session: ChatSession, opts: SlashOpts = {}): ScriptEnv 
 	let lastGen: { text: string; prompt: unknown } | null = null;
 	/** /gen 결과: 잘렸으면 알림 (5-E-20-6-6) */
 	const generated = (name: string, r: { text: string; truncated: boolean; prompt?: unknown }) => {
-		if (r.truncated) toasts.show({ tone: "warning", message: `/${name} 결과가 응답 길이 한도에서 잘림 — 프리셋의 '응답 길이'를 늘리면 됨`, source: "슬래시 커맨드" });
+		if (r.truncated) toasts.show({ tone: "warning", message: tr("slash.genTruncated", { name }), source: tr("slash.source") });
 		if (r.text.trim() && r.prompt) lastGen = { text: r.text.trim(), prompt: r.prompt };
 		return r.text;
 	};
 	const setOf = (name: string) => {
 		const s = quickReplies.sets.find((x) => x.name === name.trim());
-		if (!s) throw new ScriptError(`빠른 답장 세트를 찾지 못함 (${name})`);
+		if (!s) throw new ScriptError(tr("slash.qrSetNotFound", { name }));
 		return s;
 	};
 	const setEnabled = async (name: string, on: boolean) => {
@@ -194,7 +195,7 @@ export function slashEnv(session: ChatSession, opts: SlashOpts = {}): ScriptEnv 
 		},
 		// /impersonate 초안: 대필로 내 다음 대사를 입력칸에 (대필 플러그인이 켜져 있어야 함)
 		impersonate: async ({ unnamed }, ) => {
-			if (!plugins.on("ghostwrite")) throw new ScriptError("/impersonate: 대필 플러그인을 켜야 함 (설정 > 코어 플러그인)");
+			if (!plugins.on("ghostwrite")) throw new ScriptError(tr("slash.ghostPluginOff"));
 			ai("impersonate");
 			let draft = opts.input ?? "";
 			const out = await ghost.run(convId, text(unnamed) || null, () => draft, (v) => {
@@ -231,7 +232,7 @@ export function slashEnv(session: ChatSession, opts: SlashOpts = {}): ScriptEnv 
 			const c = conv();
 			if (!name || !c) return userName();
 			const p = library.personas.find((x) => x.name === name) ?? library.personas.find((x) => x.name.toLowerCase() === name.toLowerCase());
-			if (!p) throw new ScriptError(`/persona: 페르소나를 찾지 못함 (${name})`);
+			if (!p) throw new ScriptError(tr("slash.personaNotFound", { name }));
 			await library.setOptions(c.id, { personaId: p.id, promptPresetId: c.promptPresetId, apiProfileId: c.apiProfileId, model: c.model });
 			return p.name;
 		},
@@ -241,7 +242,7 @@ export function slashEnv(session: ChatSession, opts: SlashOpts = {}): ScriptEnv 
 			if (!c) return "";
 			if (!name) return library.presets.find((x) => x.id === c.promptPresetId)?.name ?? "";
 			const p = library.presets.find((x) => x.name === name);
-			if (!p) throw new ScriptError(`/preset: 프리셋을 찾지 못함 (${name})`);
+			if (!p) throw new ScriptError(tr("slash.presetNotFound", { name }));
 			await library.setOptions(c.id, { personaId: c.personaId, promptPresetId: p.id, apiProfileId: c.apiProfileId, model: c.model });
 			return p.name;
 		},
@@ -260,7 +261,7 @@ export function slashEnv(session: ChatSession, opts: SlashOpts = {}): ScriptEnv 
 			if (!text(unnamed).trim()) delete injects[id];
 			else {
 				const position = text(named.position) || "after";
-				if (!["before", "after", "chat", "none"].includes(position)) throw new ScriptError(`/inject: position은 before·after·chat·none (${position})`);
+				if (!["before", "after", "chat", "none"].includes(position)) throw new ScriptError(tr("slash.invalidInjectPos", { position }));
 				injects[id] = { value: text(unnamed), position, depth: Number(text(named.depth)) || 4, role: text(named.role) || "system" };
 			}
 			await library.patchMeta(convId, { injects });
@@ -296,12 +297,12 @@ export function slashEnv(session: ChatSession, opts: SlashOpts = {}): ScriptEnv 
 			const tone = sev === "success" || sev === "warning" || sev === "error" ? sev : "info";
 			const title = text(named.title).trim();
 			const ms = Number(text(named.timeout));
-			toasts.show({ tone, message: title ? `${title} · ${text(unnamed)}` : text(unnamed), source: "슬래시 커맨드" }, Number.isFinite(ms) && ms > 0 ? ms : undefined);
+			toasts.show({ tone, message: title ? `${title} · ${text(unnamed)}` : text(unnamed), source: tr("slash.source") }, Number.isFinite(ms) && ms > 0 ? ms : undefined);
 		},
 		// /input default=… placeholder=… 질문 → 입력한 글 (취소하면 빈 글)
 		// 취소하면 스크립트를 멈춤 (5-E-20-6-9). 다시 실행(6-11)할 때는 앞 실행의 답을 다시 묻지 않고 씀
 		input: async ({ named, unnamed }) => {
-			const title = text(unnamed) || "입력";
+			const title = text(unnamed) || tr("slash.inputDefaultTitle");
 			const again = opts.answers?.[title];
 			const v = again ?? (await promptText({ title, input: { value: text(named.default), placeholder: text(named.placeholder) }, confirmLabel: text(named.okButton) || undefined }));
 			if (v === null) abortScript();
@@ -311,7 +312,7 @@ export function slashEnv(session: ChatSession, opts: SlashOpts = {}): ScriptEnv 
 		// /popup okButton=… cancelButton=… 글 → 확인 1 / 취소 0 (취소 버튼은 cancelButton을 줄 때만)
 		popup: async ({ named, unnamed }) => {
 			const cancel = text(named.cancelButton).trim();
-			const ok = await confirmAction({ title: text(named.title) || "알림", message: text(unnamed), confirmLabel: text(named.okButton) || "확인", cancelLabel: cancel || undefined, hideCancel: !cancel });
+			const ok = await confirmAction({ title: text(named.title) || tr("slash.popupDefaultTitle"), message: text(unnamed), confirmLabel: text(named.okButton) || tr("slash.popupDefaultOk"), cancelLabel: cancel || undefined, hideCancel: !cancel });
 			return ok ? "1" : "0";
 		},
 		// /buttons labels=["가","나"] multiple=true 질문 → 고른 이름 (multiple이면 JSON 목록, 취소하면 빈 글)
@@ -323,9 +324,9 @@ export function slashEnv(session: ChatSession, opts: SlashOpts = {}): ScriptEnv 
 			} catch {
 				labels = text(named.labels).split(",").map((x) => x.trim()).filter(Boolean);
 			}
-			if (!labels.length) throw new ScriptError('/buttons: labels=["가","나"] 가 필요함');
+			if (!labels.length) throw new ScriptError(tr("slash.buttonsLabelsRequired"));
 			const multiple = ["true", "on", "1"].includes(text(named.multiple).toLowerCase());
-			return (await chooseFrom({ title: text(unnamed) || "고르기", choices: labels, multiple })) ?? "";
+			return (await chooseFrom({ title: text(unnamed) || tr("slash.buttonsDefaultTitle"), choices: labels, multiple })) ?? "";
 		},
 		...varCommands(vars, () => (varsDirty = true), ""),
 		...varCommands(globals, () => (globalsDirty = true), "global"),
@@ -374,9 +375,15 @@ export function slashEnv(session: ChatSession, opts: SlashOpts = {}): ScriptEnv 
 					return [...session.messages].reverse().find((m) => m.role === "user")?.content ?? "";
 				case "idle_duration": {
 					const last = session.messages.at(-1)?.createdAt;
-					if (!last) return "처음";
+					if (!last) return tr("slash.idleNever");
 					const min = Math.floor((Date.now() - last) / 60000);
-					return min < 1 ? "방금" : min < 60 ? `${min}분` : min < 1440 ? `${Math.floor(min / 60)}시간` : `${Math.floor(min / 1440)}일`;
+					return min < 1
+						? tr("slash.idleJustNow")
+						: min < 60
+							? tr("slash.idleMinutes", { n: min })
+							: min < 1440
+								? tr("slash.idleHours", { n: Math.floor(min / 60) })
+								: tr("slash.idleDays", { n: Math.floor(min / 1440) });
 				}
 				default:
 					return undefined;
@@ -387,25 +394,25 @@ export function slashEnv(session: ChatSession, opts: SlashOpts = {}): ScriptEnv 
 
 /** 입력칸·빠른 답장에서 실행. 오류는 알림으로 (멈춘 것은 조용히) */
 export async function runSlash(source: string, session: ChatSession, opts: SlashOpts = {}): Promise<void> {
-	if (session.busy) return void toasts.error("응답을 받는 중이라 실행하지 않음");
+	if (session.busy) return void toasts.error(tr("slash.busyError"));
 	const convId = session.convId;
-	if (slashRuns.isRunning(convId)) return void toasts.error("이 대화에서 스크립트가 도는 중 — 멈춘 뒤 다시");
+	if (slashRuns.isRunning(convId)) return void toasts.error(tr("slash.alreadyRunningError"));
 	if (!quickReplies.loaded) await quickReplies.load().catch(() => {});
 	let at = "";
 	const env = { ...slashEnv(session, opts), stopped: () => slashRuns.stopped(convId), trace: (name: string) => (at = name) };
 	slashRuns.start(convId);
 	try {
 		const r = await runScript(source, env);
-		if (r.stopped) toasts.info("스크립트를 멈춤");
+		if (r.stopped) toasts.info(tr("slash.stoppedToast"));
 	} catch (e) {
-		if (slashRuns.stopped(convId)) toasts.info("스크립트를 멈춤");
+		if (slashRuns.stopped(convId)) toasts.info(tr("slash.stoppedToast"));
 		else {
 			// 실패: 어디서였는지와 '다시 실행' (앞 실행의 /input 답은 다시 묻지 않음, 5-E-20-6-11).
 			// AI·저장 오류 자체는 call이 이미 알림을 띄웠으므로 여기서는 멈춘 자리와 다시 실행만
-			const why = e instanceof ScriptError ? e.message : `/${at || "?"}에서 실패해 멈춤`;
+			const why = e instanceof ScriptError ? e.message : tr("slash.failedAt", { at: at || "?" });
 			const answers = { ...(opts.answers ?? {}), ...env.answers };
 			toasts.show(
-				{ tone: "error", message: why, source: "슬래시 커맨드", action: { label: "다시 실행", run: () => void runSlash(source, session, { ...opts, answers }) } },
+				{ tone: "error", message: why, source: tr("slash.source"), action: { label: tr("slash.retryAction"), run: () => void runSlash(source, session, { ...opts, answers }) } },
 				20_000,
 			);
 		}
@@ -422,7 +429,7 @@ export function slashQueue(max = 20): (text: string, session: ChatSession, opts:
 	let chain: Promise<void> = Promise.resolve();
 	let queued = 0;
 	return (text, session, opts) => {
-		if (queued >= max) return void toasts.error("슬래시 커맨드 요청이 너무 많아 건너뜀");
+		if (queued >= max) return void toasts.error(tr("slash.queueFullError"));
 		queued++;
 		chain = chain
 			.then(() => runSlash(text, session, opts()))

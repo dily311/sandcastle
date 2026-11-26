@@ -44,4 +44,3 @@ export function trashedToast(item: TrashItem, onRestored?: () => unknown) {
 export function trashHint(): string {
 	return t("settings.trash.hint");
 }
-export const TRASH_HINT = "휴지통으로 옮김. 설정 > 데이터 > 휴지통에서 되살릴 수 있음";

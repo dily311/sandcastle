@@ -3,7 +3,7 @@
 	import { _ } from "svelte-i18n";
 	import { jobs, SKIPPED } from "$shared/stores/jobs.svelte";
 	import { lastAt } from "$features/character/library.svelte";
-	import { TRASH_HINT, trashedToast } from "$shared/trash";
+	import { trashHint, trashedToast } from "$shared/trash";
 	import { Camera, Copy, ImagePlus, Move, Pin, PinOff, X as XIcon } from "@lucide/svelte";
 	import { ChevronRight, Download, Ellipsis, Gamepad2, MessageSquarePlus, Pencil, Plus, Star, StarOff, Trash2, Upload, UserRound, Users } from "@lucide/svelte";
 	import type { GameProject_Serialize as GameProject } from "$ipc/bindings";
@@ -405,7 +405,7 @@
 	}
 	async function removeCharacter(c: Character, leave = true) {
 		const n = library.convsOf(c.id).length;
-		if (!(await confirmAction({ title: $_("characterPage.deleteTitle"), message: $_("characterPage.deleteOneMsg", { values: { name: c.name, extra: n ? $_("characterPage.deleteOneExtra", { values: { count: n } }) : "", hint: TRASH_HINT } }), confirmLabel: $_("common.delete"), danger: true }))) return;
+		if (!(await confirmAction({ title: $_("characterPage.deleteTitle"), message: $_("characterPage.deleteOneMsg", { values: { name: c.name, extra: n ? $_("characterPage.deleteOneExtra", { values: { count: n } }) : "", hint: trashHint() } }), confirmLabel: $_("common.delete"), danger: true }))) return;
 		if (leave) nav.replace({ page: "character" });
 		// 하나씩 빠르게 지워도 앞 것이 끝날 때까지 줄을 서서 기다린다 (5-E-28 — 전에는 "데이터베이스가 사용 중"으로 거절됨)
 		const item = await deleteJob(c.id, c.name).catch(() => null);

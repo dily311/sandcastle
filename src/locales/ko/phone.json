@@ -181,7 +181,8 @@
 		"profilePromptDesc": "폰 친구 프로필에서 'AI 꾸미기'를 눌렀을 때 보내는 지시문",
 		"snsPromptHeading": "폰 SNS 페이지 AI 생성 프롬프트",
 		"snsPromptDesc": "폰 개인 SNS 페이지에서 AI 생성을 눌렀을 때 보내는 지시문",
-		"charNameVar": "'{{char}}' 캐릭터 이름"
+		"charNameVar": "'{{char}}' 캐릭터 이름",
+		"phoneChatFallback": "폰 대화"
 	},
 	"phoneProfileUi": {
 		"savedToast": "프로필을 저장함",
@@ -271,5 +272,9 @@
 		"snsPublishBtn": "올리기",
 		"snsEmptyPosts": "게시물이 아직 없습니다",
 		"snsGenerateEmptyBtn": "AI로 게시물·프로필 생성하기"
+	},
+	"phoneStore": {
+		"defaultChatTitle": "폰 대화",
+		"photoPreview": "사진"
 	}
 }

@@ -6,7 +6,18 @@
 - 저장된 언어가 없을 때 초기 기본값은 OS/브라우저 언어가 `ko*`면 `ko`, 그 밖은 `en`.
 ***************************************************************************** */
 
-import { getLocaleFromNavigator, init, locale, register, waitLocale } from "svelte-i18n";
+import { get } from "svelte/store";
+import { _, getLocaleFromNavigator, init, locale, register, waitLocale } from "svelte-i18n";
+
+export { _ };
+
+/** 컴포넌트 밖(TS 모듈·스토어·유틸)에서 현재 로케일 문구를 즉시 꺼낸다 */
+export function tr(
+	key: string,
+	values?: Record<string, string | number | boolean | Date | null | undefined>,
+): string {
+	return get(_)(key, values ? { values } : undefined);
+}
 
 const LOCALE_LOADERS = import.meta.glob("../../locales/*/*.json") as Record<
 	string,

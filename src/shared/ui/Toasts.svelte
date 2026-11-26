@@ -1,5 +1,6 @@
 <script lang="ts">
 	import { CircleAlert, CircleCheck, Info, TriangleAlert, X } from "@lucide/svelte";
+	import { _ } from "svelte-i18n";
 	import { toasts } from "$shared/stores/toast.svelte";
 
 	const icons = { info: Info, success: CircleCheck, warning: TriangleAlert, error: CircleAlert };
@@ -17,7 +18,7 @@
 			{#if t.action}
 				<button class="act" onclick={() => { t.action?.run(); toasts.dismiss(t.id); }}>{t.action.label}</button>
 			{/if}
-			<button class="x" aria-label="닫기" onclick={() => toasts.dismiss(t.id)}><X /></button>
+			<button class="x" aria-label={$_("toast.close")} onclick={() => toasts.dismiss(t.id)}><X /></button>
 		</div>
 	{/each}
 </div>

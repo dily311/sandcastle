@@ -1,8 +1,12 @@
 // 테마: 화면 모드별로 덮어쓸 CSS 변수 묶음 + 직접 쓰는 CSS.
 // - 기본 제공 테마는 여기 들어 있고 (지울 수 없음, 복제해서 고칠 수 있음)
 // - 사용자 테마는 앱 데이터 themes 폴더의 JSON (백엔드 ThemeManager)
+import { get } from "svelte/store";
+import { _ } from "svelte-i18n";
 import { grayScale } from "./grays";
 import { accentValue } from "./accents";
+
+const tr = (key: string) => get(_)(key);
 
 export type Mode = "light" | "dark";
 export type ColorMap = Record<string, string>;
@@ -15,39 +19,39 @@ export interface ThemeColors {
 export const COLOR_VARS: { id: string; group: string; items: { name: string; label: string; hint?: string }[] }[] = [
 	{
 		id: "bg",
-		group: "바탕",
+		get group() { return tr("palette.themeGroups.bg"); },
 		items: [
-			{ name: "--bg", label: "앱 바탕", hint: "사이드바·헤더·목록" },
-			{ name: "--surface-2", label: "본문 바탕", hint: "설정·대화 본문" },
-			{ name: "--bg-sunken", label: "묶음 바탕", hint: "설정 카드처럼 한 단계 들어간 곳" },
-			{ name: "--surface", label: "카드·입력칸" },
-			{ name: "--surface-hover", label: "마우스 올렸을 때" },
-			{ name: "--surface-active", label: "선택됨" },
+			{ name: "--bg", get label() { return tr("palette.themeVars.bgLabel"); }, get hint() { return tr("palette.themeVars.bgHint"); } },
+			{ name: "--surface-2", get label() { return tr("palette.themeVars.surface2Label"); }, get hint() { return tr("palette.themeVars.surface2Hint"); } },
+			{ name: "--bg-sunken", get label() { return tr("palette.themeVars.bgSunkenLabel"); }, get hint() { return tr("palette.themeVars.bgSunkenHint"); } },
+			{ name: "--surface", get label() { return tr("palette.themeVars.surfaceLabel"); } },
+			{ name: "--surface-hover", get label() { return tr("palette.themeVars.surfaceHoverLabel"); } },
+			{ name: "--surface-active", get label() { return tr("palette.themeVars.surfaceActiveLabel"); } },
 		],
 	},
 	{
 		id: "border",
-		group: "선",
+		get group() { return tr("palette.themeGroups.border"); },
 		items: [
-			{ name: "--border", label: "테두리" },
-			{ name: "--border-strong", label: "진한 테두리", hint: "입력칸 테두리" },
+			{ name: "--border", get label() { return tr("palette.themeVars.borderLabel"); } },
+			{ name: "--border-strong", get label() { return tr("palette.themeVars.borderStrongLabel"); }, get hint() { return tr("palette.themeVars.borderStrongHint"); } },
 		],
 	},
 	{
 		id: "text",
-		group: "글자",
+		get group() { return tr("palette.themeGroups.text"); },
 		items: [
-			{ name: "--text", label: "본문 글자" },
-			{ name: "--text-muted", label: "보조 글자" },
-			{ name: "--text-faint", label: "흐린 글자", hint: "시각·번호" },
+			{ name: "--text", get label() { return tr("palette.themeVars.textLabel"); } },
+			{ name: "--text-muted", get label() { return tr("palette.themeVars.textMutedLabel"); } },
+			{ name: "--text-faint", get label() { return tr("palette.themeVars.textFaintLabel"); }, get hint() { return tr("palette.themeVars.textFaintHint"); } },
 		],
 	},
 	{
 		id: "accent",
-		group: "강조",
+		get group() { return tr("palette.themeGroups.accent"); },
 		items: [
-			{ name: "--accent", label: "강조색", hint: "비우면 설정에서 고른 강조색" },
-			{ name: "--text-on-accent", label: "강조색 위 글자" },
+			{ name: "--accent", get label() { return tr("palette.themeVars.accentLabel"); }, get hint() { return tr("palette.themeVars.accentHint"); } },
+			{ name: "--text-on-accent", get label() { return tr("palette.themeVars.textOnAccentLabel"); } },
 		],
 	},
 ];
@@ -61,10 +65,10 @@ export interface BuiltinTheme {
 const empty: ThemeColors = { light: {}, dark: {} };
 
 export const BUILTIN_THEMES: BuiltinTheme[] = [
-	{ id: "default", name: "기본", colors: empty },
+	{ id: "default", get name() { return tr("palette.builtinThemes.default"); }, colors: empty },
 	{
 		id: "ink",
-		name: "잉크",
+		get name() { return tr("palette.builtinThemes.ink"); },
 		colors: {
 			light: { "--bg": "#f7f5ee", "--surface-2": "#fbfaf4", "--bg-sunken": "#efece2", "--surface": "#fffdf7", "--surface-hover": "#efece2", "--surface-active": "#e7e3d6", "--border": "#e2ddcf", "--border-strong": "#cfc8b6", "--text": "#1b1c3a", "--text-muted": "#4f5070", "--text-faint": "#8b8ba3" },
 			dark: { "--bg": "#14152b", "--surface-2": "#191a33", "--bg-sunken": "#0f1022", "--surface": "#1e1f3a", "--surface-hover": "#262848", "--surface-active": "#2e3054", "--border": "#2c2e4f", "--border-strong": "#3d4068", "--text": "#ecebf7", "--text-muted": "#aeb0cf", "--text-faint": "#71739a" },
@@ -72,7 +76,7 @@ export const BUILTIN_THEMES: BuiltinTheme[] = [
 	},
 	{
 		id: "wine",
-		name: "와인",
+		get name() { return tr("palette.builtinThemes.wine"); },
 		colors: {
 			light: { "--bg": "#fbf3f4", "--surface-2": "#fdf7f8", "--bg-sunken": "#f4e7e9", "--surface": "#ffffff", "--surface-hover": "#f4e7e9", "--surface-active": "#ecd8dc", "--border": "#ead7db", "--border-strong": "#d9bcc2", "--text": "#3d1621", "--text-muted": "#7a4652", "--text-faint": "#ad8590", "--accent": "#a8324f" },
 			dark: { "--bg": "#2a181e", "--surface-2": "#311c23", "--bg-sunken": "#211217", "--surface": "#3a222a", "--surface-hover": "#442830", "--surface-active": "#502f39", "--border": "#4a2b34", "--border-strong": "#64404b", "--text": "#f6e7eb", "--text-muted": "#d1aeb8", "--text-faint": "#94707b", "--accent": "#b8e06c", "--text-on-accent": "#24180c" },
@@ -80,7 +84,7 @@ export const BUILTIN_THEMES: BuiltinTheme[] = [
 	},
 	{
 		id: "vibrowave",
-		name: "바이브로웨이브",
+		get name() { return tr("palette.builtinThemes.vibrowave"); },
 		colors: {
 			light: { "--bg": "#f6f2ff", "--surface-2": "#faf7ff", "--bg-sunken": "#ede6fd", "--surface": "#ffffff", "--surface-hover": "#ede6fd", "--surface-active": "#e1d6fb", "--border": "#e1d8f8", "--border-strong": "#c9b9f0", "--text": "#22164f", "--text-muted": "#5a4a91", "--text-faint": "#9586c4", "--accent": "#d6338f" },
 			dark: { "--bg": "#100c2a", "--surface-2": "#15103a", "--bg-sunken": "#0b0820", "--surface": "#1b1548", "--surface-hover": "#241c5a", "--surface-active": "#2d236c", "--border": "#2a2160", "--border-strong": "#3f3385", "--text": "#f3ecff", "--text-muted": "#b9acec", "--text-faint": "#7d70b3", "--accent": "#f04aa5" },
@@ -88,7 +92,7 @@ export const BUILTIN_THEMES: BuiltinTheme[] = [
 	},
 	{
 		id: "forest",
-		name: "숲",
+		get name() { return tr("palette.builtinThemes.forest"); },
 		colors: {
 			light: { "--bg": "#f3f6f1", "--surface-2": "#f8faf6", "--bg-sunken": "#e8eee4", "--surface": "#ffffff", "--surface-hover": "#e8eee4", "--surface-active": "#dce5d6", "--border": "#dbe3d5", "--border-strong": "#c1cdb9", "--text": "#16241a", "--text-muted": "#4b5f4f", "--text-faint": "#859686" },
 			dark: { "--bg": "#111a14", "--surface-2": "#151f18", "--bg-sunken": "#0c140f", "--surface": "#1a261d", "--surface-hover": "#213025", "--surface-active": "#293a2d", "--border": "#263529", "--border-strong": "#3a4d3d", "--text": "#e7efe8", "--text-muted": "#a8bcaa", "--text-faint": "#6d806f" },
@@ -96,7 +100,7 @@ export const BUILTIN_THEMES: BuiltinTheme[] = [
 	},
 	{
 		id: "contrast",
-		name: "고대비",
+		get name() { return tr("palette.builtinThemes.contrast"); },
 		colors: {
 			light: { "--bg": "#ffffff", "--surface-2": "#ffffff", "--bg-sunken": "#f2f2f2", "--surface": "#ffffff", "--surface-hover": "#ebebeb", "--surface-active": "#dedede", "--border": "#8a8a8a", "--border-strong": "#3c3c3c", "--text": "#000000", "--text-muted": "#222222", "--text-faint": "#4a4a4a" },
 			dark: { "--bg": "#000000", "--surface-2": "#000000", "--bg-sunken": "#0d0d0d", "--surface": "#0a0a0a", "--surface-hover": "#1f1f1f", "--surface-active": "#2e2e2e", "--border": "#7a7a7a", "--border-strong": "#c4c4c4", "--text": "#ffffff", "--text-muted": "#e6e6e6", "--text-faint": "#b5b5b5" },

@@ -1,5 +1,7 @@
 // 캐릭터 에셋 넣기 작업의 진행 상태. 화면(오른쪽 패널)이 아니라 앱에 두어서,
 // 다른 화면으로 나가도 작업이 이어지고 진행·결과가 계속 보인다 (끝나면 결과 토스트).
+import { get } from "svelte/store";
+import { _ } from "svelte-i18n";
 import { toasts } from "$shared/stores/toast.svelte";
 
 class AssetImport {
@@ -15,7 +17,7 @@ class AssetImport {
 
 	/** 하나씩만 한다. 도중에 또 오면 거절. `set`으로 단계를 바꿔 알림 */
 	async run<T>(label: string, work: (set: (label: string) => void) => Promise<T>): Promise<T | undefined> {
-		if (this.busy) return void toasts.info("에셋을 넣는 중입니다. 끝난 뒤에 다시 해 주세요");
+		if (this.busy) return void toasts.info(get(_)("chatExtra.assetBusy"));
 		this.busy = label;
 		this.show(label);
 		try {

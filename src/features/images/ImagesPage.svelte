@@ -154,19 +154,19 @@
 	}
 	function metaKeyLabel(key: string): string {
 		const map: Record<string, string> = {
-			크기: $_("finalPolish.imgMetaSize"),
-			단계: $_("finalPolish.imgMetaSteps"),
-			"프롬프트 반영": $_("finalPolish.imgMetaCfg"),
-			샘플러: $_("finalPolish.imgMetaSampler"),
-			시드: $_("finalPolish.imgMetaSeed"),
-			"노이즈 스케줄": $_("finalPolish.imgMetaNoise"),
+			크기: $_("finalPolish.imgMetaSize"), // i18n-ignore: service/image_meta.rs canonical meta key
+			단계: $_("finalPolish.imgMetaSteps"), // i18n-ignore
+			"프롬프트 반영": $_("finalPolish.imgMetaCfg"), // i18n-ignore
+			샘플러: $_("finalPolish.imgMetaSampler"), // i18n-ignore
+			시드: $_("finalPolish.imgMetaSeed"), // i18n-ignore
+			"노이즈 스케줄": $_("finalPolish.imgMetaNoise"), // i18n-ignore
 			SMEA: $_("finalPolish.imgMetaSmea"),
 		};
 		return map[key] ?? key;
 	}
 	function imageInfoRows(img: GeneratedImage) {
 		const neg = negativeOf(img);
-		const rest = img.meta.filter((m) => m.key !== "네거티브");
+		const rest = img.meta.filter((m) => m.key !== "네거티브"); // i18n-ignore
 		return [
 			{ label: $_("imagesPage.infoSource"), value: SOURCE[img.source] ?? img.source },
 			...(img.model ? [{ label: $_("imagesPage.infoModel"), value: img.model }] : []),
@@ -240,7 +240,7 @@
 	const title = (img: GeneratedImage) => img.name || img.prompt || img.path.split(/[\\/]/).pop() || "";
 	/** 다른 곳(캐릭터·페르소나·에셋)의 그림은 원래 화면에서 관리 */
 	const owned = (img: GeneratedImage) => !img.readonly;
-	const negativeOf = (img: GeneratedImage) => img.meta.find((m) => m.key === "네거티브")?.value ?? "";
+	const negativeOf = (img: GeneratedImage) => img.meta.find((m) => m.key === "네거티브")?.value ?? ""; // i18n-ignore
 
 	// ---- 태그 ----
 	/** 태그를 달 수 있는 그림: 갤러리에서 만든·올린 그림 (배경 목록·CG 에셋·아바타는 원래 자리에서 관리) */

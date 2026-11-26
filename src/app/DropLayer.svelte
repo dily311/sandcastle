@@ -2,6 +2,7 @@
 	// 앱 전체에서 파일 끌어다 놓기를 받는 덮개. 지금 화면이 등록한 대상(drops.target)에 넘긴다.
 	// 화면 안의 끌어서 옮기기(대화 목록 정렬 등)는 파일이 아니므로 건드리지 않는다.
 	import { FileDown, Ban } from "@lucide/svelte";
+	import { _ } from "svelte-i18n";
 	import { toasts } from "$shared/stores/toast.svelte";
 	import { drops } from "./drop.svelte";
 
@@ -47,7 +48,7 @@
 		if (!t || !files.length) return;
 		const ok = files.filter(t.accept);
 		const skipped = files.length - ok.length;
-		if (skipped) toasts.info(ok.length ? `${skipped}개는 여기서 쓸 수 없어 뺐음` : `여기서는 이 파일을 쓸 수 없음${t.hint ? ` (${t.hint})` : ""}`);
+		if (skipped) toasts.info(ok.length ? $_("appMisc.dropSkippedSome", { values: { count: skipped } }) : $_("appMisc.dropUnsupportedHere", { values: { hint: t.hint ? ` (${t.hint})` : "" } }));
 		if (ok.length) await t.ondrop(ok);
 	}
 </script>
@@ -84,7 +85,7 @@
 				{#if drops.target.hint}<span>{drops.target.hint}</span>{/if}
 			{:else}
 				<Ban />
-				<b>이 화면에서는 파일을 놓을 수 없음</b>
+				<b>{$_("appMisc.dropUnavailableScreen")}</b>
 			{/if}
 		</div>
 	</div>

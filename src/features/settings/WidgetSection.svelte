@@ -76,7 +76,7 @@
 				{#each WIDGET_FEATURES as f (f.id)}
 					{@const fid = f.id.replaceAll(".", "_")}
 					{@const fname = $_(`widgetExtra.features.${fid}.name`, { default: f.name })}
-					{@const fdesc = $_(`widgetExtra.features.${fid}.desc`, { default: f.description.replace(/합니다\.$/, "함") })}
+					{@const fdesc = $_(`widgetExtra.features.${fid}.desc`, { default: f.description })}
 					<Row label={fname} desc={fdesc}>
 						<Switch
 							checked={features[f.id] ?? f.defaultEnabled}

@@ -5,6 +5,7 @@ import type {
 	MascotImages_Serialize,
 	WidgetMascotSetting_Serialize,
 } from "$ipc/bindings";
+import { tr } from "$lib/utils/i18n";
 
 export type BehaviorMode = "automatic" | "manual";
 export type BehaviorType = "idle" | "walk" | "sitting" | "sleep" | "working" | "drag" | "happy" | "annoyed";
@@ -34,39 +35,39 @@ export interface MascotOverlayState {
 }
 
 export const MASCOT_IMAGE_SLOTS: { key: MascotImageSlot; label: string; hint: string }[] = [
-	{ key: "idle", label: "기본 (대기)", hint: "평소 가만히 있을 때" },
-	{ key: "walk", label: "걷기", hint: "화면을 돌아다닐 때" },
-	{ key: "sitting", label: "앉기", hint: "앉아서 쉴 때" },
-	{ key: "sleep", label: "잠자기", hint: "졸거나 잠들었을 때" },
-	{ key: "drag", label: "잡아 끌기", hint: "마우스로 들어올렸을 때" },
-	{ key: "happy", label: "행복", hint: "쓰다듬기·선물·기분 좋을 때" },
-	{ key: "annoyed", label: "짜증", hint: "자꾸 끌거나 귀찮게 했을 때" },
-	{ key: "working", label: "대화 / 활동", hint: "대화하거나 알림을 전할 때" },
+	{ key: "idle", get label() { return tr("mascotLib.slots.idleLabel"); }, get hint() { return tr("mascotLib.slots.idleHint"); } },
+	{ key: "walk", get label() { return tr("mascotLib.slots.walkLabel"); }, get hint() { return tr("mascotLib.slots.walkHint"); } },
+	{ key: "sitting", get label() { return tr("mascotLib.slots.sittingLabel"); }, get hint() { return tr("mascotLib.slots.sittingHint"); } },
+	{ key: "sleep", get label() { return tr("mascotLib.slots.sleepLabel"); }, get hint() { return tr("mascotLib.slots.sleepHint"); } },
+	{ key: "drag", get label() { return tr("mascotLib.slots.dragLabel"); }, get hint() { return tr("mascotLib.slots.dragHint"); } },
+	{ key: "happy", get label() { return tr("mascotLib.slots.happyLabel"); }, get hint() { return tr("mascotLib.slots.happyHint"); } },
+	{ key: "annoyed", get label() { return tr("mascotLib.slots.annoyedLabel"); }, get hint() { return tr("mascotLib.slots.annoyedHint"); } },
+	{ key: "working", get label() { return tr("mascotLib.slots.workingLabel"); }, get hint() { return tr("mascotLib.slots.workingHint"); } },
 ];
 
 export const MASCOT_DIALOGUE_FIELDS: { key: MascotDialogueKey; label: string; hint: string }[] = [
-	{ key: "greeting", label: "그리팅 (기본 인사)", hint: "위젯에 처음 등장했을 때 · {{user}}, {{char}} 사용 가능" },
-	{ key: "longAbsence", label: "오랜만에 볼 경우 (7일 이상)", hint: "마지막 접속 후 7일 이상 지나서 만났을 때" },
-	{ key: "gift", label: "선물을 준 경우", hint: "우클릭 메뉴로 선물을 주었을 때" },
-	{ key: "notify", label: "알림이 온 경우", hint: "응답·작업 알림이 도착했을 때 · {{notify}}로 내용 표시" },
-	{ key: "drag", label: "잡아 끈 경우", hint: "마우스로 시메지를 잡아 끌었을 때" },
-	{ key: "annoyed", label: "짜증 난 경우", hint: "짧은 시간에 여러 번 잡아 끌거나 귀찮게 했을 때" },
-	{ key: "happy", label: "행복해한 경우", hint: "쓰다듬거나 더블클릭으로 예뻐해 줬을 때" },
-	{ key: "idleChatter", label: "평소 혼잣말", hint: "활동 중에 가끔 혼자 중얼거리는 대사" },
-	{ key: "peerChat", label: "다른 시메지와 대화 (오프라인/기본)", hint: "AI 미사용 시 다른 시메지와 주고받는 대사" },
+	{ key: "greeting", get label() { return tr("mascotLib.dialogueFields.greetingLabel"); }, get hint() { return tr("mascotLib.dialogueFields.greetingHint"); } },
+	{ key: "longAbsence", get label() { return tr("mascotLib.dialogueFields.longAbsenceLabel"); }, get hint() { return tr("mascotLib.dialogueFields.longAbsenceHint"); } },
+	{ key: "gift", get label() { return tr("mascotLib.dialogueFields.giftLabel"); }, get hint() { return tr("mascotLib.dialogueFields.giftHint"); } },
+	{ key: "notify", get label() { return tr("mascotLib.dialogueFields.notifyLabel"); }, get hint() { return tr("mascotLib.dialogueFields.notifyHint"); } },
+	{ key: "drag", get label() { return tr("mascotLib.dialogueFields.dragLabel"); }, get hint() { return tr("mascotLib.dialogueFields.dragHint"); } },
+	{ key: "annoyed", get label() { return tr("mascotLib.dialogueFields.annoyedLabel"); }, get hint() { return tr("mascotLib.dialogueFields.annoyedHint"); } },
+	{ key: "happy", get label() { return tr("mascotLib.dialogueFields.happyLabel"); }, get hint() { return tr("mascotLib.dialogueFields.happyHint"); } },
+	{ key: "idleChatter", get label() { return tr("mascotLib.dialogueFields.idleChatterLabel"); }, get hint() { return tr("mascotLib.dialogueFields.idleChatterHint"); } },
+	{ key: "peerChat", get label() { return tr("mascotLib.dialogueFields.peerChatLabel"); }, get hint() { return tr("mascotLib.dialogueFields.peerChatHint"); } },
 ];
 
 export function defaultDialogues(): MascotDialogues_Serialize {
 	return {
-		greeting: ["안녕, {{user}}!", "오늘도 좋은 하루 보내자!"],
-		longAbsence: ["{{user}}! 정말 오랜만이야, 보고 싶었어!", "일주일 넘게 어디 갔었어? 기다렸잖아!"],
-		gift: ["와, 고마워 {{user}}! 소중히 간직할게!", "선물이야? 정말 기뻐!"],
-		notify: ["{{user}}, 알림이 왔어! {{notify}}", "띵동~ 새 소식이 도착했어!"],
-		drag: ["으악, 잠깐만! 내려놔줘!", "어디로 데려가는 거야~?"],
-		annoyed: ["그만 좀 괴롭혀! 어지럽단 말이야!", "흥, 자꾸 그러면 토라질 거야!"],
-		happy: ["헤헤, 기분 좋아!", "역시 {{user}} 옆이 제일 좋아!"],
-		idleChatter: ["심심한데 뭐 하고 놀까?", "오늘 날씨는 어떨까~"],
-		peerChat: ["안녕! 오늘 기분은 어때?", "같이 화면 좀 산책할래?"],
+		greeting: [tr("mascotLib.defaultLines.greeting1"), tr("mascotLib.defaultLines.greeting2")],
+		longAbsence: [tr("mascotLib.defaultLines.longAbsence1"), tr("mascotLib.defaultLines.longAbsence2")],
+		gift: [tr("mascotLib.defaultLines.gift1"), tr("mascotLib.defaultLines.gift2")],
+		notify: [tr("mascotLib.defaultLines.notify1"), tr("mascotLib.defaultLines.notify2")],
+		drag: [tr("mascotLib.defaultLines.drag1"), tr("mascotLib.defaultLines.drag2")],
+		annoyed: [tr("mascotLib.defaultLines.annoyed1"), tr("mascotLib.defaultLines.annoyed2")],
+		happy: [tr("mascotLib.defaultLines.happy1"), tr("mascotLib.defaultLines.happy2")],
+		idleChatter: [tr("mascotLib.defaultLines.idleChatter1"), tr("mascotLib.defaultLines.idleChatter2")],
+		peerChat: [tr("mascotLib.defaultLines.peerChat1"), tr("mascotLib.defaultLines.peerChat2")],
 	};
 }
 
@@ -81,7 +82,7 @@ export function defaultImages(): MascotImages_Serialize {
 export function createMascotConfig(partial: Partial<MascotCharacterConfig_Serialize> = {}): MascotCharacterConfig_Serialize {
 	return {
 		id: partial.id ?? (typeof crypto !== "undefined" && "randomUUID" in crypto ? crypto.randomUUID() : `mascot-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`),
-		name: partial.name ?? "새 시메지",
+		name: partial.name ?? tr("mascotLib.defaultNewMascotName"),
 		enabled: partial.enabled ?? true,
 		characterId: partial.characterId ?? null,
 		personaId: partial.personaId ?? null,
@@ -112,11 +113,11 @@ export function defaultWidgetMascotSetting(): WidgetMascotSetting_Serialize {
 export function buildBehaviorsFromWeights(weights: MascotBehaviorWeights_Serialize, intervalSec: number): Behavior[] {
 	const baseMs = Math.max(1500, intervalSec * 1000);
 	return [
-		{ id: "idle", name: "가만히 있기", type: "idle", weight: Math.max(0, weights.idle), minDuration: baseMs * 0.6, maxDuration: baseMs * 1.3 },
-		{ id: "walk", name: "걸어다니기", type: "walk", weight: Math.max(0, weights.walk), minDuration: baseMs * 0.7, maxDuration: baseMs * 1.4 },
-		{ id: "sitting", name: "앉아있기", type: "sitting", weight: Math.max(0, weights.sitting), minDuration: baseMs * 0.9, maxDuration: baseMs * 1.8 },
-		{ id: "sleep", name: "잠자기", type: "sleep", weight: Math.max(0, weights.sleep), minDuration: baseMs * 1.2, maxDuration: baseMs * 2.2 },
-		{ id: "working", name: "활동하기", type: "working", weight: Math.max(0, weights.working), minDuration: baseMs * 0.8, maxDuration: baseMs * 1.5 },
+		{ id: "idle", name: tr("mascotLib.behaviors.idle"), type: "idle", weight: Math.max(0, weights.idle), minDuration: baseMs * 0.6, maxDuration: baseMs * 1.3 },
+		{ id: "walk", name: tr("mascotLib.behaviors.walk"), type: "walk", weight: Math.max(0, weights.walk), minDuration: baseMs * 0.7, maxDuration: baseMs * 1.4 },
+		{ id: "sitting", name: tr("mascotLib.behaviors.sitting"), type: "sitting", weight: Math.max(0, weights.sitting), minDuration: baseMs * 0.9, maxDuration: baseMs * 1.8 },
+		{ id: "sleep", name: tr("mascotLib.behaviors.sleep"), type: "sleep", weight: Math.max(0, weights.sleep), minDuration: baseMs * 1.2, maxDuration: baseMs * 2.2 },
+		{ id: "working", name: tr("mascotLib.behaviors.working"), type: "working", weight: Math.max(0, weights.working), minDuration: baseMs * 0.8, maxDuration: baseMs * 1.5 },
 	];
 }
 
@@ -130,10 +131,10 @@ export function formatDialogueTemplate(
 	vars: { user?: string; char?: string; notify?: string; gift?: string },
 ): string {
 	return template
-		.replace(/\{\{user\}\}/gi, vars.user || "유저")
-		.replace(/\{\{char\}\}/gi, vars.char || "시메지")
+		.replace(/\{\{user\}\}/gi, vars.user || tr("mascotLib.defaultUserName"))
+		.replace(/\{\{char\}\}/gi, vars.char || tr("mascotLib.defaultCharName"))
 		.replace(/\{\{notify\}\}/gi, vars.notify || "")
-		.replace(/\{\{gift\}\}/gi, vars.gift || "선물")
+		.replace(/\{\{gift\}\}/gi, vars.gift || tr("mascotLib.defaultGiftName"))
 		.trim();
 }
 

@@ -56,7 +56,8 @@
 		"preparing": "앱을 준비하는 중…",
 		"loadingTheme": "테마를 불러오는 중…",
 		"loadingSettings": "설정과 플러그인을 불러오는 중…",
-		"loadingLibrary": "캐릭터와 대화를 불러오는 중…"
+		"loadingLibrary": "캐릭터와 대화를 불러오는 중…",
+		"started": "시작"
 	},
 	"sidebar": {
 		"pinned": "고정됨",
@@ -82,7 +83,7 @@
 		"close": "닫기"
 	},
 	"home": {
-		"greetingDefault": "안녕하세요, {{user}}",
+		"greetingDefault": "안녕하세요, '{{user}}'",
 		"customize": "꾸미기",
 		"customizeTitle": "홈 꾸미기",
 		"continue": "이어하기",
@@ -311,5 +312,156 @@
 		"imgMetaSeed": "시드",
 		"imgMetaNoise": "노이즈 스케줄",
 		"imgMetaSmea": "SMEA"
+	},
+	"androidDrive": {
+		"unavailable": "이 기기에서는 쓸 수 없음",
+		"noResponse": "구글 응답이 없음",
+		"cancelled": "구글 로그인이 취소됨 — 직접 취소한 게 아니라면 구글 클라우드의 Android 클라이언트(패키지 이름·서명 키 SHA-1)와 테스트 사용자를 확인",
+		"needsConsent": "구글 드라이브 권한을 다시 허락해야 함 (설정 > 동기화에서 로그인)",
+		"unknownApp": "구글이 이 앱을 알아보지 못함 — 구글 클라우드의 Android 클라이언트에 이 앱의 패키지 이름과 서명 키 SHA-1이 맞게 들어 있는지 확인",
+		"networkError": "네트워크에 연결할 수 없음",
+		"permFailed": "구글 권한을 받지 못함 ({code})",
+		"unknownCode": "알 수 없음"
+	},
+	"dialog": {
+		"pickFileErr": "파일을 고를 수 없음 (앱에서만 됨)",
+		"pickFolderErr": "폴더를 고를 수 없음 (앱에서만 됨)",
+		"pickSaveErr": "저장 위치를 고를 수 없음 (앱에서만 됨)",
+		"filterGame": "게임",
+		"filterImage": "이미지",
+		"filterStData": "SillyTavern 데이터",
+		"filterChat": "대화 기록",
+		"filterPack": "캐릭터 묶음",
+		"filterBackup": "샌드캐슬 백업",
+		"filterSync": "샌드캐슬 동기화",
+		"cannotPickFile": "파일을 고를 수 없음 (앱에서만 됨)",
+		"cannotPickFolder": "폴더를 고를 수 없음 (앱에서만 됨)",
+		"cannotPickSave": "저장 위치를 고를 수 없음 (앱에서만 됨)"
+	},
+	"avatarFit": {
+		"title": "프로필 그림 맞추기",
+		"stageAria": "끌거나 방향키로 위치, 휠로 확대",
+		"zoomAria": "확대",
+		"centerBtn": "가운데로"
+	},
+	"appMisc": {
+		"autoSyncSkippedWifi": "자동 동기화: Wi-Fi가 아니라 건너뜀",
+		"autoSyncMerged": "자동 동기화: 기기 {count}개 합침, 파일 받음 {down} · 올림 {up}",
+		"autoSyncFailed": "자동 동기화 실패: {reason}",
+		"dropSkippedSome": "{count}개는 여기서 쓸 수 없어 뺐음",
+		"dropUnsupportedHere": "여기서는 이 파일을 쓸 수 없음{hint}",
+		"dropUnavailableScreen": "이 화면에서는 파일을 놓을 수 없음",
+		"bgCountJob": "배경 {count}장",
+		"bgUploadGroup": "배경 올리기",
+		"fontCountJob": "글꼴 {count}개",
+		"fontUploadGroup": "글꼴 올리기",
+		"openReleaseErr": "릴리스 페이지를 열 수 없음",
+		"updateNewToast": "새 버전 {latest}이 나옴 (지금 {current})",
+		"viewReleaseBtn": "릴리스 보기",
+		"aiPresetDefaultName": "기본 프리셋",
+		"aiPresetDefaultDesc": "일반적인 AI 대화 설정",
+		"aiPresetCreativeName": "창작 모드",
+		"aiPresetCreativeDesc": "창의적인 이야기와 RP",
+		"aiPresetPreciseName": "정확한 답변",
+		"aiPresetPreciseDesc": "사실 중심의 대화",
+		"jobSummaryOk": "{name} {count}개",
+		"jobSummaryFailed": "실패 {count}개",
+		"jobSummarySkipped": "뺌 {count}개",
+		"jobQueueSource": "작업 대기열",
+		"toastDefaultSource": "알림",
+		"chipRemoveAria": "{label} 빼기",
+		"chipAddAria": "{label}에 넣기",
+		"menuAria": "메뉴",
+		"moreActionsAria": "다른 방법"
+	},
+	"jobs": {
+		"source": "작업 대기열",
+		"doneItem": "{name} {ok}개",
+		"failedPart": " · 실패 {count}개",
+		"skippedPart": " · 뺌 {count}개"
+	},
+	"toast": {
+		"defaultSource": "알림",
+		"close": "닫기"
+	},
+	"ui": {
+		"menu": "메뉴",
+		"moreActions": "다른 방법",
+		"chipEmpty": "없음",
+		"chipRemove": "{label} 빼기",
+		"chipAdd": "{label}에 넣기",
+		"avatarFitTitle": "프로필 그림 맞추기",
+		"avatarFitStageAria": "끌거나 방향키로 위치, 휠로 확대",
+		"avatarFitZoomAria": "확대",
+		"avatarFitCenter": "가운데로"
+	},
+	"palette": {
+		"accents": {
+			"seaglass": "바다 유리",
+			"sunset": "노을",
+			"lavender": "라벤더",
+			"rose": "장미",
+			"sky": "하늘",
+			"moss": "이끼",
+			"sand": "모래",
+			"slate": "돌"
+		},
+		"gradients": {
+			"dusk": "노을",
+			"sky": "하늘",
+			"aurora": "오로라",
+			"pastel": "파스텔",
+			"peach": "복숭아",
+			"mint": "민트",
+			"ocean": "바다",
+			"night": "밤",
+			"rose": "장미",
+			"forest": "숲",
+			"sand": "모래",
+			"mono": "먹"
+		},
+		"grays": {
+			"slate": "슬레이트 (푸른 회색)",
+			"gray": "그레이 (순수 회색)",
+			"mauve": "모브 (보랏빛 회색)",
+			"sage": "세이지 (초록빛 회색)",
+			"olive": "올리브",
+			"sand": "샌드 (따뜻한 회색)"
+		},
+		"themeGroups": {
+			"bg": "바탕",
+			"border": "선",
+			"text": "글자",
+			"accent": "강조"
+		},
+		"themeVars": {
+			"bgLabel": "앱 바탕",
+			"bgHint": "사이드바·헤더·목록",
+			"surface2Label": "본문 바탕",
+			"surface2Hint": "설정·대화 본문",
+			"bgSunkenLabel": "묶음 바탕",
+			"bgSunkenHint": "설정 카드처럼 한 단계 들어간 곳",
+			"surfaceLabel": "카드·입력칸",
+			"surfaceHoverLabel": "마우스 올렸을 때",
+			"surfaceActiveLabel": "선택됨",
+			"borderLabel": "테두리",
+			"borderStrongLabel": "진한 테두리",
+			"borderStrongHint": "입력칸 테두리",
+			"textLabel": "본문 글자",
+			"textMutedLabel": "보조 글자",
+			"textFaintLabel": "흐린 글자",
+			"textFaintHint": "시각·번호",
+			"accentLabel": "강조색",
+			"accentHint": "비우면 설정에서 고른 강조색",
+			"textOnAccentLabel": "강조색 위 글자"
+		},
+		"builtinThemes": {
+			"default": "기본",
+			"ink": "잉크",
+			"wine": "와인",
+			"vibrowave": "바이브로웨이브",
+			"forest": "숲",
+			"contrast": "고대비"
+		}
 	}
 }

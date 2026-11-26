@@ -1,6 +1,7 @@
 <script lang="ts">
 	// 좁은 화면·Android: 채팅방 위에 늘 보이는 상태창 (5-F-4-2, 사용자 요청 — ADR-029 ⑤ 추가). 접을 수 있음
 	import { ChevronDown } from "@lucide/svelte";
+	import { _ } from "$lib/utils/i18n";
 	import type { Block } from "$features/character/format";
 	import StatusWindow from "./StatusWindow.svelte";
 	import { statusView } from "./statusView.svelte";
@@ -10,7 +11,7 @@
 
 <div class="top sc-status-top" class:collapsed={statusView.topCollapsed}>
 	<button type="button" class="head" aria-expanded={!statusView.topCollapsed} onclick={() => statusView.set({ topCollapsed: !statusView.topCollapsed })}>
-		<ChevronDown class={statusView.topCollapsed ? "rot" : ""} /><b>상태창</b>
+		<ChevronDown class={statusView.topCollapsed ? "rot" : ""} /><b>{$_("statusUi.topBarTitle")}</b>
 	</button>
 	{#if !statusView.topCollapsed}
 		<div class="body"><StatusWindow {blocks} /></div>

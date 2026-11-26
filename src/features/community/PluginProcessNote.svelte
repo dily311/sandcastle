@@ -1,6 +1,7 @@
 <script lang="ts">
 	// 메시지 아래: 플러그인이 고친 표시와 메모 (6-D-4). 원문 보기 / 되돌리기.
 	// 코어 플러그인을 꺼도 보인다 — 고친 것을 되돌릴 수 있어야 하므로 (되돌리기 커맨드는 꺼져 있어도 됨)
+	import { _ } from "svelte-i18n";
 	import type { Message_Serialize as Message } from "$ipc/bindings";
 	import { call, commands } from "$shared/ipc/client";
 	import { pluginHost } from "./host.svelte";
@@ -38,9 +39,9 @@
 	<div class="pp">
 		{#if fixed}
 			<p class="line">
-				{showOriginal ? "원문" : `${pp.changedBy.map(nameOf).join(", ")}이(가) 고침`} ·
-				<button class="link" onclick={() => (showOriginal = !showOriginal)}>{showOriginal ? "고친 글 보기" : "원문 보기"}</button> ·
-				<button class="link" disabled={busy} onclick={revert}>되돌리기</button>
+				{showOriginal ? $_("communityUi.processOriginal") : $_("communityUi.processChangedBy", { values: { names: pp.changedBy.map(nameOf).join(", ") } })} ·
+				<button class="link" onclick={() => (showOriginal = !showOriginal)}>{showOriginal ? $_("communityUi.processShowFixed") : $_("communityUi.processShowOriginal")}</button> ·
+				<button class="link" disabled={busy} onclick={revert}>{$_("communityUi.processRevert")}</button>
 			</p>
 		{/if}
 		{#if notes.length}

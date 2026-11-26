@@ -41,10 +41,11 @@ function isCheckedFile(rel) {
 
 /** 줄 번호를 유지한 채 주석과 i18n-ignore 표시 줄을 비운다 */
 export function stripCommentsPreserveLines(code) {
+	const rawLines = code.split(/\r?\n/);
 	let s = code.replace(/<!--[\s\S]*?-->/g, (m) => m.replace(/[^\n]/g, " "));
 	s = s.replace(/\/\*[\s\S]*?\*\//g, (m) => m.replace(/[^\n]/g, " "));
-	return s.split(/\r?\n/).map((line) => {
-		if (line.includes("i18n-ignore")) return "";
+	return s.split(/\r?\n/).map((line, idx) => {
+		if (rawLines[idx]?.includes("i18n-ignore") || line.includes("i18n-ignore")) return "";
 		let inS = false;
 		let inD = false;
 		let inB = false;

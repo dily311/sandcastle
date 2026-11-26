@@ -2,6 +2,7 @@
 import "pixi.js/unsafe-eval";
 import { Application } from "pixi.js";
 import { commands, type MascotChatHistoryItem, type WidgetMascotNotifyPayload, type WidgetMascotSetting_Serialize } from "$ipc/bindings";
+import { tr } from "$lib/utils/i18n";
 import { onEvent } from "$shared/ipc/events";
 import { pixiInteractive } from "$/lib/interaction/interactive-pixi";
 import { handleContextMenuForMascot } from "$/lib/contextmenu/contextMenu.svelte";
@@ -36,7 +37,11 @@ export class WidgetGame {
 	private bubbles = new Map<string, BubbleEntry>();
 	private chatHistories = new Map<string, MascotChatHistoryItem[]>();
 	private charAvatarMap = new Map<string, string | null>();
-	private userName = "유저";
+	private userName = "";
+
+	private effectiveUserName(): string {
+		return this.userName || tr("mascotLib.defaultUserName");
+	}
 
 	private unlistenSetting?: () => void;
 	private unlistenNotify?: () => void;
@@ -48,7 +53,7 @@ export class WidgetGame {
 		this.onOverlayUpdate = onOverlayUpdate;
 		this.peerChat = new PeerChatManager(this.characters, {
 			getSetting: () => this.setting,
-			getUserName: () => this.userName,
+			getUserName: () => this.effectiveUserName(),
 			showBubble: (mascotId, text, durationMs, mood, speaker) => {
 				this.showBubble(mascotId, text, durationMs, mood, speaker ?? null);
 			},
@@ -192,11 +197,11 @@ export class WidgetGame {
 
 	private handleNotification(payload: WidgetMascotNotifyPayload) {
 		if (this.destroyed) return;
-		const notifyText = payload.body || payload.targetName || "새 알림";
+		const notifyText = payload.body || payload.targetName || tr("mascotLib.defaultNotifyFallback");
 		for (const char of this.characters.getAll()) {
 			const line =
 				pickDialogueLine(char.config.dialogues, "notify", {
-					user: this.userName,
+					user: this.effectiveUserName(),
 					char: char.config.name,
 					notify: notifyText,
 				}) ?? `${notifyText}`;
@@ -212,7 +217,7 @@ export class WidgetGame {
 		extraVars: { notify?: string; gift?: string } = {},
 	) {
 		const line = pickDialogueLine(char.config.dialogues, key, {
-			user: this.userName,
+			user: this.effectiveUserName(),
 			char: char.config.name,
 			...extraVars,
 		});
@@ -261,14 +266,14 @@ export class WidgetGame {
 						this.chatHistories.set(mascotId, history.slice(-12));
 					}
 				} catch (e) {
-					console.info("[Mascot] AI 응답 실패 → 설정 대사로 폴백", e);
+					console.info("[Mascot] AI reply failed; falling back to configured lines", e);
 				}
 			}
 			if (!reply) {
 				reply =
-					pickDialogueLine(char.config.dialogues, "happy", { user: this.userName, char: char.config.name }) ??
-					pickDialogueLine(char.config.dialogues, "idleChatter", { user: this.userName, char: char.config.name }) ??
-					"응, 듣고 있어!";
+					pickDialogueLine(char.config.dialogues, "happy", { user: this.effectiveUserName(), char: char.config.name }) ??
+					pickDialogueLine(char.config.dialogues, "idleChatter", { user: this.effectiveUserName(), char: char.config.name }) ??
+					tr("mascotLib.chatFallbackReply");
 			}
 			char.showMood("happy", 3400);
 			this.showBubble(mascotId, reply, 5600, "happy", char.config.name);
@@ -281,7 +286,7 @@ export class WidgetGame {
 	async giveGiftToMascot(mascotId: string, giftName: string) {
 		const char = this.characters.get(mascotId);
 		if (!char) return;
-		const gift = giftName.trim() || "선물";
+		const gift = giftName.trim() || tr("mascotLib.defaultGiftName");
 		char.showMood("happy", 4200);
 
 		if (char.config.useAiDialogue) {
@@ -289,7 +294,7 @@ export class WidgetGame {
 			try {
 				const reply = await commands.mascotGenerateReply({
 					mascotId,
-					userMessage: `${this.userName}이(가) ${gift}을(를) 선물로 주었다.`,
+					userMessage: tr("mascotLib.giftPromptEvent", { user: this.effectiveUserName(), gift }),
 					eventKind: "gift",
 					history: [],
 				});
@@ -304,10 +309,10 @@ export class WidgetGame {
 
 		const line =
 			pickDialogueLine(char.config.dialogues, "gift", {
-				user: this.userName,
+				user: this.effectiveUserName(),
 				char: char.config.name,
 				gift,
-			}) ?? `와, ${gift} 고마워!`;
+			}) ?? tr("mascotLib.giftFallbackReply", { gift });
 		this.showBubble(mascotId, line, 4800, "happy", char.config.name);
 	}
 
@@ -323,7 +328,7 @@ export class WidgetGame {
 		if (!started) {
 			const char = this.characters.get(mascotId);
 			if (char) {
-				this.showBubble(mascotId, "지금은 대화할 다른 시메지가 없거나 바빠!", 3200, "normal", char.config.name);
+				this.showBubble(mascotId, tr("mascotLib.noPeerAvailable"), 3200, "normal", char.config.name);
 			}
 		}
 	}

@@ -1,6 +1,7 @@
 <script lang="ts">
 	// 응답을 기다릴 때 보이는 타이핑 표시 (5-E-17-1). 대화·폰·설정 미리보기가 같이 쓴다.
 	// 모양·글은 설정 > 대화 > 타이핑 표시 (AppSetting.typing). 테마 CSS는 `.sc-typing`으로 고칠 수 있다.
+	import { _ } from "svelte-i18n";
 	import type { TypingStyle } from "$ipc/bindings";
 	import { appSetting } from "$shared/stores/appSetting.svelte";
 	import { fileSrc } from "$shared/ipc/file";
@@ -35,7 +36,7 @@
 </script>
 
 {#if shape !== "none" || label}
-	<div class="sc-typing {cls}" data-style={shape} role="status" aria-label={label || "응답 기다리는 중"}>
+	<div class="sc-typing {cls}" data-style={shape} role="status" aria-label={label || $_("chatExtra.typingAria")}>
 		{#if shape === "image" && !broken}
 			<img class="sc-typing-image" src={fileSrc(picked)} alt="" aria-hidden="true" onerror={() => (broken = true)} />
 		{:else if shape !== "none"}

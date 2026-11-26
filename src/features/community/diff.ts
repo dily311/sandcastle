@@ -1,4 +1,7 @@
 // 제안 전·후 글의 줄 단위 차이 (6-D-3). 승인 화면이 바뀌는 줄만 눈에 띄게 보여준다.
+import { get } from "svelte/store";
+import { _ } from "svelte-i18n";
+
 export type DiffLine = { kind: "same" | "del" | "add"; text: string };
 /** 접은 같은 줄 묶음 */
 export type DiffItem = DiffLine | { kind: "skip"; count: number };
@@ -57,6 +60,6 @@ export function fold(lines: DiffLine[], context = 2): DiffItem[] {
 export function show(v: unknown): string {
 	if (v === null || v === undefined) return "";
 	if (Array.isArray(v)) return v.map(String).join(", ");
-	if (typeof v === "boolean") return v ? "켜짐" : "꺼짐";
+	if (typeof v === "boolean") return v ? get(_)("communityUi.diffBoolOn") : get(_)("communityUi.diffBoolOff");
 	return String(v);
 }

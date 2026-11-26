@@ -1,5 +1,6 @@
 <script lang="ts">
 	// 프로필 그림 확대·위치 맞추기 (5-E-17-3): 끌어서 옮기고, 휠·막대로 확대. 저장은 부르는 쪽이 (onsave)
+	import { _ } from "svelte-i18n";
 	import type { AvatarFit } from "$ipc/bindings";
 	import Avatar from "./Avatar.svelte";
 	import Button from "./Button.svelte";
@@ -67,14 +68,14 @@
 	}
 </script>
 
-<Dialog {open} title="프로필 그림 맞추기" size="sm" {onclose}>
+<Dialog {open} title={$_("ui.avatarFitTitle")} size="sm" {onclose}>
 	<div class="fit">
 		<!-- svelte-ignore a11y_no_noninteractive_tabindex, a11y_no_noninteractive_element_interactions (방향키로도 옮김) -->
 		<div
 			class="stage"
 			class:dragging={!!drag}
 			role="application"
-			aria-label="끌거나 방향키로 위치, 휠로 확대"
+			aria-label={$_("ui.avatarFitStageAria")}
 			tabindex="0"
 			onpointerdown={down}
 			onpointermove={move}
@@ -87,7 +88,7 @@
 		</div>
 		<div class="zoom">
 			<span class="faint" aria-hidden="true">1×</span>
-			<input type="range" min="1" max="4" step="0.05" bind:value={cur.zoom} aria-label="확대" />
+			<input type="range" min="1" max="4" step="0.05" bind:value={cur.zoom} aria-label={$_("ui.avatarFitZoomAria")} />
 			<span class="faint" aria-hidden="true">4×</span>
 		</div>
 		<div class="small">
@@ -97,10 +98,10 @@
 		</div>
 	</div>
 	{#snippet footer()}
-		<Button variant="ghost" disabled={isCenter} onclick={() => (cur = { ...CENTER })}>가운데로</Button>
+		<Button variant="ghost" disabled={isCenter} onclick={() => (cur = { ...CENTER })}>{$_("ui.avatarFitCenter")}</Button>
 		<span class="grow"></span>
-		<Button variant="ghost" onclick={onclose}>취소</Button>
-		<Button variant="primary" loading={saving} onclick={save}>저장</Button>
+		<Button variant="ghost" onclick={onclose}>{$_("common.cancel")}</Button>
+		<Button variant="primary" loading={saving} onclick={save}>{$_("common.save")}</Button>
 	{/snippet}
 </Dialog>
 

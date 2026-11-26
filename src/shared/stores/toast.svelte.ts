@@ -1,3 +1,5 @@
+import { get } from "svelte/store";
+import { _ } from "svelte-i18n";
 import { logs, type LogLevel } from "./log.svelte";
 
 export type ToastTone = "info" | "success" | "warning" | "error";
@@ -24,7 +26,7 @@ class ToastStore {
 
 	show(t: Omit<Toast, "id">, ms = t.tone === "error" ? 6000 : 3500) {
 		// 화면에 뜨는 알림은 모두 설정 > 로그에도 남는다 (지나가 버려도 나중에 볼 수 있게)
-		if (t.log !== false) logs.add(LOG_LEVEL[t.tone], t.source ?? "알림", t.message, t.detail);
+		if (t.log !== false) logs.add(LOG_LEVEL[t.tone], t.source ?? get(_)("toast.defaultSource"), t.message, t.detail);
 		const id = ++seq;
 		this.items = [...this.items, { ...t, id }].slice(-4);
 		if (ms > 0) setTimeout(() => this.dismiss(id), ms);

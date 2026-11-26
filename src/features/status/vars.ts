@@ -1,4 +1,5 @@
 // 변수 정의를 화면에 쓰기 (5-F-4-3, ADR-029). 값은 늘 글자로 저장한다 (SillyTavern chat 변수와 같음).
+import { tr } from "$lib/utils/i18n";
 import type { VarDef } from "$features/character/library.svelte";
 
 export interface VarRow {
@@ -26,10 +27,10 @@ export function coerceVar(def: VarDef | undefined, raw: string): { value: string
 	if (def.kind === "boolean") {
 		const v = raw.trim().toLowerCase();
 		if (v === "true" || v === "false") return { value: v };
-		return { error: `'${def.key}'는 true 또는 false` };
+		return { error: tr("statusUi.errBool", { key: def.key }) };
 	}
 	const n = Number(raw.trim());
-	if (raw.trim() === "" || !Number.isFinite(n)) return { error: `'${def.key}'는 수여야 함` };
+	if (raw.trim() === "" || !Number.isFinite(n)) return { error: tr("statusUi.errNum", { key: def.key }) };
 	const clamped = Math.min(def.max ?? Infinity, Math.max(def.min ?? -Infinity, n));
 	return { value: String(clamped) };
 }
@@ -37,7 +38,7 @@ export function coerceVar(def: VarDef | undefined, raw: string): { value: string
 /** 툴팁: 설명과 AI 권한 */
 export function varTitle(def: VarDef | undefined): string | undefined {
 	if (!def) return undefined;
-	const ai = def.aiWrite ? "AI가 읽고 바꿈" : def.aiRead ? "AI가 읽음" : "AI에게 보이지 않음";
+	const ai = def.aiWrite ? tr("statusUi.aiReadWrite") : def.aiRead ? tr("statusUi.aiReadOnly") : tr("statusUi.aiHidden");
 	const range = def.kind === "number" && (def.min != null || def.max != null) ? ` · ${def.min ?? "…"}~${def.max ?? "…"}` : "";
 	return [def.description, `${ai}${range}`].filter(Boolean).join("\n");
 }

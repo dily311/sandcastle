@@ -36,7 +36,9 @@
 		"titlePlaceholder": "게임 제목",
 		"templateField": "템플릿",
 		"noCapInfo": "기능 정보 없음",
-		"createBtn": "만들기"
+		"createBtn": "만들기",
+		"importJobGroup": "게임 가져오기",
+		"deleteJobGroup": "게임 지우기"
 	},
 	"gameUi": {
 		"dropCoverLabel": "게임 커버로 쓰기",
@@ -186,7 +188,14 @@
 		"loadingLocation": "장소 불러오는 중",
 		"closeDrawnTitle": "닫기 · {prompt}",
 		"hiddenHint": "무대를 누르면 대사창이 다시 보임",
-		"busyLabel": "처리 중"
+		"busyLabel": "처리 중",
+		"sessionJobLabel": "플레이 기록",
+		"deleteSessionJobGroup": "플레이 기록 지우기",
+		"nextLineSimpleAria": "다음 대사",
+		"nothingHappened": "아무 일도 없었다.",
+		"messageEditedToast": "메시지 고침",
+		"lineCopiedToast": "대사 복사함",
+		"copyFailedToast": "복사 못 함"
 	},
 	"gamePlayExtra": {
 		"appDefault": "앱 기본값",
@@ -263,7 +272,46 @@
 		"showOrig": "원문 보기",
 		"closeEsc": "닫기 (Esc)",
 		"earlierOmitted": "이보다 앞의 대사는 생략됨",
-		"noLinesYet": "아직 대사가 없음"
+		"noLinesYet": "아직 대사가 없음",
+		"moveBlockScene": "장면이 끝나야 이동할 수 있음",
+		"moveBlockCond": "조건이 필요함"
+	},
+	"gamePlayUtils": {
+		"itemFallback": "아이템",
+		"locationFallback": "장소",
+		"zoneFallback": "지역",
+		"timePeriodFallback": "시간대",
+		"weatherFallback": "날씨",
+		"itemGainedOne": "{name}{particle} 얻었다.",
+		"itemGainedCount": "{name} {count}개를 얻었다.",
+		"durationHours": "{h}시간",
+		"durationMinutes": "{m}분",
+		"condNeedCheck": "조건 확인 필요",
+		"condMet": "조건 충족",
+		"condFlagGte": "{key} {required} 이상",
+		"condMinTime": "누적 시간 {duration} 이상",
+		"condInLocation": "{place}에 있음",
+		"condInZone": "{place}에 있음",
+		"condHasItem": "{name} {min}개 보유",
+		"condTimePeriod": "{period} 시간대",
+		"condWeather": "{weather} 날씨",
+		"axisAffection": "호감도",
+		"axisTrust": "신뢰도",
+		"axisTension": "긴장도",
+		"condRelation": "{from}의 {to}에 대한 {axis} {op} {required}",
+		"condAtTime": "{time}에 도달",
+		"condSpecial": "특수 조건 충족"
+	},
+	"gameVnTheme": {
+		"aspectFull": "전체",
+		"boxCard": "카드",
+		"boxBar": "하단 바",
+		"boxClassic": "클래식",
+		"presetApp": "앱 기본",
+		"presetSakura": "사쿠라 핑크",
+		"presetMidnight": "미드나잇 노벨",
+		"presetRetro": "레트로 90s",
+		"presetMinimal": "미니멀 시네마"
 	},
 	"gameEditor": {
 		"capChoices": "선택지",

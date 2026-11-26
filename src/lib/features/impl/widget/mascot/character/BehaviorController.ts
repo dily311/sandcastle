@@ -1,3 +1,4 @@
+import { tr } from "$lib/utils/i18n";
 import type { Behavior } from "../simejiType";
 import type { Character } from "./Character";
 
@@ -79,7 +80,7 @@ export class BehaviorController {
 	private pickWeightedBehavior(): Behavior {
 		const valid = this.behaviors.filter((b) => b.weight > 0);
 		if (valid.length === 0) {
-			return this.behaviors[0] ?? { id: "idle", name: "가만히 있기", type: "idle", weight: 1, minDuration: 3000, maxDuration: 5000 };
+			return this.behaviors[0] ?? { id: "idle", name: tr("mascotLib.behaviors.idle"), type: "idle", weight: 1, minDuration: 3000, maxDuration: 5000 };
 		}
 		const totalWeight = valid.reduce((sum, b) => sum + b.weight, 0);
 		let r = Math.random() * totalWeight;

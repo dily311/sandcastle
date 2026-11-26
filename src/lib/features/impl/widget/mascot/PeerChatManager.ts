@@ -1,4 +1,5 @@
 import { commands, type MascotPeerChatTurn, type WidgetMascotSetting_Serialize } from "$ipc/bindings";
+import { tr } from "$lib/utils/i18n";
 import type { Character } from "./character/Character";
 import type { CharacterManager } from "./pixi/CharaterManager";
 import { pickDialogueLine } from "./simejiType";
@@ -101,7 +102,7 @@ export class PeerChatManager {
 				await this.sleep(3700);
 			}
 		} catch (e) {
-			console.warn("[Mascot] 시메지 간 대화 중 오류", e);
+			console.warn("[Mascot] Peer chat error", e);
 		} finally {
 			a.setPeerChatting(false);
 			b.setPeerChatting(false);
@@ -124,7 +125,7 @@ export class PeerChatManager {
 				});
 				if (turns && turns.length > 0) return turns;
 			} catch (e) {
-				console.info("[Mascot] AI 시메지 간 대화 실패 → 기본 대사로 폴백", e);
+				console.info("[Mascot] AI peer chat failed; falling back to default lines", e);
 			}
 		}
 
@@ -133,11 +134,11 @@ export class PeerChatManager {
 		const lineA =
 			pickDialogueLine(a.config.dialogues, "peerChat", { user: userName, char: a.config.name }) ??
 			pickDialogueLine(a.config.dialogues, "greeting", { user: userName, char: a.config.name }) ??
-			`${b.config.name}, 안녕! 오늘 기분 어때?`;
+			tr("mascotLib.peerFallbackA", { other: b.config.name });
 		const lineB =
 			pickDialogueLine(b.config.dialogues, "peerChat", { user: userName, char: b.config.name }) ??
 			pickDialogueLine(b.config.dialogues, "idleChatter", { user: userName, char: b.config.name }) ??
-			`안녕 ${a.config.name}! 화면 위가 참 포근하네~`;
+			tr("mascotLib.peerFallbackB", { other: a.config.name });
 
 		return [
 			{ mascotId: a.id, name: a.config.name, text: lineA },

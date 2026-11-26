@@ -1,9 +1,13 @@
 // 지금 플레이 중인 세션의 상태 (continue_game / dispatch_command 응답)
+import { get } from "svelte/store";
+import { _ } from "svelte-i18n";
 import { call, commands } from "$shared/ipc/client";
 import type { ContinueGameResponse, GameCommand } from "../types";
 import { getConnectionRequirement } from "../play/vn/playUtils";
 import { gameStore } from "./gameStore.svelte";
 import { reportGameError } from "../errors";
+
+const t = (k: string) => get(_)(k);
 
 const src = { source: "game" };
 
@@ -154,10 +158,10 @@ class RuntimeStore {
 	}
 	/** 이 길로 지금 갈 수 없는 이유 (갈 수 있으면 null). 엔진의 available_moves와 같은 규칙 */
 	moveBlock(toId: string): string | null {
-		if (this.currentSceneId) return "장면이 끝나야 이동할 수 있음";
+		if (this.currentSceneId) return t("gamePlayExtra.moveBlockScene");
 		const move = this.state?.availableMoves.find((m) => m.toId === toId);
-		if (!move) return "가는 길 없음";
-		return move.available ? null : "조건이 필요함";
+		if (!move) return t("gamePlayExtra.noRoute");
+		return move.available ? null : t("gamePlayExtra.moveBlockCond");
 	}
 	get canWait() {
 		return !this.currentSceneId;

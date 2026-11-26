@@ -30,9 +30,10 @@
 	import { watchTaskErrors } from "$shared/stores/taskLog";
 	import { watchNotifySound } from "./notifySound";
 	import { appSetting } from "$shared/stores/appSetting.svelte";
+	import { _ } from "svelte-i18n";
 
 	let ready = $state(false);
-	let bootStatus = $state("앱을 준비하는 중…");
+	let bootKey = $state<"preparing" | "loadingTheme" | "loadingSettings" | "loadingLibrary">("preparing");
 
 	// 모바일: 다른 화면으로 가면 서랍과 패널 시트를 닫음
 	$effect(() => {
@@ -66,15 +67,15 @@
 
 	onMount(async () => {
 		captureGlobalErrors();
-		bootStatus = "테마를 불러오는 중…";
+		bootKey = "loadingTheme";
 		await theme.init().catch((e) => logs.error("app", String(e)));
-		logs.info("app", "시작");
-		bootStatus = "설정과 플러그인을 불러오는 중…";
+		logs.info("app", $_("boot.started"));
+		bootKey = "loadingSettings";
 		await Promise.all([
 			appSetting.load().catch((e) => logs.error("app", String(e))),
 			plugins.load().catch((e) => logs.error("app", String(e))),
 		]);
-		bootStatus = "캐릭터와 대화를 불러오는 중…";
+		bootKey = "loadingLibrary";
 		await library.load().catch((e) => logs.error("app", String(e)));
 		// 새 버전 확인: 설정을 켰을 때만 (기본 꺼짐, 1-E-2)
 		checkOnStart(appSetting.value?.checkUpdatesOnStart ?? false);
@@ -118,7 +119,7 @@
 		<div class="boot-screen" role="status" aria-live="polite" out:fade={{ duration: 180 }}>
 			<div class="boot-card">
 				<Spinner size={28} />
-				<p class="boot-msg">{bootStatus}</p>
+				<p class="boot-msg">{$_(`boot.${bootKey}`)}</p>
 			</div>
 		</div>
 	{:else}
@@ -139,9 +140,9 @@
 				{:else if r.page === "character"}
 					<CharacterPage charId={r.charId} convId={r.convId} edit={r.edit} />
 				{:else if r.page === "game"}
-					{#if plugins.on("game")}<GamePage gameId={r.gameId} sessionId={r.sessionId} edit={r.edit} />{:else}<PluginOff id="game" name="게임 모드" />{/if}
+					{#if plugins.on("game")}<GamePage gameId={r.gameId} sessionId={r.sessionId} edit={r.edit} />{:else}<PluginOff id="game" name={$_("settings.tabs.game")} />{/if}
 				{:else if r.page === "phone"}
-					{#if plugins.on("phone")}<PhonePage app={r.app} convId={r.convId} />{:else}<PluginOff id="phone" name="폰" />{/if}
+					{#if plugins.on("phone")}<PhonePage app={r.app} convId={r.convId} />{:else}<PluginOff id="phone" name={$_("settings.tabs.phone")} />{/if}
 				{:else if r.page === "images"}
 					<ImagesPage />
 				{:else if r.page === "lorebook"}
