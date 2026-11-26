@@ -29,6 +29,8 @@
 	import HomePage from "$features/home/HomePage.svelte";
 	import { watchTaskErrors } from "$shared/stores/taskLog";
 	import { watchNotifySound } from "./notifySound";
+	import { watchSyncProgress } from "./syncProgress.svelte";
+	import { call, commands } from "$shared/ipc/client";
 	import { appSetting } from "$shared/stores/appSetting.svelte";
 	import { _ } from "svelte-i18n";
 
@@ -85,9 +87,14 @@
 			if (last) void nav.replace(last);
 		}
 		ready = true;
+		// 앱 시작 시 알림 권한을 미리 확인·요청한다 (모바일 Android 13+ 포함, 1-J-5)
+		if (__IS_TAURI__) {
+			void call(commands.requestNotifyPermission(), { source: "notify", silent: true }).catch(() => {});
+		}
 		void recoverInterruptedChats();
 		watchTaskErrors();
 		watchNotifySound();
+		watchSyncProgress();
 		// 자동 동기화: 동기화 플러그인·자동 동기화·폴더가 모두 있을 때만 타이머 (기본 꺼짐)
 		watchAutoSync();
 	});

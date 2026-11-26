@@ -23,8 +23,11 @@
 		if (!s) return "";
 		const merged = s.merged.reduce((a, d) => a + d.report.added + d.report.updated + d.report.deleted + d.report.restored, 0);
 		const conflicts = s.merged.reduce((a, d) => a + d.report.conflicts + d.report.branches, 0);
+		const hasFileActivity = Boolean(s.filesDown || s.filesUp || s.filesMissing);
 		return [
-			s.merged.length ? $_("settings.more2.syncRunMerged", { values: { devices: s.merged.length, count: n(merged) } }) : $_("settings.more2.syncRunNothing"),
+			s.merged.length
+				? $_("settings.more2.syncRunMerged", { values: { devices: s.merged.length, count: n(merged) } })
+				: !hasFileActivity && $_("settings.more2.syncRunNothing"),
 			conflicts && $_("settings.more2.syncRunConflicts", { values: { count: n(conflicts) } }),
 			s.filesDown && $_("settings.more2.syncRunFilesDown", { values: { count: n(s.filesDown) } }),
 			s.filesUp && $_("settings.more2.syncRunFilesUp", { values: { count: n(s.filesUp) } }),

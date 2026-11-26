@@ -120,6 +120,7 @@ export function initI18n(): Promise<AppLocale> {
 }
 
 export async function setAppLocale(next: AppLocale, opts?: { persistSetting?: boolean }): Promise<void> {
+	await initI18n();
 	const resolved: AppLocale = isSupportedLocale(next) ? next : "en";
 	currentLocaleCache = resolved;
 	try {

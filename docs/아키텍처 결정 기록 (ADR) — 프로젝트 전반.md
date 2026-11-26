@@ -468,6 +468,12 @@ Conversation
 - 다른 기기의 묶음을 열지 못하면(더 새 앱의 DB 판, 깨진 파일) 그 기기만 건너뛰고 이유를 보고한다(`skippedDevices`) — 전에는 한 기기의 묶음이 전체 동기화를 멈췄다. 파일 내용이 해시와 다르면 DB를 바꾸기 전에 멈추고(파일이 DB보다 먼저), 고쳐지면 다음 동기화에서 이어진다.
 - 대용량: 묶음을 만들 때 테이블마다 임시 파일에 한 줄씩 쓰고, 합칠 때 임시 파일에서 2000행씩 읽어 같은 한 트랜잭션 안에서 적용한다(분기 대화 검출은 메시지를 한 번 훑는 먼저 단계로 분리). 규칙과 병합 순서는 그대로고 메모리만 묶음 크기와 무관해졌다(10만 행·1GB: 731MB → 43MB, 수치는 `성능 측정.md`).
 
+### ADR-011 갱신 — 업로드 순서·권한 재인증·전체 파일 ID 삭제 (1-J-1·3·4, 2026-11-27)
+
+- **업로드 순서와 누락 파일 재수신 (`1-J-1`)**: 전에는 `devices/<id>.scsync` 묶음을 먼저 올리고 `blobs/<해시>`를 뒤에 올려, 업로드 도중 끊기거나 다른 기기가 중간에 동기화하면 받는 쪽이 `files_missing > 0`인 채로 `sync_peers.last_bundle_created_at`을 기록한 뒤 다음 동기화부터 `unchanged`로 건너뛰며 빠진 파일을 영원히 받지 못했다. 이제 ① 올릴 때는 `blobs/` 전체 업로드를 마친 뒤 마지막에 `devices/<id>.scsync`를 올리고, ② 받을 때는 이미 합친 묶음(`seen >= created_at`)이어도 로컬에 없는 파일(`!exists()`)이 남아 있으면 매 동기화마다 받아 채운다.
+- **권한 취소·만료 시 자동 재인증 (`1-J-3`)**: 구글 계정이나 앱에서 권한을 거둔 뒤에도 Android Play 서비스가 취소된 access token을 로컬에 최대 1시간 캐시해 401이 나고 에러 토스트로 멈췄다. 이제 백엔드는 미연결·리프레시 거절·401 모두 `driveAuthRequired: true` 신호를 돌려주고, 프런트(`runWithDriveAuth`)는 에러 토스트 대신 Android `GoogleAuthUtil.clearToken`으로 Play 서비스 캐시를 비운 뒤 즉시 구글 동의/로그인 화면을 띄워 새 권한을 받고 원래 작업을 이어서 실행한다.
+- **드라이브 앱 전용 폴더 완전 삭제와 알림 (`1-J-4`)**: 구글 드라이브는 같은 `name`의 파일이 여러 `id`로 생길 수 있어(동시 업로드 등), 이름 기준 `HashMap`으로 목록을 합치던 기존 `delete_all`은 중복 파일 ID를 남겼다. 이제 `delete_all_with_progress`는 이름 중복 제거 없이 `appDataFolder`의 모든 파일 `id`를 페이지 끝까지 조회해 8개씩 병렬로 지우고 빈 폴더가 될 때까지 확인하며, 완료·실패 모두 인앱 토스트와 OS 알림(`system_notify`)을 띄운다.
+
 ### ADR-012 커뮤니티 플러그인 (사용자 코드 플러그인)
 
 **상태** Accepted (2026-11-17) — plans/roadmap.md 6-D (M16). 3단계보다 먼저 하기로 함(사용자 요청)
@@ -994,6 +1000,8 @@ Complete Submission + Task
 
 **한계**: 창 닫기 이벤트가 아니라 제목줄 닫기 버튼에서만 묻는다(창 닫기 이벤트를 막으려면 창 권한을 더 줘야 함). Android에는 닫기 버튼이 없다. 다른 곳의 지연 트랜잭션(읽고 쓰는 것)은 여전히 겹치면 BUSY가 날 수 있다 — 휴지통만 고쳤다.
 
+**갱신 (2026-11-27, 1-J-2, 사용자 요청): 원격 동기화는 하단 대기열 막대 대신 진행률 토스트·상단 알림으로** — 폴더·구글 드라이브 동기화(`syncNow`)와 드라이브 데이터 삭제는 백엔드 `RUNNING` 원자 잠금과 `TaskManager`(`BackgroundSync`)로 이미 관리되는데 프런트 `jobs.run`까지 감싸 화면 하단 중앙에 고정 팝업(`JobProgress`)이 떠 화면을 가리고 로컬 파일 작업까지 막았다. 원격 동기화·삭제는 `jobs.run`에서 빼고, 우측 하단 단일 진행률 토스트(`Toast.progress` + `dismissOnClick`, 사용자가 누르면 닫히고 해당 실행 동안 다시 뜨지 않음)와 Android 포그라운드 서비스 알림(`GenerationService.updateSync` 실시간 진행 막대·퍼센트)으로 진행률을 보여 준다.
+
 ### ADR-028 대화 옵션의 고르는 순서와 자물쇠
 
 **상태** Accepted (2026-11-23, 사용자 결정) — plans/roadmap.md 5-E-29.
@@ -1114,3 +1122,14 @@ Complete Submission + Task
 - 단일 `ko.json`·`en.json` 정적 import 유지: 언어가 늘수록 시작 시 쓰지 않는 언어 사전까지 모두 파싱해 Lazy Initialization 원칙에 어긋나고, 한 파일에서 병합 충돌이 잦다.
 - `AppSetting.language`를 기기 간 공유(`Scope::Shared`)로 두기: 데스크톱과 모바일, 또는 테스트 환경마다 선호 언어가 다를 수 있어 기기 전용으로 둔다.
 - 백엔드 오류를 `ErrorCode` 종류만으로 번역: `INVALID_INPUT`·`RESOURCE_NOT_FOUND` 하나에 수십 가지 구체 사유(비어 있는 이름, 크기 초과, 중복 키 등)가 묶여 있어 인자 없이는 사용자가 무엇을 고쳐야 하는지 알 수 없다.
+
+### ADR-033 알림 기본 켜짐 및 시작 시 권한 요청
+
+**상태** Accepted (2026-11-27, 사용자 요청) — plans/roadmap.md 1-J-5 (M27).
+
+**왜**: 알림 설정(`DoneNotify.enabled`) 기본값이 `false`이고 Android 13+(`POST_NOTIFICATIONS`) 권한을 설정 > 대화에서 스위치를 켤 때만 물어, 대부분의 기기에서 백그라운드 동기화 진행률 알림·데이터 삭제 결과 알림·응답 도착 알림이 표시되지 않았다. OS 알림은 비용이나 외부 전송이 발생하지 않는 로컬 상태 안내(Observability)다.
+
+**결정**
+1. `DoneNotify.enabled` 기본값을 `true`로 두고, 예전 기본값(`false`)으로 저장되어 있던 기존 기기 설정도 `initialized_on` 표시로 최초 한 번 `true`로 올린다(그 뒤 사용자가 직접 끈 경우는 그대로 존중).
+2. 모바일(Android 13+ / API 33+)은 `MainActivity.onCreate`와 `AppShell` 시작 시점에 즉시 `POST_NOTIFICATIONS` 권한을 요청해 포그라운드 서비스 진행률 알림과 완료 알림이 처음부터 보이게 한다. Windows도 시작 시 AUMID를 레지스트리(`HKCU`)에 등록한다.
+3. 백그라운드 동기화 완료·실패(앱이 가려져 있을 때)와 드라이브 데이터 삭제 완료·실패(전면·후면 모두)는 `notify::system_notify`로 OS 알림을 보낸다.

@@ -36,6 +36,7 @@
     - [x] (추가) 예산 한도 개편: 한 달 금액 하나 (1-G, M24, ADR-019 — 1-G-4 구독형 잔여는 실계정 확인 남음)
     - [x] (추가) 한 키로 여러 모델 (1-H, M24, ADR-020)
     - [x] (추가) 실기기 버그 0.3.4 (1-I, M25 — 실기기 재확인 남음)
+    - [x] (추가) 구글 드라이브 동기화·알림 모바일 버그 0.4.0 (1-J, M27, ADR-011·027·033 — 실기기 재확인 남음)
 2. [x] 데이터 관리 및 동기화 (M12~M15. 후속: 1-F-3-4, 드라이브 업로드 암호화는 아이디어)
     - [x] (추가) 변경 추적(수정 시각·삭제 표시·기기 id)과 휴지통 (2-A, M12, ADR-011)
     - [x] (추가) 동기화 묶음 형식 + 파일로 주고받는 수동 병합 (2-B, M12, ADR-011)
@@ -66,7 +67,7 @@
         - 반응형 레이아웃
         - 접근성 설정
         - [x] 다국어 지원 (5-C-2, M26 완료, ADR-032 — 프런트 하드코딩 0줄·백엔드 오류/알림/경고 번역·CI 검사·번역 안내 완료, 실앱 영어 화면 육안 순회는 Q1·Q2 실환경 점검과 함께)
-        - [~] 사용자가 직접 설정할 수 있는 알림 정책 (응답·작업 완료 알림과 제목·아이콘·소리 커스텀은 5-E-18·5-G-16 완료, 종류별 스위치·조용한 시간은 5-C-5 남음)
+        - [~] 사용자가 직접 설정할 수 있는 알림 정책 (응답·작업 완료 알림 기본 켜짐·시작 시 권한 요청과 제목·아이콘·소리 커스텀은 5-E-18·5-G-16·1-J-5 완료, 종류별 스위치·조용한 시간은 5-C-5 남음)
 6. [ ] 생태계 및 확장성
     - [ ] (추가) 파일 형식 명세와 호환 규칙 (6-A)
     - [ ] (추가) 선언형 확장 묶음 주고받기 (6-B)
@@ -226,6 +227,13 @@
 - [x] 1-I-7 JSONL 가져오기에서 "큿," 등이 빈칸이 됨 — 버그 아님: 사용자가 켜 둔 화면용 정규식이 지운 것(끄면 보임, 사용자 확인). 가져오기는 원문 그대로. 고친 것 없음.
 - [x] 1-I-8 텍스트 카드 배율 — 카드 캔버스는 고정 크기인데 글자 크기·위치에 `devicePixelRatio`를 곱해 배율이 1이 아닌 화면에서 글이 커지고 밖으로 밀렸다. 곱하기를 빼고, 줄 나누기 측정도 고른 굵기로. 어디: `textCard.ts`. 완료: `pnpm check`.
 - [x] 1-I-9 드라이브 동기화가 끊긴 뒤 이어 받지 않음 (2026-11-22 사용자 보고, 모바일) — 원인: 파일 받기가 실패하면(끊김 포함) "저장소에 없음"으로만 세고 그대로 합친 뒤 그 묶음을 본 것으로 적어, 다음 동기화가 "바뀐 것 없음"으로 건너뛰었다. 이제 저장소에 정말 없는 파일(`NotFound`)만 없음으로 세고, 다른 오류는 **합치기 전에** 멈춘다(받은 파일은 제자리에 있어 다음에 건너뜀). 폴더 저장소도 없는 파일을 `NotFound`로. 이미 이 상태가 된 기기는 다른 기기가 한 번 더 동기화하면(묶음을 매번 새로 씀) 다시 합치며 빠진 파일을 받는다. 어디: `sync_run.rs`, `sync_target.rs`. 완료: 시험 `a_download_cut_off_midway_resumes_on_the_next_sync`. **확인 못 함**: 실제 드라이브·Android.
+
+**1-J 구글 드라이브 동기화·알림 모바일 버그 (0.4.0, 2026-11-27 사용자 보고)**
+- [x] 1-J-1 동기화 누락 파일 영구 스킵·업로드 순서 보정 — 보낸 기기가 `blobs/`를 다 올리기 전에 다른 기기가 먼저 묶음을 합치면 `sync_peers.last_bundle_created_at`이 갱신되어 이후 동기화에서 `unchanged`로 건너뛰며 빠진 파일을 영원히 받지 못하던 문제 수정. 이미 합친 묶음이어도 로컬에 없는 파일(`!exists()`)이 남아 있으면 매 동기화마다 받아 채우고, 올릴 때도 `blobs/` 전체 업로드 완료 뒤에 `devices/<id>.scsync`를 올리도록 순서를 바꿈. 어디: `service/data/sync_run.rs`, `SyncSection.svelte`, `SyncRunsGroup.svelte`. 완료: 단위 시험 `missing_blobs_from_already_merged_bundle_are_downloaded_later`.
+- [x] 1-J-2 동기화 하단 팝업 제거·클릭 닫기 토스트·백그라운드 진행률 알림 — `syncNow`에서 하단 고정 `JobProgress`(`jobs.run`)를 빼고, 클릭하면 닫히는 단일 진행률 토스트(`Toast.progress`·`dismissOnClick`)와 Android 포그라운드 알림(`GenerationService.updateSync` 진행 막대·퍼센트) 및 백그라운드 완료/실패 OS 알림으로 전환. 어디: `toast.svelte.ts`, `Toasts.svelte`, `syncProgress.svelte.ts`, `GenerationService.kt`, `MainActivity.kt`, `keepAlive.ts`, `commands/sync.rs`. 완료: 단위 시험 `androidDrive.test.ts`, `pnpm check`.
+- [x] 1-J-3 구글 드라이브 권한 취소·만료 시 자동 재인증 — 권한을 끊었거나 만료된 상태에서 동기화·데이터 삭제를 누르면 에러 토스트를 띄우던 것을, Android `GoogleAuthUtil.clearToken`으로 Play 서비스 캐시 토큰을 비우고 즉시 동의/로그인 화면을 띄워 권한을 다시 받은 뒤 원래 작업을 이어서 실행하도록 변경. 어디: `DriveAuth.kt`, `MainActivity.kt`, `androidDrive.ts`, `service/drive/auth.rs`·`target.rs`, `commands/sync.rs`, `autoSync.svelte.ts`. 완료: 단위 시험 `drive_target_round_trip_with_chunks_and_token_refresh`, `androidDrive.test.ts`.
+- [x] 1-J-4 구글 드라이브 업로드 데이터 완전 삭제 및 완료·실패 알림 — `ensure_index`가 파일 이름으로 중복을 합쳐 같은 이름의 중복 파일 ID가 드라이브에 남고 순차 삭제로 느렸던 문제를 고쳐, `appDataFolder`의 모든 파일 ID를 페이지 끝까지 조회해 병렬(`DELETE_PARALLEL = 8`)로 완전히 비우고 삭제 진행률과 완료·실패 OS 알림(`system_notify`) 및 토스트를 표시. 어디: `service/drive/target.rs`, `commands/sync.rs`, `service/notify.rs`, `SyncSection.svelte`. 완료: 중복 파일 ID 4개 완전 삭제 단위 시험.
+- [x] 1-J-5 알림 기본 활성 및 모바일 시작 시 권한 요청 — `DoneNotify` 기본값을 켜짐(`enabled = true`, 기존 미초기화 기기도 1회 활성)으로 바꾸고, Android 13+ `MainActivity.onCreate` 및 `AppShell` 시작 시점에 알림 권한을 요청하며 Windows AUMID를 시작 시 등록. 어디: `models/settings.rs`, `lib.rs`, `service/notify.rs`, `MainActivity.kt`, `AppShell.svelte`, `ChatSection.svelte`. 완료: 단위 시험 `default_sound_settings_are_sensible`. **확인 못 함**: Android 실기기 구글 드라이브 동기화·삭제·권한 재동의 및 상단 진행률 알림.
 
 ### 2단계 — 데이터 관리 및 동기화
 

@@ -152,11 +152,19 @@ pub enum NotifySoundMode {
     Custom,
 }
 
-/// 끝나면 알림 (5-E-17·18)
+fn default_true() -> bool {
+    true
+}
+
+/// 끝나면 알림 (5-E-17·18, 1-J-5 기본 켜짐)
 #[derive(Debug, Clone, Serialize, Deserialize, specta::Type)]
 #[serde(rename_all = "camelCase", default)]
 pub struct DoneNotify {
+    #[serde(default = "default_true")]
     pub enabled: bool,
+    /// 예전 기본값(false)에서 기본 켜짐으로 한 번 올렸는지 (사용자가 직접 끄면 true가 유지되어 다시 켜지지 않음)
+    #[serde(default)]
+    pub initialized_on: bool,
     /// 알림 제목 (비면 앱 이름, `{{char}}` = 캐릭터 이름)
     pub title: String,
     /// 알림 아이콘 그림 경로 (없으면 앱 아이콘)
@@ -172,7 +180,8 @@ pub struct DoneNotify {
 impl Default for DoneNotify {
     fn default() -> Self {
         Self {
-            enabled: false,
+            enabled: true,
+            initialized_on: true,
             title: String::new(),
             icon: None,
             sound_mode: NotifySoundMode::Default,

@@ -220,12 +220,8 @@ impl Drop for RunGuard {
     }
 }
 
-/// 진행 단계 (화면에 "다른 기기 확인 / 기기 … 합치는 중 / 올리는 중")
-#[derive(Debug, Clone, Serialize, specta::Type)]
-#[serde(rename_all = "camelCase")]
-pub struct SyncProgress {
-    pub step: String,
-}
+/// 진행 단계 (화면에 "다른 기기 확인 / 파일 받는 중 (3/10) / 올리는 중")
+pub use crate::service::data::sync_run::SyncProgress;
 
 #[derive(Debug, Clone, Serialize, specta::Type)]
 #[serde(rename_all = "camelCase")]
@@ -266,7 +262,8 @@ pub async fn sync_now(
             return Err(AppError::validation("이 빌드에는 구글 드라이브 연결이 들어 있지 않음", None));
         }
         if !crate::service::drive::auth::is_connected() {
-            return Err(AppError::validation("구글 드라이브에 먼저 로그인하세요 (설정 > 동기화)", None));
+            // 권한이 끊겼거나 미연결일 때 에러 메시지 대신 재인증을 바로 요청할 수 있게 알린다 (1-J-3)
+            return Err(crate::service::drive::auth::auth_required());
         }
     } else if folder.is_empty() {
         return Err(AppError::validation("동기화 폴더를 먼저 고르세요 (설정 > 동기화)", None));
@@ -292,9 +289,10 @@ pub async fn sync_now(
         .await?;
 
     let label = if drive { "구글 드라이브 동기화" } else { "폴더 동기화" };
+    let notify_target = if drive { "구글 드라이브" } else { "폴더 동기화" };
     let job = CreateTaskRequest::inline(TaskType::BackgroundSync, TaskOwner::System, id::SYNC, label, auto);
-    let progress = |step: &str| {
-        let _ = app.emit("sync::progress", SyncProgress { step: step.to_string() });
+    let progress = |p: SyncProgress| {
+        let _ = app.emit("sync::progress", p);
     };
     let http = state.http_client.clone();
     let result = tasks
@@ -302,13 +300,14 @@ pub async fn sync_now(
             if drive {
                 let client = drive_client()?;
                 let target = crate::service::drive::target::DriveTarget::new(http, client, Default::default());
-                sync_run::run(&state.db, &base, &mut settings, &me.id, &target, &progress).await
+                sync_run::run_with_progress(&state.db, &base, &mut settings, &me.id, &target, &progress).await
             } else {
                 let target = FolderTarget::new(std::path::Path::new(&folder))?;
-                sync_run::run(&state.db, &base, &mut settings, &me.id, &target, &progress).await
+                sync_run::run_with_progress(&state.db, &base, &mut settings, &me.id, &target, &progress).await
             }
         })
         .await;
+    let _ = app.emit("sync::progress", SyncProgress::step_only("done", ""));
 
     let finished = chrono::Utc::now().timestamp_millis();
     match &result {
@@ -322,6 +321,14 @@ pub async fn sync_now(
             put::<AppSetting>(&app, &before, &settings)?;
             put::<ThemeSetting>(&app, &before, &settings)?;
             put::<PluginSetting>(&app, &before, &settings)?;
+            if !auto || !r.merged.is_empty() || r.files_down > 0 || r.files_up > 0 {
+                crate::service::notify::system_notify(&app, notify_target, "동기화가 완료됨", false);
+            }
+        }
+        Err(e) if e.is_drive_auth_required() => {
+            // 재인증을 받아 바로 다시 실행할 것이므로 실패 기록으로 남기지 않는다
+            sqlx::query("DELETE FROM sync_runs WHERE id = ?").bind(&run_id).execute(&state.db).await?;
+            return result;
         }
         Err(e) => {
             sqlx::query("UPDATE sync_runs SET finished_at = ?, ok = 0, error = ? WHERE id = ?")
@@ -330,6 +337,9 @@ pub async fn sync_now(
                 .bind(&run_id)
                 .execute(&state.db)
                 .await?;
+            if !auto {
+                crate::service::notify::system_notify(&app, notify_target, &format!("동기화 실패: {}", e.to_response().message), false);
+            }
         }
     }
     // 오래된 기록은 100개만 남긴다
@@ -476,16 +486,36 @@ pub async fn drive_login(app: AppHandle, state: State<'_, AppState>) -> Result<D
     drive_status(app)
 }
 
-/// 연결 끊기. `delete_remote`면 먼저 드라이브의 앱 전용 폴더를 비운다(되돌릴 수 없음 — 화면에서 확인)
+/// 연결 끊기. `delete_remote`면 먼저 드라이브의 앱 전용 폴더 안 모든 파일 ID를 병렬로 비우고 완료·실패 알림을 띄운다 (1-J-4)
 #[tauri::command]
 #[specta::specta]
-pub async fn drive_logout(app: AppHandle, state: State<'_, AppState>, delete_remote: bool) -> Result<u32> {
+pub async fn drive_logout(app: AppHandle, state: State<'_, AppState>, tasks: State<'_, Arc<TaskManager>>, delete_remote: bool) -> Result<u32> {
     use crate::service::drive::{auth, target::DriveTarget};
     require(&app, id::SYNC)?;
     let ep = auth::Endpoints::default();
     let mut removed = 0;
     if delete_remote {
-        removed = DriveTarget::new(state.http_client.clone(), drive_client()?, ep.clone()).delete_all().await?;
+        let client = drive_client()?;
+        let http = state.http_client.clone();
+        let ep_run = ep.clone();
+        let app_prog = app.clone();
+        let res = tasks
+            .run_inline(job("드라이브 데이터 지우기"), |_| async move {
+                let progress = |cur: u32, tot: u32| {
+                    let _ = app_prog.emit("sync::progress", SyncProgress::counted("wiping", "드라이브 데이터 지우는 중", cur, tot));
+                };
+                DriveTarget::new(http, client, ep_run).delete_all_with_progress(&progress).await
+            })
+            .await;
+        let _ = app.emit("sync::progress", SyncProgress::step_only("done", ""));
+        match res {
+            Ok(n) => removed = n,
+            Err(e) if e.is_drive_auth_required() => return Err(e),
+            Err(e) => {
+                crate::service::notify::system_notify(&app, "구글 드라이브", &format!("드라이브 데이터 삭제 실패: {}", e.to_response().message), true);
+                return Err(e);
+            }
+        }
     }
     auth::disconnect(&state.http_client, &ep).await?;
     save_sync_setting(&app, |s| {
@@ -495,6 +525,9 @@ pub async fn drive_logout(app: AppHandle, state: State<'_, AppState>, delete_rem
             s.auto = false;
         }
     })?;
+    if delete_remote {
+        crate::service::notify::system_notify(&app, "구글 드라이브", &format!("드라이브 동기화 파일 {removed}개를 삭제했습니다"), true);
+    }
     Ok(removed)
 }
 
@@ -511,7 +544,7 @@ fn drive_client() -> Result<crate::service::drive::auth::Client> {
     }
 }
 
-/// Android: 폰이 Play 서비스에서 받은 access token을 넣는다 (메모리에만). `connect`면 처음 연결 — 계정을 읽고 저장소를 드라이브로
+/// Android: 폰이 Play 서비스에서 받은 access token을 넣는다 (메모리에만). `connect`면 토큰 유효성·계정을 확인하고 저장소를 드라이브로
 #[tauri::command]
 #[specta::specta]
 pub async fn drive_use_token(app: AppHandle, state: State<'_, AppState>, token: String, connect: bool) -> Result<DriveStatus> {
@@ -519,11 +552,10 @@ pub async fn drive_use_token(app: AppHandle, state: State<'_, AppState>, token: 
     require(&app, id::SYNC)?;
     auth::use_android_token(&token)?;
     if connect {
+        // 취소된 옛 캐시 토큰이면 401 → auth_required를 돌려주어 폰이 캐시를 지우고 동의 화면을 띄우게 한다 (1-J-3)
         let email = DriveTarget::new(state.http_client.clone(), drive_client()?, auth::Endpoints::default())
-            .account_email()
-            .await
-            .ok()
-            .flatten();
+            .verify_and_email()
+            .await?;
         save_sync_setting(&app, |s| {
             s.drive_email = email.clone();
             s.target = "drive".into();

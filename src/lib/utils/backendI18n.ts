@@ -161,6 +161,7 @@ const TASK_LABEL_MAP: Record<string, string> = {
 	"동기화 파일 합치기": "syncMerge", // i18n-ignore
 	"구글 드라이브 동기화": "syncDrive", // i18n-ignore
 	"폴더 동기화": "syncFolder", // i18n-ignore
+	"드라이브 데이터 지우기": "driveWipe", // i18n-ignore
 };
 
 /** 백엔드가 저장한 작업 `label`을 현재 언어로 변환한다 */

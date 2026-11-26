@@ -724,7 +724,8 @@
 			"syncExport": "Create sync bundle",
 			"syncMerge": "Merge sync bundle",
 			"syncDrive": "Google Drive sync",
-			"syncFolder": "Folder sync"
+			"syncFolder": "Folder sync",
+			"driveWipe": "Delete Drive data"
 		}
 	},
 	"quota": {

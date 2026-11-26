@@ -54,6 +54,8 @@ pub fn localize_pair(target_name: &str, body: &str, lang: &str) -> (String, Stri
         "폰 카메라" => "Phone Camera",
         "그림 만들기" => "Image Generation",
         "대화 요약" => "Summary",
+        "구글 드라이브" => "Google Drive",
+        "폴더 동기화" => "Folder Sync",
         other => other,
     };
     let loc_body = match body {
@@ -68,9 +70,16 @@ pub fn localize_pair(target_name: &str, body: &str, lang: &str) -> (String, Stri
         "그림이 완성됨" => "Image generated".to_string(),
         "생성이 끝남" => "Generation completed".to_string(),
         "대화 요약이 끝남" => "Conversation summary completed".to_string(),
+        "동기화가 완료됨" => "Sync completed".to_string(),
         other => {
             if let Some(who) = other.strip_suffix("의 응답이 도착함") {
                 format!("Reply from {who} arrived")
+            } else if let Some(n) = other.strip_prefix("드라이브 동기화 파일 ").and_then(|s| s.strip_suffix("개를 삭제했습니다")) {
+                format!("Deleted {n} sync files from Google Drive")
+            } else if let Some(reason) = other.strip_prefix("드라이브 데이터 삭제 실패: ") {
+                format!("Failed to delete Google Drive data: {reason}")
+            } else if let Some(reason) = other.strip_prefix("동기화 실패: ") {
+                format!("Sync failed: {reason}")
             } else {
                 other.to_string()
             }
@@ -125,6 +134,37 @@ pub fn task_done(app: &AppHandle, target_name: &str, body: &str) {
     }
     if let Err(e) = dispatch(app, &cfg, &lang, &target_loc, &body_loc) {
         eprintln!("[notify] 알림을 띄우지 못함: {e}");
+    }
+}
+
+/// 앱 시작 시 알림 등록 초기화 (Windows AUMID 사전 등록, 1-J-5)
+pub fn init_on_startup(app: &AppHandle) {
+    #[cfg(target_os = "windows")]
+    {
+        let _ = ensure_windows_aumid(&app.config().identifier, DEFAULT_TITLE);
+    }
+    #[cfg(not(target_os = "windows"))]
+    let _ = app;
+}
+
+/// 동기화·드라이브 데이터 삭제 등 백그라운드 시스템 작업 알림.
+/// `even_in_front`가 true면 앱이 앞에 있어도 OS 알림을 함께 띄운다 (드라이브 데이터 삭제 결과 등).
+pub fn system_notify(app: &AppHandle, target_name: &str, body: &str, even_in_front: bool) {
+    let (cfg_opt, lang) = read_cfg_and_lang(app);
+    let (target_loc, body_loc) = localize_pair(target_name, body, &lang);
+    let _ = app.emit(
+        "widget_mascot::notify",
+        crate::models::widget::WidgetMascotNotifyPayload {
+            target_name: target_loc.clone(),
+            body: body_loc.clone(),
+        },
+    );
+    if !even_in_front && app_in_front(app) {
+        return;
+    }
+    let cfg = cfg_opt.unwrap_or_default();
+    if let Err(e) = dispatch(app, &cfg, &lang, &target_loc, &body_loc) {
+        eprintln!("[notify] 시스템 알림을 띄우지 못함: {e}");
     }
 }
 
@@ -319,12 +359,17 @@ mod tests {
             ("Game Dialogue".into(), "Character reply arrived".into())
         );
         assert_eq!(localize_pair("대필", "대필이 끝남", "ko"), ("대필".into(), "대필이 끝남".into()));
+        assert_eq!(
+            localize_pair("구글 드라이브", "드라이브 동기화 파일 12개를 삭제했습니다", "en"),
+            ("Google Drive".into(), "Deleted 12 sync files from Google Drive".into())
+        );
     }
 
     #[test]
     fn default_sound_settings_are_sensible() {
         let c = DoneNotify::default();
-        assert!(!c.enabled);
+        assert!(c.enabled);
+        assert!(c.initialized_on);
         assert_eq!(c.sound_mode, NotifySoundMode::Default);
         assert!(c.sound_path.is_none());
         assert!((c.sound_volume - 0.8).abs() < f32::EPSILON);

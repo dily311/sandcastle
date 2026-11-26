@@ -33,9 +33,10 @@
 	const presetOptions = $derived(library.presets.map((p) => ({ value: p.id, label: p.name })));
 	const personaOptions = $derived<ProfileOption[]>(library.personas.map((p) => ({ id: p.id, name: p.name, avatar: p.avatar, avatarFit: p.avatarFit, color: p.color, description: p.description })));
 
-	// 끝나면 알림 (5-E-17·18): 제목 글, 아이콘, 소리
+	// 끝나면 알림 (5-E-17·18, 1-J-5 기본 켜짐): 제목 글, 아이콘, 소리
 	const notify = $derived<NotifySetting>({
-		enabled: !!s?.doneNotify?.enabled,
+		enabled: s?.doneNotify?.enabled ?? true,
+		initializedOn: s?.doneNotify?.initializedOn ?? true,
 		title: s?.doneNotify?.title ?? "",
 		icon: s?.doneNotify?.icon ?? null,
 		soundMode: s?.doneNotify?.soundMode ?? "default",
@@ -48,11 +49,10 @@
 		{ value: "custom", label: $_("settings.chatSec.soundCustom") },
 	]);
 	const soundFileName = $derived(notify.soundPath ? (notify.soundPath.split(/[\\/]/).pop() ?? notify.soundPath) : null);
-	const setNotify = (patch: Partial<NotifySetting>) => appSetting.update({ doneNotify: { ...notify, ...patch } });
+	const setNotify = (patch: Partial<NotifySetting>) => appSetting.update({ doneNotify: { ...notify, initializedOn: true, ...patch } });
 	async function toggleNotify(on: boolean) {
-		// 켤 때 권한을 묻는다 (Android). 거절하면 켜지 않는다
-		if (on && !(await call(commands.requestNotifyPermission(), { source: "settings" }).catch(() => false))) return;
-		await setNotify({ enabled: on });
+		if (on) void call(commands.requestNotifyPermission(), { source: "settings", silent: true }).catch(() => false);
+		await setNotify({ enabled: on, initializedOn: true });
 	}
 	async function pickIcon() {
 		const [p] = await pickFiles([{ name: $_("settings.more.imgFilter"), extensions: ["png", "jpg", "jpeg", "ico"] }], false);

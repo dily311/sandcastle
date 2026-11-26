@@ -148,7 +148,14 @@ pub fn run() {
 
         // 3. 앱 설정 로드
         let settings_handle = app.handle().clone();
-        let app_setting = sys::settings::load::<AppSetting>(&settings_handle);
+        let mut app_setting = sys::settings::load::<AppSetting>(&settings_handle);
+        // 알림은 기본 켜짐으로 통일 (1-J-5: 예전 기본값 false로 저장된 기기도 최초 한 번 켜 둠)
+        if !app_setting.done_notify.initialized_on {
+            app_setting.done_notify.enabled = true;
+            app_setting.done_notify.initialized_on = true;
+            let _ = sys::settings::save(&settings_handle, &app_setting);
+        }
+        service::notify::init_on_startup(&settings_handle);
         // AI 호출 기록 스위치 (5-E-20-6-7)
         service::ai::call_log::set_enabled(app_setting.ai_call_log);
         service::prompt::prompt_manager::set_world_info_config(app_setting.world_info.scan_depth, app_setting.world_info.max_recursion_depth);

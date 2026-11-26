@@ -372,7 +372,8 @@
 		"chipRemoveAria": "Remove {label}",
 		"chipAddAria": "Add to {label}",
 		"menuAria": "Menu",
-		"moreActionsAria": "More options"
+		"moreActionsAria": "More options",
+		"keepAliveGenerating": "Generating reply"
 	},
 	"jobs": {
 		"source": "Job Queue",

@@ -372,7 +372,8 @@
 		"chipRemoveAria": "{label} 빼기",
 		"chipAddAria": "{label}에 넣기",
 		"menuAria": "메뉴",
-		"moreActionsAria": "다른 방법"
+		"moreActionsAria": "다른 방법",
+		"keepAliveGenerating": "응답을 만드는 중"
 	},
 	"jobs": {
 		"source": "작업 대기열",

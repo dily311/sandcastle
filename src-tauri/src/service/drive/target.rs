@@ -6,7 +6,10 @@
 //! - 401이면 access token을 새로 받아 한 번 더
 use std::collections::HashMap;
 use std::path::Path;
+use std::sync::atomic::{AtomicU32, Ordering};
+use std::time::Duration;
 
+use futures::stream::{self, StreamExt};
 use serde::Deserialize;
 use tokio::io::{AsyncReadExt, AsyncSeekExt, AsyncWriteExt};
 use tokio::sync::Mutex;
@@ -16,14 +19,19 @@ use crate::error::{AppError, ErrorCode, Result};
 use crate::service::data::sync_target::{RemoteEntry, SyncTarget};
 
 const CHUNK: usize = 8 * 1024 * 1024;
+const DELETE_PARALLEL: usize = 8;
+
+/// (가장 최신 파일 id, 크기, 같은 이름의 중복 파일 id들)
+type IndexEntry = (String, u64, Vec<String>);
+type IndexMap = HashMap<String, IndexEntry>;
 
 pub struct DriveTarget {
     http: reqwest::Client,
     client: Client,
     ep: Endpoints,
     chunk: usize,
-    /// 이름 → (id, 크기)
-    index: Mutex<Option<HashMap<String, (String, u64)>>>,
+    /// 이름 → 파일 인덱스
+    index: Mutex<Option<IndexMap>>,
 }
 
 #[derive(Deserialize)]
@@ -63,7 +71,7 @@ impl DriveTarget {
         self
     }
 
-    /// 인증을 붙여 보내고, 401이면 토큰을 새로 받아 한 번 더
+    /// 인증을 붙여 보내고, 401이면 토큰을 새로 받아 한 번 더. 그래도 401이면 재인증을 요청한다
     async fn send(&self, build: impl Fn(&reqwest::Client, &str) -> reqwest::RequestBuilder) -> Result<reqwest::Response> {
         for attempt in 0..2 {
             let token = auth::access_token(&self.http, &self.client, &self.ep).await?;
@@ -71,13 +79,18 @@ impl DriveTarget {
                 .send()
                 .await
                 .map_err(|e| err(format!("구글 드라이브에 연결하지 못함: {e}")))?;
-            if res.status() == reqwest::StatusCode::UNAUTHORIZED && attempt == 0 {
-                auth::forget_access_token();
-                continue;
+            if res.status() == reqwest::StatusCode::UNAUTHORIZED {
+                if attempt == 0 {
+                    auth::forget_access_token();
+                    continue;
+                }
+                auth::clear_saved_auth();
+                return Err(auth::auth_required());
             }
             return Ok(res);
         }
-        Err(err("구글 드라이브 인증 실패"))
+        auth::clear_saved_auth();
+        Err(auth::auth_required())
     }
 
     async fn ensure_index(&self) -> Result<()> {
@@ -85,7 +98,7 @@ impl DriveTarget {
         if idx.is_some() {
             return Ok(());
         }
-        let mut map: HashMap<String, (String, u64)> = HashMap::new();
+        let mut map: IndexMap = HashMap::new();
         let mut page: Option<String> = None;
         loop {
             let url = format!("{}/files", self.ep.api);
@@ -94,6 +107,8 @@ impl DriveTarget {
                 .send(|c, t| {
                     let mut q = vec![
                         ("spaces", "appDataFolder".to_string()),
+                        ("q", "trashed = false".to_string()),
+                        ("orderBy", "modifiedTime desc".to_string()),
                         ("fields", "nextPageToken,files(id,name,size)".to_string()),
                         ("pageSize", "1000".to_string()),
                     ];
@@ -109,7 +124,12 @@ impl DriveTarget {
             let list: FileList = res.json().await.map_err(|e| err(format!("드라이브 응답을 읽지 못함: {e}")))?;
             for f in list.files {
                 let size = f.size.and_then(|s| s.parse().ok()).unwrap_or(0);
-                map.entry(f.name).or_insert((f.id, size));
+                match map.get_mut(&f.name) {
+                    Some(existing) => existing.2.push(f.id),
+                    None => {
+                        map.insert(f.name, (f.id, size, Vec::new()));
+                    }
+                }
             }
             match list.next_page_token {
                 Some(p) => page = Some(p),
@@ -125,6 +145,30 @@ impl DriveTarget {
         Ok(self.index.lock().await.as_ref().and_then(|m| m.get(name).map(|v| v.0.clone())))
     }
 
+    async fn delete_id(&self, id: &str, label: &str) -> Result<()> {
+        let url = format!("{}/files/{id}", self.ep.api);
+        for attempt in 0..3 {
+            let res = match self.send(|c, t| c.delete(&url).bearer_auth(t)).await {
+                Ok(r) => r,
+                Err(e) if !e.is_drive_auth_required() && attempt < 2 => {
+                    tokio::time::sleep(Duration::from_millis(250 * (attempt + 1) as u64)).await;
+                    continue;
+                }
+                Err(e) => return Err(e),
+            };
+            let status = res.status();
+            if status.is_success() || status == reqwest::StatusCode::NOT_FOUND {
+                return Ok(());
+            }
+            if (status == reqwest::StatusCode::TOO_MANY_REQUESTS || status.is_server_error()) && attempt < 2 {
+                tokio::time::sleep(Duration::from_millis(300 * (attempt + 1) as u64)).await;
+                continue;
+            }
+            return Err(err(format!("드라이브에서 지우지 못함 ({label}, HTTP {status})")));
+        }
+        Ok(())
+    }
+
     /// 연결한 계정의 이메일 (화면 표시용)
     pub async fn account_email(&self) -> Result<Option<String>> {
         let url = format!("{}/about", self.ep.api);
@@ -136,14 +180,91 @@ impl DriveTarget {
         Ok(v["user"]["emailAddress"].as_str().map(String::from))
     }
 
-    /// 드라이브의 앱 전용 폴더를 비운다 (연결 끊기에서 사용자가 고를 때만)
-    pub async fn delete_all(&self) -> Result<u32> {
-        self.ensure_index().await?;
-        let names: Vec<String> = self.index.lock().await.as_ref().map(|m| m.keys().cloned().collect()).unwrap_or_default();
-        for n in &names {
-            self.delete(n).await?;
+    /// 토큰이 실제로 유효한지 확인하면서 계정 이메일을 읽는다 (401이면 auth_required 반환)
+    pub async fn verify_and_email(&self) -> Result<Option<String>> {
+        let url = format!("{}/about", self.ep.api);
+        let res = self.send(|c, t| c.get(&url).bearer_auth(t).query(&[("fields", "user(emailAddress)")])).await?;
+        if res.status() == reqwest::StatusCode::UNAUTHORIZED || res.status() == reqwest::StatusCode::FORBIDDEN {
+            auth::clear_saved_auth();
+            return Err(auth::auth_required());
         }
-        Ok(names.len() as u32)
+        if !res.status().is_success() {
+            return Ok(None);
+        }
+        let v: serde_json::Value = res.json().await.unwrap_or_default();
+        Ok(v["user"]["emailAddress"].as_str().map(String::from))
+    }
+
+    async fn list_all_raw_files(&self) -> Result<Vec<(String, String)>> {
+        let mut all: Vec<(String, String)> = Vec::new();
+        let mut page: Option<String> = None;
+        loop {
+            let url = format!("{}/files", self.ep.api);
+            let p = page.clone();
+            let res = self
+                .send(|c, t| {
+                    let mut q = vec![
+                        ("spaces", "appDataFolder".to_string()),
+                        ("q", "trashed = false".to_string()),
+                        ("fields", "nextPageToken,files(id,name)".to_string()),
+                        ("pageSize", "1000".to_string()),
+                    ];
+                    if let Some(p) = &p {
+                        q.push(("pageToken", p.clone()));
+                    }
+                    c.get(&url).bearer_auth(t).query(&q)
+                })
+                .await?;
+            if !res.status().is_success() {
+                return Err(err(format!("드라이브 목록을 읽지 못함 (HTTP {})", res.status())));
+            }
+            let list: FileList = res.json().await.map_err(|e| err(format!("드라이브 응답을 읽지 못함: {e}")))?;
+            for f in list.files {
+                all.push((f.id, f.name));
+            }
+            match list.next_page_token {
+                Some(p) => page = Some(p),
+                None => break,
+            }
+        }
+        Ok(all)
+    }
+
+    /// 드라이브의 앱 전용 폴더 안 모든 파일 ID를 병렬로 완전히 비운다 (중복 이름 파일 포함)
+    pub async fn delete_all(&self) -> Result<u32> {
+        self.delete_all_with_progress(&|_, _| {}).await
+    }
+
+    pub async fn delete_all_with_progress(&self, progress: &(dyn Fn(u32, u32) + Sync)) -> Result<u32> {
+        let mut removed_total = 0u32;
+        for _ in 0..5 {
+            let batch = self.list_all_raw_files().await?;
+            if batch.is_empty() {
+                break;
+            }
+            let total = removed_total + batch.len() as u32;
+            let done = AtomicU32::new(removed_total);
+            progress(removed_total, total);
+            let results: Vec<Result<()>> = stream::iter(batch)
+                .map(|(id, name)| {
+                    let done = &done;
+                    async move {
+                        self.delete_id(&id, &name).await?;
+                        let cur = done.fetch_add(1, Ordering::SeqCst) + 1;
+                        progress(cur, total);
+                        Ok(())
+                    }
+                })
+                .buffer_unordered(DELETE_PARALLEL)
+                .collect()
+                .await;
+            for r in results {
+                r?;
+            }
+            removed_total = done.load(Ordering::SeqCst);
+        }
+        *self.index.lock().await = Some(HashMap::new());
+        Ok(removed_total)
     }
 }
 
@@ -160,7 +281,7 @@ impl SyncTarget for DriveTarget {
             .map(|m| {
                 m.iter()
                     .filter(|(n, _)| n.starts_with(prefix) && !n[prefix.len()..].contains('/'))
-                    .map(|(n, (_, size))| RemoteEntry { name: n.clone(), size: *size })
+                    .map(|(n, (_, size, _))| RemoteEntry { name: n.clone(), size: *size })
                     .collect()
             })
             .unwrap_or_default();
@@ -280,18 +401,27 @@ impl SyncTarget for DriveTarget {
             name: name.into(),
             size: None,
         });
-        if let Some(m) = self.index.lock().await.as_mut() {
-            m.insert(name.to_string(), (f.id, total));
+        let stale_dups = if let Some(m) = self.index.lock().await.as_mut() {
+            let prev = m.insert(name.to_string(), (f.id.clone(), total, Vec::new()));
+            prev.map(|(_, _, extras)| extras).unwrap_or_default()
+        } else {
+            Vec::new()
+        };
+        for dup_id in stale_dups {
+            if dup_id != f.id {
+                let _ = self.delete_id(&dup_id, name).await;
+            }
         }
         Ok(())
     }
 
     async fn delete(&self, name: &str) -> Result<()> {
-        let Some(id) = self.id_of(name).await? else { return Ok(()) };
-        let url = format!("{}/files/{id}", self.ep.api);
-        let res = self.send(|c, t| c.delete(&url).bearer_auth(t)).await?;
-        if !res.status().is_success() && res.status() != reqwest::StatusCode::NOT_FOUND {
-            return Err(err(format!("드라이브에서 지우지 못함 ({name}, HTTP {})", res.status())));
+        self.ensure_index().await?;
+        let entry = self.index.lock().await.as_ref().and_then(|m| m.get(name).cloned());
+        let Some((id, _, extras)) = entry else { return Ok(()) };
+        self.delete_id(&id, name).await?;
+        for dup_id in extras {
+            self.delete_id(&dup_id, name).await?;
         }
         if let Some(m) = self.index.lock().await.as_mut() {
             m.remove(name);
@@ -511,6 +641,21 @@ mod tests {
 
         assert_eq!(t3.delete_all().await.unwrap(), 1);
         assert!(state.lock().unwrap().files.is_empty());
+
+        // 같은 이름으로 중복 생성된 파일 ID들이 있어도 delete_all이 빠짐없이 모두 지운다 (1-J-4)
+        {
+            let mut s = state.lock().unwrap();
+            s.files.insert("dup1".into(), ("blobs/same".into(), b"1".to_vec()));
+            s.files.insert("dup2".into(), ("blobs/same".into(), b"1".to_vec()));
+            s.files.insert("dup3".into(), ("devices/d1.scsync".into(), b"a".to_vec()));
+            s.files.insert("dup4".into(), ("devices/d1.scsync".into(), b"b".to_vec()));
+        }
+        let t4 = DriveTarget::new(reqwest::Client::new(), client.clone(), endpoints(&base));
+        let steps = std::sync::Mutex::new(Vec::new());
+        let removed = t4.delete_all_with_progress(&|cur, tot| steps.lock().unwrap().push((cur, tot))).await.unwrap();
+        assert_eq!(removed, 4);
+        assert!(state.lock().unwrap().files.is_empty());
+        assert_eq!(steps.lock().unwrap().last().copied(), Some((4, 4)));
     }
 
     /// 폴더 대상과 같은 sync_run이 드라이브로도 돈다 (기기 둘)
