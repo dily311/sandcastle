@@ -60,12 +60,12 @@
     - [x] (추가) 다인봇·게임 기록 전환·상태창·사용자 변수·유틸 프롬프트 (5-F, M25, ADR-023·029·030)
     - [x] (추가) 번호 없이 한 작업의 소급 기록 (5-G, M25·v0.4.0 — 2026-11-24~26 커밋)
     - [ ] (추가) 폰 ↔ 대화 연동 (5-H, **정식 릴리스 기준 R1**, 결정 필요)
-    - [ ] 접근성 및 사용 편의성 (5-C — **다국어 5-C-2가 현재 마일스톤 M26 진행 중**)
+    - [ ] 접근성 및 사용 편의성 (5-C — 다국어 5-C-2는 M26 완료)
         - 키보드 단축키
         - 모바일 터치 인터페이스 최적화
         - 반응형 레이아웃
         - 접근성 설정
-        - [~] 다국어 지원 (5-C-2, M26 진행 중 — ko·en 3,756키·주요 화면·백엔드 코드 번역 완료, 남은 한글·CI 검사·영어 검수 남음)
+        - [x] 다국어 지원 (5-C-2, M26 완료, ADR-032 — 프런트 하드코딩 0줄·백엔드 오류/알림/경고 번역·CI 검사·번역 안내 완료, 실앱 영어 화면 육안 순회는 Q1·Q2 실환경 점검과 함께)
         - [~] 사용자가 직접 설정할 수 있는 알림 정책 (응답·작업 완료 알림과 제목·아이콘·소리 커스텀은 5-E-18·5-G-16 완료, 종류별 스위치·조용한 시간은 5-C-5 남음)
 6. [ ] 생태계 및 확장성
     - [ ] (추가) 파일 형식 명세와 호환 규칙 (6-A)
@@ -129,7 +129,7 @@
 - **R2 게임 템플릿 전환** (4-B-1·4-B-2·4-B-3·4-C-1) — 대화 전용 템플릿을 추가하고, 같은 세션을 비주얼노벨 화면과 대화 화면으로 번갈아 열어도 진행 상태(변수·관계·위치·대사 기록)가 같다. 완료: 4-B-3의 완료 기준 시험 + 대화 템플릿으로 새 게임 시작 → 몇 턴 → 전환 → 이어 하기 E2E.
 
 **출시 품질 기준** (기능 기준만으로는 출시 판단이 안 되어 더함)
-- **Q1 다국어** (5-C-2, M26 진행 중) — 화면 글자의 하드코딩 검사 0, `ko`·`en` 키 집합이 같음(현재 3,756키 일치 시험 완료), 영어로 모든 화면을 한 번 돌아봄(남은 한글 정리·영어 검수 남음).
+- **Q1 다국어** (5-C-2, M26 완료) — 화면 글자의 하드코딩 검사 0(`pnpm i18n:check` 0줄), `ko`·`en` 7개 영역 사전 전 키 일치 및 ICU 치환·영문 한글 누출 0 자동 시험 통과, 백엔드 오류(`key`+`args`)·알림·경고 번역 완료. 남은 실환경 확인: 실제 앱에서 영어로 모든 화면을 한 번 돌아보며 긴 라벨 배치 점검.
 - **Q2 실환경 확인** — 공급자 4종(Claude·Gemini·OpenAI·NovelAI)으로 채팅·스트리밍·그림, Android 실기기 점검표(`docs/Android 점검표.md`) 다시 돌리기, 드라이브 동기화 두 기기, 백업 → 새 설치에 복원. 결과는 표로.
 - **Q3 품질** — clippy 경고 180 이하(현재 205), 흔들리는 시험 0(시계 주입), CI(E2E 포함) 통과.
 - **Q4 배포** — 서명 키 결정(1-E-3), 태그로 Windows 설치 파일·Android apk가 나옴.
@@ -325,7 +325,7 @@
 
 **5-C 접근성 및 사용 편의성**
 - 5-C-1 단축키 — 동작 목록(이름·실행 함수·기본 키)을 한 곳에 두고 단축키·명령 팔레트·메뉴가 같이 쓴다. 키 바꾸기, 충돌 검사, 기본값으로. 어디: `features/settings/ShortcutSection.svelte`(지금은 목록 보기만).
-- 5-C-2 다국어 — 먼저 하드코딩 한글이 새로 늘지 않게 검사를 CI에 건다. 그다음 공용 UI(`shared/ui`, `app`) → 설정 → 채팅 → 나머지 순서로 옮긴다. 백엔드가 주는 글자(플러그인 이름·오류 메시지)는 키나 코드로 보내고 프런트가 번역한다. (**M26 진행 중, 정식 릴리스 기준 Q1** — 세부는 아래 5-C-2-0~10)
+- [x] 5-C-2 다국어 — 먼저 하드코딩 한글이 새로 늘지 않게 검사를 CI에 건다. 그다음 공용 UI(`shared/ui`, `app`) → 설정 → 채팅 → 나머지 순서로 옮긴다. 백엔드가 주는 글자(플러그인 이름·오류 메시지)는 키나 코드로 보내고 프런트가 번역한다. (**M26 완료, ADR-032, 정식 릴리스 기준 Q1** — 세부는 아래 5-C-2-0~10)
   - **현재 (2026-11-25 → 2026-11-26 v0.4.0 갱신)**: `src/lib/utils/i18n.ts`가 `ko`·`en` 두 언어를 등록하고 `localStorage("sc.locale")` → 브라우저 언어(`en*`이면 `en`, 그 밖은 `ko`)로 시작하며 `<html lang>`을 동기화한다. `src/locales/ko.json`·`en.json`은 약 40개에서 **3,756개 키**로 늘었고 양쪽 키 일치·소스 내 정적 `$_()` 키 존재 시험(`i18n.test.ts`)이 통과한다. Svelte 190개 중 `$_(`를 쓰는 파일이 6개 → **133개**로 늘었으며, 백엔드 오류·코어 플러그인·작업 기능/상태 라벨 변환(`backendI18n.ts`)도 연결되었다. 남은 것: 시안(`design-preview` 6개) 제외 Svelte 41개·TS 48개의 하드코딩 한글, CI 하드코딩 기준표 검사, 백엔드 알림·가져오기 경고 등 원문, 영어 화면 전체 검수, ADR-032 확정.
   - [x] 5-C-2-0 정할 것 (2026-11-26 사용자 합의, ADR-032) — ① `ko`+`en`부터, 언어 폴더 추가만으로 확장 ② 기기 전용 `AppSetting.language`와 `localStorage("sc.locale")` 동기화, 초기 기본값은 OS `ko*`면 `ko`·그 밖은 `en` ③ `src/locales/<언어>/<영역>.json`으로 나누고 현재 언어만 지연 불러오기 ④ 백엔드 `AppError` 전체를 `key`+`args` 구조로 개편하고 OS 알림·작업 라벨·가져오기 경고도 현재 언어로 번역 ⑤ AI 초안 → 검수 ⑥ 번역 기능 기본 `targetLang`은 비어 있으면 화면 언어(`ko`→한국어, `en`→English)를 따라감.
   - [x] 5-C-2-1 기반 — ADR-032대로 `src/locales/<언어>/{common,settings,chat,phone,game,features,backend}.json` 영역별 분할 및 현재 언어만 지연 불러오기(`register` + `waitLocale`), 언어 폴더 자동 인식(`AVAILABLE_LOCALES`), 기기 전용 `AppSetting.language` ↔ `localStorage("sc.locale")` ↔ `<html lang>` ↔ 위젯 창 동기화(초기 기본 OS `ko*`→`ko`·그 밖 `en`), `src/shared/time.ts`(`Intl.DateTimeFormat`·`Intl.NumberFormat`), 번역 기본 `targetLang` 화면 언어 추종, 단위 시험(`i18n.test.ts`: 영역 간 중복 0·언어 간 3,757키 일치·정적 `$_()` 키 존재·지연 전환).
@@ -337,7 +337,7 @@
   - [x] 5-C-2-7 게임 — `GamePage`·`GameLibrary`·`GameDetail`·`GamePanel`·`GameSessionTabs`·`GameWorldTabs`·VN 플레이(`VisualNovelTemplatePlay`·`StageView`·`DialoguePanel`·`Backlog`·`PlayInfo`·`VnThemePanel`·`playUtils.ts`·`vnTheme.svelte.ts`)·`StoryPlanPanel`·런타임(`runtimeStore.svelte.ts`·`game.svelte.ts`)·게임 편집기 전 섹션 전환 완료 (`playUtils.test.ts` 한/영 검증 포함).
   - [x] 5-C-2-8 나머지 — 홈·이미지(`ImagesPage`·`ImageCreate`·`presetFromImage.ts`)·대필·빠른 답장·슬래시 엔진(`slash/commands.ts`·`script.ts`)·커뮤니티 플러그인 전체(`src/features/community/*`, `permissions.test.ts` 한/영 검증 포함)·고정 상태창(`StatusFloat`·`StatusTop`·`StatusWindow`·`status/vars.ts`)·위젯 및 시메지(`setFeautres.ts`·`simejiType.ts`·`mascotFeature.svelte.ts`·`PeerChatManager.ts`·`WidgetGame.ts`·`BehaviorController.ts`) 전 구간 전환 완료. 프런트엔드 하드코딩 기준표(`scripts/i18n-baseline.json`) **파일 0개 · 0줄** 달성.
   - [x] 5-C-2-9 백엔드 글자 — `AppErrorResponse`·`TaskErrorInfo`에 구조화 `key`+`args`를 추가하고 백엔드 오류 분류기(`src-tauri/src/error/i18n.rs`, 567개 규칙 + `ko`/`en` `backend.json` 동기화·한글 누출 0 단위 시험)로 구체 인자 포함 오류까지 전부 양쪽 언어로 치환. OS 알림(`service/notify.rs` 제목·본문·테스트 알림)·위젯 트레이 메뉴(`widget/manager.rs`)·만료 HTML 안내(`sys/html_view.rs`)·폰 프로필/SNS 기본 프롬프트(`service/app_prompts.rs` 영문화)·작업 `label`·구독형 잔여(`QuotaLine`)/연결 확인 문구·SillyTavern/팩 가져오기 경고를 현재 언어로 변환(`backendI18n.ts` + Specta 바인딩 갱신).
-  - [ ] 5-C-2-10 영어 검수와 배치 — 영어로 모든 화면을 돌며 넘침·잘림·줄바꿈을 고치고(긴 영어 라벨), 사용자 검수 반영. 완료: 하드코딩 기준표가 0, 영어 화면 스크린샷 순회, `docs/`에 번역 기여 안내(키 추가 규칙).
+  - [x] 5-C-2-10 영어 검수와 배치 — 하드코딩 기준표 0줄, 전 키 ICU 변수 치환 및 영문 한글 누출 0 자동 시험(`src/lib/utils/i18n.test.ts`·`error::i18n::tests`), 번역 기여 안내 문서(`docs/번역 안내.md`) 작성 완료. **확인 못 함**: 실제 앱을 띄워 영어 화면 전체를 눈으로 순회하며 긴 라벨 넘침·줄바꿈을 점검하는 육안 검수(정식 릴리스 기준 Q1·Q2 실환경 점검에서 함께 진행).
   - 영역 하나가 커밋 하나보다 크면 시작할 때 이 목록을 먼저 더 나눈다(작업 규칙).
 - 5-C-3 접근성 — 키보드만으로 전 기능(포커스 순서·표시, 대화상자 안에 포커스 가두기), 버튼 이름(aria), 글자 크기·줄 간격 설정, 움직임 줄이기, 테마 편집기의 대비 경고, 스트리밍 응답을 스크린 리더가 읽게.
 - 5-C-4 모바일 최적화 (1-C 뒤) — 스와이프(다른 응답·옆 패널), 하단 탐색, 한 손 조작.
