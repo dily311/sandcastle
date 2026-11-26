@@ -71,11 +71,15 @@ impl AppError {
             Self::Internal { message } => (ErrorCode::InternalError, ErrorCategory::Internal, message.clone(), false, None),
         };
 
+        let i18n = crate::error::i18n::classify(code, &message, details.as_ref());
+
         AppErrorResponse {
             code,
             category,
             message,
             retryable,
+            key: i18n.as_ref().map(|x| x.key.clone()),
+            args: i18n.and_then(|x| x.args),
             details,
         }
     }
@@ -137,6 +141,16 @@ impl AppError {
 
     pub fn window(message: impl Into<String>) -> Self {
         Self::Window { message: message.into() }
+    }
+
+    /// 구글 드라이브 권한이 취소·만료되어 재인증이 필요한 오류인가
+    pub fn is_drive_auth_required(&self) -> bool {
+        match self {
+            Self::Validation { details: Some(d), .. } | Self::AiProvider { details: Some(d), .. } => {
+                d.get("driveAuthRequired").and_then(Value::as_bool) == Some(true)
+            }
+            _ => false,
+        }
     }
 }
 

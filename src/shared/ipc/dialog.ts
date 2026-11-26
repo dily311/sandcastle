@@ -1,10 +1,13 @@
 // 파일 고르기 / 저장 위치 고르기 (Tauri 대화상자). 브라우저 개발 모드에서는 안내만.
 // Android는 경로 대신 content:// 주소를 주므로 앱 임시 폴더의 경로로 바꿔서 돌려준다 (1-C-2, service/picked_file.rs)
+import { get } from "svelte/store";
+import { _ } from "svelte-i18n";
 import { open, save } from "@tauri-apps/plugin-dialog";
 import { commands } from "$ipc/bindings";
 import { call } from "$shared/ipc/client";
 import { toasts } from "$shared/stores/toast.svelte";
 
+const t = (key: string) => get(_)(key);
 const isContent = (p: string) => p.startsWith("content://");
 
 export interface Filter {
@@ -12,15 +15,17 @@ export interface Filter {
 	extensions: string[];
 }
 
+const plainFilters = (filters: Filter[]): Filter[] => filters.map((f) => ({ name: f.name, extensions: [...f.extensions] }));
+
 export async function pickFiles(filters: Filter[], multiple = true): Promise<string[]> {
 	try {
-		const r = await open({ multiple, filters, directory: false });
+		const r = await open({ multiple, filters: plainFilters(filters), directory: false });
 		if (!r) return [];
 		const picked = Array.isArray(r) ? r : [r];
 		const exts = filters.flatMap((f) => f.extensions);
 		return await Promise.all(picked.map((p) => (isContent(p) ? call(commands.stagePickedFile(p, exts), { source: "file" }) : p)));
 	} catch (e) {
-		toasts.error("파일을 고를 수 없음 (앱에서만 됨)", String(e));
+		toasts.error(t("dialog.cannotPickFile"), String(e));
 		return [];
 	}
 }
@@ -31,16 +36,16 @@ export async function pickFolder(): Promise<string | null> {
 		const r = await open({ directory: true, multiple: false });
 		return typeof r === "string" ? r : null;
 	} catch (e) {
-		toasts.error("폴더를 고를 수 없음 (앱에서만 됨)", String(e));
+		toasts.error(t("dialog.cannotPickFolder"), String(e));
 		return null;
 	}
 }
 
 export async function pickSavePath(defaultPath: string, filters: Filter[]): Promise<string | null> {
 	try {
-		return await save({ defaultPath, filters });
+		return await save({ defaultPath, filters: plainFilters(filters) });
 	} catch (e) {
-		toasts.error("저장 위치를 고를 수 없음 (앱에서만 됨)", String(e));
+		toasts.error(t("dialog.cannotPickSave"), String(e));
 		return null;
 	}
 }
@@ -73,13 +78,13 @@ export async function saveIntoPicked(defaultName: string, filters: Filter[], run
 	return written;
 }
 
-export const GAME_FILES: Filter = { name: "게임", extensions: ["tgame"] };
-export const IMAGE_FILES: Filter = { name: "이미지", extensions: ["png", "jpg", "jpeg", "webp", "gif"] };
+export const GAME_FILES: Filter = { get name() { return t("dialog.filterGame"); }, extensions: ["tgame"] };
+export const IMAGE_FILES: Filter = { get name() { return t("dialog.filterImage"); }, extensions: ["png", "jpg", "jpeg", "webp", "gif"] };
 export const ST_FILES: Filter = { name: "SillyTavern", extensions: ["png", "json", "jsonl"] };
 /** SillyTavern 사용자 폴더(data/default-user)를 압축한 것 */
-export const ST_DATA_FILES: Filter = { name: "SillyTavern 데이터", extensions: ["zip"] };
-export const CHAT_FILES: Filter = { name: "대화 기록", extensions: ["jsonl"] };
-export const PACK_FILES: Filter = { name: "캐릭터 묶음", extensions: ["zip"] };
+export const ST_DATA_FILES: Filter = { get name() { return t("dialog.filterStData"); }, extensions: ["zip"] };
+export const CHAT_FILES: Filter = { get name() { return t("dialog.filterChat"); }, extensions: ["jsonl"] };
+export const PACK_FILES: Filter = { get name() { return t("dialog.filterPack"); }, extensions: ["zip"] };
 export const JSON_FILES: Filter = { name: "JSON", extensions: ["json"] };
-export const BACKUP_FILES: Filter = { name: "샌드캐슬 백업", extensions: ["scbackup"] };
-export const SYNC_FILES: Filter = { name: "샌드캐슬 동기화", extensions: ["scsync"] };
+export const BACKUP_FILES: Filter = { get name() { return t("dialog.filterBackup"); }, extensions: ["scbackup"] };
+export const SYNC_FILES: Filter = { get name() { return t("dialog.filterSync"); }, extensions: ["scsync"] };

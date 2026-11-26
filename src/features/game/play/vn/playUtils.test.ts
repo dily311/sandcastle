@@ -42,6 +42,7 @@ describe("getConnectionRequirement", () => {
 });
 
 import { LineKind, type StageLine } from "$features/game/types";
+import { setAppLocale } from "$lib/utils/i18n";
 import { directionParticle, foldDirectionLines, itemGainLines, objectParticle } from "./playUtils";
 
 const text = (t: string, cues: unknown[] = []) => ({ kind: LineKind.Narration, speaker: null, text: t, cues }) as unknown as StageLine;
@@ -82,5 +83,16 @@ describe("itemGainLines", () => {
 		const events = [{ type: "itemAdded", itemId: "a", quantity: 1 }, { type: "itemAdded", itemId: "b", quantity: 3 }] as never;
 		const lines = itemGainLines(events, [{ id: "a", name: "검" }, { id: "b", name: "약초" }]);
 		expect(lines.map((l) => l.text)).toEqual(["검을 얻었다.", "약초 3개를 얻었다."]);
+	});
+
+	it("영어 모드에서는 조사 없이 영어 문구로 만든다", async () => {
+		await setAppLocale("en", { persistSetting: false });
+		try {
+			const events = [{ type: "itemAdded", itemId: "a", quantity: 1 }, { type: "itemAdded", itemId: "b", quantity: 3 }] as never;
+			const lines = itemGainLines(events, [{ id: "a", name: "Sword" }, { id: "b", name: "Herb" }]);
+			expect(lines.map((l) => l.text)).toEqual(["Obtained Sword.", "Obtained Herb ×3."]);
+		} finally {
+			await setAppLocale("ko", { persistSetting: false });
+		}
 	});
 });

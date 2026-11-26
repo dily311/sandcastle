@@ -4,7 +4,7 @@
 import { get } from "svelte/store";
 import { _ } from "svelte-i18n";
 import type { TaskErrorInfo } from "$ipc/bindings";
-import { localizeBackendError, localizeTaskFeature } from "$lib/utils/backendI18n";
+import { localizeBackendError, localizeTaskFeature, localizeTaskLabel } from "$lib/utils/backendI18n";
 import { call, commands } from "$shared/ipc/client";
 import { onEvent } from "$shared/ipc/events";
 import { logs } from "./log.svelte";
@@ -24,9 +24,10 @@ export function watchTaskErrors() {
 		if (e.type !== "failed" && e.type !== "retrying") return;
 		const err = e.data.error;
 		const task = await call(commands.getTask(e.data.taskId), { source: "task", silent: true }).catch(() => null);
-		const who = task ? `${localizeTaskFeature(task.feature)}${task.label ? ` · ${task.label}` : ""}` : t("tasks.feature.default");
+		const label = localizeTaskLabel(task?.label);
+		const who = task ? `${localizeTaskFeature(task.feature)}${label ? ` · ${label}` : ""}` : t("tasks.feature.default");
 		const auto = task?.runBy === "auto" ? t("tasks.auto") : "";
-		const message = err ? localizeBackendError({ code: err.code, message: err.message }) : t("errors.UNKNOWN");
+		const message = err ? localizeBackendError(err) : t("errors.UNKNOWN");
 		const details = { taskId: e.data.taskId, code: err?.code, retryable: err?.retryable, attempt: e.data.attemptNo, feature: task?.feature, runBy: task?.runBy };
 		if (e.type === "failed" && err?.code === "BUDGET_EXCEEDED") budgetToast(message, task?.runBy !== "auto");
 		if (e.type === "failed") logs.error("task", t("tasks.failed", { who, auto, message }), details);

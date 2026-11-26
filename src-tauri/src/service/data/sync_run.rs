@@ -10,6 +10,7 @@
 //!
 //! 순서가 "받기 → 올리기"인 이유: 올리는 묶음의 acks에 방금 합친 것이 들어가야 상대가 이 기기 행을 덮어쓰지 않는다.
 use std::collections::HashSet;
+use std::sync::atomic::{AtomicU32, Ordering};
 
 use futures::stream::{self, StreamExt};
 use std::path::Path;
@@ -70,6 +71,37 @@ pub struct SyncRunReport {
     pub backup: Option<String>,
 }
 
+/// 동기화·데이터 정리 진행 상태 (토스트 및 모바일 상단 알림 진행률 표시용)
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, specta::Type)]
+#[serde(rename_all = "camelCase")]
+pub struct SyncProgress {
+    /// checking | downloading | merging | uploading | cleaning | wiping | done
+    pub phase: String,
+    pub step: String,
+    pub current: Option<u32>,
+    pub total: Option<u32>,
+}
+
+impl SyncProgress {
+    pub fn step_only(phase: &str, step: impl Into<String>) -> Self {
+        Self {
+            phase: phase.into(),
+            step: step.into(),
+            current: None,
+            total: None,
+        }
+    }
+
+    pub fn counted(phase: &str, step: impl Into<String>, current: u32, total: u32) -> Self {
+        Self {
+            phase: phase.into(),
+            step: step.into(),
+            current: Some(current),
+            total: Some(total),
+        }
+    }
+}
+
 fn is_device_bundle(name: &str) -> Option<String> {
     let file = name.strip_prefix("devices/")?;
     let id = file.strip_suffix(".scsync")?;
@@ -85,11 +117,95 @@ pub async fn run<T: SyncTarget>(
     target: &T,
     progress: &(dyn Fn(&str) + Sync),
 ) -> Result<SyncRunReport> {
+    run_with_progress(db, base, settings, me, target, &|p| progress(&p.step)).await
+}
+
+pub async fn run_with_progress<T: SyncTarget>(
+    db: &SqlitePool,
+    base: &Path,
+    settings: &mut Map<String, Value>,
+    me: &str,
+    target: &T,
+    progress: &(dyn Fn(SyncProgress) + Sync),
+) -> Result<SyncRunReport> {
     let tmp = base.join("tmp").join("sync").join(uuid::Uuid::new_v4().to_string());
     std::fs::create_dir_all(&tmp)?;
     let result = run_in(db, base, settings, me, target, progress, &tmp).await;
     let _ = std::fs::remove_dir_all(&tmp);
     result
+}
+
+/// 묶음이 가리키는 파일 중 이 기기에 아직 없는 것을 저장소에서 받는다.
+/// 이미 합친 묶음이어도 전에 원격에 아직 올라오지 않아(`files_missing > 0`) 못 받았던 파일이 있으면
+/// 다음 동기화에서 빠짐없이 이어 받는다 (1-J-1).
+async fn download_missing_files<T: SyncTarget>(
+    target: &T,
+    base: &Path,
+    b: &mut sync_bundle::Bundle,
+    rep: &mut SyncRunReport,
+    progress: &(dyn Fn(SyncProgress) + Sync),
+) -> Result<bool> {
+    let wanted: Vec<_> = b.files()?.into_iter().filter(|f| !base.join(&f.path).exists()).collect();
+    if wanted.is_empty() {
+        return Ok(false);
+    }
+    let total = wanted.len() as u32;
+    let done = AtomicU32::new(0);
+    progress(SyncProgress::counted("downloading", "파일 받는 중", 0, total));
+    // 동시에 몇 개씩 (드라이브는 파일마다 왕복이 있어 하나씩이면 느리다)
+    let results: Vec<Result<bool>> = stream::iter(wanted)
+        .map(|f| {
+            let done = &done;
+            async move {
+                let dest = base.join(&f.path);
+                let part = dest.with_extension("sync-partial");
+                let r = match target.get(&format!("blobs/{}", f.hash), &part).await {
+                    Ok(()) if sync_bundle::sha256_file(&part)? == f.hash => {
+                        std::fs::rename(&part, &dest)?;
+                        Ok(true)
+                    }
+                    Ok(()) => {
+                        let _ = std::fs::remove_file(&part);
+                        Err(AppError::validation(format!("동기화 저장소의 파일 내용이 해시와 다름: {}", f.path), None))
+                    }
+                    // 저장소에 없는 파일만 "없음"으로 센다. 끊김·시간 초과 같은 다른 오류는 합치기 전에 멈춘다 —
+                    // 합치면 이 묶음을 본 것으로 적어 다음 동기화가 남은 파일을 다시 받지 않는다 (1-I-9)
+                    Err(AppError::NotFound { .. }) => {
+                        let _ = std::fs::remove_file(&part);
+                        Ok(false)
+                    }
+                    Err(e) if e.is_drive_auth_required() => {
+                        let _ = std::fs::remove_file(&part);
+                        Err(e)
+                    }
+                    Err(e) => {
+                        let _ = std::fs::remove_file(&part);
+                        Err(AppError::io(format!(
+                            "파일을 받다가 멈춤 — 다시 동기화하면 받은 파일은 건너뛰고 이어서 받음 ({e})"
+                        )))
+                    }
+                };
+                let cur = done.fetch_add(1, Ordering::SeqCst) + 1;
+                progress(SyncProgress::counted("downloading", "파일 받는 중", cur, total));
+                r
+            }
+        })
+        .buffer_unordered(PARALLEL)
+        .collect()
+        .await;
+    // 받은 것은 이미 제자리에 있으니(다음엔 건너뜀) 셈을 먼저 하고, 하나라도 끊겼으면 합치지 않고 멈춘다
+    let mut stopped = None;
+    for r in results {
+        match r {
+            Ok(true) => rep.files_down += 1,
+            Ok(false) => rep.files_missing += 1,
+            Err(e) => stopped = stopped.or(Some(e)),
+        }
+    }
+    if let Some(e) = stopped {
+        return Err(e);
+    }
+    Ok(true)
 }
 
 async fn run_in<T: SyncTarget>(
@@ -98,14 +214,14 @@ async fn run_in<T: SyncTarget>(
     settings: &mut Map<String, Value>,
     me: &str,
     target: &T,
-    progress: &(dyn Fn(&str) + Sync),
+    progress: &(dyn Fn(SyncProgress) + Sync),
     tmp: &Path,
 ) -> Result<SyncRunReport> {
     let mut rep = SyncRunReport::default();
     let local_schema = sync_bundle::schema_version(db).await?;
 
     // ---- 1. 받기 ----
-    progress("다른 기기 확인");
+    progress(SyncProgress::step_only("checking", "다른 기기 확인"));
     for e in target.list("devices/").await? {
         let Some(id) = is_device_bundle(&e.name) else { continue };
         if id == me {
@@ -131,59 +247,20 @@ async fn run_in<T: SyncTarget>(
             .fetch_optional(db)
             .await?;
         if seen.is_some_and(|s| s >= b.manifest.created_at) {
-            rep.unchanged_devices += 1;
+            // DB 행은 이미 합쳤지만, 지난번에 상대가 아직 올리는 중이라 못 받았던 파일(`files_missing`)이 로컬에 비어 있으면 마저 받는다 (1-J-1)
+            let had_wanted = download_missing_files(target, base, &mut b, &mut rep, progress).await?;
+            if !had_wanted {
+                rep.unchanged_devices += 1;
+            }
             continue;
         }
-        progress(&format!("기기 {} 합치는 중", &id[..8]));
+        progress(SyncProgress::step_only("merging", format!("기기 {} 합치는 중", &id[..8])));
         if rep.backup.is_none() {
             let p = super::sync_exchange::backup_before(db, base, settings).await?;
             rep.backup = Some(p.strip_prefix(base).unwrap_or(&p).to_string_lossy().replace('\\', "/"));
         }
         // 이 기기에 없는 파일을 저장소에서 (DB보다 먼저 — 합친 행이 가리키는 그림이 없는 순간이 없게)
-        let wanted: Vec<_> = b.files()?.into_iter().filter(|f| !base.join(&f.path).exists()).collect();
-        // 동시에 몇 개씩 (드라이브는 파일마다 왕복이 있어 하나씩이면 느리다)
-        let results: Vec<Result<bool>> = stream::iter(wanted)
-            .map(|f| async move {
-                let dest = base.join(&f.path);
-                let part = dest.with_extension("sync-partial");
-                match target.get(&format!("blobs/{}", f.hash), &part).await {
-                    Ok(()) if sync_bundle::sha256_file(&part)? == f.hash => {
-                        std::fs::rename(&part, &dest)?;
-                        Ok(true)
-                    }
-                    Ok(()) => {
-                        let _ = std::fs::remove_file(&part);
-                        Err(AppError::validation(format!("동기화 저장소의 파일 내용이 해시와 다름: {}", f.path), None))
-                    }
-                    // 저장소에 없는 파일만 "없음"으로 센다. 끊김·시간 초과 같은 다른 오류는 합치기 전에 멈춘다 —
-                    // 합치면 이 묶음을 본 것으로 적어 다음 동기화가 남은 파일을 다시 받지 않는다 (1-I-9)
-                    Err(AppError::NotFound { .. }) => {
-                        let _ = std::fs::remove_file(&part);
-                        Ok(false)
-                    }
-                    Err(e) => {
-                        let _ = std::fs::remove_file(&part);
-                        Err(AppError::io(format!(
-                            "파일을 받다가 멈춤 — 다시 동기화하면 받은 파일은 건너뛰고 이어서 받음 ({e})"
-                        )))
-                    }
-                }
-            })
-            .buffer_unordered(PARALLEL)
-            .collect()
-            .await;
-        // 받은 것은 이미 제자리에 있으니(다음엔 건너뜀) 셈을 먼저 하고, 하나라도 끊겼으면 합치지 않고 멈춘다
-        let mut stopped = None;
-        for r in results {
-            match r {
-                Ok(true) => rep.files_down += 1,
-                Ok(false) => rep.files_missing += 1,
-                Err(e) => stopped = stopped.or(Some(e)),
-            }
-        }
-        if let Some(e) = stopped {
-            return Err(e);
-        }
+        download_missing_files(target, base, &mut b, &mut rep, progress).await?;
         let was_excluded: bool = sqlx::query_scalar("SELECT COALESCE((SELECT excluded FROM sync_peers WHERE device_id = ?), 0)")
             .bind(&id)
             .fetch_one(db)
@@ -212,8 +289,7 @@ async fn run_in<T: SyncTarget>(
         });
     }
 
-    // ---- 2. 이 기기 묶음 올리기 ----
-    progress("이 기기 내용 올리는 중");
+    // ---- 2. 파일 내용 먼저 올리기 (묶음보다 blobs/가 먼저 있어야 다른 기기가 중간에 받아도 파일 누락이 생기지 않음, 1-J-1) ----
     let mine = tmp.join("mine.scsync");
     sync_bundle::write_bundle(
         db,
@@ -227,10 +303,7 @@ async fn run_in<T: SyncTarget>(
         &mine,
     )
     .await?;
-    target.put(&format!("devices/{me}.scsync"), &mine).await?;
 
-    // ---- 3. 파일 내용 ----
-    progress("파일 올리는 중");
     let have: HashSet<String> = target
         .list("blobs/")
         .await?
@@ -240,17 +313,35 @@ async fn run_in<T: SyncTarget>(
     let files = sync_bundle::open(&mine, i64::MAX, base)?.files()?;
     let mut sent: HashSet<String> = HashSet::new();
     let todo: Vec<_> = files.into_iter().filter(|f| !have.contains(&f.hash) && sent.insert(f.hash.clone())).collect();
-    let results: Vec<Result<()>> = stream::iter(todo)
-        .map(|f| async move { target.put(&format!("blobs/{}", f.hash), &base.join(&f.path)).await })
-        .buffer_unordered(PARALLEL)
-        .collect()
-        .await;
-    for r in results {
-        r?;
-        rep.files_up += 1;
+    if !todo.is_empty() {
+        let total = todo.len() as u32;
+        let done = AtomicU32::new(0);
+        progress(SyncProgress::counted("uploading", "파일 올리는 중", 0, total));
+        let results: Vec<Result<()>> = stream::iter(todo)
+            .map(|f| {
+                let done = &done;
+                async move {
+                    target.put(&format!("blobs/{}", f.hash), &base.join(&f.path)).await?;
+                    let cur = done.fetch_add(1, Ordering::SeqCst) + 1;
+                    progress(SyncProgress::counted("uploading", "파일 올리는 중", cur, total));
+                    Ok(())
+                }
+            })
+            .buffer_unordered(PARALLEL)
+            .collect()
+            .await;
+        for r in results {
+            r?;
+            rep.files_up += 1;
+        }
     }
 
+    // ---- 3. 이 기기 묶음 올리기 (파일이 모두 올라간 뒤 마지막에 올려 정합성 보장) ----
+    progress(SyncProgress::step_only("uploading", "이 기기 내용 올리는 중"));
+    target.put(&format!("devices/{me}.scsync"), &mine).await?;
+
     // ---- 4. 지운 기록 정리 ----
+    progress(SyncProgress::step_only("cleaning", "정리 중"));
     rep.tombstones_cleaned = cleanup_tombstones(db).await?;
     Ok(rep)
 }
@@ -675,5 +766,42 @@ mod tests {
         let name: Option<String> = sqlx::query_scalar("SELECT name FROM sync_peers").fetch_one(&b.db).await.unwrap();
         assert_eq!(name.as_deref(), Some("내 PC"));
         assert_eq!(crate::service::device::set_name(&a.base, "").unwrap().name, None, "빈 글이면 지움");
+    }
+
+    #[tokio::test]
+    async fn missing_blobs_from_already_merged_bundle_are_downloaded_later() {
+        let root = tempfile::tempdir().unwrap();
+        let shared = root.path().join("Drive");
+        std::fs::create_dir_all(&shared).unwrap();
+        let folder = FolderTarget::new(&shared).unwrap();
+        let (a, b) = (dev(root.path(), "a").await, dev(root.path(), "b").await);
+        let avatar = a.base.join("characters/avatars/late.png");
+        std::fs::create_dir_all(avatar.parent().unwrap()).unwrap();
+        std::fs::write(&avatar, b"late-png").unwrap();
+        sqlx::query("INSERT INTO characters (id, name, avatar, created_at, updated_at) VALUES ('c1', 'Aria', ?, 1, 0)")
+            .bind(avatar.to_string_lossy().to_string())
+            .execute(&a.db)
+            .await
+            .unwrap();
+        sync(&a, &folder).await;
+
+        // 예전 버그 상태 재현: 원격에 묶음은 올라갔지만 blob이 아직 없던 때 B가 먼저 합침
+        let blob_path = std::fs::read_dir(folder.root().join("blobs")).unwrap().next().unwrap().unwrap().path();
+        let saved_blob = std::fs::read(&blob_path).unwrap();
+        std::fs::remove_file(&blob_path).unwrap();
+
+        let r1 = sync(&b, &folder).await;
+        assert_eq!((r1.merged.len(), r1.files_down, r1.files_missing), (1, 0, 1));
+        assert!(!b.base.join("characters/avatars/late.png").exists());
+
+        // 아직도 원격에 blob이 없으면 '바뀐 것 없음(unchanged)'으로 덮지 않고 여전히 files_missing = 1로 알려 줌
+        let r2 = sync(&b, &folder).await;
+        assert_eq!((r2.merged.len(), r2.unchanged_devices, r2.files_missing), (0, 0, 1));
+
+        // 원격에 blob이 올라오면 A가 새 묶음을 만들지 않아도 B의 다음 동기화가 빠진 파일을 즉시 받아 채움
+        std::fs::write(&blob_path, &saved_blob).unwrap();
+        let r3 = sync(&b, &folder).await;
+        assert_eq!((r3.merged.len(), r3.files_down, r3.files_missing), (0, 1, 0));
+        assert_eq!(std::fs::read(b.base.join("characters/avatars/late.png")).unwrap(), b"late-png");
     }
 }

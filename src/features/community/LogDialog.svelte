@@ -1,5 +1,6 @@
 <script lang="ts">
 	// 플러그인 기록 (6-D-8): 최근 200개, 메모리에만 있어 앱을 다시 켜면 비어 있다
+	import { _ } from "svelte-i18n";
 	import type { PluginLogEntry } from "$ipc/bindings";
 	import { Badge, Button, Dialog, EmptyState } from "$shared/ui";
 	import { admin } from "./admin.svelte";
@@ -17,9 +18,9 @@
 	const time = (ms: number) => new Date(ms).toLocaleTimeString();
 </script>
 
-<Dialog bind:open title={`'${name}' 기록`} description="최근 기록 200개. 앱을 다시 켜면 비워집니다" size="md">
+<Dialog bind:open title={$_("communityUi.logTitle", { values: { name } })} description={$_("communityUi.logDesc")} size="md">
 	{#if entries.length === 0}
-		<EmptyState title="기록이 없습니다" />
+		<EmptyState title={$_("communityUi.logEmpty")} />
 	{:else}
 		<ul class="log">
 			{#each entries as e, i (i)}
@@ -32,8 +33,8 @@
 		</ul>
 	{/if}
 	{#snippet footer()}
-		<Button variant="ghost" onclick={load}>새로 고침</Button>
-		<Button onclick={() => (open = false)}>닫기</Button>
+		<Button variant="ghost" onclick={load}>{$_("communityUi.logRefresh")}</Button>
+		<Button onclick={() => (open = false)}>{$_("common.close")}</Button>
 	{/snippet}
 </Dialog>
 

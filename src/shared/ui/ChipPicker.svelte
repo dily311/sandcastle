@@ -1,6 +1,7 @@
 <script lang="ts">
 	// 여러 개 고르기: 고른 것은 칩(× 로 빼기), '+'로 남은 것 중에서 더 넣기 (로어북 고르기와 같은 모양)
 	import { Plus, X } from "@lucide/svelte";
+	import { _ } from "svelte-i18n";
 	import ContextMenu, { type MenuItem } from "./ContextMenu.svelte";
 
 	interface Option {
@@ -12,7 +13,7 @@
 		value,
 		onchange,
 		label,
-		empty = "없음",
+		empty,
 	}: {
 		/** 고를 수 있는 것 전부 */
 		options: readonly Option[];
@@ -38,14 +39,14 @@
 	{#each picked as o (o.id)}
 		<span class="chip">
 			<span class="name">{o.label}</span>
-			<button class="x" aria-label="{o.label} 빼기" onclick={() => onchange(value.filter((id) => id !== o.id))}><X /></button>
+			<button class="x" aria-label={$_("ui.chipRemove", { values: { label: o.label } })} onclick={() => onchange(value.filter((id) => id !== o.id))}><X /></button>
 		</span>
 	{:else}
-		<span class="empty">{empty}</span>
+		<span class="empty">{empty ?? $_("ui.chipEmpty")}</span>
 	{/each}
-	<button class="add" aria-label="{label}에 넣기" aria-haspopup="menu" disabled={!items.length} onclick={openMenu}><Plus /></button>
+	<button class="add" aria-label={$_("ui.chipAdd", { values: { label } })} aria-haspopup="menu" disabled={!items.length} onclick={openMenu}><Plus /></button>
 </div>
-<ContextMenu at={menu} label="{label}에 넣기" {items} onclose={() => (menu = null)} />
+<ContextMenu at={menu} label={$_("ui.chipAdd", { values: { label } })} {items} onclose={() => (menu = null)} />
 
 <style>
 	.picker {

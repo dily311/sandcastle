@@ -1,6 +1,7 @@
 <script lang="ts">
 	// 플러그인이 manifest의 `settings`로 선언한 설정칸을 앱이 그려 준다 (6-D-8). 값은 바꾸는 즉시 저장,
 	// 플러그인은 sandcastle.settings.get()으로 읽는다 (저장하면 호스트가 플러그인을 다시 시작해 새 값을 읽게 함)
+	import { _ } from "svelte-i18n";
 	import type { PluginSettingField } from "$ipc/bindings";
 	import { Field, Input, Select, Switch } from "$shared/ui";
 	import { admin } from "./admin.svelte";
@@ -20,7 +21,7 @@
 	}
 </script>
 
-<p class="warn">여기 적은 값은 이 플러그인이 읽을 수 있습니다. 비밀번호나 API 키는 넣지 마세요.</p>
+<p class="warn">{$_("communityUi.settingsSecretWarn")}</p>
 {#each fields as f (f.key)}
 	{#if f.type === "toggle"}
 		<Switch checked={values[f.key] === true} label={f.label} description={f.description ?? undefined} onchange={(v) => save(f.key, v)} />

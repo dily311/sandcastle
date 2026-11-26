@@ -1,4 +1,9 @@
+import { get } from "svelte/store";
+import { _ } from "svelte-i18n";
+import { getAppLocale } from "$lib/utils/i18n";
 import { LineKind, type GameDefinition, type GameEvent, type Location, type RenderState, type StageLine } from "$features/game/types";
+
+const t = (k: string, values?: Record<string, string | number>) => get(_)(k, values ? { values } : undefined);
 
 
 /** 대사창에 보여줄 다음 할 일 하나 (이동·대화·살펴보기) */
@@ -63,19 +68,21 @@ export function foldDirectionLines(lines: StageLine[]): StageLine[] {
 
 /** 받침이 있으면 "을", 없으면 "를" (한글이 아니면 "을(를)") */
 export function objectParticle(word: string): string {
+	if (!getAppLocale().startsWith("ko")) return "";
 	const last = word.trim().slice(-1);
 	const code = last.charCodeAt(0) - 0xac00;
-	if (code < 0 || code > 11171) return "을(를)";
-	return code % 28 === 0 ? "를" : "을";
+	if (code < 0 || code > 11171) return "을(를)"; // i18n-ignore: 한국어 조사 계산
+	return code % 28 === 0 ? "를" : "을"; // i18n-ignore: 한국어 조사 계산
 }
 
 /** 방향 조사: 받침이 없거나 ㄹ 받침이면 "로", 그 밖의 받침은 "으로" */
 export function directionParticle(word: string): string {
+	if (!getAppLocale().startsWith("ko")) return "";
 	const last = word.trim().slice(-1);
 	const code = last.charCodeAt(0) - 0xac00;
-	if (code < 0 || code > 11171) return "(으)로";
+	if (code < 0 || code > 11171) return "(으)로"; // i18n-ignore: 한국어 조사 계산
 	const jong = code % 28;
-	return jong === 0 || jong === 8 ? "로" : "으로";
+	return jong === 0 || jong === 8 ? "로" : "으로"; // i18n-ignore: 한국어 조사 계산
 }
 
 /** 아이템을 얻었다는 대사 줄 (대사창에 이어서 보여준다) */
@@ -83,9 +90,11 @@ export function itemGainLines(events: GameEvent[], items: { id: string; name: st
 	return getItemAddedEvents(events)
 		.filter((e) => e.quantity > 0)
 		.map((e) => {
-			const name = items.find((item) => item.id === e.itemId)?.name ?? "아이템";
-			const count = e.quantity > 1 ? ` ${e.quantity}개` : "";
-			const text = count ? `${name}${count}를 얻었다.` : `${name}${objectParticle(name)} 얻었다.`;
+			const name = items.find((item) => item.id === e.itemId)?.name ?? t("gamePlayUtils.itemFallback");
+			const text =
+				e.quantity > 1
+					? t("gamePlayUtils.itemGainedCount", { name, count: e.quantity })
+					: t("gamePlayUtils.itemGainedOne", { name, particle: objectParticle(name) });
 			return { kind: LineKind.Narration, speaker: null, text, cues: [] };
 		});
 }
@@ -107,8 +116,8 @@ function conditionValue(condition: Record<string, unknown>, snake: string, camel
 }
 
 function formatDuration(seconds: number): string {
-	if (seconds >= 3600) return `${Math.ceil(seconds / 3600)}시간`;
-	return `${Math.ceil(seconds / 60)}분`;
+	if (seconds >= 3600) return t("gamePlayUtils.durationHours", { h: Math.ceil(seconds / 3600) });
+	return t("gamePlayUtils.durationMinutes", { m: Math.ceil(seconds / 60) });
 }
 
 function formatMinuteOfDay(minute: number): string {
@@ -125,7 +134,7 @@ export function getConnectionRequirement(
 	try {
 		condition = JSON.parse(rawCondition) as Record<string, unknown>;
 	} catch {
-		return { isMet: false, label: "조건 확인 필요" };
+		return { isMet: false, label: t("gamePlayUtils.condNeedCheck") };
 	}
 
 	const type = String(condition.type ?? "")
@@ -136,22 +145,22 @@ export function getConnectionRequirement(
 	const inventory = (state?.inventory ?? {}) as Record<string, number>;
 	const flags = (state?.flags ?? {}) as Record<string, unknown>;
 	const relationships = state?.relationships ?? {};
-	const itemName = (id: unknown) => view?.items.find((item) => item.id === String(id))?.name ?? "아이템";
+	const itemName = (id: unknown) => view?.items.find((item) => item.id === String(id))?.name ?? t("gamePlayUtils.itemFallback");
 	const locationName = (id: unknown) =>
-		view?.locations.find((location) => location.id === String(id))?.name ?? "장소";
-	const zoneName = (id: unknown) => view?.zones.find((zone) => zone.id === String(id))?.name ?? "지역";
+		view?.locations.find((location) => location.id === String(id))?.name ?? t("gamePlayUtils.locationFallback");
+	const zoneName = (id: unknown) => view?.zones.find((zone) => zone.id === String(id))?.name ?? t("gamePlayUtils.zoneFallback");
 	const timePeriodName = (id: unknown) =>
-		view?.timePeriods.find((period) => period.id === String(id))?.name ?? "시간대";
+		view?.timePeriods.find((period) => period.id === String(id))?.name ?? t("gamePlayUtils.timePeriodFallback");
 	const weatherName = (id: unknown) =>
-		view?.weatherTypes.find((weather) => weather.id === String(id))?.name ?? "날씨";
+		view?.weatherTypes.find((weather) => weather.id === String(id))?.name ?? t("gamePlayUtils.weatherFallback");
 	let isMet = false;
-	let label = "조건 충족";
+	let label = t("gamePlayUtils.condMet");
 
 	switch (type) {
 		case "flag_gte": {
 			const required = Number(value);
 			isMet = Number(flags[key] ?? 0) >= required;
-			label = `${key} ${required} 이상`;
+			label = t("gamePlayUtils.condFlagGte", { key, required });
 			break;
 		}
 		case "flag_eq":
@@ -161,38 +170,38 @@ export function getConnectionRequirement(
 		case "min_time": {
 			const seconds = Number(condition.seconds ?? 0);
 			isMet = (state?.gameTime ?? 0) >= seconds;
-			label = `누적 시간 ${formatDuration(seconds)} 이상`;
+			label = t("gamePlayUtils.condMinTime", { duration: formatDuration(seconds) });
 			break;
 		}
 		case "in_location": {
 			const id = conditionValue(condition, "location_id", "locationId");
 			isMet = state?.locationId === id;
-			label = `${locationName(id)}에 있음`;
+			label = t("gamePlayUtils.condInLocation", { place: locationName(id) });
 			break;
 		}
 		case "in_zone": {
 			const id = conditionValue(condition, "zone_id", "zoneId");
 			isMet = state?.zoneId === id;
-			label = `${zoneName(id)}에 있음`;
+			label = t("gamePlayUtils.condInZone", { place: zoneName(id) });
 			break;
 		}
 		case "has_item": {
 			const id = conditionValue(condition, "item_id", "itemId");
 			const min = Number(condition.min ?? 1);
 			isMet = Number(inventory[String(id)] ?? 0) >= min;
-			label = `${itemName(id)} ${min}개 보유`;
+			label = t("gamePlayUtils.condHasItem", { name: itemName(id), min });
 			break;
 		}
 		case "time_period": {
 			const id = conditionValue(condition, "period_id", "periodId");
 			isMet = state?.timePeriodId === id;
-			label = `${timePeriodName(id)} 시간대`;
+			label = t("gamePlayUtils.condTimePeriod", { period: timePeriodName(id) });
 			break;
 		}
 		case "weather": {
 			const id = condition.weather_id ?? condition.weatherId;
 			isMet = state?.weatherId === id;
-			label = `${weatherName(id)} 날씨`;
+			label = t("gamePlayUtils.condWeather", { weather: weatherName(id) });
 			break;
 		}
 		case "relation_at_least":
@@ -213,22 +222,34 @@ export function getConnectionRequirement(
 			const required = Number(value);
 			isMet = type === "relation_at_least" ? current >= required : current <= required;
 			const axisName =
-				axis === "affection" ? "호감도" : axis === "trust" ? "신뢰도" : axis === "tension" ? "긴장도" : axis;
+				axis === "affection"
+					? t("gamePlayUtils.axisAffection")
+					: axis === "trust"
+						? t("gamePlayUtils.axisTrust")
+						: axis === "tension"
+							? t("gamePlayUtils.axisTension")
+							: axis;
 			const fromName =
-				from === "player" ? "나" : (view?.characters.find((character) => character.id === from)?.name ?? from);
+				from === "player" ? t("gameUi.meFallback") : (view?.characters.find((character) => character.id === from)?.name ?? from);
 			const toName =
-				to === "player" ? "나" : (view?.characters.find((character) => character.id === to)?.name ?? to);
-			label = `${fromName}의 ${toName}에 대한 ${axisName} ${type === "relation_at_least" ? "≥" : "≤"} ${required}`;
+				to === "player" ? t("gameUi.meFallback") : (view?.characters.find((character) => character.id === to)?.name ?? to);
+			label = t("gamePlayUtils.condRelation", {
+				from: fromName,
+				to: toName,
+				axis: axisName,
+				op: type === "relation_at_least" ? "≥" : "≤",
+				required,
+			});
 			break;
 		}
 		case "at_minute_of_day": {
 			const minute = Number(condition.minute ?? 0);
-			label = `${formatMinuteOfDay(minute)}에 도달`;
+			label = t("gamePlayUtils.condAtTime", { time: formatMinuteOfDay(minute) });
 			break;
 		}
 		case "never":
 		default:
-			label = "특수 조건 충족";
+			label = t("gamePlayUtils.condSpecial");
 	}
 	return { isMet, label };
 }

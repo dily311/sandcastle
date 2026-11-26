@@ -174,14 +174,14 @@
 
 	async function resolveProfilePrompt(charName: string): Promise<string> {
 		const fallback = [
-			`지금까지의 대화와 캐릭터 설정을 바탕으로 '{{char}}'의 카카오톡 스타일 메신저 프로필 꾸미기 정보를 JSON으로만 생성해줘.`,
-			`설명이나 코드블록 없이 순수 JSON 객체 하나만 출력해.`,
-			`형식:`,
+			`Based on the conversation so far and the character settings, generate messenger profile decoration data for '{{char}}' as a single JSON object.`,
+			`Output only the raw JSON object with no explanation or code fences, and write all text values in the language of the conversation.`,
+			`Format:`,
 			`{`,
-			`  "status": "이름 아래에 표시될 짧은 상태 메시지 (15자 내외)",`,
-			`  "note": "배경 화면 위에 띄울 짧은 감성 메모 문구 (1~2줄, \\n으로 줄바꿈 가능)",`,
-			`  "bgmTitle": "캐릭터 분위기나 현재 기분에 어울리는 프로필 뮤직 제목",`,
-			`  "bgmArtist": "프로필 뮤직 아티스트명"`,
+			`  "status": "Short status message shown under the name (around 15 chars)",`,
+			`  "note": "Short mood memo shown on the profile background (1-2 lines, \\n allowed)",`,
+			`  "bgmTitle": "Profile music title fitting the character's mood",`,
+			`  "bgmArtist": "Profile music artist name"`,
 			`}`,
 		].join("\n");
 		try {

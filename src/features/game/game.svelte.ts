@@ -1,4 +1,6 @@
 // 게임 목록·열린 게임·세션. 플레이·에디터는 예전 화면을 새 틀 안에서 그대로 쓴다 (gameStore 등과 같은 데이터를 공유)
+import { get } from "svelte/store";
+import { _ } from "svelte-i18n";
 import { jobs } from "$shared/stores/jobs.svelte";
 import { trashedToast } from "$shared/trash";
 import type {
@@ -10,6 +12,8 @@ import type {
 } from "$ipc/bindings";
 import { call, commands } from "$shared/ipc/client";
 import { gameStore } from "$features/game/runtime/gameStore.svelte";
+
+const t = (k: string, values?: Record<string, string | number>) => get(_)(k, values ? { values } : undefined);
 
 export type { GameProject, Session, Template, Issue };
 const src = { source: "game" };
@@ -65,7 +69,7 @@ class Games {
 		return g;
 	}
 	async import(path: string) {
-		const g = await jobs.run(path.split(/[\\/]/).pop() ?? path, () => call(commands.importGame(path), src), { group: "게임 가져오기" });
+		const g = await jobs.run(path.split(/[\\/]/).pop() ?? path, () => call(commands.importGame(path), src), { group: t("gameLib.importJobGroup") });
 		if (!g) return null;
 		this.list = [g, ...this.list.filter((x) => x.id !== g.id)];
 		return g;
@@ -76,7 +80,7 @@ class Games {
 	}
 	/** 휴지통으로 (2-A-3). 여러 개를 한 번에 지울 때는 toast=false */
 	async remove(gameId: string, toast = true) {
-		const title = this.list.find((g) => g.id === gameId)?.title ?? "게임";
+		const title = this.list.find((g) => g.id === gameId)?.title ?? t("gameUi.gameFallback");
 		const item = await jobs.run(
 			title,
 			async () => {
@@ -86,14 +90,14 @@ class Games {
 				}
 				return call(commands.deleteGame(gameId), src);
 			},
-			{ group: "게임 지우기" },
+			{ group: t("gameLib.deleteJobGroup") },
 		);
 		if (!item) return;
 		this.list = this.list.filter((g) => g.id !== gameId);
 		if (toast) trashedToast(item, () => this.load());
 	}
 	async removeSession(id: string) {
-		const item = await jobs.run("플레이 기록", () => call(commands.deleteSessions(id), src), { group: "플레이 기록 지우기" });
+		const item = await jobs.run(t("gameUi.sessionJobLabel"), () => call(commands.deleteSessions(id), src), { group: t("gameUi.deleteSessionJobGroup") });
 		if (!item) return;
 		const gameId = this.opened?.project.id;
 		this.sessions = this.sessions.filter((s) => s.id !== id);

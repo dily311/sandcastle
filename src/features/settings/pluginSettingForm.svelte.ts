@@ -1,4 +1,6 @@
 // 플러그인 설정 탭(번역·음성·이미지·폰)이 함께 쓰는 도우미: 지금 값 + 한 부분만 고쳐 저장
+import { get } from "svelte/store";
+import { _ } from "svelte-i18n";
 import type { PluginSetting } from "$ipc/bindings";
 import { library } from "$features/character/library.svelte";
 import { pluginSetting } from "$shared/stores/aiTools.svelte";
@@ -22,13 +24,13 @@ export function save<K extends Part>(part: K, patch: Partial<Full[K]>) {
 }
 
 /** API 고르기 목록. kinds를 주면 그 종류(formatType)만 */
-export function apiOptions(firstLabel = "앱에서 고른 API", kinds?: string[]) {
+export function apiOptions(firstLabel = get(_)("settings.extra.selectedAppApi"), kinds?: string[]) {
 	const list = library.apis.filter((a) => !kinds || kinds.includes(a.formatType));
 	return [{ value: "", label: firstLabel }, ...list.map((a) => ({ value: a.id, label: `${a.name} · ${a.model}` }))];
 }
 
 /** 채팅에 쓸 수 있는 API (음성·이미지 전용 연결은 뺌) */
-export function chatApiOptions(firstLabel = "앱에서 고른 API") {
+export function chatApiOptions(firstLabel = get(_)("settings.extra.selectedAppApi")) {
 	const list = library.apis.filter((a) => a.formatType !== "elevenlabs" && a.formatType !== "novelai");
 	return [{ value: "", label: firstLabel }, ...list.map((a) => ({ value: a.id, label: `${a.name} · ${a.model}` }))];
 }

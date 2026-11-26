@@ -2,6 +2,7 @@
 	// 데스크톱에서 띄운 상태창 (5-F-4-2, ADR-029 ⑤): 머리줄을 끌어 옮기고, 오른쪽 아래 모서리로 크기를 바꾼다.
 	// separateWindows 옵션이 켜져 있고 상태창이 여러 개면 각각 독립된 팝업창으로 띄운다.
 	import { ChevronDown, PanelRightClose } from "@lucide/svelte";
+	import { _ } from "$lib/utils/i18n";
 	import { IconButton } from "$shared/ui";
 	import type { Block } from "$features/character/format";
 	import StatusWindow from "./StatusWindow.svelte";
@@ -20,8 +21,8 @@
 	}
 	const windows = $derived<WinSpec[]>(
 		statusView.separateWindows && blocks.length > 1
-			? blocks.map((b, i) => ({ key: `win:${i}`, title: `상태 ${i + 1}`, blocks: [b], index: i }))
-			: [{ key: "single", title: "상태", blocks, index: 0 }],
+			? blocks.map((b, i) => ({ key: `win:${i}`, title: $_("statusUi.winNumbered", { values: { n: i + 1 } }), blocks: [b], index: i }))
+			: [{ key: "single", title: $_("statusUi.winSingle"), blocks, index: 0 }],
 	);
 
 	function defaultRect(index: number): FloatRect {
@@ -148,8 +149,8 @@
 		<!-- svelte-ignore a11y_no_static_element_interactions -->
 		<div class="head" onpointerdown={(e) => down(e, win)} onpointermove={(e) => move(e, win)} onpointerup={() => up(win)} onpointercancel={() => up(win)}>
 			<b>{win.title}</b>
-			<IconButton label={col ? "펼치기" : "접기"} size="sm" aria-expanded={!col} onclick={() => toggleCollapsed(win)}><ChevronDown class={col ? "rot" : ""} /></IconButton>
-			<IconButton label="패널로 돌리기" size="sm" onclick={() => statusView.set({ floating: false })}><PanelRightClose /></IconButton>
+			<IconButton label={col ? $_("statusUi.expand") : $_("statusUi.collapse")} size="sm" aria-expanded={!col} onclick={() => toggleCollapsed(win)}><ChevronDown class={col ? "rot" : ""} /></IconButton>
+			<IconButton label={$_("statusUi.dockToPanel")} size="sm" onclick={() => statusView.set({ floating: false })}><PanelRightClose /></IconButton>
 		</div>
 		{#if !col}
 			<div class="body"><StatusWindow blocks={win.blocks} /></div>

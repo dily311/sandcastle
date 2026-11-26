@@ -431,8 +431,8 @@ class AudioStateStore {
 	}
 
 	setMusic = (playMusic: MusicMeta) => {
-		if (!playMusic) return console.error("없는 음악을 세팅하려함");
-		if (!this.#audioElement) return console.error("오디오 el이 없음");
+		if (!playMusic) return console.error("[MusicPlayer] Missing music metadata");
+		if (!this.#audioElement) return console.error("[MusicPlayer] Missing audio element");
 
 		const newSrc = convertFileSrc(playMusic.path);
 		if (this.#audioElement.src != newSrc) {
@@ -452,7 +452,7 @@ class AudioStateStore {
 
 	play = () => {
 		this.#audioElement.play().catch((e) => {
-			console.warn("오디오 재생 실패", e);
+			console.warn("[MusicPlayer] Audio playback failed", e);
 			//TODO: 파일 존재여부 확인 로직 필요
 		});
 		this.#paused = false;

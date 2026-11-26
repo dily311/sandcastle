@@ -366,9 +366,9 @@ export const commands = {
 	driveStatus: (options?: InvokeOptions) => __TAURI_INVOKE<DriveStatus_Serialize>("drive_status", undefined, options),
 	/**  구글 로그인: 기본 브라우저를 열고 돌아올 때까지 기다린다(5분). 권한은 앱 전용 폴더만 */
 	driveLogin: (options?: InvokeOptions) => __TAURI_INVOKE<DriveStatus_Serialize>("drive_login", undefined, options),
-	/**  연결 끊기. `delete_remote`면 먼저 드라이브의 앱 전용 폴더를 비운다(되돌릴 수 없음 — 화면에서 확인) */
+	/**  연결 끊기. `delete_remote`면 먼저 드라이브의 앱 전용 폴더 안 모든 파일 ID를 병렬로 비우고 완료·실패 알림을 띄운다 (1-J-4) */
 	driveLogout: (deleteRemote: boolean, options?: InvokeOptions) => __TAURI_INVOKE<number>("drive_logout", { deleteRemote }, options),
-	/**  Android: 폰이 Play 서비스에서 받은 access token을 넣는다 (메모리에만). `connect`면 처음 연결 — 계정을 읽고 저장소를 드라이브로 */
+	/**  Android: 폰이 Play 서비스에서 받은 access token을 넣는다 (메모리에만). `connect`면 토큰 유효성·계정을 확인하고 저장소를 드라이브로 */
 	driveUseToken: (token: string, connect: boolean, options?: InvokeOptions) => __TAURI_INVOKE<DriveStatus_Serialize>("drive_use_token", { token, connect }, options),
 	/**  지난 panic 기록 (최근 것부터, 앱 데이터 폴더의 logs/panic.log) */
 	getPanicLog: (options?: InvokeOptions) => __TAURI_INVOKE<PanicEntry_Serialize[]>("get_panic_log", undefined, options),
@@ -810,6 +810,8 @@ export type AppErrorResponse_Deserialize = {
 	category: ErrorCategory,
 	message: string,
 	retryable: boolean,
+	key?: string | null,
+	args?: { [key in string]: string } | null,
 	details?: Value | null,
 };
 
@@ -818,6 +820,8 @@ export type AppErrorResponse_Serialize = {
 	category: ErrorCategory,
 	message: string,
 	retryable: boolean,
+	key?: string,
+	args?: { [key in string]: string },
 	details?: Value,
 };
 
@@ -1919,12 +1923,14 @@ export type DisplayItem = {
 	content: string,
 };
 
-/**  끝나면 알림 (5-E-17·18) */
+/**  끝나면 알림 (5-E-17·18, 1-J-5 기본 켜짐) */
 export type DoneNotify = DoneNotify_Serialize | DoneNotify_Deserialize;
 
-/**  끝나면 알림 (5-E-17·18) */
+/**  끝나면 알림 (5-E-17·18, 1-J-5 기본 켜짐) */
 export type DoneNotify_Deserialize = {
 	enabled?: boolean,
+	/**  예전 기본값(false)에서 기본 켜짐으로 한 번 올렸는지 (사용자가 직접 끄면 true가 유지되어 다시 켜지지 않음) */
+	initializedOn?: boolean,
 	/**  알림 제목 (비면 앱 이름, `{{char}}` = 캐릭터 이름) */
 	title?: string,
 	/**  알림 아이콘 그림 경로 (없으면 앱 아이콘) */
@@ -1937,9 +1943,11 @@ export type DoneNotify_Deserialize = {
 	soundVolume?: number | null,
 };
 
-/**  끝나면 알림 (5-E-17·18) */
+/**  끝나면 알림 (5-E-17·18, 1-J-5 기본 켜짐) */
 export type DoneNotify_Serialize = {
 	enabled: boolean,
+	/**  예전 기본값(false)에서 기본 켜짐으로 한 번 올렸는지 (사용자가 직접 끄면 true가 유지되어 다시 켜지지 않음) */
+	initializedOn: boolean,
 	/**  알림 제목 (비면 앱 이름, `{{char}}` = 캐릭터 이름) */
 	title: string,
 	/**  알림 아이콘 그림 경로 (없으면 앱 아이콘) */
@@ -5489,9 +5497,25 @@ export type SyncPreview_Serialize = {
 	files: FileCounts,
 };
 
-/**  진행 단계 (화면에 "다른 기기 확인 / 기기 … 합치는 중 / 올리는 중") */
-export type SyncProgress = {
+/**  동기화·데이터 정리 진행 상태 (토스트 및 모바일 상단 알림 진행률 표시용) */
+export type SyncProgress = SyncProgress_Serialize | SyncProgress_Deserialize;
+
+/**  동기화·데이터 정리 진행 상태 (토스트 및 모바일 상단 알림 진행률 표시용) */
+export type SyncProgress_Deserialize = {
+	/**  checking | downloading | merging | uploading | cleaning | wiping | done */
+	phase: string,
 	step: string,
+	current?: number | null,
+	total?: number | null,
+};
+
+/**  동기화·데이터 정리 진행 상태 (토스트 및 모바일 상단 알림 진행률 표시용) */
+export type SyncProgress_Serialize = {
+	/**  checking | downloading | merging | uploading | cleaning | wiping | done */
+	phase: string,
+	step: string,
+	current: number | null,
+	total: number | null,
 };
 
 export type SyncRun = SyncRun_Serialize | SyncRun_Deserialize;
@@ -5608,10 +5632,24 @@ export type SyncStatus_Serialize = {
 };
 
 /**  실패 정보. DB와 프론트 이벤트에 같은 형태로 나간다. */
-export type TaskErrorInfo = {
+export type TaskErrorInfo = TaskErrorInfo_Serialize | TaskErrorInfo_Deserialize;
+
+/**  실패 정보. DB와 프론트 이벤트에 같은 형태로 나간다. */
+export type TaskErrorInfo_Deserialize = {
 	code: string,
 	message: string,
 	retryable: boolean,
+	key?: string | null,
+	args?: { [key in string]: string } | null,
+};
+
+/**  실패 정보. DB와 프론트 이벤트에 같은 형태로 나간다. */
+export type TaskErrorInfo_Serialize = {
+	code: string,
+	message: string,
+	retryable: boolean,
+	key?: string,
+	args?: { [key in string]: string },
 };
 
 export type TaskEvent = TaskEvent_Serialize | TaskEvent_Deserialize;
@@ -5644,13 +5682,13 @@ export type TaskEvent_Deserialize = { type: "queued"; data: {
 { type: "retrying"; data: {
 	taskId: string,
 	attemptNo: number,
-	error: TaskErrorInfo,
+	error: TaskErrorInfo_Deserialize,
 } } | { type: "completed"; data: {
 	taskId: string,
 	output: TaskOutput,
 } } | { type: "failed"; data: {
 	taskId: string,
-	error: TaskErrorInfo,
+	error: TaskErrorInfo_Deserialize,
 } } | { type: "cancelled"; data: {
 	taskId: string,
 } } | { type: "interrupted"; data: {
@@ -5685,13 +5723,13 @@ export type TaskEvent_Serialize = { type: "queued"; data: {
 { type: "retrying"; data: {
 	taskId: string,
 	attemptNo: number,
-	error: TaskErrorInfo,
+	error: TaskErrorInfo_Serialize,
 } } | { type: "completed"; data: {
 	taskId: string,
 	output: TaskOutput,
 } } | { type: "failed"; data: {
 	taskId: string,
-	error: TaskErrorInfo,
+	error: TaskErrorInfo_Serialize,
 } } | { type: "cancelled"; data: {
 	taskId: string,
 } } | { type: "interrupted"; data: {
@@ -5768,7 +5806,7 @@ export type TaskInfo_Deserialize = {
 	status: TaskStatus,
 	payload: Value,
 	result?: TaskOutput | null,
-	error?: TaskErrorInfo | null,
+	error?: TaskErrorInfo_Deserialize | null,
 	attemptCount: number,
 	maxAttempts: number,
 	createdAt: number,
@@ -5789,7 +5827,7 @@ export type TaskInfo_Serialize = {
 	status: TaskStatus,
 	payload: Value,
 	result: TaskOutput | null,
-	error: TaskErrorInfo | null,
+	error: TaskErrorInfo_Serialize | null,
 	attemptCount: number,
 	maxAttempts: number,
 	createdAt: number,

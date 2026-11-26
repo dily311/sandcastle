@@ -1,5 +1,7 @@
 // 고치기 제안 (6-D-3). 데이터(제안 목록)와 화면 상태(대화상자 열림)를 나눈다.
 // 코어 플러그인 `community`가 켜져 있을 때만 구독한다(PluginHost가 watch/unwatch).
+import { get } from "svelte/store";
+import { _ } from "svelte-i18n";
 import type { ChangeProposal } from "$ipc/bindings";
 import { call, commands } from "$shared/ipc/client";
 import { onEvent } from "$shared/ipc/events";
@@ -37,10 +39,11 @@ class Proposals {
 		const fresh = this.pending.filter((p) => !this.seen.has(p.id));
 		for (const p of this.pending) this.seen.add(p.id);
 		if (notify && fresh.length > 0) {
+			const tr = get(_);
 			toasts.show({
 				tone: "info",
-				message: `플러그인이 고치기를 제안했습니다 (${this.pending.length}개 기다림)`,
-				action: { label: "보기", run: () => (proposalsUi.open = true) },
+				message: tr("communityUi.proposalsToast", { values: { count: this.pending.length } }),
+				action: { label: tr("communityUi.proposalsViewAction"), run: () => (proposalsUi.open = true) },
 			});
 		}
 	}

@@ -385,20 +385,12 @@ async fn cancel_grace_keeps_executor_result() {
 
 #[test]
 fn task_error_info_keeps_code_for_frontend() {
-    let info = TaskErrorInfo {
-        code: "AI_PROVIDER_RATE_LIMIT".into(),
-        message: "한도".into(),
-        retryable: true,
-    };
+    let info = TaskErrorInfo::new("AI_PROVIDER_RATE_LIMIT".into(), "한도".into(), true);
     let res = AppError::from(info).to_response();
     assert_eq!(res.code, ErrorCode::AiProviderRateLimit);
     assert!(res.retryable);
 
-    let unknown = TaskErrorInfo {
-        code: "NOPE".into(),
-        message: "?".into(),
-        retryable: false,
-    };
+    let unknown = TaskErrorInfo::new("NOPE".into(), "?".into(), false);
     assert_eq!(AppError::from(unknown).to_response().code, ErrorCode::InternalError);
 }
 

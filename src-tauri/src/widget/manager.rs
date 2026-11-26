@@ -14,10 +14,19 @@ fn show_tray_for_window<R: Runtime>(window: &WebviewWindow<R>) -> Result<()> {
 
     // 1. 트레이가 이미 존재하지 않는 경우에만 새로 생성 (중복 생성 방지)
     if app_handle.tray_by_id(WIDGET_TRAY_LABEL).is_none() {
+        let is_en = app_handle
+            .try_state::<crate::sys::settings::SettingsState<crate::models::settings::AppSetting>>()
+            .and_then(|s| s.0.lock().ok().map(|g| g.language.trim().to_ascii_lowercase()))
+            .is_some_and(|l| !l.is_empty() && !l.starts_with("ko"));
+        let (open_lbl, focus_lbl, quit_lbl) = if is_en {
+            ("Open Main Window", "Focus Widget", "Quit Widget")
+        } else {
+            ("메인 윈도우 열기", "위젯 포커스", "위젯 종료")
+        };
         // 2. 트레이 메뉴 구성
-        let open_main_i = MenuItem::with_id(app_handle, "open_main", "메인 윈도우 열기", true, None::<&str>)?;
-        let focus_i = MenuItem::with_id(app_handle, "focus", "위젯 포커스", true, None::<&str>)?;
-        let quit_i = MenuItem::with_id(app_handle, "quit", "위젯 종료", true, None::<&str>)?;
+        let open_main_i = MenuItem::with_id(app_handle, "open_main", open_lbl, true, None::<&str>)?;
+        let focus_i = MenuItem::with_id(app_handle, "focus", focus_lbl, true, None::<&str>)?;
+        let quit_i = MenuItem::with_id(app_handle, "quit", quit_lbl, true, None::<&str>)?;
         let menu = Menu::with_items(app_handle, &[&open_main_i, &focus_i, &quit_i])?;
 
         let widget_window = window.clone();

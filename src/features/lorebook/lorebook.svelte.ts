@@ -1,4 +1,7 @@
 // 로어북(월드인포): 책 목록, 책별 항목, 쓰는 곳. 로어북 화면과 대화 패널이 같이 씀
+import { get } from "svelte/store";
+import { _ } from "svelte-i18n";
+import { localizeImportWarning } from "$lib/utils/backendI18n";
 import { jobs } from "$shared/stores/jobs.svelte";
 import { trashedToast } from "$shared/trash";
 import { moveItem } from "$shared/dnd/sortable.svelte";
@@ -10,10 +13,12 @@ import { toasts } from "$shared/stores/toast.svelte";
 import { library } from "$features/character/library.svelte";
 import { exportPicker, type ExportFormat } from "$app/exportFormats.svelte";
 
+const tr = (key: string, values?: Record<string, string | number>) => get(_)(key, values ? { values } : undefined);
+
 export type BookFormat = "json" | "txt";
 export const BOOK_FORMATS: ExportFormat<BookFormat>[] = [
-	{ id: "json", label: "SillyTavern 월드인포 (.json)", desc: "SillyTavern이나 다른 앱에서 불러올 수 있음" },
-	{ id: "txt", label: "텍스트 (.txt)", desc: "읽기용. 제목·키워드·내용" },
+	{ id: "json", get label() { return tr("chatExtra.lorebookExtra.formatJsonLabel"); }, get desc() { return tr("chatExtra.lorebookExtra.formatJsonDesc"); } },
+	{ id: "txt", get label() { return tr("chatExtra.lorebookExtra.formatTxtLabel"); }, get desc() { return tr("chatExtra.lorebookExtra.formatTxtDesc"); } },
 ];
 
 export type { Book, Entry, EntryInput };
@@ -22,7 +27,7 @@ const src = { source: "lorebook" };
 const DRAFT = "draft:";
 
 /** 목록에 보일 항목 이름: 제목, 없으면 키워드 */
-export const entryTitle = (e: Pick<Entry, "comment" | "keys">) => e.comment.trim() || e.keys.join(", ") || "(제목 없음)";
+export const entryTitle = (e: Pick<Entry, "comment" | "keys">) => e.comment.trim() || e.keys.join(", ") || tr("chatExtra.lorebookExtra.untitledEntry");
 export const isDraft = (e: Pick<Entry, "id">) => e.id.startsWith(DRAFT);
 /** 키워드 없이 상시도 아니면 저장할 수 없음 (어디서도 걸리지 않음) */
 export const isValid = (e: Pick<Entry, "keys" | "constant">) => e.constant || e.keys.length > 0;
@@ -65,9 +70,9 @@ class Lorebook {
 	}
 	async remove(b: Book, toast = true) {
 		const n = this.counts[b.id]?.entries ?? 0;
-		const ok = await confirmAction({ title: "로어북 삭제", message: `'${b.name}'와 항목 ${n}개를 휴지통으로 옮김. 이 책을 쓰던 캐릭터·페르소나·대화에서도 빠지고, 되살리면 다시 이어짐`, confirmLabel: "삭제", danger: true });
+		const ok = await confirmAction({ title: tr("chatExtra.lorebookExtra.deleteTitle"), message: tr("chatExtra.lorebookExtra.deleteMsg", { name: b.name, count: n }), confirmLabel: tr("common.delete"), danger: true });
 		if (!ok) return false;
-		const item = await jobs.run(b.name, () => call(commands.deleteWorldinfoBook(b.id), src), { group: "로어북 지우기" });
+		const item = await jobs.run(b.name, () => call(commands.deleteWorldinfoBook(b.id), src), { group: tr("chatExtra.lorebookExtra.deleteGroup") });
 		if (!item) return false;
 		if (toast)
 			trashedToast(item, async () => {
@@ -80,26 +85,26 @@ class Lorebook {
 		return true;
 	}
 	async export(b: Book, format: BookFormat = "json") {
-		const filter = format === "json" ? JSON_FILES : { name: "텍스트", extensions: ["txt"] };
+		const filter = format === "json" ? JSON_FILES : { name: tr("chatExtra.lorebookExtra.filterTxt"), extensions: ["txt"] };
 		const n = await saveTo(`${b.name}.${format}`, [filter], (path) => call(commands.exportWorldinfoBook(b.id, format, path), src));
 		if (n == null) return;
-		toasts.success(`항목 ${n}개 내보냄`);
+		toasts.success(tr("chatExtra.lorebookExtra.exportedToast", { count: n }));
 	}
 	exportMenu(b: Book) {
-		exportPicker.open("로어북 내보내기", "sc.export.lorebook", BOOK_FORMATS, (f: BookFormat) => void this.export(b, f));
+		exportPicker.open(tr("chatExtra.lorebookExtra.exportTitle"), "sc.export.lorebook", BOOK_FORMATS, (f: BookFormat) => void this.export(b, f));
 	}
 	/** SillyTavern 월드인포 JSON 가져오기. 가져온 책을 돌려줌 */
 	async importPath(path: string) {
-		const r = await jobs.run(path.split(/[\\/]/).pop() ?? path, () => call(commands.importSillytavern(path, null, null, null), src), { group: "로어북 가져오기" });
+		const r = await jobs.run(path.split(/[\\/]/).pop() ?? path, () => call(commands.importSillytavern(path, null, null, null), src), { group: tr("chatExtra.lorebookExtra.importGroup") });
 		if (!r) return null;
 		await this.load();
-		for (const w of r.warnings) toasts.info(w);
+		for (const w of r.warnings) toasts.info(localizeImportWarning(w));
 		if (r.kind !== "worldInfo") {
-			toasts.info("로어북 파일이 아님. 캐릭터·프리셋은 각 화면에서 가져옴");
+			toasts.info(tr("chatExtra.lorebookExtra.notWorldInfoToast"));
 			await library.load();
 			return null;
 		}
-		toasts.success(`'${r.book.name}' 가져옴 · 항목 ${r.entryCount}개`);
+		toasts.success(tr("chatExtra.lorebookExtra.importedToast", { name: r.book.name, count: r.entryCount }));
 		return this.book(r.book.id) ?? null;
 	}
 
@@ -122,7 +127,7 @@ class Lorebook {
 	}
 	async duplicate(e: Entry) {
 		if (isDraft(e)) return;
-		await this.saveEntry({ ...e, id: `${DRAFT}${Date.now().toString(36)}`, comment: e.comment ? `${e.comment} 사본` : "" });
+		await this.saveEntry({ ...e, id: `${DRAFT}${Date.now().toString(36)}`, comment: e.comment ? tr("chatExtra.lorebookExtra.copySuffix", { title: e.comment }) : "" });
 	}
 	async removeEntry(e: Entry) {
 		if (!isDraft(e)) await call(commands.deleteWorldinfoEntry(e.id), src);
@@ -195,7 +200,7 @@ export function sortEntries(list: Entry[]) {
 export const lorebook = new Lorebook();
 
 /** 기본 분류 (5-F-1, ADR-023). 사용자가 더 만든 분류는 항목들에서 모은다 */
-export const DEFAULT_CATEGORIES = ["캐릭터", "장소", "아이템", "이벤트", "세계"];
+export const DEFAULT_CATEGORIES = ["캐릭터", "장소", "아이템", "이벤트", "세계"]; // i18n-ignore: DB·다인봇 규약 분류 값
 /** 기본 분류 + 이 항목들에서 쓰는 분류 (기본이 앞, 나머지는 가나다순) */
 export function categoriesOf(entries: { category: string }[]): string[] {
 	const extra = [...new Set(entries.map((e) => (e.category ?? "").trim()).filter((c) => c && !DEFAULT_CATEGORIES.includes(c)))].sort((a, b) => a.localeCompare(b, "ko"));

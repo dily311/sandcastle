@@ -1,6 +1,7 @@
 <script lang="ts">
 	// 고정된 상태창들 (5-F-4-2, 5-F-5-2): 출처마다 하나씩 위아래로, 메시지와 같은 방식으로 그린다
 	// (```html이면 격리된 iframe — triggerSlash로 변수를 바꿀 수 있음, 코드 블록 밖 HTML이면 거른 HTML)
+	import { _ } from "$lib/utils/i18n";
 	import RichText from "$features/character/RichText.svelte";
 	import type { Block } from "$features/character/format";
 
@@ -13,7 +14,7 @@
 			<div class="one sc-status-item"><RichText blocks={[b]} /></div>
 		{/each}
 	{:else}
-		<p class="empty">상태창 정규식을 선택하면 가장 최근 결과가 여기에 표시됩니다</p>
+		<p class="empty">{$_("statusUi.emptyHint")}</p>
 	{/if}
 </div>
 

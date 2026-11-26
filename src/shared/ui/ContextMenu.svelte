@@ -28,6 +28,7 @@
 	 *   <div oncontextmenu={(e) => { e.preventDefault(); menu = { x: e.clientX, y: e.clientY }; }}>
 	 *   <ContextMenu at={menu} items={...} onclose={() => (menu = null)} />
 	 */
+	import { _ } from "svelte-i18n";
 	interface Props {
 		/** align "end": x가 메뉴의 오른쪽 끝 (버튼 오른쪽 끝에 맞춰 버튼 아래에 띄울 때). 메뉴 실제 폭으로 맞춘다 */
 		at: { x: number; y: number; align?: "start" | "end" } | null;
@@ -35,7 +36,8 @@
 		label?: string;
 		onclose: () => void;
 	}
-	let { at, items, label = "메뉴", onclose }: Props = $props();
+	let { at, items, label, onclose }: Props = $props();
+	const resolvedLabel = $derived(label ?? $_("ui.menu"));
 
 	let el: HTMLDivElement | undefined = $state();
 	let pos = $state({ x: 0, y: 0 });
@@ -89,7 +91,7 @@
 <svelte:window onmousedown={(e) => at && el && !el.contains(e.target as Node) && onclose()} onblur={() => at && onclose()} />
 
 {#if at}
-	<div bind:this={el} use:portal class="menu" class:scroll={inline} role="menu" aria-label={label} tabindex="-1" style:left="{pos.x}px" style:top="{pos.y}px" {onkeydown}>
+	<div bind:this={el} use:portal class="menu" class:scroll={inline} role="menu" aria-label={resolvedLabel} tabindex="-1" style:left="{pos.x}px" style:top="{pos.y}px" {onkeydown}>
 		{#each items as it}
 			{#if it.visible === undefined || it.visible}
 				{#if it.separator}<div class="sep" role="separator"></div>{/if}

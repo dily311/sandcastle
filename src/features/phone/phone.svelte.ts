@@ -2,6 +2,8 @@
 // - 페르소나 폰: 내가 페르소나, AI가 연락처 캐릭터 (일반 대화와 같은 구조)
 // - 캐릭터 폰: 내가 주인 캐릭터, AI가 연락처(다른 캐릭터나 페르소나). 엿보기로 AI가 두 사람 몫을 다 쓸 수도 있음
 //   대화 meta.phone = { owner: {kind, id}, contact: {kind, id} }
+import { get } from "svelte/store";
+import { _ } from "svelte-i18n";
 import { lastAt } from "$features/character/library.svelte";
 import { gradientCss, gradientOf } from "$shared/ui/backgrounds";
 import { fileSrc } from "$shared/ipc/file";
@@ -301,7 +303,7 @@ class PhoneState {
 		if (found) return found;
 		const conv = await call(
 			commands.createConversation({
-				title: lookup(w)?.name ?? "폰 대화",
+				title: lookup(w)?.name ?? get(_)("phoneStore.defaultChatTitle"),
 				characterId: o.id,
 				personaId: library.personas[0]?.id ?? "default",
 				worldInfoIds: [],
@@ -330,7 +332,7 @@ class PhoneState {
 		const read = this.prefs.lastRead[convId] ?? 0;
 		const lastLine = bubbles(last.content).at(-1);
 		this.previews[convId] = {
-			text: lastLine ? (lastLine.kind === "image" ? "사진" : lastLine.text) : "",
+			text: lastLine ? (lastLine.kind === "image" ? get(_)("phoneStore.photoPreview") : lastLine.text) : "",
 			at: last.createdAt,
 			role: last.role,
 			unread: msgs.filter((m) => m.role === "assistant" && m.createdAt > read).reduce((n, m) => n + Math.max(1, bubbles(m.content).length), 0),

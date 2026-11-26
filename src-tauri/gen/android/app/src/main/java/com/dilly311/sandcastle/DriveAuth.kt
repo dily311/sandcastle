@@ -9,6 +9,7 @@ import androidx.activity.result.ActivityResultLauncher
 import androidx.activity.result.IntentSenderRequest
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.webkit.JavaScriptReplyProxy
+import com.google.android.gms.auth.GoogleAuthUtil
 import com.google.android.gms.auth.api.identity.AuthorizationRequest
 import com.google.android.gms.auth.api.identity.Identity
 import com.google.android.gms.common.api.ApiException
@@ -16,17 +17,16 @@ import com.google.android.gms.common.api.Scope
 import org.json.JSONObject
 
 /**
- * 구글 드라이브 권한 (CLAUDE.md 2-D Android, ADR-011).
+ * 구글 드라이브 권한 (CLAUDE.md 2-D Android, ADR-011, 1-J-3).
  *
  * Play 서비스에 앱 전용 폴더(drive.appdata) 권한만 묻는다. 이미 허락했으면 화면 없이 access token을 돌려주고,
- * 처음이면(interactive일 때만) 구글의 동의 화면을 띄운다. refresh token은 받지 않는다 — 필요할 때마다 다시 묻는다.
- * 구글 클라우드의 Android 클라이언트(패키지 이름 + 서명 키 SHA-1)로 앱을 알아본다 (코드에 클라이언트 ID가 필요 없음).
- *
- * 화면과는 MainActivity의 SandcastleNative 메시지로 주고받는다: 받기 "drive:authorize:<id>:<0|1>",
- * 답 {"kind":"drive","id":…,"token":…} 또는 {"kind":"drive","id":…,"error":…}
+ * 처음이거나 권한이 취소되었으면(interactive일 때) 구글의 동의 화면을 띄운다.
+ * 연결을 끊거나 서버에서 401이 돌아오면 clearToken으로 Play 서비스 로컬 캐시를 비워 옛 토큰이 재사용되지 않게 한다.
  */
 class DriveAuth(private val activity: ComponentActivity) {
   private var pending: Pair<JavaScriptReplyProxy, String>? = null
+  @Volatile private var lastToken: String? = null
+
   private val consent: ActivityResultLauncher<IntentSenderRequest> =
     activity.registerForActivityResult(ActivityResultContracts.StartIntentSenderForResult()) { result ->
       val (proxy, id) = pending ?: return@registerForActivityResult
@@ -37,6 +37,7 @@ class DriveAuth(private val activity: ComponentActivity) {
       }
       try {
         val r = Identity.getAuthorizationClient(activity).getAuthorizationResultFromIntent(result.data)
+        lastToken = r.accessToken
         reply(proxy, id, token = r.accessToken)
       } catch (e: ApiException) {
         reply(proxy, id, error = "api:${e.statusCode}")
@@ -58,12 +59,28 @@ class DriveAuth(private val activity: ComponentActivity) {
             consent.launch(IntentSenderRequest.Builder(intent.intentSender).build())
           }
         } else {
+          lastToken = r.accessToken
           reply(proxy, id, token = r.accessToken)
         }
       }
       .addOnFailureListener { e ->
         reply(proxy, id, error = if (e is ApiException) "api:${e.statusCode}" else (e.message ?: "failed"))
       }
+  }
+
+  /** Play 서비스가 캐시해 둔 취소·만료 access token을 비운다 */
+  fun clearToken(proxy: JavaScriptReplyProxy, id: String, tokenArg: String?) {
+    val tok = tokenArg?.takeIf { it.isNotBlank() } ?: lastToken
+    lastToken = null
+    Thread {
+      if (tok != null) {
+        try {
+          GoogleAuthUtil.clearToken(activity.applicationContext, tok)
+        } catch (_: Exception) {
+        }
+      }
+      reply(proxy, id, token = "cleared")
+    }.start()
   }
 
   private fun reply(proxy: JavaScriptReplyProxy, id: String, token: String? = null, error: String? = null) {

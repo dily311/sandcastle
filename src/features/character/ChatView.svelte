@@ -469,24 +469,24 @@
 		const data = await session?.sentPrompt(m).catch(() => null);
 		prompt = { msg: m, data: data ?? null };
 	}
-	const roleName = { system: "시스템", user: "사용자", assistant: "AI" } as const;
-	const sourceName: Record<string, string> = {
-		preset: "프리셋",
-		world_info: "월드인포",
-		system_rules: "시스템 규칙",
-		character: "캐릭터",
-		persona: "페르소나",
-		examples: "예시 대화",
-		chat: "대화 기록",
-		user_input: "이번 입력",
-		qr: "QR 지시",
-		author_note: "작가 노트",
+	const roleName = $derived({ system: $_("chatExtra.roles.system"), user: $_("chatExtra.roles.user"), assistant: $_("chatExtra.roles.assistant") });
+	const sourceName = $derived<Record<string, string>>({
+		preset: $_("chatExtra.sources.preset"),
+		world_info: $_("chatExtra.sources.world_info"),
+		system_rules: $_("chatExtra.sources.system_rules"),
+		character: $_("chatExtra.sources.character"),
+		persona: $_("chatExtra.sources.persona"),
+		examples: $_("chatExtra.sources.examples"),
+		chat: $_("chatExtra.sources.chat"),
+		user_input: $_("chatExtra.sources.user_input"),
+		qr: $_("chatExtra.sources.qr"),
+		author_note: $_("chatExtra.sources.author_note"),
 		inject: "/inject",
-		recall: "자동 회상",
-		regen_extra: "재생성 지시",
-		plugin: "플러그인",
-		ghost: "대필",
-	};
+		recall: $_("chatExtra.sources.recall"),
+		regen_extra: $_("chatExtra.sources.regen_extra"),
+		plugin: $_("chatExtra.sources.plugin"),
+		ghost: $_("chatExtra.sources.ghost"),
+	});
 
 	// ---- 읽기 모드: 대화가 읽기 화면(ReadView)으로 바뀐다 (5-E-6-2, ADR-031) ----
 	function toReadMode() {

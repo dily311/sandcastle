@@ -1,5 +1,9 @@
 // 배경 고르기: 기본 그라데이션 + 올려 둔 이미지 (테마 배경 목록, ThemeSetting.backgrounds)
 // 값은 "preset:<id>" 또는 이미지 파일 경로. CSS(테마)와 캔버스(이미지 카드)가 같은 정의를 쓴다.
+import { get } from "svelte/store";
+import { _ } from "svelte-i18n";
+
+const t = (key: string) => get(_)(key);
 
 export interface GradientPreset {
 	id: string;
@@ -10,18 +14,18 @@ export interface GradientPreset {
 }
 
 export const GRADIENTS: GradientPreset[] = [
-	{ id: "dusk", name: "노을", angle: 135, stops: ["#5b4bdb", "#8f6fe0", "#c7a3e8"] },
-	{ id: "sky", name: "하늘", angle: 135, stops: ["#8db8f2", "#a9c4ee", "#d8c9e9"] },
-	{ id: "aurora", name: "오로라", angle: 135, stops: ["#4f7fdc", "#7aa8d8", "#9fd6c2"] },
-	{ id: "pastel", name: "파스텔", angle: 135, stops: ["#a8d8ea", "#c9b6e4", "#f5c6d6"] },
-	{ id: "peach", name: "복숭아", angle: 135, stops: ["#ffd3a5", "#fd9c8b", "#f38fb1"] },
-	{ id: "mint", name: "민트", angle: 135, stops: ["#d4fc79", "#96e6a1", "#84d3c4"] },
-	{ id: "ocean", name: "바다", angle: 160, stops: ["#0f2b4c", "#1f5f8b", "#5aa9c7"] },
-	{ id: "night", name: "밤", angle: 160, stops: ["#0b0f1f", "#1b2240", "#3a2f5b"] },
-	{ id: "rose", name: "장미", angle: 135, stops: ["#5a1832", "#a83b5c", "#e8a0a8"] },
-	{ id: "forest", name: "숲", angle: 160, stops: ["#13241a", "#2f5a3a", "#8cbf88"] },
-	{ id: "sand", name: "모래", angle: 135, stops: ["#efe6d6", "#e2cfae", "#c9a87c"] },
-	{ id: "mono", name: "먹", angle: 160, stops: ["#1a1a1a", "#3a3a3a", "#6b6b6b"] },
+	{ id: "dusk", get name() { return t("palette.gradients.dusk"); }, angle: 135, stops: ["#5b4bdb", "#8f6fe0", "#c7a3e8"] },
+	{ id: "sky", get name() { return t("palette.gradients.sky"); }, angle: 135, stops: ["#8db8f2", "#a9c4ee", "#d8c9e9"] },
+	{ id: "aurora", get name() { return t("palette.gradients.aurora"); }, angle: 135, stops: ["#4f7fdc", "#7aa8d8", "#9fd6c2"] },
+	{ id: "pastel", get name() { return t("palette.gradients.pastel"); }, angle: 135, stops: ["#a8d8ea", "#c9b6e4", "#f5c6d6"] },
+	{ id: "peach", get name() { return t("palette.gradients.peach"); }, angle: 135, stops: ["#ffd3a5", "#fd9c8b", "#f38fb1"] },
+	{ id: "mint", get name() { return t("palette.gradients.mint"); }, angle: 135, stops: ["#d4fc79", "#96e6a1", "#84d3c4"] },
+	{ id: "ocean", get name() { return t("palette.gradients.ocean"); }, angle: 160, stops: ["#0f2b4c", "#1f5f8b", "#5aa9c7"] },
+	{ id: "night", get name() { return t("palette.gradients.night"); }, angle: 160, stops: ["#0b0f1f", "#1b2240", "#3a2f5b"] },
+	{ id: "rose", get name() { return t("palette.gradients.rose"); }, angle: 135, stops: ["#5a1832", "#a83b5c", "#e8a0a8"] },
+	{ id: "forest", get name() { return t("palette.gradients.forest"); }, angle: 160, stops: ["#13241a", "#2f5a3a", "#8cbf88"] },
+	{ id: "sand", get name() { return t("palette.gradients.sand"); }, angle: 135, stops: ["#efe6d6", "#e2cfae", "#c9a87c"] },
+	{ id: "mono", get name() { return t("palette.gradients.mono"); }, angle: 160, stops: ["#1a1a1a", "#3a3a3a", "#6b6b6b"] },
 ];
 
 export const presetId = (value: string | null | undefined) => (value?.startsWith("preset:") ? value.slice(7) : null);

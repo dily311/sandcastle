@@ -1,6 +1,7 @@
 <script lang="ts">
 	// 설치된 커뮤니티 플러그인 하나의 설정 (설정 > 커뮤니티 플러그인 그룹의 탭). 설치·권한·켜기는 "커뮤니티 플러그인" 관리 화면에서
 	import { onMount } from "svelte";
+	import { _ } from "svelte-i18n";
 	import { admin } from "$features/community/admin.svelte";
 	import SettingsForm from "$features/community/SettingsForm.svelte";
 	import Section from "./Section.svelte";
@@ -14,7 +15,7 @@
 	const m = $derived(plugin?.manifest);
 </script>
 
-<Section title={m?.name ?? pluginId} lead={plugin ? (plugin.enabled ? m?.description || "" : "꺼져 있음 — 켜면 설정값을 읽습니다 (켜기는 설정 > 커뮤니티 플러그인)") : "설치된 플러그인이 아님"}>
+<Section title={m?.name ?? pluginId} lead={plugin ? (plugin.enabled ? m?.description || "" : $_("settings.extra.communityDisabledLead")) : $_("settings.extra.communityNotInstalled")}>
 	{#if m?.settings.length}
 		<Group>
 			<SettingsForm {pluginId} fields={m.settings} />

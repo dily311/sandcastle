@@ -1,5 +1,6 @@
 <script lang="ts">
 	import { CircleAlert, CircleCheck, Info, TriangleAlert, X } from "@lucide/svelte";
+	import { _ } from "svelte-i18n";
 	import { toasts } from "$shared/stores/toast.svelte";
 
 	const icons = { info: Info, success: CircleCheck, warning: TriangleAlert, error: CircleAlert };
@@ -8,16 +9,52 @@
 <div class="stack" aria-live="polite" aria-relevant="additions">
 	{#each toasts.items as t (t.id)}
 		{@const Icon = icons[t.tone]}
-		<div class="toast {t.tone}" role={t.tone === "error" ? "alert" : "status"}>
+		<!-- svelte-ignore a11y_no_noninteractive_tabindex -->
+		<div
+			class="toast {t.tone}"
+			class:clickable={t.dismissOnClick}
+			role={t.tone === "error" ? "alert" : "status"}
+			tabindex={t.dismissOnClick ? 0 : undefined}
+			onclick={() => {
+				if (t.dismissOnClick) toasts.dismiss(t.id, true);
+			}}
+			onkeydown={(e) => {
+				if (t.dismissOnClick && (e.key === "Enter" || e.key === " ")) {
+					e.preventDefault();
+					toasts.dismiss(t.id, true);
+				}
+			}}
+		>
 			<Icon class="ic" />
 			<div class="txt">
 				<p>{t.message}</p>
+				{#if t.progress}
+					{#if !t.progress.indeterminate && typeof t.progress.total === "number" && t.progress.total > 0}
+						<progress class="prog" max={t.progress.total} value={t.progress.current ?? 0}></progress>
+					{:else}
+						<progress class="prog"></progress>
+					{/if}
+				{/if}
 				{#if t.detail}<small>{t.detail}</small>{/if}
 			</div>
 			{#if t.action}
-				<button class="act" onclick={() => { t.action?.run(); toasts.dismiss(t.id); }}>{t.action.label}</button>
+				<button
+					class="act"
+					onclick={(e) => {
+						e.stopPropagation();
+						t.action?.run();
+						toasts.dismiss(t.id, false);
+					}}>{t.action.label}</button
+				>
 			{/if}
-			<button class="x" aria-label="닫기" onclick={() => toasts.dismiss(t.id)}><X /></button>
+			<button
+				class="x"
+				aria-label={$_("toast.close")}
+				onclick={(e) => {
+					e.stopPropagation();
+					toasts.dismiss(t.id, true);
+				}}><X /></button
+			>
 		</div>
 	{/each}
 </div>
@@ -46,6 +83,9 @@
 		box-shadow: var(--shadow-lg);
 		pointer-events: auto;
 		animation: in var(--duration) var(--ease);
+	}
+	.toast.clickable {
+		cursor: pointer;
 	}
 	@keyframes in {
 		from {
@@ -77,7 +117,18 @@
 	.txt {
 		flex: 1;
 		min-width: 0;
+		display: flex;
+		flex-direction: column;
+		gap: 4px;
 		font-size: var(--text-sm);
+	}
+	.txt p {
+		margin: 0;
+	}
+	.prog {
+		width: 100%;
+		height: 5px;
+		accent-color: var(--accent);
 	}
 	small {
 		color: var(--text-faint);

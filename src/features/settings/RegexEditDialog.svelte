@@ -88,7 +88,7 @@
 		const text = sample;
 		const t = setTimeout(async () => {
 			try {
-				preview = await call(commands.previewRegexScript(input, text, "캐릭터", "나"), { ...src, silent: true });
+				preview = await call(commands.previewRegexScript(input, text, $_("settings.extra.regexPreviewChar"), $_("settings.extra.regexPreviewUser")), { ...src, silent: true });
 				previewError = null;
 			} catch (e) {
 				preview = null;

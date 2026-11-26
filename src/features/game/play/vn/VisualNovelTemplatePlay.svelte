@@ -429,7 +429,7 @@
 			if (!acceptResponseLines(arrivalLine ? [arrivalLine] : [])) {
 				if (command.type === "interact") {
 					// 조사했는데 이벤트·대사가 하나도 없음: 눌렀는데 반응이 없어 보이지 않게 명시한다
-					acceptResponseLines([{ kind: LineKind.Narration, speaker: null, text: "아무 일도 없었다.", cues: [] } as StageLine]);
+					acceptResponseLines([{ kind: LineKind.Narration, speaker: null, text: $_("gameUi.nothingHappened"), cues: [] } as StageLine]);
 				} else {
 					standingOverrides = {};
 					syncBgmFromStage();
@@ -549,7 +549,7 @@
 			scriptFinished = lines.length === 0;
 			if (lines.length) prepareLinePresentation(lines);
 			editing = false;
-			toasts.success("메시지 고침");
+			toasts.success($_("gameUi.messageEditedToast"));
 		} finally {
 			isLoading = false;
 		}
@@ -626,8 +626,8 @@
 		if (!text) return;
 		const who = speakerName ? `${speakerName}: ` : "";
 		void navigator.clipboard.writeText(who + text).then(
-			() => toasts.success("대사 복사함"),
-			() => toasts.error("복사 못 함"),
+			() => toasts.success($_("gameUi.lineCopiedToast")),
+			() => toasts.error($_("gameUi.copyFailedToast")),
 		);
 	}
 

@@ -79,38 +79,39 @@ Continuing the conversation so far, write what {{user}} says next, from {{user}}
 - Output only the text {{user}} would send, with no explanation or preface.";
 
 /// 폰 메신저 프로필 AI 꾸미기 지시문 ({{char}} = 캐릭터 이름)
-pub const DEFAULT_PHONE_PROFILE: &str = "지금까지의 대화와 캐릭터 설정을 바탕으로 '{{char}}'의 카카오톡 스타일 메신저 프로필 꾸미기 정보를 JSON으로만 생성해줘.
-설명이나 코드블록 없이 순수 JSON 객체 하나만 출력해.
-형식:
+pub const DEFAULT_PHONE_PROFILE: &str =
+    "Based on the conversation so far and {{char}}'s character settings, generate a messenger profile card for '{{char}}' as a single JSON object.
+Output only a raw JSON object with no explanation or code fences. Write all text values in the language of the conversation.
+Format:
 {
-  \"status\": \"이름 아래에 표시될 짧은 상태 메시지 (15자 내외)\",
-  \"note\": \"배경 화면 위에 띄울 짧은 감성 메모 문구 (1~2줄, \\n으로 줄바꿈 가능)\",
-  \"bgmTitle\": \"캐릭터 분위기나 현재 기분에 어울리는 프로필 뮤직 제목\",
-  \"bgmArtist\": \"프로필 뮤직 아티스트명\"
+  \"status\": \"Short status message shown under the name (around 15 characters)\",
+  \"note\": \"Short mood note shown on the profile wallpaper (1-2 lines, \\n allowed)\",
+  \"bgmTitle\": \"Profile music track title fitting {{char}}'s mood or personality\",
+  \"bgmArtist\": \"Profile music artist name\"
 }";
 
 /// 폰 SNS 페이지 AI 생성 지시문 ({{char}} = 캐릭터 이름)
-pub const DEFAULT_PHONE_SNS: &str = "지금까지의 대화와 캐릭터 설정을 바탕으로 '{{char}}'의 인스타그램 스타일 개인 SNS 페이지를 JSON으로만 생성해줘.
-설명이나 코드블록 없이 순수 JSON 객체 하나만 출력해.
-형식:
+pub const DEFAULT_PHONE_SNS: &str = "Based on the conversation so far and {{char}}'s character settings, generate an Instagram-style personal social feed for '{{char}}' as a single JSON object.
+Output only a raw JSON object with no explanation or code fences. Write all text values (except handle) in the language of the conversation.
+Format:
 {
-  \"handle\": \"영문소문자_아이디\",
-  \"status\": \"인스타 노트용 짧은 상태 메시지 (20자 이내)\",
-  \"bio\": \"캐릭터 성격이 드러나는 자기소개 (1~3줄, \\n으로 줄바꿈)\",
-  \"link\": \"위치 또는 짧은 링크 문구 (선택, 없으면 빈 문자열)\",
-  \"followers\": \"팔로워 수 문자열 (예: 128 또는 1.2만)\",
-  \"following\": \"팔로잉 수 문자열 (예: 42)\",
+  \"handle\": \"lowercase_handle_id\",
+  \"status\": \"Short note bubble status (within 20 characters)\",
+  \"bio\": \"Bio reflecting {{char}}'s personality (1-3 lines, \\n allowed)\",
+  \"link\": \"Location or short link label (optional, empty string if none)\",
+  \"followers\": \"Follower count string (e.g. 128 or 1.2k)\",
+  \"following\": \"Following count string (e.g. 42)\",
   \"posts\": [
     {
-      \"caption\": \"캐릭터 말투의 최근 SNS 게시물 글 (해시태그 포함 가능)\",
-      \"location\": \"장소 (선택)\",
-      \"date\": \"상대 시간 (예: 2시간 전, 어제, 3일 전)\",
+      \"caption\": \"Recent post caption in {{char}}'s voice (hashtags allowed)\",
+      \"location\": \"Location (optional)\",
+      \"date\": \"Relative time in the conversation's language (e.g. 2h ago, Yesterday)\",
       \"likes\": 24,
-      \"comments\": [{ \"author\": \"댓글 작성자 이름\", \"text\": \"짧은 댓글\" }]
+      \"comments\": [{ \"author\": \"Commenter name\", \"text\": \"Short comment\" }]
     }
   ]
 }
-posts는 3~4개 작성해줘.";
+Include 3 to 4 items in posts.";
 
 static OVERRIDES: LazyLock<RwLock<AppPrompts>> = LazyLock::new(Default::default);
 

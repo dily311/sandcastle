@@ -95,7 +95,7 @@
 						<li class:on={isUi || isText || isMono}>
 							<div class="font-txt">
 								<b>{f.name}</b>
-								<span class="sample" style:font-family={`"${fontFamilyOf(f.path)}", var(--font-sans)`}>가나다라마바사 ABC abc 123</span>
+								<span class="sample" style:font-family={`"${fontFamilyOf(f.path)}", var(--font-sans)`}>가나다라마바사 ABC abc 123<!-- i18n-ignore: 한글·영문·숫자 글꼴 모양 견본 --></span>
 							</div>
 							<div class="font-btns">
 								<Button size="sm" variant={isUi ? "primary" : "secondary"} onclick={() => theme.update({ appFont: isUi ? null : f.path })}>UI</Button>

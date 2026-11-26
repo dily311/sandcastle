@@ -240,6 +240,8 @@ impl TaskManager {
                     code: error_code_str(res.code),
                     message: res.message,
                     retryable: res.retryable,
+                    key: res.key,
+                    args: res.args,
                 };
                 if let Err(err) = self.repo.close_attempt(&attempt.id, AttemptStatus::Failed, Some(&info)).await {
                     log_internal(task_id, "attempt 기록", err);
@@ -558,11 +560,7 @@ impl TaskManager {
         let (attempt_status, info) = match to {
             TaskStatus::Interrupted => (
                 AttemptStatus::Interrupted,
-                TaskErrorInfo {
-                    code: error_code_str(ErrorCode::TaskInterrupted),
-                    message: "앱이 종료되어 작업이 중단되었습니다".into(),
-                    retryable: true,
-                },
+                TaskErrorInfo::new(error_code_str(ErrorCode::TaskInterrupted), "앱이 종료되어 작업이 중단되었습니다".into(), true),
             ),
             _ => (AttemptStatus::Cancelled, TaskError::Cancelled.to_info()),
         };
@@ -637,11 +635,7 @@ fn log_internal(task_id: &str, step: &str, e: AppError) -> TaskErrorInfo {
 }
 
 fn channel_closed() -> TaskErrorInfo {
-    TaskErrorInfo {
-        code: error_code_str(ErrorCode::InternalError),
-        message: "작업 결과를 받지 못했습니다".into(),
-        retryable: false,
-    }
+    TaskErrorInfo::new(error_code_str(ErrorCode::InternalError), "작업 결과를 받지 못했습니다".into(), false)
 }
 
 #[cfg(test)]

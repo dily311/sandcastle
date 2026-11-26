@@ -12,9 +12,9 @@
 	import { call, commands } from "$shared/ipc/client";
 	import { pickFiles, pickFolder, saveTo, SYNC_FILES } from "$shared/ipc/dialog";
 	import { dropPaths, extOf } from "$app/drop.svelte";
-	import { onEvent } from "$shared/ipc/events";
 	import { layout } from "$app/layout.svelte";
-	import { hasNativeDrive, prepareDrive, unmetered } from "$app/androidDrive";
+	import { clearNativeDriveToken, hasNativeDrive, NativeDriveError, prepareDrive, runWithDriveAuth, unmetered } from "$app/androidDrive";
+	import { syncProgressState } from "$app/syncProgress.svelte";
 	import { current, ensureLoaded, save as savePart } from "./pluginSettingForm.svelte";
 	import { toasts } from "$shared/stores/toast.svelte";
 	import { absolute, relative } from "$shared/time";
@@ -30,9 +30,10 @@
 	/** 열어 본 묶음 (적용 전) */
 	let pending = $state<{ path: string; preview: SyncPreview } | null>(null);
 
-	// ---- 폴더 동기화 (2-C, 데스크톱) ----
+	// ---- 폴더·드라이브 동기화 (2-C·2-D) ----
 	let syncing = $state(false);
-	let step = $state("");
+	let wiping = $state(false);
+	const step = $derived(syncProgressState.step);
 	const sync = $derived(current()?.sync ?? null);
 	const INTERVALS = $derived([
 		{ value: "15", label: $_("settings.syncSec.every15m") },
@@ -45,9 +46,6 @@
 		void load();
 		if (!showAuto) return;
 		ensureLoaded();
-		let unlisten: (() => void) | undefined;
-		void onEvent<{ step: string }>("sync::progress", (p) => (step = p.step)).then((u) => (unlisten = u));
-		return () => unlisten?.();
 	});
 	// ---- 되돌리기 (2-E) ----
 	let backups = $state<SyncBackup[]>([]);
@@ -96,26 +94,15 @@
 	let drive = $state<DriveStatus | null>(null);
 	let loggingIn = $state(false);
 	const targetKind = $derived((phone || sync?.target === "drive" ? "drive" : "folder") as "folder" | "drive");
-	/** Android: 폰에서 새 토큰을 받아 넣는다 (이미 허락했으면 화면 없이). 실패하면 토스트 */
-	async function phoneToken(): Promise<boolean> {
-		if (!phone) return true;
-		try {
-			await prepareDrive(false);
-			return true;
-		} catch (e) {
-			toasts.error($_("settings.syncSec.drivePermError"), String((e as Error)?.message ?? e));
-			return false;
-		}
-	}
 	const ready = $derived(targetKind === "drive" ? !!drive?.connected : !!sync?.folder);
 	async function loginDrive() {
 		loggingIn = true;
 		try {
-			drive = phone ? await prepareDrive(true) : await call(commands.driveLogin(), src);
+			drive = phone ? await prepareDrive(true, true) : await call(commands.driveLogin(), src);
 			toasts.success(drive.email ? $_("settings.syncSec.driveConnectedEmail", { values: { email: drive.email } }) : $_("settings.syncSec.driveConnected"));
 		} catch (e) {
 			// 백엔드 오류는 call이 이미 토스트로, 폰(Play 서비스)의 오류는 여기서
-			if (e instanceof Error) toasts.error($_("settings.syncSec.driveConnectError"), e.message);
+			if (e instanceof NativeDriveError) toasts.error($_("settings.syncSec.driveConnectError"), e.message);
 		} finally {
 			loggingIn = false;
 		}
@@ -127,8 +114,9 @@
 			confirmLabel: $_("settings.syncSec.driveLogoutBtn"),
 		});
 		if (!keep) return;
-		if (phone) await prepareDrive(false).catch(() => null); // 권한을 거두려면 지금 토큰이 필요
+		if (phone) await prepareDrive(false, false).catch(() => null); // 권한을 거두려면 지금 토큰이 필요
 		await call(commands.driveLogout(false), src);
+		if (phone) await clearNativeDriveToken();
 		drive = await call(commands.driveStatus(), { ...src, silent: true }).catch(() => null);
 		toasts.success($_("settings.syncSec.driveLoggedOut"));
 	}
@@ -140,10 +128,24 @@
 			danger: true,
 		});
 		if (!ok) return;
-		if (!(await phoneToken())) return;
-		const n = await call(commands.driveLogout(true), src);
-		drive = await call(commands.driveStatus(), { ...src, silent: true }).catch(() => null);
-		toasts.success($_("settings.syncSec.driveWiped", { values: { count: n } }));
+		wiping = true;
+		try {
+			const count = await runWithDriveAuth(
+				true,
+				(silent) => call(commands.driveLogout(true), { ...src, silent }),
+				{ onReconnected: (s) => (drive = s) },
+			);
+			if (phone) await clearNativeDriveToken();
+			drive = await call(commands.driveStatus(), { ...src, silent: true }).catch(() => null);
+			toasts.success($_("settings.syncSec.driveWiped", { values: { count } }));
+		} catch (e) {
+			if (e instanceof NativeDriveError) {
+				toasts.error($_("settings.syncSec.driveWipeFailed"), e.message);
+			}
+		} finally {
+			wiping = false;
+			await load();
+		}
 	}
 
 	async function chooseFolder() {
@@ -156,35 +158,52 @@
 			if (!ok) return;
 		}
 		syncing = true;
-		step = "";
 		try {
-			if (!(await phoneToken())) return;
-			// 파일 작업 대기열에서 (5-E-28): 가져오기·지우기가 도는 동안 눌러도 거절하지 않고 차례로
-			const r = await jobs.run($_("settings.syncSec.syncNowBtn"), () => call(commands.syncNow(false), src), { group: $_("settings.syncSec.title") });
-			if (!r) return;
-			const m = r.merged.reduce((a, d) => ({ added: a.added + d.report.added, updated: a.updated + d.report.updated, deleted: a.deleted + d.report.deleted, both: a.both + d.report.conflicts + d.report.branches }), { added: 0, updated: 0, deleted: 0, both: 0 });
-			toasts.success(
-				r.merged.length
-					? $_("settings.syncSec.syncMerged", {
-							values: {
-								devices: r.merged.length,
-								added: n(m.added),
-								updated: n(m.updated),
-								deleted: n(m.deleted),
-								conflicts: m.both ? $_("settings.syncSec.syncConflictsPart", { values: { count: n(m.both) } }) : "",
-							},
-						})
-					: $_("settings.syncSec.syncNoChanges"),
+			// 하단 고정 팝업(jobs.run)을 띄우지 않고 토스트·백그라운드 알림으로 진행률을 표시한다 (1-J-2).
+			// 드라이브 권한이 취소·만료된 경우에는 에러 반환 대신 다시 권한을 받아 이어서 동기화한다 (1-J-3).
+			const r = await runWithDriveAuth(
+				targetKind === "drive",
+				(silent) => call(commands.syncNow(false), { ...src, silent }),
+				{ onReconnected: (s) => (drive = s) },
 			);
+			const m = r.merged.reduce((a, d) => ({ added: a.added + d.report.added, updated: a.updated + d.report.updated, deleted: a.deleted + d.report.deleted, both: a.both + d.report.conflicts + d.report.branches }), { added: 0, updated: 0, deleted: 0, both: 0 });
+			if (r.merged.length) {
+				toasts.success(
+					$_("settings.syncSec.syncMerged", {
+						values: {
+							devices: r.merged.length,
+							added: n(m.added),
+							updated: n(m.updated),
+							deleted: n(m.deleted),
+							conflicts: m.both ? $_("settings.syncSec.syncConflictsPart", { values: { count: n(m.both) } }) : "",
+						},
+					}),
+				);
+			} else if (r.filesDown > 0 || r.filesUp > 0) {
+				toasts.success($_("settings.syncSec.syncFilesMoved", { values: { down: n(r.filesDown), up: n(r.filesUp) } }));
+			} else if (!r.filesMissing) {
+				toasts.success($_("settings.syncSec.syncNoChanges"));
+			}
+			if (r.filesMissing > 0) {
+				toasts.show(
+					{
+						tone: "warning",
+						message: $_("settings.syncSec.syncMissingFilesWarn", { values: { count: n(r.filesMissing) } }),
+						source: "sync",
+					},
+					7000,
+				);
+			}
 			for (const d of r.skippedDevices ?? []) toasts.error($_("settings.syncSec.skippedDevice", { values: { device: label(d.deviceId), reason: d.reason } }));
 			if (r.merged.some((d) => d.returnedAfterExclusion)) toasts.info($_("settings.syncSec.returnedExcluded"));
 			await library.load();
 			conflictsKey++;
-		} catch {
-			/* 이유는 call이 토스트로, 기록에도 남음 */
+		} catch (e) {
+			if (e instanceof NativeDriveError) {
+				toasts.error($_("settings.syncSec.drivePermError"), e.message);
+			}
 		} finally {
 			syncing = false;
-			step = "";
 			await load();
 		}
 	}
@@ -320,9 +339,9 @@
 				{:else if drive && !drive.available}
 					<p class="meta empty">{$_("settings.syncSec.driveUnavailable")}</p>
 				{:else if drive?.connected}
-					<Row label={$_("settings.syncSec.googleDrive")} desc={$_("settings.syncSec.driveConnectedDesc", { values: { who: drive.email ?? $_("settings.syncSec.connectedFallback") } })}>
-						<Button size="sm" variant="ghost" onclick={wipeDrive}>{$_("settings.syncSec.driveWipeBtn")}</Button>
-						<Button size="sm" onclick={logoutDrive}>{#snippet icon()}<LogOut />{/snippet}{$_("settings.syncSec.driveLogoutBtn")}</Button>
+					<Row label={$_("settings.syncSec.googleDrive")} desc={wiping ? step || $_("settings.syncSec.preparing") : $_("settings.syncSec.driveConnectedDesc", { values: { who: drive.email ?? $_("settings.syncSec.connectedFallback") } })}>
+						<Button size="sm" variant="ghost" loading={wiping} disabled={wiping || syncing} onclick={wipeDrive}>{$_("settings.syncSec.driveWipeBtn")}</Button>
+						<Button size="sm" disabled={wiping || syncing} onclick={logoutDrive}>{#snippet icon()}<LogOut />{/snippet}{$_("settings.syncSec.driveLogoutBtn")}</Button>
 					</Row>
 				{:else}
 					<Row label={$_("settings.syncSec.googleDrive")} desc={phone ? $_("settings.syncSec.driveLoginDescPhone") : $_("settings.syncSec.driveLoginDescDesktop")}>
@@ -331,7 +350,7 @@
 				{/if}
 				{#if sync && ready}
 					<Row label={$_("settings.syncSec.syncNowBtn")} desc={syncing ? step || $_("settings.syncSec.preparing") : $_("settings.syncSec.syncNowDesc")}>
-						<Button size="sm" variant="primary" loading={syncing} disabled={syncing} onclick={syncNow}>{#snippet icon()}<RefreshCw />{/snippet}{$_("settings.syncSec.syncNowBtn")}</Button>
+						<Button size="sm" variant="primary" loading={syncing} disabled={syncing || wiping} onclick={syncNow}>{#snippet icon()}<RefreshCw />{/snippet}{$_("settings.syncSec.syncNowBtn")}</Button>
 					</Row>
 					<Row label={$_("settings.syncSec.autoSync")} desc={$_("settings.syncSec.autoSyncDesc")} nowrap>
 						{#if sync.auto}

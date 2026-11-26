@@ -1,4 +1,7 @@
 // 캐릭터·대화·폴더와 대화 설정에 쓰는 목록(페르소나·프리셋·API). 화면들이 같이 쓴다.
+import { get } from "svelte/store";
+import { _ } from "svelte-i18n";
+import { localizeImportWarning } from "$lib/utils/backendI18n";
 import { jobs } from "$shared/stores/jobs.svelte";
 import { trashedToast } from "$shared/trash";
 import type {
@@ -14,6 +17,8 @@ import type {
 import { call, commands } from "$shared/ipc/client";
 import { toasts } from "$shared/stores/toast.svelte";
 import { logs } from "$shared/stores/log.svelte";
+
+const tr = (key: string, values?: Record<string, string | number>) => get(_)(key, values ? { values } : undefined);
 
 export type { Character, CharacterImage, Conversation, ConversationFolder, Persona, Preset, ApiProfiles, VarDef };
 
@@ -136,11 +141,11 @@ class Library {
 	/** 새 대화: 캐릭터 기본 페르소나, 첫 메시지(다른 첫 메시지는 스와이프로) */
 	async createConversation(charId: string): Promise<Conversation> {
 		const ch = this.character(charId);
-		if (!ch) throw new Error("캐릭터 없음");
+		if (!ch) throw new Error(tr("chatExtra.characterNotFound"));
 		const n = this.convsOf(charId).length + 1;
 		// 페르소나를 복사하지 않는다: 비워 두면 캐릭터 기본 → 전역을 따른다 (ADR-028). 개요 탭 자물쇠로 이 대화에 고정
 		const conv = await call(
-			commands.createConversation({ title: `${ch.name} 대화 ${n}`, characterId: charId, personaId: "", worldInfoIds: [], mode: "chat" }),
+			commands.createConversation({ title: tr("chatExtra.newChatTitle", { name: ch.name, n }), characterId: charId, personaId: "", worldInfoIds: [], mode: "chat" }),
 			src,
 		);
 		const greetings = [ch.firstMessage, ...ch.alternateFirstMessage].filter((g): g is string => !!g?.trim());
@@ -177,7 +182,7 @@ class Library {
 		if (found) return found;
 		const ch = this.character(charId);
 		const conv = await call(
-			commands.createConversation({ title: ch?.name ?? "폰 대화", characterId: charId, personaId, worldInfoIds: [], mode: "phone" }),
+			commands.createConversation({ title: ch?.name ?? tr("chatExtra.phoneChatDefaultTitle"), characterId: charId, personaId, worldInfoIds: [], mode: "phone" }),
 			src,
 		);
 		this.put(conv);
@@ -236,7 +241,7 @@ class Library {
 	async duplicate(id: string) {
 		const conv = await call(commands.duplicateConversation(id), src);
 		this.put(conv);
-		toasts.success("대화 복제함");
+		toasts.success(tr("chatExtra.duplicatedToast"));
 		return conv;
 	}
 	async branch(id: string, messageId: string) {
@@ -246,7 +251,7 @@ class Library {
 	}
 	/** 휴지통으로 (2-A-3). "되돌리기" 알림을 띄운다 */
 	async remove(id: string) {
-		const item = await jobs.run(this.conversation(id)?.title || "대화", () => call(commands.deleteConversation(id), src), { group: "대화 지우기" });
+		const item = await jobs.run(this.conversation(id)?.title || tr("chatExtra.convFallback"), () => call(commands.deleteConversation(id), src), { group: tr("chatExtra.deleteConvGroup") });
 		if (!item) return;
 		this.conversations = this.conversations.filter((c) => c.id !== id);
 		trashedToast(item, () => this.load());
@@ -280,8 +285,8 @@ class Library {
 	}
 	/** 폴더만 지우고 대화는 폴더 밖으로 */
 	async removeFolder(id: string) {
-		const name = this.folders.find((f) => f.id === id)?.name ?? "폴더";
-		if ((await jobs.run(name, () => call(commands.deleteConversationFolder(id), src), { group: "폴더 지우기" })) === undefined) return;
+		const name = this.folders.find((f) => f.id === id)?.name ?? tr("chatExtra.folderFallback");
+		if ((await jobs.run(name, () => call(commands.deleteConversationFolder(id), src), { group: tr("chatExtra.deleteFolderGroup") })) === undefined) return;
 		this.folders = this.folders.filter((f) => f.id !== id);
 		for (const c of this.conversations) if (c.folderId === id) c.folderId = null;
 	}
@@ -330,7 +335,7 @@ class Library {
 	}
 	async addImages(charId: string, paths: string[]) {
 		if (!paths.length) return;
-		await jobs.run(`그림 ${paths.length}장`, () => call(commands.addCharacterImages(charId, paths), src), { group: "에셋 올리기" });
+		await jobs.run(tr("chatExtra.imagesCount", { count: paths.length }), () => call(commands.addCharacterImages(charId, paths), src), { group: tr("chatExtra.uploadAssetsGroup") });
 		await this.loadImages(charId);
 	}
 	async updateImage(img: CharacterImage, p: Partial<Pick<CharacterImage, "key" | "enabled" | "sortOrder" | "folder">>) {
@@ -342,12 +347,12 @@ class Library {
 	}
 	/** ZIP 안의 그림을 한꺼번에 (파일 이름이 키, 같은 키는 덮어씀) */
 	async addImagesZip(charId: string, zipPath: string) {
-		const added = await jobs.run(zipPath.split(/[\\/]/).pop() ?? "ZIP", () => call(commands.addCharacterImagesZip(charId, zipPath), src), { group: "에셋 올리기" });
+		const added = await jobs.run(zipPath.split(/[\\/]/).pop() ?? "ZIP", () => call(commands.addCharacterImagesZip(charId, zipPath), src), { group: tr("chatExtra.uploadAssetsGroup") });
 		await this.loadImages(charId);
 		return added?.length ?? 0;
 	}
 	async removeImage(img: CharacterImage) {
-		if ((await jobs.run(img.key || "그림", () => call(commands.deleteCharacterImage(img.id), src), { group: "에셋 지우기" })) === undefined) return;
+		if ((await jobs.run(img.key || tr("chatExtra.imageFallback"), () => call(commands.deleteCharacterImage(img.id), src), { group: tr("chatExtra.deleteAssetsGroup") })) === undefined) return;
 		this.images[img.characterId] = (this.images[img.characterId] ?? []).filter((x) => x.id !== img.id);
 	}
 
@@ -356,15 +361,16 @@ class Library {
 	/** `quiet`: 여러 파일을 차례로 가져올 때 — 파일마다 목록을 다시 읽거나 알리지 않는다 (경고는 로그에만) */
 	async importSillyTavern(path: string, characterId: string | null = null, opts: { quiet?: boolean } = {}) {
 		const r = await call(commands.importSillytavern(path, null, characterId, null), src);
+		const warnings = r.warnings.map(localizeImportWarning);
 		if (opts.quiet) {
-			for (const w of r.warnings) logs.add("warn", "가져오기", w);
+			for (const w of warnings) logs.add("warn", "import", w);
 			return r;
 		}
 		await this.load();
-		if (r.kind === "character") toasts.success(`'${r.character.name}' 가져옴`);
-		else if (r.kind === "chat") toasts.success(`대화 가져옴 · 메시지 ${r.messageCount}개`);
-		else toasts.success("가져옴");
-		for (const w of r.warnings) toasts.info(w);
+		if (r.kind === "character") toasts.success(tr("chatExtra.charImportedToast", { name: r.character.name }));
+		else if (r.kind === "chat") toasts.success(tr("chatExtra.chatImportedToast", { count: r.messageCount }));
+		else toasts.success(tr("chatExtra.importedToast"));
+		for (const w of warnings) toasts.info(w);
 		return r;
 	}
 }

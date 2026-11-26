@@ -1,6 +1,7 @@
 // 프리셋 태그를 단 그림의 생성 정보(meta) → 이미지 생성 설정에 넣을 값.
 // 갤러리에 올린 NovelAI·WebUI 그림, 앱이 만든 그림 모두 같은 이름(네거티브·단계·…)으로 정리돼 있다 (service/image_meta.rs)
 import type { MetaItem } from "$ipc/bindings";
+import { tr } from "$lib/utils/i18n";
 
 export interface PresetPatch {
 	negativePrompt?: string;
@@ -24,22 +25,29 @@ const SAMPLER: Record<string, string> = {
 export function presetFromMeta(meta: MetaItem[]): PresetPatch {
 	const get = (k: string) => meta.find((m) => m.key === k)?.value.trim() ?? "";
 	const out: PresetPatch = {};
-	const neg = get("네거티브");
+	const neg = get("네거티브"); // i18n-ignore: service/image_meta.rs canonical meta key
 	if (neg) out.negativePrompt = neg;
-	const steps = Number.parseInt(get("단계"), 10);
+	const steps = Number.parseInt(get("단계"), 10); // i18n-ignore
 	if (Number.isFinite(steps) && steps > 0) out.steps = Math.min(50, steps);
-	const scale = Number.parseFloat(get("프롬프트 반영"));
+	const scale = Number.parseFloat(get("프롬프트 반영")); // i18n-ignore
 	if (Number.isFinite(scale) && scale > 0) out.scale = Math.min(10, scale);
-	const sampler = get("샘플러");
+	const sampler = get("샘플러"); // i18n-ignore
 	if (sampler) out.sampler = sampler.startsWith("k_") ? sampler : (SAMPLER[sampler.toLowerCase()] ?? sampler);
-	const size = /^(\d{2,4})\s*x\s*(\d{2,4})$/i.exec(get("크기"));
+	const size = /^(\d{2,4})\s*x\s*(\d{2,4})$/i.exec(get("크기")); // i18n-ignore
 	if (size) out.size = `${size[1]}x${size[2]}`;
-	const model = get("모델");
+	const model = get("모델"); // i18n-ignore
 	if (model.startsWith("nai-diffusion")) out.model = model;
 	return out;
 }
 
 /** 화면에 보일 한 줄 요약 */
 export function presetSummary(p: PresetPatch): string {
-	return [p.size, p.steps && `${p.steps}단계`, p.scale && `반영 ${p.scale}`, p.sampler].filter(Boolean).join(" · ");
+	return [
+		p.size,
+		p.steps && tr("imagesExtra.summarySteps", { steps: p.steps }),
+		p.scale && tr("imagesExtra.summaryScale", { scale: p.scale }),
+		p.sampler,
+	]
+		.filter(Boolean)
+		.join(" · ");
 }

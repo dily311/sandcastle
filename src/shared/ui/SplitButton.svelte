@@ -2,6 +2,7 @@
 	// 주 동작 버튼 + 옆 화살표 메뉴 (예: "새로 만들기" ⌄ 가져오기). 캐릭터·게임·로어북·이미지 화면이 같이 씀
 	import { ChevronDown, Plus } from "@lucide/svelte";
 	import type { Component } from "svelte";
+	import { _ } from "svelte-i18n";
 	import ContextMenu, { type MenuItem } from "./ContextMenu.svelte";
 
 	interface Props {
@@ -15,7 +16,8 @@
 		menuLabel?: string;
 		size?: "sm" | "md";
 	}
-	let { label, onclick, items, icon: Icon = Plus, disabled = false, menuLabel = "다른 방법", size = "md" }: Props = $props();
+	let { label, onclick, items, icon: Icon = Plus, disabled = false, menuLabel, size = "md" }: Props = $props();
+	const resolvedMenuLabel = $derived(menuLabel ?? $_("ui.moreActions"));
 
 	let box: HTMLDivElement | undefined = $state();
 	let menu = $state<{ x: number; y: number; align?: "start" | "end" } | null>(null);
@@ -27,9 +29,9 @@
 
 <div class="split" class:sm={size === "sm"} bind:this={box}>
 	<button type="button" class="split-main" {disabled} {onclick}><Icon />{label}</button>
-	<button type="button" class="split-more" aria-label={menuLabel} title={menuLabel} aria-haspopup="menu" aria-expanded={!!menu} onclick={open}><ChevronDown /></button>
+	<button type="button" class="split-more" aria-label={resolvedMenuLabel} title={resolvedMenuLabel} aria-haspopup="menu" aria-expanded={!!menu} onclick={open}><ChevronDown /></button>
 </div>
-<ContextMenu at={menu} label={menuLabel} {items} onclose={() => (menu = null)} />
+<ContextMenu at={menu} label={resolvedMenuLabel} {items} onclose={() => (menu = null)} />
 
 <style>
 	.split {

@@ -2,7 +2,11 @@
 // 코어 플러그인 `community`가 켜져 있을 때만 시작한다: 백엔드가 켜진 플러그인을 도는 목록에 올리고, 화면은
 // 플러그인마다 숨은 sandbox iframe 하나를 띄운다(PluginHost.svelte). 꺼지면 iframe·구독을 모두 내린다.
 // iframe → postMessage → route(거르기) → call_user_plugin(백엔드가 다시 확인) → 답을 그 iframe에만 돌려준다.
+import { get } from "svelte/store";
+import { _ } from "svelte-i18n";
 import type { RuntimePlugin } from "$ipc/bindings";
+
+const tr = (key: string, values?: Record<string, string | number>) => get(_)(key, values ? { values } : undefined);
 import { call, commands, toAppError } from "$shared/ipc/client";
 import { onEvent } from "$shared/ipc/events";
 import { logs } from "$shared/stores/log.svelte";
@@ -128,7 +132,7 @@ class PluginHost {
 			// 명령이 AI를 부르면 오래 걸릴 수 있다
 			await this.emit(pluginId, "command", { id: commandId, context: this.context() }, 90_000);
 		} catch (e) {
-			toasts.error(`플러그인 명령 실패: ${e instanceof Error ? e.message : String(e)}`, "PLUGIN_COMMAND");
+			toasts.error(tr("communityUi.hostCmdFailed", { error: e instanceof Error ? e.message : String(e) }), "PLUGIN_COMMAND");
 		} finally {
 			if (this.allowance.get(pluginId) === mine) this.allowance.delete(pluginId);
 		}
@@ -145,7 +149,7 @@ class PluginHost {
 		this.plugins = this.plugins.filter((p) => p.id !== id);
 		this.frames.delete(id);
 		this.syncPanels();
-		toasts.error(`플러그인 '${id}'이(가) 오류가 많아 멈췄습니다. 설정에서 다시 켤 수 있습니다.`, "PLUGIN_SUSPENDED");
+		toasts.error(tr("communityUi.hostSuspended", { id }), "PLUGIN_SUSPENDED");
 	}
 
 	private async answerPrompt(req: PromptHookRequest) {
@@ -177,13 +181,13 @@ class PluginHost {
 
 	private send(pluginId: string, event: string, data: unknown, timeoutMs: number): Promise<unknown> {
 		const frame = this.frames.get(pluginId);
-		if (!frame?.contentWindow) return Promise.reject(new Error(`플러그인이 실행 중이 아님: ${pluginId}`));
+		if (!frame?.contentWindow) return Promise.reject(new Error(tr("communityUi.hostNotRunning", { id: pluginId })));
 		const id = ++this.eventSeq;
 		const key = `${pluginId}:${id}`;
 		return new Promise((resolve, reject) => {
 			const timer = setTimeout(() => {
 				this.waiting.delete(key);
-				reject(new Error(`응답 없음 (${timeoutMs / 1000}초): ${event}`));
+				reject(new Error(tr("communityUi.hostTimeout", { sec: timeoutMs / 1000, event })));
 			}, timeoutMs);
 			this.waiting.set(key, { resolve, reject, timer });
 			frame.contentWindow!.postMessage({ type: "sc-plugin-event", id, event, data }, "*");
@@ -223,7 +227,7 @@ class PluginHost {
 			if (w) {
 				this.waiting.delete(key);
 				clearTimeout(w.timer);
-				if (d.error) w.reject(new Error(String(d.error.message ?? "오류")));
+				if (d.error) w.reject(new Error(String(d.error.message ?? tr("communityUi.hostErrorFallback"))));
 				else w.resolve(d.ok ?? null);
 			}
 			return;
@@ -254,15 +258,15 @@ class PluginHost {
 			if (d.ask) {
 				const denied = this.deniedAt.get(id);
 				if (denied && Date.now() - denied < DENY_COOLDOWN_MS) {
-					return reply({ id: r.call.id, error: { code: "INVALID_INPUT", message: "사용자가 방금 AI 호출을 허락하지 않았음 — 잠시 뒤에 다시 부르세요" } });
+					return reply({ id: r.call.id, error: { code: "INVALID_INPUT", message: tr("communityUi.hostCooldownDenied") } });
 				}
-				if (this.asking.has(id)) return reply({ id: r.call.id, error: { code: "INVALID_INPUT", message: "확인 중인 AI 호출이 있음 — 끝난 뒤에 부르세요" } });
+				if (this.asking.has(id)) return reply({ id: r.call.id, error: { code: "INVALID_INPUT", message: tr("communityUi.hostAlreadyAsking") } });
 				this.asking.add(id);
 				const text = describeCall(plugin.name, id, r.call.args);
-				const ok = await confirmAction({ ...text, confirmLabel: "허락 (이번 한 번)" }).finally(() => this.asking.delete(id));
+				const ok = await confirmAction({ ...text, confirmLabel: tr("communityUi.hostAllowOnce") }).finally(() => this.asking.delete(id));
 				if (!ok) {
 					this.deniedAt.set(id, Date.now());
-					return reply({ id: r.call.id, error: { code: "INVALID_INPUT", message: "사용자가 AI 호출을 허락하지 않음" } });
+					return reply({ id: r.call.id, error: { code: "INVALID_INPUT", message: tr("communityUi.hostUserDenied") } });
 				}
 			}
 		}

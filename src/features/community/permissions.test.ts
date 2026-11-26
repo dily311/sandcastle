@@ -1,4 +1,5 @@
 import { describe, expect, it } from "vitest";
+import { setAppLocale } from "$lib/utils/i18n";
 import { highestRisk, permissionInfo, sortPermissions } from "./permissions";
 
 // 백엔드가 받는 권한 전부 (service/community/manifest.rs)
@@ -38,5 +39,19 @@ describe("권한 설명", () => {
 		expect(highestRisk(["ui.panel", "ui.command"])).toBe("low");
 		expect(highestRisk(["ui.panel", "ai"])).toBe("high");
 		expect(highestRisk([])).toBeNull();
+	});
+
+	it("영어 모드에서도 모든 권한 라벨·설명이 한글 없이 번역된다", async () => {
+		await setAppLocale("en", { persistSetting: false });
+		try {
+			for (const p of KNOWN) {
+				const i = permissionInfo(p);
+				expect(i.label, p).not.toBe(p);
+				expect(i.label, p).not.toMatch(/[가-힣]/);
+				expect(i.desc, p).not.toMatch(/[가-힣]/);
+			}
+		} finally {
+			await setAppLocale("ko", { persistSetting: false });
+		}
 	});
 });

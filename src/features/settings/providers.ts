@@ -2,8 +2,12 @@
 // - 연결 정보(공급자·주소·형식)는 여기, 모델 목록은 앱에 내장한 카탈로그(src-tauri/resources/info/default_*_models.json)에서 가져온다.
 //   카탈로그는 사람이 고치는 파일이라 모델이 새로 나오면 그 JSON만 고치면 된다 (이 파일은 그대로).
 // - formatType은 백엔드 adapter가 고르는 기준 (openai / anthropic / gemini / vertexai)
+import { get } from "svelte/store";
+import { _ } from "svelte-i18n";
 import textCatalog from "../../../src-tauri/resources/info/default_text_models.json";
 import embeddingCatalog from "../../../src-tauri/resources/info/default_embedding_models.json";
+
+const tr = (key: string) => get(_)(key);
 
 /** 목록에 보이는 모델 하나: 사람이 읽는 이름과 API에 보내는 id */
 export interface ModelOption {
@@ -34,7 +38,7 @@ function groupsOf(catalog: { data: CatalogProvider[] }, provider: string): Model
 	return (p?.modelList ?? []).map((g) => ({ label: g.label, model: g.model.map((m) => ({ label: m.label, modelId: m.modelId })) }));
 }
 /** 이름 없이 id만 있는 목록 (음성·그림 모델처럼 카탈로그에 없는 것) */
-const ids = (label: string, list: string[]): ModelGroup[] => [{ label, model: list.map((m) => ({ label: m, modelId: m })) }];
+const ids = (labelKey: string, list: string[]): ModelGroup[] => [{ get label() { return tr(labelKey); }, model: list.map((m) => ({ label: m, modelId: m })) }];
 
 export const apiLists: Provider[] = [
 	{ label: "OpenAI", provider: "OpenAI", formatType: "openai", baseUrl: "https://api.openai.com/v1", modelList: groupsOf(textCatalog, "openai") },
@@ -46,18 +50,18 @@ export const apiLists: Provider[] = [
 	{ label: "DeepSeek", provider: "deepseek", formatType: "openai", baseUrl: "https://api.deepseek.com/", modelList: groupsOf(textCatalog, "deepseek") },
 	// ---- 코어 플러그인 전용 (채팅에는 못 씀): 음성 읽기 · 이미지 생성 ----
 	{
-		label: "ElevenLabs (음성)",
+		get label() { return tr("settings.extra.elevenlabsLabel"); },
 		provider: "elevenlabs",
 		formatType: "elevenlabs",
 		baseUrl: "https://api.elevenlabs.io/v1",
-		modelList: ids("음성 모델", ["eleven_multilingual_v2", "eleven_flash_v2_5", "eleven_turbo_v2_5", "eleven_v3"]),
+		modelList: ids("settings.extra.voiceModelsGroup", ["eleven_multilingual_v2", "eleven_flash_v2_5", "eleven_turbo_v2_5", "eleven_v3"]),
 	},
 	{
-		label: "NovelAI (이미지)",
+		get label() { return tr("settings.extra.novelaiLabel"); },
 		provider: "novelai",
 		formatType: "novelai",
 		baseUrl: "https://image.novelai.net",
-		modelList: ids("이미지 모델", ["nai-diffusion-4-5-full", "nai-diffusion-4-5-curated", "nai-diffusion-4-full", "nai-diffusion-4-curated-preview", "nai-diffusion-3"]),
+		modelList: ids("settings.extra.imageModelsGroup", ["nai-diffusion-4-5-full", "nai-diffusion-4-5-curated", "nai-diffusion-4-full", "nai-diffusion-4-curated-preview", "nai-diffusion-3"]),
 	},
 ];
 

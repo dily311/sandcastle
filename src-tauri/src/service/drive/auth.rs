@@ -83,9 +83,16 @@ pub fn use_android_token(token: &str) -> Result<()> {
     Ok(())
 }
 
-/// 화면이 이 오류를 받으면 폰에서 토큰을 새로 받아 다시 부른다 (Android)
-fn auth_required() -> AppError {
+/// 화면이 이 오류를 받으면 에러 토스트 대신 구글 권한/로그인을 새로 받아 다시 실행한다 (Android·데스크톱 공통)
+pub fn auth_required() -> AppError {
     AppError::validation("구글 드라이브 권한을 다시 받아야 함", Some(serde_json::json!({ "driveAuthRequired": true })))
+}
+
+/// 취소·만료된 저장 인증 표시를 지운다
+pub fn clear_saved_auth() {
+    forget_access_token();
+    let _ = SecretStore::delete(REFRESH_KEY);
+    let _ = SecretStore::delete(ANDROID_KEY);
 }
 
 fn drive_err(msg: impl Into<String>) -> AppError {
@@ -231,9 +238,8 @@ pub async fn access_token(http: &reqwest::Client, client: &Client, ep: &Endpoint
     }
     let refresh = match SecretStore::get(REFRESH_KEY) {
         Ok(r) => r,
-        // Android는 refresh token이 없다 — 화면이 폰에서 새 토큰을 받아 넣는다
-        Err(_) if SecretStore::exists(ANDROID_KEY) => return Err(auth_required()),
-        Err(_) => return Err(AppError::validation("구글 드라이브가 연결되어 있지 않음 (설정 > 동기화에서 로그인)", None)),
+        // refresh token이 없거나 Android 토큰이 비었으면 화면이 권한을 새로 받아 재시도하도록 알린다
+        Err(_) => return Err(auth_required()),
     };
     let res = http
         .post(&ep.token)
@@ -247,10 +253,8 @@ pub async fn access_token(http: &reqwest::Client, client: &Client, ep: &Endpoint
         .await
         .map_err(|e| drive_err(format!("구글에 연결하지 못함: {e}")))?;
     if res.status() == reqwest::StatusCode::BAD_REQUEST || res.status() == reqwest::StatusCode::UNAUTHORIZED {
-        return Err(AppError::validation(
-            "구글 드라이브 연결이 끊어졌음 (권한이 취소됐거나 만료) — 설정 > 동기화에서 다시 로그인",
-            None,
-        ));
+        clear_saved_auth();
+        return Err(auth_required());
     }
     if !res.status().is_success() {
         return Err(drive_err(format!("구글 토큰을 새로 받지 못함 (HTTP {})", res.status())));

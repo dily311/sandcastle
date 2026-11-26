@@ -131,7 +131,7 @@
 		const cur = setting.characters.find((c) => c.id === id);
 		if (!cur) return;
 		const linked = characterId ? library.characters.find((c) => c.id === characterId) : null;
-		const shouldRename = linked && (!cur.name.trim() || /^시메지\s*\d*$|^새 시메지$/.test(cur.name.trim()));
+		const shouldRename = linked && (!cur.name.trim() || /^시메지\s*\d*$|^새 시메지$|^shimeji\s*\d*$|^new shimeji$/i.test(cur.name.trim())); // i18n-ignore: 기본 시메지 이름 패턴 매칭
 		patchCharacter(id, {
 			characterId,
 			...(shouldRename ? { name: linked.name } : {}),

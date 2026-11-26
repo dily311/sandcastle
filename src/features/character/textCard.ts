@@ -1,8 +1,12 @@
 // 고른 글을 이미지 카드(png)로. 캔버스에 직접 그린다 (외부 라이브러리 없음).
 // 디자인(각주·말풍선·편지·자막·미니멀) × 색 묶음 × 사용자가 고친 색 × 배경(그라데이션·이미지)
+import { get } from "svelte/store";
+import { _ } from "svelte-i18n";
 import { drawCover, fillGradient, gradientOf } from "$shared/ui/backgrounds";
 import { fontFamilyOf } from "$shared/ui/userFont";
 import { fileSrc } from "$shared/ipc/file";
+
+const tr = (key: string) => get(_)(key);
 
 export type CardImgRatio = "1:1" | "3:4" | "5:4" | "9:16";
 export type CardStyle = "theme" | "paper" | "night" | "light" | "dark";
@@ -19,33 +23,33 @@ export const CARD_IMG_RATIO: { value: CardImgRatio; label: string }[] = [
 ];
 
 export const CARD_DESIGNS: { value: CardDesign; label: string }[] = [
-	{ value: "none", label: "없음" },
-	{ value: "footnote", label: "각주" },
-	{ value: "bubble", label: "말풍선" },
-	{ value: "letter", label: "편지" },
-	{ value: "subtitle", label: "영화 자막" },
-	{ value: "minimal", label: "미니멀" },
+	{ value: "none", get label() { return tr("chatExtra.cardOptions.designNone"); } },
+	{ value: "footnote", get label() { return tr("chatExtra.cardOptions.designFootnote"); } },
+	{ value: "bubble", get label() { return tr("chatExtra.cardOptions.designBubble"); } },
+	{ value: "letter", get label() { return tr("chatExtra.cardOptions.designLetter"); } },
+	{ value: "subtitle", get label() { return tr("chatExtra.cardOptions.designSubtitle"); } },
+	{ value: "minimal", get label() { return tr("chatExtra.cardOptions.designMinimal"); } },
 ];
 export const CARD_STYLES: { value: CardStyle; label: string }[] = [
-	{ value: "theme", label: "지금 테마" },
-	{ value: "paper", label: "종이" },
-	{ value: "night", label: "밤" },
-	{ value: "light", label: "밝게" },
-	{ value: "dark", label: "어둡게" },
+	{ value: "theme", get label() { return tr("chatExtra.cardOptions.styleTheme"); } },
+	{ value: "paper", get label() { return tr("chatExtra.cardOptions.stylePaper"); } },
+	{ value: "night", get label() { return tr("chatExtra.cardOptions.styleNight"); } },
+	{ value: "light", get label() { return tr("chatExtra.cardOptions.styleLight"); } },
+	{ value: "dark", get label() { return tr("chatExtra.cardOptions.styleDark"); } },
 ];
 export const CARD_FONTS: { value: CardFont; label: string }[] = [
-	{ value: "app", label: "앱 글꼴" },
-	{ value: "sans", label: "고딕" },
-	{ value: "serif", label: "명조" },
-	{ value: "mono", label: "고정폭" },
+	{ value: "app", get label() { return tr("chatExtra.cardOptions.fontApp"); } },
+	{ value: "sans", get label() { return tr("chatExtra.cardOptions.fontSans"); } },
+	{ value: "serif", get label() { return tr("chatExtra.cardOptions.fontSerif"); } },
+	{ value: "mono", get label() { return tr("chatExtra.cardOptions.fontMono"); } },
 ];
 /** 0 = 글 길이에 맞춰 자동 */
 export const CARD_SIZES: { value: string; label: string }[] = [
-	{ value: "0", label: "자동" },
-	{ value: "32", label: "작게" },
-	{ value: "40", label: "보통" },
-	{ value: "48", label: "크게" },
-	{ value: "60", label: "아주 크게" },
+	{ value: "0", get label() { return tr("chatExtra.cardOptions.sizeAuto"); } },
+	{ value: "32", get label() { return tr("chatExtra.cardOptions.sizeSm"); } },
+	{ value: "40", get label() { return tr("chatExtra.cardOptions.sizeMd"); } },
+	{ value: "48", get label() { return tr("chatExtra.cardOptions.sizeLg"); } },
+	{ value: "60", get label() { return tr("chatExtra.cardOptions.sizeXl"); } },
 ];
 
 export interface CardColors {
@@ -424,7 +428,7 @@ export async function renderCard(input: CardInput): Promise<HTMLCanvasElement> {
 }
 
 export async function cardBlob(canvas: HTMLCanvasElement): Promise<Blob> {
-	return new Promise((resolve, reject) => canvas.toBlob((b) => (b ? resolve(b) : reject(new Error("이미지를 만들 수 없음"))), "image/png"));
+	return new Promise((resolve, reject) => canvas.toBlob((b) => (b ? resolve(b) : reject(new Error(tr("chatExtra.cardOptions.cannotRender")))), "image/png"));
 }
 
 export async function blobBase64(blob: Blob): Promise<string> {

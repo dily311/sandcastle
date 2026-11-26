@@ -11,6 +11,8 @@
 // /로 시작하지 않는 조각은 오류 없이 건너뛴다 (SillyTavern과 같음).
 // 매크로({{char}}·{{getvar::x}}·{{pipe}})는 그 커맨드를 실행하기 직전에 바꾼다.
 
+import { tr } from "$lib/utils/i18n";
+
 export class ScriptError extends Error {}
 
 /** 묶음 `{: … :}` — 실행할 때 다시 읽는다. immediate: `{: … :}()` (인자 자리에서 바로 실행) */
@@ -110,7 +112,7 @@ function closureEnd(s: string, i: number): number {
 			if (depth === 0) return j + 1;
 		}
 	}
-	throw new ScriptError("묶음 {: … :}이 닫히지 않음");
+	throw new ScriptError(tr("slash.errUnclosedClosure"));
 }
 
 /** 따옴표로 시작하는 값 → [값, 다음 위치] */
@@ -124,7 +126,7 @@ function readQuoted(s: string, i: number): [string, number] {
 		} else if (s[j] === '"') return [v, j + 1];
 		else v += s[j];
 	}
-	throw new ScriptError("따옴표가 닫히지 않음");
+	throw new ScriptError(tr("slash.errUnclosedQuote"));
 }
 
 /** 값 하나 (이름 있는 인자의 값 또는 묶음) → [값, 다음 위치] */
@@ -195,7 +197,7 @@ function readCommand(s: string, i: number): [Command, number] {
 		return [{ name: "run", named, unnamed: v }, j];
 	}
 	const m = /^\/([^\s|]+)/.exec(s.slice(i));
-	if (!m) throw new ScriptError("커맨드 이름이 없음");
+	if (!m) throw new ScriptError(tr("slash.errMissingCmdName"));
 	let j = i + m[0].length;
 	for (;;) {
 		while (j < s.length && isSpace(s[j])) j++;
@@ -480,7 +482,7 @@ export function compare(left: string, right: string, rule: string): boolean {
 		case "not":
 			return !left || left === "false" || left === "0";
 		default:
-			throw new ScriptError(`/if: 모르는 비교 rule=${rule} (eq·neq·lt·gt·lte·gte·in·nin·not)`);
+			throw new ScriptError(tr("slash.errUnknownIfRule", { rule }));
 	}
 }
 
@@ -584,7 +586,7 @@ export async function runScript(src: string, env: ScriptEnv, pipe = ""): Promise
 		for (const cmd of parseScript(source)) {
 			if (env.stopped?.()) throw new Stopped();
 			env.trace?.(cmd.name);
-			if (++steps > limit) throw new ScriptError(`실행 단계가 ${limit}번을 넘어 멈춤 (/${cmd.name})`);
+			if (++steps > limit) throw new ScriptError(tr("slash.errStepLimit", { limit, name: cmd.name }));
 			if (cmd.breakPipe) cur = "";
 			const pipeNow = cur;
 			const expand = async (v: ArgValue): Promise<ArgValue> =>
@@ -618,8 +620,8 @@ export async function runScript(src: string, env: ScriptEnv, pipe = ""): Promise
 	};
 
 	const missing = (name: string): Handler => {
-		if (env.unsupported?.includes(name)) throw new ScriptError(`/${name}은 지원하지 않음`);
-		throw new ScriptError(`모르는 커맨드: /${name}`);
+		if (env.unsupported?.includes(name)) throw new ScriptError(tr("slash.errUnsupportedCmd", { name }));
+		throw new ScriptError(tr("slash.errUnknownCmd", { name }));
 	};
 
 	/** /if·/while의 left·right: 변수 이름이면 그 값 (범위 → 대화·전역), 아니면 글 그대로 */
@@ -635,10 +637,10 @@ export async function runScript(src: string, env: ScriptEnv, pipe = ""): Promise
 
 	/** 반복 본문 실행: /break면 그 값으로 끝 */
 	const loop = async (body: ArgValue, input: string, scope: Scope, name: string, each: (i: number) => Promise<boolean>, setIndex?: (s: Scope, i: number) => void): Promise<string> => {
-		if (typeof body === "string") throw new ScriptError(`/${name}: 반복할 묶음 {: … :}이 필요함`);
+		if (typeof body === "string") throw new ScriptError(tr("slash.errLoopBodyClosure", { name }));
 		let cur = input;
 		for (let i = 0; await each(i); i++) {
-			if (i >= loopLimit) throw new ScriptError(`/${name} 반복이 ${loopLimit}바퀴를 넘어 멈춤`);
+			if (i >= loopLimit) throw new ScriptError(tr("slash.errLoopLimit", { name, limit: loopLimit }));
 			const inner = new Scope(body.scope ?? scope);
 			setIndex?.(inner, i);
 			try {
@@ -665,15 +667,15 @@ export async function runScript(src: string, env: ScriptEnv, pipe = ""): Promise
 		}
 		return parts.map((p) => {
 			const n = num(operand(p, scope));
-			if (n === null) throw new ScriptError(`/${name}: 숫자가 아님 (${p})`);
+			if (n === null) throw new ScriptError(tr("slash.errNotANumber", { name, value: p }));
 			return n;
 		});
 	};
 	const math = (name: string, min: number, f: (xs: number[]) => number): Builtin => ({ unnamed }, { scope }) => {
 		const xs = numbers(unnamed, scope, name);
-		if (xs.length < min) throw new ScriptError(`/${name}: 수가 ${min}개 이상 필요함`);
+		if (xs.length < min) throw new ScriptError(tr("slash.errMinNumbers", { name, min }));
 		const r = f(xs);
-		if (!Number.isFinite(r)) throw new ScriptError(`/${name}: 결과가 수가 아님`);
+		if (!Number.isFinite(r)) throw new ScriptError(tr("slash.errResultNotFinite", { name }));
 		return String(r);
 	};
 
@@ -683,11 +685,11 @@ export async function runScript(src: string, env: ScriptEnv, pipe = ""): Promise
 		sub: math("sub", 1, (xs) => xs.slice(1).reduce((a, b) => a - b, xs[0])),
 		mul: math("mul", 1, (xs) => xs.reduce((a, b) => a * b, 1)),
 		div: math("div", 2, ([a, b]) => {
-			if (b === 0) throw new ScriptError("/div: 0으로 나눌 수 없음");
+			if (b === 0) throw new ScriptError(tr("slash.errDivZero"));
 			return a / b;
 		}),
 		mod: math("mod", 2, ([a, b]) => {
-			if (b === 0) throw new ScriptError("/mod: 0으로 나눌 수 없음");
+			if (b === 0) throw new ScriptError(tr("slash.errModZero"));
 			return a % b;
 		}),
 		pow: math("pow", 2, ([a, b]) => a ** b),
@@ -744,10 +746,10 @@ export async function runScript(src: string, env: ScriptEnv, pipe = ""): Promise
 				const [n, v] = nameAndValue(unnamed);
 				count = n;
 				body = v && typeof v !== "string" ? { ...v, scope } : undefined;
-			} else throw new ScriptError("/times: 횟수가 필요함 (/times 5 {: … :})");
+			} else throw new ScriptError(tr("slash.errTimesCountRequired"));
 			const n = num(count);
-			if (n === null || n < 0) throw new ScriptError(`/times: 횟수가 숫자가 아님 (${count})`);
-			if (!body) throw new ScriptError("/times: 반복할 묶음 {: … :}이 필요함");
+			if (n === null || n < 0) throw new ScriptError(tr("slash.errTimesCountInvalid", { count }));
+			if (!body) throw new ScriptError(tr("slash.errTimesBodyClosure"));
 			return loop(body, pipe, scope, "times", async (i) => i < n, (s, i) => s.let("timesIndex", String(i)));
 		},
 		// /run 묶음 | /run 변수이름 | /run 세트.버튼  (이름 있는 인자는 묶음 인자로)
@@ -765,7 +767,7 @@ export async function runScript(src: string, env: ScriptEnv, pipe = ""): Promise
 				if (v !== undefined) target = v;
 				else {
 					const source = env.quickReply?.(name);
-					if (source === undefined) throw new ScriptError(`/run: 실행할 것을 찾지 못함 (${name})`);
+					if (source === undefined) throw new ScriptError(tr("slash.errRunTargetNotFound", { name }));
 					target = { kind: "closure", source, scope: root };
 				}
 			}
@@ -780,7 +782,7 @@ export async function runScript(src: string, env: ScriptEnv, pipe = ""): Promise
 		// /let key=이름 값  ·  /let 이름 값  (이 범위에 새로)
 		let: ({ named, unnamed }, { cmd, scope }) => {
 			const [name, value] = named.key !== undefined ? [asText(named.key), cmd.unnamed === null ? "" : unnamed] : nameAndValue(asText(unnamed));
-			if (!name) throw new ScriptError("/let: 변수 이름이 필요함");
+			if (!name) throw new ScriptError(tr("slash.errLetKeyRequired"));
 			scope.let(name, value === undefined ? "" : typeof value === "string" || !value ? value : { ...value, scope: value.scope ?? scope });
 		},
 		// /var key=이름 값 (있는 범위에 바꿈) · /var 이름 (값 읽기) · index=로 목록·객체 자리
@@ -789,7 +791,7 @@ export async function runScript(src: string, env: ScriptEnv, pipe = ""): Promise
 			let value: ArgValue | undefined;
 			if (named.key !== undefined) [name, value] = [asText(named.key), cmd.unnamed === null ? undefined : unnamed];
 			else [name, value] = nameAndValue(asText(unnamed));
-			if (!name) throw new ScriptError("/var: 변수 이름이 필요함");
+			if (!name) throw new ScriptError(tr("slash.errVarKeyRequired"));
 			const index = named.index === undefined ? undefined : asText(named.index);
 			if (value === undefined) {
 				const cur = asText(scope.get(name));

@@ -1,4 +1,5 @@
 <script lang="ts">
+	import { _ } from "svelte-i18n";
 	import { assetUrl } from "$features/game/runtime/gameStore.svelte";
 	import { gameStore } from "$features/game/runtime/gameStore.svelte";
 	import { runtimeStore } from "$features/game/runtime/runtimeStore.svelte";
@@ -48,11 +49,11 @@
 
 <div class="game-stage" bind:this={stageEl}>
 	{#if runtimeStore.currentBg}
-		<button class="background-hitbox" onclick={onAdvance} aria-label="다음 대사">
+		<button class="background-hitbox" onclick={onAdvance} aria-label={$_("gameUi.nextLineSimpleAria")}>
 			<img class="background" src={assetUrl(runtimeStore.currentBg.path)} alt="" />
 		</button>
 	{:else}
-		<button class="background-hitbox background-placeholder" onclick={onAdvance} aria-label="다음 대사"></button>
+		<button class="background-hitbox background-placeholder" onclick={onAdvance} aria-label={$_("gameUi.nextLineSimpleAria")}></button>
 	{/if}
 	<div class="stage-shade"></div>
 	<div class="characters">

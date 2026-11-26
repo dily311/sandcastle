@@ -62,7 +62,7 @@
 	// 다인봇 태그가 붙은 캐릭터는 로어북에서 등장인물(항목)을 불러와 친구 목록에 표시
 	const multiBotChars = $derived(
 		library.characters.filter(
-			(c) => c.tags.some((t) => t.trim().includes("다인봇")) && c.worldInfoIds.length > 0,
+			(c) => c.tags.some((t) => t.trim().includes("다인봇") || /^(multi[- ]?char|group)$/i.test(t.trim())) && c.worldInfoIds.length > 0, // i18n-ignore: 사용자 캐릭터 카드 태그 매칭
 		),
 	);
 	$effect(() => {

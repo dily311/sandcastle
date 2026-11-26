@@ -28,7 +28,7 @@ const db = {
 		trashRetentionDays: 30,
 		checkUpdatesOnStart: false,
 		cgGroupVariants: false,
-		doneNotify: { enabled: false, title: "", icon: null, soundMode: "default", soundPath: null, soundVolume: 0.8 },
+		doneNotify: { enabled: true, initializedOn: true, title: "", icon: null, soundMode: "default", soundPath: null, soundVolume: 0.8 },
 		aiCallLog: false,
 		typing: { style: "blink", text: "", image: null },
 		worldInfo: { scanDepth: 2, maxRecursionDepth: 0 },

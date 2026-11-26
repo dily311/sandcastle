@@ -1,5 +1,6 @@
 <script lang="ts">
 	// 플러그인 명령 메뉴 (6-D-6). 명령은 사용자가 여기서 누를 때만 플러그인에 간다 (Explicit Execution)
+	import { _ } from "svelte-i18n";
 	import { Puzzle } from "@lucide/svelte";
 	import { ContextMenu, IconButton, type MenuItem } from "$shared/ui";
 	import { pluginHost } from "./host.svelte";
@@ -23,6 +24,6 @@
 </script>
 
 {#if items.length}
-	<IconButton label="플러그인 명령" size="sm" onclick={open}><Puzzle /></IconButton>
-	<ContextMenu at={menu} {items} label="플러그인 명령" onclose={() => (menu = null)} />
+	<IconButton label={$_("communityUi.commandsMenu")} size="sm" onclick={open}><Puzzle /></IconButton>
+	<ContextMenu at={menu} {items} label={$_("communityUi.commandsMenu")} onclose={() => (menu = null)} />
 {/if}

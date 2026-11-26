@@ -1,5 +1,6 @@
 <script lang="ts">
 	// 보낸 메시지 컨텍스트 확인 창 (ChatView와 PhoneRoom이 동일하게 사용)
+	import { _ } from "svelte-i18n";
 	import { Dialog } from "$shared/ui";
 	import type { ChatSession, Message } from "./session.svelte";
 
@@ -10,43 +11,43 @@
 	}
 	let { prompt, messageIndex = 0, onclose }: Props = $props();
 
-	const roleName: Record<string, string> = { system: "시스템", user: "사용자", assistant: "AI" };
-	const sourceName: Record<string, string> = {
-		preset: "프리셋",
-		world_info: "월드인포",
-		system_rules: "시스템 규칙",
-		character: "캐릭터",
-		persona: "페르소나",
-		examples: "예시 대화",
-		chat: "대화 기록",
-		user_input: "이번 입력",
-		qr: "QR 지시",
-		author_note: "작가 노트",
-		memory: "메모",
-		summary: "요약",
-		recall: "회상",
-		inject: "주입",
-		plugin: "플러그인",
-		regen_extra: "추가 지시",
-	};
+	const roleName = $derived<Record<string, string>>({ system: $_("chatExtra.roles.system"), user: $_("chatExtra.roles.user"), assistant: $_("chatExtra.roles.assistant") });
+	const sourceName = $derived<Record<string, string>>({
+		preset: $_("chatExtra.sources.preset"),
+		world_info: $_("chatExtra.sources.world_info"),
+		system_rules: $_("chatExtra.sources.system_rules"),
+		character: $_("chatExtra.sources.character"),
+		persona: $_("chatExtra.sources.persona"),
+		examples: $_("chatExtra.sources.examples"),
+		chat: $_("chatExtra.sources.chat"),
+		user_input: $_("chatExtra.sources.user_input"),
+		qr: $_("chatExtra.sources.qr"),
+		author_note: $_("chatExtra.sources.author_note"),
+		memory: $_("chatExtra.sources.memory"),
+		summary: $_("chatExtra.sources.summary"),
+		recall: $_("chatExtra.sources.recall"),
+		inject: $_("chatExtra.sources.inject"),
+		plugin: $_("chatExtra.sources.plugin"),
+		regen_extra: $_("chatExtra.sources.regen_extra"),
+	});
 </script>
 
 <Dialog
 	open={!!prompt}
-	title="보낸 컨텍스트"
-	description={prompt ? `#${messageIndex + 1} 응답을 만들 때 보낸 프롬프트` : ""}
+	title={$_("chatExtra.sentPrompt.title")}
+	description={prompt ? $_("chatExtra.sentPrompt.desc", { values: { index: messageIndex + 1 } }) : ""}
 	size="lg"
 	{onclose}
 >
 	{#if prompt?.data}
 		{@const total = prompt.data.messages.reduce((s, m) => s + m.token, 0)}
-		<p class="ptotal">메시지 {prompt.data.messages.length}개 · 약 {total.toLocaleString()} 토큰</p>
+		<p class="ptotal">{$_("chatExtra.sentPrompt.summary", { values: { count: prompt.data.messages.length, tokens: total.toLocaleString() } })}</p>
 		<ol class="plist">
 			{#each prompt.data.messages as pm, i (i)}
 				<li>
 					<details class="prole">
 						<summary>
-							<b>{roleName[pm.role] ?? pm.role}</b>{#if pm.source}<span class="psrc" data-kind={pm.source.kind}>{sourceName[pm.source.kind] ?? pm.source.kind}</span>{#if pm.source.name}<span class="pname">{pm.source.name}</span>{/if}{/if}<span class="ptok">{pm.token} 토큰</span>
+							<b>{roleName[pm.role] ?? pm.role}</b>{#if pm.source}<span class="psrc" data-kind={pm.source.kind}>{sourceName[pm.source.kind] ?? pm.source.kind}</span>{#if pm.source.name}<span class="pname">{pm.source.name}</span>{/if}{/if}<span class="ptok">{$_("chatExtra.sentPrompt.tokens", { values: { count: pm.token } })}</span>
 						</summary>
 						<pre>{pm.content}</pre>
 					</details>
@@ -54,7 +55,7 @@
 			{/each}
 		</ol>
 	{:else if prompt}
-		<p class="ptotal">기록 없음 (가져온 메시지, 멈춘 응답, 이 기능 이전에 만든 응답)</p>
+		<p class="ptotal">{$_("chatExtra.sentPrompt.empty")}</p>
 	{/if}
 </Dialog>
 

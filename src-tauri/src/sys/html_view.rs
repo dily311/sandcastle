@@ -162,10 +162,19 @@ pub fn handle(req: Request<Vec<u8>>) -> Response<Vec<u8>> {
             csp = csp_no_scripts(&nonce);
             (StatusCode::OK, document_with(&h, &theme, Some(&nonce)))
         }
-        None => (
-            StatusCode::NOT_FOUND,
-            "<p>이 HTML은 더 이상 없습니다. 메시지를 다시 열어 주세요.</p>".to_string(),
-        ),
+        None => {
+            let prefers_ko = req
+                .headers()
+                .get("accept-language")
+                .and_then(|v| v.to_str().ok())
+                .is_some_and(|s| s.trim_start().to_ascii_lowercase().starts_with("ko"));
+            let expired = if prefers_ko {
+                "<p>이 HTML은 더 이상 없습니다. 메시지를 다시 열어 주세요.</p>"
+            } else {
+                "<p>This HTML block has expired. Please reopen the message.</p>"
+            };
+            (StatusCode::NOT_FOUND, expired.to_string())
+        }
     };
     Response::builder()
         .status(status)

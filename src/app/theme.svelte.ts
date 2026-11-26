@@ -1,6 +1,10 @@
 // 테마: 화면 모드(시스템/밝게/어둡게), 고정 강조색, 회색 톤, 글자 크기, 테마(색 + CSS), CSS 스니펫
+import { get } from "svelte/store";
+import { _ } from "svelte-i18n";
 import { jobs } from "$shared/stores/jobs.svelte";
 import type { CssSnippet, ThemeChatSetting, ThemeSetting } from "$ipc/bindings";
+
+const tr = (k: string, values?: Record<string, string | number>) => get(_)(k, values ? { values } : undefined);
 import { call, commands } from "$shared/ipc/client";
 import { getCurrentWindow } from "@tauri-apps/api/window";
 import { ACCENTS, DEFAULT_ACCENT, accentValue, isHexColor } from "$shared/ui/accents";
@@ -266,7 +270,7 @@ class Theme {
 	/** 배경 목록에 이미지 올리기 (select면 마지막 것을 앱 배경으로) */
 	async addBackgrounds(paths: string[], select = false) {
 		if (!paths.length) return;
-		const s = await jobs.run(`배경 ${paths.length}장`, () => call(commands.addBackgrounds(paths, select), { source: "theme" }), { group: "배경 올리기" });
+		const s = await jobs.run(tr("appMisc.bgCountJob", { count: paths.length }), () => call(commands.addBackgrounds(paths, select), { source: "theme" }), { group: tr("appMisc.bgUploadGroup") });
 		if (!s) return;
 		this.setting = s;
 		this.apply();
@@ -274,7 +278,7 @@ class Theme {
 	/** 글꼴 올리기: 앱 데이터에 복사. select면 마지막 것을 앱 글꼴로 */
 	async addFonts(paths: string[], select = false) {
 		if (!paths.length) return;
-		const s = await jobs.run(`글꼴 ${paths.length}개`, () => call(commands.addFonts(paths, select), { source: "theme" }), { group: "글꼴 올리기" });
+		const s = await jobs.run(tr("appMisc.fontCountJob", { count: paths.length }), () => call(commands.addFonts(paths, select), { source: "theme" }), { group: tr("appMisc.fontUploadGroup") });
 		if (!s) return;
 		this.setting = s;
 		this.apply();
