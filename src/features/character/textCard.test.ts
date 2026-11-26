@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { maskText } from "./textCard";
+import { extractRangeText } from "./selectionText";
 
 describe("maskText (5-E-11)", () => {
 	it("숨길 말은 같은 길이의 ●로, 대체어는 바꿔서", () => {
@@ -10,5 +11,21 @@ describe("maskText (5-E-11)", () => {
 	});
 	it("정규식 기호도 글자 그대로", () => {
 		expect(maskText("a.b a*b", { hide: "a.b", replace: "a*b=별" })).toBe("●●● 별");
+	});
+});
+
+describe("extractRangeText (북마크·텍스트 카드 줄바꿈 보존)", () => {
+	it("<br>과 여러 <p>/<div> 블록을 선택할 때 줄바꿈이 보존된다", () => {
+		const host = document.createElement("div");
+		host.id = "msg-1";
+		host.innerHTML = `<div class="md"><p>첫째 줄<br>둘째 줄</p><p>셋째 줄</p><div>넷째 줄</div></div>`;
+		document.body.appendChild(host);
+		try {
+			const range = document.createRange();
+			range.selectNodeContents(host);
+			expect(extractRangeText(host, range, () => false)).toBe("첫째 줄\n둘째 줄\n셋째 줄\n넷째 줄");
+		} finally {
+			host.remove();
+		}
 	});
 });

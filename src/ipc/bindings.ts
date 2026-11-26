@@ -5232,6 +5232,29 @@ export type SlashGenResult = {
 	prompt: Value,
 };
 
+/**  SillyTavern 가져오기·내보내기 실시간 진행률 (`st::progress` 이벤트 페이로드, 1-J-6) */
+export type StProgress = StProgress_Serialize | StProgress_Deserialize;
+
+/**  SillyTavern 가져오기·내보내기 실시간 진행률 (`st::progress` 이벤트 페이로드, 1-J-6) */
+export type StProgress_Deserialize = {
+	/**  `"import"` | `"export"` */
+	kind: string,
+	/**  `"preparing"` | `"extracting"` | `"books"` | `"characters"` | `"chats"` | `"presets"` | `"regex"` | `"personas"` | `"finishing"` | `"done"` */
+	phase: string,
+	current?: number | null,
+	total?: number | null,
+};
+
+/**  SillyTavern 가져오기·내보내기 실시간 진행률 (`st::progress` 이벤트 페이로드, 1-J-6) */
+export type StProgress_Serialize = {
+	/**  `"import"` | `"export"` */
+	kind: string,
+	/**  `"preparing"` | `"extracting"` | `"books"` | `"characters"` | `"chats"` | `"presets"` | `"regex"` | `"personas"` | `"finishing"` | `"done"` */
+	phase: string,
+	current: number | null,
+	total: number | null,
+};
+
 /**  프론트로 나가는 한 줄. cues는 이 줄을 보여주기 직전에 순서대로 실행한다. */
 export type StageLine = StageLine_Serialize | StageLine_Deserialize;
 

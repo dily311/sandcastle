@@ -1,5 +1,6 @@
 <script lang="ts">
 	import { jobs } from "$shared/stores/jobs.svelte";
+	import { beginStProgress, endStProgress, stepStProgress } from "$app/syncProgress.svelte";
 	import { onMount } from "svelte";
 	import { _ } from "svelte-i18n";
 	import { ChevronDown, ChevronRight, Link2, RotateCcw, Save, ShieldCheck, Trash2, Upload } from "@lucide/svelte";
@@ -26,28 +27,61 @@
 	/** SillyTavern 데이터 가져오기 결과 (5-E-20-4-1) */
 	let stResult = $state<SillyTavernDataImport | null>(null);
 	async function exportSt() {
+		let started = false;
 		try {
-			const r = await saveTo("sillytavern-default-user.zip", [ST_DATA_FILES], (path) => {
-				busy = "st-out";
-				return jobs.run($_("settings.dataSec.stExportJob"), () => call(commands.exportSillytavernData(path), src), { group: $_("settings.dataSec.stExportGroup") });
-			});
+			const r = await saveTo(
+				"sillytavern-default-user.zip",
+				[ST_DATA_FILES],
+				(path) => {
+					busy = "st-out";
+					return call(commands.exportSillytavernData(path), src);
+				},
+				{
+					onSaveStart: () => {
+						started = true;
+						busy = "st-out";
+						beginStProgress({ kind: "export", initialPhase: "preparing" });
+					},
+					onDeliverStart: () => {
+						stepStProgress({ kind: "export", phase: "finishing", current: null, total: null });
+					},
+				},
+			);
+			if (started) {
+				endStProgress();
+				started = false;
+			}
 			if (r) toasts.success($_("settings.dataSec.stExported", { values: { characters: r.characters, chats: r.chats, books: r.books, presets: r.presets, personas: r.personas, regex: r.regex } }));
 			if (r?.warnings.length) toasts.error($_("settings.dataSec.stExportWarnings", { values: { count: r.warnings.length } }), r.warnings.map(localizeImportWarning).join("\n"));
 		} finally {
+			if (started) endStProgress();
 			busy = null;
 		}
 	}
 	async function importSt() {
-		const [path] = await pickFiles([ST_DATA_FILES], false);
-		if (!path) return;
-		busy = "st";
+		let started = false;
 		try {
-			const r = await jobs.run(path.split(/[\\/]/).pop() ?? path, () => call(commands.importSillytavernData(path), src), { group: $_("settings.dataSec.stImportGroup") });
-			if (!r) return;
+			const [path] = await pickFiles([ST_DATA_FILES], false, {
+				onStageStart: () => {
+					started = true;
+					busy = "st";
+					beginStProgress({ kind: "import", initialPhase: "preparing" });
+				},
+			});
+			if (!path) return;
+			busy = "st";
+			if (!started) {
+				started = true;
+				beginStProgress({ kind: "import", initialPhase: "preparing" });
+			}
+			const r = await call(commands.importSillytavernData(path), src);
+			endStProgress();
+			started = false;
 			stResult = r;
 			toasts.success($_("settings.dataSec.stImported", { values: { characters: r.characters, chats: r.chats, books: r.books, presets: r.presets, regex: r.regex, personas: r.personas } }));
 			await Promise.all([load(), library.load()]);
 		} finally {
+			if (started) endStProgress();
 			busy = null;
 		}
 	}

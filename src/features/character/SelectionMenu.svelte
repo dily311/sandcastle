@@ -12,6 +12,7 @@
 	import { Bookmark, IdCard } from "@lucide/svelte";
 	import { _ } from "svelte-i18n";
 	import { bookmarks } from "./bookmarks";
+	import { extractRangeText } from "./selectionText";
 	import type { Conversation } from "./library.svelte";
 	import { metaOf, type ChatSession } from "./session.svelte";
 
@@ -40,20 +41,7 @@
 		const block = el(sel.anchorNode)?.closest<HTMLElement>("[id^=msg-]") ?? el(sel.focusNode)?.closest<HTMLElement>("[id^=msg-]");
 		if (!block || !scroller?.contains(block)) return null;
 		const range = sel.getRangeAt(0);
-		let text = "";
-		let lastLine: Element | null = null;
-		const walker = document.createTreeWalker(block, NodeFilter.SHOW_TEXT);
-		for (let n = walker.nextNode(); n; n = walker.nextNode()) {
-			if (!range.intersectsNode(n) || inMeta(n.parentElement)) continue;
-			const raw = n.textContent ?? "";
-			const s = n === range.startContainer ? range.startOffset : 0;
-			const e = n === range.endContainer ? range.endOffset : raw.length;
-			const line = n.parentElement?.closest("p, h2, h3, h4, li, blockquote, pre") ?? null;
-			if (lastLine && line !== lastLine) text += "\n";
-			lastLine = line;
-			text += raw.slice(s, e);
-		}
-		text = text.trim();
+		const text = extractRangeText(block, range, inMeta);
 		return text ? { text, messageId: block.id.slice(4), rect: range.getBoundingClientRect() } : null;
 	}
 

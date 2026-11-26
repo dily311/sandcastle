@@ -4,7 +4,7 @@
 	// 음성·그림은 한도가 없다. NovelAI·ElevenLabs는 구독형이라 한도 대신 계정 잔여만 보여준다.
 	import { RefreshCw } from "@lucide/svelte";
 	import { _ } from "svelte-i18n";
-	import type { ApiProfiles, BudgetOverview_Serialize as Overview, ModelPriceInfo, QuotaLine } from "$ipc/bindings";
+	import type { ApiProfiles, BudgetOverview_Serialize as Overview, QuotaLine } from "$ipc/bindings";
 	import { localizeQuotaLine } from "$lib/utils/backendI18n";
 	import { Button, Slider, Spinner } from "$shared/ui";
 	import { call, commands } from "$shared/ipc/client";
@@ -49,26 +49,6 @@
 		onchanged?.();
 	}
 
-	// ---- 모델 단가 (슬라이더 아래 환산과 "단가 없음" 안내) ----
-	let prices = $state<Record<string, ModelPriceInfo | null>>({});
-	$effect(() => {
-		for (const p of profiles) {
-			if (QUOTA_FORMATS.has(p.formatType) || p.model in prices) continue;
-			prices[p.model] = null;
-			void call(commands.getModelPrice(p.model), { ...src, silent: true })
-				.then((r) => (prices[p.model] = r))
-				.catch(() => {});
-		}
-	});
-	/** 이 한도면 출력만 썼을 때 대략 몇 토큰인지 */
-	function tokensHint(price: ModelPriceInfo | null | undefined, limit: number): string {
-		const out = price?.output ?? 0;
-		if (!price || out <= 0) return "";
-		const n = (limit / out) * 1_000_000;
-		const m = n >= 1_000_000 ? (n / 1_000_000).toFixed(1) : String(Math.round(n / 10_000) / 100);
-		return $_("settings.budgetDetail.tokensHint", { values: { m } });
-	}
-
 	// ---- 구독형 공급자의 잔여 (누를 때만 읽음) ----
 	let quotas = $state<Record<string, QuotaLine[]>>({});
 	let loadingQuota = $state<string | null>(null);
@@ -86,13 +66,9 @@
 
 {#each profiles as p (p.id)}
 	{@const o = byId.get(p.id)}
-	{@const curStr = valOf(p)}
-	{@const curVal = Number(curStr)}
-	{@const hasLimit = curStr.trim() !== "" && Number.isFinite(curVal) && curVal > 0}
 	<div class="prof">
 		<div class="head">
 			<span class="name">{p.name}</span>
-			<span class="model">{p.model}</span>
 		</div>
 		{#if QUOTA_FORMATS.has(p.formatType)}
 			<div class="quota">
@@ -121,13 +97,6 @@
 					oncommit={(v) => void commitValue(p, v)}
 				/>
 			</div>
-			{#if hasLimit}
-				{#if prices[p.model]}
-					<p class="hint">{tokensHint(prices[p.model], curVal)}{prices[p.model]?.builtin ? $_("settings.budgetDetail.builtinPrice") : $_("settings.budgetDetail.customPrice")}</p>
-				{:else if p.model in prices}
-					<p class="warn">{$_("settings.budgetDetail.noPriceWarn")}</p>
-				{/if}
-			{/if}
 			{#if o?.limit.legacyMonthlyTokens}
 				<p class="warn">{$_("settings.budgetDetail.legacyLimitWarn", { values: { tokens: o.limit.legacyMonthlyTokens.toLocaleString() } })}</p>
 			{/if}
@@ -161,24 +130,12 @@
 	.name {
 		font-weight: 500;
 	}
-	.model {
-		min-width: 0;
-		overflow: hidden;
-		text-overflow: ellipsis;
-		white-space: nowrap;
-		color: var(--text-faint);
-		font-size: var(--text-xs);
-	}
 	.slider-wrap {
 		margin-top: var(--space-2);
 	}
-	.hint,
 	.warn {
 		margin: var(--space-1) 0 0;
 		font-size: var(--text-xs);
-		color: var(--text-faint);
-	}
-	.warn {
 		color: var(--warning);
 	}
 	.meter {

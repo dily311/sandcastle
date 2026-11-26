@@ -329,10 +329,39 @@ pub fn import_gallery_images(app: AppHandle, paths: Vec<String>) -> Result<Vec<t
     tools::import_images(&generated_dir(&app)?, &paths)
 }
 
+/// 경로 하나를 캐릭터 CG 에셋 또는 갤러리 이미지에서 지운다 (지웠으면 true)
+async fn delete_image_or_asset(
+    db: &crate::db::conn::DbPool,
+    gen_dir: &std::path::Path,
+    data_dir: &std::path::Path,
+    assets: &[(String, String, Option<String>)],
+    path: &str,
+) -> Result<bool> {
+    if let Some((id, rel, thumb)) = assets.iter().find(|(_, rel, _)| same_path(&data_dir.join(rel).to_string_lossy(), path)) {
+        crate::db::character_image::delete_character_image(db, id).await?;
+        crate::service::chat::chat_images::remove_image_files(data_dir, &[rel, thumb.as_deref().unwrap_or_default()]);
+        return Ok(true);
+    }
+    Ok(tools::delete_image(gen_dir, path).is_ok())
+}
+
 #[tauri::command]
 #[specta::specta]
-pub fn delete_generated_image(app: AppHandle, theme: State<'_, SettingsState<crate::models::settings::ThemeSetting>>, path: String) -> Result<()> {
-    tools::delete_image(&generated_dir(&app)?, &path)?;
+pub async fn delete_generated_image(
+    app: AppHandle,
+    state: State<'_, AppState>,
+    theme: State<'_, SettingsState<crate::models::settings::ThemeSetting>>,
+    path: String,
+) -> Result<()> {
+    let dir = generated_dir(&app)?;
+    let data_dir = app_data_dir(&app)?;
+    let assets: Vec<(String, String, Option<String>)> = sqlx::query_as("SELECT id, file_path, thumb_path FROM character_images")
+        .fetch_all(&state.db)
+        .await
+        .map_err(AppError::from)?;
+    if !delete_image_or_asset(&state.db, &dir, &data_dir, &assets, &path).await? {
+        tools::delete_image(&dir, &path)?;
+    }
     forget_backgrounds(&app, &theme, std::slice::from_ref(&path))
 }
 
@@ -488,11 +517,7 @@ pub async fn delete_gallery_images(
         .map_err(AppError::from)?;
     let mut n = 0;
     for p in paths.iter().take(500) {
-        if let Some((id, rel, thumb)) = assets.iter().find(|(_, rel, _)| data_dir.join(rel) == std::path::Path::new(p)) {
-            crate::db::character_image::delete_character_image(&state.db, id).await?;
-            crate::service::chat::chat_images::remove_image_files(&data_dir, &[rel, thumb.as_deref().unwrap_or_default()]);
-            n += 1;
-        } else if tools::delete_image(&dir, p).is_ok() {
+        if delete_image_or_asset(&state.db, &dir, &data_dir, &assets, p).await? {
             n += 1;
         }
     }

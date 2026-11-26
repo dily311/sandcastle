@@ -935,3 +935,82 @@ async fn st_data_does_not_duplicate_worldinfo_when_card_has_both_character_book_
     let solo_entries = crate::db::conversation::get_all_worldinfo_entries(&db, &solo.world_info_ids[0]).await.unwrap();
     assert_eq!(solo_entries[0].content, "Star lore");
 }
+
+#[tokio::test]
+async fn st_data_export_and_import_emit_progress_up_to_total() {
+    let db = pool().await;
+    let app = tempfile::tempdir().unwrap();
+    let src = tempfile::tempdir().unwrap();
+    let u = src.path();
+    std::fs::create_dir_all(u.join("characters")).unwrap();
+    std::fs::create_dir_all(u.join("worlds")).unwrap();
+
+    write(
+        &u.join("worlds"),
+        "LoreA.json",
+        json!({ "entries": { "0": { "key": ["hero"], "content": "Hero lore" } } })
+            .to_string()
+            .as_bytes(),
+    );
+    write(
+        &u.join("characters"),
+        "hero.json",
+        json!({ "spec": "chara_card_v2", "data": { "name": "Hero", "first_mes": "Greetings" } })
+            .to_string()
+            .as_bytes(),
+    );
+
+    let import_events = std::sync::Arc::new(std::sync::Mutex::new(Vec::new()));
+    let import_sink = import_events.clone();
+    let imported = data::import_data_dir_with_progress(&db, app.path(), u, &move |p| {
+        import_sink.lock().unwrap().push(p);
+    })
+    .await
+    .unwrap();
+    assert_eq!((imported.characters, imported.books), (1, 1));
+    {
+        let evs = import_events.lock().unwrap();
+        assert!(evs.iter().any(|p| p.kind == "import" && p.phase == "books"));
+        assert!(evs.iter().any(|p| p.kind == "import" && p.phase == "characters"));
+        let last = evs.last().expect("가져오기 진행률 이벤트가 있어야 함");
+        assert_eq!(last.current, Some(2));
+        assert_eq!(last.total, Some(2));
+    }
+
+    let zip_path = app.path().join("exported-st.zip");
+    let export_events = std::sync::Arc::new(std::sync::Mutex::new(Vec::new()));
+    let export_sink = export_events.clone();
+    let exported = data_export::export_data_zip_with_progress(&db, &zip_path, &move |p| {
+        export_sink.lock().unwrap().push(p);
+    })
+    .await
+    .unwrap();
+    assert!(exported.characters >= 1 && exported.books >= 1);
+    {
+        let evs = export_events.lock().unwrap();
+        assert!(evs.iter().any(|p| p.kind == "export" && p.phase == "characters"));
+        assert!(evs.iter().any(|p| p.kind == "export" && p.phase == "finishing"));
+        let last = evs.last().expect("내보내기 진행률 이벤트가 있어야 함");
+        assert!(last.total.unwrap_or(0) > 0);
+        assert_eq!(last.current, last.total);
+    }
+
+    let db2 = pool().await;
+    let zip_import_events = std::sync::Arc::new(std::sync::Mutex::new(Vec::new()));
+    let zip_sink = zip_import_events.clone();
+    let reimported = data::import_data_zip_with_progress(
+        &db2,
+        app.path(),
+        &zip_path,
+        std::sync::Arc::new(move |p| {
+            zip_sink.lock().unwrap().push(p);
+        }),
+    )
+    .await
+    .unwrap();
+    assert!(reimported.characters >= 1 && reimported.books >= 1);
+    {
+        let evs = zip_import_events.lock().unwrap();
+        assert!(evs.iter().any(|p| p.phase == "extracting" && p.current == p.total && p.total.unwrap_or(0) > 0));
+    }
+}

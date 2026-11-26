@@ -197,6 +197,8 @@ pub async fn copy_conversation_as_chat(state: State<'_, AppState>, id: String) -
         .bind(&new_id)
         .execute(&state.db)
         .await?;
+    // 폰 전용 메타(meta.phone)는 제거해 일반 대화 목록과 깔끔히 분리한다
+    let _ = chat_ui::patch_conversation_meta(&state.db, &new_id, &serde_json::json!({ "phone": null })).await;
     Ok(conversation::get_conversation(&state.db, &new_id).await?)
 }
 

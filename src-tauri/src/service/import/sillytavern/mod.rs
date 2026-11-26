@@ -21,7 +21,12 @@ pub mod quick_reply;
 pub mod regex;
 pub mod worldinfo;
 
-use std::{collections::HashMap, path::Path};
+use std::{
+    collections::HashMap,
+    path::Path,
+    sync::{Arc, Mutex},
+    time::{Duration, Instant},
+};
 
 use serde::Serialize;
 use serde_json::Value;
@@ -40,6 +45,69 @@ use crate::{
 /// 가져올 파일 최대 크기
 const MAX_FILE_BYTES: u64 = 50 * 1024 * 1024;
 
+/// SillyTavern 가져오기·내보내기 실시간 진행률 (`st::progress` 이벤트 페이로드, 1-J-6)
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, specta::Type)]
+#[serde(rename_all = "camelCase")]
+pub struct StProgress {
+    /// `"import"` | `"export"`
+    pub kind: String,
+    /// `"preparing"` | `"extracting"` | `"books"` | `"characters"` | `"chats"` | `"presets"` | `"regex"` | `"personas"` | `"finishing"` | `"done"`
+    pub phase: String,
+    pub current: Option<u32>,
+    pub total: Option<u32>,
+}
+
+impl StProgress {
+    pub fn step(kind: &str, phase: &str) -> Self {
+        Self {
+            kind: kind.to_string(),
+            phase: phase.to_string(),
+            current: None,
+            total: None,
+        }
+    }
+
+    pub fn counted(kind: &str, phase: &str, current: u32, total: u32) -> Self {
+        Self {
+            kind: kind.to_string(),
+            phase: phase.to_string(),
+            current: Some(current),
+            total: Some(total),
+        }
+    }
+
+    pub fn done(kind: &str) -> Self {
+        Self::step(kind, "done")
+    }
+}
+
+/// 수천 개 항목 반복 시 IPC·모바일 알림 과부하를 막는 진행률 스로틀 (단계 전환·시작·완료는 즉시 전달)
+pub struct StProgressThrottle<'a> {
+    cb: &'a (dyn Fn(StProgress) + Send + Sync),
+    last: Mutex<Option<(String, Instant)>>,
+}
+
+impl<'a> StProgressThrottle<'a> {
+    pub fn new(cb: &'a (dyn Fn(StProgress) + Send + Sync)) -> Self {
+        Self { cb, last: Mutex::new(None) }
+    }
+
+    pub fn emit(&self, p: StProgress) -> bool {
+        let now = Instant::now();
+        let force = p.current.is_none() || p.current == Some(0) || p.current == Some(1) || (p.current.is_some() && p.current == p.total);
+        if let Ok(mut guard) = self.last.lock() {
+            let phase_changed = guard.as_ref().is_none_or(|(prev_phase, _)| prev_phase != &p.phase);
+            let elapsed_ok = guard.as_ref().is_none_or(|(_, t)| now.duration_since(*t) >= Duration::from_millis(80));
+            if !force && !phase_changed && !elapsed_ok {
+                return false;
+            }
+            *guard = Some((p.phase.clone(), now));
+        }
+        (self.cb)(p);
+        true
+    }
+}
+
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, specta::Type)]
 #[serde(rename_all = "camelCase")]
 pub enum SillyTavernKind {
@@ -51,7 +119,7 @@ pub enum SillyTavernKind {
 }
 
 /// 가져오기 옵션
-#[derive(Debug, Clone, Default)]
+#[derive(Clone, Default)]
 pub struct ImportOptions {
     /// 프리셋/로어북/대화 이름 (없으면 파일 이름)
     pub name: Option<String>,
@@ -61,6 +129,20 @@ pub struct ImportOptions {
     pub preset_id: Option<String>,
     /// 카드 안의 character_book을 만들지 않는다 (이미 worlds 폴더에서 가져온 로어북을 연결할 때 중복 방지)
     pub skip_character_book: bool,
+    /// 단일 대용량 파일(.jsonl 채팅·월드인포 등) 진행률 콜백
+    pub progress: Option<Arc<dyn Fn(StProgress) + Send + Sync>>,
+}
+
+impl std::fmt::Debug for ImportOptions {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("ImportOptions")
+            .field("name", &self.name)
+            .field("character_id", &self.character_id)
+            .field("preset_id", &self.preset_id)
+            .field("skip_character_book", &self.skip_character_book)
+            .field("has_progress", &self.progress.is_some())
+            .finish()
+    }
 }
 
 #[derive(Serialize, specta::Type)]
@@ -162,12 +244,18 @@ pub async fn import_file_with(db: &DbPool, app_data_dir: &Path, path: &Path, opt
         }
         SillyTavernKind::Preset => import_preset(db, &json, &file_name).await,
         SillyTavernKind::Regex => import_regex(db, &json, options.preset_id).await,
-        SillyTavernKind::WorldInfo => import_worldinfo(db, &json, &file_name).await,
-        SillyTavernKind::Chat => import_chat(db, &bytes, &file_name, options.character_id).await,
+        SillyTavernKind::WorldInfo => import_worldinfo(db, &json, &file_name, options.progress.as_deref()).await,
+        SillyTavernKind::Chat => import_chat(db, &bytes, &file_name, options.character_id, options.progress.as_deref()).await,
     }
 }
 
-async fn import_chat(db: &DbPool, bytes: &[u8], title: &str, character_id: Option<String>) -> Result<SillyTavernImport> {
+async fn import_chat(
+    db: &DbPool,
+    bytes: &[u8],
+    title: &str,
+    character_id: Option<String>,
+    progress: Option<&(dyn Fn(StProgress) + Send + Sync)>,
+) -> Result<SillyTavernImport> {
     let (header, raw) = chat::parse_jsonl(bytes)?;
     if raw.is_empty() {
         return Err(AppError::validation("채팅에 메시지가 없습니다", None));
@@ -267,6 +355,12 @@ async fn import_chat(db: &DbPool, bytes: &[u8], title: &str, character_id: Optio
     )
     .await?;
 
+    let throttle = progress.map(StProgressThrottle::new);
+    if let Some(t) = &throttle {
+        t.emit(StProgress::counted("import", "chats", 0, message_count as u32));
+        tokio::task::yield_now().await;
+    }
+
     for (i, (m, at)) in messages.into_iter().zip(times).enumerate() {
         let character_id = match m.role.as_str() {
             "assistant" => by_name.get(&m.name).cloned().flatten(),
@@ -291,6 +385,11 @@ async fn import_chat(db: &DbPool, bytes: &[u8], title: &str, character_id: Optio
             at,
         )
         .await?;
+        if let Some(t) = &throttle {
+            if t.emit(StProgress::counted("import", "chats", (i + 1) as u32, message_count as u32)) {
+                tokio::task::yield_now().await;
+            }
+        }
     }
     tx.commit().await?;
 
@@ -416,7 +515,7 @@ async fn import_regex(db: &DbPool, json: &Value, preset_id: Option<String>) -> R
     Ok(SillyTavernImport::Regex { scripts: saved, warnings })
 }
 
-async fn import_worldinfo(db: &DbPool, json: &Value, name: &str) -> Result<SillyTavernImport> {
+async fn import_worldinfo(db: &DbPool, json: &Value, name: &str, progress: Option<&(dyn Fn(StProgress) + Send + Sync)>) -> Result<SillyTavernImport> {
     let mut warnings = vec![];
     let entries = worldinfo::map_entries(json, &mut warnings);
     let book_name = as_str(json, "name").filter(|s| !s.trim().is_empty()).unwrap_or(name);
@@ -432,9 +531,19 @@ async fn import_worldinfo(db: &DbPool, json: &Value, name: &str) -> Result<Silly
     )
     .await?;
     let entry_count = entries.len();
-    for mut e in entries {
+    let throttle = progress.map(StProgressThrottle::new);
+    if let Some(t) = &throttle {
+        t.emit(StProgress::counted("import", "books", 0, entry_count as u32));
+        tokio::task::yield_now().await;
+    }
+    for (i, mut e) in entries.into_iter().enumerate() {
         e.book_id = book.id.clone();
         db::conversation::upsert_worldinfo_entry(&mut *tx, e).await?;
+        if let Some(t) = &throttle {
+            if t.emit(StProgress::counted("import", "books", (i + 1) as u32, entry_count as u32)) {
+                tokio::task::yield_now().await;
+            }
+        }
     }
     tx.commit().await?;
     Ok(SillyTavernImport::WorldInfo { book, entry_count, warnings })

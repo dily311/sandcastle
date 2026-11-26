@@ -75,7 +75,8 @@ fn parse(uri: &str) -> Result<FilePath> {
         .map_err(|e| AppError::validation(format!("잘못된 파일 주소: {e}"), None))
 }
 
-/// 고른 content 주소를 앱 임시 폴더로 복사하고 경로를 돌려준다 (경로면 그대로)
+/// 고른 content 주소를 앱 임시 폴더로 복사하고 경로를 돌려준다 (경로면 그대로).
+/// 수 GB짜리 SillyTavern zip·백업 파일도 메모리에 다 올리지 않도록 앞 4KB만 읽어 확장자를 판별한 뒤 스트리밍 복사한다.
 pub fn stage_picked<R: Runtime>(app: &AppHandle<R>, app_data_dir: &Path, uri: &str, allowed: &[String]) -> Result<String> {
     if !is_content_uri(uri) {
         return Ok(uri.to_string());
@@ -86,11 +87,23 @@ pub fn stage_picked<R: Runtime>(app: &AppHandle<R>, app_data_dir: &Path, uri: &s
         .fs()
         .open(parse(uri)?, opts)
         .map_err(|e| AppError::io(format!("고른 파일을 열 수 없습니다: {e}")))?;
-    let mut bytes = vec![];
-    src.read_to_end(&mut bytes)?;
-    let ext = sniff_extension(&bytes[..bytes.len().min(4096)], allowed);
+    let mut head = [0u8; 4096];
+    let mut head_len = 0usize;
+    while head_len < head.len() {
+        let n = src.read(&mut head[head_len..])?;
+        if n == 0 {
+            break;
+        }
+        head_len += n;
+    }
+    let ext = sniff_extension(&head[..head_len], allowed);
     let out = tmp_dir(app_data_dir, "picked")?.join(format!("{}.{ext}", Uuid::new_v4()));
-    std::fs::write(&out, &bytes)?;
+    let mut writer = std::io::BufWriter::new(std::fs::File::create(&out)?);
+    if head_len > 0 {
+        writer.write_all(&head[..head_len])?;
+    }
+    std::io::copy(&mut src, &mut writer)?;
+    writer.flush()?;
     Ok(out.to_string_lossy().to_string())
 }
 
@@ -105,7 +118,7 @@ pub fn save_target(app_data_dir: &Path, file_name: &str) -> Result<String> {
     Ok(dir.join(name).to_string_lossy().to_string())
 }
 
-/// 임시 파일을 고른 content 주소로 복사하고 임시 파일은 지운다
+/// 임시 파일을 고른 content 주소로 스트리밍 복사하고 임시 파일은 지운다
 pub fn deliver_saved<R: Runtime>(app: &AppHandle<R>, app_data_dir: &Path, tmp: &str, uri: &str) -> Result<()> {
     let tmp_path = PathBuf::from(tmp);
     // 앱 임시 폴더 안의 파일만 (다른 파일을 내보내는 데 쓰이지 않게)
@@ -113,15 +126,17 @@ pub fn deliver_saved<R: Runtime>(app: &AppHandle<R>, app_data_dir: &Path, tmp: &
     if !tmp_path.starts_with(&root) {
         return Err(AppError::validation("임시 저장 파일이 아닙니다", None));
     }
-    let bytes = std::fs::read(&tmp_path)?;
+    let mut src = std::io::BufReader::new(std::fs::File::open(&tmp_path)?);
     let mut opts = OpenOptions::new();
     opts.write(true).truncate(true).create(true);
-    let mut dst = app
+    let dst = app
         .fs()
         .open(parse(uri)?, opts)
         .map_err(|e| AppError::io(format!("저장할 곳을 열 수 없습니다: {e}")))?;
-    dst.write_all(&bytes)?;
-    dst.flush()?;
+    let mut writer = std::io::BufWriter::new(dst);
+    std::io::copy(&mut src, &mut writer)?;
+    writer.flush()?;
+    drop(src);
     if let Some(dir) = tmp_path.parent() {
         let _ = std::fs::remove_dir_all(dir);
     }

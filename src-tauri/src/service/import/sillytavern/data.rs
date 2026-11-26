@@ -14,7 +14,7 @@ use std::{
 use serde::Serialize;
 use serde_json::Value;
 
-use super::{import_file_with, import_regex, ImportOptions, SillyTavernImport};
+use super::{import_file_with, import_regex, ImportOptions, SillyTavernImport, StProgress, StProgressThrottle};
 use crate::{
     db::{self, conn::DbPool},
     error::{AppError, Result},
@@ -89,13 +89,22 @@ pub struct SillyTavernDataImport {
 
 /// zip을 임시 폴더에 풀어 가져온다 (끝나면 지움)
 pub async fn import_data_zip(db: &DbPool, app_data_dir: &Path, zip_path: &Path) -> Result<SillyTavernDataImport> {
+    import_data_zip_with_progress(db, app_data_dir, zip_path, std::sync::Arc::new(|_| {})).await
+}
+
+pub async fn import_data_zip_with_progress(
+    db: &DbPool,
+    app_data_dir: &Path,
+    zip_path: &Path,
+    progress: std::sync::Arc<dyn Fn(StProgress) + Send + Sync>,
+) -> Result<SillyTavernDataImport> {
     let tmp = std::env::temp_dir().join(format!("sandcastle-st-{}", uuid::Uuid::new_v4()));
-    let (zip, out) = (zip_path.to_path_buf(), tmp.clone());
-    let unzipped = tokio::task::spawn_blocking(move || extract_zip(&zip, &out, ZIP_LIMITS))
+    let (zip, out, extract_cb) = (zip_path.to_path_buf(), tmp.clone(), progress.clone());
+    let unzipped = tokio::task::spawn_blocking(move || extract_zip_with_progress(&zip, &out, ZIP_LIMITS, extract_cb.as_ref()))
         .await
         .map_err(|e| AppError::internal(e.to_string()))?;
     let result = match unzipped {
-        Ok(skipped) => import_data_dir(db, app_data_dir, &tmp).await.map(|mut r| {
+        Ok(skipped) => import_data_dir_with_progress(db, app_data_dir, &tmp, progress.as_ref()).await.map(|mut r| {
             r.warnings.splice(0..0, skipped);
             r
         }),
@@ -108,6 +117,12 @@ pub async fn import_data_zip(db: &DbPool, app_data_dir: &Path, zip_path: &Path) 
 /// 가져올 파일만 푼다 (조금씩 옮겨 써서 메모리를 거의 쓰지 않음). 폴더 밖으로 나가는 경로(`../`, 절대 경로)는 풀지 않는다.
 /// 건너뛴 큰 파일·압축 폭탄은 경고로 돌려준다
 pub fn extract_zip(zip_path: &Path, out: &Path, limits: ZipLimits) -> Result<Vec<String>> {
+    extract_zip_with_progress(zip_path, out, limits, &|_| {})
+}
+
+pub fn extract_zip_with_progress(zip_path: &Path, out: &Path, limits: ZipLimits, progress: &(dyn Fn(StProgress) + Send + Sync)) -> Result<Vec<String>> {
+    let throttle = StProgressThrottle::new(progress);
+    throttle.emit(StProgress::step("import", "preparing"));
     let size = std::fs::metadata(zip_path)
         .map_err(|e| AppError::io(format!("ZIP을 열 수 없습니다: {e}")))?
         .len();
@@ -119,24 +134,36 @@ pub fn extract_zip(zip_path: &Path, out: &Path, limits: ZipLimits) -> Result<Vec
     }
     let file = std::fs::File::open(zip_path).map_err(|e| AppError::io(format!("ZIP을 열 수 없습니다: {e}")))?;
     let mut zip = zip::ZipArchive::new(std::io::BufReader::new(file)).map_err(|e| AppError::validation(format!("ZIP 파일이 아닙니다: {e}"), None))?;
-    if zip.len() > limits.entries {
+    let entry_total = zip.len();
+    if entry_total > limits.entries {
         return Err(AppError::validation(format!("ZIP에 항목이 너무 많습니다 ({}개까지)", limits.entries), None));
+    }
+    if entry_total > 0 {
+        throttle.emit(StProgress::counted("import", "extracting", 0, entry_total as u32));
     }
     let mut skipped = vec![];
     let mut total = 0u64;
-    for i in 0..zip.len() {
+    for i in 0..entry_total {
         let f = zip.by_index(i).map_err(|e| AppError::io(e.to_string()))?;
-        let Some(rel) = f.enclosed_name() else { continue };
+        let cur = (i + 1) as u32;
+        let tot = entry_total as u32;
+        let Some(rel) = f.enclosed_name() else {
+            throttle.emit(StProgress::counted("import", "extracting", cur, tot));
+            continue;
+        };
         if f.is_dir() || !wanted(&rel) {
+            throttle.emit(StProgress::counted("import", "extracting", cur, tot));
             continue;
         }
         let name = rel.to_string_lossy().replace('\\', "/");
         if f.size() > limits.file_bytes {
             skipped.push(format!("{name}: {}MB가 넘어 건너뜀", limits.file_bytes / 1024 / 1024));
+            throttle.emit(StProgress::counted("import", "extracting", cur, tot));
             continue;
         }
         if f.size() > 1024 * 1024 && f.size() / f.compressed_size().max(1) > limits.ratio {
             skipped.push(format!("{name}: 압축 비율이 비정상이라 건너뜀"));
+            throttle.emit(StProgress::counted("import", "extracting", cur, tot));
             continue;
         }
         if total + f.size() > limits.total_bytes {
@@ -156,9 +183,11 @@ pub fn extract_zip(zip_path: &Path, out: &Path, limits: ZipLimits) -> Result<Vec
         if written > limits.file_bytes {
             let _ = std::fs::remove_file(&dest);
             skipped.push(format!("{name}: {}MB가 넘어 건너뜀", limits.file_bytes / 1024 / 1024));
+            throttle.emit(StProgress::counted("import", "extracting", cur, tot));
             continue;
         }
         total += written;
+        throttle.emit(StProgress::counted("import", "extracting", cur, tot));
     }
     Ok(skipped)
 }
@@ -206,6 +235,15 @@ fn label(p: &Path, root: &Path) -> String {
 }
 
 pub async fn import_data_dir(db: &DbPool, app_data_dir: &Path, dir: &Path) -> Result<SillyTavernDataImport> {
+    import_data_dir_with_progress(db, app_data_dir, dir, &|_| {}).await
+}
+
+pub async fn import_data_dir_with_progress(
+    db: &DbPool,
+    app_data_dir: &Path,
+    dir: &Path,
+    progress: &(dyn Fn(StProgress) + Send + Sync),
+) -> Result<SillyTavernDataImport> {
     let root = find_user_root(dir)
         .ok_or_else(|| AppError::validation("SillyTavern 데이터 폴더가 아닙니다 (characters·worlds·chats 폴더나 settings.json이 없음)", None))?;
     let mut out = SillyTavernDataImport::default();
@@ -214,9 +252,48 @@ pub async fn import_data_dir(db: &DbPool, app_data_dir: &Path, dir: &Path) -> Re
         .and_then(|b| serde_json::from_slice(&b).ok())
         .unwrap_or(Value::Null);
 
+    let world_files = files_in(&root.join("worlds"), &["json"]);
+    let char_files = files_in(&root.join("characters"), &["png", "json"]);
+    let mut chat_dirs: Vec<PathBuf> = std::fs::read_dir(root.join("chats"))
+        .map(|r| r.flatten().map(|e| e.path()).filter(|p| p.is_dir()).collect())
+        .unwrap_or_default();
+    chat_dirs.sort();
+    let chat_dir_files: Vec<(PathBuf, Vec<PathBuf>)> = chat_dirs
+        .into_iter()
+        .map(|d| {
+            let files = files_in(&d, &["jsonl"]);
+            (d, files)
+        })
+        .collect();
+    let chat_file_count: usize = chat_dir_files.iter().map(|(_, f)| f.len()).sum();
+    let preset_files = files_in(&root.join("OpenAI Settings"), &["json"]);
+    let regex_scripts_opt = settings
+        .pointer("/extension_settings/regex")
+        .filter(|v| v.as_array().is_some_and(|a| !a.is_empty()));
+    let mut persona_items: Vec<(&String, &str)> = settings
+        .pointer("/power_user/personas")
+        .and_then(Value::as_object)
+        .map(|personas| {
+            let mut list: Vec<(&String, &str)> = personas
+                .iter()
+                .filter_map(|(file, name)| name.as_str().map(str::trim).filter(|n| !n.is_empty()).map(|n| (file, n)))
+                .collect();
+            list.sort_by(|a, b| a.0.cmp(b.0));
+            list
+        })
+        .unwrap_or_default();
+    let total_items =
+        (world_files.len() + char_files.len() + chat_file_count + preset_files.len() + usize::from(regex_scripts_opt.is_some()) + persona_items.len()) as u32;
+    let mut done_items = 0u32;
+    let throttle = StProgressThrottle::new(progress);
+    if total_items > 0 {
+        throttle.emit(StProgress::counted("import", "preparing", 0, total_items));
+        tokio::task::yield_now().await;
+    }
+
     // 1. 로어북: 파일 이름(= SillyTavern의 로어북 이름) → 새 로어북 id
     let mut books: HashMap<String, String> = HashMap::new();
-    for p in files_in(&root.join("worlds"), &["json"]) {
+    for p in world_files {
         match import_file_with(db, app_data_dir, &p, ImportOptions::default()).await {
             Ok(SillyTavernImport::WorldInfo { book, .. }) => {
                 books.insert(stem(&p), book.id);
@@ -225,11 +302,15 @@ pub async fn import_data_dir(db: &DbPool, app_data_dir: &Path, dir: &Path) -> Re
             Ok(_) => out.warnings.push(format!("{}: 로어북이 아님", label(&p, &root))),
             Err(e) => out.warnings.push(format!("{}: {}", label(&p, &root), e)),
         }
+        done_items += 1;
+        if throttle.emit(StProgress::counted("import", "books", done_items, total_items)) {
+            tokio::task::yield_now().await;
+        }
     }
 
     // 2. 캐릭터: 파일 이름(채팅 폴더 이름과 같음) → 새 캐릭터 id
     let mut chars: HashMap<String, String> = HashMap::new();
-    for p in files_in(&root.join("characters"), &["png", "json"]) {
+    for p in char_files {
         // SillyTavern은 카드에 character_book이 있어도 worlds/<extensions.world>.json으로 꺼내 두고 그쪽을 쓴다.
         // worlds에서 이미 가져온 로어북이 있으면 카드 안의 character_book을 중복 생성하지 않고 worlds 것만 연결한다.
         let linked = linked_world(&p).and_then(|w| books.get(&w).cloned());
@@ -250,20 +331,20 @@ pub async fn import_data_dir(db: &DbPool, app_data_dir: &Path, dir: &Path) -> Re
             Ok(_) => out.warnings.push(format!("{}: 캐릭터 카드가 아님", label(&p, &root))),
             Err(e) => out.warnings.push(format!("{}: {}", label(&p, &root), e)),
         }
+        done_items += 1;
+        if throttle.emit(StProgress::counted("import", "characters", done_items, total_items)) {
+            tokio::task::yield_now().await;
+        }
     }
 
     // 3. 채팅: chats/<캐릭터 파일 이름>/*.jsonl. 카드가 없는 폴더는 이름만 있는 캐릭터를 만들어 붙인다.
     //    분기(헤더 chat_metadata.main_chat = 부모 채팅 파일 이름)는 다 가져온 뒤 부모 대화에 잇는다
-    let mut chat_dirs: Vec<PathBuf> = std::fs::read_dir(root.join("chats"))
-        .map(|r| r.flatten().map(|e| e.path()).filter(|p| p.is_dir()).collect())
-        .unwrap_or_default();
-    chat_dirs.sort();
-    for d in chat_dirs {
+    for (d, chat_files) in chat_dir_files {
         let folder = d.file_name().map(|n| n.to_string_lossy().to_string()).unwrap_or_default();
         let mut character_id = chars.get(&folder).cloned();
         // 파일 이름 → (대화 id, 부모 채팅 파일 이름)
         let mut imported: Vec<(String, String, Option<String>)> = vec![];
-        for p in files_in(&d, &["jsonl"]) {
+        for p in chat_files {
             let mut result = import_file_with(
                 db,
                 app_data_dir,
@@ -315,6 +396,10 @@ pub async fn import_data_dir(db: &DbPool, app_data_dir: &Path, dir: &Path) -> Re
                 Ok(_) => out.chats += 1,
                 Err(e) => out.warnings.push(format!("{}: {}", label(&p, &root), e)),
             }
+            done_items += 1;
+            if throttle.emit(StProgress::counted("import", "chats", done_items, total_items)) {
+                tokio::task::yield_now().await;
+            }
         }
         for (name, id, parent) in &imported {
             let Some(parent) = parent else { continue };
@@ -332,11 +417,15 @@ pub async fn import_data_dir(db: &DbPool, app_data_dir: &Path, dir: &Path) -> Re
     }
 
     // 4. 프리셋 (Chat Completion). 다른 API 폴더(TextGen·Kobold·NovelAI Settings)는 샘플러 값뿐이라 건너뜀
-    for p in files_in(&root.join("OpenAI Settings"), &["json"]) {
+    for p in preset_files {
         match import_file_with(db, app_data_dir, &p, ImportOptions::default()).await {
             Ok(SillyTavernImport::Preset { .. }) => out.presets += 1,
             Ok(_) => out.warnings.push(format!("{}: 프리셋이 아님", label(&p, &root))),
             Err(e) => out.warnings.push(format!("{}: {}", label(&p, &root), e)),
+        }
+        done_items += 1;
+        if throttle.emit(StProgress::counted("import", "presets", done_items, total_items)) {
+            tokio::task::yield_now().await;
         }
     }
     for other in ["TextGen Settings", "KoboldAI Settings", "NovelAI Settings", "instruct", "context"] {
@@ -347,10 +436,7 @@ pub async fn import_data_dir(db: &DbPool, app_data_dir: &Path, dir: &Path) -> Re
     }
 
     // 5. 전역 정규식
-    if let Some(scripts) = settings
-        .pointer("/extension_settings/regex")
-        .filter(|v| v.as_array().is_some_and(|a| !a.is_empty()))
-    {
+    if let Some(scripts) = regex_scripts_opt {
         match import_regex(db, scripts, None).await {
             Ok(SillyTavernImport::Regex { scripts, warnings }) => {
                 out.regex += scripts.len();
@@ -359,18 +445,17 @@ pub async fn import_data_dir(db: &DbPool, app_data_dir: &Path, dir: &Path) -> Re
             Ok(_) => {}
             Err(e) => out.warnings.push(format!("settings.json 정규식: {}", e)),
         }
+        done_items += 1;
+        if throttle.emit(StProgress::counted("import", "regex", done_items, total_items)) {
+            tokio::task::yield_now().await;
+        }
     }
 
     // 6. 페르소나: power_user.personas {그림 파일: 이름}, persona_descriptions {그림 파일: {description}}
-    if let Some(personas) = settings.pointer("/power_user/personas").and_then(Value::as_object) {
+    if !persona_items.is_empty() {
         let descriptions = settings.pointer("/power_user/persona_descriptions");
         let avatar_dir = app_data_dir.join("characters").join("avatars");
-        let mut list: Vec<(&String, &Value)> = personas.iter().collect();
-        list.sort_by(|a, b| a.0.cmp(b.0));
-        for (file, name) in list {
-            let Some(name) = name.as_str().map(str::trim).filter(|n| !n.is_empty()) else {
-                continue;
-            };
+        for (file, name) in persona_items.drain(..) {
             let description = descriptions
                 .and_then(|d| d.get(file))
                 .and_then(|d| d.get("description"))
@@ -394,6 +479,10 @@ pub async fn import_data_dir(db: &DbPool, app_data_dir: &Path, dir: &Path) -> Re
             match db::conversation::create_persona(db, input).await {
                 Ok(_) => out.personas += 1,
                 Err(e) => out.warnings.push(format!("페르소나 {name}: {e}")),
+            }
+            done_items += 1;
+            if throttle.emit(StProgress::counted("import", "personas", done_items, total_items)) {
+                tokio::task::yield_now().await;
             }
         }
     }

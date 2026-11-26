@@ -3,6 +3,7 @@ import { get } from "svelte/store";
 import { _ } from "svelte-i18n";
 import { trashHint } from "$shared/trash";
 import { nav } from "$app/nav.svelte";
+import { beginStProgress, endStProgress, stepStProgress } from "$app/syncProgress.svelte";
 import { exportPicker, type ExportFormat } from "$app/exportFormats.svelte";
 import { call, commands } from "$shared/ipc/client";
 import { PACK_FILES, saveTo } from "$shared/ipc/dialog";
@@ -50,9 +51,29 @@ export const convActions = {
 		const ch = library.character(conv.characterId);
 		const ext = format === "txt" ? "txt" : "jsonl";
 		const filter = ext === "jsonl" ? { name: t("uiPolish.exportChatFilterJsonl"), extensions: ["jsonl"] } : { name: t("uiPolish.exportChatFilterTxt"), extensions: ["txt"] };
-		const n = await saveTo(`${ch?.name ?? "chat"} - ${conv.title}.${ext}`, [filter], (path) => call(commands.exportConversation(conv.id, format, path), { source: "character" }));
-		if (n == null) return;
-		toasts.success(t("uiPolish.exportMsgCountToast", { count: n }));
+		let started = false;
+		try {
+			const n = await saveTo(
+				`${ch?.name ?? "chat"} - ${conv.title}.${ext}`,
+				[filter],
+				(path) => call(commands.exportConversation(conv.id, format, path), { source: "character" }),
+				{
+					onSaveStart: () => {
+						started = true;
+						beginStProgress({ kind: "export", initialPhase: "chats", delayToastMs: 150 });
+					},
+					onDeliverStart: () => stepStProgress({ kind: "export", phase: "finishing", current: null, total: null }),
+				},
+			);
+			if (started) {
+				endStProgress();
+				started = false;
+			}
+			if (n == null) return;
+			toasts.success(t("uiPolish.exportMsgCountToast", { count: n }));
+		} finally {
+			if (started) endStProgress();
+		}
 	},
 
 	/** 고른 형식으로 내보내기 */
@@ -67,26 +88,76 @@ export const convActions = {
 	/** 대화 하나를 캐릭터 묶음(zip)으로 내보내기 */
 	async export(conv: Conversation) {
 		const ch = library.character(conv.characterId);
-		const r = await saveTo(`${ch?.name ?? "chat"} - ${conv.title}.zip`, [PACK_FILES], (path) => call(commands.exportCharacterPack([conv.characterId], [conv.id], path), { source: "character" }));
-		if (r == null) return;
-		toasts.success(t("uiPolish.exportedToast"));
+		let started = false;
+		try {
+			const r = await saveTo(
+				`${ch?.name ?? "chat"} - ${conv.title}.zip`,
+				[PACK_FILES],
+				(path) => call(commands.exportCharacterPack([conv.characterId], [conv.id], path), { source: "character" }),
+				{
+					onSaveStart: () => {
+						started = true;
+						beginStProgress({ kind: "export", initialPhase: "chats", delayToastMs: 150 });
+					},
+					onDeliverStart: () => stepStProgress({ kind: "export", phase: "finishing", current: null, total: null }),
+				},
+			);
+			if (started) {
+				endStProgress();
+				started = false;
+			}
+			if (r == null) return;
+			toasts.success(t("uiPolish.exportedToast"));
+		} finally {
+			if (started) endStProgress();
+		}
 	},
 };
 
 export const charActions = {
 	async export(c: Character, format: CharacterFormat) {
-		if (format === "zip") {
-			const r = await saveTo(`${c.name}.zip`, [PACK_FILES], (path) => call(commands.exportCharacterPack([c.id], null, path), { source: "character" }));
-			if (r == null) return;
-		} else {
-			const filter = format === "png" ? { name: t("uiPolish.exportCharFilterCard"), extensions: ["png"] } : { name: t("uiPolish.exportCharFilterCard"), extensions: ["json"] };
-			const r = await saveTo(`${c.name}.${format}`, [filter], async (path) => {
-				await call(commands.exportCharacterCard(c.id, format, path), { source: "character" });
-				return true;
-			});
-			if (!r) return;
+		let started = false;
+		try {
+			if (format === "zip") {
+				const r = await saveTo(`${c.name}.zip`, [PACK_FILES], (path) => call(commands.exportCharacterPack([c.id], null, path), { source: "character" }), {
+					onSaveStart: () => {
+						started = true;
+						beginStProgress({ kind: "export", initialPhase: "characters", delayToastMs: 150 });
+					},
+					onDeliverStart: () => stepStProgress({ kind: "export", phase: "finishing", current: null, total: null }),
+				});
+				if (started) {
+					endStProgress();
+					started = false;
+				}
+				if (r == null) return;
+			} else {
+				const filter = format === "png" ? { name: t("uiPolish.exportCharFilterCard"), extensions: ["png"] } : { name: t("uiPolish.exportCharFilterCard"), extensions: ["json"] };
+				const r = await saveTo(
+					`${c.name}.${format}`,
+					[filter],
+					async (path) => {
+						await call(commands.exportCharacterCard(c.id, format, path), { source: "character" });
+						return true;
+					},
+					{
+						onSaveStart: () => {
+							started = true;
+							beginStProgress({ kind: "export", initialPhase: "characters", delayToastMs: 150 });
+						},
+						onDeliverStart: () => stepStProgress({ kind: "export", phase: "finishing", current: null, total: null }),
+					},
+				);
+				if (started) {
+					endStProgress();
+					started = false;
+				}
+				if (!r) return;
+			}
+			toasts.success(t("uiPolish.exportedToast"));
+		} finally {
+			if (started) endStProgress();
 		}
-		toasts.success(t("uiPolish.exportedToast"));
 	},
 	exportMenu(c: Character) {
 		exportPicker.open(t("uiPolish.exportCharTitle"), "sc.export.character", getCharacterFormats(), (f: CharacterFormat) => void charActions.export(c, f));

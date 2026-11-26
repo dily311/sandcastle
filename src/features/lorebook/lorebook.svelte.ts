@@ -12,6 +12,7 @@ import { confirmAction } from "$shared/stores/confirm.svelte";
 import { toasts } from "$shared/stores/toast.svelte";
 import { library } from "$features/character/library.svelte";
 import { exportPicker, type ExportFormat } from "$app/exportFormats.svelte";
+import { beginStProgress, endStProgress, runWithStProgress, stepStProgress } from "$app/syncProgress.svelte";
 
 const tr = (key: string, values?: Record<string, string | number>) => get(_)(key, values ? { values } : undefined);
 
@@ -86,16 +87,31 @@ class Lorebook {
 	}
 	async export(b: Book, format: BookFormat = "json") {
 		const filter = format === "json" ? JSON_FILES : { name: tr("chatExtra.lorebookExtra.filterTxt"), extensions: ["txt"] };
-		const n = await saveTo(`${b.name}.${format}`, [filter], (path) => call(commands.exportWorldinfoBook(b.id, format, path), src));
-		if (n == null) return;
-		toasts.success(tr("chatExtra.lorebookExtra.exportedToast", { count: n }));
+		let started = false;
+		try {
+			const n = await saveTo(`${b.name}.${format}`, [filter], (path) => call(commands.exportWorldinfoBook(b.id, format, path), src), {
+				onSaveStart: () => {
+					started = true;
+					beginStProgress({ kind: "export", initialPhase: "books", delayToastMs: 150 });
+				},
+				onDeliverStart: () => stepStProgress({ kind: "export", phase: "finishing", current: null, total: null }),
+			});
+			if (started) {
+				endStProgress();
+				started = false;
+			}
+			if (n == null) return;
+			toasts.success(tr("chatExtra.lorebookExtra.exportedToast", { count: n }));
+		} finally {
+			if (started) endStProgress();
+		}
 	}
 	exportMenu(b: Book) {
 		exportPicker.open(tr("chatExtra.lorebookExtra.exportTitle"), "sc.export.lorebook", BOOK_FORMATS, (f: BookFormat) => void this.export(b, f));
 	}
 	/** SillyTavern 월드인포 JSON 가져오기. 가져온 책을 돌려줌 */
 	async importPath(path: string) {
-		const r = await jobs.run(path.split(/[\\/]/).pop() ?? path, () => call(commands.importSillytavern(path, null, null, null), src), { group: tr("chatExtra.lorebookExtra.importGroup") });
+		const r = await runWithStProgress({ kind: "import", initialPhase: "books", delayToastMs: 150 }, () => call(commands.importSillytavern(path, null, null, null), src));
 		if (!r) return null;
 		await this.load();
 		for (const w of r.warnings) toasts.info(localizeImportWarning(w));

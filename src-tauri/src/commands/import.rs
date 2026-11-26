@@ -1,14 +1,17 @@
 //! 가져오기 커맨드
-use std::path::PathBuf;
+use std::{path::PathBuf, sync::Arc};
 
-use tauri::{AppHandle, State};
+use tauri::{AppHandle, Emitter, State};
 
+pub use crate::service::import::sillytavern::StProgress;
 use crate::{
     commands::character_image::app_data_dir,
     error::Result,
     service::import::sillytavern::{detect_file, import_file_with, ImportOptions, SillyTavernImport, SillyTavernKind},
     state::AppState,
 };
+
+const ST_PROGRESS_EVENT: &str = "st::progress";
 
 /// SillyTavern 파일 가져오기 (캐릭터 카드 PNG/JSON, 프리셋, 정규식, 월드인포, 채팅 .jsonl 자동 판별).
 /// - `name`: 프리셋/로어북/대화 이름. 비우면 파일 이름을 쓴다.
@@ -26,7 +29,14 @@ pub async fn import_sillytavern(
     preset_id: Option<String>,
 ) -> Result<SillyTavernImport> {
     let base = app_data_dir(&app)?;
-    import_file_with(
+    let emit_app = app.clone();
+    let emitted = Arc::new(std::sync::atomic::AtomicBool::new(false));
+    let emitted_flag = emitted.clone();
+    let progress = Arc::new(move |p: StProgress| {
+        emitted_flag.store(true, std::sync::atomic::Ordering::Relaxed);
+        let _ = emit_app.emit(ST_PROGRESS_EVENT, p);
+    });
+    let res = import_file_with(
         &state.db,
         &base,
         &PathBuf::from(path),
@@ -34,10 +44,15 @@ pub async fn import_sillytavern(
             name,
             character_id,
             preset_id,
+            progress: Some(progress),
             ..Default::default()
         },
     )
-    .await
+    .await;
+    if emitted.load(std::sync::atomic::Ordering::Relaxed) {
+        let _ = app.emit(ST_PROGRESS_EVENT, StProgress::done("import"));
+    }
+    res
 }
 
 /// SillyTavern 파일의 종류만 본다 (가져오지 않음)
@@ -57,17 +72,37 @@ pub async fn import_sillytavern_data(
     path: String,
 ) -> Result<crate::service::import::sillytavern::data::SillyTavernDataImport> {
     let base = app_data_dir(&app)?;
-    crate::service::import::sillytavern::data::import_data_zip(&state.db, &base, &PathBuf::from(path)).await
+    let emit_app = app.clone();
+    let progress = Arc::new(move |p: StProgress| {
+        let _ = emit_app.emit(ST_PROGRESS_EVENT, p);
+    });
+    let res = crate::service::import::sillytavern::data::import_data_zip_with_progress(&state.db, &base, &PathBuf::from(path), progress).await;
+    let _ = app.emit(ST_PROGRESS_EVENT, StProgress::done("import"));
+    match &res {
+        Ok(_) => crate::service::notify::system_notify(&app, "SillyTavern", "SillyTavern 데이터 가져오기가 완료됨", false),
+        Err(e) => crate::service::notify::system_notify(&app, "SillyTavern", &format!("SillyTavern 가져오기 실패: {e}"), false),
+    }
+    res
 }
 
 /// 샌드캐슬 데이터를 SillyTavern 사용자 폴더 모양 zip으로 (캐릭터 카드·채팅·로어북·페르소나·전역 정규식)
 #[tauri::command]
 #[specta::specta]
 pub async fn export_sillytavern_data(
+    app: AppHandle,
     state: State<'_, AppState>,
     path: String,
 ) -> Result<crate::service::import::sillytavern::data_export::SillyTavernDataExport> {
-    crate::service::import::sillytavern::data_export::export_data_zip(&state.db, &PathBuf::from(path)).await
+    let progress = |p: StProgress| {
+        let _ = app.emit(ST_PROGRESS_EVENT, p);
+    };
+    let res = crate::service::import::sillytavern::data_export::export_data_zip_with_progress(&state.db, &PathBuf::from(path), &progress).await;
+    let _ = app.emit(ST_PROGRESS_EVENT, StProgress::done("export"));
+    match &res {
+        Ok(_) => crate::service::notify::system_notify(&app, "SillyTavern", "SillyTavern 데이터 내보내기가 완료됨", false),
+        Err(e) => crate::service::notify::system_notify(&app, "SillyTavern", &format!("SillyTavern 내보내기 실패: {e}"), false),
+    }
+    res
 }
 
 /// 프리셋 하나를 SillyTavern Chat Completion 프리셋(.json)으로 (프리셋에 묶인 정규식 포함)

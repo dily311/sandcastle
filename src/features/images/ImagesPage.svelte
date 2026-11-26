@@ -316,6 +316,25 @@
 		selecting = false;
 		picked = new Set();
 	}
+	/** 삭제된 이미지 경로를 캐릭터 에셋 캐시와 테마 배경 목록에도 즉시 반영한다 */
+	function syncDeletedPaths(paths: string[]) {
+		if (!paths.length) return;
+		library.dropImagePaths(paths);
+		const norm = (p: string) => p.replace(/\\/g, "/").toLowerCase();
+		const gone = new Set(paths.map(norm));
+		const bgs = theme.setting.backgrounds ?? [];
+		const nextBgs = bgs.filter((b) => !gone.has(norm(b)));
+		const bgGone = !!theme.setting.backgroundImage && gone.has(norm(theme.setting.backgroundImage));
+		if (nextBgs.length !== bgs.length || bgGone) {
+			theme.setting = {
+				...theme.setting,
+				backgrounds: nextBgs,
+				backgroundImage: bgGone ? null : theme.setting.backgroundImage,
+			};
+			theme.apply();
+		}
+	}
+
 	async function removePicked() {
 		const list = images.filter((i) => picked.has(i.path));
 		if (!list.length) return;
@@ -334,7 +353,10 @@
 			},
 			{ group: $_("imagesPage.deleteJobGroup") },
 		);
-		if (n !== undefined) toasts.success($_("imagesPage.deletedCountToast", { values: { count: n } }));
+		if (n !== undefined) {
+			syncDeletedPaths(list.map((i) => i.path));
+			toasts.success($_("imagesPage.deletedCountToast", { values: { count: n } }));
+		}
 		stopSelecting();
 		await load();
 	}
@@ -355,6 +377,7 @@
 		const name = img.path.split(/[\\/]/).pop() ?? $_("imagesPage.imageFileLabel");
 		const ok = await jobs.run(name, async () => (img.source === "background" ? theme.removeBackground(img.path) : call(commands.deleteGeneratedImage(img.path), src)).then(() => true), { group: $_("imagesPage.deleteJobGroup") });
 		if (!ok) return;
+		syncDeletedPaths([img.path]);
 		images = images.filter((i) => i.path !== img.path);
 		if (imageViewer.current?.src === fileSrc(img.path)) imageViewer.close();
 	}

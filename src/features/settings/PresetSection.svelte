@@ -19,6 +19,7 @@
 	import Row from "./Row.svelte";
 	import PresetEditor from "./PresetEditor.svelte";
 	import { importPresetPaths } from "./presetImport";
+	import { beginStProgress, endStProgress, stepStProgress } from "$app/syncProgress.svelte";
 
 	const src = { source: "preset" };
 	let editing = $state<Detail | null>(null);
@@ -30,8 +31,23 @@
 
 	/** SillyTavern Chat Completion 프리셋(.json)으로 (5-E-20-4-3) */
 	async function exportSt(p: Preset) {
-		const done = await saveTo(`${p.name}.json`, [JSON_FILES], (path) => call(commands.exportPresetSillytavern(p.id, path), src).then(() => true));
-		if (done) toasts.success($_("settings.more.stPresetExported"));
+		let started = false;
+		try {
+			const done = await saveTo(`${p.name}.json`, [JSON_FILES], (path) => call(commands.exportPresetSillytavern(p.id, path), src).then(() => true), {
+				onSaveStart: () => {
+					started = true;
+					beginStProgress({ kind: "export", initialPhase: "presets", delayToastMs: 150 });
+				},
+				onDeliverStart: () => stepStProgress({ kind: "export", phase: "finishing", current: null, total: null }),
+			});
+			if (started) {
+				endStProgress();
+				started = false;
+			}
+			if (done) toasts.success($_("settings.more.stPresetExported"));
+		} finally {
+			if (started) endStProgress();
+		}
 	}
 	async function reload() {
 		library.presets = await call(commands.listPromptPresets(), src);

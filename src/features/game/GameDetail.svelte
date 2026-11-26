@@ -6,6 +6,7 @@
 	import { call, commands } from "$shared/ipc/client";
 	import { GAME_FILES, IMAGE_FILES, pickFiles, saveIntoPicked, saveTo } from "$shared/ipc/dialog";
 	import { layout } from "$app/layout.svelte";
+	import { beginStProgress, endStProgress, stepStProgress } from "$app/syncProgress.svelte";
 	import { dropPaths } from "$app/drop.svelte";
 	import { confirmAction } from "$shared/stores/confirm.svelte";
 	import { toasts } from "$shared/stores/toast.svelte";
@@ -149,8 +150,28 @@
 	/** 플레이 기록 → SillyTavern 채팅 (5-E-20-3). 연출 태그는 걷고 선택지는 줄로 */
 	async function exportSession(s: Session) {
 		const title = `${game?.project.title ?? "game"} - ${sceneName(s.currentSceneId)}`;
-		const n = await saveTo(`${title}.jsonl`, [{ name: $_("gameUi.stChatFile"), extensions: ["jsonl"] }], (path) => call(commands.exportGameSession(s.id, path), { source: "game" }));
-		if (n != null) toasts.success($_("gameUi.exportedMsgsToast", { values: { count: n } }));
+		let started = false;
+		try {
+			const n = await saveTo(
+				`${title}.jsonl`,
+				[{ name: $_("gameUi.stChatFile"), extensions: ["jsonl"] }],
+				(path) => call(commands.exportGameSession(s.id, path), { source: "game" }),
+				{
+					onSaveStart: () => {
+						started = true;
+						beginStProgress({ kind: "export", initialPhase: "chats", delayToastMs: 150 });
+					},
+					onDeliverStart: () => stepStProgress({ kind: "export", phase: "finishing", current: null, total: null }),
+				},
+			);
+			if (started) {
+				endStProgress();
+				started = false;
+			}
+			if (n != null) toasts.success($_("gameUi.exportedMsgsToast", { values: { count: n } }));
+		} finally {
+			if (started) endStProgress();
+		}
 	}
 
 	async function copyToCharacter(id: string, name: string) {
@@ -306,8 +327,7 @@
 		transition: opacity var(--duration-fast) var(--ease);
 	}
 	.banner:hover .cover-tools,
-	.cover-tools:focus-within,
-	.cover-tools.on {
+	.cover-tools:focus-within {
 		opacity: 1;
 	}
 	@media (hover: none) {
