@@ -355,6 +355,20 @@ class Library {
 		if ((await jobs.run(img.key || tr("chatExtra.imageFallback"), () => call(commands.deleteCharacterImage(img.id), src), { group: tr("chatExtra.deleteAssetsGroup") })) === undefined) return;
 		this.images[img.characterId] = (this.images[img.characterId] ?? []).filter((x) => x.id !== img.id);
 	}
+	/** 이미지 갤러리 등 다른 화면에서 에셋을 삭제했을 때 메모리 캐시(library.images)에서도 즉시 제거한다 */
+	dropImagePaths(paths: string[]) {
+		if (!paths.length) return;
+		const norm = (p: string) => p.replace(/\\/g, "/").toLowerCase();
+		const gone = new Set(paths.map(norm));
+		const next: Record<string, CharacterImage[]> = {};
+		let changed = false;
+		for (const [cid, list] of Object.entries(this.images)) {
+			const filtered = list.filter((img) => !gone.has(norm(img.path)));
+			if (filtered.length !== list.length) changed = true;
+			next[cid] = filtered;
+		}
+		if (changed) this.images = next;
+	}
 
 	// ---- 가져오기 ----
 	/** SillyTavern 파일(카드·채팅 등). 채팅이면 `characterId`에 붙인다 */

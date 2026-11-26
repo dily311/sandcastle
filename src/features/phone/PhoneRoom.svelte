@@ -414,7 +414,15 @@
 				{ label: $_("phoneUi.peekMenu"), icon: Eye, disabled: session.busy, onselect: peek },
 				{ label: $_("phoneUi.regenLastMenu"), icon: RefreshCw, disabled: session.busy || !lastAi || session.last?.id !== lastAi.id, onselect: again },
 				{ label: novelView ? $_("phoneUi.toMessengerView") : $_("phoneUi.toNovelView"), icon: novelView ? MessageCircle : BookOpen, separator: true, onselect: () => (novelView = !novelView) },
-				{ label: $_("phoneUi.moveToChatTab"), icon: ExternalLink, onselect: () => nav.go({ page: "character", charId: conv.characterId ?? undefined, convId: conv.id }) },
+				{
+					label: $_("phoneUi.moveToChatTab"),
+					icon: ExternalLink,
+					onselect: async () => {
+						const copy = await call(commands.copyConversationAsChat(conv.id), { source: "phone" });
+						await library.load();
+						nav.go({ page: "character", charId: copy.characterId ?? undefined, convId: copy.id });
+					},
+				},
 			],
 		};
 	}

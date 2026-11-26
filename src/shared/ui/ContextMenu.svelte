@@ -41,6 +41,7 @@
 
 	let el: HTMLDivElement | undefined = $state();
 	let pos = $state({ x: 0, y: 0 });
+	let overflows = $state(false);
 	/** 펼친 하위 메뉴 (항목 키) */
 	let openSub = $state<string | null>(null);
 	/** 좁은 화면: 하위 메뉴를 옆이 아니라 항목 아래에 펼침 */
@@ -57,24 +58,54 @@
 		host.appendChild(node);
 		return { destroy: () => node.remove() };
 	}
-	/** 하위 메뉴가 화면 밖으로 나가면 왼쪽으로 뒤집고, 아래로 넘치면 위로 올린다 */
+	/** 하위 메뉴가 화면 밖으로 나가면 왼쪽으로 뒤집고, 위·아래·왼쪽 경계 안으로 보정한다 */
 	function placeSub(node: HTMLElement, side: boolean) {
 		if (!side) return;
-		const r = node.getBoundingClientRect();
-		if (r.right > window.innerWidth - 8) node.classList.add("flip");
-		const over = r.bottom - (window.innerHeight - 8);
-		if (over > 0) node.style.top = `${-4 - over}px`;
+		const margin = 8;
+		node.classList.remove("flip");
+		node.style.top = "";
+		node.style.left = "";
+		node.style.right = "";
+		let r = node.getBoundingClientRect();
+		if (r.right > window.innerWidth - margin) {
+			node.classList.add("flip");
+			r = node.getBoundingClientRect();
+			if (r.left < margin) {
+				// 왼쪽으로도 자리가 모자라면 화면 왼쪽 경계 안에 고정
+				node.style.right = "auto";
+				node.style.left = `${margin - r.left}px`;
+				r = node.getBoundingClientRect();
+			}
+		}
+		const overBottom = r.bottom - (window.innerHeight - margin);
+		if (overBottom > 0) {
+			const maxUp = Math.max(0, r.top - margin);
+			node.style.top = `${-5 - Math.min(overBottom, maxUp)}px`;
+		} else if (r.top < margin) {
+			node.style.top = `${-5 + (margin - r.top)}px`;
+		}
+	}
+
+	function placeMenu() {
+		if (!at || !el) return;
+		const margin = 8;
+		const r = el.getBoundingClientRect();
+		const maxX = Math.max(margin, window.innerWidth - r.width - margin);
+		const maxY = Math.max(margin, window.innerHeight - r.height - margin);
+		const left = at.align === "end" ? at.x - r.width : at.x;
+		pos = {
+			x: Math.max(margin, Math.min(left, maxX)),
+			y: Math.max(margin, Math.min(at.y, maxY)),
+		};
+		overflows = r.height > window.innerHeight - margin * 2;
 	}
 
 	// 화면 밖으로 나가지 않게 위치 보정, 첫 항목에 포커스
 	$effect(() => {
 		if (!at || !el) return;
-		const r = el.getBoundingClientRect();
-		const left = at.align === "end" ? at.x - r.width : at.x;
-		pos = {
-			x: Math.max(8, Math.min(left, window.innerWidth - r.width - 8)),
-			y: Math.min(at.y, window.innerHeight - r.height - 8),
-		};
+		void items;
+		void openSub;
+		placeMenu();
 		el.querySelector<HTMLButtonElement>("button:not(:disabled)")?.focus();
 	});
 
@@ -88,10 +119,10 @@
 	}
 </script>
 
-<svelte:window onmousedown={(e) => at && el && !el.contains(e.target as Node) && onclose()} onblur={() => at && onclose()} />
+<svelte:window onmousedown={(e) => at && el && !el.contains(e.target as Node) && onclose()} onblur={() => at && onclose()} onresize={() => at && placeMenu()} />
 
 {#if at}
-	<div bind:this={el} use:portal class="menu" class:scroll={inline} role="menu" aria-label={resolvedLabel} tabindex="-1" style:left="{pos.x}px" style:top="{pos.y}px" {onkeydown}>
+	<div bind:this={el} use:portal class="menu" class:scroll={inline || overflows} role="menu" aria-label={resolvedLabel} tabindex="-1" style:left="{pos.x}px" style:top="{pos.y}px" {onkeydown}>
 		{#each items as it}
 			{#if it.visible === undefined || it.visible}
 				{#if it.separator}<div class="sep" role="separator"></div>{/if}
@@ -151,7 +182,7 @@
 		z-index: var(--z-menu);
 		min-width: min(168px, calc(100vw - 16px));
 		max-width: min(340px, calc(100vw - 16px));
-		max-height: 100%;
+		max-height: calc(100dvh - 16px);
 		padding: 4px;
 		border: 1px solid var(--border);
 		border-radius: var(--radius-md);

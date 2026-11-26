@@ -111,8 +111,12 @@
 			{ id: "info", label: $_("phoneUi.panelInfo"), icon: Info },
 		]),
 	);
-	// 방의 세션은 여기서 만들어 방과 패널이 같이 씀
-	const roomSession = $derived(room ? new ChatSession(room.id) : null);
+	// 방의 세션은 room.id가 바뀔 때만 $effect에서 만든다 ($derived 안에서 $state 클래스 생성 시 state_unsafe_mutation 발생 방지)
+	let roomSession = $state<ChatSession | null>(null);
+	$effect(() => {
+		const id = room?.id;
+		roomSession = id ? new ChatSession(id) : null;
+	});
 	let roomRef = $state<ReturnType<typeof PhoneRoom> | undefined>(undefined);
 	const roomDraft = {
 		get: () => roomRef?.getDraft() ?? "",
@@ -297,8 +301,9 @@
 				target={vp.target}
 				onback={() => (viewingProfile = null)}
 				onchat={() => {
+					const who = viewingProfile?.chatWho;
 					viewingProfile = null;
-					void openChat(vp.chatWho);
+					if (who) void openChat(who);
 				}}
 			/>
 		{:else if picker}

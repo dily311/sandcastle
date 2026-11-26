@@ -231,6 +231,7 @@
 **1-J 구글 드라이브 동기화·알림·SillyTavern 진행률 버그 (2026-11-27 사용자 보고, M27)**
 - [x] 1-J-1~5 드라이브 동기화 누락 파일 재수신·업로드 순서 보정(`c69ed80`), 클릭 닫기 진행률 토스트·Android 상단 진행률 알림(`GenerationService`), 권한 취소 시 자동 재인증(`clearToken`+동의 화면), `appDataFolder` 전체 파일 병렬 삭제 및 알림, 알림 기본 활성·시작 시 권한 요청.
 - [x] 1-J-6 SillyTavern 내보내기·가져오기 진행률 토스트·Android 포그라운드 알림 통일 — 고정 하단 팝업(`<JobProgress />`, `0/1` 멈춤·클릭 해제 불가) 대신 구글 드라이브 동기화(`1-J-2`)와 같은 클릭 해제 토스트(`dismissOnClick`) + Android 포그라운드 서비스(`GenerationService`) 진행률 막대(`current/total`·`%`)로 통일. 백엔드 `data.rs`·`data_export.rs`·단일 채팅/월드인포(`sillytavern/mod.rs`)가 단계·개수 스로틀 이벤트(`st::progress`)와 백그라운드 완료·실패 OS 알림(`system_notify`)을 보내고, Android `content://` 임시 복사(`picked_file.rs`)를 4KB 헤더 판별 후 스트리밍(`std::io::copy`)으로 전환. 완료: `syncProgress.test.ts` + `sillytavern::tests` 진행률 검증. **확인 못 함**: Android 실기기 포그라운드 알림 막대·대용량 zip.
+- [x] 1-J-7 실사용 버그 8건 일괄 수정 — 북마크·텍스트 카드 `<br>`/`<div>` 줄바꿈 보존(`selectionText.ts`·`SelectionMenu.svelte`), 예산관리 제거된 API 기본 모델 단가 경고 제거(`BudgetLimits.svelte`), 이미지 갤러리 삭제 시 캐릭터 에셋 DB/캐시·배경 목록 즉시 동기화(`plugins.rs`·`library.svelte.ts`·`ImagesPage.svelte`), 폰→대화 이동 시 일반 대화 복사(`mode='chat'`, `meta.phone` 정리)로 채팅 목록 표시(`PhoneRoom.svelte`·`chat.rs`), 폰 개인 페이지 `1:1 Chat` `chatWho` null 참조 및 `$derived` 내 `ChatSession` 생성 `state_unsafe_mutation` 수정(`PhonePage.svelte`), `ContextMenu` 상하좌우 화면 경계·하위 메뉴 보정(`ContextMenu.svelte`). 완료: `textCard.test.ts` + `pnpm check`·`pnpm test:run`·`cargo test` 통과.
 
 ### 2단계 — 데이터 관리 및 동기화
 
