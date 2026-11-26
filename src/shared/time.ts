@@ -1,11 +1,15 @@
-// 시각 표시: 목록·메시지에는 상대 시각, 툴팁에는 전체 날짜
+// 시각·수 표시 (5-C-2-1): Intl을 한 곳에서 써 현재 화면 언어에 맞춘다.
 import { get } from "svelte/store";
 import { _ } from "svelte-i18n";
 import { getAppLocale } from "$lib/utils/i18n";
 
 const t = (key: string, values?: Record<string, string | number>) => get(_)(key, values ? { values } : undefined);
 
-/** ms 타임스탬프 → "방금", "3분 전", "2시간 전", "4일 전", "2달 전", "1년 전" */
+function intlTag(): string {
+	return getAppLocale().startsWith("ko") ? "ko-KR" : "en-US";
+}
+
+/** ms 타임스탬프 → 상대 시각 */
 export function relative(at: number, now = Date.now()): string {
 	const min = Math.floor((now - at) / 60_000);
 	if (min < 1) return t("settings.time.justNow");
@@ -19,8 +23,12 @@ export function relative(at: number, now = Date.now()): string {
 	return t("settings.time.yearsAgo", { n: Math.floor(mo / 12) });
 }
 
-/** 툴팁용 전체 날짜·시각 */
+/** 툴팁용 전체 날짜·시각 (`Intl.DateTimeFormat`) */
 export function absolute(at: number): string {
-	const loc = getAppLocale() === "en" ? "en-US" : "ko-KR";
-	return new Date(at).toLocaleString(loc, { dateStyle: "full", timeStyle: "medium" });
+	return new Intl.DateTimeFormat(intlTag(), { dateStyle: "full", timeStyle: "medium" }).format(new Date(at));
+}
+
+/** 숫자 서식 (`Intl.NumberFormat`) */
+export function formatNumber(n: number): string {
+	return new Intl.NumberFormat(intlTag()).format(n);
 }

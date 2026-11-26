@@ -186,7 +186,7 @@ impl Default for AppSetting {
     fn default() -> Self {
         Self {
             auto_update: true,
-            language: "ko".into(),
+            language: String::new(),
             selected_preset: "default".into(),
             send_on_enter: false,
             selected_api_profile: None,
@@ -825,9 +825,24 @@ impl Default for TranslateSetting {
         Self {
             api_profile_id: None,
             model: String::new(),
-            target_lang: "한국어".into(),
+            target_lang: String::new(),
             input_lang: "English".into(),
             auto_translate: false,
+        }
+    }
+}
+
+impl TranslateSetting {
+    /// 사용자가 `target_lang`을 비워 두었으면 기기 화면 언어(`AppSetting.language`)를 따라간다 (ADR-032 ⑤)
+    pub fn effective_target_lang(&self, app_lang: &str) -> String {
+        let t = self.target_lang.trim();
+        if !t.is_empty() {
+            return t.to_string();
+        }
+        if app_lang.trim().starts_with("ko") {
+            "한국어".into()
+        } else {
+            "English".into()
         }
     }
 }

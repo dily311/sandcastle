@@ -1,9 +1,10 @@
 import "$/styles/font.css";
 import "$shared/ui/base.css";
-import "$lib/utils/i18n";
+import { initI18n } from "$lib/utils/i18n";
 import { mount } from "svelte";
 import AppShell from "$app/AppShell.svelte";
 import { bootstrapWidgetFeatures } from "$lib/features/widgetFeatures.svelte";
+import { appSetting } from "$shared/stores/appSetting.svelte";
 import { logs } from "$shared/stores/log.svelte";
 import { layout } from "$app/layout.svelte";
 import { watchSystemInsets } from "$app/systemInsets";
@@ -27,6 +28,8 @@ async function boot() {
 	// 브라우저 개발 모드: 가짜 백엔드 (빌드에서는 이 분기가 통째로 빠짐)
 	if (import.meta.env.DEV && !("__TAURI_INTERNALS__" in window)) await import("$ipc/dev-mock/install");
 
+	await initI18n();
+	void appSetting.load();
 	watchSystemInsets();
 	const target = document.getElementById("app")!;
 	document.getElementById("boot-splash")?.remove();

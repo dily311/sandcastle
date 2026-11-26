@@ -1,0 +1,227 @@
+{
+	"imagesPage": {
+		"source": {
+			"message": "Chat",
+			"manual": "Manual",
+			"game": "Game",
+			"phone": "Phone",
+			"upload": "Upload",
+			"background": "Background",
+			"asset": "CG Asset",
+			"avatar": "Avatar",
+			"cover": "Cover",
+			"persona": "Persona",
+			"unknown": "Other"
+		},
+		"tagPreset": "Preset",
+		"tagUpload": "Upload",
+		"filterAll": "All {count}",
+		"sortNew": "Newest",
+		"sortOld": "Oldest",
+		"sortName": "Name",
+		"imgMenuAria": "Image menu",
+		"viewLarge": "View Full Size",
+		"rename": "Rename",
+		"reusePrompt": "Reuse This Prompt",
+		"goConv": "Go to Chat",
+		"tagsMenu": "Tags",
+		"newTagMenu": "New Tag…",
+		"revealFile": "Reveal in Explorer",
+		"infoSource": "Source",
+		"infoModel": "Model",
+		"infoDate": "Date",
+		"infoTags": "Tags",
+		"infoPrompt": "Prompt",
+		"infoNegative": "Negative",
+		"renameMsg": "Display name in gallery (file unchanged)",
+		"namePlaceholder": "Name",
+		"renameConfirm": "Rename",
+		"revealErr": "Could not open file location",
+		"imagesCountJob": "{count} image(s)",
+		"uploadJobGroup": "Upload Images",
+		"uploadedToast": "Uploaded {count} image(s)",
+		"uploadedWithInfo": "Uploaded {count} image(s) · {info} with generation info",
+		"dropLabel": "Upload to Gallery",
+		"dropHint": "PNG, JPG, WEBP, GIF (AI generation metadata is preserved)",
+		"addTagTitle": "Add Tag",
+		"addTagMsg": "Tag for this image (used for filtering)",
+		"addTagPlaceholder": "e.g. Elian, Outfit",
+		"addBtn": "Add",
+		"presetNeedPrompt": "Only images with a prompt or negative prompt can be tagged as Preset.",
+		"bulkTaggedToast": "Tagged {count} image(s) with #{tag}",
+		"bulkTagNoneToast": "No eligible images to tag",
+		"bulkTagLabel": "Add Tag",
+		"newTagTitle": "New Tag",
+		"newTagMsg": "Tag to apply to selected images",
+		"newTagPlaceholder": "e.g. Elian",
+		"applyTagBtn": "Apply",
+		"readonlyToast": "Character and persona images are managed on their own pages.",
+		"deleteTitle": "Delete Images",
+		"deleteManyMsg": "Delete {count} selected image(s)? Images used in chats or backgrounds will no longer appear. This cannot be undone.",
+		"deleteManyBtn": "Delete {count}",
+		"deleteJobGroup": "Delete Images",
+		"deletedCountToast": "Deleted {count} image(s)",
+		"imageFileLabel": "Images",
+		"deleteOneMsg": "Delete this image file? Images attached in chats will no longer appear.",
+		"copiedWhatToast": "Copied {what}",
+		"copyFailedToast": "Failed to copy",
+		"sourceConvNotFound": "Original conversation not found",
+		"searchPlaceholder": "Name, prompt, or tags",
+		"uploadFileMenu": "Upload Files",
+		"emptyTitle": "No Images",
+		"emptyDesc": "Images drawn in chats, created here, generated in games, or uploaded appear here.",
+		"uploadBtn": "Upload Images",
+		"showMore": "Load More",
+		"remainingCount": "({count} more)"
+	},
+	"music": {
+		"loopChange": "Change repeat mode",
+		"dragHandle": "Mini player drag handle. Use arrow keys to move.",
+		"play": "Play",
+		"pause": "Pause",
+		"onShuffle": "Shuffle on",
+		"offShuffle": "Shuffle off",
+		"prevSong": "Previous track",
+		"nextSong": "Next track",
+		"menu": "Menu",
+		"defaultTitle": "No track playing",
+		"defaultArtist": "Unknown artist",
+		"currentTime": "Current time",
+		"duration": "Track duration",
+		"slider": "Seek slider",
+		"volume": "Volume",
+		"playlist:add": "Add to playlist",
+		"playlist:change": "Reorder playlist",
+		"playlist:remove": "Remove from playlist",
+		"playlist:include": "In current playlist",
+		"playlist:goChosesMusicPage": "Select music",
+		"playlist:goCurrentPlaylistPage": "Current playlist",
+		"context:playlists": "Playlists",
+		"context:changeLayout": "Change layout",
+		"context:miniPlayer": "Mini player",
+		"context:open": "Show in folder",
+		"context:albumArtGroup": "Album art settings",
+		"context:changeAlbumArt": "Change album art",
+		"context:imgEdit": "Adjust album art position",
+		"context:quit": "Quit"
+	},
+	"widgetExtra": {
+		"features": {
+			"widget_mascot": {
+				"name": "Shimeji (Mascot)",
+				"desc": "Display and interact with Shimeji characters on your desktop"
+			},
+			"widget_music": {
+				"name": "Music Player",
+				"desc": "Control music playback from the widget"
+			}
+		},
+		"imageSlots": {
+			"idle": {
+				"label": "Default (Idle)",
+				"hint": "When standing still"
+			},
+			"walk": {
+				"label": "Walk",
+				"hint": "When wandering around the screen"
+			},
+			"sitting": {
+				"label": "Sitting",
+				"hint": "When sitting and resting"
+			},
+			"sleep": {
+				"label": "Sleep",
+				"hint": "When drowsy or asleep"
+			},
+			"drag": {
+				"label": "Dragging",
+				"hint": "When picked up with the mouse"
+			},
+			"happy": {
+				"label": "Happy",
+				"hint": "When petted, gifted, or in a good mood"
+			},
+			"annoyed": {
+				"label": "Annoyed",
+				"hint": "When dragged repeatedly or bothered"
+			},
+			"working": {
+				"label": "Chat / Activity",
+				"hint": "When chatting or delivering notifications"
+			}
+		},
+		"dialogueFields": {
+			"greeting": {
+				"label": "Greeting",
+				"hint": "When first appearing on the widget · supports '{{user}}', '{{char}}'"
+			},
+			"longAbsence": {
+				"label": "Long Absence (7+ days)",
+				"hint": "When returning after 7 or more days away"
+			},
+			"gift": {
+				"label": "Received Gift",
+				"hint": "When given a gift via the context menu"
+			},
+			"notify": {
+				"label": "Notification",
+				"hint": "When a reply or task alert arrives · use '{{notify}}' for content"
+			},
+			"drag": {
+				"label": "Dragged",
+				"hint": "When picked up and dragged with the mouse"
+			},
+			"annoyed": {
+				"label": "Annoyed",
+				"hint": "When dragged or bothered repeatedly in a short time"
+			},
+			"happy": {
+				"label": "Happy",
+				"hint": "When petted or double-clicked affectionately"
+			},
+			"idleChatter": {
+				"label": "Idle Chatter",
+				"hint": "Lines occasionally spoken to themselves while active"
+			},
+			"peerChat": {
+				"label": "Chat with Another Shimeji (Offline/Fallback)",
+				"hint": "Lines exchanged with another Shimeji when AI is off"
+			}
+		},
+		"defaultPlaylist": "Default Playlist",
+		"playlistList": "Playlists",
+		"playlistNameAria": "Playlist name",
+		"switchPlaylistTitle": "Switch playlist",
+		"playlistsTitle": "Playlists",
+		"addTrackTitle": "Add Tracks",
+		"playlistMenuAria": "Playlist menu",
+		"viewList": "View Playlists",
+		"rename": "Rename",
+		"deletePlaylistAria": "Delete playlist",
+		"newPlaylistPlaceholder": "New playlist name",
+		"newPlaylistBtn": "New Playlist",
+		"selectFolder": "Select Folder",
+		"mascotMenu": {
+			"chat": "Talk",
+			"pet": "Pet",
+			"gift": "Give Gift",
+			"giftCake": "🍰 Cake",
+			"giftCoffee": "☕ Coffee",
+			"giftFlower": "💐 Bouquet",
+			"giftCandy": "🍬 Star Candy",
+			"giftCustom": "✏️ Custom...",
+			"peer": "Chat with Another Shimeji",
+			"action": "Action",
+			"actionFree": "Free Roam",
+			"actionSitting": "Sit",
+			"actionSleep": "Sleep",
+			"actionWorking": "Activity",
+			"hide": "Hide This Shimeji",
+			"quit": "Turn Off All Shimeji"
+		},
+		"mascotPromptChat": "Talk to {name}...",
+		"mascotPromptGift": "Enter a gift (e.g., strawberry cake)",
+		"mascotSend": "Send",
+		"mascotGive": "Give"
+	}
+}

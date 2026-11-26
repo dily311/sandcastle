@@ -13,7 +13,8 @@
 
 	onMount(() => appSetting.load());
 	const s = $derived(appSetting.value);
-	const currentLocale = $derived<AppLocale>(($locale ?? "ko").startsWith("en") ? "en" : "ko");
+	const currentLocale = $derived<AppLocale>(($locale ?? "en").startsWith("ko") ? "ko" : "en");
+	const LANGUAGE_LABELS: Record<string, string> = { ko: "한국어", en: "English" };
 
 	// 새 버전 확인 (1-E-2): 누를 때만 확인하고, 내려받기는 릴리스 페이지에서 직접
 	let update = $state<UpdateInfo | null>(null);
@@ -37,11 +38,11 @@
 				<Select
 					value={currentLocale}
 					options={[
-						{ value: "ko", label: "한국어" },
-						{ value: "en", label: "English" },
+						{ value: "ko", label: LANGUAGE_LABELS.ko },
+						{ value: "en", label: LANGUAGE_LABELS.en },
 					]}
 					aria-label={$_("settings.general.language")}
-					onchange={(e) => setAppLocale(e.currentTarget.value as AppLocale)}
+					onchange={(e) => void setAppLocale(e.currentTarget.value as AppLocale)}
 				/>
 			</Row>
 		</Group>

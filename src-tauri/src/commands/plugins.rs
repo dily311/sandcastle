@@ -95,19 +95,12 @@ pub async fn translate_text(
 ) -> Result<String> {
     require(&app, id::TRANSLATE)?;
     let p = read(&plugin)?.translate;
-    let to = to.filter(|s| !s.trim().is_empty()).unwrap_or_else(|| p.target_lang.clone());
+    let app_cfg = read(&settings)?;
+    let to = to
+        .filter(|s| !s.trim().is_empty())
+        .unwrap_or_else(|| p.effective_target_lang(&app_cfg.language));
     let db = &app.state::<AppState>().db;
-    cached_translate(
-        db,
-        &ai,
-        &tasks,
-        &p,
-        &fallback_profile(&read(&settings)?, None),
-        &text,
-        &to,
-        auto.unwrap_or(false),
-    )
-    .await
+    cached_translate(db, &ai, &tasks, &p, &fallback_profile(&app_cfg, None), &text, &to, auto.unwrap_or(false)).await
 }
 
 /// 공용 번역 캐시를 먼저 보고, 없을 때만 AI로 번역해 캐시에 넣는다 (같은 문장에 다시 요금을 내지 않게).
@@ -149,9 +142,13 @@ pub async fn get_cached_translations(
     if !crate::sys::plugins::is_enabled(&app, id::TRANSLATE) {
         return Ok(vec![None; texts.len()]);
     }
+    let app_lang = app
+        .try_state::<SettingsState<AppSetting>>()
+        .and_then(|s| read(&s).ok().map(|a| a.language))
+        .unwrap_or_default();
     let to = to
         .filter(|s| !s.trim().is_empty())
-        .unwrap_or_else(|| read(&plugin).map(|p| p.translate.target_lang).unwrap_or_default());
+        .unwrap_or_else(|| read(&plugin).map(|p| p.translate.effective_target_lang(&app_lang)).unwrap_or_default());
     let mut out = Vec::with_capacity(texts.len());
     for t in texts.iter().take(500) {
         out.push(translation::get_translation(&state.db, t, &to).await?);
@@ -176,12 +173,14 @@ pub async fn translate_message(
 ) -> Result<Message> {
     require(&app, id::TRANSLATE)?;
     let p = read(&plugin)?.translate;
+    let app_cfg = read(&settings)?;
+    let to = p.effective_target_lang(&app_cfg.language);
     let msg = chat_ui::get_message(&state.db, &message_id).await?;
     let conv = conversation::get_conversation(&state.db, &msg.conversation_id).await?;
-    let fallback = fallback_profile(&read(&settings)?, conv.api_profile_id.as_deref());
-    let text = cached_translate(&state.db, &ai, &tasks, &p, &fallback, &msg.content, &p.target_lang, auto.unwrap_or(false)).await?;
+    let fallback = fallback_profile(&app_cfg, conv.api_profile_id.as_deref());
+    let text = cached_translate(&state.db, &ai, &tasks, &p, &fallback, &msg.content, &to, auto.unwrap_or(false)).await?;
     let mut meta = msg.meta.clone().filter(Value::is_object).unwrap_or_else(|| json!({}));
-    meta["translation"] = json!({ "lang": p.target_lang, "text": text, "source": msg.content });
+    meta["translation"] = json!({ "lang": to, "text": text, "source": msg.content });
     conversation::update_message_meta(&state.db, &message_id, meta).await?;
     Ok(chat_ui::get_message(&state.db, &message_id).await?)
 }

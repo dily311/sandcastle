@@ -24,7 +24,7 @@ pub enum Scope {
 pub const SETTINGS_SCOPE: &[(&str, Scope)] = &[
     // ---- app-setting ----
     ("app-setting/autoUpdate", Scope::Device), // 쓰지 않는 예전 칸
-    ("app-setting/language", Scope::Shared),
+    ("app-setting/language", Scope::Device),   // 화면 언어는 기기마다 고름 (ADR-032)
     ("app-setting/selectedPreset", Scope::Shared),
     ("app-setting/sendOnEnter", Scope::Device), // 키보드가 있는 PC와 폰이 다름
     ("app-setting/selectedApiProfile", Scope::Device),
@@ -246,6 +246,7 @@ mod tests {
     #[test]
     fn shared_part_leaves_device_fields_out() {
         let mut d = defaults();
+        d["app-setting"]["language"] = "en-device-only".into();
         d["app-setting"]["selectedApiProfile"] = "p-local".into();
         d["app-setting"]["selectedPresetX"] = "unknown".into(); // 표에 없는 칸
         d["feature-setting"]["feature"] = serde_json::json!({ "translate": true });
@@ -256,6 +257,8 @@ mod tests {
         for leaked in [
             "p-local",
             "selectedApiProfile",
+            "en-device-only",
+            "\"language\":",
             "autoTranslate",
             "feature-setting",
             "unknown",

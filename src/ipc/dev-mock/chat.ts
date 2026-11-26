@@ -127,7 +127,7 @@ type Conv = Omit<Conversation_Serialize, "messageCount" | "lastMessageAt">;
 const convs: Conv[] = [];
 const messages: Message_Serialize[] = [];
 let pluginSetting = {
-	translate: { apiProfileId: null as string | null, targetLang: "한국어", inputLang: "English", autoTranslate: false },
+	translate: { apiProfileId: null as string | null, targetLang: "", inputLang: "English", autoTranslate: false },
 	tts: { apiProfileId: null as string | null, model: "tts-1", voice: "alloy", speed: 1, autoRead: false, dialogueOnly: false },
 	imageGen: {
 		apiProfileId: null as string | null,
@@ -350,15 +350,22 @@ AI: 그때 이야기를 다시 해 볼까요?`, stale: false },
 	get_plugin_setting: () => pluginSetting,
 	update_plugin_setting: ({ setting }) => (pluginSetting = setting as typeof pluginSetting),
 	translate_text: ({ text, to }) => {
-		const lang = (to as string) || pluginSetting.translate.targetLang;
+		const fallbackLang = (typeof localStorage !== "undefined" && localStorage.getItem("sc.locale") === "ko") ? "한국어" : "English";
+		const lang = (to as string) || pluginSetting.translate.targetLang || fallbackLang;
 		const out = `[${lang}] ${text}`;
 		translationCache.set(`${lang}\u0000${text}`, out);
 		return out;
 	},
-	get_cached_translations: ({ texts, to }) => (texts as string[]).map((t) => translationCache.get(`${(to as string) || pluginSetting.translate.targetLang}\u0000${t}`) ?? null),
+	get_cached_translations: ({ texts, to }) => {
+		const fallbackLang = (typeof localStorage !== "undefined" && localStorage.getItem("sc.locale") === "ko") ? "한국어" : "English";
+		const lang = (to as string) || pluginSetting.translate.targetLang || fallbackLang;
+		return (texts as string[]).map((t) => translationCache.get(`${lang}\u0000${t}`) ?? null);
+	},
 	translate_message: ({ messageId }) => {
 		const m = messages.find((x) => x.id === messageId)!;
-		m.meta = { ...((m.meta as object) ?? {}), translation: { lang: pluginSetting.translate.targetLang, text: `[${pluginSetting.translate.targetLang} 번역] ${m.content}`, source: m.content } } as never;
+		const fallbackLang = (typeof localStorage !== "undefined" && localStorage.getItem("sc.locale") === "ko") ? "한국어" : "English";
+		const lang = pluginSetting.translate.targetLang || fallbackLang;
+		m.meta = { ...((m.meta as object) ?? {}), translation: { lang, text: `[${lang}] ${m.content}`, source: m.content } } as never;
 		return m;
 	},
 	speak_text: () => "C:/mock/tts.mp3",

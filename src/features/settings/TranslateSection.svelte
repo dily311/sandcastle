@@ -2,7 +2,8 @@
 	import ModelPicker from "$features/settings/ModelPicker.svelte";
 	import { library } from "$features/character/library.svelte";
 	import { onMount } from "svelte";
-	import { _ } from "svelte-i18n";
+	import { _, locale } from "svelte-i18n";
+	import { defaultTargetLang } from "$lib/utils/i18n";
 	import { Input, Select, Switch } from "$shared/ui";
 	import Section from "./Section.svelte";
 	import Group from "./Group.svelte";
@@ -25,8 +26,8 @@
 					<ModelPicker profile={library.apis.find((a) => a.id === cur.translate.apiProfileId)} value={cur.translate.model || null} onchange={(m) => save("translate", { model: m ?? "" })} label={$_("settings.translateSec.model")} />
 				</Row>
 			{/if}
-			<Row label={$_("settings.translateSec.targetLang")}>
-				<Input value={cur.translate.targetLang} onchange={(e) => save("translate", { targetLang: e.currentTarget.value.trim() || "한국어" })} />
+			<Row label={$_("settings.translateSec.targetLang")} desc={$_("settings.translateSec.targetLangDesc")}>
+				<Input value={cur.translate.targetLang} placeholder={defaultTargetLang($locale ?? "en")} onchange={(e) => save("translate", { targetLang: e.currentTarget.value.trim() })} />
 			</Row>
 			<Row label={$_("settings.translateSec.inputLang")} desc={$_("settings.translateSec.inputLangDesc")}>
 				<Input value={cur.translate.inputLang} onchange={(e) => save("translate", { inputLang: e.currentTarget.value.trim() || "English" })} />

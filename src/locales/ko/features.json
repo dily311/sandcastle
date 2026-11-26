@@ -1,0 +1,227 @@
+{
+	"imagesPage": {
+		"source": {
+			"message": "대화",
+			"manual": "직접",
+			"game": "게임",
+			"phone": "폰",
+			"upload": "업로드",
+			"background": "배경",
+			"asset": "CG 에셋",
+			"avatar": "아바타",
+			"cover": "커버",
+			"persona": "페르소나",
+			"unknown": "기타"
+		},
+		"tagPreset": "프리셋",
+		"tagUpload": "업로드",
+		"filterAll": "전부 {count}",
+		"sortNew": "최신 순",
+		"sortOld": "오래된 순",
+		"sortName": "이름 순",
+		"imgMenuAria": "그림 메뉴",
+		"viewLarge": "크게 보기",
+		"rename": "이름 바꾸기",
+		"reusePrompt": "이 프롬프트로 다시",
+		"goConv": "대화로 이동",
+		"tagsMenu": "태그",
+		"newTagMenu": "새 태그…",
+		"revealFile": "파일 위치 열기",
+		"infoSource": "출처",
+		"infoModel": "모델",
+		"infoDate": "날짜",
+		"infoTags": "태그",
+		"infoPrompt": "프롬프트",
+		"infoNegative": "네거티브",
+		"renameMsg": "갤러리에 보일 이름 (파일은 그대로)",
+		"namePlaceholder": "이름",
+		"renameConfirm": "바꾸기",
+		"revealErr": "파일 위치를 열 수 없음",
+		"imagesCountJob": "그림 {count}장",
+		"uploadJobGroup": "그림 올리기",
+		"uploadedToast": "{count}장 업로드 됨",
+		"uploadedWithInfo": "{count}장 업로드 됨 · 생성 정보 {info}장",
+		"dropLabel": "갤러리에 올리기",
+		"dropHint": "PNG·JPG·WEBP·GIF (AI 그림이면 생성 정보도 읽음)",
+		"addTagTitle": "태그 추가",
+		"addTagMsg": "이 그림에 달 태그 (같은 태그로 거를 수 있음)",
+		"addTagPlaceholder": "예: 엘리안, 의상",
+		"addBtn": "추가",
+		"presetNeedPrompt": "프롬프트나 네거티브 프롬프트가 있는 그림만 프리셋으로 쓸 수 있음",
+		"bulkTaggedToast": "{count}장에 #{tag}",
+		"bulkTagNoneToast": "달 수 있는 그림 없음",
+		"bulkTagLabel": "태그 달기",
+		"newTagTitle": "새 태그",
+		"newTagMsg": "고른 그림들에 달 태그",
+		"newTagPlaceholder": "예: 엘리안",
+		"applyTagBtn": "달기",
+		"readonlyToast": "캐릭터·페르소나의 그림은 그 화면에서 관리함",
+		"deleteTitle": "그림 삭제",
+		"deleteManyMsg": "고른 그림 {count}장을 지움. 대화·배경에 쓰던 그림도 더 이상 보이지 않음. 되돌릴 수 없음",
+		"deleteManyBtn": "{count}장 삭제",
+		"deleteJobGroup": "그림 지우기",
+		"deletedCountToast": "{count}장 지움",
+		"imageFileLabel": "그림",
+		"deleteOneMsg": "이 그림 파일을 지움. 대화에 붙어 있던 그림도 더 이상 보이지 않음",
+		"copiedWhatToast": "{what} 복사함",
+		"copyFailedToast": "복사 못 함",
+		"sourceConvNotFound": "원래 대화를 찾을 수 없음",
+		"searchPlaceholder": "이름·프롬프트·태그",
+		"uploadFileMenu": "파일 업로드",
+		"emptyTitle": "그림 없음",
+		"emptyDesc": "대화의 '이 장면 그리기', 만들기, 게임 장면 그림, 업로드 한 그림이 여기 모임",
+		"uploadBtn": "그림 올리기",
+		"showMore": "더 보기",
+		"remainingCount": "({count}장 남음)"
+	},
+	"music": {
+		"loopChange": "반복 재생 모드 변경",
+		"dragHandle": "미니 플레이어 위치 이동 핸들러. 화살표 키를 이용해 움직이세요.",
+		"play": "재생",
+		"pause": "일시정지",
+		"onShuffle": "셔플 중",
+		"offShuffle": "셔플 중이 아님",
+		"prevSong": "이전 곡 재생",
+		"nextSong": "다음 곡 재생",
+		"menu": "메뉴",
+		"defaultTitle": "재생 중인 곡 없음",
+		"defaultArtist": "알 수 없는 아티스트",
+		"currentTime": "현재 재생 시간",
+		"duration": "전체 음악 길이",
+		"slider": "탐색 슬라이더",
+		"volume": "볼륨",
+		"playlist:add": "플레이리스트에 추가",
+		"playlist:change": "플레이리스트 순서 변경",
+		"playlist:remove": "플레이리스트에서 제거",
+		"playlist:include": "현재 플레이리스트에 있음",
+		"playlist:goChosesMusicPage": "음악 선택 페이지 이동",
+		"playlist:goCurrentPlaylistPage": "현재 플레이리스트 페이지 이동",
+		"context:playlists": "플레이리스트",
+		"context:changeLayout": "레이아웃 변경",
+		"context:miniPlayer": "미니 플레이어",
+		"context:open": "폴더에서 보기",
+		"context:albumArtGroup": "앨범아트 설정",
+		"context:changeAlbumArt": "앨범아트 변경",
+		"context:imgEdit": "앨범아트 표시 위치 변경",
+		"context:quit": "종료"
+	},
+	"widgetExtra": {
+		"features": {
+			"widget_mascot": {
+				"name": "시메지 (마스코트)",
+				"desc": "바탕화면에 시메지 캐릭터를 띄우고 상호작용함"
+			},
+			"widget_music": {
+				"name": "음악 플레이어",
+				"desc": "위젯에서 음악을 제어함"
+			}
+		},
+		"imageSlots": {
+			"idle": {
+				"label": "기본 (대기)",
+				"hint": "평소 가만히 있을 때"
+			},
+			"walk": {
+				"label": "걷기",
+				"hint": "화면을 돌아다닐 때"
+			},
+			"sitting": {
+				"label": "앉기",
+				"hint": "앉아서 쉴 때"
+			},
+			"sleep": {
+				"label": "잠자기",
+				"hint": "졸거나 잠들었을 때"
+			},
+			"drag": {
+				"label": "잡아 끌기",
+				"hint": "마우스로 들어올렸을 때"
+			},
+			"happy": {
+				"label": "행복",
+				"hint": "쓰다듬기·선물·기분 좋을 때"
+			},
+			"annoyed": {
+				"label": "짜증",
+				"hint": "자꾸 끌거나 귀찮게 했을 때"
+			},
+			"working": {
+				"label": "대화 / 활동",
+				"hint": "대화하거나 알림을 전할 때"
+			}
+		},
+		"dialogueFields": {
+			"greeting": {
+				"label": "그리팅 (기본 인사)",
+				"hint": "위젯에 처음 등장했을 때 · '{{user}}', '{{char}}' 사용 가능"
+			},
+			"longAbsence": {
+				"label": "오랜만에 볼 경우 (7일 이상)",
+				"hint": "마지막 접속 후 7일 이상 지나서 만났을 때"
+			},
+			"gift": {
+				"label": "선물을 준 경우",
+				"hint": "우클릭 메뉴로 선물을 주었을 때"
+			},
+			"notify": {
+				"label": "알림이 온 경우",
+				"hint": "응답·작업 알림이 도착했을 때 · '{{notify}}'로 내용 표시"
+			},
+			"drag": {
+				"label": "잡아 끈 경우",
+				"hint": "마우스로 시메지를 잡아 끌었을 때"
+			},
+			"annoyed": {
+				"label": "짜증 난 경우",
+				"hint": "짧은 시간에 여러 번 잡아 끌거나 귀찮게 했을 때"
+			},
+			"happy": {
+				"label": "행복해한 경우",
+				"hint": "쓰다듬거나 더블클릭으로 예뻐해 줬을 때"
+			},
+			"idleChatter": {
+				"label": "평소 혼잣말",
+				"hint": "활동 중에 가끔 혼자 중얼거리는 대사"
+			},
+			"peerChat": {
+				"label": "다른 시메지와 대화 (오프라인/기본)",
+				"hint": "AI 미사용 시 다른 시메지와 주고받는 대사"
+			}
+		},
+		"defaultPlaylist": "기본 플레이리스트",
+		"playlistList": "플레이리스트 목록",
+		"playlistNameAria": "플레이리스트 이름",
+		"switchPlaylistTitle": "플레이리스트 전환",
+		"playlistsTitle": "플레이리스트",
+		"addTrackTitle": "곡 추가",
+		"playlistMenuAria": "플레이리스트 메뉴",
+		"viewList": "목록 보기",
+		"rename": "이름 변경",
+		"deletePlaylistAria": "플레이리스트 삭제",
+		"newPlaylistPlaceholder": "새 플레이리스트 이름",
+		"newPlaylistBtn": "새 플레이리스트",
+		"selectFolder": "폴더 선택",
+		"mascotMenu": {
+			"chat": "대화하기",
+			"pet": "쓰다듬기",
+			"gift": "선물 주기",
+			"giftCake": "🍰 케이크",
+			"giftCoffee": "☕ 커피",
+			"giftFlower": "💐 꽃다발",
+			"giftCandy": "🍬 별사탕",
+			"giftCustom": "✏️ 직접 입력...",
+			"peer": "다른 시메지와 대화하기",
+			"action": "행동",
+			"actionFree": "자유행동",
+			"actionSitting": "앉아있기",
+			"actionSleep": "잠자기",
+			"actionWorking": "활동하기",
+			"hide": "이 시메지 숨기기",
+			"quit": "시메지 모두 끄기"
+		},
+		"mascotPromptChat": "{name}에게 말 걸기...",
+		"mascotPromptGift": "줄 선물 입력 (예: 딸기 케이크)",
+		"mascotSend": "전송",
+		"mascotGive": "주기"
+	}
+}
