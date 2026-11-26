@@ -15,7 +15,10 @@ pub async fn init_pool(app_data_dir: PathBuf) -> Result<DbPool, sqlx::Error> {
 
     let opts = SqliteConnectOptions::from_str(&format!("sqlite://{}", db_path.display()))?
         .create_if_missing(true)
-        .foreign_keys(true);
+        .foreign_keys(true)
+        // 쓰기 잠금을 기다리는 시간. sqlx 기본 5초는 쓰기가 몰리면(휴지통 옮기기 여러 개, 기기가 느릴 때) 모자라
+        // 뒤 차례가 "데이터베이스가 사용 중"으로 실패했다. 잠금이 겹칠 때만 기다리므로 평소 속도와는 상관없다
+        .busy_timeout(std::time::Duration::from_secs(30));
 
     let pool = SqlitePoolOptions::new().max_connections(5).connect_with(opts).await?;
 
