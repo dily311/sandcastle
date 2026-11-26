@@ -19,7 +19,9 @@
     "e2e:build": "tauri build --debug --no-bundle --config src-tauri/tauri.e2e.conf.json",
     "e2e": "wdio run e2e/wdio.conf.mjs",
     "version:check": "node scripts/version.mjs",
-    "version:set": "node scripts/version.mjs"
+    "version:set": "node scripts/version.mjs",
+    "i18n:check": "node scripts/check-i18n.mjs",
+    "i18n:baseline": "node scripts/check-i18n.mjs --write-baseline"
   },
   "license": "AGPL-3.0",
   "dependencies": {

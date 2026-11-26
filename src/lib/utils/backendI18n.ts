@@ -4,7 +4,7 @@ import { _ } from "svelte-i18n";
 import type { CorePlugin, ErrorCode } from "$ipc/bindings";
 import { getAppLocale } from "./i18n";
 
-const HAS_HANGUL = /[가-힣]/;
+const HAS_HANGUL = /[가-힣]/; // i18n-ignore: 한글 범위 정규식
 
 function t(key: string, values?: Record<string, string | number>): string {
 	const fn = get(_);

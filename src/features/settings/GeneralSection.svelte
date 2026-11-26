@@ -14,7 +14,7 @@
 	onMount(() => appSetting.load());
 	const s = $derived(appSetting.value);
 	const currentLocale = $derived<AppLocale>(($locale ?? "en").startsWith("ko") ? "ko" : "en");
-	const LANGUAGE_LABELS: Record<string, string> = { ko: "한국어", en: "English" };
+	const LANGUAGE_LABELS: Record<string, string> = { ko: "한국어", en: "English" }; // i18n-ignore: 언어 고유 자칭(autonym)
 
 	// 새 버전 확인 (1-E-2): 누를 때만 확인하고, 내려받기는 릴리스 페이지에서 직접
 	let update = $state<UpdateInfo | null>(null);

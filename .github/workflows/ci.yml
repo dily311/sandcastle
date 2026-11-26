@@ -24,6 +24,8 @@ jobs:
       - run: pnpm install --frozen-lockfile
       - name: 버전이 한 곳과 같은지 (package.json · Cargo.toml · tauri.conf.json)
         run: node scripts/version.mjs
+      - name: 하드코딩 한글 검사 (5-C-2-2)
+        run: pnpm i18n:check
       - name: 타입 검사
         run: pnpm check
       - name: 테스트

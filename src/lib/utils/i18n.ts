@@ -141,5 +141,5 @@ export function getAppLocale(): AppLocale {
 
 /** 번역 플러그인의 `targetLang`이 비어 있을 때 화면 언어를 따라가는 기본 언어 이름 (ADR-032 ⑤) */
 export function defaultTargetLang(loc: AppLocale = getAppLocale()): string {
-	return loc.startsWith("ko") ? "한국어" : "English";
+	return loc.startsWith("ko") ? "한국어" : "English"; // i18n-ignore: AI 번역 지시용 대상 언어명
 }
